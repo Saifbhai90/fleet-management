@@ -1,48 +1,78 @@
 {# Expects: rec = MaintenanceExpense, show_work_order_link (default true) #}
-<div class="expense-invoice-bill shadow-sm mb-3">
-  <div class="inv-head d-flex flex-wrap justify-content-between align-items-start gap-2">
-    <div>
-      <div class="text-uppercase small" style="color:#c2410c;font-weight:700;">Maintenance bill / invoice</div>
-      <h2 class="h4 mb-0 mt-1">Entry #{{ rec.id }} (MAINT-{{ rec.id }})</h2>
+<div class="meinv-headcard expense-invoice-bill shadow-sm mb-1 border">
+  <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 py-1 px-2 px-md-3 border-bottom bg-white">
+    <div class="min-w-0">
+      <div class="text-uppercase meinv-hlabel">Maintenance bill / invoice</div>
+      <div class="meinv-htitle mb-0">Entry #{{ rec.id }} <span class="text-muted fw-normal">(MAINT-{{ rec.id }})</span></div>
     </div>
-    <div class="text-end small">
-      <div><span class="text-muted">Date:</span> <strong>{{ rec.expense_date|ddmmyyyy if rec.expense_date else '-' }}</strong></div>
+    <div class="text-end small text-nowrap flex-shrink-0">
+      <div><span class="text-muted meinv-k">Date</span> <strong>{{ rec.expense_date|ddmmyyyy if rec.expense_date else '—' }}</strong></div>
       {% if (show_work_order_link is not defined or show_work_order_link) and rec.work_order %}
-      <div><span class="text-muted">Work order:</span> <a href="{{ url_for('maintenance_work_order_detail', pk=rec.work_order.id) }}{% if mwo_preserve_qs %}?{{ mwo_preserve_qs }}{% endif %}" class="text-decoration-none"><strong>{{ rec.work_order.work_order_no }}</strong></a></div>
+      <div><span class="text-muted meinv-k">WO</span> <a href="{{ url_for('maintenance_work_order_detail', pk=rec.work_order.id) }}{% if mwo_preserve_qs %}?{{ mwo_preserve_qs }}{% endif %}" class="text-decoration-none fw-semibold">{{ rec.work_order.work_order_no }}</a></div>
       {% elif rec.work_order %}
-      <div><span class="text-muted">Work order:</span> <strong>{{ rec.work_order.work_order_no }}</strong></div>
+      <div><span class="text-muted meinv-k">WO</span> <strong>{{ rec.work_order.work_order_no }}</strong></div>
       {% endif %}
     </div>
   </div>
-  <div class="p-3 p-md-4">
-    <div class="inv-row"><span class="inv-label">District</span><span class="inv-value">{{ rec.district.name if rec.district else '—' }}</span></div>
-    <div class="inv-row"><span class="inv-label">Project</span><span class="inv-value">{{ rec.project.name if rec.project else '—' }}</span></div>
-    <div class="inv-row"><span class="inv-label">Vehicle</span><span class="inv-value">{{ rec.vehicle.vehicle_no if rec.vehicle else '—' }}</span></div>
-    <div class="inv-row"><span class="inv-label">Party / workshop</span><span class="inv-value">{{ rec.workspace_party.name if rec.workspace_party else '—' }}</span></div>
-    <div class="inv-row"><span class="inv-label">Payment</span><span class="inv-value">{{ rec.payment_type or '—' }}</span></div>
-    <div class="inv-row"><span class="inv-label">Job category</span><span class="inv-value">{{ rec.job_category or '—' }}</span></div>
-    <div class="inv-row"><span class="inv-label">Interval</span><span class="inv-value">{% if rec.job_interval_mode == 'interval_km' %}Interval KM{% elif rec.job_interval_mode == 'interval_day' %}Interval day{% else %}—{% endif %}</span></div>
-    <div class="inv-row"><span class="inv-label">Previous / current / KM</span><span class="inv-value">
-      {{ "%.2f"|format((rec.previous_reading or 0)|float) }} &nbsp;|&nbsp;
-      {{ "%.2f"|format((rec.current_reading or 0)|float) }} &nbsp;|&nbsp;
-      {{ "%.2f"|format((rec.km or 0)|float) }}
-    </span></div>
-    <div class="inv-row"><span class="inv-label">Total bill (party)</span><span class="inv-value">{{ "%.2f"|format((rec.total_bill_amount or 0)|float) if rec.total_bill_amount is not none else '—' }}</span></div>
-    <div class="inv-row border-0"><span class="inv-label">Remarks</span><span class="inv-value text-break" style="font-weight:500;">{{ rec.remarks or '—' }}</span></div>
+  <div class="px-2 py-1 meinv-meta">
+    <div class="row g-1 row-cols-2 row-cols-lg-3 small">
+      <div class="col">
+        <div class="meinv-k">District</div>
+        <div class="meinv-v">{{ rec.district.name if rec.district else '—' }}</div>
+      </div>
+      <div class="col">
+        <div class="meinv-k">Project</div>
+        <div class="meinv-v">{{ rec.project.name if rec.project else '—' }}</div>
+      </div>
+      <div class="col">
+        <div class="meinv-k">Vehicle</div>
+        <div class="meinv-v">{{ rec.vehicle.vehicle_no if rec.vehicle else '—' }}</div>
+      </div>
+      <div class="col-12 col-lg-6">
+        <div class="meinv-k">Party / workshop</div>
+        <div class="meinv-v">{{ rec.workspace_party.name if rec.workspace_party else '—' }}</div>
+      </div>
+      <div class="col-6 col-lg-3">
+        <div class="meinv-k">Payment</div>
+        <div class="meinv-v">{{ rec.payment_type or '—' }}</div>
+      </div>
+      <div class="col-6 col-lg-3">
+        <div class="meinv-k">Job category</div>
+        <div class="meinv-v">{{ rec.job_category or '—' }}</div>
+      </div>
+      <div class="col-6 col-lg-3">
+        <div class="meinv-k">Interval</div>
+        <div class="meinv-v">{% if rec.job_interval_mode == 'interval_km' %}KM{% elif rec.job_interval_mode == 'interval_day' %}Day{% else %}—{% endif %}</div>
+      </div>
+      <div class="col-12 col-lg-5">
+        <div class="meinv-k">Prev / Curr / KM</div>
+        <div class="meinv-v meinv-mono">{{ "%.2f"|format((rec.previous_reading or 0)|float) }} · {{ "%.2f"|format((rec.current_reading or 0)|float) }} · {{ "%.2f"|format((rec.km or 0)|float) }}</div>
+      </div>
+      <div class="col-12 col-lg-4">
+        <div class="meinv-k">Total bill</div>
+        <div class="meinv-v meinv-total">{{ "%.2f"|format((rec.total_bill_amount or 0)|float) if rec.total_bill_amount is not none else '—' }}</div>
+      </div>
+    </div>
+    <div class="row g-0 mt-1 pt-1 border-top border-light">
+      <div class="col-12">
+        <div class="meinv-k">Remarks</div>
+        <div class="meinv-v meinv-remarks">{{ rec.remarks or '—' }}</div>
+      </div>
+    </div>
   </div>
 </div>
 
-<div class="expense-invoice-bill shadow-sm p-0 overflow-hidden mb-0">
-  <div class="px-3 py-2 border-bottom bg-light"><strong>Line items (parts / products)</strong></div>
+<div class="meinv-lines expense-invoice-bill shadow-sm border overflow-hidden mb-0">
+  <div class="px-2 py-1 border-bottom bg-light small fw-semibold">Line items (parts / products)</div>
   <div class="table-responsive">
-    <table class="table table-sm table-bordered mb-0">
+    <table class="table table-sm table-bordered mb-0 meinv-table">
       <thead class="table-light">
         <tr>
-          <th>#</th>
+          <th style="width:2.5rem">#</th>
           <th>Product</th>
-          <th class="text-end">Qty</th>
-          <th class="text-end">Price</th>
-          <th class="text-end">Amount</th>
+          <th class="text-end" style="width:4rem">Qty</th>
+          <th class="text-end" style="width:5rem">Price</th>
+          <th class="text-end" style="width:5.5rem">Amount</th>
         </tr>
       </thead>
       <tbody>
@@ -55,7 +85,7 @@
           <td class="text-end fw-semibold">{{ "%.2f"|format((it.amount or 0)|float) }}</td>
         </tr>
         {% else %}
-        <tr><td colspan="5" class="text-center text-muted py-3">No line items</td></tr>
+        <tr><td colspan="5" class="text-center text-muted py-2 small">No line items</td></tr>
         {% endfor %}
       </tbody>
     </table>

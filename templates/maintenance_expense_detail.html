@@ -1,28 +1,39 @@
 {% extends "base.html" %}
+{% block title %}Maintenance bill — MAINT-{{ rec.id }}{% endblock %}
 {% block content %}
 <style>
-  .expense-invoice-bill { max-width: 800px; margin: 0 auto; border: 1px solid #dee2e6; border-radius: 12px; background: #fff; }
-  .expense-invoice-bill .inv-head { border-bottom: 2px solid #ea580c; padding: 1rem 1.25rem; background: linear-gradient(135deg, #fff7ed 0%, #fff 100%); border-radius: 12px 12px 0 0; }
-  .expense-invoice-bill .inv-row { display: flex; flex-wrap: wrap; gap: .5rem 1.5rem; padding: .35rem 0; border-bottom: 1px dashed #e9ecef; }
-  .expense-invoice-bill .inv-label { min-width: 140px; color: #6c757d; font-size: .82rem; }
-  .expense-invoice-bill .inv-value { font-weight: 600; }
+  .meinv-page { max-width: min(1100px, 100%); margin: 0 auto; }
+  .meinv-hlabel { font-size: .65rem; letter-spacing: .08em; color: #c2410c; font-weight: 700; }
+  .meinv-htitle { font-size: 1.05rem; font-weight: 700; line-height: 1.2; color: #0f172a; }
+  .meinv-k { font-size: .68rem; text-transform: uppercase; letter-spacing: .04em; color: #64748b; line-height: 1.15; }
+  .meinv-v { font-size: .84rem; font-weight: 600; color: #0f172a; line-height: 1.25; word-break: break-word; }
+  .meinv-mono { font-variant-numeric: tabular-nums; }
+  .meinv-total { font-size: 1.05rem; font-weight: 700; color: #c2410c; }
+  .meinv-remarks { font-weight: 500; font-size: .82rem; color: #334155; }
+  .meinv-meta { background: linear-gradient(180deg, #fafafa 0%, #fff 100%); }
+  .meinv-table { font-size: .84rem; }
+  .meinv-table thead th { font-size: .72rem; text-transform: uppercase; letter-spacing: .03em; color: #64748b; padding: .35rem .5rem; }
+  .meinv-table tbody td { padding: .35rem .5rem; vertical-align: middle; }
+  .meinv-headcard.expense-invoice-bill, .meinv-lines.expense-invoice-bill { max-width: none; }
+  .expense-invoice-bill { border-radius: 10px; }
   @media print {
     .navbar, .sidebar, .flash-message, .d-print-none { display: none !important; }
-    .main-content { margin: 0 !important; margin-top: 0 !important; padding: 8px !important; }
-    .expense-invoice-bill { border: 1px solid #000; box-shadow: none !important; }
+    .main-content { margin: 0 !important; margin-top: 0 !important; padding: 6px !important; }
+    .expense-invoice-bill { border: 1px solid #000 !important; box-shadow: none !important; page-break-inside: avoid; }
+    .meinv-table { font-size: 9pt; }
   }
 </style>
-<div class="container-fluid py-3">
-  <div class="d-flex justify-content-between align-items-center mb-3 d-print-none">
-    <h2 class="mb-0 h5"><i class="bi bi-receipt-cutoff me-2 text-primary"></i>{{ title }}</h2>
-    <div class="d-flex flex-wrap gap-2">
-      <a href="{{ back_url }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back</a>
-      <button type="button" class="btn btn-primary btn-sm" onclick="window.print()"><i class="bi bi-printer me-1"></i>Print</button>
-      <a href="{{ url_for('maintenance_expense_media', pk=rec.id) }}{% if return_to_path %}?return_to={{ return_to_path|url_quote }}{% endif %}" class="btn btn-outline-primary btn-sm" rel="noopener"><i class="bi bi-images me-1"></i>Media</a>
+<div class="container-fluid py-2 px-2 meinv-page">
+  <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2 d-print-none">
+    <div class="small text-muted fw-semibold text-uppercase" style="letter-spacing:.04em">Bill view</div>
+    <div class="d-flex flex-wrap gap-1">
+      <a href="{{ back_url }}" class="btn btn-outline-secondary btn-sm py-1"><i class="bi bi-arrow-left me-1"></i>Back</a>
+      <button type="button" class="btn btn-primary btn-sm py-1" onclick="window.print()"><i class="bi bi-printer me-1"></i>Print</button>
+      <a href="{{ url_for('maintenance_expense_media', pk=rec.id) }}{% if return_to_path %}?return_to={{ return_to_path|url_quote }}{% endif %}" class="btn btn-outline-primary btn-sm py-1"><i class="bi bi-images me-1"></i>Media</a>
     </div>
   </div>
 
-  <div id="expense-invoice-print-root" class="mb-3" style="max-width:800px;margin:0 auto;">
+  <div id="expense-invoice-print-root">
   {% with show_work_order_link = true, mwo_preserve_qs = None %}
   {% include 'maintenance_expense_invoice_body.html' %}
   {% endwith %}

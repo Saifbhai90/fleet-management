@@ -13,15 +13,24 @@
   .mwo-metric-row { background: #f8fafc; font-size: .875rem; }
   .mwo-tiny-table { font-size: .875rem; line-height: 1.45; }
   .mwo-bad { font-size: .75rem; padding: .28em .55em; }
-  .expense-invoice-bill { max-width: min(800px, 100%); margin: 0 auto; border: 1px solid #dee2e6; border-radius: 12px; background: #fff; }
-  .expense-invoice-bill .inv-head { border-bottom: 2px solid #ea580c; padding: 1rem 1.25rem; background: linear-gradient(135deg, #fff7ed 0%, #fff 100%); border-radius: 12px 12px 0 0; }
-  .expense-invoice-bill .inv-row { display: flex; flex-wrap: wrap; gap: .5rem 1.5rem; padding: .35rem 0; border-bottom: 1px dashed #e9ecef; }
-  .expense-invoice-bill .inv-label { min-width: 140px; color: #6c757d; font-size: .82rem; }
-  .expense-invoice-bill .inv-value { font-weight: 600; }
+  .wo-inv-wrap .meinv-headcard, .wo-inv-wrap .meinv-lines { max-width: min(1100px, 100%); margin-left: auto; margin-right: auto; }
+  .meinv-hlabel { font-size: .65rem; letter-spacing: .08em; color: #c2410c; font-weight: 700; }
+  .meinv-htitle { font-size: 1.05rem; font-weight: 700; line-height: 1.2; color: #0f172a; }
+  .meinv-k { font-size: .68rem; text-transform: uppercase; letter-spacing: .04em; color: #64748b; line-height: 1.15; }
+  .meinv-v { font-size: .84rem; font-weight: 600; color: #0f172a; line-height: 1.25; word-break: break-word; }
+  .meinv-mono { font-variant-numeric: tabular-nums; }
+  .meinv-total { font-size: 1.05rem; font-weight: 700; color: #c2410c; }
+  .meinv-remarks { font-weight: 500; font-size: .82rem; color: #334155; }
+  .meinv-meta { background: linear-gradient(180deg, #fafafa 0%, #fff 100%); }
+  .meinv-table { font-size: .84rem; }
+  .meinv-table thead th { font-size: .72rem; text-transform: uppercase; letter-spacing: .03em; color: #64748b; padding: .35rem .5rem; }
+  .meinv-table tbody td { padding: .35rem .5rem; vertical-align: middle; }
+  .expense-invoice-bill { border: 1px solid #dee2e6; border-radius: 10px; background: #fff; }
   @media print {
     .navbar, .sidebar, .flash-message, .d-print-none { display: none !important; }
     .main-content { margin: 0 !important; margin-top: 0 !important; padding: 8px !important; }
     .mwo-slab .border, .expense-invoice-bill { border: 1px solid #000 !important; box-shadow: none !important; }
+    .meinv-table { font-size: 9pt; }
   }
 </style>
 <div class="container-fluid py-2 px-0">
