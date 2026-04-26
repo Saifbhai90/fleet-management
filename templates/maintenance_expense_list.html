@@ -9,9 +9,22 @@
 </style>
 <style>
   #maintUploadStatusPanel { position: fixed; right: 18px; bottom: 18px; width: min(420px, calc(100vw - 24px)); z-index: 1040; }
-  /* Open-WO modal was inside list wrappers: fixed/overlay broke. Keep above main shell. */
-  #mwoOpenListModal { z-index: 1060; }
-  body.modal-open .modal-backdrop { z-index: 1055; }
+  /* Non-modal panel (not .modal): no backdrop, no body scroll lock — only this box is above the list */
+  .mwo-open-wo-panel {
+    position: fixed;
+    z-index: 1060;
+    right: max(12px, env(safe-area-inset-right, 0px));
+    top: max(64px, env(safe-area-inset-top, 0px));
+    width: min(920px, calc(100vw - 20px));
+    max-height: min(78vh, 860px);
+  }
+  .mwo-open-wo-panel__card {
+    max-height: inherit;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .mwo-open-wo-panel__body { overflow: auto; -webkit-overflow-scrolling: touch; }
 </style>
 <div class="container-fluid py-3">
   <script type="application/json" id="locationCascadeData">{{ location_cascade|tojson }}</script>
@@ -19,7 +32,7 @@
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 maint-list-head">
     <h5 class="mb-0"><i class="bi bi-wrench me-2"></i>Maintenance Expense</h5>
     <div class="d-flex gap-2 flex-wrap">
-      <button type="button" class="btn btn-outline-light btn-sm" data-bs-toggle="modal" data-bs-target="#mwoOpenListModal" title="Open WOs: add bill or close">
+      <button type="button" class="btn btn-outline-light btn-sm" id="btnMwoOpenPanelToggle" aria-expanded="false" aria-controls="mwoOpenListPanel" title="Open WOs: add bill or close (list stays usable)">
         <i class="bi bi-clipboard2-pulse me-1"></i>Open work orders
       </button>
       <a href="{{ url_for('maintenance_work_order_list') }}" class="btn btn-outline-light btn-sm"><i class="bi bi-clipboard2-check me-1"></i>Work Orders</a>
@@ -269,59 +282,57 @@
   </div>
 </div>
 
-{# Modal outside container-fluid / maint-list-wrap so backdrop & stacking are not trapped (no double "lock" with the list) #}
-<div class="modal fade" id="mwoOpenListModal" tabindex="-1" aria-labelledby="mwoOpenListModalLabel" aria-hidden="true" data-bs-backdrop="true">
-  <div class="modal-dialog modal-lg modal-dialog-scrollable modal-dialog-centered">
-    <div class="modal-content">
-      <div class="modal-header py-2">
-        <h5 class="modal-title" id="mwoOpenListModalLabel"><i class="bi bi-clipboard2-pulse me-1"></i>Open work orders</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+{# Floating panel (not Bootstrap modal): no dimmed backdrop, no body scroll lock #}
+<div id="mwoOpenListPanel" class="mwo-open-wo-panel d-none" role="dialog" aria-modal="false" aria-labelledby="mwoOpenListTitle" aria-hidden="true">
+  <div class="mwo-open-wo-panel__card card shadow-lg border-0">
+    <div class="card-header py-2 d-flex justify-content-between align-items-center bg-primary text-white">
+      <h5 class="mb-0 h6" id="mwoOpenListTitle"><i class="bi bi-clipboard2-pulse me-1"></i>Open work orders</h5>
+      <button type="button" class="btn-close btn-close-white mwo-open-wo-panel-close" aria-label="Close"></button>
+    </div>
+    <div class="card-body p-0 mwo-open-wo-panel__body">
+      <div class="table-responsive" style="max-height: 52vh;">
+        <table class="table table-sm table-hover align-middle mb-0 small">
+          <thead class="table-light" style="position: sticky; top: 0; z-index: 2;">
+            <tr>
+              <th class="ps-3">Work order</th>
+              <th>Opened</th>
+              <th>Vehicle</th>
+              <th>Title</th>
+              <th>Status</th>
+              <th class="text-end pe-3" style="min-width: 9rem">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for wo in open_work_orders %}
+            <tr>
+              <td class="ps-3 fw-semibold text-primary">{{ wo.work_order_no }}</td>
+              <td>{% if wo.opened_on %}{{ wo.opened_on|ddmmyyyy }}{% else %}—{% endif %}</td>
+              <td class="text-nowrap">{{ wo.vehicle.vehicle_no if wo.vehicle else '—' }}</td>
+              <td>{{ wo.title or '—' }}</td>
+              <td>
+                {% if wo.status == 'in_progress' %}
+                <span class="badge bg-warning text-dark">In progress</span>
+                {% else %}
+                <span class="badge bg-primary">Open</span>
+                {% endif %}
+              </td>
+              <td class="text-end pe-3 text-nowrap">
+                <a href="{{ url_for('maintenance_expense_form', work_order_id=wo.id) }}" class="btn btn-sm btn-outline-warning">Add bill</a>
+                <button type="button" class="btn btn-sm btn-outline-danger mwo-open-row-close" data-wo-id="{{ wo.id }}">Close</button>
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="6" class="text-center text-muted py-4">Koi open / in-progress work order nahi.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
       </div>
-      <div class="modal-body p-0">
-        <div class="table-responsive" style="max-height: 70vh;">
-          <table class="table table-sm table-hover align-middle mb-0 small">
-            <thead class="table-light" style="position: sticky; top: 0; z-index: 2;">
-              <tr>
-                <th class="ps-3">Work order</th>
-                <th>Opened</th>
-                <th>Vehicle</th>
-                <th>Title</th>
-                <th>Status</th>
-                <th class="text-end pe-3" style="min-width: 9rem">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for wo in open_work_orders %}
-              <tr>
-                <td class="ps-3 fw-semibold text-primary">{{ wo.work_order_no }}</td>
-                <td>{% if wo.opened_on %}{{ wo.opened_on|ddmmyyyy }}{% else %}—{% endif %}</td>
-                <td class="text-nowrap">{{ wo.vehicle.vehicle_no if wo.vehicle else '—' }}</td>
-                <td>{{ wo.title or '—' }}</td>
-                <td>
-                  {% if wo.status == 'in_progress' %}
-                  <span class="badge bg-warning text-dark">In progress</span>
-                  {% else %}
-                  <span class="badge bg-primary">Open</span>
-                  {% endif %}
-                </td>
-                <td class="text-end pe-3 text-nowrap">
-                  <a href="{{ url_for('maintenance_expense_form', work_order_id=wo.id) }}" class="btn btn-sm btn-outline-warning">Add bill</a>
-                  <button type="button" class="btn btn-sm btn-outline-danger mwo-open-row-close" data-wo-id="{{ wo.id }}">Close</button>
-                </td>
-              </tr>
-              {% else %}
-              <tr>
-                <td colspan="6" class="text-center text-muted py-4">Koi open / in-progress work order nahi.</td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      </div>
-      <div class="modal-footer py-2">
-        <a href="{{ url_for('maintenance_work_order_list') }}" class="btn btn-sm btn-outline-primary">Full work order list</a>
-        <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">OK</button>
-      </div>
+    </div>
+    <div class="card-footer py-2 d-flex flex-wrap justify-content-between gap-2 align-items-center bg-light">
+      <a href="{{ url_for('maintenance_work_order_list') }}" class="btn btn-sm btn-outline-primary">Full work order list</a>
+      <button type="button" class="btn btn-sm btn-secondary mwo-open-wo-panel-close">OK</button>
     </div>
   </div>
 </div>
@@ -660,6 +671,36 @@ if (window.fleetPrintExport) window.fleetPrintExport('maintenanceTable', 'Mainte
 })();
 </script>
 <script>
+(function() {
+  var panel = document.getElementById('mwoOpenListPanel');
+  var toggleBtn = document.getElementById('btnMwoOpenPanelToggle');
+  function setMwoOpen(open) {
+    if (!panel) return;
+    if (open) {
+      panel.classList.remove('d-none');
+      panel.setAttribute('aria-hidden', 'false');
+    } else {
+      panel.classList.add('d-none');
+      panel.setAttribute('aria-hidden', 'true');
+    }
+    if (toggleBtn) {
+      toggleBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
+  }
+  if (toggleBtn) {
+    toggleBtn.addEventListener('click', function() {
+      setMwoOpen(panel && panel.classList.contains('d-none'));
+    });
+  }
+  if (panel) {
+    panel.querySelectorAll('.mwo-open-wo-panel-close').forEach(function(b) {
+      b.addEventListener('click', function() { setMwoOpen(false); });
+    });
+  }
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && panel && !panel.classList.contains('d-none')) setMwoOpen(false);
+  });
+})();
 document.addEventListener('click', function(ev) {
   var btn = ev.target && ev.target.closest && ev.target.closest('.mwo-open-row-close');
   if (!btn) return;
@@ -679,7 +720,7 @@ document.addEventListener('click', function(ev) {
     if (data && data.ok) {
       var tr = btn.closest('tr');
       if (tr) tr.remove();
-      var tbody = document.querySelector('#mwoOpenListModal tbody');
+      var tbody = document.querySelector('#mwoOpenListPanel table tbody');
       if (tbody && !tbody.querySelector('tr')) {
         tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">Koi open / in-progress work order nahi.</td></tr>';
       }
