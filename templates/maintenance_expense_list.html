@@ -9,6 +9,9 @@
 </style>
 <style>
   #maintUploadStatusPanel { position: fixed; right: 18px; bottom: 18px; width: min(420px, calc(100vw - 24px)); z-index: 1040; }
+  /* Open-WO modal was inside list wrappers: fixed/overlay broke. Keep above main shell. */
+  #mwoOpenListModal { z-index: 1060; }
+  body.modal-open .modal-backdrop { z-index: 1055; }
 </style>
 <div class="container-fluid py-3">
   <script type="application/json" id="locationCascadeData">{{ location_cascade|tojson }}</script>
@@ -26,61 +29,6 @@
       <a href="{{ url_for('maintenance_expense_form') }}" class="btn btn-light btn-sm text-warning">
         <i class="bi bi-plus-circle me-1"></i>Add Maintenance
       </a>
-    </div>
-  </div>
-  <div class="modal fade" id="mwoOpenListModal" tabindex="-1" aria-labelledby="mwoOpenListModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-scrollable">
-      <div class="modal-content">
-        <div class="modal-header py-2">
-          <h5 class="modal-title" id="mwoOpenListModalLabel"><i class="bi bi-clipboard2-pulse me-1"></i>Open work orders</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-        </div>
-        <div class="modal-body p-0">
-          <div class="table-responsive" style="max-height: 70vh;">
-            <table class="table table-sm table-hover align-middle mb-0 small">
-              <thead class="table-light sticky-top">
-                <tr>
-                  <th class="ps-3">Work order</th>
-                  <th>Opened</th>
-                  <th>Vehicle</th>
-                  <th>Title</th>
-                  <th>Status</th>
-                  <th class="text-end pe-3" style="min-width: 9rem">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for wo in open_work_orders %}
-                <tr>
-                  <td class="ps-3 fw-semibold text-primary">{{ wo.work_order_no }}</td>
-                  <td>{% if wo.opened_on %}{{ wo.opened_on|ddmmyyyy }}{% else %}—{% endif %}</td>
-                  <td class="text-nowrap">{{ wo.vehicle.vehicle_no if wo.vehicle else '—' }}</td>
-                  <td>{{ wo.title or '—' }}</td>
-                  <td>
-                    {% if wo.status == 'in_progress' %}
-                    <span class="badge bg-warning text-dark">In progress</span>
-                    {% else %}
-                    <span class="badge bg-primary">Open</span>
-                    {% endif %}
-                  </td>
-                  <td class="text-end pe-3 text-nowrap">
-                    <a href="{{ url_for('maintenance_expense_form', work_order_id=wo.id) }}" class="btn btn-sm btn-outline-warning">Add bill</a>
-                    <button type="button" class="btn btn-sm btn-outline-danger mwo-open-row-close" data-wo-id="{{ wo.id }}">Close</button>
-                  </td>
-                </tr>
-                {% else %}
-                <tr>
-                  <td colspan="6" class="text-center text-muted py-4">Koi open / in-progress work order nahi.</td>
-                </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
-        </div>
-        <div class="modal-footer py-2">
-          <a href="{{ url_for('maintenance_work_order_list') }}" class="btn btn-sm btn-outline-primary">Full work order list</a>
-          <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">OK</button>
-        </div>
-      </div>
     </div>
   </div>
 
@@ -318,6 +266,63 @@
     </div>
     </div>
   </div>
+  </div>
+</div>
+
+{# Modal outside container-fluid / maint-list-wrap so backdrop & stacking are not trapped (no double "lock" with the list) #}
+<div class="modal fade" id="mwoOpenListModal" tabindex="-1" aria-labelledby="mwoOpenListModalLabel" aria-hidden="true" data-bs-backdrop="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h5 class="modal-title" id="mwoOpenListModalLabel"><i class="bi bi-clipboard2-pulse me-1"></i>Open work orders</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body p-0">
+        <div class="table-responsive" style="max-height: 70vh;">
+          <table class="table table-sm table-hover align-middle mb-0 small">
+            <thead class="table-light" style="position: sticky; top: 0; z-index: 2;">
+              <tr>
+                <th class="ps-3">Work order</th>
+                <th>Opened</th>
+                <th>Vehicle</th>
+                <th>Title</th>
+                <th>Status</th>
+                <th class="text-end pe-3" style="min-width: 9rem">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for wo in open_work_orders %}
+              <tr>
+                <td class="ps-3 fw-semibold text-primary">{{ wo.work_order_no }}</td>
+                <td>{% if wo.opened_on %}{{ wo.opened_on|ddmmyyyy }}{% else %}—{% endif %}</td>
+                <td class="text-nowrap">{{ wo.vehicle.vehicle_no if wo.vehicle else '—' }}</td>
+                <td>{{ wo.title or '—' }}</td>
+                <td>
+                  {% if wo.status == 'in_progress' %}
+                  <span class="badge bg-warning text-dark">In progress</span>
+                  {% else %}
+                  <span class="badge bg-primary">Open</span>
+                  {% endif %}
+                </td>
+                <td class="text-end pe-3 text-nowrap">
+                  <a href="{{ url_for('maintenance_expense_form', work_order_id=wo.id) }}" class="btn btn-sm btn-outline-warning">Add bill</a>
+                  <button type="button" class="btn btn-sm btn-outline-danger mwo-open-row-close" data-wo-id="{{ wo.id }}">Close</button>
+                </td>
+              </tr>
+              {% else %}
+              <tr>
+                <td colspan="6" class="text-center text-muted py-4">Koi open / in-progress work order nahi.</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer py-2">
+        <a href="{{ url_for('maintenance_work_order_list') }}" class="btn btn-sm btn-outline-primary">Full work order list</a>
+        <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">OK</button>
+      </div>
+    </div>
   </div>
 </div>
 
