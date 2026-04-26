@@ -23813,6 +23813,7 @@ def maintenance_work_order_detail(pk):
     expenses = rec.expenses.order_by(MaintenanceExpense.expense_date.asc(), MaintenanceExpense.id.asc()).all()
     total_bill = sum(float(x.total_bill_amount or 0) for x in expenses)
     total_media = sum(x.attachments.count() for x in expenses)
+    wo_media = rec.attachments.count()
     from urllib.parse import urlencode
     mwo_preserve_qs = urlencode(request.args) if request.args else None
     return render_template(
@@ -23821,6 +23822,7 @@ def maintenance_work_order_detail(pk):
         expenses=expenses,
         total_bill=total_bill,
         total_media=total_media,
+        wo_media=wo_media,
         mwo_preserve_qs=mwo_preserve_qs,
     )
 
