@@ -23756,6 +23756,31 @@ def maintenance_work_order_form(pk=None):
     )
 
 
+@app.route('/maintenance-work-order/delete/<int:pk>', methods=['POST'])
+def maintenance_work_order_delete(pk):
+    _ensure_maintenance_work_order_schema()
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return _guard
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    rec = MaintenanceWorkOrder.query.get_or_404(pk)
+    if workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
+        flash('This work order does not belong to selected workspace employee.', 'danger')
+        return redirect(request.referrer or url_for('maintenance_work_order_list'))
+    if rec.expenses.count() > 0:
+        flash('Work order delete nahi ho sakta: is par pehle se maintenance bill(s) / invoice link hain. Pehle bills alag karein ya delete karein.', 'danger')
+        return redirect(request.referrer or url_for('maintenance_work_order_list'))
+    attachment_paths = [att.file_path for att in rec.attachments.all() if att and getattr(att, 'file_path', None)]
+    rec_id = rec.id
+    initiated_by_user_id = session.get('user_id')
+    db.session.delete(rec)
+    db.session.commit()
+    if attachment_paths and workspace_employee_id:
+        _start_expense_delete_cleanup_worker('mwo', rec_id, attachment_paths, employee_id=workspace_employee_id, initiated_by_user_id=initiated_by_user_id)
+    flash('Work order delete ho gaya.' + (' Job photos ki files background me saaf ho rahi hain.' if attachment_paths else ''), 'success')
+    return redirect(request.referrer or url_for('maintenance_work_order_list'))
+
+
 @app.route('/maintenance-work-order/<int:pk>/close', methods=['POST'])
 def maintenance_work_order_close(pk):
     _ensure_maintenance_work_order_schema()
