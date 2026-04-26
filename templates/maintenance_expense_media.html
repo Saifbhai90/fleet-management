@@ -128,7 +128,7 @@
       </div>
     {% else %}
       <div class="card border-0 shadow-sm"><div class="card-body text-center text-muted py-5">
-        <i class="bi bi-image display-6 d-block mb-2"></i>No media found for this maintenance entry.
+        <i class="bi bi-image display-6 d-block mb-2"></i>{% if media_empty_hint is defined and media_empty_hint %}{{ media_empty_hint }}{% else %}No media found for this maintenance entry.{% endif %}
       </div></div>
     {% endif %}
   </div>

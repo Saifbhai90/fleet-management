@@ -19,7 +19,7 @@ from models import (
     WorkspaceMpgReportInput,
     FuelExpense, OilExpense, MaintenanceExpense, EmployeeExpense,
 )
-from routes_finance import check_auth
+from routes_finance import check_auth, _ft_media_items_from_path
 from auth_utils import get_user_context
 from finance_utils import (
     get_account_ledger,
@@ -3156,6 +3156,48 @@ def workspace_fund_transfer_delete(pk):
     db.session.commit()
     flash("Workspace transfer deleted.", "success")
     return redirect(url_for("workspace_fund_transfers_list"))
+
+
+def workspace_fund_transfer_view(pk):
+    guard, emp = _workspace_guard("workspace_transfer_list")
+    if guard:
+        return guard
+    row = WorkspaceFundTransfer.query.filter_by(employee_id=emp.id, id=pk).first_or_404()
+    from routes import _safe_internal_path
+    back_default = url_for("workspace_fund_transfers_list")
+    back_url = _safe_internal_path(request.args.get("return_to"), back_default)
+    return render_template(
+        "finance/fund_transfer_detail.html",
+        rec=row,
+        is_workspace=True,
+        title="Workspace fund transfer — " + (row.transfer_number or ""),
+        back_url=back_url,
+        return_to_path=request.full_path,
+    )
+
+
+def workspace_fund_transfer_media(pk):
+    guard, emp = _workspace_guard("workspace_transfer_list")
+    if guard:
+        return guard
+    from routes import _safe_internal_path
+    row = WorkspaceFundTransfer.query.filter_by(employee_id=emp.id, id=pk).first_or_404()
+    back_default = url_for("workspace_fund_transfers_list")
+    back_url = _safe_internal_path(request.args.get("return_to"), back_default)
+    media_items = _ft_media_items_from_path(row.attachment, "Receipt")
+    sub = f"Transfer: {row.transfer_number} | {row.transfer_date.strftime('%d-%m-%Y') if row.transfer_date else '—'}"
+    tmpl = dict(
+        rec=row,
+        media_items=media_items,
+        media_title="Workspace fund transfer — Media",
+        media_header_subline=sub,
+        back_url=back_url,
+        back_link_label="Back to list",
+        show_download_all=False,
+    )
+    if not media_items:
+        tmpl["media_empty_hint"] = "No receipt or attachment for this transfer."
+    return render_template("maintenance_expense_media.html", **tmpl)
 
 
 def workspace_ledger():

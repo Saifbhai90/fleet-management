@@ -119,8 +119,9 @@
                             <th>Description</th>
                             <th>District</th>
                             <th>Project</th>
-                            <th class="text-center">Att.</th>
-                            <th class="text-center no-print no-export">Act.</th>
+                            <th class="text-center">Upload status</th>
+                            <th class="text-center">Media</th>
+                            <th class="text-center no-print no-export">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -143,9 +144,31 @@
                             <td>{{ ft.district.name if ft.district else '-' }}</td>
                             <td>{{ ft.project.name if ft.project else '-' }}</td>
                             <td class="text-center">
-                                {% if ft.attachment %}<a href="{{ ft.attachment }}" target="_blank" title="View"><i class="bi bi-paperclip text-success"></i></a>{% else %}-{% endif %}
+                                {% if ft.attachment %}
+                                <span class="badge bg-success" title="File attached">Success</span>
+                                {% else %}
+                                <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                {% if not ft.attachment %}
+                                <span class="text-muted">—</span>
+                                {% elif ft.attachment.startswith('http://') or ft.attachment.startswith('https://') %}
+                                <span class="badge bg-success" title="Receipt on Cloudflare / R2">Cloud</span>
+                                {% else %}
+                                <span class="badge bg-warning text-dark" title="On app server (relative path)">Local</span>
+                                {% endif %}
                             </td>
                             <td class="text-center no-print no-export">
+                                <div class="expense-view-wrap d-inline-block align-top">
+                                    <button type="button" class="btn btn-outline-success btn-sm expense-view-eye" title="Invoice / Media" aria-expanded="false" aria-haspopup="true">
+                                        <i class="bi bi-eye"></i>
+                                    </button>
+                                    <div class="expense-view-popover d-none border rounded-2 bg-white shadow p-2" style="min-width: 7.25rem;">
+                                        <a class="btn btn-primary btn-sm w-100 mb-1 py-1" href="{{ url_for('fund_transfer_view', pk=ft.id) }}?return_to={{ request.full_path|url_quote }}">Invoice</a>
+                                        <a class="btn btn-outline-success btn-sm w-100 py-1" href="{{ url_for('fund_transfer_media', pk=ft.id) }}?return_to={{ request.full_path|url_quote }}">Media</a>
+                                    </div>
+                                </div>
                                 <a href="{{ url_for('fund_transfer_edit', pk=ft.id) }}" class="btn btn-sm btn-edit-compact" title="Edit"><i class="bi bi-pencil"></i></a>
                                 <form action="{{ url_for('fund_transfer_delete', pk=ft.id) }}" method="POST" style="display:inline" onsubmit="return confirm('Delete?')">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -155,7 +178,7 @@
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="14" class="text-center py-5 text-muted">
+                            <td colspan="15" class="text-center py-5 text-muted">
                                 <i class="bi bi-arrow-left-right display-6 d-block mb-2 opacity-25"></i>
                                 No fund transfers found{% if from_date or to_date %} for the selected filters{% endif %}.
                             </td>
@@ -166,12 +189,12 @@
                         <tr class="table-warning fw-semibold">
                             <td colspan="5" class="text-end">Subtotal (Current Page)</td>
                             <td class="text-end" data-ft-visible-col="5">{{ "{:,.2f}".format(page_amount_subtotal or 0) }}</td>
-                            <td colspan="8"></td>
+                            <td colspan="9"></td>
                         </tr>
                         <tr class="table-info fw-bold">
                             <td colspan="5" class="text-end">Total (All Filtered Records)</td>
                             <td class="text-end" data-ft-total-col="5" data-ft-base="{{ overall_amount_total or 0 }}">{{ "{:,.2f}".format(overall_amount_total or 0) }}</td>
-                            <td colspan="8"></td>
+                            <td colspan="9"></td>
                         </tr>
                     </tfoot>
                 </table>
@@ -241,6 +264,81 @@ mark{background:#fff3cd;padding:0 1px;border-radius:2px}
 
 <script>
 function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page',n);window.location.search=u.toString();}
+(function() {
+  function closeAll() {
+    document.querySelectorAll('.expense-view-popover').forEach(function(p) {
+      p.classList.add('d-none');
+      p.classList.remove('position-fixed');
+      p.style.left = '';
+      p.style.top = '';
+      p.style.zIndex = '';
+      if (p._expenseViewWrap && p.parentNode === document.body) {
+        p._expenseViewWrap.appendChild(p);
+      }
+      p._expenseViewWrap = null;
+    });
+    document.querySelectorAll('.expense-view-eye').forEach(function(b) {
+      b.setAttribute('aria-expanded', 'false');
+    });
+  }
+  function positionPop(eye, pop) {
+    if (!eye || !pop) return;
+    var r = eye.getBoundingClientRect();
+    var pr = pop.getBoundingClientRect();
+    var w = Math.max(pr.width, pop.offsetWidth, 1);
+    var h = Math.max(pr.height, pop.offsetHeight, 1);
+    var sb = document.querySelector('.sidebar');
+    var minLeft = 8;
+    if (sb) {
+      var sr = sb.getBoundingClientRect();
+      if (sr.width > 0) minLeft = Math.max(minLeft, sr.right + 4);
+    }
+    var left = r.left;
+    if (left < minLeft) left = minLeft;
+    if (left + w > window.innerWidth - 8) left = window.innerWidth - w - 8;
+    if (left < minLeft) left = minLeft;
+    var top = r.bottom + 6;
+    if (top + h > window.innerHeight - 8) {
+      top = r.top - h - 6;
+    }
+    if (top < 8) top = 8;
+    pop.style.left = left + 'px';
+    pop.style.top = top + 'px';
+  }
+  document.querySelectorAll('.expense-view-eye').forEach(function(eye) {
+    eye.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      var wrap = eye.closest('.expense-view-wrap');
+      var pop = (wrap && (wrap._expenseViewPop || (wrap._expenseViewPop = wrap.querySelector('.expense-view-popover')))) || null;
+      if (!pop) return;
+      var wasOpen = !pop.classList.contains('d-none');
+      closeAll();
+      if (wasOpen) return;
+      document.body.appendChild(pop);
+      pop._expenseViewWrap = wrap;
+      pop.classList.remove('d-none');
+      pop.classList.add('position-fixed');
+      pop.style.zIndex = '10050';
+      requestAnimationFrame(function() {
+        requestAnimationFrame(function() { positionPop(eye, pop); });
+      });
+      eye.setAttribute('aria-expanded', 'true');
+    });
+  });
+  document.querySelectorAll('.expense-view-popover a[href]').forEach(function(a) {
+    a.addEventListener('click', function() { closeAll(); });
+  });
+  document.addEventListener('click', function(e) {
+    if (e.target && e.target.closest && (e.target.closest('.expense-view-wrap') || e.target.closest('.expense-view-popover'))) return;
+    closeAll();
+  });
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeAll();
+  });
+  window.addEventListener('scroll', function() { closeAll(); }, true);
+  window.addEventListener('resize', function() { closeAll(); });
+})();
 document.addEventListener('DOMContentLoaded', function(){
     if(window.fleetTableEnhance) window.fleetTableEnhance('fundTransferTable');
     window.fleetPrintExport && window.fleetPrintExport('fundTransferTable','Fund Transfers','Fund_Transfers.csv');

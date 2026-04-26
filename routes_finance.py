@@ -2245,6 +2245,78 @@ def fund_transfers_list():
                            overall_amount_total=overall_amount_total)
 
 
+def _ft_media_items_from_path(attachment, display_name='Attachment'):
+    """Build media_items for maintenance_expense_media.html from a single stored path/URL."""
+    p = (attachment or '').strip()
+    if not p:
+        return []
+    if p.startswith('http://') or p.startswith('https://'):
+        url = p
+    else:
+        url = url_for('uploaded_file', filename=p)
+    path_only = p.split('?')[0]
+    low = path_only.lower()
+    ftype = 'image'
+    if any(low.endswith(x) for x in ('.mp4', '.webm', '.mov', '.m4v')):
+        ftype = 'video'
+    elif low.endswith('.pdf'):
+        ftype = 'pdf'
+    name = display_name or 'Attachment'
+    if name in ('', 'Attachment'):
+        name = os.path.basename(path_only.replace('\\', '/')) or 'Attachment'
+    return [{
+        'url': url,
+        'type': ftype,
+        'name': name,
+        'size_label': '',
+        'created_at': '',
+        'download_url': url,
+        'is_local_file': not (p.startswith('http://') or p.startswith('https://')),
+    }]
+
+
+def fund_transfer_view(pk):
+    auth_check = check_auth('fund_transfer')
+    if auth_check:
+        return auth_check
+    from routes import _safe_internal_path
+    rec = FundTransfer.query.get_or_404(pk)
+    back_default = url_for('fund_transfers_list')
+    back_url = _safe_internal_path(request.args.get('return_to'), back_default)
+    return render_template(
+        'finance/fund_transfer_detail.html',
+        rec=rec,
+        is_workspace=False,
+        title='Fund transfer — ' + (rec.transfer_number or ''),
+        back_url=back_url,
+        return_to_path=request.full_path,
+    )
+
+
+def fund_transfer_media(pk):
+    auth_check = check_auth('fund_transfer')
+    if auth_check:
+        return auth_check
+    from routes import _safe_internal_path
+    rec = FundTransfer.query.get_or_404(pk)
+    back_default = url_for('fund_transfers_list')
+    back_url = _safe_internal_path(request.args.get('return_to'), back_default)
+    media_items = _ft_media_items_from_path(rec.attachment, 'Receipt')
+    sub = f"Transfer: {rec.transfer_number} | {rec.transfer_date.strftime('%d-%m-%Y') if rec.transfer_date else '—'}"
+    tmpl = dict(
+        rec=rec,
+        media_items=media_items,
+        media_title='Fund Transfer — Media',
+        media_header_subline=sub,
+        back_url=back_url,
+        back_link_label='Back to list',
+        show_download_all=False,
+    )
+    if not media_items:
+        tmpl['media_empty_hint'] = 'No receipt or attachment for this fund transfer.'
+    return render_template('maintenance_expense_media.html', **tmpl)
+
+
 def _populate_transfer_filters(form):
     districts = District.query.order_by(District.name).all()
     form.district_id.choices = [(0, '-- All --')] + [(d.id, d.name) for d in districts]

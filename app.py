@@ -475,6 +475,7 @@ from routes_finance import (
     employee_expense_media, employee_expense_receipt_push_cloud, employee_expense_description_suggestions_api,
     chart_of_accounts_list, chart_of_accounts_add, chart_of_accounts_edit, chart_of_accounts_toggle,
     fund_transfer_add, fund_transfer_edit, fund_transfer_delete, fund_transfers_list,
+    fund_transfer_view, fund_transfer_media,
     wallet_dashboard,
     journal_voucher_add, journal_vouchers_list, journal_voucher_detail,
     bank_directory_list_api, bank_directory_add_api, bank_directory_delete_api, bank_directory_update_api,
@@ -499,6 +500,7 @@ from routes_workspace import (
     workspace_fuel_oil_opening_import, workspace_fuel_oil_opening_import_template,
     workspace_fuel_oil_month_close, workspace_fuel_oil_month_close_list, workspace_fuel_oil_month_close_reverse,
     workspace_fund_transfers_list, workspace_fund_transfer_form, workspace_fund_transfer_delete,
+    workspace_fund_transfer_view, workspace_fund_transfer_media,
     workspace_ledger, workspace_ledger_transfer_detail, workspace_ledger_journal_detail, workspace_balance_sheet, workspace_month_close, workspace_month_close_list, workspace_month_close_reverse, workspace_reports, workspace_mpg_report, workspace_dashboard_financial_report,
     workspace_transfer_description_suggestions_api,
     workspace_account_balance_api,
@@ -551,6 +553,8 @@ app.add_url_rule('/accounts/chart/<int:pk>/toggle', 'chart_of_accounts_toggle', 
 # Fund Transfer
 app.add_url_rule('/accounts/fund-transfer', 'fund_transfer_add', fund_transfer_add, methods=['GET', 'POST'])
 app.add_url_rule('/accounts/fund-transfers', 'fund_transfers_list', fund_transfers_list, methods=['GET', 'POST'])
+app.add_url_rule('/accounts/fund-transfer/<int:pk>/view', 'fund_transfer_view', fund_transfer_view, methods=['GET'])
+app.add_url_rule('/accounts/fund-transfer/<int:pk>/media', 'fund_transfer_media', fund_transfer_media, methods=['GET'])
 app.add_url_rule('/accounts/fund-transfer/<int:pk>/edit', 'fund_transfer_edit', fund_transfer_edit, methods=['GET', 'POST'])
 app.add_url_rule('/accounts/fund-transfer/<int:pk>/delete', 'fund_transfer_delete', fund_transfer_delete, methods=['POST'])
 
@@ -624,6 +628,8 @@ app.add_url_rule('/workspace/fuel-oil-close/list', 'workspace_fuel_oil_month_clo
 app.add_url_rule('/workspace/fuel-oil-close/<int:pk>/reverse', 'workspace_fuel_oil_month_close_reverse', workspace_fuel_oil_month_close_reverse, methods=['POST'])
 app.add_url_rule('/workspace/transfers', 'workspace_fund_transfers_list', workspace_fund_transfers_list)
 app.add_url_rule('/workspace/transfer/new', 'workspace_fund_transfer_new', workspace_fund_transfer_form, methods=['GET', 'POST'])
+app.add_url_rule('/workspace/transfer/<int:pk>/view', 'workspace_fund_transfer_view', workspace_fund_transfer_view, methods=['GET'])
+app.add_url_rule('/workspace/transfer/<int:pk>/media', 'workspace_fund_transfer_media', workspace_fund_transfer_media, methods=['GET'])
 app.add_url_rule('/workspace/transfer/<int:pk>/edit', 'workspace_fund_transfer_edit', workspace_fund_transfer_form, methods=['GET', 'POST'])
 app.add_url_rule('/workspace/transfer/<int:pk>/delete', 'workspace_fund_transfer_delete', workspace_fund_transfer_delete, methods=['POST'])
 app.add_url_rule('/api/workspace-transfer-descriptions', 'workspace_transfer_description_suggestions', workspace_transfer_description_suggestions_api, methods=['GET'])

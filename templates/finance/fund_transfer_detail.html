@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}{{ title or 'Fund transfer' }}{% endblock %}
+{% block content %}
+<style>
+  .ftd-wrap { max-width: min(1100px, 100vw - 2rem); margin: 0 auto; }
+  .ftd-hero { background: linear-gradient(135deg, #ecfdf5 0%, #fff 50%); border-bottom: 1px solid #a7f3d0; border-radius: 10px 10px 0 0; }
+  .ftd-card { border: 1px solid #e2e8f0; border-radius: 10px; box-shadow: 0 2px 10px rgba(16,24,40,.05); }
+  .ftd-k { color: #64748b; font-size: .8rem; min-width: 140px; }
+  .ftd-v { color: #0f172a; font-size: .9rem; }
+  @media print { .d-print-none { display: none !important; } }
+</style>
+<div class="container-fluid py-3 ftd-wrap">
+  <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2 d-print-none">
+    <a href="{{ back_url if back_url is defined else (url_for('workspace_fund_transfers_list') if is_workspace else url_for('fund_transfers_list')) }}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-arrow-left me-1"></i>Back
+    </a>
+    <div class="d-flex flex-wrap gap-1">
+      <button type="button" class="btn btn-primary btn-sm" onclick="window.print()"><i class="bi bi-printer me-1"></i>Print</button>
+      {% if is_workspace %}
+      <a href="{{ url_for('workspace_fund_transfer_media', pk=rec.id) }}{% if return_to_path is defined and return_to_path %}?return_to={{ return_to_path|url_quote }}{% endif %}" class="btn btn-outline-success btn-sm">
+        <i class="bi bi-images me-1"></i>Media
+      </a>
+      <a href="{{ url_for('workspace_fund_transfer_edit', pk=rec.id) }}" class="btn btn-outline-primary btn-sm"><i class="bi bi-pencil me-1"></i>Edit</a>
+      {% else %}
+      <a href="{{ url_for('fund_transfer_media', pk=rec.id) }}{% if return_to_path is defined and return_to_path %}?return_to={{ return_to_path|url_quote }}{% endif %}" class="btn btn-outline-success btn-sm">
+        <i class="bi bi-images me-1"></i>Media
+      </a>
+      <a href="{{ url_for('fund_transfer_edit', pk=rec.id) }}" class="btn btn-outline-primary btn-sm"><i class="bi bi-pencil me-1"></i>Edit</a>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="ftd-card">
+    <div class="p-3 ftd-hero">
+      <h4 class="mb-0 text-success">
+        <i class="bi bi-arrow-left-right me-2"></i>Fund transfer <span class="text-primary">{{ rec.transfer_number }}</span>
+      </h4>
+      <div class="small text-muted mt-1">Complete transaction (invoice) details</div>
+    </div>
+    <div class="p-3">
+      <div class="row g-2">
+        <div class="col-md-6 d-flex border-bottom py-1"><div class="ftd-k">Transfer ID</div><div class="ftd-v fw-semibold text-primary">{{ rec.transfer_number }}</div></div>
+        <div class="col-md-6 d-flex border-bottom py-1"><div class="ftd-k">Date</div><div class="ftd-v">{{ rec.transfer_date|ddmmyyyy if rec.transfer_date else '—' }}</div></div>
+        <div class="col-md-6 d-flex border-bottom py-1"><div class="ftd-k">From</div><div class="ftd-v">{% if is_workspace %}{% if rec.from_account %}{{ rec.from_account.code }} — {{ rec.from_account.name }}{% else %}—{% endif %}{% else %}{{ rec.from_name }}{% endif %}</div></div>
+        <div class="col-md-6 d-flex border-bottom py-1"><div class="ftd-k">To</div><div class="ftd-v">{% if is_workspace %}{% if rec.to_account %}{{ rec.to_account.code }} — {{ rec.to_account.name }}{% else %}—{% endif %}{% else %}{{ rec.to_name }}{% endif %}</div></div>
+        <div class="col-md-6 d-flex border-bottom py-1"><div class="ftd-k">Amount</div><div class="ftd-v fw-bold">{{ "{:,.2f}".format((rec.amount or 0)|float) }}</div></div>
+        <div class="col-md-6 d-flex border-bottom py-1"><div class="ftd-k">Category</div><div class="ftd-v">{% if rec.category %}<span class="badge bg-info text-dark">{{ rec.category }}</span>{% else %}—{% endif %}</div></div>
+        <div class="col-md-6 d-flex border-bottom py-1"><div class="ftd-k">Payment mode</div><div class="ftd-v">{{ rec.payment_mode or '—' }}</div></div>
+        <div class="col-md-6 d-flex border-bottom py-1"><div class="ftd-k">Reference</div><div class="ftd-v">{{ rec.reference_no or '—' }}</div></div>
+        {% if not is_workspace %}
+        <div class="col-md-6 d-flex border-bottom py-1"><div class="ftd-k">Salary transfer</div><div class="ftd-v">{% if rec.is_salary %}Yes{% else %}No{% endif %}</div></div>
+        <div class="col-md-6 d-flex border-bottom py-1"><div class="ftd-k">District</div><div class="ftd-v">{{ rec.district.name if rec.district else '—' }}</div></div>
+        <div class="col-md-6 d-flex border-bottom py-1"><div class="ftd-k">Project</div><div class="ftd-v">{{ rec.project.name if rec.project else '—' }}</div></div>
+        {% if rec.journal_entry_id and rec.journal_entry %}
+        <div class="col-12 d-flex border-bottom py-1"><div class="ftd-k">Journal</div><div class="ftd-v">#{{ rec.journal_entry_id }} (posted)</div></div>
+        {% endif %}
+        {% else %}
+        {% if rec.journal_entry_id and rec.journal_entry %}
+        <div class="col-12 d-flex border-bottom py-1"><div class="ftd-k">Workspace journal</div><div class="ftd-v">#{{ rec.journal_entry_id }}</div></div>
+        {% endif %}
+        {% endif %}
+        <div class="col-12 d-flex border-bottom py-1 align-items-start"><div class="ftd-k">Description</div><div class="ftd-v" style="white-space: pre-wrap;">{{ rec.description or '—' }}</div></div>
+        {% if rec.attachment %}
+        <div class="col-12 d-flex py-1 align-items-start">
+          <div class="ftd-k">Attachment</div>
+          <div class="ftd-v">
+            <a href="{{ rec.attachment|media_url }}" target="_blank" rel="noopener" class="text-decoration-none">
+              <i class="bi bi-paperclip me-1"></i>Open file
+            </a>
+          </div>
+        </div>
+        {% endif %}
+        <div class="col-md-6 d-flex border-bottom py-1"><div class="ftd-k">Created by</div><div class="ftd-v">{% if rec.created_by %}{{ rec.created_by.username }}{% else %}—{% endif %}</div></div>
+        <div class="col-md-6 d-flex border-bottom py-1"><div class="ftd-k">Created at</div><div class="ftd-v">{{ rec.created_at.strftime('%d-%m-%Y %H:%M') if rec.created_at else '—' }}</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
