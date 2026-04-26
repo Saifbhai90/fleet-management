@@ -127,6 +127,7 @@
   {% endif %}
 
   <form method="POST" action="" id="fuelExpenseForm" data-record-id="{{ rec.id if rec else '' }}" enctype="multipart/form-data">
+    <script type="application/json" id="fuelLocationCascadeData">{{ fuel_location_cascade|tojson }}</script>
     {{ form.hidden_tag() }}
 
     <div class="row g-3 align-items-start">
@@ -326,6 +327,43 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
   window._cascadeCache = window._cascadeCache || {};
+  var FUEL_CASCADE = null;
+  try {
+    var _fcEl = document.getElementById('fuelLocationCascadeData');
+    if (_fcEl && _fcEl.textContent) {
+      FUEL_CASCADE = JSON.parse(_fcEl.textContent);
+    }
+  } catch (e) {
+    FUEL_CASCADE = null;
+  }
+  if (FUEL_CASCADE && FUEL_CASCADE.projects_by_district) {
+    Object.keys(FUEL_CASCADE.projects_by_district).forEach(function(dk) {
+      window._cascadeCache['proj_d' + dk] = FUEL_CASCADE.projects_by_district[dk];
+    });
+  }
+  function projectsFromColdCache(did) {
+    if (!FUEL_CASCADE || !FUEL_CASCADE.projects_by_district) return null;
+    return FUEL_CASCADE.projects_by_district[String(did)] || [];
+  }
+  function vehiclesFromColdCache(pid, did) {
+    if (!FUEL_CASCADE || !FUEL_CASCADE.vehicles) return null;
+    var list = FUEL_CASCADE.vehicles;
+    var out = [];
+    var restrictDid = (did && did !== '0' && did !== 0) ? String(did) : '';
+    for (var i = 0; i < list.length; i++) {
+      var v = list[i];
+      if (String(v.project_id) !== String(pid)) continue;
+      if (!restrictDid) {
+        out.push(v);
+        continue;
+      }
+      if (String(v.district_id == null ? '' : v.district_id) === restrictDid) out.push(v);
+    }
+    out.sort(function(a, b) {
+      return (a.vehicle_no || '').localeCompare(b.vehicle_no || '', undefined, { numeric: true });
+    });
+    return out;
+  }
   var _vehicleFuelTypeMap = {};
   function _smoothFillSelect(sel, arr, buildOptionFn) {
     if (!sel) return;
@@ -670,7 +708,10 @@ document.addEventListener('DOMContentLoaded', function() {
       if (fuelTypeDisplay) fuelTypeDisplay.value = '';
       if (did && did !== '0') {
         var _cKey = 'proj_d' + did;
-        if (window._cascadeCache[_cKey]) {
+        var coldP = projectsFromColdCache(did);
+        if (coldP !== null) {
+          _smoothFillSelect(projectSelect, coldP, function(p) { return {value: String(p.id), text: p.name}; });
+        } else if (window._cascadeCache[_cKey]) {
           _smoothFillSelect(projectSelect, window._cascadeCache[_cKey], function(p) { return {value: String(p.id), text: p.name}; });
         } else {
           _smoothLoadingSelect(projectSelect);
@@ -695,7 +736,11 @@ document.addEventListener('DOMContentLoaded', function() {
       if (fuelTypeDisplay) fuelTypeDisplay.value = '';
       if (pid && pid !== '0') {
         var _vKey = 'veh_p' + pid + '_d' + (did || '0');
-        if (window._cascadeCache[_vKey]) {
+        var coldV = vehiclesFromColdCache(pid, did);
+        if (coldV !== null) {
+          coldV.forEach(function(v) { _vehicleFuelTypeMap[String(v.id)] = v.fuel_type || 'Petrol'; });
+          _smoothFillSelect(vehicleSelect, coldV, function(v) { return {value: String(v.id), text: v.vehicle_no}; });
+        } else if (window._cascadeCache[_vKey]) {
           window._cascadeCache[_vKey].forEach(function(v) { _vehicleFuelTypeMap[String(v.id)] = v.fuel_type || 'Petrol'; });
           _smoothFillSelect(vehicleSelect, window._cascadeCache[_vKey], function(v) { return {value: String(v.id), text: v.vehicle_no}; });
         } else {

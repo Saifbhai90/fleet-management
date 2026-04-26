@@ -16797,6 +16797,56 @@ def get_vehicles_by_project_district():
     return resp
 
 
+def _fuel_expense_location_cascade_dict():
+    """
+    One-shot data for Add/Edit Fuel form: all projects by district (same as get_projects_by_district)
+    plus all vehicles the user is allowed to see (same scoping as get_vehicles_by_project_district).
+    """
+    pbd = {}
+    q_pd = (
+        db.session.query(Project.id, Project.name, project_district.c.district_id)
+        .join(project_district, Project.id == project_district.c.project_id)
+        .order_by(project_district.c.district_id, Project.name)
+    )
+    for pid, name, did in q_pd.all():
+        key = str(did)
+        if key not in pbd:
+            pbd[key] = []
+        pbd[key].append({"id": int(pid), "name": name})
+
+    scope_projects, scope_districts, scope_vehicles, _ = _get_user_scope()
+    vq = Vehicle.query
+    if scope_projects:
+        vq = vq.filter(Vehicle.project_id.in_(list(scope_projects)))
+    if scope_districts:
+        vq = vq.filter(Vehicle.district_id.in_(list(scope_districts)))
+    if scope_vehicles:
+        vq = vq.filter(Vehicle.id.in_(list(scope_vehicles)))
+    vehicles = []
+    for v in vq.order_by(Vehicle.vehicle_no).all():
+        vehicles.append(
+            {
+                "id": v.id,
+                "vehicle_no": v.vehicle_no or "",
+                "project_id": v.project_id,
+                "district_id": v.district_id,
+                "fuel_type": (v.fuel_type or "Petrol"),
+            }
+        )
+    return {"projects_by_district": pbd, "vehicles": vehicles}
+
+
+@app.route('/api/fuel-expense/location-cascade')
+def api_fuel_expense_location_cascade():
+    """JSON: full district→projects + scoped vehicles; same payload embedded in form page."""
+    if not _workspace_employee_id_for_expenses():
+        return jsonify({"error": "no_workspace", "projects_by_district": {}, "vehicles": []}), 403
+    r = _fuel_expense_location_cascade_dict()
+    resp = make_response(jsonify(r))
+    resp.headers["Cache-Control"] = "private, max-age=60"
+    return resp
+
+
 @app.route('/task-report', methods=['GET', 'POST'])
 def task_report_list():
     from auth_utils import get_user_context
@@ -21470,7 +21520,12 @@ def fuel_expense_add():
         vehicle_id = form.vehicle_id.data
         if vehicle_id == 0:
             flash('Please select a vehicle.', 'danger')
-            return render_template('fuel_expense_form.html', form=form, title='Add Fuel Expense')
+            return render_template(
+                'fuel_expense_form.html',
+                form=form,
+                title='Add Fuel Expense',
+                fuel_location_cascade=_fuel_expense_location_cascade_dict(),
+            )
         vehicle = Vehicle.query.get_or_404(vehicle_id)
         district_id = form.district_id.data or None
         if district_id == 0:
@@ -21484,7 +21539,12 @@ def fuel_expense_add():
         allowed_payment_types = ('Cash', 'Credit', 'Tp/Card', 'Shl/Card')
         if payment_type not in allowed_payment_types:
             flash('Please select a valid payment type.', 'danger')
-            return render_template('fuel_expense_form.html', form=form, title='Add Fuel Expense')
+            return render_template(
+                'fuel_expense_form.html',
+                form=form,
+                title='Add Fuel Expense',
+                fuel_location_cascade=_fuel_expense_location_cascade_dict(),
+            )
         if payment_type in ('Cash', 'Credit'):
             card_swipe_date = None
         slip_no = (form.slip_no.data or '').strip() or None
@@ -21494,7 +21554,12 @@ def fuel_expense_add():
             workspace_pump_id = None
         if not workspace_pump_id:
             flash('Please select a fuel pump name.', 'danger')
-            return render_template('fuel_expense_form.html', form=form, title='Add Fuel Expense')
+            return render_template(
+                'fuel_expense_form.html',
+                form=form,
+                title='Add Fuel Expense',
+                fuel_location_cascade=_fuel_expense_location_cascade_dict(),
+            )
         previous_reading = form.previous_reading.data
         current_reading = form.current_reading.data
         if previous_reading is None:
@@ -21625,7 +21690,14 @@ def fuel_expense_add():
             last_id=rec.id))
     elif request.method == 'POST' and form.errors:
         flash('Fuel form save nahi hua. Required fields aur selected options check karein.', 'danger')
-    return render_template('fuel_expense_form.html', form=form, rec=None, title='Add Fuel Expense', last_rec=last_rec)
+    return render_template(
+        'fuel_expense_form.html',
+        form=form,
+        rec=None,
+        title='Add Fuel Expense',
+        last_rec=last_rec,
+        fuel_location_cascade=_fuel_expense_location_cascade_dict(),
+    )
 
 
 @app.route('/expenses/fuel/<int:pk>/edit', methods=['GET', 'POST'])
@@ -21674,7 +21746,13 @@ def fuel_expense_edit(pk):
         vehicle_id = form.vehicle_id.data
         if vehicle_id == 0:
             flash('Please select a vehicle.', 'danger')
-            return render_template('fuel_expense_form.html', form=form, title='Edit Fuel Expense', rec=rec)
+            return render_template(
+                'fuel_expense_form.html',
+                form=form,
+                title='Edit Fuel Expense',
+                rec=rec,
+                fuel_location_cascade=_fuel_expense_location_cascade_dict(),
+            )
         district_id = form.district_id.data or None
         if district_id == 0:
             district_id = None
@@ -21687,7 +21765,13 @@ def fuel_expense_edit(pk):
         allowed_payment_types = ('Cash', 'Credit', 'Tp/Card', 'Shl/Card')
         if payment_type not in allowed_payment_types:
             flash('Please select a valid payment type.', 'danger')
-            return render_template('fuel_expense_form.html', form=form, title='Edit Fuel Expense', rec=rec)
+            return render_template(
+                'fuel_expense_form.html',
+                form=form,
+                title='Edit Fuel Expense',
+                rec=rec,
+                fuel_location_cascade=_fuel_expense_location_cascade_dict(),
+            )
         if payment_type in ('Cash', 'Credit'):
             card_swipe_date = None
         slip_no = (form.slip_no.data or '').strip() or None
@@ -21698,7 +21782,13 @@ def fuel_expense_edit(pk):
             workspace_pump_id = None
         if not workspace_pump_id:
             flash('Please select a fuel pump name.', 'danger')
-            return render_template('fuel_expense_form.html', form=form, title='Edit Fuel Expense', rec=rec)
+            return render_template(
+                'fuel_expense_form.html',
+                form=form,
+                title='Edit Fuel Expense',
+                rec=rec,
+                fuel_location_cascade=_fuel_expense_location_cascade_dict(),
+            )
         previous_reading = form.previous_reading.data
         current_reading = form.current_reading.data
         if previous_reading is None:
@@ -21834,7 +21924,13 @@ def fuel_expense_edit(pk):
         except Exception:
             db.session.rollback()
             raise
-    return render_template('fuel_expense_form.html', form=form, title='Edit Fuel Expense', rec=rec)
+    return render_template(
+        'fuel_expense_form.html',
+        form=form,
+        title='Edit Fuel Expense',
+        rec=rec,
+        fuel_location_cascade=_fuel_expense_location_cascade_dict(),
+    )
 
 
 @app.route('/expenses/fuel/<int:pk>/view')

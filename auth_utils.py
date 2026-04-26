@@ -337,6 +337,7 @@ ENDPOINT_PERMISSION_MAP = [
     ('get_left_drivers_by_vehicle', 'driver_rejoin_list'),
     ('check_vehicle_shifts', 'assign_driver_to_vehicle'),
     # Fuel expense helper APIs
+    ('api_fuel_expense_location_cascade', 'fuel_expense'),
     ('api_fuel_expense_last_reading', 'fuel_expense'),
     ('api_fuel_expense_task_readings', 'fuel_expense'),
     ('api_fuel_expense_suggested_price', 'fuel_expense'),
