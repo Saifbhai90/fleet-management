@@ -267,7 +267,16 @@ document.addEventListener('DOMContentLoaded', function () {
 
   var detailEls = Array.prototype.slice.call(document.querySelectorAll('.js-umr-detail'));
   var historyModalEl = document.getElementById('unauthorizedMovementHistoryModal');
-  var historyModal = historyModalEl && window.bootstrap ? new bootstrap.Modal(historyModalEl) : null;
+  var historyModal = historyModalEl && window.bootstrap
+    ? new bootstrap.Modal(historyModalEl, { backdrop: false, focus: false, keyboard: true })
+    : null;
+  if (historyModalEl) {
+    historyModalEl.addEventListener('shown.bs.modal', function () {
+      document.body.classList.remove('modal-open');
+      document.body.style.overflow = '';
+      document.body.style.paddingRight = '';
+    });
+  }
   var metaEl = document.getElementById('unauthorizedMovementHistoryMeta');
   var totalsEl = document.getElementById('unauthorizedMovementTotals');
   var tasksBody = document.getElementById('unauthorizedMovementTasksBody');
@@ -347,11 +356,6 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   detailEls.forEach(function (el) {
-    el.addEventListener('mouseenter', function () {
-      var vehicleId = parseInt(el.getAttribute('data-vehicle-id') || '0', 10);
-      var focus = el.getAttribute('data-focus') || '';
-      openHistory(vehicleId, focus);
-    }, { once: true });
     el.addEventListener('click', function () {
       var vehicleId = parseInt(el.getAttribute('data-vehicle-id') || '0', 10);
       var focus = el.getAttribute('data-focus') || '';
