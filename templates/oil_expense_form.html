@@ -133,7 +133,7 @@
     <div class="form-section">
       <div class="form-section-header">Product Lines</div>
       <div class="form-section-body">
-        <p class="small text-muted mb-2">Search product → Purchase Qty → Used Qty → Price. Amount = Purchase × Price (aap Amount edit karke Price adjust kar saktay hain). Balance = Purchase − Used (agar used zyada ho to <span class="text-danger">red</span> + alert). Press <kbd>Enter</kbd> to add line to list below.</p>
+        <p class="small text-muted mb-2">Search product → Purchase Qty → Used Qty → Price/Amount. Qty+Price se Amount auto calc hota hai, aur Amount enter karne par Price = Amount/Qty auto hota hai. Balance = Purchase − Used (agar used zyada ho to <span class="text-danger">red</span> + alert). Press <kbd>Enter</kbd> to add line to list below.</p>
         <div class="row g-2 align-items-end mb-3 border rounded p-2 bg-light" id="entryRow">
           <div class="col-md-3">
             <label class="form-label mb-0">Product</label>
@@ -151,11 +151,11 @@
           </div>
           <div class="col-md-2">
             <label class="form-label mb-0">Price <span id="entryDefaultPriceHint" class="text-muted small ms-1"></span></label>
-            <input type="number" id="entryPrice" class="form-control form-control-sm" step="0.01" min="0" placeholder="0" value="0">
+            <input type="text" id="entryPrice" class="form-control form-control-sm" inputmode="decimal" placeholder="0.00" value="0.00" autocomplete="off">
           </div>
           <div class="col-md-1">
             <label class="form-label mb-0">Amount</label>
-            <input type="text" id="entryAmount" class="form-control form-control-sm bg-light" readonly placeholder="0">
+            <input type="text" id="entryAmount" class="form-control form-control-sm" inputmode="decimal" placeholder="0.00" value="0.00" autocomplete="off">
           </div>
           <div class="col-md-1">
             <label class="form-label mb-0">Balance Qty</label>
