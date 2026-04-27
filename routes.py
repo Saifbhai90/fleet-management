@@ -77,6 +77,7 @@ import re
 import os
 import json
 import uuid
+import math
 import tempfile
 import zipfile
 import time as _time_mod
@@ -11805,6 +11806,22 @@ def _unauthorized_movement_rows(from_date=None, to_date=None, project_id=0, dist
                                 check_type='', without_task_move_limit=None,
                                 allowed_projects=None, allowed_districts=None, allowed_vehicles=None,
                                 is_master_or_admin=True):
+    def _haversine_meters(lat1, lon1, lat2, lon2):
+        try:
+            lat1 = float(lat1)
+            lon1 = float(lon1)
+            lat2 = float(lat2)
+            lon2 = float(lon2)
+        except (TypeError, ValueError):
+            return None
+        r = 6371000.0
+        p1 = math.radians(lat1)
+        p2 = math.radians(lat2)
+        dphi = math.radians(lat2 - lat1)
+        dlambda = math.radians(lon2 - lon1)
+        a = math.sin(dphi / 2.0) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dlambda / 2.0) ** 2
+        return 2.0 * r * math.asin(min(1.0, math.sqrt(a)))
+
     allowed_projects = set(allowed_projects or [])
     allowed_districts = set(allowed_districts or [])
     allowed_vehicles = set(allowed_vehicles or [])
@@ -11847,6 +11864,8 @@ def _unauthorized_movement_rows(from_date=None, to_date=None, project_id=0, dist
             'task_running_km': 0.0,
             'task_count': 0,
             'vehicle_no_key': key_no,
+            'last_task_running_km': 0.0,
+            'return_to_parking_km': 0.0,
         }
         if key_no:
             by_vehicle_no[key_no] = by_vehicle_id[v.id]
@@ -11889,8 +11908,25 @@ def _unauthorized_movement_rows(from_date=None, to_date=None, project_id=0, dist
             EmergencyTaskRecord.completed_date_time.isnot(None),
             EmergencyTaskRecord.excel_created_date.isnot(None),
         ).all()
+        # Keep assign times for "next task started" stop condition in return calculation.
+        emg_assign_rows = EmergencyTaskRecord.query.filter(
+            EmergencyTaskRecord.task_date >= from_date,
+            EmergencyTaskRecord.task_date <= to_date,
+            EmergencyTaskRecord.amb_reg_no.in_(vehicle_nos),
+            EmergencyTaskRecord.category.in_(['Green', 'Yellow']),
+            EmergencyTaskRecord.excel_created_date.isnot(None),
+        ).all()
+        assign_times_by_vehicle = {}
+        for emg in emg_assign_rows:
+            key_no = (emg.amb_reg_no or '').strip().upper()
+            if key_no not in by_vehicle_no:
+                continue
+            assign_dt = _parse_emg_datetime(emg.excel_created_date)
+            if assign_dt:
+                assign_times_by_vehicle.setdefault(key_no, []).append(assign_dt)
 
         task_windows = {}
+        task_meta = {}
         for emg in emg_rows:
             key_no = (emg.amb_reg_no or '').strip().upper()
             if key_no not in by_vehicle_no:
@@ -11899,7 +11935,14 @@ def _unauthorized_movement_rows(from_date=None, to_date=None, project_id=0, dist
             close_dt = _parse_emg_datetime(emg.completed_date_time)
             if not assign_dt or not close_dt or close_dt < assign_dt:
                 continue
-            task_windows.setdefault(key_no, []).append((assign_dt, close_dt))
+            idx = len(task_windows.setdefault(key_no, []))
+            task_windows[key_no].append((assign_dt, close_dt))
+            task_meta.setdefault(key_no, []).append({
+                'idx': idx,
+                'assign_dt': assign_dt,
+                'close_dt': close_dt,
+                'running_km': 0.0,
+            })
             by_vehicle_no[key_no]['task_count'] += 1
 
         if task_windows:
@@ -11909,6 +11952,7 @@ def _unauthorized_movement_rows(from_date=None, to_date=None, project_id=0, dist
                 VehicleActivityRecord.vehicle_no.in_(list(task_windows.keys())),
             ).all()
 
+            activity_by_vehicle = {}
             for act in activity_rows:
                 key_no = (act.vehicle_no or '').strip().upper()
                 windows = task_windows.get(key_no) or []
@@ -11917,17 +11961,77 @@ def _unauthorized_movement_rows(from_date=None, to_date=None, project_id=0, dist
                 act_dt = _parse_activity_datetime(act.record_date_time)
                 if not act_dt:
                     continue
+                dist_val = float(act.distance or 0)
+                activity_by_vehicle.setdefault(key_no, []).append((act_dt, dist_val, act))
                 for assign_dt, close_dt in windows:
                     if assign_dt <= act_dt <= close_dt:
-                        by_vehicle_no[key_no]['task_running_km'] += float(act.distance or 0)
+                        by_vehicle_no[key_no]['task_running_km'] += dist_val
+                        for tm in (task_meta.get(key_no) or []):
+                            if tm['assign_dt'] == assign_dt and tm['close_dt'] == close_dt:
+                                tm['running_km'] += dist_val
+                                break
                         break
+
+            # Return-to-parking calculation (Rule set):
+            # 1) Stop on next task start (if any)
+            # 2) Stop on first geofence entry (<=500m to assigned parking station)
+            # 3) Cap return KM by last task running KM
+            # 4) Stop return window at 120 minutes after last task close
+            for key_no, activities in activity_by_vehicle.items():
+                agg = by_vehicle_no.get(key_no)
+                if not agg:
+                    continue
+                v = agg.get('vehicle')
+                parking = getattr(v, 'parking_station', None) if v else None
+                base_lat = getattr(parking, 'latitude', None) if parking else None
+                base_lon = getattr(parking, 'longitude', None) if parking else None
+                if base_lat is None or base_lon is None:
+                    continue
+
+                metas = sorted((task_meta.get(key_no) or []), key=lambda x: x['close_dt'])
+                if not metas:
+                    continue
+                last_task = metas[-1]
+                close_dt = last_task['close_dt']
+                cap_km = max(float(last_task.get('running_km') or 0.0), 0.0)
+                agg['last_task_running_km'] = cap_km
+                if cap_km <= 0:
+                    continue
+
+                cutoff_dt = close_dt + timedelta(minutes=120)
+                next_assign_dt = None
+                for dt in sorted(assign_times_by_vehicle.get(key_no) or []):
+                    if dt > close_dt:
+                        next_assign_dt = dt
+                        break
+                ret_km = 0.0
+                for act_dt, dist_val, act in sorted(activities, key=lambda x: x[0]):
+                    if act_dt <= close_dt:
+                        continue
+                    if next_assign_dt and act_dt >= next_assign_dt:
+                        break
+                    if act_dt > cutoff_dt:
+                        break
+
+                    # If already inside parking geofence, return journey is complete.
+                    d_m = _haversine_meters(getattr(act, 'latitude', None), getattr(act, 'longitude', None), base_lat, base_lon)
+                    if d_m is not None and d_m <= 500.0:
+                        break
+
+                    if dist_val > 0:
+                        ret_km += dist_val
+                    if ret_km >= cap_km:
+                        ret_km = cap_km
+                        break
+
+                agg['return_to_parking_km'] = max(0.0, ret_km)
 
     rows = []
     for agg in by_vehicle_id.values():
         km_driven = round(float(agg['km_driven']), 2)
         tracker_km = round(float(agg['tracker_km']), 2)
         task_running_km = round(float(agg['task_running_km']), 2)
-        return_to_parking_km = round(task_running_km, 2)
+        return_to_parking_km = round(min(float(agg.get('return_to_parking_km') or 0.0), float(agg.get('last_task_running_km') or 0.0)), 2)
         without_task_move = round(tracker_km - (task_running_km + return_to_parking_km), 2)
 
         if without_task_move_limit is not None:
@@ -18189,7 +18293,7 @@ def _parse_activity_report_excels(files, task_date):
         if len(all_rows) <= header_row_idx:
             continue
 
-        headers = all_rows[header_row_idx][:9]
+        headers = all_rows[header_row_idx][:11]
         norm_headers = [str(h).strip().lower().replace('\xa0', ' ') if h is not None else '' for h in headers]
         expected = ['group name', 'record date time', 'location', 'speed', 'direction', 'distance', 'travel time', 'stop time', 'reason']
         if not all(any(tok in (norm_headers[i] or '') for tok in expected[i].split()) for i in range(min(9, len(norm_headers)))):
@@ -18198,7 +18302,7 @@ def _parse_activity_report_excels(files, task_date):
                 raise ValueError(f"Invalid heading row in file '{f.filename}'. Expected activity columns at row 10.")
 
         for excel_row_no, row in enumerate(all_rows[header_row_idx + 1:], start=header_row_idx + 2):
-            cells = list(row[:9]) + [None] * max(0, 9 - len(row))
+            cells = list(row[:11]) + [None] * max(0, 11 - len(row))
             group_name = _safe_str(cells[0])
             record_date_time = _safe_str(cells[1])
             location = _safe_str(cells[2])
@@ -18208,6 +18312,8 @@ def _parse_activity_report_excels(files, task_date):
             reason = _safe_str(cells[8])
             speed = _safe_float(cells[3])
             distance = _safe_float(cells[5])
+            latitude = _safe_float(cells[9]) if cells[9] not in (None, '') else None
+            longitude = _safe_float(cells[10]) if cells[10] not in (None, '') else None
 
             # Skip blank/detail-less rows and totals.
             if group_name and group_name.strip().lower() == 'total':
@@ -18215,7 +18321,7 @@ def _parse_activity_report_excels(files, task_date):
             if not any([group_name, record_date_time, location, direction, travel_time, stop_time, reason, speed, distance]):
                 continue
 
-            dedup_key = (vehicle_no, group_name or '', record_date_time or '', location or '', speed, direction or '', distance, travel_time or '', stop_time or '', reason or '')
+            dedup_key = (vehicle_no, group_name or '', record_date_time or '', location or '', speed, direction or '', distance, travel_time or '', stop_time or '', reason or '', latitude, longitude)
             if dedup_key in seen_rows:
                 continue
             seen_rows.add(dedup_key)
@@ -18231,6 +18337,8 @@ def _parse_activity_report_excels(files, task_date):
                 'travel_time': travel_time,
                 'stop_time': stop_time,
                 'reason': reason,
+                'latitude': latitude,
+                'longitude': longitude,
                 'source_file': f.filename,
             }
             _validate_string_lengths('vehicle_activity_record', VehicleActivityRecord, vals, excel_row_no, 'Tracker Activity Report')

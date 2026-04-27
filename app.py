@@ -235,6 +235,8 @@ if _run_startup_tasks:
                 ('penalty_record', 'source_type', 'VARCHAR(30)'),
                 ('penalty_record', 'source_id', 'INTEGER'),
                 ('vehicle_daily_task', 'start_reading', 'NUMERIC(12,2)'),
+                ('vehicle_activity_record', 'latitude', 'NUMERIC(10,6)'),
+                ('vehicle_activity_record', 'longitude', 'NUMERIC(10,6)'),
                 ('employee', 'wallet_account_id', 'INTEGER REFERENCES account(id)'),
                 ('driver', 'wallet_account_id', 'INTEGER REFERENCES account(id)'),
                 ('account', 'entity_type', 'VARCHAR(30)'),

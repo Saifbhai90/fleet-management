@@ -632,6 +632,8 @@ class VehicleActivityRecord(db.Model):
     travel_time = db.Column(db.String(30), nullable=True)
     stop_time = db.Column(db.String(30), nullable=True)
     reason = db.Column(db.String(100), nullable=True)
+    latitude = db.Column(db.Numeric(10, 6), nullable=True)
+    longitude = db.Column(db.Numeric(10, 6), nullable=True)
     source_file = db.Column(db.String(255), nullable=True)
 
     def __repr__(self):
