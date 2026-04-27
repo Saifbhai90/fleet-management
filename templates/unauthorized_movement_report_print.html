@@ -9,12 +9,15 @@
   .rpt-meta { font-size: 0.8rem; color: #475569; margin-bottom: 0.9rem; }
   .meta-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: .45rem .7rem; display: inline-flex; align-items: center; gap: .35rem; }
   .total-badge { display: inline-block; background: #fef3c7; color: #92400e; font-size: 0.82rem; font-weight: 700; padding: 0.22rem 0.75rem; border-radius: 20px; border: 1px solid #fde68a; }
-  .rpt-table { font-size: 0.79rem; border-radius: 10px; overflow: hidden; table-layout: fixed; width: 100%; }
-  .rpt-table thead th { background: #fef3c7; color: #92400e; font-weight: 800; font-size: 0.72rem; text-transform: uppercase; border-bottom: 2px solid #f59e0b; white-space: nowrap; padding: 0.42rem 0.58rem; letter-spacing: .2px; }
-  .rpt-table tbody td { vertical-align: middle; padding: 0.35rem 0.45rem; color: #0f172a; }
+  .rpt-table { font-size: 0.79rem; border-radius: 10px; overflow: hidden; table-layout: auto; width: 100%; border-collapse: collapse; }
+  .rpt-table thead th { background: #fef3c7; color: #92400e; font-weight: 800; font-size: 0.72rem; text-transform: uppercase; border-bottom: 2px solid #f59e0b; white-space: normal; word-wrap: break-word; overflow-wrap: break-word; vertical-align: bottom; line-height: 1.25; padding: 0.42rem 0.58rem; letter-spacing: .2px; }
+  .rpt-table tbody td { vertical-align: top; padding: 0.35rem 0.45rem; color: #0f172a; white-space: normal; word-wrap: break-word; overflow-wrap: break-word; }
   .rpt-table tbody tr:nth-child(even) { background: #fffbeb; }
   .rpt-table tbody tr:hover { background: #fef3c7; }
-  .rpt-table th, .rpt-table td { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rpt-table th:first-child, .rpt-table td:first-child { white-space: nowrap; vertical-align: middle; }
+  @media print {
+    .rpt-table { width: 100% !important; table-layout: auto !important; }
+  }
   .print-container { max-width: none !important; width: calc(100vw - 16px) !important; margin: 0 auto !important; padding: 10px 8px 20px 8px !important; }
   .preview-search-wrap { display: flex; justify-content: flex-end; margin: 6px 0 10px 0; }
   .preview-search { width: 300px; max-width: 60vw; border: 1px solid #cbd5e1; border-radius: 8px; padding: 6px 10px; font-size: .85rem; }

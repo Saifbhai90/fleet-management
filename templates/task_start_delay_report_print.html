@@ -12,13 +12,12 @@
   .rpt-badges { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
   .total-badge { display: inline-block; background: #e0e7ff; color: #312e81; font-size: 0.82rem; font-weight: 700; padding: 0.22rem 0.75rem; border-radius: 20px; border: 1px solid #c7d2fe; }
   .rpt-table-outer { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 10px; }
-  .rpt-table { font-size: 0.76rem; margin-bottom: 0; table-layout: auto; width: max-content; min-width: 100%; border-collapse: collapse; }
-  .rpt-table thead th { background: #e0e7ff; color: #312e81; font-weight: 800; font-size: 0.7rem; text-transform: uppercase; border-bottom: 2px solid #6366f1; white-space: nowrap; padding: 0.4rem 0.5rem; letter-spacing: .2px; }
-  .rpt-table tbody td { vertical-align: middle; padding: 0.35rem 0.5rem; color: #0f172a; }
+  .rpt-table { font-size: 0.76rem; margin-bottom: 0; table-layout: auto; width: 100%; border-collapse: collapse; }
+  .rpt-table thead th { background: #e0e7ff; color: #312e81; font-weight: 800; font-size: 0.7rem; text-transform: uppercase; border-bottom: 2px solid #6366f1; white-space: normal; word-wrap: break-word; overflow-wrap: break-word; vertical-align: bottom; line-height: 1.25; padding: 0.4rem 0.5rem; letter-spacing: .2px; }
+  .rpt-table tbody td { vertical-align: top; padding: 0.35rem 0.5rem; color: #0f172a; white-space: normal; word-wrap: break-word; overflow-wrap: break-word; }
   .rpt-table tbody tr:nth-child(even) { background: #f5f3ff; }
   .rpt-table tbody tr:hover { background: #eef2ff; }
-  .rpt-table th, .rpt-table td { white-space: nowrap; }
-  .rpt-table td { overflow: visible; }
+  .rpt-table th:first-child, .rpt-table td:first-child { white-space: nowrap; vertical-align: middle; }
   .print-container { max-width: none !important; width: calc(100vw - 16px) !important; margin: 0 auto !important; padding: 10px 8px 20px 8px !important; display: flex; flex-direction: column; gap: 0.75rem; box-sizing: border-box; }
   .preview-search-wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; width: 100%; }
   .preview-search { flex: 1 1 220px; min-width: 0; max-width: 100%; border: 1px solid #cbd5e1; border-radius: 8px; padding: 6px 10px; font-size: .85rem; }
@@ -26,7 +25,7 @@
   @page { size: A4 landscape !important; margin: 6mm !important; }
   @media print {
     .rpt-table-outer { overflow: visible !important; }
-    .rpt-table { width: 100% !important; min-width: 0 !important; table-layout: auto; }
+    .rpt-table { width: 100% !important; min-width: 0 !important; table-layout: auto !important; }
   }
 </style>
 {% endblock %}
