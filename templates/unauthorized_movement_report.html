@@ -14,6 +14,12 @@
   .warn-neg { color: #065f46; font-weight: 700; }
   .total-badge { background: #fef3c7; color: #92400e; padding: .25rem .8rem; border-radius: 20px; font-size: .82rem; font-weight: 700; }
   .umr-wait-inline { background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: .65rem .8rem; margin-bottom: .9rem; display: none; }
+  .umr-detail-link { cursor: pointer; text-decoration: underline dotted; text-underline-offset: 2px; }
+  .umr-seg-badge { font-size: .7rem; padding: .2rem .45rem; border-radius: 12px; }
+  .umr-seg-task { background: #dbeafe; color: #1e3a8a; }
+  .umr-seg-return { background: #dcfce7; color: #166534; }
+  .umr-seg-without { background: #fee2e2; color: #991b1b; }
+  #unauthorizedMovementHistoryBody td, #unauthorizedMovementHistoryBody th { font-size: .8rem; }
 </style>
 
 <div class="container-fluid py-3 px-3 px-md-4">
@@ -135,10 +141,10 @@
             <td>{{ r.vehicle.vehicle_no if r.vehicle else '-' }}</td>
             <td>{{ '%.2f'|format(r.km_driven) }}</td>
             <td>{{ '%.2f'|format(r.tracker_km) }}</td>
-            <td title="Emergency tasks: {{ r.task_count }}">{{ '%.2f'|format(r.task_running_km) }}</td>
-            <td>{{ '%.2f'|format(r.return_to_parking_km) }}</td>
+            <td title="Emergency tasks: {{ r.task_count }}" class="umr-detail-link js-umr-detail" data-vehicle-id="{{ r.vehicle.id if r.vehicle else 0 }}" data-focus="task_running">{{ '%.2f'|format(r.task_running_km) }}</td>
+            <td class="umr-detail-link js-umr-detail" data-vehicle-id="{{ r.vehicle.id if r.vehicle else 0 }}" data-focus="return_to_parking">{{ '%.2f'|format(r.return_to_parking_km) }}</td>
             <td class="{% if r.without_task_move > 0 %}warn-pos{% elif r.without_task_move < 0 %}warn-neg{% endif %}">
-              {{ '%.2f'|format(r.without_task_move) }}
+              <span class="umr-detail-link js-umr-detail" data-vehicle-id="{{ r.vehicle.id if r.vehicle else 0 }}" data-focus="without_task">{{ '%.2f'|format(r.without_task_move) }}</span>
             </td>
           </tr>
           {% else %}
@@ -146,6 +152,42 @@
           {% endfor %}
         </tbody>
       </table>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="unauthorizedMovementHistoryModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Movement Timeline Detail</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div id="unauthorizedMovementHistoryMeta" class="small text-muted mb-2"></div>
+        <div class="row g-2 mb-3" id="unauthorizedMovementTotals"></div>
+
+        <div class="table-responsive mb-3">
+          <table class="table table-sm table-bordered">
+            <thead><tr><th colspan="4">Task Windows</th></tr><tr><th>Task ID</th><th>Assign</th><th>Close</th><th>Task Running KM</th></tr></thead>
+            <tbody id="unauthorizedMovementTasksBody"></tbody>
+          </table>
+        </div>
+
+        <div class="table-responsive mb-3">
+          <table class="table table-sm table-bordered">
+            <thead><tr><th colspan="5">Return Windows</th></tr><tr><th>Task ID</th><th>Start</th><th>End</th><th>KM</th><th>Stop Reason</th></tr></thead>
+            <tbody id="unauthorizedMovementReturnBody"></tbody>
+          </table>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table table-sm table-bordered">
+            <thead><tr><th colspan="5">Full Activity Segments (verify-friendly)</th></tr><tr><th>Type</th><th>Task ID</th><th>From Time</th><th>To Time</th><th>KM</th></tr></thead>
+            <tbody id="unauthorizedMovementHistoryBody"></tbody>
+          </table>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -222,6 +264,100 @@ document.addEventListener('DOMContentLoaded', function () {
     });
     searchBox.dispatchEvent(new Event('input'));
   }
+
+  var detailEls = Array.prototype.slice.call(document.querySelectorAll('.js-umr-detail'));
+  var historyModalEl = document.getElementById('unauthorizedMovementHistoryModal');
+  var historyModal = historyModalEl && window.bootstrap ? new bootstrap.Modal(historyModalEl) : null;
+  var metaEl = document.getElementById('unauthorizedMovementHistoryMeta');
+  var totalsEl = document.getElementById('unauthorizedMovementTotals');
+  var tasksBody = document.getElementById('unauthorizedMovementTasksBody');
+  var returnBody = document.getElementById('unauthorizedMovementReturnBody');
+  var segBody = document.getElementById('unauthorizedMovementHistoryBody');
+
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+  function segBadge(label) {
+    if (label === 'task_running') return '<span class="umr-seg-badge umr-seg-task">Task Running</span>';
+    if (label === 'return_to_parking') return '<span class="umr-seg-badge umr-seg-return">Return to Parking</span>';
+    return '<span class="umr-seg-badge umr-seg-without">Without Task</span>';
+  }
+  function reasonText(r) {
+    if (r === 'next_task_started') return 'Next task started';
+    if (r === 'geofence_500m') return 'Geofence <= 500m';
+    if (r === 'km_cap_reached') return 'KM cap reached';
+    if (r === 'cutoff_120m') return '120 min cutoff';
+    return r || '-';
+  }
+  function fillRows(target, rows, rowBuilder, emptyCols) {
+    if (!target) return;
+    if (!rows || !rows.length) {
+      target.innerHTML = '<tr><td colspan="' + emptyCols + '" class="text-center text-muted">No data</td></tr>';
+      return;
+    }
+    target.innerHTML = rows.map(rowBuilder).join('');
+  }
+
+  async function openHistory(vehicleId, focus) {
+    if (!vehicleId || !historyModal) return;
+    var fromDate = (document.querySelector('input[name="from_date"]') || {}).value || '';
+    var toDate = (document.querySelector('input[name="to_date"]') || {}).value || '';
+    metaEl.textContent = 'Loading...';
+    totalsEl.innerHTML = '';
+    tasksBody.innerHTML = '';
+    returnBody.innerHTML = '';
+    segBody.innerHTML = '';
+    historyModal.show();
+    try {
+      var u = new URL('{{ url_for("unauthorized_movement_report_history") }}', window.location.origin);
+      u.searchParams.set('vehicle_id', vehicleId);
+      u.searchParams.set('from_date', fromDate);
+      u.searchParams.set('to_date', toDate);
+      var res = await fetch(u.toString(), { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+      var data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.message || 'Unable to load history.');
+
+      metaEl.textContent = 'Vehicle: ' + (data.vehicle_no || '-') + ' | Date range: ' + (data.from_date || '-') + ' to ' + (data.to_date || '-');
+      var totals = data.totals || {};
+      totalsEl.innerHTML = [
+        '<div class="col-md-4"><div class="border rounded p-2 bg-light small"><b>Task Running KM</b><br>' + esc((totals.task_running_km || 0).toFixed ? totals.task_running_km.toFixed(2) : totals.task_running_km) + '</div></div>',
+        '<div class="col-md-4"><div class="border rounded p-2 bg-light small"><b>Return to Parking KM</b><br>' + esc((totals.return_to_parking_km || 0).toFixed ? totals.return_to_parking_km.toFixed(2) : totals.return_to_parking_km) + '</div></div>',
+        '<div class="col-md-4"><div class="border rounded p-2 bg-light small"><b>Without Task KM</b><br>' + esc((totals.without_task_km || 0).toFixed ? totals.without_task_km.toFixed(2) : totals.without_task_km) + '</div></div>'
+      ].join('');
+
+      fillRows(tasksBody, data.tasks || [], function (t) {
+        return '<tr><td>' + esc(t.task_id || '-') + '</td><td>' + esc(t.assign || '-') + '</td><td>' + esc(t.close || '-') + '</td><td>' + esc(t.running_km) + '</td></tr>';
+      }, 4);
+      fillRows(returnBody, data.return_windows || [], function (r) {
+        return '<tr><td>' + esc(r.task_id || '-') + '</td><td>' + esc(r.start || '-') + '</td><td>' + esc(r.end || '-') + '</td><td>' + esc(r.km) + '</td><td>' + esc(reasonText(r.reason)) + '</td></tr>';
+      }, 5);
+      fillRows(segBody, data.segments || [], function (s) {
+        return '<tr><td>' + segBadge(s.label) + '</td><td>' + esc(s.task_id || '-') + '</td><td>' + esc(s.start || '-') + '</td><td>' + esc(s.end || '-') + '</td><td>' + esc(s.km) + '</td></tr>';
+      }, 5);
+
+      if (focus && segBody) {
+        var target = focus === 'task_running' ? 'Task Running' : (focus === 'return_to_parking' ? 'Return to Parking' : 'Without Task');
+        metaEl.textContent += ' | Focus: ' + target;
+      }
+    } catch (err) {
+      metaEl.textContent = (err && err.message) ? err.message : 'Failed to load history.';
+    }
+  }
+
+  detailEls.forEach(function (el) {
+    el.addEventListener('mouseenter', function () {
+      var vehicleId = parseInt(el.getAttribute('data-vehicle-id') || '0', 10);
+      var focus = el.getAttribute('data-focus') || '';
+      openHistory(vehicleId, focus);
+    }, { once: true });
+    el.addEventListener('click', function () {
+      var vehicleId = parseInt(el.getAttribute('data-vehicle-id') || '0', 10);
+      var focus = el.getAttribute('data-focus') || '';
+      openHistory(vehicleId, focus);
+    });
+  });
 });
 </script>
 {% endblock %}

@@ -12086,6 +12086,203 @@ def _filter_unauthorized_movement_rows(rows, table_search):
     return out
 
 
+def _build_unauthorized_movement_timeline(vehicle, from_date, to_date):
+    if not vehicle:
+        return {'segments': [], 'totals': {}, 'tasks': []}
+
+    vehicle_no = (vehicle.vehicle_no or '').strip().upper()
+    if not vehicle_no:
+        return {'segments': [], 'totals': {}, 'tasks': []}
+
+    def _haversine_meters(lat1, lon1, lat2, lon2):
+        try:
+            lat1 = float(lat1)
+            lon1 = float(lon1)
+            lat2 = float(lat2)
+            lon2 = float(lon2)
+        except (TypeError, ValueError):
+            return None
+        r = 6371000.0
+        p1 = math.radians(lat1)
+        p2 = math.radians(lat2)
+        dphi = math.radians(lat2 - lat1)
+        dlambda = math.radians(lon2 - lon1)
+        a = math.sin(dphi / 2.0) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dlambda / 2.0) ** 2
+        return 2.0 * r * math.asin(min(1.0, math.sqrt(a)))
+
+    emg_rows = EmergencyTaskRecord.query.filter(
+        EmergencyTaskRecord.task_date >= from_date,
+        EmergencyTaskRecord.task_date <= to_date,
+        EmergencyTaskRecord.amb_reg_no == vehicle_no,
+        EmergencyTaskRecord.category.in_(['Green', 'Yellow']),
+        EmergencyTaskRecord.completed_date_time.isnot(None),
+        EmergencyTaskRecord.excel_created_date.isnot(None),
+    ).all()
+
+    tasks = []
+    for emg in emg_rows:
+        assign_dt = _parse_emg_datetime(emg.excel_created_date)
+        close_dt = _parse_emg_datetime(emg.completed_date_time)
+        if not assign_dt or not close_dt or close_dt < assign_dt:
+            continue
+        tasks.append({
+            'task_id': emg.task_id_ext or '',
+            'assign_dt': assign_dt,
+            'close_dt': close_dt,
+            'running_km': 0.0,
+        })
+    tasks.sort(key=lambda x: x['assign_dt'])
+
+    activity_rows = VehicleActivityRecord.query.filter(
+        VehicleActivityRecord.task_date >= from_date,
+        VehicleActivityRecord.task_date <= to_date,
+        VehicleActivityRecord.vehicle_no == vehicle_no,
+    ).all()
+    acts = []
+    for act in activity_rows:
+        adt = _parse_activity_datetime(act.record_date_time)
+        if not adt:
+            continue
+        try:
+            dist_val = float(act.distance or 0)
+        except (TypeError, ValueError):
+            dist_val = 0.0
+        acts.append((adt, dist_val, act))
+    acts.sort(key=lambda x: x[0])
+
+    # Running KM per task (for KM cap on return window)
+    for adt, dist_val, _act in acts:
+        for t in tasks:
+            if t['assign_dt'] <= adt <= t['close_dt']:
+                t['running_km'] += dist_val
+                break
+
+    parking = getattr(vehicle, 'parking_station', None)
+    base_lat = getattr(parking, 'latitude', None) if parking else None
+    base_lon = getattr(parking, 'longitude', None) if parking else None
+
+    # Build return windows for each task, with stop reason.
+    return_windows = []
+    for i, t in enumerate(tasks):
+        close_dt = t['close_dt']
+        next_assign_dt = tasks[i + 1]['assign_dt'] if i + 1 < len(tasks) else None
+        cutoff_dt = close_dt + timedelta(minutes=120)
+        window_end = cutoff_dt if not next_assign_dt else min(cutoff_dt, next_assign_dt)
+        cap_km = max(float(t.get('running_km') or 0.0), 0.0)
+        if cap_km <= 0 or window_end <= close_dt:
+            continue
+
+        ret_km = 0.0
+        stop_dt = window_end
+        stop_reason = 'cutoff_120m' if window_end == cutoff_dt else 'next_task_started'
+        for adt, dist_val, act in acts:
+            if adt <= close_dt:
+                continue
+            if adt >= window_end:
+                break
+            # Keep return window clean: movement inside any task belongs to task running.
+            in_task = any(tt['assign_dt'] <= adt <= tt['close_dt'] for tt in tasks)
+            if in_task:
+                continue
+            d_m = _haversine_meters(getattr(act, 'latitude', None), getattr(act, 'longitude', None), base_lat, base_lon) \
+                if (base_lat is not None and base_lon is not None) else None
+            if d_m is not None and d_m <= 500.0:
+                stop_dt = adt
+                stop_reason = 'geofence_500m'
+                break
+            if dist_val > 0:
+                ret_km += dist_val
+            if ret_km >= cap_km:
+                ret_km = cap_km
+                stop_dt = adt
+                stop_reason = 'km_cap_reached'
+                break
+        if stop_dt > close_dt:
+            return_windows.append({
+                'start': close_dt,
+                'end': stop_dt,
+                'task_id': t.get('task_id') or '',
+                'km': round(ret_km, 2),
+                'reason': stop_reason,
+            })
+
+    # Classify each activity point.
+    timeline_points = []
+    totals = {'task_running_km': 0.0, 'return_to_parking_km': 0.0, 'without_task_km': 0.0}
+    for adt, dist_val, _act in acts:
+        label = 'without_task'
+        task_id = ''
+        for t in tasks:
+            if t['assign_dt'] <= adt <= t['close_dt']:
+                label = 'task_running'
+                task_id = t.get('task_id') or ''
+                break
+        if label != 'task_running':
+            for w in return_windows:
+                if w['start'] < adt < w['end']:
+                    label = 'return_to_parking'
+                    task_id = w.get('task_id') or ''
+                    break
+
+        if label == 'task_running':
+            totals['task_running_km'] += dist_val
+        elif label == 'return_to_parking':
+            totals['return_to_parking_km'] += dist_val
+        else:
+            totals['without_task_km'] += dist_val
+
+        timeline_points.append({'dt': adt, 'km': dist_val, 'label': label, 'task_id': task_id})
+
+    # Merge into readable time segments.
+    segments = []
+    current = None
+    for p in timeline_points:
+        if current and current['label'] == p['label'] and current.get('task_id', '') == p.get('task_id', ''):
+            current['end'] = p['dt']
+            current['km'] += p['km']
+        else:
+            if current:
+                segments.append(current)
+            current = {
+                'label': p['label'],
+                'task_id': p.get('task_id') or '',
+                'start': p['dt'],
+                'end': p['dt'],
+                'km': p['km'],
+            }
+    if current:
+        segments.append(current)
+
+    fmt = '%d-%m-%Y %I:%M:%S %p'
+    return {
+        'segments': [{
+            'label': s['label'],
+            'task_id': s['task_id'],
+            'start': s['start'].strftime(fmt) if s.get('start') else '-',
+            'end': s['end'].strftime(fmt) if s.get('end') else '-',
+            'km': round(float(s.get('km') or 0.0), 2),
+        } for s in segments],
+        'totals': {
+            'task_running_km': round(totals['task_running_km'], 2),
+            'return_to_parking_km': round(totals['return_to_parking_km'], 2),
+            'without_task_km': round(totals['without_task_km'], 2),
+        },
+        'tasks': [{
+            'task_id': t.get('task_id') or '-',
+            'assign': t['assign_dt'].strftime(fmt),
+            'close': t['close_dt'].strftime(fmt),
+            'running_km': round(float(t.get('running_km') or 0.0), 2),
+        } for t in tasks],
+        'return_windows': [{
+            'task_id': w.get('task_id') or '-',
+            'start': w['start'].strftime(fmt),
+            'end': w['end'].strftime(fmt),
+            'km': round(float(w.get('km') or 0.0), 2),
+            'reason': w.get('reason') or '',
+        } for w in return_windows],
+    }
+
+
 @app.route('/unauthorized-movement-report')
 def unauthorized_movement_report():
     from auth_utils import get_user_context
@@ -12172,6 +12369,46 @@ def unauthorized_movement_report():
         district_choices=district_choices,
         vehicle_choices=vehicle_choices,
     )
+
+
+@app.route('/unauthorized-movement-report/history')
+def unauthorized_movement_report_history():
+    from auth_utils import get_user_context
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = set(user_context.get('allowed_projects', set()) or [])
+    allowed_districts = set(user_context.get('allowed_districts', set()) or [])
+    allowed_vehicles = set(user_context.get('allowed_vehicles', set()) or [])
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+
+    vehicle_id = request.args.get('vehicle_id', type=int) or 0
+    from_date = parse_date(request.args.get('from_date')) or pk_date()
+    to_date = parse_date(request.args.get('to_date')) or pk_date()
+    if from_date > to_date:
+        from_date, to_date = to_date, from_date
+    if not vehicle_id:
+        return jsonify({'ok': False, 'message': 'Vehicle is required.'}), 400
+
+    vq = Vehicle.query.filter(Vehicle.id == vehicle_id)
+    if not is_master_or_admin:
+        if allowed_vehicles:
+            vq = vq.filter(Vehicle.id.in_(list(allowed_vehicles)))
+        if allowed_projects:
+            vq = vq.filter(Vehicle.project_id.in_(list(allowed_projects)))
+        if allowed_districts:
+            vq = vq.filter(Vehicle.district_id.in_(list(allowed_districts)))
+    v = vq.first()
+    if not v:
+        return jsonify({'ok': False, 'message': 'Vehicle not found or not allowed.'}), 404
+
+    payload = _build_unauthorized_movement_timeline(v, from_date, to_date)
+    payload.update({
+        'ok': True,
+        'vehicle_no': v.vehicle_no or '-',
+        'from_date': from_date.strftime('%d-%m-%Y'),
+        'to_date': to_date.strftime('%d-%m-%Y'),
+    })
+    return jsonify(payload)
 
 
 @app.route('/unauthorized-movement-report/export')
