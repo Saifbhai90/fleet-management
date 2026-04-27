@@ -141,7 +141,7 @@
             <td>{{ r.vehicle.vehicle_no if r.vehicle else '-' }}</td>
             <td>{{ '%.2f'|format(r.km_driven) }}</td>
             <td>{{ '%.2f'|format(r.tracker_km) }}</td>
-            <td title="Emergency tasks: {{ r.task_count }}" class="umr-detail-link js-umr-detail" data-vehicle-id="{{ r.vehicle.id if r.vehicle else 0 }}" data-focus="task_running">{{ '%.2f'|format(r.task_running_km) }}</td>
+            <td class="umr-detail-link js-umr-detail" data-vehicle-id="{{ r.vehicle.id if r.vehicle else 0 }}" data-focus="task_running">{{ '%.2f'|format(r.task_running_km) }}</td>
             <td class="umr-detail-link js-umr-detail" data-vehicle-id="{{ r.vehicle.id if r.vehicle else 0 }}" data-focus="return_to_parking">{{ '%.2f'|format(r.return_to_parking_km) }}</td>
             <td class="{% if r.without_task_move > 0 %}warn-pos{% elif r.without_task_move < 0 %}warn-neg{% endif %}">
               <span class="umr-detail-link js-umr-detail" data-vehicle-id="{{ r.vehicle.id if r.vehicle else 0 }}" data-focus="without_task">{{ '%.2f'|format(r.without_task_move) }}</span>
