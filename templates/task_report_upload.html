@@ -9,8 +9,11 @@
 
   <div class="card shadow border-0 rounded-3">
     <div class="card-body">
-      <p class="text-muted small">Report date select karein, phir required Excel files choose karein. Har field optional hai, lekin kam az kam ek file zaroor select karein. Same date par re-upload karne par purana data replace ho jata hai.</p>
-      <form method="POST" enctype="multipart/form-data">
+      <p class="text-muted small">Report date select karein, phir required Excel files choose karein. Har field optional hai, lekin kam az kam ek file zaroor select karein. Same date par re-upload karne par purana data replace ho jata hai. Multiple Tracker Activity files ko timeout se bachne ke liye upload har file alag-alag server request par hota hai.</p>
+      <form method="POST" enctype="multipart/form-data" id="taskReportUploadForm"
+            data-core-url="{{ url_for('task_report_upload_core') }}"
+            data-activity-url="{{ url_for('task_report_upload_activity_one') }}"
+            data-redirect-base="{{ url_for('task_report_list') }}">
         {{ form.hidden_tag() }}
         <div class="row g-3">
           <div class="col-md-12">
@@ -49,7 +52,7 @@
     <div class="card-body text-center py-5">
       <div class="spinner-border text-primary mb-3" style="width:3rem;height:3rem;" role="status"></div>
       <h5 class="mb-2">Uploading & Processing...</h5>
-      <p class="text-muted small mb-3">Excel files parse ho rahi hain. Please wait.</p>
+      <p class="text-muted small mb-3" id="uploadStatusLine">Excel files parse ho rahi hain. Please wait.</p>
       <div class="progress" style="height:6px;">
         <div id="uploadProgress" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" style="width:5%;"></div>
       </div>
@@ -60,23 +63,125 @@
 
 <script>
 (function(){
-  var form = document.querySelector('form[enctype]');
+  var form = document.getElementById('taskReportUploadForm');
   if (!form) return;
-  form.addEventListener('submit', function() {
+
+  function showOverlaySpinner(message) {
     var overlay = document.getElementById('uploadOverlay');
     overlay.classList.remove('d-none');
     overlay.style.display = 'flex';
     var bar = document.getElementById('uploadProgress');
-    var pct = document.getElementById('uploadPct');
-    var w = 5, target = 90;
+    var pctEl = document.getElementById('uploadPct');
+    var statusEl = document.getElementById('uploadStatusLine');
+    if (statusEl && message) statusEl.textContent = message;
+    var w = 5;
+    bar.style.width = w + '%';
+    pctEl.textContent = w + '%';
+    var target = 90;
     var iv = setInterval(function() {
       var step = Math.max(0.3, (target - w) * 0.04);
       w = Math.min(w + step, target);
       bar.style.width = w.toFixed(0) + '%';
-      pct.textContent = w.toFixed(0) + '%';
+      pctEl.textContent = w.toFixed(0) + '%';
     }, 300);
     setTimeout(function() { target = 95; }, 8000);
     window._uploadInterval = iv;
+  }
+
+  function hideOverlaySpinner() {
+    if (window._uploadInterval) {
+      clearInterval(window._uploadInterval);
+      window._uploadInterval = null;
+    }
+    var overlay = document.getElementById('uploadOverlay');
+    overlay.classList.add('d-none');
+    overlay.style.display = 'none';
+  }
+
+  form.addEventListener('submit', function(ev) {
+    var actInput = form.querySelector('[name="file_activity_reports"]');
+    var actFiles = actInput && actInput.files ? actInput.files : null;
+    if (!actFiles || actFiles.length === 0) {
+      showOverlaySpinner('Excel parse ho rahi hai…');
+      return;
+    }
+
+    ev.preventDefault();
+    showOverlaySpinner('Tracker Activity files upload ho rahi hain…');
+
+    var csrfInput = form.querySelector('[name="csrf_token"]');
+    var csrfVal = csrfInput ? csrfInput.value : '';
+    var taskDateInput = form.querySelector('[name="task_date"]');
+    var taskDate = taskDateInput ? taskDateInput.value : '';
+    var emInput = form.querySelector('[name="file_emergency"]');
+    var miInput = form.querySelector('[name="file_mileage"]');
+    var emFile = emInput && emInput.files && emInput.files[0];
+    var miFile = miInput && miInput.files && miInput.files[0];
+    var coreUrl = form.getAttribute('data-core-url');
+    var activityUrl = form.getAttribute('data-activity-url');
+    var redirectBase = form.getAttribute('data-redirect-base');
+
+    var stepsTotal = actFiles.length + (emFile || miFile ? 1 : 0);
+    var stepDone = 0;
+
+    function setProgress(message) {
+      var bar = document.getElementById('uploadProgress');
+      var pctEl = document.getElementById('uploadPct');
+      var statusEl = document.getElementById('uploadStatusLine');
+      stepDone++;
+      var p = 5 + Math.min(92, (89 * stepDone / Math.max(stepsTotal, 1)));
+      bar.style.width = p + '%';
+      pctEl.textContent = Math.round(p) + '%';
+      if (statusEl && message) statusEl.textContent = message;
+    }
+
+    var chain = Promise.resolve();
+
+    if (emFile || miFile) {
+      chain = chain.then(function() {
+        var fd = new FormData();
+        fd.append('csrf_token', csrfVal);
+        fd.append('task_date', taskDate);
+        if (emFile) fd.append('file_emergency', emFile);
+        if (miFile) fd.append('file_mileage', miFile);
+        return fetch(coreUrl, { method: 'POST', body: fd, credentials: 'same-origin' }).then(function(r) {
+          return r.json().then(function(j) {
+            if (!r.ok || !j.ok) throw new Error(j.error || 'Emergency/Mileage upload failed.');
+            setProgress('Emergency/Mileage ho gayi. Activity files…');
+          });
+        });
+      });
+    }
+
+    for (var i = 0; i < actFiles.length; i++) {
+      (function(index, file) {
+        chain = chain.then(function() {
+          var fd = new FormData();
+          fd.append('csrf_token', csrfVal);
+          fd.append('task_date', taskDate);
+          fd.append('clear_activity', index === 0 ? '1' : '0');
+          fd.append('file_activity', file, file.name);
+          return fetch(activityUrl, { method: 'POST', body: fd, credentials: 'same-origin' }).then(function(r) {
+            return r.json().then(function(j) {
+              if (!r.ok || !j.ok) throw new Error(j.error || ('Failed: ' + file.name));
+              setProgress('Activity file ' + (index + 1) + ' / ' + actFiles.length + ': ' + file.name);
+            });
+          });
+        });
+      })(i, actFiles[i]);
+    }
+
+    chain.then(function() {
+      var bar = document.getElementById('uploadProgress');
+      var pctEl = document.getElementById('uploadPct');
+      bar.style.width = '100%';
+      pctEl.textContent = '100%';
+      hideOverlaySpinner();
+      window.location.href = redirectBase + '?date=' + encodeURIComponent(taskDate);
+    }).catch(function(err) {
+      hideOverlaySpinner();
+      alert(err && err.message ? err.message : String(err));
+    });
   });
 })();
 </script>

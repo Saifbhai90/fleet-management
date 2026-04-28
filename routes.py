@@ -18476,16 +18476,115 @@ def _extract_activity_vehicle_no(ws):
     return ''
 
 
-def _parse_activity_report_excels(files, task_date):
-    """Parse multiple Tracker Activity Report files (one per vehicle)."""
+def _activity_cell_safe_str(v):
+    if v is None:
+        return None
+    if isinstance(v, datetime):
+        return v.strftime('%Y-%m-%d %H:%M:%S')
+    s = str(v).strip()
+    return s if s else None
+
+
+def _activity_cell_safe_float(v):
+    if v in (None, ''):
+        return 0.0
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _parse_activity_report_single_file(f, task_date, upload_date, seen_rows):
+    """Parse one Tracker Activity workbook; adds VehicleActivityRecord rows to session.
+    Returns (rows_added, workbook_processed): workbook_processed False if file had no bytes."""
     import io
     import openpyxl
 
+    raw = f.read()
+    f.seek(0)
+    if not raw:
+        return 0, False
+    if raw[:4] != b'PK\x03\x04':
+        raise ValueError(f"Tracker Activity Report '{f.filename}' must be .xlsx format.")
+
+    wb = openpyxl.load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
+    ws = wb.active
+    vehicle_no = _extract_activity_vehicle_no(ws)
+    if not vehicle_no:
+        wb.close()
+        raise ValueError(f"Vehicle number not found in title for file '{f.filename}'. Expected: Activity Report (VEHICLE-NO).")
+
+    header_row_idx = 9  # Row 10 in Excel (0-based index)
+    all_rows = [list(r) for r in ws.iter_rows(min_row=1, values_only=True)]
+    wb.close()
+    if len(all_rows) <= header_row_idx:
+        return 0, False
+
+    headers = all_rows[header_row_idx][:11]
+    norm_headers = [str(h).strip().lower().replace('\xa0', ' ') if h is not None else '' for h in headers]
+    expected = ['group name', 'record date time', 'location', 'speed', 'direction', 'distance', 'travel time', 'stop time', 'reason']
+    if not all(any(tok in (norm_headers[i] or '') for tok in expected[i].split()) for i in range(min(9, len(norm_headers)))):
+        if not any('record' in h and 'time' in h for h in norm_headers):
+            raise ValueError(f"Invalid heading row in file '{f.filename}'. Expected activity columns at row 10.")
+
+    count_rows = 0
+    for excel_row_no, row in enumerate(all_rows[header_row_idx + 1:], start=header_row_idx + 2):
+        cells = list(row[:11]) + [None] * max(0, 11 - len(row))
+        group_name = _activity_cell_safe_str(cells[0])
+        record_date_time = _activity_cell_safe_str(cells[1])
+        location = _activity_cell_safe_str(cells[2])
+        direction = _activity_cell_safe_str(cells[4])
+        travel_time = _activity_cell_safe_str(cells[6])
+        stop_time = _activity_cell_safe_str(cells[7])
+        reason = _activity_cell_safe_str(cells[8])
+        speed = _activity_cell_safe_float(cells[3])
+        distance = _activity_cell_safe_float(cells[5])
+        latitude = _activity_cell_safe_float(cells[9]) if cells[9] not in (None, '') else None
+        longitude = _activity_cell_safe_float(cells[10]) if cells[10] not in (None, '') else None
+
+        if group_name and group_name.strip().lower() == 'total':
+            continue
+        if not any([group_name, record_date_time, location, direction, travel_time, stop_time, reason, speed, distance]):
+            continue
+
+        dedup_key = (vehicle_no, group_name or '', record_date_time or '', location or '', speed, direction or '', distance, travel_time or '', stop_time or '', reason or '', latitude, longitude)
+        if dedup_key in seen_rows:
+            continue
+        seen_rows.add(dedup_key)
+
+        vals = {
+            'vehicle_no': vehicle_no,
+            'group_name': group_name,
+            'record_date_time': record_date_time,
+            'location': location,
+            'speed': speed,
+            'direction': direction,
+            'distance': distance,
+            'travel_time': travel_time,
+            'stop_time': stop_time,
+            'reason': reason,
+            'latitude': latitude,
+            'longitude': longitude,
+            'source_file': f.filename,
+        }
+        _validate_string_lengths('vehicle_activity_record', VehicleActivityRecord, vals, excel_row_no, 'Tracker Activity Report')
+
+        db.session.add(VehicleActivityRecord(
+            task_date=task_date,
+            upload_date=upload_date,
+            **vals,
+        ))
+        count_rows += 1
+
+    return count_rows, True
+
+
+def _parse_activity_report_excels(files, task_date):
+    """Parse multiple Tracker Activity Report files (one per vehicle)."""
     valid_files = [f for f in (files or []) if f and getattr(f, 'filename', '').strip()]
     if not valid_files:
         return {'files': 0, 'rows': 0}
 
-    # Same-date reupload policy: keep only latest upload data.
     VehicleActivityRecord.query.filter_by(task_date=task_date).delete()
 
     count_rows = 0
@@ -18493,103 +18592,77 @@ def _parse_activity_report_excels(files, task_date):
     today = pk_date()
     seen_rows = set()
 
-    def _safe_str(v):
-        if v is None:
-            return None
-        if isinstance(v, datetime):
-            return v.strftime('%Y-%m-%d %H:%M:%S')
-        s = str(v).strip()
-        return s if s else None
-
-    def _safe_float(v):
-        if v in (None, ''):
-            return 0.0
-        try:
-            return float(v)
-        except (TypeError, ValueError):
-            return 0.0
-
     for f in valid_files:
-        raw = f.read()
-        f.seek(0)
-        if not raw:
-            continue
-        if raw[:4] != b'PK\x03\x04':
-            raise ValueError(f"Tracker Activity Report '{f.filename}' must be .xlsx format.")
-
-        wb = openpyxl.load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
-        ws = wb.active
-        vehicle_no = _extract_activity_vehicle_no(ws)
-        if not vehicle_no:
-            wb.close()
-            raise ValueError(f"Vehicle number not found in title for file '{f.filename}'. Expected: Activity Report (VEHICLE-NO).")
-
-        header_row_idx = 9  # Row 10 in Excel (0-based index)
-        all_rows = [list(r) for r in ws.iter_rows(min_row=1, values_only=True)]
-        wb.close()
-        if len(all_rows) <= header_row_idx:
-            continue
-
-        headers = all_rows[header_row_idx][:11]
-        norm_headers = [str(h).strip().lower().replace('\xa0', ' ') if h is not None else '' for h in headers]
-        expected = ['group name', 'record date time', 'location', 'speed', 'direction', 'distance', 'travel time', 'stop time', 'reason']
-        if not all(any(tok in (norm_headers[i] or '') for tok in expected[i].split()) for i in range(min(9, len(norm_headers)))):
-            # Header may vary slightly; keep row10 default parsing but guard empty structure.
-            if not any('record' in h and 'time' in h for h in norm_headers):
-                raise ValueError(f"Invalid heading row in file '{f.filename}'. Expected activity columns at row 10.")
-
-        for excel_row_no, row in enumerate(all_rows[header_row_idx + 1:], start=header_row_idx + 2):
-            cells = list(row[:11]) + [None] * max(0, 11 - len(row))
-            group_name = _safe_str(cells[0])
-            record_date_time = _safe_str(cells[1])
-            location = _safe_str(cells[2])
-            direction = _safe_str(cells[4])
-            travel_time = _safe_str(cells[6])
-            stop_time = _safe_str(cells[7])
-            reason = _safe_str(cells[8])
-            speed = _safe_float(cells[3])
-            distance = _safe_float(cells[5])
-            latitude = _safe_float(cells[9]) if cells[9] not in (None, '') else None
-            longitude = _safe_float(cells[10]) if cells[10] not in (None, '') else None
-
-            # Skip blank/detail-less rows and totals.
-            if group_name and group_name.strip().lower() == 'total':
-                continue
-            if not any([group_name, record_date_time, location, direction, travel_time, stop_time, reason, speed, distance]):
-                continue
-
-            dedup_key = (vehicle_no, group_name or '', record_date_time or '', location or '', speed, direction or '', distance, travel_time or '', stop_time or '', reason or '', latitude, longitude)
-            if dedup_key in seen_rows:
-                continue
-            seen_rows.add(dedup_key)
-
-            vals = {
-                'vehicle_no': vehicle_no,
-                'group_name': group_name,
-                'record_date_time': record_date_time,
-                'location': location,
-                'speed': speed,
-                'direction': direction,
-                'distance': distance,
-                'travel_time': travel_time,
-                'stop_time': stop_time,
-                'reason': reason,
-                'latitude': latitude,
-                'longitude': longitude,
-                'source_file': f.filename,
-            }
-            _validate_string_lengths('vehicle_activity_record', VehicleActivityRecord, vals, excel_row_no, 'Tracker Activity Report')
-
-            db.session.add(VehicleActivityRecord(
-                task_date=task_date,
-                upload_date=today,
-                **vals,
-            ))
-            count_rows += 1
-
-        count_files += 1
+        rows_i, processed = _parse_activity_report_single_file(f, task_date, today, seen_rows)
+        count_rows += rows_i
+        if processed:
+            count_files += 1
 
     return {'files': count_files, 'rows': count_rows}
+
+
+def _json_task_date():
+    td = parse_date(request.form.get('task_date'))
+    return td
+
+
+@app.route('/task-report/upload/core', methods=['POST'])
+def task_report_upload_core():
+    """Import emergency + mileage only; short JSON request to avoid proxy timeout with large activity batches."""
+    task_date = _json_task_date()
+    if not task_date:
+        return jsonify({'ok': False, 'error': 'Invalid or missing report date.'}), 400
+    fe = request.files.get('file_emergency')
+    fm = request.files.get('file_mileage')
+    has_fe = fe and getattr(fe, 'filename', '').strip()
+    has_fm = fm and getattr(fm, 'filename', '').strip()
+    if not has_fe and not has_fm:
+        return jsonify({'ok': False, 'error': 'No emergency or mileage file.'}), 400
+    try:
+        c1 = c2 = 0
+        if has_fe:
+            c1 = _parse_emergency_excel(fe, task_date)
+        if has_fm:
+            c2 = _parse_mileage_excel(fm, task_date)
+        db.session.commit()
+        return jsonify({'ok': True, 'emergency_count': c1, 'mileage_count': c2, 'task_date': task_date.strftime('%d-%m-%Y')})
+    except ValueError as ex:
+        db.session.rollback()
+        return jsonify({'ok': False, 'error': str(ex)}), 400
+    except Exception:
+        db.session.rollback()
+        app.logger.exception('task_report_upload_core')
+        return jsonify({'ok': False, 'error': 'Emergency/Mileage processing failed.'}), 500
+
+
+@app.route('/task-report/upload/activity-one', methods=['POST'])
+def task_report_upload_activity_one():
+    """Import a single Tracker Activity workbook per request (multi-step upload)."""
+    task_date = _json_task_date()
+    if not task_date:
+        return jsonify({'ok': False, 'error': 'Invalid or missing report date.'}), 400
+    clear_activity = request.form.get('clear_activity') in ('1', 'true', 'on', 'yes')
+    fa = request.files.get('file_activity')
+    if not fa or not getattr(fa, 'filename', '').strip():
+        return jsonify({'ok': False, 'error': 'No activity file.'}), 400
+    try:
+        if clear_activity:
+            VehicleActivityRecord.query.filter_by(task_date=task_date).delete()
+        today = pk_date()
+        seen_rows = set()
+        rows_added, processed = _parse_activity_report_single_file(fa, task_date, today, seen_rows)
+        if not processed:
+            db.session.rollback()
+            return jsonify({'ok': False, 'error': f"No usable data in '{fa.filename}' (empty file or sheet missing activity rows)."}), 400
+        db.session.commit()
+        return jsonify({'ok': True, 'rows': rows_added, 'filename': fa.filename, 'task_date': task_date.strftime('%d-%m-%Y')})
+    except ValueError as ex:
+        db.session.rollback()
+        return jsonify({'ok': False, 'error': str(ex)}), 400
+    except Exception:
+        db.session.rollback()
+        app.logger.exception('task_report_upload_activity_one')
+        return jsonify({'ok': False, 'error': 'Tracker Activity Report processing failed.'}), 500
 
 
 @app.route('/task-report/upload', methods=['GET', 'POST'])

@@ -266,6 +266,9 @@ def get_freeze_request_codes(req: Request, endpoint: str) -> list:
     elif endpoint == 'maintenance_work_order_form':
         op = 'edit' if view_args.get('pk') else 'add'
         codes.append(f'maintenance_work_order_form:{op}')
+    elif endpoint in ('task_report_upload_core', 'task_report_upload_activity_one'):
+        # Chunked workbook upload: same freeze allowance as task_report_upload
+        codes.append('task_report_upload')
     codes.append(endpoint)
     return codes
 
