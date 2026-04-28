@@ -184,7 +184,16 @@
               <td>{{ row.district.name if row.district else (row.emg.district_name or '-') }}</td>
               <td>{{ row.project.name if row.project else '-' }}</td>
               <td>{{ row.vehicle.vehicle_no if row.vehicle else (row.emg.amb_reg_no or '-') }}</td>
-              <td>{{ row.emg.task_id_ext or '-' }}</td>
+              <td>
+                {% if row.emg.task_id_ext %}
+                <a href="#" class="red-taskid-link small fw-semibold text-primary text-decoration-none"
+                   data-task-id="{{ row.emg.task_id_ext }}"
+                   data-task-date="{{ row.emg.task_date.strftime('%Y-%m-%d') if row.emg.task_date else '' }}"
+                   data-vno="{{ row.vehicle.vehicle_no if row.vehicle else (row.emg.amb_reg_no or '') }}">{{ row.emg.task_id_ext }}</a>
+                {% else %}
+                -
+                {% endif %}
+              </td>
               <td>{{ row.assign_dt.strftime('%d-%m-%Y %I:%M %p') if row.assign_dt else '-' }}</td>
               <td>{{ row.close_dt.strftime('%d-%m-%Y %I:%M %p') if row.close_dt else '-' }}</td>
               <td>{{ row.total_time }}</td>
@@ -319,4 +328,5 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 });
 </script>
+{% include 'includes/emg_task_detail_panel.html' %}
 {% endblock %}

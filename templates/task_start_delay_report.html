@@ -136,7 +136,16 @@
             <td>{{ r.district.name if r.district else '-' }}</td>
             <td>{{ r.project.name if r.project else '-' }}</td>
             <td>{{ r.vehicle.vehicle_no if r.vehicle else '-' }}</td>
-            <td>{{ r.task_id }}</td>
+            <td>
+              {% if r.emg and r.emg.task_id_ext and r.task_id != '-' %}
+              <a href="#" class="red-taskid-link small fw-semibold text-primary text-decoration-none"
+                 data-task-id="{{ r.emg.task_id_ext }}"
+                 data-task-date="{{ r.emg.task_date.strftime('%Y-%m-%d') if r.emg.task_date else '' }}"
+                 data-vno="{{ r.vehicle.vehicle_no if r.vehicle else '' }}">{{ r.task_id }}</a>
+              {% else %}
+              {{ r.task_id }}
+              {% endif %}
+            </td>
             <td>{{ r.category }}</td>
             <td>{% if r.assign_dt %}{{ r.assign_dt.strftime('%d-%m-%Y %I:%M %p') }}{% else %}-{% endif %}</td>
             <td>{% if r.close_dt %}{{ r.close_dt.strftime('%d-%m-%Y %I:%M %p') }}{% else %}-{% endif %}</td>
@@ -220,4 +229,5 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 });
 </script>
+{% include 'includes/emg_task_detail_panel.html' %}
 {% endblock %}
