@@ -11,11 +11,12 @@
     background: #fff; border-radius: 10px; padding: 6px 8px; box-shadow: 0 1px 3px rgba(0,0,0,.08);
   }
   .mwo-ico-btn {
-    display: inline-flex; align-items: center; justify-content: center; width: 2.5rem; height: 2.5rem; padding: 0; margin: 0; border: 1.5px solid; border-radius: 8px;
+    display: inline-flex; align-items: center; justify-content: center; gap: .35rem; min-width: 2.5rem; height: 2.5rem; padding: 0 .6rem; margin: 0; border: 1.5px solid; border-radius: 8px;
     background: #fff; line-height: 1; text-decoration: none; transition: box-shadow .15s, transform .1s, background .15s;
   }
   .mwo-ico-btn:hover { box-shadow: 0 2px 10px rgba(0,0,0,.12); transform: translateY(-1px); }
   .mwo-ico-btn i { font-size: 1.1rem; }
+  .mwo-ico-label { font-size: .76rem; font-weight: 600; white-space: nowrap; }
   .mwo-ico-btn--wrench   { border-color: #4f46e5; color: #4f46e5; }
   .mwo-ico-btn--wrench:hover   { background: #eef2ff; }
   .mwo-ico-btn--graph    { border-color: #0d9488; color: #0d9488; }
@@ -36,18 +37,21 @@
     <div class="mwo-head-tools d-flex flex-wrap gap-1 align-items-center" role="toolbar" aria-label="List actions">
       <a href="{{ url_for('maintenance_expense_list') }}" class="mwo-ico-btn mwo-ico-btn--wrench" title="Maintenance bills list">
         <i class="bi bi-wrench" aria-hidden="true"></i>
+        <span class="mwo-ico-label">Bills</span>
       </a>
       <a href="{{ url_for('maintenance_expense_history') }}" class="mwo-ico-btn mwo-ico-btn--graph" title="History report">
         <i class="bi bi-graph-up-arrow" aria-hidden="true"></i>
+        <span class="mwo-ico-label">History</span>
       </a>
       <button type="button" class="mwo-ico-btn mwo-ico-btn--print" id="btnPrintReport" title="Print / Preview">
-        <i class="bi bi-printer" aria-hidden="true"></i><span class="visually-hidden">Print / Preview</span>
+        <i class="bi bi-printer" aria-hidden="true"></i><span class="mwo-ico-label">Print</span><span class="visually-hidden">Print / Preview</span>
       </button>
       <button type="button" class="mwo-ico-btn mwo-ico-btn--excel" id="btnExportReport" data-export-url="{{ url_for('maintenance_work_order_export') }}" title="Export to Excel">
-        <i class="bi bi-file-earmark-excel" aria-hidden="true"></i><span class="visually-hidden">Export to Excel</span>
+        <i class="bi bi-file-earmark-excel" aria-hidden="true"></i><span class="mwo-ico-label">Excel</span><span class="visually-hidden">Export to Excel</span>
       </button>
       <a href="{{ url_for('maintenance_work_order_form') }}" class="mwo-ico-btn mwo-ico-btn--add" title="New work order">
         <i class="bi bi-plus-lg" aria-hidden="true"></i>
+        <span class="mwo-ico-label">New</span>
       </a>
     </div>
   </div>

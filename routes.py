@@ -24089,28 +24089,30 @@ def api_maintenance_expense_approval_text(pk):
             current_product_names[it.product_id] = p_name
 
     # Previous similar product usage detail for context in approval message.
-    previous_work_detail = 'No previous work record found.'
+    previous_work_lines = []
     if vehicle and current_product_ids:
-        prev_item = db.session.query(MaintenanceExpenseItem, MaintenanceExpense).join(
-            MaintenanceExpense, MaintenanceExpense.id == MaintenanceExpenseItem.maintenance_expense_id
-        ).filter(
-            MaintenanceExpense.vehicle_id == vehicle.id,
-            MaintenanceExpenseItem.product_id.in_(current_product_ids),
-            db.or_(
-                MaintenanceExpense.expense_date < rec.expense_date,
-                db.and_(MaintenanceExpense.expense_date == rec.expense_date, MaintenanceExpense.id < rec.id),
-            )
-        ).order_by(
-            MaintenanceExpense.expense_date.desc(),
-            MaintenanceExpense.id.desc(),
-            MaintenanceExpenseItem.id.desc(),
-        ).first()
-        if prev_item:
+        for product_id in current_product_ids:
+            prev_item = db.session.query(MaintenanceExpenseItem, MaintenanceExpense).join(
+                MaintenanceExpense, MaintenanceExpense.id == MaintenanceExpenseItem.maintenance_expense_id
+            ).filter(
+                MaintenanceExpense.vehicle_id == vehicle.id,
+                MaintenanceExpenseItem.product_id == product_id,
+                db.or_(
+                    MaintenanceExpense.expense_date < rec.expense_date,
+                    db.and_(MaintenanceExpense.expense_date == rec.expense_date, MaintenanceExpense.id < rec.id),
+                )
+            ).order_by(
+                MaintenanceExpense.expense_date.desc(),
+                MaintenanceExpense.id.desc(),
+                MaintenanceExpenseItem.id.desc(),
+            ).first()
+            if not prev_item:
+                continue
             p_it, p_exp = prev_item
             p_name = current_product_names.get(p_it.product_id) or (p_it.product.name if p_it.product else f'Product #{p_it.product_id}')
             p_date = p_exp.expense_date.strftime('%d-%m-%Y') if p_exp.expense_date else '-'
             p_reading = f"{float(p_exp.current_reading):,.0f}" if p_exp.current_reading is not None else '-'
-            previous_work_detail = f"{p_name} last work was on {p_date} at a reading of {p_reading} km."
+            previous_work_lines.append(f"{p_name} last work was on {p_date} at a reading of {p_reading} km.")
 
     district_name = rec.district.name if rec.district else '-'
     project_name = rec.project.name if rec.project else '-'
@@ -24138,8 +24140,8 @@ def api_maintenance_expense_approval_text(pk):
     lines.extend([
         f"Total: {total_txt}",
         "Previous Work Detail:",
-        previous_work_detail,
     ])
+    lines.extend(previous_work_lines or ['No previous work record found.'])
     approval_text = '\n'.join(lines)
     return jsonify({
         'ok': True,
@@ -24251,8 +24253,6 @@ def api_maintenance_work_order_approval_text(pk):
                 p_date = p_exp.expense_date.strftime('%d-%m-%Y') if p_exp.expense_date else '-'
                 p_reading = f"{float(p_exp.current_reading):,.0f}" if p_exp.current_reading is not None else '-'
                 previous_work_lines.append(f"{pidx}- {p_name} last work was on {p_date} at a reading of {p_reading} km.")
-            else:
-                previous_work_lines.append(f"{pidx}- {p_name}: no previous work record found.")
     if not previous_work_lines:
         previous_work_lines = ['No previous work record found.']
 
