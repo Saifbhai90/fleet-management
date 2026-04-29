@@ -36,7 +36,7 @@
         <input type="hidden" name="{{ k }}" value="{{ v }}">
         {% endfor %}
         <div class="mb-3">
-          <label class="form-label fw-semibold">Check-out Time <span class="text-danger">*</span></label>
+          <label class="form-label fw-semibold">Check-out Time <span class="text-danger">*</span> <span id="checkOutTimeSourceBadge" class="badge text-bg-secondary ms-1 d-none"></span></label>
           <input type="time" id="checkOutTime" name="check_out_time" class="form-control form-control-lg" required step="60" value="{{ request.form.get('check_out_time', '') }}">
           <div class="form-text">Format: HH:MM (e.g. 09:00, 17:30)</div>
         </div>
@@ -89,6 +89,7 @@
   var allowFuture = {{ 'true' if allow_future_checkout else 'false' }};
 
   var timeInput = document.getElementById('checkOutTime');
+  var timeSourceBadge = document.getElementById('checkOutTimeSourceBadge');
   var dateInput = document.getElementById('checkOutDate');
   var hint = document.getElementById('nightShiftHint');
   var form = timeInput.closest('form');
@@ -336,6 +337,21 @@
     el.className = 'small ' + (ok ? 'text-success' : 'text-danger');
     if (warn) warn.classList.toggle('d-none', ok);
   }
+  function setTimeSourceBadge(sourceKind) {
+    if (!timeSourceBadge) return;
+    if (sourceKind === 'gps') {
+      timeSourceBadge.textContent = 'GPS image time';
+      timeSourceBadge.className = 'badge text-bg-success ms-1';
+      return;
+    }
+    if (sourceKind === 'current') {
+      timeSourceBadge.textContent = 'Current time';
+      timeSourceBadge.className = 'badge text-bg-warning ms-1';
+      return;
+    }
+    timeSourceBadge.textContent = '';
+    timeSourceBadge.className = 'badge text-bg-secondary ms-1 d-none';
+  }
   function autoFillFromPhotoEvent(fileObj) {
     parseExifDateTimeOriginal(fileObj).then(function(dt) {
       if (dt) return { time: hhmmFromDate(dt), dateYmd: ymdFromDate(dt) };
@@ -344,6 +360,7 @@
       var timeStr = parsed && parsed.time ? parsed.time : null;
       var dateYmd = parsed && parsed.dateYmd ? parsed.dateYmd : null;
       if (timeInput) timeInput.value = timeStr || nowHHMM();
+      setTimeSourceBadge(timeStr ? 'gps' : 'current');
       if (timeInput) timeInput.dispatchEvent(new Event('change', { bubbles: true }));
       applyDateMatchStatus(dateYmd);
       if (reasonInput && (!reasonInput.value || reasonInput.dataset.autoFilled === '1')) {
@@ -352,6 +369,7 @@
       }
     }).catch(function() {
       if (timeInput) timeInput.value = nowHHMM();
+      setTimeSourceBadge('current');
       if (timeInput) timeInput.dispatchEvent(new Event('change', { bubbles: true }));
       applyDateMatchStatus(null);
     });
