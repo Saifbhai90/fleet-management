@@ -35,17 +35,17 @@
         {% endfor %}
         <div class="mb-3">
           <label class="form-label fw-semibold">Check-in Time <span class="text-danger">*</span></label>
-          <input type="time" name="check_in_time" class="form-control form-control-lg" required step="60" value="{{ request.form.get('check_in_time', '') }}">
+          <input type="time" id="checkInTime" name="check_in_time" class="form-control form-control-lg" required step="60" value="{{ request.form.get('check_in_time', '') }}">
           <div class="form-text">Format: HH:MM AM/PM (e.g. 9:00 AM, 5:30 PM) — seconds mat likhein.</div>
         </div>
         <div class="mb-3">
           <label class="form-label fw-semibold">Reason <span class="text-danger">*</span></label>
-          <input type="text" name="remarks" class="form-control" placeholder="Manual check-in ka reason likhein" value="{{ request.form.get('remarks', '') }}" required>
+          <input type="text" id="checkInReason" name="remarks" class="form-control" placeholder="Manual check-in ka reason likhein" value="{{ request.form.get('remarks', '') }}" required>
           <div class="form-text">Manual check-in kyun kar rahe hain — reason likhein.</div>
         </div>
         <div class="mb-4">
           <label class="form-label fw-semibold">Photo <span class="text-muted">(optional)</span></label>
-          <input type="file" name="photo" class="form-control" accept="image/*" capture="environment">
+          <input type="file" id="checkInPhoto" name="photo" class="form-control" accept="image/*" capture="environment">
           <div class="form-text">Agar chahein to check-in ki photo attach karein.</div>
         </div>
         <div class="d-flex gap-2">
@@ -58,4 +58,53 @@
     </div>
   </div>
 </div>
+<script>
+(function() {
+  function nowHHMM() {
+    var now = new Date();
+    var hh = ('0' + now.getHours()).slice(-2);
+    var mm = ('0' + now.getMinutes()).slice(-2);
+    return hh + ':' + mm;
+  }
+  var timeInput = document.getElementById('checkInTime');
+  var reasonInput = document.getElementById('checkInReason');
+  var photoInput = document.getElementById('checkInPhoto');
+  if (!photoInput) return;
+  var autoReason = 'GPS camera image attached for manual check-in.';
+
+  function autoFillFromPhotoEvent() {
+    if (timeInput && !timeInput.value) {
+      timeInput.value = nowHHMM();
+      timeInput.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    if (reasonInput && (!reasonInput.value || reasonInput.dataset.autoFilled === '1')) {
+      reasonInput.value = autoReason;
+      reasonInput.dataset.autoFilled = '1';
+    }
+  }
+
+  if (reasonInput) {
+    reasonInput.addEventListener('input', function() {
+      if ((reasonInput.value || '').trim() !== autoReason) reasonInput.dataset.autoFilled = '0';
+    });
+  }
+  photoInput.addEventListener('change', function() {
+    if (photoInput.files && photoInput.files.length) autoFillFromPhotoEvent();
+  });
+  document.addEventListener('paste', function(e) {
+    var items = (e.clipboardData || window.clipboardData || {}).items || [];
+    var dt = new DataTransfer();
+    var added = 0;
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].kind === 'file' && (items[i].type || '').indexOf('image/') === 0) {
+        var f = items[i].getAsFile();
+        if (f) { dt.items.add(f); added++; }
+      }
+    }
+    if (!added) return;
+    photoInput.files = dt.files;
+    autoFillFromPhotoEvent();
+  });
+})();
+</script>
 {% endblock %}
