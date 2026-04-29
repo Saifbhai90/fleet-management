@@ -52,6 +52,9 @@
           <button type="submit" class="btn btn-success">
             <i class="bi bi-check2 me-1"></i>Save Check-in
           </button>
+          <span id="checkInDateWarnBadge" class="badge text-bg-warning align-self-center d-none">
+            <i class="bi bi-exclamation-triangle-fill me-1"></i>Date No match
+          </span>
           <a href="{{ back_url }}" class="btn btn-outline-secondary">Cancel</a>
         </div>
       </form>
@@ -228,16 +231,19 @@
   }
   function applyDateMatchStatus(imageDateYmd) {
     var el = document.getElementById('checkInDateMatchStatus');
+    var warn = document.getElementById('checkInDateWarnBadge');
     if (!el) return;
     if (!imageDateYmd) {
       el.textContent = '';
       el.className = 'small text-muted';
+      if (warn) warn.classList.add('d-none');
       return;
     }
     var expected = "{{ view_date.strftime('%Y-%m-%d') }}";
     var ok = String(imageDateYmd) === String(expected);
     el.textContent = ok ? '(Match)' : '(No match)';
     el.className = 'small ' + (ok ? 'text-success' : 'text-danger');
+    if (warn) warn.classList.toggle('d-none', ok);
   }
   var timeInput = document.getElementById('checkInTime');
   var reasonInput = document.getElementById('checkInReason');

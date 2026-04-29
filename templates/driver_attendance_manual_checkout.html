@@ -65,6 +65,9 @@
           <button type="submit" class="btn btn-danger">
             <i class="bi bi-check2 me-1"></i>Save Check-out
           </button>
+          <span id="checkOutDateWarnBadge" class="badge text-bg-warning align-self-center d-none">
+            <i class="bi bi-exclamation-triangle-fill me-1"></i>Date No match
+          </span>
           <a href="{{ back_url }}" class="btn btn-outline-secondary">Cancel</a>
         </div>
       </form>
@@ -319,16 +322,19 @@
   }
   function applyDateMatchStatus(imageDateYmd) {
     var el = document.getElementById('checkOutDateMatchStatus');
+    var warn = document.getElementById('checkOutDateWarnBadge');
     if (!el) return;
     if (!imageDateYmd) {
       el.textContent = '';
       el.className = 'small text-muted';
+      if (warn) warn.classList.add('d-none');
       return;
     }
     var expected = "{{ view_date.strftime('%Y-%m-%d') }}";
     var ok = String(imageDateYmd) === String(expected);
     el.textContent = ok ? '(Match)' : '(No match)';
     el.className = 'small ' + (ok ? 'text-success' : 'text-danger');
+    if (warn) warn.classList.toggle('d-none', ok);
   }
   function autoFillFromPhotoEvent(fileObj) {
     parseExifDateTimeOriginal(fileObj).then(function(dt) {
