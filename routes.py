@@ -24203,43 +24203,71 @@ def api_maintenance_work_order_approval_text(pk):
 
     detail_lines = []
     grand_total = 0.0
-    for idx, ex in enumerate(expenses, 1):
+    current_product_ids = []
+    current_product_names = {}
+    for ex in expenses:
         ex_total = float(ex.total_bill_amount or 0)
         if ex_total <= 0:
             ex_total = sum(float(it.amount or (float(it.qty or 0) * float(it.price or 0))) for it in ex.items.all())
         grand_total += ex_total
-        ex_date = ex.expense_date.strftime('%d-%m-%Y') if ex.expense_date else '-'
-        ex_reading = f"{float(ex.current_reading):.0f}" if ex.current_reading is not None else '-'
-        line = f"Bill-{idx}: MAINT-{ex.id} | {ex_date} | Reading {ex_reading} | Total {ex_total:.0f}"
-        detail_lines.append(line)
         for it in ex.items.order_by(MaintenanceExpenseItem.sort_order.asc(), MaintenanceExpenseItem.id.asc()).all():
             p_name = (it.product.name if it.product else f'Product #{it.product_id}')
             qty = float(it.qty or 0)
             price = float(it.price or 0)
             amount = float(it.amount or (qty * price))
-            detail_lines.append(f"- {p_name} {qty:.0f}x{price:.0f}={amount:.0f}")
+            detail_lines.append(f"{len(detail_lines) + 1}- {p_name} {qty:.0f}x{price:.0f}={amount:.0f}")
+            if it.product_id and it.product_id not in current_product_ids:
+                current_product_ids.append(it.product_id)
+                current_product_names[it.product_id] = p_name
 
     if not detail_lines:
-        detail_lines = ['No bill lines attached yet.']
+        detail_lines = ['-']
+
+    previous_work_lines = []
+    if vehicle and current_product_ids:
+        first_expense = expenses[0] if expenses else None
+        boundary_date = first_expense.expense_date if first_expense and first_expense.expense_date else wo.opened_on
+        boundary_id = first_expense.id if first_expense else 0
+        for pidx, product_id in enumerate(current_product_ids, 1):
+            prev_item = db.session.query(MaintenanceExpenseItem, MaintenanceExpense).join(
+                MaintenanceExpense, MaintenanceExpense.id == MaintenanceExpenseItem.maintenance_expense_id
+            ).filter(
+                MaintenanceExpense.vehicle_id == vehicle.id,
+                MaintenanceExpenseItem.product_id == product_id,
+                db.or_(
+                    MaintenanceExpense.expense_date < boundary_date,
+                    db.and_(MaintenanceExpense.expense_date == boundary_date, MaintenanceExpense.id < boundary_id),
+                )
+            ).order_by(
+                MaintenanceExpense.expense_date.desc(),
+                MaintenanceExpense.id.desc(),
+                MaintenanceExpenseItem.id.desc(),
+            ).first()
+            p_name = current_product_names.get(product_id) or f'Product #{product_id}'
+            if prev_item:
+                p_it, p_exp = prev_item
+                p_date = p_exp.expense_date.strftime('%d-%m-%Y') if p_exp.expense_date else '-'
+                p_reading = f"{float(p_exp.current_reading):,.0f}" if p_exp.current_reading is not None else '-'
+                previous_work_lines.append(f"{pidx}- {p_name} last work was on {p_date} at a reading of {p_reading} km.")
+            else:
+                previous_work_lines.append(f"{pidx}- {p_name}: no previous work record found.")
+    if not previous_work_lines:
+        previous_work_lines = ['No previous work record found.']
 
     lines = [
-        "Approval Required (Work Order)",
-        f"WO: {wo.work_order_no or '-'}",
+        "Approval Required",
         vehicle_label,
         f"Date: {wo_date}",
         f"Driver: {driver_name}",
         f"Location: {location}",
-        f"Work Type: {wo.work_type or '-'}",
-        f"Title: {wo.title or '-'}",
         "Detail:",
     ]
     lines.extend(detail_lines)
     lines.extend([
-        f"Grand Total: {grand_total:.0f}",
-        f"Total Bills: {len(expenses)}",
+        f"Total: {grand_total:.0f}",
         "Previous Work Detail:",
-        (wo.remarks or 'Refer linked bills for full previous work context.'),
     ])
+    lines.extend(previous_work_lines)
 
     return jsonify({
         'ok': True,
