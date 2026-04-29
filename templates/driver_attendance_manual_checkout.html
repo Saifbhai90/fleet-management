@@ -23,7 +23,7 @@
         <dt class="col-sm-4">Shift</dt>
         <dd class="col-sm-8">{{ driver.shift or '-' }}</dd>
         <dt class="col-sm-4">Attendance Date</dt>
-        <dd class="col-sm-8">{{ view_date.strftime('%d-%m-%Y') }}</dd>
+        <dd class="col-sm-8">{{ view_date.strftime('%d-%m-%Y') }} <span id="checkOutDateMatchStatus" class="small text-muted"></span></dd>
         <dt class="col-sm-4">Check-in Time</dt>
         <dd class="col-sm-8">{% if rec and rec.check_in %}{{ rec.check_in.strftime('%I:%M %p') }}{% else %}-{% endif %}</dd>
       </dl>
@@ -248,7 +248,18 @@
     var m3;
     while ((m3 = re3.exec(t)) !== null) candidates.push({ time: m3[0], ampm: '' });
     if (!candidates.length) return null;
-    var picked = candidates[candidates.length - 1];
+    var picked = null;
+    var bestScore = -1;
+    candidates.forEach(function(c) {
+      var score = 0;
+      if (c.ampm) score += 10;
+      if (String(c.time || '').indexOf(':') !== -1) score += 2;
+      if (score > bestScore) {
+        bestScore = score;
+        picked = c;
+      }
+    });
+    if (!picked) picked = candidates[candidates.length - 1];
     var parts = picked.time.split(':');
     var hh = parseInt(parts[0], 10);
     var mm = parseInt(parts[1], 10);
@@ -260,7 +271,19 @@
     if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return null;
     return ('0' + hh).slice(-2) + ':' + ('0' + mm).slice(-2);
   }
-  function ocrTimeFromImage(file) {
+  function parseDateFromOcrText(text) {
+    if (!text) return null;
+    var t = String(text).replace(/\s+/g, ' ').trim();
+    var m = t.match(/\b(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})\b/);
+    if (!m) return null;
+    var d = parseInt(m[1], 10);
+    var mo = parseInt(m[2], 10);
+    var y = parseInt(m[3], 10);
+    if (y < 100) y += 2000;
+    if (d < 1 || d > 31 || mo < 1 || mo > 12 || y < 2000 || y > 2100) return null;
+    return y + '-' + ('0' + mo).slice(-2) + '-' + ('0' + d).slice(-2);
+  }
+  function ocrDateTimeFromImage(file) {
     return ensureTesseract()
       .then(function(Tesseract) {
         return new Promise(function(resolve, reject) {
@@ -275,7 +298,13 @@
               var ctx = canvas.getContext('2d');
               ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
               Tesseract.recognize(canvas, 'eng')
-                .then(function(r) { resolve(parseTimeFromOcrText(r && r.data ? r.data.text : '')); })
+                .then(function(r) {
+                  var text = (r && r.data) ? (r.data.text || '') : '';
+                  resolve({
+                    time: parseTimeFromOcrText(text),
+                    dateYmd: parseDateFromOcrText(text)
+                  });
+                })
                 .catch(reject);
             } catch (ex) { reject(ex); }
           };
@@ -283,15 +312,34 @@
           img.src = URL.createObjectURL(file);
         });
       })
-      .catch(function() { return null; });
+      .catch(function() { return { time: null, dateYmd: null }; });
+  }
+  function ymdFromDate(dt) {
+    return dt.getFullYear() + '-' + ('0' + (dt.getMonth() + 1)).slice(-2) + '-' + ('0' + dt.getDate()).slice(-2);
+  }
+  function applyDateMatchStatus(imageDateYmd) {
+    var el = document.getElementById('checkOutDateMatchStatus');
+    if (!el) return;
+    if (!imageDateYmd) {
+      el.textContent = '';
+      el.className = 'small text-muted';
+      return;
+    }
+    var expected = "{{ view_date.strftime('%Y-%m-%d') }}";
+    var ok = String(imageDateYmd) === String(expected);
+    el.textContent = ok ? '(Match)' : '(No match)';
+    el.className = 'small ' + (ok ? 'text-success' : 'text-danger');
   }
   function autoFillFromPhotoEvent(fileObj) {
     parseExifDateTimeOriginal(fileObj).then(function(dt) {
-      if (dt) return hhmmFromDate(dt);
-      return ocrTimeFromImage(fileObj);
-    }).then(function(timeStr) {
+      if (dt) return { time: hhmmFromDate(dt), dateYmd: ymdFromDate(dt) };
+      return ocrDateTimeFromImage(fileObj);
+    }).then(function(parsed) {
+      var timeStr = parsed && parsed.time ? parsed.time : null;
+      var dateYmd = parsed && parsed.dateYmd ? parsed.dateYmd : null;
       if (timeInput) timeInput.value = timeStr || nowHHMM();
       if (timeInput) timeInput.dispatchEvent(new Event('change', { bubbles: true }));
+      applyDateMatchStatus(dateYmd);
       if (reasonInput && (!reasonInput.value || reasonInput.dataset.autoFilled === '1')) {
         reasonInput.value = autoReason;
         reasonInput.dataset.autoFilled = '1';
@@ -299,6 +347,7 @@
     }).catch(function() {
       if (timeInput) timeInput.value = nowHHMM();
       if (timeInput) timeInput.dispatchEvent(new Event('change', { bubbles: true }));
+      applyDateMatchStatus(null);
     });
   }
   if (reasonInput) {
