@@ -52,7 +52,7 @@
   <table class="table table-sm table-bordered rpt-table w-100">
     <thead>
       <tr>
-        <th>Sr</th><th>Date</th><th>District</th><th>Project</th><th>Vehicle</th>
+        <th>Sr</th><th>Date</th><th>District</th><th>Tehsil</th><th>Project</th><th>V.Type</th><th>Vehicle</th>
         <th>Start Reading</th><th>Close Reading</th><th>Total KMs</th><th>Task</th><th>Check Result</th>
       </tr>
     </thead>
@@ -62,7 +62,9 @@
         <td>{{ loop.index }}</td>
         <td>{{ r.rec.task_date|ddmmyyyy }}</td>
         <td>{{ r.district.name if r.district else '-' }}</td>
+        <td>{{ r.vehicle.parking_station.tehsil if r.vehicle and r.vehicle.parking_station else '-' }}</td>
         <td>{{ r.project.name if r.project else '-' }}</td>
+        <td>{{ r.vehicle.vehicle_type if r.vehicle else '-' }}</td>
         <td>{{ r.vehicle.vehicle_no if r.vehicle else '-' }}</td>
         <td>{{ '%.2f'|format(r.start_reading) }}</td>
         <td>{{ '%.2f'|format(r.close_reading) }}</td>
@@ -78,7 +80,7 @@
         </td>
       </tr>
       {% else %}
-      <tr><td colspan="10" class="text-center text-muted py-4">No mileage records found.</td></tr>
+      <tr><td colspan="12" class="text-center text-muted py-4">No mileage records found.</td></tr>
       {% endfor %}
     </tbody>
   </table>

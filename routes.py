@@ -11693,11 +11693,21 @@ def mileage_report_export():
     table_search = (request.args.get('table_search') or '').strip().lower()
     if table_search:
         def _m(r):
+            v = r.get('vehicle')
+            tehsil_txt = ''
+            vtype_txt = ''
+            if v:
+                ps = getattr(v, 'parking_station', None)
+                if ps:
+                    tehsil_txt = ps.tehsil or ''
+                vtype_txt = v.vehicle_type or ''
             blob = ' '.join([
                 r['rec'].task_date.strftime('%d-%m-%Y') if r['rec'].task_date else '',
                 r['district'].name if r.get('district') else '',
+                tehsil_txt,
                 r['project'].name if r.get('project') else '',
-                r['vehicle'].vehicle_no if r.get('vehicle') else '',
+                vtype_txt,
+                v.vehicle_no if v else '',
                 f"{r['start_reading']:.2f}",
                 f"{r['close_reading']:.2f}",
                 f"{r['total_km']:.2f}",
@@ -11707,15 +11717,24 @@ def mileage_report_export():
             return table_search in blob
         rows = [r for r in rows if _m(r)]
 
-    headers = ['Sr', 'Date', 'District', 'Project', 'Vehicle', 'Start Reading', 'Close Reading', 'Total KMs', 'Task', 'Check Result']
+    headers = ['Sr', 'Date', 'District', 'Tehsil', 'Project', 'Vehicle Type', 'Vehicle', 'Start Reading', 'Close Reading', 'Total KMs', 'Task', 'Check Result']
     data_rows = []
     for i, r in enumerate(rows, 1):
+        v = r.get('vehicle')
+        tehsil_disp = '-'
+        vtype_disp = '-'
+        if v:
+            ps = getattr(v, 'parking_station', None)
+            tehsil_disp = ps.tehsil if ps and ps.tehsil else '-'
+            vtype_disp = v.vehicle_type or '-'
         data_rows.append([
             i,
             r['rec'].task_date.strftime('%d-%m-%Y') if r['rec'].task_date else '-',
             r['district'].name if r['district'] else '-',
+            tehsil_disp,
             r['project'].name if r['project'] else '-',
-            r['vehicle'].vehicle_no if r['vehicle'] else '-',
+            vtype_disp,
+            v.vehicle_no if v else '-',
             r['start_reading'],
             r['close_reading'],
             r['total_km'],
@@ -11766,11 +11785,21 @@ def _mileage_report_preview_context():
     table_search = (request.args.get('table_search') or '').strip().lower()
     if table_search:
         def _m(r):
+            v = r.get('vehicle')
+            tehsil_txt = ''
+            vtype_txt = ''
+            if v:
+                ps = getattr(v, 'parking_station', None)
+                if ps:
+                    tehsil_txt = ps.tehsil or ''
+                vtype_txt = v.vehicle_type or ''
             blob = ' '.join([
                 r['rec'].task_date.strftime('%d-%m-%Y') if r['rec'].task_date else '',
                 r['district'].name if r.get('district') else '',
+                tehsil_txt,
                 r['project'].name if r.get('project') else '',
-                r['vehicle'].vehicle_no if r.get('vehicle') else '',
+                vtype_txt,
+                v.vehicle_no if v else '',
                 f"{r['start_reading']:.2f}",
                 f"{r['close_reading']:.2f}",
                 f"{r['total_km']:.2f}",
