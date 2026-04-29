@@ -11937,23 +11937,6 @@ def _unauthorized_movement_rows(from_date=None, to_date=None, project_id=0, dist
             EmergencyTaskRecord.completed_date_time.isnot(None),
             EmergencyTaskRecord.excel_created_date.isnot(None),
         ).all()
-        # Keep assign times for "next task started" stop condition in return calculation.
-        emg_assign_rows = EmergencyTaskRecord.query.filter(
-            EmergencyTaskRecord.task_date >= from_date,
-            EmergencyTaskRecord.task_date <= to_date,
-            EmergencyTaskRecord.amb_reg_no.in_(vehicle_nos),
-            EmergencyTaskRecord.category.in_(['Green', 'Yellow']),
-            EmergencyTaskRecord.excel_created_date.isnot(None),
-        ).all()
-        assign_times_by_vehicle = {}
-        for emg in emg_assign_rows:
-            key_no = (emg.amb_reg_no or '').strip().upper()
-            if key_no not in by_vehicle_no:
-                continue
-            assign_dt = _parse_emg_datetime(emg.excel_created_date)
-            if assign_dt:
-                assign_times_by_vehicle.setdefault(key_no, []).append(assign_dt)
-
         task_windows = {}
         task_meta = {}
         for emg in emg_rows:
@@ -12001,11 +11984,12 @@ def _unauthorized_movement_rows(from_date=None, to_date=None, project_id=0, dist
                                 break
                         break
 
-            # Return-to-parking calculation (Rule set):
-            # 1) Stop on next task start (if any)
-            # 2) Stop on first geofence entry (<=500m to assigned parking station)
-            # 3) Cap return KM by last task running KM
-            # 4) Stop return window at 120 minutes after last task close
+            # Return-to-parking calculation (same rules as timeline detail):
+            # for EACH task window:
+            # 1) start after task close
+            # 2) stop at min(next task start, close+120m)
+            # 3) stop on geofence entry <=500m
+            # 4) cap by that task's running KM
             for key_no, activities in activity_by_vehicle.items():
                 agg = by_vehicle_no.get(key_no)
                 if not agg:
@@ -12017,50 +12001,55 @@ def _unauthorized_movement_rows(from_date=None, to_date=None, project_id=0, dist
                 if base_lat is None or base_lon is None:
                     continue
 
-                metas = sorted((task_meta.get(key_no) or []), key=lambda x: x['close_dt'])
+                metas = sorted((task_meta.get(key_no) or []), key=lambda x: x['assign_dt'])
                 if not metas:
                     continue
-                last_task = metas[-1]
-                close_dt = last_task['close_dt']
-                cap_km = max(float(last_task.get('running_km') or 0.0), 0.0)
-                agg['last_task_running_km'] = cap_km
-                if cap_km <= 0:
-                    continue
 
-                cutoff_dt = close_dt + timedelta(minutes=120)
-                next_assign_dt = None
-                for dt in sorted(assign_times_by_vehicle.get(key_no) or []):
-                    if dt > close_dt:
-                        next_assign_dt = dt
-                        break
-                ret_km = 0.0
-                for act_dt, dist_val, act in sorted(activities, key=lambda x: x[0]):
-                    if act_dt <= close_dt:
+                activities_sorted = sorted(activities, key=lambda x: x[0])
+                total_return_km = 0.0
+                for i, tm in enumerate(metas):
+                    close_dt = tm['close_dt']
+                    next_assign_dt = metas[i + 1]['assign_dt'] if i + 1 < len(metas) else None
+                    cutoff_dt = close_dt + timedelta(minutes=120)
+                    window_end = cutoff_dt if not next_assign_dt else min(cutoff_dt, next_assign_dt)
+                    cap_km = max(float(tm.get('running_km') or 0.0), 0.0)
+                    if cap_km <= 0 or window_end <= close_dt:
                         continue
-                    if next_assign_dt and act_dt >= next_assign_dt:
-                        break
-                    if act_dt > cutoff_dt:
-                        break
 
-                    # If already inside parking geofence, return journey is complete.
-                    d_m = _haversine_meters(getattr(act, 'latitude', None), getattr(act, 'longitude', None), base_lat, base_lon)
-                    if d_m is not None and d_m <= 500.0:
-                        break
+                    ret_km = 0.0
+                    for act_dt, dist_val, act in activities_sorted:
+                        if act_dt <= close_dt:
+                            continue
+                        if act_dt >= window_end:
+                            break
+                        # Keep return window clean: points inside any task belong to task running.
+                        in_task = any(tt['assign_dt'] <= act_dt <= tt['close_dt'] for tt in metas)
+                        if in_task:
+                            continue
 
-                    if dist_val > 0:
-                        ret_km += dist_val
-                    if ret_km >= cap_km:
-                        ret_km = cap_km
-                        break
+                        d_m = _haversine_meters(
+                            getattr(act, 'latitude', None),
+                            getattr(act, 'longitude', None),
+                            base_lat,
+                            base_lon,
+                        )
+                        if d_m is not None and d_m <= 500.0:
+                            break
+                        if dist_val > 0:
+                            ret_km += dist_val
+                        if ret_km >= cap_km:
+                            ret_km = cap_km
+                            break
+                    total_return_km += max(0.0, ret_km)
 
-                agg['return_to_parking_km'] = max(0.0, ret_km)
+                agg['return_to_parking_km'] = max(0.0, total_return_km)
 
     rows = []
     for agg in by_vehicle_id.values():
         km_driven = round(float(agg['km_driven']), 2)
         tracker_km = round(float(agg['tracker_km']), 2)
         task_running_km = round(float(agg['task_running_km']), 2)
-        return_to_parking_km = round(min(float(agg.get('return_to_parking_km') or 0.0), float(agg.get('last_task_running_km') or 0.0)), 2)
+        return_to_parking_km = round(float(agg.get('return_to_parking_km') or 0.0), 2)
         without_task_move = round(tracker_km - (task_running_km + return_to_parking_km), 2)
 
         if without_task_move_limit is not None:

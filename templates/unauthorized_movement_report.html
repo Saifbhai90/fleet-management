@@ -161,31 +161,41 @@
     <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title">Movement Timeline Detail</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        <div class="d-flex align-items-center gap-2">
+          <button type="button" class="btn btn-outline-success btn-sm" id="unauthorizedMovementHistoryExportBtn">
+            <i class="bi bi-file-earmark-excel me-1"></i>Export
+          </button>
+          <button type="button" class="btn btn-outline-secondary btn-sm" id="unauthorizedMovementHistoryPrintBtn">
+            <i class="bi bi-printer me-1"></i>Print
+          </button>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
       </div>
       <div class="modal-body">
-        <div id="unauthorizedMovementHistoryMeta" class="small text-muted mb-2"></div>
-        <div class="row g-2 mb-3" id="unauthorizedMovementTotals"></div>
+        <div id="unauthorizedMovementHistoryPrintable">
+          <div id="unauthorizedMovementHistoryMeta" class="small text-muted mb-2"></div>
+          <div class="row g-2 mb-3" id="unauthorizedMovementTotals"></div>
 
-        <div class="table-responsive mb-3">
-          <table class="table table-sm table-bordered">
-            <thead><tr><th colspan="4">Task Windows</th></tr><tr><th>Task ID</th><th>Assign</th><th>Close</th><th>Task Running KM</th></tr></thead>
-            <tbody id="unauthorizedMovementTasksBody"></tbody>
-          </table>
-        </div>
+          <div class="table-responsive mb-3">
+            <table class="table table-sm table-bordered">
+              <thead><tr><th colspan="4">Task Windows</th></tr><tr><th>Task ID</th><th>Assign</th><th>Close</th><th>Task Running KM</th></tr></thead>
+              <tbody id="unauthorizedMovementTasksBody"></tbody>
+            </table>
+          </div>
 
-        <div class="table-responsive mb-3">
-          <table class="table table-sm table-bordered">
-            <thead><tr><th colspan="5">Return Windows</th></tr><tr><th>Task ID</th><th>Start</th><th>End</th><th>KM</th><th>Stop Reason</th></tr></thead>
-            <tbody id="unauthorizedMovementReturnBody"></tbody>
-          </table>
-        </div>
+          <div class="table-responsive mb-3">
+            <table class="table table-sm table-bordered">
+              <thead><tr><th colspan="5">Return Windows</th></tr><tr><th>Task ID</th><th>Start</th><th>End</th><th>KM</th><th>Stop Reason</th></tr></thead>
+              <tbody id="unauthorizedMovementReturnBody"></tbody>
+            </table>
+          </div>
 
-        <div class="table-responsive">
-          <table class="table table-sm table-bordered">
-            <thead><tr><th colspan="5">Full Activity Segments (verify-friendly)</th></tr><tr><th>Type</th><th>Task ID</th><th>From Time</th><th>To Time</th><th>KM</th></tr></thead>
-            <tbody id="unauthorizedMovementHistoryBody"></tbody>
-          </table>
+          <div class="table-responsive">
+            <table class="table table-sm table-bordered">
+              <thead><tr><th colspan="5">Full Activity Segments (verify-friendly)</th></tr><tr><th>Type</th><th>Task ID</th><th>From Time</th><th>To Time</th><th>KM</th></tr></thead>
+              <tbody id="unauthorizedMovementHistoryBody"></tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
@@ -282,6 +292,10 @@ document.addEventListener('DOMContentLoaded', function () {
   var tasksBody = document.getElementById('unauthorizedMovementTasksBody');
   var returnBody = document.getElementById('unauthorizedMovementReturnBody');
   var segBody = document.getElementById('unauthorizedMovementHistoryBody');
+  var printableEl = document.getElementById('unauthorizedMovementHistoryPrintable');
+  var exportBtn = document.getElementById('unauthorizedMovementHistoryExportBtn');
+  var printBtn = document.getElementById('unauthorizedMovementHistoryPrintBtn');
+  var historyState = null;
 
   function esc(s) {
     return String(s == null ? '' : s)
@@ -309,6 +323,69 @@ document.addEventListener('DOMContentLoaded', function () {
     target.innerHTML = rows.map(rowBuilder).join('');
   }
 
+  function csvEscape(v) {
+    var s = String(v == null ? '' : v);
+    return '"' + s.replace(/"/g, '""') + '"';
+  }
+
+  function downloadHistoryCsv() {
+    if (!historyState || !historyState.ok) return;
+    var lines = [];
+    lines.push(['Vehicle', historyState.vehicle_no || '-', 'From', historyState.from_date || '-', 'To', historyState.to_date || '-']);
+    lines.push([]);
+    lines.push(['Totals']);
+    lines.push(['Task Running KM', (historyState.totals && historyState.totals.task_running_km) || 0]);
+    lines.push(['Return to Parking KM', (historyState.totals && historyState.totals.return_to_parking_km) || 0]);
+    lines.push(['Without Task KM', (historyState.totals && historyState.totals.without_task_km) || 0]);
+    lines.push([]);
+    lines.push(['Task Windows']);
+    lines.push(['Task ID', 'Assign', 'Close', 'Task Running KM']);
+    (historyState.tasks || []).forEach(function(t) {
+      lines.push([t.task_id || '-', t.assign || '-', t.close || '-', t.running_km || 0]);
+    });
+    lines.push([]);
+    lines.push(['Return Windows']);
+    lines.push(['Task ID', 'Start', 'End', 'KM', 'Stop Reason']);
+    (historyState.return_windows || []).forEach(function(r) {
+      lines.push([r.task_id || '-', r.start || '-', r.end || '-', r.km || 0, reasonText(r.reason)]);
+    });
+    lines.push([]);
+    lines.push(['Full Activity Segments']);
+    lines.push(['Type', 'Task ID', 'From Time', 'To Time', 'KM']);
+    (historyState.segments || []).forEach(function(s) {
+      var typeLabel = s.label === 'task_running' ? 'Task Running' : (s.label === 'return_to_parking' ? 'Return to Parking' : 'Without Task');
+      lines.push([typeLabel, s.task_id || '-', s.start || '-', s.end || '-', s.km || 0]);
+    });
+
+    var csv = '\uFEFF' + lines.map(function(row) {
+      return (row || []).map(csvEscape).join(',');
+    }).join('\n');
+    var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    var a = document.createElement('a');
+    var safeVehicle = (historyState.vehicle_no || 'vehicle').replace(/[^\w\-]+/g, '_');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'Movement_Timeline_' + safeVehicle + '_' + (historyState.from_date || '') + '_to_' + (historyState.to_date || '') + '.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
+  }
+
+  function printHistory() {
+    if (!printableEl) return;
+    var win = window.open('', '_blank', 'width=1100,height=800');
+    if (!win) return;
+    win.document.write('<html><head><title>Movement Timeline Detail</title>');
+    win.document.write('<style>body{font-family:Arial,sans-serif;padding:14px;}table{width:100%;border-collapse:collapse;margin-bottom:12px;}th,td{border:1px solid #999;padding:6px 8px;font-size:12px;text-align:left;}thead th{background:#f2f2f2;}h3{margin:0 0 10px 0;} .totals{display:flex;gap:10px;margin:8px 0 12px 0;} .totals>div{border:1px solid #ccc;padding:8px;border-radius:6px;min-width:180px;}</style>');
+    win.document.write('</head><body>');
+    win.document.write('<h3>Movement Timeline Detail</h3>');
+    win.document.write(printableEl.innerHTML);
+    win.document.write('</body></html>');
+    win.document.close();
+    win.focus();
+    win.print();
+  }
+
   async function openHistory(vehicleId, focus) {
     if (!vehicleId || !historyModal) return;
     var fromDate = (document.querySelector('input[name="from_date"]') || {}).value || '';
@@ -327,6 +404,7 @@ document.addEventListener('DOMContentLoaded', function () {
       var res = await fetch(u.toString(), { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
       var data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.message || 'Unable to load history.');
+      historyState = data;
 
       metaEl.textContent = 'Vehicle: ' + (data.vehicle_no || '-') + ' | Date range: ' + (data.from_date || '-') + ' to ' + (data.to_date || '-');
       var totals = data.totals || {};
@@ -351,6 +429,7 @@ document.addEventListener('DOMContentLoaded', function () {
         metaEl.textContent += ' | Focus: ' + target;
       }
     } catch (err) {
+      historyState = null;
       metaEl.textContent = (err && err.message) ? err.message : 'Failed to load history.';
     }
   }
@@ -362,6 +441,13 @@ document.addEventListener('DOMContentLoaded', function () {
       openHistory(vehicleId, focus);
     });
   });
+
+  if (exportBtn) {
+    exportBtn.addEventListener('click', function () { downloadHistoryCsv(); });
+  }
+  if (printBtn) {
+    printBtn.addEventListener('click', function () { printHistory(); });
+  }
 });
 </script>
 {% endblock %}
