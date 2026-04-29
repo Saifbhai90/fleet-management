@@ -317,7 +317,7 @@
   <div class="modal-dialog modal-lg modal-dialog-scrollable">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title"><i class="bi bi-whatsapp me-1 text-success"></i>Maintenance Approval Text</h5>
+        <h5 class="modal-title" id="maintApprovalModalTitle"><i class="bi bi-whatsapp me-1 text-success"></i>Maintenance Approval Text</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
@@ -373,6 +373,12 @@
               </td>
               <td class="text-end pe-3 text-nowrap">
                 <a href="{{ url_for('maintenance_expense_form', work_order_id=wo.id) }}" class="btn btn-sm btn-outline-warning">Add bill</a>
+                <button type="button"
+                        class="btn btn-sm btn-outline-success js-maint-wo-approval"
+                        data-wo-id="{{ wo.id }}"
+                        title="Generate WO Approval Summary">
+                  <i class="bi bi-whatsapp"></i>
+                </button>
                 <button type="button" class="btn btn-sm btn-outline-danger mwo-open-row-close" data-wo-id="{{ wo.id }}" data-opened-date="{{ wo.opened_on|ddmmyyyy if wo.opened_on else '' }}" title="Close work order (date confirm)">Close</button>
               </td>
             </tr>
@@ -471,6 +477,7 @@ function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page
 })();
 document.addEventListener('DOMContentLoaded', function() {
   var approvalModalEl = document.getElementById('maintApprovalModal');
+  var approvalModalTitleEl = document.getElementById('maintApprovalModalTitle');
   var approvalTextEl = document.getElementById('maintApprovalText');
   var approvalCopyBtn = document.getElementById('maintApprovalCopyBtn');
   var approvalWhatsappBtn = document.getElementById('maintApprovalWhatsappBtn');
@@ -482,11 +489,12 @@ document.addEventListener('DOMContentLoaded', function() {
     if (approvalTextEl) approvalTextEl.value = approvalCachedText;
   }
 
-  function openApprovalForExpense(expenseId) {
-    if (!expenseId) return;
+  function openApprovalFromUrl(url, titleText) {
+    if (!url) return;
     setApprovalText('Loading approval text...');
+    if (approvalModalTitleEl && titleText) approvalModalTitleEl.innerHTML = '<i class="bi bi-whatsapp me-1 text-success"></i>' + titleText;
     if (approvalModal) approvalModal.show();
-    fetch('/api/maintenance-expense/approval-text/' + encodeURIComponent(expenseId), {
+    fetch(url, {
       headers: { 'X-Requested-With': 'XMLHttpRequest' }
     })
       .then(function(r) { return r.json(); })
@@ -501,7 +509,17 @@ document.addEventListener('DOMContentLoaded', function() {
 
   document.querySelectorAll('.js-maint-approval').forEach(function(btn) {
     btn.addEventListener('click', function() {
-      openApprovalForExpense(btn.getAttribute('data-expense-id') || '');
+      var expenseId = btn.getAttribute('data-expense-id') || '';
+      if (!expenseId) return;
+      openApprovalFromUrl('/api/maintenance-expense/approval-text/' + encodeURIComponent(expenseId), 'Maintenance Approval Text');
+    });
+  });
+
+  document.querySelectorAll('.js-maint-wo-approval').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var woId = btn.getAttribute('data-wo-id') || '';
+      if (!woId) return;
+      openApprovalFromUrl('/api/maintenance-work-order/approval-text/' + encodeURIComponent(woId), 'Work Order Approval Summary');
     });
   });
 

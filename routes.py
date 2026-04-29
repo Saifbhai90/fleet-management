@@ -24129,6 +24129,86 @@ def api_maintenance_expense_approval_text(pk):
     })
 
 
+@app.route('/api/maintenance-work-order/approval-text/<int:pk>')
+def api_maintenance_work_order_approval_text(pk):
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return jsonify({'ok': False, 'error': 'forbidden'}), 403
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    wo = MaintenanceWorkOrder.query.options(
+        joinedload(MaintenanceWorkOrder.district),
+        joinedload(MaintenanceWorkOrder.project),
+        joinedload(MaintenanceWorkOrder.vehicle).joinedload(Vehicle.drivers),
+    ).get_or_404(pk)
+    if workspace_employee_id and wo.employee_id and wo.employee_id != workspace_employee_id:
+        return jsonify({'ok': False, 'error': 'forbidden'}), 403
+
+    expenses = wo.expenses.order_by(MaintenanceExpense.expense_date.asc(), MaintenanceExpense.id.asc()).all()
+    vehicle = wo.vehicle
+    driver_name = '-'
+    if vehicle:
+        active_drivers = [d for d in (vehicle.drivers or []) if (d.status or '').lower() == 'active']
+        if active_drivers:
+            active_drivers.sort(key=lambda d: (d.assign_date or date.min, d.id or 0), reverse=True)
+            driver_name = active_drivers[0].name or '-'
+        elif vehicle.drivers:
+            driver_name = (vehicle.drivers[0].name or '-')
+
+    district_name = (wo.district.name if wo.district else '-') if wo else '-'
+    project_name = (wo.project.name if wo.project else '-') if wo else '-'
+    location = f"{district_name}, {project_name}"
+    vehicle_no = vehicle.vehicle_no if vehicle else '-'
+    wo_date = wo.opened_on.strftime('%d-%m-%Y') if wo.opened_on else '-'
+
+    detail_lines = []
+    grand_total = 0.0
+    for idx, ex in enumerate(expenses, 1):
+        ex_total = float(ex.total_bill_amount or 0)
+        if ex_total <= 0:
+            ex_total = sum(float(it.amount or (float(it.qty or 0) * float(it.price or 0))) for it in ex.items.all())
+        grand_total += ex_total
+        ex_date = ex.expense_date.strftime('%d-%m-%Y') if ex.expense_date else '-'
+        ex_reading = f"{float(ex.current_reading):.0f}" if ex.current_reading is not None else '-'
+        line = f"Bill-{idx}: MAINT-{ex.id} | {ex_date} | Reading {ex_reading} | Total {ex_total:.0f}"
+        detail_lines.append(line)
+        for it in ex.items.order_by(MaintenanceExpenseItem.sort_order.asc(), MaintenanceExpenseItem.id.asc()).all():
+            p_name = (it.product.name if it.product else f'Product #{it.product_id}')
+            qty = float(it.qty or 0)
+            price = float(it.price or 0)
+            amount = float(it.amount or (qty * price))
+            detail_lines.append(f"- {p_name} {qty:.0f}x{price:.0f}={amount:.0f}")
+
+    if not detail_lines:
+        detail_lines = ['No bill lines attached yet.']
+
+    lines = [
+        "Approval Required (Work Order)",
+        f"WO: {wo.work_order_no or '-'}",
+        vehicle_no,
+        f"Date: {wo_date}",
+        f"Driver: {driver_name}",
+        f"Location: {location}",
+        f"Work Type: {wo.work_type or '-'}",
+        f"Title: {wo.title or '-'}",
+        "Detail:",
+    ]
+    lines.extend(detail_lines)
+    lines.extend([
+        f"Grand Total: {grand_total:.0f}",
+        f"Total Bills: {len(expenses)}",
+        "Previous Work Detail:",
+        (wo.remarks or 'Refer linked bills for full previous work context.'),
+    ])
+
+    return jsonify({
+        'ok': True,
+        'approval_text': '\n'.join(lines),
+        'work_order_no': wo.work_order_no or '-',
+        'vehicle_no': vehicle_no,
+        'date': wo_date,
+    })
+
+
 def _maintenance_expense_previous_reading(vehicle_id, expense_date=None, exclude_id=None, workspace_employee_id=None, current_reading=None):
     if not vehicle_id:
         return None
