@@ -221,16 +221,84 @@
       return null;
     }).catch(function(){ return null; });
   }
+  function ensureTesseract() {
+    if (window.Tesseract) return Promise.resolve(window.Tesseract);
+    if (window.__tesseractLoaderPromise) return window.__tesseractLoaderPromise;
+    window.__tesseractLoaderPromise = new Promise(function(resolve, reject) {
+      var s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+      s.async = true;
+      s.onload = function() { resolve(window.Tesseract); };
+      s.onerror = function() { reject(new Error('tesseract load failed')); };
+      document.head.appendChild(s);
+    });
+    return window.__tesseractLoaderPromise;
+  }
+  function parseTimeFromOcrText(text) {
+    if (!text) return null;
+    var t = String(text).replace(/\s+/g, ' ').trim();
+    var candidates = [];
+    var re1 = /(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})[^0-9]{0,30}(\d{1,2}:\d{2})(?::\d{2})?\s*([AaPp][Mm])?/g;
+    var m1;
+    while ((m1 = re1.exec(t)) !== null) candidates.push({ time: m1[2], ampm: m1[3] || '' });
+    var re2 = /(\d{1,2}:\d{2})(?::\d{2})?\s*([AaPp][Mm])/g;
+    var m2;
+    while ((m2 = re2.exec(t)) !== null) candidates.push({ time: m2[1], ampm: m2[2] || '' });
+    var re3 = /\b([01]?\d|2[0-3]):([0-5]\d)\b/g;
+    var m3;
+    while ((m3 = re3.exec(t)) !== null) candidates.push({ time: m3[0], ampm: '' });
+    if (!candidates.length) return null;
+    var picked = candidates[candidates.length - 1];
+    var parts = picked.time.split(':');
+    var hh = parseInt(parts[0], 10);
+    var mm = parseInt(parts[1], 10);
+    if (picked.ampm) {
+      var ap = picked.ampm.toUpperCase();
+      if (ap === 'PM' && hh < 12) hh += 12;
+      if (ap === 'AM' && hh === 12) hh = 0;
+    }
+    if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return null;
+    return ('0' + hh).slice(-2) + ':' + ('0' + mm).slice(-2);
+  }
+  function ocrTimeFromImage(file) {
+    return ensureTesseract()
+      .then(function(Tesseract) {
+        return new Promise(function(resolve, reject) {
+          var img = new Image();
+          img.onload = function() {
+            try {
+              var maxW = 1600;
+              var scale = img.width > maxW ? (maxW / img.width) : 1;
+              var canvas = document.createElement('canvas');
+              canvas.width = Math.max(1, Math.round(img.width * scale));
+              canvas.height = Math.max(1, Math.round(img.height * scale));
+              var ctx = canvas.getContext('2d');
+              ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+              Tesseract.recognize(canvas, 'eng')
+                .then(function(r) { resolve(parseTimeFromOcrText(r && r.data ? r.data.text : '')); })
+                .catch(reject);
+            } catch (ex) { reject(ex); }
+          };
+          img.onerror = function() { reject(new Error('image decode failed')); };
+          img.src = URL.createObjectURL(file);
+        });
+      })
+      .catch(function() { return null; });
+  }
   function autoFillFromPhotoEvent(fileObj) {
     parseExifDateTimeOriginal(fileObj).then(function(dt) {
-      if (timeInput) {
-        timeInput.value = dt ? hhmmFromDate(dt) : nowHHMM();
-      }
-      timeInput.dispatchEvent(new Event('change', { bubbles: true }));
+      if (dt) return hhmmFromDate(dt);
+      return ocrTimeFromImage(fileObj);
+    }).then(function(timeStr) {
+      if (timeInput) timeInput.value = timeStr || nowHHMM();
+      if (timeInput) timeInput.dispatchEvent(new Event('change', { bubbles: true }));
       if (reasonInput && (!reasonInput.value || reasonInput.dataset.autoFilled === '1')) {
         reasonInput.value = autoReason;
         reasonInput.dataset.autoFilled = '1';
       }
+    }).catch(function() {
+      if (timeInput) timeInput.value = nowHHMM();
+      if (timeInput) timeInput.dispatchEvent(new Event('change', { bubbles: true }));
     });
   }
   if (reasonInput) {
