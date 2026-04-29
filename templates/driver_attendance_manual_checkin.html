@@ -60,11 +60,75 @@
 </div>
 <script>
 (function() {
-  function nowHHMM() {
-    var now = new Date();
+  function hhmmFromDate(now) {
     var hh = ('0' + now.getHours()).slice(-2);
     var mm = ('0' + now.getMinutes()).slice(-2);
     return hh + ':' + mm;
+  }
+  function nowHHMM() {
+    return hhmmFromDate(new Date());
+  }
+  function readAscii(view, start, len) {
+    var out = '';
+    for (var i = 0; i < len; i++) out += String.fromCharCode(view.getUint8(start + i));
+    return out;
+  }
+  function parseExifDateTimeOriginal(file) {
+    if (!file) return Promise.resolve(null);
+    return file.arrayBuffer().then(function(buf) {
+      var view = new DataView(buf);
+      if (view.byteLength < 4 || view.getUint16(0, false) !== 0xFFD8) return null;
+      var offset = 2;
+      while (offset + 4 < view.byteLength) {
+        if (view.getUint8(offset) !== 0xFF) break;
+        var marker = view.getUint8(offset + 1);
+        if (marker === 0xDA || marker === 0xD9) break;
+        var size = view.getUint16(offset + 2, false);
+        if (size < 2 || offset + 2 + size > view.byteLength) break;
+        if (marker === 0xE1 && size >= 10 && readAscii(view, offset + 4, 4) === 'Exif') {
+          var tiff = offset + 10;
+          var le = view.getUint16(tiff, false) === 0x4949;
+          var get16 = function(pos){ return view.getUint16(pos, le); };
+          var get32 = function(pos){ return view.getUint32(pos, le); };
+          var ifd0 = tiff + get32(tiff + 4);
+          if (ifd0 + 2 > view.byteLength) break;
+          var entries0 = get16(ifd0);
+          var exifPtr = 0;
+          for (var i0 = 0; i0 < entries0; i0++) {
+            var e0 = ifd0 + 2 + i0 * 12;
+            if (e0 + 12 > view.byteLength) break;
+            if (get16(e0) === 0x8769) { exifPtr = get32(e0 + 8); break; }
+          }
+          if (!exifPtr) break;
+          var exifIfd = tiff + exifPtr;
+          if (exifIfd + 2 > view.byteLength) break;
+          var exifEntries = get16(exifIfd);
+          for (var i = 0; i < exifEntries; i++) {
+            var e = exifIfd + 2 + i * 12;
+            if (e + 12 > view.byteLength) break;
+            if (get16(e) !== 0x9003) continue;
+            var cnt = get32(e + 4);
+            var valOff = get32(e + 8);
+            if (!cnt) return null;
+            var strPos = tiff + valOff;
+            if (strPos + cnt > view.byteLength) return null;
+            var raw = readAscii(view, strPos, Math.min(cnt, 32)).replace(/\0/g, '').trim();
+            var m = raw.match(/^(\d{4}):(\d{2}):(\d{2}) (\d{2}):(\d{2}):(\d{2})$/);
+            if (!m) return null;
+            return new Date(
+              parseInt(m[1], 10),
+              parseInt(m[2], 10) - 1,
+              parseInt(m[3], 10),
+              parseInt(m[4], 10),
+              parseInt(m[5], 10),
+              parseInt(m[6], 10)
+            );
+          }
+        }
+        offset += 2 + size;
+      }
+      return null;
+    }).catch(function(){ return null; });
   }
   var timeInput = document.getElementById('checkInTime');
   var reasonInput = document.getElementById('checkInReason');
@@ -72,15 +136,17 @@
   if (!photoInput) return;
   var autoReason = 'GPS camera image attached for manual check-in.';
 
-  function autoFillFromPhotoEvent() {
-    if (timeInput && !timeInput.value) {
-      timeInput.value = nowHHMM();
+  function autoFillFromPhotoEvent(fileObj) {
+    parseExifDateTimeOriginal(fileObj).then(function(dt) {
+      if (timeInput) {
+        timeInput.value = dt ? hhmmFromDate(dt) : nowHHMM();
+      }
       timeInput.dispatchEvent(new Event('change', { bubbles: true }));
-    }
-    if (reasonInput && (!reasonInput.value || reasonInput.dataset.autoFilled === '1')) {
-      reasonInput.value = autoReason;
-      reasonInput.dataset.autoFilled = '1';
-    }
+      if (reasonInput && (!reasonInput.value || reasonInput.dataset.autoFilled === '1')) {
+        reasonInput.value = autoReason;
+        reasonInput.dataset.autoFilled = '1';
+      }
+    });
   }
 
   if (reasonInput) {
@@ -89,7 +155,7 @@
     });
   }
   photoInput.addEventListener('change', function() {
-    if (photoInput.files && photoInput.files.length) autoFillFromPhotoEvent();
+    if (photoInput.files && photoInput.files.length) autoFillFromPhotoEvent(photoInput.files[0]);
   });
   document.addEventListener('paste', function(e) {
     var items = (e.clipboardData || window.clipboardData || {}).items || [];
@@ -103,7 +169,7 @@
     }
     if (!added) return;
     photoInput.files = dt.files;
-    autoFillFromPhotoEvent();
+    autoFillFromPhotoEvent(dt.files[0]);
   });
 })();
 </script>
