@@ -47,6 +47,7 @@
         <th>District</th>
         <th>Vehicle</th>
         <th>Family / Limit</th>
+        <th>Last Oil Change Date</th>
         <th>Base Reading</th>
         <th>Current Reading</th>
         <th>KM After Oil</th>
@@ -63,6 +64,7 @@
         <td>{{ r.district.name if r.district else '-' }}</td>
         <td>{{ r.vehicle.vehicle_no }}{% if r.vehicle.model %} ({{ r.vehicle.model }}){% endif %}</td>
         <td>{{ r.vehicle_family }} / {{ r.limit_km }} KM ({{ r.near_percent }}%)</td>
+        <td>{{ r.last_oil_change_date|ddmmyyyy if r.last_oil_change_date else '-' }}</td>
         <td>{{ '%.2f'|format(r.base_reading) }}</td>
         <td>{{ '%.2f'|format(r.current_reading) }}</td>
         <td>{{ '%.2f'|format(r.kms_after_oil) }}</td>
@@ -83,7 +85,7 @@
         </td>
       </tr>
       {% else %}
-      <tr><td colspan="11" class="text-center text-muted py-4">No vehicles found.</td></tr>
+      <tr><td colspan="12" class="text-center text-muted py-4">No vehicles found.</td></tr>
       {% endfor %}
     </tbody>
   </table>

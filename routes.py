@@ -10782,6 +10782,18 @@ def _vehicle_last_oil_change_base(vehicle_id, workspace_employee_id=None):
     return None, None, None
 
 
+def _vehicle_last_oil_change_date(vehicle_id, workspace_employee_id=None):
+    oil_q = OilExpense.query.filter(
+        OilExpense.vehicle_id == vehicle_id,
+        OilExpense.expense_date.isnot(None),
+    )
+    oil_q = _apply_workspace_employee_scope_for_expense(oil_q, OilExpense, workspace_employee_id)
+    oil_row = oil_q.order_by(OilExpense.expense_date.desc(), OilExpense.id.desc()).first()
+    if oil_row and oil_row.expense_date:
+        return oil_row.expense_date
+    return None
+
+
 def _oil_change_alert_rows(project_id=0, district_id=0, vehicle_family='', status='',
                            custom_km=None,
                            custom_km_mode='',
@@ -10821,6 +10833,7 @@ def _oil_change_alert_rows(project_id=0, district_id=0, vehicle_family='', statu
         base_reading, base_date, base_source = _vehicle_last_oil_change_base(vehicle.id, workspace_employee_id)
         if base_reading is None:
             continue
+        last_oil_change_date = _vehicle_last_oil_change_date(vehicle.id, workspace_employee_id)
 
         current_reading, current_date, current_source = _vehicle_latest_meter_reading(vehicle.id, workspace_employee_id)
         if current_reading is None:
@@ -10870,6 +10883,7 @@ def _oil_change_alert_rows(project_id=0, district_id=0, vehicle_family='', statu
             'near_percent': int(near_percent),
             'base_reading': round(float(base_reading), 2),
             'base_date': base_date,
+            'last_oil_change_date': last_oil_change_date,
             'base_source': base_source,
             'current_reading': round(float(current_reading), 2),
             'current_date': current_date,
@@ -11021,7 +11035,7 @@ def oil_change_alert_report_export():
 
     headers = [
         'Sr No', 'Project', 'District', 'Vehicle No', 'Model', 'Type', 'Family',
-        'Limit KM', 'Near %', 'Base Reading', 'Current Reading', 'KM After Oil', 'Remaining KM', 'Status', 'Custom KM Check',
+        'Limit KM', 'Near %', 'Last Oil Change Date', 'Base Reading', 'Current Reading', 'KM After Oil', 'Remaining KM', 'Status', 'Custom KM Check',
         'Base Source', 'Current Source'
     ]
     data_rows = []
@@ -11037,6 +11051,7 @@ def oil_change_alert_report_export():
             r['vehicle_family'],
             r['limit_km'],
             r['near_percent'],
+            r['last_oil_change_date'].strftime('%d-%m-%Y') if r.get('last_oil_change_date') else '-',
             r['base_reading'],
             r['current_reading'],
             r['kms_after_oil'],
