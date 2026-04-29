@@ -292,6 +292,13 @@
       <div class="modal-body">
         <div class="small text-muted mb-2">Driver select karein, location edit karein, phir text copy ya WhatsApp open karein.</div>
         <div class="row g-2 mb-2">
+          <div class="col-md-4">
+            <label class="form-label small mb-1">Text Type</label>
+            <select id="mwoApprovalHeadingSelect" class="form-select form-select-sm">
+              <option value="approval_required" selected>Approval Required</option>
+              <option value="work_done">Work done</option>
+            </select>
+          </div>
           <div class="col-md-6">
             <label class="form-label small mb-1">Driver</label>
             <select id="mwoApprovalDriverSelect" class="form-select form-select-sm">
@@ -651,6 +658,7 @@ document.addEventListener('DOMContentLoaded', function() {
   var textEl = document.getElementById('mwoApprovalText');
   var copyBtn = document.getElementById('mwoApprovalCopyBtn');
   var whatsappBtn = document.getElementById('mwoApprovalWhatsappBtn');
+  var headingSelect = document.getElementById('mwoApprovalHeadingSelect');
   var driverSelect = document.getElementById('mwoApprovalDriverSelect');
   var locationInput = document.getElementById('mwoApprovalLocationInput');
   var locationList = document.getElementById('mwoApprovalLocationList');
@@ -704,8 +712,10 @@ document.addEventListener('DOMContentLoaded', function() {
   function buildUrl() {
     if (!currentWoId) return '';
     var qs = new URLSearchParams();
+    var hm = headingSelect ? (headingSelect.value || 'approval_required') : 'approval_required';
     var d = currentDriverId();
     var l = currentLocation();
+    qs.set('message_mode', hm);
     if (d) qs.set('driver_id', d);
     if (l) qs.set('location', l);
     return '/api/maintenance-work-order/approval-text/' + encodeURIComponent(currentWoId) + (qs.toString() ? ('?' + qs.toString()) : '');
@@ -756,6 +766,7 @@ document.addEventListener('DOMContentLoaded', function() {
       currentWoId = btn.getAttribute('data-wo-id') || '';
       if (!currentWoId) return;
       if (modalTitleEl) modalTitleEl.innerHTML = '<i class="bi bi-whatsapp me-1 text-success"></i>Work Order Approval Summary';
+      if (headingSelect) headingSelect.value = 'approval_required';
       if (driverSelect) { driverSelect.innerHTML = '<option value="">-</option>'; driverSelect.disabled = true; }
       if (locationInput) locationInput.value = '';
       setText('Loading approval text...');
@@ -766,6 +777,9 @@ document.addEventListener('DOMContentLoaded', function() {
   });
   if (driverSelect) {
     driverSelect.addEventListener('change', function() { loadApproval(); });
+  }
+  if (headingSelect) {
+    headingSelect.addEventListener('change', function() { loadApproval(); });
   }
   if (locationInput) {
     locationInput.addEventListener('change', function() { loadApproval(); });

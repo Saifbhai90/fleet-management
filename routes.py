@@ -24123,8 +24123,10 @@ def api_maintenance_expense_approval_text(pk):
     date_txt = rec.expense_date.strftime('%d-%m-%Y') if rec.expense_date else '-'
     total_txt = f"{float(rec.total_bill_amount if rec.total_bill_amount is not None else total_amount):.0f}"
 
+    message_mode = (request.args.get('message_mode') or 'approval_required').strip().lower()
+    heading_text = "Work done" if message_mode == 'work_done' else "Approval Required"
     lines = [
-        "Approval Required",
+        heading_text,
         vehicle_label,
         f"Date: {date_txt}",
         f"Reading: {reading_txt}",
@@ -24254,8 +24256,10 @@ def api_maintenance_work_order_approval_text(pk):
     if not previous_work_lines:
         previous_work_lines = ['No previous work record found.']
 
+    message_mode = (request.args.get('message_mode') or 'approval_required').strip().lower()
+    heading_text = "Work done" if message_mode == 'work_done' else "Approval Required"
     lines = [
-        "Approval Required",
+        heading_text,
         vehicle_label,
         f"Date: {wo_date}",
         f"Driver: {driver_name}",
