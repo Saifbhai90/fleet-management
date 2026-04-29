@@ -233,6 +233,12 @@
                     <a class="btn btn-outline-success btn-sm w-100 py-1" href="{{ url_for('maintenance_expense_media', pk=r.id) }}">Media</a>
                   </div>
                 </div>
+                <button type="button"
+                        class="btn btn-outline-success btn-sm js-maint-approval"
+                        title="Generate WhatsApp Approval Text"
+                        data-expense-id="{{ r.id }}">
+                  <i class="bi bi-whatsapp"></i>
+                </button>
                 <a href="{{ url_for('maintenance_expense_form', pk=r.id) }}" class="btn btn-outline-primary btn-sm" title="Edit"><i class="bi bi-pencil"></i></a>
                 <form action="{{ url_for('maintenance_expense_delete', pk=r.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Delete this maintenance entry?');">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -304,6 +310,30 @@
     </div>
     </div>
   </div>
+  </div>
+</div>
+
+<div class="modal fade" id="maintApprovalModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-whatsapp me-1 text-success"></i>Maintenance Approval Text</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="small text-muted mb-2">Text ko WhatsApp par approval ke liye direct copy ya open karein.</div>
+        <textarea id="maintApprovalText" class="form-control" rows="15" readonly placeholder="Approval text loading..."></textarea>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-outline-primary btn-sm" id="maintApprovalCopyBtn">
+          <i class="bi bi-clipboard me-1"></i>Copy Text
+        </button>
+        <button type="button" class="btn btn-success btn-sm" id="maintApprovalWhatsappBtn">
+          <i class="bi bi-whatsapp me-1"></i>Open WhatsApp
+        </button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -440,6 +470,66 @@ function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page
   window.addEventListener('resize', function() { closeAll(); });
 })();
 document.addEventListener('DOMContentLoaded', function() {
+  var approvalModalEl = document.getElementById('maintApprovalModal');
+  var approvalTextEl = document.getElementById('maintApprovalText');
+  var approvalCopyBtn = document.getElementById('maintApprovalCopyBtn');
+  var approvalWhatsappBtn = document.getElementById('maintApprovalWhatsappBtn');
+  var approvalModal = (window.bootstrap && approvalModalEl) ? new window.bootstrap.Modal(approvalModalEl, { backdrop: false, focus: false, keyboard: true }) : null;
+  var approvalCachedText = '';
+
+  function setApprovalText(text) {
+    approvalCachedText = text || '';
+    if (approvalTextEl) approvalTextEl.value = approvalCachedText;
+  }
+
+  function openApprovalForExpense(expenseId) {
+    if (!expenseId) return;
+    setApprovalText('Loading approval text...');
+    if (approvalModal) approvalModal.show();
+    fetch('/api/maintenance-expense/approval-text/' + encodeURIComponent(expenseId), {
+      headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+      .then(function(r) { return r.json(); })
+      .then(function(j) {
+        if (!j || !j.ok) throw new Error((j && (j.error || j.message)) || 'Unable to generate text');
+        setApprovalText(j.approval_text || '');
+      })
+      .catch(function(err) {
+        setApprovalText('Unable to generate approval text.\n' + ((err && err.message) ? err.message : 'Unknown error'));
+      });
+  }
+
+  document.querySelectorAll('.js-maint-approval').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      openApprovalForExpense(btn.getAttribute('data-expense-id') || '');
+    });
+  });
+
+  if (approvalCopyBtn) {
+    approvalCopyBtn.addEventListener('click', function() {
+      var txt = (approvalTextEl && approvalTextEl.value) ? approvalTextEl.value : '';
+      if (!txt) return;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(txt).then(function() {
+          approvalCopyBtn.innerHTML = '<i class="bi bi-check2 me-1"></i>Copied';
+          setTimeout(function(){ approvalCopyBtn.innerHTML = '<i class="bi bi-clipboard me-1"></i>Copy Text'; }, 1200);
+        });
+      } else {
+        approvalTextEl.select();
+        document.execCommand('copy');
+      }
+    });
+  }
+
+  if (approvalWhatsappBtn) {
+    approvalWhatsappBtn.addEventListener('click', function() {
+      var txt = (approvalTextEl && approvalTextEl.value) ? approvalTextEl.value.trim() : '';
+      if (!txt) return;
+      var waUrl = 'https://wa.me/?text=' + encodeURIComponent(txt);
+      window.open(waUrl, '_blank');
+    });
+  }
+
   var LC = null;
   try {
     var _lc = document.getElementById('locationCascadeData');

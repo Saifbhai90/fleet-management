@@ -24033,6 +24033,102 @@ def api_maintenance_expense_invoice_detail(pk):
     })
 
 
+@app.route('/api/maintenance-expense/approval-text/<int:pk>')
+def api_maintenance_expense_approval_text(pk):
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return jsonify({'ok': False, 'error': 'forbidden'}), 403
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    rec = MaintenanceExpense.query.options(
+        joinedload(MaintenanceExpense.district),
+        joinedload(MaintenanceExpense.project),
+        joinedload(MaintenanceExpense.vehicle).joinedload(Vehicle.drivers),
+    ).get_or_404(pk)
+    if workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
+        return jsonify({'ok': False, 'error': 'forbidden'}), 403
+
+    vehicle = rec.vehicle
+    driver_name = '-'
+    if vehicle:
+        active_drivers = [d for d in (vehicle.drivers or []) if (d.status or '').lower() == 'active']
+        if active_drivers:
+            active_drivers.sort(key=lambda d: (d.assign_date or date.min, d.id or 0), reverse=True)
+            driver_name = active_drivers[0].name or '-'
+        elif vehicle.drivers:
+            driver_name = (vehicle.drivers[0].name or '-')
+
+    item_rows = rec.items.order_by(MaintenanceExpenseItem.sort_order.asc(), MaintenanceExpenseItem.id.asc()).all()
+    detail_lines = []
+    total_amount = 0.0
+    current_product_ids = []
+    current_product_names = {}
+    for it in item_rows:
+        qty = float(it.qty or 0)
+        price = float(it.price or 0)
+        amount = float(it.amount or (qty * price))
+        total_amount += amount
+        p_name = (it.product.name if it.product else f'Product #{it.product_id}')
+        detail_lines.append(f"{p_name} {qty:.0f}x{price:.0f}={amount:.0f}")
+        if it.product_id and it.product_id not in current_product_ids:
+            current_product_ids.append(it.product_id)
+            current_product_names[it.product_id] = p_name
+
+    # Previous similar product usage detail for context in approval message.
+    previous_work_detail = 'No previous work record found.'
+    if vehicle and current_product_ids:
+        prev_item = db.session.query(MaintenanceExpenseItem, MaintenanceExpense).join(
+            MaintenanceExpense, MaintenanceExpense.id == MaintenanceExpenseItem.maintenance_expense_id
+        ).filter(
+            MaintenanceExpense.vehicle_id == vehicle.id,
+            MaintenanceExpenseItem.product_id.in_(current_product_ids),
+            db.or_(
+                MaintenanceExpense.expense_date < rec.expense_date,
+                db.and_(MaintenanceExpense.expense_date == rec.expense_date, MaintenanceExpense.id < rec.id),
+            )
+        ).order_by(
+            MaintenanceExpense.expense_date.desc(),
+            MaintenanceExpense.id.desc(),
+            MaintenanceExpenseItem.id.desc(),
+        ).first()
+        if prev_item:
+            p_it, p_exp = prev_item
+            p_name = current_product_names.get(p_it.product_id) or (p_it.product.name if p_it.product else f'Product #{p_it.product_id}')
+            p_date = p_exp.expense_date.strftime('%d-%m-%Y') if p_exp.expense_date else '-'
+            p_reading = f"{float(p_exp.current_reading):,.0f}" if p_exp.current_reading is not None else '-'
+            previous_work_detail = f"{p_name} last work was on {p_date} at a reading of {p_reading} km."
+
+    district_name = rec.district.name if rec.district else '-'
+    project_name = rec.project.name if rec.project else '-'
+    location = f"{district_name}, {project_name}"
+    vehicle_no = vehicle.vehicle_no if vehicle else '-'
+    reading_txt = f"{float(rec.current_reading):.0f}" if rec.current_reading is not None else '-'
+    date_txt = rec.expense_date.strftime('%d-%m-%Y') if rec.expense_date else '-'
+    total_txt = f"{float(rec.total_bill_amount if rec.total_bill_amount is not None else total_amount):.0f}"
+
+    lines = [
+        "Approval Required",
+        vehicle_no,
+        f"Date: {date_txt}",
+        f"Reading: {reading_txt}",
+        f"Driver: {driver_name}",
+        f"Location: {location}",
+        "Detail:",
+    ]
+    lines.extend(detail_lines or ['-'])
+    lines.extend([
+        f"Total: {total_txt}",
+        "Previous Work Detail:",
+        previous_work_detail,
+    ])
+    approval_text = '\n'.join(lines)
+    return jsonify({
+        'ok': True,
+        'approval_text': approval_text,
+        'vehicle_no': vehicle_no,
+        'date': date_txt,
+    })
+
+
 def _maintenance_expense_previous_reading(vehicle_id, expense_date=None, exclude_id=None, workspace_employee_id=None, current_reading=None):
     if not vehicle_id:
         return None
