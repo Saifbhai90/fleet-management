@@ -10794,7 +10794,9 @@ def _vehicle_last_oil_change_date(vehicle_id, workspace_employee_id=None):
     return None
 
 
-def _oil_change_alert_rows(project_id=0, district_id=0, vehicle_family='', status='',
+def _oil_change_alert_rows(project_id=0, district_id=0, vehicle_family='',
+                           from_date=None, to_date=None,
+                           statuses=None,
                            custom_km=None,
                            custom_km_mode='',
                            workspace_employee_id=None,
@@ -10821,6 +10823,7 @@ def _oil_change_alert_rows(project_id=0, district_id=0, vehicle_family='', statu
     if vehicle_family:
         query = query.filter(Vehicle.vehicle_family == vehicle_family)
 
+    statuses_set = set(statuses or [])
     rows = []
     for vehicle, project, district in query.order_by(Project.name, District.name, Vehicle.vehicle_no).all():
         family_name = (vehicle.vehicle_family or '').strip()
@@ -10834,6 +10837,10 @@ def _oil_change_alert_rows(project_id=0, district_id=0, vehicle_family='', statu
         if base_reading is None:
             continue
         last_oil_change_date = _vehicle_last_oil_change_date(vehicle.id, workspace_employee_id)
+        if from_date and (not last_oil_change_date or last_oil_change_date < from_date):
+            continue
+        if to_date and (not last_oil_change_date or last_oil_change_date > to_date):
+            continue
 
         current_reading, current_date, current_source = _vehicle_latest_meter_reading(vehicle.id, workspace_employee_id)
         if current_reading is None:
@@ -10854,9 +10861,8 @@ def _oil_change_alert_rows(project_id=0, district_id=0, vehicle_family='', statu
         else:
             status_code = 'safe'
 
-        # If user selected a status, apply that specific status filter.
-        # If user did not select status, show all vehicles (safe/near/crossed).
-        if status in ('safe', 'near', 'crossed') and status_code != status:
+        # Multi-status filter: if any statuses selected, row must match one.
+        if statuses_set and status_code not in statuses_set:
             continue
 
         custom_state = None
@@ -10910,12 +10916,18 @@ def oil_change_alert_report():
     is_master_or_admin = user_context.get('is_master_or_admin', False)
     workspace_employee_id = _workspace_employee_id_for_expenses()
 
+    from_date = parse_date(request.args.get('from_date'))
+    to_date = parse_date(request.args.get('to_date'))
+    if from_date and to_date and from_date > to_date:
+        from_date, to_date = to_date, from_date
     project_id = request.args.get('project_id', type=int) or 0
     district_id = request.args.get('district_id', type=int) or 0
     vehicle_family = (request.args.get('vehicle_family') or '').strip()
-    status = (request.args.get('status') or '').strip().lower()
-    if status not in ('', 'safe', 'near', 'crossed'):
-        status = ''
+    status_values = []
+    for s in request.args.getlist('status'):
+        sv = (s or '').strip().lower()
+        if sv in ('safe', 'near', 'crossed') and sv not in status_values:
+            status_values.append(sv)
     custom_km_raw = (request.args.get('custom_km') or '').strip()
     custom_km_mode = (request.args.get('custom_km_mode') or '').strip().lower()
     if custom_km_mode not in ('', 'above', 'below'):
@@ -10935,7 +10947,9 @@ def oil_change_alert_report():
         project_id=project_id,
         district_id=district_id,
         vehicle_family=vehicle_family,
-        status=status,
+        from_date=from_date,
+        to_date=to_date,
+        statuses=status_values,
         custom_km=custom_km,
         custom_km_mode=custom_km_mode,
         workspace_employee_id=workspace_employee_id,
@@ -10973,10 +10987,12 @@ def oil_change_alert_report():
         'oil_change_alert_report.html',
         rows=rows,
         total=len(rows),
+        from_date=from_date,
+        to_date=to_date,
         project_id=project_id,
         district_id=district_id,
         vehicle_family=vehicle_family,
-        status=status,
+        status_values=status_values,
         project_choices=project_choices,
         district_choices=district_choices,
         family_choices=family_choices,
@@ -10998,12 +11014,18 @@ def oil_change_alert_report_export():
     is_master_or_admin = user_context.get('is_master_or_admin', False)
     workspace_employee_id = _workspace_employee_id_for_expenses()
 
+    from_date = parse_date(request.args.get('from_date'))
+    to_date = parse_date(request.args.get('to_date'))
+    if from_date and to_date and from_date > to_date:
+        from_date, to_date = to_date, from_date
     project_id = request.args.get('project_id', type=int) or 0
     district_id = request.args.get('district_id', type=int) or 0
     vehicle_family = (request.args.get('vehicle_family') or '').strip()
-    status = (request.args.get('status') or '').strip().lower()
-    if status not in ('', 'safe', 'near', 'crossed'):
-        status = ''
+    status_values = []
+    for s in request.args.getlist('status'):
+        sv = (s or '').strip().lower()
+        if sv in ('safe', 'near', 'crossed') and sv not in status_values:
+            status_values.append(sv)
     custom_km_raw = (request.args.get('custom_km') or '').strip()
     custom_km_mode = (request.args.get('custom_km_mode') or '').strip().lower()
     if custom_km_mode not in ('', 'above', 'below'):
@@ -11023,7 +11045,9 @@ def oil_change_alert_report_export():
         project_id=project_id,
         district_id=district_id,
         vehicle_family=vehicle_family,
-        status=status,
+        from_date=from_date,
+        to_date=to_date,
+        statuses=status_values,
         custom_km=custom_km,
         custom_km_mode=custom_km_mode,
         workspace_employee_id=workspace_employee_id,
@@ -11083,12 +11107,18 @@ def oil_change_alert_report_print():
     is_master_or_admin = user_context.get('is_master_or_admin', False)
     workspace_employee_id = _workspace_employee_id_for_expenses()
 
+    from_date = parse_date(request.args.get('from_date'))
+    to_date = parse_date(request.args.get('to_date'))
+    if from_date and to_date and from_date > to_date:
+        from_date, to_date = to_date, from_date
     project_id = request.args.get('project_id', type=int) or 0
     district_id = request.args.get('district_id', type=int) or 0
     vehicle_family = (request.args.get('vehicle_family') or '').strip()
-    status = (request.args.get('status') or '').strip().lower()
-    if status not in ('', 'safe', 'near', 'crossed'):
-        status = ''
+    status_values = []
+    for s in request.args.getlist('status'):
+        sv = (s or '').strip().lower()
+        if sv in ('safe', 'near', 'crossed') and sv not in status_values:
+            status_values.append(sv)
     custom_km_raw = (request.args.get('custom_km') or '').strip()
     custom_km_mode = (request.args.get('custom_km_mode') or '').strip().lower()
     if custom_km_mode not in ('', 'above', 'below'):
@@ -11108,7 +11138,9 @@ def oil_change_alert_report_print():
         project_id=project_id,
         district_id=district_id,
         vehicle_family=vehicle_family,
-        status=status,
+        from_date=from_date,
+        to_date=to_date,
+        statuses=status_values,
         custom_km=custom_km,
         custom_km_mode=custom_km_mode,
         workspace_employee_id=workspace_employee_id,
@@ -11122,6 +11154,9 @@ def oil_change_alert_report_print():
         'oil_change_alert_report_print.html',
         rows=rows,
         total=len(rows),
+        from_date=from_date,
+        to_date=to_date,
+        status_values=status_values,
         custom_km=custom_km_raw,
         custom_km_mode=custom_km_mode,
         now=datetime.now,

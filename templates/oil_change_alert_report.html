@@ -25,19 +25,27 @@
         <div class="oca-subtitle">Family-wise oil limits with safe/near/crossed tracking</div>
       </div>
       {% if can_see_page('oil_change_alert_report') %}
-      <a href="{{ url_for('oil_change_alert_report_export', project_id=project_id, district_id=district_id, vehicle_family=vehicle_family, status=status, custom_km_mode=custom_km_mode, custom_km=custom_km) }}" class="btn btn-success btn-sm">
+      <button type="button" class="btn btn-success btn-sm" id="oilAlertExportBtn" data-base-url="{{ url_for('oil_change_alert_report_export') }}">
         <i class="bi bi-file-earmark-excel me-1"></i>Export
-      </a>
-      <a href="{{ url_for('oil_change_alert_report_print', project_id=project_id, district_id=district_id, vehicle_family=vehicle_family, status=status, custom_km_mode=custom_km_mode, custom_km=custom_km) }}" class="btn btn-warning btn-sm" target="_blank">
+      </button>
+      <button type="button" class="btn btn-warning btn-sm" id="oilAlertPrintBtn" data-base-url="{{ url_for('oil_change_alert_report_print') }}">
         <i class="bi bi-printer me-1"></i>Print
-      </a>
+      </button>
       {% endif %}
     </div>
   </div>
 
   <div class="oca-filter">
-    <form method="get" action="{{ url_for('oil_change_alert_report') }}">
+    <form method="get" action="{{ url_for('oil_change_alert_report') }}" id="oilAlertFilterForm">
       <div class="row g-2 align-items-end">
+        <div class="col-6 col-md-2">
+          <label class="form-label mb-1 small fw-semibold">From Date</label>
+          <input type="text" name="from_date" class="form-control form-control-sm datepicker" value="{{ from_date|ddmmyyyy if from_date else '' }}">
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label mb-1 small fw-semibold">To Date</label>
+          <input type="text" name="to_date" class="form-control form-control-sm datepicker" value="{{ to_date|ddmmyyyy if to_date else '' }}">
+        </div>
         <div class="col-6 col-md-3">
           <label class="form-label mb-1 small fw-semibold">Project</label>
           <select name="project_id" class="form-select form-select-sm search-select" id="projectSelect">
@@ -64,11 +72,10 @@
         </div>
         <div class="col-6 col-md-2">
           <label class="form-label mb-1 small fw-semibold">Status</label>
-          <select name="status" class="form-select form-select-sm">
-            <option value="" {% if not status %}selected{% endif %}>-- Select Status --</option>
-            <option value="safe" {% if status == 'safe' %}selected{% endif %}>Safe</option>
-            <option value="near" {% if status == 'near' %}selected{% endif %}>Near</option>
-            <option value="crossed" {% if status == 'crossed' %}selected{% endif %}>Crossed</option>
+          <select name="status" class="form-select form-select-sm search-select" multiple>
+            <option value="safe" {% if 'safe' in (status_values or []) %}selected{% endif %}>Safe</option>
+            <option value="near" {% if 'near' in (status_values or []) %}selected{% endif %}>Near</option>
+            <option value="crossed" {% if 'crossed' in (status_values or []) %}selected{% endif %}>Crossed</option>
           </select>
         </div>
         <div class="col-6 col-md-2">
@@ -206,6 +213,36 @@
 <script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
 <script>
 $(function () {
+  function buildActionUrl(baseUrl) {
+    var url = new URL(baseUrl, window.location.origin);
+    var form = document.getElementById('oilAlertFilterForm');
+    if (form) {
+      var fd = new FormData(form);
+      for (var pair of fd.entries()) {
+        var k = pair[0];
+        var v = (pair[1] || '').toString().trim();
+        if (!v) continue;
+        url.searchParams.append(k, v);
+      }
+    }
+    return url.toString();
+  }
+
+  var exportBtn = document.getElementById('oilAlertExportBtn');
+  if (exportBtn) {
+    exportBtn.addEventListener('click', function() {
+      var u = buildActionUrl(this.getAttribute('data-base-url'));
+      window.location.href = u;
+    });
+  }
+  var printBtn = document.getElementById('oilAlertPrintBtn');
+  if (printBtn) {
+    printBtn.addEventListener('click', function() {
+      var u = buildActionUrl(this.getAttribute('data-base-url'));
+      window.open(u, '_blank');
+    });
+  }
+
   var hasData = {{ 1 if rows else 0 }};
   if (!hasData) return;
   if (window.innerWidth < 768) return;
