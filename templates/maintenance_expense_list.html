@@ -314,7 +314,7 @@
 </div>
 
 <div class="modal fade" id="maintApprovalModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title" id="maintApprovalModalTitle"><i class="bi bi-whatsapp me-1 text-success"></i>Maintenance Approval Text</h5>
@@ -509,6 +509,7 @@ document.addEventListener('DOMContentLoaded', function() {
     document.body.style.removeProperty('padding-right');
   }
   if (approvalModalEl) {
+    approvalModalEl.addEventListener('show.bs.modal', restoreBodyScroll);
     approvalModalEl.addEventListener('shown.bs.modal', restoreBodyScroll);
     approvalModalEl.addEventListener('hidden.bs.modal', restoreBodyScroll);
   }

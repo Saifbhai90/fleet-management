@@ -224,7 +224,7 @@
                 <i class="bi bi-pencil"></i>
               </a>
               <button type="button"
-                      class="btn btn-link btn-sm p-1 text-success js-mwo-approval"
+                      class="btn btn-outline-success btn-sm js-mwo-approval"
                       title="Generate WhatsApp Approval Text"
                       data-wo-id="{{ row.rec.id }}">
                 <i class="bi bi-whatsapp"></i>
@@ -283,7 +283,7 @@
   </div>
 </div>
 <div class="modal fade" id="mwoApprovalModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title" id="mwoApprovalModalTitle"><i class="bi bi-whatsapp me-1 text-success"></i>Work Order Approval Summary</h5>
@@ -318,6 +318,7 @@
     </div>
   </div>
 </div>
+
 <script>
 document.addEventListener('DOMContentLoaded', function() {
   var LC = null;
@@ -665,6 +666,7 @@ document.addEventListener('DOMContentLoaded', function() {
     document.body.style.removeProperty('padding-right');
   }
   if (modalEl) {
+    modalEl.addEventListener('show.bs.modal', restoreBodyScroll);
     modalEl.addEventListener('shown.bs.modal', restoreBodyScroll);
     modalEl.addEventListener('hidden.bs.modal', restoreBodyScroll);
   }
