@@ -149,23 +149,29 @@
   function parseTimeFromOcrText(text) {
     if (!text) return null;
     var t = String(text).replace(/\s+/g, ' ').trim();
+    t = t
+      .replace(/[Oo]/g, '0')
+      .replace(/[lI|]/g, '1')
+      .replace(/[Ss]/g, '5')
+      .replace(/[Bb]/g, '8')
+      .replace(/—/g, '-');
     var candidates = [];
-    var re1 = /(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})[^0-9]{0,30}(\d{1,2}:\d{2})(?::\d{2})?\s*([AaPp][Mm])?/g;
+    var re1 = /(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})[^0-9]{0,35}(\d{1,2}:\d{2})(?::\d{2})?\s*([AaPp][Mm])?/g;
     var m1;
-    while ((m1 = re1.exec(t)) !== null) candidates.push({ time: m1[2], ampm: m1[3] || '' });
+    while ((m1 = re1.exec(t)) !== null) candidates.push({ time: m1[2], ampm: m1[3] || '', idx: m1.index, score: 120 });
     var re2 = /(\d{1,2}:\d{2})(?::\d{2})?\s*([AaPp][Mm])/g;
     var m2;
-    while ((m2 = re2.exec(t)) !== null) candidates.push({ time: m2[1], ampm: m2[2] || '' });
+    while ((m2 = re2.exec(t)) !== null) candidates.push({ time: m2[1], ampm: m2[2] || '', idx: m2.index, score: 95 });
     var re3 = /\b([01]?\d|2[0-3]):([0-5]\d)\b/g;
     var m3;
-    while ((m3 = re3.exec(t)) !== null) candidates.push({ time: m3[0], ampm: '' });
+    while ((m3 = re3.exec(t)) !== null) candidates.push({ time: m3[0], ampm: '', idx: m3.index, score: 60 });
     if (!candidates.length) return null;
     var picked = null;
     var bestScore = -1;
     candidates.forEach(function(c) {
-      var score = 0;
-      if (c.ampm) score += 10;
-      if (String(c.time || '').indexOf(':') !== -1) score += 2;
+      var score = c.score || 0;
+      if (c.ampm) score += 12;
+      if (String(t).substr(Math.max(0, (c.idx || 0) - 14), 28).toUpperCase().indexOf('GMT') !== -1) score += 8;
       if (score > bestScore) {
         bestScore = score;
         picked = c;
@@ -186,14 +192,32 @@
   function parseDateFromOcrText(text) {
     if (!text) return null;
     var t = String(text).replace(/\s+/g, ' ').trim();
-    var m = t.match(/\b(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})\b/);
-    if (!m) return null;
-    var d = parseInt(m[1], 10);
-    var mo = parseInt(m[2], 10);
-    var y = parseInt(m[3], 10);
-    if (y < 100) y += 2000;
-    if (d < 1 || d > 31 || mo < 1 || mo > 12 || y < 2000 || y > 2100) return null;
-    return y + '-' + ('0' + mo).slice(-2) + '-' + ('0' + d).slice(-2);
+    t = t
+      .replace(/[Oo]/g, '0')
+      .replace(/[lI|]/g, '1')
+      .replace(/[Ss]/g, '5')
+      .replace(/[Bb]/g, '8')
+      .replace(/—/g, '-');
+    var re = /\b(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})\b/g;
+    var m;
+    var best = null;
+    var bestScore = -1;
+    while ((m = re.exec(t)) !== null) {
+      var d = parseInt(m[1], 10);
+      var mo = parseInt(m[2], 10);
+      var y = parseInt(m[3], 10);
+      if (y < 100) y += 2000;
+      if (d < 1 || d > 31 || mo < 1 || mo > 12 || y < 2000 || y > 2100) continue;
+      var score = 85;
+      if (String(m[3]).length === 4) score += 8;
+      var ctx = t.substr(Math.max(0, m.index - 20), 40).toLowerCase();
+      if (ctx.indexOf('wednesday') !== -1 || ctx.indexOf('monday') !== -1 || ctx.indexOf('tuesday') !== -1 || ctx.indexOf('thursday') !== -1 || ctx.indexOf('friday') !== -1 || ctx.indexOf('saturday') !== -1 || ctx.indexOf('sunday') !== -1) score += 6;
+      if (score > bestScore) {
+        bestScore = score;
+        best = y + '-' + ('0' + mo).slice(-2) + '-' + ('0' + d).slice(-2);
+      }
+    }
+    return best;
   }
   function ocrDateTimeFromImage(file) {
     return ensureTesseract()
@@ -202,8 +226,8 @@
           var img = new Image();
           img.onload = function() {
             try {
-              var canvases = [];
-              function makeCanvas(sx, sy, sw, sh, scale, mode) {
+              var variants = [];
+              function makeCanvas(sx, sy, sw, sh, scale, mode, name) {
                 var c = document.createElement('canvas');
                 c.width = Math.max(1, Math.round(sw * scale));
                 c.height = Math.max(1, Math.round(sh * scale));
@@ -219,32 +243,40 @@
                   }
                   cx.putImageData(id, 0, 0);
                 }
-                return c;
+                variants.push({ canvas: c, name: name + ':' + mode });
               }
-              var fullScale = img.width < 1300 ? (1300 / img.width) : 1;
-              canvases.push(makeCanvas(0, 0, img.width, img.height, fullScale, 'normal'));
-              var oy = Math.floor(img.height * 0.52);
-              var oh = img.height - oy;
-              var overlayScale = img.width < 1800 ? (1800 / img.width) : 1.15;
-              canvases.push(makeCanvas(0, oy, img.width, oh, overlayScale, 'normal'));
-              canvases.push(makeCanvas(0, oy, img.width, oh, overlayScale, 'gray-boost'));
+              var fullScale = img.width < 1400 ? (1400 / img.width) : 1;
+              makeCanvas(0, 0, img.width, img.height, fullScale, 'normal', 'full');
+              var oy = Math.floor(img.height * 0.50), oh = img.height - oy;
+              var overlayScale = img.width < 1900 ? (1900 / img.width) : 1.1;
+              makeCanvas(0, oy, img.width, oh, overlayScale, 'normal', 'bottom50');
+              makeCanvas(0, oy, img.width, oh, overlayScale, 'gray-boost', 'bottom50');
+              var rx = Math.floor(img.width * 0.22), rw = img.width - rx;
+              var ry = Math.floor(img.height * 0.62), rh = img.height - ry;
+              makeCanvas(rx, ry, rw, rh, 2.0, 'normal', 'overlay-right');
+              makeCanvas(rx, ry, rw, rh, 2.0, 'gray-boost', 'overlay-right');
+              var cx0 = Math.floor(img.width * 0.10), cw = Math.floor(img.width * 0.86);
+              var cy0 = Math.floor(img.height * 0.70), ch = img.height - cy0;
+              makeCanvas(cx0, cy0, cw, ch, 2.2, 'normal', 'overlay-bottom');
+              makeCanvas(cx0, cy0, cw, ch, 2.2, 'gray-boost', 'overlay-bottom');
+              var best = { time: null, dateYmd: null, timeScore: -1, dateScore: -1 };
 
               (function run(idx) {
-                if (idx >= canvases.length) {
-                  resolve({ time: null, dateYmd: null });
+                if (idx >= variants.length) {
+                  resolve({ time: best.time, dateYmd: best.dateYmd });
                   return;
                 }
-                Tesseract.recognize(canvases[idx], 'eng')
+                Tesseract.recognize(variants[idx].canvas, 'eng', {
+                  tessedit_char_whitelist: '0123456789:/- AMPMapmGMT+.,',
+                  preserve_interword_spaces: '1'
+                })
                   .then(function(r) {
                     var text = (r && r.data) ? (r.data.text || '') : '';
-                    var parsed = {
-                      time: parseTimeFromOcrText(text),
-                      dateYmd: parseDateFromOcrText(text)
-                    };
-                    if (parsed.time || parsed.dateYmd) {
-                      resolve(parsed);
-                      return;
-                    }
+                    var pTime = parseTimeFromOcrText(text);
+                    var pDate = parseDateFromOcrText(text);
+                    if (pTime) best.time = pTime;
+                    if (pDate) best.dateYmd = pDate;
+                    if (best.time && best.dateYmd) { resolve({ time: best.time, dateYmd: best.dateYmd }); return; }
                     run(idx + 1);
                   })
                   .catch(function() { run(idx + 1); });
