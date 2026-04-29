@@ -3675,6 +3675,7 @@
                     <button type="button" class="btn btn-sm btn-outline-primary guide-chip">Add vehicle</button>
                     <button type="button" class="btn btn-sm btn-outline-primary guide-chip">Fuel expense</button>
                     <button type="button" class="btn btn-sm btn-outline-primary guide-chip">Reports</button>
+                    <button type="button" class="btn btn-sm btn-outline-primary guide-chip">Keyboard shortcuts</button>
                     <button type="button" class="btn btn-sm btn-outline-primary guide-chip">License expiry</button>
                     <button type="button" class="btn btn-sm btn-outline-primary guide-chip">AI report</button>
                     <button type="button" class="btn btn-sm btn-outline-primary guide-chip">Notifications</button>
@@ -4834,6 +4835,18 @@
               text: "<strong>Attendance Report:</strong> Sidebar → Reports → Attendance Report. Monthly driver attendance summary. Filter by date range." },
             { keys: ["custom report", "apni report", "ai report", "khud report", "temp report"], cat: "reports",
               text: "<strong>Custom report:</strong> Go to Reports → <strong>Create report with AI</strong>. Describe what you need (e.g. drivers, vehicles, projects, expiry). A temporary report opens; close it when done—nothing is saved." },
+            { keys: ["shortcut", "shortcuts", "short key", "keyboard shortcut", "hotkey"], cat: "general",
+              text: (function() {
+                var list = (window._appShortcuts || [
+                  { keys: "Alt+F", label: "Add Fuel Expense" },
+                  { keys: "Alt+O", label: "Add Oil Expense" },
+                  { keys: "Alt+M", label: "Add Maintenance Expense" },
+                  { keys: "Alt+T", label: "Add Workspace Transfer" },
+                  { keys: "Alt+L", label: "Workspace Ledger" }
+                ]);
+                var lines = list.map(function(it){ return "• <kbd>" + it.keys + "</kbd> → " + it.label; });
+                return "<strong>Keyboard Shortcuts:</strong><br>" + lines.join("<br>") + "<br><br>Note: Shortcut tab kaam nahi karta jab input field, command palette, ya modal open ho.";
+              })() },
             { keys: ["dashboard", "home", "main page"], cat: "general",
               text: "<strong>Dashboard:</strong> Shows counts (Companies, Projects, Districts, Vehicles, Parking, Drivers) and <strong>Notifications</strong> (e.g. document expiry). Use the cards to jump to each section." },
             { keys: ["notification", "notifications", "alert", "bell"], cat: "general",
@@ -7484,15 +7497,20 @@ window._dtPrintCustomize = function(title, color, icon) {
 <script>
 /* ── Global navigation shortcuts ────────────────────────────────────────
    Alt+F  → Add Fuel Expense
+   Alt+O  → Add Oil Expense
+   Alt+M  → Add Maintenance Expense
    Alt+T  → Add Workspace Transfer
    Alt+L  → Workspace Ledger
    (Only when command palette is NOT open and no modal/dialog is active) */
 (function() {
     var SHORTCUTS = {
-        'f': '/expenses/fuel/add',
-        't': '/workspace/transfer/new',
-        'l': '/workspace/ledger',
+        'f': { path: '/expenses/fuel/add', keys: 'Alt+F', label: 'Add Fuel Expense' },
+        'o': { path: '/oil-expense/add', keys: 'Alt+O', label: 'Add Oil Expense' },
+        'm': { path: '/maintenance-expense/add', keys: 'Alt+M', label: 'Add Maintenance Expense' },
+        't': { path: '/workspace/transfer/new', keys: 'Alt+T', label: 'Add Workspace Transfer' },
+        'l': { path: '/workspace/ledger', keys: 'Alt+L', label: 'Workspace Ledger' },
     };
+    window._appShortcuts = Object.keys(SHORTCUTS).map(function(k){ return SHORTCUTS[k]; });
     document.addEventListener('keydown', function(e) {
         if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
         var k = e.key.toLowerCase();
@@ -7503,7 +7521,7 @@ window._dtPrintCustomize = function(title, color, icon) {
         if (activeTag === 'INPUT' || activeTag === 'TEXTAREA' || activeTag === 'SELECT') return;
         if (document.querySelector('.modal.show')) return;
         e.preventDefault();
-        window.location.href = SHORTCUTS[k];
+        window.location.href = SHORTCUTS[k].path;
     });
 })();
 </script>
