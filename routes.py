@@ -21594,20 +21594,8 @@ def api_fuel_expense_price_history():
             'fuel_price': float(r.fuel_price),
         }
 
-    pump_or_date_rows = []
-    # Strict rule for this card:
-    # show rows only when BOTH selected pump and selected date are provided and matched.
-    if fuel_pump_id and fueling_date:
-        strict_rows = any_price_q.filter(
-            or_(FuelExpense.workspace_pump_id == fuel_pump_id, FuelExpense.fuel_pump_id == fuel_pump_id),
-            FuelExpense.fueling_date == fueling_date,
-        ).order_by(
-            FuelExpense.id.desc(),
-        ).limit(3).all()
-        pump_or_date_rows = [_fmt_row(r) for r in strict_rows]
-
     if normalized not in ('Diesel', 'Super'):
-        return jsonify({'pump_or_date': pump_or_date_rows, 'selected_pump': [], 'all_pumps': [], 'date_snapshot': []})
+        return jsonify({'pump_or_date': [], 'selected_pump': [], 'all_pumps': [], 'date_snapshot': []})
 
     if normalized == 'Super':
         fuel_filter = FuelExpense.fuel_type.in_(('Super', 'Petrol'))
@@ -21615,6 +21603,18 @@ def api_fuel_expense_price_history():
         fuel_filter = FuelExpense.fuel_type == normalized
 
     base_q = any_price_q.filter(fuel_filter)
+    pump_or_date_rows = []
+    # Strict rule for this card:
+    # show rows only when BOTH selected pump and selected date are provided and matched.
+    # Fuel type filter is mandatory for this section as well.
+    if fuel_pump_id and fueling_date:
+        strict_rows = base_q.filter(
+            or_(FuelExpense.workspace_pump_id == fuel_pump_id, FuelExpense.fuel_pump_id == fuel_pump_id),
+            FuelExpense.fueling_date == fueling_date,
+        ).order_by(
+            FuelExpense.id.desc(),
+        ).limit(3).all()
+        pump_or_date_rows = [_fmt_row(r) for r in strict_rows]
 
     selected_pump_rows = []
     if fuel_pump_id:
