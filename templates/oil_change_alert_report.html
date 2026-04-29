@@ -129,7 +129,7 @@
             <th>District</th>
             <th>Vehicle</th>
             <th>Family / Limit</th>
-            <th>Last Oil Change Date</th>
+            <th>Date</th>
             <th>Base Reading</th>
             <th>Current Reading</th>
             <th>KM After Oil</th>
@@ -152,13 +152,16 @@
               <div class="fw-semibold">{{ r.vehicle_family }}</div>
               <small class="text-muted">Limit: {{ r.limit_km }} KM · Near: {{ r.near_percent }}%</small>
             </td>
-            <td>{{ r.last_oil_change_date|ddmmyyyy if r.last_oil_change_date else '-' }}</td>
             <td>
-              <div>{{ '%.2f'|format(r.base_reading) }}</div>
+              <div>{{ r.last_oil_change_date|ddmmyyyy if r.last_oil_change_date else '-' }}</div>
+              <small class="text-muted">Last Oil Change</small>
+            </td>
+            <td>
+              <div>{{ '%.0f'|format(r.base_reading) }}</div>
               <small class="text-muted">{{ r.base_source }}</small>
             </td>
             <td>
-              <div>{{ '%.2f'|format(r.current_reading) }}</div>
+              <div>{{ '%.0f'|format(r.current_reading) }}</div>
               <small class="text-muted">{{ r.current_source }}</small>
             </td>
             <td class="fw-semibold">{{ '%.2f'|format(r.kms_after_oil) }}</td>
