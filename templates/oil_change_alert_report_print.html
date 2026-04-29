@@ -3,32 +3,51 @@
 
 {% block extra_head %}
 <style>
-  .rpt-header { background: linear-gradient(135deg, #8e24aa 0%, #5e35b1 100%); color: #fff; border-radius: 10px; padding: 1rem 1.2rem; margin-bottom: 1rem; }
-  .rpt-header h2 { margin: 0; font-size: 1.22rem; font-weight: 700; }
-  .rpt-meta { font-size: 0.78rem; color: #546e7a; margin-bottom: 0.75rem; }
-  .total-badge { display: inline-block; background: #ede7f6; color: #512da8; font-size: 0.82rem; font-weight: 700; padding: 0.2rem 0.75rem; border-radius: 20px; }
-  .rpt-table { font-size: 0.81rem; }
-  .rpt-table thead th { background: #f3e5f5; color: #4a148c; font-weight: 700; font-size: 0.74rem; text-transform: uppercase; border-bottom: 2px solid #8e24aa; white-space: nowrap; padding: 0.4rem 0.6rem; }
-  .rpt-table tbody td { vertical-align: middle; padding: 0.38rem 0.58rem; }
+  .rpt-top { display: flex; flex-direction: column; gap: 0.65rem; width: 100%; }
+  .rpt-header { background: linear-gradient(135deg, #8e24aa 0%, #5e35b1 100%); color: #fff; border-radius: 12px; padding: 1.1rem 1.3rem; box-shadow: 0 4px 18px rgba(94,53,177,.25); }
+  .rpt-header h2 { margin: 0; font-size: clamp(1.05rem, 2.5vw, 1.26rem); font-weight: 800; letter-spacing: .2px; }
+  .rpt-sub { margin-top: .3rem; font-size: clamp(0.78rem, 1.6vw, 0.82rem); opacity: .92; }
+  .rpt-meta { font-size: 0.8rem; color: #475569; display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: flex-start; }
+  .meta-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: .45rem .7rem; display: inline-flex; align-items: center; gap: .35rem; max-width: 100%; }
+  .rpt-badges { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+  .total-badge { display: inline-block; background: #ede7f6; color: #512da8; font-size: 0.82rem; font-weight: 700; padding: 0.22rem 0.75rem; border-radius: 20px; border: 1px solid #ddd6fe; }
+  .rpt-table-outer { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 10px; }
+  .rpt-table { font-size: 0.76rem; margin-bottom: 0; table-layout: auto; width: 100%; border-collapse: collapse; }
+  .rpt-table thead th { background: #f3e5f5; color: #4a148c; font-weight: 800; font-size: 0.7rem; text-transform: uppercase; border-bottom: 2px solid #8e24aa; white-space: normal; word-wrap: break-word; overflow-wrap: break-word; vertical-align: bottom; line-height: 1.25; padding: 0.4rem 0.5rem; letter-spacing: .2px; }
+  .rpt-table tbody td { vertical-align: top; padding: 0.35rem 0.5rem; color: #0f172a; white-space: normal; word-wrap: break-word; overflow-wrap: break-word; }
   .rpt-table tbody tr:nth-child(even) { background: #faf5ff; }
+  .rpt-table tbody tr:hover { background: #f5f3ff; }
+  .rpt-table th:first-child, .rpt-table td:first-child { white-space: nowrap; vertical-align: middle; }
+  .print-container { max-width: none !important; width: calc(100vw - 16px) !important; margin: 0 auto !important; padding: 10px 8px 20px 8px !important; display: flex; flex-direction: column; gap: 0.75rem; box-sizing: border-box; }
+  .preview-search-wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; width: 100%; }
+  .preview-search { flex: 1 1 220px; min-width: 0; max-width: 100%; border: 1px solid #cbd5e1; border-radius: 8px; padding: 6px 10px; font-size: .85rem; }
+  .preview-count { font-size: .78rem; color: #475569; flex: 1 1 160px; min-width: 0; }
   .status-near { color: #ef6c00; font-weight: 700; }
   .status-crossed { color: #c62828; font-weight: 700; }
   .status-safe { color: #2e7d32; font-weight: 700; }
+  @page { size: A4 landscape !important; margin: 6mm !important; }
+  @media print {
+    .rpt-table-outer { overflow: visible !important; }
+    .rpt-table { width: 100% !important; min-width: 0 !important; table-layout: auto !important; }
+  }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="print-container">
+  <div class="rpt-top">
   <div class="rpt-header">
     <h2><i class="bi bi-bell-fill me-2"></i>Oil Change Alert Report</h2>
+    <div class="rpt-sub">Custom preview for full-width visibility and zoom-safe columns.</div>
   </div>
 
-  <div class="rpt-meta d-flex flex-wrap gap-3">
-    <span><i class="bi bi-calendar3 me-1"></i>Generated: {{ now().strftime('%d %b %Y, %I:%M %p') if now is defined and now is callable else '' }}</span>
-    <span><i class="bi bi-sliders me-1"></i>Near threshold: family-wise configuration</span>
+  <div class="rpt-meta">
+    <span class="meta-card"><i class="bi bi-calendar3"></i>Generated: {{ now().strftime('%d %b %Y, %I:%M %p') if now is defined and now is callable else '' }}</span>
+    <span class="meta-card"><i class="bi bi-sliders"></i>Near threshold: family-wise configuration</span>
   </div>
-  <div class="mb-2">
-    <span class="total-badge"><i class="bi bi-exclamation-triangle-fill me-1"></i>Total Vehicles: {{ total }}</span>
+
+  <div class="rpt-badges">
+    <span class="total-badge">Total Vehicles: {{ total }}</span>
     {% if custom_km %}
     <span class="total-badge ms-2">Check KM: {{ custom_km }}</span>
     {% if custom_km_mode == 'above' %}
@@ -38,7 +57,13 @@
     {% endif %}
     {% endif %}
   </div>
+  <div class="preview-search-wrap no-print">
+    <div class="preview-count" id="previewVisibleCount">Showing {{ total }} of {{ total }}</div>
+    <input type="text" id="previewSearchInput" class="preview-search" placeholder="Search in preview...">
+  </div>
+  </div>
 
+  <div class="rpt-table-outer">
   <table class="table table-sm table-bordered rpt-table w-100">
     <thead>
       <tr>
@@ -89,5 +114,34 @@
       {% endfor %}
     </tbody>
   </table>
+  </div>
 </div>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  var inp = document.getElementById('previewSearchInput');
+  var tbody = document.querySelector('.rpt-table tbody');
+  var countEl = document.getElementById('previewVisibleCount');
+  if (!inp || !tbody) return;
+  var rows = Array.prototype.slice.call(tbody.querySelectorAll('tr'));
+  var total = rows.length;
+  function applyFilter() {
+    var q = (inp.value || '').toLowerCase().trim();
+    var visible = 0;
+    var sr = 1;
+    rows.forEach(function (tr) {
+      var txt = (tr.textContent || '').toLowerCase();
+      var show = !q || txt.indexOf(q) !== -1;
+      tr.style.display = show ? '' : 'none';
+      if (show) {
+        visible += 1;
+        var srCell = tr.querySelector('td');
+        if (srCell) srCell.textContent = sr++;
+      }
+    });
+    if (countEl) countEl.textContent = 'Showing ' + visible + ' of ' + total;
+  }
+  inp.addEventListener('input', applyFilter);
+  applyFilter();
+});
+</script>
 {% endblock %}
