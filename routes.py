@@ -23376,6 +23376,7 @@ def oil_expense_list():
         page_subtotal_amount=page_subtotal_amount,
         show_upload_media_columns=show_upload_media_columns,
         location_cascade=_fuel_expense_location_cascade_dict(),
+        workspace_employee_id=workspace_employee_id,
     )
 
 
@@ -24284,6 +24285,105 @@ def api_maintenance_work_order_approval_text(pk):
         'selected_driver_id': selected_driver_id,
         'location_default': location_default,
         'location_used': location,
+    })
+
+
+@app.route('/api/oil-expense/approval-text/<int:pk>')
+def api_oil_expense_approval_text(pk):
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return jsonify({'ok': False, 'error': 'forbidden'}), 403
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    rec = OilExpense.query.options(
+        joinedload(OilExpense.district),
+        joinedload(OilExpense.project),
+        joinedload(OilExpense.vehicle).joinedload(Vehicle.drivers),
+    ).get_or_404(pk)
+    if workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
+        return jsonify({'ok': False, 'error': 'forbidden'}), 403
+
+    vehicle = rec.vehicle
+    selected_driver_id = request.args.get('driver_id', type=int)
+    driver_name = '-'
+    driver_options = []
+    if vehicle:
+        active_drivers = [d for d in (vehicle.drivers or []) if (d.status or '').lower() == 'active']
+        fallback_drivers = active_drivers or list(vehicle.drivers or [])
+        fallback_drivers.sort(key=lambda d: ((d.name or '').lower(), d.id or 0))
+        selected_driver = None
+        if selected_driver_id:
+            selected_driver = next((d for d in fallback_drivers if d.id == selected_driver_id), None)
+        if not selected_driver and fallback_drivers:
+            selected_driver = fallback_drivers[0]
+        if selected_driver:
+            driver_name = selected_driver.name or '-'
+            selected_driver_id = selected_driver.id
+        driver_options = [
+            {
+                'id': d.id,
+                'name': d.name or f'Driver #{d.id}',
+                'status': (d.status or '').lower(),
+            }
+            for d in fallback_drivers
+        ]
+
+    district_name = rec.district.name if rec.district else '-'
+    project_name = rec.project.name if rec.project else '-'
+    custom_location = (request.args.get('location') or '').strip()
+    location_default = district_name if district_name and district_name != '-' else ''
+    location = custom_location or location_default or '-'
+    vehicle_no = vehicle.vehicle_no if vehicle else '-'
+    vehicle_label = f"{vehicle_no} ({project_name})" if project_name and project_name != '-' else vehicle_no
+
+    payment_mode_raw = (request.args.get('payment_mode') or '').strip()
+    payment_mode = payment_mode_raw or (rec.payment_type or 'Cash')
+    allowed_payment_modes = ['Cash', 'Credit', 'Card', 'In Hand Stock']
+    if payment_mode not in allowed_payment_modes:
+        payment_mode = 'Cash'
+
+    oil_date_txt = rec.expense_date.strftime('%d-%m-%Y') if rec.expense_date else '-'
+    prev_reading = f"{float(rec.previous_reading):.0f}" if rec.previous_reading is not None else '-'
+    curr_reading = f"{float(rec.current_reading):.0f}" if rec.current_reading is not None else '-'
+    km_txt = f"{float(rec.km):.0f}" if rec.km is not None else '-'
+
+    detail_lines = []
+    total_amount = 0.0
+    for it in rec.items.order_by(OilExpenseItem.sort_order.asc(), OilExpenseItem.id.asc()).all():
+        p_name = (it.product.name if it.product else f'Product #{it.product_id}')
+        qty = float(it.purchase_qty if it.purchase_qty is not None else (it.qty or 0))
+        price = float(it.price or 0)
+        amount = float(it.amount or (qty * price))
+        total_amount += amount
+        detail_lines.append(f"{len(detail_lines) + 1}- {p_name} {qty:.0f}x{price:.0f}={amount:.0f}")
+    if not detail_lines:
+        detail_lines = ['-']
+
+    lines = [
+        "Oil Change Done",
+        vehicle_label,
+        f"Oil Change Date: {oil_date_txt}",
+        f"last Oil change Reading: {prev_reading}",
+        f"Current Oil Change Reading: {curr_reading} ({km_txt} km)",
+        f"Driver: {driver_name}",
+        f"Location: {location}",
+        "Detail:",
+        f"Payment Mode: {payment_mode}",
+    ]
+    lines.extend(detail_lines)
+    lines.append(f"Total: {total_amount:.0f}")
+
+    return jsonify({
+        'ok': True,
+        'approval_text': '\n'.join(lines),
+        'vehicle_no': vehicle_no,
+        'vehicle_label': vehicle_label,
+        'date': oil_date_txt,
+        'driver_options': driver_options,
+        'selected_driver_id': selected_driver_id,
+        'location_default': location_default,
+        'location_used': location,
+        'payment_mode': payment_mode,
+        'payment_modes': allowed_payment_modes,
     })
 
 

@@ -184,6 +184,12 @@
                     <a class="btn btn-outline-success btn-sm w-100 py-1" href="{{ url_for('oil_expense_media', pk=r.id) }}">Media</a>
                   </div>
                 </div>
+                <button type="button"
+                        class="btn btn-outline-success btn-sm js-oil-approval"
+                        title="Generate WhatsApp Oil Change Text"
+                        data-oil-id="{{ r.id }}">
+                  <i class="bi bi-whatsapp"></i>
+                </button>
                 <a href="{{ url_for('oil_expense_form', pk=r.id) }}" class="btn btn-outline-primary btn-sm" title="Edit"><i class="bi bi-pencil"></i></a>
                 <form action="{{ url_for('oil_expense_delete', pk=r.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Delete this oil expense?');">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -255,6 +261,51 @@
     </div>
     </div>
   </div>
+  </div>
+</div>
+<div class="modal fade" id="oilApprovalModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="oilApprovalModalTitle"><i class="bi bi-whatsapp me-1 text-success"></i>Oil Change WhatsApp Text</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="small text-muted mb-2">Driver, payment mode aur location select karein; text auto update ho jayega.</div>
+        <div class="row g-2 mb-2">
+          <div class="col-md-4">
+            <label class="form-label small mb-1">Driver</label>
+            <select id="oilApprovalDriverSelect" class="form-select form-select-sm">
+              <option value="">-</option>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label small mb-1">Payment Mode</label>
+            <select id="oilApprovalPaymentModeSelect" class="form-select form-select-sm">
+              <option value="Cash" selected>Cash</option>
+              <option value="Credit">Credit</option>
+              <option value="Card">Card</option>
+              <option value="In Hand Stock">In Hand Stock</option>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label small mb-1">Location</label>
+            <input type="text" id="oilApprovalLocationInput" class="form-control form-control-sm" list="oilApprovalLocationList" placeholder="Enter location">
+            <datalist id="oilApprovalLocationList"></datalist>
+          </div>
+        </div>
+        <textarea id="oilApprovalText" class="form-control" rows="15" readonly placeholder="Oil change text loading..."></textarea>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-outline-primary btn-sm" id="oilApprovalCopyBtn">
+          <i class="bi bi-clipboard me-1"></i>Copy Text
+        </button>
+        <button type="button" class="btn btn-success btn-sm" id="oilApprovalWhatsappBtn">
+          <i class="bi bi-whatsapp me-1"></i>Open WhatsApp
+        </button>
+      </div>
+    </div>
   </div>
 </div>
 <script>
@@ -547,6 +598,173 @@ document.addEventListener('DOMContentLoaded', function() {
       try { expandRow.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (x) { expandRow.scrollIntoView(false); }
     });
   });
+
+  var oilApprovalModalEl = document.getElementById('oilApprovalModal');
+  var oilApprovalTextEl = document.getElementById('oilApprovalText');
+  var oilApprovalCopyBtn = document.getElementById('oilApprovalCopyBtn');
+  var oilApprovalWhatsappBtn = document.getElementById('oilApprovalWhatsappBtn');
+  var oilApprovalDriverSelect = document.getElementById('oilApprovalDriverSelect');
+  var oilApprovalPaymentModeSelect = document.getElementById('oilApprovalPaymentModeSelect');
+  var oilApprovalLocationInput = document.getElementById('oilApprovalLocationInput');
+  var oilApprovalLocationList = document.getElementById('oilApprovalLocationList');
+  var oilApprovalModal = (window.bootstrap && oilApprovalModalEl) ? new window.bootstrap.Modal(oilApprovalModalEl, { backdrop: false, focus: false, keyboard: true }) : null;
+  var oilApprovalContextId = '';
+  var oilApprovalBusy = false;
+  var workspaceEmployeeId = "{{ workspace_employee_id or 0 }}";
+  var oilSavedLocationsKey = 'oilApprovalLocations:' + workspaceEmployeeId;
+
+  function oilRestoreBodyScroll() {
+    document.body.classList.remove('modal-open');
+    document.body.style.removeProperty('overflow');
+    document.body.style.removeProperty('padding-right');
+  }
+  if (oilApprovalModalEl) {
+    oilApprovalModalEl.addEventListener('shown.bs.modal', oilRestoreBodyScroll);
+    oilApprovalModalEl.addEventListener('hidden.bs.modal', oilRestoreBodyScroll);
+  }
+  function oilGetSavedLocations() {
+    try {
+      var raw = localStorage.getItem(oilSavedLocationsKey);
+      var arr = raw ? JSON.parse(raw) : [];
+      return Array.isArray(arr) ? arr.filter(function(x){ return typeof x === 'string' && x.trim(); }) : [];
+    } catch (e) { return []; }
+  }
+  function oilSetSavedLocations(list) {
+    try { localStorage.setItem(oilSavedLocationsKey, JSON.stringify(list.slice(0, 15))); } catch (e) {}
+  }
+  function oilRememberLocation(value) {
+    var v = (value || '').trim();
+    if (!v) return;
+    var list = oilGetSavedLocations().filter(function(x){ return x.toLowerCase() !== v.toLowerCase(); });
+    list.unshift(v);
+    oilSetSavedLocations(list);
+    oilRenderSavedLocations();
+  }
+  function oilRenderSavedLocations() {
+    if (!oilApprovalLocationList) return;
+    oilApprovalLocationList.innerHTML = '';
+    oilGetSavedLocations().forEach(function(loc) {
+      var o = document.createElement('option');
+      o.value = loc;
+      oilApprovalLocationList.appendChild(o);
+    });
+  }
+  function oilSetText(text) {
+    if (oilApprovalTextEl) oilApprovalTextEl.value = text || '';
+  }
+  function oilCurrentDriverId() { return oilApprovalDriverSelect ? (oilApprovalDriverSelect.value || '') : ''; }
+  function oilCurrentPaymentMode() { return oilApprovalPaymentModeSelect ? (oilApprovalPaymentModeSelect.value || 'Cash') : 'Cash'; }
+  function oilCurrentLocation() { return oilApprovalLocationInput ? (oilApprovalLocationInput.value || '').trim() : ''; }
+  function oilBuildUrl() {
+    if (!oilApprovalContextId) return '';
+    var qs = new URLSearchParams();
+    var did = oilCurrentDriverId();
+    var mode = oilCurrentPaymentMode();
+    var loc = oilCurrentLocation();
+    if (did) qs.set('driver_id', did);
+    if (mode) qs.set('payment_mode', mode);
+    if (loc) qs.set('location', loc);
+    return '/api/oil-expense/approval-text/' + encodeURIComponent(oilApprovalContextId) + (qs.toString() ? ('?' + qs.toString()) : '');
+  }
+  function oilRenderDrivers(options, selectedId) {
+    if (!oilApprovalDriverSelect) return;
+    oilApprovalDriverSelect.innerHTML = '';
+    var opts = Array.isArray(options) ? options : [];
+    if (!opts.length) {
+      var emptyOpt = document.createElement('option');
+      emptyOpt.value = '';
+      emptyOpt.textContent = '-';
+      oilApprovalDriverSelect.appendChild(emptyOpt);
+      oilApprovalDriverSelect.disabled = true;
+      return;
+    }
+    opts.forEach(function(d) {
+      var o = document.createElement('option');
+      o.value = String(d.id || '');
+      o.textContent = d.name || '-';
+      if (String(d.id || '') === String(selectedId || '')) o.selected = true;
+      oilApprovalDriverSelect.appendChild(o);
+    });
+    oilApprovalDriverSelect.disabled = opts.length <= 1;
+  }
+  function oilRenderPaymentModes(options, selectedValue) {
+    if (!oilApprovalPaymentModeSelect) return;
+    var opts = (Array.isArray(options) && options.length) ? options : ['Cash', 'Credit', 'Card', 'In Hand Stock'];
+    oilApprovalPaymentModeSelect.innerHTML = '';
+    opts.forEach(function(v) {
+      var o = document.createElement('option');
+      o.value = v;
+      o.textContent = v;
+      if (String(v) === String(selectedValue || '')) o.selected = true;
+      oilApprovalPaymentModeSelect.appendChild(o);
+    });
+  }
+  function oilLoadApproval() {
+    var url = oilBuildUrl();
+    if (!url || oilApprovalBusy) return;
+    oilApprovalBusy = true;
+    oilSetText('Oil change text loading...');
+    fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+      .then(function(r){ return r.json(); })
+      .then(function(j) {
+        if (!j || !j.ok) throw new Error((j && (j.error || j.message)) || 'Unable to generate text');
+        oilSetText(j.approval_text || '');
+        oilRenderDrivers(j.driver_options || [], j.selected_driver_id || '');
+        oilRenderPaymentModes(j.payment_modes || [], j.payment_mode || 'Cash');
+        if (oilApprovalLocationInput && !oilApprovalLocationInput.value.trim()) {
+          oilApprovalLocationInput.value = j.location_used || j.location_default || '';
+        }
+      })
+      .catch(function(err) {
+        oilSetText('Unable to generate oil change text.\n' + ((err && err.message) ? err.message : 'Unknown error'));
+      })
+      .finally(function() { oilApprovalBusy = false; });
+  }
+
+  oilRenderSavedLocations();
+  document.querySelectorAll('.js-oil-approval').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      oilApprovalContextId = btn.getAttribute('data-oil-id') || '';
+      if (!oilApprovalContextId) return;
+      if (oilApprovalDriverSelect) { oilApprovalDriverSelect.innerHTML = '<option value="">-</option>'; oilApprovalDriverSelect.disabled = true; }
+      if (oilApprovalPaymentModeSelect) oilApprovalPaymentModeSelect.value = 'Cash';
+      if (oilApprovalLocationInput) oilApprovalLocationInput.value = '';
+      oilSetText('Oil change text loading...');
+      if (oilApprovalModal) oilApprovalModal.show();
+      oilRestoreBodyScroll();
+      oilLoadApproval();
+    });
+  });
+  if (oilApprovalDriverSelect) oilApprovalDriverSelect.addEventListener('change', function(){ oilLoadApproval(); });
+  if (oilApprovalPaymentModeSelect) oilApprovalPaymentModeSelect.addEventListener('change', function(){ oilLoadApproval(); });
+  if (oilApprovalLocationInput) {
+    oilApprovalLocationInput.addEventListener('change', function(){ oilLoadApproval(); });
+    oilApprovalLocationInput.addEventListener('blur', function(){ oilLoadApproval(); });
+  }
+  if (oilApprovalCopyBtn) {
+    oilApprovalCopyBtn.addEventListener('click', function() {
+      var txt = oilApprovalTextEl && oilApprovalTextEl.value ? oilApprovalTextEl.value : '';
+      if (!txt) return;
+      oilRememberLocation(oilCurrentLocation());
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(txt).then(function() {
+          oilApprovalCopyBtn.innerHTML = '<i class="bi bi-check2 me-1"></i>Copied';
+          setTimeout(function(){ oilApprovalCopyBtn.innerHTML = '<i class="bi bi-clipboard me-1"></i>Copy Text'; }, 1200);
+        });
+      } else if (oilApprovalTextEl) {
+        oilApprovalTextEl.select();
+        document.execCommand('copy');
+      }
+    });
+  }
+  if (oilApprovalWhatsappBtn) {
+    oilApprovalWhatsappBtn.addEventListener('click', function() {
+      var txt = oilApprovalTextEl && oilApprovalTextEl.value ? oilApprovalTextEl.value.trim() : '';
+      if (!txt) return;
+      oilRememberLocation(oilCurrentLocation());
+      window.open('https://wa.me/?text=' + encodeURIComponent(txt), '_blank');
+    });
+  }
 });
 </script>
 <script>
