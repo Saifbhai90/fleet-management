@@ -24048,14 +24048,29 @@ def api_maintenance_expense_approval_text(pk):
         return jsonify({'ok': False, 'error': 'forbidden'}), 403
 
     vehicle = rec.vehicle
+    selected_driver_id = request.args.get('driver_id', type=int)
     driver_name = '-'
+    driver_options = []
     if vehicle:
         active_drivers = [d for d in (vehicle.drivers or []) if (d.status or '').lower() == 'active']
-        if active_drivers:
-            active_drivers.sort(key=lambda d: (d.assign_date or date.min, d.id or 0), reverse=True)
-            driver_name = active_drivers[0].name or '-'
-        elif vehicle.drivers:
-            driver_name = (vehicle.drivers[0].name or '-')
+        fallback_drivers = active_drivers or list(vehicle.drivers or [])
+        fallback_drivers.sort(key=lambda d: ((d.name or '').lower(), d.id or 0))
+        selected_driver = None
+        if selected_driver_id:
+            selected_driver = next((d for d in fallback_drivers if d.id == selected_driver_id), None)
+        if not selected_driver and fallback_drivers:
+            selected_driver = fallback_drivers[0]
+        if selected_driver:
+            driver_name = selected_driver.name or '-'
+            selected_driver_id = selected_driver.id
+        driver_options = [
+            {
+                'id': d.id,
+                'name': d.name or f'Driver #{d.id}',
+                'status': (d.status or '').lower(),
+            }
+            for d in fallback_drivers
+        ]
 
     item_rows = rec.items.order_by(MaintenanceExpenseItem.sort_order.asc(), MaintenanceExpenseItem.id.asc()).all()
     detail_lines = []
@@ -24099,15 +24114,18 @@ def api_maintenance_expense_approval_text(pk):
 
     district_name = rec.district.name if rec.district else '-'
     project_name = rec.project.name if rec.project else '-'
-    location = f"{district_name}, {project_name}"
+    custom_location = (request.args.get('location') or '').strip()
+    location_default = district_name if district_name and district_name != '-' else ''
+    location = custom_location or location_default or '-'
     vehicle_no = vehicle.vehicle_no if vehicle else '-'
+    vehicle_label = f"{vehicle_no} ({project_name})" if project_name and project_name != '-' else vehicle_no
     reading_txt = f"{float(rec.current_reading):.0f}" if rec.current_reading is not None else '-'
     date_txt = rec.expense_date.strftime('%d-%m-%Y') if rec.expense_date else '-'
     total_txt = f"{float(rec.total_bill_amount if rec.total_bill_amount is not None else total_amount):.0f}"
 
     lines = [
         "Approval Required",
-        vehicle_no,
+        vehicle_label,
         f"Date: {date_txt}",
         f"Reading: {reading_txt}",
         f"Driver: {driver_name}",
@@ -24125,7 +24143,12 @@ def api_maintenance_expense_approval_text(pk):
         'ok': True,
         'approval_text': approval_text,
         'vehicle_no': vehicle_no,
+        'vehicle_label': vehicle_label,
         'date': date_txt,
+        'driver_options': driver_options,
+        'selected_driver_id': selected_driver_id,
+        'location_default': location_default,
+        'location_used': location,
     })
 
 
@@ -24145,19 +24168,37 @@ def api_maintenance_work_order_approval_text(pk):
 
     expenses = wo.expenses.order_by(MaintenanceExpense.expense_date.asc(), MaintenanceExpense.id.asc()).all()
     vehicle = wo.vehicle
+    selected_driver_id = request.args.get('driver_id', type=int)
     driver_name = '-'
+    driver_options = []
     if vehicle:
         active_drivers = [d for d in (vehicle.drivers or []) if (d.status or '').lower() == 'active']
-        if active_drivers:
-            active_drivers.sort(key=lambda d: (d.assign_date or date.min, d.id or 0), reverse=True)
-            driver_name = active_drivers[0].name or '-'
-        elif vehicle.drivers:
-            driver_name = (vehicle.drivers[0].name or '-')
+        fallback_drivers = active_drivers or list(vehicle.drivers or [])
+        fallback_drivers.sort(key=lambda d: ((d.name or '').lower(), d.id or 0))
+        selected_driver = None
+        if selected_driver_id:
+            selected_driver = next((d for d in fallback_drivers if d.id == selected_driver_id), None)
+        if not selected_driver and fallback_drivers:
+            selected_driver = fallback_drivers[0]
+        if selected_driver:
+            driver_name = selected_driver.name or '-'
+            selected_driver_id = selected_driver.id
+        driver_options = [
+            {
+                'id': d.id,
+                'name': d.name or f'Driver #{d.id}',
+                'status': (d.status or '').lower(),
+            }
+            for d in fallback_drivers
+        ]
 
     district_name = (wo.district.name if wo.district else '-') if wo else '-'
     project_name = (wo.project.name if wo.project else '-') if wo else '-'
-    location = f"{district_name}, {project_name}"
+    custom_location = (request.args.get('location') or '').strip()
+    location_default = district_name if district_name and district_name != '-' else ''
+    location = custom_location or location_default or '-'
     vehicle_no = vehicle.vehicle_no if vehicle else '-'
+    vehicle_label = f"{vehicle_no} ({project_name})" if project_name and project_name != '-' else vehicle_no
     wo_date = wo.opened_on.strftime('%d-%m-%Y') if wo.opened_on else '-'
 
     detail_lines = []
@@ -24184,7 +24225,7 @@ def api_maintenance_work_order_approval_text(pk):
     lines = [
         "Approval Required (Work Order)",
         f"WO: {wo.work_order_no or '-'}",
-        vehicle_no,
+        vehicle_label,
         f"Date: {wo_date}",
         f"Driver: {driver_name}",
         f"Location: {location}",
@@ -24205,7 +24246,12 @@ def api_maintenance_work_order_approval_text(pk):
         'approval_text': '\n'.join(lines),
         'work_order_no': wo.work_order_no or '-',
         'vehicle_no': vehicle_no,
+        'vehicle_label': vehicle_label,
         'date': wo_date,
+        'driver_options': driver_options,
+        'selected_driver_id': selected_driver_id,
+        'location_default': location_default,
+        'location_used': location,
     })
 
 
@@ -24558,6 +24604,7 @@ def maintenance_work_order_list():
         vehicle_choices=vehicle_choices,
         show_upload_media_columns=show_upload_media_columns,
         location_cascade=_fuel_expense_location_cascade_dict(),
+        workspace_employee_id=workspace_employee_id,
     )
 
 
@@ -25369,6 +25416,7 @@ def maintenance_expense_list():
         open_work_orders=open_work_orders,
         show_upload_media_columns=show_upload_media_columns,
         location_cascade=_fuel_expense_location_cascade_dict(),
+        workspace_employee_id=workspace_employee_id,
     )
 
 

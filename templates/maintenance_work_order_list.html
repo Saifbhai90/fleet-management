@@ -223,6 +223,12 @@
               <a href="{{ url_for('maintenance_work_order_form', pk=row.rec.id) }}{% if request.query_string %}?{{ request.query_string.decode() }}{% endif %}" class="btn btn-link btn-sm p-1" title="Edit">
                 <i class="bi bi-pencil"></i>
               </a>
+              <button type="button"
+                      class="btn btn-link btn-sm p-1 text-success js-mwo-approval"
+                      title="Generate WhatsApp Approval Text"
+                      data-wo-id="{{ row.rec.id }}">
+                <i class="bi bi-whatsapp"></i>
+              </button>
               {% if wo_st == 'closed' %}
               <span class="d-inline-block btn btn-link btn-sm p-1 text-secondary" style="opacity:.45;cursor:not-allowed" title="Work order band — naya bill add nahi ho sakta">
                 <i class="bi bi-receipt"></i>
@@ -274,6 +280,42 @@
       </table>
     </div>
   </div>
+  </div>
+</div>
+<div class="modal fade" id="mwoApprovalModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="mwoApprovalModalTitle"><i class="bi bi-whatsapp me-1 text-success"></i>Work Order Approval Summary</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="small text-muted mb-2">Driver select karein, location edit karein, phir text copy ya WhatsApp open karein.</div>
+        <div class="row g-2 mb-2">
+          <div class="col-md-6">
+            <label class="form-label small mb-1">Driver</label>
+            <select id="mwoApprovalDriverSelect" class="form-select form-select-sm">
+              <option value="">-</option>
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label small mb-1">Location</label>
+            <input type="text" id="mwoApprovalLocationInput" class="form-control form-control-sm" list="mwoApprovalLocationList" placeholder="Enter location">
+            <datalist id="mwoApprovalLocationList"></datalist>
+          </div>
+        </div>
+        <textarea id="mwoApprovalText" class="form-control" rows="14" readonly placeholder="Approval text loading..."></textarea>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-outline-primary btn-sm" id="mwoApprovalCopyBtn">
+          <i class="bi bi-clipboard me-1"></i>Copy Text
+        </button>
+        <button type="button" class="btn btn-success btn-sm" id="mwoApprovalWhatsappBtn">
+          <i class="bi bi-whatsapp me-1"></i>Open WhatsApp
+        </button>
+      </div>
+    </div>
   </div>
 </div>
 <script>
@@ -600,5 +642,157 @@ if (window.fleetPrintExport) window.fleetPrintExport('mwoTable', 'Maintenance Wo
     window.location.href = baseUrl + (qs.toString() ? ('?' + qs.toString()) : '');
   }, true);
 })();
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  var modalEl = document.getElementById('mwoApprovalModal');
+  var modalTitleEl = document.getElementById('mwoApprovalModalTitle');
+  var textEl = document.getElementById('mwoApprovalText');
+  var copyBtn = document.getElementById('mwoApprovalCopyBtn');
+  var whatsappBtn = document.getElementById('mwoApprovalWhatsappBtn');
+  var driverSelect = document.getElementById('mwoApprovalDriverSelect');
+  var locationInput = document.getElementById('mwoApprovalLocationInput');
+  var locationList = document.getElementById('mwoApprovalLocationList');
+  var modal = (window.bootstrap && modalEl) ? new window.bootstrap.Modal(modalEl, { backdrop: false, focus: false, keyboard: true }) : null;
+  var currentWoId = '';
+  var busy = false;
+  var workspaceEmployeeId = "{{ workspace_employee_id or 0 }}";
+  var savedLocationsKey = 'mwoApprovalLocations:' + workspaceEmployeeId;
+
+  function restoreBodyScroll() {
+    document.body.classList.remove('modal-open');
+    document.body.style.removeProperty('overflow');
+    document.body.style.removeProperty('padding-right');
+  }
+  if (modalEl) {
+    modalEl.addEventListener('shown.bs.modal', restoreBodyScroll);
+    modalEl.addEventListener('hidden.bs.modal', restoreBodyScroll);
+  }
+
+  function getSavedLocations() {
+    try {
+      var raw = localStorage.getItem(savedLocationsKey);
+      var arr = raw ? JSON.parse(raw) : [];
+      return Array.isArray(arr) ? arr.filter(function(x){ return typeof x === 'string' && x.trim(); }) : [];
+    } catch (e) { return []; }
+  }
+  function setSavedLocations(list) {
+    try { localStorage.setItem(savedLocationsKey, JSON.stringify(list.slice(0, 15))); } catch (e) {}
+  }
+  function rememberLocation(value) {
+    var v = (value || '').trim();
+    if (!v) return;
+    var list = getSavedLocations().filter(function(x){ return x.toLowerCase() !== v.toLowerCase(); });
+    list.unshift(v);
+    setSavedLocations(list);
+    renderLocationList();
+  }
+  function renderLocationList() {
+    if (!locationList) return;
+    locationList.innerHTML = '';
+    getSavedLocations().forEach(function(loc) {
+      var o = document.createElement('option');
+      o.value = loc;
+      locationList.appendChild(o);
+    });
+  }
+  function setText(t) { if (textEl) textEl.value = t || ''; }
+  function currentDriverId() { return driverSelect ? (driverSelect.value || '') : ''; }
+  function currentLocation() { return locationInput ? (locationInput.value || '').trim() : ''; }
+  function buildUrl() {
+    if (!currentWoId) return '';
+    var qs = new URLSearchParams();
+    var d = currentDriverId();
+    var l = currentLocation();
+    if (d) qs.set('driver_id', d);
+    if (l) qs.set('location', l);
+    return '/api/maintenance-work-order/approval-text/' + encodeURIComponent(currentWoId) + (qs.toString() ? ('?' + qs.toString()) : '');
+  }
+  function renderDrivers(options, selectedId) {
+    if (!driverSelect) return;
+    var opts = Array.isArray(options) ? options : [];
+    driverSelect.innerHTML = '';
+    if (!opts.length) {
+      var emptyOpt = document.createElement('option');
+      emptyOpt.value = '';
+      emptyOpt.textContent = '-';
+      driverSelect.appendChild(emptyOpt);
+      driverSelect.disabled = true;
+      return;
+    }
+    opts.forEach(function(d) {
+      var o = document.createElement('option');
+      o.value = String(d.id || '');
+      o.textContent = d.name || '-';
+      if (String(d.id || '') === String(selectedId || '')) o.selected = true;
+      driverSelect.appendChild(o);
+    });
+    driverSelect.disabled = opts.length <= 1;
+  }
+  function loadApproval() {
+    var url = buildUrl();
+    if (!url || busy) return;
+    busy = true;
+    setText('Loading approval text...');
+    fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+      .then(function(r){ return r.json(); })
+      .then(function(j) {
+        if (!j || !j.ok) throw new Error((j && (j.error || j.message)) || 'Unable to generate text');
+        setText(j.approval_text || '');
+        renderDrivers(j.driver_options || [], j.selected_driver_id || '');
+        if (locationInput && !locationInput.value.trim()) locationInput.value = j.location_used || j.location_default || '';
+      })
+      .catch(function(err) {
+        setText('Unable to generate approval text.\n' + ((err && err.message) ? err.message : 'Unknown error'));
+      })
+      .finally(function() { busy = false; });
+  }
+
+  renderLocationList();
+  document.querySelectorAll('.js-mwo-approval').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      currentWoId = btn.getAttribute('data-wo-id') || '';
+      if (!currentWoId) return;
+      if (modalTitleEl) modalTitleEl.innerHTML = '<i class="bi bi-whatsapp me-1 text-success"></i>Work Order Approval Summary';
+      if (driverSelect) { driverSelect.innerHTML = '<option value="">-</option>'; driverSelect.disabled = true; }
+      if (locationInput) locationInput.value = '';
+      setText('Loading approval text...');
+      if (modal) modal.show();
+      restoreBodyScroll();
+      loadApproval();
+    });
+  });
+  if (driverSelect) {
+    driverSelect.addEventListener('change', function() { loadApproval(); });
+  }
+  if (locationInput) {
+    locationInput.addEventListener('change', function() { loadApproval(); });
+    locationInput.addEventListener('blur', function() { loadApproval(); });
+  }
+  if (copyBtn) {
+    copyBtn.addEventListener('click', function() {
+      var txt = textEl && textEl.value ? textEl.value : '';
+      if (!txt) return;
+      rememberLocation(currentLocation());
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(txt).then(function() {
+          copyBtn.innerHTML = '<i class="bi bi-check2 me-1"></i>Copied';
+          setTimeout(function(){ copyBtn.innerHTML = '<i class="bi bi-clipboard me-1"></i>Copy Text'; }, 1200);
+        });
+      } else if (textEl) {
+        textEl.select();
+        document.execCommand('copy');
+      }
+    });
+  }
+  if (whatsappBtn) {
+    whatsappBtn.addEventListener('click', function() {
+      var txt = textEl && textEl.value ? textEl.value.trim() : '';
+      if (!txt) return;
+      rememberLocation(currentLocation());
+      window.open('https://wa.me/?text=' + encodeURIComponent(txt), '_blank');
+    });
+  }
+});
 </script>
 {% endblock %}

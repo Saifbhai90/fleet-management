@@ -322,6 +322,19 @@
       </div>
       <div class="modal-body">
         <div class="small text-muted mb-2">Text ko WhatsApp par approval ke liye direct copy ya open karein.</div>
+        <div class="row g-2 mb-2">
+          <div class="col-md-6">
+            <label class="form-label small mb-1">Driver</label>
+            <select id="maintApprovalDriverSelect" class="form-select form-select-sm">
+              <option value="">-</option>
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label small mb-1">Location</label>
+            <input type="text" id="maintApprovalLocationInput" class="form-control form-control-sm" list="maintApprovalLocationList" placeholder="Enter location">
+            <datalist id="maintApprovalLocationList"></datalist>
+          </div>
+        </div>
         <textarea id="maintApprovalText" class="form-control" rows="15" readonly placeholder="Approval text loading..."></textarea>
       </div>
       <div class="modal-footer">
@@ -481,26 +494,120 @@ document.addEventListener('DOMContentLoaded', function() {
   var approvalTextEl = document.getElementById('maintApprovalText');
   var approvalCopyBtn = document.getElementById('maintApprovalCopyBtn');
   var approvalWhatsappBtn = document.getElementById('maintApprovalWhatsappBtn');
+  var approvalDriverSelect = document.getElementById('maintApprovalDriverSelect');
+  var approvalLocationInput = document.getElementById('maintApprovalLocationInput');
+  var approvalLocationList = document.getElementById('maintApprovalLocationList');
   var approvalModal = (window.bootstrap && approvalModalEl) ? new window.bootstrap.Modal(approvalModalEl, { backdrop: false, focus: false, keyboard: true }) : null;
   var approvalCachedText = '';
+  var approvalContext = { type: '', id: '' };
+  var workspaceEmployeeId = "{{ workspace_employee_id or 0 }}";
+  var savedLocationsKey = 'maintApprovalLocations:' + workspaceEmployeeId;
+
+  function restoreBodyScroll() {
+    document.body.classList.remove('modal-open');
+    document.body.style.removeProperty('overflow');
+    document.body.style.removeProperty('padding-right');
+  }
+  if (approvalModalEl) {
+    approvalModalEl.addEventListener('shown.bs.modal', restoreBodyScroll);
+    approvalModalEl.addEventListener('hidden.bs.modal', restoreBodyScroll);
+  }
+
+  function getSavedLocations() {
+    try {
+      var raw = localStorage.getItem(savedLocationsKey);
+      var arr = raw ? JSON.parse(raw) : [];
+      return Array.isArray(arr) ? arr.filter(function(x){ return typeof x === 'string' && x.trim(); }) : [];
+    } catch (e) { return []; }
+  }
+  function setSavedLocations(list) {
+    try { localStorage.setItem(savedLocationsKey, JSON.stringify(list.slice(0, 15))); } catch (e) {}
+  }
+  function rememberLocation(value) {
+    var v = (value || '').trim();
+    if (!v) return;
+    var list = getSavedLocations().filter(function(x){ return x.toLowerCase() !== v.toLowerCase(); });
+    list.unshift(v);
+    setSavedLocations(list);
+    renderSavedLocations();
+  }
+  function renderSavedLocations() {
+    if (!approvalLocationList) return;
+    approvalLocationList.innerHTML = '';
+    getSavedLocations().forEach(function(loc) {
+      var o = document.createElement('option');
+      o.value = loc;
+      approvalLocationList.appendChild(o);
+    });
+  }
+  function renderDriverOptions(options, selectedId) {
+    if (!approvalDriverSelect) return;
+    approvalDriverSelect.innerHTML = '';
+    var opts = Array.isArray(options) ? options : [];
+    if (!opts.length) {
+      var o = document.createElement('option');
+      o.value = '';
+      o.textContent = '-';
+      approvalDriverSelect.appendChild(o);
+      approvalDriverSelect.disabled = true;
+      return;
+    }
+    opts.forEach(function(d) {
+      var o = document.createElement('option');
+      o.value = String(d.id || '');
+      o.textContent = d.name || '-';
+      if (String(d.id || '') === String(selectedId || '')) o.selected = true;
+      approvalDriverSelect.appendChild(o);
+    });
+    approvalDriverSelect.disabled = opts.length <= 1;
+  }
+  function approvalLocationValue() {
+    return approvalLocationInput ? (approvalLocationInput.value || '').trim() : '';
+  }
+  function approvalDriverValue() {
+    return approvalDriverSelect ? (approvalDriverSelect.value || '') : '';
+  }
+  function buildApprovalUrl() {
+    var base = '';
+    if (approvalContext.type === 'expense' && approvalContext.id) {
+      base = '/api/maintenance-expense/approval-text/' + encodeURIComponent(approvalContext.id);
+    } else if (approvalContext.type === 'work-order' && approvalContext.id) {
+      base = '/api/maintenance-work-order/approval-text/' + encodeURIComponent(approvalContext.id);
+    }
+    if (!base) return '';
+    var qs = new URLSearchParams();
+    var driverId = approvalDriverValue();
+    var location = approvalLocationValue();
+    if (driverId) qs.set('driver_id', driverId);
+    if (location) qs.set('location', location);
+    return base + (qs.toString() ? ('?' + qs.toString()) : '');
+  }
 
   function setApprovalText(text) {
     approvalCachedText = text || '';
     if (approvalTextEl) approvalTextEl.value = approvalCachedText;
   }
 
-  function openApprovalFromUrl(url, titleText) {
-    if (!url) return;
+  function openApprovalFromUrl(kind, id, titleText) {
+    approvalContext = { type: kind || '', id: id || '' };
+    if (!approvalContext.id) return;
     setApprovalText('Loading approval text...');
     if (approvalModalTitleEl && titleText) approvalModalTitleEl.innerHTML = '<i class="bi bi-whatsapp me-1 text-success"></i>' + titleText;
+    if (approvalDriverSelect) { approvalDriverSelect.innerHTML = '<option value="">-</option>'; approvalDriverSelect.disabled = true; }
+    if (approvalLocationInput) approvalLocationInput.value = '';
     if (approvalModal) approvalModal.show();
-    fetch(url, {
+    restoreBodyScroll();
+    fetch(buildApprovalUrl(), {
       headers: { 'X-Requested-With': 'XMLHttpRequest' }
     })
       .then(function(r) { return r.json(); })
       .then(function(j) {
         if (!j || !j.ok) throw new Error((j && (j.error || j.message)) || 'Unable to generate text');
         setApprovalText(j.approval_text || '');
+        renderDriverOptions(j.driver_options || [], j.selected_driver_id || '');
+        if (approvalLocationInput && !approvalLocationInput.value.trim()) {
+          approvalLocationInput.value = j.location_used || j.location_default || '';
+        }
       })
       .catch(function(err) {
         setApprovalText('Unable to generate approval text.\n' + ((err && err.message) ? err.message : 'Unknown error'));
@@ -511,7 +618,7 @@ document.addEventListener('DOMContentLoaded', function() {
     btn.addEventListener('click', function() {
       var expenseId = btn.getAttribute('data-expense-id') || '';
       if (!expenseId) return;
-      openApprovalFromUrl('/api/maintenance-expense/approval-text/' + encodeURIComponent(expenseId), 'Maintenance Approval Text');
+      openApprovalFromUrl('expense', expenseId, 'Maintenance Approval Text');
     });
   });
 
@@ -519,14 +626,38 @@ document.addEventListener('DOMContentLoaded', function() {
     btn.addEventListener('click', function() {
       var woId = btn.getAttribute('data-wo-id') || '';
       if (!woId) return;
-      openApprovalFromUrl('/api/maintenance-work-order/approval-text/' + encodeURIComponent(woId), 'Work Order Approval Summary');
+      openApprovalFromUrl('work-order', woId, 'Work Order Approval Summary');
     });
   });
+  if (approvalDriverSelect) {
+    approvalDriverSelect.addEventListener('change', function() {
+      if (!approvalContext.id) return;
+      fetch(buildApprovalUrl(), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(function(r){ return r.json(); })
+        .then(function(j){ if (j && j.ok) setApprovalText(j.approval_text || ''); });
+    });
+  }
+  if (approvalLocationInput) {
+    approvalLocationInput.addEventListener('change', function() {
+      if (!approvalContext.id) return;
+      fetch(buildApprovalUrl(), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(function(r){ return r.json(); })
+        .then(function(j){ if (j && j.ok) setApprovalText(j.approval_text || ''); });
+    });
+    approvalLocationInput.addEventListener('blur', function() {
+      if (!approvalContext.id) return;
+      fetch(buildApprovalUrl(), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(function(r){ return r.json(); })
+        .then(function(j){ if (j && j.ok) setApprovalText(j.approval_text || ''); });
+    });
+  }
+  renderSavedLocations();
 
   if (approvalCopyBtn) {
     approvalCopyBtn.addEventListener('click', function() {
       var txt = (approvalTextEl && approvalTextEl.value) ? approvalTextEl.value : '';
       if (!txt) return;
+      rememberLocation(approvalLocationValue());
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(txt).then(function() {
           approvalCopyBtn.innerHTML = '<i class="bi bi-check2 me-1"></i>Copied';
@@ -543,6 +674,7 @@ document.addEventListener('DOMContentLoaded', function() {
     approvalWhatsappBtn.addEventListener('click', function() {
       var txt = (approvalTextEl && approvalTextEl.value) ? approvalTextEl.value.trim() : '';
       if (!txt) return;
+      rememberLocation(approvalLocationValue());
       var waUrl = 'https://wa.me/?text=' + encodeURIComponent(txt);
       window.open(waUrl, '_blank');
     });
