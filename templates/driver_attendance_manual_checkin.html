@@ -202,22 +202,53 @@
           var img = new Image();
           img.onload = function() {
             try {
-              var maxW = 1600;
-              var scale = img.width > maxW ? (maxW / img.width) : 1;
-              var canvas = document.createElement('canvas');
-              canvas.width = Math.max(1, Math.round(img.width * scale));
-              canvas.height = Math.max(1, Math.round(img.height * scale));
-              var ctx = canvas.getContext('2d');
-              ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-              Tesseract.recognize(canvas, 'eng')
-                .then(function(r) {
-                  var text = (r && r.data) ? (r.data.text || '') : '';
-                  resolve({
-                    time: parseTimeFromOcrText(text),
-                    dateYmd: parseDateFromOcrText(text)
-                  });
-                })
-                .catch(reject);
+              var canvases = [];
+              function makeCanvas(sx, sy, sw, sh, scale, mode) {
+                var c = document.createElement('canvas');
+                c.width = Math.max(1, Math.round(sw * scale));
+                c.height = Math.max(1, Math.round(sh * scale));
+                var cx = c.getContext('2d');
+                cx.drawImage(img, sx, sy, sw, sh, 0, 0, c.width, c.height);
+                if (mode === 'gray-boost') {
+                  var id = cx.getImageData(0, 0, c.width, c.height);
+                  var d = id.data;
+                  for (var i = 0; i < d.length; i += 4) {
+                    var g = (0.299 * d[i]) + (0.587 * d[i + 1]) + (0.114 * d[i + 2]);
+                    g = g > 150 ? 255 : (g < 70 ? 0 : Math.min(255, g * 1.25));
+                    d[i] = d[i + 1] = d[i + 2] = g;
+                  }
+                  cx.putImageData(id, 0, 0);
+                }
+                return c;
+              }
+              var fullScale = img.width < 1300 ? (1300 / img.width) : 1;
+              canvases.push(makeCanvas(0, 0, img.width, img.height, fullScale, 'normal'));
+              var oy = Math.floor(img.height * 0.52);
+              var oh = img.height - oy;
+              var overlayScale = img.width < 1800 ? (1800 / img.width) : 1.15;
+              canvases.push(makeCanvas(0, oy, img.width, oh, overlayScale, 'normal'));
+              canvases.push(makeCanvas(0, oy, img.width, oh, overlayScale, 'gray-boost'));
+
+              (function run(idx) {
+                if (idx >= canvases.length) {
+                  resolve({ time: null, dateYmd: null });
+                  return;
+                }
+                Tesseract.recognize(canvases[idx], 'eng')
+                  .then(function(r) {
+                    var text = (r && r.data) ? (r.data.text || '') : '';
+                    var parsed = {
+                      time: parseTimeFromOcrText(text),
+                      dateYmd: parseDateFromOcrText(text)
+                    };
+                    if (parsed.time || parsed.dateYmd) {
+                      resolve(parsed);
+                      return;
+                    }
+                    run(idx + 1);
+                  })
+                  .catch(function() { run(idx + 1); });
+              })(0);
             } catch (ex) { reject(ex); }
           };
           img.onerror = function() { reject(new Error('image decode failed')); };
