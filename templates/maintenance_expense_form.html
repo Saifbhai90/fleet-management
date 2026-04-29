@@ -288,7 +288,7 @@
     <div class="form-section">
       <div class="form-section-header">Product Lines</div>
       <div class="form-section-body">
-        <p class="entry-hint text-muted mb-2">Search product -> Qty -> Price (Amount auto). Press <kbd>Enter</kbd> to add line to list.</p>
+        <p class="entry-hint text-muted mb-2">Search product -> Qty -> Price (Amount auto). Price me plus ya minus value allowed hai, lekin 0 allowed nahi. Press <kbd>Enter</kbd> to add line to list.</p>
         <div class="maint-entry-grid mb-2">
           <div class="maint-entry-main" id="entryRow">
             <div class="maint-entry-grid-row">
@@ -1293,7 +1293,7 @@ document.addEventListener('DOMContentLoaded', function() {
     var qty = parseNum(entryQty.value);
     var price = parseNum(entryPrice.value);
     if (qty <= 0) { alert('Qty enter karein (0 se bari).'); entryQty.focus(); return; }
-    if (price <= 0) { alert('Price enter karein (0 se bari).'); entryPrice.focus(); return; }
+    if (Math.abs(price) < 0.000001) { alert('Price 0 nahi ho sakti. Plus ya minus value enter karein.'); entryPrice.focus(); return; }
     var amount = fmt2(qty * price);
 
     var tr = document.createElement('tr');
