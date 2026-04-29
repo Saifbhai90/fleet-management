@@ -376,14 +376,14 @@ document.addEventListener('DOMContentLoaded', function () {
     var win = window.open('', '_blank', 'width=1100,height=800');
     if (!win) return;
     win.document.write('<html><head><title>Movement Timeline Detail</title>');
-    win.document.write('<style>body{font-family:Arial,sans-serif;padding:14px;}table{width:100%;border-collapse:collapse;margin-bottom:12px;}th,td{border:1px solid #999;padding:6px 8px;font-size:12px;text-align:left;}thead th{background:#f2f2f2;}h3{margin:0 0 10px 0;} .totals{display:flex;gap:10px;margin:8px 0 12px 0;} .totals>div{border:1px solid #ccc;padding:8px;border-radius:6px;min-width:180px;}</style>');
+    win.document.write('<style>body{font-family:Arial,sans-serif;padding:14px;background:#f8fafc;}table{width:100%;border-collapse:collapse;margin-bottom:12px;background:#fff;}th,td{border:1px solid #999;padding:6px 8px;font-size:12px;text-align:left;}thead th{background:#f2f2f2;}h3{margin:0 0 10px 0;} .preview-toolbar{position:sticky;top:0;z-index:10;background:#111827;color:#fff;padding:10px 12px;border-radius:8px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;gap:10px;} .preview-toolbar .btn{border:1px solid #d1d5db;background:#fff;color:#111827;padding:6px 10px;border-radius:6px;font-size:12px;cursor:pointer;} .preview-toolbar .btn-primary{background:#2563eb;color:#fff;border-color:#2563eb;} @media print {.preview-toolbar{display:none;} body{background:#fff;padding:0;}}</style>');
     win.document.write('</head><body>');
+    win.document.write('<div class="preview-toolbar"><div><strong>Movement Timeline Detail</strong> <span style="opacity:.85;">(Print / Preview)</span></div><div><button class="btn" onclick="window.close()">Close</button> <button class="btn btn-primary" onclick="window.print()">Print</button></div></div>');
     win.document.write('<h3>Movement Timeline Detail</h3>');
     win.document.write(printableEl.innerHTML);
     win.document.write('</body></html>');
     win.document.close();
     win.focus();
-    win.print();
   }
 
   async function openHistory(vehicleId, focus) {
