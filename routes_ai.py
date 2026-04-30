@@ -276,6 +276,143 @@ def _add_conversation_message(conversation, role, content, sql_query=None, chart
     conversation.updated_at = datetime.utcnow()
 
 
+def _refresh_conversation_memory(conversation):
+    msgs = (
+        AIConversationMessage.query
+        .filter_by(conversation_id=conversation.id)
+        .order_by(AIConversationMessage.created_at.asc())
+        .all()
+    )
+    if not msgs:
+        conversation.summary_text = None
+        conversation.pinned_facts_json = None
+        conversation.instruction_policy_json = None
+        return
+
+    # 1) Compressed summary for long chats (older turns only)
+    recent_cut = 10
+    older = msgs[:-recent_cut] if len(msgs) > recent_cut else []
+    summary_lines = []
+    char_budget = 2200
+    used = 0
+    for m in older[-12:]:
+        role_tag = "U" if m.role == "user" else "A"
+        chunk = (m.content or "").replace("\n", " ").strip()
+        if not chunk:
+            continue
+        chunk = (chunk[:180] + "...") if len(chunk) > 180 else chunk
+        line = f"{role_tag}: {chunk}"
+        if used + len(line) > char_budget:
+            break
+        summary_lines.append(line)
+        used += len(line)
+    conversation.summary_text = "\n".join(summary_lines) if summary_lines else None
+
+    # 2) Pinned key facts (constraints/instructions)
+    fact_keywords = ("must", "only", "never", "always", "required", "constraint", "scope", "project", "district", "read-only")
+    facts = []
+    seen = set()
+    for m in msgs:
+        if m.role != "user":
+            continue
+        text_val = (m.content or "").strip()
+        if not text_val:
+            continue
+        sentences = re.split(r"[.\n!?]+", text_val)
+        for s in sentences:
+            s = s.strip()
+            if len(s) < 8:
+                continue
+            low = s.lower()
+            if any(k in low for k in fact_keywords):
+                norm = low[:140]
+                if norm in seen:
+                    continue
+                seen.add(norm)
+                facts.append(s[:180])
+            if len(facts) >= 10:
+                break
+        if len(facts) >= 10:
+            break
+    conversation.pinned_facts_json = json.dumps(facts, ensure_ascii=True) if facts else None
+
+    # 3) Explicit instruction priority policy (latest instruction override + constraints preservation)
+    latest_user = ""
+    for m in reversed(msgs):
+        if m.role == "user" and (m.content or "").strip():
+            latest_user = (m.content or "").strip()[:260]
+            break
+    policy = {
+        "priority_order": [
+            "Hard security constraints (READ-ONLY SQL + scope restrictions)",
+            "Latest user instruction in current conversation",
+            "Pinned key facts from conversation memory",
+            "Older context summary"
+        ],
+        "latest_user_instruction": latest_user,
+        "preserve_constraints": [
+            "Never run write SQL",
+            "Respect project/district scope guards",
+            "Keep result actionable and concise"
+        ]
+    }
+    conversation.instruction_policy_json = json.dumps(policy, ensure_ascii=True)
+
+
+def _build_conversation_context(conversation_id, max_messages=12, max_chars=4500):
+    if not conversation_id:
+        return ""
+    conv = AIConversation.query.get(conversation_id)
+    if not conv:
+        return ""
+    rows = (
+        AIConversationMessage.query
+        .filter_by(conversation_id=conversation_id)
+        .order_by(AIConversationMessage.created_at.desc())
+        .limit(max_messages)
+        .all()
+    )
+    if not rows:
+        return ""
+    rows = list(reversed(rows))
+    parts = []
+    used = 0
+    for r in rows:
+        role = "User" if r.role == "user" else "Assistant"
+        text_part = (r.content or "").strip()
+        if not text_part:
+            continue
+        chunk = f"{role}: {text_part}"
+        if r.sql_query and r.role == "assistant":
+            chunk += f"\nAssistant SQL: {r.sql_query}"
+        if used + len(chunk) > max_chars:
+            break
+        parts.append(chunk)
+        used += len(chunk)
+
+    blocks = []
+    if conv.summary_text:
+        blocks.append("Conversation Summary (older turns):\n" + conv.summary_text)
+    if conv.pinned_facts_json:
+        try:
+            facts = json.loads(conv.pinned_facts_json) or []
+        except Exception:
+            facts = []
+        if facts:
+            fact_lines = "\n".join(["- " + str(f) for f in facts[:8]])
+            blocks.append("Pinned Key Facts:\n" + fact_lines)
+    if conv.instruction_policy_json:
+        try:
+            pol = json.loads(conv.instruction_policy_json) or {}
+        except Exception:
+            pol = {}
+        if pol:
+            blocks.append("Instruction Priority Policy:\n" + json.dumps(pol, ensure_ascii=False))
+    if parts:
+        blocks.append("Recent Conversation Turns:\n" + "\n\n".join(parts))
+    return "\n\n".join(blocks)
+
+
 def _call_gemini(prompt, temperature=0.1):
     api_key = (os.environ.get("GOOGLE_API_KEY") or "").strip()
     if not api_key:
@@ -425,7 +562,9 @@ def ai_query():
 
     conversation = _get_or_create_conversation(uid, conversation_id, user_question)
     _add_conversation_message(conversation, "user", user_question)
+    _refresh_conversation_memory(conversation)
     db.session.commit()
+    conv_context = _build_conversation_context(conversation.id)
 
     schema = _schema_context()
     policy = _scope_policy_for_user()
@@ -446,12 +585,20 @@ Rules:
 5) If user asks for month/date logic, infer best effort with current DB fields.
 6) Keep output safe and analytics-oriented.
 7) Respect user data scope strictly.
+8) Instruction precedence:
+   - First: security constraints and scope.
+   - Second: latest user instruction in this conversation.
+   - Third: preserve pinned key facts from memory.
+   - Fourth: use older summary only as fallback context.
 
 Domain guidance:
 {domain_pack}
 
 User scope constraints:
 {scope_fragment}
+
+Conversation context (latest turns, use this to keep continuity):
+{conv_context}
 
 User question:
 {user_question}
@@ -486,6 +633,7 @@ Content:
                 int((time.time() - started_at) * 1000),
             )
             _add_conversation_message(conversation, "assistant", f"Failed to generate SQL: {inner_exc}")
+            _refresh_conversation_memory(conversation)
             db.session.commit()
             return jsonify({"ok": False, "error": f"Failed to generate SQL: {inner_exc}"}), 500
 
@@ -501,6 +649,7 @@ Content:
             int((time.time() - started_at) * 1000),
         )
         _add_conversation_message(conversation, "assistant", "Generated query was blocked because it was not read-only.")
+        _refresh_conversation_memory(conversation)
         db.session.commit()
         return jsonify(
             {
@@ -522,6 +671,7 @@ Content:
             int((time.time() - started_at) * 1000),
         )
         _add_conversation_message(conversation, "assistant", reason)
+        _refresh_conversation_memory(conversation)
         db.session.commit()
         return jsonify({"ok": False, "error": reason}), 403
 
@@ -538,6 +688,7 @@ Content:
             int((time.time() - started_at) * 1000),
         )
         _add_conversation_message(conversation, "assistant", scope_reason)
+        _refresh_conversation_memory(conversation)
         db.session.commit()
         return jsonify({"ok": False, "error": scope_reason}), 403
 
@@ -556,6 +707,7 @@ Content:
             int((time.time() - started_at) * 1000),
         )
         _add_conversation_message(conversation, "assistant", f"SQL execution failed: {exc}", sql_query=sql_query)
+        _refresh_conversation_memory(conversation)
         db.session.commit()
         return jsonify({"ok": False, "error": f"SQL execution failed: {exc}", "sql": sql_query}), 400
 
@@ -566,6 +718,8 @@ Keep response actionable and business-focused.
 If data is empty, clearly say no record found.
 
 Question: {user_question}
+Conversation context:
+{conv_context}
 SQL: {sql_query}
 Result rows JSON: {json.dumps(rows[:80], default=_json_default)}
 Total rows fetched: {len(rows)}
@@ -589,6 +743,7 @@ Total rows fetched: {len(rows)}
     elapsed_ms = int((time.time() - started_at) * 1000)
     _log_query(user_question, sql_query, len(rows), "success", "", wants_chart, elapsed_ms)
     _add_conversation_message(conversation, "assistant", answer_text, sql_query=sql_query, chart_data=chart_data)
+    _refresh_conversation_memory(conversation)
     db.session.commit()
 
     return jsonify(

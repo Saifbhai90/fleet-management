@@ -91,7 +91,7 @@
   var historySearchEl = document.getElementById('historySearch');
   var csrfToken = (document.querySelector('meta[name="csrf-token"]') || {}).content || '';
   var allHistoryModalEl = document.getElementById('allHistoryModal');
-  var historyModal = allHistoryModalEl ? new bootstrap.Modal(allHistoryModalEl) : null;
+  var historyModal = allHistoryModalEl ? new bootstrap.Modal(allHistoryModalEl, { backdrop: false, focus: false, keyboard: true }) : null;
 
   function fetchConversations() {
     return fetch('/api/ai/conversations')

@@ -1334,6 +1334,9 @@ class AIConversation(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False, index=True)
     title = db.Column(db.String(240), nullable=False)
     is_pinned = db.Column(db.Boolean, nullable=False, default=False, index=True)
+    summary_text = db.Column(db.Text, nullable=True)
+    pinned_facts_json = db.Column(db.Text, nullable=True)
+    instruction_policy_json = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=pk_now, nullable=False, index=True)
     updated_at = db.Column(db.DateTime, default=pk_now, onupdate=pk_now, nullable=False, index=True)
 
