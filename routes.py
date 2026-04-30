@@ -531,12 +531,13 @@ def _attendance_local_now():
 
 
 def _get_checked_in_vehicle_ids(attendance_date):
-    """Return set of vehicle_ids where at least one driver has check_in for this date."""
+    """Vehicle IDs that still have an open attendance session (check-in set, check-out empty) on this date."""
     rows = db.session.query(Driver.vehicle_id).join(
         DriverAttendance, Driver.id == DriverAttendance.driver_id
     ).filter(
         DriverAttendance.attendance_date == attendance_date,
         DriverAttendance.check_in.isnot(None),
+        DriverAttendance.check_out.is_(None),
         Driver.vehicle_id.isnot(None)
     ).distinct().all()
     return {r[0] for r in rows}
@@ -15986,16 +15987,21 @@ def driver_attendance_manual_checkin():
         return redirect(back_url)
 
     if driver.vehicle_id:
-        other_checkin = db.session.query(DriverAttendance.id).join(
+        other_open = db.session.query(DriverAttendance.id).join(
             Driver, Driver.id == DriverAttendance.driver_id
         ).filter(
             Driver.vehicle_id == driver.vehicle_id,
             Driver.id != driver_id,
             DriverAttendance.attendance_date == view_date,
-            DriverAttendance.check_in.isnot(None)
+            DriverAttendance.check_in.isnot(None),
+            DriverAttendance.check_out.is_(None),
         ).first()
-        if other_checkin:
-            flash('Is vehicle par dusri shift ke driver ne pehle hi check-in kar liya hai. Ek waqt mein sirf ek driver check-in kar sakta hai.', 'warning')
+        if other_open:
+            flash(
+                'Is vehicle par kisi aur shift ka session abhi khula hai (check-out pending). '
+                'Pehle un ka check-out complete karein — phir dusri shift manual check-in kar sakti hai.',
+                'warning',
+            )
             return redirect(back_url)
 
     if request.method == 'POST':
@@ -16629,16 +16635,21 @@ def driver_attendance_checkin():
                 flash(f'Night shift ki attendance sirf configured time window mein lag sakti hai ({src}). Control mein time check karein.', 'danger')
                 return redirect(url_for('driver_attendance_checkin'))
         if driver.vehicle_id:
-            other_checkin = db.session.query(DriverAttendance.id).join(
+            other_open = db.session.query(DriverAttendance.id).join(
                 Driver, Driver.id == DriverAttendance.driver_id
             ).filter(
                 Driver.vehicle_id == driver.vehicle_id,
                 Driver.id != driver_id,
                 DriverAttendance.attendance_date == today,
-                DriverAttendance.check_in.isnot(None)
+                DriverAttendance.check_in.isnot(None),
+                DriverAttendance.check_out.is_(None),
             ).first()
-            if other_checkin:
-                flash('Is vehicle par dusri shift ke driver ne pehle hi check-in kar liya hai. Ek waqt mein sirf ek driver check-in kar sakta hai.', 'warning')
+            if other_open:
+                flash(
+                    'Is vehicle par kisi aur shift ka session abhi khula hai (check-out pending). '
+                    'Pehle check-out complete karein.',
+                    'warning',
+                )
                 return redirect(url_for('driver_attendance_checkin'))
 
         photo_path = None
