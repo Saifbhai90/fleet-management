@@ -92,6 +92,7 @@ LIMIT 10
 """
 _RATE_WINDOW_SECONDS = int((os.environ.get("AI_RATE_WINDOW_SECONDS") or "300").strip() or "300")
 _RATE_LIMIT_PER_WINDOW = int((os.environ.get("AI_RATE_LIMIT_PER_WINDOW") or "25").strip() or "25")
+_GEMINI_RETRYABLE_HTTP_CODES = {429, 500, 503, 504}
 
 
 def _json_default(value):
@@ -544,6 +545,30 @@ def _call_gemini(prompt, temperature=0.1):
         with url_request.urlopen(req, timeout=45) as resp:
             return json.loads(resp.read().decode("utf-8"))
 
+    def _call_model_with_retries(model_name, retries=2):
+        wait_seconds = 0.8
+        last_exc = None
+        for attempt in range(retries + 1):
+            try:
+                return _post_generate(model_name)
+            except url_error.HTTPError as exc:
+                err_body = exc.read().decode("utf-8", errors="ignore")
+                if exc.code in _GEMINI_RETRYABLE_HTTP_CODES and attempt < retries:
+                    time.sleep(wait_seconds)
+                    wait_seconds = min(wait_seconds * 1.8, 3.0)
+                    last_exc = RuntimeError(f"Gemini transient HTTP {exc.code}: {err_body[:220]}")
+                    continue
+                raise RuntimeError(f"Gemini HTTP {exc.code}: {err_body[:300]}") from exc
+            except Exception as exc:
+                if attempt < retries:
+                    time.sleep(wait_seconds)
+                    wait_seconds = min(wait_seconds * 1.8, 3.0)
+                    last_exc = RuntimeError(f"Gemini request transient failure: {exc}")
+                    continue
+                raise RuntimeError(f"Gemini request failed: {exc}") from exc
+        if last_exc:
+            raise last_exc
+
     def _available_models():
         list_url = f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}"
         req = url_request.Request(list_url, method="GET")
@@ -566,7 +591,7 @@ def _call_gemini(prompt, temperature=0.1):
     for model_name in model_candidates:
         attempted.append(model_name)
         try:
-            body = _post_generate(model_name)
+            body = _call_model_with_retries(model_name)
             candidates = body.get("candidates") or []
             if not candidates:
                 raise RuntimeError("Gemini did not return any candidate response.")
@@ -579,9 +604,9 @@ def _call_gemini(prompt, temperature=0.1):
             if exc.code == 404 and "not found" in err_body.lower():
                 continue
             raise RuntimeError(f"Gemini HTTP {exc.code}: {err_body[:300]}") from exc
-        except Exception as exc:
-            # Network/runtime issues should fail fast.
-            raise RuntimeError(f"Gemini request failed: {exc}") from exc
+        except Exception:
+            # Any other failure on one model: continue fallback models.
+            continue
 
     # Last attempt: discover models dynamically and try first supported one.
     try:
@@ -590,7 +615,7 @@ def _call_gemini(prompt, temperature=0.1):
             if model_name in attempted:
                 continue
             try:
-                body = _post_generate(model_name)
+                body = _call_model_with_retries(model_name)
                 candidates = body.get("candidates") or []
                 if not candidates:
                     continue
@@ -881,8 +906,11 @@ Total rows fetched: {len(rows)}
 """
     try:
         answer_text = _call_gemini(explain_prompt, temperature=0.2)
-    except Exception as exc:
-        answer_text = f"Data mil gaya, lekin AI explanation abhi unavailable hai ({exc})."
+    except Exception:
+        answer_text = (
+            "Data mil gaya, lekin AI explanation service temporary busy hai. "
+            "Please 10-20 seconds baad dubara try karein."
+        )
 
     chart_hint = (parsed or {}).get("chart") or {}
     wants_chart = bool(chart_hint.get("requested")) or any(
