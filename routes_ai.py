@@ -93,7 +93,7 @@ LIMIT 10
 """
 _RATE_WINDOW_SECONDS = int((os.environ.get("AI_RATE_WINDOW_SECONDS") or "300").strip() or "300")
 _RATE_LIMIT_PER_WINDOW = int((os.environ.get("AI_RATE_LIMIT_PER_WINDOW") or "25").strip() or "25")
-_GEMINI_RETRYABLE_HTTP_CODES = {429, 500, 503, 504}
+_GEMINI_RETRYABLE_HTTP_CODES = {500, 503, 504}
 _GEMINI_HTTP_TIMEOUT_SECONDS = float((os.environ.get("AI_GEMINI_HTTP_TIMEOUT_SECONDS") or "20").strip() or "20")
 _GEMINI_TOTAL_BUDGET_SECONDS = float((os.environ.get("AI_GEMINI_TOTAL_BUDGET_SECONDS") or "28").strip() or "28")
 _GEMINI_MAX_DISCOVERED_ATTEMPTS = int((os.environ.get("AI_GEMINI_MAX_DISCOVERED_ATTEMPTS") or "2").strip() or "2")
@@ -590,6 +590,10 @@ def _call_gemini(prompt, temperature=0.1):
     def _remaining_seconds():
         return max(0.0, deadline - time.monotonic())
 
+    def _is_quota_error(message):
+        txt = (message or "").lower()
+        return ("http 429" in txt) or ("quota" in txt) or ("rate limit" in txt) or ("resource_exhausted" in txt)
+
     def _post_generate(model_name):
         remaining = _remaining_seconds()
         if remaining <= 0.2:
@@ -678,6 +682,8 @@ def _call_gemini(prompt, temperature=0.1):
         except Exception as exc:
             msg = str(exc)
             last_error_message = msg[:600]
+            if _is_quota_error(msg):
+                raise RuntimeError(f"Gemini quota/rate-limit error: {msg}") from exc
             # Auth/config problems should fail fast with real reason.
             if ("HTTP 401" in msg) or ("HTTP 403" in msg) or ("API key" in msg.lower()):
                 raise RuntimeError(f"Gemini authentication/config error: {msg}") from exc
@@ -891,6 +897,26 @@ Database schema:
         llm_raw = _call_gemini(sql_prompt, temperature=0.05 if complex_need else 0.02)
         parsed = _parse_llm_json(llm_raw)
     except Exception as exc:
+        err_text = str(exc or "")
+        err_lower = err_text.lower()
+        if ("quota" in err_lower) or ("http 429" in err_lower) or ("rate-limit" in err_lower) or ("rate limit" in err_lower):
+            quota_msg = (
+                "AI service quota reached (Google Gemini 429). "
+                "Please retry after 1-2 minutes or update billing/quota for GOOGLE_API_KEY."
+            )
+            _log_query(
+                user_question,
+                "",
+                0,
+                "error",
+                f"{quota_msg} Raw: {err_text}",
+                False,
+                int((time.time() - started_at) * 1000),
+            )
+            _add_conversation_message(conversation, "assistant", quota_msg)
+            _refresh_conversation_memory(conversation)
+            db.session.commit()
+            return jsonify({"ok": False, "error": quota_msg}), 429
         # One recovery attempt: ask model to normalize output into strict JSON.
         try:
             fixer_prompt = f"""
