@@ -555,8 +555,58 @@ def _vehicle_capacity_value(vehicle):
         return 1
 
 
-def _duty_shift_label(driver, vehicle, attendance_segment):
-    """Assigned shift stays on driver.shift; duty slot labels multi-session days (capacity ≥ 2)."""
+def _time_to_minutes_day(t):
+    """Minute-of-day 0–1439 from datetime.time."""
+    if t is None:
+        return None
+    return t.hour * 60 + t.minute
+
+
+def _minutes_span_contains(m, start_m, end_m):
+    """Inclusive minute span on the clock; overnight wrap when start_m > end_m."""
+    if start_m is None or end_m is None:
+        return False
+    if start_m <= end_m:
+        return start_m <= m <= end_m
+    return m >= start_m or m <= end_m
+
+
+def _duty_shift_fallback_from_minutes(m):
+    """If check-in falls outside configured windows: coarse Morning vs Evening band."""
+    return 'Morning duty' if (6 * 60) <= m < (13 * 60) else 'Evening duty'
+
+
+def _duty_shift_label_from_check_in(driver, vehicle, check_in_time):
+    """Morning duty vs Evening duty from actual check-in + hierarchical Morning/Night windows."""
+    m = _time_to_minutes_day(check_in_time)
+    if m is None:
+        return None
+    win = _get_effective_time_window(driver=driver, vehicle_id=vehicle.id if vehicle else None)
+    ms = _time_to_minutes_day(win.get('morning_start'))
+    me = _time_to_minutes_day(win.get('morning_end'))
+    ns = _time_to_minutes_day(win.get('night_start'))
+    ne = _time_to_minutes_day(win.get('night_end'))
+    has_m = ms is not None and me is not None
+    has_n = ns is not None and ne is not None
+    in_m = _minutes_span_contains(m, ms, me) if has_m else False
+    in_n = _minutes_span_contains(m, ns, ne) if has_n else False
+    if in_m and not in_n:
+        return 'Morning duty'
+    if in_n and not in_m:
+        return 'Evening duty'
+    if in_m and in_n:
+        return 'Morning duty'
+    if has_m and not has_n:
+        return 'Morning duty' if in_m else 'Evening duty'
+    if has_n and not has_m:
+        return 'Evening duty' if in_n else 'Morning duty'
+    return _duty_shift_fallback_from_minutes(m)
+
+
+def _duty_shift_label(driver, vehicle, attendance_segment, rec=None):
+    """Duty column: check-in time vs Morning/Night windows first; else segment slot or assigned shift."""
+    if rec is not None and getattr(rec, 'check_in', None) is not None:
+        return _duty_shift_label_from_check_in(driver, vehicle, rec.check_in)
     seg = int(attendance_segment or 1)
     cap = _vehicle_capacity_value(vehicle)
     if cap <= 1:
@@ -671,7 +721,7 @@ def _driver_attendance_flat_rows(
         if not d:
             continue
         veh = d.vehicle
-        duty = _duty_shift_label(d, veh, getattr(rec, 'attendance_segment', None))
+        duty = _duty_shift_label(d, veh, getattr(rec, 'attendance_segment', None), rec)
         out.append({'driver': d, 'rec': rec, 'duty_shift': duty})
     return out
 
