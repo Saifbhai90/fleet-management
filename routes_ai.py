@@ -18,6 +18,7 @@ from models import AIAssistantQueryLog, AIConversation, AIConversationMessage
 
 
 ai_bp = Blueprint("ai", __name__)
+_AI_SCHEMA_CHECKED = False
 
 _DEFAULT_GEMINI_MODEL = "gemini-1.5-pro"
 _GEMINI_FALLBACK_MODELS = [
@@ -126,6 +127,35 @@ def _schema_context():
             tag_suffix = f" [{' | '.join(tags)}]" if tags else ""
             lines.append(f"  - {name}: {col_type}{tag_suffix}")
     return "\n".join(lines)
+
+
+def _ensure_ai_conversation_schema():
+    global _AI_SCHEMA_CHECKED
+    if _AI_SCHEMA_CHECKED:
+        return
+    try:
+        insp = inspect(db.engine)
+        if "ai_conversation" not in insp.get_table_names():
+            _AI_SCHEMA_CHECKED = True
+            return
+        existing = {c.get("name") for c in insp.get_columns("ai_conversation")}
+        ddl_list = []
+        if "is_pinned" not in existing:
+            ddl_list.append("ALTER TABLE ai_conversation ADD COLUMN is_pinned BOOLEAN NOT NULL DEFAULT FALSE")
+        if "summary_text" not in existing:
+            ddl_list.append("ALTER TABLE ai_conversation ADD COLUMN summary_text TEXT")
+        if "pinned_facts_json" not in existing:
+            ddl_list.append("ALTER TABLE ai_conversation ADD COLUMN pinned_facts_json TEXT")
+        if "instruction_policy_json" not in existing:
+            ddl_list.append("ALTER TABLE ai_conversation ADD COLUMN instruction_policy_json TEXT")
+        for ddl in ddl_list:
+            db.session.execute(text(ddl))
+        if ddl_list:
+            db.session.commit()
+    except Exception:
+        db.session.rollback()
+    finally:
+        _AI_SCHEMA_CHECKED = True
 
 
 def _schema_dictionary_text():
@@ -641,6 +671,7 @@ def ai_assistant():
 @ai_bp.route("/api/ai/query", methods=["POST"])
 @csrf.exempt
 def ai_query():
+    _ensure_ai_conversation_schema()
     started_at = time.time()
     payload = request.get_json(silent=True) or {}
     user_question = (payload.get("message") or "").strip()
@@ -954,6 +985,7 @@ def ai_recent():
 
 @ai_bp.route("/api/ai/conversations", methods=["GET"])
 def ai_conversations():
+    _ensure_ai_conversation_schema()
     uid = session.get("user_id")
     if not uid:
         return jsonify({"ok": False, "error": "Session expired."}), 401
@@ -981,6 +1013,7 @@ def ai_conversations():
 @ai_bp.route("/api/ai/conversations/new", methods=["POST"])
 @csrf.exempt
 def ai_conversation_new():
+    _ensure_ai_conversation_schema()
     uid = session.get("user_id")
     if not uid:
         return jsonify({"ok": False, "error": "Session expired."}), 401
@@ -995,6 +1028,7 @@ def ai_conversation_new():
 @ai_bp.route("/api/ai/conversations/<int:conversation_id>", methods=["GET", "PATCH", "DELETE"])
 @csrf.exempt
 def ai_conversation_detail(conversation_id):
+    _ensure_ai_conversation_schema()
     uid = session.get("user_id")
     if not uid:
         return jsonify({"ok": False, "error": "Session expired."}), 401
