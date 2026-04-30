@@ -3,6 +3,7 @@
   var _lastFeedbackAt = 0;
   var _feedbackGapMs = 700;
   var _observerInstalled = false;
+  var _unlockHandlersInstalled = false;
 
   function getCtx() {
     var Ctx = window.AudioContext || window.webkitAudioContext;
@@ -30,32 +31,30 @@
   function playPattern(tones) {
     var ctx = getCtx();
     if (!ctx) return Promise.resolve(false);
-    if (ctx.state === 'suspended') {
-      return ctx.resume().catch(function() {}).then(function() {
-        var start = ctx.currentTime + 0.01;
-        tones.forEach(function(t) {
-          playTone(ctx, t.f, t.d, t.g || 0.08, start + (t.o || 0), t.w);
-        });
-        return true;
+    var run = function() {
+      if (ctx.state !== 'running') return false;
+      var start = ctx.currentTime + 0.01;
+      tones.forEach(function(t) {
+        playTone(ctx, t.f, t.d, t.g || 0.08, start + (t.o || 0), t.w);
       });
+      return true;
+    };
+    if (ctx.state === 'suspended') {
+      return ctx.resume().catch(function() {}).then(run);
     }
-    var start = ctx.currentTime + 0.01;
-    tones.forEach(function(t) {
-      playTone(ctx, t.f, t.d, t.g || 0.08, start + (t.o || 0), t.w);
-    });
-    return Promise.resolve(true);
+    return Promise.resolve(run());
   }
 
   function unlockOnGesture() {
-    var once = function() {
+    if (_unlockHandlersInstalled) return;
+    _unlockHandlersInstalled = true;
+
+    var unlock = function() {
       var ctx = getCtx();
       if (ctx && ctx.state === 'suspended') ctx.resume().catch(function() {});
-      ['pointerdown', 'keydown', 'touchstart'].forEach(function(ev) {
-        document.removeEventListener(ev, once, true);
-      });
     };
-    ['pointerdown', 'keydown', 'touchstart'].forEach(function(ev) {
-      document.addEventListener(ev, once, true);
+    ['pointerdown', 'keydown', 'touchstart', 'click', 'submit'].forEach(function(ev) {
+      document.addEventListener(ev, unlock, true);
     });
   }
 
@@ -124,6 +123,8 @@
       function getLevel(el) {
         if (!el || !el.classList) return '';
         var cls = ' ' + (el.className || '') + ' ';
+        if (cls.indexOf(' swal2-icon-error ') !== -1 || cls.indexOf(' swal2-validation-message ') !== -1) return 'error';
+        if (cls.indexOf(' swal2-icon-warning ') !== -1 || cls.indexOf(' swal2-icon-question ') !== -1) return 'warning';
         if (cls.indexOf(' danger ') !== -1 || cls.indexOf(' alert-danger ') !== -1 || cls.indexOf(' error ') !== -1 || cls.indexOf(' alert-error ') !== -1) return 'error';
         if (cls.indexOf(' warning ') !== -1 || cls.indexOf(' alert-warning ') !== -1 || cls.indexOf(' message ') !== -1) return 'warning';
         return '';
@@ -131,7 +132,7 @@
 
       function scanAndPlay(root) {
         if (!root || !root.querySelectorAll) return;
-        var nodes = root.querySelectorAll('.alert, .lp-toast, .toast, .swal2-popup');
+        var nodes = root.querySelectorAll('.alert, .lp-toast, .toast, .swal2-popup, .swal2-container');
         var hasError = false;
         var hasWarning = false;
         nodes.forEach(function(n) {

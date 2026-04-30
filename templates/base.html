@@ -7546,11 +7546,23 @@ window._dtPrintCustomize = function(title, color, icon) {
 
     e.preventDefault();
     url.searchParams.set('pre_sound', '1');
+    var navigate = function() { window.location.href = url.toString(); };
     if (window.fleetSessionSounds) {
       window.fleetSessionSounds.init();
-      window.fleetSessionSounds.play('logout-manual').catch(function() {});
+      var hasNavigated = false;
+      var onceNavigate = function() {
+        if (hasNavigated) return;
+        hasNavigated = true;
+        navigate();
+      };
+      window.fleetSessionSounds
+        .play('logout-manual')
+        .catch(function() {})
+        .then(function() { setTimeout(onceNavigate, 130); });
+      setTimeout(onceNavigate, 520);
+      return;
     }
-    setTimeout(function() { window.location.href = url.toString(); }, 260);
+    setTimeout(navigate, 260);
   }, true);
 })();
 </script>

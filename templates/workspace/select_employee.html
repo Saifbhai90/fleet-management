@@ -49,11 +49,22 @@
     e.preventDefault();
     isForwarding = true;
     if (btn) btn.disabled = true;
+    var forwarded = false;
+    function forwardNow() {
+      if (forwarded) return;
+      forwarded = true;
+      form.submit();
+    }
     if (window.fleetSessionSounds) {
       window.fleetSessionSounds.init();
-      window.fleetSessionSounds.play('workspace-load').catch(function() {});
+      window.fleetSessionSounds
+        .play('workspace-load')
+        .catch(function() {})
+        .then(function() { setTimeout(forwardNow, 120); });
+      setTimeout(forwardNow, 480);
+      return;
     }
-    setTimeout(function() { form.submit(); }, 180);
+    setTimeout(forwardNow, 180);
   });
 })();
 </script>
