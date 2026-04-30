@@ -10,6 +10,7 @@ from urllib import request as url_request
 
 from flask import Blueprint, jsonify, render_template, request, session
 from sqlalchemy import inspect, text
+from werkzeug.exceptions import HTTPException
 
 from app import csrf, db
 from auth_utils import get_user_context
@@ -573,6 +574,19 @@ def _call_gemini(prompt, temperature=0.1):
 
 def _rows_to_dicts(result):
     return [dict(row._mapping) for row in result]
+
+
+@ai_bp.errorhandler(Exception)
+def _ai_error_handler(exc):
+    if isinstance(exc, HTTPException):
+        return exc
+    if (request.path or "").startswith("/api/ai/"):
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return jsonify({"ok": False, "error": f"AI API internal error: {exc}"}), 500
+    raise exc
 
 
 def _build_chart_data(rows, chart_hint):
