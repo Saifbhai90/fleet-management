@@ -80,6 +80,7 @@
         var serverItems = data.items.map(function (it) {
           return {
             title: it.question || ('AI Query #' + it.id),
+            question: it.question || '',
             ts: it.created_at ? new Date(it.created_at).getTime() : Date.now(),
             html: '',
             meta: (it.status || 'n/a') + ' • rows: ' + (it.rows_count || 0)
@@ -109,8 +110,17 @@
       div.className = 'ai-history-item';
       div.innerHTML = '<div class="fw-semibold small">' + escapeHtml(item.title || 'Chat') + '</div><div class="text-muted small">' + new Date(item.ts).toLocaleString() + '</div>' + (item.meta ? '<div class="text-muted small">' + escapeHtml(item.meta) + '</div>' : '');
       div.addEventListener('click', function () {
-        messagesEl.innerHTML = item.html || '';
-        messagesEl.scrollTop = messagesEl.scrollHeight;
+        if (item.html) {
+          messagesEl.innerHTML = item.html;
+          messagesEl.scrollTop = messagesEl.scrollHeight;
+          return;
+        }
+        if (item.question) {
+          messagesEl.innerHTML = '';
+          submitQuery(item.question, true);
+          return;
+        }
+        addMessage('Selected chat has no saved content yet.', 'ai');
       });
       if (idx === 0) div.style.borderColor = '#93c5fd';
       historyEl.appendChild(div);
@@ -195,10 +205,10 @@
     saveHistory();
   }
 
-  async function submitQuery() {
-    var msg = (inputEl.value || '').trim();
+  async function submitQuery(forcedMessage, keepInput) {
+    var msg = (forcedMessage || inputEl.value || '').trim();
     if (!msg) return;
-    inputEl.value = '';
+    if (!keepInput) inputEl.value = '';
     addMessage(msg, 'user');
     showThinking();
     sendBtn.disabled = true;
