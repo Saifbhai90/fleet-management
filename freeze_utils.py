@@ -102,6 +102,7 @@ FREEZE_FORM_CATALOG = [
     ('Attendance - Checkout', 'driver_attendance_checkout'),
     ('Attendance - Manual Checkin', 'driver_attendance_manual_checkin'),
     ('Attendance - Manual Checkout', 'driver_attendance_manual_checkout'),
+    ('Attendance - Bulk Manual Checkout', 'driver_attendance_bulk_manual_checkout'),
     ('Attendance - Mark Attendance', 'driver_attendance_mark'),
     ('Attendance - Bulk OFF', 'driver_attendance_bulk_off'),
     ('Attendance - Leave Request', 'leave_request_new'),

@@ -15770,6 +15770,45 @@ def driver_attendance_pending():
     return render_template('driver_attendance_pending.html', form=form, view_date=view_date, drivers=drivers, project_id=project_id, district_id=district_id, vehicle_id=vehicle_id, shift=shift, driver_id=driver_id, search=search, vehicles=vehicles, vehicle_drivers=vehicle_drivers, disable_project=disable_project, disable_district=disable_district, disable_vehicle=disable_vehicle, disable_shift=disable_shift, checked_in_vehicle_count=checked_in_vehicle_count)
 
 
+def _missing_checkout_records(view_date, project_id, district_id, vehicle_id, shift, driver_id, search, user_context):
+    """Drivers with check-in but no check-out for view_date, scoped like Missing Check-outs filters."""
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+    need_vehicle_join = bool(district_id or search or (not is_master_or_admin and allowed_districts))
+    query = DriverAttendance.query.filter(
+        DriverAttendance.attendance_date == view_date,
+        DriverAttendance.check_in.isnot(None),
+        DriverAttendance.check_out.is_(None),
+    ).join(Driver, DriverAttendance.driver_id == Driver.id).options(db.joinedload(DriverAttendance.driver))
+    if need_vehicle_join:
+        query = query.outerjoin(Vehicle, Driver.vehicle_id == Vehicle.id)
+    if project_id:
+        query = query.filter(Driver.project_id == project_id)
+    elif not is_master_or_admin and allowed_projects:
+        query = query.filter(Driver.project_id.in_(list(allowed_projects)))
+    if district_id:
+        query = query.filter(db.or_(Driver.district_id == district_id, Vehicle.district_id == district_id))
+    elif not is_master_or_admin and allowed_districts:
+        query = query.filter(
+            db.or_(
+                Driver.district_id.in_(list(allowed_districts)),
+                Vehicle.district_id.in_(list(allowed_districts)),
+            )
+        )
+    if vehicle_id:
+        query = query.filter(Driver.vehicle_id == vehicle_id)
+    if shift:
+        query = query.filter(Driver.shift == shift)
+    if driver_id:
+        query = query.filter(Driver.id == driver_id)
+    if search:
+        flt = _multi_word_filter(search, Driver.name, Driver.driver_id, Vehicle.vehicle_no)
+        if flt is not None:
+            query = query.filter(flt)
+    return query.order_by(Driver.name).all()
+
+
 @app.route('/driver-attendance/missing-checkout', methods=['GET'])
 def driver_attendance_missing_checkout():
     """Report: drivers who have check-in for the selected date but no check-out (same filters as Pending Attendance)."""
@@ -15872,33 +15911,9 @@ def driver_attendance_missing_checkout():
         if flt is not None:
             vehicle_drivers_q = vehicle_drivers_q.filter(flt)
     vehicle_drivers = vehicle_drivers_q.order_by(Driver.name).all()
-    need_vehicle_join = bool(district_id or search or (not is_master_or_admin and allowed_districts))
-    query = DriverAttendance.query.filter(
-        DriverAttendance.attendance_date == view_date,
-        DriverAttendance.check_in.isnot(None),
-        DriverAttendance.check_out.is_(None),
-    ).join(Driver, DriverAttendance.driver_id == Driver.id).options(db.joinedload(DriverAttendance.driver))
-    if need_vehicle_join:
-        query = query.outerjoin(Vehicle, Driver.vehicle_id == Vehicle.id)
-    if project_id:
-        query = query.filter(Driver.project_id == project_id)
-    elif not is_master_or_admin and allowed_projects:
-        query = query.filter(Driver.project_id.in_(list(allowed_projects)))
-    if district_id:
-        query = query.filter(db.or_(Driver.district_id == district_id, Vehicle.district_id == district_id))
-    elif not is_master_or_admin and allowed_districts:
-        query = query.filter(db.or_(Driver.district_id.in_(list(allowed_districts)), Vehicle.district_id.in_(list(allowed_districts))))
-    if vehicle_id:
-        query = query.filter(Driver.vehicle_id == vehicle_id)
-    if shift:
-        query = query.filter(Driver.shift == shift)
-    if driver_id:
-        query = query.filter(Driver.id == driver_id)
-    if search:
-        flt = _multi_word_filter(search, Driver.name, Driver.driver_id, Vehicle.vehicle_no)
-        if flt is not None:
-            query = query.filter(flt)
-    records = query.order_by(Driver.name).all()
+    records = _missing_checkout_records(
+        view_date, project_id, district_id, vehicle_id, shift, driver_id, search, user_context
+    )
 
     if (request.args.get('export') or '').strip().lower() == 'excel':
         headers = ['#', 'Project', 'District', 'Vehicle No', 'Vehicle Type', 'Shift', 'Driver', 'Driver ID', 'Check-in Time']
@@ -16143,6 +16158,162 @@ def driver_attendance_manual_checkout():
             db.session.rollback()
             flash(f'Error: {str(e)}', 'danger')
     return render_template('driver_attendance_manual_checkout.html', **tpl_kwargs)
+
+
+@app.route('/driver-attendance/bulk-manual-checkout', methods=['POST'])
+def driver_attendance_bulk_manual_checkout():
+    """Same rules as manual check-out, applied to multiple drivers from Missing Check-outs (one time/date/reason)."""
+    from auth_utils import get_user_context
+    from datetime import time as dt_time_cls
+
+    local_today = _attendance_local_date()
+    date_str = (request.form.get('date') or '').strip()
+    view_date = parse_date(date_str) if date_str else local_today
+
+    def _int_or_none(key):
+        raw = request.form.get(key)
+        if raw is None or raw == '':
+            return None
+        try:
+            return int(raw)
+        except (TypeError, ValueError):
+            return None
+
+    project_id = _int_or_none('project_id')
+    district_id = _int_or_none('district_id')
+    vehicle_id = _int_or_none('vehicle_id')
+    shift = (request.form.get('shift') or '').strip()
+    driver_filter_id = _int_or_none('driver_id')
+    search = (request.form.get('search') or '').strip()
+    if project_id == 0:
+        project_id = None
+    if district_id == 0:
+        district_id = None
+    if vehicle_id == 0:
+        vehicle_id = None
+    if driver_filter_id == 0:
+        driver_filter_id = None
+
+    back_params = {}
+    for k in ('project_id', 'district_id', 'vehicle_id', 'shift', 'search'):
+        v = request.form.get(k)
+        if v is not None and v != '':
+            back_params[k] = v
+    back_url = url_for('driver_attendance_missing_checkout', date=view_date.strftime('%d-%m-%Y'), **back_params)
+
+    if view_date > local_today:
+        flash('Manual check-out cannot be recorded for a future date.', 'danger')
+        return redirect(back_url)
+
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_records = _missing_checkout_records(
+        view_date, project_id, district_id, vehicle_id, shift, driver_filter_id, search, user_context
+    )
+    allowed_ids = {r.driver_id for r in allowed_records}
+
+    requested = set()
+    for x in request.form.getlist('driver_ids'):
+        try:
+            requested.add(int(x))
+        except (TypeError, ValueError):
+            continue
+    to_process = sorted(allowed_ids & requested)
+
+    _BULK_MAX = 150
+    if len(to_process) > _BULK_MAX:
+        flash(f'Ek dafa mein maximum {_BULK_MAX} drivers select kar sakte hain.', 'warning')
+        to_process = to_process[:_BULK_MAX]
+
+    time_str = (request.form.get('check_out_time') or '').strip()
+    checkout_date_str = (request.form.get('check_out_date') or '').strip()
+    remarks_add = (request.form.get('remarks') or '').strip()
+
+    if not to_process:
+        flash('Koi driver select nahi kiya ya selected drivers is filter / scope ke mutabiq allowed nahi.', 'danger')
+        return redirect(back_url)
+    if not time_str:
+        flash('Check-out time zaroori hai.', 'danger')
+        return redirect(back_url)
+    if not remarks_add:
+        flash('Reason zaroori hai (manual check-out kyun kar rahe hain).', 'danger')
+        return redirect(back_url)
+
+    try:
+        parts = time_str.replace('.', ':').split(':')
+        h = int(parts[0]) if len(parts) > 0 else 0
+        m = int(parts[1]) if len(parts) > 1 else 0
+        s = int(parts[2]) if len(parts) > 2 else 0
+        check_out_t = dt_time_cls(h, m, s)
+    except (ValueError, IndexError):
+        flash('Invalid check-out time. HH:MM format use karein.', 'danger')
+        return redirect(back_url)
+
+    check_out_d = parse_date(checkout_date_str) if checkout_date_str else view_date
+    if check_out_d is None:
+        check_out_d = view_date
+
+    _glob_setting = AttendanceTimeOverride.query.filter_by(scope='global').first()
+    allow_future = _glob_setting.allow_future_checkout if _glob_setting else False
+    max_allowed_date = view_date + timedelta(days=1)
+    if check_out_d < view_date:
+        flash('Check-out date attendance date se pehle nahi ho sakti.', 'danger')
+        return redirect(back_url)
+    if check_out_d > max_allowed_date:
+        flash('Check-out date zyada se zyada attendance date ke agle din tak ho sakti hai.', 'danger')
+        return redirect(back_url)
+    if not allow_future:
+        now_pk = _attendance_local_now()
+        check_out_dt = datetime.combine(check_out_d, check_out_t)
+        if check_out_dt > now_pk:
+            flash(
+                'Check-out date/time future mein nahi ho sakti. Admin Settings se "Allow Future Manual Check-out" ON karein agar zaroorat hai.',
+                'danger',
+            )
+            return redirect(back_url)
+
+    photo_path = None
+    photo = request.files.get('photo')
+    if photo and photo.filename:
+        try:
+            photo.stream.seek(0)
+            photo_path = upload_image_file(photo, folder='attendance')
+        except Exception as e:
+            flash(f'Photo save nahi hua (cloud storage): {str(e)}', 'warning')
+
+    ok_count = 0
+    skip_count = 0
+    for did in to_process:
+        rec = DriverAttendance.query.filter_by(driver_id=did, attendance_date=view_date).first()
+        if not rec or not rec.check_in or rec.check_out:
+            skip_count += 1
+            continue
+        if check_out_d == view_date and rec.check_in and check_out_t < rec.check_in:
+            skip_count += 1
+            continue
+        rec.check_out = check_out_t
+        rec.check_out_date = check_out_d
+        rec.remarks = (rec.remarks or '').rstrip() + (' | Manual check-out' + (': ' + remarks_add if remarks_add else ''))
+        if photo_path:
+            rec.check_out_photo_path = photo_path
+        rec.updated_at = pk_now()
+        ok_count += 1
+
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error: {str(e)}', 'danger')
+        return redirect(back_url)
+
+    if ok_count:
+        msg = f'{ok_count} driver(s) ka check-out save ho gaya.'
+        if skip_count:
+            msg += f' {skip_count} skip (pehle se check-out / check-in se pehle time — night shift ke liye alag date).'
+        flash(msg, 'success')
+    else:
+        flash('Koi check-out save nahi hua — sab skip (invalid state ya time).', 'warning')
+    return redirect(back_url)
 
 
 # ────────────────────────────────────────────────

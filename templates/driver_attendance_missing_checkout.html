@@ -130,11 +130,27 @@
       {% endif %}
     </div>
     <div class="card-body p-0">
+      {% if records %}
+      <form method="post" action="{{ url_for('driver_attendance_bulk_manual_checkout') }}" enctype="multipart/form-data" id="bulkManualCheckoutForm" class="mb-0">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="date" value="{{ view_date.strftime('%d-%m-%Y') }}">
+        <input type="hidden" name="project_id" value="{{ project_id or '' }}">
+        <input type="hidden" name="district_id" value="{{ district_id or '' }}">
+        <input type="hidden" name="vehicle_id" value="{{ vehicle_id or '' }}">
+        <input type="hidden" name="shift" value="{{ shift or '' }}">
+        <input type="hidden" name="driver_id" value="{{ driver_id or '' }}">
+        <input type="hidden" name="search" value="{{ search or '' }}">
+      {% endif %}
       <div class="table-responsive">
         <table class="table table-hover align-middle mb-0" id="missingCoTable">
           <thead class="table-light">
             <tr>
               <th class="ps-4">#</th>
+              {% if records %}
+              <th class="text-center" style="width:44px;" title="Multi check-out ke liye select">
+                <input type="checkbox" id="bulkSelectAll" class="form-check-input" aria-label="Select all on page">
+              </th>
+              {% endif %}
               <th>Project</th>
               <th>District</th>
               <th>Vehicle No</th>
@@ -150,6 +166,11 @@
             {% set d = rec.driver %}
             <tr>
               <td class="ps-4">{{ loop.index }}</td>
+              {% if records %}
+              <td class="text-center">
+                <input type="checkbox" name="driver_ids" value="{{ d.id }}" class="form-check-input bulk-co-cb" aria-label="Select {{ d.name }}">
+              </td>
+              {% endif %}
               <td>{{ rec.project.name if rec.project else (d.project.name if d.project else '-') }}</td>
               <td>{{ d.district.name if d.district else (d.vehicle.district.name if d.vehicle and d.vehicle.district else '-') }}</td>
               <td class="fw-medium">{{ d.vehicle.vehicle_no if d.vehicle else '-' }}</td>
@@ -182,6 +203,41 @@
           </tbody>
         </table>
       </div>
+      {% if records %}
+      <div class="p-3 border-top bg-light">
+        <div class="fw-semibold text-dark mb-2 d-flex flex-wrap align-items-center gap-2">
+          <span><i class="bi bi-people-fill me-1 text-primary"></i>Multi check-out</span>
+          <span class="badge bg-secondary" id="bulkCoSelectedCount">0 selected</span>
+        </div>
+        <p class="small text-muted mb-2">Jo drivers select kiye hain, un sab par <strong>yahi</strong> check-out time, date aur reason lag jaye ga. Pagination par alag page ke drivers ke liye pehle un rows par jayein ya &quot;Select all&quot; har page par dubara use karein.</p>
+        <div class="row g-2 align-items-end">
+          <div class="col-6 col-md-2">
+            <label class="form-label small mb-0">Check-out time <span class="text-danger">*</span></label>
+            <input type="time" name="check_out_time" class="form-control form-control-sm" required step="60">
+          </div>
+          <div class="col-6 col-md-2">
+            <label class="form-label small mb-0">Check-out date <span class="text-danger">*</span></label>
+            <input type="date" name="check_out_date" class="form-control form-control-sm" required
+                   value="{{ view_date.strftime('%Y-%m-%d') }}"
+                   min="{{ view_date.strftime('%Y-%m-%d') }}">
+          </div>
+          <div class="col-12 col-md-3">
+            <label class="form-label small mb-0">Reason <span class="text-danger">*</span></label>
+            <input type="text" name="remarks" class="form-control form-control-sm" placeholder="Bulk manual check-out ka reason" required maxlength="500">
+          </div>
+          <div class="col-12 col-md-2">
+            <label class="form-label small mb-0">Photo <span class="text-muted">(optional)</span></label>
+            <input type="file" name="photo" class="form-control form-control-sm" accept="image/*">
+          </div>
+          <div class="col-12 col-md-3">
+            <button type="submit" class="btn btn-danger btn-sm w-100 mt-1 mt-md-0" id="bulkCheckoutSubmitBtn">
+              <i class="bi bi-check2-all me-1"></i>Selected drivers check-out
+            </button>
+          </div>
+        </div>
+      </div>
+      </form>
+      {% endif %}
     </div>
     {% if records %}
     <div class="card-footer d-flex justify-content-between align-items-center flex-wrap gap-2">
@@ -252,6 +308,45 @@
       syncHiddenFromSelects();
     });
   }
+
+  var bulkForm = document.getElementById('bulkManualCheckoutForm');
+  var bulkAll = document.getElementById('bulkSelectAll');
+  function updateBulkCoSelectedCount() {
+    var el = document.getElementById('bulkCoSelectedCount');
+    if (!el) return;
+    var n = bulkForm ? bulkForm.querySelectorAll('.bulk-co-cb:checked').length : 0;
+    el.textContent = n + ' selected';
+  }
+  window._missingCoUpdateBulkCount = updateBulkCoSelectedCount;
+  if (bulkAll) {
+    bulkAll.addEventListener('change', function() {
+      var on = this.checked;
+      document.querySelectorAll('#missingCoTable tbody tr .bulk-co-cb').forEach(function(cb) {
+        var row = cb.closest('tr');
+        if (row && row.style.display !== 'none' && row.dataset.searchHidden !== '1') {
+          cb.checked = on;
+        }
+      });
+      updateBulkCoSelectedCount();
+    });
+  }
+  document.querySelectorAll('.bulk-co-cb').forEach(function(cb) {
+    cb.addEventListener('change', updateBulkCoSelectedCount);
+  });
+  if (bulkForm) {
+    bulkForm.addEventListener('submit', function(e) {
+      var n = bulkForm.querySelectorAll('.bulk-co-cb:checked').length;
+      if (!n) {
+        e.preventDefault();
+        alert('Pehle kam az kam ek driver checkbox se select karein.');
+        return;
+      }
+      if (!confirm(n + ' driver(s) ka ek hi time / date par check-out save karna hai?')) {
+        e.preventDefault();
+      }
+    });
+  }
+  updateBulkCoSelectedCount();
 
   function refreshDriverDropdown(keepSelectionIfInList) {
     var pid = (projectSelect && projectSelect.value) ? projectSelect.value : '0';
@@ -438,6 +533,17 @@ function attPaginate(tableId, perPageId, navId, countId) {
     r.style.display = (i >= (curPage-1)*perPage && i < curPage*perPage) ? '' : 'none';
   });
   if (countEl) countEl.textContent = 'Showing ' + (total===0?0:(curPage-1)*perPage+1) + ' to ' + Math.min(curPage*perPage,total) + ' of ' + total + ' entries';
+  var bulkAllEl = document.getElementById('bulkSelectAll');
+  if (bulkAllEl) {
+    var cbs = Array.from(document.querySelectorAll('#missingCoTable tbody tr .bulk-co-cb')).filter(function(cb) {
+      var row = cb.closest('tr');
+      return row && row.style.display !== 'none' && row.dataset.searchHidden !== '1';
+    });
+    var checked = cbs.filter(function(cb) { return cb.checked; }).length;
+    bulkAllEl.checked = cbs.length > 0 && checked === cbs.length;
+    bulkAllEl.indeterminate = checked > 0 && checked < cbs.length;
+  }
+  if (typeof window._missingCoUpdateBulkCount === 'function') window._missingCoUpdateBulkCount();
   var html = '<ul class="pagination pagination-sm mb-0">';
   html += '<li class="page-item'+(curPage<=1?' disabled':'')+'"><a class="page-link" style="cursor:pointer" onclick="attGoPage(\''+tableId+'\',\''+perPageId+'\',\''+navId+'\',\''+countId+'\','+(curPage-1)+')"><i class=\'bi bi-chevron-left\'></i></a></li>';
   for (var p=1;p<=totalPages;p++) {
@@ -499,11 +605,11 @@ function printPreview() {
   html += '<table><thead><tr><th>#</th><th>Project</th><th>District</th><th>Vehicle No</th><th>Vehicle Type</th><th>Shift</th><th>Driver</th><th>Check-in</th></tr></thead><tbody>';
   var n = 0;
   rows.forEach(function(r) {
-    if (r.style.display === 'none' || r.cells.length < 8) return;
+    if (r.style.display === 'none' || r.cells.length < 10) return;
     n++;
     html += '<tr>';
     html += '<td>' + n + '</td>';
-    for (var i = 1; i < 8; i++) html += '<td>' + (r.cells[i] ? r.cells[i].innerHTML : '') + '</td>';
+    for (var i = 2; i < 9; i++) html += '<td>' + (r.cells[i] ? r.cells[i].innerHTML : '') + '</td>';
     html += '</tr>';
   });
   html += '</tbody></table></body></html>';
