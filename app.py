@@ -672,6 +672,10 @@ app.add_url_rule('/api/payroll/attendance-preview', 'api_payroll_attendance_prev
 from api import api_bp  # noqa: E402
 app.register_blueprint(api_bp)
 
+# Master Mind AI assistant routes
+from routes_ai import ai_bp  # noqa: E402
+app.register_blueprint(ai_bp)
+
 # Start backup scheduler if enabled
 _backup_scheduler = None
 if _run_startup_tasks and app.config.get('BACKUP_SCHEDULE_ENABLED'):

@@ -1305,6 +1305,27 @@ class ClientActivityLog(db.Model):
         return f'<ClientActivityLog {self.action} at {self.created_at}>'
 
 
+class AIAssistantQueryLog(db.Model):
+    """Audit log for Master Mind AI queries and generated SQL."""
+    __tablename__ = 'ai_assistant_query_log'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='SET NULL'), nullable=True, index=True)
+    question = db.Column(db.Text, nullable=False)
+    sql_query = db.Column(db.Text, nullable=True)
+    rows_count = db.Column(db.Integer, nullable=False, default=0)
+    status = db.Column(db.String(20), nullable=False, default='success', index=True)  # success|blocked|error
+    error_message = db.Column(db.Text, nullable=True)
+    chart_requested = db.Column(db.Boolean, nullable=False, default=False)
+    duration_ms = db.Column(db.Integer, nullable=True)
+    created_at = db.Column(db.DateTime, default=pk_now, nullable=False, index=True)
+
+    user = db.relationship('User', backref='ai_query_logs', lazy='select')
+
+    def __repr__(self):
+        return f'<AIAssistantQueryLog id={self.id} status={self.status}>'
+
+
 # ────────────────────────────────────────────────
 # Form Control: Attendance time windows (Morning / Night shift)
 # Single row: kis time se kis time tak attendance lag sakti hai

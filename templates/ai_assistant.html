@@ -1,0 +1,248 @@
+{% extends "base.html" %}
+{% block title %}Master Mind AI - Fleet Manager{% endblock %}
+
+{% block content %}
+<style>
+  .ai-shell { display: grid; grid-template-columns: 300px 1fr; gap: 16px; min-height: calc(100vh - 110px); }
+  .ai-panel { background: #fff; border: 1px solid #e5e7eb; border-radius: 16px; box-shadow: 0 8px 24px rgba(2, 6, 23, 0.05); }
+  .ai-sidebar { padding: 14px; overflow: auto; }
+  .ai-chat { display: flex; flex-direction: column; min-height: 0; }
+  .ai-header { border-bottom: 1px solid #edf2f7; padding: 14px 18px; display:flex; align-items:center; justify-content:space-between; }
+  .ai-history-item { border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px; margin-bottom: 8px; cursor: pointer; background: #f8fafc; }
+  .ai-history-item:hover { background: #eef2ff; border-color: #c7d2fe; }
+  .ai-messages { flex: 1; padding: 16px; overflow: auto; background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%); }
+  .msg { max-width: 80%; padding: 12px 14px; border-radius: 14px; margin-bottom: 12px; white-space: pre-wrap; }
+  .msg-user { margin-left: auto; background: #2563eb; color: #fff; border-bottom-right-radius: 6px; }
+  .msg-ai { margin-right: auto; background: #fff; border: 1px solid #e2e8f0; color: #1f2937; border-bottom-left-radius: 6px; }
+  .msg-tools { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .ai-input-wrap { border-top: 1px solid #edf2f7; padding: 12px; display: flex; gap: 10px; align-items: flex-end; }
+  .ai-textarea { min-height: 56px; max-height: 160px; resize: vertical; }
+  .thinking { display:inline-flex; gap:6px; align-items:center; }
+  .thinking span { width: 7px; height: 7px; border-radius: 999px; background:#64748b; animation: blink 1.1s infinite ease-in-out; }
+  .thinking span:nth-child(2){ animation-delay:.15s; }
+  .thinking span:nth-child(3){ animation-delay:.3s; }
+  @keyframes blink { 0%, 80%, 100% { transform: scale(.6); opacity:.35; } 40% { transform: scale(1); opacity:1; } }
+  @media (max-width: 992px) { .ai-shell { grid-template-columns: 1fr; } .msg{max-width:92%;} }
+</style>
+
+<div class="container-fluid py-3">
+  <div class="ai-shell">
+    <aside class="ai-panel ai-sidebar">
+      <div class="d-flex align-items-center justify-content-between mb-2">
+        <h6 class="mb-0 fw-bold"><i class="bi bi-stars text-warning me-1"></i>Recent Chats</h6>
+        <button id="newChatBtn" class="btn btn-sm btn-outline-primary">New</button>
+      </div>
+      <div id="historyList"></div>
+    </aside>
+
+    <section class="ai-panel ai-chat">
+      <div class="ai-header">
+        <div>
+          <div class="fw-bold"><i class="bi bi-robot me-1 text-primary"></i>Master Mind AI Analytics Engine</div>
+          <small class="text-muted">Ask anything about Fleet, Payroll, Attendance, Fuel, Workspace and more.</small>
+        </div>
+      </div>
+
+      <div id="messages" class="ai-messages"></div>
+
+      <div class="ai-input-wrap">
+        <textarea id="aiInput" class="form-control ai-textarea" placeholder="Example: Muzaffargarh mein pichlay mahine fuel expense trend ka chart dikhao."></textarea>
+        <button id="sendBtn" class="btn btn-primary"><i class="bi bi-send"></i></button>
+      </div>
+    </section>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+(function () {
+  var STORAGE_KEY = 'fleet_ai_recent_chats_v1';
+  var history = [];
+  var thinkingNode = null;
+
+  var messagesEl = document.getElementById('messages');
+  var historyEl = document.getElementById('historyList');
+  var inputEl = document.getElementById('aiInput');
+  var sendBtn = document.getElementById('sendBtn');
+  var newChatBtn = document.getElementById('newChatBtn');
+  var csrfToken = (document.querySelector('meta[name="csrf-token"]') || {}).content || '';
+
+  function loadHistory() {
+    try { history = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch (_) { history = []; }
+    if (!Array.isArray(history)) history = [];
+    renderHistory();
+    fetch('/api/ai/recent?limit=12')
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (!data || !data.ok || !Array.isArray(data.items)) return;
+        var serverItems = data.items.map(function (it) {
+          return {
+            title: it.question || ('AI Query #' + it.id),
+            ts: it.created_at ? new Date(it.created_at).getTime() : Date.now(),
+            html: '',
+            meta: (it.status || 'n/a') + ' • rows: ' + (it.rows_count || 0)
+          };
+        });
+        if (serverItems.length) {
+          history = serverItems.concat(history).slice(0, 20);
+          renderHistory();
+        }
+      })
+      .catch(function () {});
+  }
+
+  function saveHistory() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(history.slice(0, 20)));
+    renderHistory();
+  }
+
+  function renderHistory() {
+    historyEl.innerHTML = '';
+    if (!history.length) {
+      historyEl.innerHTML = '<div class="text-muted small">No chat yet.</div>';
+      return;
+    }
+    history.forEach(function (item, idx) {
+      var div = document.createElement('div');
+      div.className = 'ai-history-item';
+      div.innerHTML = '<div class="fw-semibold small">' + escapeHtml(item.title || 'Chat') + '</div><div class="text-muted small">' + new Date(item.ts).toLocaleString() + '</div>' + (item.meta ? '<div class="text-muted small">' + escapeHtml(item.meta) + '</div>' : '');
+      div.addEventListener('click', function () {
+        messagesEl.innerHTML = item.html || '';
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+      });
+      if (idx === 0) div.style.borderColor = '#93c5fd';
+      historyEl.appendChild(div);
+    });
+  }
+
+  function escapeHtml(s) {
+    return String(s || '').replace(/[&<>"']/g, function (m) {
+      return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[m];
+    });
+  }
+
+  function addMessage(text, role) {
+    var div = document.createElement('div');
+    div.className = 'msg ' + (role === 'user' ? 'msg-user' : 'msg-ai');
+    div.innerHTML = escapeHtml(text || '');
+    messagesEl.appendChild(div);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+    return div;
+  }
+
+  function showThinking() {
+    if (thinkingNode) return;
+    thinkingNode = document.createElement('div');
+    thinkingNode.className = 'msg msg-ai';
+    thinkingNode.innerHTML = '<div class="thinking"><span></span><span></span><span></span><span class="ms-2 small text-muted">Thinking...</span></div>';
+    messagesEl.appendChild(thinkingNode);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  function hideThinking() {
+    if (!thinkingNode) return;
+    thinkingNode.remove();
+    thinkingNode = null;
+  }
+
+  function addSqlButton(container, sqlText) {
+    var tools = document.createElement('div');
+    tools.className = 'msg-tools';
+    var btn = document.createElement('button');
+    btn.className = 'btn btn-sm btn-outline-secondary';
+    btn.textContent = 'Copy SQL';
+    btn.addEventListener('click', function () {
+      navigator.clipboard.writeText(sqlText || '');
+      btn.textContent = 'Copied';
+      setTimeout(function () { btn.textContent = 'Copy SQL'; }, 1200);
+    });
+    tools.appendChild(btn);
+    container.appendChild(tools);
+  }
+
+  function addNextSteps(container, steps) {
+    if (!Array.isArray(steps) || !steps.length) return;
+    var box = document.createElement('div');
+    box.className = 'mt-2';
+    box.innerHTML = '<div class="small fw-semibold mb-1 text-primary">Next Steps</div>';
+    steps.forEach(function (s) {
+      if (!s || !s.label || !s.url) return;
+      var a = document.createElement('a');
+      a.href = s.url;
+      a.className = 'btn btn-sm btn-outline-primary me-2 mb-2';
+      a.textContent = s.label;
+      box.appendChild(a);
+    });
+    container.appendChild(box);
+  }
+
+  function addChart(container, chartData) {
+    if (!chartData || !chartData.labels || !chartData.datasets) return;
+    var canvas = document.createElement('canvas');
+    canvas.height = 220;
+    container.appendChild(canvas);
+    new Chart(canvas.getContext('2d'), {
+      type: chartData.type || 'bar',
+      data: { labels: chartData.labels, datasets: chartData.datasets },
+      options: { responsive: true, plugins: { legend: { display: true }, title: { display: !!chartData.title, text: chartData.title || '' } } }
+    });
+  }
+
+  function persistCurrentChat(title) {
+    history.unshift({ title: title || 'AI Chat', ts: Date.now(), html: messagesEl.innerHTML });
+    saveHistory();
+  }
+
+  async function submitQuery() {
+    var msg = (inputEl.value || '').trim();
+    if (!msg) return;
+    inputEl.value = '';
+    addMessage(msg, 'user');
+    showThinking();
+    sendBtn.disabled = true;
+    try {
+      var resp = await fetch('/api/ai/query', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': csrfToken
+        },
+        body: JSON.stringify({ message: msg })
+      });
+      var data = await resp.json();
+      hideThinking();
+      if (!data.ok) {
+        addMessage(data.error || 'Request failed.', 'ai');
+      } else {
+        var aiNode = addMessage(data.answer || 'No answer generated.', 'ai');
+        if (data.sql) addSqlButton(aiNode, data.sql);
+        if (data.chart_data) addChart(aiNode, data.chart_data);
+        if (data.next_steps) addNextSteps(aiNode, data.next_steps);
+        persistCurrentChat(msg.substring(0, 70));
+      }
+    } catch (err) {
+      hideThinking();
+      addMessage('Network/API issue: ' + (err && err.message ? err.message : err), 'ai');
+    } finally {
+      sendBtn.disabled = false;
+      inputEl.focus();
+    }
+  }
+
+  sendBtn.addEventListener('click', submitQuery);
+  inputEl.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      submitQuery();
+    }
+  });
+  newChatBtn.addEventListener('click', function () { messagesEl.innerHTML = ''; inputEl.focus(); });
+
+  loadHistory();
+  addMessage('Master Mind AI ready. Aap data question puchain, chart bhi bana dunga.', 'ai');
+})();
+</script>
+{% endblock %}
+

@@ -2096,6 +2096,13 @@
                 <i class="bi bi-bar-chart"></i><span>Report Centre</span>
             </a>
         </div>
+        {% if can_see_page('report_ai') %}
+        <div>
+            <a href="{{ url_for('ai.ai_assistant') }}" class="{% if request.endpoint in ['ai_assistant', 'ai.ai_assistant'] %}active-link{% endif %}" style="display:flex;align-items:center;padding:.65rem 1rem;text-decoration:none;">
+                <i class="bi bi-robot text-info me-1"></i><i class="bi bi-stars text-warning me-2"></i><span>Master Mind AI</span>
+            </a>
+        </div>
+        {% endif %}
         {% endif %}
 
         <!-- Notifications -->
