@@ -544,6 +544,11 @@ def _get_checked_in_vehicle_ids(attendance_date):
 @app.before_request
 def require_login():
     """Redirect to login if user not logged in. Check permission for endpoint. Session timeout."""
+    def _api_error(payload, status):
+        if request.path.startswith('/api/'):
+            return jsonify(payload), status
+        return None
+
     endpoint = request.endpoint or ''
     if endpoint.startswith('static'):
         return
@@ -552,6 +557,9 @@ def require_login():
     if endpoint == 'set_new_password' and session.get('must_set_password_user_id'):
         return
     if not session.get('user'):
+        api_resp = _api_error({'ok': False, 'error': 'Session expired. Please login again.'}, 401)
+        if api_resp:
+            return api_resp
         return redirect(url_for('login'))
     if getattr(session, 'permanent', False):
         _uid = session.get('user_id')
@@ -564,6 +572,9 @@ def require_login():
                     _u = User.query.get(_uid)
                     if not _u or not _u.is_active:
                         session.clear()
+                        api_resp = _api_error({'ok': False, 'error': 'Your account has been deactivated. Please contact administrator.'}, 403)
+                        if api_resp:
+                            return api_resp
                         flash('Your account has been deactivated. Please contact administrator.', 'danger')
                         return redirect(url_for('login'))
                     session['_user_active_ts'] = _now_ts
@@ -582,6 +593,9 @@ def require_login():
             last = last.astimezone(timezone.utc)
         if (now - last).total_seconds() > timeout_mins * 60:
             session.clear()
+            api_resp = _api_error({'ok': False, 'error': 'Session expired. Please login again.'}, 401)
+            if api_resp:
+                return api_resp
             flash('Session expired. Please login again.', 'info')
             return redirect(url_for('login'))
     # Role-based access: check if user has permission for this endpoint
@@ -630,6 +644,9 @@ def require_login():
             if has_dashboard_access:
                 return  # allow
             session['show_no_access'] = True
+            api_resp = _api_error({'ok': False, 'error': 'You do not have permission for this action.'}, 403)
+            if api_resp:
+                return api_resp
             return redirect(url_for('login'))
 
         # Explicit: assignment (full) grants all assignment sub-pages (Vehicle to Parking, etc.)
@@ -638,6 +655,9 @@ def require_login():
                 pass  # allow
             else:
                 session['show_no_access'] = True  # show once on login page, not per-request flash
+                api_resp = _api_error({'ok': False, 'error': 'You do not have permission for this action.'}, 403)
+                if api_resp:
+                    return api_resp
                 return redirect(url_for('login'))
 
 
