@@ -137,7 +137,14 @@ def _ensure_ai_conversation_schema():
         return True, ""
     try:
         required = {"is_pinned", "summary_text", "pinned_facts_json", "instruction_policy_json"}
-        dialect = (db.session.bind.dialect.name or "").lower()
+        bind = None
+        try:
+            bind = db.session.get_bind()
+        except Exception:
+            bind = None
+        if bind is None:
+            bind = db.engine
+        dialect = (((bind.dialect.name if bind is not None else "") or "").lower())
         for _ in range(2):
             insp = inspect(db.engine)
             if "ai_conversation" not in insp.get_table_names():
