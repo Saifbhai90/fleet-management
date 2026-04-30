@@ -9,8 +9,12 @@
   .ai-history-list { overflow:auto; max-height: calc(100vh - 210px); padding-right: 2px; }
   .ai-chat { display: flex; flex-direction: column; min-height: 0; }
   .ai-header { border-bottom: 1px solid #edf2f7; padding: 14px 18px; display:flex; align-items:center; justify-content:space-between; }
-  .ai-history-item { border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px; margin-bottom: 8px; cursor: pointer; background: #f8fafc; }
+  .ai-history-item { border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px; margin-bottom: 8px; background: #f8fafc; }
   .ai-history-item:hover { background: #eef2ff; border-color: #c7d2fe; }
+  .ai-history-row { display: flex; align-items: flex-start; gap: 8px; justify-content: space-between; }
+  .ai-history-actions { display: flex; gap: 2px; flex-shrink: 0; align-items: flex-start; }
+  .btn-history-act { padding: 4px 6px; line-height: 1; border: none; background: transparent; color: #64748b; border-radius: 6px; cursor: pointer; }
+  .btn-history-act:hover { background: #e2e8f0; color: #1e293b; }
   .ai-messages { flex: 1; padding: 16px; overflow: auto; background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%); }
   .msg { max-width: 80%; padding: 12px 14px; border-radius: 14px; margin-bottom: 12px; white-space: pre-wrap; }
   .msg-user { margin-left: auto; background: #2563eb; color: #fff; border-bottom-right-radius: 6px; }
@@ -114,16 +118,130 @@
   function loadHistory() {
     history = [];
     renderHistory();
-    fetchConversations().then(function (items) {
+    refreshConversationLists();
+  }
+
+  function refreshConversationLists() {
+    return fetchConversations().then(function (items) {
       history = items.slice(0, 200);
       renderHistory();
       renderAllHistory();
     });
   }
 
-  function saveHistory() {
-    renderHistory();
-    renderAllHistory();
+  function patchConversation(id, body) {
+    return fetch('/api/ai/conversations/' + encodeURIComponent(id), {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': csrfToken
+      },
+      body: JSON.stringify(body)
+    }).then(function (r) { return r.json(); });
+  }
+
+  function deleteConversation(id) {
+    return fetch('/api/ai/conversations/' + encodeURIComponent(id), {
+      method: 'DELETE',
+      headers: { 'X-CSRFToken': csrfToken }
+    }).then(function (r) { return r.json(); });
+  }
+
+  function createConversationRow(item, opts) {
+    opts = opts || {};
+    var wrap = document.createElement('div');
+    wrap.className = 'ai-history-item';
+
+    var row = document.createElement('div');
+    row.className = 'ai-history-row';
+
+    var main = document.createElement('div');
+    main.className = 'flex-grow-1';
+    main.style.minWidth = '0';
+    main.style.cursor = 'pointer';
+
+    var titleEl = document.createElement('div');
+    titleEl.className = 'fw-semibold small';
+    if (item.is_pinned) {
+      var pi = document.createElement('i');
+      pi.className = 'bi bi-pin-angle-fill text-warning me-1';
+      pi.title = 'Pinned';
+      titleEl.appendChild(pi);
+    }
+    titleEl.appendChild(document.createTextNode(item.title || 'Chat'));
+
+    var d1 = document.createElement('div');
+    d1.className = 'text-muted small';
+    d1.textContent = new Date(item.ts).toLocaleString();
+
+    main.appendChild(titleEl);
+    main.appendChild(d1);
+    if (item.meta) {
+      var d2 = document.createElement('div');
+      d2.className = 'text-muted small';
+      d2.textContent = item.meta;
+      main.appendChild(d2);
+    }
+
+    main.addEventListener('click', function () {
+      loadHistoryItem(item);
+      if (opts.closeModalOnPick && historyModal) historyModal.hide();
+    });
+
+    var actions = document.createElement('div');
+    actions.className = 'ai-history-actions';
+
+    function mkBtn(iconClass, btnTitle, handler) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'btn-history-act';
+      b.title = btnTitle;
+      b.innerHTML = '<i class="bi ' + iconClass + '"></i>';
+      b.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        handler(b);
+      });
+      actions.appendChild(b);
+    }
+
+    mkBtn(item.is_pinned ? 'bi-pin-angle-fill text-warning' : 'bi-pin-angle', item.is_pinned ? 'Unpin' : 'Pin', function () {
+      patchConversation(item.id, { is_pinned: !item.is_pinned }).then(function (data) {
+        if (!data || !data.ok || !data.conversation) return;
+        item.is_pinned = !!data.conversation.is_pinned;
+        refreshConversationLists();
+      });
+    });
+
+    mkBtn('bi-pencil', 'Rename', function () {
+      var t = prompt('Chat title:', item.title || '');
+      if (t === null) return;
+      t = String(t).trim();
+      if (!t) return;
+      patchConversation(item.id, { title: t }).then(function (data) {
+        if (!data || !data.ok || !data.conversation) return;
+        item.title = data.conversation.title;
+        refreshConversationLists();
+      });
+    });
+
+    mkBtn('bi-trash', 'Delete', function () {
+      if (!confirm('Delete this chat permanently?')) return;
+      deleteConversation(item.id).then(function (data) {
+        if (!data || !data.ok) return;
+        if (currentConversationId === item.id) {
+          currentConversationId = null;
+          messagesEl.innerHTML = '';
+          addMessage('Chat deleted. Start a new conversation anytime.', 'ai');
+        }
+        refreshConversationLists();
+      });
+    });
+
+    row.appendChild(main);
+    row.appendChild(actions);
+    wrap.appendChild(row);
+    return wrap;
   }
 
   function loadHistoryItem(item) {
@@ -169,15 +287,10 @@
     }
     var previewItems = history.slice(0, 6);
     previewItems.forEach(function (item, idx) {
-      var div = document.createElement('div');
-      div.className = 'ai-history-item';
-      div.innerHTML = '<div class="fw-semibold small">' + escapeHtml(item.title || 'Chat') + '</div><div class="text-muted small">' + new Date(item.ts).toLocaleString() + '</div>' + (item.meta ? '<div class="text-muted small">' + escapeHtml(item.meta) + '</div>' : '');
-      div.addEventListener('click', function () {
-        loadHistoryItem(item);
-      });
+      var div = createConversationRow(item, {});
       if (idx === 0) div.style.borderColor = '#93c5fd';
       historyEl.appendChild(div);
-    });    
+    });
     if (history.length > 6) {
       var more = document.createElement('button');
       more.className = 'btn btn-sm btn-light w-100 mt-1';
@@ -202,14 +315,7 @@
       return;
     }
     filtered.forEach(function (item) {
-      var row = document.createElement('div');
-      row.className = 'ai-history-item';
-      row.innerHTML = '<div class="fw-semibold small">' + escapeHtml(item.title || 'Chat') + '</div><div class="text-muted small">' + new Date(item.ts).toLocaleString() + '</div>' + (item.meta ? '<div class="text-muted small">' + escapeHtml(item.meta) + '</div>' : '');
-      row.addEventListener('click', function () {
-        loadHistoryItem(item);
-        if (historyModal) historyModal.hide();
-      });
-      allHistoryListEl.appendChild(row);
+      allHistoryListEl.appendChild(createConversationRow(item, { closeModalOnPick: true }));
     });
   }
 
@@ -287,10 +393,7 @@
   }
 
   function persistCurrentChat() {
-    fetchConversations().then(function (items) {
-      history = items.slice(0, 200);
-      saveHistory();
-    });
+    refreshConversationLists();
   }
 
   async function submitQuery(forcedMessage, keepInput) {

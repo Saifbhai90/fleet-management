@@ -822,7 +822,8 @@ def ai_conversation_new():
     return jsonify({"ok": True, "id": conv.id})
 
 
-@ai_bp.route("/api/ai/conversations/<int:conversation_id>", methods=["GET"])
+@ai_bp.route("/api/ai/conversations/<int:conversation_id>", methods=["GET", "PATCH", "DELETE"])
+@csrf.exempt
 def ai_conversation_detail(conversation_id):
     uid = session.get("user_id")
     if not uid:
@@ -830,6 +831,39 @@ def ai_conversation_detail(conversation_id):
     conv = AIConversation.query.filter_by(id=conversation_id, user_id=uid).first()
     if not conv:
         return jsonify({"ok": False, "error": "Conversation not found."}), 404
+
+    if request.method == "DELETE":
+        AIConversationMessage.query.filter_by(conversation_id=conv.id).delete(synchronize_session=False)
+        db.session.delete(conv)
+        db.session.commit()
+        return jsonify({"ok": True})
+
+    if request.method == "PATCH":
+        payload = request.get_json(silent=True) or {}
+        changed = False
+        if "title" in payload:
+            t = str(payload.get("title") or "").strip()[:240]
+            if t:
+                conv.title = t
+                changed = True
+        if "is_pinned" in payload:
+            conv.is_pinned = bool(payload.get("is_pinned"))
+            changed = True
+        if not changed:
+            return jsonify({"ok": False, "error": "Provide title or is_pinned."}), 400
+        db.session.commit()
+        return jsonify(
+            {
+                "ok": True,
+                "conversation": {
+                    "id": conv.id,
+                    "title": conv.title,
+                    "is_pinned": bool(conv.is_pinned),
+                    "updated_at": conv.updated_at.isoformat() if conv.updated_at else "",
+                },
+            }
+        )
+
     msgs = (
         AIConversationMessage.query
         .filter_by(conversation_id=conv.id)
