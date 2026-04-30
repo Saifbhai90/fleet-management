@@ -5909,6 +5909,7 @@ def login():
                     target_endpoint = 'driver_attendance_report'
                 else:
                     target_endpoint = 'dashboard'
+                session['play_login_sound'] = 1
                 flash(f'Welcome, {session["user"]}!', 'success')
                 resp_target = url_for('dashboard', from_login=1) if target_endpoint == 'dashboard' else url_for(target_endpoint)
                 return redirect(resp_target)
@@ -5941,6 +5942,7 @@ def login():
 def logout():
     from auth_utils import TRUSTED_DEVICE_COOKIE
     inactivity = request.args.get('inactivity') == '1'
+    play_logout_sound = 'auto' if inactivity else 'manual'
     # Mark logout time for current session's login log if any
     try:
         log_id = session.get('login_log_id')
@@ -5950,6 +5952,7 @@ def logout():
     except Exception:
         db.session.rollback()
     session.clear()  # Destroy ALL session data
+    session['play_logout_sound'] = play_logout_sound
     msg = 'Session expired due to inactivity.' if inactivity else 'You have been logged out.'
     flash(msg, 'info' if inactivity else 'info')
     # Add clear_bio=1 parameter to signal login.html to clear biometric localStorage

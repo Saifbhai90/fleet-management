@@ -3,6 +3,7 @@
 {% block title %}Sign In — Fleet Manager{% endblock %}
 
 {% block content %}
+{% set play_logout_sound = session.pop('play_logout_sound', '') %}
 <!-- ═══════════════════════════════════════════════════════════════════
      HBL-Style Saved Account View (NATIVE ONLY)
      Shown when user has previously logged in with biometric enabled
@@ -564,6 +565,17 @@
       }
     });
   }
+})();
+
+/* ── Logout Sound (manual/auto) ── */
+(function() {
+  var logoutKind = '{{ play_logout_sound }}';
+  if (!logoutKind || !window.fleetSessionSounds) return;
+  window.fleetSessionSounds.init();
+  setTimeout(function() {
+    var kind = logoutKind === 'auto' ? 'logout-auto' : 'logout-manual';
+    window.fleetSessionSounds.play(kind);
+  }, 120);
 })();
 </script>
 

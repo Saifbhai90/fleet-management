@@ -7525,6 +7525,19 @@ window._dtPrintCustomize = function(title, color, icon) {
     });
 })();
 </script>
+<script src="{{ url_for('static', filename='js/session_sounds.js') }}"></script>
+{% set play_login_sound = session.pop('play_login_sound', 0) %}
+{% if play_login_sound %}
+<script>
+(function() {
+  if (!window.fleetSessionSounds) return;
+  window.fleetSessionSounds.init();
+  setTimeout(function() {
+    window.fleetSessionSounds.play('login');
+  }, 120);
+})();
+</script>
+{% endif %}
 
 </body>
 </html>
