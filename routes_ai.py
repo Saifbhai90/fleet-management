@@ -657,6 +657,7 @@ def _call_gemini(prompt, temperature=0.1):
 
     model_candidates = [preferred] + [m for m in _GEMINI_FALLBACK_MODELS if m != preferred]
     attempted = []
+    last_error_message = ""
 
     for model_name in model_candidates:
         attempted.append(model_name)
@@ -674,14 +675,19 @@ def _call_gemini(prompt, temperature=0.1):
             if exc.code == 404 and "not found" in err_body.lower():
                 continue
             raise RuntimeError(f"Gemini HTTP {exc.code}: {err_body[:300]}") from exc
-        except Exception:
-            # Any other failure on one model: continue fallback models.
+        except Exception as exc:
+            msg = str(exc)
+            last_error_message = msg[:600]
+            # Auth/config problems should fail fast with real reason.
+            if ("HTTP 401" in msg) or ("HTTP 403" in msg) or ("API key" in msg.lower()):
+                raise RuntimeError(f"Gemini authentication/config error: {msg}") from exc
+            # Otherwise continue trying fallback models.
             continue
 
     # Last attempt: discover a few models dynamically (bounded for latency).
     try:
         discovered = _available_models()
-        discovered = [m for m in discovered if m.startswith("gemini-")]
+        discovered = [m for m in discovered if "gemini" in m.lower()]
         discovered = [m for m in discovered if m not in attempted]
         discovered = discovered[:max(0, _GEMINI_MAX_DISCOVERED_ATTEMPTS)]
         for model_name in discovered:
@@ -697,9 +703,11 @@ def _call_gemini(prompt, temperature=0.1):
                 answer = "\n".join([t for t in text_chunks if t]).strip()
                 if answer:
                     return answer
-            except Exception:
+            except Exception as exc:
+                last_error_message = str(exc)[:600]
                 continue
-        raise RuntimeError(f"No compatible Gemini model available. Tried: {', '.join(attempted)}")
+        tail = f" Last error: {last_error_message}" if last_error_message else ""
+        raise RuntimeError(f"No compatible Gemini model available. Tried: {', '.join(attempted)}.{tail}")
     except Exception as exc:
         raise RuntimeError(f"Gemini model resolution failed: {exc}") from exc
 
