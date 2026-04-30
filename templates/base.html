@@ -7528,6 +7528,9 @@ window._dtPrintCustomize = function(title, color, icon) {
 <script src="{{ url_for('static', filename='js/session_sounds.js') }}"></script>
 <script>
 (function() {
+  if (window.fleetSessionSounds) {
+    window.fleetSessionSounds.installGlobalFeedbackSounds();
+  }
   var logoutPath = '{{ url_for("logout") }}';
   document.addEventListener('click', function(e) {
     var link = e.target.closest('a[href]');

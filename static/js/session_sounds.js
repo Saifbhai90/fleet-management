@@ -1,5 +1,9 @@
 /* Fleet session sounds (classic Windows-style chimes) */
 (function() {
+  var _lastFeedbackAt = 0;
+  var _feedbackGapMs = 700;
+  var _observerInstalled = false;
+
   function getCtx() {
     var Ctx = window.AudioContext || window.webkitAudioContext;
     if (!Ctx) return null;
@@ -81,7 +85,95 @@
           { f: 466.16, d: 240, o: 0.22, g: 0.07, w: 'sine' }
         ]);
       }
+      if (kind === 'workspace-load') {
+        return playPattern([
+          { f: 440.00, d: 90, o: 0.00, g: 0.052, w: 'triangle' },
+          { f: 554.37, d: 120, o: 0.09, g: 0.06, w: 'sine' },
+          { f: 698.46, d: 170, o: 0.20, g: 0.066, w: 'triangle' }
+        ]);
+      }
+      if (kind === 'warning') {
+        return playPattern([
+          { f: 784.00, d: 110, o: 0.00, g: 0.052, w: 'triangle' },
+          { f: 659.25, d: 130, o: 0.10, g: 0.058, w: 'sine' }
+        ]);
+      }
+      if (kind === 'error') {
+        return playPattern([
+          { f: 392.00, d: 120, o: 0.00, g: 0.06, w: 'square' },
+          { f: 329.63, d: 145, o: 0.11, g: 0.065, w: 'square' },
+          { f: 261.63, d: 190, o: 0.24, g: 0.07, w: 'triangle' }
+        ]);
+      }
       return Promise.resolve(false);
+    },
+    playFeedback: function(level) {
+      var now = Date.now();
+      if (now - _lastFeedbackAt < _feedbackGapMs) return Promise.resolve(false);
+      _lastFeedbackAt = now;
+      if (level === 'error') return this.play('error');
+      if (level === 'warning') return this.play('warning');
+      return Promise.resolve(false);
+    },
+    installGlobalFeedbackSounds: function() {
+      if (_observerInstalled) return;
+      _observerInstalled = true;
+      this.init();
+      var self = this;
+
+      function getLevel(el) {
+        if (!el || !el.classList) return '';
+        var cls = ' ' + (el.className || '') + ' ';
+        if (cls.indexOf(' danger ') !== -1 || cls.indexOf(' alert-danger ') !== -1 || cls.indexOf(' error ') !== -1 || cls.indexOf(' alert-error ') !== -1) return 'error';
+        if (cls.indexOf(' warning ') !== -1 || cls.indexOf(' alert-warning ') !== -1 || cls.indexOf(' message ') !== -1) return 'warning';
+        return '';
+      }
+
+      function scanAndPlay(root) {
+        if (!root || !root.querySelectorAll) return;
+        var nodes = root.querySelectorAll('.alert, .lp-toast, .toast, .swal2-popup');
+        var hasError = false;
+        var hasWarning = false;
+        nodes.forEach(function(n) {
+          var lvl = getLevel(n);
+          if (lvl === 'error') hasError = true;
+          if (lvl === 'warning') hasWarning = true;
+        });
+        if (hasError) { self.playFeedback('error'); return; }
+        if (hasWarning) self.playFeedback('warning');
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function() { scanAndPlay(document); }, { once: true });
+      } else {
+        scanAndPlay(document);
+      }
+
+      var observer = new MutationObserver(function(mutations) {
+        mutations.forEach(function(m) {
+          if (m.type === 'childList' && m.addedNodes && m.addedNodes.length) {
+            m.addedNodes.forEach(function(node) {
+              if (!node || node.nodeType !== 1) return;
+              var lvl = getLevel(node);
+              if (lvl) {
+                self.playFeedback(lvl);
+              } else {
+                scanAndPlay(node);
+              }
+            });
+          }
+          if (m.type === 'attributes' && m.target && m.target.nodeType === 1) {
+            var lvl2 = getLevel(m.target);
+            if (lvl2) self.playFeedback(lvl2);
+          }
+        });
+      });
+      observer.observe(document.body || document.documentElement, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['class']
+      });
     }
   };
 })();

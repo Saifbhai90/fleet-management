@@ -9,7 +9,7 @@
             <h4 class="mb-1">Employee Workspace</h4>
             <p class="text-muted mb-0">Working start karne ke liye pehle employee select karein.</p>
           </div>
-          <form method="post" action="{{ url_for('workspace_select_employee') }}">
+          <form method="post" action="{{ url_for('workspace_select_employee') }}" id="workspaceSelectForm">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="mb-3">
               <label class="form-label fw-semibold">Select Employee (Required)</label>
@@ -23,7 +23,7 @@
               </select>
               <div class="form-text">Name type karke employee ko asani se select karein.</div>
             </div>
-            <button type="submit" class="btn btn-primary btn-lg w-100">
+            <button type="submit" class="btn btn-primary btn-lg w-100" id="workspaceLoadBtn">
               <i class="bi bi-check2-circle me-1"></i>Load Workspace Dashboard
             </button>
           </form>
@@ -37,4 +37,24 @@
     </div>
   </div>
 </div>
+<script>
+(function() {
+  var form = document.getElementById('workspaceSelectForm');
+  var btn = document.getElementById('workspaceLoadBtn');
+  if (!form) return;
+
+  var isForwarding = false;
+  form.addEventListener('submit', function(e) {
+    if (isForwarding) return;
+    e.preventDefault();
+    isForwarding = true;
+    if (btn) btn.disabled = true;
+    if (window.fleetSessionSounds) {
+      window.fleetSessionSounds.init();
+      window.fleetSessionSounds.play('workspace-load').catch(function() {});
+    }
+    setTimeout(function() { form.submit(); }, 180);
+  });
+})();
+</script>
 {% endblock %}
