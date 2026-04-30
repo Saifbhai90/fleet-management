@@ -9,6 +9,7 @@
   .ai-history-list { overflow:auto; max-height: calc(100vh - 210px); padding-right: 2px; }
   .ai-chat { display: flex; flex-direction: column; min-height: 0; }
   .ai-header { border-bottom: 1px solid #edf2f7; padding: 14px 18px; display:flex; align-items:center; justify-content:space-between; }
+  .ai-health-badge { font-size: 12px; font-weight: 600; padding: 6px 10px; border-radius: 999px; border: 1px solid #cbd5e1; background: #f8fafc; color: #334155; white-space: nowrap; }
   .ai-history-item { border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px; margin-bottom: 8px; background: #f8fafc; }
   .ai-history-item:hover { background: #eef2ff; border-color: #c7d2fe; }
   .ai-history-row { display: flex; align-items: flex-start; gap: 8px; justify-content: space-between; }
@@ -49,6 +50,7 @@
           <div class="fw-bold"><i class="bi bi-robot me-1 text-primary"></i>Master Mind AI Analytics Engine</div>
           <small class="text-muted">Ask anything about Fleet, Payroll, Attendance, Fuel, Workspace and more.</small>
         </div>
+        <div id="aiHealthBadge" class="ai-health-badge">AI Health: --%</div>
       </div>
 
       <div id="messages" class="ai-messages"></div>
@@ -93,6 +95,7 @@
   var historyBtn = document.getElementById('historyBtn');
   var allHistoryListEl = document.getElementById('allHistoryList');
   var historySearchEl = document.getElementById('historySearch');
+  var healthBadgeEl = document.getElementById('aiHealthBadge');
   var csrfToken = (document.querySelector('meta[name="csrf-token"]') || {}).content || '';
   var allHistoryModalEl = document.getElementById('allHistoryModal');
   var historyModal = allHistoryModalEl ? new bootstrap.Modal(allHistoryModalEl, { backdrop: false, focus: false, keyboard: true }) : null;
@@ -392,8 +395,36 @@
     });
   }
 
+  function healthTone(score) {
+    if (score >= 85) return { bg: '#ecfdf5', border: '#10b981', text: '#065f46' };
+    if (score >= 70) return { bg: '#eff6ff', border: '#3b82f6', text: '#1e3a8a' };
+    if (score >= 55) return { bg: '#fffbeb', border: '#f59e0b', text: '#92400e' };
+    return { bg: '#fef2f2', border: '#ef4444', text: '#991b1b' };
+  }
+
+  function updateHealthBadge() {
+    if (!healthBadgeEl) return;
+    fetch('/api/ai/quality-score')
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (!data || !data.ok) throw new Error((data && data.error) || 'Health score unavailable');
+        var score = Number(data.score_percent || 0);
+        var sample = Number(data.sample_size || 0);
+        healthBadgeEl.textContent = 'AI Health: ' + score.toFixed(1) + '%';
+        healthBadgeEl.title = 'Sample size: ' + sample;
+        var tone = healthTone(score);
+        healthBadgeEl.style.background = tone.bg;
+        healthBadgeEl.style.borderColor = tone.border;
+        healthBadgeEl.style.color = tone.text;
+      })
+      .catch(function () {
+        healthBadgeEl.textContent = 'AI Health: N/A';
+      });
+  }
+
   function persistCurrentChat() {
     refreshConversationLists();
+    updateHealthBadge();
   }
 
   async function submitQuery(forcedMessage, keepInput) {
@@ -481,6 +512,7 @@
 
   loadHistory();
   renderAllHistory();
+  updateHealthBadge();
   addMessage('Master Mind AI ready. Aap data question puchain, chart bhi bana dunga.', 'ai');
 })();
 </script>

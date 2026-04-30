@@ -89,8 +89,8 @@ GROUP BY v.registration_no
 ORDER BY maintenance_total DESC
 LIMIT 10
 """
-_RATE_WINDOW_SECONDS = 300
-_RATE_LIMIT_PER_WINDOW = 25
+_RATE_WINDOW_SECONDS = int((os.environ.get("AI_RATE_WINDOW_SECONDS") or "300").strip() or "300")
+_RATE_LIMIT_PER_WINDOW = int((os.environ.get("AI_RATE_LIMIT_PER_WINDOW") or "25").strip() or "25")
 
 
 def _json_default(value):
@@ -279,6 +279,10 @@ def _enforce_scope(sql_query, table_names, policy, table_columns):
 
 def _rate_limit_guard(user_id):
     if not user_id:
+        return True, ""
+    ctx = get_user_context(user_id) if user_id else {}
+    is_admin_or_master = bool(session.get("is_master")) or bool(ctx.get("is_master_or_admin"))
+    if is_admin_or_master:
         return True, ""
     since_epoch = int(time.time()) - _RATE_WINDOW_SECONDS
     since_dt = datetime.utcfromtimestamp(since_epoch)
