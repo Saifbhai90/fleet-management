@@ -134,30 +134,49 @@ def _schema_context():
 def _ensure_ai_conversation_schema():
     global _AI_SCHEMA_CHECKED
     if _AI_SCHEMA_CHECKED:
-        return
+        return True, ""
     try:
-        insp = inspect(db.engine)
-        if "ai_conversation" not in insp.get_table_names():
-            _AI_SCHEMA_CHECKED = True
-            return
-        existing = {c.get("name") for c in insp.get_columns("ai_conversation")}
-        ddl_list = []
-        if "is_pinned" not in existing:
-            ddl_list.append("ALTER TABLE ai_conversation ADD COLUMN is_pinned BOOLEAN NOT NULL DEFAULT FALSE")
-        if "summary_text" not in existing:
-            ddl_list.append("ALTER TABLE ai_conversation ADD COLUMN summary_text TEXT")
-        if "pinned_facts_json" not in existing:
-            ddl_list.append("ALTER TABLE ai_conversation ADD COLUMN pinned_facts_json TEXT")
-        if "instruction_policy_json" not in existing:
-            ddl_list.append("ALTER TABLE ai_conversation ADD COLUMN instruction_policy_json TEXT")
-        for ddl in ddl_list:
-            db.session.execute(text(ddl))
-        if ddl_list:
+        required = {"is_pinned", "summary_text", "pinned_facts_json", "instruction_policy_json"}
+        dialect = (db.session.bind.dialect.name or "").lower()
+        for _ in range(2):
+            insp = inspect(db.engine)
+            if "ai_conversation" not in insp.get_table_names():
+                _AI_SCHEMA_CHECKED = True
+                return True, ""
+            existing = {c.get("name") for c in insp.get_columns("ai_conversation")}
+            missing = [c for c in required if c not in existing]
+            if not missing:
+                _AI_SCHEMA_CHECKED = True
+                return True, ""
+            ddl_list = []
+            for col in missing:
+                if col == "is_pinned":
+                    if dialect == "postgresql":
+                        ddl_list.append("ALTER TABLE ai_conversation ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN NOT NULL DEFAULT FALSE")
+                    else:
+                        ddl_list.append("ALTER TABLE ai_conversation ADD COLUMN is_pinned BOOLEAN NOT NULL DEFAULT FALSE")
+                elif col == "summary_text":
+                    if dialect == "postgresql":
+                        ddl_list.append("ALTER TABLE ai_conversation ADD COLUMN IF NOT EXISTS summary_text TEXT")
+                    else:
+                        ddl_list.append("ALTER TABLE ai_conversation ADD COLUMN summary_text TEXT")
+                elif col == "pinned_facts_json":
+                    if dialect == "postgresql":
+                        ddl_list.append("ALTER TABLE ai_conversation ADD COLUMN IF NOT EXISTS pinned_facts_json TEXT")
+                    else:
+                        ddl_list.append("ALTER TABLE ai_conversation ADD COLUMN pinned_facts_json TEXT")
+                elif col == "instruction_policy_json":
+                    if dialect == "postgresql":
+                        ddl_list.append("ALTER TABLE ai_conversation ADD COLUMN IF NOT EXISTS instruction_policy_json TEXT")
+                    else:
+                        ddl_list.append("ALTER TABLE ai_conversation ADD COLUMN instruction_policy_json TEXT")
+            for ddl in ddl_list:
+                db.session.execute(text(ddl))
             db.session.commit()
-    except Exception:
+        return False, "AI schema mismatch: missing required ai_conversation columns."
+    except Exception as exc:
         db.session.rollback()
-    finally:
-        _AI_SCHEMA_CHECKED = True
+        return False, f"AI schema migration failed: {exc}"
 
 
 def _schema_dictionary_text():
@@ -757,7 +776,9 @@ def ai_assistant():
 @ai_bp.route("/api/ai/query", methods=["POST"])
 @csrf.exempt
 def ai_query():
-    _ensure_ai_conversation_schema()
+    ok_schema, schema_err = _ensure_ai_conversation_schema()
+    if not ok_schema:
+        return jsonify({"ok": False, "error": schema_err}), 500
     started_at = time.time()
     payload = request.get_json(silent=True) or {}
     user_question = (payload.get("message") or "").strip()
@@ -1102,7 +1123,9 @@ def ai_recent():
 
 @ai_bp.route("/api/ai/conversations", methods=["GET"])
 def ai_conversations():
-    _ensure_ai_conversation_schema()
+    ok_schema, schema_err = _ensure_ai_conversation_schema()
+    if not ok_schema:
+        return jsonify({"ok": False, "error": schema_err}), 500
     uid = session.get("user_id")
     if not uid:
         return jsonify({"ok": False, "error": "Session expired."}), 401
@@ -1130,7 +1153,9 @@ def ai_conversations():
 @ai_bp.route("/api/ai/conversations/new", methods=["POST"])
 @csrf.exempt
 def ai_conversation_new():
-    _ensure_ai_conversation_schema()
+    ok_schema, schema_err = _ensure_ai_conversation_schema()
+    if not ok_schema:
+        return jsonify({"ok": False, "error": schema_err}), 500
     uid = session.get("user_id")
     if not uid:
         return jsonify({"ok": False, "error": "Session expired."}), 401
@@ -1145,7 +1170,9 @@ def ai_conversation_new():
 @ai_bp.route("/api/ai/conversations/<int:conversation_id>", methods=["GET", "PATCH", "DELETE"])
 @csrf.exempt
 def ai_conversation_detail(conversation_id):
-    _ensure_ai_conversation_schema()
+    ok_schema, schema_err = _ensure_ai_conversation_schema()
+    if not ok_schema:
+        return jsonify({"ok": False, "error": schema_err}), 500
     uid = session.get("user_id")
     if not uid:
         return jsonify({"ok": False, "error": "Session expired."}), 401
