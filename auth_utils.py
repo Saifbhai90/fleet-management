@@ -297,6 +297,8 @@ ENDPOINT_PERMISSION_MAP = [
     ('ai.ai_conversation_detail', 'report_ai'),
     ('ai_quality_score', 'report_ai'),
     ('ai.ai_quality_score', 'report_ai'),
+    ('ai_debug_status', 'report_ai'),
+    ('ai.ai_debug_status', 'report_ai'),
     ('driver_attendance_report', 'driver_attendance_report'),
     ('active_drivers_report', 'active_drivers_report'),
     ('driver_salary_slip', 'driver_salary_slip'),

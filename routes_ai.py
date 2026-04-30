@@ -14,7 +14,7 @@ from sqlalchemy import inspect, text
 from werkzeug.exceptions import HTTPException
 
 from app import csrf, db
-from auth_utils import get_user_context
+from auth_utils import get_required_permission, get_user_context, user_can_access
 from models import AIAssistantQueryLog, AIConversation, AIConversationMessage
 
 
@@ -1050,6 +1050,30 @@ def ai_quality_score():
                 "blocked_rate_percent": round(blocked_rate, 1),
                 "avg_latency_ms": int(avg_latency),
                 "chart_response_ratio_percent": round((chart_hits / total) * 100.0, 1),
+            },
+        }
+    )
+
+
+@ai_bp.route("/api/ai/debug-status", methods=["GET"])
+def ai_debug_status():
+    uid = session.get("user_id")
+    endpoint = request.endpoint or "ai.ai_debug_status"
+    required = get_required_permission(endpoint)
+    perms = session.get("permissions") or []
+    has_access = True if session.get("is_master") else user_can_access(perms, required)
+    return jsonify(
+        {
+            "ok": True,
+            "debug": {
+                "path": request.path,
+                "method": request.method,
+                "endpoint": endpoint,
+                "logged_in": bool(session.get("user")),
+                "user_id": uid,
+                "is_master": bool(session.get("is_master")),
+                "required_permission": required,
+                "has_permission": bool(has_access),
             },
         }
     )
