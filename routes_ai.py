@@ -12,7 +12,7 @@ from sqlalchemy import inspect, text
 
 from app import csrf, db
 from auth_utils import get_user_context
-from models import AIAssistantQueryLog
+from models import AIAssistantQueryLog, AIConversation, AIConversationMessage
 
 
 ai_bp = Blueprint("ai", __name__)
@@ -252,6 +252,30 @@ def _log_query(question, sql_query, rows_count, status, error_message="", chart_
         db.session.rollback()
 
 
+def _get_or_create_conversation(user_id, conversation_id, first_question):
+    conv = None
+    if conversation_id:
+        conv = AIConversation.query.filter_by(id=conversation_id, user_id=user_id).first()
+    if not conv:
+        title = (first_question or "New AI Chat").strip()[:220] or "New AI Chat"
+        conv = AIConversation(user_id=user_id, title=title)
+        db.session.add(conv)
+        db.session.flush()
+    return conv
+
+
+def _add_conversation_message(conversation, role, content, sql_query=None, chart_data=None):
+    msg = AIConversationMessage(
+        conversation_id=conversation.id,
+        role=role,
+        content=content or "",
+        sql_query=sql_query,
+        chart_json=json.dumps(chart_data, default=_json_default) if chart_data else None,
+    )
+    db.session.add(msg)
+    conversation.updated_at = datetime.utcnow()
+
+
 def _call_gemini(prompt, temperature=0.1):
     api_key = (os.environ.get("GOOGLE_API_KEY") or "").strip()
     if not api_key:
@@ -391,8 +415,17 @@ def ai_query():
     started_at = time.time()
     payload = request.get_json(silent=True) or {}
     user_question = (payload.get("message") or "").strip()
+    conversation_id = payload.get("conversation_id")
+    uid = session.get("user_id")
     if not user_question:
         return jsonify({"ok": False, "error": "Question is required."}), 400
+
+    if not uid:
+        return jsonify({"ok": False, "error": "Session expired. Please login again."}), 401
+
+    conversation = _get_or_create_conversation(uid, conversation_id, user_question)
+    _add_conversation_message(conversation, "user", user_question)
+    db.session.commit()
 
     schema = _schema_context()
     policy = _scope_policy_for_user()
@@ -452,6 +485,8 @@ Content:
                 False,
                 int((time.time() - started_at) * 1000),
             )
+            _add_conversation_message(conversation, "assistant", f"Failed to generate SQL: {inner_exc}")
+            db.session.commit()
             return jsonify({"ok": False, "error": f"Failed to generate SQL: {inner_exc}"}), 500
 
     sql_query = _extract_sql((parsed or {}).get("sql", ""))
@@ -465,6 +500,8 @@ Content:
             bool((parsed or {}).get("chart", {}).get("requested")),
             int((time.time() - started_at) * 1000),
         )
+        _add_conversation_message(conversation, "assistant", "Generated query was blocked because it was not read-only.")
+        db.session.commit()
         return jsonify(
             {
                 "ok": False,
@@ -484,6 +521,8 @@ Content:
             bool((parsed or {}).get("chart", {}).get("requested")),
             int((time.time() - started_at) * 1000),
         )
+        _add_conversation_message(conversation, "assistant", reason)
+        db.session.commit()
         return jsonify({"ok": False, "error": reason}), 403
 
     table_columns = _table_columns_map()
@@ -498,6 +537,8 @@ Content:
             bool((parsed or {}).get("chart", {}).get("requested")),
             int((time.time() - started_at) * 1000),
         )
+        _add_conversation_message(conversation, "assistant", scope_reason)
+        db.session.commit()
         return jsonify({"ok": False, "error": scope_reason}), 403
 
     safe_sql = f"SELECT * FROM ({sql_query}) AS ai_q LIMIT 500"
@@ -514,6 +555,8 @@ Content:
             bool((parsed or {}).get("chart", {}).get("requested")),
             int((time.time() - started_at) * 1000),
         )
+        _add_conversation_message(conversation, "assistant", f"SQL execution failed: {exc}", sql_query=sql_query)
+        db.session.commit()
         return jsonify({"ok": False, "error": f"SQL execution failed: {exc}", "sql": sql_query}), 400
 
     explain_prompt = f"""
@@ -545,6 +588,8 @@ Total rows fetched: {len(rows)}
 
     elapsed_ms = int((time.time() - started_at) * 1000)
     _log_query(user_question, sql_query, len(rows), "success", "", wants_chart, elapsed_ms)
+    _add_conversation_message(conversation, "assistant", answer_text, sql_query=sql_query, chart_data=chart_data)
+    db.session.commit()
 
     return jsonify(
         {
@@ -556,6 +601,7 @@ Total rows fetched: {len(rows)}
             "chart_data": chart_data,
             "next_steps": next_steps,
             "duration_ms": elapsed_ms,
+            "conversation_id": conversation.id,
         }
     )
 
@@ -579,4 +625,90 @@ def ai_recent():
         for r in rows
     ]
     return jsonify({"ok": True, "items": out})
+
+
+@ai_bp.route("/api/ai/conversations", methods=["GET"])
+def ai_conversations():
+    uid = session.get("user_id")
+    if not uid:
+        return jsonify({"ok": False, "error": "Session expired."}), 401
+    rows = (
+        AIConversation.query
+        .filter_by(user_id=uid)
+        .order_by(AIConversation.is_pinned.desc(), AIConversation.updated_at.desc())
+        .limit(200)
+        .all()
+    )
+    items = [
+        {
+            "id": r.id,
+            "title": r.title,
+            "is_pinned": bool(r.is_pinned),
+            "created_at": r.created_at.isoformat() if r.created_at else "",
+            "updated_at": r.updated_at.isoformat() if r.updated_at else "",
+            "message_count": len(r.messages or []),
+        }
+        for r in rows
+    ]
+    return jsonify({"ok": True, "items": items})
+
+
+@ai_bp.route("/api/ai/conversations/new", methods=["POST"])
+@csrf.exempt
+def ai_conversation_new():
+    uid = session.get("user_id")
+    if not uid:
+        return jsonify({"ok": False, "error": "Session expired."}), 401
+    payload = request.get_json(silent=True) or {}
+    title = ((payload.get("title") or "New AI Chat").strip()[:220]) or "New AI Chat"
+    conv = AIConversation(user_id=uid, title=title)
+    db.session.add(conv)
+    db.session.commit()
+    return jsonify({"ok": True, "id": conv.id})
+
+
+@ai_bp.route("/api/ai/conversations/<int:conversation_id>", methods=["GET"])
+def ai_conversation_detail(conversation_id):
+    uid = session.get("user_id")
+    if not uid:
+        return jsonify({"ok": False, "error": "Session expired."}), 401
+    conv = AIConversation.query.filter_by(id=conversation_id, user_id=uid).first()
+    if not conv:
+        return jsonify({"ok": False, "error": "Conversation not found."}), 404
+    msgs = (
+        AIConversationMessage.query
+        .filter_by(conversation_id=conv.id)
+        .order_by(AIConversationMessage.created_at.asc())
+        .all()
+    )
+    items = []
+    for m in msgs:
+        chart_data = None
+        if m.chart_json:
+            try:
+                chart_data = json.loads(m.chart_json)
+            except Exception:
+                chart_data = None
+        items.append(
+            {
+                "id": m.id,
+                "role": m.role,
+                "content": m.content,
+                "sql_query": m.sql_query,
+                "chart_data": chart_data,
+                "created_at": m.created_at.isoformat() if m.created_at else "",
+            }
+        )
+    return jsonify(
+        {
+            "ok": True,
+            "conversation": {
+                "id": conv.id,
+                "title": conv.title,
+                "is_pinned": bool(conv.is_pinned),
+                "updated_at": conv.updated_at.isoformat() if conv.updated_at else "",
+            },
+            "messages": items,
+        }
+    )
 

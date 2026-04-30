@@ -1326,6 +1326,41 @@ class AIAssistantQueryLog(db.Model):
         return f'<AIAssistantQueryLog id={self.id} status={self.status}>'
 
 
+class AIConversation(db.Model):
+    """Conversation container for Master Mind AI chats."""
+    __tablename__ = 'ai_conversation'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False, index=True)
+    title = db.Column(db.String(240), nullable=False)
+    is_pinned = db.Column(db.Boolean, nullable=False, default=False, index=True)
+    created_at = db.Column(db.DateTime, default=pk_now, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=pk_now, onupdate=pk_now, nullable=False, index=True)
+
+    user = db.relationship('User', backref='ai_conversations', lazy='select')
+
+    def __repr__(self):
+        return f'<AIConversation id={self.id} user_id={self.user_id}>'
+
+
+class AIConversationMessage(db.Model):
+    """Individual messages inside AI conversation."""
+    __tablename__ = 'ai_conversation_message'
+
+    id = db.Column(db.Integer, primary_key=True)
+    conversation_id = db.Column(db.Integer, db.ForeignKey('ai_conversation.id', ondelete='CASCADE'), nullable=False, index=True)
+    role = db.Column(db.String(20), nullable=False)  # user|assistant
+    content = db.Column(db.Text, nullable=False)
+    sql_query = db.Column(db.Text, nullable=True)
+    chart_json = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=pk_now, nullable=False, index=True)
+
+    conversation = db.relationship('AIConversation', backref='messages', lazy='select')
+
+    def __repr__(self):
+        return f'<AIConversationMessage id={self.id} role={self.role}>'
+
+
 # ────────────────────────────────────────────────
 # Form Control: Attendance time windows (Morning / Night shift)
 # Single row: kis time se kis time tak attendance lag sakti hai

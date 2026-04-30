@@ -5,7 +5,8 @@
 <style>
   .ai-shell { display: grid; grid-template-columns: 300px 1fr; gap: 16px; min-height: calc(100vh - 110px); }
   .ai-panel { background: #fff; border: 1px solid #e5e7eb; border-radius: 16px; box-shadow: 0 8px 24px rgba(2, 6, 23, 0.05); }
-  .ai-sidebar { padding: 14px; overflow: auto; }
+  .ai-sidebar { padding: 14px; display:flex; flex-direction:column; min-height: 0; }
+  .ai-history-list { overflow:auto; max-height: calc(100vh - 210px); padding-right: 2px; }
   .ai-chat { display: flex; flex-direction: column; min-height: 0; }
   .ai-header { border-bottom: 1px solid #edf2f7; padding: 14px 18px; display:flex; align-items:center; justify-content:space-between; }
   .ai-history-item { border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px; margin-bottom: 8px; cursor: pointer; background: #f8fafc; }
@@ -30,9 +31,12 @@
     <aside class="ai-panel ai-sidebar">
       <div class="d-flex align-items-center justify-content-between mb-2">
         <h6 class="mb-0 fw-bold"><i class="bi bi-stars text-warning me-1"></i>Recent Chats</h6>
-        <button id="newChatBtn" class="btn btn-sm btn-outline-primary">New</button>
+        <div class="d-flex gap-1">
+          <button id="historyBtn" class="btn btn-sm btn-outline-secondary">History</button>
+          <button id="newChatBtn" class="btn btn-sm btn-outline-primary">New</button>
+        </div>
       </div>
-      <div id="historyList"></div>
+      <div id="historyList" class="ai-history-list"></div>
     </aside>
 
     <section class="ai-panel ai-chat">
@@ -52,14 +56,29 @@
     </section>
   </div>
 </div>
+
+<div class="modal fade" id="allHistoryModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-clock-history me-1"></i>Chat History</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <input id="historySearch" type="text" class="form-control mb-3" placeholder="Search history...">
+        <div id="allHistoryList"></div>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 (function () {
-  var STORAGE_KEY = 'fleet_ai_recent_chats_v1';
   var history = [];
+  var currentConversationId = null;
   var thinkingNode = null;
 
   var messagesEl = document.getElementById('messages');
@@ -67,36 +86,79 @@
   var inputEl = document.getElementById('aiInput');
   var sendBtn = document.getElementById('sendBtn');
   var newChatBtn = document.getElementById('newChatBtn');
+  var historyBtn = document.getElementById('historyBtn');
+  var allHistoryListEl = document.getElementById('allHistoryList');
+  var historySearchEl = document.getElementById('historySearch');
   var csrfToken = (document.querySelector('meta[name="csrf-token"]') || {}).content || '';
+  var allHistoryModalEl = document.getElementById('allHistoryModal');
+  var historyModal = allHistoryModalEl ? new bootstrap.Modal(allHistoryModalEl) : null;
 
-  function loadHistory() {
-    try { history = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch (_) { history = []; }
-    if (!Array.isArray(history)) history = [];
-    renderHistory();
-    fetch('/api/ai/recent?limit=12')
+  function fetchConversations() {
+    return fetch('/api/ai/conversations')
       .then(function (r) { return r.json(); })
       .then(function (data) {
-        if (!data || !data.ok || !Array.isArray(data.items)) return;
-        var serverItems = data.items.map(function (it) {
+        if (!data || !data.ok || !Array.isArray(data.items)) return [];
+        return data.items.map(function (it) {
           return {
-            title: it.question || ('AI Query #' + it.id),
-            question: it.question || '',
-            ts: it.created_at ? new Date(it.created_at).getTime() : Date.now(),
-            html: '',
-            meta: (it.status || 'n/a') + ' • rows: ' + (it.rows_count || 0)
+            id: it.id,
+            title: it.title || ('Chat #' + it.id),
+            ts: it.updated_at ? new Date(it.updated_at).getTime() : Date.now(),
+            meta: (it.message_count || 0) + ' msgs',
+            is_pinned: !!it.is_pinned
           };
         });
-        if (serverItems.length) {
-          history = serverItems.concat(history).slice(0, 20);
-          renderHistory();
-        }
       })
-      .catch(function () {});
+      .catch(function () { return []; });
+  }
+
+  function loadHistory() {
+    history = [];
+    renderHistory();
+    fetchConversations().then(function (items) {
+      history = items.slice(0, 200);
+      renderHistory();
+      renderAllHistory();
+    });
   }
 
   function saveHistory() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(history.slice(0, 20)));
     renderHistory();
+    renderAllHistory();
+  }
+
+  function loadHistoryItem(item) {
+    if (!item || !item.id) {
+      addMessage('Selected chat has no saved content yet.', 'ai');
+      return;
+    }
+    fetch('/api/ai/conversations/' + encodeURIComponent(item.id))
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (!data || !data.ok) {
+          addMessage((data && data.error) || 'Unable to load selected conversation.', 'ai');
+          return;
+        }
+        currentConversationId = item.id;
+        renderConversationMessages(data.messages || []);
+      })
+      .catch(function (err) {
+        addMessage('Unable to open chat history: ' + (err && err.message ? err.message : err), 'ai');
+      });
+  }
+
+  function renderConversationMessages(messages) {
+    messagesEl.innerHTML = '';
+    if (!Array.isArray(messages) || !messages.length) {
+      addMessage('No messages in this conversation yet.', 'ai');
+      return;
+    }
+    messages.forEach(function (m) {
+      var node = addMessage(m.content || '', m.role === 'user' ? 'user' : 'ai');
+      if (m.role === 'assistant') {
+        if (m.sql_query) addSqlButton(node, m.sql_query);
+        if (m.chart_data) addChart(node, m.chart_data);
+      }
+    });
   }
 
   function renderHistory() {
@@ -105,25 +167,49 @@
       historyEl.innerHTML = '<div class="text-muted small">No chat yet.</div>';
       return;
     }
-    history.forEach(function (item, idx) {
+    var previewItems = history.slice(0, 6);
+    previewItems.forEach(function (item, idx) {
       var div = document.createElement('div');
       div.className = 'ai-history-item';
       div.innerHTML = '<div class="fw-semibold small">' + escapeHtml(item.title || 'Chat') + '</div><div class="text-muted small">' + new Date(item.ts).toLocaleString() + '</div>' + (item.meta ? '<div class="text-muted small">' + escapeHtml(item.meta) + '</div>' : '');
       div.addEventListener('click', function () {
-        if (item.html) {
-          messagesEl.innerHTML = item.html;
-          messagesEl.scrollTop = messagesEl.scrollHeight;
-          return;
-        }
-        if (item.question) {
-          messagesEl.innerHTML = '';
-          submitQuery(item.question, true);
-          return;
-        }
-        addMessage('Selected chat has no saved content yet.', 'ai');
+        loadHistoryItem(item);
       });
       if (idx === 0) div.style.borderColor = '#93c5fd';
       historyEl.appendChild(div);
+    });    
+    if (history.length > 6) {
+      var more = document.createElement('button');
+      more.className = 'btn btn-sm btn-light w-100 mt-1';
+      more.textContent = 'View all history (' + history.length + ')';
+      more.addEventListener('click', function () { if (historyModal) historyModal.show(); });
+      historyEl.appendChild(more);
+    }
+  }
+
+  function renderAllHistory() {
+    if (!allHistoryListEl) return;
+    var q = (historySearchEl && historySearchEl.value || '').trim().toLowerCase();
+    allHistoryListEl.innerHTML = '';
+    var filtered = history.filter(function (item) {
+      if (!q) return true;
+      var t = (item.title || '').toLowerCase();
+      var m = (item.meta || '').toLowerCase();
+      return t.indexOf(q) !== -1 || m.indexOf(q) !== -1;
+    });
+    if (!filtered.length) {
+      allHistoryListEl.innerHTML = '<div class="text-muted small">No matching history.</div>';
+      return;
+    }
+    filtered.forEach(function (item) {
+      var row = document.createElement('div');
+      row.className = 'ai-history-item';
+      row.innerHTML = '<div class="fw-semibold small">' + escapeHtml(item.title || 'Chat') + '</div><div class="text-muted small">' + new Date(item.ts).toLocaleString() + '</div>' + (item.meta ? '<div class="text-muted small">' + escapeHtml(item.meta) + '</div>' : '');
+      row.addEventListener('click', function () {
+        loadHistoryItem(item);
+        if (historyModal) historyModal.hide();
+      });
+      allHistoryListEl.appendChild(row);
     });
   }
 
@@ -200,9 +286,11 @@
     });
   }
 
-  function persistCurrentChat(title) {
-    history.unshift({ title: title || 'AI Chat', ts: Date.now(), html: messagesEl.innerHTML });
-    saveHistory();
+  function persistCurrentChat() {
+    fetchConversations().then(function (items) {
+      history = items.slice(0, 200);
+      saveHistory();
+    });
   }
 
   async function submitQuery(forcedMessage, keepInput) {
@@ -219,7 +307,7 @@
           'Content-Type': 'application/json',
           'X-CSRFToken': csrfToken
         },
-        body: JSON.stringify({ message: msg })
+        body: JSON.stringify({ message: msg, conversation_id: currentConversationId })
       });
       var ct = (resp.headers.get('content-type') || '').toLowerCase();
       var data;
@@ -236,11 +324,12 @@
       if (!data.ok) {
         addMessage(data.error || 'Request failed.', 'ai');
       } else {
+        if (data.conversation_id) currentConversationId = data.conversation_id;
         var aiNode = addMessage(data.answer || 'No answer generated.', 'ai');
         if (data.sql) addSqlButton(aiNode, data.sql);
         if (data.chart_data) addChart(aiNode, data.chart_data);
         if (data.next_steps) addNextSteps(aiNode, data.next_steps);
-        persistCurrentChat(msg.substring(0, 70));
+        persistCurrentChat();
       }
     } catch (err) {
       hideThinking();
@@ -258,9 +347,37 @@
       submitQuery();
     }
   });
-  newChatBtn.addEventListener('click', function () { messagesEl.innerHTML = ''; inputEl.focus(); });
+  newChatBtn.addEventListener('click', function () {
+    fetch('/api/ai/conversations/new', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+      body: JSON.stringify({ title: 'New AI Chat' })
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        currentConversationId = (data && data.ok && data.id) ? data.id : null;
+        messagesEl.innerHTML = '';
+        inputEl.focus();
+        persistCurrentChat();
+      })
+      .catch(function () {
+        currentConversationId = null;
+        messagesEl.innerHTML = '';
+        inputEl.focus();
+      });
+  });
+  if (historyBtn) {
+    historyBtn.addEventListener('click', function () {
+      renderAllHistory();
+      if (historyModal) historyModal.show();
+    });
+  }
+  if (historySearchEl) {
+    historySearchEl.addEventListener('input', renderAllHistory);
+  }
 
   loadHistory();
+  renderAllHistory();
   addMessage('Master Mind AI ready. Aap data question puchain, chart bhi bana dunga.', 'ai');
 })();
 </script>
