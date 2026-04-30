@@ -2,6 +2,7 @@ import json
 import os
 import re
 import time
+from collections import defaultdict
 from datetime import date, datetime
 from decimal import Decimal
 from urllib import error as url_error
@@ -58,6 +59,37 @@ _DOMAIN_PACKS = {
     "maintenance": "Maintenance analytics focus: maintenance_expense, maintenance_work_order, oil_expense, vehicle. Prefer cost by category, vehicle, and month.",
     "workspace": "Workspace finance focus: workspace_* tables, workspace_journal_entry, workspace_expense, workspace_fund_transfer, month close summaries.",
 }
+_TABLE_BUSINESS_HINTS = {
+    "fuel_expense": "Fuel costs with date, amount, vehicle/project links.",
+    "vehicle": "Vehicle master (registration, model, assignment fields).",
+    "driver_attendance": "Daily driver attendance and check-in/out pattern.",
+    "monthly_payroll": "Monthly payroll aggregates (salary/payable/payment status).",
+    "workspace_expense": "Workspace operational expenses by account/category/date.",
+    "district": "Geographic/administrative location dimension.",
+    "project": "Project/client/site dimension used for scoping.",
+}
+_SQL_FEW_SHOTS = """
+Example 1
+Question: "Last 6 months fuel trend by month"
+SQL:
+SELECT strftime('%Y-%m', fe.expense_date) AS month, SUM(fe.amount) AS total_fuel_amount
+FROM fuel_expense fe
+GROUP BY strftime('%Y-%m', fe.expense_date)
+ORDER BY month DESC
+LIMIT 6
+
+Example 2
+Question: "Top 10 vehicles by maintenance spend"
+SQL:
+SELECT v.registration_no AS vehicle, SUM(me.amount) AS maintenance_total
+FROM maintenance_expense me
+JOIN vehicle v ON v.id = me.vehicle_id
+GROUP BY v.registration_no
+ORDER BY maintenance_total DESC
+LIMIT 10
+"""
+_RATE_WINDOW_SECONDS = 300
+_RATE_LIMIT_PER_WINDOW = 25
 
 
 def _json_default(value):
@@ -93,6 +125,16 @@ def _schema_context():
             tag_suffix = f" [{' | '.join(tags)}]" if tags else ""
             lines.append(f"  - {name}: {col_type}{tag_suffix}")
     return "\n".join(lines)
+
+
+def _schema_dictionary_text():
+    insp = inspect(db.engine)
+    lines = []
+    for table_name in sorted(insp.get_table_names()):
+        hint = _TABLE_BUSINESS_HINTS.get(table_name)
+        if hint:
+            lines.append(f"- {table_name}: {hint}")
+    return "\n".join(lines) if lines else "- No table hints configured."
 
 
 def _table_columns_map():
@@ -231,6 +273,38 @@ def _enforce_scope(sql_query, table_names, policy, table_columns):
             return False, "Scoped access: query must include project_id filter for your assigned projects."
         if "district_id" in cols and allowed_districts and "district_id" not in sql_l:
             return False, "Scoped access: query must include district_id filter for your assigned districts."
+    return True, ""
+
+
+def _rate_limit_guard(user_id):
+    if not user_id:
+        return True, ""
+    since_epoch = int(time.time()) - _RATE_WINDOW_SECONDS
+    since_dt = datetime.utcfromtimestamp(since_epoch)
+    cnt = (
+        AIAssistantQueryLog.query
+        .filter(AIAssistantQueryLog.user_id == user_id)
+        .filter(AIAssistantQueryLog.created_at >= since_dt)
+        .count()
+    )
+    if cnt >= _RATE_LIMIT_PER_WINDOW:
+        return False, f"Rate limit exceeded: {_RATE_LIMIT_PER_WINDOW} requests in {_RATE_WINDOW_SECONDS // 60} minutes."
+    return True, ""
+
+
+def _preflight_validate_sql(sql_query):
+    q = (sql_query or "").strip().lower()
+    if not q:
+        return False, "Generated SQL is empty."
+    if re.search(r"\blimit\s+([0-9]+)\b", q):
+        try:
+            lim = int(re.search(r"\blimit\s+([0-9]+)\b", q).group(1))
+            if lim > 2000:
+                return False, "SQL limit too high (max 2000)."
+        except Exception:
+            pass
+    if "select *" in q:
+        return False, "Avoid SELECT * for safety/performance. Please ask focused columns."
     return True, ""
 
 
@@ -559,6 +633,12 @@ def ai_query():
 
     if not uid:
         return jsonify({"ok": False, "error": "Session expired. Please login again."}), 401
+    if len(user_question) > 2000:
+        return jsonify({"ok": False, "error": "Question too long. Keep it under 2000 characters."}), 400
+    if not session.get("is_master"):
+        ok_rate, rate_reason = _rate_limit_guard(uid)
+        if not ok_rate:
+            return jsonify({"ok": False, "error": rate_reason}), 429
 
     conversation = _get_or_create_conversation(uid, conversation_id, user_question)
     _add_conversation_message(conversation, "user", user_question)
@@ -570,6 +650,7 @@ def ai_query():
     policy = _scope_policy_for_user()
     scope_fragment = _scope_prompt_fragment(policy)
     domain_pack = _prompt_pack_for_question(user_question)
+    schema_dictionary = _schema_dictionary_text()
     sql_prompt = f"""
 You are a FleetManager SQL analyst.
 Return ONLY strict JSON (no markdown) with keys:
@@ -590,9 +671,16 @@ Rules:
    - Second: latest user instruction in this conversation.
    - Third: preserve pinned key facts from memory.
    - Fourth: use older summary only as fallback context.
+9) Keep query efficient: avoid SELECT *, avoid unnecessary wide joins, and keep LIMIT sensible.
 
 Domain guidance:
 {domain_pack}
+
+Business data dictionary:
+{schema_dictionary}
+
+Few-shot SQL patterns:
+{_SQL_FEW_SHOTS}
 
 User scope constraints:
 {scope_fragment}
@@ -607,7 +695,9 @@ Database schema:
 {schema}
 """
     try:
-        llm_raw = _call_gemini(sql_prompt, temperature=0.05)
+        # Lightweight routing: complex aggregation/join requests get higher-quality model.
+        complex_need = any(k in user_question.lower() for k in ("join", "trend", "forecast", "compare", "breakdown", "correlation"))
+        llm_raw = _call_gemini(sql_prompt, temperature=0.05 if complex_need else 0.02)
         parsed = _parse_llm_json(llm_raw)
     except Exception as exc:
         # One recovery attempt: ask model to normalize output into strict JSON.
@@ -657,6 +747,21 @@ Content:
                 "error": "Generated query was not read-only. Please rephrase your question.",
             }
         ), 400
+    preflight_ok, preflight_reason = _preflight_validate_sql(sql_query)
+    if not preflight_ok:
+        _log_query(
+            user_question,
+            sql_query,
+            0,
+            "blocked",
+            preflight_reason,
+            bool((parsed or {}).get("chart", {}).get("requested")),
+            int((time.time() - started_at) * 1000),
+        )
+        _add_conversation_message(conversation, "assistant", preflight_reason)
+        _refresh_conversation_memory(conversation)
+        db.session.commit()
+        return jsonify({"ok": False, "error": preflight_reason}), 400
 
     table_names = _extract_table_names(sql_query)
     allowed, reason = _allow_tables_for_current_user(table_names)
@@ -694,6 +799,7 @@ Content:
 
     safe_sql = f"SELECT * FROM ({sql_query}) AS ai_q LIMIT 500"
     try:
+        db.session.execute(text("EXPLAIN " + sql_query))
         result = db.session.execute(text(safe_sql))
         rows = _rows_to_dicts(result)
     except Exception as exc:
@@ -757,6 +863,52 @@ Total rows fetched: {len(rows)}
             "next_steps": next_steps,
             "duration_ms": elapsed_ms,
             "conversation_id": conversation.id,
+        }
+    )
+
+
+@ai_bp.route("/api/ai/quality-score", methods=["GET"])
+def ai_quality_score():
+    uid = session.get("user_id")
+    if not uid:
+        return jsonify({"ok": False, "error": "Session expired."}), 401
+    q = AIAssistantQueryLog.query
+    if not session.get("is_master"):
+        q = q.filter(AIAssistantQueryLog.user_id == uid)
+    rows = q.order_by(AIAssistantQueryLog.created_at.desc()).limit(300).all()
+    if not rows:
+        return jsonify({"ok": True, "score_percent": 0, "sample_size": 0, "breakdown": {}})
+
+    status_counts = defaultdict(int)
+    durations = []
+    chart_hits = 0
+    for r in rows:
+        status_counts[r.status or "unknown"] += 1
+        if isinstance(r.duration_ms, int):
+            durations.append(r.duration_ms)
+        if r.chart_requested:
+            chart_hits += 1
+
+    total = len(rows)
+    success_rate = (status_counts.get("success", 0) / total) * 100.0
+    blocked_rate = (status_counts.get("blocked", 0) / total) * 100.0
+    avg_latency = (sum(durations) / len(durations)) if durations else 0
+    latency_score = 100 if avg_latency <= 3000 else max(20, 100 - ((avg_latency - 3000) / 120))
+    chart_score = min(100, (chart_hits / total) * 180)  # 55%+ chart usage reaches 100
+
+    final_score = round((success_rate * 0.55) + (latency_score * 0.25) + (chart_score * 0.20) - (blocked_rate * 0.10), 1)
+    final_score = max(0, min(100, final_score))
+    return jsonify(
+        {
+            "ok": True,
+            "score_percent": final_score,
+            "sample_size": total,
+            "breakdown": {
+                "success_rate_percent": round(success_rate, 1),
+                "blocked_rate_percent": round(blocked_rate, 1),
+                "avg_latency_ms": int(avg_latency),
+                "chart_response_ratio_percent": round((chart_hits / total) * 100.0, 1),
+            },
         }
     )
 
