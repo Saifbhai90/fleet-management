@@ -17,7 +17,12 @@ from models import AIAssistantQueryLog
 
 ai_bp = Blueprint("ai", __name__)
 
-_GEMINI_MODEL = "gemini-1.5-pro"
+_DEFAULT_GEMINI_MODEL = "gemini-1.5-pro"
+_GEMINI_FALLBACK_MODELS = [
+    "gemini-2.5-flash",
+    "gemini-2.0-flash",
+    "gemini-1.5-flash",
+]
 _FORBIDDEN_SQL = (
     "insert",
     "update",
@@ -225,33 +230,83 @@ def _call_gemini(prompt, temperature=0.1):
     if not api_key:
         raise RuntimeError("GOOGLE_API_KEY is missing in environment variables.")
 
-    url = (
-        f"https://generativelanguage.googleapis.com/v1beta/models/{_GEMINI_MODEL}:generateContent"
-        f"?key={api_key}"
-    )
-    payload = {
-        "generationConfig": {"temperature": temperature},
-        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-    }
-    data = json.dumps(payload).encode("utf-8")
-    req = url_request.Request(url, data=data, method="POST")
-    req.add_header("Content-Type", "application/json")
+    preferred = (os.environ.get("GEMINI_MODEL") or "").strip() or _DEFAULT_GEMINI_MODEL
 
-    try:
+    def _post_generate(model_name):
+        url = (
+            f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent"
+            f"?key={api_key}"
+        )
+        payload = {
+            "generationConfig": {"temperature": temperature},
+            "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+        }
+        data = json.dumps(payload).encode("utf-8")
+        req = url_request.Request(url, data=data, method="POST")
+        req.add_header("Content-Type", "application/json")
         with url_request.urlopen(req, timeout=45) as resp:
-            body = json.loads(resp.read().decode("utf-8"))
-    except url_error.HTTPError as exc:
-        err_body = exc.read().decode("utf-8", errors="ignore")
-        raise RuntimeError(f"Gemini HTTP {exc.code}: {err_body[:300]}") from exc
-    except Exception as exc:
-        raise RuntimeError(f"Gemini request failed: {exc}") from exc
+            return json.loads(resp.read().decode("utf-8"))
 
-    candidates = body.get("candidates") or []
-    if not candidates:
-        raise RuntimeError("Gemini did not return any candidate response.")
-    parts = (((candidates[0] or {}).get("content") or {}).get("parts")) or []
-    text_chunks = [p.get("text", "") for p in parts if isinstance(p, dict)]
-    return "\n".join([t for t in text_chunks if t]).strip()
+    def _available_models():
+        list_url = f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}"
+        req = url_request.Request(list_url, method="GET")
+        with url_request.urlopen(req, timeout=30) as resp:
+            body = json.loads(resp.read().decode("utf-8"))
+        out = []
+        for model in body.get("models") or []:
+            name = (model.get("name") or "").strip()
+            if not name:
+                continue
+            short_name = name.split("/", 1)[-1]  # models/gemini-2.0-flash -> gemini-2.0-flash
+            methods = model.get("supportedGenerationMethods") or []
+            if "generateContent" in methods:
+                out.append(short_name)
+        return out
+
+    model_candidates = [preferred] + [m for m in _GEMINI_FALLBACK_MODELS if m != preferred]
+    attempted = []
+
+    for model_name in model_candidates:
+        attempted.append(model_name)
+        try:
+            body = _post_generate(model_name)
+            candidates = body.get("candidates") or []
+            if not candidates:
+                raise RuntimeError("Gemini did not return any candidate response.")
+            parts = (((candidates[0] or {}).get("content") or {}).get("parts")) or []
+            text_chunks = [p.get("text", "") for p in parts if isinstance(p, dict)]
+            return "\n".join([t for t in text_chunks if t]).strip()
+        except url_error.HTTPError as exc:
+            err_body = exc.read().decode("utf-8", errors="ignore")
+            # If model not found, continue to next fallback model.
+            if exc.code == 404 and "not found" in err_body.lower():
+                continue
+            raise RuntimeError(f"Gemini HTTP {exc.code}: {err_body[:300]}") from exc
+        except Exception as exc:
+            # Network/runtime issues should fail fast.
+            raise RuntimeError(f"Gemini request failed: {exc}") from exc
+
+    # Last attempt: discover models dynamically and try first supported one.
+    try:
+        discovered = _available_models()
+        for model_name in discovered:
+            if model_name in attempted:
+                continue
+            try:
+                body = _post_generate(model_name)
+                candidates = body.get("candidates") or []
+                if not candidates:
+                    continue
+                parts = (((candidates[0] or {}).get("content") or {}).get("parts")) or []
+                text_chunks = [p.get("text", "") for p in parts if isinstance(p, dict)]
+                answer = "\n".join([t for t in text_chunks if t]).strip()
+                if answer:
+                    return answer
+            except Exception:
+                continue
+        raise RuntimeError(f"No compatible Gemini model available. Tried: {', '.join(attempted)}")
+    except Exception as exc:
+        raise RuntimeError(f"Gemini model resolution failed: {exc}") from exc
 
 
 def _rows_to_dicts(result):
