@@ -115,6 +115,33 @@ def _extract_sql(raw_text):
     return text_value.strip().rstrip(";")
 
 
+def _parse_llm_json(raw_text):
+    text_value = (raw_text or "").strip()
+    if not text_value:
+        raise ValueError("LLM returned empty response.")
+    try:
+        return json.loads(text_value)
+    except Exception:
+        pass
+
+    fenced = re.search(r"```(?:json)?\s*(.*?)```", text_value, re.IGNORECASE | re.DOTALL)
+    if fenced:
+        inner = fenced.group(1).strip()
+        if inner:
+            try:
+                return json.loads(inner)
+            except Exception:
+                pass
+
+    obj_match = re.search(r"\{.*\}", text_value, re.DOTALL)
+    if obj_match:
+        maybe_json = obj_match.group(0).strip()
+        if maybe_json:
+            return json.loads(maybe_json)
+
+    raise ValueError("Could not parse JSON from LLM response.")
+
+
 def _extract_table_names(sql_query):
     if not sql_query:
         return set()
@@ -400,10 +427,31 @@ Database schema:
 """
     try:
         llm_raw = _call_gemini(sql_prompt, temperature=0.05)
-        parsed = json.loads(llm_raw)
+        parsed = _parse_llm_json(llm_raw)
     except Exception as exc:
-        _log_query(user_question, "", 0, "error", f"SQL generation failed: {exc}", False, int((time.time() - started_at) * 1000))
-        return jsonify({"ok": False, "error": f"Failed to generate SQL: {exc}"}), 500
+        # One recovery attempt: ask model to normalize output into strict JSON.
+        try:
+            fixer_prompt = f"""
+Convert the following content into strict JSON object with keys:
+sql, chart, next_steps
+Return JSON only.
+
+Content:
+{llm_raw if 'llm_raw' in locals() else ''}
+"""
+            llm_fixed = _call_gemini(fixer_prompt, temperature=0.0)
+            parsed = _parse_llm_json(llm_fixed)
+        except Exception as inner_exc:
+            _log_query(
+                user_question,
+                "",
+                0,
+                "error",
+                f"SQL generation failed: {exc}; normalize failed: {inner_exc}",
+                False,
+                int((time.time() - started_at) * 1000),
+            )
+            return jsonify({"ok": False, "error": f"Failed to generate SQL: {inner_exc}"}), 500
 
     sql_query = _extract_sql((parsed or {}).get("sql", ""))
     if not _is_read_only_sql(sql_query):
