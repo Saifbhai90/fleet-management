@@ -190,6 +190,32 @@ def _extract_sql(raw_text):
     return text_value.strip().rstrip(";")
 
 
+def _rewrite_to_readonly_sql(user_question, raw_sql, schema_text):
+    fixer_prompt = f"""
+Rewrite the SQL below into a STRICT READ-ONLY query.
+Return JSON only: {{"sql":"<query>"}}
+
+Rules:
+1) Only SELECT or WITH...SELECT.
+2) Never use INSERT/UPDATE/DELETE/DROP/ALTER/TRUNCATE/CREATE/REPLACE.
+3) Keep SQL compatible with SQLite/PostgreSQL basics.
+4) Keep user intent unchanged.
+5) Do not include markdown.
+
+User question:
+{user_question}
+
+Original SQL:
+{raw_sql}
+
+Database schema:
+{schema_text}
+"""
+    fixed_raw = _call_gemini(fixer_prompt, temperature=0.0)
+    fixed_json = _parse_llm_json(fixed_raw)
+    return _extract_sql((fixed_json or {}).get("sql", ""))
+
+
 def _parse_llm_json(raw_text):
     text_value = (raw_text or "").strip()
     if not text_value:
@@ -837,6 +863,13 @@ Content:
             return jsonify({"ok": False, "error": f"Failed to generate SQL: {inner_exc}"}), 500
 
     sql_query = _extract_sql((parsed or {}).get("sql", ""))
+    if not _is_read_only_sql(sql_query):
+        try:
+            rewritten_sql = _rewrite_to_readonly_sql(user_question, sql_query, schema)
+            if _is_read_only_sql(rewritten_sql):
+                sql_query = rewritten_sql
+        except Exception:
+            pass
     if not _is_read_only_sql(sql_query):
         _log_query(
             user_question,
