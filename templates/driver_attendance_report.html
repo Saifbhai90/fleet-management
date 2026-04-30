@@ -109,7 +109,8 @@
               <th>Vehicle (Type)</th>
               <th>Driver</th>
               <th>Shift</th>
-              <th class="text-center">Present</th>
+              <th class="text-center">Present <small class="fw-normal opacity-75">(sessions)</small></th>
+              <th class="text-center">Present days</th>
               <th class="text-center">Absent</th>
               <th class="text-center">Leave</th>
               <th class="text-center">Late</th>
@@ -139,6 +140,7 @@
               </td>
               <td>{{ d.shift or '-' }}</td>
               <td class="text-center"><span class="badge bg-success">{{ row.present }}</span></td>
+              <td class="text-center">{{ row.distinct_present_days }}</td>
               <td class="text-center"><span class="badge bg-danger">{{ row.absent }}</span></td>
               <td class="text-center"><span class="badge bg-info">{{ row.leave }}</span></td>
               <td class="text-center"><span class="badge bg-warning text-dark">{{ row.late }}</span></td>
@@ -153,7 +155,11 @@
       </div>
     </div>
     <div class="card-footer bg-light text-muted small d-flex justify-content-between align-items-center flex-wrap gap-2">
-      <span>Active drivers (vehicle assigned): <strong>{{ report|length }}</strong></span>
+      <span>
+        Active drivers (vehicle assigned): <strong>{{ report|length }}</strong>.
+        <span class="ms-1">Present (sessions) har attendance session count karti hai — agar ek din par Morning aur Evening dono duty ki ho to Present +2 ho sakta hai.</span>
+        <span class="ms-1"><strong>Present days</strong> un din ki ginti hai jis din kam az kam ek session Present tha.</span>
+      </span>
       <input type="text" id="reportTableSearch" class="form-control form-control-sm" style="max-width: 220px;" placeholder="Search in report...">
     </div>
   </div>

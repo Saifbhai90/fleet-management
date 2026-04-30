@@ -8,10 +8,10 @@
     <div class="d-flex flex-wrap gap-2">
       <button class="btn btn-sm btn-outline-secondary" title="Download Photos" onclick="showPhotoModal('download')"><i class="bi bi-download me-1"></i>Download</button>
       <button class="btn btn-sm btn-outline-secondary" title="Share Photos" onclick="showPhotoModal('share')"><i class="bi bi-share me-1"></i>Share</button>
-      <a href="{{ url_for('driver_attendance_export') }}?from_date={{ from_date or view_date.strftime('%d-%m-%Y') }}&to_date={{ to_date or view_date.strftime('%d-%m-%Y') }}{% if project_id %}&project_id={{ project_id }}{% endif %}{% if district_id %}&district_id={{ district_id }}{% endif %}{% if vehicle_id %}&vehicle_id={{ vehicle_id }}{% endif %}{% if shift %}&shift={{ shift|e }}{% endif %}{% if search %}&search={{ search|e }}{% endif %}" class="btn btn-success btn-sm">
+      <a href="{{ url_for('driver_attendance_export') }}?from_date={{ from_date or view_date.strftime('%d-%m-%Y') }}&to_date={{ to_date or view_date.strftime('%d-%m-%Y') }}{% if project_id %}&project_id={{ project_id }}{% endif %}{% if district_id %}&district_id={{ district_id }}{% endif %}{% if vehicle_id %}&vehicle_id={{ vehicle_id }}{% endif %}{% if shift %}&shift={{ shift|e }}{% endif %}{% if search %}&search={{ search|e }}{% endif %}{% if driver_id %}&driver_id={{ driver_id }}{% endif %}" class="btn btn-success btn-sm">
         <i class="bi bi-file-earmark-excel me-1"></i>Excel
       </a>
-      <a href="{{ url_for('driver_attendance_print') }}?from_date={{ from_date or view_date.strftime('%d-%m-%Y') }}&to_date={{ to_date or view_date.strftime('%d-%m-%Y') }}{% if project_id %}&project_id={{ project_id }}{% endif %}{% if district_id %}&district_id={{ district_id }}{% endif %}{% if vehicle_id %}&vehicle_id={{ vehicle_id }}{% endif %}{% if shift %}&shift={{ shift|e }}{% endif %}{% if search %}&search={{ search|e }}{% endif %}" target="_blank" class="btn btn-outline-primary btn-sm">
+      <a href="{{ url_for('driver_attendance_print') }}?from_date={{ from_date or view_date.strftime('%d-%m-%Y') }}&to_date={{ to_date or view_date.strftime('%d-%m-%Y') }}{% if project_id %}&project_id={{ project_id }}{% endif %}{% if district_id %}&district_id={{ district_id }}{% endif %}{% if vehicle_id %}&vehicle_id={{ vehicle_id }}{% endif %}{% if shift %}&shift={{ shift|e }}{% endif %}{% if search %}&search={{ search|e }}{% endif %}{% if driver_id %}&driver_id={{ driver_id }}{% endif %}" target="_blank" class="btn btn-outline-primary btn-sm">
         <i class="bi bi-printer me-1"></i>Print
       </a>
       <a href="{{ url_for('driver_attendance_report') }}" class="btn btn-outline-info btn-sm">
@@ -160,7 +160,8 @@
               <th>Project / District / Parking</th>
               <th>Vehicle No</th>
               <th>Vehicle Type</th>
-              <th>Shift</th>
+              <th>Assigned shift</th>
+              <th>Duty shift</th>
               <th>Status</th>
               <th>Check In</th>
               <th>Check In Photo</th>
@@ -171,8 +172,10 @@
             </tr>
           </thead>
           <tbody>
-            {% for driver in drivers %}
-            {% set rec = by_driver.get(driver.id) %}
+            {% for row in attendance_rows %}
+            {% set driver = row.driver %}
+            {% set rec = row.rec %}
+            {% set duty_shift = row.duty_shift %}
             {% set missing_checkout = rec and rec.check_in and not rec.check_out %}
             {% set district_name = driver.district.name if driver.district else (driver.vehicle.district.name if driver.vehicle and driver.vehicle.district else '-') %}
             {% set parking_name = driver.vehicle.parking_station.name if driver.vehicle and driver.vehicle.parking_station else '-' %}
@@ -198,7 +201,7 @@
               {% set check_out_remarks_text = '' %}
             {% endif %}
             <tr class="{% if missing_checkout %}table-warning{% endif %}">
-              <td class="ps-4">{{ loop.index }}</td>
+              <td class="ps-4">{{ (pagination.page - 1) * per_page + loop.index if pagination else loop.index }}</td>
               <td>{{ rec.attendance_date.strftime('%d-%m-%Y') if rec else view_date.strftime('%d-%m-%Y') }}</td>
               <td class="text-muted small">{{ driver.driver_id or '-' }}</td>
               <td class="fw-medium">{{ driver.name }}</td>
@@ -206,6 +209,7 @@
               <td class="fw-medium">{{ driver.vehicle.vehicle_no if driver.vehicle else '-' }}</td>
               <td><span class="badge bg-light text-dark border">{{ driver.vehicle.vehicle_type if driver.vehicle and driver.vehicle.vehicle_type else '-' }}</span></td>
               <td>{{ driver.shift or '-' }}</td>
+              <td><span class="text-muted">{{ duty_shift or '-' }}</span></td>
               <td>
                 {% if rec %}
                   {% if rec.status == 'Present' %}
@@ -247,7 +251,7 @@
               <td>
                 {% if missing_checkout %}
                   <button type="button" class="btn btn-sm btn-outline-danger att-checkout-btn" title="Manual check-out karein"
-                    data-url="{{ url_for('driver_attendance_manual_checkout', driver_id=driver.id, date=view_date.strftime('%d-%m-%Y'), project_id=project_id or '', district_id=district_id or '', vehicle_id=vehicle_id or '', shift=shift or '', search=search or '', back_to='attendance_list') }}"
+                    data-url="{{ url_for('driver_attendance_manual_checkout', driver_id=driver.id, date=(rec.attendance_date.strftime('%d-%m-%Y') if rec else view_date.strftime('%d-%m-%Y')), project_id=project_id or '', district_id=district_id or '', vehicle_id=vehicle_id or '', shift=shift or '', search=search or '', back_to='attendance_list') }}"
                     data-name="{{ driver.name }}">
                     <i class="bi bi-box-arrow-right me-1"></i>Check-out
                   </button>
@@ -268,7 +272,8 @@
               </td>
               <td class="small text-muted" style="max-width:160px;">{{ check_out_remarks_text or '-' }}</td>
             </tr>
-            {% else %}
+            {% endfor %}
+            {% if not attendance_rows %}
             <tr>
               <td colspan="16" class="text-center py-5 text-muted">
                 <i class="bi bi-calendar-x display-6 d-block mb-2"></i>
@@ -276,7 +281,7 @@
                 <br><small>Use <strong>Leave / Late / Half Day / Off</strong> (above) to set status, then filter by date to view.</small>
               </td>
             </tr>
-            {% endfor %}
+            {% endif %}
           </tbody>
         </table>
       </div>
@@ -284,7 +289,7 @@
     <div class="card-footer table-footer bg-white border-top pt-2 pb-3 px-3">
       <div class="d-flex justify-content-between align-items-center">
         <small class="text-muted"><i class="bi bi-list-ul me-1"></i>Showing
-          {% if pagination %}{{ (pagination.page - 1) * per_page + 1 if drivers|length > 0 else 0 }} to {{ (pagination.page - 1) * per_page + drivers|length }} of {{ pagination.total }}{% else %}{{ '1' if drivers|length > 0 else '0' }} to {{ drivers|length }} of {{ drivers|length }}{% endif %} entries
+          {% if pagination %}{{ (pagination.page - 1) * per_page + 1 if attendance_rows|length > 0 else 0 }} to {{ (pagination.page - 1) * per_page + attendance_rows|length }} of {{ pagination.total }}{% else %}{{ '1' if attendance_rows|length > 0 else '0' }} to {{ attendance_rows|length }} of {{ attendance_rows|length }}{% endif %} entries
         </small>
         {% if pagination and pagination.pages > 1 %}
         <nav><ul class="pagination pagination-sm mb-0">
@@ -492,7 +497,7 @@ function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page
       if (visCount === 0 && !existing) {
         var nr = document.createElement('tr');
         nr.className = 'no-match-row';
-        nr.innerHTML = '<td colspan="15" class="text-center py-4 text-muted"><i class="bi bi-search me-2"></i>No matching records found.</td>';
+        nr.innerHTML = '<td colspan="16" class="text-center py-4 text-muted"><i class="bi bi-search me-2"></i>No matching records found.</td>';
         document.querySelector('#attendanceTable tbody').appendChild(nr);
       } else if (visCount > 0 && existing) {
         existing.remove();
@@ -527,13 +532,13 @@ function collectPhotoUrls(type) {
   rows.forEach(function(row) {
     if (row.style.display === 'none') return;
     var cells = row.querySelectorAll('td');
-    if (cells.length < 14) return;
+    if (cells.length < 16) return;
     if (type === 'checkin' || type === 'both') {
-      var ciLink = cells[10].querySelector('a[href]');
+      var ciLink = cells[11].querySelector('a[href]');
       if (ciLink) urls.push(ciLink.href);
     }
     if (type === 'checkout' || type === 'both') {
-      var coLink = cells[13].querySelector('a[href]');
+      var coLink = cells[14].querySelector('a[href]');
       if (coLink) urls.push(coLink.href);
     }
   });

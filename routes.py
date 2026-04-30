@@ -555,6 +555,127 @@ def _vehicle_capacity_value(vehicle):
         return 1
 
 
+def _duty_shift_label(driver, vehicle, attendance_segment):
+    """Assigned shift stays on driver.shift; duty slot labels multi-session days (capacity ≥ 2)."""
+    seg = int(attendance_segment or 1)
+    cap = _vehicle_capacity_value(vehicle)
+    if cap <= 1:
+        return (driver.shift or '-') if driver else '-'
+    slot_names = ('Morning duty', 'Evening duty')
+    i = seg - 1
+    if 0 <= i < len(slot_names):
+        return slot_names[i]
+    return 'Duty #%s' % seg
+
+
+def _driver_attendance_flat_rows(
+    project_id=None,
+    district_id=None,
+    vehicle_id=None,
+    shift=None,
+    search=None,
+    driver_id=None,
+    user_context=None,
+    *,
+    from_date=None,
+    to_date=None,
+    single_date=None,
+):
+    """One dict per DriverAttendance row: driver, rec, duty_shift. Same filters as Attendance List."""
+    from auth_utils import get_user_context as _guc
+
+    if user_context is None:
+        uid = session.get('user_id')
+        user_context = _guc(uid) if uid else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles = user_context.get('allowed_vehicles', set())
+    allowed_shifts = user_context.get('allowed_shifts', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+
+    q = DriverAttendance.query.options(
+        db.joinedload(DriverAttendance.driver).joinedload(Driver.vehicle).joinedload(Vehicle.parking_station),
+        db.joinedload(DriverAttendance.driver).joinedload(Driver.project),
+        db.joinedload(DriverAttendance.driver).joinedload(Driver.district),
+        db.joinedload(DriverAttendance.parking_station),
+    ).join(Driver, DriverAttendance.driver_id == Driver.id).outerjoin(Vehicle, Driver.vehicle_id == Vehicle.id)
+
+    if from_date and to_date:
+        q = q.filter(DriverAttendance.attendance_date.between(from_date, to_date))
+    elif from_date:
+        q = q.filter(DriverAttendance.attendance_date >= from_date)
+    elif to_date:
+        q = q.filter(DriverAttendance.attendance_date <= to_date)
+    elif single_date:
+        q = q.filter(DriverAttendance.attendance_date == single_date)
+
+    if driver_id:
+        q = q.filter(DriverAttendance.driver_id == driver_id)
+
+    if project_id:
+        q = q.filter(
+            db.or_(
+                DriverAttendance.project_id == project_id,
+                db.and_(DriverAttendance.project_id.is_(None), Driver.project_id == project_id),
+            )
+        )
+    elif not is_master_or_admin and allowed_projects:
+        q = q.filter(Driver.project_id.in_(list(allowed_projects)))
+
+    if district_id:
+        q = q.filter(db.or_(Driver.district_id == district_id, Vehicle.district_id == district_id))
+    elif not is_master_or_admin and allowed_districts:
+        q = q.filter(
+            db.or_(
+                Driver.district_id.in_(list(allowed_districts)),
+                Vehicle.district_id.in_(list(allowed_districts)),
+            )
+        )
+
+    if vehicle_id:
+        q = q.filter(Driver.vehicle_id == vehicle_id)
+
+    if shift:
+        q = q.filter(Driver.shift == shift)
+
+    if not is_master_or_admin and allowed_vehicles:
+        q = q.filter(Driver.vehicle_id.in_(list(allowed_vehicles)))
+
+    if not is_master_or_admin and allowed_shifts:
+        q = q.filter(Driver.shift.in_(list(allowed_shifts)))
+
+    if search:
+        q = (
+            q.outerjoin(Project, Driver.project_id == Project.id)
+            .outerjoin(District, Vehicle.district_id == District.id)
+            .outerjoin(ParkingStation, Vehicle.parking_station_id == ParkingStation.id)
+        )
+        flt = _multi_word_filter(
+            search,
+            Driver.name,
+            Driver.driver_id,
+            Driver.shift,
+            Vehicle.vehicle_no,
+            Vehicle.vehicle_type,
+            Project.name,
+            District.name,
+            ParkingStation.name,
+        )
+        if flt is not None:
+            q = q.filter(flt)
+
+    records = q.order_by(DriverAttendance.attendance_date, Driver.name, DriverAttendance.attendance_segment).all()
+    out = []
+    for rec in records:
+        d = rec.driver
+        if not d:
+            continue
+        veh = d.vehicle
+        duty = _duty_shift_label(d, veh, getattr(rec, 'attendance_segment', None))
+        out.append({'driver': d, 'rec': rec, 'duty_shift': duty})
+    return out
+
+
 def _driver_has_open_segment(driver_id, attendance_date):
     return db.session.query(DriverAttendance.id).filter(
         DriverAttendance.driver_id == driver_id,
@@ -15074,73 +15195,23 @@ def driver_attendance_list():
         vd_q = vd_q.filter(Driver.vehicle_id.in_(list(allowed_vehicles)))
     vehicle_drivers = vd_q.order_by(Driver.name).all()
 
-    query = DriverAttendance.query
-    if from_date and to_date:
-        query = query.filter(DriverAttendance.attendance_date.between(from_date, to_date))
-    elif from_date:
-        query = query.filter(DriverAttendance.attendance_date >= from_date)
-    elif to_date:
-        query = query.filter(DriverAttendance.attendance_date <= to_date)
-    else:
-        query = query.filter(DriverAttendance.attendance_date == view_date)
-    if driver_id:
-        query = query.filter(DriverAttendance.driver_id == driver_id)
-    if project_id:
-        query = query.outerjoin(Driver, DriverAttendance.driver_id == Driver.id).filter(
-            db.or_(
-                DriverAttendance.project_id == project_id,
-                db.and_(DriverAttendance.project_id.is_(None), Driver.project_id == project_id)
-            )
-        )
-    attendance_list = query.order_by(DriverAttendance.driver_id).all()
-    by_driver = {a.driver_id: a for a in attendance_list}
-    driver_ids = [a.driver_id for a in attendance_list]
-    if not driver_ids:
-        drivers = []
-    else:
-        need_vehicle_join = bool(district_id or search)
-        if need_vehicle_join:
-            drivers_query = Driver.query.outerjoin(Vehicle, Driver.vehicle_id == Vehicle.id).outerjoin(
-                Project, Driver.project_id == Project.id
-            ).outerjoin(
-                District, Vehicle.district_id == District.id
-            ).outerjoin(
-                ParkingStation, Vehicle.parking_station_id == ParkingStation.id
-            ).filter(
-                Driver.id.in_(driver_ids)
-            )
-            drivers_query = drivers_query.options(
-                db.contains_eager(Driver.vehicle).joinedload(Vehicle.parking_station)
-            )
-        else:
-            drivers_query = Driver.query.options(
-                db.joinedload(Driver.vehicle).joinedload(Vehicle.parking_station)
-            ).filter(Driver.id.in_(driver_ids))
+    uc = get_user_context(user_id) if user_id else {}
+    attendance_rows_full = _driver_attendance_flat_rows(
+        project_id,
+        district_id,
+        vehicle_id,
+        shift,
+        search,
+        driver_id,
+        uc,
+        from_date=from_date,
+        to_date=to_date,
+        single_date=view_date if not from_date and not to_date else None,
+    )
 
-        # Current user ki scope apply karein (Master/Admin ke ilawa)
-        if not is_master_or_admin:
-            if allowed_projects:
-                drivers_query = drivers_query.filter(Driver.project_id.in_(list(allowed_projects)))
-            if allowed_vehicles:
-                drivers_query = drivers_query.filter(Driver.vehicle_id.in_(list(allowed_vehicles)))
-            if allowed_shifts:
-                drivers_query = drivers_query.filter(Driver.shift.in_(list(allowed_shifts)))
-
-        if district_id:
-            drivers_query = drivers_query.filter(
-                db.or_(Driver.district_id == district_id, Vehicle.district_id == district_id)
-            )
-        if vehicle_id:
-            drivers_query = drivers_query.filter(Driver.vehicle_id == vehicle_id)
-        if shift:
-            drivers_query = drivers_query.filter(Driver.shift == shift)
-        if search:
-            flt = _multi_word_filter(search, Driver.name, Driver.driver_id, Driver.shift, Vehicle.vehicle_no, Vehicle.vehicle_type, Project.name, District.name, ParkingStation.name)
-            if flt is not None:
-                drivers_query = drivers_query.filter(flt)
-        drivers = drivers_query.order_by(Driver.name).all()
     att_counts = {'present': 0, 'late': 0, 'leave': 0, 'half_day': 0, 'off': 0, 'absent': 0, 'missing_co': 0}
-    for rec in attendance_list:
+    for row in attendance_rows_full:
+        rec = row['rec']
         s = (rec.status or '').lower()
         if s == 'present':
             att_counts['present'] += 1
@@ -15159,45 +15230,30 @@ def driver_attendance_list():
 
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
-    pagination = SimplePagination(drivers, page, per_page)
-    drivers = pagination.items
-    return render_template('driver_attendance_list.html', form=form, view_date=view_date, drivers=drivers, by_driver=by_driver, project_id=project_id, district_id=district_id, vehicle_id=vehicle_id, shift=shift, driver_id=driver_id, vehicle_drivers=vehicle_drivers, search=search, from_date=from_date_str, to_date=to_date_str, disable_project=disable_project, disable_district=disable_district, disable_vehicle=disable_vehicle, disable_shift=disable_shift, pagination=pagination, per_page=per_page, att_counts=att_counts)
-
-
-def _driver_attendance_marked_list(view_date, project_id=None, district_id=None, vehicle_id=None, shift=None, search=None):
-    """Returns (drivers, by_driver) for date - only drivers who have attendance marked (from Mark Attendance form)."""
-    query = DriverAttendance.query.options(db.joinedload(DriverAttendance.parking_station)).filter_by(attendance_date=view_date)
-    if project_id:
-        query = query.filter(DriverAttendance.project_id == project_id)
-    attendance_list = query.order_by(DriverAttendance.driver_id).all()
-    by_driver = {a.driver_id: a for a in attendance_list}
-    driver_ids = [a.driver_id for a in attendance_list]
-    if not driver_ids:
-        return [], by_driver
-    drivers_query = Driver.query.options(
-        db.joinedload(Driver.vehicle).joinedload(Vehicle.parking_station)
-    ).filter(Driver.id.in_(driver_ids))
-
-    # Scope apply karein (non Master/Admin users ke liye)
-    scope_projects, scope_districts, scope_vehicles, scope_shifts = _get_user_scope()
-    if scope_projects:
-        drivers_query = drivers_query.filter(Driver.project_id.in_(scope_projects))
-    if scope_vehicles:
-        drivers_query = drivers_query.filter(Driver.vehicle_id.in_(scope_vehicles))
-    if scope_shifts:
-        drivers_query = drivers_query.filter(Driver.shift.in_(scope_shifts))
-
-    if district_id:
-        drivers_query = drivers_query.filter(Driver.district_id == district_id)
-    if vehicle_id:
-        drivers_query = drivers_query.filter(Driver.vehicle_id == vehicle_id)
-    if shift:
-        drivers_query = drivers_query.filter(Driver.shift == shift)
-    if search:
-        flt = _multi_word_filter(search, Driver.name, Driver.driver_id, Vehicle.vehicle_no)
-        if flt is not None:
-            drivers_query = drivers_query.outerjoin(Vehicle, Driver.vehicle_id == Vehicle.id).filter(flt)
-    return drivers_query.order_by(Driver.name).all(), by_driver
+    pagination = SimplePagination(attendance_rows_full, page, per_page)
+    attendance_rows = pagination.items
+    return render_template(
+        'driver_attendance_list.html',
+        form=form,
+        view_date=view_date,
+        attendance_rows=attendance_rows,
+        project_id=project_id,
+        district_id=district_id,
+        vehicle_id=vehicle_id,
+        shift=shift,
+        driver_id=driver_id,
+        vehicle_drivers=vehicle_drivers,
+        search=search,
+        from_date=from_date_str,
+        to_date=to_date_str,
+        disable_project=disable_project,
+        disable_district=disable_district,
+        disable_vehicle=disable_vehicle,
+        disable_shift=disable_shift,
+        pagination=pagination,
+        per_page=per_page,
+        att_counts=att_counts,
+    )
 
 
 def _attendance_check_in_remarks(rec):
@@ -15230,55 +15286,148 @@ def _attendance_check_out_remarks(rec):
 
 @app.route('/driver-attendance/export')
 def driver_attendance_export():
+    from auth_utils import get_user_context as _guc_att_export
+
     view_date = _attendance_local_date()
-    if request.args.get('date'):
+    from_date_str = (request.args.get('from_date') or '').strip()
+    to_date_str = (request.args.get('to_date') or '').strip()
+    from_date = parse_date(from_date_str) if from_date_str else None
+    to_date = parse_date(to_date_str) if to_date_str else None
+    if request.args.get('date') and not from_date and not to_date:
         view_date = parse_date(request.args.get('date')) or view_date
+        from_date = to_date = view_date
     project_id = request.args.get('project_id', type=int) or None
     district_id = request.args.get('district_id', type=int) or None
     vehicle_id = request.args.get('vehicle_id', type=int) or None
+    driver_id = request.args.get('driver_id', type=int) or None
+    if driver_id == 0:
+        driver_id = None
     shift = (request.args.get('shift') or '').strip() or None
     search = (request.args.get('search') or '').strip()
-    drivers, by_driver = _driver_attendance_marked_list(view_date, project_id, district_id, vehicle_id, shift, search)
-    headers = ['S.No', 'Date', 'Driver ID', 'Name', 'Project / District / Parking', 'Vehicle No', 'Vehicle Type', 'Shift', 'Status', 'Check In', 'Check In Photo', 'Check In Remarks', 'Check Out', 'Check Out Photo', 'Check Out Remarks']
+    uid = session.get('user_id')
+    uc = _guc_att_export(uid) if uid else {}
+    flat = _driver_attendance_flat_rows(
+        project_id,
+        district_id,
+        vehicle_id,
+        shift,
+        search,
+        driver_id,
+        uc,
+        from_date=from_date,
+        to_date=to_date,
+        single_date=view_date if not from_date and not to_date else None,
+    )
+    headers = [
+        'S.No',
+        'Date',
+        'Driver ID',
+        'Name',
+        'Project / District / Parking',
+        'Vehicle No',
+        'Vehicle Type',
+        'Assigned shift',
+        'Duty shift',
+        'Status',
+        'Check In',
+        'Check In Photo',
+        'Check In Remarks',
+        'Check Out',
+        'Check Out Photo',
+        'Check Out Remarks',
+    ]
     rows = []
-    for i, d in enumerate(drivers, 1):
-        rec = by_driver.get(d.id)
+    for i, item in enumerate(flat, 1):
+        d = item['driver']
+        rec = item['rec']
+        duty = item.get('duty_shift') or '-'
         district_name = d.district.name if d.district else (d.vehicle.district.name if d.vehicle and d.vehicle.district else '-')
         parking_name = d.vehicle.parking_station.name if d.vehicle and d.vehicle.parking_station else '-'
         project_district_parking = f"{(d.project.name if d.project else '-')} / {district_name} / {parking_name}"
+        ad = rec.attendance_date.strftime('%Y-%m-%d') if rec else '-'
         rows.append([
             i,
-            view_date.strftime('%Y-%m-%d'),
+            ad,
             d.driver_id or '-',
             d.name or '',
             project_district_parking,
             d.vehicle.vehicle_no if d.vehicle else '-',
             (d.vehicle.vehicle_type if d.vehicle else '') or '-',
             d.shift or '-',
+            duty,
             rec.status if rec else '-',
             rec.check_in.strftime('%H:%M') if rec and rec.check_in else '-',
             'Yes' if rec and rec.check_in_photo_path else '-',
             _attendance_check_in_remarks(rec) or '-',
-            (rec.check_out.strftime('%H:%M') + (' (' + rec.check_out_date.strftime('%d-%m-%Y') + ')' if rec.check_out_date and rec.check_out_date != rec.attendance_date else '')) if rec and rec.check_out else '-',
+            (
+                rec.check_out.strftime('%H:%M')
+                + (
+                    ' (' + rec.check_out_date.strftime('%d-%m-%Y') + ')'
+                    if rec.check_out_date and rec.check_out_date != rec.attendance_date
+                    else ''
+                )
+            )
+            if rec and rec.check_out
+            else '-',
             'Yes' if rec and rec.check_out_photo_path else '-',
             _attendance_check_out_remarks(rec) or '-',
         ])
-    filename = f'driver_attendance_{view_date.strftime("%Y-%m-%d")}.xlsx'
+    if flat:
+        d0 = flat[0]['rec'].attendance_date
+        d1 = flat[-1]['rec'].attendance_date
+    else:
+        d0 = d1 = view_date
+    filename = f'driver_attendance_{d0.strftime("%Y%m%d")}_{d1.strftime("%Y%m%d")}.xlsx'
     return generate_excel_template(headers, rows, required_columns=[], filename=filename)
 
 
 @app.route('/driver-attendance/print')
 def driver_attendance_print():
+    from auth_utils import get_user_context as _guc_att_print
+
     view_date = _attendance_local_date()
-    if request.args.get('date'):
+    from_date_str = (request.args.get('from_date') or '').strip()
+    to_date_str = (request.args.get('to_date') or '').strip()
+    from_date = parse_date(from_date_str) if from_date_str else None
+    to_date = parse_date(to_date_str) if to_date_str else None
+    if request.args.get('date') and not from_date and not to_date:
         view_date = parse_date(request.args.get('date')) or view_date
+        from_date = to_date = view_date
     project_id = request.args.get('project_id', type=int) or None
     district_id = request.args.get('district_id', type=int) or None
     vehicle_id = request.args.get('vehicle_id', type=int) or None
+    driver_id = request.args.get('driver_id', type=int) or None
+    if driver_id == 0:
+        driver_id = None
     shift = (request.args.get('shift') or '').strip() or None
     search = (request.args.get('search') or '').strip()
-    drivers, by_driver = _driver_attendance_marked_list(view_date, project_id, district_id, vehicle_id, shift, search)
-    return render_template('driver_attendance_print.html', drivers=drivers, by_driver=by_driver, view_date=view_date, project_id=project_id, district_id=district_id, vehicle_id=vehicle_id, shift=shift, search=search)
+    uid = session.get('user_id')
+    uc = _guc_att_print(uid) if uid else {}
+    attendance_rows = _driver_attendance_flat_rows(
+        project_id,
+        district_id,
+        vehicle_id,
+        shift,
+        search,
+        driver_id,
+        uc,
+        from_date=from_date,
+        to_date=to_date,
+        single_date=view_date if not from_date and not to_date else None,
+    )
+    return render_template(
+        'driver_attendance_print.html',
+        attendance_rows=attendance_rows,
+        view_date=view_date,
+        from_date=from_date_str,
+        to_date=to_date_str,
+        project_id=project_id,
+        district_id=district_id,
+        vehicle_id=vehicle_id,
+        shift=shift,
+        search=search,
+        driver_id=driver_id,
+    )
 
 
 @app.route('/driver-attendance/mark', methods=['GET', 'POST'])
@@ -17263,14 +17412,19 @@ def driver_attendance_report():
         start_d = date(year, month, 1)
         end_d = date(year, month, ndays)
         for d in drivers:
-            rows = DriverAttendance.query.filter(
-                DriverAttendance.driver_id == d.id,
-                DriverAttendance.attendance_date >= start_d,
-                DriverAttendance.attendance_date <= end_d
-            ).all()
+            rows = (
+                DriverAttendance.query.filter(
+                    DriverAttendance.driver_id == d.id,
+                    DriverAttendance.attendance_date >= start_d,
+                    DriverAttendance.attendance_date <= end_d,
+                )
+                .order_by(DriverAttendance.attendance_date, DriverAttendance.attendance_segment)
+                .all()
+            )
             by_status = {}
             for r in rows:
                 by_status[r.status] = by_status.get(r.status, 0) + 1
+            distinct_present_days = len({r.attendance_date for r in rows if r.status == 'Present'})
             report.append({
                 'driver': d,
                 'present': by_status.get('Present', 0),
@@ -17280,6 +17434,7 @@ def driver_attendance_report():
                 'half_day': by_status.get('Half-Day', 0),
                 'off': by_status.get('Off', 0),
                 'total_marked': len(rows),
+                'distinct_present_days': distinct_present_days,
                 'days_in_month': ndays,
             })
     # Driver dropdown choices (scoped, for cascade)
