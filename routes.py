@@ -543,6 +543,181 @@ def _get_checked_in_vehicle_ids(attendance_date):
     return {r[0] for r in rows}
 
 
+def _vehicle_capacity_value(vehicle):
+    if vehicle is None:
+        return 1
+    try:
+        c = getattr(vehicle, 'driver_capacity', None)
+        if c is None:
+            return 1
+        return max(1, int(c))
+    except (TypeError, ValueError):
+        return 1
+
+
+def _driver_has_open_segment(driver_id, attendance_date):
+    return db.session.query(DriverAttendance.id).filter(
+        DriverAttendance.driver_id == driver_id,
+        DriverAttendance.attendance_date == attendance_date,
+        DriverAttendance.check_in.isnot(None),
+        DriverAttendance.check_out.is_(None),
+    ).first() is not None
+
+
+def _count_driver_segments_with_checkin(driver_id, attendance_date):
+    return (
+        db.session.query(func.count(DriverAttendance.id))
+        .filter(
+            DriverAttendance.driver_id == driver_id,
+            DriverAttendance.attendance_date == attendance_date,
+            DriverAttendance.check_in.isnot(None),
+        )
+        .scalar()
+        or 0
+    )
+
+
+def _next_attendance_segment(driver_id, attendance_date):
+    mx = db.session.query(func.coalesce(func.max(DriverAttendance.attendance_segment), 0)).filter(
+        DriverAttendance.driver_id == driver_id,
+        DriverAttendance.attendance_date == attendance_date,
+    ).scalar()
+    return int(mx or 0) + 1
+
+
+def _gps_marked_attendance_row(rec):
+    if not rec:
+        return False
+    rem = (rec.remarks or '') or ''
+    has_photo = bool((rec.check_in_photo_path or '').strip())
+    has_remarks = 'GPS' in rem or 'Ye GPS' in rem or 'Camera' in rem or 'GPS+Cam' in rem
+    return bool(has_photo or has_remarks)
+
+
+def _open_gps_driver_attendance_session(driver_id, today):
+    rows = (
+        DriverAttendance.query.filter(
+            DriverAttendance.driver_id == driver_id,
+            DriverAttendance.attendance_date == today,
+            DriverAttendance.check_in.isnot(None),
+            DriverAttendance.check_out.is_(None),
+        )
+        .order_by(DriverAttendance.attendance_segment.desc())
+        .all()
+    )
+    for rec in rows:
+        if _gps_marked_attendance_row(rec):
+            return rec
+    return None
+
+
+def _open_gps_driver_attendance_for_checkout(driver_id, today):
+    """Today's open GPS-marked session, or overnight open session from yesterday."""
+    rec = _open_gps_driver_attendance_session(driver_id, today)
+    if rec:
+        return rec
+    yesterday = today - timedelta(days=1)
+    rows = (
+        DriverAttendance.query.filter(
+            DriverAttendance.driver_id == driver_id,
+            DriverAttendance.attendance_date == yesterday,
+            DriverAttendance.check_in.isnot(None),
+            DriverAttendance.check_out.is_(None),
+        )
+        .order_by(DriverAttendance.attendance_segment.desc())
+        .all()
+    )
+    for r in rows:
+        if _gps_marked_attendance_row(r):
+            return r
+    return None
+
+
+def _open_driver_attendance_for_manual_checkout(driver_id, attendance_date):
+    return (
+        DriverAttendance.query.filter(
+            DriverAttendance.driver_id == driver_id,
+            DriverAttendance.attendance_date == attendance_date,
+            DriverAttendance.check_in.isnot(None),
+            DriverAttendance.check_out.is_(None),
+        )
+        .order_by(DriverAttendance.attendance_segment.asc())
+        .first()
+    )
+
+
+def _pending_blocked_by_other_driver_on_vehicle(driver_id, vehicle_id, view_date, cap):
+    if not vehicle_id:
+        return False
+    q = (
+        db.session.query(DriverAttendance.id)
+        .join(Driver, Driver.id == DriverAttendance.driver_id)
+        .filter(
+            Driver.vehicle_id == vehicle_id,
+            Driver.id != driver_id,
+            DriverAttendance.attendance_date == view_date,
+            DriverAttendance.check_in.isnot(None),
+        )
+    )
+    if cap <= 1:
+        return q.first() is not None
+    return q.filter(DriverAttendance.check_out.is_(None)).first() is not None
+
+
+def _driver_excluded_from_missing_checkin_list(driver, view_date):
+    cap = _vehicle_capacity_value(getattr(driver, 'vehicle', None))
+    if _driver_has_open_segment(driver.id, view_date):
+        return True
+    if _count_driver_segments_with_checkin(driver.id, view_date) >= cap:
+        return True
+    if _pending_blocked_by_other_driver_on_vehicle(driver.id, driver.vehicle_id, view_date, cap):
+        return True
+    return False
+
+
+def _manual_checkin_blocked_by_vehicle_rules(driver_id, vehicle, view_date):
+    if not vehicle or not getattr(vehicle, 'id', None):
+        return None
+    vid = vehicle.id
+    cap = _vehicle_capacity_value(vehicle)
+    if cap <= 1:
+        other = (
+            db.session.query(DriverAttendance.id)
+            .join(Driver, Driver.id == DriverAttendance.driver_id)
+            .filter(
+                Driver.vehicle_id == vid,
+                Driver.id != driver_id,
+                DriverAttendance.attendance_date == view_date,
+                DriverAttendance.check_in.isnot(None),
+            )
+            .first()
+        )
+        if other:
+            return (
+                'Is vehicle (capacity 1) par aaj kisi aur driver ka check-in record hai — '
+                'dusra manual check-in allow nahi.'
+            )
+    else:
+        other_open = (
+            db.session.query(DriverAttendance.id)
+            .join(Driver, Driver.id == DriverAttendance.driver_id)
+            .filter(
+                Driver.vehicle_id == vid,
+                Driver.id != driver_id,
+                DriverAttendance.attendance_date == view_date,
+                DriverAttendance.check_in.isnot(None),
+                DriverAttendance.check_out.is_(None),
+            )
+            .first()
+        )
+        if other_open:
+            return (
+                'Is vehicle par kisi aur shift ka session abhi khula hai (check-out pending). '
+                'Pehle un ka check-out complete karein — phir manual check-in.'
+            )
+    return None
+
+
 @app.before_request
 def require_login():
     """Redirect to login if user not logged in. Check permission for endpoint. Session timeout."""
@@ -15273,7 +15448,13 @@ def driver_attendance_mark():
     if driver_id:
         drivers_query = drivers_query.filter(Driver.id == driver_id)
     drivers = drivers_query.order_by(Driver.name).all()
-    existing = {a.driver_id: a for a in DriverAttendance.query.filter_by(attendance_date=view_date).all()}
+    existing = {}
+    for a in (
+        DriverAttendance.query.filter_by(attendance_date=view_date)
+        .order_by(DriverAttendance.driver_id.asc(), DriverAttendance.attendance_segment.asc())
+        .all()
+    ):
+        existing.setdefault(a.driver_id, a)
     if request.method == 'POST' and request.form.get('save_attendance'):
         gps_cam_remark = 'Ye GPS + Camera se attendance lagi hai.'
         for d in drivers:
@@ -15547,13 +15728,23 @@ def driver_attendance_bulk_off():
             for d in all_drivers:
                 if d.id not in selected_ids:
                     continue
-                rec = DriverAttendance.query.filter_by(
-                    driver_id=d.id,
-                    attendance_date=cur_d,
-                ).first()
-                if rec and rec.check_in is not None:
+                any_ci = (
+                    db.session.query(DriverAttendance.id)
+                    .filter(
+                        DriverAttendance.driver_id == d.id,
+                        DriverAttendance.attendance_date == cur_d,
+                        DriverAttendance.check_in.isnot(None),
+                    )
+                    .first()
+                )
+                if any_ci:
                     total_skipped += 1
                     continue
+                rec = (
+                    DriverAttendance.query.filter_by(driver_id=d.id, attendance_date=cur_d)
+                    .order_by(DriverAttendance.attendance_segment.asc())
+                    .first()
+                )
                 if rec:
                     rec.status = bulk_status
                     rec.check_in = None
@@ -15744,14 +15935,13 @@ def driver_attendance_pending():
         flt = _multi_word_filter(search, Driver.name, Driver.driver_id, Vehicle.vehicle_no)
         if flt is not None:
             drivers_query = drivers_query.filter(flt)
+    drivers_query = drivers_query.options(joinedload(Driver.vehicle))
     vehicle_drivers = drivers_query.order_by(Driver.name).all()
     if driver_id:
         drivers_query = drivers_query.filter(Driver.id == driver_id)
     all_filtered_drivers = drivers_query.order_by(Driver.name).all()
-    existing_ids = {a.driver_id for a in DriverAttendance.query.filter_by(attendance_date=view_date).all()}
-    checked_in_vids = _get_checked_in_vehicle_ids(view_date)
-    checked_in_vehicle_count = len(checked_in_vids)
-    drivers = [d for d in all_filtered_drivers if d.id not in existing_ids and d.vehicle_id not in checked_in_vids]
+    checked_in_vehicle_count = len(_get_checked_in_vehicle_ids(view_date))
+    drivers = [d for d in all_filtered_drivers if not _driver_excluded_from_missing_checkin_list(d, view_date)]
     if (request.args.get('export') or '').strip().lower() == 'excel':
         headers = ['#', 'Project', 'District', 'Vehicle No', 'Vehicle Type', 'Shift', 'Driver', 'Driver ID']
         rows = []
@@ -15976,33 +16166,28 @@ def driver_attendance_manual_checkin():
         flash('Driver select karein.', 'danger')
         return redirect(back_url)
 
-    driver = Driver.query.get(driver_id)
+    driver = Driver.query.options(joinedload(Driver.vehicle)).get(driver_id)
     if not driver:
         flash('Driver nahi mila.', 'danger')
         return redirect(back_url)
 
-    existing = DriverAttendance.query.filter_by(driver_id=driver_id, attendance_date=view_date).first()
-    if existing and existing.check_in:
-        flash('Is driver ne is date ko pehle hi check-in kar liya hai.', 'info')
+    cap = _vehicle_capacity_value(driver.vehicle)
+    if _driver_has_open_segment(driver_id, view_date):
+        flash(
+            'Is driver ka aaj ka ek session abhi khula hai (check-out pending). Pehle check-out karein.',
+            'warning',
+        )
         return redirect(back_url)
-
-    if driver.vehicle_id:
-        other_open = db.session.query(DriverAttendance.id).join(
-            Driver, Driver.id == DriverAttendance.driver_id
-        ).filter(
-            Driver.vehicle_id == driver.vehicle_id,
-            Driver.id != driver_id,
-            DriverAttendance.attendance_date == view_date,
-            DriverAttendance.check_in.isnot(None),
-            DriverAttendance.check_out.is_(None),
-        ).first()
-        if other_open:
-            flash(
-                'Is vehicle par kisi aur shift ka session abhi khula hai (check-out pending). '
-                'Pehle un ka check-out complete karein — phir dusri shift manual check-in kar sakti hai.',
-                'warning',
-            )
-            return redirect(back_url)
+    if _count_driver_segments_with_checkin(driver_id, view_date) >= cap:
+        flash(
+            f'Is driver ke liye aaj maximum {cap} shift/session ho chuki hain — mazeed manual check-in allow nahi.',
+            'warning',
+        )
+        return redirect(back_url)
+    blocked = _manual_checkin_blocked_by_vehicle_rules(driver_id, driver.vehicle, view_date)
+    if blocked:
+        flash(blocked, 'warning')
+        return redirect(back_url)
 
     if request.method == 'POST':
         time_str = (request.form.get('check_in_time') or '').strip()
@@ -16031,23 +16216,18 @@ def driver_attendance_manual_checkin():
                 photo_path = upload_image_file(photo, folder="attendance")
             except Exception as e:
                 flash(f'Photo save nahi hua (cloud storage): {str(e)}', 'warning')
-        if existing:
-            existing.check_in = check_in_t
-            existing.remarks = (existing.remarks or '').rstrip() + (' | Manual check-in' + (': ' + remarks_add if remarks_add else ''))
-            if photo_path:
-                existing.check_in_photo_path = photo_path
-            existing.updated_at = pk_now()
-        else:
-            rec = DriverAttendance(
-                driver_id=driver_id,
-                attendance_date=view_date,
-                status='Present',
-                check_in=check_in_t,
-                project_id=driver.project_id,
-                remarks='Manual check-in' + (': ' + remarks_add if remarks_add else ''),
-                check_in_photo_path=photo_path,
-            )
-            db.session.add(rec)
+        seg = _next_attendance_segment(driver_id, view_date)
+        rec = DriverAttendance(
+            driver_id=driver_id,
+            attendance_date=view_date,
+            attendance_segment=seg,
+            status='Present',
+            check_in=check_in_t,
+            project_id=driver.project_id,
+            remarks='Manual check-in' + (': ' + remarks_add if remarks_add else ''),
+            check_in_photo_path=photo_path,
+        )
+        db.session.add(rec)
         try:
             db.session.commit()
             flash('Manual check-in save ho gaya.', 'success')
@@ -16091,12 +16271,9 @@ def driver_attendance_manual_checkout():
         flash('Driver nahi mila.', 'danger')
         return redirect(back_url)
 
-    rec = DriverAttendance.query.filter_by(driver_id=driver_id, attendance_date=view_date).first()
+    rec = _open_driver_attendance_for_manual_checkout(driver_id, view_date)
     if not rec:
-        flash('Is date ke liye attendance record nahi mila.', 'danger')
-        return redirect(back_url)
-    if rec.check_out:
-        flash('Is driver ka check-out pehle hi lag chuka hai.', 'info')
+        flash('Is date ke liye khula check-in session nahi mila — ya check-out pehle hi ho chuka hai.', 'danger')
         return redirect(back_url)
 
     _glob_setting = AttendanceTimeOverride.query.filter_by(scope='global').first()
@@ -16290,7 +16467,7 @@ def driver_attendance_bulk_manual_checkout():
     ok_count = 0
     skip_count = 0
     for did in to_process:
-        rec = DriverAttendance.query.filter_by(driver_id=did, attendance_date=view_date).first()
+        rec = _open_driver_attendance_for_manual_checkout(did, view_date)
         if not rec or not rec.check_in or rec.check_out:
             skip_count += 1
             continue
@@ -16521,13 +16698,8 @@ def api_attendance_has_gps_checkin():
     if not driver_id:
         return jsonify({'has_gps_checkin': False})
     today = _attendance_local_date()
-    rec = DriverAttendance.query.filter_by(driver_id=driver_id, attendance_date=today).first()
-    if not rec or rec.check_in is None:
-        return jsonify({'has_gps_checkin': False})
-    rem = (rec.remarks or '') or ''
-    has_photo = bool((rec.check_in_photo_path or '').strip())
-    has_remarks = 'GPS' in rem or 'Ye GPS' in rem or 'Camera' in rem or 'GPS+Cam' in rem
-    return jsonify({'has_gps_checkin': bool(has_photo or has_remarks)})
+    rec = _open_gps_driver_attendance_for_checkout(driver_id, today)
+    return jsonify({'has_gps_checkin': bool(rec)})
 
 @app.route('/driver-attendance/checkin', methods=['GET', 'POST'])
 def driver_attendance_checkin():
@@ -16608,9 +16780,26 @@ def driver_attendance_checkin():
             lng_val = float(lng_s) if lng_s else None
         except ValueError:
             lat_val = lng_val = None
-        driver = Driver.query.get(driver_id)
+        driver = Driver.query.options(joinedload(Driver.vehicle)).get(driver_id)
         if not driver:
             flash('Invalid driver.', 'danger')
+            return redirect(url_for('driver_attendance_checkin'))
+        cap = _vehicle_capacity_value(driver.vehicle)
+        if _driver_has_open_segment(driver_id, today):
+            flash(
+                'Pehle Mark Attendance check-out complete karein — check-out pending session hai.',
+                'warning',
+            )
+            return redirect(url_for('driver_attendance_checkin'))
+        if _count_driver_segments_with_checkin(driver_id, today) >= cap:
+            flash(
+                f'Is vehicle ki capacity ke mutabiq aaj maximum {cap} GPS check-in ho sakti hain.',
+                'danger',
+            )
+            return redirect(url_for('driver_attendance_checkin'))
+        blocked_msg = _manual_checkin_blocked_by_vehicle_rules(driver_id, driver.vehicle, today)
+        if blocked_msg:
+            flash(blocked_msg, 'warning')
             return redirect(url_for('driver_attendance_checkin'))
         now = pk_now()
         now_time = _attendance_local_time()
@@ -16634,23 +16823,6 @@ def driver_attendance_checkin():
                 src = tw.get('source', '')
                 flash(f'Night shift ki attendance sirf configured time window mein lag sakti hai ({src}). Control mein time check karein.', 'danger')
                 return redirect(url_for('driver_attendance_checkin'))
-        if driver.vehicle_id:
-            other_open = db.session.query(DriverAttendance.id).join(
-                Driver, Driver.id == DriverAttendance.driver_id
-            ).filter(
-                Driver.vehicle_id == driver.vehicle_id,
-                Driver.id != driver_id,
-                DriverAttendance.attendance_date == today,
-                DriverAttendance.check_in.isnot(None),
-                DriverAttendance.check_out.is_(None),
-            ).first()
-            if other_open:
-                flash(
-                    'Is vehicle par kisi aur shift ka session abhi khula hai (check-out pending). '
-                    'Pehle check-out complete karein.',
-                    'warning',
-                )
-                return redirect(url_for('driver_attendance_checkin'))
 
         photo_path = None
         photo = request.files.get('photo')
@@ -16673,31 +16845,21 @@ def driver_attendance_checkin():
                     flash('Image upload failed. Please check your internet and try taking attendance again.', 'danger')
                     return redirect(url_for('driver_attendance_checkin'))
         gps_cam_remark = 'Ye GPS + Camera se attendance lagi hai.'
-        existing = DriverAttendance.query.filter_by(driver_id=driver_id, attendance_date=today).first()
-        if existing:
-            existing.status = 'Present'
-            existing.check_in = now.time()
-            existing.project_id = driver.project_id
-            existing.parking_station_id = parking_station_id
-            existing.check_in_latitude = lat_val
-            existing.check_in_longitude = lng_val
-            existing.check_in_photo_path = photo_path
-            existing.remarks = gps_cam_remark
-            existing.updated_at = now
-        else:
-            rec = DriverAttendance(
-                driver_id=driver_id,
-                attendance_date=today,
-                status='Present',
-                check_in=now.time(),
-                project_id=driver.project_id,
-                parking_station_id=parking_station_id,
-                check_in_latitude=lat_val,
-                check_in_longitude=lng_val,
-                check_in_photo_path=photo_path,
-                remarks=gps_cam_remark,
-            )
-            db.session.add(rec)
+        seg = _next_attendance_segment(driver_id, today)
+        rec = DriverAttendance(
+            driver_id=driver_id,
+            attendance_date=today,
+            attendance_segment=seg,
+            status='Present',
+            check_in=now.time(),
+            project_id=driver.project_id,
+            parking_station_id=parking_station_id,
+            check_in_latitude=lat_val,
+            check_in_longitude=lng_val,
+            check_in_photo_path=photo_path,
+            remarks=gps_cam_remark,
+        )
+        db.session.add(rec)
         try:
             db.session.commit()
             try:
@@ -16824,20 +16986,12 @@ def driver_attendance_checkout():
         if not driver:
             flash('Invalid driver.', 'danger')
             return redirect(url_for('driver_attendance_checkout'))
-        # Check-out tab tab allow: jab aaj ki check-in attendance maujood ho AUR wo Mark At Attendance (GPS + Camera) se lagi ho
-        existing = DriverAttendance.query.filter_by(driver_id=driver_id, attendance_date=today).first()
+        existing = _open_gps_driver_attendance_for_checkout(driver_id, today)
         if not existing:
-            flash('Is driver ki aaj ki Check-in attendance maujood nahi. Pehle Mark At Attendance (GPS + Camera) se Check-in karein, phir Check-out karein.', 'danger')
-            return redirect(url_for('driver_attendance_checkout'))
-        if existing.check_in is None:
-            flash('Is driver ka aaj Check-in record nahi hai. Pehle Mark At Attendance (GPS + Camera) se Check-in karein, phir Check-out karein.', 'danger')
-            return redirect(url_for('driver_attendance_checkout'))
-        # GPS+Camera checkout sirf tab: jab check-in bhi GPS+Camera se hua ho (photo/remarks se pehchan)
-        rem = (existing.remarks or '') or ''
-        has_gps_checkin = bool((existing.check_in_photo_path or '').strip())
-        has_gps_remarks = 'GPS' in rem or 'Ye GPS' in rem or 'Camera' in rem or 'GPS+Cam' in rem
-        if not has_gps_checkin and not has_gps_remarks:
-            flash('Check-out (GPS + Camera) sirf tab allow hai jab driver ne Mark At Attendance (GPS + Camera) se Check-in kiya ho. Is driver ka check-in is tareeqe se nahi laga.', 'danger')
+            flash(
+                'Mark At Attendance (GPS + Camera) se khula check-in session nahi mila — pehle check-in karein.',
+                'danger',
+            )
             return redirect(url_for('driver_attendance_checkout'))
         now = pk_now()
         now_time = _attendance_local_time()
@@ -16891,15 +17045,6 @@ def driver_attendance_checkout():
                 except Exception:
                     flash('Image upload failed. Please check your internet and try taking attendance again.', 'danger')
                     return redirect(url_for('driver_attendance_checkout'))
-        existing = DriverAttendance.query.filter_by(driver_id=driver_id, attendance_date=today).first()
-        if not existing:
-            yesterday = today - timedelta(days=1)
-            existing = DriverAttendance.query.filter_by(
-                driver_id=driver_id, attendance_date=yesterday
-            ).filter(
-                DriverAttendance.check_in.isnot(None),
-                DriverAttendance.check_out.is_(None)
-            ).first()
         if existing:
             check_out_time = now.time()
             is_overnight = (existing.attendance_date != today)
@@ -17631,13 +17776,23 @@ def leave_request_review(req_id):
         cur_d = lr.from_date
         marked = 0
         while cur_d <= lr.to_date:
-            rec = DriverAttendance.query.filter_by(
-                driver_id=lr.driver_id,
-                attendance_date=cur_d,
-            ).first()
-            if rec and rec.check_in is not None:
+            any_ci_lr = (
+                db.session.query(DriverAttendance.id)
+                .filter(
+                    DriverAttendance.driver_id == lr.driver_id,
+                    DriverAttendance.attendance_date == cur_d,
+                    DriverAttendance.check_in.isnot(None),
+                )
+                .first()
+            )
+            if any_ci_lr:
                 cur_d += timedelta(days=1)
                 continue
+            rec = (
+                DriverAttendance.query.filter_by(driver_id=lr.driver_id, attendance_date=cur_d)
+                .order_by(DriverAttendance.attendance_segment.asc())
+                .first()
+            )
             remark = f'{lr.leave_type} (Leave Request #{lr.id}) [approved by {_audit_user}]'
             if rec:
                 rec.status = lr.leave_type

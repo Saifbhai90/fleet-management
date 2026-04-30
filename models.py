@@ -466,10 +466,17 @@ class DriverStatusChange(db.Model):
 # ────────────────────────────────────────────────
 class DriverAttendance(db.Model):
     __tablename__ = 'driver_attendance'
-    __table_args__ = (db.UniqueConstraint('driver_id', 'attendance_date', name='uq_attendance_driver_date'),)
+    __table_args__ = (
+        db.UniqueConstraint(
+            'driver_id', 'attendance_date', 'attendance_segment',
+            name='uq_attendance_driver_date_seg',
+        ),
+    )
     id = db.Column(db.Integer, primary_key=True)
     driver_id = db.Column(db.Integer, db.ForeignKey('driver.id'), nullable=False, index=True)
     attendance_date = db.Column(db.Date, nullable=False)
+    # 1-based segment: capacity-2 vehicles allow two sessions same calendar day (two shifts or same driver twice).
+    attendance_segment = db.Column(db.Integer, nullable=False, default=1)
     status = db.Column(db.String(20), nullable=False, default='Present')
     # Present | Absent | Leave | Late | Half-Day | Off
     check_in = db.Column(db.Time, nullable=True)

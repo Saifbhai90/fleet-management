@@ -297,7 +297,7 @@ def mobile_checkin():
     Privileged users (Master/Admin) may specify any driver_id.
     Regular users are restricted to their own driver record.
     """
-    from models import DriverAttendance
+    from models import DriverAttendance, Driver
     from app import db
     from utils import pk_date, pk_now
     import datetime as dt
@@ -314,33 +314,89 @@ def mobile_checkin():
     today = pk_date()
     now_utc = pk_now()
 
-    existing = DriverAttendance.query.filter_by(
-        driver_id=driver.id, attendance_date=today
+    from sqlalchemy import func
+
+    pending_open = DriverAttendance.query.filter(
+        DriverAttendance.driver_id == driver.id,
+        DriverAttendance.attendance_date == today,
+        DriverAttendance.check_in.isnot(None),
+        DriverAttendance.check_out.is_(None),
     ).first()
-    if existing and existing.check_in:
-        return _err('Already checked in today.')
+    if pending_open:
+        return _err('Check-out pending for current session.')
+
+    vehicle = getattr(driver, 'vehicle', None)
+    cap = max(1, int(getattr(vehicle, 'driver_capacity', None) or 1))
+    cnt = (
+        db.session.query(func.count(DriverAttendance.id))
+        .filter(
+            DriverAttendance.driver_id == driver.id,
+            DriverAttendance.attendance_date == today,
+            DriverAttendance.check_in.isnot(None),
+        )
+        .scalar()
+        or 0
+    )
+    if cnt >= cap:
+        return _err(f'Maximum {cap} check-in session(s) allowed today for this vehicle.')
+
+    if vehicle and getattr(vehicle, 'id', None):
+        vid = vehicle.id
+        if cap <= 1:
+            clash = (
+                db.session.query(DriverAttendance.id)
+                .join(Driver, Driver.id == DriverAttendance.driver_id)
+                .filter(
+                    Driver.vehicle_id == vid,
+                    Driver.id != driver.id,
+                    DriverAttendance.attendance_date == today,
+                    DriverAttendance.check_in.isnot(None),
+                )
+                .first()
+            )
+            if clash:
+                return _err('Another driver on this vehicle already has attendance today.')
+        else:
+            clash = (
+                db.session.query(DriverAttendance.id)
+                .join(Driver, Driver.id == DriverAttendance.driver_id)
+                .filter(
+                    Driver.vehicle_id == vid,
+                    Driver.id != driver.id,
+                    DriverAttendance.attendance_date == today,
+                    DriverAttendance.check_in.isnot(None),
+                    DriverAttendance.check_out.is_(None),
+                )
+                .first()
+            )
+            if clash:
+                return _err('Another shift on this vehicle has check-out pending.')
+
+    mx_seg = (
+        db.session.query(func.coalesce(func.max(DriverAttendance.attendance_segment), 0))
+        .filter(
+            DriverAttendance.driver_id == driver.id,
+            DriverAttendance.attendance_date == today,
+        )
+        .scalar()
+        or 0
+    )
+    seg = int(mx_seg) + 1
 
     photo_url = _save_base64_photo(photo_b64, 'attendance') if photo_b64 else None
 
     try:
-        if existing:
-            existing.check_in = now_utc.time()
-            existing.check_in_latitude = lat
-            existing.check_in_longitude = lng
-            if photo_url:
-                existing.check_in_photo_path = photo_url
-            record = existing
-        else:
-            record = DriverAttendance(
-                driver_id=driver.id,
-                attendance_date=today,
-                check_in=now_utc.time(),
-                check_in_latitude=lat,
-                check_in_longitude=lng,
-                check_in_photo_path=photo_url,
-                status='Present',
-            )
-            db.session.add(record)
+        record = DriverAttendance(
+            driver_id=driver.id,
+            attendance_date=today,
+            attendance_segment=seg,
+            check_in=now_utc.time(),
+            check_in_latitude=lat,
+            check_in_longitude=lng,
+            check_in_photo_path=photo_url,
+            status='Present',
+        )
+        db.session.add(record)
         db.session.commit()
         return _ok({'message': f'Check-in recorded for {driver.name}', 'time': str(now_utc.time())[:5]})
     except Exception as e:
@@ -374,17 +430,20 @@ def mobile_checkout():
     today = pk_date()
     now_utc = pk_now()
 
-    record = DriverAttendance.query.filter_by(
-        driver_id=driver.id, attendance_date=today
-    ).first()
-    if not record or not record.check_in:
+    record = DriverAttendance.query.filter(
+        DriverAttendance.driver_id == driver.id,
+        DriverAttendance.attendance_date == today,
+        DriverAttendance.check_in.isnot(None),
+        DriverAttendance.check_out.is_(None),
+    ).order_by(DriverAttendance.attendance_segment.desc()).first()
+    if not record:
         yesterday = today - dt.timedelta(days=1)
-        record = DriverAttendance.query.filter_by(
-            driver_id=driver.id, attendance_date=yesterday
-        ).filter(
+        record = DriverAttendance.query.filter(
+            DriverAttendance.driver_id == driver.id,
+            DriverAttendance.attendance_date == yesterday,
             DriverAttendance.check_in.isnot(None),
-            DriverAttendance.check_out.is_(None)
-        ).first()
+            DriverAttendance.check_out.is_(None),
+        ).order_by(DriverAttendance.attendance_segment.desc()).first()
     if not record or not record.check_in:
         return _err('No check-in found for today. Please check in first.')
     if record.check_out:
@@ -432,9 +491,11 @@ def mobile_driver_profile():
         return _err('Driver profile not found for this user.', 404)
 
     today = pk_date()
-    attendance_today = DriverAttendance.query.filter_by(
-        driver_id=driver.id, attendance_date=today
-    ).first()
+    attendance_today = (
+        DriverAttendance.query.filter_by(driver_id=driver.id, attendance_date=today)
+        .order_by(DriverAttendance.attendance_segment.desc())
+        .first()
+    )
 
     return _ok({
         'driver_id': driver.driver_id,

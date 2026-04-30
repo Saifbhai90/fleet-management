@@ -115,7 +115,7 @@
   </div>
 
   {% if checked_in_vehicle_count is defined and checked_in_vehicle_count > 0 %}
-  <div class="alert alert-info py-2 px-3 small mb-3"><i class="bi bi-info-circle me-1"></i>{{ checked_in_vehicle_count }} vehicle(s) par abhi check-out pending hai — jab tak wo session band na ho, un vehicles par doosri shift yahan list mein nahi dikhe gi (capacity 2 / do shifts).</div>
+  <div class="alert alert-info py-2 px-3 small mb-3"><i class="bi bi-info-circle me-1"></i>{{ checked_in_vehicle_count }} gaari(yan): jahan abhi check-out pending hai. <strong>Capacity 2:</strong> ek shift ka session khula ho to doosra driver yahan hide — dono shifts ke baad / checkout ke baad dono dubara aa sakte hain; ek hi driver dono shifts kar sakta hai (do alag attendance rows). <strong>Capacity 1:</strong> purana rule — din mein sirf ek driver / ek session.</div>
   {% endif %}
 
   <div class="card shadow border-0 mb-4 pending-att-table-card">
