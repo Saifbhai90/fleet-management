@@ -439,6 +439,7 @@
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
           'X-CSRFToken': csrfToken
         },
         body: JSON.stringify({ message: msg, conversation_id: currentConversationId })
@@ -449,6 +450,13 @@
         data = await resp.json();
       } else {
         var txt = await resp.text();
+        try {
+          data = JSON.parse(txt);
+        } catch (_ignored) {
+          data = null;
+        }
+      }
+      if (!data) {
         hideThinking();
         addMessage('API returned non-JSON response (likely login/session redirect or server HTML error). Please refresh and login again.', 'ai');
         if (txt) console.error('[AI API non-JSON]', txt.slice(0, 500));

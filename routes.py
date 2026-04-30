@@ -72,6 +72,7 @@ from sqlalchemy.orm import joinedload
 from utils import generate_csv_response, parse_date, generate_excel_template, format_cnic, format_phone, format_date_ddmmyyyy, pk_now, pk_date, pk_time
 from auth_utils import get_required_permission, user_has_permission, user_can_access, check_password
 from flask_wtf.csrf import CSRFError
+from werkzeug.exceptions import HTTPException
 from werkzeug.security import generate_password_hash
 import re
 import os
@@ -4181,9 +4182,27 @@ def drivers_print():
 @app.errorhandler(CSRFError)
 def handle_csrf_error(e):
     """Redirect back to the originating page with a helpful flash instead of bare 400."""
+    if request.path.startswith('/api/'):
+        return jsonify({'ok': False, 'error': 'CSRF token missing or invalid. Please refresh and try again.'}), 400
     flash('Session expired or form was re-submitted. Please try again.', 'warning')
     referrer = request.referrer or url_for('dashboard')
     return redirect(referrer)
+
+
+@app.errorhandler(Exception)
+def handle_unhandled_exception(e):
+    """Ensure API endpoints never leak HTML pages on failures."""
+    if request.path.startswith('/api/'):
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        if isinstance(e, HTTPException):
+            return jsonify({'ok': False, 'error': e.description or 'HTTP error'}), int(e.code or 500)
+        return jsonify({'ok': False, 'error': f'API internal error: {e}'}), 500
+    if isinstance(e, HTTPException):
+        return e
+    raise e
 
 
 @app.route('/r2-proxy')
