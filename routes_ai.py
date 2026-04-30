@@ -5,10 +5,11 @@ import time
 from collections import defaultdict
 from datetime import date, datetime
 from decimal import Decimal
+from urllib.parse import urlparse
 from urllib import error as url_error
 from urllib import request as url_request
 
-from flask import Blueprint, jsonify, render_template, request, session
+from flask import Blueprint, current_app, jsonify, render_template, request, session
 from sqlalchemy import inspect, text
 from werkzeug.exceptions import HTTPException
 
@@ -688,6 +689,40 @@ def _build_chart_data(rows, chart_hint):
     }
 
 
+def _is_valid_internal_get_url(url_value):
+    if not url_value:
+        return False
+    parsed = urlparse(str(url_value).strip())
+    if parsed.scheme or parsed.netloc:
+        return False
+    path = parsed.path or ""
+    if not path.startswith("/"):
+        return False
+    try:
+        adapter = current_app.url_map.bind("")
+        adapter.match(path, method="GET")
+        return True
+    except Exception:
+        return False
+
+
+def _sanitize_next_steps(raw_steps):
+    if not isinstance(raw_steps, list):
+        return []
+    out = []
+    for step in raw_steps:
+        if not isinstance(step, dict):
+            continue
+        label = str(step.get("label") or "").strip()[:90]
+        url = str(step.get("url") or "").strip()
+        if not label or not _is_valid_internal_get_url(url):
+            continue
+        out.append({"label": label, "url": url})
+        if len(out) >= 3:
+            break
+    return out
+
+
 @ai_bp.route("/ai-assistant")
 def ai_assistant():
     return render_template("ai_assistant.html")
@@ -918,10 +953,7 @@ Total rows fetched: {len(rows)}
     )
     chart_data = _build_chart_data(rows, chart_hint) if wants_chart else None
 
-    next_steps = (parsed or {}).get("next_steps") or []
-    if not isinstance(next_steps, list):
-        next_steps = []
-    next_steps = [s for s in next_steps if isinstance(s, dict) and s.get("label") and s.get("url")][:3]
+    next_steps = _sanitize_next_steps((parsed or {}).get("next_steps") or [])
 
     elapsed_ms = int((time.time() - started_at) * 1000)
     _log_query(user_question, sql_query, len(rows), "success", "", wants_chart, elapsed_ms)
