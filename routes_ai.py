@@ -21,11 +21,11 @@ from models import AIAssistantQueryLog, AIConversation, AIConversationMessage
 ai_bp = Blueprint("ai", __name__)
 _AI_SCHEMA_CHECKED = False
 
-_DEFAULT_GEMINI_MODEL = "gemini-1.5-pro"
+_DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
 _GEMINI_FALLBACK_MODELS = [
-    "gemini-2.5-flash",
     "gemini-2.0-flash",
     "gemini-1.5-flash",
+    "gemini-1.5-pro",
 ]
 _FORBIDDEN_SQL = (
     "insert",
@@ -94,6 +94,9 @@ LIMIT 10
 _RATE_WINDOW_SECONDS = int((os.environ.get("AI_RATE_WINDOW_SECONDS") or "300").strip() or "300")
 _RATE_LIMIT_PER_WINDOW = int((os.environ.get("AI_RATE_LIMIT_PER_WINDOW") or "25").strip() or "25")
 _GEMINI_RETRYABLE_HTTP_CODES = {429, 500, 503, 504}
+_GEMINI_HTTP_TIMEOUT_SECONDS = float((os.environ.get("AI_GEMINI_HTTP_TIMEOUT_SECONDS") or "20").strip() or "20")
+_GEMINI_TOTAL_BUDGET_SECONDS = float((os.environ.get("AI_GEMINI_TOTAL_BUDGET_SECONDS") or "28").strip() or "28")
+_GEMINI_MAX_DISCOVERED_ATTEMPTS = int((os.environ.get("AI_GEMINI_MAX_DISCOVERED_ATTEMPTS") or "2").strip() or "2")
 
 
 def _json_default(value):
@@ -582,8 +585,15 @@ def _call_gemini(prompt, temperature=0.1):
         raise RuntimeError("GOOGLE_API_KEY is missing in environment variables.")
 
     preferred = (os.environ.get("GEMINI_MODEL") or "").strip() or _DEFAULT_GEMINI_MODEL
+    deadline = time.monotonic() + max(3.0, _GEMINI_TOTAL_BUDGET_SECONDS)
+
+    def _remaining_seconds():
+        return max(0.0, deadline - time.monotonic())
 
     def _post_generate(model_name):
+        remaining = _remaining_seconds()
+        if remaining <= 0.2:
+            raise RuntimeError("Gemini request budget exhausted before API call.")
         url = (
             f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent"
             f"?key={api_key}"
@@ -595,13 +605,16 @@ def _call_gemini(prompt, temperature=0.1):
         data = json.dumps(payload).encode("utf-8")
         req = url_request.Request(url, data=data, method="POST")
         req.add_header("Content-Type", "application/json")
-        with url_request.urlopen(req, timeout=45) as resp:
+        req_timeout = max(1.0, min(_GEMINI_HTTP_TIMEOUT_SECONDS, remaining))
+        with url_request.urlopen(req, timeout=req_timeout) as resp:
             return json.loads(resp.read().decode("utf-8"))
 
     def _call_model_with_retries(model_name, retries=2):
         wait_seconds = 0.8
         last_exc = None
         for attempt in range(retries + 1):
+            if _remaining_seconds() <= 0.2:
+                break
             try:
                 return _post_generate(model_name)
             except url_error.HTTPError as exc:
@@ -621,11 +634,15 @@ def _call_gemini(prompt, temperature=0.1):
                 raise RuntimeError(f"Gemini request failed: {exc}") from exc
         if last_exc:
             raise last_exc
+        raise RuntimeError(f"Gemini request budget exhausted while trying model: {model_name}")
 
     def _available_models():
+        remaining = _remaining_seconds()
+        if remaining <= 0.2:
+            return []
         list_url = f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}"
         req = url_request.Request(list_url, method="GET")
-        with url_request.urlopen(req, timeout=30) as resp:
+        with url_request.urlopen(req, timeout=max(1.0, min(_GEMINI_HTTP_TIMEOUT_SECONDS, remaining))) as resp:
             body = json.loads(resp.read().decode("utf-8"))
         out = []
         for model in body.get("models") or []:
@@ -661,12 +678,15 @@ def _call_gemini(prompt, temperature=0.1):
             # Any other failure on one model: continue fallback models.
             continue
 
-    # Last attempt: discover models dynamically and try first supported one.
+    # Last attempt: discover a few models dynamically (bounded for latency).
     try:
         discovered = _available_models()
+        discovered = [m for m in discovered if m.startswith("gemini-")]
+        discovered = [m for m in discovered if m not in attempted]
+        discovered = discovered[:max(0, _GEMINI_MAX_DISCOVERED_ATTEMPTS)]
         for model_name in discovered:
-            if model_name in attempted:
-                continue
+            if _remaining_seconds() <= 0.2:
+                break
             try:
                 body = _call_model_with_retries(model_name)
                 candidates = body.get("candidates") or []
