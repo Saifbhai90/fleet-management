@@ -10,7 +10,7 @@ from urllib import request as url_request
 from flask import Blueprint, jsonify, render_template, request, session
 from sqlalchemy import inspect, text
 
-from app import db
+from app import csrf, db
 from auth_utils import get_user_context
 from models import AIAssistantQueryLog
 
@@ -386,6 +386,7 @@ def ai_assistant():
 
 
 @ai_bp.route("/api/ai/query", methods=["POST"])
+@csrf.exempt
 def ai_query():
     started_at = time.time()
     payload = request.get_json(silent=True) or {}

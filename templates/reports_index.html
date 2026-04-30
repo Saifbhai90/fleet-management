@@ -380,9 +380,9 @@
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-robot me-1"></i>AI Tools</h6>
           <div class="list-group list-group-flush report-link-group">
             {% if can_see_page('report_ai') %}
-            <a href="{{ url_for('report_ai') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
-              <i class="bi bi-star text-warning me-2"></i>Create Report with AI
-              <small class="text-muted d-block ms-4">Describe the report you need</small>
+            <a href="{{ url_for('ai.ai_assistant') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
+              <i class="bi bi-stars text-warning me-2"></i>Master Mind AI
+              <small class="text-muted d-block ms-4">Conversational analytics, SQL insights, and charts</small>
             </a>
             {% endif %}
           </div>

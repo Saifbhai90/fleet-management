@@ -3664,42 +3664,14 @@
 </div>
 {% endif %}
 
-<!-- Guide Chatbot: App guide (Forms & Reports) -->
+<!-- Master Mind AI Floating Shortcut -->
+{% if can_see_page('report_ai') %}
 <div id="guideChatbotWrap" class="position-fixed bottom-0 end-0 p-3" style="z-index: 1050;">
-    <div id="guideChatPanel" class="card shadow-lg border-0 d-none" style="width: 360px; max-width: 95vw; max-height: 70vh;">
-        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center py-2">
-            <span><i class="bi bi-chat-dots me-2"></i>App Guide</span>
-            <button type="button" class="btn btn-sm btn-light" id="guideChatClose" aria-label="Close">&times;</button>
-        </div>
-        <div class="card-body p-0 d-flex flex-column" style="min-height: 280px;">
-            <div id="guideChatMessages" class="flex-grow-1 overflow-auto p-3" style="min-height: 200px;">
-                <div class="text-muted small mb-2">
-                    Ask about <strong>Forms</strong> or <strong>Reports</strong>. Examples:
-                </div>
-                <div class="d-flex flex-wrap gap-1 mb-2" id="guideChatChips">
-                    <button type="button" class="btn btn-sm btn-outline-primary guide-chip">Forms list</button>
-                    <button type="button" class="btn btn-sm btn-outline-primary guide-chip">Add driver</button>
-                    <button type="button" class="btn btn-sm btn-outline-primary guide-chip">Add vehicle</button>
-                    <button type="button" class="btn btn-sm btn-outline-primary guide-chip">Fuel expense</button>
-                    <button type="button" class="btn btn-sm btn-outline-primary guide-chip">Reports</button>
-                    <button type="button" class="btn btn-sm btn-outline-primary guide-chip">Keyboard shortcuts</button>
-                    <button type="button" class="btn btn-sm btn-outline-primary guide-chip">License expiry</button>
-                    <button type="button" class="btn btn-sm btn-outline-primary guide-chip">AI report</button>
-                    <button type="button" class="btn btn-sm btn-outline-primary guide-chip">Notifications</button>
-                </div>
-            </div>
-            <div class="p-2 border-top">
-                <div class="input-group input-group-sm">
-                    <input type="text" id="guideChatInput" class="form-control" placeholder="Type your question..." maxlength="200">
-                    <button class="btn btn-primary" type="button" id="guideChatSend"><i class="bi bi-send"></i></button>
-                </div>
-            </div>
-        </div>
-    </div>
-    <button type="button" id="guideChatToggle" class="btn btn-primary btn-lg rounded-circle shadow" title="App Guide" aria-label="Open guide">
-        <i class="bi bi-question-lg"></i>
-    </button>
+    <a href="{{ url_for('ai.ai_assistant') }}" class="btn btn-primary btn-lg rounded-circle shadow d-flex align-items-center justify-content-center" title="Master Mind AI" aria-label="Open Master Mind AI" style="width:56px;height:56px;">
+        <i class="bi bi-robot"></i>
+    </a>
 </div>
+{% endif %}
 
 <!-- External JS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>

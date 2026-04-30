@@ -211,7 +211,17 @@
         },
         body: JSON.stringify({ message: msg })
       });
-      var data = await resp.json();
+      var ct = (resp.headers.get('content-type') || '').toLowerCase();
+      var data;
+      if (ct.indexOf('application/json') !== -1) {
+        data = await resp.json();
+      } else {
+        var txt = await resp.text();
+        hideThinking();
+        addMessage('API returned non-JSON response (likely login/session redirect or server HTML error). Please refresh and login again.', 'ai');
+        if (txt) console.error('[AI API non-JSON]', txt.slice(0, 500));
+        return;
+      }
       hideThinking();
       if (!data.ok) {
         addMessage(data.error || 'Request failed.', 'ai');
