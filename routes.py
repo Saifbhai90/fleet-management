@@ -5942,6 +5942,7 @@ def login():
 def logout():
     from auth_utils import TRUSTED_DEVICE_COOKIE
     inactivity = request.args.get('inactivity') == '1'
+    pre_sound = request.args.get('pre_sound') == '1'
     play_logout_sound = 'auto' if inactivity else 'manual'
     # Mark logout time for current session's login log if any
     try:
@@ -5952,7 +5953,8 @@ def logout():
     except Exception:
         db.session.rollback()
     session.clear()  # Destroy ALL session data
-    session['play_logout_sound'] = play_logout_sound
+    if not (play_logout_sound == 'manual' and pre_sound):
+        session['play_logout_sound'] = play_logout_sound
     msg = 'Session expired due to inactivity.' if inactivity else 'You have been logged out.'
     flash(msg, 'info' if inactivity else 'info')
     # Add clear_bio=1 parameter to signal login.html to clear biometric localStorage

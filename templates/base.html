@@ -7526,6 +7526,31 @@ window._dtPrintCustomize = function(title, color, icon) {
 })();
 </script>
 <script src="{{ url_for('static', filename='js/session_sounds.js') }}"></script>
+<script>
+(function() {
+  var logoutPath = '{{ url_for("logout") }}';
+  document.addEventListener('click', function(e) {
+    var link = e.target.closest('a[href]');
+    if (!link) return;
+    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    var href = link.getAttribute('href') || '';
+    if (!href || href.indexOf('javascript:') === 0 || href.charAt(0) === '#') return;
+    var url;
+    try { url = new URL(href, window.location.origin); } catch (_) { return; }
+    if (url.origin !== window.location.origin) return;
+    if (url.pathname !== logoutPath) return;
+    if (url.searchParams.get('inactivity') === '1') return;
+
+    e.preventDefault();
+    url.searchParams.set('pre_sound', '1');
+    if (window.fleetSessionSounds) {
+      window.fleetSessionSounds.init();
+      window.fleetSessionSounds.play('logout-manual').catch(function() {});
+    }
+    setTimeout(function() { window.location.href = url.toString(); }, 260);
+  }, true);
+})();
+</script>
 {% set play_login_sound = session.pop('play_login_sound', 0) %}
 {% if play_login_sound %}
 <script>

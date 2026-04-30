@@ -9,10 +9,10 @@
     return window.__fleetSessionAudioCtx;
   }
 
-  function playTone(ctx, freq, durationMs, gainValue, atTime) {
+  function playTone(ctx, freq, durationMs, gainValue, atTime, type) {
     var osc = ctx.createOscillator();
     var gain = ctx.createGain();
-    osc.type = 'sine';
+    osc.type = type || 'sine';
     osc.frequency.setValueAtTime(freq, atTime);
     gain.gain.setValueAtTime(0.0001, atTime);
     gain.gain.exponentialRampToValueAtTime(gainValue, atTime + 0.015);
@@ -30,14 +30,14 @@
       return ctx.resume().catch(function() {}).then(function() {
         var start = ctx.currentTime + 0.01;
         tones.forEach(function(t) {
-          playTone(ctx, t.f, t.d, t.g || 0.08, start + (t.o || 0));
+          playTone(ctx, t.f, t.d, t.g || 0.08, start + (t.o || 0), t.w);
         });
         return true;
       });
     }
     var start = ctx.currentTime + 0.01;
     tones.forEach(function(t) {
-      playTone(ctx, t.f, t.d, t.g || 0.08, start + (t.o || 0));
+      playTone(ctx, t.f, t.d, t.g || 0.08, start + (t.o || 0), t.w);
     });
     return Promise.resolve(true);
   }
@@ -62,23 +62,23 @@
     play: function(kind) {
       if (kind === 'login') {
         return playPattern([
-          { f: 523.25, d: 140, o: 0.00, g: 0.07 },
-          { f: 659.25, d: 170, o: 0.12, g: 0.08 },
-          { f: 783.99, d: 220, o: 0.25, g: 0.09 }
+          { f: 659.25, d: 110, o: 0.00, g: 0.055, w: 'sine' },
+          { f: 830.61, d: 140, o: 0.10, g: 0.065, w: 'sine' },
+          { f: 987.77, d: 220, o: 0.23, g: 0.072, w: 'triangle' }
         ]);
       }
       if (kind === 'logout-auto') {
         return playPattern([
-          { f: 523.25, d: 160, o: 0.00, g: 0.08 },
-          { f: 392.00, d: 190, o: 0.13, g: 0.08 },
-          { f: 261.63, d: 260, o: 0.28, g: 0.09 }
+          { f: 622.25, d: 130, o: 0.00, g: 0.055, w: 'sine' },
+          { f: 493.88, d: 170, o: 0.11, g: 0.065, w: 'triangle' },
+          { f: 369.99, d: 250, o: 0.25, g: 0.072, w: 'sine' }
         ]);
       }
       if (kind === 'logout-manual') {
         return playPattern([
-          { f: 587.33, d: 130, o: 0.00, g: 0.07 },
-          { f: 493.88, d: 160, o: 0.11, g: 0.07 },
-          { f: 349.23, d: 230, o: 0.23, g: 0.08 }
+          { f: 740.00, d: 120, o: 0.00, g: 0.055, w: 'sine' },
+          { f: 622.25, d: 155, o: 0.10, g: 0.062, w: 'triangle' },
+          { f: 466.16, d: 240, o: 0.22, g: 0.07, w: 'sine' }
         ]);
       }
       return Promise.resolve(false);
