@@ -618,6 +618,104 @@ def _duty_shift_label(driver, vehicle, attendance_segment, rec=None):
     return 'Duty #%s' % seg
 
 
+def _duty_shift_passes_filter(duty_label, filt):
+    """filt: '', 'morning', or 'evening' — matches Duty shift column (Morning/Evening duty, assigned Morning/Night)."""
+    if not filt or filt == 'all':
+        return True
+    s = (duty_label or '').strip().lower()
+    is_morning = ('morning duty' in s) or (s == 'morning')
+    is_evening = ('evening duty' in s) or (s == 'night') or ('evening' in s)
+    if filt == 'morning':
+        return bool(is_morning)
+    if filt == 'evening':
+        return bool(is_evening)
+    return True
+
+
+def _filter_attendance_rows_by_duty_shift(flat_rows, filt):
+    if not flat_rows or not filt:
+        return flat_rows
+    return [r for r in flat_rows if _duty_shift_passes_filter(r.get('duty_shift'), filt)]
+
+
+def _driver_attendance_record_allowed_for_user(rec, uc):
+    """Scope check for a DriverAttendance row (same idea as Attendance List)."""
+    if not rec or not rec.driver:
+        return False
+    if uc.get('is_master_or_admin'):
+        return True
+    d = rec.driver
+    veh = d.vehicle
+    allowed_projects = uc.get('allowed_projects') or set()
+    allowed_districts = uc.get('allowed_districts') or set()
+    allowed_vehicles = uc.get('allowed_vehicles') or set()
+    allowed_shifts = uc.get('allowed_shifts') or set()
+    if allowed_projects and d.project_id not in allowed_projects:
+        return False
+    if allowed_districts:
+        vd = veh.district_id if veh else None
+        if d.district_id not in allowed_districts and vd not in allowed_districts:
+            return False
+    if allowed_vehicles and (not veh or veh.id not in allowed_vehicles):
+        return False
+    if allowed_shifts and d.shift not in allowed_shifts:
+        return False
+    return True
+
+
+def _build_attendance_media_gallery_items(flat_rows, gallery_shift, photo_kind):
+    """Build media_items for maintenance_expense_media-style gallery."""
+    gs = (gallery_shift or 'both').strip().lower()
+    pk = (photo_kind or 'both').strip().lower()
+    if gs not in ('morning', 'evening', 'both'):
+        gs = 'both'
+    if pk not in ('checkin', 'checkout', 'both'):
+        pk = 'both'
+    items = []
+    for row in flat_rows or []:
+        duty = row.get('duty_shift') or ''
+        if gs != 'both' and not _duty_shift_passes_filter(duty, gs):
+            continue
+        rec = row.get('rec')
+        d = row.get('driver')
+        if not rec or not d:
+            continue
+        date_s = rec.attendance_date.strftime('%d-%m-%Y') if rec.attendance_date else ''
+        if pk in ('checkin', 'both') and (rec.check_in_photo_path or '').strip():
+            p = rec.check_in_photo_path.strip()
+            url = media_url_filter(p)
+            if url:
+                items.append({
+                    'url': url,
+                    'type': 'image',
+                    'name': f"{d.name or 'Driver'} ({d.driver_id or '-'}) — {date_s} — Check-in",
+                    'stored_path': p,
+                    'created_at': '',
+                    'created_at_iso': '',
+                    'size_bytes': None,
+                    'size_label': '',
+                    'download_url': url_for('driver_attendance_media_item_download', rec_id=rec.id, kind='checkin'),
+                    'is_local_file': bool(_maintenance_attachment_local_full_path(p)),
+                })
+        if pk in ('checkout', 'both') and (rec.check_out_photo_path or '').strip():
+            p = rec.check_out_photo_path.strip()
+            url = media_url_filter(p)
+            if url:
+                items.append({
+                    'url': url,
+                    'type': 'image',
+                    'name': f"{d.name or 'Driver'} ({d.driver_id or '-'}) — {date_s} — Check-out",
+                    'stored_path': p,
+                    'created_at': '',
+                    'created_at_iso': '',
+                    'size_bytes': None,
+                    'size_label': '',
+                    'download_url': url_for('driver_attendance_media_item_download', rec_id=rec.id, kind='checkout'),
+                    'is_local_file': bool(_maintenance_attachment_local_full_path(p)),
+                })
+    return items
+
+
 def _driver_attendance_flat_rows(
     project_id=None,
     district_id=None,
@@ -15156,6 +15254,9 @@ def driver_attendance_list():
     driver_id = _int_arg('driver_id')
     shift = (request.args.get('shift') or '').strip()
     search = (request.args.get('search') or '').strip()
+    duty_shift_filter = (request.args.get('duty_shift') or '').strip().lower()
+    if duty_shift_filter not in ('', 'morning', 'evening'):
+        duty_shift_filter = ''
     # From / To date range (strings in dd-mm-yyyy)
     from_date_str = (request.args.get('from_date') or '').strip()
     to_date_str = (request.args.get('to_date') or '').strip()
@@ -15275,6 +15376,8 @@ def driver_attendance_list():
         to_date=to_date,
         single_date=view_date if not from_date and not to_date else None,
     )
+    if duty_shift_filter:
+        attendance_rows_full = _filter_attendance_rows_by_duty_shift(attendance_rows_full, duty_shift_filter)
 
     att_counts = {'present': 0, 'late': 0, 'leave': 0, 'half_day': 0, 'off': 0, 'absent': 0, 'missing_co': 0}
     for row in attendance_rows_full:
@@ -15320,6 +15423,276 @@ def driver_attendance_list():
         pagination=pagination,
         per_page=per_page,
         att_counts=att_counts,
+        duty_shift_filter=duty_shift_filter,
+    )
+
+
+@app.route('/driver-attendance/media-gallery')
+def driver_attendance_media_gallery():
+    from auth_utils import get_user_context
+
+    uid = session.get('user_id')
+    uc = get_user_context(uid) if uid else {}
+    view_date = _attendance_local_date()
+    from_date_str = (request.args.get('from_date') or '').strip()
+    to_date_str = (request.args.get('to_date') or '').strip()
+    from_date = parse_date(from_date_str) if from_date_str else None
+    to_date = parse_date(to_date_str) if to_date_str else None
+    if request.args.get('date') and not from_date and not to_date:
+        view_date = parse_date(request.args.get('date')) or view_date
+        from_date = to_date = view_date
+
+    def _iq(name):
+        v = request.args.get(name)
+        if v is None or v == '':
+            return None
+        try:
+            n = int(v)
+            return n if n != 0 else None
+        except (TypeError, ValueError):
+            return None
+
+    project_id = _iq('project_id')
+    district_id = _iq('district_id')
+    vehicle_id = _iq('vehicle_id')
+    driver_id = _iq('driver_id')
+    shift = (request.args.get('shift') or '').strip()
+    search = (request.args.get('search') or '').strip()
+    duty_shift_filter = (request.args.get('duty_shift') or '').strip().lower()
+    if duty_shift_filter not in ('', 'morning', 'evening'):
+        duty_shift_filter = ''
+
+    gallery_shift = (request.args.get('gallery_shift') or 'both').strip().lower()
+    gallery_photo = (request.args.get('gallery_photo') or 'both').strip().lower()
+    if gallery_shift not in ('morning', 'evening', 'both'):
+        gallery_shift = 'both'
+    if gallery_photo not in ('checkin', 'checkout', 'both'):
+        gallery_photo = 'both'
+
+    flat = _driver_attendance_flat_rows(
+        project_id,
+        district_id,
+        vehicle_id,
+        shift,
+        search,
+        driver_id,
+        uc,
+        from_date=from_date,
+        to_date=to_date,
+        single_date=view_date if not from_date and not to_date else None,
+    )
+    if duty_shift_filter:
+        flat = _filter_attendance_rows_by_duty_shift(flat, duty_shift_filter)
+
+    media_items = _build_attendance_media_gallery_items(flat, gallery_shift, gallery_photo)
+    media_items_display = [{k: v for k, v in it.items() if k != 'stored_path'} for it in media_items]
+
+    list_q = {}
+    for key in ('from_date', 'to_date', 'project_id', 'district_id', 'vehicle_id', 'shift', 'driver_id', 'search', 'duty_shift'):
+        val = request.args.get(key)
+        if val is not None and str(val).strip() != '':
+            list_q[key] = val
+    back_url = url_for('driver_attendance_list', **list_q)
+    qs = request.query_string.decode()
+    download_all_url = url_for('driver_attendance_media_gallery_zip') + ('?' + qs if qs else '')
+
+    if gallery_shift != 'both':
+        duty_lbl = 'Morning duty' if gallery_shift == 'morning' else 'Evening duty'
+        hdr_duty = 'Duty shift images: ' + duty_lbl
+    else:
+        hdr_duty = 'Duty shift images: Morning & Evening'
+    if gallery_photo != 'both':
+        hdr_photo = 'Check-in photos only' if gallery_photo == 'checkin' else 'Check-out photos only'
+    else:
+        hdr_photo = 'Check-in & Check-out photos'
+    media_header_subline = hdr_duty + ' · ' + hdr_photo
+
+    return render_template(
+        'maintenance_expense_media.html',
+        rec=None,
+        media_items=media_items_display,
+        media_title='Attendance Image Gallery',
+        media_header_subline=media_header_subline,
+        media_date_label='',
+        back_url=back_url,
+        back_link_label='Back to Attendance List',
+        download_all_url=download_all_url,
+        media_empty_hint='Is selection ke liye koi photo nahi mili — filters ya duty shift badal kar dekhein.',
+    )
+
+
+@app.route('/driver-attendance/media-gallery/download-all')
+def driver_attendance_media_gallery_zip():
+    from auth_utils import get_user_context
+
+    uid = session.get('user_id')
+    uc = get_user_context(uid) if uid else {}
+    view_date = _attendance_local_date()
+    from_date_str = (request.args.get('from_date') or '').strip()
+    to_date_str = (request.args.get('to_date') or '').strip()
+    from_date = parse_date(from_date_str) if from_date_str else None
+    to_date = parse_date(to_date_str) if to_date_str else None
+    if request.args.get('date') and not from_date and not to_date:
+        view_date = parse_date(request.args.get('date')) or view_date
+        from_date = to_date = view_date
+
+    def _iq2(name):
+        v = request.args.get(name)
+        if v is None or v == '':
+            return None
+        try:
+            n = int(v)
+            return n if n != 0 else None
+        except (TypeError, ValueError):
+            return None
+
+    project_id = _iq2('project_id')
+    district_id = _iq2('district_id')
+    vehicle_id = _iq2('vehicle_id')
+    driver_id = _iq2('driver_id')
+    shift = (request.args.get('shift') or '').strip()
+    search = (request.args.get('search') or '').strip()
+    duty_shift_filter = (request.args.get('duty_shift') or '').strip().lower()
+    if duty_shift_filter not in ('', 'morning', 'evening'):
+        duty_shift_filter = ''
+    gallery_shift = (request.args.get('gallery_shift') or 'both').strip().lower()
+    gallery_photo = (request.args.get('gallery_photo') or 'both').strip().lower()
+    if gallery_shift not in ('morning', 'evening', 'both'):
+        gallery_shift = 'both'
+    if gallery_photo not in ('checkin', 'checkout', 'both'):
+        gallery_photo = 'both'
+
+    flat = _driver_attendance_flat_rows(
+        project_id,
+        district_id,
+        vehicle_id,
+        shift,
+        search,
+        driver_id,
+        uc,
+        from_date=from_date,
+        to_date=to_date,
+        single_date=view_date if not from_date and not to_date else None,
+    )
+    if duty_shift_filter:
+        flat = _filter_attendance_rows_by_duty_shift(flat, duty_shift_filter)
+
+    media_items = _build_attendance_media_gallery_items(flat, gallery_shift, gallery_photo)
+    if not media_items:
+        flash('Download ke liye koi photo nahi mili.', 'warning')
+        q = request.query_string.decode()
+        return redirect(url_for('driver_attendance_media_gallery') + ('?' + q if q else ''))
+
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.zip')
+    zip_path = tmp.name
+    tmp.close()
+    used_names = set()
+    added = 0
+    try:
+        with zipfile.ZipFile(zip_path, mode='w', compression=zipfile.ZIP_DEFLATED) as zf:
+            for idx, it in enumerate(media_items):
+                path = (it.get('stored_path') or '').strip()
+                if not path:
+                    continue
+                root = secure_filename((it.get('name') or f'photo_{idx+1}').replace(' — ', '_')) or f'photo_{idx+1}'
+                ext = os.path.splitext(path)[1] or '.jpg'
+                arc = f'{idx+1:04d}_{root[:100]}{ext}'
+                n = 2
+                while arc.lower() in used_names:
+                    stem, _e = os.path.splitext(root[:80] or 'pic')
+                    arc = f'{idx+1:04d}_{stem}_{n}{ext}'
+                    n += 1
+                used_names.add(arc.lower())
+                local_full = _maintenance_attachment_local_full_path(path)
+                if local_full:
+                    try:
+                        zf.write(local_full, arcname=arc)
+                        added += 1
+                        continue
+                    except OSError:
+                        pass
+                try:
+                    blob, _mime = _maintenance_attachment_read_bytes(path)
+                    if blob:
+                        zf.writestr(arc, blob)
+                        added += 1
+                except Exception:
+                    pass
+        if added == 0:
+            try:
+                os.remove(zip_path)
+            except OSError:
+                pass
+            flash('ZIP tayar nahi ho saka (files read nahi ho saken).', 'danger')
+            q = request.query_string.decode()
+            return redirect(url_for('driver_attendance_media_gallery') + ('?' + q if q else ''))
+    except Exception as ex:
+        try:
+            os.remove(zip_path)
+        except OSError:
+            pass
+        app.logger.warning('Attendance gallery zip failed: %s', ex)
+        flash('ZIP error.', 'danger')
+        return redirect(url_for('driver_attendance_list'))
+
+    @after_this_request
+    def _cleanup_att_gal_zip(resp):
+        try:
+            os.remove(zip_path)
+        except OSError:
+            pass
+        return resp
+
+    d0 = from_date or view_date
+    d1 = to_date or view_date
+    archive_name = f'attendance_photos_{d0.strftime("%Y%m%d")}_{d1.strftime("%Y%m%d")}.zip'
+    return send_file(zip_path, as_attachment=True, download_name=archive_name, mimetype='application/zip', max_age=0)
+
+
+@app.route('/driver-attendance/media/item/<int:rec_id>/<kind>/download')
+def driver_attendance_media_item_download(rec_id, kind):
+    from auth_utils import get_user_context
+
+    if kind not in ('checkin', 'checkout'):
+        abort(404)
+    uid = session.get('user_id')
+    uc = get_user_context(uid) if uid else {}
+    rec = DriverAttendance.query.options(
+        joinedload(DriverAttendance.driver).joinedload(Driver.vehicle),
+    ).get(rec_id)
+    if not rec or not rec.driver or not _driver_attendance_record_allowed_for_user(rec, uc):
+        flash('Access denied ya record nahi mila.', 'danger')
+        return redirect(url_for('driver_attendance_list'))
+
+    path = (rec.check_in_photo_path if kind == 'checkin' else rec.check_out_photo_path) or ''
+    path = path.strip()
+    if not path:
+        flash('Photo maujood nahi.', 'warning')
+        return redirect(url_for('driver_attendance_list'))
+
+    d = rec.driver
+    base = secure_filename(f"{rec.attendance_date.strftime('%Y%m%d')}_{d.driver_id or d.id}_{kind}") or 'attendance_photo'
+    ext = os.path.splitext(path)[1] or '.jpg'
+    dl_name = base + ext
+
+    local_full = _maintenance_attachment_local_full_path(path)
+    if local_full:
+        return send_file(local_full, as_attachment=True, download_name=dl_name, conditional=True, max_age=0)
+    try:
+        blob, mime = _maintenance_attachment_read_bytes(path)
+    except Exception as ex:
+        app.logger.warning('Attendance media download failed (%s): %s', rec_id, ex)
+        flash('Download fail.', 'danger')
+        return redirect(url_for('driver_attendance_list'))
+    if not blob:
+        flash('Empty file.', 'warning')
+        return redirect(url_for('driver_attendance_list'))
+    return send_file(
+        BytesIO(blob),
+        as_attachment=True,
+        download_name=dl_name,
+        mimetype=mime or 'application/octet-stream',
+        max_age=0,
     )
 
 
@@ -15371,6 +15744,9 @@ def driver_attendance_export():
         driver_id = None
     shift = (request.args.get('shift') or '').strip() or None
     search = (request.args.get('search') or '').strip()
+    duty_shift_filter = (request.args.get('duty_shift') or '').strip().lower()
+    if duty_shift_filter not in ('', 'morning', 'evening'):
+        duty_shift_filter = ''
     uid = session.get('user_id')
     uc = _guc_att_export(uid) if uid else {}
     flat = _driver_attendance_flat_rows(
@@ -15385,6 +15761,8 @@ def driver_attendance_export():
         to_date=to_date,
         single_date=view_date if not from_date and not to_date else None,
     )
+    if duty_shift_filter:
+        flat = _filter_attendance_rows_by_duty_shift(flat, duty_shift_filter)
     headers = [
         'S.No',
         'Date',
@@ -15468,6 +15846,9 @@ def driver_attendance_print():
         driver_id = None
     shift = (request.args.get('shift') or '').strip() or None
     search = (request.args.get('search') or '').strip()
+    duty_shift_filter = (request.args.get('duty_shift') or '').strip().lower()
+    if duty_shift_filter not in ('', 'morning', 'evening'):
+        duty_shift_filter = ''
     uid = session.get('user_id')
     uc = _guc_att_print(uid) if uid else {}
     attendance_rows = _driver_attendance_flat_rows(
@@ -15482,6 +15863,8 @@ def driver_attendance_print():
         to_date=to_date,
         single_date=view_date if not from_date and not to_date else None,
     )
+    if duty_shift_filter:
+        attendance_rows = _filter_attendance_rows_by_duty_shift(attendance_rows, duty_shift_filter)
     return render_template(
         'driver_attendance_print.html',
         attendance_rows=attendance_rows,

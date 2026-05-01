@@ -6,12 +6,12 @@
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
     <h2 class="mb-0"><i class="bi bi-calendar-check me-2 text-primary"></i>Attendance List</h2>
     <div class="d-flex flex-wrap gap-2">
-      <button class="btn btn-sm btn-outline-secondary" title="Download Photos" onclick="showPhotoModal('download')"><i class="bi bi-download me-1"></i>Download</button>
+      <button type="button" class="btn btn-sm btn-outline-secondary" title="Attendance photos gallery" onclick="openAttendanceImageViewWizard()"><i class="bi bi-images me-1"></i>Image view</button>
       <button class="btn btn-sm btn-outline-secondary" title="Share Photos" onclick="showPhotoModal('share')"><i class="bi bi-share me-1"></i>Share</button>
-      <a href="{{ url_for('driver_attendance_export') }}?from_date={{ from_date or view_date.strftime('%d-%m-%Y') }}&to_date={{ to_date or view_date.strftime('%d-%m-%Y') }}{% if project_id %}&project_id={{ project_id }}{% endif %}{% if district_id %}&district_id={{ district_id }}{% endif %}{% if vehicle_id %}&vehicle_id={{ vehicle_id }}{% endif %}{% if shift %}&shift={{ shift|e }}{% endif %}{% if search %}&search={{ search|e }}{% endif %}{% if driver_id %}&driver_id={{ driver_id }}{% endif %}" class="btn btn-success btn-sm">
+      <a href="{{ url_for('driver_attendance_export') }}?from_date={{ from_date or view_date.strftime('%d-%m-%Y') }}&to_date={{ to_date or view_date.strftime('%d-%m-%Y') }}{% if project_id %}&project_id={{ project_id }}{% endif %}{% if district_id %}&district_id={{ district_id }}{% endif %}{% if vehicle_id %}&vehicle_id={{ vehicle_id }}{% endif %}{% if shift %}&shift={{ shift|e }}{% endif %}{% if duty_shift_filter %}&duty_shift={{ duty_shift_filter|e }}{% endif %}{% if search %}&search={{ search|e }}{% endif %}{% if driver_id %}&driver_id={{ driver_id }}{% endif %}" class="btn btn-success btn-sm">
         <i class="bi bi-file-earmark-excel me-1"></i>Excel
       </a>
-      <a href="{{ url_for('driver_attendance_print') }}?from_date={{ from_date or view_date.strftime('%d-%m-%Y') }}&to_date={{ to_date or view_date.strftime('%d-%m-%Y') }}{% if project_id %}&project_id={{ project_id }}{% endif %}{% if district_id %}&district_id={{ district_id }}{% endif %}{% if vehicle_id %}&vehicle_id={{ vehicle_id }}{% endif %}{% if shift %}&shift={{ shift|e }}{% endif %}{% if search %}&search={{ search|e }}{% endif %}{% if driver_id %}&driver_id={{ driver_id }}{% endif %}" target="_blank" class="btn btn-outline-primary btn-sm">
+      <a href="{{ url_for('driver_attendance_print') }}?from_date={{ from_date or view_date.strftime('%d-%m-%Y') }}&to_date={{ to_date or view_date.strftime('%d-%m-%Y') }}{% if project_id %}&project_id={{ project_id }}{% endif %}{% if district_id %}&district_id={{ district_id }}{% endif %}{% if vehicle_id %}&vehicle_id={{ vehicle_id }}{% endif %}{% if shift %}&shift={{ shift|e }}{% endif %}{% if duty_shift_filter %}&duty_shift={{ duty_shift_filter|e }}{% endif %}{% if search %}&search={{ search|e }}{% endif %}{% if driver_id %}&driver_id={{ driver_id }}{% endif %}" target="_blank" class="btn btn-outline-primary btn-sm">
         <i class="bi bi-printer me-1"></i>Print
       </a>
       <a href="{{ url_for('driver_attendance_report') }}" class="btn btn-outline-info btn-sm">
@@ -91,6 +91,14 @@
             </select>
           </div>
           <div class="col-md-3 col-lg-2">
+            <label class="form-label">Duty shift</label>
+            <select name="duty_shift" id="dutyShiftFilter" class="form-select form-select-sm">
+              <option value="" {% if not (duty_shift_filter or '') %}selected{% endif %}>All duty shifts</option>
+              <option value="morning" {% if (duty_shift_filter or '') == 'morning' %}selected{% endif %}>Morning duty</option>
+              <option value="evening" {% if (duty_shift_filter or '') == 'evening' %}selected{% endif %}>Evening duty</option>
+            </select>
+          </div>
+          <div class="col-md-3 col-lg-2">
             <label class="form-label">Driver</label>
             <select id="driverSelect" class="form-select search-select" data-placeholder="Search driver...">
               <option value="0" {% if not driver_id %}selected{% endif %}>All Drivers</option>
@@ -122,6 +130,7 @@
         {% if district_id %} · District filter{% endif %}
         {% if vehicle_id %} · Vehicle filter{% endif %}
         {% if shift %} · Shift filter{% endif %}
+        {% if duty_shift_filter %} · Duty shift filter{% endif %}
         {% if search %} · Search{% endif %}
         <small class="opacity-75">(Only marked attendance)</small>
       </span>
@@ -686,6 +695,38 @@ function _nativeSharePhotos(urls, type) {
   saveNext(0);
 }
 
+var _attImgGalDuty = 'both';
+function openAttendanceImageViewWizard() {
+  var el = document.getElementById('attImgWizardStep1');
+  if (!el) return;
+  if (el.parentElement !== document.body) document.body.appendChild(el);
+  bootstrap.Modal.getOrCreateInstance(el).show();
+}
+function attImgWizardGoStep2(duty) {
+  _attImgGalDuty = duty || 'both';
+  var m1El = document.getElementById('attImgWizardStep1');
+  var m1 = m1El ? bootstrap.Modal.getInstance(m1El) : null;
+  if (m1) m1.hide();
+  var el2 = document.getElementById('attImgWizardStep2');
+  if (!el2) return;
+  if (el2.parentElement !== document.body) document.body.appendChild(el2);
+  bootstrap.Modal.getOrCreateInstance(el2).show();
+}
+function attImgWizardOpenGallery(photoKind) {
+  var kind = photoKind || 'both';
+  var params = new URLSearchParams(window.location.search);
+  params.delete('page');
+  params.set('gallery_shift', _attImgGalDuty);
+  params.set('gallery_photo', kind);
+  window.location.href = "{{ url_for('driver_attendance_media_gallery') }}?" + params.toString();
+}
+function attImgWizardBackToStep1() {
+  var m2El = document.getElementById('attImgWizardStep2');
+  var m2 = m2El ? bootstrap.Modal.getInstance(m2El) : null;
+  if (m2) m2.hide();
+  openAttendanceImageViewWizard();
+}
+
 document.addEventListener('click', function(e) {
   var btn = e.target.closest('.att-checkout-btn');
   if (!btn) return;
@@ -711,6 +752,45 @@ document.addEventListener('click', function(e) {
   };
 });
 </script>
+
+<div class="modal fade" id="attImgWizardStep1" tabindex="-1" aria-labelledby="attImgWizard1Lbl" data-bs-backdrop="static">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title" id="attImgWizard1Lbl"><i class="bi bi-images me-2 text-primary"></i>Image view — Duty shift</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body pt-2">
+        <p class="text-muted small mb-3 mb-0">Gallery ke liye kon si <strong>duty shift</strong> ki images chahiye? (Morning duty / Evening duty — list column ke mutabiq)</p>
+        <div class="d-grid gap-2 mt-3">
+          <button type="button" class="btn btn-outline-primary" onclick="attImgWizardGoStep2('morning')"><i class="bi bi-sunrise me-1"></i>Morning duty</button>
+          <button type="button" class="btn btn-outline-primary" onclick="attImgWizardGoStep2('evening')"><i class="bi bi-moon me-1"></i>Evening duty</button>
+          <button type="button" class="btn btn-primary" onclick="attImgWizardGoStep2('both')"><i class="bi bi-collection me-1"></i>Both</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="attImgWizardStep2" tabindex="-1" aria-labelledby="attImgWizard2Lbl" data-bs-backdrop="static">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title" id="attImgWizard2Lbl"><i class="bi bi-camera me-2 text-primary"></i>Image view — Photo type</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body pt-2">
+        <p class="text-muted small mb-3 mb-0">Check-in selfie / Check-out selfie ya dono? Gallery Fuel/Oil style khule gi — ek ek download ya &quot;All Media Download&quot; se sab ZIP.</p>
+        <div class="d-grid gap-2 mt-3">
+          <button type="button" class="btn btn-outline-success" onclick="attImgWizardOpenGallery('checkin')"><i class="bi bi-box-arrow-in-right me-1"></i>Check-in photos</button>
+          <button type="button" class="btn btn-outline-danger" onclick="attImgWizardOpenGallery('checkout')"><i class="bi bi-box-arrow-right me-1"></i>Check-out photos</button>
+          <button type="button" class="btn btn-primary" onclick="attImgWizardOpenGallery('both')"><i class="bi bi-images me-1"></i>Both</button>
+        </div>
+        <button type="button" class="btn btn-link btn-sm mt-2 px-0" onclick="attImgWizardBackToStep1()"><i class="bi bi-arrow-left me-1"></i>Back</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <div class="modal fade" id="attCheckoutConfirmModal" tabindex="-1" data-bs-backdrop="true" data-bs-keyboard="true">
   <div class="modal-dialog modal-dialog-centered modal-sm">
