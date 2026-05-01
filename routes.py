@@ -835,7 +835,24 @@ def _pending_blocked_by_other_driver_on_vehicle(driver_id, vehicle_id, view_date
     return q.filter(DriverAttendance.check_out.is_(None)).first() is not None
 
 
+def _driver_marked_duty_off_no_checkin(driver_id, view_date):
+    """True when attendance for this date is Off with no check-in (e.g. Bulk Status Off)."""
+    return (
+        db.session.query(DriverAttendance.id)
+        .filter(
+            DriverAttendance.driver_id == driver_id,
+            DriverAttendance.attendance_date == view_date,
+            DriverAttendance.status == 'Off',
+            DriverAttendance.check_in.is_(None),
+        )
+        .first()
+        is not None
+    )
+
+
 def _driver_excluded_from_missing_checkin_list(driver, view_date):
+    if _driver_marked_duty_off_no_checkin(driver.id, view_date):
+        return True
     cap = _vehicle_capacity_value(getattr(driver, 'vehicle', None))
     if _driver_has_open_segment(driver.id, view_date):
         return True
@@ -16387,6 +16404,12 @@ def driver_attendance_manual_checkin():
     if blocked:
         flash(blocked, 'warning')
         return redirect(back_url)
+    if _driver_marked_duty_off_no_checkin(driver_id, view_date):
+        flash(
+            'Aaj ki is date par is driver ki duty Bulk Status se Off mark hai — manual check-in list mein nahi aate aur yahan check-in allow nahi.',
+            'warning',
+        )
+        return redirect(back_url)
 
     if request.method == 'POST':
         time_str = (request.form.get('check_in_time') or '').strip()
@@ -16774,6 +16797,7 @@ def api_attendance_drivers():
     project_id = request.args.get('project_id', type=int)
     vehicle_id = request.args.get('vehicle_id', type=int)
     shift = (request.args.get('shift') or '').strip()
+    today = _attendance_local_date()
     if not project_id:
         return jsonify([])
     query = Driver.query.filter_by(project_id=project_id, status='Active')
@@ -16789,7 +16813,18 @@ def api_attendance_drivers():
     if shift:
         query = query.filter(Driver.shift == shift)
     drivers = query.order_by(Driver.name).all()
-    return jsonify([{'id': d.id, 'name': d.name, 'driver_id': d.driver_id, 'shift': d.shift or ''} for d in drivers])
+    return jsonify(
+        [
+            {
+                'id': d.id,
+                'name': d.name,
+                'driver_id': d.driver_id,
+                'shift': d.shift or '',
+                'duty_off': _driver_marked_duty_off_no_checkin(d.id, today),
+            }
+            for d in drivers
+        ]
+    )
 
 
 def _ov_to_dict(ov, source_label=None):
@@ -16982,6 +17017,12 @@ def driver_attendance_checkin():
         driver = Driver.query.options(joinedload(Driver.vehicle)).get(driver_id)
         if not driver:
             flash('Invalid driver.', 'danger')
+            return redirect(url_for('driver_attendance_checkin'))
+        if _driver_marked_duty_off_no_checkin(driver_id, today):
+            flash(
+                'Aaj ki date par is driver ki duty Off mark hai — GPS/Camera se attendance nahi lag sakti.',
+                'warning',
+            )
             return redirect(url_for('driver_attendance_checkin'))
         cap = _vehicle_capacity_value(driver.vehicle)
         if _driver_has_open_segment(driver_id, today):

@@ -126,6 +126,9 @@
           <div id="timeWindowMessage" class="status-box warning d-none mb-2">
             <span id="timeWindowText">—</span>
           </div>
+          <div id="dutyOffMessage" class="status-box warning d-none mb-2">
+            <i class="bi bi-calendar-x me-1"></i><span id="dutyOffText">—</span>
+          </div>
           <div class="d-grid mt-2">
             <button type="button" id="btnMarkAttendance" class="btn btn-success btn-mark" disabled>
               <i class="bi bi-camera-fill me-2"></i>Mark Attendance
@@ -207,7 +210,10 @@
   var distanceMessage = document.getElementById('distanceMessage');
   var timeWindowMessage = document.getElementById('timeWindowMessage');
   var timeWindowText = document.getElementById('timeWindowText');
+  var dutyOffMessage = document.getElementById('dutyOffMessage');
+  var dutyOffText = document.getElementById('dutyOffText');
   var parkingNotSetMessage = document.getElementById('parkingNotSetMessage');
+  var driverDutyOffById = {};
   var cameraModal = document.getElementById('cameraModal');
   var cameraVideo = document.getElementById('cameraVideo');
   var cameraCanvas = document.getElementById('cameraCanvas');
@@ -293,7 +299,28 @@
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   }
 
+  function selectedDriverDutyOff() {
+    var raw = driverSelect.tomselect ? driverSelect.tomselect.getValue() : driverSelect.value;
+    var id = parseInt(raw, 10);
+    return id && driverDutyOffById[id];
+  }
+
   function updateDistanceUI() {
+    dutyOffMessage.classList.add('d-none');
+    if (selectedDriverDutyOff()) {
+      btnMarkAttendance.disabled = true;
+      distanceMessage.classList.add('d-none');
+      timeWindowMessage.classList.add('d-none');
+      dutyOffText.textContent = 'Aaj ki date par is driver ki duty Off mark hai (Bulk Status). GPS/Camera se attendance nahi lag sakti.';
+      dutyOffMessage.classList.remove('d-none');
+      if (parkingCoords && parkingCoords.lat && currentPosition) {
+        locationStatus.classList.remove('d-none', 'warning');
+        locationStatus.classList.add('neutral');
+        var dist = haversineDistance(currentPosition.coords.latitude, currentPosition.coords.longitude, parkingCoords.lat, parkingCoords.lng);
+        locationText.textContent = 'Distance: ' + Math.round(dist) + ' m';
+      }
+      return;
+    }
     if (!parkingCoords || !parkingCoords.lat || !currentPosition) {
       btnMarkAttendance.disabled = true;
       distanceMessage.classList.add('d-none');
@@ -418,6 +445,8 @@
     if (!projectId || !vehicleId || !shift) { resetField(driverSelect, [], true); return; }
     if (driverSelect.tomselect) { driverSelect.tomselect.disable(); driverSelect.tomselect.clear(true); }
     fetch('{{ url_for("api_attendance_drivers") }}?project_id=' + projectId + '&vehicle_id=' + encodeURIComponent(vehicleId) + '&shift=' + encodeURIComponent(shift)).then(function(r) { return r.json(); }).then(function(arr) {
+      driverDutyOffById = {};
+      arr.forEach(function(d) { if (d && d.id != null) driverDutyOffById[d.id] = !!d.duty_off; });
       var vehicleDriverId = null;
       for (var i = 0; i < vehiclesData.length; i++) { if (String(vehiclesData[i].id) === vehicleId) { vehicleDriverId = vehiclesData[i].driver_id; break; } }
       var autoVal = null;
@@ -430,6 +459,7 @@
       var isAutoLocked = districtSelect.disabled && projectSelect.disabled && vehicleSelect.disabled;
       syncTS(driverSelect, opts, isAutoLocked);
       if (autoVal && driverSelect.tomselect) driverSelect.tomselect.setValue(autoVal, true);
+      updateDistanceUI();
       if ((driverSelect.tomselect ? driverSelect.tomselect.getValue() : driverSelect.value) && parkingLat.value && parkingLng.value) fetchLocation();
     });
   }
@@ -456,6 +486,7 @@
 
   function onDriverChange() {
     fetchTimeWindow();
+    updateDistanceUI();
     if (driverSelect.value && parkingLat.value && parkingLng.value) fetchLocation();
   }
 
@@ -549,6 +580,10 @@
   }
 
   btnMarkAttendance.addEventListener('click', function() {
+    if (selectedDriverDutyOff()) {
+      alert('Aaj ki date par is driver ki duty Off mark hai — attendance nahi lag sakti.');
+      return;
+    }
     if (!currentPosition || !parkingCoords) return;
     if (!driverSelect.value) { alert('Please select a driver.'); return; }
     if (!parkingId.value || !parkingLat.value || !parkingLng.value) {
