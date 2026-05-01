@@ -513,6 +513,37 @@ function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page
       }
     });
   }
+
+  /** Same filters as clicking View — full dataset for gallery (list pagination is ignored server-side). */
+  window.buildAttendanceGalleryParams = function() {
+    syncHiddenFromSelects();
+    var params = new URLSearchParams();
+    var form = document.getElementById('filterForm');
+    if (form) {
+      var fd = new FormData(form);
+      fd.forEach(function(v, k) {
+        if (v === undefined || v === null) return;
+        var s = String(v).trim();
+        if (s === '') return;
+        params.set(k, s);
+      });
+    }
+    var ts = document.getElementById('tableSearch');
+    if (ts && ts.value.trim()) {
+      params.set('search', ts.value.trim());
+    } else {
+      var locS = new URLSearchParams(window.location.search).get('search');
+      if (locS && locS.trim()) params.set('search', locS.trim());
+    }
+    var loc = new URLSearchParams(window.location.search);
+    var legacyDate = loc.get('date');
+    if (legacyDate && !params.has('from_date') && !params.has('to_date')) {
+      params.set('date', legacyDate);
+    }
+    params.delete('page');
+    params.delete('per_page');
+    return params;
+  };
 })();
 
 var _photoAction = '';
@@ -714,8 +745,11 @@ function attImgWizardGoStep2(duty) {
 }
 function attImgWizardOpenGallery(photoKind) {
   var kind = photoKind || 'both';
-  var params = new URLSearchParams(window.location.search);
+  var params = (typeof window.buildAttendanceGalleryParams === 'function')
+    ? window.buildAttendanceGalleryParams()
+    : new URLSearchParams(window.location.search);
   params.delete('page');
+  params.delete('per_page');
   params.set('gallery_shift', _attImgGalDuty);
   params.set('gallery_photo', kind);
   window.location.href = "{{ url_for('driver_attendance_media_gallery') }}?" + params.toString();

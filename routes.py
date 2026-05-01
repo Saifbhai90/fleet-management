@@ -15429,6 +15429,7 @@ def driver_attendance_list():
 
 @app.route('/driver-attendance/media-gallery')
 def driver_attendance_media_gallery():
+    """Full filtered attendance set (no pagination). page/per_page in query are ignored."""
     from auth_utils import get_user_context
 
     uid = session.get('user_id')
@@ -15523,6 +15524,7 @@ def driver_attendance_media_gallery():
 
 @app.route('/driver-attendance/media-gallery/download-all')
 def driver_attendance_media_gallery_zip():
+    """ZIP of all gallery images for the same full (non-paginated) filter set."""
     from auth_utils import get_user_context
 
     uid = session.get('user_id')
