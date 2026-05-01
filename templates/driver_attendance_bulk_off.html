@@ -10,6 +10,8 @@
   .bulk-off-page .ts-dropdown { z-index: 9999 !important; }
   .bulk-off-filter-card { position: relative; z-index: 10; overflow: visible; }
   .bulk-off-filter-card .card-body { overflow: visible; }
+  /* Modal must not live under .main-content: base layout uses transform on .main-content (appFadeUp),
+     which traps fixed positioning — Bootstrap’s body-level backdrop would then sit above the dialog and block clicks. */
 </style>
 <div class="container-fluid bulk-off-page">
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
@@ -127,7 +129,7 @@
       <div class="modal-content">
         <div class="modal-header"><h6 class="modal-title"><i class="bi bi-exclamation-triangle me-2 text-warning"></i>Confirm</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
         <div class="modal-body text-center"><p><span id="confirmCount">0</span> driver(s) ko <strong id="confirmStatus">Off</strong> mark karna hai?</p></div>
-        <div class="modal-footer justify-content-center"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button><button type="button" class="btn btn-dark" onclick="document.getElementById('confirmModal').querySelector('.btn-close').click();document.getElementById('bulkOffForm').submit();">Confirm</button></div>
+        <div class="modal-footer justify-content-center"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button><button type="button" class="btn btn-dark" id="confirmBulkOffBtn">Confirm</button></div>
       </div>
     </div>
   </div>
@@ -247,6 +249,21 @@
   var table = document.getElementById('bulkTable');
   var countEl = document.getElementById('bulkSelectedCount');
   var submitBtn = document.getElementById('bulkSubmitBtn');
+  var confirmModalEl = document.getElementById('confirmModal');
+  var bulkOffForm = document.getElementById('bulkOffForm');
+
+  if (confirmModalEl && confirmModalEl.parentElement !== document.body) {
+    document.body.appendChild(confirmModalEl);
+  }
+
+  var confirmBtn = document.getElementById('confirmBulkOffBtn');
+  if (confirmBtn && bulkOffForm) {
+    confirmBtn.addEventListener('click', function() {
+      var inst = confirmModalEl ? bootstrap.Modal.getInstance(confirmModalEl) : null;
+      if (inst) inst.hide();
+      bulkOffForm.submit();
+    });
+  }
 
   function updateCount() {
     if (!countEl) return;
@@ -298,7 +315,9 @@
       document.getElementById('confirmCount').textContent = checked.length;
       var statusSel = document.getElementById('bulkStatusSelect');
       document.getElementById('confirmStatus').textContent = statusSel ? statusSel.value : 'Off';
-      new bootstrap.Modal(document.getElementById('confirmModal')).show();
+      if (confirmModalEl) {
+        bootstrap.Modal.getOrCreateInstance(confirmModalEl).show();
+      }
     });
   }
 })();
