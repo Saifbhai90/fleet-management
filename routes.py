@@ -663,6 +663,16 @@ def _driver_attendance_record_allowed_for_user(rec, uc):
     return True
 
 
+def _attendance_list_manual_edit_allowed():
+    """Role permission for Edit check-in / Edit check-out links from Attendance List."""
+    return user_can_access(session.get('permissions') or [], 'driver_attendance_list_manual_edit')
+
+
+def _attendance_list_manual_checkout_allowed():
+    """Role permission for Check-out button (missing checkout) from Attendance List."""
+    return user_can_access(session.get('permissions') or [], 'driver_attendance_list_manual_checkout')
+
+
 def _build_attendance_media_gallery_items(flat_rows, gallery_shift, photo_kind):
     """Build media_items for maintenance_expense_media-style gallery."""
     gs = (gallery_shift or 'both').strip().lower()
@@ -15423,6 +15433,9 @@ def driver_attendance_list():
     per_page = request.args.get('per_page', 20, type=int)
     pagination = SimplePagination(attendance_rows_full, page, per_page)
     attendance_rows = pagination.items
+    _perms = session.get('permissions') or []
+    can_att_list_manual_checkout = user_can_access(_perms, 'driver_attendance_list_manual_checkout')
+    can_att_list_manual_edit = user_can_access(_perms, 'driver_attendance_list_manual_edit')
     return render_template(
         'driver_attendance_list.html',
         form=form,
@@ -15445,6 +15458,8 @@ def driver_attendance_list():
         per_page=per_page,
         att_counts=att_counts,
         duty_shift_filter=duty_shift_filter,
+        can_att_list_manual_checkout=can_att_list_manual_checkout,
+        can_att_list_manual_edit=can_att_list_manual_edit,
     )
 
 
@@ -16858,6 +16873,11 @@ def driver_attendance_manual_checkin():
             )
             return redirect(back_url)
 
+    if back_to == 'attendance_list' and attendance_id:
+        if not _attendance_list_manual_edit_allowed():
+            flash('Attendance List se check-in edit karne ki permission nahi hai.', 'danger')
+            return redirect(back_url)
+
     tpl = dict(
         driver=driver,
         view_date=view_date,
@@ -16997,6 +17017,16 @@ def driver_attendance_manual_checkout():
             flash('Is date ke liye khula check-in session nahi mila — ya check-out pehle hi ho chuka hai.', 'danger')
             return redirect(back_url)
 
+    if back_to == 'attendance_list':
+        if rec.check_out:
+            if not _attendance_list_manual_edit_allowed():
+                flash('Attendance List se check-out edit karne ki permission nahi hai.', 'danger')
+                return redirect(back_url)
+        else:
+            if not _attendance_list_manual_checkout_allowed():
+                flash('Attendance List se manual check-out karne ki permission nahi hai.', 'danger')
+                return redirect(back_url)
+
     checkout_edit_mode = bool(attendance_id and rec.check_out)
     _glob_setting = AttendanceTimeOverride.query.filter_by(scope='global').first()
     allow_future = _glob_setting.allow_future_checkout if _glob_setting else False
@@ -17031,6 +17061,16 @@ def driver_attendance_manual_checkout():
                 return redirect(back_url)
         tpl_kwargs['rec'] = rec
         tpl_kwargs['checkout_edit_mode'] = bool(rec.check_out)
+
+        if back_to == 'attendance_list':
+            if rec.check_out:
+                if not _attendance_list_manual_edit_allowed():
+                    flash('Attendance List se check-out edit karne ki permission nahi hai.', 'danger')
+                    return redirect(back_url)
+            else:
+                if not _attendance_list_manual_checkout_allowed():
+                    flash('Attendance List se manual check-out karne ki permission nahi hai.', 'danger')
+                    return redirect(back_url)
 
         time_str = (request.form.get('check_out_time') or '').strip()
         checkout_date_str = (request.form.get('check_out_date') or '').strip()

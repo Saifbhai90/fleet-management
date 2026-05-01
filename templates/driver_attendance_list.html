@@ -31,7 +31,7 @@
   </div>
   {% endif %}
 
-  <div class="card shadow-sm border-0 rounded-3 mb-4" style="position:relative; z-index:10; overflow:visible;">
+  <div class="card shadow-sm border-0 rounded-3 mb-4" style="position:relative; overflow:visible;">
     <div class="card-body" style="overflow:visible;">
       <form method="GET" action="{{ url_for('driver_attendance_list') }}" id="filterForm" class="mb-2">
         <input type="hidden" name="project_id" id="hiddenProjectId" value="{{ project_id or '0' }}">
@@ -245,7 +245,9 @@
                 {% if rec and rec.check_in %}
                   {{ rec.check_in.strftime('%H:%M') }}
                   {% if rec.check_in_latitude is not none and rec.check_in_longitude is not none %}<br><span class="badge bg-success badge-sm" title="GPS">GPS</span>{% endif %}
+                  {% if can_att_list_manual_edit|default(false) %}
                   <br><a href="{{ url_for('driver_attendance_manual_checkin') }}?driver_id={{ driver.id }}&date={{ rec.attendance_date.strftime('%d-%m-%Y') }}&attendance_id={{ rec.id }}&back_to=attendance_list{% if list_qs %}&{{ list_qs }}{% endif %}" class="small text-decoration-none">Edit check-in</a>
+                  {% endif %}
                 {% else %}-{% endif %}
               </td>
               <td>
@@ -261,15 +263,21 @@
               <td class="small text-muted" style="max-width:160px;">{{ check_in_remarks_text or '-' }}</td>
               <td>
                 {% if missing_checkout %}
+                  {% if can_att_list_manual_checkout|default(false) %}
                   <button type="button" class="btn btn-sm btn-outline-danger att-checkout-btn" title="Manual check-out karein"
                     data-url="{{ url_for('driver_attendance_manual_checkout') }}?driver_id={{ driver.id }}&date={{ rec.attendance_date.strftime('%d-%m-%Y') }}&attendance_id={{ rec.id }}&back_to=attendance_list{% if list_qs %}&{{ list_qs }}{% endif %}"
                     data-name="{{ driver.name }}">
                     <i class="bi bi-box-arrow-right me-1"></i>Check-out
                   </button>
+                  {% else %}
+                  <span class="text-muted small">—</span>
+                  {% endif %}
                 {% elif rec and rec.check_out %}
                   {{ rec.check_out.strftime('%H:%M') }}{% if rec.check_out_date and rec.check_out_date != rec.attendance_date %}<br><small class="text-muted">({{ rec.check_out_date.strftime('%d-%m') }})</small>{% endif %}
                   {% if rec.check_out_latitude is not none and rec.check_out_longitude is not none %}<br><span class="badge bg-success badge-sm" title="GPS">GPS</span>{% endif %}
+                  {% if can_att_list_manual_edit|default(false) %}
                   <br><a href="{{ url_for('driver_attendance_manual_checkout') }}?driver_id={{ driver.id }}&date={{ rec.attendance_date.strftime('%d-%m-%Y') }}&attendance_id={{ rec.id }}&back_to=attendance_list{% if list_qs %}&{{ list_qs }}{% endif %}" class="small text-decoration-none">Edit check-out</a>
+                  {% endif %}
                 {% else %}-{% endif %}
               </td>
               <td>
@@ -773,17 +781,18 @@ document.addEventListener('click', function(e) {
   document.getElementById('attCoDriverName').textContent = name;
 
   var modalEl = document.getElementById('attCheckoutConfirmModal');
+  if (!modalEl) return;
+  /* Modal nested under filtered layout + z-index can trap backdrop; mount on body like Image view wizard */
+  if (modalEl.parentElement !== document.body) {
+    document.body.appendChild(modalEl);
+  }
   var confirmBtn = document.getElementById('attCoConfirmBtn');
-  var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+  var modal = bootstrap.Modal.getOrCreateInstance(modalEl, { backdrop: true, keyboard: true, focus: true });
   modal.show();
 
   confirmBtn.onclick = function() {
     modal.hide();
-    modalEl.addEventListener('hidden.bs.modal', function() {
-      document.querySelectorAll('.modal-backdrop').forEach(function(b) { b.remove(); });
-      document.body.classList.remove('modal-open');
-      document.body.style.removeProperty('overflow');
-      document.body.style.removeProperty('padding-right');
+    modalEl.addEventListener('hidden.bs.modal', function onHidden() {
       if (url && url !== '#') window.location.href = url;
     }, { once: true });
   };
