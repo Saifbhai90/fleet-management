@@ -1237,6 +1237,56 @@ def get_permission_tree_grouped_filtered(permission_by_code, allowed_codes=None)
     return out
 
 
+def _perm_matrix_bucket(code, name):
+    """Map one permission into table columns: full | list | add | edit | delete | other."""
+    code_l = (code or '').lower()
+    name_l = (name or '').lower().strip()
+    if '(full)' in name_l:
+        return 'full'
+    if code_l.endswith('_delete') or name_l == 'delete':
+        return 'delete'
+    if code_l.endswith('_add') or name_l == 'add new':
+        return 'add'
+    if code_l.endswith('_edit') or name_l == 'edit':
+        return 'edit'
+    if code_l.endswith('_list') or 'list / view' in name_l:
+        return 'list'
+    return 'other'
+
+
+def build_permission_matrix_rows(permission_tree_grouped):
+    """
+    Flatten grouped permission tree into table rows for role_form.html.
+    Each page becomes one row with cells: full, list, add, edit, delete, other (list of triples).
+    Also emits section header rows: {'type': 'section', 'label': str}.
+    Page rows: {'type': 'page', 'section_label', 'page_label', 'cells': dict}.
+    """
+    out = []
+    for section_label, pages in permission_tree_grouped or []:
+        out.append({'type': 'section', 'label': section_label})
+        for page_label, rows in pages:
+            cells = {'full': None, 'list': None, 'add': None, 'edit': None, 'delete': None, 'other': []}
+            for perm_id, perm_code, perm_name in rows:
+                b = _perm_matrix_bucket(perm_code, perm_name)
+                cell = {'id': perm_id, 'code': perm_code, 'name': perm_name}
+                key_map = {'full': 'full', 'list': 'list', 'add': 'add', 'edit': 'edit', 'delete': 'delete'}
+                if b in key_map:
+                    k = key_map[b]
+                    if cells[k] is None:
+                        cells[k] = cell
+                    else:
+                        cells['other'].append(cell)
+                else:
+                    cells['other'].append(cell)
+            out.append({
+                'type': 'page',
+                'section_label': section_label,
+                'page_label': page_label,
+                'cells': cells,
+            })
+    return out
+
+
 def can_see_page(permission_codes, page_key):
     """True if user has any permission that grants visibility to this sidebar page."""
     if not permission_codes:
