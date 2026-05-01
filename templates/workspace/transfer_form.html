@@ -132,10 +132,32 @@
         </div>
       </div>
 
+      {% if not row and last_saved_transfer %}
+      <div class="alert alert-light border shadow-sm mt-3 mb-0">
+        <div class="d-flex flex-wrap align-items-start justify-content-between gap-2">
+          <div>
+            <div class="small text-muted mb-1"><i class="bi bi-clock-history me-1"></i>Last transfer you saved</div>
+            <div class="fw-semibold">{{ last_saved_transfer.transfer_number or ('#' ~ last_saved_transfer.id) }}</div>
+            <div class="small mt-1">
+              {{ last_saved_transfer.transfer_date|ddmmyyyy if last_saved_transfer.transfer_date else '—' }}
+              · <span class="text-success">{{ last_saved_transfer.amount }}</span>
+              {% if last_saved_transfer.payment_mode %} · {{ last_saved_transfer.payment_mode }}{% endif %}
+            </div>
+            <div class="small text-muted mt-1 mb-0">
+              From: {{ account_display_map.get(last_saved_transfer.from_account_id, '—') }}<br>
+              To: {{ account_display_map.get(last_saved_transfer.to_account_id, '—') }}
+              {% if last_saved_transfer.description %}<br><span class="text-body">{{ last_saved_transfer.description[:120] }}{% if last_saved_transfer.description|length > 120 %}…{% endif %}</span>{% endif %}
+            </div>
+          </div>
+          <a href="{{ url_for('workspace_fund_transfer_edit', pk=last_saved_transfer.id) }}" class="btn btn-sm btn-outline-secondary flex-shrink-0"><i class="bi bi-pencil me-1"></i>Open</a>
+        </div>
+      </div>
+      {% endif %}
+
       <div class="d-flex gap-2 justify-content-end mt-3">
         <a href="{{ url_for('workspace_fund_transfers_list') }}" class="btn btn-outline-secondary">Cancel</a>
         {% if not row %}
-        <button type="submit" name="_save_action" value="save_add" class="btn btn-outline-success px-4"><i class="bi bi-plus-circle me-1"></i>Save &amp; Add Next</button>
+        <button type="submit" name="_save_action" value="save_add" class="btn btn-outline-success px-4" id="wsTransferSaveAddBtn"><i class="bi bi-plus-circle me-1"></i>Save &amp; Add Next</button>
         {% endif %}
         <button type="submit" name="_save_action" value="save_list" class="btn btn-success px-4" id="wsTransferSaveBtn"><i class="bi bi-check2-circle me-1"></i>Save Transfer</button>
       </div>
@@ -154,7 +176,12 @@ document.addEventListener('DOMContentLoaded', function() {
   var attachPreview = document.getElementById('wsAttachPreview');
   var attachPreviewImg = document.getElementById('wsAttachPreviewImg');
   var saveBtn = document.getElementById('wsTransferSaveBtn');
+  var saveAddBtn = document.getElementById('wsTransferSaveAddBtn');
   var transferDateInput = document.getElementById('wsTransferDateInput');
+  function _wsFocusAfterAttachment() {
+    var t = (saveAddBtn && !saveAddBtn.disabled) ? saveAddBtn : saveBtn;
+    if (t) t.focus();
+  }
 
   var fromSelect = document.getElementById('wsFromAccountSelect');
   var toSelect = document.getElementById('wsToAccountSelect');
@@ -220,15 +247,15 @@ document.addEventListener('DOMContentLoaded', function() {
   if (attachZone && attachInput) {
     attachZone.addEventListener('click', function(){ attachInput.click(); });
     attachZone.addEventListener('keydown', function(e){
-      if (e.key === 'Tab' && !e.shiftKey && saveBtn) {
+      if (e.key === 'Tab' && !e.shiftKey && (saveAddBtn || saveBtn)) {
         e.preventDefault();
-        saveBtn.focus();
+        _wsFocusAfterAttachment();
       }
     });
     attachInput.addEventListener('keydown', function(e){
-      if (e.key === 'Tab' && !e.shiftKey && saveBtn) {
+      if (e.key === 'Tab' && !e.shiftKey && (saveAddBtn || saveBtn)) {
         e.preventDefault();
-        saveBtn.focus();
+        _wsFocusAfterAttachment();
       }
     });
     attachInput.addEventListener('change', function(){

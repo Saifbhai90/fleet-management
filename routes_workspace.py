@@ -7,7 +7,7 @@ from decimal import Decimal, InvalidOperation
 from flask import flash, redirect, render_template, request, session, url_for, make_response, jsonify
 from sqlalchemy import and_, or_, not_, cast, String
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import aliased
+from sqlalchemy.orm import aliased, joinedload
 
 from models import (
     db, Employee, Driver, Party, Account, District, Project, Vehicle,
@@ -3089,21 +3089,58 @@ def workspace_fund_transfer_form(pk=None):
                     base = f"{base} | Vehicle: {v_no}"
         account_display_map[a.id] = base
 
+    account_balance_json = {}
+    for a in accounts:
+        bal = Decimal(str(a.current_balance or 0))
+        if a.account_type in ('Asset', 'Expense'):
+            side = 'Dr' if bal >= 0 else 'Cr'
+        else:
+            side = 'Cr' if bal >= 0 else 'Dr'
+        account_balance_json[str(a.id)] = {
+            'balance': float(bal),
+            'balance_str': f"{abs(bal):,.2f} {side}",
+            'ledger_url': f'/workspace/ledger?account_id={a.id}',
+        }
+
+    last_saved_transfer = None
+    if not pk:
+        last_saved_transfer = (
+            WorkspaceFundTransfer.query.filter_by(employee_id=emp.id)
+            .options(joinedload(WorkspaceFundTransfer.from_account), joinedload(WorkspaceFundTransfer.to_account))
+            .order_by(WorkspaceFundTransfer.created_at.desc(), WorkspaceFundTransfer.id.desc())
+            .first()
+        )
+
+    def _transfer_form_ctx(extra=None):
+        ctx = dict(
+            row=row,
+            employee=emp,
+            accounts=accounts,
+            account_display_map=account_display_map,
+            categories=categories,
+            existing_attachment=(row.attachment if row else None),
+            account_balance_json=account_balance_json,
+            last_saved_transfer=last_saved_transfer,
+        )
+        if extra:
+            ctx.update(extra)
+        return ctx
+
     if request.method == "POST":
         try:
             transfer_date = parse_date(request.form.get("transfer_date"))
             amount = Decimal(str((request.form.get("amount") or "").strip()))
         except Exception:
             flash("Date and amount are required.", "danger")
-            return render_template("workspace/transfer_form.html", row=row, employee=emp, accounts=accounts, account_display_map=account_display_map, categories=categories, existing_attachment=(row.attachment if row else None))
+            return render_template("workspace/transfer_form.html", **_transfer_form_ctx())
         from_account_id = request.form.get("from_account_id", type=int)
         to_account_id = request.form.get("to_account_id", type=int)
         if not from_account_id:
             flash("From account is required.", "danger")
-            return render_template("workspace/transfer_form.html", row=row, employee=emp, accounts=accounts, account_display_map=account_display_map, categories=categories, existing_attachment=(row.attachment if row else None))
+            return render_template("workspace/transfer_form.html", **_transfer_form_ctx())
         if not to_account_id:
             flash("To account is required.", "danger")
-            return render_template("workspace/transfer_form.html", row=row, employee=emp, accounts=accounts, account_display_map=account_display_map, categories=categories, existing_attachment=(row.attachment if row else None))
+            return render_template("workspace/transfer_form.html", **_transfer_form_ctx())
 
         attachment_url = _upload_workspace_transfer_attachment(request.files.get("attachment"))
 
@@ -3142,19 +3179,7 @@ def workspace_fund_transfer_form(pk=None):
         if request.form.get("_save_action") == "save_add":
             return redirect(url_for("workspace_fund_transfer_new"))
         return redirect(url_for("workspace_fund_transfers_list"))
-    account_balance_json = {}
-    for a in accounts:
-        bal = Decimal(str(a.current_balance or 0))
-        if a.account_type in ('Asset', 'Expense'):
-            side = 'Dr' if bal >= 0 else 'Cr'
-        else:
-            side = 'Cr' if bal >= 0 else 'Dr'
-        account_balance_json[str(a.id)] = {
-            'balance': float(bal),
-            'balance_str': f"{abs(bal):,.2f} {side}",
-            'ledger_url': f'/workspace/ledger?account_id={a.id}',
-        }
-    return render_template("workspace/transfer_form.html", row=row, employee=emp, accounts=accounts, account_display_map=account_display_map, categories=categories, existing_attachment=(row.attachment if row else None), account_balance_json=account_balance_json)
+    return render_template("workspace/transfer_form.html", **_transfer_form_ctx())
 
 
 def workspace_fund_transfer_delete(pk):
