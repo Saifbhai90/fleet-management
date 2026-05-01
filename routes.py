@@ -16746,6 +16746,21 @@ def driver_attendance_missing_checkout():
     )
 
 
+def _manual_attendance_driver_id():
+    """Resolve driver_id when query string repeats keys (e.g. filter driver_id=0 + row driver_id). Last positive id wins."""
+    merged = []
+    merged.extend(request.args.getlist('driver_id'))
+    merged.extend(request.form.getlist('driver_id'))
+    for raw in reversed(merged):
+        try:
+            n = int(raw)
+            if n > 0:
+                return n
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
 @app.route('/driver-attendance/manual-checkin', methods=['GET', 'POST'])
 def driver_attendance_manual_checkin():
     """Manual check-in form: new check-in, or edit existing check-in time when attendance_id is set."""
@@ -16754,7 +16769,7 @@ def driver_attendance_manual_checkin():
     uid = session.get('user_id')
     uc = get_user_context(uid) if uid else {}
     local_today = _attendance_local_date()
-    driver_id = request.args.get('driver_id', type=int) or request.form.get('driver_id', type=int)
+    driver_id = _manual_attendance_driver_id()
     attendance_id = request.args.get('attendance_id', type=int) or request.form.get('attendance_id', type=int)
     date_str = request.args.get('date') or request.form.get('date')
     view_date = parse_date(date_str) if date_str else local_today
@@ -16913,7 +16928,7 @@ def driver_attendance_manual_checkout():
     uid = session.get('user_id')
     uc = get_user_context(uid) if uid else {}
     local_today = _attendance_local_date()
-    driver_id = request.args.get('driver_id', type=int) or request.form.get('driver_id', type=int)
+    driver_id = _manual_attendance_driver_id()
     attendance_id = request.args.get('attendance_id', type=int) or request.form.get('attendance_id', type=int)
     date_str = request.args.get('date') or request.form.get('date')
     view_date = parse_date(date_str) if date_str else local_today
