@@ -17,19 +17,19 @@
       <div class="alert alert-light border mb-3">
         <small class="text-muted">Product naam likhte waqt <strong>maujood list filter</strong> hoti rahegi. Wohi naam (spacing/case) dubara nahi. Bahut milta-julta naam pe pehle <strong>confirm</strong> karein.</small>
       </div>
-      {% if show_similar_ack|default(false) %}
-      <div class="alert alert-warning border-warning mb-3">
-        <strong><i class="bi bi-exclamation-triangle me-1"></i>Milta-julta product:</strong>
-        “<a href="{{ url_for('workspace_product_edit', pk=similar_product_id) }}" target="_blank">{{ similar_product_name }}</a>”
-        {% if similar_score %}<span class="badge bg-secondary ms-1">~{{ (similar_score * 100)|round(0, 'floor')|int }}% match</span>{% endif %}
-        <div class="form-check mt-2">
-          <input class="form-check-input" type="checkbox" name="ack_similar" value="1" id="ackSimilarProd">
-          <label class="form-check-label" for="ackSimilarProd">Main confirm karta / karti hoon — yeh <strong>alag</strong> naya product hai (spelling / naam jaiz taur par different hai).</label>
-        </div>
-      </div>
-      {% endif %}
       <form method="post" id="wsProductForm">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {% if show_similar_ack|default(false) %}
+        <div class="alert alert-warning border-warning mb-3">
+          <strong><i class="bi bi-exclamation-triangle me-1"></i>Milta-julta product:</strong>
+          “<a href="{{ url_for('workspace_product_edit', pk=similar_product_id) }}" target="_blank">{{ similar_product_name }}</a>”
+          {% if similar_score %}<span class="badge bg-secondary ms-1">~{{ (similar_score * 100)|round(0, 'floor')|int }}% match</span>{% endif %}
+          <div class="form-check mt-2">
+            <input class="form-check-input" type="checkbox" name="ack_similar" value="1" id="ackSimilarProd">
+            <label class="form-check-label" for="ackSimilarProd">Main confirm karta / karti hoon — yeh <strong>alag</strong> naya product hai (spelling / naam jaiz taur par different hai).</label>
+          </div>
+        </div>
+        {% endif %}
         <div class="row g-3">
           <div class="col-md-8">
             <label class="form-label fw-semibold">Product Name <span class="text-danger">*</span></label>

@@ -14,20 +14,20 @@
       <div class="alert alert-light border mb-3">
         <small class="text-muted">Naam type karte waqt <strong>pehle se maujood parties filter</strong> hongi (type bhi chunein to wahi type ke andar). Same naam dubara nahi (employee workspace par).</small>
       </div>
-      {% if show_similar_ack|default(false) %}
-      <div class="alert alert-warning border-warning mb-3">
-        <strong><i class="bi bi-exclamation-triangle me-1"></i>Milta-julta party:</strong>
-        “<a href="{{ url_for('workspace_party_edit', pk=similar_party_id) }}" target="_blank">{{ similar_party_name }}</a>”
-        {% if similar_score %}<span class="badge bg-secondary ms-1">~{{ (similar_score * 100)|round(0, 'floor')|int }}% match</span>{% endif %}
-        <div class="form-check mt-2">
-          <input class="form-check-input" type="checkbox" name="ack_similar" value="1" id="ackSimilarParty">
-          <label class="form-check-label" for="ackSimilarParty">Main confirm karta / karti hoon — yeh <strong>alag</strong> nayi party hai (spelling / naam jaiz taur par different hai).</label>
-        </div>
-      </div>
-      {% endif %}
       <form method="post" id="wsPartyForm">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="next" value="{{ next_url or '' }}">
+        {% if show_similar_ack|default(false) %}
+        <div class="alert alert-warning border-warning mb-3">
+          <strong><i class="bi bi-exclamation-triangle me-1"></i>Milta-julta party:</strong>
+          “<a href="{{ url_for('workspace_party_edit', pk=similar_party_id) }}" target="_blank">{{ similar_party_name }}</a>”
+          {% if similar_score %}<span class="badge bg-secondary ms-1">~{{ (similar_score * 100)|round(0, 'floor')|int }}% match</span>{% endif %}
+          <div class="form-check mt-2">
+            <input class="form-check-input" type="checkbox" name="ack_similar" value="1" id="ackSimilarParty">
+            <label class="form-check-label" for="ackSimilarParty">Main confirm karta / karti hoon — yeh <strong>alag</strong> nayi party hai (spelling / naam jaiz taur par different hai).</label>
+          </div>
+        </div>
+        {% endif %}
         <div class="row g-3">
           <div class="col-md-6">
             <label class="form-label fw-semibold">Party Name <span class="text-danger">*</span></label>
