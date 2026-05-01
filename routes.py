@@ -16748,20 +16748,33 @@ def driver_attendance_missing_checkout():
 
 @app.route('/driver-attendance/manual-checkin', methods=['GET', 'POST'])
 def driver_attendance_manual_checkin():
-    """Manual check-in form: set check-in time for a driver who has not checked in."""
+    """Manual check-in form: new check-in, or edit existing check-in time when attendance_id is set."""
+    from auth_utils import get_user_context
+
+    uid = session.get('user_id')
+    uc = get_user_context(uid) if uid else {}
     local_today = _attendance_local_date()
     driver_id = request.args.get('driver_id', type=int) or request.form.get('driver_id', type=int)
+    attendance_id = request.args.get('attendance_id', type=int) or request.form.get('attendance_id', type=int)
     date_str = request.args.get('date') or request.form.get('date')
     view_date = parse_date(date_str) if date_str else local_today
     if view_date > local_today:
         flash('Manual check-in cannot be recorded for a future date.', 'danger')
         return redirect(url_for('driver_attendance_pending', date=local_today.strftime('%d-%m-%Y')))
     back_params = {}
-    for k in ('project_id', 'district_id', 'vehicle_id', 'shift', 'search'):
+    for k in ('project_id', 'district_id', 'vehicle_id', 'shift', 'search', 'from_date', 'to_date', 'driver_id', 'duty_shift', 'page', 'per_page'):
         v = request.args.get(k) or request.form.get(k)
         if v is not None and v != '':
             back_params[k] = v
-    back_url = url_for('driver_attendance_pending', date=view_date.strftime('%d-%m-%Y'), **back_params)
+    back_to = request.args.get('back_to') or request.form.get('back_to') or ''
+    if back_to:
+        back_params['back_to'] = back_to
+    if back_to == 'attendance_list':
+        list_params = {k: v for k, v in back_params.items() if k != 'back_to'}
+        back_url = url_for('driver_attendance_list', **list_params)
+    else:
+        bp = {k: v for k, v in back_params.items() if k != 'back_to'}
+        back_url = url_for('driver_attendance_pending', date=view_date.strftime('%d-%m-%Y'), **bp)
 
     if not driver_id:
         flash('Driver select karein.', 'danger')
@@ -16772,39 +16785,63 @@ def driver_attendance_manual_checkin():
         flash('Driver nahi mila.', 'danger')
         return redirect(back_url)
 
-    cap = _vehicle_capacity_value(driver.vehicle)
-    if _driver_has_open_segment(driver_id, view_date):
-        flash(
-            'Is driver ka aaj ka ek session abhi khula hai (check-out pending). Pehle check-out karein.',
-            'warning',
-        )
-        return redirect(back_url)
-    if _count_driver_segments_with_checkin(driver_id, view_date) >= cap:
-        flash(
-            f'Is driver ke liye aaj maximum {cap} shift/session ho chuki hain — mazeed manual check-in allow nahi.',
-            'warning',
-        )
-        return redirect(back_url)
-    blocked = _manual_checkin_blocked_by_vehicle_rules(driver_id, driver.vehicle, view_date)
-    if blocked:
-        flash(blocked, 'warning')
-        return redirect(back_url)
-    if _driver_marked_duty_off_no_checkin(driver_id, view_date):
-        flash(
-            'Aaj ki is date par is driver ki duty Bulk Status se Off mark hai — manual check-in list mein nahi aate aur yahan check-in allow nahi.',
-            'warning',
-        )
-        return redirect(back_url)
+    edit_rec = None
+    if attendance_id:
+        edit_rec = DriverAttendance.query.get(attendance_id)
+        if not edit_rec or edit_rec.driver_id != driver_id or edit_rec.attendance_date != view_date:
+            flash('Attendance record mismatch.', 'danger')
+            return redirect(back_url)
+        if not _driver_attendance_record_allowed_for_user(edit_rec, uc):
+            flash('Access denied.', 'danger')
+            return redirect(back_url)
+        if not edit_rec.check_in:
+            flash('Is record par check-in maujood nahi — edit nahi ho sakta.', 'warning')
+            return redirect(back_url)
+    else:
+        cap = _vehicle_capacity_value(driver.vehicle)
+        if _driver_has_open_segment(driver_id, view_date):
+            flash(
+                'Is driver ka aaj ka ek session abhi khula hai (check-out pending). Pehle check-out karein.',
+                'warning',
+            )
+            return redirect(back_url)
+        if _count_driver_segments_with_checkin(driver_id, view_date) >= cap:
+            flash(
+                f'Is driver ke liye aaj maximum {cap} shift/session ho chuki hain — mazeed manual check-in allow nahi.',
+                'warning',
+            )
+            return redirect(back_url)
+        blocked = _manual_checkin_blocked_by_vehicle_rules(driver_id, driver.vehicle, view_date)
+        if blocked:
+            flash(blocked, 'warning')
+            return redirect(back_url)
+        if _driver_marked_duty_off_no_checkin(driver_id, view_date):
+            flash(
+                'Aaj ki is date par is driver ki duty Bulk Status se Off mark hai — manual check-in list mein nahi aate aur yahan check-in allow nahi.',
+                'warning',
+            )
+            return redirect(back_url)
+
+    tpl = dict(
+        driver=driver,
+        view_date=view_date,
+        back_url=back_url,
+        back_params={k: v for k, v in back_params.items() if k != 'back_to'},
+        edit_mode=bool(edit_rec),
+        edit_rec=edit_rec,
+        back_to=back_to,
+    )
 
     if request.method == 'POST':
         time_str = (request.form.get('check_in_time') or '').strip()
         remarks_add = (request.form.get('remarks') or '').strip()
+        post_aid = request.form.get('attendance_id', type=int)
         if not time_str:
             flash('Check-in time zaroori hai.', 'danger')
-            return render_template('driver_attendance_manual_checkin.html', driver=driver, view_date=view_date, back_url=back_url, back_params=back_params)
+            return render_template('driver_attendance_manual_checkin.html', **tpl)
         if not remarks_add:
-            flash('Reason zaroori hai (manual check-in kyun kar rahe hain).', 'danger')
-            return render_template('driver_attendance_manual_checkin.html', driver=driver, view_date=view_date, back_url=back_url, back_params=back_params)
+            flash('Reason zaroori hai (manual check-in / edit ka reason).', 'danger')
+            return render_template('driver_attendance_manual_checkin.html', **tpl)
         try:
             from datetime import time as dt_time
             parts = time_str.split(':')
@@ -16814,7 +16851,7 @@ def driver_attendance_manual_checkin():
             check_in_t = dt_time(h, m, s)
         except (ValueError, IndexError):
             flash('Invalid check-in time. HH:MM format use karein.', 'danger')
-            return render_template('driver_attendance_manual_checkin.html', driver=driver, view_date=view_date, back_url=back_url, back_params=back_params)
+            return render_template('driver_attendance_manual_checkin.html', **tpl)
         photo_path = None
         photo = request.files.get('photo')
         if photo and photo.filename:
@@ -16823,6 +16860,29 @@ def driver_attendance_manual_checkin():
                 photo_path = upload_image_file(photo, folder="attendance")
             except Exception as e:
                 flash(f'Photo save nahi hua (cloud storage): {str(e)}', 'warning')
+        if post_aid:
+            rec = DriverAttendance.query.get(post_aid)
+            if not rec or rec.driver_id != driver_id or rec.attendance_date != view_date:
+                flash('Invalid attendance record.', 'danger')
+                return redirect(back_url)
+            if not _driver_attendance_record_allowed_for_user(rec, uc):
+                flash('Access denied.', 'danger')
+                return redirect(back_url)
+            rec.check_in = check_in_t
+            if photo_path:
+                rec.check_in_photo_path = photo_path
+            tag = 'Manual check-in edit'
+            rec.remarks = (rec.remarks or '').rstrip() + (' | ' + tag + ': ' + remarks_add if remarks_add else (' | ' + tag))
+            rec.updated_at = pk_now()
+            try:
+                db.session.commit()
+                flash('Check-in update ho gaya.', 'success')
+                return redirect(back_url)
+            except Exception as e:
+                db.session.rollback()
+                flash(f'Error: {str(e)}', 'danger')
+            return render_template('driver_attendance_manual_checkin.html', **tpl)
+
         seg = _next_attendance_segment(driver_id, view_date)
         rec = DriverAttendance(
             driver_id=driver_id,
@@ -16842,21 +16902,26 @@ def driver_attendance_manual_checkin():
         except Exception as e:
             db.session.rollback()
             flash(f'Error: {str(e)}', 'danger')
-    return render_template('driver_attendance_manual_checkin.html', driver=driver, view_date=view_date, back_url=back_url, back_params=back_params)
+    return render_template('driver_attendance_manual_checkin.html', **tpl)
 
 
 @app.route('/driver-attendance/manual-checkout', methods=['GET', 'POST'])
 def driver_attendance_manual_checkout():
-    """Manual check-out form: set check-out time (and optional remarks) for a driver who has check-in but no check-out."""
+    """Manual check-out: new checkout for open session, or edit existing checkout when attendance_id is set."""
+    from auth_utils import get_user_context
+
+    uid = session.get('user_id')
+    uc = get_user_context(uid) if uid else {}
     local_today = _attendance_local_date()
     driver_id = request.args.get('driver_id', type=int) or request.form.get('driver_id', type=int)
+    attendance_id = request.args.get('attendance_id', type=int) or request.form.get('attendance_id', type=int)
     date_str = request.args.get('date') or request.form.get('date')
     view_date = parse_date(date_str) if date_str else local_today
     if view_date > local_today:
         flash('Manual check-out cannot be recorded for a future date.', 'danger')
         return redirect(url_for('driver_attendance_missing_checkout', date=local_today.strftime('%d-%m-%Y')))
     back_params = {}
-    for k in ('project_id', 'district_id', 'vehicle_id', 'shift', 'search'):
+    for k in ('project_id', 'district_id', 'vehicle_id', 'shift', 'search', 'from_date', 'to_date', 'driver_id', 'duty_shift', 'page', 'per_page'):
         v = request.args.get(k) or request.form.get(k)
         if v is not None and v != '':
             back_params[k] = v
@@ -16865,7 +16930,7 @@ def driver_attendance_manual_checkout():
         back_params['back_to'] = back_to
     if back_to == 'attendance_list':
         list_params = {k: v for k, v in back_params.items() if k != 'back_to'}
-        back_url = url_for('driver_attendance_list', date=view_date.strftime('%d-%m-%Y'), **list_params)
+        back_url = url_for('driver_attendance_list', **list_params)
     else:
         back_url = url_for('driver_attendance_missing_checkout', date=view_date.strftime('%d-%m-%Y'), **{k: v for k, v in back_params.items() if k != 'back_to'})
 
@@ -16873,21 +16938,64 @@ def driver_attendance_manual_checkout():
         flash('Driver select karein.', 'danger')
         return redirect(back_url)
 
-    driver = Driver.query.get(driver_id)
+    driver = Driver.query.options(joinedload(Driver.vehicle)).get(driver_id)
     if not driver:
         flash('Driver nahi mila.', 'danger')
         return redirect(back_url)
 
-    rec = _open_driver_attendance_for_manual_checkout(driver_id, view_date)
-    if not rec:
-        flash('Is date ke liye khula check-in session nahi mila — ya check-out pehle hi ho chuka hai.', 'danger')
-        return redirect(back_url)
+    rec = None
+    if attendance_id:
+        rec = DriverAttendance.query.options(joinedload(DriverAttendance.driver)).get(attendance_id)
+        if not rec or rec.driver_id != driver_id or rec.attendance_date != view_date:
+            flash('Attendance record mismatch.', 'danger')
+            return redirect(back_url)
+        if not _driver_attendance_record_allowed_for_user(rec, uc):
+            flash('Access denied.', 'danger')
+            return redirect(back_url)
+        if not rec.check_in:
+            flash('Is record par check-in maujood nahi — check-out edit nahi ho sakta.', 'warning')
+            return redirect(back_url)
+    else:
+        rec = _open_driver_attendance_for_manual_checkout(driver_id, view_date)
+        if not rec:
+            flash('Is date ke liye khula check-in session nahi mila — ya check-out pehle hi ho chuka hai.', 'danger')
+            return redirect(back_url)
 
+    checkout_edit_mode = bool(attendance_id and rec.check_out)
     _glob_setting = AttendanceTimeOverride.query.filter_by(scope='global').first()
     allow_future = _glob_setting.allow_future_checkout if _glob_setting else False
-    tpl_kwargs = dict(driver=driver, rec=rec, view_date=view_date, back_url=back_url, back_params=back_params, allow_future_checkout=allow_future)
+    tpl_kwargs = dict(
+        driver=driver,
+        rec=rec,
+        view_date=view_date,
+        back_url=back_url,
+        back_params={k: v for k, v in back_params.items() if k != 'back_to'},
+        allow_future_checkout=allow_future,
+        back_to=back_to,
+        checkout_edit_mode=checkout_edit_mode,
+    )
 
     if request.method == 'POST':
+        post_aid = request.form.get('attendance_id', type=int)
+        if post_aid:
+            rec = DriverAttendance.query.get(post_aid)
+            if not rec or rec.driver_id != driver_id or rec.attendance_date != view_date:
+                flash('Invalid attendance record.', 'danger')
+                return redirect(back_url)
+            if not _driver_attendance_record_allowed_for_user(rec, uc):
+                flash('Access denied.', 'danger')
+                return redirect(back_url)
+            if not rec.check_in:
+                flash('Check-in zaroori hai.', 'danger')
+                return redirect(back_url)
+        else:
+            rec = _open_driver_attendance_for_manual_checkout(driver_id, view_date)
+            if not rec:
+                flash('Is date ke liye khula check-in session nahi mila.', 'danger')
+                return redirect(back_url)
+        tpl_kwargs['rec'] = rec
+        tpl_kwargs['checkout_edit_mode'] = bool(rec.check_out)
+
         time_str = (request.form.get('check_out_time') or '').strip()
         checkout_date_str = (request.form.get('check_out_date') or '').strip()
         remarks_add = (request.form.get('remarks') or '').strip()
@@ -16895,7 +17003,7 @@ def driver_attendance_manual_checkout():
             flash('Check-out time zaroori hai.', 'danger')
             return render_template('driver_attendance_manual_checkout.html', **tpl_kwargs)
         if not remarks_add:
-            flash('Reason zaroori hai (manual check-out kyun kar rahe hain).', 'danger')
+            flash('Reason zaroori hai (manual check-out / edit ka reason).', 'danger')
             return render_template('driver_attendance_manual_checkout.html', **tpl_kwargs)
         try:
             from datetime import time as dt_time, timedelta
@@ -16934,15 +17042,17 @@ def driver_attendance_manual_checkout():
                 photo_path = upload_image_file(photo, folder="attendance")
             except Exception as e:
                 flash(f'Photo save nahi hua (cloud storage): {str(e)}', 'warning')
+        was_existing_checkout = rec.check_out is not None
         rec.check_out = check_out_t
         rec.check_out_date = check_out_d
-        rec.remarks = (rec.remarks or '').rstrip() + (' | Manual check-out' + (': ' + remarks_add if remarks_add else ''))
+        tag = 'Manual check-out edit' if was_existing_checkout else 'Manual check-out'
+        rec.remarks = (rec.remarks or '').rstrip() + (' | ' + tag + (': ' + remarks_add if remarks_add else ''))
         if photo_path:
             rec.check_out_photo_path = photo_path
         rec.updated_at = pk_now()
         try:
             db.session.commit()
-            flash('Manual check-out save ho gaya.', 'success')
+            flash('Check-out update ho gaya.' if was_existing_checkout else 'Manual check-out save ho gaya.', 'success')
             return redirect(back_url)
         except Exception as e:
             db.session.rollback()

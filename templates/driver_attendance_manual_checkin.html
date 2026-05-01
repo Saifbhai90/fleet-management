@@ -4,13 +4,13 @@
 {% block content %}
 <div class="container-fluid">
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
-    <h2 class="mb-0"><i class="bi bi-pencil-square me-2 text-success"></i>Manual Check-in</h2>
-    <a href="{{ back_url }}" class="btn btn-outline-primary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back to Missing Check IN</a>
+    <h2 class="mb-0"><i class="bi bi-pencil-square me-2 text-success"></i>{% if edit_mode %}Edit Check-in{% else %}Manual Check-in{% endif %}</h2>
+    <a href="{{ back_url }}" class="btn btn-outline-primary btn-sm"><i class="bi bi-arrow-left me-1"></i>{% if back_to == 'attendance_list' %}Back to Attendance List{% else %}Back to Missing Check IN{% endif %}</a>
   </div>
 
   <div class="card shadow-sm border-0 rounded-3" style="max-width: 520px;">
     <div class="card-body">
-      <p class="text-muted small mb-3">Driver ne abhi check-in nahi kiya; yahan se manually check-in time set karein.</p>
+      <p class="text-muted small mb-3">{% if edit_mode %}Attendance list se check-in time / photo update karein — save par isi record par apply hoga.{% else %}Driver ne abhi check-in nahi kiya; yahan se manually check-in time set karein.{% endif %}</p>
       <dl class="row mb-0 small">
         <dt class="col-sm-4">District</dt>
         <dd class="col-sm-8">{{ driver.district.name if driver.district else (driver.vehicle.district.name if driver.vehicle and driver.vehicle.district else '-') }}</dd>
@@ -30,12 +30,14 @@
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="driver_id" value="{{ driver.id }}">
         <input type="hidden" name="date" value="{{ view_date.strftime('%d-%m-%Y') }}">
+        {% if back_to %}<input type="hidden" name="back_to" value="{{ back_to }}">{% endif %}
+        {% if edit_mode and edit_rec %}<input type="hidden" name="attendance_id" value="{{ edit_rec.id }}">{% endif %}
         {% for k, v in (back_params or {}).items() %}
         <input type="hidden" name="{{ k }}" value="{{ v }}">
         {% endfor %}
         <div class="mb-3">
           <label class="form-label fw-semibold">Check-in Time <span class="text-danger">*</span> <span id="checkInTimeSourceBadge" class="badge text-bg-secondary ms-1 d-none"></span></label>
-          <input type="time" id="checkInTime" name="check_in_time" class="form-control form-control-lg" required step="60" value="{{ request.form.get('check_in_time', '') }}">
+          <input type="time" id="checkInTime" name="check_in_time" class="form-control form-control-lg" required step="60" value="{{ request.form.get('check_in_time', edit_rec.check_in.strftime('%H:%M') if edit_mode and edit_rec and edit_rec.check_in else '') }}">
           <div class="form-text">Format: HH:MM AM/PM (e.g. 9:00 AM, 5:30 PM) — seconds mat likhein.</div>
         </div>
         <div class="mb-3">
@@ -50,7 +52,7 @@
         </div>
         <div class="d-flex gap-2">
           <button type="submit" class="btn btn-success">
-            <i class="bi bi-check2 me-1"></i>Save Check-in
+            <i class="bi bi-check2 me-1"></i>{% if edit_mode %}Update Check-in{% else %}Save Check-in{% endif %}
           </button>
           <span id="checkInDateWarnBadge" class="badge text-bg-warning align-self-center d-none">
             <i class="bi bi-exclamation-triangle-fill me-1"></i>Date No match

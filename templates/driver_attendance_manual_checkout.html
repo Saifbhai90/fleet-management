@@ -4,13 +4,13 @@
 {% block content %}
 <div class="container-fluid">
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
-    <h2 class="mb-0"><i class="bi bi-pencil-square me-2 text-danger"></i>Manual Check-out</h2>
-    <a href="{{ back_url }}" class="btn btn-outline-primary btn-sm"><i class="bi bi-arrow-left me-1"></i>{% if 'attendance-list' in back_url %}Back to Attendance List{% else %}Back to Missing Check-outs{% endif %}</a>
+    <h2 class="mb-0"><i class="bi bi-pencil-square me-2 text-danger"></i>{% if checkout_edit_mode %}Edit Check-out{% else %}Manual Check-out{% endif %}</h2>
+    <a href="{{ back_url }}" class="btn btn-outline-primary btn-sm"><i class="bi bi-arrow-left me-1"></i>{% if back_to == 'attendance_list' %}Back to Attendance List{% else %}Back to Missing Check-outs{% endif %}</a>
   </div>
 
   <div class="card shadow-sm border-0 rounded-3" style="max-width: 520px;">
     <div class="card-body">
-      <p class="text-muted small mb-3">Driver ne check-in kar liya hai, ab check-out time manually set karein.</p>
+      <p class="text-muted small mb-3">{% if checkout_edit_mode %}Attendance list se check-out time / date / photo update karein — save par isi session par apply hoga.{% else %}Driver ne check-in kar liya hai, ab check-out time manually set karein.{% endif %}</p>
       <dl class="row mb-0 small">
         <dt class="col-sm-4">District</dt>
         <dd class="col-sm-8">{{ driver.district.name if driver.district else (driver.vehicle.district.name if driver.vehicle and driver.vehicle.district else '-') }}</dd>
@@ -32,18 +32,20 @@
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="driver_id" value="{{ driver.id }}">
         <input type="hidden" name="date" value="{{ view_date.strftime('%d-%m-%Y') }}">
+        {% if rec %}<input type="hidden" name="attendance_id" value="{{ rec.id }}">{% endif %}
+        {% if back_to %}<input type="hidden" name="back_to" value="{{ back_to }}">{% endif %}
         {% for k, v in (back_params or {}).items() %}
         <input type="hidden" name="{{ k }}" value="{{ v }}">
         {% endfor %}
         <div class="mb-3">
           <label class="form-label fw-semibold">Check-out Time <span class="text-danger">*</span> <span id="checkOutTimeSourceBadge" class="badge text-bg-secondary ms-1 d-none"></span></label>
-          <input type="time" id="checkOutTime" name="check_out_time" class="form-control form-control-lg" required step="60" value="{{ request.form.get('check_out_time', '') }}">
+          <input type="time" id="checkOutTime" name="check_out_time" class="form-control form-control-lg" required step="60" value="{{ request.form.get('check_out_time', rec.check_out.strftime('%H:%M') if rec and rec.check_out else '') }}">
           <div class="form-text">Format: HH:MM (e.g. 09:00, 17:30)</div>
         </div>
         <div class="mb-3">
           <label class="form-label fw-semibold">Check-out Date <span class="text-danger">*</span></label>
           <input type="date" id="checkOutDate" name="check_out_date" class="form-control" required
-                 value="{{ request.form.get('check_out_date', view_date.strftime('%Y-%m-%d')) }}"
+                 value="{{ request.form.get('check_out_date', (rec.check_out_date.strftime('%Y-%m-%d') if rec and rec.check_out_date else view_date.strftime('%Y-%m-%d'))) }}"
                  min="{{ view_date.strftime('%Y-%m-%d') }}">
           <div class="form-text">Night shift ke liye agle din ki date select karein.</div>
           <div id="nightShiftHint" class="alert alert-info small mt-2 py-2 px-3 d-none">
@@ -63,7 +65,7 @@
         </div>
         <div class="d-flex gap-2">
           <button type="submit" class="btn btn-danger">
-            <i class="bi bi-check2 me-1"></i>Save Check-out
+            <i class="bi bi-check2 me-1"></i>{% if checkout_edit_mode %}Update Check-out{% else %}Save Check-out{% endif %}
           </button>
           <span id="checkOutDateWarnBadge" class="badge text-bg-warning align-self-center d-none">
             <i class="bi bi-exclamation-triangle-fill me-1"></i>Date No match
