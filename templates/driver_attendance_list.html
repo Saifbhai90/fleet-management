@@ -659,8 +659,113 @@ function doPhotoAction(type) {
   }
 }
 
-function downloadPhotos(urls) {
+/** Share-failure debug: same flow on all devices — collect errors, show copyable modal when share → download fallback. */
+function attendanceResetShareDebug() {
+  window.__attendanceShareLastDebug = [];
+}
+function attendancePushShareDebug(stage, err) {
+  window.__attendanceShareLastDebug = window.__attendanceShareLastDebug || [];
+  var msg = '(no detail)';
+  if (err != null && err !== undefined) {
+    if (typeof err === 'string') msg = err;
+    else {
+      try {
+        msg = (err.message != null && err.message !== '') ? String(err.message) : String(err);
+        if (err.name) msg = err.name + ': ' + msg;
+        if (err.code != null && err.code !== '') msg += ' | code=' + err.code;
+      } catch (e) { msg = String(err); }
+    }
+  }
+  window.__attendanceShareLastDebug.push({ stage: String(stage || '?'), message: msg });
+}
+
+function attendanceBuildShareDebugText(meta) {
+  var lines = [];
+  lines.push('=== Fleet Manager — Attendance photo share debug ===');
+  lines.push('Local: ' + new Date().toString());
+  lines.push('');
+  try {
+    lines.push('UserAgent: ' + navigator.userAgent);
+  } catch (e) { lines.push('UserAgent: (n/a)'); }
+  try {
+    lines.push('language: ' + navigator.language);
+    if (navigator.maxTouchPoints != null) lines.push('maxTouchPoints: ' + navigator.maxTouchPoints);
+  } catch (e) {}
+  try {
+    var C = window.Capacitor;
+    if (C && typeof C.getPlatform === 'function') lines.push('Capacitor.getPlatform(): ' + C.getPlatform());
+  } catch (e) {}
+  lines.push('navigator.share: ' + (typeof navigator !== 'undefined' && typeof navigator.share === 'function' ? 'yes' : 'no'));
+  lines.push('navigator.canShare: ' + (typeof navigator !== 'undefined' && typeof navigator.canShare === 'function' ? 'yes' : 'no'));
+  var fsP = !!(window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem);
+  var shP = !!(window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Share);
+  lines.push('Capacitor Filesystem: ' + (fsP ? 'yes' : 'no'));
+  lines.push('Capacitor Share: ' + (shP ? 'yes' : 'no'));
+  lines.push('FleetBridge.isNative: ' + !!(window.FleetBridge && window.FleetBridge.isNative));
+  lines.push('innerWidth x innerHeight: ' + (typeof innerWidth !== 'undefined' ? innerWidth + 'x' + innerHeight : '?'));
+  lines.push('');
+  if (meta) {
+    if (meta.urlsCount != null) lines.push('photoCount: ' + meta.urlsCount);
+    if (meta.photoType) lines.push('filterType: ' + meta.photoType);
+    if (meta.note) lines.push('outcome: ' + meta.note);
+  }
+  lines.push('');
+  lines.push('--- Failure / step log ---');
+  var steps = window.__attendanceShareLastDebug || [];
+  if (!steps.length) lines.push('(no step logged — fail before hooks or unknown path)');
+  else steps.forEach(function(x, i) { lines.push((i + 1) + ') [' + x.stage + '] ' + x.message); });
+  lines.push('');
+  lines.push('App versions: mobile project package.json → @capacitor/core, @capacitor/share');
+  lines.push('Phone: Settings → About phone → Android version / model');
+  return lines.join('\n');
+}
+
+function attendanceShowShareDebugModal(meta) {
+  var text = attendanceBuildShareDebugText(meta);
+  var ta = document.getElementById('attendanceShareDebugText');
+  var modalEl = document.getElementById('attendanceShareDebugModal');
+  if (ta) {
+    ta.value = text;
+    try { ta.focus(); ta.select(); } catch (e) {}
+  }
+  if (modalEl && typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+    bootstrap.Modal.getOrCreateInstance(modalEl).show();
+  } else if (ta) {
+    try { prompt('Copy debug text:', text); } catch (e2) { alert(text.substring(0, 800)); }
+  }
+}
+
+function attendanceCopyShareDebug() {
+  var ta = document.getElementById('attendanceShareDebugText');
+  if (!ta || !ta.value) return;
+  var v = ta.value;
+  function ok() {
+    if (window.FleetBridge && window.FleetBridge._toast) window.FleetBridge._toast('Debug note copied.');
+    else alert('Copied.');
+  }
+  function fail() {
+    try {
+      ta.focus(); ta.select();
+      document.execCommand('copy');
+      ok();
+    } catch (e) {
+      prompt('Copy manually:', v);
+    }
+  }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(v).then(ok).catch(fail);
+  } else fail();
+}
+
+function downloadPhotos(urls, opts) {
   var isNative = window.FleetBridge && window.FleetBridge.isNative;
+  if (opts && opts.afterShareFail) {
+    attendanceShowShareDebugModal({
+      urlsCount: urls.length,
+      photoType: opts.photoType || '',
+      note: opts.note || 'Photos save / download fallback (share sheet did not complete).'
+    });
+  }
   if (isNative) {
     _nativeDownloadPhotos(urls, 0);
     return;
@@ -695,6 +800,7 @@ function _nativeDownloadPhotos(urls, idx) {
 }
 
 function sharePhotos(urls, type) {
+  attendanceResetShareDebug();
   var isNative = window.FleetBridge && window.FleetBridge.isNative;
   var MAX_SHARE = 30;
   if (urls.length > MAX_SHARE) {
@@ -719,35 +825,32 @@ function sharePhotos(urls, type) {
 
   function tryNavigatorShare() {
     if (typeof navigator === 'undefined' || !navigator.share) {
-      return Promise.reject(new Error('no share'));
+      attendancePushShareDebug('navigator_share', new Error('navigator.share not available'));
+      return Promise.reject(new Error('navigator.share not available'));
     }
-    return fetchAsFiles().then(function(files) {
+    return fetchAsFiles().catch(function(err) {
+      attendancePushShareDebug('fetch_images_for_share', err);
+      return Promise.reject(err);
+    }).then(function(files) {
       var data = { files: files, title: 'Attendance photos', text: 'Attendance photos (' + files.length + ')' };
       try {
         if (typeof navigator.canShare === 'function' && files.length && !navigator.canShare(data)) {
-          console.warn('[Attendance share] canShare=false — trying navigator.share anyway (some WebViews)');
+          attendancePushShareDebug('navigator_canShare_hint', new Error('canShare returned false (still attempted share)'));
         }
       } catch (e) {}
-      return navigator.share(data);
+      return navigator.share(data).catch(function(err) {
+        attendancePushShareDebug('navigator_share_api', err);
+        return Promise.reject(err);
+      });
     });
-  }
-
-  /** Short label for toasts — full plugin versions are in the mobile app repo (package.json / build.gradle). */
-  function attendanceShareDiagShort() {
-    try {
-      var C = window.Capacitor;
-      return (C && typeof C.getPlatform === 'function') ? C.getPlatform() : 'web';
-    } catch (e) {
-      return '?';
-    }
   }
 
   /* Multiple images: Web Share (multi File[]) → native Capacitor files[] → save files */
   if (urls.length > 1) {
     tryNavigatorShare().catch(function(err) {
-      console.warn('[Attendance share] navigator.share:', err && err.message ? err.message : err);
+      if (err && err.name === 'AbortError') return;
       if (isNative) _nativeSharePhotos(urls, type);
-      else downloadPhotos(urls);
+      else downloadPhotos(urls, { afterShareFail: true, photoType: type, note: 'Multi-photo: web share failed; download fallback.' });
     });
     return;
   }
@@ -758,18 +861,23 @@ function sharePhotos(urls, type) {
   }
 
   if (typeof navigator !== 'undefined' && navigator.share) {
-    tryNavigatorShare().catch(function() { downloadPhotos(urls); });
+    tryNavigatorShare().catch(function(err) {
+      if (err && err.name === 'AbortError') return;
+      downloadPhotos(urls, { afterShareFail: true, photoType: type, note: 'Web: share failed; download fallback.' });
+    });
     return;
   }
-  downloadPhotos(urls);
+  attendancePushShareDebug('navigator_share', new Error('navigator.share missing'));
+  downloadPhotos(urls, { afterShareFail: true, photoType: type, note: 'Web Share API not available.' });
 }
 
 function _nativeSharePhotos(urls, type) {
   var Filesystem = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem;
   var SharePlugin = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Share;
   if (!Filesystem || !SharePlugin) {
+    attendancePushShareDebug('native_plugins', new Error('Filesystem=' + !!Filesystem + ' Share=' + !!SharePlugin));
     if (window.FleetBridge) window.FleetBridge._toast('Downloading photos instead...');
-    downloadPhotos(urls);
+    downloadPhotos(urls, { afterShareFail: true, photoType: type || '', note: 'Capacitor Filesystem or Share plugin missing.' });
     return;
   }
 
@@ -791,9 +899,13 @@ function _nativeSharePhotos(urls, type) {
   var ts = Date.now();
   var savedUris = [];
   function shareOrFallback() {
+    if (savedUris.length > 0 && savedUris.length < urls.length) {
+      attendancePushShareDebug('native_partial_load', new Error('Cached ' + savedUris.length + ' of ' + urls.length + ' photos'));
+    }
     if (savedUris.length === 0) {
+      attendancePushShareDebug('native_no_uris', new Error('No photo files cached after fetch/write'));
       if (window.FleetBridge) window.FleetBridge._toast('No photos could be loaded.');
-      downloadPhotos(urls);
+      downloadPhotos(urls, { afterShareFail: true, photoType: type || '', note: 'Native share had zero usable files.' });
       return;
     }
     var titleOne = 'Attendance Photo';
@@ -806,30 +918,34 @@ function _nativeSharePhotos(urls, type) {
       });
     };
     if (savedUris.length === 1) {
-      doShare({ title: titleOne, url: savedUris[0], dialogTitle: dialogTitle }).catch(function() {
+      doShare({ title: titleOne, url: savedUris[0], dialogTitle: dialogTitle }).catch(function(err) {
+        attendancePushShareDebug('capacitor_share_single', err);
         if (window.FleetBridge) window.FleetBridge._toast('Share failed. Saving instead…');
-        downloadPhotos(urls);
+        downloadPhotos(urls, { afterShareFail: true, photoType: type || '', note: 'Capacitor single-file share failed.' });
       });
       return;
     }
     var multiOpts = { files: savedUris, dialogTitle: dialogTitle, title: titleMany, text: titleMany };
-    doShare(multiOpts).catch(function() {
+    doShare(multiOpts).catch(function(err) {
+      attendancePushShareDebug('capacitor_share_multi_try1', err);
       return doShare({ title: titleMany, files: savedUris, dialogTitle: dialogTitle });
-    }).catch(function() {
+    }).catch(function(err) {
+      attendancePushShareDebug('capacitor_share_multi_try2', err);
       return doShare({ files: savedUris });
-    }).catch(function() {
+    }).catch(function(err) {
+      attendancePushShareDebug('capacitor_share_multi_try3', err);
       return doShare({
         title: titleMany,
         text: 'Attendance photos (' + savedUris.length + ')',
         url: savedUris[0],
         dialogTitle: dialogTitle
       });
-    }).catch(function() {
-      var hint = ' (' + attendanceShareDiagShort() + ')';
+    }).catch(function(err) {
+      attendancePushShareDebug('capacitor_share_batch_final', err);
       if (window.FleetBridge && window.FleetBridge._toast) {
-        window.FleetBridge._toast('Batch share failed' + hint + ' — saving photos. Check package.json @capacitor/share in app project.');
+        window.FleetBridge._toast('Share incomplete — debug note opened');
       }
-      downloadPhotos(urls);
+      downloadPhotos(urls, { afterShareFail: true, photoType: type || '', note: 'Capacitor multi-file share exhausted fallbacks.' });
     });
   }
 
@@ -1001,6 +1117,25 @@ document.addEventListener('click', function(e) {
           <button type="button" class="btn btn-primary" onclick="attImgWizardOpenGallery('both')"><i class="bi bi-images me-1"></i>Both</button>
         </div>
         <button type="button" class="btn btn-link btn-sm mt-2 px-0" onclick="attImgWizardBackToStep1()"><i class="bi bi-arrow-left me-1"></i>Back</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="attendanceShareDebugModal" tabindex="-1" aria-labelledby="attendanceShareDebugTitle" data-bs-backdrop="true">
+  <div class="modal-dialog modal-dialog-scrollable modal-lg">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title" id="attendanceShareDebugTitle"><i class="bi bi-bug text-warning me-2"></i>Share — debug note (copy bhejein)</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p class="small text-muted mb-2">Share poora complete na hua ho to yeh text copy kar ke support ko bhejein.</p>
+        <textarea id="attendanceShareDebugText" class="form-control font-monospace small" rows="14" readonly style="font-size:11px;line-height:1.35;"></textarea>
+      </div>
+      <div class="modal-footer flex-wrap gap-2 py-2">
+        <button type="button" class="btn btn-primary btn-sm" id="attendanceShareDebugCopyBtn" onclick="attendanceCopyShareDebug()"><i class="bi bi-clipboard me-1"></i>Copy</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Close</button>
       </div>
     </div>
   </div>
