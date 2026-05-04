@@ -1004,10 +1004,11 @@ function sharePhotos(urls, type) {
     filterType: type || ''
   };
   var isNative = window.FleetBridge && window.FleetBridge.isNative;
-  var MAX_SHARE = 30;
+  /* Cap huge batches (memory / OEM share intent limits). 139 rows × check-in+check-out ≈ 278 URLs — old cap was 30 and looked like "WhatsApp". */
+  var MAX_SHARE = 500;
   if (urls.length > MAX_SHARE) {
     if (window.FleetBridge && window.FleetBridge._toast) {
-      window.FleetBridge._toast('Sharing first ' + MAX_SHARE + ' photos (WhatsApp limit).');
+      window.FleetBridge._toast('Only the first ' + MAX_SHARE + ' photos can be shared at once. Use a smaller date range or share in batches.');
     }
     urls = urls.slice(0, MAX_SHARE);
   }
