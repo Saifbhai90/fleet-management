@@ -9,7 +9,7 @@
 {% set public_view = public_view|default(false) %}
 {% if public_view %}
 <style>
-/* Public shared profile: no login — strip main shell chrome */
+/* Public shared profile: strip shell chrome (scroll unlock lives in base.html + script below) */
 #sidebar, .sidebar, nav.navbar, .navbar.fixed-top, .fab-speed-dial, #sidebarToggleMobile,
 #moreDrawer, .more-drawer-backdrop, .mobile-bottom-nav { display: none !important; }
 .main-content, html.capacitor-native .main-content, #appNativeShell .main-content {
@@ -17,36 +17,7 @@
   padding: 12px !important; max-width: 100vw !important;
   box-sizing: border-box !important;
 }
-body { overflow-x: hidden; }
-/* Capacitor shell locks body scroll; for read-only public link, use normal page scroll on small screens + WebView */
-html.driver-profile-public-view.capacitor-native,
-html.driver-profile-public-view.capacitor-native body,
-body.driver-profile-public-view {
-  overflow-y: auto !important;
-  height: auto !important;
-  min-height: 100% !important;
-  -webkit-overflow-scrolling: touch;
-}
-html.driver-profile-public-view #appNativeShell {
-  position: static !important;
-  display: block !important;
-  height: auto !important;
-  min-height: 0 !important;
-  overflow: visible !important;
-  inset: auto !important;
-}
-html.driver-profile-public-view #appNativeShell .main-content,
-html.driver-profile-public-view.capacitor-native .main-content,
-body.driver-profile-public-view .main-content {
-  position: relative !important;
-  inset: auto !important;
-  flex: none !important;
-  max-height: none !important;
-  height: auto !important;
-  overflow-x: hidden !important;
-  overflow-y: visible !important;
-  padding-bottom: max(12px, env(safe-area-inset-bottom, 0px)) !important;
-}
+body.driver-profile-public-view { overflow-x: hidden; }
 </style>
 <div class="alert alert-info py-2 px-3 small mb-2" style="border-radius:10px;">
   <i class="bi bi-link-45deg me-1"></i>Read-only shared view. This link expires <strong>24 hours</strong> after it was created.
@@ -2439,6 +2410,78 @@ body.driver-profile-public-view .main-content {
     {% endif %}
   }
   </script>
+{% if public_view %}
+<script>
+(function () {
+  function imp(el, prop, val) {
+    if (!el) return;
+    el.style.setProperty(prop, val, 'important');
+  }
+  function unlockPublicProfileScroll() {
+    var body = document.body;
+    if (!body || !body.classList.contains('driver-profile-public-view')) return;
+    var root = document.documentElement;
+    imp(root, 'overflow-x', 'hidden');
+    imp(root, 'overflow-y', 'auto');
+    imp(root, 'height', 'auto');
+    imp(root, 'min-height', '100%');
+    imp(body, 'overflow-x', 'hidden');
+    imp(body, 'overflow-y', 'auto');
+    imp(body, 'height', 'auto');
+    imp(body, 'min-height', '100%');
+    imp(body, 'touch-action', 'pan-y pinch-zoom');
+    var shell = document.getElementById('appNativeShell');
+    if (shell) {
+      imp(shell, 'position', 'static');
+      imp(shell, 'overflow', 'visible');
+      imp(shell, 'height', 'auto');
+      imp(shell, 'display', 'block');
+    }
+    var mc = document.getElementById('mainContent');
+    if (mc) {
+      imp(mc, 'position', 'relative');
+      imp(mc, 'overflow-x', 'hidden');
+      imp(mc, 'overflow-y', 'visible');
+      imp(mc, 'max-height', 'none');
+      imp(mc, 'height', 'auto');
+      imp(mc, 'flex', 'none');
+      imp(mc, 'top', 'auto');
+      imp(mc, 'bottom', 'auto');
+      imp(mc, 'left', 'auto');
+      imp(mc, 'right', 'auto');
+    }
+  }
+  /** If layout height still equals viewport while profile is tall, use wide layout (desktop-style) so pan/zoom works. */
+  function maybeDesktopWidthViewport() {
+    if (window.innerWidth > 992) return;
+    var page = document.querySelector('.profile-page');
+    var tall = page ? page.scrollHeight : 0;
+    if (tall < window.innerHeight + 80) return;
+    var root = document.documentElement;
+    if (root.scrollHeight > root.clientHeight + 30) return;
+    var m = document.getElementById('metaViewport') || document.querySelector('meta[name="viewport"]');
+    if (!m || m.getAttribute('data-public-desktop-fallback') === '1') return;
+    m.setAttribute('data-public-desktop-fallback', '1');
+    m.setAttribute('content', 'width=1280, initial-scale=0.30, maximum-scale=5, minimum-scale=0.2, user-scalable=yes, viewport-fit=cover');
+    unlockPublicProfileScroll();
+  }
+  function run() {
+    unlockPublicProfileScroll();
+    requestAnimationFrame(function () {
+      unlockPublicProfileScroll();
+      maybeDesktopWidthViewport();
+    });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
+  else run();
+  setTimeout(run, 0);
+  setTimeout(run, 120);
+  setTimeout(run, 450);
+  setTimeout(function () { unlockPublicProfileScroll(); maybeDesktopWidthViewport(); }, 1800);
+  window.addEventListener('resize', function () { unlockPublicProfileScroll(); });
+})();
+</script>
+{% endif %}
 
 </div>
 {% endblock %}
