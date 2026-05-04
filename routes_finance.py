@@ -15,7 +15,7 @@ from forms import (PaymentVoucherForm, ReceiptVoucherForm, BankEntryForm, Journa
 from finance_utils import (generate_entry_number, create_journal_entry, create_payment_voucher_journal,
                            create_receipt_voucher_journal, create_bank_entry_journal,
                            get_account_ledger, get_dto_wallet_summary, get_account_balance,
-                           ensure_wallet_account, create_fund_transfer_journal,
+                           ensure_wallet_account, next_available_account_code, create_fund_transfer_journal,
                            ensure_workspace_base_accounts, workspace_create_journal_entry, workspace_reverse_journal_entry)
 from permissions_config import can_see_page
 from utils import pk_now, pk_date
@@ -1602,17 +1602,7 @@ def _auto_create_coa_account(entity_type, entity_id, entity_name,
         return None
 
     prefix = parent_head.code
-    max_sub = db.session.query(db.func.max(Account.code)).filter(
-        Account.entity_type == entity_type
-    ).scalar()
-    if max_sub:
-        try:
-            next_num = int(max_sub) + 1
-        except ValueError:
-            next_num = int(prefix) * 10 + 1
-    else:
-        next_num = int(prefix) * 10 + 1
-    new_code = str(next_num)
+    new_code = next_available_account_code(prefix)
 
     lbl = f" ({extra_label})" if extra_label else ''
     type_labels = {'driver': 'Driver', 'employee': 'Employee',

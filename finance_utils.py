@@ -577,6 +577,43 @@ def create_expense_journal(expense_type, expense_obj, expense_account_code, part
     return je
 
 
+def next_available_account_code(parent_code_str):
+    """
+    Return the first unused `account.code` in the band under a CoA parent head
+    (e.g. parent 6000 -> codes 6001 through 6999). Checks global uniqueness so
+    auto-created driver/employee rows never collide with other account types or
+    manual entries. Fills numeric gaps (lowest free slot first).
+    """
+    code_prefix = (parent_code_str or '').strip()
+    if not code_prefix or not code_prefix.isdigit():
+        raise ValueError(f'Invalid parent account code: {parent_code_str!r}')
+    lo = int(code_prefix) + 1
+    hi = int(code_prefix) + 999
+    code_end = str(hi)
+    rows = db.session.query(Account.code).filter(
+        Account.code.between(code_prefix, code_end)
+    ).all()
+    used = set()
+    for (c,) in rows:
+        if c is None:
+            continue
+        s = str(c).strip()
+        if not s.isdigit():
+            continue
+        try:
+            v = int(s)
+        except ValueError:
+            continue
+        if lo <= v <= hi:
+            used.add(v)
+    for num in range(lo, hi + 1):
+        if num not in used:
+            return str(num)
+    raise ValueError(
+        f'No free account code in range {lo}-{hi} for parent head {code_prefix}'
+    )
+
+
 def ensure_wallet_account(person_type, person_id):
     """
     Ensure the entity (employee/driver/party/company) has a wallet Account.
@@ -636,12 +673,7 @@ def ensure_wallet_account(person_type, person_id):
     parent_code = _parent_codes[ptype]
     parent = Account.query.filter_by(code=parent_code).first()
     parent_id = parent.id if parent else None
-    code_prefix = parent_code
-    code_end = str(int(parent_code) + 999)
-    max_code_row = db.session.query(db.func.max(Account.code)).filter(
-        Account.code.between(code_prefix, code_end)
-    ).scalar()
-    next_code = str(int(max_code_row) + 1) if max_code_row and max_code_row >= code_prefix else str(int(code_prefix) + 1)
+    next_code = next_available_account_code(parent_code)
 
     label = _labels[ptype]
     wallet = Account(
