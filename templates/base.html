@@ -1049,6 +1049,13 @@
         .capacitor-native .mobile-menu-btn { display: flex; }
 
         /* ── FAB (Floating Action Button) ── */
+        /* More drawer open: hide dashboard FAB (+) — only while More menu is visible */
+        #mobileFabWrap.fab-hidden-for-more-drawer {
+            display: none !important;
+            visibility: hidden !important;
+            pointer-events: none !important;
+        }
+
         .mobile-fab-wrap {
             display: none; position: fixed; right: 18px;
             bottom: calc(74px + env(safe-area-inset-bottom, 0px)); z-index: 1055;
@@ -6021,7 +6028,10 @@
                 else {
                     sb.classList.remove('mobile-open');
                     var ov = document.getElementById('sidebarOverlay');
-                    if (ov) ov.classList.remove('show');
+                    if (ov) {
+                        ov.classList.remove('show');
+                        ov.style.display = '';
+                    }
                 }
                 return true;
             }
@@ -7169,7 +7179,6 @@ document.addEventListener('DOMContentLoaded', function() {
         sidebar.classList.add('mobile-open');
         if (overlay) {
             overlay.classList.add('show');
-            overlay.style.display = 'block';
             overlay.setAttribute('aria-hidden', 'false');
         }
         document.body.style.overflow = 'hidden';
@@ -7180,6 +7189,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (sidebar) sidebar.classList.remove('mobile-open');
         if (overlay) {
             overlay.classList.remove('show');
+            overlay.style.display = '';
             overlay.setAttribute('aria-hidden', 'true');
         }
         document.body.style.overflow = '';
@@ -7205,6 +7215,17 @@ document.addEventListener('DOMContentLoaded', function() {
         syncMoreLangLabel();
         overlay.classList.add('open');
         panel.classList.add('open');
+        var fabWrap = document.getElementById('mobileFabWrap');
+        if (fabWrap) fabWrap.classList.add('fab-hidden-for-more-drawer');
+        /* Close speed-dial if open so + doesn’t stay expanded behind drawer */
+        var dial = document.getElementById('fabDialMenu');
+        var fabBtn = document.getElementById('mobileFabBtn');
+        var fabBd = document.getElementById('fabBackdrop');
+        if (dial && dial.classList.contains('open')) {
+            dial.classList.remove('open');
+            if (fabBtn) fabBtn.classList.remove('open');
+            if (fabBd) fabBd.classList.remove('show');
+        }
         document.body.style.overflow = 'hidden';
         /* Lock the app-shell scroll container so content behind can't scroll */
         var _mc = document.getElementById('mainContent');
@@ -7217,6 +7238,8 @@ document.addEventListener('DOMContentLoaded', function() {
         var panel   = document.getElementById('moreDrawerPanel');
         if (overlay) overlay.classList.remove('open');
         if (panel)   panel.classList.remove('open');
+        var fabWrap = document.getElementById('mobileFabWrap');
+        if (fabWrap) fabWrap.classList.remove('fab-hidden-for-more-drawer');
         document.body.style.overflow = '';
         /* Restore app-shell scroll container */
         var _mc = document.getElementById('mainContent');
