@@ -7,7 +7,7 @@
     <h2 class="mb-0"><i class="bi bi-calendar-check me-2 text-primary"></i>Attendance List</h2>
     <div class="d-flex flex-wrap gap-2">
       <button type="button" class="btn btn-sm btn-outline-secondary" title="Attendance photos gallery" onclick="openAttendanceImageViewWizard()"><i class="bi bi-images me-1"></i>Image view</button>
-      <button class="btn btn-sm btn-outline-secondary" title="Share Photos" onclick="showPhotoModal('share')"><i class="bi bi-share me-1"></i>Share</button>
+      <button type="button" class="btn btn-sm btn-outline-secondary" title="Share Photos" onclick="openSharePhotosWizard()"><i class="bi bi-share me-1"></i>Share</button>
       <a href="{{ url_for('driver_attendance_export') }}?from_date={{ from_date or view_date.strftime('%d-%m-%Y') }}&to_date={{ to_date or view_date.strftime('%d-%m-%Y') }}{% if project_id %}&project_id={{ project_id }}{% endif %}{% if district_id %}&district_id={{ district_id }}{% endif %}{% if vehicle_id %}&vehicle_id={{ vehicle_id }}{% endif %}{% if shift %}&shift={{ shift|e }}{% endif %}{% if duty_shift_filter %}&duty_shift={{ duty_shift_filter|e }}{% endif %}{% if search %}&search={{ search|e }}{% endif %}{% if driver_id %}&driver_id={{ driver_id }}{% endif %}" class="btn btn-success btn-sm">
         <i class="bi bi-file-earmark-excel me-1"></i>Excel
       </a>
@@ -210,7 +210,7 @@
             {% else %}
               {% set check_out_remarks_text = '' %}
             {% endif %}
-            <tr class="{% if missing_checkout %}table-warning{% endif %}">
+            <tr class="{% if missing_checkout %}table-warning{% endif %}" data-duty-shift="{{ duty_shift|e if duty_shift else '' }}">
               <td class="ps-4">{{ (pagination.page - 1) * per_page + loop.index if pagination else loop.index }}</td>
               <td>{{ rec.attendance_date.strftime('%d-%m-%Y') if rec else view_date.strftime('%d-%m-%Y') }}</td>
               <td class="text-muted small">{{ driver.driver_id or '-' }}</td>
@@ -558,6 +558,37 @@ function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page
 })();
 
 var _photoAction = '';
+/** 'gallery' = open media gallery URL; 'share' = share photos after wizard */
+var _attMediaWizardMode = 'gallery';
+
+function _setAttMediaWizardLabels() {
+  var isShare = _attMediaWizardMode === 'share';
+  var t1 = document.getElementById('attImgWizard1Lbl');
+  var t2 = document.getElementById('attImgWizard2Lbl');
+  var p1 = document.getElementById('attImgWizardStep1Help');
+  var p2 = document.getElementById('attImgWizardStep2Help');
+  if (t1) {
+    t1.innerHTML = isShare
+      ? '<i class="bi bi-share me-2 text-primary"></i>Share photos — Duty shift'
+      : '<i class="bi bi-images me-2 text-primary"></i>Image view — Duty shift';
+  }
+  if (t2) {
+    t2.innerHTML = isShare
+      ? '<i class="bi bi-camera me-2 text-primary"></i>Share photos — Photo type'
+      : '<i class="bi bi-camera me-2 text-primary"></i>Image view — Photo type';
+  }
+  if (p1) {
+    p1.textContent = isShare
+      ? 'Kon si duty shift ki photos share karni hain? (Morning / Evening / Both — list ke Duty shift column ke mutabiq)'
+      : 'Gallery ke liye kon si duty shift ki images chahiye? (Morning duty / Evening duty — list column ke mutabiq)';
+  }
+  if (p2) {
+    p2.innerHTML = isShare
+      ? 'Check-in / Check-out / dono — <strong>system share sheet</strong> khol kar photos bhej sakte hain.'
+      : 'Check-in selfie / Check-out selfie ya dono? Gallery Fuel/Oil style khule gi — ek ek download ya "All Media Download" se sab ZIP.';
+  }
+}
+
 function showPhotoModal(action) {
   _photoAction = action;
   var panel = document.getElementById('photoChoicePanel');
@@ -577,11 +608,25 @@ function hidePhotoPanel() {
   document.getElementById('photoChoicePanel').classList.add('d-none');
 }
 
-function collectPhotoUrls(type) {
+/** Match server _duty_shift_passes_filter (routes.py) for gallery/share filtering */
+function rowPassesDutyShift(dutyLabel, filt) {
+  if (!filt || filt === 'both' || filt === 'all') return true;
+  var s = (dutyLabel || '').trim().toLowerCase();
+  var isMorning = (s.indexOf('morning duty') !== -1) || (s === 'morning');
+  var isEvening = (s.indexOf('evening duty') !== -1) || (s === 'night') || (s.indexOf('evening') !== -1);
+  if (filt === 'morning') return !!isMorning;
+  if (filt === 'evening') return !!isEvening;
+  return true;
+}
+
+function collectPhotoUrlsForDuty(type, dutyFilt) {
   var urls = [];
   var rows = document.querySelectorAll('#attendanceTable tbody tr');
   rows.forEach(function(row) {
     if (row.style.display === 'none') return;
+    if (row.classList.contains('no-match-row')) return;
+    var duty = row.getAttribute('data-duty-shift') || '';
+    if (!rowPassesDutyShift(duty, dutyFilt)) return;
     var cells = row.querySelectorAll('td');
     if (cells.length < 16) return;
     if (type === 'checkin' || type === 'both') {
@@ -594,6 +639,10 @@ function collectPhotoUrls(type) {
     }
   });
   return urls;
+}
+
+function collectPhotoUrls(type) {
+  return collectPhotoUrlsForDuty(type, 'both');
 }
 
 function doPhotoAction(type) {
@@ -739,6 +788,16 @@ function _nativeSharePhotos(urls, type) {
 
 var _attImgGalDuty = 'both';
 function openAttendanceImageViewWizard() {
+  _attMediaWizardMode = 'gallery';
+  _setAttMediaWizardLabels();
+  var el = document.getElementById('attImgWizardStep1');
+  if (!el) return;
+  if (el.parentElement !== document.body) document.body.appendChild(el);
+  bootstrap.Modal.getOrCreateInstance(el).show();
+}
+function openSharePhotosWizard() {
+  _attMediaWizardMode = 'share';
+  _setAttMediaWizardLabels();
   var el = document.getElementById('attImgWizardStep1');
   if (!el) return;
   if (el.parentElement !== document.body) document.body.appendChild(el);
@@ -754,8 +813,33 @@ function attImgWizardGoStep2(duty) {
   if (el2.parentElement !== document.body) document.body.appendChild(el2);
   bootstrap.Modal.getOrCreateInstance(el2).show();
 }
+function attImgWizardRunShare(photoKind) {
+  var kind = photoKind || 'both';
+  var m2El = document.getElementById('attImgWizardStep2');
+  var m1El = document.getElementById('attImgWizardStep1');
+  if (m2El) {
+    var m2 = bootstrap.Modal.getInstance(m2El);
+    if (m2) m2.hide();
+  }
+  if (m1El) {
+    var m1 = bootstrap.Modal.getInstance(m1El);
+    if (m1) m1.hide();
+  }
+  _photoAction = 'share';
+  var urls = collectPhotoUrlsForDuty(kind, _attImgGalDuty);
+  if (urls.length === 0) {
+    alert('No photos found for the selected option.');
+    return;
+  }
+  sharePhotos(urls, kind);
+}
+
 function attImgWizardOpenGallery(photoKind) {
   var kind = photoKind || 'both';
+  if (_attMediaWizardMode === 'share') {
+    attImgWizardRunShare(kind);
+    return;
+  }
   var params = (typeof window.buildAttendanceGalleryParams === 'function')
     ? window.buildAttendanceGalleryParams()
     : new URLSearchParams(window.location.search);
@@ -807,7 +891,7 @@ document.addEventListener('click', function(e) {
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body pt-2">
-        <p class="text-muted small mb-3 mb-0">Gallery ke liye kon si <strong>duty shift</strong> ki images chahiye? (Morning duty / Evening duty — list column ke mutabiq)</p>
+        <p id="attImgWizardStep1Help" class="text-muted small mb-3 mb-0">Gallery ke liye kon si <strong>duty shift</strong> ki images chahiye? (Morning duty / Evening duty — list column ke mutabiq)</p>
         <div class="d-grid gap-2 mt-3">
           <button type="button" class="btn btn-outline-primary" onclick="attImgWizardGoStep2('morning')"><i class="bi bi-sunrise me-1"></i>Morning duty</button>
           <button type="button" class="btn btn-outline-primary" onclick="attImgWizardGoStep2('evening')"><i class="bi bi-moon me-1"></i>Evening duty</button>
@@ -826,7 +910,7 @@ document.addEventListener('click', function(e) {
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body pt-2">
-        <p class="text-muted small mb-3 mb-0">Check-in selfie / Check-out selfie ya dono? Gallery Fuel/Oil style khule gi — ek ek download ya &quot;All Media Download&quot; se sab ZIP.</p>
+        <p id="attImgWizardStep2Help" class="text-muted small mb-3 mb-0">Check-in selfie / Check-out selfie ya dono? Gallery Fuel/Oil style khule gi — ek ek download ya &quot;All Media Download&quot; se sab ZIP.</p>
         <div class="d-grid gap-2 mt-3">
           <button type="button" class="btn btn-outline-success" onclick="attImgWizardOpenGallery('checkin')"><i class="bi bi-box-arrow-in-right me-1"></i>Check-in photos</button>
           <button type="button" class="btn btn-outline-danger" onclick="attImgWizardOpenGallery('checkout')"><i class="bi bi-box-arrow-right me-1"></i>Check-out photos</button>
