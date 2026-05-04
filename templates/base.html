@@ -1864,8 +1864,9 @@
                 <i class="bi bi-calendar-check"></i><span>Attendance</span>
             </a>
             {% set _a_cio = request.endpoint in ['driver_attendance_checkin','driver_attendance_checkout','driver_attendance_pending','driver_attendance_missing_checkout'] %}
-            {% set _a_mgmt = request.endpoint in ['driver_attendance_mark','driver_attendance_bulk_off','leave_request_list','leave_request_new'] %}
+            {% set _a_mgmt = request.endpoint in ['driver_attendance_mark','driver_attendance_bulk_off','leave_request_list','leave_request_new','leave_request_review'] %}
             {% set _a_rpt = request.endpoint in ['driver_attendance_tra_report','driver_attendance_list','driver_attendance_report'] %}
+            {% set _att_mgmt_visible = can_see_page('driver_attendance_mark') or can_see_page('driver_attendance_bulk_off') or can_see_page('leave_request_list') %}
             <div class="collapse collapse-item-container {% if attendance_open %}show{% endif %}"
                  id="attendanceMenu" data-bs-parent="#sidebarAccordion">
                 <div class="sb-sub-toggle {% if not _a_cio %}collapsed{% endif %}" data-bs-toggle="collapse" data-bs-target="#attCheckIO" aria-expanded="{{ 'true' if _a_cio else 'false' }}">Check In / Out</div>
@@ -1891,6 +1892,7 @@
                 </a>
                 {% endif %}
                 </div>
+                {% if _att_mgmt_visible %}
                 <div class="sb-sub-toggle {% if not _a_mgmt %}collapsed{% endif %}" data-bs-toggle="collapse" data-bs-target="#attMgmt" aria-expanded="{{ 'true' if _a_mgmt else 'false' }}">Management</div>
                 <div class="collapse sb-sub-items {% if _a_mgmt %}show{% endif %}" id="attMgmt" data-bs-parent="#attendanceMenu">
                 {% if can_see_page('driver_attendance_mark') %}
@@ -1904,11 +1906,12 @@
                 </a>
                 {% endif %}
                 {% if can_see_page('leave_request_list') %}
-                <a href="{{ url_for('leave_request_list') }}" class="collapse-item {% if request.endpoint in ['leave_request_list', 'leave_request_new'] %}active-link{% endif %}">
+                <a href="{{ url_for('leave_request_list') }}" class="collapse-item {% if request.endpoint in ['leave_request_list', 'leave_request_new', 'leave_request_review'] %}active-link{% endif %}">
                     <i class="bi bi-calendar2-check text-info"></i><span>Leave Requests</span>
                 </a>
                 {% endif %}
                 </div>
+                {% endif %}
                 <div class="sb-sub-toggle {% if not _a_rpt %}collapsed{% endif %}" data-bs-toggle="collapse" data-bs-target="#attReports" aria-expanded="{{ 'true' if _a_rpt else 'false' }}">Reports</div>
                 <div class="collapse sb-sub-items {% if _a_rpt %}show{% endif %}" id="attReports" data-bs-parent="#attendanceMenu">
                 {% if can_see_page('driver_attendance_tra_report') %}
@@ -2149,20 +2152,20 @@
         </div>
         {% endif %}
 
-        <!-- Reports & Analytics -->
-        {% if can_see_section('reports') %}
+        <!-- Reports & Analytics: Report Centre only if user can open the hub (not just any report sub-permission) -->
+        {% if can_see_page('reports_index') %}
         <div>
             <a href="{{ url_for('reports_index') }}" class="{% if request.endpoint in reports_endpoints %}active-link{% endif %}" style="display:flex;align-items:center;padding:.65rem 1rem;text-decoration:none;">
                 <i class="bi bi-bar-chart"></i><span>Report Centre</span>
             </a>
         </div>
+        {% endif %}
         {% if can_see_page('report_ai') %}
         <div>
             <a href="{{ url_for('ai.ai_assistant') }}" class="{% if request.endpoint in ['ai_assistant', 'ai.ai_assistant'] %}active-link{% endif %}" style="display:flex;align-items:center;padding:.65rem 1rem;text-decoration:none;">
                 <i class="bi bi-robot text-info me-1"></i><i class="bi bi-stars text-warning me-2"></i><span>Master Mind AI</span>
             </a>
         </div>
-        {% endif %}
         {% endif %}
 
         <!-- Notifications -->

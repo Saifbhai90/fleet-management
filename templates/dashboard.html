@@ -891,10 +891,10 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 <!-- ── Bottom Row: Notifications + Doc Health ── -->
-{% if notifications or (can_see_page('dashboard_card_doc_health') and (expiry_already > 0 or expiry_soon > 0)) %}
+{% if (can_see_page('notification_list') and notifications) or (can_see_page('dashboard_card_doc_health') and (expiry_already > 0 or expiry_soon > 0)) %}
 <div class="row g-3 mt-3">
 
-    {% if notifications %}
+    {% if can_see_page('notification_list') and notifications %}
     <div class="col-12 col-lg-7">
         <div class="card border-0 shadow-sm h-100" style="border-radius:20px;">
             <div class="card-body p-4">
@@ -926,7 +926,7 @@ document.addEventListener('DOMContentLoaded', function() {
     {% endif %}
 
     {% if can_see_page('dashboard_card_doc_health') and (expiry_already > 0 or expiry_soon > 0) %}
-    <div class="col-12 {% if notifications %}col-lg-5{% endif %}">
+    <div class="col-12 {% if can_see_page('notification_list') and notifications %}col-lg-5{% endif %}">
         <div class="d-flex flex-column gap-3 px-4 py-4 h-100"
              style="background:linear-gradient(135deg,{% if expiry_already > 0 %}#fef2f2,#fee2e2{% else %}#fffbeb,#fef3c7{% endif %});border:2px solid {% if expiry_already > 0 %}#fca5a5{% else %}#fcd34d{% endif %};border-radius:20px;">
             <div class="d-flex align-items-start gap-3">
