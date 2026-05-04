@@ -720,19 +720,46 @@ function attendanceBuildShareDebugText(meta) {
   return lines.join('\n');
 }
 
+function attendanceHideShareDebugPanel() {
+  var panel = document.getElementById('attendanceShareDebugPanel');
+  if (panel) {
+    panel.classList.add('d-none');
+    panel.setAttribute('aria-hidden', 'true');
+  }
+}
+
 function attendanceShowShareDebugModal(meta) {
   var text = attendanceBuildShareDebugText(meta);
   var ta = document.getElementById('attendanceShareDebugText');
-  var modalEl = document.getElementById('attendanceShareDebugModal');
+  var panel = document.getElementById('attendanceShareDebugPanel');
   if (ta) {
     ta.value = text;
     try { ta.focus(); ta.select(); } catch (e) {}
   }
-  if (modalEl && typeof bootstrap !== 'undefined' && bootstrap.Modal) {
-    bootstrap.Modal.getOrCreateInstance(modalEl).show();
-  } else if (ta) {
+  if (!panel) {
     try { prompt('Copy debug text:', text); } catch (e2) { alert(text.substring(0, 800)); }
+    return;
   }
+  /* Wizard modals sometimes leave backdrop + modal-open — unstick before showing non-blocking panel */
+  ['attImgWizardStep1', 'attImgWizardStep2'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (!el || typeof bootstrap === 'undefined' || !bootstrap.Modal) return;
+    var inst = bootstrap.Modal.getInstance(el);
+    if (inst) try { inst.hide(); } catch (e) {}
+  });
+  setTimeout(function() {
+    document.querySelectorAll('.modal-backdrop').forEach(function(b) { try { b.remove(); } catch (e) {} });
+    document.body.classList.remove('modal-open');
+    document.body.style.removeProperty('overflow');
+    document.body.style.removeProperty('padding-right');
+    if (panel.parentElement !== document.body) document.body.appendChild(panel);
+    panel.classList.remove('d-none');
+    panel.setAttribute('aria-hidden', 'false');
+    try {
+      var cp = document.getElementById('attendanceShareDebugCopyBtn');
+      if (cp) cp.focus();
+    } catch (e) {}
+  }, 80);
 }
 
 function attendanceCopyShareDebug() {
@@ -1122,20 +1149,54 @@ document.addEventListener('click', function(e) {
   </div>
 </div>
 
-<div class="modal fade" id="attendanceShareDebugModal" tabindex="-1" aria-labelledby="attendanceShareDebugTitle" data-bs-backdrop="true">
-  <div class="modal-dialog modal-dialog-scrollable modal-lg">
-    <div class="modal-content">
-      <div class="modal-header py-2">
-        <h6 class="modal-title" id="attendanceShareDebugTitle"><i class="bi bi-bug text-warning me-2"></i>Share — debug note (copy bhejein)</h6>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body">
-        <p class="small text-muted mb-2">Share poora complete na hua ho to yeh text copy kar ke support ko bhejein.</p>
-        <textarea id="attendanceShareDebugText" class="form-control font-monospace small" rows="14" readonly style="font-size:11px;line-height:1.35;"></textarea>
-      </div>
-      <div class="modal-footer flex-wrap gap-2 py-2">
+<style>
+  /* No Bootstrap backdrop — page + Tom Select stay usable; only the card captures taps */
+  #attendanceShareDebugPanel {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 250000;
+    max-height: 58vh;
+    padding: 0;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+  }
+  #attendanceShareDebugPanel .attendance-share-debug-card {
+    pointer-events: auto;
+    max-height: 54vh;
+    display: flex;
+    flex-direction: column;
+    border-radius: 12px 12px 0 0;
+    box-shadow: 0 -8px 32px rgba(0,0,0,.25);
+  }
+  #attendanceShareDebugPanel .attendance-share-debug-body {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  #attendanceShareDebugText {
+    flex: 1;
+    min-height: 120px;
+    resize: vertical;
+  }
+</style>
+<div id="attendanceShareDebugPanel" class="d-none" aria-hidden="true" role="dialog" aria-labelledby="attendanceShareDebugTitle">
+  <div class="card attendance-share-debug-card border-warning border-2 mx-2 mb-0 bg-white">
+    <div class="card-header py-2 d-flex justify-content-between align-items-center gap-2 flex-shrink-0">
+      <h6 class="mb-0 small fw-bold" id="attendanceShareDebugTitle"><i class="bi bi-bug text-warning me-1"></i>Share debug — copy</h6>
+      <button type="button" class="btn-close" onclick="attendanceHideShareDebugPanel()" aria-label="Close"></button>
+    </div>
+    <div class="card-body attendance-share-debug-body py-2 px-2">
+      <p class="small text-muted mb-2 mb-0">Neeche page / filter use kar sakte hain — ye sheet lock nahi karti.</p>
+      <textarea id="attendanceShareDebugText" class="form-control font-monospace form-control-sm" rows="10" readonly style="font-size:11px;line-height:1.35;"></textarea>
+      <div class="d-flex gap-2 mt-2 flex-shrink-0">
         <button type="button" class="btn btn-primary btn-sm" id="attendanceShareDebugCopyBtn" onclick="attendanceCopyShareDebug()"><i class="bi bi-clipboard me-1"></i>Copy</button>
-        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="attendanceHideShareDebugPanel()">Band karein</button>
       </div>
     </div>
   </div>
