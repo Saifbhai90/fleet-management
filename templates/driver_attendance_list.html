@@ -619,6 +619,86 @@ function rowPassesDutyShift(dutyLabel, filt) {
   return true;
 }
 
+/** Normalize photo URL so fetch() works from Capacitor WebView (relative / scheme-relative links). */
+function attendanceAbsolutePhotoUrl(u) {
+  try {
+    if (!u || typeof u !== 'string') return u;
+    var s = u.trim();
+    if (/^https?:\/\//i.test(s)) return s;
+    var proto = (typeof location !== 'undefined' && location.protocol) ? location.protocol : 'https:';
+    if (s.indexOf('//') === 0) return proto + s;
+    var origin = (typeof location !== 'undefined' && location.origin) ? location.origin : '';
+    if (!origin) return s;
+    if (s.charAt(0) === '/') return origin + s;
+    return origin + '/' + s.replace(/^\/+/, '');
+  } catch (e) {
+    return u;
+  }
+}
+
+/** Fetch image blob — retries credential modes (Android WebView quirks). */
+function attendanceFetchPhotoBlob(absUrl) {
+  var attempts;
+  try {
+    var cross = new URL(absUrl).origin !== window.location.origin;
+    attempts = cross
+      ? [{ credentials: 'omit', mode: 'cors' }]
+      : [
+          { credentials: 'include', mode: 'same-origin' },
+          { credentials: 'same-origin', mode: 'same-origin' },
+          { credentials: 'omit', mode: 'same-origin' }
+        ];
+  } catch (e) {
+    attempts = [{ credentials: 'include', mode: 'same-origin' }];
+  }
+  function tryFetch(i) {
+    if (i >= attempts.length) {
+      return Promise.reject(new Error('fetch failed (' + attempts.length + ' modes) url=' + absUrl.substring(0, 96)));
+    }
+    var init = Object.assign({ cache: 'no-store' }, attempts[i]);
+    return fetch(absUrl, init).then(function(r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status + ' ' + (r.statusText || '') + ' url=' + absUrl.substring(0, 96));
+      return r.blob();
+    }).catch(function() {
+      return tryFetch(i + 1);
+    });
+  }
+  return tryFetch(0);
+}
+
+/** Match FleetBridge.downloadBlob: CACHE → DATA → EXTERNAL/Download for OEM/Android 15 writes. */
+function attendanceNativeWriteShareTemp(Filesystem, fileBaseName, b64) {
+  var tries = [
+    { directory: 'CACHE', path: fileBaseName },
+    { directory: 'DATA', path: fileBaseName },
+    { directory: 'EXTERNAL', path: 'Download/' + fileBaseName }
+  ];
+  function attempt(i) {
+    if (i >= tries.length) {
+      return Promise.reject(new Error('Filesystem.writeFile failed (CACHE, DATA, EXTERNAL/Download)'));
+    }
+    var t = tries[i];
+    return Filesystem.writeFile({
+      path: t.path,
+      data: b64,
+      directory: t.directory,
+      recursive: true
+    }).then(function(result) {
+      if (typeof Filesystem.getUri === 'function') {
+        return Filesystem.getUri({ path: t.path, directory: t.directory }).then(function(u) {
+          return (u && u.uri) ? u.uri : result.uri;
+        }).catch(function() {
+          return result.uri;
+        });
+      }
+      return result.uri;
+    }).catch(function() {
+      return attempt(i + 1);
+    });
+  }
+  return attempt(0);
+}
+
 function collectPhotoUrlsForDuty(type, dutyFilt) {
   var urls = [];
   var rows = document.querySelectorAll('#attendanceTable tbody tr');
@@ -631,11 +711,11 @@ function collectPhotoUrlsForDuty(type, dutyFilt) {
     if (cells.length < 16) return;
     if (type === 'checkin' || type === 'both') {
       var ciLink = cells[11].querySelector('a[href]');
-      if (ciLink) urls.push(ciLink.href);
+      if (ciLink) urls.push(attendanceAbsolutePhotoUrl(ciLink.href || ciLink.getAttribute('href')));
     }
     if (type === 'checkout' || type === 'both') {
       var coLink = cells[14].querySelector('a[href]');
-      if (coLink) urls.push(coLink.href);
+      if (coLink) urls.push(attendanceAbsolutePhotoUrl(coLink.href || coLink.getAttribute('href')));
     }
   });
   return urls;
@@ -695,7 +775,7 @@ function attendanceBuildShareDebugText(meta) {
     var C = window.Capacitor;
     if (C && typeof C.getPlatform === 'function') lines.push('Capacitor.getPlatform(): ' + C.getPlatform());
   } catch (e) {}
-  lines.push('navigator.share: ' + (typeof navigator !== 'undefined' && typeof navigator.share === 'function' ? 'yes' : 'no'));
+  lines.push('navigator.share: ' + (typeof navigator !== 'undefined' && typeof navigator.share === 'function' ? 'yes' : 'no') + ' (no = normal in many Capacitor WebViews)');
   lines.push('navigator.canShare: ' + (typeof navigator !== 'undefined' && typeof navigator.canShare === 'function' ? 'yes' : 'no'));
   var fsP = !!(window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem);
   var shP = !!(window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Share);
@@ -819,8 +899,7 @@ function _nativeDownloadPhotos(urls, idx) {
     return;
   }
   var fname = 'attendance_photo_' + (idx + 1) + '.jpg';
-  fetch(urls[idx], { credentials: 'include' })
-    .then(function(r) { return r.blob(); })
+  attendanceFetchPhotoBlob(attendanceAbsolutePhotoUrl(urls[idx]))
     .then(function(blob) { return window.FleetBridge.downloadBlob(blob, fname); })
     .then(function() { _nativeDownloadPhotos(urls, idx + 1); })
     .catch(function() { _nativeDownloadPhotos(urls, idx + 1); });
@@ -839,10 +918,7 @@ function sharePhotos(urls, type) {
 
   function fetchAsFiles() {
     return Promise.all(urls.map(function(url, idx) {
-      return fetch(url, { credentials: 'include' }).then(function(r) {
-        if (!r.ok) throw new Error('http');
-        return r.blob();
-      }).then(function(blob) {
+      return attendanceFetchPhotoBlob(attendanceAbsolutePhotoUrl(url)).then(function(blob) {
         var ct = (blob && blob.type) || '';
         var mime = (ct.indexOf('image/') === 0) ? ct : 'image/jpeg';
         return new File([blob], 'attendance_' + type + '_' + (idx + 1) + '.jpg', { type: mime });
@@ -982,30 +1058,18 @@ function _nativeSharePhotos(urls, type) {
       return;
     }
     var fname = 'att_share_' + ts + '_' + (idx + 1) + '.jpg';
-    fetch(urls[idx], { credentials: 'include' })
-      .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
+    var absUrl = attendanceAbsolutePhotoUrl(urls[idx]);
+    attendanceFetchPhotoBlob(absUrl)
       .then(blobToRawBase64)
       .then(function(b64) {
-        return Filesystem.writeFile({
-          path: fname,
-          data: b64,
-          directory: 'CACHE',
-          recursive: true
-        });
-      })
-      .then(function(result) {
-        if (typeof Filesystem.getUri === 'function') {
-          return Filesystem.getUri({ path: fname, directory: 'CACHE' }).then(function(u) {
-            return u.uri || result.uri;
-          });
-        }
-        return result.uri;
+        return attendanceNativeWriteShareTemp(Filesystem, fname, b64);
       })
       .then(function(uri) {
         savedUris.push(uri);
         saveNext(idx + 1);
       })
       .catch(function(e) {
+        attendancePushShareDebug('native_fetch_or_write_' + idx, e instanceof Error ? e : new Error(String(e)));
         console.warn('Attendance share: fetch/save failed', e);
         saveNext(idx + 1);
       });
