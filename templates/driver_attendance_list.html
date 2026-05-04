@@ -734,54 +734,87 @@ function _nativeSharePhotos(urls, type) {
 
   if (window.FleetBridge) window.FleetBridge._toast('Preparing ' + urls.length + ' photo(s)...');
 
-  function blobToBase64(blob) {
+  function blobToRawBase64(blob) {
     return new Promise(function(resolve, reject) {
       var reader = new FileReader();
-      reader.onloadend = function() { resolve(reader.result); };
+      reader.onloadend = function() {
+        var r = reader.result;
+        var raw = (typeof r === 'string' && r.indexOf(',') >= 0) ? r.substring(r.indexOf(',') + 1) : r;
+        resolve(raw);
+      };
       reader.onerror = reject;
       reader.readAsDataURL(blob);
     });
   }
 
+  var ts = Date.now();
   var savedUris = [];
-  function saveNext(idx) {
-    if (idx >= urls.length) {
-      if (savedUris.length === 0) {
-        if (window.FleetBridge) window.FleetBridge._toast('No photos could be loaded.');
-        return;
-      }
-      if (savedUris.length === 1) {
-        SharePlugin.share({
-          title: 'Attendance Photo',
-          url: savedUris[0],
-          dialogTitle: 'Share Attendance Photo'
-        }).catch(function() {});
-      } else {
-        SharePlugin.share({
-          title: 'Attendance Photos (' + savedUris.length + ')',
-          text: 'Attendance ' + type + ' photos (' + savedUris.length + ')',
-          url: savedUris[0],
-          dialogTitle: 'Share Attendance Photos'
-        }).catch(function() {
-          if (window.FleetBridge) window.FleetBridge._toast(savedUris.length + ' photos saved to Downloads.');
-        });
-      }
+  function shareOrFallback() {
+    if (savedUris.length === 0) {
+      if (window.FleetBridge) window.FleetBridge._toast('No photos could be loaded.');
+      downloadPhotos(urls);
       return;
     }
-    var fname = 'attendance_' + type + '_' + (idx + 1) + '.jpg';
-    fetch(urls[idx])
-      .then(function(r) { return r.blob(); })
-      .then(function(blob) { return blobToBase64(blob); })
+    var titleOne = 'Attendance Photo';
+    var titleMany = 'Attendance Photos (' + savedUris.length + ')';
+    var dialogTitle = 'Share via';
+    var doShare = function(opts) {
+      return SharePlugin.share(opts).catch(function(err) {
+        console.warn('[Share]', err);
+        return Promise.reject(err);
+      });
+    };
+    if (savedUris.length === 1) {
+      doShare({ title: titleOne, url: savedUris[0], dialogTitle: dialogTitle }).catch(function() {
+        if (window.FleetBridge) window.FleetBridge._toast('Share failed. Saving instead…');
+        downloadPhotos(urls);
+      });
+      return;
+    }
+    var multiOpts = {
+      title: titleMany,
+      text: 'Attendance ' + type + ' photos (' + savedUris.length + ')',
+      files: savedUris,
+      dialogTitle: dialogTitle
+    };
+    doShare(multiOpts).catch(function() {
+      return doShare({
+        title: titleMany,
+        text: multiOpts.text,
+        url: savedUris[0],
+        dialogTitle: dialogTitle
+      });
+    }).catch(function() {
+      if (window.FleetBridge) window.FleetBridge._toast('Could not open share sheet. Saving photos…');
+      downloadPhotos(urls);
+    });
+  }
+
+  function saveNext(idx) {
+    if (idx >= urls.length) {
+      shareOrFallback();
+      return;
+    }
+    var fname = 'att_share_' + ts + '_' + (idx + 1) + '.jpg';
+    fetch(urls[idx], { credentials: 'same-origin' })
+      .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
+      .then(blobToRawBase64)
       .then(function(b64) {
         return Filesystem.writeFile({
-          path: 'Download/' + fname, data: b64, directory: 'EXTERNAL', recursive: true
+          path: fname,
+          data: b64,
+          directory: 'CACHE',
+          recursive: true
         });
       })
       .then(function(result) {
         savedUris.push(result.uri);
         saveNext(idx + 1);
       })
-      .catch(function() { saveNext(idx + 1); });
+      .catch(function(e) {
+        console.warn('Attendance share: fetch/save failed', e);
+        saveNext(idx + 1);
+      });
   }
   saveNext(0);
 }

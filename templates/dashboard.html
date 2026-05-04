@@ -356,7 +356,7 @@ document.addEventListener('DOMContentLoaded', function() {
             <i data-lucide="calendar-check" style="width:14px;height:14px;"></i> Attendance
         </a>
         {% endif %}
-        {% if can_see_page('reports_index') %}
+        {% if can_see_report_centre() %}
         <a href="{{ url_for('reports_index') }}" class="qa-btn qa-secondary">
             <i data-lucide="bar-chart-2" style="width:14px;height:14px;"></i> Reports
         </a>

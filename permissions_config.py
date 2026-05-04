@@ -977,6 +977,18 @@ SECTION_PAGE_GROUPS = {
     ],
 }
 
+# All permission codes under Reports & Analytics (for Report Centre nav: show hub if user has any).
+def _report_centre_hub_codes():
+    codes = set()
+    for _page_label, items in SECTION_PAGE_GROUPS.get(PERMISSION_REPORTS, []):
+        for code, _name in items:
+            codes.add(code)
+    return frozenset(codes)
+
+
+REPORT_CENTRE_VISIBLE_CODES = _report_centre_hub_codes()
+
+
 # Page key -> list of permission codes that grant visibility to that sidebar link
 # Key = permission code (or short key). User sees link if they have any of these permissions.
 PAGE_VISIBLE = {
@@ -1302,6 +1314,13 @@ def can_see_page(permission_codes, page_key):
         return False
     codes = set(permission_codes)
     return bool(codes & set(PAGE_VISIBLE.get(page_key, [])))
+
+
+def can_see_report_centre(permission_codes):
+    """True if user should see the Report Centre hub link (any Reports & Analytics granular code or section full)."""
+    if not permission_codes:
+        return False
+    return bool(set(permission_codes) & REPORT_CENTRE_VISIBLE_CODES)
 
 
 def can_see_section(permission_codes, section_code):

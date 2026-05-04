@@ -2152,8 +2152,8 @@
         </div>
         {% endif %}
 
-        <!-- Reports & Analytics: Report Centre only if user can open the hub (not just any report sub-permission) -->
-        {% if can_see_page('reports_index') %}
+        <!-- Reports & Analytics: hub if user has Report Centre, Reports (full), or any granular report permission -->
+        {% if can_see_report_centre() %}
         <div>
             <a href="{{ url_for('reports_index') }}" class="{% if request.endpoint in reports_endpoints %}active-link{% endif %}" style="display:flex;align-items:center;padding:.65rem 1rem;text-decoration:none;">
                 <i class="bi bi-bar-chart"></i><span>Report Centre</span>
@@ -3617,7 +3617,7 @@
         </a>
 
         <!-- Reports -->
-        {% if can_see_page('reports_index') %}
+        {% if can_see_report_centre() %}
         <a href="{{ url_for('reports_index') }}" class="more-drawer-item {% if request.endpoint == 'reports_index' %}active{% endif %}" onclick="closeMoreDrawer()">
             <div class="more-icon">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>

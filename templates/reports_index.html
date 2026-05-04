@@ -55,10 +55,12 @@
               <i class="bi bi-star text-warning me-2"></i>Vehicle Summary
             </a>
             {% endif %}
+            {% if can_see_page('vehicles_list') or can_see_page('report_vehicle_profile') %}
             <a href="{{ url_for('vehicles_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
               <i class="bi bi-star text-warning me-2"></i>Vehicle Profile
               <small class="text-muted d-block ms-4">Full vehicle history, transfers, driver assignments</small>
             </a>
+            {% endif %}
             {% if can_see_page('report_parking_utilization') %}
             <a href="{{ url_for('report_parking_utilization') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
               <i class="bi bi-star text-warning me-2"></i>Parking Utilization
@@ -224,6 +226,12 @@
         <div class="col-lg-4 col-md-6 mb-4">
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-person-badge me-1"></i>Driver Reports</h6>
           <div class="list-group list-group-flush report-link-group">
+            {% if linked_driver_id and can_see_page('report_driver_profile') %}
+            <a href="{{ url_for('report_driver_profile', driver_id=linked_driver_id, ref=url_for('reports_index')) }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
+              <i class="bi bi-person-badge text-primary me-2"></i>Driver Profile
+              <small class="text-muted d-block ms-4">Your driver record (linked to this login)</small>
+            </a>
+            {% endif %}
             {% if can_see_page('active_drivers_report') %}
             <a href="{{ url_for('active_drivers_report') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
               <i class="bi bi-star text-warning me-2"></i>Active Driver Summary
@@ -439,6 +447,23 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function(){
+  // Open the first tab that has at least one visible report link (drivers with only HR reports often have an empty Fleet tab).
+  (function activateFirstTabWithLinks(){
+    var order = ['fleet', 'task', 'hr', 'finance', 'admin'];
+    var targetBtnId = null;
+    for (var i = 0; i < order.length; i++) {
+      var pane = document.getElementById(order[i]);
+      if (pane && pane.querySelector('a.report-link')) {
+        targetBtnId = order[i] + '-tab';
+        break;
+      }
+    }
+    if (!targetBtnId) return;
+    var btn = document.getElementById(targetBtnId);
+    if (!btn || btn.classList.contains('active')) return;
+    try { new bootstrap.Tab(btn).show(); } catch (e) {}
+  })();
+
   var searchBox = document.getElementById('reportSearchBox');
   if(!searchBox) return;
   searchBox.addEventListener('input', function(){

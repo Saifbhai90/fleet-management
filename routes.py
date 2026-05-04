@@ -28519,9 +28519,34 @@ def oil_expense_media_download_all(pk):
 # ────────────────────────────────────────────────
 # Reports Index & Multiple Report Types
 # ────────────────────────────────────────────────
+def _linked_driver_id_for_current_user():
+    """If logged-in user matches a driver by CNIC (username), return driver.id for 'my profile' links."""
+    try:
+        uid = session.get('user_id')
+        if not uid:
+            return None
+        user = User.query.get(uid)
+        if not user:
+            return None
+        uname = (user.username or '').strip()
+        if not uname:
+            return None
+        cnic_variants = [uname]
+        digits = re.sub(r'\D', '', uname)
+        if len(digits) == 13:
+            cnic_variants.append(digits[:5] + '-' + digits[5:12] + '-' + digits[12:])
+        for c in cnic_variants:
+            drv = Driver.query.filter(func.lower(Driver.cnic_no) == c.lower()).first()
+            if drv:
+                return drv.id
+    except Exception:
+        return None
+    return None
+
+
 @app.route('/reports/')
 def reports_index():
-    return render_template('reports_index.html')
+    return render_template('reports_index.html', linked_driver_id=_linked_driver_id_for_current_user())
 
 
 @app.route('/reports/activity-log')
