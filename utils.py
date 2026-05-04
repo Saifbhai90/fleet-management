@@ -218,3 +218,31 @@ def generate_excel_template(
             "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         },
     )
+
+
+# ---------- Public share links (e.g. Driver Profile, 24h) ----------
+_SALT_DRIVER_PROFILE = "driver-profile-share-v1"
+_MAX_AGE_DRIVER_PROFILE = 86400  # 24 hours
+
+
+def make_driver_profile_share_token(secret_key: str, driver_id: int) -> str:
+    """Signed token for a time-limited public driver profile URL (itsdangerous)."""
+    from itsdangerous import URLSafeTimedSerializer
+
+    s = URLSafeTimedSerializer(secret_key, salt=_SALT_DRIVER_PROFILE)
+    return s.dumps({"d": int(driver_id)})
+
+
+def load_driver_profile_share_token(secret_key: str, token: str) -> Optional[int]:
+    """
+    Return driver_id if token is valid and not older than 24 hours, else None.
+    """
+    from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
+
+    s = URLSafeTimedSerializer(secret_key, salt=_SALT_DRIVER_PROFILE)
+    try:
+        data = s.loads(token, max_age=_MAX_AGE_DRIVER_PROFILE)
+        d = data.get("d")
+        return int(d) if d is not None else None
+    except (BadSignature, SignatureExpired, TypeError, ValueError, Exception):
+        return None

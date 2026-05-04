@@ -1,6 +1,27 @@
 {% extends "base.html" %}
 {% block title %}Driver Profile – {{ driver.name }}{% endblock %}
+{% block extra_head %}
+{% if public_view|default(false) %}
+<meta name="robots" content="noindex,nofollow">
+{% endif %}
+{% endblock %}
 {% block content %}
+{% set public_view = public_view|default(false) %}
+{% if public_view %}
+<style>
+/* Public shared profile: no login — strip main shell chrome */
+#sidebar, .sidebar, nav.navbar, .navbar.fixed-top, .fab-speed-dial, #sidebarToggleMobile,
+#moreDrawer, .more-drawer-backdrop { display: none !important; }
+.main-content, html.capacitor-native .main-content, #appNativeShell .main-content {
+  margin-left: 0 !important; margin-right: 0 !important; margin-top: 0 !important;
+  padding: 12px !important; max-width: 100vw !important;
+}
+body { overflow-x: hidden; }
+</style>
+<div class="alert alert-info py-2 px-3 small mb-2" style="border-radius:10px;">
+  <i class="bi bi-link-45deg me-1"></i>Read-only shared view. This link expires <strong>24 hours</strong> after it was created.
+</div>
+{% endif %}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -25,6 +46,9 @@
     font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
     line-height: 1.5;
     color: var(--text-dark);
+    max-width: 100%;
+    overflow-x: hidden;
+    box-sizing: border-box;
   }
 
   /* ── Action bar ── */
@@ -41,7 +65,11 @@
     margin-bottom: 0.85rem;
     position: relative;
     box-shadow: 0 6px 20px rgba(30,58,138,.22);
+    overflow: hidden;
   }
+  .profile-header .d-flex.align-items-center { flex-wrap: wrap; gap: .75rem; }
+  .profile-header .d-flex.align-items-center > div:last-child { min-width: 0; flex: 1 1 200px; }
+  .profile-header h2 { word-break: break-word; hyphens: auto; }
   .profile-header h2 {
     font-size: 1.6rem; font-weight: 700; margin: 0 0 0.2rem;
     letter-spacing: -.015em;
@@ -158,7 +186,9 @@
   }
 
   /* ── Info grid ── */
-  .info-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem 1.6rem; }
+  .info-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem 1.6rem; min-width: 0; }
+  .info-item { min-width: 0; }
+  .info-label, .info-value { word-break: break-word; overflow-wrap: anywhere; }
   .info-grid-2col { grid-template-columns: 1fr 1fr; }
   .info-item .info-label {
     font-size: .63rem; color: var(--text-light); font-weight: 600;
@@ -591,6 +621,8 @@
     .doc-grid   { grid-template-columns: 1fr; }
     .docs-photo-grid .photo-row { grid-template-columns: repeat(2,1fr); }
     .profile-header h2 { font-size: 1.35rem; }
+    /* Mobile: hide Print (desktop + QA menu) */
+    #printBtn, #printBtnM, button#printBtnM { display: none !important; }
   }
   @media (max-width: 480px) {
     .stats-row { grid-template-columns: 1fr; }
@@ -756,6 +788,7 @@
 
 <div class="profile-page">
   <!-- Action Bar — excluded from PDF/Print capture -->
+  {% if not public_view %}
   <div class="action-bar" id="profile-action-bar">
     <h4><i class="bi bi-person-badge me-2 text-primary"></i>Driver Profile</h4>
     <div class="d-flex gap-2 align-items-center">
@@ -782,8 +815,8 @@
           <i class="bi bi-file-earmark-pdf me-1"></i>Docs
         </a>
         {% endif %}
-        <button onclick="shareProfile()" class="btn btn-outline-dark btn-action" title="Share">
-          <i class="bi bi-share me-1"></i>Share
+        <button onclick="shareProfile()" class="btn btn-outline-dark btn-action" title="Share read-only link (24h)">
+          <i class="bi bi-link-45deg me-1"></i>Share link
         </button>
       </div>
       <div class="quick-actions-wrap">
@@ -797,11 +830,12 @@
           {% if driver.document_path %}
           <a href="{{ driver.document_path | media_url }}" target="_blank" onclick="closeQA();"><i class="bi bi-file-earmark-pdf"></i> Docs</a>
           {% endif %}
-          <button onclick="shareProfile();closeQA();"><i class="bi bi-share"></i> Share</button>
+          <button onclick="shareProfile();closeQA();"><i class="bi bi-link-45deg"></i> Share link</button>
         </div>
       </div>
     </div>
   </div>
+  {% endif %}
 
   <!-- Profile content — this div is captured for PDF/Print -->
   <div id="profile-content">
@@ -2256,7 +2290,7 @@
 
   /* ── Share profile ── */
   function shareProfile() {
-    var url = '{{ profile_url }}';
+    var url = {{ (public_share_url or profile_url)|tojson }};
     var title = 'Driver Profile - {{ driver.name }} ({{ driver.driver_id }})';
     var SharePlugin = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Share;
     if (SharePlugin) {
@@ -2301,6 +2335,7 @@
 
   /* ── Keyboard shortcuts ── */
   document.addEventListener('keydown', function(e) {
+    {% if public_view %} return; {% endif %}
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     var k = e.key.toLowerCase();

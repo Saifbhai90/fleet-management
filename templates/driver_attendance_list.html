@@ -694,6 +694,66 @@ function _nativeDownloadPhotos(urls, idx) {
     .catch(function() { _nativeDownloadPhotos(urls, idx + 1); });
 }
 
+function _loadJSZip() {
+  return new Promise(function(resolve, reject) {
+    if (window.JSZip) { resolve(window.JSZip); return; }
+    var s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+    s.async = true;
+    s.onload = function() { resolve(window.JSZip); };
+    s.onerror = function() { reject(new Error('jszip')); };
+    document.head.appendChild(s);
+  });
+}
+
+/** Zip multiple attendance photos → single file share (fallback when multi File[] share fails). */
+function tryShareAttendanceZip(urls, type, isNative) {
+  return _loadJSZip().then(function(JSZip) {
+    var zip = new JSZip();
+    return Promise.all(urls.map(function(url, idx) {
+      return fetch(url, { credentials: 'same-origin' }).then(function(r) {
+        if (!r.ok) throw new Error('http');
+        return r.blob();
+      }).then(function(blob) {
+        zip.file('attendance_' + type + '_' + (idx + 1) + '.jpg', blob);
+      });
+    })).then(function() { return zip.generateAsync({ type: 'blob' }); })
+    .then(function(zipBlob) {
+      var Filesystem = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem;
+      var SharePlugin = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Share;
+      if (isNative && Filesystem && SharePlugin) {
+        var fname = 'attendance_' + type + '_' + Date.now() + '.zip';
+        return new Promise(function(res, rej) {
+          var reader = new FileReader();
+          reader.onloadend = function() {
+            var raw = reader.result;
+            var b64 = (typeof raw === 'string' && raw.indexOf(',') >= 0) ? raw.substring(raw.indexOf(',') + 1) : raw;
+            Filesystem.writeFile({ path: fname, data: b64, directory: 'CACHE', recursive: true })
+              .then(function(w) {
+                if (typeof Filesystem.getUri === 'function') {
+                  return Filesystem.getUri({ path: fname, directory: 'CACHE' }).then(function(u) { return u.uri || w.uri; });
+                }
+                return w.uri;
+              })
+              .then(function(uri) {
+                return SharePlugin.share({ title: 'Attendance photos (ZIP)', url: uri, dialogTitle: 'Share zip' });
+              })
+              .then(res).catch(rej);
+          };
+          reader.onerror = rej;
+          reader.readAsDataURL(zipBlob);
+        });
+      }
+      var zf = new File([zipBlob], 'attendance_' + type + '.zip', { type: 'application/zip' });
+      if (typeof navigator !== 'undefined' && navigator.share) {
+        var sd = { files: [zf], title: 'Attendance photos' };
+        if (!navigator.canShare || navigator.canShare(sd)) return navigator.share(sd);
+      }
+      throw new Error('zip web share unavailable');
+    });
+  });
+}
+
 function sharePhotos(urls, type) {
   var isNative = window.FleetBridge && window.FleetBridge.isNative;
 
@@ -721,12 +781,14 @@ function sharePhotos(urls, type) {
     });
   }
 
-  // Multiple images: navigator.share(File[]) must run before native shortcut — Capacitor WebView supports multi-file share here
+  // Multiple images: Web Share files → ZIP single file → native multi-uri → download
   if (urls.length > 1) {
-    tryNavigatorShare().catch(function() {
-      if (isNative) _nativeSharePhotos(urls, type);
-      else downloadPhotos(urls);
-    });
+    tryNavigatorShare()
+      .catch(function() { return tryShareAttendanceZip(urls, type, isNative); })
+      .catch(function() {
+        if (isNative) _nativeSharePhotos(urls, type);
+        else downloadPhotos(urls);
+      });
     return;
   }
 

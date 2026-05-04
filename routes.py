@@ -69,7 +69,11 @@ from sqlalchemy import func, text, inspect, or_, cast, and_
 from sqlalchemy import String as SAString
 from sqlalchemy.exc import OperationalError, IntegrityError, DataError
 from sqlalchemy.orm import joinedload
-from utils import generate_csv_response, parse_date, generate_excel_template, format_cnic, format_phone, format_date_ddmmyyyy, pk_now, pk_date, pk_time
+from utils import (
+    generate_csv_response, parse_date, generate_excel_template, format_cnic, format_phone, format_date_ddmmyyyy,
+    pk_now, pk_date, pk_time,
+    make_driver_profile_share_token, load_driver_profile_share_token,
+)
 from auth_utils import get_required_permission, user_has_permission, user_can_access, check_password
 from flask_wtf.csrf import CSRFError
 from werkzeug.exceptions import HTTPException
@@ -1025,7 +1029,10 @@ def require_login():
     endpoint = request.endpoint or ''
     if endpoint.startswith('static'):
         return
-    if endpoint in ('login', 'pwa_manifest', 'service_worker', 'biometric_login', 'app_logout', 'mobile_init', 'app_check_update', 'debug_fcm_status', 'health_check'):
+    if endpoint in (
+        'login', 'pwa_manifest', 'service_worker', 'biometric_login', 'app_logout', 'mobile_init', 'app_check_update',
+        'debug_fcm_status', 'health_check', 'report_driver_profile_public',
+    ):
         return
     if endpoint == 'set_new_password' and session.get('must_set_password_user_id'):
         return
@@ -3037,6 +3044,22 @@ def reminder_toggle(pk):
 # Account (profile, change password, biometric, session)
 # ────────────────────────────────────────────────
 
+def _user_profile_avatar_path(user):
+    """Driver photo_path when login username matches driver CNIC (same variants as login)."""
+    uname = (user.username or '').strip()
+    if not uname:
+        return None
+    variants = [uname]
+    digits = re.sub(r'\D', '', uname)
+    if len(digits) == 13:
+        variants.append(digits[:5] + '-' + digits[5:12] + '-' + digits[12:])
+    for c in variants:
+        drv = Driver.query.filter(func.lower(Driver.cnic_no) == c.lower()).first()
+        if drv and getattr(drv, 'photo_path', None):
+            return drv.photo_path
+    return None
+
+
 @app.route('/account/profile')
 def account_profile():
     user_id = session.get('user_id')
@@ -3044,7 +3067,13 @@ def account_profile():
         return redirect(url_for('login'))
     user = User.query.get_or_404(user_id)
     login_count = LoginLog.query.filter_by(user_id=user.id).count()
-    return render_template('account_profile.html', user=user, login_count=login_count)
+    profile_avatar_path = _user_profile_avatar_path(user)
+    return render_template(
+        'account_profile.html',
+        user=user,
+        login_count=login_count,
+        profile_avatar_path=profile_avatar_path,
+    )
 
 
 @app.route('/auth/biometric-token')
@@ -29224,13 +29253,12 @@ def report_vehicle_summary():
     )
 
 
-@app.route('/reports/driver-profile/<int:driver_id>')
-def report_driver_profile(driver_id):
+def _driver_profile_view_core(driver_id):
+    """Shared template context for driver profile (authenticated + public share link)."""
     driver = Driver.query.get_or_404(driver_id)
     transfers = DriverTransfer.query.filter_by(driver_id=driver_id).order_by(DriverTransfer.transfer_date.asc()).all()
     status_changes = DriverStatusChange.query.filter_by(driver_id=driver_id).order_by(DriverStatusChange.change_date.asc()).all()
 
-    # Build combined job history sorted oldest first
     job_history = []
     if driver.assign_date:
         if transfers:
@@ -29268,17 +29296,7 @@ def report_driver_profile(driver_id):
             last_action_type = 'Transferred'
         elif _la['type'] == 'status':
             last_action_type = 'Left' if _la['data'].action_type == 'left' else 'Rejoined'
-    _from = request.args.get('from', '').strip()
-    _ref  = request.args.get('ref',  '').strip()
-    _back_map = {
-        'master': url_for('drivers_list'),
-        'missing_docs': url_for('missing_documents_report'),
-        'active_drivers': url_for('active_drivers_report'),
-    }
-    ref       = _back_map.get(_from) or _ref or ''
-    # Show Edit only when opened directly from Drivers List (master section)
-    hide_edit = (_from != 'master')
-    came_from = _from
+
     _today = pk_date()
     service_days = (_today - driver.application_date).days if driver.application_date else None
     driver_age = None
@@ -29302,14 +29320,68 @@ def report_driver_profile(driver_id):
                 jh_counts['left'] += 1
             else:
                 jh_counts['rejoin'] += 1
+
+    return {
+        'driver': driver,
+        'job_history': job_history,
+        'total_actions': total_actions,
+        'last_action': last_action,
+        'last_action_type': last_action_type,
+        'today': _today,
+        'service_days': service_days,
+        'driver_age': driver_age,
+        'doc_uploaded': doc_uploaded,
+        'doc_total': doc_total,
+        'jh_counts': jh_counts,
+    }
+
+
+@app.route('/reports/driver-profile/<int:driver_id>')
+def report_driver_profile(driver_id):
+    ctx = _driver_profile_view_core(driver_id)
+    _from = request.args.get('from', '').strip()
+    _ref = request.args.get('ref', '').strip()
+    _back_map = {
+        'master': url_for('drivers_list'),
+        'missing_docs': url_for('missing_documents_report'),
+        'active_drivers': url_for('active_drivers_report'),
+    }
+    ref = _back_map.get(_from) or _ref or ''
+    hide_edit = (_from != 'master')
+    came_from = _from
     profile_url = url_for('report_driver_profile', driver_id=driver_id, _external=True)
-    return render_template('report_driver_profile.html', driver=driver,
-                           job_history=job_history, total_actions=total_actions,
-                           last_action=last_action, last_action_type=last_action_type, today=_today,
-                           service_days=service_days, driver_age=driver_age,
-                           doc_uploaded=doc_uploaded, doc_total=doc_total,
-                           jh_counts=jh_counts, profile_url=profile_url,
-                           ref=ref, came_from=came_from, hide_edit=hide_edit)
+    share_tok = make_driver_profile_share_token(app.config['SECRET_KEY'], driver_id)
+    public_share_url = url_for('report_driver_profile_public', token=share_tok, _external=True)
+    return render_template(
+        'report_driver_profile.html',
+        public_view=False,
+        public_share_url=public_share_url,
+        profile_url=profile_url,
+        ref=ref,
+        came_from=came_from,
+        hide_edit=hide_edit,
+        **ctx,
+    )
+
+
+@app.route('/p/driver-profile/<token>')
+def report_driver_profile_public(token):
+    """Time-limited read-only driver profile (no login). Token expires after 24 hours."""
+    driver_id = load_driver_profile_share_token(app.config['SECRET_KEY'], token)
+    if not driver_id:
+        return render_template('share_link_expired.html'), 410
+    ctx = _driver_profile_view_core(driver_id)
+    public_url = url_for('report_driver_profile_public', token=token, _external=True)
+    return render_template(
+        'report_driver_profile.html',
+        public_view=True,
+        public_share_url=None,
+        profile_url=public_url,
+        ref='',
+        came_from='public',
+        hide_edit=True,
+        **ctx,
+    )
 
 
 @app.route('/reports/vehicle-profile/<int:vehicle_id>')
