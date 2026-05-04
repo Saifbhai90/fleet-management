@@ -697,30 +697,49 @@ function _nativeDownloadPhotos(urls, idx) {
 function sharePhotos(urls, type) {
   var isNative = window.FleetBridge && window.FleetBridge.isNative;
 
+  function fetchAsFiles() {
+    return Promise.all(urls.map(function(url, idx) {
+      return fetch(url, { credentials: 'same-origin' }).then(function(r) {
+        if (!r.ok) throw new Error('http');
+        return r.blob();
+      }).then(function(blob) {
+        return new File([blob], 'attendance_' + type + '_' + (idx + 1) + '.jpg', { type: 'image/jpeg' });
+      });
+    }));
+  }
+
+  function tryNavigatorShare() {
+    if (typeof navigator === 'undefined' || !navigator.share) {
+      return Promise.reject(new Error('no share'));
+    }
+    return fetchAsFiles().then(function(files) {
+      var data = { files: files };
+      if (files.length && navigator.canShare && !navigator.canShare(data)) {
+        throw new Error('cannot share files');
+      }
+      return navigator.share(data);
+    });
+  }
+
+  // Multiple images: navigator.share(File[]) must run before native shortcut — Capacitor WebView supports multi-file share here
+  if (urls.length > 1) {
+    tryNavigatorShare().catch(function() {
+      if (isNative) _nativeSharePhotos(urls, type);
+      else downloadPhotos(urls);
+    });
+    return;
+  }
+
   if (isNative) {
     _nativeSharePhotos(urls, type);
     return;
   }
 
-  if (navigator.share && navigator.canShare) {
-    var fetches = urls.map(function(url, idx) {
-      return fetch(url).then(function(r) { return r.blob(); }).then(function(blob) {
-        return new File([blob], 'attendance_' + type + '_' + (idx + 1) + '.jpg', { type: 'image/jpeg' });
-      });
-    });
-    Promise.all(fetches).then(function(files) {
-      var shareData = { files: files };
-      if (navigator.canShare(shareData)) {
-        navigator.share(shareData).catch(function() {});
-      } else {
-        downloadPhotos(urls);
-      }
-    }).catch(function() {
-      downloadPhotos(urls);
-    });
-  } else {
-    downloadPhotos(urls);
+  if (typeof navigator !== 'undefined' && navigator.share) {
+    tryNavigatorShare().catch(function() { downloadPhotos(urls); });
+    return;
   }
+  downloadPhotos(urls);
 }
 
 function _nativeSharePhotos(urls, type) {
@@ -771,16 +790,13 @@ function _nativeSharePhotos(urls, type) {
       });
       return;
     }
-    var multiOpts = {
-      title: titleMany,
-      text: 'Attendance ' + type + ' photos (' + savedUris.length + ')',
-      files: savedUris,
-      dialogTitle: dialogTitle
-    };
+    var multiOpts = { files: savedUris, dialogTitle: dialogTitle, title: titleMany };
     doShare(multiOpts).catch(function() {
+      return doShare({ files: savedUris, dialogTitle: dialogTitle });
+    }).catch(function() {
       return doShare({
         title: titleMany,
-        text: multiOpts.text,
+        text: 'Attendance ' + type + ' photos (' + savedUris.length + ')',
         url: savedUris[0],
         dialogTitle: dialogTitle
       });
@@ -808,7 +824,15 @@ function _nativeSharePhotos(urls, type) {
         });
       })
       .then(function(result) {
-        savedUris.push(result.uri);
+        if (typeof Filesystem.getUri === 'function') {
+          return Filesystem.getUri({ path: fname, directory: 'CACHE' }).then(function(u) {
+            return u.uri || result.uri;
+          });
+        }
+        return result.uri;
+      })
+      .then(function(uri) {
+        savedUris.push(uri);
         saveNext(idx + 1);
       })
       .catch(function(e) {

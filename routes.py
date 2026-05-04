@@ -28544,9 +28544,108 @@ def _linked_driver_id_for_current_user():
     return None
 
 
+def _report_centre_visibility(linked_driver_id=None):
+    """Which Report Centre tabs/columns have at least one permitted link (same rules as can_see_page in template)."""
+    from permissions_config import can_see_page as _can_pg
+
+    perms = session.get('permissions') or []
+    is_master = session.get('is_master', False)
+    linked_id = linked_driver_id if linked_driver_id is not None else _linked_driver_id_for_current_user()
+
+    def c(page_key):
+        if is_master:
+            return True
+        return _can_pg(perms, page_key)
+
+    fleet_vehicle = (
+        c('report_vehicle_summary') or c('vehicles_list') or c('report_vehicle_profile')
+        or c('report_parking_utilization')
+    )
+    fleet_project = c('report_project_summary') or c('report_district_summary') or c('report_company_profile')
+    fleet_expense = (
+        c('fuel_expense_list') or c('oil_expense_list') or c('maintenance_expense_list')
+        or c('oil_change_alert_report')
+    )
+    show_fleet = bool(fleet_vehicle or fleet_project or fleet_expense)
+
+    task_daily = (
+        c('task_report_list') or c('task_report_new') or c('red_task_list') or c('without_task_list')
+        or c('speed_monitoring_report') or c('mileage_report') or c('tracker_difference_report')
+        or c('unauthorized_movement_report') or c('task_start_delay_report') or c('task_turnaround_report')
+        or c('unexecuted_task_report')
+    )
+    task_logbook = c('task_report_logbook_cover')
+    task_upload = c('task_report_upload')
+    show_task = bool(task_daily or task_logbook or task_upload)
+
+    hr_driver = (
+        (bool(linked_id) and c('report_driver_profile'))
+        or c('active_drivers_report') or c('driver_seat_available_report') or c('missing_documents_report')
+        or c('penalty_record_list') or c('driver_salary_slip')
+    )
+    hr_att = c('driver_attendance_report') or c('driver_attendance_tra_report') or c('report_expiry')
+    hr_workforce = c('driver_job_left_list') or c('driver_rejoin_list')
+    show_hr = bool(hr_driver or hr_att or hr_workforce)
+
+    finance_books = (
+        c('payment_vouchers_list') or c('receipt_vouchers_list') or c('bank_entries_list')
+        or c('journal_vouchers_list')
+    )
+    finance_ledger = c('accounts_account_ledger') or c('wallet_dashboard') or c('fund_transfers_list')
+    finance_final = c('accounts_balance_sheet') or c('chart_of_accounts_list')
+    show_finance = bool(finance_books or finance_ledger or finance_final)
+
+    admin_activity = c('activity_log_report')
+    admin_ai = c('report_ai')
+    admin_books = c('book_inventory_list') or c('book_assignment_list') or c('book_pending_returns')
+    show_admin = bool(admin_activity or admin_ai or admin_books)
+
+    order = [
+        ('fleet', show_fleet),
+        ('task', show_task),
+        ('hr', show_hr),
+        ('finance', show_finance),
+        ('admin', show_admin),
+    ]
+    first_tab = 'fleet'
+    for tid, ok in order:
+        if ok:
+            first_tab = tid
+            break
+
+    any_tab = bool(show_fleet or show_task or show_hr or show_finance or show_admin)
+
+    return {
+        'first_tab': first_tab,
+        'any_tab': any_tab,
+        'show_fleet': show_fleet,
+        'show_task': show_task,
+        'show_hr': show_hr,
+        'show_finance': show_finance,
+        'show_admin': show_admin,
+        'fleet_vehicle_col': fleet_vehicle,
+        'fleet_project_col': fleet_project,
+        'fleet_expense_col': fleet_expense,
+        'task_daily_col': task_daily,
+        'task_logbook_col': task_logbook,
+        'task_upload_col': task_upload,
+        'hr_driver_col': hr_driver,
+        'hr_att_col': hr_att,
+        'hr_workforce_col': hr_workforce,
+        'finance_books_col': finance_books,
+        'finance_ledger_col': finance_ledger,
+        'finance_final_col': finance_final,
+        'admin_activity_col': admin_activity,
+        'admin_ai_col': admin_ai,
+        'admin_books_col': admin_books,
+    }
+
+
 @app.route('/reports/')
 def reports_index():
-    return render_template('reports_index.html', linked_driver_id=_linked_driver_id_for_current_user())
+    _lid = _linked_driver_id_for_current_user()
+    rc = _report_centre_visibility(_lid)
+    return render_template('reports_index.html', linked_driver_id=_lid, rc=rc)
 
 
 @app.route('/reports/activity-log')

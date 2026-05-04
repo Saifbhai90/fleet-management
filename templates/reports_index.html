@@ -3,50 +3,68 @@
 {% block content %}
 <div class="container-fluid">
 
-  <div class="d-flex align-items-center justify-content-between mb-3">
+  <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
     <h4 class="mb-0"><i class="bi bi-bar-chart-line me-2 text-primary"></i>Report Centre</h4>
-    <div class="position-relative" style="width:260px;">
+    {% if rc.any_tab %}
+    <div class="position-relative" style="width:260px;max-width:100%;">
       <i class="bi bi-search position-absolute" style="left:10px;top:50%;transform:translateY(-50%);color:#999;"></i>
       <input type="text" id="reportSearchBox" class="form-control form-control-sm ps-4" placeholder="Search reports..." autocomplete="off">
     </div>
+    {% endif %}
   </div>
 
-  <!-- Tab Navigation -->
+  {% if not rc.any_tab %}
+  <div class="alert alert-light border text-muted mb-0"><i class="bi bi-info-circle me-2"></i>No report shortcuts are assigned for your role. Ask an administrator to grant specific reports under <strong>Reports & Analytics</strong>.</div>
+  {% else %}
+
+  <!-- Tab Navigation (only tabs that have at least one permitted report) -->
   <ul class="nav nav-tabs mb-0" id="reportTabs" role="tablist" style="border-bottom:2px solid #dee2e6;">
+    {% if rc.show_fleet %}
     <li class="nav-item" role="presentation">
-      <button class="nav-link active fw-semibold" id="fleet-tab" data-bs-toggle="tab" data-bs-target="#fleet" type="button" role="tab" aria-controls="fleet" aria-selected="true">
+      <button class="nav-link fw-semibold {% if rc.first_tab == 'fleet' %}active{% endif %}" id="fleet-tab" data-bs-toggle="tab" data-bs-target="#fleet" type="button" role="tab" aria-controls="fleet" aria-selected="{{ 'true' if rc.first_tab == 'fleet' else 'false' }}">
         <i class="bi bi-truck me-1"></i>Fleet & Operations
       </button>
     </li>
+    {% endif %}
+    {% if rc.show_task %}
     <li class="nav-item" role="presentation">
-      <button class="nav-link fw-semibold" id="task-tab" data-bs-toggle="tab" data-bs-target="#task" type="button" role="tab" aria-controls="task" aria-selected="false">
+      <button class="nav-link fw-semibold {% if rc.first_tab == 'task' %}active{% endif %}" id="task-tab" data-bs-toggle="tab" data-bs-target="#task" type="button" role="tab" aria-controls="task" aria-selected="{{ 'true' if rc.first_tab == 'task' else 'false' }}">
         <i class="bi bi-journal-text me-1"></i>Task & Logbook
       </button>
     </li>
+    {% endif %}
+    {% if rc.show_hr %}
     <li class="nav-item" role="presentation">
-      <button class="nav-link fw-semibold" id="hr-tab" data-bs-toggle="tab" data-bs-target="#hr" type="button" role="tab" aria-controls="hr" aria-selected="false">
+      <button class="nav-link fw-semibold {% if rc.first_tab == 'hr' %}active{% endif %}" id="hr-tab" data-bs-toggle="tab" data-bs-target="#hr" type="button" role="tab" aria-controls="hr" aria-selected="{{ 'true' if rc.first_tab == 'hr' else 'false' }}">
         <i class="bi bi-people me-1"></i>HR & Workforce
       </button>
     </li>
+    {% endif %}
+    {% if rc.show_finance %}
     <li class="nav-item" role="presentation">
-      <button class="nav-link fw-semibold" id="finance-tab" data-bs-toggle="tab" data-bs-target="#finance" type="button" role="tab" aria-controls="finance" aria-selected="false">
+      <button class="nav-link fw-semibold {% if rc.first_tab == 'finance' %}active{% endif %}" id="finance-tab" data-bs-toggle="tab" data-bs-target="#finance" type="button" role="tab" aria-controls="finance" aria-selected="{{ 'true' if rc.first_tab == 'finance' else 'false' }}">
         <i class="bi bi-wallet2 me-1"></i>Finance
       </button>
     </li>
+    {% endif %}
+    {% if rc.show_admin %}
     <li class="nav-item" role="presentation">
-      <button class="nav-link fw-semibold" id="admin-tab" data-bs-toggle="tab" data-bs-target="#admin" type="button" role="tab" aria-controls="admin" aria-selected="false">
+      <button class="nav-link fw-semibold {% if rc.first_tab == 'admin' %}active{% endif %}" id="admin-tab" data-bs-toggle="tab" data-bs-target="#admin" type="button" role="tab" aria-controls="admin" aria-selected="{{ 'true' if rc.first_tab == 'admin' else 'false' }}">
         <i class="bi bi-gear me-1"></i>Administration
       </button>
     </li>
+    {% endif %}
   </ul>
 
   <!-- Tab Content -->
   <div class="tab-content border border-top-0 rounded-bottom bg-white p-4" id="reportTabContent">
 
     <!-- ═══════════════ Fleet & Operations ═══════════════ -->
-    <div class="tab-pane fade show active" id="fleet" role="tabpanel" aria-labelledby="fleet-tab">
+    {% if rc.show_fleet %}
+    <div class="tab-pane fade {% if rc.first_tab == 'fleet' %}show active{% endif %}" id="fleet" role="tabpanel" aria-labelledby="fleet-tab">
       <div class="row">
         <!-- Vehicle Reports -->
+        {% if rc.fleet_vehicle_col %}
         <div class="col-lg-4 col-md-6 mb-4">
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-truck me-1"></i>Vehicle Reports</h6>
           <div class="list-group list-group-flush report-link-group">
@@ -68,7 +86,9 @@
             {% endif %}
           </div>
         </div>
+        {% endif %}
         <!-- Project / District -->
+        {% if rc.fleet_project_col %}
         <div class="col-lg-4 col-md-6 mb-4">
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-briefcase me-1"></i>Project & District</h6>
           <div class="list-group list-group-flush report-link-group">
@@ -89,7 +109,9 @@
             {% endif %}
           </div>
         </div>
+        {% endif %}
         <!-- Expense Reports -->
+        {% if rc.fleet_expense_col %}
         <div class="col-lg-4 col-md-6 mb-4">
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-fuel-pump me-1"></i>Expense Reports</h6>
           <div class="list-group list-group-flush report-link-group">
@@ -127,13 +149,17 @@
             {% endif %}
           </div>
         </div>
+        {% endif %}
       </div>
     </div>
+    {% endif %}
 
     <!-- ═══════════════ Task & Logbook ═══════════════ -->
-    <div class="tab-pane fade" id="task" role="tabpanel" aria-labelledby="task-tab">
+    {% if rc.show_task %}
+    <div class="tab-pane fade {% if rc.first_tab == 'task' %}show active{% endif %}" id="task" role="tabpanel" aria-labelledby="task-tab">
       <div class="row">
         <!-- Daily Task Reports -->
+        {% if rc.task_daily_col %}
         <div class="col-lg-4 col-md-6 mb-4">
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-clipboard-data me-1"></i>Daily Task Reports</h6>
           <div class="list-group list-group-flush report-link-group">
@@ -194,7 +220,9 @@
             {% endif %}
           </div>
         </div>
+        {% endif %}
         <!-- Logbook -->
+        {% if rc.task_logbook_col %}
         <div class="col-lg-4 col-md-6 mb-4">
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-book me-1"></i>Logbook</h6>
           <div class="list-group list-group-flush report-link-group">
@@ -205,7 +233,9 @@
             {% endif %}
           </div>
         </div>
+        {% endif %}
         <!-- Workbook Upload -->
+        {% if rc.task_upload_col %}
         <div class="col-lg-4 col-md-6 mb-4">
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-cloud-upload me-1"></i>Workbook Upload</h6>
           <div class="list-group list-group-flush report-link-group">
@@ -216,13 +246,17 @@
             {% endif %}
           </div>
         </div>
+        {% endif %}
       </div>
     </div>
+    {% endif %}
 
     <!-- ═══════════════ HR & Workforce ═══════════════ -->
-    <div class="tab-pane fade" id="hr" role="tabpanel" aria-labelledby="hr-tab">
+    {% if rc.show_hr %}
+    <div class="tab-pane fade {% if rc.first_tab == 'hr' %}show active{% endif %}" id="hr" role="tabpanel" aria-labelledby="hr-tab">
       <div class="row">
         <!-- Driver Reports -->
+        {% if rc.hr_driver_col %}
         <div class="col-lg-4 col-md-6 mb-4">
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-person-badge me-1"></i>Driver Reports</h6>
           <div class="list-group list-group-flush report-link-group">
@@ -260,7 +294,9 @@
             {% endif %}
           </div>
         </div>
+        {% endif %}
         <!-- Attendance Reports -->
+        {% if rc.hr_att_col %}
         <div class="col-lg-4 col-md-6 mb-4">
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-calendar-check me-1"></i>Attendance Reports</h6>
           <div class="list-group list-group-flush report-link-group">
@@ -282,7 +318,9 @@
             {% endif %}
           </div>
         </div>
+        {% endif %}
         <!-- Workforce -->
+        {% if rc.hr_workforce_col %}
         <div class="col-lg-4 col-md-6 mb-4">
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-person-dash me-1"></i>Workforce</h6>
           <div class="list-group list-group-flush report-link-group">
@@ -298,13 +336,17 @@
             {% endif %}
           </div>
         </div>
+        {% endif %}
       </div>
     </div>
+    {% endif %}
 
     <!-- ═══════════════ Finance ═══════════════ -->
-    <div class="tab-pane fade" id="finance" role="tabpanel" aria-labelledby="finance-tab">
+    {% if rc.show_finance %}
+    <div class="tab-pane fade {% if rc.first_tab == 'finance' %}show active{% endif %}" id="finance" role="tabpanel" aria-labelledby="finance-tab">
       <div class="row">
         <!-- Books of Account -->
+        {% if rc.finance_books_col %}
         <div class="col-lg-4 col-md-6 mb-4">
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-journal-bookmark me-1"></i>Books of Account</h6>
           <div class="list-group list-group-flush report-link-group">
@@ -330,7 +372,9 @@
             {% endif %}
           </div>
         </div>
+        {% endif %}
         <!-- Ledger & Statements -->
+        {% if rc.finance_ledger_col %}
         <div class="col-lg-4 col-md-6 mb-4">
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-receipt me-1"></i>Ledger & Statements</h6>
           <div class="list-group list-group-flush report-link-group">
@@ -351,7 +395,9 @@
             {% endif %}
           </div>
         </div>
+        {% endif %}
         <!-- Final Accounts -->
+        {% if rc.finance_final_col %}
         <div class="col-lg-4 col-md-6 mb-4">
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-clipboard-data me-1"></i>Final Accounts</h6>
           <div class="list-group list-group-flush report-link-group">
@@ -367,23 +413,31 @@
             {% endif %}
           </div>
         </div>
+        {% endif %}
       </div>
     </div>
+    {% endif %}
 
     <!-- ═══════════════ Administration ═══════════════ -->
-    <div class="tab-pane fade" id="admin" role="tabpanel" aria-labelledby="admin-tab">
+    {% if rc.show_admin %}
+    <div class="tab-pane fade {% if rc.first_tab == 'admin' %}show active{% endif %}" id="admin" role="tabpanel" aria-labelledby="admin-tab">
       <div class="row">
         <!-- Activity & Logs -->
+        {% if rc.admin_activity_col %}
         <div class="col-lg-4 col-md-6 mb-4">
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-journal-check me-1"></i>Activity & Logs</h6>
           <div class="list-group list-group-flush report-link-group">
+            {% if can_see_page('activity_log_report') %}
             <a href="{{ url_for('activity_log_report') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
               <i class="bi bi-star text-warning me-2"></i>Activity & Login Log
               <small class="text-muted d-block ms-4">Login sessions, device info, IP, geolocation</small>
             </a>
+            {% endif %}
           </div>
         </div>
+        {% endif %}
         <!-- AI Tools -->
+        {% if rc.admin_ai_col %}
         <div class="col-lg-4 col-md-6 mb-4">
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-robot me-1"></i>AI Tools</h6>
           <div class="list-group list-group-flush report-link-group">
@@ -395,7 +449,9 @@
             {% endif %}
           </div>
         </div>
+        {% endif %}
         <!-- Book Management -->
+        {% if rc.admin_books_col %}
         <div class="col-lg-4 col-md-6 mb-4">
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-book me-1"></i>Book Management</h6>
           <div class="list-group list-group-flush report-link-group">
@@ -416,10 +472,14 @@
             {% endif %}
           </div>
         </div>
+        {% endif %}
       </div>
     </div>
+    {% endif %}
 
   </div><!-- /tab-content -->
+
+  {% endif %}
 
 </div><!-- /container-fluid -->
 
@@ -447,21 +507,18 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function(){
-  // Open the first tab that has at least one visible report link (drivers with only HR reports often have an empty Fleet tab).
-  (function activateFirstTabWithLinks(){
+  // Active tab is set server-side (rc.first_tab). If no tab is active (edge), open first pane with links.
+  (function ensureActiveTab(){
+    if (document.querySelector('#reportTabs .nav-link.active')) return;
     var order = ['fleet', 'task', 'hr', 'finance', 'admin'];
-    var targetBtnId = null;
     for (var i = 0; i < order.length; i++) {
       var pane = document.getElementById(order[i]);
       if (pane && pane.querySelector('a.report-link')) {
-        targetBtnId = order[i] + '-tab';
+        var b = document.getElementById(order[i] + '-tab');
+        if (b) try { new bootstrap.Tab(b).show(); } catch (e) {}
         break;
       }
     }
-    if (!targetBtnId) return;
-    var btn = document.getElementById(targetBtnId);
-    if (!btn || btn.classList.contains('active')) return;
-    try { new bootstrap.Tab(btn).show(); } catch (e) {}
   })();
 
   var searchBox = document.getElementById('reportSearchBox');
