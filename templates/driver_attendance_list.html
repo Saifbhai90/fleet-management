@@ -134,13 +134,14 @@
         {% if search %} · Search{% endif %}
         <small class="opacity-75">(Only marked attendance)</small>
       </span>
-      <div class="d-flex align-items-center gap-2">
-        <span class="small opacity-75">Per Page:</span>
-        <select class="form-select form-select-sm bg-dark text-white border-secondary" style="width:70px;" onchange="(function(v){var u=new URLSearchParams(window.location.search);u.set('per_page',v);u.set('page',1);window.location.search=u.toString();})(this.value)">
-          <option value="10" {% if per_page == 10 %}selected{% endif %}>10</option>
-          <option value="20" {% if per_page == 20 %}selected{% endif %}>20</option>
-          <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
-          <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
+      <div class="d-flex align-items-center gap-2 flex-wrap justify-content-end">
+        <span class="small opacity-75 text-nowrap">Per page:</span>
+        <select class="form-select form-select-sm bg-dark text-white border-secondary" style="min-width:78px;max-width:100px;" title="Capacitor app: default is All rows" onchange="(function(v){var u=new URLSearchParams(window.location.search);u.set('per_page',v);u.set('page',1);window.location.search=u.toString();})(this.value)">
+          <option value="10" {% if per_page == 10 and not attendance_list_show_all|default(false) %}selected{% endif %}>10</option>
+          <option value="20" {% if per_page == 20 and not attendance_list_show_all|default(false) %}selected{% endif %}>20</option>
+          <option value="50" {% if per_page == 50 and not attendance_list_show_all|default(false) %}selected{% endif %}>50</option>
+          <option value="100" {% if per_page == 100 and not attendance_list_show_all|default(false) %}selected{% endif %}>100</option>
+          <option value="all" {% if attendance_list_show_all|default(false) %}selected{% endif %}>All</option>
         </select>
         <input type="text" id="tableSearch" class="form-control form-control-sm text-dark bg-light border-0" style="max-width: 220px;" placeholder="Search in list...">
       </div>

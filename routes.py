@@ -146,6 +146,45 @@ class SimplePagination:
                 last = num
 
 
+def _attendance_list_resolve_per_page(request, total_count):
+    """Attendance list pagination size.
+
+    Desktop browser default: 20 rows (fast load).
+
+    Mobile shell (Capacitor / Android System WebView): when ``per_page`` is omitted,
+    return full filtered result set so the list + photo share see every row (no silent 20 cap).
+
+    Explicit ``?per_page=all`` / ``0`` / negative → show all. ``?native=1`` forces full list.
+    """
+    raw = request.args.get('per_page')
+    ua = (request.headers.get('User-Agent') or '').lower()
+
+    def _full_size():
+        return max(int(total_count or 0), 1)
+
+    hint = (request.args.get('native') or request.args.get('app') or '').strip().lower()
+    if hint in ('1', 'true', 'yes'):
+        return _full_size()
+
+    if raw is not None and str(raw).strip() != '':
+        s = str(raw).strip().lower()
+        if s in ('all', 'max', 'full'):
+            return _full_size()
+        try:
+            n = int(raw)
+            if n <= 0:
+                return _full_size()
+            return max(1, min(n, 10000))
+        except (TypeError, ValueError):
+            return 20
+
+    # Same WebView as Fleet Manager Android app (see README_CAPACITOR)
+    if 'capacitor' in ua or ('wv' in ua and 'android' in ua):
+        return _full_size()
+
+    return 20
+
+
 _VEHICLE_FAMILY_SETTING_KEY = 'vehicle_family_options'
 _DEFAULT_VEHICLE_FAMILIES = [
     'Suzuki Bolan',
@@ -15463,9 +15502,11 @@ def driver_attendance_list():
             att_counts['missing_co'] += 1
 
     page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 20, type=int)
+    total_att = len(attendance_rows_full)
+    per_page = _attendance_list_resolve_per_page(request, total_att)
     pagination = SimplePagination(attendance_rows_full, page, per_page)
     attendance_rows = pagination.items
+    attendance_list_show_all = total_att > 0 and per_page >= total_att
     _perms = session.get('permissions') or []
     can_att_list_manual_checkout = user_can_access(_perms, 'driver_attendance_list_manual_checkout')
     can_att_list_manual_edit = user_can_access(_perms, 'driver_attendance_list_manual_edit')
@@ -15489,6 +15530,7 @@ def driver_attendance_list():
         disable_shift=disable_shift,
         pagination=pagination,
         per_page=per_page,
+        attendance_list_show_all=attendance_list_show_all,
         att_counts=att_counts,
         duty_shift_filter=duty_shift_filter,
         can_att_list_manual_checkout=can_att_list_manual_checkout,
