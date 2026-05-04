@@ -722,17 +722,30 @@ function sharePhotos(urls, type) {
       return Promise.reject(new Error('no share'));
     }
     return fetchAsFiles().then(function(files) {
-      var data = { files: files, title: 'Attendance photos' };
-      if (files.length && navigator.canShare && !navigator.canShare(data)) {
-        throw new Error('cannot share files');
-      }
+      var data = { files: files, title: 'Attendance photos', text: 'Attendance photos (' + files.length + ')' };
+      try {
+        if (typeof navigator.canShare === 'function' && files.length && !navigator.canShare(data)) {
+          console.warn('[Attendance share] canShare=false — trying navigator.share anyway (some WebViews)');
+        }
+      } catch (e) {}
       return navigator.share(data);
     });
   }
 
+  /** Short label for toasts — full plugin versions are in the mobile app repo (package.json / build.gradle). */
+  function attendanceShareDiagShort() {
+    try {
+      var C = window.Capacitor;
+      return (C && typeof C.getPlatform === 'function') ? C.getPlatform() : 'web';
+    } catch (e) {
+      return '?';
+    }
+  }
+
   /* Multiple images: Web Share (multi File[]) → native Capacitor files[] → save files */
   if (urls.length > 1) {
-    tryNavigatorShare().catch(function() {
+    tryNavigatorShare().catch(function(err) {
+      console.warn('[Attendance share] navigator.share:', err && err.message ? err.message : err);
       if (isNative) _nativeSharePhotos(urls, type);
       else downloadPhotos(urls);
     });
@@ -812,7 +825,10 @@ function _nativeSharePhotos(urls, type) {
         dialogTitle: dialogTitle
       });
     }).catch(function() {
-      if (window.FleetBridge) window.FleetBridge._toast('Batch share unavailable — saving photos to attach in WhatsApp…');
+      var hint = ' (' + attendanceShareDiagShort() + ')';
+      if (window.FleetBridge && window.FleetBridge._toast) {
+        window.FleetBridge._toast('Batch share failed' + hint + ' — saving photos. Check package.json @capacitor/share in app project.');
+      }
       downloadPhotos(urls);
     });
   }
