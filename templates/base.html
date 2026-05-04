@@ -34,6 +34,8 @@
         .ts-wrapper { width: 100%; }
         /* Body-level dropdown must sit above cards/tables/modals */
         body > .ts-dropdown { z-index: 1060 !important; }
+        /* Native app: bottom nav z-index 1065 — TS dropdown must clear it */
+        html.capacitor-native body > .ts-dropdown { z-index: 12050 !important; }
         /* Highlighted (active) option — strong ERP-style blue */
         .ts-dropdown .active {
             background-color: #0d6efd !important;
@@ -504,6 +506,29 @@
         }
         .sidebar.collapsed .sb-sub-toggle,
         .sidebar.collapsed .sb-sub-items { display: none; }
+        /* Slide-out menu open: undo desktop "collapsed" hiding (labels + nested groups) */
+        @media (max-width: 991.98px) {
+            .sidebar.mobile-open span,
+            .sidebar.mobile-open .dropdown-toggle::after {
+                display: inline-block !important;
+            }
+            .sidebar.mobile-open.collapsed .sb-sub-toggle {
+                display: flex !important;
+            }
+            .sidebar.mobile-open.collapsed .sb-sub-items.collapse.show {
+                display: block !important;
+            }
+        }
+        html.capacitor-native .sidebar.mobile-open span,
+        html.capacitor-native .sidebar.mobile-open .dropdown-toggle::after {
+            display: inline-block !important;
+        }
+        html.capacitor-native .sidebar.mobile-open.collapsed .sb-sub-toggle {
+            display: flex !important;
+        }
+        html.capacitor-native .sidebar.mobile-open.collapsed .sb-sub-items.collapse.show {
+            display: block !important;
+        }
         /* Main Content */
         .main-content { margin-left: 300px; margin-top: 60px; padding: 25px; transition: 0.3s; }
         .main-content.expanded { margin-left: 70px; }
@@ -825,6 +850,9 @@
         }
         .capacitor-native .sidebar.mobile-open {
             transform: translateX(0) !important;
+        }
+        .capacitor-native .sidebar-overlay.show {
+            z-index: 1990 !important;
         }
 
         /* ── Native App Shell: single fixed container; nav is a flex child — never scrolls ── */
@@ -1159,7 +1187,7 @@
         .btn-loading { pointer-events: none !important; opacity: 0.80; }
         @keyframes btnSpin { to { transform: rotate(360deg); } }
 
-        /* ── Native Sticky Submit (Thumb Zone) — mobile only ── */
+        /* ── Native Sticky Submit (Thumb Zone) — mobile width OR Capacitor app (any width) ── */
         @media (max-width: 767.98px) {
             .capacitor-native .main-content {
                 padding-bottom: 130px !important;
@@ -1176,6 +1204,31 @@
                 border-top: 1px solid rgba(0,0,0,0.07);
             }
             .capacitor-native .native-submit-sticky .btn {
+                width: 100% !important;
+                min-height: 52px !important;
+                font-size: 1rem !important;
+                font-weight: 700 !important;
+                border-radius: 16px !important;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.15) !important;
+            }
+        }
+        /* Capacitor on wider screens (tablet / landscape): same sticky submit + bottom inset */
+        @media (min-width: 768px) {
+            html.capacitor-native .main-content {
+                padding-bottom: max(130px, calc(72px + env(safe-area-inset-bottom, 0px))) !important;
+            }
+            html.capacitor-native .native-submit-sticky {
+                position: sticky;
+                bottom: 72px;
+                background: rgba(241,245,249,0.97);
+                -webkit-backdrop-filter: blur(8px);
+                backdrop-filter: blur(8px);
+                padding: 10px 4px;
+                margin: 12px -4px -4px;
+                z-index: 100;
+                border-top: 1px solid rgba(0,0,0,0.07);
+            }
+            html.capacitor-native .native-submit-sticky .btn {
                 width: 100% !important;
                 min-height: 52px !important;
                 font-size: 1rem !important;
@@ -3495,8 +3548,18 @@
 <!-- ── More Bottom Drawer (Mobile) ── -->
 <div id="moreDrawerOverlay" class="more-drawer-overlay" onclick="closeMoreDrawer()"></div>
 <div id="moreDrawerPanel" class="more-drawer-panel" role="dialog" aria-label="More options">
-    <div class="more-drawer-handle"></div>
-    <div class="more-drawer-grid">
+        <div class="more-drawer-handle"></div>
+        <div class="more-drawer-grid">
+
+        <!-- Full menu → opens left sidebar (same place as hamburger) -->
+        <button type="button" class="more-drawer-item" id="moreDrawerFullMenuBtn"
+                onclick="closeMoreDrawer(); fleetToggleMobileSidebar(true);"
+                style="grid-column: 1 / -1; flex-direction: row; justify-content: center; gap: 10px; min-height: 54px; background: rgba(59,130,246,0.14); border: 1px solid rgba(59,130,246,0.35);">
+            <div class="more-icon" style="background: rgba(59,130,246,0.2);">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+            </div>
+            <span style="font-weight: 700; font-size: 0.74rem;">Full menu</span>
+        </button>
 
         <!-- Language Toggle -->
         <button type="button" class="more-drawer-item" id="moreDrawerLangBtn" onclick="toggleLang(); syncMoreLangLabel();">
@@ -3879,33 +3942,6 @@
             document.cookie = "workspace_sidebar_open=1; path=/; max-age=31536000; SameSite=Lax";
         }
     }
-
-    // Mobile: open/close sidebar with overlay
-    (function() {
-        var sidebar = document.getElementById("sidebar");
-        var overlay = document.getElementById("sidebarOverlay");
-        var btn = document.getElementById("sidebarToggleMobile");
-        if (!sidebar || !overlay) return;
-        function openSidebar() {
-            sidebar.classList.add("mobile-open");
-            overlay.classList.add("show");
-            document.body.style.overflow = "hidden";
-        }
-        function closeSidebar() {
-            sidebar.classList.remove("mobile-open");
-            overlay.classList.remove("show");
-            document.body.style.overflow = "";
-        }
-        if (btn) btn.addEventListener("click", function() {
-            if (sidebar.classList.contains("mobile-open")) closeSidebar();
-            else openSidebar();
-        });
-        overlay.addEventListener("click", closeSidebar);
-        // Close on resize to desktop
-        window.addEventListener("resize", function() {
-            if (window.innerWidth >= 992) closeSidebar();
-        });
-    })();
 
     // Workspace sidebar mode lock:
     // - Entering workspace => force collapsed, keep locked.
@@ -4883,19 +4919,6 @@
         });
     })();
 
-    // ── Mobile Bottom Nav: "More" opens sidebar ───────────────────────────
-    (function() {
-        var moreBtn = document.getElementById('mobileNavMore');
-        if (moreBtn) {
-            moreBtn.addEventListener('click', function() {
-                var sidebar = document.getElementById('sidebar');
-                var overlay = document.getElementById('sidebarOverlay');
-                if (sidebar) sidebar.classList.toggle('mobile-open');
-                if (overlay) overlay.classList.toggle('show');
-            });
-        }
-    })();
-
     // ── Pull-to-Refresh (dashboard only) ──────────────────────────────────
     (function() {
         if (!('ontouchstart' in window)) return;
@@ -5722,6 +5745,10 @@
             document.addEventListener('touchend', function(e) {
                 var now = Date.now();
                 if (now - lastTap < 300) {
+                    if (e.target.closest('#mobileMenuBtn, #sidebarToggleMobile, #sidebar, #sidebarOverlay, .sidebar, .more-drawer-panel, .more-drawer-item')) {
+                        lastTap = now;
+                        return;
+                    }
                     if (e.target.tagName === 'A' || e.target.tagName === 'BUTTON' || e.target.closest('.btn')) {
                         e.preventDefault();
                     }
@@ -5741,7 +5768,8 @@
 
     // ── Mobile Input Enhancements ─────────────────────────────────────────
     (function() {
-        if (window.innerWidth > 768) return;
+        var _cap = window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform();
+        if (window.innerWidth > 768 && !_cap) return;
         document.querySelectorAll('input[type="text"]').forEach(function(el) {
             var name = (el.name || el.id || '').toLowerCase();
             if (/phone|mobile|contact|cell/.test(name)) {
@@ -5807,48 +5835,41 @@
         });
     })();
 
-    // ── Mobile Hamburger → Sidebar ─────────────────────────────────────────
+    // ── Mobile Hamburger + navbar toggle → Sidebar ────────────────────────
     (function() {
         var btn = document.getElementById('mobileMenuBtn');
+        var navBtn = document.getElementById('sidebarToggleMobile');
         var sidebar = document.getElementById('sidebar');
         var overlay = document.getElementById('sidebarOverlay');
-        if (!btn || !sidebar) return;
+        if (!sidebar) return;
 
-        function openSB() {
-            sidebar.classList.add('mobile-open');
-            if (overlay) { overlay.classList.add('show'); overlay.style.display = 'block'; }
-            document.body.style.overflow = 'hidden';
+        function closeSB() { window.fleetCloseMobileSidebar(); }
+        function openSB() { window.fleetOpenMobileSidebar(); }
+
+        if (btn) {
+            btn.addEventListener('click', function() {
+                window.fleetToggleMobileSidebar();
+            });
         }
-        function closeSB() {
-            sidebar.classList.remove('mobile-open');
-            if (overlay) { overlay.classList.remove('show'); }
-            document.body.style.overflow = '';
+        if (navBtn) {
+            navBtn.addEventListener('click', function() {
+                window.fleetToggleMobileSidebar();
+            });
         }
 
-        btn.addEventListener('click', function() {
-            if (sidebar.classList.contains('mobile-open')) closeSB(); else openSB();
-        });
-
-        // Tap overlay → close sidebar
         if (overlay) overlay.addEventListener('click', closeSB);
 
-        // Sidebar link click logic:
-        // • Dropdown-toggle (parent section) → ONLY toggle sub-menu, NEVER close or navigate
-        // • Real page link (.collapse-item or direct) → navigate AND close sidebar on mobile
         sidebar.querySelectorAll('a').forEach(function(a) {
             a.addEventListener('click', function(e) {
                 var isToggle = a.getAttribute('data-bs-toggle') === 'collapse';
                 if (isToggle) {
-                    // Let Bootstrap handle the collapse toggle; stop any href navigation
                     e.preventDefault();
-                    return; // do NOT close the sidebar
+                    return;
                 }
-                // Real page link: close sidebar on mobile
                 if (window.innerWidth < 992) closeSB();
             });
         });
 
-        // Close on resize to desktop
         window.addEventListener('resize', function() {
             if (window.innerWidth >= 992) closeSB();
         });
@@ -5981,12 +6002,27 @@
                 if (bd) bd.classList.remove('show');
                 return true;
             }
+            // More drawer (bottom sheet)
+            var moreOv = document.getElementById('moreDrawerOverlay');
+            if (moreOv && moreOv.classList.contains('open') && window.closeMoreDrawer) {
+                window.closeMoreDrawer();
+                return true;
+            }
+            // Attend sheet
+            var attOv = document.getElementById('attendSheetOverlay');
+            if (attOv && attOv.classList.contains('open') && window.closeAttendSheet) {
+                window.closeAttendSheet();
+                return true;
+            }
             // Mobile sidebar
             var sb = document.getElementById('sidebar');
             if (sb && sb.classList.contains('mobile-open')) {
-                sb.classList.remove('mobile-open');
-                var ov = document.getElementById('sidebarOverlay');
-                if (ov) ov.classList.remove('show');
+                if (window.fleetCloseMobileSidebar) window.fleetCloseMobileSidebar();
+                else {
+                    sb.classList.remove('mobile-open');
+                    var ov = document.getElementById('sidebarOverlay');
+                    if (ov) ov.classList.remove('show');
+                }
                 return true;
             }
             return false;
@@ -6375,7 +6411,6 @@
     // ── 5. Native Sticky Submit Buttons (Thumb Zone) ─────────────────────
     (function() {
         if (!window.Capacitor || !window.Capacitor.isNativePlatform()) return;
-        if (window.innerWidth > 768) return;
         document.addEventListener('DOMContentLoaded', function() {
             var content = document.querySelector('.main-content');
             if (!content) return;
@@ -7126,9 +7161,44 @@ document.addEventListener('DOMContentLoaded', function() {
         else applyEnglish();
     };
 
+    /* ── Left sidebar (mobile / Capacitor): shared open/close ── */
+    window.fleetOpenMobileSidebar = function() {
+        var sidebar = document.getElementById('sidebar');
+        var overlay = document.getElementById('sidebarOverlay');
+        if (!sidebar) return;
+        sidebar.classList.add('mobile-open');
+        if (overlay) {
+            overlay.classList.add('show');
+            overlay.style.display = 'block';
+            overlay.setAttribute('aria-hidden', 'false');
+        }
+        document.body.style.overflow = 'hidden';
+    };
+    window.fleetCloseMobileSidebar = function() {
+        var sidebar = document.getElementById('sidebar');
+        var overlay = document.getElementById('sidebarOverlay');
+        if (sidebar) sidebar.classList.remove('mobile-open');
+        if (overlay) {
+            overlay.classList.remove('show');
+            overlay.setAttribute('aria-hidden', 'true');
+        }
+        document.body.style.overflow = '';
+    };
+    window.fleetToggleMobileSidebar = function(forceOpen) {
+        var sb = document.getElementById('sidebar');
+        if (!sb) return;
+        if (forceOpen === true) {
+            window.fleetOpenMobileSidebar();
+            return;
+        }
+        if (sb.classList.contains('mobile-open')) window.fleetCloseMobileSidebar();
+        else window.fleetOpenMobileSidebar();
+    };
+
     /* ── More Drawer (Mobile) ── */
     window.openMoreDrawer = function() {
-        if (window.innerWidth >= 992) return;
+        var _native = window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform();
+        if (!_native && window.innerWidth >= 992) return;
         var overlay = document.getElementById('moreDrawerOverlay');
         var panel   = document.getElementById('moreDrawerPanel');
         if (!overlay || !panel) return;
