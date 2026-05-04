@@ -752,217 +752,50 @@ function doPhotoAction(type) {
   }
 }
 
-/** Share-failure debug: same flow on all devices — collect errors, show copyable modal when share → download fallback. */
-function attendanceResetShareDebug() {
-  window.__attendanceShareLastDebug = [];
-  window.__attendanceShareSession = null;
-}
-function attendancePushShareDebug(stage, err) {
-  window.__attendanceShareLastDebug = window.__attendanceShareLastDebug || [];
-  var msg = '(no detail)';
-  if (err != null && err !== undefined) {
-    if (typeof err === 'string') msg = err;
-    else {
-      try {
-        msg = (err.message != null && err.message !== '') ? String(err.message) : String(err);
-        if (err.name) msg = err.name + ': ' + msg;
-        if (err.code != null && err.code !== '') msg += ' | code=' + err.code;
-      } catch (e) { msg = String(err); }
-    }
-  }
-  window.__attendanceShareLastDebug.push({ stage: String(stage || '?'), message: msg });
+/** WhatsApp-style targets accept ~99 attachments per share intent — split larger lists into sequential batches (no photos skipped). */
+var ATTENDANCE_WHATSAPP_BATCH_SIZE = 99;
+function attendanceChunkUrls(arr, size) {
+  var out = [];
+  for (var i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
 }
 
-/** Log Share.share() option shape (no full URIs) — WhatsApp Android often sends only text if both text and files are set. */
-function attendancePushShareAttempt(stage, opts) {
-  var summary = {
-    fileCount: opts && opts.files ? opts.files.length : 0,
-    hasUrl: !!(opts && opts.url),
-    hasText: !!(opts && opts.text && String(opts.text).length),
-    hasTitle: !!(opts && opts.title && String(opts.title).length),
-    hasDialogTitle: !!(opts && opts.dialogTitle)
-  };
-  attendancePushShareDebug(stage, new Error(JSON.stringify(summary)));
+function attendanceShowShareProgress(total, label) {
+  var el = document.getElementById('attendanceShareProgressOverlay');
+  if (!el) return;
+  el.classList.remove('d-none');
+  el.setAttribute('aria-busy', 'true');
+  el.setAttribute('aria-hidden', 'false');
+  attendanceUpdateShareProgress(0, total, label || 'Preparing photos…');
 }
 
-function attendanceSummarizeUriSchemes(uris) {
-  var counts = {};
-  (uris || []).forEach(function(u) {
-    var s = 'other';
-    try {
-      var m = String(u).match(/^([a-z][a-z0-9+.-]*):/i);
-      s = m ? m[1].toLowerCase() : (String(u).charAt(0) === '/' ? 'path' : 'opaque');
-    } catch (e) {}
-    counts[s] = (counts[s] || 0) + 1;
-  });
-  try {
-    return JSON.stringify(counts);
-  } catch (e2) {
-    return '{}';
+function attendanceUpdateShareProgress(done, total, label) {
+  var pct = total > 0 ? Math.min(100, Math.round(100 * done / total)) : 0;
+  var bar = document.getElementById('attendanceShareProgressBar');
+  var det = document.getElementById('attendanceShareProgressDetail');
+  var lbl = document.getElementById('attendanceShareProgressLabel');
+  if (bar) {
+    bar.style.width = pct + '%';
+    bar.textContent = pct + '%';
+    bar.setAttribute('aria-valuenow', String(pct));
   }
+  if (det) det.textContent = done + ' / ' + total;
+  if (lbl && label) lbl.textContent = label;
 }
 
-function attendanceAppendSavedUriSample(uri, index) {
-  var sess = window.__attendanceShareSession;
-  if (!sess) return;
-  sess.uriSamples = sess.uriSamples || [];
-  var u = String(uri || '');
-  var scheme = 'unknown';
-  try {
-    var m = u.match(/^([a-z][a-z0-9+.-]*):/i);
-    scheme = m ? m[1].toLowerCase() : 'unknown';
-  } catch (e) {}
-  var one = { index: index, scheme: scheme, len: u.length };
-  if (u.length <= 96) one.tail = u;
-  else one.tail = u.substring(0, 28) + '…' + u.substring(u.length - 44);
-  if (sess.uriSamples.length < 5) sess.uriSamples.push(one);
-}
-
-function attendanceBuildShareDebugText(meta) {
-  var lines = [];
-  lines.push('=== Fleet Manager — Attendance photo share debug ===');
-  lines.push('Local: ' + new Date().toString());
-  lines.push('');
-  try {
-    lines.push('UserAgent: ' + navigator.userAgent);
-  } catch (e) { lines.push('UserAgent: (n/a)'); }
-  try {
-    lines.push('language: ' + navigator.language);
-    if (navigator.maxTouchPoints != null) lines.push('maxTouchPoints: ' + navigator.maxTouchPoints);
-  } catch (e) {}
-  try {
-    var C = window.Capacitor;
-    if (C && typeof C.getPlatform === 'function') lines.push('Capacitor.getPlatform(): ' + C.getPlatform());
-    if (C && C.VERSION != null) lines.push('Capacitor.VERSION: ' + C.VERSION);
-  } catch (e) {}
-  try {
-    if (typeof location !== 'undefined' && location.origin) lines.push('page origin: ' + location.origin);
-  } catch (e2) {}
-  try {
-    if (typeof devicePixelRatio !== 'undefined') lines.push('devicePixelRatio: ' + devicePixelRatio);
-  } catch (e3) {}
-  try {
-    var conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
-    if (conn && conn.effectiveType) lines.push('network effectiveType: ' + conn.effectiveType);
-  } catch (e4) {}
-  lines.push('navigator.share: ' + (typeof navigator !== 'undefined' && typeof navigator.share === 'function' ? 'yes' : 'no') + ' (no = normal in many Capacitor WebViews)');
-  lines.push('navigator.canShare: ' + (typeof navigator !== 'undefined' && typeof navigator.canShare === 'function' ? 'yes' : 'no'));
-  var fsP = !!(window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem);
-  var shP = !!(window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Share);
-  lines.push('Capacitor Filesystem: ' + (fsP ? 'yes' : 'no'));
-  lines.push('Capacitor Share: ' + (shP ? 'yes' : 'no'));
-  lines.push('FleetBridge.isNative: ' + !!(window.FleetBridge && window.FleetBridge.isNative));
-  lines.push('innerWidth x innerHeight: ' + (typeof innerWidth !== 'undefined' ? innerWidth + 'x' + innerHeight : '?'));
-  lines.push('');
-  if (meta) {
-    if (meta.urlsCount != null) lines.push('photoCount: ' + meta.urlsCount);
-    if (meta.photoType) lines.push('filterType: ' + meta.photoType);
-    if (meta.note) lines.push('outcome: ' + meta.note);
+function attendanceHideShareProgress() {
+  var el = document.getElementById('attendanceShareProgressOverlay');
+  if (el) {
+    el.classList.add('d-none');
+    el.removeAttribute('aria-busy');
+    el.setAttribute('aria-hidden', 'true');
   }
-  lines.push('');
-  try {
-    var sess = window.__attendanceShareSession;
-    if (sess && typeof sess === 'object') {
-      lines.push('--- Share session (structured) ---');
-      if (sess.path) lines.push('path: ' + sess.path);
-      if (sess.step) lines.push('step: ' + sess.step);
-      if (sess.requestedUrls != null) lines.push('URLs requested: ' + sess.requestedUrls);
-      if (sess.nativePrepareCount != null) lines.push('native prepare queued: ' + sess.nativePrepareCount);
-      if (sess.readyFileUris != null) lines.push('local file URIs for Share: ' + sess.readyFileUris);
-      if (sess.uriSchemeSummary) lines.push('URI schemes (count by scheme): ' + sess.uriSchemeSummary);
-      if (sess.filterType) lines.push('filterType: ' + sess.filterType);
-      if (sess.uriSamples && sess.uriSamples.length) {
-        lines.push('URI samples (up to 5, truncated):');
-        sess.uriSamples.forEach(function(s) {
-          lines.push('  #' + s.index + ' ' + s.scheme + ' len=' + s.len + ' ' + (s.tail || ''));
-        });
-      }
-      lines.push('hint: WhatsApp Android often ignores images if Share includes both text and files — we send files-first.');
-      lines.push('');
-    }
-  } catch (se) {}
-  lines.push('--- Failure / step log ---');
-  var steps = window.__attendanceShareLastDebug || [];
-  if (!steps.length) lines.push('(no step logged — fail before hooks or unknown path)');
-  else steps.forEach(function(x, i) { lines.push((i + 1) + ') [' + x.stage + '] ' + x.message); });
-  lines.push('');
-  lines.push('App versions: mobile project package.json → @capacitor/core, @capacitor/share');
-  lines.push('Phone: Settings → About phone → Android version / model');
-  return lines.join('\n');
-}
-
-function attendanceHideShareDebugPanel() {
-  var panel = document.getElementById('attendanceShareDebugPanel');
-  if (panel) {
-    panel.classList.add('d-none');
-    panel.setAttribute('aria-hidden', 'true');
-  }
-}
-
-function attendanceShowShareDebugModal(meta) {
-  var text = attendanceBuildShareDebugText(meta);
-  var ta = document.getElementById('attendanceShareDebugText');
-  var panel = document.getElementById('attendanceShareDebugPanel');
-  if (ta) {
-    ta.value = text;
-    try { ta.focus(); ta.select(); } catch (e) {}
-  }
-  if (!panel) {
-    try { prompt('Copy debug text:', text); } catch (e2) { alert(text.substring(0, 800)); }
-    return;
-  }
-  /* Wizard modals sometimes leave backdrop + modal-open — unstick before showing non-blocking panel */
-  ['attImgWizardStep1', 'attImgWizardStep2'].forEach(function(id) {
-    var el = document.getElementById(id);
-    if (!el || typeof bootstrap === 'undefined' || !bootstrap.Modal) return;
-    var inst = bootstrap.Modal.getInstance(el);
-    if (inst) try { inst.hide(); } catch (e) {}
-  });
-  setTimeout(function() {
-    document.querySelectorAll('.modal-backdrop').forEach(function(b) { try { b.remove(); } catch (e) {} });
-    document.body.classList.remove('modal-open');
-    document.body.style.removeProperty('overflow');
-    document.body.style.removeProperty('padding-right');
-    if (panel.parentElement !== document.body) document.body.appendChild(panel);
-    panel.classList.remove('d-none');
-    panel.setAttribute('aria-hidden', 'false');
-    try {
-      var cp = document.getElementById('attendanceShareDebugCopyBtn');
-      if (cp) cp.focus();
-    } catch (e) {}
-  }, 80);
-}
-
-function attendanceCopyShareDebug() {
-  var ta = document.getElementById('attendanceShareDebugText');
-  if (!ta || !ta.value) return;
-  var v = ta.value;
-  function ok() {
-    if (window.FleetBridge && window.FleetBridge._toast) window.FleetBridge._toast('Debug note copied.');
-    else alert('Copied.');
-  }
-  function fail() {
-    try {
-      ta.focus(); ta.select();
-      document.execCommand('copy');
-      ok();
-    } catch (e) {
-      prompt('Copy manually:', v);
-    }
-  }
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(v).then(ok).catch(fail);
-  } else fail();
 }
 
 function downloadPhotos(urls, opts) {
   var isNative = window.FleetBridge && window.FleetBridge.isNative;
-  if (opts && opts.afterShareFail) {
-    attendanceShowShareDebugModal({
-      urlsCount: urls.length,
-      photoType: opts.photoType || '',
-      note: opts.note || 'Photos save / download fallback (share sheet did not complete).'
-    });
+  if (opts && opts.afterShareFail && window.FleetBridge && window.FleetBridge._toast) {
+    window.FleetBridge._toast('Saving photos instead…');
   }
   if (isNative) {
     _nativeDownloadPhotos(urls, 0);
@@ -996,99 +829,140 @@ function _nativeDownloadPhotos(urls, idx) {
     .catch(function() { _nativeDownloadPhotos(urls, idx + 1); });
 }
 
-function sharePhotos(urls, type) {
-  attendanceResetShareDebug();
-  window.__attendanceShareSession = {
-    path: 'sharePhotos',
-    requestedUrls: urls.length,
-    filterType: type || ''
-  };
-  var isNative = window.FleetBridge && window.FleetBridge.isNative;
-  /* Cap huge batches (memory / OEM share intent limits). 139 rows × check-in+check-out ≈ 278 URLs — old cap was 30 and looked like "WhatsApp". */
-  var MAX_SHARE = 500;
-  if (urls.length > MAX_SHARE) {
-    if (window.FleetBridge && window.FleetBridge._toast) {
-      window.FleetBridge._toast('Only the first ' + MAX_SHARE + ' photos can be shared at once. Use a smaller date range or share in batches.');
+/** Browser Web Share — one batch (already sized ≤99). */
+function sharePhotosWebBatch(slice, type, ctx) {
+  var gt = ctx.globalTotal;
+  var go = ctx.globalOffset;
+  var prefix = ctx.batchLabelPrefix || '';
+
+  if (typeof navigator === 'undefined' || !navigator.share) {
+    downloadPhotos(slice, {});
+    if (ctx.onBatchComplete) ctx.onBatchComplete();
+    return;
+  }
+  if (!slice.length) {
+    if (ctx.onBatchComplete) ctx.onBatchComplete();
+    return;
+  }
+
+  var done = 0;
+  Promise.all(slice.map(function(url, idx) {
+    return attendanceFetchPhotoBlob(attendanceAbsolutePhotoUrl(url)).then(function(blob) {
+      done++;
+      attendanceUpdateShareProgress(go + done, gt, prefix + 'Preparing…');
+      var ct = (blob && blob.type) || '';
+      var mime = (ct.indexOf('image/') === 0) ? ct : 'image/jpeg';
+      return new File([blob], 'attendance_' + type + '_' + (go + idx + 1) + '.jpg', { type: mime });
+    });
+  })).then(function(files) {
+    var data = { files: files, title: files.length === 1 ? 'Attendance photo' : ('Attendance photos (' + files.length + ')') };
+    return navigator.share(data);
+  }).then(function() {
+    if (ctx.onBatchComplete) ctx.onBatchComplete();
+  }).catch(function(err) {
+    if (err && err.name === 'AbortError') {
+      attendanceHideShareProgress();
+      return;
     }
-    urls = urls.slice(0, MAX_SHARE);
-  }
-
-  function fetchAsFiles() {
-    return Promise.all(urls.map(function(url, idx) {
-      return attendanceFetchPhotoBlob(attendanceAbsolutePhotoUrl(url)).then(function(blob) {
-        var ct = (blob && blob.type) || '';
-        var mime = (ct.indexOf('image/') === 0) ? ct : 'image/jpeg';
-        return new File([blob], 'attendance_' + type + '_' + (idx + 1) + '.jpg', { type: mime });
-      });
-    }));
-  }
-
-  function tryNavigatorShare() {
-    if (typeof navigator === 'undefined' || !navigator.share) {
-      attendancePushShareDebug('navigator_share', new Error('navigator.share not available'));
-      return Promise.reject(new Error('navigator.share not available'));
-    }
-    return fetchAsFiles().catch(function(err) {
-      attendancePushShareDebug('fetch_images_for_share', err);
-      return Promise.reject(err);
-    }).then(function(files) {
-      /* Multiple files: omit text — many Android targets (incl. WhatsApp) only forward text if both text and files are set. */
-      var data = { files: files, title: files.length === 1 ? 'Attendance photo' : ('Attendance photos (' + files.length + ')') };
-      try {
-        if (typeof navigator.canShare === 'function' && files.length && !navigator.canShare(data)) {
-          attendancePushShareDebug('navigator_canShare_hint', new Error('canShare returned false (still attempted share)'));
-        }
-      } catch (e) {}
-      attendancePushShareAttempt('web_share_opts', data);
-      return navigator.share(data).catch(function(err) {
-        attendancePushShareDebug('navigator_share_api', err);
-        return Promise.reject(err);
-      });
-    });
-  }
-
-  /* Multiple images: Web Share (multi File[]) → native Capacitor files[] → save files */
-  if (urls.length > 1) {
-    tryNavigatorShare().catch(function(err) {
-      if (err && err.name === 'AbortError') return;
-      if (isNative) _nativeSharePhotos(urls, type);
-      else downloadPhotos(urls, { afterShareFail: true, photoType: type, note: 'Multi-photo: web share failed; download fallback.' });
-    });
-    return;
-  }
-
-  if (isNative) {
-    _nativeSharePhotos(urls, type);
-    return;
-  }
-
-  if (typeof navigator !== 'undefined' && navigator.share) {
-    tryNavigatorShare().catch(function(err) {
-      if (err && err.name === 'AbortError') return;
-      downloadPhotos(urls, { afterShareFail: true, photoType: type, note: 'Web: share failed; download fallback.' });
-    });
-    return;
-  }
-  attendancePushShareDebug('navigator_share', new Error('navigator.share missing'));
-  downloadPhotos(urls, { afterShareFail: true, photoType: type, note: 'Web Share API not available.' });
+    downloadPhotos(slice, { afterShareFail: true });
+    if (ctx.onBatchComplete) ctx.onBatchComplete();
+  });
 }
 
-function _nativeSharePhotos(urls, type) {
+function sharePhotos(urls, type) {
+  var isNative = window.FleetBridge && window.FleetBridge.isNative;
+  var SAFETY_MAX_URLS = 3000;
+  if (!urls || urls.length === 0) return;
+  if (urls.length > SAFETY_MAX_URLS) {
+    if (window.FleetBridge && window.FleetBridge._toast) {
+      window.FleetBridge._toast('Too many photos at once. Using first ' + SAFETY_MAX_URLS + ' — narrow the date filter.');
+    }
+    urls = urls.slice(0, SAFETY_MAX_URLS);
+  }
+
+  var total = urls.length;
+  var chunks = attendanceChunkUrls(urls, ATTENDANCE_WHATSAPP_BATCH_SIZE);
+  var batchCount = chunks.length;
+
+  var startLabel = batchCount > 1
+    ? ('Loading — ~' + ATTENDANCE_WHATSAPP_BATCH_SIZE + ' photos per WhatsApp send; ' + batchCount + ' batches.')
+    : 'Loading photos…';
+  attendanceShowShareProgress(total, startLabel);
+
+  var chunkIndex = 0;
+
+  function chunkOffset(ci) {
+    var o = 0;
+    for (var k = 0; k < ci; k++) o += chunks[k].length;
+    return o;
+  }
+
+  function finishAll() {
+    attendanceHideShareProgress();
+    if (window.FleetBridge && window.FleetBridge._toast) {
+      window.FleetBridge._toast('Done. ' + total + ' photo(s) in ' + batchCount + ' share batch(es).');
+    }
+  }
+
+  function scheduleNextBatch() {
+    chunkIndex++;
+    if (chunkIndex >= chunks.length) {
+      finishAll();
+      return;
+    }
+    var gapMs = batchCount > 1 ? 600 : 0;
+    setTimeout(runBatch, gapMs);
+  }
+
+  function runBatch() {
+    var slice = chunks[chunkIndex];
+    var offset = chunkOffset(chunkIndex);
+    var bn = chunkIndex + 1;
+    var labelPrefix = batchCount > 1 ? ('Batch ' + bn + '/' + batchCount + ' — ') : '';
+
+    var ctx = {
+      globalTotal: total,
+      globalOffset: offset,
+      batchLabelPrefix: labelPrefix,
+      onBatchComplete: scheduleNextBatch
+    };
+
+    if (isNative) {
+      _nativeSharePhotos(slice, type, ctx);
+    } else {
+      sharePhotosWebBatch(slice, type, ctx);
+    }
+  }
+
+  runBatch();
+}
+
+function _nativeSharePhotos(urls, type, ctx) {
+  ctx = ctx || {};
+  var gt = ctx.globalTotal != null ? ctx.globalTotal : urls.length;
+  var go = ctx.globalOffset || 0;
+  var prefix = ctx.batchLabelPrefix || '';
+
+  function bumpProg(localIdx) {
+    attendanceUpdateShareProgress(go + localIdx + 1, gt, prefix + 'Preparing…');
+  }
+
+  function completeBatch() {
+    if (ctx.onBatchComplete) ctx.onBatchComplete();
+  }
+
   var Filesystem = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem;
   var SharePlugin = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Share;
   if (!Filesystem || !SharePlugin) {
-    attendancePushShareDebug('native_plugins', new Error('Filesystem=' + !!Filesystem + ' Share=' + !!SharePlugin));
     if (window.FleetBridge) window.FleetBridge._toast('Downloading photos instead...');
-    downloadPhotos(urls, { afterShareFail: true, photoType: type || '', note: 'Capacitor Filesystem or Share plugin missing.' });
+    downloadPhotos(urls, {});
+    completeBatch();
     return;
   }
 
-  window.__attendanceShareSession = window.__attendanceShareSession || {};
-  window.__attendanceShareSession.step = 'native_prepare';
-  window.__attendanceShareSession.nativePrepareCount = urls.length;
-  if (type) window.__attendanceShareSession.filterType = type;
-
-  if (window.FleetBridge) window.FleetBridge._toast('Preparing ' + urls.length + ' photo(s)...');
+  if (window.FleetBridge && !prefix) {
+    window.FleetBridge._toast('Preparing ' + urls.length + ' photo(s)...');
+  }
 
   function blobToRawBase64(blob) {
     return new Promise(function(resolve, reject) {
@@ -1103,22 +977,16 @@ function _nativeSharePhotos(urls, type) {
     });
   }
 
-  var ts = Date.now();
+  var ts = Date.now() + '_' + Math.random().toString(36).slice(2, 9);
   var savedUris = [];
+
   function shareOrFallback() {
-    if (savedUris.length > 0 && savedUris.length < urls.length) {
-      attendancePushShareDebug('native_partial_load', new Error('Cached ' + savedUris.length + ' of ' + urls.length + ' photos'));
-    }
     if (savedUris.length === 0) {
-      attendancePushShareDebug('native_no_uris', new Error('No photo files cached after fetch/write'));
       if (window.FleetBridge) window.FleetBridge._toast('No photos could be loaded.');
-      downloadPhotos(urls, { afterShareFail: true, photoType: type || '', note: 'Native share had zero usable files.' });
+      downloadPhotos(urls, {});
+      completeBatch();
       return;
     }
-    window.__attendanceShareSession = window.__attendanceShareSession || {};
-    window.__attendanceShareSession.step = 'native_share';
-    window.__attendanceShareSession.readyFileUris = savedUris.length;
-    window.__attendanceShareSession.uriSchemeSummary = attendanceSummarizeUriSchemes(savedUris);
 
     var titleOne = 'Attendance Photo';
     var titleMany = 'Attendance Photos (' + savedUris.length + ')';
@@ -1129,50 +997,59 @@ function _nativeSharePhotos(urls, type) {
         return Promise.reject(err);
       });
     };
+
     if (savedUris.length === 1) {
-      attendancePushShareAttempt('capacitor_share_single_opts', { url: savedUris[0], title: titleOne, dialogTitle: dialogTitle });
+      var singleCanceled = false;
       doShare({ title: titleOne, url: savedUris[0], dialogTitle: dialogTitle }).catch(function(err) {
         if (attendanceIsNativeShareCanceled(err)) {
-          attendancePushShareDebug('capacitor_share_canceled', new Error('User dismissed share sheet (not a failure)'));
+          singleCanceled = true;
           return;
         }
-        attendancePushShareDebug('capacitor_share_single', err);
         if (window.FleetBridge) window.FleetBridge._toast('Share failed. Saving instead…');
-        downloadPhotos(urls, { afterShareFail: true, photoType: type || '', note: 'Capacitor single-file share failed.' });
+        downloadPhotos(urls, { afterShareFail: true });
+      }).finally(function() {
+        if (singleCanceled) attendanceHideShareProgress();
+        else completeBatch();
       });
       return;
     }
-    /*
-     * Multiple files: do NOT set text together with files — WhatsApp (Android) often forwards only the text
-     * ("Attendance Photos (20)") and drops attachments. Order: files+dialogTitle → files only → files+title → single url.
-     */
-    attendancePushShareDebug('capacitor_multi_strategy', new Error('files-first, no text body on multi-share attempts'));
-    attendancePushShareAttempt('capacitor_share_multi_a', { files: savedUris, dialogTitle: dialogTitle });
-    doShare({ files: savedUris, dialogTitle: dialogTitle }).catch(function(err) {
-      if (attendanceIsNativeShareCanceled(err)) return;
-      attendancePushShareDebug('capacitor_share_multi_try_a', err);
-      attendancePushShareAttempt('capacitor_share_multi_b', { files: savedUris });
-      return doShare({ files: savedUris });
-    }).catch(function(err) {
-      if (attendanceIsNativeShareCanceled(err)) return;
-      attendancePushShareDebug('capacitor_share_multi_try_b', err);
-      attendancePushShareAttempt('capacitor_share_multi_c', { files: savedUris, title: titleMany, dialogTitle: dialogTitle });
-      return doShare({ files: savedUris, title: titleMany, dialogTitle: dialogTitle });
-    }).catch(function(err) {
-      if (attendanceIsNativeShareCanceled(err)) return;
-      attendancePushShareDebug('capacitor_share_multi_try_c', err);
-      attendancePushShareAttempt('capacitor_share_multi_d', { url: savedUris[0], dialogTitle: dialogTitle });
-      return doShare({ url: savedUris[0], dialogTitle: dialogTitle });
-    }).catch(function(err) {
+
+    var multiCanceled = false;
+    var chain = doShare({ files: savedUris, dialogTitle: dialogTitle });
+    chain = chain.catch(function(err) {
       if (attendanceIsNativeShareCanceled(err)) {
-        attendancePushShareDebug('capacitor_share_canceled', new Error('User dismissed share sheet (not a failure)'));
+        multiCanceled = true;
+        return Promise.reject(err);
+      }
+      return doShare({ files: savedUris });
+    });
+    chain = chain.catch(function(err) {
+      if (attendanceIsNativeShareCanceled(err)) {
+        multiCanceled = true;
+        return Promise.reject(err);
+      }
+      return doShare({ files: savedUris, title: titleMany, dialogTitle: dialogTitle });
+    });
+    chain = chain.catch(function(err) {
+      if (attendanceIsNativeShareCanceled(err)) {
+        multiCanceled = true;
+        return Promise.reject(err);
+      }
+      return doShare({ url: savedUris[0], dialogTitle: dialogTitle });
+    });
+    chain = chain.catch(function(err) {
+      if (attendanceIsNativeShareCanceled(err)) {
+        multiCanceled = true;
         return;
       }
-      attendancePushShareDebug('capacitor_share_batch_final', err);
       if (window.FleetBridge && window.FleetBridge._toast) {
-        window.FleetBridge._toast('Share incomplete — debug note opened');
+        window.FleetBridge._toast('Saving photos instead…');
       }
-      downloadPhotos(urls, { afterShareFail: true, photoType: type || '', note: 'Capacitor multi-file share exhausted fallbacks.' });
+      downloadPhotos(urls, { afterShareFail: true });
+    });
+    chain.finally(function() {
+      if (multiCanceled) attendanceHideShareProgress();
+      else completeBatch();
     });
   }
 
@@ -1190,12 +1067,12 @@ function _nativeSharePhotos(urls, type) {
       })
       .then(function(uri) {
         savedUris.push(uri);
-        attendanceAppendSavedUriSample(uri, savedUris.length - 1);
+        bumpProg(idx);
         saveNext(idx + 1);
       })
       .catch(function(e) {
-        attendancePushShareDebug('native_fetch_or_write_' + idx, e instanceof Error ? e : new Error(String(e)));
         console.warn('Attendance share: fetch/save failed', e);
+        bumpProg(idx);
         saveNext(idx + 1);
       });
   }
@@ -1338,55 +1215,15 @@ document.addEventListener('click', function(e) {
   </div>
 </div>
 
-<style>
-  /* No Bootstrap backdrop — page + Tom Select stay usable; only the card captures taps */
-  #attendanceShareDebugPanel {
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 250000;
-    max-height: 58vh;
-    padding: 0;
-    pointer-events: none;
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-end;
-  }
-  #attendanceShareDebugPanel .attendance-share-debug-card {
-    pointer-events: auto;
-    max-height: 54vh;
-    display: flex;
-    flex-direction: column;
-    border-radius: 12px 12px 0 0;
-    box-shadow: 0 -8px 32px rgba(0,0,0,.25);
-  }
-  #attendanceShareDebugPanel .attendance-share-debug-body {
-    flex: 1;
-    min-height: 0;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-  }
-  #attendanceShareDebugText {
-    flex: 1;
-    min-height: 120px;
-    resize: vertical;
-  }
-</style>
-<div id="attendanceShareDebugPanel" class="d-none" aria-hidden="true" role="dialog" aria-labelledby="attendanceShareDebugTitle">
-  <div class="card attendance-share-debug-card border-warning border-2 mx-2 mb-0 bg-white">
-    <div class="card-header py-2 d-flex justify-content-between align-items-center gap-2 flex-shrink-0">
-      <h6 class="mb-0 small fw-bold" id="attendanceShareDebugTitle"><i class="bi bi-bug text-warning me-1"></i>Share debug — copy</h6>
-      <button type="button" class="btn-close" onclick="attendanceHideShareDebugPanel()" aria-label="Close"></button>
-    </div>
-    <div class="card-body attendance-share-debug-body py-2 px-2">
-      <p class="small text-muted mb-2 mb-0">Neeche page / filter use kar sakte hain — ye sheet lock nahi karti.</p>
-      <textarea id="attendanceShareDebugText" class="form-control font-monospace form-control-sm" rows="10" readonly style="font-size:11px;line-height:1.35;"></textarea>
-      <div class="d-flex gap-2 mt-2 flex-shrink-0">
-        <button type="button" class="btn btn-primary btn-sm" id="attendanceShareDebugCopyBtn" onclick="attendanceCopyShareDebug()"><i class="bi bi-clipboard me-1"></i>Copy</button>
-        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="attendanceHideShareDebugPanel()">Band karein</button>
+<div id="attendanceShareProgressOverlay" class="d-none" aria-hidden="true" role="alertdialog" aria-busy="true" aria-labelledby="attendanceShareProgressLabel"
+  style="position:fixed;inset:0;z-index:240000;background:rgba(15,23,42,.55);display:flex;align-items:center;justify-content:center;padding:16px;">
+  <div class="card shadow-lg border-0" style="max-width:380px;width:100%;">
+    <div class="card-body py-3 px-3">
+      <div class="small text-muted mb-2 fw-medium" id="attendanceShareProgressLabel">Preparing photos…</div>
+      <div class="progress" style="height:26px;" role="progressbar" aria-valuemin="0" aria-valuemax="100">
+        <div id="attendanceShareProgressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" style="width:0%" aria-valuenow="0">0%</div>
       </div>
+      <div class="small mt-2 text-center text-muted" id="attendanceShareProgressDetail">0 / 0</div>
     </div>
   </div>
 </div>
