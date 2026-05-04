@@ -36,6 +36,8 @@
         body > .ts-dropdown { z-index: 1060 !important; }
         /* Native app: bottom nav z-index 1065 — TS dropdown must clear it */
         html.capacitor-native body > .ts-dropdown { z-index: 12050 !important; }
+        /* Card-anchored TS (filter forms): above table content */
+        .card-body .ts-dropdown { z-index: 12050 !important; }
         /* Highlighted (active) option — strong ERP-style blue */
         .ts-dropdown .active {
             background-color: #0d6efd !important;
@@ -4320,13 +4322,25 @@
                 })();
                 var _emptyLabelCap = _emptyLabel.charAt(0).toUpperCase() + _emptyLabel.slice(1);
 
+                /* Keep dropdown in the same scroll container as the field (e.g. filter card) so it stays
+                 * aligned with the control when the app content scrolls; body-parent drops "float" with keyboard. */
+                var _ddParent = null;
+                try {
+                    var _ff = el.closest && el.closest('#filterForm, form.ts-filter-in-card');
+                    if (_ff) {
+                        var _cb = _ff.closest('.card-body');
+                        if (_cb) _ddParent = _cb;
+                    }
+                } catch (e) {}
+                if (!_ddParent) _ddParent = 'body';
+
                 var ts = new TomSelect(el, {
                     create: el.classList.contains('create-mode'),
                     allowEmptyOption: false,
                     openOnFocus: false,
                     selectOnTab: true,
                     maxOptions: 300,
-                    dropdownParent: 'body',
+                    dropdownParent: _ddParent,
                     placeholder: placeholder,
                     render: {
                         /* Triggered by TomSelect when a text search finds nothing */
@@ -4486,6 +4500,27 @@
 
     // Run immediately — content block is above scripts in the rendered HTML
     window.initSearchableDropdowns();
+
+    /* Close open Tom Selects when the main app column scrolls or the on-screen keyboard resizes the
+     * visual viewport (dropdown was body-anchored or needs re-open). Avoids list "stuck" to keyboard. */
+    (function() {
+        function _closeAllTomSelects() {
+            try {
+                document.querySelectorAll('select.search-select').forEach(function(sel) {
+                    var t = sel.tomselect;
+                    if (t && t.isOpen) t.close();
+                });
+            } catch (e) {}
+        }
+        var mc = document.getElementById('mainContent');
+        if (mc) {
+            mc.addEventListener('scroll', _closeAllTomSelects, { passive: true });
+        }
+        window.addEventListener('scroll', _closeAllTomSelects, { passive: true });
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', _closeAllTomSelects);
+        }
+    })();
 
     // onInitialize hook inside TomSelect handles placeholder — no setInterval needed.
 
