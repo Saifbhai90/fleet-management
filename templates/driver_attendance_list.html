@@ -699,6 +699,18 @@ function attendanceNativeWriteShareTemp(Filesystem, fileBaseName, b64) {
   return attempt(0);
 }
 
+/** @capacitor/share on Android often rejects with "Share canceled" when the user closes the sheet (same idea as Web Share AbortError). */
+function attendanceIsNativeShareCanceled(err) {
+  if (!err) return false;
+  if (err.name === 'AbortError') return true;
+  var msg = String(err.message != null ? err.message : err).toLowerCase();
+  if (msg.indexOf('share canceled') !== -1 || msg.indexOf('share cancelled') !== -1) return true;
+  if (msg.indexOf('user canceled') !== -1 || msg.indexOf('user cancelled') !== -1) return true;
+  if (msg === 'canceled' || msg === 'cancelled') return true;
+  if (msg.indexOf('result_canceled') !== -1) return true;
+  return false;
+}
+
 function collectPhotoUrlsForDuty(type, dutyFilt) {
   var urls = [];
   var rows = document.querySelectorAll('#attendanceTable tbody tr');
@@ -1022,6 +1034,10 @@ function _nativeSharePhotos(urls, type) {
     };
     if (savedUris.length === 1) {
       doShare({ title: titleOne, url: savedUris[0], dialogTitle: dialogTitle }).catch(function(err) {
+        if (attendanceIsNativeShareCanceled(err)) {
+          attendancePushShareDebug('capacitor_share_canceled', new Error('User dismissed share sheet (not a failure)'));
+          return;
+        }
         attendancePushShareDebug('capacitor_share_single', err);
         if (window.FleetBridge) window.FleetBridge._toast('Share failed. Saving instead…');
         downloadPhotos(urls, { afterShareFail: true, photoType: type || '', note: 'Capacitor single-file share failed.' });
@@ -1030,12 +1046,15 @@ function _nativeSharePhotos(urls, type) {
     }
     var multiOpts = { files: savedUris, dialogTitle: dialogTitle, title: titleMany, text: titleMany };
     doShare(multiOpts).catch(function(err) {
+      if (attendanceIsNativeShareCanceled(err)) return;
       attendancePushShareDebug('capacitor_share_multi_try1', err);
       return doShare({ title: titleMany, files: savedUris, dialogTitle: dialogTitle });
     }).catch(function(err) {
+      if (attendanceIsNativeShareCanceled(err)) return;
       attendancePushShareDebug('capacitor_share_multi_try2', err);
       return doShare({ files: savedUris });
     }).catch(function(err) {
+      if (attendanceIsNativeShareCanceled(err)) return;
       attendancePushShareDebug('capacitor_share_multi_try3', err);
       return doShare({
         title: titleMany,
@@ -1044,6 +1063,10 @@ function _nativeSharePhotos(urls, type) {
         dialogTitle: dialogTitle
       });
     }).catch(function(err) {
+      if (attendanceIsNativeShareCanceled(err)) {
+        attendancePushShareDebug('capacitor_share_canceled', new Error('User dismissed share sheet (not a failure)'));
+        return;
+      }
       attendancePushShareDebug('capacitor_share_batch_final', err);
       if (window.FleetBridge && window.FleetBridge._toast) {
         window.FleetBridge._toast('Share incomplete — debug note opened');
