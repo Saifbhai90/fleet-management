@@ -491,6 +491,14 @@ def user_can_access(permission_codes, required_code):
     codes = permission_codes or []
     if required_code in codes:
         return True
+    # Report Centre hub: must match UI (see can_see_report_centre) — not only reports_index / reports full
+    if required_code == 'reports_index':
+        try:
+            from permissions_config import can_see_report_centre
+            if can_see_report_centre(list(codes)):
+                return True
+        except Exception:
+            pass
     # Section-level full codes: grant access to granular pages in that section
     try:
         from permissions_config import SECTION_FULL_TO_GROUP, SECTION_PAGE_GROUPS
