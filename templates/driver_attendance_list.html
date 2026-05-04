@@ -697,12 +697,22 @@ function _nativeDownloadPhotos(urls, idx) {
 function _loadJSZip() {
   return new Promise(function(resolve, reject) {
     if (window.JSZip) { resolve(window.JSZip); return; }
-    var s = document.createElement('script');
-    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
-    s.async = true;
-    s.onload = function() { resolve(window.JSZip); };
-    s.onerror = function() { reject(new Error('jszip')); };
-    document.head.appendChild(s);
+    function attach(src, onFail) {
+      var s = document.createElement('script');
+      s.async = true;
+      s.src = src;
+      s.onload = function() {
+        if (window.JSZip) { resolve(window.JSZip); return; }
+        if (onFail) onFail(); else reject(new Error('jszip'));
+      };
+      s.onerror = function() {
+        if (onFail) onFail(); else reject(new Error('jszip'));
+      };
+      document.head.appendChild(s);
+    }
+    attach('/static/js/jszip.min.js', function() {
+      attach('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js', null);
+    });
   });
 }
 
@@ -721,24 +731,32 @@ function tryShareAttendanceZip(urls, type, isNative) {
     .then(function(zipBlob) {
       var Filesystem = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem;
       var SharePlugin = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Share;
+      var zipFname = 'attendance_' + type + '_' + Date.now() + '.zip';
       if (isNative && Filesystem && SharePlugin) {
-        var fname = 'attendance_' + type + '_' + Date.now() + '.zip';
         return new Promise(function(res, rej) {
           var reader = new FileReader();
           reader.onloadend = function() {
             var raw = reader.result;
             var b64 = (typeof raw === 'string' && raw.indexOf(',') >= 0) ? raw.substring(raw.indexOf(',') + 1) : raw;
-            Filesystem.writeFile({ path: fname, data: b64, directory: 'CACHE', recursive: true })
+            Filesystem.writeFile({ path: zipFname, data: b64, directory: 'CACHE', recursive: true })
               .then(function(w) {
                 if (typeof Filesystem.getUri === 'function') {
-                  return Filesystem.getUri({ path: fname, directory: 'CACHE' }).then(function(u) { return u.uri || w.uri; });
+                  return Filesystem.getUri({ path: zipFname, directory: 'CACHE' }).then(function(u) { return u.uri || w.uri; });
                 }
                 return w.uri;
               })
               .then(function(uri) {
                 return SharePlugin.share({ title: 'Attendance photos (ZIP)', url: uri, dialogTitle: 'Share zip' });
               })
-              .then(res).catch(rej);
+              .then(res)
+              .catch(function(err) {
+                console.warn('[Attendance zip share]', err);
+                if (window.FleetBridge && window.FleetBridge.downloadBlob) {
+                  if (window.FleetBridge._toast) window.FleetBridge._toast('Sharing ZIP failed — saving file…');
+                  return window.FleetBridge.downloadBlob(zipBlob, zipFname).then(res).catch(rej);
+                }
+                rej(err);
+              });
           };
           reader.onerror = rej;
           reader.readAsDataURL(zipBlob);

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="{% if request.endpoint == 'report_driver_profile_public' %}driver-profile-public-view{% endif %}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
@@ -1401,7 +1401,7 @@
     <link rel="stylesheet" href="/static/css/mobile_perfect.css">
     {% block extra_head %}{% endblock %}
 </head>
-<body{% if request.endpoint == 'dashboard' %} class="page-dashboard"{% endif %}>
+<body{% if request.endpoint == 'dashboard' %} class="page-dashboard"{% elif request.endpoint == 'report_driver_profile_public' %} class="driver-profile-public-view"{% endif %}>
 <script>if(localStorage.getItem('fleetDarkMode')==='on')document.body.classList.add('dark-mode');</script>
 <div id="topLoadBar"></div>
 

@@ -11,12 +11,42 @@
 <style>
 /* Public shared profile: no login — strip main shell chrome */
 #sidebar, .sidebar, nav.navbar, .navbar.fixed-top, .fab-speed-dial, #sidebarToggleMobile,
-#moreDrawer, .more-drawer-backdrop { display: none !important; }
+#moreDrawer, .more-drawer-backdrop, .mobile-bottom-nav { display: none !important; }
 .main-content, html.capacitor-native .main-content, #appNativeShell .main-content {
   margin-left: 0 !important; margin-right: 0 !important; margin-top: 0 !important;
   padding: 12px !important; max-width: 100vw !important;
+  box-sizing: border-box !important;
 }
 body { overflow-x: hidden; }
+/* Capacitor shell locks body scroll; for read-only public link, use normal page scroll on small screens + WebView */
+html.driver-profile-public-view.capacitor-native,
+html.driver-profile-public-view.capacitor-native body,
+body.driver-profile-public-view {
+  overflow-y: auto !important;
+  height: auto !important;
+  min-height: 100% !important;
+  -webkit-overflow-scrolling: touch;
+}
+html.driver-profile-public-view #appNativeShell {
+  position: static !important;
+  display: block !important;
+  height: auto !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+  inset: auto !important;
+}
+html.driver-profile-public-view #appNativeShell .main-content,
+html.driver-profile-public-view.capacitor-native .main-content,
+body.driver-profile-public-view .main-content {
+  position: relative !important;
+  inset: auto !important;
+  flex: none !important;
+  max-height: none !important;
+  height: auto !important;
+  overflow-x: hidden !important;
+  overflow-y: visible !important;
+  padding-bottom: max(12px, env(safe-area-inset-bottom, 0px)) !important;
+}
 </style>
 <div class="alert alert-info py-2 px-3 small mb-2" style="border-radius:10px;">
   <i class="bi bi-link-45deg me-1"></i>Read-only shared view. This link expires <strong>24 hours</strong> after it was created.
@@ -274,7 +304,7 @@ body { overflow-x: hidden; }
 
   /* ── Document completeness bar ── */
   .doc-completeness {
-    display: flex; align-items: center; gap: .75rem;
+    display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .65rem;
     margin-bottom: 1rem; padding: .6rem .85rem;
     background: var(--bg-subtle); border-radius: 8px;
     border: 1px solid var(--border);
@@ -285,8 +315,22 @@ body { overflow-x: hidden; }
   }
   .doc-completeness .dc-info i { font-size: .9rem; }
   .dc-bar-wrap {
-    flex: 1; height: 8px; background: #e5e7eb;
+    flex: 1 1 100px; min-width: 0; height: 8px; background: #e5e7eb;
     border-radius: 4px; overflow: hidden; position: relative;
+  }
+  .doc-completeness .doc-missing-note {
+    font-size: .68rem; font-weight: 600; color: #dc2626;
+    flex: 1 1 120px; min-width: 0; text-align: left; margin-top: 0;
+  }
+  .doc-completeness .doc-dl-all-btn {
+    flex: 0 1 auto; max-width: 100%;
+  }
+  @media (max-width: 420px) {
+    .doc-completeness .doc-dl-all-btn {
+      width: 100%;
+      margin-left: 0 !important;
+      margin-top: .15rem;
+    }
   }
   .dc-bar-fill {
     height: 100%; border-radius: 4px;
@@ -529,10 +573,6 @@ body { overflow-x: hidden; }
   }
   .emergency-warning i { font-size: .85rem; }
   .relation-unknown { color: #ea580c; font-weight: 700; }
-  .doc-missing-note {
-    font-size: .72rem; font-weight: 600; color: #dc2626;
-    margin-top: .3rem; text-align: center;
-  }
   /* ── Copy button ── */
   .copy-btn {
     display: inline-flex; align-items: center; justify-content: center;
@@ -1160,7 +1200,7 @@ body { overflow-x: hidden; }
       <span class="doc-missing-note">{{ doc_total - doc_uploaded }} document{{ 's' if (doc_total - doc_uploaded) > 1 else '' }} missing</span>
       {% endif %}
       {% if doc_uploaded > 0 %}
-      <button class="btn btn-sm btn-outline-primary ms-auto" onclick="downloadAllDocs()" style="font-size:.68rem;padding:.2rem .6rem;border-radius:6px;font-weight:600;white-space:nowrap;"><i class="bi bi-download me-1"></i>Download All</button>
+      <button type="button" class="btn btn-sm btn-outline-primary ms-auto doc-dl-all-btn" onclick="downloadAllDocs()" style="font-size:.68rem;padding:.2rem .6rem;border-radius:6px;font-weight:600;white-space:nowrap;"><i class="bi bi-download me-1"></i>Download All</button>
       {% endif %}
     </div>
     {% if _has_any_doc %}
