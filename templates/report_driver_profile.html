@@ -18,6 +18,7 @@
   box-sizing: border-box !important;
 }
 body.driver-profile-public-view { overflow-x: hidden; }
+body.driver-profile-public-view .profile-page { min-height: auto !important; }
 </style>
 <div class="alert alert-info py-2 px-3 small mb-2" style="border-radius:10px;">
   <i class="bi bi-link-45deg me-1"></i>Read-only shared view. This link expires <strong>24 hours</strong> after it was created.
@@ -2429,7 +2430,8 @@ body.driver-profile-public-view { overflow-x: hidden; }
     imp(body, 'overflow-y', 'auto');
     imp(body, 'height', 'auto');
     imp(body, 'min-height', '100%');
-    imp(body, 'touch-action', 'pan-y pinch-zoom');
+    imp(body, 'overscroll-behavior-y', 'auto');
+    body.style.removeProperty('touch-action');
     var shell = document.getElementById('appNativeShell');
     if (shell) {
       imp(shell, 'position', 'static');
@@ -2451,34 +2453,16 @@ body.driver-profile-public-view { overflow-x: hidden; }
       imp(mc, 'right', 'auto');
     }
   }
-  /** If layout height still equals viewport while profile is tall, use wide layout (desktop-style) so pan/zoom works. */
-  function maybeDesktopWidthViewport() {
-    if (window.innerWidth > 992) return;
-    var page = document.querySelector('.profile-page');
-    var tall = page ? page.scrollHeight : 0;
-    if (tall < window.innerHeight + 80) return;
-    var root = document.documentElement;
-    if (root.scrollHeight > root.clientHeight + 30) return;
-    var m = document.getElementById('metaViewport') || document.querySelector('meta[name="viewport"]');
-    if (!m || m.getAttribute('data-public-desktop-fallback') === '1') return;
-    m.setAttribute('data-public-desktop-fallback', '1');
-    m.setAttribute('content', 'width=1280, initial-scale=0.30, maximum-scale=5, minimum-scale=0.2, user-scalable=yes, viewport-fit=cover');
-    unlockPublicProfileScroll();
-  }
   function run() {
     unlockPublicProfileScroll();
-    requestAnimationFrame(function () {
-      unlockPublicProfileScroll();
-      maybeDesktopWidthViewport();
-    });
+    requestAnimationFrame(unlockPublicProfileScroll);
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
   else run();
   setTimeout(run, 0);
-  setTimeout(run, 120);
-  setTimeout(run, 450);
-  setTimeout(function () { unlockPublicProfileScroll(); maybeDesktopWidthViewport(); }, 1800);
-  window.addEventListener('resize', function () { unlockPublicProfileScroll(); });
+  setTimeout(run, 100);
+  setTimeout(run, 400);
+  window.addEventListener('resize', unlockPublicProfileScroll);
 })();
 </script>
 {% endif %}

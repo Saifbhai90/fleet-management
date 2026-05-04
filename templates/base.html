@@ -2,7 +2,7 @@
 <html lang="en" class="{% if request.endpoint == 'report_driver_profile_public' %}driver-profile-public-view{% endif %}">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" id="metaViewport" content="{% if request.endpoint == 'report_driver_profile_public' %}width=device-width, initial-scale=1, maximum-scale=5, minimum-scale=0.5, user-scalable=yes, viewport-fit=cover{% else %}width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover{% endif %}">
+    <meta name="viewport" id="metaViewport" content="{% if request.endpoint == 'report_driver_profile_public' %}width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=3, user-scalable=yes, viewport-fit=cover{% else %}width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover{% endif %}">
     <meta name="theme-color" content="#0f172a">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -921,11 +921,11 @@
         }
 
         /*
-         * Public shared driver profile (/p/driver-profile/<token>): document scroll.
-         * Root cause: html/body overflow:hidden + fixed #appNativeShell clips content; inner .main-content
-         * overflow-y:visible grows past shell without scrolling. Undo shell + allow html/body to scroll.
+         * Public shared driver profile (/p/driver-profile/<token>): single scroll root = document.
+         * - Normal browsers + desktop: wheel scrolls <html>; body overscroll must not block chaining.
+         * - Capacitor: undo fixed shell; do NOT set touch-action (breaks 1-finger pan on iOS when combined with pinch-zoom).
          */
-        html.driver-profile-public-view.capacitor-native {
+        html.driver-profile-public-view {
             overflow-x: hidden !important;
             overflow-y: auto !important;
             height: auto !important;
@@ -933,13 +933,29 @@
             min-height: -webkit-fill-available !important;
             -webkit-overflow-scrolling: touch !important;
         }
-        html.driver-profile-public-view.capacitor-native body {
+        html.driver-profile-public-view body,
+        body.driver-profile-public-view {
             overflow-x: hidden !important;
             overflow-y: auto !important;
             height: auto !important;
             min-height: 100% !important;
             min-height: -webkit-fill-available !important;
-            touch-action: pan-y pinch-zoom !important;
+            overscroll-behavior-y: auto !important;
+            -webkit-overflow-scrolling: touch !important;
+        }
+        html.driver-profile-public-view #mainContent,
+        html.driver-profile-public-view .main-content {
+            position: relative !important;
+            top: auto !important;
+            left: auto !important;
+            right: auto !important;
+            bottom: auto !important;
+            flex: none !important;
+            max-height: none !important;
+            min-height: 0 !important;
+            height: auto !important;
+            overflow-x: hidden !important;
+            overflow-y: visible !important;
             -webkit-overflow-scrolling: touch !important;
         }
         html.driver-profile-public-view #appNativeShell {
@@ -955,36 +971,8 @@
             right: auto !important;
             bottom: auto !important;
         }
-        html.driver-profile-public-view #appNativeShell .main-content,
-        html.driver-profile-public-view.capacitor-native .main-content {
-            position: relative !important;
-            top: auto !important;
-            left: auto !important;
-            right: auto !important;
-            bottom: auto !important;
-            flex: none !important;
-            max-height: none !important;
-            min-height: 0 !important;
-            height: auto !important;
-            overflow-x: hidden !important;
-            overflow-y: visible !important;
-            -webkit-overflow-scrolling: touch !important;
+        html.driver-profile-public-view #appNativeShell .main-content {
             padding-bottom: max(16px, env(safe-area-inset-bottom, 0px)) !important;
-        }
-        /* Shared link opened in normal mobile browser (no capacitor-native on <html>) */
-        html.driver-profile-public-view:not(.capacitor-native) {
-            overflow-x: hidden !important;
-            overflow-y: auto !important;
-            height: auto !important;
-            min-height: 100% !important;
-            -webkit-overflow-scrolling: touch !important;
-        }
-        html.driver-profile-public-view:not(.capacitor-native) body {
-            overflow-x: hidden !important;
-            overflow-y: auto !important;
-            height: auto !important;
-            min-height: 100% !important;
-            touch-action: pan-y pinch-zoom !important;
         }
 
         /* ── Cards: native app style ── */
