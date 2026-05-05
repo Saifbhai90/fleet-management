@@ -25376,13 +25376,24 @@ def api_maintenance_expense_approval_text(pk):
     total_amount = 0.0
     current_product_ids = []
     current_product_names = {}
+    def _approval_qty_label(qty_val):
+        try:
+            qv = Decimal(str(qty_val))
+        except Exception:
+            qv = Decimal('0')
+        qv = qv.quantize(Decimal('0.01'))
+        s = format(qv, 'f')
+        if '.' in s:
+            s = s.rstrip('0').rstrip('.')
+        return s or '0'
+
     for it in item_rows:
         qty = float(it.qty or 0)
         price = float(it.price or 0)
         amount = float(it.amount or (qty * price))
         total_amount += amount
         p_name = (it.product.name if it.product else f'Product #{it.product_id}')
-        detail_lines.append(f"{p_name} {qty:.0f}x{price:.0f}={amount:.0f}")
+        detail_lines.append(f"{p_name} {_approval_qty_label(qty)}x{price:.0f}={amount:.0f}")
         if it.product_id and it.product_id not in current_product_ids:
             current_product_ids.append(it.product_id)
             current_product_names[it.product_id] = p_name
@@ -25508,6 +25519,17 @@ def api_maintenance_work_order_approval_text(pk):
     grand_total = 0.0
     current_product_ids = []
     current_product_names = {}
+    def _approval_qty_label(qty_val):
+        try:
+            qv = Decimal(str(qty_val))
+        except Exception:
+            qv = Decimal('0')
+        qv = qv.quantize(Decimal('0.01'))
+        s = format(qv, 'f')
+        if '.' in s:
+            s = s.rstrip('0').rstrip('.')
+        return s or '0'
+
     for ex in expenses:
         ex_total = float(ex.total_bill_amount or 0)
         if ex_total <= 0:
@@ -25518,7 +25540,7 @@ def api_maintenance_work_order_approval_text(pk):
             qty = float(it.qty or 0)
             price = float(it.price or 0)
             amount = float(it.amount or (qty * price))
-            detail_lines.append(f"{len(detail_lines) + 1}- {p_name} {qty:.0f}x{price:.0f}={amount:.0f}")
+            detail_lines.append(f"{len(detail_lines) + 1}- {p_name} {_approval_qty_label(qty)}x{price:.0f}={amount:.0f}")
             if it.product_id and it.product_id not in current_product_ids:
                 current_product_ids.append(it.product_id)
                 current_product_names[it.product_id] = p_name
@@ -25644,6 +25666,17 @@ def api_oil_expense_approval_text(pk):
     curr_reading = f"{float(rec.current_reading):.0f}" if rec.current_reading is not None else '-'
     km_txt = f"{float(rec.km):.0f}" if rec.km is not None else '-'
 
+    def _approval_qty_label(qty_val):
+        try:
+            qv = Decimal(str(qty_val))
+        except Exception:
+            qv = Decimal('0')
+        qv = qv.quantize(Decimal('0.01'))
+        s = format(qv, 'f')
+        if '.' in s:
+            s = s.rstrip('0').rstrip('.')
+        return s or '0'
+
     detail_lines = []
     total_amount = 0.0
     for it in rec.items.order_by(OilExpenseItem.sort_order.asc(), OilExpenseItem.id.asc()).all():
@@ -25652,7 +25685,7 @@ def api_oil_expense_approval_text(pk):
         price = float(it.price or 0)
         amount = float(it.amount or (qty * price))
         total_amount += amount
-        detail_lines.append(f"{len(detail_lines) + 1}- {p_name} {qty:.0f}x{price:.0f}={amount:.0f}")
+        detail_lines.append(f"{len(detail_lines) + 1}- {p_name} {_approval_qty_label(qty)}x{price:.0f}={amount:.0f}")
     if not detail_lines:
         detail_lines = ['-']
 
