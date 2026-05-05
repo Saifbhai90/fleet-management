@@ -117,7 +117,7 @@
                 </div>
                 <div class="col-md-4">
                   <label class="form-label">Reference No</label>
-                  <input type="text" name="reference_no" class="form-control" value="{{ row.reference_no if row else '' }}">
+                  <input type="text" id="wsTransferRefInput" name="reference_no" class="form-control" value="{{ row.reference_no if row else '' }}">
                 </div>
                 <div class="col-12">
                   <label class="form-label">Description</label>
@@ -160,7 +160,7 @@
         </div>
       </div>
 
-      <div class="d-flex gap-2 justify-content-end mt-3">
+      <div class="d-flex gap-2 justify-content-end mt-3" id="wsTransferFormActions">
         <a href="{{ url_for('workspace_fund_transfers_list') }}" class="btn btn-outline-secondary">Cancel</a>
         {% if not row %}
         <button type="submit" name="_save_action" value="save_add" class="btn btn-outline-success px-4" id="wsTransferSaveAddBtn"><i class="bi bi-plus-circle me-1"></i>Save &amp; Add Next</button>
@@ -377,6 +377,38 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     descBox.addEventListener('blur', function(){ setTimeout(function(){ sugBox.style.display = 'none'; }, 120); });
   }
+
+  /* Auto-scroll: Description / lower area → show lower; Reference No & fields above → show upper */
+  var formEl = document.getElementById('wsTransferForm');
+  var formActionsEl = document.getElementById('wsTransferFormActions');
+  function _wsScrollFormForFocus(focusTarget) {
+    if (!formEl || !descBox || !focusTarget || !formEl.contains(focusTarget)) return;
+    var attachCol = attachZone ? attachZone.closest('.col-xl-4') : null;
+    if (attachCol && attachCol.contains(focusTarget)) {
+      focusTarget.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+      return;
+    }
+    if (formActionsEl && formActionsEl.contains(focusTarget)) {
+      focusTarget.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+      return;
+    }
+    var descTop = descBox.getBoundingClientRect().top;
+    var elTop = focusTarget.getBoundingClientRect().top;
+    var margin = 36;
+    if (focusTarget === descBox || descBox.contains(focusTarget)) {
+      descBox.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+      return;
+    }
+    if (elTop < descTop - margin) {
+      focusTarget.scrollIntoView({ behavior: 'smooth', block: 'start', inline: 'nearest' });
+      return;
+    }
+    focusTarget.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+  }
+  document.addEventListener('focusin', function(ev) {
+    if (!formEl || !formEl.contains(ev.target)) return;
+    requestAnimationFrame(function() { _wsScrollFormForFocus(ev.target); });
+  });
 
 });
 </script>
