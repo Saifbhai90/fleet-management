@@ -9,6 +9,7 @@
 
   <div class="card">
     <div class="card-body">
+      <script type="application/json" id="locationCascadeData">{{ location_cascade|tojson }}</script>
       <form method="POST" action="" enctype="multipart/form-data">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="row g-3">
@@ -39,7 +40,7 @@
             <select name="district_id" id="districtSelect" class="form-select search-select">
               <option value="0">-- Select District --</option>
               {% for d in districts %}
-              <option value="{{ d.id }}" {% if request.form.get('district_id', type=int) == d.id or (not request.form and rec and rec.district_id == d.id) %}selected{% endif %}>{{ d.name }}</option>
+              <option value="{{ d.id }}" {% if (selected_district_id or 0) == d.id %}selected{% endif %}>{{ d.name }}</option>
               {% endfor %}
             </select>
           </div>
@@ -48,7 +49,7 @@
             <select name="project_id" id="projectSelect" class="form-select search-select">
               <option value="0">-- Select Project --</option>
               {% for p in projects %}
-              <option value="{{ p.id }}" {% if request.form.get('project_id', type=int) == p.id or (not request.form and rec and rec.project_id == p.id) %}selected{% endif %}>{{ p.name }}</option>
+              <option value="{{ p.id }}" {% if (selected_project_id or 0) == p.id %}selected{% endif %}>{{ p.name }}</option>
               {% endfor %}
             </select>
           </div>
@@ -57,7 +58,7 @@
             <select name="vehicle_id" id="vehicleSelect" class="form-select search-select" required>
               <option value="0">-- Select Vehicle --</option>
               {% for v in vehicles %}
-              <option value="{{ v.id }}" {% if request.form.get('vehicle_id', type=int) == v.id or (not request.form and rec and rec.vehicle_id == v.id) %}selected{% endif %}>{{ v.vehicle_no }}</option>
+              <option value="{{ v.id }}" {% if (selected_vehicle_id or 0) == v.id %}selected{% endif %}>{{ v.vehicle_no }}</option>
               {% endfor %}
             </select>
           </div>
@@ -190,27 +191,78 @@ document.addEventListener('DOMContentLoaded', function() {
   var districtSelect = document.getElementById('districtSelect');
   var projectSelect = document.getElementById('projectSelect');
   var vehicleSelect = document.getElementById('vehicleSelect');
+  var LOCATION_CASCADE = null;
+  try {
+    var lcEl = document.getElementById('locationCascadeData');
+    if (lcEl && lcEl.textContent) LOCATION_CASCADE = JSON.parse(lcEl.textContent);
+  } catch (e) { LOCATION_CASCADE = null; }
+  window._cascadeCache = window._cascadeCache || {};
+  if (LOCATION_CASCADE && LOCATION_CASCADE.projects_by_district) {
+    Object.keys(LOCATION_CASCADE.projects_by_district).forEach(function(dk) {
+      window._cascadeCache['proj_d' + dk] = LOCATION_CASCADE.projects_by_district[dk];
+    });
+  }
+  function vehiclesFromColdCacheWorkOrder(pid, did) {
+    if (!LOCATION_CASCADE || !LOCATION_CASCADE.vehicles) return null;
+    var list = LOCATION_CASCADE.vehicles;
+    var out = [];
+    var restrictDid = (did && did !== '0' && did !== 0) ? String(did) : '';
+    for (var i = 0; i < list.length; i++) {
+      var v = list[i];
+      if (String(v.project_id) !== String(pid)) continue;
+      if (!restrictDid) { out.push(v); continue; }
+      if (String(v.district_id == null ? '' : v.district_id) === restrictDid) out.push(v);
+    }
+    out.sort(function(a, b) { return (a.vehicle_no || '').localeCompare(b.vehicle_no || '', undefined, { numeric: true }); });
+    return out;
+  }
+  function resetSelectWithDefault(sel, placeholder) {
+    if (!sel) return;
+    if (sel.tomselect) { try { sel.tomselect.destroy(); } catch(e) {} }
+    sel.innerHTML = '<option value="0">' + placeholder + '</option>';
+  }
+  function initSelectSearch(sel) {
+    if (!sel) return;
+    if (typeof initSearchableDropdowns === 'function') initSearchableDropdowns(sel.parentNode);
+  }
+  function fillProjectOptions(arr) {
+    resetSelectWithDefault(projectSelect, '-- Select Project --');
+    (arr || []).forEach(function(p) {
+      var o = document.createElement('option');
+      o.value = p.id;
+      o.textContent = p.name;
+      projectSelect.appendChild(o);
+    });
+    initSelectSearch(projectSelect);
+  }
+  function fillVehicleOptions(arr) {
+    resetSelectWithDefault(vehicleSelect, '-- Select Vehicle --');
+    (arr || []).forEach(function(v) {
+      var o = document.createElement('option');
+      o.value = v.id;
+      o.textContent = v.vehicle_no;
+      vehicleSelect.appendChild(o);
+    });
+    initSelectSearch(vehicleSelect);
+  }
   if (districtSelect && projectSelect) {
     districtSelect.addEventListener('change', function() {
       var did = this.value || '0';
-      if (projectSelect.tomselect) projectSelect.tomselect.destroy();
-      if (vehicleSelect.tomselect) vehicleSelect.tomselect.destroy();
-      projectSelect.innerHTML = '<option value="0">-- Select Project --</option>';
-      vehicleSelect.innerHTML = '<option value="0">-- Select Vehicle --</option>';
+      fillProjectOptions([]);
+      fillVehicleOptions([]);
       if (did !== '0') {
+        var cacheKey = 'proj_d' + did;
+        if (window._cascadeCache[cacheKey]) {
+          fillProjectOptions(window._cascadeCache[cacheKey]);
+          return;
+        }
         fetch('/get_projects_by_district/' + did).then(function(r) { return r.json(); }).then(function(arr) {
-          (arr || []).forEach(function(p) {
-            var o = document.createElement('option');
-            o.value = p.id;
-            o.textContent = p.name;
-            projectSelect.appendChild(o);
-          });
-          if (typeof initSearchableDropdowns === 'function') initSearchableDropdowns(projectSelect.parentNode);
-          if (typeof initSearchableDropdowns === 'function') initSearchableDropdowns(vehicleSelect.parentNode);
+          window._cascadeCache[cacheKey] = arr || [];
+          fillProjectOptions(window._cascadeCache[cacheKey]);
         });
       } else {
-        if (typeof initSearchableDropdowns === 'function') initSearchableDropdowns(projectSelect.parentNode);
-        if (typeof initSearchableDropdowns === 'function') initSearchableDropdowns(vehicleSelect.parentNode);
+        initSelectSearch(projectSelect);
+        initSelectSearch(vehicleSelect);
       }
     });
   }
@@ -218,22 +270,26 @@ document.addEventListener('DOMContentLoaded', function() {
     projectSelect.addEventListener('change', function() {
       var pid = this.value || '0';
       var did = districtSelect ? (districtSelect.value || '0') : '0';
-      if (vehicleSelect.tomselect) vehicleSelect.tomselect.destroy();
-      vehicleSelect.innerHTML = '<option value="0">-- Select Vehicle --</option>';
+      fillVehicleOptions([]);
       if (pid !== '0') {
+        var vSync = vehiclesFromColdCacheWorkOrder(pid, did);
+        if (vSync !== null) {
+          fillVehicleOptions(vSync);
+          return;
+        }
+        var cacheKey = 'veh_p' + pid + '_d' + did;
+        if (window._cascadeCache[cacheKey]) {
+          fillVehicleOptions(window._cascadeCache[cacheKey]);
+          return;
+        }
         var url = '/get_vehicles_by_project_district?project_id=' + encodeURIComponent(pid);
         if (did !== '0') url += '&district_id=' + encodeURIComponent(did);
         fetch(url).then(function(r) { return r.json(); }).then(function(arr) {
-          (arr || []).forEach(function(v) {
-            var o = document.createElement('option');
-            o.value = v.id;
-            o.textContent = v.vehicle_no;
-            vehicleSelect.appendChild(o);
-          });
-          if (typeof initSearchableDropdowns === 'function') initSearchableDropdowns(vehicleSelect.parentNode);
+          window._cascadeCache[cacheKey] = arr || [];
+          fillVehicleOptions(window._cascadeCache[cacheKey]);
         });
-      } else if (typeof initSearchableDropdowns === 'function') {
-        initSearchableDropdowns(vehicleSelect.parentNode);
+      } else {
+        initSelectSearch(vehicleSelect);
       }
     });
   }

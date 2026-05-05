@@ -23308,6 +23308,31 @@ def _workspace_employee_default_district_id(employee_id):
     return first_district.id if first_district else None
 
 
+def _workspace_employee_default_project_id(employee_id, preferred_district_id=None):
+    if not employee_id:
+        return None
+    emp = Employee.query.get(employee_id)
+    if not emp:
+        return None
+    preferred_district_id = int(preferred_district_id) if preferred_district_id else None
+    try:
+        emp_projects = list(emp.projects)
+    except Exception:
+        emp_projects = []
+    if not emp_projects:
+        return None
+    emp_projects.sort(key=lambda p: (p.name or '').lower())
+    if preferred_district_id:
+        for p in emp_projects:
+            try:
+                linked = p.districts.filter(District.id == preferred_district_id).first() if hasattr(p.districts, 'filter') else None
+            except Exception:
+                linked = None
+            if linked:
+                return p.id
+    return emp_projects[0].id
+
+
 def _fallback_vehicle_previous_reading(employee_id, vehicle_id, mode):
     if not vehicle_id:
         return None
@@ -26112,10 +26137,22 @@ def maintenance_work_order_form(pk=None):
         flash('This work order does not belong to selected workspace employee.', 'danger')
         return redirect(url_for('maintenance_work_order_list'))
 
+    default_district_id = _workspace_employee_default_district_id(workspace_employee_id)
+    default_project_id = _workspace_employee_default_project_id(workspace_employee_id, default_district_id)
+
     districts = District.query.order_by(District.name.asc()).all()
-    district_id = request.form.get('district_id', type=int) if request.method == 'POST' else (rec.district_id if rec else None)
-    project_id = request.form.get('project_id', type=int) if request.method == 'POST' else (rec.project_id if rec else None)
-    vehicle_id = request.form.get('vehicle_id', type=int) if request.method == 'POST' else (rec.vehicle_id if rec else None)
+    if request.method == 'POST':
+        district_id = request.form.get('district_id', type=int)
+        project_id = request.form.get('project_id', type=int)
+        vehicle_id = request.form.get('vehicle_id', type=int)
+    elif rec:
+        district_id = rec.district_id
+        project_id = rec.project_id
+        vehicle_id = rec.vehicle_id
+    else:
+        district_id = default_district_id
+        project_id = default_project_id
+        vehicle_id = None
 
     project_q = Project.query
     if district_id:
@@ -26208,6 +26245,10 @@ def maintenance_work_order_form(pk=None):
         districts=districts,
         projects=projects,
         vehicles=vehicles,
+        selected_district_id=(district_id or 0),
+        selected_project_id=(project_id or 0),
+        selected_vehicle_id=(vehicle_id or 0),
+        location_cascade=_fuel_expense_location_cascade_dict(),
     )
 
 

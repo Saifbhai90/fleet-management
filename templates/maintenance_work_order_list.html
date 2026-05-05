@@ -337,6 +337,12 @@ document.addEventListener('DOMContentLoaded', function() {
     var _lc = document.getElementById('locationCascadeData');
     if (_lc && _lc.textContent) LC = JSON.parse(_lc.textContent);
   } catch (e) { LC = null; }
+  window._cascadeCache = window._cascadeCache || {};
+  if (LC && LC.projects_by_district) {
+    Object.keys(LC.projects_by_district).forEach(function(dk) {
+      window._cascadeCache['proj_d' + dk] = LC.projects_by_district[dk];
+    });
+  }
   function listProjectsByDistrict(did) {
     if (!LC || !LC.projects_by_district) return null;
     return LC.projects_by_district[String(did)] || [];
@@ -356,37 +362,58 @@ document.addEventListener('DOMContentLoaded', function() {
   var districtSelect = document.getElementById('districtSelect');
   var projectSelect = document.getElementById('projectSelect');
   var vehicleSelect = document.getElementById('vehicleSelect');
+  function resetSelectWithDefault(sel, placeholder) {
+    if (!sel) return;
+    if (sel.tomselect) { try { sel.tomselect.destroy(); } catch (e) {} }
+    sel.innerHTML = '<option value="0">' + placeholder + '</option>';
+  }
+  function initSelectSearch(sel) {
+    if (!sel) return;
+    if (typeof initSearchableDropdowns === 'function') initSearchableDropdowns(sel.parentNode);
+  }
+  function fillProjectOptions(arr) {
+    resetSelectWithDefault(projectSelect, '-- Select Project --');
+    (arr || []).forEach(function(p) {
+      var o = document.createElement('option');
+      o.value = p.id;
+      o.textContent = p.name;
+      projectSelect.appendChild(o);
+    });
+    initSelectSearch(projectSelect);
+  }
+  function fillVehicleOptions(arr) {
+    resetSelectWithDefault(vehicleSelect, '-- All Vehicles --');
+    (arr || []).forEach(function(v) {
+      var o = document.createElement('option');
+      o.value = v.id;
+      o.textContent = v.vehicle_no;
+      vehicleSelect.appendChild(o);
+    });
+    initSelectSearch(vehicleSelect);
+  }
   if (districtSelect && projectSelect) {
     districtSelect.addEventListener('change', function() {
       var did = this.value;
-      if (projectSelect.tomselect) { projectSelect.tomselect.destroy(); }
-      if (vehicleSelect && vehicleSelect.tomselect) { vehicleSelect.tomselect.destroy(); }
-      projectSelect.innerHTML = '<option value="0">-- Select Project --</option>';
-      if (vehicleSelect) vehicleSelect.innerHTML = '<option value="0">-- All Vehicles --</option>';
-      if (vehicleSelect) initSearchableDropdowns(vehicleSelect.parentNode);
+      fillProjectOptions([]);
+      if (vehicleSelect) fillVehicleOptions([]);
       if (did && did !== '0') {
+        var cacheKey = 'proj_d' + did;
+        if (window._cascadeCache[cacheKey]) {
+          fillProjectOptions(window._cascadeCache[cacheKey]);
+          return;
+        }
         var pSync = listProjectsByDistrict(did);
         if (pSync !== null) {
-          pSync.forEach(function(p) {
-            var o = document.createElement('option');
-            o.value = p.id;
-            o.textContent = p.name;
-            projectSelect.appendChild(o);
-          });
-          initSearchableDropdowns(projectSelect.parentNode);
+          window._cascadeCache[cacheKey] = pSync;
+          fillProjectOptions(window._cascadeCache[cacheKey]);
         } else {
           fetch('/get_projects_by_district/' + did).then(function(r) { return r.json(); }).then(function(arr) {
-            arr.forEach(function(p) {
-              var o = document.createElement('option');
-              o.value = p.id;
-              o.textContent = p.name;
-              projectSelect.appendChild(o);
-            });
-            initSearchableDropdowns(projectSelect.parentNode);
+            window._cascadeCache[cacheKey] = arr || [];
+            fillProjectOptions(window._cascadeCache[cacheKey]);
           });
         }
       } else {
-        initSearchableDropdowns(projectSelect.parentNode);
+        initSelectSearch(projectSelect);
       }
     });
   }
@@ -394,33 +421,27 @@ document.addEventListener('DOMContentLoaded', function() {
     projectSelect.addEventListener('change', function() {
       var pid = projectSelect.value;
       var did = districtSelect ? districtSelect.value : '';
-      if (vehicleSelect.tomselect) { vehicleSelect.tomselect.destroy(); }
-      vehicleSelect.innerHTML = '<option value="0">-- All Vehicles --</option>';
+      fillVehicleOptions([]);
       if (pid && pid !== '0') {
+        var cacheKey = 'veh_p' + pid + '_d' + (did || '0');
+        if (window._cascadeCache[cacheKey]) {
+          fillVehicleOptions(window._cascadeCache[cacheKey]);
+          return;
+        }
         var vSync = listVehiclesByProjectDistrict(pid, did);
         if (vSync !== null) {
-          vSync.forEach(function(v) {
-            var o = document.createElement('option');
-            o.value = v.id;
-            o.textContent = v.vehicle_no;
-            vehicleSelect.appendChild(o);
-          });
-          initSearchableDropdowns(vehicleSelect.parentNode);
+          window._cascadeCache[cacheKey] = vSync;
+          fillVehicleOptions(window._cascadeCache[cacheKey]);
         } else {
           var url = '/get_vehicles_by_project_district?project_id=' + pid;
           if (did && did !== '0') url += '&district_id=' + did;
           fetch(url).then(function(r) { return r.json(); }).then(function(arr) {
-            arr.forEach(function(v) {
-              var o = document.createElement('option');
-              o.value = v.id;
-              o.textContent = v.vehicle_no;
-              vehicleSelect.appendChild(o);
-            });
-            initSearchableDropdowns(vehicleSelect.parentNode);
+            window._cascadeCache[cacheKey] = arr || [];
+            fillVehicleOptions(window._cascadeCache[cacheKey]);
           });
         }
       } else {
-        initSearchableDropdowns(vehicleSelect.parentNode);
+        initSelectSearch(vehicleSelect);
       }
     });
   }
