@@ -280,6 +280,31 @@
               <div class="text-danger small mt-1">{{ total_bill_error }}</div>
             {% endif %}
           </div>
+          <div class="col-md-2 field-group">
+            <label class="form-label">Labour Amount</label>
+            <input
+              type="text"
+              class="form-control"
+              id="labourAmountInput"
+              name="labour_amount"
+              value="{{ entered_labour_amount if entered_labour_amount is not none else '' }}"
+              placeholder="0.00"
+              autocomplete="off"
+            >
+            <small id="labourPartsHint" class="text-muted"></small>
+          </div>
+          <div class="col-md-3 field-group">
+            <label class="form-label">Labour Party (Mechanic / Denter)</label>
+            <select name="labour_workspace_party_id" id="labourPartySelect" class="form-select search-select">
+              <option value="">-- Select Labour Party --</option>
+              {% for p in workspace_parties or [] %}
+                <option value="{{ p.id }}" {% if selected_labour_party_id and selected_labour_party_id|string == p.id|string %}selected{% endif %}>{{ p.name }}</option>
+              {% endfor %}
+            </select>
+            {% if labour_split_error %}
+              <div class="text-danger small mt-1">{{ labour_split_error }}</div>
+            {% endif %}
+          </div>
 
         </div>
       </div>
@@ -700,6 +725,9 @@ document.addEventListener('DOMContentLoaded', function() {
   var taskCloseReading = null;
   var totalBillInput = document.getElementById('totalBillInput');
   var totalBillEvalHint = document.getElementById('totalBillEvalHint');
+  var labourAmountInput = document.getElementById('labourAmountInput');
+  var labourPartsHint = document.getElementById('labourPartsHint');
+  var labourPartySelect = document.getElementById('labourPartySelect');
   var workOrderSelect = document.getElementById('workOrderSelect');
   var cashExpenseByValue = '';
   var maintAttachmentFiles = document.getElementById('maintAttachmentFiles');
@@ -809,6 +837,20 @@ document.addEventListener('DOMContentLoaded', function() {
         }
       }, true);
     }
+  }
+
+  function updateLabourSplitHint() {
+    if (!labourPartsHint || !totalBillInput || !labourAmountInput) return;
+    var billTotal = parseNum(totalBillInput.value);
+    var labour = parseNum(labourAmountInput.value);
+    if (labour < 0) labour = 0;
+    if (labour > billTotal) labour = billTotal;
+    var parts = billTotal - labour;
+    if (billTotal <= 0 && labour <= 0) {
+      labourPartsHint.textContent = '';
+      return;
+    }
+    labourPartsHint.textContent = 'Parts: ' + fmt2(parts) + ' | Labour: ' + fmt2(labour);
   }
 
   function _selVal(sel) {
@@ -958,6 +1000,13 @@ document.addEventListener('DOMContentLoaded', function() {
         partySelect.tomselect.setValue('', true);
       } else if (!isCredit) {
         partySelect.value = '';
+      }
+    }
+    if (labourPartySelect) {
+      labourPartySelect.disabled = isCash;
+      if (isCash) {
+        labourPartySelect.value = '';
+        if (labourPartySelect.tomselect) labourPartySelect.tomselect.setValue('', true);
       }
     }
     if (!expenseBySelect) return;
@@ -1768,6 +1817,8 @@ document.addEventListener('DOMContentLoaded', function() {
   });
   if (currentReading) currentReading.addEventListener('input', updateCurrentReadingMatch);
   if (paymentTypeSelect) paymentTypeSelect.addEventListener('change', function() { handlePaymentTypeBehavior(true); });
+  if (labourAmountInput) labourAmountInput.addEventListener('input', updateLabourSplitHint);
+  if (totalBillInput) totalBillInput.addEventListener('input', updateLabourSplitHint);
   if (partySelect) partySelect.addEventListener('change', function() {
     if (entryProductSelect && entryProductSelect.value) fetchMaintenancePriceHistory(false);
   });
@@ -1831,6 +1882,7 @@ document.addEventListener('DOMContentLoaded', function() {
   window.setTimeout(fetchTaskReadingsForMaintenance, 250);
   window.setTimeout(fetchMaintenanceLiveSummary, 300);
   handlePaymentTypeBehavior(false);
+  updateLabourSplitHint();
   updateExpenseByBalanceHint();
   if (lastInvoiceDetailBtn) {
     lastInvoiceDetailBtn.addEventListener('click', function() {

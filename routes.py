@@ -27360,9 +27360,35 @@ def maintenance_expense_form(pk=None):
         if request.method == 'POST'
         else (f"{float(rec.total_bill_amount):.2f}" if rec and rec.total_bill_amount is not None else '')
     )
+    entered_labour_amount = (request.form.get('labour_amount') or '').strip() if request.method == 'POST' else ''
     party_error = ''
+    labour_split_error = ''
     selected_payment_type = (request.form.get('payment_type') or (getattr(rec, 'payment_type', None) if rec else '') or '').strip()
     selected_party_id = (request.form.get('workspace_party_id') or (str(getattr(rec, 'workspace_party_id', '') or '') if rec else '')).strip()
+    selected_labour_party_id = (request.form.get('labour_workspace_party_id') or '').strip()
+
+    def _render_maintenance_form():
+        return render_template(
+            'maintenance_expense_form.html',
+            form=form,
+            rec=rec,
+            title='Edit Maintenance' if rec else 'Add Maintenance',
+            products_for_maintenance=products_for_maintenance,
+            job_categories=job_categories,
+            total_bill_error=total_bill_error,
+            entered_total_bill=entered_total_bill,
+            entered_labour_amount=entered_labour_amount,
+            party_error=party_error,
+            labour_split_error=labour_split_error,
+            selected_payment_type=selected_payment_type,
+            selected_party_id=selected_party_id,
+            selected_labour_party_id=selected_labour_party_id,
+            workspace_parties=workspace_parties,
+            maintenance_direct_r2=maintenance_direct_r2,
+            requested_work_order=requested_work_order,
+            maintenance_form_focus=maintenance_form_focus,
+            location_cascade=_fuel_expense_location_cascade_dict(),
+        )
     form.expense_by.choices = _workspace_expense_by_choices(workspace_employee_id)
     products_for_maintenance = _workspace_products_for_expense_form(workspace_employee_id, 'Maintenance')
     job_categories = _get_maintenance_job_categories()
@@ -27457,22 +27483,7 @@ def maintenance_expense_form(pk=None):
         vehicle_id = form.vehicle_id.data
         if not vehicle_id:
             flash('Select vehicle.', 'danger')
-            return render_template(
-                'maintenance_expense_form.html',
-                form=form,
-                rec=rec,
-                title='Edit Maintenance' if rec else 'Add Maintenance',
-                products_for_maintenance=products_for_maintenance,
-                job_categories=job_categories,
-                total_bill_error=total_bill_error,
-                entered_total_bill=entered_total_bill,
-                party_error=party_error,
-                selected_payment_type=selected_payment_type,
-                selected_party_id=selected_party_id,
-                workspace_parties=workspace_parties,
-                maintenance_direct_r2=maintenance_direct_r2,
-                location_cascade=_fuel_expense_location_cascade_dict(),
-            )
+            return _render_maintenance_form()
         district_id = form.district_id.data or None
         if district_id == 0:
             district_id = None
@@ -27482,40 +27493,10 @@ def maintenance_expense_form(pk=None):
         vehicle_obj = Vehicle.query.get_or_404(vehicle_id)
         if project_id and int(vehicle_obj.project_id or 0) != int(project_id):
             flash('Selected vehicle does not belong to selected project.', 'danger')
-            return render_template(
-                'maintenance_expense_form.html',
-                form=form,
-                rec=rec,
-                title='Edit Maintenance' if rec else 'Add Maintenance',
-                products_for_maintenance=products_for_maintenance,
-                job_categories=job_categories,
-                total_bill_error=total_bill_error,
-                entered_total_bill=entered_total_bill,
-                party_error=party_error,
-                selected_payment_type=selected_payment_type,
-                selected_party_id=selected_party_id,
-                workspace_parties=workspace_parties,
-                maintenance_direct_r2=maintenance_direct_r2,
-                location_cascade=_fuel_expense_location_cascade_dict(),
-            )
+            return _render_maintenance_form()
         if district_id and int(vehicle_obj.district_id or 0) != int(district_id):
             flash('Selected vehicle does not belong to selected district.', 'danger')
-            return render_template(
-                'maintenance_expense_form.html',
-                form=form,
-                rec=rec,
-                title='Edit Maintenance' if rec else 'Add Maintenance',
-                products_for_maintenance=products_for_maintenance,
-                job_categories=job_categories,
-                total_bill_error=total_bill_error,
-                entered_total_bill=entered_total_bill,
-                party_error=party_error,
-                selected_payment_type=selected_payment_type,
-                selected_party_id=selected_party_id,
-                workspace_parties=workspace_parties,
-                maintenance_direct_r2=maintenance_direct_r2,
-                location_cascade=_fuel_expense_location_cascade_dict(),
-            )
+            return _render_maintenance_form()
         if district_id and project_id:
             linked = Project.query.join(project_district).filter(
                 Project.id == project_id,
@@ -27523,22 +27504,7 @@ def maintenance_expense_form(pk=None):
             ).first()
             if not linked:
                 flash('Selected project is not linked with selected district.', 'danger')
-                return render_template(
-                    'maintenance_expense_form.html',
-                    form=form,
-                    rec=rec,
-                    title='Edit Maintenance' if rec else 'Add Maintenance',
-                    products_for_maintenance=products_for_maintenance,
-                    job_categories=job_categories,
-                    total_bill_error=total_bill_error,
-                    entered_total_bill=entered_total_bill,
-                    party_error=party_error,
-                    selected_payment_type=selected_payment_type,
-                    selected_party_id=selected_party_id,
-                    workspace_parties=workspace_parties,
-                    maintenance_direct_r2=maintenance_direct_r2,
-                    location_cascade=_fuel_expense_location_cascade_dict(),
-                )
+                return _render_maintenance_form()
         if not project_id:
             project_id = vehicle_obj.project_id
         if not district_id:
@@ -27551,58 +27517,13 @@ def maintenance_expense_form(pk=None):
             work_order_obj = MaintenanceWorkOrder.query.filter_by(id=work_order_id).first()
             if not work_order_obj:
                 flash('Selected work order not found.', 'danger')
-                return render_template(
-                    'maintenance_expense_form.html',
-                    form=form,
-                    rec=rec,
-                    title='Edit Maintenance' if rec else 'Add Maintenance',
-                    products_for_maintenance=products_for_maintenance,
-                    job_categories=job_categories,
-                    total_bill_error=total_bill_error,
-                    entered_total_bill=entered_total_bill,
-                    party_error=party_error,
-                    selected_payment_type=selected_payment_type,
-                    selected_party_id=selected_party_id,
-                    workspace_parties=workspace_parties,
-                    maintenance_direct_r2=maintenance_direct_r2,
-                    location_cascade=_fuel_expense_location_cascade_dict(),
-                )
+                return _render_maintenance_form()
             if workspace_employee_id and work_order_obj.employee_id and work_order_obj.employee_id != workspace_employee_id:
                 flash('Selected work order is not allowed for current workspace employee.', 'danger')
-                return render_template(
-                    'maintenance_expense_form.html',
-                    form=form,
-                    rec=rec,
-                    title='Edit Maintenance' if rec else 'Add Maintenance',
-                    products_for_maintenance=products_for_maintenance,
-                    job_categories=job_categories,
-                    total_bill_error=total_bill_error,
-                    entered_total_bill=entered_total_bill,
-                    party_error=party_error,
-                    selected_payment_type=selected_payment_type,
-                    selected_party_id=selected_party_id,
-                    workspace_parties=workspace_parties,
-                    maintenance_direct_r2=maintenance_direct_r2,
-                    location_cascade=_fuel_expense_location_cascade_dict(),
-                )
+                return _render_maintenance_form()
             if int(work_order_obj.vehicle_id or 0) != int(vehicle_id):
                 flash('Selected work order vehicle does not match expense vehicle.', 'danger')
-                return render_template(
-                    'maintenance_expense_form.html',
-                    form=form,
-                    rec=rec,
-                    title='Edit Maintenance' if rec else 'Add Maintenance',
-                    products_for_maintenance=products_for_maintenance,
-                    job_categories=job_categories,
-                    total_bill_error=total_bill_error,
-                    entered_total_bill=entered_total_bill,
-                    party_error=party_error,
-                    selected_payment_type=selected_payment_type,
-                    selected_party_id=selected_party_id,
-                    workspace_parties=workspace_parties,
-                    maintenance_direct_r2=maintenance_direct_r2,
-                    location_cascade=_fuel_expense_location_cascade_dict(),
-                )
+                return _render_maintenance_form()
         expense_date = form.expense_date.data
         curr_reading = form.current_reading.data
         remarks = form.remarks.data
@@ -27635,45 +27556,14 @@ def maintenance_expense_form(pk=None):
         payment_type = (request.form.get('payment_type') or '').strip()
         if payment_type not in ('Cash', 'Credit'):
             flash('Payment Type select karna zaroori hai.', 'danger')
-            return render_template(
-                'maintenance_expense_form.html',
-                form=form,
-                rec=rec,
-                title='Edit Maintenance' if rec else 'Add Maintenance',
-                products_for_maintenance=products_for_maintenance,
-                job_categories=job_categories,
-                total_bill_error=total_bill_error,
-                entered_total_bill=entered_total_bill,
-                party_error=party_error,
-                selected_payment_type=selected_payment_type,
-                selected_party_id=selected_party_id,
-                workspace_parties=workspace_parties,
-                maintenance_direct_r2=maintenance_direct_r2,
-                location_cascade=_fuel_expense_location_cascade_dict(),
-            )
+            return _render_maintenance_form()
         selected_payment_type = payment_type
         workspace_party_id_raw = (request.form.get('workspace_party_id') or '').strip()
         workspace_party_id = int(workspace_party_id_raw) if workspace_party_id_raw.isdigit() else None
         selected_party_id = str(workspace_party_id or '')
-        if payment_type == 'Credit' and not workspace_party_id:
-            party_error = 'Credit payment ke liye Party Name select karna zaroori hai.'
-            flash('Form save nahi hua. Credit payment me Party Name required hai.', 'danger')
-            return render_template(
-                'maintenance_expense_form.html',
-                form=form,
-                rec=rec,
-                title='Edit Maintenance' if rec else 'Add Maintenance',
-                products_for_maintenance=products_for_maintenance,
-                job_categories=job_categories,
-                total_bill_error=total_bill_error,
-                entered_total_bill=entered_total_bill,
-                party_error=party_error,
-                selected_payment_type=selected_payment_type,
-                selected_party_id=selected_party_id,
-                workspace_parties=workspace_parties,
-                maintenance_direct_r2=maintenance_direct_r2,
-                location_cascade=_fuel_expense_location_cascade_dict(),
-            )
+        labour_workspace_party_id_raw = (request.form.get('labour_workspace_party_id') or '').strip()
+        labour_workspace_party_id = int(labour_workspace_party_id_raw) if labour_workspace_party_id_raw.isdigit() else None
+        selected_labour_party_id = str(labour_workspace_party_id or '')
 
         product_ids = request.form.getlist('product_id')
         qtys = request.form.getlist('qty')
@@ -27704,46 +27594,47 @@ def maintenance_expense_form(pk=None):
             entered_total_bill_num = float(entered_total_bill) if entered_total_bill else 0.0
         except (TypeError, ValueError):
             entered_total_bill_num = 0.0
+        try:
+            labour_amount_num = float(entered_labour_amount) if entered_labour_amount else 0.0
+        except (TypeError, ValueError):
+            labour_amount_num = -1.0
 
         if entered_total_bill_num <= 0:
             total_bill_error = 'Total Bill Amount enter karein (0 se bara).'
             flash('Form save nahi hua. Total Bill Amount required hai.', 'danger')
-            return render_template(
-                'maintenance_expense_form.html',
-                form=form,
-                rec=rec,
-                title='Edit Maintenance' if rec else 'Add Maintenance',
-                products_for_maintenance=products_for_maintenance,
-                job_categories=job_categories,
-                total_bill_error=total_bill_error,
-                entered_total_bill=entered_total_bill,
-                party_error=party_error,
-                selected_payment_type=selected_payment_type,
-                selected_party_id=selected_party_id,
-                workspace_parties=workspace_parties,
-                maintenance_direct_r2=maintenance_direct_r2,
-                location_cascade=_fuel_expense_location_cascade_dict(),
-            )
+            return _render_maintenance_form()
 
         if abs(items_total - entered_total_bill_num) > 0.01:
             total_bill_error = f'Total mismatch: list total {items_total:.2f} aur entered total {entered_total_bill_num:.2f} equal nahi.'
             flash('Form save nahi hua. Product list total aur Total Bill Amount equal karein.', 'danger')
-            return render_template(
-                'maintenance_expense_form.html',
-                form=form,
-                rec=rec,
-                title='Edit Maintenance' if rec else 'Add Maintenance',
-                products_for_maintenance=products_for_maintenance,
-                job_categories=job_categories,
-                total_bill_error=total_bill_error,
-                entered_total_bill=entered_total_bill,
-                party_error=party_error,
-                selected_payment_type=selected_payment_type,
-                selected_party_id=selected_party_id,
-                workspace_parties=workspace_parties,
-                maintenance_direct_r2=maintenance_direct_r2,
-                location_cascade=_fuel_expense_location_cascade_dict(),
-            )
+            return _render_maintenance_form()
+
+        if labour_amount_num < 0:
+            labour_split_error = 'Labour amount numeric hona chahiye (0 ya us se bara).'
+            flash('Form save nahi hua. Labour amount theek karein.', 'danger')
+            return _render_maintenance_form()
+        if labour_amount_num > entered_total_bill_num + 0.01:
+            labour_split_error = 'Labour amount total bill se zyada nahi ho sakta.'
+            flash('Form save nahi hua. Labour amount total bill se zyada hai.', 'danger')
+            return _render_maintenance_form()
+
+        if labour_amount_num < 0.005:
+            labour_amount_num = 0.0
+        parts_amount_num = max(0.0, entered_total_bill_num - labour_amount_num)
+        if parts_amount_num <= 0 and labour_amount_num <= 0:
+            total_bill_error = 'Parts/Labour split invalid hai.'
+            flash('Form save nahi hua. Split amount check karein.', 'danger')
+            return _render_maintenance_form()
+
+        if payment_type == 'Credit':
+            if parts_amount_num > 0 and not workspace_party_id:
+                party_error = 'Credit payment me Parts amount ke liye Party Name select karna zaroori hai.'
+                flash('Form save nahi hua. Parts party required hai.', 'danger')
+                return _render_maintenance_form()
+            if labour_amount_num > 0 and not labour_workspace_party_id:
+                labour_split_error = 'Credit payment me Labour amount ke liye Labour Party select karna zaroori hai.'
+                flash('Form save nahi hua. Labour party required hai.', 'danger')
+                return _render_maintenance_form()
 
         try:
             if rec:
@@ -27761,7 +27652,7 @@ def maintenance_expense_form(pk=None):
                     job_category=job_category,
                     job_interval_mode=job_interval_mode,
                     payment_type=payment_type,
-                    workspace_party_id=(workspace_party_id if payment_type == 'Credit' else None),
+                    workspace_party_id=(workspace_party_id if (payment_type == 'Credit' and parts_amount_num > 0) else None),
                     work_order_id=work_order_id,
                     total_bill_amount=entered_total_bill_num,
                     remarks=remarks
@@ -27780,7 +27671,7 @@ def maintenance_expense_form(pk=None):
                 rec.job_category = job_category
                 rec.job_interval_mode = job_interval_mode
                 rec.payment_type = payment_type
-                rec.workspace_party_id = workspace_party_id if payment_type == 'Credit' else None
+                rec.workspace_party_id = workspace_party_id if (payment_type == 'Credit' and parts_amount_num > 0) else None
                 rec.work_order_id = work_order_id
                 rec.total_bill_amount = entered_total_bill_num
                 rec.remarks = remarks
@@ -27800,51 +27691,89 @@ def maintenance_expense_form(pk=None):
             if payment_type == 'Cash':
                 expense_by_val = expense_by_val or _workspace_default_hbl_expense_by(workspace_employee_id)
             selected_credit_account_id = _workspace_account_id_from_expense_by(expense_by_val, workspace_employee_id)
+            base_desc = f'Maintenance expense vehicle {rec.vehicle.vehicle_no if rec.vehicle else rec.vehicle_id}'
+            maintenance_je = None
+            if parts_amount_num > 0:
+                maintenance_je = _workspace_post_expense_journal(
+                    employee_id=workspace_employee_id,
+                    reference_type='MaintenanceExpense',
+                    reference_id=rec.id,
+                    expense_date=expense_date,
+                    amount=parts_amount_num,
+                    description=base_desc + ' (Parts)',
+                    category_code='Maintenance',
+                    workspace_party_id=workspace_party_id if payment_type == 'Credit' else None,
+                    credit_account_id=(selected_credit_account_id if payment_type == 'Cash' else None),
+                )
+            if labour_amount_num > 0:
+                labour_je = _workspace_post_expense_journal(
+                    employee_id=workspace_employee_id,
+                    reference_type='MaintenanceExpense',
+                    reference_id=rec.id,
+                    expense_date=expense_date,
+                    amount=labour_amount_num,
+                    description=base_desc + ' (Labour)',
+                    category_code='Maintenance',
+                    workspace_party_id=labour_workspace_party_id if payment_type == 'Credit' else None,
+                    credit_account_id=(selected_credit_account_id if payment_type == 'Cash' else None),
+                )
+                if not maintenance_je:
+                    maintenance_je = labour_je
 
-            maintenance_je = _workspace_post_expense_journal(
-                employee_id=workspace_employee_id,
-                reference_type='MaintenanceExpense',
-                reference_id=rec.id,
-                expense_date=expense_date,
-                amount=items_total,
-                description=f'Maintenance expense vehicle {rec.vehicle.vehicle_no if rec.vehicle else rec.vehicle_id}',
-                category_code='Maintenance',
-                workspace_party_id=workspace_party_id if payment_type == 'Credit' else None,
-                credit_account_id=(selected_credit_account_id if payment_type == 'Cash' else None),
-            )
-
-            if payment_type == 'Credit' and workspace_party_id and selected_credit_account_id:
+            if payment_type == 'Credit' and selected_credit_account_id:
                 selected_credit = WorkspaceAccount.query.filter_by(
                     id=selected_credit_account_id,
                     employee_id=workspace_employee_id,
                     is_active=True,
                 ).first()
-                party_obj = WorkspaceParty.query.filter_by(employee_id=workspace_employee_id, id=workspace_party_id).first()
-                _workspace_post_credit_settlement_journal(
-                    employee_id=workspace_employee_id,
-                    reference_type='MaintenanceExpense',
-                    reference_id=rec.id,
-                    expense_date=expense_date,
-                    amount=items_total,
-                    category_code='Maintenance',
-                    workspace_party_id=workspace_party_id,
-                    credit_account_id=selected_credit_account_id,
-                    description=(
-                        f"Cash paid by {(selected_credit.name if selected_credit else f'Account {selected_credit_account_id}')}"
-                        f" to {(party_obj.name if party_obj else 'Party')} for Maintenance expense"
-                    ),
-                )
+                selected_credit_name = selected_credit.name if selected_credit else f'Account {selected_credit_account_id}'
+                if parts_amount_num > 0 and workspace_party_id:
+                    parts_party_obj = WorkspaceParty.query.filter_by(employee_id=workspace_employee_id, id=workspace_party_id).first()
+                    _workspace_post_credit_settlement_journal(
+                        employee_id=workspace_employee_id,
+                        reference_type='MaintenanceExpense',
+                        reference_id=rec.id,
+                        expense_date=expense_date,
+                        amount=parts_amount_num,
+                        category_code='Maintenance',
+                        workspace_party_id=workspace_party_id,
+                        credit_account_id=selected_credit_account_id,
+                        description=(
+                            f"Cash paid by {selected_credit_name} to {(parts_party_obj.name if parts_party_obj else 'Parts Party')}"
+                            f" for Maintenance parts expense"
+                        ),
+                    )
+                if labour_amount_num > 0 and labour_workspace_party_id:
+                    labour_party_obj = WorkspaceParty.query.filter_by(employee_id=workspace_employee_id, id=labour_workspace_party_id).first()
+                    _workspace_post_credit_settlement_journal(
+                        employee_id=workspace_employee_id,
+                        reference_type='MaintenanceExpense',
+                        reference_id=rec.id,
+                        expense_date=expense_date,
+                        amount=labour_amount_num,
+                        category_code='Maintenance',
+                        workspace_party_id=labour_workspace_party_id,
+                        credit_account_id=selected_credit_account_id,
+                        description=(
+                            f"Cash paid by {selected_credit_name} to {(labour_party_obj.name if labour_party_obj else 'Labour Party')}"
+                            f" for Maintenance labour expense"
+                        ),
+                    )
             _workspace_sync_regular_expense(
                 employee_id=workspace_employee_id,
                 reference_type='MaintenanceExpense',
                 reference_id=rec.id,
                 expense_date=expense_date,
                 amount=items_total,
-                description=f'Maintenance expense vehicle {rec.vehicle.vehicle_no if rec.vehicle else rec.vehicle_id}',
+                description=(
+                    f'{base_desc} (Parts {parts_amount_num:.2f}'
+                    + (f', Labour {labour_amount_num:.2f}' if labour_amount_num > 0 else '')
+                    + ')'
+                ),
                 expense_type='Maintenance Expense',
                 payment_mode=(payment_type or 'Cash'),
                 category='Maintenance',
-                workspace_party_id=workspace_party_id if payment_type == 'Credit' else None,
+                workspace_party_id=(workspace_party_id if (payment_type == 'Credit' and parts_amount_num > 0) else (labour_workspace_party_id if payment_type == 'Credit' else None)),
                 journal_entry_id=(maintenance_je.id if maintenance_je else None),
             )
             db.session.commit()
@@ -27888,24 +27817,7 @@ def maintenance_expense_form(pk=None):
             flash('Form save nahi hua. Required fields check karein.', 'danger')
         else:
             flash('Form save nahi hua. Data dobara check karein.', 'danger')
-    return render_template(
-        'maintenance_expense_form.html',
-        form=form,
-        rec=rec,
-        title='Edit Maintenance' if rec else 'Add Maintenance',
-        products_for_maintenance=products_for_maintenance,
-        job_categories=job_categories,
-        total_bill_error=total_bill_error,
-        entered_total_bill=entered_total_bill,
-        party_error=party_error,
-        selected_payment_type=selected_payment_type,
-        selected_party_id=selected_party_id,
-        workspace_parties=workspace_parties,
-        maintenance_direct_r2=maintenance_direct_r2,
-        requested_work_order=requested_work_order,
-        maintenance_form_focus=maintenance_form_focus,
-        location_cascade=_fuel_expense_location_cascade_dict(),
-    )
+    return _render_maintenance_form()
 
 
 @app.route('/maintenance-expense/<int:pk>/view')
