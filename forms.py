@@ -1339,7 +1339,11 @@ class FundTransferForm(FlaskForm):
     reference_no = StringField('Reference / Cheque No', validators=[Optional(), Length(max=50)],
                                render_kw={"class": "form-control"})
     description = TextAreaField('Description', validators=[Optional()],
-                                render_kw={"class": "form-control", "rows": 2})
+                                render_kw={
+                                    "class": "form-control",
+                                    "rows": 3,
+                                    "placeholder": "Type or select from recent descriptions...",
+                                })
     district_id = SelectField('District', coerce=int, validators=[Optional()],
                               choices=[], render_kw={'class': 'form-select search-select'})
     project_id = SelectField('Project', coerce=int, validators=[Optional()],

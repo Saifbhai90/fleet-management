@@ -1920,10 +1920,24 @@ def fund_transfer_add():
     form.to_person.choices = choices
     _populate_transfer_filters(form)
 
+    uid = session.get('user_id')
+    last_saved_transfer = None
+    if uid:
+        last_saved_transfer = (
+            FundTransfer.query.filter_by(created_by_user_id=uid)
+            .order_by(FundTransfer.created_at.desc(), FundTransfer.id.desc())
+            .first()
+        )
+
     if request.method == 'POST' and not form.validate_on_submit():
         _flash_fund_transfer_form_errors(form)
-        return render_template('finance/fund_transfer_form.html', form=form, title='New Fund Transfer',
-                               existing_attachment=None)
+        return render_template(
+            'finance/fund_transfer_form.html',
+            form=form,
+            title='New Fund Transfer',
+            existing_attachment=None,
+            last_saved_transfer=last_saved_transfer,
+        )
 
     if form.validate_on_submit():
         try:
@@ -1931,19 +1945,34 @@ def fund_transfer_add():
             to_type, to_id = _parse_person(form.to_person.data)
             if not from_type or not to_type:
                 flash('Please select both sender and receiver.', 'danger')
-                return render_template('finance/fund_transfer_form.html', form=form, title='New Fund Transfer',
-                           existing_attachment=None)
+                return render_template(
+                    'finance/fund_transfer_form.html',
+                    form=form,
+                    title='New Fund Transfer',
+                    existing_attachment=None,
+                    last_saved_transfer=last_saved_transfer,
+                )
 
             amount_val = Decimal(str(form.amount.data or 0))
             if amount_val <= Decimal('0'):
                 flash('Amount must be greater than 0.', 'danger')
-                return render_template('finance/fund_transfer_form.html', form=form, title='New Fund Transfer',
-                                       existing_attachment=None)
+                return render_template(
+                    'finance/fund_transfer_form.html',
+                    form=form,
+                    title='New Fund Transfer',
+                    existing_attachment=None,
+                    last_saved_transfer=last_saved_transfer,
+                )
             category_val = (form.category.data or '').strip()
             if not category_val:
                 flash('Category / Purpose is required.', 'danger')
-                return render_template('finance/fund_transfer_form.html', form=form, title='New Fund Transfer',
-                                       existing_attachment=None)
+                return render_template(
+                    'finance/fund_transfer_form.html',
+                    form=form,
+                    title='New Fund Transfer',
+                    existing_attachment=None,
+                    last_saved_transfer=last_saved_transfer,
+                )
 
             from_wallet = ensure_wallet_account(from_type, from_id)
             to_wallet = ensure_wallet_account(to_type, to_id)
@@ -1987,8 +2016,13 @@ def fund_transfer_add():
             db.session.rollback()
             flash(f'Error: {e}', 'danger')
 
-    return render_template('finance/fund_transfer_form.html', form=form, title='New Fund Transfer',
-                           existing_attachment=None)
+    return render_template(
+        'finance/fund_transfer_form.html',
+        form=form,
+        title='New Fund Transfer',
+        existing_attachment=None,
+        last_saved_transfer=last_saved_transfer,
+    )
 
 
 def fund_transfer_edit(pk):
