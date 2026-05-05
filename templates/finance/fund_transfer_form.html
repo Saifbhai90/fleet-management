@@ -596,15 +596,18 @@
         sugBox.style.display = 'block';
     }
 
+    function fetchFtDescSuggestions(q){
+        fetch('/api/ft-descriptions?q=' + encodeURIComponent(q || ''))
+            .then(function(r){ return r.json(); })
+            .then(function(items){ showSuggestions(items || [], q || ''); })
+            .catch(function(){});
+    }
+
+    descBox.addEventListener('focus', function(){ fetchFtDescSuggestions(this.value.trim()); });
     descBox.addEventListener('input', function(){
         clearTimeout(_dTimer);
         var q = this.value.trim();
-        if(!q){ sugBox.style.display='none'; return; }
-        _dTimer = setTimeout(function(){
-            fetch('/api/ft-descriptions?q=' + encodeURIComponent(q))
-                .then(function(r){ return r.json(); })
-                .then(function(items){ showSuggestions(items, q); });
-        }, 200);
+        _dTimer = setTimeout(function(){ fetchFtDescSuggestions(q); }, 200);
     });
 
     descBox.addEventListener('keydown', function(e){
@@ -620,7 +623,6 @@
     });
 
     descBox.addEventListener('blur', function(){ setTimeout(function(){ sugBox.style.display='none'; }, 150); });
-    descBox.addEventListener('focus', function(){ if(this.value.trim()) this.dispatchEvent(new Event('input')); });
 
     /* ── Auto-fill District/Project when Employee selected ── */
     function autoFillFromPerson(val){

@@ -2927,16 +2927,34 @@ def bank_directory_update_api(pk):
 
 
 def ft_description_suggestions_api():
-    """Return unique past Fund Transfer descriptions for autocomplete."""
-    q = (request.args.get('q') or '').strip().lower()
-    query = db.session.query(FundTransfer.description).filter(
+    """Unique past Fund Transfer descriptions — same rules as workspace transfer suggestions."""
+    auth_check = check_auth('fund_transfer')
+    if auth_check:
+        return jsonify([])
+    q = (request.args.get('q') or '').strip()
+    query = FundTransfer.query.filter(
         FundTransfer.description.isnot(None),
         FundTransfer.description != '',
-    ).distinct().order_by(FundTransfer.description)
+    )
     if q:
-        query = query.filter(FundTransfer.description.ilike(f'%{q}%'))
-    results = query.limit(30).all()
-    return jsonify([r[0] for r in results if r[0]])
+        words = [w.strip() for w in q.split() if w.strip()]
+        for w in words:
+            query = query.filter(FundTransfer.description.ilike(f'%{w}%'))
+    rows = query.order_by(FundTransfer.id.desc()).limit(200).all()
+    out = []
+    seen = set()
+    for r in rows:
+        d = (r.description or '').strip()
+        if not d:
+            continue
+        key = d.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(d)
+        if len(out) >= 20:
+            break
+    return jsonify(out)
 
 
 def ft_categories_list_api():
