@@ -351,16 +351,6 @@
     rmBtn.addEventListener('click', function(e){ e.stopPropagation(); clearPreview(); });
     if(fileChipRemove){ fileChipRemove.addEventListener('click', function(e){ e.stopPropagation(); clearPreview(); }); }
 
-    /* ── Move focus: To (Receiver) -> Amount ── */
-    if(toSel && amountInput){
-        toSel.addEventListener('change', function(){
-            setTimeout(function(){
-                amountInput.focus();
-                if (amountInput.select) amountInput.select();
-            }, 80);
-        });
-    }
-
     /* ── Bank Directory Panel ── */
     var bdList     = document.getElementById('bdList'),
         bdEmpty    = document.getElementById('bdEmpty'),
@@ -624,31 +614,52 @@
 
     descBox.addEventListener('blur', function(){ setTimeout(function(){ sugBox.style.display='none'; }, 150); });
 
-    /* ── Auto-fill District/Project when Employee selected ── */
-    function autoFillFromPerson(val){
-        if(!val) return;
+    /* ── Auto-fill District/Project when Employee selected ──
+       Returns a Promise so callers can run logic after Tom Select updates (avoids focus stealing Amount). */
+    function autoFillFromPerson(val, opts){
+        opts = opts || {};
+        var blurAfterSet = !!opts.blurAfterSet;
+        if(!val) return Promise.resolve();
         var m = val.match(/^emp-(\d+)$/);
-        if(!m) return;
-        fetch('/api/employee/' + m[1] + '/assignments')
+        if(!m) return Promise.resolve();
+        return fetch('/api/employee/' + m[1] + '/assignments')
             .then(function(r){ return r.json(); })
             .then(function(data){
                 var distSel = document.getElementById('district_id');
                 var projSel = document.getElementById('project_id');
                 if(distSel && data.districts && data.districts.length === 1){
                     var dv = String(data.districts[0].id);
-                    if(distSel.tomselect){ distSel.tomselect.setValue(dv); }
+                    if(distSel.tomselect){
+                        distSel.tomselect.setValue(dv, true);
+                        if(blurAfterSet) try { distSel.tomselect.blur(); } catch(e){}
+                    }
                     else { distSel.value = dv; }
                 }
                 if(projSel && data.projects && data.projects.length === 1){
                     var pv = String(data.projects[0].id);
-                    if(projSel.tomselect){ projSel.tomselect.setValue(pv); }
+                    if(projSel.tomselect){
+                        projSel.tomselect.setValue(pv, true);
+                        if(blurAfterSet) try { projSel.tomselect.blur(); } catch(e){}
+                    }
                     else { projSel.value = pv; }
                 }
             }).catch(function(){});
     }
+
     var fromSel = document.getElementById('from_person');
     if(fromSel){ fromSel.addEventListener('change', function(){ autoFillFromPerson(this.value); }); }
-    if(toSel){ toSel.addEventListener('change', function(){ autoFillFromPerson(this.value); }); }
+
+    /* To (Receiver) -> Amount: focus after auto-fill completes (Tom Select setValue was grabbing District). */
+    if(toSel && amountInput){
+        toSel.addEventListener('change', function(){
+            Promise.resolve(autoFillFromPerson(this.value, { blurAfterSet: true })).finally(function(){
+                setTimeout(function(){
+                    amountInput.focus();
+                    if(amountInput.select) amountInput.select();
+                }, 50);
+            });
+        });
+    }
 })();
 </script>
 {% endblock %}
