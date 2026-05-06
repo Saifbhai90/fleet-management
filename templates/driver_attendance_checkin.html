@@ -282,7 +282,9 @@
     }
     if (start === null && end === null) return { inWindow: true, label: '' };
     var now = new Date(Date.now() + (typeof _pktOffset!=='undefined'?_pktOffset:0));
-    var current = now.getUTCHours() * 60 + now.getUTCMinutes();
+    var current = (typeof pktMinutesFromMidnight === 'function')
+      ? pktMinutesFromMidnight(now)
+      : (now.getHours() * 60 + now.getMinutes());
     var inWindow = false;
     var label = (shiftLower === 'morning') ? ('Morning: ' + (win.morning_start || '') + ' – ' + (win.morning_end || '')) : ('Night: ' + (win.night_start || '') + ' – ' + (win.night_end || ''));
     if (start !== null && end !== null) {
@@ -616,8 +618,12 @@
     var ctx = cameraCanvas.getContext('2d');
     ctx.drawImage(cameraVideo, 0, 0);
     var now = new Date(Date.now() + (typeof _pktOffset!=='undefined'?_pktOffset:0));
-    var dateStr = now.getUTCDate().toString().padStart(2, '0') + '-' + (now.getUTCMonth() + 1).toString().padStart(2, '0') + '-' + now.getUTCFullYear();
-    var timeStr = now.getUTCHours().toString().padStart(2, '0') + ':' + now.getUTCMinutes().toString().padStart(2, '0') + ':' + now.getUTCSeconds().toString().padStart(2, '0');
+    var _od = (typeof pktOverlayDateTimeStrings === 'function')
+      ? pktOverlayDateTimeStrings(now)
+      : { dateStr: now.getDate().toString().padStart(2, '0') + '-' + (now.getMonth() + 1).toString().padStart(2, '0') + '-' + now.getFullYear(),
+          timeStr: now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0') + ':' + now.getSeconds().toString().padStart(2, '0') };
+    var dateStr = _od.dateStr;
+    var timeStr = _od.timeStr;
     var locStr = '';
     if (currentPosition && currentPosition.coords) {
       locStr = currentPosition.coords.latitude.toFixed(6) + ', ' + currentPosition.coords.longitude.toFixed(6);

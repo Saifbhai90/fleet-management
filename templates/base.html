@@ -4090,18 +4090,69 @@
     })();
     function updateDateTime() {
         var now = new Date(Date.now() + _pktOffset);
-        var days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-        var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-        var dateStr = days[now.getUTCDay()] + ', ' + months[now.getUTCMonth()] + ' ' + now.getUTCDate() + ', ' + now.getUTCFullYear();
-        var h = now.getUTCHours(), m = now.getUTCMinutes(), s = now.getUTCSeconds();
-        var ampm = h >= 12 ? 'PM' : 'AM';
-        h = h % 12; if(h === 0) h = 12;
-        var timeStr = ('0'+h).slice(-2) + ':' + ('0'+m).slice(-2) + ':' + ('0'+s).slice(-2) + ' ' + ampm;
+        /* Same instant as server clock sync; format in Asia/Karachi (not UTC getters — those wrongly showed UTC as "PKT"). */
+        var parts = new Intl.DateTimeFormat('en-US', {
+            timeZone: 'Asia/Karachi',
+            weekday: 'short',
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: true,
+            hourCycle: 'h12'
+        }).formatToParts(now);
+        var map = {};
+        for (var i = 0; i < parts.length; i++) {
+            var p = parts[i];
+            if (p.type !== 'literal') map[p.type] = p.value;
+        }
+        var dateStr = map.weekday + ', ' + map.month + ' ' + map.day + ', ' + map.year;
+        var ap = (map.dayPeriod || '').toUpperCase();
+        var timeStr = map.hour + ':' + map.minute + ':' + map.second + ' ' + ap;
         var el = document.getElementById("liveDateTime");
         if(el) el.innerHTML = '<i class="bi bi-calendar3 me-1"></i> ' + dateStr + ' | <i class="bi bi-clock me-1"></i> ' + timeStr + ' PKT';
     }
     setInterval(updateDateTime, 1000);
     updateDateTime();
+
+    /** Minutes since midnight (0–1439) in Asia/Karachi — matches Attendance Time Control HH:MM windows + server skew. */
+    window.pktMinutesFromMidnight = function(d) {
+        var parts = new Intl.DateTimeFormat('en-GB', {
+            timeZone: 'Asia/Karachi',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+        }).formatToParts(d);
+        var h = 0, m = 0;
+        for (var i = 0; i < parts.length; i++) {
+            if (parts[i].type === 'hour') h = parseInt(parts[i].value, 10) || 0;
+            if (parts[i].type === 'minute') m = parseInt(parts[i].value, 10) || 0;
+        }
+        return h * 60 + m;
+    };
+    /** DD-MM-YYYY + HH:MM:SS in Asia/Karachi for GPS+Camera photo overlay (not UTC). */
+    window.pktOverlayDateTimeStrings = function(d) {
+        var parts = new Intl.DateTimeFormat('en-GB', {
+            timeZone: 'Asia/Karachi',
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+        }).formatToParts(d);
+        var map = {};
+        for (var i = 0; i < parts.length; i++) {
+            if (parts[i].type !== 'literal') map[parts[i].type] = parts[i].value;
+        }
+        return {
+            dateStr: map.day + '-' + map.month + '-' + map.year,
+            timeStr: map.hour + ':' + map.minute + ':' + map.second
+        };
+    };
 
     // Live network quality (speed + signal bars)
     (function() {

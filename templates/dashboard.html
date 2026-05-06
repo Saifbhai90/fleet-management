@@ -282,15 +282,25 @@ document.addEventListener('DOMContentLoaded', function() {
             card.classList.add('entered');
         }, 60 + i * 55);
     });
-    /* Live clock */
+    /* Live clock — Asia/Karachi, same server skew as header (see base.html _pktOffset) */
     function updateClock() {
         var el = document.getElementById('dashClock');
         if (!el) return;
-        var now = new Date();
-        var h = now.getHours().toString().padStart(2,'0');
-        var m = now.getMinutes().toString().padStart(2,'0');
-        var s = now.getSeconds().toString().padStart(2,'0');
-        el.textContent = h + ':' + m + ':' + s;
+        var skew = (typeof _pktOffset === 'number') ? _pktOffset : 0;
+        var now = new Date(Date.now() + skew);
+        var parts = new Intl.DateTimeFormat('en-GB', {
+            timeZone: 'Asia/Karachi',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+        }).formatToParts(now);
+        var map = {};
+        for (var i = 0; i < parts.length; i++) {
+            var p = parts[i];
+            if (p.type !== 'literal') map[p.type] = p.value;
+        }
+        el.textContent = map.hour + ':' + map.minute + ':' + map.second;
     }
     updateClock();
     setInterval(updateClock, 1000);

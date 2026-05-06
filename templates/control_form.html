@@ -7,7 +7,7 @@
 {% block content %}
 {% set active_tab = request.args.get('settings_tab', 'attendance') %}
 {% set page_title = 'Attendance Time Control' %}
-{% set page_subtitle = 'Yahan attendance time windows set karein. Global Default sab par apply hota hai. Kisi Project / District / Vehicle ka alag time chahiye to override add karein.' %}
+{% set page_subtitle = 'Yahan attendance time windows Pakistan (Asia/Karachi) wall-clock par set karein — GPS/Camera check-in & check-out isi se match karte hain. Global Default sab par apply hota hai. Kisi Project / District / Vehicle ka alag time chahiye to override add karein.' %}
 {% if active_tab == 'freeze' %}
   {% set page_title = 'Freeze Data Control' %}
   {% set page_subtitle = 'Yahan date-wise freeze policy set karein taake add/edit entries controlled rahen.' %}
