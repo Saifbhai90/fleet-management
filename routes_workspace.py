@@ -3604,6 +3604,7 @@ def workspace_reports():
     district_id = request.args.get("district_id", type=int) or 0
     project_id = request.args.get("project_id", type=int) or 0
     active_tab = (request.args.get("tab") or "w-expense").strip() or "w-expense"
+    show_expense_summary = request.args.get("expense_summary", "").strip() in ("1", "true", "yes")
     if from_date and to_date and from_date > to_date:
         from_date, to_date = to_date, from_date
 
@@ -3685,6 +3686,7 @@ def workspace_reports():
         "opening_expense": opening_q.count(),
         "fuel_oil_opening": fuel_oil_opening_q.count(),
     }
+    source_total_records = sum(source_counts.values())
 
     tracked_total = sum(source_totals.values(), Decimal("0"))
     transfer_q = WorkspaceFundTransfer.query.filter(WorkspaceFundTransfer.employee_id == emp.id)
@@ -3717,10 +3719,12 @@ def workspace_reports():
         district_id=district_id,
         project_id=project_id,
         active_tab=active_tab,
+        show_expense_summary=show_expense_summary,
         districts=districts,
         projects=projects,
         source_totals=source_totals,
         source_counts=source_counts,
+        source_total_records=source_total_records,
         tracked_total=tracked_total,
         transfer_total=transfer_total,
         month_closes=month_closes,

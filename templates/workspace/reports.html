@@ -29,17 +29,31 @@
     <div class="tab-content ws-tab-content" id="workspaceReportTabContent">
       <div class="tab-pane fade {{ 'show active' if active_tab == 'w-expense' else '' }}" id="w-expense" role="tabpanel">
         <div class="ws-panel">
+          {% if not show_expense_summary %}
+          <div class="text-center py-4 px-3">
+            <h6 class="mb-2 fw-semibold">Expense Reports</h6>
+            <p class="text-muted small mb-4 mx-auto" style="max-width: 420px;">Workspace tracked expenses ka digest — Fuel, Oil, Maintenance, Employee, Opening aur Fuel/Oil Opening ek hi jagah filters aur KPI cards ke sath.</p>
+            <a href="{{ url_for('workspace_reports', tab='w-expense', expense_summary=1) }}" class="btn btn-primary btn-lg px-4 workspace-report-link">
+              <i class="bi bi-pie-chart-fill me-2"></i>Expense Summary
+            </a>
+            <div class="small text-muted mt-3">Is button se hi breakdown report khulti hai; filters aur export yahi screen par milenge.</div>
+          </div>
+          {% else %}
           <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
-            <h6 class="mb-0">Total Expenses Card Sources</h6>
-            <div class="d-flex align-items-center gap-2">
+            <div>
+              <h6 class="mb-0">Expense Summary</h6>
               <span class="text-muted small">Same sources as dashboard Total Expenses card</span>
-              <button class="btn btn-outline-secondary btn-sm" id="btnPrintReport" title="Print / Preview"><i class="bi bi-eye me-1"></i>Print / Preview</button>
-              <button class="btn btn-outline-success btn-sm" id="btnExportReport" title="Export to Excel"><i class="bi bi-file-earmark-excel me-1"></i>Export</button>
+            </div>
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+              <a href="{{ url_for('workspace_reports', tab='w-expense') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back</a>
+              <button type="button" class="btn btn-outline-secondary btn-sm" id="btnPrintReport" title="Print / Preview"><i class="bi bi-eye me-1"></i>Print / Preview</button>
+              <button type="button" class="btn btn-outline-success btn-sm" id="btnExportReport" title="Export to Excel"><i class="bi bi-file-earmark-excel me-1"></i>Export</button>
             </div>
           </div>
 
           <form method="get" class="row g-2 align-items-end mb-3">
             <input type="hidden" name="tab" value="w-expense">
+            <input type="hidden" name="expense_summary" value="1">
             <div class="col-lg-2 col-md-3">
               <label class="form-label form-label-sm mb-1">From Date</label>
               <input type="text" class="form-control form-control-sm datepicker" name="from_date" value="{{ from_date|ddmmyyyy if from_date else '' }}" placeholder="dd-mm-yyyy" autocomplete="off">
@@ -68,7 +82,7 @@
             </div>
             <div class="col-lg-2 col-md-12 d-flex gap-2">
               <button class="btn btn-primary btn-sm w-100" type="submit">Apply</button>
-              <a href="{{ url_for('workspace_reports', tab='w-expense') }}" class="btn btn-outline-secondary btn-sm">Reset</a>
+              <a href="{{ url_for('workspace_reports', tab='w-expense', expense_summary=1) }}" class="btn btn-outline-secondary btn-sm">Reset</a>
             </div>
           </form>
 
@@ -135,8 +149,16 @@
                 <tr><td>Opening Expenses</td><td class="text-end">{{ source_counts.opening_expense }}</td><td class="text-end">{{ '%.2f'|format((source_totals.opening_expense or 0)|float) }}</td></tr>
                 <tr><td>Fuel/Oil Opening (Pump Card & Credit)</td><td class="text-end">{{ source_counts.fuel_oil_opening }}</td><td class="text-end">{{ '%.2f'|format((source_totals.fuel_oil_opening or 0)|float) }}</td></tr>
               </tbody>
+              <tfoot class="table-secondary fw-semibold">
+                <tr>
+                  <td>Total</td>
+                  <td class="text-end">{{ source_total_records }}</td>
+                  <td class="text-end">{{ '%.2f'|format((tracked_total or 0)|float) }}</td>
+                </tr>
+              </tfoot>
             </table>
           </div>
+          {% endif %}
         </div>
       </div>
 
@@ -245,8 +267,8 @@ document.addEventListener('DOMContentLoaded', function(){
     });
   });
 
-  if(window.fleetPrintExport){
-    window.fleetPrintExport('workspaceTotalExpenseSourcesTable','Workspace Total Expenses Card Sources','Workspace_Total_Expenses_Card_Sources.csv');
+  if(window.fleetPrintExport && document.getElementById('workspaceTotalExpenseSourcesTable')){
+    window.fleetPrintExport('workspaceTotalExpenseSourcesTable','Workspace Expense Summary','Workspace_Expense_Summary.csv');
   }
 });
 </script>
