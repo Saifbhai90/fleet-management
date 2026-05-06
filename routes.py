@@ -22951,13 +22951,15 @@ def fuel_expense_list():
     district_id = request.args.get('district_id', type=int) or 0
     project_id = request.args.get('project_id', type=int) or 0
     vehicle_id = request.args.get('vehicle_id', type=int) or 0
+    q = (request.args.get('q') or '').strip()
     if request.method == 'POST':
         from_date = request.form.get('from_date')
         to_date = request.form.get('to_date')
         district_id = request.form.get('district_id', type=int) or 0
         project_id = request.form.get('project_id', type=int) or 0
         vehicle_id = request.form.get('vehicle_id', type=int) or 0
-        return redirect(url_for('fuel_expense_list', from_date=from_date or '', to_date=to_date or '', district_id=district_id, project_id=project_id, vehicle_id=vehicle_id))
+        q = (request.form.get('q') or '').strip()
+        return redirect(url_for('fuel_expense_list', from_date=from_date or '', to_date=to_date or '', district_id=district_id, project_id=project_id, vehicle_id=vehicle_id, q=q))
     from_d = parse_date(from_date) if from_date else today
     to_d = parse_date(to_date) if to_date else today
     if from_d and to_d and from_d > to_d:
@@ -23007,6 +23009,25 @@ def fuel_expense_list():
         query = query.filter(FuelExpense.project_id == project_id)
     if vehicle_id:
         query = query.filter(FuelExpense.vehicle_id == vehicle_id)
+    if q:
+        like_q = f"%{q}%"
+        query = query.filter(
+            db.or_(
+                FuelExpense.slip_no.ilike(like_q),
+                FuelExpense.payment_type.ilike(like_q),
+                FuelExpense.fuel_type.ilike(like_q),
+                db.cast(FuelExpense.id, db.String).ilike(like_q),
+                db.cast(FuelExpense.current_reading, db.String).ilike(like_q),
+                db.cast(FuelExpense.previous_reading, db.String).ilike(like_q),
+                db.cast(FuelExpense.amount, db.String).ilike(like_q),
+                db.cast(FuelExpense.liters, db.String).ilike(like_q),
+                db.cast(FuelExpense.km, db.String).ilike(like_q),
+                FuelExpense.vehicle.has(Vehicle.vehicle_no.ilike(like_q)),
+                FuelExpense.project.has(Project.name.ilike(like_q)),
+                FuelExpense.district.has(District.name.ilike(like_q)),
+                FuelExpense.workspace_pump.has(WorkspaceParty.name.ilike(like_q)),
+            )
+        )
     query = query.order_by(
         FuelExpense.fueling_date.asc(),
         db.case((FuelExpense.current_reading.is_(None), 1), else_=0).asc(),
@@ -23043,6 +23064,7 @@ def fuel_expense_list():
                            from_date=from_d, to_date=to_d, totals=totals,
                            pagination=pagination, page=page, per_page=per_page,
                            district_id=district_id, project_id=project_id, vehicle_id=vehicle_id,
+                           q=q,
                            cleanup_status=cleanup_status,
                            show_upload_media_columns=show_upload_media_columns,
                            location_cascade=_fuel_expense_location_cascade_dict())
@@ -23799,9 +23821,11 @@ def fuel_expense_edit(pk):
         return _guard
     workspace_employee_id = _workspace_employee_id_for_expenses()
     rec = FuelExpense.query.get_or_404(pk)
+    default_back = url_for('fuel_expense_list')
+    back_url = _safe_internal_path(request.args.get('return_to') or request.form.get('return_to'), default_back)
     if workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
         flash('This expense does not belong to selected workspace employee.', 'danger')
-        return redirect(url_for('fuel_expense_list'))
+        return redirect(back_url)
     form = FuelExpenseForm(obj=rec)
     form.expense_by.choices = _workspace_expense_by_choices(workspace_employee_id)
     form.district_id.choices = [(0, '-- Select District --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
@@ -24012,7 +24036,7 @@ def fuel_expense_edit(pk):
                     app.logger.exception('Fuel async attachment queue save (edit)')
                     flash('Fuel update save ho gayi lekin files queue me add nahi ho sakin.', 'warning')
             flash('Fuel expense updated.', 'success')
-            return redirect(url_for('fuel_expense_list'))
+            return redirect(back_url)
         except Exception:
             db.session.rollback()
             raise
@@ -24021,6 +24045,8 @@ def fuel_expense_edit(pk):
         form=form,
         title='Edit Fuel Expense',
         rec=rec,
+        back_url=back_url,
+        return_to_path=request.full_path,
         location_cascade=_fuel_expense_location_cascade_dict(),
     )
 
@@ -24053,9 +24079,11 @@ def fuel_expense_delete(pk):
         return _guard
     workspace_employee_id = _workspace_employee_id_for_expenses()
     rec = FuelExpense.query.get_or_404(pk)
+    default_back = url_for('fuel_expense_list')
+    back_url = _safe_internal_path(request.args.get('return_to'), default_back)
     if workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
         flash('This expense does not belong to selected workspace employee.', 'danger')
-        return redirect(url_for('fuel_expense_list'))
+        return redirect(back_url)
     attachment_paths = [att.file_path for att in rec.attachments.all() if att and getattr(att, 'file_path', None)]
     rec_id = rec.id
     initiated_by_user_id = session.get('user_id')
@@ -24067,7 +24095,7 @@ def fuel_expense_delete(pk):
     db.session.commit()
     _start_expense_delete_cleanup_worker('fuel', rec_id, attachment_paths, employee_id=workspace_employee_id, initiated_by_user_id=initiated_by_user_id)
     flash('Fuel expense deleted. Media cleanup background me continue ho rahi hai.', 'success')
-    return redirect(url_for('fuel_expense_list'))
+    return redirect(back_url)
 
 
 @app.route('/workspace/expense-delete-cleanup/<int:job_id>/retry')

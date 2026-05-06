@@ -40,6 +40,7 @@
     <div class="card-body">
       <form method="POST" action="{{ url_for('fuel_expense_list') }}" class="row g-3 align-items-end" id="fuelListFilterForm">
         {{ form.hidden_tag() }}
+        <input type="hidden" name="q" id="fuelListFilterQuery" value="{{ q or '' }}">
         <div class="col-md-2">
           <label class="form-label small">From Date</label>
           {{ form.from_date(class="form-control form-control-sm datepicker") }}
@@ -97,7 +98,7 @@
   <div class="card fuel-list-card overflow-hidden">
     <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
       <span class="fw-semibold">Fuel Expense from {{ from_date|ddmmyyyy }} to {{ to_date|ddmmyyyy }}</span>
-      <input type="text" id="fuelExpenseSearch" class="form-control form-control-sm bg-white text-dark" placeholder="Search..." style="max-width: 220px;" autocomplete="off">
+      <input type="text" id="fuelExpenseSearch" class="form-control form-control-sm bg-white text-dark" placeholder="Search all pages..." style="max-width: 240px;" autocomplete="off" value="{{ q or '' }}">
     </div>
     <div class="card-body p-0">
       {% set umc = show_upload_media_columns|default(true) %}
@@ -212,12 +213,12 @@
                     <i class="bi bi-eye"></i>
                   </button>
                   <div class="expense-view-popover d-none border rounded-2 bg-white shadow p-2" style="min-width: 7.25rem;">
-                    <a class="btn btn-primary btn-sm w-100 mb-1 py-1" href="{{ url_for('fuel_expense_view', pk=r.id) }}">Invoice</a>
-                    <a class="btn btn-outline-success btn-sm w-100 py-1" href="{{ url_for('fuel_expense_media', pk=r.id) }}">Media</a>
+                    <a class="btn btn-primary btn-sm w-100 mb-1 py-1" href="{{ url_for('fuel_expense_view', pk=r.id, return_to=request.full_path) }}">Invoice</a>
+                    <a class="btn btn-outline-success btn-sm w-100 py-1" href="{{ url_for('fuel_expense_media', pk=r.id, return_to=request.full_path) }}">Media</a>
                   </div>
                 </div>
-                <a href="{{ url_for('fuel_expense_edit', pk=r.id) }}" class="btn btn-outline-primary btn-sm" title="Edit"><i class="bi bi-pencil"></i></a>
-                <form action="{{ url_for('fuel_expense_delete', pk=r.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Delete this fuel expense entry?');">
+                <a href="{{ url_for('fuel_expense_edit', pk=r.id, return_to=request.full_path) }}" class="btn btn-outline-primary btn-sm" title="Edit"><i class="bi bi-pencil"></i></a>
+                <form action="{{ url_for('fuel_expense_delete', pk=r.id, return_to=request.full_path) }}" method="POST" class="d-inline" onsubmit="return confirm('Delete this fuel expense entry?');">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                   <button type="submit" class="btn btn-outline-danger btn-sm" title="Delete"><i class="bi bi-trash"></i></button>
                 </form>
@@ -483,50 +484,36 @@
 <script>
 (function() {
   var searchInput = document.getElementById('fuelExpenseSearch');
-  var table = document.getElementById('fuelExpenseTable');
-  if (searchInput && table) {
-    var tbody = table.querySelector('tbody');
-    var avgFuelPriceCell = table.querySelector('#fuelExpenseAvgPriceCell');
-    function updateVisibleAvgFuelPrice(dataRows) {
-      if (!avgFuelPriceCell) return;
-      var totalAmount = 0;
-      var totalLiters = 0;
-      dataRows.forEach(function(row) {
-        if (row.style.display === 'none') return;
-        var litersRaw = (row.getAttribute('data-liters') || '').trim();
-        var amountRaw = (row.getAttribute('data-amount') || '').trim();
-        var liters = Number(litersRaw);
-        var amount = Number(amountRaw);
-        if (!Number.isFinite(liters) || !Number.isFinite(amount) || liters <= 0) return;
-        totalLiters += liters;
-        totalAmount += amount;
-      });
-      if (totalLiters > 0) {
-        avgFuelPriceCell.textContent = (totalAmount / totalLiters).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-      } else {
-        avgFuelPriceCell.textContent = '-';
-      }
+  var filterQueryInput = document.getElementById('fuelListFilterQuery');
+  if (searchInput) {
+    var searchTimer = null;
+    var searchDelayMs = 450;
+    var initialQuery = (searchInput.value || '').trim();
+    function navigateWithSearch(qVal) {
+      var params = new URLSearchParams(window.location.search || '');
+      if (qVal) params.set('q', qVal);
+      else params.delete('q');
+      params.set('page', '1');
+      var next = window.location.pathname + (params.toString() ? ('?' + params.toString()) : '');
+      window.location.assign(next);
     }
-    if (tbody) {
-      var dataRows = Array.from(tbody.querySelectorAll('tr.fuel-expense-row'));
-      var noDataRow = tbody.querySelector('tr#fuelExpenseNoDataRow') || tbody.querySelector('tr[colspan]') || null;
-      searchInput.addEventListener('input', function() {
-        var q = this.value.trim();
-        var visible = 0;
-        dataRows.forEach(function(row) {
-          var show = !q || window.fleetMultiWordMatch(row.innerText || row.textContent, q);
-          row.style.display = show ? '' : 'none';
-          var ex = row.nextElementSibling;
-          if (ex && ex.classList && ex.classList.contains('fuel-upload-expand-row')) {
-            ex.classList.add('d-none');
-          }
-          if (show) visible++;
-        });
-        if (noDataRow) noDataRow.style.display = (dataRows.length === 0 || (q && visible === 0)) ? '' : 'none';
-        updateVisibleAvgFuelPrice(dataRows);
-      });
-      updateVisibleAvgFuelPrice(dataRows);
-    }
+    searchInput.addEventListener('input', function() {
+      var qVal = (searchInput.value || '').trim();
+      if (filterQueryInput) filterQueryInput.value = qVal;
+      window.clearTimeout(searchTimer);
+      searchTimer = window.setTimeout(function() {
+        if (qVal === initialQuery) return;
+        navigateWithSearch(qVal);
+      }, searchDelayMs);
+    });
+    searchInput.addEventListener('keydown', function(e) {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      window.clearTimeout(searchTimer);
+      var qVal = (searchInput.value || '').trim();
+      if (filterQueryInput) filterQueryInput.value = qVal;
+      if (qVal !== initialQuery) navigateWithSearch(qVal);
+    });
   }
 
   var activeEls = null;
@@ -663,7 +650,7 @@ if (window.fleetPrintExport) window.fleetPrintExport('fuelExpenseTable', 'Fuel E
       Showing {{ ((pagination.page - 1) * per_page) + 1 }}–{{ [pagination.page * per_page, pagination.total] | min }} of {{ pagination.total }} records
     </small>
     <select class="form-select form-select-sm" style="width:auto;"
-            onchange="window.location.href='{{ url_for('fuel_expense_list', from_date=from_date, to_date=to_date, district_id=district_id, project_id=project_id, vehicle_id=vehicle_id, page=1) }}&per_page='+this.value">
+            onchange="window.location.href='{{ url_for('fuel_expense_list', from_date=from_date, to_date=to_date, district_id=district_id, project_id=project_id, vehicle_id=vehicle_id, q=q, page=1) }}&per_page='+this.value">
       {% for n in [25, 50, 100, 200] %}
         <option value="{{ n }}" {% if per_page == n %}selected{% endif %}>{{ n }} / page</option>
       {% endfor %}
@@ -672,19 +659,19 @@ if (window.fleetPrintExport) window.fleetPrintExport('fuelExpenseTable', 'Fuel E
   <nav>
     <ul class="pagination pagination-sm mb-0">
       <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
-        <a class="page-link" href="{{ url_for('fuel_expense_list', from_date=from_date, to_date=to_date, district_id=district_id, project_id=project_id, vehicle_id=vehicle_id, page=pagination.prev_num, per_page=per_page) }}">&laquo;</a>
+        <a class="page-link" href="{{ url_for('fuel_expense_list', from_date=from_date, to_date=to_date, district_id=district_id, project_id=project_id, vehicle_id=vehicle_id, q=q, page=pagination.prev_num, per_page=per_page) }}">&laquo;</a>
       </li>
       {% for p in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
         {% if p %}
           <li class="page-item {% if p == pagination.page %}active{% endif %}">
-            <a class="page-link" href="{{ url_for('fuel_expense_list', from_date=from_date, to_date=to_date, district_id=district_id, project_id=project_id, vehicle_id=vehicle_id, page=p, per_page=per_page) }}">{{ p }}</a>
+            <a class="page-link" href="{{ url_for('fuel_expense_list', from_date=from_date, to_date=to_date, district_id=district_id, project_id=project_id, vehicle_id=vehicle_id, q=q, page=p, per_page=per_page) }}">{{ p }}</a>
           </li>
         {% else %}
           <li class="page-item disabled"><span class="page-link">…</span></li>
         {% endif %}
       {% endfor %}
       <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
-        <a class="page-link" href="{{ url_for('fuel_expense_list', from_date=from_date, to_date=to_date, district_id=district_id, project_id=project_id, vehicle_id=vehicle_id, page=pagination.next_num, per_page=per_page) }}">&raquo;</a>
+        <a class="page-link" href="{{ url_for('fuel_expense_list', from_date=from_date, to_date=to_date, district_id=district_id, project_id=project_id, vehicle_id=vehicle_id, q=q, page=pagination.next_num, per_page=per_page) }}">&raquo;</a>
       </li>
     </ul>
   </nav>

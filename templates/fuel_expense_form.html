@@ -129,6 +129,9 @@
   <form method="POST" action="" id="fuelExpenseForm" data-record-id="{{ rec.id if rec else '' }}" enctype="multipart/form-data">
     <script type="application/json" id="locationCascadeData">{{ location_cascade|tojson }}</script>
     {{ form.hidden_tag() }}
+    {% if return_to_path is defined and return_to_path %}
+    <input type="hidden" name="return_to" value="{{ return_to_path }}">
+    {% endif %}
 
     <div class="row g-3 align-items-start">
       <div class="col-xl-8">
@@ -281,7 +284,7 @@
             </div>
           </div>
           <div class="action-bar">
-            <a href="{{ url_for('fuel_expense_list') }}" class="btn btn-outline-secondary btn-cancel">Cancel</a>
+            <a href="{{ back_url if back_url is defined else url_for('fuel_expense_list') }}" class="btn btn-outline-secondary btn-cancel">Cancel</a>
             {% if not rec %}
             <button type="submit" name="_save_action" value="save_list" class="btn btn-outline-primary btn-save">
               <i class="bi bi-list-ul me-1"></i>Save to List
