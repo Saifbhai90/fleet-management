@@ -22951,15 +22951,15 @@ def fuel_expense_list():
     district_id = request.args.get('district_id', type=int) or 0
     project_id = request.args.get('project_id', type=int) or 0
     vehicle_id = request.args.get('vehicle_id', type=int) or 0
-    q = (request.args.get('q') or '').strip()
+    search_q = (request.args.get('q') or '').strip()
     if request.method == 'POST':
         from_date = request.form.get('from_date')
         to_date = request.form.get('to_date')
         district_id = request.form.get('district_id', type=int) or 0
         project_id = request.form.get('project_id', type=int) or 0
         vehicle_id = request.form.get('vehicle_id', type=int) or 0
-        q = (request.form.get('q') or '').strip()
-        return redirect(url_for('fuel_expense_list', from_date=from_date or '', to_date=to_date or '', district_id=district_id, project_id=project_id, vehicle_id=vehicle_id, q=q))
+        search_q = (request.form.get('q') or '').strip()
+        return redirect(url_for('fuel_expense_list', from_date=from_date or '', to_date=to_date or '', district_id=district_id, project_id=project_id, vehicle_id=vehicle_id, q=search_q))
     from_d = parse_date(from_date) if from_date else today
     to_d = parse_date(to_date) if to_date else today
     if from_d and to_d and from_d > to_d:
@@ -22973,10 +22973,10 @@ def fuel_expense_list():
         projects = Project.query.join(project_district).filter(project_district.c.district_id == district_id).order_by(Project.name).all()
         form.project_id.choices = [(0, '-- Select Project --')] + [(p.id, p.name) for p in projects]
     if project_id:
-        q = Vehicle.query.filter(Vehicle.project_id == project_id)
+        veh_q = Vehicle.query.filter(Vehicle.project_id == project_id)
         if district_id:
-            q = q.filter(Vehicle.district_id == district_id)
-        vehicles = q.order_by(Vehicle.vehicle_no).all()
+            veh_q = veh_q.filter(Vehicle.district_id == district_id)
+        vehicles = veh_q.order_by(Vehicle.vehicle_no).all()
         form.vehicle_id.choices = [(0, '-- All Vehicles --')] + [(v.id, v.vehicle_no) for v in vehicles]
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 50, type=int)
@@ -23009,8 +23009,8 @@ def fuel_expense_list():
         query = query.filter(FuelExpense.project_id == project_id)
     if vehicle_id:
         query = query.filter(FuelExpense.vehicle_id == vehicle_id)
-    if q:
-        like_q = f"%{q}%"
+    if search_q:
+        like_q = f"%{search_q}%"
         query = query.filter(
             db.or_(
                 FuelExpense.slip_no.ilike(like_q),
@@ -23064,7 +23064,7 @@ def fuel_expense_list():
                            from_date=from_d, to_date=to_d, totals=totals,
                            pagination=pagination, page=page, per_page=per_page,
                            district_id=district_id, project_id=project_id, vehicle_id=vehicle_id,
-                           q=q,
+                           q=search_q,
                            cleanup_status=cleanup_status,
                            show_upload_media_columns=show_upload_media_columns,
                            location_cascade=_fuel_expense_location_cascade_dict())
