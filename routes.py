@@ -17581,6 +17581,244 @@ def api_attendance_has_gps_checkin():
     rec = _open_gps_driver_attendance_for_checkout(driver_id, today)
     return jsonify({'has_gps_checkin': bool(rec)})
 
+
+def _attendance_media_payload(rec, kind):
+    path_val = ''
+    time_val = None
+    if kind == 'checkin':
+        path_val = (rec.check_in_photo_path or '').strip()
+        time_val = rec.check_in
+    else:
+        path_val = (rec.check_out_photo_path or '').strip()
+        time_val = rec.check_out
+    media_url = media_url_filter(path_val) if path_val else None
+    return {
+        'has_media': bool(path_val),
+        'media_path': path_val or None,
+        'media_url': media_url,
+        'uploaded': bool(path_val),
+        'time': time_val.strftime('%H:%M') if time_val else None,
+    }
+
+
+@app.route('/api/attendance/latest-gps-media')
+def api_attendance_latest_gps_media():
+    """Latest current-date GPS attendance media/status for selected driver."""
+    driver_id = request.args.get('driver_id', type=int)
+    kind = (request.args.get('kind') or 'checkin').strip().lower()
+    if kind not in ('checkin', 'checkout'):
+        kind = 'checkin'
+    if not driver_id:
+        return jsonify({'ok': False, 'message': 'Driver is required.'}), 400
+    rec_date = request.args.get('attendance_date', '').strip()
+    if rec_date:
+        try:
+            use_date = datetime.strptime(rec_date, '%d-%m-%Y').date()
+        except ValueError:
+            use_date = _attendance_local_date()
+    else:
+        use_date = _attendance_local_date()
+    q = DriverAttendance.query.filter(
+        DriverAttendance.driver_id == driver_id,
+        DriverAttendance.attendance_date == use_date,
+    )
+    rec = q.order_by(DriverAttendance.attendance_segment.desc(), DriverAttendance.id.desc()).first()
+    if not rec:
+        return jsonify({
+            'ok': True,
+            'has_record': False,
+            'pending_text': 'Check IN pending' if kind == 'checkin' else 'Check-out pending',
+            'attendance_date': use_date.strftime('%d-%m-%Y'),
+            'kind': kind,
+        })
+    media = _attendance_media_payload(rec, kind)
+    if kind == 'checkout' and not rec.check_in:
+        pending_text = 'Check IN pending'
+    elif kind == 'checkout' and rec.check_in and not rec.check_out:
+        pending_text = 'Check-out pending'
+    elif kind == 'checkin' and not rec.check_in:
+        pending_text = 'Check IN pending'
+    else:
+        pending_text = None if media.get('has_media') else ('Check IN pending' if kind == 'checkin' else 'Check-out pending')
+    return jsonify({
+        'ok': True,
+        'has_record': True,
+        'attendance_date': use_date.strftime('%d-%m-%Y'),
+        'kind': kind,
+        'check_in_time': rec.check_in.strftime('%H:%M') if rec.check_in else None,
+        'check_out_time': rec.check_out.strftime('%H:%M') if rec.check_out else None,
+        'status': rec.status or '',
+        'remarks': rec.remarks or '',
+        'pending_text': pending_text,
+        'media': media,
+    })
+
+
+def _upload_attendance_photo_from_form_or_b64(photo_file, photo_b64, fail_msg):
+    photo_path = None
+    if photo_file and photo_file.filename:
+        photo_file.stream.seek(0)
+        photo_path = upload_image_file(photo_file, folder="attendance")
+    elif photo_b64 and photo_b64.startswith('data:image'):
+        import base64
+        _, raw_b64 = photo_b64.split(',', 1)
+        data = base64.b64decode(raw_b64)
+        photo_path = upload_image_bytes(data, folder="attendance")
+    if not photo_path:
+        raise ValueError(fail_msg)
+    return photo_path
+
+
+@app.route('/api/attendance/gps-checkin-submit', methods=['POST'])
+def api_attendance_gps_checkin_submit():
+    """Async GPS+Camera check-in upload endpoint used by web UI retry flow."""
+    try:
+        body = request.get_json(silent=True) or {}
+        driver_id = int(body.get('driver_id') or 0)
+        parking_station_id = int(body.get('parking_station_id') or 0)
+        lat_val = float(body.get('latitude')) if body.get('latitude') not in (None, '') else None
+        lng_val = float(body.get('longitude')) if body.get('longitude') not in (None, '') else None
+        photo_b64 = (body.get('photo_base64') or '').strip()
+        if not driver_id:
+            return jsonify({'ok': False, 'message': 'Please select a driver.'}), 400
+        if not parking_station_id:
+            return jsonify({'ok': False, 'message': 'Please select a parking station.'}), 400
+        driver = Driver.query.options(joinedload(Driver.vehicle)).get(driver_id)
+        if not driver:
+            return jsonify({'ok': False, 'message': 'Invalid driver.'}), 404
+        today = _attendance_local_date()
+        if _driver_marked_duty_off_no_checkin(driver_id, today):
+            return jsonify({'ok': False, 'message': 'Driver duty off hai; GPS/Camera attendance allowed nahi.'}), 400
+        cap = _vehicle_capacity_value(driver.vehicle)
+        if _driver_has_open_segment(driver_id, today):
+            return jsonify({'ok': False, 'message': 'Check-out pending hai. Pehle previous session close karein.'}), 400
+        if _count_driver_segments_with_checkin(driver_id, today) >= cap:
+            return jsonify({'ok': False, 'message': f'Aaj maximum {cap} GPS check-in allowed hain.'}), 400
+        blocked_msg = _manual_checkin_blocked_by_vehicle_rules(driver_id, driver.vehicle, today)
+        if blocked_msg:
+            return jsonify({'ok': False, 'message': blocked_msg}), 400
+        now = pk_now()
+        now_time = _attendance_local_time()
+        _ci_vehicle_id = int(body.get('vehicle_id') or 0) or None
+        _ci_project_id = int(body.get('project_id') or 0) or None
+        tw = _get_effective_time_window(driver=driver, vehicle_id=_ci_vehicle_id, project_id=_ci_project_id)
+
+        def _in_window(t, start_t, end_t):
+            if start_t is None or end_t is None:
+                return True
+            if end_t < start_t:
+                return t >= start_t or t <= end_t
+            return start_t <= t <= end_t
+
+        shift = (driver.shift or '').strip().lower()
+        if shift == 'morning' and not _in_window(now_time, tw['morning_start'], tw['morning_end']):
+            return jsonify({'ok': False, 'message': 'Morning shift time-window allowed nahi.'}), 400
+        if shift == 'night' and not _in_window(now_time, tw['night_start'], tw['night_end']):
+            return jsonify({'ok': False, 'message': 'Night shift time-window allowed nahi.'}), 400
+        try:
+            photo_path = _upload_attendance_photo_from_form_or_b64(None, photo_b64, 'Image required')
+        except Exception:
+            return jsonify({'ok': False, 'message': 'Image upload failed. Network check karein.'}), 502
+        rec = DriverAttendance(
+            driver_id=driver_id,
+            attendance_date=today,
+            attendance_segment=_next_attendance_segment(driver_id, today),
+            status='Present',
+            check_in=now.time(),
+            project_id=driver.project_id,
+            parking_station_id=parking_station_id,
+            check_in_latitude=lat_val,
+            check_in_longitude=lng_val,
+            check_in_photo_path=photo_path,
+            remarks='Ye GPS + Camera se attendance lagi hai.',
+        )
+        db.session.add(rec)
+        db.session.commit()
+        return jsonify({
+            'ok': True,
+            'message': 'Check-in upload ho gaya.',
+            'record': {
+                'check_in_time': rec.check_in.strftime('%H:%M') if rec.check_in else None,
+                'media': _attendance_media_payload(rec, 'checkin'),
+            },
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'ok': False, 'message': f'Upload failed: {str(e)}'}), 500
+
+
+@app.route('/api/attendance/gps-checkout-submit', methods=['POST'])
+def api_attendance_gps_checkout_submit():
+    """Async GPS+Camera check-out upload endpoint used by web UI retry flow."""
+    try:
+        body = request.get_json(silent=True) or {}
+        driver_id = int(body.get('driver_id') or 0)
+        parking_station_id = int(body.get('parking_station_id') or 0)
+        lat_val = float(body.get('latitude')) if body.get('latitude') not in (None, '') else None
+        lng_val = float(body.get('longitude')) if body.get('longitude') not in (None, '') else None
+        photo_b64 = (body.get('photo_base64') or '').strip()
+        if not driver_id:
+            return jsonify({'ok': False, 'message': 'Please select a driver.'}), 400
+        if not parking_station_id:
+            return jsonify({'ok': False, 'message': 'Please select a parking station.'}), 400
+        driver = Driver.query.get(driver_id)
+        if not driver:
+            return jsonify({'ok': False, 'message': 'Invalid driver.'}), 404
+        today = _attendance_local_date()
+        existing = _open_gps_driver_attendance_for_checkout(driver_id, today)
+        if not existing:
+            return jsonify({'ok': False, 'message': 'Current date ke liye GPS check-in nahi mila.'}), 400
+        now = pk_now()
+        now_time = _attendance_local_time()
+        _co_vehicle_id = int(body.get('vehicle_id') or 0) or None
+        _co_project_id = int(body.get('project_id') or 0) or None
+        tw = _get_effective_time_window(driver=driver, vehicle_id=_co_vehicle_id, project_id=_co_project_id)
+        mco_s = tw.get('morning_checkout_start') or tw.get('night_start')
+        mco_e = tw.get('morning_checkout_end') or tw.get('night_end')
+        nco_s = tw.get('night_checkout_start') or tw.get('morning_start')
+        nco_e = tw.get('night_checkout_end') or tw.get('morning_end')
+
+        def _in_window(t, start_t, end_t):
+            if start_t is None or end_t is None:
+                return True
+            if end_t < start_t:
+                return t >= start_t or t <= end_t
+            return start_t <= t <= end_t
+
+        shift = (driver.shift or '').strip().lower()
+        if shift == 'morning' and not _in_window(now_time, mco_s, mco_e):
+            return jsonify({'ok': False, 'message': 'Morning check-out time-window allowed nahi.'}), 400
+        if shift == 'night' and not _in_window(now_time, nco_s, nco_e):
+            return jsonify({'ok': False, 'message': 'Night check-out time-window allowed nahi.'}), 400
+        try:
+            photo_path = _upload_attendance_photo_from_form_or_b64(None, photo_b64, 'Image required')
+        except Exception:
+            return jsonify({'ok': False, 'message': 'Image upload failed. Network check karein.'}), 502
+        check_out_time = now.time()
+        is_overnight = (existing.attendance_date != today)
+        if not is_overnight and existing.check_in is not None and check_out_time <= existing.check_in:
+            return jsonify({'ok': False, 'message': 'Check-out time check-in se pehle ya barabar nahi ho sakta.'}), 400
+        existing.check_out = check_out_time
+        existing.check_out_date = today
+        existing.check_out_latitude = lat_val
+        existing.check_out_longitude = lng_val
+        existing.check_out_photo_path = photo_path
+        existing.updated_at = now
+        if not existing.remarks or 'GPS' not in (existing.remarks or ''):
+            existing.remarks = (existing.remarks or '').rstrip() + ' | Check-out GPS+Cam'
+        db.session.commit()
+        return jsonify({
+            'ok': True,
+            'message': 'Check-out upload ho gaya.',
+            'record': {
+                'check_out_time': existing.check_out.strftime('%H:%M') if existing.check_out else None,
+                'media': _attendance_media_payload(existing, 'checkout'),
+            },
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'ok': False, 'message': f'Upload failed: {str(e)}'}), 500
+
 @app.route('/driver-attendance/checkin', methods=['GET', 'POST'])
 def driver_attendance_checkin():
     """Geofenced check-in: District → Project → Vehicle → Parking (auto) → Shift → Driver. Then location + selfie."""

@@ -23,6 +23,10 @@
   .gps-attendance-page .btn-mark:disabled { box-shadow: none; }
   .gps-attendance-page .step-num { width: 22px; height: 22px; border-radius: 50%; background: linear-gradient(135deg, #0d6efd, #0a58ca); color: white; font-size: 0.7rem; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; margin-right: 6px; }
   .gps-attendance-page .section-title { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin-bottom: 0.4rem; }
+  .gps-attendance-page .media-preview-wrap { border: 1px dashed #cbd5e1; border-radius: 10px; padding: 0.5rem; background: #f8fafc; text-align: center; }
+  .gps-attendance-page .media-preview-wrap img { width: 100%; max-height: 180px; object-fit: cover; border-radius: 8px; }
+  .gps-attendance-page .media-fallback { font-size: 0.85rem; color: #64748b; padding: 1.25rem 0.25rem; }
+  .gps-attendance-page .upload-meta { font-size: 0.78rem; color: #475569; line-height: 1.35; }
   #cameraModal { z-index: 1090 !important; }
   #cameraModal + .modal-backdrop { z-index: 1089 !important; }
   #cameraModal .modal-dialog { max-width: 480px; margin: 0.5rem auto; }
@@ -134,6 +138,19 @@
               <i class="bi bi-camera-fill me-2"></i>Mark Attendance
             </button>
           </div>
+          <hr class="my-3">
+          <div class="section-title"><i class="bi bi-image me-1"></i>Latest Check-in image</div>
+          <div class="media-preview-wrap mb-2">
+            <img id="checkinPreviewImage" class="d-none" alt="Latest check-in">
+            <div id="checkinPreviewFallback" class="media-fallback">Driver select karein.</div>
+          </div>
+          <div id="checkinUploadStatus" class="status-box neutral mb-2">
+            Upload status: Waiting for driver selection.
+          </div>
+          <div id="checkinUploadMeta" class="upload-meta mb-2"></div>
+          <button type="button" id="btnRetryPendingCheckin" class="btn btn-outline-primary btn-sm d-none">
+            <i class="bi bi-arrow-clockwise me-1"></i>Retry Upload (Current Date)
+          </button>
         </div>
       </div>
     </div>
@@ -226,6 +243,11 @@
   var formPhotoBase64 = document.getElementById('formPhotoBase64');
   var formVehicleId = document.getElementById('formVehicleId');
   var formProjectId = document.getElementById('formProjectId');
+  var checkinPreviewImage = document.getElementById('checkinPreviewImage');
+  var checkinPreviewFallback = document.getElementById('checkinPreviewFallback');
+  var checkinUploadStatus = document.getElementById('checkinUploadStatus');
+  var checkinUploadMeta = document.getElementById('checkinUploadMeta');
+  var btnRetryPendingCheckin = document.getElementById('btnRetryPendingCheckin');
 
   var currentPosition = null;
   var parkingCoords = null;
@@ -239,6 +261,7 @@
   var allVehiclesByProject = {{ all_vehicles_by_project | tojson }};
   var serverAutoShift = {{ auto_shift | tojson }};
   var timeWindow = {};
+  var PENDING_PREFIX = 'gps-attendance:checkin:';
 
   function syncTS(el, opts, disabled) {
     var ts = el.tomselect;
@@ -490,6 +513,7 @@
     fetchTimeWindow();
     updateDistanceUI();
     if (driverSelect.value && parkingLat.value && parkingLng.value) fetchLocation();
+    refreshCheckinMediaPanel();
   }
 
   function fetchLocation() {
@@ -532,6 +556,107 @@
 
   btnRetryLocation.addEventListener('click', fetchLocation);
   fetchTimeWindow();
+
+  function selectedDriverId() {
+    var raw = driverSelect.tomselect ? driverSelect.tomselect.getValue() : driverSelect.value;
+    return raw ? String(raw) : '';
+  }
+
+  function currentDateDmy() {
+    var now = new Date(Date.now() + (typeof _pktOffset !== 'undefined' ? _pktOffset : 0));
+    var dd = String(now.getDate()).padStart(2, '0');
+    var mm = String(now.getMonth() + 1).padStart(2, '0');
+    var yyyy = String(now.getFullYear());
+    return dd + '-' + mm + '-' + yyyy;
+  }
+
+  function pendingStorageKey(driverId) {
+    return PENDING_PREFIX + currentDateDmy() + ':' + String(driverId || '');
+  }
+
+  function loadPendingCheckin(driverId) {
+    if (!driverId) return null;
+    try {
+      var raw = localStorage.getItem(pendingStorageKey(driverId));
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function savePendingCheckin(driverId, payload) {
+    if (!driverId) return;
+    localStorage.setItem(pendingStorageKey(driverId), JSON.stringify(payload));
+  }
+
+  function clearPendingCheckin(driverId) {
+    if (!driverId) return;
+    localStorage.removeItem(pendingStorageKey(driverId));
+  }
+
+  function setMediaFallback(text) {
+    checkinPreviewImage.classList.add('d-none');
+    checkinPreviewImage.removeAttribute('src');
+    checkinPreviewFallback.classList.remove('d-none');
+    checkinPreviewFallback.textContent = text;
+  }
+
+  function setUploadStatus(text, cls) {
+    checkinUploadStatus.className = 'status-box mb-2 ' + (cls || 'neutral');
+    checkinUploadStatus.textContent = text;
+  }
+
+  function refreshCheckinMediaPanel() {
+    var driverId = selectedDriverId();
+    if (!driverId) {
+      setMediaFallback('Driver select karein.');
+      setUploadStatus('Upload status: Waiting for driver selection.', 'neutral');
+      checkinUploadMeta.textContent = '';
+      btnRetryPendingCheckin.classList.add('d-none');
+      return;
+    }
+    var pending = loadPendingCheckin(driverId);
+    if (pending && pending.photo_base64) {
+      checkinPreviewImage.src = pending.photo_base64;
+      checkinPreviewImage.classList.remove('d-none');
+      checkinPreviewFallback.classList.add('d-none');
+      setUploadStatus('Upload pending: Network issue ki wajah se server par nahi gaya.', 'warning');
+      checkinUploadMeta.textContent = 'Media: Local pending | Time: ' + (pending.captured_at || '-') + ' | Date: ' + currentDateDmy();
+      btnRetryPendingCheckin.classList.remove('d-none');
+      return;
+    }
+    btnRetryPendingCheckin.classList.add('d-none');
+    setUploadStatus('Upload status fetch ho raha hai...', 'info');
+    fetch('{{ url_for("api_attendance_latest_gps_media") }}?kind=checkin&driver_id=' + encodeURIComponent(driverId) + '&attendance_date=' + encodeURIComponent(currentDateDmy()))
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (!data || !data.ok) throw new Error('status');
+        if (!data.has_record || !data.media || !data.media.has_media) {
+          setMediaFallback(data.pending_text || 'Check IN pending');
+          setUploadStatus('Upload status: No uploaded check-in image for current date.', 'neutral');
+          checkinUploadMeta.textContent = 'Media: Not available | Date: ' + (data.attendance_date || currentDateDmy());
+          return;
+        }
+        checkinPreviewImage.src = data.media.media_url || '';
+        checkinPreviewImage.classList.remove('d-none');
+        checkinPreviewFallback.classList.add('d-none');
+        setUploadStatus('Upload status: Uploaded successfully.', 'success');
+        checkinUploadMeta.textContent = 'Media: Server uploaded | Check-in Time: ' + (data.check_in_time || '-') + ' | Date: ' + (data.attendance_date || currentDateDmy());
+      })
+      .catch(function() {
+        setMediaFallback('Check IN pending');
+        setUploadStatus('Upload status verify nahi ho saka. Network check karein.', 'warning');
+        checkinUploadMeta.textContent = 'Media info unavailable';
+      });
+  }
+
+  function postCheckinPayload(payload) {
+    return fetch('{{ url_for("api_attendance_gps_checkin_submit") }}', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }).then(function(r) { return r.json().then(function(j) { return { ok: r.ok, body: j }; }); });
+  }
 
   function stopCamera() {
     if (stream) { stream.getTracks().forEach(function(t) { t.stop(); }); stream = null; }
@@ -664,8 +789,59 @@
     btnCapture.disabled = true;
     btnCapture.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Saving...';
     document.getElementById('savingOverlay').style.display = 'flex';
-    checkinForm.submit();
+    var payload = {
+      driver_id: Number(formDriverId.value || 0),
+      parking_station_id: Number(formParkingId.value || 0),
+      latitude: formLat.value,
+      longitude: formLng.value,
+      photo_base64: formPhotoBase64.value,
+      vehicle_id: Number(formVehicleId.value || 0),
+      project_id: Number(formProjectId.value || 0),
+      captured_at: timeStr,
+    };
+    savePendingCheckin(String(payload.driver_id), payload);
+    refreshCheckinMediaPanel();
+    postCheckinPayload(payload).then(function(res) {
+      if (res.ok && res.body && res.body.ok) {
+        clearPendingCheckin(String(payload.driver_id));
+        refreshCheckinMediaPanel();
+        setUploadStatus('Upload status: Uploaded successfully.', 'success');
+      } else {
+        setUploadStatus('Upload pending: ' + ((res.body && res.body.message) ? res.body.message : 'Server rejected upload.'), 'warning');
+        btnRetryPendingCheckin.classList.remove('d-none');
+      }
+    }).catch(function() {
+      setUploadStatus('Upload pending: Network issue. Retry karein.', 'warning');
+      btnRetryPendingCheckin.classList.remove('d-none');
+    }).finally(function() {
+      document.getElementById('savingOverlay').style.display = 'none';
+      btnCapture.disabled = false;
+      btnCapture.innerHTML = '<i class="bi bi-camera me-2"></i>Capture';
+    });
   });
+
+  btnRetryPendingCheckin.addEventListener('click', function() {
+    var driverId = selectedDriverId();
+    var pending = loadPendingCheckin(driverId);
+    if (!pending) {
+      btnRetryPendingCheckin.classList.add('d-none');
+      refreshCheckinMediaPanel();
+      return;
+    }
+    setUploadStatus('Retry upload in progress...', 'info');
+    postCheckinPayload(pending).then(function(res) {
+      if (res.ok && res.body && res.body.ok) {
+        clearPendingCheckin(driverId);
+        refreshCheckinMediaPanel();
+      } else {
+        setUploadStatus('Retry failed: ' + ((res.body && res.body.message) ? res.body.message : 'Upload failed.'), 'warning');
+      }
+    }).catch(function() {
+      setUploadStatus('Retry failed: Network issue.', 'warning');
+    });
+  });
+
+  refreshCheckinMediaPanel();
 })();
 </script>
 {% endblock %}
