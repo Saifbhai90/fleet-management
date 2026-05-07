@@ -122,6 +122,21 @@
       });
     });
   }
+  function ptPdfIdbPut(id,blob){
+    return ptPdfIdbOpen().then(function(db){
+      return new Promise(function(resolve,reject){
+        var tx=db.transaction(PT_PDF_IDB_STORE,'readwrite');
+        tx.oncomplete=function(){ try{ db.close(); }catch(_){ } resolve(); };
+        tx.onerror=function(){ try{ db.close(); }catch(_){ } reject(tx.error); };
+        tx.objectStore(PT_PDF_IDB_STORE).put({ id:id, blob:blob, savedAt:Date.now() });
+      });
+    });
+  }
+  function guessMimeFromFileName(n){
+    var ext=(String(n).split('.').pop()||'').toLowerCase();
+    var map={pdf:'application/pdf',png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',gif:'image/gif',webp:'image/webp',bmp:'image/bmp',svg:'image/svg+xml',txt:'text/plain',csv:'text/csv'};
+    return map[ext]||'';
+  }
   const desktop=document.getElementById('pt-desktop');
   const selBox=document.getElementById('pt-selection-box');
   const ctx=document.getElementById('pt-context-menu');
@@ -541,7 +556,8 @@
       if(file.kind==='text'){ openSavedText(entryName,file); return; }
       if(file.kind==='pdf_saved' && (file.source || file.blobId)){ openSavedPdf(entryName,file); return; }
       if(file.kind==='binary'){
-        alert('Ye sirf upload ki file ki listing hai — poori file browser ke storage mein save nahi hoti.\nPDF ko Print Ready se "Save to Web My PC" karain taake yahan se open ho sake.');
+        if(file.blobId){ openUploadedBinary(entryName,file); return; }
+        alert('Ye purani upload listing hai — dubara upload karain taake file khul sake.');
         return;
       }
       alert('Is type ki file open nahi ho sakti.');
@@ -642,26 +658,43 @@
       const files=Array.from(inp.files||[]);
       if(!files.length) return;
       const parent=fsEnsureFolder(curr);
-      files.forEach(function(f){
-        const rel=(f.webkitRelativePath||f.name||'').replace(/\\/g,'/').trim();
-        if(!rel) return;
-        const parts=rel.split('/').filter(Boolean);
-        let node=parent;
-        for(let i=0;i<parts.length-1;i++){
-          const d=parts[i];
-          if(!node.children[d]) node.children[d]={type:'folder',children:{}};
-          node=node.children[d];
+      (async function(){
+        var ok=0,fail=0;
+        for(var fi=0;fi<files.length;fi++){
+          var f=files[fi];
+          const rel=(f.webkitRelativePath||f.name||'').replace(/\\/g,'/').trim();
+          if(!rel) continue;
+          const parts=rel.split('/').filter(Boolean);
+          let node=parent;
+          for(let i=0;i<parts.length-1;i++){
+            const d=parts[i];
+            if(!node.children[d]) node.children[d]={type:'folder',children:{}};
+            node=node.children[d];
+          }
+          let fileName=parts[parts.length-1]||f.name;
+          if(node.children[fileName]){
+            let i=1,b=fileName,ext='';
+            const k=fileName.lastIndexOf('.');
+            if(k>0){ b=fileName.slice(0,k); ext=fileName.slice(k); }
+            while(node.children[fileName]) fileName=b+'_'+(i++)+ext;
+          }
+          var blobId=(crypto.randomUUID&&crypto.randomUUID())||('up_'+Date.now()+'_'+Math.random().toString(36).slice(2,12)+'_'+fi);
+          try{
+            await ptPdfIdbPut(blobId,f);
+            node.children[fileName]={
+              type:'file',
+              kind:'binary',
+              blobId:blobId,
+              mime:(f.type||guessMimeFromFileName(fileName)||''),
+              size:f.size||0,
+              lastModified:f.lastModified||Date.now()
+            };
+            ok++;
+          }catch(_){ fail++; }
         }
-        let fileName=parts[parts.length-1]||f.name;
-        if(node.children[fileName]){
-          let i=1,b=fileName,ext='';
-          const k=fileName.lastIndexOf('.');
-          if(k>0){ b=fileName.slice(0,k); ext=fileName.slice(k); }
-          while(node.children[fileName]) fileName=b+'_'+(i++)+ext;
-        }
-        node.children[fileName]={type:'file',kind:'binary',size:f.size||0,lastModified:f.lastModified||Date.now()};
-      });
-      saveState(); renderFileExplorer(container,win);
+        saveState(); renderFileExplorer(container,win);
+        if(fail){ alert(ok+' file(s) save ho gayin, '+fail+' IndexedDB / quota ki wajah se fail ho gayin.'); }
+      })();
     };
     inp.click();
   }
@@ -719,6 +752,34 @@
     const body=w.el.querySelector('.pt-win-body');
     body.innerHTML=`<div class="pt-notes"><textarea>${file.content||''}</textarea></div>`;
   }
+  async function openUploadedBinary(name,file){
+    if(!file.blobId){ alert('File data missing.'); return; }
+    var blobRevokeUrl=null;
+    try{
+      var blob=await ptPdfIdbGet(file.blobId);
+      if(!blob){ alert('File data missing — storage clear ho chuki ho sakti hai.'); return; }
+      var mime=(file.mime||blob.type||guessMimeFromFileName(name)||'application/octet-stream').toLowerCase();
+      blobRevokeUrl=URL.createObjectURL(blob);
+      var winObj=createWindow(name,'upload_'+Date.now());
+      winObj.blobRevokeUrl=blobRevokeUrl;
+      windows.push(winObj); focusWindow(winObj.id); renderTaskbar();
+      var body=winObj.el.querySelector('.pt-win-body');
+      var isPdf=mime.indexOf('pdf')>=0 || /\.pdf$/i.test(name);
+      var isImg=mime.indexOf('image/')===0 || /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(name);
+      if(isPdf){
+        body.innerHTML='<div class="p-2 h-100"><iframe src="'+blobRevokeUrl+'#toolbar=1&navpanes=0&scrollbar=1" style="width:100%;height:100%;border:0"></iframe></div>';
+      }else if(isImg){
+        body.innerHTML='<div class="p-2 h-100 overflow-auto d-flex align-items-center justify-content-center" style="background:#1a1d21;"><img alt="" src="'+blobRevokeUrl+'" style="max-width:100%;max-height:100%;object-fit:contain"></div>';
+      }else{
+        body.innerHTML='';
+        var wrap=document.createElement('div'); wrap.className='p-3';
+        var p=document.createElement('p'); p.className='text-muted small'; p.textContent='Is type ki preview yahan nahi — Download kar ke dekhein.';
+        var a=document.createElement('a'); a.className='btn btn-primary btn-sm'; a.textContent='Download'; a.download=name; a.href=blobRevokeUrl;
+        wrap.appendChild(p); wrap.appendChild(a); body.appendChild(wrap);
+      }
+    }catch(_){ alert('File open nahi ho saki.'); if(blobRevokeUrl){ try{ URL.revokeObjectURL(blobRevokeUrl); }catch(_){ } } }
+  }
+
   async function openSavedPdf(name,file){
     var src='', blobRevokeUrl=null;
     try{
