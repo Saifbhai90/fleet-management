@@ -25,7 +25,7 @@
   <div class="head">
     <div><strong>Print Ready</strong> <span class="text-muted small ms-2">{{ files_count }} files, {{ pages }} pages</span></div>
     <div class="d-flex gap-2">
-      <button class="btn btn-sm btn-primary" id="btnPrintNow">Print</button>
+      <button class="btn btn-sm btn-success" id="btnSaveToMyPc">Save to My PC</button>
       <a href="{{ url_for('admin_personal_tools') }}" class="btn btn-sm btn-outline-secondary">Back</a>
     </div>
   </div>
@@ -33,11 +33,11 @@
     <button class="btn btn-sm btn-outline-secondary" id="btnPrev">←</button>
     <span class="small">Page</span>
     <input type="number" id="pageNo" class="form-control form-control-sm" style="width:90px" min="1" value="1">
-    <span class="small">/ {{ pages }}</span>
+    <span class="small">/ <span id="maxPagesLbl">{{ pages }}</span></span>
     <button class="btn btn-sm btn-outline-secondary" id="btnNext">→</button>
     <button class="btn btn-sm btn-outline-primary ms-2" id="btnCropCurrent">Crop Current Page</button>
     <button class="btn btn-sm btn-outline-danger" id="btnResetCrop">Reset Crop</button>
-    <span class="text-muted small ms-2">Right-click viewer for crop</span>
+    <span class="text-muted small ms-2">Right-click viewer for crop | Page auto-sync enabled</span>
   </div>
   <div class="stage">
     <div class="frame-wrap" id="viewerWrap">
@@ -71,6 +71,7 @@
 <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js"></script>
 <script type="module">
 import * as pdfjsLib from 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.6.82/build/pdf.min.mjs';
+import { PDFDocument } from 'https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/+esm';
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.6.82/build/pdf.worker.min.mjs';
 
 const pdfUrl = "{{ pdf_url }}";
@@ -84,6 +85,9 @@ const cropModalEl = document.getElementById('cropModal');
 const cropModal = new bootstrap.Modal(cropModalEl);
 const cropImage = document.getElementById('cropImage');
 let cropper = null;
+let pdfDocRef = null;
+let activePdfUrl = pdfUrl;
+let regenBusy = false;
 const cropKey = 'pt_print_crops_' + btoa(pdfUrl).replace(/[^a-zA-Z0-9]/g,'');
 let cropMap = {};
 try{ cropMap = JSON.parse(localStorage.getItem(cropKey) || '{}'); }catch(_){ cropMap = {}; }
@@ -96,48 +100,47 @@ function nPage(){
   return n;
 }
 function rawViewerSrc(page){
-  return pdfUrl + '#page=' + page + '&toolbar=1&navpanes=0&scrollbar=1&view=FitH';
+  return activePdfUrl + '#page=' + page + '&toolbar=1&navpanes=0&scrollbar=1&view=FitH';
 }
 function refreshViewer(){
   const p = nPage();
-  const c = cropMap[String(p)];
-  if(c){
-    cropPreview.src = c;
-    cropPreview.style.display = 'block';
-    frame.style.display = 'none';
-  }else{
-    cropPreview.style.display = 'none';
-    frame.style.display = 'block';
-    frame.src = rawViewerSrc(p);
-  }
+  cropPreview.style.display = 'none';
+  frame.style.display = 'block';
+  frame.src = rawViewerSrc(p);
 }
 document.getElementById('btnPrev').onclick = ()=>{ pageNo.value = Math.max(1, nPage()-1); refreshViewer(); };
 document.getElementById('btnNext').onclick = ()=>{ pageNo.value = Math.min(maxPages, nPage()+1); refreshViewer(); };
 pageNo.onchange = refreshViewer;
 
 async function renderPageToDataUrl(pageNumber){
-  const loadingTask = pdfjsLib.getDocument(pdfUrl);
-  const pdf = await loadingTask.promise;
+  if(!pdfDocRef){
+    const loadingTask = pdfjsLib.getDocument(pdfUrl);
+    pdfDocRef = await loadingTask.promise;
+  }
+  const pdf = pdfDocRef;
   const page = await pdf.getPage(pageNumber);
-  const viewport = page.getViewport({ scale: 2 });
+  const viewport = page.getViewport({ scale: 3 });
   const canvas = document.createElement('canvas');
   const ctx2 = canvas.getContext('2d');
   canvas.width = viewport.width; canvas.height = viewport.height;
   await page.render({ canvasContext: ctx2, viewport }).promise;
-  return canvas.toDataURL('image/webp', 0.95);
+  return canvas.toDataURL('image/png');
 }
 async function openCrop(){
   const p = nPage();
-  let src = cropMap[String(p)];
-  if(!src) src = await renderPageToDataUrl(p);
+  let src = await renderPageToDataUrl(p);
   cropImage.src = src;
   cropModal.show();
   setTimeout(()=>{
     if(cropper) cropper.destroy();
     cropper = new Cropper(cropImage,{
-      viewMode:1, dragMode:'move', autoCropArea:0.9, responsive:true,
+      viewMode:1, dragMode:'move', autoCropArea:0.96, responsive:true,
       background:false, rotatable:true, scalable:true, zoomOnWheel:true
     });
+    const old = cropMap[String(p)];
+    if(old && old.cropData){
+      try{ cropper.setData(old.cropData); }catch(_){}
+    }
   },120);
 }
 document.getElementById('btnCropCurrent').onclick = ()=>openCrop();
@@ -146,16 +149,18 @@ document.getElementById('btnApplyCrop').onclick = ()=>{
   if(!cropper) return;
   const p = nPage();
   const cv = cropper.getCroppedCanvas({ imageSmoothingQuality:'high' });
-  cropMap[String(p)] = cv.toDataURL('image/webp',0.95);
+  cropMap[String(p)] = { dataUrl: cv.toDataURL('image/webp',0.95), cropData: cropper.getData(true) };
   localStorage.setItem(cropKey, JSON.stringify(cropMap));
+  rebuildCroppedPdf().then(function(){
+    refreshViewer();
+  });
   cropModal.hide();
-  refreshViewer();
 };
 cropModalEl.addEventListener('hidden.bs.modal', ()=>{ if(cropper){ cropper.destroy(); cropper=null; }});
 document.getElementById('btnResetCrop').onclick = ()=>{
   const p = nPage(); delete cropMap[String(p)];
   localStorage.setItem(cropKey, JSON.stringify(cropMap));
-  refreshViewer();
+  rebuildCroppedPdf().then(function(){ refreshViewer(); });
 };
 viewerWrap.addEventListener('contextmenu', (e)=>{
   e.preventDefault();
@@ -164,20 +169,100 @@ viewerWrap.addEventListener('contextmenu', (e)=>{
   ctx.style.display = 'block';
 });
 document.addEventListener('click', (e)=>{ if(!e.target.closest('#viewerCtx')) ctx.style.display='none'; });
-document.getElementById('btnPrintNow').onclick = ()=>{
+async function rebuildCroppedPdf(){
+  if(regenBusy) return;
+  regenBusy = true;
   try{
-    if(frame.style.display!=='none'){ frame.contentWindow.focus(); frame.contentWindow.print(); return; }
-  }catch(_){}
-  // cropped pages print fallback
-  const win = window.open('', '_blank');
-  if(!win) return;
-  const p = nPage();
-  const src = cropMap[String(p)];
-  win.document.write('<html><head><title>Print</title><style>body{margin:0;text-align:center}img{max-width:100%;height:auto;}</style></head><body>'+(src?('<img src="'+src+'">'):'')+'</body></html>');
-  win.document.close(); setTimeout(()=>win.print(),300);
-};
+    const hasCrop = Object.keys(cropMap).length > 0;
+    if(!hasCrop){
+      activePdfUrl = pdfUrl;
+      return;
+    }
+    if(!pdfDocRef){
+      const loadingTask = pdfjsLib.getDocument(pdfUrl);
+      pdfDocRef = await loadingTask.promise;
+    }
+    const outDoc = await PDFDocument.create();
+    const total = pdfDocRef.numPages || maxPages;
+    document.getElementById('maxPagesLbl').textContent = total;
+    for(let i=1;i<=total;i++){
+      let dataUrl;
+      const c = cropMap[String(i)];
+      if(c && c.dataUrl) dataUrl = c.dataUrl;
+      else dataUrl = await renderPageToDataUrl(i);
+      const img = await outDoc.embedPng(dataUrl);
+      const page = outDoc.addPage([img.width, img.height]);
+      page.drawImage(img,{x:0,y:0,width:img.width,height:img.height});
+    }
+    const bytes = await outDoc.save();
+    const blob = new Blob([bytes], {type:'application/pdf'});
+    if(activePdfUrl && activePdfUrl.startsWith('blob:')) URL.revokeObjectURL(activePdfUrl);
+    activePdfUrl = URL.createObjectURL(blob);
+  } finally {
+    regenBusy = false;
+  }
+}
 
-window.addEventListener('load', ()=>{ refreshViewer(); setTimeout(()=>document.getElementById('btnPrintNow').click(),300); });
+async function blobUrlToDataUrl(url){
+  const res = await fetch(url);
+  const blob = await res.blob();
+  return await new Promise((resolve,reject)=>{
+    const fr = new FileReader();
+    fr.onload = ()=>resolve(fr.result);
+    fr.onerror = reject;
+    fr.readAsDataURL(blob);
+  });
+}
+
+async function saveToMyPc(){
+  const raw = localStorage.getItem('pt_desktop_state_v3');
+  if(!raw){ alert('My PC state not found.'); return; }
+  let st = {};
+  try{ st = JSON.parse(raw); }catch(_){ st = {}; }
+  st.fs = st.fs || {drives:{'D:':{name:'Local Disk (D:)',children:{}},'E:':{name:'Local Disk (E:)',children:{}}},recycle:{}};
+  const drive = (prompt('Save Drive (D: or E:)', 'D:') || 'D:').toUpperCase();
+  if(!st.fs.drives[drive]){ alert('Invalid drive'); return; }
+  const folderPath = (prompt('Folder path inside drive (optional)', '') || '').trim();
+  const name = (prompt('File name', 'combined_print_'+Date.now()+'.pdf') || '').trim() || ('combined_print_'+Date.now()+'.pdf');
+  const ensure = function(parts){
+    let n = st.fs.drives[drive];
+    parts.forEach(function(p){
+      if(!p) return;
+      if(!n.children[p]) n.children[p] = {type:'folder',children:{}};
+      n = n.children[p];
+    });
+    return n;
+  };
+  const parts = folderPath ? folderPath.split('/').filter(Boolean) : [];
+  const parent = ensure(parts);
+  let nm = name; let i=1;
+  while(parent.children[nm]){ nm = name.replace(/(\.pdf)?$/i,'') + '_' + (i++) + '.pdf'; }
+  // Save current PDF source ref (cropped-aware)
+  let src = activePdfUrl;
+  if(src && src.startsWith('blob:')){
+    try{ src = await blobUrlToDataUrl(src); }catch(_){}
+  }
+  parent.children[nm] = {type:'file',kind:'pdf_saved',source:src,savedAt:Date.now()};
+  localStorage.setItem('pt_desktop_state_v3', JSON.stringify(st));
+  alert('Saved to My PC: ' + drive + '/' + (folderPath?folderPath+'/':'') + nm);
+}
+document.getElementById('btnSaveToMyPc').onclick = function(){ saveToMyPc(); };
+
+setInterval(function(){
+  try{
+    if(!frame.contentWindow) return;
+    const h = frame.contentWindow.location.hash || '';
+    const m = /page=(\d+)/i.exec(h);
+    if(m){
+      const n = parseInt(m[1],10);
+      if(!isNaN(n) && n>=1 && n<=maxPages && String(n)!==String(pageNo.value||'')){
+        pageNo.value = n;
+      }
+    }
+  }catch(_){}
+}, 500);
+
+window.addEventListener('load', async ()=>{ await rebuildCroppedPdf(); refreshViewer(); });
 </script>
 </body>
 </html>

@@ -529,7 +529,14 @@
         row.className='pt-exp-row';
         row.dataset.name=r.name;
         row.innerHTML=`<i class="bi ${r.type==='folder'?'bi-folder-fill text-warning':'bi-file-earmark text-secondary'}"></i><div class="nm">${r.name}</div>`;
-        row.ondblclick=()=>{ if(r.type==='folder'){ win.path=win.path.concat([r.name]); renderFileExplorer(container,win);} };
+        row.ondblclick=()=>{
+          if(r.type==='folder'){ win.path=win.path.concat([r.name]); renderFileExplorer(container,win); return; }
+          const parent=fsGetNode(win.path);
+          const file=parent && parent.children ? parent.children[r.name] : null;
+          if(!file) return;
+          if(file.kind==='text'){ openSavedText(r.name,file); return; }
+          if(file.kind==='pdf_saved' && file.source){ openSavedPdf(r.name,file.source); return; }
+        };
         row.oncontextmenu=(e)=>{ e.preventDefault(); explorerContext(e.clientX,e.clientY,win,r.name,r.type,container); };
         list.appendChild(row);
       });
@@ -646,6 +653,19 @@
     };
     input.addEventListener('keydown',e=>{ if(e.key==='Enter') done(true); if(e.key==='Escape') done(false); });
     input.addEventListener('blur',()=>done(true));
+  }
+
+  function openSavedText(name,file){
+    const appId='text_'+Date.now();
+    const w=createWindow(name,appId); windows.push(w); focusWindow(w.id); renderTaskbar();
+    const body=w.el.querySelector('.pt-win-body');
+    body.innerHTML=`<div class="pt-notes"><textarea>${file.content||''}</textarea></div>`;
+  }
+  function openSavedPdf(name,src){
+    const appId='pdf_'+Date.now();
+    const w=createWindow(name,appId); windows.push(w); focusWindow(w.id); renderTaskbar();
+    const body=w.el.querySelector('.pt-win-body');
+    body.innerHTML=`<div class="p-2 h-100"><iframe src="${src}#toolbar=1&navpanes=0&scrollbar=1" style="width:100%;height:100%;border:0"></iframe></div>`;
   }
 
   function openContextMenu(x,y,items){
