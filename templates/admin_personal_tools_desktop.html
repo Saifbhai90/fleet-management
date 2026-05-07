@@ -803,6 +803,36 @@
   }
   setInterval(tickClock,1000); tickClock();
 
+  /**
+   * Quick Print / other tabs write pt_desktop_state_v3 for Web My PC files.
+   * This tab keeps an in-memory copy — reload when returning via Back (BFCache),
+   * tab switch, or cross-tab localStorage updates so explorer shows new files.
+   */
+  function refreshFsFromStorage(){
+    try{
+      state = loadState();
+      renderDesktop();
+      windows.forEach(function(win){
+        if(win.appId==='my_pc'){
+          var body = win.el.querySelector('.pt-win-body');
+          if(body) renderFileExplorer(body, win);
+        }
+      });
+    }catch(_){}
+  }
+  var fsVisTimer = null;
+  function scheduleFsRefresh(){
+    clearTimeout(fsVisTimer);
+    fsVisTimer = setTimeout(refreshFsFromStorage, 150);
+  }
+  window.addEventListener('storage', function(ev){
+    if(ev.key === LS_KEY && ev.newValue != null){ refreshFsFromStorage(); }
+  });
+  window.addEventListener('pageshow', function(){ refreshFsFromStorage(); });
+  document.addEventListener('visibilitychange', function(){
+    if(document.visibilityState === 'visible'){ scheduleFsRefresh(); }
+  });
+
   renderStartMenu();
   renderDesktop();
 })();
