@@ -2525,6 +2525,19 @@ def _safe_abs_from_rel(rel_path):
     return abs_path, rel
 
 
+def _unique_name(parent_abs, raw_name):
+    nm = secure_filename((raw_name or '').strip())
+    if not nm:
+        nm = 'New_Item'
+    base, ext = os.path.splitext(nm)
+    out = nm
+    i = 1
+    while os.path.exists(os.path.join(parent_abs, out)):
+        out = f'{base}_{i}{ext}'
+        i += 1
+    return out
+
+
 def _static_url_for_personal_rel(rel_path):
     rel = _normalize_rel_path(rel_path).replace('\\', '/')
     return url_for('static', filename=f'personal_tools_drive/{rel}')
@@ -2565,19 +2578,58 @@ def admin_personal_tools():
     if request.method == 'POST':
         action = (request.form.get('action') or '').strip()
         posted_path = (request.form.get('path') or '').strip()
-        if not posted_path:
+        curr_abs = None
+        curr_rel = ''
+        if posted_path:
+            curr_abs, curr_rel = _safe_abs_from_rel(posted_path)
+
+        if action == 'rename_drive':
+            old_rel = (request.form.get('old_path') or '').strip()
+            new_name = (request.form.get('new_name') or '').strip()
+            if not old_rel or '/' in old_rel:
+                flash('Drive rename sirf root drive par allowed hai.', 'warning')
+                return redirect(url_for('admin_personal_tools', mode='my_pc'))
+            old_abs, old_rel_norm = _safe_abs_from_rel(old_rel)
+            parent = _personal_drive_root()
+            if os.path.dirname(old_abs) != os.path.abspath(parent):
+                flash('Invalid drive.', 'danger')
+                return redirect(url_for('admin_personal_tools', mode='my_pc'))
+            safe_new = secure_filename(new_name)
+            if not safe_new:
+                flash('Drive name valid nahi.', 'warning')
+                return redirect(url_for('admin_personal_tools', mode='my_pc'))
+            new_abs = os.path.join(parent, safe_new)
+            if os.path.exists(new_abs):
+                flash('Ye name already mojood hai.', 'warning')
+                return redirect(url_for('admin_personal_tools', mode='my_pc'))
+            try:
+                os.rename(old_abs, new_abs)
+                flash('Drive rename ho gayi.', 'success')
+            except Exception as e:
+                flash(f'Rename failed: {e}', 'danger')
             return redirect(url_for('admin_personal_tools', mode='my_pc'))
-        curr_abs, curr_rel = _safe_abs_from_rel(posted_path)
+
+        if not curr_abs:
+            return redirect(url_for('admin_personal_tools', mode='my_pc'))
 
         if action == 'create_folder':
             folder_name = (request.form.get('folder_name') or '').strip()
             if folder_name:
-                safe_name = secure_filename(folder_name)
+                safe_name = _unique_name(curr_abs, folder_name)
                 if not safe_name:
                     flash('Folder name valid nahi.', 'warning')
                 else:
                     os.makedirs(os.path.join(curr_abs, safe_name), exist_ok=True)
                     flash('Folder create ho gaya.', 'success')
+            return redirect(url_for('admin_personal_tools', path=curr_rel))
+
+        if action == 'create_text':
+            nm = _unique_name(curr_abs, request.form.get('file_name') or 'New Text Document.txt')
+            if not nm.lower().endswith('.txt'):
+                nm += '.txt'
+            with open(os.path.join(curr_abs, nm), 'w', encoding='utf-8') as f:
+                f.write('')
+            flash('Text file create ho gayi.', 'success')
             return redirect(url_for('admin_personal_tools', path=curr_rel))
 
         if action == 'upload_files':
@@ -2598,6 +2650,78 @@ def admin_personal_tools():
                     target = os.path.join(curr_abs, nm)
                 f.save(target)
             flash(f'{len(files)} file(s) upload ho gayi.', 'success')
+            return redirect(url_for('admin_personal_tools', path=curr_rel))
+
+        if action == 'upload_folder':
+            files = request.files.getlist('upload_folder_files')
+            files = [f for f in files if f and (f.filename or '').strip()]
+            if not files:
+                flash('Folder upload ke liye files select karein.', 'warning')
+                return redirect(url_for('admin_personal_tools', path=curr_rel))
+            saved = 0
+            for f in files:
+                rel_name = (f.filename or '').replace('\\', '/').strip('/')
+                if not rel_name:
+                    continue
+                parts = [secure_filename(p) for p in rel_name.split('/') if p.strip()]
+                if not parts:
+                    continue
+                sub_dirs = parts[:-1]
+                file_name = parts[-1]
+                target_dir = curr_abs
+                for d in sub_dirs:
+                    target_dir = os.path.join(target_dir, d)
+                os.makedirs(target_dir, exist_ok=True)
+                target = os.path.join(target_dir, file_name)
+                if os.path.exists(target):
+                    target = os.path.join(target_dir, _unique_name(target_dir, file_name))
+                f.save(target)
+                saved += 1
+            flash(f'{saved} file(s) folder upload se save ho gayi.', 'success')
+            return redirect(url_for('admin_personal_tools', path=curr_rel))
+
+        if action in {'copy_selected', 'cut_selected'}:
+            selected = request.form.getlist('selected_paths')
+            selected = [p for p in selected if p.strip()]
+            if not selected:
+                flash('Copy/Cut ke liye item select karein.', 'warning')
+                return redirect(url_for('admin_personal_tools', path=curr_rel))
+            session['personal_tools_clipboard'] = {
+                'mode': 'cut' if action == 'cut_selected' else 'copy',
+                'items': selected,
+            }
+            flash(f"{len(selected)} item(s) {'Cut' if action == 'cut_selected' else 'Copy'} ho gayi.", 'info')
+            return redirect(url_for('admin_personal_tools', path=curr_rel))
+
+        if action == 'paste_here':
+            clip = session.get('personal_tools_clipboard') or {}
+            items = clip.get('items') or []
+            mode_cp = clip.get('mode') or 'copy'
+            if not items:
+                flash('Clipboard empty hai.', 'warning')
+                return redirect(url_for('admin_personal_tools', path=curr_rel))
+            pasted = 0
+            for relp in items:
+                try:
+                    src_abs, _ = _safe_abs_from_rel(relp)
+                    if not os.path.exists(src_abs):
+                        continue
+                    dst_abs = os.path.join(curr_abs, os.path.basename(src_abs))
+                    if os.path.exists(dst_abs):
+                        dst_abs = os.path.join(curr_abs, _unique_name(curr_abs, os.path.basename(src_abs)))
+                    if mode_cp == 'cut':
+                        shutil.move(src_abs, dst_abs)
+                    else:
+                        if os.path.isdir(src_abs):
+                            shutil.copytree(src_abs, dst_abs)
+                        else:
+                            shutil.copy2(src_abs, dst_abs)
+                    pasted += 1
+                except Exception:
+                    continue
+            if mode_cp == 'cut':
+                session['personal_tools_clipboard'] = {'mode': 'copy', 'items': []}
+            flash(f'{pasted} item(s) paste ho gayi.', 'success' if pasted else 'warning')
             return redirect(url_for('admin_personal_tools', path=curr_rel))
 
         if action == 'move_selected':
@@ -2734,28 +2858,13 @@ def admin_personal_tools():
             parent_rel = '/'.join(parts[:-1])
 
     roots = ['Driver D', 'Driver E']
+    # Root drives (blank-style cards as requested)
+    drive_root = _personal_drive_root()
     drives = []
-    for r in roots:
-        rp = os.path.join(_personal_drive_root(), r)
-        total = 0
-        files = 0
-        folders = 0
-        for root_dir, dir_names, file_names in os.walk(rp):
-            folders += len(dir_names)
-            files += len(file_names)
-            for fn in file_names:
-                fp = os.path.join(root_dir, fn)
-                try:
-                    total += os.path.getsize(fp)
-                except Exception:
-                    pass
-        drives.append({
-            'name': r,
-            'rel_path': r,
-            'total_size': _fmt_size(total),
-            'files': files,
-            'folders': folders,
-        })
+    for dname in sorted([n for n in os.listdir(drive_root) if os.path.isdir(os.path.join(drive_root, n))], key=lambda s: s.lower()):
+        drives.append({'name': dname, 'rel_path': dname, 'total_size': '', 'files': 0, 'folders': 0})
+
+    clip = session.get('personal_tools_clipboard') or {'mode': 'copy', 'items': []}
 
     return render_template(
         'admin_personal_tools.html',
@@ -2766,6 +2875,8 @@ def admin_personal_tools():
         parent_rel=parent_rel,
         entries=entries,
         folder_options=folder_options,
+        clipboard_count=len(clip.get('items') or []),
+        clipboard_mode=clip.get('mode') or 'copy',
     )
 
 

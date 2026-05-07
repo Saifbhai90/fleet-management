@@ -6,7 +6,6 @@
     <h2 class="mb-0"><i class="bi bi-pc-display-horizontal me-2 text-primary"></i>Personal Tools</h2>
     <a href="{{ url_for('admin_app_releases') }}" class="btn btn-outline-primary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back to App Updates</a>
   </div>
-
   <div class="card shadow-sm border-0 rounded-3">
     <div class="card-body">
       <div class="d-flex align-items-center gap-2 flex-wrap border rounded p-2 mb-3 bg-light">
@@ -27,13 +26,10 @@
       <div class="row g-3">
         {% for d in drives %}
         <div class="col-md-6 col-xl-3">
-          <a href="{{ url_for('admin_personal_tools', path=d.rel_path) }}" class="text-decoration-none text-reset">
-            <div class="border rounded p-3 h-100">
-              <div class="d-flex align-items-center gap-2 mb-2"><i class="bi bi-hdd-fill text-primary"></i><strong>{{ d.name }}</strong></div>
-              <div class="small text-muted">{{ d.folders }} folders, {{ d.files }} files</div>
-              <div class="small text-muted">Used: {{ d.total_size }}</div>
-            </div>
-          </a>
+          <div class="border rounded p-3 h-100 drive-card" data-path="{{ d.rel_path }}">
+            <div class="d-flex align-items-center gap-2 mb-2"><i class="bi bi-hdd-fill text-primary"></i><strong>{{ d.name }}</strong></div>
+            <div class="small text-muted">Blank</div>
+          </div>
         </div>
         {% endfor %}
       </div>
@@ -41,8 +37,8 @@
       <div class="d-flex gap-2 mb-3 flex-wrap">
         {% if parent_rel %}<a href="{{ url_for('admin_personal_tools', path=parent_rel) }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-up-circle me-1"></i>Up</a>{% endif %}
         <span class="badge bg-light text-dark border">Current: {{ current_rel }}</span>
+        <span class="badge bg-light text-dark border">Clipboard: {{ clipboard_mode|capitalize }} {{ clipboard_count }}</span>
       </div>
-
       <div class="row g-3 mb-3">
         <div class="col-lg-6">
           <form method="post" class="d-flex gap-2">
@@ -61,13 +57,12 @@
           <div id="uploadPreview" class="small text-muted mt-1"></div>
         </div>
       </div>
-
       <form method="post" id="selectionForm">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="path" value="{{ current_rel }}">
         <div class="row g-3">
           {% for e in entries %}
           <div class="col-6 col-md-4 col-xl-2">
-            <div class="border rounded p-2 h-100">
+            <div class="border rounded p-2 h-100 file-item" data-path="{{ e.rel_path }}" data-is-dir="{{ '1' if e.is_dir else '0' }}">
               <div class="d-flex justify-content-between mb-2">
                 <input type="checkbox" name="selected_paths" value="{{ e.rel_path }}">
                 {% if e.is_dir %}<i class="bi bi-folder-fill text-warning"></i>{% elif e.is_image %}<i class="bi bi-file-image text-info"></i>{% elif e.ext == '.pdf' %}<i class="bi bi-file-earmark-pdf text-danger"></i>{% else %}<i class="bi bi-file-earmark text-secondary"></i>{% endif %}
@@ -87,12 +82,12 @@
           <div class="col-12"><div class="text-center text-muted py-4 border rounded">Folder empty hai.</div></div>
           {% endfor %}
         </div>
-
         <div class="row g-3 mt-2">
           <div class="col-lg-6">
             <div class="input-group">
               <select class="form-select" name="destination_path">{% for p in folder_options %}<option value="{{ p }}" {% if p == current_rel %}selected{% endif %}>{{ p }}</option>{% endfor %}</select>
               <button type="submit" name="action" value="move_selected" class="btn btn-outline-warning"><i class="bi bi-arrow-left-right me-1"></i>Move Selected</button>
+              <button type="submit" name="action" value="paste_here" class="btn btn-outline-secondary"><i class="bi bi-clipboard-check me-1"></i>Paste</button>
             </div>
           </div>
           <div class="col-lg-6">
@@ -111,10 +106,32 @@
 
 <div class="modal fade" id="imgFullViewModal" tabindex="-1" aria-hidden="true"><div class="modal-dialog modal-fullscreen"><div class="modal-content bg-dark"><div class="modal-header border-0"><h5 class="modal-title text-white" id="imgFullViewTitle">Image</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body d-flex justify-content-center align-items-center p-2"><img id="imgFullViewTarget" src="" alt="" style="max-width:100%;max-height:90vh;object-fit:contain;"></div></div></div></div>
 
+<div id="ctxMenu" class="position-fixed bg-white border rounded shadow d-none" style="z-index:2000;min-width:180px;">
+  <button class="dropdown-item py-2" data-cmd="open">Open</button>
+  <button class="dropdown-item py-2" data-cmd="rename_drive">Rename</button>
+  <div class="dropdown-divider m-0"></div>
+  <button class="dropdown-item py-2 d-none" data-cmd="new_menu">New ▸</button>
+  <button class="dropdown-item py-2 d-none" data-cmd="copy">Copy</button>
+  <button class="dropdown-item py-2 d-none" data-cmd="cut">Cut</button>
+  <button class="dropdown-item py-2 d-none" data-cmd="paste">Paste</button>
+  <button class="dropdown-item py-2 d-none" data-cmd="upload_menu">Upload ▸</button>
+</div>
+<div id="ctxSubMenu" class="position-fixed bg-white border rounded shadow d-none" style="z-index:2001;min-width:170px;">
+  <button class="dropdown-item py-2 submenu-new" data-sub="folder">Folder</button>
+  <button class="dropdown-item py-2 submenu-new" data-sub="text">Text Document</button>
+  <button class="dropdown-item py-2 submenu-upload d-none" data-sub="file">File(s)</button>
+  <button class="dropdown-item py-2 submenu-upload d-none" data-sub="folder_upload">Folder</button>
+</div>
+
 <script>
 document.addEventListener('DOMContentLoaded', function () {
   var uploadInput = document.getElementById('uploadFilesInput');
   var uploadPreview = document.getElementById('uploadPreview');
+  var ctx = document.getElementById('ctxMenu');
+  var sub = document.getElementById('ctxSubMenu');
+  var targetPath = '';
+  var currentPath = "{{ current_rel }}";
+
   if (uploadInput) {
     uploadInput.addEventListener('change', function () {
       var files = Array.from(uploadInput.files || []);
@@ -124,8 +141,7 @@ document.addEventListener('DOMContentLoaded', function () {
   document.addEventListener('paste', function (e) {
     if (!uploadInput) return;
     var cb = e.clipboardData; if (!cb || !cb.items || !cb.items.length) return;
-    var incoming = [];
-    for (var i = 0; i < cb.items.length; i++) { var it = cb.items[i]; if (it.kind !== 'file') continue; var f = it.getAsFile(); if (f) incoming.push(f); }
+    var incoming = []; for (var i = 0; i < cb.items.length; i++) { var it = cb.items[i]; if (it.kind !== 'file') continue; var f = it.getAsFile(); if (f) incoming.push(f); }
     if (!incoming.length) return;
     var dt = new DataTransfer(); Array.from(uploadInput.files || []).forEach(function (f) { dt.items.add(f); }); incoming.forEach(function (f) { dt.items.add(f); });
     uploadInput.files = dt.files; uploadInput.dispatchEvent(new Event('change'));
@@ -136,6 +152,82 @@ document.addEventListener('DOMContentLoaded', function () {
       document.getElementById('imgFullViewTitle').textContent = btn.getAttribute('data-img-name') || 'Image';
       new bootstrap.Modal(document.getElementById('imgFullViewModal')).show();
     });
+  });
+
+  function closeCtx(){ ctx.classList.add('d-none'); sub.classList.add('d-none'); }
+  document.addEventListener('click', function(){ closeCtx(); });
+  document.addEventListener('contextmenu', function(e){
+    var drive = e.target.closest('.drive-card');
+    var item = e.target.closest('.file-item');
+    var workspace = e.target.closest('.card-body');
+    if(!drive && !item && !workspace) return;
+    e.preventDefault();
+    closeCtx();
+    targetPath = '';
+    ctx.querySelectorAll('[data-cmd]').forEach(function(el){ el.classList.add('d-none'); });
+    if(drive){
+      targetPath = drive.getAttribute('data-path') || '';
+      ctx.querySelector('[data-cmd="open"]').classList.remove('d-none');
+      ctx.querySelector('[data-cmd="rename_drive"]').classList.remove('d-none');
+    } else {
+      targetPath = item ? (item.getAttribute('data-path') || currentPath) : currentPath;
+      ctx.querySelector('[data-cmd="new_menu"]').classList.remove('d-none');
+      ctx.querySelector('[data-cmd="copy"]').classList.remove('d-none');
+      ctx.querySelector('[data-cmd="cut"]').classList.remove('d-none');
+      ctx.querySelector('[data-cmd="paste"]').classList.remove('d-none');
+      ctx.querySelector('[data-cmd="upload_menu"]').classList.remove('d-none');
+    }
+    ctx.style.left = e.clientX + 'px'; ctx.style.top = e.clientY + 'px'; ctx.classList.remove('d-none');
+  });
+
+  function submitDynamic(fields, queryPath){
+    var f = document.createElement('form'); f.method='post'; f.action="{{ url_for('admin_personal_tools') }}" + (queryPath ? ('?path='+encodeURIComponent(queryPath)) : '');
+    var html = '<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">';
+    Object.keys(fields).forEach(function(k){ html += '<input type="hidden" name="'+k+'" value="'+fields[k]+'">'; });
+    f.innerHTML = html; document.body.appendChild(f); f.submit();
+  }
+
+  ctx.addEventListener('click', function(e){
+    var btn = e.target.closest('[data-cmd]'); if(!btn) return;
+    var cmd = btn.getAttribute('data-cmd');
+    if(cmd === 'open'){ window.location = "{{ url_for('admin_personal_tools') }}" + "?path=" + encodeURIComponent(targetPath); return; }
+    if(cmd === 'rename_drive'){ var nn = prompt('Rename drive:', targetPath); if(nn) submitDynamic({action:'rename_drive', old_path:targetPath, new_name:nn}, ''); return; }
+    if(cmd === 'new_menu' || cmd === 'upload_menu'){
+      sub.querySelectorAll('.submenu-new').forEach(function(x){ x.classList.toggle('d-none', cmd!=='new_menu'); });
+      sub.querySelectorAll('.submenu-upload').forEach(function(x){ x.classList.toggle('d-none', cmd!=='upload_menu'); });
+      var r = btn.getBoundingClientRect(); sub.style.left = (r.right + 2) + 'px'; sub.style.top = r.top + 'px'; sub.classList.remove('d-none'); return;
+    }
+    if(cmd === 'copy' || cmd === 'cut'){
+      var checked = Array.from(document.querySelectorAll('input[name="selected_paths"]:checked')).map(function(c){ return c.value; });
+      if(!checked.length && targetPath) checked = [targetPath];
+      if(!checked.length) return;
+      var fields = {path: currentPath, action: (cmd==='copy'?'copy_selected':'cut_selected')};
+      var f = document.createElement('form'); f.method='post'; f.action="{{ url_for('admin_personal_tools') }}" + "?path=" + encodeURIComponent(currentPath);
+      var h = '<input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="path" value="'+currentPath+'"><input type="hidden" name="action" value="'+fields.action+'">';
+      checked.forEach(function(p){ h += '<input type="hidden" name="selected_paths" value="'+p+'">'; });
+      f.innerHTML = h; document.body.appendChild(f); f.submit(); return;
+    }
+    if(cmd === 'paste'){ submitDynamic({path: currentPath, action:'paste_here'}, currentPath); return; }
+  });
+
+  sub.addEventListener('click', function(e){
+    var btn = e.target.closest('[data-sub]'); if(!btn) return;
+    var k = btn.getAttribute('data-sub');
+    if(k === 'folder'){ var n = prompt('Folder name:', 'New Folder'); if(n) submitDynamic({path:currentPath, action:'create_folder', folder_name:n}, currentPath); return; }
+    if(k === 'text'){ var n2 = prompt('Text file name:', 'New Text Document.txt'); if(n2) submitDynamic({path:currentPath, action:'create_text', file_name:n2}, currentPath); return; }
+    if(k === 'file'){ if(uploadInput) uploadInput.click(); return; }
+    if(k === 'folder_upload'){
+      var inp = document.createElement('input'); inp.type='file'; inp.multiple=true; inp.setAttribute('webkitdirectory','webkitdirectory');
+      inp.onchange = function(){
+        if(!inp.files || !inp.files.length) return;
+        var f = document.createElement('form'); f.method='post'; f.enctype='multipart/form-data'; f.action="{{ url_for('admin_personal_tools') }}" + "?path=" + encodeURIComponent(currentPath);
+        f.innerHTML = '<input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="path" value="'+currentPath+'"><input type="hidden" name="action" value="upload_folder">';
+        var real = document.createElement('input'); real.type='file'; real.name='upload_folder_files'; real.multiple=true;
+        var dt = new DataTransfer(); Array.from(inp.files).forEach(function(file){ dt.items.add(file); }); real.files = dt.files;
+        f.appendChild(real); document.body.appendChild(f); f.submit();
+      };
+      inp.click();
+    }
   });
 });
 </script>
