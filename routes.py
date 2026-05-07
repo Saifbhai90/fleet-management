@@ -2548,10 +2548,15 @@ def admin_personal_tools():
     if not _require_master_admin():
         return redirect(url_for('dashboard'))
 
+    mode = (request.values.get('mode') or '').strip().lower()
     path_arg = (request.values.get('path') or '').strip()
     root_mode = not path_arg
     curr_abs = None
     curr_rel = ''
+
+    if request.method == 'GET' and root_mode and mode != 'my_pc':
+        return render_template('admin_personal_tools_desktop.html')
+
     if not root_mode:
         curr_abs, curr_rel = _safe_abs_from_rel(path_arg)
         if not os.path.exists(curr_abs):
@@ -2561,7 +2566,7 @@ def admin_personal_tools():
         action = (request.form.get('action') or '').strip()
         posted_path = (request.form.get('path') or '').strip()
         if not posted_path:
-            return redirect(url_for('admin_personal_tools'))
+            return redirect(url_for('admin_personal_tools', mode='my_pc'))
         curr_abs, curr_rel = _safe_abs_from_rel(posted_path)
 
         if action == 'create_folder':
@@ -2762,6 +2767,81 @@ def admin_personal_tools():
         entries=entries,
         folder_options=folder_options,
     )
+
+
+@app.route('/admin/personal-tools/quick-print', methods=['GET', 'POST'])
+def admin_personal_tools_quick_print():
+    """Standalone multi file select + print tool from desktop launcher."""
+    if not _require_master_admin():
+        return redirect(url_for('dashboard'))
+
+    if request.method == 'POST':
+        files = request.files.getlist('print_files')
+        files = [f for f in files if f and (f.filename or '').strip()]
+        if not files:
+            flash('Kam az kam 1 PDF/Image file select karein.', 'warning')
+            return redirect(url_for('admin_personal_tools_quick_print'))
+
+        page_size = (request.form.get('page_size') or 'original').strip().lower()
+        orientation = (request.form.get('orientation') or 'portrait').strip().lower()
+        order_by = (request.form.get('order_by') or 'as_uploaded').strip().lower()
+        if page_size not in {'original', 'a4', 'letter'}:
+            page_size = 'original'
+        if orientation not in {'portrait', 'landscape'}:
+            orientation = 'portrait'
+        if order_by not in {'as_uploaded', 'name_asc', 'name_desc'}:
+            order_by = 'as_uploaded'
+        if order_by in {'name_asc', 'name_desc'}:
+            files = sorted(files, key=lambda f: secure_filename(f.filename or '').lower(), reverse=(order_by == 'name_desc'))
+
+        try:
+            PdfReader, PdfWriter = _load_pdf_writer_reader()
+            writer = PdfWriter()
+            allowed_img = {'.png', '.jpg', '.jpeg', '.webp', '.bmp', '.gif', '.tif', '.tiff'}
+            added_pages = 0
+            for fs in files:
+                ext = os.path.splitext(secure_filename(fs.filename or ''))[1].lower()
+                if ext == '.pdf':
+                    reader = PdfReader(fs.stream)
+                    for p in reader.pages:
+                        writer.add_page(p)
+                        added_pages += 1
+                elif ext in allowed_img:
+                    page_pdf = _image_to_pdf_page_bytes(fs)
+                    reader = PdfReader(page_pdf)
+                    for p in reader.pages:
+                        writer.add_page(p)
+                        added_pages += 1
+            if added_pages <= 0:
+                flash('Selected files me printable pages nahi milin.', 'danger')
+                return redirect(url_for('admin_personal_tools_quick_print'))
+            tw, th = _target_page_dims(page_size, orientation)
+            if tw and th:
+                writer = _normalize_writer_pages(writer, tw, th)
+            tmp_dir = os.path.join(app.static_folder, 'tmp_print')
+            os.makedirs(tmp_dir, exist_ok=True)
+            fname = f'quick-print-{uuid.uuid4().hex}.pdf'
+            fpath = os.path.join(tmp_dir, fname)
+            with open(fpath, 'wb') as f:
+                out = BytesIO()
+                writer.write(out)
+                out.seek(0)
+                f.write(out.read())
+            return render_template(
+                'admin_personal_tools_print_ready.html',
+                pdf_url=url_for('static', filename=f'tmp_print/{fname}'),
+                pages=added_pages,
+                files_count=len(files),
+                page_size=page_size,
+                orientation=orientation,
+                order_by=order_by,
+                job_id='',
+            )
+        except Exception as e:
+            flash(f'Print batch error: {e}', 'danger')
+            return redirect(url_for('admin_personal_tools_quick_print'))
+
+    return render_template('admin_personal_tools_quick_print.html')
 
 
 @app.route('/admin/personal-tools/library', methods=['GET'])

@@ -170,6 +170,7 @@ ENDPOINT_PERMISSION_MAP = [
     # Administration
     ('admin_app_releases', 'users_manage'),
     ('admin_personal_tools', 'users_manage'),
+    ('admin_personal_tools_quick_print', 'users_manage'),
     ('admin_personal_tools_library', 'users_manage'),
     ('admin_personal_tools_library_detail', 'users_manage'),
     # Task & Logbook

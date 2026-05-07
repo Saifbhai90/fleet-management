@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Personal Tools Desktop{% endblock %}
+{% block content %}
+<div class="container-fluid">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="mb-0"><i class="bi bi-tools me-2 text-primary"></i>Personal Tools</h2>
+    <a href="{{ url_for('admin_app_releases') }}" class="btn btn-outline-primary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back to App Updates</a>
+  </div>
+
+  <div class="border rounded-3 p-4" style="min-height:68vh;background:linear-gradient(160deg,#d8ebff 0%,#b9dcff 45%,#9dcdf5 100%);">
+    <div class="row g-4">
+      <div class="col-6 col-md-3 col-xl-2 text-center">
+        <a href="{{ url_for('admin_personal_tools', mode='my_pc') }}" class="text-decoration-none text-dark">
+          <div class="p-2 rounded hover-shadow">
+            <i class="bi bi-pc-display fs-1 d-block mb-2 text-primary"></i>
+            <div class="fw-semibold">My PC</div>
+          </div>
+        </a>
+      </div>
+      <div class="col-6 col-md-3 col-xl-2 text-center">
+        <a href="{{ url_for('admin_personal_tools_quick_print') }}" class="text-decoration-none text-dark">
+          <div class="p-2 rounded hover-shadow">
+            <i class="bi bi-printer-fill fs-1 d-block mb-2 text-success"></i>
+            <div class="fw-semibold">Multi File Print</div>
+          </div>
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+

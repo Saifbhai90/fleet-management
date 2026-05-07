@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Multi File Print Tool{% endblock %}
+{% block content %}
+<div class="container-fluid">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0"><i class="bi bi-printer-fill me-2 text-success"></i>Multi File Print Tool</h2>
+    <a href="{{ url_for('admin_personal_tools') }}" class="btn btn-outline-primary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back to Desktop</a>
+  </div>
+
+  <div class="card shadow-sm border-0 rounded-3">
+    <div class="card-body">
+      <form method="post" enctype="multipart/form-data" id="quickPrintForm">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Select PDF / Image Files</label>
+          <input type="file" class="form-control" name="print_files" id="printFilesInput" multiple accept=".pdf,.png,.jpg,.jpeg,.webp,.bmp,.gif,.tif,.tiff" required>
+          <div class="form-text text-primary">Ctrl+V se clipboard images/files add ho sakti hain.</div>
+        </div>
+        <div id="selectedFilesBox" class="alert alert-light border d-none"></div>
+
+        <div class="row g-3 mb-3">
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Page Size</label>
+            <select class="form-select" name="page_size">
+              <option value="original">Original</option>
+              <option value="a4">A4</option>
+              <option value="letter">Letter</option>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Orientation</label>
+            <select class="form-select" name="orientation">
+              <option value="portrait">Portrait</option>
+              <option value="landscape">Landscape</option>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Order</label>
+            <select class="form-select" name="order_by">
+              <option value="as_uploaded">As Uploaded</option>
+              <option value="name_asc">A to Z</option>
+              <option value="name_desc">Z to A</option>
+            </select>
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-success" id="quickPrintBtn"><i class="bi bi-lightning-charge-fill me-1"></i>Combine & Print</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  var input = document.getElementById('printFilesInput');
+  var box = document.getElementById('selectedFilesBox');
+  var form = document.getElementById('quickPrintForm');
+  var btn = document.getElementById('quickPrintBtn');
+  function refresh() {
+    var files = Array.from(input.files || []);
+    if (!files.length) { box.classList.add('d-none'); box.innerHTML=''; return; }
+    var rows = files.slice(0, 12).map(function (f) { return '<li>'+f.name+'</li>'; }).join('');
+    if (files.length > 12) rows += '<li>...and '+(files.length-12)+' more</li>';
+    box.innerHTML = '<strong>'+files.length+' file(s):</strong><ul class="mb-0 mt-1">'+rows+'</ul>';
+    box.classList.remove('d-none');
+  }
+  input.addEventListener('change', refresh);
+  document.addEventListener('paste', function (e) {
+    var cb = e.clipboardData; if (!cb || !cb.items) return;
+    var incoming = [];
+    for (var i=0;i<cb.items.length;i++){ var it=cb.items[i]; if(it.kind!=='file') continue; var f=it.getAsFile(); if(f) incoming.push(f); }
+    if(!incoming.length) return;
+    var dt = new DataTransfer(); Array.from(input.files || []).forEach(function(f){dt.items.add(f)}); incoming.forEach(function(f){dt.items.add(f)});
+    input.files = dt.files; refresh();
+  });
+  form.addEventListener('submit', function(){ btn.disabled=true; btn.innerHTML='<span class="spinner-border spinner-border-sm me-1"></span>Preparing...'; });
+});
+</script>
+{% endblock %}
+
