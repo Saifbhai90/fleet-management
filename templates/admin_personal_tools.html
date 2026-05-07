@@ -1,54 +1,59 @@
 {% extends "base.html" %}
 {% block title %}Personal Tools{% endblock %}
-
 {% block content %}
 <div class="container-fluid">
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
-    <h2 class="mb-0"><i class="bi bi-tools me-2 text-primary"></i>Personal Tools</h2>
-    <div class="d-flex gap-2">
-      <a href="{{ url_for('admin_app_releases') }}" class="btn btn-outline-primary btn-sm">
-        <i class="bi bi-arrow-left me-1"></i>Back to App Updates
-      </a>
-    </div>
+    <h2 class="mb-0"><i class="bi bi-pc-display-horizontal me-2 text-primary"></i>Personal Tools</h2>
+    <a href="{{ url_for('admin_app_releases') }}" class="btn btn-outline-primary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back to App Updates</a>
   </div>
 
   <div class="card shadow-sm border-0 rounded-3">
-    <div class="card-header bg-primary text-white py-3">
-      <h5 class="mb-0"><i class="bi bi-hdd-stack me-2"></i>Driver D / Driver E File Manager + Print</h5>
-    </div>
     <div class="card-body">
-      <div class="d-flex gap-2 mb-3 flex-wrap">
-        {% for r in roots %}
-        <a href="{{ url_for('admin_personal_tools', path=r) }}" class="btn btn-sm {% if current_rel.startswith(r) %}btn-primary{% else %}btn-outline-primary{% endif %}">
-          <i class="bi bi-hdd-fill me-1"></i>{{ r }}
-        </a>
-        {% endfor %}
-        {% if parent_rel %}
-        <a href="{{ url_for('admin_personal_tools', path=parent_rel) }}" class="btn btn-sm btn-outline-secondary">
-          <i class="bi bi-arrow-up-circle me-1"></i>Up
-        </a>
+      <div class="d-flex align-items-center gap-2 flex-wrap border rounded p-2 mb-3 bg-light">
+        <a href="{{ url_for('admin_personal_tools') }}" class="btn btn-sm btn-outline-secondary">This PC</a>
+        {% if not root_mode %}
+          {% set parts = current_rel.split('/') %}
+          {% set accum = '' %}
+          {% for p in parts %}
+            {% if accum %}{% set accum = accum + '/' + p %}{% else %}{% set accum = p %}{% endif %}
+            <span class="text-muted">/</span>
+            <a href="{{ url_for('admin_personal_tools', path=accum) }}" class="btn btn-sm btn-outline-secondary">{{ p }}</a>
+          {% endfor %}
         {% endif %}
       </div>
 
-      <div class="alert alert-light border py-2">
-        <strong>Current Path:</strong> {{ current_rel }}
+      {% if root_mode %}
+      <h5 class="mb-3">Devices and drives</h5>
+      <div class="row g-3">
+        {% for d in drives %}
+        <div class="col-md-6 col-xl-3">
+          <a href="{{ url_for('admin_personal_tools', path=d.rel_path) }}" class="text-decoration-none text-reset">
+            <div class="border rounded p-3 h-100">
+              <div class="d-flex align-items-center gap-2 mb-2"><i class="bi bi-hdd-fill text-primary"></i><strong>{{ d.name }}</strong></div>
+              <div class="small text-muted">{{ d.folders }} folders, {{ d.files }} files</div>
+              <div class="small text-muted">Used: {{ d.total_size }}</div>
+            </div>
+          </a>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="d-flex gap-2 mb-3 flex-wrap">
+        {% if parent_rel %}<a href="{{ url_for('admin_personal_tools', path=parent_rel) }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-up-circle me-1"></i>Up</a>{% endif %}
+        <span class="badge bg-light text-dark border">Current: {{ current_rel }}</span>
       </div>
 
       <div class="row g-3 mb-3">
         <div class="col-lg-6">
           <form method="post" class="d-flex gap-2">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="hidden" name="action" value="create_folder">
-            <input type="hidden" name="path" value="{{ current_rel }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="create_folder"><input type="hidden" name="path" value="{{ current_rel }}">
             <input type="text" class="form-control" name="folder_name" placeholder="New folder name" required>
             <button type="submit" class="btn btn-outline-success"><i class="bi bi-folder-plus me-1"></i>Add Folder</button>
           </form>
         </div>
         <div class="col-lg-6">
           <form method="post" enctype="multipart/form-data" id="uploadForm" class="d-flex gap-2">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="hidden" name="action" value="upload_files">
-            <input type="hidden" name="path" value="{{ current_rel }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="upload_files"><input type="hidden" name="path" value="{{ current_rel }}">
             <input type="file" class="form-control" name="upload_files" id="uploadFilesInput" multiple>
             <button type="submit" class="btn btn-outline-primary"><i class="bi bi-upload me-1"></i>Upload / Paste</button>
           </form>
@@ -58,159 +63,78 @@
       </div>
 
       <form method="post" id="selectionForm">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <input type="hidden" name="path" value="{{ current_rel }}">
-
-        <div class="table-responsive border rounded">
-          <table class="table table-hover align-middle mb-0">
-            <thead class="table-light">
-              <tr>
-                <th class="ps-3" style="width:45px;"><input type="checkbox" id="checkAll"></th>
-                <th>Name</th>
-                <th>Type</th>
-                <th>Size</th>
-                <th>Modified</th>
-                <th class="text-end pe-3">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for e in entries %}
-              <tr>
-                <td class="ps-3">
-                  <input type="checkbox" name="selected_paths" value="{{ e.rel_path }}">
-                </td>
-                <td>
-                  {% if e.is_dir %}
-                    <i class="bi bi-folder-fill text-warning me-1"></i>
-                    <a href="{{ url_for('admin_personal_tools', path=e.rel_path) }}" class="fw-semibold">{{ e.name }}</a>
-                  {% else %}
-                    <i class="bi bi-file-earmark me-1 text-secondary"></i>{{ e.name }}
-                  {% endif %}
-                </td>
-                <td>{{ 'Folder' if e.is_dir else 'File' }}</td>
-                <td>{{ e.size if not e.is_dir else '-' }}</td>
-                <td class="small text-muted">{{ e.mtime }}</td>
-                <td class="text-end pe-3">
-                  {% if not e.is_dir %}
-                    <a href="{{ e.url }}" class="btn btn-sm btn-outline-dark" target="_blank"><i class="bi bi-box-arrow-up-right"></i></a>
-                    <a href="{{ e.url }}" class="btn btn-sm btn-outline-primary" download><i class="bi bi-download"></i></a>
-                    {% if e.is_image %}
-                    <button type="button" class="btn btn-sm btn-outline-secondary img-fullview-btn" data-img-url="{{ e.url }}" data-img-name="{{ e.name }}">
-                      <i class="bi bi-arrows-fullscreen"></i>
-                    </button>
-                    {% endif %}
-                  {% endif %}
-                </td>
-              </tr>
-              {% else %}
-              <tr><td colspan="6" class="text-center text-muted py-4">Folder empty hai.</td></tr>
-              {% endfor %}
-            </tbody>
-          </table>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="path" value="{{ current_rel }}">
+        <div class="row g-3">
+          {% for e in entries %}
+          <div class="col-6 col-md-4 col-xl-2">
+            <div class="border rounded p-2 h-100">
+              <div class="d-flex justify-content-between mb-2">
+                <input type="checkbox" name="selected_paths" value="{{ e.rel_path }}">
+                {% if e.is_dir %}<i class="bi bi-folder-fill text-warning"></i>{% elif e.is_image %}<i class="bi bi-file-image text-info"></i>{% elif e.ext == '.pdf' %}<i class="bi bi-file-earmark-pdf text-danger"></i>{% else %}<i class="bi bi-file-earmark text-secondary"></i>{% endif %}
+              </div>
+              <div class="small fw-semibold text-break mb-1">{% if e.is_dir %}<a href="{{ url_for('admin_personal_tools', path=e.rel_path) }}" class="text-decoration-none">{{ e.name }}</a>{% else %}{{ e.name }}{% endif %}</div>
+              <div class="small text-muted mb-2">{{ 'Folder' if e.is_dir else e.size }}</div>
+              {% if not e.is_dir %}
+              <div class="d-flex gap-1">
+                <a href="{{ e.url }}" class="btn btn-sm btn-outline-dark" target="_blank"><i class="bi bi-box-arrow-up-right"></i></a>
+                <a href="{{ e.url }}" class="btn btn-sm btn-outline-primary" download><i class="bi bi-download"></i></a>
+                {% if e.is_image %}<button type="button" class="btn btn-sm btn-outline-secondary img-fullview-btn" data-img-url="{{ e.url }}" data-img-name="{{ e.name }}"><i class="bi bi-arrows-fullscreen"></i></button>{% endif %}
+              </div>
+              {% endif %}
+            </div>
+          </div>
+          {% else %}
+          <div class="col-12"><div class="text-center text-muted py-4 border rounded">Folder empty hai.</div></div>
+          {% endfor %}
         </div>
 
         <div class="row g-3 mt-2">
           <div class="col-lg-6">
             <div class="input-group">
-              <select class="form-select" name="destination_path">
-                {% for p in folder_options %}
-                <option value="{{ p }}" {% if p == current_rel %}selected{% endif %}>{{ p }}</option>
-                {% endfor %}
-              </select>
-              <button type="submit" name="action" value="move_selected" class="btn btn-outline-warning">
-                <i class="bi bi-arrow-left-right me-1"></i>Move Selected
-              </button>
+              <select class="form-select" name="destination_path">{% for p in folder_options %}<option value="{{ p }}" {% if p == current_rel %}selected{% endif %}>{{ p }}</option>{% endfor %}</select>
+              <button type="submit" name="action" value="move_selected" class="btn btn-outline-warning"><i class="bi bi-arrow-left-right me-1"></i>Move Selected</button>
             </div>
           </div>
           <div class="col-lg-6">
             <div class="d-flex gap-2 justify-content-lg-end">
-              <select class="form-select" name="page_size" style="max-width:140px;">
-                <option value="original">Original</option>
-                <option value="a4">A4</option>
-                <option value="letter">Letter</option>
-              </select>
-              <select class="form-select" name="orientation" style="max-width:140px;">
-                <option value="portrait">Portrait</option>
-                <option value="landscape">Landscape</option>
-              </select>
-              <button type="submit" name="action" value="print_selected" class="btn btn-primary">
-                <i class="bi bi-printer-fill me-1"></i>Print Selected
-              </button>
+              <select class="form-select" name="page_size" style="max-width:140px;"><option value="original">Original</option><option value="a4">A4</option><option value="letter">Letter</option></select>
+              <select class="form-select" name="orientation" style="max-width:140px;"><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select>
+              <button type="submit" name="action" value="print_selected" class="btn btn-primary"><i class="bi bi-printer-fill me-1"></i>Print Selected</button>
             </div>
           </div>
         </div>
       </form>
+      {% endif %}
     </div>
   </div>
 </div>
 
-<div class="modal fade" id="imgFullViewModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-fullscreen">
-    <div class="modal-content bg-dark">
-      <div class="modal-header border-0">
-        <h5 class="modal-title text-white" id="imgFullViewTitle">Image</h5>
-        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body d-flex justify-content-center align-items-center p-2">
-        <img id="imgFullViewTarget" src="" alt="" style="max-width:100%;max-height:90vh;object-fit:contain;">
-      </div>
-    </div>
-  </div>
-</div>
+<div class="modal fade" id="imgFullViewModal" tabindex="-1" aria-hidden="true"><div class="modal-dialog modal-fullscreen"><div class="modal-content bg-dark"><div class="modal-header border-0"><h5 class="modal-title text-white" id="imgFullViewTitle">Image</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body d-flex justify-content-center align-items-center p-2"><img id="imgFullViewTarget" src="" alt="" style="max-width:100%;max-height:90vh;object-fit:contain;"></div></div></div></div>
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
   var uploadInput = document.getElementById('uploadFilesInput');
   var uploadPreview = document.getElementById('uploadPreview');
-  var checkAll = document.getElementById('checkAll');
-  var form = document.getElementById('selectionForm');
-
-  if (checkAll) {
-    checkAll.addEventListener('change', function () {
-      document.querySelectorAll('input[name="selected_paths"]').forEach(function (cb) { cb.checked = checkAll.checked; });
-    });
-  }
-
   if (uploadInput) {
     uploadInput.addEventListener('change', function () {
       var files = Array.from(uploadInput.files || []);
       uploadPreview.textContent = files.length ? (files.length + ' file(s) ready for upload.') : '';
     });
   }
-
-  // Ctrl+V clipboard paste support for files/images into upload input
   document.addEventListener('paste', function (e) {
     if (!uploadInput) return;
-    var cb = e.clipboardData;
-    if (!cb || !cb.items || !cb.items.length) return;
+    var cb = e.clipboardData; if (!cb || !cb.items || !cb.items.length) return;
     var incoming = [];
-    for (var i = 0; i < cb.items.length; i++) {
-      var it = cb.items[i];
-      if (it.kind !== 'file') continue;
-      var f = it.getAsFile();
-      if (!f) continue;
-      if (!f.name) {
-        var ext = (f.type && f.type.indexOf('png') !== -1) ? '.png' : '';
-        Object.defineProperty(f, 'name', { value: 'pasted_' + Date.now() + '_' + i + ext });
-      }
-      incoming.push(f);
-    }
+    for (var i = 0; i < cb.items.length; i++) { var it = cb.items[i]; if (it.kind !== 'file') continue; var f = it.getAsFile(); if (f) incoming.push(f); }
     if (!incoming.length) return;
-    var dt = new DataTransfer();
-    Array.from(uploadInput.files || []).forEach(function (f) { dt.items.add(f); });
-    incoming.forEach(function (f) { dt.items.add(f); });
-    uploadInput.files = dt.files;
-    uploadInput.dispatchEvent(new Event('change'));
+    var dt = new DataTransfer(); Array.from(uploadInput.files || []).forEach(function (f) { dt.items.add(f); }); incoming.forEach(function (f) { dt.items.add(f); });
+    uploadInput.files = dt.files; uploadInput.dispatchEvent(new Event('change'));
   });
-
   document.querySelectorAll('.img-fullview-btn').forEach(function (btn) {
     btn.addEventListener('click', function () {
-      var u = btn.getAttribute('data-img-url') || '';
-      var n = btn.getAttribute('data-img-name') || 'Image';
-      document.getElementById('imgFullViewTarget').src = u;
-      document.getElementById('imgFullViewTitle').textContent = n;
-      var mdl = new bootstrap.Modal(document.getElementById('imgFullViewModal'));
-      mdl.show();
+      document.getElementById('imgFullViewTarget').src = btn.getAttribute('data-img-url') || '';
+      document.getElementById('imgFullViewTitle').textContent = btn.getAttribute('data-img-name') || 'Image';
+      new bootstrap.Modal(document.getElementById('imgFullViewModal')).show();
     });
   });
 });

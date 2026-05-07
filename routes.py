@@ -2544,17 +2544,25 @@ def _require_master_admin():
 
 @app.route('/admin/personal-tools', methods=['GET', 'POST'])
 def admin_personal_tools():
-    """Master admin personal tools: local-like folders, paste/upload, move, view, print selected."""
+    """Master admin personal tools: explorer-like folders, paste/upload, move, view, print selected."""
     if not _require_master_admin():
         return redirect(url_for('dashboard'))
 
-    path_arg = request.values.get('path', 'Driver D')
-    curr_abs, curr_rel = _safe_abs_from_rel(path_arg)
-    if not os.path.exists(curr_abs):
-        os.makedirs(curr_abs, exist_ok=True)
+    path_arg = (request.values.get('path') or '').strip()
+    root_mode = not path_arg
+    curr_abs = None
+    curr_rel = ''
+    if not root_mode:
+        curr_abs, curr_rel = _safe_abs_from_rel(path_arg)
+        if not os.path.exists(curr_abs):
+            os.makedirs(curr_abs, exist_ok=True)
 
     if request.method == 'POST':
         action = (request.form.get('action') or '').strip()
+        posted_path = (request.form.get('path') or '').strip()
+        if not posted_path:
+            return redirect(url_for('admin_personal_tools'))
+        curr_abs, curr_rel = _safe_abs_from_rel(posted_path)
 
         if action == 'create_folder':
             folder_name = (request.form.get('folder_name') or '').strip()
@@ -2689,18 +2697,20 @@ def admin_personal_tools():
         return f'{n/(1024*1024):.2f} MB'
 
     entries = []
-    for it in sorted(os.scandir(curr_abs), key=lambda e: (not e.is_dir(), e.name.lower())):
-        rel_item = _normalize_rel_path(os.path.join(curr_rel, it.name).replace('\\', '/'))
-        is_image = os.path.splitext(it.name)[1].lower() in {'.png', '.jpg', '.jpeg', '.webp', '.bmp', '.gif', '.tif', '.tiff'}
-        entries.append({
-            'name': it.name,
-            'is_dir': it.is_dir(),
-            'rel_path': rel_item,
-            'size': _fmt_size(it.stat().st_size if it.is_file() else 0),
-            'mtime': datetime.fromtimestamp(it.stat().st_mtime).strftime('%d-%m-%Y %I:%M %p'),
-            'url': _static_url_for_personal_rel(rel_item) if it.is_file() else '',
-            'is_image': is_image,
-        })
+    if not root_mode:
+        for it in sorted(os.scandir(curr_abs), key=lambda e: (not e.is_dir(), e.name.lower())):
+            rel_item = _normalize_rel_path(os.path.join(curr_rel, it.name).replace('\\', '/'))
+            is_image = os.path.splitext(it.name)[1].lower() in {'.png', '.jpg', '.jpeg', '.webp', '.bmp', '.gif', '.tif', '.tiff'}
+            entries.append({
+                'name': it.name,
+                'is_dir': it.is_dir(),
+                'rel_path': rel_item,
+                'size': _fmt_size(it.stat().st_size if it.is_file() else 0),
+                'mtime': datetime.fromtimestamp(it.stat().st_mtime).strftime('%d-%m-%Y %I:%M %p'),
+                'url': _static_url_for_personal_rel(rel_item) if it.is_file() else '',
+                'is_image': is_image,
+                'ext': os.path.splitext(it.name)[1].lower(),
+            })
 
     # destination options (all folders in both drives)
     folder_options = []
@@ -2713,14 +2723,40 @@ def admin_personal_tools():
     folder_options.sort(key=lambda x: x.lower())
 
     parent_rel = ''
-    parts = curr_rel.split('/')
-    if len(parts) > 1:
-        parent_rel = '/'.join(parts[:-1])
+    if not root_mode:
+        parts = curr_rel.split('/')
+        if len(parts) > 1:
+            parent_rel = '/'.join(parts[:-1])
 
     roots = ['Driver D', 'Driver E']
+    drives = []
+    for r in roots:
+        rp = os.path.join(_personal_drive_root(), r)
+        total = 0
+        files = 0
+        folders = 0
+        for root_dir, dir_names, file_names in os.walk(rp):
+            folders += len(dir_names)
+            files += len(file_names)
+            for fn in file_names:
+                fp = os.path.join(root_dir, fn)
+                try:
+                    total += os.path.getsize(fp)
+                except Exception:
+                    pass
+        drives.append({
+            'name': r,
+            'rel_path': r,
+            'total_size': _fmt_size(total),
+            'files': files,
+            'folders': folders,
+        })
+
     return render_template(
         'admin_personal_tools.html',
         roots=roots,
+        drives=drives,
+        root_mode=root_mode,
         current_rel=curr_rel,
         parent_rel=parent_rel,
         entries=entries,
