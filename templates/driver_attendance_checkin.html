@@ -467,7 +467,11 @@
     var projectId = projectSelect.tomselect ? projectSelect.tomselect.getValue() : projectSelect.value;
     var vehicleId = vehicleSelect.tomselect ? vehicleSelect.tomselect.getValue() : vehicleSelect.value;
     var shift = shiftSelect.tomselect ? shiftSelect.tomselect.getValue() : shiftSelect.value;
-    if (!projectId || !vehicleId || !shift) { resetField(driverSelect, [], true); return; }
+    if (!projectId || !vehicleId || !shift) {
+      resetField(driverSelect, [], true);
+      refreshCheckinMediaPanel();
+      return;
+    }
     if (driverSelect.tomselect) { driverSelect.tomselect.disable(); driverSelect.tomselect.clear(true); }
     fetch('{{ url_for("api_attendance_drivers") }}?project_id=' + projectId + '&vehicle_id=' + encodeURIComponent(vehicleId) + '&shift=' + encodeURIComponent(shift)).then(function(r) { return r.json(); }).then(function(arr) {
       driverDutyOffById = {};
@@ -486,6 +490,9 @@
       if (autoVal && driverSelect.tomselect) driverSelect.tomselect.setValue(autoVal, true);
       updateDistanceUI();
       if ((driverSelect.tomselect ? driverSelect.tomselect.getValue() : driverSelect.value) && parkingLat.value && parkingLng.value) fetchLocation();
+      refreshCheckinMediaPanel();
+    }).catch(function() {
+      refreshCheckinMediaPanel();
     });
   }
 
