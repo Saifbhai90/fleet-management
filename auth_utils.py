@@ -166,6 +166,7 @@ ENDPOINT_PERMISSION_MAP = [
     ('driver_attendance_missing_checkout', 'driver_attendance_missing_checkout'),
     ('driver_attendance_manual_checkin', 'driver_attendance_list'),
     ('driver_attendance_manual_checkout', 'driver_attendance_list'),
+    ('driver_attendance_list_clear_times', 'driver_attendance_list'),
     ('driver_attendance_bulk_manual_checkout', 'driver_attendance_missing_checkout'),
     # Administration
     ('admin_app_releases', 'users_manage'),

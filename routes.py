@@ -717,6 +717,41 @@ def _attendance_list_manual_checkout_allowed():
     return user_can_access(session.get('permissions') or [], 'driver_attendance_list_manual_checkout')
 
 
+def _delete_stored_attendance_photo(path):
+    """Remove R2 object by URL or local file under UPLOAD_FOLDER (paths like /uploads/attendance/...)."""
+    if not path:
+        return
+    fp = (path or '').strip()
+    if fp.startswith('http://') or fp.startswith('https://'):
+        try:
+            from r2_storage import delete_file_by_url
+            delete_file_by_url(fp)
+        except Exception:
+            pass
+        return
+    rel = fp.lstrip('/')
+    if rel.startswith('uploads/'):
+        rel = rel[len('uploads/'):]
+    full_path = os.path.join(app.config['UPLOAD_FOLDER'], rel.replace('/', os.sep))
+    if os.path.isfile(full_path):
+        try:
+            os.remove(full_path)
+        except OSError:
+            pass
+
+
+def _driver_attendance_list_redirect_params_from_form():
+    """Rebuild Attendance List query args from POST hidden fields (filter bar state)."""
+    keys = ('project_id', 'district_id', 'vehicle_id', 'shift', 'search', 'from_date', 'to_date', 'driver_id', 'duty_shift', 'page', 'per_page')
+    params = {}
+    for k in keys:
+        v = request.form.get(k)
+        if v is None or str(v).strip() == '':
+            continue
+        params[k] = str(v).strip()
+    return params
+
+
 def _build_attendance_media_gallery_items(flat_rows, gallery_shift, photo_kind):
     """Build media_items for maintenance_expense_media-style gallery."""
     gs = (gallery_shift or 'both').strip().lower()
@@ -17778,6 +17813,78 @@ def driver_attendance_manual_checkout():
             db.session.rollback()
             flash(f'Error: {str(e)}', 'danger')
     return render_template('driver_attendance_manual_checkout.html', **tpl_kwargs)
+
+
+@app.route('/driver-attendance/list-clear-times', methods=['POST'])
+def driver_attendance_list_clear_times():
+    """From Attendance List: delete check-out only, or clear check-in (and check-out) GPS/times/photos."""
+    from auth_utils import get_user_context
+
+    uid = session.get('user_id')
+    uc = get_user_context(uid) if uid else {}
+    list_params = _driver_attendance_list_redirect_params_from_form()
+    back_url = url_for('driver_attendance_list', **list_params)
+
+    if not _attendance_list_manual_edit_allowed():
+        flash('Attendance List se check-in / check-out delete karne ki permission nahi hai.', 'danger')
+        return redirect(back_url)
+
+    attendance_id = request.form.get('attendance_id', type=int)
+    date_str = (request.form.get('date') or '').strip()
+    clear_kind = (request.form.get('clear_kind') or '').strip().lower()
+    view_date = parse_date(date_str) if date_str else None
+
+    if not attendance_id or clear_kind not in ('checkout', 'checkin'):
+        flash('Invalid request.', 'danger')
+        return redirect(back_url)
+
+    rec = DriverAttendance.query.options(joinedload(DriverAttendance.driver)).get(attendance_id)
+    if not rec or not view_date or rec.attendance_date != view_date:
+        flash('Attendance record mismatch.', 'danger')
+        return redirect(back_url)
+    if not _driver_attendance_record_allowed_for_user(rec, uc):
+        flash('Access denied.', 'danger')
+        return redirect(back_url)
+
+    tag_note = ''
+    try:
+        if clear_kind == 'checkout':
+            if not rec.check_out:
+                flash('Is record par check-out maujood nahi.', 'info')
+                return redirect(back_url)
+            _delete_stored_attendance_photo(rec.check_out_photo_path)
+            rec.check_out = None
+            rec.check_out_date = None
+            rec.check_out_latitude = None
+            rec.check_out_longitude = None
+            rec.check_out_photo_path = None
+            tag_note = 'List delete check-out'
+        else:
+            if not rec.check_in:
+                flash('Is record par check-in maujood nahi.', 'info')
+                return redirect(back_url)
+            _delete_stored_attendance_photo(rec.check_in_photo_path)
+            _delete_stored_attendance_photo(rec.check_out_photo_path)
+            rec.check_in = None
+            rec.check_in_latitude = None
+            rec.check_in_longitude = None
+            rec.check_in_photo_path = None
+            rec.parking_station_id = None
+            rec.check_out = None
+            rec.check_out_date = None
+            rec.check_out_latitude = None
+            rec.check_out_longitude = None
+            rec.check_out_photo_path = None
+            tag_note = 'List delete check-in (+cleared check-out if any)'
+        if tag_note:
+            rec.remarks = (rec.remarks or '').rstrip() + (' | ' + tag_note)
+        rec.updated_at = pk_now()
+        db.session.commit()
+        flash('Check-out hat diya gaya.' if clear_kind == 'checkout' else 'Check-in / check-out timing aur GPS data hat diya gaya.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error: {str(e)}', 'danger')
+    return redirect(back_url)
 
 
 @app.route('/driver-attendance/bulk-manual-checkout', methods=['POST'])

@@ -2,6 +2,19 @@
 {% block title %}Attendance List{% endblock %}
 
 {% block content %}
+{% macro att_list_redirect_hidden() %}
+        {% if project_id %}<input type="hidden" name="project_id" value="{{ project_id }}">{% endif %}
+        {% if district_id %}<input type="hidden" name="district_id" value="{{ district_id }}">{% endif %}
+        {% if vehicle_id %}<input type="hidden" name="vehicle_id" value="{{ vehicle_id }}">{% endif %}
+        {% if shift %}<input type="hidden" name="shift" value="{{ shift }}">{% endif %}
+        {% if search %}<input type="hidden" name="search" value="{{ search }}">{% endif %}
+        {% if from_date %}<input type="hidden" name="from_date" value="{{ from_date }}">{% endif %}
+        {% if to_date %}<input type="hidden" name="to_date" value="{{ to_date }}">{% endif %}
+        {% if driver_id %}<input type="hidden" name="driver_id" value="{{ driver_id }}">{% endif %}
+        {% if duty_shift_filter %}<input type="hidden" name="duty_shift" value="{{ duty_shift_filter }}">{% endif %}
+        {% if pagination %}<input type="hidden" name="page" value="{{ pagination.page }}">{% endif %}
+        <input type="hidden" name="per_page" value="{{ per_page }}">
+{% endmacro %}
 <div class="container-fluid">
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
     <h2 class="mb-0"><i class="bi bi-calendar-check me-2 text-primary"></i>Attendance List</h2>
@@ -247,7 +260,16 @@
                   {{ rec.check_in.strftime('%H:%M') }}
                   {% if rec.check_in_latitude is not none and rec.check_in_longitude is not none %}<br><span class="badge bg-success badge-sm" title="GPS">GPS</span>{% endif %}
                   {% if can_att_list_manual_edit|default(false) %}
-                  <br><a href="{{ url_for('driver_attendance_manual_checkin') }}?driver_id={{ driver.id }}&date={{ rec.attendance_date.strftime('%d-%m-%Y') }}&attendance_id={{ rec.id }}&back_to=attendance_list{% if list_qs %}&{{ list_qs }}{% endif %}" class="small text-decoration-none">Edit check-in</a>
+                  <br><a href="{{ url_for('driver_attendance_manual_checkin') }}?driver_id={{ driver.id }}&date={{ rec.attendance_date.strftime('%d-%m-%Y') }}&attendance_id={{ rec.id }}&back_to=attendance_list{% if list_qs %}&{{ list_qs }}{% endif %}" class="small text-decoration-none">Edit check-in</a><span class="text-muted mx-1">·</span>
+                  <form method="post" action="{{ url_for('driver_attendance_list_clear_times') }}" class="d-inline"
+                    onsubmit="return confirm('Check-in ka time, GPS aur photo hat jaye ga. Agar check-out tha to wo bhi hat jaye ga. Status record rahay ga. Continue?');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="clear_kind" value="checkin">
+                    <input type="hidden" name="attendance_id" value="{{ rec.id }}">
+                    <input type="hidden" name="date" value="{{ rec.attendance_date.strftime('%d-%m-%Y') }}">
+                    {{ att_list_redirect_hidden() }}
+                    <button type="submit" class="btn btn-link btn-sm text-danger p-0 align-baseline text-decoration-none">Delete check-in</button>
+                  </form>
                   {% endif %}
                 {% else %}-{% endif %}
               </td>
@@ -279,7 +301,16 @@
                   {{ rec.check_out.strftime('%H:%M') }}{% if rec.check_out_date and rec.check_out_date != rec.attendance_date %}<br><small class="text-muted">({{ rec.check_out_date.strftime('%d-%m') }})</small>{% endif %}
                   {% if rec.check_out_latitude is not none and rec.check_out_longitude is not none %}<br><span class="badge bg-success badge-sm" title="GPS">GPS</span>{% endif %}
                   {% if can_att_list_manual_edit|default(false) %}
-                  <br><a href="{{ url_for('driver_attendance_manual_checkout') }}?driver_id={{ driver.id }}&date={{ rec.attendance_date.strftime('%d-%m-%Y') }}&attendance_id={{ rec.id }}&back_to=attendance_list{% if list_qs %}&{{ list_qs }}{% endif %}" class="small text-decoration-none">Edit check-out</a>
+                  <br><a href="{{ url_for('driver_attendance_manual_checkout') }}?driver_id={{ driver.id }}&date={{ rec.attendance_date.strftime('%d-%m-%Y') }}&attendance_id={{ rec.id }}&back_to=attendance_list{% if list_qs %}&{{ list_qs }}{% endif %}" class="small text-decoration-none">Edit check-out</a><span class="text-muted mx-1">·</span>
+                  <form method="post" action="{{ url_for('driver_attendance_list_clear_times') }}" class="d-inline"
+                    onsubmit="return confirm('Sirf check-out time, GPS aur photo hatayein? Check-in waqi rahay ga.');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="clear_kind" value="checkout">
+                    <input type="hidden" name="attendance_id" value="{{ rec.id }}">
+                    <input type="hidden" name="date" value="{{ rec.attendance_date.strftime('%d-%m-%Y') }}">
+                    {{ att_list_redirect_hidden() }}
+                    <button type="submit" class="btn btn-link btn-sm text-danger p-0 align-baseline text-decoration-none">Delete check-out</button>
+                  </form>
                   {% endif %}
                 {% else %}-{% endif %}
               </td>
