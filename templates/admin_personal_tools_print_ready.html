@@ -168,7 +168,12 @@ function getEdit(p){
   return e;
 }
 function saveEdits(){
-  localStorage.setItem(cropKey, JSON.stringify(cropMap));
+  try{
+    localStorage.setItem(cropKey, JSON.stringify(cropMap));
+    return true;
+  }catch(_){
+    return false;
+  }
 }
 
 function nPage(){
@@ -294,12 +299,17 @@ document.getElementById('btnCropRotate').onclick = ()=>{ if(!cropper) return; tr
 document.getElementById('btnCropResetSel').onclick = ()=>{ if(!cropper) return; try{ cropper.reset(); cropFitToWindow(); }catch(_){} };
 document.getElementById('btnApplyCrop').onclick = ()=>{
   if(!cropper) return;
+  const applyBtn = document.getElementById('btnApplyCrop');
+  const oldText = applyBtn.textContent;
+  applyBtn.disabled = true;
+  applyBtn.textContent = 'Applying...';
+  try{
   const p = getViewerPage();
   const srcPage = pageOrder[p-1] || p;
   pushHistory(srcPage);
   let cv = null;
   try{
-    cv = cropper.getCroppedCanvas({ imageSmoothingEnabled:true, imageSmoothingQuality:'high', fillColor:'#fff', maxWidth:3000, maxHeight:3000 });
+    cv = cropper.getCroppedCanvas({ imageSmoothingEnabled:true, imageSmoothingQuality:'high', fillColor:'#fff', maxWidth:2200, maxHeight:2200 });
   }catch(_){}
   if(!cv || !cv.width || !cv.height){
     alert('Crop apply nahi hua. Crop area select karke dobara try karein.');
@@ -307,18 +317,28 @@ document.getElementById('btnApplyCrop').onclick = ()=>{
   }
   const e = getEdit(srcPage);
   // Bake crop result directly so coordinates never drift with rotate/reorder edits.
-  e.dataUrl = cv.toDataURL('image/png', 0.95);
+  e.dataUrl = cv.toDataURL('image/jpeg', 0.9);
   delete e.cropData;
   e.rotate = 0;
   e.brightness = 100;
   e.contrast = 100;
   cropMap[String(srcPage)] = e;
-  saveEdits();
+  const ok = saveEdits();
+  if(!ok){
+    // Keep in-memory edit so current session still works.
+    alert('Crop apply ho gaya, lekin browser storage full hone ki wajah se permanent save nahi ho saka.');
+  }
   markDirty();
   pageNo.value = p;
   renderMainPage();
   renderOneThumb(p);
   cropModal.hide();
+  } catch(_){
+    alert('Crop apply mein error aaya. Dobara try karein.');
+  } finally {
+    applyBtn.disabled = false;
+    applyBtn.textContent = oldText;
+  }
 };
 cropModalEl.addEventListener('hidden.bs.modal', ()=>{ if(cropper){ cropper.destroy(); cropper=null; }});
 document.getElementById('btnResetCrop').onclick = ()=>{
