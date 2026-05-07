@@ -7,26 +7,521 @@
     <a href="{{ url_for('admin_app_releases') }}" class="btn btn-outline-primary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back to App Updates</a>
   </div>
 
-  <div class="border rounded-3 p-4" style="min-height:68vh;background:linear-gradient(160deg,#d8ebff 0%,#b9dcff 45%,#9dcdf5 100%);">
-    <div class="row g-4">
-      <div class="col-6 col-md-3 col-xl-2 text-center">
-        <a href="{{ url_for('admin_personal_tools', mode='my_pc') }}" class="text-decoration-none text-dark">
-          <div class="p-2 rounded hover-shadow">
-            <i class="bi bi-pc-display fs-1 d-block mb-2 text-primary"></i>
-            <div class="fw-semibold">My PC</div>
-          </div>
-        </a>
+  <div id="pt-desktop-shell" class="pt-shell border rounded-3">
+    <div id="pt-desktop" class="pt-desktop"></div>
+    <div id="pt-selection-box" class="pt-selection-box d-none"></div>
+
+    <div id="pt-start-menu" class="pt-start-menu d-none">
+      <div class="pt-start-title">Pinned</div>
+      <div class="pt-start-grid" id="pt-start-grid"></div>
+      <div class="pt-start-footer">
+        <button class="btn btn-sm btn-outline-secondary" data-start-action="settings">Settings</button>
+        <button class="btn btn-sm btn-outline-warning" data-start-action="restart">Restart</button>
+        <button class="btn btn-sm btn-outline-danger" data-start-action="shutdown">Shutdown</button>
       </div>
-      <div class="col-6 col-md-3 col-xl-2 text-center">
-        <a href="{{ url_for('admin_personal_tools_quick_print') }}" class="text-decoration-none text-dark">
-          <div class="p-2 rounded hover-shadow">
-            <i class="bi bi-printer-fill fs-1 d-block mb-2 text-success"></i>
-            <div class="fw-semibold">Multi File Print</div>
-          </div>
-        </a>
+    </div>
+
+    <div id="pt-context-menu" class="pt-context-menu d-none"></div>
+    <div id="pt-context-submenu" class="pt-context-menu d-none"></div>
+
+    <div id="pt-taskbar" class="pt-taskbar">
+      <div class="pt-task-left">
+        <button class="pt-task-btn" id="pt-start-btn"><i class="bi bi-windows"></i></button>
+        <button class="pt-task-btn" id="pt-search-btn"><i class="bi bi-search"></i></button>
+        <div id="pt-task-running" class="pt-task-running"></div>
+      </div>
+      <div class="pt-task-right">
+        <span id="pt-task-date"></span>
+        <span id="pt-task-time"></span>
+        <i class="bi bi-bell"></i>
       </div>
     </div>
   </div>
 </div>
+
+<style>
+.pt-shell{position:relative;min-height:72vh;overflow:hidden;background:linear-gradient(160deg,#d8ebff 0%,#b9dcff 45%,#9dcdf5 100%);}
+.pt-desktop{position:relative;height:calc(72vh - 54px);min-height:540px;overflow:hidden;}
+.pt-desktop-icon{position:absolute;width:82px;padding:8px 6px;border-radius:10px;text-align:center;cursor:default;user-select:none;color:#10233d}
+.pt-desktop-icon i{font-size:28px;display:block;margin-bottom:4px}
+.pt-desktop-icon span{font-size:12px;line-height:1.2;display:block;word-break:break-word}
+.pt-desktop-icon.selected{background:rgba(255,255,255,.45);outline:1px solid rgba(0,90,200,.35)}
+.pt-taskbar{position:absolute;left:0;right:0;bottom:0;height:54px;background:rgba(245,248,255,.82);backdrop-filter:blur(8px);border-top:1px solid rgba(0,0,0,.12);display:flex;justify-content:space-between;align-items:center;padding:0 10px;z-index:1200}
+.pt-task-left{display:flex;align-items:center;gap:6px}
+.pt-task-btn{width:34px;height:34px;border:1px solid #d6e2f5;background:#fff;border-radius:8px}
+.pt-task-running{display:flex;gap:6px;align-items:center}
+.pt-running-item{border:1px solid #cddcf6;background:#fff;border-radius:8px;padding:4px 8px;font-size:12px}
+.pt-running-item.active{background:#dcebff;border-color:#6ca5f5}
+.pt-task-right{display:flex;align-items:center;gap:10px;font-size:12px;color:#1f3556}
+.pt-window{position:absolute;background:#fff;border:1px solid #d6e2f5;border-radius:12px;box-shadow:0 8px 24px rgba(10,34,66,.18);overflow:hidden;min-width:320px;min-height:240px}
+.pt-window.maximized{border-radius:0}
+.pt-win-header{height:38px;background:#f3f7ff;border-bottom:1px solid #dce8fb;display:flex;align-items:center;justify-content:space-between;padding:0 8px;cursor:move}
+.pt-win-title{font-size:13px;font-weight:600;color:#21395f}
+.pt-win-controls{display:flex;gap:4px}
+.pt-win-controls button{width:28px;height:26px;border:1px solid #d2def4;background:#fff;border-radius:6px}
+.pt-win-body{height:calc(100% - 38px);overflow:auto;background:#fff}
+.pt-selection-box{position:absolute;border:1px dashed #3488f8;background:rgba(52,136,248,.15);pointer-events:none;z-index:1100}
+.pt-context-menu{position:absolute;min-width:190px;background:#fff;border:1px solid #d6e2f5;border-radius:10px;box-shadow:0 12px 28px rgba(0,0,0,.18);padding:6px 0;z-index:2200}
+.pt-context-item{display:flex;justify-content:space-between;align-items:center;padding:7px 12px;font-size:13px;cursor:pointer}
+.pt-context-item:hover{background:#f2f7ff}
+.pt-start-menu{position:absolute;left:12px;bottom:62px;width:360px;background:rgba(255,255,255,.92);border:1px solid #dce7fb;border-radius:14px;box-shadow:0 14px 34px rgba(8,24,48,.2);padding:12px;z-index:2100}
+.pt-start-title{font-size:12px;color:#5e7093;margin-bottom:8px}
+.pt-start-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.pt-start-app{border:1px solid #dce7fb;background:#fff;border-radius:10px;padding:8px;text-align:center;font-size:11px;cursor:pointer}
+.pt-start-app i{font-size:20px;display:block;margin-bottom:4px}
+.pt-start-footer{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
+.pt-explorer-toolbar{padding:8px;border-bottom:1px solid #e7eefc;display:flex;gap:8px;align-items:center;background:#fbfdff}
+.pt-explorer-list{padding:8px}
+.pt-exp-row{display:flex;gap:10px;align-items:center;padding:7px 8px;border-radius:8px;cursor:default}
+.pt-exp-row:hover{background:#f4f8ff}
+.pt-exp-row .nm{flex:1}
+.pt-notes{padding:8px}
+.pt-notes textarea{width:100%;height:280px;border:1px solid #d7e4f8;border-radius:8px;padding:8px}
+.pt-calc{padding:10px}
+.pt-calc-screen{height:54px;border:1px solid #d7e4f8;border-radius:8px;margin-bottom:10px;padding:8px;font-size:22px;text-align:right}
+.pt-calc-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.pt-calc-grid button{height:42px;border:1px solid #d7e4f8;background:#fff;border-radius:8px}
+.pt-resizer{position:absolute;background:transparent}
+.pt-r-e,.pt-r-w{top:0;bottom:0;width:7px}.pt-r-e{right:0;cursor:e-resize}.pt-r-w{left:0;cursor:w-resize}
+.pt-r-n,.pt-r-s{left:0;right:0;height:7px}.pt-r-n{top:0;cursor:n-resize}.pt-r-s{bottom:0;cursor:s-resize}
+.pt-r-ne,.pt-r-nw,.pt-r-se,.pt-r-sw{width:11px;height:11px;z-index:3}
+.pt-r-ne{right:0;top:0;cursor:ne-resize}.pt-r-nw{left:0;top:0;cursor:nw-resize}.pt-r-se{right:0;bottom:0;cursor:se-resize}.pt-r-sw{left:0;bottom:0;cursor:sw-resize}
+</style>
+
+<script>
+(function(){
+  const LS_KEY='pt_desktop_state_v3';
+  const desktop=document.getElementById('pt-desktop');
+  const selBox=document.getElementById('pt-selection-box');
+  const ctx=document.getElementById('pt-context-menu');
+  const ctxSub=document.getElementById('pt-context-submenu');
+  const taskRunning=document.getElementById('pt-task-running');
+  const startBtn=document.getElementById('pt-start-btn');
+  const searchBtn=document.getElementById('pt-search-btn');
+  const startMenu=document.getElementById('pt-start-menu');
+  const startGrid=document.getElementById('pt-start-grid');
+  const taskTime=document.getElementById('pt-task-time');
+  const taskDate=document.getElementById('pt-task-date');
+
+  const APPS=['my_pc','notes','calculator','multi_print','recycle_bin'];
+  const appMeta={
+    my_pc:{name:'My PC',icon:'bi-pc-display'},
+    notes:{name:'Notes',icon:'bi-journal-text'},
+    calculator:{name:'Calculator',icon:'bi-calculator'},
+    multi_print:{name:'Multi File Print',icon:'bi-printer-fill'},
+    recycle_bin:{name:'Recycle Bin',icon:'bi-trash3'}
+  };
+  let state=loadState();
+  let selectedIcons=new Set();
+  let windows=[];
+  let zCounter=300;
+  let activeWindowId=null;
+  let contextTarget={type:'desktop',id:null,path:null};
+
+  function defaultState(){
+    return {
+      iconPositions:{
+        my_pc:{x:20,y:20},notes:{x:20,y:118},calculator:{x:20,y:216},multi_print:{x:20,y:314},recycle_bin:{x:20,y:412}
+      },
+      fs:{drives:{'D:':{name:'Local Disk (D:)',children:{}},'E:':{name:'Local Disk (E:)',children:{}}},recycle:{}},
+      notesContent:'',
+      desktopState:{}
+    };
+  }
+  function loadState(){
+    try{
+      const raw=localStorage.getItem(LS_KEY);
+      if(!raw) return defaultState();
+      const parsed=JSON.parse(raw);
+      return Object.assign(defaultState(),parsed);
+    }catch(_){return defaultState();}
+  }
+  function saveState(){ localStorage.setItem(LS_KEY,JSON.stringify(state)); }
+
+  function renderDesktop(){
+    desktop.querySelectorAll('.pt-desktop-icon').forEach(n=>n.remove());
+    APPS.forEach(id=>{
+      const m=appMeta[id], pos=state.iconPositions[id]||{x:20,y:20};
+      const el=document.createElement('div');
+      el.className='pt-desktop-icon';
+      el.dataset.id=id;
+      el.style.left=pos.x+'px'; el.style.top=pos.y+'px';
+      el.innerHTML=`<i class="bi ${m.icon}"></i><span>${m.name}</span>`;
+      desktop.appendChild(el);
+      wireIcon(el,id);
+    });
+    renderTaskbar();
+  }
+
+  function wireIcon(el,id){
+    let dragging=false,ox=0,oy=0,startX=0,startY=0,lastClick=0;
+    el.addEventListener('mousedown',e=>{
+      if(e.button!==0) return;
+      selectIcon(id,!e.ctrlKey);
+      const r=el.getBoundingClientRect(), dr=desktop.getBoundingClientRect();
+      ox=e.clientX-r.left; oy=e.clientY-r.top; startX=e.clientX; startY=e.clientY;
+      const move=ev=>{
+        if(Math.abs(ev.clientX-startX)+Math.abs(ev.clientY-startY)>4) dragging=true;
+        if(!dragging) return;
+        const x=Math.max(0,Math.min(dr.width-84,ev.clientX-dr.left-ox));
+        const y=Math.max(0,Math.min(dr.height-98,ev.clientY-dr.top-oy));
+        el.style.left=x+'px'; el.style.top=y+'px';
+      };
+      const up=ev=>{
+        document.removeEventListener('mousemove',move); document.removeEventListener('mouseup',up);
+        if(dragging){
+          state.iconPositions[id]={x:parseInt(el.style.left,10),y:parseInt(el.style.top,10)};
+          saveState();
+        }else{
+          const now=Date.now();
+          if(now-lastClick<320){ openApp(id); }
+          lastClick=now;
+        }
+        dragging=false;
+      };
+      document.addEventListener('mousemove',move); document.addEventListener('mouseup',up);
+    });
+    el.addEventListener('contextmenu',e=>{
+      e.preventDefault(); selectIcon(id,true);
+      contextTarget={type:'icon',id};
+      openContextMenu(e.clientX,e.clientY,[
+        {label:'Open',action:()=>openApp(id)},
+        {label:'Rename',action:()=>renameIcon(id)},
+        {label:'Delete',action:()=>deleteIcon(id)},
+        {label:'Properties',action:()=>alert(appMeta[id].name)}
+      ]);
+    });
+  }
+
+  function selectIcon(id,clear){
+    if(clear) selectedIcons.clear();
+    selectedIcons.add(id);
+    desktop.querySelectorAll('.pt-desktop-icon').forEach(el=>{
+      el.classList.toggle('selected',selectedIcons.has(el.dataset.id));
+    });
+  }
+  function clearIconSelection(){ selectedIcons.clear(); desktop.querySelectorAll('.pt-desktop-icon').forEach(el=>el.classList.remove('selected')); }
+
+  function renameIcon(id){
+    const n=prompt('Rename icon',appMeta[id].name);
+    if(!n) return;
+    appMeta[id].name=n;
+    renderDesktop();
+  }
+  function deleteIcon(id){
+    if(id==='recycle_bin') return;
+    APPS.splice(APPS.indexOf(id),1);
+    saveState(); renderDesktop();
+  }
+
+  function openApp(appId){
+    const existing=windows.find(w=>w.appId===appId && !w.minimized);
+    if(existing){ focusWindow(existing.id); return; }
+    const win=createWindow(appMeta[appId].name,appId);
+    windows.push(win);
+    focusWindow(win.id);
+    renderTaskbar();
+    renderAppContent(win);
+  }
+
+  function createWindow(title,appId){
+    const id='w_'+Date.now()+'_'+Math.floor(Math.random()*999);
+    const w=document.createElement('div');
+    w.className='pt-window';
+    w.style.left=(90+windows.length*22)+'px'; w.style.top=(70+windows.length*18)+'px';
+    w.style.width='760px'; w.style.height='470px'; w.style.zIndex=++zCounter;
+    w.dataset.id=id;
+    w.innerHTML=`
+      <div class="pt-win-header">
+        <div class="pt-win-title">${title}</div>
+        <div class="pt-win-controls">
+          <button data-act="min">_</button><button data-act="max">□</button><button data-act="close">✕</button>
+        </div>
+      </div>
+      <div class="pt-win-body"></div>
+      <div class="pt-resizer pt-r-e"></div><div class="pt-resizer pt-r-w"></div><div class="pt-resizer pt-r-n"></div><div class="pt-resizer pt-r-s"></div>
+      <div class="pt-resizer pt-r-ne"></div><div class="pt-resizer pt-r-nw"></div><div class="pt-resizer pt-r-se"></div><div class="pt-resizer pt-r-sw"></div>`;
+    desktop.appendChild(w);
+    wireWindow(w,id,appId);
+    return {id,appId,el:w,minimized:false,maximized:false,lastRect:null};
+  }
+
+  function wireWindow(w,id,appId){
+    w.addEventListener('mousedown',()=>focusWindow(id));
+    const hdr=w.querySelector('.pt-win-header');
+    let sx=0,sy=0,sl=0,st=0,drag=false;
+    hdr.addEventListener('mousedown',e=>{
+      if(e.target.closest('button')) return;
+      drag=true; sx=e.clientX; sy=e.clientY; sl=parseInt(w.style.left,10); st=parseInt(w.style.top,10);
+      const mv=ev=>{ if(!drag || w.classList.contains('maximized')) return; w.style.left=(sl+ev.clientX-sx)+'px'; w.style.top=(st+ev.clientY-sy)+'px'; };
+      const up=()=>{drag=false;document.removeEventListener('mousemove',mv);document.removeEventListener('mouseup',up);};
+      document.addEventListener('mousemove',mv); document.addEventListener('mouseup',up);
+    });
+    w.querySelectorAll('.pt-win-controls button').forEach(btn=>{
+      btn.addEventListener('click',()=>{
+        const act=btn.dataset.act;
+        if(act==='close') closeWindow(id);
+        if(act==='min') minimizeWindow(id);
+        if(act==='max') maximizeWindow(id);
+      });
+    });
+    w.querySelectorAll('.pt-resizer').forEach(h=>h.addEventListener('mousedown',e=>startResize(e,w,h.classList[1])));
+  }
+
+  function startResize(e,w,cls){
+    e.preventDefault(); focusWindow(w.dataset.id);
+    const sx=e.clientX, sy=e.clientY;
+    const start={l:parseInt(w.style.left,10),t:parseInt(w.style.top,10),w:parseInt(w.style.width,10),h:parseInt(w.style.height,10)};
+    const mv=ev=>{
+      let nl=start.l,nt=start.t,nw=start.w,nh=start.h,dx=ev.clientX-sx,dy=ev.clientY-sy;
+      if(cls.includes('e')) nw=Math.max(320,start.w+dx);
+      if(cls.includes('s')) nh=Math.max(240,start.h+dy);
+      if(cls.includes('w')){ nw=Math.max(320,start.w-dx); nl=start.l+dx; if(nw===320) nl=start.l+(start.w-320); }
+      if(cls.includes('n')){ nh=Math.max(240,start.h-dy); nt=start.t+dy; if(nh===240) nt=start.t+(start.h-240); }
+      w.style.left=nl+'px'; w.style.top=nt+'px'; w.style.width=nw+'px'; w.style.height=nh+'px';
+    };
+    const up=()=>{document.removeEventListener('mousemove',mv);document.removeEventListener('mouseup',up);};
+    document.addEventListener('mousemove',mv); document.addEventListener('mouseup',up);
+  }
+
+  function focusWindow(id){
+    const w=windows.find(x=>x.id===id); if(!w) return;
+    activeWindowId=id; w.el.style.zIndex=++zCounter; renderTaskbar();
+  }
+  function closeWindow(id){
+    const i=windows.findIndex(x=>x.id===id); if(i<0) return;
+    windows[i].el.remove(); windows.splice(i,1); if(activeWindowId===id) activeWindowId=windows.length?windows[windows.length-1].id:null; renderTaskbar();
+  }
+  function minimizeWindow(id){
+    const w=windows.find(x=>x.id===id); if(!w) return;
+    w.minimized=true; w.el.style.display='none'; renderTaskbar();
+  }
+  function maximizeWindow(id){
+    const w=windows.find(x=>x.id===id); if(!w) return;
+    if(!w.maximized){
+      w.lastRect={l:w.el.style.left,t:w.el.style.top,w:w.el.style.width,h:w.el.style.height};
+      w.el.style.left='0px'; w.el.style.top='0px'; w.el.style.width=desktop.clientWidth+'px'; w.el.style.height=desktop.clientHeight+'px'; w.el.classList.add('maximized'); w.maximized=true;
+    }else{
+      if(w.lastRect){ w.el.style.left=w.lastRect.l; w.el.style.top=w.lastRect.t; w.el.style.width=w.lastRect.w; w.el.style.height=w.lastRect.h; }
+      w.el.classList.remove('maximized'); w.maximized=false;
+    }
+    focusWindow(id);
+  }
+  function restoreWindow(id){
+    const w=windows.find(x=>x.id===id); if(!w) return;
+    w.minimized=false; w.el.style.display='block'; focusWindow(id);
+  }
+
+  function renderTaskbar(){
+    taskRunning.innerHTML='';
+    windows.forEach(w=>{
+      const b=document.createElement('button');
+      b.className='pt-running-item'+(activeWindowId===w.id && !w.minimized?' active':'');
+      b.textContent=appMeta[w.appId].name;
+      b.onclick=()=>{ if(w.minimized) restoreWindow(w.id); else if(activeWindowId===w.id){ minimizeWindow(w.id); } else focusWindow(w.id); };
+      taskRunning.appendChild(b);
+    });
+  }
+
+  function renderStartMenu(){
+    startGrid.innerHTML='';
+    ['my_pc','notes','calculator','multi_print'].forEach(id=>{
+      const d=document.createElement('div');
+      d.className='pt-start-app';
+      d.innerHTML=`<i class="bi ${appMeta[id].icon}"></i>${appMeta[id].name}`;
+      d.onclick=()=>{openApp(id);startMenu.classList.add('d-none');};
+      startGrid.appendChild(d);
+    });
+  }
+
+  function renderAppContent(win){
+    const body=win.el.querySelector('.pt-win-body');
+    if(win.appId==='my_pc'){ renderFileExplorer(body,win); return; }
+    if(win.appId==='notes'){
+      body.innerHTML=`<div class="pt-notes"><textarea id="pt-notes-area">${state.notesContent||''}</textarea><div class="mt-2"><button class="btn btn-sm btn-primary">Save</button></div></div>`;
+      body.querySelector('button').onclick=()=>{state.notesContent=body.querySelector('textarea').value;saveState();};
+      body.querySelector('textarea').addEventListener('input',e=>{state.notesContent=e.target.value;saveState();});
+      return;
+    }
+    if(win.appId==='calculator'){
+      body.innerHTML=`<div class="pt-calc"><div class="pt-calc-screen" id="calc-screen">0</div><div class="pt-calc-grid" id="calc-grid"></div></div>`;
+      const keys=['7','8','9','/','4','5','6','*','1','2','3','-','0','.','=','+','C','⌫'];
+      const grid=body.querySelector('#calc-grid'); let expr='';
+      keys.forEach(k=>{ const bt=document.createElement('button'); bt.textContent=k; bt.onclick=()=>{ if(k==='C'){expr='';} else if(k==='⌫'){expr=expr.slice(0,-1);} else if(k==='='){ try{expr=String(Function('return '+expr.replace(/×/g,'*').replace(/÷/g,'/'))());}catch(_){expr='Err';} } else {expr+=k;} body.querySelector('#calc-screen').textContent=expr||'0'; }; grid.appendChild(bt); });
+      return;
+    }
+    if(win.appId==='multi_print'){
+      body.innerHTML=`<div class="p-3"><h6>Multi File Print</h6><p class="text-muted small">File list placeholder</p><div class="border rounded p-3 mb-2">No files selected</div><button class="btn btn-primary btn-sm">Print</button></div>`;
+      return;
+    }
+    if(win.appId==='recycle_bin'){
+      body.innerHTML=`<div class="p-3"><h6>Recycle Bin</h6><div id="rb-list"></div></div>`;
+      const list=body.querySelector('#rb-list');
+      const keys=Object.keys(state.fs.recycle||{});
+      if(!keys.length){ list.innerHTML='<p class="text-muted small">Recycle Bin is empty.</p>'; return; }
+      keys.forEach(k=>{
+        const row=document.createElement('div');
+        row.className='d-flex justify-content-between align-items-center border rounded p-2 mb-2';
+        row.innerHTML=`<span class="small">${k}</span><span><button class="btn btn-sm btn-outline-success me-1">Restore</button><button class="btn btn-sm btn-outline-danger">Delete</button></span>`;
+        row.querySelector('.btn-outline-success').onclick=()=>{ const rec=state.fs.recycle[k]; restoreDeleted(rec); delete state.fs.recycle[k]; saveState(); renderAppContent(win); };
+        row.querySelector('.btn-outline-danger').onclick=()=>{ delete state.fs.recycle[k]; saveState(); renderAppContent(win); };
+        list.appendChild(row);
+      });
+    }
+  }
+
+  function fsGetNode(pathArr){
+    let node=state.fs.drives[pathArr[0]];
+    for(let i=1;i<pathArr.length;i++){ if(!node || !node.children) return null; node=node.children[pathArr[i]]; }
+    return node;
+  }
+  function fsEnsureFolder(pathArr){
+    let node=state.fs.drives[pathArr[0]];
+    for(let i=1;i<pathArr.length;i++){
+      if(!node.children[pathArr[i]]) node.children[pathArr[i]]={type:'folder',children:{}};
+      node=node.children[pathArr[i]];
+    }
+    return node;
+  }
+  function fsDelete(pathArr){
+    if(pathArr.length===1) return false;
+    const parent=fsGetNode(pathArr.slice(0,-1)); if(!parent || !parent.children[pathArr[pathArr.length-1]]) return false;
+    const key=pathArr[pathArr.length-1];
+    state.fs.recycle[Date.now()+'_'+key]={name:key,node:parent.children[key],from:pathArr.slice(0,-1)};
+    delete parent.children[key];
+    return true;
+  }
+  function restoreDeleted(rec){
+    const parent=fsEnsureFolder(rec.from);
+    let name=rec.name,i=1;
+    while(parent.children[name]){ name=rec.name+'_'+i; i++; }
+    parent.children[name]=rec.node;
+  }
+
+  function renderFileExplorer(container,win){
+    if(!win.path) win.path=['D:'];
+    const node=fsGetNode(win.path);
+    const isRoot=win.path.length===1;
+    const parts=win.path;
+    container.innerHTML=`<div class="pt-explorer-toolbar">
+      <button class="btn btn-sm btn-outline-secondary" id="exp-up">Up</button>
+      <div class="small fw-semibold">${parts.join(' / ')}</div>
+      <button class="btn btn-sm btn-outline-primary ms-auto" id="exp-new-folder">New Folder</button>
+    </div>
+    <div class="pt-explorer-list" id="exp-list"></div>`;
+    const list=container.querySelector('#exp-list');
+    const rows=[];
+    if(isRoot){
+      Object.keys(state.fs.drives).forEach(k=>rows.push({name:k,type:'drive'}));
+    }else{
+      Object.keys((node&&node.children)||{}).forEach(k=>rows.push({name:k,type:node.children[k].type||'folder'}));
+    }
+    rows.sort((a,b)=>a.name.localeCompare(b.name));
+    rows.forEach(r=>{
+      const row=document.createElement('div');
+      row.className='pt-exp-row';
+      row.innerHTML=`<i class="bi ${r.type==='folder'||r.type==='drive'?'bi-folder-fill text-warning':'bi-file-earmark text-secondary'}"></i><div class="nm">${r.name}</div>`;
+      row.ondblclick=()=>{ if(r.type==='drive'){ win.path=[r.name]; renderFileExplorer(container,win); return; } if(r.type==='folder'){ win.path=win.path.concat([r.name]); renderFileExplorer(container,win);} };
+      row.oncontextmenu=(e)=>{ e.preventDefault(); explorerContext(e.clientX,e.clientY,win,r.name,r.type,container); };
+      list.appendChild(row);
+    });
+    container.querySelector('#exp-up').onclick=()=>{ if(win.path.length>1){ win.path=win.path.slice(0,-1);} renderFileExplorer(container,win); };
+    container.querySelector('#exp-new-folder').onclick=()=>{ const n=prompt('Folder name','New Folder'); if(!n) return; const p=fsEnsureFolder(win.path); let name=n,i=1; while(p.children[name]){name=n+'_'+i;i++;} p.children[name]={type:'folder',children:{}}; saveState(); renderFileExplorer(container,win); };
+    list.oncontextmenu=(e)=>{ if(e.target===list){ e.preventDefault(); explorerContext(e.clientX,e.clientY,win,null,'background',container);} };
+  }
+
+  function explorerContext(x,y,win,name,type,container){
+    const curr=win.path;
+    const build=(items)=>openContextMenu(x,y,items);
+    build([
+      {label:'New ▸',submenu:[
+        {label:'Folder',action:()=>{ const n=prompt('Folder name','New Folder'); if(!n) return; const p=fsEnsureFolder(curr); let nm=n,i=1; while(p.children[nm]){nm=n+'_'+i;i++;} p.children[nm]={type:'folder',children:{}}; saveState(); renderFileExplorer(container,win); }},
+        {label:'Text File',action:()=>{ const n=prompt('File name','New Text Document.txt'); if(!n) return; const p=fsEnsureFolder(curr); let nm=n,i=1; while(p.children[nm]){nm=n.replace('.txt','')+'_'+i+'.txt';i++;} p.children[nm]={type:'file',kind:'text',content:''}; saveState(); renderFileExplorer(container,win); }}
+      ]},
+      {label:'Copy',action:()=>{ if(!name) return; state.desktopState.clip={mode:'copy',from:curr.slice(),name}; saveState(); }},
+      {label:'Cut',action:()=>{ if(!name) return; state.desktopState.clip={mode:'cut',from:curr.slice(),name}; saveState(); }},
+      {label:'Paste',action:()=>{ const c=state.desktopState.clip; if(!c) return; const srcPar=fsGetNode(c.from); const dstPar=fsEnsureFolder(curr); if(!srcPar || !srcPar.children[c.name]) return; let nm=c.name,i=1; while(dstPar.children[nm]){nm=c.name+'_'+i;i++;} if(c.mode==='copy'){ dstPar.children[nm]=JSON.parse(JSON.stringify(srcPar.children[c.name])); } else { dstPar.children[nm]=srcPar.children[c.name]; delete srcPar.children[c.name]; state.desktopState.clip=null; } saveState(); renderFileExplorer(container,win); }},
+      {label:'Rename',action:()=>{ if(!name) return; const p=fsEnsureFolder(curr); const nn=prompt('Rename',name); if(!nn||nn===name) return; if(p.children[nn]) return; p.children[nn]=p.children[name]; delete p.children[name]; saveState(); renderFileExplorer(container,win); }},
+      {label:'Delete',action:()=>{ if(!name) return; fsDelete(curr.concat([name])); saveState(); renderFileExplorer(container,win); }}
+    ]);
+  }
+
+  function openContextMenu(x,y,items){
+    ctx.innerHTML=''; ctxSub.innerHTML=''; ctxSub.classList.add('d-none');
+    items.forEach(it=>{
+      const row=document.createElement('div'); row.className='pt-context-item'; row.innerHTML=`<span>${it.label}</span><span>${it.submenu?'▸':''}</span>`;
+      row.onclick=(e)=>{ e.stopPropagation(); if(it.submenu){ openSubMenu(row,it.submenu); return; } closeMenus(); if(it.action) it.action(); };
+      ctx.appendChild(row);
+    });
+    ctx.style.left=x+'px'; ctx.style.top=y+'px'; ctx.classList.remove('d-none');
+  }
+  function openSubMenu(parent,items){
+    ctxSub.innerHTML='';
+    items.forEach(it=>{ const r=document.createElement('div'); r.className='pt-context-item'; r.textContent=it.label; r.onclick=(e)=>{e.stopPropagation(); closeMenus(); if(it.action) it.action();}; ctxSub.appendChild(r); });
+    const rect=parent.getBoundingClientRect(); ctxSub.style.left=(rect.right+2)+'px'; ctxSub.style.top=rect.top+'px'; ctxSub.classList.remove('d-none');
+  }
+  function closeMenus(){ ctx.classList.add('d-none'); ctxSub.classList.add('d-none'); startMenu.classList.add('d-none'); }
+
+  desktop.addEventListener('contextmenu',e=>{
+    if(e.target.closest('.pt-desktop-icon') || e.target.closest('.pt-window')) return;
+    e.preventDefault();
+    openContextMenu(e.clientX,e.clientY,[
+      {label:'View'},
+      {label:'Sort by'},
+      {label:'Refresh',action:()=>renderDesktop()},
+      {label:'New ▸',submenu:[
+        {label:'Folder',action:()=>alert('Create in My PC explorer')},
+        {label:'Text File',action:()=>alert('Create in My PC explorer')},
+        {label:'Shortcut',action:()=>alert('Shortcut created')}
+      ]},
+      {label:'Paste',action:()=>alert('Use My PC window for file paste')},
+      {label:'Personalize'}
+    ]);
+  });
+
+  desktop.addEventListener('mousedown',e=>{
+    if(e.button!==0) return;
+    if(e.target.closest('.pt-desktop-icon') || e.target.closest('.pt-window')) return;
+    clearIconSelection();
+    const drect=desktop.getBoundingClientRect();
+    let sx=e.clientX-drect.left, sy=e.clientY-drect.top;
+    selBox.classList.remove('d-none'); selBox.style.left=sx+'px'; selBox.style.top=sy+'px'; selBox.style.width='0px'; selBox.style.height='0px';
+    const mv=ev=>{
+      let x=ev.clientX-drect.left,y=ev.clientY-drect.top;
+      let l=Math.min(sx,x),t=Math.min(sy,y),w=Math.abs(x-sx),h=Math.abs(y-sy);
+      selBox.style.left=l+'px'; selBox.style.top=t+'px'; selBox.style.width=w+'px'; selBox.style.height=h+'px';
+      selectedIcons.clear();
+      desktop.querySelectorAll('.pt-desktop-icon').forEach(ic=>{
+        const r=ic.getBoundingClientRect(),dr=desktop.getBoundingClientRect();
+        const il=r.left-dr.left,it=r.top-dr.top,iw=r.width,ih=r.height;
+        const hit=!(il>l+w || il+iw<l || it>t+h || it+ih<t);
+        ic.classList.toggle('selected',hit);
+        if(hit) selectedIcons.add(ic.dataset.id);
+      });
+    };
+    const up=()=>{ selBox.classList.add('d-none'); document.removeEventListener('mousemove',mv); document.removeEventListener('mouseup',up); };
+    document.addEventListener('mousemove',mv); document.addEventListener('mouseup',up);
+  });
+
+  document.addEventListener('click',e=>{
+    if(!e.target.closest('#pt-context-menu') && !e.target.closest('#pt-context-submenu')){ ctx.classList.add('d-none'); ctxSub.classList.add('d-none'); }
+    if(!e.target.closest('#pt-start-menu') && !e.target.closest('#pt-start-btn')) startMenu.classList.add('d-none');
+  });
+  startBtn.onclick=(e)=>{ e.stopPropagation(); startMenu.classList.toggle('d-none'); };
+  searchBtn.onclick=()=>alert('Search UI placeholder');
+  startMenu.querySelectorAll('[data-start-action]').forEach(btn=>btn.onclick=()=>alert(btn.dataset.startAction+' (fake action)'));
+
+  function tickClock(){
+    const d=new Date();
+    taskTime.textContent=d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+    taskDate.textContent=d.toLocaleDateString();
+  }
+  setInterval(tickClock,1000); tickClock();
+
+  renderStartMenu();
+  renderDesktop();
+})();
+</script>
+{% endblock %}
 {% endblock %}
 
