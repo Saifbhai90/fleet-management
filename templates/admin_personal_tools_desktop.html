@@ -45,6 +45,7 @@
 .pt-desktop-icon{position:absolute;width:82px;padding:8px 6px;border-radius:10px;text-align:center;cursor:default;user-select:none;color:#10233d}
 .pt-desktop-icon i{font-size:28px;display:block;margin-bottom:4px}
 .pt-desktop-icon span{font-size:12px;line-height:1.2;display:block;word-break:break-word}
+.pt-rename-input{width:100%;font-size:12px;border:1px solid #6ca5f5;border-radius:6px;padding:2px 4px}
 .pt-desktop-icon.selected{background:rgba(255,255,255,.45);outline:1px solid rgba(0,90,200,.35)}
 .pt-taskbar{position:absolute;left:0;right:0;bottom:0;height:54px;background:rgba(245,248,255,.82);backdrop-filter:blur(8px);border-top:1px solid rgba(0,0,0,.12);display:flex;justify-content:space-between;align-items:center;padding:0 10px;z-index:1200}
 .pt-task-left{display:flex;align-items:center;gap:6px}
@@ -72,6 +73,10 @@
 .pt-start-footer{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
 .pt-explorer-toolbar{padding:8px;border-bottom:1px solid #e7eefc;display:flex;gap:8px;align-items:center;background:#fbfdff}
 .pt-explorer-list{padding:8px}
+.pt-drive-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;padding:6px}
+.pt-drive-card{border:1px solid #dce7fb;border-radius:10px;padding:10px;background:#fff;cursor:default}
+.pt-drive-bar{height:8px;border-radius:99px;background:#e9f0fc;overflow:hidden}
+.pt-drive-bar>span{display:block;height:100%;width:35%;background:linear-gradient(90deg,#4e8ef7,#63b0ff)}
 .pt-exp-row{display:flex;gap:10px;align-items:center;padding:7px 8px;border-radius:8px;cursor:default}
 .pt-exp-row:hover{background:#f4f8ff}
 .pt-exp-row .nm{flex:1}
@@ -103,6 +108,7 @@
   const taskTime=document.getElementById('pt-task-time');
   const taskDate=document.getElementById('pt-task-date');
   const shell=document.getElementById('pt-desktop-shell');
+  if(shell){ shell.addEventListener('contextmenu',e=>e.preventDefault()); }
 
   const APPS=['my_pc','notes','calculator','multi_print','recycle_bin'];
   const appMeta={
@@ -126,7 +132,9 @@
       },
       fs:{drives:{'D:':{name:'Local Disk (D:)',children:{}},'E:':{name:'Local Disk (E:)',children:{}}},recycle:{}},
       notesContent:'',
-      desktopState:{}
+      desktopState:{},
+      desktopItems:[],
+      desktopLabels:{}
     };
   }
   function loadState(){
@@ -141,20 +149,25 @@
 
   function renderDesktop(){
     desktop.querySelectorAll('.pt-desktop-icon').forEach(n=>n.remove());
-    APPS.forEach(id=>{
-      const m=appMeta[id], pos=state.iconPositions[id]||{x:20,y:20};
+    const allIcons = APPS.map(id=>({id,type:'app'})).concat((state.desktopItems||[]).map(it=>({id:it.id,type:it.type,item:it})));
+    allIcons.forEach((meta,idx)=>{
+      const id=meta.id;
+      const m=meta.type==='app' ? appMeta[id] : {name:meta.item.name, icon:(meta.type==='folder'?'bi-folder-fill':'bi-file-earmark-text')};
+      const pos=state.iconPositions[id]||{x:20,y:(20+idx*98)};
       const el=document.createElement('div');
       el.className='pt-desktop-icon';
       el.dataset.id=id;
+      el.dataset.kind=meta.type;
       el.style.left=pos.x+'px'; el.style.top=pos.y+'px';
-      el.innerHTML=`<i class="bi ${m.icon}"></i><span>${m.name}</span>`;
+      const label = (state.desktopLabels && state.desktopLabels[id]) || m.name;
+      el.innerHTML=`<i class="bi ${m.icon}"></i><span class="pt-icon-label">${label}</span>`;
       desktop.appendChild(el);
-      wireIcon(el,id);
+      wireIcon(el,id,meta.type);
     });
     renderTaskbar();
   }
 
-  function wireIcon(el,id){
+  function wireIcon(el,id,kind){
     let dragging=false,ox=0,oy=0,startX=0,startY=0,lastClick=0;
     el.addEventListener('mousedown',e=>{
       if(e.button!==0) return;
@@ -175,7 +188,10 @@
           saveState();
         }else{
           const now=Date.now();
-          if(now-lastClick<320){ openApp(id); }
+          if(now-lastClick<320){
+            if(kind==='app') openApp(id);
+            else openDesktopItem(id);
+          }
           lastClick=now;
         }
         dragging=false;
@@ -186,10 +202,10 @@
       e.preventDefault(); selectIcon(id,true);
       contextTarget={type:'icon',id};
       openContextMenu(e.clientX,e.clientY,[
-        {label:'Open',action:()=>openApp(id)},
-        {label:'Rename',action:()=>renameIcon(id)},
+        {label:'Open',action:()=>{ if(kind==='app') openApp(id); else openDesktopItem(id);} },
+        {label:'Rename',action:()=>startIconInlineRename(id)},
         {label:'Delete',action:()=>deleteIcon(id)},
-        {label:'Properties',action:()=>alert(appMeta[id].name)}
+        {label:'Properties',action:()=>alert(((state.desktopLabels&&state.desktopLabels[id]) || (appMeta[id]&&appMeta[id].name) || 'Item'))}
       ]);
     });
   }
@@ -203,16 +219,62 @@
   }
   function clearIconSelection(){ selectedIcons.clear(); desktop.querySelectorAll('.pt-desktop-icon').forEach(el=>el.classList.remove('selected')); }
 
-  function renameIcon(id){
-    const n=prompt('Rename icon',appMeta[id].name);
-    if(!n) return;
-    appMeta[id].name=n;
-    renderDesktop();
+  function startIconInlineRename(id){
+    const icon = desktop.querySelector(`.pt-desktop-icon[data-id="${id}"]`);
+    if(!icon) return;
+    const lbl = icon.querySelector('.pt-icon-label');
+    if(!lbl) return;
+    const old = lbl.textContent || '';
+    const input = document.createElement('input');
+    input.className='pt-rename-input';
+    input.value=old;
+    lbl.replaceWith(input);
+    input.focus(); input.select();
+    const done=(ok)=>{
+      const v=(input.value||'').trim();
+      const newName = ok && v ? v : old;
+      state.desktopLabels[id]=newName;
+      const it=(state.desktopItems||[]).find(x=>x.id===id);
+      if(it) it.name=newName;
+      saveState(); renderDesktop();
+    };
+    input.addEventListener('keydown',e=>{ if(e.key==='Enter') done(true); if(e.key==='Escape') done(false); });
+    input.addEventListener('blur',()=>done(true));
   }
   function deleteIcon(id){
-    if(id==='recycle_bin') return;
-    APPS.splice(APPS.indexOf(id),1);
+    if(APPS.includes(id)){ if(id==='recycle_bin') return; return; }
+    state.desktopItems=(state.desktopItems||[]).filter(x=>x.id!==id);
+    delete state.desktopLabels[id];
+    delete state.iconPositions[id];
     saveState(); renderDesktop();
+  }
+
+  function openDesktopItem(id){
+    const item=(state.desktopItems||[]).find(x=>x.id===id);
+    if(!item) return;
+    const appId = item.type==='folder' ? 'desktop_folder_'+id : 'desktop_text_'+id;
+    const existing=windows.find(w=>w.appId===appId && !w.minimized);
+    if(existing){ focusWindow(existing.id); return; }
+    const win=createWindow(item.name,appId);
+    win.desktopItemId=id;
+    windows.push(win); focusWindow(win.id); renderTaskbar();
+    const body=win.el.querySelector('.pt-win-body');
+    if(item.type==='folder'){
+      body.innerHTML='<div class="p-3"><h6>Desktop Folder</h6><p class="text-muted small">This is a desktop folder shortcut.</p></div>';
+    }else{
+      body.innerHTML=`<div class="pt-notes"><textarea>${item.content||''}</textarea><div class="mt-2"><button class="btn btn-sm btn-primary">Save</button></div></div>`;
+      const ta=body.querySelector('textarea');
+      body.querySelector('button').onclick=()=>{ item.content=ta.value; saveState(); };
+      ta.addEventListener('input',()=>{ item.content=ta.value; saveState(); });
+    }
+  }
+
+  function uniqueDesktopName(prefix){
+    const names = new Set([...(state.desktopItems||[]).map(x=>x.name)]);
+    if(!names.has(prefix)) return prefix;
+    let i=1, n=prefix;
+    while(names.has(n)){ n=`${prefix} (${i++})`; }
+    return n;
   }
 
   function openApp(appId){
@@ -450,17 +512,28 @@
       Object.keys((node&&node.children)||{}).forEach(k=>rows.push({name:k,type:node.children[k].type||'folder'}));
     }
     rows.sort((a,b)=>a.name.localeCompare(b.name));
-    rows.forEach(r=>{
-      const row=document.createElement('div');
-      row.className='pt-exp-row';
-      row.innerHTML=`<i class="bi ${r.type==='folder'||r.type==='drive'?'bi-folder-fill text-warning':'bi-file-earmark text-secondary'}"></i><div class="nm">${r.name}</div>`;
-      row.ondblclick=()=>{
-        if(r.type==='drive'){ win.path=[r.name]; renderFileExplorer(container,win); return; }
-        if(r.type==='folder'){ win.path=win.path.concat([r.name]); renderFileExplorer(container,win); return; }
-      };
-      row.oncontextmenu=(e)=>{ e.preventDefault(); explorerContext(e.clientX,e.clientY,win,r.name,r.type,container); };
-      list.appendChild(row);
-    });
+    if(isRoot){
+      const g=document.createElement('div'); g.className='pt-drive-grid';
+      rows.forEach(r=>{
+        const c=document.createElement('div');
+        c.className='pt-drive-card';
+        c.innerHTML=`<div class="d-flex align-items-center justify-content-between mb-2"><span><i class="bi bi-hdd-fill text-primary me-1"></i>${state.fs.drives[r.name].name}</span><strong>${r.name}</strong></div><div class="pt-drive-bar"><span></span></div>`;
+        c.ondblclick=()=>{ win.path=[r.name]; renderFileExplorer(container,win); };
+        c.oncontextmenu=(e)=>{ e.preventDefault(); explorerContext(e.clientX,e.clientY,win,r.name,'drive',container); };
+        g.appendChild(c);
+      });
+      list.appendChild(g);
+    }else{
+      rows.forEach(r=>{
+        const row=document.createElement('div');
+        row.className='pt-exp-row';
+        row.dataset.name=r.name;
+        row.innerHTML=`<i class="bi ${r.type==='folder'?'bi-folder-fill text-warning':'bi-file-earmark text-secondary'}"></i><div class="nm">${r.name}</div>`;
+        row.ondblclick=()=>{ if(r.type==='folder'){ win.path=win.path.concat([r.name]); renderFileExplorer(container,win);} };
+        row.oncontextmenu=(e)=>{ e.preventDefault(); explorerContext(e.clientX,e.clientY,win,r.name,r.type,container); };
+        list.appendChild(row);
+      });
+    }
     container.querySelector('#exp-up').onclick=()=>{ if(win.path.length>0){ win.path=win.path.slice(0,-1);} renderFileExplorer(container,win); };
     container.querySelector('#exp-new-folder').onclick=()=>{
       if(isRoot){ alert('Pehle drive open karein.'); return; }
@@ -470,7 +543,7 @@
       p.children[name]={type:'folder',children:{}};
       saveState(); renderFileExplorer(container,win);
     };
-    list.oncontextmenu=(e)=>{ if(e.target===list){ e.preventDefault(); explorerContext(e.clientX,e.clientY,win,null,'background',container);} };
+    container.oncontextmenu=(e)=>{ e.preventDefault(); if(!e.target.closest('.pt-exp-row') && !e.target.closest('.pt-drive-card')) explorerContext(e.clientX,e.clientY,win,null,'background',container); };
   }
 
   function explorerContext(x,y,win,name,type,container){
@@ -479,15 +552,62 @@
     const build=(items)=>openContextMenu(x,y,items);
     build([
       {label:'New ▸',submenu:[
-        {label:'Folder',action:()=>{ if(isRoot){alert('Pehle drive open karein.');return;} const n=prompt('Folder name','New Folder'); if(!n) return; const p=fsEnsureFolder(curr); let nm=n,i=1; while(p.children[nm]){nm=n+'_'+i;i++;} p.children[nm]={type:'folder',children:{}}; saveState(); renderFileExplorer(container,win); }},
-        {label:'Text File',action:()=>{ if(isRoot){alert('Pehle drive open karein.');return;} const n=prompt('File name','New Text Document.txt'); if(!n) return; const p=fsEnsureFolder(curr); let nm=n,i=1; while(p.children[nm]){nm=n.replace('.txt','')+'_'+i+'.txt';i++;} p.children[nm]={type:'file',kind:'text',content:''}; saveState(); renderFileExplorer(container,win); }}
+        {label:'Folder',action:()=>{ if(isRoot){alert('Pehle drive open karein.');return;} const p=fsEnsureFolder(curr); let base='New Folder',nm=base,i=1; while(p.children[nm]){nm=base+' '+(i++);} p.children[nm]={type:'folder',children:{}}; saveState(); renderFileExplorer(container,win); inlineRenameExplorer(container,nm,win); }},
+        {label:'Text File',action:()=>{ if(isRoot){alert('Pehle drive open karein.');return;} const p=fsEnsureFolder(curr); let base='New Text Document.txt',nm=base,i=1; while(p.children[nm]){nm='New Text Document ('+(i++)+').txt';} p.children[nm]={type:'file',kind:'text',content:''}; saveState(); renderFileExplorer(container,win); inlineRenameExplorer(container,nm,win); }}
       ]},
       {label:'Copy',action:()=>{ if(!name) return; state.desktopState.clip={mode:'copy',from:curr.slice(),name,type}; saveState(); }},
       {label:'Cut',action:()=>{ if(!name) return; state.desktopState.clip={mode:'cut',from:curr.slice(),name,type}; saveState(); }},
       {label:'Paste',action:()=>{ if(isRoot){alert('Pehle drive open karein.');return;} const c=state.desktopState.clip; if(!c) return; const srcPar=fsGetNode(c.from); const dstPar=fsEnsureFolder(curr); if(!srcPar || !srcPar.children[c.name]) return; let nm=c.name,i=1; while(dstPar.children[nm]){nm=c.name+'_'+i;i++;} if(c.mode==='copy'){ dstPar.children[nm]=JSON.parse(JSON.stringify(srcPar.children[c.name])); } else { dstPar.children[nm]=srcPar.children[c.name]; delete srcPar.children[c.name]; state.desktopState.clip=null; } saveState(); renderFileExplorer(container,win); }},
-      {label:'Rename',action:()=>{ if(!name) return; if(type==='drive'){ const nn=prompt('Rename drive',name); if(!nn||nn===name) return; if(state.fs.drives[nn]){alert('Drive exists'); return;} state.fs.drives[nn]=state.fs.drives[name]; delete state.fs.drives[name]; if(curr[0]===name) curr[0]=nn; saveState(); renderFileExplorer(container,win); return; } const p=fsEnsureFolder(curr); const nn=prompt('Rename',name); if(!nn||nn===name) return; if(p.children[nn]) return; p.children[nn]=p.children[name]; delete p.children[name]; saveState(); renderFileExplorer(container,win); }},
+      {label:'Rename',action:()=>{ if(!name) return; if(type==='drive'){ inlineRenameDrive(container,win,name); return; } inlineRenameExplorer(container,name,win); }},
       {label:'Delete',action:()=>{ if(!name || type==='drive') return; fsDelete(curr.concat([name])); saveState(); renderFileExplorer(container,win); }}
     ]);
+  }
+
+  function inlineRenameDrive(container,win,oldName){
+    const card = Array.from(container.querySelectorAll('.pt-drive-card')).find(c=>c.textContent.includes(oldName));
+    if(!card) return;
+    const title = card.querySelector('span');
+    if(!title) return;
+    const txt = title.textContent.trim();
+    const input=document.createElement('input');
+    input.className='pt-rename-input';
+    input.value=txt;
+    title.replaceWith(input);
+    input.focus(); input.select();
+    const done=(ok)=>{
+      const v=(input.value||'').trim();
+      const candidate = ok && v ? v : txt;
+      const newDrive = candidate.endsWith(':') ? candidate : candidate;
+      if(newDrive!==oldName && !state.fs.drives[newDrive]){
+        state.fs.drives[newDrive]=state.fs.drives[oldName];
+        state.fs.drives[newDrive].name='Local Disk ('+newDrive+')';
+        delete state.fs.drives[oldName];
+        if(win.path[0]===oldName) win.path[0]=newDrive;
+      }
+      saveState(); renderFileExplorer(container,win);
+    };
+    input.addEventListener('keydown',e=>{ if(e.key==='Enter') done(true); if(e.key==='Escape') done(false); });
+    input.addEventListener('blur',()=>done(true));
+  }
+
+  function inlineRenameExplorer(container,oldName,win){
+    const row = Array.from(container.querySelectorAll('.pt-exp-row')).find(r=>r.dataset.name===oldName);
+    if(!row) return;
+    const nm=row.querySelector('.nm'); if(!nm) return;
+    const input=document.createElement('input'); input.className='pt-rename-input'; input.value=oldName;
+    nm.replaceWith(input); input.focus(); input.select();
+    const done=(ok)=>{
+      const v=(input.value||'').trim();
+      const newName = ok && v ? v : oldName;
+      const p=fsEnsureFolder(win.path);
+      if(newName!==oldName && !p.children[newName]){
+        p.children[newName]=p.children[oldName];
+        delete p.children[oldName];
+      }
+      saveState(); renderFileExplorer(container,win);
+    };
+    input.addEventListener('keydown',e=>{ if(e.key==='Enter') done(true); if(e.key==='Escape') done(false); });
+    input.addEventListener('blur',()=>done(true));
   }
 
   function openContextMenu(x,y,items){
@@ -524,8 +644,20 @@
       {label:'Sort by'},
       {label:'Refresh',action:()=>renderDesktop()},
       {label:'New ▸',submenu:[
-        {label:'Folder',action:()=>alert('Create in My PC explorer')},
-        {label:'Text File',action:()=>alert('Create in My PC explorer')},
+        {label:'Folder',action:()=>{
+          const id='desk_'+Date.now();
+          const name=uniqueDesktopName('New Folder');
+          state.desktopItems.push({id,name,type:'folder'});
+          state.iconPositions[id]={x:120,y:40 + state.desktopItems.length*24};
+          saveState(); renderDesktop(); setTimeout(()=>startIconInlineRename(id),20);
+        }},
+        {label:'Text File',action:()=>{
+          const id='desk_'+Date.now();
+          const name=uniqueDesktopName('New Text Document.txt');
+          state.desktopItems.push({id,name,type:'text',content:''});
+          state.iconPositions[id]={x:120,y:40 + state.desktopItems.length*24};
+          saveState(); renderDesktop(); setTimeout(()=>startIconInlineRename(id),20);
+        }},
         {label:'Shortcut',action:()=>alert('Shortcut created')}
       ]},
       {label:'Paste',action:()=>alert('Use My PC window for file paste')},
