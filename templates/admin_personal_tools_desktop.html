@@ -521,6 +521,33 @@
     parent.children[name]=rec.node;
   }
 
+  /** Open drive / folder / file from My PC explorer (double-click + context menu Open). */
+  function openExplorerItem(win,container,entryName,entryType){
+    var currPath = win.path || [];
+    if(entryType==='drive'){
+      win.path=[entryName];
+      renderFileExplorer(container,win);
+      return;
+    }
+    if(entryType==='folder'){
+      win.path=currPath.concat([entryName]);
+      renderFileExplorer(container,win);
+      return;
+    }
+    if(entryType==='file'){
+      var parent=fsGetNode(currPath);
+      var file = parent && parent.children ? parent.children[entryName] : null;
+      if(!file) return;
+      if(file.kind==='text'){ openSavedText(entryName,file); return; }
+      if(file.kind==='pdf_saved' && (file.source || file.blobId)){ openSavedPdf(entryName,file); return; }
+      if(file.kind==='binary'){
+        alert('Ye sirf upload ki file ki listing hai — poori file browser ke storage mein save nahi hoti.\nPDF ko Print Ready se "Save to Web My PC" karain taake yahan se open ho sake.');
+        return;
+      }
+      alert('Is type ki file open nahi ho sakti.');
+    }
+  }
+
   function renderFileExplorer(container,win){
     if(!win.path) win.path=[];
     const node=fsGetNode(win.path);
@@ -546,7 +573,7 @@
         const c=document.createElement('div');
         c.className='pt-drive-card';
         c.innerHTML=`<div class="d-flex align-items-center justify-content-between mb-2"><span><i class="bi bi-hdd-fill text-primary me-1"></i>${state.fs.drives[r.name].name}</span><strong>${r.name}</strong></div><div class="pt-drive-bar"><span></span></div>`;
-        c.ondblclick=()=>{ win.path=[r.name]; renderFileExplorer(container,win); };
+        c.ondblclick=()=>{ openExplorerItem(win,container,r.name,'drive'); };
         c.oncontextmenu=(e)=>{ e.preventDefault(); explorerContext(e.clientX,e.clientY,win,r.name,'drive',container); };
         g.appendChild(c);
       });
@@ -557,14 +584,7 @@
         row.className='pt-exp-row';
         row.dataset.name=r.name;
         row.innerHTML=`<i class="bi ${r.type==='folder'?'bi-folder-fill text-warning':'bi-file-earmark text-secondary'}"></i><div class="nm">${r.name}</div>`;
-        row.ondblclick=()=>{
-          if(r.type==='folder'){ win.path=win.path.concat([r.name]); renderFileExplorer(container,win); return; }
-          const parent=fsGetNode(win.path);
-          const file=parent && parent.children ? parent.children[r.name] : null;
-          if(!file) return;
-          if(file.kind==='text'){ openSavedText(r.name,file); return; }
-          if(file.kind==='pdf_saved' && (file.source || file.blobId)){ openSavedPdf(r.name,file); return; }
-        };
+        row.ondblclick=()=>{ openExplorerItem(win,container,r.name,r.type); };
         row.oncontextmenu=(e)=>{ e.preventDefault(); explorerContext(e.clientX,e.clientY,win,r.name,r.type,container); };
         list.appendChild(row);
       });
@@ -585,7 +605,17 @@
     const curr=win.path;
     const isRoot=curr.length===0;
     const build=(items)=>openContextMenu(x,y,items);
-    build([
+    const head=[];
+    if(name){
+      if(type==='drive'){
+        head.push({label:'Open',action:()=>{ openExplorerItem(win,container,name,'drive'); }});
+      }else if(type==='folder'){
+        head.push({label:'Open',action:()=>{ openExplorerItem(win,container,name,'folder'); }});
+      }else if(type==='file'){
+        head.push({label:'Open',action:()=>{ openExplorerItem(win,container,name,'file'); }});
+      }
+    }
+    build(head.concat([
       {label:'New ▸',submenu:[
         {label:'Folder',action:()=>{ if(isRoot){alert('Pehle drive open karein.');return;} const p=fsEnsureFolder(curr); let base='New Folder',nm=base,i=1; while(p.children[nm]){nm=base+' '+(i++);} p.children[nm]={type:'folder',children:{}}; saveState(); renderFileExplorer(container,win); inlineRenameExplorer(container,nm,win); }},
         {label:'Text File',action:()=>{ if(isRoot){alert('Pehle drive open karein.');return;} const p=fsEnsureFolder(curr); let base='New Text Document.txt',nm=base,i=1; while(p.children[nm]){nm='New Text Document ('+(i++)+').txt';} p.children[nm]={type:'file',kind:'text',content:''}; saveState(); renderFileExplorer(container,win); inlineRenameExplorer(container,nm,win); }}
@@ -599,7 +629,7 @@
       {label:'Paste',action:()=>{ if(isRoot){alert('Pehle drive open karein.');return;} const c=state.desktopState.clip; if(!c) return; const srcPar=fsGetNode(c.from); const dstPar=fsEnsureFolder(curr); if(!srcPar || !srcPar.children[c.name]) return; let nm=c.name,i=1; while(dstPar.children[nm]){nm=c.name+'_'+i;i++;} if(c.mode==='copy'){ dstPar.children[nm]=JSON.parse(JSON.stringify(srcPar.children[c.name])); } else { dstPar.children[nm]=srcPar.children[c.name]; delete srcPar.children[c.name]; state.desktopState.clip=null; } saveState(); renderFileExplorer(container,win); }},
       {label:'Rename',action:()=>{ if(!name) return; if(type==='drive'){ inlineRenameDrive(container,win,name); return; } inlineRenameExplorer(container,name,win); }},
       {label:'Delete',action:()=>{ if(!name || type==='drive') return; fsDelete(curr.concat([name])); saveState(); renderFileExplorer(container,win); }}
-    ]);
+    ]));
   }
 
   function uploadIntoExplorer(curr,container,win,isFolder){
