@@ -1,52 +1,92 @@
-{% extends "base.html" %}
-{% block title %}Print Ready{% endblock %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Print Ready</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body{margin:0;background:#f2f6ff;font-family:Segoe UI,Arial,sans-serif}
+    .wrap{height:100vh;display:flex;flex-direction:column}
+    .top{padding:10px 14px;background:#fff;border-bottom:1px solid #d9e4f6;display:flex;justify-content:space-between;align-items:center}
+    .viewer-shell{padding:10px;flex:1;display:flex;flex-direction:column;gap:8px}
+    .tools{background:#fff;border:1px solid #dce7fb;border-radius:10px;padding:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .stage{position:relative;flex:1;background:#fff;border:1px solid #dce7fb;border-radius:12px;overflow:hidden}
+    .crop-wrap{position:absolute;inset:0;overflow:hidden}
+    .pdf-frame{width:100%;height:100%;border:0}
+    .hint{font-size:12px;color:#5d7398}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <div>
+        <strong>Print Ready</strong>
+        <span class="hint ms-2">{{ files_count }} files, {{ pages }} pages</span>
+      </div>
+      <div class="d-flex gap-2">
+        <button class="btn btn-sm btn-primary" id="btnPrintNow">Print</button>
+        <a href="{{ url_for('admin_personal_tools') }}" class="btn btn-sm btn-outline-secondary">Back</a>
+      </div>
+    </div>
 
-{% block content %}
-<div class="container-fluid">
-  <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
-    <h2 class="mb-0"><i class="bi bi-printer-fill me-2 text-success"></i>Print Ready</h2>
-    <div class="d-flex gap-2">
-      {% if job_id %}
-      <a href="{{ url_for('admin_personal_tools_library_detail', job_id=job_id) }}" class="btn btn-outline-dark btn-sm">
-        <i class="bi bi-folder2-open me-1"></i>Open Saved Folder
-      </a>
-      {% endif %}
-      <a href="{{ url_for('admin_personal_tools') }}" class="btn btn-outline-primary btn-sm">
-        <i class="bi bi-arrow-left me-1"></i>Back to Personal Tools
-      </a>
+    <div class="viewer-shell">
+      <div class="tools">
+        <button class="btn btn-sm btn-outline-secondary" id="btnPrev">← Prev</button>
+        <span class="small">Page</span>
+        <input type="number" id="pageNo" class="form-control form-control-sm" style="width:90px" min="1" value="1">
+        <button class="btn btn-sm btn-outline-secondary" id="btnNext">Next →</button>
+        <span class="vr"></span>
+        <span class="small">Crop L</span><input type="range" id="cropL" min="0" max="120" value="0">
+        <span class="small">R</span><input type="range" id="cropR" min="0" max="120" value="0">
+        <span class="small">T</span><input type="range" id="cropT" min="0" max="120" value="0">
+        <span class="small">B</span><input type="range" id="cropB" min="0" max="120" value="0">
+        <span class="hint">Toolbar hidden mode enabled</span>
+      </div>
+
+      <div class="stage">
+        <div class="crop-wrap" id="cropWrap">
+          <iframe id="printFrame" class="pdf-frame" src=""></iframe>
+        </div>
+      </div>
     </div>
   </div>
 
-  <div class="alert alert-success shadow-sm border-0">
-    <strong>Batch prepared:</strong> {{ files_count }} file(s), {{ pages }} page(s).
-    Print dialog automatically open ho jayega.
-    <div class="small text-muted mt-1">
-      Size: <strong>{{ page_size|upper if page_size != 'original' else 'ORIGINAL' }}</strong> |
-      Orientation: <strong>{{ orientation|capitalize }}</strong> |
-      Order: <strong>{{ order_by.replace('_', ' ')|title }}</strong>
-    </div>
-  </div>
-
-  <div class="card shadow-sm border-0 rounded-3">
-    <div class="card-body p-2" style="height:78vh;">
-      <iframe id="printFrame" src="{{ pdf_url }}" style="width:100%;height:100%;border:0;"></iframe>
-    </div>
-  </div>
-</div>
-
-<script>
-window.addEventListener('load', function () {
-  var frame = document.getElementById('printFrame');
-  if (!frame) return;
-  frame.addEventListener('load', function () {
-    try {
-      frame.contentWindow.focus();
-      frame.contentWindow.print();
-    } catch (e) {
-      console.warn('Auto print blocked:', e);
+  <script>
+  (function(){
+    var pdfBase = "{{ pdf_url }}";
+    var maxPages = {{ pages|int if pages else 1 }};
+    var frame = document.getElementById('printFrame');
+    var pageNo = document.getElementById('pageNo');
+    var cropWrap = document.getElementById('cropWrap');
+    function currentPage(){
+      var n = parseInt(pageNo.value || '1', 10);
+      if (isNaN(n) || n < 1) n = 1;
+      if (n > maxPages) n = maxPages;
+      pageNo.value = n;
+      return n;
     }
-  });
-});
-</script>
-{% endblock %}
+    function setSrc(){
+      var p = currentPage();
+      frame.src = pdfBase + "#page=" + p + "&toolbar=0&navpanes=0&scrollbar=0&view=FitH";
+    }
+    function applyCrop(){
+      var l = parseInt(document.getElementById('cropL').value || '0', 10);
+      var r = parseInt(document.getElementById('cropR').value || '0', 10);
+      var t = parseInt(document.getElementById('cropT').value || '0', 10);
+      var b = parseInt(document.getElementById('cropB').value || '0', 10);
+      cropWrap.style.clipPath = "inset(" + t + "px " + r + "px " + b + "px " + l + "px)";
+    }
+    document.getElementById('btnPrev').onclick = function(){ pageNo.value = Math.max(1, currentPage()-1); setSrc(); };
+    document.getElementById('btnNext').onclick = function(){ pageNo.value = Math.min(maxPages, currentPage()+1); setSrc(); };
+    pageNo.onchange = setSrc;
+    ['cropL','cropR','cropT','cropB'].forEach(function(id){ document.getElementById(id).oninput = applyCrop; });
+    document.getElementById('btnPrintNow').onclick = function(){
+      try{ frame.contentWindow.focus(); frame.contentWindow.print(); }catch(_){ window.print(); }
+    };
+    window.addEventListener('load', function(){ setSrc(); setTimeout(function(){ document.getElementById('btnPrintNow').click(); }, 300); });
+  })();
+  </script>
+</body>
+</html>
 

@@ -555,12 +555,50 @@
         {label:'Folder',action:()=>{ if(isRoot){alert('Pehle drive open karein.');return;} const p=fsEnsureFolder(curr); let base='New Folder',nm=base,i=1; while(p.children[nm]){nm=base+' '+(i++);} p.children[nm]={type:'folder',children:{}}; saveState(); renderFileExplorer(container,win); inlineRenameExplorer(container,nm,win); }},
         {label:'Text File',action:()=>{ if(isRoot){alert('Pehle drive open karein.');return;} const p=fsEnsureFolder(curr); let base='New Text Document.txt',nm=base,i=1; while(p.children[nm]){nm='New Text Document ('+(i++)+').txt';} p.children[nm]={type:'file',kind:'text',content:''}; saveState(); renderFileExplorer(container,win); inlineRenameExplorer(container,nm,win); }}
       ]},
+      {label:'Upload ▸',submenu:[
+        {label:'File(s)',action:()=>uploadIntoExplorer(curr,container,win,false)},
+        {label:'Folder',action:()=>uploadIntoExplorer(curr,container,win,true)}
+      ]},
       {label:'Copy',action:()=>{ if(!name) return; state.desktopState.clip={mode:'copy',from:curr.slice(),name,type}; saveState(); }},
       {label:'Cut',action:()=>{ if(!name) return; state.desktopState.clip={mode:'cut',from:curr.slice(),name,type}; saveState(); }},
       {label:'Paste',action:()=>{ if(isRoot){alert('Pehle drive open karein.');return;} const c=state.desktopState.clip; if(!c) return; const srcPar=fsGetNode(c.from); const dstPar=fsEnsureFolder(curr); if(!srcPar || !srcPar.children[c.name]) return; let nm=c.name,i=1; while(dstPar.children[nm]){nm=c.name+'_'+i;i++;} if(c.mode==='copy'){ dstPar.children[nm]=JSON.parse(JSON.stringify(srcPar.children[c.name])); } else { dstPar.children[nm]=srcPar.children[c.name]; delete srcPar.children[c.name]; state.desktopState.clip=null; } saveState(); renderFileExplorer(container,win); }},
       {label:'Rename',action:()=>{ if(!name) return; if(type==='drive'){ inlineRenameDrive(container,win,name); return; } inlineRenameExplorer(container,name,win); }},
       {label:'Delete',action:()=>{ if(!name || type==='drive') return; fsDelete(curr.concat([name])); saveState(); renderFileExplorer(container,win); }}
     ]);
+  }
+
+  function uploadIntoExplorer(curr,container,win,isFolder){
+    if(!curr || !curr.length){ alert('Pehle drive open karein.'); return; }
+    const inp=document.createElement('input');
+    inp.type='file';
+    inp.multiple=true;
+    if(isFolder) inp.setAttribute('webkitdirectory','webkitdirectory');
+    inp.onchange=function(){
+      const files=Array.from(inp.files||[]);
+      if(!files.length) return;
+      const parent=fsEnsureFolder(curr);
+      files.forEach(function(f){
+        const rel=(f.webkitRelativePath||f.name||'').replace(/\\/g,'/').trim();
+        if(!rel) return;
+        const parts=rel.split('/').filter(Boolean);
+        let node=parent;
+        for(let i=0;i<parts.length-1;i++){
+          const d=parts[i];
+          if(!node.children[d]) node.children[d]={type:'folder',children:{}};
+          node=node.children[d];
+        }
+        let fileName=parts[parts.length-1]||f.name;
+        if(node.children[fileName]){
+          let i=1,b=fileName,ext='';
+          const k=fileName.lastIndexOf('.');
+          if(k>0){ b=fileName.slice(0,k); ext=fileName.slice(k); }
+          while(node.children[fileName]) fileName=b+'_'+(i++)+ext;
+        }
+        node.children[fileName]={type:'file',kind:'binary',size:f.size||0,lastModified:f.lastModified||Date.now()};
+      });
+      saveState(); renderFileExplorer(container,win);
+    };
+    inp.click();
   }
 
   function inlineRenameDrive(container,win,oldName){
