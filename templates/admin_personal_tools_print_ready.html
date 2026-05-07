@@ -80,6 +80,11 @@
     </div>
   </div>
 </div>
+<div id="viewerBusy" style="display:none;position:fixed;inset:0;background:rgba(15,18,26,.35);z-index:2400;align-items:center;justify-content:center;">
+  <div style="background:#fff;border:1px solid #dbe3f4;border-radius:10px;padding:12px 16px;box-shadow:0 8px 20px rgba(0,0,0,.2);font-size:14px;color:#21324d;">
+    <span id="viewerBusyText">Preparing...</span>
+  </div>
+</div>
 
 <div class="ctx" id="viewerCtx">
   <button id="ctxCrop">Crop Current Page</button>
@@ -130,6 +135,8 @@ let needsRebuild = true;
 let thumbRenderToken = 0;
 let renderTick = 0;
 let rangeApplyTimer = null;
+let rebuildTimer = null;
+const pageCache = new Map();
 const cropKey = 'pt_print_crops_' + btoa(pdfUrl).replace(/[^a-zA-Z0-9]/g,'');
 const presetKey = cropKey + '_presets';
 const orderKey = cropKey + '_order';
@@ -169,6 +176,9 @@ function nPage(){
 function getViewerPage(){ return nPage(); }
 
 async function renderPageToDataUrl(pageNumber, scale=3){
+  const cacheKey = `${pageNumber}:${scale}`;
+  const cached = pageCache.get(cacheKey);
+  if(cached) return cached;
   if(!pdfDocRef){
     const loadingTask = pdfjsLib.getDocument(pdfUrl);
     pdfDocRef = await loadingTask.promise;
@@ -183,11 +193,13 @@ async function renderPageToDataUrl(pageNumber, scale=3){
   const ctx2 = canvas.getContext('2d');
   canvas.width = viewport.width; canvas.height = viewport.height;
   await page.render({ canvasContext: ctx2, viewport }).promise;
-  return canvas.toDataURL('image/png');
+  const data = canvas.toDataURL('image/png');
+  pageCache.set(cacheKey, data);
+  return data;
 }
-async function renderEditedPageDataUrl(pageNumber){
-  let src = await renderPageToDataUrl(pageNumber, 2);
+async function renderEditedPageDataUrl(pageNumber, sourceScale=1.4){
   const edit = getEdit(pageNumber);
+  let src = edit.dataUrl ? edit.dataUrl : await renderPageToDataUrl(pageNumber, sourceScale);
   const base = await dataUrlToCanvas(src);
   let work = base;
   // apply crop first
@@ -240,7 +252,8 @@ function dataUrlToCanvas(url){
 async function openCrop(){
   const p = getViewerPage();
   const srcPage = pageOrder[p-1] || p;
-  let src = await renderEditedPageDataUrl(srcPage);
+  // Use higher source scale in crop editor for precise selection.
+  let src = await renderEditedPageDataUrl(srcPage, 3.2);
   cropImage.src = src;
   cropModal.show();
   setTimeout(()=>{
@@ -249,10 +262,12 @@ async function openCrop(){
       viewMode:1, dragMode:'move', autoCropArea:0.95, responsive:true,
       background:false, rotatable:true, scalable:true, zoomOnWheel:true
     });
-    const old = cropMap[String(srcPage)];
-    if(old && old.cropData){
-      try{ cropper.setData(old.cropData); }catch(_){}
-    }
+    setTimeout(()=>{
+      try{
+        cropper.reset();
+        cropper.zoomTo(1.8);
+      }catch(_){}
+    }, 50);
   },120);
 }
 document.getElementById('btnCropCurrent').onclick = ()=>openCrop();
@@ -264,8 +279,12 @@ document.getElementById('btnApplyCrop').onclick = ()=>{
   pushHistory(srcPage);
   const cv = cropper.getCroppedCanvas({ imageSmoothingQuality:'high' });
   const e = getEdit(srcPage);
-  e.dataUrl = cv.toDataURL('image/webp',0.95);
-  e.cropData = cropper.getData(true);
+  // Bake crop result directly so coordinates never drift with rotate/reorder edits.
+  e.dataUrl = cv.toDataURL('image/png', 0.95);
+  delete e.cropData;
+  e.rotate = 0;
+  e.brightness = 100;
+  e.contrast = 100;
   cropMap[String(srcPage)] = e;
   saveEdits();
   markDirty();
@@ -299,7 +318,7 @@ async function rebuildCroppedPdf(){
   if(regenBusy) return;
   regenBusy = true;
   try{
-    const hasEdits = Object.values(cropMap).some(v=>v && (v.cropData || (v.rotate||0)!==0 || (v.brightness||100)!==100 || (v.contrast||100)!==100));
+    const hasEdits = Object.values(cropMap).some(v=>v && (v.dataUrl || v.cropData || (v.rotate||0)!==0 || (v.brightness||100)!==100 || (v.contrast||100)!==100));
     const hasReorder = pageOrder.some((n,idx)=>n!==(idx+1));
     if(!hasEdits && !hasReorder){
       activePdfUrl = pdfUrl;
@@ -333,9 +352,25 @@ async function rebuildCroppedPdf(){
 }
 function markDirty(){
   needsRebuild = true;
+  scheduleRebuild();
 }
 async function ensureBuiltPdf(){
   if(needsRebuild) await rebuildCroppedPdf();
+}
+function scheduleRebuild(){
+  if(rebuildTimer) clearTimeout(rebuildTimer);
+  rebuildTimer = setTimeout(()=>{
+    rebuildCroppedPdf();
+  }, 700);
+}
+function showBusy(text){
+  const el = document.getElementById('viewerBusy');
+  const tx = document.getElementById('viewerBusyText');
+  tx.textContent = text || 'Preparing...';
+  el.style.display = 'flex';
+}
+function hideBusy(){
+  document.getElementById('viewerBusy').style.display = 'none';
 }
 
 async function blobUrlToDataUrl(url){
@@ -350,46 +385,63 @@ async function blobUrlToDataUrl(url){
 }
 
 async function saveToMyPc(){
-  await ensureBuiltPdf();
-  const raw = localStorage.getItem('pt_desktop_state_v3');
-  if(!raw){ alert('My PC state not found.'); return; }
-  let st = {};
-  try{ st = JSON.parse(raw); }catch(_){ st = {}; }
-  st.fs = st.fs || {drives:{'D:':{name:'Local Disk (D:)',children:{}},'E:':{name:'Local Disk (E:)',children:{}}},recycle:{}};
-  const drive = (prompt('Save Drive (D: or E:)', 'D:') || 'D:').toUpperCase();
-  if(!st.fs.drives[drive]){ alert('Invalid drive'); return; }
-  const folderPath = (prompt('Folder path inside drive (optional)', '') || '').trim();
-  const name = (prompt('File name', 'combined_print_'+Date.now()+'.pdf') || '').trim() || ('combined_print_'+Date.now()+'.pdf');
-  const ensure = function(parts){
-    let n = st.fs.drives[drive];
-    parts.forEach(function(p){
-      if(!p) return;
-      if(!n.children[p]) n.children[p] = {type:'folder',children:{}};
-      n = n.children[p];
-    });
-    return n;
-  };
-  const parts = folderPath ? folderPath.split('/').filter(Boolean) : [];
-  const parent = ensure(parts);
-  let nm = name; let i=1;
-  while(parent.children[nm]){ nm = name.replace(/(\.pdf)?$/i,'') + '_' + (i++) + '.pdf'; }
-  // Save current PDF source ref (cropped-aware)
-  let src = activePdfUrl;
-  if(src && src.startsWith('blob:')){
-    try{ src = await blobUrlToDataUrl(src); }catch(_){}
+  showBusy('Preparing PDF for save...');
+  try{
+    await ensureBuiltPdf();
+    const raw = localStorage.getItem('pt_desktop_state_v3');
+    if(!raw){ alert('My PC state not found.'); return; }
+    let st = {};
+    try{ st = JSON.parse(raw); }catch(_){ st = {}; }
+    st.fs = st.fs || {drives:{'D:':{name:'Local Disk (D:)',children:{}},'E:':{name:'Local Disk (E:)',children:{}}},recycle:{}};
+    const drive = (prompt('Save Drive (D: or E:)', 'D:') || 'D:').toUpperCase();
+    if(!st.fs.drives[drive]){ alert('Invalid drive'); return; }
+    const folderPath = (prompt('Folder path inside drive (optional)', '') || '').trim();
+    const name = (prompt('File name', 'combined_print_'+Date.now()+'.pdf') || '').trim() || ('combined_print_'+Date.now()+'.pdf');
+    const ensure = function(parts){
+      let n = st.fs.drives[drive];
+      parts.forEach(function(p){
+        if(!p) return;
+        if(!n.children[p]) n.children[p] = {type:'folder',children:{}};
+        n = n.children[p];
+      });
+      return n;
+    };
+    const parts = folderPath ? folderPath.split('/').filter(Boolean) : [];
+    const parent = ensure(parts);
+    let nm = name; let i=1;
+    while(parent.children[nm]){ nm = name.replace(/(\.pdf)?$/i,'') + '_' + (i++) + '.pdf'; }
+    // Save current PDF source ref (cropped-aware)
+    let src = activePdfUrl;
+    if(src && src.startsWith('blob:')){
+      try{ src = await blobUrlToDataUrl(src); }catch(_){}
+    }
+    parent.children[nm] = {type:'file',kind:'pdf_saved',source:src,savedAt:Date.now()};
+    localStorage.setItem('pt_desktop_state_v3', JSON.stringify(st));
+    alert('Saved to My PC: ' + drive + '/' + (folderPath?folderPath+'/':'') + nm);
+  } finally {
+    hideBusy();
   }
-  parent.children[nm] = {type:'file',kind:'pdf_saved',source:src,savedAt:Date.now()};
-  localStorage.setItem('pt_desktop_state_v3', JSON.stringify(st));
-  alert('Saved to My PC: ' + drive + '/' + (folderPath?folderPath+'/':'') + nm);
 }
 document.getElementById('btnSaveToMyPc').onclick = function(){ saveToMyPc(); };
 document.getElementById('btnDownloadPdf').onclick = async function(){
-  await ensureBuiltPdf();
-  const a=document.createElement('a'); a.href=activePdfUrl; a.download='print_ready_' + Date.now() + '.pdf'; a.click();
+  showBusy('Preparing download...');
+  try{
+    await ensureBuiltPdf();
+    const a=document.createElement('a'); a.href=activePdfUrl; a.download='print_ready_' + Date.now() + '.pdf'; a.click();
+  } finally {
+    hideBusy();
+  }
 };
 document.getElementById('btnPrintViewer').onclick = async function(){
-  await ensureBuiltPdf();
-  const w=window.open(activePdfUrl,'_blank'); if(!w) return; setTimeout(()=>w.print(),500);
+  showBusy('Preparing print preview...');
+  try{
+    await ensureBuiltPdf();
+    const w=window.open(activePdfUrl,'_blank');
+    if(!w) return;
+    setTimeout(()=>w.print(),220);
+  } finally {
+    hideBusy();
+  }
 };
 
 function updateEditControls(){
@@ -414,9 +466,9 @@ function refreshPresetUI(){
 }
 document.getElementById('btnSavePreset').onclick = ()=>{
   const p=getViewerPage(); const srcPage=pageOrder[p-1]||p; const e=getEdit(srcPage);
-  if(!e.cropData){ alert('Current page par crop apply karein phir preset save karein.'); return; }
+  if(!e.cropData && !e.dataUrl){ alert('Current page par crop apply karein phir preset save karein.'); return; }
   const nm=prompt('Preset name','Preset '+p); if(!nm) return;
-  cropPresets[nm]={cropData:e.cropData};
+  cropPresets[nm]={cropData:e.cropData || null, dataUrl:e.dataUrl || null};
   localStorage.setItem(presetKey, JSON.stringify(cropPresets)); refreshPresetUI();
 };
 document.getElementById('btnApplyRangeCrop').onclick = ()=>{
@@ -428,7 +480,16 @@ document.getElementById('btnApplyRangeCrop').onclick = ()=>{
   for(let p=f;p<=t;p++){
     const srcPage=pageOrder[p-1]||p;
     const e=getEdit(srcPage);
-    e.cropData = JSON.parse(JSON.stringify(cropPresets[preset].cropData));
+    if(cropPresets[preset].dataUrl){
+      e.dataUrl = cropPresets[preset].dataUrl;
+      delete e.cropData;
+      e.rotate = 0;
+      e.brightness = 100;
+      e.contrast = 100;
+    } else {
+      e.cropData = JSON.parse(JSON.stringify(cropPresets[preset].cropData));
+      delete e.dataUrl;
+    }
     cropMap[String(srcPage)] = e;
   }
   saveEdits();
@@ -461,7 +522,7 @@ async function renderMainPage(fit=false){
   const ticket = ++renderTick;
   const p=nPage();
   const srcPage=pageOrder[p-1]||p;
-  const url=await renderEditedPageDataUrl(srcPage);
+  const url=await renderEditedPageDataUrl(srcPage, 1.5);
   const img=new Image();
   img.onload=function(){
     if(ticket !== renderTick) return;
@@ -508,8 +569,8 @@ async function renderOneThumb(displayPage, token){
   if(workToken !== thumbRenderToken) return;
   const srcPage = pageOrder[displayPage-1] || displayPage;
   const edit = getEdit(srcPage);
-  const hasEdit = !!(edit.cropData || (edit.rotate||0)!==0 || (edit.brightness||100)!==100 || (edit.contrast||100)!==100);
-  const dataUrl = hasEdit ? await renderEditedPageDataUrl(srcPage) : await renderPageToDataUrl(srcPage, 0.35);
+  const hasEdit = !!(edit.dataUrl || edit.cropData || (edit.rotate||0)!==0 || (edit.brightness||100)!==100 || (edit.contrast||100)!==100);
+  const dataUrl = hasEdit ? await renderEditedPageDataUrl(srcPage, 0.6) : await renderPageToDataUrl(srcPage, 0.35);
   if(workToken !== thumbRenderToken) return;
   const img = new Image();
   img.onload = function(){
