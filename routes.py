@@ -712,6 +712,11 @@ def _attendance_list_manual_edit_allowed():
     return user_can_access(session.get('permissions') or [], 'driver_attendance_list_manual_edit')
 
 
+def _attendance_list_manual_delete_allowed():
+    """Role permission for Delete check-in / Delete check-out from Attendance List."""
+    return user_can_access(session.get('permissions') or [], 'driver_attendance_list_manual_delete')
+
+
 def _attendance_list_manual_checkout_allowed():
     """Role permission for Check-out button (missing checkout) from Attendance List."""
     return user_can_access(session.get('permissions') or [], 'driver_attendance_list_manual_checkout')
@@ -16114,6 +16119,7 @@ def driver_attendance_list():
     _perms = session.get('permissions') or []
     can_att_list_manual_checkout = user_can_access(_perms, 'driver_attendance_list_manual_checkout')
     can_att_list_manual_edit = user_can_access(_perms, 'driver_attendance_list_manual_edit')
+    can_att_list_manual_delete = user_can_access(_perms, 'driver_attendance_list_manual_delete')
     return render_template(
         'driver_attendance_list.html',
         form=form,
@@ -16139,6 +16145,7 @@ def driver_attendance_list():
         duty_shift_filter=duty_shift_filter,
         can_att_list_manual_checkout=can_att_list_manual_checkout,
         can_att_list_manual_edit=can_att_list_manual_edit,
+        can_att_list_manual_delete=can_att_list_manual_delete,
     )
 
 
@@ -17825,7 +17832,7 @@ def driver_attendance_list_clear_times():
     list_params = _driver_attendance_list_redirect_params_from_form()
     back_url = url_for('driver_attendance_list', **list_params)
 
-    if not _attendance_list_manual_edit_allowed():
+    if not _attendance_list_manual_delete_allowed():
         flash('Attendance List se check-in / check-out delete karne ki permission nahi hai.', 'danger')
         return redirect(back_url)
 

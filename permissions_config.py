@@ -167,6 +167,7 @@ PERMISSION_TREE = {
         ('driver_attendance_list', 'Attendance – Attendance List'),
         ('driver_attendance_list_manual_checkout', 'Attendance – Attendance List – Manual Check-out'),
         ('driver_attendance_list_manual_edit', 'Attendance – Attendance List – Edit check-in / check-out'),
+        ('driver_attendance_list_manual_delete', 'Attendance – Attendance List – Delete check-in / check-out (from list)'),
     ],
     PERMISSION_TASK_REPORT: [
         ('task_report', 'Task & Logbook (full)'),
@@ -491,6 +492,7 @@ PERMISSION_DEPENDENCIES = {
     'driver_attendance_list': [],
     'driver_attendance_list_manual_checkout': ['driver_attendance_list'],
     'driver_attendance_list_manual_edit': ['driver_attendance_list'],
+    'driver_attendance_list_manual_delete': ['driver_attendance_list'],
     # Expenses – list per feature, buttons depend on list, which depend on section
     'fuel_expense': ['expenses'],
     'fuel_expense_add': ['fuel_expense'],
@@ -782,6 +784,7 @@ SECTION_PAGE_GROUPS = {
             ('driver_attendance_list', 'Attendance List'),
             ('driver_attendance_list_manual_checkout', 'Manual Check-out (from list)'),
             ('driver_attendance_list_manual_edit', 'Edit check-in / check-out (from list)'),
+            ('driver_attendance_list_manual_delete', 'Delete check-in / check-out (from list)'),
         ]),
     ],
     PERMISSION_TASK_REPORT: [
