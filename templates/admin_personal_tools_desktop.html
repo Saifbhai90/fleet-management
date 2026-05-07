@@ -96,6 +96,32 @@
 <script>
 (function(){
   const LS_KEY='pt_desktop_state_v3';
+  const PT_PDF_IDB_NAME='pt_my_pc_pdf_blobs_v1';
+  const PT_PDF_IDB_STORE='pdfs';
+  function ptPdfIdbOpen(){
+    return new Promise(function(resolve,reject){
+      if(!window.indexedDB){ reject(new Error('IndexedDB unavailable')); return; }
+      var req=indexedDB.open(PT_PDF_IDB_NAME,1);
+      req.onerror=function(){ reject(req.error); };
+      req.onupgradeneeded=function(ev){
+        var db=ev.target.result;
+        if(!db.objectStoreNames.contains(PT_PDF_IDB_STORE)){
+          db.createObjectStore(PT_PDF_IDB_STORE,{keyPath:'id'});
+        }
+      };
+      req.onsuccess=function(){ resolve(req.result); };
+    });
+  }
+  function ptPdfIdbGet(id){
+    return ptPdfIdbOpen().then(function(db){
+      return new Promise(function(resolve,reject){
+        var tx=db.transaction(PT_PDF_IDB_STORE,'readonly');
+        var r=tx.objectStore(PT_PDF_IDB_STORE).get(id);
+        r.onsuccess=function(){ var b=r.result?r.result.blob:null; try{ db.close(); }catch(_){ } resolve(b); };
+        r.onerror=function(){ try{ db.close(); }catch(_){ } reject(r.error); };
+      });
+    });
+  }
   const desktop=document.getElementById('pt-desktop');
   const selBox=document.getElementById('pt-selection-box');
   const ctx=document.getElementById('pt-context-menu');
@@ -306,7 +332,7 @@
       <div class="pt-resizer pt-r-ne"></div><div class="pt-resizer pt-r-nw"></div><div class="pt-resizer pt-r-se"></div><div class="pt-resizer pt-r-sw"></div>`;
     desktop.appendChild(w);
     wireWindow(w,id,appId);
-    return {id,appId,el:w,minimized:false,maximized:false,lastRect:null};
+    return {id,appId,title:title,el:w,minimized:false,maximized:false,lastRect:null,blobRevokeUrl:null};
   }
 
   function wireWindow(w,id,appId){
@@ -353,7 +379,9 @@
   }
   function closeWindow(id){
     const i=windows.findIndex(x=>x.id===id); if(i<0) return;
-    windows[i].el.remove(); windows.splice(i,1); if(activeWindowId===id) activeWindowId=windows.length?windows[windows.length-1].id:null; renderTaskbar();
+    const win=windows[i];
+    if(win.blobRevokeUrl){ try{ URL.revokeObjectURL(win.blobRevokeUrl); }catch(_){} }
+    win.el.remove(); windows.splice(i,1); if(activeWindowId===id) activeWindowId=windows.length?windows[windows.length-1].id:null; renderTaskbar();
   }
   function minimizeWindow(id){
     const w=windows.find(x=>x.id===id); if(!w) return;
@@ -380,7 +408,7 @@
     windows.forEach(w=>{
       const b=document.createElement('button');
       b.className='pt-running-item'+(activeWindowId===w.id && !w.minimized?' active':'');
-      b.textContent=appMeta[w.appId].name;
+      b.textContent=(appMeta[w.appId]&&appMeta[w.appId].name)||w.title||w.appId;
       b.onclick=()=>{ if(w.minimized) restoreWindow(w.id); else if(activeWindowId===w.id){ minimizeWindow(w.id); } else focusWindow(w.id); };
       taskRunning.appendChild(b);
     });
@@ -535,7 +563,7 @@
           const file=parent && parent.children ? parent.children[r.name] : null;
           if(!file) return;
           if(file.kind==='text'){ openSavedText(r.name,file); return; }
-          if(file.kind==='pdf_saved' && file.source){ openSavedPdf(r.name,file.source); return; }
+          if(file.kind==='pdf_saved' && (file.source || file.blobId)){ openSavedPdf(r.name,file); return; }
         };
         row.oncontextmenu=(e)=>{ e.preventDefault(); explorerContext(e.clientX,e.clientY,win,r.name,r.type,container); };
         list.appendChild(row);
@@ -661,11 +689,24 @@
     const body=w.el.querySelector('.pt-win-body');
     body.innerHTML=`<div class="pt-notes"><textarea>${file.content||''}</textarea></div>`;
   }
-  function openSavedPdf(name,src){
-    const appId='pdf_'+Date.now();
-    const w=createWindow(name,appId); windows.push(w); focusWindow(w.id); renderTaskbar();
-    const body=w.el.querySelector('.pt-win-body');
-    body.innerHTML=`<div class="p-2 h-100"><iframe src="${src}#toolbar=1&navpanes=0&scrollbar=1" style="width:100%;height:100%;border:0"></iframe></div>`;
+  async function openSavedPdf(name,file){
+    var src='', blobRevokeUrl=null;
+    try{
+      if(file.blobId){
+        var blob=await ptPdfIdbGet(file.blobId);
+        if(!blob){ alert('File data missing — browser storage cleared ho sakti hai.'); return; }
+        blobRevokeUrl=URL.createObjectURL(blob);
+        src=blobRevokeUrl;
+      }else if(file.source){
+        src=file.source;
+      }else return;
+    }catch(_){ alert('PDF open karte waqt error aaya.'); return; }
+    var appId='pdf_'+Date.now();
+    var winObj=createWindow(name,appId);
+    winObj.blobRevokeUrl=blobRevokeUrl;
+    windows.push(winObj); focusWindow(winObj.id); renderTaskbar();
+    var body=winObj.el.querySelector('.pt-win-body');
+    body.innerHTML='<div class="p-2 h-100"><iframe src="'+src+'#toolbar=1&navpanes=0&scrollbar=1" style="width:100%;height:100%;border:0"></iframe></div>';
   }
 
   function openContextMenu(x,y,items){

@@ -452,12 +452,29 @@ function hideBusy(){
   document.getElementById('viewerBusy').style.display = 'none';
 }
 
-function blobToDataUrl(blob){
+const PT_PDF_IDB_NAME = 'pt_my_pc_pdf_blobs_v1';
+const PT_PDF_IDB_STORE = 'pdfs';
+function ptPdfIdbOpen(){
   return new Promise((resolve,reject)=>{
-    const fr = new FileReader();
-    fr.onload = ()=>resolve(fr.result);
-    fr.onerror = reject;
-    fr.readAsDataURL(blob);
+    if(!window.indexedDB){ reject(new Error('IndexedDB unavailable')); return; }
+    const req = indexedDB.open(PT_PDF_IDB_NAME, 1);
+    req.onerror = ()=>reject(req.error);
+    req.onupgradeneeded = (ev)=>{
+      const db = ev.target.result;
+      if(!db.objectStoreNames.contains(PT_PDF_IDB_STORE)){
+        db.createObjectStore(PT_PDF_IDB_STORE, { keyPath: 'id' });
+      }
+    };
+    req.onsuccess = ()=>resolve(req.result);
+  });
+}
+async function ptPdfIdbPut(id, blob){
+  const db = await ptPdfIdbOpen();
+  return new Promise((resolve,reject)=>{
+    const tx = db.transaction(PT_PDF_IDB_STORE, 'readwrite');
+    tx.oncomplete = ()=>{ try{ db.close(); }catch(_){} resolve(); };
+    tx.onerror = ()=>{ try{ db.close(); }catch(_){} reject(tx.error); };
+    tx.objectStore(PT_PDF_IDB_STORE).put({ id, blob, savedAt: Date.now() });
   });
 }
 function listFolderPathsForDrive(st, drive){
@@ -548,13 +565,21 @@ document.getElementById('btnSaveMyPcConfirm').onclick = async function(){
     while(parent.children[nm]){ nm = name.replace(/(\.pdf)?$/i,'') + '_' + (i++) + '.pdf'; }
     const res = await fetch(activePdfUrl);
     const blob = await res.blob();
-    const src = await blobToDataUrl(blob);
-    parent.children[nm] = {type:'file',kind:'pdf_saved',source:src,savedAt:Date.now()};
+    const blobId = (crypto.randomUUID && crypto.randomUUID()) || ('pdf_'+Date.now()+'_'+Math.random().toString(36).slice(2,12));
+    await ptPdfIdbPut(blobId, blob);
+    parent.children[nm] = {type:'file',kind:'pdf_saved',blobId,size:blob.size||0,savedAt:Date.now()};
     localStorage.setItem('pt_desktop_state_v3', JSON.stringify(pendingMyPcState));
     saveMyPcModal.hide();
     alert('Saved to Web My PC: ' + drive + '/' + (folderPath?folderPath+'/':'') + nm);
-  }catch(_){
-    alert('Save to My PC failed. Dobara try karein.');
+  }catch(err){
+    console.error(err);
+    let msg = 'Save to Web My PC failed.';
+    if(err && err.name === 'QuotaExceededError'){
+      msg = 'Browser localStorage full hai — Purani virtual files delete karain ya site data clear karain.';
+    }else if(err && String(err.message||'').includes('IndexedDB')){
+      msg = 'IndexedDB save nahi ho saki (private mode / blocked storage).';
+    }
+    alert(msg + ' Dobara try karain.');
   } finally {
     hideBusy();
     btn.disabled = false;
