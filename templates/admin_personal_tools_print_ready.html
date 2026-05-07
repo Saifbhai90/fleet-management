@@ -30,14 +30,11 @@
     </div>
   </div>
   <div class="bar">
-    <button class="btn btn-sm btn-outline-secondary" id="btnPrev">←</button>
-    <span class="small">Page</span>
-    <input type="number" id="pageNo" class="form-control form-control-sm" style="width:90px" min="1" value="1">
-    <span class="small">/ <span id="maxPagesLbl">{{ pages }}</span></span>
-    <button class="btn btn-sm btn-outline-secondary" id="btnNext">→</button>
+    <input type="hidden" id="pageNo" value="1">
+    <span class="small text-muted">Viewer page auto-detect enabled</span>
     <button class="btn btn-sm btn-outline-primary ms-2" id="btnCropCurrent">Crop Current Page</button>
     <button class="btn btn-sm btn-outline-danger" id="btnResetCrop">Reset Crop</button>
-    <span class="text-muted small ms-2">Right-click viewer for crop | Page auto-sync enabled</span>
+    <span class="text-muted small ms-2">Right-click viewer for crop</span>
   </div>
   <div class="stage">
     <div class="frame-wrap" id="viewerWrap">
@@ -55,8 +52,10 @@
   <div class="modal-dialog modal-xl modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header"><h5 class="modal-title">Crop Page</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
-      <div class="modal-body" style="max-height:74vh;overflow:auto;">
-        <img id="cropImage" alt="" style="max-width:100%;">
+      <div class="modal-body">
+        <div style="height:68vh;border:1px solid #dfe6f5;border-radius:8px;background:#f8fbff;display:flex;align-items:center;justify-content:center;overflow:hidden;">
+          <img id="cropImage" alt="" style="max-width:100%;max-height:100%;display:block;">
+        </div>
       </div>
       <div class="modal-footer">
         <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -99,6 +98,20 @@ function nPage(){
   pageNo.value = n;
   return n;
 }
+function getViewerPage(){
+  try{
+    const h = frame.contentWindow.location.hash || '';
+    const m = /page=(\d+)/i.exec(h);
+    if(m){
+      const n = parseInt(m[1],10);
+      if(!isNaN(n) && n>=1 && n<=maxPages){
+        pageNo.value = n;
+        return n;
+      }
+    }
+  }catch(_){}
+  return nPage();
+}
 function rawViewerSrc(page){
   return activePdfUrl + '#page=' + page + '&toolbar=1&navpanes=0&scrollbar=1&view=FitH';
 }
@@ -108,9 +121,6 @@ function refreshViewer(){
   frame.style.display = 'block';
   frame.src = rawViewerSrc(p);
 }
-document.getElementById('btnPrev').onclick = ()=>{ pageNo.value = Math.max(1, nPage()-1); refreshViewer(); };
-document.getElementById('btnNext').onclick = ()=>{ pageNo.value = Math.min(maxPages, nPage()+1); refreshViewer(); };
-pageNo.onchange = refreshViewer;
 
 async function renderPageToDataUrl(pageNumber){
   if(!pdfDocRef){
@@ -127,14 +137,14 @@ async function renderPageToDataUrl(pageNumber){
   return canvas.toDataURL('image/png');
 }
 async function openCrop(){
-  const p = nPage();
+  const p = getViewerPage();
   let src = await renderPageToDataUrl(p);
   cropImage.src = src;
   cropModal.show();
   setTimeout(()=>{
     if(cropper) cropper.destroy();
     cropper = new Cropper(cropImage,{
-      viewMode:1, dragMode:'move', autoCropArea:0.96, responsive:true,
+      viewMode:1, dragMode:'move', autoCropArea:0.95, responsive:true,
       background:false, rotatable:true, scalable:true, zoomOnWheel:true
     });
     const old = cropMap[String(p)];
@@ -147,20 +157,21 @@ document.getElementById('btnCropCurrent').onclick = ()=>openCrop();
 document.getElementById('ctxCrop').onclick = ()=>{ ctx.style.display='none'; openCrop(); };
 document.getElementById('btnApplyCrop').onclick = ()=>{
   if(!cropper) return;
-  const p = nPage();
+  const p = getViewerPage();
   const cv = cropper.getCroppedCanvas({ imageSmoothingQuality:'high' });
   cropMap[String(p)] = { dataUrl: cv.toDataURL('image/webp',0.95), cropData: cropper.getData(true) };
   localStorage.setItem(cropKey, JSON.stringify(cropMap));
   rebuildCroppedPdf().then(function(){
+    pageNo.value = p;
     refreshViewer();
   });
   cropModal.hide();
 };
 cropModalEl.addEventListener('hidden.bs.modal', ()=>{ if(cropper){ cropper.destroy(); cropper=null; }});
 document.getElementById('btnResetCrop').onclick = ()=>{
-  const p = nPage(); delete cropMap[String(p)];
+  const p = getViewerPage(); delete cropMap[String(p)];
   localStorage.setItem(cropKey, JSON.stringify(cropMap));
-  rebuildCroppedPdf().then(function(){ refreshViewer(); });
+  rebuildCroppedPdf().then(function(){ pageNo.value = p; refreshViewer(); });
 };
 viewerWrap.addEventListener('contextmenu', (e)=>{
   e.preventDefault();
@@ -184,7 +195,6 @@ async function rebuildCroppedPdf(){
     }
     const outDoc = await PDFDocument.create();
     const total = pdfDocRef.numPages || maxPages;
-    document.getElementById('maxPagesLbl').textContent = total;
     for(let i=1;i<=total;i++){
       let dataUrl;
       const c = cropMap[String(i)];
