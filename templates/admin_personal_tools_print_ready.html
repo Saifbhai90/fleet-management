@@ -126,6 +126,10 @@ let pdfDocRef = null;
 let activePdfUrl = pdfUrl;
 let regenBusy = false;
 let zoomLevel = 1;
+let needsRebuild = true;
+let thumbRenderToken = 0;
+let renderTick = 0;
+let rangeApplyTimer = null;
 const cropKey = 'pt_print_crops_' + btoa(pdfUrl).replace(/[^a-zA-Z0-9]/g,'');
 const presetKey = cropKey + '_presets';
 const orderKey = cropKey + '_order';
@@ -182,7 +186,7 @@ async function renderPageToDataUrl(pageNumber, scale=3){
   return canvas.toDataURL('image/png');
 }
 async function renderEditedPageDataUrl(pageNumber){
-  let src = await renderPageToDataUrl(pageNumber, 3);
+  let src = await renderPageToDataUrl(pageNumber, 2);
   const edit = getEdit(pageNumber);
   const base = await dataUrlToCanvas(src);
   let work = base;
@@ -264,7 +268,10 @@ document.getElementById('btnApplyCrop').onclick = ()=>{
   e.cropData = cropper.getData(true);
   cropMap[String(srcPage)] = e;
   saveEdits();
-  rebuildCroppedPdf().then(function(){ pageNo.value = p; renderMainPage(); renderThumbs(); });
+  markDirty();
+  pageNo.value = p;
+  renderMainPage();
+  renderOneThumb(p);
   cropModal.hide();
 };
 cropModalEl.addEventListener('hidden.bs.modal', ()=>{ if(cropper){ cropper.destroy(); cropper=null; }});
@@ -276,7 +283,10 @@ document.getElementById('btnResetCrop').onclick = ()=>{
   delete e.cropData; delete e.dataUrl;
   cropMap[String(srcPage)] = e;
   saveEdits();
-  rebuildCroppedPdf().then(function(){ pageNo.value = p; renderMainPage(); renderThumbs(); });
+  markDirty();
+  pageNo.value = p;
+  renderMainPage();
+  renderOneThumb(p);
 };
 viewerWrap.addEventListener('contextmenu', (e)=>{
   e.preventDefault();
@@ -294,6 +304,7 @@ async function rebuildCroppedPdf(){
     if(!hasEdits && !hasReorder){
       activePdfUrl = pdfUrl;
       pdfDocRef = null;
+      needsRebuild = false;
       return;
     }
     const srcDocTask = pdfjsLib.getDocument(pdfUrl);
@@ -315,9 +326,16 @@ async function rebuildCroppedPdf(){
     if(activePdfUrl && activePdfUrl.startsWith('blob:')) URL.revokeObjectURL(activePdfUrl);
     activePdfUrl = URL.createObjectURL(blob);
     pdfDocRef = null;
+    needsRebuild = false;
   } finally {
     regenBusy = false;
   }
+}
+function markDirty(){
+  needsRebuild = true;
+}
+async function ensureBuiltPdf(){
+  if(needsRebuild) await rebuildCroppedPdf();
 }
 
 async function blobUrlToDataUrl(url){
@@ -332,6 +350,7 @@ async function blobUrlToDataUrl(url){
 }
 
 async function saveToMyPc(){
+  await ensureBuiltPdf();
   const raw = localStorage.getItem('pt_desktop_state_v3');
   if(!raw){ alert('My PC state not found.'); return; }
   let st = {};
@@ -365,9 +384,11 @@ async function saveToMyPc(){
 }
 document.getElementById('btnSaveToMyPc').onclick = function(){ saveToMyPc(); };
 document.getElementById('btnDownloadPdf').onclick = async function(){
+  await ensureBuiltPdf();
   const a=document.createElement('a'); a.href=activePdfUrl; a.download='print_ready_' + Date.now() + '.pdf'; a.click();
 };
-document.getElementById('btnPrintViewer').onclick = function(){
+document.getElementById('btnPrintViewer').onclick = async function(){
+  await ensureBuiltPdf();
   const w=window.open(activePdfUrl,'_blank'); if(!w) return; setTimeout(()=>w.print(),500);
 };
 
@@ -378,12 +399,12 @@ function updateEditControls(){
   document.getElementById('rngBrightness').value = e.brightness || 100;
   document.getElementById('rngContrast').value = e.contrast || 100;
 }
-document.getElementById('btnRotateCW').onclick = ()=>{ const p=getViewerPage(); const srcPage=pageOrder[p-1]||p; pushHistory(srcPage); const e=getEdit(srcPage); e.rotate=((e.rotate||0)+90)%360; cropMap[String(srcPage)]=e; saveEdits(); rebuildCroppedPdf().then(()=>{renderMainPage();renderThumbs();}); };
-document.getElementById('btnRotateCCW').onclick = ()=>{ const p=getViewerPage(); const srcPage=pageOrder[p-1]||p; pushHistory(srcPage); const e=getEdit(srcPage); e.rotate=((e.rotate||0)-90+360)%360; cropMap[String(srcPage)]=e; saveEdits(); rebuildCroppedPdf().then(()=>{renderMainPage();renderThumbs();}); };
-document.getElementById('rngBrightness').oninput = ()=>{ const p=getViewerPage(); const srcPage=pageOrder[p-1]||p; const e=getEdit(srcPage); e.brightness=parseInt(document.getElementById('rngBrightness').value,10); cropMap[String(srcPage)]=e; saveEdits(); rebuildCroppedPdf().then(()=>{renderMainPage();renderThumbs();}); };
-document.getElementById('rngContrast').oninput = ()=>{ const p=getViewerPage(); const srcPage=pageOrder[p-1]||p; const e=getEdit(srcPage); e.contrast=parseInt(document.getElementById('rngContrast').value,10); cropMap[String(srcPage)]=e; saveEdits(); rebuildCroppedPdf().then(()=>{renderMainPage();renderThumbs();}); };
-document.getElementById('btnUndo').onclick = ()=>{ const p=getViewerPage(); const srcPage=pageOrder[p-1]||p; const h=ensureHistory(srcPage); if(!h.undo.length) return; h.redo.push(JSON.stringify(cropMap[String(srcPage)]||{})); cropMap[String(srcPage)] = JSON.parse(h.undo.pop()||'{}'); saveEdits(); rebuildCroppedPdf().then(()=>{renderMainPage();renderThumbs();}); };
-document.getElementById('btnRedo').onclick = ()=>{ const p=getViewerPage(); const srcPage=pageOrder[p-1]||p; const h=ensureHistory(srcPage); if(!h.redo.length) return; h.undo.push(JSON.stringify(cropMap[String(srcPage)]||{})); cropMap[String(srcPage)] = JSON.parse(h.redo.pop()||'{}'); saveEdits(); rebuildCroppedPdf().then(()=>{renderMainPage();renderThumbs();}); };
+document.getElementById('btnRotateCW').onclick = ()=>{ const p=getViewerPage(); const srcPage=pageOrder[p-1]||p; pushHistory(srcPage); const e=getEdit(srcPage); e.rotate=((e.rotate||0)+90)%360; cropMap[String(srcPage)]=e; saveEdits(); markDirty(); renderMainPage(); renderOneThumb(p); };
+document.getElementById('btnRotateCCW').onclick = ()=>{ const p=getViewerPage(); const srcPage=pageOrder[p-1]||p; pushHistory(srcPage); const e=getEdit(srcPage); e.rotate=((e.rotate||0)-90+360)%360; cropMap[String(srcPage)]=e; saveEdits(); markDirty(); renderMainPage(); renderOneThumb(p); };
+document.getElementById('rngBrightness').oninput = ()=>{ const p=getViewerPage(); const srcPage=pageOrder[p-1]||p; const e=getEdit(srcPage); e.brightness=parseInt(document.getElementById('rngBrightness').value,10); cropMap[String(srcPage)]=e; saveEdits(); markDirty(); renderMainPage(); if(rangeApplyTimer) clearTimeout(rangeApplyTimer); rangeApplyTimer=setTimeout(()=>renderOneThumb(p),120); };
+document.getElementById('rngContrast').oninput = ()=>{ const p=getViewerPage(); const srcPage=pageOrder[p-1]||p; const e=getEdit(srcPage); e.contrast=parseInt(document.getElementById('rngContrast').value,10); cropMap[String(srcPage)]=e; saveEdits(); markDirty(); renderMainPage(); if(rangeApplyTimer) clearTimeout(rangeApplyTimer); rangeApplyTimer=setTimeout(()=>renderOneThumb(p),120); };
+document.getElementById('btnUndo').onclick = ()=>{ const p=getViewerPage(); const srcPage=pageOrder[p-1]||p; const h=ensureHistory(srcPage); if(!h.undo.length) return; h.redo.push(JSON.stringify(cropMap[String(srcPage)]||{})); cropMap[String(srcPage)] = JSON.parse(h.undo.pop()||'{}'); saveEdits(); markDirty(); renderMainPage(); renderOneThumb(p); };
+document.getElementById('btnRedo').onclick = ()=>{ const p=getViewerPage(); const srcPage=pageOrder[p-1]||p; const h=ensureHistory(srcPage); if(!h.redo.length) return; h.undo.push(JSON.stringify(cropMap[String(srcPage)]||{})); cropMap[String(srcPage)] = JSON.parse(h.redo.pop()||'{}'); saveEdits(); markDirty(); renderMainPage(); renderOneThumb(p); };
 
 function refreshPresetUI(){
   const sel=document.getElementById('cropPresetSel'); sel.innerHTML='';
@@ -411,7 +432,9 @@ document.getElementById('btnApplyRangeCrop').onclick = ()=>{
     cropMap[String(srcPage)] = e;
   }
   saveEdits();
-  rebuildCroppedPdf().then(()=>{renderMainPage();renderThumbs();});
+  markDirty();
+  renderMainPage();
+  renderThumbs();
 };
 document.getElementById('btnReorder').onclick = ()=>{
   const current = pageOrder.join(',');
@@ -423,7 +446,9 @@ document.getElementById('btnReorder').onclick = ()=>{
   for(const n of nums){ if(n<1||n>maxPages){ alert('Invalid page no: '+n); return; } }
   pageOrder = nums;
   localStorage.setItem(orderKey, JSON.stringify(pageOrder));
-  rebuildCroppedPdf().then(()=>{renderMainPage();renderThumbs();});
+  markDirty();
+  renderMainPage();
+  renderThumbs();
 };
 document.getElementById('btnPrev').onclick=()=>{ pageNo.value=Math.max(1,nPage()-1); renderMainPage(); };
 document.getElementById('btnNext').onclick=()=>{ pageNo.value=Math.min(maxPages,nPage()+1); renderMainPage(); };
@@ -433,11 +458,13 @@ document.getElementById('btnZoomOut').onclick=()=>{ zoomLevel=Math.max(0.4,zoomL
 document.getElementById('btnFitWidth').onclick=()=>{ zoomLevel=1; renderMainPage(true); };
 
 async function renderMainPage(fit=false){
+  const ticket = ++renderTick;
   const p=nPage();
   const srcPage=pageOrder[p-1]||p;
   const url=await renderEditedPageDataUrl(srcPage);
   const img=new Image();
   img.onload=function(){
+    if(ticket !== renderTick) return;
     const maxW = mainPane.clientWidth - 30;
     let targetScale = zoomLevel;
     if(fit) targetScale = maxW / img.width;
@@ -457,6 +484,7 @@ function highlightThumb(p){
   thumbsPane.querySelectorAll('.thumb').forEach(el=>el.classList.toggle('active', Number(el.dataset.page)===p));
 }
 async function renderThumbs(){
+  const token = ++thumbRenderToken;
   thumbsPane.innerHTML='';
   for(let i=1;i<=maxPages;i++){
     const t=document.createElement('div'); t.className='thumb'; t.dataset.page=String(i);
@@ -464,25 +492,40 @@ async function renderThumbs(){
     const n=document.createElement('div'); n.className='n'; n.textContent=String(i);
     t.appendChild(cv); t.appendChild(n); thumbsPane.appendChild(t);
     t.onclick=()=>{ pageNo.value=i; renderMainPage(); };
-    const srcPage=pageOrder[i-1]||i;
-    const url=await renderEditedPageDataUrl(srcPage);
-    const img=new Image();
-    img.onload=function(){
-      const ctx2=cv.getContext('2d');
-      const s=Math.min(cv.width/img.width, cv.height/img.height);
-      const w=Math.floor(img.width*s), h=Math.floor(img.height*s);
-      const x=(cv.width-w)/2, y=(cv.height-h)/2;
-      ctx2.fillStyle='#fff'; ctx2.fillRect(0,0,cv.width,cv.height);
-      ctx2.drawImage(img,x,y,w,h);
-    };
-    img.src=url;
+    cv.dataset.page = String(i);
+    cv.dataset.pending = '1';
+  }
+  for(let i=1;i<=maxPages;i++){
+    if(token !== thumbRenderToken) return;
+    await renderOneThumb(i, token);
   }
   highlightThumb(nPage());
+}
+async function renderOneThumb(displayPage, token){
+  const workToken = token || thumbRenderToken;
+  const canvas = thumbsPane.querySelector(`.thumb canvas[data-page="${displayPage}"]`);
+  if(!canvas) return;
+  if(workToken !== thumbRenderToken) return;
+  const srcPage = pageOrder[displayPage-1] || displayPage;
+  const edit = getEdit(srcPage);
+  const hasEdit = !!(edit.cropData || (edit.rotate||0)!==0 || (edit.brightness||100)!==100 || (edit.contrast||100)!==100);
+  const dataUrl = hasEdit ? await renderEditedPageDataUrl(srcPage) : await renderPageToDataUrl(srcPage, 0.35);
+  if(workToken !== thumbRenderToken) return;
+  const img = new Image();
+  img.onload = function(){
+    if(workToken !== thumbRenderToken) return;
+    const ctx2=canvas.getContext('2d');
+    const s=Math.min(canvas.width/img.width, canvas.height/img.height);
+    const w=Math.floor(img.width*s), h=Math.floor(img.height*s);
+    const x=(canvas.width-w)/2, y=(canvas.height-h)/2;
+    ctx2.fillStyle='#fff'; ctx2.fillRect(0,0,canvas.width,canvas.height);
+    ctx2.drawImage(img,x,y,w,h);
+  };
+  img.src = dataUrl;
 }
 
 window.addEventListener('load', async ()=>{
   refreshPresetUI();
-  await rebuildCroppedPdf();
   await renderThumbs();
   await renderMainPage(true);
 });
