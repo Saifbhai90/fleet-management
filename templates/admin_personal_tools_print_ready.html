@@ -100,6 +100,11 @@
         </div>
       </div>
       <div class="modal-footer">
+        <button class="btn btn-sm btn-outline-secondary" type="button" id="btnCropFit">Fit</button>
+        <button class="btn btn-sm btn-outline-secondary" type="button" id="btnCropZoomOut">-</button>
+        <button class="btn btn-sm btn-outline-secondary" type="button" id="btnCropZoomIn">+</button>
+        <button class="btn btn-sm btn-outline-secondary" type="button" id="btnCropRotate">Rotate 90</button>
+        <button class="btn btn-sm btn-outline-secondary" type="button" id="btnCropResetSel">Reset</button>
         <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
         <button class="btn btn-primary" id="btnApplyCrop">Apply Crop</button>
       </div>
@@ -249,6 +254,16 @@ function dataUrlToCanvas(url){
     img.src = url;
   });
 }
+function cropFitToWindow(){
+  if(!cropper) return;
+  try{
+    cropper.reset();
+    const cd = cropper.getContainerData();
+    const id = cropper.getImageData();
+    const fit = Math.min(cd.width / id.naturalWidth, cd.height / id.naturalHeight);
+    cropper.zoomTo(Math.max(fit * 0.98, 0.08));
+  }catch(_){}
+}
 async function openCrop(){
   const p = getViewerPage();
   const srcPage = pageOrder[p-1] || p;
@@ -266,24 +281,30 @@ async function openCrop(){
       minContainerHeight: 420
     });
     setTimeout(()=>{
-      try{
-        cropper.reset();
-        const cd = cropper.getContainerData();
-        const id = cropper.getImageData();
-        const fit = Math.min(cd.width / id.naturalWidth, cd.height / id.naturalHeight);
-        cropper.zoomTo(Math.max(fit * 0.98, 0.08));
-      }catch(_){}
+      cropFitToWindow();
     }, 50);
   },120);
 }
 document.getElementById('btnCropCurrent').onclick = ()=>openCrop();
 document.getElementById('ctxCrop').onclick = ()=>{ ctx.style.display='none'; openCrop(); };
+document.getElementById('btnCropFit').onclick = ()=>cropFitToWindow();
+document.getElementById('btnCropZoomIn').onclick = ()=>{ if(!cropper) return; try{ cropper.zoom(0.12); }catch(_){} };
+document.getElementById('btnCropZoomOut').onclick = ()=>{ if(!cropper) return; try{ cropper.zoom(-0.12); }catch(_){} };
+document.getElementById('btnCropRotate').onclick = ()=>{ if(!cropper) return; try{ cropper.rotate(90); }catch(_){} };
+document.getElementById('btnCropResetSel').onclick = ()=>{ if(!cropper) return; try{ cropper.reset(); cropFitToWindow(); }catch(_){} };
 document.getElementById('btnApplyCrop').onclick = ()=>{
   if(!cropper) return;
   const p = getViewerPage();
   const srcPage = pageOrder[p-1] || p;
   pushHistory(srcPage);
-  const cv = cropper.getCroppedCanvas({ imageSmoothingQuality:'high' });
+  let cv = null;
+  try{
+    cv = cropper.getCroppedCanvas({ imageSmoothingEnabled:true, imageSmoothingQuality:'high', fillColor:'#fff', maxWidth:3000, maxHeight:3000 });
+  }catch(_){}
+  if(!cv || !cv.width || !cv.height){
+    alert('Crop apply nahi hua. Crop area select karke dobara try karein.');
+    return;
+  }
   const e = getEdit(srcPage);
   // Bake crop result directly so coordinates never drift with rotate/reorder edits.
   e.dataUrl = cv.toDataURL('image/png', 0.95);
@@ -367,7 +388,7 @@ function scheduleRebuild(){
   if(rebuildTimer) clearTimeout(rebuildTimer);
   rebuildTimer = setTimeout(()=>{
     rebuildCroppedPdf();
-  }, 700);
+  }, 1800);
 }
 function showBusy(text){
   const el = document.getElementById('viewerBusy');
@@ -440,10 +461,12 @@ document.getElementById('btnDownloadPdf').onclick = async function(){
 };
 document.getElementById('btnPrintViewer').onclick = async function(){
   showBusy('Preparing print preview...');
+  let w = null;
   try{
+    w = window.open('about:blank','_blank');
     await ensureBuiltPdf();
-    const w=window.open(activePdfUrl,'_blank');
     if(!w) return;
+    w.location = activePdfUrl;
     setTimeout(()=>w.print(),220);
   } finally {
     hideBusy();
