@@ -5,12 +5,24 @@
     position: fixed; inset: 0; z-index: 10050;
     background: rgba(2, 6, 23, 0.94);
     display: none; flex-direction: column;
+    /* Status bar / notch / home indicator (Capacitor & mobile browsers) */
+    padding-top: constant(safe-area-inset-top);
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding-left: env(safe-area-inset-left, 0px);
+    box-sizing: border-box;
+  }
+  /* Android WebView / Capacitor: sometimes inset is 0 but content still sits under status bar */
+  html.capacitor-native .gps-att-fv-overlay.open {
+    padding-top: max(env(safe-area-inset-top, 0px), 24px);
   }
   .gps-att-fv-overlay.open { display: flex; }
   .gps-att-fv-top {
     flex: 0 0 auto;
     display: flex; justify-content: space-between; align-items: center;
-    gap: 10px; padding: 10px 14px;
+    gap: 10px;
+    padding: 12px 14px 10px;
     color: #e2e8f0;
     border-bottom: 1px solid rgba(148, 163, 184, 0.22);
   }
@@ -63,6 +75,7 @@
     background: #0f172a; color: #e2e8f0; border: 1px solid #334155;
   }
   @media (max-width: 900px) {
+    .gps-att-fv-top { padding-top: 14px; flex-wrap: wrap; }
     .gps-att-fv-stage img { max-width: calc(100% - 8px); max-height: calc(100% - 8px); }
     .gps-att-fv-arrow { width: 40px; height: 40px; font-size: 1rem; }
     .gps-att-fv-arrow.left { left: 4px; }
@@ -107,9 +120,9 @@
   var btnZoomOut = document.getElementById(PREFIX + 'ZoomOut');
   var btnZoomReset = document.getElementById(PREFIX + 'ZoomReset');
   var btnDownload = document.getElementById(PREFIX + 'Download');
-  var previewImg = document.getElementById(PREVIEW_ID);
+  var previewImg = (PREVIEW_ID && String(PREVIEW_ID).length) ? document.getElementById(PREVIEW_ID) : null;
 
-  if (!overlay || !stage || !previewImg) return;
+  if (!overlay || !stage) return;
 
   document.body.appendChild(overlay);
 
@@ -255,20 +268,26 @@
     openViewer(src, PHOTO_LABEL);
   }
 
-  previewImg.style.cursor = 'zoom-in';
-  previewImg.setAttribute('role', 'button');
-  previewImg.setAttribute('tabindex', '0');
-  previewImg.setAttribute('aria-label', 'Full screen mein dekhen');
-  previewImg.addEventListener('click', function (e) {
-    e.preventDefault();
-    tryOpenFromPreview();
-  });
-  previewImg.addEventListener('keydown', function (e) {
-    if (e.key === 'Enter' || e.key === ' ') {
+  if (previewImg) {
+    previewImg.style.cursor = 'zoom-in';
+    previewImg.setAttribute('role', 'button');
+    previewImg.setAttribute('tabindex', '0');
+    previewImg.setAttribute('aria-label', 'Full screen mein dekhen');
+    previewImg.addEventListener('click', function (e) {
       e.preventDefault();
       tryOpenFromPreview();
-    }
-  });
+    });
+    previewImg.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        tryOpenFromPreview();
+      }
+    });
+  }
+
+  window.openAttendancePhotoFullView = function (url, name) {
+    openViewer(url, name || PHOTO_LABEL);
+  };
 
   btnClose.addEventListener('click', closeViewer);
   btnPrev.addEventListener('click', function (e) { e.stopPropagation(); showPrev(); });

@@ -255,10 +255,12 @@
                 {% if rec and rec.check_in_photo_path %}
                   {% set photo_url = rec.check_in_photo_path %}
                   {% if photo_url.startswith('http') %}
-                  <a href="{{ photo_url }}" target="_blank" class="btn btn-sm btn-outline-primary" title="Check-in photo"> <i class="bi bi-image"></i> </a>
+                  {% set photo_abs = photo_url %}
                   {% else %}
-                  <a href="{{ url_for('uploaded_file', filename=photo_url) }}" target="_blank" class="btn btn-sm btn-outline-primary" title="Check-in photo"> <i class="bi bi-image"></i> </a>
+                  {% set photo_abs = url_for('uploaded_file', filename=photo_url, _external=True) %}
                   {% endif %}
+                  <button type="button" class="btn btn-sm btn-outline-primary att-photo-fullview-btn" title="Check-in photo — full view"
+                    data-url="{{ photo_abs }}" data-label="Check-in photo"><i class="bi bi-image"></i></button>
                 {% else %}<span class="text-muted">-</span>{% endif %}
               </td>
               <td class="small text-muted" style="max-width:160px;">{{ check_in_remarks_text or '-' }}</td>
@@ -285,10 +287,12 @@
                 {% if rec and rec.check_out_photo_path %}
                   {% set photo_url = rec.check_out_photo_path %}
                   {% if photo_url.startswith('http') %}
-                  <a href="{{ photo_url }}" target="_blank" class="btn btn-sm btn-outline-danger" title="Check-out photo"> <i class="bi bi-image"></i> </a>
+                  {% set photo_abs = photo_url %}
                   {% else %}
-                  <a href="{{ url_for('uploaded_file', filename=photo_url) }}" target="_blank" class="btn btn-sm btn-outline-danger" title="Check-out photo"> <i class="bi bi-image"></i> </a>
+                  {% set photo_abs = url_for('uploaded_file', filename=photo_url, _external=True) %}
                   {% endif %}
+                  <button type="button" class="btn btn-sm btn-outline-danger att-photo-fullview-btn" title="Check-out photo — full view"
+                    data-url="{{ photo_abs }}" data-label="Check-out photo"><i class="bi bi-image"></i></button>
                 {% else %}<span class="text-muted">-</span>{% endif %}
               </td>
               <td class="small text-muted" style="max-width:160px;">{{ check_out_remarks_text or '-' }}</td>
@@ -324,8 +328,24 @@
   </div>
 </div>
 
+{% set fv_prefix = 'attListFv' %}
+{% set fv_preview_img_id = '' %}
+{% set fv_photo_label = 'Attendance photo' %}
+{% include 'partials/gps_attendance_fullview.html' %}
+
 <script>
 function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page',n);window.location.search=u.toString();}
+
+document.addEventListener('click', function (e) {
+  var btn = e.target.closest('.att-photo-fullview-btn');
+  if (!btn) return;
+  e.preventDefault();
+  var url = btn.getAttribute('data-url');
+  var label = btn.getAttribute('data-label') || '';
+  if (url && typeof window.openAttendancePhotoFullView === 'function') {
+    window.openAttendancePhotoFullView(url, label);
+  }
+});
 
 (function() {
   var projectSelect = document.getElementById('projectSelect');
