@@ -420,51 +420,45 @@ function hideBusy(){
   document.getElementById('viewerBusy').style.display = 'none';
 }
 
-async function blobUrlToDataUrl(url){
-  const res = await fetch(url);
-  const blob = await res.blob();
-  return await new Promise((resolve,reject)=>{
-    const fr = new FileReader();
-    fr.onload = ()=>resolve(fr.result);
-    fr.onerror = reject;
-    fr.readAsDataURL(blob);
-  });
+async function saveBlobToLocalPc(blob, suggestedName){
+  if(window.showSaveFilePicker){
+    try{
+      const handle = await window.showSaveFilePicker({
+        suggestedName: suggestedName,
+        types: [{ description: 'PDF Document', accept: { 'application/pdf': ['.pdf'] } }]
+      });
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      return true;
+    }catch(err){
+      if(err && err.name === 'AbortError') return false;
+      throw err;
+    }
+  }
+  return null;
 }
 
 async function saveToMyPc(){
   showBusy('Preparing PDF for save...');
   try{
     await ensureBuiltPdf();
-    const raw = localStorage.getItem('pt_desktop_state_v3');
-    if(!raw){ alert('My PC state not found.'); return; }
-    let st = {};
-    try{ st = JSON.parse(raw); }catch(_){ st = {}; }
-    st.fs = st.fs || {drives:{'D:':{name:'Local Disk (D:)',children:{}},'E:':{name:'Local Disk (E:)',children:{}}},recycle:{}};
-    const drive = (prompt('Save Drive (D: or E:)', 'D:') || 'D:').toUpperCase();
-    if(!st.fs.drives[drive]){ alert('Invalid drive'); return; }
-    const folderPath = (prompt('Folder path inside drive (optional)', '') || '').trim();
-    const name = (prompt('File name', 'combined_print_'+Date.now()+'.pdf') || '').trim() || ('combined_print_'+Date.now()+'.pdf');
-    const ensure = function(parts){
-      let n = st.fs.drives[drive];
-      parts.forEach(function(p){
-        if(!p) return;
-        if(!n.children[p]) n.children[p] = {type:'folder',children:{}};
-        n = n.children[p];
-      });
-      return n;
-    };
-    const parts = folderPath ? folderPath.split('/').filter(Boolean) : [];
-    const parent = ensure(parts);
-    let nm = name; let i=1;
-    while(parent.children[nm]){ nm = name.replace(/(\.pdf)?$/i,'') + '_' + (i++) + '.pdf'; }
-    // Save current PDF source ref (cropped-aware)
-    let src = activePdfUrl;
-    if(src && src.startsWith('blob:')){
-      try{ src = await blobUrlToDataUrl(src); }catch(_){}
+    const fileName = 'print_ready_' + Date.now() + '.pdf';
+    const res = await fetch(activePdfUrl);
+    const blob = await res.blob();
+    const pickerSaved = await saveBlobToLocalPc(blob, fileName);
+    if(pickerSaved === false) return;
+    if(pickerSaved === true){
+      alert('Saved to local PC successfully.');
+      return;
     }
-    parent.children[nm] = {type:'file',kind:'pdf_saved',source:src,savedAt:Date.now()};
-    localStorage.setItem('pt_desktop_state_v3', JSON.stringify(st));
-    alert('Saved to My PC: ' + drive + '/' + (folderPath?folderPath+'/':'') + nm);
+    // Fallback for browsers without File System Access API support.
+    const obj = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = obj;
+    a.download = fileName;
+    a.click();
+    setTimeout(()=>URL.revokeObjectURL(obj), 1000);
   } finally {
     hideBusy();
   }
