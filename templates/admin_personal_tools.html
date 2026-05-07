@@ -6,9 +6,6 @@
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
     <h2 class="mb-0"><i class="bi bi-tools me-2 text-primary"></i>Personal Tools</h2>
     <div class="d-flex gap-2">
-      <a href="{{ url_for('admin_personal_tools_library') }}" class="btn btn-outline-dark btn-sm">
-        <i class="bi bi-folder2-open me-1"></i>Saved Folders
-      </a>
       <a href="{{ url_for('admin_app_releases') }}" class="btn btn-outline-primary btn-sm">
         <i class="bi bi-arrow-left me-1"></i>Back to App Updates
       </a>
@@ -17,99 +14,173 @@
 
   <div class="card shadow-sm border-0 rounded-3">
     <div class="card-header bg-primary text-white py-3">
-      <h5 class="mb-0"><i class="bi bi-printer me-2"></i>Multi PDF / Image Fast Print</h5>
+      <h5 class="mb-0"><i class="bi bi-hdd-stack me-2"></i>Driver D / Driver E File Manager + Print</h5>
     </div>
     <div class="card-body">
-      <p class="text-muted mb-3">
-        Multiple PDF/Image files select karein. Tool in sab ko single combined PDF bana kar
-        print dialog khol dega taake print single file jaisa fast ho.
-      </p>
+      <div class="d-flex gap-2 mb-3 flex-wrap">
+        {% for r in roots %}
+        <a href="{{ url_for('admin_personal_tools', path=r) }}" class="btn btn-sm {% if current_rel.startswith(r) %}btn-primary{% else %}btn-outline-primary{% endif %}">
+          <i class="bi bi-hdd-fill me-1"></i>{{ r }}
+        </a>
+        {% endfor %}
+        {% if parent_rel %}
+        <a href="{{ url_for('admin_personal_tools', path=parent_rel) }}" class="btn btn-sm btn-outline-secondary">
+          <i class="bi bi-arrow-up-circle me-1"></i>Up
+        </a>
+        {% endif %}
+      </div>
 
-      <form method="post" enctype="multipart/form-data" id="multiPrintForm">
+      <div class="alert alert-light border py-2">
+        <strong>Current Path:</strong> {{ current_rel }}
+      </div>
+
+      <div class="row g-3 mb-3">
+        <div class="col-lg-6">
+          <form method="post" class="d-flex gap-2">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="create_folder">
+            <input type="hidden" name="path" value="{{ current_rel }}">
+            <input type="text" class="form-control" name="folder_name" placeholder="New folder name" required>
+            <button type="submit" class="btn btn-outline-success"><i class="bi bi-folder-plus me-1"></i>Add Folder</button>
+          </form>
+        </div>
+        <div class="col-lg-6">
+          <form method="post" enctype="multipart/form-data" id="uploadForm" class="d-flex gap-2">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="upload_files">
+            <input type="hidden" name="path" value="{{ current_rel }}">
+            <input type="file" class="form-control" name="upload_files" id="uploadFilesInput" multiple>
+            <button type="submit" class="btn btn-outline-primary"><i class="bi bi-upload me-1"></i>Upload / Paste</button>
+          </form>
+          <div class="form-text text-primary"><i class="bi bi-clipboard2-plus me-1"></i>Ctrl+V se clipboard files/images paste ho sakti hain.</div>
+          <div id="uploadPreview" class="small text-muted mt-1"></div>
+        </div>
+      </div>
+
+      <form method="post" id="selectionForm">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <div class="mb-3">
-          <label class="form-label fw-semibold">Select Files</label>
-          <input
-            type="file"
-            class="form-control"
-            name="print_files"
-            id="printFilesInput"
-            accept=".pdf,.png,.jpg,.jpeg,.webp,.bmp,.gif,.tif,.tiff"
-            multiple
-            required
-          >
-          <div class="form-text">Supported: PDF, PNG, JPG, JPEG, WEBP, BMP, GIF, TIF, TIFF</div>
-          <div class="form-text text-primary"><i class="bi bi-clipboard2-plus me-1"></i>Tip: Ctrl+V paste se bhi images/files add ho sakti hain.</div>
+        <input type="hidden" name="path" value="{{ current_rel }}">
+
+        <div class="table-responsive border rounded">
+          <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+              <tr>
+                <th class="ps-3" style="width:45px;"><input type="checkbox" id="checkAll"></th>
+                <th>Name</th>
+                <th>Type</th>
+                <th>Size</th>
+                <th>Modified</th>
+                <th class="text-end pe-3">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for e in entries %}
+              <tr>
+                <td class="ps-3">
+                  <input type="checkbox" name="selected_paths" value="{{ e.rel_path }}">
+                </td>
+                <td>
+                  {% if e.is_dir %}
+                    <i class="bi bi-folder-fill text-warning me-1"></i>
+                    <a href="{{ url_for('admin_personal_tools', path=e.rel_path) }}" class="fw-semibold">{{ e.name }}</a>
+                  {% else %}
+                    <i class="bi bi-file-earmark me-1 text-secondary"></i>{{ e.name }}
+                  {% endif %}
+                </td>
+                <td>{{ 'Folder' if e.is_dir else 'File' }}</td>
+                <td>{{ e.size if not e.is_dir else '-' }}</td>
+                <td class="small text-muted">{{ e.mtime }}</td>
+                <td class="text-end pe-3">
+                  {% if not e.is_dir %}
+                    <a href="{{ e.url }}" class="btn btn-sm btn-outline-dark" target="_blank"><i class="bi bi-box-arrow-up-right"></i></a>
+                    <a href="{{ e.url }}" class="btn btn-sm btn-outline-primary" download><i class="bi bi-download"></i></a>
+                    {% if e.is_image %}
+                    <button type="button" class="btn btn-sm btn-outline-secondary img-fullview-btn" data-img-url="{{ e.url }}" data-img-name="{{ e.name }}">
+                      <i class="bi bi-arrows-fullscreen"></i>
+                    </button>
+                    {% endif %}
+                  {% endif %}
+                </td>
+              </tr>
+              {% else %}
+              <tr><td colspan="6" class="text-center text-muted py-4">Folder empty hai.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
         </div>
 
-        <div class="alert alert-light border d-none" id="selectedFilesBox"></div>
-
-        <div class="row g-3 mb-3">
-          <div class="col-md-4">
-            <label class="form-label fw-semibold">Page Size</label>
-            <select class="form-select" name="page_size">
-              <option value="original">Original (as-is)</option>
-              <option value="a4">A4</option>
-              <option value="letter">Letter</option>
-            </select>
+        <div class="row g-3 mt-2">
+          <div class="col-lg-6">
+            <div class="input-group">
+              <select class="form-select" name="destination_path">
+                {% for p in folder_options %}
+                <option value="{{ p }}" {% if p == current_rel %}selected{% endif %}>{{ p }}</option>
+                {% endfor %}
+              </select>
+              <button type="submit" name="action" value="move_selected" class="btn btn-outline-warning">
+                <i class="bi bi-arrow-left-right me-1"></i>Move Selected
+              </button>
+            </div>
           </div>
-          <div class="col-md-4">
-            <label class="form-label fw-semibold">Orientation</label>
-            <select class="form-select" name="orientation">
-              <option value="portrait">Portrait</option>
-              <option value="landscape">Landscape</option>
-            </select>
-          </div>
-          <div class="col-md-4">
-            <label class="form-label fw-semibold">Print Order</label>
-            <select class="form-select" name="order_by">
-              <option value="as_uploaded">As Uploaded</option>
-              <option value="name_asc">File Name (A to Z)</option>
-              <option value="name_desc">File Name (Z to A)</option>
-            </select>
+          <div class="col-lg-6">
+            <div class="d-flex gap-2 justify-content-lg-end">
+              <select class="form-select" name="page_size" style="max-width:140px;">
+                <option value="original">Original</option>
+                <option value="a4">A4</option>
+                <option value="letter">Letter</option>
+              </select>
+              <select class="form-select" name="orientation" style="max-width:140px;">
+                <option value="portrait">Portrait</option>
+                <option value="landscape">Landscape</option>
+              </select>
+              <button type="submit" name="action" value="print_selected" class="btn btn-primary">
+                <i class="bi bi-printer-fill me-1"></i>Print Selected
+              </button>
+            </div>
           </div>
         </div>
-
-        <button type="submit" class="btn btn-primary" id="printNowBtn" disabled>
-          <i class="bi bi-lightning-charge-fill me-1"></i>Combine & Print
-        </button>
       </form>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="imgFullViewModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-fullscreen">
+    <div class="modal-content bg-dark">
+      <div class="modal-header border-0">
+        <h5 class="modal-title text-white" id="imgFullViewTitle">Image</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body d-flex justify-content-center align-items-center p-2">
+        <img id="imgFullViewTarget" src="" alt="" style="max-width:100%;max-height:90vh;object-fit:contain;">
+      </div>
     </div>
   </div>
 </div>
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-  var input = document.getElementById('printFilesInput');
-  var box = document.getElementById('selectedFilesBox');
-  var btn = document.getElementById('printNowBtn');
-  var form = document.getElementById('multiPrintForm');
+  var uploadInput = document.getElementById('uploadFilesInput');
+  var uploadPreview = document.getElementById('uploadPreview');
+  var checkAll = document.getElementById('checkAll');
+  var form = document.getElementById('selectionForm');
 
-  input.addEventListener('change', function () {
-    var files = Array.from(input.files || []);
-    if (!files.length) {
-      box.classList.add('d-none');
-      box.innerHTML = '';
-      btn.disabled = true;
-      return;
-    }
-    var rows = files.slice(0, 12).map(function (f) {
-      var mb = (f.size / (1024 * 1024)).toFixed(2);
-      return '<li>' + f.name + ' <span class="text-muted">(' + mb + ' MB)</span></li>';
-    }).join('');
-    if (files.length > 12) rows += '<li class="text-muted">... and ' + (files.length - 12) + ' more</li>';
-    box.innerHTML = '<strong>' + files.length + ' file(s) selected:</strong><ul class="mb-0 mt-1">' + rows + '</ul>';
-    box.classList.remove('d-none');
-    btn.disabled = false;
-  });
+  if (checkAll) {
+    checkAll.addEventListener('change', function () {
+      document.querySelectorAll('input[name="selected_paths"]').forEach(function (cb) { cb.checked = checkAll.checked; });
+    });
+  }
 
-  form.addEventListener('submit', function () {
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Preparing print batch...';
-  });
+  if (uploadInput) {
+    uploadInput.addEventListener('change', function () {
+      var files = Array.from(uploadInput.files || []);
+      uploadPreview.textContent = files.length ? (files.length + ' file(s) ready for upload.') : '';
+    });
+  }
 
-  // Ctrl+V clipboard paste support for files/images
+  // Ctrl+V clipboard paste support for files/images into upload input
   document.addEventListener('paste', function (e) {
+    if (!uploadInput) return;
     var cb = e.clipboardData;
     if (!cb || !cb.items || !cb.items.length) return;
     var incoming = [];
@@ -125,12 +196,22 @@ document.addEventListener('DOMContentLoaded', function () {
       incoming.push(f);
     }
     if (!incoming.length) return;
-
     var dt = new DataTransfer();
-    Array.from(input.files || []).forEach(function (f) { dt.items.add(f); });
+    Array.from(uploadInput.files || []).forEach(function (f) { dt.items.add(f); });
     incoming.forEach(function (f) { dt.items.add(f); });
-    input.files = dt.files;
-    input.dispatchEvent(new Event('change'));
+    uploadInput.files = dt.files;
+    uploadInput.dispatchEvent(new Event('change'));
+  });
+
+  document.querySelectorAll('.img-fullview-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var u = btn.getAttribute('data-img-url') || '';
+      var n = btn.getAttribute('data-img-name') || 'Image';
+      document.getElementById('imgFullViewTarget').src = u;
+      document.getElementById('imgFullViewTitle').textContent = n;
+      var mdl = new bootstrap.Modal(document.getElementById('imgFullViewModal'));
+      mdl.show();
+    });
   });
 });
 </script>

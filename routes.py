@@ -88,6 +88,7 @@ import zipfile
 import time as _time_mod
 import threading
 import mimetypes
+import shutil
 from urllib.request import Request, urlopen
 from werkzeug.utils import secure_filename
 from r2_storage import upload_image_file, upload_image_bytes
@@ -2500,6 +2501,35 @@ def _personal_tools_jobs_dir():
     return root
 
 
+def _personal_drive_root():
+    root = os.path.join(app.static_folder, 'personal_tools_drive')
+    os.makedirs(root, exist_ok=True)
+    for d in ('Driver D', 'Driver E'):
+        os.makedirs(os.path.join(root, d), exist_ok=True)
+    return root
+
+
+def _normalize_rel_path(rel_path):
+    rel = (rel_path or '').replace('\\', '/').strip().strip('/')
+    if not rel:
+        rel = 'Driver D'
+    return rel
+
+
+def _safe_abs_from_rel(rel_path):
+    base = os.path.abspath(_personal_drive_root())
+    rel = _normalize_rel_path(rel_path)
+    abs_path = os.path.abspath(os.path.join(base, rel))
+    if not abs_path.startswith(base):
+        raise ValueError('Invalid path')
+    return abs_path, rel
+
+
+def _static_url_for_personal_rel(rel_path):
+    rel = _normalize_rel_path(rel_path).replace('\\', '/')
+    return url_for('static', filename=f'personal_tools_drive/{rel}')
+
+
 def _personal_tool_job_path(job_id):
     safe = re.sub(r'[^a-zA-Z0-9_\-]', '', (job_id or ''))
     return os.path.join(_personal_tools_jobs_dir(), safe)
@@ -2514,129 +2544,188 @@ def _require_master_admin():
 
 @app.route('/admin/personal-tools', methods=['GET', 'POST'])
 def admin_personal_tools():
-    """Master admin personal tools: multi PDF/Image fast single-print."""
+    """Master admin personal tools: local-like folders, paste/upload, move, view, print selected."""
     if not _require_master_admin():
         return redirect(url_for('dashboard'))
 
+    path_arg = request.values.get('path', 'Driver D')
+    curr_abs, curr_rel = _safe_abs_from_rel(path_arg)
+    if not os.path.exists(curr_abs):
+        os.makedirs(curr_abs, exist_ok=True)
+
     if request.method == 'POST':
-        files = request.files.getlist('print_files')
-        files = [f for f in files if f and (f.filename or '').strip()]
-        if not files:
-            flash('Kam az kam 1 PDF/Image file select karein.', 'warning')
-            return redirect(url_for('admin_personal_tools'))
+        action = (request.form.get('action') or '').strip()
 
-        page_size = (request.form.get('page_size') or 'original').strip().lower()
-        orientation = (request.form.get('orientation') or 'portrait').strip().lower()
-        order_by = (request.form.get('order_by') or 'as_uploaded').strip().lower()
-        if page_size not in {'original', 'a4', 'letter'}:
-            page_size = 'original'
-        if orientation not in {'portrait', 'landscape'}:
-            orientation = 'portrait'
-        if order_by not in {'as_uploaded', 'name_asc', 'name_desc'}:
-            order_by = 'as_uploaded'
-
-        if order_by in {'name_asc', 'name_desc'}:
-            rev = order_by == 'name_desc'
-            files = sorted(files, key=lambda f: secure_filename(f.filename or '').lower(), reverse=rev)
-
-        try:
-            PdfReader, PdfWriter = _load_pdf_writer_reader()
-        except Exception:
-            flash('PDF merge library missing hai. `pypdf` install karein.', 'danger')
-            return redirect(url_for('admin_personal_tools'))
-
-        allowed_img = {'.png', '.jpg', '.jpeg', '.webp', '.bmp', '.gif', '.tif', '.tiff'}
-        writer = PdfWriter()
-        added_pages = 0
-
-        try:
-            for fs in files:
-                name = secure_filename(fs.filename or '')
-                ext = os.path.splitext(name)[1].lower()
-                if ext == '.pdf':
-                    reader = PdfReader(fs.stream)
-                    for p in reader.pages:
-                        writer.add_page(p)
-                        added_pages += 1
-                elif ext in allowed_img:
-                    page_pdf = _image_to_pdf_page_bytes(fs)
-                    reader = PdfReader(page_pdf)
-                    for p in reader.pages:
-                        writer.add_page(p)
-                        added_pages += 1
+        if action == 'create_folder':
+            folder_name = (request.form.get('folder_name') or '').strip()
+            if folder_name:
+                safe_name = secure_filename(folder_name)
+                if not safe_name:
+                    flash('Folder name valid nahi.', 'warning')
                 else:
-                    raise ValueError(f'Unsupported file: {name}')
-        except Exception as e:
-            flash(f'File process error: {e}', 'danger')
-            return redirect(url_for('admin_personal_tools'))
+                    os.makedirs(os.path.join(curr_abs, safe_name), exist_ok=True)
+                    flash('Folder create ho gaya.', 'success')
+            return redirect(url_for('admin_personal_tools', path=curr_rel))
 
-        if added_pages <= 0:
-            flash('Selected files se printable pages generate nahi huin.', 'danger')
-            return redirect(url_for('admin_personal_tools'))
+        if action == 'upload_files':
+            files = request.files.getlist('upload_files')
+            files = [f for f in files if f and (f.filename or '').strip()]
+            if not files:
+                flash('Upload ke liye file select karein.', 'warning')
+                return redirect(url_for('admin_personal_tools', path=curr_rel))
+            for f in files:
+                nm = secure_filename(f.filename or '')
+                if not nm:
+                    continue
+                target = os.path.join(curr_abs, nm)
+                # avoid overwrite
+                if os.path.exists(target):
+                    stem, ext = os.path.splitext(nm)
+                    nm = f"{stem}_{uuid.uuid4().hex[:6]}{ext}"
+                    target = os.path.join(curr_abs, nm)
+                f.save(target)
+            flash(f'{len(files)} file(s) upload ho gayi.', 'success')
+            return redirect(url_for('admin_personal_tools', path=curr_rel))
 
-        target_w, target_h = _target_page_dims(page_size, orientation)
-        if target_w and target_h:
+        if action == 'move_selected':
+            selected = request.form.getlist('selected_paths')
+            dest_rel = request.form.get('destination_path', '')
             try:
-                writer = _normalize_writer_pages(writer, target_w, target_h)
+                dest_abs, dest_rel_norm = _safe_abs_from_rel(dest_rel)
+                os.makedirs(dest_abs, exist_ok=True)
+            except Exception:
+                flash('Destination path invalid.', 'danger')
+                return redirect(url_for('admin_personal_tools', path=curr_rel))
+            moved = 0
+            for relp in selected:
+                try:
+                    src_abs, src_rel = _safe_abs_from_rel(relp)
+                    if not os.path.exists(src_abs):
+                        continue
+                    if os.path.abspath(src_abs) == os.path.abspath(dest_abs):
+                        continue
+                    dst_abs = os.path.join(dest_abs, os.path.basename(src_abs))
+                    if os.path.exists(dst_abs):
+                        base, ext = os.path.splitext(os.path.basename(src_abs))
+                        dst_abs = os.path.join(dest_abs, f'{base}_{uuid.uuid4().hex[:6]}{ext}')
+                    shutil.move(src_abs, dst_abs)
+                    moved += 1
+                except Exception:
+                    continue
+            flash(f'{moved} item(s) move ho gayi.', 'success' if moved else 'warning')
+            return redirect(url_for('admin_personal_tools', path=curr_rel))
+
+        if action == 'print_selected':
+            selected = request.form.getlist('selected_paths')
+            if not selected:
+                flash('Print ke liye files select karein.', 'warning')
+                return redirect(url_for('admin_personal_tools', path=curr_rel))
+            page_size = (request.form.get('page_size') or 'original').strip().lower()
+            orientation = (request.form.get('orientation') or 'portrait').strip().lower()
+            if page_size not in {'original', 'a4', 'letter'}:
+                page_size = 'original'
+            if orientation not in {'portrait', 'landscape'}:
+                orientation = 'portrait'
+
+            try:
+                PdfReader, PdfWriter = _load_pdf_writer_reader()
+                writer = PdfWriter()
+                added_pages = 0
+                allowed_img = {'.png', '.jpg', '.jpeg', '.webp', '.bmp', '.gif', '.tif', '.tiff'}
+                for relp in selected:
+                    f_abs, _ = _safe_abs_from_rel(relp)
+                    if not os.path.isfile(f_abs):
+                        continue
+                    ext = os.path.splitext(f_abs)[1].lower()
+                    if ext == '.pdf':
+                        with open(f_abs, 'rb') as pf:
+                            reader = PdfReader(pf)
+                            for p in reader.pages:
+                                writer.add_page(p)
+                                added_pages += 1
+                    elif ext in allowed_img:
+                        with open(f_abs, 'rb') as imf:
+                            fs = type('TmpFS', (), {'stream': BytesIO(imf.read())})()
+                            page_pdf = _image_to_pdf_page_bytes(fs)
+                        reader = PdfReader(page_pdf)
+                        for p in reader.pages:
+                            writer.add_page(p)
+                            added_pages += 1
+                if added_pages <= 0:
+                    flash('Selected items me printable files nahi milin.', 'danger')
+                    return redirect(url_for('admin_personal_tools', path=curr_rel))
+                tw, th = _target_page_dims(page_size, orientation)
+                if tw and th:
+                    writer = _normalize_writer_pages(writer, tw, th)
+                tmp_dir = os.path.join(app.static_folder, 'tmp_print')
+                os.makedirs(tmp_dir, exist_ok=True)
+                out_name = f'print-batch-{uuid.uuid4().hex}.pdf'
+                out_path = os.path.join(tmp_dir, out_name)
+                with open(out_path, 'wb') as f:
+                    out = BytesIO()
+                    writer.write(out)
+                    out.seek(0)
+                    f.write(out.read())
+                return render_template(
+                    'admin_personal_tools_print_ready.html',
+                    pdf_url=url_for('static', filename=f'tmp_print/{out_name}'),
+                    pages=added_pages,
+                    files_count=len(selected),
+                    page_size=page_size,
+                    orientation=orientation,
+                    order_by='selected',
+                    job_id='',
+                )
             except Exception as e:
-                flash(f'Page size/orientation apply nahi ho saka: {e}', 'danger')
-                return redirect(url_for('admin_personal_tools'))
+                flash(f'Print batch error: {e}', 'danger')
+                return redirect(url_for('admin_personal_tools', path=curr_rel))
 
-        # Persist as a "folder-like job" so user can open later like local folders.
-        job_id = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
-        job_dir = _personal_tool_job_path(job_id)
-        input_dir = os.path.join(job_dir, 'input_files')
-        os.makedirs(input_dir, exist_ok=True)
+    def _fmt_size(n):
+        n = int(n or 0)
+        if n < 1024:
+            return f'{n} B'
+        if n < 1024 * 1024:
+            return f'{n/1024:.1f} KB'
+        return f'{n/(1024*1024):.2f} MB'
 
-        saved_files = []
-        for idx, fs in enumerate(files, start=1):
-            src_name = secure_filename(fs.filename or f'file_{idx}')
-            ext = os.path.splitext(src_name)[1].lower()
-            store_name = f"{idx:03d}_{src_name}" if src_name else f"{idx:03d}{ext}"
-            fs.stream.seek(0)
-            full = os.path.join(input_dir, store_name)
-            fs.save(full)
-            saved_files.append({
-                'original_name': src_name,
-                'stored_name': store_name,
-                'size_bytes': os.path.getsize(full),
-            })
+    entries = []
+    for it in sorted(os.scandir(curr_abs), key=lambda e: (not e.is_dir(), e.name.lower())):
+        rel_item = _normalize_rel_path(os.path.join(curr_rel, it.name).replace('\\', '/'))
+        is_image = os.path.splitext(it.name)[1].lower() in {'.png', '.jpg', '.jpeg', '.webp', '.bmp', '.gif', '.tif', '.tiff'}
+        entries.append({
+            'name': it.name,
+            'is_dir': it.is_dir(),
+            'rel_path': rel_item,
+            'size': _fmt_size(it.stat().st_size if it.is_file() else 0),
+            'mtime': datetime.fromtimestamp(it.stat().st_mtime).strftime('%d-%m-%Y %I:%M %p'),
+            'url': _static_url_for_personal_rel(rel_item) if it.is_file() else '',
+            'is_image': is_image,
+        })
 
-        merged_path = os.path.join(job_dir, 'merged_output.pdf')
-        with open(merged_path, 'wb') as f:
-            out = BytesIO()
-            writer.write(out)
-            out.seek(0)
-            f.write(out.read())
+    # destination options (all folders in both drives)
+    folder_options = []
+    base = _personal_drive_root()
+    for root_dir, dirs, _files in os.walk(base):
+        rel = os.path.relpath(root_dir, base).replace('\\', '/')
+        if rel == '.':
+            continue
+        folder_options.append(rel)
+    folder_options.sort(key=lambda x: x.lower())
 
-        meta = {
-            'job_id': job_id,
-            'created_at': pk_now().isoformat() if hasattr(pk_now(), 'isoformat') else str(pk_now()),
-            'created_by_user_id': session.get('user_id'),
-            'files_count': len(saved_files),
-            'pages': added_pages,
-            'settings': {
-                'page_size': page_size,
-                'orientation': orientation,
-                'order_by': order_by,
-            },
-            'files': saved_files,
-        }
-        with open(os.path.join(job_dir, 'metadata.json'), 'w', encoding='utf-8') as mf:
-            json.dump(meta, mf, ensure_ascii=True, indent=2)
+    parent_rel = ''
+    parts = curr_rel.split('/')
+    if len(parts) > 1:
+        parent_rel = '/'.join(parts[:-1])
 
-        return render_template(
-            'admin_personal_tools_print_ready.html',
-            pdf_url=url_for('static', filename=f'personal_tools_jobs/{job_id}/merged_output.pdf'),
-            pages=added_pages,
-            files_count=len(files),
-            page_size=page_size,
-            orientation=orientation,
-            order_by=order_by,
-            job_id=job_id,
-        )
-
-    return render_template('admin_personal_tools.html')
+    roots = ['Driver D', 'Driver E']
+    return render_template(
+        'admin_personal_tools.html',
+        roots=roots,
+        current_rel=curr_rel,
+        parent_rel=parent_rel,
+        entries=entries,
+        folder_options=folder_options,
+    )
 
 
 @app.route('/admin/personal-tools/library', methods=['GET'])
