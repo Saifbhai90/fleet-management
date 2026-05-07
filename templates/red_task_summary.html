@@ -14,7 +14,7 @@
 
   <div class="card shadow-sm border-0 rounded-3 mb-4">
     <div class="card-body">
-      <p class="text-muted small mb-3"><strong>Direct Emergency Task Report</strong> (Excel upload) se <strong>Red</strong> category tasks. Sirf woh <strong>districts</strong> jin ko master data mein abhi koi vehicle assign nahi aur koi project link nahi — unhi ke naam Emergency sheet ke <code>DistrictName</code> se match honay par count honge. Fine saved <strong>Red Task</strong> rows se (same date + Task ID) li jati hai.</p>
+      <p class="text-muted small mb-3"><strong>Direct Emergency Task Report</strong> (Excel upload) se <strong>Red</strong> category tasks — <strong>tamam</strong> master districts jahan Emergency sheet ka <code>DistrictName</code> district ke naam se match ho (vehicle/project assign hon ya na ho). Fine saved <strong>Red Task</strong> rows se (same date + Task ID) li jati hai.</p>
       <form method="get" action="{{ url_for('red_task_summary') }}" class="row g-3 align-items-end">
         <input type="hidden" name="show" value="1">
         <div class="col-md-2">
@@ -52,7 +52,7 @@
     </div>
     <div class="card-body">
       {% if not summary_rows %}
-      <p class="text-muted mb-0"><i class="bi bi-info-circle me-1"></i>Is range mein koi match nahi: Emergency Report mein Red category ho, aur district ka naam un master districts se mile jin ko vehicle/project assign nahi — ya Task Report upload check karein.</p>
+      <p class="text-muted mb-0"><i class="bi bi-info-circle me-1"></i>Is range mein koi match nahi: Emergency Report mein Red category tasks hon aur district ka naam spelling/master district name se mile — ya Task Report upload check karein.</p>
       {% else %}
       <p class="small text-muted mb-3"><strong>{{ summary_title }}</strong></p>
       <div class="table-responsive">

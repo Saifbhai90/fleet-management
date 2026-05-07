@@ -20309,21 +20309,6 @@ def _norm_district_name_key(name):
     return (name or '').strip().lower()
 
 
-def _districts_with_no_vehicle_and_no_project_link():
-    """Districts that have no Vehicle row and no project_district M2M row (master mein assign nahi)."""
-    veh_ids = {
-        int(v) for (v,) in db.session.query(Vehicle.district_id)
-        .filter(Vehicle.district_id.isnot(None)).distinct().all()
-        if v is not None
-    }
-    pd_ids = {
-        int(d) for (d,) in db.session.query(project_district.c.district_id).distinct().all()
-        if d is not None
-    }
-    assigned = veh_ids | pd_ids
-    return [d for d in District.query.order_by(District.name).all() if d.id not in assigned]
-
-
 # ────────────────────────────────────────────────
 # Red Task Report
 # ────────────────────────────────────────────────
@@ -20390,14 +20375,14 @@ def red_task_list():
 
 @app.route('/red-task/summary', methods=['GET'])
 def red_task_summary():
-    """Direct Emergency Task Report (category Red only): districts with no vehicle / no project in master; fines from saved Red Task when task ID matches."""
+    """Direct Emergency Task Report (category Red): group by master District when Excel DistrictName matches; fines from saved Red Task when task ID matches."""
     from collections import defaultdict
 
     form = RedTaskFilterForm()
-    empty_districts = _districts_with_no_vehicle_and_no_project_link()
-    empty_ids = {d.id for d in empty_districts}
+    all_districts = District.query.order_by(District.name).all()
+    valid_district_ids = {d.id for d in all_districts}
 
-    form.district_id.choices = [(0, '-- Tamam (jin districts ko vehicle/project assign nahi) --')] + [(d.id, d.name) for d in empty_districts]
+    form.district_id.choices = [(0, '-- Tamam districts --')] + [(d.id, d.name) for d in all_districts]
     today = pk_date()
     from_date = today
     to_date = today
@@ -20413,9 +20398,8 @@ def red_task_summary():
     if from_date and to_date and from_date > to_date:
         from_date, to_date = to_date, from_date
 
-    if district_id and district_id not in empty_ids:
+    if district_id and district_id not in valid_district_ids:
         district_id = 0
-        flash('Summary sirf un districts ke liye hai jin ko master mein koi vehicle ya project assign nahi.', 'warning')
 
     form.from_date.data = from_date
     form.to_date.data = to_date
@@ -20430,17 +20414,23 @@ def red_task_summary():
     grand_fine = Decimal('0')
 
     if show:
+        name_map_all = {}
+        for d in all_districts:
+            k = _norm_district_name_key(d.name)
+            if k not in name_map_all:
+                name_map_all[k] = d
+
         if district_id:
             sel = District.query.get(district_id)
-            name_map = {_norm_district_name_key(sel.name): sel} if sel and sel.id in empty_ids else {}
+            name_map = {_norm_district_name_key(sel.name): sel} if sel else {}
             summary_kind = 'single'
-            summary_title = 'Direct Emergency (Red) — selected district (master: no vehicle / project assignment)'
+            summary_title = 'Direct Emergency (Red) — selected district'
         else:
-            name_map = {_norm_district_name_key(d.name): d for d in empty_districts}
+            name_map = name_map_all
             summary_kind = 'by_district'
-            summary_title = 'Direct Emergency Task Report — Red category; districts jin ko master mein vehicle/project assign nahi'
+            summary_title = 'Direct Emergency Task Report — Red category (tamam districts jahan Excel district naam master se match ho)'
 
-        dist_by_id = {d.id: d for d in empty_districts}
+        dist_by_id = {d.id: d for d in all_districts}
 
         fine_lookup = {}
         for rt in RedTask.query.filter(RedTask.task_date >= from_date, RedTask.task_date <= to_date).all():
@@ -20495,10 +20485,7 @@ def red_task_summary():
 
 @app.route('/red-task/summary/detail', methods=['GET'])
 def red_task_summary_detail():
-    """Emergency Report Red rows for one summary district + date range (master district: no vehicle/project)."""
-    empty_districts = _districts_with_no_vehicle_and_no_project_link()
-    empty_ids = {d.id for d in empty_districts}
-
+    """Emergency Report Red rows for one master district + date range (Excel DistrictName matches district name)."""
     today = pk_date()
     from_date = today
     to_date = today
@@ -20513,8 +20500,8 @@ def red_task_summary_detail():
     if from_date and to_date and from_date > to_date:
         from_date, to_date = to_date, from_date
 
-    if district_id not in empty_ids:
-        flash('Ye district summary detail ke liye allow nahi — sirf un districts ke liye jin ko vehicle/project assign nahi.', 'warning')
+    if not district_id:
+        flash('District select karke detail dekhein.', 'warning')
         return redirect(url_for(
             'red_task_summary',
             show=1,
