@@ -7,17 +7,24 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.css">
   <style>
-    body{margin:0;background:#eef3fb;font-family:Segoe UI,Arial,sans-serif}
+    body{margin:0;background:#111;font-family:Segoe UI,Arial,sans-serif}
     .wrap{height:100vh;display:flex;flex-direction:column}
-    .head{padding:10px 14px;background:#fff;border-bottom:1px solid #d5e1f5;display:flex;justify-content:space-between;align-items:center}
-    .bar{padding:8px 14px;background:#fff;border-bottom:1px solid #dfe8f8;display:flex;gap:8px;align-items:center}
-    .stage{position:relative;flex:1;padding:10px}
-    .frame-wrap{height:100%;border:1px solid #dbe6f8;border-radius:10px;overflow:hidden;background:#fff;position:relative}
-    #printFrame{width:100%;height:100%;border:0}
-    #cropPreview{display:none;width:100%;height:100%;object-fit:contain;background:#fff}
+    .head{padding:8px 12px;background:#f5f7fb;border-bottom:1px solid #d5e1f5;display:flex;justify-content:space-between;align-items:center}
+    .bar{padding:7px 10px;background:#f7f9fd;border-bottom:1px solid #dfe8f8;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+    .stage{position:relative;flex:1;padding:8px;background:#1e1f23}
+    .viewer-shell{height:100%;border:1px solid #2f333a;border-radius:10px;overflow:hidden;display:grid;grid-template-columns:170px 1fr;background:#2a2d33}
+    .thumbs{background:#202329;border-right:1px solid #343946;overflow:auto;padding:8px}
+    .thumb{border:2px solid transparent;border-radius:6px;padding:3px;margin-bottom:10px;cursor:pointer;background:#2b2f38}
+    .thumb.active{border-color:#76a9ff}
+    .thumb canvas{width:100%;height:auto;display:block;background:#fff}
+    .thumb .n{color:#d0d7e5;font-size:12px;text-align:center;margin-top:3px}
+    .main{position:relative;overflow:auto;background:#2b2f36}
+    .page-wrap{display:flex;justify-content:center;align-items:flex-start;padding:14px}
+    #mainCanvas{background:#fff;box-shadow:0 6px 18px rgba(0,0,0,.35)}
     .ctx{position:fixed;z-index:3000;background:#fff;border:1px solid #d7e2f6;border-radius:8px;box-shadow:0 12px 24px rgba(0,0,0,.16);padding:6px 0;display:none}
     .ctx button{display:block;width:100%;border:0;background:transparent;text-align:left;padding:7px 12px}
     .ctx button:hover{background:#f2f7ff}
+    .lbl{font-size:12px;color:#506481}
   </style>
 </head>
 <body>
@@ -26,12 +33,23 @@
     <div><strong>Print Ready</strong> <span class="text-muted small ms-2">{{ files_count }} files, {{ pages }} pages</span></div>
     <div class="d-flex gap-2">
       <button class="btn btn-sm btn-success" id="btnSaveToMyPc">Save to My PC</button>
+      <button class="btn btn-sm btn-outline-dark" id="btnDownloadPdf">Download PDF</button>
+      <button class="btn btn-sm btn-primary" id="btnPrintViewer">Print</button>
       <a href="{{ url_for('admin_personal_tools') }}" class="btn btn-sm btn-outline-secondary">Back</a>
     </div>
   </div>
   <div class="bar">
-    <input type="hidden" id="pageNo" value="1">
-    <span class="small text-muted">Viewer page auto-detect enabled</span>
+    <button class="btn btn-sm btn-outline-secondary" id="btnPrev">◀</button>
+    <span class="lbl">Page</span>
+    <input type="number" id="pageNo" class="form-control form-control-sm" style="width:72px" min="1" value="1">
+    <span class="lbl">/ <span id="maxPagesLbl">{{ pages }}</span></span>
+    <button class="btn btn-sm btn-outline-secondary" id="btnNext">▶</button>
+    <span class="vr"></span>
+    <button class="btn btn-sm btn-outline-secondary" id="btnZoomOut">-</button>
+    <span class="lbl" id="zoomLbl">100%</span>
+    <button class="btn btn-sm btn-outline-secondary" id="btnZoomIn">+</button>
+    <button class="btn btn-sm btn-outline-secondary" id="btnFitWidth">Fit</button>
+    <span class="vr"></span>
     <button class="btn btn-sm btn-outline-primary ms-2" id="btnCropCurrent">Crop Current Page</button>
     <button class="btn btn-sm btn-outline-danger" id="btnResetCrop">Reset Crop</button>
     <span class="vr"></span>
@@ -51,12 +69,14 @@
     <button class="btn btn-sm btn-outline-primary" id="btnApplyRangeCrop">Apply Range Crop</button>
     <span class="vr"></span>
     <button class="btn btn-sm btn-outline-dark" id="btnReorder">Page Reorder</button>
-    <span class="text-muted small ms-2">Right-click viewer for crop</span>
+    <span class="text-muted small ms-2">Right-click page for crop</span>
   </div>
   <div class="stage">
-    <div class="frame-wrap" id="viewerWrap">
-      <iframe id="printFrame"></iframe>
-      <img id="cropPreview" alt="">
+    <div class="viewer-shell" id="viewerWrap">
+      <div class="thumbs" id="thumbsPane"></div>
+      <div class="main" id="mainPane">
+        <div class="page-wrap"><canvas id="mainCanvas"></canvas></div>
+      </div>
     </div>
   </div>
 </div>
@@ -91,10 +111,11 @@ import { PDFDocument } from 'https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/+esm';
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.6.82/build/pdf.worker.min.mjs';
 
 const pdfUrl = "{{ pdf_url }}";
-const maxPages = {{ pages|int if pages else 1 }};
+let maxPages = {{ pages|int if pages else 1 }};
 const pageNo = document.getElementById('pageNo');
-const frame = document.getElementById('printFrame');
-const cropPreview = document.getElementById('cropPreview');
+const mainCanvas = document.getElementById('mainCanvas');
+const thumbsPane = document.getElementById('thumbsPane');
+const mainPane = document.getElementById('mainPane');
 const viewerWrap = document.getElementById('viewerWrap');
 const ctx = document.getElementById('viewerCtx');
 const cropModalEl = document.getElementById('cropModal');
@@ -104,6 +125,7 @@ let cropper = null;
 let pdfDocRef = null;
 let activePdfUrl = pdfUrl;
 let regenBusy = false;
+let zoomLevel = 1;
 const cropKey = 'pt_print_crops_' + btoa(pdfUrl).replace(/[^a-zA-Z0-9]/g,'');
 const presetKey = cropKey + '_presets';
 const orderKey = cropKey + '_order';
@@ -140,38 +162,19 @@ function nPage(){
   pageNo.value = n;
   return n;
 }
-function getViewerPage(){
-  try{
-    const h = frame.contentWindow.location.hash || '';
-    const m = /page=(\d+)/i.exec(h);
-    if(m){
-      const n = parseInt(m[1],10);
-      if(!isNaN(n) && n>=1 && n<=maxPages){
-        pageNo.value = n;
-        return n;
-      }
-    }
-  }catch(_){}
-  return nPage();
-}
-function rawViewerSrc(page){
-  return activePdfUrl + '#page=' + page + '&toolbar=1&navpanes=0&scrollbar=1&view=FitH';
-}
-function refreshViewer(){
-  const p = nPage();
-  cropPreview.style.display = 'none';
-  frame.style.display = 'block';
-  frame.src = rawViewerSrc(p);
-}
+function getViewerPage(){ return nPage(); }
 
-async function renderPageToDataUrl(pageNumber){
+async function renderPageToDataUrl(pageNumber, scale=3){
   if(!pdfDocRef){
     const loadingTask = pdfjsLib.getDocument(pdfUrl);
     pdfDocRef = await loadingTask.promise;
+    maxPages = pdfDocRef.numPages || maxPages;
+    document.getElementById('maxPagesLbl').textContent = String(maxPages);
+    if(pageOrder.length!==maxPages) pageOrder = Array.from({length:maxPages},(_,i)=>i+1);
   }
   const pdf = pdfDocRef;
   const page = await pdf.getPage(pageNumber);
-  const viewport = page.getViewport({ scale: 3 });
+  const viewport = page.getViewport({ scale });
   const canvas = document.createElement('canvas');
   const ctx2 = canvas.getContext('2d');
   canvas.width = viewport.width; canvas.height = viewport.height;
@@ -179,7 +182,7 @@ async function renderPageToDataUrl(pageNumber){
   return canvas.toDataURL('image/png');
 }
 async function renderEditedPageDataUrl(pageNumber){
-  let src = await renderPageToDataUrl(pageNumber);
+  let src = await renderPageToDataUrl(pageNumber, 3);
   const edit = getEdit(pageNumber);
   const base = await dataUrlToCanvas(src);
   let work = base;
@@ -232,7 +235,8 @@ function dataUrlToCanvas(url){
 }
 async function openCrop(){
   const p = getViewerPage();
-  let src = await renderPageToDataUrl(p);
+  const srcPage = pageOrder[p-1] || p;
+  let src = await renderEditedPageDataUrl(srcPage);
   cropImage.src = src;
   cropModal.show();
   setTimeout(()=>{
@@ -241,7 +245,7 @@ async function openCrop(){
       viewMode:1, dragMode:'move', autoCropArea:0.95, responsive:true,
       background:false, rotatable:true, scalable:true, zoomOnWheel:true
     });
-    const old = cropMap[String(p)];
+    const old = cropMap[String(srcPage)];
     if(old && old.cropData){
       try{ cropper.setData(old.cropData); }catch(_){}
     }
@@ -252,28 +256,27 @@ document.getElementById('ctxCrop').onclick = ()=>{ ctx.style.display='none'; ope
 document.getElementById('btnApplyCrop').onclick = ()=>{
   if(!cropper) return;
   const p = getViewerPage();
-  pushHistory(p);
+  const srcPage = pageOrder[p-1] || p;
+  pushHistory(srcPage);
   const cv = cropper.getCroppedCanvas({ imageSmoothingQuality:'high' });
-  const e = getEdit(p);
+  const e = getEdit(srcPage);
   e.dataUrl = cv.toDataURL('image/webp',0.95);
   e.cropData = cropper.getData(true);
-  cropMap[String(p)] = e;
+  cropMap[String(srcPage)] = e;
   saveEdits();
-  rebuildCroppedPdf().then(function(){
-    pageNo.value = p;
-    refreshViewer();
-  });
+  rebuildCroppedPdf().then(function(){ pageNo.value = p; renderMainPage(); renderThumbs(); });
   cropModal.hide();
 };
 cropModalEl.addEventListener('hidden.bs.modal', ()=>{ if(cropper){ cropper.destroy(); cropper=null; }});
 document.getElementById('btnResetCrop').onclick = ()=>{
   const p = getViewerPage();
-  pushHistory(p);
-  const e = getEdit(p);
+  const srcPage = pageOrder[p-1] || p;
+  pushHistory(srcPage);
+  const e = getEdit(srcPage);
   delete e.cropData; delete e.dataUrl;
-  cropMap[String(p)] = e;
+  cropMap[String(srcPage)] = e;
   saveEdits();
-  rebuildCroppedPdf().then(function(){ pageNo.value = p; refreshViewer(); });
+  rebuildCroppedPdf().then(function(){ pageNo.value = p; renderMainPage(); renderThumbs(); });
 };
 viewerWrap.addEventListener('contextmenu', (e)=>{
   e.preventDefault();
@@ -290,17 +293,18 @@ async function rebuildCroppedPdf(){
     const hasReorder = pageOrder.some((n,idx)=>n!==(idx+1));
     if(!hasEdits && !hasReorder){
       activePdfUrl = pdfUrl;
+      pdfDocRef = null;
       return;
     }
-    if(!pdfDocRef){
-      const loadingTask = pdfjsLib.getDocument(pdfUrl);
-      pdfDocRef = await loadingTask.promise;
-    }
+    const srcDocTask = pdfjsLib.getDocument(pdfUrl);
+    const srcDoc = await srcDocTask.promise;
     const outDoc = await PDFDocument.create();
-    const total = pdfDocRef.numPages || maxPages;
+    const total = srcDoc.numPages || maxPages;
     const order = (pageOrder && pageOrder.length===total) ? pageOrder.slice() : Array.from({length:total},(_,i)=>i+1);
     for(let oi=0;oi<order.length;oi++){
       const i = order[oi];
+      // render based on original source page index i
+      pdfDocRef = srcDoc;
       const dataUrl = await renderEditedPageDataUrl(i);
       const img = await outDoc.embedPng(dataUrl);
       const page = outDoc.addPage([img.width, img.height]);
@@ -310,6 +314,7 @@ async function rebuildCroppedPdf(){
     const blob = new Blob([bytes], {type:'application/pdf'});
     if(activePdfUrl && activePdfUrl.startsWith('blob:')) URL.revokeObjectURL(activePdfUrl);
     activePdfUrl = URL.createObjectURL(blob);
+    pdfDocRef = null;
   } finally {
     regenBusy = false;
   }
@@ -359,19 +364,26 @@ async function saveToMyPc(){
   alert('Saved to My PC: ' + drive + '/' + (folderPath?folderPath+'/':'') + nm);
 }
 document.getElementById('btnSaveToMyPc').onclick = function(){ saveToMyPc(); };
+document.getElementById('btnDownloadPdf').onclick = async function(){
+  const a=document.createElement('a'); a.href=activePdfUrl; a.download='print_ready_' + Date.now() + '.pdf'; a.click();
+};
+document.getElementById('btnPrintViewer').onclick = function(){
+  const w=window.open(activePdfUrl,'_blank'); if(!w) return; setTimeout(()=>w.print(),500);
+};
 
 function updateEditControls(){
   const p = getViewerPage();
-  const e = getEdit(p);
+  const srcPage = pageOrder[p-1] || p;
+  const e = getEdit(srcPage);
   document.getElementById('rngBrightness').value = e.brightness || 100;
   document.getElementById('rngContrast').value = e.contrast || 100;
 }
-document.getElementById('btnRotateCW').onclick = ()=>{ const p=getViewerPage(); pushHistory(p); const e=getEdit(p); e.rotate=((e.rotate||0)+90)%360; cropMap[String(p)]=e; saveEdits(); rebuildCroppedPdf().then(refreshViewer); };
-document.getElementById('btnRotateCCW').onclick = ()=>{ const p=getViewerPage(); pushHistory(p); const e=getEdit(p); e.rotate=((e.rotate||0)-90+360)%360; cropMap[String(p)]=e; saveEdits(); rebuildCroppedPdf().then(refreshViewer); };
-document.getElementById('rngBrightness').oninput = ()=>{ const p=getViewerPage(); const e=getEdit(p); e.brightness=parseInt(document.getElementById('rngBrightness').value,10); cropMap[String(p)]=e; saveEdits(); rebuildCroppedPdf().then(refreshViewer); };
-document.getElementById('rngContrast').oninput = ()=>{ const p=getViewerPage(); const e=getEdit(p); e.contrast=parseInt(document.getElementById('rngContrast').value,10); cropMap[String(p)]=e; saveEdits(); rebuildCroppedPdf().then(refreshViewer); };
-document.getElementById('btnUndo').onclick = ()=>{ const p=getViewerPage(); const h=ensureHistory(p); if(!h.undo.length) return; h.redo.push(JSON.stringify(cropMap[String(p)]||{})); cropMap[String(p)] = JSON.parse(h.undo.pop()||'{}'); saveEdits(); rebuildCroppedPdf().then(refreshViewer); };
-document.getElementById('btnRedo').onclick = ()=>{ const p=getViewerPage(); const h=ensureHistory(p); if(!h.redo.length) return; h.undo.push(JSON.stringify(cropMap[String(p)]||{})); cropMap[String(p)] = JSON.parse(h.redo.pop()||'{}'); saveEdits(); rebuildCroppedPdf().then(refreshViewer); };
+document.getElementById('btnRotateCW').onclick = ()=>{ const p=getViewerPage(); const srcPage=pageOrder[p-1]||p; pushHistory(srcPage); const e=getEdit(srcPage); e.rotate=((e.rotate||0)+90)%360; cropMap[String(srcPage)]=e; saveEdits(); rebuildCroppedPdf().then(()=>{renderMainPage();renderThumbs();}); };
+document.getElementById('btnRotateCCW').onclick = ()=>{ const p=getViewerPage(); const srcPage=pageOrder[p-1]||p; pushHistory(srcPage); const e=getEdit(srcPage); e.rotate=((e.rotate||0)-90+360)%360; cropMap[String(srcPage)]=e; saveEdits(); rebuildCroppedPdf().then(()=>{renderMainPage();renderThumbs();}); };
+document.getElementById('rngBrightness').oninput = ()=>{ const p=getViewerPage(); const srcPage=pageOrder[p-1]||p; const e=getEdit(srcPage); e.brightness=parseInt(document.getElementById('rngBrightness').value,10); cropMap[String(srcPage)]=e; saveEdits(); rebuildCroppedPdf().then(()=>{renderMainPage();renderThumbs();}); };
+document.getElementById('rngContrast').oninput = ()=>{ const p=getViewerPage(); const srcPage=pageOrder[p-1]||p; const e=getEdit(srcPage); e.contrast=parseInt(document.getElementById('rngContrast').value,10); cropMap[String(srcPage)]=e; saveEdits(); rebuildCroppedPdf().then(()=>{renderMainPage();renderThumbs();}); };
+document.getElementById('btnUndo').onclick = ()=>{ const p=getViewerPage(); const srcPage=pageOrder[p-1]||p; const h=ensureHistory(srcPage); if(!h.undo.length) return; h.redo.push(JSON.stringify(cropMap[String(srcPage)]||{})); cropMap[String(srcPage)] = JSON.parse(h.undo.pop()||'{}'); saveEdits(); rebuildCroppedPdf().then(()=>{renderMainPage();renderThumbs();}); };
+document.getElementById('btnRedo').onclick = ()=>{ const p=getViewerPage(); const srcPage=pageOrder[p-1]||p; const h=ensureHistory(srcPage); if(!h.redo.length) return; h.undo.push(JSON.stringify(cropMap[String(srcPage)]||{})); cropMap[String(srcPage)] = JSON.parse(h.redo.pop()||'{}'); saveEdits(); rebuildCroppedPdf().then(()=>{renderMainPage();renderThumbs();}); };
 
 function refreshPresetUI(){
   const sel=document.getElementById('cropPresetSel'); sel.innerHTML='';
@@ -380,7 +392,7 @@ function refreshPresetUI(){
   keys.forEach(k=>{ const o=document.createElement('option'); o.value=k; o.textContent=k; sel.appendChild(o); });
 }
 document.getElementById('btnSavePreset').onclick = ()=>{
-  const p=getViewerPage(); const e=getEdit(p);
+  const p=getViewerPage(); const srcPage=pageOrder[p-1]||p; const e=getEdit(srcPage);
   if(!e.cropData){ alert('Current page par crop apply karein phir preset save karein.'); return; }
   const nm=prompt('Preset name','Preset '+p); if(!nm) return;
   cropPresets[nm]={cropData:e.cropData};
@@ -393,12 +405,13 @@ document.getElementById('btnApplyRangeCrop').onclick = ()=>{
   let t=parseInt(document.getElementById('rangeTo').value||String(maxPages),10);
   if(isNaN(f)||f<1) f=1; if(isNaN(t)||t>maxPages) t=maxPages; if(f>t){ const x=f; f=t; t=x; }
   for(let p=f;p<=t;p++){
-    const e=getEdit(p);
+    const srcPage=pageOrder[p-1]||p;
+    const e=getEdit(srcPage);
     e.cropData = JSON.parse(JSON.stringify(cropPresets[preset].cropData));
-    cropMap[String(p)] = e;
+    cropMap[String(srcPage)] = e;
   }
   saveEdits();
-  rebuildCroppedPdf().then(refreshViewer);
+  rebuildCroppedPdf().then(()=>{renderMainPage();renderThumbs();});
 };
 document.getElementById('btnReorder').onclick = ()=>{
   const current = pageOrder.join(',');
@@ -410,25 +423,69 @@ document.getElementById('btnReorder').onclick = ()=>{
   for(const n of nums){ if(n<1||n>maxPages){ alert('Invalid page no: '+n); return; } }
   pageOrder = nums;
   localStorage.setItem(orderKey, JSON.stringify(pageOrder));
-  rebuildCroppedPdf().then(refreshViewer);
+  rebuildCroppedPdf().then(()=>{renderMainPage();renderThumbs();});
 };
+document.getElementById('btnPrev').onclick=()=>{ pageNo.value=Math.max(1,nPage()-1); renderMainPage(); };
+document.getElementById('btnNext').onclick=()=>{ pageNo.value=Math.min(maxPages,nPage()+1); renderMainPage(); };
+pageNo.onchange=()=>renderMainPage();
+document.getElementById('btnZoomIn').onclick=()=>{ zoomLevel=Math.min(3,zoomLevel+0.1); renderMainPage(); };
+document.getElementById('btnZoomOut').onclick=()=>{ zoomLevel=Math.max(0.4,zoomLevel-0.1); renderMainPage(); };
+document.getElementById('btnFitWidth').onclick=()=>{ zoomLevel=1; renderMainPage(true); };
 
-setInterval(function(){
-  try{
-    if(!frame.contentWindow) return;
-    const h = frame.contentWindow.location.hash || '';
-    const m = /page=(\d+)/i.exec(h);
-    if(m){
-      const n = parseInt(m[1],10);
-      if(!isNaN(n) && n>=1 && n<=maxPages && String(n)!==String(pageNo.value||'')){
-        pageNo.value = n;
-        updateEditControls();
-      }
-    }
-  }catch(_){}
-}, 500);
+async function renderMainPage(fit=false){
+  const p=nPage();
+  const srcPage=pageOrder[p-1]||p;
+  const url=await renderEditedPageDataUrl(srcPage);
+  const img=new Image();
+  img.onload=function(){
+    const maxW = mainPane.clientWidth - 30;
+    let targetScale = zoomLevel;
+    if(fit) targetScale = maxW / img.width;
+    const w = Math.max(120, Math.floor(img.width * targetScale));
+    const h = Math.max(120, Math.floor(img.height * targetScale));
+    mainCanvas.width=w; mainCanvas.height=h;
+    const cx=mainCanvas.getContext('2d');
+    cx.clearRect(0,0,w,h);
+    cx.drawImage(img,0,0,w,h);
+    document.getElementById('zoomLbl').textContent=Math.round(targetScale*100)+'%';
+    updateEditControls();
+    highlightThumb(p);
+  };
+  img.src=url;
+}
+function highlightThumb(p){
+  thumbsPane.querySelectorAll('.thumb').forEach(el=>el.classList.toggle('active', Number(el.dataset.page)===p));
+}
+async function renderThumbs(){
+  thumbsPane.innerHTML='';
+  for(let i=1;i<=maxPages;i++){
+    const t=document.createElement('div'); t.className='thumb'; t.dataset.page=String(i);
+    const cv=document.createElement('canvas'); cv.width=140; cv.height=180;
+    const n=document.createElement('div'); n.className='n'; n.textContent=String(i);
+    t.appendChild(cv); t.appendChild(n); thumbsPane.appendChild(t);
+    t.onclick=()=>{ pageNo.value=i; renderMainPage(); };
+    const srcPage=pageOrder[i-1]||i;
+    const url=await renderEditedPageDataUrl(srcPage);
+    const img=new Image();
+    img.onload=function(){
+      const ctx2=cv.getContext('2d');
+      const s=Math.min(cv.width/img.width, cv.height/img.height);
+      const w=Math.floor(img.width*s), h=Math.floor(img.height*s);
+      const x=(cv.width-w)/2, y=(cv.height-h)/2;
+      ctx2.fillStyle='#fff'; ctx2.fillRect(0,0,cv.width,cv.height);
+      ctx2.drawImage(img,x,y,w,h);
+    };
+    img.src=url;
+  }
+  highlightThumb(nPage());
+}
 
-window.addEventListener('load', async ()=>{ refreshPresetUI(); updateEditControls(); await rebuildCroppedPdf(); refreshViewer(); });
+window.addEventListener('load', async ()=>{
+  refreshPresetUI();
+  await rebuildCroppedPdf();
+  await renderThumbs();
+  await renderMainPage(true);
+});
 </script>
 </body>
 </html>
