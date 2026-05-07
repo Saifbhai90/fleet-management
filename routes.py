@@ -20305,6 +20305,25 @@ def task_report_upload():
     return render_template('task_report_upload.html', form=form)
 
 
+def _norm_district_name_key(name):
+    return (name or '').strip().lower()
+
+
+def _districts_with_no_vehicle_and_no_project_link():
+    """Districts that have no Vehicle row and no project_district M2M row (master mein assign nahi)."""
+    veh_ids = {
+        int(v) for (v,) in db.session.query(Vehicle.district_id)
+        .filter(Vehicle.district_id.isnot(None)).distinct().all()
+        if v is not None
+    }
+    pd_ids = {
+        int(d) for (d,) in db.session.query(project_district.c.district_id).distinct().all()
+        if d is not None
+    }
+    assigned = veh_ids | pd_ids
+    return [d for d in District.query.order_by(District.name).all() if d.id not in assigned]
+
+
 # ────────────────────────────────────────────────
 # Red Task Report
 # ────────────────────────────────────────────────
@@ -20371,14 +20390,18 @@ def red_task_list():
 
 @app.route('/red-task/summary', methods=['GET'])
 def red_task_summary():
-    """Aggregated Red Task counts / fines by district or project for a date range."""
+    """Direct Emergency Task Report (category Red only): districts with no vehicle / no project in master; fines from saved Red Task when task ID matches."""
+    from collections import defaultdict
+
     form = RedTaskFilterForm()
-    form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
+    empty_districts = _districts_with_no_vehicle_and_no_project_link()
+    empty_ids = {d.id for d in empty_districts}
+
+    form.district_id.choices = [(0, '-- Tamam (jin districts ko vehicle/project assign nahi) --')] + [(d.id, d.name) for d in empty_districts]
     today = pk_date()
     from_date = today
     to_date = today
     district_id = request.args.get('district_id', type=int) or 0
-    project_id = request.args.get('project_id', type=int) or 0
     show = request.args.get('show', type=int) or 0
 
     from_str = request.args.get('from_date', '').strip()
@@ -20390,15 +20413,15 @@ def red_task_summary():
     if from_date and to_date and from_date > to_date:
         from_date, to_date = to_date, from_date
 
+    if district_id and district_id not in empty_ids:
+        district_id = 0
+        flash('Summary sirf un districts ke liye hai jin ko master mein koi vehicle ya project assign nahi.', 'warning')
+
     form.from_date.data = from_date
     form.to_date.data = to_date
     form.district_id.data = district_id
-    if district_id:
-        projects = Project.query.join(project_district).filter(project_district.c.district_id == district_id).order_by(Project.name).all()
-        form.project_id.choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in projects]
-    else:
-        form.project_id.choices = [(0, '-- All Projects --')]
-    form.project_id.data = project_id
+    form.project_id.choices = [(0, '—')]
+    form.project_id.data = 0
 
     summary_rows = []
     summary_kind = ''
@@ -20407,86 +20430,52 @@ def red_task_summary():
     grand_fine = Decimal('0')
 
     if show:
-        base_dates = and_(RedTask.task_date >= from_date, RedTask.task_date <= to_date)
-
-        if district_id and project_id:
+        if district_id:
+            sel = District.query.get(district_id)
+            name_map = {_norm_district_name_key(sel.name): sel} if sel and sel.id in empty_ids else {}
             summary_kind = 'single'
-            summary_title = 'Selected district & project'
-            dist = District.query.get(district_id)
-            proj = Project.query.get(project_id)
-            label = f'{dist.name if dist else "?"} — {proj.name if proj else "?"}'
-            q = RedTask.query.filter(base_dates, RedTask.district_id == district_id, RedTask.project_id == project_id)
-            grand_count = q.count()
-            grand_fine = db.session.query(func.coalesce(func.sum(RedTask.fine_amount), 0)).filter(
-                base_dates, RedTask.district_id == district_id, RedTask.project_id == project_id,
-            ).scalar() or Decimal('0')
-            summary_rows = [{'label': label, 'count': grand_count, 'fine': grand_fine}]
-        elif district_id and not project_id:
-            summary_kind = 'by_project'
-            summary_title = 'By project (within selected district)'
-            agg = (
-                db.session.query(
-                    Project.id,
-                    func.coalesce(Project.name, '— No project —').label('lbl'),
-                    func.count(RedTask.id).label('cnt'),
-                    func.coalesce(func.sum(RedTask.fine_amount), 0).label('fine'),
-                )
-                .select_from(RedTask)
-                .outerjoin(Project, RedTask.project_id == Project.id)
-                .filter(base_dates, RedTask.district_id == district_id)
-                .group_by(Project.id, Project.name)
-                .order_by(func.coalesce(Project.name, ''))
-            )
-            for _pid, lbl, cnt, fine in agg.all():
-                cnt = int(cnt or 0)
-                fine_d = fine if isinstance(fine, Decimal) else Decimal(str(fine or 0))
-                summary_rows.append({'label': lbl, 'count': cnt, 'fine': fine_d})
-                grand_count += cnt
-                grand_fine += fine_d
-        elif project_id and not district_id:
-            summary_kind = 'by_district'
-            summary_title = 'By district (for selected project)'
-            agg = (
-                db.session.query(
-                    District.id,
-                    func.coalesce(District.name, '— No district —').label('lbl'),
-                    func.count(RedTask.id).label('cnt'),
-                    func.coalesce(func.sum(RedTask.fine_amount), 0).label('fine'),
-                )
-                .select_from(RedTask)
-                .outerjoin(District, RedTask.district_id == District.id)
-                .filter(base_dates, RedTask.project_id == project_id)
-                .group_by(District.id, District.name)
-                .order_by(func.coalesce(District.name, ''))
-            )
-            for _did, lbl, cnt, fine in agg.all():
-                cnt = int(cnt or 0)
-                fine_d = fine if isinstance(fine, Decimal) else Decimal(str(fine or 0))
-                summary_rows.append({'label': lbl, 'count': cnt, 'fine': fine_d})
-                grand_count += cnt
-                grand_fine += fine_d
+            summary_title = 'Direct Emergency (Red) — selected district (master: no vehicle / project assignment)'
         else:
+            name_map = {_norm_district_name_key(d.name): d for d in empty_districts}
             summary_kind = 'by_district'
-            summary_title = 'By district (all districts)'
-            agg = (
-                db.session.query(
-                    District.id,
-                    func.coalesce(District.name, '— No district —').label('lbl'),
-                    func.count(RedTask.id).label('cnt'),
-                    func.coalesce(func.sum(RedTask.fine_amount), 0).label('fine'),
-                )
-                .select_from(RedTask)
-                .outerjoin(District, RedTask.district_id == District.id)
-                .filter(base_dates)
-                .group_by(District.id, District.name)
-                .order_by(func.coalesce(District.name, ''))
-            )
-            for _did, lbl, cnt, fine in agg.all():
-                cnt = int(cnt or 0)
-                fine_d = fine if isinstance(fine, Decimal) else Decimal(str(fine or 0))
-                summary_rows.append({'label': lbl, 'count': cnt, 'fine': fine_d})
-                grand_count += cnt
-                grand_fine += fine_d
+            summary_title = 'Direct Emergency Task Report — Red category; districts jin ko master mein vehicle/project assign nahi'
+
+        dist_by_id = {d.id: d for d in empty_districts}
+
+        fine_lookup = {}
+        for rt in RedTask.query.filter(RedTask.task_date >= from_date, RedTask.task_date <= to_date).all():
+            k = (rt.task_date, (rt.task_id or '').strip())
+            fa = rt.fine_amount if rt.fine_amount is not None else Decimal('0')
+            if not isinstance(fa, Decimal):
+                fa = Decimal(str(fa))
+            fine_lookup[k] = fine_lookup.get(k, Decimal('0')) + fa
+
+        emg_rows = EmergencyTaskRecord.query.filter(
+            EmergencyTaskRecord.task_date >= from_date,
+            EmergencyTaskRecord.task_date <= to_date,
+            EmergencyTaskRecord.category == 'Red',
+        ).all()
+
+        groups = defaultdict(lambda: {'count': 0, 'fine': Decimal('0')})
+        for r in emg_rows:
+            d = name_map.get(_norm_district_name_key(r.district_name))
+            if not d:
+                continue
+            groups[d.id]['count'] += 1
+            fk = (r.task_date, (r.task_id_ext or '').strip())
+            groups[d.id]['fine'] += fine_lookup.get(fk, Decimal('0'))
+
+        for did in sorted(groups.keys(), key=lambda i: (dist_by_id.get(i).name or '').lower()):
+            dist = dist_by_id.get(did)
+            data = groups[did]
+            summary_rows.append({
+                'district_id': did,
+                'label': dist.name if dist else '—',
+                'count': data['count'],
+                'fine': data['fine'],
+            })
+            grand_count += data['count']
+            grand_fine += data['fine']
 
     return render_template(
         'red_task_summary.html',
@@ -20494,13 +20483,84 @@ def red_task_summary():
         from_date=from_date,
         to_date=to_date,
         district_id=district_id,
-        project_id=project_id,
+        project_id=0,
         summary_rows=summary_rows,
         summary_kind=summary_kind,
         summary_title=summary_title,
         grand_count=grand_count,
         grand_fine=grand_fine,
         show=bool(show),
+    )
+
+
+@app.route('/red-task/summary/detail', methods=['GET'])
+def red_task_summary_detail():
+    """Emergency Report Red rows for one summary district + date range (master district: no vehicle/project)."""
+    empty_districts = _districts_with_no_vehicle_and_no_project_link()
+    empty_ids = {d.id for d in empty_districts}
+
+    today = pk_date()
+    from_date = today
+    to_date = today
+    district_id = request.args.get('district_id', type=int) or 0
+
+    from_str = request.args.get('from_date', '').strip()
+    to_str = request.args.get('to_date', '').strip()
+    if from_str:
+        from_date = parse_date(from_str) or from_date
+    if to_str:
+        to_date = parse_date(to_str) or to_date
+    if from_date and to_date and from_date > to_date:
+        from_date, to_date = to_date, from_date
+
+    if district_id not in empty_ids:
+        flash('Ye district summary detail ke liye allow nahi — sirf un districts ke liye jin ko vehicle/project assign nahi.', 'warning')
+        return redirect(url_for(
+            'red_task_summary',
+            show=1,
+            from_date=from_date.strftime('%d-%m-%Y'),
+            to_date=to_date.strftime('%d-%m-%Y'),
+        ))
+
+    dist = District.query.get_or_404(district_id)
+    dist_key = _norm_district_name_key(dist.name)
+
+    saved_map = {}
+    for rt in RedTask.query.filter(
+        RedTask.task_date >= from_date,
+        RedTask.task_date <= to_date,
+    ).order_by(RedTask.id.asc()).all():
+        k = (rt.task_date, (rt.task_id or '').strip())
+        saved_map[k] = rt
+
+    emg_q = EmergencyTaskRecord.query.filter(
+        EmergencyTaskRecord.task_date >= from_date,
+        EmergencyTaskRecord.task_date <= to_date,
+        EmergencyTaskRecord.category == 'Red',
+    ).order_by(EmergencyTaskRecord.task_date.desc(), EmergencyTaskRecord.id.desc())
+
+    rows = []
+    for r in emg_q.all():
+        if _norm_district_name_key(r.district_name) != dist_key:
+            continue
+        fk = (r.task_date, (r.task_id_ext or '').strip())
+        rows.append({'emg': r, 'saved': saved_map.get(fk)})
+
+    back_q = url_for(
+        'red_task_summary',
+        show=1,
+        from_date=from_date.strftime('%d-%m-%Y'),
+        to_date=to_date.strftime('%d-%m-%Y'),
+        district_id=district_id,
+    )
+
+    return render_template(
+        'red_task_summary_detail.html',
+        district=dist,
+        rows=rows,
+        from_date=from_date,
+        to_date=to_date,
+        back_summary_url=back_q,
     )
 
 
@@ -29027,7 +29087,7 @@ def _report_centre_visibility(linked_driver_id=None):
     show_fleet = bool(fleet_vehicle or fleet_project or fleet_expense)
 
     task_daily = (
-        c('task_report_list') or c('task_report_new') or c('red_task_list') or c('red_task_summary') or c('without_task_list')
+        c('task_report_list') or c('task_report_new') or c('red_task_list') or c('red_task_summary') or c('red_task_summary_detail') or c('without_task_list')
         or c('speed_monitoring_report') or c('mileage_report') or c('tracker_difference_report')
         or c('unauthorized_movement_report') or c('task_start_delay_report') or c('task_turnaround_report')
         or c('unexecuted_task_report')
