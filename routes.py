@@ -2432,6 +2432,20 @@ def _load_pdf_writer_reader():
         return PdfReader, PdfWriter
 
 
+def _target_page_dims(page_size, orientation):
+    # PDF points (1 inch = 72 pt)
+    sizes = {
+        'a4': (595.276, 841.890),
+        'letter': (612.000, 792.000),
+    }
+    w, h = sizes.get((page_size or '').lower(), (None, None))
+    if not w or not h:
+        return None, None
+    if (orientation or '').lower() == 'landscape':
+        return h, w
+    return w, h
+
+
 def _image_to_pdf_page_bytes(fs):
     """Convert an uploaded image file to a one-page PDF bytes."""
     from PIL import Image
@@ -2450,6 +2464,36 @@ def _image_to_pdf_page_bytes(fs):
     return out
 
 
+def _normalize_writer_pages(writer, target_w, target_h):
+    """Fit each page to target size keeping aspect ratio."""
+    if not target_w or not target_h:
+        return writer
+
+    try:
+        from pypdf import PdfWriter as _Writer, Transformation
+    except Exception:
+        from PyPDF2 import PdfWriter as _Writer
+        Transformation = None
+
+    out_writer = _Writer()
+    for src in writer.pages:
+        src_w = float(src.mediabox.width or 0) or 1.0
+        src_h = float(src.mediabox.height or 0) or 1.0
+        scale = min(float(target_w) / src_w, float(target_h) / src_h)
+        draw_w = src_w * scale
+        draw_h = src_h * scale
+        tx = (float(target_w) - draw_w) / 2.0
+        ty = (float(target_h) - draw_h) / 2.0
+        blank = out_writer.add_blank_page(width=float(target_w), height=float(target_h))
+
+        if Transformation is not None and hasattr(blank, 'merge_transformed_page'):
+            blank.merge_transformed_page(src, Transformation().scale(scale).translate(tx, ty))
+        else:
+            # Fallback for older APIs
+            blank.mergeScaledTranslatedPage(src, scale, tx, ty)  # type: ignore[attr-defined]
+    return out_writer
+
+
 @app.route('/admin/personal-tools', methods=['GET', 'POST'])
 def admin_personal_tools():
     """Master admin personal tools: multi PDF/Image fast single-print."""
@@ -2463,6 +2507,20 @@ def admin_personal_tools():
         if not files:
             flash('Kam az kam 1 PDF/Image file select karein.', 'warning')
             return redirect(url_for('admin_personal_tools'))
+
+        page_size = (request.form.get('page_size') or 'original').strip().lower()
+        orientation = (request.form.get('orientation') or 'portrait').strip().lower()
+        order_by = (request.form.get('order_by') or 'as_uploaded').strip().lower()
+        if page_size not in {'original', 'a4', 'letter'}:
+            page_size = 'original'
+        if orientation not in {'portrait', 'landscape'}:
+            orientation = 'portrait'
+        if order_by not in {'as_uploaded', 'name_asc', 'name_desc'}:
+            order_by = 'as_uploaded'
+
+        if order_by in {'name_asc', 'name_desc'}:
+            rev = order_by == 'name_desc'
+            files = sorted(files, key=lambda f: secure_filename(f.filename or '').lower(), reverse=rev)
 
         try:
             PdfReader, PdfWriter = _load_pdf_writer_reader()
@@ -2499,6 +2557,14 @@ def admin_personal_tools():
             flash('Selected files se printable pages generate nahi huin.', 'danger')
             return redirect(url_for('admin_personal_tools'))
 
+        target_w, target_h = _target_page_dims(page_size, orientation)
+        if target_w and target_h:
+            try:
+                writer = _normalize_writer_pages(writer, target_w, target_h)
+            except Exception as e:
+                flash(f'Page size/orientation apply nahi ho saka: {e}', 'danger')
+                return redirect(url_for('admin_personal_tools'))
+
         out = BytesIO()
         writer.write(out)
         out.seek(0)
@@ -2515,6 +2581,9 @@ def admin_personal_tools():
             pdf_url=url_for('static', filename=f'tmp_print/{fname}'),
             pages=added_pages,
             files_count=len(files),
+            page_size=page_size,
+            orientation=orientation,
+            order_by=order_by,
         )
 
     return render_template('admin_personal_tools.html')

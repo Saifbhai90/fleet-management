@@ -13,6 +13,11 @@
   <div class="alert alert-success shadow-sm border-0">
     <strong>Batch prepared:</strong> {{ files_count }} file(s), {{ pages }} page(s).
     Print dialog automatically open ho jayega.
+    <div class="small text-muted mt-1">
+      Size: <strong>{{ page_size|upper if page_size != 'original' else 'ORIGINAL' }}</strong> |
+      Orientation: <strong>{{ orientation|capitalize }}</strong> |
+      Order: <strong>{{ order_by.replace('_', ' ')|title }}</strong>
+    </div>
   </div>
 
   <div class="card shadow-sm border-0 rounded-3">

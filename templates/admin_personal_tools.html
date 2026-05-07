@@ -38,6 +38,32 @@
 
         <div class="alert alert-light border d-none" id="selectedFilesBox"></div>
 
+        <div class="row g-3 mb-3">
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Page Size</label>
+            <select class="form-select" name="page_size">
+              <option value="original">Original (as-is)</option>
+              <option value="a4">A4</option>
+              <option value="letter">Letter</option>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Orientation</label>
+            <select class="form-select" name="orientation">
+              <option value="portrait">Portrait</option>
+              <option value="landscape">Landscape</option>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Print Order</label>
+            <select class="form-select" name="order_by">
+              <option value="as_uploaded">As Uploaded</option>
+              <option value="name_asc">File Name (A to Z)</option>
+              <option value="name_desc">File Name (Z to A)</option>
+            </select>
+          </div>
+        </div>
+
         <button type="submit" class="btn btn-primary" id="printNowBtn" disabled>
           <i class="bi bi-lightning-charge-fill me-1"></i>Combine & Print
         </button>
