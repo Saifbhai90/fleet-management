@@ -24,7 +24,7 @@
   .gps-attendance-page .step-num { width: 22px; height: 22px; border-radius: 50%; background: linear-gradient(135deg, #dc3545, #c82333); color: white; font-size: 0.7rem; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; margin-right: 6px; }
   .gps-attendance-page .section-title { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin-bottom: 0.4rem; }
   .gps-attendance-page .media-preview-wrap { border: 1px dashed #cbd5e1; border-radius: 10px; padding: 0.5rem; background: #f8fafc; text-align: center; }
-  .gps-attendance-page .media-preview-wrap img { width: 100%; max-height: 180px; object-fit: cover; border-radius: 8px; }
+  .gps-attendance-page .media-preview-wrap img { width: 100%; max-height: 180px; object-fit: cover; border-radius: 8px; touch-action: manipulation; }
   .gps-attendance-page .media-fallback { font-size: 0.85rem; color: #64748b; padding: 1.25rem 0.25rem; }
   .gps-attendance-page .upload-meta { font-size: 0.78rem; color: #475569; line-height: 1.35; }
   #cameraModal { z-index: 1090 !important; }
@@ -144,6 +144,7 @@
             <img id="checkoutPreviewImage" class="d-none" alt="Latest check-out">
             <div id="checkoutPreviewFallback" class="media-fallback">Driver select karein.</div>
           </div>
+          <small class="text-muted d-none mb-2" id="checkoutPreviewTapHint">Image par tap karen — poori screen par dekhen (zoom / save).</small>
           <div id="checkoutUploadStatus" class="status-box neutral mb-2">
             Upload status: Waiting for driver selection.
           </div>
@@ -204,6 +205,11 @@
   </div>
 </div>
 
+{% set fv_prefix = 'gpsCoFv' %}
+{% set fv_preview_img_id = 'checkoutPreviewImage' %}
+{% set fv_photo_label = 'Check-out (GPS + Camera)' %}
+{% include 'partials/gps_attendance_fullview.html' %}
+
 <script>
 (function() {
   var RADIUS_METERS = {{ geofence_radius | default(150) }};
@@ -245,6 +251,7 @@
   var checkoutUploadStatus = document.getElementById('checkoutUploadStatus');
   var checkoutUploadMeta = document.getElementById('checkoutUploadMeta');
   var btnRetryPendingCheckout = document.getElementById('btnRetryPendingCheckout');
+  var checkoutPreviewTapHint = document.getElementById('checkoutPreviewTapHint');
 
   var currentPosition = null;
   var parkingCoords = null;
@@ -643,6 +650,7 @@
     checkoutPreviewImage.removeAttribute('src');
     checkoutPreviewFallback.classList.remove('d-none');
     checkoutPreviewFallback.textContent = text;
+    if (checkoutPreviewTapHint) checkoutPreviewTapHint.classList.add('d-none');
   }
 
   function setUploadStatus(text, cls) {
@@ -664,6 +672,7 @@
       checkoutPreviewImage.src = pending.photo_base64;
       checkoutPreviewImage.classList.remove('d-none');
       checkoutPreviewFallback.classList.add('d-none');
+      if (checkoutPreviewTapHint) checkoutPreviewTapHint.classList.remove('d-none');
       setUploadStatus('Upload pending: Network issue ki wajah se server par nahi gaya.', 'warning');
       checkoutUploadMeta.textContent = 'Media: Local pending | Time: ' + (pending.captured_at || '-') + ' | Date: ' + currentDateDmy();
       btnRetryPendingCheckout.classList.remove('d-none');
@@ -684,6 +693,7 @@
         checkoutPreviewImage.src = data.media.media_url || '';
         checkoutPreviewImage.classList.remove('d-none');
         checkoutPreviewFallback.classList.add('d-none');
+        if (checkoutPreviewTapHint) checkoutPreviewTapHint.classList.remove('d-none');
         setUploadStatus('Upload status: Uploaded successfully.', 'success');
         checkoutUploadMeta.textContent = 'Media: Server uploaded | Check-out Time: ' + (data.check_out_time || '-') + ' | Date: ' + (data.attendance_date || currentDateDmy());
       })

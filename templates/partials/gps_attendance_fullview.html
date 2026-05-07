@@ -1,0 +1,345 @@
+{# Fuel Media Gallery (maintenance_expense_media.html) style full-screen viewer for GPS attendance preview.
+   Set before include: fv_prefix (unique), fv_preview_img_id (thumbnail img id), fv_photo_label (download name hint). #}
+<style>
+  .gps-att-fv-overlay {
+    position: fixed; inset: 0; z-index: 10050;
+    background: rgba(2, 6, 23, 0.94);
+    display: none; flex-direction: column;
+  }
+  .gps-att-fv-overlay.open { display: flex; }
+  .gps-att-fv-top {
+    flex: 0 0 auto;
+    display: flex; justify-content: space-between; align-items: center;
+    gap: 10px; padding: 10px 14px;
+    color: #e2e8f0;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+  }
+  .gps-att-fv-top .gps-att-fv-info {
+    font-size: 0.9rem;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    max-width: min(62vw, 520px);
+  }
+  .gps-att-fv-tool {
+    border: none; border-radius: 8px; color: #fff; background: rgba(255, 255, 255, 0.14);
+    min-width: 42px; min-height: 42px; padding: 0 12px;
+    font-size: 1rem;
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    touch-action: manipulation;
+  }
+  .gps-att-fv-tool:hover { background: rgba(255, 255, 255, 0.24); }
+  .gps-att-fv-close { border-radius: 50%; width: 44px; height: 44px; min-width: 44px; }
+  .gps-att-fv-stage {
+    flex: 1 1 auto; min-height: 0; position: relative; overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+    touch-action: pan-y;
+  }
+  .gps-att-fv-stage img {
+    max-width: calc(100% - 24px);
+    max-height: calc(100% - 24px);
+    object-fit: contain;
+    border-radius: 8px;
+    user-select: none;
+    -webkit-user-drag: none;
+    transform-origin: center center;
+  }
+  .gps-att-fv-stage img.gps-att-fv-zoomable { cursor: grab; transition: transform 0.08s linear; }
+  .gps-att-fv-stage img.gps-att-fv-zoomable.dragging { cursor: grabbing; }
+  .gps-att-fv-arrow {
+    position: absolute; top: 50%; transform: translateY(-50%);
+    width: 48px; height: 48px; border: none; border-radius: 50%;
+    background: rgba(255, 255, 255, 0.15); color: #fff; font-size: 1.3rem;
+    display: flex; align-items: center; justify-content: center; z-index: 2;
+    touch-action: manipulation;
+  }
+  .gps-att-fv-arrow:hover { background: rgba(255, 255, 255, 0.3); }
+  .gps-att-fv-arrow.left { left: 10px; }
+  .gps-att-fv-arrow.right { right: 10px; }
+  .gps-att-fv-loading { color: #94a3b8; font-size: 0.95rem; position: absolute; }
+  .gps-att-fv-err { color: #fca5a5; font-size: 0.9rem; text-align: center; padding: 1rem; }
+  .gps-att-fv-err a { color: #93c5fd; }
+  .gps-att-fv-pill {
+    display: inline-flex; align-items: center; gap: 5px;
+    border-radius: 999px; padding: 4px 10px; font-size: 0.78rem;
+    background: #0f172a; color: #e2e8f0; border: 1px solid #334155;
+  }
+  @media (max-width: 900px) {
+    .gps-att-fv-stage img { max-width: calc(100% - 8px); max-height: calc(100% - 8px); }
+    .gps-att-fv-arrow { width: 40px; height: 40px; font-size: 1rem; }
+    .gps-att-fv-arrow.left { left: 4px; }
+    .gps-att-fv-arrow.right { right: 4px; }
+    .gps-att-fv-tool span.lbl { display: none; }
+  }
+</style>
+
+<div id="{{ fv_prefix }}Overlay" class="gps-att-fv-overlay" aria-hidden="true">
+  <div class="gps-att-fv-top">
+    <div class="d-flex align-items-center gap-2 min-w-0 flex-grow-1">
+      <span class="gps-att-fv-info" id="{{ fv_prefix }}Info">{{ fv_photo_label }}</span>
+      <span class="gps-att-fv-pill" id="{{ fv_prefix }}MetaPill">Image</span>
+    </div>
+    <div class="d-flex align-items-center gap-1 flex-shrink-0">
+      <button type="button" class="gps-att-fv-tool" id="{{ fv_prefix }}ZoomOut" title="Zoom out"><i class="bi bi-dash-lg"></i></button>
+      <button type="button" class="gps-att-fv-tool" id="{{ fv_prefix }}ZoomIn" title="Zoom in"><i class="bi bi-plus-lg"></i></button>
+      <button type="button" class="gps-att-fv-tool" id="{{ fv_prefix }}ZoomReset" title="Reset zoom"><i class="bi bi-arrows-angle-contract"></i></button>
+      <button type="button" class="gps-att-fv-tool" id="{{ fv_prefix }}Download" title="Download"><i class="bi bi-download"></i><span class="lbl ms-1">Save</span></button>
+      <button type="button" class="gps-att-fv-tool gps-att-fv-close" id="{{ fv_prefix }}Close" title="Close"><i class="bi bi-x-lg"></i></button>
+    </div>
+  </div>
+  <div class="gps-att-fv-stage" id="{{ fv_prefix }}Stage">
+    <button type="button" class="gps-att-fv-arrow left d-none" id="{{ fv_prefix }}Prev" aria-hidden="true"><i class="bi bi-chevron-left"></i></button>
+    <button type="button" class="gps-att-fv-arrow right d-none" id="{{ fv_prefix }}Next" aria-hidden="true"><i class="bi bi-chevron-right"></i></button>
+  </div>
+</div>
+
+<script>
+(function () {
+  var PREFIX = {{ fv_prefix | tojson }};
+  var PREVIEW_ID = {{ fv_preview_img_id | tojson }};
+  var PHOTO_LABEL = {{ fv_photo_label | tojson }};
+  var overlay = document.getElementById(PREFIX + 'Overlay');
+  var stage = document.getElementById(PREFIX + 'Stage');
+  var infoEl = document.getElementById(PREFIX + 'Info');
+  var metaPill = document.getElementById(PREFIX + 'MetaPill');
+  var btnClose = document.getElementById(PREFIX + 'Close');
+  var btnPrev = document.getElementById(PREFIX + 'Prev');
+  var btnNext = document.getElementById(PREFIX + 'Next');
+  var btnZoomIn = document.getElementById(PREFIX + 'ZoomIn');
+  var btnZoomOut = document.getElementById(PREFIX + 'ZoomOut');
+  var btnZoomReset = document.getElementById(PREFIX + 'ZoomReset');
+  var btnDownload = document.getElementById(PREFIX + 'Download');
+  var previewImg = document.getElementById(PREVIEW_ID);
+
+  if (!overlay || !stage || !previewImg) return;
+
+  document.body.appendChild(overlay);
+
+  var ITEMS = [];
+  var cur = 0;
+  var mediaEl = null;
+  var lastBodyOverflow = '';
+  var zoom = 1;
+  var panX = 0;
+  var panY = 0;
+  var dragOn = false;
+  var dragStartX = 0;
+  var dragStartY = 0;
+  var touchStartX = 0;
+  var touchStartY = 0;
+  var touchStartTime = 0;
+
+  function resetZoomState() {
+    zoom = 1;
+    panX = 0;
+    panY = 0;
+  }
+
+  function applyZoomTransform() {
+    if (!mediaEl || mediaEl.tagName !== 'IMG') return;
+    mediaEl.style.transform = 'translate(' + panX + 'px,' + panY + 'px) scale(' + zoom + ')';
+  }
+
+  function setMeta(it) {
+    infoEl.textContent = (it && it.name) ? it.name : PHOTO_LABEL;
+    metaPill.textContent = 'IMAGE';
+  }
+
+  function clearStageAux() {
+    var oldLoad = stage.querySelector('.gps-att-fv-loading');
+    if (oldLoad) oldLoad.remove();
+    var oldErr = stage.querySelector('.gps-att-fv-err');
+    if (oldErr) oldErr.remove();
+    var oldMedia = stage.querySelector('img, video');
+    if (oldMedia) oldMedia.remove();
+    mediaEl = null;
+    resetZoomState();
+  }
+
+  function renderCurrent() {
+    cur = ((cur % ITEMS.length) + ITEMS.length) % ITEMS.length;
+    var it = ITEMS[cur];
+    if (!it) return;
+    clearStageAux();
+    setMeta(it);
+
+    var loader = document.createElement('div');
+    loader.className = 'gps-att-fv-loading';
+    loader.textContent = 'Loading...';
+    stage.insertBefore(loader, btnNext);
+
+    var img = new Image();
+    img.className = 'gps-att-fv-zoomable';
+    img.alt = it.name || PHOTO_LABEL;
+    img.onload = function () {
+      if (loader.parentNode) loader.remove();
+      mediaEl = img;
+      stage.insertBefore(img, btnNext);
+      applyZoomTransform();
+    };
+    img.onerror = function () {
+      if (loader.parentNode) loader.remove();
+      var errDiv = document.createElement('div');
+      errDiv.className = 'gps-att-fv-err';
+      errDiv.appendChild(document.createTextNode('Image load nahi ho saki.'));
+      errDiv.appendChild(document.createElement('br'));
+      var a = document.createElement('a');
+      a.href = it.url || '#';
+      a.target = '_blank';
+      a.rel = 'noopener';
+      a.textContent = 'Nayi tab mein kholen';
+      errDiv.appendChild(a);
+      stage.insertBefore(errDiv, btnNext);
+    };
+    img.src = it.url;
+  }
+
+  function showAt(index) {
+    cur = index;
+    renderCurrent();
+  }
+  function showPrev() { showAt(cur - 1); }
+  function showNext() { showAt(cur + 1); }
+
+  function updateNavVisibility() {
+    var multi = ITEMS.length > 1;
+    btnPrev.classList.toggle('d-none', !multi);
+    btnNext.classList.toggle('d-none', !multi);
+    btnPrev.setAttribute('aria-hidden', multi ? 'false' : 'true');
+    btnNext.setAttribute('aria-hidden', multi ? 'false' : 'true');
+  }
+
+  function openViewer(url, name) {
+    if (!url) return;
+    ITEMS = [{ url: url, type: 'image', name: name || PHOTO_LABEL, download_url: url }];
+    cur = 0;
+    updateNavVisibility();
+    renderCurrent();
+    overlay.classList.add('open');
+    overlay.setAttribute('aria-hidden', 'false');
+    lastBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeViewer() {
+    overlay.classList.remove('open');
+    overlay.setAttribute('aria-hidden', 'true');
+    clearStageAux();
+    document.body.style.overflow = lastBodyOverflow;
+  }
+
+  function setZoom(delta) {
+    if (!mediaEl || mediaEl.tagName !== 'IMG') return;
+    zoom = Math.max(1, Math.min(5, zoom + delta));
+    if (zoom === 1) {
+      panX = 0;
+      panY = 0;
+    }
+    applyZoomTransform();
+  }
+
+  function downloadCurrent() {
+    var it = ITEMS[cur];
+    if (!it || !it.url) return;
+    var url = it.download_url || it.url;
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = (it.name || 'attendance').replace(/[^\w\-\s]/g, '_').trim().slice(0, 80) + '.jpg';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
+  function tryOpenFromPreview() {
+    if (!previewImg || previewImg.classList.contains('d-none')) return;
+    var src = previewImg.getAttribute('src');
+    if (!src) return;
+    openViewer(src, PHOTO_LABEL);
+  }
+
+  previewImg.style.cursor = 'zoom-in';
+  previewImg.setAttribute('role', 'button');
+  previewImg.setAttribute('tabindex', '0');
+  previewImg.setAttribute('aria-label', 'Full screen mein dekhen');
+  previewImg.addEventListener('click', function (e) {
+    e.preventDefault();
+    tryOpenFromPreview();
+  });
+  previewImg.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      tryOpenFromPreview();
+    }
+  });
+
+  btnClose.addEventListener('click', closeViewer);
+  btnPrev.addEventListener('click', function (e) { e.stopPropagation(); showPrev(); });
+  btnNext.addEventListener('click', function (e) { e.stopPropagation(); showNext(); });
+  btnDownload.addEventListener('click', downloadCurrent);
+  btnZoomIn.addEventListener('click', function () { setZoom(0.25); });
+  btnZoomOut.addEventListener('click', function () { setZoom(-0.25); });
+  btnZoomReset.addEventListener('click', function () {
+    resetZoomState();
+    applyZoomTransform();
+  });
+
+  stage.addEventListener('click', function (e) {
+    if (e.target === stage) closeViewer();
+  });
+
+  stage.addEventListener('wheel', function (e) {
+    if (!overlay.classList.contains('open')) return;
+    if (!mediaEl || mediaEl.tagName !== 'IMG') return;
+    e.preventDefault();
+    setZoom(e.deltaY > 0 ? -0.15 : 0.15);
+  }, { passive: false });
+
+  stage.addEventListener('mousedown', function (e) {
+    if (!mediaEl || mediaEl.tagName !== 'IMG' || zoom <= 1) return;
+    dragOn = true;
+    mediaEl.classList.add('dragging');
+    dragStartX = e.clientX - panX;
+    dragStartY = e.clientY - panY;
+  });
+  window.addEventListener('mousemove', function (e) {
+    if (!dragOn || !mediaEl || mediaEl.tagName !== 'IMG') return;
+    panX = e.clientX - dragStartX;
+    panY = e.clientY - dragStartY;
+    applyZoomTransform();
+  });
+  window.addEventListener('mouseup', function () {
+    if (!dragOn || !mediaEl || mediaEl.tagName !== 'IMG') return;
+    dragOn = false;
+    mediaEl.classList.remove('dragging');
+  });
+
+  stage.addEventListener('touchstart', function (e) {
+    if (!overlay.classList.contains('open')) return;
+    var t = e.changedTouches && e.changedTouches[0];
+    if (!t) return;
+    touchStartX = t.clientX;
+    touchStartY = t.clientY;
+    touchStartTime = Date.now();
+  }, { passive: true });
+  stage.addEventListener('touchend', function (e) {
+    if (!overlay.classList.contains('open')) return;
+    var t = e.changedTouches && e.changedTouches[0];
+    if (!t) return;
+    var dx = t.clientX - touchStartX;
+    var dy = t.clientY - touchStartY;
+    var dt = Date.now() - touchStartTime;
+    if (ITEMS.length > 1 && dt < 650 && Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy)) {
+      if (dx > 0) showPrev();
+      else showNext();
+    }
+  }, { passive: true });
+
+  document.addEventListener('keydown', function (e) {
+    if (!overlay.classList.contains('open')) return;
+    if (e.key === 'Escape') closeViewer();
+    else if (e.key === 'ArrowLeft' && ITEMS.length > 1) { e.preventDefault(); showPrev(); }
+    else if (e.key === 'ArrowRight' && ITEMS.length > 1) { e.preventDefault(); showNext(); }
+    else if (e.key === '+' || e.key === '=') { e.preventDefault(); setZoom(0.2); }
+    else if (e.key === '-') { e.preventDefault(); setZoom(-0.2); }
+    else if (e.key === '0') { e.preventDefault(); resetZoomState(); applyZoomTransform(); }
+  });
+})();
+</script>
