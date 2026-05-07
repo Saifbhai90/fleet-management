@@ -273,6 +273,15 @@
     return body.message || body.error || '';
   }
 
+  /** Flask-WTF CSRF: JSON POSTs must send the same token as the page form (see handle_csrf_error in routes). */
+  function gpsJsonPostHeaders() {
+    var tokEl = checkoutForm ? checkoutForm.querySelector('input[name="csrf_token"]') : null;
+    var tok = tokEl ? tokEl.value : '';
+    var h = { 'Content-Type': 'application/json' };
+    if (tok) h['X-CSRFToken'] = tok;
+    return h;
+  }
+
   /** Downscale before JSON upload so proxies / body limits (large base64) are less likely to reject. */
   function jpegDataUrlMaxSide(canvas, maxSide, quality) {
     maxSide = maxSide || 1280;
@@ -730,7 +739,7 @@
   function postCheckoutPayload(payload) {
     return fetch('{{ url_for("api_attendance_gps_checkout_submit") }}', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: gpsJsonPostHeaders(),
       body: JSON.stringify(payload),
     }).then(function(r) {
       return r.text().then(function(text) {

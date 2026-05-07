@@ -275,6 +275,14 @@
     return body.message || body.error || '';
   }
 
+  function gpsJsonPostHeaders() {
+    var tokEl = checkinForm ? checkinForm.querySelector('input[name="csrf_token"]') : null;
+    var tok = tokEl ? tokEl.value : '';
+    var h = { 'Content-Type': 'application/json' };
+    if (tok) h['X-CSRFToken'] = tok;
+    return h;
+  }
+
   function jpegDataUrlMaxSide(canvas, maxSide, quality) {
     maxSide = maxSide || 1280;
     quality = (quality === undefined || quality === null) ? 0.72 : quality;
@@ -692,7 +700,7 @@
   function postCheckinPayload(payload) {
     return fetch('{{ url_for("api_attendance_gps_checkin_submit") }}', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: gpsJsonPostHeaders(),
       body: JSON.stringify(payload),
     }).then(function(r) {
       return r.text().then(function(text) {
