@@ -268,6 +268,29 @@
   var hasGpsCheckin = false;
   var PENDING_PREFIX = 'gps-attendance:checkout:';
 
+  function gpsApiJsonMessage(body) {
+    if (!body || typeof body !== 'object') return '';
+    return body.message || body.error || '';
+  }
+
+  /** Downscale before JSON upload so proxies / body limits (large base64) are less likely to reject. */
+  function jpegDataUrlMaxSide(canvas, maxSide, quality) {
+    maxSide = maxSide || 1280;
+    quality = (quality === undefined || quality === null) ? 0.72 : quality;
+    var w = canvas.width;
+    var h = canvas.height;
+    if (!w || !h) return canvas.toDataURL('image/jpeg', quality);
+    if (w <= maxSide && h <= maxSide) return canvas.toDataURL('image/jpeg', quality);
+    var scale = maxSide / Math.max(w, h);
+    var nw = Math.max(1, Math.round(w * scale));
+    var nh = Math.max(1, Math.round(h * scale));
+    var tmp = document.createElement('canvas');
+    tmp.width = nw;
+    tmp.height = nh;
+    tmp.getContext('2d').drawImage(canvas, 0, 0, nw, nh);
+    return tmp.toDataURL('image/jpeg', quality);
+  }
+
   function syncTS(el, opts, disabled) {
     var ts = el.tomselect;
     if (!ts) {
@@ -709,7 +732,21 @@
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
-    }).then(function(r) { return r.json().then(function(j) { return { ok: r.ok, body: j }; }); });
+    }).then(function(r) {
+      return r.text().then(function(text) {
+        var body = {};
+        if (text) {
+          try {
+            body = JSON.parse(text);
+          } catch (e) {
+            body = { message: 'Server jawab parse nahi ho saka (HTTP ' + r.status + ').' };
+          }
+        } else if (!r.ok) {
+          body = { message: 'Server error (HTTP ' + r.status + ').' };
+        }
+        return { ok: r.ok, body: body };
+      });
+    });
   }
 
   function stopCamera() {
@@ -826,7 +863,7 @@
       ctx.font = fontSize * 0.85 + 'px Arial';
       ctx.fillText(line2, x + 12, y + 8 + fontSize * 1.15);
     }
-    var dataUrl = cameraCanvas.toDataURL('image/jpeg', 0.9);
+    var dataUrl = jpegDataUrlMaxSide(cameraCanvas, 1280, 0.72);
     stopCamera();
     if (cameraModalInstance) cameraModalInstance.hide();
     formDriverId.value = driverSelect.value;
@@ -855,7 +892,7 @@
         refreshCheckoutMediaPanel();
         setUploadStatus('Upload status: Uploaded successfully.', 'success');
       } else {
-        setUploadStatus('Upload pending: ' + ((res.body && res.body.message) ? res.body.message : 'Server rejected upload.'), 'warning');
+        setUploadStatus('Upload pending: ' + (gpsApiJsonMessage(res.body) || 'Server rejected upload.'), 'warning');
         btnRetryPendingCheckout.classList.remove('d-none');
       }
     }).catch(function() {
@@ -880,7 +917,7 @@
         clearPendingCheckout(driverId);
         refreshCheckoutMediaPanel();
       } else {
-        setUploadStatus('Retry failed: ' + ((res.body && res.body.message) ? res.body.message : 'Upload failed.'), 'warning');
+        setUploadStatus('Retry failed: ' + (gpsApiJsonMessage(res.body) || 'Upload failed.'), 'warning');
       }
     }).catch(function() {
       setUploadStatus('Retry failed: Network issue.', 'warning');

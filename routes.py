@@ -18223,18 +18223,56 @@ def api_attendance_latest_gps_media():
     })
 
 
-def _upload_attendance_photo_from_form_or_b64(photo_file, photo_b64, fail_msg):
-    photo_path = None
-    if photo_file and photo_file.filename:
+def _decode_attendance_photo_b64(photo_b64):
+    """Decode a data-URL or raw base64 string into image bytes. Returns None if invalid."""
+    import base64
+
+    if not (photo_b64 or '').strip():
+        return None
+    s = photo_b64.strip()
+    m = re.match(r'data:image/[^;]+;base64,(.+)', s, re.DOTALL)
+    raw_b64 = m.group(1) if m else s
+    try:
+        return base64.b64decode(raw_b64)
+    except Exception:
+        return None
+
+
+def _upload_attendance_image_bytes_with_fallback(data, folder='attendance'):
+    """Upload via R2 (WebP); if R2 misconfigured or fails, save JPEG bytes under uploads/."""
+    if not data:
+        return None
+    try:
+        return upload_image_bytes(data, folder=folder)
+    except Exception as exc:
+        app.logger.warning('Attendance photo R2 upload failed (%s), using disk fallback', exc)
+    try:
+        root = os.path.dirname(os.path.abspath(__file__))
+        upload_dir = os.path.join(root, 'uploads', folder)
+        os.makedirs(upload_dir, exist_ok=True)
+        fname = uuid.uuid4().hex + '.jpg'
+        fpath = os.path.join(upload_dir, fname)
+        with open(fpath, 'wb') as out:
+            out.write(data)
+        return '/uploads/%s/%s' % (folder, fname)
+    except Exception as exc2:
+        app.logger.exception('Attendance photo local save failed: %s', exc2)
+        return None
+
+
+def _upload_attendance_photo_from_form_or_b64(photo_file, photo_b64, *, required=True):
+    """Resolve a werkzeug FileStorage and/or base64 payload to a stored path URL."""
+    data = None
+    if photo_file and getattr(photo_file, 'filename', None):
         photo_file.stream.seek(0)
-        photo_path = upload_image_file(photo_file, folder="attendance")
-    elif photo_b64 and photo_b64.startswith('data:image'):
-        import base64
-        _, raw_b64 = photo_b64.split(',', 1)
-        data = base64.b64decode(raw_b64)
-        photo_path = upload_image_bytes(data, folder="attendance")
+        data = photo_file.read()
+    elif photo_b64:
+        data = _decode_attendance_photo_b64(photo_b64)
+    photo_path = _upload_attendance_image_bytes_with_fallback(data) if data else None
     if not photo_path:
-        raise ValueError(fail_msg)
+        if required:
+            raise ValueError('Image required.')
+        return None
     return photo_path
 
 
@@ -18285,8 +18323,11 @@ def api_attendance_gps_checkin_submit():
         if shift == 'night' and not _in_window(now_time, tw['night_start'], tw['night_end']):
             return jsonify({'ok': False, 'message': 'Night shift time-window allowed nahi.'}), 400
         try:
-            photo_path = _upload_attendance_photo_from_form_or_b64(None, photo_b64, 'Image required')
-        except Exception:
+            photo_path = _upload_attendance_photo_from_form_or_b64(None, photo_b64, required=True)
+        except ValueError as ve:
+            return jsonify({'ok': False, 'message': str(ve) or 'Image required.'}), 400
+        except Exception as photo_exc:
+            app.logger.warning('GPS check-in photo upload failed: %s', photo_exc)
             return jsonify({'ok': False, 'message': 'Image upload failed. Network check karein.'}), 502
         rec = DriverAttendance(
             driver_id=driver_id,
@@ -18360,8 +18401,11 @@ def api_attendance_gps_checkout_submit():
         if shift == 'night' and not _in_window(now_time, nco_s, nco_e):
             return jsonify({'ok': False, 'message': 'Night check-out time-window allowed nahi.'}), 400
         try:
-            photo_path = _upload_attendance_photo_from_form_or_b64(None, photo_b64, 'Image required')
-        except Exception:
+            photo_path = _upload_attendance_photo_from_form_or_b64(None, photo_b64, required=True)
+        except ValueError as ve:
+            return jsonify({'ok': False, 'message': str(ve) or 'Image required.'}), 400
+        except Exception as photo_exc:
+            app.logger.warning('GPS check-out photo upload failed: %s', photo_exc)
             return jsonify({'ok': False, 'message': 'Image upload failed. Network check karein.'}), 502
         check_out_time = now.time()
         is_overnight = (existing.attendance_date != today)
@@ -18517,26 +18561,17 @@ def driver_attendance_checkin():
                 flash(f'Night shift ki attendance sirf configured time window mein lag sakti hai ({src}). Control mein time check karein.', 'danger')
                 return redirect(url_for('driver_attendance_checkin'))
 
-        photo_path = None
         photo = request.files.get('photo')
-        if photo and photo.filename:
-            try:
-                photo.stream.seek(0)
-                photo_path = upload_image_file(photo, folder="attendance")
-            except Exception:
-                flash('Image upload failed. Please check your internet and try taking attendance again.', 'danger')
-                return redirect(url_for('driver_attendance_checkin'))
-        else:
-            b64 = request.form.get('photo_base64', '').strip()
-            if b64 and b64.startswith('data:image'):
-                try:
-                    import base64
-                    header, b64 = b64.split(',', 1)
-                    data = base64.b64decode(b64)
-                    photo_path = upload_image_bytes(data, folder="attendance")
-                except Exception:
-                    flash('Image upload failed. Please check your internet and try taking attendance again.', 'danger')
-                    return redirect(url_for('driver_attendance_checkin'))
+        b64 = request.form.get('photo_base64', '').strip()
+        try:
+            photo_path = _upload_attendance_photo_from_form_or_b64(
+                photo if (photo and photo.filename) else None,
+                b64 or None,
+                required=False,
+            )
+        except Exception:
+            flash('Image upload failed. Please check your internet and try taking attendance again.', 'danger')
+            return redirect(url_for('driver_attendance_checkin'))
         gps_cam_remark = 'Ye GPS + Camera se attendance lagi hai.'
         seg = _next_attendance_segment(driver_id, today)
         rec = DriverAttendance(
@@ -18718,26 +18753,17 @@ def driver_attendance_checkout():
                 src = tw.get('source', '')
                 flash(f'Night shift ka check-out abhi allowed nahi hai. Allowed window: {nco_s.strftime("%H:%M") if nco_s else "–"} – {nco_e.strftime("%H:%M") if nco_e else "–"} ({src}).', 'danger')
                 return redirect(url_for('driver_attendance_checkout'))
-        photo_path = None
         photo = request.files.get('photo')
-        if photo and photo.filename:
-            try:
-                photo.stream.seek(0)
-                photo_path = upload_image_file(photo, folder="attendance")
-            except Exception:
-                flash('Image upload failed. Please check your internet and try taking attendance again.', 'danger')
-                return redirect(url_for('driver_attendance_checkout'))
-        else:
-            b64 = request.form.get('photo_base64', '').strip()
-            if b64 and b64.startswith('data:image'):
-                try:
-                    import base64
-                    header, b64 = b64.split(',', 1)
-                    data = base64.b64decode(b64)
-                    photo_path = upload_image_bytes(data, folder="attendance")
-                except Exception:
-                    flash('Image upload failed. Please check your internet and try taking attendance again.', 'danger')
-                    return redirect(url_for('driver_attendance_checkout'))
+        b64 = request.form.get('photo_base64', '').strip()
+        try:
+            photo_path = _upload_attendance_photo_from_form_or_b64(
+                photo if (photo and photo.filename) else None,
+                b64 or None,
+                required=False,
+            )
+        except Exception:
+            flash('Image upload failed. Please check your internet and try taking attendance again.', 'danger')
+            return redirect(url_for('driver_attendance_checkout'))
         if existing:
             check_out_time = now.time()
             is_overnight = (existing.attendance_date != today)
