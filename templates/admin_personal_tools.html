@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Personal Tools{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
+    <h2 class="mb-0"><i class="bi bi-tools me-2 text-primary"></i>Personal Tools</h2>
+    <a href="{{ url_for('admin_app_releases') }}" class="btn btn-outline-primary btn-sm">
+      <i class="bi bi-arrow-left me-1"></i>Back to App Updates
+    </a>
+  </div>
+
+  <div class="card shadow-sm border-0 rounded-3">
+    <div class="card-header bg-primary text-white py-3">
+      <h5 class="mb-0"><i class="bi bi-printer me-2"></i>Multi PDF / Image Fast Print</h5>
+    </div>
+    <div class="card-body">
+      <p class="text-muted mb-3">
+        Multiple PDF/Image files select karein. Tool in sab ko single combined PDF bana kar
+        print dialog khol dega taake print single file jaisa fast ho.
+      </p>
+
+      <form method="post" enctype="multipart/form-data" id="multiPrintForm">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Select Files</label>
+          <input
+            type="file"
+            class="form-control"
+            name="print_files"
+            id="printFilesInput"
+            accept=".pdf,.png,.jpg,.jpeg,.webp,.bmp,.gif,.tif,.tiff"
+            multiple
+            required
+          >
+          <div class="form-text">Supported: PDF, PNG, JPG, JPEG, WEBP, BMP, GIF, TIF, TIFF</div>
+        </div>
+
+        <div class="alert alert-light border d-none" id="selectedFilesBox"></div>
+
+        <button type="submit" class="btn btn-primary" id="printNowBtn" disabled>
+          <i class="bi bi-lightning-charge-fill me-1"></i>Combine & Print
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  var input = document.getElementById('printFilesInput');
+  var box = document.getElementById('selectedFilesBox');
+  var btn = document.getElementById('printNowBtn');
+  var form = document.getElementById('multiPrintForm');
+
+  input.addEventListener('change', function () {
+    var files = Array.from(input.files || []);
+    if (!files.length) {
+      box.classList.add('d-none');
+      box.innerHTML = '';
+      btn.disabled = true;
+      return;
+    }
+    var rows = files.slice(0, 12).map(function (f) {
+      var mb = (f.size / (1024 * 1024)).toFixed(2);
+      return '<li>' + f.name + ' <span class="text-muted">(' + mb + ' MB)</span></li>';
+    }).join('');
+    if (files.length > 12) rows += '<li class="text-muted">... and ' + (files.length - 12) + ' more</li>';
+    box.innerHTML = '<strong>' + files.length + ' file(s) selected:</strong><ul class="mb-0 mt-1">' + rows + '</ul>';
+    box.classList.remove('d-none');
+    btn.disabled = false;
+  });
+
+  form.addEventListener('submit', function () {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Preparing print batch...';
+  });
+});
+</script>
+{% endblock %}
+

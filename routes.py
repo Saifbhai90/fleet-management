@@ -2422,6 +2422,104 @@ def admin_app_releases():
     return render_template('admin_app_releases.html', releases=releases, latest=latest)
 
 
+def _load_pdf_writer_reader():
+    """Import PDF merger classes with fallback names."""
+    try:
+        from pypdf import PdfReader, PdfWriter
+        return PdfReader, PdfWriter
+    except Exception:
+        from PyPDF2 import PdfReader, PdfWriter
+        return PdfReader, PdfWriter
+
+
+def _image_to_pdf_page_bytes(fs):
+    """Convert an uploaded image file to a one-page PDF bytes."""
+    from PIL import Image
+
+    img = Image.open(fs.stream)
+    if img.mode in ('RGBA', 'LA', 'P'):
+        bg = Image.new('RGB', img.size, (255, 255, 255))
+        bg.paste(img.convert('RGBA'), mask=img.convert('RGBA').split()[-1])
+        img = bg
+    elif img.mode != 'RGB':
+        img = img.convert('RGB')
+
+    out = BytesIO()
+    img.save(out, format='PDF', resolution=200.0)
+    out.seek(0)
+    return out
+
+
+@app.route('/admin/personal-tools', methods=['GET', 'POST'])
+def admin_personal_tools():
+    """Master admin personal tools: multi PDF/Image fast single-print."""
+    if not session.get('is_master'):
+        flash('Only master admin can access Personal Tools.', 'danger')
+        return redirect(url_for('dashboard'))
+
+    if request.method == 'POST':
+        files = request.files.getlist('print_files')
+        files = [f for f in files if f and (f.filename or '').strip()]
+        if not files:
+            flash('Kam az kam 1 PDF/Image file select karein.', 'warning')
+            return redirect(url_for('admin_personal_tools'))
+
+        try:
+            PdfReader, PdfWriter = _load_pdf_writer_reader()
+        except Exception:
+            flash('PDF merge library missing hai. `pypdf` install karein.', 'danger')
+            return redirect(url_for('admin_personal_tools'))
+
+        allowed_img = {'.png', '.jpg', '.jpeg', '.webp', '.bmp', '.gif', '.tif', '.tiff'}
+        writer = PdfWriter()
+        added_pages = 0
+
+        try:
+            for fs in files:
+                name = secure_filename(fs.filename or '')
+                ext = os.path.splitext(name)[1].lower()
+                if ext == '.pdf':
+                    reader = PdfReader(fs.stream)
+                    for p in reader.pages:
+                        writer.add_page(p)
+                        added_pages += 1
+                elif ext in allowed_img:
+                    page_pdf = _image_to_pdf_page_bytes(fs)
+                    reader = PdfReader(page_pdf)
+                    for p in reader.pages:
+                        writer.add_page(p)
+                        added_pages += 1
+                else:
+                    raise ValueError(f'Unsupported file: {name}')
+        except Exception as e:
+            flash(f'File process error: {e}', 'danger')
+            return redirect(url_for('admin_personal_tools'))
+
+        if added_pages <= 0:
+            flash('Selected files se printable pages generate nahi huin.', 'danger')
+            return redirect(url_for('admin_personal_tools'))
+
+        out = BytesIO()
+        writer.write(out)
+        out.seek(0)
+
+        tmp_dir = os.path.join(app.static_folder, 'tmp_print')
+        os.makedirs(tmp_dir, exist_ok=True)
+        fname = f'print-batch-{uuid.uuid4().hex}.pdf'
+        fpath = os.path.join(tmp_dir, fname)
+        with open(fpath, 'wb') as f:
+            f.write(out.read())
+
+        return render_template(
+            'admin_personal_tools_print_ready.html',
+            pdf_url=url_for('static', filename=f'tmp_print/{fname}'),
+            pages=added_pages,
+            files_count=len(files),
+        )
+
+    return render_template('admin_personal_tools.html')
+
+
 @app.route('/api/register-fcm-token', methods=['POST'])
 def web_register_fcm_token():
     """Register FCM push token for web-session user (Capacitor or browser).
