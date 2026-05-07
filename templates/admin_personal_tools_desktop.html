@@ -102,6 +102,7 @@
   const startGrid=document.getElementById('pt-start-grid');
   const taskTime=document.getElementById('pt-task-time');
   const taskDate=document.getElementById('pt-task-date');
+  const shell=document.getElementById('pt-desktop-shell');
 
   const APPS=['my_pc','notes','calculator','multi_print','recycle_bin'];
   const appMeta={
@@ -351,7 +352,37 @@
       return;
     }
     if(win.appId==='multi_print'){
-      body.innerHTML=`<div class="p-3"><h6>Multi File Print</h6><p class="text-muted small">File list placeholder</p><div class="border rounded p-3 mb-2">No files selected</div><button class="btn btn-primary btn-sm">Print</button></div>`;
+      body.innerHTML=`<div class="p-3">
+        <h6>Multi File Print</h6>
+        <form method="post" enctype="multipart/form-data" action="{{ url_for('admin_personal_tools_quick_print') }}" target="_blank" class="mt-2" id="mfForm_${win.id}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="mb-2">
+            <input type="file" name="print_files" id="mfInput_${win.id}" class="form-control form-control-sm" multiple accept=".pdf,.png,.jpg,.jpeg,.webp,.bmp,.gif,.tif,.tiff" required>
+            <div class="form-text">Ctrl+V se bhi files/images add ho sakti hain.</div>
+          </div>
+          <div class="row g-2 mb-2">
+            <div class="col"><select class="form-select form-select-sm" name="page_size"><option value="original">Original</option><option value="a4">A4</option><option value="letter">Letter</option></select></div>
+            <div class="col"><select class="form-select form-select-sm" name="orientation"><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select></div>
+            <div class="col"><select class="form-select form-select-sm" name="order_by"><option value="as_uploaded">As Uploaded</option><option value="name_asc">A-Z</option><option value="name_desc">Z-A</option></select></div>
+          </div>
+          <div class="border rounded p-2 small text-muted mb-2" id="mfList_${win.id}">No files selected</div>
+          <button class="btn btn-primary btn-sm">Combine & Print</button>
+        </form>
+      </div>`;
+      const input=body.querySelector(`#mfInput_${win.id}`);
+      const list=body.querySelector(`#mfList_${win.id}`);
+      function refreshList(){
+        const files=Array.from(input.files||[]);
+        list.textContent = files.length ? files.map(f=>f.name).join(' | ') : 'No files selected';
+      }
+      input.addEventListener('change',refreshList);
+      body.addEventListener('paste',function(e){
+        const cb=e.clipboardData; if(!cb||!cb.items) return;
+        const add=[]; for(let i=0;i<cb.items.length;i++){const it=cb.items[i]; if(it.kind!=='file') continue; const f=it.getAsFile(); if(f) add.push(f);}
+        if(!add.length) return;
+        const dt=new DataTransfer(); Array.from(input.files||[]).forEach(f=>dt.items.add(f)); add.forEach(f=>dt.items.add(f));
+        input.files=dt.files; refreshList();
+      });
       return;
     }
     if(win.appId==='recycle_bin'){
@@ -371,11 +402,13 @@
   }
 
   function fsGetNode(pathArr){
+    if(!pathArr || !pathArr.length) return null;
     let node=state.fs.drives[pathArr[0]];
     for(let i=1;i<pathArr.length;i++){ if(!node || !node.children) return null; node=node.children[pathArr[i]]; }
     return node;
   }
   function fsEnsureFolder(pathArr){
+    if(!pathArr || !pathArr.length) return null;
     let node=state.fs.drives[pathArr[0]];
     for(let i=1;i<pathArr.length;i++){
       if(!node.children[pathArr[i]]) node.children[pathArr[i]]={type:'folder',children:{}};
@@ -399,13 +432,13 @@
   }
 
   function renderFileExplorer(container,win){
-    if(!win.path) win.path=['D:'];
+    if(!win.path) win.path=[];
     const node=fsGetNode(win.path);
-    const isRoot=win.path.length===1;
+    const isRoot=win.path.length===0;
     const parts=win.path;
     container.innerHTML=`<div class="pt-explorer-toolbar">
       <button class="btn btn-sm btn-outline-secondary" id="exp-up">Up</button>
-      <div class="small fw-semibold">${parts.join(' / ')}</div>
+      <div class="small fw-semibold">${isRoot ? 'My PC' : parts.join(' / ')}</div>
       <button class="btn btn-sm btn-outline-primary ms-auto" id="exp-new-folder">New Folder</button>
     </div>
     <div class="pt-explorer-list" id="exp-list"></div>`;
@@ -421,28 +454,39 @@
       const row=document.createElement('div');
       row.className='pt-exp-row';
       row.innerHTML=`<i class="bi ${r.type==='folder'||r.type==='drive'?'bi-folder-fill text-warning':'bi-file-earmark text-secondary'}"></i><div class="nm">${r.name}</div>`;
-      row.ondblclick=()=>{ if(r.type==='drive'){ win.path=[r.name]; renderFileExplorer(container,win); return; } if(r.type==='folder'){ win.path=win.path.concat([r.name]); renderFileExplorer(container,win);} };
+      row.ondblclick=()=>{
+        if(r.type==='drive'){ win.path=[r.name]; renderFileExplorer(container,win); return; }
+        if(r.type==='folder'){ win.path=win.path.concat([r.name]); renderFileExplorer(container,win); return; }
+      };
       row.oncontextmenu=(e)=>{ e.preventDefault(); explorerContext(e.clientX,e.clientY,win,r.name,r.type,container); };
       list.appendChild(row);
     });
-    container.querySelector('#exp-up').onclick=()=>{ if(win.path.length>1){ win.path=win.path.slice(0,-1);} renderFileExplorer(container,win); };
-    container.querySelector('#exp-new-folder').onclick=()=>{ const n=prompt('Folder name','New Folder'); if(!n) return; const p=fsEnsureFolder(win.path); let name=n,i=1; while(p.children[name]){name=n+'_'+i;i++;} p.children[name]={type:'folder',children:{}}; saveState(); renderFileExplorer(container,win); };
+    container.querySelector('#exp-up').onclick=()=>{ if(win.path.length>0){ win.path=win.path.slice(0,-1);} renderFileExplorer(container,win); };
+    container.querySelector('#exp-new-folder').onclick=()=>{
+      if(isRoot){ alert('Pehle drive open karein.'); return; }
+      const n=prompt('Folder name','New Folder'); if(!n) return;
+      const p=fsEnsureFolder(win.path); if(!p) return;
+      let name=n,i=1; while(p.children[name]){name=n+'_'+i;i++;}
+      p.children[name]={type:'folder',children:{}};
+      saveState(); renderFileExplorer(container,win);
+    };
     list.oncontextmenu=(e)=>{ if(e.target===list){ e.preventDefault(); explorerContext(e.clientX,e.clientY,win,null,'background',container);} };
   }
 
   function explorerContext(x,y,win,name,type,container){
     const curr=win.path;
+    const isRoot=curr.length===0;
     const build=(items)=>openContextMenu(x,y,items);
     build([
       {label:'New ▸',submenu:[
-        {label:'Folder',action:()=>{ const n=prompt('Folder name','New Folder'); if(!n) return; const p=fsEnsureFolder(curr); let nm=n,i=1; while(p.children[nm]){nm=n+'_'+i;i++;} p.children[nm]={type:'folder',children:{}}; saveState(); renderFileExplorer(container,win); }},
-        {label:'Text File',action:()=>{ const n=prompt('File name','New Text Document.txt'); if(!n) return; const p=fsEnsureFolder(curr); let nm=n,i=1; while(p.children[nm]){nm=n.replace('.txt','')+'_'+i+'.txt';i++;} p.children[nm]={type:'file',kind:'text',content:''}; saveState(); renderFileExplorer(container,win); }}
+        {label:'Folder',action:()=>{ if(isRoot){alert('Pehle drive open karein.');return;} const n=prompt('Folder name','New Folder'); if(!n) return; const p=fsEnsureFolder(curr); let nm=n,i=1; while(p.children[nm]){nm=n+'_'+i;i++;} p.children[nm]={type:'folder',children:{}}; saveState(); renderFileExplorer(container,win); }},
+        {label:'Text File',action:()=>{ if(isRoot){alert('Pehle drive open karein.');return;} const n=prompt('File name','New Text Document.txt'); if(!n) return; const p=fsEnsureFolder(curr); let nm=n,i=1; while(p.children[nm]){nm=n.replace('.txt','')+'_'+i+'.txt';i++;} p.children[nm]={type:'file',kind:'text',content:''}; saveState(); renderFileExplorer(container,win); }}
       ]},
-      {label:'Copy',action:()=>{ if(!name) return; state.desktopState.clip={mode:'copy',from:curr.slice(),name}; saveState(); }},
-      {label:'Cut',action:()=>{ if(!name) return; state.desktopState.clip={mode:'cut',from:curr.slice(),name}; saveState(); }},
-      {label:'Paste',action:()=>{ const c=state.desktopState.clip; if(!c) return; const srcPar=fsGetNode(c.from); const dstPar=fsEnsureFolder(curr); if(!srcPar || !srcPar.children[c.name]) return; let nm=c.name,i=1; while(dstPar.children[nm]){nm=c.name+'_'+i;i++;} if(c.mode==='copy'){ dstPar.children[nm]=JSON.parse(JSON.stringify(srcPar.children[c.name])); } else { dstPar.children[nm]=srcPar.children[c.name]; delete srcPar.children[c.name]; state.desktopState.clip=null; } saveState(); renderFileExplorer(container,win); }},
-      {label:'Rename',action:()=>{ if(!name) return; const p=fsEnsureFolder(curr); const nn=prompt('Rename',name); if(!nn||nn===name) return; if(p.children[nn]) return; p.children[nn]=p.children[name]; delete p.children[name]; saveState(); renderFileExplorer(container,win); }},
-      {label:'Delete',action:()=>{ if(!name) return; fsDelete(curr.concat([name])); saveState(); renderFileExplorer(container,win); }}
+      {label:'Copy',action:()=>{ if(!name) return; state.desktopState.clip={mode:'copy',from:curr.slice(),name,type}; saveState(); }},
+      {label:'Cut',action:()=>{ if(!name) return; state.desktopState.clip={mode:'cut',from:curr.slice(),name,type}; saveState(); }},
+      {label:'Paste',action:()=>{ if(isRoot){alert('Pehle drive open karein.');return;} const c=state.desktopState.clip; if(!c) return; const srcPar=fsGetNode(c.from); const dstPar=fsEnsureFolder(curr); if(!srcPar || !srcPar.children[c.name]) return; let nm=c.name,i=1; while(dstPar.children[nm]){nm=c.name+'_'+i;i++;} if(c.mode==='copy'){ dstPar.children[nm]=JSON.parse(JSON.stringify(srcPar.children[c.name])); } else { dstPar.children[nm]=srcPar.children[c.name]; delete srcPar.children[c.name]; state.desktopState.clip=null; } saveState(); renderFileExplorer(container,win); }},
+      {label:'Rename',action:()=>{ if(!name) return; if(type==='drive'){ const nn=prompt('Rename drive',name); if(!nn||nn===name) return; if(state.fs.drives[nn]){alert('Drive exists'); return;} state.fs.drives[nn]=state.fs.drives[name]; delete state.fs.drives[name]; if(curr[0]===name) curr[0]=nn; saveState(); renderFileExplorer(container,win); return; } const p=fsEnsureFolder(curr); const nn=prompt('Rename',name); if(!nn||nn===name) return; if(p.children[nn]) return; p.children[nn]=p.children[name]; delete p.children[name]; saveState(); renderFileExplorer(container,win); }},
+      {label:'Delete',action:()=>{ if(!name || type==='drive') return; fsDelete(curr.concat([name])); saveState(); renderFileExplorer(container,win); }}
     ]);
   }
 
@@ -453,12 +497,22 @@
       row.onclick=(e)=>{ e.stopPropagation(); if(it.submenu){ openSubMenu(row,it.submenu); return; } closeMenus(); if(it.action) it.action(); };
       ctx.appendChild(row);
     });
-    ctx.style.left=x+'px'; ctx.style.top=y+'px'; ctx.classList.remove('d-none');
+    const sr=shell.getBoundingClientRect();
+    const mx=x-sr.left, my=y-sr.top;
+    ctx.style.left=Math.max(6,Math.min(mx,shell.clientWidth-210))+'px';
+    ctx.style.top=Math.max(6,Math.min(my,shell.clientHeight-230))+'px';
+    ctx.classList.remove('d-none');
   }
   function openSubMenu(parent,items){
     ctxSub.innerHTML='';
     items.forEach(it=>{ const r=document.createElement('div'); r.className='pt-context-item'; r.textContent=it.label; r.onclick=(e)=>{e.stopPropagation(); closeMenus(); if(it.action) it.action();}; ctxSub.appendChild(r); });
-    const rect=parent.getBoundingClientRect(); ctxSub.style.left=(rect.right+2)+'px'; ctxSub.style.top=rect.top+'px'; ctxSub.classList.remove('d-none');
+    const pr=parent.getBoundingClientRect(), sr=shell.getBoundingClientRect();
+    let lx=(pr.right-sr.left+2), ty=(pr.top-sr.top);
+    if(lx+190>shell.clientWidth) lx=pr.left-sr.left-190;
+    if(ty+120>shell.clientHeight) ty=shell.clientHeight-126;
+    ctxSub.style.left=Math.max(4,lx)+'px';
+    ctxSub.style.top=Math.max(4,ty)+'px';
+    ctxSub.classList.remove('d-none');
   }
   function closeMenus(){ ctx.classList.add('d-none'); ctxSub.classList.add('d-none'); startMenu.classList.add('d-none'); }
 
