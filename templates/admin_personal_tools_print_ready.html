@@ -252,20 +252,26 @@ function dataUrlToCanvas(url){
 async function openCrop(){
   const p = getViewerPage();
   const srcPage = pageOrder[p-1] || p;
-  // Use higher source scale in crop editor for precise selection.
-  let src = await renderEditedPageDataUrl(srcPage, 3.2);
+  // Always open crop editor on full source page (high-res), not previously baked crop.
+  // This prevents tiny preview loops after an earlier crop.
+  let src = await renderPageToDataUrl(srcPage, 3.4);
   cropImage.src = src;
   cropModal.show();
   setTimeout(()=>{
     if(cropper) cropper.destroy();
     cropper = new Cropper(cropImage,{
-      viewMode:1, dragMode:'move', autoCropArea:0.95, responsive:true,
-      background:false, rotatable:true, scalable:true, zoomOnWheel:true
+      viewMode:1, dragMode:'move', autoCropArea:0.92, responsive:true,
+      background:false, rotatable:true, scalable:true, zoomOnWheel:true,
+      minContainerWidth: 820,
+      minContainerHeight: 420
     });
     setTimeout(()=>{
       try{
         cropper.reset();
-        cropper.zoomTo(1.8);
+        const cd = cropper.getContainerData();
+        const id = cropper.getImageData();
+        const fit = Math.min(cd.width / id.naturalWidth, cd.height / id.naturalHeight);
+        cropper.zoomTo(Math.max(fit * 0.98, 0.08));
       }catch(_){}
     }, 50);
   },120);
