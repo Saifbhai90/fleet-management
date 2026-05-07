@@ -34,6 +34,23 @@
     <span class="small text-muted">Viewer page auto-detect enabled</span>
     <button class="btn btn-sm btn-outline-primary ms-2" id="btnCropCurrent">Crop Current Page</button>
     <button class="btn btn-sm btn-outline-danger" id="btnResetCrop">Reset Crop</button>
+    <span class="vr"></span>
+    <button class="btn btn-sm btn-outline-secondary" id="btnRotateCCW">⟲</button>
+    <button class="btn btn-sm btn-outline-secondary" id="btnRotateCW">⟳</button>
+    <label class="small">Bri</label><input type="range" id="rngBrightness" min="40" max="180" value="100" style="width:80px">
+    <label class="small">Con</label><input type="range" id="rngContrast" min="40" max="180" value="100" style="width:80px">
+    <button class="btn btn-sm btn-outline-secondary" id="btnUndo">Undo</button>
+    <button class="btn btn-sm btn-outline-secondary" id="btnRedo">Redo</button>
+    <span class="vr"></span>
+    <label class="small">Preset</label>
+    <select id="cropPresetSel" class="form-select form-select-sm" style="width:110px"></select>
+    <button class="btn btn-sm btn-outline-secondary" id="btnSavePreset">Save Preset</button>
+    <label class="small">Range</label>
+    <input type="number" id="rangeFrom" class="form-control form-control-sm" style="width:70px" min="1" value="1">
+    <input type="number" id="rangeTo" class="form-control form-control-sm" style="width:70px" min="1" value="{{ pages }}">
+    <button class="btn btn-sm btn-outline-primary" id="btnApplyRangeCrop">Apply Range Crop</button>
+    <span class="vr"></span>
+    <button class="btn btn-sm btn-outline-dark" id="btnReorder">Page Reorder</button>
     <span class="text-muted small ms-2">Right-click viewer for crop</span>
   </div>
   <div class="stage">
@@ -88,8 +105,33 @@ let pdfDocRef = null;
 let activePdfUrl = pdfUrl;
 let regenBusy = false;
 const cropKey = 'pt_print_crops_' + btoa(pdfUrl).replace(/[^a-zA-Z0-9]/g,'');
+const presetKey = cropKey + '_presets';
+const orderKey = cropKey + '_order';
 let cropMap = {};
+let cropPresets = {};
+let pageOrder = [];
 try{ cropMap = JSON.parse(localStorage.getItem(cropKey) || '{}'); }catch(_){ cropMap = {}; }
+try{ cropPresets = JSON.parse(localStorage.getItem(presetKey) || '{}'); }catch(_){ cropPresets = {}; }
+try{ pageOrder = JSON.parse(localStorage.getItem(orderKey) || '[]'); }catch(_){ pageOrder = []; }
+if(!Array.isArray(pageOrder) || !pageOrder.length){ pageOrder = Array.from({length:maxPages},(_,i)=>i+1); }
+const historyMap = {};
+function ensureHistory(p){ if(!historyMap[p]) historyMap[p]={undo:[],redo:[]}; return historyMap[p]; }
+function pushHistory(p){
+  const h=ensureHistory(p);
+  h.undo.push(JSON.stringify(cropMap[String(p)] || {}));
+  if(h.undo.length>30) h.undo.shift();
+  h.redo=[];
+}
+function getEdit(p){
+  const e = cropMap[String(p)] || {};
+  if(typeof e.rotate!=='number') e.rotate=0;
+  if(typeof e.brightness!=='number') e.brightness=100;
+  if(typeof e.contrast!=='number') e.contrast=100;
+  return e;
+}
+function saveEdits(){
+  localStorage.setItem(cropKey, JSON.stringify(cropMap));
+}
 
 function nPage(){
   let n = parseInt(pageNo.value || '1', 10);
@@ -136,6 +178,58 @@ async function renderPageToDataUrl(pageNumber){
   await page.render({ canvasContext: ctx2, viewport }).promise;
   return canvas.toDataURL('image/png');
 }
+async function renderEditedPageDataUrl(pageNumber){
+  let src = await renderPageToDataUrl(pageNumber);
+  const edit = getEdit(pageNumber);
+  const base = await dataUrlToCanvas(src);
+  let work = base;
+  // apply crop first
+  if(edit.cropData){
+    const cd = edit.cropData;
+    const cx = Math.max(0, Math.floor(cd.x || 0));
+    const cy = Math.max(0, Math.floor(cd.y || 0));
+    const cw = Math.max(1, Math.floor(cd.width || base.width));
+    const ch = Math.max(1, Math.floor(cd.height || base.height));
+    const c = document.createElement('canvas'); c.width=cw; c.height=ch;
+    c.getContext('2d').drawImage(base, cx, cy, cw, ch, 0, 0, cw, ch);
+    work = c;
+  }
+  // rotate
+  if(edit.rotate){
+    const deg = ((edit.rotate % 360) + 360) % 360;
+    if(deg){
+      const rad = deg * Math.PI / 180;
+      const swap = deg===90 || deg===270;
+      const r = document.createElement('canvas');
+      r.width = swap ? work.height : work.width;
+      r.height = swap ? work.width : work.height;
+      const x = r.getContext('2d');
+      x.translate(r.width/2, r.height/2);
+      x.rotate(rad);
+      x.drawImage(work, -work.width/2, -work.height/2);
+      work = r;
+    }
+  }
+  // brightness/contrast
+  const b = edit.brightness || 100;
+  const cVal = edit.contrast || 100;
+  if(b!==100 || cVal!==100){
+    const f = document.createElement('canvas'); f.width=work.width; f.height=work.height;
+    const x=f.getContext('2d');
+    x.filter = `brightness(${b}%) contrast(${cVal}%)`;
+    x.drawImage(work,0,0);
+    work=f;
+  }
+  return work.toDataURL('image/png');
+}
+function dataUrlToCanvas(url){
+  return new Promise((resolve,reject)=>{
+    const img = new Image();
+    img.onload = ()=>{ const c=document.createElement('canvas'); c.width=img.width; c.height=img.height; c.getContext('2d').drawImage(img,0,0); resolve(c); };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
 async function openCrop(){
   const p = getViewerPage();
   let src = await renderPageToDataUrl(p);
@@ -158,9 +252,13 @@ document.getElementById('ctxCrop').onclick = ()=>{ ctx.style.display='none'; ope
 document.getElementById('btnApplyCrop').onclick = ()=>{
   if(!cropper) return;
   const p = getViewerPage();
+  pushHistory(p);
   const cv = cropper.getCroppedCanvas({ imageSmoothingQuality:'high' });
-  cropMap[String(p)] = { dataUrl: cv.toDataURL('image/webp',0.95), cropData: cropper.getData(true) };
-  localStorage.setItem(cropKey, JSON.stringify(cropMap));
+  const e = getEdit(p);
+  e.dataUrl = cv.toDataURL('image/webp',0.95);
+  e.cropData = cropper.getData(true);
+  cropMap[String(p)] = e;
+  saveEdits();
   rebuildCroppedPdf().then(function(){
     pageNo.value = p;
     refreshViewer();
@@ -169,8 +267,12 @@ document.getElementById('btnApplyCrop').onclick = ()=>{
 };
 cropModalEl.addEventListener('hidden.bs.modal', ()=>{ if(cropper){ cropper.destroy(); cropper=null; }});
 document.getElementById('btnResetCrop').onclick = ()=>{
-  const p = getViewerPage(); delete cropMap[String(p)];
-  localStorage.setItem(cropKey, JSON.stringify(cropMap));
+  const p = getViewerPage();
+  pushHistory(p);
+  const e = getEdit(p);
+  delete e.cropData; delete e.dataUrl;
+  cropMap[String(p)] = e;
+  saveEdits();
   rebuildCroppedPdf().then(function(){ pageNo.value = p; refreshViewer(); });
 };
 viewerWrap.addEventListener('contextmenu', (e)=>{
@@ -184,8 +286,9 @@ async function rebuildCroppedPdf(){
   if(regenBusy) return;
   regenBusy = true;
   try{
-    const hasCrop = Object.keys(cropMap).length > 0;
-    if(!hasCrop){
+    const hasEdits = Object.values(cropMap).some(v=>v && (v.cropData || (v.rotate||0)!==0 || (v.brightness||100)!==100 || (v.contrast||100)!==100));
+    const hasReorder = pageOrder.some((n,idx)=>n!==(idx+1));
+    if(!hasEdits && !hasReorder){
       activePdfUrl = pdfUrl;
       return;
     }
@@ -195,11 +298,10 @@ async function rebuildCroppedPdf(){
     }
     const outDoc = await PDFDocument.create();
     const total = pdfDocRef.numPages || maxPages;
-    for(let i=1;i<=total;i++){
-      let dataUrl;
-      const c = cropMap[String(i)];
-      if(c && c.dataUrl) dataUrl = c.dataUrl;
-      else dataUrl = await renderPageToDataUrl(i);
+    const order = (pageOrder && pageOrder.length===total) ? pageOrder.slice() : Array.from({length:total},(_,i)=>i+1);
+    for(let oi=0;oi<order.length;oi++){
+      const i = order[oi];
+      const dataUrl = await renderEditedPageDataUrl(i);
       const img = await outDoc.embedPng(dataUrl);
       const page = outDoc.addPage([img.width, img.height]);
       page.drawImage(img,{x:0,y:0,width:img.width,height:img.height});
@@ -258,6 +360,59 @@ async function saveToMyPc(){
 }
 document.getElementById('btnSaveToMyPc').onclick = function(){ saveToMyPc(); };
 
+function updateEditControls(){
+  const p = getViewerPage();
+  const e = getEdit(p);
+  document.getElementById('rngBrightness').value = e.brightness || 100;
+  document.getElementById('rngContrast').value = e.contrast || 100;
+}
+document.getElementById('btnRotateCW').onclick = ()=>{ const p=getViewerPage(); pushHistory(p); const e=getEdit(p); e.rotate=((e.rotate||0)+90)%360; cropMap[String(p)]=e; saveEdits(); rebuildCroppedPdf().then(refreshViewer); };
+document.getElementById('btnRotateCCW').onclick = ()=>{ const p=getViewerPage(); pushHistory(p); const e=getEdit(p); e.rotate=((e.rotate||0)-90+360)%360; cropMap[String(p)]=e; saveEdits(); rebuildCroppedPdf().then(refreshViewer); };
+document.getElementById('rngBrightness').oninput = ()=>{ const p=getViewerPage(); const e=getEdit(p); e.brightness=parseInt(document.getElementById('rngBrightness').value,10); cropMap[String(p)]=e; saveEdits(); rebuildCroppedPdf().then(refreshViewer); };
+document.getElementById('rngContrast').oninput = ()=>{ const p=getViewerPage(); const e=getEdit(p); e.contrast=parseInt(document.getElementById('rngContrast').value,10); cropMap[String(p)]=e; saveEdits(); rebuildCroppedPdf().then(refreshViewer); };
+document.getElementById('btnUndo').onclick = ()=>{ const p=getViewerPage(); const h=ensureHistory(p); if(!h.undo.length) return; h.redo.push(JSON.stringify(cropMap[String(p)]||{})); cropMap[String(p)] = JSON.parse(h.undo.pop()||'{}'); saveEdits(); rebuildCroppedPdf().then(refreshViewer); };
+document.getElementById('btnRedo').onclick = ()=>{ const p=getViewerPage(); const h=ensureHistory(p); if(!h.redo.length) return; h.undo.push(JSON.stringify(cropMap[String(p)]||{})); cropMap[String(p)] = JSON.parse(h.redo.pop()||'{}'); saveEdits(); rebuildCroppedPdf().then(refreshViewer); };
+
+function refreshPresetUI(){
+  const sel=document.getElementById('cropPresetSel'); sel.innerHTML='';
+  const keys=Object.keys(cropPresets);
+  const opt=document.createElement('option'); opt.value=''; opt.textContent='--'; sel.appendChild(opt);
+  keys.forEach(k=>{ const o=document.createElement('option'); o.value=k; o.textContent=k; sel.appendChild(o); });
+}
+document.getElementById('btnSavePreset').onclick = ()=>{
+  const p=getViewerPage(); const e=getEdit(p);
+  if(!e.cropData){ alert('Current page par crop apply karein phir preset save karein.'); return; }
+  const nm=prompt('Preset name','Preset '+p); if(!nm) return;
+  cropPresets[nm]={cropData:e.cropData};
+  localStorage.setItem(presetKey, JSON.stringify(cropPresets)); refreshPresetUI();
+};
+document.getElementById('btnApplyRangeCrop').onclick = ()=>{
+  const preset = document.getElementById('cropPresetSel').value;
+  if(!preset || !cropPresets[preset]){ alert('Preset select karein.'); return; }
+  let f=parseInt(document.getElementById('rangeFrom').value||'1',10);
+  let t=parseInt(document.getElementById('rangeTo').value||String(maxPages),10);
+  if(isNaN(f)||f<1) f=1; if(isNaN(t)||t>maxPages) t=maxPages; if(f>t){ const x=f; f=t; t=x; }
+  for(let p=f;p<=t;p++){
+    const e=getEdit(p);
+    e.cropData = JSON.parse(JSON.stringify(cropPresets[preset].cropData));
+    cropMap[String(p)] = e;
+  }
+  saveEdits();
+  rebuildCroppedPdf().then(refreshViewer);
+};
+document.getElementById('btnReorder').onclick = ()=>{
+  const current = pageOrder.join(',');
+  const raw = prompt('Enter page order (comma separated)', current);
+  if(!raw) return;
+  const nums = raw.split(',').map(s=>parseInt(s.trim(),10)).filter(n=>!isNaN(n));
+  if(nums.length!==maxPages){ alert('Page count mismatch.'); return; }
+  const set=new Set(nums); if(set.size!==maxPages){ alert('Duplicate page numbers not allowed.'); return; }
+  for(const n of nums){ if(n<1||n>maxPages){ alert('Invalid page no: '+n); return; } }
+  pageOrder = nums;
+  localStorage.setItem(orderKey, JSON.stringify(pageOrder));
+  rebuildCroppedPdf().then(refreshViewer);
+};
+
 setInterval(function(){
   try{
     if(!frame.contentWindow) return;
@@ -267,12 +422,13 @@ setInterval(function(){
       const n = parseInt(m[1],10);
       if(!isNaN(n) && n>=1 && n<=maxPages && String(n)!==String(pageNo.value||'')){
         pageNo.value = n;
+        updateEditControls();
       }
     }
   }catch(_){}
 }, 500);
 
-window.addEventListener('load', async ()=>{ await rebuildCroppedPdf(); refreshViewer(); });
+window.addEventListener('load', async ()=>{ refreshPresetUI(); updateEditControls(); await rebuildCroppedPdf(); refreshViewer(); });
 </script>
 </body>
 </html>
