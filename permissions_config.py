@@ -1188,6 +1188,7 @@ PAGE_VISIBLE = {
     'journal_vouchers_list': ['accounts', 'accounts_jv'],
     'fund_transfers_list': ['accounts', 'fund_transfer'],
     'red_task_list': ['task_report', 'red_task'],
+    'red_task_summary': ['task_report', 'red_task'],
     'without_task_list': ['task_report', 'without_task'],
     'task_report_new': ['task_report', 'task_report_list', 'task_report_add'],
     'task_report_logbook_cover': ['task_report', 'task_report_logbook'],

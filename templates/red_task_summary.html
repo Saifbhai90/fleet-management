@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% block title %}Red Task Summary{% endblock %}
+{% block content %}
+<div class="container-fluid">
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
+    <h2 class="mb-0"><i class="bi bi-pie-chart-fill me-2 text-danger"></i>Red Task Summary</h2>
+    <div class="d-flex gap-2">
+      <a href="{{ url_for('red_task_list') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-list-ul me-1"></i>Red Task Report</a>
+      {% if show and summary_rows %}
+      <button type="button" class="btn btn-outline-primary btn-sm" onclick="window.print()"><i class="bi bi-printer me-1"></i>Print</button>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card shadow-sm border-0 rounded-3 mb-4">
+    <div class="card-body">
+      <p class="text-muted small mb-3">Date range choose karein. District / Project optional hain — khali chhorne par sirf dates ke mutabiq <strong>tamam districts</strong> ka summary dikhega.</p>
+      <form method="get" action="{{ url_for('red_task_summary') }}" class="row g-3 align-items-end">
+        <input type="hidden" name="show" value="1">
+        <div class="col-md-2">
+          <label class="form-label">From Date</label>
+          <input type="text" name="from_date" class="form-control datepicker" placeholder="dd-mm-yyyy" value="{{ from_date.strftime('%d-%m-%Y') if from_date else '' }}" autocomplete="off">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">To Date</label>
+          <input type="text" name="to_date" class="form-control datepicker" placeholder="dd-mm-yyyy" value="{{ to_date.strftime('%d-%m-%Y') if to_date else '' }}" autocomplete="off">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">District</label>
+          <select name="district_id" id="summaryDistrictSelect" class="form-select search-select">
+            {% for val, label in form.district_id.choices %}
+              <option value="{{ val }}" {% if district_id == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Project</label>
+          <select name="project_id" id="summaryProjectSelect" class="form-select search-select">
+            {% for val, label in form.project_id.choices %}
+              <option value="{{ val }}" {% if project_id == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <button type="submit" class="btn btn-danger w-100">
+            <i class="bi bi-bar-chart-fill me-1"></i>Show Summary
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  {% if show %}
+  <div class="card shadow border-0 rounded-3 overflow-hidden">
+    <div class="card-header bg-danger text-white py-3">
+      <span class="fw-semibold"><i class="bi bi-calendar-range me-2"></i>{{ from_date|ddmmyyyy }} — {{ to_date|ddmmyyyy }}</span>
+      {% if district_id %}
+      <span class="ms-2 badge bg-light text-danger">District filtered</span>
+      {% endif %}
+      {% if project_id %}
+      <span class="ms-1 badge bg-light text-danger">Project filtered</span>
+      {% endif %}
+    </div>
+    <div class="card-body">
+      {% if not summary_rows %}
+      <p class="text-muted mb-0"><i class="bi bi-info-circle me-1"></i>Is range mein koi Red Task record nahi mila.</p>
+      {% else %}
+      <p class="small text-muted mb-3"><strong>{{ summary_title }}</strong></p>
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              {% if summary_kind == 'single' %}
+              <th class="ps-3">Scope</th>
+              {% elif summary_kind == 'by_project' %}
+              <th class="ps-3">Project</th>
+              {% else %}
+              <th class="ps-3">District</th>
+              {% endif %}
+              <th class="text-end">Red Tasks</th>
+              <th class="text-end pe-3">Total Fine (PKR)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in summary_rows %}
+            <tr>
+              <td class="ps-3">{{ row.label }}</td>
+              <td class="text-end fw-semibold">{{ row.count }}</td>
+              <td class="text-end pe-3">{{ '%.2f' % row.fine }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+          {% if summary_kind != 'single' %}
+          <tfoot class="table-secondary fw-bold">
+            <tr>
+              <td class="ps-3">Grand total</td>
+              <td class="text-end">{{ grand_count }}</td>
+              <td class="text-end pe-3">{{ '%.2f' % grand_fine }}</td>
+            </tr>
+          </tfoot>
+          {% endif %}
+        </table>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  {% else %}
+  <div class="alert alert-light border"><i class="bi bi-hand-index-thumb me-2"></i>Filters set karke <strong>Show Summary</strong> dabayein.</div>
+  {% endif %}
+</div>
+
+<script>
+(function() {
+  var ds = document.getElementById('summaryDistrictSelect');
+  var ps = document.getElementById('summaryProjectSelect');
+  if (!ds || !ps) return;
+  function syncDropdown(el) {
+    if (el && el.classList.contains('search-select') && el.parentNode) {
+      if (el.tomselect) el.tomselect.destroy();
+      initSearchableDropdowns(el.parentNode);
+    }
+  }
+  ds.addEventListener('change', function() {
+    var pid = this.value || '0';
+    ps.innerHTML = '<option value="0">-- All Projects --</option>';
+    if (pid && pid !== '0') {
+      fetch('/api/filter/projects-by-district?district_id=' + encodeURIComponent(pid))
+        .then(function(r) { return r.json(); })
+        .then(function(arr) {
+          (arr || []).forEach(function(p) {
+            var opt = document.createElement('option');
+            opt.value = p.id;
+            opt.textContent = p.name;
+            ps.appendChild(opt);
+          });
+          ps.value = '0';
+          syncDropdown(ps);
+        })
+        .catch(function() { syncDropdown(ps); });
+    } else {
+      syncDropdown(ps);
+    }
+  });
+  setTimeout(function() {
+    syncDropdown(ds);
+    syncDropdown(ps);
+  }, 80);
+})();
+</script>
+<style media="print">
+  .sidebar, .navbar, .btn, .collapse-item, footer { display: none !important; }
+  .card { border: none !important; box-shadow: none !important; }
+</style>
+{% endblock %}

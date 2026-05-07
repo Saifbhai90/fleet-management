@@ -20369,6 +20369,141 @@ def red_task_list():
     return render_template('red_task_list.html', form=form, rows=rows, from_date=from_date, to_date=to_date, pagination=pagination, per_page=per_page, search=search)
 
 
+@app.route('/red-task/summary', methods=['GET'])
+def red_task_summary():
+    """Aggregated Red Task counts / fines by district or project for a date range."""
+    form = RedTaskFilterForm()
+    form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
+    today = pk_date()
+    from_date = today
+    to_date = today
+    district_id = request.args.get('district_id', type=int) or 0
+    project_id = request.args.get('project_id', type=int) or 0
+    show = request.args.get('show', type=int) or 0
+
+    from_str = request.args.get('from_date', '').strip()
+    to_str = request.args.get('to_date', '').strip()
+    if from_str:
+        from_date = parse_date(from_str) or from_date
+    if to_str:
+        to_date = parse_date(to_str) or to_date
+    if from_date and to_date and from_date > to_date:
+        from_date, to_date = to_date, from_date
+
+    form.from_date.data = from_date
+    form.to_date.data = to_date
+    form.district_id.data = district_id
+    if district_id:
+        projects = Project.query.join(project_district).filter(project_district.c.district_id == district_id).order_by(Project.name).all()
+        form.project_id.choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in projects]
+    else:
+        form.project_id.choices = [(0, '-- All Projects --')]
+    form.project_id.data = project_id
+
+    summary_rows = []
+    summary_kind = ''
+    summary_title = ''
+    grand_count = 0
+    grand_fine = Decimal('0')
+
+    if show:
+        base_dates = and_(RedTask.task_date >= from_date, RedTask.task_date <= to_date)
+
+        if district_id and project_id:
+            summary_kind = 'single'
+            summary_title = 'Selected district & project'
+            dist = District.query.get(district_id)
+            proj = Project.query.get(project_id)
+            label = f'{dist.name if dist else "?"} — {proj.name if proj else "?"}'
+            q = RedTask.query.filter(base_dates, RedTask.district_id == district_id, RedTask.project_id == project_id)
+            grand_count = q.count()
+            grand_fine = db.session.query(func.coalesce(func.sum(RedTask.fine_amount), 0)).filter(
+                base_dates, RedTask.district_id == district_id, RedTask.project_id == project_id,
+            ).scalar() or Decimal('0')
+            summary_rows = [{'label': label, 'count': grand_count, 'fine': grand_fine}]
+        elif district_id and not project_id:
+            summary_kind = 'by_project'
+            summary_title = 'By project (within selected district)'
+            agg = (
+                db.session.query(
+                    Project.id,
+                    func.coalesce(Project.name, '— No project —').label('lbl'),
+                    func.count(RedTask.id).label('cnt'),
+                    func.coalesce(func.sum(RedTask.fine_amount), 0).label('fine'),
+                )
+                .select_from(RedTask)
+                .outerjoin(Project, RedTask.project_id == Project.id)
+                .filter(base_dates, RedTask.district_id == district_id)
+                .group_by(Project.id, Project.name)
+                .order_by(func.coalesce(Project.name, ''))
+            )
+            for _pid, lbl, cnt, fine in agg.all():
+                cnt = int(cnt or 0)
+                fine_d = fine if isinstance(fine, Decimal) else Decimal(str(fine or 0))
+                summary_rows.append({'label': lbl, 'count': cnt, 'fine': fine_d})
+                grand_count += cnt
+                grand_fine += fine_d
+        elif project_id and not district_id:
+            summary_kind = 'by_district'
+            summary_title = 'By district (for selected project)'
+            agg = (
+                db.session.query(
+                    District.id,
+                    func.coalesce(District.name, '— No district —').label('lbl'),
+                    func.count(RedTask.id).label('cnt'),
+                    func.coalesce(func.sum(RedTask.fine_amount), 0).label('fine'),
+                )
+                .select_from(RedTask)
+                .outerjoin(District, RedTask.district_id == District.id)
+                .filter(base_dates, RedTask.project_id == project_id)
+                .group_by(District.id, District.name)
+                .order_by(func.coalesce(District.name, ''))
+            )
+            for _did, lbl, cnt, fine in agg.all():
+                cnt = int(cnt or 0)
+                fine_d = fine if isinstance(fine, Decimal) else Decimal(str(fine or 0))
+                summary_rows.append({'label': lbl, 'count': cnt, 'fine': fine_d})
+                grand_count += cnt
+                grand_fine += fine_d
+        else:
+            summary_kind = 'by_district'
+            summary_title = 'By district (all districts)'
+            agg = (
+                db.session.query(
+                    District.id,
+                    func.coalesce(District.name, '— No district —').label('lbl'),
+                    func.count(RedTask.id).label('cnt'),
+                    func.coalesce(func.sum(RedTask.fine_amount), 0).label('fine'),
+                )
+                .select_from(RedTask)
+                .outerjoin(District, RedTask.district_id == District.id)
+                .filter(base_dates)
+                .group_by(District.id, District.name)
+                .order_by(func.coalesce(District.name, ''))
+            )
+            for _did, lbl, cnt, fine in agg.all():
+                cnt = int(cnt or 0)
+                fine_d = fine if isinstance(fine, Decimal) else Decimal(str(fine or 0))
+                summary_rows.append({'label': lbl, 'count': cnt, 'fine': fine_d})
+                grand_count += cnt
+                grand_fine += fine_d
+
+    return render_template(
+        'red_task_summary.html',
+        form=form,
+        from_date=from_date,
+        to_date=to_date,
+        district_id=district_id,
+        project_id=project_id,
+        summary_rows=summary_rows,
+        summary_kind=summary_kind,
+        summary_title=summary_title,
+        grand_count=grand_count,
+        grand_fine=grand_fine,
+        show=bool(show),
+    )
+
+
 @app.route('/red-task/new', methods=['GET', 'POST'])
 def red_task_new():
     districts = District.query.order_by(District.name).all()
@@ -28892,7 +29027,7 @@ def _report_centre_visibility(linked_driver_id=None):
     show_fleet = bool(fleet_vehicle or fleet_project or fleet_expense)
 
     task_daily = (
-        c('task_report_list') or c('task_report_new') or c('red_task_list') or c('without_task_list')
+        c('task_report_list') or c('task_report_new') or c('red_task_list') or c('red_task_summary') or c('without_task_list')
         or c('speed_monitoring_report') or c('mileage_report') or c('tracker_difference_report')
         or c('unauthorized_movement_report') or c('task_start_delay_report') or c('task_turnaround_report')
         or c('unexecuted_task_report')

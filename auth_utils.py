@@ -177,6 +177,7 @@ ENDPOINT_PERMISSION_MAP = [
     ('task_report_new', 'task_report_add'),
     # Red Task
     ('red_task_list', 'red_task'),
+    ('red_task_summary', 'red_task'),
     ('red_task_new', 'red_task_add'),
     ('red_task_edit', 'red_task_edit'),
     # Movement without Task
