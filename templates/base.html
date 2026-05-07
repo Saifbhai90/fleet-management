@@ -1724,7 +1724,7 @@
         {% set payroll_open = request.endpoint in payroll_endpoints %}
         {% set books_endpoints = ['book_inventory_list', 'book_stock_entry', 'book_stock_edit', 'book_issue', 'book_assignment_list', 'book_return', 'book_pending_returns'] %}
         {% set books_open = request.endpoint in books_endpoints %}
-        {% set users_manage_endpoints = ['user_list', 'user_form', 'user_edit', 'role_list', 'role_form', 'role_edit', 'form_control', 'admin_app_releases', 'admin_personal_tools'] %}
+        {% set users_manage_endpoints = ['user_list', 'user_form', 'user_edit', 'role_list', 'role_form', 'role_edit', 'form_control', 'admin_app_releases', 'admin_personal_tools', 'admin_personal_tools_library', 'admin_personal_tools_library_detail'] %}
         {% set users_open = request.endpoint in users_manage_endpoints %}
 
         <!-- Dashboard -->
@@ -2278,7 +2278,7 @@
                 <a href="{{ url_for('admin_app_releases') }}" class="collapse-item {% if request.endpoint == 'admin_app_releases' %}active-link{% endif %}">
                     <i class="bi bi-phone-vibrate text-info"></i><span>App Updates</span>
                 </a>
-                <a href="{{ url_for('admin_personal_tools') }}" class="collapse-item {% if request.endpoint in ['admin_personal_tools'] %}active-link{% endif %}">
+                <a href="{{ url_for('admin_personal_tools') }}" class="collapse-item {% if request.endpoint in ['admin_personal_tools', 'admin_personal_tools_library', 'admin_personal_tools_library_detail'] %}active-link{% endif %}">
                     <i class="bi bi-tools text-warning"></i><span>Personal Tool</span>
                 </a>
                 {% endif %}

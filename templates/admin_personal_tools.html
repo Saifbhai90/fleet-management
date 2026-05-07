@@ -5,9 +5,14 @@
 <div class="container-fluid">
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
     <h2 class="mb-0"><i class="bi bi-tools me-2 text-primary"></i>Personal Tools</h2>
-    <a href="{{ url_for('admin_app_releases') }}" class="btn btn-outline-primary btn-sm">
-      <i class="bi bi-arrow-left me-1"></i>Back to App Updates
-    </a>
+    <div class="d-flex gap-2">
+      <a href="{{ url_for('admin_personal_tools_library') }}" class="btn btn-outline-dark btn-sm">
+        <i class="bi bi-folder2-open me-1"></i>Saved Folders
+      </a>
+      <a href="{{ url_for('admin_app_releases') }}" class="btn btn-outline-primary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>Back to App Updates
+      </a>
+    </div>
   </div>
 
   <div class="card shadow-sm border-0 rounded-3">
@@ -34,6 +39,7 @@
             required
           >
           <div class="form-text">Supported: PDF, PNG, JPG, JPEG, WEBP, BMP, GIF, TIF, TIFF</div>
+          <div class="form-text text-primary"><i class="bi bi-clipboard2-plus me-1"></i>Tip: Ctrl+V paste se bhi images/files add ho sakti hain.</div>
         </div>
 
         <div class="alert alert-light border d-none" id="selectedFilesBox"></div>
@@ -100,6 +106,31 @@ document.addEventListener('DOMContentLoaded', function () {
   form.addEventListener('submit', function () {
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Preparing print batch...';
+  });
+
+  // Ctrl+V clipboard paste support for files/images
+  document.addEventListener('paste', function (e) {
+    var cb = e.clipboardData;
+    if (!cb || !cb.items || !cb.items.length) return;
+    var incoming = [];
+    for (var i = 0; i < cb.items.length; i++) {
+      var it = cb.items[i];
+      if (it.kind !== 'file') continue;
+      var f = it.getAsFile();
+      if (!f) continue;
+      if (!f.name) {
+        var ext = (f.type && f.type.indexOf('png') !== -1) ? '.png' : '';
+        Object.defineProperty(f, 'name', { value: 'pasted_' + Date.now() + '_' + i + ext });
+      }
+      incoming.push(f);
+    }
+    if (!incoming.length) return;
+
+    var dt = new DataTransfer();
+    Array.from(input.files || []).forEach(function (f) { dt.items.add(f); });
+    incoming.forEach(function (f) { dt.items.add(f); });
+    input.files = dt.files;
+    input.dispatchEvent(new Event('change'));
   });
 });
 </script>

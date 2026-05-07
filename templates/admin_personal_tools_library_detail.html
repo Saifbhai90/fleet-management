@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Library Folder {{ meta.job_id }}{% endblock %}
+{% block content %}
+<div class="container-fluid">
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
+    <h2 class="mb-0"><i class="bi bi-folder-fill me-2 text-warning"></i>Saved Folder</h2>
+    <div class="d-flex gap-2">
+      <a href="{{ url_for('admin_personal_tools_library') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>Library
+      </a>
+      <a href="{{ url_for('static', filename='personal_tools_jobs/' + meta.job_id + '/merged_output.pdf') }}" class="btn btn-outline-primary btn-sm" target="_blank">
+        <i class="bi bi-eye me-1"></i>Preview / Print All
+      </a>
+      <a href="{{ url_for('static', filename='personal_tools_jobs/' + meta.job_id + '/merged_output.pdf') }}" class="btn btn-primary btn-sm" download>
+        <i class="bi bi-download me-1"></i>Download Combined
+      </a>
+    </div>
+  </div>
+
+  <div class="alert alert-light border">
+    <strong>Folder ID:</strong> {{ meta.job_id }} |
+    <strong>Created:</strong> {{ meta.created_at or '-' }} |
+    <strong>Files:</strong> {{ meta.files_count or 0 }} |
+    <strong>Pages:</strong> {{ meta.pages or 0 }}
+  </div>
+
+  <div class="card shadow-sm border-0 rounded-3">
+    <div class="card-header bg-light">
+      <strong>Input Files</strong>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover mb-0 align-middle">
+          <thead class="table-light">
+            <tr>
+              <th class="ps-3">Name</th>
+              <th>Size</th>
+              <th class="text-end pe-3">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for f in meta.files or [] %}
+            <tr>
+              <td class="ps-3">{{ f.original_name or f.stored_name }}</td>
+              <td class="small text-muted">{{ ((f.size_bytes or 0) / (1024 * 1024))|round(2) }} MB</td>
+              <td class="text-end pe-3">
+                <a class="btn btn-sm btn-outline-dark" target="_blank"
+                   href="{{ url_for('static', filename='personal_tools_jobs/' + meta.job_id + '/input_files/' + f.stored_name) }}">
+                  <i class="bi bi-eye"></i>
+                </a>
+                <a class="btn btn-sm btn-outline-primary"
+                   href="{{ url_for('static', filename='personal_tools_jobs/' + meta.job_id + '/input_files/' + f.stored_name) }}" download>
+                  <i class="bi bi-download"></i>
+                </a>
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="3" class="text-center text-muted py-4">No files in this folder.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+

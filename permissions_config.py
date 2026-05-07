@@ -1203,6 +1203,8 @@ PAGE_VISIBLE = {
     'form_control': ['users_manage', 'form_control'],
     'admin_app_releases': ['users_manage'],
     'admin_personal_tools': ['users_manage'],
+    'admin_personal_tools_library': ['users_manage'],
+    'admin_personal_tools_library_detail': ['users_manage'],
     'notification_list': ['notification_list', 'notification_add'],
     'notification_add': ['notification_list', 'notification_add'],
     'whats_new': ['whats_new'],

@@ -2494,11 +2494,28 @@ def _normalize_writer_pages(writer, target_w, target_h):
     return out_writer
 
 
+def _personal_tools_jobs_dir():
+    root = os.path.join(app.static_folder, 'personal_tools_jobs')
+    os.makedirs(root, exist_ok=True)
+    return root
+
+
+def _personal_tool_job_path(job_id):
+    safe = re.sub(r'[^a-zA-Z0-9_\-]', '', (job_id or ''))
+    return os.path.join(_personal_tools_jobs_dir(), safe)
+
+
+def _require_master_admin():
+    if not session.get('is_master'):
+        flash('Only master admin can access Personal Tools.', 'danger')
+        return False
+    return True
+
+
 @app.route('/admin/personal-tools', methods=['GET', 'POST'])
 def admin_personal_tools():
     """Master admin personal tools: multi PDF/Image fast single-print."""
-    if not session.get('is_master'):
-        flash('Only master admin can access Personal Tools.', 'danger')
+    if not _require_master_admin():
         return redirect(url_for('dashboard'))
 
     if request.method == 'POST':
@@ -2565,28 +2582,97 @@ def admin_personal_tools():
                 flash(f'Page size/orientation apply nahi ho saka: {e}', 'danger')
                 return redirect(url_for('admin_personal_tools'))
 
-        out = BytesIO()
-        writer.write(out)
-        out.seek(0)
+        # Persist as a "folder-like job" so user can open later like local folders.
+        job_id = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
+        job_dir = _personal_tool_job_path(job_id)
+        input_dir = os.path.join(job_dir, 'input_files')
+        os.makedirs(input_dir, exist_ok=True)
 
-        tmp_dir = os.path.join(app.static_folder, 'tmp_print')
-        os.makedirs(tmp_dir, exist_ok=True)
-        fname = f'print-batch-{uuid.uuid4().hex}.pdf'
-        fpath = os.path.join(tmp_dir, fname)
-        with open(fpath, 'wb') as f:
+        saved_files = []
+        for idx, fs in enumerate(files, start=1):
+            src_name = secure_filename(fs.filename or f'file_{idx}')
+            ext = os.path.splitext(src_name)[1].lower()
+            store_name = f"{idx:03d}_{src_name}" if src_name else f"{idx:03d}{ext}"
+            fs.stream.seek(0)
+            full = os.path.join(input_dir, store_name)
+            fs.save(full)
+            saved_files.append({
+                'original_name': src_name,
+                'stored_name': store_name,
+                'size_bytes': os.path.getsize(full),
+            })
+
+        merged_path = os.path.join(job_dir, 'merged_output.pdf')
+        with open(merged_path, 'wb') as f:
+            out = BytesIO()
+            writer.write(out)
+            out.seek(0)
             f.write(out.read())
+
+        meta = {
+            'job_id': job_id,
+            'created_at': pk_now().isoformat() if hasattr(pk_now(), 'isoformat') else str(pk_now()),
+            'created_by_user_id': session.get('user_id'),
+            'files_count': len(saved_files),
+            'pages': added_pages,
+            'settings': {
+                'page_size': page_size,
+                'orientation': orientation,
+                'order_by': order_by,
+            },
+            'files': saved_files,
+        }
+        with open(os.path.join(job_dir, 'metadata.json'), 'w', encoding='utf-8') as mf:
+            json.dump(meta, mf, ensure_ascii=True, indent=2)
 
         return render_template(
             'admin_personal_tools_print_ready.html',
-            pdf_url=url_for('static', filename=f'tmp_print/{fname}'),
+            pdf_url=url_for('static', filename=f'personal_tools_jobs/{job_id}/merged_output.pdf'),
             pages=added_pages,
             files_count=len(files),
             page_size=page_size,
             orientation=orientation,
             order_by=order_by,
+            job_id=job_id,
         )
 
     return render_template('admin_personal_tools.html')
+
+
+@app.route('/admin/personal-tools/library', methods=['GET'])
+def admin_personal_tools_library():
+    if not _require_master_admin():
+        return redirect(url_for('dashboard'))
+
+    jobs = []
+    base = _personal_tools_jobs_dir()
+    for job_id in os.listdir(base):
+        jdir = _personal_tool_job_path(job_id)
+        mpath = os.path.join(jdir, 'metadata.json')
+        if not os.path.isdir(jdir) or not os.path.exists(mpath):
+            continue
+        try:
+            with open(mpath, 'r', encoding='utf-8') as f:
+                meta = json.load(f)
+            jobs.append(meta)
+        except Exception:
+            continue
+    jobs.sort(key=lambda j: j.get('created_at') or '', reverse=True)
+    return render_template('admin_personal_tools_library.html', jobs=jobs)
+
+
+@app.route('/admin/personal-tools/library/<job_id>', methods=['GET'])
+def admin_personal_tools_library_detail(job_id):
+    if not _require_master_admin():
+        return redirect(url_for('dashboard'))
+
+    jdir = _personal_tool_job_path(job_id)
+    mpath = os.path.join(jdir, 'metadata.json')
+    if not os.path.exists(mpath):
+        abort(404)
+    with open(mpath, 'r', encoding='utf-8') as f:
+        meta = json.load(f)
+    return render_template('admin_personal_tools_library_detail.html', meta=meta)
 
 
 @app.route('/api/register-fcm-token', methods=['POST'])
