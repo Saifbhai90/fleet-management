@@ -89,16 +89,16 @@
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title">Save to My PC</h5>
+        <h5 class="modal-title">Save to Web My PC</h5>
         <button class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
         <div class="mb-2">
-          <label class="form-label small mb-1">Drive</label>
+          <label class="form-label small mb-1">Web My PC Drive</label>
           <select id="saveMyPcDrive" class="form-select form-select-sm"></select>
         </div>
         <div class="mb-2">
-          <label class="form-label small mb-1">Folder</label>
+          <label class="form-label small mb-1">Web My PC Folder</label>
           <select id="saveMyPcFolder" class="form-select form-select-sm"></select>
         </div>
         <div>
@@ -107,6 +107,7 @@
         </div>
       </div>
       <div class="modal-footer">
+        <div class="me-auto text-muted small">This saves inside app My PC (web storage), not local Windows drives.</div>
         <button class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
         <button class="btn btn-success btn-sm" id="btnSaveMyPcConfirm">Save</button>
       </div>
@@ -551,7 +552,7 @@ document.getElementById('btnSaveMyPcConfirm').onclick = async function(){
     parent.children[nm] = {type:'file',kind:'pdf_saved',source:src,savedAt:Date.now()};
     localStorage.setItem('pt_desktop_state_v3', JSON.stringify(pendingMyPcState));
     saveMyPcModal.hide();
-    alert('Saved to My PC: ' + drive + '/' + (folderPath?folderPath+'/':'') + nm);
+    alert('Saved to Web My PC: ' + drive + '/' + (folderPath?folderPath+'/':'') + nm);
   }catch(_){
     alert('Save to My PC failed. Dobara try karein.');
   } finally {
