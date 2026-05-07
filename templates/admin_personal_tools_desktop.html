@@ -91,6 +91,13 @@
 .pt-r-n,.pt-r-s{left:0;right:0;height:7px}.pt-r-n{top:0;cursor:n-resize}.pt-r-s{bottom:0;cursor:s-resize}
 .pt-r-ne,.pt-r-nw,.pt-r-se,.pt-r-sw{width:11px;height:11px;z-index:3}
 .pt-r-ne{right:0;top:0;cursor:ne-resize}.pt-r-nw{left:0;top:0;cursor:nw-resize}.pt-r-se{right:0;bottom:0;cursor:se-resize}.pt-r-sw{left:0;bottom:0;cursor:sw-resize}
+.pt-office-bar{font-size:11px;color:#5b6b82;border-bottom:1px solid #e7eefc;background:#fbfdff;padding:6px 10px}
+.pt-office-doc{font-size:13px;line-height:1.5;color:#1a2540}
+.pt-office-doc table{border-collapse:collapse;margin:8px 0;max-width:100%}
+.pt-office-doc td,.pt-office-doc th{border:1px solid #cfd9ea;padding:4px 8px}
+.pt-xlsx-wrap .pt-xlsx-pane{overflow:auto;min-height:240px}
+.pt-xlsx-wrap table{border-collapse:collapse;font-size:12px;width:max-content;max-width:100%}
+.pt-xlsx-wrap td,.pt-xlsx-wrap th{border:1px solid #dee2e6;padding:4px 8px;white-space:pre-wrap;vertical-align:top}
 </style>
 
 <script>
@@ -134,8 +141,64 @@
   }
   function guessMimeFromFileName(n){
     var ext=(String(n).split('.').pop()||'').toLowerCase();
-    var map={pdf:'application/pdf',png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',gif:'image/gif',webp:'image/webp',bmp:'image/bmp',svg:'image/svg+xml',txt:'text/plain',csv:'text/csv'};
+    var map={pdf:'application/pdf',png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',gif:'image/gif',webp:'image/webp',bmp:'image/bmp',svg:'image/svg+xml',txt:'text/plain',csv:'text/csv',
+      docx:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      xlsx:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      xls:'application/vnd.ms-excel'
+    };
     return map[ext]||'';
+  }
+  function escapeHtml(str){
+    var d=document.createElement('div'); d.textContent=String(str); return d.innerHTML;
+  }
+  var __ptScriptPromises={};
+  function loadScriptOnce(src){
+    if(__ptScriptPromises[src]) return __ptScriptPromises[src];
+    __ptScriptPromises[src]=new Promise(function(resolve,reject){
+      var s=document.createElement('script');
+      s.src=src;
+      s.onload=function(){ resolve(); };
+      s.onerror=function(){ reject(new Error('script')); };
+      document.head.appendChild(s);
+    });
+    return __ptScriptPromises[src];
+  }
+  function attachExcelSheetTabs(body){
+    var tabs=body.querySelectorAll('.pt-xlsx-tab');
+    var panes=body.querySelectorAll('.pt-xlsx-pane');
+    tabs.forEach(function(btn){
+      btn.onclick=function(){
+        var idx=btn.getAttribute('data-idx');
+        panes.forEach(function(p,i){ p.classList.toggle('d-none', String(i)!==String(idx)); });
+        tabs.forEach(function(b,j){
+          b.className='btn btn-sm pt-xlsx-tab '+(String(j)===String(idx)?'btn-secondary':'btn-outline-secondary');
+        });
+      };
+    });
+  }
+  async function renderExcelIntoBody(body, arrayBuffer){
+    await loadScriptOnce('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js');
+    var wb=typeof XLSX!=='undefined'?XLSX.read(arrayBuffer,{type:'array',cellDates:true}):null;
+    if(!wb||!wb.SheetNames||!wb.SheetNames.length){
+      body.innerHTML='<div class="p-3 text-muted">Workbook read nahi ho saki.</div>';
+      return;
+    }
+    var tabHtml=wb.SheetNames.map(function(n,i){
+      return '<button type="button" class="btn btn-sm pt-xlsx-tab '+(i?'btn-outline-secondary':'btn-secondary')+'" data-idx="'+i+'">'+escapeHtml(n)+'</button>';
+    }).join(' ');
+    var panesHtml=wb.SheetNames.map(function(sheetName,i){
+      var ws=wb.Sheets[sheetName];
+      var inner=typeof XLSX.utils.sheet_to_html==='function'?XLSX.utils.sheet_to_html(ws):'<pre>'+escapeHtml(JSON.stringify(XLSX.utils.sheet_to_json(ws,{header:1}),null,2))+'</pre>';
+      return '<div class="pt-xlsx-pane p-2'+(i?' d-none':'')+'">'+inner+'</div>';
+    }).join('');
+    body.innerHTML='<div class="pt-xlsx-wrap h-100 d-flex flex-column" style="min-height:320px"><div class="pt-office-bar">Excel preview (simple grid — MS Excel jaisi editing yahan nahi)</div><div class="d-flex flex-wrap gap-1 px-2 py-2 border-bottom bg-light">'+tabHtml+'</div><div class="flex-grow-1 overflow-auto">'+panesHtml+'</div></div>';
+    attachExcelSheetTabs(body);
+  }
+  async function renderWordIntoBody(body, arrayBuffer){
+    await loadScriptOnce('https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js');
+    if(typeof mammoth==='undefined'){ body.innerHTML='<div class="p-3 text-muted">Word viewer load nahi hua.</div>'; return; }
+    var result=await mammoth.convertToHtml({arrayBuffer:arrayBuffer});
+    body.innerHTML='<div class="h-100 d-flex flex-column"><div class="pt-office-bar">Word preview (.docx) — formatting approximate; desktop Word jaisa nahi</div><div class="flex-grow-1 overflow-auto p-3 pt-office-doc">'+(result.value||'<p class="text-muted">Empty</p>')+'</div></div>';
   }
   const desktop=document.getElementById('pt-desktop');
   const selBox=document.getElementById('pt-selection-box');
@@ -755,29 +818,92 @@
   async function openUploadedBinary(name,file){
     if(!file.blobId){ alert('File data missing.'); return; }
     var blobRevokeUrl=null;
+    var winObj=null;
     try{
       var blob=await ptPdfIdbGet(file.blobId);
       if(!blob){ alert('File data missing — storage clear ho chuki ho sakti hai.'); return; }
       var mime=(file.mime||blob.type||guessMimeFromFileName(name)||'application/octet-stream').toLowerCase();
-      blobRevokeUrl=URL.createObjectURL(blob);
-      var winObj=createWindow(name,'upload_'+Date.now());
-      winObj.blobRevokeUrl=blobRevokeUrl;
-      windows.push(winObj); focusWindow(winObj.id); renderTaskbar();
-      var body=winObj.el.querySelector('.pt-win-body');
+      var lower=String(name).toLowerCase();
       var isPdf=mime.indexOf('pdf')>=0 || /\.pdf$/i.test(name);
       var isImg=mime.indexOf('image/')===0 || /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(name);
+      var isDocx=/\.docx$/i.test(lower) || mime.indexOf('wordprocessingml')>=0 || mime==='application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      var isOldDoc=/\.doc$/i.test(lower)&&!isDocx;
+      var isExcel=/\.(xlsx|xls|csv)$/i.test(lower) || mime.indexOf('spreadsheetml')>=0 || mime.indexOf('ms-excel')>=0 || mime==='application/vnd.ms-excel' || mime==='text/csv';
+
+      winObj=createWindow(name,'upload_'+Date.now());
+      windows.push(winObj); focusWindow(winObj.id); renderTaskbar();
+      var body=winObj.el.querySelector('.pt-win-body');
+
       if(isPdf){
+        blobRevokeUrl=URL.createObjectURL(blob);
+        winObj.blobRevokeUrl=blobRevokeUrl;
         body.innerHTML='<div class="p-2 h-100"><iframe src="'+blobRevokeUrl+'#toolbar=1&navpanes=0&scrollbar=1" style="width:100%;height:100%;border:0"></iframe></div>';
-      }else if(isImg){
-        body.innerHTML='<div class="p-2 h-100 overflow-auto d-flex align-items-center justify-content-center" style="background:#1a1d21;"><img alt="" src="'+blobRevokeUrl+'" style="max-width:100%;max-height:100%;object-fit:contain"></div>';
-      }else{
-        body.innerHTML='';
-        var wrap=document.createElement('div'); wrap.className='p-3';
-        var p=document.createElement('p'); p.className='text-muted small'; p.textContent='Is type ki preview yahan nahi — Download kar ke dekhein.';
-        var a=document.createElement('a'); a.className='btn btn-primary btn-sm'; a.textContent='Download'; a.download=name; a.href=blobRevokeUrl;
-        wrap.appendChild(p); wrap.appendChild(a); body.appendChild(wrap);
+        return;
       }
-    }catch(_){ alert('File open nahi ho saki.'); if(blobRevokeUrl){ try{ URL.revokeObjectURL(blobRevokeUrl); }catch(_){ } } }
+      if(isImg){
+        blobRevokeUrl=URL.createObjectURL(blob);
+        winObj.blobRevokeUrl=blobRevokeUrl;
+        body.innerHTML='<div class="p-2 h-100 overflow-auto d-flex align-items-center justify-content-center" style="background:#1a1d21;"><img alt="" src="'+blobRevokeUrl+'" style="max-width:100%;max-height:100%;object-fit:contain"></div>';
+        return;
+      }
+
+      if(isDocx){
+        body.innerHTML='<div class="p-3 text-muted small">Word preview load ho raha hai…</div>';
+        try{
+          var abDoc=await blob.arrayBuffer();
+          await renderWordIntoBody(body, abDoc);
+        }catch(_){
+          blobRevokeUrl=URL.createObjectURL(blob);
+          winObj.blobRevokeUrl=blobRevokeUrl;
+          body.innerHTML='';
+          var w1=document.createElement('div'); w1.className='p-3';
+          w1.innerHTML='<p class="text-muted small">Preview fail — purana .doc format ya corrupt file. Download try karain.</p>';
+          var a1=document.createElement('a'); a1.className='btn btn-primary btn-sm'; a1.textContent='Download'; a1.download=name; a1.href=blobRevokeUrl;
+          w1.appendChild(a1); body.appendChild(w1);
+        }
+        return;
+      }
+
+      if(isExcel){
+        body.innerHTML='<div class="p-3 text-muted small">Excel preview load ho raha hai…</div>';
+        try{
+          var abX=await blob.arrayBuffer();
+          await renderExcelIntoBody(body, abX);
+        }catch(_){
+          blobRevokeUrl=URL.createObjectURL(blob);
+          winObj.blobRevokeUrl=blobRevokeUrl;
+          body.innerHTML='';
+          var w2=document.createElement('div'); w2.className='p-3';
+          w2.innerHTML='<p class="text-muted small">Excel preview fail — Download kar ke MS Excel mein kholein.</p>';
+          var a2=document.createElement('a'); a2.className='btn btn-primary btn-sm'; a2.textContent='Download'; a2.download=name; a2.href=blobRevokeUrl;
+          w2.appendChild(a2); body.appendChild(w2);
+        }
+        return;
+      }
+
+      if(isOldDoc){
+        blobRevokeUrl=URL.createObjectURL(blob);
+        winObj.blobRevokeUrl=blobRevokeUrl;
+        body.innerHTML='';
+        var w3=document.createElement('div'); w3.className='p-3';
+        w3.innerHTML='<p class="text-muted small">Purana <strong>.doc</strong> browser mein preview support nahi — Download kar ke Word mein kholein.</p>';
+        var a3=document.createElement('a'); a3.className='btn btn-primary btn-sm'; a3.textContent='Download'; a3.download=name; a3.href=blobRevokeUrl;
+        w3.appendChild(a3); body.appendChild(w3);
+        return;
+      }
+
+      blobRevokeUrl=URL.createObjectURL(blob);
+      winObj.blobRevokeUrl=blobRevokeUrl;
+      body.innerHTML='';
+      var wrap=document.createElement('div'); wrap.className='p-3';
+      var p=document.createElement('p'); p.className='text-muted small'; p.textContent='Is type ki preview yahan nahi — Download kar ke dekhein.';
+      var a=document.createElement('a'); a.className='btn btn-primary btn-sm'; a.textContent='Download'; a.download=name; a.href=blobRevokeUrl;
+      wrap.appendChild(p); wrap.appendChild(a); body.appendChild(wrap);
+    }catch(_){
+      alert('File open nahi ho saki.');
+      if(blobRevokeUrl){ try{ URL.revokeObjectURL(blobRevokeUrl); }catch(_){ } }
+      if(winObj) winObj.blobRevokeUrl=null;
+    }
   }
 
   async function openSavedPdf(name,file){
