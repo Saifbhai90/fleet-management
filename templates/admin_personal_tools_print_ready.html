@@ -85,6 +85,34 @@
     <span id="viewerBusyText">Preparing...</span>
   </div>
 </div>
+<div class="modal fade" id="saveMyPcModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Save to My PC</h5>
+        <button class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-2">
+          <label class="form-label small mb-1">Drive</label>
+          <select id="saveMyPcDrive" class="form-select form-select-sm"></select>
+        </div>
+        <div class="mb-2">
+          <label class="form-label small mb-1">Folder</label>
+          <select id="saveMyPcFolder" class="form-select form-select-sm"></select>
+        </div>
+        <div>
+          <label class="form-label small mb-1">File name</label>
+          <input id="saveMyPcName" class="form-control form-control-sm" type="text">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-success btn-sm" id="btnSaveMyPcConfirm">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <div class="ctx" id="viewerCtx">
   <button id="ctxCrop">Crop Current Page</button>
@@ -130,6 +158,8 @@ const viewerWrap = document.getElementById('viewerWrap');
 const ctx = document.getElementById('viewerCtx');
 const cropModalEl = document.getElementById('cropModal');
 const cropModal = new bootstrap.Modal(cropModalEl);
+const saveMyPcModalEl = document.getElementById('saveMyPcModal');
+const saveMyPcModal = new bootstrap.Modal(saveMyPcModalEl);
 const cropImage = document.getElementById('cropImage');
 let cropper = null;
 let pdfDocRef = null;
@@ -153,6 +183,7 @@ try{ cropPresets = JSON.parse(localStorage.getItem(presetKey) || '{}'); }catch(_
 try{ pageOrder = JSON.parse(localStorage.getItem(orderKey) || '[]'); }catch(_){ pageOrder = []; }
 if(!Array.isArray(pageOrder) || !pageOrder.length){ pageOrder = Array.from({length:maxPages},(_,i)=>i+1); }
 const historyMap = {};
+let pendingMyPcState = null;
 function ensureHistory(p){ if(!historyMap[p]) historyMap[p]={undo:[],redo:[]}; return historyMap[p]; }
 function pushHistory(p){
   const h=ensureHistory(p);
@@ -420,50 +451,116 @@ function hideBusy(){
   document.getElementById('viewerBusy').style.display = 'none';
 }
 
-async function saveBlobToLocalPc(blob, suggestedName){
-  if(window.showSaveFilePicker){
-    try{
-      const handle = await window.showSaveFilePicker({
-        suggestedName: suggestedName,
-        types: [{ description: 'PDF Document', accept: { 'application/pdf': ['.pdf'] } }]
-      });
-      const writable = await handle.createWritable();
-      await writable.write(blob);
-      await writable.close();
-      return true;
-    }catch(err){
-      if(err && err.name === 'AbortError') return false;
-      throw err;
-    }
+function blobToDataUrl(blob){
+  return new Promise((resolve,reject)=>{
+    const fr = new FileReader();
+    fr.onload = ()=>resolve(fr.result);
+    fr.onerror = reject;
+    fr.readAsDataURL(blob);
+  });
+}
+function listFolderPathsForDrive(st, drive){
+  const out = [''];
+  const root = st && st.fs && st.fs.drives && st.fs.drives[drive];
+  if(!root || !root.children) return out;
+  const walk = function(node, base){
+    const keys = Object.keys(node || {}).sort((a,b)=>a.localeCompare(b));
+    keys.forEach((k)=>{
+      const it = node[k];
+      if(it && it.type === 'folder'){
+        const p = base ? (base + '/' + k) : k;
+        out.push(p);
+        walk(it.children || {}, p);
+      }
+    });
+  };
+  walk(root.children, '');
+  return out;
+}
+function getFolderNode(st, drive, folderPath){
+  let node = st.fs.drives[drive];
+  if(!folderPath) return node;
+  const parts = folderPath.split('/').filter(Boolean);
+  for(const p of parts){
+    if(!node.children[p]) node.children[p] = {type:'folder',children:{}};
+    node = node.children[p];
   }
-  return null;
+  return node;
+}
+function updateSaveMyPcFolders(){
+  if(!pendingMyPcState) return;
+  const driveSel = document.getElementById('saveMyPcDrive');
+  const folderSel = document.getElementById('saveMyPcFolder');
+  const drive = driveSel.value;
+  const opts = listFolderPathsForDrive(pendingMyPcState, drive);
+  folderSel.innerHTML = '';
+  opts.forEach((p)=>{
+    const o = document.createElement('option');
+    o.value = p;
+    o.textContent = p || '(Root)';
+    folderSel.appendChild(o);
+  });
 }
 
-async function saveToMyPc(){
-  showBusy('Preparing PDF for save...');
+async function openSaveMyPcDialog(){
   try{
     await ensureBuiltPdf();
-    const fileName = 'print_ready_' + Date.now() + '.pdf';
-    const res = await fetch(activePdfUrl);
-    const blob = await res.blob();
-    const pickerSaved = await saveBlobToLocalPc(blob, fileName);
-    if(pickerSaved === false) return;
-    if(pickerSaved === true){
-      alert('Saved to local PC successfully.');
-      return;
-    }
-    // Fallback for browsers without File System Access API support.
-    const obj = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = obj;
-    a.download = fileName;
-    a.click();
-    setTimeout(()=>URL.revokeObjectURL(obj), 1000);
-  } finally {
-    hideBusy();
+    const raw = localStorage.getItem('pt_desktop_state_v3');
+    let st = {};
+    try{ st = raw ? JSON.parse(raw) : {}; }catch(_){ st = {}; }
+    st.fs = st.fs || {drives:{'D:':{name:'Local Disk (D:)',children:{}},'E:':{name:'Local Disk (E:)',children:{}}},recycle:{}};
+    st.fs.drives = st.fs.drives || {'D:':{name:'Local Disk (D:)',children:{}},'E:':{name:'Local Disk (E:)',children:{}}};
+    pendingMyPcState = st;
+    const driveSel = document.getElementById('saveMyPcDrive');
+    driveSel.innerHTML = '';
+    Object.keys(st.fs.drives).sort().forEach((d)=>{
+      const o = document.createElement('option');
+      o.value = d;
+      o.textContent = st.fs.drives[d].name || d;
+      driveSel.appendChild(o);
+    });
+    if(!driveSel.value && driveSel.options.length) driveSel.value = driveSel.options[0].value;
+    updateSaveMyPcFolders();
+    document.getElementById('saveMyPcName').value = 'print_ready_' + Date.now() + '.pdf';
+    saveMyPcModal.show();
+  }catch(_){
+    alert('Save dialog open karte waqt error aaya.');
   }
 }
-document.getElementById('btnSaveToMyPc').onclick = function(){ saveToMyPc(); };
+document.getElementById('saveMyPcDrive').onchange = updateSaveMyPcFolders;
+document.getElementById('btnSaveMyPcConfirm').onclick = async function(){
+  if(!pendingMyPcState) return;
+  const btn = document.getElementById('btnSaveMyPcConfirm');
+  const oldText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+  showBusy('Saving to My PC...');
+  try{
+    const drive = document.getElementById('saveMyPcDrive').value;
+    const folderPath = document.getElementById('saveMyPcFolder').value || '';
+    let name = (document.getElementById('saveMyPcName').value || '').trim();
+    if(!name) name = 'print_ready_' + Date.now() + '.pdf';
+    if(!/\.pdf$/i.test(name)) name += '.pdf';
+    const parent = getFolderNode(pendingMyPcState, drive, folderPath);
+    parent.children = parent.children || {};
+    let nm = name; let i=1;
+    while(parent.children[nm]){ nm = name.replace(/(\.pdf)?$/i,'') + '_' + (i++) + '.pdf'; }
+    const res = await fetch(activePdfUrl);
+    const blob = await res.blob();
+    const src = await blobToDataUrl(blob);
+    parent.children[nm] = {type:'file',kind:'pdf_saved',source:src,savedAt:Date.now()};
+    localStorage.setItem('pt_desktop_state_v3', JSON.stringify(pendingMyPcState));
+    saveMyPcModal.hide();
+    alert('Saved to My PC: ' + drive + '/' + (folderPath?folderPath+'/':'') + nm);
+  }catch(_){
+    alert('Save to My PC failed. Dobara try karein.');
+  } finally {
+    hideBusy();
+    btn.disabled = false;
+    btn.textContent = oldText;
+  }
+};
+document.getElementById('btnSaveToMyPc').onclick = function(){ openSaveMyPcDialog(); };
 document.getElementById('btnDownloadPdf').onclick = async function(){
   showBusy('Preparing download...');
   try{
