@@ -4,89 +4,181 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Print Ready</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.css">
   <style>
-    body{margin:0;background:#f2f6ff;font-family:Segoe UI,Arial,sans-serif}
+    body{margin:0;background:#eef3fb;font-family:Segoe UI,Arial,sans-serif}
     .wrap{height:100vh;display:flex;flex-direction:column}
-    .top{padding:10px 14px;background:#fff;border-bottom:1px solid #d9e4f6;display:flex;justify-content:space-between;align-items:center}
-    .viewer-shell{padding:10px;flex:1;display:flex;flex-direction:column;gap:8px}
-    .tools{background:#fff;border:1px solid #dce7fb;border-radius:10px;padding:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-    .stage{position:relative;flex:1;background:#fff;border:1px solid #dce7fb;border-radius:12px;overflow:hidden}
-    .crop-wrap{position:absolute;inset:0;overflow:hidden}
-    .pdf-frame{width:100%;height:100%;border:0}
-    .hint{font-size:12px;color:#5d7398}
+    .head{padding:10px 14px;background:#fff;border-bottom:1px solid #d5e1f5;display:flex;justify-content:space-between;align-items:center}
+    .bar{padding:8px 14px;background:#fff;border-bottom:1px solid #dfe8f8;display:flex;gap:8px;align-items:center}
+    .stage{position:relative;flex:1;padding:10px}
+    .frame-wrap{height:100%;border:1px solid #dbe6f8;border-radius:10px;overflow:hidden;background:#fff;position:relative}
+    #printFrame{width:100%;height:100%;border:0}
+    #cropPreview{display:none;width:100%;height:100%;object-fit:contain;background:#fff}
+    .ctx{position:fixed;z-index:3000;background:#fff;border:1px solid #d7e2f6;border-radius:8px;box-shadow:0 12px 24px rgba(0,0,0,.16);padding:6px 0;display:none}
+    .ctx button{display:block;width:100%;border:0;background:transparent;text-align:left;padding:7px 12px}
+    .ctx button:hover{background:#f2f7ff}
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <div class="top">
-      <div>
-        <strong>Print Ready</strong>
-        <span class="hint ms-2">{{ files_count }} files, {{ pages }} pages</span>
-      </div>
-      <div class="d-flex gap-2">
-        <button class="btn btn-sm btn-primary" id="btnPrintNow">Print</button>
-        <a href="{{ url_for('admin_personal_tools') }}" class="btn btn-sm btn-outline-secondary">Back</a>
-      </div>
+<div class="wrap">
+  <div class="head">
+    <div><strong>Print Ready</strong> <span class="text-muted small ms-2">{{ files_count }} files, {{ pages }} pages</span></div>
+    <div class="d-flex gap-2">
+      <button class="btn btn-sm btn-primary" id="btnPrintNow">Print</button>
+      <a href="{{ url_for('admin_personal_tools') }}" class="btn btn-sm btn-outline-secondary">Back</a>
     </div>
+  </div>
+  <div class="bar">
+    <button class="btn btn-sm btn-outline-secondary" id="btnPrev">←</button>
+    <span class="small">Page</span>
+    <input type="number" id="pageNo" class="form-control form-control-sm" style="width:90px" min="1" value="1">
+    <span class="small">/ {{ pages }}</span>
+    <button class="btn btn-sm btn-outline-secondary" id="btnNext">→</button>
+    <button class="btn btn-sm btn-outline-primary ms-2" id="btnCropCurrent">Crop Current Page</button>
+    <button class="btn btn-sm btn-outline-danger" id="btnResetCrop">Reset Crop</button>
+    <span class="text-muted small ms-2">Right-click viewer for crop</span>
+  </div>
+  <div class="stage">
+    <div class="frame-wrap" id="viewerWrap">
+      <iframe id="printFrame"></iframe>
+      <img id="cropPreview" alt="">
+    </div>
+  </div>
+</div>
 
-    <div class="viewer-shell">
-      <div class="tools">
-        <button class="btn btn-sm btn-outline-secondary" id="btnPrev">← Prev</button>
-        <span class="small">Page</span>
-        <input type="number" id="pageNo" class="form-control form-control-sm" style="width:90px" min="1" value="1">
-        <button class="btn btn-sm btn-outline-secondary" id="btnNext">Next →</button>
-        <span class="vr"></span>
-        <span class="small">Crop L</span><input type="range" id="cropL" min="0" max="120" value="0">
-        <span class="small">R</span><input type="range" id="cropR" min="0" max="120" value="0">
-        <span class="small">T</span><input type="range" id="cropT" min="0" max="120" value="0">
-        <span class="small">B</span><input type="range" id="cropB" min="0" max="120" value="0">
-        <span class="hint">Toolbar hidden mode enabled</span>
+<div class="ctx" id="viewerCtx">
+  <button id="ctxCrop">Crop Current Page</button>
+</div>
+
+<div class="modal fade" id="cropModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">Crop Page</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body" style="max-height:74vh;overflow:auto;">
+        <img id="cropImage" alt="" style="max-width:100%;">
       </div>
-
-      <div class="stage">
-        <div class="crop-wrap" id="cropWrap">
-          <iframe id="printFrame" class="pdf-frame" src=""></iframe>
-        </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-primary" id="btnApplyCrop">Apply Crop</button>
       </div>
     </div>
   </div>
+</div>
 
-  <script>
-  (function(){
-    var pdfBase = "{{ pdf_url }}";
-    var maxPages = {{ pages|int if pages else 1 }};
-    var frame = document.getElementById('printFrame');
-    var pageNo = document.getElementById('pageNo');
-    var cropWrap = document.getElementById('cropWrap');
-    function currentPage(){
-      var n = parseInt(pageNo.value || '1', 10);
-      if (isNaN(n) || n < 1) n = 1;
-      if (n > maxPages) n = maxPages;
-      pageNo.value = n;
-      return n;
-    }
-    function setSrc(){
-      var p = currentPage();
-      frame.src = pdfBase + "#page=" + p + "&toolbar=0&navpanes=0&scrollbar=0&view=FitH";
-    }
-    function applyCrop(){
-      var l = parseInt(document.getElementById('cropL').value || '0', 10);
-      var r = parseInt(document.getElementById('cropR').value || '0', 10);
-      var t = parseInt(document.getElementById('cropT').value || '0', 10);
-      var b = parseInt(document.getElementById('cropB').value || '0', 10);
-      cropWrap.style.clipPath = "inset(" + t + "px " + r + "px " + b + "px " + l + "px)";
-    }
-    document.getElementById('btnPrev').onclick = function(){ pageNo.value = Math.max(1, currentPage()-1); setSrc(); };
-    document.getElementById('btnNext').onclick = function(){ pageNo.value = Math.min(maxPages, currentPage()+1); setSrc(); };
-    pageNo.onchange = setSrc;
-    ['cropL','cropR','cropT','cropB'].forEach(function(id){ document.getElementById(id).oninput = applyCrop; });
-    document.getElementById('btnPrintNow').onclick = function(){
-      try{ frame.contentWindow.focus(); frame.contentWindow.print(); }catch(_){ window.print(); }
-    };
-    window.addEventListener('load', function(){ setSrc(); setTimeout(function(){ document.getElementById('btnPrintNow').click(); }, 300); });
-  })();
-  </script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@4.6.82/build/pdf.min.mjs" type="module"></script>
+<script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js"></script>
+<script type="module">
+import * as pdfjsLib from 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.6.82/build/pdf.min.mjs';
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.6.82/build/pdf.worker.min.mjs';
+
+const pdfUrl = "{{ pdf_url }}";
+const maxPages = {{ pages|int if pages else 1 }};
+const pageNo = document.getElementById('pageNo');
+const frame = document.getElementById('printFrame');
+const cropPreview = document.getElementById('cropPreview');
+const viewerWrap = document.getElementById('viewerWrap');
+const ctx = document.getElementById('viewerCtx');
+const cropModalEl = document.getElementById('cropModal');
+const cropModal = new bootstrap.Modal(cropModalEl);
+const cropImage = document.getElementById('cropImage');
+let cropper = null;
+const cropKey = 'pt_print_crops_' + btoa(pdfUrl).replace(/[^a-zA-Z0-9]/g,'');
+let cropMap = {};
+try{ cropMap = JSON.parse(localStorage.getItem(cropKey) || '{}'); }catch(_){ cropMap = {}; }
+
+function nPage(){
+  let n = parseInt(pageNo.value || '1', 10);
+  if (isNaN(n) || n < 1) n = 1;
+  if (n > maxPages) n = maxPages;
+  pageNo.value = n;
+  return n;
+}
+function rawViewerSrc(page){
+  return pdfUrl + '#page=' + page + '&toolbar=1&navpanes=0&scrollbar=1&view=FitH';
+}
+function refreshViewer(){
+  const p = nPage();
+  const c = cropMap[String(p)];
+  if(c){
+    cropPreview.src = c;
+    cropPreview.style.display = 'block';
+    frame.style.display = 'none';
+  }else{
+    cropPreview.style.display = 'none';
+    frame.style.display = 'block';
+    frame.src = rawViewerSrc(p);
+  }
+}
+document.getElementById('btnPrev').onclick = ()=>{ pageNo.value = Math.max(1, nPage()-1); refreshViewer(); };
+document.getElementById('btnNext').onclick = ()=>{ pageNo.value = Math.min(maxPages, nPage()+1); refreshViewer(); };
+pageNo.onchange = refreshViewer;
+
+async function renderPageToDataUrl(pageNumber){
+  const loadingTask = pdfjsLib.getDocument(pdfUrl);
+  const pdf = await loadingTask.promise;
+  const page = await pdf.getPage(pageNumber);
+  const viewport = page.getViewport({ scale: 2 });
+  const canvas = document.createElement('canvas');
+  const ctx2 = canvas.getContext('2d');
+  canvas.width = viewport.width; canvas.height = viewport.height;
+  await page.render({ canvasContext: ctx2, viewport }).promise;
+  return canvas.toDataURL('image/webp', 0.95);
+}
+async function openCrop(){
+  const p = nPage();
+  let src = cropMap[String(p)];
+  if(!src) src = await renderPageToDataUrl(p);
+  cropImage.src = src;
+  cropModal.show();
+  setTimeout(()=>{
+    if(cropper) cropper.destroy();
+    cropper = new Cropper(cropImage,{
+      viewMode:1, dragMode:'move', autoCropArea:0.9, responsive:true,
+      background:false, rotatable:true, scalable:true, zoomOnWheel:true
+    });
+  },120);
+}
+document.getElementById('btnCropCurrent').onclick = ()=>openCrop();
+document.getElementById('ctxCrop').onclick = ()=>{ ctx.style.display='none'; openCrop(); };
+document.getElementById('btnApplyCrop').onclick = ()=>{
+  if(!cropper) return;
+  const p = nPage();
+  const cv = cropper.getCroppedCanvas({ imageSmoothingQuality:'high' });
+  cropMap[String(p)] = cv.toDataURL('image/webp',0.95);
+  localStorage.setItem(cropKey, JSON.stringify(cropMap));
+  cropModal.hide();
+  refreshViewer();
+};
+cropModalEl.addEventListener('hidden.bs.modal', ()=>{ if(cropper){ cropper.destroy(); cropper=null; }});
+document.getElementById('btnResetCrop').onclick = ()=>{
+  const p = nPage(); delete cropMap[String(p)];
+  localStorage.setItem(cropKey, JSON.stringify(cropMap));
+  refreshViewer();
+};
+viewerWrap.addEventListener('contextmenu', (e)=>{
+  e.preventDefault();
+  ctx.style.left = e.clientX + 'px';
+  ctx.style.top = e.clientY + 'px';
+  ctx.style.display = 'block';
+});
+document.addEventListener('click', (e)=>{ if(!e.target.closest('#viewerCtx')) ctx.style.display='none'; });
+document.getElementById('btnPrintNow').onclick = ()=>{
+  try{
+    if(frame.style.display!=='none'){ frame.contentWindow.focus(); frame.contentWindow.print(); return; }
+  }catch(_){}
+  // cropped pages print fallback
+  const win = window.open('', '_blank');
+  if(!win) return;
+  const p = nPage();
+  const src = cropMap[String(p)];
+  win.document.write('<html><head><title>Print</title><style>body{margin:0;text-align:center}img{max-width:100%;height:auto;}</style></head><body>'+(src?('<img src="'+src+'">'):'')+'</body></html>');
+  win.document.close(); setTimeout(()=>win.print(),300);
+};
+
+window.addEventListener('load', ()=>{ refreshViewer(); setTimeout(()=>document.getElementById('btnPrintNow').click(),300); });
+</script>
 </body>
 </html>
 
