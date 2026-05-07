@@ -143,8 +143,14 @@
     var ext=(String(n).split('.').pop()||'').toLowerCase();
     var map={pdf:'application/pdf',png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',gif:'image/gif',webp:'image/webp',bmp:'image/bmp',svg:'image/svg+xml',txt:'text/plain',csv:'text/csv',
       docx:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      docm:'application/vnd.ms-word.document.macroEnabled.12',
+      dotx:'application/vnd.openxmlformats-officedocument.wordprocessingml.template',
       xlsx:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      xls:'application/vnd.ms-excel'
+      xlsm:'application/vnd.ms-excel.sheet.macroEnabled.12',
+      xlsb:'application/vnd.ms-excel.sheet.binary.macroEnabled.12',
+      xltx:'application/vnd.openxmlformats-officedocument.spreadsheetml.template',
+      xls:'application/vnd.ms-excel',
+      ods:'application/vnd.oasis.opendocument.spreadsheet'
     };
     return map[ext]||'';
   }
@@ -163,6 +169,40 @@
     });
     return __ptScriptPromises[src];
   }
+  function isExcelFilename(fname){
+    return /\.(xlsx|xlsm|xlsb|xltx|xltm|xlam|xls|csv|ods)$/i.test(String(fname||''));
+  }
+  function isExcelMime(m){
+    var x=String(m||'').toLowerCase();
+    return x.indexOf('spreadsheetml')>=0 || x.indexOf('macroenabled')>=0 || x.indexOf('ms-excel')>=0 || x.indexOf('excel')>=0 ||
+      x==='text/csv' || x==='application/csv' || x.indexOf('opendocument.spreadsheet')>=0;
+  }
+  function isWordFilename(fname){
+    return /\.(docx|docm|dotx)$/i.test(String(fname||''));
+  }
+  function sheetToTableHtml(XLSX, ws){
+    try{
+      var rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',blankrows:false});
+      if(!rows||!rows.length) return '<p class="text-muted small mb-0">(Khali sheet)</p>';
+      var maxRows=800, maxCols=64;
+      var html='<table class="table table-sm table-bordered mb-0 align-middle" style="font-size:12px">';
+      for(var r=0;r<rows.length&&r<maxRows;r++){
+        var row=rows[r]||[];
+        html+='<tr>';
+        for(var c=0;c<row.length&&c<maxCols;c++){
+          html+='<td>'+escapeHtml(row[c]==null?'':String(row[c]))+'</td>';
+        }
+        html+='</tr>';
+      }
+      html+='</table>';
+      if(rows.length>maxRows){
+        html+='<p class="text-muted small mt-2 mb-0">'+escapeHtml(String(rows.length))+' rows — pehli '+maxRows+' dikhai gayin.</p>';
+      }
+      return html;
+    }catch(_){
+      return '<p class="text-muted small">Sheet render nahi ho saki.</p>';
+    }
+  }
   function attachExcelSheetTabs(body){
     var tabs=body.querySelectorAll('.pt-xlsx-tab');
     var panes=body.querySelectorAll('.pt-xlsx-pane');
@@ -177,10 +217,23 @@
     });
   }
   async function renderExcelIntoBody(body, arrayBuffer){
-    await loadScriptOnce('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js');
-    var wb=typeof XLSX!=='undefined'?XLSX.read(arrayBuffer,{type:'array',cellDates:true}):null;
+    try{
+      await loadScriptOnce('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js');
+    }catch(_){
+      await loadScriptOnce('https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js');
+    }
+    if(typeof XLSX==='undefined'){
+      body.innerHTML='<div class="p-3 text-muted">Excel library load nahi hui — network check karain.</div>';
+      return;
+    }
+    var wb=null;
+    try{
+      wb=XLSX.read(arrayBuffer,{type:'array',cellDates:true});
+    }catch(_){
+      try{ wb=XLSX.read(arrayBuffer,{type:'array',cellDates:false}); }catch(e2){ throw e2; }
+    }
     if(!wb||!wb.SheetNames||!wb.SheetNames.length){
-      body.innerHTML='<div class="p-3 text-muted">Workbook read nahi ho saki.</div>';
+      body.innerHTML='<div class="p-3 text-muted">Workbook read nahi ho saki (password / corrupt?).</div>';
       return;
     }
     var tabHtml=wb.SheetNames.map(function(n,i){
@@ -188,17 +241,27 @@
     }).join(' ');
     var panesHtml=wb.SheetNames.map(function(sheetName,i){
       var ws=wb.Sheets[sheetName];
-      var inner=typeof XLSX.utils.sheet_to_html==='function'?XLSX.utils.sheet_to_html(ws):'<pre>'+escapeHtml(JSON.stringify(XLSX.utils.sheet_to_json(ws,{header:1}),null,2))+'</pre>';
+      var inner='';
+      try{
+        if(typeof XLSX.utils.sheet_to_html==='function'){
+          inner=XLSX.utils.sheet_to_html(ws,{id:'pt-sh-'+i});
+        }
+      }catch(_){ inner=''; }
+      if(!inner||inner.length<10){ inner=sheetToTableHtml(XLSX, ws); }
       return '<div class="pt-xlsx-pane p-2'+(i?' d-none':'')+'">'+inner+'</div>';
     }).join('');
-    body.innerHTML='<div class="pt-xlsx-wrap h-100 d-flex flex-column" style="min-height:320px"><div class="pt-office-bar">Excel preview (simple grid — MS Excel jaisi editing yahan nahi)</div><div class="d-flex flex-wrap gap-1 px-2 py-2 border-bottom bg-light">'+tabHtml+'</div><div class="flex-grow-1 overflow-auto">'+panesHtml+'</div></div>';
+    body.innerHTML='<div class="pt-xlsx-wrap h-100 d-flex flex-column" style="min-height:320px"><div class="pt-office-bar">Excel preview (.xlsx / .xlsm / .xls …) — macros run nahi hotay; grid sirf dekhne ke liye</div><div class="d-flex flex-wrap gap-1 px-2 py-2 border-bottom bg-light">'+tabHtml+'</div><div class="flex-grow-1 overflow-auto">'+panesHtml+'</div></div>';
     attachExcelSheetTabs(body);
   }
   async function renderWordIntoBody(body, arrayBuffer){
-    await loadScriptOnce('https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js');
+    try{
+      await loadScriptOnce('https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js');
+    }catch(_){
+      await loadScriptOnce('https://unpkg.com/mammoth@1.8.0/mammoth.browser.min.js');
+    }
     if(typeof mammoth==='undefined'){ body.innerHTML='<div class="p-3 text-muted">Word viewer load nahi hua.</div>'; return; }
     var result=await mammoth.convertToHtml({arrayBuffer:arrayBuffer});
-    body.innerHTML='<div class="h-100 d-flex flex-column"><div class="pt-office-bar">Word preview (.docx) — formatting approximate; desktop Word jaisa nahi</div><div class="flex-grow-1 overflow-auto p-3 pt-office-doc">'+(result.value||'<p class="text-muted">Empty</p>')+'</div></div>';
+    body.innerHTML='<div class="h-100 d-flex flex-column"><div class="pt-office-bar">Word preview (.docx / .docm) — formatting approximate; macros run nahi hotay</div><div class="flex-grow-1 overflow-auto p-3 pt-office-doc">'+(result.value||'<p class="text-muted">Empty</p>')+'</div></div>';
   }
   const desktop=document.getElementById('pt-desktop');
   const selBox=document.getElementById('pt-selection-box');
@@ -826,9 +889,9 @@
       var lower=String(name).toLowerCase();
       var isPdf=mime.indexOf('pdf')>=0 || /\.pdf$/i.test(name);
       var isImg=mime.indexOf('image/')===0 || /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(name);
-      var isDocx=/\.docx$/i.test(lower) || mime.indexOf('wordprocessingml')>=0 || mime==='application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      var isDocx=isWordFilename(name) || mime.indexOf('wordprocessingml')>=0 || mime.indexOf('word.document')>=0 || mime==='application/vnd.openxmlformats-officedocument.wordprocessingml.document';
       var isOldDoc=/\.doc$/i.test(lower)&&!isDocx;
-      var isExcel=/\.(xlsx|xls|csv)$/i.test(lower) || mime.indexOf('spreadsheetml')>=0 || mime.indexOf('ms-excel')>=0 || mime==='application/vnd.ms-excel' || mime==='text/csv';
+      var isExcel=isExcelFilename(name) || isExcelMime(mime);
 
       winObj=createWindow(name,'upload_'+Date.now());
       windows.push(winObj); focusWindow(winObj.id); renderTaskbar();
