@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Red Task Detail — {{ district.name }}{% endblock %}
+{% block title %}Red Task Detail — {{ scope_label }}{% endblock %}
 {% block content %}
 <div class="container-fluid">
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
@@ -12,7 +12,8 @@
 
   <div class="card shadow-sm border-0 rounded-3 mb-3">
     <div class="card-body py-3">
-      <p class="mb-0"><strong>{{ district.name }}</strong>
+      <p class="mb-0"><strong>{{ scope_label }}</strong>
+        {% if not district %}<span class="badge bg-secondary ms-1 small">Excel district (master match nahi)</span>{% endif %}
         <span class="text-muted">— {{ from_date|ddmmyyyy }} se {{ to_date|ddmmyyyy }} tak</span>
         <span class="badge bg-danger ms-2">{{ rows|length }} Red (Emergency)</span>
       </p>

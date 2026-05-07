@@ -14,7 +14,7 @@
 
   <div class="card shadow-sm border-0 rounded-3 mb-4">
     <div class="card-body">
-      <p class="text-muted small mb-3"><strong>Direct Emergency Task Report</strong> (Excel upload) se <strong>Red</strong> category tasks — <strong>tamam</strong> master districts jahan Emergency sheet ka <code>DistrictName</code> district ke naam se match ho (vehicle/project assign hon ya na ho). Fine saved <strong>Red Task</strong> rows se (same date + Task ID) li jati hai.</p>
+      <p class="text-muted small mb-3"><strong>Direct Emergency Task Report</strong> (Excel upload) ki <strong>Red</strong> category — <strong>har row count hoti hai</strong>. Master district naam match ho to us naam se group; warna Excel ka district text alag line par (detail link usi Excel grouping par). Fine saved <strong>Red Task</strong> se (same date + Task ID).</p>
       <form method="get" action="{{ url_for('red_task_summary') }}" class="row g-3 align-items-end">
         <input type="hidden" name="show" value="1">
         <div class="col-md-2">
@@ -52,7 +52,7 @@
     </div>
     <div class="card-body">
       {% if not summary_rows %}
-      <p class="text-muted mb-0"><i class="bi bi-info-circle me-1"></i>Is range mein koi match nahi: Emergency Report mein Red category tasks hon aur district ka naam spelling/master district name se mile — ya Task Report upload check karein.</p>
+      <p class="text-muted mb-0"><i class="bi bi-info-circle me-1"></i>Is date range mein Emergency Report mein koi <strong>Red</strong> category task nahi — Task Report upload / dates check karein.</p>
       {% else %}
       <p class="small text-muted mb-3"><strong>{{ summary_title }}</strong></p>
       <div class="table-responsive">
@@ -75,10 +75,10 @@
             <tr>
               <td class="ps-3">{{ row.label }}</td>
               <td class="text-end fw-semibold">
-                {% if row.district_id %}
+                {% if row.detail_kind == 'master' %}
                 <a href="{{ url_for('red_task_summary_detail', district_id=row.district_id, from_date=from_date.strftime('%d-%m-%Y'), to_date=to_date.strftime('%d-%m-%Y')) }}" class="text-danger text-decoration-underline">{{ row.count }}</a>
                 {% else %}
-                {{ row.count }}
+                <a href="{{ url_for('red_task_summary_detail', from_date=from_date.strftime('%d-%m-%Y'), to_date=to_date.strftime('%d-%m-%Y'), excel_norm=row.excel_norm) }}" class="text-danger text-decoration-underline">{{ row.count }}</a>
                 {% endif %}
               </td>
               <td class="text-end pe-3">{{ '%.2f' % row.fine }}</td>
