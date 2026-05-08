@@ -1,4 +1,5 @@
 import { memo, useMemo, useState } from "react";
+import { type ComponentProcessProps } from "components/system/Apps/RenderComponent";
 
 type PrintResponse = {
   error?: string;
@@ -20,7 +21,7 @@ const appStyle: React.CSSProperties = {
   padding: 12,
 };
 
-const FleetMultiFilePrint: FC = () => {
+const FleetMultiFilePrint: FC<ComponentProcessProps> = () => {
   const [files, setFiles] = useState<File[]>([]);
   const [pageSize, setPageSize] = useState("original");
   const [orientation, setOrientation] = useState("portrait");

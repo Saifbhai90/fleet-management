@@ -1,4 +1,5 @@
 import { memo, useMemo, useState } from "react";
+import { type ComponentProcessProps } from "components/system/Apps/RenderComponent";
 
 const BUTTONS = [
   "7",
@@ -66,7 +67,7 @@ const evalExpression = (expression: string): string => {
   }
 };
 
-const FleetCalculator: FC = () => {
+const FleetCalculator: FC<ComponentProcessProps> = () => {
   const [expression, setExpression] = useState("");
   const [result, setResult] = useState("0");
 

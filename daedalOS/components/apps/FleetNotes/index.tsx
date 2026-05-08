@@ -1,4 +1,5 @@
 import { memo, useEffect, useState } from "react";
+import { type ComponentProcessProps } from "components/system/Apps/RenderComponent";
 
 const NOTES_STORAGE_KEY = "fleet-personal-notes-v1";
 
@@ -18,7 +19,7 @@ const toolbarStyle: React.CSSProperties = {
   justifyContent: "space-between",
 };
 
-const FleetNotes: FC = () => {
+const FleetNotes: FC<ComponentProcessProps> = () => {
   const [value, setValue] = useState("");
   const [savedAt, setSavedAt] = useState("");
 
