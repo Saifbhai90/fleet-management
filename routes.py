@@ -2591,9 +2591,19 @@ def fleet_personal_pc_system_asset(asset_path):
     return _serve_fleet_personal_pc_asset('System', asset_path)
 
 
+@app.route('/Program Files/<path:asset_path>')
+def fleet_personal_pc_program_files_asset(asset_path):
+    return _serve_fleet_personal_pc_asset('Program Files', asset_path)
+
+
 @app.route('/Users/<path:asset_path>')
 def fleet_personal_pc_users_asset(asset_path):
     return _serve_fleet_personal_pc_asset('Users', asset_path)
+
+
+@app.route('/Drives/<path:asset_path>')
+def fleet_personal_pc_drives_asset(asset_path):
+    return _serve_fleet_personal_pc_asset('Drives', asset_path)
 
 
 @app.route('/fleet-brand/<path:asset_path>')
