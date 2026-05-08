@@ -1,7 +1,7 @@
+import { basename, dirname, isAbsolute } from "path";
 import { memo, useMemo, useState } from "react";
 import { type ComponentProcessProps } from "components/system/Apps/RenderComponent";
 import { useFileSystem } from "contexts/fileSystem";
-import { useProcesses } from "contexts/process";
 import { DESKTOP_PATH } from "utils/constants";
 
 type PrintResponse = {
@@ -13,7 +13,6 @@ type PrintResponse = {
   pages?: number;
   pdf_base64?: string;
   pdf_name?: string;
-  pdf_url?: string;
   success?: boolean;
 };
 
@@ -37,15 +36,18 @@ const decodeBase64ToBuffer = (content: string): Buffer => {
 };
 
 const FleetMultiFilePrint: FC<ComponentProcessProps> = () => {
-  const { createPath } = useFileSystem();
-  const { open } = useProcesses();
+  const { mkdirRecursive, updateFolder, writeFile } = useFileSystem();
   const [files, setFiles] = useState<File[]>([]);
   const [pageSize, setPageSize] = useState("original");
   const [orientation, setOrientation] = useState("portrait");
   const [orderBy, setOrderBy] = useState("as_uploaded");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
-  const [pdfPath, setPdfPath] = useState("");
+  const [pendingPdfBytes, setPendingPdfBytes] = useState<Buffer>();
+  const [pendingPdfName, setPendingPdfName] = useState("");
+  const [savePath, setSavePath] = useState("");
+  const [savedPath, setSavedPath] = useState("");
   const [summary, setSummary] = useState("");
 
   const orderedFiles = useMemo(() => {
@@ -60,7 +62,10 @@ const FleetMultiFilePrint: FC<ComponentProcessProps> = () => {
   const submit = async (): Promise<void> => {
     setError("");
     setSummary("");
-    setPdfPath("");
+    setSavedPath("");
+    setPendingPdfBytes(undefined);
+    setPendingPdfName("");
+    setSavePath("");
 
     if (orderedFiles.length === 0) {
       setError("Kam az kam 1 PDF/Image file select karein.");
@@ -87,16 +92,10 @@ const FleetMultiFilePrint: FC<ComponentProcessProps> = () => {
         return;
       }
       const pdfBuffer = decodeBase64ToBuffer(data.pdf_base64);
-      const savedName = await createPath(data.pdf_name, DESKTOP_PATH, pdfBuffer);
-      if (!savedName) {
-        setError("Combined PDF Desktop par save nahi ho saki.");
-        return;
-      }
-
-      const savedPath = `${DESKTOP_PATH}/${savedName}`;
-      setPdfPath(savedPath);
+      setPendingPdfBytes(pdfBuffer);
+      setPendingPdfName(data.pdf_name);
+      setSavePath(`${DESKTOP_PATH}/${data.pdf_name}`);
       setSummary(`${data.files_count || 0} files -> ${data.pages || 0} pages`);
-      open("PDF", { url: savedPath });
     } catch {
       setError("Print service reach nahi ho saki. Dobara try karein.");
     } finally {
@@ -104,14 +103,35 @@ const FleetMultiFilePrint: FC<ComponentProcessProps> = () => {
     }
   };
 
-  const openPdfInViewer = (): void => {
-    if (!pdfPath) return;
-    open("PDF", { url: pdfPath });
-  };
+  const saveCombinedPdf = async (): Promise<void> => {
+    setError("");
+    if (!pendingPdfBytes || !pendingPdfName) {
+      setError("Pehle Combine & Print karein.");
+      return;
+    }
 
-  const printPdfFromViewer = (): void => {
-    if (!pdfPath) return;
-    open("PDF", { url: pdfPath });
+    const targetPath = (savePath || "").trim();
+    if (!targetPath || !isAbsolute(targetPath)) {
+      setError("Valid absolute path dein. Example: /Users/Public/Desktop/my-print.pdf");
+      return;
+    }
+    if (!targetPath.toLowerCase().endsWith(".pdf")) {
+      setError("Save path ka extension .pdf hona chahiye.");
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const targetDir = dirname(targetPath);
+      await mkdirRecursive(targetDir);
+      await writeFile(targetPath, pendingPdfBytes, true);
+      await updateFolder(targetDir, basename(targetPath));
+      setSavedPath(targetPath);
+    } catch {
+      setError("File save nahi ho saki. Path check karke dobara try karein.");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -182,7 +202,7 @@ const FleetMultiFilePrint: FC<ComponentProcessProps> = () => {
       {error && <div style={{ color: "#b91c1c", fontWeight: 600 }}>{error}</div>}
       {summary && <div style={{ color: "#166534", fontWeight: 600 }}>{summary}</div>}
 
-      {pdfPath && (
+      {pendingPdfBytes && (
         <div
           style={{
             alignItems: "center",
@@ -200,41 +220,45 @@ const FleetMultiFilePrint: FC<ComponentProcessProps> = () => {
             textAlign: "center",
           }}
         >
-          <strong>PDF ready inside DaedalOS</strong>
+          <strong>PDF combined successfully</strong>
           <span style={{ fontSize: 13 }}>
-            File Desktop me save ho chuki hai aur internal PDF viewer me open ho gayi hai.
+            Ab save path choose karein. File auto-open nahi hogi; aap baad me khud open karein.
           </span>
-          <code style={{ background: "#e2e8f0", borderRadius: 6, padding: "4px 8px" }}>{pdfPath}</code>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button
-              onClick={openPdfInViewer}
-              style={{
-                background: "#2563eb",
-                border: "1px solid #1d4ed8",
-                borderRadius: 7,
-                color: "#fff",
-                cursor: "pointer",
-                padding: "6px 12px",
-              }}
-              type="button"
-            >
-              Open in PDF Viewer
-            </button>
-            <button
-              onClick={printPdfFromViewer}
-              style={{
-                background: "#0f766e",
-                border: "1px solid #0f766e",
-                borderRadius: 7,
-                color: "#fff",
-                cursor: "pointer",
-                padding: "6px 12px",
-              }}
-              type="button"
-            >
-              Print via PDF Viewer
-            </button>
-          </div>
+          <code style={{ background: "#e2e8f0", borderRadius: 6, padding: "4px 8px" }}>{pendingPdfName}</code>
+          <input
+            onChange={(event) => setSavePath(event.target.value)}
+            style={{
+              border: "1px solid #cbd5e1",
+              borderRadius: 8,
+              fontFamily: "Consolas, Menlo, Monaco, monospace",
+              fontSize: 13,
+              maxWidth: 620,
+              padding: "8px 10px",
+              width: "100%",
+            }}
+            value={savePath}
+          />
+          <button
+            disabled={isSaving}
+            onClick={saveCombinedPdf}
+            style={{
+              background: "#0f766e",
+              border: "1px solid #0f766e",
+              borderRadius: 7,
+              color: "#fff",
+              cursor: isSaving ? "default" : "pointer",
+              opacity: isSaving ? 0.75 : 1,
+              padding: "6px 12px",
+            }}
+            type="button"
+          >
+            {isSaving ? "Saving..." : "Save Combined PDF"}
+          </button>
+          {savedPath && (
+            <div style={{ color: "#166534", fontWeight: 600 }}>
+              Saved: <code>{savedPath}</code>
+            </div>
+          )}
         </div>
       )}
     </div>
