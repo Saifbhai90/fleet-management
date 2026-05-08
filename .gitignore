@@ -28,6 +28,9 @@ uploads/
 static/fleet_personal_pc/*
 !static/fleet_personal_pc/README.txt
 
+# Nested git backup after merging daedalOS (never commit)
+daedalOS/.git_upstream_backup/
+
 # Node
 node_modules/
 

@@ -1,0 +1,769 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR Simon Schneegans
+# This file is distributed under the same license as the burn-my-windows package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: burn-my-windows\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-02-17 20:23+0100\n"
+"PO-Revision-Date: 2025-05-25 10:03+0000\n"
+"Last-Translator: cris b <ventura@users.noreply.hosted.weblate.org>\n"
+"Language-Team: Greek <https://hosted.weblate.org/projects/burn-my-windows/"
+"core/el/>\n"
+"Language: el\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=n != 1;\n"
+"X-Generator: Weblate 5.12-dev\n"
+
+#: src/effects/Apparition.js:80
+msgid "Apparition"
+msgstr "Οπτασία"
+
+#: src/effects/AuraGlow.js:89
+msgid "Aura Glow"
+msgstr "Λάμψη Αύρας"
+
+#: src/effects/BrokenGlass.js:138
+msgid "Broken Glass"
+msgstr "Σπασμένο Γυαλί"
+
+#: src/effects/Doom.js:87
+msgid "Doom"
+msgstr "Καταδίκη"
+
+#: src/effects/EnergizeA.js:74
+msgid "Energize A"
+msgstr "Ενεργοποίηση Α"
+
+#: src/effects/EnergizeB.js:75
+msgid "Energize B"
+msgstr "Ενεργοποίηση Β"
+
+#: src/effects/Fire.js:96
+msgid "Fire"
+msgstr "Φωτιά"
+
+#: src/effects/Fire.js:150
+msgid "Default Fire"
+msgstr "Προεπιλεγμένη Φωτιά"
+
+#: src/effects/Fire.js:160
+msgid "Hell Fire"
+msgstr "Πυρκαγιά"
+
+#: src/effects/Fire.js:170
+msgid "Dark and Smutty"
+msgstr "Σκοτεινό και Βρώμικο"
+
+#: src/effects/Fire.js:180
+msgid "Cold Breeze"
+msgstr "Κρύο Αεράκι"
+
+#: src/effects/Fire.js:190
+msgid "Santa is Coming"
+msgstr "Ο Άι Βασίλης Έρχεται"
+
+#: src/effects/Fire.js:201
+msgid "Nuclear ☢️"
+msgstr "Πυρηνικά ☢️"
+
+#: src/effects/Focus.js:76
+msgid "Focus"
+msgstr "Συγκέντρωση"
+
+#: src/effects/Glide.js:78
+msgid "Glide"
+msgstr "Ολίσθηση"
+
+#: src/effects/Glitch.js:80
+msgid "Glitch"
+msgstr "Σφάλμα"
+
+#: src/effects/Hexagon.js:83
+msgid "Hexagon"
+msgstr "Εξάγωνο"
+
+#: src/effects/Incinerate.js:126
+msgid "Incinerate"
+msgstr "Αποτέφρωσε"
+
+#: src/effects/Matrix.js:109
+msgid "Matrix"
+msgstr "Μήτρα"
+
+#: src/effects/Mushroom.js:124
+msgid "Mushroom"
+msgstr "Μανιτάρι"
+
+#: src/effects/Mushroom.js:204
+msgid "8Bit Plumber"
+msgstr "Υδραυλικός 8bit"
+
+#: src/effects/Mushroom.js:221
+msgid "New Bros 2 🍄"
+msgstr "Νέο Bros 2 🍄"
+
+#: src/effects/Mushroom.js:239
+msgid "Red White and Blue 🇺🇸"
+msgstr "Κόκκινο Λευκό και Μπλε 🇺🇸"
+
+#: src/effects/Mushroom.js:256
+msgid "Rainbow 🌈"
+msgstr "Ουράνιο τόξο 🌈"
+
+#: src/effects/Mushroom.js:273
+msgid "Cattuccino 😺"
+msgstr "Γατουτσίνο 😺"
+
+#: src/effects/Mushroom.js:291
+msgid "Dracula 🦇"
+msgstr "Δράκουλας 🦇"
+
+#: src/effects/Mushroom.js:308
+msgid "Sparkle ✨"
+msgstr "Σπινθηρίζω ✨"
+
+#: src/effects/PaintBrush.js:101
+msgid "Paint Brush"
+msgstr "Πινέλο"
+
+#: src/effects/Pixelate.js:74
+msgid "Pixelate"
+msgstr "Εικονοστοιχειοποίηση"
+
+#: src/effects/PixelWheel.js:74
+msgid "Pixel Wheel"
+msgstr "Τροχός εικονοστοιχείων"
+
+#: src/effects/PixelWipe.js:100
+msgid "Pixel Wipe"
+msgstr "Σκουπίσμα Εικονοστοιχείων"
+
+#: src/effects/Portal.js:82
+msgid "Portal"
+msgstr "Πύλη"
+
+#: src/effects/RGBWarp.js:77
+msgid "RGB Warp"
+msgstr "RGB Παραμόρφωση"
+
+#: src/effects/SnapOfDisintegration.js:110
+msgid "Snap of Disintegration"
+msgstr "Κρότος της Αποσύνθεσης"
+
+#: src/effects/TeamRocket.js:89
+msgid "Team Rocket"
+msgstr "Ομάδα Πύραυλος"
+
+#: src/effects/TRexAttack.js:109
+msgid "T-Rex Attack"
+msgstr "Επίθεση T-Rex"
+
+#: src/effects/TVEffect.js:73
+msgid "TV Effect"
+msgstr "Εφέ Τηλεόρασης"
+
+#: src/effects/TVGlitch.js:81
+msgid "TV Glitch"
+msgstr "Σφάλμα Τηλεόρασης"
+
+#: src/effects/Wisps.js:85
+msgid "Wisps"
+msgstr "Δέσμες"
+
+#: prefs.js:256
+msgid "Preview this effect"
+msgstr "Προεπισκόπηση του εφέ"
+
+#: prefs.js:333
+msgid "Burn-My-Windows has been updated!"
+msgstr "Το Burn-My-Windows έχει ενημερωθεί!"
+
+#: prefs.js:334 resources/ui/common/menus.ui:17
+msgid "View Changelog"
+msgstr "Δείτε το Αρχείο Αλλαγών"
+
+#: prefs.js:516
+msgid "Delete this Profile?"
+msgstr "Διαγραφή αυτού του Προφίλ;"
+
+#: prefs.js:517
+msgid ""
+"The current effect profile with all its effect settings will be permanently "
+"lost."
+msgstr "Το τρέχον προφίλ εφέ με όλες τις ρυθμίσεις εφέν θα χαθούν μόνιμα."
+
+#: prefs.js:520
+msgid "Cancel"
+msgstr "Ακύρωση"
+
+#: prefs.js:525
+msgid "Delete"
+msgstr "Διαγραφή"
+
+#: prefs.js:757 resources/ui/adw/prefs.ui:103
+msgid "Opening Windows"
+msgstr "Άνοιγμα Παραθύρων"
+
+#: prefs.js:758 resources/ui/adw/prefs.ui:104
+msgid "Closing Windows"
+msgstr "Κλείσιμο Παραθύρων"
+
+#: prefs.js:759 resources/ui/adw/prefs.ui:118
+msgid "Normal Windows"
+msgstr "Κανονικά Παραθύρα"
+
+#: prefs.js:760 resources/ui/adw/prefs.ui:119
+msgid "Dialog Windows"
+msgstr "Παράθυρα Διαλόγου"
+
+#: prefs.js:761 resources/ui/adw/prefs.ui:133
+msgid "Default Color Scheme"
+msgstr "Προεπιλεγμένο Σχέδιο Χρωμάτων"
+
+#: prefs.js:762 resources/ui/adw/prefs.ui:134
+msgid "Dark Color Scheme"
+msgstr "Σκούρο Σχέδιο Χρωμάτων"
+
+#: prefs.js:763 resources/ui/adw/prefs.ui:148
+msgid "On Battery"
+msgstr "Σε Μπαταρία"
+
+#: prefs.js:764 resources/ui/adw/prefs.ui:149
+msgid "Plugged In"
+msgstr "Συνδεδεμένο"
+
+#: prefs.js:765 resources/ui/adw/prefs.ui:163
+msgid "Power-Saver Mode"
+msgstr "Λειτουργία Εξοινόμησης-Ενέργειας"
+
+#: prefs.js:766 resources/ui/adw/prefs.ui:164
+msgid "Balanced Mode"
+msgstr "Ισορροπημένη Λειτουργία"
+
+#: prefs.js:767 resources/ui/adw/prefs.ui:165
+msgid "Performance Mode"
+msgstr "Λειτουργία Απόδοσης"
+
+#: prefs.js:768 resources/ui/adw/prefs.ui:166
+msgid "Power Saver or Balanced"
+msgstr "Εξοικονόμηση ενέργειας ή Ισορροπημένη"
+
+#: prefs.js:769 resources/ui/adw/prefs.ui:167
+msgid "Balanced or Performance"
+msgstr "Ισορροπημένη ή Απόδοσης"
+
+#: prefs.js:774 resources/ui/adw/prefs.ui:183
+msgid "High Priority"
+msgstr "Υψηλή Προτεραιότητα"
+
+#: prefs.js:780
+msgid "Standard Profile"
+msgstr "Τυπικό Προφίλ"
+
+#. Translators: %s will be replaced by the effect's name.
+#: prefs.js:860
+#, javascript-format
+msgid "Preview for %s"
+msgstr "Προεπισκόπηση για %s"
+
+#: prefs.js:879
+msgid "Close this Window to Preview the Effect!"
+msgstr "Κλείστε αυτό το Παράθυρο για να Δείτε το Εφέ!"
+
+#: resources/ui/common/menus.ui:13
+msgid "Visit Homepage"
+msgstr "Επισκεφθείτε την Αρχική Σελίδα"
+
+#: resources/ui/common/menus.ui:21
+msgid "View Matching Wallpapers"
+msgstr "Προβολή Ταιριαστών Ταπετσαριών"
+
+#: resources/ui/common/menus.ui:25
+msgid "View Donors Hall-of-Fame"
+msgstr "Δείτε το Hall-of-Fame των Δωρητών"
+
+#: resources/ui/common/menus.ui:31
+msgid "Donate"
+msgstr "Δωρήστε"
+
+#: resources/ui/common/menus.ui:50
+msgid "Report a Bug"
+msgstr "Αναφέρετε ένα Σφάλμα"
+
+#: resources/ui/common/menus.ui:54
+msgid "Create an Effect"
+msgstr "Δημιουργήστε ένα Εφέ"
+
+#: resources/ui/common/menus.ui:58
+msgid "Translate"
+msgstr "Μεταφράστε"
+
+#: resources/ui/common/menus.ui:64
+msgid "Open Effect-Profile Directory"
+msgstr "Ανοίξτε Κατάλογο Προφίλ-Εφέ"
+
+#: resources/ui/common/menus.ui:70
+msgid "About Burn-My-Windows"
+msgstr "Σχετικά με το Burn-My-Windows"
+
+#: resources/ui/common/menus.ui:81
+msgid "Add New Profile..."
+msgstr "Προσθήκη Νέου Προφίλ ..."
+
+#: resources/ui/adw/broken-glass.ui:15 resources/ui/adw/tv-glitch.ui:14
+#: resources/ui/adw/glitch.ui:14 resources/ui/adw/matrix.ui:14
+#: resources/ui/adw/doom.ui:14 resources/ui/adw/rgbwarp.ui:17
+#: resources/ui/adw/paint-brush.ui:14 resources/ui/adw/trex.ui:14
+#: resources/ui/adw/wisps.ui:14 resources/ui/adw/aura-glow.ui:13
+#: resources/ui/adw/energize-b.ui:15 resources/ui/adw/pixel-wheel.ui:14
+#: resources/ui/adw/glide.ui:14 resources/ui/adw/apparition.ui:15
+#: resources/ui/adw/portal.ui:14 resources/ui/adw/incinerate.ui:14
+#: resources/ui/adw/hexagon.ui:14 resources/ui/adw/fire.ui:30
+#: resources/ui/adw/team-rocket.ui:17 resources/ui/adw/pixel-wipe.ui:14
+#: resources/ui/adw/snap.ui:14 resources/ui/adw/focus.ui:35
+#: resources/ui/adw/mushroom.ui:17 resources/ui/adw/energize-a.ui:14
+#: resources/ui/adw/pixelate.ui:14 resources/ui/adw/tv.ui:14
+msgid "Animation Time [ms]"
+msgstr "Χρόνος Κινουμένων Σχεδίων [ms]"
+
+#: resources/ui/adw/broken-glass.ui:37 resources/ui/adw/broken-glass.ui:70
+#: resources/ui/adw/broken-glass.ui:103 resources/ui/adw/broken-glass.ui:136
+#: resources/ui/adw/broken-glass.ui:159 resources/ui/adw/tv-glitch.ui:36
+#: resources/ui/adw/tv-glitch.ui:69 resources/ui/adw/tv-glitch.ui:102
+#: resources/ui/adw/tv-glitch.ui:135 resources/ui/adw/tv-glitch.ui:160
+#: resources/ui/adw/glitch.ui:36 resources/ui/adw/glitch.ui:69
+#: resources/ui/adw/glitch.ui:102 resources/ui/adw/glitch.ui:135
+#: resources/ui/adw/glitch.ui:160 resources/ui/adw/matrix.ui:36
+#: resources/ui/adw/matrix.ui:69 resources/ui/adw/matrix.ui:102
+#: resources/ui/adw/matrix.ui:135 resources/ui/adw/matrix.ui:160
+#: resources/ui/adw/matrix.ui:185 resources/ui/adw/doom.ui:36
+#: resources/ui/adw/doom.ui:69 resources/ui/adw/doom.ui:102
+#: resources/ui/adw/doom.ui:135 resources/ui/adw/rgbwarp.ui:42
+#: resources/ui/adw/rgbwarp.ui:81 resources/ui/adw/rgbwarp.ui:118
+#: resources/ui/adw/rgbwarp.ui:155 resources/ui/adw/rgbwarp.ui:192
+#: resources/ui/adw/paint-brush.ui:36 resources/ui/adw/paint-brush.ui:69
+#: resources/ui/adw/trex.ui:36 resources/ui/adw/trex.ui:69
+#: resources/ui/adw/trex.ui:102 resources/ui/adw/trex.ui:135
+#: resources/ui/adw/trex.ui:160 resources/ui/adw/wisps.ui:36
+#: resources/ui/adw/wisps.ui:69 resources/ui/adw/wisps.ui:110
+#: resources/ui/adw/aura-glow.ui:35 resources/ui/adw/aura-glow.ui:58
+#: resources/ui/adw/aura-glow.ui:92 resources/ui/adw/aura-glow.ui:125
+#: resources/ui/adw/aura-glow.ui:158 resources/ui/adw/aura-glow.ui:191
+#: resources/ui/adw/aura-glow.ui:224 resources/ui/adw/aura-glow.ui:257
+#: resources/ui/adw/energize-b.ui:37 resources/ui/adw/energize-b.ui:70
+#: resources/ui/adw/energize-b.ui:95 resources/ui/adw/pixel-wheel.ui:36
+#: resources/ui/adw/pixel-wheel.ui:69 resources/ui/adw/pixel-wheel.ui:102
+#: resources/ui/adw/glide.ui:36 resources/ui/adw/glide.ui:69
+#: resources/ui/adw/glide.ui:102 resources/ui/adw/glide.ui:135
+#: resources/ui/adw/glide.ui:168 resources/ui/adw/apparition.ui:37
+#: resources/ui/adw/apparition.ui:70 resources/ui/adw/apparition.ui:103
+#: resources/ui/adw/apparition.ui:136 resources/ui/adw/apparition.ui:169
+#: resources/ui/adw/portal.ui:36 resources/ui/adw/portal.ui:69
+#: resources/ui/adw/portal.ui:102 resources/ui/adw/portal.ui:135
+#: resources/ui/adw/portal.ui:160 resources/ui/adw/incinerate.ui:36
+#: resources/ui/adw/incinerate.ui:69 resources/ui/adw/incinerate.ui:102
+#: resources/ui/adw/incinerate.ui:125 resources/ui/adw/incinerate.ui:150
+#: resources/ui/adw/hexagon.ui:36 resources/ui/adw/hexagon.ui:69
+#: resources/ui/adw/hexagon.ui:102 resources/ui/adw/hexagon.ui:127
+#: resources/ui/adw/hexagon.ui:152 resources/ui/adw/hexagon.ui:175
+#: resources/ui/adw/fire.ui:52 resources/ui/adw/fire.ui:85
+#: resources/ui/adw/fire.ui:118 resources/ui/adw/fire.ui:141
+#: resources/ui/adw/fire.ui:199 resources/ui/adw/team-rocket.ui:42
+#: resources/ui/adw/team-rocket.ui:80 resources/ui/adw/team-rocket.ui:102
+#: resources/ui/adw/team-rocket.ui:139 resources/ui/adw/team-rocket.ui:176
+#: resources/ui/adw/team-rocket.ui:214 resources/ui/adw/team-rocket.ui:251
+#: resources/ui/adw/pixel-wipe.ui:36 resources/ui/adw/pixel-wipe.ui:69
+#: resources/ui/adw/snap.ui:36 resources/ui/adw/snap.ui:69
+#: resources/ui/adw/snap.ui:94 resources/ui/adw/focus.ui:50
+#: resources/ui/adw/focus.ui:76 resources/ui/adw/focus.ui:102
+#: resources/ui/adw/mushroom.ui:42 resources/ui/adw/mushroom.ui:99
+#: resources/ui/adw/mushroom.ui:137 resources/ui/adw/mushroom.ui:175
+#: resources/ui/adw/mushroom.ui:209 resources/ui/adw/mushroom.ui:243
+#: resources/ui/adw/mushroom.ui:281 resources/ui/adw/mushroom.ui:319
+#: resources/ui/adw/mushroom.ui:357 resources/ui/adw/mushroom.ui:427
+#: resources/ui/adw/energize-a.ui:36 resources/ui/adw/energize-a.ui:69
+#: resources/ui/adw/energize-a.ui:94 resources/ui/adw/pixelate.ui:36
+#: resources/ui/adw/pixelate.ui:69 resources/ui/adw/pixelate.ui:102
+#: resources/ui/adw/tv.ui:36 resources/ui/adw/tv.ui:61
+msgid "Reset to Default Value"
+msgstr "Επαναφορά σε Προεπιλεγμένη Τιμή"
+
+#: resources/ui/adw/broken-glass.ui:48 resources/ui/adw/tv-glitch.ui:47
+#: resources/ui/adw/glitch.ui:47 resources/ui/adw/matrix.ui:47
+#: resources/ui/adw/wisps.ui:47 resources/ui/adw/energize-b.ui:48
+#: resources/ui/adw/glide.ui:47 resources/ui/adw/incinerate.ui:47
+#: resources/ui/adw/hexagon.ui:47 resources/ui/adw/fire.ui:63
+#: resources/ui/adw/snap.ui:47 resources/ui/adw/energize-a.ui:47
+msgid "Scale"
+msgstr "Κλιμάκωση"
+
+#: resources/ui/adw/broken-glass.ui:81
+msgid "Gravity"
+msgstr "Βαρύτητα"
+
+#: resources/ui/adw/broken-glass.ui:114
+msgid "Blow Force"
+msgstr "Δύναμη Έκρηξης"
+
+#: resources/ui/adw/broken-glass.ui:147
+msgid "Shatter From Pointer Location"
+msgstr "Θραύση Από Την Τοποθεσία Κέρσορα"
+
+#: resources/ui/adw/broken-glass.ui:148
+msgid ""
+"The shards will fly away from where your mouse pointer was when closing the "
+"window."
+msgstr ""
+"Τα θραύσματα θα πετάξουν μακριά από το σημείο όπου ο κέρσοράς σας ήταν όταν "
+"έκλεισε το παράθυρο."
+
+#: resources/ui/adw/tv-glitch.ui:80 resources/ui/adw/glitch.ui:80
+msgid "Strength"
+msgstr "Δύναμη"
+
+#: resources/ui/adw/tv-glitch.ui:113 resources/ui/adw/glitch.ui:113
+#: resources/ui/adw/aura-glow.ui:103 resources/ui/adw/fire.ui:96
+msgid "Speed"
+msgstr "Ταχύτητα"
+
+#: resources/ui/adw/tv-glitch.ui:146 resources/ui/adw/glitch.ui:146
+#: resources/ui/adw/wisps.ui:80 resources/ui/adw/energize-b.ui:81
+#: resources/ui/adw/portal.ui:146 resources/ui/adw/incinerate.ui:136
+#: resources/ui/adw/snap.ui:80 resources/ui/adw/energize-a.ui:80
+#: resources/ui/adw/tv.ui:47
+msgid "Color"
+msgstr "Χρώμα"
+
+#: resources/ui/adw/matrix.ui:80 resources/ui/adw/apparition.ui:48
+msgid "Randomness"
+msgstr "Τυχαιότητα"
+
+#: resources/ui/adw/matrix.ui:113
+msgid "Vertical Overshooting"
+msgstr "Κατακόρυφη Επικάλυψη"
+
+#: resources/ui/adw/matrix.ui:146
+msgid "Trail Color"
+msgstr "Χρώμα Ίχνους"
+
+#: resources/ui/adw/matrix.ui:171
+msgid "Tip Color"
+msgstr "Χρώμα Άκρης"
+
+#: resources/ui/adw/doom.ui:47
+msgid "Horizontal Scale"
+msgstr "Οριζόντια Κλιμάκωση"
+
+#: resources/ui/adw/doom.ui:80
+msgid "Vertical Scale"
+msgstr "Κατακόρυφη Κλιμάκωση"
+
+#: resources/ui/adw/doom.ui:113 resources/ui/adw/pixel-wheel.ui:80
+#: resources/ui/adw/pixel-wipe.ui:47 resources/ui/adw/pixelate.ui:80
+msgid "Pixel Size"
+msgstr "Μέγεθος εικονοστοιχείων"
+
+#: resources/ui/adw/rgbwarp.ui:55
+msgid "Brightness"
+msgstr "Φωτεινότητα"
+
+#: resources/ui/adw/rgbwarp.ui:93
+msgid "Red Speed"
+msgstr "Ταχύτητα Κόκκινου"
+
+#: resources/ui/adw/rgbwarp.ui:130
+msgid "Green Speed"
+msgstr "Ταχύτητα Πράσινου"
+
+#: resources/ui/adw/rgbwarp.ui:167
+msgid "Blue Speed"
+msgstr "Ταχύτητα Μπλε"
+
+#: resources/ui/adw/paint-brush.ui:47
+msgid "Brush Size"
+msgstr "Μέγεθος Βούρτσας"
+
+#: resources/ui/adw/trex.ui:47
+msgid "Claw Scratch Scale"
+msgstr "Κλιμάκωση γραντζουνιών"
+
+#: resources/ui/adw/trex.ui:80
+msgid "Claw Scratch Count"
+msgstr "Πλήθος Γραντζουνιών"
+
+#: resources/ui/adw/trex.ui:113
+msgid "Warp Effect"
+msgstr "Εφέ Παραμόρφωσης"
+
+#: resources/ui/adw/trex.ui:146
+msgid "Flash Color"
+msgstr "Χρώμα Φλας"
+
+#: resources/ui/adw/aura-glow.ui:47
+msgid "Random Color"
+msgstr "Τυχαίο Χρώμα"
+
+#: resources/ui/adw/aura-glow.ui:69
+msgid "Start Hue"
+msgstr "Απόχρωση Έναρξης"
+
+#: resources/ui/adw/aura-glow.ui:136
+msgid "Saturation"
+msgstr "Κορεσμός"
+
+#: resources/ui/adw/aura-glow.ui:169
+msgid "Edge Size"
+msgstr "Μέγεθος Άκρων"
+
+#: resources/ui/adw/aura-glow.ui:202
+msgid "Edge Hardness"
+msgstr "Σκληρότητα Άκρων"
+
+#: resources/ui/adw/aura-glow.ui:235 resources/ui/adw/focus.ui:61
+msgid "Blur Amount"
+msgstr "Ποσό Θολώματος"
+
+#: resources/ui/adw/pixel-wheel.ui:47
+msgid "Spoke Count"
+msgstr "Πλήθος Ακτίνων"
+
+#: resources/ui/adw/glide.ui:80
+msgid "Squish"
+msgstr "Συμπίεση"
+
+#: resources/ui/adw/glide.ui:113
+msgid "Tilt"
+msgstr "Πρόσκλιση"
+
+#: resources/ui/adw/glide.ui:146
+msgid "Shift"
+msgstr "Μετακίνηση"
+
+#: resources/ui/adw/apparition.ui:81
+msgid "Twirl Intensity"
+msgstr "Ένταση Στρόβιλου"
+
+#: resources/ui/adw/apparition.ui:114
+msgid "Shake Intensity"
+msgstr "Ένταση Κουνήματος"
+
+#: resources/ui/adw/apparition.ui:147
+msgid "Suction Intensity"
+msgstr "Ένταση Αναρρόφησης"
+
+#: resources/ui/adw/portal.ui:47
+msgid "Rotation Speed"
+msgstr "Ταχύτητα Περιστροφής"
+
+#: resources/ui/adw/portal.ui:80
+msgid "Whirling"
+msgstr "Στροβιλισμός"
+
+#: resources/ui/adw/portal.ui:113
+msgid "Details"
+msgstr "Λεπτομέρειες"
+
+#: resources/ui/adw/incinerate.ui:80
+msgid "Turbulence"
+msgstr "Tύρβη"
+
+#: resources/ui/adw/incinerate.ui:113
+msgid "Start at Pointer"
+msgstr "Ξεκινήστε από τον Κέρσορα"
+
+#: resources/ui/adw/incinerate.ui:114
+msgid "If disabled, a random location will be chosen."
+msgstr "Εάν απενεργοποιηθεί, θα επιλεγεί μια τυχαία θέση."
+
+#: resources/ui/adw/hexagon.ui:80
+msgid "Mesh Line Width"
+msgstr "Πλάτος Γραμμής Πλέγματος"
+
+#: resources/ui/adw/hexagon.ui:113
+msgid "Line Color"
+msgstr "Χρώμα Γραμμής"
+
+#: resources/ui/adw/hexagon.ui:138
+msgid "Glow Color"
+msgstr "Χρώμα Λάμψης"
+
+#: resources/ui/adw/hexagon.ui:163
+msgid "Additive Blending"
+msgstr "Πρόσθετη Ανάμειξη"
+
+#: resources/ui/adw/hexagon.ui:164
+msgid "You may want to enable this for dark window themes."
+msgstr "Μπορεί να θέλετε να το ενεργοποιήσετε για θέματα σκοτεινού παραθύρου."
+
+#: resources/ui/adw/fire.ui:14
+msgid "Presets"
+msgstr "Προεπιλογές"
+
+#: resources/ui/adw/fire.ui:19 resources/ui/adw/mushroom.ui:61
+msgid "Choose a Preset"
+msgstr "Επιλέξτε μια Προεπιλογή"
+
+#: resources/ui/adw/fire.ui:129
+msgid "3D Noise"
+msgstr "3D Θόρυβος"
+
+#: resources/ui/adw/fire.ui:130
+msgid "Creates a more dynamic fire but requires more GPU power."
+msgstr "Δημιουργεί μια πιο δυναμική φωτιά, αλλά απαιτεί περισσότερη ισχύ GPU."
+
+#: resources/ui/adw/fire.ui:152
+msgid "Gradient"
+msgstr "Κλίση"
+
+#: resources/ui/adw/team-rocket.ui:54
+msgid "Animation Split"
+msgstr "Διαχωρισμός Κινουμένων Σχεδίων"
+
+#: resources/ui/adw/team-rocket.ui:91
+msgid "Rotate Window"
+msgstr "Περιστρεφή Παραθύρου"
+
+#: resources/ui/adw/team-rocket.ui:114
+msgid "Horizontal Sparkle Position"
+msgstr "Οριζόντια Θέση Σπινθήρων"
+
+#: resources/ui/adw/team-rocket.ui:151
+msgid "Vertical Sparkle Position"
+msgstr "Κατακόρυφη Θέση Σπινθήρων"
+
+#: resources/ui/adw/team-rocket.ui:189
+msgid "Sparkle Size"
+msgstr "Μέγεθος Σπινθήρων"
+
+#: resources/ui/adw/team-rocket.ui:226
+msgid "Sparkle Rotation"
+msgstr "Περιστροφή Σπινθήρων"
+
+#: resources/ui/adw/focus.ui:87
+msgid "Blur Quality"
+msgstr "Ποιότητα Θολώματος"
+
+#: resources/ui/adw/prefs.ui:65
+msgid "Effect Profile Constraints"
+msgstr "Περιορισμοί Προφίλ Εφέ"
+
+#: resources/ui/adw/prefs.ui:66
+msgid "Define when the current effect settings should be used."
+msgstr "Ορίστε πότε πρέπει να χρησιμοποιηθούν οι τρέχουσες ρυθμίσεις εφέ."
+
+#: resources/ui/adw/prefs.ui:70
+msgid "Application"
+msgstr "Εφαρμογή"
+
+#: resources/ui/adw/prefs.ui:81 resources/ui/adw/prefs.ui:102
+#: resources/ui/adw/prefs.ui:117 resources/ui/adw/prefs.ui:132
+#: resources/ui/adw/prefs.ui:147 resources/ui/adw/prefs.ui:162
+msgid "Any"
+msgstr "Οποιαδήποτε"
+
+#: resources/ui/adw/prefs.ui:98
+msgid "Animation Type"
+msgstr "Τύπος Κινουμένων Σχεδίων"
+
+#: resources/ui/adw/prefs.ui:113
+msgid "Window Type"
+msgstr "Τύπος Παραθύρου"
+
+#: resources/ui/adw/prefs.ui:128
+msgid "Color Scheme"
+msgstr "Σχέδιο Χρώματος"
+
+#: resources/ui/adw/prefs.ui:143
+msgid "Power Mode"
+msgstr "Λειτουργία Ισχύος"
+
+#: resources/ui/adw/prefs.ui:158
+msgid "Power Profile"
+msgstr "Προφίλ Ισχύος"
+
+#: resources/ui/adw/prefs.ui:179
+msgid "Advanced Profile Options"
+msgstr "Προχωρημένες Επιλογές Προφίλ"
+
+#: resources/ui/adw/prefs.ui:184
+msgid "Use this profile even if there are better matching profiles."
+msgstr ""
+"Χρησιμοποιήστε αυτό το προφίλ ακόμη και αν υπάρχουν καλύτερα αντιστοιχίσιμα "
+"προφίλ ."
+
+#: resources/ui/adw/prefs.ui:204
+msgid "Delete this Profile..."
+msgstr "Διαγράψτε αυτό το Προφίλ .."
+
+#: resources/ui/adw/prefs.ui:223
+msgid "Effect Selection"
+msgstr "Επιλογή Εφέ"
+
+#: resources/ui/adw/prefs.ui:224
+msgid "If multiple are selected, one is chosen randomly."
+msgstr "Εάν έχουν επιλεγεί πολλαπλά, επιλέγεται ένα τυχαία."
+
+#: resources/ui/adw/prefs.ui:235
+msgid "Search..."
+msgstr "Αναζήτηση..."
+
+#: resources/ui/adw/prefs.ui:250
+msgid "Enable All"
+msgstr "Ενεργοποίηση Όλων"
+
+#: resources/ui/adw/prefs.ui:256
+msgid "Disable All"
+msgstr "Απενεργοποίηση Όλων"
+
+#: resources/ui/adw/mushroom.ui:55
+msgid "Effect Presets"
+msgstr "Προεπιλογές Εφέ"
+
+#: resources/ui/adw/mushroom.ui:73
+msgid "Scale Style"
+msgstr "Στυλ Κλιμάκωσης"
+
+#: resources/ui/adw/mushroom.ui:74
+msgid "8Bit --- Smooth"
+msgstr "8Bit --- Ομαλό"
+
+#: resources/ui/adw/mushroom.ui:112
+msgid "Spark Count"
+msgstr "Πλήθος Σπινθήρων"
+
+#: resources/ui/adw/mushroom.ui:150
+msgid "Spark Rotation"
+msgstr "Περιστροφή Σπινθήρα"
+
+#: resources/ui/adw/mushroom.ui:188
+msgid "Spark Color"
+msgstr "Χρώμα Σπινθήρων"
+
+#: resources/ui/adw/mushroom.ui:222
+msgid "Rays Color"
+msgstr "Χρώμα Ακτίνων"
+
+#: resources/ui/adw/mushroom.ui:256
+msgid "Star Rings Count"
+msgstr "Πλήθος Αστρικών Δακτυλίων"
+
+#: resources/ui/adw/mushroom.ui:294
+msgid "Star Ring Rotation"
+msgstr "Περιστροφή Αστρικού Δακτυλίου"
+
+#: resources/ui/adw/mushroom.ui:332
+msgid "Stars Count Per Ring"
+msgstr "Πλήθος Αστέρων Ανά Δακτύλιο"
+
+#: resources/ui/adw/mushroom.ui:370
+msgid "Star Gradient"
+msgstr "Κλίση Αστέρα"
+
+#: resources/ui/adw/pixelate.ui:47
+msgid "Noise"
+msgstr "Θόρυβος"

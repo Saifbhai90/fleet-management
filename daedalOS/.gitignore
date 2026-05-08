@@ -1,0 +1,34 @@
+.next
+.swc
+certificates
+out
+
+node_modules
+
+test-results
+playwright-report
+playwright/.cache
+
+public/private
+public/Program Files/
+public/robots.txt
+public/rss.xml
+public/sitemap.xml
+public/.index/*
+public/Users/Public/**
+
+!public/Users/**/desktop.ini
+!public/Users/Public/Desktop
+!public/Users/Public/Desktop/My PC.url
+!public/Users/Public/Desktop/Public.url
+!public/Users/Public/Desktop/Fleet Notes.url
+!public/Users/Public/Desktop/Fleet Calculator.url
+!public/Users/Public/Desktop/Fleet Multi File Print.url
+!public/Users/Public/Documents
+!public/Users/Public/Music
+!public/Users/Public/Pictures
+!public/Users/Public/Pictures/prompts.json
+!public/Users/Public/Pictures/slideshow.json
+!public/Users/Public/Start Menu
+!public/Users/Public/Start Menu/*.url
+!public/Users/Public/Videos
