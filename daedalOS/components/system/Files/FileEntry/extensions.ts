@@ -1,9 +1,5 @@
 import { emulatorCores } from "components/apps/Emulator/config";
-import {
-  EDITABLE_IMAGE_FILE_EXTENSIONS,
-  STIRLING_PDF_APP_URL,
-  TEXT_EDITORS,
-} from "utils/constants";
+import { EDITABLE_IMAGE_FILE_EXTENSIONS, TEXT_EDITORS } from "utils/constants";
 
 type Extension = {
   command?: string;
@@ -75,9 +71,7 @@ const types = {
   },
   PdfDocument: {
     icon: "pdf",
-    process: STIRLING_PDF_APP_URL
-      ? ["StirlingPDF", "PDF"]
-      : ["PDF"],
+    process: ["PDF"],
     type: "PDF Document",
   },
   PythonFile: {

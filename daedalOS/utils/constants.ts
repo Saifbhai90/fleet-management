@@ -14,10 +14,6 @@ export const IFRAME_CONFIG = {
     "allow-downloads allow-forms allow-modals allow-pointer-lock allow-popups allow-presentation allow-same-origin allow-scripts",
 };
 
-/** Base URL for Stirling-PDF (Docker/backend). Set at build time via NEXT_PUBLIC_STIRLING_PDF_URL. */
-export const STIRLING_PDF_APP_URL =
-  process.env.NEXT_PUBLIC_STIRLING_PDF_URL?.trim() ?? "";
-
 export const DEFAULT_LOCALE = "en";
 
 export const DEFAULT_ASCENDING = true;
