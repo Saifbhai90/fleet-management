@@ -2,14 +2,11 @@ import { type TextItem } from "pdfjs-dist/types/src/display/api";
 import { loadFiles } from "utils/functions";
 
 export const readPdfText = async (pdfDoc: Buffer): Promise<string> => {
-  await loadFiles(["/Program Files/PDF.js/pdf.js"]);
+  await loadFiles(["/Program Files/PDF.js/pdf-bootstrap.mjs"]);
 
   let text = "";
 
   if (window.pdfjsLib) {
-    window.pdfjsLib.GlobalWorkerOptions.workerSrc =
-      "/Program Files/PDF.js/pdf.worker.js";
-
     try {
       const doc = await window.pdfjsLib.getDocument(pdfDoc).promise;
 

@@ -217,7 +217,7 @@ const directory: Processes = {
     Component: dynamic(() => import("components/apps/PDF")),
     backgroundColor: "#525659",
     icon: "/System/Icons/pdf.webp",
-    libs: ["/Program Files/PDF.js/pdf.js"],
+    libs: ["/Program Files/PDF.js/pdf-bootstrap.mjs"],
     title: "PDF",
   },
   Paint: {

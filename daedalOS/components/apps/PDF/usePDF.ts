@@ -173,17 +173,12 @@ const usePDF = (
 
   useEffect(() => {
     loadFiles(libs).then(() => {
-      if (window.pdfjsLib) {
-        window.pdfjsLib.GlobalWorkerOptions.workerSrc =
-          "/Program Files/PDF.js/pdf.worker.js";
-
-        if (processUrl) {
-          renderPages(processUrl).catch(() => {
-            setUrl(id, "");
-            argument(id, "rendering", false);
-            renderingRef.current = false;
-          });
-        }
+      if (window.pdfjsLib && processUrl) {
+        renderPages(processUrl).catch(() => {
+          setUrl(id, "");
+          argument(id, "rendering", false);
+          renderingRef.current = false;
+        });
       }
     });
   }, [argument, id, libs, processUrl, renderPages, setUrl]);

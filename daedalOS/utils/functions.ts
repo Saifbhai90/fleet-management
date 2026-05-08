@@ -358,7 +358,13 @@ export const loadFiles = async (
     : files.reduce(async (_promise, file) => {
         await (getExtension(file) === ".css"
           ? loadStyle(encodeURI(file), contentWindow)
-          : loadScript(encodeURI(file), defer, force, asModule, contentWindow));
+          : loadScript(
+              encodeURI(file),
+              defer,
+              force,
+              asModule || getExtension(file) === ".mjs",
+              contentWindow
+            ));
       }, Promise.resolve());
 
 export const getHtmlToImage = async (): Promise<
@@ -1137,6 +1143,7 @@ export const preloadLibs = (libs: string[] = []): void => {
         link.rel = "prerender";
         break;
       case ".js":
+      case ".mjs":
         if (supportsModulePreload()) {
           link.rel = "modulepreload";
         }
