@@ -35,7 +35,7 @@ const GlobalStyle = styled.createGlobalStyle`
     --background-blend-mode: normal;
     --before-background-opacity: 0%;
     --after-background-opacity: 100%;
-    --after-background: url("/fleet-brand/wallpaper.svg");
+    --after-background: url("fleet-brand/wallpaper.svg");
     /* stylelint-disable value-no-vendor-prefix */
     height: -webkit-fill-available;
     height: -moz-available;
