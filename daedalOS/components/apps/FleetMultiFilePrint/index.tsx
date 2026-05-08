@@ -82,6 +82,26 @@ const FleetMultiFilePrint: FC<ComponentProcessProps> = () => {
     }
   };
 
+  const openPdfInNewTab = (): void => {
+    if (!pdfUrl) return;
+    window.open(pdfUrl, "_blank", "noopener,noreferrer");
+  };
+
+  const printPdfInNewTab = (): void => {
+    if (!pdfUrl) return;
+    const printWindow = window.open(pdfUrl, "_blank");
+    if (!printWindow) return;
+
+    setTimeout(() => {
+      try {
+        printWindow.focus();
+        printWindow.print();
+      } catch {
+        // Ignore failures from browser popup/print policies.
+      }
+    }, 700);
+  };
+
   return (
     <div style={appStyle}>
       <div style={{ alignItems: "center", display: "flex", gap: 8, justifyContent: "space-between" }}>
@@ -151,12 +171,57 @@ const FleetMultiFilePrint: FC<ComponentProcessProps> = () => {
       {summary && <div style={{ color: "#166534", fontWeight: 600 }}>{summary}</div>}
 
       {pdfUrl && (
-        <div style={{ border: "1px solid #dbe1ea", borderRadius: 8, flex: 1, minHeight: 260, overflow: "hidden" }}>
-          <iframe
-            src={pdfUrl}
-            style={{ border: 0, height: "100%", width: "100%" }}
-            title="Combined PDF"
-          />
+        <div
+          style={{
+            alignItems: "center",
+            background: "#f1f5f9",
+            border: "1px solid #dbe1ea",
+            borderRadius: 8,
+            color: "#0f172a",
+            display: "flex",
+            flex: 1,
+            flexDirection: "column",
+            gap: 10,
+            justifyContent: "center",
+            minHeight: 220,
+            padding: 16,
+            textAlign: "center",
+          }}
+        >
+          <strong>PDF ready for preview and print</strong>
+          <span style={{ fontSize: 13 }}>
+            Chrome sandbox iframe me direct preview block hoti hai, is liye PDF new tab me open hogi.
+          </span>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              onClick={openPdfInNewTab}
+              style={{
+                background: "#2563eb",
+                border: "1px solid #1d4ed8",
+                borderRadius: 7,
+                color: "#fff",
+                cursor: "pointer",
+                padding: "6px 12px",
+              }}
+              type="button"
+            >
+              Open PDF
+            </button>
+            <button
+              onClick={printPdfInNewTab}
+              style={{
+                background: "#0f766e",
+                border: "1px solid #0f766e",
+                borderRadius: 7,
+                color: "#fff",
+                cursor: "pointer",
+                padding: "6px 12px",
+              }}
+              type="button"
+            >
+              Print PDF
+            </button>
+          </div>
         </div>
       )}
     </div>
