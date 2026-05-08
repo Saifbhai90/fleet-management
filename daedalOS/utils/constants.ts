@@ -24,8 +24,8 @@ export const DEFAULT_CLOSE_EFFECT = "None";
 
 export const DEFAULT_THEME: ThemeName = "defaultTheme";
 
-/** Default desktop wallpaper id — change in session / Personalize, or swap for another id from Desktop wallpaper menu (see `Wallpapers/constants.ts`). */
-export const DEFAULT_WALLPAPER = "COASTAL_LANDSCAPE";
+/** Default desktop wallpaper id — keeping VANTA to match stock daedalOS look. */
+export const DEFAULT_WALLPAPER = "VANTA";
 
 export const DEFAULT_WALLPAPER_FIT: WallpaperFit = "fill";
 
