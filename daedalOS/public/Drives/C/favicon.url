@@ -1,1 +1,5 @@
-﻿[InternetShortcut]`nBaseURL=Browser`nComment=Favicon preview`nIconFile=/System/Icons/chromium.webp`nURL=/favicon.ico`n
+[InternetShortcut]
+BaseURL=Browser
+Comment=Favicon preview
+IconFile=/System/Icons/chromium.webp
+URL=/favicon.ico

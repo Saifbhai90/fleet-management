@@ -1,1 +1,5 @@
-﻿[InternetShortcut]`nBaseURL=FileExplorer`nComment=Fleet brand assets`nIconFile=/System/Icons/folder.webp`nURL=/fleet-brand`n
+[InternetShortcut]
+BaseURL=FileExplorer
+Comment=Fleet brand assets
+IconFile=/System/Icons/folder.webp
+URL=/fleet-brand

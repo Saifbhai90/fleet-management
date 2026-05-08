@@ -84,9 +84,8 @@ const createSearchIndex = (path) => {
       const keyPath = normalizePath(fullPath);
 
       if (extname(entry).toLowerCase() === ".url") {
-        const {
-          InternetShortcut: { URL: url = "" },
-        } = parse(readFileSync(fullPath).toString());
+        const parsedShortcut = parse(readFileSync(fullPath, "utf8"));
+        const url = parsedShortcut?.InternetShortcut?.URL || "";
 
         if (url.length > 1 && url.startsWith("/")) {
           return;

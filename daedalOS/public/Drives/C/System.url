@@ -1,1 +1,5 @@
-﻿[InternetShortcut]`nBaseURL=FileExplorer`nComment=System files`nIconFile=/System/Icons/folder.webp`nURL=/System`n
+[InternetShortcut]
+BaseURL=FileExplorer
+Comment=System files
+IconFile=/System/Icons/folder.webp
+URL=/System

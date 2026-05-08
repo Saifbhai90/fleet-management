@@ -1,1 +1,5 @@
-﻿[InternetShortcut]`nBaseURL=MonacoEditor`nComment=Session config`nIconFile=/System/Icons/text.webp`nURL=/session.json`n
+[InternetShortcut]
+BaseURL=MonacoEditor
+Comment=Session config
+IconFile=/System/Icons/text.webp
+URL=/session.json

@@ -1,1 +1,5 @@
-﻿[InternetShortcut]`nBaseURL=Browser`nComment=Sitemap`nIconFile=/System/Icons/chromium.webp`nURL=/sitemap.xml`n
+[InternetShortcut]
+BaseURL=Browser
+Comment=Sitemap
+IconFile=/System/Icons/chromium.webp
+URL=/sitemap.xml

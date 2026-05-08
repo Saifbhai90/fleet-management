@@ -1,1 +1,5 @@
-﻿[InternetShortcut]`nBaseURL=Browser`nComment=Screenshot image`nIconFile=/System/Icons/chromium.webp`nURL=/screenshot.png`n
+[InternetShortcut]
+BaseURL=Browser
+Comment=Screenshot image
+IconFile=/System/Icons/chromium.webp
+URL=/screenshot.png

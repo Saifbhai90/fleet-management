@@ -1,1 +1,5 @@
-﻿[InternetShortcut]`nBaseURL=MonacoEditor`nComment=Credits file`nIconFile=/System/Icons/text.webp`nURL=/CREDITS.md`n
+[InternetShortcut]
+BaseURL=MonacoEditor
+Comment=Credits file
+IconFile=/System/Icons/text.webp
+URL=/CREDITS.md
