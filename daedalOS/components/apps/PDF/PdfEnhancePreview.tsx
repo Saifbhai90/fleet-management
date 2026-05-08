@@ -79,7 +79,10 @@ const PdfEnhancePreview: FC<PdfEnhancePreviewProps> = ({ id }) => {
         pngBuffer
       );
 
-      await writeFile(url, Buffer.from(nextPdf), true);
+      const wrote = await writeFile(url, Buffer.from(nextPdf), true);
+
+      if (!wrote) throw new Error("writeFile returned false");
+
       reloadDocument();
       dismiss();
     } catch {

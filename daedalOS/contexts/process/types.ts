@@ -36,8 +36,9 @@ type PdfProcessArguments = {
   page?: number;
   pdfCropMode?: boolean;
   pdfEditMode?: boolean;
-  pdfRotation?: number;
-  pdfTool?: "pen" | "text";
+  /** Per-page clockwise rotation in degrees (0, 90, 180, 270) for pdf.js viewport only */
+  pdfPageRotations?: number[];
+  pdfTool?: "hand" | "pen" | "text";
   rendering?: boolean;
   scale?: number;
   subTitle?: string;

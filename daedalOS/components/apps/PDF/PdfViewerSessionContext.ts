@@ -1,10 +1,11 @@
-import { createContext, useContext } from "react";
+import { createContext, useContext, type RefObject } from "react";
 
 export type PdfViewerSessionValue = {
   enhancePreviewDataUrl?: string;
   enhancePreviewPage?: number;
   overlayRefs: { current: (HTMLCanvasElement | undefined)[] };
   pageCanvasRefs: { current: (HTMLCanvasElement | undefined)[] };
+  penUndoHandlersRef: RefObject<((() => void) | undefined)[]>;
   reloadDocument: () => void;
   setEnhancePreview: (
     dataUrl?: string,

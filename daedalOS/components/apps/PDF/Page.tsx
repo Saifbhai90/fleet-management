@@ -6,7 +6,10 @@ import {
   type FC,
 } from "react";
 import PdfCropLayer from "components/apps/PDF/PdfCropLayer";
+import { usePdfViewerSession } from "components/apps/PDF/PdfViewerSessionContext";
 import { useProcesses } from "contexts/process";
+
+const MAX_PEN_UNDO = 40;
 
 type PageProps = {
   canvas: HTMLCanvasElement;
@@ -26,6 +29,9 @@ const Page: FC<PageProps> = ({
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const canvasMountRef = useRef<HTMLDivElement | null>(null);
   const overlayRef = useRef<HTMLCanvasElement | null>(null);
+  const undoStackRef = useRef<ImageData[]>([]);
+  const pendingBeforeStrokeRef = useRef<ImageData | undefined>(undefined);
+  const { penUndoHandlersRef } = usePdfViewerSession();
   const {
     argument,
     processes: { [id]: process },
@@ -35,7 +41,7 @@ const Page: FC<PageProps> = ({
     pdfCropMode = false,
     pdfEditMode = false,
     pdfScrollRoot,
-    pdfTool = "pen",
+    pdfTool = "hand",
   } = process || {};
 
   const pageIndex = page - 1;
@@ -64,6 +70,38 @@ const Page: FC<PageProps> = ({
   }, [canvas, pageCanvasRegister, pageIndex]);
 
   useEffect(() => {
+    undoStackRef.current = [];
+    pendingBeforeStrokeRef.current = undefined;
+  }, [canvas.height, canvas.width]);
+
+  useEffect(() => {
+    if (!pdfEditMode) undoStackRef.current = [];
+  }, [pdfEditMode]);
+
+  useEffect(() => {
+    const handlers = penUndoHandlersRef.current;
+
+    const undoLastStroke = (): void => {
+      const overlay = overlayRef.current;
+      const ctx = overlay?.getContext("2d");
+
+      if (!overlay || !ctx) return;
+
+      const snap = undoStackRef.current.pop();
+
+      if (!snap) return;
+
+      ctx.putImageData(snap, 0, 0);
+    };
+
+    handlers[pageIndex] = undoLastStroke;
+
+    return (): void => {
+      handlers[pageIndex] = undefined;
+    };
+  }, [pageIndex, penUndoHandlersRef]);
+
+  useEffect(() => {
     let cleanup: (() => void) | undefined;
 
     const overlay = overlayRef.current;
@@ -78,9 +116,10 @@ const Page: FC<PageProps> = ({
       ctx.fillStyle = "#111827";
 
       let drawing = false;
+      let activePenStroke = false;
 
       const getOffsets = (
-        event: PointerEvent
+        event: Pick<PointerEvent | MouseEvent, "clientX" | "clientY">
       ): { offsetX: number; offsetY: number } => {
         const rect = overlay.getBoundingClientRect();
 
@@ -95,6 +134,13 @@ const Page: FC<PageProps> = ({
 
         overlay.setPointerCapture(event.pointerId);
         drawing = true;
+        activePenStroke = true;
+        pendingBeforeStrokeRef.current = ctx.getImageData(
+          0,
+          0,
+          overlay.width,
+          overlay.height
+        );
         const { offsetX, offsetY } = getOffsets(event);
 
         ctx.beginPath();
@@ -110,7 +156,7 @@ const Page: FC<PageProps> = ({
         ctx.stroke();
       };
 
-      const onPointerUp = (event: PointerEvent): void => {
+      const finishPenStroke = (event: PointerEvent): void => {
         if (!drawing) return;
 
         drawing = false;
@@ -120,17 +166,34 @@ const Page: FC<PageProps> = ({
         } catch {
           // Ignore invalid capture release
         }
+
+        if (activePenStroke && pendingBeforeStrokeRef.current) {
+          undoStackRef.current.push(pendingBeforeStrokeRef.current);
+          pendingBeforeStrokeRef.current = undefined;
+
+          while (undoStackRef.current.length > MAX_PEN_UNDO) {
+            undoStackRef.current.shift();
+          }
+        }
+
+        activePenStroke = false;
+      };
+
+      const onPointerUp = (event: PointerEvent): void => {
+        finishPenStroke(event);
       };
 
       const onClick = (event: MouseEvent): void => {
         if (pdfTool !== "text") return;
+
+        const { offsetX, offsetY } = getOffsets(event);
 
         // eslint-disable-next-line no-alert -- lightweight annotation UX inside desktop shell
         const label = window.prompt("Enter text to place on this page");
 
         if (!label) return;
 
-        ctx.fillText(label, event.offsetX, event.offsetY);
+        ctx.fillText(label, offsetX, offsetY);
       };
 
       overlay.addEventListener("pointerdown", onPointerDown);
@@ -182,6 +245,9 @@ const Page: FC<PageProps> = ({
     return () => observer?.disconnect();
   }, [argument, componentWindow, id, page, pdfScrollRoot]);
 
+  const overlayInteractive =
+    pdfEditMode && pdfTool !== "hand" && !pdfCropMode;
+
   return (
     <li>
       <div
@@ -199,13 +265,14 @@ const Page: FC<PageProps> = ({
             cursor:
               pdfCropMode || !pdfEditMode
                 ? "default"
-                : pdfTool === "pen"
-                  ? "crosshair"
-                  : "text",
+                : pdfTool === "hand"
+                  ? "grab"
+                  : pdfTool === "pen"
+                    ? "crosshair"
+                    : "text",
             height: canvas.height,
             left: 0,
-            pointerEvents:
-              pdfCropMode || !pdfEditMode ? "none" : "auto",
+            pointerEvents: overlayInteractive ? "auto" : "none",
             position: "absolute",
             top: 0,
             touchAction: "none",

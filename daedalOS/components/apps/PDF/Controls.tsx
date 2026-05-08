@@ -12,12 +12,14 @@ import {
   Crop,
   Download,
   Enhance,
+  Hand,
   More,
   Pencil,
   Print,
   RotateCw,
   SaveDisk,
   Subtract,
+  Undo,
 } from "components/apps/PDF/ControlIcons";
 import { mergeOverlaysIntoPdf } from "components/apps/PDF/mergePdfOverlays";
 import { enhanceCanvasToDataUrl } from "components/apps/PDF/pdfImageEnhance";
@@ -28,14 +30,7 @@ import { type ComponentProcessProps } from "components/system/Apps/RenderCompone
 import { useFileSystem } from "contexts/fileSystem";
 import { useProcesses } from "contexts/process";
 import Button from "styles/common/Button";
-import { MILLISECONDS_IN_SECOND } from "utils/constants";
-import { bufferToUrl, isSafari, label } from "utils/functions";
-
-declare global {
-  interface Window {
-    InstallTrigger?: boolean;
-  }
-}
+import { bufferToUrl, label } from "utils/functions";
 
 const COMPACT_TOOLBAR_PX = 640;
 
@@ -43,6 +38,7 @@ const Controls: FC<ComponentProcessProps> = ({ id }) => {
   const {
     overlayRefs,
     pageCanvasRefs,
+    penUndoHandlersRef,
     reloadDocument,
     setEnhancePreview,
   } = usePdfViewerSession();
@@ -53,8 +49,8 @@ const Controls: FC<ComponentProcessProps> = ({ id }) => {
     page: currentPage = 1,
     pdfCropMode = false,
     pdfEditMode = false,
-    pdfRotation = 0,
-    pdfTool = "pen",
+    pdfPageRotations = [],
+    pdfTool = "hand",
     pdfScrollRoot,
     rendering = false,
     scale = 1,
@@ -118,17 +114,22 @@ const Controls: FC<ComponentProcessProps> = ({ id }) => {
     });
   };
 
+  const persistPdfWithOverlays = async (): Promise<void> => {
+    const bytes = await readFile(url);
+    const merged = await mergeOverlaysIntoPdf(
+      new Uint8Array(bytes),
+      overlayRefs.current
+    );
+    const wrote = await writeFile(url, Buffer.from(merged), true);
+
+    if (!wrote) throw new Error("writeFile returned false");
+  };
+
   const onSave = async (): Promise<void> => {
     if (!url || count === 0) return;
 
     try {
-      const bytes = await readFile(url);
-      const merged = await mergeOverlaysIntoPdf(
-        new Uint8Array(bytes),
-        overlayRefs.current
-      );
-
-      await writeFile(url, Buffer.from(merged), true);
+      await persistPdfWithOverlays();
       reloadDocument();
     } catch {
       // eslint-disable-next-line no-alert -- user-visible failure for blocked FS writes
@@ -169,13 +170,79 @@ const Controls: FC<ComponentProcessProps> = ({ id }) => {
 
     if (next) {
       argument(id, "pdfCropMode", false);
-      argument(id, "pdfTool", "pen");
+      argument(id, "pdfTool", "hand");
       setEnhancePreview(undefined, undefined);
     }
   };
 
-  const rotatePage = (): void => {
-    argument(id, "pdfRotation", (pdfRotation + 90) % 360);
+  const rotatePage = async (): Promise<void> => {
+    if (!url || count === 0) return;
+
+    try {
+      await persistPdfWithOverlays();
+      const rotations = [...pdfPageRotations];
+
+      while (rotations.length < count) rotations.push(0);
+
+      const idx = currentPage - 1;
+
+      rotations[idx] = ((rotations[idx] ?? 0) + 90) % 360;
+      argument(id, "pdfPageRotations", rotations);
+      reloadDocument();
+    } catch {
+      // eslint-disable-next-line no-alert -- rotation persists annotations via merge+write
+      window.alert("Could not rotate this page.");
+    }
+  };
+
+  const undoLastPenStroke = (): void => {
+    penUndoHandlersRef.current[currentPage - 1]?.();
+  };
+
+  const printPdf = async (): Promise<void> => {
+    if (!url || count === 0) return;
+
+    try {
+      const buf = await readFile(url);
+      const blob = new Blob([new Uint8Array(buf)], {
+        type: "application/pdf",
+      });
+      const blobUrl = URL.createObjectURL(blob);
+      const iframe = document.createElement("iframe");
+
+      iframe.setAttribute(
+        "style",
+        "position:fixed;width:0;height:0;border:0;right:0;bottom:0;"
+      );
+      iframe.src = blobUrl;
+      document.body.append(iframe);
+
+      iframe.addEventListener(
+        "load",
+        () => {
+          iframe.contentWindow?.focus();
+          iframe.contentWindow?.print();
+          globalThis.setTimeout(() => {
+            iframe.remove();
+            URL.revokeObjectURL(blobUrl);
+          }, 120_000);
+        },
+        { once: true }
+      );
+    } catch {
+      try {
+        const { default: printJs } = await import("print-js");
+
+        printJs({
+          base64: true,
+          printable: (await readFile(url)).toString("base64"),
+          type: "pdf",
+        });
+      } catch {
+        // eslint-disable-next-line no-alert -- last-resort feedback
+        window.alert("Could not open the print dialog.");
+      }
+    }
   };
 
   return (
@@ -283,16 +350,16 @@ const Controls: FC<ComponentProcessProps> = ({ id }) => {
           {compactToolbar ? undefined : (
             <>
               <Button
-                className="icon-tool"
-                disabled={count === 0 || rendering}
-                onClick={rotatePage}
-                {...label("Rotate")}
+                className={`icon-tool${pdfTool === "hand" ? " active" : ""}`}
+                disabled={!pdfEditMode || rendering || count === 0}
+                onClick={() => argument(id, "pdfTool", "hand")}
+                {...label("Hand (scroll)")}
               >
-                <RotateCw />
+                <Hand />
               </Button>
               <Button
                 className={`icon-tool${pdfTool === "pen" ? " active" : ""}`}
-                disabled={!pdfEditMode || rendering}
+                disabled={!pdfEditMode || rendering || count === 0}
                 onClick={() => argument(id, "pdfTool", "pen")}
                 {...label("Pen")}
               >
@@ -300,11 +367,31 @@ const Controls: FC<ComponentProcessProps> = ({ id }) => {
               </Button>
               <Button
                 className={`icon-tool${pdfTool === "text" ? " active" : ""}`}
-                disabled={!pdfEditMode || rendering}
+                disabled={!pdfEditMode || rendering || count === 0}
                 onClick={() => argument(id, "pdfTool", "text")}
                 {...label("Text")}
               >
                 T
+              </Button>
+              <Button
+                className="icon-tool"
+                disabled={!pdfEditMode || rendering || count === 0}
+                onClick={undoLastPenStroke}
+                {...label("Undo last pen stroke")}
+              >
+                <Undo />
+              </Button>
+              <Button
+                className="icon-tool"
+                disabled={count === 0 || rendering}
+                onClick={() => {
+                  rotatePage().catch(() => {
+                    // surfaced via alert inside rotatePage
+                  });
+                }}
+                {...label("Rotate page")}
+              >
+                <RotateCw />
               </Button>
             </>
           )}
@@ -334,21 +421,21 @@ const Controls: FC<ComponentProcessProps> = ({ id }) => {
                 <div className="more-dropdown">
                   <button
                     className="more-dd-row"
-                    disabled={count === 0 || rendering}
+                    disabled={!pdfEditMode || rendering || count === 0}
                     onClick={() => {
-                      rotatePage();
+                      argument(id, "pdfTool", "hand");
                       setMoreOpen(false);
                     }}
                     type="button"
                   >
                     <span className="more-dd-icon">
-                      <RotateCw />
+                      <Hand />
                     </span>
-                    <span>Rotate</span>
+                    <span>Hand</span>
                   </button>
                   <button
                     className="more-dd-row"
-                    disabled={!pdfEditMode || rendering}
+                    disabled={!pdfEditMode || rendering || count === 0}
                     onClick={() => {
                       argument(id, "pdfTool", "pen");
                       setMoreOpen(false);
@@ -359,7 +446,7 @@ const Controls: FC<ComponentProcessProps> = ({ id }) => {
                   </button>
                   <button
                     className="more-dd-row"
-                    disabled={!pdfEditMode || rendering}
+                    disabled={!pdfEditMode || rendering || count === 0}
                     onClick={() => {
                       argument(id, "pdfTool", "text");
                       setMoreOpen(false);
@@ -367,6 +454,36 @@ const Controls: FC<ComponentProcessProps> = ({ id }) => {
                     type="button"
                   >
                     Text
+                  </button>
+                  <button
+                    className="more-dd-row"
+                    disabled={!pdfEditMode || rendering || count === 0}
+                    onClick={() => {
+                      undoLastPenStroke();
+                      setMoreOpen(false);
+                    }}
+                    type="button"
+                  >
+                    <span className="more-dd-icon">
+                      <Undo />
+                    </span>
+                    <span>Undo stroke</span>
+                  </button>
+                  <button
+                    className="more-dd-row"
+                    disabled={count === 0 || rendering}
+                    onClick={() => {
+                      rotatePage().catch(() => {
+                        // surfaced via alert inside rotatePage
+                      });
+                      setMoreOpen(false);
+                    }}
+                    type="button"
+                  >
+                    <span className="more-dd-icon">
+                      <RotateCw />
+                    </span>
+                    <span>Rotate page</span>
                   </button>
                 </div>
               ) : undefined}
@@ -392,20 +509,9 @@ const Controls: FC<ComponentProcessProps> = ({ id }) => {
         </Button>
         <Button
           disabled={count === 0}
-          onClick={async () => {
-            if (isSafari()) {
-              window.InstallTrigger = true;
-              setTimeout(() => {
-                delete window.InstallTrigger;
-              }, 5 * MILLISECONDS_IN_SECOND);
-            }
-
-            const { default: printJs } = await import("print-js");
-
-            printJs({
-              base64: true,
-              printable: (await readFile(url)).toString("base64"),
-              type: "pdf",
+          onClick={() => {
+            printPdf().catch(() => {
+              // surfaced via alert inside printPdf
             });
           }}
           {...label("Print")}

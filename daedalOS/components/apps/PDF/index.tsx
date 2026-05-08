@@ -1,7 +1,6 @@
 import {
   memo,
   useCallback,
-  useEffect,
   useRef,
   useState,
   type FC,
@@ -25,6 +24,7 @@ const PDF: FC<ComponentProcessProps> = ({ id }) => {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const overlayRefs = useRef<(HTMLCanvasElement | undefined)[]>([]);
   const pageCanvasRefs = useRef<(HTMLCanvasElement | undefined)[]>([]);
+  const penUndoHandlersRef = useRef<((() => void) | undefined)[]>([]);
   const [reloadKey, setReloadKey] = useState(0);
   const [enhancePreviewDataUrl, setEnhancePreviewDataUrl] =
     useState<string | undefined>();
@@ -59,9 +59,6 @@ const PDF: FC<ComponentProcessProps> = ({ id }) => {
 
   const { pages, thumbnails } = usePDF(id, scrollAreaRef, reloadKey);
 
-  const pagesMarker =
-    pages[0]?.dataset.pdfReactKey ?? `len-${String(pages.length)}`;
-
   const overlayRegister = useCallback(
     (pageIndex: number, element?: HTMLCanvasElement) => {
       overlayRefs.current[pageIndex] = element;
@@ -75,13 +72,6 @@ const PDF: FC<ComponentProcessProps> = ({ id }) => {
     },
     []
   );
-
-  /* eslint-disable react-hooks-addons/no-unused-deps -- pagesMarker tracks rebuilt page canvases */
-  useEffect(() => {
-    overlayRefs.current = [];
-    pageCanvasRefs.current = [];
-  }, [pagesMarker]);
-  /* eslint-enable react-hooks-addons/no-unused-deps */
 
   const jumpToPage = useCallback(
     (pageNumber: number) => {
@@ -108,6 +98,7 @@ const PDF: FC<ComponentProcessProps> = ({ id }) => {
         enhancePreviewPage,
         overlayRefs,
         pageCanvasRefs,
+        penUndoHandlersRef,
         reloadDocument,
         setEnhancePreview,
       }}

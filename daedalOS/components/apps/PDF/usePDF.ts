@@ -80,7 +80,7 @@ const usePDF = (
   } = useProcesses();
   const {
     libs = [],
-    pdfRotation = 0,
+    pdfPageRotations,
     scale,
     url: processUrl,
   } = process || {};
@@ -109,7 +109,11 @@ const usePDF = (
 
         if (renderCancelledRef.current) return;
 
-        const vp = firstPage.getViewport({ rotation: pdfRotation, scale: 1 });
+        const firstRotation = pdfPageRotations?.[0] ?? 0;
+        const vp = firstPage.getViewport({
+          rotation: firstRotation,
+          scale: 1,
+        });
         effectiveScale = getInitialScale(containerRef.current.clientWidth, vp.width);
         argument(id, "scale", effectiveScale);
       }
@@ -123,15 +127,20 @@ const usePDF = (
       for (let pageNumber = 1; pageNumber <= doc.numPages; pageNumber += 1) {
         if (renderCancelledRef.current) return;
 
+        const pageRotation = pdfPageRotations?.[pageNumber - 1] ?? 0;
+
         const pageCanvas = await renderPageToCanvas(
           doc,
           pageNumber,
           effectiveScale,
-          pdfRotation
+          pageRotation
         );
 
         const pageObj = await doc.getPage(pageNumber);
-        const unitVp = pageObj.getViewport({ rotation: pdfRotation, scale: 1 });
+        const unitVp = pageObj.getViewport({
+          rotation: pageRotation,
+          scale: 1,
+        });
         const thumbScale = Math.min(
           THUMB_MAX_PX / unitVp.width,
           THUMB_MAX_PX / unitVp.height
@@ -141,7 +150,7 @@ const usePDF = (
           doc,
           pageNumber,
           thumbScale,
-          pdfRotation
+          pageRotation
         );
 
         pageCanvas.dataset.pdfReactKey = stampCanvasId();
@@ -164,7 +173,7 @@ const usePDF = (
     argument,
     containerRef,
     id,
-    pdfRotation,
+    pdfPageRotations,
     processUrl,
     scale,
   ]);
@@ -291,7 +300,7 @@ const usePDF = (
     docEpoch,
     id,
     paintPages,
-    pdfRotation,
+    pdfPageRotations,
     processUrl,
     scale,
   ]);
