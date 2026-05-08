@@ -1,10 +1,13 @@
 import styled from "styled-components";
 
 const StyledControls = styled.nav`
+  align-items: center;
   background-color: rgb(50 54 57);
   box-shadow: 0 0 5px hsl(0 0% 10% / 50%);
   display: flex;
-  height: 40px;
+  flex-wrap: wrap;
+  gap: 6px 0;
+  min-height: 40px;
   position: absolute;
   top: ${({ theme }) => theme.sizes.titleBar.height}px;
   width: 100%;
@@ -138,6 +141,25 @@ const StyledControls = styled.nav`
 
         input {
           width: 45px;
+        }
+      }
+
+      &.pdf-extra-tools {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        max-width: min(420px, 45vw);
+        place-items: center;
+
+        button {
+          border-radius: 6px;
+          font-size: 12px;
+          font-weight: 600;
+          height: auto;
+          letter-spacing: 0.3px;
+          min-height: 26px;
+          padding: 4px 10px;
+          width: auto;
         }
       }
     }

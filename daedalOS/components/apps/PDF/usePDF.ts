@@ -10,7 +10,6 @@ import {
   type PDFWorker,
   type PDFDocumentProxy,
 } from "pdfjs-dist/types/src/display/api";
-import type * as PdfjsLib from "pdfjs-dist";
 import { type MetadataInfo } from "components/apps/PDF/types";
 import useTitle from "components/system/Window/useTitle";
 import { useFileSystem } from "contexts/fileSystem";
@@ -24,6 +23,11 @@ export const scales = [
 ];
 
 const CANVAS_MARGIN_PX = 4;
+const THUMB_MAX_PX = 96;
+
+const stampCanvasId = (): string =>
+  globalThis.crypto?.randomUUID?.() ??
+  `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 
 const getInitialScale = (windowWidth = 0, canvasWidth = 0): number => {
   const adjustedWindowWidth = windowWidth - CANVAS_MARGIN_PX * 2;
@@ -36,163 +40,264 @@ const getInitialScale = (windowWidth = 0, canvasWidth = 0): number => {
   return minScaleIndex > 0 ? scales[minScaleIndex - 1] : 1;
 };
 
+type UsePdfResult = {
+  pages: HTMLCanvasElement[];
+  thumbnails: HTMLCanvasElement[];
+};
+
+const renderPageToCanvas = async (
+  doc: PDFDocumentProxy,
+  pageNumber: number,
+  scale: number,
+  rotation: number
+): Promise<HTMLCanvasElement> => {
+  const canvas = document.createElement("canvas");
+  const canvasContext = canvas.getContext(
+    "2d",
+    BASE_2D_CONTEXT_OPTIONS
+  ) as CanvasRenderingContext2D;
+  const page = await doc.getPage(pageNumber);
+  const viewport = page.getViewport({ rotation, scale });
+
+  canvas.height = viewport.height;
+  canvas.width = viewport.width;
+
+  await page.render({ canvas, canvasContext, viewport }).promise;
+
+  return canvas;
+};
+
 const usePDF = (
   id: string,
-  containerRef: RefObject<HTMLDivElement | null>
-): HTMLCanvasElement[] => {
+  containerRef: RefObject<HTMLDivElement | null>,
+  reloadKey: number
+): UsePdfResult => {
   const { readFile } = useFileSystem();
   const {
     argument,
     processes: { [id]: process } = {},
     url: setUrl,
   } = useProcesses();
-  const { libs = [], scale, url: processUrl } = process || {};
+  const {
+    libs = [],
+    pdfRotation = 0,
+    scale,
+    url: processUrl,
+  } = process || {};
   const [pages, setPages] = useState<HTMLCanvasElement[]>([]);
-  const pdfWorker = useRef<PDFWorker | null>(null);
-  const renderPage = useCallback(
-    async (
-      pageNumber: number,
-      doc: PDFDocumentProxy
-    ): Promise<HTMLCanvasElement> => {
-      const canvas = document.createElement("canvas");
-      const canvasContext = canvas.getContext(
-        "2d",
-        BASE_2D_CONTEXT_OPTIONS
-      ) as CanvasRenderingContext2D;
-      const page = await doc.getPage(pageNumber);
-      let viewport: PdfjsLib.PageViewport;
+  const [thumbnails, setThumbnails] = useState<HTMLCanvasElement[]>([]);
+  const pdfWorker = useRef<PDFWorker | undefined>(undefined);
+  const docRef = useRef<PDFDocumentProxy | undefined>(undefined);
+  const [docEpoch, setDocEpoch] = useState(0);
+  const { prependFileToTitle } = useTitle(id);
+  const renderCancelledRef = useRef(false);
 
-      if (scale) {
-        viewport = page.getViewport({ scale });
-      } else {
-        const pageWidth = page.getViewport().viewBox[2];
-        const initialScale = getInitialScale(
-          containerRef.current?.clientWidth,
-          pageWidth
-        );
+  const paintPages = useCallback(async (): Promise<void> => {
+    const doc = docRef.current;
 
-        argument(id, "scale", initialScale);
+    if (!doc || !processUrl || !containerRef.current || !window.pdfjsLib) {
+      return;
+    }
 
-        viewport = page.getViewport({ scale: initialScale });
+    argument(id, "rendering", true);
+
+    try {
+      let effectiveScale = scale;
+
+      if (effectiveScale === undefined && doc.numPages > 0) {
+        const firstPage = await doc.getPage(1);
+
+        if (renderCancelledRef.current) return;
+
+        const vp = firstPage.getViewport({ rotation: pdfRotation, scale: 1 });
+        effectiveScale = getInitialScale(containerRef.current.clientWidth, vp.width);
+        argument(id, "scale", effectiveScale);
       }
 
-      canvas.height = viewport.height;
-      canvas.width = viewport.width;
+      effectiveScale = scale ?? effectiveScale ?? 1;
 
-      await page.render({ canvas, canvasContext, viewport }).promise;
+      const nextPages: HTMLCanvasElement[] = [];
+      const nextThumbs: HTMLCanvasElement[] = [];
 
-      return canvas;
-    },
-    [argument, containerRef, id, scale]
-  );
-  const { prependFileToTitle } = useTitle(id);
-  const currentUrlRef = useRef("");
-  const renderingRef = useRef(false);
-  const abortControllerRef = useRef<AbortController | null>(null);
-  const resetApp = useCallback(() => {
-    abortControllerRef.current?.abort();
+      /* eslint-disable no-await-in-loop -- page renders are sequential to cap memory */
+      for (let pageNumber = 1; pageNumber <= doc.numPages; pageNumber += 1) {
+        if (renderCancelledRef.current) return;
+
+        const pageCanvas = await renderPageToCanvas(
+          doc,
+          pageNumber,
+          effectiveScale,
+          pdfRotation
+        );
+
+        const pageObj = await doc.getPage(pageNumber);
+        const unitVp = pageObj.getViewport({ rotation: pdfRotation, scale: 1 });
+        const thumbScale = Math.min(
+          THUMB_MAX_PX / unitVp.width,
+          THUMB_MAX_PX / unitVp.height
+        );
+
+        const thumbCanvas = await renderPageToCanvas(
+          doc,
+          pageNumber,
+          thumbScale,
+          pdfRotation
+        );
+
+        pageCanvas.dataset.pdfReactKey = stampCanvasId();
+        thumbCanvas.dataset.pdfReactKey = stampCanvasId();
+
+        nextPages.push(pageCanvas);
+        nextThumbs.push(thumbCanvas);
+      }
+
+      /* eslint-enable no-await-in-loop */
+
+      if (renderCancelledRef.current) return;
+
+      setPages(nextPages);
+      setThumbnails(nextThumbs);
+    } finally {
+      argument(id, "rendering", false);
+    }
+  }, [
+    argument,
+    containerRef,
+    id,
+    pdfRotation,
+    processUrl,
+    scale,
+  ]);
+
+  useEffect(() => {
+    renderCancelledRef.current = false;
+
+    return () => {
+      renderCancelledRef.current = true;
+    };
+  }, []);
+
+  /* eslint-disable react-hooks-addons/no-unused-deps -- reloadKey forces reloading PDF bytes after save */
+  useEffect(() => {
+    renderCancelledRef.current = false;
     pdfWorker.current?.destroy();
+    pdfWorker.current = undefined;
+    docRef.current = undefined;
+    setPages([]);
+    setThumbnails([]);
 
-    argument(id, "rendering", false);
-    renderingRef.current = false;
+    if (!processUrl) {
+      if (containerRef.current) {
+        containerRef.current.classList.add("drop");
+      }
+
+      argument(id, "subTitle", "");
+      argument(id, "count", 0);
+      argument(id, "page", 1);
+      prependFileToTitle("");
+
+      return () => {
+        renderCancelledRef.current = true;
+      };
+    }
 
     if (containerRef.current) {
+      containerRef.current.classList.remove("drop");
       // eslint-disable-next-line no-param-reassign
       containerRef.current.scrollTop = 0;
     }
-  }, [argument, containerRef, id]);
-  const renderPages = useCallback(
-    async (url: string): Promise<void> => {
-      if (containerRef.current) {
-        setPages([]);
 
-        if (url) {
-          containerRef.current.classList.remove("drop");
+    let cancelled = false;
 
-          if (window.pdfjsLib && !renderingRef.current) {
-            renderingRef.current = true;
-            argument(id, "rendering", true);
-
-            // eslint-disable-next-line no-param-reassign
-            containerRef.current.scrollTop = 0;
-
-            const fileData = await readFile(url);
-
-            if (fileData.length === 0) throw new Error("File is empty");
-
-            const loader = window.pdfjsLib.getDocument(fileData);
-            const doc = await loader.promise;
-            const { info } = await doc.getMetadata();
-
-            pdfWorker.current = (
-              loader as unknown as { _worker: PDFWorker }
-            )._worker;
-
-            const { Title } = info as MetadataInfo;
-
-            argument(id, "subTitle", Title);
-            argument(id, "count", doc.numPages);
-            prependFileToTitle(Title || basename(url));
-
-            abortControllerRef.current = new AbortController();
-
-            for (let i = 0; i < doc.numPages; i += 1) {
-              if (
-                abortControllerRef.current.signal.aborted ||
-                url !== currentUrlRef.current
-              ) {
-                break;
-              }
-
-              // eslint-disable-next-line no-await-in-loop
-              const page = await renderPage(i + 1, doc);
-
-              if (
-                abortControllerRef.current.signal.aborted ||
-                url !== currentUrlRef.current
-              ) {
-                break;
-              }
-
-              setPages((currentPages) => [...currentPages, page]);
-            }
-
-            argument(id, "rendering", false);
-            renderingRef.current = false;
-          }
-        } else {
-          containerRef.current.classList.add("drop");
-          argument(id, "subTitle", "");
-          argument(id, "count", 0);
-          prependFileToTitle("");
-        }
-      }
-    },
-    [argument, containerRef, id, prependFileToTitle, readFile, renderPage]
-  );
-
-  useEffect(() => {
     loadFiles(libs).then(() => {
-      if (window.pdfjsLib && processUrl) {
-        renderPages(processUrl).catch(() => {
-          setUrl(id, "");
-          argument(id, "rendering", false);
-          renderingRef.current = false;
+      if (cancelled || !window.pdfjsLib || !processUrl) return;
+
+      readFile(processUrl)
+        .then(async (fileData) => {
+          if (cancelled || renderCancelledRef.current) return;
+
+          if (fileData.length === 0) throw new Error("File is empty");
+
+          const pdfjs = window.pdfjsLib;
+
+          if (!pdfjs) return;
+
+          const loader = pdfjs.getDocument(fileData);
+          const doc = await loader.promise;
+
+          if (cancelled || renderCancelledRef.current) return;
+
+          pdfWorker.current = (
+            loader as unknown as { _worker: PDFWorker }
+          )._worker;
+          docRef.current = doc;
+
+          const { info } = await doc.getMetadata();
+          const { Title } = info as MetadataInfo;
+
+          argument(id, "subTitle", Title);
+          argument(id, "count", doc.numPages);
+          argument(id, "page", 1);
+          prependFileToTitle(Title || basename(processUrl));
+
+          setDocEpoch((epoch) => epoch + 1);
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setUrl(id, "");
+            argument(id, "subTitle", "");
+            argument(id, "count", 0);
+            prependFileToTitle("");
+          }
         });
-      }
     });
-  }, [argument, id, libs, processUrl, renderPages, setUrl]);
 
-  useEffect(() => resetApp, [resetApp]);
+    return () => {
+      cancelled = true;
+      renderCancelledRef.current = true;
+    };
+  }, [
+    argument,
+    containerRef,
+    id,
+    libs,
+    prependFileToTitle,
+    processUrl,
+    readFile,
+    reloadKey,
+    setUrl,
+  ]);
+  /* eslint-enable react-hooks-addons/no-unused-deps */
 
+  /* eslint-disable react-hooks-addons/no-unused-deps -- repaint when docEpoch / zoom / rotation changes */
   useEffect(() => {
-    if (processUrl && currentUrlRef.current !== processUrl) {
-      currentUrlRef.current = processUrl;
-      resetApp();
-    }
-  }, [resetApp, processUrl]);
+    let cleanup: (() => void) | undefined;
 
-  return pages;
+    if (docRef.current && processUrl) {
+      renderCancelledRef.current = false;
+
+      paintPages().catch(() => {
+        argument(id, "rendering", false);
+      });
+
+      cleanup = () => {
+        renderCancelledRef.current = true;
+      };
+    }
+
+    return cleanup;
+  }, [
+    argument,
+    docEpoch,
+    id,
+    paintPages,
+    pdfRotation,
+    processUrl,
+    scale,
+  ]);
+  /* eslint-enable react-hooks-addons/no-unused-deps */
+
+  return { pages, thumbnails };
 };
 
 export default usePDF;

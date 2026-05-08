@@ -73,6 +73,7 @@
     "next": "^15.5.5",
     "nostr-tools": "^1.17.0",
     "opentype.js": "^1.3.4",
+    "pdf-lib": "^1.17.1",
     "playlist-parser": "^0.0.12",
     "prettier": "^3.6.2",
     "print-js": "^1.6.0",

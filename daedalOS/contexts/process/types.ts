@@ -34,6 +34,9 @@ type MonacoProcessArguments = {
 type PdfProcessArguments = {
   count?: number;
   page?: number;
+  pdfEditMode?: boolean;
+  pdfRotation?: number;
+  pdfTool?: "pen" | "text";
   rendering?: boolean;
   scale?: number;
   subTitle?: string;
@@ -74,6 +77,7 @@ export type ProcessArguments = BaseProcessArguments &
 
 export type ProcessElements = {
   componentWindow?: HTMLElement;
+  pdfScrollRoot?: HTMLElement;
   peekElement?: HTMLElement;
   taskbarEntry?: HTMLElement;
 };
