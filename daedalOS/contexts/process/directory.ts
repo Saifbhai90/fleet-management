@@ -328,6 +328,16 @@ const directory: Processes = {
     singleton: true,
     title: "Stable Diffusion",
   },
+  StirlingPDF: {
+    Component: dynamic(() => import("components/apps/StirlingPDF")),
+    backgroundColor: "#1e1e1e",
+    defaultSize: {
+      height: 720,
+      width: 960,
+    },
+    icon: "/System/Icons/pdf.webp",
+    title: "Stirling-PDF",
+  },
   Terminal: {
     Component: dynamic(() => import("components/apps/Terminal")),
     backgroundBlur: "8px",
