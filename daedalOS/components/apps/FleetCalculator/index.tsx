@@ -51,7 +51,7 @@ const gridStyle: React.CSSProperties = {
   gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
 };
 
-const TOKEN_REGEX = /(\d+(?:\.\d+)?)|[+\-*/]/g;
+const TOKEN_REGEX = /\d+(?:\.\d+)?|[+\-*/]/g;
 
 const parseTokens = (expression: string): string[] => {
   const normalized = expression.replaceAll(" ", "");
@@ -64,28 +64,26 @@ const computeMulDiv = (tokens: string[]): number[] => {
   const reduced: number[] = [];
   let operator = "+";
 
-  for (let index = 0; index < tokens.length; index += 1) {
-    const token = tokens[index];
+  for (const token of tokens) {
     if (token === "*" || token === "/" || token === "+" || token === "-") {
       operator = token;
-      continue;
-    }
-
-    const value = Number(token);
-    if (!Number.isFinite(value)) return [];
-
-    if (operator === "*") {
-      const last = reduced.pop();
-      if (typeof last !== "number") return [];
-      reduced.push(last * value);
-    } else if (operator === "/") {
-      const last = reduced.pop();
-      if (typeof last !== "number" || value === 0) return [];
-      reduced.push(last / value);
-    } else if (operator === "-") {
-      reduced.push(-value);
     } else {
-      reduced.push(value);
+      const value = Number(token);
+      if (!Number.isFinite(value)) return [];
+
+      if (operator === "*") {
+        const last = reduced.pop();
+        if (typeof last !== "number") return [];
+        reduced.push(last * value);
+      } else if (operator === "/") {
+        const last = reduced.pop();
+        if (typeof last !== "number" || value === 0) return [];
+        reduced.push(last / value);
+      } else if (operator === "-") {
+        reduced.push(-value);
+      } else {
+        reduced.push(value);
+      }
     }
   }
 

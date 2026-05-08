@@ -32,36 +32,6 @@ const directory: Processes = {
     icon: "/System/Icons/chromium.webp",
     title: "Browser",
   },
-  FleetCalculator: {
-    Component: dynamic(() => import("components/apps/FleetCalculator")),
-    backgroundColor: "#FFFFFF",
-    defaultSize: {
-      height: 520,
-      width: 430,
-    },
-    icon: "/System/Icons/run.webp",
-    title: "Fleet Calculator",
-  },
-  FleetMultiFilePrint: {
-    Component: dynamic(() => import("components/apps/FleetMultiFilePrint")),
-    backgroundColor: "#FFFFFF",
-    defaultSize: {
-      height: 620,
-      width: 920,
-    },
-    icon: "/System/Icons/documents.webp",
-    title: "Fleet Multi File Print",
-  },
-  FleetNotes: {
-    Component: dynamic(() => import("components/apps/FleetNotes")),
-    backgroundColor: "#FFFFFF",
-    defaultSize: {
-      height: 640,
-      width: 860,
-    },
-    icon: "/System/Icons/monaco.webp",
-    title: "Fleet Notes",
-  },
   ClassiCube: {
     Component: dynamic(() => import("components/apps/ClassiCube")),
     backgroundColor: "#201E20",
@@ -122,6 +92,36 @@ const directory: Processes = {
     },
     icon: FOLDER_ICON,
     title: "File Explorer",
+  },
+  FleetCalculator: {
+    Component: dynamic(() => import("components/apps/FleetCalculator")),
+    backgroundColor: "#FFFFFF",
+    defaultSize: {
+      height: 520,
+      width: 430,
+    },
+    icon: "/System/Icons/run.webp",
+    title: "Fleet Calculator",
+  },
+  FleetMultiFilePrint: {
+    Component: dynamic(() => import("components/apps/FleetMultiFilePrint")),
+    backgroundColor: "#FFFFFF",
+    defaultSize: {
+      height: 620,
+      width: 920,
+    },
+    icon: "/System/Icons/documents.webp",
+    title: "Fleet Multi File Print",
+  },
+  FleetNotes: {
+    Component: dynamic(() => import("components/apps/FleetNotes")),
+    backgroundColor: "#FFFFFF",
+    defaultSize: {
+      height: 640,
+      width: 860,
+    },
+    icon: "/System/Icons/monaco.webp",
+    title: "Fleet Notes",
   },
   IRC: {
     Component: dynamic(() => import("components/apps/IRC")),

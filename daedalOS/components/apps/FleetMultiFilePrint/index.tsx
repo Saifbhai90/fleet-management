@@ -106,10 +106,10 @@ const FleetMultiFilePrint: FC<ComponentProcessProps> = () => {
       </div>
 
       <input
-        type="file"
-        multiple
         accept=".pdf,.png,.jpg,.jpeg,.webp,.bmp,.gif,.tif,.tiff"
         onChange={(event) => setFiles([...(event.target.files || [])])}
+        type="file"
+        multiple
       />
 
       <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(3, minmax(0, 1fr))" }}>
@@ -153,8 +153,8 @@ const FleetMultiFilePrint: FC<ComponentProcessProps> = () => {
       {pdfUrl && (
         <div style={{ border: "1px solid #dbe1ea", borderRadius: 8, flex: 1, minHeight: 260, overflow: "hidden" }}>
           <iframe
-            style={{ border: 0, height: "100%", width: "100%" }}
             src={pdfUrl}
+            style={{ border: 0, height: "100%", width: "100%" }}
             title="Combined PDF"
           />
         </div>
