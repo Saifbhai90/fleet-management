@@ -35,6 +35,21 @@ That copies `daedalOS/out/` into `static/fleet_personal_pc/` for Flask (large fo
 
 For local development **without** a subpath (e.g. `http://localhost:3000`), omit `FLEET_OS_BASE_PATH` so it stays empty.
 
+### Render.com (Python Web Service)
+
+Build machines often have **no Node** unless you opt in. From repo root:
+
+1. Add environment variable on the service: **`BOOTSTRAP_NODE_FOR_BUILD=1`** (downloads Node 20.x during build; override version with **`NODE_DIST_VERSION`** if needed).
+2. Append to your **Build Command** after `pip install -r requirements.txt`:
+
+   ```bash
+   chmod +x scripts/build_fleet_personal_pc.sh && ./scripts/build_fleet_personal_pc.sh
+   ```
+
+3. Redeploy. The Personal Tools page checks for `static/fleet_personal_pc/index.html`; if it is missing you will see setup instructions instead of a blank “Not Found” iframe.
+
+Optional: host the static export elsewhere (CDN / another origin) and set **`FLEET_PERSONAL_PC_URL`** to that full HTTPS URL so the iframe loads it without building into this repo.
+
 ## 2. Copy build output
 
 After `npm run build`, copy everything inside `daedalOS/out/` to:

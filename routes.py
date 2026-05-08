@@ -1,5 +1,5 @@
 # Force Rebuild — all syntax verified clean, pushing to unblock Render deploy queue
-from flask import render_template, redirect, url_for, flash, request, Response, jsonify, send_from_directory, session, send_file, abort, make_response, after_this_request
+from flask import render_template, redirect, url_for, flash, request, Response, jsonify, send_from_directory, session, send_file, abort, make_response, after_this_request, current_app
 from app import app, db, csrf
 from models import (
     Company, Project, Vehicle, Driver, ParkingStation, District, EmployeePost, Employee, EmployeeDocument,
@@ -2595,6 +2595,23 @@ def _require_master_admin():
     return True
 
 
+def _fleet_personal_pc_desktop_template_kwargs():
+    """Iframe URL for Fleet Personal PC + flag when static export was never built/deployed."""
+    external = (os.environ.get('FLEET_PERSONAL_PC_URL') or '').strip()
+    if external:
+        return {'fleet_pc_iframe_src': external, 'fleet_pc_missing': False}
+
+    static_folder = current_app.static_folder or ''
+    index_path = os.path.join(static_folder, 'fleet_personal_pc', 'index.html')
+    if os.path.isfile(index_path):
+        return {
+            'fleet_pc_iframe_src': url_for('static', filename='fleet_personal_pc/index.html'),
+            'fleet_pc_missing': False,
+        }
+
+    return {'fleet_pc_iframe_src': '', 'fleet_pc_missing': True}
+
+
 @app.route('/admin/personal-tools', methods=['GET', 'POST'])
 def admin_personal_tools():
     """Master admin personal tools: explorer-like folders, paste/upload, move, view, print selected."""
@@ -2608,7 +2625,10 @@ def admin_personal_tools():
     curr_rel = ''
 
     if request.method == 'GET' and root_mode and mode != 'my_pc':
-        return render_template('admin_personal_tools_desktop.html')
+        return render_template(
+            'admin_personal_tools_desktop.html',
+            **_fleet_personal_pc_desktop_template_kwargs(),
+        )
 
     if not root_mode:
         curr_abs, curr_rel = _safe_abs_from_rel(path_arg)

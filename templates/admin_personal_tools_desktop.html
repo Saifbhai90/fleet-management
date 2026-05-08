@@ -10,19 +10,35 @@
     </div>
   </div>
 
+  {% if fleet_pc_missing %}
+  <div class="alert alert-warning border shadow-sm">
+    <h5 class="alert-heading"><i class="bi bi-exclamation-triangle-fill me-2"></i>Fleet Personal PC build yahan maujood nahi</h5>
+    <p class="mb-2">Iframe <code>/static/fleet_personal_pc/index.html</code> dhoondhti hai. Ye file tab hi banti hai jab server par <strong>daedalOS</strong> ka production build chala kar output copy ho.</p>
+    <hr>
+    <p class="mb-1 fw-semibold">Render / Linux deploy</p>
+    <ol class="small mb-2 ps-3">
+      <li>Web service par env add karein: <code>BOOTSTRAP_NODE_FOR_BUILD=1</code> (taake build waqt Node mil jaye).</li>
+      <li><strong>Build Command</strong> ke end mein yeh lagayein (pip ke baad):<br>
+        <code>chmod +x scripts/build_fleet_personal_pc.sh &amp;&amp; ./scripts/build_fleet_personal_pc.sh</code></li>
+      <li>Deploy dubara chalayein — deploy ke baad <code>static/fleet_personal_pc/index.html</code> image par aa jana chahiye.</li>
+    </ol>
+    <p class="mb-1 fw-semibold">Windows (local)</p>
+    <p class="small mb-0"><code>daedalOS</code> mein <code>npm run build</code> (<code>FLEET_OS_BASE_PATH=/static/fleet_personal_pc</code>), phir repo root se <code>.\scripts\copy_fleet_personal_pc_static.ps1</code>. Details: <code>daedalOS/FLEET_EMBED.md</code>.</p>
+    <p class="small text-muted mt-2 mb-0">Optional: poora desktop kisi aur HTTPS URL par host kar ke env <code>FLEET_PERSONAL_PC_URL</code> set karein — iframe seedha us URL ko kholegi.</p>
+  </div>
+  {% else %}
   <div class="ratio rounded border shadow-sm bg-dark overflow-hidden" style="min-height: min(85vh, 960px); max-height: 960px;">
     <iframe
       title="Fleet Personal PC"
-      src="{{ url_for('static', filename='fleet_personal_pc/index.html') }}"
+      src="{{ fleet_pc_iframe_src }}"
       class="border-0 w-100 h-100"
       sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads allow-modals allow-presentation"
       referrerpolicy="origin-when-cross-origin"
     ></iframe>
   </div>
-
   <p class="small text-muted mt-3 mb-0">
-    Agar upar wala area blank ho ya assets load na hon, to <code>daedalOS</code> se build kar ke output <code>static/fleet_personal_pc/</code> mein copy karein
-    (step-by-step: <code>daedalOS/FLEET_EMBED.md</code>). Desktop shortcuts (Notes, Calculator, Multi File Print) Browser app ke through Fleet routes kholte hain — same site login zaroori hai.
+    Desktop shortcuts (Notes, Calculator, Multi File Print) Browser app ke through Fleet routes kholte hain — same browser session / login zaroori hai.
   </p>
+  {% endif %}
 </div>
 {% endblock %}
