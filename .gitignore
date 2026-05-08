@@ -24,6 +24,10 @@ build/
 # Uploads (optional: remove this line if you want to backup uploads)
 uploads/
 
+# Fleet Personal PC built assets (keep README; remove these lines if you commit full static export)
+static/fleet_personal_pc/*
+!static/fleet_personal_pc/README.txt
+
 # Node
 node_modules/
 

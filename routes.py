@@ -2995,6 +2995,22 @@ def admin_personal_tools_quick_print():
     return render_template('admin_personal_tools_quick_print.html')
 
 
+@app.route('/admin/personal-tools/os-notes', methods=['GET'])
+def admin_personal_tools_os_notes():
+    """Minimal Notes page opened from Fleet Personal PC (Browser / desktop shortcuts)."""
+    if not _require_master_admin():
+        return redirect(url_for('dashboard'))
+    return render_template('admin_personal_tools_os_notes.html')
+
+
+@app.route('/admin/personal-tools/os-calculator', methods=['GET'])
+def admin_personal_tools_os_calculator():
+    """Minimal Calculator for Fleet Personal PC shortcuts."""
+    if not _require_master_admin():
+        return redirect(url_for('dashboard'))
+    return render_template('admin_personal_tools_os_calculator.html')
+
+
 @app.route('/admin/personal-tools/library', methods=['GET'])
 def admin_personal_tools_library():
     if not _require_master_admin():
