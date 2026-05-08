@@ -5,16 +5,15 @@ import {
   useCallback,
   type FC,
 } from "react";
+import PdfCropLayer from "components/apps/PDF/PdfCropLayer";
 import { useProcesses } from "contexts/process";
 
 type PageProps = {
   canvas: HTMLCanvasElement;
   id: string;
-  overlayRegister: (
-    pageIndex: number,
-    element: HTMLCanvasElement | null
-  ) => void;
+  overlayRegister: (pageIndex: number, element?: HTMLCanvasElement) => void;
   page: number;
+  pageCanvasRegister: (pageIndex: number, element?: HTMLCanvasElement) => void;
 };
 
 const Page: FC<PageProps> = ({
@@ -22,6 +21,7 @@ const Page: FC<PageProps> = ({
   id,
   overlayRegister,
   page,
+  pageCanvasRegister,
 }) => {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const canvasMountRef = useRef<HTMLDivElement | null>(null);
@@ -32,17 +32,20 @@ const Page: FC<PageProps> = ({
   } = useProcesses();
   const {
     componentWindow,
+    pdfCropMode = false,
     pdfEditMode = false,
     pdfScrollRoot,
     pdfTool = "pen",
   } = process || {};
 
   const pageIndex = page - 1;
+  const currentVisiblePage = process?.page ?? 1;
+  const cropThisPage = pdfCropMode && currentVisiblePage === page;
 
   const setOverlayRef = useCallback(
     (element: HTMLCanvasElement | null) => {
       overlayRef.current = element;
-      overlayRegister(pageIndex, element);
+      overlayRegister(pageIndex, element ?? undefined);
     },
     [overlayRegister, pageIndex]
   );
@@ -52,10 +55,13 @@ const Page: FC<PageProps> = ({
 
     if (mount) mount.replaceChildren(canvas);
 
+    pageCanvasRegister(pageIndex, canvas);
+
     return () => {
+      pageCanvasRegister(pageIndex);
       canvas.remove();
     };
-  }, [canvas]);
+  }, [canvas, pageCanvasRegister, pageIndex]);
 
   useEffect(() => {
     let cleanup: (() => void) | undefined;
@@ -65,67 +71,67 @@ const Page: FC<PageProps> = ({
 
     if (overlay && ctx && pdfEditMode) {
       ctx.strokeStyle = "#111827";
-    ctx.lineWidth = 2;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.font = "16px system-ui, sans-serif";
-    ctx.fillStyle = "#111827";
+      ctx.lineWidth = 2;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.font = "16px system-ui, sans-serif";
+      ctx.fillStyle = "#111827";
 
-    let drawing = false;
+      let drawing = false;
 
-    const getOffsets = (
-      event: PointerEvent
-    ): { offsetX: number; offsetY: number } => {
-      const rect = overlay.getBoundingClientRect();
+      const getOffsets = (
+        event: PointerEvent
+      ): { offsetX: number; offsetY: number } => {
+        const rect = overlay.getBoundingClientRect();
 
-      return {
-        offsetX: event.clientX - rect.left,
-        offsetY: event.clientY - rect.top,
+        return {
+          offsetX: event.clientX - rect.left,
+          offsetY: event.clientY - rect.top,
+        };
       };
-    };
 
-    const onPointerDown = (event: PointerEvent): void => {
-      if (pdfTool !== "pen") return;
+      const onPointerDown = (event: PointerEvent): void => {
+        if (pdfTool !== "pen") return;
 
-      overlay.setPointerCapture(event.pointerId);
-      drawing = true;
-      const { offsetX, offsetY } = getOffsets(event);
+        overlay.setPointerCapture(event.pointerId);
+        drawing = true;
+        const { offsetX, offsetY } = getOffsets(event);
 
-      ctx.beginPath();
-      ctx.moveTo(offsetX, offsetY);
-    };
+        ctx.beginPath();
+        ctx.moveTo(offsetX, offsetY);
+      };
 
-    const onPointerMove = (event: PointerEvent): void => {
-      if (!drawing || pdfTool !== "pen") return;
+      const onPointerMove = (event: PointerEvent): void => {
+        if (!drawing || pdfTool !== "pen") return;
 
-      const { offsetX, offsetY } = getOffsets(event);
+        const { offsetX, offsetY } = getOffsets(event);
 
-      ctx.lineTo(offsetX, offsetY);
-      ctx.stroke();
-    };
+        ctx.lineTo(offsetX, offsetY);
+        ctx.stroke();
+      };
 
-    const onPointerUp = (event: PointerEvent): void => {
-      if (!drawing) return;
+      const onPointerUp = (event: PointerEvent): void => {
+        if (!drawing) return;
 
-      drawing = false;
+        drawing = false;
 
-      try {
-        overlay.releasePointerCapture(event.pointerId);
-      } catch {
-        // Ignore invalid capture release
-      }
-    };
+        try {
+          overlay.releasePointerCapture(event.pointerId);
+        } catch {
+          // Ignore invalid capture release
+        }
+      };
 
-    const onClick = (event: MouseEvent): void => {
-      if (pdfTool !== "text") return;
+      const onClick = (event: MouseEvent): void => {
+        if (pdfTool !== "text") return;
 
-      // eslint-disable-next-line no-alert -- lightweight annotation UX inside desktop shell
-      const label = window.prompt("Enter text to place on this page");
+        // eslint-disable-next-line no-alert -- lightweight annotation UX inside desktop shell
+        const label = window.prompt("Enter text to place on this page");
 
-      if (!label) return;
+        if (!label) return;
 
-      ctx.fillText(label, event.offsetX, event.offsetY);
-    };
+        ctx.fillText(label, event.offsetX, event.offsetY);
+      };
 
       overlay.addEventListener("pointerdown", onPointerDown);
       overlay.addEventListener("pointermove", onPointerMove);
@@ -190,20 +196,31 @@ const Page: FC<PageProps> = ({
         <canvas
           ref={setOverlayRef}
           style={{
-            cursor: pdfEditMode
-              ? pdfTool === "pen"
-                ? "crosshair"
-                : "text"
-              : "default",
+            cursor:
+              pdfCropMode || !pdfEditMode
+                ? "default"
+                : pdfTool === "pen"
+                  ? "crosshair"
+                  : "text",
             height: canvas.height,
             left: 0,
-            pointerEvents: pdfEditMode ? "auto" : "none",
+            pointerEvents:
+              pdfCropMode || !pdfEditMode ? "none" : "auto",
             position: "absolute",
             top: 0,
             touchAction: "none",
             width: canvas.width,
+            zIndex: 2,
           }}
         />
+        {cropThisPage && (
+          <PdfCropLayer
+            canvasHeight={canvas.height}
+            canvasWidth={canvas.width}
+            id={id}
+            page={page}
+          />
+        )}
       </div>
     </li>
   );

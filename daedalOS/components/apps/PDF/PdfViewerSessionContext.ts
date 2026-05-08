@@ -1,8 +1,15 @@
 import { createContext, useContext } from "react";
 
 export type PdfViewerSessionValue = {
-  overlayRefs: { current: (HTMLCanvasElement | null)[] };
+  enhancePreviewDataUrl?: string;
+  enhancePreviewPage?: number;
+  overlayRefs: { current: (HTMLCanvasElement | undefined)[] };
+  pageCanvasRefs: { current: (HTMLCanvasElement | undefined)[] };
   reloadDocument: () => void;
+  setEnhancePreview: (
+    dataUrl?: string,
+    pageOneBased?: number
+  ) => void;
 };
 
 const PdfViewerSessionContext = createContext<

@@ -34,6 +34,7 @@ type MonacoProcessArguments = {
 type PdfProcessArguments = {
   count?: number;
   page?: number;
+  pdfCropMode?: boolean;
   pdfEditMode?: boolean;
   pdfRotation?: number;
   pdfTool?: "pen" | "text";

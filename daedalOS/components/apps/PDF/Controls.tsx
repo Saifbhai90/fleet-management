@@ -1,12 +1,26 @@
 import { basename } from "path";
-import { memo, type FC } from "react";
+import {
+  memo,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type FC,
+} from "react";
 import {
   Add,
+  Crop,
   Download,
+  Enhance,
+  More,
+  Pencil,
   Print,
+  RotateCw,
+  SaveDisk,
   Subtract,
 } from "components/apps/PDF/ControlIcons";
 import { mergeOverlaysIntoPdf } from "components/apps/PDF/mergePdfOverlays";
+import { enhanceCanvasToDataUrl } from "components/apps/PDF/pdfImageEnhance";
 import { usePdfViewerSession } from "components/apps/PDF/PdfViewerSessionContext";
 import StyledControls from "components/apps/PDF/StyledControls";
 import { scales } from "components/apps/PDF/usePDF";
@@ -23,21 +37,75 @@ declare global {
   }
 }
 
+const COMPACT_TOOLBAR_PX = 640;
+
 const Controls: FC<ComponentProcessProps> = ({ id }) => {
-  const { overlayRefs, reloadDocument } = usePdfViewerSession();
+  const {
+    overlayRefs,
+    pageCanvasRefs,
+    reloadDocument,
+    setEnhancePreview,
+  } = usePdfViewerSession();
   const { readFile, writeFile } = useFileSystem();
   const { argument, processes: { [id]: process } = {} } = useProcesses();
   const {
     count = 0,
     page: currentPage = 1,
+    pdfCropMode = false,
     pdfEditMode = false,
     pdfRotation = 0,
+    pdfTool = "pen",
     pdfScrollRoot,
     rendering = false,
     scale = 1,
     subTitle = "",
     url = "",
   } = process || {};
+
+  const navRef = useRef<HTMLElement>(null);
+  const moreWrapRef = useRef<HTMLLIElement>(null);
+  const [compactToolbar, setCompactToolbar] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+
+  useLayoutEffect(() => {
+    const node = navRef.current;
+    let observer: ResizeObserver | undefined;
+
+    if (node && typeof ResizeObserver !== "undefined") {
+      observer = new ResizeObserver(([entry]) => {
+        setCompactToolbar(entry.contentRect.width < COMPACT_TOOLBAR_PX);
+      });
+      observer.observe(node);
+    }
+
+    return (): void => {
+      observer?.disconnect();
+    };
+  }, []);
+
+  useEffect(() => {
+    let removeDocMouseDown: (() => void) | undefined;
+
+    if (moreOpen) {
+      const onDocMouseDown = (event: MouseEvent): void => {
+        if (
+          moreWrapRef.current?.contains(event.target as globalThis.Node)
+        ) {
+          return;
+        }
+
+        setMoreOpen(false);
+      };
+
+      document.addEventListener("mousedown", onDocMouseDown);
+      removeDocMouseDown = (): void =>
+        document.removeEventListener("mousedown", onDocMouseDown);
+    }
+
+    return (): void => {
+      removeDocMouseDown?.();
+    };
+  }, [moreOpen]);
 
   const scrollMainPageIntoView = (pageNumber: number): void => {
     requestAnimationFrame(() => {
@@ -68,8 +136,50 @@ const Controls: FC<ComponentProcessProps> = ({ id }) => {
     }
   };
 
+  const runEnhancePreview = (): void => {
+    argument(id, "pdfCropMode", false);
+    argument(id, "pdfEditMode", false);
+
+    const canvas = pageCanvasRefs.current[currentPage - 1];
+
+    if (!canvas) return;
+
+    const dataUrl = enhanceCanvasToDataUrl(canvas);
+
+    if (!dataUrl) return;
+
+    setEnhancePreview(dataUrl, currentPage);
+  };
+
+  const toggleCrop = (): void => {
+    const next = !pdfCropMode;
+
+    argument(id, "pdfCropMode", next);
+
+    if (next) {
+      argument(id, "pdfEditMode", false);
+      setEnhancePreview(undefined, undefined);
+    }
+  };
+
+  const toggleEdit = (): void => {
+    const next = !pdfEditMode;
+
+    argument(id, "pdfEditMode", next);
+
+    if (next) {
+      argument(id, "pdfCropMode", false);
+      argument(id, "pdfTool", "pen");
+      setEnhancePreview(undefined, undefined);
+    }
+  };
+
+  const rotatePage = (): void => {
+    argument(id, "pdfRotation", (pdfRotation + 90) % 360);
+  };
+
   return (
-    <StyledControls>
+    <StyledControls ref={navRef}>
       <div className="side-menu">
         <span>{subTitle || basename(url)}</span>
       </div>
@@ -145,44 +255,61 @@ const Controls: FC<ComponentProcessProps> = ({ id }) => {
             <Add />
           </Button>
         </li>
-        <li className="pdf-extra-tools">
+        <li className="pdf-icon-tools">
           <Button
+            className={`icon-tool${pdfCropMode ? " active" : ""}`}
             disabled={count === 0 || rendering}
-            onClick={() =>
-              argument(id, "pdfRotation", (pdfRotation + 90) % 360)
-            }
-            {...label("Rotate")}
+            onClick={toggleCrop}
+            {...label("Crop page")}
           >
-            ⟳
+            <Crop />
           </Button>
           <Button
+            className="icon-tool"
             disabled={count === 0 || rendering}
-            onClick={() => {
-              const next = !pdfEditMode;
-
-              argument(id, "pdfEditMode", next);
-
-              if (next) argument(id, "pdfTool", "pen");
-            }}
-            {...label("Edit mode")}
+            onClick={runEnhancePreview}
+            {...label("Enhance scan")}
           >
-            Edit
+            <Enhance />
           </Button>
           <Button
-            disabled={!pdfEditMode || rendering}
-            onClick={() => argument(id, "pdfTool", "pen")}
-            {...label("Draw")}
+            className={`icon-tool${pdfEditMode ? " active" : ""}`}
+            disabled={count === 0 || rendering}
+            onClick={toggleEdit}
+            {...label("Annotate")}
           >
-            Pen
+            <Pencil />
           </Button>
+          {compactToolbar ? undefined : (
+            <>
+              <Button
+                className="icon-tool"
+                disabled={count === 0 || rendering}
+                onClick={rotatePage}
+                {...label("Rotate")}
+              >
+                <RotateCw />
+              </Button>
+              <Button
+                className={`icon-tool${pdfTool === "pen" ? " active" : ""}`}
+                disabled={!pdfEditMode || rendering}
+                onClick={() => argument(id, "pdfTool", "pen")}
+                {...label("Pen")}
+              >
+                ✎
+              </Button>
+              <Button
+                className={`icon-tool${pdfTool === "text" ? " active" : ""}`}
+                disabled={!pdfEditMode || rendering}
+                onClick={() => argument(id, "pdfTool", "text")}
+                {...label("Text")}
+              >
+                T
+              </Button>
+            </>
+          )}
           <Button
-            disabled={!pdfEditMode || rendering}
-            onClick={() => argument(id, "pdfTool", "text")}
-            {...label("Add text")}
-          >
-            Text
-          </Button>
-          <Button
+            className="icon-tool"
             disabled={count === 0 || rendering}
             onClick={() => {
               onSave().catch(() => {
@@ -191,8 +318,60 @@ const Controls: FC<ComponentProcessProps> = ({ id }) => {
             }}
             {...label("Save")}
           >
-            Save
+            <SaveDisk />
           </Button>
+          {compactToolbar ? (
+            <span ref={moreWrapRef} className="more-menu-wrap">
+              <Button
+                className={`icon-tool${moreOpen ? " active" : ""}`}
+                disabled={count === 0 || rendering}
+                onClick={() => setMoreOpen((open) => !open)}
+                {...label("More tools")}
+              >
+                <More />
+              </Button>
+              {moreOpen ? (
+                <div className="more-dropdown">
+                  <button
+                    className="more-dd-row"
+                    disabled={count === 0 || rendering}
+                    onClick={() => {
+                      rotatePage();
+                      setMoreOpen(false);
+                    }}
+                    type="button"
+                  >
+                    <span className="more-dd-icon">
+                      <RotateCw />
+                    </span>
+                    <span>Rotate</span>
+                  </button>
+                  <button
+                    className="more-dd-row"
+                    disabled={!pdfEditMode || rendering}
+                    onClick={() => {
+                      argument(id, "pdfTool", "pen");
+                      setMoreOpen(false);
+                    }}
+                    type="button"
+                  >
+                    Pen
+                  </button>
+                  <button
+                    className="more-dd-row"
+                    disabled={!pdfEditMode || rendering}
+                    onClick={() => {
+                      argument(id, "pdfTool", "text");
+                      setMoreOpen(false);
+                    }}
+                    type="button"
+                  >
+                    Text
+                  </button>
+                </div>
+              ) : undefined}
+            </span>
+          ) : undefined}
         </li>
       </ol>
       <div className="side-menu">
