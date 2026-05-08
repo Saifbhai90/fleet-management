@@ -31,6 +31,11 @@ const GlobalStyle = styled.createGlobalStyle`
 
   html {
     background-color: ${({ theme }) => theme.colors.background};
+    /* Fallback wallpaper (so desktop isn't black if wallpaper engine fails). */
+    --background-blend-mode: normal;
+    --before-background-opacity: 0%;
+    --after-background-opacity: 100%;
+    --after-background: url("/fleet-brand/wallpaper.svg");
     /* stylelint-disable value-no-vendor-prefix */
     height: -webkit-fill-available;
     height: -moz-available;
