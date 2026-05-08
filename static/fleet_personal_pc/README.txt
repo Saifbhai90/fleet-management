@@ -1,14 +1,14 @@
-Fleet Personal PC (daedalOS build output)
+Fleet Personal PC (daedalOS static export)
 ==========================================
 
-Place the contents of `daedalOS/out/` here after a production build so that:
+After building daedalOS with FLEET_OS_BASE_PATH=/static/fleet_personal_pc (see daedalOS/FLEET_EMBED.md),
+copy the export here so Flask serves:
 
   /static/fleet_personal_pc/index.html
 
-is served by Flask and the Personal Tools desktop iframe loads correctly.
+Quick copy (repo root, PowerShell):
 
-Build steps are documented in the repo at:
+  .\scripts\copy_fleet_personal_pc_static.ps1
 
-  daedalOS/FLEET_EMBED.md
-
-Until this folder contains `index.html`, the Personal Tools page shows an empty iframe until you deploy the build.
+Built assets are gitignored because they are large (~300MB). Run the script after each daedalOS
+production build before deploy, or run it in CI after `npm run build` inside daedalOS.
