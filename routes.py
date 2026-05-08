@@ -2618,72 +2618,101 @@ def admin_personal_tools_quick_print():
         return redirect(url_for('dashboard'))
 
     if request.method == 'POST':
-        files = request.files.getlist('print_files')
-        files = [f for f in files if f and (f.filename or '').strip()]
-        if not files:
-            flash('Kam az kam 1 PDF/Image file select karein.', 'warning')
+        ok, payload = _build_personal_tools_quick_print_payload()
+        if not ok:
+            flash(payload.get('error', 'Print batch error'), 'danger')
             return redirect(url_for('admin_personal_tools_quick_print'))
 
-        page_size = (request.form.get('page_size') or 'original').strip().lower()
-        orientation = (request.form.get('orientation') or 'portrait').strip().lower()
-        order_by = (request.form.get('order_by') or 'as_uploaded').strip().lower()
-        if page_size not in {'original', 'a4', 'letter'}:
-            page_size = 'original'
-        if orientation not in {'portrait', 'landscape'}:
-            orientation = 'portrait'
-        if order_by not in {'as_uploaded', 'name_asc', 'name_desc'}:
-            order_by = 'as_uploaded'
-        if order_by in {'name_asc', 'name_desc'}:
-            files = sorted(files, key=lambda f: secure_filename(f.filename or '').lower(), reverse=(order_by == 'name_desc'))
-
-        try:
-            PdfReader, PdfWriter = _load_pdf_writer_reader()
-            writer = PdfWriter()
-            allowed_img = {'.png', '.jpg', '.jpeg', '.webp', '.bmp', '.gif', '.tif', '.tiff'}
-            added_pages = 0
-            for fs in files:
-                ext = os.path.splitext(secure_filename(fs.filename or ''))[1].lower()
-                if ext == '.pdf':
-                    reader = PdfReader(fs.stream)
-                    for p in reader.pages:
-                        writer.add_page(p)
-                        added_pages += 1
-                elif ext in allowed_img:
-                    page_pdf = _image_to_pdf_page_bytes(fs)
-                    reader = PdfReader(page_pdf)
-                    for p in reader.pages:
-                        writer.add_page(p)
-                        added_pages += 1
-            if added_pages <= 0:
-                flash('Selected files me printable pages nahi milin.', 'danger')
-                return redirect(url_for('admin_personal_tools_quick_print'))
-            tw, th = _target_page_dims(page_size, orientation)
-            if tw and th:
-                writer = _normalize_writer_pages(writer, tw, th)
-            tmp_dir = os.path.join(app.static_folder, 'tmp_print')
-            os.makedirs(tmp_dir, exist_ok=True)
-            fname = f'quick-print-{uuid.uuid4().hex}.pdf'
-            fpath = os.path.join(tmp_dir, fname)
-            with open(fpath, 'wb') as f:
-                out = BytesIO()
-                writer.write(out)
-                out.seek(0)
-                f.write(out.read())
-            return render_template(
-                'admin_personal_tools_print_ready.html',
-                pdf_url=url_for('static', filename=f'tmp_print/{fname}'),
-                pages=added_pages,
-                files_count=len(files),
-                page_size=page_size,
-                orientation=orientation,
-                order_by=order_by,
-                job_id='',
-            )
-        except Exception as e:
-            flash(f'Print batch error: {e}', 'danger')
-            return redirect(url_for('admin_personal_tools_quick_print'))
+        return render_template(
+            'admin_personal_tools_print_ready.html',
+            pdf_url=payload['pdf_url'],
+            pages=payload['pages'],
+            files_count=payload['files_count'],
+            page_size=payload['page_size'],
+            orientation=payload['orientation'],
+            order_by=payload['order_by'],
+            job_id='',
+        )
 
     return render_template('admin_personal_tools_quick_print.html')
+
+
+def _build_personal_tools_quick_print_payload():
+    files = request.files.getlist('print_files')
+    files = [f for f in files if f and (f.filename or '').strip()]
+    if not files:
+        return False, {'error': 'Kam az kam 1 PDF/Image file select karein.'}
+
+    page_size = (request.form.get('page_size') or 'original').strip().lower()
+    orientation = (request.form.get('orientation') or 'portrait').strip().lower()
+    order_by = (request.form.get('order_by') or 'as_uploaded').strip().lower()
+    if page_size not in {'original', 'a4', 'letter'}:
+        page_size = 'original'
+    if orientation not in {'portrait', 'landscape'}:
+        orientation = 'portrait'
+    if order_by not in {'as_uploaded', 'name_asc', 'name_desc'}:
+        order_by = 'as_uploaded'
+    if order_by in {'name_asc', 'name_desc'}:
+        files = sorted(files, key=lambda f: secure_filename(f.filename or '').lower(), reverse=(order_by == 'name_desc'))
+
+    try:
+        PdfReader, PdfWriter = _load_pdf_writer_reader()
+        writer = PdfWriter()
+        allowed_img = {'.png', '.jpg', '.jpeg', '.webp', '.bmp', '.gif', '.tif', '.tiff'}
+        added_pages = 0
+        for fs in files:
+            ext = os.path.splitext(secure_filename(fs.filename or ''))[1].lower()
+            if ext == '.pdf':
+                reader = PdfReader(fs.stream)
+                for p in reader.pages:
+                    writer.add_page(p)
+                    added_pages += 1
+            elif ext in allowed_img:
+                page_pdf = _image_to_pdf_page_bytes(fs)
+                reader = PdfReader(page_pdf)
+                for p in reader.pages:
+                    writer.add_page(p)
+                    added_pages += 1
+        if added_pages <= 0:
+            return False, {'error': 'Selected files me printable pages nahi milin.'}
+
+        tw, th = _target_page_dims(page_size, orientation)
+        if tw and th:
+            writer = _normalize_writer_pages(writer, tw, th)
+        tmp_dir = os.path.join(app.static_folder, 'tmp_print')
+        os.makedirs(tmp_dir, exist_ok=True)
+        fname = f'quick-print-{uuid.uuid4().hex}.pdf'
+        fpath = os.path.join(tmp_dir, fname)
+        with open(fpath, 'wb') as f:
+            out = BytesIO()
+            writer.write(out)
+            out.seek(0)
+            f.write(out.read())
+
+        return True, {
+            'files_count': len(files),
+            'order_by': order_by,
+            'orientation': orientation,
+            'page_size': page_size,
+            'pages': added_pages,
+            'pdf_url': url_for('static', filename=f'tmp_print/{fname}'),
+        }
+    except Exception as e:
+        return False, {'error': f'Print batch error: {e}'}
+
+
+@csrf.exempt
+@app.route('/api/personal-tools/quick-print', methods=['POST'])
+def api_personal_tools_quick_print():
+    if not _require_master_admin():
+        return jsonify({'error': 'Unauthorized access', 'success': False}), 403
+
+    ok, payload = _build_personal_tools_quick_print_payload()
+    if not ok:
+        return jsonify({'error': payload.get('error', 'Print batch error'), 'success': False}), 400
+
+    payload['success'] = True
+    return jsonify(payload)
 
 
 @app.route('/admin/personal-tools/os-notes', methods=['GET'])

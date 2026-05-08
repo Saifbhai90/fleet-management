@@ -33,7 +33,7 @@ const directory: Processes = {
     title: "Browser",
   },
   FleetCalculator: {
-    Component: dynamic(() => import("components/apps/FleetTool")),
+    Component: dynamic(() => import("components/apps/FleetCalculator")),
     backgroundColor: "#FFFFFF",
     defaultSize: {
       height: 520,
@@ -43,7 +43,7 @@ const directory: Processes = {
     title: "Fleet Calculator",
   },
   FleetMultiFilePrint: {
-    Component: dynamic(() => import("components/apps/FleetTool")),
+    Component: dynamic(() => import("components/apps/FleetMultiFilePrint")),
     backgroundColor: "#FFFFFF",
     defaultSize: {
       height: 620,
@@ -53,7 +53,7 @@ const directory: Processes = {
     title: "Fleet Multi File Print",
   },
   FleetNotes: {
-    Component: dynamic(() => import("components/apps/FleetTool")),
+    Component: dynamic(() => import("components/apps/FleetNotes")),
     backgroundColor: "#FFFFFF",
     defaultSize: {
       height: 640,

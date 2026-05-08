@@ -2,4 +2,4 @@
 BaseURL=FleetMultiFilePrint
 Comment=FleetManager Multi File Print app
 IconFile=/System/Icons/documents.webp
-URL=/admin/personal-tools/quick-print
+URL=
