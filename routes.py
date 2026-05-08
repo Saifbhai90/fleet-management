@@ -2612,6 +2612,36 @@ def _fleet_personal_pc_desktop_template_kwargs():
     return {'fleet_pc_iframe_src': '', 'fleet_pc_missing': True}
 
 
+def _serve_fleet_personal_pc_asset(root_name: str, asset_path: str):
+    """Serve daedalOS absolute asset paths when app runs under /static/fleet_personal_pc/."""
+    static_folder = current_app.static_folder or ''
+    root_abs = os.path.abspath(os.path.join(static_folder, 'fleet_personal_pc', root_name))
+    target_abs = os.path.abspath(os.path.join(root_abs, asset_path or ''))
+
+    if not target_abs.startswith(root_abs):
+        abort(404)
+
+    if not os.path.exists(target_abs):
+        abort(404)
+
+    return send_from_directory(root_abs, asset_path)
+
+
+@app.route('/System/<path:asset_path>')
+def fleet_personal_pc_system_asset(asset_path):
+    return _serve_fleet_personal_pc_asset('System', asset_path)
+
+
+@app.route('/Users/<path:asset_path>')
+def fleet_personal_pc_users_asset(asset_path):
+    return _serve_fleet_personal_pc_asset('Users', asset_path)
+
+
+@app.route('/fleet-brand/<path:asset_path>')
+def fleet_personal_pc_brand_asset(asset_path):
+    return _serve_fleet_personal_pc_asset('fleet-brand', asset_path)
+
+
 @app.route('/admin/personal-tools', methods=['GET', 'POST'])
 def admin_personal_tools():
     """Master admin personal tools: explorer-like folders, paste/upload, move, view, print selected."""
