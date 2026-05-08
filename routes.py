@@ -61,6 +61,7 @@ from forms import (
 from datetime import datetime, date, time, timezone
 from datetime import timedelta
 from decimal import Decimal
+import base64
 import csv
 from io import StringIO, BytesIO
 import io
@@ -2637,7 +2638,7 @@ def admin_personal_tools_quick_print():
     return render_template('admin_personal_tools_quick_print.html')
 
 
-def _build_personal_tools_quick_print_payload():
+def _build_personal_tools_quick_print_payload(include_content=False):
     files = request.files.getlist('print_files')
     files = [f for f in files if f and (f.filename or '').strip()]
     if not files:
@@ -2687,16 +2688,22 @@ def _build_personal_tools_quick_print_payload():
             out = BytesIO()
             writer.write(out)
             out.seek(0)
-            f.write(out.read())
+            pdf_bytes = out.read()
+            f.write(pdf_bytes)
 
-        return True, {
+        payload = {
             'files_count': len(files),
             'order_by': order_by,
             'orientation': orientation,
             'page_size': page_size,
             'pages': added_pages,
+            'pdf_name': fname,
             'pdf_url': url_for('api_personal_tools_quick_print_file', filename=fname),
         }
+        if include_content:
+            payload['pdf_base64'] = base64.b64encode(pdf_bytes).decode('ascii')
+
+        return True, payload
     except Exception as e:
         return False, {'error': f'Print batch error: {e}'}
 
@@ -2707,7 +2714,7 @@ def api_personal_tools_quick_print():
     if not _require_master_admin():
         return jsonify({'error': 'Unauthorized access', 'success': False}), 403
 
-    ok, payload = _build_personal_tools_quick_print_payload()
+    ok, payload = _build_personal_tools_quick_print_payload(include_content=True)
     if not ok:
         return jsonify({'error': payload.get('error', 'Print batch error'), 'success': False}), 400
 

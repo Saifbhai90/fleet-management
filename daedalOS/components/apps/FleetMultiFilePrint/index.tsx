@@ -1,6 +1,8 @@
-import { memo, useEffect, useMemo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { type ComponentProcessProps } from "components/system/Apps/RenderComponent";
+import { useFileSystem } from "contexts/fileSystem";
 import { useProcesses } from "contexts/process";
+import { DESKTOP_PATH } from "utils/constants";
 
 type PrintResponse = {
   error?: string;
@@ -9,6 +11,8 @@ type PrintResponse = {
   orientation?: string;
   page_size?: string;
   pages?: number;
+  pdf_base64?: string;
+  pdf_name?: string;
   pdf_url?: string;
   success?: boolean;
 };
@@ -22,7 +26,18 @@ const appStyle: React.CSSProperties = {
   padding: 12,
 };
 
+const decodeBase64ToBuffer = (content: string): Buffer => {
+  const binary = window.atob(content);
+  const bytes = Uint8Array.from(binary, (character) => {
+    const code = character.codePointAt(0);
+    return typeof code === "number" ? code : 0;
+  });
+
+  return Buffer.from(bytes);
+};
+
 const FleetMultiFilePrint: FC<ComponentProcessProps> = () => {
+  const { createPath } = useFileSystem();
   const { open } = useProcesses();
   const [files, setFiles] = useState<File[]>([]);
   const [pageSize, setPageSize] = useState("original");
@@ -30,15 +45,8 @@ const FleetMultiFilePrint: FC<ComponentProcessProps> = () => {
   const [orderBy, setOrderBy] = useState("as_uploaded");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [pdfUrl, setPdfUrl] = useState("");
+  const [pdfPath, setPdfPath] = useState("");
   const [summary, setSummary] = useState("");
-
-  useEffect(
-    () => () => {
-      if (pdfUrl.startsWith("blob:")) URL.revokeObjectURL(pdfUrl);
-    },
-    [pdfUrl]
-  );
 
   const orderedFiles = useMemo(() => {
     const next = [...files];
@@ -52,8 +60,7 @@ const FleetMultiFilePrint: FC<ComponentProcessProps> = () => {
   const submit = async (): Promise<void> => {
     setError("");
     setSummary("");
-    if (pdfUrl.startsWith("blob:")) URL.revokeObjectURL(pdfUrl);
-    setPdfUrl("");
+    setPdfPath("");
 
     if (orderedFiles.length === 0) {
       setError("Kam az kam 1 PDF/Image file select karein.");
@@ -75,27 +82,21 @@ const FleetMultiFilePrint: FC<ComponentProcessProps> = () => {
       });
       const data = (await response.json()) as PrintResponse;
 
-      if (!response.ok || !data.success || !data.pdf_url) {
+      if (!response.ok || !data.success || !data.pdf_base64 || !data.pdf_name) {
         setError(data.error || "Print batch error");
         return;
       }
-
-      const absolutePdfUrl = data.pdf_url.startsWith("http")
-        ? data.pdf_url
-        : `${window.location.origin}${data.pdf_url}`;
-      const pdfFileResponse = await fetch(absolutePdfUrl, {
-        credentials: "include",
-      });
-      if (!pdfFileResponse.ok) {
-        setError("Combined PDF load nahi ho saki.");
+      const pdfBuffer = decodeBase64ToBuffer(data.pdf_base64);
+      const savedName = await createPath(data.pdf_name, DESKTOP_PATH, pdfBuffer);
+      if (!savedName) {
+        setError("Combined PDF Desktop par save nahi ho saki.");
         return;
       }
 
-      const pdfBlob = await pdfFileResponse.blob();
-      const blobUrl = URL.createObjectURL(pdfBlob);
-      setPdfUrl(blobUrl);
+      const savedPath = `${DESKTOP_PATH}/${savedName}`;
+      setPdfPath(savedPath);
       setSummary(`${data.files_count || 0} files -> ${data.pages || 0} pages`);
-      open("PDF", { url: blobUrl });
+      open("PDF", { url: savedPath });
     } catch {
       setError("Print service reach nahi ho saki. Dobara try karein.");
     } finally {
@@ -104,13 +105,13 @@ const FleetMultiFilePrint: FC<ComponentProcessProps> = () => {
   };
 
   const openPdfInViewer = (): void => {
-    if (!pdfUrl) return;
-    open("PDF", { url: pdfUrl });
+    if (!pdfPath) return;
+    open("PDF", { url: pdfPath });
   };
 
   const printPdfFromViewer = (): void => {
-    if (!pdfUrl) return;
-    open("PDF", { url: pdfUrl });
+    if (!pdfPath) return;
+    open("PDF", { url: pdfPath });
   };
 
   return (
@@ -181,7 +182,7 @@ const FleetMultiFilePrint: FC<ComponentProcessProps> = () => {
       {error && <div style={{ color: "#b91c1c", fontWeight: 600 }}>{error}</div>}
       {summary && <div style={{ color: "#166534", fontWeight: 600 }}>{summary}</div>}
 
-      {pdfUrl && (
+      {pdfPath && (
         <div
           style={{
             alignItems: "center",
@@ -201,8 +202,9 @@ const FleetMultiFilePrint: FC<ComponentProcessProps> = () => {
         >
           <strong>PDF ready inside DaedalOS</strong>
           <span style={{ fontSize: 13 }}>
-            PDF DaedalOS ke internal viewer me open ho chuki hai. Neeche bhi preview available hai.
+            File Desktop me save ho chuki hai aur internal PDF viewer me open ho gayi hai.
           </span>
+          <code style={{ background: "#e2e8f0", borderRadius: 6, padding: "4px 8px" }}>{pdfPath}</code>
           <div style={{ display: "flex", gap: 8 }}>
             <button
               onClick={openPdfInViewer}
@@ -232,23 +234,6 @@ const FleetMultiFilePrint: FC<ComponentProcessProps> = () => {
             >
               Print via PDF Viewer
             </button>
-          </div>
-          <div
-            style={{
-              background: "#fff",
-              border: "1px solid #dbe1ea",
-              borderRadius: 8,
-              height: "100%",
-              minHeight: 260,
-              overflow: "hidden",
-              width: "100%",
-            }}
-          >
-            <iframe
-              src={pdfUrl}
-              style={{ border: 0, height: "100%", width: "100%" }}
-              title="Combined PDF Preview"
-            />
           </div>
         </div>
       )}
