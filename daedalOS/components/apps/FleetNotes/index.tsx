@@ -42,7 +42,6 @@ const FleetNotes: FC<ComponentProcessProps> = () => {
       <div style={toolbarStyle}>
         <strong style={{ color: "#0f172a" }}>Fleet Notes</strong>
         <button
-          type="button"
           onClick={() => setValue("")}
           style={{
             background: "#ef4444",
@@ -52,6 +51,7 @@ const FleetNotes: FC<ComponentProcessProps> = () => {
             cursor: "pointer",
             padding: "5px 10px",
           }}
+          type="button"
         >
           Clear
         </button>
@@ -59,7 +59,6 @@ const FleetNotes: FC<ComponentProcessProps> = () => {
 
       <textarea
         aria-label="Fleet Notes Editor"
-        value={value}
         onChange={(event) => setValue(event.target.value)}
         placeholder="Yahan notes likhein..."
         style={{
@@ -76,6 +75,7 @@ const FleetNotes: FC<ComponentProcessProps> = () => {
           resize: "none",
           width: "100%",
         }}
+        value={value}
       />
 
       <small style={{ color: "#475569" }}>

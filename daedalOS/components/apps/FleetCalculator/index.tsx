@@ -51,20 +51,59 @@ const gridStyle: React.CSSProperties = {
   gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
 };
 
+const TOKEN_REGEX = /(\d+(?:\.\d+)?)|[+\-*/]/g;
+
+const parseTokens = (expression: string): string[] => {
+  const normalized = expression.replaceAll(" ", "");
+  const matches = normalized.match(TOKEN_REGEX) || [];
+
+  return matches.join("") === normalized ? matches : [];
+};
+
+const computeMulDiv = (tokens: string[]): number[] => {
+  const reduced: number[] = [];
+  let operator = "+";
+
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    if (token === "*" || token === "/" || token === "+" || token === "-") {
+      operator = token;
+      continue;
+    }
+
+    const value = Number(token);
+    if (!Number.isFinite(value)) return [];
+
+    if (operator === "*") {
+      const last = reduced.pop();
+      if (typeof last !== "number") return [];
+      reduced.push(last * value);
+    } else if (operator === "/") {
+      const last = reduced.pop();
+      if (typeof last !== "number" || value === 0) return [];
+      reduced.push(last / value);
+    } else if (operator === "-") {
+      reduced.push(-value);
+    } else {
+      reduced.push(value);
+    }
+  }
+
+  return reduced;
+};
+
 const evalExpression = (expression: string): string => {
   if (!expression) return "0";
-  const safe = expression.replace(/[^0-9+\-*/.() ]/g, "");
-  if (!safe.trim()) return "0";
+  const tokens = parseTokens(expression);
+  if (tokens.length === 0) return "Error";
 
-  try {
-    const result = Function(`"use strict"; return (${safe});`)();
-    if (typeof result !== "number" || Number.isNaN(result) || !Number.isFinite(result)) {
-      return "Error";
-    }
-    return Number(result.toFixed(10)).toString();
-  } catch {
-    return "Error";
-  }
+  const phaseOne = computeMulDiv(tokens);
+  if (phaseOne.length === 0) return "Error";
+
+  const result = phaseOne.reduce((sum, current) => sum + current, 0);
+  if (!Number.isFinite(result)) return "Error";
+
+  return Number(result.toFixed(10)).toString();
 };
 
 const FleetCalculator: FC<ComponentProcessProps> = () => {
@@ -100,7 +139,6 @@ const FleetCalculator: FC<ComponentProcessProps> = () => {
         {BUTTONS.map((button) => (
           <button
             key={button}
-            type="button"
             onClick={() => handleButton(button)}
             style={{
               background: button === "C" ? "#fee2e2" : "#ffffff",
@@ -112,12 +150,12 @@ const FleetCalculator: FC<ComponentProcessProps> = () => {
               fontWeight: 600,
               minHeight: 44,
             }}
+            type="button"
           >
             {button}
           </button>
         ))}
         <button
-          type="button"
           onClick={handleEquals}
           style={{
             background: "#16a34a",
@@ -130,6 +168,7 @@ const FleetCalculator: FC<ComponentProcessProps> = () => {
             gridColumn: "span 4",
             minHeight: 44,
           }}
+          type="button"
         >
           =
         </button>

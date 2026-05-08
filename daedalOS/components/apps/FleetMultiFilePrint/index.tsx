@@ -87,7 +87,6 @@ const FleetMultiFilePrint: FC<ComponentProcessProps> = () => {
       <div style={{ alignItems: "center", display: "flex", gap: 8, justifyContent: "space-between" }}>
         <strong style={{ color: "#0f172a" }}>Fleet Multi File Print</strong>
         <button
-          type="button"
           disabled={isSubmitting}
           onClick={submit}
           style={{
@@ -100,6 +99,7 @@ const FleetMultiFilePrint: FC<ComponentProcessProps> = () => {
             opacity: isSubmitting ? 0.75 : 1,
             padding: "6px 12px",
           }}
+          type="button"
         >
           {isSubmitting ? "Preparing..." : "Combine & Print"}
         </button>
@@ -109,20 +109,20 @@ const FleetMultiFilePrint: FC<ComponentProcessProps> = () => {
         type="file"
         multiple
         accept=".pdf,.png,.jpg,.jpeg,.webp,.bmp,.gif,.tif,.tiff"
-        onChange={(event) => setFiles(Array.from(event.target.files || []))}
+        onChange={(event) => setFiles([...(event.target.files || [])])}
       />
 
       <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(3, minmax(0, 1fr))" }}>
-        <select value={pageSize} onChange={(event) => setPageSize(event.target.value)}>
+        <select onChange={(event) => setPageSize(event.target.value)} value={pageSize}>
           <option value="original">Original</option>
           <option value="a4">A4</option>
           <option value="letter">Letter</option>
         </select>
-        <select value={orientation} onChange={(event) => setOrientation(event.target.value)}>
+        <select onChange={(event) => setOrientation(event.target.value)} value={orientation}>
           <option value="portrait">Portrait</option>
           <option value="landscape">Landscape</option>
         </select>
-        <select value={orderBy} onChange={(event) => setOrderBy(event.target.value)}>
+        <select onChange={(event) => setOrderBy(event.target.value)} value={orderBy}>
           <option value="as_uploaded">As Uploaded</option>
           <option value="name_asc">A to Z</option>
           <option value="name_desc">Z to A</option>
@@ -153,9 +153,9 @@ const FleetMultiFilePrint: FC<ComponentProcessProps> = () => {
       {pdfUrl && (
         <div style={{ border: "1px solid #dbe1ea", borderRadius: 8, flex: 1, minHeight: 260, overflow: "hidden" }}>
           <iframe
+            style={{ border: 0, height: "100%", width: "100%" }}
             src={pdfUrl}
             title="Combined PDF"
-            style={{ border: 0, height: "100%", width: "100%" }}
           />
         </div>
       )}
