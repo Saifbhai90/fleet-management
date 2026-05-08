@@ -1,5 +1,5 @@
 [InternetShortcut]
-BaseURL=Browser
-Comment=FleetManager Notes (same browser session)
-IconFile=/System/Icons/chromium.webp
+BaseURL=FleetNotes
+Comment=FleetManager Notes app
+IconFile=/System/Icons/monaco.webp
 URL=/admin/personal-tools/os-notes

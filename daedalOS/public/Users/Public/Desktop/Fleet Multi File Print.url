@@ -1,5 +1,5 @@
 [InternetShortcut]
-BaseURL=Browser
-Comment=FleetManager Multi File Print
-IconFile=/System/Icons/chromium.webp
+BaseURL=FleetMultiFilePrint
+Comment=FleetManager Multi File Print app
+IconFile=/System/Icons/documents.webp
 URL=/admin/personal-tools/quick-print
