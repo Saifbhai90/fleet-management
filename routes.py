@@ -2681,7 +2681,7 @@ def _build_personal_tools_quick_print_payload():
             writer = _normalize_writer_pages(writer, tw, th)
         tmp_dir = os.path.join(app.static_folder, 'tmp_print')
         os.makedirs(tmp_dir, exist_ok=True)
-        fname = f'quick-print-{uuid.uuid4().hex}.pdf'
+        fname = f'fleet-print-{uuid.uuid4().hex}.pdf'
         fpath = os.path.join(tmp_dir, fname)
         with open(fpath, 'wb') as f:
             out = BytesIO()
@@ -2695,7 +2695,7 @@ def _build_personal_tools_quick_print_payload():
             'orientation': orientation,
             'page_size': page_size,
             'pages': added_pages,
-            'pdf_url': url_for('static', filename=f'tmp_print/{fname}'),
+            'pdf_url': url_for('api_personal_tools_quick_print_file', filename=fname),
         }
     except Exception as e:
         return False, {'error': f'Print batch error: {e}'}
@@ -2713,6 +2713,24 @@ def api_personal_tools_quick_print():
 
     payload['success'] = True
     return jsonify(payload)
+
+
+@app.route('/api/personal-tools/quick-print/file/<path:filename>', methods=['GET'])
+def api_personal_tools_quick_print_file(filename):
+    if not _require_master_admin():
+        return jsonify({'error': 'Unauthorized access'}), 403
+
+    safe_name = secure_filename(filename or '')
+    if not safe_name.lower().endswith('.pdf'):
+        abort(404)
+
+    tmp_dir = os.path.join(app.static_folder, 'tmp_print')
+    fpath = os.path.abspath(os.path.join(tmp_dir, safe_name))
+    base = os.path.abspath(tmp_dir)
+    if not fpath.startswith(base) or not os.path.exists(fpath):
+        abort(404)
+
+    return send_from_directory(tmp_dir, safe_name, mimetype='application/pdf')
 
 
 @app.route('/admin/personal-tools/os-notes', methods=['GET'])

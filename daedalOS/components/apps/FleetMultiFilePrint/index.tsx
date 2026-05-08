@@ -1,5 +1,6 @@
-import { memo, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import { type ComponentProcessProps } from "components/system/Apps/RenderComponent";
+import { useProcesses } from "contexts/process";
 
 type PrintResponse = {
   error?: string;
@@ -22,6 +23,7 @@ const appStyle: React.CSSProperties = {
 };
 
 const FleetMultiFilePrint: FC<ComponentProcessProps> = () => {
+  const { open } = useProcesses();
   const [files, setFiles] = useState<File[]>([]);
   const [pageSize, setPageSize] = useState("original");
   const [orientation, setOrientation] = useState("portrait");
@@ -30,6 +32,13 @@ const FleetMultiFilePrint: FC<ComponentProcessProps> = () => {
   const [error, setError] = useState("");
   const [pdfUrl, setPdfUrl] = useState("");
   const [summary, setSummary] = useState("");
+
+  useEffect(
+    () => () => {
+      if (pdfUrl.startsWith("blob:")) URL.revokeObjectURL(pdfUrl);
+    },
+    [pdfUrl]
+  );
 
   const orderedFiles = useMemo(() => {
     const next = [...files];
@@ -43,6 +52,7 @@ const FleetMultiFilePrint: FC<ComponentProcessProps> = () => {
   const submit = async (): Promise<void> => {
     setError("");
     setSummary("");
+    if (pdfUrl.startsWith("blob:")) URL.revokeObjectURL(pdfUrl);
     setPdfUrl("");
 
     if (orderedFiles.length === 0) {
@@ -73,8 +83,19 @@ const FleetMultiFilePrint: FC<ComponentProcessProps> = () => {
       const absolutePdfUrl = data.pdf_url.startsWith("http")
         ? data.pdf_url
         : `${window.location.origin}${data.pdf_url}`;
-      setPdfUrl(absolutePdfUrl);
+      const pdfFileResponse = await fetch(absolutePdfUrl, {
+        credentials: "include",
+      });
+      if (!pdfFileResponse.ok) {
+        setError("Combined PDF load nahi ho saki.");
+        return;
+      }
+
+      const pdfBlob = await pdfFileResponse.blob();
+      const blobUrl = URL.createObjectURL(pdfBlob);
+      setPdfUrl(blobUrl);
       setSummary(`${data.files_count || 0} files -> ${data.pages || 0} pages`);
+      open("PDF", { url: blobUrl });
     } catch {
       setError("Print service reach nahi ho saki. Dobara try karein.");
     } finally {
@@ -82,24 +103,14 @@ const FleetMultiFilePrint: FC<ComponentProcessProps> = () => {
     }
   };
 
-  const openPdfInNewTab = (): void => {
+  const openPdfInViewer = (): void => {
     if (!pdfUrl) return;
-    window.open(pdfUrl, "_blank", "noopener,noreferrer");
+    open("PDF", { url: pdfUrl });
   };
 
-  const printPdfInNewTab = (): void => {
+  const printPdfFromViewer = (): void => {
     if (!pdfUrl) return;
-    const printWindow = window.open(pdfUrl, "_blank");
-    if (!printWindow) return;
-
-    setTimeout(() => {
-      try {
-        printWindow.focus();
-        printWindow.print();
-      } catch {
-        // Ignore failures from browser popup/print policies.
-      }
-    }, 700);
+    open("PDF", { url: pdfUrl });
   };
 
   return (
@@ -188,13 +199,13 @@ const FleetMultiFilePrint: FC<ComponentProcessProps> = () => {
             textAlign: "center",
           }}
         >
-          <strong>PDF ready for preview and print</strong>
+          <strong>PDF ready inside DaedalOS</strong>
           <span style={{ fontSize: 13 }}>
-            Chrome sandbox iframe me direct preview block hoti hai, is liye PDF new tab me open hogi.
+            PDF DaedalOS ke internal viewer me open ho chuki hai. Neeche bhi preview available hai.
           </span>
           <div style={{ display: "flex", gap: 8 }}>
             <button
-              onClick={openPdfInNewTab}
+              onClick={openPdfInViewer}
               style={{
                 background: "#2563eb",
                 border: "1px solid #1d4ed8",
@@ -205,10 +216,10 @@ const FleetMultiFilePrint: FC<ComponentProcessProps> = () => {
               }}
               type="button"
             >
-              Open PDF
+              Open in PDF Viewer
             </button>
             <button
-              onClick={printPdfInNewTab}
+              onClick={printPdfFromViewer}
               style={{
                 background: "#0f766e",
                 border: "1px solid #0f766e",
@@ -219,8 +230,25 @@ const FleetMultiFilePrint: FC<ComponentProcessProps> = () => {
               }}
               type="button"
             >
-              Print PDF
+              Print via PDF Viewer
             </button>
+          </div>
+          <div
+            style={{
+              background: "#fff",
+              border: "1px solid #dbe1ea",
+              borderRadius: 8,
+              height: "100%",
+              minHeight: 260,
+              overflow: "hidden",
+              width: "100%",
+            }}
+          >
+            <iframe
+              src={pdfUrl}
+              style={{ border: 0, height: "100%", width: "100%" }}
+              title="Combined PDF Preview"
+            />
           </div>
         </div>
       )}
