@@ -172,6 +172,7 @@ PERMISSION_TREE = {
     PERMISSION_TASK_REPORT: [
         ('task_report', 'Task & Logbook (full)'),
         ('task_report_upload', 'Workbook Upload'),
+        ('task_report_upload_list', 'Workbook Upload Log – List / View'),
         # Daily Task Report
         ('task_report_list', 'Daily Task – List / View'),
         ('task_report_add', 'Daily Task – Add New'),
@@ -538,6 +539,7 @@ PERMISSION_DEPENDENCIES = {
     # Task & Logbook – granular features independent of section "full" (like Assignments / Transfers).
     # Granting Daily Task list/add must NOT auto-add "task_report" (that implied Workbook Upload via PAGE_VISIBLE).
     'task_report_upload': [],
+    'task_report_upload_list': [],
     'task_report_list': [],
     'task_report_add': ['task_report_list'],
     'red_task': [],
@@ -793,6 +795,7 @@ SECTION_PAGE_GROUPS = {
         ('Task & Logbook (full)', [('task_report', 'Task & Logbook (full)')]),
         ('Workbook Upload', [
             ('task_report_upload', 'Workbook Upload'),
+            ('task_report_upload_list', 'Workbook Upload Log – List / View'),
         ]),
         ('Daily Task Report', [
             ('task_report_list', 'List / View'),
@@ -1107,7 +1110,7 @@ PAGE_VISIBLE = {
     'leave_request_review': ['attendance', 'driver_attendance', 'driver_attendance_mark'],
     # Task & Logbook
     'task_report_upload': ['task_report', 'task_report_upload'],
-    'task_report_upload_list': ['task_report', 'task_report_upload'],
+    'task_report_upload_list': ['task_report', 'task_report_upload_list'],
     'task_report_list': ['task_report', 'task_report_list'],
     'red_task': ['task_report', 'red_task'],
     'without_task': ['task_report', 'without_task'],

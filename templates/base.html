@@ -2002,6 +2002,8 @@
                 <a href="{{ url_for('task_report_upload') }}" class="collapse-item {% if request.endpoint in ['task_report_upload', 'task_report_upload_emergency', 'task_report_upload_mileage', 'task_report_upload_both'] %}active-link{% endif %}">
                     <i class="bi bi-file-earmark-excel"></i><span>Workbook Upload</span>
                 </a>
+                {% endif %}
+                {% if can_see_page('task_report_upload') or can_see_page('task_report_upload_list') %}
                 <a href="{{ url_for('task_report_upload_list') }}" class="collapse-item {% if request.endpoint == 'task_report_upload_list' %}active-link{% endif %}">
                     <i class="bi bi-journal-bookmark"></i><span>Workbook Upload Log</span>
                 </a>

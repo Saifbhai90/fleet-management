@@ -6978,6 +6978,59 @@ def _current_user_is_master():
     return session.get('is_master', False)
 
 
+def _is_admin_role_user(user):
+    """True if this user's assigned role is the built-in Admin role (name == 'Admin')."""
+    return bool(user and user.role and (user.role.name or '').strip() == 'Admin')
+
+
+def _master_may_post_user_edit(target_user):
+    """Master may change only their own account or users who have the Admin role (password, post, etc.)."""
+    if not target_user:
+        return False
+    if target_user.id == session.get('user_id'):
+        return True
+    return _is_admin_role_user(target_user)
+
+
+def _reconcile_roles_to_admin_cap(admin_role):
+    """
+    After Admin role permissions change: every other role (except Master) may only keep
+    permissions that still exist on the Admin role. Removes permissions Master revoked from Admin
+    from Driver / Accountant / … roles everywhere.
+    """
+    if not admin_role:
+        return
+    try:
+        db.session.refresh(admin_role)
+    except Exception:
+        pass
+    admin_ids = {p.id for p in (admin_role.permissions or [])}
+    others = Role.query.filter(Role.name != 'Master').all()
+    for r in others:
+        if r.id == admin_role.id:
+            continue
+        keep = [p.id for p in (r.permissions or []) if p.id in admin_ids]
+        if set(keep) != {p.id for p in (r.permissions or [])}:
+            _replace_role_permissions(r, keep)
+
+
+def _clamp_role_to_admin_cap(role):
+    """Non-master role edits: ensure role never keeps permissions the Admin role no longer has."""
+    if not role or role.name in ('Master', 'Admin'):
+        return
+    admin = Role.query.filter_by(name='Admin').first()
+    if not admin:
+        return
+    try:
+        db.session.refresh(admin)
+    except Exception:
+        pass
+    admin_ids = {p.id for p in (admin.permissions or [])}
+    keep = [p.id for p in (role.permissions or []) if p.id in admin_ids]
+    if set(keep) != {p.id for p in (role.permissions or [])}:
+        _replace_role_permissions(role, keep)
+
+
 def _current_user_effective_permission_codes():
     """Effective permission codes for current user, including section-level expansions."""
     codes = set(session.get('permissions') or [])
@@ -7142,6 +7195,9 @@ def user_list():
 def user_delete(pk):
     user = User.query.get_or_404(pk)
     is_master = _current_user_is_master()
+    if is_master:
+        flash('Users delete sirf Admin login kar sakta hai.', 'danger')
+        return redirect(url_for('user_list'))
     # Master/Admin users ko kabhi delete na karein yahan se
     if user.role and _role_name(user.role) in ('Master', 'Admin'):
         flash('Master / Admin users delete nahi kiye ja sakte.', 'danger')
@@ -7164,6 +7220,9 @@ def user_delete(pk):
 def users_sync_from_employees_drivers():
     """Create User for existing Employees and Drivers who have CNIC and no user yet. Returns JSON {created, total}."""
     import json as json_module
+
+    if session.get('is_master'):
+        return jsonify({'ok': False, 'error': 'Only Admin can run this sync.'}), 403
 
     def _candidates():
         out = []
@@ -7223,11 +7282,15 @@ def users_sync_from_employees_drivers():
 def user_form():
     form = UserForm()
     is_master = _current_user_is_master()
+    if is_master:
+        flash('Naye users sirf Admin login bana sakta hai.', 'warning')
+        return redirect(url_for('user_list'))
+    master_user_form_read_only = False
     posts = EmployeePost.query.order_by(EmployeePost.full_name).all()
     form.employee_post_id.choices = [(0, '-- No Post --')] + [(p.id, p.full_name) for p in posts]
 
     if request.method == 'GET':
-        return render_template('user_form.html', form=form, user=None, allowed_roles_master_only=is_master)
+        return render_template('user_form.html', form=form, user=None, allowed_roles_master_only=is_master, master_user_form_read_only=master_user_form_read_only)
     if form.validate_on_submit():
         employee_post_id = form.employee_post_id.data if form.employee_post_id.data else None
         role_id = None
@@ -7238,23 +7301,23 @@ def user_form():
                 role = Role.query.get(role_id)
                 if role and _role_name(role) in ('Master',) and not is_master:
                     flash('Only Master (Developer) can assign Master access.', 'danger')
-                    return render_template('user_form.html', form=form, user=None, allowed_roles_master_only=is_master)
+                    return render_template('user_form.html', form=form, user=None, allowed_roles_master_only=is_master, master_user_form_read_only=master_user_form_read_only)
                 # Delegation rule: non-master can only assign roles whose effective permissions are subset of their own
                 if role and not is_master:
                     current_codes = _current_user_effective_permission_codes()
                     role_codes = _role_effective_permission_codes(role)
                     if not role_codes.issubset(current_codes):
                         flash('Aap apne se zyada access assign nahi kar sakte. Pehle apne permissions update karwayen.', 'danger')
-                        return render_template('user_form.html', form=form, user=None, allowed_roles_master_only=is_master)
+                        return render_template('user_form.html', form=form, user=None, allowed_roles_master_only=is_master, master_user_form_read_only=master_user_form_read_only)
         username = (form.username.data or '').strip()
         if User.query.filter(func.lower(User.username) == username.lower()).first():
             flash('Username already exists.', 'danger')
-            return render_template('user_form.html', form=form, user=None, allowed_roles_master_only=is_master)
+            return render_template('user_form.html', form=form, user=None, allowed_roles_master_only=is_master, master_user_form_read_only=master_user_form_read_only)
 
         password = (form.password.data or '').strip()
         if not password or len(password) < 4:
             flash('Password must be at least 4 characters.', 'danger')
-            return render_template('user_form.html', form=form, user=None, allowed_roles_master_only=is_master)
+            return render_template('user_form.html', form=form, user=None, allowed_roles_master_only=is_master, master_user_form_read_only=master_user_form_read_only)
         user = User(
             username=username,
             password_hash=generate_password_hash(password),
@@ -7267,7 +7330,7 @@ def user_form():
         db.session.commit()
         flash('User created successfully.', 'success')
         return redirect(url_for('user_list'))
-    return render_template('user_form.html', form=form, user=None, allowed_roles_master_only=is_master)
+    return render_template('user_form.html', form=form, user=None, allowed_roles_master_only=is_master, master_user_form_read_only=master_user_form_read_only)
 
 
 @app.route('/users/<int:pk>/edit', methods=['GET', 'POST'])
@@ -7284,14 +7347,24 @@ def user_edit(pk):
     form = UserForm()
     posts = EmployeePost.query.order_by(EmployeePost.full_name).all()
     form.employee_post_id.choices = [(0, '-- No Post --')] + [(p.id, p.full_name) for p in posts]
+    master_user_form_read_only = bool(is_master and not _master_may_post_user_edit(user))
 
     if request.method == 'GET':
         form.username.data = user.username
         form.full_name.data = user.full_name
         form.employee_post_id.data = user.employee_post_id or 0
         form.is_active.data = user.is_active
-        return render_template('user_form.html', form=form, user=user, allowed_roles_master_only=is_master)
+        return render_template(
+            'user_form.html',
+            form=form,
+            user=user,
+            allowed_roles_master_only=is_master,
+            master_user_form_read_only=master_user_form_read_only,
+        )
     if form.validate_on_submit():
+        if is_master and not _master_may_post_user_edit(user):
+            flash('Master sirf apna account ya Admin role wale user ki details yahan badal sakta hai.', 'danger')
+            return redirect(url_for('user_list'))
         employee_post_id = form.employee_post_id.data if form.employee_post_id.data else None
         role_id = None
         if employee_post_id:
@@ -7301,18 +7374,36 @@ def user_edit(pk):
                 role = Role.query.get(role_id)
                 if role and _role_name(role) in ('Master',) and not is_master:
                     flash('Only Master (Developer) can assign Master access.', 'danger')
-                    return render_template('user_form.html', form=form, user=user, allowed_roles_master_only=is_master)
+                    return render_template(
+                        'user_form.html',
+                        form=form,
+                        user=user,
+                        allowed_roles_master_only=is_master,
+                        master_user_form_read_only=master_user_form_read_only,
+                    )
                 if role and not is_master:
                     current_codes = _current_user_effective_permission_codes()
                     role_codes = _role_effective_permission_codes(role)
                     if not role_codes.issubset(current_codes):
                         flash('Aap apne se zyada access assign nahi kar sakte. Pehle apne permissions update karwayen.', 'danger')
-                        return render_template('user_form.html', form=form, user=user, allowed_roles_master_only=is_master)
+                        return render_template(
+                            'user_form.html',
+                            form=form,
+                            user=user,
+                            allowed_roles_master_only=is_master,
+                            master_user_form_read_only=master_user_form_read_only,
+                        )
         username = (form.username.data or '').strip()
         other = User.query.filter(func.lower(User.username) == username.lower()).filter(User.id != pk).first()
         if other:
             flash('Username already exists.', 'danger')
-            return render_template('user_form.html', form=form, user=user, allowed_roles_master_only=is_master)
+            return render_template(
+                'user_form.html',
+                form=form,
+                user=user,
+                allowed_roles_master_only=is_master,
+                master_user_form_read_only=master_user_form_read_only,
+            )
 
         user.username = username
         user.full_name = (form.full_name.data or '').strip() or None
@@ -7325,7 +7416,13 @@ def user_edit(pk):
         if password:
             if len(password) < 4:
                 flash('Password must be at least 4 characters.', 'danger')
-                return render_template('user_form.html', form=form, user=user, allowed_roles_master_only=is_master)
+                return render_template(
+                    'user_form.html',
+                    form=form,
+                    user=user,
+                    allowed_roles_master_only=is_master,
+                    master_user_form_read_only=master_user_form_read_only,
+                )
             user.password_hash = generate_password_hash(password)
             # Manual new password set kiya gaya: first-login flag hata dein
             if getattr(user, 'force_password_change', None):
@@ -7337,7 +7434,13 @@ def user_edit(pk):
         db.session.commit()
         flash('User updated successfully.', 'success')
         return redirect(url_for('user_list'))
-    return render_template('user_form.html', form=form, user=user, allowed_roles_master_only=is_master)
+    return render_template(
+        'user_form.html',
+        form=form,
+        user=user,
+        allowed_roles_master_only=is_master,
+        master_user_form_read_only=master_user_form_read_only,
+    )
 
 
 @app.route('/roles')
@@ -7848,6 +7951,7 @@ def role_form():
         current_app.logger.exception('role_form: permission tree/matrix build failed')
         permission_tree = []
         permission_matrix = []
+    master_role_matrix_read_only = bool(is_master)
     if request.method == 'GET':
         return render_template(
             'role_form.html',
@@ -7856,23 +7960,59 @@ def role_form():
             permission_tree=permission_tree,
             permission_matrix=permission_matrix,
             permission_dependencies=PERMISSION_DEPENDENCIES,
+            master_role_matrix_read_only=master_role_matrix_read_only,
         )
     if form.validate_on_submit():
+        if is_master:
+            flash('Naye roles sirf Admin login bana sakta hai. Master sirf Admin role ki permissions change kar sakta hai.', 'warning')
+            return redirect(url_for('role_list'))
         post_id = form.post_id.data if form.post_id.data else 0
         if post_id == 0:
             flash('Please select a Post from Employee Posts.', 'danger')
-            return render_template('role_form.html', form=form, role=None, permission_tree=permission_tree, permission_matrix=permission_matrix, permission_dependencies=PERMISSION_DEPENDENCIES)
+            return render_template(
+                'role_form.html',
+                form=form,
+                role=None,
+                permission_tree=permission_tree,
+                permission_matrix=permission_matrix,
+                permission_dependencies=PERMISSION_DEPENDENCIES,
+                master_role_matrix_read_only=master_role_matrix_read_only,
+            )
         post = EmployeePost.query.get(post_id)
         if not post:
             flash('Selected post not found.', 'danger')
-            return render_template('role_form.html', form=form, role=None, permission_tree=permission_tree, permission_matrix=permission_matrix, permission_dependencies=PERMISSION_DEPENDENCIES)
+            return render_template(
+                'role_form.html',
+                form=form,
+                role=None,
+                permission_tree=permission_tree,
+                permission_matrix=permission_matrix,
+                permission_dependencies=PERMISSION_DEPENDENCIES,
+                master_role_matrix_read_only=master_role_matrix_read_only,
+            )
         name = (post.full_name or '').strip()
         if not name:
             flash('Post has no name.', 'danger')
-            return render_template('role_form.html', form=form, role=None, permission_tree=permission_tree, permission_matrix=permission_matrix, permission_dependencies=PERMISSION_DEPENDENCIES)
+            return render_template(
+                'role_form.html',
+                form=form,
+                role=None,
+                permission_tree=permission_tree,
+                permission_matrix=permission_matrix,
+                permission_dependencies=PERMISSION_DEPENDENCIES,
+                master_role_matrix_read_only=master_role_matrix_read_only,
+            )
         if Role.query.filter(func.lower(Role.name) == name.lower()).first():
             flash('A role with this post name already exists. Select another post or edit the existing role.', 'danger')
-            return render_template('role_form.html', form=form, role=None, permission_tree=permission_tree, permission_matrix=permission_matrix, permission_dependencies=PERMISSION_DEPENDENCIES)
+            return render_template(
+                'role_form.html',
+                form=form,
+                role=None,
+                permission_tree=permission_tree,
+                permission_matrix=permission_matrix,
+                permission_dependencies=PERMISSION_DEPENDENCIES,
+                master_role_matrix_read_only=master_role_matrix_read_only,
+            )
         role = Role(name=name, description=(form.description.data or '').strip() or None)
         db.session.add(role)
         db.session.commit()
@@ -7891,10 +8031,19 @@ def role_form():
             permission_matrix=permission_matrix,
             permission_by_code=permission_by_code,
         )
+        _clamp_role_to_admin_cap(role)
         db.session.commit()
         flash('Role created successfully and linked to selected Post.', 'success')
         return redirect(url_for('role_list'))
-    return render_template('role_form.html', form=form, role=None, permission_tree=permission_tree, permission_matrix=permission_matrix, permission_dependencies=PERMISSION_DEPENDENCIES)
+    return render_template(
+                'role_form.html',
+                form=form,
+                role=None,
+                permission_tree=permission_tree,
+                permission_matrix=permission_matrix,
+                permission_dependencies=PERMISSION_DEPENDENCIES,
+                master_role_matrix_read_only=master_role_matrix_read_only,
+            )
 
 
 @app.route('/roles/<int:pk>/edit', methods=['GET', 'POST'])
@@ -7934,10 +8083,22 @@ def role_edit(pk):
         permission_matrix = []
     form = RoleForm()
     form.post_id.choices = [(0, '—')]
+    master_role_matrix_read_only = bool(is_master and role.name != 'Admin')
     if request.method == 'GET':
         # Edit mode: Role name/description sirf read-only dikhaani hain (change ki ijazat nahi)
-        return render_template('role_form.html', form=form, role=role, permission_tree=permission_tree, permission_matrix=permission_matrix, permission_dependencies=PERMISSION_DEPENDENCIES)
+        return render_template(
+            'role_form.html',
+            form=form,
+            role=role,
+            permission_tree=permission_tree,
+            permission_matrix=permission_matrix,
+            permission_dependencies=PERMISSION_DEPENDENCIES,
+            master_role_matrix_read_only=master_role_matrix_read_only,
+        )
     if form.validate_on_submit():
+        if is_master and role.name != 'Admin':
+            flash('Master sirf Admin role ki permissions change kar sakta hai. Baqi roles par sirf dekh sakta hai.', 'danger')
+            return redirect(url_for('role_list'))
         # Role Details (name/description) ko edit ki permission nahi – sirf permissions update honge
         perm_ids_raw = request.form.getlist('permission_ids', type=int)
         _apply_role_permissions_from_form(
@@ -7948,18 +8109,33 @@ def role_edit(pk):
             permission_matrix=permission_matrix,
             permission_by_code=permission_by_code,
         )
+        if role.name == 'Admin':
+            _reconcile_roles_to_admin_cap(role)
+        elif not is_master and role.name not in ('Master', 'Admin'):
+            _clamp_role_to_admin_cap(role)
         db.session.commit()
         flash('Role updated successfully.', 'success')
         return redirect(url_for('role_list'))
     if request.method == 'POST':
         flash('Role save nahi ho saka — form check karein (CSRF / fields).', 'danger')
-    return render_template('role_form.html', form=form, role=role, permission_tree=permission_tree, permission_matrix=permission_matrix, permission_dependencies=PERMISSION_DEPENDENCIES)
+    return render_template(
+        'role_form.html',
+        form=form,
+        role=role,
+        permission_tree=permission_tree,
+        permission_matrix=permission_matrix,
+        permission_dependencies=PERMISSION_DEPENDENCIES,
+        master_role_matrix_read_only=master_role_matrix_read_only,
+    )
 
 
 @app.route('/roles/<int:pk>/delete', methods=['POST'])
 def role_delete(pk):
     role = Role.query.get_or_404(pk)
     is_master = _current_user_is_master()
+    if is_master:
+        flash('Roles delete sirf Admin login kar sakta hai.', 'danger')
+        return redirect(url_for('role_list'))
     # Master/Admin roles kabhi delete nahi ho sakte
     if role.name in ('Master', 'Admin'):
         flash('Master / Admin role delete nahi kiya ja sakta.', 'danger')

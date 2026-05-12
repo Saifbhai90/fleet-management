@@ -177,7 +177,7 @@ ENDPOINT_PERMISSION_MAP = [
     ('admin_personal_tools_library', 'users_manage'),
     ('admin_personal_tools_library_detail', 'users_manage'),
     # Task & Logbook
-    ('task_report_upload_list', 'task_report_upload'),
+    ('task_report_upload_list', 'task_report_upload_list'),
     ('task_report_upload', 'task_report_upload'),
     ('task_report_upload_emergency', 'task_report_upload'),
     ('task_report_upload_mileage', 'task_report_upload'),
@@ -621,6 +621,24 @@ def seed_auth_tables(app):
             )
             db.session.add(admin_user)
             db.session.commit()
+
+        # Grant task_report_upload_list on any role that already has task_report_upload (new granular log permission).
+        try:
+            ul_perm = Permission.query.filter_by(code='task_report_upload_list').first()
+            up_perm = Permission.query.filter_by(code='task_report_upload').first()
+            if ul_perm and up_perm:
+                changed = False
+                for role in Role.query.all():
+                    if role.name == 'Master':
+                        continue
+                    codes = {p.code for p in role.permissions}
+                    if 'task_report_upload' in codes and 'task_report_upload_list' not in codes:
+                        role.permissions.append(ul_perm)
+                        changed = True
+                if changed:
+                    db.session.commit()
+        except Exception:
+            db.session.rollback()
 
 
 def check_password(user, password):

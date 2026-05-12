@@ -123,6 +123,13 @@ tr.perm-matrix-page-row.perm-highlight td { box-shadow: inset 0 0 0 999px rgba(2
   </div>
   {% endif %}
 
+  {% set _mro = master_role_matrix_read_only|default(false) %}
+  {% if _mro %}
+  <div class="alert alert-info border-0 shadow-sm mb-3">
+    <i class="bi bi-eye me-2"></i><strong>View only:</strong> Master login sirf <strong>Admin</strong> role ki permissions change kar sakta hai. Baqi roles / naye role yahan sirf dekh sakte hain — save / naya role <strong>Admin</strong> karega.
+  </div>
+  {% endif %}
+
   {% set selected_perm_ids = (role.permissions | map(attribute='id') | list) if role and role.permissions else [] %}
   {% macro perm_matrix_cell(cell, section_label, page_label) %}
     {% if cell %}
@@ -131,7 +138,8 @@ tr.perm-matrix-page-row.perm-highlight td { box-shadow: inset 0 0 0 999px rgba(2
         <input type="checkbox" name="permission_ids" value="{{ cell.id }}" class="form-check-input perm-cb" id="perm{{ cell.id }}"
           data-code="{{ cell.code }}" data-section="{{ section_label }}" data-page="{{ page_label }}"
           {% if is_full %}data-full="1"{% endif %}
-          {% if cell.id in selected_perm_ids %}checked{% endif %}>
+          {% if cell.id in selected_perm_ids %}checked{% endif %}
+          {% if _mro %}disabled{% endif %}>
         <label class="form-check-label small{% if cell.code and cell.code.endswith('_delete') %} label-danger{% endif %}" for="perm{{ cell.id }}">{{ cell.name }}</label>
       </div>
     {% else %}
@@ -142,6 +150,7 @@ tr.perm-matrix-page-row.perm-highlight td { box-shadow: inset 0 0 0 999px rgba(2
   <form method="POST" action="" id="role-permission-form">
     {{ form.hidden_tag() }}
     {% if role %}<input type="hidden" name="post_id" value="0" />{% endif %}
+    {% if _mro %}<fieldset disabled class="border-0 p-0 m-0">{% endif %}
     <div class="row">
       <!-- Role basics -->
       <div class="col-lg-5 col-xl-4 mb-4">
@@ -306,9 +315,11 @@ tr.perm-matrix-page-row.perm-highlight td { box-shadow: inset 0 0 0 999px rgba(2
       </div>
     </div>
     </div>
+  {% if _mro %}</fieldset>{% endif %}
   </form>
 </div>
 
+{% if not _mro %}
 <script>
 (function() {
   var deps = {{ permission_dependencies | tojson | safe }};
@@ -616,4 +627,5 @@ tr.perm-matrix-page-row.perm-highlight td { box-shadow: inset 0 0 0 999px rgba(2
 
 })();
 </script>
+{% endif %}
 {% endblock %}

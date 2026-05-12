@@ -9,8 +9,14 @@
 
   <div class="card shadow-sm border-0 rounded-3">
     <div class="card-body">
+      {% if master_user_form_read_only|default(false) %}
+      <div class="alert alert-info border-0 shadow-sm mb-3">
+        <i class="bi bi-eye me-2"></i><strong>View only:</strong> Master login yahan sirf dekh sakta hai. User / post / password change <strong>Admin</strong> karega (ya Master apna hi account jahan edit ki ijazat ho).
+      </div>
+      {% endif %}
       <form method="POST" action="">
         {{ form.hidden_tag() }}
+        <fieldset class="border-0 p-0 m-0" {% if master_user_form_read_only|default(false) %}disabled{% endif %}>
         <div class="row g-3">
           <div class="col-md-6">
             {{ form.username.label(class="form-label") }}
@@ -54,11 +60,22 @@
               {{ form.is_active.label(class="form-check-label") }}
             </div>
           </div>
-          <div class="col-12">
+        </div>
+        </fieldset>
+        {% if not master_user_form_read_only|default(false) %}
+        <div class="row g-3 mt-1">
+        <div class="col-12">
             <button type="submit" class="btn btn-primary">{{ form.submit.label.text }}</button>
             <a href="{{ url_for('user_list') }}" class="btn btn-outline-secondary ms-2">Cancel</a>
-          </div>
         </div>
+        </div>
+        {% else %}
+        <div class="row g-3 mt-1">
+        <div class="col-12">
+            <a href="{{ url_for('user_list') }}" class="btn btn-outline-secondary">Back to Users</a>
+        </div>
+        </div>
+        {% endif %}
       </form>
     </div>
   </div>
