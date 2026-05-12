@@ -74,7 +74,6 @@ FREEZE_FORM_CATALOG = [
     ('Master - Drivers', 'driver_form'),
     ('Master - Parking', 'parking_form'),
     ('Master - Employees', 'employee_form'),
-    ('Master - Party', 'party_form'),
     ('Master - Product', 'product_form'),
     ('Master - Driver Post', 'driver_post_form'),
     ('Assignment - Employee Assignment', 'employee_assignment_form'),

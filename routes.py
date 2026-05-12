@@ -30,7 +30,7 @@ from forms import (
     AssignProjectToDistrictForm, AssignVehicleToDistrictForm, AssignVehicleToParkingForm,
     AssignDriverToVehicleForm, ProjectTransferForm, VehicleTransferForm, EditVehicleTransferForm, DriverTransferForm, DriverJobLeftForm, DriverRejoinForm,
     DriverAttendanceFilterForm, DriverAttendanceReportForm, ATTENDANCE_STATUS_CHOICES,
-    TaskReportForm, TaskReportFilterForm, EmergencyTaskUploadForm, VehicleMileageUploadForm, ParkingImportForm, PartyImportForm, ProductImportForm,
+    TaskReportForm, TaskReportFilterForm, EmergencyTaskUploadForm, VehicleMileageUploadForm, ParkingImportForm, ProductImportForm,
     TaskReportUploadBothForm, RedTaskFilterForm, RedTaskForm, VehicleMoveWithoutTaskFilterForm, VehicleMoveWithoutTaskForm, PenaltyRecordForm, PenaltyRecordFilterForm,
     FuelExpenseFilterForm, FuelExpenseForm,
     OilExpenseFilterForm, OilExpenseForm,
@@ -1183,8 +1183,6 @@ def require_login():
             required = 'employees_edit'
         elif endpoint == 'driver_post_form':
             required = 'driver_post_edit'
-        elif endpoint == 'party_form':
-            required = 'party_edit'
         elif endpoint == 'product_form':
             required = 'product_edit'
     if required:
@@ -23162,137 +23160,28 @@ def party_form(id=None):
 
 @app.route('/party/delete/<int:id>', methods=['POST'])
 def party_delete(id):
-    party = Party.query.get_or_404(id)
-    db.session.delete(party)
-    db.session.commit()
-    flash('Party deleted.', 'success')
-    return redirect(url_for('party_list'))
-
-
-def _party_list_query(search=None, party_type=None):
-    """Shared query for party list/export/print (filter by search and type)."""
-    query = Party.query
-    if party_type:
-        query = query.filter(Party.party_type == party_type)
-    if search:
-        flt = _multi_word_filter(search, Party.name)
-        if flt is not None:
-            query = query.filter(flt)
-    return query.order_by(Party.party_type, Party.name)
+    flash('Master party delete disabled — use Employee Workspace > Parties.', 'info')
+    return redirect(url_for('workspace_parties_list'))
 
 
 @app.route('/parties/export')
 def party_export():
-    """Export party list (with optional search and type) to Excel."""
-    search = request.args.get('search', '').strip()
-    party_type = request.args.get('type', '').strip()
-    query = _party_list_query(search=search, party_type=party_type)
-    parties = query.all()
-    headers = ['S.No', 'Name', 'Type', 'District', 'Contact', 'Address', 'Remarks']
-    rows = []
-    for i, p in enumerate(parties, 1):
-        rows.append([
-            i,
-            p.name or '',
-            p.party_type or '',
-            p.district.name if p.district else '',
-            p.contact or '',
-            (p.address or '')[:200],
-            (p.remarks or '')[:200]
-        ])
-    filename = 'parties.xlsx'
-    if search or party_type:
-        parts = [search[:20].replace('/', '-')] if search else []
-        if party_type:
-            parts.append(party_type.replace(' ', '_'))
-        filename = 'parties_' + '_'.join(parts) + '.xlsx'
-    return generate_excel_template(headers, rows, required_columns=[], filename=filename)
+    return redirect(url_for('workspace_party_export', **dict(request.args)))
 
 
 @app.route('/parties/print')
 def party_print():
-    """Print-friendly view of parties (browser print to PDF)."""
-    search = request.args.get('search', '').strip()
-    party_type = request.args.get('type', '').strip()
-    parties = _party_list_query(search=search, party_type=party_type).all()
-    return render_template('party_print.html', parties=parties, search=search, party_type=party_type)
+    return redirect(url_for('workspace_party_print', **dict(request.args)))
 
 
 @app.route('/parties/import', methods=['GET', 'POST'])
 def party_import():
-    """Import parties from Excel/CSV. User can download a template."""
-    form = PartyImportForm()
-    if request.method == 'POST' and form.validate_on_submit():
-        f = form.file.data
-        if not f:
-            flash('Please select an Excel/CSV file.', 'warning')
-            return redirect(url_for('party_import'))
-        try:
-            import pandas as pd
-            filename = f.filename or ''
-            ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
-            if ext in ('xlsx', 'xls'):
-                df = pd.read_excel(f)
-            elif ext == 'csv':
-                df = pd.read_csv(f)
-            else:
-                flash('Unsupported file type. Use .xlsx, .xls or .csv.', 'danger')
-                return redirect(url_for('party_import'))
-
-            required_cols = ['name', 'party_type']
-            expected_cols = ['name', 'party_type', 'contact', 'address', 'remarks']
-            missing = [c for c in required_cols if c not in df.columns]
-            if missing:
-                flash(f'Missing required columns: {", ".join(missing)}', 'danger')
-                return redirect(url_for('party_import'))
-
-            import_errors = []
-            parties_to_add = []
-            for idx, row in df.iterrows():
-                row_num = idx + 2
-                row_issues = []
-                name = str(row.get('name', '')).strip() if not pd.isna(row.get('name')) else ''
-                ptype = str(row.get('party_type', '')).strip() if not pd.isna(row.get('party_type')) else ''
-                if not name:
-                    row_issues.append('"name" is required.')
-                if not ptype:
-                    row_issues.append('"party_type" is required.')
-                if ptype and ptype not in ('Pump', 'Workshop', 'Spare parts shop'):
-                    row_issues.append('party_type must be Pump, Workshop or Spare parts shop.')
-                if row_issues:
-                    import_errors.append({'row': row_num, 'identifier': name or ptype or '-', 'message': '; '.join(row_issues)})
-                    continue
-                contact = row.get('contact')
-                contact = '' if pd.isna(contact) else str(contact).strip()
-                address = row.get('address')
-                address = '' if pd.isna(address) else str(address).strip()[:255]
-                remarks = row.get('remarks')
-                remarks = '' if pd.isna(remarks) else str(remarks).strip()
-                parties_to_add.append(Party(name=name, party_type=ptype, contact=contact or None, address=address or None, remarks=remarks or None))
-
-            if import_errors:
-                return render_template('party_import.html', form=form, import_errors=import_errors)
-
-            for p in parties_to_add:
-                db.session.add(p)
-            db.session.commit()
-            flash(f'{len(parties_to_add)} party(ies) imported successfully.', 'success')
-            return redirect(url_for('party_list'))
-        except Exception as e:
-            db.session.rollback()
-            flash(f'Error importing: {str(e)}', 'danger')
-    return render_template('party_import.html', form=form)
+    return redirect(url_for('workspace_party_import'))
 
 
 @app.route('/parties/import/template')
 def party_import_template():
-    """Download template for party import."""
-    headers = ['name', 'party_type', 'contact', 'address', 'remarks']
-    rows = [
-        ['Shell Pump A', 'Pump', '042-1234567', 'Main Road, City', 'Sample pump'],
-        ['ABC Workshop', 'Workshop', '042-7654321', 'Industrial Area', 'Sample workshop'],
-    ]
-    return generate_excel_template(headers, rows, required_columns=['name', 'party_type'], filename='party_import_template.xlsx')
+    return redirect(url_for('workspace_party_import_template'))
 
 
 # ────────────────────────────────────────────────
@@ -23464,22 +23353,6 @@ def product_import_template():
         ['Engine Oil', 'Oil,Maintenance', 'Oil and maintenance'],
     ]
     return generate_excel_template(headers, rows, required_columns=['name'], filename='product_import_template.xlsx')
-
-
-@app.route('/api/parties')
-def api_parties():
-    """List parties for dropdown. Optional: type=Pump, search=xxx."""
-    party_type = request.args.get('type', '').strip()
-    search = request.args.get('search', '').strip()
-    query = Party.query
-    if party_type:
-        query = query.filter(Party.party_type == party_type)
-    if search:
-        flt = _multi_word_filter(search, Party.name)
-        if flt is not None:
-            query = query.filter(flt)
-    parties = query.order_by(Party.name).limit(100).all()
-    return jsonify([{'id': p.id, 'name': p.name, 'party_type': p.party_type} for p in parties])
 
 
 # ────────────────────────────────────────────────
