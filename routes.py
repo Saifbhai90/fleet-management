@@ -1185,6 +1185,16 @@ def require_login():
             required = 'driver_post_edit'
         elif endpoint == 'product_form':
             required = 'product_edit'
+    # Report Centre → Company Profile uses /companies/?mode=report (same route as master list).
+    if endpoint == 'companies' and request.args.get('mode') == 'report':
+        perms_cp = session.get('permissions') or []
+        if not user_can_access(perms_cp, 'report_company_profile') and not user_can_access(perms_cp, 'companies_list'):
+            session['show_no_access'] = True
+            api_resp = _api_error({'ok': False, 'error': 'You do not have permission for this action.'}, 403)
+            if api_resp:
+                return api_resp
+            return redirect(url_for('login'))
+        required = None
     if required:
         perms = session.get('permissions') or []
 

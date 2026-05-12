@@ -41,14 +41,20 @@ self.addEventListener('activate', function(event) {
 });
 
 function offlineHtmlResponse() {
-    return new Response(
-        '<html><body style="font-family:sans-serif;text-align:center;padding:40px;">' +
+    // Auto-reload when the browser reports connectivity again; Retry uses the same path.
+    var body =
+        '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
+        '<title>Offline</title></head><body style="font-family:sans-serif;text-align:center;padding:40px;">' +
         '<h2>You are offline</h2>' +
         '<p>Please check your internet connection.</p>' +
-        '<button onclick="location.reload()" style="padding:12px 24px;font-size:1rem;cursor:pointer;">Retry</button>' +
-        '</body></html>',
-        { headers: { 'Content-Type': 'text/html' } }
-    );
+        '<button type="button" id="offline-retry" style="padding:12px 24px;font-size:1rem;cursor:pointer;">Retry</button>' +
+        '<script>' +
+        '(function(){function reload(){try{location.reload();}catch(e){location.href=location.href;}}' +
+        'var b=document.getElementById("offline-retry");if(b)b.addEventListener("click",reload);' +
+        'window.addEventListener("online",reload);' +
+        'document.addEventListener("visibilitychange",function(){if(!document.hidden&&navigator.onLine)reload();});' +
+        '})();</script></body></html>';
+    return new Response(body, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
 }
 
 // Fetch strategy
