@@ -150,7 +150,7 @@ tr.perm-matrix-page-row.perm-highlight td { box-shadow: inset 0 0 0 999px rgba(2
 
   <form method="POST" action="" id="role-permission-form">
     {{ form.hidden_tag() }}
-    <input type="hidden" name="role_form_template_version" value="role_form_v6_matrix_section_dedupe" />
+    <input type="hidden" name="role_form_template_version" value="role_form_v7_submit_and_matrix_scope" />
     {% if role %}<input type="hidden" name="post_id" value="0" />{% endif %}
     {% if _mro %}<fieldset disabled class="border-0 p-0 m-0">{% endif %}
     <div class="row">
@@ -324,6 +324,11 @@ tr.perm-matrix-page-row.perm-highlight td { box-shadow: inset 0 0 0 999px rgba(2
 {% if not _mro %}
 <script>
 (function() {
+  var form = document.getElementById('role-permission-form');
+  if (!form) return;
+  var matrixBody = document.getElementById('permMatrixBody');
+  /* Prefer matrix tbody so we never index stray .perm-cb outside the table (future-proof). */
+  var indexRoot = matrixBody || form;
   var deps = {{ permission_dependencies | tojson | safe }};
   var codeToId  = {};   // code -> first checkbox element
   var codeToCbs = {};   // code -> checkbox elements[]
@@ -333,7 +338,7 @@ tr.perm-matrix-page-row.perm-highlight td { box-shadow: inset 0 0 0 999px rgba(2
   var sectionCountEl = {}; // section_label -> counter span
 
   /* ── Index all checkboxes ── */
-  document.querySelectorAll('.perm-cb').forEach(function(cb) {
+  indexRoot.querySelectorAll('input.perm-cb[type="checkbox"]').forEach(function(cb) {
     var code    = cb.getAttribute('data-code');
     var section = cb.getAttribute('data-section') || '';
     if (!(code in codeToId)) codeToId[code] = cb;
@@ -452,10 +457,14 @@ tr.perm-matrix-page-row.perm-highlight td { box-shadow: inset 0 0 0 999px rgba(2
     if (el) el.textContent = checked + ' / ' + total;
   }
 
-  /* ── Global selected counter ── */
+  /* ── Global selected counter (unique permission ids; avoids double-counting matrix duplicates) ── */
   function updateTotalCount() {
-    var total = 0;
-    document.querySelectorAll('.perm-cb:checked').forEach(function() { total++; });
+    var seen = {};
+    indexRoot.querySelectorAll('input.perm-cb[type="checkbox"]:checked').forEach(function(cb) {
+      if (cb.disabled || !cb.value) return;
+      seen[cb.value] = true;
+    });
+    var total = Object.keys(seen).length;
     var el = document.getElementById('selectedCount');
     if (el) el.textContent = total + ' selected';
   }
@@ -488,8 +497,32 @@ tr.perm-matrix-page-row.perm-highlight td { box-shadow: inset 0 0 0 999px rgba(2
   /* ── Initialise on load ── */
   Object.keys(sections).forEach(function(section) { syncSection(section); });
 
-  var form = document.getElementById('role-permission-form');
-  if (!form) return;
+  /* Before POST: every matrix cell for the same id must be checked to count as on (fixes ghost ticks). */
+  function collatePermissionIdsForSubmit() {
+    var selected = {};
+    var root = matrixBody || form;
+    if (!root) return selected;
+    var groups = {};
+    root.querySelectorAll('input.perm-cb[type="checkbox"]').forEach(function(cb) {
+      if (cb.disabled || !cb.value) return;
+      if (!groups[cb.value]) groups[cb.value] = [];
+      groups[cb.value].push(cb);
+    });
+    Object.keys(groups).forEach(function(v) {
+      var list = groups[v];
+      var allOn = list.length > 0 && list.every(function(x) { return x.checked; });
+      list.forEach(function(x) {
+        x.checked = allOn;
+        x.indeterminate = false;
+      });
+      (valueToCbs[v] || []).forEach(function(x) {
+        x.checked = allOn;
+        x.indeterminate = false;
+      });
+      if (allOn) selected[v] = true;
+    });
+    return selected;
+  }
 
   /* ── Main change handler ── */
   form.addEventListener('change', function(ev) {
@@ -545,14 +578,11 @@ tr.perm-matrix-page-row.perm-highlight td { box-shadow: inset 0 0 0 999px rgba(2
     syncSection(section);
   });
 
-  // Submit unique permission ids only once (matrix may render same code in multiple cells).
+  // Submit: matrix-scoped AND across duplicate cells, then unique hidden permission_ids.
   form.addEventListener('submit', function() {
-    var selected = {};
-    form.querySelectorAll('.perm-cb:checked').forEach(function(cb) {
-      if (cb.value) selected[cb.value] = true;
-    });
-    form.querySelectorAll('.perm-cb').forEach(function(cb) {
-      cb.removeAttribute('name');
+    var selected = collatePermissionIdsForSubmit();
+    form.querySelectorAll('input[name="permission_ids"]').forEach(function(inp) {
+      inp.removeAttribute('name');
     });
     form.querySelectorAll('.perm-cb-hidden').forEach(function(n) { n.remove(); });
     Object.keys(selected).forEach(function(v) {
@@ -570,8 +600,8 @@ tr.perm-matrix-page-row.perm-highlight td { box-shadow: inset 0 0 0 999px rgba(2
       mark.name = 'role_form_submit_marker';
       form.appendChild(mark);
     }
-    mark.value = 'submit_v6_matrix_section_dedupe';
-  });
+    mark.value = 'submit_v7_matrix_and_submit_scope';
+  }, true);
 
   /* ── "Select All" / "None" buttons ── */
   document.querySelectorAll('.section-select-all').forEach(function(btn) {
