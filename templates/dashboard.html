@@ -410,10 +410,12 @@ function showAccessDenied(msg) {
 <!-- ═══════════════════════════════
      BENTO GRID
 ═══════════════════════════════ -->
-{% if can_see_page('dashboard_card_drivers') or can_see_page('active_drivers_report') or can_see_page('dashboard_card_vehicles') or can_see_page('dashboard_card_attendance') or can_see_page('dashboard_card_transfers') or can_see_page('dashboard_card_projects') or can_see_page('dashboard_card_districts') or can_see_page('dashboard_card_parking') or can_see_page('dashboard_card_companies') %}
+{# Bento KPI row: each tile is gated only by its dashboard_card_* role permission.
+   Report-only codes (e.g. active_drivers_report) must not show a card — Report Centre handles those. #}
+{% if can_see_page('dashboard_card_drivers') or can_see_page('dashboard_card_vehicles') or can_see_page('dashboard_card_attendance') or can_see_page('dashboard_card_transfers') or can_see_page('dashboard_card_projects') or can_see_page('dashboard_card_districts') or can_see_page('dashboard_card_parking') or can_see_page('dashboard_card_companies') %}
 <div class="bento-grid">
 
-    {% if can_see_page('dashboard_card_drivers') or can_see_page('active_drivers_report') %}
+    {% if can_see_page('dashboard_card_drivers') %}
     <a {% if can_see_page('active_drivers_report') %}href="{{ url_for('active_drivers_report') }}"{% else %}href="javascript:void(0)" onclick="showAccessDenied('Access denied - Active Drivers Report permission required.')"{% endif %}
        class="bc bc-blue bc-hero" style="cursor:pointer;">
         <div style="position:relative;z-index:1;">

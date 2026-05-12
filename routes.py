@@ -2968,7 +2968,7 @@ def dashboard():
 
     total_vehicles = _scope_vehicle_q(Vehicle.query).count() if (_can('dashboard_card_vehicles') or _can('dashboard_card_utilization')) else 0
 
-    total_drivers = _scope_driver_q(Driver.query).count() if (_can('dashboard_card_drivers') or _can('active_drivers_report')) else 0
+    total_drivers = _scope_driver_q(Driver.query).count() if _can('dashboard_card_drivers') else 0
 
     total_parking = 0
     if _can('dashboard_card_parking'):
@@ -2997,7 +2997,7 @@ def dashboard():
 
     active_drivers = _scope_driver_q(
         Driver.query.filter(Driver.status == 'Active', Driver.vehicle_id.isnot(None))
-    ).count() if (_can('dashboard_card_drivers') or _can('active_drivers_report')) else 0
+    ).count() if _can('dashboard_card_drivers') else 0
 
     assigned_vehicles = _scope_vehicle_q(
         Vehicle.query.filter(Vehicle.district_id.isnot(None))
