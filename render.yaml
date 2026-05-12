@@ -1,0 +1,29 @@
+# Render Blueprint — one-click infra that matches this repo (see RENDER_SCALING_GUIDE.md).
+# After push: Dashboard → New → Blueprint → connect repo → apply. Set any extra secrets (R2, Firebase, mail) in the Web Service → Environment.
+version: "1"
+databases:
+  - name: company-management-db
+    databaseName: company_management
+    user: company_app
+    plan: free
+services:
+  - type: web
+    name: fleet-manager
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    # Matches Procfile; bind 0.0.0.0:$PORT per https://render.com/docs/web-services#port-binding
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --timeout 120 --workers 2 --worker-class gthread --threads 4
+    preDeployCommand: sh scripts/render_migrate.sh
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: company-management-db
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: FLASK_APP
+        value: app:app
+      - key: SESSION_COOKIE_SECURE
+        value: "true"
