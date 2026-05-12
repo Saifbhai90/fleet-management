@@ -12,7 +12,7 @@ from models import (
     WorkspaceProduct,
     WorkspaceParty, WorkspaceAccount, WorkspaceJournalEntry, WorkspaceVehicleReadingSetup, WorkspaceVehicleMaintenanceBaseline, WorkspaceExpense, ExpenseDeleteCleanupJob,
     Notification, NotificationRead,
-    User, Role, Permission,
+    User, Role, Permission, role_permissions,
     LoginLog, ActivityLog, ClientActivityLog,
     Reminder,
     AttendanceTimeControl, AttendanceTimeOverride,
@@ -66,7 +66,7 @@ import csv
 from io import StringIO, BytesIO
 import io
 import xlsxwriter
-from sqlalchemy import func, text, inspect, or_, cast, and_, false
+from sqlalchemy import func, text, inspect, or_, cast, and_, false, delete
 from sqlalchemy import String as SAString
 from sqlalchemy.exc import OperationalError, IntegrityError, DataError
 from sqlalchemy.orm import joinedload
@@ -7721,6 +7721,28 @@ def _matrix_assignable_permission_ids(permission_matrix):
     return ids
 
 
+def _replace_role_permissions(role, permission_id_list):
+    """Replace role_permissions association rows directly (ORM secondary can miss deletes with clear/extend)."""
+    rid = role.id
+    unique = []
+    seen = set()
+    for x in permission_id_list or []:
+        try:
+            i = int(x)
+        except (TypeError, ValueError):
+            continue
+        if i not in seen:
+            seen.add(i)
+            unique.append(i)
+    db.session.execute(delete(role_permissions).where(role_permissions.c.role_id == rid))
+    db.session.flush()
+    if unique:
+        role.permissions = Permission.query.filter(Permission.id.in_(unique)).all()
+    else:
+        role.permissions = []
+    db.session.flush()
+
+
 def _apply_role_permissions_from_form(
     role,
     perm_ids_raw,
@@ -7753,10 +7775,7 @@ def _apply_role_permissions_from_form(
         codes = _codes_from_perm_ids(perm_ids)
         expanded = expand_permission_dependencies(codes)
         new_ids = [permission_by_code[c].id for c in expanded if permission_by_code.get(c)]
-        role.permissions.clear()
-        db.session.flush()
-        if new_ids:
-            role.permissions.extend(Permission.query.filter(Permission.id.in_(new_ids)).all())
+        _replace_role_permissions(role, new_ids)
         return
 
     allowed_ids = allowed_permission_ids or set()
@@ -7783,10 +7802,7 @@ def _apply_role_permissions_from_form(
     for p in managed_objs:
         by_id[p.id] = p
 
-    role.permissions.clear()
-    db.session.flush()
-    if by_id:
-        role.permissions.extend(list(by_id.values()))
+    _replace_role_permissions(role, list(by_id.keys()))
 
 
 @app.route('/roles/new', methods=['GET', 'POST'])
