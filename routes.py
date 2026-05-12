@@ -66,7 +66,7 @@ import csv
 from io import StringIO, BytesIO
 import io
 import xlsxwriter
-from sqlalchemy import func, text, inspect, or_, cast, and_, false, delete
+from sqlalchemy import func, text, inspect, or_, cast, and_, false, delete, insert
 from sqlalchemy import String as SAString
 from sqlalchemy.exc import OperationalError, IntegrityError, DataError
 from sqlalchemy.orm import joinedload
@@ -7722,7 +7722,7 @@ def _matrix_assignable_permission_ids(permission_matrix):
 
 
 def _replace_role_permissions(role, permission_id_list):
-    """Replace role_permissions association rows directly (ORM secondary can miss deletes with clear/extend)."""
+    """Replace role_permissions rows via DELETE + INSERT (ORM secondary assign can miss sync in some cases)."""
     rid = role.id
     unique = []
     seen = set()
@@ -7736,11 +7736,15 @@ def _replace_role_permissions(role, permission_id_list):
             unique.append(i)
     db.session.execute(delete(role_permissions).where(role_permissions.c.role_id == rid))
     db.session.flush()
-    if unique:
-        role.permissions = Permission.query.filter(Permission.id.in_(unique)).all()
-    else:
-        role.permissions = []
+    for pid in unique:
+        db.session.execute(
+            insert(role_permissions).values(role_id=rid, permission_id=pid)
+        )
     db.session.flush()
+    try:
+        db.session.expire(role, ['permissions'])
+    except Exception:
+        pass
 
 
 def _apply_role_permissions_from_form(
@@ -7771,7 +7775,7 @@ def _apply_role_permissions_from_form(
             return set()
         return {p.code for p in Permission.query.filter(Permission.id.in_(pid_list)).all()}
 
-    if is_master or allowed_permission_ids is None:
+    if is_master:
         codes = _codes_from_perm_ids(perm_ids)
         expanded = expand_permission_dependencies(codes)
         new_ids = [permission_by_code[c].id for c in expanded if permission_by_code.get(c)]
