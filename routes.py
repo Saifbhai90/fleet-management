@@ -2267,8 +2267,13 @@ def _unread_notifications_for_user(user_id, limit=20):
     Notifications with required_permission are only shown to users who have
     at least one of the listed permission codes. Notifications without
     required_permission are visible to everyone (broadcast)."""
-    read_ids = db.session.query(NotificationRead.notification_id).filter(NotificationRead.user_id == user_id).subquery()
-    candidates = Notification.query.filter(~Notification.id.in_(read_ids)).order_by(Notification.created_at.desc()).limit(limit * 5).all()
+    read_stmt = select(NotificationRead.notification_id).where(NotificationRead.user_id == user_id)
+    candidates = (
+        Notification.query.filter(Notification.id.not_in(read_stmt))
+        .order_by(Notification.created_at.desc())
+        .limit(limit * 5)
+        .all()
+    )
 
     user_perms = set(session.get('permissions') or [])
     is_master = session.get('is_master', False)

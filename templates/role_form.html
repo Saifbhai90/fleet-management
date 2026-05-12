@@ -150,7 +150,7 @@ tr.perm-matrix-page-row.perm-highlight td { box-shadow: inset 0 0 0 999px rgba(2
 
   <form method="POST" action="" id="role-permission-form">
     {{ form.hidden_tag() }}
-    <input type="hidden" name="role_form_template_version" value="role_form_v5_unique_ids_dedupe" />
+    <input type="hidden" name="role_form_template_version" value="role_form_v6_matrix_section_dedupe" />
     {% if role %}<input type="hidden" name="post_id" value="0" />{% endif %}
     {% if _mro %}<fieldset disabled class="border-0 p-0 m-0">{% endif %}
     <div class="row">
@@ -343,7 +343,17 @@ tr.perm-matrix-page-row.perm-highlight td { box-shadow: inset 0 0 0 999px rgba(2
     if (!valueToCbs[val]) valueToCbs[val] = [];
     valueToCbs[val].push(cb);
     if (!sections[section]) sections[section] = [];
-    sections[section].push(cb);
+    /* One logical row per permission id per section: duplicate matrix cells must not inflate
+       "all children checked" counts (else section-full stays checked and keeps re-ticking). */
+    var isFullCb = cb.getAttribute('data-full') === '1';
+    if (isFullCb) {
+      sections[section].push(cb);
+    } else {
+      var dup = sections[section].some(function(x) {
+        return x.getAttribute('data-full') !== '1' && (x.value || '') === val;
+      });
+      if (!dup) sections[section].push(cb);
+    }
     if (cb.getAttribute('data-full') === '1') {
       sectionFull[section] = cb;
     }
@@ -397,6 +407,17 @@ tr.perm-matrix-page-row.perm-highlight td { box-shadow: inset 0 0 0 999px rgba(2
     });
   }
 
+  /* Same permission id may appear in multiple matrix cells — keep DOM copies aligned after programmatic toggles. */
+  function syncValueDupes(cb) {
+    if (!cb || !cb.value) return;
+    (valueToCbs[cb.value] || []).forEach(function(o) {
+      if (o !== cb) {
+        o.checked = cb.checked;
+        o.indeterminate = false;
+      }
+    });
+  }
+
   /* ── Sync section "full" checkbox state + indeterminate ── */
   function syncSectionFull(section) {
     var fullCb = sectionFull[section];
@@ -423,8 +444,10 @@ tr.perm-matrix-page-row.perm-highlight td { box-shadow: inset 0 0 0 999px rgba(2
   /* ── Section counter ── */
   function updateSectionCount(section) {
     var list = sections[section] || [];
-    var total   = list.length;
-    var checked = list.filter(function(cb) { return cb.checked; }).length;
+    var fullCb = sectionFull[section];
+    var children = list.filter(function(cb) { return cb !== fullCb; });
+    var total   = children.length;
+    var checked = children.filter(function(cb) { return cb.checked; }).length;
     var el = sectionCountEl[section];
     if (el) el.textContent = checked + ' / ' + total;
   }
@@ -493,6 +516,7 @@ tr.perm-matrix-page-row.perm-highlight td { box-shadow: inset 0 0 0 999px rgba(2
           if (!other.checked) {
             other.checked = true;
             ensureDependencies(other.getAttribute('data-code'));
+            syncValueDupes(other);
           }
         });
       } else {
@@ -501,6 +525,7 @@ tr.perm-matrix-page-row.perm-highlight td { box-shadow: inset 0 0 0 999px rgba(2
           if (other !== cb && other.checked) {
             other.checked = false;
             uncheckDependents(other.getAttribute('data-code'));
+            syncValueDupes(other);
           }
         });
       }
@@ -545,7 +570,7 @@ tr.perm-matrix-page-row.perm-highlight td { box-shadow: inset 0 0 0 999px rgba(2
       mark.name = 'role_form_submit_marker';
       form.appendChild(mark);
     }
-    mark.value = 'submit_v5_unique_ids_dedupe';
+    mark.value = 'submit_v6_matrix_section_dedupe';
   });
 
   /* ── "Select All" / "None" buttons ── */
@@ -557,6 +582,7 @@ tr.perm-matrix-page-row.perm-highlight td { box-shadow: inset 0 0 0 999px rgba(2
         if (!cb.checked) {
           cb.checked = true;
           ensureDependencies(cb.getAttribute('data-code'));
+          syncValueDupes(cb);
         }
       });
       syncSection(sec);
@@ -572,6 +598,7 @@ tr.perm-matrix-page-row.perm-highlight td { box-shadow: inset 0 0 0 999px rgba(2
           cb.checked = false;
           cb.indeterminate = false;
           uncheckDependents(cb.getAttribute('data-code'));
+          syncValueDupes(cb);
         }
       });
       syncSection(sec);
