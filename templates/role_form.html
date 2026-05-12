@@ -131,16 +131,17 @@ tr.perm-matrix-page-row.perm-highlight td { box-shadow: inset 0 0 0 999px rgba(2
   {% endif %}
 
   {% set selected_perm_ids = (role.permissions | map(attribute='id') | list) if role and role.permissions else [] %}
-  {% macro perm_matrix_cell(cell, section_label, page_label) %}
+  {% macro perm_matrix_cell(cell, section_label, page_label, uid) %}
     {% if cell %}
       {% set is_full = '(full)' in cell.name %}
+      {% set input_id = ('perm-' ~ uid ~ '-' ~ cell.id)|replace(' ','_')|replace('/','_')|replace('.','_')|replace(':','_')|replace('(','')|replace(')','') %}
       <div class="form-check perm-item {% if is_full %}perm-full-cb{% endif %} justify-content-center text-start" style="min-height:auto;margin:0 0 6px 0;">
-        <input type="checkbox" name="permission_ids" value="{{ cell.id }}" class="form-check-input perm-cb" id="perm{{ cell.id }}"
+        <input type="checkbox" name="permission_ids" value="{{ cell.id }}" class="form-check-input perm-cb" id="{{ input_id }}"
           data-code="{{ cell.code }}" data-section="{{ section_label }}" data-page="{{ page_label }}"
           {% if is_full %}data-full="1"{% endif %}
           {% if cell.id in selected_perm_ids %}checked{% endif %}
           {% if _mro %}disabled{% endif %}>
-        <label class="form-check-label small{% if cell.code and cell.code.endswith('_delete') %} label-danger{% endif %}" for="perm{{ cell.id }}">{{ cell.name }}</label>
+        <label class="form-check-label small{% if cell.code and cell.code.endswith('_delete') %} label-danger{% endif %}" for="{{ input_id }}">{{ cell.name }}</label>
       </div>
     {% else %}
       <span class="text-muted small">—</span>
@@ -269,17 +270,17 @@ tr.perm-matrix-page-row.perm-highlight td { box-shadow: inset 0 0 0 999px rgba(2
                       data-search="{{ search_blob|lower|e }}">
                     <td class="fw-semibold small">{{ row.page_label }}</td>
                     <td class="text-center align-top small py-2">
-                      {% if c.full %}{{ perm_matrix_cell(c.full, row.section_label, row.page_label) }}{% endif %}
-                      {% if c.list %}{{ perm_matrix_cell(c.list, row.section_label, row.page_label) }}{% endif %}
+                      {% if c.full %}{{ perm_matrix_cell(c.full, row.section_label, row.page_label, row.section_label ~ '-' ~ row.page_label ~ '-full') }}{% endif %}
+                      {% if c.list %}{{ perm_matrix_cell(c.list, row.section_label, row.page_label, row.section_label ~ '-' ~ row.page_label ~ '-list') }}{% endif %}
                       {% if not c.full and not c.list %}<span class="text-muted small">—</span>{% endif %}
                     </td>
-                    <td class="text-center align-top small py-2">{{ perm_matrix_cell(c.add, row.section_label, row.page_label) }}</td>
-                    <td class="text-center align-top small py-2">{{ perm_matrix_cell(c.edit, row.section_label, row.page_label) }}</td>
-                    <td class="text-center align-top small py-2">{{ perm_matrix_cell(c.delete, row.section_label, row.page_label) }}</td>
+                    <td class="text-center align-top small py-2">{{ perm_matrix_cell(c.add, row.section_label, row.page_label, row.section_label ~ '-' ~ row.page_label ~ '-add') }}</td>
+                    <td class="text-center align-top small py-2">{{ perm_matrix_cell(c.edit, row.section_label, row.page_label, row.section_label ~ '-' ~ row.page_label ~ '-edit') }}</td>
+                    <td class="text-center align-top small py-2">{{ perm_matrix_cell(c.delete, row.section_label, row.page_label, row.section_label ~ '-' ~ row.page_label ~ '-delete') }}</td>
                     <td class="align-top small py-2">
                       {% if c.other %}
                         {% for cell in c.other %}
-                          {{ perm_matrix_cell(cell, row.section_label, row.page_label) }}
+                          {{ perm_matrix_cell(cell, row.section_label, row.page_label, row.section_label ~ '-' ~ row.page_label ~ '-other-' ~ loop.index) }}
                         {% endfor %}
                       {% else %}
                         <span class="text-muted small">—</span>
