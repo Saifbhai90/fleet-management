@@ -8137,7 +8137,7 @@ def role_edit(pk):
                 },
             )
         # Edit mode: Role name/description sirf read-only dikhaani hain (change ki ijazat nahi)
-        return render_template(
+        resp = make_response(render_template(
             'role_form.html',
             form=form,
             role=role,
@@ -8145,7 +8145,9 @@ def role_edit(pk):
             permission_matrix=permission_matrix,
             permission_dependencies=PERMISSION_DEPENDENCIES,
             master_role_matrix_read_only=master_role_matrix_read_only,
-        )
+        ))
+        resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        return resp
     if form.validate_on_submit():
         role_name = (role.name or '').strip()
         if is_master and role_name != 'Admin':
@@ -8194,6 +8196,8 @@ def role_edit(pk):
                 'role_edit_post_admin_before_apply',
                 role,
                 {
+                    'template_version': (request.form.get('role_form_template_version') or ''),
+                    'submit_marker': (request.form.get('role_form_submit_marker') or ''),
                     'raw_perm_ids_count': len(raw_perm_ids),
                     'raw_perm_ids_head': raw_perm_ids[:40],
                     'before_codes_count': len(before_codes),

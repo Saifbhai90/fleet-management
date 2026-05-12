@@ -150,6 +150,7 @@ tr.perm-matrix-page-row.perm-highlight td { box-shadow: inset 0 0 0 999px rgba(2
 
   <form method="POST" action="" id="role-permission-form">
     {{ form.hidden_tag() }}
+    <input type="hidden" name="role_form_template_version" value="role_form_v5_unique_ids_dedupe" />
     {% if role %}<input type="hidden" name="post_id" value="0" />{% endif %}
     {% if _mro %}<fieldset disabled class="border-0 p-0 m-0">{% endif %}
     <div class="row">
@@ -537,6 +538,14 @@ tr.perm-matrix-page-row.perm-highlight td { box-shadow: inset 0 0 0 999px rgba(2
       h.className = 'perm-cb-hidden';
       form.appendChild(h);
     });
+    var mark = form.querySelector('input[name="role_form_submit_marker"]');
+    if (!mark) {
+      mark = document.createElement('input');
+      mark.type = 'hidden';
+      mark.name = 'role_form_submit_marker';
+      form.appendChild(mark);
+    }
+    mark.value = 'submit_v5_unique_ids_dedupe';
   });
 
   /* ── "Select All" / "None" buttons ── */
