@@ -66,7 +66,7 @@ import csv
 from io import StringIO, BytesIO
 import io
 import xlsxwriter
-from sqlalchemy import func, text, inspect, or_, cast, and_, false, delete, insert
+from sqlalchemy import func, text, inspect, or_, cast, and_, false, delete, insert, select
 from sqlalchemy import String as SAString
 from sqlalchemy.exc import OperationalError, IntegrityError, DataError
 from sqlalchemy.orm import joinedload
@@ -8100,24 +8100,61 @@ def role_edit(pk):
             master_role_matrix_read_only=master_role_matrix_read_only,
         )
     if form.validate_on_submit():
-        if is_master and role.name != 'Admin':
+        role_name = (role.name or '').strip()
+        if is_master and role_name != 'Admin':
             flash('Master sirf Admin role ki permissions change kar sakta hai. Baqi roles par sirf dekh sakta hai.', 'danger')
             return redirect(url_for('role_list'))
         # Role Details (name/description) ko edit ki permission nahi – sirf permissions update honge
         perm_ids_raw = request.form.getlist('permission_ids', type=int)
-        _apply_role_permissions_from_form(
-            role,
-            perm_ids_raw,
-            is_master=is_master,
-            allowed_permission_ids=allowed_permission_ids,
-            permission_matrix=permission_matrix,
-            permission_by_code=permission_by_code,
-        )
-        if role.name == 'Admin':
+        if is_master and role_name == 'Admin':
+            # Master -> Admin path: apply deterministic full replace and verify persisted rows.
+            from permissions_config import expand_permission_dependencies
+            selected_ids = []
+            seen = set()
+            for x in perm_ids_raw or []:
+                if x is None:
+                    continue
+                try:
+                    i = int(x)
+                except (TypeError, ValueError):
+                    continue
+                if i not in seen:
+                    seen.add(i)
+                    selected_ids.append(i)
+            selected_codes = {
+                p.code for p in Permission.query.filter(Permission.id.in_(selected_ids)).all()
+            } if selected_ids else set()
+            expanded_codes = expand_permission_dependencies(selected_codes)
+            intended_ids = [
+                permission_by_code[c].id for c in expanded_codes if permission_by_code.get(c)
+            ]
+            _replace_role_permissions(role, intended_ids)
             _reconcile_roles_to_admin_cap(role)
-        elif not is_master and role.name not in ('Master', 'Admin'):
-            _clamp_role_to_admin_cap(role)
-        db.session.commit()
+            db.session.commit()
+            persisted_ids = set(
+                r[0]
+                for r in db.session.execute(
+                    select(role_permissions.c.permission_id).where(role_permissions.c.role_id == role.id)
+                ).all()
+            )
+            intended_set = set(intended_ids)
+            if persisted_ids != intended_set:
+                # Safety net: if any race/ORM edge appears, force one more exact sync.
+                _replace_role_permissions(role, list(intended_set))
+                _reconcile_roles_to_admin_cap(role)
+                db.session.commit()
+        else:
+            _apply_role_permissions_from_form(
+                role,
+                perm_ids_raw,
+                is_master=is_master,
+                allowed_permission_ids=allowed_permission_ids,
+                permission_matrix=permission_matrix,
+                permission_by_code=permission_by_code,
+            )
+            if not is_master and role.name not in ('Master', 'Admin'):
+                _clamp_role_to_admin_cap(role)
+            db.session.commit()
         flash('Role updated successfully.', 'success')
         return redirect(url_for('role_list'))
     if request.method == 'POST':
