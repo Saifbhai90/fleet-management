@@ -6992,6 +6992,35 @@ def _master_may_post_user_edit(target_user):
     return _is_admin_role_user(target_user)
 
 
+def _role_perm_debug_enabled():
+    """Enable verbose role-permission diagnostics via env or request flag."""
+    env_on = (os.environ.get('ROLE_PERM_DEBUG') or '').strip().lower() in ('1', 'true', 'yes', 'on')
+    req_on = (
+        (request.args.get('role_perm_debug') or '').strip() == '1'
+        or (request.form.get('role_perm_debug') or '').strip() == '1'
+    )
+    return bool(env_on or req_on)
+
+
+def _log_role_perm_debug(stage, role, payload):
+    if not _role_perm_debug_enabled():
+        return
+    try:
+        data = {
+            'stage': stage,
+            'role_id': role.id if role else None,
+            'role_name': (role.name if role else None),
+            'user_id': session.get('user_id'),
+            'is_master': bool(session.get('is_master')),
+            'path': request.path,
+            'method': request.method,
+            'payload': payload or {},
+        }
+        current_app.logger.warning('ROLE_PERM_DEBUG %s', json.dumps(data, ensure_ascii=True, default=str))
+    except Exception:
+        pass
+
+
 def _reconcile_roles_to_admin_cap(admin_role):
     """
     After Admin role permissions change: every other role (except Master) may only keep
@@ -8089,6 +8118,24 @@ def role_edit(pk):
     form.post_id.choices = [(0, '—')]
     master_role_matrix_read_only = bool(is_master and role.name != 'Admin')
     if request.method == 'GET':
+        if is_master and (role.name or '').strip() == 'Admin':
+            db_ids_get = set(
+                r[0]
+                for r in db.session.execute(
+                    select(role_permissions.c.permission_id).where(role_permissions.c.role_id == role.id)
+                ).all()
+            )
+            orm_ids_get = {p.id for p in (role.permissions or [])}
+            _log_role_perm_debug(
+                'role_edit_get_admin',
+                role,
+                {
+                    'db_ids_count': len(db_ids_get),
+                    'orm_ids_count': len(orm_ids_get),
+                    'only_in_db': sorted(list(db_ids_get - orm_ids_get))[:50],
+                    'only_in_orm': sorted(list(orm_ids_get - db_ids_get))[:50],
+                },
+            )
         # Edit mode: Role name/description sirf read-only dikhaani hain (change ki ijazat nahi)
         return render_template(
             'role_form.html',
@@ -8109,6 +8156,7 @@ def role_edit(pk):
         if is_master and role_name == 'Admin':
             # Master -> Admin path: apply deterministic full replace and verify persisted rows.
             from permissions_config import expand_permission_dependencies
+            raw_perm_ids = request.form.getlist('permission_ids')
             selected_ids = []
             seen = set()
             for x in perm_ids_raw or []:
@@ -8128,6 +8176,19 @@ def role_edit(pk):
             intended_ids = [
                 permission_by_code[c].id for c in expanded_codes if permission_by_code.get(c)
             ]
+            _log_role_perm_debug(
+                'role_edit_post_admin_before_apply',
+                role,
+                {
+                    'raw_perm_ids_count': len(raw_perm_ids),
+                    'raw_perm_ids_head': raw_perm_ids[:40],
+                    'parsed_perm_ids_count': len(selected_ids),
+                    'selected_codes_count': len(selected_codes),
+                    'expanded_codes_count': len(expanded_codes),
+                    'intended_ids_count': len(intended_ids),
+                    'intended_ids_head': sorted(list(set(intended_ids)))[:60],
+                },
+            )
             _replace_role_permissions(role, intended_ids)
             _reconcile_roles_to_admin_cap(role)
             db.session.commit()
@@ -8143,6 +8204,22 @@ def role_edit(pk):
                 _replace_role_permissions(role, list(intended_set))
                 _reconcile_roles_to_admin_cap(role)
                 db.session.commit()
+                persisted_ids = set(
+                    r[0]
+                    for r in db.session.execute(
+                        select(role_permissions.c.permission_id).where(role_permissions.c.role_id == role.id)
+                    ).all()
+                )
+            _log_role_perm_debug(
+                'role_edit_post_admin_after_commit',
+                role,
+                {
+                    'intended_ids_count': len(intended_set),
+                    'persisted_ids_count': len(persisted_ids),
+                    'extra_in_db': sorted(list(persisted_ids - intended_set))[:80],
+                    'missing_in_db': sorted(list(intended_set - persisted_ids))[:80],
+                },
+            )
         else:
             _apply_role_permissions_from_form(
                 role,
