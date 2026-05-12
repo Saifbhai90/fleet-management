@@ -7797,7 +7797,15 @@ def _apply_role_permissions_from_form(
     }
     managed_objs = Permission.query.filter(Permission.id.in_(managed_ids)).all() if managed_ids else []
 
-    preserved = [p for p in role.permissions if p.id not in assignable_matrix_ids]
+    # Normal: preserve only DB rows not shown on the matrix (editor cannot toggle them).
+    # If the matrix failed to build (empty assignable) but we still know what the editor may grant,
+    # preserve only permissions outside that set — otherwise "preserve all on matrix" blocks removals.
+    if assignable_matrix_ids:
+        preserved = [p for p in role.permissions if p.id not in assignable_matrix_ids]
+    elif allowed_permission_ids is not None and allowed_ids:
+        preserved = [p for p in role.permissions if p.id not in allowed_ids]
+    else:
+        preserved = [p for p in role.permissions if p.id not in assignable_matrix_ids]
     by_id = {p.id: p for p in preserved}
     for p in managed_objs:
         by_id[p.id] = p
@@ -7813,25 +7821,29 @@ def role_form():
     # Current user sirf apne paas wale permissions hi kisi role ko de sakta hai
     is_master = _current_user_is_master()
     user_perm_codes = set(session.get('permissions') or []) if not is_master else None
+    from permissions_config import (
+        get_permission_tree_grouped_filtered,
+        PERMISSION_DEPENDENCIES,
+        expand_login_permissions,
+        build_permission_matrix_rows,
+    )
+    permission_by_code = {p.code: p for p in Permission.query.all()}
+    user_perm_codes_expanded = (
+        set(expand_login_permissions(list(user_perm_codes or []))) if user_perm_codes is not None else None
+    )
+    codes_for_allowed = list(user_perm_codes_expanded or [])
+    allowed_permission_ids = None if is_master else {
+        p.id for p in Permission.query.filter(Permission.code.in_(codes_for_allowed)).all()
+    }
     try:
-        from permissions_config import (
-            get_permission_tree_grouped_filtered,
-            PERMISSION_DEPENDENCIES,
-            expand_login_permissions,
-            build_permission_matrix_rows,
+        permission_tree = get_permission_tree_grouped_filtered(
+            permission_by_code, allowed_codes=user_perm_codes_expanded
         )
-        permission_by_code = {p.code: p for p in Permission.query.all()}
-        # Expand section-level codes (e.g. assignment -> assign_vehicle_to_parking) so Admin can assign them
-        user_perm_codes_expanded = set(expand_login_permissions(list(user_perm_codes or []))) if user_perm_codes is not None else None
-        permission_tree = get_permission_tree_grouped_filtered(permission_by_code, allowed_codes=user_perm_codes_expanded)
         permission_matrix = build_permission_matrix_rows(permission_tree)
-        allowed_permission_ids = None if is_master else set(p.id for p in Permission.query.filter(Permission.code.in_(user_perm_codes_expanded or [])).all())
     except Exception:
+        current_app.logger.exception('role_form: permission tree/matrix build failed')
         permission_tree = []
         permission_matrix = []
-        permission_by_code = {p.code: p for p in Permission.query.all()}
-        allowed_permission_ids = set()
-        PERMISSION_DEPENDENCIES = {}
     if request.method == 'GET':
         return render_template(
             'role_form.html',
@@ -7839,24 +7851,24 @@ def role_form():
             role=None,
             permission_tree=permission_tree,
             permission_matrix=permission_matrix,
-            permission_dependencies=PERMISSION_DEPENDENCIES if 'PERMISSION_DEPENDENCIES' in dir() else {},
+            permission_dependencies=PERMISSION_DEPENDENCIES,
         )
     if form.validate_on_submit():
         post_id = form.post_id.data if form.post_id.data else 0
         if post_id == 0:
             flash('Please select a Post from Employee Posts.', 'danger')
-            return render_template('role_form.html', form=form, role=None, permission_tree=permission_tree, permission_matrix=permission_matrix, permission_dependencies=PERMISSION_DEPENDENCIES if 'PERMISSION_DEPENDENCIES' in dir() else {})
+            return render_template('role_form.html', form=form, role=None, permission_tree=permission_tree, permission_matrix=permission_matrix, permission_dependencies=PERMISSION_DEPENDENCIES)
         post = EmployeePost.query.get(post_id)
         if not post:
             flash('Selected post not found.', 'danger')
-            return render_template('role_form.html', form=form, role=None, permission_tree=permission_tree, permission_matrix=permission_matrix, permission_dependencies=PERMISSION_DEPENDENCIES if 'PERMISSION_DEPENDENCIES' in dir() else {})
+            return render_template('role_form.html', form=form, role=None, permission_tree=permission_tree, permission_matrix=permission_matrix, permission_dependencies=PERMISSION_DEPENDENCIES)
         name = (post.full_name or '').strip()
         if not name:
             flash('Post has no name.', 'danger')
-            return render_template('role_form.html', form=form, role=None, permission_tree=permission_tree, permission_matrix=permission_matrix, permission_dependencies=PERMISSION_DEPENDENCIES if 'PERMISSION_DEPENDENCIES' in dir() else {})
+            return render_template('role_form.html', form=form, role=None, permission_tree=permission_tree, permission_matrix=permission_matrix, permission_dependencies=PERMISSION_DEPENDENCIES)
         if Role.query.filter(func.lower(Role.name) == name.lower()).first():
             flash('A role with this post name already exists. Select another post or edit the existing role.', 'danger')
-            return render_template('role_form.html', form=form, role=None, permission_tree=permission_tree, permission_matrix=permission_matrix, permission_dependencies=PERMISSION_DEPENDENCIES if 'PERMISSION_DEPENDENCIES' in dir() else {})
+            return render_template('role_form.html', form=form, role=None, permission_tree=permission_tree, permission_matrix=permission_matrix, permission_dependencies=PERMISSION_DEPENDENCIES)
         role = Role(name=name, description=(form.description.data or '').strip() or None)
         db.session.add(role)
         db.session.commit()
@@ -7878,7 +7890,7 @@ def role_form():
         db.session.commit()
         flash('Role created successfully and linked to selected Post.', 'success')
         return redirect(url_for('role_list'))
-    return render_template('role_form.html', form=form, role=None, permission_tree=permission_tree, permission_matrix=permission_matrix, permission_dependencies=PERMISSION_DEPENDENCIES if 'PERMISSION_DEPENDENCIES' in dir() else {})
+    return render_template('role_form.html', form=form, role=None, permission_tree=permission_tree, permission_matrix=permission_matrix, permission_dependencies=PERMISSION_DEPENDENCIES)
 
 
 @app.route('/roles/<int:pk>/edit', methods=['GET', 'POST'])
@@ -7893,25 +7905,29 @@ def role_edit(pk):
         abort(404)
     # Current user sirf apne paas wale permissions hi is role ko assign kar sakta hai
     user_perm_codes = set(session.get('permissions') or []) if not is_master else None
+    from permissions_config import (
+        get_permission_tree_grouped_filtered,
+        PERMISSION_DEPENDENCIES,
+        expand_login_permissions,
+        build_permission_matrix_rows,
+    )
+    permission_by_code = {p.code: p for p in Permission.query.all()}
+    user_perm_codes_expanded = (
+        set(expand_login_permissions(list(user_perm_codes or []))) if user_perm_codes is not None else None
+    )
+    codes_for_allowed = list(user_perm_codes_expanded or [])
+    allowed_permission_ids = None if is_master else {
+        p.id for p in Permission.query.filter(Permission.code.in_(codes_for_allowed)).all()
+    }
     try:
-        from permissions_config import (
-            get_permission_tree_grouped_filtered,
-            PERMISSION_DEPENDENCIES,
-            expand_login_permissions,
-            build_permission_matrix_rows,
+        permission_tree = get_permission_tree_grouped_filtered(
+            permission_by_code, allowed_codes=user_perm_codes_expanded
         )
-        permission_by_code = {p.code: p for p in Permission.query.all()}
-        # Expand section-level codes so Admin can assign e.g. Vehicle to Parking when they have Assignment (full)
-        user_perm_codes_expanded = set(expand_login_permissions(list(user_perm_codes or []))) if user_perm_codes is not None else None
-        permission_tree = get_permission_tree_grouped_filtered(permission_by_code, allowed_codes=user_perm_codes_expanded)
         permission_matrix = build_permission_matrix_rows(permission_tree)
-        allowed_permission_ids = None if is_master else set(p.id for p in Permission.query.filter(Permission.code.in_(user_perm_codes_expanded or [])).all())
     except Exception:
+        current_app.logger.exception('role_edit: permission tree/matrix build failed')
         permission_tree = []
         permission_matrix = []
-        permission_by_code = {p.code: p for p in Permission.query.all()}
-        allowed_permission_ids = set()
-        PERMISSION_DEPENDENCIES = {}
     form = RoleForm()
     form.post_id.choices = [(0, '—')]
     if request.method == 'GET':
