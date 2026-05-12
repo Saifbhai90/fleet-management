@@ -181,6 +181,7 @@ ENDPOINT_PERMISSION_MAP = [
     ('task-report', 'task_report_list'),
     ('task_report_list', 'task_report_list'),
     ('task_report_new', 'task_report_add'),
+    ('api_task_report_odometer_photo_upload', 'task_report_add'),
     # Red Task
     ('red_task_list', 'red_task'),
     ('red_task_summary', 'red_task'),

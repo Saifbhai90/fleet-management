@@ -67,6 +67,7 @@
                 <th>Vehicle No</th>
                 <th class="text-end">Start Reading</th>
                 <th class="text-end">Close Reading <span class="text-danger">*</span></th>
+                <th class="text-center" style="white-space:nowrap;" title="Optional — GPS + date/time on image">Odoo meter</th>
                 <th class="text-end">KMs Driven</th>
                 <th class="text-center">Task's</th>
                 <th class="text-center">EMG (admin)</th>
@@ -102,6 +103,24 @@
                          class="form-control form-control-sm text-end close-input task-editable-field" data-row="{{ row.vehicle.id }}" style="min-width:90px;"
                          value="{% if row.close_reading is not none %}{{ row.close_reading }}{% endif %}" placeholder="Close" {% if s %}disabled{% endif %}>
                 </td>
+                <td class="text-center align-middle odometer-cell" style="min-width:72px;vertical-align:middle;">
+                  <input type="hidden" name="vehicle_{{ row.vehicle.id }}_odometer_photo_url" class="odom-url-input" data-row="{{ row.vehicle.id }}" value="{{ row.odometer_photo_path or '' }}">
+                  <div class="d-flex flex-column align-items-center gap-1 odom-ctrl-wrap{% if s %} odom-wrap-locked{% endif %}" data-row="{{ row.vehicle.id }}" tabindex="{% if s %}-1{% else %}0{% endif %}" title="{% if s %}Edit row to change photo{% else %}Paste (Ctrl+V) when focused, or click speedometer for file / mobile rear camera{% endif %}">
+                    {% if row.odometer_photo_path %}
+                    <a href="{{ row.odometer_photo_path }}" target="_blank" rel="noopener" class="odom-thumb-link d-inline-block">
+                      <img src="{{ row.odometer_photo_path }}" alt="Odoo meter" class="rounded border odom-thumb" style="max-height:44px;max-width:64px;object-fit:cover;">
+                    </a>
+                    {% else %}
+                    <span class="odom-thumb-placeholder text-muted small" style="font-size:.65rem;">—</span>
+                    {% endif %}
+                    <div class="btn-group btn-group-sm" role="group">
+                      <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-1 odom-photo-btn task-editable-field" data-row="{{ row.vehicle.id }}" title="Add / change photo" {% if s %}disabled{% endif %}>
+                        <i class="bi bi-speedometer2"></i>
+                      </button>
+                      <button type="button" class="btn btn-outline-danger btn-sm py-0 px-1 odom-clear-btn {% if not row.odometer_photo_path %}d-none{% endif %} task-editable-field" data-row="{{ row.vehicle.id }}" title="Remove photo" {% if s %}disabled{% endif %}>×</button>
+                    </div>
+                  </div>
+                </td>
                 <td class="text-end kms-driven">-</td>
                 <td class="text-center">
                   <input type="number" min="0" name="vehicle_{{ row.vehicle.id }}_tasks_count"
@@ -135,7 +154,7 @@
             </tbody>
             <tfoot class="table-light fw-bold" id="batchTotals">
               <tr>
-                <td colspan="9" class="ps-4 text-end">Total</td>
+                <td colspan="10" class="ps-4 text-end">Total</td>
                 <td class="text-end" id="totalKmsDriven">-</td>
                 <td class="text-center" id="totalTasks">-</td>
                 <td class="text-center" id="totalEmg">-</td>
@@ -511,6 +530,9 @@
     });
   });
 })();
+</script>
+{% include 'partials/task_report_odometer_upload.html' %}
+<script>
 window._fleetAfterFilter = function(){ if(typeof updateTotals==='function') updateTotals(); };
 document.addEventListener('DOMContentLoaded', function(){ if(window.fleetTableEnhance) window.fleetTableEnhance('batchTable'); });
 
@@ -525,6 +547,12 @@ document.addEventListener('click', function(e){
 
   document.querySelectorAll('.task-editable-field[data-row="' + rowId + '"]').forEach(function(el){
     el.disabled = false;
+  });
+  document.querySelectorAll('.odom-ctrl-wrap[data-row="' + rowId + '"]').forEach(function(w) {
+    w.classList.remove('odom-wrap-locked');
+    w.setAttribute('tabindex', '0');
+    w.style.opacity = '';
+    w.title = 'Paste (Ctrl+V) when focused, or click speedometer for file / mobile rear camera';
   });
 
   btn.classList.remove('btn-outline-primary');

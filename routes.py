@@ -20159,6 +20159,7 @@ def task_report_list():
             'kms_driven': round(kms_driven, 2), 'tasks_count': t.tasks_count,
             'emg_tasks': emg_tasks, 'tracker_km': round(tracker_km, 2),
             'kms_diff': round(kms_diff, 2), 'pct_diff': pct_diff,
+            'odometer_photo_path': (getattr(t, 'odometer_photo_path', None) or '').strip(),
         })
     search = (request.args.get('search') or '').strip()
     if search:
@@ -20171,6 +20172,7 @@ def task_report_list():
                 r['vehicle'].parking_station.name if r['vehicle'].parking_station else '',
                 r['vehicle'].vehicle_type or '',
                 str(r['kms_driven']), str(r['tasks_count']), str(r['emg_tasks']),
+                str(r.get('odometer_photo_path') or ''),
             ]).lower()
             return all(tok in blob for tok in tokens)
         rows = [r for r in rows if _match(r)]
@@ -20508,16 +20510,19 @@ def task_report_new():
                 )
             return render_template('task_report_new.html', rows=rows, view_date=view_date, district_id=district_id, project_id=project_id, districts=districts, projects=projects)
         for v, existing, close_reading, tasks_count, user_start in to_save:
+            photo_url = (request.form.get('vehicle_%s_odometer_photo_url' % v.id) or '').strip()
             if existing:
                 existing.close_reading = close_reading
                 existing.tasks_count = tasks_count
                 if user_start is not None:
                     existing.start_reading = user_start
+                existing.odometer_photo_path = photo_url or None
             else:
                 db.session.add(VehicleDailyTask(
                     vehicle_id=v.id, project_id=project_id or None, district_id=district_id or None,
                     task_date=task_date, close_reading=close_reading, tasks_count=tasks_count,
                     start_reading=user_start,
+                    odometer_photo_path=photo_url or None,
                 ))
         try:
             db.session.commit()
@@ -20621,8 +20626,31 @@ def _build_vehicle_rows(vehicles, task_date, form=None):
             'close_reading': existing_close,
             'tasks_count': existing_tasks,
             'saved': existing,
+            'odometer_photo_path': ((existing.odometer_photo_path or '').strip()) if existing else '',
         })
     return rows
+
+
+@app.route('/api/task-report/odometer-photo-upload', methods=['POST'])
+def api_task_report_odometer_photo_upload():
+    """Upload Odoo/odometer display photo (optional) for daily task entry — R2 WebP like attendance."""
+    try:
+        body = request.get_json(silent=True) or {}
+        photo_b64 = (body.get('photo_base64') or '').strip()
+        if not photo_b64:
+            return jsonify({'ok': False, 'message': 'Koi image nahi bheji.'}), 400
+        data = _decode_attendance_photo_b64(photo_b64)
+        if not data or len(data) < 80:
+            return jsonify({'ok': False, 'message': 'Image decode nahi ho saki.'}), 400
+        if len(data) > 12 * 1024 * 1024:
+            return jsonify({'ok': False, 'message': 'Image bahut bari hai.'}), 400
+        url = _upload_attendance_image_bytes_with_fallback(data, folder='task_odometer')
+        if not url:
+            return jsonify({'ok': False, 'message': 'Upload save nahi ho saka.'}), 502
+        return jsonify({'ok': True, 'url': url})
+    except Exception as e:
+        app.logger.warning('task odometer photo upload: %s', e)
+        return jsonify({'ok': False, 'message': str(e) or 'Upload failed.'}), 500
 
 
 @app.route('/api/task-report/emg-detail')

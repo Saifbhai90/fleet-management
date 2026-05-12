@@ -518,6 +518,8 @@ class VehicleDailyTask(db.Model):
     close_reading = db.Column(db.Numeric(12, 2), nullable=False)
     tasks_count = db.Column(db.Integer, default=1)
     remarks = db.Column(db.Text, nullable=True)
+    # R2 URL or local path — Odoo / odometer display photo (optional), GPS+datetime burned in client like attendance
+    odometer_photo_path = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=pk_now)
 
     vehicle = db.relationship('Vehicle', backref='daily_tasks', lazy='select')

@@ -1,0 +1,256 @@
+{# Optional Odoo / odometer photo for New Task Entry — R2 upload + GPS overlay (same style as attendance) #}
+<input type="file" id="odomGlobalFileInput" class="d-none" accept="image/jpeg,image/png,image/webp,.jpg,.png,.webp" aria-hidden="true">
+<script>
+(function() {
+  var UP = {{ url_for('api_task_report_odometer_photo_upload') | tojson }};
+  var fileInp = document.getElementById('odomGlobalFileInput');
+  if (!fileInp) return;
+
+  function jpegDataUrlMaxSide(canvas, maxSide, quality) {
+    maxSide = maxSide || 1600;
+    quality = (quality === undefined || quality === null) ? 0.72 : quality;
+    var w = canvas.width, h = canvas.height;
+    if (!w || !h) return canvas.toDataURL('image/jpeg', quality);
+    if (w <= maxSide && h <= maxSide) return canvas.toDataURL('image/jpeg', quality);
+    var scale = maxSide / Math.max(w, h);
+    var nw = Math.max(1, Math.round(w * scale));
+    var nh = Math.max(1, Math.round(h * scale));
+    var tmp = document.createElement('canvas');
+    tmp.width = nw; tmp.height = nh;
+    tmp.getContext('2d').drawImage(canvas, 0, 0, nw, nh);
+    return tmp.toDataURL('image/jpeg', quality);
+  }
+
+  function csrfHeaders() {
+    var f = document.getElementById('batchForm');
+    var t = f && f.querySelector('input[name="csrf_token"]');
+    var h = { 'Content-Type': 'application/json' };
+    if (t && t.value) h['X-CSRFToken'] = t.value;
+    return h;
+  }
+
+  function rowEditUnlocked(rowId) {
+    var m = document.getElementById('row_' + rowId + '_edit_mode');
+    return m && m.value === '1';
+  }
+
+  function fetchGpsQuick(cb) {
+    if (!navigator.geolocation) return cb(null, null);
+    navigator.geolocation.getCurrentPosition(
+      function(p) { cb(p.coords.latitude, p.coords.longitude); },
+      function() { cb(null, null); },
+      { enableHighAccuracy: false, timeout: 9000, maximumAge: 120000 }
+    );
+  }
+
+  function drawOdometerOverlay(ctx, w, h, lat, lng) {
+    var now = new Date(Date.now() + (typeof _pktOffset !== 'undefined' ? _pktOffset : 0));
+    var _od = (typeof pktOverlayDateTimeStrings === 'function')
+      ? pktOverlayDateTimeStrings(now)
+      : { dateStr: String(now.getDate()).padStart(2, '0') + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + now.getFullYear(),
+          timeStr: String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0') + ':' + String(now.getSeconds()).padStart(2, '0') };
+    var line1 = 'Odoo meter | ' + _od.dateStr + ' ' + _od.timeStr;
+    var line2 = (lat != null && lng != null) ? ('Location: ' + Number(lat).toFixed(6) + ', ' + Number(lng).toFixed(6)) : '';
+    var fontSize = Math.max(14, Math.min(24, h / 22));
+    ctx.font = 'bold ' + fontSize + 'px Arial';
+    var tw1 = ctx.measureText(line1).width;
+    var tw2 = 0;
+    if (line2) {
+      ctx.font = (fontSize * 0.85) + 'px Arial';
+      tw2 = ctx.measureText(line2).width;
+    }
+    var boxW = Math.max(tw1, tw2) + 24;
+    var boxH = line2 ? fontSize * 2.4 : fontSize * 1.6;
+    var pad = 12;
+    var x = w - boxW - pad;
+    var y = h - boxH - pad;
+    ctx.fillStyle = 'rgba(0,0,0,0.65)';
+    ctx.fillRect(x, y, boxW, boxH);
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x, y, boxW, boxH);
+    ctx.fillStyle = '#fff';
+    ctx.textBaseline = 'top';
+    ctx.font = 'bold ' + fontSize + 'px Arial';
+    ctx.fillText(line1, x + 12, y + 8);
+    if (line2) {
+      ctx.font = (fontSize * 0.85) + 'px Arial';
+      ctx.fillText(line2, x + 12, y + 8 + fontSize * 1.15);
+    }
+  }
+
+  function applyOverlayFromDataUrl(dataUrl, lat, lng) {
+    return new Promise(function(resolve, reject) {
+      var img = new Image();
+      img.onload = function() {
+        var w = img.naturalWidth, h = img.naturalHeight;
+        if (!w || !h) { reject(new Error('Bad image')); return; }
+        var c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        var ctx = c.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        drawOdometerOverlay(ctx, w, h, lat, lng);
+        resolve(jpegDataUrlMaxSide(c, 1600, 0.72));
+      };
+      img.onerror = function() { reject(new Error('Image load failed')); };
+      img.src = dataUrl;
+    });
+  }
+
+  function setRowPhotoUi(rowId, url) {
+    var row = document.querySelector('.odom-url-input[data-row="' + rowId + '"]');
+    if (!row) return;
+    row.value = url || '';
+    var cell = row.closest('.odometer-cell');
+    if (!cell) return;
+    var wrap = cell.querySelector('.odom-ctrl-wrap');
+    if (!wrap) return;
+    var ph = cell.querySelector('.odom-thumb-placeholder');
+    var link = cell.querySelector('.odom-thumb-link');
+    var clr = cell.querySelector('.odom-clear-btn');
+      if (url) {
+      if (ph) ph.classList.add('d-none');
+      if (link) {
+        link.href = url;
+        var im0 = link.querySelector('img');
+        if (im0) im0.src = url;
+        link.classList.remove('d-none');
+      } else {
+        var a = document.createElement('a');
+        a.href = url;
+        a.target = '_blank';
+        a.rel = 'noopener';
+        a.className = 'odom-thumb-link d-inline-block';
+        var im = document.createElement('img');
+        im.src = url;
+        im.alt = 'Odoo meter';
+        im.className = 'rounded border odom-thumb';
+        im.style.cssText = 'max-height:44px;max-width:64px;object-fit:cover;';
+        a.appendChild(im);
+        wrap.insertBefore(a, wrap.firstChild);
+      }
+      if (clr) clr.classList.remove('d-none');
+    } else {
+      if (ph) ph.classList.remove('d-none');
+      if (link) link.remove();
+      if (clr) clr.classList.add('d-none');
+    }
+  }
+
+  function uploadJpeg(rowId, jpegDataUrl) {
+    return fetch(UP, {
+      method: 'POST',
+      headers: csrfHeaders(),
+      body: JSON.stringify({ photo_base64: jpegDataUrl })
+    }).then(function(r) {
+      return r.text().then(function(txt) {
+        var body = {};
+        try { body = txt ? JSON.parse(txt) : {}; } catch (e) {}
+        return { ok: r.ok, body: body };
+      });
+    }).then(function(res) {
+      if (!res.ok || !res.body.ok) throw new Error((res.body && res.body.message) || 'Upload failed');
+      setRowPhotoUi(rowId, res.body.url);
+    });
+  }
+
+  function processAnyImageSource(rowId, dataUrl, lat, lng) {
+    return applyOverlayFromDataUrl(dataUrl, lat, lng).then(function(jpeg) { return uploadJpeg(rowId, jpeg); });
+  }
+
+  var pendingRowId = null;
+
+  function openFilePickerForRow(rowId) {
+    pendingRowId = rowId;
+    fileInp.value = '';
+    fileInp.click();
+  }
+
+  fileInp.addEventListener('change', function() {
+    var rowId = pendingRowId;
+    pendingRowId = null;
+    if (!rowId || !fileInp.files || !fileInp.files[0]) return;
+    var f = fileInp.files[0];
+    var reader = new FileReader();
+    reader.onload = function() {
+      var dataUrl = reader.result;
+      fetchGpsQuick(function(lat, lng) {
+        processAnyImageSource(rowId, dataUrl, lat, lng).catch(function(err) {
+          alert(err.message || String(err));
+        });
+      });
+    };
+    reader.readAsDataURL(f);
+  });
+
+  function nativeRearCamera(rowId) {
+    fetchGpsQuick(function(lat, lng) {
+      var Cam = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Camera;
+      if (!Cam || !Cam.getPhoto) {
+        openFilePickerForRow(rowId);
+        return;
+      }
+      Cam.getPhoto({
+        quality: 85,
+        allowEditing: false,
+        resultType: 'base64',
+        source: 'CAMERA',
+        direction: 'REAR',
+        saveToGallery: false
+      }).then(function(photo) {
+        var raw = 'data:image/jpeg;base64,' + (photo.base64String || '');
+        return processAnyImageSource(rowId, raw, lat, lng);
+      }).catch(function(err) {
+        alert((err && err.message) ? err.message : 'Camera failed');
+      });
+    });
+  }
+
+  document.addEventListener('click', function(e) {
+    var clr = e.target.closest('.odom-clear-btn');
+    if (clr) {
+      e.preventDefault();
+      var rid = clr.getAttribute('data-row');
+      if (!rid || !rowEditUnlocked(rid)) return;
+      setRowPhotoUi(rid, '');
+      return;
+    }
+    var btn = e.target.closest('.odom-photo-btn');
+    if (!btn) return;
+    e.preventDefault();
+    var rowId = btn.getAttribute('data-row');
+    if (!rowId || !rowEditUnlocked(rowId)) return;
+    var isNative = !!(window.FleetBridge && window.FleetBridge.isNative);
+    if (isNative) nativeRearCamera(rowId);
+    else openFilePickerForRow(rowId);
+  });
+
+  var batchForm = document.getElementById('batchForm');
+  if (batchForm) {
+    batchForm.addEventListener('paste', function(e) {
+      var wrap = e.target.closest('.odom-ctrl-wrap');
+      if (!wrap) return;
+      var rowId = wrap.getAttribute('data-row');
+      if (!rowId || !rowEditUnlocked(rowId) || wrap.classList.contains('odom-wrap-locked')) return;
+      var cd = e.clipboardData;
+      if (!cd || !cd.items) return;
+      for (var i = 0; i < cd.items.length; i++) {
+        if (cd.items[i].type.indexOf('image') === -1) continue;
+        e.preventDefault();
+        var blob = cd.items[i].getAsFile();
+        if (!blob) continue;
+        var r = new FileReader();
+        r.onload = function() {
+          fetchGpsQuick(function(lat, lng) {
+            processAnyImageSource(rowId, r.result, lat, lng).catch(function(err) {
+              alert(err.message || String(err));
+            });
+          });
+        };
+        r.readAsDataURL(blob);
+        break;
+      }
+    });
+  }
+})();
+</script>
