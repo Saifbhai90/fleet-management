@@ -114,6 +114,15 @@ tr.perm-matrix-page-row.perm-highlight td { box-shadow: inset 0 0 0 999px rgba(2
     </a>
   </div>
 
+  {% if form.errors %}
+  <div class="alert alert-danger mb-3">
+    <strong>Form save nahi ho saka.</strong>
+    {% for field, errs in form.errors.items() %}
+      {% for e in errs %}<div class="small">{{ field }}: {{ e }}</div>{% endfor %}
+    {% endfor %}
+  </div>
+  {% endif %}
+
   {% set selected_perm_ids = (role.permissions | map(attribute='id') | list) if role and role.permissions else [] %}
   {% macro perm_matrix_cell(cell, section_label, page_label) %}
     {% if cell %}

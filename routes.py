@@ -7704,6 +7704,91 @@ def freeze_data_settings():
     return redirect(url_for('form_control', settings_tab='freeze'))
 
 
+def _matrix_assignable_permission_ids(permission_matrix):
+    """DB ids for permissions shown on the role matrix (checkboxes the editor can toggle)."""
+    ids = set()
+    for row in permission_matrix or []:
+        if not isinstance(row, dict) or row.get('type') != 'page':
+            continue
+        cells = row.get('cells') or {}
+        for key in ('full', 'list', 'add', 'edit', 'delete'):
+            cell = cells.get(key)
+            if cell and isinstance(cell, dict) and cell.get('id') is not None:
+                ids.add(int(cell['id']))
+        for cell in cells.get('other') or []:
+            if cell and isinstance(cell, dict) and cell.get('id') is not None:
+                ids.add(int(cell['id']))
+    return ids
+
+
+def _apply_role_permissions_from_form(
+    role,
+    perm_ids_raw,
+    *,
+    is_master,
+    allowed_permission_ids,
+    permission_matrix,
+    permission_by_code,
+):
+    """
+    Apply POSTed permission_ids to role (with dependency expansion).
+
+    Master: full replace — unchecked permissions are removed.
+
+    Non-master: merge — keep existing permissions that are NOT on the matrix (editor cannot see
+    or change them, e.g. Task & Logbook when editor lacks that section). Replace only matrix-visible
+    permissions with the submitted selection + dependencies (capped to allowed_permission_ids).
+    """
+    from permissions_config import expand_permission_dependencies
+
+    assignable_matrix_ids = _matrix_assignable_permission_ids(permission_matrix)
+    perm_ids = [i for i in (perm_ids_raw or []) if i is not None]
+
+    def _codes_from_perm_ids(pid_list):
+        if not pid_list:
+            return set()
+        return {p.code for p in Permission.query.filter(Permission.id.in_(pid_list)).all()}
+
+    if is_master or allowed_permission_ids is None:
+        codes = _codes_from_perm_ids(perm_ids)
+        expanded = expand_permission_dependencies(codes)
+        new_ids = [permission_by_code[c].id for c in expanded if permission_by_code.get(c)]
+        role.permissions.clear()
+        db.session.flush()
+        if new_ids:
+            role.permissions.extend(Permission.query.filter(Permission.id.in_(new_ids)).all())
+        return
+
+    allowed_ids = allowed_permission_ids or set()
+    submitted_ids = set(perm_ids)
+    blocked_ids = submitted_ids - allowed_ids
+    if blocked_ids:
+        blocked_names = [p.name for p in Permission.query.filter(Permission.id.in_(blocked_ids)).all()]
+        flash(
+            f'Security: {len(blocked_ids)} permission(s) blocked — you cannot grant access you do not have: {", ".join(blocked_names[:5])}.',
+            'warning',
+        )
+    submitted_allowed = submitted_ids & allowed_ids
+    codes = _codes_from_perm_ids(list(submitted_allowed))
+    expanded = expand_permission_dependencies(codes)
+    managed_ids = {
+        permission_by_code[c].id
+        for c in expanded
+        if permission_by_code.get(c) and permission_by_code[c].id in allowed_ids
+    }
+    managed_objs = Permission.query.filter(Permission.id.in_(managed_ids)).all() if managed_ids else []
+
+    preserved = [p for p in role.permissions if p.id not in assignable_matrix_ids]
+    by_id = {p.id: p for p in preserved}
+    for p in managed_objs:
+        by_id[p.id] = p
+
+    role.permissions.clear()
+    db.session.flush()
+    if by_id:
+        role.permissions.extend(list(by_id.values()))
+
+
 @app.route('/roles/new', methods=['GET', 'POST'])
 def role_form():
     form = RoleForm()
@@ -7728,7 +7813,7 @@ def role_form():
     except Exception:
         permission_tree = []
         permission_matrix = []
-        permission_by_code = {}
+        permission_by_code = {p.code: p for p in Permission.query.all()}
         allowed_permission_ids = set()
         PERMISSION_DEPENDENCIES = {}
     if request.method == 'GET':
@@ -7765,26 +7850,16 @@ def role_form():
             if emp_post:
                 emp_post.role_id = role.id
                 db.session.commit()
-        perm_ids = request.form.getlist('permission_ids', type=int)
-        if perm_ids and allowed_permission_ids is not None:
-            # Delegation ceiling: block any IDs outside current user's own set
-            blocked = [i for i in perm_ids if i not in allowed_permission_ids]
-            if blocked:
-                blocked_names = [p.name for p in Permission.query.filter(Permission.id.in_(blocked)).all()]
-                flash(f'Security: {len(blocked)} permission(s) blocked — you cannot grant access you do not have: {", ".join(blocked_names[:5])}.', 'warning')
-            perm_ids = [i for i in perm_ids if i in allowed_permission_ids]
-        if perm_ids:
-            from permissions_config import expand_permission_dependencies
-            permission_by_code = {p.code: p for p in Permission.query.all()}
-            codes = {p.code for p in Permission.query.filter(Permission.id.in_(perm_ids)).all()}
-            expanded = expand_permission_dependencies(codes)
-            if allowed_permission_ids is not None:
-                perm_ids = [permission_by_code[c].id for c in expanded if permission_by_code.get(c) and permission_by_code[c].id in allowed_permission_ids]
-            else:
-                perm_ids = [permission_by_code[c].id for c in expanded if permission_by_code.get(c)]
-            perms = Permission.query.filter(Permission.id.in_(perm_ids)).all()
-            role.permissions = perms
-            db.session.commit()
+        perm_ids_raw = request.form.getlist('permission_ids', type=int)
+        _apply_role_permissions_from_form(
+            role,
+            perm_ids_raw,
+            is_master=is_master,
+            allowed_permission_ids=allowed_permission_ids,
+            permission_matrix=permission_matrix,
+            permission_by_code=permission_by_code,
+        )
+        db.session.commit()
         flash('Role created successfully and linked to selected Post.', 'success')
         return redirect(url_for('role_list'))
     return render_template('role_form.html', form=form, role=None, permission_tree=permission_tree, permission_matrix=permission_matrix, permission_dependencies=PERMISSION_DEPENDENCIES if 'PERMISSION_DEPENDENCIES' in dir() else {})
@@ -7818,41 +7893,30 @@ def role_edit(pk):
     except Exception:
         permission_tree = []
         permission_matrix = []
+        permission_by_code = {p.code: p for p in Permission.query.all()}
         allowed_permission_ids = set()
         PERMISSION_DEPENDENCIES = {}
     form = RoleForm()
+    form.post_id.choices = [(0, '—')]
     if request.method == 'GET':
         # Edit mode: Role name/description sirf read-only dikhaani hain (change ki ijazat nahi)
         return render_template('role_form.html', form=form, role=role, permission_tree=permission_tree, permission_matrix=permission_matrix, permission_dependencies=PERMISSION_DEPENDENCIES)
     if form.validate_on_submit():
         # Role Details (name/description) ko edit ki permission nahi – sirf permissions update honge
-        perm_ids = request.form.getlist('permission_ids', type=int)
-        from permissions_config import expand_permission_dependencies
-        permission_by_code = {p.code: p for p in Permission.query.all()}
-
-        if is_master or allowed_permission_ids is None:
-            # Master: saare selected permissions (dependencies ke sath) allow
-            codes = {p.code for p in Permission.query.filter(Permission.id.in_(perm_ids)).all()}
-            expanded = expand_permission_dependencies(codes)
-            perm_ids = [permission_by_code[c].id for c in expanded if permission_by_code.get(c)]
-            role.permissions = Permission.query.filter(Permission.id.in_(perm_ids)).all() if perm_ids else []
-        else:
-            # Delegation ceiling: non-master can ONLY assign permissions they themselves hold.
-            # Any attempt to include an ID outside their own set is silently stripped + warned.
-            submitted_ids   = set(perm_ids)
-            allowed_ids     = allowed_permission_ids or set()
-            blocked_ids     = submitted_ids - allowed_ids
-            if blocked_ids:
-                blocked_names = [p.name for p in Permission.query.filter(Permission.id.in_(blocked_ids)).all()]
-                flash(f'Security: {len(blocked_ids)} permission(s) blocked — you cannot grant access you do not have: {", ".join(blocked_names[:5])}.', 'warning')
-            submitted_allowed = submitted_ids & allowed_ids
-            codes = {p.code for p in Permission.query.filter(Permission.id.in_(submitted_allowed)).all()}
-            expanded = expand_permission_dependencies(codes)
-            expanded_ids = {permission_by_code[c].id for c in expanded if permission_by_code.get(c) and permission_by_code[c].id in allowed_ids}
-            role.permissions = Permission.query.filter(Permission.id.in_(expanded_ids)).all() if expanded_ids else []
+        perm_ids_raw = request.form.getlist('permission_ids', type=int)
+        _apply_role_permissions_from_form(
+            role,
+            perm_ids_raw,
+            is_master=is_master,
+            allowed_permission_ids=allowed_permission_ids,
+            permission_matrix=permission_matrix,
+            permission_by_code=permission_by_code,
+        )
         db.session.commit()
         flash('Role updated successfully.', 'success')
         return redirect(url_for('role_list'))
+    if request.method == 'POST':
+        flash('Role save nahi ho saka — form check karein (CSRF / fields).', 'danger')
     return render_template('role_form.html', form=form, role=role, permission_tree=permission_tree, permission_matrix=permission_matrix, permission_dependencies=PERMISSION_DEPENDENCIES)
 
 
