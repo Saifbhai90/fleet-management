@@ -177,6 +177,7 @@ ENDPOINT_PERMISSION_MAP = [
     ('admin_personal_tools_library', 'users_manage'),
     ('admin_personal_tools_library_detail', 'users_manage'),
     # Task & Logbook
+    ('task_report_upload_list', 'task_report_upload'),
     ('task_report_upload', 'task_report_upload'),
     ('task_report_upload_emergency', 'task_report_upload'),
     ('task_report_upload_mileage', 'task_report_upload'),

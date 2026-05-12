@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% block title %}Workbook Upload Log{% endblock %}
+{% block content %}
+<div class="container-fluid">
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
+    <h2 class="mb-0"><i class="bi bi-journal-bookmark me-2 text-primary"></i>Workbook Upload Log</h2>
+    <div class="d-flex gap-2">
+      <a href="{{ url_for('task_report_upload') }}" class="btn btn-outline-primary btn-sm">
+        <i class="bi bi-cloud-upload me-1"></i>New Upload
+      </a>
+      <a href="{{ url_for('task_report_list') }}" class="btn btn-outline-secondary btn-sm">Daily Task Report</a>
+    </div>
+  </div>
+
+  <div class="card shadow-sm border-0 rounded-3 mb-3">
+    <div class="card-body">
+      <p class="text-muted small mb-3">Yeh list database mein save imported rows se banai jaati hai (EmergencyTaskReport, Vehicle Mileage, Tracker Activity). Har workbook ka asal Excel file server par store nahi hota — filename sirf activity import ke liye maujood hai.</p>
+      <form method="get" action="{{ url_for('task_report_upload_list') }}" class="row g-3 align-items-end">
+        <div class="col-md-2">
+          <label class="form-label">From Date</label>
+          {{ form.from_date(class="form-control datepicker") }}
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">To Date</label>
+          {{ form.to_date(class="form-control datepicker") }}
+        </div>
+        <div class="col-md-2">
+          <button type="submit" class="btn btn-primary w-100">
+            <i class="bi bi-search me-1"></i>View
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card shadow border-0 rounded-3 overflow-hidden mb-4">
+    <div class="card-header bg-dark text-white py-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
+      <span class="fw-semibold">Summary by report date — {{ from_date|ddmmyyyy }} to {{ to_date|ddmmyyyy }}</span>
+      <select class="form-select form-select-sm bg-dark text-white border-secondary" style="width:70px;" onchange="(function(v){var u=new URLSearchParams(window.location.search);u.set('per_page',v);u.set('page',1);window.location.search=u.toString();})(this.value)">
+        <option value="10" {% if per_page == 10 %}selected{% endif %}>10</option>
+        <option value="25" {% if per_page == 25 %}selected{% endif %}>25</option>
+        <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
+        <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
+      </select>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0" style="font-size:.88rem;">
+          <thead class="table-light">
+            <tr>
+              <th class="ps-3">#</th>
+              <th>Report date</th>
+              <th class="text-end">Emergency rows</th>
+              <th>Last EMG import</th>
+              <th class="text-end">Mileage rows</th>
+              <th>Last mileage import</th>
+              <th class="text-end">Activity files</th>
+              <th class="text-end">Activity rows</th>
+              <th>Last activity import</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in summary_rows %}
+            <tr>
+              <td class="ps-3">{{ loop.index + (pagination.page - 1) * per_page }}</td>
+              <td class="fw-medium text-nowrap">{{ row.task_date|ddmmyyyy }}</td>
+              <td class="text-end">{{ row.emergency_count }}</td>
+              <td class="text-muted small text-nowrap">{% if row.emergency_last %}{{ row.emergency_last.strftime('%d-%m-%Y %H:%M') }}{% else %}—{% endif %}</td>
+              <td class="text-end">{{ row.mileage_count }}</td>
+              <td class="text-muted small text-nowrap">{% if row.mileage_last %}{{ row.mileage_last.strftime('%d-%m-%Y %H:%M') }}{% else %}—{% endif %}</td>
+              <td class="text-end">{{ row.activity_files }}</td>
+              <td class="text-end">{{ row.activity_rows }}</td>
+              <td class="text-muted small text-nowrap">{% if row.activity_last %}{{ row.activity_last.strftime('%d-%m-%Y %H:%M') }}{% else %}—{% endif %}</td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="9" class="text-center py-5 text-muted">Is date range mein koi imported workbook data nahi mila.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card-footer bg-white border-top pt-2 pb-3 px-3">
+      <div class="d-flex justify-content-between align-items-center">
+        <small class="text-muted">
+          Showing {% if pagination %}{{ (pagination.page - 1) * per_page + 1 if summary_rows|length > 0 else 0 }} to {{ (pagination.page - 1) * per_page + summary_rows|length }} of {{ pagination.total }}{% endif %} dates
+        </small>
+        {% if pagination and pagination.pages > 1 %}
+        <nav><ul class="pagination pagination-sm mb-0">
+          <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}"><a class="page-link" style="cursor:pointer" onclick="goPage({{ pagination.prev_num }})"><i class="bi bi-chevron-left"></i></a></li>
+          {% for p in pagination.iter_pages(left_edge=1,right_edge=1,left_current=2,right_current=2) %}{% if p %}<li class="page-item {% if p == pagination.page %}active{% endif %}"><a class="page-link" style="cursor:pointer" onclick="goPage({{ p }})">{{ p }}</a></li>{% else %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}{% endfor %}
+          <li class="page-item {% if not pagination.has_next %}disabled{% endif %}"><a class="page-link" style="cursor:pointer" onclick="goPage({{ pagination.next_num }})"><i class="bi bi-chevron-right"></i></a></li>
+        </ul></nav>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="card shadow border-0 rounded-3 overflow-hidden">
+    <div class="card-header bg-secondary text-white py-3">
+      <span class="fw-semibold">Tracker activity — document detail (filename + row count)</span>
+    </div>
+    <div class="card-body p-0">
+      {% if activity_truncated %}
+      <div class="alert alert-warning m-3 mb-0 small">
+        Sirf pehle <strong>{{ activity_cap }}</strong> file groups dikha rahe hain (kul <strong>{{ activity_file_total }}</strong>). Range choti karein ya zarurat ho to export alag se banaya ja sakta hai.
+      </div>
+      {% endif %}
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0" style="font-size:.88rem;">
+          <thead class="table-light">
+            <tr>
+              <th class="ps-3">#</th>
+              <th>Report date</th>
+              <th>Source file (Excel)</th>
+              <th class="text-end">Rows imported</th>
+              <th>Last row saved at</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in activity_detail %}
+            <tr>
+              <td class="ps-3">{{ loop.index }}</td>
+              <td class="text-nowrap">{{ row.task_date|ddmmyyyy }}</td>
+              <td class="text-break" style="max-width:420px;">{{ row.filename }}</td>
+              <td class="text-end">{{ row.rows }}</td>
+              <td class="text-muted small text-nowrap">{% if row.last_at %}{{ row.last_at.strftime('%d-%m-%Y %H:%M') }}{% else %}—{% endif %}</td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="5" class="text-center py-4 text-muted">Koi activity workbook import record nahi.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+function goPage(p) {
+  var u = new URLSearchParams(window.location.search);
+  u.set('page', p);
+  if (!u.get('from_date')) u.set('from_date', '{{ from_date.strftime("%d-%m-%Y") }}');
+  if (!u.get('to_date')) u.set('to_date', '{{ to_date.strftime("%d-%m-%Y") }}');
+  window.location.search = u.toString();
+}
+</script>
+{% endblock %}

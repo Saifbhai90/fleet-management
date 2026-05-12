@@ -66,7 +66,7 @@ import csv
 from io import StringIO, BytesIO
 import io
 import xlsxwriter
-from sqlalchemy import func, text, inspect, or_, cast, and_
+from sqlalchemy import func, text, inspect, or_, cast, and_, false
 from sqlalchemy import String as SAString
 from sqlalchemy.exc import OperationalError, IntegrityError, DataError
 from sqlalchemy.orm import joinedload
@@ -19533,6 +19533,25 @@ def api_fuel_expense_location_cascade():
     return resp
 
 
+def _vehicle_query_task_report_scope(is_master_or_admin, allowed_projects, allowed_districts, allowed_vehicles):
+    """Restrict Vehicle rows to user's district/project/vehicle assignments (same AND logic as fleet reports)."""
+    q = Vehicle.query
+    if is_master_or_admin:
+        return q
+    ap = set(allowed_projects or [])
+    ad = set(allowed_districts or [])
+    av = set(allowed_vehicles or [])
+    if not ap and not ad and not av:
+        return q.filter(Vehicle.id.in_([-1]))
+    if ap:
+        q = q.filter(Vehicle.project_id.in_(list(ap)))
+    if ad:
+        q = q.filter(Vehicle.district_id.in_(list(ad)))
+    if av:
+        q = q.filter(Vehicle.id.in_(list(av)))
+    return q
+
+
 @app.route('/task-report', methods=['GET', 'POST'])
 def task_report_list():
     from auth_utils import get_user_context
@@ -19541,19 +19560,51 @@ def task_report_list():
     user_context = get_user_context(user_id) if user_id else {}
     allowed_projects = user_context.get('allowed_projects', set())
     allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles = user_context.get('allowed_vehicles', set())
     is_master_or_admin = user_context.get('is_master_or_admin', False)
     
     form = TaskReportFilterForm()
     
-    # Filter dropdown choices by user scope
+    # Filter dropdown choices by user scope (Master/Admin = all)
     district_q = District.query
-    if not is_master_or_admin and allowed_districts:
-        district_q = district_q.filter(District.id.in_(list(allowed_districts)))
-    form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in district_q.order_by(District.name).all()]
-    
     project_q = Project.query
-    if not is_master_or_admin and allowed_projects:
-        project_q = project_q.filter(Project.id.in_(list(allowed_projects)))
+    if not is_master_or_admin:
+        ap, ad, av = allowed_projects, allowed_districts, allowed_vehicles
+        if not ap and not ad and not av:
+            district_q = district_q.filter(District.id.in_([-1]))
+            project_q = project_q.filter(Project.id.in_([-1]))
+        else:
+            if ad:
+                district_q = district_q.filter(District.id.in_(list(ad)))
+            elif ap:
+                district_q = (
+                    district_q.join(project_district, project_district.c.district_id == District.id)
+                    .filter(project_district.c.project_id.in_(list(ap)))
+                    .distinct()
+                )
+            elif av:
+                d_ids = [
+                    r[0] for r in db.session.query(Vehicle.district_id)
+                    .filter(Vehicle.id.in_(list(av)), Vehicle.district_id.isnot(None))
+                    .distinct().all()
+                ]
+                district_q = district_q.filter(District.id.in_(d_ids or [-1]))
+            if ap:
+                project_q = project_q.filter(Project.id.in_(list(ap)))
+            if ad:
+                project_q = (
+                    project_q.join(project_district, project_district.c.project_id == Project.id)
+                    .filter(project_district.c.district_id.in_(list(ad)))
+                    .distinct()
+                )
+            if not ap and not ad and av:
+                p_ids = [
+                    r[0] for r in db.session.query(Vehicle.project_id)
+                    .filter(Vehicle.id.in_(list(av)), Vehicle.project_id.isnot(None))
+                    .distinct().all()
+                ]
+                project_q = project_q.filter(Project.id.in_(p_ids or [-1]))
+    form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in district_q.order_by(District.name).all()]
     form.project_id.choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in project_q.order_by(Project.name).all()]
     
     today = pk_date()
@@ -19579,16 +19630,55 @@ def task_report_list():
         from_date, to_date = to_date, from_date
     form.from_date.data = from_date
     form.to_date.data = to_date
+    valid_d_ids = {c[0] for c in form.district_id.choices}
+    valid_p_ids = {c[0] for c in form.project_id.choices}
+    if district_id and district_id not in valid_d_ids:
+        district_id = 0
+    if project_id and project_id not in valid_p_ids:
+        project_id = 0
     form.district_id.data = district_id
     form.project_id.data = project_id
     query = VehicleDailyTask.query.filter(
         VehicleDailyTask.task_date >= from_date,
         VehicleDailyTask.task_date <= to_date
     )
+    vehicle_joined = False
+
+    def _ensure_vehicle_join():
+        nonlocal query, vehicle_joined
+        if not vehicle_joined:
+            query = query.join(Vehicle, Vehicle.id == VehicleDailyTask.vehicle_id)
+            vehicle_joined = True
+
+    if not is_master_or_admin:
+        ap, ad, av = allowed_projects, allowed_districts, allowed_vehicles
+        if not ap and not ad and not av:
+            query = query.filter(false())
+        else:
+            _ensure_vehicle_join()
+            scope_parts = []
+            if av:
+                scope_parts.append(Vehicle.id.in_(list(av)))
+            if ap:
+                scope_parts.append(
+                    or_(
+                        VehicleDailyTask.project_id.in_(list(ap)),
+                        Vehicle.project_id.in_(list(ap)),
+                    )
+                )
+            if ad:
+                scope_parts.append(
+                    or_(
+                        VehicleDailyTask.district_id.in_(list(ad)),
+                        Vehicle.district_id.in_(list(ad)),
+                    )
+                )
+            if scope_parts:
+                query = query.filter(and_(*scope_parts))
+
     if district_id:
-        # Some legacy rows may have null/old district_id; in that case
-        # fall back to the linked vehicle's current district for filtering.
-        query = query.join(Vehicle, Vehicle.id == VehicleDailyTask.vehicle_id).filter(
+        _ensure_vehicle_join()
+        query = query.filter(
             or_(
                 VehicleDailyTask.district_id == district_id,
                 and_(VehicleDailyTask.district_id.is_(None), Vehicle.district_id == district_id),
@@ -19860,19 +19950,81 @@ def task_report_logbook_view_all():
 
 @app.route('/task-report/new', methods=['GET', 'POST'])
 def task_report_new():
-    districts = District.query.order_by(District.name).all()
+    from auth_utils import get_user_context
+
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles = user_context.get('allowed_vehicles', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+
+    district_q = District.query
+    project_q_all = Project.query
+    if not is_master_or_admin:
+        ap, ad, av = allowed_projects, allowed_districts, allowed_vehicles
+        if not ap and not ad and not av:
+            district_q = district_q.filter(District.id.in_([-1]))
+            project_q_all = project_q_all.filter(Project.id.in_([-1]))
+        else:
+            if ad:
+                district_q = district_q.filter(District.id.in_(list(ad)))
+            elif ap:
+                district_q = (
+                    district_q.join(project_district, project_district.c.district_id == District.id)
+                    .filter(project_district.c.project_id.in_(list(ap)))
+                    .distinct()
+                )
+            elif av:
+                d_ids = [
+                    r[0] for r in db.session.query(Vehicle.district_id)
+                    .filter(Vehicle.id.in_(list(av)), Vehicle.district_id.isnot(None))
+                    .distinct().all()
+                ]
+                district_q = district_q.filter(District.id.in_(d_ids or [-1]))
+            if ap:
+                project_q_all = project_q_all.filter(Project.id.in_(list(ap)))
+            if ad:
+                project_q_all = (
+                    project_q_all.join(project_district, project_district.c.project_id == Project.id)
+                    .filter(project_district.c.district_id.in_(list(ad)))
+                    .distinct()
+                )
+            if not ap and not ad and av:
+                p_ids = [
+                    r[0] for r in db.session.query(Vehicle.project_id)
+                    .filter(Vehicle.id.in_(list(av)), Vehicle.project_id.isnot(None))
+                    .distinct().all()
+                ]
+                project_q_all = project_q_all.filter(Project.id.in_(p_ids or [-1]))
+
+    districts = district_q.order_by(District.name).all()
+    valid_district_ids = {d.id for d in districts}
+    scoped_project_ids = None
+    if not is_master_or_admin:
+        scoped_project_ids = {p.id for p in project_q_all.order_by(Project.name).all()}
+
     view_date = parse_date(request.args.get('date') or request.form.get('task_date')) or pk_date()
     district_id = request.args.get('district_id', type=int) or request.form.get('district_id', type=int) or 0
     project_id = request.args.get('project_id', type=int) or request.form.get('project_id', type=int) or 0
+    if district_id and valid_district_ids and district_id not in valid_district_ids:
+        district_id = 0
+    if project_id and scoped_project_ids is not None and project_id not in scoped_project_ids:
+        project_id = 0
 
     if request.method == 'POST' and request.form.get('save_batch'):
         task_date = parse_date(request.form.get('task_date')) or view_date
         district_id = request.form.get('district_id', type=int) or 0
         project_id = request.form.get('project_id', type=int) or 0
+        if district_id and valid_district_ids and district_id not in valid_district_ids:
+            district_id = 0
+        if project_id and scoped_project_ids is not None and project_id not in scoped_project_ids:
+            project_id = 0
         if not project_id:
             flash('Select District and Project first.', 'warning')
             return redirect(url_for('task_report_new'))
-        q = Vehicle.query.filter(Vehicle.project_id == project_id)
+        q = _vehicle_query_task_report_scope(is_master_or_admin, allowed_projects, allowed_districts, allowed_vehicles)
+        q = q.filter(Vehicle.project_id == project_id)
         if district_id:
             q = q.filter(Vehicle.district_id == district_id)
         vehicles = q.order_by(Vehicle.vehicle_no).all()
@@ -19904,7 +20056,17 @@ def task_report_new():
             flash('Sab vehicles ke liye Close Reading zaroori hai. Missing: ' + ', '.join(missing), 'danger')
             view_date = task_date
             rows = _build_vehicle_rows(vehicles, task_date, request.form)
-            projects = Project.query.join(project_district).filter(project_district.c.district_id == district_id).order_by(Project.name).all() if district_id else []
+            if district_id:
+                pq = Project.query.join(project_district).filter(project_district.c.district_id == district_id)
+                if scoped_project_ids is not None:
+                    pq = pq.filter(Project.id.in_(list(scoped_project_ids)))
+                projects = pq.order_by(Project.name).all()
+            else:
+                projects = (
+                    Project.query.filter(Project.id.in_(list(scoped_project_ids))).order_by(Project.name).all()
+                    if scoped_project_ids is not None
+                    else Project.query.order_by(Project.name).all()
+                )
             return render_template('task_report_new.html', rows=rows, view_date=view_date, district_id=district_id, project_id=project_id, districts=districts, projects=projects)
         for v, existing, close_reading, tasks_count, user_start in to_save:
             if existing:
@@ -19932,18 +20094,35 @@ def task_report_new():
             flash(f'Error: {str(e)}', 'danger')
             view_date = task_date
             rows = _build_vehicle_rows(vehicles, task_date, request.form)
-            projects = Project.query.join(project_district).filter(project_district.c.district_id == district_id).order_by(Project.name).all() if district_id else []
+            if district_id:
+                pq = Project.query.join(project_district).filter(project_district.c.district_id == district_id)
+                if scoped_project_ids is not None:
+                    pq = pq.filter(Project.id.in_(list(scoped_project_ids)))
+                projects = pq.order_by(Project.name).all()
+            else:
+                projects = (
+                    Project.query.filter(Project.id.in_(list(scoped_project_ids))).order_by(Project.name).all()
+                    if scoped_project_ids is not None
+                    else Project.query.order_by(Project.name).all()
+                )
             return render_template('task_report_new.html', rows=rows, view_date=view_date, district_id=district_id, project_id=project_id, districts=districts, projects=projects)
 
     rows = []
     projects = []
     if district_id:
-        projects = Project.query.join(project_district).filter(project_district.c.district_id == district_id).order_by(Project.name).all()
+        pq = Project.query.join(project_district).filter(project_district.c.district_id == district_id)
+        if scoped_project_ids is not None:
+            pq = pq.filter(Project.id.in_(list(scoped_project_ids)))
+        projects = pq.order_by(Project.name).all()
     else:
-        projects = Project.query.order_by(Project.name).all()
+        projects = (
+            Project.query.filter(Project.id.in_(list(scoped_project_ids))).order_by(Project.name).all()
+            if scoped_project_ids is not None
+            else Project.query.order_by(Project.name).all()
+        )
     _has_filter = request.args.get('date') is not None
     if _has_filter or district_id or project_id:
-        q = Vehicle.query
+        q = _vehicle_query_task_report_scope(is_master_or_admin, allowed_projects, allowed_districts, allowed_vehicles)
         if project_id:
             q = q.filter(Vehicle.project_id == project_id)
         if district_id:
@@ -20783,6 +20962,121 @@ def task_report_upload():
             )
             flash(_build_upload_error_message('Upload Workbooks', e), 'danger')
     return render_template('task_report_upload.html', form=form)
+
+
+@app.route('/task-report/upload/list', methods=['GET'])
+def task_report_upload_list():
+    """Read-only log: workbook import stats from Emergency / Mileage / Activity tables (no separate upload log table)."""
+    today = pk_date()
+    default_from = today - timedelta(days=90)
+    from_date = parse_date(request.args.get('from_date')) or default_from
+    to_date = parse_date(request.args.get('to_date')) or today
+    if from_date > to_date:
+        from_date, to_date = to_date, from_date
+
+    form = TaskReportFilterForm()
+    form.from_date.data = from_date
+    form.to_date.data = to_date
+    form.district_id.choices = [(0, '--')]
+    form.project_id.choices = [(0, '--')]
+
+    emg_stats = {
+        row[0]: {'count': int(row[1]), 'last_at': row[2]}
+        for row in db.session.query(
+            EmergencyTaskRecord.task_date,
+            func.count(EmergencyTaskRecord.id),
+            func.max(EmergencyTaskRecord.created_at),
+        ).filter(
+            EmergencyTaskRecord.task_date >= from_date,
+            EmergencyTaskRecord.task_date <= to_date,
+        ).group_by(EmergencyTaskRecord.task_date).all()
+    }
+
+    mil_stats = {
+        row[0]: {'count': int(row[1]), 'last_at': row[2]}
+        for row in db.session.query(
+            VehicleMileageRecord.task_date,
+            func.count(VehicleMileageRecord.id),
+            func.max(VehicleMileageRecord.created_at),
+        ).filter(
+            VehicleMileageRecord.task_date >= from_date,
+            VehicleMileageRecord.task_date <= to_date,
+        ).group_by(VehicleMileageRecord.task_date).all()
+    }
+
+    activity_cap = 1200
+    act_q = (
+        db.session.query(
+            VehicleActivityRecord.task_date,
+            VehicleActivityRecord.source_file,
+            func.count(VehicleActivityRecord.id),
+            func.max(VehicleActivityRecord.created_at),
+        )
+        .filter(
+            VehicleActivityRecord.task_date >= from_date,
+            VehicleActivityRecord.task_date <= to_date,
+        )
+        .group_by(VehicleActivityRecord.task_date, VehicleActivityRecord.source_file)
+        .order_by(VehicleActivityRecord.task_date.desc(), VehicleActivityRecord.source_file.asc())
+    )
+    act_rows_all = act_q.all()
+
+    act_by_date = {}
+    for row in act_rows_all:
+        td = row[0]
+        fn = row[1] or '(unknown file)'
+        cnt = int(row[2])
+        la = row[3]
+        act_by_date.setdefault(td, {'files': 0, 'rows': 0, 'last_at': None})
+        act_by_date[td]['files'] += 1
+        act_by_date[td]['rows'] += cnt
+        if la and (act_by_date[td]['last_at'] is None or la > act_by_date[td]['last_at']):
+            act_by_date[td]['last_at'] = la
+
+    act_detail = []
+    for row in act_rows_all[:activity_cap]:
+        act_detail.append({
+            'task_date': row[0],
+            'filename': row[1] or '(unknown file)',
+            'rows': int(row[2]),
+            'last_at': row[3],
+        })
+    activity_truncated = len(act_rows_all) > activity_cap
+
+    all_dates = sorted(set(emg_stats.keys()) | set(mil_stats.keys()) | set(act_by_date.keys()), reverse=True)
+    summary_rows = []
+    for td in all_dates:
+        em = emg_stats.get(td, {})
+        mi = mil_stats.get(td, {})
+        ac = act_by_date.get(td, {})
+        summary_rows.append({
+            'task_date': td,
+            'emergency_count': em.get('count', 0),
+            'emergency_last': em.get('last_at'),
+            'mileage_count': mi.get('count', 0),
+            'mileage_last': mi.get('last_at'),
+            'activity_files': ac.get('files', 0),
+            'activity_rows': ac.get('rows', 0),
+            'activity_last': ac.get('last_at'),
+        })
+
+    page = request.args.get('page', 1, type=int) or 1
+    per_page = request.args.get('per_page', 25, type=int) or 25
+    pagination = SimplePagination(summary_rows, page, per_page)
+
+    return render_template(
+        'task_report_upload_list.html',
+        form=form,
+        summary_rows=pagination.items,
+        activity_detail=act_detail,
+        activity_truncated=activity_truncated,
+        activity_cap=activity_cap,
+        activity_file_total=len(act_rows_all),
+        from_date=from_date,
+        to_date=to_date,
+        pagination=pagination,
+        per_page=per_page,
+    )
 
 
 def _norm_district_name_key(name):

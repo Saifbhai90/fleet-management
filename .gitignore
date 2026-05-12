@@ -11,6 +11,9 @@ venv/
 .venv/
 env/
 
+# Render CLI binaries (large; use scripts/download_render_cli.ps1 after clone)
+tools/render-cli/*.exe
+
 # Python
 __pycache__/
 *.py[cod]
