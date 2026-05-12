@@ -8155,7 +8155,7 @@ def role_edit(pk):
         perm_ids_raw = request.form.getlist('permission_ids', type=int)
         if is_master and role_name == 'Admin':
             # Master -> Admin path: apply deterministic full replace and verify persisted rows.
-            from permissions_config import expand_permission_dependencies
+            from permissions_config import PERMISSION_DEPENDENCIES
             raw_perm_ids = request.form.getlist('permission_ids')
             selected_ids = []
             seen = set()
@@ -8172,9 +8172,22 @@ def role_edit(pk):
             selected_codes = {
                 p.code for p in Permission.query.filter(Permission.id.in_(selected_ids)).all()
             } if selected_ids else set()
-            expanded_codes = expand_permission_dependencies(selected_codes)
+            # Keep explicit unticks authoritative:
+            # instead of auto-adding missing dependencies, drop dependents whose requirements
+            # are not selected (downward closure).
+            constrained_codes = set(selected_codes)
+            dropped_codes = set()
+            changed = True
+            while changed:
+                changed = False
+                for code in list(constrained_codes):
+                    reqs = set(PERMISSION_DEPENDENCIES.get(code, []))
+                    if reqs and not reqs.issubset(constrained_codes):
+                        constrained_codes.remove(code)
+                        dropped_codes.add(code)
+                        changed = True
             intended_ids = [
-                permission_by_code[c].id for c in expanded_codes if permission_by_code.get(c)
+                permission_by_code[c].id for c in constrained_codes if permission_by_code.get(c)
             ]
             _log_role_perm_debug(
                 'role_edit_post_admin_before_apply',
@@ -8184,11 +8197,18 @@ def role_edit(pk):
                     'raw_perm_ids_head': raw_perm_ids[:40],
                     'parsed_perm_ids_count': len(selected_ids),
                     'selected_codes_count': len(selected_codes),
-                    'expanded_codes_count': len(expanded_codes),
+                    'constrained_codes_count': len(constrained_codes),
+                    'dropped_codes_count': len(dropped_codes),
+                    'dropped_codes_head': sorted(list(dropped_codes))[:40],
                     'intended_ids_count': len(intended_ids),
                     'intended_ids_head': sorted(list(set(intended_ids)))[:60],
                 },
             )
+            if dropped_codes:
+                flash(
+                    f"{len(dropped_codes)} dependent permission(s) were removed because their required base permission was unchecked.",
+                    'warning',
+                )
             _replace_role_permissions(role, intended_ids)
             _reconcile_roles_to_admin_cap(role)
             db.session.commit()
