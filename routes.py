@@ -8157,6 +8157,7 @@ def role_edit(pk):
             # Master -> Admin path: apply deterministic full replace and verify persisted rows.
             from permissions_config import PERMISSION_DEPENDENCIES
             raw_perm_ids = request.form.getlist('permission_ids')
+            before_codes = {p.code for p in (role.permissions or [])}
             selected_ids = []
             seen = set()
             for x in perm_ids_raw or []:
@@ -8195,8 +8196,15 @@ def role_edit(pk):
                 {
                     'raw_perm_ids_count': len(raw_perm_ids),
                     'raw_perm_ids_head': raw_perm_ids[:40],
+                    'before_codes_count': len(before_codes),
                     'parsed_perm_ids_count': len(selected_ids),
                     'selected_codes_count': len(selected_codes),
+                    'added_codes_count': len(selected_codes - before_codes),
+                    'removed_codes_count': len(before_codes - selected_codes),
+                    'added_codes_head': sorted(list(selected_codes - before_codes))[:30],
+                    'removed_codes_head': sorted(list(before_codes - selected_codes))[:30],
+                    'selected_has_whats_new': ('whats_new' in selected_codes),
+                    'selected_has_dashboard_card_drivers': ('dashboard_card_drivers' in selected_codes),
                     'constrained_codes_count': len(constrained_codes),
                     'dropped_codes_count': len(dropped_codes),
                     'dropped_codes_head': sorted(list(dropped_codes))[:40],
