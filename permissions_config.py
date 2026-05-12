@@ -1146,7 +1146,7 @@ PAGE_VISIBLE = {
     'workspace_reports': ['workspace', 'workspace_reports'],
     # Reports
     'reports_index': ['reports', 'reports_index'],
-    'report_company_profile': ['reports', 'reports_index', 'report_company_profile'],
+    'report_company_profile': ['reports', 'report_company_profile'],
     'driver_attendance_report': ['reports', 'driver_attendance_report'],
     'driver_attendance_tra_report': ['reports', 'driver_attendance_tra_report'],
     'report_expiry': ['reports', 'report_expiry'],
