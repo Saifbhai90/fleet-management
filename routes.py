@@ -7839,13 +7839,13 @@ def _replace_role_permissions(role, permission_id_list):
             unique.append(i)
     db.session.execute(delete(role_permissions).where(role_permissions.c.role_id == rid))
     db.session.flush()
-    for pid in unique:
-        db.session.execute(
-            insert(role_permissions).values(role_id=rid, permission_id=pid)
-        )
+    if unique:
+        rows = [{'role_id': rid, 'permission_id': pid} for pid in unique]
+        db.session.execute(insert(role_permissions), rows)
     db.session.flush()
     try:
         db.session.expire(role, ['permissions'])
+        db.session.refresh(role)
     except Exception:
         pass
 
@@ -7883,6 +7883,10 @@ def _apply_role_permissions_from_form(
         expanded = expand_permission_dependencies(codes)
         new_ids = [permission_by_code[c].id for c in expanded if permission_by_code.get(c)]
         _replace_role_permissions(role, new_ids)
+        try:
+            db.session.refresh(role)
+        except Exception:
+            pass
         return
 
     allowed_ids = allowed_permission_ids or set()
