@@ -102,9 +102,10 @@
               <td class="text-end">{{ "%.0f"|format(row.close_reading) }}</td>
               <td class="text-center">
                 {% if row.odometer_photo_path %}
-                <a href="{{ row.odometer_photo_path }}" target="_blank" rel="noopener" title="Odoo meter photo">
+                <button type="button" class="att-photo-fullview-btn p-0 border-0 bg-transparent d-inline-block" title="Odoo meter — full view"
+                        data-url="{{ row.odometer_photo_path }}" data-label="Odoo meter photo">
                   <img src="{{ row.odometer_photo_path }}" alt="" class="rounded border" style="max-height:40px;max-width:56px;object-fit:cover;">
-                </a>
+                </button>
                 {% else %}
                 <span class="text-muted">—</span>
                 {% endif %}
@@ -234,6 +235,11 @@
     <button class="btn btn-secondary btn-sm" id="trackerCloseBtnFooter">Close</button>
   </div>
 </div>
+
+{% set fv_prefix = 'taskListOdomFv' %}
+{% set fv_preview_img_id = '' %}
+{% set fv_photo_label = 'Odoo meter photo' %}
+{% include 'partials/gps_attendance_fullview.html' %}
 
 <script>
 function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page',n);window.location.search=u.toString();}
@@ -398,6 +404,17 @@ function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page
 })();
 window._fleetAfterFilter = function(){ if(typeof updateListTotals==='function') updateListTotals(); };
 document.addEventListener('DOMContentLoaded', function(){ if(window.fleetTableEnhance) window.fleetTableEnhance('taskReportTable'); });
+
+document.addEventListener('click', function (e) {
+  var btn = e.target.closest('.att-photo-fullview-btn');
+  if (!btn || !btn.closest('#taskReportTable')) return;
+  e.preventDefault();
+  var url = btn.getAttribute('data-url');
+  var label = btn.getAttribute('data-label') || '';
+  if (url && typeof window.openAttendancePhotoFullView === 'function') {
+    window.openAttendancePhotoFullView(url, label);
+  }
+});
 
 /* ── Print visible table ── */
 window.fleetPrintExport && window.fleetPrintExport('taskReportTable','Vehicles Daily Task Report — {{ from_date|ddmmyyyy }} to {{ to_date|ddmmyyyy }}','Daily_Task_Report_{{ from_date.strftime("%d-%m-%Y") }}_to_{{ to_date.strftime("%d-%m-%Y") }}.csv');

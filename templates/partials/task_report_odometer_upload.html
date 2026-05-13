@@ -44,12 +44,16 @@
   }
 
   function drawOdometerOverlay(ctx, w, h, lat, lng) {
+    if (typeof window.pktDrawReadableGpsStamp === 'function') {
+      window.pktDrawReadableGpsStamp(ctx, w, h, { line1Prefix: 'GPS+Cam', lat: lat, lng: lng });
+      return;
+    }
     var now = new Date(Date.now() + (typeof _pktOffset !== 'undefined' ? _pktOffset : 0));
     var _od = (typeof pktOverlayDateTimeStrings === 'function')
       ? pktOverlayDateTimeStrings(now)
       : { dateStr: String(now.getDate()).padStart(2, '0') + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + now.getFullYear(),
           timeStr: String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0') + ':' + String(now.getSeconds()).padStart(2, '0') };
-    var line1 = 'Odoo meter | ' + _od.dateStr + ' ' + _od.timeStr;
+    var line1 = 'GPS+Cam | ' + _od.dateStr + ' ' + _od.timeStr;
     var line2 = (lat != null && lng != null) ? ('Location: ' + Number(lat).toFixed(6) + ', ' + Number(lng).toFixed(6)) : '';
     var fontSize = Math.max(14, Math.min(24, h / 22));
     ctx.font = 'bold ' + fontSize + 'px Arial';
@@ -62,11 +66,11 @@
     var boxW = Math.max(tw1, tw2) + 24;
     var boxH = line2 ? fontSize * 2.4 : fontSize * 1.6;
     var pad = 12;
-    var x = w - boxW - pad;
+    var x = (w - boxW) / 2;
     var y = h - boxH - pad;
-    ctx.fillStyle = 'rgba(0,0,0,0.65)';
+    ctx.fillStyle = 'rgba(0,0,0,0.92)';
     ctx.fillRect(x, y, boxW, boxH);
-    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+    ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = 2;
     ctx.strokeRect(x, y, boxW, boxH);
     ctx.fillStyle = '#fff';
@@ -74,7 +78,7 @@
     ctx.font = 'bold ' + fontSize + 'px Arial';
     ctx.fillText(line1, x + 12, y + 8);
     if (line2) {
-      ctx.font = (fontSize * 0.85) + 'px Arial';
+      ctx.font = 'bold ' + (fontSize * 0.85) + 'px Arial';
       ctx.fillText(line2, x + 12, y + 8 + fontSize * 1.15);
     }
   }
@@ -113,23 +117,24 @@
     if (url) {
       if (ph) ph.classList.add('d-none');
       if (link) {
-        link.href = url;
+        link.setAttribute('data-url', url);
         var im0 = link.querySelector('img');
         if (im0) im0.src = url;
         link.classList.remove('d-none');
       } else {
-        var a = document.createElement('a');
-        a.href = url;
-        a.target = '_blank';
-        a.rel = 'noopener';
-        a.className = 'odom-thumb-link d-inline-block';
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'att-photo-fullview-btn p-0 border-0 bg-transparent d-inline-block rounded odom-thumb-link';
+        btn.setAttribute('data-url', url);
+        btn.setAttribute('data-label', 'Odoo meter photo');
+        btn.title = 'Odoo meter — full view';
         var im = document.createElement('img');
         im.src = url;
         im.alt = 'Odoo meter';
         im.className = 'rounded border odom-thumb';
         im.style.cssText = 'max-height:44px;max-width:64px;object-fit:cover;';
-        a.appendChild(im);
-        wrap.insertBefore(a, wrap.firstChild);
+        btn.appendChild(im);
+        wrap.insertBefore(btn, wrap.firstChild);
       }
       if (clr) clr.classList.remove('d-none');
       if (btn && inline) {

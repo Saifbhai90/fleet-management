@@ -733,9 +733,10 @@
                   <input type="hidden" name="vehicle_{{ row.vehicle.id }}_odometer_photo_url" class="odom-url-input" data-row="{{ row.vehicle.id }}" value="{{ row.odometer_photo_path or '' }}">
                   <div class="d-flex flex-column align-items-center gap-1 odom-ctrl-wrap{% if s %} odom-wrap-locked{% endif %}" data-row="{{ row.vehicle.id }}" tabindex="{% if s %}-1{% else %}0{% endif %}" title="{% if s %}Edit row to change photo{% else %}Paste (Ctrl+V) when focused, or click speedometer for file / mobile rear camera{% endif %}">
                     {% if row.odometer_photo_path %}
-                    <a href="{{ row.odometer_photo_path }}" target="_blank" rel="noopener" class="odom-thumb-link d-inline-block">
+                    <button type="button" class="att-photo-fullview-btn p-0 border-0 bg-transparent d-inline-block odom-thumb-link" title="Odoo meter — full view"
+                            data-url="{{ row.odometer_photo_path }}" data-label="Odoo meter photo">
                       <img src="{{ row.odometer_photo_path }}" alt="Odoo meter" class="rounded border odom-thumb" style="max-height:44px;max-width:64px;object-fit:cover;">
-                    </a>
+                    </button>
                     {% else %}
                     <span class="odom-thumb-placeholder text-muted small" style="font-size:.65rem;">—</span>
                     {% endif %}
@@ -1176,7 +1177,23 @@
   window.updateTotals = updateTotals;
 })();
 </script>
+{% set fv_prefix = 'taskNewOdomFv' %}
+{% set fv_preview_img_id = '' %}
+{% set fv_photo_label = 'Odoo meter photo' %}
+{% include 'partials/gps_attendance_fullview.html' %}
 {% include 'partials/task_report_odometer_upload.html' %}
+<script>
+document.addEventListener('click', function (e) {
+  var btn = e.target.closest('.att-photo-fullview-btn');
+  if (!btn || !btn.closest('#batchForm')) return;
+  e.preventDefault();
+  var url = btn.getAttribute('data-url');
+  var label = btn.getAttribute('data-label') || '';
+  if (url && typeof window.openAttendancePhotoFullView === 'function') {
+    window.openAttendancePhotoFullView(url, label);
+  }
+});
+</script>
 <script>
 window._fleetAfterFilter = function(){ if (typeof window.updateTotals === 'function') window.updateTotals(); };
 document.addEventListener('DOMContentLoaded', function() {

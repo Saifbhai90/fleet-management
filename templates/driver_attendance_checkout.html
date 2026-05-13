@@ -838,6 +838,11 @@
     cameraCanvas.height = h;
     var ctx = cameraCanvas.getContext('2d');
     ctx.drawImage(cameraVideo, 0, 0);
+    var lat = (currentPosition && currentPosition.coords) ? currentPosition.coords.latitude : null;
+    var lng = (currentPosition && currentPosition.coords) ? currentPosition.coords.longitude : null;
+    if (typeof window.pktDrawReadableGpsStamp === 'function') {
+      window.pktDrawReadableGpsStamp(ctx, w, h, { line1Prefix: 'Check-out GPS+Cam', lat: lat, lng: lng });
+    } else {
     var now = new Date(Date.now() + (typeof _pktOffset!=='undefined'?_pktOffset:0));
     var _od = (typeof pktOverlayDateTimeStrings === 'function')
       ? pktOverlayDateTimeStrings(now)
@@ -872,6 +877,12 @@
       ctx.font = fontSize * 0.85 + 'px Arial';
       ctx.fillText(line2, x + 12, y + 8 + fontSize * 1.15);
     }
+    }
+    var nowCap = new Date(Date.now() + (typeof _pktOffset!=='undefined'?_pktOffset:0));
+    var _odCap = (typeof pktOverlayDateTimeStrings === 'function')
+      ? pktOverlayDateTimeStrings(nowCap)
+      : { timeStr: nowCap.getHours().toString().padStart(2, '0') + ':' + nowCap.getMinutes().toString().padStart(2, '0') + ':' + nowCap.getSeconds().toString().padStart(2, '0') };
+    var timeStr = _odCap.timeStr;
     var dataUrl = jpegDataUrlMaxSide(cameraCanvas, 1280, 0.72);
     stopCamera();
     if (cameraModalInstance) cameraModalInstance.hide();
