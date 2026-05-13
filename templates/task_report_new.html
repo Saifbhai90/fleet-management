@@ -9,6 +9,16 @@
 
   /* ── Phone / narrow: one vertical “card” per vehicle (same <table> DOM — Save + JS totals work) ── */
   @media (max-width: 767.98px) {
+    html, body {
+      overflow-x: hidden;
+    }
+    .task-batch-card,
+    .task-batch-card .card-body,
+    .task-batch-card .table-responsive,
+    .task-batch-table {
+      max-width: 100vw;
+      box-sizing: border-box;
+    }
     .task-batch-page-title {
       font-size: 1.15rem !important;
     }
@@ -101,12 +111,25 @@
       flex-wrap: wrap;
       text-align: right;
     }
+    .task-batch-table tbody td.odometer-cell {
+      padding-top: 8px !important;
+      padding-bottom: 8px !important;
+    }
     .task-batch-table tbody td.odometer-cell > .odom-ctrl-wrap {
       flex: 1 1 auto;
       min-width: 0;
       max-width: 100%;
       align-items: flex-end !important;
       justify-content: flex-end;
+      gap: 4px;
+    }
+    .task-batch-table tbody td.odometer-cell .btn-group {
+      width: 100%;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+    }
+    .task-batch-table tbody td.odometer-cell .btn-group .btn {
+      flex: 0 0 auto;
     }
     /* Totals strip */
     .task-batch-table tfoot#batchTotals td[colspan] {
