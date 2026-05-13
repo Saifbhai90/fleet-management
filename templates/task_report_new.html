@@ -1,6 +1,19 @@
 {% extends "base.html" %}
 {% block title %}New Task Entry{% endblock %}
 {% block content %}
+{% macro mobile_vehicle_summary(row) -%}
+{% set v = row.vehicle %}
+<div class="task-batch-mobile-summary d-md-none">
+  <div class="task-batch-mobile-summary-title text-uppercase fw-bold text-muted">Vehicle details</div>
+  <div class="task-batch-summary-grid">
+    <div class="task-batch-sum-item"><span class="task-batch-sum-lbl">District</span><span class="task-batch-sum-val">{{ v.district.name if v.district else '—' }}</span></div>
+    <div class="task-batch-sum-item"><span class="task-batch-sum-lbl">Tehsil</span><span class="task-batch-sum-val">{{ v.parking_station.tehsil if v.parking_station else '—' }}</span></div>
+    <div class="task-batch-sum-item task-batch-sum-span-2"><span class="task-batch-sum-lbl">Parking</span><span class="task-batch-sum-val">{{ v.parking_station.name if v.parking_station else '—' }}</span></div>
+    <div class="task-batch-sum-item"><span class="task-batch-sum-lbl">Type</span><span class="task-batch-sum-val">{{ v.vehicle_type or '—' }}</span></div>
+    <div class="task-batch-sum-item"><span class="task-batch-sum-lbl">Vehicle No</span><span class="task-batch-sum-val">{{ v.vehicle_no }}</span></div>
+  </div>
+</div>
+{%- endmacro %}
 <style>
   /* Mobile app: Save footer needs visible overflow for sticky thumb-zone bar (base.html adds .native-submit-sticky) */
   html.capacitor-native .task-batch-card .card-footer.native-submit-sticky {
@@ -35,6 +48,28 @@
       border-radius: 12px;
       font-weight: 600;
       box-shadow: 0 4px 14px rgba(13, 110, 253, 0.35);
+    }
+    /* Vertical filter stack: avoid Tom Select / button overlap on narrow screens */
+    .task-batch-page .task-batch-filter-form {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    .task-batch-page .task-batch-filter-form > [class*="col-"] {
+      width: 100% !important;
+      max-width: 100% !important;
+      flex: 0 0 auto !important;
+    }
+    .task-batch-page .task-batch-filter-card .ts-wrapper {
+      position: relative;
+      z-index: 1;
+    }
+    .task-batch-page .task-batch-filter-card .ts-wrapper.focus,
+    .task-batch-page .task-batch-filter-card .ts-wrapper.dropdown-active {
+      z-index: 10;
+    }
+    .task-batch-page .task-batch-filter-card .ts-dropdown {
+      z-index: 3000 !important;
     }
     .task-batch-page .task-batch-card {
       border: none !important;
@@ -76,7 +111,7 @@
     .task-batch-page .task-batch-card .card-footer {
       background: linear-gradient(180deg, #fafbfc 0%, #f1f5f9 100%) !important;
       border-top: 1px solid #e2e8f0 !important;
-      padding: 16px !important;
+      padding: 16px 16px max(20px, calc(12px + env(safe-area-inset-bottom, 0px))) !important;
     }
     .task-batch-page .task-batch-save-btn {
       border-radius: 14px;
@@ -105,8 +140,8 @@
     .task-batch-page .task-batch-table tbody td.kms-driven,
     .task-batch-page .task-batch-table tbody td.kms-diff,
     .task-batch-page .task-batch-table tbody td.pct-diff,
-    .task-batch-page .task-batch-table tbody td.start-reading,
-    .task-batch-page .task-batch-table tbody td.task-diff {
+    .task-batch-page .task-batch-table tbody td.task-diff,
+    .task-batch-page .task-batch-start-cell .start-reading {
       font-variant-numeric: tabular-nums;
       font-weight: 700;
       font-size: 1.05rem;
@@ -213,13 +248,8 @@
     .task-batch-page .task-batch-table tbody tr.task-row > td:nth-child(5) {
       background: #f8fafc;
     }
-    .task-batch-page .task-batch-table tbody tr.task-row > td:nth-child(7),
-    .task-batch-page .task-batch-table tbody tr.task-row > td:nth-child(8) {
-      background: linear-gradient(180deg, #ecfdf5 0%, #f8fafc 100%);
-    }
-    .task-batch-page .task-batch-table tbody tr.task-row > td:nth-child(8) {
-      border-left: 3px solid #059669;
-      padding-left: 13px !important;
+    .task-batch-page .task-batch-table tbody tr.task-row > td:nth-child(7) {
+      background: #fafbfc;
     }
     .task-batch-page .task-batch-table tbody tr.task-row > td:nth-child(n+10):nth-child(-n+16) {
       background: #fafbfc;
@@ -232,6 +262,78 @@
       background: #fff;
       padding-top: 14px !important;
     }
+    /* Compact read-only summary (inside Start Reading cell on mobile) */
+    .task-batch-page .task-batch-mobile-summary {
+      background: #eef2f7;
+      border: 1px solid #e2e8f0;
+      border-radius: 14px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+    .task-batch-page .task-batch-mobile-summary-title {
+      font-size: 0.68rem;
+      letter-spacing: 0.08em;
+      margin-bottom: 10px;
+    }
+    .task-batch-page .task-batch-summary-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .task-batch-page .task-batch-sum-span-2 {
+      grid-column: span 2;
+    }
+    .task-batch-page .task-batch-sum-item {
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0;
+    }
+    .task-batch-page .task-batch-sum-lbl {
+      font-size: 0.62rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #64748b;
+    }
+    .task-batch-page .task-batch-sum-val {
+      font-size: 0.88rem;
+      font-weight: 500;
+      color: #0f172a;
+      word-break: break-word;
+    }
+    .task-batch-page .task-batch-start-cell .start-reading {
+      display: inline-block;
+      margin-top: 6px;
+      font-weight: 600;
+    }
+    /* Actionable inputs: clear “fill these” affordance */
+    .task-batch-page .task-batch-input-priority {
+      background: linear-gradient(180deg, #eff6ff 0%, #ffffff 60%) !important;
+      border-left: 4px solid #2563eb !important;
+      padding-left: 14px !important;
+    }
+    .task-batch-page .task-batch-input-priority[data-label]::before {
+      font-size: 0.74rem !important;
+      font-weight: 800 !important;
+      letter-spacing: 0.06em !important;
+      background: #dbeafe !important;
+      border-color: #93c5fd !important;
+      color: #1e3a8a !important;
+    }
+    .task-batch-page .task-batch-input-priority .form-control-sm {
+      border-color: #93c5fd !important;
+      background: #fff !important;
+    }
+    .task-batch-page .task-batch-input-priority .form-control-sm:focus {
+      border-color: #2563eb !important;
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2) !important;
+    }
+
     /* Stacked field: label on top, control/value full width (no side‑by‑side = no L/R pan) */
     .task-batch-table tbody td {
       display: flex !important;
@@ -408,7 +510,7 @@
 
   <div class="card shadow border-0 rounded-3 mb-4 task-batch-filter-card">
     <div class="card-body">
-      <form method="GET" action="{{ url_for('task_report_new') }}" id="filterForm" class="row g-2 g-md-3 align-items-end">
+      <form method="GET" action="{{ url_for('task_report_new') }}" id="filterForm" class="row g-3 g-md-3 align-items-stretch align-items-md-end task-batch-filter-form">
         <div class="col-12 col-md-2">
           <label class="form-label">Date <span class="text-danger">*</span></label>
           <input type="text" name="date" class="form-control datepicker" placeholder="dd-mm-yyyy" value="{{ view_date.strftime('%d-%m-%Y') }}">
@@ -431,7 +533,8 @@
             {% endfor %}
           </select>
         </div>
-        <div class="col-12 col-md-2">
+        <div class="col-12 col-md-2 d-grid">
+          <label class="form-label d-none d-md-block opacity-0 user-select-none">.</label>
           <button type="submit" class="btn btn-primary w-100 py-2">
             <i class="bi bi-list-ul me-1"></i>Load Vehicles
           </button>
@@ -488,26 +591,27 @@
                   <input type="hidden" name="row_{{ row.vehicle.id }}_edit_mode" id="row_{{ row.vehicle.id }}_edit_mode" value="{{ '0' if s else '1' }}">
                   <span class="task-batch-num-inner"><span class="task-batch-row-num">{{ loop.index }}</span>{% if s %} <i class="bi bi-check-circle-fill text-success" title="Previously saved"></i>{% endif %}</span>
                 </td>
-                <td>{{ row.vehicle.district.name if row.vehicle.district else '-' }}</td>
-                <td>{{ row.vehicle.parking_station.tehsil if row.vehicle.parking_station else '-' }}</td>
-                <td>{{ row.vehicle.parking_station.name if row.vehicle.parking_station else '-' }}</td>
-                <td>{{ row.vehicle.vehicle_type or '-' }}</td>
+                <td class="d-none d-md-table-cell">{{ row.vehicle.district.name if row.vehicle.district else '-' }}</td>
+                <td class="d-none d-md-table-cell">{{ row.vehicle.parking_station.tehsil if row.vehicle.parking_station else '-' }}</td>
+                <td class="d-none d-md-table-cell">{{ row.vehicle.parking_station.name if row.vehicle.parking_station else '-' }}</td>
+                <td class="d-none d-md-table-cell">{{ row.vehicle.vehicle_type or '-' }}</td>
                 <td class="fw-medium d-none d-md-table-cell">{{ row.vehicle.vehicle_no }}</td>
                 {% if row.start_editable %}
-                <td class="text-end">
+                <td class="text-end task-batch-start-cell">
+                  {{ mobile_vehicle_summary(row) }}
                   <input type="number" step="0.01" min="0" name="vehicle_{{ row.vehicle.id }}_start_reading"
                          class="form-control form-control-sm text-end start-input task-editable-field" data-row="{{ row.vehicle.id }}" style="min-width:90px;"
                          value="{% if row.start_reading %}{{ "%.0f"|format(row.start_reading) }}{% endif %}" placeholder="Start" {% if s %}disabled{% endif %}>
                 </td>
                 {% else %}
-                <td class="text-end start-reading">{{ "%.0f"|format(row.start_reading) }}</td>
+                <td class="text-end task-batch-start-cell">{{ mobile_vehicle_summary(row) }}<span class="start-reading">{{ "%.0f"|format(row.start_reading) }}</span></td>
                 {% endif %}
-                <td class="text-end">
+                <td class="text-end task-batch-input-priority">
                   <input type="number" step="0.01" min="0" name="vehicle_{{ row.vehicle.id }}_close_reading"
                          class="form-control form-control-sm text-end close-input task-editable-field" data-row="{{ row.vehicle.id }}" style="min-width:90px;"
                          value="{% if row.close_reading is not none %}{{ row.close_reading }}{% endif %}" placeholder="Close" {% if s %}disabled{% endif %}>
                 </td>
-                <td class="text-center align-middle odometer-cell" style="min-width:72px;vertical-align:middle;">
+                <td class="text-center align-middle odometer-cell task-batch-input-priority" style="min-width:72px;vertical-align:middle;">
                   <input type="hidden" name="vehicle_{{ row.vehicle.id }}_odometer_photo_url" class="odom-url-input" data-row="{{ row.vehicle.id }}" value="{{ row.odometer_photo_path or '' }}">
                   <div class="d-flex flex-column align-items-center gap-1 odom-ctrl-wrap{% if s %} odom-wrap-locked{% endif %}" data-row="{{ row.vehicle.id }}" tabindex="{% if s %}-1{% else %}0{% endif %}" title="{% if s %}Edit row to change photo{% else %}Paste (Ctrl+V) when focused, or click speedometer for file / mobile rear camera{% endif %}">
                     {% if row.odometer_photo_path %}
@@ -527,7 +631,7 @@
                   </div>
                 </td>
                 <td class="text-end kms-driven">-</td>
-                <td class="text-center">
+                <td class="text-center task-batch-input-priority">
                   <input type="number" min="0" name="vehicle_{{ row.vehicle.id }}_tasks_count"
                          class="form-control form-control-sm text-center task-editable-field" data-row="{{ row.vehicle.id }}" style="min-width:60px;"
                          value="{% if row.tasks_count is not none %}{{ row.tasks_count }}{% endif %}" placeholder="0" {% if s %}disabled{% endif %}>
@@ -557,6 +661,7 @@
               </tr>
               {% endfor %}
             </tbody>
+            {% if show_batch_totals is defined and show_batch_totals %}
             <tfoot class="table-light fw-bold" id="batchTotals">
               <tr>
                 <td colspan="10" class="ps-4 text-end">Total</td>
@@ -569,6 +674,7 @@
                 <td class="text-end" id="totalPctDiff" data-mob-label="Total % diff">-</td>
               </tr>
             </tfoot>
+            {% endif %}
           </table>
         </div>
       </div>

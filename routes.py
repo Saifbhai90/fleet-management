@@ -20389,6 +20389,19 @@ def task_report_logbook_view_all():
     return render_template('verification_claim_report.html', rows=rows_with_data, project_name=project_name)
 
 
+def _show_task_batch_totals(user_context, row_list):
+    """Footer batch totals: show for employees with >1 assigned vehicle, or admin with >1 row; hide for drivers."""
+    if not row_list:
+        return False
+    if user_context.get('is_driver'):
+        return False
+    if user_context.get('is_master_or_admin'):
+        return len(row_list) > 1
+    if user_context.get('is_employee'):
+        return len(user_context.get('allowed_vehicles') or ()) > 1
+    return len(row_list) > 1
+
+
 @app.route('/task-report/new', methods=['GET', 'POST'])
 def task_report_new():
     from auth_utils import get_user_context
@@ -20508,7 +20521,16 @@ def task_report_new():
                     if scoped_project_ids is not None
                     else Project.query.order_by(Project.name).all()
                 )
-            return render_template('task_report_new.html', rows=rows, view_date=view_date, district_id=district_id, project_id=project_id, districts=districts, projects=projects)
+            return render_template(
+                'task_report_new.html',
+                rows=rows,
+                view_date=view_date,
+                district_id=district_id,
+                project_id=project_id,
+                districts=districts,
+                projects=projects,
+                show_batch_totals=_show_task_batch_totals(user_context, rows),
+            )
         for v, existing, close_reading, tasks_count, user_start in to_save:
             photo_url = (request.form.get('vehicle_%s_odometer_photo_url' % v.id) or '').strip()
             if existing:
@@ -20549,7 +20571,16 @@ def task_report_new():
                     if scoped_project_ids is not None
                     else Project.query.order_by(Project.name).all()
                 )
-            return render_template('task_report_new.html', rows=rows, view_date=view_date, district_id=district_id, project_id=project_id, districts=districts, projects=projects)
+            return render_template(
+                'task_report_new.html',
+                rows=rows,
+                view_date=view_date,
+                district_id=district_id,
+                project_id=project_id,
+                districts=districts,
+                projects=projects,
+                show_batch_totals=_show_task_batch_totals(user_context, rows),
+            )
 
     rows = []
     projects = []
@@ -20573,7 +20604,17 @@ def task_report_new():
             q = q.filter(Vehicle.district_id == district_id)
         vehicles = q.order_by(Vehicle.vehicle_no).all()
         rows = _build_vehicle_rows(vehicles, view_date, request.form)
-    return render_template('task_report_new.html', rows=rows, view_date=view_date, district_id=district_id, project_id=project_id, districts=districts, projects=projects)
+    show_batch_totals = _show_task_batch_totals(user_context, rows)
+    return render_template(
+        'task_report_new.html',
+        rows=rows,
+        view_date=view_date,
+        district_id=district_id,
+        project_id=project_id,
+        districts=districts,
+        projects=projects,
+        show_batch_totals=show_batch_totals,
+    )
 
 
 def _build_vehicle_rows(vehicles, task_date, form=None):
