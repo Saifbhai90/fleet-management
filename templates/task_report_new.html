@@ -31,11 +31,12 @@
       border: none !important;
       border-radius: 18px !important;
       box-shadow: 0 4px 24px rgba(15, 23, 42, 0.07), 0 0 0 1px rgba(15, 23, 42, 0.04) !important;
-      overflow: hidden;
+      overflow: visible;
       background: #fff !important;
     }
     .task-batch-page .task-batch-filter-card .card-body {
       padding: 16px !important;
+      overflow: visible;
     }
     .task-batch-page .task-batch-filter-card .form-label {
       font-size: 0.72rem;
@@ -49,61 +50,11 @@
       font-weight: 600;
       box-shadow: 0 4px 14px rgba(13, 110, 253, 0.35);
     }
-    /* Vertical filter stack: avoid Tom Select / button overlap on narrow screens */
-    .task-batch-page .task-batch-filter-form.row {
-      margin-left: 0 !important;
-      margin-right: 0 !important;
-      --bs-gutter-x: 0;
-      --bs-gutter-y: 1rem;
-      /* Beat Bootstrap .row row direction — must be column so each field stacks */
-      flex-direction: column !important;
-      flex-wrap: nowrap !important;
-      align-items: stretch !important;
-    }
-    /*
-      NEVER use flex: 0 0 100% here: with flex-direction:column the main axis is height;
-      % flex-basis is often indefinite → resolves like 0 → collapsed flex lines → controls overlap.
-    */
-    .task-batch-page .task-batch-filter-form.row > [class*="col-"] {
-      width: 100% !important;
-      max-width: 100% !important;
-      flex: none !important;
-      align-self: stretch !important;
-      padding-left: 0 !important;
-      padding-right: 0 !important;
-      min-height: 0;
-      position: relative;
-    }
-    .task-batch-page .task-batch-filter-form {
-      display: flex;
-      flex-direction: column;
-      /* Do not use gap:0 — stacked cols need vertical rhythm or Tom Select + button overlap */
-      row-gap: 1rem;
-      column-gap: 0;
-    }
-    /* Project column: Tom Select wrapper lives here after init */
-    .task-batch-page .task-batch-filter-project .ts-wrapper {
-      min-height: 52px;
-      margin-bottom: 4px;
-    }
-    .task-batch-page .task-batch-filter-form.row > .task-batch-filter-submit {
-      margin-top: 20px;
-    }
-    .task-batch-page .task-batch-filter-card .task-batch-filter-form button[type="submit"] {
-      position: static;
-    }
+    /* Same flow as Vehicles Daily Task Report filter: plain Bootstrap row — Tom Select full width only */
     .task-batch-page .task-batch-filter-card .ts-wrapper,
     .task-batch-page .task-batch-filter-card .ts-control {
       width: 100% !important;
       max-width: 100% !important;
-    }
-    .task-batch-page .task-batch-filter-card .ts-wrapper {
-      position: relative;
-      z-index: 1;
-    }
-    .task-batch-page .task-batch-filter-card .ts-wrapper.focus,
-    .task-batch-page .task-batch-filter-card .ts-wrapper.dropdown-active {
-      z-index: 10;
     }
     .task-batch-page .task-batch-filter-card .ts-dropdown {
       z-index: 3000 !important;
@@ -677,12 +628,12 @@
 
   <div class="card shadow border-0 rounded-3 mb-4 task-batch-filter-card">
     <div class="card-body">
-      <form method="GET" action="{{ url_for('task_report_new') }}" id="filterForm" class="row mx-0 g-3 g-md-3 align-items-stretch align-items-md-end task-batch-filter-form">
+      <form method="GET" action="{{ url_for('task_report_new') }}" id="filterForm" class="row g-3 align-items-end mx-0">
         <div class="col-12 col-md-2">
           <label class="form-label">Date <span class="text-danger">*</span></label>
           <input type="text" name="date" class="form-control datepicker" placeholder="dd-mm-yyyy" value="{{ view_date.strftime('%d-%m-%Y') }}">
         </div>
-        <div class="col-12 col-md-3">
+        <div class="col-12 col-md-2">
           <label class="form-label">District</label>
           <select name="district_id" id="districtSelect" class="form-select search-select">
             <option value="0">-- All Districts --</option>
@@ -691,7 +642,7 @@
             {% endfor %}
           </select>
         </div>
-        <div class="col-12 col-md-3 task-batch-filter-project">
+        <div class="col-12 col-md-2">
           <label class="form-label" for="projectSelect">Project</label>
           <select name="project_id" id="projectSelect" class="form-select search-select">
             <option value="0">-- All Projects --</option>
@@ -700,8 +651,7 @@
             {% endfor %}
           </select>
         </div>
-        <div class="col-12 col-md-2 d-grid task-batch-filter-submit">
-          <label class="form-label d-none d-md-block opacity-0 user-select-none">.</label>
+        <div class="col-12 col-md-2">
           <button type="submit" class="btn btn-primary w-100 py-2">
             <i class="bi bi-list-ul me-1"></i>Load Vehicles
           </button>
