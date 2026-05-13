@@ -55,13 +55,24 @@
       margin-right: 0 !important;
       --bs-gutter-x: 0;
       --bs-gutter-y: 1rem;
+      /* Beat Bootstrap .row row direction — must be column so each field stacks */
+      flex-direction: column !important;
+      flex-wrap: nowrap !important;
+      align-items: stretch !important;
     }
+    /*
+      NEVER use flex: 0 0 100% here: with flex-direction:column the main axis is height;
+      % flex-basis is often indefinite → resolves like 0 → collapsed flex lines → controls overlap.
+    */
     .task-batch-page .task-batch-filter-form.row > [class*="col-"] {
       width: 100% !important;
       max-width: 100% !important;
-      flex: 0 0 100% !important;
+      flex: none !important;
+      align-self: stretch !important;
       padding-left: 0 !important;
       padding-right: 0 !important;
+      min-height: 0;
+      position: relative;
     }
     .task-batch-page .task-batch-filter-form {
       display: flex;
@@ -69,6 +80,17 @@
       /* Do not use gap:0 — stacked cols need vertical rhythm or Tom Select + button overlap */
       row-gap: 1rem;
       column-gap: 0;
+    }
+    /* Project column: Tom Select wrapper lives here after init */
+    .task-batch-page .task-batch-filter-project .ts-wrapper {
+      min-height: 52px;
+      margin-bottom: 4px;
+    }
+    .task-batch-page .task-batch-filter-form.row > .task-batch-filter-submit {
+      margin-top: 20px;
+    }
+    .task-batch-page .task-batch-filter-card .task-batch-filter-form button[type="submit"] {
+      position: static;
     }
     .task-batch-page .task-batch-filter-card .ts-wrapper,
     .task-batch-page .task-batch-filter-card .ts-control {
@@ -273,16 +295,10 @@
     .task-batch-page .task-batch-table tbody tr.task-row > td:nth-child(7) {
       background: #fafbfc;
     }
-    .task-batch-page .task-batch-table tbody tr.task-row > td:nth-child(n+10):nth-child(-n+16) {
-      background: #fafbfc;
-    }
-    .task-batch-page .task-batch-table tbody tr.task-row > td:nth-child(10) {
+    .task-batch-page .task-batch-table tbody tr.task-row > td.kms-driven {
       border-top: 1px dashed #e2e8f0;
       padding-top: 14px !important;
-    }
-    .task-batch-page .task-batch-table tbody tr.task-row > td:nth-child(17) {
-      background: #fff;
-      padding-top: 14px !important;
+      background: #fafbfc;
     }
     /* Compact read-only summary (inside Start Reading cell on mobile) */
     .task-batch-page .task-batch-mobile-summary {
@@ -340,6 +356,117 @@
       letter-spacing: 0.07em;
       color: #475569;
       margin: 10px 0 8px;
+    }
+
+    /* Metrics cluster (Task's … Edit): one elevated card like Vehicle details */
+    .task-batch-page .task-batch-metrics-card-head {
+      display: block;
+      width: 100%;
+      font-size: 0.68rem;
+      letter-spacing: 0.1em;
+      margin-bottom: 2px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid rgba(99, 102, 241, 0.22);
+      color: #4338ca;
+    }
+    .task-batch-page .task-batch-table tbody tr.task-row > td.task-batch-metric-cell {
+      flex-direction: row !important;
+      flex-wrap: nowrap;
+      align-items: center !important;
+      justify-content: space-between !important;
+      gap: 10px 12px;
+      padding: 11px 14px !important;
+      border-bottom: 1px solid #eef2f7 !important;
+      border-left: 3px solid #6366f1 !important;
+      border-right: 1px solid #e8ecf2 !important;
+      background: linear-gradient(145deg, #fafbff 0%, #ffffff 52%, #f8fafc 100%) !important;
+      text-align: left !important;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+    }
+    .task-batch-page .task-batch-table tbody tr.task-row > td.task-batch-metric-cell--first {
+      margin-top: 14px;
+      flex-wrap: wrap !important;
+      border-top: 1px solid #e2e8f0 !important;
+      border-radius: 16px 16px 0 0 !important;
+      padding-top: 12px !important;
+    }
+    .task-batch-page .task-batch-table tbody tr.task-row > td.task-batch-metric-cell--first .task-batch-metrics-card-head {
+      flex: 1 0 100%;
+      order: -3;
+    }
+    .task-batch-page .task-batch-table tbody tr.task-row > td.task-batch-metric-cell--first[data-label]::before {
+      order: -2;
+      flex: 0 1 40%;
+      align-self: center !important;
+    }
+    .task-batch-page .task-batch-table tbody tr.task-row > td.task-batch-metric-cell--first > .form-control {
+      order: -1;
+      flex: 1 1 52%;
+      max-width: 56% !important;
+      width: auto !important;
+    }
+    .task-batch-page .task-batch-table tbody tr.task-row > td.task-batch-metric-cell--last {
+      flex-direction: column !important;
+      align-items: stretch !important;
+      justify-content: flex-start !important;
+      border-radius: 0 0 16px 16px !important;
+      border-bottom: 1px solid #e2e8f0 !important;
+      margin-bottom: 2px;
+      box-shadow: 0 12px 32px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.85);
+      padding-bottom: 14px !important;
+      gap: 8px;
+    }
+    .task-batch-page .task-batch-table tbody td.task-batch-metric-cell[data-label]::before {
+      background: transparent !important;
+      border: none !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      font-size: 0.66rem !important;
+      font-weight: 800 !important;
+      letter-spacing: 0.07em !important;
+      color: #64748b !important;
+      flex: 0 1 44%;
+      min-width: 0;
+      text-align: left !important;
+      align-self: center !important;
+    }
+    .task-batch-page .task-batch-table tbody td.task-batch-metric-cell--last[data-label]::before {
+      flex: 0 0 auto;
+      width: auto;
+      max-width: 100%;
+    }
+    .task-batch-page .task-batch-table tbody td.task-batch-metric-cell > * {
+      width: auto !important;
+      max-width: 54% !important;
+      flex: 0 1 auto;
+      align-self: center !important;
+      text-align: right !important;
+    }
+    .task-batch-page .task-batch-table tbody td.task-batch-metric-cell--last > * {
+      width: 100% !important;
+      max-width: 100% !important;
+      align-self: stretch !important;
+      text-align: center !important;
+    }
+    .task-batch-page .task-batch-table tbody td.task-batch-metric-cell .task-batch-metric-plain {
+      font-variant-numeric: tabular-nums;
+      font-weight: 600;
+      font-size: 0.94rem;
+      color: inherit;
+    }
+    .task-batch-page .task-batch-table tbody td.task-batch-metric-cell .form-control-sm {
+      min-height: 44px;
+      max-width: 100% !important;
+    }
+    .task-batch-page .task-batch-table tbody td.task-batch-metric-cell.task-batch-input-priority {
+      background: linear-gradient(145deg, #f4f6ff 0%, #ffffff 55%, #fafbff 100%) !important;
+      border-left: 3px solid #6366f1 !important;
+      padding-left: 14px !important;
+    }
+    .task-batch-page .task-batch-table tbody td.task-batch-metric-cell .task-row-edit-btn {
+      min-height: 46px;
+      border-radius: 12px;
+      font-weight: 700;
     }
 
     /* Actionable inputs: clear “fill these” affordance */
@@ -564,8 +691,8 @@
             {% endfor %}
           </select>
         </div>
-        <div class="col-12 col-md-3">
-          <label class="form-label">Project</label>
+        <div class="col-12 col-md-3 task-batch-filter-project">
+          <label class="form-label" for="projectSelect">Project</label>
           <select name="project_id" id="projectSelect" class="form-select search-select">
             <option value="0">-- All Projects --</option>
             {% for p in projects %}
@@ -573,7 +700,7 @@
             {% endfor %}
           </select>
         </div>
-        <div class="col-12 col-md-2 d-grid">
+        <div class="col-12 col-md-2 d-grid task-batch-filter-submit">
           <label class="form-label d-none d-md-block opacity-0 user-select-none">.</label>
           <button type="submit" class="btn btn-primary w-100 py-2">
             <i class="bi bi-list-ul me-1"></i>Load Vehicles
@@ -672,31 +799,32 @@
                   </div>
                 </td>
                 <td class="text-end kms-driven">-</td>
-                <td class="text-center task-batch-input-priority">
+                <td class="text-center task-batch-input-priority task-batch-metric-cell task-batch-metric-cell--first">
+                  <span class="d-md-none task-batch-metrics-card-head text-uppercase fw-bold">Variance &amp; actions</span>
                   <input type="number" min="0" name="vehicle_{{ row.vehicle.id }}_tasks_count"
                          class="form-control form-control-sm text-center task-editable-field" data-row="{{ row.vehicle.id }}" style="min-width:60px;"
                          value="{% if row.tasks_count is not none %}{{ row.tasks_count }}{% endif %}" placeholder="0" {% if s %}disabled{% endif %}>
                 </td>
-                <td class="text-center">
+                <td class="text-center task-batch-metric-cell">
                   <a href="#" class="emg-link text-decoration-none" data-vno="{{ row.vehicle.vehicle_no }}" data-date="{{ view_date.strftime('%d-%m-%Y') }}">
                     <span class="badge {% if row.emg_tasks %}bg-info text-dark{% else %}bg-secondary{% endif %}" style="cursor:pointer;font-size:.8rem;">{{ row.emg_tasks }}</span>
                   </a>
                 </td>
-                <td class="text-center task-diff">-</td>
-                <td class="text-end">
+                <td class="text-center task-diff task-batch-metric-cell"><span class="task-batch-metric-plain">-</span></td>
+                <td class="text-end task-batch-metric-cell">
                   <a href="#" class="tracker-link text-decoration-none" data-vno="{{ row.vehicle.vehicle_no }}" data-date="{{ view_date.strftime('%d-%m-%Y') }}">
                     <span class="badge bg-dark" style="cursor:pointer;font-size:.8rem;">{{ row.tracker_km }}</span>
                   </a>
                 </td>
-                <td class="text-end kms-diff">-</td>
-                <td class="text-end pct-diff">-</td>
-                <td class="text-center">
+                <td class="text-end kms-diff task-batch-metric-cell"><span class="task-batch-metric-plain">-</span></td>
+                <td class="text-end pct-diff task-batch-metric-cell"><span class="task-batch-metric-plain">-</span></td>
+                <td class="text-center task-batch-metric-cell task-batch-metric-cell--last">
                   {% if s %}
                   <button type="button" class="btn btn-sm btn-outline-primary task-row-edit-btn" data-row="{{ row.vehicle.id }}" title="Enable editing for this row">
                     <i class="bi bi-pencil-square me-1"></i>Edit
                   </button>
                   {% else %}
-                  <span class="badge bg-success">New</span>
+                  <span class="badge bg-success px-3 py-2">New</span>
                   {% endif %}
                 </td>
               </tr>
@@ -845,15 +973,21 @@
     }
     var tdCell = row.querySelector('.task-diff');
     var td = tasks - emg;
-    tdCell.textContent = td;
-    tdCell.className = 'text-center task-diff' + (td !== 0 ? ' text-danger fw-bold' : '');
+    var taskDiffOut = tdCell && (tdCell.querySelector('.task-batch-metric-plain') || tdCell);
+    if (taskDiffOut) taskDiffOut.textContent = td;
+    if (tdCell) tdCell.className = 'text-center task-diff task-batch-metric-cell' + (td !== 0 ? ' text-danger fw-bold' : '');
 
-    row.querySelector('.kms-diff').textContent = isNaN(kmsDiff) ? '-' : kmsDiff.toFixed(2);
-    row.querySelector('.pct-diff').textContent = pctDiff;
+    var kmsTd = row.querySelector('.kms-diff');
+    var kmsText = isNaN(kmsDiff) ? '-' : kmsDiff.toFixed(2);
+    var kmsOut = kmsTd && (kmsTd.querySelector('.task-batch-metric-plain') || kmsTd);
+    if (kmsOut) kmsOut.textContent = kmsText;
+    var pctTd = row.querySelector('.pct-diff');
+    var pctOut = pctTd && (pctTd.querySelector('.task-batch-metric-plain') || pctTd);
+    if (pctOut) pctOut.textContent = pctDiff;
     var pctVal = (typeof pctDiff === 'string' && pctDiff !== '-' && pctDiff !== 'Driven KM Zero') ? parseFloat(pctDiff) : NaN;
     var pctRed = !isNaN(pctVal) && pctVal >= 10;
-    row.querySelector('.pct-diff').className = 'text-end pct-diff' + (pctRed ? ' text-danger fw-bold' : (!isNaN(pctVal) && pctVal < 0 ? ' text-warning' : ''));
-    row.querySelector('.kms-diff').className = 'text-end kms-diff' + (pctRed ? ' text-danger fw-bold' : (!isNaN(kmsDiff) && kmsDiff < 0 ? ' text-warning' : ''));
+    if (pctTd) pctTd.className = 'text-end pct-diff task-batch-metric-cell' + (pctRed ? ' text-danger fw-bold' : (!isNaN(pctVal) && pctVal < 0 ? ' text-warning' : ''));
+    if (kmsTd) kmsTd.className = 'text-end kms-diff task-batch-metric-cell' + (pctRed ? ' text-danger fw-bold' : (!isNaN(kmsDiff) && kmsDiff < 0 ? ' text-warning' : ''));
   }
 
   function updateTotals() {
