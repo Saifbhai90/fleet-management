@@ -50,15 +50,30 @@
       box-shadow: 0 4px 14px rgba(13, 110, 253, 0.35);
     }
     /* Vertical filter stack: avoid Tom Select / button overlap on narrow screens */
+    .task-batch-page .task-batch-filter-form.row {
+      margin-left: 0 !important;
+      margin-right: 0 !important;
+      --bs-gutter-x: 0;
+      --bs-gutter-y: 1rem;
+    }
+    .task-batch-page .task-batch-filter-form.row > [class*="col-"] {
+      width: 100% !important;
+      max-width: 100% !important;
+      flex: 0 0 100% !important;
+      padding-left: 0 !important;
+      padding-right: 0 !important;
+    }
     .task-batch-page .task-batch-filter-form {
       display: flex;
       flex-direction: column;
-      gap: 1rem;
+      /* Do not use gap:0 — stacked cols need vertical rhythm or Tom Select + button overlap */
+      row-gap: 1rem;
+      column-gap: 0;
     }
-    .task-batch-page .task-batch-filter-form > [class*="col-"] {
+    .task-batch-page .task-batch-filter-card .ts-wrapper,
+    .task-batch-page .task-batch-filter-card .ts-control {
       width: 100% !important;
       max-width: 100% !important;
-      flex: 0 0 auto !important;
     }
     .task-batch-page .task-batch-filter-card .ts-wrapper {
       position: relative;
@@ -203,12 +218,19 @@
       max-width: 100%;
       box-sizing: border-box;
     }
+    /* Last rows clear Capacitor sticky Save (thumb zone) + bottom nav */
+    html.capacitor-native .task-batch-card > .card-body {
+      padding-bottom: max(110px, calc(80px + env(safe-area-inset-bottom, 0px))) !important;
+    }
+    .task-batch-page.container-fluid {
+      max-width: 100vw;
+      overflow-x: hidden;
+      overflow-x: clip;
+      padding-left: max(12px, env(safe-area-inset-left, 0px));
+      padding-right: max(12px, env(safe-area-inset-right, 0px));
+    }
     .task-batch-page-title {
       font-size: 1.15rem !important;
-    }
-    .task-batch-filter-card .row > [class*="col-"] {
-      flex: 0 0 100% !important;
-      max-width: 100% !important;
     }
     .task-batch-table thead {
       display: none !important;
@@ -311,6 +333,15 @@
       margin-top: 6px;
       font-weight: 600;
     }
+    .task-batch-page .task-batch-start-field-title {
+      font-size: 0.72rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: #475569;
+      margin: 10px 0 8px;
+    }
+
     /* Actionable inputs: clear “fill these” affordance */
     .task-batch-page .task-batch-input-priority {
       background: linear-gradient(180deg, #eff6ff 0%, #ffffff 60%) !important;
@@ -335,7 +366,7 @@
     }
 
     /* Stacked field: label on top, control/value full width (no side‑by‑side = no L/R pan) */
-    .task-batch-table tbody td {
+    .task-batch-table tbody tr.task-row > td {
       display: flex !important;
       flex-direction: column !important;
       align-items: stretch !important;
@@ -348,8 +379,17 @@
       text-align: left !important;
       vertical-align: top !important;
     }
-    .task-batch-table tbody td:last-child {
+    /* Critical: our flex rule must NOT override Bootstrap .d-none (was showing duplicate District… rows on mobile) */
+    .task-batch-table tbody tr.task-row > td.d-none.d-md-table-cell {
+      display: none !important;
+    }
+    .task-batch-table tbody tr.task-row > td:last-child {
       border-bottom: none !important;
+    }
+    /* Start cell: vehicle summary first — hide auto thead label (::before) */
+    .task-batch-table tbody td.task-batch-start-cell[data-label]::before {
+      display: none !important;
+      content: none !important;
     }
     .task-batch-table tbody td[data-label]::before {
       content: attr(data-label);
@@ -510,7 +550,7 @@
 
   <div class="card shadow border-0 rounded-3 mb-4 task-batch-filter-card">
     <div class="card-body">
-      <form method="GET" action="{{ url_for('task_report_new') }}" id="filterForm" class="row g-3 g-md-3 align-items-stretch align-items-md-end task-batch-filter-form">
+      <form method="GET" action="{{ url_for('task_report_new') }}" id="filterForm" class="row mx-0 g-3 g-md-3 align-items-stretch align-items-md-end task-batch-filter-form">
         <div class="col-12 col-md-2">
           <label class="form-label">Date <span class="text-danger">*</span></label>
           <input type="text" name="date" class="form-control datepicker" placeholder="dd-mm-yyyy" value="{{ view_date.strftime('%d-%m-%Y') }}">
@@ -599,12 +639,13 @@
                 {% if row.start_editable %}
                 <td class="text-end task-batch-start-cell">
                   {{ mobile_vehicle_summary(row) }}
+                  <span class="d-md-none task-batch-start-field-title">Start reading</span>
                   <input type="number" step="0.01" min="0" name="vehicle_{{ row.vehicle.id }}_start_reading"
                          class="form-control form-control-sm text-end start-input task-editable-field" data-row="{{ row.vehicle.id }}" style="min-width:90px;"
                          value="{% if row.start_reading %}{{ "%.0f"|format(row.start_reading) }}{% endif %}" placeholder="Start" {% if s %}disabled{% endif %}>
                 </td>
                 {% else %}
-                <td class="text-end task-batch-start-cell">{{ mobile_vehicle_summary(row) }}<span class="start-reading">{{ "%.0f"|format(row.start_reading) }}</span></td>
+                <td class="text-end task-batch-start-cell">{{ mobile_vehicle_summary(row) }}<span class="d-md-none task-batch-start-field-title">Start reading</span><span class="start-reading">{{ "%.0f"|format(row.start_reading) }}</span></td>
                 {% endif %}
                 <td class="text-end task-batch-input-priority">
                   <input type="number" step="0.01" min="0" name="vehicle_{{ row.vehicle.id }}_close_reading"
@@ -1070,8 +1111,16 @@ document.addEventListener('DOMContentLoaded', function() {
     tbl.querySelectorAll('tbody tr.task-row').forEach(function(tr) {
       var tds = tr.querySelectorAll('td');
       for (var i = 0; i < tds.length && i < batchColLabels.length; i++) {
-        if (narrow && batchColLabels[i]) tds[i].setAttribute('data-label', batchColLabels[i]);
-        else tds[i].removeAttribute('data-label');
+        var td = tds[i];
+        if (td.classList.contains('d-none') && td.classList.contains('d-md-table-cell')) {
+          td.removeAttribute('data-label');
+          continue;
+        }
+        if (narrow && batchColLabels[i] && !td.classList.contains('task-batch-start-cell')) {
+          td.setAttribute('data-label', batchColLabels[i]);
+        } else {
+          td.removeAttribute('data-label');
+        }
       }
     });
   }
