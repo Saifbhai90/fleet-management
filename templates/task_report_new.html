@@ -6,6 +6,21 @@
   html.capacitor-native .task-batch-card .card-footer.native-submit-sticky {
     flex-wrap: wrap;
   }
+  /* Single table layout on phone (data-mp-skip-cards): horizontal scroll, comfortable touch targets */
+  @media (max-width: 767.98px) {
+    .task-batch-card .table-responsive {
+      -webkit-overflow-scrolling: touch;
+      border-radius: 0 0 0.375rem 0.375rem;
+    }
+    .task-batch-card #batchTable {
+      font-size: 0.8rem;
+      min-width: 720px;
+    }
+    .task-batch-card #batchTable .form-control-sm {
+      min-height: 38px;
+      font-size: 16px; /* reduce iOS zoom-on-focus */
+    }
+  }
 </style>
 <div class="container-fluid">
   <div class="d-flex justify-content-between align-items-center mb-4">
@@ -63,7 +78,7 @@
       </div>
       <div class="card-body p-0 overflow-hidden">
         <div class="table-responsive">
-          <table class="table table-hover align-middle mb-0" id="batchTable">
+          <table class="table table-hover align-middle mb-0" id="batchTable" data-mp-skip-cards="1" role="grid">
             <thead class="table-light">
               <tr>
                 <th class="ps-4">#</th>
@@ -121,8 +136,9 @@
                     <span class="odom-thumb-placeholder text-muted small" style="font-size:.65rem;">—</span>
                     {% endif %}
                     <div class="btn-group btn-group-sm" role="group">
-                      <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-1 odom-photo-btn task-editable-field" data-row="{{ row.vehicle.id }}" title="Add / change photo" {% if s %}disabled{% endif %}>
-                        <i class="bi bi-speedometer2"></i>
+                      <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-1 odom-photo-btn task-editable-field d-inline-flex align-items-center gap-1 {% if row.odometer_photo_path %}border-success{% endif %}" data-row="{{ row.vehicle.id }}" title="Add / change photo" {% if s %}disabled{% endif %}>
+                        <img alt="" width="22" height="22" class="odom-inline-thumb rounded border flex-shrink-0 {% if row.odometer_photo_path %}border-success{% else %}d-none{% endif %}" style="object-fit:cover;" {% if row.odometer_photo_path %}src="{{ row.odometer_photo_path }}"{% endif %}>
+                        <i class="bi bi-speedometer2 odom-meter-icon flex-shrink-0"></i>
                       </button>
                       <button type="button" class="btn btn-outline-danger btn-sm py-0 px-1 odom-clear-btn {% if not row.odometer_photo_path %}d-none{% endif %} task-editable-field" data-row="{{ row.vehicle.id }}" title="Remove photo" {% if s %}disabled{% endif %}>×</button>
                     </div>
@@ -341,6 +357,11 @@
   var batchTable = document.getElementById('batchTable');
   if (batchTable) {
     batchTable.addEventListener('input', function(e) {
+      var row = e.target.closest('tr.task-row');
+      if (row) updateRow(row);
+      updateTotals();
+    });
+    batchTable.addEventListener('change', function(e) {
       var row = e.target.closest('tr.task-row');
       if (row) updateRow(row);
       updateTotals();

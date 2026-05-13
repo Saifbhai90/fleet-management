@@ -6824,6 +6824,12 @@
 
         tables.forEach(function(tbl) {
             if (tbl.dataset.mpBuilt) return;
+            /* Batch forms (e.g. New Task Entry): must keep one DOM tree — footer Save + input listeners.
+               Mobile “cards” duplicate cells and hide the whole .card, breaking save + live totals. */
+            if (tbl.getAttribute('data-mp-skip-cards') === '1') {
+                tbl.dataset.mpBuilt = 'skip-cards';
+                return;
+            }
             tbl.dataset.mpBuilt = '1';
 
             // Skip tiny utility tables (< 2 columns or 0 header rows)
