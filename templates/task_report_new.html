@@ -6,36 +6,173 @@
   html.capacitor-native .task-batch-card .card-footer.native-submit-sticky {
     flex-wrap: wrap;
   }
-  /* Single table layout on phone (data-mp-skip-cards): horizontal scroll, comfortable touch targets */
+
+  /* ── Phone / narrow: one vertical “card” per vehicle (same <table> DOM — Save + JS totals work) ── */
   @media (max-width: 767.98px) {
+    .task-batch-page-title {
+      font-size: 1.15rem !important;
+    }
+    .task-batch-filter-card .row > [class*="col-"] {
+      flex: 0 0 100% !important;
+      max-width: 100% !important;
+    }
     .task-batch-card .table-responsive {
+      overflow-x: visible !important;
       -webkit-overflow-scrolling: touch;
-      border-radius: 0 0 0.375rem 0.375rem;
     }
-    .task-batch-card #batchTable {
-      font-size: 0.8rem;
-      min-width: 720px;
+    .task-batch-table thead {
+      display: none !important;
     }
-    .task-batch-card #batchTable .form-control-sm {
-      min-height: 38px;
-      font-size: 16px; /* reduce iOS zoom-on-focus */
+    .task-batch-table tbody tr.task-row {
+      display: block;
+      margin: 0 10px 14px;
+      padding: 0;
+      border-radius: 14px;
+      box-shadow: 0 2px 14px rgba(15, 23, 42, 0.09);
+      border: 1px solid #e8ecf0;
+      overflow: hidden;
+      background: #fff;
+    }
+    .task-batch-table tbody tr.task-row.table-info {
+      border-left: 4px solid #0dcaf0;
+    }
+    /* Vehicle banner */
+    .task-batch-table tbody tr.task-row::before {
+      content: attr(data-vehicle);
+      display: flex;
+      align-items: center;
+      min-height: 46px;
+      padding: 10px 14px;
+      background: linear-gradient(135deg, #14532d 0%, #16a34a 100%);
+      color: #fff;
+      font-weight: 700;
+      font-size: 0.95rem;
+      letter-spacing: 0.02em;
+    }
+    .task-batch-table tbody td {
+      display: flex !important;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      width: 100% !important;
+      max-width: none !important;
+      padding: 11px 14px !important;
+      border-bottom: 1px solid #f1f5f9 !important;
+      text-align: right !important;
+      vertical-align: middle !important;
+    }
+    .task-batch-table tbody td:last-child {
+      border-bottom: none !important;
+    }
+    .task-batch-table tbody td[data-label]::before {
+      content: attr(data-label);
+      font-weight: 600;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: #64748b;
+      text-align: left;
+      flex: 0 1 42%;
+      line-height: 1.25;
+      padding-right: 6px;
+    }
+    .task-batch-table tbody td > * {
+      flex: 1 1 auto;
+      min-width: 0;
+      text-align: right;
+    }
+    .task-batch-table tbody td .form-control-sm {
+      min-height: 42px;
+      font-size: 16px; /* iOS zoom */
+      width: 100%;
+      max-width: 148px;
+      margin-left: auto;
+    }
+    .task-batch-table tbody td .close-input,
+    .task-batch-table tbody td .start-input {
+      max-width: 170px;
+    }
+    .task-batch-table tbody td.task-batch-num-cell > .task-batch-num-inner {
+      flex: 1 1 auto;
+      display: inline-flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 6px;
+      flex-wrap: wrap;
+      text-align: right;
+    }
+    .task-batch-table tbody td.odometer-cell > .odom-ctrl-wrap {
+      flex: 1 1 auto;
+      min-width: 0;
+      max-width: 100%;
+      align-items: flex-end !important;
+      justify-content: flex-end;
+    }
+    /* Totals strip */
+    .task-batch-table tfoot#batchTotals td[colspan] {
+      display: none !important;
+    }
+    .task-batch-table tfoot#batchTotals tr {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: center;
+      padding: 12px 10px;
+      margin: 0 10px 14px;
+      background: #f8fafc;
+      border-radius: 12px;
+      border: 1px solid #e2e8f0;
+    }
+    .task-batch-table tfoot#batchTotals td:not([colspan]) {
+      flex: 1 1 42%;
+      min-width: calc(50% - 10px);
+      text-align: center !important;
+      padding: 10px 8px !important;
+      font-size: 0.78rem !important;
+      border: 1px solid #e2e8f0 !important;
+      border-radius: 10px;
+      background: #fff;
+    }
+    .task-batch-footer-hint {
+      font-size: 0.72rem !important;
+      line-height: 1.35;
+    }
+    .task-batch-entry-search {
+      width: 100%;
+    }
+    .task-batch-table tfoot#batchTotals td[id]::before {
+      content: attr(data-mob-label);
+      display: block;
+      font-size: 0.62rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: #64748b;
+      margin-bottom: 4px;
+    }
+  }
+
+  @media (min-width: 768px) {
+    .task-batch-entry-search {
+      max-width: 240px;
+      width: auto;
     }
   }
 </style>
 <div class="container-fluid">
-  <div class="d-flex justify-content-between align-items-center mb-4">
-    <h2 class="mb-0"><i class="bi bi-plus-circle me-2 text-success"></i>New Task Entry</h2>
+  <div class="d-flex justify-content-between align-items-center mb-3 mb-md-4 flex-wrap gap-2">
+    <h2 class="mb-0 task-batch-page-title"><i class="bi bi-plus-circle me-2 text-success"></i>New Task Entry</h2>
     <a href="{{ url_for('task_report_list') }}" class="btn btn-outline-secondary btn-sm">Back to Report</a>
   </div>
 
-  <div class="card shadow border-0 rounded-3 mb-4">
+  <div class="card shadow border-0 rounded-3 mb-4 task-batch-filter-card">
     <div class="card-body">
-      <form method="GET" action="{{ url_for('task_report_new') }}" id="filterForm" class="row g-3 align-items-end">
-        <div class="col-md-2">
+      <form method="GET" action="{{ url_for('task_report_new') }}" id="filterForm" class="row g-2 g-md-3 align-items-end">
+        <div class="col-12 col-md-2">
           <label class="form-label">Date <span class="text-danger">*</span></label>
           <input type="text" name="date" class="form-control datepicker" placeholder="dd-mm-yyyy" value="{{ view_date.strftime('%d-%m-%Y') }}">
         </div>
-        <div class="col-md-3">
+        <div class="col-12 col-md-3">
           <label class="form-label">District</label>
           <select name="district_id" id="districtSelect" class="form-select search-select">
             <option value="0">-- All Districts --</option>
@@ -44,7 +181,7 @@
             {% endfor %}
           </select>
         </div>
-        <div class="col-md-3">
+        <div class="col-12 col-md-3">
           <label class="form-label">Project</label>
           <select name="project_id" id="projectSelect" class="form-select search-select">
             <option value="0">-- All Projects --</option>
@@ -53,8 +190,8 @@
             {% endfor %}
           </select>
         </div>
-        <div class="col-md-2">
-          <button type="submit" class="btn btn-primary w-100">
+        <div class="col-12 col-md-2">
+          <button type="submit" class="btn btn-primary w-100 py-2">
             <i class="bi bi-list-ul me-1"></i>Load Vehicles
           </button>
         </div>
@@ -72,13 +209,13 @@
 
     {# overflow-hidden removed so Capacitor sticky Save bar (native-submit-sticky) works; rounded clip via card-body only #}
     <div class="card shadow border-0 rounded-3 task-batch-card">
-      <div class="card-header bg-success text-white py-3 rounded-top d-flex flex-wrap align-items-center justify-content-between gap-2">
-        <span class="fw-semibold">Vehicles list – sirf Close Reading aur Task's edit karein. Baaki real-time calculate hoga.</span>
-        <input type="text" id="taskEntrySearch" class="form-control form-control-sm" placeholder="Search list..." style="max-width:220px;">
+      <div class="card-header bg-success text-white py-3 rounded-top d-flex flex-column flex-md-row flex-wrap align-items-stretch align-items-md-center justify-content-between gap-2">
+        <span class="fw-semibold"><span class="d-none d-md-inline">Vehicles list – sirf Close Reading aur Task's edit karein. Baaki real-time calculate hoga.</span><span class="d-md-none">Sirf <strong>Close Reading</strong> aur <strong>Task's</strong> edit karein — baqi auto.</span></span>
+        <input type="text" id="taskEntrySearch" class="form-control form-control-sm flex-shrink-0 task-batch-entry-search" placeholder="Search vehicles..." autocomplete="off">
       </div>
       <div class="card-body p-0 overflow-hidden">
         <div class="table-responsive">
-          <table class="table table-hover align-middle mb-0" id="batchTable" data-mp-skip-cards="1" role="grid">
+          <table class="table table-hover align-middle mb-0 task-batch-table" id="batchTable" data-mp-skip-cards="1" role="grid">
             <thead class="table-light">
               <tr>
                 <th class="ps-4">#</th>
@@ -103,14 +240,16 @@
             <tbody>
               {% for row in rows %}
               {% set s = row.saved %}
-              <tr class="task-row{% if s %} table-info{% endif %}" data-start="{{ row.start_reading }}" data-tracker="{{ row.tracker_km }}" data-emg="{{ row.emg_tasks }}">
-                <td class="ps-4">{{ loop.index }}{% if s %} <i class="bi bi-check-circle-fill text-success" title="Previously saved"></i>{% endif %}</td>
+              <tr class="task-row{% if s %} table-info{% endif %}" data-start="{{ row.start_reading }}" data-tracker="{{ row.tracker_km }}" data-emg="{{ row.emg_tasks }}" data-vehicle="{{ row.vehicle.vehicle_no | e }}">
+                <td class="ps-4 ps-md-4 task-batch-num-cell">
+                  <input type="hidden" name="row_{{ row.vehicle.id }}_edit_mode" id="row_{{ row.vehicle.id }}_edit_mode" value="{{ '0' if s else '1' }}">
+                  <span class="task-batch-num-inner"><span class="task-batch-row-num">{{ loop.index }}</span>{% if s %} <i class="bi bi-check-circle-fill text-success" title="Previously saved"></i>{% endif %}</span>
+                </td>
                 <td>{{ row.vehicle.district.name if row.vehicle.district else '-' }}</td>
                 <td>{{ row.vehicle.parking_station.tehsil if row.vehicle.parking_station else '-' }}</td>
                 <td>{{ row.vehicle.parking_station.name if row.vehicle.parking_station else '-' }}</td>
                 <td>{{ row.vehicle.vehicle_type or '-' }}</td>
-                <td class="fw-medium">{{ row.vehicle.vehicle_no }}</td>
-                <input type="hidden" name="row_{{ row.vehicle.id }}_edit_mode" id="row_{{ row.vehicle.id }}_edit_mode" value="{{ '0' if s else '1' }}">
+                <td class="fw-medium d-none d-md-table-cell">{{ row.vehicle.vehicle_no }}</td>
                 {% if row.start_editable %}
                 <td class="text-end">
                   <input type="number" step="0.01" min="0" name="vehicle_{{ row.vehicle.id }}_start_reading"
@@ -178,21 +317,21 @@
             <tfoot class="table-light fw-bold" id="batchTotals">
               <tr>
                 <td colspan="10" class="ps-4 text-end">Total</td>
-                <td class="text-end" id="totalKmsDriven">-</td>
-                <td class="text-center" id="totalTasks">-</td>
-                <td class="text-center" id="totalEmg">-</td>
-                <td class="text-center" id="totalTaskDiff">-</td>
-                <td class="text-end" id="totalTracker">-</td>
-                <td class="text-end" id="totalKmsDiff">-</td>
-                <td class="text-end" id="totalPctDiff">-</td>
+                <td class="text-end" id="totalKmsDriven" data-mob-label="Total KMs driven">-</td>
+                <td class="text-center" id="totalTasks" data-mob-label="Total tasks">-</td>
+                <td class="text-center" id="totalEmg" data-mob-label="Total EMG">-</td>
+                <td class="text-center" id="totalTaskDiff" data-mob-label="Total task diff">-</td>
+                <td class="text-end" id="totalTracker" data-mob-label="Total tracker">-</td>
+                <td class="text-end" id="totalKmsDiff" data-mob-label="Total KMs diff">-</td>
+                <td class="text-end" id="totalPctDiff" data-mob-label="Total % diff">-</td>
               </tr>
             </tfoot>
           </table>
         </div>
       </div>
       <div class="card-footer bg-light d-flex flex-column flex-sm-row justify-content-between align-items-stretch align-items-sm-center gap-2 rounded-bottom">
-        <span class="text-muted small order-2 order-sm-1">Saved rows locked rahengi; last column me <strong>Edit</strong> click karne par hi editable hongi. New rows ke liye Close Reading required hai.</span>
-        <button type="submit" class="btn btn-primary px-4 order-1 order-sm-2 align-self-stretch" id="saveBtn">
+        <span class="text-muted small order-2 order-sm-1 task-batch-footer-hint"><span class="d-none d-md-inline">Saved rows locked rahengi; last column me <strong>Edit</strong> click karne par hi editable hongi. New rows ke liye Close Reading required hai.</span><span class="d-md-none">Saved row par pehle <strong>Edit</strong>, phir change. Nayi row: <strong>Close Reading</strong> zaroori.</span></span>
+        <button type="submit" class="btn btn-primary px-4 py-2 order-1 order-sm-2 align-self-stretch" id="saveBtn">
           <i class="bi bi-save me-1"></i>Save All
         </button>
       </div>
@@ -376,8 +515,11 @@
         var mode = document.getElementById('row_' + rowId + '_edit_mode');
         if (mode && mode.value === '0') return; // Locked row skip validation.
         if (!inp.value || inp.value.trim() === '') {
-          var vno = inp.closest('tr').querySelector('.fw-medium');
-          if (vno) empty.push(vno.textContent);
+          var tr = inp.closest('tr');
+          var dv = tr && tr.getAttribute('data-vehicle');
+          var vnoEl = tr && tr.querySelector('.fw-medium');
+          var label = (dv && dv.trim()) || (vnoEl && vnoEl.textContent.trim()) || '';
+          if (label) empty.push(label);
         }
       });
       if (empty.length > 0) {
@@ -557,12 +699,40 @@
       alert('Save failed: ' + e);
     });
   });
+  window.updateTotals = updateTotals;
 })();
 </script>
 {% include 'partials/task_report_odometer_upload.html' %}
 <script>
-window._fleetAfterFilter = function(){ if(typeof updateTotals==='function') updateTotals(); };
-document.addEventListener('DOMContentLoaded', function(){ if(window.fleetTableEnhance) window.fleetTableEnhance('batchTable'); });
+window._fleetAfterFilter = function(){ if (typeof window.updateTotals === 'function') window.updateTotals(); };
+document.addEventListener('DOMContentLoaded', function() {
+  var tbl = document.getElementById('batchTable');
+  if (!tbl) return;
+  var batchColLabels = null;
+  function captureBatchColLabels() {
+    if (batchColLabels) return;
+    batchColLabels = Array.from(tbl.querySelectorAll('thead th')).map(function(th) {
+      return (th.innerText || th.textContent || '').replace(/\s+/g, ' ').trim().replace(/\s*\*+\s*$/, '').trim();
+    });
+  }
+  function stampTaskBatchMobileLabels() {
+    if (!tbl || !batchColLabels) return;
+    var narrow = window.matchMedia('(max-width:767.98px)').matches;
+    tbl.querySelectorAll('tbody tr.task-row').forEach(function(tr) {
+      var tds = tr.querySelectorAll('td');
+      for (var i = 0; i < tds.length && i < batchColLabels.length; i++) {
+        if (narrow && batchColLabels[i]) tds[i].setAttribute('data-label', batchColLabels[i]);
+        else tds[i].removeAttribute('data-label');
+      }
+    });
+  }
+  captureBatchColLabels();
+  stampTaskBatchMobileLabels();
+  if (window.matchMedia('(min-width:768px)').matches && window.fleetTableEnhance) {
+    window.fleetTableEnhance('batchTable');
+  }
+  window.addEventListener('resize', stampTaskBatchMobileLabels);
+});
 
 document.addEventListener('click', function(e){
   var btn = e.target.closest('.task-row-edit-btn');
