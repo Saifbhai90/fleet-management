@@ -84,8 +84,8 @@
               <td class="text-center text-muted">{{ ((pagination.page - 1) * per_page + loop.index) if pagination else loop.index }}</td>
               <td><span class="text-success fw-semibold">{{ r.transfer_number }}</span></td>
               <td>{{ r.transfer_date|ddmmyyyy }}</td>
-              <td>{{ (r.from_account.code ~ ' - ' ~ r.from_account.name) if r.from_account else '-' }}</td>
-              <td>{{ (r.to_account.code ~ ' - ' ~ r.to_account.name) if r.to_account else '-' }}</td>
+              <td>{% if r.from_account %}{{ account_display_map.get(r.from_account.id, r.from_account.code ~ ' - ' ~ r.from_account.name) }}{% else %}-{% endif %}</td>
+              <td>{% if r.to_account %}{{ account_display_map.get(r.to_account.id, r.to_account.code ~ ' - ' ~ r.to_account.name) }}{% else %}-{% endif %}</td>
               <td class="text-end fw-semibold">{{ '{:,.2f}'.format((r.amount or 0)|float) }}</td>
               <td>{% if r.category %}<span class="badge bg-info text-dark">{{ r.category }}</span>{% else %}-{% endif %}</td>
               <td><span class="badge bg-light text-dark border">{{ r.payment_mode or '-' }}</span></td>

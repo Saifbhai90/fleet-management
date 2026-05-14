@@ -75,6 +75,47 @@ def _workspace_multi_word_filter(search_text, *columns):
     return and_(*and_parts)
 
 
+def _workspace_driver_vehicle_no(drv):
+    if not drv:
+        return None
+    if getattr(drv, "vehicle", None) and getattr(drv.vehicle, "vehicle_no", None):
+        return drv.vehicle.vehicle_no
+    if getattr(drv, "vehicle_id", None):
+        v = Vehicle.query.get(drv.vehicle_id)
+        if v and v.vehicle_no:
+            return v.vehicle_no
+    v = Vehicle.query.filter_by(driver_id=drv.id).order_by(Vehicle.id.desc()).first()
+    return v.vehicle_no if v and v.vehicle_no else None
+
+
+def _build_workspace_account_display_map(employee_id, active_only=True):
+    """Label for workspace accounts; driver-linked rows include vehicle no (same as transfer form dropdown)."""
+    q = WorkspaceAccount.query.filter_by(employee_id=employee_id)
+    if active_only:
+        q = q.filter_by(is_active=True)
+    accounts = q.order_by(WorkspaceAccount.code).all()
+    driver_ids = sorted(
+        int(a.entity_id)
+        for a in accounts
+        if (a.entity_type or "").strip().lower() == "driver" and a.entity_id
+    )
+    drivers_by_id = {}
+    if driver_ids:
+        for drv in Driver.query.options(joinedload(Driver.vehicle)).filter(Driver.id.in_(driver_ids)).all():
+            drivers_by_id[int(drv.id)] = drv
+    account_display_map = {}
+    for a in accounts:
+        base = f"{a.code} - {a.name}"
+        if (a.entity_type or "").strip().lower() == "driver" and a.entity_id:
+            drv = drivers_by_id.get(int(a.entity_id))
+            if drv:
+                v_no = _workspace_driver_vehicle_no(drv)
+                if v_no:
+                    base = f"{base} | Vehicle: {v_no}"
+        account_display_map[a.id] = base
+    return account_display_map
+
+
 def _get_workspace_employee():
     emp_id = session.get("workspace_employee_id")
     if not emp_id:
@@ -2963,6 +3004,10 @@ def workspace_fund_transfers_list():
     to_acct = aliased(WorkspaceAccount)
     query = (
         db.session.query(WorkspaceFundTransfer)
+        .options(
+            joinedload(WorkspaceFundTransfer.from_account),
+            joinedload(WorkspaceFundTransfer.to_account),
+        )
         .outerjoin(from_acct, WorkspaceFundTransfer.from_account_id == from_acct.id)
         .outerjoin(to_acct, WorkspaceFundTransfer.to_account_id == to_acct.id)
         .filter(WorkspaceFundTransfer.employee_id == emp.id)
@@ -3009,6 +3054,8 @@ def workspace_fund_transfers_list():
         WorkspaceFundTransfer.id.desc(),
     ).paginate(page=page, per_page=per_page, error_out=False)
 
+    account_display_map = _build_workspace_account_display_map(emp.id, active_only=False)
+
     return render_template(
         "workspace/transfers_list.html",
         rows=pagination.items,
@@ -3020,6 +3067,7 @@ def workspace_fund_transfers_list():
         employee=emp,
         total_amount=total_amount,
         show_upload_media_columns=show_upload_media_columns,
+        account_display_map=account_display_map,
     )
 
 
@@ -3057,37 +3105,7 @@ def workspace_fund_transfer_form(pk=None):
 
     accounts = WorkspaceAccount.query.filter_by(employee_id=emp.id, is_active=True).order_by(WorkspaceAccount.code).all()
     categories = FundTransferCategory.query.order_by(FundTransferCategory.name).all()
-    driver_ids = sorted({
-        int(a.entity_id) for a in accounts
-        if (a.entity_type or '').strip().lower() == 'driver' and a.entity_id
-    })
-    drivers_by_id = {}
-    if driver_ids:
-        for drv in Driver.query.filter(Driver.id.in_(driver_ids)).all():
-            drivers_by_id[int(drv.id)] = drv
-
-    def _driver_vehicle_no(drv):
-        if not drv:
-            return None
-        if getattr(drv, 'vehicle', None) and getattr(drv.vehicle, 'vehicle_no', None):
-            return drv.vehicle.vehicle_no
-        if getattr(drv, 'vehicle_id', None):
-            v = Vehicle.query.get(drv.vehicle_id)
-            if v and v.vehicle_no:
-                return v.vehicle_no
-        v = Vehicle.query.filter_by(driver_id=drv.id).order_by(Vehicle.id.desc()).first()
-        return v.vehicle_no if v and v.vehicle_no else None
-
-    account_display_map = {}
-    for a in accounts:
-        base = f"{a.code} - {a.name}"
-        if (a.entity_type or '').strip().lower() == 'driver' and a.entity_id:
-            drv = drivers_by_id.get(int(a.entity_id))
-            if drv:
-                v_no = _driver_vehicle_no(drv)
-                if v_no:
-                    base = f"{base} | Vehicle: {v_no}"
-        account_display_map[a.id] = base
+    account_display_map = _build_workspace_account_display_map(emp.id, active_only=True)
 
     account_balance_json = {}
     for a in accounts:
