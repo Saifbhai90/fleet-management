@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}
 {% set _tab = request.args.get('settings_tab', 'attendance') %}
-{% if _tab == 'freeze' %}Freeze Data Control{% elif _tab == 'oil_limits' %}Oil Change Limits{% elif _tab == 'accounting_maintenance' %}Accounting Maintenance{% else %}Attendance Time Control{% endif %}
+{% if _tab == 'freeze' %}Freeze Data Control{% elif _tab == 'oil_limits' %}Oil Change Limits{% elif _tab == 'accounting_maintenance' %}Accounting Maintenance{% elif _tab == 'daily_task_entry' %}New Task Entry{% else %}Attendance Time Control{% endif %}
 {% endblock %}
 
 {% block content %}
@@ -17,6 +17,9 @@
 {% elif active_tab == 'accounting_maintenance' %}
   {% set page_title = 'Accounting Maintenance' %}
   {% set page_subtitle = 'One-time repair/backfill tools. Daily flow mein auto backfill disabled hai; yahan se manual run karein.' %}
+{% elif active_tab == 'daily_task_entry' %}
+  {% set page_title = 'New Task Entry — Rules' %}
+  {% set page_subtitle = 'Batch form par Close−Start (KM driven) validation aur Odoo meter policy yahan set hoti hai.' %}
 {% endif %}
 <div class="container-fluid">
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
@@ -33,7 +36,7 @@
 
   <ul class="nav nav-pills mb-3" id="settingsMainTabs">
     <li class="nav-item">
-      <button type="button" class="nav-link {% if active_tab not in ['freeze', 'oil_limits', 'accounting_maintenance'] %}active{% endif %}" data-settings-tab="attendance">
+      <button type="button" class="nav-link {% if active_tab not in ['freeze', 'oil_limits', 'accounting_maintenance', 'daily_task_entry'] %}active{% endif %}" data-settings-tab="attendance">
         <i class="bi bi-clock-history me-1"></i>Attendance Control
       </button>
     </li>
@@ -48,13 +51,18 @@
       </button>
     </li>
     <li class="nav-item">
+      <button type="button" class="nav-link {% if active_tab == 'daily_task_entry' %}active{% endif %}" data-settings-tab="daily_task_entry">
+        <i class="bi bi-clipboard-check me-1"></i>New Task Entry
+      </button>
+    </li>
+    <li class="nav-item">
       <button type="button" class="nav-link {% if active_tab == 'accounting_maintenance' %}active{% endif %}" data-settings-tab="accounting_maintenance">
         <i class="bi bi-journal-check me-1"></i>Accounting Maintenance
       </button>
     </li>
   </ul>
 
-  <div id="attendanceControlPane" {% if active_tab in ['freeze', 'oil_limits', 'accounting_maintenance'] %}style="display:none"{% endif %}>
+  <div id="attendanceControlPane" {% if active_tab in ['freeze', 'oil_limits', 'accounting_maintenance', 'daily_task_entry'] %}style="display:none"{% endif %}>
 
   <!-- ═══════════════ GLOBAL DEFAULT ═══════════════ -->
   <div class="row mb-4">
@@ -645,6 +653,34 @@
   </div>
 </div>
 
+<div id="dailyTaskEntryPane" {% if active_tab != 'daily_task_entry' %}style="display:none"{% endif %}>
+  <div class="row mb-4">
+    <div class="col-lg-10">
+      <div class="card shadow-sm border-0 rounded-3">
+        <div class="card-header text-white py-3" style="background: linear-gradient(135deg, #0f766e 0%, #0d9488 100%);">
+          <h5 class="mb-0"><i class="bi bi-clipboard-check me-2"></i>New Task Entry (batch form)</h5>
+        </div>
+        <div class="card-body">
+          <form method="post" action="{{ url_for('form_control', settings_tab='daily_task_entry') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="save_daily_task_entry_settings">
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Maximum KMs driven (per vehicle row)</label>
+              <input type="number" name="daily_task_entry_max_kms_driven" class="form-control" min="0" step="1" placeholder="Khali = koi limit nahi" value="{% if att_settings and att_settings.daily_task_entry_max_kms_driven is not none %}{{ att_settings.daily_task_entry_max_kms_driven }}{% endif %}">
+              <div class="form-text">Close Reading − Start Reading agar is se zyada ho to Save block. Zero ya khali = limit off.</div>
+            </div>
+            <div class="form-check form-switch mb-3">
+              <input class="form-check-input" type="checkbox" role="switch" id="dailyTaskOdomRequired" name="daily_task_odometer_photo_required" value="1" {% if att_settings and att_settings.daily_task_odometer_photo_required %}checked{% endif %}>
+              <label class="form-check-label fw-semibold" for="dailyTaskOdomRequired">Odoo meter photo zaroori (ON = baghair photo save nahi hoga)</label>
+            </div>
+            <button type="submit" class="btn btn-primary"><i class="bi bi-save me-1"></i>Save</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="accountingMaintenancePane" {% if active_tab != 'accounting_maintenance' %}style="display:none"{% endif %}>
   <div class="row mb-4">
     <div class="col-lg-10">
@@ -693,35 +729,39 @@ document.addEventListener('DOMContentLoaded', function() {
   const attendancePane = document.getElementById('attendanceControlPane');
   const freezePane = document.getElementById('freezeControlPane');
   const oilPane = document.getElementById('oilLimitsPane');
+  const dailyTaskPane = document.getElementById('dailyTaskEntryPane');
   const accountingPane = document.getElementById('accountingMaintenancePane');
+  function hideAllPanes() {
+    if (attendancePane) attendancePane.style.display = 'none';
+    if (freezePane) freezePane.style.display = 'none';
+    if (oilPane) oilPane.style.display = 'none';
+    if (dailyTaskPane) dailyTaskPane.style.display = 'none';
+    if (accountingPane) accountingPane.style.display = 'none';
+  }
   tabBtns.forEach(function(btn){
     btn.addEventListener('click', function(){
       const t = btn.getAttribute('data-settings-tab');
       tabBtns.forEach(function(b){ b.classList.remove('active'); });
       btn.classList.add('active');
       if(t === 'freeze'){
-        attendancePane.style.display = 'none';
-        oilPane.style.display = 'none';
-        accountingPane.style.display = 'none';
-        freezePane.style.display = '';
+        hideAllPanes();
+        if (freezePane) freezePane.style.display = '';
         history.replaceState({}, '', '{{ url_for("form_control") }}?settings_tab=freeze');
       } else if (t === 'oil_limits') {
-        attendancePane.style.display = 'none';
-        freezePane.style.display = 'none';
-        accountingPane.style.display = 'none';
-        oilPane.style.display = '';
+        hideAllPanes();
+        if (oilPane) oilPane.style.display = '';
         history.replaceState({}, '', '{{ url_for("form_control") }}?settings_tab=oil_limits');
+      } else if (t === 'daily_task_entry') {
+        hideAllPanes();
+        if (dailyTaskPane) dailyTaskPane.style.display = '';
+        history.replaceState({}, '', '{{ url_for("form_control") }}?settings_tab=daily_task_entry');
       } else if (t === 'accounting_maintenance') {
-        attendancePane.style.display = 'none';
-        freezePane.style.display = 'none';
-        oilPane.style.display = 'none';
-        accountingPane.style.display = '';
+        hideAllPanes();
+        if (accountingPane) accountingPane.style.display = '';
         history.replaceState({}, '', '{{ url_for("form_control") }}?settings_tab=accounting_maintenance');
       } else {
-        freezePane.style.display = 'none';
-        oilPane.style.display = 'none';
-        accountingPane.style.display = 'none';
-        attendancePane.style.display = '';
+        hideAllPanes();
+        if (attendancePane) attendancePane.style.display = '';
         history.replaceState({}, '', '{{ url_for("form_control") }}');
       }
     });

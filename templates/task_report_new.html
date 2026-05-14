@@ -626,6 +626,13 @@
     <a href="{{ url_for('task_report_list') }}" class="btn btn-outline-secondary btn-sm rounded-pill px-3">Back to Report</a>
   </div>
 
+  {% if task_entry_max_km_driven is not none and (task_entry_max_km_driven | int) > 0 %}
+  <div class="alert alert-light border py-2 mb-2 small"><i class="bi bi-speedometer2 me-1"></i>Settings: ek row par zyada se zyada <strong>{{ task_entry_max_km_driven }}</strong> KM driven allowed.</div>
+  {% endif %}
+  {% if task_entry_odometer_required %}
+  <div class="alert alert-light border py-2 mb-2 small"><i class="bi bi-camera me-1"></i>Settings: har row par <strong>Odoo meter</strong> photo zaroori hai.</div>
+  {% endif %}
+
   <div class="card shadow border-0 rounded-3 mb-4 task-batch-filter-card">
     <div class="card-body">
       <form method="GET" action="{{ url_for('task_report_new') }}" id="filterForm" class="row g-3 align-items-end mx-0">
@@ -781,9 +788,13 @@
                 <td class="text-end pct-diff task-batch-metric-cell"><span class="task-batch-metric-plain">-</span></td>
                 <td class="text-center task-batch-metric-cell task-batch-metric-cell--last">
                   {% if s %}
+                    {% if can_edit_saved_task_rows %}
                   <button type="button" class="btn btn-sm btn-outline-primary task-row-edit-btn" data-row="{{ row.vehicle.id }}" title="Enable editing for this row">
                     <i class="bi bi-pencil-square me-1"></i>Edit
                   </button>
+                    {% else %}
+                  <span class="badge bg-secondary px-2 py-2" title="Edit ki ijazat nahi — role mein &quot;Edit saved rows&quot; add karein">Locked</span>
+                    {% endif %}
                   {% else %}
                   <span class="badge bg-success px-3 py-2">New</span>
                   {% endif %}

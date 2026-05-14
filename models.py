@@ -1953,6 +1953,9 @@ class AttendanceSettings(db.Model):
     checkin_reminder_minutes = db.Column(db.Integer, nullable=False, default=20)
     checkout_reminder_minutes = db.Column(db.Integer, nullable=False, default=30)
     notify_on_attendance_mark = db.Column(db.Boolean, nullable=False, default=True)
+    # New Task Entry (batch form) — Settings → New Task Entry tab
+    daily_task_entry_max_kms_driven = db.Column(db.Integer, nullable=True)  # None/0 = no cap
+    daily_task_odometer_photo_required = db.Column(db.Boolean, nullable=False, default=False)
     updated_at = db.Column(db.DateTime, default=pk_now, onupdate=pk_now)
 
     def __repr__(self):

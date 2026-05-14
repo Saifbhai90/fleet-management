@@ -7682,6 +7682,26 @@ def form_control():
         flash('Geofence & Notification settings saved.', 'success')
         return redirect(url_for('form_control'))
 
+    if action == 'save_daily_task_entry_settings':
+        att_s = AttendanceSettings.query.first()
+        if not att_s:
+            att_s = AttendanceSettings()
+            db.session.add(att_s)
+        raw_max = (request.form.get('daily_task_entry_max_kms_driven') or '').strip()
+        if not raw_max:
+            att_s.daily_task_entry_max_kms_driven = None
+        else:
+            try:
+                mx = int(float(raw_max))
+                att_s.daily_task_entry_max_kms_driven = mx if mx > 0 else None
+            except (TypeError, ValueError):
+                flash('Max KM invalid — number likhein ya khali chhor dein.', 'warning')
+                return redirect(url_for('form_control', settings_tab='daily_task_entry'))
+        att_s.daily_task_odometer_photo_required = bool(request.form.get('daily_task_odometer_photo_required'))
+        db.session.commit()
+        flash('New Task Entry settings saved.', 'success')
+        return redirect(url_for('form_control', settings_tab='daily_task_entry'))
+
     if action == 'save_oil_change_limits':
         posted_families = request.form.getlist('oil_family')
         posted_limits = request.form.getlist('oil_limit_value')
@@ -20435,6 +20455,27 @@ def _show_task_batch_totals(user_context, row_list):
     return len(row_list) > 1
 
 
+def _task_entry_resolve_start_reading(v, task_date, form_dict):
+    """Same start-reading resolution as _build_vehicle_rows (for save validation)."""
+    form_dict = form_dict or {}
+    prev = VehicleDailyTask.query.filter(
+        VehicleDailyTask.vehicle_id == v.id,
+        VehicleDailyTask.task_date < task_date,
+    ).order_by(VehicleDailyTask.task_date.desc()).first()
+    has_prev = prev is not None and prev.close_reading is not None
+    start_reading = float(prev.close_reading) if has_prev else 0
+    existing = VehicleDailyTask.query.filter_by(vehicle_id=v.id, task_date=task_date).first()
+    if existing and existing.start_reading is not None and not has_prev:
+        start_reading = float(existing.start_reading)
+    key_start = 'vehicle_%s_start_reading' % v.id
+    if not has_prev and key_start in form_dict and form_dict[key_start] not in (None, ''):
+        try:
+            start_reading = float(form_dict[key_start])
+        except (TypeError, ValueError):
+            pass
+    return start_reading
+
+
 @app.route('/task-report/new', methods=['GET', 'POST'])
 def task_report_new():
     from auth_utils import get_user_context
@@ -20528,6 +20569,13 @@ def task_report_new():
         project_id = 0
     district_id, project_id, task_entry_filter = apply_task_entry_assignment_locks(district_id, project_id)
 
+    _att_cfg = AttendanceSettings.query.first()
+    max_km_setting = getattr(_att_cfg, 'daily_task_entry_max_kms_driven', None) if _att_cfg else None
+    odom_required_setting = bool(getattr(_att_cfg, 'daily_task_odometer_photo_required', False) if _att_cfg else False)
+    from auth_utils import user_can_access
+    _perms = session.get('permissions') or []
+    can_edit_saved_task_rows = bool(session.get('is_master') or user_can_access(_perms, 'task_report_entry_edit'))
+
     def _task_report_new_projects_ui(did):
         if did:
             pq = Project.query.join(project_district).filter(project_district.c.district_id == did)
@@ -20549,6 +20597,9 @@ def task_report_new():
             projects=_task_report_new_projects_ui(district_id),
             show_batch_totals=_show_task_batch_totals(user_context, rows_list),
             task_entry_filter=task_entry_filter,
+            can_edit_saved_task_rows=can_edit_saved_task_rows,
+            task_entry_max_km_driven=max_km_setting,
+            task_entry_odometer_required=odom_required_setting,
         )
 
     if request.method == 'POST' and request.form.get('save_batch'):
@@ -20604,6 +20655,35 @@ def task_report_new():
                 'Zarurat ho to pehle row par Edit karein, phir Close Reading bharen aur dubara Save All dabaen.',
                 'danger',
             )
+            view_date = task_date
+            rows = _build_vehicle_rows(vehicles, task_date, request.form)
+            return _task_report_new_render(rows, view_date)
+        validation_msgs = []
+        try:
+            max_km_cap = int(max_km_setting) if max_km_setting is not None else 0
+        except (TypeError, ValueError):
+            max_km_cap = 0
+        for v, existing, close_reading, tasks_count, user_start in to_save:
+            if existing and not can_edit_saved_task_rows:
+                validation_msgs.append(
+                    '%s: pehle se saved row — Edit ki ijazat nahi (admin se "New Task Entry – Edit saved rows" mangwain).'
+                    % (v.vehicle_no,)
+                )
+            start_eff = _task_entry_resolve_start_reading(v, task_date, request.form)
+            kms = float(close_reading) - float(start_eff)
+            if kms < 0:
+                validation_msgs.append(
+                    '%s: Close Reading Start Reading se kam nahi ho sakti (KM %.2f).' % (v.vehicle_no, kms)
+                )
+            if max_km_cap > 0 and kms > max_km_cap:
+                validation_msgs.append(
+                    '%s: KMs driven %.2f hai; Settings ki max limit %s KM hai.' % (v.vehicle_no, kms, max_km_cap)
+                )
+            photo_url = (request.form.get('vehicle_%s_odometer_photo_url' % v.id) or '').strip()
+            if odom_required_setting and not photo_url:
+                validation_msgs.append('%s: Odoo meter photo zaroori hai (Settings).' % (v.vehicle_no,))
+        if validation_msgs:
+            flash('Save nahi ho saka: ' + ' '.join(validation_msgs), 'danger')
             view_date = task_date
             rows = _build_vehicle_rows(vehicles, task_date, request.form)
             return _task_report_new_render(rows, view_date)
@@ -30316,7 +30396,7 @@ def _report_centre_visibility(linked_driver_id=None):
     show_fleet = bool(fleet_vehicle or fleet_project or fleet_expense)
 
     task_daily = (
-        c('task_report_list') or c('task_report_new') or c('red_task_list') or c('red_task_summary') or c('red_task_summary_detail') or c('without_task_list')
+        c('task_report_list') or c('task_report_new') or c('task_report_entry') or c('red_task_list') or c('red_task_summary') or c('red_task_summary_detail') or c('without_task_list')
         or c('speed_monitoring_report') or c('mileage_report') or c('tracker_difference_report')
         or c('unauthorized_movement_report') or c('task_start_delay_report') or c('task_turnaround_report')
         or c('unexecuted_task_report')

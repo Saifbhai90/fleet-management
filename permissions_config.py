@@ -170,7 +170,9 @@ PERMISSION_TREE = {
         ('task_report_upload_list', 'Workbook Upload Log – List / View'),
         # Daily Task Report
         ('task_report_list', 'Daily Task – List / View'),
-        ('task_report_add', 'Daily Task – Add New'),
+        ('task_report_add', 'Daily Task – Add New (legacy)'),
+        ('task_report_entry', 'New Task Entry – Form access'),
+        ('task_report_entry_edit', 'New Task Entry – Edit saved rows'),
         # Red Task
         ('red_task', 'Red Task – List / View'),
         ('red_task_add', 'Red Task – Add New'),
@@ -534,6 +536,8 @@ PERMISSION_DEPENDENCIES = {
     'task_report_upload_list': [],
     'task_report_list': [],
     'task_report_add': ['task_report_list'],
+    'task_report_entry': ['task_report_list'],
+    'task_report_entry_edit': ['task_report_entry'],
     'red_task': [],
     'red_task_add': ['red_task'],
     'red_task_edit': ['red_task'],
@@ -784,7 +788,8 @@ SECTION_PAGE_GROUPS = {
         ]),
         ('Daily Task Report', [
             ('task_report_list', 'List / View'),
-            ('task_report_add', 'Add New'),
+            ('task_report_entry', 'New Task Entry'),
+            ('task_report_entry_edit', 'Edit saved rows (New Task Entry)'),
         ]),
         ('Red Task', [
             ('red_task', 'List / View'),
@@ -1096,6 +1101,8 @@ PAGE_VISIBLE = {
     'task_report_upload': ['task_report', 'task_report_upload'],
     'task_report_upload_list': ['task_report', 'task_report_upload_list'],
     'task_report_list': ['task_report', 'task_report_list'],
+    'task_report_entry': ['task_report', 'task_report_entry', 'task_report_add'],
+    'task_report_entry_edit': ['task_report', 'task_report_entry_edit'],
     'red_task': ['task_report', 'red_task'],
     'without_task': ['task_report', 'without_task'],
     'task_report_logbook': ['task_report', 'task_report_logbook'],
@@ -1184,7 +1191,7 @@ PAGE_VISIBLE = {
     'red_task_summary': ['task_report', 'red_task'],
     'red_task_summary_detail': ['task_report', 'red_task'],
     'without_task_list': ['task_report', 'without_task'],
-    'task_report_new': ['task_report', 'task_report_list', 'task_report_add'],
+    'task_report_new': ['task_report', 'task_report_list', 'task_report_entry', 'task_report_add'],
     'task_report_logbook_cover': ['task_report', 'task_report_logbook'],
     'penalty_record_list': ['driver_status', 'penalty_record'],
     'driver_job_left_list': ['driver_status', 'driver_job_left', 'driver_job_left_list'],

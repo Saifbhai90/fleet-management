@@ -7,9 +7,11 @@
     <div class="d-flex align-items-center gap-2">
       <button class="btn btn-outline-secondary btn-sm" id="btnPrintReport" title="Print / Preview"><i class="bi bi-eye me-1"></i>Print / Preview</button>
       <button class="btn btn-outline-success btn-sm" id="btnExportReport" title="Export to Excel"><i class="bi bi-file-earmark-excel me-1"></i>Export</button>
+      {% if can_see_page('task_report_entry') or can_see_page('task_report_add') %}
       <a href="{{ url_for('task_report_new') }}" class="btn btn-success btn-sm">
         <i class="bi bi-plus-circle me-1"></i>New Task Entry
       </a>
+      {% endif %}
     </div>
   </div>
 
@@ -144,7 +146,7 @@
             <tr>
               <td colspan="17" class="text-center py-5 text-muted">
                 <i class="bi bi-clipboard2-data display-6 d-block mb-2"></i>
-                No task entries for this date/filter. <a href="{{ url_for('task_report_new') }}">Add entry</a> or change filter.
+                No task entries for this date/filter. {% if can_see_page('task_report_entry') or can_see_page('task_report_add') %}<a href="{{ url_for('task_report_new') }}">Add entry</a>{% else %}Add entry{% endif %} or change filter.
               </td>
             </tr>
             {% endfor %}

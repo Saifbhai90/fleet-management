@@ -180,8 +180,8 @@ ENDPOINT_PERMISSION_MAP = [
     # Daily Task Report
     ('task-report', 'task_report_list'),
     ('task_report_list', 'task_report_list'),
-    ('task_report_new', 'task_report_add'),
-    ('api_task_report_odometer_photo_upload', 'task_report_add'),
+    ('task_report_new', 'task_report_entry'),
+    ('api_task_report_odometer_photo_upload', 'task_report_entry'),
     # Red Task
     ('red_task_list', 'red_task'),
     ('red_task_summary', 'red_task'),
@@ -507,6 +507,9 @@ def user_can_access(permission_codes, required_code):
     codes = permission_codes or []
     if required_code in codes:
         return True
+    # Legacy: old roles used task_report_add for New Task Entry; treat as task_report_entry
+    if required_code == 'task_report_entry' and 'task_report_add' in codes:
+        return True
     # Report Centre hub: must match UI (see can_see_report_centre) — not only reports_index / reports full
     if required_code == 'reports_index':
         try:
@@ -637,6 +640,24 @@ def seed_auth_tables(app):
                     codes = {p.code for p in role.permissions}
                     if 'task_report_upload' in codes and 'task_report_upload_list' not in codes:
                         role.permissions.append(ul_perm)
+                        changed = True
+                if changed:
+                    db.session.commit()
+        except Exception:
+            db.session.rollback()
+
+        # New Task Entry: grant task_report_entry to roles that only have legacy task_report_add
+        try:
+            entry_perm = Permission.query.filter_by(code='task_report_entry').first()
+            add_perm = Permission.query.filter_by(code='task_report_add').first()
+            if entry_perm and add_perm:
+                changed = False
+                for role in Role.query.all():
+                    if role.name == 'Master':
+                        continue
+                    codes = {p.code for p in role.permissions}
+                    if 'task_report_add' in codes and 'task_report_entry' not in codes:
+                        role.permissions.append(entry_perm)
                         changed = True
                 if changed:
                     db.session.commit()
