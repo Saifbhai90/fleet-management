@@ -20053,12 +20053,37 @@ def task_report_list():
                 project_q = project_q.filter(Project.id.in_(p_ids or [-1]))
     form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in district_q.order_by(District.name).all()]
     form.project_id.choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in project_q.order_by(Project.name).all()]
-    
+
     today = pk_date()
     from_date = today
     to_date = today
-    district_id = request.args.get('district_id', type=int) or 0
-    project_id = request.args.get('project_id', type=int) or 0
+
+    lad = set(allowed_districts) if allowed_districts else set()
+    lap = set(allowed_projects) if allowed_projects else set()
+    lav = set(allowed_vehicles) if allowed_vehicles else set()
+
+    def coerce_task_report_scope(did, pid):
+        vd = {c[0] for c in form.district_id.choices}
+        vp = {c[0] for c in form.project_id.choices}
+        lk = {'lock_district': False, 'lock_project': False}
+        if did and did not in vd:
+            did = 0
+        if pid and pid not in vp:
+            pid = 0
+        if is_master_or_admin:
+            return did, pid, lk
+        if len(lad) == 1:
+            only_d = next(iter(lad))
+            if only_d in vd:
+                did = only_d
+                lk['lock_district'] = True
+        if len(lad) == 1 and len(lap) == 1 and len(lav) == 1:
+            only_p = next(iter(lap))
+            if only_p in vp:
+                pid = only_p
+                lk['lock_project'] = True
+        return did, pid, lk
+
     if request.method == 'POST':
         from_date = parse_date(request.form.get('from_date')) or today
         to_date = parse_date(request.form.get('to_date')) or today
@@ -20066,7 +20091,11 @@ def task_report_list():
         project_id = request.form.get('project_id', type=int) or 0
         if from_date and to_date and from_date > to_date:
             from_date, to_date = to_date, from_date
+        district_id, project_id, _ = coerce_task_report_scope(district_id, project_id)
         return redirect(url_for('task_report_list', from_date=from_date.strftime('%d-%m-%Y') if from_date else '', to_date=to_date.strftime('%d-%m-%Y') if to_date else '', district_id=district_id, project_id=project_id))
+
+    district_id = request.args.get('district_id', type=int) or 0
+    project_id = request.args.get('project_id', type=int) or 0
     from_str = request.args.get('from_date', '')
     to_str = request.args.get('to_date', '')
     if from_str:
@@ -20075,14 +20104,9 @@ def task_report_list():
         to_date = parse_date(to_str) or to_date
     if from_date and to_date and from_date > to_date:
         from_date, to_date = to_date, from_date
+    district_id, project_id, task_report_filter_lock = coerce_task_report_scope(district_id, project_id)
     form.from_date.data = from_date
     form.to_date.data = to_date
-    valid_d_ids = {c[0] for c in form.district_id.choices}
-    valid_p_ids = {c[0] for c in form.project_id.choices}
-    if district_id and district_id not in valid_d_ids:
-        district_id = 0
-    if project_id and project_id not in valid_p_ids:
-        project_id = 0
     form.district_id.data = district_id
     form.project_id.data = project_id
     query = VehicleDailyTask.query.filter(
@@ -20199,7 +20223,8 @@ def task_report_list():
     return render_template('task_report_list.html', form=form, rows=rows, from_date=from_date, to_date=to_date,
                            total_kms=total_kms, total_tracker=total_tracker, total_diff=total_diff, total_pct=total_pct,
                            total_tasks=total_tasks, total_emg=total_emg, total_task_diff=total_task_diff,
-                           pagination=pagination, per_page=per_page, search=search)
+                           pagination=pagination, per_page=per_page, search=search,
+                           task_report_filter_lock=task_report_filter_lock)
 
 
 def _logbook_vehicle_aggregate(vehicle_id, from_date, to_date):
