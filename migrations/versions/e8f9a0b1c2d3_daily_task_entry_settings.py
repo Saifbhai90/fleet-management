@@ -27,7 +27,12 @@ def upgrade():
     if 'daily_task_odometer_photo_required' not in cols:
         op.add_column(
             'attendance_settings',
-            sa.Column('daily_task_odometer_photo_required', sa.Boolean(), nullable=False, server_default=sa.text('0')),
+            sa.Column(
+                'daily_task_odometer_photo_required',
+                sa.Boolean(),
+                nullable=False,
+                server_default=sa.text('false'),
+            ),
         )
 
 
