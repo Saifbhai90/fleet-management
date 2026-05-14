@@ -635,21 +635,31 @@
         </div>
         <div class="col-12 col-md-2">
           <label class="form-label">District</label>
+          {% if task_entry_filter.lock_district %}
+          <input type="hidden" name="district_id" value="{{ district_id }}">
+          <div class="form-control bg-light text-body-secondary" id="districtSelectLocked" title="Aap ko sirf yeh district assign hai">{% for d in districts %}{% if d.id == district_id %}{{ d.name }}{% endif %}{% endfor %}</div>
+          {% else %}
           <select name="district_id" id="districtSelect" class="form-select search-select">
             <option value="0">-- All Districts --</option>
             {% for d in districts %}
               <option value="{{ d.id }}" {% if district_id == d.id %}selected{% endif %}>{{ d.name }}</option>
             {% endfor %}
           </select>
+          {% endif %}
         </div>
         <div class="col-12 col-md-2">
           <label class="form-label" for="projectSelect">Project</label>
+          {% if task_entry_filter.lock_project %}
+          <input type="hidden" name="project_id" value="{{ project_id }}">
+          <div class="form-control bg-light text-body-secondary" id="projectSelectLocked" title="Aap ko sirf yeh project assign hai">{% for p in projects %}{% if p.id == project_id %}{{ p.name }}{% endif %}{% endfor %}</div>
+          {% else %}
           <select name="project_id" id="projectSelect" class="form-select search-select">
             <option value="0">-- All Projects --</option>
             {% for p in projects %}
               <option value="{{ p.id }}" {% if project_id == p.id %}selected{% endif %}>{{ p.name }}</option>
             {% endfor %}
           </select>
+          {% endif %}
         </div>
         <div class="col-12 col-md-2">
           <button type="submit" class="btn btn-primary w-100 py-2">
@@ -799,10 +809,13 @@
         </div>
       </div>
       <div class="card-footer bg-light d-flex flex-column flex-sm-row justify-content-between align-items-stretch align-items-sm-center gap-2 rounded-bottom">
-        <span class="text-muted small order-2 order-sm-1 task-batch-footer-hint"><span class="d-none d-md-inline">Saved rows locked rahengi; last column me <strong>Edit</strong> click karne par hi editable hongi. New rows ke liye Close Reading required hai.</span><span class="d-md-none">Saved row par pehle <strong>Edit</strong>, phir change. Nayi row: <strong>Close Reading</strong> zaroori.</span></span>
-        <button type="submit" class="btn btn-primary px-4 py-2 order-1 order-sm-2 align-self-stretch task-batch-save-btn" id="saveBtn">
-          <i class="bi bi-save me-1"></i>Save All
-        </button>
+        <span class="text-muted small order-3 order-sm-1 task-batch-footer-hint"><span class="d-none d-md-inline">Saved rows locked rahengi; last column me <strong>Edit</strong> click karne par hi editable hongi. New rows ke liye Close Reading required hai.</span><span class="d-md-none">Saved row par pehle <strong>Edit</strong>, phir change. Nayi row: <strong>Close Reading</strong> zaroori.</span></span>
+        <div class="d-flex flex-column flex-sm-row gap-2 order-1 order-sm-2 align-self-stretch align-self-sm-auto">
+          <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary px-4 py-2 align-self-stretch text-center">Cancel</a>
+          <button type="submit" class="btn btn-primary px-4 py-2 align-self-stretch task-batch-save-btn" id="saveBtn">
+            <i class="bi bi-save me-1"></i>Save All
+          </button>
+        </div>
       </div>
     </div>
   </form>
@@ -878,10 +891,16 @@
 </div>
 
 <script>
+window.TASK_REPORT_NEW_LOCK_DISTRICT = {{ task_entry_filter.lock_district|tojson }};
+window.TASK_REPORT_NEW_LOCK_PROJECT = {{ task_entry_filter.lock_project|tojson }};
+</script>
+<script>
 (function() {
+  var lockDistrict = !!(window.TASK_REPORT_NEW_LOCK_DISTRICT);
   var projectSelect = document.getElementById('projectSelect');
-  if (projectSelect && document.getElementById('districtSelect')) {
-    document.getElementById('districtSelect').addEventListener('change', function() {
+  var districtSelect = document.getElementById('districtSelect');
+  if (projectSelect && districtSelect && !lockDistrict) {
+    districtSelect.addEventListener('change', function() {
       var did = this.value;
       if (projectSelect.tomselect) { projectSelect.tomselect.destroy(); }
       projectSelect.innerHTML = '<option value="0">-- Select Project --</option>';
@@ -895,10 +914,14 @@
               o.textContent = p.name;
               projectSelect.appendChild(o);
             });
-            initSearchableDropdowns(projectSelect.parentNode);
+            if (typeof initSearchableDropdowns === 'function') {
+              initSearchableDropdowns(projectSelect.parentNode);
+            }
           });
       } else {
-        initSearchableDropdowns(projectSelect.parentNode);
+        if (typeof initSearchableDropdowns === 'function') {
+          initSearchableDropdowns(projectSelect.parentNode);
+        }
       }
     });
   }
