@@ -7,9 +7,36 @@ On Windows, PostgreSQL backup uses Python (psycopg2) when pg_dump is not found.
 import os
 import zipfile
 import tempfile
-from datetime import datetime
+from datetime import date, datetime, time
+from decimal import Decimal
 from utils import pk_now
 from urllib.parse import unquote
+
+
+def _backup_include_uploads(app):
+    raw = (os.environ.get('BACKUP_INCLUDE_UPLOADS') or app.config.get('BACKUP_INCLUDE_UPLOADS', 'true'))
+    return str(raw).strip().lower() in ('1', 'true', 'yes')
+
+
+def _sql_literal(value):
+    """Escape a Python value for a simple SQL INSERT literal."""
+    if value is None:
+        return 'NULL'
+    if isinstance(value, bool):
+        return 'TRUE' if value else 'FALSE'
+    if isinstance(value, (int, float, Decimal)):
+        return str(value)
+    if isinstance(value, datetime):
+        return "'" + value.isoformat().replace("'", "''") + "'"
+    if isinstance(value, date):
+        return "'" + value.isoformat().replace("'", "''") + "'"
+    if isinstance(value, time):
+        return "'" + value.isoformat().replace("'", "''") + "'"
+    if isinstance(value, (bytes, memoryview)):
+        raw = bytes(value)
+        return "'\\\\x" + raw.hex() + "'"
+    s = str(value).replace("\\", "\\\\").replace("'", "''")
+    return "'" + s + "'"
 
 
 def get_sqlite_db_path(app):
@@ -29,56 +56,79 @@ def get_sqlite_db_path(app):
     return os.path.abspath(path)
 
 
+def _pg_connect(db_uri):
+    """Connect with psycopg2; prefer SQLAlchemy URL parsing (sslmode, etc.)."""
+    import psycopg2
+    try:
+        from sqlalchemy.engine.url import make_url
+        url = make_url(db_uri)
+        kwargs = {
+            'host': url.host or 'localhost',
+            'port': url.port or 5432,
+            'user': url.username or 'postgres',
+            'password': url.password or '',
+            'dbname': url.database or 'postgres',
+        }
+        q = dict(url.query) if url.query else {}
+        if q.get('sslmode'):
+            kwargs['sslmode'] = q['sslmode']
+        return psycopg2.connect(**kwargs)
+    except Exception:
+        from urllib.parse import urlparse
+        parsed = urlparse(db_uri)
+        return psycopg2.connect(
+            host=parsed.hostname or 'localhost',
+            port=parsed.port or 5432,
+            user=parsed.username or 'postgres',
+            password=parsed.password or '',
+            dbname=(parsed.path or '').strip('/') or 'postgres',
+        )
+
+
 def _pg_dump_via_python(db_uri, sql_file):
     """
-    Dump PostgreSQL schema + data to sql_file using psycopg2 (no pg_dump needed).
-    Raises on error.
+    Dump PostgreSQL data to sql_file using psycopg2 (no pg_dump needed).
+    Streams rows in batches to avoid OOM on large tables.
     """
-    import psycopg2
-    from urllib.parse import urlparse
-    parsed = urlparse(db_uri)
-    host = parsed.hostname or 'localhost'
-    port = parsed.port or 5432
-    user = parsed.username or 'postgres'
-    password = parsed.password or ''
-    dbname = (parsed.path or '').strip('/') or 'postgres'
-    conn = psycopg2.connect(
-        host=host, port=port, user=user, password=password, dbname=dbname
-    )
+    conn = _pg_connect(db_uri)
+    batch_size = 500
     try:
         with open(sql_file, 'w', encoding='utf-8') as f:
-            with conn.cursor() as cur:
-                cur.execute("""
+            with conn.cursor() as meta:
+                meta.execute("""
                     SELECT tablename FROM pg_tables
                     WHERE schemaname = 'public'
                     ORDER BY tablename
                 """)
-                tables = [r[0] for r in cur.fetchall()]
-                for table in tables:
+                tables = [r[0] for r in meta.fetchall()]
+            for table in tables:
+                f.write(f'-- Table "{table}"\n')
+                named = f'backup_cur_{table}'.replace('-', '_')[:50]
+                cur = conn.cursor(name=named)
+                cur.itersize = batch_size
+                try:
                     cur.execute(f'SELECT * FROM "{table}"')
-                    rows = cur.fetchall()
-                    cols = [d[0] for d in cur.description]
-                    if not rows:
-                        f.write(f'-- Table "{table}" (empty)\n')
+                    cols = [d[0] for d in cur.description] if cur.description else []
+                    if not cols:
+                        f.write(f'-- (no columns)\n\n')
                         continue
                     col_list = ','.join(f'"{c}"' for c in cols)
-                    f.write(f'-- Table "{table}"\n')
-                    for row in rows:
-                        vals = []
-                        for v in row:
-                            if v is None:
-                                vals.append('NULL')
-                            elif isinstance(v, bool):
-                                vals.append('TRUE' if v else 'FALSE')
-                            elif isinstance(v, (int, float)):
-                                vals.append(str(v))
-                            elif isinstance(v, datetime):
-                                vals.append("'" + v.isoformat().replace("'", "''") + "'")
-                            else:
-                                s = str(v).replace("\\", "\\\\").replace("'", "''")
-                                vals.append("'" + s + "'")
-                        f.write(f'INSERT INTO "{table}" ({col_list}) VALUES ({",".join(vals)});\n')
-                    f.write('\n')
+                    row_count = 0
+                    while True:
+                        rows = cur.fetchmany(batch_size)
+                        if not rows:
+                            break
+                        for row in rows:
+                            vals = [_sql_literal(v) for v in row]
+                            f.write(
+                                f'INSERT INTO "{table}" ({col_list}) VALUES ({",".join(vals)});\n'
+                            )
+                            row_count += 1
+                    if row_count == 0:
+                        f.write(f'-- (empty)\n')
+                finally:
+                    cur.close()
+                f.write('\n')
     finally:
         conn.close()
 
@@ -136,12 +186,17 @@ def create_backup_zip(app):
                     os.remove(sql_file)
                 except Exception:
                     pass
-            if upload_folder and os.path.isdir(upload_folder):
+            if _backup_include_uploads(app) and upload_folder and os.path.isdir(upload_folder):
                 for root, dirs, files in os.walk(upload_folder):
                     for f in files:
                         full = os.path.join(root, f)
-                        arc = os.path.join('uploads', os.path.relpath(full, upload_folder))
-                        zf.write(full, arc)
+                        try:
+                            if not os.path.isfile(full):
+                                continue
+                            arc = os.path.join('uploads', os.path.relpath(full, upload_folder))
+                            zf.write(full, arc)
+                        except OSError:
+                            continue
         return zip_path, None
     except Exception as e:
         if zip_path and os.path.exists(zip_path):
