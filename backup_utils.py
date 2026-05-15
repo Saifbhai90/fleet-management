@@ -15,7 +15,11 @@ from urllib.parse import unquote
 
 
 def _backup_include_uploads(app):
-    raw = (os.environ.get('BACKUP_INCLUDE_UPLOADS') or app.config.get('BACKUP_INCLUDE_UPLOADS', 'true'))
+    raw = os.environ.get('BACKUP_INCLUDE_UPLOADS')
+    if raw is None:
+        raw = app.config.get('BACKUP_INCLUDE_UPLOADS')
+    if raw is None:
+        raw = 'false' if os.environ.get('RENDER') else 'true'
     return str(raw).strip().lower() in ('1', 'true', 'yes')
 
 
@@ -26,21 +30,71 @@ def _backup_exclude_tables():
     return {t.strip() for t in raw.split(',') if t.strip()}
 
 
-def _zip_add_file(zf, src_path, arcname, progress_cb=None):
-    """Stream a large file into the ZIP (STORED = no extra compression, saves disk/RAM)."""
-    if not os.path.isfile(src_path):
-        raise FileNotFoundError(f'Export file not found: {arcname}')
-    size = os.path.getsize(src_path)
-    if size <= 0:
-        raise ValueError(f'Database export is empty ({arcname}).')
-    size_mb = round(size / (1024 * 1024), 1)
-    if progress_cb:
-        progress_cb(78, f'Adding database to ZIP ({size_mb} MB)…')
+def _check_disk_for_path(path, need_mb):
+    """Raise if free space on volume is below need_mb (rough estimate)."""
+    try:
+        usage = shutil.disk_usage(os.path.dirname(os.path.abspath(path)) or os.getcwd())
+        free_mb = usage.free / (1024 * 1024)
+        if free_mb < need_mb:
+            raise OSError(
+                f'Not enough server disk space ({free_mb:.0f} MB free, need about {need_mb:.0f} MB). '
+                'Set BACKUP_INCLUDE_UPLOADS=false and/or BACKUP_EXCLUDE_TABLES=activity_log,client_activity_log,login_log,login_attempt in Render env.'
+            )
+    except OSError:
+        raise
+    except Exception:
+        pass
+
+
+def _postgres_into_zip(zf, db_uri, arcname, progress_cb=None):
+    """
+    Add PostgreSQL dump into ZIP. Prefer pg_dump straight into ZIP (saves disk).
+    Fallback: temp .sql then ZipFile.write (STORED).
+    """
+    import subprocess
+
+    def _rep(pct, msg):
+        if progress_cb:
+            progress_cb(int(pct), str(msg))
+
     zinfo = zipfile.ZipInfo(filename=arcname)
     zinfo.compress_type = zipfile.ZIP_STORED
-    with open(src_path, 'rb') as src:
+
+    _rep(12, 'Streaming database into ZIP…')
+    try:
         with zf.open(zinfo, 'w', force_zip64=True) as dest:
-            shutil.copyfileobj(src, dest, length=1024 * 1024)
+            proc = subprocess.Popen(
+                ['pg_dump', db_uri, '--no-owner', '--no-acl'],
+                stdout=dest,
+                stderr=subprocess.PIPE,
+            )
+            err_b = proc.communicate(timeout=1200)[1]
+        if proc.returncode == 0:
+            _rep(80, 'Database added to ZIP')
+            return
+        err_tail = (err_b or b'').decode('utf-8', errors='replace')[:500]
+        raise RuntimeError(f'pg_dump failed: {err_tail or "unknown error"}')
+    except FileNotFoundError:
+        pass
+    except subprocess.TimeoutExpired:
+        raise RuntimeError('pg_dump timed out (database very large). Try BACKUP_EXCLUDE_TABLES for log tables.')
+
+    _rep(10, 'Exporting database (Python)…')
+    fd_sql, sql_file = tempfile.mkstemp(suffix='.sql')
+    os.close(fd_sql)
+    try:
+        _pg_dump_via_python(db_uri, sql_file, progress_cb=progress_cb)
+        if not os.path.isfile(sql_file) or os.path.getsize(sql_file) <= 0:
+            raise ValueError('Database export produced an empty file.')
+        size_mb = round(os.path.getsize(sql_file) / (1024 * 1024), 1)
+        _check_disk_for_path(sql_file, size_mb * 2.2 + 80)
+        _rep(78, f'Adding database to ZIP ({size_mb} MB)…')
+        zf.write(sql_file, arcname, compress_type=zipfile.ZIP_STORED)
+    finally:
+        try:
+            os.remove(sql_file)
+        except OSError:
+            pass
 
 
 def _sql_literal(value):
@@ -211,35 +265,8 @@ def create_backup_zip(app, progress_cb=None):
                 else:
                     raise FileNotFoundError('SQLite database file not found.')
             else:
-                _report(10, 'Exporting PostgreSQL database…')
-                fd_sql, sql_file = tempfile.mkstemp(suffix='.sql')
-                os.close(fd_sql)
-                try:
-                    import subprocess
-                    r = None
-                    try:
-                        r = subprocess.run(
-                            ['pg_dump', db_uri, '-F', 'p', '-f', sql_file, '--no-owner', '--no-acl'],
-                            capture_output=True,
-                            text=True,
-                            timeout=900,
-                        )
-                    except (FileNotFoundError, subprocess.TimeoutExpired) as ex:
-                        r = None
-                        if isinstance(ex, subprocess.TimeoutExpired):
-                            raise RuntimeError('pg_dump timed out (database very large).') from ex
-                    if r is not None and r.returncode != 0:
-                        err_tail = (r.stderr or r.stdout or '')[:400]
-                        raise RuntimeError(f'pg_dump failed: {err_tail or "unknown error"}')
-                    if r is None or r.returncode != 0:
-                        _pg_dump_via_python(db_uri, sql_file, progress_cb=_report)
-                    arc_sql = zip_basename.replace('.zip', '_database.sql')
-                    _zip_add_file(zf, sql_file, arc_sql, progress_cb=_report)
-                finally:
-                    try:
-                        os.remove(sql_file)
-                    except OSError:
-                        pass
+                arc_sql = zip_basename.replace('.zip', '_database.sql')
+                _postgres_into_zip(zf, db_uri, arc_sql, progress_cb=_report)
             if _backup_include_uploads(app) and upload_folder and os.path.isdir(upload_folder):
                 _report(82, 'Adding local uploads folder…')
                 file_count = 0
