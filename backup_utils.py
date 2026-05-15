@@ -618,7 +618,13 @@ def _execute_backup_job_after_claim(app, job_id):
                     pass
                 write_job(app, job_id, status='error', step='Backup failed', error=err_msg)
                 return {'started': True, 'status': 'error', 'error': err_msg}
-            write_job(app, job_id, status='running', step='Sending email…', percent=92)
+            write_job(
+                app,
+                job_id,
+                status='running',
+                step='Preparing email attachment…',
+                percent=93,
+            )
             ok, msg = send_backup_email(app, zip_path, dest)
             try:
                 os.remove(zip_path)

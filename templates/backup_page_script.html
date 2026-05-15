@@ -10,6 +10,9 @@
   var pollTimer = null;
   var currentJobId = null;
   var currentJobType = 'download';
+  /** Render proxy/worker blips often return 502 mid-job; do not abort until many failures. */
+  var pollTransientFailures = 0;
+  var maxTransientPollFailures = 50;
 
   function el(id) { return document.getElementById(id); }
 
@@ -81,8 +84,35 @@
 
   function pollStatus(jobId) {
     fetch(statusUrl(jobId), { credentials: 'same-origin', headers: csrfHeaders() })
-      .then(parseJsonResponse)
+      .then(function(r) {
+        return r.text().then(function(text) {
+          var transient = r.status === 502 || r.status === 503 || r.status === 504;
+          if (transient) {
+            pollTransientFailures++;
+            if (pollTransientFailures >= maxTransientPollFailures) {
+              throw new Error('Server temporarily unavailable (' + r.status + '). Open Render logs or redeploy; if email backup: try Download Backup once.');
+            }
+            el('backupStatusLine').textContent =
+              'Brief connection issue (' + r.status + '), retrying… (' + pollTransientFailures + '/' + maxTransientPollFailures + ')';
+            return null;
+          }
+          pollTransientFailures = 0;
+          var j = null;
+          try {
+            j = text ? JSON.parse(text) : null;
+          } catch (e) {
+            j = null;
+          }
+          if (!r.ok) {
+            var msg = (j && j.error) ? j.error : (text && text.indexOf('<') >= 0 ? ('Server error (' + r.status + ')') : text);
+            throw new Error(msg || ('Request failed (' + r.status + ')'));
+          }
+          if (!j) throw new Error('Invalid server response.');
+          return j;
+        });
+      })
       .then(function(j) {
+        if (!j) return;
         if (!j.ok) throw new Error(j.error || 'Status failed');
         if (j.status === 'error') {
           if (pollTimer) {
@@ -136,6 +166,7 @@
       .catch(function(err) {
         if (pollTimer) clearInterval(pollTimer);
         pollTimer = null;
+        pollTransientFailures = 0;
         el('backupSpinner').classList.add('d-none');
         el('backupFailIcon').classList.remove('d-none');
         el('backupOverlayTitle').textContent = 'Backup Failed';
@@ -146,6 +177,7 @@
   }
 
   function startJob(jobType) {
+    pollTransientFailures = 0;
     currentJobType = jobType || 'download';
     showOverlay(
       jobType === 'email' ? 'Sending Backup Email…' : 'Creating Backup…',

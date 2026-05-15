@@ -4324,7 +4324,7 @@ def backup_job_execute(job_id):
 
 @app.route('/backup/job/<job_id>/status')
 def backup_job_status(job_id):
-    """Poll progress; if still queued, run backup in this request (Render-safe, no background thread)."""
+    """Poll progress; queued jobs start in a background thread so HTTP stays short (avoids Render 502)."""
     from backup_jobs import read_job, _lock_file
     from backup_utils import start_backup_job_background
 
@@ -4338,7 +4338,8 @@ def backup_job_status(job_id):
 
         if job.get('status') == 'queued' and not os.path.exists(_lock_file(app, job_id)):
             start_backup_job_background(app, job_id)
-            job = read_job(app, job_id) or job
+
+        job = read_job(app, job_id) or job
 
         err_val = job.get('error')
         if err_val is None:
