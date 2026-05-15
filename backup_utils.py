@@ -36,8 +36,10 @@ def _zip_add_file(zf, src_path, arcname, progress_cb=None):
     size_mb = round(size / (1024 * 1024), 1)
     if progress_cb:
         progress_cb(78, f'Adding database to ZIP ({size_mb} MB)…')
+    zinfo = zipfile.ZipInfo(filename=arcname)
+    zinfo.compress_type = zipfile.ZIP_STORED
     with open(src_path, 'rb') as src:
-        with zf.open(arcname, 'w', force_zip64=True, compress_type=zipfile.ZIP_STORED) as dest:
+        with zf.open(zinfo, 'w', force_zip64=True) as dest:
             shutil.copyfileobj(src, dest, length=1024 * 1024)
 
 
