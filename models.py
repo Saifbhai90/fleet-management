@@ -2065,6 +2065,29 @@ class SystemSetting(db.Model):
 
 
 # ────────────────────────────────────────────────
+# Backup job queue (PostgreSQL) — shared across Render instances / workers
+# ────────────────────────────────────────────────
+class FleetBackupJob(db.Model):
+    """Async backup job JSON blob; used when DB is Postgres (see backup_jobs.py)."""
+    __tablename__ = 'fleet_backup_job'
+
+    id = db.Column(db.String(40), primary_key=True)
+    body = db.Column(db.JSON, nullable=False)
+    updated_at = db.Column(db.DateTime, default=pk_now, onupdate=pk_now, nullable=False)
+
+
+class FleetBackupJobLock(db.Model):
+    """Only one worker/instance may hold a lock row per job (exclusive backup runner)."""
+    __tablename__ = 'fleet_backup_job_lock'
+
+    job_id = db.Column(
+        db.String(40),
+        db.ForeignKey('fleet_backup_job.id', ondelete='CASCADE'),
+        primary_key=True,
+    )
+
+
+# ────────────────────────────────────────────────
 # Fund Transfer (bank-like wallet transfers)
 # ────────────────────────────────────────────────
 class FundTransfer(db.Model):

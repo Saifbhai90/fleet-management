@@ -4325,7 +4325,7 @@ def backup_job_execute(job_id):
 @app.route('/backup/job/<job_id>/status')
 def backup_job_status(job_id):
     """Poll progress; queued jobs start in a background thread so HTTP stays short (avoids Render 502)."""
-    from backup_jobs import read_job, _lock_file
+    from backup_jobs import read_job, has_worker_claim
     from backup_utils import start_backup_job_background
 
     try:
@@ -4336,7 +4336,7 @@ def backup_job_status(job_id):
         if owner != session.get('user_id') and not session.get('is_master'):
             return jsonify({'ok': False, 'error': 'Forbidden'}), 403
 
-        if job.get('status') == 'queued' and not os.path.exists(_lock_file(app, job_id)):
+        if job.get('status') == 'queued' and not has_worker_claim(app, job_id):
             start_backup_job_background(app, job_id)
 
         job = read_job(app, job_id) or job
