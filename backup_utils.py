@@ -32,6 +32,30 @@ def _backup_exclude_tables():
     return {t.strip() for t in raw.split(',') if t.strip()}
 
 
+def _backup_compact(app):
+    """On Render: single compressed dump file (no ZIP) to avoid 2× disk for large DBs."""
+    raw = os.environ.get('BACKUP_COMPACT')
+    if raw is None:
+        raw = app.config.get('BACKUP_COMPACT')
+    if raw is None:
+        raw = 'true' if os.environ.get('RENDER') else 'false'
+    return str(raw).strip().lower() in ('1', 'true', 'yes')
+
+
+def _backup_temp_path(suffix):
+    ts = pk_now().strftime('%Y%m%d_%H%M%S')
+    return os.path.join(tempfile.gettempdir(), f'fleet_backup_{ts}{suffix}')
+
+
+def _gzip_file(src_path, dest_path=None):
+    import gzip
+    gz_path = dest_path or (src_path + '.gz')
+    with open(src_path, 'rb') as f_in:
+        with gzip.open(gz_path, 'wb', compresslevel=6) as f_out:
+            shutil.copyfileobj(f_in, f_out, length=1024 * 1024)
+    return gz_path
+
+
 def _check_disk_for_path(path, need_mb):
     """Raise if free space on volume is below need_mb (rough estimate)."""
     try:
@@ -48,10 +72,10 @@ def _check_disk_for_path(path, need_mb):
         pass
 
 
-def _postgres_into_zip(zf, db_uri, arcname, progress_cb=None):
+def _postgres_dump_to_file(db_uri, progress_cb=None):
     """
-    Add PostgreSQL dump into ZIP: pg_dump to temp .sql, then ZipFile.write (STORED).
-    Do not pipe pg_dump stdout into ZipFile (no fileno — breaks subprocess on Linux).
+    PostgreSQL backup as .dump (pg_dump -Fc) or .sql.gz (Python fallback).
+    Much smaller than plain .sql — avoids running out of disk on Render.
     """
     import subprocess
 
@@ -59,51 +83,102 @@ def _postgres_into_zip(zf, db_uri, arcname, progress_cb=None):
         if progress_cb:
             progress_cb(int(pct), str(msg))
 
-    def _add_sql_to_zip(sql_file):
-        if not os.path.isfile(sql_file) or os.path.getsize(sql_file) <= 0:
-            raise ValueError('Database export produced an empty file.')
-        size_mb = round(os.path.getsize(sql_file) / (1024 * 1024), 1)
-        _check_disk_for_path(sql_file, size_mb * 2.2 + 80)
-        _rep(78, f'Adding database to ZIP ({size_mb} MB)…')
-        zf.write(sql_file, arcname, compress_type=zipfile.ZIP_STORED)
-        _rep(80, 'Database added to ZIP')
+    out_path = _backup_temp_path('.dump')
+    _rep(12, 'Exporting database (pg_dump compressed)…')
+    try:
+        r = subprocess.run(
+            ['pg_dump', db_uri, '-Fc', '--no-owner', '--no-acl', '-f', out_path],
+            capture_output=True,
+            text=True,
+            timeout=1200,
+        )
+        if r.returncode == 0 and os.path.isfile(out_path) and os.path.getsize(out_path) > 0:
+            _rep(80, 'Database export ready')
+            return out_path
+    except FileNotFoundError:
+        pass
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(
+            'pg_dump timed out (database very large). '
+            'Set BACKUP_EXCLUDE_TABLES=activity_log,client_activity_log,login_log,login_attempt on Render.'
+        )
 
-    fd_sql, sql_file = tempfile.mkstemp(suffix='.sql')
+    try:
+        os.remove(out_path)
+    except OSError:
+        pass
+
+    fd_sql, sql_file = tempfile.mkstemp(suffix='.sql', prefix='fleet_backup_pg_')
     os.close(fd_sql)
     try:
-        pg_dump_ok = False
-        _rep(12, 'Exporting database (pg_dump)…')
-        try:
-            r = subprocess.run(
-                ['pg_dump', db_uri, '--no-owner', '--no-acl', '-f', sql_file],
-                capture_output=True,
-                text=True,
-                timeout=1200,
-            )
-            if r.returncode == 0:
-                pg_dump_ok = True
-            elif r.stderr or r.stdout:
-                err_tail = (r.stderr or r.stdout or '')[:400]
-                if progress_cb:
-                    progress_cb(12, f'pg_dump failed, using Python export… ({err_tail[:80]})')
-        except FileNotFoundError:
-            pass
-        except subprocess.TimeoutExpired:
-            raise RuntimeError(
-                'pg_dump timed out (database very large). '
-                'Set BACKUP_EXCLUDE_TABLES=activity_log,client_activity_log,login_log,login_attempt on Render.'
-            )
-
-        if not pg_dump_ok:
-            _rep(10, 'Exporting database (Python)…')
-            _pg_dump_via_python(db_uri, sql_file, progress_cb=progress_cb)
-
-        _add_sql_to_zip(sql_file)
+        _rep(10, 'Exporting database (Python)…')
+        _pg_dump_via_python(db_uri, sql_file, progress_cb=progress_cb)
+        if not os.path.isfile(sql_file) or os.path.getsize(sql_file) <= 0:
+            raise ValueError('Database export produced an empty file.')
+        _rep(70, 'Compressing database export…')
+        size_mb = os.path.getsize(sql_file) / (1024 * 1024)
+        _check_disk_for_path(sql_file, size_mb * 1.5 + 50)
+        gz_path = _backup_temp_path('.sql.gz')
+        _gzip_file(sql_file, gz_path)
+        _rep(80, 'Database export ready')
+        return gz_path
     finally:
         try:
             os.remove(sql_file)
         except OSError:
             pass
+
+
+def _postgres_into_zip(zf, db_uri, arcname, progress_cb=None):
+    """Add compressed PostgreSQL dump (.dump or .sql.gz) into ZIP."""
+    out_path = _postgres_dump_to_file(db_uri, progress_cb=progress_cb)
+    try:
+        if out_path.endswith('.dump'):
+            arc = arcname.replace('_database.sql', '_database.dump')
+            if not arc.endswith('.dump'):
+                arc = arc.rsplit('.', 1)[0] + '.dump'
+        else:
+            arc = arcname if arcname.endswith('.gz') else (arcname + '.gz')
+        size_mb = round(os.path.getsize(out_path) / (1024 * 1024), 1)
+        _check_disk_for_path(out_path, size_mb * 1.3 + 40)
+        if progress_cb:
+            progress_cb(78, f'Adding database to ZIP ({size_mb} MB)…')
+        try:
+            zf.write(out_path, arc, compress_type=zipfile.ZIP_STORED)
+        except OSError as ex:
+            raise OSError(
+                f'Cannot add database to ZIP ({size_mb} MB): {ex}. '
+                'On Render use compact backup (BACKUP_COMPACT=true, default).'
+            ) from ex
+        if progress_cb:
+            progress_cb(82, 'Database added to ZIP')
+    finally:
+        try:
+            os.remove(out_path)
+        except OSError:
+            pass
+
+
+def _create_backup_compact(app, progress_cb=None):
+    """Single-file backup (no ZIP) — one copy on disk for large PostgreSQL DBs."""
+    def _report(pct, step):
+        if progress_cb:
+            progress_cb(int(pct), str(step))
+
+    _report(5, 'Preparing compact backup…')
+    db_uri = (app.config.get('SQLALCHEMY_DATABASE_URI') or '').strip()
+    if 'sqlite' in db_uri:
+        db_path = get_sqlite_db_path(app)
+        if not db_path or not os.path.exists(db_path):
+            raise FileNotFoundError('SQLite database file not found.')
+        out_path = _backup_temp_path('.sqlite')
+        shutil.copy2(db_path, out_path)
+        _report(95, 'Backup ready')
+        return out_path, None
+
+    out_path = _postgres_dump_to_file(db_uri, progress_cb=_report)
+    _report(95, 'Finalizing backup…')
+    return out_path, None
 
 
 def _sql_literal(value):
@@ -249,10 +324,13 @@ def _pg_dump_via_python(db_uri, sql_file, progress_cb=None):
 
 def create_backup_zip(app, progress_cb=None):
     """
-    Create a full backup ZIP: database + uploads folder.
-    progress_cb(percent, step_message) optional.
-    Returns (path_to_zip_file, error_message). Caller must delete zip_path when done.
+    Create backup archive. On Render (BACKUP_COMPACT=true): single .dump or .sql.gz file.
+    Otherwise: ZIP with database + optional uploads.
+    Returns (path_to_file, error_message). Caller must delete file when done.
     """
+    if _backup_compact(app):
+        return _create_backup_compact(app, progress_cb)
+
     def _report(pct, step):
         if progress_cb:
             progress_cb(int(pct), str(step))
@@ -334,11 +412,15 @@ def send_backup_email(app, zip_path, to_email):
         msg['From'] = mail_from
         msg['To'] = to_email
         msg.attach(MIMEText('Fleet Manager database and uploads backup. Please store securely.', 'plain'))
+        attach_name = os.path.basename(zip_path)
+        ext = os.path.splitext(attach_name)[1].lower()
+        maintype = 'application'
+        subtype = 'zip' if ext == '.zip' else 'gzip' if ext == '.gz' else 'octet-stream'
         with open(zip_path, 'rb') as f:
-            part = MIMEBase('application', 'zip')
+            part = MIMEBase(maintype, subtype)
             part.set_payload(f.read())
         encoders.encode_base64(part)
-        part.add_header('Content-Disposition', 'attachment', filename=os.path.basename(zip_path))
+        part.add_header('Content-Disposition', 'attachment', filename=attach_name)
         msg.attach(part)
         # Try 465 (SSL) first; often works better from local. Else 587 (STARTTLS).
         last_err = None
@@ -388,13 +470,22 @@ def run_backup_job_sync(app, job_id):
 
         zip_path, err = create_backup_zip(app, progress_cb=progress)
         if err:
+            err_msg = (err or '').strip() or 'Backup failed (unknown reason)'
             write_job(
                 app, job_id,
-                status='error', step='Backup failed', error=err,
+                status='error', step='Backup failed', error=err_msg,
             )
-            return {'started': True, 'status': 'error', 'error': err}
+            return {'started': True, 'status': 'error', 'error': err_msg}
 
-        friendly = f'fleet_backup_{pk_now().strftime("%Y%m%d_%H%M%S")}.zip'
+        if not zip_path or not os.path.isfile(zip_path):
+            err_msg = 'Backup file was not created.'
+            write_job(app, job_id, status='error', step='Backup failed', error=err_msg)
+            return {'started': True, 'status': 'error', 'error': err_msg}
+
+        ext = os.path.splitext(zip_path)[1] or '.zip'
+        friendly = os.path.basename(zip_path)
+        if not friendly.startswith('fleet_backup_'):
+            friendly = f'fleet_backup_{pk_now().strftime("%Y%m%d_%H%M%S")}{ext}'
         size_mb = round(os.path.getsize(zip_path) / (1024 * 1024), 1)
         try:
             from models import SystemSetting
@@ -423,11 +514,12 @@ def run_backup_job_sync(app, job_id):
                 os.remove(zip_path)
             except OSError:
                 pass
+        err_msg = str(e).strip() or f'{type(e).__name__}: backup failed'
         write_job(
             app, job_id,
-            status='error', step='Backup failed', error=str(e),
+            status='error', step='Backup failed', error=err_msg,
         )
-        return {'started': True, 'status': 'error', 'error': str(e)}
+        return {'started': True, 'status': 'error', 'error': err_msg}
     finally:
         release_claim(app, job_id)
 

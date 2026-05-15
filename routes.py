@@ -4346,12 +4346,19 @@ def backup_job_download(job_id):
         return redirect(url_for('backup_index'))
     friendly = job.get('download_name') or os.path.basename(zip_path)
     _last_backup_ts['ts'] = pk_now()
+    ext = os.path.splitext(friendly)[1].lower()
+    mimetype = {
+        '.zip': 'application/zip',
+        '.gz': 'application/gzip',
+        '.dump': 'application/octet-stream',
+        '.sqlite': 'application/x-sqlite3',
+    }.get(ext, 'application/octet-stream')
 
     resp = send_file(
         zip_path,
         as_attachment=True,
         download_name=friendly,
-        mimetype='application/zip',
+        mimetype=mimetype,
         max_age=0,
     )
 

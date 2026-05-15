@@ -209,7 +209,7 @@
           el('backupSpinner').classList.add('d-none');
           el('backupFailIcon').classList.remove('d-none');
           el('backupOverlayTitle').textContent = 'Backup Failed';
-          var errMsg = j.error || j.step || 'Unknown error';
+          var errMsg = (j.error && String(j.error).trim()) ? j.error : (j.step || 'Unknown error');
           el('backupStatusLine').textContent = errMsg;
           el('backupStatusLine').title = errMsg;
           el('backupProgress').classList.remove('progress-bar-animated');

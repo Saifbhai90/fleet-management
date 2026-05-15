@@ -31,3 +31,5 @@ services:
         value: "false"
       - key: BACKUP_EXCLUDE_TABLES
         value: activity_log,client_activity_log,login_log,login_attempt
+      - key: BACKUP_COMPACT
+        value: "true"
