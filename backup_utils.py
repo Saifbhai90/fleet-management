@@ -395,14 +395,73 @@ def _format_email_error(exc):
     ):
         return (
             'SMTP blocked or unreachable from Render (free plan blocks ports 587/465). '
-            'Fix: add a SendGrid API key in backup settings below, upgrade Render to a paid instance, '
-            'or use Download Backup instead. Detail: ' + msg
+            'Fix: add a Mailtrap API token in backup settings (recommended on Render), '
+            'upgrade Render to paid for Gmail SMTP, or use Download Backup. Detail: ' + msg
         )
     if 'authentication' in low or '535' in msg or '534' in msg:
         return 'Gmail login failed. Use a 16-character App Password (Google → Security → App passwords), not your normal password.'
     if any(x in low for x in ('552', 'too large', 'maximum', 'size exceeded', 'message size')):
         return f'Attachment too large for email (max about {_email_attachment_limit_mb()} MB). Use Download Backup.'
     return msg
+
+
+def _send_backup_via_mailtrap(api_token, from_email, to_email, subject, body, attach_path):
+    import base64
+    import json
+    from urllib.error import HTTPError, URLError
+    from urllib.request import Request, urlopen
+
+    attach_name = os.path.basename(attach_path)
+    ext = os.path.splitext(attach_name)[1].lower()
+    mime = 'application/zip' if ext == '.zip' else 'application/gzip' if ext == '.gz' else 'application/octet-stream'
+    with open(attach_path, 'rb') as f:
+        b64 = base64.b64encode(f.read()).decode('ascii')
+    payload = {
+        'from': {'email': from_email, 'name': 'Fleet Manager Backup'},
+        'to': [{'email': to_email}],
+        'subject': subject,
+        'text': body,
+        'attachments': [{
+            'content': b64,
+            'filename': attach_name,
+            'type': mime,
+            'disposition': 'attachment',
+        }],
+    }
+    req = Request(
+        'https://send.api.mailtrap.io/api/send',
+        data=json.dumps(payload).encode('utf-8'),
+        headers={
+            'Authorization': 'Bearer ' + api_token,
+            'Content-Type': 'application/json',
+            'User-Agent': 'FleetManager-Backup/1.0',
+        },
+        method='POST',
+    )
+    try:
+        with urlopen(req, timeout=180) as resp:
+            raw = resp.read().decode('utf-8', errors='replace')
+            if 200 <= getattr(resp, 'status', 200) < 300:
+                try:
+                    data = json.loads(raw) if raw else {}
+                    if data.get('success') is False:
+                        errs = data.get('errors') or ['Unknown Mailtrap error']
+                        return False, 'Mailtrap: ' + '; '.join(str(e) for e in errs[:3])
+                except json.JSONDecodeError:
+                    pass
+                return True, 'Backup sent to ' + to_email + ' (Mailtrap)'
+    except HTTPError as e:
+        detail = e.read().decode('utf-8', errors='replace')[:500]
+        try:
+            data = json.loads(detail)
+            if data.get('errors'):
+                return False, 'Mailtrap: ' + '; '.join(str(x) for x in data['errors'][:3])
+        except json.JSONDecodeError:
+            pass
+        return False, f'Mailtrap error ({e.code}): {detail or e.reason}'
+    except URLError as e:
+        return False, 'Mailtrap request failed: ' + str(e.reason or e)
+    return False, 'Mailtrap send failed'
 
 
 def _send_backup_via_sendgrid(api_key, from_email, to_email, subject, body, attach_path):
@@ -487,8 +546,8 @@ def _send_backup_via_smtp(server, port, use_tls, username, password, mail_from, 
 def send_backup_email(app, zip_path, to_email):
     """
     Send backup file as email attachment.
-    Uses SendGrid API when SENDGRID_API_KEY is set (required on Render free tier).
-    Otherwise SMTP (Gmail).
+    Uses Mailtrap API, then SendGrid, then SMTP (Gmail).
+    On Render free tier use Mailtrap or SendGrid (SMTP ports blocked).
     """
     from backup_config import apply_backup_config_to_app
 
@@ -510,9 +569,15 @@ def send_backup_email(app, zip_path, to_email):
     username = (app.config.get('MAIL_USERNAME') or '').strip()
     password = (app.config.get('MAIL_PASSWORD') or '').strip()
     mail_from = (app.config.get('MAIL_FROM') or username or '').strip()
+    mailtrap_token = (app.config.get('MAILTRAP_API_TOKEN') or os.environ.get('MAILTRAP_API_TOKEN') or '').strip()
     sendgrid_key = (app.config.get('SENDGRID_API_KEY') or os.environ.get('SENDGRID_API_KEY') or '').strip()
     subject = f'Fleet Manager Backup {pk_now().strftime("%Y-%m-%d %H:%M")}'
     body = 'Fleet Manager database backup. Please store securely.'
+
+    if mailtrap_token:
+        if not mail_from:
+            return False, 'Sender email is required (must be verified in Mailtrap → Domains).'
+        return _send_backup_via_mailtrap(mailtrap_token, mail_from, to_email, subject, body, zip_path)
 
     if sendgrid_key:
         if not mail_from:
@@ -526,7 +591,7 @@ def send_backup_email(app, zip_path, to_email):
     if not server or not username or not password:
         hint = ''
         if os.environ.get('RENDER'):
-            hint = ' On Render free tier, add a SendGrid API key in backup settings (SMTP is blocked).'
+            hint = ' On Render free tier, add a Mailtrap API token in backup settings (SMTP is blocked).'
         return False, 'Email not configured (Gmail App Password required).' + hint
 
     try:
