@@ -16,21 +16,33 @@ depends_on = None
 
 
 def upgrade():
-    op.create_table(
-        'fleet_backup_job',
-        sa.Column('id', sa.String(length=40), nullable=False),
-        sa.Column('body', sa.JSON(), nullable=False),
-        sa.Column('updated_at', sa.DateTime(), nullable=False),
-        sa.PrimaryKeyConstraint('id'),
-    )
-    op.create_table(
-        'fleet_backup_job_lock',
-        sa.Column('job_id', sa.String(length=40), nullable=False),
-        sa.ForeignKeyConstraint(['job_id'], ['fleet_backup_job.id'], ondelete='CASCADE'),
-        sa.PrimaryKeyConstraint('job_id'),
-    )
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    existing = set(inspector.get_table_names())
+
+    if 'fleet_backup_job' not in existing:
+        op.create_table(
+            'fleet_backup_job',
+            sa.Column('id', sa.String(length=40), nullable=False),
+            sa.Column('body', sa.JSON(), nullable=False),
+            sa.Column('updated_at', sa.DateTime(), nullable=False),
+            sa.PrimaryKeyConstraint('id'),
+        )
+    if 'fleet_backup_job_lock' not in existing:
+        op.create_table(
+            'fleet_backup_job_lock',
+            sa.Column('job_id', sa.String(length=40), nullable=False),
+            sa.ForeignKeyConstraint(['job_id'], ['fleet_backup_job.id'], ondelete='CASCADE'),
+            sa.PrimaryKeyConstraint('job_id'),
+        )
 
 
 def downgrade():
-    op.drop_table('fleet_backup_job_lock')
-    op.drop_table('fleet_backup_job')
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    existing = set(inspector.get_table_names())
+
+    if 'fleet_backup_job_lock' in existing:
+        op.drop_table('fleet_backup_job_lock')
+    if 'fleet_backup_job' in existing:
+        op.drop_table('fleet_backup_job')
