@@ -4,6 +4,7 @@ Professional-style backup: one ZIP containing database dump and uploads folder.
 Supports SQLite and PostgreSQL. Used for Download, Email, and Save-to-path.
 On Windows, PostgreSQL backup uses Python (psycopg2) when pg_dump is not found.
 """
+import logging
 import os
 import shutil
 import zipfile
@@ -12,6 +13,8 @@ from datetime import date, datetime, time
 from decimal import Decimal
 from utils import pk_now
 from urllib.parse import unquote
+
+_logger = logging.getLogger(__name__)
 
 
 def _backup_include_uploads(app):
@@ -45,6 +48,19 @@ def _backup_compact(app):
 def _backup_temp_path(suffix):
     ts = pk_now().strftime('%Y%m%d_%H%M%S')
     return os.path.join(tempfile.gettempdir(), f'fleet_backup_{ts}{suffix}')
+
+
+def _normalize_postgresql_uri_for_pg_dump(db_uri):
+    """pg_dump expects postgresql://… not postgres:// or postgresql+driver://."""
+    u = (db_uri or '').strip()
+    if not u:
+        return u
+    if u.startswith('postgres://'):
+        u = 'postgresql://' + u[len('postgres://') :]
+    for prefix in ('postgresql+psycopg2://', 'postgresql+psycopg://', 'postgresql+asyncpg://'):
+        if u.startswith(prefix):
+            return 'postgresql://' + u[len(prefix) :]
+    return u
 
 
 def _gzip_file(src_path, dest_path=None):
@@ -84,19 +100,28 @@ def _postgres_dump_to_file(db_uri, progress_cb=None):
             progress_cb(int(pct), str(msg))
 
     out_path = _backup_temp_path('.dump')
+    pg_uri = _normalize_postgresql_uri_for_pg_dump(db_uri)
+    pg_dump_stderr = ''
     _rep(12, 'Exporting database (pg_dump compressed)…')
     try:
         r = subprocess.run(
-            ['pg_dump', db_uri, '-Fc', '--no-owner', '--no-acl', '-f', out_path],
+            ['pg_dump', pg_uri, '-Fc', '--no-owner', '--no-acl', '-f', out_path],
             capture_output=True,
             text=True,
             timeout=1200,
         )
+        pg_dump_stderr = ((r.stderr or '') + '\n' + (r.stdout or '')).strip()[:1500]
         if r.returncode == 0 and os.path.isfile(out_path) and os.path.getsize(out_path) > 0:
             _rep(80, 'Database export ready')
             return out_path
+        if pg_dump_stderr:
+            _logger.warning('pg_dump exited %s: %s', r.returncode, pg_dump_stderr[:500])
     except FileNotFoundError:
-        pass
+        pg_dump_stderr = (
+            'pg_dump not found on server (install PostgreSQL client tools), '
+            'using built-in Python export instead.'
+        )
+        _logger.warning('%s', pg_dump_stderr)
     except subprocess.TimeoutExpired:
         raise RuntimeError(
             'pg_dump timed out (database very large). '
@@ -111,8 +136,21 @@ def _postgres_dump_to_file(db_uri, progress_cb=None):
     fd_sql, sql_file = tempfile.mkstemp(suffix='.sql', prefix='fleet_backup_pg_')
     os.close(fd_sql)
     try:
-        _rep(10, 'Exporting database (Python)…')
-        _pg_dump_via_python(db_uri, sql_file, progress_cb=progress_cb)
+        _rep(
+            14,
+            'Built-in database export (streams to disk; large tables safe)…',
+        )
+        try:
+            _pg_dump_via_python(db_uri, sql_file, progress_cb=progress_cb)
+        except Exception as e:
+            extra = ''
+            if pg_dump_stderr:
+                extra = f' pg_dump/detail: {pg_dump_stderr[:600]}'
+            raise RuntimeError(
+                'PostgreSQL backup failed during export. '
+                'Check DATABASE_URL / SSL, disk space, and Render logs. '
+                f'({e}){extra}'
+            ) from e
         if not os.path.isfile(sql_file) or os.path.getsize(sql_file) <= 0:
             raise ValueError('Database export produced an empty file.')
         _rep(70, 'Compressing database export…')
@@ -235,24 +273,35 @@ def _pg_connect(db_uri):
         q = dict(url.query) if url.query else {}
         if q.get('sslmode'):
             kwargs['sslmode'] = q['sslmode']
+        elif os.environ.get('RENDER'):
+            kwargs['sslmode'] = 'require'
         return psycopg2.connect(**kwargs)
     except Exception:
-        from urllib.parse import urlparse
+        from urllib.parse import parse_qs, unquote, urlparse
+
         parsed = urlparse(db_uri)
-        return psycopg2.connect(
-            host=parsed.hostname or 'localhost',
-            port=parsed.port or 5432,
-            user=parsed.username or 'postgres',
-            password=parsed.password or '',
-            dbname=(parsed.path or '').strip('/') or 'postgres',
-        )
+        pwd = unquote(parsed.password) if parsed.password else ''
+        user = unquote(parsed.username) if parsed.username else 'postgres'
+        conn_kw = {
+            'host': parsed.hostname or 'localhost',
+            'port': parsed.port or 5432,
+            'user': user,
+            'password': pwd,
+            'dbname': (parsed.path or '').strip('/') or 'postgres',
+        }
+        qs = parse_qs(parsed.query)
+        if qs.get('sslmode'):
+            conn_kw['sslmode'] = qs['sslmode'][0]
+        elif os.environ.get('RENDER'):
+            conn_kw['sslmode'] = 'require'
+        return psycopg2.connect(**conn_kw)
 
 
 def _pg_dump_via_python(db_uri, sql_file, progress_cb=None):
     """
     Dump PostgreSQL to sql_file using psycopg2 COPY (fast) with INSERT fallback per row batch.
+    COPY streams via a temp file so large tables do not exhaust RAM (StringIO would).
     """
-    import io
     conn = _pg_connect(db_uri)
     batch_size = 1000
     try:
@@ -275,20 +324,30 @@ def _pg_dump_via_python(db_uri, sql_file, progress_cb=None):
                 f.write(f'\n-- Table "{table}"\n')
                 copied = False
                 try:
-                    buf = io.StringIO()
-                    with conn.cursor() as cur:
-                        cur.copy_expert(
-                            f'COPY (SELECT * FROM "{table}") TO STDOUT WITH (FORMAT csv, HEADER true)',
-                            buf,
-                        )
-                    payload = buf.getvalue()
-                    if payload.strip():
-                        f.write('-- format: csv\n')
-                        f.write(payload)
-                        if not payload.endswith('\n'):
-                            f.write('\n')
-                    else:
-                        f.write('-- (empty)\n')
+                    fd_csv, tmp_csv = tempfile.mkstemp(suffix='_copy.csv', prefix='fleet_pg_')
+                    os.close(fd_csv)
+                    try:
+                        with open(tmp_csv, 'w', encoding='utf-8', newline='') as tmpf:
+                            with conn.cursor() as cur:
+                                cur.copy_expert(
+                                    (
+                                        f'COPY (SELECT * FROM "{table}") '
+                                        'TO STDOUT WITH (FORMAT csv, HEADER true)'
+                                    ),
+                                    tmpf,
+                                )
+                        sz = os.path.getsize(tmp_csv)
+                        if sz <= 0:
+                            f.write('-- (empty)\n')
+                        else:
+                            f.write('-- format: csv\n')
+                            with open(tmp_csv, 'r', encoding='utf-8', newline='') as rf:
+                                shutil.copyfileobj(rf, f, length=1024 * 1024)
+                    finally:
+                        try:
+                            os.remove(tmp_csv)
+                        except OSError:
+                            pass
                     copied = True
                 except Exception:
                     copied = False

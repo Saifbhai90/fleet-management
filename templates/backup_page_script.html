@@ -95,7 +95,7 @@
           var errMsg = '';
           if (j.failure_detail != null && String(j.failure_detail).trim()) errMsg = String(j.failure_detail).trim();
           else if (j.error != null && String(j.error).trim()) errMsg = String(j.error).trim();
-          if (!errMsg) errMsg = 'Email send failed (no detail returned). Check Mailtrap sender/domain and Render logs.';
+          if (!errMsg) errMsg = 'Backup failed (no detail returned). Check DATABASE_URL, disk space, and Render logs.';
           el('backupStatusLine').textContent = errMsg;
           el('backupStatusLine').title = errMsg;
           el('backupProgress').classList.remove('progress-bar-animated');
