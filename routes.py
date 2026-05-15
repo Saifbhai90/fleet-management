@@ -4273,25 +4273,35 @@ def backup_download():
     if err:
         flash(f'Backup failed: {err}', 'danger')
         return redirect(url_for('backup_index'))
+    if not zip_path or not os.path.exists(zip_path):
+        flash('Backup file was not created.', 'danger')
+        return redirect(url_for('backup_index'))
+    friendly = f'fleet_backup_{pk_now().strftime("%Y%m%d_%H%M%S")}.zip'
+    _last_backup_ts['ts'] = pk_now()
     try:
-        filename = os.path.basename(zip_path)
-        # Use a friendly download name
-        friendly = f'fleet_backup_{pk_now().strftime("%Y%m%d_%H%M%S")}.zip'
-        _last_backup_ts['ts'] = pk_now()
-        try:
-            _bk_size = os.path.getsize(zip_path)
-            SystemSetting.set('last_backup_ts', pk_now().strftime('%Y-%m-%d %H:%M:%S'))
-            SystemSetting.set('last_backup_result', 'success')
-            SystemSetting.set('last_backup_size', f'{round(_bk_size / (1024*1024), 1)} MB')
-        except Exception:
-            pass
-        return send_file(zip_path, as_attachment=True, download_name=friendly)
-    finally:
+        _bk_size = os.path.getsize(zip_path)
+        SystemSetting.set('last_backup_ts', pk_now().strftime('%Y-%m-%d %H:%M:%S'))
+        SystemSetting.set('last_backup_result', 'success')
+        SystemSetting.set('last_backup_size', f'{round(_bk_size / (1024 * 1024), 1)} MB')
+    except Exception:
+        pass
+
+    @after_this_request
+    def _cleanup_backup_zip(resp):
         try:
             if zip_path and os.path.exists(zip_path):
                 os.remove(zip_path)
-        except Exception:
+        except OSError:
             pass
+        return resp
+
+    return send_file(
+        zip_path,
+        as_attachment=True,
+        download_name=friendly,
+        mimetype='application/zip',
+        max_age=0,
+    )
 
 
 @app.route('/backup/email', methods=['POST'])
