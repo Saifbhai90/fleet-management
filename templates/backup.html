@@ -108,6 +108,7 @@
 <script>
 (function() {
   var startUrl = {{ url_for('backup_job_start') | tojson }};
+  var executeUrlBase = '/backup/job/';
   var csrf = {{ csrf_token() | tojson }};
   var btn = document.getElementById('btnBackupDownload');
   var overlay = document.getElementById('backupOverlay');
@@ -157,6 +158,22 @@
 
   function downloadUrl(jobId) {
     return '/backup/job/' + encodeURIComponent(jobId) + '/download';
+  }
+
+  function executeUrl(jobId) {
+    return executeUrlBase + encodeURIComponent(jobId) + '/execute';
+  }
+
+  function runExecute(jobId) {
+    var fd = new FormData();
+    fd.append('csrf_token', csrf);
+    return fetch(executeUrl(jobId), { method: 'POST', body: fd, credentials: 'same-origin' })
+      .then(function(r) { return r.json(); })
+      .then(function(j) {
+        if (!j.ok) throw new Error(j.error || 'Backup run failed');
+        if (j.status === 'error') throw new Error(j.error || 'Backup failed');
+        return j;
+      });
   }
 
   function pollStatus(jobId) {
@@ -222,9 +239,20 @@
       .then(function(j) {
         if (!j.ok || !j.job_id) throw new Error(j.error || 'Could not start backup');
         currentJobId = j.job_id;
-        setProgress(8, 'Backup job started…');
+        setProgress(8, 'Starting backup on server…');
+        pollTimer = setInterval(function() { pollStatus(currentJobId); }, 1200);
         pollStatus(currentJobId);
-        pollTimer = setInterval(function() { pollStatus(currentJobId); }, 1500);
+        runExecute(currentJobId)
+          .then(function() { pollStatus(currentJobId); })
+          .catch(function(err) {
+            if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+            el('backupSpinner').classList.add('d-none');
+            el('backupFailIcon').classList.remove('d-none');
+            el('backupOverlayTitle').textContent = 'Backup Failed';
+            el('backupStatusLine').textContent = err && err.message ? err.message : String(err);
+            el('backupOverlayClose').classList.remove('d-none');
+            btn.disabled = false;
+          });
       })
       .catch(function(err) {
         el('backupSpinner').classList.add('d-none');

@@ -427,6 +427,7 @@ ENDPOINT_PERMISSION_MAP = [
     # Backup sub-routes (same section as /backup index; require system_backup)
     ('backup_download', 'system_backup'),
     ('backup_job_start', 'system_backup'),
+    ('backup_job_execute', 'system_backup'),
     ('backup_job_status', 'system_backup'),
     ('backup_job_download', 'system_backup'),
     ('backup_email', 'system_backup'),

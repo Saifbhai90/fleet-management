@@ -1,14 +1,49 @@
 """File-backed backup job state (shared across gunicorn workers on same instance)."""
 import json
 import os
+import tempfile
 import time
 import uuid
 
 
 def _jobs_root(app):
-    root = os.path.join(app.instance_path, 'backup_jobs')
+    explicit = (os.environ.get('BACKUP_JOBS_DIR') or '').strip()
+    if explicit:
+        root = explicit
+    else:
+        try:
+            root = os.path.join(app.instance_path, 'backup_jobs')
+        except Exception:
+            root = os.path.join(tempfile.gettempdir(), 'fleet_backup_jobs')
     os.makedirs(root, exist_ok=True)
     return root
+
+
+def _lock_file(app, job_id):
+    return _job_file(app, job_id) + '.lock'
+
+
+def try_claim_job(app, job_id):
+    """Exclusive lock so only one worker runs the backup (gunicorn has multiple workers)."""
+    job = read_job(app, job_id)
+    if not job or job.get('status') != 'queued':
+        return False
+    lock_path = _lock_file(app, job_id)
+    try:
+        fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        os.close(fd)
+        return True
+    except FileExistsError:
+        return False
+    except OSError:
+        return False
+
+
+def release_claim(app, job_id):
+    try:
+        os.remove(_lock_file(app, job_id))
+    except OSError:
+        pass
 
 
 def _job_file(app, job_id):

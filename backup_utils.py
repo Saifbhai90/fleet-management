@@ -294,61 +294,73 @@ def send_backup_email(app, zip_path, to_email):
         return False, str(e)
 
 
-def run_backup_job_async(app, job_id):
-    """Run backup in a background thread; updates backup_jobs JSON state."""
-    import threading
-    from backup_jobs import write_job
+def run_backup_job_sync(app, job_id):
+    """
+    Run backup in the current request (Render/gunicorn: background threads often never run).
+    Caller must hold the job claim lock from backup_jobs.try_claim_job.
+    Returns dict with started, status, error.
+    """
+    from backup_jobs import write_job, read_job, release_claim, try_claim_job
 
-    def worker():
+    if not try_claim_job(app, job_id):
+        job = read_job(app, job_id) or {}
+        return {
+            'started': False,
+            'status': job.get('status'),
+            'error': job.get('error'),
+        }
+
+    zip_path = None
+    try:
+        write_job(app, job_id, status='running', step='Starting backup…', percent=5, error=None)
+
+        def progress(pct, step):
+            write_job(app, job_id, status='running', step=step, percent=pct)
+
+        zip_path, err = create_backup_zip(app, progress_cb=progress)
+        if err:
+            write_job(
+                app, job_id,
+                status='error', step='Backup failed', percent=0, error=err,
+            )
+            return {'started': True, 'status': 'error', 'error': err}
+
+        friendly = f'fleet_backup_{pk_now().strftime("%Y%m%d_%H%M%S")}.zip'
+        size_mb = round(os.path.getsize(zip_path) / (1024 * 1024), 1)
+        try:
+            from models import SystemSetting
+            SystemSetting.set('last_backup_ts', pk_now().strftime('%Y-%m-%d %H:%M:%S'))
+            SystemSetting.set('last_backup_result', 'success')
+            SystemSetting.set('last_backup_size', f'{size_mb} MB')
+        except Exception:
+            pass
+        write_job(
+            app, job_id,
+            status='done',
+            step='Backup ready',
+            percent=100,
+            zip_path=zip_path,
+            download_name=friendly,
+            message=f'{size_mb} MB',
+            error=None,
+        )
         zip_path = None
-        with app.app_context():
+        return {'started': True, 'status': 'done', 'error': None}
+    except Exception as e:
+        if hasattr(app, 'logger'):
+            app.logger.exception('backup job %s failed: %s', job_id, e)
+        if zip_path and os.path.exists(zip_path):
             try:
-                write_job(app, job_id, status='running', step='Starting backup…', percent=5, error=None)
-
-                def progress(pct, step):
-                    write_job(app, job_id, status='running', step=step, percent=pct)
-
-                zip_path, err = create_backup_zip(app, progress_cb=progress)
-                if err:
-                    write_job(
-                        app, job_id,
-                        status='error', step='Backup failed', percent=0, error=err,
-                    )
-                    return
-                friendly = f'fleet_backup_{pk_now().strftime("%Y%m%d_%H%M%S")}.zip'
-                size_mb = round(os.path.getsize(zip_path) / (1024 * 1024), 1)
-                try:
-                    from models import SystemSetting
-                    SystemSetting.set('last_backup_ts', pk_now().strftime('%Y-%m-%d %H:%M:%S'))
-                    SystemSetting.set('last_backup_result', 'success')
-                    SystemSetting.set('last_backup_size', f'{size_mb} MB')
-                except Exception:
-                    pass
-                write_job(
-                    app, job_id,
-                    status='done',
-                    step='Backup ready',
-                    percent=100,
-                    zip_path=zip_path,
-                    download_name=friendly,
-                    message=f'{size_mb} MB',
-                    error=None,
-                )
-                zip_path = None
-            except Exception as e:
-                if hasattr(app, 'logger'):
-                    app.logger.exception('backup job %s failed: %s', job_id, e)
-                if zip_path and os.path.exists(zip_path):
-                    try:
-                        os.remove(zip_path)
-                    except OSError:
-                        pass
-                write_job(
-                    app, job_id,
-                    status='error', step='Backup failed', percent=0, error=str(e),
-                )
-
-    threading.Thread(target=worker, daemon=True, name=f'backup-{job_id[:8]}').start()
+                os.remove(zip_path)
+            except OSError:
+                pass
+        write_job(
+            app, job_id,
+            status='error', step='Backup failed', percent=0, error=str(e),
+        )
+        return {'started': True, 'status': 'error', 'error': str(e)}
+    finally:
+        release_claim(app, job_id)
 
 
 def run_scheduled_backup(app):

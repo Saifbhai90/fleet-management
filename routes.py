@@ -4274,16 +4274,39 @@ def backup_download():
 
 @app.route('/backup/job/start', methods=['POST'])
 def backup_job_start():
-    """Start async backup; returns job_id for status polling."""
+    """Create backup job; client must POST /execute then poll /status."""
     from backup_jobs import create_job
-    from backup_utils import run_backup_job_async
 
     uid = session.get('user_id')
     if not uid:
         return jsonify({'ok': False, 'error': 'Not logged in'}), 401
     job_id = create_job(app, uid)
-    run_backup_job_async(app, job_id)
     return jsonify({'ok': True, 'job_id': job_id})
+
+
+@app.route('/backup/job/<job_id>/execute', methods=['POST'])
+def backup_job_execute(job_id):
+    """Run backup synchronously (progress via /status polling). Works on Render multi-worker."""
+    from backup_jobs import read_job
+    from backup_utils import run_backup_job_sync
+
+    job = read_job(app, job_id)
+    if not job:
+        return jsonify({'ok': False, 'error': 'Job not found'}), 404
+    owner = job.get('user_id')
+    if owner != session.get('user_id') and not session.get('is_master'):
+        return jsonify({'ok': False, 'error': 'Forbidden'}), 403
+
+    result = run_backup_job_sync(app, job_id)
+    job = read_job(app, job_id) or {}
+    return jsonify({
+        'ok': True,
+        'started': bool(result.get('started')),
+        'status': job.get('status'),
+        'error': job.get('error') or result.get('error'),
+        'step': job.get('step') or '',
+        'percent': int(job.get('percent') or 0),
+    })
 
 
 @app.route('/backup/job/<job_id>/status')
