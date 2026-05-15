@@ -15,8 +15,6 @@ _DB_KEYS = {
     'schedule_time': 'backup_schedule_time',
     'schedule_frequency': 'backup_schedule_frequency',
     'schedule_weekday': 'backup_schedule_weekday',
-    'sendgrid_api_key': 'backup_sendgrid_api_key',
-    'mailtrap_api_token': 'backup_mailtrap_api_token',
 }
 
 _ENV_MAP = {
@@ -29,8 +27,6 @@ _ENV_MAP = {
     'email_to': 'BACKUP_EMAIL_TO',
     'schedule_enabled': 'BACKUP_SCHEDULE_ENABLED',
     'schedule_time': 'BACKUP_SCHEDULE_TIME',
-    'sendgrid_api_key': 'SENDGRID_API_KEY',
-    'mailtrap_api_token': 'MAILTRAP_API_TOKEN',
 }
 
 _SCHEDULER = None
@@ -95,10 +91,6 @@ def get_backup_settings(app):
             'schedule_time': _read_field(app, 'schedule_time') or '02:00',
             'schedule_frequency': freq,
             'schedule_weekday': _read_field(app, 'schedule_weekday') or '0',
-            'sendgrid_api_key': PASSWORD_PLACEHOLDER if _read_field(app, 'sendgrid_api_key') else '',
-            'sendgrid_api_key_set': bool(_read_field(app, 'sendgrid_api_key')),
-            'mailtrap_api_token': PASSWORD_PLACEHOLDER if _read_field(app, 'mailtrap_api_token') else '',
-            'mailtrap_api_token_set': bool(_read_field(app, 'mailtrap_api_token')),
             'on_render': bool(os.environ.get('RENDER')),
         }
 
@@ -119,21 +111,28 @@ def apply_backup_config_to_app(app):
         app.config['BACKUP_SCHEDULE_TIME'] = _read_field(app, 'schedule_time') or '02:00'
         app.config['BACKUP_SCHEDULE_FREQUENCY'] = _read_field(app, 'schedule_frequency') or 'daily'
         app.config['BACKUP_SCHEDULE_WEEKDAY'] = _read_field(app, 'schedule_weekday') or '0'
-        app.config['SENDGRID_API_KEY'] = _read_field(app, 'sendgrid_api_key')
-        app.config['MAILTRAP_API_TOKEN'] = _read_field(app, 'mailtrap_api_token')
 
 
 def mail_is_configured(app):
     apply_backup_config_to_app(app)
     to_ok = bool((app.config.get('BACKUP_EMAIL_TO') or '').strip())
     from_ok = bool((app.config.get('MAIL_USERNAME') or '').strip())
-    if not to_ok or not from_ok:
-        return False
-    if (app.config.get('MAILTRAP_API_TOKEN') or '').strip():
-        return True
-    if (app.config.get('SENDGRID_API_KEY') or '').strip():
-        return True
-    return bool((app.config.get('MAIL_PASSWORD') or '').strip())
+    pwd_ok = bool((app.config.get('MAIL_PASSWORD') or '').strip())
+    return to_ok and from_ok and pwd_ok
+
+
+def _purge_legacy_mail_provider_keys():
+    """Remove Mailtrap/SendGrid rows saved before SMTP-only backup mail."""
+    from models import SystemSetting, db
+
+    changed = False
+    for legacy_key in ('backup_sendgrid_api_key', 'backup_mailtrap_api_token'):
+        row = SystemSetting.query.get(legacy_key)
+        if row:
+            db.session.delete(row)
+            changed = True
+    if changed:
+        db.session.commit()
 
 
 def save_backup_settings(app, data):
@@ -159,21 +158,10 @@ def save_backup_settings(app, data):
             return False, 'Sender Gmail address is required.'
         if not email_to:
             return False, 'Recipient email is required.'
-        sg_key = (data.get('sendgrid_api_key') or '').strip()
-        if sg_key in (PASSWORD_PLACEHOLDER, '********', ''):
-            sg_key = ''
-        mt_key = (data.get('mailtrap_api_token') or '').strip()
-        mt_key = mt_key.replace('\u2022', '').replace('\xa0', '').strip()
-        if mt_key in (PASSWORD_PLACEHOLDER, '********', ''):
-            mt_key = ''
-        has_api = bool(
-            sg_key or mt_key
-            or _read_field(app, 'sendgrid_api_key')
-            or _read_field(app, 'mailtrap_api_token')
-        )
-        if not has_api and not _read_field(app, 'mail_password') and not new_password:
-            return False, 'Mailtrap API token, SendGrid key, or Gmail App Password is required.'
+        if not new_password and not _read_field(app, 'mail_password'):
+            return False, 'Gmail App Password is required (paste the 16-character password; spaces are removed automatically).'
 
+        _purge_legacy_mail_provider_keys()
         _set_db('mail_server', mail_server)
         _set_db('mail_port', mail_port)
         _set_db('mail_use_tls', mail_use_tls)
@@ -186,10 +174,6 @@ def save_backup_settings(app, data):
         _set_db('schedule_weekday', schedule_weekday)
         if new_password:
             _set_db('mail_password', new_password.replace(' ', ''))
-        if sg_key:
-            _set_db('sendgrid_api_key', sg_key)
-        if mt_key:
-            _set_db('mailtrap_api_token', mt_key)
 
         apply_backup_config_to_app(app)
         reload_backup_scheduler(app)

@@ -4264,20 +4264,18 @@ def backup_index():
 @app.route('/backup/settings', methods=['POST'])
 def backup_settings_save():
     """Save backup email & auto-backup schedule (SystemSetting)."""
-    from backup_config import save_backup_settings, get_backup_settings
+    from backup_config import save_backup_settings
 
     if request.is_json:
         data = request.get_json(silent=True) or {}
     else:
         data = request.form.to_dict()
     ok, msg = save_backup_settings(app, data)
-    set_mt = bool(get_backup_settings(app).get('mailtrap_api_token_set'))
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.is_json:
         return jsonify({
             'ok': ok,
             'message': msg,
             'error': None if ok else msg,
-            'mailtrap_saved': set_mt,
         })
     flash(msg, 'success' if ok else 'danger')
     return redirect(url_for('backup_index'))
@@ -4305,7 +4303,7 @@ def backup_job_start():
             if not mail_is_configured(app):
                 return jsonify({
                     'ok': False,
-                    'error': 'Email not configured. Open settings below and save Gmail + recipient.',
+                    'error': 'Email not configured. Open settings below and save Gmail sender, App Password, and recipient.',
                 }), 400
             settings = get_backup_settings(app)
             email_to = (request.form.get('email_to') or settings.get('email_to') or '').strip()
