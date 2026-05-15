@@ -36,7 +36,7 @@
             <input type="password" name="mailtrap_api_token" class="form-control form-control-sm" autocomplete="new-password"
                    autocorrect="off" spellcheck="false" inputmode="text"
                    placeholder="{% if backup_settings.mailtrap_api_token_set %}Leave blank = keep saved token{% else %}Paste API token from Mailtrap{% endif %}">
-            <div class="form-text">Mailtrap → Email Sending → API tokens. Not the same as SMTP password.</div>
+            <div class="form-text">Mailtrap → Email Sending → API tokens. Sender must be a Mailtrap-verified domain (usually not @gmail.com).</div>
           </div>
           <div class="col-md-6">
             <label class="form-label small fw-semibold">SendGrid API key (optional)</label>

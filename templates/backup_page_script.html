@@ -84,6 +84,26 @@
       .then(parseJsonResponse)
       .then(function(j) {
         if (!j.ok) throw new Error(j.error || 'Status failed');
+        if (j.status === 'error') {
+          if (pollTimer) {
+            clearInterval(pollTimer);
+            pollTimer = null;
+          }
+          el('backupSpinner').classList.add('d-none');
+          el('backupFailIcon').classList.remove('d-none');
+          el('backupOverlayTitle').textContent = 'Backup Failed';
+          var errMsg = '';
+          if (j.failure_detail != null && String(j.failure_detail).trim()) errMsg = String(j.failure_detail).trim();
+          else if (j.error != null && String(j.error).trim()) errMsg = String(j.error).trim();
+          if (!errMsg) errMsg = 'Email send failed (no detail returned). Check Mailtrap sender/domain and Render logs.';
+          el('backupStatusLine').textContent = errMsg;
+          el('backupStatusLine').title = errMsg;
+          el('backupProgress').classList.remove('progress-bar-animated');
+          el('backupProgress').classList.add('bg-danger');
+          el('backupOverlayClose').classList.remove('d-none');
+          setButtonsDisabled(false);
+          return;
+        }
         setProgress(j.percent, j.step || j.message || '');
         if (j.status === 'running' || j.status === 'queued') return;
         if (pollTimer) {
@@ -111,20 +131,6 @@
           el('backupProgress').classList.add('bg-success');
           el('backupOverlayClose').classList.remove('d-none');
           return;
-        }
-        if (j.status === 'error') {
-          el('backupSpinner').classList.add('d-none');
-          el('backupFailIcon').classList.remove('d-none');
-          el('backupOverlayTitle').textContent = 'Backup Failed';
-          var errMsg = (j.error && String(j.error).trim()) ? j.error : '';
-          if (!errMsg && j.step && j.step !== 'Sending email…') errMsg = j.step;
-          if (!errMsg) errMsg = 'Backup or email failed. Check settings and try again.';
-          el('backupStatusLine').textContent = errMsg;
-          el('backupStatusLine').title = errMsg;
-          el('backupProgress').classList.remove('progress-bar-animated');
-          el('backupProgress').classList.add('bg-danger');
-          el('backupOverlayClose').classList.remove('d-none');
-          setButtonsDisabled(false);
         }
       })
       .catch(function(err) {

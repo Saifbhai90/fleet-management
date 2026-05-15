@@ -454,18 +454,30 @@ def _send_backup_via_mailtrap(api_token, from_email, to_email, subject, body, at
                 raw = resp.read().decode('utf-8', errors='replace')
                 if 200 <= getattr(resp, 'status', 200) < 300:
                     try:
-                        data = json.loads(raw) if raw else {}
+                        data = json.loads(raw) if raw and raw.strip() else {}
+                    except json.JSONDecodeError:
+                        return False, 'Mailtrap: invalid JSON response — ' + raw[:200]
+
+                    if isinstance(data, dict):
                         if data.get('success') is False:
                             errs = data.get('errors') or ['Unknown Mailtrap error']
                             msg = '; '.join(str(e) for e in errs[:5])
                             hint = ''
                             low = msg.lower()
                             if 'from' in low or 'domain' in low or 'sender' in low or 'verify' in low:
-                                hint = ' Verify your sender email/domain in Mailtrap → Sending → Domains.'
+                                hint = (
+                                    ' In Mailtrap → Sending → Domains, verify the same domain as your Sender email. '
+                                    'Pure Gmail (@gmail.com) usually cannot be used as Mailtrap Sending sender.'
+                                )
                             return False, 'Mailtrap: ' + msg + hint
-                    except json.JSONDecodeError:
-                        pass
-                    return True, 'Backup sent to ' + to_email + ' (Mailtrap)'
+                        errs = data.get('errors') or []
+                        if errs:
+                            msg = '; '.join(str(e) for e in errs[:5])
+                            return False, 'Mailtrap: ' + msg
+                        mids = data.get('message_ids') or []
+                        if data.get('success') is True or mids:
+                            return True, 'Backup sent to ' + to_email + ' (Mailtrap)'
+                        return False, 'Mailtrap: unexpected response — ' + (raw[:400] if raw else 'empty body')
         except HTTPError as e:
             detail = e.read().decode('utf-8', errors='replace')[:600]
             last_detail = detail or str(e.reason)

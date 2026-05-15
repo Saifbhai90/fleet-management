@@ -12,7 +12,11 @@
     <span class="badge bg-secondary px-3 py-2">Auto backup off</span>
     {% endif %}
   </div>
-  <p class="text-muted small mb-3">Download or send to email to create a backup now. Both show live progress while the backup is created.</p>
+  <p class="text-muted small mb-3">
+    <strong>Download</strong> saves the backup file on this computer.
+    <strong>Send to Email</strong> sends the same backup as an attachment from your <strong>Sender email</strong> (From) to <strong>Recipient email</strong> (To) — like a normal outgoing email.
+    Auto backup below is optional; you can turn it off and only use the buttons above.
+  </p>
   <p class="text-muted small mb-3"><i class="bi bi-info-circle me-1"></i>Session: expires when you close the browser, or after 7 days if you used <strong>Remember me</strong> at login.</p>
 
   <div class="row g-4">
@@ -44,12 +48,13 @@
             </div>
             <div>
               <h5 class="card-title mb-0">Send to Email</h5>
-              <p class="text-muted small mb-0">Create backup and send to configured Gmail</p>
+              <p class="text-muted small mb-0">Backup file attached: Sender → Recipient (settings below)</p>
             </div>
           </div>
           {% if mail_configured %}
           <p class="text-muted small mb-2 mt-1">
-            <i class="bi bi-check-circle text-success me-1"></i>To: <strong>{{ backup_settings.email_to }}</strong>
+            <span class="d-block"><i class="bi bi-arrow-right-circle text-secondary me-1"></i>From: <strong>{{ backup_settings.mail_username }}</strong></span>
+            <span class="d-block"><i class="bi bi-envelope-check text-success me-1"></i>To: <strong>{{ backup_settings.email_to }}</strong></span>
           </p>
           <button type="button" class="btn btn-success w-100 mt-auto" id="btnBackupEmailSend">
             <i class="bi bi-send me-2"></i>Send Backup Now

@@ -4342,13 +4342,19 @@ def backup_job_status(job_id):
             run_backup_job_sync(app, job_id)
             job = read_job(app, job_id) or job
 
+        err_val = job.get('error')
+        if err_val is None:
+            err_val = ''
+        else:
+            err_val = str(err_val).strip()
         return jsonify({
             'ok': True,
             'status': job.get('status'),
             'step': job.get('step') or '',
             'percent': int(job.get('percent') or 0),
             'message': job.get('message') or '',
-            'error': job.get('error'),
+            'error': err_val if err_val else None,
+            'failure_detail': err_val,
             'download_name': job.get('download_name'),
             'job_type': job.get('job_type') or 'download',
         })
