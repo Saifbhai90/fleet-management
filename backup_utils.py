@@ -5,6 +5,7 @@ Supports SQLite and PostgreSQL. Used for Download, Email, and Save-to-path.
 On Windows, PostgreSQL backup uses Python (psycopg2) when pg_dump is not found.
 """
 import os
+import shutil
 import zipfile
 import tempfile
 from datetime import date, datetime, time
@@ -16,6 +17,28 @@ from urllib.parse import unquote
 def _backup_include_uploads(app):
     raw = (os.environ.get('BACKUP_INCLUDE_UPLOADS') or app.config.get('BACKUP_INCLUDE_UPLOADS', 'true'))
     return str(raw).strip().lower() in ('1', 'true', 'yes')
+
+
+def _backup_exclude_tables():
+    raw = (os.environ.get('BACKUP_EXCLUDE_TABLES') or '').strip()
+    if not raw:
+        return set()
+    return {t.strip() for t in raw.split(',') if t.strip()}
+
+
+def _zip_add_file(zf, src_path, arcname, progress_cb=None):
+    """Stream a large file into the ZIP (STORED = no extra compression, saves disk/RAM)."""
+    if not os.path.isfile(src_path):
+        raise FileNotFoundError(f'Export file not found: {arcname}')
+    size = os.path.getsize(src_path)
+    if size <= 0:
+        raise ValueError(f'Database export is empty ({arcname}).')
+    size_mb = round(size / (1024 * 1024), 1)
+    if progress_cb:
+        progress_cb(78, f'Adding database to ZIP ({size_mb} MB)…')
+    with open(src_path, 'rb') as src:
+        with zf.open(arcname, 'w', force_zip64=True, compress_type=zipfile.ZIP_STORED) as dest:
+            shutil.copyfileobj(src, dest, length=1024 * 1024)
 
 
 def _sql_literal(value):
@@ -101,6 +124,9 @@ def _pg_dump_via_python(db_uri, sql_file, progress_cb=None):
                     ORDER BY tablename
                 """)
                 tables = [r[0] for r in meta.fetchall()]
+            skip = _backup_exclude_tables()
+            if skip:
+                tables = [t for t in tables if t not in skip]
             total = max(len(tables), 1)
             for idx, table in enumerate(tables):
                 if progress_cb:
@@ -174,7 +200,7 @@ def create_backup_zip(app, progress_cb=None):
         upload_folder = app.config.get('UPLOAD_FOLDER') or ''
         timestamp = pk_now().strftime('%Y%m%d_%H%M%S')
         zip_basename = f'fleet_backup_{timestamp}.zip'
-        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED, allowZip64=True) as zf:
             if 'sqlite' in db_uri:
                 _report(15, 'Copying SQLite database…')
                 db_path = get_sqlite_db_path(app)
@@ -196,12 +222,17 @@ def create_backup_zip(app, progress_cb=None):
                             text=True,
                             timeout=900,
                         )
-                    except (FileNotFoundError, subprocess.TimeoutExpired):
+                    except (FileNotFoundError, subprocess.TimeoutExpired) as ex:
                         r = None
+                        if isinstance(ex, subprocess.TimeoutExpired):
+                            raise RuntimeError('pg_dump timed out (database very large).') from ex
+                    if r is not None and r.returncode != 0:
+                        err_tail = (r.stderr or r.stdout or '')[:400]
+                        raise RuntimeError(f'pg_dump failed: {err_tail or "unknown error"}')
                     if r is None or r.returncode != 0:
                         _pg_dump_via_python(db_uri, sql_file, progress_cb=_report)
-                    _report(78, 'Adding database file to ZIP…')
-                    zf.write(sql_file, zip_basename.replace('.zip', '_database.sql'))
+                    arc_sql = zip_basename.replace('.zip', '_database.sql')
+                    _zip_add_file(zf, sql_file, arc_sql, progress_cb=_report)
                 finally:
                     try:
                         os.remove(sql_file)
@@ -321,7 +352,7 @@ def run_backup_job_sync(app, job_id):
         if err:
             write_job(
                 app, job_id,
-                status='error', step='Backup failed', percent=0, error=err,
+                status='error', step='Backup failed', error=err,
             )
             return {'started': True, 'status': 'error', 'error': err}
 
@@ -356,7 +387,7 @@ def run_backup_job_sync(app, job_id):
                 pass
         write_job(
             app, job_id,
-            status='error', step='Backup failed', percent=0, error=str(e),
+            status='error', step='Backup failed', error=str(e),
         )
         return {'started': True, 'status': 'error', 'error': str(e)}
     finally:

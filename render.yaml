@@ -13,7 +13,7 @@ services:
     plan: free
     buildCommand: pip install -r requirements.txt
     # Matches Procfile; bind 0.0.0.0:$PORT per https://render.com/docs/web-services#port-binding
-    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --timeout 120 --workers 2 --worker-class gthread --threads 4
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --timeout 600 --workers 2 --worker-class gthread --threads 4
     preDeployCommand: sh scripts/render_migrate.sh
     healthCheckPath: /health
     envVars:
