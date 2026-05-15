@@ -4326,7 +4326,7 @@ def backup_job_execute(job_id):
 def backup_job_status(job_id):
     """Poll progress; if still queued, run backup in this request (Render-safe, no background thread)."""
     from backup_jobs import read_job, _lock_file
-    from backup_utils import run_backup_job_sync
+    from backup_utils import start_backup_job_background
 
     try:
         job = read_job(app, job_id)
@@ -4337,7 +4337,7 @@ def backup_job_status(job_id):
             return jsonify({'ok': False, 'error': 'Forbidden'}), 403
 
         if job.get('status') == 'queued' and not os.path.exists(_lock_file(app, job_id)):
-            run_backup_job_sync(app, job_id)
+            start_backup_job_background(app, job_id)
             job = read_job(app, job_id) or job
 
         err_val = job.get('error')

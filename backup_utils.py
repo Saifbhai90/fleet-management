@@ -7,8 +7,9 @@ On Windows, PostgreSQL backup uses Python (psycopg2) when pg_dump is not found.
 import logging
 import os
 import shutil
-import zipfile
 import tempfile
+import threading
+import zipfile
 from datetime import date, datetime, time
 from decimal import Decimal
 from utils import pk_now
@@ -560,21 +561,12 @@ def send_backup_email(app, zip_path, to_email):
         return False, _format_email_error(e)
 
 
-def run_backup_job_sync(app, job_id):
+def _execute_backup_job_after_claim(app, job_id):
     """
-    Run backup in the current request (Render/gunicorn: background threads often never run).
-    Caller must hold the job claim lock from backup_jobs.try_claim_job.
-    Returns dict with started, status, error.
+    Run backup work after try_claim_job succeeded.
+    Caller must call release_claim(app, job_id) when this returns (e.g. in a finally block).
     """
-    from backup_jobs import write_job, read_job, release_claim, try_claim_job
-
-    if not try_claim_job(app, job_id):
-        job = read_job(app, job_id) or {}
-        return {
-            'started': False,
-            'status': job.get('status'),
-            'error': job.get('error'),
-        }
+    from backup_jobs import write_job, read_job
 
     zip_path = None
     try:
@@ -682,6 +674,54 @@ def run_backup_job_sync(app, job_id):
             status='error', step='Backup failed', error=err_msg,
         )
         return {'started': True, 'status': 'error', 'error': err_msg}
+
+
+def start_backup_job_background(app, job_id):
+    """
+    Claim the job and run backup in a worker thread so the HTTP poll returns quickly.
+
+    Render (and similar) HTTP proxies often close requests around ~100s; running the full
+    backup + SMTP send inside one /status poll causes 502 while the UI shows ~92%.
+    """
+    from backup_jobs import release_claim, try_claim_job
+
+    if not try_claim_job(app, job_id):
+        return False
+
+    app_ref = app._get_current_object() if hasattr(app, '_get_current_object') else app
+
+    def _worker():
+        try:
+            with app_ref.app_context():
+                _execute_backup_job_after_claim(app_ref, job_id)
+        finally:
+            release_claim(app_ref, job_id)
+
+    threading.Thread(
+        target=_worker,
+        daemon=False,
+        name=f'fleet-backup-{job_id[:10]}',
+    ).start()
+    return True
+
+
+def run_backup_job_sync(app, job_id):
+    """
+    Claim and run backup in the current thread (tests / special callers).
+    Normal HTTP flow uses start_backup_job_background so polls do not hit proxy timeouts.
+    """
+    from backup_jobs import read_job, release_claim, try_claim_job
+
+    if not try_claim_job(app, job_id):
+        job = read_job(app, job_id) or {}
+        return {
+            'started': False,
+            'status': job.get('status'),
+            'error': job.get('error'),
+        }
+
+    try:
+        return _execute_backup_job_after_claim(app, job_id)
     finally:
         release_claim(app, job_id)
 
