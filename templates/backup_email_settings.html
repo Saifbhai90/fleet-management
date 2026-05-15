@@ -28,9 +28,15 @@
           </div>
           <div class="col-md-6">
             <label class="form-label small fw-semibold">Mailtrap API token (recommended on Render)</label>
-            <input type="password" name="mailtrap_api_token" class="form-control form-control-sm" autocomplete="off"
-                   placeholder="{% if backup_settings.mailtrap_api_token_set %}Leave blank to keep current{% else %}Paste API token from Mailtrap{% endif %}">
-            <div class="form-text">Mailtrap → Email API/SMTP → Sending → API tokens. Copy once, save here.</div>
+            {% if backup_settings.mailtrap_api_token_set %}
+            <div class="alert alert-success py-1 px-2 small mb-1">
+              <i class="bi bi-check-circle me-1"></i>Token saved — field stays empty on purpose (security). Paste again only to replace it.
+            </div>
+            {% endif %}
+            <input type="password" name="mailtrap_api_token" class="form-control form-control-sm" autocomplete="new-password"
+                   autocorrect="off" spellcheck="false" inputmode="text"
+                   placeholder="{% if backup_settings.mailtrap_api_token_set %}Leave blank = keep saved token{% else %}Paste API token from Mailtrap{% endif %}">
+            <div class="form-text">Mailtrap → Email Sending → API tokens. Not the same as SMTP password.</div>
           </div>
           <div class="col-md-6">
             <label class="form-label small fw-semibold">SendGrid API key (optional)</label>

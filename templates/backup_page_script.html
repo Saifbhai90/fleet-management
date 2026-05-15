@@ -196,6 +196,9 @@
         .then(function(j) {
           if (msgEl) {
             msgEl.textContent = j.message || (j.ok ? 'Saved.' : 'Failed.');
+            if (j.ok && j.mailtrap_saved) {
+              msgEl.textContent += ' Mailtrap token stored (hidden on reload).';
+            }
             msgEl.className = 'small ' + (j.ok ? 'text-success' : 'text-danger');
           }
           if (j.ok) setTimeout(function() { window.location.reload(); }, 800);

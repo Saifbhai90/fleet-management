@@ -163,6 +163,7 @@ def save_backup_settings(app, data):
         if sg_key in (PASSWORD_PLACEHOLDER, '********', ''):
             sg_key = ''
         mt_key = (data.get('mailtrap_api_token') or '').strip()
+        mt_key = mt_key.replace('\u2022', '').replace('\xa0', '').strip()
         if mt_key in (PASSWORD_PLACEHOLDER, '********', ''):
             mt_key = ''
         has_api = bool(

@@ -428,39 +428,65 @@ def _send_backup_via_mailtrap(api_token, from_email, to_email, subject, body, at
             'disposition': 'attachment',
         }],
     }
-    req = Request(
-        'https://send.api.mailtrap.io/api/send',
-        data=json.dumps(payload).encode('utf-8'),
-        headers={
-            'Authorization': 'Bearer ' + api_token,
+    body_json = json.dumps(payload).encode('utf-8')
+
+    def _post(headers):
+        return Request(
+            'https://send.api.mailtrap.io/api/send',
+            data=body_json,
+            headers=dict(headers),
+            method='POST',
+        )
+
+    auth_attempts = [
+        {'Authorization': 'Bearer ' + api_token},
+        {'Api-Token': api_token},
+    ]
+    last_detail = ''
+    for auth_hdr in auth_attempts:
+        req = _post({
+            **auth_hdr,
             'Content-Type': 'application/json',
             'User-Agent': 'FleetManager-Backup/1.0',
-        },
-        method='POST',
-    )
-    try:
-        with urlopen(req, timeout=180) as resp:
-            raw = resp.read().decode('utf-8', errors='replace')
-            if 200 <= getattr(resp, 'status', 200) < 300:
-                try:
-                    data = json.loads(raw) if raw else {}
-                    if data.get('success') is False:
-                        errs = data.get('errors') or ['Unknown Mailtrap error']
-                        return False, 'Mailtrap: ' + '; '.join(str(e) for e in errs[:3])
-                except json.JSONDecodeError:
-                    pass
-                return True, 'Backup sent to ' + to_email + ' (Mailtrap)'
-    except HTTPError as e:
-        detail = e.read().decode('utf-8', errors='replace')[:500]
+        })
         try:
-            data = json.loads(detail)
-            if data.get('errors'):
-                return False, 'Mailtrap: ' + '; '.join(str(x) for x in data['errors'][:3])
-        except json.JSONDecodeError:
-            pass
-        return False, f'Mailtrap error ({e.code}): {detail or e.reason}'
-    except URLError as e:
-        return False, 'Mailtrap request failed: ' + str(e.reason or e)
+            with urlopen(req, timeout=180) as resp:
+                raw = resp.read().decode('utf-8', errors='replace')
+                if 200 <= getattr(resp, 'status', 200) < 300:
+                    try:
+                        data = json.loads(raw) if raw else {}
+                        if data.get('success') is False:
+                            errs = data.get('errors') or ['Unknown Mailtrap error']
+                            msg = '; '.join(str(e) for e in errs[:5])
+                            hint = ''
+                            low = msg.lower()
+                            if 'from' in low or 'domain' in low or 'sender' in low or 'verify' in low:
+                                hint = ' Verify your sender email/domain in Mailtrap → Sending → Domains.'
+                            return False, 'Mailtrap: ' + msg + hint
+                    except json.JSONDecodeError:
+                        pass
+                    return True, 'Backup sent to ' + to_email + ' (Mailtrap)'
+        except HTTPError as e:
+            detail = e.read().decode('utf-8', errors='replace')[:600]
+            last_detail = detail or str(e.reason)
+            try:
+                err_json = json.loads(detail)
+                errs = err_json.get('errors')
+                if errs:
+                    msg = '; '.join(str(x) for x in errs[:5])
+                    hint = ''
+                    low = msg.lower()
+                    if 'from' in low or 'domain' in low or 'sender' in low:
+                        hint = ' Verify sender @ Mailtrap Domains.'
+                    return False, 'Mailtrap: ' + msg + hint
+            except json.JSONDecodeError:
+                pass
+            continue
+        except URLError as e:
+            return False, 'Mailtrap request failed: ' + str(e.reason or e)
+
+    if last_detail:
+        return False, f'Mailtrap error: {last_detail}'
     return False, 'Mailtrap send failed'
 
 
