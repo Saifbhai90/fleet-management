@@ -2,6 +2,9 @@
     <div class="card-header bg-white border-bottom py-3">
       <h5 class="mb-0 fw-semibold"><i class="bi bi-gear me-2 text-secondary"></i>Email &amp; Auto Backup Settings</h5>
       <p class="text-muted small mb-0 mt-1">Gmail App Password: Google Account → Security → 2-Step Verification → App passwords.</p>
+      {% if backup_settings.on_render %}
+      <p class="text-warning small mb-0 mt-1"><i class="bi bi-exclamation-triangle me-1"></i><strong>Render free plan blocks SMTP.</strong> Add a SendGrid API key below, or upgrade Render to paid for Gmail SMTP.</p>
+      {% endif %}
     </div>
     <div class="card-body">
       <form id="backupSettingsForm" method="POST" action="{{ url_for('backup_settings_save') }}">
@@ -21,6 +24,12 @@
             <label class="form-label small fw-semibold">Gmail App Password</label>
             <input type="password" name="mail_password" class="form-control form-control-sm" autocomplete="new-password"
                    placeholder="{% if backup_settings.mail_password_set %}Leave blank to keep current{% else %}16-character app password{% endif %}">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label small fw-semibold">SendGrid API key (Render / large files)</label>
+            <input type="password" name="sendgrid_api_key" class="form-control form-control-sm" autocomplete="off"
+                   placeholder="{% if backup_settings.sendgrid_api_key_set %}Leave blank to keep current{% else %}SG.xxxx — optional{% endif %}">
+            <div class="form-text">Works on Render free tier when Gmail SMTP is blocked. Verify sender email in SendGrid.</div>
           </div>
           <div class="col-md-6">
             <label class="form-label small fw-semibold">From address (optional)</label>

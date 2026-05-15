@@ -383,11 +383,112 @@ def create_backup_zip(app, progress_cb=None):
         return None, str(e)
 
 
+def _email_attachment_limit_mb():
+    return int(os.environ.get('BACKUP_EMAIL_MAX_MB', '24'))
+
+
+def _format_email_error(exc):
+    msg = str(exc).strip() or type(exc).__name__
+    low = msg.lower()
+    if os.environ.get('RENDER') and any(
+        x in low for x in ('timed out', 'timeout', 'connection refused', 'network is unreachable', 'errno 111', 'errno 110')
+    ):
+        return (
+            'SMTP blocked or unreachable from Render (free plan blocks ports 587/465). '
+            'Fix: add a SendGrid API key in backup settings below, upgrade Render to a paid instance, '
+            'or use Download Backup instead. Detail: ' + msg
+        )
+    if 'authentication' in low or '535' in msg or '534' in msg:
+        return 'Gmail login failed. Use a 16-character App Password (Google → Security → App passwords), not your normal password.'
+    if any(x in low for x in ('552', 'too large', 'maximum', 'size exceeded', 'message size')):
+        return f'Attachment too large for email (max about {_email_attachment_limit_mb()} MB). Use Download Backup.'
+    return msg
+
+
+def _send_backup_via_sendgrid(api_key, from_email, to_email, subject, body, attach_path):
+    import base64
+    import json
+    from urllib.error import HTTPError, URLError
+    from urllib.request import Request, urlopen
+
+    attach_name = os.path.basename(attach_path)
+    ext = os.path.splitext(attach_name)[1].lower()
+    mime = 'application/zip' if ext == '.zip' else 'application/gzip' if ext == '.gz' else 'application/octet-stream'
+    with open(attach_path, 'rb') as f:
+        b64 = base64.b64encode(f.read()).decode('ascii')
+    payload = {
+        'personalizations': [{'to': [{'email': to_email}]}],
+        'from': {'email': from_email},
+        'subject': subject,
+        'content': [{'type': 'text/plain', 'value': body}],
+        'attachments': [{
+            'content': b64,
+            'type': mime,
+            'filename': attach_name,
+            'disposition': 'attachment',
+        }],
+    }
+    req = Request(
+        'https://api.sendgrid.com/v3/mail/send',
+        data=json.dumps(payload).encode('utf-8'),
+        headers={
+            'Authorization': 'Bearer ' + api_key,
+            'Content-Type': 'application/json',
+        },
+        method='POST',
+    )
+    try:
+        with urlopen(req, timeout=180) as resp:
+            if 200 <= getattr(resp, 'status', 200) < 300:
+                return True, 'Backup sent to ' + to_email + ' (SendGrid)'
+    except HTTPError as e:
+        detail = e.read().decode('utf-8', errors='replace')[:400]
+        return False, f'SendGrid error ({e.code}): {detail or e.reason}'
+    except URLError as e:
+        return False, 'SendGrid request failed: ' + str(e.reason or e)
+    return False, 'SendGrid send failed'
+
+
+def _send_backup_via_smtp(server, port, use_tls, username, password, mail_from, to_email, msg_bytes):
+    import smtplib
+
+    attempts = []
+    if port == 465:
+        attempts.append((465, True))
+    elif port == 587:
+        attempts.append((587, False))
+    else:
+        attempts.append((port, False))
+    for extra_port, use_ssl in ((465, True), (587, False)):
+        if (extra_port, use_ssl) not in attempts:
+            attempts.append((extra_port, use_ssl))
+
+    last_err = None
+    envelope_from = username or mail_from
+    for try_port, use_ssl in attempts:
+        try:
+            if use_ssl:
+                smtp = smtplib.SMTP_SSL(server, try_port, timeout=90)
+            else:
+                smtp = smtplib.SMTP(server, try_port, timeout=90)
+            with smtp:
+                smtp.ehlo()
+                if not use_ssl and use_tls:
+                    smtp.starttls()
+                    smtp.ehlo()
+                smtp.login(username, password)
+                smtp.sendmail(envelope_from, [to_email], msg_bytes)
+            return True, None
+        except Exception as e:
+            last_err = e
+    return False, last_err
+
+
 def send_backup_email(app, zip_path, to_email):
     """
-    Send backup ZIP as email attachment via SMTP.
-    Returns (success: bool, message: str).
-    Tries port 465 (SSL) first, then 587 (STARTTLS).
+    Send backup file as email attachment.
+    Uses SendGrid API when SENDGRID_API_KEY is set (required on Render free tier).
+    Otherwise SMTP (Gmail).
     """
     from backup_config import apply_backup_config_to_app
 
@@ -395,57 +496,67 @@ def send_backup_email(app, zip_path, to_email):
     if not to_email or not to_email.strip():
         return False, 'Email address is required.'
     to_email = to_email.strip()
-    server = (app.config.get('MAIL_SERVER') or os.environ.get('MAIL_SERVER') or '').strip()
-    port_str = (app.config.get('MAIL_PORT') or os.environ.get('MAIL_PORT') or '587').strip()
+    if not zip_path or not os.path.isfile(zip_path):
+        return False, 'Backup file missing.'
+
+    size_mb = os.path.getsize(zip_path) / (1024 * 1024)
+    max_mb = _email_attachment_limit_mb()
+    if size_mb > max_mb:
+        return False, (
+            f'Backup file is {size_mb:.1f} MB; email allows about {max_mb} MB. '
+            'Use Download Backup or enable SendGrid with a smaller backup.'
+        )
+
+    username = (app.config.get('MAIL_USERNAME') or '').strip()
+    password = (app.config.get('MAIL_PASSWORD') or '').strip()
+    mail_from = (app.config.get('MAIL_FROM') or username or '').strip()
+    sendgrid_key = (app.config.get('SENDGRID_API_KEY') or os.environ.get('SENDGRID_API_KEY') or '').strip()
+    subject = f'Fleet Manager Backup {pk_now().strftime("%Y-%m-%d %H:%M")}'
+    body = 'Fleet Manager database backup. Please store securely.'
+
+    if sendgrid_key:
+        if not mail_from:
+            return False, 'Sender email is required for SendGrid.'
+        return _send_backup_via_sendgrid(sendgrid_key, mail_from, to_email, subject, body, zip_path)
+
+    server = (app.config.get('MAIL_SERVER') or 'smtp.gmail.com').strip()
+    port_str = str(app.config.get('MAIL_PORT') or '587').strip()
     port = int(port_str) if port_str.isdigit() else 587
     use_tls = str(app.config.get('MAIL_USE_TLS', True)).lower() in ('1', 'true', 'yes')
-    username = (app.config.get('MAIL_USERNAME') or os.environ.get('MAIL_USERNAME') or '').strip()
-    password = (app.config.get('MAIL_PASSWORD') or os.environ.get('MAIL_PASSWORD') or '').strip()
-    mail_from = (app.config.get('MAIL_FROM') or os.environ.get('MAIL_FROM') or username or 'noreply@fleetmanager.local').strip()
     if not server or not username or not password:
-        return False, 'Email not configured. Set MAIL_SERVER, MAIL_USERNAME, MAIL_PASSWORD in .env (local) or Environment (online).'
+        hint = ''
+        if os.environ.get('RENDER'):
+            hint = ' On Render free tier, add a SendGrid API key in backup settings (SMTP is blocked).'
+        return False, 'Email not configured (Gmail App Password required).' + hint
+
     try:
-        import smtplib
         from email.mime.multipart import MIMEMultipart
         from email.mime.base import MIMEBase
         from email.mime.text import MIMEText
         from email import encoders
+
         msg = MIMEMultipart()
-        msg['Subject'] = f'Fleet Manager Backup {pk_now().strftime("%Y-%m-%d %H:%M")}'
+        msg['Subject'] = subject
         msg['From'] = mail_from
         msg['To'] = to_email
-        msg.attach(MIMEText('Fleet Manager database and uploads backup. Please store securely.', 'plain'))
+        msg.attach(MIMEText(body, 'plain'))
         attach_name = os.path.basename(zip_path)
         ext = os.path.splitext(attach_name)[1].lower()
-        maintype = 'application'
         subtype = 'zip' if ext == '.zip' else 'gzip' if ext == '.gz' else 'octet-stream'
         with open(zip_path, 'rb') as f:
-            part = MIMEBase(maintype, subtype)
+            part = MIMEBase('application', subtype)
             part.set_payload(f.read())
         encoders.encode_base64(part)
         part.add_header('Content-Disposition', 'attachment', filename=attach_name)
         msg.attach(part)
-        # Try 465 (SSL) first; often works better from local. Else 587 (STARTTLS).
-        last_err = None
-        for try_port, use_ssl in [(465, True), (587, False)]:
-            try:
-                if use_ssl:
-                    with smtplib.SMTP_SSL(server, try_port) as smtp:
-                        smtp.login(username, password)
-                        smtp.sendmail(mail_from, [to_email], msg.as_string())
-                else:
-                    with smtplib.SMTP(server, try_port) as smtp:
-                        if use_tls:
-                            smtp.starttls()
-                        smtp.login(username, password)
-                        smtp.sendmail(mail_from, [to_email], msg.as_string())
-                return True, 'Backup sent to ' + to_email
-            except Exception as e:
-                last_err = e
-                continue
-        return False, str(last_err) if last_err else 'Email failed'
+        msg_text = msg.as_string()
+
+        ok, err = _send_backup_via_smtp(server, port, use_tls, username, password, mail_from, to_email, msg_text)
+        if ok:
+            return True, 'Backup sent to ' + to_email
+        return False, _format_email_error(err)
     except Exception as e:
-        return False, str(e)
+        return False, _format_email_error(e)
 
 
 def run_backup_job_sync(app, job_id):
@@ -522,8 +633,14 @@ def run_backup_job_sync(app, job_id):
                 pass
             zip_path = None
             if not ok:
-                err_msg = msg or 'Email failed'
-                write_job(app, job_id, status='error', step='Email failed', error=err_msg)
+                err_msg = (msg or '').strip() or 'Email failed'
+                write_job(
+                    app, job_id,
+                    status='error',
+                    step='Email failed',
+                    error=err_msg,
+                    percent=92,
+                )
                 return {'started': True, 'status': 'error', 'error': err_msg}
             write_job(
                 app, job_id,
