@@ -389,6 +389,9 @@ def send_backup_email(app, zip_path, to_email):
     Returns (success: bool, message: str).
     Tries port 465 (SSL) first, then 587 (STARTTLS).
     """
+    from backup_config import apply_backup_config_to_app
+
+    apply_backup_config_to_app(app)
     if not to_email or not to_email.strip():
         return False, 'Email address is required.'
     to_email = to_email.strip()
@@ -468,6 +471,10 @@ def run_backup_job_sync(app, job_id):
         def progress(pct, step):
             write_job(app, job_id, status='running', step=step, percent=pct)
 
+        job = read_job(app, job_id) or {}
+        job_type = (job.get('job_type') or 'download').strip().lower()
+        email_to = (job.get('email_to') or '').strip()
+
         zip_path, err = create_backup_zip(app, progress_cb=progress)
         if err:
             err_msg = (err or '').strip() or 'Backup failed (unknown reason)'
@@ -494,6 +501,43 @@ def run_backup_job_sync(app, job_id):
             SystemSetting.set('last_backup_size', f'{size_mb} MB')
         except Exception:
             pass
+
+        if job_type == 'email':
+            from backup_config import apply_backup_config_to_app
+            apply_backup_config_to_app(app)
+            dest = email_to or (app.config.get('BACKUP_EMAIL_TO') or '').strip()
+            if not dest:
+                err_msg = 'Recipient email not configured.'
+                try:
+                    os.remove(zip_path)
+                except OSError:
+                    pass
+                write_job(app, job_id, status='error', step='Backup failed', error=err_msg)
+                return {'started': True, 'status': 'error', 'error': err_msg}
+            write_job(app, job_id, status='running', step='Sending email…', percent=92)
+            ok, msg = send_backup_email(app, zip_path, dest)
+            try:
+                os.remove(zip_path)
+            except OSError:
+                pass
+            zip_path = None
+            if not ok:
+                err_msg = msg or 'Email failed'
+                write_job(app, job_id, status='error', step='Email failed', error=err_msg)
+                return {'started': True, 'status': 'error', 'error': err_msg}
+            write_job(
+                app, job_id,
+                status='done',
+                step='Email sent',
+                percent=100,
+                zip_path=None,
+                download_name=None,
+                message=msg,
+                job_type='email',
+                error=None,
+            )
+            return {'started': True, 'status': 'done', 'error': None}
+
         write_job(
             app, job_id,
             status='done',
@@ -530,6 +574,8 @@ def run_scheduled_backup(app):
     Uses app context; log errors via app.logger if available.
     """
     with app.app_context():
+        from backup_config import apply_backup_config_to_app
+        apply_backup_config_to_app(app)
         zip_path, err = create_backup_zip(app)
         if err:
             if hasattr(app, 'logger'):

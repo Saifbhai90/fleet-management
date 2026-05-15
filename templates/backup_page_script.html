@@ -1,0 +1,210 @@
+<script>
+(function() {
+  var startUrl = {{ url_for('backup_job_start') | tojson }};
+  var settingsUrl = {{ url_for('backup_settings_save') | tojson }};
+  var btnDownload = document.getElementById('btnBackupDownload');
+  var btnEmail = document.getElementById('btnBackupEmailSend');
+  var overlay = document.getElementById('backupOverlay');
+  if (!overlay) return;
+
+  var pollTimer = null;
+  var currentJobId = null;
+  var currentJobType = 'download';
+
+  function el(id) { return document.getElementById(id); }
+
+  function csrfHeaders() {
+    var h = { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' };
+    var m = document.querySelector('meta[name="csrf-token"]');
+    if (m && m.content) h['X-CSRFToken'] = m.content;
+    return h;
+  }
+
+  function parseJsonResponse(r) {
+    return r.text().then(function(text) {
+      var j = null;
+      try { j = text ? JSON.parse(text) : null; } catch (e) { j = null; }
+      if (!r.ok) {
+        var msg = (j && j.error) ? j.error : (text && text.indexOf('<') >= 0 ? ('Server error (' + r.status + ')') : text);
+        throw new Error(msg || ('Request failed (' + r.status + ')'));
+      }
+      if (!j) throw new Error('Invalid server response.');
+      return j;
+    });
+  }
+
+  function setButtonsDisabled(disabled) {
+    if (btnDownload) btnDownload.disabled = disabled;
+    if (btnEmail) btnEmail.disabled = disabled;
+  }
+
+  function showOverlay(title, line) {
+    overlay.classList.remove('d-none');
+    overlay.style.display = 'flex';
+    el('backupSpinner').classList.remove('d-none');
+    el('backupDoneIcon').classList.add('d-none');
+    el('backupFailIcon').classList.add('d-none');
+    el('backupOverlayTitle').textContent = title || 'Creating Backup…';
+    el('backupStatusLine').textContent = line || 'Starting…';
+    el('backupProgress').className = 'progress-bar progress-bar-striped progress-bar-animated bg-primary';
+    el('backupProgress').style.width = '5%';
+    el('backupPct').textContent = '5%';
+    el('backupDownloadReady').classList.add('d-none');
+    el('backupOverlayClose').classList.add('d-none');
+    setButtonsDisabled(true);
+  }
+
+  function hideOverlay() {
+    overlay.classList.add('d-none');
+    overlay.style.display = 'none';
+    setButtonsDisabled(false);
+    if (pollTimer) {
+      clearInterval(pollTimer);
+      pollTimer = null;
+    }
+  }
+
+  function setProgress(pct, message) {
+    var p = Math.max(0, Math.min(100, parseInt(pct, 10) || 0));
+    el('backupProgress').style.width = p + '%';
+    el('backupPct').textContent = p + '%';
+    if (message) el('backupStatusLine').textContent = message;
+  }
+
+  function statusUrl(jobId) {
+    return '/backup/job/' + encodeURIComponent(jobId) + '/status';
+  }
+
+  function downloadUrl(jobId) {
+    return '/backup/job/' + encodeURIComponent(jobId) + '/download';
+  }
+
+  function pollStatus(jobId) {
+    fetch(statusUrl(jobId), { credentials: 'same-origin', headers: csrfHeaders() })
+      .then(parseJsonResponse)
+      .then(function(j) {
+        if (!j.ok) throw new Error(j.error || 'Status failed');
+        setProgress(j.percent, j.step || j.message || '');
+        if (j.status === 'running' || j.status === 'queued') return;
+        if (pollTimer) {
+          clearInterval(pollTimer);
+          pollTimer = null;
+        }
+        if (j.status === 'done') {
+          el('backupSpinner').classList.add('d-none');
+          el('backupDoneIcon').classList.remove('d-none');
+          var isEmail = (j.job_type === 'email') || currentJobType === 'email';
+          if (isEmail) {
+            el('backupOverlayTitle').textContent = 'Email Sent';
+            setProgress(100, j.message || 'Backup sent successfully.');
+          } else {
+            el('backupOverlayTitle').textContent = 'Backup Ready';
+            setProgress(100, (j.message ? j.message + ' — ' : '') + 'Click below to download.');
+            var dl = el('backupDownloadReady');
+            dl.classList.remove('d-none');
+            dl.onclick = function() {
+              window.location.href = downloadUrl(jobId);
+              setTimeout(hideOverlay, 800);
+            };
+          }
+          el('backupProgress').classList.remove('progress-bar-animated');
+          el('backupProgress').classList.add('bg-success');
+          el('backupOverlayClose').classList.remove('d-none');
+          return;
+        }
+        if (j.status === 'error') {
+          el('backupSpinner').classList.add('d-none');
+          el('backupFailIcon').classList.remove('d-none');
+          el('backupOverlayTitle').textContent = 'Backup Failed';
+          var errMsg = (j.error && String(j.error).trim()) ? j.error : (j.step || 'Unknown error');
+          el('backupStatusLine').textContent = errMsg;
+          el('backupProgress').classList.remove('progress-bar-animated');
+          el('backupProgress').classList.add('bg-danger');
+          el('backupOverlayClose').classList.remove('d-none');
+          setButtonsDisabled(false);
+        }
+      })
+      .catch(function(err) {
+        if (pollTimer) clearInterval(pollTimer);
+        pollTimer = null;
+        el('backupSpinner').classList.add('d-none');
+        el('backupFailIcon').classList.remove('d-none');
+        el('backupOverlayTitle').textContent = 'Backup Failed';
+        el('backupStatusLine').textContent = err && err.message ? err.message : String(err);
+        el('backupOverlayClose').classList.remove('d-none');
+        setButtonsDisabled(false);
+      });
+  }
+
+  function startJob(jobType) {
+    currentJobType = jobType || 'download';
+    showOverlay(
+      jobType === 'email' ? 'Sending Backup Email…' : 'Creating Backup…',
+      jobType === 'email' ? 'Creating backup and sending to Gmail…' : 'Please wait. Database export may take several minutes.'
+    );
+    var fd = new FormData();
+    var m = document.querySelector('meta[name="csrf-token"]');
+    if (m && m.content) fd.append('csrf_token', m.content);
+    fd.append('type', jobType);
+    fetch(startUrl, { method: 'POST', body: fd, credentials: 'same-origin', headers: csrfHeaders() })
+      .then(parseJsonResponse)
+      .then(function(j) {
+        if (!j.ok || !j.job_id) throw new Error(j.error || 'Could not start backup');
+        currentJobId = j.job_id;
+        setProgress(8, 'Working… (first step may take a few minutes)');
+        pollStatus(currentJobId);
+        pollTimer = setInterval(function() { pollStatus(currentJobId); }, 2000);
+      })
+      .catch(function(err) {
+        el('backupSpinner').classList.add('d-none');
+        el('backupFailIcon').classList.remove('d-none');
+        el('backupOverlayTitle').textContent = 'Could not start';
+        el('backupStatusLine').textContent = err && err.message ? err.message : String(err);
+        el('backupOverlayClose').classList.remove('d-none');
+        setButtonsDisabled(false);
+      });
+  }
+
+  el('backupOverlayClose').addEventListener('click', hideOverlay);
+  if (btnDownload) btnDownload.addEventListener('click', function() { startJob('download'); });
+  if (btnEmail) btnEmail.addEventListener('click', function() { startJob('email'); });
+
+  var freqEl = document.getElementById('scheduleFrequency');
+  var weekdayWrap = document.getElementById('weekdayWrap');
+  if (freqEl && weekdayWrap) {
+    freqEl.addEventListener('change', function() {
+      weekdayWrap.style.display = freqEl.value === 'weekly' ? '' : 'none';
+    });
+  }
+
+  var settingsForm = document.getElementById('backupSettingsForm');
+  if (settingsForm) {
+    settingsForm.addEventListener('submit', function(ev) {
+      ev.preventDefault();
+      var msgEl = document.getElementById('backupSettingsMsg');
+      var btn = document.getElementById('btnSaveBackupSettings');
+      var fd = new FormData(settingsForm);
+      if (!fd.get('mail_use_tls')) fd.append('mail_use_tls', 'false');
+      if (!fd.get('schedule_enabled')) fd.append('schedule_enabled', 'false');
+      if (btn) btn.disabled = true;
+      if (msgEl) msgEl.textContent = 'Saving…';
+      fetch(settingsUrl, { method: 'POST', body: fd, credentials: 'same-origin', headers: csrfHeaders() })
+        .then(parseJsonResponse)
+        .then(function(j) {
+          if (msgEl) {
+            msgEl.textContent = j.message || (j.ok ? 'Saved.' : 'Failed.');
+            msgEl.className = 'small ' + (j.ok ? 'text-success' : 'text-danger');
+          }
+          if (j.ok) setTimeout(function() { window.location.reload(); }, 800);
+        })
+        .catch(function(err) {
+          if (msgEl) {
+            msgEl.textContent = err.message || 'Save failed';
+            msgEl.className = 'small text-danger';
+          }
+        })
+        .finally(function() { if (btn) btn.disabled = false; });
+    });
+  }
+})();
+</script>

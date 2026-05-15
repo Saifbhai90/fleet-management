@@ -4230,39 +4230,51 @@ def accounts_future_entry():
 # ────────────────────────────────────────────────
 @app.route('/backup')
 def backup_index():
-    """Backup page: download, email, or save to path."""
-    backup_path = app.config.get('BACKUP_PATH') or ''
-    mail_configured = bool(
-        app.config.get('MAIL_SERVER') and
-        app.config.get('MAIL_USERNAME') and
-        app.config.get('MAIL_PASSWORD')
-    )
-    schedule_enabled = app.config.get('BACKUP_SCHEDULE_ENABLED', False)
-    schedule_time = app.config.get('BACKUP_SCHEDULE_TIME') or '02:00'
-    backup_email_to = (app.config.get('BACKUP_EMAIL_TO') or '').strip()
-    # Missing env (for online: Render Environment mein kya add karna hai)
-    mail_missing = []
-    if not (app.config.get('MAIL_SERVER') or '').strip():
-        mail_missing.append('MAIL_SERVER')
-    if not (app.config.get('MAIL_USERNAME') or '').strip():
-        mail_missing.append('MAIL_USERNAME')
-    if not (app.config.get('MAIL_PASSWORD') or '').strip():
-        mail_missing.append('MAIL_PASSWORD')
-    schedule_missing = []
-    if not schedule_enabled:
-        schedule_missing.append('BACKUP_SCHEDULE_ENABLED=true')
-    if not backup_email_to:
-        schedule_missing.append('BACKUP_EMAIL_TO=your@email.com')
+    """Backup page: download, email configuration, send to email."""
+    from backup_config import get_backup_settings, mail_is_configured
+
+    settings = get_backup_settings(app)
+    mail_configured = mail_is_configured(app)
+    freq_labels = {
+        'daily': 'Daily',
+        'weekly': 'Weekly',
+        'twice_daily': 'Twice daily',
+    }
+    weekday_names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+    try:
+        wd = int(settings.get('schedule_weekday') or 0)
+    except (TypeError, ValueError):
+        wd = 0
+    wd = max(0, min(6, wd))
     return render_template(
         'backup.html',
-        backup_path=backup_path,
+        backup_settings=settings,
         mail_configured=mail_configured,
-        schedule_enabled=schedule_enabled,
-        schedule_time=schedule_time,
-        backup_email_to=backup_email_to,
-        mail_missing=mail_missing,
-        schedule_missing=schedule_missing,
+        schedule_enabled=settings.get('schedule_enabled'),
+        schedule_time=settings.get('schedule_time'),
+        backup_email_to=settings.get('email_to'),
+        schedule_frequency=settings.get('schedule_frequency'),
+        schedule_frequency_label=freq_labels.get(settings.get('schedule_frequency'), 'Daily'),
+        schedule_weekday_name=weekday_names[wd],
+        mail_missing=[],
+        schedule_missing=[],
     )
+
+
+@app.route('/backup/settings', methods=['POST'])
+def backup_settings_save():
+    """Save backup email & auto-backup schedule (SystemSetting)."""
+    from backup_config import save_backup_settings
+
+    if request.is_json:
+        data = request.get_json(silent=True) or {}
+    else:
+        data = request.form.to_dict()
+    ok, msg = save_backup_settings(app, data)
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.is_json:
+        return jsonify({'ok': ok, 'message': msg, 'error': None if ok else msg})
+    flash(msg, 'success' if ok else 'danger')
+    return redirect(url_for('backup_index'))
 
 
 @app.route('/backup/download')
@@ -4276,13 +4288,25 @@ def backup_download():
 def backup_job_start():
     """Create backup job; client polls /status (runs backup while queued)."""
     from backup_jobs import create_job
+    from backup_config import mail_is_configured, get_backup_settings
 
     try:
         uid = session.get('user_id')
         if not uid:
             return jsonify({'ok': False, 'error': 'Not logged in'}), 401
-        job_id = create_job(app, uid)
-        return jsonify({'ok': True, 'job_id': job_id})
+        job_type = (request.form.get('type') or request.args.get('type') or 'download').strip().lower()
+        if job_type == 'email':
+            if not mail_is_configured(app):
+                return jsonify({
+                    'ok': False,
+                    'error': 'Email not configured. Open settings below and save Gmail + recipient.',
+                }), 400
+            settings = get_backup_settings(app)
+            email_to = (request.form.get('email_to') or settings.get('email_to') or '').strip()
+            job_id = create_job(app, uid, job_type='email', email_to=email_to)
+        else:
+            job_id = create_job(app, uid, job_type='download')
+        return jsonify({'ok': True, 'job_id': job_id, 'job_type': job_type})
     except Exception as ex:
         app.logger.exception('backup_job_start failed: %s', ex)
         return jsonify({'ok': False, 'error': str(ex)}), 500
@@ -4320,6 +4344,7 @@ def backup_job_status(job_id):
             'message': job.get('message') or '',
             'error': job.get('error'),
             'download_name': job.get('download_name'),
+            'job_type': job.get('job_type') or 'download',
         })
     except Exception as ex:
         app.logger.exception('backup_job_status failed: %s', ex)

@@ -431,6 +431,7 @@ ENDPOINT_PERMISSION_MAP = [
     ('backup_job_status', 'system_backup'),
     ('backup_job_download', 'system_backup'),
     ('backup_email', 'system_backup'),
+    ('backup_settings_save', 'system_backup'),
     ('backup_save', 'system_backup'),
     # Uploaded documents / photos (require view_documents)
     ('uploaded_file', 'view_documents'),

@@ -71,7 +71,7 @@ def cleanup_old_jobs(app, max_age_seconds=3600):
             pass
 
 
-def create_job(app, user_id):
+def create_job(app, user_id, job_type='download', email_to=None):
     cleanup_old_jobs(app)
     job_id = uuid.uuid4().hex
     write_job(app, job_id, {
@@ -82,6 +82,8 @@ def create_job(app, user_id):
         'error': None,
         'zip_path': None,
         'download_name': None,
+        'job_type': job_type or 'download',
+        'email_to': (email_to or '').strip() or None,
         'user_id': int(user_id) if user_id else None,
         'created': time.time(),
     })
