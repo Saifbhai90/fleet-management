@@ -4274,60 +4274,56 @@ def backup_download():
 
 @app.route('/backup/job/start', methods=['POST'])
 def backup_job_start():
-    """Create backup job; client must POST /execute then poll /status."""
+    """Create backup job; client polls /status (runs backup while queued)."""
     from backup_jobs import create_job
 
-    uid = session.get('user_id')
-    if not uid:
-        return jsonify({'ok': False, 'error': 'Not logged in'}), 401
-    job_id = create_job(app, uid)
-    return jsonify({'ok': True, 'job_id': job_id})
+    try:
+        uid = session.get('user_id')
+        if not uid:
+            return jsonify({'ok': False, 'error': 'Not logged in'}), 401
+        job_id = create_job(app, uid)
+        return jsonify({'ok': True, 'job_id': job_id})
+    except Exception as ex:
+        app.logger.exception('backup_job_start failed: %s', ex)
+        return jsonify({'ok': False, 'error': str(ex)}), 500
 
 
 @app.route('/backup/job/<job_id>/execute', methods=['POST'])
 def backup_job_execute(job_id):
-    """Run backup synchronously (progress via /status polling). Works on Render multi-worker."""
-    from backup_jobs import read_job
-    from backup_utils import run_backup_job_sync
-
-    job = read_job(app, job_id)
-    if not job:
-        return jsonify({'ok': False, 'error': 'Job not found'}), 404
-    owner = job.get('user_id')
-    if owner != session.get('user_id') and not session.get('is_master'):
-        return jsonify({'ok': False, 'error': 'Forbidden'}), 403
-
-    result = run_backup_job_sync(app, job_id)
-    job = read_job(app, job_id) or {}
-    return jsonify({
-        'ok': True,
-        'started': bool(result.get('started')),
-        'status': job.get('status'),
-        'error': job.get('error') or result.get('error'),
-        'step': job.get('step') or '',
-        'percent': int(job.get('percent') or 0),
-    })
+    """Legacy: same as polling /status while queued. Kept for older clients."""
+    return backup_job_status(job_id)
 
 
 @app.route('/backup/job/<job_id>/status')
 def backup_job_status(job_id):
-    from backup_jobs import read_job
+    """Poll progress; if still queued, run backup in this request (Render-safe, no background thread)."""
+    from backup_jobs import read_job, _lock_file
+    from backup_utils import run_backup_job_sync
 
-    job = read_job(app, job_id)
-    if not job:
-        return jsonify({'ok': False, 'error': 'Job not found'}), 404
-    owner = job.get('user_id')
-    if owner != session.get('user_id') and not session.get('is_master'):
-        return jsonify({'ok': False, 'error': 'Forbidden'}), 403
-    return jsonify({
-        'ok': True,
-        'status': job.get('status'),
-        'step': job.get('step') or '',
-        'percent': int(job.get('percent') or 0),
-        'message': job.get('message') or '',
-        'error': job.get('error'),
-        'download_name': job.get('download_name'),
-    })
+    try:
+        job = read_job(app, job_id)
+        if not job:
+            return jsonify({'ok': False, 'error': 'Job not found'}), 404
+        owner = job.get('user_id')
+        if owner != session.get('user_id') and not session.get('is_master'):
+            return jsonify({'ok': False, 'error': 'Forbidden'}), 403
+
+        if job.get('status') == 'queued' and not os.path.exists(_lock_file(app, job_id)):
+            run_backup_job_sync(app, job_id)
+            job = read_job(app, job_id) or job
+
+        return jsonify({
+            'ok': True,
+            'status': job.get('status'),
+            'step': job.get('step') or '',
+            'percent': int(job.get('percent') or 0),
+            'message': job.get('message') or '',
+            'error': job.get('error'),
+            'download_name': job.get('download_name'),
+        })
+    except Exception as ex:
+        app.logger.exception('backup_job_status failed: %s', ex)
+        return jsonify({'ok': False, 'error': str(ex)}), 500
 
 
 @app.route('/backup/job/<job_id>/download')
