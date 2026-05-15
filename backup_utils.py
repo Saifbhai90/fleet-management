@@ -449,6 +449,11 @@ def _email_attachment_limit_mb():
 
 def _format_email_error(exc):
     msg = str(exc).strip() or type(exc).__name__
+    if isinstance(exc, MemoryError):
+        return (
+            'Server ran out of memory building/sending the email. '
+            'Use Download Backup, reduce DB size, or upgrade Render RAM.'
+        )
     low = msg.lower()
     if os.environ.get('RENDER') and any(
         x in low for x in ('timed out', 'timeout', 'connection refused', 'network is unreachable', 'errno 111', 'errno 110')
@@ -464,7 +469,11 @@ def _format_email_error(exc):
     return msg
 
 
-def _send_backup_via_smtp(server, port, use_tls, username, password, mail_from, to_email, msg_bytes):
+def _send_backup_via_smtp(server, port, use_tls, username, password, mail_from, to_email, eml_path):
+    """
+    Send a pre-built RFC822 message file with minimal RAM (stream DATA phase).
+    Gmail/large attachments must not use msg.as_string() — it duplicates the payload in memory.
+    """
     import smtplib
 
     attempts = []
@@ -483,20 +492,125 @@ def _send_backup_via_smtp(server, port, use_tls, username, password, mail_from, 
     for try_port, use_ssl in attempts:
         try:
             if use_ssl:
-                smtp = smtplib.SMTP_SSL(server, try_port, timeout=90)
+                smtp = smtplib.SMTP_SSL(server, try_port, timeout=120)
             else:
-                smtp = smtplib.SMTP(server, try_port, timeout=90)
+                smtp = smtplib.SMTP(server, try_port, timeout=120)
             with smtp:
                 smtp.ehlo()
                 if not use_ssl and use_tls:
                     smtp.starttls()
                     smtp.ehlo()
                 smtp.login(username, password)
-                smtp.sendmail(envelope_from, [to_email], msg_bytes)
+                _smtp_stream_mail_from_file(smtp, envelope_from, [to_email], eml_path)
             return True, None
         except Exception as e:
             last_err = e
     return False, last_err
+
+
+def _smtp_stream_mail_from_file(smtp, envelope_from, to_addrs, eml_path):
+    """MAIL FROM → RCPT → DATA, streaming file bytes with SMTP dot-stuffing."""
+    from smtplib import SMTPDataError, SMTPRecipientsRefused, SMTPSenderRefused
+
+    sz = os.path.getsize(eml_path)
+    fudge = min(max(sz // 15, 2048), 256 * 1024)
+
+    smtp.ehlo_or_helo_if_needed()
+    esmtp_opts = []
+    if getattr(smtp, 'does_esmtp', False) and smtp.has_extn('size'):
+        esmtp_opts.append('size=%d' % (sz + fudge))
+
+    code, resp = smtp.mail(envelope_from, esmtp_opts)
+    if code != 250:
+        if code == 421:
+            smtp.close()
+        else:
+            smtp.rset()
+        raise SMTPSenderRefused(code, resp, envelope_from)
+
+    senderrs = {}
+    if isinstance(to_addrs, str):
+        to_addrs = [to_addrs]
+    for each in to_addrs:
+        code, resp = smtp.rcpt(each)
+        if code not in (250, 251):
+            senderrs[each] = (code, resp)
+        if code == 421:
+            smtp.close()
+            raise SMTPRecipientsRefused(senderrs)
+    if len(senderrs) == len(to_addrs):
+        smtp.rset()
+        raise SMTPRecipientsRefused(senderrs)
+
+    smtp.putcmd('data')
+    code, repl = smtp.getreply()
+    if code != 354:
+        raise SMTPDataError(code, repl)
+
+    with open(eml_path, 'rb') as fp:
+        for line in fp:
+            if line.startswith(b'.'):
+                smtp.send(b'.')
+            smtp.send(line)
+    smtp.send(b'\r\n.\r\n')
+    code, msg = smtp.getreply()
+    if code != 250:
+        raise SMTPDataError(code, msg)
+
+
+def _write_backup_rfc822_tempfile(zip_path, subject, mail_from, to_email, body_plain):
+    """Build multipart/mixed + base64 attachment by streaming (low peak RAM)."""
+    import base64
+    import tempfile
+
+    boundary = '=_fleet_' + pk_now().strftime('%Y%m%d%H%M%S')
+    fd, path = tempfile.mkstemp(prefix='fleet_backup_mail_', suffix='.eml')
+    os.close(fd)
+    attach_name = os.path.basename(zip_path)
+    ext = os.path.splitext(attach_name)[1].lower()
+    subtype = 'zip' if ext == '.zip' else 'gzip' if ext == '.gz' else 'octet-stream'
+
+    try:
+        with open(path, 'wb') as out:
+            hdr_subject = subject.encode('ascii', errors='replace')
+            out.write(b'Subject: ' + hdr_subject + b'\r\n')
+            out.write(b'From: ' + mail_from.encode('utf-8') + b'\r\n')
+            out.write(b'To: ' + to_email.encode('utf-8') + b'\r\n')
+            out.write(b'MIME-Version: 1.0\r\n')
+            out.write(
+                f'Content-Type: multipart/mixed; boundary="{boundary}"\r\n\r\n'.encode('ascii')
+            )
+
+            out.write(f'--{boundary}\r\n'.encode('ascii'))
+            out.write(b'Content-Type: text/plain; charset=utf-8\r\n\r\n')
+            out.write(body_plain.encode('utf-8'))
+            out.write(b'\r\n')
+
+            out.write(f'--{boundary}\r\n'.encode('ascii'))
+            out.write(f'Content-Type: application/{subtype}\r\n'.encode('ascii'))
+            disp = f'Content-Disposition: attachment; filename="{attach_name}"\r\n'
+            out.write(disp.encode('utf-8'))
+            out.write(b'Content-Transfer-Encoding: base64\r\n\r\n')
+
+            chunk_raw = 57 * 4096
+            with open(zip_path, 'rb') as zf:
+                while True:
+                    chunk = zf.read(chunk_raw)
+                    if not chunk:
+                        break
+                    b64 = base64.b64encode(chunk)
+                    line_len = 76
+                    for i in range(0, len(b64), line_len):
+                        out.write(b64[i : i + line_len] + b'\r\n')
+
+            out.write(f'--{boundary}--\r\n'.encode('ascii'))
+        return path
+    except Exception:
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+        raise
 
 
 def send_backup_email(app, zip_path, to_email):
@@ -521,8 +635,6 @@ def send_backup_email(app, zip_path, to_email):
     username = (app.config.get('MAIL_USERNAME') or '').strip()
     password = (app.config.get('MAIL_PASSWORD') or '').strip()
     mail_from = (app.config.get('MAIL_FROM') or username or '').strip()
-    subject = f'Fleet Manager Backup {pk_now().strftime("%Y-%m-%d %H:%M")}'
-    body = 'Fleet Manager database backup. Please store securely.'
 
     server = (app.config.get('MAIL_SERVER') or 'smtp.gmail.com').strip()
     port_str = str(app.config.get('MAIL_PORT') or '587').strip()
@@ -531,34 +643,25 @@ def send_backup_email(app, zip_path, to_email):
     if not server or not username or not password:
         return False, 'Email not configured: set Gmail sender, App Password (MAIL_PASSWORD), and recipient in backup settings.'
 
+    eml_path = None
     try:
-        from email.mime.multipart import MIMEMultipart
-        from email.mime.base import MIMEBase
-        from email.mime.text import MIMEText
-        from email import encoders
-
-        msg = MIMEMultipart()
-        msg['Subject'] = subject
-        msg['From'] = mail_from
-        msg['To'] = to_email
-        msg.attach(MIMEText(body, 'plain'))
-        attach_name = os.path.basename(zip_path)
-        ext = os.path.splitext(attach_name)[1].lower()
-        subtype = 'zip' if ext == '.zip' else 'gzip' if ext == '.gz' else 'octet-stream'
-        with open(zip_path, 'rb') as f:
-            part = MIMEBase('application', subtype)
-            part.set_payload(f.read())
-        encoders.encode_base64(part)
-        part.add_header('Content-Disposition', 'attachment', filename=attach_name)
-        msg.attach(part)
-        msg_text = msg.as_string()
-
-        ok, err = _send_backup_via_smtp(server, port, use_tls, username, password, mail_from, to_email, msg_text)
+        subject = f'Fleet Manager Backup {pk_now().strftime("%Y-%m-%d %H:%M")}'
+        body = 'Fleet Manager database backup. Please store securely.'
+        eml_path = _write_backup_rfc822_tempfile(zip_path, subject, mail_from, to_email, body)
+        ok, err = _send_backup_via_smtp(
+            server, port, use_tls, username, password, mail_from, to_email, eml_path,
+        )
         if ok:
             return True, 'Backup sent to ' + to_email
         return False, _format_email_error(err)
     except Exception as e:
         return False, _format_email_error(e)
+    finally:
+        if eml_path and os.path.isfile(eml_path):
+            try:
+                os.remove(eml_path)
+            except OSError:
+                pass
 
 
 def _execute_backup_job_after_claim(app, job_id):
