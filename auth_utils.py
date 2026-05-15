@@ -426,6 +426,9 @@ ENDPOINT_PERMISSION_MAP = [
     # ── Security Lockdown: previously unprotected routes ─────────────────
     # Backup sub-routes (same section as /backup index; require system_backup)
     ('backup_download', 'system_backup'),
+    ('backup_job_start', 'system_backup'),
+    ('backup_job_status', 'system_backup'),
+    ('backup_job_download', 'system_backup'),
     ('backup_email', 'system_backup'),
     ('backup_save', 'system_backup'),
     # Uploaded documents / photos (require view_documents)

@@ -4267,58 +4267,80 @@ def backup_index():
 
 @app.route('/backup/download')
 def backup_download():
-    """Create backup ZIP and send as download (local computer)."""
-    import io
-    from backup_utils import create_backup_zip
+    """Legacy direct download URL — use Backup page button (async job + progress)."""
+    flash('Use Download Backup on the Backup page to see progress and download.', 'info')
+    return redirect(url_for('backup_index'))
 
-    zip_path = None
-    try:
-        zip_path, err = create_backup_zip(app)
-        if err:
-            flash(f'Backup failed: {err}', 'danger')
-            return redirect(url_for('backup_index'))
-        if not zip_path or not os.path.exists(zip_path):
-            flash('Backup file was not created.', 'danger')
-            return redirect(url_for('backup_index'))
 
-        friendly = f'fleet_backup_{pk_now().strftime("%Y%m%d_%H%M%S")}.zip'
-        _last_backup_ts['ts'] = pk_now()
-        try:
-            _bk_size = os.path.getsize(zip_path)
-            SystemSetting.set('last_backup_ts', pk_now().strftime('%Y-%m-%d %H:%M:%S'))
-            SystemSetting.set('last_backup_result', 'success')
-            SystemSetting.set('last_backup_size', f'{round(_bk_size / (1024 * 1024), 1)} MB')
-        except Exception:
-            pass
+@app.route('/backup/job/start', methods=['POST'])
+def backup_job_start():
+    """Start async backup; returns job_id for status polling."""
+    from backup_jobs import create_job
+    from backup_utils import run_backup_job_async
 
-        # Buffer in memory so gunicorn can send the full file before temp path is removed.
-        with open(zip_path, 'rb') as zf:
-            payload = zf.read()
-        try:
-            os.remove(zip_path)
-        except OSError:
-            pass
-        zip_path = None
+    uid = session.get('user_id')
+    if not uid:
+        return jsonify({'ok': False, 'error': 'Not logged in'}), 401
+    job_id = create_job(app, uid)
+    run_backup_job_async(app, job_id)
+    return jsonify({'ok': True, 'job_id': job_id})
 
-        bio = io.BytesIO(payload)
-        bio.seek(0)
-        return send_file(
-            bio,
-            as_attachment=True,
-            download_name=friendly,
-            mimetype='application/zip',
-            max_age=0,
-        )
-    except Exception as ex:
-        app.logger.exception('backup_download failed: %s', ex)
-        flash(f'Backup download failed: {ex}', 'danger')
+
+@app.route('/backup/job/<job_id>/status')
+def backup_job_status(job_id):
+    from backup_jobs import read_job
+
+    job = read_job(app, job_id)
+    if not job:
+        return jsonify({'ok': False, 'error': 'Job not found'}), 404
+    owner = job.get('user_id')
+    if owner != session.get('user_id') and not session.get('is_master'):
+        return jsonify({'ok': False, 'error': 'Forbidden'}), 403
+    return jsonify({
+        'ok': True,
+        'status': job.get('status'),
+        'step': job.get('step') or '',
+        'percent': int(job.get('percent') or 0),
+        'message': job.get('message') or '',
+        'error': job.get('error'),
+        'download_name': job.get('download_name'),
+    })
+
+
+@app.route('/backup/job/<job_id>/download')
+def backup_job_download(job_id):
+    from backup_jobs import read_job, delete_job
+
+    job = read_job(app, job_id)
+    if not job:
+        abort(404)
+    owner = job.get('user_id')
+    if owner != session.get('user_id') and not session.get('is_master'):
+        abort(403)
+    if job.get('status') != 'done':
+        flash('Backup is not ready yet.', 'warning')
         return redirect(url_for('backup_index'))
-    finally:
-        if zip_path and os.path.exists(zip_path):
-            try:
-                os.remove(zip_path)
-            except OSError:
-                pass
+    zip_path = job.get('zip_path')
+    if not zip_path or not os.path.isfile(zip_path):
+        flash('Backup file missing. Please create a new backup.', 'danger')
+        delete_job(app, job_id)
+        return redirect(url_for('backup_index'))
+    friendly = job.get('download_name') or os.path.basename(zip_path)
+    _last_backup_ts['ts'] = pk_now()
+
+    resp = send_file(
+        zip_path,
+        as_attachment=True,
+        download_name=friendly,
+        mimetype='application/zip',
+        max_age=0,
+    )
+
+    @resp.call_on_close
+    def _cleanup_backup_job():
+        delete_job(app, job_id)
+
+    return resp
 
 
 @app.route('/backup/email', methods=['POST'])

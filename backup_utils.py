@@ -85,13 +85,13 @@ def _pg_connect(db_uri):
         )
 
 
-def _pg_dump_via_python(db_uri, sql_file):
+def _pg_dump_via_python(db_uri, sql_file, progress_cb=None):
     """
-    Dump PostgreSQL data to sql_file using psycopg2 (no pg_dump needed).
-    Streams rows in batches to avoid OOM on large tables.
+    Dump PostgreSQL to sql_file using psycopg2 COPY (fast) with INSERT fallback per row batch.
     """
+    import io
     conn = _pg_connect(db_uri)
-    batch_size = 500
+    batch_size = 1000
     try:
         with open(sql_file, 'w', encoding='utf-8') as f:
             with conn.cursor() as meta:
@@ -101,92 +101,115 @@ def _pg_dump_via_python(db_uri, sql_file):
                     ORDER BY tablename
                 """)
                 tables = [r[0] for r in meta.fetchall()]
-            for table in tables:
-                f.write(f'-- Table "{table}"\n')
-                named = f'backup_cur_{table}'.replace('-', '_')[:50]
-                cur = conn.cursor(name=named)
-                cur.itersize = batch_size
+            total = max(len(tables), 1)
+            for idx, table in enumerate(tables):
+                if progress_cb:
+                    pct = 10 + int(65 * (idx / total))
+                    progress_cb(pct, f'Database: {table} ({idx + 1}/{total})')
+                f.write(f'\n-- Table "{table}"\n')
+                copied = False
                 try:
-                    cur.execute(f'SELECT * FROM "{table}"')
-                    cols = [d[0] for d in cur.description] if cur.description else []
-                    if not cols:
-                        f.write(f'-- (no columns)\n\n')
-                        continue
-                    col_list = ','.join(f'"{c}"' for c in cols)
+                    buf = io.StringIO()
+                    with conn.cursor() as cur:
+                        cur.copy_expert(
+                            f'COPY (SELECT * FROM "{table}") TO STDOUT WITH (FORMAT csv, HEADER true)',
+                            buf,
+                        )
+                    payload = buf.getvalue()
+                    if payload.strip():
+                        f.write('-- format: csv\n')
+                        f.write(payload)
+                        if not payload.endswith('\n'):
+                            f.write('\n')
+                    else:
+                        f.write('-- (empty)\n')
+                    copied = True
+                except Exception:
+                    copied = False
+                if copied:
+                    continue
+                with conn.cursor() as cur:
+                    offset = 0
                     row_count = 0
                     while True:
-                        rows = cur.fetchmany(batch_size)
+                        cur.execute(
+                            f'SELECT * FROM "{table}" LIMIT %s OFFSET %s',
+                            (batch_size, offset),
+                        )
+                        rows = cur.fetchall()
                         if not rows:
                             break
+                        cols = [d[0] for d in cur.description] if cur.description else []
+                        if not cols:
+                            break
+                        col_list = ','.join(f'"{c}"' for c in cols)
                         for row in rows:
                             vals = [_sql_literal(v) for v in row]
                             f.write(
                                 f'INSERT INTO "{table}" ({col_list}) VALUES ({",".join(vals)});\n'
                             )
                             row_count += 1
+                        offset += len(rows)
                     if row_count == 0:
-                        f.write(f'-- (empty)\n')
-                finally:
-                    cur.close()
-                f.write('\n')
+                        f.write('-- (empty)\n')
     finally:
         conn.close()
 
 
-def create_backup_zip(app):
+def create_backup_zip(app, progress_cb=None):
     """
     Create a full backup ZIP: database + uploads folder.
+    progress_cb(percent, step_message) optional.
     Returns (path_to_zip_file, error_message). Caller must delete zip_path when done.
     """
-    zip_path = tempfile.mktemp(suffix='.zip', prefix='fleet_backup_')
+    def _report(pct, step):
+        if progress_cb:
+            progress_cb(int(pct), str(step))
+
+    fd, zip_path = tempfile.mkstemp(suffix='.zip', prefix='fleet_backup_')
+    os.close(fd)
     try:
+        _report(5, 'Preparing backup…')
         db_uri = (app.config.get('SQLALCHEMY_DATABASE_URI') or '').strip()
         upload_folder = app.config.get('UPLOAD_FOLDER') or ''
         timestamp = pk_now().strftime('%Y%m%d_%H%M%S')
         zip_basename = f'fleet_backup_{timestamp}.zip'
         with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
             if 'sqlite' in db_uri:
+                _report(15, 'Copying SQLite database…')
                 db_path = get_sqlite_db_path(app)
                 if db_path and os.path.exists(db_path):
                     zf.write(db_path, zip_basename.replace('.zip', '_db.sqlite'))
                 else:
                     raise FileNotFoundError('SQLite database file not found.')
             else:
-                sql_file = tempfile.mktemp(suffix='.sql')
+                _report(10, 'Exporting PostgreSQL database…')
+                fd_sql, sql_file = tempfile.mkstemp(suffix='.sql')
+                os.close(fd_sql)
                 try:
-                    from urllib.parse import urlparse
-                    parsed = urlparse(db_uri)
-                    host = parsed.hostname or 'localhost'
-                    port = parsed.port or 5432
-                    user = parsed.username or 'postgres'
-                    password = parsed.password or ''
-                    dbname = (parsed.path or '').strip('/') or 'postgres'
-                except Exception as e:
-                    raise ValueError(f'Invalid DATABASE_URL: {e}')
-                env = os.environ.copy()
-                if password:
-                    env['PGPASSWORD'] = password
-                import subprocess
-                cmd = [
-                    'pg_dump', '-h', host, '-p', str(port), '-U', user,
-                    '-d', dbname, '-F', 'p', '-f', sql_file, '--no-owner', '--no-acl'
-                ]
-                try:
-                    r = subprocess.run(cmd, env=env, capture_output=True, text=True)
-                except FileNotFoundError:
+                    import subprocess
                     r = None
-                if r is None or r.returncode != 0:
-                    # pg_dump not found (e.g. Windows) or failed: use Python dump
-                    _pg_dump_via_python(db_uri, sql_file)
-                else:
-                    # pg_dump wrote sql_file; only need to zip it (no rewrite)
-                    pass
-                zf.write(sql_file, zip_basename.replace('.zip', '_database.sql'))
-                try:
-                    os.remove(sql_file)
-                except Exception:
-                    pass
+                    try:
+                        r = subprocess.run(
+                            ['pg_dump', db_uri, '-F', 'p', '-f', sql_file, '--no-owner', '--no-acl'],
+                            capture_output=True,
+                            text=True,
+                            timeout=900,
+                        )
+                    except (FileNotFoundError, subprocess.TimeoutExpired):
+                        r = None
+                    if r is None or r.returncode != 0:
+                        _pg_dump_via_python(db_uri, sql_file, progress_cb=_report)
+                    _report(78, 'Adding database file to ZIP…')
+                    zf.write(sql_file, zip_basename.replace('.zip', '_database.sql'))
+                finally:
+                    try:
+                        os.remove(sql_file)
+                    except OSError:
+                        pass
             if _backup_include_uploads(app) and upload_folder and os.path.isdir(upload_folder):
+                _report(82, 'Adding local uploads folder…')
+                file_count = 0
                 for root, dirs, files in os.walk(upload_folder):
                     for f in files:
                         full = os.path.join(root, f)
@@ -195,14 +218,20 @@ def create_backup_zip(app):
                                 continue
                             arc = os.path.join('uploads', os.path.relpath(full, upload_folder))
                             zf.write(full, arc)
+                            file_count += 1
+                            if file_count % 50 == 0:
+                                _report(82 + min(12, file_count // 50), f'Uploads: {file_count} files…')
                         except OSError:
                             continue
+            else:
+                _report(85, 'Skipping local uploads (R2 / BACKUP_INCLUDE_UPLOADS=false)…')
+        _report(98, 'Finalizing ZIP…')
         return zip_path, None
     except Exception as e:
         if zip_path and os.path.exists(zip_path):
             try:
                 os.remove(zip_path)
-            except Exception:
+            except OSError:
                 pass
         return None, str(e)
 
@@ -263,6 +292,63 @@ def send_backup_email(app, zip_path, to_email):
         return False, str(last_err) if last_err else 'Email failed'
     except Exception as e:
         return False, str(e)
+
+
+def run_backup_job_async(app, job_id):
+    """Run backup in a background thread; updates backup_jobs JSON state."""
+    import threading
+    from backup_jobs import write_job
+
+    def worker():
+        zip_path = None
+        with app.app_context():
+            try:
+                write_job(app, job_id, status='running', step='Starting backup…', percent=5, error=None)
+
+                def progress(pct, step):
+                    write_job(app, job_id, status='running', step=step, percent=pct)
+
+                zip_path, err = create_backup_zip(app, progress_cb=progress)
+                if err:
+                    write_job(
+                        app, job_id,
+                        status='error', step='Backup failed', percent=0, error=err,
+                    )
+                    return
+                friendly = f'fleet_backup_{pk_now().strftime("%Y%m%d_%H%M%S")}.zip'
+                size_mb = round(os.path.getsize(zip_path) / (1024 * 1024), 1)
+                try:
+                    from models import SystemSetting
+                    SystemSetting.set('last_backup_ts', pk_now().strftime('%Y-%m-%d %H:%M:%S'))
+                    SystemSetting.set('last_backup_result', 'success')
+                    SystemSetting.set('last_backup_size', f'{size_mb} MB')
+                except Exception:
+                    pass
+                write_job(
+                    app, job_id,
+                    status='done',
+                    step='Backup ready',
+                    percent=100,
+                    zip_path=zip_path,
+                    download_name=friendly,
+                    message=f'{size_mb} MB',
+                    error=None,
+                )
+                zip_path = None
+            except Exception as e:
+                if hasattr(app, 'logger'):
+                    app.logger.exception('backup job %s failed: %s', job_id, e)
+                if zip_path and os.path.exists(zip_path):
+                    try:
+                        os.remove(zip_path)
+                    except OSError:
+                        pass
+                write_job(
+                    app, job_id,
+                    status='error', step='Backup failed', percent=0, error=str(e),
+                )
+
+    threading.Thread(target=worker, daemon=True, name=f'backup-{job_id[:8]}').start()
 
 
 def run_scheduled_backup(app):

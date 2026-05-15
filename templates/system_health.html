@@ -198,7 +198,7 @@
         <a href="{{ url_for('system_health', refresh=1) }}" class="btn btn-sm btn-primary d-flex align-items-center gap-1" style="font-size:0.8rem;">
             <i class="bi bi-arrow-clockwise"></i> Force Refresh
         </a>
-        <a href="{{ url_for('backup_download') }}" class="btn btn-sm btn-outline-info d-flex align-items-center gap-1" style="font-size:0.8rem;">
+        <a href="{{ url_for('backup_index') }}" class="btn btn-sm btn-outline-info d-flex align-items-center gap-1" style="font-size:0.8rem;">
             <i class="bi bi-download"></i> Backup Now
         </a>
         <a href="{{ url_for('dashboard') }}" class="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1" style="font-size:0.8rem;">
@@ -479,7 +479,7 @@
                     <div><div>GitHub Repository</div><div style="font-size:0.67rem;opacity:0.8;">Code · Commits · Issues</div></div>
                     <i class="bi bi-box-arrow-up-right ms-auto" style="opacity:0.6;font-size:0.75rem;"></i>
                 </a>
-                <a href="{{ url_for('backup_download') }}" class="qbtn qb-backup">
+                <a href="{{ url_for('backup_index') }}" class="qbtn qb-backup">
                     <i class="bi bi-download"></i>
                     <div>
                         <div>Download Backup</div>
