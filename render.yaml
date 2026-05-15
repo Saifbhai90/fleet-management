@@ -27,3 +27,7 @@ services:
         value: app:app
       - key: SESSION_COOKIE_SECURE
         value: "true"
+      - key: BACKUP_INCLUDE_UPLOADS
+        value: "false"
+      - key: BACKUP_EXCLUDE_TABLES
+        value: activity_log,client_activity_log,login_log,login_attempt
