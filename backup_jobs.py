@@ -88,10 +88,12 @@ def create_job(app, user_id):
     return job_id
 
 
-def write_job(app, job_id, data):
+def write_job(app, job_id, data=None, **kwargs):
     path = _job_file(app, job_id)
     existing = read_job_file(path) or {}
-    existing.update(data)
+    patch = dict(data or {})
+    patch.update(kwargs)
+    existing.update(patch)
     existing['updated'] = time.time()
     tmp = path + '.tmp'
     with open(tmp, 'w', encoding='utf-8') as f:
