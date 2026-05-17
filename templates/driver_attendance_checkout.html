@@ -36,6 +36,8 @@
   #cameraModal .modal-body { flex: 1 1 auto; overflow: hidden; padding: 0.35rem !important; min-height: 0; }
   #cameraModal .modal-body video { width: 100%; height: auto; max-height: calc(100vh - 8rem); object-fit: contain; display: block; background: #111; border-radius: 0.375rem; }
   #cameraModal .modal-footer { flex-shrink: 0; border-top: none; padding: 0.35rem 0.75rem 0.5rem; justify-content: center; }
+  #cameraModal .camera-preview-img { width: 100%; height: auto; max-height: calc(100vh - 10rem); object-fit: contain; display: block; background: #111; border-radius: 0.375rem; }
+  #cameraModal .camera-preview-hint { font-size: 0.8rem; color: #64748b; margin-top: 0.35rem; }
 </style>
 
 <div class="container-fluid gps-attendance-page">
@@ -167,21 +169,39 @@
         <button type="button" class="btn-close btn-close-white" id="cameraModalClose" aria-label="Close"></button>
       </div>
       <div class="modal-body text-center">
-        <video id="cameraVideo" autoplay playsinline muted></video>
+        <div id="cameraLiveWrap">
+          <video id="cameraVideo" autoplay playsinline muted></video>
+        </div>
+        <div id="cameraPreviewWrap" class="d-none">
+          <img id="cameraPreviewImg" class="camera-preview-img" alt="Captured preview">
+          <p class="camera-preview-hint mb-0">Photo theek hai? Save karein ya dobara lein.</p>
+        </div>
         <canvas id="cameraCanvas" class="d-none"></canvas>
       </div>
-      <div class="modal-footer">
-        <div id="cameraLoading" class="text-center w-100">
-          <div class="spinner-border text-danger mb-1" role="status" style="width:1.5rem;height:1.5rem;"></div>
-          <p class="mb-0 text-muted small">Camera loading...</p>
+      <div class="modal-footer flex-column align-items-stretch">
+        <div id="cameraLiveFooter" class="w-100 d-flex flex-column align-items-center">
+          <div id="cameraLoading" class="text-center w-100">
+            <div class="spinner-border text-danger mb-1" role="status" style="width:1.5rem;height:1.5rem;"></div>
+            <p class="mb-0 text-muted small">Camera loading...</p>
+          </div>
+          <div id="cameraError" class="alert alert-danger mb-0 w-100 d-none">
+            <i class="bi bi-exclamation-triangle me-2"></i><span id="cameraErrorText"></span>
+            <button type="button" class="btn btn-outline-danger btn-sm ms-2" id="btnRetryCamera"><i class="bi bi-arrow-clockwise me-1"></i>Retry</button>
+          </div>
+          <button type="button" id="btnCapture" class="btn btn-danger btn-lg rounded-pill px-5 d-none">
+            <i class="bi bi-camera me-2"></i>Capture
+          </button>
         </div>
-        <div id="cameraError" class="alert alert-danger mb-0 w-100 d-none">
-          <i class="bi bi-exclamation-triangle me-2"></i><span id="cameraErrorText"></span>
-          <button type="button" class="btn btn-outline-danger btn-sm ms-2" id="btnRetryCamera"><i class="bi bi-arrow-clockwise me-1"></i>Retry</button>
+        <div id="cameraPreviewFooter" class="w-100 d-none">
+          <div class="d-flex flex-wrap gap-2 justify-content-center">
+            <button type="button" id="btnRetakePhoto" class="btn btn-outline-secondary btn-lg rounded-pill px-4">
+              <i class="bi bi-arrow-counterclockwise me-2"></i>Dobara lein
+            </button>
+            <button type="button" id="btnConfirmUpload" class="btn btn-danger btn-lg rounded-pill px-4">
+              <i class="bi bi-check2-circle me-2"></i>Check-out save karein
+            </button>
+          </div>
         </div>
-        <button type="button" id="btnCapture" class="btn btn-danger btn-lg rounded-pill px-5 d-none">
-          <i class="bi bi-camera me-2"></i>Capture
-        </button>
       </div>
     </div>
   </div>
@@ -238,6 +258,15 @@
   var cameraVideo = document.getElementById('cameraVideo');
   var cameraCanvas = document.getElementById('cameraCanvas');
   var btnCapture = document.getElementById('btnCapture');
+  var cameraLiveWrap = document.getElementById('cameraLiveWrap');
+  var cameraPreviewWrap = document.getElementById('cameraPreviewWrap');
+  var cameraPreviewImg = document.getElementById('cameraPreviewImg');
+  var cameraLiveFooter = document.getElementById('cameraLiveFooter');
+  var cameraPreviewFooter = document.getElementById('cameraPreviewFooter');
+  var btnRetakePhoto = document.getElementById('btnRetakePhoto');
+  var btnConfirmUpload = document.getElementById('btnConfirmUpload');
+  var cameraModalLabel = document.getElementById('cameraModalLabel');
+  var pendingCapturePayload = null;
   var checkoutForm = document.getElementById('checkoutForm');
   var formDriverId = document.getElementById('formDriverId');
   var formParkingId = document.getElementById('formParkingId');
@@ -763,16 +792,44 @@
     cameraVideo.srcObject = null;
   }
 
+  function resetCameraModalToLive() {
+    pendingCapturePayload = null;
+    if (cameraLiveWrap) cameraLiveWrap.classList.remove('d-none');
+    if (cameraPreviewWrap) cameraPreviewWrap.classList.add('d-none');
+    if (cameraPreviewImg) cameraPreviewImg.removeAttribute('src');
+    if (cameraLiveFooter) cameraLiveFooter.classList.remove('d-none');
+    if (cameraPreviewFooter) cameraPreviewFooter.classList.add('d-none');
+    if (cameraModalLabel) cameraModalLabel.innerHTML = '<i class="bi bi-camera-fill me-2"></i>Take selfie (Check-out)';
+    if (btnConfirmUpload) {
+      btnConfirmUpload.disabled = false;
+      btnConfirmUpload.innerHTML = '<i class="bi bi-check2-circle me-2"></i>Check-out save karein';
+    }
+  }
+
+  function showCameraPreviewMode(dataUrl) {
+    stopCamera();
+    if (cameraLiveWrap) cameraLiveWrap.classList.add('d-none');
+    if (cameraPreviewWrap) cameraPreviewWrap.classList.remove('d-none');
+    if (cameraPreviewImg) cameraPreviewImg.src = dataUrl;
+    if (cameraLiveFooter) cameraLiveFooter.classList.add('d-none');
+    if (cameraPreviewFooter) cameraPreviewFooter.classList.remove('d-none');
+    if (cameraModalLabel) cameraModalLabel.innerHTML = '<i class="bi bi-image me-2"></i>Preview — photo check karein';
+  }
+
   function showCameraReady() {
     cameraLoading.className = 'text-center w-100 d-none';
     cameraError.className = 'alert alert-danger mb-0 w-100 d-none';
     btnCapture.className = 'btn btn-danger btn-lg rounded-pill px-5';
+    if (cameraLiveFooter) cameraLiveFooter.classList.remove('d-none');
+    if (cameraPreviewFooter) cameraPreviewFooter.classList.add('d-none');
   }
 
   function showCameraLoading() {
     cameraLoading.className = 'text-center w-100';
     cameraError.className = 'alert alert-danger mb-0 w-100 d-none';
     btnCapture.className = 'btn btn-danger btn-lg rounded-pill px-5 d-none';
+    if (cameraLiveFooter) cameraLiveFooter.classList.remove('d-none');
+    if (cameraPreviewFooter) cameraPreviewFooter.classList.add('d-none');
   }
 
   function showCameraError(msg) {
@@ -780,9 +837,67 @@
     cameraError.className = 'alert alert-danger mb-0 w-100';
     btnCapture.className = 'btn btn-danger btn-lg rounded-pill px-5 d-none';
     cameraErrorText.textContent = msg;
+    if (cameraLiveFooter) cameraLiveFooter.classList.remove('d-none');
+    if (cameraPreviewFooter) cameraPreviewFooter.classList.add('d-none');
+  }
+
+  function captureStampedPhoto() {
+    var w = cameraVideo.videoWidth;
+    var h = cameraVideo.videoHeight;
+    if (!w || !h) return null;
+    cameraCanvas.width = w;
+    cameraCanvas.height = h;
+    var ctx = cameraCanvas.getContext('2d');
+    ctx.drawImage(cameraVideo, 0, 0);
+    var lat = (currentPosition && currentPosition.coords) ? currentPosition.coords.latitude : null;
+    var lng = (currentPosition && currentPosition.coords) ? currentPosition.coords.longitude : null;
+    if (typeof window.pktDrawReadableGpsStamp === 'function') {
+      window.pktDrawReadableGpsStamp(ctx, w, h, { line1Prefix: 'Check-out GPS+Cam', lat: lat, lng: lng });
+    } else {
+      var now = new Date(Date.now() + (typeof _pktOffset!=='undefined'?_pktOffset:0));
+      var _od = (typeof pktOverlayDateTimeStrings === 'function')
+        ? pktOverlayDateTimeStrings(now)
+        : { dateStr: now.getDate().toString().padStart(2, '0') + '-' + (now.getMonth() + 1).toString().padStart(2, '0') + '-' + now.getFullYear(),
+            timeStr: now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0') + ':' + now.getSeconds().toString().padStart(2, '0') };
+      var dateStr = _od.dateStr;
+      var timeStr = _od.timeStr;
+      var locStr = '';
+      if (currentPosition && currentPosition.coords) {
+        locStr = currentPosition.coords.latitude.toFixed(6) + ', ' + currentPosition.coords.longitude.toFixed(6);
+      }
+      var line1 = 'Check-out GPS+Cam | ' + dateStr + ' ' + timeStr;
+      var line2 = locStr ? 'Location: ' + locStr : '';
+      var fontSize = Math.max(14, Math.min(24, h / 22));
+      ctx.font = 'bold ' + fontSize + 'px Arial';
+      var tw1 = ctx.measureText(line1).width;
+      var tw2 = line2 ? ctx.measureText(line2).width : 0;
+      var boxW = Math.max(tw1, tw2) + 24;
+      var boxH = line2 ? fontSize * 2.4 : fontSize * 1.6;
+      var pad = 12;
+      var x = w - boxW - pad;
+      var y = h - boxH - pad;
+      ctx.fillStyle = 'rgba(0,0,0,0.65)';
+      ctx.fillRect(x, y, boxW, boxH);
+      ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x, y, boxW, boxH);
+      ctx.fillStyle = '#fff';
+      ctx.textBaseline = 'top';
+      ctx.fillText(line1, x + 12, y + 8);
+      if (line2) {
+        ctx.font = fontSize * 0.85 + 'px Arial';
+        ctx.fillText(line2, x + 12, y + 8 + fontSize * 1.15);
+      }
+    }
+    var nowCap = new Date(Date.now() + (typeof _pktOffset!=='undefined'?_pktOffset:0));
+    var _odCap = (typeof pktOverlayDateTimeStrings === 'function')
+      ? pktOverlayDateTimeStrings(nowCap)
+      : { timeStr: nowCap.getHours().toString().padStart(2, '0') + ':' + nowCap.getMinutes().toString().padStart(2, '0') + ':' + nowCap.getSeconds().toString().padStart(2, '0') };
+    return { dataUrl: jpegDataUrlMaxSide(cameraCanvas, 1280, 0.72), timeStr: _odCap.timeStr };
   }
 
   function startCamera() {
+    resetCameraModalToLive();
     stopCamera();
     showCameraLoading();
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -816,112 +931,92 @@
     if (!cameraModalInstance) {
       cameraModalInstance = new bootstrap.Modal(cameraModal);
     }
+    resetCameraModalToLive();
     cameraModalInstance.show();
     startCamera();
   });
 
-  cameraModal.addEventListener('hidden.bs.modal', function() { stopCamera(); });
+  cameraModal.addEventListener('hidden.bs.modal', function() {
+    stopCamera();
+    resetCameraModalToLive();
+  });
   document.getElementById('cameraModalClose').addEventListener('click', function() {
     stopCamera();
+    resetCameraModalToLive();
     if (cameraModalInstance) cameraModalInstance.hide();
   });
 
   btnCapture.addEventListener('click', function() {
     if (!cameraVideo.srcObject || !stream) return;
-    var w = cameraVideo.videoWidth;
-    var h = cameraVideo.videoHeight;
-    if (!w || !h) {
+    if (!cameraVideo.videoWidth || !cameraVideo.videoHeight) {
       alert('Camera abhi tayyar ho raha hai. 1-2 second ruk kar dobara Capture karein.');
       return;
     }
-    cameraCanvas.width = w;
-    cameraCanvas.height = h;
-    var ctx = cameraCanvas.getContext('2d');
-    ctx.drawImage(cameraVideo, 0, 0);
-    var lat = (currentPosition && currentPosition.coords) ? currentPosition.coords.latitude : null;
-    var lng = (currentPosition && currentPosition.coords) ? currentPosition.coords.longitude : null;
-    if (typeof window.pktDrawReadableGpsStamp === 'function') {
-      window.pktDrawReadableGpsStamp(ctx, w, h, { line1Prefix: 'Check-out GPS+Cam', lat: lat, lng: lng });
-    } else {
-    var now = new Date(Date.now() + (typeof _pktOffset!=='undefined'?_pktOffset:0));
-    var _od = (typeof pktOverlayDateTimeStrings === 'function')
-      ? pktOverlayDateTimeStrings(now)
-      : { dateStr: now.getDate().toString().padStart(2, '0') + '-' + (now.getMonth() + 1).toString().padStart(2, '0') + '-' + now.getFullYear(),
-          timeStr: now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0') + ':' + now.getSeconds().toString().padStart(2, '0') };
-    var dateStr = _od.dateStr;
-    var timeStr = _od.timeStr;
-    var locStr = '';
-    if (currentPosition && currentPosition.coords) {
-      locStr = currentPosition.coords.latitude.toFixed(6) + ', ' + currentPosition.coords.longitude.toFixed(6);
+    var shot = captureStampedPhoto();
+    if (!shot || !shot.dataUrl) {
+      alert('Photo capture nahi ho saki. Dobara try karein.');
+      return;
     }
-    var line1 = 'Check-out GPS+Cam | ' + dateStr + ' ' + timeStr;
-    var line2 = locStr ? 'Location: ' + locStr : '';
-    var fontSize = Math.max(14, Math.min(24, h / 22));
-    ctx.font = 'bold ' + fontSize + 'px Arial';
-    var tw1 = ctx.measureText(line1).width;
-    var tw2 = line2 ? ctx.measureText(line2).width : 0;
-    var boxW = Math.max(tw1, tw2) + 24;
-    var boxH = line2 ? fontSize * 2.4 : fontSize * 1.6;
-    var pad = 12;
-    var x = w - boxW - pad;
-    var y = h - boxH - pad;
-    ctx.fillStyle = 'rgba(0,0,0,0.65)';
-    ctx.fillRect(x, y, boxW, boxH);
-    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(x, y, boxW, boxH);
-    ctx.fillStyle = '#fff';
-    ctx.textBaseline = 'top';
-    ctx.fillText(line1, x + 12, y + 8);
-    if (line2) {
-      ctx.font = fontSize * 0.85 + 'px Arial';
-      ctx.fillText(line2, x + 12, y + 8 + fontSize * 1.15);
-    }
-    }
-    var nowCap = new Date(Date.now() + (typeof _pktOffset!=='undefined'?_pktOffset:0));
-    var _odCap = (typeof pktOverlayDateTimeStrings === 'function')
-      ? pktOverlayDateTimeStrings(nowCap)
-      : { timeStr: nowCap.getHours().toString().padStart(2, '0') + ':' + nowCap.getMinutes().toString().padStart(2, '0') + ':' + nowCap.getSeconds().toString().padStart(2, '0') };
-    var timeStr = _odCap.timeStr;
-    var dataUrl = jpegDataUrlMaxSide(cameraCanvas, 1280, 0.72);
-    stopCamera();
-    if (cameraModalInstance) cameraModalInstance.hide();
     formDriverId.value = driverSelect.value;
     formParkingId.value = parkingId.value;
     formLat.value = currentPosition.coords.latitude;
     formLng.value = currentPosition.coords.longitude;
-    formPhotoBase64.value = dataUrl;
+    formPhotoBase64.value = shot.dataUrl;
     formVehicleId.value = vehicleSelect.tomselect ? vehicleSelect.tomselect.getValue() : vehicleSelect.value;
     formProjectId.value = projectSelect.tomselect ? projectSelect.tomselect.getValue() : projectSelect.value;
-    document.getElementById('savingOverlay').style.display = 'flex';
-    var payload = {
+    pendingCapturePayload = {
       driver_id: Number(formDriverId.value || 0),
       parking_station_id: Number(formParkingId.value || 0),
       latitude: formLat.value,
       longitude: formLng.value,
-      photo_base64: formPhotoBase64.value,
+      photo_base64: shot.dataUrl,
       vehicle_id: Number(formVehicleId.value || 0),
       project_id: Number(formProjectId.value || 0),
-      captured_at: timeStr,
+      captured_at: shot.timeStr,
     };
-    savePendingCheckout(String(payload.driver_id), payload);
-    refreshCheckoutMediaPanel();
-    postCheckoutPayload(payload).then(function(res) {
-      if (res.ok && res.body && res.body.ok) {
-        clearPendingCheckout(String(payload.driver_id));
-        refreshCheckoutMediaPanel();
-        setUploadStatus('Upload status: Uploaded successfully.', 'success');
-      } else {
-        setUploadStatus('Upload pending: ' + (gpsApiJsonMessage(res.body) || 'Server rejected upload.'), 'warning');
-        btnRetryPendingCheckout.classList.remove('d-none');
-      }
-    }).catch(function() {
-      setUploadStatus('Upload pending: Network issue. Retry karein.', 'warning');
-      btnRetryPendingCheckout.classList.remove('d-none');
-    }).finally(function() {
-      document.getElementById('savingOverlay').style.display = 'none';
-    });
+    showCameraPreviewMode(shot.dataUrl);
   });
+
+  if (btnRetakePhoto) {
+    btnRetakePhoto.addEventListener('click', function() {
+      resetCameraModalToLive();
+      startCamera();
+    });
+  }
+
+  if (btnConfirmUpload) {
+    btnConfirmUpload.addEventListener('click', function() {
+      var payload = pendingCapturePayload;
+      if (!payload || !payload.photo_base64) {
+        alert('Pehle photo capture karein.');
+        return;
+      }
+      btnConfirmUpload.disabled = true;
+      btnConfirmUpload.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Saving...';
+      document.getElementById('savingOverlay').style.display = 'flex';
+      savePendingCheckout(String(payload.driver_id), payload);
+      refreshCheckoutMediaPanel();
+      postCheckoutPayload(payload).then(function(res) {
+        if (res.ok && res.body && res.body.ok) {
+          clearPendingCheckout(String(payload.driver_id));
+          refreshCheckoutMediaPanel();
+          setUploadStatus('Upload status: Uploaded successfully.', 'success');
+          resetCameraModalToLive();
+          if (cameraModalInstance) cameraModalInstance.hide();
+        } else {
+          setUploadStatus('Upload pending: ' + (gpsApiJsonMessage(res.body) || 'Server rejected upload.'), 'warning');
+          btnRetryPendingCheckout.classList.remove('d-none');
+        }
+      }).catch(function() {
+        setUploadStatus('Upload pending: Network issue. Retry karein.', 'warning');
+        btnRetryPendingCheckout.classList.remove('d-none');
+      }).finally(function() {
+        document.getElementById('savingOverlay').style.display = 'none';
+        btnConfirmUpload.disabled = false;
+        btnConfirmUpload.innerHTML = '<i class="bi bi-check2-circle me-2"></i>Check-out save karein';
+      });
+    });
+  }
 
   btnRetryPendingCheckout.addEventListener('click', function() {
     var driverId = selectedDriverId();
