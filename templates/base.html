@@ -4218,9 +4218,10 @@
         };
     };
 
-    /** Bottom-centre, high-contrast GPS stamp for captured photos (same tab readability as attendance reference). */
+    /** Bottom-centre, high-contrast GPS stamp for captured photos (same tab readability as attendance reference). opts.sizeScale enlarges stamp (e.g. 2.5 for odometer photos). */
     window.pktDrawReadableGpsStamp = function(ctx, w, h, opts) {
         opts = opts || {};
+        var sizeScale = (opts.sizeScale != null && Number(opts.sizeScale) > 0) ? Number(opts.sizeScale) : 1;
         var prefix = (opts.line1Prefix != null && opts.line1Prefix !== '') ? String(opts.line1Prefix) : 'GPS+Cam';
         var lat = opts.lat;
         var lng = opts.lng;
@@ -4232,13 +4233,16 @@
         var line2 = (lat != null && lng != null && !isNaN(lat) && !isNaN(lng))
             ? ('Location: ' + Number(lat).toFixed(6) + ', ' + Number(lng).toFixed(6))
             : '';
-        var padBottom = Math.round(Math.min(32, Math.max(16, h * 0.04)));
-        var padSide = Math.round(Math.min(24, Math.max(10, w * 0.028)));
-        var innerPadX = 20;
-        var innerPadY = 16;
-        var lineGap = 10;
-        var maxBoxW = Math.max(160, w - 2 * padSide);
-        var fontSize = Math.max(22, Math.min(42, Math.floor(w / 20)));
+        var padBottom = Math.round(Math.min(32, Math.max(16, h * 0.04)) * sizeScale);
+        var padSide = Math.round(Math.min(24, Math.max(10, w * 0.028)) * sizeScale);
+        var innerPadX = Math.round(20 * sizeScale);
+        var innerPadY = Math.round(16 * sizeScale);
+        var lineGap = Math.round(10 * sizeScale);
+        var maxBoxW = Math.max(Math.round(160 * sizeScale), w - 2 * padSide);
+        var fontDivisor = 20 / sizeScale;
+        var minFont = Math.round(22 * sizeScale);
+        var maxFont = Math.round(42 * sizeScale);
+        var fontSize = Math.max(minFont, Math.min(maxFont, Math.floor(w / fontDivisor)));
         function blockWidth(fs) {
             var l2s = Math.round(fs * 0.9);
             ctx.font = 'bold ' + fs + 'px system-ui, "Segoe UI", Arial, sans-serif';
@@ -4250,7 +4254,8 @@
             }
             return Math.max(tw1, tw2) + 2 * innerPadX;
         }
-        while (fontSize > 15 && blockWidth(fontSize) > maxBoxW) fontSize -= 1;
+        var minShrink = Math.round(15 * sizeScale);
+        while (fontSize > minShrink && blockWidth(fontSize) > maxBoxW) fontSize -= 1;
         var line2Size = Math.round(fontSize * 0.9);
         var boxW = Math.min(maxBoxW, Math.ceil(blockWidth(fontSize)));
         var boxH = line2 ? (innerPadY * 2 + fontSize + lineGap + line2Size) : (innerPadY * 2 + fontSize);

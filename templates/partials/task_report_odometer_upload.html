@@ -43,9 +43,11 @@
     );
   }
 
+  var ODOM_STAMP_SCALE = 2.5;
+
   function drawOdometerOverlay(ctx, w, h, lat, lng) {
     if (typeof window.pktDrawReadableGpsStamp === 'function') {
-      window.pktDrawReadableGpsStamp(ctx, w, h, { line1Prefix: 'GPS+Cam', lat: lat, lng: lng });
+      window.pktDrawReadableGpsStamp(ctx, w, h, { line1Prefix: 'GPS+Cam', lat: lat, lng: lng, sizeScale: ODOM_STAMP_SCALE });
       return;
     }
     var now = new Date(Date.now() + (typeof _pktOffset !== 'undefined' ? _pktOffset : 0));
@@ -55,7 +57,7 @@
           timeStr: String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0') + ':' + String(now.getSeconds()).padStart(2, '0') };
     var line1 = 'GPS+Cam | ' + _od.dateStr + ' ' + _od.timeStr;
     var line2 = (lat != null && lng != null) ? ('Location: ' + Number(lat).toFixed(6) + ', ' + Number(lng).toFixed(6)) : '';
-    var fontSize = Math.max(14, Math.min(24, h / 22));
+    var fontSize = Math.max(35, Math.min(60, h / 9));
     ctx.font = 'bold ' + fontSize + 'px Arial';
     var tw1 = ctx.measureText(line1).width;
     var tw2 = 0;
@@ -63,9 +65,9 @@
       ctx.font = (fontSize * 0.85) + 'px Arial';
       tw2 = ctx.measureText(line2).width;
     }
-    var boxW = Math.max(tw1, tw2) + 24;
+    var boxW = Math.max(tw1, tw2) + Math.round(24 * ODOM_STAMP_SCALE);
     var boxH = line2 ? fontSize * 2.4 : fontSize * 1.6;
-    var pad = 12;
+    var pad = Math.round(12 * ODOM_STAMP_SCALE);
     var x = (w - boxW) / 2;
     var y = h - boxH - pad;
     ctx.fillStyle = 'rgba(0,0,0,0.92)';
