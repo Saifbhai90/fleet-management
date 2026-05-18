@@ -359,27 +359,42 @@
     return h * 60 + m;
   }
 
+  function minutesInSpan(current, start, end) {
+    if (start === null || end === null) return true;
+    return (end >= start) ? (current >= start && current <= end) : (current >= start || current <= end);
+  }
+
   function isInTimeWindow(shift, win) {
     var shiftLower = (shift || '').toLowerCase();
-    var start = null, end = null;
-    if (shiftLower === 'morning') {
-      start = win.morning_start ? minutesFromMidnight(win.morning_start) : null;
-      end = win.morning_end ? minutesFromMidnight(win.morning_end) : null;
-    } else if (shiftLower === 'night') {
-      start = win.night_start ? minutesFromMidnight(win.night_start) : null;
-      end = win.night_end ? minutesFromMidnight(win.night_end) : null;
-    }
-    if (start === null && end === null) return { inWindow: true, label: '' };
     var now = new Date(Date.now() + (typeof _pktOffset!=='undefined'?_pktOffset:0));
     var current = (typeof pktMinutesFromMidnight === 'function')
       ? pktMinutesFromMidnight(now)
       : (now.getHours() * 60 + now.getMinutes());
-    var inWindow = false;
-    var label = (shiftLower === 'morning') ? ('Morning: ' + (win.morning_start || '') + ' – ' + (win.morning_end || '')) : ('Night: ' + (win.night_start || '') + ' – ' + (win.night_end || ''));
-    if (start !== null && end !== null) {
-      inWindow = (end >= start) ? (current >= start && current <= end) : (current >= start || current <= end);
-    } else { inWindow = true; }
-    return { inWindow: inWindow, label: label };
+    if (shiftLower === 'morning') {
+      var mStart = win.morning_start ? minutesFromMidnight(win.morning_start) : null;
+      var mEnd = win.morning_end ? minutesFromMidnight(win.morning_end) : null;
+      var nStart = win.night_start ? minutesFromMidnight(win.night_start) : null;
+      var nEnd = win.night_end ? minutesFromMidnight(win.night_end) : null;
+      if (mStart === null && mEnd === null && nStart === null && nEnd === null) return { inWindow: true, label: '' };
+      if (minutesInSpan(current, mStart, mEnd)) {
+        return { inWindow: true, label: 'Morning: ' + (win.morning_start || '') + ' – ' + (win.morning_end || '') };
+      }
+      if (win.allow_morning_driver_night_gps_checkin && minutesInSpan(current, nStart, nEnd)) {
+        return { inWindow: true, label: 'Night (Morning driver): ' + (win.night_start || '') + ' – ' + (win.night_end || '') };
+      }
+      var denyLabel = win.allow_morning_driver_night_gps_checkin
+        ? ('Morning: ' + (win.morning_start || '') + ' – ' + (win.morning_end || '') + ' ya Night: ' + (win.night_start || '') + ' – ' + (win.night_end || ''))
+        : ('Morning: ' + (win.morning_start || '') + ' – ' + (win.morning_end || ''));
+      return { inWindow: false, label: denyLabel };
+    }
+    if (shiftLower === 'night') {
+      var start = win.night_start ? minutesFromMidnight(win.night_start) : null;
+      var end = win.night_end ? minutesFromMidnight(win.night_end) : null;
+      if (start === null && end === null) return { inWindow: true, label: '' };
+      var inWindow = minutesInSpan(current, start, end);
+      return { inWindow: inWindow, label: 'Night: ' + (win.night_start || '') + ' – ' + (win.night_end || '') };
+    }
+    return { inWindow: true, label: '' };
   }
 
   function haversineDistance(lat1, lon1, lat2, lon2) {

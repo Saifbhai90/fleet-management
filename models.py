@@ -1412,6 +1412,7 @@ class AttendanceTimeOverride(db.Model):
     night_checkout_start = db.Column(db.Time, nullable=True)
     night_checkout_end = db.Column(db.Time, nullable=True)
     allow_future_checkout = db.Column(db.Boolean, nullable=False, server_default='0')
+    allow_morning_driver_night_gps_checkin = db.Column(db.Boolean, nullable=False, server_default='0')
     remarks = db.Column(db.Text, nullable=True)
     updated_at = db.Column(db.DateTime, default=pk_now, onupdate=pk_now)
 

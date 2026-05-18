@@ -7853,6 +7853,20 @@ def form_control():
         flash('Manual check-out setting saved.', 'success')
         return redirect(url_for('form_control'))
 
+    if action == 'save_gps_checkin_settings':
+        denied = _form_control_tab_guard('attendance')
+        if denied:
+            return denied
+        if not glob:
+            glob = AttendanceTimeOverride(scope='global')
+            db.session.add(glob)
+        glob.allow_morning_driver_night_gps_checkin = bool(
+            request.form.get('allow_morning_driver_night_gps_checkin')
+        )
+        db.session.commit()
+        flash('GPS check-in setting saved.', 'success')
+        return redirect(url_for('form_control'))
+
     if action == 'save_geofence':
         denied = _form_control_tab_guard('attendance')
         if denied:
@@ -18603,6 +18617,43 @@ def _ov_to_dict(ov, source_label=None):
         d[f] = getattr(ov, f, None)
     return d
 
+
+def _attendance_time_in_window(t, start_t, end_t):
+    if start_t is None or end_t is None:
+        return True
+    if end_t < start_t:
+        return t >= start_t or t <= end_t
+    return start_t <= t <= end_t
+
+
+def _attendance_allow_morning_driver_night_gps_checkin():
+    glob = AttendanceTimeOverride.query.filter_by(scope='global').first()
+    return bool(glob and glob.allow_morning_driver_night_gps_checkin)
+
+
+def _gps_checkin_shift_window_ok(shift, now_time, tw):
+    """GPS check-in allowed for assigned shift and configured windows."""
+    shift_l = (shift or '').strip().lower()
+    if shift_l == 'morning':
+        if _attendance_time_in_window(now_time, tw.get('morning_start'), tw.get('morning_end')):
+            return True, None
+        if _attendance_allow_morning_driver_night_gps_checkin() and _attendance_time_in_window(
+            now_time, tw.get('night_start'), tw.get('night_end')
+        ):
+            return True, None
+        if _attendance_allow_morning_driver_night_gps_checkin():
+            return False, (
+                'Morning shift driver: abhi na morning na night check-in window mein. '
+                'Settings → Attendance → GPS Check-in settings aur Night window check karein.'
+            )
+        return False, 'Morning shift ki attendance sirf morning time window mein lag sakti hai.'
+    if shift_l == 'night':
+        if not _attendance_time_in_window(now_time, tw.get('night_start'), tw.get('night_end')):
+            return False, 'Night shift time-window allowed nahi.'
+        return True, None
+    return True, None
+
+
 def _get_effective_time_window(driver=None, vehicle_id=None, project_id=None):
     """Hierarchical time lookup: Vehicle > District > Project > Global.
     Accepts driver object OR explicit vehicle_id/project_id for early lookup
@@ -18687,6 +18738,7 @@ def api_attendance_time_window():
         'night_checkout_start': t_str(nco_s),
         'night_checkout_end': t_str(nco_e),
         'source': w.get('source', ''),
+        'allow_morning_driver_night_gps_checkin': _attendance_allow_morning_driver_night_gps_checkin(),
     })
 
 
@@ -18859,19 +18911,10 @@ def api_attendance_gps_checkin_submit():
         _ci_vehicle_id = int(body.get('vehicle_id') or 0) or None
         _ci_project_id = int(body.get('project_id') or 0) or None
         tw = _get_effective_time_window(driver=driver, vehicle_id=_ci_vehicle_id, project_id=_ci_project_id)
-
-        def _in_window(t, start_t, end_t):
-            if start_t is None or end_t is None:
-                return True
-            if end_t < start_t:
-                return t >= start_t or t <= end_t
-            return start_t <= t <= end_t
-
         shift = (driver.shift or '').strip().lower()
-        if shift == 'morning' and not _in_window(now_time, tw['morning_start'], tw['morning_end']):
-            return jsonify({'ok': False, 'message': 'Morning shift time-window allowed nahi.'}), 400
-        if shift == 'night' and not _in_window(now_time, tw['night_start'], tw['night_end']):
-            return jsonify({'ok': False, 'message': 'Night shift time-window allowed nahi.'}), 400
+        ci_ok, ci_msg = _gps_checkin_shift_window_ok(shift, now_time, tw)
+        if not ci_ok:
+            return jsonify({'ok': False, 'message': ci_msg}), 400
         try:
             photo_path = _upload_attendance_photo_from_form_or_b64(None, photo_b64, required=True)
         except ValueError as ve:
@@ -19093,23 +19136,11 @@ def driver_attendance_checkin():
         _ci_vehicle_id = request.form.get('vehicle_id', type=int)
         _ci_project_id = request.form.get('project_id', type=int)
         tw = _get_effective_time_window(driver=driver, vehicle_id=_ci_vehicle_id, project_id=_ci_project_id)
-        def _in_window(t, start_t, end_t):
-            if start_t is None or end_t is None:
-                return True
-            if end_t < start_t:
-                return t >= start_t or t <= end_t
-            return start_t <= t <= end_t
         shift = (driver.shift or '').strip()
-        if shift and shift.lower() == 'morning':
-            if not _in_window(now_time, tw['morning_start'], tw['morning_end']):
-                src = tw.get('source', '')
-                flash(f'Morning shift ki attendance sirf configured time window mein lag sakti hai ({src}). Control mein time check karein.', 'danger')
-                return redirect(url_for('driver_attendance_checkin'))
-        elif shift and shift.lower() == 'night':
-            if not _in_window(now_time, tw['night_start'], tw['night_end']):
-                src = tw.get('source', '')
-                flash(f'Night shift ki attendance sirf configured time window mein lag sakti hai ({src}). Control mein time check karein.', 'danger')
-                return redirect(url_for('driver_attendance_checkin'))
+        ci_ok, ci_msg = _gps_checkin_shift_window_ok(shift, now_time, tw)
+        if not ci_ok:
+            flash(ci_msg, 'danger')
+            return redirect(url_for('driver_attendance_checkin'))
 
         photo = request.files.get('photo')
         b64 = request.form.get('photo_base64', '').strip()
