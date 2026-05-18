@@ -7863,6 +7863,9 @@ def form_control():
         glob.allow_morning_driver_night_gps_checkin = bool(
             request.form.get('allow_morning_driver_night_gps_checkin')
         )
+        glob.allow_night_driver_morning_gps_checkin = bool(
+            request.form.get('allow_night_driver_morning_gps_checkin')
+        )
         db.session.commit()
         flash('GPS check-in setting saved.', 'success')
         return redirect(url_for('form_control'))
@@ -18631,6 +18634,11 @@ def _attendance_allow_morning_driver_night_gps_checkin():
     return bool(glob and glob.allow_morning_driver_night_gps_checkin)
 
 
+def _attendance_allow_night_driver_morning_gps_checkin():
+    glob = AttendanceTimeOverride.query.filter_by(scope='global').first()
+    return bool(glob and glob.allow_night_driver_morning_gps_checkin)
+
+
 def _gps_checkin_shift_window_ok(shift, now_time, tw):
     """GPS check-in allowed for assigned shift and configured windows."""
     shift_l = (shift or '').strip().lower()
@@ -18648,9 +18656,18 @@ def _gps_checkin_shift_window_ok(shift, now_time, tw):
             )
         return False, 'Morning shift ki attendance sirf morning time window mein lag sakti hai.'
     if shift_l == 'night':
-        if not _attendance_time_in_window(now_time, tw.get('night_start'), tw.get('night_end')):
-            return False, 'Night shift time-window allowed nahi.'
-        return True, None
+        if _attendance_time_in_window(now_time, tw.get('night_start'), tw.get('night_end')):
+            return True, None
+        if _attendance_allow_night_driver_morning_gps_checkin() and _attendance_time_in_window(
+            now_time, tw.get('morning_start'), tw.get('morning_end')
+        ):
+            return True, None
+        if _attendance_allow_night_driver_morning_gps_checkin():
+            return False, (
+                'Night shift driver: abhi na night na morning check-in window mein. '
+                'Settings → Attendance → GPS Check-in settings aur Morning window check karein.'
+            )
+        return False, 'Night shift ki attendance sirf night time window mein lag sakti hai.'
     return True, None
 
 
@@ -18739,6 +18756,7 @@ def api_attendance_time_window():
         'night_checkout_end': t_str(nco_e),
         'source': w.get('source', ''),
         'allow_morning_driver_night_gps_checkin': _attendance_allow_morning_driver_night_gps_checkin(),
+        'allow_night_driver_morning_gps_checkin': _attendance_allow_night_driver_morning_gps_checkin(),
     })
 
 

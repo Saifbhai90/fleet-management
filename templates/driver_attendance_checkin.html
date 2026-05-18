@@ -388,11 +388,21 @@
       return { inWindow: false, label: denyLabel };
     }
     if (shiftLower === 'night') {
-      var start = win.night_start ? minutesFromMidnight(win.night_start) : null;
-      var end = win.night_end ? minutesFromMidnight(win.night_end) : null;
-      if (start === null && end === null) return { inWindow: true, label: '' };
-      var inWindow = minutesInSpan(current, start, end);
-      return { inWindow: inWindow, label: 'Night: ' + (win.night_start || '') + ' – ' + (win.night_end || '') };
+      var nStart = win.night_start ? minutesFromMidnight(win.night_start) : null;
+      var nEnd = win.night_end ? minutesFromMidnight(win.night_end) : null;
+      var mStart = win.morning_start ? minutesFromMidnight(win.morning_start) : null;
+      var mEnd = win.morning_end ? minutesFromMidnight(win.morning_end) : null;
+      if (nStart === null && nEnd === null && mStart === null && mEnd === null) return { inWindow: true, label: '' };
+      if (minutesInSpan(current, nStart, nEnd)) {
+        return { inWindow: true, label: 'Night: ' + (win.night_start || '') + ' – ' + (win.night_end || '') };
+      }
+      if (win.allow_night_driver_morning_gps_checkin && minutesInSpan(current, mStart, mEnd)) {
+        return { inWindow: true, label: 'Morning (Night driver): ' + (win.morning_start || '') + ' – ' + (win.morning_end || '') };
+      }
+      var denyNightLabel = win.allow_night_driver_morning_gps_checkin
+        ? ('Night: ' + (win.night_start || '') + ' – ' + (win.night_end || '') + ' ya Morning: ' + (win.morning_start || '') + ' – ' + (win.morning_end || ''))
+        : ('Night: ' + (win.night_start || '') + ' – ' + (win.night_end || ''));
+      return { inWindow: false, label: denyNightLabel };
     }
     return { inWindow: true, label: '' };
   }

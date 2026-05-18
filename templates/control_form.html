@@ -196,10 +196,22 @@
             </div>
             <div class="form-text mb-3">
               <strong>OFF (default):</strong> Profile par <em>Morning</em> shift wale driver sirf morning check-in window mein GPS + Camera se attendance laga sakte hain.<br>
-              <strong>ON:</strong> Morning assigned driver raat ke <em>Night check-in window</em> mein bhi GPS check-in kar sakta hai (extra night duty). Duty column check-in time se <em>Evening duty</em> dikhegi.<br>
-              Night window <strong>Global Default Time</strong> (upar) se aati hai — pehle Night Start/End set karein.
+              <strong>ON:</strong> Morning assigned driver raat ke <em>Night check-in window</em> mein bhi GPS check-in kar sakta hai (extra night duty). Duty column check-in time se <em>Evening duty</em> dikhegi.
             </div>
-            <button type="submit" class="btn btn-success"><i class="bi bi-check2-circle me-1"></i>Save Setting</button>
+            <div class="form-check form-switch mb-3">
+              <input class="form-check-input" type="checkbox" role="switch" id="allowNightDriverMorningGps"
+                     name="allow_night_driver_morning_gps_checkin" value="1"
+                     {% if global_override and global_override.allow_night_driver_morning_gps_checkin %}checked{% endif %}>
+              <label class="form-check-label fw-semibold" for="allowNightDriverMorningGps">
+                Allow Night-shift drivers to GPS check-in during Morning window
+              </label>
+            </div>
+            <div class="form-text mb-3">
+              <strong>OFF (default):</strong> Profile par <em>Night</em> shift wale driver sirf night check-in window mein GPS lag sakte hain.<br>
+              <strong>ON:</strong> Night assigned driver subah ke <em>Morning check-in window</em> mein bhi GPS check-in kar sakta hai (extra morning duty). Duty column <em>Morning duty</em> dikhegi.<br>
+              Windows <strong>Global Default Time</strong> (upar) se aati hain — pehle Morning / Night Start-End set karein.
+            </div>
+            <button type="submit" class="btn btn-success"><i class="bi bi-check2-circle me-1"></i>Save Settings</button>
           </form>
         </div>
       </div>
