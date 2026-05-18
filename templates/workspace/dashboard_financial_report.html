@@ -40,9 +40,17 @@
   </div>
 
   <div class="card border-0 shadow-sm">
-    <div class="card-header bg-light d-flex justify-content-between align-items-center">
+    <div class="card-header bg-light d-flex flex-wrap justify-content-between align-items-center gap-2">
       <strong>Detailed Breakdown</strong>
-      <span class="small text-muted">{{ rows|length }} row(s)</span>
+      <div class="d-flex flex-wrap align-items-center gap-2 ms-auto">
+        <div class="input-group input-group-sm" style="min-width: 220px; max-width: 320px;">
+          <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+          <input type="search" id="wsFinancialLedgerSearch" class="form-control"
+                 placeholder="{% if report_kind in ['receivable', 'payable'] %}Search party or driver...{% else %}Search bank / account...{% endif %}"
+                 autocomplete="off" aria-label="Search ledger rows">
+        </div>
+        <span class="small text-muted" id="wsFinancialRowCount">{{ rows|length }} row(s)</span>
+      </div>
     </div>
     <div class="table-responsive">
       <table class="table table-sm table-hover align-middle mb-0" id="workspaceDashFinancialTable">
@@ -59,7 +67,7 @@
         </thead>
         <tbody>
           {% for r in rows %}
-          <tr>
+          <tr class="ws-financial-ledger-row" data-search="{{ ((r.account.code or '') ~ ' ' ~ (r.display_name or '') ~ ' ' ~ (r.account.name or '') ~ ' ' ~ (r.account.description or ''))|lower }}">
             <td class="text-muted">{{ r.account.code }}</td>
             <td>
               <div class="fw-semibold">{{ r.display_name }}</div>
@@ -76,6 +84,9 @@
           {% else %}
           <tr><td colspan="7" class="text-center text-muted py-4">No records found.</td></tr>
           {% endfor %}
+          <tr id="wsFinancialNoMatchRow" class="d-none">
+            <td colspan="7" class="text-center text-muted py-4">No matching records for your search.</td>
+          </tr>
         </tbody>
       </table>
     </div>
@@ -90,6 +101,32 @@ document.addEventListener('DOMContentLoaded', function(){
   if(window.fleetPrintExport){
     window.fleetPrintExport('workspaceDashFinancialTable', '{{ title }}', '{{ csv_name }}');
   }
+  var inp = document.getElementById('wsFinancialLedgerSearch');
+  var tbl = document.getElementById('workspaceDashFinancialTable');
+  var countEl = document.getElementById('wsFinancialRowCount');
+  var noMatch = document.getElementById('wsFinancialNoMatchRow');
+  if (!inp || !tbl) return;
+  var rows = tbl.querySelectorAll('tbody tr.ws-financial-ledger-row');
+  function norm(s) { return String(s || '').toLowerCase().replace(/\s+/g, ' ').trim(); }
+  function filterRows() {
+    var q = norm(inp.value);
+    var terms = q ? q.split(' ').filter(Boolean) : [];
+    var visible = 0;
+    rows.forEach(function(tr) {
+      var hay = norm(tr.getAttribute('data-search') || tr.textContent);
+      var show = !terms.length || terms.every(function(t) { return hay.indexOf(t) !== -1; });
+      tr.classList.toggle('d-none', !show);
+      if (show) visible++;
+    });
+    if (noMatch) noMatch.classList.toggle('d-none', visible > 0 || !terms.length);
+    if (countEl) {
+      countEl.textContent = terms.length
+        ? (visible + ' of ' + rows.length + ' row(s)')
+        : (rows.length + ' row(s)');
+    }
+  }
+  inp.addEventListener('input', filterRows);
+  inp.addEventListener('search', filterRows);
 });
 </script>
 {% endblock %}
