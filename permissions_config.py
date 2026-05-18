@@ -9,6 +9,44 @@ from auth_utils import (
     PERMISSION_REPORTS, PERMISSION_BACKUP, PERMISSION_USERS_MANAGE, PERMISSION_DASHBOARD,
 )
 
+# Setting (Form Control) — one permission per tab; backup is a separate section (not freeze).
+FORM_CONTROL_LEGACY = 'form_control'
+FORM_CONTROL_TAB_KEYS = (
+    'attendance',
+    'freeze',
+    'oil_limits',
+    'daily_task_entry',
+    'accounting_maintenance',
+)
+FORM_CONTROL_TAB_CODES = {
+    'attendance': 'form_control_attendance',
+    'freeze': 'form_control_freeze',
+    'oil_limits': 'form_control_oil_limits',
+    'daily_task_entry': 'form_control_daily_task_entry',
+    'accounting_maintenance': 'form_control_accounting_maintenance',
+}
+FORM_CONTROL_ALL_TAB_CODES = tuple(FORM_CONTROL_TAB_CODES.values())
+
+
+def user_has_form_control_tab(permission_codes, tab_key, is_master=False):
+    """True if user may open/save this Setting tab (legacy form_control = all tabs)."""
+    if is_master:
+        return True
+    codes = set(permission_codes or [])
+    if FORM_CONTROL_LEGACY in codes:
+        return True
+    need = FORM_CONTROL_TAB_CODES.get(tab_key)
+    return bool(need and need in codes)
+
+
+def user_has_any_form_control_tab(permission_codes, is_master=False):
+    if is_master:
+        return True
+    codes = set(permission_codes or [])
+    if FORM_CONTROL_LEGACY in codes:
+        return True
+    return bool(codes.intersection(FORM_CONTROL_ALL_TAB_CODES))
+
 # Section code -> list of (permission_code, display_name)
 PERMISSION_TREE = {
     PERMISSION_DASHBOARD: [
@@ -312,7 +350,12 @@ PERMISSION_TREE = {
         ('role_add', 'Roles – Add'),
         ('role_edit', 'Roles – Edit'),
         ('role_delete', 'Roles – Delete'),
-        ('form_control', 'Setting'),
+        ('form_control', 'Setting (all tabs)'),
+        ('form_control_attendance', 'Setting – Attendance Control'),
+        ('form_control_freeze', 'Setting – Freeze Data Control'),
+        ('form_control_oil_limits', 'Setting – Oil Change Limits'),
+        ('form_control_daily_task_entry', 'Setting – New Task Entry'),
+        ('form_control_accounting_maintenance', 'Setting – Accounting Maintenance'),
         ('notification_list', 'Notifications – List / View'),
         ('notification_add', 'Notifications – Create'),
         ('whats_new', "What's New"),
@@ -967,7 +1010,12 @@ SECTION_PAGE_GROUPS = {
             ('role_edit', 'Edit'),
             ('role_delete', 'Delete'),
         ]),
-        ('Setting', [('form_control', 'Setting')]),
+        ('Setting (all tabs)', [('form_control', 'Setting (all tabs)')]),
+        ('Attendance Control', [('form_control_attendance', 'Attendance Control')]),
+        ('Freeze Data Control', [('form_control_freeze', 'Freeze Data Control')]),
+        ('Oil Change Limits', [('form_control_oil_limits', 'Oil Change Limits')]),
+        ('New Task Entry', [('form_control_daily_task_entry', 'New Task Entry')]),
+        ('Accounting Maintenance', [('form_control_accounting_maintenance', 'Accounting Maintenance')]),
         ('Notifications', [
             ('notification_list', 'List / View'),
             ('notification_add', 'Create'),
@@ -1200,7 +1248,7 @@ PAGE_VISIBLE = {
     # Administration
     'user_list': ['users_manage', 'user_list', 'user_add', 'user_edit'],
     'role_list': ['users_manage', 'role_list', 'role_add', 'role_edit'],
-    'form_control': ['users_manage', 'form_control'],
+    'form_control': [FORM_CONTROL_LEGACY, *FORM_CONTROL_ALL_TAB_CODES],
     'admin_app_releases': ['users_manage'],
     'admin_personal_tools': ['users_manage'],
     'admin_personal_tools_quick_print': ['users_manage'],

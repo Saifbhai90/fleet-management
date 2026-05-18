@@ -369,8 +369,8 @@ ENDPOINT_PERMISSION_MAP = [
     ('role_form', 'role_add'),
     ('role_edit', 'role_edit'),
     ('form_control', 'form_control'),
-    ('form_control_delete_override', 'form_control'),
-    ('form_control_edit_override', 'form_control'),
+    ('form_control_delete_override', 'form_control_attendance'),
+    ('form_control_edit_override', 'form_control_attendance'),
     ('notification_list', 'notification_list'),
     ('notification_add', 'notification_add'),
     ('notification_mark_read', 'notification_list'),
@@ -515,6 +515,13 @@ def user_can_access(permission_codes, required_code):
     # Legacy: old roles used task_report_add for New Task Entry; treat as task_report_entry
     if required_code == 'task_report_entry' and 'task_report_add' in codes:
         return True
+    if required_code == 'form_control':
+        try:
+            from permissions_config import user_has_any_form_control_tab
+            if user_has_any_form_control_tab(codes):
+                return True
+        except Exception:
+            pass
     # Report Centre hub: must match UI (see can_see_report_centre) — not only reports_index / reports full
     if required_code == 'reports_index':
         try:

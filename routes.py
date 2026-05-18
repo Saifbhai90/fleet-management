@@ -1230,11 +1230,41 @@ def require_login():
                 return redirect(url_for('login'))
 
 
-def _can_manage_freeze_data():
-    if session.get('is_master'):
-        return True
-    perms = set(session.get('permissions') or [])
-    return ('users_manage' in perms) or ('settings' in perms) or ('backup' in perms)
+def _form_control_tab_allowed(tab_key):
+    """Per-tab Setting permission (Master = all; legacy form_control = all tabs)."""
+    from permissions_config import user_has_form_control_tab
+    return user_has_form_control_tab(
+        session.get('permissions') or [],
+        tab_key,
+        is_master=bool(session.get('is_master')),
+    )
+
+
+def _any_form_control_tab_allowed():
+    from permissions_config import user_has_any_form_control_tab
+    return user_has_any_form_control_tab(
+        session.get('permissions') or [],
+        is_master=bool(session.get('is_master')),
+    )
+
+
+def _resolve_form_control_settings_tab(requested):
+    from permissions_config import FORM_CONTROL_TAB_KEYS
+    allowed = [k for k in FORM_CONTROL_TAB_KEYS if _form_control_tab_allowed(k)]
+    if not allowed:
+        return None
+    req = (requested or 'attendance').strip()
+    if req in allowed:
+        return req
+    return allowed[0]
+
+
+def _form_control_tab_guard(tab_key, message=None):
+    if _form_control_tab_allowed(tab_key):
+        return None
+    flash(message or 'You do not have permission for this settings tab.', 'danger')
+    first_tab = _resolve_form_control_settings_tab(None)
+    return redirect(url_for('form_control', settings_tab=first_tab or 'attendance'))
 
 
 @app.before_request
@@ -7713,6 +7743,15 @@ def form_control():
     oil_family_options = _get_vehicle_family_options()
     oil_change_limits = _get_vehicle_family_oil_change_limits()
 
+    requested_tab = request.args.get('settings_tab', 'attendance')
+    active_tab = _resolve_form_control_settings_tab(requested_tab)
+    if not active_tab:
+        flash('You do not have permission to access Settings.', 'danger')
+        return redirect(url_for('user_list'))
+    fc_tab_allowed = {k: _form_control_tab_allowed(k) for k in (
+        'attendance', 'freeze', 'oil_limits', 'daily_task_entry', 'accounting_maintenance',
+    )}
+
     if request.method == 'GET':
         if glob:
             global_form.morning_start.data = glob.morning_start.strftime('%H:%M') if glob.morning_start else ''
@@ -7732,6 +7771,8 @@ def form_control():
             freeze_allowed_set=freeze_allowed_set,
             oil_family_options=oil_family_options,
             oil_change_limits=oil_change_limits,
+            settings_active_tab=active_tab,
+            fc_tab_allowed=fc_tab_allowed,
         )
 
     action = request.form.get('action', '')
@@ -7744,9 +7785,9 @@ def form_control():
             return None
 
     if action == 'run_transfer_mirror_backfill':
-        if not _can_manage_freeze_data():
-            flash('You do not have permission to run accounting maintenance.', 'danger')
-            return redirect(url_for('form_control', settings_tab='accounting_maintenance'))
+        denied = _form_control_tab_guard('accounting_maintenance', 'You do not have permission to run accounting maintenance.')
+        if denied:
+            return denied
         try:
             from routes_finance import _backfill_workspace_company_funding_mirrors
             created = int(_backfill_workspace_company_funding_mirrors() or 0)
@@ -7758,9 +7799,9 @@ def form_control():
         return redirect(url_for('form_control', settings_tab='accounting_maintenance'))
 
     if action == 'run_opening_entries_backfill':
-        if not _can_manage_freeze_data():
-            flash('You do not have permission to run accounting maintenance.', 'danger')
-            return redirect(url_for('form_control', settings_tab='accounting_maintenance'))
+        denied = _form_control_tab_guard('accounting_maintenance', 'You do not have permission to run accounting maintenance.')
+        if denied:
+            return denied
         try:
             from finance_utils import reconcile_workspace_opening_expense_postings
             updated_total = 0
@@ -7782,6 +7823,9 @@ def form_control():
         return redirect(url_for('form_control', settings_tab='accounting_maintenance'))
 
     if action == 'save_global':
+        denied = _form_control_tab_guard('attendance')
+        if denied:
+            return denied
         if not glob:
             glob = AttendanceTimeOverride(scope='global')
             db.session.add(glob)
@@ -7798,6 +7842,9 @@ def form_control():
         return redirect(url_for('form_control'))
 
     if action == 'save_checkout_settings':
+        denied = _form_control_tab_guard('attendance')
+        if denied:
+            return denied
         if not glob:
             glob = AttendanceTimeOverride(scope='global')
             db.session.add(glob)
@@ -7807,6 +7854,9 @@ def form_control():
         return redirect(url_for('form_control'))
 
     if action == 'save_geofence':
+        denied = _form_control_tab_guard('attendance')
+        if denied:
+            return denied
         from models import AttendanceSettings
         att_s = AttendanceSettings.query.first()
         if not att_s:
@@ -7822,6 +7872,9 @@ def form_control():
         return redirect(url_for('form_control'))
 
     if action == 'save_daily_task_entry_settings':
+        denied = _form_control_tab_guard('daily_task_entry')
+        if denied:
+            return denied
         att_s = AttendanceSettings.query.first()
         if not att_s:
             att_s = AttendanceSettings()
@@ -7842,6 +7895,9 @@ def form_control():
         return redirect(url_for('form_control', settings_tab='daily_task_entry'))
 
     if action == 'save_oil_change_limits':
+        denied = _form_control_tab_guard('oil_limits')
+        if denied:
+            return denied
         posted_families = request.form.getlist('oil_family')
         posted_limits = request.form.getlist('oil_limit_value')
         posted_near = request.form.getlist('oil_near_percent_value')
@@ -7869,6 +7925,9 @@ def form_control():
         return redirect(url_for('form_control', settings_tab='oil_limits'))
 
     if action == 'add_override':
+        denied = _form_control_tab_guard('attendance')
+        if denied:
+            return denied
         scope = override_form.scope.data
         proj = override_form.project_id.data if override_form.project_id.data else None
         dist = override_form.district_id.data if override_form.district_id.data else None
@@ -7917,9 +7976,9 @@ def form_control():
         return redirect(url_for('form_control'))
 
     if action == 'save_freeze_data':
-        if not _can_manage_freeze_data():
-            flash('You do not have permission to manage freeze settings.', 'danger')
-            return redirect(url_for('form_control', settings_tab='freeze'))
+        denied = _form_control_tab_guard('freeze', 'You do not have permission to manage freeze settings.')
+        if denied:
+            return denied
 
         enabled = bool(request.form.get('freeze_enabled'))
         allow_future_entries = bool(request.form.get('freeze_allow_future_entries'))
@@ -7963,11 +8022,16 @@ def form_control():
         freeze_allowed_set=freeze_allowed_set,
         oil_family_options=oil_family_options,
         oil_change_limits=oil_change_limits,
+        settings_active_tab=active_tab,
+        fc_tab_allowed=fc_tab_allowed,
     )
 
 
 @app.route('/form-control/override/<int:ov_id>/delete', methods=['POST'])
 def form_control_delete_override(ov_id):
+    denied = _form_control_tab_guard('attendance')
+    if denied:
+        return denied
     ov = AttendanceTimeOverride.query.get_or_404(ov_id)
     if ov.scope == 'global':
         flash('Global default delete nahi kar saktay.', 'danger')
@@ -7981,6 +8045,9 @@ def form_control_delete_override(ov_id):
 
 @app.route('/form-control/override/<int:ov_id>/edit', methods=['POST'])
 def form_control_edit_override(ov_id):
+    denied = _form_control_tab_guard('attendance')
+    if denied:
+        return denied
     ov = AttendanceTimeOverride.query.get_or_404(ov_id)
     def parse_time(s):
         if not s or not str(s).strip():

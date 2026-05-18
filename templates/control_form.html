@@ -5,7 +5,8 @@
 {% endblock %}
 
 {% block content %}
-{% set active_tab = request.args.get('settings_tab', 'attendance') %}
+{% set active_tab = settings_active_tab if settings_active_tab is defined else request.args.get('settings_tab', 'attendance') %}
+{% set fc_tab = fc_tab_allowed if fc_tab_allowed is defined else {} %}
 {% set page_title = 'Attendance Time Control' %}
 {% set page_subtitle = 'Yahan attendance time windows Pakistan (Asia/Karachi) wall-clock par set karein — GPS/Camera check-in & check-out isi se match karte hain. Global Default sab par apply hota hai. Kisi Project / District / Vehicle ka alag time chahiye to override add karein.' %}
 {% if active_tab == 'freeze' %}
@@ -35,34 +36,44 @@
   </p>
 
   <ul class="nav nav-pills mb-3" id="settingsMainTabs">
+    {% if fc_tab.get('attendance') %}
     <li class="nav-item">
       <button type="button" class="nav-link {% if active_tab not in ['freeze', 'oil_limits', 'accounting_maintenance', 'daily_task_entry'] %}active{% endif %}" data-settings-tab="attendance">
         <i class="bi bi-clock-history me-1"></i>Attendance Control
       </button>
     </li>
+    {% endif %}
+    {% if fc_tab.get('freeze') %}
     <li class="nav-item">
       <button type="button" class="nav-link {% if active_tab == 'freeze' %}active{% endif %}" data-settings-tab="freeze">
         <i class="bi bi-snow2 me-1"></i>Freeze Data Control
       </button>
     </li>
+    {% endif %}
+    {% if fc_tab.get('oil_limits') %}
     <li class="nav-item">
       <button type="button" class="nav-link {% if active_tab == 'oil_limits' %}active{% endif %}" data-settings-tab="oil_limits">
         <i class="bi bi-droplet-half me-1"></i>Oil Change Limits
       </button>
     </li>
+    {% endif %}
+    {% if fc_tab.get('daily_task_entry') %}
     <li class="nav-item">
       <button type="button" class="nav-link {% if active_tab == 'daily_task_entry' %}active{% endif %}" data-settings-tab="daily_task_entry">
         <i class="bi bi-clipboard-check me-1"></i>New Task Entry
       </button>
     </li>
+    {% endif %}
+    {% if fc_tab.get('accounting_maintenance') %}
     <li class="nav-item">
       <button type="button" class="nav-link {% if active_tab == 'accounting_maintenance' %}active{% endif %}" data-settings-tab="accounting_maintenance">
         <i class="bi bi-journal-check me-1"></i>Accounting Maintenance
       </button>
     </li>
+    {% endif %}
   </ul>
 
-  <div id="attendanceControlPane" {% if active_tab in ['freeze', 'oil_limits', 'accounting_maintenance', 'daily_task_entry'] %}style="display:none"{% endif %}>
+  <div id="attendanceControlPane" {% if active_tab in ['freeze', 'oil_limits', 'accounting_maintenance', 'daily_task_entry'] or not fc_tab.get('attendance') %}style="display:none"{% endif %}>
 
   <!-- ═══════════════ GLOBAL DEFAULT ═══════════════ -->
   <div class="row mb-4">
@@ -454,6 +465,7 @@
   </div>
 </div>
 
+{% if fc_tab.get('freeze') %}
 <div id="freezeControlPane" {% if active_tab != 'freeze' %}style="display:none"{% endif %}>
   <div class="row mb-4">
     <div class="col-lg-10">
@@ -592,7 +604,9 @@
     </div>
   </div>
 </div>
+{% endif %}
 
+{% if fc_tab.get('oil_limits') %}
 <div id="oilLimitsPane" {% if active_tab != 'oil_limits' %}style="display:none"{% endif %}>
   <div class="row mb-4">
     <div class="col-lg-10">
@@ -652,7 +666,9 @@
     </div>
   </div>
 </div>
+{% endif %}
 
+{% if fc_tab.get('daily_task_entry') %}
 <div id="dailyTaskEntryPane" {% if active_tab != 'daily_task_entry' %}style="display:none"{% endif %}>
   <div class="row mb-4">
     <div class="col-lg-10">
@@ -680,7 +696,9 @@
     </div>
   </div>
 </div>
+{% endif %}
 
+{% if fc_tab.get('accounting_maintenance') %}
 <div id="accountingMaintenancePane" {% if active_tab != 'accounting_maintenance' %}style="display:none"{% endif %}>
   <div class="row mb-4">
     <div class="col-lg-10">
@@ -721,6 +739,7 @@
     </div>
   </div>
 </div>
+{% endif %}
 </div>
 
 <script>
