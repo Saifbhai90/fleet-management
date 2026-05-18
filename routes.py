@@ -18639,6 +18639,90 @@ def _attendance_allow_night_driver_morning_gps_checkin():
     return bool(glob and glob.allow_night_driver_morning_gps_checkin)
 
 
+def _checkin_in_morning_window(tw, check_in_time):
+    return _attendance_time_in_window(
+        check_in_time, tw.get('morning_start'), tw.get('morning_end'),
+    )
+
+
+def _checkin_in_night_window(tw, check_in_time):
+    return _attendance_time_in_window(
+        check_in_time, tw.get('night_start'), tw.get('night_end'),
+    )
+
+
+def _gps_checkin_was_cross_shift(driver, check_in_time, tw):
+    """True when GPS check-in used the opposite window (toggle path), not assigned shift window."""
+    if not driver or not check_in_time:
+        return False
+    shift_l = (driver.shift or '').strip().lower()
+    in_m = _checkin_in_morning_window(tw, check_in_time)
+    in_n = _checkin_in_night_window(tw, check_in_time)
+    if shift_l == 'morning':
+        return bool(
+            _attendance_allow_morning_driver_night_gps_checkin()
+            and in_n
+            and not in_m
+        )
+    if shift_l == 'night':
+        return bool(
+            _attendance_allow_night_driver_morning_gps_checkin()
+            and in_m
+            and not in_n
+        )
+    return False
+
+
+def _gps_checkout_window_bounds(driver, tw, check_in_time):
+    """GPS check-out window from check-in context: cross-shift uses opposite Check-OUT override."""
+    shift_l = (driver.shift or '').strip().lower() if driver else ''
+    cross = _gps_checkin_was_cross_shift(driver, check_in_time, tw)
+    co_s = co_e = None
+    if shift_l == 'morning':
+        if cross:
+            co_s = tw.get('night_checkout_start')
+            co_e = tw.get('night_checkout_end')
+            if not co_s and not co_e:
+                co_s = tw.get('morning_start')
+                co_e = tw.get('morning_end')
+        else:
+            co_s = tw.get('morning_checkout_start')
+            co_e = tw.get('morning_checkout_end')
+            if not co_s and not co_e:
+                co_s = tw.get('night_start')
+                co_e = tw.get('night_end')
+    elif shift_l == 'night':
+        if cross:
+            co_s = tw.get('morning_checkout_start')
+            co_e = tw.get('morning_checkout_end')
+            if not co_s and not co_e:
+                co_s = tw.get('night_start')
+                co_e = tw.get('night_end')
+        else:
+            co_s = tw.get('night_checkout_start')
+            co_e = tw.get('night_checkout_end')
+            if not co_s and not co_e:
+                co_s = tw.get('morning_start')
+                co_e = tw.get('morning_end')
+    return co_s, co_e, cross
+
+
+def _gps_checkout_window_ok(driver, now_time, tw, check_in_time):
+    co_s, co_e, cross = _gps_checkout_window_bounds(driver, tw, check_in_time)
+    if not _attendance_time_in_window(now_time, co_s, co_e):
+        shift_l = (driver.shift or '').strip().lower() if driver else ''
+        if cross and shift_l == 'morning':
+            return False, 'Is session ki check-in night window mein thi — night check-out window ke dauran check-out karein.'
+        if cross and shift_l == 'night':
+            return False, 'Is session ki check-in morning window mein thi — morning check-out window ke dauran check-out karein.'
+        if shift_l == 'morning':
+            return False, 'Morning check-out time-window allowed nahi.'
+        if shift_l == 'night':
+            return False, 'Night check-out time-window allowed nahi.'
+        return False, 'Check-out time-window allowed nahi.'
+    return True, None
+
+
 def _gps_checkin_shift_window_ok(shift, now_time, tw):
     """GPS check-in allowed for assigned shift and configured windows."""
     shift_l = (shift or '').strip().lower()
@@ -18764,11 +18848,26 @@ def api_attendance_time_window():
 def api_attendance_has_gps_checkin():
     """Check if driver has GPS+Camera check-in for today (for Check-out form: button enable only if true)."""
     driver_id = request.args.get('driver_id', type=int)
+    vehicle_id_param = request.args.get('vehicle_id', type=int)
+    project_id_param = request.args.get('project_id', type=int)
     if not driver_id:
         return jsonify({'has_gps_checkin': False})
     today = _attendance_local_date()
     rec = _open_gps_driver_attendance_for_checkout(driver_id, today)
-    return jsonify({'has_gps_checkin': bool(rec)})
+    payload = {'has_gps_checkin': bool(rec)}
+    if rec:
+        driver = Driver.query.get(driver_id)
+        tw = _get_effective_time_window(
+            driver=driver, vehicle_id=vehicle_id_param, project_id=project_id_param,
+        )
+        co_s, co_e, cross = _gps_checkout_window_bounds(driver, tw, rec.check_in)
+        def t_str(t):
+            return t.strftime('%H:%M') if t else None
+        payload['effective_checkout_start'] = t_str(co_s)
+        payload['effective_checkout_end'] = t_str(co_e)
+        payload['checkout_cross_shift'] = cross
+        payload['check_in_time'] = t_str(rec.check_in)
+    return jsonify(payload)
 
 
 def _attendance_media_payload(rec, kind):
@@ -18994,23 +19093,9 @@ def api_attendance_gps_checkout_submit():
         _co_vehicle_id = int(body.get('vehicle_id') or 0) or None
         _co_project_id = int(body.get('project_id') or 0) or None
         tw = _get_effective_time_window(driver=driver, vehicle_id=_co_vehicle_id, project_id=_co_project_id)
-        mco_s = tw.get('morning_checkout_start') or tw.get('night_start')
-        mco_e = tw.get('morning_checkout_end') or tw.get('night_end')
-        nco_s = tw.get('night_checkout_start') or tw.get('morning_start')
-        nco_e = tw.get('night_checkout_end') or tw.get('morning_end')
-
-        def _in_window(t, start_t, end_t):
-            if start_t is None or end_t is None:
-                return True
-            if end_t < start_t:
-                return t >= start_t or t <= end_t
-            return start_t <= t <= end_t
-
-        shift = (driver.shift or '').strip().lower()
-        if shift == 'morning' and not _in_window(now_time, mco_s, mco_e):
-            return jsonify({'ok': False, 'message': 'Morning check-out time-window allowed nahi.'}), 400
-        if shift == 'night' and not _in_window(now_time, nco_s, nco_e):
-            return jsonify({'ok': False, 'message': 'Night check-out time-window allowed nahi.'}), 400
+        co_ok, co_msg = _gps_checkout_window_ok(driver, now_time, tw, existing.check_in)
+        if not co_ok:
+            return jsonify({'ok': False, 'message': co_msg}), 400
         try:
             photo_path = _upload_attendance_photo_from_form_or_b64(None, photo_b64, required=True)
         except ValueError as ve:
@@ -19325,33 +19410,16 @@ def driver_attendance_checkout():
         _co_vehicle_id = request.form.get('vehicle_id', type=int)
         _co_project_id = request.form.get('project_id', type=int)
         tw = _get_effective_time_window(driver=driver, vehicle_id=_co_vehicle_id, project_id=_co_project_id)
-        mco_s = tw.get('morning_checkout_start')
-        mco_e = tw.get('morning_checkout_end')
-        nco_s = tw.get('night_checkout_start')
-        nco_e = tw.get('night_checkout_end')
-        if not mco_s and not mco_e:
-            mco_s = tw.get('night_start')
-            mco_e = tw.get('night_end')
-        if not nco_s and not nco_e:
-            nco_s = tw.get('morning_start')
-            nco_e = tw.get('morning_end')
-        def _in_window(t, start_t, end_t):
-            if start_t is None or end_t is None:
-                return True
-            if end_t < start_t:
-                return t >= start_t or t <= end_t
-            return start_t <= t <= end_t
-        shift = (driver.shift or '').strip()
-        if shift and shift.lower() == 'morning':
-            if not _in_window(now_time, mco_s, mco_e):
-                src = tw.get('source', '')
-                flash(f'Morning shift ka check-out abhi allowed nahi hai. Allowed window: {mco_s.strftime("%H:%M") if mco_s else "–"} – {mco_e.strftime("%H:%M") if mco_e else "–"} ({src}).', 'danger')
-                return redirect(url_for('driver_attendance_checkout'))
-        elif shift and shift.lower() == 'night':
-            if not _in_window(now_time, nco_s, nco_e):
-                src = tw.get('source', '')
-                flash(f'Night shift ka check-out abhi allowed nahi hai. Allowed window: {nco_s.strftime("%H:%M") if nco_s else "–"} – {nco_e.strftime("%H:%M") if nco_e else "–"} ({src}).', 'danger')
-                return redirect(url_for('driver_attendance_checkout'))
+        co_ok, co_msg = _gps_checkout_window_ok(driver, now_time, tw, existing.check_in)
+        if not co_ok:
+            co_s, co_e, _cross = _gps_checkout_window_bounds(driver, tw, existing.check_in)
+            src = tw.get('source', '')
+            detail = (
+                f' Allowed: {co_s.strftime("%H:%M") if co_s else "–"} – {co_e.strftime("%H:%M") if co_e else "–"} ({src}).'
+                if co_s or co_e else ''
+            )
+            flash((co_msg or 'Check-out abhi allowed nahi.') + detail, 'danger')
+            return redirect(url_for('driver_attendance_checkout'))
         photo = request.files.get('photo')
         b64 = request.form.get('photo_base64', '').strip()
         try:

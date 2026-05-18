@@ -295,6 +295,9 @@
   var serverAutoShift = {{ auto_shift | tojson }};
   var timeWindow = {};
   var hasGpsCheckin = false;
+  var effectiveCheckoutStart = null;
+  var effectiveCheckoutEnd = null;
+  var checkoutCrossShift = false;
   var PENDING_PREFIX = 'gps-attendance:checkout:';
 
   function gpsApiJsonMessage(body) {
@@ -408,6 +411,23 @@
     return { inWindow: inWindow, label: label };
   }
 
+  function isInEffectiveCheckoutWindow() {
+    if (!effectiveCheckoutStart && !effectiveCheckoutEnd) return null;
+    var start = effectiveCheckoutStart ? minutesFromMidnight(effectiveCheckoutStart) : null;
+    var end = effectiveCheckoutEnd ? minutesFromMidnight(effectiveCheckoutEnd) : null;
+    if (start === null && end === null) return { inWindow: true, label: '' };
+    var now = new Date(Date.now() + (typeof _pktOffset!=='undefined'?_pktOffset:0));
+    var current = (typeof pktMinutesFromMidnight === 'function')
+      ? pktMinutesFromMidnight(now)
+      : (now.getHours() * 60 + now.getMinutes());
+    var inWindow = (start !== null && end !== null)
+      ? ((end >= start) ? (current >= start && current <= end) : (current >= start || current <= end))
+      : true;
+    var label = (checkoutCrossShift ? 'Session check-out' : 'Check-out') + ': '
+      + (effectiveCheckoutStart || '–') + ' – ' + (effectiveCheckoutEnd || '–');
+    return { inWindow: inWindow, label: label };
+  }
+
   function haversineDistance(lat1, lon1, lat2, lon2) {
     var R = 6371e3;
     var phi1 = lat1 * Math.PI / 180, phi2 = lat2 * Math.PI / 180;
@@ -448,7 +468,8 @@
     noCheckinMessage.classList.add('d-none');
     var opt = driverSelect.options[driverSelect.selectedIndex];
     var shift = (opt && opt.dataset.shift) ? opt.dataset.shift : shiftSelect.value;
-    var timeCheck = isInCheckoutTimeWindow(shift, timeWindow);
+    var timeCheck = isInEffectiveCheckoutWindow();
+    if (!timeCheck) timeCheck = isInCheckoutTimeWindow(shift, timeWindow);
     if (!timeCheck.inWindow) {
       btnMarkCheckout.disabled = true;
       timeWindowText.textContent = 'Check-out abhi allowed nahi. ' + (timeCheck.label || '') + ' ke dauran karein.';
@@ -463,17 +484,31 @@
     var driverId = driverSelect.value;
     if (!driverId) {
       hasGpsCheckin = false;
+      effectiveCheckoutStart = null;
+      effectiveCheckoutEnd = null;
+      checkoutCrossShift = false;
       updateDistanceUI();
       return;
     }
-    fetch('{{ url_for("api_attendance_has_gps_checkin") }}?driver_id=' + encodeURIComponent(driverId))
+    var params = ['driver_id=' + encodeURIComponent(driverId)];
+    var vId = vehicleSelect.tomselect ? vehicleSelect.tomselect.getValue() : vehicleSelect.value;
+    var pId = projectSelect.tomselect ? projectSelect.tomselect.getValue() : projectSelect.value;
+    if (vId) params.push('vehicle_id=' + encodeURIComponent(vId));
+    if (pId) params.push('project_id=' + encodeURIComponent(pId));
+    fetch('{{ url_for("api_attendance_has_gps_checkin") }}?' + params.join('&'))
       .then(function(r) { return r.json(); })
       .then(function(data) {
         hasGpsCheckin = data.has_gps_checkin === true;
+        effectiveCheckoutStart = data.effective_checkout_start || null;
+        effectiveCheckoutEnd = data.effective_checkout_end || null;
+        checkoutCrossShift = !!data.checkout_cross_shift;
         updateDistanceUI();
       })
       .catch(function() {
         hasGpsCheckin = false;
+        effectiveCheckoutStart = null;
+        effectiveCheckoutEnd = null;
+        checkoutCrossShift = false;
         updateDistanceUI();
       });
   }
