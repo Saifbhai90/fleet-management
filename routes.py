@@ -5448,6 +5448,8 @@ def driver_form(id=None):
                 u = _create_user_for_employee_or_driver(driver.cnic_no.strip(), driver.name, post_id, role_id)
                 if u:
                     flash("Driver saved! Login user bhi ban gaya: User ID = CNIC, pehli dafa password 123 se login karein, phir naya password set karein.", 'success')
+            if driver.cnic_no and (driver.cnic_no or '').strip():
+                _sync_user_full_name_by_cnic(driver.cnic_no.strip(), driver.name)
             if id or not (not id and driver.cnic_no and (driver.cnic_no or '').strip() and u):
                 flash(f"Driver '{driver.name}' successfully {'updated' if id else 'added'}!", 'success')
             return redirect(url_for('drivers_list'))
@@ -5630,6 +5632,8 @@ def employee_form(id=None):
                     emp.address = (form1.address.data or '').strip()
                     emp.joining_date = form1.joining_date.data
                     db.session.commit()
+                    if emp.cnic_no and (emp.cnic_no or '').strip():
+                        _sync_user_full_name_by_cnic(emp.cnic_no.strip(), emp.name)
                     try:
                         from routes_finance import _auto_create_coa_account
                         _auto_create_coa_account('employee', emp.id, emp.name, extra_label=emp.code)
@@ -7264,6 +7268,26 @@ def _sync_user_active_by_cnic(cnic, is_active):
             db.session.rollback()
 
 
+def _sync_user_full_name_by_cnic(cnic, full_name):
+    """User (username=CNIC) ka full_name employee/driver record ke naam se sync karo — sirf display name."""
+    if not cnic or not (cnic or '').strip():
+        return
+    username = (cnic or '').strip()
+    if len(username) < 5:
+        return
+    new_name = (full_name or '').strip() or None
+    u = User.query.filter(func.lower(User.username) == username.lower()).first()
+    if not u:
+        return
+    if (u.full_name or '').strip() == (new_name or '').strip():
+        return
+    u.full_name = new_name
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+
+
 def _user_effective_active(user):
     """Login ke liye: User.is_active + agar Employee/Driver se link hai to unka status bhi Active hona chahiye."""
     if not user or not user.is_active:
@@ -7289,8 +7313,12 @@ def _create_user_for_employee_or_driver(username_cnic, full_name, employee_post_
         return None
     existing = User.query.filter(func.lower(User.username) == username.lower()).first()
     if existing:
-        # User already bana hua hai → sirf sync/update karein (post/role) taa ke Roles & Permissions view me sahi count aaye
+        # User already bana hua hai → sirf sync/update karein (post/role/name) taa ke Roles & Permissions view me sahi count aaye
         updated = False
+        synced_name = (full_name or '').strip() or username
+        if synced_name and (existing.full_name or '').strip() != synced_name:
+            existing.full_name = synced_name
+            updated = True
         if employee_post_id and existing.employee_post_id != employee_post_id:
             existing.employee_post_id = employee_post_id
             updated = True
