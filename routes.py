@@ -575,17 +575,37 @@ def _attendance_local_now():
     return pk_now()
 
 
-def _get_checked_in_vehicle_ids(attendance_date):
-    """Vehicle IDs that still have an open attendance session (check-in set, check-out empty) on this date."""
-    rows = db.session.query(Driver.vehicle_id).join(
+def _get_checked_in_vehicle_ids(attendance_date=None):
+    """Vehicle IDs with any open session (check-out pending), including overnight from prior dates."""
+    q = db.session.query(Driver.vehicle_id).join(
         DriverAttendance, Driver.id == DriverAttendance.driver_id
     ).filter(
-        DriverAttendance.attendance_date == attendance_date,
         DriverAttendance.check_in.isnot(None),
         DriverAttendance.check_out.is_(None),
-        Driver.vehicle_id.isnot(None)
-    ).distinct().all()
+        Driver.vehicle_id.isnot(None),
+    )
+    if attendance_date is not None:
+        q = q.filter(DriverAttendance.attendance_date <= attendance_date)
+    rows = q.distinct().all()
     return {r[0] for r in rows}
+
+
+def _other_driver_open_session_on_vehicle(driver_id, vehicle_id):
+    """True if another driver on this vehicle has check-in without check-out (any date)."""
+    if not vehicle_id:
+        return False
+    return (
+        db.session.query(DriverAttendance.id)
+        .join(Driver, Driver.id == DriverAttendance.driver_id)
+        .filter(
+            Driver.vehicle_id == vehicle_id,
+            Driver.id != driver_id,
+            DriverAttendance.check_in.isnot(None),
+            DriverAttendance.check_out.is_(None),
+        )
+        .first()
+        is not None
+    )
 
 
 def _vehicle_capacity_value(vehicle):
@@ -1013,19 +1033,22 @@ def _open_driver_attendance_for_manual_checkout(driver_id, attendance_date):
 def _pending_blocked_by_other_driver_on_vehicle(driver_id, vehicle_id, view_date, cap):
     if not vehicle_id:
         return False
-    q = (
-        db.session.query(DriverAttendance.id)
-        .join(Driver, Driver.id == DriverAttendance.driver_id)
-        .filter(
-            Driver.vehicle_id == vehicle_id,
-            Driver.id != driver_id,
-            DriverAttendance.attendance_date == view_date,
-            DriverAttendance.check_in.isnot(None),
-        )
-    )
+    if _other_driver_open_session_on_vehicle(driver_id, vehicle_id):
+        return True
     if cap <= 1:
-        return q.first() is not None
-    return q.filter(DriverAttendance.check_out.is_(None)).first() is not None
+        return (
+            db.session.query(DriverAttendance.id)
+            .join(Driver, Driver.id == DriverAttendance.driver_id)
+            .filter(
+                Driver.vehicle_id == vehicle_id,
+                Driver.id != driver_id,
+                DriverAttendance.attendance_date == view_date,
+                DriverAttendance.check_in.isnot(None),
+            )
+            .first()
+            is not None
+        )
+    return False
 
 
 def _driver_marked_duty_off_no_checkin(driver_id, view_date):
@@ -1061,6 +1084,12 @@ def _manual_checkin_blocked_by_vehicle_rules(driver_id, vehicle, view_date):
         return None
     vid = vehicle.id
     cap = _vehicle_capacity_value(vehicle)
+    if _other_driver_open_session_on_vehicle(driver_id, vid):
+        return (
+            'Is vehicle par kisi aur driver ka session abhi khula hai (check-out pending) — '
+            'pehle un ka check-out complete karein (purani date ki raat ki duty bhi shamil hai), '
+            'phir naya check-in.'
+        )
     if cap <= 1:
         other = (
             db.session.query(DriverAttendance.id)
@@ -1077,24 +1106,6 @@ def _manual_checkin_blocked_by_vehicle_rules(driver_id, vehicle, view_date):
             return (
                 'Is vehicle (capacity 1) par aaj kisi aur driver ka check-in record hai — '
                 'dusra manual check-in allow nahi.'
-            )
-    else:
-        other_open = (
-            db.session.query(DriverAttendance.id)
-            .join(Driver, Driver.id == DriverAttendance.driver_id)
-            .filter(
-                Driver.vehicle_id == vid,
-                Driver.id != driver_id,
-                DriverAttendance.attendance_date == view_date,
-                DriverAttendance.check_in.isnot(None),
-                DriverAttendance.check_out.is_(None),
-            )
-            .first()
-        )
-        if other_open:
-            return (
-                'Is vehicle par kisi aur shift ka session abhi khula hai (check-out pending). '
-                'Pehle un ka check-out complete karein — phir manual check-in.'
             )
     return None
 

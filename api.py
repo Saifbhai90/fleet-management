@@ -342,6 +342,22 @@ def mobile_checkin():
 
     if vehicle and getattr(vehicle, 'id', None):
         vid = vehicle.id
+        clash_open = (
+            db.session.query(DriverAttendance.id)
+            .join(Driver, Driver.id == DriverAttendance.driver_id)
+            .filter(
+                Driver.vehicle_id == vid,
+                Driver.id != driver.id,
+                DriverAttendance.check_in.isnot(None),
+                DriverAttendance.check_out.is_(None),
+            )
+            .first()
+        )
+        if clash_open:
+            return _err(
+                'Another driver on this vehicle has check-out pending. '
+                'Pehle un ka check-out complete karein.'
+            )
         if cap <= 1:
             clash = (
                 db.session.query(DriverAttendance.id)
@@ -356,21 +372,6 @@ def mobile_checkin():
             )
             if clash:
                 return _err('Another driver on this vehicle already has attendance today.')
-        else:
-            clash = (
-                db.session.query(DriverAttendance.id)
-                .join(Driver, Driver.id == DriverAttendance.driver_id)
-                .filter(
-                    Driver.vehicle_id == vid,
-                    Driver.id != driver.id,
-                    DriverAttendance.attendance_date == today,
-                    DriverAttendance.check_in.isnot(None),
-                    DriverAttendance.check_out.is_(None),
-                )
-                .first()
-            )
-            if clash:
-                return _err('Another shift on this vehicle has check-out pending.')
 
     mx_seg = (
         db.session.query(func.coalesce(func.max(DriverAttendance.attendance_segment), 0))
