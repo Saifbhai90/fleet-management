@@ -3997,11 +3997,16 @@ def company_projects(company_id):
 def project_form(id=None):
     project = Project.query.get_or_404(id) if id else None
     form = ProjectForm(obj=project)
+    if project and project.task_entry_yesterday_default_until:
+        form.task_entry_yesterday_default_until.data = project.task_entry_yesterday_default_until.strftime('%H:%M')
     if form.validate_on_submit():
         try:
             if not project:
                 project = Project()
             form.populate_obj(project)
+            project.task_entry_yesterday_default_until = _parse_hhmm_time_optional(
+                form.task_entry_yesterday_default_until.data
+            )
             if form.status.data == 'Inactive' and not form.inactive_date.data:
                 flash('Inactive Date is required when status is Inactive.', 'danger')
                 return render_template('project_form.html', form=form, title='Project', back_url=url_for('projects_list'))
@@ -20799,6 +20804,79 @@ def _task_entry_resolve_start_reading(v, task_date, form_dict):
     return start_reading
 
 
+def _parse_hhmm_time_optional(s):
+    if not s or not str(s).strip():
+        return None
+    try:
+        return datetime.strptime(str(s).strip()[:5], '%H:%M').time()
+    except ValueError:
+        return None
+
+
+def _default_task_entry_date_for_project(project_id):
+    """24h projects: before configured time, default task date = yesterday."""
+    today = pk_date()
+    if not project_id:
+        return today
+    project = Project.query.get(project_id)
+    if not project or not project.task_entry_yesterday_default_until:
+        return today
+    if _attendance_local_time() < project.task_entry_yesterday_default_until:
+        return today - timedelta(days=1)
+    return today
+
+
+def _task_entry_date_save_ok(project, task_date):
+    """Block saving today's task on 24h-style projects during grace window (common mistake)."""
+    if not project or not project.task_entry_yesterday_default_until or not task_date:
+        return True, None
+    today = pk_date()
+    if task_date != today:
+        return True, None
+    if _attendance_local_time() >= project.task_entry_yesterday_default_until:
+        return True, None
+    y = today - timedelta(days=1)
+    return False, (
+        f'"{project.name}": subah {project.task_entry_yesterday_default_until.strftime("%H:%M")} se pehle '
+        f'aaj ({today.strftime("%d-%m-%Y")}) ki date par save nahi — kal ({y.strftime("%d-%m-%Y")}) select karein.'
+    )
+
+
+def _task_entry_date_hint_for_project(project, view_date):
+    if not project or not project.task_entry_yesterday_default_until:
+        return None
+    today = pk_date()
+    y = today - timedelta(days=1)
+    until_s = project.task_entry_yesterday_default_until.strftime('%H:%M')
+    if _attendance_local_time() < project.task_entry_yesterday_default_until:
+        if view_date == y:
+            return (
+                f'"{project.name}": abhi {until_s} se pehle — task report zyada tar '
+                f'kal ({y.strftime("%d-%m-%Y")}) ki duty ke liye hoti hai.'
+            )
+        return (
+            f'"{project.name}": aaj subah {until_s} se pehle kal ki date ({y.strftime("%d-%m-%Y")}) '
+            f'use karein — raat ki duty ki report calendar date badalne ke baad bhi kal ki hoti hai.'
+        )
+    return None
+
+
+@app.route('/api/task-entry-default-date')
+def api_task_entry_default_date():
+    project_id = request.args.get('project_id', type=int)
+    d = _default_task_entry_date_for_project(project_id)
+    project = Project.query.get(project_id) if project_id else None
+    return jsonify({
+        'date': d.strftime('%d-%m-%Y'),
+        'hint': _task_entry_date_hint_for_project(project, d),
+        'yesterday_default_active': bool(
+            project
+            and project.task_entry_yesterday_default_until
+            and _attendance_local_time() < project.task_entry_yesterday_default_until
+        ),
+    })
+
+
 @app.route('/task-report/new', methods=['GET', 'POST'])
 def task_report_new():
     from auth_utils import get_user_context
@@ -20879,7 +20957,7 @@ def task_report_new():
             pid = 0
         return did, pid, tef
 
-    view_date = parse_date(request.args.get('date') or request.form.get('task_date')) or pk_date()
+    _explicit_task_date = parse_date(request.args.get('date') or request.form.get('task_date'))
     if request.method == 'POST':
         district_id = request.form.get('district_id', type=int) or request.args.get('district_id', type=int) or 0
         project_id = request.form.get('project_id', type=int) or request.args.get('project_id', type=int) or 0
@@ -20892,6 +20970,12 @@ def task_report_new():
         project_id = 0
     district_id, project_id, task_entry_filter = apply_task_entry_assignment_locks(district_id, project_id)
 
+    if _explicit_task_date:
+        view_date = _explicit_task_date
+    elif project_id:
+        view_date = _default_task_entry_date_for_project(project_id)
+    else:
+        view_date = pk_date()
     _att_cfg = AttendanceSettings.query.first()
     max_km_setting = getattr(_att_cfg, 'daily_task_entry_max_kms_driven', None) if _att_cfg else None
     odom_required_setting = bool(getattr(_att_cfg, 'daily_task_odometer_photo_required', False) if _att_cfg else False)
@@ -20910,6 +20994,8 @@ def task_report_new():
         return Project.query.order_by(Project.name).all()
 
     def _task_report_new_render(rows_list, v_date):
+        _tp = Project.query.get(project_id) if project_id else None
+        _hint = _task_entry_date_hint_for_project(_tp, v_date)
         return render_template(
             'task_report_new.html',
             rows=rows_list,
@@ -20923,6 +21009,7 @@ def task_report_new():
             can_edit_saved_task_rows=can_edit_saved_task_rows,
             task_entry_max_km_driven=max_km_setting,
             task_entry_odometer_required=odom_required_setting,
+            task_entry_date_hint=_hint,
         )
 
     if request.method == 'POST' and request.form.get('save_batch'):
@@ -20938,6 +21025,18 @@ def task_report_new():
             flash('Project select karna zaroori hai — baghair project ke save nahi ho sakta.', 'danger')
             view_date = task_date
             return _task_report_new_render([], view_date)
+        _save_project = Project.query.get(project_id)
+        ok_date, date_msg = _task_entry_date_save_ok(_save_project, task_date)
+        if not ok_date:
+            flash(date_msg, 'danger')
+            view_date = task_date
+            q = _vehicle_query_task_report_scope(is_master_or_admin, allowed_projects, allowed_districts, allowed_vehicles)
+            q = q.filter(Vehicle.project_id == project_id)
+            if district_id:
+                q = q.filter(Vehicle.district_id == district_id)
+            vehicles = q.order_by(Vehicle.vehicle_no).all()
+            rows = _build_vehicle_rows(vehicles, task_date, request.form)
+            return _task_report_new_render(rows, view_date)
         q = _vehicle_query_task_report_scope(is_master_or_admin, allowed_projects, allowed_districts, allowed_vehicles)
         q = q.filter(Vehicle.project_id == project_id)
         if district_id:

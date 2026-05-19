@@ -65,6 +65,8 @@ class Project(db.Model):
     
     remarks = db.Column(db.Text)
     company_id = db.Column(db.Integer, db.ForeignKey('company.id'), nullable=True)
+    # New Task Entry: before this clock time (PKT), default/suggested date = yesterday (24h projects).
+    task_entry_yesterday_default_until = db.Column(db.Time, nullable=True)
     created_at = db.Column(db.DateTime, default=pk_now)
 
     # Relationships

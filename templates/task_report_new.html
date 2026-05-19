@@ -632,6 +632,11 @@
   {% if task_entry_odometer_required %}
   <div class="alert alert-light border py-2 mb-2 small"><i class="bi bi-camera me-1"></i>Settings: har row par <strong>Odoo meter</strong> photo zaroori hai.</div>
   {% endif %}
+  {% if task_entry_date_hint %}
+  <div class="alert alert-warning border py-2 mb-2 small" id="taskEntryDateHint"><i class="bi bi-calendar-event me-1"></i>{{ task_entry_date_hint }}</div>
+  {% else %}
+  <div class="alert alert-warning border py-2 mb-2 small d-none" id="taskEntryDateHint"></div>
+  {% endif %}
 
   <div class="card shadow border-0 rounded-3 mb-4 task-batch-filter-card">
     <div class="card-body">
@@ -691,7 +696,7 @@
         <span class="fw-semibold"><span class="d-none d-md-inline">Vehicles list – sirf Close Reading aur Task's edit karein. Baaki real-time calculate hoga.</span><span class="d-md-none">Sirf <strong>Close Reading</strong> aur <strong>Task's</strong> edit karein — baqi auto.</span></span>
         <div class="task-batch-search-wrap">
           <input type="text" id="taskEntrySearch" class="form-control form-control-sm flex-shrink-0 task-batch-entry-search" placeholder="Search vehicles..." autocomplete="off">
-        </div>
+      </div>
       </div>
       <div class="card-body p-0 overflow-hidden">
         <div class="table-responsive task-batch-table-wrap">
@@ -722,7 +727,7 @@
               {% set s = row.saved %}
               <tr class="task-row{% if s %} table-info{% endif %}" data-start="{{ row.start_reading }}" data-tracker="{{ row.tracker_km }}" data-emg="{{ row.emg_tasks }}" data-vehicle="{{ row.vehicle.vehicle_no | e }}">
                 <td class="ps-4 ps-md-4 task-batch-num-cell">
-                  <input type="hidden" name="row_{{ row.vehicle.id }}_edit_mode" id="row_{{ row.vehicle.id }}_edit_mode" value="{{ '0' if s else '1' }}">
+                <input type="hidden" name="row_{{ row.vehicle.id }}_edit_mode" id="row_{{ row.vehicle.id }}_edit_mode" value="{{ '0' if s else '1' }}">
                   <span class="task-batch-num-inner"><span class="task-batch-row-num">{{ loop.index }}</span>{% if s %} <i class="bi bi-check-circle-fill text-success" title="Previously saved"></i>{% endif %}</span>
                 </td>
                 <td class="d-none d-md-table-cell">{{ row.vehicle.district.name if row.vehicle.district else '-' }}</td>
@@ -792,7 +797,7 @@
                   <button type="button" class="btn btn-sm btn-outline-primary task-row-edit-btn" data-row="{{ row.vehicle.id }}" title="Enable editing for this row">
                     <i class="bi bi-pencil-square me-1"></i>Edit
                   </button>
-                    {% else %}
+                  {% else %}
                   <span class="badge bg-secondary px-2 py-2" title="Edit ki ijazat nahi — role mein &quot;Edit saved rows&quot; add karein">Locked</span>
                     {% endif %}
                   {% else %}
@@ -824,8 +829,8 @@
         <div class="d-flex flex-column flex-sm-row gap-2 order-1 order-sm-2 align-self-stretch align-self-sm-auto">
           <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary px-4 py-2 align-self-stretch text-center">Cancel</a>
           <button type="submit" class="btn btn-primary px-4 py-2 align-self-stretch task-batch-save-btn" id="saveBtn">
-            <i class="bi bi-save me-1"></i>Save All
-          </button>
+          <i class="bi bi-save me-1"></i>Save All
+        </button>
         </div>
       </div>
     </div>
@@ -926,15 +931,49 @@ window.TASK_REPORT_NEW_LOCK_PROJECT = {{ task_entry_filter.lock_project|tojson }
               projectSelect.appendChild(o);
             });
             if (typeof initSearchableDropdowns === 'function') {
-              initSearchableDropdowns(projectSelect.parentNode);
+            initSearchableDropdowns(projectSelect.parentNode);
             }
           });
       } else {
         if (typeof initSearchableDropdowns === 'function') {
-          initSearchableDropdowns(projectSelect.parentNode);
+        initSearchableDropdowns(projectSelect.parentNode);
         }
       }
     });
+  }
+
+  function applyTaskEntryDefaultDate(pid) {
+    var dateInp = document.querySelector('#filterForm input[name="date"]');
+    var hintEl = document.getElementById('taskEntryDateHint');
+    if (!dateInp || !pid || pid === '0') {
+      if (hintEl) { hintEl.classList.add('d-none'); hintEl.textContent = ''; }
+      return;
+    }
+    fetch('{{ url_for("api_task_entry_default_date") }}?project_id=' + encodeURIComponent(pid))
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.date) dateInp.value = data.date;
+        if (hintEl) {
+          if (data.hint) {
+            hintEl.innerHTML = '<i class="bi bi-calendar-event me-1"></i>' + data.hint;
+            hintEl.classList.remove('d-none');
+          } else {
+            hintEl.classList.add('d-none');
+            hintEl.textContent = '';
+          }
+        }
+      })
+      .catch(function() {});
+  }
+  if (projectSelect) {
+    projectSelect.addEventListener('change', function() {
+      var pid = projectSelect.tomselect ? projectSelect.tomselect.getValue() : projectSelect.value;
+      applyTaskEntryDefaultDate(pid);
+    });
+    var initPid = projectSelect.tomselect ? projectSelect.tomselect.getValue() : projectSelect.value;
+    if (initPid && initPid !== '0') {
+      applyTaskEntryDefaultDate(initPid);
+    }
   }
 
   function updateRow(row) {
