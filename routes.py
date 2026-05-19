@@ -20982,6 +20982,7 @@ def task_report_new():
     from auth_utils import user_can_access
     _perms = session.get('permissions') or []
     can_edit_saved_task_rows = bool(session.get('is_master') or user_can_access(_perms, 'task_report_entry_edit'))
+    can_delete_saved_task_rows = bool(session.get('is_master') or user_can_access(_perms, 'task_report_entry_delete'))
 
     def _task_report_new_projects_ui(did):
         if did:
@@ -21007,6 +21008,7 @@ def task_report_new():
             show_batch_totals=_show_task_batch_totals(user_context, rows_list),
             task_entry_filter=task_entry_filter,
             can_edit_saved_task_rows=can_edit_saved_task_rows,
+            can_delete_saved_task_rows=can_delete_saved_task_rows,
             task_entry_max_km_driven=max_km_setting,
             task_entry_odometer_required=odom_required_setting,
             task_entry_date_hint=_hint,
@@ -21151,6 +21153,74 @@ def task_report_new():
         vehicles = q.order_by(Vehicle.vehicle_no).all()
         rows = _build_vehicle_rows(vehicles, view_date, request.form)
     return _task_report_new_render(rows, view_date)
+
+
+def _task_entry_record_in_user_scope(rec, is_master_or_admin, allowed_projects, allowed_districts, allowed_vehicles):
+    """True if this VehicleDailyTask's vehicle passes the same scope filters as task report entry."""
+    if is_master_or_admin:
+        return True
+    v = rec.vehicle
+    if not v:
+        return False
+    ap = set(allowed_projects or [])
+    ad = set(allowed_districts or [])
+    av = set(allowed_vehicles or [])
+    if not ap and not ad and not av:
+        return False
+    if ap and v.project_id not in ap:
+        return False
+    if ad and v.district_id not in ad:
+        return False
+    if av and v.id not in av:
+        return False
+    return True
+
+
+@app.route('/task-report/new/delete', methods=['POST'])
+def task_report_new_delete_row():
+    from auth_utils import get_user_context, user_can_access
+
+    perms = session.get('permissions') or []
+    if not (session.get('is_master') or user_can_access(perms, 'task_report_entry_delete')):
+        return jsonify({'ok': False, 'message': 'Delete ki ijazat nahi — role mein "Delete saved rows" add karein.'}), 403
+
+    body = request.get_json(silent=True) or {}
+    task_id = body.get('task_id') or request.form.get('task_id', type=int)
+    if not task_id:
+        return jsonify({'ok': False, 'message': 'Task record ID missing hai.'}), 400
+
+    rec = VehicleDailyTask.query.get(task_id)
+    if not rec:
+        return jsonify({'ok': False, 'message': 'Record nahi mila (pehle se delete ho chuka ho sakta hai).'}), 404
+
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    if not _task_entry_record_in_user_scope(
+        rec,
+        user_context.get('is_master_or_admin', False),
+        user_context.get('allowed_projects', set()),
+        user_context.get('allowed_districts', set()),
+        user_context.get('allowed_vehicles', set()),
+    ):
+        return jsonify({'ok': False, 'message': 'Is record par aap ki scope ki ijazat nahi.'}), 403
+
+    vno = rec.vehicle.vehicle_no if rec.vehicle else str(rec.vehicle_id)
+    task_date = rec.task_date
+    vehicle_id = rec.vehicle_id
+    try:
+        db.session.delete(rec)
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        app.logger.warning('task_report_new_delete_row: %s', e)
+        return jsonify({'ok': False, 'message': 'Delete nahi ho saka: %s' % (str(e) or 'error')}), 500
+
+    return jsonify({
+        'ok': True,
+        'message': '%s (%s) ki entry delete ho gayi.' % (vno, task_date.strftime('%d-%m-%Y')),
+        'vehicle_id': vehicle_id,
+        'task_date': task_date.strftime('%d-%m-%Y'),
+    })
 
 
 def _build_vehicle_rows(vehicles, task_date, form=None):

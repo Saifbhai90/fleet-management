@@ -140,12 +140,20 @@
       padding: 0.45em 0.65em;
       border-radius: 10px;
     }
-    .task-batch-page .task-batch-table tbody td .task-row-edit-btn {
+    .task-batch-page .task-batch-table tbody td .task-row-edit-btn,
+    .task-batch-page .task-batch-table tbody td .task-row-delete-btn {
       width: 100%;
       min-height: 48px;
       border-radius: 12px;
       font-weight: 600;
       border-width: 2px;
+    }
+    .task-batch-page .task-batch-row-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      width: 100%;
+      min-width: 5.5rem;
     }
     .task-batch-page .odometer-cell .btn {
       border-radius: 10px;
@@ -719,7 +727,7 @@
                 <th class="text-end">Tracker KM</th>
                 <th class="text-end">KMs Diff</th>
                 <th class="text-end">% Diff</th>
-                <th class="text-center">Edit</th>
+                <th class="text-center">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -793,12 +801,26 @@
                 <td class="text-end pct-diff task-batch-metric-cell"><span class="task-batch-metric-plain">-</span></td>
                 <td class="text-center task-batch-metric-cell task-batch-metric-cell--last">
                   {% if s %}
+                    {% if can_edit_saved_task_rows or can_delete_saved_task_rows %}
+                  <div class="task-batch-row-actions">
                     {% if can_edit_saved_task_rows %}
-                  <button type="button" class="btn btn-sm btn-outline-primary task-row-edit-btn" data-row="{{ row.vehicle.id }}" title="Enable editing for this row">
-                    <i class="bi bi-pencil-square me-1"></i>Edit
-                  </button>
-                  {% else %}
-                  <span class="badge bg-secondary px-2 py-2" title="Edit ki ijazat nahi — role mein &quot;Edit saved rows&quot; add karein">Locked</span>
+                    <button type="button" class="btn btn-sm btn-outline-primary task-row-edit-btn" data-row="{{ row.vehicle.id }}" title="Enable editing for this row">
+                      <i class="bi bi-pencil-square me-1"></i>Edit
+                    </button>
+                    {% endif %}
+                    {% if can_delete_saved_task_rows %}
+                    <button type="button" class="btn btn-sm btn-outline-danger task-row-delete-btn"
+                            data-task-id="{{ s.id }}"
+                            data-row="{{ row.vehicle.id }}"
+                            data-vehicle-no="{{ row.vehicle.vehicle_no | e }}"
+                            data-task-date="{{ view_date.strftime('%d-%m-%Y') }}"
+                            title="Galat entry delete karein">
+                      <i class="bi bi-trash me-1"></i>Delete
+                    </button>
+                    {% endif %}
+                  </div>
+                    {% else %}
+                  <span class="badge bg-secondary px-2 py-2" title="Edit/Delete ki ijazat nahi — role mein permissions add karein">Locked</span>
                     {% endif %}
                   {% else %}
                   <span class="badge bg-success px-3 py-2">New</span>
@@ -825,7 +847,7 @@
         </div>
       </div>
       <div class="card-footer bg-light d-flex flex-column flex-sm-row justify-content-between align-items-stretch align-items-sm-center gap-2 rounded-bottom">
-        <span class="text-muted small order-3 order-sm-1 task-batch-footer-hint"><span class="d-none d-md-inline">Saved rows locked rahengi; last column me <strong>Edit</strong> click karne par hi editable hongi. New rows ke liye Close Reading required hai.</span><span class="d-md-none">Saved row par pehle <strong>Edit</strong>, phir change. Nayi row: <strong>Close Reading</strong> zaroori.</span></span>
+        <span class="text-muted small order-3 order-sm-1 task-batch-footer-hint"><span class="d-none d-md-inline">Saved rows locked rahengi; <strong>Edit</strong> se change, <strong>Delete</strong> se galat entry hataen (ijazat ke sath). New rows ke liye Close Reading required hai.</span><span class="d-md-none">Saved: <strong>Edit</strong> / <strong>Delete</strong> (agar ijazat ho). Nayi row: <strong>Close Reading</strong> zaroori.</span></span>
         <div class="d-flex flex-column flex-sm-row gap-2 order-1 order-sm-2 align-self-stretch align-self-sm-auto">
           <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary px-4 py-2 align-self-stretch text-center">Cancel</a>
           <button type="submit" class="btn btn-primary px-4 py-2 align-self-stretch task-batch-save-btn" id="saveBtn">
@@ -1329,6 +1351,47 @@ document.addEventListener('click', function(e){
   btn.classList.add('btn-primary');
   btn.innerHTML = '<i class="bi bi-check2-circle me-1"></i>Editing';
   btn.disabled = true;
+});
+
+document.addEventListener('click', function(e){
+  var btn = e.target.closest('.task-row-delete-btn');
+  if(!btn || btn.disabled) return;
+  var taskId = btn.getAttribute('data-task-id');
+  var vno = btn.getAttribute('data-vehicle-no') || '';
+  var taskDate = btn.getAttribute('data-task-date') || '';
+  if(!taskId) return;
+
+  var msg = 'Kya aap ' + (vno ? vno + ' ' : '') + '(' + taskDate + ') ki saved entry delete karna chahte hain? Dubara enter karna paray ga.';
+  if(!window.confirm(msg)) return;
+
+  btn.disabled = true;
+  var prevHtml = btn.innerHTML;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+  fetch('{{ url_for("task_report_new_delete_row") }}', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}'},
+    body: JSON.stringify({task_id: parseInt(taskId, 10), task_date: taskDate})
+  })
+  .then(function(r){ return r.json().then(function(j){ return {status: r.status, body: j}; }); })
+  .then(function(res){
+    if(res.body && res.body.ok){
+      if(typeof window.showToast === 'function'){
+        window.showToast(res.body.message || 'Deleted.', 'success');
+      }
+      window.location.reload();
+      return;
+    }
+    var errMsg = (res.body && res.body.message) ? res.body.message : 'Delete nahi ho saka.';
+    alert(errMsg);
+    btn.disabled = false;
+    btn.innerHTML = prevHtml;
+  })
+  .catch(function(){
+    alert('Network error — dubara try karein.');
+    btn.disabled = false;
+    btn.innerHTML = prevHtml;
+  });
 });
 </script>
 {% endblock %}

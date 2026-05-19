@@ -181,6 +181,7 @@ ENDPOINT_PERMISSION_MAP = [
     ('task-report', 'task_report_list'),
     ('task_report_list', 'task_report_list'),
     ('task_report_new', 'task_report_entry'),
+    ('task_report_new_delete_row', 'task_report_entry_delete'),
     ('api_task_report_odometer_photo_upload', 'task_report_entry'),
     # Red Task
     ('red_task_list', 'red_task'),
@@ -670,6 +671,24 @@ def seed_auth_tables(app):
                     codes = {p.code for p in role.permissions}
                     if 'task_report_add' in codes and 'task_report_entry' not in codes:
                         role.permissions.append(entry_perm)
+                        changed = True
+                if changed:
+                    db.session.commit()
+        except Exception:
+            db.session.rollback()
+
+        # New Task Entry: roles with Edit saved rows also get Delete (same intent as correcting entries).
+        try:
+            edit_perm = Permission.query.filter_by(code='task_report_entry_edit').first()
+            del_perm = Permission.query.filter_by(code='task_report_entry_delete').first()
+            if edit_perm and del_perm:
+                changed = False
+                for role in Role.query.all():
+                    if role.name == 'Master':
+                        continue
+                    codes = {p.code for p in role.permissions}
+                    if 'task_report_entry_edit' in codes and 'task_report_entry_delete' not in codes:
+                        role.permissions.append(del_perm)
                         changed = True
                 if changed:
                     db.session.commit()

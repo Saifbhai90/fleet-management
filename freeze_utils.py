@@ -93,6 +93,7 @@ FREEZE_FORM_CATALOG = [
     ('Transfers - Driver Rejoin', 'driver_rejoin_new'),
     ('Tasks - Daily Task Upload', 'task_report_upload'),
     ('Tasks - Daily Task Form', 'task_report_new'),
+    ('Tasks - Daily Task Delete', 'task_report_new_delete_row'),
     ('Tasks - Red Task Form', 'red_task_new'),
     ('Tasks - Red Task Edit', 'red_task_edit'),
     ('Tasks - Without Task Form', 'without_task_new'),
@@ -272,6 +273,8 @@ def get_freeze_request_codes(req: Request, endpoint: str) -> list:
     elif endpoint in ('task_report_upload_core', 'task_report_upload_activity_one'):
         # Chunked workbook upload: same freeze allowance as task_report_upload
         codes.append('task_report_upload')
+    elif endpoint == 'task_report_new_delete_row':
+        codes.append('task_report_new')
     codes.append(endpoint)
     return codes
 
