@@ -833,30 +833,45 @@ def workspace_parties_list():
     )
 
 
-def _append_url_query_params(url, extra_params):
-    """Append query keys to a relative or same-origin return URL (used by expense quick-create flows)."""
-    from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+def _workspace_normalize_return_path(raw_next):
+    """Return safe app-relative path+query for post-create redirects (accepts full or relative URLs)."""
+    from urllib.parse import unquote, urlparse
 
-    raw = (url or "").strip()
-    if not raw:
-        return None
+    raw = unquote((raw_next or "").strip())
+    if not raw or any(c in raw for c in "\n\r\x00"):
+        return ""
     parsed = urlparse(raw)
-    path = parsed.path or raw.split("?")[0]
-    if not path.startswith("/") or path.startswith("//"):
+    if parsed.scheme and parsed.netloc:
+        path = parsed.path or ""
+        query = parsed.query
+    elif raw.startswith("/"):
+        path, _, query = raw.partition("?")
+    else:
+        return ""
+    if not path.startswith("/") or path.startswith("//") or len(path) > 500:
+        return ""
+    if len(query) > 4000:
+        query = query[:4000]
+    return path + ("?" + query if query else "")
+
+
+def _append_url_query_params(url, extra_params=None, **query_kwargs):
+    """Append query keys; always returns an app-relative redirect path when possible."""
+    from urllib.parse import parse_qsl, urlencode
+
+    merged = dict(extra_params or {})
+    merged.update(query_kwargs or {})
+    safe_path = _workspace_normalize_return_path(url)
+    if not safe_path:
         return None
-    if any(c in raw for c in "\n\r\x00") or len(raw) > 2000:
-        return None
-    q = dict(parse_qsl(parsed.query, keep_blank_values=True))
-    for key, val in (extra_params or {}).items():
+    path, _, query = safe_path.partition("?")
+    q = dict(parse_qsl(query, keep_blank_values=True))
+    for key, val in merged.items():
         if val is not None and str(val) != "":
             q[key] = str(val)
     new_query = urlencode(list(q.items()))
-    if parsed.scheme and parsed.netloc:
-        return urlunparse((parsed.scheme, parsed.netloc, path, "", new_query, parsed.fragment or ""))
-    rel = path + ("?" + new_query if new_query else "")
-    if parsed.fragment:
-        rel += "#" + parsed.fragment
-    return rel
+    out = path + ("?" + new_query if new_query else "")
+    return out
 
 
 def _workspace_party_form_prefill():
@@ -883,7 +898,9 @@ def workspace_party_form(pk=None):
 
     districts = District.query.order_by(District.name).all()
 
-    next_url = (request.args.get("next") or request.form.get("next") or "").strip()
+    next_url = _workspace_normalize_return_path(
+        request.args.get("next") or request.form.get("next") or ""
+    )
     default_type = (request.args.get("type") or "").strip()
 
     if request.method == "POST":
@@ -1486,7 +1503,9 @@ def workspace_product_form(pk=None):
         flash("Product not found for selected workspace employee.", "danger")
         return redirect(url_for("workspace_products_list"))
 
-    next_url = (request.args.get("next") or request.form.get("next") or "").strip()
+    next_url = _workspace_normalize_return_path(
+        request.args.get("next") or request.form.get("next") or ""
+    )
     default_used_in = (request.args.get("default_used_in") or request.form.get("default_used_in") or "").strip()
 
     default_units = ["Liter", "Piece", "Kg", "Gram", "Ml", "Pack", "Set", "Box", "Pair", "Unit"]

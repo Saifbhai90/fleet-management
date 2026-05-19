@@ -306,7 +306,7 @@
                   {% endfor %}
                 </select>
               </div>
-              <a href="{{ url_for('workspace_party_new', next=request.url) }}"
+              <a href="{{ url_for('workspace_party_new', next=request.full_path) }}"
                  class="btn btn-outline-primary maint-quick-add-btn maint-quick-create-link"
                  title="Nayi party add karein (wapas isi form par)"><i class="bi bi-plus-lg" aria-hidden="true"></i><span class="visually-hidden">Add party</span></a>
             </div>
@@ -363,7 +363,7 @@
     <div class="form-section">
       <div class="form-section-header maint-product-lines-head">
         <span><i class="bi bi-box-seam me-1 text-primary"></i>Product Lines</span>
-        <a href="{{ url_for('workspace_product_new', next=request.url, default_used_in='Maintenance') }}"
+        <a href="{{ url_for('workspace_product_new', next=request.full_path, default_used_in='Maintenance') }}"
            class="btn btn-sm btn-outline-primary maint-add-product-btn maint-quick-create-link"
            title="Naya product add karein (wapas isi form par)"><i class="bi bi-plus-circle me-1"></i>Add Product</a>
       </div>
