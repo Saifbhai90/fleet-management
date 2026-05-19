@@ -142,6 +142,49 @@
   /* Hide workspace mini navigation for wider insights on this form */
   .ws-global-mini { display: none !important; }
   #mainContent.ws-mini-open { padding-right: 25px !important; }
+  .maint-party-field-wrap {
+    display: flex;
+    gap: 0.35rem;
+    align-items: stretch;
+  }
+  .maint-party-field-wrap .party-select-grow {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .maint-quick-add-btn {
+    flex: 0 0 auto;
+    width: 40px;
+    min-width: 40px;
+    min-height: 40px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    font-size: 1.15rem;
+    line-height: 1;
+    box-shadow: 0 2px 6px rgba(253, 126, 20, 0.18);
+  }
+  .maint-quick-add-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 10px rgba(253, 126, 20, 0.28);
+  }
+  .maint-product-lines-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    width: 100%;
+  }
+  .maint-add-product-btn {
+    font-size: 0.82rem;
+    font-weight: 600;
+    border-radius: 999px;
+    padding: 0.35rem 0.75rem;
+    white-space: nowrap;
+    box-shadow: 0 2px 8px rgba(13, 110, 253, 0.15);
+  }
 </style>
 <script>var MAINTENANCE_DIRECT_R2 = {{ maintenance_direct_r2 | tojson }};</script>
 <div class="container-fluid maint-form-wrap py-2">
@@ -254,12 +297,19 @@
           </div>
           <div class="col-md-4 field-group">
             <label class="form-label">Party Name</label>
-            <select name="workspace_party_id" id="partySelect" class="form-select search-select">
-              <option value="">-- Select Party --</option>
-              {% for p in workspace_parties or [] %}
-                <option value="{{ p.id }}" {% if selected_party_id and selected_party_id|string == p.id|string %}selected{% endif %}>{{ p.name }}</option>
-              {% endfor %}
-            </select>
+            <div class="maint-party-field-wrap">
+              <div class="party-select-grow">
+                <select name="workspace_party_id" id="partySelect" class="form-select search-select">
+                  <option value="">-- Select Party --</option>
+                  {% for p in workspace_parties or [] %}
+                    <option value="{{ p.id }}" {% if selected_party_id and selected_party_id|string == p.id|string %}selected{% endif %}>{{ p.name }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <a href="{{ url_for('workspace_party_new', next=request.url) }}"
+                 class="btn btn-outline-primary maint-quick-add-btn maint-quick-create-link"
+                 title="Nayi party add karein (wapas isi form par)"><i class="bi bi-plus-lg" aria-hidden="true"></i><span class="visually-hidden">Add party</span></a>
+            </div>
             {% if party_error %}
               <div class="text-danger small mt-1">{{ party_error }}</div>
             {% endif %}
@@ -311,7 +361,12 @@
     </div>
 
     <div class="form-section">
-      <div class="form-section-header">Product Lines</div>
+      <div class="form-section-header maint-product-lines-head">
+        <span><i class="bi bi-box-seam me-1 text-primary"></i>Product Lines</span>
+        <a href="{{ url_for('workspace_product_new', next=request.url, default_used_in='Maintenance') }}"
+           class="btn btn-sm btn-outline-primary maint-add-product-btn maint-quick-create-link"
+           title="Naya product add karein (wapas isi form par)"><i class="bi bi-plus-circle me-1"></i>Add Product</a>
+      </div>
       <div class="form-section-body">
         <p class="entry-hint text-muted mb-2">Search product -> Qty -> Price (Amount auto). Price me plus ya minus value allowed hai, lekin 0 allowed nahi. Press <kbd>Enter</kbd> to add line to list.</p>
         <div class="maint-entry-grid mb-2">
@@ -776,6 +831,203 @@ document.addEventListener('DOMContentLoaded', function() {
   var maintOtherPartyEmpty = document.getElementById('maintOtherPartyEmpty');
 
   var productsForMaintenance = [{% for p in products_for_maintenance %}{id:{{ p.id }},name:{{ p.name | tojson }},default_price:{% if p.default_price is not none %}{{ (p.default_price|float) }}{% else %}null{% endif %}}{% if not loop.last %},{% endif %}{% endfor %}];
+  var IS_MAINTENANCE_EDIT = {{ 'true' if rec else 'false' }};
+  var MAINT_FORM_DRAFT_KEY = 'maint_expense_form_draft_v1';
+
+  function maintFormPageKey() {
+    try {
+      var u = new URL(window.location.href);
+      u.searchParams.delete('ws_party_created');
+      u.searchParams.delete('ws_product_created');
+      return u.pathname + u.search;
+    } catch (e) {
+      return window.location.pathname;
+    }
+  }
+
+  function collectMaintFormDraft() {
+    var formEl = document.getElementById('maintenanceExpenseForm');
+    if (!formEl) return null;
+    var fields = {};
+    formEl.querySelectorAll('input, select, textarea').forEach(function(el) {
+      if (!el.name || el.type === 'file' || el.name === 'csrf_token') return;
+      if (el.type === 'checkbox') fields[el.name] = el.checked ? '1' : '0';
+      else fields[el.name] = el.value;
+    });
+    var lines = [];
+    if (itemsBody) {
+      itemsBody.querySelectorAll('.item-row').forEach(function(tr) {
+        var hid = tr.querySelector('input[name="product_id"]');
+        var nm = tr.querySelector('.product-name');
+        lines.push({
+          product_id: hid ? hid.value : '',
+          product_name: nm ? nm.textContent : '',
+          qty: (tr.querySelector('.item-qty') || {}).value || '0',
+          price: (tr.querySelector('.item-price') || {}).value || '0',
+          amount: (tr.querySelector('.item-amount') || {}).value || '0'
+        });
+      });
+    }
+    var adj = document.getElementById('attachmentsDirectJson');
+    return {
+      pageKey: maintFormPageKey(),
+      savedAt: Date.now(),
+      data: {
+        fields: fields,
+        lines: lines,
+        attachmentsDirect: adj ? adj.value : ''
+      }
+    };
+  }
+
+  function saveMaintFormDraft() {
+    if (IS_MAINTENANCE_EDIT) return;
+    try {
+      var pack = collectMaintFormDraft();
+      if (pack) sessionStorage.setItem(MAINT_FORM_DRAFT_KEY, JSON.stringify(pack));
+    } catch (e) {}
+  }
+
+  function setMaintFormField(name, val) {
+    var formEl = document.getElementById('maintenanceExpenseForm');
+    if (!formEl || val == null) return;
+    var el = formEl.querySelector('[name="' + name + '"]');
+    if (!el) return;
+    if (el.type === 'checkbox') el.checked = (val === '1' || val === true || val === 'true');
+    else el.value = String(val);
+    if (el.tomselect) {
+      try { el.tomselect.setValue(el.value, true); } catch (e) {}
+    }
+  }
+
+  function restoreMaintLineItems(lines) {
+    if (!itemsBody || !lines || !lines.length) return;
+    itemsBody.innerHTML = '';
+    lines.forEach(function(line) {
+      var pid = line.product_id;
+      if (!pid) return;
+      var productName = line.product_name || ('Product #' + pid);
+      var qty = parseNum(line.qty);
+      var price = parseNum(line.price);
+      var amount = line.amount != null && line.amount !== '' ? fmt2(parseNum(line.amount)) : fmt2(qty * price);
+      var tr = document.createElement('tr');
+      tr.className = 'item-row';
+      tr.dataset.productId = pid;
+      tr.innerHTML =
+        '<td><input type="hidden" name="product_id" value="' + pid + '"><span class="product-name">' + productName + '</span></td>' +
+        '<td><input type="text" name="qty" class="form-control form-control-sm item-qty" inputmode="decimal" value="' + fmt2(qty) + '"></td>' +
+        '<td><input type="text" name="price" class="form-control form-control-sm item-price" inputmode="decimal" value="' + fmt2(price) + '"></td>' +
+        '<td><input type="text" class="form-control form-control-sm item-amount" inputmode="decimal" value="' + amount + '"></td>' +
+        '<td><button type="button" class="btn btn-outline-danger btn-sm remove-row"><i class="bi bi-trash"></i></button></td>';
+      itemsBody.appendChild(tr);
+      bindListRow(tr);
+    });
+    updateTotals();
+  }
+
+  function restoreMaintFormDraft(doneCb) {
+    if (IS_MAINTENANCE_EDIT) {
+      if (doneCb) doneCb();
+      return false;
+    }
+    var raw;
+    try { raw = sessionStorage.getItem(MAINT_FORM_DRAFT_KEY); } catch (e) { raw = null; }
+    if (!raw) {
+      if (doneCb) doneCb();
+      return false;
+    }
+    var pack;
+    try { pack = JSON.parse(raw); } catch (e) {
+      if (doneCb) doneCb();
+      return false;
+    }
+    if (!pack || pack.pageKey !== maintFormPageKey() || !pack.data) {
+      if (doneCb) doneCb();
+      return false;
+    }
+    var d = pack.data;
+    var fields = d.fields || {};
+    var did = fields.district_id || '0';
+    var pid = fields.project_id || '0';
+    var vid = fields.vehicle_id || '0';
+    if (districtSelect) _selSet(districtSelect, did);
+    _loadProjectsForDistrict(did, pid, function() {
+      _loadVehiclesForProject(pid, did, vid, function() {
+        Object.keys(fields).forEach(function(name) {
+          if (name === 'district_id' || name === 'project_id' || name === 'vehicle_id') return;
+          setMaintFormField(name, fields[name]);
+        });
+        restoreMaintLineItems(d.lines || []);
+        var adj = document.getElementById('attachmentsDirectJson');
+        if (adj && d.attachmentsDirect) adj.value = d.attachmentsDirect;
+        handlePaymentTypeBehavior(false);
+        updateLabourSplitHint();
+        updateExpenseByBalanceHint();
+        syncJobIntervalMode();
+        updateTotals();
+        if (doneCb) doneCb();
+      });
+    });
+    return true;
+  }
+
+  function ensureProductInMaintenanceList(productId, cb) {
+    var pid = parseInt(productId, 10);
+    if (!pid) {
+      if (cb) cb();
+      return;
+    }
+    var found = productsForMaintenance.some(function(p) { return parseInt(p.id, 10) === pid; });
+    if (found) {
+      if (cb) cb();
+      return;
+    }
+    fetch('/api/maintenance-expense/products-for-maintenance')
+      .then(function(r) { return r.json(); })
+      .then(function(arr) {
+        if (arr && arr.length) _populateMaintenanceProducts(arr);
+        if (cb) cb();
+      })
+      .catch(function() { if (cb) cb(); });
+  }
+
+  function applyMaintQuickCreateFromUrl() {
+    var params = new URLSearchParams(window.location.search);
+    var partyId = params.get('ws_party_created');
+    var productId = params.get('ws_product_created');
+    if (partyId && partySelect) {
+      if (!partySelect.querySelector('option[value="' + partyId + '"]')) {
+        var o = document.createElement('option');
+        o.value = partyId;
+        o.textContent = 'Party #' + partyId;
+        partySelect.appendChild(o);
+        if (partySelect.tomselect) {
+          try { partySelect.tomselect.addOption({ value: partyId, text: o.textContent }); } catch (e) {}
+        }
+      }
+      _selSet(partySelect, partyId);
+      if (paymentTypeSelect && !paymentTypeSelect.value) {
+        paymentTypeSelect.value = 'Credit';
+        if (paymentTypeSelect.tomselect) paymentTypeSelect.tomselect.setValue('Credit', true);
+      }
+      handlePaymentTypeBehavior(true);
+    }
+    if (productId) {
+      ensureProductInMaintenanceList(productId, function() {
+        _selSet(entryProductSelect, String(productId));
+        updateDefaultPriceHint();
+        focusEntryProduct();
+      });
+    }
+    if (partyId || productId) {
+      try {
+        var u = new URL(window.location.href);
+        u.searchParams.delete('ws_party_created');
+        u.searchParams.delete('ws_product_created');
+        history.replaceState({}, '', u.pathname + u.search + u.hash);
+      } catch (e) {}
+    }
+  }
 
   function _reinitSearchableDropdown(scopeEl) {
     if (typeof initSearchableDropdowns === 'function') {
@@ -1836,6 +2088,7 @@ document.addEventListener('DOMContentLoaded', function() {
         e.preventDefault();
         return;
       }
+      try { sessionStorage.removeItem(MAINT_FORM_DRAFT_KEY); } catch (err) {}
       if (maintenanceHasDirectUpload) {
         return;
       }
@@ -1878,12 +2131,29 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
-  _runInitialLocationLoadChain();
-  window.setTimeout(fetchTaskReadingsForMaintenance, 250);
+  document.querySelectorAll('.maint-quick-create-link').forEach(function(link) {
+    link.addEventListener('click', function() { saveMaintFormDraft(); });
+  });
+
+  var restoredDraft = restoreMaintFormDraft(function() {
+    applyMaintQuickCreateFromUrl();
+    fetchTaskReadingsForMaintenance();
+    fetchMaintenanceLiveSummary();
+    handlePaymentTypeBehavior(false);
+    updateLabourSplitHint();
+    updateExpenseByBalanceHint();
+  });
+  if (!restoredDraft) {
+    _runInitialLocationLoadChain();
+    window.setTimeout(fetchTaskReadingsForMaintenance, 250);
+    window.setTimeout(function() { applyMaintQuickCreateFromUrl(); }, 350);
+  }
   window.setTimeout(fetchMaintenanceLiveSummary, 300);
-  handlePaymentTypeBehavior(false);
-  updateLabourSplitHint();
-  updateExpenseByBalanceHint();
+  if (!restoredDraft) {
+    handlePaymentTypeBehavior(false);
+    updateLabourSplitHint();
+    updateExpenseByBalanceHint();
+  }
   if (lastInvoiceDetailBtn) {
     lastInvoiceDetailBtn.addEventListener('click', function() {
       if (!activeSummaryExpenseId) return;

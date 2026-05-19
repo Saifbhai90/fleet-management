@@ -833,6 +833,32 @@ def workspace_parties_list():
     )
 
 
+def _append_url_query_params(url, extra_params):
+    """Append query keys to a relative or same-origin return URL (used by expense quick-create flows)."""
+    from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+
+    raw = (url or "").strip()
+    if not raw:
+        return None
+    parsed = urlparse(raw)
+    path = parsed.path or raw.split("?")[0]
+    if not path.startswith("/") or path.startswith("//"):
+        return None
+    if any(c in raw for c in "\n\r\x00") or len(raw) > 2000:
+        return None
+    q = dict(parse_qsl(parsed.query, keep_blank_values=True))
+    for key, val in (extra_params or {}).items():
+        if val is not None and str(val) != "":
+            q[key] = str(val)
+    new_query = urlencode(list(q.items()))
+    if parsed.scheme and parsed.netloc:
+        return urlunparse((parsed.scheme, parsed.netloc, path, "", new_query, parsed.fragment or ""))
+    rel = path + ("?" + new_query if new_query else "")
+    if parsed.fragment:
+        rel += "#" + parsed.fragment
+    return rel
+
+
 def _workspace_party_form_prefill():
     return {
         "name": (request.form.get("name") or "").strip(),
@@ -960,7 +986,8 @@ def workspace_party_form(pk=None):
             )
         flash("Workspace party saved.", "success")
         if next_url:
-            return redirect(next_url)
+            target = _append_url_query_params(next_url, ws_party_created=row.id)
+            return redirect(target or next_url)
         return redirect(url_for("workspace_parties_list"))
     return render_template(
         "workspace/party_form.html",
@@ -1459,6 +1486,9 @@ def workspace_product_form(pk=None):
         flash("Product not found for selected workspace employee.", "danger")
         return redirect(url_for("workspace_products_list"))
 
+    next_url = (request.args.get("next") or request.form.get("next") or "").strip()
+    default_used_in = (request.args.get("default_used_in") or request.form.get("default_used_in") or "").strip()
+
     default_units = ["Liter", "Piece", "Kg", "Gram", "Ml", "Pack", "Set", "Box", "Pair", "Unit"]
     db_units = [
         (u or "").strip()
@@ -1493,6 +1523,8 @@ def workspace_product_form(pk=None):
                 row=row,
                 employee=emp,
                 unit_choices=unit_choices,
+                next_url=next_url,
+                default_used_in=default_used_in,
                 product_form_values=_workspace_product_form_prefill(),
             )
         exid = row.id if row else None
@@ -1508,6 +1540,8 @@ def workspace_product_form(pk=None):
                 row=row,
                 employee=emp,
                 unit_choices=unit_choices,
+                next_url=next_url,
+                default_used_in=default_used_in,
                 product_form_values=_workspace_product_form_prefill(),
             )
         if conf.get("similar") and request.form.get("ack_similar") != "1":
@@ -1522,6 +1556,8 @@ def workspace_product_form(pk=None):
                 row=row,
                 employee=emp,
                 unit_choices=unit_choices,
+                next_url=next_url,
+                default_used_in=default_used_in,
                 product_form_values=_workspace_product_form_prefill(),
                 show_similar_ack=True,
                 similar_product_name=sp.name,
@@ -1555,15 +1591,22 @@ def workspace_product_form(pk=None):
                 row=r_after,
                 employee=emp,
                 unit_choices=unit_choices,
+                next_url=next_url,
+                default_used_in=default_used_in,
                 product_form_values=_workspace_product_form_prefill(),
             )
         flash("Workspace product saved.", "success")
+        if next_url:
+            target = _append_url_query_params(next_url, ws_product_created=row.id)
+            return redirect(target or next_url)
         return redirect(url_for("workspace_products_list"))
     return render_template(
         "workspace/product_form.html",
         row=row,
         employee=emp,
         unit_choices=unit_choices,
+        next_url=next_url,
+        default_used_in=default_used_in,
         product_form_values=None,
         show_similar_ack=False,
     )
