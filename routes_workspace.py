@@ -5,7 +5,7 @@ from calendar import monthrange
 from decimal import Decimal, InvalidOperation
 
 from flask import flash, redirect, render_template, request, session, url_for, make_response, jsonify
-from sqlalchemy import and_, or_, not_, cast, String
+from sqlalchemy import and_, or_, not_, cast, String, select, exists
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import aliased, joinedload
 
@@ -114,6 +114,58 @@ def _build_workspace_account_display_map(employee_id, active_only=True):
                     base = f"{base} | Vehicle: {v_no}"
         account_display_map[a.id] = base
     return account_display_map
+
+
+def _workspace_fund_transfer_account_driver_vehicle_match(acct_alias, like):
+    """Match driver-linked From/To accounts by driver name, driver ID, or vehicle number."""
+    drv = aliased(Driver)
+    veh = aliased(Vehicle)
+    return exists(
+        select(1)
+        .select_from(drv)
+        .outerjoin(veh, or_(veh.id == drv.vehicle_id, veh.driver_id == drv.id))
+        .where(
+            acct_alias.entity_type == "driver",
+            acct_alias.entity_id.isnot(None),
+            acct_alias.entity_id == drv.id,
+            or_(
+                drv.name.ilike(like),
+                drv.driver_id.ilike(like),
+                veh.vehicle_no.ilike(like),
+            ),
+        )
+    ).correlate(acct_alias)
+
+
+def _workspace_fund_transfer_search_filter(query, search, from_acct, to_acct):
+    """Search all visible transfer columns including driver vehicle numbers on From/To."""
+    words = [w.strip() for w in (search or "").split() if w.strip()]
+    if not words:
+        return query
+    amt_col = cast(WorkspaceFundTransfer.amount, String)
+    date_col = cast(WorkspaceFundTransfer.transfer_date, String)
+    for w in words:
+        like = f"%{w}%"
+        query = query.filter(
+            or_(
+                WorkspaceFundTransfer.transfer_number.ilike(like),
+                WorkspaceFundTransfer.category.ilike(like),
+                WorkspaceFundTransfer.payment_mode.ilike(like),
+                WorkspaceFundTransfer.reference_no.ilike(like),
+                WorkspaceFundTransfer.description.ilike(like),
+                amt_col.ilike(like),
+                date_col.ilike(like),
+                from_acct.code.ilike(like),
+                from_acct.name.ilike(like),
+                from_acct.account_type.ilike(like),
+                to_acct.code.ilike(like),
+                to_acct.name.ilike(like),
+                to_acct.account_type.ilike(like),
+                _workspace_fund_transfer_account_driver_vehicle_match(from_acct, like),
+                _workspace_fund_transfer_account_driver_vehicle_match(to_acct, like),
+            )
+        )
+    return query
 
 
 def _get_workspace_employee():
@@ -3080,22 +3132,7 @@ def workspace_fund_transfers_list():
     if to_date:
         query = query.filter(WorkspaceFundTransfer.transfer_date <= to_date)
     if search:
-        words = [w.strip() for w in search.split() if w.strip()]
-        for w in words:
-            like = f"%{w}%"
-            query = query.filter(
-                or_(
-                    WorkspaceFundTransfer.transfer_number.ilike(like),
-                    WorkspaceFundTransfer.category.ilike(like),
-                    WorkspaceFundTransfer.payment_mode.ilike(like),
-                    WorkspaceFundTransfer.reference_no.ilike(like),
-                    WorkspaceFundTransfer.description.ilike(like),
-                    from_acct.code.ilike(like),
-                    from_acct.name.ilike(like),
-                    to_acct.code.ilike(like),
-                    to_acct.name.ilike(like),
-                )
-            )
+        query = _workspace_fund_transfer_search_filter(query, search, from_acct, to_acct)
 
     total_amount = (
         query.with_entities(db.func.coalesce(db.func.sum(WorkspaceFundTransfer.amount), 0)).scalar() or 0
