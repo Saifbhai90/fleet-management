@@ -4298,19 +4298,26 @@
         var boxH = totalH;
         var x = Math.round((w - boxW) / 2);
         var y = Math.round(h - boxH - padBottom);
-        ctx.fillStyle = 'rgba(0,0,0,0.92)';
+        /* Semi-transparent panel: photo behind remains visible; text stays readable via outline. */
+        ctx.fillStyle = 'rgba(0,0,0,0.55)';
         pktCanvasRoundRect(ctx, x, y, boxW, boxH, cornerR);
         ctx.fill();
-        ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+        ctx.strokeStyle = 'rgba(255,255,255,0.72)';
         ctx.lineWidth = Math.max(2, Math.round(baseFont / 12));
         pktCanvasRoundRect(ctx, x, y, boxW, boxH, cornerR);
         ctx.stroke();
-        ctx.fillStyle = '#ffffff';
         ctx.textBaseline = 'top';
+        ctx.lineJoin = 'round';
         var cy = y + innerPadY;
         for (var k = 0; k < stampLines.length; k++) {
             ctx.font = 'bold ' + lineHeights[k] + 'px ' + fontFamily;
-            ctx.fillText(stampLines[k].text, x + innerPadX, cy);
+            var tx = x + innerPadX;
+            var outline = Math.max(2, Math.round(lineHeights[k] / 12));
+            ctx.strokeStyle = 'rgba(0,0,0,0.88)';
+            ctx.lineWidth = outline;
+            ctx.strokeText(stampLines[k].text, tx, cy);
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText(stampLines[k].text, tx, cy);
             cy += lineHeights[k] + (k < stampLines.length - 1 ? lineGap : 0);
         }
     };
