@@ -1261,8 +1261,8 @@ PAGE_VISIBLE = {
     'admin_personal_tools_os_calculator': ['users_manage'],
     'admin_personal_tools_library': ['users_manage'],
     'admin_personal_tools_library_detail': ['users_manage'],
-    'notification_list': ['notification_list', 'notification_add'],
-    'notification_add': ['notification_list', 'notification_add'],
+    'notification_list': ['notification_list'],
+    'notification_add': ['notification_add'],
     'whats_new': ['whats_new'],
     # Dashboard section-level guards
     # view_fleet_map: ONLY the specific permission (or 'dashboard' full which expands to it via expand_login_permissions)

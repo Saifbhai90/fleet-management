@@ -3267,7 +3267,10 @@ def notification_list():
 
 @app.route('/notifications/new', methods=['GET', 'POST'])
 def notification_add():
-    """Any logged-in user can create a notification (broadcast to all users)."""
+    """Create notification (requires notification_add permission)."""
+    if not session.get('is_master') and not user_can_access(session.get('permissions') or [], 'notification_add'):
+        flash('You do not have permission to create notifications.', 'danger')
+        return redirect(url_for('notification_list'))
     form = NotificationForm()
     if form.validate_on_submit():
         flash(
