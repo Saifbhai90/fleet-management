@@ -6,9 +6,12 @@
     <div class="col-md-8 col-lg-6">
       <div class="card border-0 shadow-sm">
         <div class="card-header bg-primary text-white">
-          <h5 class="mb-0"><i class="bi bi-bell-fill me-2"></i>New Notification (all users will see this)</h5>
+          <h5 class="mb-0"><i class="bi bi-bell-fill me-2"></i>New Notification</h5>
         </div>
         <div class="card-body">
+          <div class="alert alert-info small mb-3">
+            Form is kept for future use. Right now manual create is off — notifications are sent automatically for GPS attendance and Task Report save.
+          </div>
           <form method="POST" action="{{ url_for('notification_add') }}">
             {{ form.hidden_tag() }}
             <div class="mb-3">

@@ -535,19 +535,27 @@ def mobile_notifications():
     from models import Notification, NotificationRead
     from app import db
 
+    from notification_service import notification_visible_to_user
+
     uid = request.jwt_payload.get('user_id')
     read_ids = {r.notification_id for r in NotificationRead.query.filter_by(user_id=uid).all()}
-    notifications = Notification.query.order_by(Notification.created_at.desc()).limit(50).all()
-
-    return _ok([{
-        'id': n.id,
-        'title': n.title,
-        'message': n.message,
-        'type': n.notification_type,
-        'link': n.link,
-        'is_read': n.id in read_ids,
-        'created_at': n.created_at.isoformat() if n.created_at else None,
-    } for n in notifications])
+    notifications = Notification.query.order_by(Notification.created_at.desc()).limit(100).all()
+    out = []
+    for n in notifications:
+        if not notification_visible_to_user(n, uid, None, False):
+            continue
+        out.append({
+            'id': n.id,
+            'title': n.title,
+            'message': n.message,
+            'type': n.notification_type,
+            'link': n.link,
+            'is_read': n.id in read_ids,
+            'created_at': n.created_at.isoformat() if n.created_at else None,
+        })
+        if len(out) >= 50:
+            break
+    return _ok(out)
 
 
 # ── GET /api/v1/drivers ───────────────────────────────────────────────────────

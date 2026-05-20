@@ -2261,26 +2261,6 @@ def _start_expense_delete_cleanup_worker(kind, expense_id: int, file_paths, empl
                 else:
                     current.status = 'error'
                     current.last_error = 'All file deletions failed.'
-                notif_link = _expense_cleanup_list_link(kind)
-                notif_text = 'Open List'
-                if failed > 0:
-                    notif_link = f'/workspace/expense-delete-cleanup/{current.id}/retry'
-                    notif_text = 'Retry Cleanup'
-                kind_title = (kind or 'expense').title()
-                n = Notification(
-                    title=f'{kind_title} media cleanup completed',
-                    message=(
-                        f'Expense #{expense_id} delete cleanup finished. '
-                        f'Deleted {success}/{total} file(s).'
-                        + ('' if failed == 0 else f' Failed: {failed}.')
-                    ),
-                    link=notif_link,
-                    link_text=notif_text,
-                    notification_type=('warning' if failed else 'info'),
-                    created_by_user_id=(current.initiated_by_user_id or initiated_by_user_id),
-                    required_permission=_expense_cleanup_permission(kind),
-                )
-                db.session.add(n)
                 db.session.commit()
         except Exception as exc:
             with app.app_context():
@@ -2327,17 +2307,11 @@ def _unread_notifications_for_user(user_id, limit=20):
     user_perms = set(session.get('permissions') or [])
     is_master = session.get('is_master', False)
 
+    from notification_service import notification_visible_to_user
     out = []
     for n in candidates:
-        if _is_parking_full_notification(n):
+        if not notification_visible_to_user(n, user_id, user_perms, is_master):
             continue
-        if n.required_permission:
-            if is_master:
-                out.append(n)
-                continue
-            req_codes = set(n.required_permission.split(','))
-            if not (user_perms & req_codes):
-                continue
         out.append(n)
         if len(out) >= limit:
             break
@@ -2461,20 +2435,7 @@ def admin_app_releases():
             db.session.add(rel)
             db.session.commit()
 
-            try:
-                from push_notifications import broadcast_push_all
-                note_body = f'Version {version} available hai. App kholein — update automatic download hoga.'
-                if notes:
-                    note_body = f'{notes}\n\nApp kholein — update automatic download hoga.'
-                sent = broadcast_push_all(
-                    title=f'Fleet Manager v{version} Update!',
-                    body=note_body,
-                    data={'type': 'app_update', 'version': version},
-                )
-                flash(f'v{version} uploaded + {sent} users ko notification bheji gayi!', 'success')
-            except Exception as e:
-                app.logger.warning('Update notification broadcast failed: %s', e)
-                flash(f'v{version} uploaded! (Notification send mein issue: {e})', 'success')
+            flash(f'v{version} uploaded successfully.', 'success')
 
             return redirect(url_for('admin_app_releases'))
 
@@ -2932,15 +2893,13 @@ def poll_notifications():
     read_ids = {r.notification_id for r in NotificationRead.query.filter_by(user_id=uid).all()}
     all_n = Notification.query.order_by(Notification.created_at.desc()).limit(50).all()
 
+    from notification_service import notification_visible_to_user
     result = []
     for n in all_n:
-        if n.id in read_ids or _is_parking_full_notification(n):
+        if n.id in read_ids:
             continue
-        if n.required_permission:
-            if not is_master:
-                req_codes = set(n.required_permission.split(','))
-                if not (user_perms & req_codes):
-                    continue
+        if not notification_visible_to_user(n, uid, user_perms, is_master):
+            continue
         result.append({
             'id': n.id,
             'title': n.title,
@@ -3223,81 +3182,6 @@ def dashboard():
         except Exception:
             notifications = []
 
-    # Optional: seed expiry/attendance notifications only when no unread (and we have drivers)
-    # Do not add any "Parking full" notification (user requested: parking full ki notification na ho).
-    if _can('notification_list'):
-        try:
-            if not notifications and total_drivers and user_id:
-                today = pk_date()
-                expiring_count = 0
-                for d in Driver.query.filter(Driver.status == 'Active').all():
-                    if (d.license_expiry_date and d.license_expiry_date < today) or (d.cnic_expiry_date and d.cnic_expiry_date < today):
-                        expiring_count += 1
-                if expiring_count > 0:
-                    _exp_title = 'Document expiry'
-                    _exp_msg = f'{expiring_count} driver(s) have license or CNIC already expired (current expiry).'
-                    _exp_link = url_for('report_expiry', days=0)
-                    n = Notification(
-                        title=_exp_title,
-                        message=_exp_msg,
-                        link=_exp_link,
-                        link_text='View expiry report',
-                        notification_type='warning',
-                        created_by_user_id=None,
-                        required_permission='report_expiry,reports,dashboard_card_doc_health,master,drivers_list'
-                    )
-                    db.session.add(n)
-                    db.session.commit()
-                    try:
-                        from push_notifications import send_push_to_permitted
-                        send_push_to_permitted(
-                            ['report_expiry', 'reports', 'dashboard_card_doc_health', 'master', 'drivers_list'],
-                            _exp_title, _exp_msg, link=_exp_link)
-                    except Exception:
-                        pass
-                    notifications = _unread_notifications_for_user(user_id, 20)
-
-                from datetime import timedelta
-                _today2 = pk_date()
-                start = _today2 - timedelta(days=7)
-                _active_list = Driver.query.filter(Driver.status == 'Active').all()
-                missing_count = 0
-                for d in _active_list:
-                    has_recent = DriverAttendance.query.filter(
-                        DriverAttendance.driver_id == d.id,
-                        DriverAttendance.attendance_date >= start
-                    ).first()
-                    if not has_recent:
-                        missing_count += 1
-                if missing_count > 0:
-                    _att_title = 'Attendance missing'
-                    _att_msg = f'{missing_count} active driver(s) have no attendance in the last 7 days.'
-                    _att_link = url_for('driver_attendance_list')
-                    n3 = Notification(
-                        title=_att_title,
-                        message=_att_msg,
-                        link=_att_link,
-                        link_text='View attendance',
-                        notification_type='info',
-                        created_by_user_id=None,
-                        required_permission='driver_attendance,driver_attendance_list,driver_attendance_checkin'
-                    )
-                    db.session.add(n3)
-                    db.session.commit()
-                    try:
-                        from push_notifications import send_push_to_permitted
-                        send_push_to_permitted(
-                            ['driver_attendance', 'driver_attendance_list', 'driver_attendance_checkin'],
-                            _att_title, _att_msg, link=_att_link)
-                    except Exception:
-                        pass
-                    notifications = _unread_notifications_for_user(user_id, 20)
-        except Exception:
-            try:
-                db.session.rollback()
-            except Exception:
-                pass
-
     # Critical health alert from cache (master only, no extra API calls)
     health_alert = None
     if session.get('is_master') and _health_cache.get('data') and _health_cache['data'].get('any_critical'):
@@ -3365,15 +3249,11 @@ def notification_list():
         read_ids = {r.notification_id for r in NotificationRead.query.filter_by(user_id=user_id).all()}
     all_n = Notification.query.order_by(Notification.created_at.desc()).limit(200).all()
 
+    from notification_service import notification_visible_to_user
     filtered = []
     for n in all_n:
-        if _is_parking_full_notification(n):
+        if not notification_visible_to_user(n, user_id, user_perms, is_master):
             continue
-        if n.required_permission:
-            if not is_master:
-                req_codes = set(n.required_permission.split(','))
-                if not (user_perms & req_codes):
-                    continue
         filtered.append(n)
         if len(filtered) >= 100:
             break
@@ -3390,25 +3270,11 @@ def notification_add():
     """Any logged-in user can create a notification (broadcast to all users)."""
     form = NotificationForm()
     if form.validate_on_submit():
-        _n_title = form.title.data.strip()
-        _n_msg = (form.message.data or '').strip() or None
-        _n_link = (form.link.data or '').strip() or None
-        n = Notification(
-            title=_n_title,
-            message=_n_msg,
-            link=_n_link,
-            link_text=(form.link_text.data or '').strip() or None,
-            notification_type=form.notification_type.data or 'info',
-            created_by_user_id=session.get('user_id')
+        flash(
+            'Manual notification create is temporarily disabled. '
+            'Attendance (GPS+Camera) and Task Report save alerts are sent automatically.',
+            'info',
         )
-        db.session.add(n)
-        db.session.commit()
-        try:
-            from push_notifications import broadcast_push_all
-            sent = broadcast_push_all(_n_title, _n_msg or '', link=_n_link)
-            flash(f'Notification sent to all users. ({sent} devices ko push bheji)', 'success')
-        except Exception:
-            flash('Notification sent to all users.', 'success')
         return redirect(url_for('notification_list'))
     return render_template('notification_form.html', form=form)
 
@@ -19070,6 +18936,12 @@ def api_attendance_gps_checkin_submit():
         )
         db.session.add(rec)
         db.session.commit()
+        try:
+            from notification_service import notify_gps_checkin
+            _v = Vehicle.query.get(_ci_vehicle_id) if _ci_vehicle_id else None
+            notify_gps_checkin(driver, photo_path, vehicle=_v)
+        except Exception:
+            pass
         return jsonify({
             'ok': True,
             'message': 'Check-in upload ho gaya.',
@@ -19132,6 +19004,12 @@ def api_attendance_gps_checkout_submit():
         if not existing.remarks or 'GPS' not in (existing.remarks or ''):
             existing.remarks = (existing.remarks or '').rstrip() + ' | Check-out GPS+Cam'
         db.session.commit()
+        try:
+            from notification_service import notify_gps_checkout
+            _v = Vehicle.query.get(_co_vehicle_id) if _co_vehicle_id else None
+            notify_gps_checkout(driver, existing.check_out_photo_path, vehicle=_v)
+        except Exception:
+            pass
         return jsonify({
             'ok': True,
             'message': 'Check-out upload ho gaya.',
@@ -19291,12 +19169,9 @@ def driver_attendance_checkin():
         try:
             db.session.commit()
             try:
-                _att_cfg = AttendanceSettings.query.first()
-                if _att_cfg and _att_cfg.notify_on_attendance_mark:
-                    from push_notifications import notify_driver
-                    notify_driver(driver, 'Check-in Recorded',
-                                  f'{driver.name}, your attendance check-in has been recorded at {pk_now().strftime("%I:%M %p")}.',
-                                  link=url_for('driver_attendance_list', date=today.strftime('%d-%m-%Y'), _external=True))
+                from notification_service import notify_gps_checkin
+                _v = Vehicle.query.get(_ci_vehicle_id) if _ci_vehicle_id else None
+                notify_gps_checkin(driver, photo_path, vehicle=_v)
             except Exception:
                 pass
             flash('Attendance marked successfully. Check-in recorded with photo.', 'success')
@@ -19468,12 +19343,9 @@ def driver_attendance_checkout():
         try:
             db.session.commit()
             try:
-                _att_cfg = AttendanceSettings.query.first()
-                if _att_cfg and _att_cfg.notify_on_attendance_mark:
-                    from push_notifications import notify_driver
-                    notify_driver(driver, 'Check-out Recorded',
-                                  f'{driver.name}, your check-out has been recorded at {pk_now().strftime("%I:%M %p")}.',
-                                  link=url_for('driver_attendance_list', date=today.strftime('%d-%m-%Y'), _external=True))
+                from notification_service import notify_gps_checkout
+                _v = Vehicle.query.get(_co_vehicle_id) if _co_vehicle_id else None
+                notify_gps_checkout(driver, photo_path or existing.check_out_photo_path, vehicle=_v)
             except Exception:
                 pass
             flash('Check-out recorded successfully with photo.', 'success')
@@ -20218,28 +20090,10 @@ def leave_request_review(req_id):
             marked += 1
             cur_d += timedelta(days=1)
         db.session.commit()
-        try:
-            _att_cfg = AttendanceSettings.query.first()
-            if _att_cfg and _att_cfg.notify_on_attendance_mark:
-                from push_notifications import notify_driver
-                notify_driver(lr.driver, 'Leave Approved',
-                              f'Your {lr.leave_type} request ({lr.from_date.strftime("%d-%m-%Y")} to {lr.to_date.strftime("%d-%m-%Y")}) has been approved.',
-                              link=url_for('leave_request_list', _external=True))
-        except Exception:
-            pass
         flash(f'Leave request approved. {marked} din ka {lr.leave_type} mark kar diya.', 'success')
     else:
         lr.status = 'Rejected'
         db.session.commit()
-        try:
-            _att_cfg = AttendanceSettings.query.first()
-            if _att_cfg and _att_cfg.notify_on_attendance_mark:
-                from push_notifications import notify_driver
-                notify_driver(lr.driver, 'Leave Rejected',
-                              f'Your {lr.leave_type} request ({lr.from_date.strftime("%d-%m-%Y")} to {lr.to_date.strftime("%d-%m-%Y")}) has been rejected.' + (f' Reason: {review_remarks}' if review_remarks else ''),
-                              link=url_for('leave_request_list', _external=True))
-        except Exception:
-            pass
         flash('Leave request rejected.', 'info')
 
     return redirect(url_for('leave_request_list'))
@@ -21139,6 +20993,12 @@ def task_report_new():
                 ))
         try:
             db.session.commit()
+            try:
+                from notification_service import notify_task_report_saved
+                for v, existing, close_reading, tasks_count, user_start in to_save:
+                    notify_task_report_saved(v, task_date)
+            except Exception:
+                pass
             flash('Task entries saved successfully.', 'success')
             return redirect(url_for(
                 'task_report_new',
@@ -32006,7 +31866,8 @@ def _sh_after_request(response):
 
 
 def _maybe_send_health_alert(data):
-    """Create in-app notification when storage is critical (once per server restart)."""
+    """Legacy health notifications disabled (notifications v2)."""
+    return
     try:
         if data.get('db_critical') and not _health_alert_sent['db']:
             _health_alert_sent['db'] = True

@@ -1162,8 +1162,10 @@ class Notification(db.Model):
     created_at = db.Column(db.DateTime, default=pk_now)
     created_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='SET NULL'), nullable=True)
     required_permission = db.Column(db.String(500), nullable=True)
+    target_user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=True, index=True)
 
     created_by = db.relationship('User', backref='created_notifications', foreign_keys=[created_by_user_id], lazy=True)
+    target_user = db.relationship('User', foreign_keys=[target_user_id], lazy=True)
 
     def __repr__(self):
         return f'<Notification {self.title}>'

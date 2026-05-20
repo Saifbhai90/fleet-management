@@ -138,11 +138,10 @@ def inject_notification_badge():
         if cached and (_time.time() - cached[1]) < 60:
             return dict(unread_notification_count=cached[0])
         subq = db.session.query(NotificationRead.notification_id).filter(NotificationRead.user_id == user_id)
-        parking_full = and_(
-            Notification.title.ilike('%parking%'),
-            or_(Notification.title.ilike('%full%'), db.func.coalesce(Notification.message, '').ilike('%full%'))
-        )
-        count = Notification.query.filter(~Notification.id.in_(subq)).filter(~parking_full).count()
+        count = Notification.query.filter(
+            Notification.target_user_id == user_id,
+            ~Notification.id.in_(subq),
+        ).count()
         _notif_cache[cache_key] = (count, _time.time())
     except Exception as e:
         app.logger.warning('Notification badge error: %s', e)
@@ -338,6 +337,12 @@ if _run_startup_tasks:
                         conn.execute(db.text("ALTER TABLE notification ADD COLUMN created_by_user_id INTEGER REFERENCES user(id)"))
                         conn.commit()
                         print("Added notification.created_by_user_id.")
+                    r2 = conn.execute(db.text("PRAGMA table_info(notification)"))
+                    cols2 = [row[1] for row in r2]
+                    if 'target_user_id' not in cols2:
+                        conn.execute(db.text("ALTER TABLE notification ADD COLUMN target_user_id INTEGER REFERENCES user(id)"))
+                        conn.commit()
+                        print("Added notification.target_user_id.")
                 with db.engine.connect() as conn:
                     conn.execute(db.text("""
                         CREATE TABLE IF NOT EXISTS notification_read (
@@ -417,6 +422,12 @@ if _run_startup_tasks:
             print("Auth seed done.")
         except Exception as e:
             print("Auth seed skip or error:", e)
+        try:
+            from notification_service import purge_legacy_notifications_once
+            if purge_legacy_notifications_once():
+                print('Notifications v2: legacy inbox cleared.')
+        except Exception as e:
+            print('Notifications v2 init skip or error:', e)
         # Seed Chart of Accounts default heads + auto-create accounts for existing entities
         try:
             from routes_finance import seed_chart_of_accounts
