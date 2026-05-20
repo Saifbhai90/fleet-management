@@ -4196,10 +4196,11 @@
         }
         return h * 60 + m;
     };
-    /** DD-MM-YYYY + hh:mm:ss AM/PM in Asia/Karachi for GPS+Camera photo overlay (not UTC). */
+    /** DD-MM-YYYY + hh:mm:ss AM/PM + weekday in Asia/Karachi for GPS+Camera photo overlay (not UTC). */
     window.pktOverlayDateTimeStrings = function(d) {
         var parts = new Intl.DateTimeFormat('en-US', {
             timeZone: 'Asia/Karachi',
+            weekday: 'short',
             day: '2-digit',
             month: '2-digit',
             year: 'numeric',
@@ -4214,67 +4215,103 @@
             if (parts[i].type !== 'literal') map[parts[i].type] = parts[i].value;
         }
         var ap = (map.dayPeriod || '').toUpperCase();
+        var dateStr = map.day + '-' + map.month + '-' + map.year;
+        var timeStr = map.hour + ':' + map.minute + ':' + map.second + ' ' + ap;
         return {
-            dateStr: map.day + '-' + map.month + '-' + map.year,
-            timeStr: map.hour + ':' + map.minute + ':' + map.second + ' ' + ap
+            dateStr: dateStr,
+            timeStr: timeStr,
+            weekdayShort: map.weekday || '',
+            dateTimeDisplay: (map.weekday ? map.weekday + ', ' : '') + dateStr + ' ' + timeStr + ' PKT'
         };
     };
 
-    /** Bottom-centre, high-contrast GPS stamp for captured photos (same tab readability as attendance reference). opts.sizeScale enlarges stamp (e.g. 2.5 for odometer photos). */
+    function pktCanvasRoundRect(ctx, x, y, rw, rh, radius) {
+        var r = Math.max(0, Math.min(radius, rw / 2, rh / 2));
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.arcTo(x + rw, y, x + rw, y + rh, r);
+        ctx.arcTo(x + rw, y + rh, x, y + rh, r);
+        ctx.arcTo(x, y + rh, x, y, r);
+        ctx.arcTo(x, y, x + rw, y, r);
+        ctx.closePath();
+    }
+
+    /** Bottom-centre GPS stamp for captured photos. opts: line1Prefix, lat, lng, accuracyMeters, sizeScale. */
     window.pktDrawReadableGpsStamp = function(ctx, w, h, opts) {
         opts = opts || {};
         var sizeScale = (opts.sizeScale != null && Number(opts.sizeScale) > 0) ? Number(opts.sizeScale) : 1;
         var prefix = (opts.line1Prefix != null && opts.line1Prefix !== '') ? String(opts.line1Prefix) : 'GPS+Cam';
         var lat = opts.lat;
         var lng = opts.lng;
+        var accuracyM = opts.accuracyMeters;
         var now = new Date(Date.now() + (typeof _pktOffset !== 'undefined' ? _pktOffset : 0));
         var _od = (typeof pktOverlayDateTimeStrings === 'function')
             ? pktOverlayDateTimeStrings(now)
-            : { dateStr: '--', timeStr: '--' };
-        var line1 = prefix + ' | ' + _od.dateStr + ' ' + _od.timeStr;
-        var line2 = (lat != null && lng != null && !isNaN(lat) && !isNaN(lng))
-            ? ('Location: ' + Number(lat).toFixed(6) + ', ' + Number(lng).toFixed(6))
-            : '';
+            : { dateStr: '--', timeStr: '--', dateTimeDisplay: '--' };
+        var stampLines = [];
+        stampLines.push({ text: prefix, scale: 1.0 });
+        stampLines.push({ text: _od.dateTimeDisplay || (_od.dateStr + ' ' + _od.timeStr), scale: 0.88 });
+        if (lat != null && lng != null && !isNaN(lat) && !isNaN(lng)) {
+            stampLines.push({
+                text: 'Lat ' + Number(lat).toFixed(6) + '\u00b0   Long ' + Number(lng).toFixed(6) + '\u00b0',
+                scale: 0.82
+            });
+        }
+        if (accuracyM != null && !isNaN(accuracyM) && isFinite(accuracyM)) {
+            stampLines.push({ text: 'Accuracy: ~' + Math.round(Number(accuracyM)) + ' m', scale: 0.78 });
+        }
         var padBottom = Math.round(Math.min(32, Math.max(16, h * 0.04)) * sizeScale);
         var padSide = Math.round(Math.min(24, Math.max(10, w * 0.028)) * sizeScale);
         var innerPadX = Math.round(20 * sizeScale);
         var innerPadY = Math.round(16 * sizeScale);
-        var lineGap = Math.round(10 * sizeScale);
+        var lineGap = Math.round(8 * sizeScale);
+        var cornerR = Math.round(12 * sizeScale);
         var maxBoxW = Math.max(Math.round(160 * sizeScale), w - 2 * padSide);
         var fontDivisor = 20 / sizeScale;
-        var minFont = Math.round(22 * sizeScale);
-        var maxFont = Math.round(42 * sizeScale);
-        var fontSize = Math.max(minFont, Math.min(maxFont, Math.floor(w / fontDivisor)));
-        function blockWidth(fs) {
-            var l2s = Math.round(fs * 0.9);
-            ctx.font = 'bold ' + fs + 'px system-ui, "Segoe UI", Arial, sans-serif';
-            var tw1 = ctx.measureText(line1).width;
-            var tw2 = 0;
-            if (line2) {
-                ctx.font = 'bold ' + l2s + 'px system-ui, "Segoe UI", Arial, sans-serif';
-                tw2 = ctx.measureText(line2).width;
+        var minFont = Math.round(20 * sizeScale);
+        var maxFont = Math.round(40 * sizeScale);
+        var baseFont = Math.max(minFont, Math.min(maxFont, Math.floor(w / fontDivisor)));
+        var fontFamily = 'system-ui, "Segoe UI", Arial, sans-serif';
+
+        function measureBlock(fs) {
+            var maxW = 0;
+            for (var i = 0; i < stampLines.length; i++) {
+                var fsLine = Math.max(Math.round(14 * sizeScale), Math.round(fs * stampLines[i].scale));
+                ctx.font = 'bold ' + fsLine + 'px ' + fontFamily;
+                maxW = Math.max(maxW, ctx.measureText(stampLines[i].text).width);
             }
-            return Math.max(tw1, tw2) + 2 * innerPadX;
+            return maxW + 2 * innerPadX;
         }
-        var minShrink = Math.round(15 * sizeScale);
-        while (fontSize > minShrink && blockWidth(fontSize) > maxBoxW) fontSize -= 1;
-        var line2Size = Math.round(fontSize * 0.9);
-        var boxW = Math.min(maxBoxW, Math.ceil(blockWidth(fontSize)));
-        var boxH = line2 ? (innerPadY * 2 + fontSize + lineGap + line2Size) : (innerPadY * 2 + fontSize);
+
+        var minShrink = Math.round(14 * sizeScale);
+        while (baseFont > minShrink && measureBlock(baseFont) > maxBoxW) baseFont -= 1;
+
+        var lineHeights = [];
+        var totalH = innerPadY * 2;
+        for (var j = 0; j < stampLines.length; j++) {
+            var fsJ = Math.max(Math.round(14 * sizeScale), Math.round(baseFont * stampLines[j].scale));
+            lineHeights.push(fsJ);
+            totalH += fsJ;
+            if (j < stampLines.length - 1) totalH += lineGap;
+        }
+        var boxW = Math.min(maxBoxW, Math.ceil(measureBlock(baseFont)));
+        var boxH = totalH;
         var x = Math.round((w - boxW) / 2);
         var y = Math.round(h - boxH - padBottom);
         ctx.fillStyle = 'rgba(0,0,0,0.92)';
-        ctx.fillRect(x, y, boxW, boxH);
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = Math.max(2, Math.round(fontSize / 11));
-        ctx.strokeRect(x, y, boxW, boxH);
+        pktCanvasRoundRect(ctx, x, y, boxW, boxH, cornerR);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+        ctx.lineWidth = Math.max(2, Math.round(baseFont / 12));
+        pktCanvasRoundRect(ctx, x, y, boxW, boxH, cornerR);
+        ctx.stroke();
         ctx.fillStyle = '#ffffff';
         ctx.textBaseline = 'top';
-        ctx.font = 'bold ' + fontSize + 'px system-ui, "Segoe UI", Arial, sans-serif';
-        ctx.fillText(line1, x + innerPadX, y + innerPadY);
-        if (line2) {
-            ctx.font = 'bold ' + line2Size + 'px system-ui, "Segoe UI", Arial, sans-serif';
-            ctx.fillText(line2, x + innerPadX, y + innerPadY + fontSize + lineGap);
+        var cy = y + innerPadY;
+        for (var k = 0; k < stampLines.length; k++) {
+            ctx.font = 'bold ' + lineHeights[k] + 'px ' + fontFamily;
+            ctx.fillText(stampLines[k].text, x + innerPadX, cy);
+            cy += lineHeights[k] + (k < stampLines.length - 1 ? lineGap : 0);
         }
     };
 

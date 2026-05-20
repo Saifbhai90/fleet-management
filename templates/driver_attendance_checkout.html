@@ -886,8 +886,9 @@
     ctx.drawImage(cameraVideo, 0, 0);
     var lat = (currentPosition && currentPosition.coords) ? currentPosition.coords.latitude : null;
     var lng = (currentPosition && currentPosition.coords) ? currentPosition.coords.longitude : null;
+    var acc = (currentPosition && currentPosition.coords) ? currentPosition.coords.accuracy : null;
     if (typeof window.pktDrawReadableGpsStamp === 'function') {
-      window.pktDrawReadableGpsStamp(ctx, w, h, { line1Prefix: 'Check-out GPS+Cam', lat: lat, lng: lng });
+      window.pktDrawReadableGpsStamp(ctx, w, h, { line1Prefix: 'Check-out GPS+Cam', lat: lat, lng: lng, accuracyMeters: acc });
     } else {
       var now = new Date(Date.now() + (typeof _pktOffset!=='undefined'?_pktOffset:0));
       var _od = (typeof pktOverlayDateTimeStrings === 'function')

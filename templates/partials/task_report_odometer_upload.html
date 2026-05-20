@@ -37,7 +37,7 @@
   function fetchGpsQuick(cb) {
     if (!navigator.geolocation) return cb(null, null);
     navigator.geolocation.getCurrentPosition(
-      function(p) { cb(p.coords.latitude, p.coords.longitude); },
+      function(p) { cb(p.coords.latitude, p.coords.longitude, p.coords.accuracy); },
       function() { cb(null, null); },
       { enableHighAccuracy: false, timeout: 9000, maximumAge: 120000 }
     );
@@ -45,9 +45,9 @@
 
   var ODOM_STAMP_SCALE = 2.5;
 
-  function drawOdometerOverlay(ctx, w, h, lat, lng) {
+  function drawOdometerOverlay(ctx, w, h, lat, lng, accuracyMeters) {
     if (typeof window.pktDrawReadableGpsStamp === 'function') {
-      window.pktDrawReadableGpsStamp(ctx, w, h, { line1Prefix: 'GPS+Cam', lat: lat, lng: lng, sizeScale: ODOM_STAMP_SCALE });
+      window.pktDrawReadableGpsStamp(ctx, w, h, { line1Prefix: 'Odoo meter GPS+Cam', lat: lat, lng: lng, accuracyMeters: accuracyMeters, sizeScale: ODOM_STAMP_SCALE });
       return;
     }
     var now = new Date(Date.now() + (typeof _pktOffset !== 'undefined' ? _pktOffset : 0));
@@ -85,7 +85,7 @@
     }
   }
 
-  function applyOverlayFromDataUrl(dataUrl, lat, lng) {
+  function applyOverlayFromDataUrl(dataUrl, lat, lng, accuracyMeters) {
     return new Promise(function(resolve, reject) {
       var img = new Image();
       img.onload = function() {
@@ -95,7 +95,7 @@
         c.width = w; c.height = h;
         var ctx = c.getContext('2d');
         ctx.drawImage(img, 0, 0);
-        drawOdometerOverlay(ctx, w, h, lat, lng);
+        drawOdometerOverlay(ctx, w, h, lat, lng, accuracyMeters);
         resolve(jpegDataUrlMaxSide(c, 1600, 0.72));
       };
       img.onerror = function() { reject(new Error('Image load failed')); };
@@ -175,8 +175,8 @@
     });
   }
 
-  function processAnyImageSource(rowId, dataUrl, lat, lng) {
-    return applyOverlayFromDataUrl(dataUrl, lat, lng).then(function(jpeg) { return uploadJpeg(rowId, jpeg); });
+  function processAnyImageSource(rowId, dataUrl, lat, lng, accuracyMeters) {
+    return applyOverlayFromDataUrl(dataUrl, lat, lng, accuracyMeters).then(function(jpeg) { return uploadJpeg(rowId, jpeg); });
   }
 
   var pendingRowId = null;
@@ -195,8 +195,8 @@
     var reader = new FileReader();
     reader.onload = function() {
       var dataUrl = reader.result;
-      fetchGpsQuick(function(lat, lng) {
-        processAnyImageSource(rowId, dataUrl, lat, lng).catch(function(err) {
+      fetchGpsQuick(function(lat, lng, acc) {
+        processAnyImageSource(rowId, dataUrl, lat, lng, acc).catch(function(err) {
           alert(err.message || String(err));
         });
       });
@@ -205,7 +205,7 @@
   });
 
   function nativeRearCamera(rowId) {
-    fetchGpsQuick(function(lat, lng) {
+    fetchGpsQuick(function(lat, lng, acc) {
       var Cam = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Camera;
       if (!Cam || !Cam.getPhoto) {
         openFilePickerForRow(rowId);
@@ -220,7 +220,7 @@
         saveToGallery: false
       }).then(function(photo) {
         var raw = 'data:image/jpeg;base64,' + (photo.base64String || '');
-        return processAnyImageSource(rowId, raw, lat, lng);
+        return processAnyImageSource(rowId, raw, lat, lng, acc);
       }).catch(function(err) {
         alert((err && err.message) ? err.message : 'Camera failed');
       });
@@ -262,8 +262,8 @@
         if (!blob) continue;
         var r = new FileReader();
         r.onload = function() {
-          fetchGpsQuick(function(lat, lng) {
-            processAnyImageSource(rowId, r.result, lat, lng).catch(function(err) {
+          fetchGpsQuick(function(lat, lng, acc) {
+            processAnyImageSource(rowId, r.result, lat, lng, acc).catch(function(err) {
               alert(err.message || String(err));
             });
           });
