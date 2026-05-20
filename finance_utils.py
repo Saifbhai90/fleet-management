@@ -1156,7 +1156,20 @@ def workspace_get_account_ledger(account_id, from_date=None, to_date=None, categ
 
     tx = []
     running = opening_balance
+    period_total_debit = Decimal('0')
+    period_total_credit = Decimal('0')
     if from_date:
+        bf_debit = Decimal('0')
+        bf_credit = Decimal('0')
+        prior_q = db.session.query(WorkspaceJournalEntryLine, WorkspaceJournalEntry).join(WorkspaceJournalEntry).filter(
+            WorkspaceJournalEntryLine.account_id == account_id,
+            WorkspaceJournalEntry.employee_id == account.employee_id,
+            WorkspaceJournalEntry.entry_date < from_date,
+            WorkspaceJournalEntry.is_posted == True,
+        )
+        for line, _je in prior_q.all():
+            bf_debit += Decimal(str(line.debit or 0))
+            bf_credit += Decimal(str(line.credit or 0))
         tx.append({
             'journal_entry_id': None,
             'date': from_date,
@@ -1166,8 +1179,8 @@ def workspace_get_account_ledger(account_id, from_date=None, to_date=None, categ
             'category': '',
             'reference_type': '',
             'reference_id': None,
-            'debit': Decimal('0'),
-            'credit': Decimal('0'),
+            'debit': bf_debit,
+            'credit': bf_credit,
             'balance': running,
             'is_brought_forward': True,
         })
@@ -1176,6 +1189,8 @@ def workspace_get_account_ledger(account_id, from_date=None, to_date=None, categ
         debit = Decimal(str(line.debit or 0))
         credit = Decimal(str(line.credit or 0))
         running += _workspace_account_balance_delta(account, debit, credit)
+        period_total_debit += debit
+        period_total_credit += credit
         tx.append({
             'journal_entry_id': je.id,
             'date': je.entry_date,
@@ -1203,6 +1218,8 @@ def workspace_get_account_ledger(account_id, from_date=None, to_date=None, categ
         'opening_balance': opening_balance,
         'period_opening_date': period_opening_date,
         'category_filter_active': category_active,
+        'period_total_debit': period_total_debit,
+        'period_total_credit': period_total_credit,
         'transactions': tx,
         'closing_balance': closing_balance,
     }
