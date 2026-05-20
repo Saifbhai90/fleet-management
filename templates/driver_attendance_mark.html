@@ -52,7 +52,7 @@
   <div class="card shadow-sm border-0 mb-4 mark-att-filter">
     <div class="card-header">
       <i class="bi bi-funnel me-2"></i>Filters
-      <span class="hint ms-2">— Leave, Late, Half Day, Off ya Absent dene ke liye drivers select karein, status set karein.</span>
+      <span class="hint ms-2">— Status set karein; ghalati par row par <strong>Clear</strong> se entry delete ho jati hai (GPS/Camera check-in par Clear nahi).</span>
     </div>
     <div class="card-body">
       <form method="get" action="{{ url_for('driver_attendance_mark') }}" id="filterForm" class="row g-2 align-items-end">
@@ -170,6 +170,7 @@
                 <th>Check Out (HH:MM)</th>
                 <th>Photo (optional)</th>
                 <th>Remarks</th>
+                <th class="text-center" style="min-width:88px;">Action</th>
               </tr>
             </thead>
             <tbody>
@@ -270,10 +271,26 @@
                     <input type="text" name="driver_{{ driver.id }}_remarks" class="form-control form-control-sm" placeholder="Remarks (optional)" value="{{ rec.remarks if rec and rec.remarks and 'Manual entry' not in rec.remarks else '' }}" style="min-width:120px;">
                   {% endif %}
                 </td>
+                <td class="text-center">
+                  {% if rec and mark_clearable.get(driver.id) %}
+                  <button type="submit" class="btn btn-sm btn-outline-danger" title="Is din ki manual status entry delete karein"
+                    formaction="{{ url_for('driver_attendance_mark_clear') }}"
+                    name="attendance_id" value="{{ rec.id }}"
+                    onclick="return confirm('Is driver ki manual status entry delete ho jayegi. Continue?');">
+                    <i class="bi bi-trash me-1"></i>Clear
+                  </button>
+                  {% elif rec and gps_cam_locked %}
+                  <span class="text-muted small" title="GPS/Camera attendance — yahan se delete nahi">—</span>
+                  {% elif rec %}
+                  <span class="text-muted small" title="GPS/photo maujood — Attendance List use karein">—</span>
+                  {% else %}
+                  <span class="text-muted">—</span>
+                  {% endif %}
+                </td>
               </tr>
               {% else %}
               <tr>
-                <td colspan="10" class="text-center py-5 text-muted">
+                <td colspan="11" class="text-center py-5 text-muted">
                   Filters use karein (Excel ki tarah — koi bhi alag ya mila kar). Project / District / Vehicle No / Shift / Driver. Phir <strong>Load</strong> dabayein. Sirf assigned data dikhega.
                 </td>
               </tr>

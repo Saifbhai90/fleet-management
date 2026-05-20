@@ -772,6 +772,39 @@ def _attendance_list_manual_delete_allowed():
     return user_can_access(session.get('permissions') or [], 'driver_attendance_list_manual_delete')
 
 
+_ATTENDANCE_GPS_CAM_REMARK = 'Ye GPS + Camera se attendance lagi hai.'
+
+
+def _attendance_mark_record_clearable(rec):
+    """Whether Leave/Late/Half-Day/Off/Absent mark can be removed from the mark form."""
+    if not rec:
+        return False
+    if rec.remarks and _ATTENDANCE_GPS_CAM_REMARK in (rec.remarks or ''):
+        return False
+    if rec.check_in_latitude is not None or rec.check_in_longitude is not None:
+        return False
+    if rec.check_in_photo_path:
+        return False
+    if rec.check_out_latitude is not None or rec.check_out_longitude is not None:
+        return False
+    if rec.check_out_photo_path:
+        return False
+    return True
+
+
+def _driver_attendance_mark_redirect_url():
+    """Rebuild mark form URL after clear/save."""
+    date_str = (request.form.get('attendance_date') or request.args.get('date') or '').strip()
+    params = {}
+    if date_str:
+        params['date'] = date_str
+    for k in ('project_id', 'district_id', 'vehicle_id', 'shift', 'search', 'driver_id'):
+        v = request.form.get(k) or request.args.get(k)
+        if v is not None and str(v).strip() not in ('', '0'):
+            params[k] = v
+    return url_for('driver_attendance_mark', **params)
+
+
 def _attendance_list_manual_checkout_allowed():
     """Role permission for Check-out button (missing checkout) from Attendance List."""
     return user_can_access(session.get('permissions') or [], 'driver_attendance_list_manual_checkout')
@@ -17022,6 +17055,57 @@ def driver_attendance_print():
     )
 
 
+@app.route('/driver-attendance/mark/clear', methods=['POST'])
+def driver_attendance_mark_clear():
+    """Remove mistaken manual status (Leave/Late/Half-Day/Off/Absent) from mark form."""
+    from auth_utils import get_user_context
+
+    if not user_can_access(session.get('permissions') or [], 'driver_attendance_mark'):
+        flash('Access denied.', 'danger')
+        return redirect(url_for('driver_attendance_list'))
+
+    uid = session.get('user_id')
+    uc = get_user_context(uid) if uid else {}
+    back_url = _driver_attendance_mark_redirect_url()
+
+    attendance_id = request.form.get('attendance_id', type=int)
+    if not attendance_id:
+        flash('Invalid request.', 'danger')
+        return redirect(back_url)
+
+    rec = DriverAttendance.query.options(joinedload(DriverAttendance.driver)).get(attendance_id)
+    if not rec:
+        flash('Attendance record nahi mila.', 'danger')
+        return redirect(back_url)
+    if not _driver_attendance_record_allowed_for_user(rec, uc):
+        flash('Access denied.', 'danger')
+        return redirect(back_url)
+    if not _attendance_mark_record_clearable(rec):
+        flash(
+            'Ye entry delete nahi ho sakti — GPS/Camera check-in hai ya photo/GPS data maujood hai. '
+            'Attendance List se check-in delete karein, ya status change karein.',
+            'warning',
+        )
+        return redirect(back_url)
+
+    driver_name = rec.driver.name if rec.driver else 'Driver'
+    status_was = rec.status or ''
+    att_date = rec.attendance_date
+    try:
+        _delete_stored_attendance_photo(rec.check_in_photo_path)
+        _delete_stored_attendance_photo(rec.check_out_photo_path)
+        db.session.delete(rec)
+        db.session.commit()
+        flash(
+            f'{driver_name} ki {att_date.strftime("%d-%m-%Y")} wali {status_was} entry hata di gayi.',
+            'success',
+        )
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error: {str(e)}', 'danger')
+    return redirect(back_url)
+
+
 @app.route('/driver-attendance/mark', methods=['GET', 'POST'])
 def driver_attendance_mark():
     form = DriverAttendanceFilterForm()
@@ -17305,7 +17389,28 @@ def driver_attendance_mark():
                     days.append({'date': dt.strftime('%d-%m'), 'status': 'No Record', 'cls': 'none', 'label': '-'})
             driver_history[did] = days
 
-    return render_template('driver_attendance_mark.html', form=form, view_date=view_date, drivers=drivers, existing=existing, project_id=project_id, district_id=district_id, vehicle_id=vehicle_id, shift=shift, driver_id=driver_id, search=search, status_choices=ATTENDANCE_STATUS_CHOICES, vehicles=vehicles, vehicle_drivers=vehicle_drivers, has_single_scope=has_single_scope, disable_project=disable_project, disable_district=disable_district, driver_history=driver_history)
+    mark_clearable = {d.id: _attendance_mark_record_clearable(existing.get(d.id)) for d in drivers}
+    return render_template(
+        'driver_attendance_mark.html',
+        form=form,
+        view_date=view_date,
+        drivers=drivers,
+        existing=existing,
+        project_id=project_id,
+        district_id=district_id,
+        vehicle_id=vehicle_id,
+        shift=shift,
+        driver_id=driver_id,
+        search=search,
+        status_choices=ATTENDANCE_STATUS_CHOICES,
+        vehicles=vehicles,
+        vehicle_drivers=vehicle_drivers,
+        has_single_scope=has_single_scope,
+        disable_project=disable_project,
+        disable_district=disable_district,
+        driver_history=driver_history,
+        mark_clearable=mark_clearable,
+    )
 
 
 @app.route('/driver-attendance/bulk-off', methods=['GET', 'POST'])
