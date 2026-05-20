@@ -512,16 +512,32 @@ document.addEventListener('click', function (e) {
     window._catMultiSelect('statusMultiBtn', 'statusFilterHidden', ATT_STATUS_FILTER_OPTS, ATT_STATUS_FILTER_PRE || []);
   }
 
+  var absentWaPanel = document.getElementById('absentWaPanel');
+  if (absentWaPanel && absentWaPanel.parentNode !== document.body) {
+    document.body.appendChild(absentWaPanel);
+  }
+  function showAbsentWaPanel() {
+    if (!absentWaPanel) return;
+    absentWaPanel.classList.remove('d-none');
+    absentWaPanel.setAttribute('aria-hidden', 'false');
+  }
+  function hideAbsentWaPanel() {
+    if (!absentWaPanel) return;
+    absentWaPanel.classList.add('d-none');
+    absentWaPanel.setAttribute('aria-hidden', 'true');
+  }
   var btnAbsentBulk = document.getElementById('btnAbsentWhatsAppBulk');
   if (btnAbsentBulk && ATT_ABSENT_WA_ROWS && ATT_ABSENT_WA_ROWS.length) {
     btnAbsentBulk.addEventListener('click', function() {
       var txt = buildAbsentBulkWhatsAppText(ATT_ABSENT_WA_ROWS);
       var ta = document.getElementById('absentWaText');
-      var modalEl = document.getElementById('absentWaModal');
       if (ta) ta.value = txt;
-      if (modalEl && window.bootstrap) bootstrap.Modal.getOrCreateInstance(modalEl).show();
+      showAbsentWaPanel();
     });
   }
+  document.querySelectorAll('[data-absent-wa-close]').forEach(function(el) {
+    el.addEventListener('click', hideAbsentWaPanel);
+  });
   var absentWaCopyBtn = document.getElementById('absentWaCopyBtn');
   if (absentWaCopyBtn) {
     absentWaCopyBtn.addEventListener('click', function() {
@@ -1362,22 +1378,36 @@ document.addEventListener('click', function(e) {
 });
 </script>
 
-<div class="modal fade" id="absentWaModal" tabindex="-1" aria-labelledby="absentWaModalTitle">
-  <div class="modal-dialog modal-dialog-centered modal-lg">
-    <div class="modal-content">
-      <div class="modal-header py-2">
-        <h6 class="modal-title" id="absentWaModalTitle"><i class="bi bi-whatsapp me-2 text-success"></i>Absent drivers — WhatsApp</h6>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body">
-        <p class="text-muted small mb-2">Group ya contact par paste karein. Har driver: vehicle, name | duty shift, phir &quot;Check-in not submitted&quot;.</p>
-        <textarea id="absentWaText" class="form-control font-monospace" rows="12" readonly></textarea>
-      </div>
-      <div class="modal-footer py-2">
-        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Close</button>
-        <button type="button" class="btn btn-primary btn-sm" id="absentWaCopyBtn"><i class="bi bi-clipboard me-1"></i>Copy</button>
-      </div>
-    </div>
+<style>
+  #absentWaPanel.absent-wa-float {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 105500;
+    width: min(520px, 92vw);
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    pointer-events: auto;
+  }
+  #absentWaPanel .absent-wa-float-body {
+    overflow: auto;
+    max-height: calc(85vh - 7rem);
+  }
+</style>
+<div id="absentWaPanel" class="absent-wa-float card shadow-lg border-0 d-none" tabindex="-1" aria-labelledby="absentWaPanelTitle" aria-hidden="true" role="dialog">
+  <div class="card-header py-2 d-flex justify-content-between align-items-center bg-white">
+    <h6 class="mb-0" id="absentWaPanelTitle"><i class="bi bi-whatsapp me-2 text-success"></i>Absent drivers — WhatsApp</h6>
+    <button type="button" class="btn-close" data-absent-wa-close aria-label="Close"></button>
+  </div>
+  <div class="card-body py-2 absent-wa-float-body">
+    <p class="text-muted small mb-2">Page scroll / filters chalte rahenge. Group par paste karein — vehicle, name | duty shift, phir &quot;Check-in not submitted&quot;.</p>
+    <textarea id="absentWaText" class="form-control font-monospace" rows="12" readonly></textarea>
+  </div>
+  <div class="card-footer py-2 d-flex justify-content-end gap-2 bg-white">
+    <button type="button" class="btn btn-outline-secondary btn-sm" data-absent-wa-close>Close</button>
+    <button type="button" class="btn btn-primary btn-sm" id="absentWaCopyBtn"><i class="bi bi-clipboard me-1"></i>Copy</button>
   </div>
 </div>
 
