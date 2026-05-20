@@ -4196,9 +4196,9 @@
         }
         return h * 60 + m;
     };
-    /** DD-MM-YYYY + HH:MM:SS in Asia/Karachi for GPS+Camera photo overlay (not UTC). */
+    /** DD-MM-YYYY + hh:mm:ss AM/PM in Asia/Karachi for GPS+Camera photo overlay (not UTC). */
     window.pktOverlayDateTimeStrings = function(d) {
-        var parts = new Intl.DateTimeFormat('en-GB', {
+        var parts = new Intl.DateTimeFormat('en-US', {
             timeZone: 'Asia/Karachi',
             day: '2-digit',
             month: '2-digit',
@@ -4206,15 +4206,17 @@
             hour: '2-digit',
             minute: '2-digit',
             second: '2-digit',
-            hour12: false
+            hour12: true,
+            hourCycle: 'h12'
         }).formatToParts(d);
         var map = {};
         for (var i = 0; i < parts.length; i++) {
             if (parts[i].type !== 'literal') map[parts[i].type] = parts[i].value;
         }
+        var ap = (map.dayPeriod || '').toUpperCase();
         return {
             dateStr: map.day + '-' + map.month + '-' + map.year,
-            timeStr: map.hour + ':' + map.minute + ':' + map.second
+            timeStr: map.hour + ':' + map.minute + ':' + map.second + ' ' + ap
         };
     };
 
