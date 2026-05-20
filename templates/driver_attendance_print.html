@@ -97,10 +97,10 @@
                   <span class="badge {% if rec.status == 'Leave' %}bg-info{% elif rec.status == 'Late' %}bg-warning text-dark{% elif rec.status == 'Half-Day' %}bg-secondary{% elif rec.status == 'Off' %}bg-dark{% else %}bg-secondary{% endif %}">{{ rec.status }}</span>
                 {% else %}-{% endif %}
               </td>
-              <td>{% if rec and rec.check_in %}{{ rec.check_in.strftime('%H:%M') }}{% if rec.check_in_latitude is not none and rec.check_in_longitude is not none %} <small class="text-muted">(GPS)</small>{% endif %}{% else %}-{% endif %}</td>
+              <td>{% if rec and rec.check_in %}{{ rec.check_in|timeampm }}{% if rec.check_in_latitude is not none and rec.check_in_longitude is not none %} <small class="text-muted">(GPS)</small>{% endif %}{% else %}-{% endif %}</td>
               <td class="small">{% if rec and rec.check_in_photo_path %}Yes{% else %}-{% endif %}</td>
               <td class="small">{{ check_in_remarks_text or '-' }}</td>
-              <td>{% if rec and rec.check_out %}{{ rec.check_out.strftime('%H:%M') }}{% if rec.check_out_date and rec.check_out_date != rec.attendance_date %} <small>({{ rec.check_out_date.strftime('%d-%m') }})</small>{% endif %}{% if rec.check_out_latitude is not none and rec.check_out_longitude is not none %} <small class="text-muted">(GPS)</small>{% endif %}{% else %}-{% endif %}</td>
+              <td>{% if rec and rec.check_out %}{{ rec.check_out|timeampm }}{% if rec.check_out_date and rec.check_out_date != rec.attendance_date %} <small>({{ rec.check_out_date.strftime('%d-%m') }})</small>{% endif %}{% if rec.check_out_latitude is not none and rec.check_out_longitude is not none %} <small class="text-muted">(GPS)</small>{% endif %}{% else %}-{% endif %}</td>
               <td class="small">{% if rec and rec.check_out_photo_path %}Yes{% else %}-{% endif %}</td>
               <td class="small">{{ check_out_remarks_text or '-' }}</td>
             </tr>

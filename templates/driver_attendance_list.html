@@ -12,6 +12,7 @@
         {% if to_date %}<input type="hidden" name="to_date" value="{{ to_date }}">{% endif %}
         {% if driver_id %}<input type="hidden" name="driver_id" value="{{ driver_id }}">{% endif %}
         {% if duty_shift_filter %}<input type="hidden" name="duty_shift" value="{{ duty_shift_filter }}">{% endif %}
+        {% if list_filter %}<input type="hidden" name="list_filter" value="{{ list_filter }}">{% endif %}
         {% if pagination %}<input type="hidden" name="page" value="{{ pagination.page }}">{% endif %}
         <input type="hidden" name="per_page" value="{{ per_page }}">
 {% endmacro %}
@@ -40,7 +41,9 @@
     <div class="d-flex align-items-center bg-white rounded-3 shadow-sm px-3 py-2 border-start border-4 border-info"><div><div class="text-muted small">Leave</div><div class="fw-bold fs-5 text-info">{{ att_counts.leave }}</div></div></div>
     <div class="d-flex align-items-center bg-white rounded-3 shadow-sm px-3 py-2 border-start border-4 border-secondary"><div><div class="text-muted small">Half-Day</div><div class="fw-bold fs-5 text-secondary">{{ att_counts.half_day }}</div></div></div>
     <div class="d-flex align-items-center bg-white rounded-3 shadow-sm px-3 py-2 border-start border-4 border-dark"><div><div class="text-muted small">Off</div><div class="fw-bold fs-5">{{ att_counts.off }}</div></div></div>
-    <div class="d-flex align-items-center bg-white rounded-3 shadow-sm px-3 py-2 border-start border-4 border-danger"><div><div class="text-muted small">Missing C/O</div><div class="fw-bold fs-5 text-danger">{{ att_counts.missing_co }}</div></div></div>
+    <div role="button" tabindex="0" id="attCardMissingCo" class="d-flex align-items-center bg-white rounded-3 shadow-sm px-3 py-2 border-start border-4 border-danger{% if list_filter == 'missing_co' %} border border-3 border-danger{% endif %}" style="cursor:pointer;" title="Sirf missing check-out drivers — dubara click se filter hata dein">
+      <div><div class="text-muted small">Missing C/O</div><div class="fw-bold fs-5 text-danger">{{ att_counts.missing_co }}</div></div>
+    </div>
   </div>
   {% endif %}
 
@@ -144,6 +147,7 @@
         {% if vehicle_id %} · Vehicle filter{% endif %}
         {% if shift %} · Shift filter{% endif %}
         {% if duty_shift_filter %} · Duty shift filter{% endif %}
+        {% if list_filter == 'missing_co' %} · <span class="text-warning">Missing check-out only</span>{% endif %}
         {% if search %} · Search{% endif %}
         <small class="opacity-75">(Only marked attendance)</small>
       </span>
@@ -224,7 +228,7 @@
             {% else %}
               {% set check_out_remarks_text = '' %}
             {% endif %}
-            <tr class="{% if missing_checkout %}table-warning{% endif %}" data-duty-shift="{{ duty_shift|e if duty_shift else '' }}">
+            <tr class="{% if missing_checkout %}table-warning{% endif %}" data-duty-shift="{{ duty_shift|e if duty_shift else '' }}" data-missing-checkout="{{ 1 if missing_checkout else 0 }}">
               <td class="ps-4">{{ (pagination.page - 1) * per_page + loop.index if pagination else loop.index }}</td>
               <td>{{ rec.attendance_date.strftime('%d-%m-%Y') if rec else view_date.strftime('%d-%m-%Y') }}</td>
               <td class="text-muted small">{{ driver.driver_id or '-' }}</td>
@@ -257,7 +261,7 @@
               </td>
               <td>
                 {% if rec and rec.check_in %}
-                  {{ rec.check_in.strftime('%H:%M') }}
+                  {{ rec.check_in|timeampm }}
                   {% if rec.check_in_latitude is not none and rec.check_in_longitude is not none %}<br><span class="badge bg-success badge-sm" title="GPS">GPS</span>{% endif %}
                   {% if can_att_list_manual_edit|default(false) or can_att_list_manual_delete|default(false) %}
                   <br>
@@ -300,7 +304,7 @@
                   <span class="text-muted small">—</span>
                   {% endif %}
                 {% elif rec and rec.check_out %}
-                  {{ rec.check_out.strftime('%H:%M') }}{% if rec.check_out_date and rec.check_out_date != rec.attendance_date %}<br><small class="text-muted">({{ rec.check_out_date.strftime('%d-%m') }})</small>{% endif %}
+                  {{ rec.check_out|timeampm }}{% if rec.check_out_date and rec.check_out_date != rec.attendance_date %}<br><small class="text-muted">({{ rec.check_out_date.strftime('%d-%m') }})</small>{% endif %}
                   {% if rec.check_out_latitude is not none and rec.check_out_longitude is not none %}<br><span class="badge bg-success badge-sm" title="GPS">GPS</span>{% endif %}
                   {% if can_att_list_manual_edit|default(false) or can_att_list_manual_delete|default(false) %}
                   <br>
@@ -426,6 +430,27 @@ document.addEventListener('click', function (e) {
   if (filterForm) {
     filterForm.addEventListener('submit', function(e) {
       syncHiddenFromSelects();
+    });
+  }
+
+  var cardMissingCo = document.getElementById('attCardMissingCo');
+  if (cardMissingCo) {
+    function toggleMissingCoFilter() {
+      var u = new URLSearchParams(window.location.search);
+      if (u.get('list_filter') === 'missing_co') {
+        u.delete('list_filter');
+      } else {
+        u.set('list_filter', 'missing_co');
+      }
+      u.set('page', '1');
+      window.location.search = u.toString();
+    }
+    cardMissingCo.addEventListener('click', toggleMissingCoFilter);
+    cardMissingCo.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        toggleMissingCoFilter();
+      }
     });
   }
 

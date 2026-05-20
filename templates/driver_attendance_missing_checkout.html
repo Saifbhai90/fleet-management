@@ -29,10 +29,10 @@
 </style>
 <div class="container-fluid missing-co-page">
   <div class="page-header d-flex flex-wrap justify-content-between align-items-center">
-    <h1 class="page-title mb-0"><i class="bi bi-box-arrow-right me-2 text-warning"></i>Missing Check-outs {% if records %}<span class="badge bg-warning text-dark fs-6 align-middle">{{ records|length }}</span>{% endif %}</h1>
+    <h1 class="page-title mb-0"><i class="bi bi-box-arrow-right me-2 text-warning"></i>Missing Check-outs {% if record_rows %}<span class="badge bg-warning text-dark fs-6 align-middle">{{ record_rows|length }}</span>{% endif %}</h1>
     <div class="d-flex flex-wrap gap-2">
-      {% if records %}
-      <a href="{{ url_for('driver_attendance_missing_checkout') }}?date={{ view_date.strftime('%d-%m-%Y') }}{% if project_id %}&project_id={{ project_id }}{% endif %}{% if district_id %}&district_id={{ district_id }}{% endif %}&export=excel" class="btn btn-success btn-sm" title="Export to Excel"><i class="bi bi-file-earmark-excel me-1"></i>Excel</a>
+      {% if record_rows %}
+      <a href="{{ url_for('driver_attendance_missing_checkout') }}?date={{ view_date.strftime('%d-%m-%Y') }}{% if project_id %}&project_id={{ project_id }}{% endif %}{% if district_id %}&district_id={{ district_id }}{% endif %}{% if duty_shift_filter %}&duty_shift={{ duty_shift_filter|e }}{% endif %}&export=excel" class="btn btn-success btn-sm" title="Export to Excel"><i class="bi bi-file-earmark-excel me-1"></i>Excel</a>
       <button type="button" class="btn btn-outline-secondary btn-sm" title="Print Preview" onclick="printPreview()"><i class="bi bi-printer me-1"></i>Print</button>
       {% endif %}
       <a href="{{ url_for('driver_attendance_list') }}?date={{ view_date.strftime('%d-%m-%Y') }}{% if project_id %}&project_id={{ project_id }}{% endif %}{% if district_id %}&district_id={{ district_id }}{% endif %}{% if search %}&search={{ search|e }}{% endif %}" class="btn btn-outline-primary btn-sm">
@@ -93,6 +93,14 @@
           </select>
         </div>
         <div class="col-6 col-md-4 col-lg-3">
+          <label class="form-label">Duty shift</label>
+          <select name="duty_shift" class="form-select form-select-sm">
+            <option value="" {% if not (duty_shift_filter or '') %}selected{% endif %}>All duty shifts</option>
+            <option value="morning" {% if (duty_shift_filter or '') == 'morning' %}selected{% endif %}>Morning duty</option>
+            <option value="evening" {% if (duty_shift_filter or '') == 'evening' %}selected{% endif %}>Evening duty</option>
+          </select>
+        </div>
+        <div class="col-6 col-md-4 col-lg-3">
           <label class="form-label">Driver</label>
           <select id="driverSelect" class="form-select search-select" data-placeholder="Search driver...">
             <option value="0" {% if not driver_id %}selected{% endif %}>All Drivers</option>
@@ -114,7 +122,7 @@
   <div class="card shadow border-0 mb-4 missing-co-table-card">
     <div class="card-header text-white py-3">
       <span class="header-title">Check-in ho chuka, check-out nahi — {{ view_date|ddmmyyyy }}</span>
-      {% if records %}
+      {% if record_rows %}
       <div class="d-flex align-items-center gap-2 flex-wrap">
         <div class="list-search-wrap flex-grow-1 flex-md-grow-0">
           <input type="text" id="missingCoTableSearch" class="form-control heading-search-input" placeholder="&#128269; Search all columns..." aria-label="Search in list">
@@ -130,7 +138,7 @@
       {% endif %}
     </div>
     <div class="card-body p-0">
-      {% if records %}
+      {% if record_rows %}
       <form method="post" action="{{ url_for('driver_attendance_bulk_manual_checkout') }}" enctype="multipart/form-data" id="bulkManualCheckoutForm" class="mb-0">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="date" value="{{ view_date.strftime('%d-%m-%Y') }}">
@@ -140,13 +148,14 @@
         <input type="hidden" name="shift" value="{{ shift or '' }}">
         <input type="hidden" name="driver_id" value="{{ driver_id or '' }}">
         <input type="hidden" name="search" value="{{ search or '' }}">
+        <input type="hidden" name="duty_shift" value="{{ duty_shift_filter or '' }}">
       {% endif %}
       <div class="table-responsive">
         <table class="table table-hover align-middle mb-0" id="missingCoTable">
           <thead class="table-light">
             <tr>
               <th class="ps-4">#</th>
-              {% if records %}
+              {% if record_rows %}
               <th class="text-center" style="width:44px;" title="Multi check-out ke liye select">
                 <input type="checkbox" id="bulkSelectAll" class="form-check-input" aria-label="Select all on page">
               </th>
@@ -156,17 +165,20 @@
               <th>Vehicle No</th>
               <th>Vehicle Type</th>
               <th>Shift</th>
+              <th>Duty shift</th>
               <th>Driver</th>
               <th>Check-in Time</th>
               <th>Action</th>
             </tr>
           </thead>
           <tbody>
-            {% for rec in records %}
-            {% set d = rec.driver %}
-            <tr>
+            {% for item in record_rows %}
+            {% set rec = item.rec %}
+            {% set d = item.driver %}
+            {% set duty_shift = item.duty_shift %}
+            <tr data-duty-shift="{{ duty_shift|e if duty_shift else '' }}">
               <td class="ps-4">{{ loop.index }}</td>
-              {% if records %}
+              {% if record_rows %}
               <td class="text-center">
                 <input type="checkbox" name="driver_ids" value="{{ d.id }}" class="form-check-input bulk-co-cb" aria-label="Select {{ d.name }}">
               </td>
@@ -176,14 +188,15 @@
               <td class="fw-medium">{{ d.vehicle.vehicle_no if d.vehicle else '-' }}</td>
               <td><span class="badge bg-light text-dark border">{{ d.vehicle.vehicle_type if d.vehicle and d.vehicle.vehicle_type else '-' }}</span></td>
               <td>{{ d.shift or '-' }}</td>
+              <td><span class="text-muted">{{ duty_shift or '-' }}</span></td>
               <td>
                 <span class="fw-medium">{{ d.name }}</span>
                 {% if d.driver_id %}<br><small class="text-muted">{{ d.driver_id }}</small>{% endif %}
               </td>
-              <td><span class="badge bg-success">{{ rec.check_in.strftime('%H:%M') if rec.check_in else '-' }}</span></td>
+              <td><span class="badge bg-success">{% if rec.check_in %}{{ rec.check_in|timeampm }}{% else %}-{% endif %}</span></td>
               <td>
                 <button type="button" class="btn btn-sm btn-outline-danger checkout-confirm-btn" title="Manual check-out karein"
-                  data-url="{{ url_for('driver_attendance_manual_checkout', driver_id=d.id, date=view_date.strftime('%d-%m-%Y'), project_id=project_id or '', district_id=district_id or '', vehicle_id=vehicle_id or '', shift=shift or '', search=search or '') }}"
+                  data-url="{{ url_for('driver_attendance_manual_checkout', driver_id=d.id, date=view_date.strftime('%d-%m-%Y'), project_id=project_id or '', district_id=district_id or '', vehicle_id=vehicle_id or '', shift=shift or '', search=search or '', duty_shift=duty_shift_filter or '') }}"
                   data-name="{{ d.name }}">
                   <i class="bi bi-box-arrow-right me-1"></i>Check-out
                 </button>
@@ -191,8 +204,8 @@
             </tr>
             {% else %}
             <tr>
-              <td colspan="9" class="text-center py-5 text-muted">
-                {% if project_id or district_id or vehicle_id or shift or driver_id or search %}
+              <td colspan="10" class="text-center py-5 text-muted">
+                {% if project_id or district_id or vehicle_id or shift or driver_id or search or duty_shift_filter %}
                 Is date aur filters ke mutabiq koi driver check-in without check-out nahi hai.
                 {% else %}
                 Filters use karein (Date, Project, District, Vehicle, Shift, Driver). Phir <strong>Load</strong> dabayein — sirf wo drivers dikhenge jinhone check-in kiya hai lekin check-out nahi.
@@ -203,7 +216,7 @@
           </tbody>
         </table>
       </div>
-      {% if records %}
+      {% if record_rows %}
       <div class="p-3 border-top bg-light">
         <div class="fw-semibold text-dark mb-2 d-flex flex-wrap align-items-center gap-2">
           <span><i class="bi bi-people-fill me-1 text-primary"></i>Multi check-out</span>
@@ -239,7 +252,7 @@
       </form>
       {% endif %}
     </div>
-    {% if records %}
+    {% if record_rows %}
     <div class="card-footer d-flex justify-content-between align-items-center flex-wrap gap-2">
       <span class="text-muted small" id="missingCount"></span>
       <nav id="missingPagNav"></nav>

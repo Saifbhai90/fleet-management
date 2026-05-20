@@ -72,6 +72,7 @@ from sqlalchemy.exc import OperationalError, IntegrityError, DataError
 from sqlalchemy.orm import joinedload
 from utils import (
     generate_csv_response, parse_date, generate_excel_template, format_cnic, format_phone, format_date_ddmmyyyy,
+    format_time_ampm,
     pk_now, pk_date, pk_time,
     make_driver_profile_share_token, load_driver_profile_share_token,
 )
@@ -703,6 +704,14 @@ def _filter_attendance_rows_by_duty_shift(flat_rows, filt):
     return [r for r in flat_rows if _duty_shift_passes_filter(r.get('duty_shift'), filt)]
 
 
+def _parse_duty_shift_filter_request():
+    """Request arg duty_shift: '', 'morning', or 'evening'."""
+    filt = (request.args.get('duty_shift') or '').strip().lower()
+    if filt not in ('', 'morning', 'evening'):
+        return ''
+    return filt
+
+
 def _driver_attendance_record_allowed_for_user(rec, uc):
     """Scope check for a DriverAttendance row (same idea as Attendance List)."""
     if not rec or not rec.driver:
@@ -768,7 +777,7 @@ def _delete_stored_attendance_photo(path):
 
 def _driver_attendance_list_redirect_params_from_form():
     """Rebuild Attendance List query args from POST hidden fields (filter bar state)."""
-    keys = ('project_id', 'district_id', 'vehicle_id', 'shift', 'search', 'from_date', 'to_date', 'driver_id', 'duty_shift', 'page', 'per_page')
+    keys = ('project_id', 'district_id', 'vehicle_id', 'shift', 'search', 'from_date', 'to_date', 'driver_id', 'duty_shift', 'list_filter', 'page', 'per_page')
     params = {}
     for k in keys:
         v = request.form.get(k)
@@ -16304,9 +16313,10 @@ def driver_attendance_list():
     driver_id = _int_arg('driver_id')
     shift = (request.args.get('shift') or '').strip()
     search = (request.args.get('search') or '').strip()
-    duty_shift_filter = (request.args.get('duty_shift') or '').strip().lower()
-    if duty_shift_filter not in ('', 'morning', 'evening'):
-        duty_shift_filter = ''
+    duty_shift_filter = _parse_duty_shift_filter_request()
+    list_filter = (request.args.get('list_filter') or '').strip().lower()
+    if list_filter not in ('', 'missing_co'):
+        list_filter = ''
     # From / To date range (strings in dd-mm-yyyy)
     from_date_str = (request.args.get('from_date') or '').strip()
     to_date_str = (request.args.get('to_date') or '').strip()
@@ -16428,6 +16438,11 @@ def driver_attendance_list():
     )
     if duty_shift_filter:
         attendance_rows_full = _filter_attendance_rows_by_duty_shift(attendance_rows_full, duty_shift_filter)
+    if list_filter == 'missing_co':
+        attendance_rows_full = [
+            r for r in attendance_rows_full
+            if r.get('rec') and r['rec'].check_in and not r['rec'].check_out
+        ]
 
     att_counts = {'present': 0, 'late': 0, 'leave': 0, 'half_day': 0, 'off': 0, 'absent': 0, 'missing_co': 0}
     for row in attendance_rows_full:
@@ -16481,6 +16496,7 @@ def driver_attendance_list():
         attendance_list_show_all=attendance_list_show_all,
         att_counts=att_counts,
         duty_shift_filter=duty_shift_filter,
+        list_filter=list_filter,
         can_att_list_manual_checkout=can_att_list_manual_checkout,
         can_att_list_manual_edit=can_att_list_manual_edit,
         can_att_list_manual_delete=can_att_list_manual_delete,
@@ -16863,11 +16879,11 @@ def driver_attendance_export():
             d.shift or '-',
             duty,
             rec.status if rec else '-',
-            rec.check_in.strftime('%H:%M') if rec and rec.check_in else '-',
+            format_time_ampm(rec.check_in) if rec and rec.check_in else '-',
             'Yes' if rec and rec.check_in_photo_path else '-',
             _attendance_check_in_remarks(rec) or '-',
             (
-                rec.check_out.strftime('%H:%M')
+                format_time_ampm(rec.check_out)
                 + (
                     ' (' + rec.check_out_date.strftime('%d-%m-%Y') + ')'
                     if rec.check_out_date and rec.check_out_date != rec.attendance_date
@@ -17521,6 +17537,7 @@ def driver_attendance_pending():
     shift = (request.args.get('shift') or '').strip()
     driver_id = request.args.get('driver_id', type=int) or None
     search = (request.args.get('search') or '').strip()
+    duty_shift_filter = _parse_duty_shift_filter_request()
     if project_id == 0: project_id = None
     if district_id == 0: district_id = None
     if vehicle_id == 0: vehicle_id = None
@@ -17602,11 +17619,19 @@ def driver_attendance_pending():
         drivers_query = drivers_query.filter(Driver.id == driver_id)
     all_filtered_drivers = drivers_query.order_by(Driver.name).all()
     checked_in_vehicle_count = len(_get_checked_in_vehicle_ids(view_date))
-    drivers = [d for d in all_filtered_drivers if not _driver_excluded_from_missing_checkin_list(d, view_date)]
+    pending_rows = []
+    for d in all_filtered_drivers:
+        if _driver_excluded_from_missing_checkin_list(d, view_date):
+            continue
+        duty = _duty_shift_label(d, d.vehicle, 1, None)
+        pending_rows.append({'driver': d, 'duty_shift': duty})
+    if duty_shift_filter:
+        pending_rows = [r for r in pending_rows if _duty_shift_passes_filter(r.get('duty_shift'), duty_shift_filter)]
     if (request.args.get('export') or '').strip().lower() == 'excel':
-        headers = ['#', 'Project', 'District', 'Vehicle No', 'Vehicle Type', 'Shift', 'Driver', 'Driver ID']
+        headers = ['#', 'Project', 'District', 'Vehicle No', 'Vehicle Type', 'Shift', 'Duty shift', 'Driver', 'Driver ID']
         rows = []
-        for i, d in enumerate(drivers, start=1):
+        for i, item in enumerate(pending_rows, start=1):
+            d = item['driver']
             rows.append([
                 i,
                 d.project.name if d.project else '',
@@ -17614,12 +17639,32 @@ def driver_attendance_pending():
                 d.vehicle.vehicle_no if d.vehicle else '',
                 (d.vehicle.vehicle_type if d.vehicle and d.vehicle.vehicle_type else '') or '',
                 d.shift or '',
+                item.get('duty_shift') or '-',
                 d.name,
                 d.driver_id or '',
             ])
         fn = f'missing_checkin_{view_date.strftime("%Y%m%d")}.xlsx'
         return generate_excel_template(headers, rows, required_columns=[], filename=fn)
-    return render_template('driver_attendance_pending.html', form=form, view_date=view_date, drivers=drivers, project_id=project_id, district_id=district_id, vehicle_id=vehicle_id, shift=shift, driver_id=driver_id, search=search, vehicles=vehicles, vehicle_drivers=vehicle_drivers, disable_project=disable_project, disable_district=disable_district, disable_vehicle=disable_vehicle, disable_shift=disable_shift, checked_in_vehicle_count=checked_in_vehicle_count)
+    return render_template(
+        'driver_attendance_pending.html',
+        form=form,
+        view_date=view_date,
+        pending_rows=pending_rows,
+        project_id=project_id,
+        district_id=district_id,
+        vehicle_id=vehicle_id,
+        shift=shift,
+        driver_id=driver_id,
+        search=search,
+        duty_shift_filter=duty_shift_filter,
+        vehicles=vehicles,
+        vehicle_drivers=vehicle_drivers,
+        disable_project=disable_project,
+        disable_district=disable_district,
+        disable_vehicle=disable_vehicle,
+        disable_shift=disable_shift,
+        checked_in_vehicle_count=checked_in_vehicle_count,
+    )
 
 
 def _missing_checkout_records(view_date, project_id, district_id, vehicle_id, shift, driver_id, search, user_context):
@@ -17687,6 +17732,7 @@ def driver_attendance_missing_checkout():
     shift = (request.args.get('shift') or '').strip()
     driver_id = request.args.get('driver_id', type=int) or None
     search = (request.args.get('search') or '').strip()
+    duty_shift_filter = _parse_duty_shift_filter_request()
     if project_id == 0: project_id = None
     if district_id == 0: district_id = None
     if vehicle_id == 0: vehicle_id = None
@@ -17766,12 +17812,20 @@ def driver_attendance_missing_checkout():
     records = _missing_checkout_records(
         view_date, project_id, district_id, vehicle_id, shift, driver_id, search, user_context
     )
+    record_rows = []
+    for rec in records:
+        d = rec.driver
+        duty = _duty_shift_label(d, d.vehicle, getattr(rec, 'attendance_segment', 1), rec)
+        record_rows.append({'rec': rec, 'driver': d, 'duty_shift': duty})
+    if duty_shift_filter:
+        record_rows = [r for r in record_rows if _duty_shift_passes_filter(r.get('duty_shift'), duty_shift_filter)]
 
     if (request.args.get('export') or '').strip().lower() == 'excel':
-        headers = ['#', 'Project', 'District', 'Vehicle No', 'Vehicle Type', 'Shift', 'Driver', 'Driver ID', 'Check-in Time']
+        headers = ['#', 'Project', 'District', 'Vehicle No', 'Vehicle Type', 'Shift', 'Duty shift', 'Driver', 'Driver ID', 'Check-in Time']
         rows = []
-        for i, rec in enumerate(records, start=1):
-            d = rec.driver
+        for i, item in enumerate(record_rows, start=1):
+            rec = item['rec']
+            d = item['driver']
             rows.append([
                 i,
                 rec.project.name if rec.project else (d.project.name if d.project else ''),
@@ -17779,9 +17833,10 @@ def driver_attendance_missing_checkout():
                 d.vehicle.vehicle_no if d.vehicle else '',
                 (d.vehicle.vehicle_type if d.vehicle and d.vehicle.vehicle_type else '') or '',
                 d.shift or '',
+                item.get('duty_shift') or '-',
                 d.name,
                 d.driver_id or '',
-                rec.check_in.strftime('%H:%M') if rec.check_in else '',
+                format_time_ampm(rec.check_in) if rec.check_in else '',
             ])
         fn = f'missing_checkout_{view_date.strftime("%Y%m%d")}.xlsx'
         return generate_excel_template(headers, rows, required_columns=[], filename=fn)
@@ -17790,13 +17845,14 @@ def driver_attendance_missing_checkout():
         'driver_attendance_missing_checkout.html',
         form=form,
         view_date=view_date,
-        records=records,
+        record_rows=record_rows,
         project_id=project_id,
         district_id=district_id,
         vehicle_id=vehicle_id,
         shift=shift,
         driver_id=driver_id,
         search=search,
+        duty_shift_filter=duty_shift_filter,
         vehicles=vehicles,
         vehicle_drivers=vehicle_drivers,
         disable_project=disable_project,
@@ -18267,7 +18323,7 @@ def driver_attendance_bulk_manual_checkout():
         driver_filter_id = None
 
     back_params = {}
-    for k in ('project_id', 'district_id', 'vehicle_id', 'shift', 'search'):
+    for k in ('project_id', 'district_id', 'vehicle_id', 'shift', 'search', 'duty_shift'):
         v = request.form.get(k)
         if v is not None and v != '':
             back_params[k] = v

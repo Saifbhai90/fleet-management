@@ -112,8 +112,9 @@ def _set_sqlite_pragma(dbapi_conn, connection_record):
         cursor.close()
 
 # Jinja filters: date dd-mm-yyyy, CNIC, phone
-from utils import format_date_ddmmyyyy, format_cnic, format_phone
+from utils import format_date_ddmmyyyy, format_cnic, format_phone, format_time_ampm
 app.jinja_env.filters['ddmmyyyy'] = format_date_ddmmyyyy
+app.jinja_env.filters['timeampm'] = format_time_ampm
 app.jinja_env.filters['cnic_fmt'] = format_cnic
 app.jinja_env.filters['phone_fmt'] = format_phone
 

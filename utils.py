@@ -31,6 +31,15 @@ def pk_time() -> dt_time:
 
 
 # ---------- Date: dd-mm-yyyy display & parse ----------
+def format_time_ampm(t: Optional[Union[dt_time, datetime]]) -> str:
+    """Format time as hh:mm AM/PM (e.g. 09:30 AM). Returns '' if None."""
+    if t is None:
+        return ''
+    if isinstance(t, datetime):
+        t = t.time()
+    return t.strftime('%I:%M %p').lstrip('0') or t.strftime('%I:%M %p')
+
+
 def format_date_ddmmyyyy(d: Optional[date]) -> str:
     """Format date as dd-mm-yyyy. Returns '' if None."""
     if d is None:
