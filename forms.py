@@ -627,12 +627,22 @@ class EmployeeRejoinForm(FlaskForm):
             raise ValidationError('Rejoin date cannot be in the future.')
 
 
-# Driver Attendance (Leave / Late / Half Day / Off form — Present & Absent removed)
+# Driver Attendance — Mark Attendance & Bulk Status (Present via GPS / manual check-in only)
 ATTENDANCE_STATUS_CHOICES = [
     ('Leave', 'Leave'),
     ('Late', 'Late'),
     ('Half-Day', 'Half-Day'),
     ('Off', 'Off'),
+    ('Absent', 'Absent'),
+]
+
+ATTENDANCE_LIST_STATUS_FILTER_OPTIONS = [
+    ('Present', 'Present'),
+    ('Leave', 'Leave'),
+    ('Late', 'Late'),
+    ('Half-Day', 'Half-Day'),
+    ('Off', 'Off'),
+    ('Absent', 'Absent'),
 ]
 
 

@@ -12,6 +12,7 @@
         {% if to_date %}<input type="hidden" name="to_date" value="{{ to_date }}">{% endif %}
         {% if driver_id %}<input type="hidden" name="driver_id" value="{{ driver_id }}">{% endif %}
         {% if duty_shift_filter %}<input type="hidden" name="duty_shift" value="{{ duty_shift_filter }}">{% endif %}
+        {% if status_filter_selected %}<input type="hidden" name="status_filter" value="{{ status_filter_selected|join(',') }}">{% endif %}
         {% if list_filter %}<input type="hidden" name="list_filter" value="{{ list_filter }}">{% endif %}
         {% if pagination %}<input type="hidden" name="page" value="{{ pagination.page }}">{% endif %}
         <input type="hidden" name="per_page" value="{{ per_page }}">
@@ -22,10 +23,15 @@
     <div class="d-flex flex-wrap gap-2">
       <button type="button" class="btn btn-sm btn-outline-secondary" title="Attendance photos gallery" onclick="openAttendanceImageViewWizard()"><i class="bi bi-images me-1"></i>Image view</button>
       <button type="button" class="btn btn-sm btn-outline-secondary" title="Share Photos" onclick="openSharePhotosWizard()"><i class="bi bi-share me-1"></i>Share</button>
-      <a href="{{ url_for('driver_attendance_export') }}?from_date={{ from_date or view_date.strftime('%d-%m-%Y') }}&to_date={{ to_date or view_date.strftime('%d-%m-%Y') }}{% if project_id %}&project_id={{ project_id }}{% endif %}{% if district_id %}&district_id={{ district_id }}{% endif %}{% if vehicle_id %}&vehicle_id={{ vehicle_id }}{% endif %}{% if shift %}&shift={{ shift|e }}{% endif %}{% if duty_shift_filter %}&duty_shift={{ duty_shift_filter|e }}{% endif %}{% if search %}&search={{ search|e }}{% endif %}{% if driver_id %}&driver_id={{ driver_id }}{% endif %}" class="btn btn-success btn-sm">
+      {% if absent_whatsapp_rows|length > 0 %}
+      <button type="button" class="btn btn-sm btn-outline-success" id="btnAbsentWhatsAppBulk" title="Absent drivers — WhatsApp message copy / share">
+        <i class="bi bi-whatsapp me-1"></i>Absent ({{ absent_whatsapp_rows|length }})
+      </button>
+      {% endif %}
+      <a href="{{ url_for('driver_attendance_export') }}?from_date={{ from_date or view_date.strftime('%d-%m-%Y') }}&to_date={{ to_date or view_date.strftime('%d-%m-%Y') }}{% if project_id %}&project_id={{ project_id }}{% endif %}{% if district_id %}&district_id={{ district_id }}{% endif %}{% if vehicle_id %}&vehicle_id={{ vehicle_id }}{% endif %}{% if shift %}&shift={{ shift|e }}{% endif %}{% if duty_shift_filter %}&duty_shift={{ duty_shift_filter|e }}{% endif %}{% if status_filter_selected %}&status_filter={{ status_filter_selected|join(',')|urlencode }}{% endif %}{% if list_filter %}&list_filter={{ list_filter|e }}{% endif %}{% if search %}&search={{ search|e }}{% endif %}{% if driver_id %}&driver_id={{ driver_id }}{% endif %}" class="btn btn-success btn-sm">
         <i class="bi bi-file-earmark-excel me-1"></i>Excel
       </a>
-      <a href="{{ url_for('driver_attendance_print') }}?from_date={{ from_date or view_date.strftime('%d-%m-%Y') }}&to_date={{ to_date or view_date.strftime('%d-%m-%Y') }}{% if project_id %}&project_id={{ project_id }}{% endif %}{% if district_id %}&district_id={{ district_id }}{% endif %}{% if vehicle_id %}&vehicle_id={{ vehicle_id }}{% endif %}{% if shift %}&shift={{ shift|e }}{% endif %}{% if duty_shift_filter %}&duty_shift={{ duty_shift_filter|e }}{% endif %}{% if search %}&search={{ search|e }}{% endif %}{% if driver_id %}&driver_id={{ driver_id }}{% endif %}" target="_blank" class="btn btn-outline-primary btn-sm">
+      <a href="{{ url_for('driver_attendance_print') }}?from_date={{ from_date or view_date.strftime('%d-%m-%Y') }}&to_date={{ to_date or view_date.strftime('%d-%m-%Y') }}{% if project_id %}&project_id={{ project_id }}{% endif %}{% if district_id %}&district_id={{ district_id }}{% endif %}{% if vehicle_id %}&vehicle_id={{ vehicle_id }}{% endif %}{% if shift %}&shift={{ shift|e }}{% endif %}{% if duty_shift_filter %}&duty_shift={{ duty_shift_filter|e }}{% endif %}{% if status_filter_selected %}&status_filter={{ status_filter_selected|join(',')|urlencode }}{% endif %}{% if list_filter %}&list_filter={{ list_filter|e }}{% endif %}{% if search %}&search={{ search|e }}{% endif %}{% if driver_id %}&driver_id={{ driver_id }}{% endif %}" target="_blank" class="btn btn-outline-primary btn-sm">
         <i class="bi bi-printer me-1"></i>Print
       </a>
       <a href="{{ url_for('driver_attendance_report') }}" class="btn btn-outline-info btn-sm">
@@ -41,6 +47,7 @@
     <div class="d-flex align-items-center bg-white rounded-3 shadow-sm px-3 py-2 border-start border-4 border-info"><div><div class="text-muted small">Leave</div><div class="fw-bold fs-5 text-info">{{ att_counts.leave }}</div></div></div>
     <div class="d-flex align-items-center bg-white rounded-3 shadow-sm px-3 py-2 border-start border-4 border-secondary"><div><div class="text-muted small">Half-Day</div><div class="fw-bold fs-5 text-secondary">{{ att_counts.half_day }}</div></div></div>
     <div class="d-flex align-items-center bg-white rounded-3 shadow-sm px-3 py-2 border-start border-4 border-dark"><div><div class="text-muted small">Off</div><div class="fw-bold fs-5">{{ att_counts.off }}</div></div></div>
+    <div class="d-flex align-items-center bg-white rounded-3 shadow-sm px-3 py-2 border-start border-4 border-danger"><div><div class="text-muted small">Absent</div><div class="fw-bold fs-5 text-danger">{{ att_counts.absent }}</div></div></div>
     <div role="button" tabindex="0" id="attCardMissingCo" class="d-flex align-items-center bg-white rounded-3 shadow-sm px-3 py-2 border-start border-4 border-danger{% if list_filter == 'missing_co' %} border border-3 border-danger{% endif %}" style="cursor:pointer;" title="Sirf missing check-out drivers — dubara click se filter hata dein">
       <div><div class="text-muted small">Missing C/O</div><div class="fw-bold fs-5 text-danger">{{ att_counts.missing_co }}</div></div>
     </div>
@@ -55,6 +62,8 @@
         <input type="hidden" name="vehicle_id" id="hiddenVehicleId" value="{{ vehicle_id or '0' }}">
         <input type="hidden" name="shift" id="hiddenShift" value="{{ shift or '' }}">
         <input type="hidden" name="driver_id" id="hiddenDriverId" value="{{ driver_id or '0' }}">
+        <input type="hidden" name="status_filter" id="statusFilterHidden" value="{{ status_filter_selected|join(',') if status_filter_selected else '' }}">
+        {% if list_filter %}<input type="hidden" name="list_filter" value="{{ list_filter }}">{% endif %}
 
         <!-- Row 1: Date range -->
         <div class="row g-3 align-items-end mb-2">
@@ -115,6 +124,12 @@
             </select>
           </div>
           <div class="col-md-3 col-lg-2">
+            <label class="form-label">Status</label>
+            <button type="button" class="btn btn-outline-secondary btn-sm w-100 text-start text-truncate" id="statusMultiBtn" title="Present, Leave, Late, Half-Day, Off, Absent — ek ya zyada">
+              {% if status_filter_selected %}{{ status_filter_selected|length }} selected{% else %}All statuses{% endif %}
+            </button>
+          </div>
+          <div class="col-md-3 col-lg-2">
             <label class="form-label">Driver</label>
             <select id="driverSelect" class="form-select search-select" data-placeholder="Search driver...">
               <option value="0" {% if not driver_id %}selected{% endif %}>All Drivers</option>
@@ -147,6 +162,7 @@
         {% if vehicle_id %} · Vehicle filter{% endif %}
         {% if shift %} · Shift filter{% endif %}
         {% if duty_shift_filter %} · Duty shift filter{% endif %}
+        {% if status_filter_selected %} · Status: {{ status_filter_selected|join(', ') }}{% endif %}
         {% if list_filter == 'missing_co' %} · <span class="text-warning">Missing check-out only</span>{% endif %}
         {% if search %} · Search{% endif %}
         <small class="opacity-75">(Only marked attendance)</small>
@@ -228,7 +244,10 @@
             {% else %}
               {% set check_out_remarks_text = '' %}
             {% endif %}
-            <tr class="{% if missing_checkout %}table-warning{% endif %}" data-duty-shift="{{ duty_shift|e if duty_shift else '' }}" data-missing-checkout="{{ 1 if missing_checkout else 0 }}">
+            {% set _veh_no = driver.vehicle.vehicle_no if driver.vehicle else '-' %}
+            {% set _wa_phone = driver.phone1 or '' %}
+            {% set _wa_date = rec.attendance_date.strftime('%d-%m-%Y') if rec and rec.attendance_date else (view_date.strftime('%d-%m-%Y') if view_date else '') %}
+            <tr class="{% if missing_checkout %}table-warning{% endif %}" data-status="{{ rec.status if rec else '' }}" data-vehicle="{{ _veh_no|e }}" data-driver-name="{{ (driver.name or '')|e }}" data-duty-shift="{{ duty_shift|e if duty_shift else '' }}" data-att-date="{{ _wa_date|e }}" data-wa-phone="{{ _wa_phone|e }}" data-missing-checkout="{{ 1 if missing_checkout else 0 }}">
               <td class="ps-4">{{ (pagination.page - 1) * per_page + loop.index if pagination else loop.index }}</td>
               <td>{{ rec.attendance_date.strftime('%d-%m-%Y') if rec else view_date.strftime('%d-%m-%Y') }}</td>
               <td class="text-muted small">{{ driver.driver_id or '-' }}</td>
@@ -254,6 +273,10 @@
                     <span class="badge bg-dark">Off</span>
                   {% else %}
                     <span class="badge bg-secondary">{{ rec.status }}</span>
+                  {% endif %}
+                  {% if rec.status == 'Absent' %}
+                  <a href="#" class="btn btn-sm btn-outline-success ms-1 py-0 px-1 att-absent-wa-btn" title="WhatsApp — absent driver"
+                    onclick="sendAbsentWhatsApp(this.closest('tr')); return false;"><i class="bi bi-whatsapp"></i></a>
                   {% endif %}
                 {% else %}
                   <span class="text-muted">Not marked</span>
@@ -373,6 +396,58 @@
 {% include 'partials/gps_attendance_fullview.html' %}
 
 <script>
+var ATT_ABSENT_WA_ROWS = {{ absent_whatsapp_rows|tojson }};
+var ATT_STATUS_FILTER_OPTS = {{ status_filter_options|tojson }};
+var ATT_STATUS_FILTER_PRE = {{ (status_filter_selected or [])|tojson }};
+
+function attAbsentLine(vehicle, name, dutyShift) {
+  return (vehicle || '-') + '\n' + (name || '') + ' | ' + (dutyShift || '-') + '\nCheck-in not submitted';
+}
+
+function buildAbsentBulkWhatsAppText(rows) {
+  if (!rows || !rows.length) return '';
+  var dates = {};
+  rows.forEach(function(r) { if (r.date) dates[r.date] = true; });
+  var dateKeys = Object.keys(dates);
+  var dateLbl = dateKeys.length === 1 ? dateKeys[0] : (dateKeys.length ? dateKeys.sort().join(' — ') : '');
+  var lines = ['Check-in not submitted' + (dateLbl ? ' — ' + dateLbl : ''), ''];
+  rows.forEach(function(r) {
+    lines.push(attAbsentLine(r.vehicle, r.name, r.duty_shift));
+    lines.push('');
+  });
+  while (lines.length && lines[lines.length - 1] === '') lines.pop();
+  return lines.join('\n');
+}
+
+function sendAbsentWhatsApp(tr) {
+  if (!tr) return;
+  var msg = attAbsentLine(
+    tr.getAttribute('data-vehicle'),
+    tr.getAttribute('data-driver-name'),
+    tr.getAttribute('data-duty-shift')
+  );
+  var dateLbl = tr.getAttribute('data-att-date');
+  if (dateLbl) msg = 'Check-in not submitted — ' + dateLbl + '\n\n' + msg;
+  var phone = (tr.getAttribute('data-wa-phone') || '').replace(/\D/g, '');
+  if (phone.startsWith('0')) phone = '92' + phone.slice(1);
+  else if (phone && !phone.startsWith('92')) phone = '92' + phone;
+  var enc = encodeURIComponent(msg);
+  if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent) && phone) {
+    window.location.href = 'intent://send?phone=' + phone + '&text=' + enc + '#Intent;scheme=whatsapp;package=com.whatsapp;end';
+    setTimeout(function() {
+      window.location.href = 'https://api.whatsapp.com/send?phone=' + phone + '&text=' + enc;
+    }, 400);
+  } else if (phone) {
+    window.open('https://web.whatsapp.com/send?phone=' + phone + '&text=' + enc, '_blank');
+  } else {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(msg).then(function() { alert('Phone number nahi — message copy ho gaya.'); });
+    } else {
+      prompt('Copy message:', msg);
+    }
+  }
+}
+
 function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page',n);window.location.search=u.toString();}
 
 document.addEventListener('click', function (e) {
@@ -430,6 +505,37 @@ document.addEventListener('click', function (e) {
   if (filterForm) {
     filterForm.addEventListener('submit', function(e) {
       syncHiddenFromSelects();
+    });
+  }
+
+  if (window._catMultiSelect && ATT_STATUS_FILTER_OPTS) {
+    window._catMultiSelect('statusMultiBtn', 'statusFilterHidden', ATT_STATUS_FILTER_OPTS, ATT_STATUS_FILTER_PRE || []);
+  }
+
+  var btnAbsentBulk = document.getElementById('btnAbsentWhatsAppBulk');
+  if (btnAbsentBulk && ATT_ABSENT_WA_ROWS && ATT_ABSENT_WA_ROWS.length) {
+    btnAbsentBulk.addEventListener('click', function() {
+      var txt = buildAbsentBulkWhatsAppText(ATT_ABSENT_WA_ROWS);
+      var ta = document.getElementById('absentWaText');
+      var modalEl = document.getElementById('absentWaModal');
+      if (ta) ta.value = txt;
+      if (modalEl && window.bootstrap) bootstrap.Modal.getOrCreateInstance(modalEl).show();
+    });
+  }
+  var absentWaCopyBtn = document.getElementById('absentWaCopyBtn');
+  if (absentWaCopyBtn) {
+    absentWaCopyBtn.addEventListener('click', function() {
+      var ta = document.getElementById('absentWaText');
+      if (!ta || !ta.value) return;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(ta.value).then(function() {
+          absentWaCopyBtn.innerHTML = '<i class="bi bi-check2 me-1"></i>Copied';
+          setTimeout(function() { absentWaCopyBtn.innerHTML = '<i class="bi bi-clipboard me-1"></i>Copy'; }, 2000);
+        });
+      } else {
+        ta.select();
+        document.execCommand('copy');
+      }
     });
   }
 
@@ -1255,6 +1361,25 @@ document.addEventListener('click', function(e) {
   };
 });
 </script>
+
+<div class="modal fade" id="absentWaModal" tabindex="-1" aria-labelledby="absentWaModalTitle">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title" id="absentWaModalTitle"><i class="bi bi-whatsapp me-2 text-success"></i>Absent drivers — WhatsApp</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small mb-2">Group ya contact par paste karein. Har driver: vehicle, name | duty shift, phir &quot;Check-in not submitted&quot;.</p>
+        <textarea id="absentWaText" class="form-control font-monospace" rows="12" readonly></textarea>
+      </div>
+      <div class="modal-footer py-2">
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-primary btn-sm" id="absentWaCopyBtn"><i class="bi bi-clipboard me-1"></i>Copy</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <div class="modal fade" id="attImgWizardStep1" tabindex="-1" aria-labelledby="attImgWizard1Lbl" data-bs-backdrop="static">
   <div class="modal-dialog modal-dialog-centered">

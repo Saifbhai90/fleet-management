@@ -30,6 +30,7 @@ from forms import (
     AssignProjectToDistrictForm, AssignVehicleToDistrictForm, AssignVehicleToParkingForm,
     AssignDriverToVehicleForm, ProjectTransferForm, VehicleTransferForm, EditVehicleTransferForm, DriverTransferForm, DriverJobLeftForm, DriverRejoinForm,
     DriverAttendanceFilterForm, DriverAttendanceReportForm, ATTENDANCE_STATUS_CHOICES,
+    ATTENDANCE_LIST_STATUS_FILTER_OPTIONS,
     TaskReportForm, TaskReportFilterForm, EmergencyTaskUploadForm, VehicleMileageUploadForm, ParkingImportForm, ProductImportForm,
     TaskReportUploadBothForm, RedTaskFilterForm, RedTaskForm, VehicleMoveWithoutTaskFilterForm, VehicleMoveWithoutTaskForm, PenaltyRecordForm, PenaltyRecordFilterForm,
     FuelExpenseFilterForm, FuelExpenseForm,
@@ -712,6 +713,30 @@ def _parse_duty_shift_filter_request():
     return filt
 
 
+def _parse_attendance_status_filter_request():
+    """status_filter query: comma-separated Present,Leave,... (multi-select)."""
+    allowed = {v for v, _ in ATTENDANCE_LIST_STATUS_FILTER_OPTIONS}
+    raw = (request.args.get('status_filter') or '').strip()
+    if not raw:
+        parts = request.args.getlist('status')
+    else:
+        parts = [p.strip() for p in raw.split(',') if p.strip()]
+    seen = set()
+    out = []
+    for p in parts:
+        if p in allowed and p not in seen:
+            seen.add(p)
+            out.append(p)
+    return out
+
+
+def _filter_attendance_rows_by_status(flat_rows, status_filters):
+    if not flat_rows or not status_filters:
+        return flat_rows
+    allowed = {s.strip() for s in status_filters}
+    return [r for r in flat_rows if r.get('rec') and (r['rec'].status or '') in allowed]
+
+
 def _driver_attendance_record_allowed_for_user(rec, uc):
     """Scope check for a DriverAttendance row (same idea as Attendance List)."""
     if not rec or not rec.driver:
@@ -777,7 +802,10 @@ def _delete_stored_attendance_photo(path):
 
 def _driver_attendance_list_redirect_params_from_form():
     """Rebuild Attendance List query args from POST hidden fields (filter bar state)."""
-    keys = ('project_id', 'district_id', 'vehicle_id', 'shift', 'search', 'from_date', 'to_date', 'driver_id', 'duty_shift', 'list_filter', 'page', 'per_page')
+    keys = (
+        'project_id', 'district_id', 'vehicle_id', 'shift', 'search', 'from_date', 'to_date',
+        'driver_id', 'duty_shift', 'status_filter', 'list_filter', 'page', 'per_page',
+    )
     params = {}
     for k in keys:
         v = request.form.get(k)
@@ -16314,6 +16342,7 @@ def driver_attendance_list():
     shift = (request.args.get('shift') or '').strip()
     search = (request.args.get('search') or '').strip()
     duty_shift_filter = _parse_duty_shift_filter_request()
+    status_filter_selected = _parse_attendance_status_filter_request()
     list_filter = (request.args.get('list_filter') or '').strip().lower()
     if list_filter not in ('', 'missing_co'):
         list_filter = ''
@@ -16463,6 +16492,23 @@ def driver_attendance_list():
         if rec.check_in and not rec.check_out:
             att_counts['missing_co'] += 1
 
+    if status_filter_selected:
+        attendance_rows_full = _filter_attendance_rows_by_status(attendance_rows_full, status_filter_selected)
+
+    absent_whatsapp_rows = []
+    for row in attendance_rows_full:
+        rec = row.get('rec')
+        if not rec or (rec.status or '') != 'Absent':
+            continue
+        d = row['driver']
+        absent_whatsapp_rows.append({
+            'vehicle': (d.vehicle.vehicle_no if d.vehicle else '-') or '-',
+            'name': (d.name or '').strip(),
+            'duty_shift': (row.get('duty_shift') or '-').strip() or '-',
+            'phone': (d.phone1 or '').strip(),
+            'date': rec.attendance_date.strftime('%d-%m-%Y') if rec.attendance_date else '',
+        })
+
     page = request.args.get('page', 1, type=int)
     total_att = len(attendance_rows_full)
     per_page = _attendance_list_resolve_per_page(request, total_att)
@@ -16496,6 +16542,9 @@ def driver_attendance_list():
         attendance_list_show_all=attendance_list_show_all,
         att_counts=att_counts,
         duty_shift_filter=duty_shift_filter,
+        status_filter_selected=status_filter_selected,
+        status_filter_options=ATTENDANCE_LIST_STATUS_FILTER_OPTIONS,
+        absent_whatsapp_rows=absent_whatsapp_rows,
         list_filter=list_filter,
         can_att_list_manual_checkout=can_att_list_manual_checkout,
         can_att_list_manual_edit=can_att_list_manual_edit,
@@ -16841,6 +16890,12 @@ def driver_attendance_export():
     )
     if duty_shift_filter:
         flat = _filter_attendance_rows_by_duty_shift(flat, duty_shift_filter)
+    status_filter_selected = _parse_attendance_status_filter_request()
+    list_filter = (request.args.get('list_filter') or '').strip().lower()
+    if list_filter == 'missing_co':
+        flat = [r for r in flat if r.get('rec') and r['rec'].check_in and not r['rec'].check_out]
+    if status_filter_selected:
+        flat = _filter_attendance_rows_by_status(flat, status_filter_selected)
     headers = [
         'S.No',
         'Date',
@@ -16943,6 +16998,15 @@ def driver_attendance_print():
     )
     if duty_shift_filter:
         attendance_rows = _filter_attendance_rows_by_duty_shift(attendance_rows, duty_shift_filter)
+    list_filter = (request.args.get('list_filter') or '').strip().lower()
+    if list_filter == 'missing_co':
+        attendance_rows = [
+            r for r in attendance_rows
+            if r.get('rec') and r['rec'].check_in and not r['rec'].check_out
+        ]
+    status_filter_selected = _parse_attendance_status_filter_request()
+    if status_filter_selected:
+        attendance_rows = _filter_attendance_rows_by_status(attendance_rows, status_filter_selected)
     return render_template(
         'driver_attendance_print.html',
         attendance_rows=attendance_rows,
@@ -17363,7 +17427,8 @@ def driver_attendance_bulk_off():
     # ── Main bulk mark handler (date range + status choice) ──
     if request.method == 'POST' and request.form.get('confirm_bulk_off'):
         bulk_status = request.form.get('bulk_status', 'Off').strip() or 'Off'
-        if bulk_status not in ('Off', 'Leave', 'Half-Day'):
+        _bulk_allowed = {v for v, _ in ATTENDANCE_STATUS_CHOICES}
+        if bulk_status not in _bulk_allowed:
             bulk_status = 'Off'
 
         start_d = from_date_parsed or view_date
@@ -17508,6 +17573,7 @@ def driver_attendance_bulk_off():
         disable_project=disable_project,
         last_bulk_action=last_bulk_action,
         bulk_history=bulk_history,
+        status_choices=ATTENDANCE_STATUS_CHOICES,
     )
 
 
