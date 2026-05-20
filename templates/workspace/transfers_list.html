@@ -52,7 +52,7 @@
         <label class="mb-0" style="font-size:.75rem">entries</label>
       </div>
       <div>
-        <input type="text" class="form-control form-control-sm" placeholder="Search all columns..." style="width:180px;font-size:.75rem;padding:3px 8px;" autocomplete="off" value="{{ search or '' }}" onkeydown="if(event.key==='Enter'){var u=new URLSearchParams(window.location.search);u.set('search',this.value.trim());u.set('page','1');window.location.search=u.toString();}">
+        <input type="text" id="wsTransferHeaderSearch" class="form-control form-control-sm" placeholder="Search all columns..." style="width:200px;font-size:.75rem;padding:3px 8px;" autocomplete="off" value="{{ search or '' }}" title="Driver, vehicle no, account, amount — Enter searches all pages">
       </div>
     </div>
     <div class="card-body p-0">
@@ -80,12 +80,14 @@
           </thead>
           <tbody>
             {% for r in rows %}
-            <tr class="ft-transfer-row">
+            {% set from_lbl = account_display_map.get(r.from_account.id, (r.from_account.code ~ ' - ' ~ r.from_account.name) if r.from_account else '-') %}
+            {% set to_lbl = account_display_map.get(r.to_account.id, (r.to_account.code ~ ' - ' ~ r.to_account.name) if r.to_account else '-') %}
+            <tr class="ft-transfer-row" data-ft-search-text="{{ (r.transfer_number ~ ' ' ~ (r.transfer_date|ddmmyyyy) ~ ' ' ~ from_lbl ~ ' ' ~ to_lbl ~ ' ' ~ '{:,.2f}'.format((r.amount or 0)|float) ~ ' ' ~ (r.category or '') ~ ' ' ~ (r.payment_mode or '') ~ ' ' ~ (r.reference_no or '') ~ ' ' ~ (r.description or ''))|lower }}">
               <td class="text-center text-muted">{{ ((pagination.page - 1) * per_page + loop.index) if pagination else loop.index }}</td>
               <td><span class="text-success fw-semibold">{{ r.transfer_number }}</span></td>
               <td>{{ r.transfer_date|ddmmyyyy }}</td>
-              <td>{% if r.from_account %}{{ account_display_map.get(r.from_account.id, r.from_account.code ~ ' - ' ~ r.from_account.name) }}{% else %}-{% endif %}</td>
-              <td>{% if r.to_account %}{{ account_display_map.get(r.to_account.id, r.to_account.code ~ ' - ' ~ r.to_account.name) }}{% else %}-{% endif %}</td>
+              <td>{% if r.from_account %}{{ from_lbl }}{% else %}-{% endif %}</td>
+              <td>{% if r.to_account %}{{ to_lbl }}{% else %}-{% endif %}</td>
               <td class="text-end fw-semibold">{{ '{:,.2f}'.format((r.amount or 0)|float) }}</td>
               <td>{% if r.category %}<span class="badge bg-info text-dark">{{ r.category }}</span>{% else %}-{% endif %}</td>
               <td><span class="badge bg-light text-dark border">{{ r.payment_mode or '-' }}</span></td>
@@ -300,6 +302,54 @@ function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page
         try { expandRow.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (x) { expandRow.scrollIntoView(false); }
       });
     });
+  }
+})();
+
+(function() {
+  function wsTransferApplyServerSearch(val) {
+    var u = new URLSearchParams(window.location.search);
+    var q = (val || '').trim();
+    if (q) u.set('search', q); else u.delete('search');
+    u.set('page', '1');
+    window.location.search = u.toString();
+  }
+  function wsTransferFilterVisibleRows(q) {
+    var words = (q || '').trim().toLowerCase().split(/\s+/).filter(Boolean);
+    document.querySelectorAll('#wsTransferTable tr.ft-transfer-row').forEach(function(tr) {
+      var hay = (tr.getAttribute('data-ft-search-text') || tr.textContent || '').toLowerCase();
+      var show = !words.length || words.every(function(w) {
+        var bare = w.replace(/[\s\-]+/g, '');
+        var hayBare = hay.replace(/[\s\-]+/g, '');
+        return hay.indexOf(w) !== -1 || (bare && hayBare.indexOf(bare) !== -1);
+      });
+      tr.style.display = show ? '' : 'none';
+      var exp = tr.nextElementSibling;
+      if (exp && exp.classList.contains('ft-upload-expand-row')) exp.classList.add('d-none');
+    });
+  }
+  function wsTransferBindSearch() {
+    var headerInp = document.getElementById('wsTransferHeaderSearch');
+    var filterInp = document.querySelector('form[method="GET"] input[name="search"]');
+    if (!headerInp) return;
+    headerInp.addEventListener('input', function() {
+      if (filterInp) filterInp.value = headerInp.value;
+      wsTransferFilterVisibleRows(headerInp.value);
+    });
+    headerInp.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        wsTransferApplyServerSearch(headerInp.value);
+      }
+    });
+    if (filterInp) {
+      filterInp.addEventListener('input', function() { headerInp.value = filterInp.value; wsTransferFilterVisibleRows(filterInp.value); });
+    }
+    wsTransferFilterVisibleRows(headerInp.value);
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', wsTransferBindSearch);
+  } else {
+    wsTransferBindSearch();
   }
 })();
 

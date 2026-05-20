@@ -5,7 +5,7 @@ from calendar import monthrange
 from decimal import Decimal, InvalidOperation
 
 from flask import flash, redirect, render_template, request, session, url_for, make_response, jsonify
-from sqlalchemy import and_, or_, not_, cast, String, select, exists
+from sqlalchemy import and_, or_, not_, cast, String, select, exists, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import aliased, joinedload
 
@@ -116,8 +116,48 @@ def _build_workspace_account_display_map(employee_id, active_only=True):
     return account_display_map
 
 
-def _workspace_fund_transfer_account_driver_vehicle_match(acct_alias, like):
+def _workspace_fund_transfer_search_like_variants(word):
+    """Plain and hyphen/space-stripped ILIKE patterns (e.g. LEG181076 matches LEG-18-1076)."""
+    w = (word or "").strip()
+    like = f"%{w}%"
+    compact = re.sub(r"[\s\-]+", "", w)
+    like_compact = f"%{compact}%" if compact else like
+    return like, like_compact
+
+
+def _workspace_fund_transfer_vehicle_no_match(veh_col, like, like_compact):
+    bare = func.replace(func.replace(func.coalesce(veh_col, ""), "-", ""), " ", "")
+    return or_(veh_col.ilike(like), bare.ilike(like_compact))
+
+
+def _workspace_fund_transfer_driver_vehicle_match(drv, veh, like, like_compact):
+    return or_(
+        drv.name.ilike(like),
+        func.coalesce(drv.driver_id, "").ilike(like),
+        _workspace_fund_transfer_vehicle_no_match(veh.vehicle_no, like, like_compact),
+    )
+
+
+def _workspace_fund_transfer_account_driver_vehicle_match(acct_alias, like, like_compact):
     """Match driver-linked From/To accounts by driver name, driver ID, or vehicle number."""
+    drv = aliased(Driver)
+    veh = aliased(Vehicle)
+    et = func.lower(func.trim(func.coalesce(acct_alias.entity_type, "")))
+    return exists(
+        select(1)
+        .select_from(drv)
+        .outerjoin(veh, or_(veh.id == drv.vehicle_id, veh.driver_id == drv.id))
+        .where(
+            et == "driver",
+            acct_alias.entity_id.isnot(None),
+            acct_alias.entity_id == drv.id,
+            _workspace_fund_transfer_driver_vehicle_match(drv, veh, like, like_compact),
+        )
+    )
+
+
+def _workspace_fund_transfer_to_driver_id_match(like, like_compact):
+    """Match transfer.to_driver_id when set (driver / vehicle on To side)."""
     drv = aliased(Driver)
     veh = aliased(Vehicle)
     return exists(
@@ -125,16 +165,11 @@ def _workspace_fund_transfer_account_driver_vehicle_match(acct_alias, like):
         .select_from(drv)
         .outerjoin(veh, or_(veh.id == drv.vehicle_id, veh.driver_id == drv.id))
         .where(
-            acct_alias.entity_type == "driver",
-            acct_alias.entity_id.isnot(None),
-            acct_alias.entity_id == drv.id,
-            or_(
-                drv.name.ilike(like),
-                drv.driver_id.ilike(like),
-                veh.vehicle_no.ilike(like),
-            ),
+            WorkspaceFundTransfer.to_driver_id.isnot(None),
+            WorkspaceFundTransfer.to_driver_id == drv.id,
+            _workspace_fund_transfer_driver_vehicle_match(drv, veh, like, like_compact),
         )
-    ).correlate(acct_alias)
+    )
 
 
 def _workspace_fund_transfer_search_filter(query, search, from_acct, to_acct):
@@ -145,7 +180,7 @@ def _workspace_fund_transfer_search_filter(query, search, from_acct, to_acct):
     amt_col = cast(WorkspaceFundTransfer.amount, String)
     date_col = cast(WorkspaceFundTransfer.transfer_date, String)
     for w in words:
-        like = f"%{w}%"
+        like, like_compact = _workspace_fund_transfer_search_like_variants(w)
         query = query.filter(
             or_(
                 WorkspaceFundTransfer.transfer_number.ilike(like),
@@ -158,11 +193,14 @@ def _workspace_fund_transfer_search_filter(query, search, from_acct, to_acct):
                 from_acct.code.ilike(like),
                 from_acct.name.ilike(like),
                 from_acct.account_type.ilike(like),
+                func.coalesce(from_acct.description, "").ilike(like),
                 to_acct.code.ilike(like),
                 to_acct.name.ilike(like),
                 to_acct.account_type.ilike(like),
-                _workspace_fund_transfer_account_driver_vehicle_match(from_acct, like),
-                _workspace_fund_transfer_account_driver_vehicle_match(to_acct, like),
+                func.coalesce(to_acct.description, "").ilike(like),
+                _workspace_fund_transfer_account_driver_vehicle_match(from_acct, like, like_compact),
+                _workspace_fund_transfer_account_driver_vehicle_match(to_acct, like, like_compact),
+                _workspace_fund_transfer_to_driver_id_match(like, like_compact),
             )
         )
     return query
