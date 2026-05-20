@@ -1076,13 +1076,65 @@ def reverse_company_journal_entry(journal_entry_id):
         db.session.delete(je)
 
 
+def _workspace_account_balance_delta(account, debit, credit):
+    debit = Decimal(str(debit or 0))
+    credit = Decimal(str(credit or 0))
+    if account.account_type in ['Asset', 'Expense']:
+        return debit - credit
+    return credit - debit
+
+
+def workspace_get_account_balance(account_id, as_of_date=None):
+    """Account balance as of a date (opening_balance + all posted lines up to as_of_date)."""
+    account = WorkspaceAccount.query.get(account_id)
+    if not account:
+        return Decimal('0')
+    if as_of_date is None:
+        return Decimal(str(account.current_balance or 0))
+
+    balance = Decimal(str(account.opening_balance or 0))
+    lines = (
+        db.session.query(WorkspaceJournalEntryLine, WorkspaceJournalEntry)
+        .join(WorkspaceJournalEntry)
+        .filter(
+            WorkspaceJournalEntryLine.account_id == account_id,
+            WorkspaceJournalEntry.employee_id == account.employee_id,
+            WorkspaceJournalEntry.entry_date <= as_of_date,
+            WorkspaceJournalEntry.is_posted == True,
+        )
+        .all()
+    )
+    for line, _je in lines:
+        balance += _workspace_account_balance_delta(account, line.debit, line.credit)
+    return balance
+
+
 def workspace_get_account_ledger(account_id, from_date=None, to_date=None, category=None):
+    """
+    Period ledger: opening = balance brought forward (day before from_date);
+    then period transactions with running balance. Matches main finance account ledger.
+    """
     account = WorkspaceAccount.query.get(account_id)
     if not account:
         return None
-    opening_balance = Decimal(str(account.opening_balance or 0))
+
+    category_active = False
+    if category:
+        if isinstance(category, (list, tuple, set)):
+            category_active = bool([str(c).strip() for c in category if str(c).strip()])
+        else:
+            category_active = bool(str(category).strip())
+
+    period_opening_date = None
+    if from_date:
+        period_opening_date = from_date - timedelta(days=1)
+        opening_balance = workspace_get_account_balance(account_id, period_opening_date)
+    else:
+        opening_balance = Decimal(str(account.opening_balance or 0))
+
     q = db.session.query(WorkspaceJournalEntryLine, WorkspaceJournalEntry).join(WorkspaceJournalEntry).filter(
         WorkspaceJournalEntryLine.account_id == account_id,
+        WorkspaceJournalEntry.employee_id == account.employee_id,
         WorkspaceJournalEntry.is_posted == True,
     )
     if from_date:
@@ -1096,14 +1148,34 @@ def workspace_get_account_ledger(account_id, from_date=None, to_date=None, categ
                 q = q.filter(WorkspaceJournalEntry.category.in_(cats))
         else:
             q = q.filter(WorkspaceJournalEntry.category == category)
-    q = q.order_by(WorkspaceJournalEntry.entry_date.asc(), WorkspaceJournalEntry.id.asc(), WorkspaceJournalEntryLine.sort_order.asc())
+    q = q.order_by(
+        WorkspaceJournalEntry.entry_date.asc(),
+        WorkspaceJournalEntry.id.asc(),
+        WorkspaceJournalEntryLine.sort_order.asc(),
+    )
 
     tx = []
     running = opening_balance
+    if from_date:
+        tx.append({
+            'journal_entry_id': None,
+            'date': from_date,
+            'entry_number': '—',
+            'entry_type': 'B/F',
+            'description': 'Balance brought forward',
+            'category': '',
+            'reference_type': '',
+            'reference_id': None,
+            'debit': Decimal('0'),
+            'credit': Decimal('0'),
+            'balance': running,
+            'is_brought_forward': True,
+        })
+
     for line, je in q.all():
         debit = Decimal(str(line.debit or 0))
         credit = Decimal(str(line.credit or 0))
-        running += (debit - credit) if account.account_type in ['Asset', 'Expense'] else (credit - debit)
+        running += _workspace_account_balance_delta(account, debit, credit)
         tx.append({
             'journal_entry_id': je.id,
             'date': je.entry_date,
@@ -1116,13 +1188,23 @@ def workspace_get_account_ledger(account_id, from_date=None, to_date=None, categ
             'debit': debit,
             'credit': credit,
             'balance': running,
+            'is_brought_forward': False,
         })
+
+    if category_active:
+        closing_balance = running
+    elif to_date:
+        closing_balance = workspace_get_account_balance(account_id, to_date)
+    else:
+        closing_balance = running
 
     return {
         'account': account,
         'opening_balance': opening_balance,
+        'period_opening_date': period_opening_date,
+        'category_filter_active': category_active,
         'transactions': tx,
-        'closing_balance': running,
+        'closing_balance': closing_balance,
     }
 
 

@@ -51,12 +51,23 @@
   {% if ledger %}
   {% set ns = namespace(total_debit=0.0, total_credit=0.0) %}
   {% for t in ledger.transactions %}
+    {% if not t.get('is_brought_forward') %}
     {% set ns.total_debit = ns.total_debit + (t.debit or 0)|float %}
     {% set ns.total_credit = ns.total_credit + (t.credit or 0)|float %}
+    {% endif %}
   {% endfor %}
+  {% if ledger.period_opening_date %}
+  <div class="alert alert-light border small py-2 mb-3">
+    <i class="bi bi-info-circle me-1"></i>
+    Period ledger: opening balance is as of <strong>{{ ledger.period_opening_date|ddmmyyyy }}</strong> (day before From date), then running balance for the selected range.
+    {% if ledger.category_filter_active %}
+    Category filter applies to period lines only; opening is the full account balance brought forward.
+    {% endif %}
+  </div>
+  {% endif %}
   <div class="row g-3 mb-3">
     <div class="col-lg-2 col-md-6"><div class="card border-0 shadow-sm h-100"><div class="card-body"><small class="text-muted">Selected Account</small><h6 class="mb-0">{{ ledger.account.code }} - {{ ledger.account.name }}</h6></div></div></div>
-    <div class="col-lg-2 col-md-6"><div class="card border-0 shadow-sm h-100"><div class="card-body"><small class="text-muted">Opening Balance</small><h5 class="mb-0">{{ '%.2f'|format((ledger.opening_balance or 0)|float) }}</h5></div></div></div>
+    <div class="col-lg-2 col-md-6"><div class="card border-0 shadow-sm h-100"><div class="card-body"><small class="text-muted">{% if ledger.period_opening_date %}Opening (B/F){% else %}Opening Balance{% endif %}</small><h5 class="mb-0">{{ '%.2f'|format((ledger.opening_balance or 0)|float) }}</h5>{% if ledger.period_opening_date %}<small class="text-muted">as of {{ ledger.period_opening_date|ddmmyyyy }}</small>{% endif %}</div></div></div>
     <div class="col-lg-2 col-md-6"><div class="card border-0 shadow-sm h-100"><div class="card-body"><small class="text-muted">Total Debit</small><h5 class="mb-0 text-success">{{ '%.2f'|format(ns.total_debit) }}</h5></div></div></div>
     <div class="col-lg-2 col-md-6"><div class="card border-0 shadow-sm h-100"><div class="card-body"><small class="text-muted">Total Credit</small><h5 class="mb-0 text-danger">{{ '%.2f'|format(ns.total_credit) }}</h5></div></div></div>
     <div class="col-lg-4 col-md-12"><div class="card border-0 shadow-sm h-100"><div class="card-body"><small class="text-muted">Closing Balance</small><h5 class="mb-0 {{ 'text-danger' if (ledger.closing_balance or 0)|float < 0 else 'text-success' }}">{{ '%.2f'|format((ledger.closing_balance or 0)|float) }}</h5></div></div></div>
@@ -68,11 +79,11 @@
       <small>{{ ledger.transactions|length }} entries</small>
     </div>
     <div class="table-responsive">
-      <table class="table table-sm table-hover align-middle mb-0" id="workspaceLedgerTable">
+      <table class="table table-sm table-hover align-middle mb-0" id="workspaceLedgerTable" data-ft-ignore="1">
         <thead class="table-light"><tr><th>Date</th><th>Entry</th><th>FT Ref</th><th>Type</th><th>Description</th><th>Category</th><th class="text-end">Debit</th><th class="text-end">Credit</th><th class="text-end">Balance</th></tr></thead>
         <tbody>
           {% for t in ledger.transactions %}
-          <tr>
+          <tr{% if t.get('is_brought_forward') %} class="table-secondary"{% endif %}>
             <td>{{ t.date|ddmmyyyy }}</td>
             <td>{{ t.entry_number }}</td>
             <td>
@@ -125,7 +136,6 @@
 </div>
 <script>
 document.addEventListener('DOMContentLoaded', function(){
-  if(window.fleetTableEnhance) window.fleetTableEnhance('workspaceLedgerTable');
   if(window.fleetPrintExport) window.fleetPrintExport('workspaceLedgerTable','Workspace Ledger','Workspace_Ledger.csv');
   var CATS_RAW = [
     ['Workspace Close', 'Workspace Close'],
