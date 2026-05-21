@@ -15,7 +15,8 @@ WhatsApp often **breaks** `.apk` files. Use one of these:
 
 | File | Status |
 |------|--------|
-| `fleet-manager-1.9.5.apk` | Signed — use this |
+| `fleet-manager-1.9.6.apk` | Signed (new release key in `New folder/`) — use this |
+| `fleet-manager-1.9.5.apk` | Old debug key — do not use for updates |
 | `fleet-manager-1.7.0.apk` | Signed (old key) — only if you need old build |
 | `fleet-manager-1.9.3.apk` / `1.9.4.apk` | **Removed** — unsigned, install fails |
 
