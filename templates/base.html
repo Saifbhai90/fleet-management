@@ -4333,7 +4333,7 @@
         }
     };
 
-    /** GPS attendance selfie camera: torch, low-light detect, capture enhance (front camera only). */
+    /** GPS attendance selfie camera: torch / screen-flash, low-light detect, capture enhance (front camera only). */
     window.FleetGpsCamera = (function() {
         var TORCH_PREF_KEY = 'fleetGpsCamTorchOn';
         var LOW_LIGHT_THRESHOLD = 58;
@@ -4344,6 +4344,12 @@
         }
         function _saveTorchPref(on) {
             try { localStorage.setItem(TORCH_PREF_KEY, on ? '1' : '0'); } catch (e) {}
+        }
+
+        function isMobileDevice() {
+            var ua = navigator.userAgent || '';
+            if (/Android|iPhone|iPad|iPod|Mobile/i.test(ua)) return true;
+            return (navigator.maxTouchPoints > 1 && Math.min(screen.width, screen.height) < 900);
         }
 
         function getVideoConstraints() {
@@ -4357,7 +4363,7 @@
             };
         }
 
-        function detectTorchSupported(track) {
+        function detectHardwareTorch(track) {
             if (!track || typeof track.getCapabilities !== 'function') return false;
             try {
                 var cap = track.getCapabilities();
@@ -4427,18 +4433,41 @@
             var videoEl = opts.video;
             var btnTorch = opts.btnTorch;
             var lowLightEl = opts.lowLightEl;
+            var screenFlashEl = opts.screenFlashEl;
+            var flashHintEl = opts.flashHintEl;
             var stream = null;
             var videoTrack = null;
             var torchOn = false;
-            var torchSupported = false;
+            /** @type {'none'|'hardware'|'screen'} */
+            var flashMode = 'none';
             var lowLightTimer = null;
             var lastBrightness = 255;
 
             function _updateTorchUi() {
                 if (!btnTorch) return;
                 btnTorch.classList.toggle('torch-on', torchOn);
+                btnTorch.classList.toggle('torch-screen', flashMode === 'screen');
                 btnTorch.setAttribute('aria-pressed', torchOn ? 'true' : 'false');
-                btnTorch.title = torchOn ? 'Flash ON — band karne ke liye tap karein' : 'Flash OFF — roshni ke liye tap karein';
+                if (flashMode === 'screen') {
+                    btnTorch.title = torchOn
+                        ? 'Screen flash ON — band karne ke liye tap karein'
+                        : 'Screen flash OFF — andheray mein ON karein';
+                } else if (flashMode === 'hardware') {
+                    btnTorch.title = torchOn
+                        ? 'Flash ON — band karne ke liye tap karein'
+                        : 'Flash OFF — roshni ke liye tap karein';
+                }
+            }
+
+            function _applyScreenFlashVisual(on) {
+                if (!screenFlashEl) return;
+                screenFlashEl.classList.toggle('active', !!on);
+                screenFlashEl.setAttribute('aria-hidden', on ? 'false' : 'true');
+            }
+
+            function _updateFlashHint() {
+                if (!flashHintEl) return;
+                flashHintEl.classList.toggle('d-none', flashMode !== 'screen');
             }
 
             function _updateLowLightUi() {
@@ -4446,7 +4475,7 @@
                 var dark = lastBrightness < LOW_LIGHT_THRESHOLD;
                 var show = dark && (isNightHour() || lastBrightness < 42);
                 lowLightEl.classList.toggle('d-none', !show);
-                if (btnTorch && torchSupported && dark && !torchOn) {
+                if (btnTorch && flashMode !== 'none' && dark && !torchOn) {
                     btnTorch.classList.add('torch-pulse');
                 } else if (btnTorch) {
                     btnTorch.classList.remove('torch-pulse');
@@ -4467,20 +4496,46 @@
             }
 
             function setTorch(on) {
-                if (!torchSupported || !videoTrack) return Promise.resolve(false);
-                return applyTorch(videoTrack, on).then(function(ok) {
-                    if (ok) {
-                        torchOn = !!on;
-                        _saveTorchPref(torchOn);
-                        _updateTorchUi();
-                        _updateLowLightUi();
-                    }
-                    return ok;
-                });
+                var want = !!on;
+                if (flashMode === 'screen') {
+                    torchOn = want;
+                    _applyScreenFlashVisual(torchOn);
+                    _saveTorchPref(torchOn);
+                    _updateTorchUi();
+                    _updateLowLightUi();
+                    return Promise.resolve(true);
+                }
+                if (flashMode === 'hardware' && videoTrack) {
+                    return applyTorch(videoTrack, want).then(function(ok) {
+                        if (ok) {
+                            torchOn = want;
+                            _saveTorchPref(torchOn);
+                            _updateTorchUi();
+                            _updateLowLightUi();
+                        }
+                        return ok;
+                    });
+                }
+                return Promise.resolve(false);
             }
 
             function toggleTorch() {
                 return setTorch(!torchOn);
+            }
+
+            function _resolveFlashModeAfterStream() {
+                if (detectHardwareTorch(videoTrack)) {
+                    flashMode = 'hardware';
+                } else if (isMobileDevice()) {
+                    flashMode = 'screen';
+                } else {
+                    flashMode = 'none';
+                }
+                if (btnTorch) {
+                    if (flashMode === 'none') btnTorch.classList.add('d-none');
+                    else btnTorch.classList.remove('d-none');
+                }
+                _updateFlashHint();
             }
 
             function stop() {
@@ -4491,13 +4546,14 @@
                 stream = null;
                 videoTrack = null;
                 torchOn = false;
-                torchSupported = false;
+                flashMode = 'none';
                 if (videoEl) videoEl.srcObject = null;
+                _applyScreenFlashVisual(false);
                 if (btnTorch) {
-                    btnTorch.classList.add('d-none');
-                    btnTorch.classList.remove('torch-on', 'torch-pulse');
+                    btnTorch.classList.remove('torch-on', 'torch-pulse', 'torch-screen');
                 }
                 if (lowLightEl) lowLightEl.classList.add('d-none');
+                if (flashHintEl) flashHintEl.classList.add('d-none');
             }
 
             function start() {
@@ -4509,16 +4565,22 @@
                     stream = s;
                     videoTrack = s.getVideoTracks()[0] || null;
                     if (videoEl) videoEl.srcObject = s;
-                    torchSupported = detectTorchSupported(videoTrack);
-                    if (btnTorch) {
-                        if (torchSupported) {
-                            btnTorch.classList.remove('d-none');
-                            torchOn = _readTorchPref();
-                            _updateTorchUi();
-                            return setTorch(torchOn).then(function() { return s; });
-                        }
-                        btnTorch.classList.add('d-none');
+                    _resolveFlashModeAfterStream();
+                    if (flashMode === 'none') return s;
+                    torchOn = _readTorchPref();
+                    _updateTorchUi();
+                    if (flashMode === 'hardware') {
+                        return setTorch(torchOn).then(function(ok) {
+                            if (!ok && isMobileDevice()) {
+                                flashMode = 'screen';
+                                _updateFlashHint();
+                                torchOn = false;
+                                return setTorch(_readTorchPref());
+                            }
+                            return s;
+                        });
                     }
+                    _applyScreenFlashVisual(torchOn);
                     return s;
                 }).then(function(s) {
                     _startLowLightMonitor();
@@ -4526,9 +4588,25 @@
                 });
             }
 
+            function prepareForCapture() {
+                if (flashMode === 'screen' && screenFlashEl) {
+                    _applyScreenFlashVisual(true);
+                    return new Promise(function(resolve) {
+                        setTimeout(resolve, 120);
+                    });
+                }
+                return Promise.resolve();
+            }
+
+            function afterCapture() {
+                if (flashMode === 'screen' && !torchOn) {
+                    _applyScreenFlashVisual(false);
+                }
+            }
+
             if (btnTorch) {
                 btnTorch.addEventListener('click', function() {
-                    if (!torchSupported) return;
+                    if (flashMode === 'none') return;
                     toggleTorch();
                 });
             }
@@ -4538,9 +4616,14 @@
                 stop: stop,
                 setTorch: setTorch,
                 toggleTorch: toggleTorch,
+                prepareForCapture: prepareForCapture,
+                afterCapture: afterCapture,
                 getBrightness: function() { return lastBrightness; },
+                isFlashOn: function() { return torchOn; },
+                isFlashAvailable: function() { return flashMode !== 'none'; },
                 isTorchOn: function() { return torchOn; },
-                isTorchSupported: function() { return torchSupported; },
+                isTorchSupported: function() { return flashMode === 'hardware'; },
+                getFlashMode: function() { return flashMode; },
                 getStream: function() { return stream; },
                 enhanceCanvasForLowLight: enhanceCanvasForLowLight
             };
@@ -4548,10 +4631,11 @@
 
         return {
             getVideoConstraints: getVideoConstraints,
-            detectTorchSupported: detectTorchSupported,
+            detectHardwareTorch: detectHardwareTorch,
             applyTorch: applyTorch,
             sampleBrightness: sampleBrightness,
             enhanceCanvasForLowLight: enhanceCanvasForLowLight,
+            isMobileDevice: isMobileDevice,
             createSession: createSession
         };
     })();

@@ -291,6 +291,8 @@
   var cameraErrorText = document.getElementById('cameraErrorText');
   var btnRetryCamera = document.getElementById('btnRetryCamera');
   var btnCameraTorch = document.getElementById('btnCameraTorch');
+  var cameraScreenFlash = document.getElementById('cameraScreenFlash');
+  var cameraFlashHint = document.getElementById('cameraFlashHint');
   var cameraLowLightWarn = document.getElementById('cameraLowLightWarn');
   var gpsCameraSession = null;
   var vehiclesData = {{ pre_vehicles_data | tojson }};
@@ -951,6 +953,8 @@
     gpsCameraSession = window.FleetGpsCamera.createSession({
       video: cameraVideo,
       btnTorch: btnCameraTorch,
+      screenFlashEl: cameraScreenFlash,
+      flashHintEl: cameraFlashHint,
       lowLightEl: cameraLowLightWarn
     });
     gpsCameraSession.start()
@@ -1001,36 +1005,42 @@
       alert('Camera abhi tayyar ho raha hai. 1-2 second ruk kar dobara Capture karein.');
       return;
     }
-    if (gpsCameraSession && gpsCameraSession.isTorchSupported() && !gpsCameraSession.isTorchOn()) {
+    if (gpsCameraSession && gpsCameraSession.isFlashAvailable() && !gpsCameraSession.isFlashOn()) {
       var bCap = gpsCameraSession.getBrightness();
       if (bCap < 58) {
-        alert('Andhera hai — upar Flash icon tap karke ON karein, phir Capture karein.');
+        alert('Andhera hai — upar ⚡ Flash ON karein (screen roshni), phir Capture karein.');
         return;
       }
     }
-    var shot = captureStampedPhoto();
-    if (!shot || !shot.dataUrl) {
-      alert('Photo capture nahi ho saki. Dobara try karein.');
-      return;
-    }
-    formDriverId.value = driverSelect.value;
-    formParkingId.value = parkingId.value;
-    formLat.value = currentPosition.coords.latitude;
-    formLng.value = currentPosition.coords.longitude;
-    formPhotoBase64.value = shot.dataUrl;
-    formVehicleId.value = vehicleSelect.tomselect ? vehicleSelect.tomselect.getValue() : vehicleSelect.value;
-    formProjectId.value = projectSelect.tomselect ? projectSelect.tomselect.getValue() : projectSelect.value;
-    pendingCapturePayload = {
-      driver_id: Number(formDriverId.value || 0),
-      parking_station_id: Number(formParkingId.value || 0),
-      latitude: formLat.value,
-      longitude: formLng.value,
-      photo_base64: shot.dataUrl,
-      vehicle_id: Number(formVehicleId.value || 0),
-      project_id: Number(formProjectId.value || 0),
-      captured_at: shot.timeStr,
+    var doCapture = function() {
+      var shot = captureStampedPhoto();
+      if (gpsCameraSession && gpsCameraSession.afterCapture) gpsCameraSession.afterCapture();
+      if (!shot || !shot.dataUrl) {
+        alert('Photo capture nahi ho saki. Dobara try karein.');
+        return;
+      }
+      formDriverId.value = driverSelect.value;
+      formParkingId.value = parkingId.value;
+      formLat.value = currentPosition.coords.latitude;
+      formLng.value = currentPosition.coords.longitude;
+      formPhotoBase64.value = shot.dataUrl;
+      formVehicleId.value = vehicleSelect.tomselect ? vehicleSelect.tomselect.getValue() : vehicleSelect.value;
+      formProjectId.value = projectSelect.tomselect ? projectSelect.tomselect.getValue() : projectSelect.value;
+      pendingCapturePayload = {
+        driver_id: Number(formDriverId.value || 0),
+        parking_station_id: Number(formParkingId.value || 0),
+        latitude: formLat.value,
+        longitude: formLng.value,
+        photo_base64: shot.dataUrl,
+        vehicle_id: Number(formVehicleId.value || 0),
+        project_id: Number(formProjectId.value || 0),
+        captured_at: shot.timeStr,
+      };
+      showCameraPreviewMode(shot.dataUrl);
     };
-    showCameraPreviewMode(shot.dataUrl);
+    var prep = (gpsCameraSession && gpsCameraSession.prepareForCapture)
+      ? gpsCameraSession.prepareForCapture() : Promise.resolve();
+    prep.then(doCapture);
   });
 
   if (btnRetakePhoto) {

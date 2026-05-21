@@ -18,16 +18,25 @@
     0%, 100% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.5); }
     50% { box-shadow: 0 0 0 8px rgba(251, 191, 36, 0); }
   }
+  #cameraModal .camera-screen-flash {
+    position: absolute; inset: 0; z-index: 2; border-radius: 0.375rem;
+    background: #fff; opacity: 0; pointer-events: none;
+    transition: opacity 0.12s ease;
+  }
+  #cameraModal .camera-screen-flash.active { opacity: 0.9; }
+  #cameraModal #cameraFlashHint { font-size: 0.72rem; color: #64748b; text-align: center; }
   #cameraModal #cameraLowLightWarn { font-size: 0.78rem; line-height: 1.3; text-align: left; }
 </style>
 <div class="camera-live-stack">
   <video id="cameraVideo" autoplay playsinline muted></video>
+  <div id="cameraScreenFlash" class="camera-screen-flash" aria-hidden="true"></div>
   <div class="camera-toolbar-overlay" id="cameraToolbarOverlay">
-    <button type="button" id="btnCameraTorch" class="btn btn-sm btn-dark rounded-circle camera-torch-btn d-none" title="Flash / Torch" aria-label="Flash">
+    <button type="button" id="btnCameraTorch" class="btn btn-sm btn-dark rounded-circle camera-torch-btn" title="Flash ON / OFF" aria-label="Flash">
       <i class="bi bi-lightning-charge-fill" id="btnCameraTorchIcon"></i>
     </button>
   </div>
 </div>
+<p id="cameraFlashHint" class="small mb-0 mt-1 d-none">⚡ Flash = screen ki roshni (selfie ke liye). Andheray mein ON karein.</p>
 <div id="cameraLowLightWarn" class="alert alert-warning py-1 px-2 small mb-0 mt-1 d-none" role="status">
-  <i class="bi bi-moon-stars me-1"></i><span id="cameraLowLightWarnText">Andhera hai — Flash ON karke photo lein.</span>
+  <i class="bi bi-moon-stars me-1"></i><span id="cameraLowLightWarnText">Andhera hai — upar ⚡ Flash ON karke photo lein.</span>
 </div>
