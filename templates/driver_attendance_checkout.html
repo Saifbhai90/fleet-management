@@ -170,7 +170,10 @@
       </div>
       <div class="modal-body text-center">
         <div id="cameraLiveWrap">
-          <video id="cameraVideo" autoplay playsinline muted></video>
+          <div id="cameraOpening" class="text-center py-4 px-2">
+            <div class="spinner-border text-danger mb-2" role="status"></div>
+            <p class="mb-0 small text-muted">Phone ka camera khul raha hai…<br><span class="text-secondary">Front selfie — sirf camera, gallery nahi</span></p>
+          </div>
         </div>
         <div id="cameraPreviewWrap" class="d-none">
           <img id="cameraPreviewImg" class="camera-preview-img" alt="Captured preview">
@@ -188,9 +191,6 @@
             <i class="bi bi-exclamation-triangle me-2"></i><span id="cameraErrorText"></span>
             <button type="button" class="btn btn-outline-danger btn-sm ms-2" id="btnRetryCamera"><i class="bi bi-arrow-clockwise me-1"></i>Retry</button>
           </div>
-          <button type="button" id="btnCapture" class="btn btn-danger btn-lg rounded-pill px-5 d-none">
-            <i class="bi bi-camera me-2"></i>Capture
-          </button>
         </div>
         <div id="cameraPreviewFooter" class="w-100 d-none">
           <div class="d-flex flex-wrap gap-2 justify-content-center">
@@ -255,10 +255,9 @@
   var timeWindowText = document.getElementById('timeWindowText');
   var noCheckinMessage = document.getElementById('noCheckinMessage');
   var cameraModal = document.getElementById('cameraModal');
-  var cameraVideo = document.getElementById('cameraVideo');
   var cameraCanvas = document.getElementById('cameraCanvas');
-  var btnCapture = document.getElementById('btnCapture');
   var cameraLiveWrap = document.getElementById('cameraLiveWrap');
+  var cameraOpening = document.getElementById('cameraOpening');
   var cameraPreviewWrap = document.getElementById('cameraPreviewWrap');
   var cameraPreviewImg = document.getElementById('cameraPreviewImg');
   var cameraLiveFooter = document.getElementById('cameraLiveFooter');
@@ -284,7 +283,6 @@
 
   var currentPosition = null;
   var parkingCoords = null;
-  var stream = null;
   var cameraModalInstance = null;
   var cameraLoading = document.getElementById('cameraLoading');
   var cameraError = document.getElementById('cameraError');
@@ -822,11 +820,6 @@
     });
   }
 
-  function stopCamera() {
-    if (stream) { stream.getTracks().forEach(function(t) { t.stop(); }); stream = null; }
-    cameraVideo.srcObject = null;
-  }
-
   function resetCameraModalToLive() {
     pendingCapturePayload = null;
     if (cameraLiveWrap) cameraLiveWrap.classList.remove('d-none');
@@ -834,7 +827,8 @@
     if (cameraPreviewImg) cameraPreviewImg.removeAttribute('src');
     if (cameraLiveFooter) cameraLiveFooter.classList.remove('d-none');
     if (cameraPreviewFooter) cameraPreviewFooter.classList.add('d-none');
-    if (cameraModalLabel) cameraModalLabel.innerHTML = '<i class="bi bi-camera-fill me-2"></i>Take selfie (Check-out)';
+    if (cameraModalLabel) cameraModalLabel.innerHTML = '<i class="bi bi-camera-fill me-2"></i>Phone camera (Check-out)';
+    if (cameraOpening) cameraOpening.classList.remove('d-none');
     if (btnConfirmUpload) {
       btnConfirmUpload.disabled = false;
       btnConfirmUpload.innerHTML = '<i class="bi bi-check2-circle me-2"></i>Check-out save karein';
@@ -842,7 +836,6 @@
   }
 
   function showCameraPreviewMode(dataUrl) {
-    stopCamera();
     if (cameraLiveWrap) cameraLiveWrap.classList.add('d-none');
     if (cameraPreviewWrap) cameraPreviewWrap.classList.remove('d-none');
     if (cameraPreviewImg) cameraPreviewImg.src = dataUrl;
@@ -851,18 +844,11 @@
     if (cameraModalLabel) cameraModalLabel.innerHTML = '<i class="bi bi-image me-2"></i>Preview — photo check karein';
   }
 
-  function showCameraReady() {
+  function showCameraLoading() {
     cameraLoading.className = 'text-center w-100 d-none';
     cameraError.className = 'alert alert-danger mb-0 w-100 d-none';
-    btnCapture.className = 'btn btn-danger btn-lg rounded-pill px-5';
-    if (cameraLiveFooter) cameraLiveFooter.classList.remove('d-none');
-    if (cameraPreviewFooter) cameraPreviewFooter.classList.add('d-none');
-  }
-
-  function showCameraLoading() {
-    cameraLoading.className = 'text-center w-100';
-    cameraError.className = 'alert alert-danger mb-0 w-100 d-none';
-    btnCapture.className = 'btn btn-danger btn-lg rounded-pill px-5 d-none';
+    if (cameraLiveWrap) cameraLiveWrap.classList.remove('d-none');
+    if (cameraOpening) cameraOpening.classList.remove('d-none');
     if (cameraLiveFooter) cameraLiveFooter.classList.remove('d-none');
     if (cameraPreviewFooter) cameraPreviewFooter.classList.add('d-none');
   }
@@ -870,128 +856,33 @@
   function showCameraError(msg) {
     cameraLoading.className = 'text-center w-100 d-none';
     cameraError.className = 'alert alert-danger mb-0 w-100';
-    btnCapture.className = 'btn btn-danger btn-lg rounded-pill px-5 d-none';
     cameraErrorText.textContent = msg;
+    if (cameraLiveWrap) cameraLiveWrap.classList.add('d-none');
     if (cameraLiveFooter) cameraLiveFooter.classList.remove('d-none');
     if (cameraPreviewFooter) cameraPreviewFooter.classList.add('d-none');
   }
 
-  function captureStampedPhoto() {
-    var w = cameraVideo.videoWidth;
-    var h = cameraVideo.videoHeight;
-    if (!w || !h) return null;
-    cameraCanvas.width = w;
-    cameraCanvas.height = h;
-    var ctx = cameraCanvas.getContext('2d');
-    ctx.drawImage(cameraVideo, 0, 0);
-    var lat = (currentPosition && currentPosition.coords) ? currentPosition.coords.latitude : null;
-    var lng = (currentPosition && currentPosition.coords) ? currentPosition.coords.longitude : null;
-    var acc = (currentPosition && currentPosition.coords) ? currentPosition.coords.accuracy : null;
-    if (typeof window.pktDrawReadableGpsStamp === 'function') {
-      window.pktDrawReadableGpsStamp(ctx, w, h, { line1Prefix: 'Check-out GPS+Cam', lat: lat, lng: lng, accuracyMeters: acc });
-    } else {
-      var now = new Date(Date.now() + (typeof _pktOffset!=='undefined'?_pktOffset:0));
-      var _od = (typeof pktOverlayDateTimeStrings === 'function')
-        ? pktOverlayDateTimeStrings(now)
-        : { dateStr: now.getDate().toString().padStart(2, '0') + '-' + (now.getMonth() + 1).toString().padStart(2, '0') + '-' + now.getFullYear(),
-            timeStr: now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0') + ':' + now.getSeconds().toString().padStart(2, '0') };
-      var dateStr = _od.dateStr;
-      var timeStr = _od.timeStr;
-      var locStr = '';
-      if (currentPosition && currentPosition.coords) {
-        locStr = currentPosition.coords.latitude.toFixed(6) + ', ' + currentPosition.coords.longitude.toFixed(6);
-      }
-      var line1 = 'Check-out GPS+Cam | ' + dateStr + ' ' + timeStr;
-      var line2 = locStr ? 'Location: ' + locStr : '';
-      var fontSize = Math.max(14, Math.min(24, h / 22));
-      ctx.font = 'bold ' + fontSize + 'px Arial';
-      var tw1 = ctx.measureText(line1).width;
-      var tw2 = line2 ? ctx.measureText(line2).width : 0;
-      var boxW = Math.max(tw1, tw2) + 24;
-      var boxH = line2 ? fontSize * 2.4 : fontSize * 1.6;
-      var pad = 12;
-      var x = w - boxW - pad;
-      var y = h - boxH - pad;
-      ctx.fillStyle = 'rgba(0,0,0,0.55)';
-      ctx.fillRect(x, y, boxW, boxH);
-      ctx.strokeStyle = 'rgba(255,255,255,0.5)';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(x, y, boxW, boxH);
-      ctx.fillStyle = '#fff';
-      ctx.textBaseline = 'top';
-      ctx.fillText(line1, x + 12, y + 8);
-      if (line2) {
-        ctx.font = fontSize * 0.85 + 'px Arial';
-        ctx.fillText(line2, x + 12, y + 8 + fontSize * 1.15);
-      }
-    }
-    var nowCap = new Date(Date.now() + (typeof _pktOffset!=='undefined'?_pktOffset:0));
-    var _odCap = (typeof pktOverlayDateTimeStrings === 'function')
-      ? pktOverlayDateTimeStrings(nowCap)
-      : { timeStr: nowCap.getHours().toString().padStart(2, '0') + ':' + nowCap.getMinutes().toString().padStart(2, '0') + ':' + nowCap.getSeconds().toString().padStart(2, '0') };
-    return { dataUrl: jpegDataUrlMaxSide(cameraCanvas, 1280, 0.72), timeStr: _odCap.timeStr };
+  function stampOptsForCheckout() {
+    return {
+      line1Prefix: 'Check-out GPS+Cam',
+      lat: (currentPosition && currentPosition.coords) ? currentPosition.coords.latitude : null,
+      lng: (currentPosition && currentPosition.coords) ? currentPosition.coords.longitude : null,
+      accuracyMeters: (currentPosition && currentPosition.coords) ? currentPosition.coords.accuracy : null
+    };
   }
 
-  function startCamera() {
-    resetCameraModalToLive();
-    stopCamera();
-    showCameraLoading();
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      showCameraError('Camera not supported in this browser.');
-      return;
+  function captureNativeCheckoutPhoto() {
+    if (typeof window.fleetTakeNativeFrontPhoto !== 'function' || typeof window.fleetStampAttendancePhoto !== 'function') {
+      return Promise.reject(new Error('Camera module load nahi hua. Page refresh karein.'));
     }
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false })
-      .then(function(s) {
-        stream = s;
-        cameraVideo.srcObject = s;
-        showCameraReady();
-      })
-      .catch(function(err) {
-        showCameraError('Camera failed: ' + (err.message || 'Permission denied'));
-      });
+    return window.fleetTakeNativeFrontPhoto().then(function(rawUrl) {
+      return window.fleetStampAttendancePhoto(rawUrl, cameraCanvas, stampOptsForCheckout());
+    });
   }
 
-  btnRetryCamera.addEventListener('click', function() { startCamera(); });
-
-  if (cameraModal.parentElement !== document.body) {
-    document.body.appendChild(cameraModal);
-  }
-
-  btnMarkCheckout.addEventListener('click', function() {
-    if (!currentPosition || !parkingCoords) return;
-    if (!driverSelect.value) { alert('Please select a driver.'); return; }
-    if (!parkingId.value || !parkingLat.value || !parkingLng.value) {
-      alert('Parking coordinates set nahi. Admin se parking location set karwain.');
-      return;
-    }
+  function applyCheckoutShot(shot) {
     if (!cameraModalInstance) {
       cameraModalInstance = new bootstrap.Modal(cameraModal);
-    }
-    resetCameraModalToLive();
-    cameraModalInstance.show();
-    startCamera();
-  });
-
-  cameraModal.addEventListener('hidden.bs.modal', function() {
-    stopCamera();
-    resetCameraModalToLive();
-  });
-  document.getElementById('cameraModalClose').addEventListener('click', function() {
-    stopCamera();
-    resetCameraModalToLive();
-    if (cameraModalInstance) cameraModalInstance.hide();
-  });
-
-  btnCapture.addEventListener('click', function() {
-    if (!cameraVideo.srcObject || !stream) return;
-    if (!cameraVideo.videoWidth || !cameraVideo.videoHeight) {
-      alert('Camera abhi tayyar ho raha hai. 1-2 second ruk kar dobara Capture karein.');
-      return;
-    }
-    var shot = captureStampedPhoto();
-    if (!shot || !shot.dataUrl) {
-      alert('Photo capture nahi ho saki. Dobara try karein.');
-      return;
     }
     formDriverId.value = driverSelect.value;
     formParkingId.value = parkingId.value;
@@ -1011,12 +902,65 @@
       captured_at: shot.timeStr,
     };
     showCameraPreviewMode(shot.dataUrl);
+    cameraModalInstance.show();
+  }
+
+  function openNativeCheckoutCamera() {
+    captureNativeCheckoutPhoto()
+      .then(applyCheckoutShot)
+      .catch(function(err) {
+        if (window.fleetIsCameraCancelled && window.fleetIsCameraCancelled(err)) {
+          return;
+        }
+        alert('Camera failed: ' + (err && err.message ? err.message : 'Permission denied'));
+      });
+  }
+
+  btnRetryCamera.addEventListener('click', function() {
+    showCameraLoading();
+    captureNativeCheckoutPhoto()
+      .then(applyCheckoutShot)
+      .catch(function(err) {
+        if (window.fleetIsCameraCancelled && window.fleetIsCameraCancelled(err)) {
+          return;
+        }
+        showCameraError('Camera failed: ' + (err && err.message ? err.message : 'Try again'));
+      });
+  });
+
+  if (cameraModal.parentElement !== document.body) {
+    document.body.appendChild(cameraModal);
+  }
+
+  btnMarkCheckout.addEventListener('click', function() {
+    if (!currentPosition || !parkingCoords) return;
+    if (!driverSelect.value) { alert('Please select a driver.'); return; }
+    if (!parkingId.value || !parkingLat.value || !parkingLng.value) {
+      alert('Parking coordinates set nahi. Admin se parking location set karwain.');
+      return;
+    }
+    openNativeCheckoutCamera();
+  });
+
+  cameraModal.addEventListener('hidden.bs.modal', function() {
+    resetCameraModalToLive();
+  });
+  document.getElementById('cameraModalClose').addEventListener('click', function() {
+    resetCameraModalToLive();
+    if (cameraModalInstance) cameraModalInstance.hide();
   });
 
   if (btnRetakePhoto) {
     btnRetakePhoto.addEventListener('click', function() {
-      resetCameraModalToLive();
-      startCamera();
+      if (cameraModalInstance) cameraModalInstance.hide();
+      captureNativeCheckoutPhoto()
+        .then(applyCheckoutShot)
+        .catch(function(err) {
+          if (window.fleetIsCameraCancelled && window.fleetIsCameraCancelled(err)) {
+            return;
+          }
+          alert('Camera failed: ' + (err && err.message ? err.message : 'Try again'));
+        });
     });
   }
 

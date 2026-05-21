@@ -4333,6 +4333,83 @@
         }
     };
 
+    window.fleetJpegDataUrlMaxSide = function(canvas, maxSide, quality) {
+        maxSide = maxSide || 1280;
+        quality = (quality === undefined || quality === null) ? 0.88 : quality;
+        var w = canvas.width;
+        var h = canvas.height;
+        if (!w || !h) return canvas.toDataURL('image/jpeg', quality);
+        if (w <= maxSide && h <= maxSide) return canvas.toDataURL('image/jpeg', quality);
+        var scale = maxSide / Math.max(w, h);
+        var nw = Math.max(1, Math.round(w * scale));
+        var nh = Math.max(1, Math.round(h * scale));
+        var tmp = document.createElement('canvas');
+        tmp.width = nw;
+        tmp.height = nh;
+        tmp.getContext('2d').drawImage(canvas, 0, 0, nw, nh);
+        return tmp.toDataURL('image/jpeg', quality);
+    };
+
+    /** Stamp GPS overlay on a photo from native camera; returns { dataUrl, timeStr }. */
+    window.fleetStampAttendancePhoto = function(dataUrl, canvasEl, stampOpts) {
+        stampOpts = stampOpts || {};
+        return new Promise(function(resolve, reject) {
+            if (!dataUrl) {
+                reject(new Error('No photo'));
+                return;
+            }
+            var img = new Image();
+            img.onload = function() {
+                var w = img.naturalWidth || img.width;
+                var h = img.naturalHeight || img.height;
+                if (!w || !h) {
+                    reject(new Error('Invalid image'));
+                    return;
+                }
+                var canvas = canvasEl || document.createElement('canvas');
+                canvas.width = w;
+                canvas.height = h;
+                var ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, w, h);
+                if (typeof window.pktDrawReadableGpsStamp === 'function') {
+                    window.pktDrawReadableGpsStamp(ctx, w, h, {
+                        line1Prefix: stampOpts.line1Prefix || 'GPS+Cam',
+                        lat: stampOpts.lat,
+                        lng: stampOpts.lng,
+                        accuracyMeters: stampOpts.accuracyMeters
+                    });
+                }
+                var nowCap = new Date(Date.now() + (typeof _pktOffset !== 'undefined' ? _pktOffset : 0));
+                var _odCap = (typeof pktOverlayDateTimeStrings === 'function')
+                    ? pktOverlayDateTimeStrings(nowCap)
+                    : { timeStr: nowCap.getHours().toString().padStart(2, '0') + ':' + nowCap.getMinutes().toString().padStart(2, '0') + ':' + nowCap.getSeconds().toString().padStart(2, '0') };
+                resolve({
+                    dataUrl: window.fleetJpegDataUrlMaxSide(canvas, stampOpts.maxSide || 1280, stampOpts.quality != null ? stampOpts.quality : 0.88),
+                    timeStr: _odCap.timeStr
+                });
+            };
+            img.onerror = function() { reject(new Error('Image load failed')); };
+            img.src = dataUrl;
+        });
+    };
+
+    window.fleetTakeNativeFrontPhoto = function() {
+        if (window.FleetBridge && typeof window.FleetBridge.takeAttendanceSelfie === 'function') {
+            return window.FleetBridge.takeAttendanceSelfie();
+        }
+        if (window.FleetBridge && typeof window.FleetBridge.takeSelfie === 'function') {
+            return window.FleetBridge.takeSelfie({ quality: 88 });
+        }
+        return Promise.reject(new Error('Camera not available'));
+    };
+
+    window.fleetIsCameraCancelled = function(err) {
+        if (!err) return true;
+        if (err.code === 'cancelled') return true;
+        var msg = (err.message || String(err)).toLowerCase();
+        return msg.indexOf('cancel') >= 0 || msg.indexOf('no image') >= 0 || msg.indexOf('no file') >= 0 || msg.indexOf('user denied') >= 0;
+    };
+
     // Live network quality (speed + signal bars)
     (function() {
         var _netTimer = null;
@@ -5361,46 +5438,68 @@
         }
 
         /* ── Camera with permission gate ──────────────────────────────────── */
-        function takeSelfie() {
+        function _capacitorCameraPhoto(quality) {
+            var Cam = window.Capacitor.Plugins.Camera;
+            var q = (quality != null && quality >= 1 && quality <= 100) ? quality : 70;
+            var opts = {
+                quality: q,
+                allowEditing: false,
+                resultType: 'base64',
+                source: 'CAMERA',
+                direction: 'FRONT',
+                saveToGallery: false
+            };
+            return Cam.checkPermissions().then(function(status) {
+                var state = (status.camera || 'prompt');
+                if (state === 'granted') {
+                    return Cam.getPhoto(opts);
+                }
+                if (state === 'denied') {
+                    _showPermissionAlert('Camera', 'Camera permission was denied. Please go to Settings → Apps → Fleet Manager → Permissions and enable Camera to take attendance selfies.');
+                    throw { code: 'camera_denied' };
+                }
+                return Cam.requestPermissions({ permissions: ['camera'] }).then(function(res) {
+                    if (res.camera === 'granted') {
+                        return Cam.getPhoto(opts);
+                    }
+                    _showPermissionAlert('Camera', 'Camera permission is required to take an attendance selfie. Please grant Camera access when prompted.');
+                    throw { code: 'camera_denied' };
+                });
+            }).then(function(photo) {
+                return 'data:image/jpeg;base64,' + photo.base64String;
+            });
+        }
+
+        function takeSelfie(opts) {
+            opts = opts || {};
+            var quality = opts.quality != null ? opts.quality : 70;
             return new Promise(function(resolve, reject) {
                 if (_isNative && window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Camera) {
-                    var Cam = window.Capacitor.Plugins.Camera;
-                    Cam.checkPermissions().then(function(status) {
-                        var state = (status.camera || 'prompt');
-                        if (state === 'granted') {
-                            return Cam.getPhoto({ quality: 70, allowEditing: false, resultType: 'base64', source: 'CAMERA', direction: 'FRONT', saveToGallery: false });
-                        } else if (state === 'denied') {
-                            _showPermissionAlert('Camera', 'Camera permission was denied. Please go to Settings → Apps → Fleet Manager → Permissions and enable Camera to take attendance selfies.');
-                            throw { code: 'camera_denied' };
-                        } else {
-                            return Cam.requestPermissions({ permissions: ['camera'] }).then(function(res) {
-                                if (res.camera === 'granted') {
-                                    return Cam.getPhoto({ quality: 70, allowEditing: false, resultType: 'base64', source: 'CAMERA', direction: 'FRONT', saveToGallery: false });
-                                } else {
-                                    _showPermissionAlert('Camera', 'Camera permission is required to take an attendance selfie. Please grant Camera access when prompted.');
-                                    throw { code: 'camera_denied' };
-                                }
-                            });
-                        }
-                    }).then(function(photo) {
-                        resolve('data:image/jpeg;base64,' + photo.base64String);
-                    }).catch(reject);
-                } else {
-                    var input = document.createElement('input');
-                    input.type = 'file';
-                    input.accept = 'image/*';
-                    input.capture = 'user';
-                    input.onchange = function() {
-                        var file = input.files && input.files[0];
-                        if (!file) { reject(new Error('No file selected')); return; }
-                        var reader = new FileReader();
-                        reader.onload = function(e) { resolve(e.target.result); };
-                        reader.onerror = reject;
-                        reader.readAsDataURL(file);
-                    };
-                    input.click();
+                    _capacitorCameraPhoto(quality).then(resolve).catch(reject);
+                    return;
                 }
+                var input = document.createElement('input');
+                input.type = 'file';
+                input.accept = 'image/*';
+                input.capture = 'user';
+                input.onchange = function() {
+                    var file = input.files && input.files[0];
+                    if (!file) {
+                        reject({ code: 'cancelled', message: 'No file selected' });
+                        return;
+                    }
+                    var reader = new FileReader();
+                    reader.onload = function(e) { resolve(e.target.result); };
+                    reader.onerror = reject;
+                    reader.readAsDataURL(file);
+                };
+                input.click();
             });
+        }
+
+        /** GPS attendance: phone built-in front camera (not gallery). */
+        function takeAttendanceSelfie() {
+            return takeSelfie({ quality: 88 });
         }
 
         /* ── Proactive permission warm-up (call once on app init) ────────── */
@@ -5824,7 +5923,7 @@
         }
 
         return {
-            isNative: _isNative, getGPS: getGPS, takeSelfie: takeSelfie,
+            isNative: _isNative, getGPS: getGPS, takeSelfie: takeSelfie, takeAttendanceSelfie: takeAttendanceSelfie,
             requestPushPermission: requestPushPermission, initPermissions: initPermissions,
             showPermissionAlert: _showPermissionAlert,
             downloadBlob: downloadBlob, openBlobUrl: openBlobUrl, _toast: _toast,
