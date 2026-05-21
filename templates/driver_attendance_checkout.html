@@ -34,7 +34,18 @@
   #cameraModal .modal-header { flex-shrink: 0; padding: 0.4rem 0.75rem; }
   #cameraModal .modal-header .modal-title { font-size: 0.95rem; }
   #cameraModal .modal-body { flex: 1 1 auto; overflow: hidden; padding: 0.35rem !important; min-height: 0; }
-  #cameraModal .modal-body video { width: 100%; height: auto; max-height: calc(100vh - 8rem); object-fit: contain; display: block; background: #111; border-radius: 0.375rem; }
+  #cameraModal.fleet-attnd-camera-active .modal-content { background: rgba(15, 23, 42, 0.82) !important; }
+  #cameraModal.fleet-attnd-camera-active .modal-header,
+  #cameraModal.fleet-attnd-camera-active .modal-footer { background: rgba(15, 23, 42, 0.88) !important; }
+  #cameraModal.fleet-attnd-camera-active .modal-body { background: transparent !important; }
+  #cameraPreviewViewport {
+    width: 100%;
+    min-height: 52vh;
+    max-height: calc(100vh - 10rem);
+    background: transparent;
+    position: relative;
+    border-radius: 0.375rem;
+  }
   #cameraModal .modal-footer { flex-shrink: 0; border-top: none; padding: 0.35rem 0.75rem 0.5rem; justify-content: center; }
   #cameraModal .camera-preview-img { width: 100%; height: auto; max-height: calc(100vh - 10rem); object-fit: contain; display: block; background: #111; border-radius: 0.375rem; }
   #cameraModal .camera-preview-hint { font-size: 0.8rem; color: #64748b; margin-top: 0.35rem; }
@@ -170,9 +181,12 @@
       </div>
       <div class="modal-body text-center">
         <div id="cameraLiveWrap">
+          <div id="cameraPreviewViewport">
+            <div id="fleetLiveGpsStamp" class="fleet-live-gps-stamp d-none" aria-hidden="true"></div>
+          </div>
           <div id="cameraOpening" class="text-center py-4 px-2">
             <div class="spinner-border text-danger mb-2" role="status"></div>
-            <p class="mb-0 small text-muted">Phone ka camera khul raha hai…<br><span class="text-secondary">Front selfie — gallery nahi</span></p>
+            <p class="mb-0 small text-muted">Front camera load ho raha hai…<br><span class="text-secondary">Sirf front selfie — gallery / rear band</span></p>
           </div>
         </div>
         <div id="cameraPreviewWrap" class="d-none">
@@ -191,6 +205,9 @@
             <i class="bi bi-exclamation-triangle me-2"></i><span id="cameraErrorText"></span>
             <button type="button" class="btn btn-outline-danger btn-sm ms-2" id="btnRetryCamera"><i class="bi bi-arrow-clockwise me-1"></i>Retry</button>
           </div>
+          <button type="button" id="btnCapture" class="btn btn-danger btn-lg rounded-pill px-5 d-none">
+            <i class="bi bi-camera me-2"></i>Capture
+          </button>
         </div>
         <div id="cameraPreviewFooter" class="w-100 d-none">
           <div class="d-flex flex-wrap gap-2 justify-content-center">
@@ -257,7 +274,11 @@
   var cameraModal = document.getElementById('cameraModal');
   var cameraCanvas = document.getElementById('cameraCanvas');
   var cameraLiveWrap = document.getElementById('cameraLiveWrap');
+  var cameraPreviewViewport = document.getElementById('cameraPreviewViewport');
+  var fleetLiveGpsStamp = document.getElementById('fleetLiveGpsStamp');
   var cameraOpening = document.getElementById('cameraOpening');
+  var btnCapture = document.getElementById('btnCapture');
+  var _attendancePreviewMode = false;
   var cameraPreviewWrap = document.getElementById('cameraPreviewWrap');
   var cameraPreviewImg = document.getElementById('cameraPreviewImg');
   var cameraLiveFooter = document.getElementById('cameraLiveFooter');
@@ -821,14 +842,22 @@
   }
 
   function resetCameraModalToLive() {
+    _attendancePreviewMode = false;
+    if (typeof window.fleetStopAttendancePreview === 'function') window.fleetStopAttendancePreview();
+    if (cameraModal) cameraModal.classList.remove('fleet-attnd-camera-active');
     pendingCapturePayload = null;
     if (cameraLiveWrap) cameraLiveWrap.classList.remove('d-none');
     if (cameraPreviewWrap) cameraPreviewWrap.classList.add('d-none');
     if (cameraPreviewImg) cameraPreviewImg.removeAttribute('src');
     if (cameraLiveFooter) cameraLiveFooter.classList.remove('d-none');
     if (cameraPreviewFooter) cameraPreviewFooter.classList.add('d-none');
-    if (cameraModalLabel) cameraModalLabel.innerHTML = '<i class="bi bi-camera-fill me-2"></i>Phone camera (Check-out)';
+    if (cameraModalLabel) cameraModalLabel.innerHTML = '<i class="bi bi-camera-fill me-2"></i>Take selfie (Check-out)';
     if (cameraOpening) cameraOpening.classList.remove('d-none');
+    if (fleetLiveGpsStamp) {
+      fleetLiveGpsStamp.classList.add('d-none');
+      fleetLiveGpsStamp.setAttribute('aria-hidden', 'true');
+    }
+    if (btnCapture) btnCapture.className = 'btn btn-danger btn-lg rounded-pill px-5 d-none';
     if (btnConfirmUpload) {
       btnConfirmUpload.disabled = false;
       btnConfirmUpload.innerHTML = '<i class="bi bi-check2-circle me-2"></i>Check-out save karein';
@@ -836,6 +865,9 @@
   }
 
   function showCameraPreviewMode(dataUrl) {
+    _attendancePreviewMode = false;
+    if (typeof window.fleetStopAttendancePreview === 'function') window.fleetStopAttendancePreview();
+    if (cameraModal) cameraModal.classList.remove('fleet-attnd-camera-active');
     if (cameraLiveWrap) cameraLiveWrap.classList.add('d-none');
     if (cameraPreviewWrap) cameraPreviewWrap.classList.remove('d-none');
     if (cameraPreviewImg) cameraPreviewImg.src = dataUrl;
@@ -845,7 +877,7 @@
   }
 
   function showCameraLoading() {
-    cameraLoading.className = 'text-center w-100 d-none';
+    cameraLoading.className = 'text-center w-100';
     cameraError.className = 'alert alert-danger mb-0 w-100 d-none';
     if (cameraLiveWrap) cameraLiveWrap.classList.remove('d-none');
     if (cameraOpening) cameraOpening.classList.remove('d-none');
@@ -867,17 +899,91 @@
       line1Prefix: 'Check-out GPS+Cam',
       lat: (currentPosition && currentPosition.coords) ? currentPosition.coords.latitude : null,
       lng: (currentPosition && currentPosition.coords) ? currentPosition.coords.longitude : null,
-      accuracyMeters: (currentPosition && currentPosition.coords) ? currentPosition.coords.accuracy : null
+      accuracyMeters: (currentPosition && currentPosition.coords) ? currentPosition.coords.accuracy : null,
+      sizeScale: (window.FLEET_ATTENDANCE_STAMP_SCALE != null) ? window.FLEET_ATTENDANCE_STAMP_SCALE : 1
     };
   }
 
   function captureNativeCheckoutPhoto() {
-    if (typeof window.fleetTakeNativeFrontPhoto !== 'function' || typeof window.fleetStampAttendancePhoto !== 'function') {
+    if (typeof window.fleetStampAttendancePhoto !== 'function') {
       return Promise.reject(new Error('Camera module load nahi hua. Page refresh karein.'));
     }
-    return window.fleetTakeNativeFrontPhoto().then(function(rawUrl) {
-      return window.fleetStampAttendancePhoto(rawUrl, cameraCanvas, stampOptsForCheckout());
+    var stampOpts = stampOptsForCheckout();
+    var captureP;
+    if (_attendancePreviewMode && typeof window.fleetCaptureAttendancePreviewPhoto === 'function') {
+      captureP = window.fleetCaptureAttendancePreviewPhoto();
+    } else if (typeof window.fleetTakeNativeFrontPhoto === 'function') {
+      captureP = window.fleetTakeNativeFrontPhoto(stampOpts);
+    } else {
+      return Promise.reject(new Error('Camera not available'));
+    }
+    return captureP.then(function(rawUrl) {
+      return window.fleetStampAttendancePhoto(rawUrl, cameraCanvas, stampOpts);
     });
+  }
+
+  function showCameraReady() {
+    cameraLoading.className = 'text-center w-100 d-none';
+    cameraError.className = 'alert alert-danger mb-0 w-100 d-none';
+    if (cameraOpening) cameraOpening.classList.add('d-none');
+    if (btnCapture) btnCapture.className = 'btn btn-danger btn-lg rounded-pill px-5';
+    if (fleetLiveGpsStamp && _attendancePreviewMode) {
+      fleetLiveGpsStamp.classList.remove('d-none');
+      fleetLiveGpsStamp.setAttribute('aria-hidden', 'false');
+    }
+    if (cameraModalLabel) cameraModalLabel.innerHTML = '<i class="bi bi-camera-fill me-2"></i>Front selfie — Capture';
+  }
+
+  function startCheckoutCameraLive() {
+    _attendancePreviewMode = false;
+    showCameraLoading();
+    if (!cameraModalInstance) {
+      cameraModalInstance = new bootstrap.Modal(cameraModal);
+    }
+    cameraModalInstance.show();
+    var stampOpts = stampOptsForCheckout();
+    var viewport = cameraPreviewViewport;
+    var canPreview = viewport && typeof window.fleetStartAttendancePreview === 'function' && typeof window.fleetIsNativeAndroid === 'function' && window.fleetIsNativeAndroid();
+    if (!canPreview) {
+      captureNativeCheckoutPhoto()
+        .then(applyCheckoutShot)
+        .catch(handleCheckoutCameraError);
+      return;
+    }
+    window.setTimeout(function() {
+      window.fleetStartAttendancePreview(viewport, fleetLiveGpsStamp, stampOpts)
+        .then(function() {
+          _attendancePreviewMode = true;
+          if (cameraModal) cameraModal.classList.add('fleet-attnd-camera-active');
+          showCameraReady();
+        })
+        .catch(function() {
+          _attendancePreviewMode = false;
+          if (typeof window.fleetTakeCameraXFrontPhoto === 'function') {
+            window.fleetTakeCameraXFrontPhoto(stampOpts)
+              .then(function(rawUrl) {
+                return window.fleetStampAttendancePhoto(rawUrl, cameraCanvas, stampOpts);
+              })
+              .then(applyCheckoutShot)
+              .catch(handleCheckoutCameraError);
+          } else {
+            handleCheckoutCameraError(new Error('Camera start failed'));
+          }
+        });
+    }, 350);
+  }
+
+  function handleCheckoutCameraError(err) {
+    if (window.fleetIsCameraCancelled && window.fleetIsCameraCancelled(err)) {
+      if (typeof window.fleetStopAttendancePreview === 'function') window.fleetStopAttendancePreview();
+      if (cameraModalInstance) cameraModalInstance.hide();
+      return;
+    }
+    if (cameraModalInstance && !cameraModal.classList.contains('show')) {
+      alert('Camera failed: ' + (err && err.message ? err.message : 'Permission denied'));
+      return;
+    }
+    showCameraError('Camera failed: ' + (err && err.message ? err.message : 'Try again'));
   }
 
   function applyCheckoutShot(shot) {
@@ -906,27 +1012,24 @@
   }
 
   function openNativeCheckoutCamera() {
-    captureNativeCheckoutPhoto()
-      .then(applyCheckoutShot)
-      .catch(function(err) {
-        if (window.fleetIsCameraCancelled && window.fleetIsCameraCancelled(err)) {
-          return;
-        }
-        alert('Camera failed: ' + (err && err.message ? err.message : 'Permission denied'));
-      });
+    startCheckoutCameraLive();
   }
 
   btnRetryCamera.addEventListener('click', function() {
-    showCameraLoading();
-    captureNativeCheckoutPhoto()
-      .then(applyCheckoutShot)
-      .catch(function(err) {
-        if (window.fleetIsCameraCancelled && window.fleetIsCameraCancelled(err)) {
-          return;
-        }
-        showCameraError('Camera failed: ' + (err && err.message ? err.message : 'Try again'));
-      });
+    resetCameraModalToLive();
+    startCheckoutCameraLive();
   });
+
+  if (btnCapture) {
+    btnCapture.addEventListener('click', function() {
+      if (!_attendancePreviewMode) return;
+      btnCapture.disabled = true;
+      captureNativeCheckoutPhoto()
+        .then(applyCheckoutShot)
+        .catch(handleCheckoutCameraError)
+        .finally(function() { btnCapture.disabled = false; });
+    });
+  }
 
   if (cameraModal.parentElement !== document.body) {
     document.body.appendChild(cameraModal);
@@ -952,15 +1055,8 @@
 
   if (btnRetakePhoto) {
     btnRetakePhoto.addEventListener('click', function() {
-      if (cameraModalInstance) cameraModalInstance.hide();
-      captureNativeCheckoutPhoto()
-        .then(applyCheckoutShot)
-        .catch(function(err) {
-          if (window.fleetIsCameraCancelled && window.fleetIsCameraCancelled(err)) {
-            return;
-          }
-          alert('Camera failed: ' + (err && err.message ? err.message : 'Try again'));
-        });
+      resetCameraModalToLive();
+      startCheckoutCameraLive();
     });
   }
 
