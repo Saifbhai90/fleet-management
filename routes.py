@@ -610,6 +610,48 @@ def _other_driver_open_session_on_vehicle(driver_id, vehicle_id):
     )
 
 
+def _vehicle_oldest_pending_checkout(vehicle_id):
+    """First open session on vehicle (check-in hai, check-out nahi) — kisi bhi driver / date."""
+    if not vehicle_id:
+        return None, None
+    row = (
+        db.session.query(DriverAttendance, Driver)
+        .join(Driver, Driver.id == DriverAttendance.driver_id)
+        .filter(
+            Driver.vehicle_id == vehicle_id,
+            DriverAttendance.check_in.isnot(None),
+            DriverAttendance.check_out.is_(None),
+        )
+        .order_by(DriverAttendance.attendance_date.asc(), DriverAttendance.attendance_segment.asc())
+        .first()
+    )
+    if not row:
+        return None, None
+    return row[0], row[1]
+
+
+def _vehicle_pending_checkout_block_message(driver_id, vehicle):
+    """Block new check-in until every open session on this vehicle is checked out."""
+    if not vehicle or not getattr(vehicle, 'id', None):
+        return None
+    rec, d = _vehicle_oldest_pending_checkout(vehicle.id)
+    if not rec:
+        return None
+    vno = (getattr(vehicle, 'vehicle_no', None) or '').strip() or 'Vehicle'
+    dt = rec.attendance_date.strftime('%d-%m-%Y') if rec.attendance_date else ''
+    ci = rec.check_in.strftime('%I:%M %p') if rec.check_in else ''
+    if d and d.id == driver_id:
+        return (
+            f'{vno}: aap ka {dt} ka check-in ({ci}) abhi check-out pending hai — '
+            'pehle us session ka check-out complete karein, phir naya check-in.'
+        )
+    dname = (d.name if d else '') or 'Driver'
+    return (
+        f'{vno}: {dname} ka {dt} ka check-in ({ci}) check-out pending hai — '
+        'pehle us session ka check-out complete karein, phir is gari par kisi driver ka naya check-in.'
+    )
+
+
 def _vehicle_capacity_value(vehicle):
     if vehicle is None:
         return 1
@@ -1154,12 +1196,9 @@ def _manual_checkin_blocked_by_vehicle_rules(driver_id, vehicle, view_date):
         return None
     vid = vehicle.id
     cap = _vehicle_capacity_value(vehicle)
-    if _other_driver_open_session_on_vehicle(driver_id, vid):
-        return (
-            'Is vehicle par kisi aur driver ka session abhi khula hai (check-out pending) — '
-            'pehle un ka check-out complete karein (purani date ki raat ki duty bhi shamil hai), '
-            'phir naya check-in.'
-        )
+    pending_msg = _vehicle_pending_checkout_block_message(driver_id, vehicle)
+    if pending_msg:
+        return pending_msg
     if cap <= 1:
         other = (
             db.session.query(DriverAttendance.id)
@@ -18101,21 +18140,21 @@ def driver_attendance_manual_checkin():
             return redirect(back_url)
     else:
         cap = _vehicle_capacity_value(driver.vehicle)
+        blocked = _manual_checkin_blocked_by_vehicle_rules(driver_id, driver.vehicle, view_date)
+        if blocked:
+            flash(blocked, 'warning')
+            return redirect(back_url)
         if _driver_has_open_segment(driver_id, view_date):
             flash(
-                'Is driver ka aaj ka ek session abhi khula hai (check-out pending). Pehle check-out karein.',
+                'Is driver ka is date par session abhi khula hai (check-out pending). Pehle check-out karein.',
                 'warning',
             )
             return redirect(back_url)
         if _count_driver_segments_with_checkin(driver_id, view_date) >= cap:
             flash(
-                f'Is driver ke liye aaj maximum {cap} shift/session ho chuki hain — mazeed manual check-in allow nahi.',
+                f'Is driver ke liye is date par maximum {cap} shift/session ho chuki hain — mazeed manual check-in allow nahi.',
                 'warning',
             )
-            return redirect(back_url)
-        blocked = _manual_checkin_blocked_by_vehicle_rules(driver_id, driver.vehicle, view_date)
-        if blocked:
-            flash(blocked, 'warning')
             return redirect(back_url)
         if _driver_marked_duty_off_no_checkin(driver_id, view_date):
             flash(
@@ -19128,13 +19167,13 @@ def api_attendance_gps_checkin_submit():
         if _driver_marked_duty_off_no_checkin(driver_id, today):
             return jsonify({'ok': False, 'message': 'Driver duty off hai; GPS/Camera attendance allowed nahi.'}), 400
         cap = _vehicle_capacity_value(driver.vehicle)
+        blocked_msg = _manual_checkin_blocked_by_vehicle_rules(driver_id, driver.vehicle, today)
+        if blocked_msg:
+            return jsonify({'ok': False, 'message': blocked_msg}), 400
         if _driver_has_open_segment(driver_id, today):
             return jsonify({'ok': False, 'message': 'Check-out pending hai. Pehle previous session close karein.'}), 400
         if _count_driver_segments_with_checkin(driver_id, today) >= cap:
             return jsonify({'ok': False, 'message': f'Aaj maximum {cap} GPS check-in allowed hain.'}), 400
-        blocked_msg = _manual_checkin_blocked_by_vehicle_rules(driver_id, driver.vehicle, today)
-        if blocked_msg:
-            return jsonify({'ok': False, 'message': blocked_msg}), 400
         now = pk_now()
         now_time = _attendance_local_time()
         _ci_vehicle_id = int(body.get('vehicle_id') or 0) or None
@@ -19342,6 +19381,10 @@ def driver_attendance_checkin():
             )
             return redirect(url_for('driver_attendance_checkin'))
         cap = _vehicle_capacity_value(driver.vehicle)
+        blocked_vehicle_first = _vehicle_pending_checkout_block_message(driver_id, driver.vehicle)
+        if blocked_vehicle_first:
+            flash(blocked_vehicle_first, 'warning')
+            return redirect(url_for('driver_attendance_checkin'))
         if _driver_has_open_segment(driver_id, today):
             flash(
                 'Pehle Mark Attendance check-out complete karein — check-out pending session hai.',

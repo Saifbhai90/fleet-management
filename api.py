@@ -342,21 +342,28 @@ def mobile_checkin():
 
     if vehicle and getattr(vehicle, 'id', None):
         vid = vehicle.id
-        clash_open = (
-            db.session.query(DriverAttendance.id)
+        pending_row = (
+            db.session.query(DriverAttendance, Driver)
             .join(Driver, Driver.id == DriverAttendance.driver_id)
             .filter(
                 Driver.vehicle_id == vid,
-                Driver.id != driver.id,
                 DriverAttendance.check_in.isnot(None),
                 DriverAttendance.check_out.is_(None),
             )
+            .order_by(DriverAttendance.attendance_date.asc(), DriverAttendance.attendance_segment.asc())
             .first()
         )
-        if clash_open:
+        if pending_row:
+            prec, pd = pending_row
+            pdt = prec.attendance_date.strftime('%d-%m-%Y') if prec.attendance_date else ''
+            vno = (getattr(vehicle, 'vehicle_no', None) or '').strip() or 'Vehicle'
+            if pd.id == driver.id:
+                return _err(
+                    f'{vno}: aap ka {pdt} ka check-out pending hai — pehle check-out complete karein.'
+                )
             return _err(
-                'Another driver on this vehicle has check-out pending. '
-                'Pehle un ka check-out complete karein.'
+                f'{vno}: {pd.name or "Driver"} ka {pdt} ka check-out pending hai — '
+                'pehle us session ka check-out complete karein.'
             )
         if cap <= 1:
             clash = (
