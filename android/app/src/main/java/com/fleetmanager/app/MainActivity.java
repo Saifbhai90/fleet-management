@@ -10,6 +10,7 @@ import android.graphics.drawable.ColorDrawable;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.view.View;
 import android.webkit.WebView;
 import android.os.Handler;
 import android.os.Looper;
@@ -87,6 +88,7 @@ public class MainActivity extends BridgeActivity {
             if (getBridge() != null && getBridge().getWebView() != null) {
                 WebView wv = getBridge().getWebView();
                 wv.setBackgroundColor(Color.TRANSPARENT);
+                wv.setLayerType(View.LAYER_TYPE_HARDWARE, null);
             } else {
                 mainHandler.postDelayed(this::scheduleWebViewTransparent, 50);
             }

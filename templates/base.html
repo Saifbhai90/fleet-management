@@ -36,37 +36,43 @@
         body > .ts-dropdown { z-index: 1060 !important; }
         /* Native app: bottom nav z-index 1065 — TS dropdown must clear it */
         html.capacitor-native body > .ts-dropdown { z-index: 12050 !important; }
-        /* GPS attendance: native CameraPreview in viewport (front-only) */
+        /* GPS attendance: native CameraPreview behind WebView hole (front-only) */
         html.fleet-attnd-camera-active,
         html.fleet-attnd-camera-active body {
+            background: #000 !important;
+        }
+        html.fleet-attnd-camera-active.capacitor-native body > *:not(#cameraModal) {
+            display: none !important;
+        }
+        html.fleet-attnd-camera-active.capacitor-native body > .modal-backdrop {
+            display: none !important;
+        }
+        html.fleet-attnd-camera-active.capacitor-native body > .ts-dropdown {
+            display: none !important;
+        }
+        html.fleet-attnd-camera-active #cameraModal {
+            display: block !important;
+            position: fixed !important;
+            inset: 0 !important;
+            z-index: 200000 !important;
+            padding: 0 !important;
+        }
+        html.fleet-attnd-camera-active #cameraModal .modal-dialog {
+            margin: 0.5rem auto !important;
+            max-width: 480px !important;
             background: transparent !important;
         }
-        html.fleet-attnd-camera-active .modal-content,
-        html.fleet-attnd-camera-active .modal-body,
-        html.fleet-attnd-camera-active .modal-dialog {
+        html.fleet-attnd-camera-active #cameraModal .modal-content,
+        html.fleet-attnd-camera-active #cameraModal .modal-body,
+        html.fleet-attnd-camera-active #cameraModal #cameraLiveWrap,
+        html.fleet-attnd-camera-active #cameraModal #cameraPreviewViewport {
             background: transparent !important;
         }
-        html.fleet-attnd-camera-active.capacitor-native ion-content,
-        html.fleet-attnd-camera-active.capacitor-native .main-content,
-        html.fleet-attnd-camera-active.capacitor-native #appNativeShell {
-            background: transparent !important;
-        }
-        /* Hide page shell so transparent modal does not show attendance UI through the hole */
-        html.fleet-attnd-camera-active.capacitor-native #appNativeShell,
-        html.fleet-attnd-camera-active.capacitor-native nav.navbar,
-        html.fleet-attnd-camera-active.capacitor-native .mobile-bottom-nav,
-        html.fleet-attnd-camera-active.capacitor-native .sidebar,
-        html.fleet-attnd-camera-active.capacitor-native .sidebar-overlay {
-            visibility: hidden !important;
-            pointer-events: none !important;
-        }
-        html.fleet-attnd-camera-active #cameraModal,
-        html.fleet-attnd-camera-active #cameraModal * {
-            visibility: visible;
+        html.fleet-attnd-camera-active #cameraModal #cameraPreviewViewport {
+            pointer-events: none;
         }
         html.fleet-attnd-camera-active .modal-backdrop.show {
-            opacity: 0 !important;
-            background: transparent !important;
+            display: none !important;
         }
         .fleet-live-gps-stamp {
             position: absolute;
@@ -4474,7 +4480,28 @@
         });
     };
 
-    /** Portrait selfie: honor EXIF + landscape buffer on portrait phones. opts.fromCameraPreview fixes upside-down CameraPreview JPEGs. */
+    /** EXIF orientation tag → clockwise correction degrees (canvas), or 0 if none. */
+    window.fleetExifToRotationDegrees = function(exif) {
+        if (exif === 3) return 180;
+        if (exif === 6) return 90;
+        if (exif === 8) return 270;
+        return 0;
+    };
+
+    /** Toggle full-screen camera chrome (hide app shell; show only #cameraModal). */
+    window.fleetSetAttendanceCameraChrome = function(active) {
+        document.documentElement.classList.toggle('fleet-attnd-camera-active', !!active);
+        document.body.classList.toggle('fleet-attnd-camera-active', !!active);
+        document.querySelectorAll('body > .ts-dropdown').forEach(function(el) {
+            el.style.display = active ? 'none' : '';
+        });
+    };
+
+    /**
+     * Portrait selfie orientation.
+     * fromCameraPreview: live preview is already upright — only apply EXIF correction (never blind 180°).
+     * Other sources: EXIF + 90° when landscape buffer on portrait phone.
+     */
     window.fleetNormalizeSelfieOrientation = function(dataUrl, opts) {
         opts = opts || {};
         return new Promise(function(resolve, reject) {
@@ -4482,28 +4509,19 @@
                 reject(new Error('No photo'));
                 return;
             }
+            var exif = window.fleetReadJpegExifOrientation(dataUrl);
+            var deg = window.fleetExifToRotationDegrees(exif);
             if (opts.fromCameraPreview) {
-                var exifCp = window.fleetReadJpegExifOrientation(dataUrl);
-                var cpDeg = 0;
-                if (exifCp === 3) cpDeg = 180;
-                else if (exifCp === 6) cpDeg = 90;
-                else if (exifCp === 8) cpDeg = 270;
-                else cpDeg = 180;
-                if (cpDeg === 0) {
+                if (deg === 0) {
                     resolve(dataUrl);
                     return;
                 }
-                window.fleetRotateDataUrl(dataUrl, cpDeg).then(resolve).catch(reject);
+                window.fleetRotateDataUrl(dataUrl, deg).then(resolve).catch(reject);
                 return;
             }
-            var exif = window.fleetReadJpegExifOrientation(dataUrl);
-            var exifDeg = 0;
-            if (exif === 3) exifDeg = 180;
-            else if (exif === 6) exifDeg = 90;
-            else if (exif === 8) exifDeg = 270;
-            var hadExifRotate = exifDeg !== 0;
+            var hadExifRotate = deg !== 0;
             var afterExif = hadExifRotate
-                ? window.fleetRotateDataUrl(dataUrl, exifDeg)
+                ? window.fleetRotateDataUrl(dataUrl, deg)
                 : Promise.resolve(dataUrl);
             afterExif.then(function(url) {
                 var img = new Image();
@@ -4632,8 +4650,7 @@
             clearInterval(window._fleetAttendancePreviewTimer);
             window._fleetAttendancePreviewTimer = null;
         }
-        document.documentElement.classList.remove('fleet-attnd-camera-active');
-        document.body.classList.remove('fleet-attnd-camera-active');
+        window.fleetSetAttendanceCameraChrome(false);
         var cp = window.fleetGetCameraPreviewPlugin();
         var stopP = Promise.resolve();
         if (cp && window._fleetAttendancePreviewActive && typeof cp.stop === 'function') {
@@ -4657,15 +4674,14 @@
                     }, 450);
                 });
             }
-            document.documentElement.classList.add('fleet-attnd-camera-active');
-            document.body.classList.add('fleet-attnd-camera-active');
+            window.fleetSetAttendanceCameraChrome(true);
             return cp.start({
                 position: 'front',
                 x: r.x,
                 y: r.y,
                 width: r.width,
                 height: r.height,
-                toBack: false,
+                toBack: true,
                 disableAudio: true,
                 enableZoom: false,
                 lockAndroidOrientation: true,
@@ -4676,8 +4692,7 @@
                 }
                 window._fleetAttendancePreviewActive = true;
             }).catch(function(err) {
-                document.documentElement.classList.remove('fleet-attnd-camera-active');
-                document.body.classList.remove('fleet-attnd-camera-active');
+                window.fleetSetAttendanceCameraChrome(false);
                 throw err;
             });
         });
