@@ -1117,6 +1117,11 @@
     });
   }
 
+  function closeCheckoutPreviewModal() {
+    resetCameraModalToLive();
+    if (cameraModalInstance) cameraModalInstance.hide();
+  }
+
   if (btnConfirmUpload) {
     btnConfirmUpload.addEventListener('click', function() {
       var payload = pendingCapturePayload;
@@ -1134,19 +1139,18 @@
           clearPendingCheckout(String(payload.driver_id));
           refreshCheckoutMediaPanel();
           setUploadStatus('Upload status: Uploaded successfully.', 'success');
-          resetCameraModalToLive();
-          if (cameraModalInstance) cameraModalInstance.hide();
         } else {
-          setUploadStatus('Upload pending: ' + (gpsApiJsonMessage(res.body) || 'Server rejected upload.'), 'warning');
+          setUploadStatus('Upload pending: ' + (gpsApiJsonMessage(res.body) || 'Server rejected upload. Neeche Retry karein.'), 'warning');
           btnRetryPendingCheckout.classList.remove('d-none');
         }
       }).catch(function() {
-        setUploadStatus('Upload pending: Network issue. Retry karein.', 'warning');
+        setUploadStatus('Upload pending: Network issue. Neeche Retry Upload karein.', 'warning');
         btnRetryPendingCheckout.classList.remove('d-none');
       }).finally(function() {
         document.getElementById('savingOverlay').style.display = 'none';
         btnConfirmUpload.disabled = false;
         btnConfirmUpload.innerHTML = '<i class="bi bi-check2-circle me-2"></i>Check-out save karein';
+        closeCheckoutPreviewModal();
       });
     });
   }

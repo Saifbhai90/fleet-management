@@ -1073,6 +1073,11 @@
     });
   }
 
+  function closeCheckinPreviewModal() {
+    resetCameraModalToLive();
+    if (cameraModalInstance) cameraModalInstance.hide();
+  }
+
   if (btnConfirmUpload) {
     btnConfirmUpload.addEventListener('click', function() {
       var payload = pendingCapturePayload;
@@ -1090,19 +1095,18 @@
           clearPendingCheckin(String(payload.driver_id));
           refreshCheckinMediaPanel();
           setUploadStatus('Upload status: Uploaded successfully.', 'success');
-          resetCameraModalToLive();
-          if (cameraModalInstance) cameraModalInstance.hide();
         } else {
-          setUploadStatus('Upload pending: ' + (gpsApiJsonMessage(res.body) || 'Server rejected upload.'), 'warning');
+          setUploadStatus('Upload pending: ' + (gpsApiJsonMessage(res.body) || 'Server rejected upload. Neeche Retry karein.'), 'warning');
           btnRetryPendingCheckin.classList.remove('d-none');
         }
       }).catch(function() {
-        setUploadStatus('Upload pending: Network issue. Retry karein.', 'warning');
+        setUploadStatus('Upload pending: Network issue. Neeche Retry Upload karein.', 'warning');
         btnRetryPendingCheckin.classList.remove('d-none');
       }).finally(function() {
         document.getElementById('savingOverlay').style.display = 'none';
         btnConfirmUpload.disabled = false;
         btnConfirmUpload.innerHTML = '<i class="bi bi-check2-circle me-2"></i>Check-in save karein';
+        closeCheckinPreviewModal();
       });
     });
   }
