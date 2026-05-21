@@ -1,28 +1,33 @@
-# GPS Attendance — Front Camera (Android)
+# GPS Attendance — Camera (Production)
 
-## Architecture (do not duplicate logic elsewhere)
+## Current behaviour (Mark Attendance / Check-out)
 
-1. **Live preview** — `@capacitor-community/camera-preview` in `base.html`:
-   - `fleetStartAttendancePreview()` → `toBack: true`, rect from `#cameraPreviewViewport`
-   - `fleetSetAttendanceCameraChrome(true)` hides all `body` children except `#cameraModal` (stops driver-name bleed-through)
-   - Native: `MainActivity` sets WebView background transparent
+1. User taps **Mark Attendance** (or check-out equivalent).
+2. **Phone system camera** opens (Capacitor Camera plugin).
+   - `source: 'CAMERA'` — gallery picker **not** offered.
+   - `direction: 'FRONT'` — front / selfie camera.
+   - `saveToGallery: false` — photo **not** saved to gallery.
+3. After capture → `fleetStampAttendancePhoto()` adds GPS stamp on canvas.
+4. In-app **Preview** modal → Save or **Dobara lein** (re-opens system camera).
 
-2. **Capture** — `fleetCaptureAttendancePreviewPhoto()` returns raw base64 (no rotation).
+Implementation: `window.fleetTakeSystemCameraPhoto()` in `templates/base.html` (uses `FleetBridge.takeSelfie` when available).
 
-3. **Orientation** — once in `fleetStampAttendancePhoto()` via `fleetNormalizeSelfieOrientation(dataUrl, { fromCameraPreview: true })`:
-   - **Only EXIF-based rotation** (3→180°, 6→90°, 8→270°). **Never** blind 180° when EXIF=1 (live preview is already upright).
+## GPS stamp size
 
-4. **GPS stamp** — only on final canvas in `fleetStampAttendancePhoto()` (not on live preview).
+- Odometer photos: `ODOM_STAMP_SCALE = 2.5` in `task_report_odometer_upload.html`.
+- Attendance: `FLEET_ATTENDANCE_STAMP_SCALE = 2.75` in `base.html` (slightly larger than odometer).
 
-5. **Retake** — `fleetRestartAttendancePreview()` → stop, 300ms, start (do not rely on `shown.bs.modal`).
+## Archived custom in-app camera
 
-## Version bump before release APK
+Future built-in live preview work is documented in:
 
-Edit `android/version.properties` or run `npm run version:bump`, then rebuild signed APK.
+`docs/archive/CUSTOM_ATTENDANCE_CAMERA_ARCHIVE.md`
 
-## Deploy checklist
+Toggle: `window.FLEET_ATTENDANCE_USE_INAPP_PREVIEW = true` (default **false**).
 
-| Change | Needs Render deploy | Needs new APK |
-|--------|---------------------|---------------|
-| `base.html` / attendance templates | Yes | No (if app loads remote URL) |
-| `MainActivity` / `version.properties` | No | Yes |
+## Deploy vs APK
+
+| Change | Render deploy | New APK |
+|--------|---------------|---------|
+| `base.html`, check-in/out templates | Yes | No (remote URL) |
+| `MainActivity` / CameraPreview native | Only if re-enabling in-app preview | Yes |

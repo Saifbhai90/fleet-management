@@ -864,18 +864,35 @@
     }
     var stampOpts = stampOptsForCheckin();
     var captureP;
-    if (_attendancePreviewMode && typeof window.fleetCaptureAttendancePreviewPhoto === 'function') {
+    if (_attendancePreviewMode && window.FLEET_ATTENDANCE_USE_INAPP_PREVIEW && typeof window.fleetCaptureAttendancePreviewPhoto === 'function') {
       captureP = window.fleetCaptureAttendancePreviewPhoto();
-    } else if (typeof window.fleetTakeNativeFrontPhoto === 'function') {
-      captureP = window.fleetTakeNativeFrontPhoto(stampOpts);
+    } else if (typeof window.fleetTakeSystemCameraPhoto === 'function') {
+      captureP = window.fleetTakeSystemCameraPhoto();
     } else {
       return Promise.reject(new Error('Camera not available'));
     }
     return captureP.then(function(rawUrl) {
       var opts = stampOpts;
-      if (_attendancePreviewMode) opts = Object.assign({}, stampOpts, { fromCameraPreview: true });
+      if (_attendancePreviewMode && window.FLEET_ATTENDANCE_USE_INAPP_PREVIEW) {
+        opts = Object.assign({}, stampOpts, { fromCameraPreview: true });
+      }
       return window.fleetStampAttendancePhoto(rawUrl, cameraCanvas, opts);
     });
+  }
+
+  /** Phone system camera → stamp → preview modal (no gallery). */
+  function runCheckinSystemCameraFlow() {
+    _attendancePreviewMode = false;
+    if (typeof window.fleetTakeSystemCameraPhoto !== 'function') {
+      alert('Camera not available. App update ya page refresh karein.');
+      return;
+    }
+    window.fleetTakeSystemCameraPhoto()
+      .then(function(rawUrl) {
+        return window.fleetStampAttendancePhoto(rawUrl, cameraCanvas, stampOptsForCheckin());
+      })
+      .then(applyCheckinShot)
+      .catch(handleCheckinCameraError);
   }
 
   function showCameraReady() {
@@ -989,12 +1006,20 @@
   }
 
   function openNativeCheckinCamera() {
-    startCheckinCameraLive();
+    if (window.FLEET_ATTENDANCE_USE_INAPP_PREVIEW) {
+      startCheckinCameraLive();
+      return;
+    }
+    runCheckinSystemCameraFlow();
   }
 
   btnRetryCamera.addEventListener('click', function() {
     resetCameraModalToLive();
-    resumeCheckinCameraPreview();
+    if (window.FLEET_ATTENDANCE_USE_INAPP_PREVIEW) {
+      resumeCheckinCameraPreview();
+    } else {
+      runCheckinSystemCameraFlow();
+    }
   });
 
   if (btnCapture) {
@@ -1037,7 +1062,11 @@
   if (btnRetakePhoto) {
     btnRetakePhoto.addEventListener('click', function() {
       resetCameraModalToLive();
-      resumeCheckinCameraPreview();
+      if (window.FLEET_ATTENDANCE_USE_INAPP_PREVIEW) {
+        resumeCheckinCameraPreview();
+      } else {
+        runCheckinSystemCameraFlow();
+      }
     });
   }
 

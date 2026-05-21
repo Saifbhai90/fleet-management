@@ -4410,8 +4410,11 @@
         return tmp.toDataURL('image/jpeg', quality);
     };
 
-    /** Attendance capture: stamp size matches in-app WebView era (sizeScale 1); high-res export. */
-    window.FLEET_ATTENDANCE_STAMP_SCALE = 1;
+    /** Odometer reference scale (task_report_odometer_upload.html). Attendance stamp is slightly larger. */
+    window.FLEET_ODOMETER_STAMP_SCALE = 2.5;
+    window.FLEET_ATTENDANCE_STAMP_SCALE = 2.75;
+    /** false = system camera (production). true = in-app CameraPreview (see docs/archive/). */
+    window.FLEET_ATTENDANCE_USE_INAPP_PREVIEW = false;
     window.FLEET_ATTENDANCE_CAPTURE_MAX_SIDE = 2048;
     window.FLEET_ATTENDANCE_CAPTURE_QUALITY = 0.92;
 
@@ -4743,16 +4746,50 @@
         });
     };
 
-    /** Front-only capture: in-app preview (CameraPreview) or CameraX fallback. */
+    /**
+     * System camera only — no gallery. Uses Capacitor Camera (FRONT, saveToGallery: false).
+     * Requires FleetBridge (loaded after this script block on native).
+     */
+    window.fleetTakeSystemCameraPhoto = function(quality) {
+        if (window.FleetBridge && typeof window.FleetBridge.takeSelfie === 'function') {
+            var q = (quality != null && quality >= 1 && quality <= 100)
+                ? quality
+                : Math.round((window.FLEET_ATTENDANCE_CAPTURE_QUALITY || 0.92) * 100);
+            return window.FleetBridge.takeSelfie({ quality: q });
+        }
+        var Cam = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Camera;
+        if (!Cam || typeof Cam.getPhoto !== 'function') {
+            return Promise.reject(new Error('Camera not available'));
+        }
+        var q2 = (quality != null && quality >= 1 && quality <= 100)
+            ? quality
+            : Math.round((window.FLEET_ATTENDANCE_CAPTURE_QUALITY || 0.92) * 100);
+        return Cam.getPhoto({
+            quality: q2,
+            allowEditing: false,
+            resultType: 'base64',
+            source: 'CAMERA',
+            direction: 'FRONT',
+            saveToGallery: false
+        }).then(function(photo) {
+            if (!photo || !photo.base64String) throw new Error('No photo captured');
+            return 'data:image/jpeg;base64,' + photo.base64String;
+        });
+    };
+
+    /** Front capture: system camera (default) or archived in-app preview when FLEET_ATTENDANCE_USE_INAPP_PREVIEW. */
     window.fleetTakeNativeFrontPhoto = function(stampOpts) {
         stampOpts = stampOpts || {};
-        if (window.fleetIsNativeAndroid()) {
-            return window.fleetTakeCameraXFrontPhoto(stampOpts);
+        if (window.FLEET_ATTENDANCE_USE_INAPP_PREVIEW) {
+            if (window.fleetIsNativeAndroid()) {
+                return window.fleetTakeCameraXFrontPhoto(stampOpts);
+            }
+            if (window.FleetBridge && typeof window.FleetBridge.takeAttendanceSelfie === 'function') {
+                return window.FleetBridge.takeAttendanceSelfie();
+            }
+            return Promise.reject(new Error('Camera not available'));
         }
-        if (window.FleetBridge && typeof window.FleetBridge.takeAttendanceSelfie === 'function') {
-            return window.FleetBridge.takeAttendanceSelfie();
-        }
-        return Promise.reject(new Error('Camera not available'));
+        return window.fleetTakeSystemCameraPhoto();
     };
 
     window.fleetIsCameraCancelled = function(err) {
