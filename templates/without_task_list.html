@@ -80,7 +80,7 @@
               <th class="text-center">Logbook</th>
               <th class="text-center">EMG</th>
               <th class="text-end">T.KM</th>
-              <th>Remarks</th>
+              <th class="rpt-wrap-cell">Remarks</th>
               <th>Fine</th>
             </tr>
           </thead>
@@ -99,7 +99,7 @@
               <td class="text-center">{{ row.logbook_task }}</td>
               <td class="text-center">{{ row.emg_task }}</td>
               <td class="text-end">{{ "%.0f"|format(row.t_km|float) if row.t_km is not none else '-' }}</td>
-              <td>{{ row.remarks or '-' }}</td>
+              <td class="rpt-wrap-cell">{{ row.remarks or '-' }}</td>
               <td>{{ row.fine or '-' }}</td>
             </tr>
             {% else %}

@@ -12734,7 +12734,7 @@ def oil_change_alert_report_export():
     )
 
     headers = [
-        'Sr No', 'Project', 'Tehsil', 'District', 'Vehicle No', 'Model', 'Type', 'Family',
+        'Sr No', 'Project', 'District', 'Tehsil', 'Vehicle No', 'Model', 'Type', 'Family',
         'Limit KM', 'Near %', 'Last Oil Change Date', 'Base Reading', 'Current Reading', 'KM After Oil', 'Remaining KM', 'Status', 'Custom KM Check',
         'Base Source', 'Current Source'
     ]
@@ -12744,8 +12744,8 @@ def oil_change_alert_report_export():
         data_rows.append([
             idx,
             r['project'].name if r['project'] else '-',
-            r.get('tehsil') or '-',
             r['district'].name if r['district'] else '-',
+            r.get('tehsil') or '-',
             v.vehicle_no if v else '-',
             v.model if v and v.model else '-',
             v.vehicle_type if v and v.vehicle_type else '-',
@@ -21372,9 +21372,10 @@ def task_report_pending():
     all_rows = []
     pending_rows = []
     _has_filter = request.args.get('date') is not None
-    if _has_filter and project_id:
+    if _has_filter:
         q = _vehicle_query_task_report_scope(is_master_or_admin, allowed_projects, allowed_districts, allowed_vehicles)
-        q = q.filter(Vehicle.project_id == project_id)
+        if project_id:
+            q = q.filter(Vehicle.project_id == project_id)
         if district_id:
             q = q.filter(Vehicle.district_id == district_id)
         vehicles = q.order_by(Vehicle.vehicle_no).all()

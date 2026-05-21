@@ -69,8 +69,8 @@
       <tr>
         <th>Sr No</th>
         <th>Project</th>
-        <th>Tehsil</th>
         <th>District</th>
+        <th>Tehsil</th>
         <th>Vehicle</th>
         <th>Family / Limit</th>
         <th>Last Oil Change Date</th>
@@ -87,8 +87,8 @@
       <tr>
         <td>{{ loop.index }}</td>
         <td>{{ r.project.name if r.project else '-' }}</td>
-        <td>{{ r.tehsil or '-' }}</td>
         <td>{{ r.district.name if r.district else '-' }}</td>
+        <td>{{ r.tehsil or '-' }}</td>
         <td>{{ r.vehicle.vehicle_no }}{% if r.vehicle.model %} ({{ r.vehicle.model }}){% endif %}</td>
         <td>{{ r.vehicle_family }} / {{ r.limit_km }} KM ({{ r.near_percent }}%)</td>
         <td>{{ r.last_oil_change_date|ddmmyyyy if r.last_oil_change_date else '-' }}</td>

@@ -632,11 +632,9 @@
   <div class="d-flex justify-content-between align-items-center mb-3 mb-md-4 flex-wrap gap-2 task-batch-page-header">
     <h2 class="mb-0 task-batch-page-title"><i class="bi bi-plus-circle me-2 text-success"></i>New Task Entry</h2>
     <div class="d-flex flex-wrap gap-2">
-      {% if project_id and (request.args.get('date') or view_date) %}
-      <a href="{{ url_for('task_report_pending') }}?date={{ view_date.strftime('%d-%m-%Y') }}{% if district_id %}&district_id={{ district_id }}{% endif %}&project_id={{ project_id }}" class="btn btn-warning btn-sm rounded-pill px-3">
+      <a href="{{ url_for('task_report_pending') }}?date={{ view_date.strftime('%d-%m-%Y') }}{% if district_id %}&district_id={{ district_id }}{% endif %}{% if project_id %}&project_id={{ project_id }}{% endif %}" class="btn btn-warning btn-sm rounded-pill px-3">
         <i class="bi bi-hourglass-split me-1"></i>Pending Task Report{% if pending_task_count %} ({{ pending_task_count }}){% endif %}
       </a>
-      {% endif %}
       <a href="{{ url_for('task_report_list') }}" class="btn btn-outline-secondary btn-sm rounded-pill px-3">Back to Report</a>
     </div>
   </div>

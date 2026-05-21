@@ -42,13 +42,13 @@
           {% endif %}
         </div>
         <div class="col-12 col-md-2">
-          <label class="form-label">Project <span class="text-danger">*</span></label>
+          <label class="form-label">Project</label>
           {% if task_entry_filter.lock_project %}
           <input type="hidden" name="project_id" value="{{ project_id }}">
           <div class="form-control bg-light">{% for p in projects %}{% if p.id == project_id %}{{ p.name }}{% endif %}{% endfor %}</div>
           {% else %}
-          <select name="project_id" id="pendingProjectSelect" class="form-select search-select" required>
-            <option value="0">-- Select Project --</option>
+          <select name="project_id" id="pendingProjectSelect" class="form-select search-select">
+            <option value="0">-- All Projects --</option>
             {% for p in projects %}
             <option value="{{ p.id }}" {% if project_id == p.id %}selected{% endif %}>{{ p.name }}</option>
             {% endfor %}
@@ -62,7 +62,7 @@
     </div>
   </div>
 
-  {% if request.args.get('date') and project_id %}
+  {% if request.args.get('date') %}
   <div class="d-flex flex-wrap gap-2 mb-2">
     <span class="badge bg-secondary">Loaded: {{ total_loaded }} vehicle(s)</span>
     <span class="badge bg-warning text-dark">Pending: {{ pending_rows|length }}</span>
@@ -73,13 +73,14 @@
         <thead class="table-light">
           <tr>
             <th>#</th>
+            <th>Project</th>
             <th>District</th>
             <th>Tehsil</th>
             <th>Parking</th>
             <th>Vehicle No</th>
-            <th>Start Reading</th>
-            <th>Close Reading</th>
-            <th>Task's</th>
+            <th class="text-center">Start Reading</th>
+            <th class="text-center">Close Reading</th>
+            <th class="text-center">Task's</th>
             <th>Pending reason</th>
           </tr>
         </thead>
@@ -88,12 +89,13 @@
           {% set v = row.vehicle %}
           <tr>
             <td>{{ loop.index }}</td>
+            <td>{{ v.project.name if v.project else '—' }}</td>
             <td>{{ v.district.name if v.district else '—' }}</td>
             <td>{{ v.parking_station.tehsil if v.parking_station else '—' }}</td>
             <td>{{ v.parking_station.name if v.parking_station else '—' }}</td>
             <td class="fw-semibold">{{ v.vehicle_no }}</td>
-            <td class="text-end">{{ '%.0f'|format(row.start_reading) if row.start_reading is not none else '—' }}</td>
-            <td class="text-end">
+            <td class="text-center">{{ '%.0f'|format(row.start_reading) if row.start_reading is not none else '—' }}</td>
+            <td class="text-center">
               {% if row.close_reading is none %}<span class="badge bg-danger">Missing</span>{% else %}{{ row.close_reading }}{% endif %}
             </td>
             <td class="text-center">
@@ -107,7 +109,7 @@
           </tr>
           {% else %}
           <tr>
-            <td colspan="9" class="text-center text-muted py-4">Is filter par koi pending vehicle nahi — sab entries complete hain.</td>
+            <td colspan="10" class="text-center text-muted py-4">Is filter par koi pending vehicle nahi — sab entries complete hain.</td>
           </tr>
           {% endfor %}
         </tbody>
@@ -115,7 +117,7 @@
     </div>
   </div>
   {% else %}
-  <div class="alert alert-info">Date aur Project select karke <strong>Load</strong> karein.</div>
+  <div class="alert alert-info">Date select karke <strong>Load</strong> karein. Project / District khali chhor sakte hain — tamam scope ki pending list dikhe gi.</div>
   {% endif %}
 </div>
 <script>
@@ -126,7 +128,7 @@
     districtSelect.addEventListener('change', function() {
       var did = this.value;
       if (projectSelect.tomselect) projectSelect.tomselect.destroy();
-      projectSelect.innerHTML = '<option value="0">-- Select Project --</option>';
+      projectSelect.innerHTML = '<option value="0">-- All Projects --</option>';
       if (did && did !== '0') {
         fetch('/get_projects_by_district/' + did).then(function(r) { return r.json(); }).then(function(arr) {
           arr.forEach(function(p) {

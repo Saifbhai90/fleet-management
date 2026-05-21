@@ -126,8 +126,8 @@
           <tr>
             <th>Sr No</th>
             <th>Project</th>
-            <th>Tehsil</th>
             <th>District</th>
+            <th>Tehsil</th>
             <th>Vehicle</th>
             <th>Family / Limit</th>
             <th>Date</th>
@@ -144,8 +144,8 @@
           <tr>
             <td>{{ loop.index }}</td>
             <td>{{ r.project.name if r.project else '-' }}</td>
-            <td>{{ r.tehsil or '-' }}</td>
             <td>{{ r.district.name if r.district else '-' }}</td>
+            <td>{{ r.tehsil or '-' }}</td>
             <td>
               <div class="fw-semibold">{{ r.vehicle.vehicle_no }}</div>
               <small class="text-muted">{{ r.vehicle.model or '-' }}{% if r.vehicle.vehicle_type %} · {{ r.vehicle.vehicle_type }}{% endif %}</small>

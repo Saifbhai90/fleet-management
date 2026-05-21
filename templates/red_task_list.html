@@ -77,10 +77,10 @@
               <th>District Name</th>
               <th>Project</th>
               <th>Vehicle #</th>
-              <th>Reason of Red Task</th>
+              <th class="rpt-wrap-cell">Reason of Red Task</th>
               <th>Driver Name</th>
               <th class="text-center">Call to DTO / according to CRC</th>
-              <th>According to DTO Investigation</th>
+              <th class="rpt-wrap-cell">According to DTO Investigation</th>
               <th>Action Against Red Task</th>
             </tr>
           </thead>
@@ -104,10 +104,10 @@
               <td>{{ row.district.name if row.district else '-' }}</td>
               <td>{{ row.project.name if row.project else '-' }}</td>
               <td class="fw-medium">{{ row.vehicle.vehicle_no if row.vehicle else '-' }}</td>
-              <td>{{ row.reason or '-' }}</td>
+              <td class="rpt-wrap-cell">{{ row.reason or '-' }}</td>
               <td>{{ row.driver_name or '-' }}</td>
               <td class="text-center">{{ row.call_to_dto or '-' }}</td>
-              <td>{{ row.dto_investigation or '-' }}</td>
+              <td class="rpt-wrap-cell">{{ row.dto_investigation or '-' }}</td>
               <td>{{ row.action or '-' }}</td>
             </tr>
             {% else %}
