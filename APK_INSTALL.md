@@ -15,19 +15,20 @@ WhatsApp often **breaks** `.apk` files. Use one of these:
 
 | File | Status |
 |------|--------|
-| `fleet-manager-1.9.6.apk` | Signed (new release key in `New folder/`) — use this |
+| `fleet-manager-1.9.7.apk` | Signed (new release key) — **latest**; camera orientation + native EXIF fix |
+| `fleet-manager-1.9.6.apk` | Signed (same key) — OK for in-app update from 1.9.6 |
 | `fleet-manager-1.9.5.apk` | Old debug key — do not use for updates |
 | `fleet-manager-1.7.0.apk` | Signed (old key) — only if you need old build |
 | `fleet-manager-1.9.3.apk` / `1.9.4.apk` | **Removed** — unsigned, install fails |
 
-Build output: `android\app\build\outputs\apk\release\fleet-manager-1.9.5.apk`
+Build output: `android\app\build\outputs\apk\release\fleet-manager-1.9.7.apk`
 
 ### If install still fails
 
 1. Delete any `fleet-manager-*.apk` from Downloads (failed copies)
 2. Uninstall old Fleet Manager app (Settings → Apps)
-3. Install again from USB/Drive copy of **1.9.5**
-4. If message is **"App not installed"** (not parse error): old app used a different signing key — uninstall first, then install 1.9.5
+3. Install again from USB/Drive copy of **1.9.7**
+4. If message is **"App not installed"** (not parse error): old app used a different signing key — uninstall first, then install 1.9.7
 
 ### Android Studio "Run"
 
