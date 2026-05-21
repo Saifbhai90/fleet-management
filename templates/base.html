@@ -5905,11 +5905,24 @@
             }
         }
 
+        function _apkLooksValid(blob, expectedBytes) {
+            if (!blob || blob.size < 500000) return false;
+            if (expectedBytes > 0 && blob.size < expectedBytes * 0.9) return false;
+            return true;
+        }
+
+        function _validateApkBlobHeader(blob) {
+            return blob.slice(0, 2).arrayBuffer().then(function(buf) {
+                var v = new Uint8Array(buf);
+                if (v.length < 2 || v[0] !== 0x50 || v[1] !== 0x4B) {
+                    throw new Error('Downloaded file is not a valid APK');
+                }
+            });
+        }
+
         function _downloadAndInstallApk(data, banner) {
-            var Filesystem = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem;
-            var FileOpener = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.FileOpener;
-            if (!Filesystem) { alert('Filesystem plugin not available.'); return; }
-            if (!FileOpener) { alert('FileOpener plugin not available.'); return; }
+            var FleetDl = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.FleetApkDownload;
+            var fname = data.apk_filename || 'fleet-manager-update.apk';
 
             banner.innerHTML = '<div style="flex:1">' +
                 '<div style="margin-bottom:6px;font-weight:600">Downloading v' + data.latest_version + '...</div>' +
@@ -5917,6 +5930,26 @@
                 '<div id="apkProgressBar" style="background:#fff;height:100%;width:0%;border-radius:6px;transition:width 0.3s"></div></div>' +
                 '<div id="apkProgressText" style="font-size:11px;opacity:0.8;margin-top:4px">Starting download...</div>' +
                 '</div>';
+
+            if (FleetDl && typeof FleetDl.download === 'function') {
+                var txtNative = document.getElementById('apkProgressText');
+                if (txtNative) txtNative.textContent = 'Downloading via system (reliable)...';
+                FleetDl.download({ url: data.apk_url, filename: fname })
+                    .then(function(res) {
+                        if (!res || !res.uri) throw new Error('Download incomplete');
+                        _showInstallPrompt(res.uri, fname, banner, true);
+                    })
+                    .catch(function(err) {
+                        console.error('[Update] Native download failed:', err);
+                        banner.innerHTML = '<div style="flex:1;color:#fca5a5">Download failed. Check connection or install APK manually from Downloads.</div>';
+                        setTimeout(function() { banner.remove(); }, 7000);
+                    });
+                return;
+            }
+
+            var Filesystem = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem;
+            var FileOpener = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.FileOpener;
+            if (!Filesystem || !FileOpener) { alert('Update plugins not available.'); return; }
 
             var xhr = new XMLHttpRequest();
             xhr.open('GET', data.apk_url, true);
@@ -5937,27 +5970,35 @@
                     return;
                 }
                 var blob = xhr.response;
-                var fname = data.apk_filename || 'fleet-manager-update.apk';
+                var expectedBytes = data.file_size_bytes || 0;
+                if (!_apkLooksValid(blob, expectedBytes)) {
+                    banner.innerHTML = '<div style="flex:1;color:#fca5a5">Invalid or incomplete APK download. Admin se sahi file upload karein.</div>';
+                    setTimeout(function() { banner.remove(); }, 7000);
+                    return;
+                }
                 var txtEl = document.getElementById('apkProgressText');
                 if (txtEl) txtEl.textContent = 'Saving file...';
 
-                var reader = new FileReader();
-                reader.onloadend = function() {
-                    var base64 = reader.result.substring(reader.result.indexOf(',') + 1);
-                    Filesystem.writeFile({
-                        path: fname,
+                _validateApkBlobHeader(blob).then(function() {
+                    return _blobToBase64(blob);
+                }).then(function(base64) {
+                    var savePath = 'Download/' + fname;
+                    return Filesystem.writeFile({
+                        path: savePath,
                         data: base64,
-                        directory: 'CACHE'
-                    }).then(function(result) {
-                        console.log('[Update] APK saved:', result.uri);
-                        _showInstallPrompt(result.uri, fname, banner);
-                    }).catch(function(err) {
-                        console.error('[Update] Save failed:', err);
-                        banner.innerHTML = '<div style="flex:1;color:#fca5a5">Save failed. Please try again.</div>';
-                        setTimeout(function() { banner.remove(); }, 5000);
+                        directory: 'EXTERNAL',
+                        recursive: true
+                    }).then(function() {
+                        return Filesystem.getUri({ path: savePath, directory: 'EXTERNAL' });
                     });
-                };
-                reader.readAsDataURL(blob);
+                }).then(function(uriResult) {
+                    console.log('[Update] APK saved:', uriResult.uri);
+                    _showInstallPrompt(uriResult.uri, fname, banner, false);
+                }).catch(function(err) {
+                    console.error('[Update] Save failed:', err);
+                    banner.innerHTML = '<div style="flex:1;color:#fca5a5">Save failed (file too large?). Install manually from PC/USB.</div>';
+                    setTimeout(function() { banner.remove(); }, 7000);
+                });
             };
             xhr.onerror = function() {
                 banner.innerHTML = '<div style="flex:1;color:#fca5a5">Download failed. Check your connection.</div>';
@@ -5966,17 +6007,26 @@
             xhr.send();
         }
 
-        function _showInstallPrompt(fileUri, fname, banner) {
-            var FileOpener = window.Capacitor.Plugins.FileOpener;
+        function _showInstallPrompt(fileUri, fname, banner, useNativeInstaller) {
+            var FileOpener = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.FileOpener;
+            var FleetDl = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.FleetApkDownload;
             banner.style.background = 'linear-gradient(135deg,#065f46,#10b981)';
             banner.innerHTML = '<div style="flex:1"><strong>Update Ready!</strong><br><span style="font-size:12px;opacity:0.9">Tap Install to apply the update</span></div>' +
                 '<button id="apkInstallBtn" style="background:#fff;color:#065f46;border:none;border-radius:8px;padding:10px 22px;font-weight:700;font-size:14px;cursor:pointer">Install</button>';
             document.getElementById('apkInstallBtn').addEventListener('click', function() {
-                FileOpener.open({ filePath: fileUri, contentType: 'application/vnd.android.package-archive' })
-                    .then(function() { console.log('[Update] Installer launched'); })
+                var openP;
+                if (useNativeInstaller && FleetDl && typeof FleetDl.openInstaller === 'function') {
+                    openP = FleetDl.openInstaller({ uri: fileUri });
+                } else if (FileOpener) {
+                    openP = FileOpener.open({ filePath: fileUri, contentType: 'application/vnd.android.package-archive' });
+                } else {
+                    alert('Installer not available. Open Downloads folder and tap ' + fname);
+                    return;
+                }
+                openP.then(function() { console.log('[Update] Installer launched'); })
                     .catch(function(err) {
-                        console.error('[Update] FileOpener failed:', err);
-                        alert('Could not open APK installer. Please install manually from Downloads.');
+                        console.error('[Update] Install open failed:', err);
+                        alert('Installer open nahi hua. Downloads folder se ' + fname + ' manually install karein.');
                     });
             });
         }

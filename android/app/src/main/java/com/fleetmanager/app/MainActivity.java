@@ -55,6 +55,7 @@ public class MainActivity extends BridgeActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         registerPlugin(AttendanceFrontCameraPlugin.class);
+        registerPlugin(FleetApkDownloadPlugin.class);
         mainHandler = new Handler(Looper.getMainLooper());
         prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
 

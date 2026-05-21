@@ -2485,6 +2485,7 @@ def app_check_update():
         'apk_url': apk_url,
         'apk_filename': latest.apk_filename,
         'force_update': latest.force_update,
+        'file_size_bytes': latest.file_size_bytes or 0,
     })
 
 
