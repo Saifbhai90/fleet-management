@@ -4340,13 +4340,18 @@
         if (accuracyM != null && !isNaN(accuracyM) && isFinite(accuracyM)) {
             stampLines.push({ text: 'Accuracy: ~' + Math.round(Number(accuracyM)) + ' m', scale: 0.78 });
         }
-        var padBottom = Math.round(Math.min(32, Math.max(16, h * 0.04)) * sizeScale);
-        var padSide = Math.round(Math.min(24, Math.max(10, w * 0.028)) * sizeScale);
+        var fullBleed = !!opts.fullBleed;
+        var padBottom = fullBleed
+            ? (opts.padBottom != null ? opts.padBottom : 6)
+            : Math.round(Math.min(32, Math.max(16, h * 0.04)) * sizeScale);
+        var padSide = fullBleed
+            ? (opts.padSide != null ? opts.padSide : 8)
+            : Math.round(Math.min(24, Math.max(10, w * 0.028)) * sizeScale);
         var innerPadX = Math.round(20 * sizeScale);
         var innerPadY = Math.round(16 * sizeScale);
         var lineGap = Math.round(8 * sizeScale);
-        var cornerR = Math.round(12 * sizeScale);
-        var maxBoxW = Math.max(Math.round(160 * sizeScale), w - 2 * padSide);
+        var cornerR = fullBleed ? Math.round(10 * Math.min(sizeScale, 2)) : Math.round(12 * sizeScale);
+        var maxBoxW = fullBleed ? Math.max(1, w - 2 * padSide) : Math.max(Math.round(160 * sizeScale), w - 2 * padSide);
         var fontDivisor = 20 / sizeScale;
         var minFont = Math.round(20 * sizeScale);
         var maxFont = Math.round(40 * sizeScale);
@@ -4374,9 +4379,9 @@
             totalH += fsJ;
             if (j < stampLines.length - 1) totalH += lineGap;
         }
-        var boxW = Math.min(maxBoxW, Math.ceil(measureBlock(baseFont)));
+        var boxW = fullBleed ? maxBoxW : Math.min(maxBoxW, Math.ceil(measureBlock(baseFont)));
         var boxH = totalH;
-        var x = Math.round((w - boxW) / 2);
+        var x = fullBleed ? padSide : Math.round((w - boxW) / 2);
         var y = Math.round(h - boxH - padBottom);
         /* Semi-transparent panel: photo behind remains visible; text stays readable via outline. */
         ctx.fillStyle = 'rgba(0,0,0,0.55)';
@@ -4421,7 +4426,7 @@
 
     /** Odometer reference scale (task_report_odometer_upload.html). Attendance stamp is slightly larger. */
     window.FLEET_ODOMETER_STAMP_SCALE = 2.5;
-    window.FLEET_ATTENDANCE_STAMP_SCALE = 3.5;
+    window.FLEET_ATTENDANCE_STAMP_SCALE = 6.5;
     /** false = system camera (production). true = in-app CameraPreview (see docs/archive/). */
     window.FLEET_ATTENDANCE_USE_INAPP_PREVIEW = false;
     window.FLEET_ATTENDANCE_CAPTURE_MAX_SIDE = 2048;
@@ -4618,7 +4623,10 @@
                             lat: stampOpts.lat,
                             lng: stampOpts.lng,
                             accuracyMeters: stampOpts.accuracyMeters,
-                            sizeScale: stampScale
+                            sizeScale: stampScale,
+                            fullBleed: true,
+                            padBottom: 6,
+                            padSide: 8
                         });
                     }
                     var nowCap = new Date(Date.now() + (typeof _pktOffset !== 'undefined' ? _pktOffset : 0));

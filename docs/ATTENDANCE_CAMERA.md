@@ -15,7 +15,7 @@ Implementation: `window.fleetTakeSystemCameraPhoto()` in `templates/base.html` (
 ## GPS stamp size
 
 - Odometer photos: `ODOM_STAMP_SCALE = 2.5` in `task_report_odometer_upload.html`.
-- Attendance: `FLEET_ATTENDANCE_STAMP_SCALE = 3.5` in `base.html` (larger than odometer `2.5`).
+- Attendance: `FLEET_ATTENDANCE_STAMP_SCALE = 6.5`, full-width bottom stamp (`fullBleed` in `fleetStampAttendancePhoto`).
 - While preview modal is open: Tom Select dropdowns are closed/hidden (`fleetSetAttendanceModalOpen`).
 
 ## Archived custom in-app camera
