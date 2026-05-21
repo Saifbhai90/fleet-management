@@ -12459,6 +12459,14 @@ def _vehicle_last_oil_change_date(vehicle_id, workspace_employee_id=None):
     return None
 
 
+def _oil_alert_tehsil_for_vehicle(vehicle):
+    """Tehsil from vehicle parking station (Oil Change Alert Report)."""
+    ps = getattr(vehicle, 'parking_station', None) if vehicle else None
+    if ps and (getattr(ps, 'tehsil', None) or '').strip():
+        return (ps.tehsil or '').strip()
+    return '-'
+
+
 def _oil_change_alert_rows(project_id=0, district_id=0, vehicle_family='',
                            from_date=None, to_date=None,
                            statuses=None,
@@ -12469,7 +12477,9 @@ def _oil_change_alert_rows(project_id=0, district_id=0, vehicle_family='',
                            is_master_or_admin=True):
     limits = _get_vehicle_family_oil_change_limits()
 
-    query = db.session.query(Vehicle, Project, District).outerjoin(
+    query = db.session.query(Vehicle, Project, District).options(
+        joinedload(Vehicle.parking_station),
+    ).outerjoin(
         Project, Vehicle.project_id == Project.id
     ).outerjoin(
         District, Vehicle.district_id == District.id
@@ -12549,6 +12559,7 @@ def _oil_change_alert_rows(project_id=0, district_id=0, vehicle_family='',
             'vehicle': vehicle,
             'project': project,
             'district': district,
+            'tehsil': _oil_alert_tehsil_for_vehicle(vehicle),
             'vehicle_family': family_name,
             'limit_km': int(limit_f),
             'near_percent': int(near_percent),
@@ -12723,7 +12734,7 @@ def oil_change_alert_report_export():
     )
 
     headers = [
-        'Sr No', 'Project', 'District', 'Vehicle No', 'Model', 'Type', 'Family',
+        'Sr No', 'Project', 'Tehsil', 'District', 'Vehicle No', 'Model', 'Type', 'Family',
         'Limit KM', 'Near %', 'Last Oil Change Date', 'Base Reading', 'Current Reading', 'KM After Oil', 'Remaining KM', 'Status', 'Custom KM Check',
         'Base Source', 'Current Source'
     ]
@@ -12733,6 +12744,7 @@ def oil_change_alert_report_export():
         data_rows.append([
             idx,
             r['project'].name if r['project'] else '-',
+            r.get('tehsil') or '-',
             r['district'].name if r['district'] else '-',
             v.vehicle_no if v else '-',
             v.model if v and v.model else '-',
