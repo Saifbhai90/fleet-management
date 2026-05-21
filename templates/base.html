@@ -36,6 +36,15 @@
         body > .ts-dropdown { z-index: 1060 !important; }
         /* Native app: bottom nav z-index 1065 — TS dropdown must clear it */
         html.capacitor-native body > .ts-dropdown { z-index: 12050 !important; }
+        /* GPS attendance modal must sit above Tom Select body dropdowns */
+        body.fleet-attnd-modal-open > .ts-dropdown {
+            display: none !important;
+            visibility: hidden !important;
+            pointer-events: none !important;
+        }
+        #cameraModal.show {
+            z-index: 12100 !important;
+        }
         /* GPS attendance: native CameraPreview behind WebView hole (front-only) */
         html.fleet-attnd-camera-active,
         html.fleet-attnd-camera-active body {
@@ -4412,7 +4421,7 @@
 
     /** Odometer reference scale (task_report_odometer_upload.html). Attendance stamp is slightly larger. */
     window.FLEET_ODOMETER_STAMP_SCALE = 2.5;
-    window.FLEET_ATTENDANCE_STAMP_SCALE = 2.75;
+    window.FLEET_ATTENDANCE_STAMP_SCALE = 3.5;
     /** false = system camera (production). true = in-app CameraPreview (see docs/archive/). */
     window.FLEET_ATTENDANCE_USE_INAPP_PREVIEW = false;
     window.FLEET_ATTENDANCE_CAPTURE_MAX_SIDE = 2048;
@@ -4489,6 +4498,20 @@
         if (exif === 6) return 90;
         if (exif === 8) return 270;
         return 0;
+    };
+
+    /** Close Tom Select menus and block body dropdowns while attendance modal is open. */
+    window.fleetSetAttendanceModalOpen = function(open) {
+        document.body.classList.toggle('fleet-attnd-modal-open', !!open);
+        if (!open) return;
+        document.querySelectorAll('body > .ts-dropdown').forEach(function(el) {
+            el.style.display = 'none';
+        });
+        document.querySelectorAll('.gps-attendance-page select.search-select').forEach(function(sel) {
+            if (sel.tomselect && typeof sel.tomselect.close === 'function') {
+                try { sel.tomselect.close(); } catch (e) { /* ignore */ }
+            }
+        });
     };
 
     /** Toggle full-screen camera chrome (hide app shell; show only #cameraModal). */

@@ -27,8 +27,8 @@
   .gps-attendance-page .media-preview-wrap img { width: 100%; max-height: 180px; object-fit: cover; border-radius: 8px; touch-action: manipulation; }
   .gps-attendance-page .media-fallback { font-size: 0.85rem; color: #64748b; padding: 1.25rem 0.25rem; }
   .gps-attendance-page .upload-meta { font-size: 0.78rem; color: #475569; line-height: 1.35; }
-  #cameraModal { z-index: 1090 !important; }
-  #cameraModal + .modal-backdrop { z-index: 1089 !important; }
+  #cameraModal.show { z-index: 12100 !important; }
+  #cameraModal + .modal-backdrop { z-index: 12090 !important; }
   #cameraModal .modal-dialog { max-width: 480px; margin: 0.5rem auto; }
   #cameraModal .modal-content { overflow: visible !important; max-height: calc(100vh - 1rem); display: flex; flex-direction: column; }
   #cameraModal .modal-header { flex-shrink: 0; padding: 0.4rem 0.75rem; }
@@ -797,6 +797,7 @@
 
   function resetCameraModalToLive() {
     _attendancePreviewMode = false;
+    if (typeof window.fleetSetAttendanceModalOpen === 'function') window.fleetSetAttendanceModalOpen(false);
     if (typeof window.fleetStopAttendancePreview === 'function') window.fleetStopAttendancePreview();
     if (typeof window.fleetSetAttendanceCameraChrome === 'function') window.fleetSetAttendanceCameraChrome(false);
     pendingCapturePayload = null;
@@ -822,6 +823,7 @@
     _attendancePreviewMode = false;
     if (typeof window.fleetStopAttendancePreview === 'function') window.fleetStopAttendancePreview();
     if (typeof window.fleetSetAttendanceCameraChrome === 'function') window.fleetSetAttendanceCameraChrome(false);
+    if (typeof window.fleetSetAttendanceModalOpen === 'function') window.fleetSetAttendanceModalOpen(true);
     if (cameraLiveWrap) cameraLiveWrap.classList.add('d-none');
     if (cameraPreviewWrap) cameraPreviewWrap.classList.remove('d-none');
     if (cameraPreviewImg) cameraPreviewImg.src = dataUrl;
@@ -883,6 +885,7 @@
   /** Phone system camera → stamp → preview modal (no gallery). */
   function runCheckinSystemCameraFlow() {
     _attendancePreviewMode = false;
+    if (typeof window.fleetSetAttendanceModalOpen === 'function') window.fleetSetAttendanceModalOpen(true);
     if (typeof window.fleetTakeSystemCameraPhoto !== 'function') {
       alert('Camera not available. App update ya page refresh karein.');
       return;
