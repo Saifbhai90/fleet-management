@@ -4394,6 +4394,19 @@
     };
 
     window.fleetTakeNativeFrontPhoto = function() {
+        var isNative = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+        var isAndroid = /android/i.test(navigator.userAgent || '');
+        if (isNative && isAndroid) {
+            var frontPlg = window.Capacitor.Plugins && window.Capacitor.Plugins.AttendanceFrontCamera;
+            if (frontPlg && typeof frontPlg.capture === 'function') {
+                return frontPlg.capture({ quality: 88 }).then(function(res) {
+                    if (!res || !res.base64) throw new Error('No photo captured');
+                    var b64 = res.base64;
+                    if (b64.indexOf('data:') !== 0) b64 = 'data:image/jpeg;base64,' + b64;
+                    return b64;
+                });
+            }
+        }
         if (window.FleetBridge && typeof window.FleetBridge.takeAttendanceSelfie === 'function') {
             return window.FleetBridge.takeAttendanceSelfie();
         }
