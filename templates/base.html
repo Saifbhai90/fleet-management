@@ -4404,6 +4404,11 @@
                     var b64 = res.base64;
                     if (b64.indexOf('data:') !== 0) b64 = 'data:image/jpeg;base64,' + b64;
                     return b64;
+                }).catch(function() {
+                    if (window.FleetBridge && typeof window.FleetBridge.takeAttendanceSelfie === 'function') {
+                        return window.FleetBridge.takeAttendanceSelfie();
+                    }
+                    throw new Error('Camera not available');
                 });
             }
         }

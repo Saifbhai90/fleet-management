@@ -5,6 +5,12 @@
     },
     "render": {
       "enabled": true
+    },
+    "firebase": {
+      "enabled": true
+    },
+    "cursor-team-kit": {
+      "enabled": true
     }
   }
 }
