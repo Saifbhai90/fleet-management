@@ -3394,6 +3394,11 @@
             clone.querySelectorAll('thead tr.mwo-search-row').forEach(function(el){ el.remove(); });
             clone.querySelectorAll('tbody tr').forEach(function(r){ if(r.style.display==='none') r.remove(); });
             clone.querySelectorAll('.btn, button, a.btn').forEach(function(el){ el.closest('td') && el.closest('td').remove(); });
+            clone.querySelectorAll('th[style], td[style]').forEach(function(el){ el.removeAttribute('style'); });
+            clone.querySelectorAll('a').forEach(function(a){
+                var td = a.closest('td');
+                if (td) td.textContent = (a.textContent || '').trim() || '-';
+            });
             var ths = clone.querySelectorAll('thead th');
             ths.forEach(function(th){
                 var t = th.textContent.trim();
@@ -3411,9 +3416,14 @@
             '.btn-p{background:#3b82f6;color:#fff;}.btn-p:hover{background:#2563eb;}' +
             '.btn-c{background:#64748b;color:#fff;margin-left:6px;}.btn-c:hover{background:#475569;}' +
             'h3{text-align:center;margin:6px 0 10px;font-size:14px;}' +
-            'table{width:100%;border-collapse:collapse;table-layout:fixed;}' +
-            'th,td{border:1px solid #555;padding:3px 5px;text-align:left;white-space:nowrap;}' +
-            'th.rpt-wrap-cell,td.rpt-wrap-cell{white-space:normal!important;word-wrap:break-word;overflow-wrap:break-word;vertical-align:top;max-width:36vw;}' +
+            'table{width:100%;border-collapse:collapse;table-layout:auto;}' +
+            'th,td{border:1px solid #555;padding:3px 5px;text-align:left;vertical-align:top;}' +
+            'th:not(.rpt-wrap-cell):not(.rpt-head-wrap),td:not(.rpt-wrap-cell){white-space:nowrap;}' +
+            'th.rpt-compact,td.rpt-compact{width:1%;white-space:nowrap;}' +
+            'th.rpt-head-wrap{white-space:normal!important;width:1%;max-width:6.5em;line-height:1.2;font-size:8px;text-align:center;vertical-align:middle;}' +
+            'td.rpt-head-wrap{text-align:center;white-space:nowrap;width:1%;}' +
+            'th.rpt-num-cell,td.rpt-num-cell{text-align:right;white-space:nowrap;width:1%;}' +
+            'th.rpt-wrap-cell,td.rpt-wrap-cell{white-space:normal!important;word-wrap:break-word;overflow-wrap:break-word;hyphens:auto;width:auto;}' +
             'th{background:#e9ecef;font-size:9px;}' +
             'tfoot td{font-weight:bold;background:#f8f9fa;}' +
             '.text-end{text-align:right;}.text-center{text-align:center;}' +

@@ -68,39 +68,39 @@
         <table class="table table-hover align-middle mb-0" id="withoutTaskTable">
           <thead class="table-light" style="font-size:.82rem;">
             <tr>
-              <th class="ps-3" style="width:40px;">Sr.No</th>
-              <th>Date</th>
+              <th class="ps-3 rpt-compact">Sr.No</th>
+              <th class="rpt-compact">Date</th>
               <th>District</th>
-              <th>Project</th>
+              <th class="rpt-compact">Project</th>
               <th>Vehicle#</th>
               <th>Driver</th>
-              <th class="text-end">KM IN</th>
-              <th class="text-end">KM Out</th>
-              <th class="text-end">D.Km</th>
-              <th class="text-center">Logbook</th>
-              <th class="text-center">EMG</th>
-              <th class="text-end">T.KM</th>
+              <th class="rpt-num-cell">KM IN</th>
+              <th class="rpt-num-cell">KM Out</th>
+              <th class="rpt-num-cell">D.Km</th>
+              <th class="text-center rpt-compact">Logbook</th>
+              <th class="text-center rpt-compact">EMG</th>
+              <th class="rpt-num-cell">T.KM</th>
               <th class="rpt-wrap-cell">Remarks</th>
-              <th>Fine</th>
+              <th class="rpt-compact">Fine</th>
             </tr>
           </thead>
           <tbody>
             {% for row in rows %}
             <tr class="without-task-row" style="font-size:.82rem;">
-              <td class="ps-3">{{ loop.index }}</td>
-              <td>{{ row.move_date|ddmmyyyy }}</td>
+              <td class="ps-3 rpt-compact">{{ loop.index }}</td>
+              <td class="rpt-compact">{{ row.move_date|ddmmyyyy }}</td>
               <td>{{ row.district.name if row.district else '-' }}</td>
-              <td>{{ row.project.name if row.project else '-' }}</td>
+              <td class="rpt-compact">{{ row.project.name if row.project else '-' }}</td>
               <td class="fw-medium">{{ row.vehicle.vehicle_no if row.vehicle else '-' }}</td>
               <td>{{ row.driver.name if row.driver else '-' }}</td>
-              <td class="text-end">{{ "%.0f"|format(row.km_in|float) if row.km_in is not none else '-' }}</td>
-              <td class="text-end">{{ "%.0f"|format(row.km_out|float) if row.km_out is not none else '-' }}</td>
-              <td class="text-end">{{ "%.0f"|format(row.d_km|float) if row.d_km is not none else '-' }}</td>
-              <td class="text-center">{{ row.logbook_task }}</td>
-              <td class="text-center">{{ row.emg_task }}</td>
-              <td class="text-end">{{ "%.0f"|format(row.t_km|float) if row.t_km is not none else '-' }}</td>
+              <td class="rpt-num-cell">{{ "%.0f"|format(row.km_in|float) if row.km_in is not none else '-' }}</td>
+              <td class="rpt-num-cell">{{ "%.0f"|format(row.km_out|float) if row.km_out is not none else '-' }}</td>
+              <td class="rpt-num-cell">{{ "%.0f"|format(row.d_km|float) if row.d_km is not none else '-' }}</td>
+              <td class="text-center rpt-compact">{{ row.logbook_task }}</td>
+              <td class="text-center rpt-compact">{{ row.emg_task }}</td>
+              <td class="rpt-num-cell">{{ "%.0f"|format(row.t_km|float) if row.t_km is not none else '-' }}</td>
               <td class="rpt-wrap-cell">{{ row.remarks or '-' }}</td>
-              <td>{{ row.fine or '-' }}</td>
+              <td class="rpt-compact">{{ row.fine or '-' }}</td>
             </tr>
             {% else %}
             <tr>

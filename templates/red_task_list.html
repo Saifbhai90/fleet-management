@@ -71,24 +71,24 @@
         <table class="table table-hover align-middle mb-0" id="redTaskTable">
           <thead class="table-light">
             <tr>
-              <th class="ps-4">Sr.#</th>
-              <th>Date</th>
+              <th class="ps-4 rpt-compact">Sr.#</th>
+              <th class="rpt-compact">Date</th>
               <th>Task ID</th>
               <th>District Name</th>
-              <th>Project</th>
+              <th class="rpt-compact">Project</th>
               <th>Vehicle #</th>
               <th class="rpt-wrap-cell">Reason of Red Task</th>
               <th>Driver Name</th>
-              <th class="text-center">Call to DTO / according to CRC</th>
+              <th class="text-center rpt-head-wrap">Call to DTO / according to CRC</th>
               <th class="rpt-wrap-cell">According to DTO Investigation</th>
-              <th>Action Against Red Task</th>
+              <th class="rpt-compact">Action Against Red Task</th>
             </tr>
           </thead>
           <tbody>
             {% for row in rows %}
             <tr class="red-task-row">
-              <td class="ps-4">{{ loop.index }}</td>
-              <td>{{ row.task_date|ddmmyyyy }}</td>
+              <td class="ps-4 rpt-compact">{{ loop.index }}</td>
+              <td class="rpt-compact">{{ row.task_date|ddmmyyyy }}</td>
               <td>
                 {% if row.task_id %}
                 <a href="#" class="small fw-semibold red-taskid-link"
@@ -102,13 +102,13 @@
                 {% endif %}
               </td>
               <td>{{ row.district.name if row.district else '-' }}</td>
-              <td>{{ row.project.name if row.project else '-' }}</td>
+              <td class="rpt-compact">{{ row.project.name if row.project else '-' }}</td>
               <td class="fw-medium">{{ row.vehicle.vehicle_no if row.vehicle else '-' }}</td>
               <td class="rpt-wrap-cell">{{ row.reason or '-' }}</td>
               <td>{{ row.driver_name or '-' }}</td>
-              <td class="text-center">{{ row.call_to_dto or '-' }}</td>
+              <td class="text-center rpt-head-wrap">{{ row.call_to_dto or '-' }}</td>
               <td class="rpt-wrap-cell">{{ row.dto_investigation or '-' }}</td>
-              <td>{{ row.action or '-' }}</td>
+              <td class="rpt-compact">{{ row.action or '-' }}</td>
             </tr>
             {% else %}
             <tr>
