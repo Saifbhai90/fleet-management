@@ -1,6 +1,9 @@
 package com.fleetmanager.app;
 
 import android.content.Intent;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.Matrix;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -18,8 +21,10 @@ import androidx.camera.core.Preview;
 import androidx.camera.lifecycle.ProcessCameraProvider;
 import androidx.camera.view.PreviewView;
 import androidx.core.content.ContextCompat;
+import androidx.exifinterface.media.ExifInterface;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
@@ -156,6 +161,7 @@ public class AttendanceCameraActivity extends AppCompatActivity {
         imageCapture.takePicture(options, mainExecutor, new ImageCapture.OnImageSavedCallback() {
             @Override
             public void onImageSaved(@NonNull ImageCapture.OutputFileResults outputFileResults) {
+                fixImageOrientation(photoFile);
                 if (cameraProvider != null) {
                     cameraProvider.unbindAll();
                 }
@@ -175,6 +181,45 @@ public class AttendanceCameraActivity extends AppCompatActivity {
                         Toast.LENGTH_SHORT).show();
             }
         });
+    }
+
+    private void fixImageOrientation(File file) {
+        try {
+            ExifInterface exif = new ExifInterface(file.getAbsolutePath());
+            int orientation = exif.getAttributeInt(
+                    ExifInterface.TAG_ORIENTATION,
+                    ExifInterface.ORIENTATION_NORMAL);
+            int rotation = 0;
+            if (orientation == ExifInterface.ORIENTATION_ROTATE_90) {
+                rotation = 90;
+            } else if (orientation == ExifInterface.ORIENTATION_ROTATE_180) {
+                rotation = 180;
+            } else if (orientation == ExifInterface.ORIENTATION_ROTATE_270) {
+                rotation = 270;
+            }
+            if (rotation == 0) {
+                return;
+            }
+            Bitmap bmp = BitmapFactory.decodeFile(file.getAbsolutePath());
+            if (bmp == null) {
+                return;
+            }
+            Matrix matrix = new Matrix();
+            matrix.postRotate(rotation);
+            Bitmap rotated = Bitmap.createBitmap(bmp, 0, 0, bmp.getWidth(), bmp.getHeight(), matrix, true);
+            bmp.recycle();
+            try (FileOutputStream out = new FileOutputStream(file)) {
+                rotated.compress(Bitmap.CompressFormat.JPEG, 95, out);
+            }
+            rotated.recycle();
+            ExifInterface outExif = new ExifInterface(file.getAbsolutePath());
+            outExif.setAttribute(
+                    ExifInterface.TAG_ORIENTATION,
+                    String.valueOf(ExifInterface.ORIENTATION_NORMAL));
+            outExif.saveAttributes();
+        } catch (Exception ignored) {
+            // keep original file
+        }
     }
 
     @Override

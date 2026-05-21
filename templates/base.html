@@ -45,6 +45,9 @@
         html.fleet-attnd-camera-active.capacitor-native .main-content {
             background: transparent !important;
         }
+        html.fleet-attnd-camera-active .modal-backdrop.show {
+            opacity: 0.35 !important;
+        }
         .fleet-live-gps-stamp {
             position: absolute;
             left: 50%;
@@ -4386,17 +4389,45 @@
     window.FLEET_ATTENDANCE_CAPTURE_MAX_SIDE = 2048;
     window.FLEET_ATTENDANCE_CAPTURE_QUALITY = 0.92;
 
-    /** Stamp GPS overlay on a photo from native camera; returns { dataUrl, timeStr }. */
-    window.fleetStampAttendancePhoto = function(dataUrl, canvasEl, stampOpts) {
-        stampOpts = stampOpts || {};
-        var stampScale = (stampOpts.sizeScale != null && Number(stampOpts.sizeScale) > 0)
-            ? Number(stampOpts.sizeScale)
-            : (window.FLEET_ATTENDANCE_STAMP_SCALE || 1);
-        var maxSide = stampOpts.maxSide || window.FLEET_ATTENDANCE_CAPTURE_MAX_SIDE || 2048;
-        var quality = stampOpts.quality != null ? stampOpts.quality : (window.FLEET_ATTENDANCE_CAPTURE_QUALITY || 0.92);
+    /** Read JPEG EXIF orientation (1–8). Returns 1 if missing. */
+    window.fleetReadJpegExifOrientation = function(dataUrl) {
+        try {
+            var b64 = dataUrl.indexOf(',') >= 0 ? dataUrl.split(',')[1] : dataUrl;
+            var bin = atob(b64);
+            var len = Math.min(bin.length, 65536);
+            var dv = new DataView(new ArrayBuffer(len));
+            for (var i = 0; i < len; i++) dv.setUint8(i, bin.charCodeAt(i));
+            if (len < 4 || dv.getUint8(0) !== 0xFF || dv.getUint8(1) !== 0xD8) return 1;
+            var off = 2;
+            while (off + 4 < len) {
+                if (dv.getUint8(off) !== 0xFF) break;
+                var marker = dv.getUint8(off + 1);
+                if (marker === 0xD8 || marker === 0xD9) break;
+                var segLen = dv.getUint16(off + 2, false);
+                if (marker === 0xE1 && off + 10 < len) {
+                    if (dv.getUint32(off + 4, false) === 0x45786966) {
+                        var tiff = off + 10;
+                        var le = dv.getUint16(tiff, false) === 0x4949;
+                        var ifd = tiff + dv.getUint32(tiff + 4, !le);
+                        var entries = dv.getUint16(ifd, !le);
+                        for (var e = 0; e < entries; e++) {
+                            var ent = ifd + 2 + e * 12;
+                            if (dv.getUint16(ent, !le) === 0x0112) {
+                                return dv.getUint16(ent + 8, !le) || 1;
+                            }
+                        }
+                    }
+                }
+                off += 2 + segLen;
+            }
+        } catch (e) { /* ignore */ }
+        return 1;
+    };
+
+    window.fleetRotateDataUrl = function(dataUrl, degrees) {
         return new Promise(function(resolve, reject) {
-            if (!dataUrl) {
-                reject(new Error('No photo'));
+            if (!degrees || degrees % 360 === 0) {
+                resolve(dataUrl);
                 return;
             }
             var img = new Image();
@@ -4407,31 +4438,121 @@
                     reject(new Error('Invalid image'));
                     return;
                 }
-                var canvas = canvasEl || document.createElement('canvas');
-                canvas.width = w;
-                canvas.height = h;
+                var rad = degrees * Math.PI / 180;
+                var swap = (degrees === 90 || degrees === 270);
+                var canvas = document.createElement('canvas');
+                canvas.width = swap ? h : w;
+                canvas.height = swap ? w : h;
                 var ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0, w, h);
-                if (typeof window.pktDrawReadableGpsStamp === 'function') {
-                    window.pktDrawReadableGpsStamp(ctx, w, h, {
-                        line1Prefix: stampOpts.line1Prefix || 'GPS+Cam',
-                        lat: stampOpts.lat,
-                        lng: stampOpts.lng,
-                        accuracyMeters: stampOpts.accuracyMeters,
-                        sizeScale: stampScale
-                    });
-                }
-                var nowCap = new Date(Date.now() + (typeof _pktOffset !== 'undefined' ? _pktOffset : 0));
-                var _odCap = (typeof pktOverlayDateTimeStrings === 'function')
-                    ? pktOverlayDateTimeStrings(nowCap)
-                    : { timeStr: nowCap.getHours().toString().padStart(2, '0') + ':' + nowCap.getMinutes().toString().padStart(2, '0') + ':' + nowCap.getSeconds().toString().padStart(2, '0') };
-                resolve({
-                    dataUrl: window.fleetJpegDataUrlMaxSide(canvas, maxSide, quality),
-                    timeStr: _odCap.timeStr
-                });
+                ctx.translate(canvas.width / 2, canvas.height / 2);
+                ctx.rotate(rad);
+                ctx.drawImage(img, -w / 2, -h / 2, w, h);
+                resolve(canvas.toDataURL('image/jpeg', 0.95));
             };
             img.onerror = function() { reject(new Error('Image load failed')); };
             img.src = dataUrl;
+        });
+    };
+
+    /** Portrait selfie: honor EXIF + landscape buffer on portrait phones. */
+    window.fleetNormalizeSelfieOrientation = function(dataUrl) {
+        return new Promise(function(resolve, reject) {
+            if (!dataUrl) {
+                reject(new Error('No photo'));
+                return;
+            }
+            var exif = window.fleetReadJpegExifOrientation(dataUrl);
+            var exifDeg = 0;
+            if (exif === 3) exifDeg = 180;
+            else if (exif === 6) exifDeg = 90;
+            else if (exif === 8) exifDeg = 270;
+            var hadExifRotate = exifDeg !== 0;
+            var afterExif = hadExifRotate
+                ? window.fleetRotateDataUrl(dataUrl, exifDeg)
+                : Promise.resolve(dataUrl);
+            afterExif.then(function(url) {
+                var img = new Image();
+                img.onload = function() {
+                    var w = img.naturalWidth || img.width;
+                    var h = img.naturalHeight || img.height;
+                    if (!w || !h) {
+                        reject(new Error('Invalid image'));
+                        return;
+                    }
+                    var portraitScreen = (window.innerHeight || 0) >= (window.innerWidth || 0);
+                    if (!hadExifRotate && portraitScreen && w > h) {
+                        window.fleetRotateDataUrl(url, 90).then(resolve).catch(reject);
+                        return;
+                    }
+                    resolve(url);
+                };
+                img.onerror = function() { reject(new Error('Image load failed')); };
+                img.src = url;
+            }).catch(reject);
+        });
+    };
+
+    window.fleetPreviewViewportRect = function(viewportEl) {
+        var rect = viewportEl.getBoundingClientRect();
+        var vv = window.visualViewport;
+        var top = rect.top + (vv ? vv.offsetTop : 0);
+        var left = rect.left + (vv ? vv.offsetLeft : 0);
+        return {
+            x: Math.max(0, Math.round(left)),
+            y: Math.max(0, Math.round(top)),
+            width: Math.max(1, Math.round(rect.width)),
+            height: Math.max(1, Math.round(rect.height))
+        };
+    };
+
+    /** Stamp GPS overlay on a photo from native camera; returns { dataUrl, timeStr }. */
+    window.fleetStampAttendancePhoto = function(dataUrl, canvasEl, stampOpts) {
+        stampOpts = stampOpts || {};
+        var stampScale = (stampOpts.sizeScale != null && Number(stampOpts.sizeScale) > 0)
+            ? Number(stampOpts.sizeScale)
+            : (window.FLEET_ATTENDANCE_STAMP_SCALE || 1);
+        var maxSide = stampOpts.maxSide || window.FLEET_ATTENDANCE_CAPTURE_MAX_SIDE || 2048;
+        var quality = stampOpts.quality != null ? stampOpts.quality : (window.FLEET_ATTENDANCE_CAPTURE_QUALITY || 0.92);
+        return window.fleetNormalizeSelfieOrientation(dataUrl).then(function(uprightUrl) {
+            return new Promise(function(resolve, reject) {
+                if (!uprightUrl) {
+                    reject(new Error('No photo'));
+                    return;
+                }
+                var img = new Image();
+                img.onload = function() {
+                    var w = img.naturalWidth || img.width;
+                    var h = img.naturalHeight || img.height;
+                    if (!w || !h) {
+                        reject(new Error('Invalid image'));
+                        return;
+                    }
+                    var canvas = canvasEl || document.createElement('canvas');
+                    canvas.width = w;
+                    canvas.height = h;
+                    var ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, w, h);
+                    if (typeof window.pktDrawReadableGpsStamp === 'function') {
+                        window.pktDrawReadableGpsStamp(ctx, w, h, {
+                            line1Prefix: stampOpts.line1Prefix || 'GPS+Cam',
+                            lat: stampOpts.lat,
+                            lng: stampOpts.lng,
+                            accuracyMeters: stampOpts.accuracyMeters,
+                            sizeScale: stampScale
+                        });
+                    }
+                    var nowCap = new Date(Date.now() + (typeof _pktOffset !== 'undefined' ? _pktOffset : 0));
+                    var _odCap = (typeof pktOverlayDateTimeStrings === 'function')
+                        ? pktOverlayDateTimeStrings(nowCap)
+                        : { timeStr: nowCap.getHours().toString().padStart(2, '0') + ':' + nowCap.getMinutes().toString().padStart(2, '0') + ':' + nowCap.getSeconds().toString().padStart(2, '0') };
+                    resolve({
+                        dataUrl: window.fleetJpegDataUrlMaxSide(canvas, maxSide, quality),
+                        timeStr: _odCap.timeStr
+                    });
+                };
+                img.onerror = function() { reject(new Error('Image load failed')); };
+                img.src = uprightUrl;
+            });
         });
     };
 
@@ -4486,27 +4607,31 @@
         return stopP;
     };
 
-    window.fleetStartAttendancePreview = function(viewportEl, liveStampEl, stampOpts) {
+    window.fleetStartAttendancePreview = function(viewportEl, liveStampEl, stampOpts, isRetry) {
         var cp = window.fleetGetCameraPreviewPlugin();
         if (!cp || !window.fleetIsNativeAndroid() || !viewportEl) {
             return Promise.reject(new Error('NO_PREVIEW'));
         }
         return window.fleetStopAttendancePreview().then(function() {
-            var rect = viewportEl.getBoundingClientRect();
-            var w = Math.max(1, Math.round(rect.width));
-            var h = Math.max(1, Math.round(rect.height));
-            var x = Math.max(0, Math.round(rect.left));
-            var y = Math.max(0, Math.round(rect.top));
+            var r = window.fleetPreviewViewportRect(viewportEl);
+            if ((r.width < 80 || r.height < 120) && !isRetry) {
+                return new Promise(function(res, rej) {
+                    window.setTimeout(function() {
+                        window.fleetStartAttendancePreview(viewportEl, liveStampEl, stampOpts, true).then(res).catch(rej);
+                    }, 450);
+                });
+            }
             return cp.start({
                 position: 'front',
-                x: x,
-                y: y,
-                width: w,
-                height: h,
+                x: r.x,
+                y: r.y,
+                width: r.width,
+                height: r.height,
                 toBack: true,
                 disableAudio: true,
                 enableZoom: false,
-                lockAndroidOrientation: true
+                lockAndroidOrientation: true,
+                disableExifHeaderStripping: true
             }).then(function() {
                 if (typeof cp.setOpacity === 'function') {
                     try { cp.setOpacity({ opacity: 1 }); } catch (e) { /* optional */ }
@@ -4535,7 +4660,7 @@
                 if (!res || !res.value) throw new Error('No photo captured');
                 var b64 = res.value;
                 if (b64.indexOf('data:') !== 0) b64 = 'data:image/jpeg;base64,' + b64;
-                return b64;
+                return window.fleetNormalizeSelfieOrientation(b64);
             });
         });
     };
@@ -4555,7 +4680,7 @@
             if (!res || !res.base64) throw new Error('No photo captured');
             var b64 = res.base64;
             if (b64.indexOf('data:') !== 0) b64 = 'data:image/jpeg;base64,' + b64;
-            return b64;
+            return window.fleetNormalizeSelfieOrientation(b64);
         });
     };
 

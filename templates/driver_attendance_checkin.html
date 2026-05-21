@@ -37,7 +37,8 @@
   #cameraModal.fleet-attnd-camera-active .modal-content { background: rgba(15, 23, 42, 0.82) !important; }
   #cameraModal.fleet-attnd-camera-active .modal-header,
   #cameraModal.fleet-attnd-camera-active .modal-footer { background: rgba(15, 23, 42, 0.88) !important; }
-  #cameraModal.fleet-attnd-camera-active .modal-body { background: transparent !important; }
+  #cameraModal.fleet-attnd-camera-active .modal-body,
+  #cameraModal.fleet-attnd-camera-active #cameraLiveWrap { background: transparent !important; }
   #cameraPreviewViewport {
     width: 100%;
     min-height: 52vh;
@@ -45,6 +46,10 @@
     background: transparent;
     position: relative;
     border-radius: 0.375rem;
+  }
+  #cameraModal.fleet-attnd-camera-active #cameraPreviewViewport {
+    min-height: 55vh;
+    border: 2px dashed rgba(255, 255, 255, 0.35);
   }
   #cameraModal .modal-footer { flex-shrink: 0; border-top: none; padding: 0.35rem 0.75rem 0.5rem; justify-content: center; }
   #cameraModal .camera-preview-img { width: 100%; height: auto; max-height: calc(100vh - 10rem); object-fit: contain; display: block; background: #111; border-radius: 0.375rem; }
@@ -891,17 +896,18 @@
     if (!cameraModalInstance) {
       cameraModalInstance = new bootstrap.Modal(cameraModal);
     }
-    cameraModalInstance.show();
     var stampOpts = stampOptsForCheckin();
     var viewport = cameraPreviewViewport;
     var canPreview = viewport && typeof window.fleetStartAttendancePreview === 'function' && typeof window.fleetIsNativeAndroid === 'function' && window.fleetIsNativeAndroid();
     if (!canPreview) {
+      cameraModalInstance.show();
       captureNativeCheckinPhoto()
         .then(applyCheckinShot)
         .catch(handleCheckinCameraError);
       return;
     }
-    window.setTimeout(function() {
+    function runPreviewStart() {
+      if (cameraOpening) cameraOpening.classList.add('d-none');
       window.fleetStartAttendancePreview(viewport, fleetLiveGpsStamp, stampOpts)
         .then(function() {
           _attendancePreviewMode = true;
@@ -921,7 +927,11 @@
             handleCheckinCameraError(new Error('Camera start failed'));
           }
         });
-    }, 350);
+    }
+    cameraModalInstance.show();
+    cameraModal.addEventListener('shown.bs.modal', function() {
+      window.setTimeout(runPreviewStart, 200);
+    }, { once: true });
   }
 
   function handleCheckinCameraError(err) {
