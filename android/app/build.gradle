@@ -1,5 +1,13 @@
 apply plugin: 'com.android.application'
 
+def versionPropsFile = rootProject.file('version.properties')
+def versionProps = new Properties()
+if (versionPropsFile.exists()) {
+    versionProps.load(new FileInputStream(versionPropsFile))
+}
+def appVersionCode = (versionProps['VERSION_CODE'] ?: '1').toInteger()
+def appVersionName = versionProps['VERSION_NAME'] ?: '1.0.0'
+
 def keystorePropertiesFile = rootProject.file('keystore.properties')
 def keystoreProperties = new Properties()
 if (keystorePropertiesFile.exists()) {
@@ -13,8 +21,8 @@ android {
         applicationId "com.fleetmanager.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 9
-        versionName "1.9.7"
+        versionCode appVersionCode
+        versionName appVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

@@ -1,13 +1,16 @@
 {
   "name": "fleet-manager",
-  "version": "1.0.0",
+  "version": "1.9.8",
   "description": "Fleet Management Mobile App (Capacitor + WebView)",
   "main": "index.js",
   "scripts": {
     "cap:sync": "npx cap sync",
     "cap:android": "npx cap open android",
     "cap:ios": "npx cap open ios",
-    "cap:build:android": "npx cap sync android && npx cap copy android"
+    "cap:build:android": "npx cap sync android && npx cap copy android",
+    "version:bump": "powershell -ExecutionPolicy Bypass -File scripts/bump-android-version.ps1",
+    "version:bump:minor": "powershell -ExecutionPolicy Bypass -File scripts/bump-android-version.ps1 -Part minor",
+    "version:show": "powershell -Command \"Get-Content android/version.properties | Where-Object { $_ -match 'VERSION_' }\""
   },
   "dependencies": {
     "@aparajita/capacitor-biometric-auth": "^10.0.0",

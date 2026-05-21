@@ -5,9 +5,12 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.net.Uri;
+import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.webkit.WebView;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.PowerManager;
@@ -71,6 +74,29 @@ public class MainActivity extends BridgeActivity {
 
         schedulePollingActivation();
         setupDownloadListener();
+        getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+        scheduleWebViewTransparent();
+    }
+
+    /** CameraPreview (toBack) needs a transparent WebView; opaque white blocks the native preview. */
+    private void scheduleWebViewTransparent() {
+        if (mainHandler == null) {
+            mainHandler = new Handler(Looper.getMainLooper());
+        }
+        mainHandler.post(() -> {
+            if (getBridge() != null && getBridge().getWebView() != null) {
+                WebView wv = getBridge().getWebView();
+                wv.setBackgroundColor(Color.TRANSPARENT);
+            } else {
+                mainHandler.postDelayed(this::scheduleWebViewTransparent, 50);
+            }
+        });
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        scheduleWebViewTransparent();
     }
 
     private void createNotificationChannels() {

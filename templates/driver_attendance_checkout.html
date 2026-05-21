@@ -36,7 +36,9 @@
   #cameraModal .modal-body { flex: 1 1 auto; overflow: hidden; padding: 0.35rem !important; min-height: 0; }
   #cameraModal.fleet-attnd-camera-active .modal-content,
   #cameraModal.fleet-attnd-camera-active .modal-body,
-  #cameraModal.fleet-attnd-camera-active #cameraLiveWrap { background: transparent !important; }
+  #cameraModal.fleet-attnd-camera-active .modal-dialog,
+  #cameraModal.fleet-attnd-camera-active #cameraLiveWrap,
+  #cameraModal.fleet-attnd-camera-active #cameraPreviewViewport { background: transparent !important; }
   #cameraModal.fleet-attnd-camera-active .modal-header,
   #cameraModal.fleet-attnd-camera-active .modal-footer { background: rgba(15, 23, 42, 0.88) !important; }
   #cameraPreviewViewport {
@@ -50,6 +52,8 @@
   #cameraModal.fleet-attnd-camera-active #cameraPreviewViewport {
     min-height: 55vh;
     border: 2px dashed rgba(255, 255, 255, 0.35);
+    background: transparent !important;
+    z-index: 1;
   }
   #cameraModal .modal-footer { flex-shrink: 0; border-top: none; padding: 0.35rem 0.75rem 0.5rem; justify-content: center; }
   #cameraModal .camera-preview-img { width: 100%; height: auto; max-height: calc(100vh - 10rem); object-fit: contain; display: block; background: #111; border-radius: 0.375rem; }
@@ -923,7 +927,9 @@
       return Promise.reject(new Error('Camera not available'));
     }
     return captureP.then(function(rawUrl) {
-      return window.fleetStampAttendancePhoto(rawUrl, cameraCanvas, stampOpts);
+      var opts = stampOpts;
+      if (_attendancePreviewMode) opts = Object.assign({}, stampOpts, { fromCameraPreview: true });
+      return window.fleetStampAttendancePhoto(rawUrl, cameraCanvas, opts);
     });
   }
 

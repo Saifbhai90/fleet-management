@@ -36,21 +36,37 @@
         body > .ts-dropdown { z-index: 1060 !important; }
         /* Native app: bottom nav z-index 1065 — TS dropdown must clear it */
         html.capacitor-native body > .ts-dropdown { z-index: 12050 !important; }
-        /* GPS attendance: native camera preview behind WebView (front-only) */
+        /* GPS attendance: native CameraPreview in viewport (front-only) */
         html.fleet-attnd-camera-active,
         html.fleet-attnd-camera-active body {
             background: transparent !important;
         }
         html.fleet-attnd-camera-active .modal-content,
-        html.fleet-attnd-camera-active .modal-body {
+        html.fleet-attnd-camera-active .modal-body,
+        html.fleet-attnd-camera-active .modal-dialog {
             background: transparent !important;
         }
         html.fleet-attnd-camera-active.capacitor-native ion-content,
-        html.fleet-attnd-camera-active.capacitor-native .main-content {
+        html.fleet-attnd-camera-active.capacitor-native .main-content,
+        html.fleet-attnd-camera-active.capacitor-native #appNativeShell {
             background: transparent !important;
         }
+        /* Hide page shell so transparent modal does not show attendance UI through the hole */
+        html.fleet-attnd-camera-active.capacitor-native #appNativeShell,
+        html.fleet-attnd-camera-active.capacitor-native nav.navbar,
+        html.fleet-attnd-camera-active.capacitor-native .mobile-bottom-nav,
+        html.fleet-attnd-camera-active.capacitor-native .sidebar,
+        html.fleet-attnd-camera-active.capacitor-native .sidebar-overlay {
+            visibility: hidden !important;
+            pointer-events: none !important;
+        }
+        html.fleet-attnd-camera-active #cameraModal,
+        html.fleet-attnd-camera-active #cameraModal * {
+            visibility: visible;
+        }
         html.fleet-attnd-camera-active .modal-backdrop.show {
-            opacity: 0.35 !important;
+            opacity: 0 !important;
+            background: transparent !important;
         }
         .fleet-live-gps-stamp {
             position: absolute;
@@ -4467,19 +4483,17 @@
                 return;
             }
             if (opts.fromCameraPreview) {
-                var previewImg = new Image();
-                previewImg.onload = function() {
-                    var pw = previewImg.naturalWidth || previewImg.width;
-                    var ph = previewImg.naturalHeight || previewImg.height;
-                    if (!pw || !ph) {
-                        reject(new Error('Invalid image'));
-                        return;
-                    }
-                    var deg = (ph >= pw) ? 180 : 90;
-                    window.fleetRotateDataUrl(dataUrl, deg).then(resolve).catch(reject);
-                };
-                previewImg.onerror = function() { reject(new Error('Image load failed')); };
-                previewImg.src = dataUrl;
+                var exifCp = window.fleetReadJpegExifOrientation(dataUrl);
+                var cpDeg = 0;
+                if (exifCp === 3) cpDeg = 180;
+                else if (exifCp === 6) cpDeg = 90;
+                else if (exifCp === 8) cpDeg = 270;
+                else cpDeg = 180;
+                if (cpDeg === 0) {
+                    resolve(dataUrl);
+                    return;
+                }
+                window.fleetRotateDataUrl(dataUrl, cpDeg).then(resolve).catch(reject);
                 return;
             }
             var exif = window.fleetReadJpegExifOrientation(dataUrl);
@@ -4534,7 +4548,8 @@
             : (window.FLEET_ATTENDANCE_STAMP_SCALE || 1);
         var maxSide = stampOpts.maxSide || window.FLEET_ATTENDANCE_CAPTURE_MAX_SIDE || 2048;
         var quality = stampOpts.quality != null ? stampOpts.quality : (window.FLEET_ATTENDANCE_CAPTURE_QUALITY || 0.92);
-        return window.fleetNormalizeSelfieOrientation(dataUrl).then(function(uprightUrl) {
+        var orientOpts = stampOpts.fromCameraPreview ? { fromCameraPreview: true } : {};
+        return window.fleetNormalizeSelfieOrientation(dataUrl, orientOpts).then(function(uprightUrl) {
             return new Promise(function(resolve, reject) {
                 if (!uprightUrl) {
                     reject(new Error('No photo'));
@@ -4642,13 +4657,15 @@
                     }, 450);
                 });
             }
+            document.documentElement.classList.add('fleet-attnd-camera-active');
+            document.body.classList.add('fleet-attnd-camera-active');
             return cp.start({
                 position: 'front',
                 x: r.x,
                 y: r.y,
                 width: r.width,
                 height: r.height,
-                toBack: true,
+                toBack: false,
                 disableAudio: true,
                 enableZoom: false,
                 lockAndroidOrientation: true,
@@ -4658,8 +4675,10 @@
                     try { cp.setOpacity({ opacity: 1 }); } catch (e) { /* optional */ }
                 }
                 window._fleetAttendancePreviewActive = true;
-                document.documentElement.classList.add('fleet-attnd-camera-active');
-                document.body.classList.add('fleet-attnd-camera-active');
+            }).catch(function(err) {
+                document.documentElement.classList.remove('fleet-attnd-camera-active');
+                document.body.classList.remove('fleet-attnd-camera-active');
+                throw err;
             });
         });
     };
@@ -4685,7 +4704,7 @@
                 if (!res || !res.value) throw new Error('No photo captured');
                 var b64 = res.value;
                 if (b64.indexOf('data:') !== 0) b64 = 'data:image/jpeg;base64,' + b64;
-                return window.fleetNormalizeSelfieOrientation(b64, { fromCameraPreview: true });
+                return b64;
             });
         });
     };
