@@ -170,7 +170,7 @@
       </div>
       <div class="modal-body text-center">
         <div id="cameraLiveWrap">
-          {% include 'partials/gps_attendance_camera_extras.html' %}
+          <video id="cameraVideo" autoplay playsinline muted></video>
         </div>
         <div id="cameraPreviewWrap" class="d-none">
           <img id="cameraPreviewImg" class="camera-preview-img" alt="Captured preview">
@@ -293,11 +293,6 @@
   var cameraError = document.getElementById('cameraError');
   var cameraErrorText = document.getElementById('cameraErrorText');
   var btnRetryCamera = document.getElementById('btnRetryCamera');
-  var btnCameraTorch = document.getElementById('btnCameraTorch');
-  var cameraScreenFlash = document.getElementById('cameraScreenFlash');
-  var cameraFlashHint = document.getElementById('cameraFlashHint');
-  var cameraLowLightWarn = document.getElementById('cameraLowLightWarn');
-  var gpsCameraSession = null;
   var vehiclesData = {{ pre_vehicles_data | tojson }};
   var allVehiclesByProject = {{ all_vehicles_by_project | tojson }};
   var serverAutoShift = {{ auto_shift | tojson }};
@@ -779,9 +774,8 @@
   }
 
   function stopCamera() {
-    if (gpsCameraSession) { gpsCameraSession.stop(); gpsCameraSession = null; }
-    stream = null;
-    if (cameraVideo) cameraVideo.srcObject = null;
+    if (stream) { stream.getTracks().forEach(function(t) { t.stop(); }); stream = null; }
+    cameraVideo.srcObject = null;
   }
 
   function resetCameraModalToLive() {
@@ -841,10 +835,6 @@
     cameraCanvas.height = h;
     var ctx = cameraCanvas.getContext('2d');
     ctx.drawImage(cameraVideo, 0, 0);
-    var bright = gpsCameraSession ? gpsCameraSession.getBrightness() : 255;
-    if (typeof window.FleetGpsCamera !== 'undefined' && window.FleetGpsCamera.enhanceCanvasForLowLight) {
-      window.FleetGpsCamera.enhanceCanvasForLowLight(ctx, w, h, bright);
-    }
     var lat = (currentPosition && currentPosition.coords) ? currentPosition.coords.latitude : null;
     var lng = (currentPosition && currentPosition.coords) ? currentPosition.coords.longitude : null;
     var acc = (currentPosition && currentPosition.coords) ? currentPosition.coords.accuracy : null;
@@ -890,32 +880,25 @@
     var _odCap = (typeof pktOverlayDateTimeStrings === 'function')
       ? pktOverlayDateTimeStrings(nowCap)
       : { timeStr: nowCap.getHours().toString().padStart(2, '0') + ':' + nowCap.getMinutes().toString().padStart(2, '0') + ':' + nowCap.getSeconds().toString().padStart(2, '0') };
-    return { dataUrl: jpegDataUrlMaxSide(cameraCanvas, 1280, 0.84), timeStr: _odCap.timeStr };
+    return { dataUrl: jpegDataUrlMaxSide(cameraCanvas, 1280, 0.72), timeStr: _odCap.timeStr };
   }
 
   function startCamera() {
     resetCameraModalToLive();
     stopCamera();
     showCameraLoading();
-    if (!window.FleetGpsCamera || typeof window.FleetGpsCamera.createSession !== 'function') {
-      showCameraError('Camera module load nahi hua. Page refresh karein.');
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      showCameraError('Camera not supported in this browser.');
       return;
     }
-    gpsCameraSession = window.FleetGpsCamera.createSession({
-      video: cameraVideo,
-      btnTorch: btnCameraTorch,
-      screenFlashEl: cameraScreenFlash,
-      flashHintEl: cameraFlashHint,
-      lowLightEl: cameraLowLightWarn
-    });
-    gpsCameraSession.start()
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false })
       .then(function(s) {
         stream = s;
+        cameraVideo.srcObject = s;
         showCameraReady();
       })
       .catch(function(err) {
-        gpsCameraSession = null;
-        showCameraError('Camera failed: ' + (err && err.message ? err.message : 'Permission denied'));
+        showCameraError('Camera failed: ' + (err.message || 'Permission denied'));
       });
   }
 
@@ -960,42 +943,29 @@
       alert('Camera abhi tayyar ho raha hai. 1-2 second ruk kar dobara Capture karein.');
       return;
     }
-    if (gpsCameraSession && gpsCameraSession.isFlashAvailable() && !gpsCameraSession.isFlashOn()) {
-      var bCap = gpsCameraSession.getBrightness();
-      if (bCap < 58) {
-        alert('Andhera hai — upar ⚡ Flash ON karein (screen roshni), phir Capture karein.');
-        return;
-      }
+    var shot = captureStampedPhoto();
+    if (!shot || !shot.dataUrl) {
+      alert('Photo capture nahi ho saki. Dobara try karein.');
+      return;
     }
-    var doCapture = function() {
-      var shot = captureStampedPhoto();
-      if (gpsCameraSession && gpsCameraSession.afterCapture) gpsCameraSession.afterCapture();
-      if (!shot || !shot.dataUrl) {
-        alert('Photo capture nahi ho saki. Dobara try karein.');
-        return;
-      }
-      formDriverId.value = driverSelect.value;
-      formParkingId.value = parkingId.value;
-      formLat.value = currentPosition.coords.latitude;
-      formLng.value = currentPosition.coords.longitude;
-      formPhotoBase64.value = shot.dataUrl;
-      formVehicleId.value = vehicleSelect.tomselect ? vehicleSelect.tomselect.getValue() : vehicleSelect.value;
-      formProjectId.value = projectSelect.tomselect ? projectSelect.tomselect.getValue() : projectSelect.value;
-      pendingCapturePayload = {
-        driver_id: Number(formDriverId.value || 0),
-        parking_station_id: Number(formParkingId.value || 0),
-        latitude: formLat.value,
-        longitude: formLng.value,
-        photo_base64: shot.dataUrl,
-        vehicle_id: Number(formVehicleId.value || 0),
-        project_id: Number(formProjectId.value || 0),
-        captured_at: shot.timeStr,
-      };
-      showCameraPreviewMode(shot.dataUrl);
+    formDriverId.value = driverSelect.value;
+    formParkingId.value = parkingId.value;
+    formLat.value = currentPosition.coords.latitude;
+    formLng.value = currentPosition.coords.longitude;
+    formPhotoBase64.value = shot.dataUrl;
+    formVehicleId.value = vehicleSelect.tomselect ? vehicleSelect.tomselect.getValue() : vehicleSelect.value;
+    formProjectId.value = projectSelect.tomselect ? projectSelect.tomselect.getValue() : projectSelect.value;
+    pendingCapturePayload = {
+      driver_id: Number(formDriverId.value || 0),
+      parking_station_id: Number(formParkingId.value || 0),
+      latitude: formLat.value,
+      longitude: formLng.value,
+      photo_base64: shot.dataUrl,
+      vehicle_id: Number(formVehicleId.value || 0),
+      project_id: Number(formProjectId.value || 0),
+      captured_at: shot.timeStr,
     };
-    var prep = (gpsCameraSession && gpsCameraSession.prepareForCapture)
-      ? gpsCameraSession.prepareForCapture() : Promise.resolve();
-    prep.then(doCapture);
+    showCameraPreviewMode(shot.dataUrl);
   });
 
   if (btnRetakePhoto) {
