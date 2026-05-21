@@ -41,6 +41,10 @@
         html.fleet-attnd-camera-active body {
             background: transparent !important;
         }
+        html.fleet-attnd-camera-active .modal-content,
+        html.fleet-attnd-camera-active .modal-body {
+            background: transparent !important;
+        }
         html.fleet-attnd-camera-active.capacitor-native ion-content,
         html.fleet-attnd-camera-active.capacitor-native .main-content {
             background: transparent !important;
@@ -4454,11 +4458,28 @@
         });
     };
 
-    /** Portrait selfie: honor EXIF + landscape buffer on portrait phones. */
-    window.fleetNormalizeSelfieOrientation = function(dataUrl) {
+    /** Portrait selfie: honor EXIF + landscape buffer on portrait phones. opts.fromCameraPreview fixes upside-down CameraPreview JPEGs. */
+    window.fleetNormalizeSelfieOrientation = function(dataUrl, opts) {
+        opts = opts || {};
         return new Promise(function(resolve, reject) {
             if (!dataUrl) {
                 reject(new Error('No photo'));
+                return;
+            }
+            if (opts.fromCameraPreview) {
+                var previewImg = new Image();
+                previewImg.onload = function() {
+                    var pw = previewImg.naturalWidth || previewImg.width;
+                    var ph = previewImg.naturalHeight || previewImg.height;
+                    if (!pw || !ph) {
+                        reject(new Error('Invalid image'));
+                        return;
+                    }
+                    var deg = (ph >= pw) ? 180 : 90;
+                    window.fleetRotateDataUrl(dataUrl, deg).then(resolve).catch(reject);
+                };
+                previewImg.onerror = function() { reject(new Error('Image load failed')); };
+                previewImg.src = dataUrl;
                 return;
             }
             var exif = window.fleetReadJpegExifOrientation(dataUrl);
@@ -4639,14 +4660,18 @@
                 window._fleetAttendancePreviewActive = true;
                 document.documentElement.classList.add('fleet-attnd-camera-active');
                 document.body.classList.add('fleet-attnd-camera-active');
-                function refreshLive() {
-                    if (liveStampEl) {
-                        liveStampEl.innerHTML = window.fleetFormatLiveGpsStampHtml(stampOpts);
-                    }
-                }
-                refreshLive();
-                window._fleetAttendancePreviewTimer = setInterval(refreshLive, 1000);
             });
+        });
+    };
+
+    /** Stop preview, pause, then restart (retake / retry without re-opening modal). */
+    window.fleetRestartAttendancePreview = function(viewportEl, stampOpts) {
+        return window.fleetStopAttendancePreview().then(function() {
+            return new Promise(function(resolve) {
+                window.setTimeout(resolve, 300);
+            });
+        }).then(function() {
+            return window.fleetStartAttendancePreview(viewportEl, null, stampOpts);
         });
     };
 
@@ -4660,7 +4685,7 @@
                 if (!res || !res.value) throw new Error('No photo captured');
                 var b64 = res.value;
                 if (b64.indexOf('data:') !== 0) b64 = 'data:image/jpeg;base64,' + b64;
-                return window.fleetNormalizeSelfieOrientation(b64);
+                return window.fleetNormalizeSelfieOrientation(b64, { fromCameraPreview: true });
             });
         });
     };

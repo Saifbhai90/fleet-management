@@ -34,11 +34,11 @@
   #cameraModal .modal-header { flex-shrink: 0; padding: 0.4rem 0.75rem; }
   #cameraModal .modal-header .modal-title { font-size: 0.95rem; }
   #cameraModal .modal-body { flex: 1 1 auto; overflow: hidden; padding: 0.35rem !important; min-height: 0; }
-  #cameraModal.fleet-attnd-camera-active .modal-content { background: rgba(15, 23, 42, 0.82) !important; }
-  #cameraModal.fleet-attnd-camera-active .modal-header,
-  #cameraModal.fleet-attnd-camera-active .modal-footer { background: rgba(15, 23, 42, 0.88) !important; }
+  #cameraModal.fleet-attnd-camera-active .modal-content,
   #cameraModal.fleet-attnd-camera-active .modal-body,
   #cameraModal.fleet-attnd-camera-active #cameraLiveWrap { background: transparent !important; }
+  #cameraModal.fleet-attnd-camera-active .modal-header,
+  #cameraModal.fleet-attnd-camera-active .modal-footer { background: rgba(15, 23, 42, 0.88) !important; }
   #cameraPreviewViewport {
     width: 100%;
     min-height: 52vh;
@@ -883,11 +883,29 @@
     cameraError.className = 'alert alert-danger mb-0 w-100 d-none';
     if (cameraOpening) cameraOpening.classList.add('d-none');
     if (btnCapture) btnCapture.className = 'btn btn-primary btn-lg rounded-pill px-5';
-    if (fleetLiveGpsStamp && _attendancePreviewMode) {
-      fleetLiveGpsStamp.classList.remove('d-none');
-      fleetLiveGpsStamp.setAttribute('aria-hidden', 'false');
+    if (fleetLiveGpsStamp) {
+      fleetLiveGpsStamp.classList.add('d-none');
+      fleetLiveGpsStamp.setAttribute('aria-hidden', 'true');
     }
     if (cameraModalLabel) cameraModalLabel.innerHTML = '<i class="bi bi-camera-fill me-2"></i>Front selfie — Capture';
+  }
+
+  function resumeCheckinCameraPreview() {
+    var stampOpts = stampOptsForCheckin();
+    var viewport = cameraPreviewViewport;
+    showCameraLoading();
+    if (cameraOpening) cameraOpening.classList.add('d-none');
+    if (cameraModal) cameraModal.classList.add('fleet-attnd-camera-active');
+    if (typeof window.fleetRestartAttendancePreview === 'function' && viewport) {
+      window.fleetRestartAttendancePreview(viewport, stampOpts)
+        .then(function() {
+          _attendancePreviewMode = true;
+          showCameraReady();
+        })
+        .catch(handleCheckinCameraError);
+      return;
+    }
+    startCheckinCameraLive();
   }
 
   function startCheckinCameraLive() {
@@ -908,7 +926,7 @@
     }
     function runPreviewStart() {
       if (cameraOpening) cameraOpening.classList.add('d-none');
-      window.fleetStartAttendancePreview(viewport, fleetLiveGpsStamp, stampOpts)
+      window.fleetStartAttendancePreview(viewport, null, stampOpts)
         .then(function() {
           _attendancePreviewMode = true;
           if (cameraModal) cameraModal.classList.add('fleet-attnd-camera-active');
@@ -978,7 +996,7 @@
 
   btnRetryCamera.addEventListener('click', function() {
     resetCameraModalToLive();
-    startCheckinCameraLive();
+    resumeCheckinCameraPreview();
   });
 
   if (btnCapture) {
@@ -1021,7 +1039,7 @@
   if (btnRetakePhoto) {
     btnRetakePhoto.addEventListener('click', function() {
       resetCameraModalToLive();
-      startCheckinCameraLive();
+      resumeCheckinCameraPreview();
     });
   }
 
