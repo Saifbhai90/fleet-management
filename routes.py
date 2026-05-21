@@ -2448,36 +2448,93 @@ def api_me():
     })
 
 
+def _is_valid_apk_on_disk(file_path):
+    """Reject corrupt/unsigned-looking APKs (must be ZIP with PK header, reasonable size)."""
+    try:
+        size = os.path.getsize(file_path)
+        if size < 500_000:
+            return False
+        with open(file_path, 'rb') as fh:
+            return fh.read(2) == b'PK'
+    except OSError:
+        return False
+
+
+def _parse_apk_version(fname):
+    ver = fname.replace('fleet-manager-', '').replace('.apk', '')
+    parts = ver.split('.')
+    if len(parts) != 3 or not all(p.isdigit() for p in parts):
+        return None
+    return tuple(int(p) for p in parts), ver
+
+
+def _best_signed_apk_from_static():
+    apps_dir = os.path.join(app.static_folder, 'apps')
+    if not os.path.isdir(apps_dir):
+        return None
+    best = None
+    for fname in os.listdir(apps_dir):
+        if not fname.startswith('fleet-manager-') or not fname.endswith('.apk'):
+            continue
+        parsed = _parse_apk_version(fname)
+        if not parsed:
+            continue
+        path = os.path.join(apps_dir, fname)
+        if not _is_valid_apk_on_disk(path):
+            continue
+        ver_tuple, ver_str = parsed
+        row = (ver_tuple, ver_str, fname, os.path.getsize(path))
+        if best is None or row[0] > best[0]:
+            best = row
+    if not best:
+        return None
+    return {'version': best[1], 'apk_filename': best[2], 'file_size_bytes': best[3]}
+
+
 @app.route('/api/app/check-update')
 def app_check_update():
     """Returns latest app version info — reads from DB (AppRelease)."""
     latest = AppRelease.query.filter_by(is_latest=True).first()
+    static_best = _best_signed_apk_from_static()
 
-    if not latest:
-        apps_dir = os.path.join(app.static_folder, 'apps')
-        if os.path.isdir(apps_dir):
-            apks = sorted(
-                [f for f in os.listdir(apps_dir) if f.startswith('fleet-manager-') and f.endswith('.apk')],
-                reverse=True,
+    if latest:
+        disk_path = os.path.join(app.static_folder, 'apps', latest.apk_filename)
+        if not _is_valid_apk_on_disk(disk_path):
+            latest = None
+
+    if not latest and static_best:
+        try:
+            latest = AppRelease(
+                version=static_best['version'],
+                apk_filename=static_best['apk_filename'],
+                force_update=False,
+                is_latest=True,
+                file_size_bytes=static_best['file_size_bytes'],
             )
-            for fname in apks:
-                ver = fname.replace('fleet-manager-', '').replace('.apk', '')
-                parts = ver.split('.')
-                if len(parts) == 3 and all(p.isdigit() for p in parts):
-                    try:
-                        rel = AppRelease(
-                            version=ver, apk_filename=fname, force_update=False,
-                            is_latest=True, file_size_bytes=os.path.getsize(os.path.join(apps_dir, fname)),
-                        )
-                        db.session.add(rel)
-                        db.session.commit()
-                        latest = rel
-                    except Exception:
-                        db.session.rollback()
-                    break
+            db.session.add(latest)
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            latest = None
 
     if not latest:
-        return jsonify({'latest_version': '0.0.0', 'apk_url': '', 'apk_filename': '', 'force_update': False})
+        return jsonify({
+            'latest_version': '0.0.0',
+            'apk_url': '',
+            'apk_filename': '',
+            'force_update': False,
+            'file_size_bytes': 0,
+        })
+
+    if static_best and _parse_apk_version(latest.apk_filename):
+        db_ver = _parse_apk_version(latest.apk_filename)[0]
+        if static_best['version'] and _parse_apk_version(static_best['apk_filename'])[0] > db_ver:
+            latest.version = static_best['version']
+            latest.apk_filename = static_best['apk_filename']
+            latest.file_size_bytes = static_best['file_size_bytes']
+
+    apk_path = os.path.join(app.static_folder, 'apps', latest.apk_filename)
+    file_size = latest.file_size_bytes or (os.path.getsize(apk_path) if os.path.isfile(apk_path) else 0)
 
     apk_url = request.url_root.rstrip('/') + url_for('static', filename=f'apps/{latest.apk_filename}')
     return jsonify({
@@ -2485,7 +2542,7 @@ def app_check_update():
         'apk_url': apk_url,
         'apk_filename': latest.apk_filename,
         'force_update': latest.force_update,
-        'file_size_bytes': latest.file_size_bytes or 0,
+        'file_size_bytes': file_size,
     })
 
 
@@ -2528,6 +2585,13 @@ def admin_app_releases():
             file_path = os.path.join(apps_dir, fname)
             apk_file.save(file_path)
             file_size = os.path.getsize(file_path)
+            if not _is_valid_apk_on_disk(file_path):
+                try:
+                    os.remove(file_path)
+                except OSError:
+                    pass
+                flash('Uploaded file valid APK nahi hai (corrupt ya unsigned). Dubara signed APK upload karein.', 'danger')
+                return redirect(url_for('admin_app_releases'))
 
             AppRelease.query.update({AppRelease.is_latest: False})
 
