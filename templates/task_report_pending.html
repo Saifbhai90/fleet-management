@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block title %}Pending Task Report{% endblock %}
+{% block content %}
+<div class="container-fluid px-2 px-md-3">
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h2 class="mb-0"><i class="bi bi-hourglass-split me-2 text-warning"></i>Pending Task Report</h2>
+    <div class="d-flex flex-wrap gap-2">
+      {% if pending_filter_qs %}
+      <a href="{{ url_for('task_report_new') }}?{{ pending_filter_qs }}" class="btn btn-success btn-sm rounded-pill px-3">
+        <i class="bi bi-pencil-square me-1"></i>New Task Entry
+      </a>
+      {% endif %}
+      <a href="{{ url_for('task_report_list') }}" class="btn btn-outline-secondary btn-sm rounded-pill px-3">Back to Report</a>
+    </div>
+  </div>
+
+  <div class="alert alert-light border small py-2 mb-3">
+    <i class="bi bi-info-circle me-1"></i>
+    Woh vehicles jin ka <strong>Close Reading</strong> ya <strong>Task's</strong> abhi enter nahi hua (Load Vehicles ke baad jo list banti hai — wahi rules).
+    Save ke baghair bhari hui fields yahan pending <strong>nahi</strong> count hoti; sirf database / saved state.
+  </div>
+
+  <div class="card shadow border-0 rounded-3 mb-4">
+    <div class="card-body">
+      <form method="get" action="{{ url_for('task_report_pending') }}" class="row g-3 align-items-end">
+        <div class="col-12 col-md-2">
+          <label class="form-label">Date <span class="text-danger">*</span></label>
+          <input type="text" name="date" class="form-control datepicker" placeholder="dd-mm-yyyy" value="{{ view_date.strftime('%d-%m-%Y') }}">
+        </div>
+        <div class="col-12 col-md-2">
+          <label class="form-label">District</label>
+          {% if task_entry_filter.lock_district %}
+          <input type="hidden" name="district_id" value="{{ district_id }}">
+          <div class="form-control bg-light">{% for d in districts %}{% if d.id == district_id %}{{ d.name }}{% endif %}{% endfor %}</div>
+          {% else %}
+          <select name="district_id" id="pendingDistrictSelect" class="form-select search-select">
+            <option value="0">-- All Districts --</option>
+            {% for d in districts %}
+            <option value="{{ d.id }}" {% if district_id == d.id %}selected{% endif %}>{{ d.name }}</option>
+            {% endfor %}
+          </select>
+          {% endif %}
+        </div>
+        <div class="col-12 col-md-2">
+          <label class="form-label">Project <span class="text-danger">*</span></label>
+          {% if task_entry_filter.lock_project %}
+          <input type="hidden" name="project_id" value="{{ project_id }}">
+          <div class="form-control bg-light">{% for p in projects %}{% if p.id == project_id %}{{ p.name }}{% endif %}{% endfor %}</div>
+          {% else %}
+          <select name="project_id" id="pendingProjectSelect" class="form-select search-select" required>
+            <option value="0">-- Select Project --</option>
+            {% for p in projects %}
+            <option value="{{ p.id }}" {% if project_id == p.id %}selected{% endif %}>{{ p.name }}</option>
+            {% endfor %}
+          </select>
+          {% endif %}
+        </div>
+        <div class="col-12 col-md-2">
+          <button type="submit" class="btn btn-primary w-100"><i class="bi bi-list-ul me-1"></i>Load</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  {% if request.args.get('date') and project_id %}
+  <div class="d-flex flex-wrap gap-2 mb-2">
+    <span class="badge bg-secondary">Loaded: {{ total_loaded }} vehicle(s)</span>
+    <span class="badge bg-warning text-dark">Pending: {{ pending_rows|length }}</span>
+  </div>
+  <div class="card shadow border-0 rounded-3">
+    <div class="table-responsive">
+      <table class="table table-sm table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>#</th>
+            <th>District</th>
+            <th>Tehsil</th>
+            <th>Parking</th>
+            <th>Vehicle No</th>
+            <th>Start Reading</th>
+            <th>Close Reading</th>
+            <th>Task's</th>
+            <th>Pending reason</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in pending_rows %}
+          {% set v = row.vehicle %}
+          <tr>
+            <td>{{ loop.index }}</td>
+            <td>{{ v.district.name if v.district else '—' }}</td>
+            <td>{{ v.parking_station.tehsil if v.parking_station else '—' }}</td>
+            <td>{{ v.parking_station.name if v.parking_station else '—' }}</td>
+            <td class="fw-semibold">{{ v.vehicle_no }}</td>
+            <td class="text-end">{{ '%.0f'|format(row.start_reading) if row.start_reading is not none else '—' }}</td>
+            <td class="text-end">
+              {% if row.close_reading is none %}<span class="badge bg-danger">Missing</span>{% else %}{{ row.close_reading }}{% endif %}
+            </td>
+            <td class="text-center">
+              {% if row.tasks_count is none %}<span class="badge bg-danger">Missing</span>{% else %}{{ row.tasks_count }}{% endif %}
+            </td>
+            <td class="small">
+              {% if row.close_reading is none and row.tasks_count is none %}Close Reading &amp; Task's
+              {% elif row.close_reading is none %}Close Reading
+              {% else %}Task's{% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="9" class="text-center text-muted py-4">Is filter par koi pending vehicle nahi — sab entries complete hain.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% else %}
+  <div class="alert alert-info">Date aur Project select karke <strong>Load</strong> karein.</div>
+  {% endif %}
+</div>
+<script>
+(function() {
+  var districtSelect = document.getElementById('pendingDistrictSelect');
+  var projectSelect = document.getElementById('pendingProjectSelect');
+  if (districtSelect && projectSelect) {
+    districtSelect.addEventListener('change', function() {
+      var did = this.value;
+      if (projectSelect.tomselect) projectSelect.tomselect.destroy();
+      projectSelect.innerHTML = '<option value="0">-- Select Project --</option>';
+      if (did && did !== '0') {
+        fetch('/get_projects_by_district/' + did).then(function(r) { return r.json(); }).then(function(arr) {
+          arr.forEach(function(p) {
+            var o = document.createElement('option');
+            o.value = p.id;
+            o.textContent = p.name;
+            projectSelect.appendChild(o);
+          });
+          if (typeof initSearchableDropdowns === 'function') initSearchableDropdowns(projectSelect.parentNode);
+        });
+      } else if (typeof initSearchableDropdowns === 'function') {
+        initSearchableDropdowns(projectSelect.parentNode);
+      }
+    });
+  }
+})();
+</script>
+{% endblock %}

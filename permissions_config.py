@@ -1244,6 +1244,7 @@ PAGE_VISIBLE = {
     'red_task_summary_detail': ['task_report', 'red_task'],
     'without_task_list': ['task_report', 'without_task'],
     'task_report_new': ['task_report', 'task_report_list', 'task_report_entry', 'task_report_add'],
+    'task_report_pending': ['task_report', 'task_report_list', 'task_report_entry', 'task_report_add'],
     'task_report_new_delete_row': ['task_report', 'task_report_list', 'task_report_entry', 'task_report_entry_delete'],
     'task_report_logbook_cover': ['task_report', 'task_report_logbook'],
     'penalty_record_list': ['driver_status', 'penalty_record'],

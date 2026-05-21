@@ -21162,6 +21162,7 @@ def task_report_new():
             task_entry_max_km_driven=max_km_setting,
             task_entry_odometer_required=odom_required_setting,
             task_entry_date_hint=_hint,
+            pending_task_count=len(_filter_pending_task_rows(rows_list)) if rows_list else 0,
         )
 
     if request.method == 'POST' and request.form.get('save_batch'):
@@ -21290,6 +21291,7 @@ def task_report_new():
                 date=task_date.strftime('%d-%m-%Y'),
                 district_id=district_id,
                 project_id=project_id,
+                batch_saved='1',
             ))
         except Exception as e:
             db.session.rollback()
@@ -21309,6 +21311,96 @@ def task_report_new():
         vehicles = q.order_by(Vehicle.vehicle_no).all()
         rows = _build_vehicle_rows(vehicles, view_date, request.form)
     return _task_report_new_render(rows, view_date)
+
+
+@app.route('/task-report/pending')
+def task_report_pending():
+    """Vehicles with missing Close Reading and/or Task's after same filters as New Task Entry."""
+    from auth_utils import get_user_context
+
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    sc = _task_report_entry_scope_context(user_context)
+    allowed_projects = sc['allowed_projects']
+    allowed_districts = sc['allowed_districts']
+    allowed_vehicles = sc['allowed_vehicles']
+    is_master_or_admin = sc['is_master_or_admin']
+    districts = sc['districts']
+    valid_district_ids = sc['valid_district_ids']
+    scoped_project_ids = sc['scoped_project_ids']
+
+    lad = set(allowed_districts) if allowed_districts else set()
+    lap = set(allowed_projects) if allowed_projects else set()
+    lav = set(allowed_vehicles) if allowed_vehicles else set()
+
+    district_id = request.args.get('district_id', type=int) or 0
+    project_id = request.args.get('project_id', type=int) or 0
+    if district_id and valid_district_ids and district_id not in valid_district_ids:
+        district_id = 0
+    if project_id and scoped_project_ids is not None and project_id not in scoped_project_ids:
+        project_id = 0
+
+    disable_project = False
+    disable_district = False
+    if not is_master_or_admin:
+        if len(lad) == 1:
+            district_id = district_id or next(iter(lad))
+            disable_district = True
+        if len(lad) == 1 and len(lap) == 1 and len(lav) == 1:
+            project_id = project_id or next(iter(lap))
+            disable_project = True
+
+    task_entry_filter = {'lock_district': disable_district, 'lock_project': disable_project}
+    _explicit_task_date = parse_date(request.args.get('date'))
+    if _explicit_task_date:
+        view_date = _explicit_task_date
+    elif project_id:
+        view_date = _default_task_entry_date_for_project(project_id)
+    else:
+        view_date = pk_date()
+
+    def _projects_ui(did):
+        if did:
+            pq = Project.query.join(project_district).filter(project_district.c.district_id == did)
+            if scoped_project_ids is not None:
+                pq = pq.filter(Project.id.in_(list(scoped_project_ids)))
+            return pq.order_by(Project.name).all()
+        if scoped_project_ids is not None:
+            return Project.query.filter(Project.id.in_(list(scoped_project_ids))).order_by(Project.name).all()
+        return Project.query.order_by(Project.name).all()
+
+    all_rows = []
+    pending_rows = []
+    _has_filter = request.args.get('date') is not None
+    if _has_filter and project_id:
+        q = _vehicle_query_task_report_scope(is_master_or_admin, allowed_projects, allowed_districts, allowed_vehicles)
+        q = q.filter(Vehicle.project_id == project_id)
+        if district_id:
+            q = q.filter(Vehicle.district_id == district_id)
+        vehicles = q.order_by(Vehicle.vehicle_no).all()
+        all_rows = _build_vehicle_rows(vehicles, view_date, None)
+        pending_rows = _filter_pending_task_rows(all_rows)
+
+    pending_qs = ''
+    if view_date:
+        pending_qs = 'date=' + view_date.strftime('%d-%m-%Y')
+        if district_id:
+            pending_qs += '&district_id=' + str(district_id)
+        if project_id:
+            pending_qs += '&project_id=' + str(project_id)
+
+    return render_template(
+        'task_report_pending.html',
+        pending_rows=pending_rows,
+        total_loaded=len(all_rows),
+        view_date=view_date,
+        district_id=district_id,
+        project_id=project_id,
+        districts=districts,
+        projects=_projects_ui(district_id),
+        task_entry_filter=task_entry_filter,
+        pending_filter_qs=pending_qs,
+    )
 
 
 def _task_entry_record_in_user_scope(rec, is_master_or_admin, allowed_projects, allowed_districts, allowed_vehicles):
@@ -21432,6 +21524,81 @@ def _build_vehicle_rows(vehicles, task_date, form=None):
             'odometer_photo_path': ((existing.odometer_photo_path or '').strip()) if existing else '',
         })
     return rows
+
+
+def _task_row_is_pending(entry_row):
+    """Pending = Close Reading missing and/or Task's not entered (empty field, not 0)."""
+    if entry_row.get('close_reading') is None:
+        return True
+    if entry_row.get('tasks_count') is None:
+        return True
+    return False
+
+
+def _filter_pending_task_rows(rows):
+    return [r for r in rows if _task_row_is_pending(r)]
+
+
+def _task_report_entry_scope_context(user_context):
+    """Districts/projects and scope flags shared by New Task Entry + Pending report."""
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles = user_context.get('allowed_vehicles', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+
+    district_q = District.query
+    project_q_all = Project.query
+    if not is_master_or_admin:
+        ap, ad, av = allowed_projects, allowed_districts, allowed_vehicles
+        if not ap and not ad and not av:
+            district_q = district_q.filter(District.id.in_([-1]))
+            project_q_all = project_q_all.filter(Project.id.in_([-1]))
+        else:
+            if ad:
+                district_q = district_q.filter(District.id.in_(list(ad)))
+            elif ap:
+                district_q = (
+                    district_q.join(project_district, project_district.c.district_id == District.id)
+                    .filter(project_district.c.project_id.in_(list(ap)))
+                    .distinct()
+                )
+            elif av:
+                d_ids = [
+                    r[0] for r in db.session.query(Vehicle.district_id)
+                    .filter(Vehicle.id.in_(list(av)), Vehicle.district_id.isnot(None))
+                    .distinct().all()
+                ]
+                district_q = district_q.filter(District.id.in_(d_ids or [-1]))
+            if ap:
+                project_q_all = project_q_all.filter(Project.id.in_(list(ap)))
+            if ad:
+                project_q_all = (
+                    project_q_all.join(project_district, project_district.c.project_id == Project.id)
+                    .filter(project_district.c.district_id.in_(list(ad)))
+                    .distinct()
+                )
+            if not ap and not ad and av:
+                p_ids = [
+                    r[0] for r in db.session.query(Vehicle.project_id)
+                    .filter(Vehicle.id.in_(list(av)), Vehicle.project_id.isnot(None))
+                    .distinct().all()
+                ]
+                project_q_all = project_q_all.filter(Project.id.in_(p_ids or [-1]))
+
+    districts = district_q.order_by(District.name).all()
+    valid_district_ids = {d.id for d in districts}
+    scoped_project_ids = None
+    if not is_master_or_admin:
+        scoped_project_ids = {p.id for p in project_q_all.order_by(Project.name).all()}
+    return {
+        'allowed_projects': allowed_projects,
+        'allowed_districts': allowed_districts,
+        'allowed_vehicles': allowed_vehicles,
+        'is_master_or_admin': is_master_or_admin,
+        'districts': districts,
+        'valid_district_ids': valid_district_ids,
+        'scoped_project_ids': scoped_project_ids,
+    }
 
 
 @app.route('/api/task-report/odometer-photo-upload', methods=['POST'])

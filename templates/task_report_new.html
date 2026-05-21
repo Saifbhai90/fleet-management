@@ -631,7 +631,14 @@
 <div class="container-fluid task-batch-page px-2 px-md-3">
   <div class="d-flex justify-content-between align-items-center mb-3 mb-md-4 flex-wrap gap-2 task-batch-page-header">
     <h2 class="mb-0 task-batch-page-title"><i class="bi bi-plus-circle me-2 text-success"></i>New Task Entry</h2>
-    <a href="{{ url_for('task_report_list') }}" class="btn btn-outline-secondary btn-sm rounded-pill px-3">Back to Report</a>
+    <div class="d-flex flex-wrap gap-2">
+      {% if project_id and (request.args.get('date') or view_date) %}
+      <a href="{{ url_for('task_report_pending') }}?date={{ view_date.strftime('%d-%m-%Y') }}{% if district_id %}&district_id={{ district_id }}{% endif %}&project_id={{ project_id }}" class="btn btn-warning btn-sm rounded-pill px-3">
+        <i class="bi bi-hourglass-split me-1"></i>Pending Task Report{% if pending_task_count %} ({{ pending_task_count }}){% endif %}
+      </a>
+      {% endif %}
+      <a href="{{ url_for('task_report_list') }}" class="btn btn-outline-secondary btn-sm rounded-pill px-3">Back to Report</a>
+    </div>
   </div>
 
   {% if task_entry_max_km_driven is not none and (task_entry_max_km_driven | int) > 0 %}
@@ -733,7 +740,7 @@
             <tbody>
               {% for row in rows %}
               {% set s = row.saved %}
-              <tr class="task-row{% if s %} table-info{% endif %}" data-start="{{ row.start_reading }}" data-tracker="{{ row.tracker_km }}" data-emg="{{ row.emg_tasks }}" data-vehicle="{{ row.vehicle.vehicle_no | e }}">
+              <tr class="task-row{% if s %} table-info{% endif %}" data-vehicle-id="{{ row.vehicle.id }}" data-start="{{ row.start_reading }}" data-tracker="{{ row.tracker_km }}" data-emg="{{ row.emg_tasks }}" data-vehicle="{{ row.vehicle.vehicle_no | e }}" data-init-close="{% if row.close_reading is not none %}{{ row.close_reading }}{% endif %}" data-init-tasks="{% if row.tasks_count is not none %}{{ row.tasks_count }}{% endif %}" data-init-odom="{{ row.odometer_photo_path or '' }}">
                 <td class="ps-4 ps-md-4 task-batch-num-cell">
                 <input type="hidden" name="row_{{ row.vehicle.id }}_edit_mode" id="row_{{ row.vehicle.id }}_edit_mode" value="{{ '0' if s else '1' }}">
                   <span class="task-batch-num-inner"><span class="task-batch-row-num">{{ loop.index }}</span>{% if s %} <i class="bi bi-check-circle-fill text-success" title="Previously saved"></i>{% endif %}</span>
@@ -1061,6 +1068,54 @@ window.TASK_REPORT_NEW_LOCK_PROJECT = {{ task_entry_filter.lock_project|tojson }
     el('totalTracker', tTracker ? tTracker.toFixed(2) : '-');
     el('totalKmsDiff', tDiff ? tDiff.toFixed(2) : '-');
     el('totalPctDiff', validKms ? ((tDiff / validKms) * 100).toFixed(1) + '%' : '-');
+  }
+
+  function taskEntryRestoreOdomUi(rowId, url) {
+    if (typeof window.taskEntrySetRowPhotoUi === 'function') {
+      window.taskEntrySetRowPhotoUi(rowId, url || '');
+      return;
+    }
+    var inp = document.querySelector('.odom-url-input[data-row="' + rowId + '"]');
+    if (inp) inp.value = url || '';
+    var clr = document.querySelector('.odom-clear-btn[data-row="' + rowId + '"]');
+    if (clr && !url) clr.click();
+  }
+
+  function taskEntryRestoreRowsFromServer() {
+    var batchTable = document.getElementById('batchTable');
+    if (!batchTable) return;
+    batchTable.querySelectorAll('tr.task-row').forEach(function(row) {
+      var vid = row.getAttribute('data-vehicle-id');
+      if (!vid) return;
+      var editMode = document.getElementById('row_' + vid + '_edit_mode');
+      if (row.classList.contains('table-info') && editMode && editMode.value === '0') {
+        return;
+      }
+      var initClose = row.getAttribute('data-init-close') || '';
+      var initTasks = row.getAttribute('data-init-tasks') || '';
+      var initOdom = row.getAttribute('data-init-odom') || '';
+      var closeInp = row.querySelector('.close-input');
+      var taskInp = row.querySelector('input[name*="_tasks_count"]');
+      if (closeInp) closeInp.value = initClose;
+      if (taskInp) taskInp.value = initTasks;
+      taskEntryRestoreOdomUi(vid, initOdom);
+      updateRow(row);
+    });
+    updateTotals();
+  }
+
+  window.addEventListener('pageshow', function(ev) {
+    if (!document.getElementById('batchForm')) return;
+    if (sessionStorage.getItem('task_batch_skip_draft_reset') === '1') {
+      sessionStorage.removeItem('task_batch_skip_draft_reset');
+      return;
+    }
+    if (ev.persisted) {
+      taskEntryRestoreRowsFromServer();
+    }
+  });
+  if (new URLSearchParams(window.location.search).get('batch_saved') === '1') {
+    sessionStorage.setItem('task_batch_skip_draft_reset', '1');
   }
 
   var batchTable = document.getElementById('batchTable');
