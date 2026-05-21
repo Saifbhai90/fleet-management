@@ -170,7 +170,7 @@
       </div>
       <div class="modal-body text-center">
         <div id="cameraLiveWrap">
-          <video id="cameraVideo" autoplay playsinline muted></video>
+          {% include 'partials/gps_attendance_camera_extras.html' %}
         </div>
         <div id="cameraPreviewWrap" class="d-none">
           <img id="cameraPreviewImg" class="camera-preview-img" alt="Captured preview">
@@ -290,6 +290,9 @@
   var cameraError = document.getElementById('cameraError');
   var cameraErrorText = document.getElementById('cameraErrorText');
   var btnRetryCamera = document.getElementById('btnRetryCamera');
+  var btnCameraTorch = document.getElementById('btnCameraTorch');
+  var cameraLowLightWarn = document.getElementById('cameraLowLightWarn');
+  var gpsCameraSession = null;
   var vehiclesData = {{ pre_vehicles_data | tojson }};
   var allVehiclesByProject = {{ all_vehicles_by_project | tojson }};
   var serverAutoShift = {{ auto_shift | tojson }};
@@ -823,8 +826,9 @@
   }
 
   function stopCamera() {
-    if (stream) { stream.getTracks().forEach(function(t) { t.stop(); }); stream = null; }
-    cameraVideo.srcObject = null;
+    if (gpsCameraSession) { gpsCameraSession.stop(); gpsCameraSession = null; }
+    stream = null;
+    if (cameraVideo) cameraVideo.srcObject = null;
   }
 
   function resetCameraModalToLive() {
@@ -884,6 +888,10 @@
     cameraCanvas.height = h;
     var ctx = cameraCanvas.getContext('2d');
     ctx.drawImage(cameraVideo, 0, 0);
+    var bright = gpsCameraSession ? gpsCameraSession.getBrightness() : 255;
+    if (typeof window.FleetGpsCamera !== 'undefined' && window.FleetGpsCamera.enhanceCanvasForLowLight) {
+      window.FleetGpsCamera.enhanceCanvasForLowLight(ctx, w, h, bright);
+    }
     var lat = (currentPosition && currentPosition.coords) ? currentPosition.coords.latitude : null;
     var lng = (currentPosition && currentPosition.coords) ? currentPosition.coords.longitude : null;
     var acc = (currentPosition && currentPosition.coords) ? currentPosition.coords.accuracy : null;
@@ -929,25 +937,30 @@
     var _odCap = (typeof pktOverlayDateTimeStrings === 'function')
       ? pktOverlayDateTimeStrings(nowCap)
       : { timeStr: nowCap.getHours().toString().padStart(2, '0') + ':' + nowCap.getMinutes().toString().padStart(2, '0') + ':' + nowCap.getSeconds().toString().padStart(2, '0') };
-    return { dataUrl: jpegDataUrlMaxSide(cameraCanvas, 1280, 0.72), timeStr: _odCap.timeStr };
+    return { dataUrl: jpegDataUrlMaxSide(cameraCanvas, 1280, 0.84), timeStr: _odCap.timeStr };
   }
 
   function startCamera() {
     resetCameraModalToLive();
     stopCamera();
     showCameraLoading();
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      showCameraError('Camera not supported in this browser.');
+    if (!window.FleetGpsCamera || typeof window.FleetGpsCamera.createSession !== 'function') {
+      showCameraError('Camera module load nahi hua. Page refresh karein.');
       return;
     }
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false })
+    gpsCameraSession = window.FleetGpsCamera.createSession({
+      video: cameraVideo,
+      btnTorch: btnCameraTorch,
+      lowLightEl: cameraLowLightWarn
+    });
+    gpsCameraSession.start()
       .then(function(s) {
         stream = s;
-        cameraVideo.srcObject = s;
         showCameraReady();
       })
       .catch(function(err) {
-        showCameraError('Camera failed: ' + (err.message || 'Permission denied'));
+        gpsCameraSession = null;
+        showCameraError('Camera failed: ' + (err && err.message ? err.message : 'Permission denied'));
       });
   }
 
@@ -987,6 +1000,13 @@
     if (!cameraVideo.videoWidth || !cameraVideo.videoHeight) {
       alert('Camera abhi tayyar ho raha hai. 1-2 second ruk kar dobara Capture karein.');
       return;
+    }
+    if (gpsCameraSession && gpsCameraSession.isTorchSupported() && !gpsCameraSession.isTorchOn()) {
+      var bCap = gpsCameraSession.getBrightness();
+      if (bCap < 58) {
+        alert('Andhera hai — upar Flash icon tap karke ON karein, phir Capture karein.');
+        return;
+      }
     }
     var shot = captureStampedPhoto();
     if (!shot || !shot.dataUrl) {
