@@ -4340,7 +4340,7 @@
                 if (vdText) vdText += '   \u00b7   ';
                 vdText += 'Driver: ' + driverName;
             }
-            stampLines.push({ text: vdText, scale: 0.84 });
+            stampLines.push({ text: vdText, scale: 0.72, fitWidth: true });
         }
         var latLngText = null;
         if (lat != null && lng != null && !isNaN(lat) && !isNaN(lng)) {
@@ -4409,6 +4409,21 @@
             if (j < stampLines.length - 1) totalH += lineGap;
         }
         var boxW = fullBleed ? maxBoxW : Math.min(maxBoxW, Math.ceil(measureBlock(baseFont)));
+        var maxTextW = boxW - 2 * innerPadX;
+        var minFitFont = Math.round(12 * sizeScale);
+        for (var fj = 0; fj < stampLines.length; fj++) {
+            if (!stampLines[fj].fitWidth) continue;
+            var fsFit = lineHeights[fj];
+            ctx.font = 'bold ' + fsFit + 'px ' + fontFamily;
+            while (fsFit > minFitFont && ctx.measureText(stampLines[fj].text).width > maxTextW) {
+                fsFit -= 1;
+                ctx.font = 'bold ' + fsFit + 'px ' + fontFamily;
+            }
+            if (fsFit !== lineHeights[fj]) {
+                totalH -= lineHeights[fj] - fsFit;
+                lineHeights[fj] = fsFit;
+            }
+        }
         var boxH = totalH;
         var x = fullBleed ? padSide : Math.round((w - boxW) / 2);
         var y = Math.round(h - boxH - padBottom);
@@ -4457,6 +4472,14 @@
     window.FLEET_ODOMETER_STAMP_SCALE = 2.5;
     window.FLEET_ATTENDANCE_STAMP_SCALE = 5.5;
 
+    /** Drop "(Type)" suffix from vehicle/driver select option text. */
+    window.fleetStripSelectOptionLabel = function(label) {
+        var s = String(label || '').trim();
+        var paren = s.indexOf('(');
+        if (paren > 0) s = s.slice(0, paren).trim();
+        return s;
+    };
+
     /** Selected vehicle/driver labels for attendance photo stamp (check-in/out pages). */
     window.fleetGetAttendanceStampVehicleDriver = function() {
         var vehicleNo = '';
@@ -4465,14 +4488,18 @@
         var dSel = document.getElementById('driverSelect');
         if (vSel && vSel.selectedIndex >= 0) {
             var vOpt = vSel.options[vSel.selectedIndex];
-            if (vOpt && vOpt.value) vehicleNo = String(vOpt.textContent || '').trim();
+            if (vOpt && vOpt.value) {
+                vehicleNo = (typeof window.fleetStripSelectOptionLabel === 'function')
+                    ? window.fleetStripSelectOptionLabel(vOpt.textContent)
+                    : String(vOpt.textContent || '').trim();
+            }
         }
         if (dSel && dSel.selectedIndex >= 0) {
             var dOpt = dSel.options[dSel.selectedIndex];
             if (dOpt && dOpt.value) {
-                driverName = String(dOpt.textContent || '').trim();
-                var paren = driverName.indexOf('(');
-                if (paren > 0) driverName = driverName.slice(0, paren).trim();
+                driverName = (typeof window.fleetStripSelectOptionLabel === 'function')
+                    ? window.fleetStripSelectOptionLabel(dOpt.textContent)
+                    : String(dOpt.textContent || '').trim();
             }
         }
         return { vehicleNo: vehicleNo, driverName: driverName };
