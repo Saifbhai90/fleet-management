@@ -382,8 +382,10 @@
       btnMarkCheckout.disabled = true;
       return;
     }
-    if (st === 'no_checkin' && msg) {
+    if (st === 'no_checkin') {
       attendanceActionMessage.classList.add('d-none');
+      noCheckinMessage.classList.remove('d-none');
+      btnMarkCheckout.disabled = true;
       return;
     }
     if ((st === 'blocked') && msg) {
@@ -551,7 +553,8 @@
       return;
     }
     distanceMessage.classList.add('d-none');
-    if (driverSelect.value && !hasGpsCheckin) {
+    /* Warning only when aaj na check-in na check-out (server: no_checkin). Hide if check-out already done (complete). */
+    if (driverSelect.value && gpsSubmitStatus.state === 'no_checkin') {
       btnMarkCheckout.disabled = true;
       noCheckinMessage.classList.remove('d-none');
       timeWindowMessage.classList.add('d-none');
