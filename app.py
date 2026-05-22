@@ -699,12 +699,17 @@ app.register_blueprint(ai_bp)
 
 # Start backup scheduler from DB/env settings (see backup_config.py)
 if _run_startup_tasks:
-    try:
-        with app.app_context():
+    with app.app_context():
+        try:
             from backup_config import start_backup_scheduler
             start_backup_scheduler(app)
-    except Exception as e:
-        app.logger.warning('Backup scheduler failed to start: %s', e)
+        except Exception as e:
+            app.logger.warning('Backup scheduler failed to start: %s', e)
+        try:
+            from attendance_reminder_scheduler import start_attendance_reminder_scheduler
+            start_attendance_reminder_scheduler(app)
+        except Exception as e:
+            app.logger.warning('Attendance reminder scheduler failed to start: %s', e)
 
 
 if __name__ == '__main__':

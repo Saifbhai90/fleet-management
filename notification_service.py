@@ -253,7 +253,12 @@ def _notify_dtos(district_id, project_id, driver, vehicle_no, title, message, li
 
 def notify_gps_checkin(driver, photo_path, *, vehicle=None):
     """After GPS+Camera check-in with photo stored (prefer R2/cloud URL)."""
+    from models import AttendanceSettings
+
     if not driver or not _is_cloud_media_url(photo_path):
+        return
+    att = AttendanceSettings.query.first()
+    if not att or not att.notify_on_attendance_mark:
         return
     district_id, project_id, v_no = _vehicle_scope_from_driver(driver, vehicle)
     if not district_id or not project_id:
@@ -280,7 +285,12 @@ def notify_gps_checkin(driver, photo_path, *, vehicle=None):
 
 def notify_gps_checkout(driver, photo_path, *, vehicle=None):
     """After GPS+Camera check-out with photo stored (prefer R2/cloud URL)."""
+    from models import AttendanceSettings
+
     if not driver or not _is_cloud_media_url(photo_path):
+        return
+    att = AttendanceSettings.query.first()
+    if not att or not att.notify_on_attendance_mark:
         return
     district_id, project_id, v_no = _vehicle_scope_from_driver(driver, vehicle)
     if not district_id or not project_id:
@@ -303,6 +313,11 @@ def notify_gps_checkout(driver, photo_path, *, vehicle=None):
         pass
     _notify_driver_user(driver, driver_title, driver_msg, link=link)
     _notify_dtos(district_id, project_id, driver, v_no, dto_title, dto_msg, link=link)
+    try:
+        from attendance_reminder_service import notify_vehicle_peers_after_checkout
+        notify_vehicle_peers_after_checkout(driver, vehicle=vehicle)
+    except Exception as exc:
+        logger.warning('notify_vehicle_peers_after_checkout: %s', exc)
 
 
 def notify_task_report_saved(vehicle, task_date, *, driver=None):
