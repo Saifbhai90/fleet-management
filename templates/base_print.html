@@ -35,7 +35,8 @@
     .tb-print:hover { background: #1d4ed8; box-shadow: 0 4px 14px rgba(37,99,235,0.4); }
     .tb-pdf { background: #dc2626; color: #fff; box-shadow: 0 2px 8px rgba(220,38,38,0.3); }
     .tb-pdf:hover { background: #b91c1c; box-shadow: 0 4px 14px rgba(220,38,38,0.4); }
-    .tb-hint { color: #94a3b8; font-size: 0.76rem; margin-left: auto; display: flex; align-items: center; gap: 6px; }
+    .tb-hint { color: #94a3b8; font-size: 0.76rem; margin-left: auto; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .tb-hint .tb-landscape-note { color: #cbd5e1; font-size: 0.72rem; }
     .tb-hint kbd { background: #334155; color: #e2e8f0; padding: 2px 7px; border-radius: 4px; font-size: 0.72rem; font-weight: 500; }
     .print-container {
       max-width: 1100px; margin: 0 auto;
@@ -84,7 +85,8 @@
     </button>
     <span class="tb-hint">
       <i class="bi bi-info-circle"></i>
-      Use <kbd>Ctrl+P</kbd> and select "Save as PDF" for PDF download
+      Use <kbd>Ctrl+P</kbd> — layout: <strong>Landscape</strong> / Save as PDF
+      <span class="tb-landscape-note d-none d-md-inline">· Wide reports fit without sideways scroll</span>
     </span>
   </div>
   <div class="print-container" id="printContainer">

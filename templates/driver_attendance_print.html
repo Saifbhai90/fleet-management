@@ -4,21 +4,83 @@
 
 {% block extra_head %}
 <style>
+    /* Landscape preview + print — wide attendance table without horizontal scroll */
+    .print-container.att-print-page {
+        max-width: none !important;
+        width: calc(100vw - 24px) !important;
+        margin: 0 auto !important;
+        padding: 12px 14px 28px !important;
+        box-sizing: border-box;
+    }
     .att-header {
         background: linear-gradient(135deg, #0d47a1 0%, #1565c0 100%);
-        color: #fff; border-radius: 10px; padding: 1rem 1.4rem; margin-bottom: 1rem;
+        color: #fff; border-radius: 10px; padding: 0.85rem 1.2rem; margin-bottom: 0.75rem;
     }
-    .att-header h2 { margin: 0; font-size: 1.2rem; font-weight: 700; }
-    .att-header .sub { font-size: 0.82rem; opacity: 0.85; margin-top: 0.2rem; }
-    .att-meta { font-size: 0.78rem; color: #546e7a; margin-bottom: 0.75rem; }
+    .att-header h2 { margin: 0; font-size: clamp(1rem, 2vw, 1.15rem); font-weight: 700; }
+    .att-header .sub { font-size: 0.78rem; opacity: 0.88; margin-top: 0.15rem; }
+    .att-print-page .card { border: 0; box-shadow: none !important; }
+    .att-table-outer { width: 100%; overflow: visible; }
+    .att-print-table {
+        width: 100%;
+        table-layout: fixed;
+        margin-bottom: 0;
+        font-size: 0.68rem;
+        border-collapse: collapse;
+    }
+    .att-print-table thead th {
+        background: #e3f2fd;
+        color: #0d47a1;
+        font-weight: 700;
+        font-size: 0.62rem;
+        line-height: 1.2;
+        padding: 0.32rem 0.28rem;
+        vertical-align: bottom;
+        white-space: normal;
+        word-wrap: break-word;
+        overflow-wrap: anywhere;
+        hyphens: auto;
+    }
+    .att-print-table tbody td {
+        padding: 0.3rem 0.28rem;
+        font-size: 0.65rem;
+        line-height: 1.25;
+        vertical-align: top;
+        white-space: normal;
+        word-wrap: break-word;
+        overflow-wrap: anywhere;
+    }
+    .att-print-table tbody tr:nth-child(even) { background: #f8fafc; }
+    .att-print-table .col-num { width: 2.2%; }
+    .att-print-table .col-date { width: 5.5%; }
+    .att-print-table .col-drvid { width: 6.5%; }
+    .att-print-table .col-name { width: 7%; }
+    .att-print-table .col-pdp { width: 11%; }
+    .att-print-table .col-vno { width: 5%; }
+    .att-print-table .col-vtype { width: 5%; }
+    .att-print-table .col-shift { width: 4.5%; }
+    .att-print-table .col-duty { width: 5.5%; }
+    .att-print-table .col-status { width: 4.5%; }
+    .att-print-table .col-cin { width: 5.5%; }
+    .att-print-table .col-ciph { width: 3.5%; }
+    .att-print-table .col-cirm { width: 9%; }
+    .att-print-table .col-cout { width: 5.5%; }
+    .att-print-table .col-coph { width: 3.5%; }
+    .att-print-table .col-corm { width: 9%; }
+    .att-print-table .badge { font-size: 0.58rem; padding: 0.15em 0.4em; }
+    @page { size: A4 landscape; margin: 5mm; }
     @media print {
         .att-header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .att-table-outer { overflow: visible !important; }
+        .att-print-table { font-size: 7px !important; width: 100% !important; }
+        .att-print-table thead th { font-size: 6.5px !important; padding: 2px 3px !important; }
+        .att-print-table tbody td { font-size: 7px !important; padding: 2px 3px !important; }
+        .att-print-table .badge { font-size: 6px !important; }
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="print-container">
+<div class="print-container att-print-page">
   <div class="att-header">
     <h2><i class="bi bi-calendar-check me-2"></i>Driver Attendance Report</h2>
     <div class="sub">
@@ -35,26 +97,26 @@
 
   <div class="card shadow-sm border-0">
     <div class="card-body p-0">
-      <div class="table-responsive">
-        <table class="table table-bordered table-sm mb-0">
-          <thead class="table-light">
+      <div class="att-table-outer">
+        <table class="table table-bordered table-sm att-print-table">
+          <thead>
             <tr>
-              <th>#</th>
-              <th>Date</th>
-              <th>Driver ID</th>
-              <th>Name</th>
-              <th>Project / District / Parking</th>
-              <th>Vehicle No</th>
-              <th>Vehicle Type</th>
-              <th>Assigned shift</th>
-              <th>Duty shift</th>
-              <th>Status</th>
-              <th>Check In</th>
-              <th>Check In Photo</th>
-              <th>Check In Remarks</th>
-              <th>Check Out</th>
-              <th>Check Out Photo</th>
-              <th>Check Out Remarks</th>
+              <th class="col-num">#</th>
+              <th class="col-date">Date</th>
+              <th class="col-drvid">Driver ID</th>
+              <th class="col-name">Name</th>
+              <th class="col-pdp">Project / District / Parking</th>
+              <th class="col-vno">Vehicle No</th>
+              <th class="col-vtype">Vehicle Type</th>
+              <th class="col-shift">Assigned shift</th>
+              <th class="col-duty">Duty shift</th>
+              <th class="col-status">Status</th>
+              <th class="col-cin">Check In</th>
+              <th class="col-ciph">Check In Photo</th>
+              <th class="col-cirm">Check In Remarks</th>
+              <th class="col-cout">Check Out</th>
+              <th class="col-coph">Check Out Photo</th>
+              <th class="col-corm">Check Out Remarks</th>
             </tr>
           </thead>
           <tbody>
