@@ -14,7 +14,7 @@ Implementation: `window.fleetTakeSystemCameraPhoto()` in `templates/base.html` (
 
 ## GPS stamp size
 
-- Odometer photos: `ODOM_STAMP_SCALE = 2.5` in `task_report_odometer_upload.html`.
+- Odometer photos (New Task Entry): same `fleetComposeAttendanceFixedFrame` (1080×1440) + `fleetStampAttendancePhoto` / `fleetBuildAttendanceStampLines` as check-out; prefix `Odoo meter GPS+Cam`; rear-camera EXIF only (no portrait selfie 90° rotate). Context via `fleetGetOdometerStampContext(rowId)` (project, district, vehicle).
 - Attendance frame: `FLEET_ATTENDANCE_FRAME_W×H` = 1080×1440; photo scaled to fit entirely (landscape/portrait). Letterbox uses edge colour, not black side bars.
 - Stamp: overlay on photo, fixed `FLEET_ATTENDANCE_STAMP_BASE_FONT` (44px), up to 5 rows: title, date/time, Project·Vehicle·Driver, District·🇵🇰 country, Lat·Acc. Each row shrinks to fit width if needed.
 - While preview modal is open: Tom Select dropdowns are closed/hidden (`fleetSetAttendanceModalOpen`).

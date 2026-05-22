@@ -4590,7 +4590,7 @@
         return tmp.toDataURL('image/jpeg', quality);
     };
 
-    /** Odometer reference scale (task_report_odometer_upload.html). Attendance stamp is slightly larger. */
+    /** Legacy odometer scale (unused when fleetStampAttendancePhoto + fixed frame is used). */
     window.FLEET_ODOMETER_STAMP_SCALE = 2.5;
     window.FLEET_ATTENDANCE_STAMP_SCALE = 5.5;
     /** Fixed attendance output frame (portrait 3:4). Photo: contain fit, no crop. Stamp: overlay, fixed px font. */
@@ -4723,6 +4723,50 @@
     window.fleetGetAttendanceStampVehicleDriver = function() {
         var c = window.fleetGetAttendanceStampContext();
         return { vehicleNo: c.vehicleNo, driverName: c.driverName };
+    };
+
+    /** Project / district / vehicle for Odoo meter stamp on New Task Entry (same rows as check-out stamp). */
+    window.fleetGetOdometerStampContext = function(rowId) {
+        var strip = (typeof window.fleetStripSelectOptionLabel === 'function')
+            ? window.fleetStripSelectOptionLabel
+            : function(l) { return String(l || '').trim(); };
+        var projectName = '';
+        var districtName = '';
+        var vehicleNo = '';
+        var pSel = document.getElementById('projectSelect');
+        var pLock = document.getElementById('projectSelectLocked');
+        if (pLock && pLock.textContent) {
+            projectName = strip(pLock.textContent);
+        } else if (pSel && pSel.selectedIndex >= 0) {
+            var pOpt = pSel.options[pSel.selectedIndex];
+            if (pOpt && pOpt.value && pOpt.value !== '0') projectName = strip(pOpt.textContent);
+        }
+        var dSel = document.getElementById('districtSelect');
+        var dLock = document.getElementById('districtSelectLocked');
+        if (dLock && dLock.textContent) {
+            districtName = strip(dLock.textContent);
+        } else if (dSel && dSel.selectedIndex >= 0) {
+            var dOpt = dSel.options[dSel.selectedIndex];
+            if (dOpt && dOpt.value && dOpt.value !== '0') districtName = strip(dOpt.textContent);
+        }
+        if (rowId != null && rowId !== '') {
+            var tr = document.querySelector('.task-row[data-vehicle-id="' + rowId + '"]');
+            if (tr) {
+                vehicleNo = strip(tr.getAttribute('data-vehicle') || '');
+                if (!districtName) districtName = strip(tr.getAttribute('data-district') || '');
+            }
+        }
+        var countryName = window.FLEET_ATTENDANCE_COUNTRY_NAME || 'Pakistan';
+        var countryCode = window.FLEET_ATTENDANCE_COUNTRY_CODE || 'PK';
+        return {
+            projectName: projectName,
+            districtName: districtName,
+            vehicleNo: vehicleNo,
+            driverName: '',
+            countryName: countryName,
+            countryCode: countryCode,
+            countryFlag: window.fleetCountryCodeToFlagEmoji(countryCode)
+        };
     };
     /** false = system camera (production). true = in-app CameraPreview (see docs/archive/). */
     window.FLEET_ATTENDANCE_USE_INAPP_PREVIEW = false;
@@ -4861,7 +4905,7 @@
                         return;
                     }
                     var portraitScreen = (window.innerHeight || 0) >= (window.innerWidth || 0);
-                    if (!hadExifRotate && portraitScreen && w > h) {
+                    if (!opts.rearCamera && !hadExifRotate && portraitScreen && w > h) {
                         window.fleetRotateDataUrl(url, 90).then(resolve).catch(reject);
                         return;
                     }
@@ -4895,7 +4939,10 @@
         var maxSide = stampOpts.maxSide || window.FLEET_ATTENDANCE_CAPTURE_MAX_SIDE || 2048;
         var quality = stampOpts.quality != null ? stampOpts.quality : (window.FLEET_ATTENDANCE_CAPTURE_QUALITY || 0.92);
         var orientOpts = stampOpts.fromCameraPreview ? { fromCameraPreview: true } : {};
-        var useFixedFrame = window.FLEET_ATTENDANCE_USE_FIXED_FRAME !== false;
+        if (stampOpts.rearCamera) orientOpts.rearCamera = true;
+        var useFixedFrame = stampOpts.useFixedFrame != null
+            ? !!stampOpts.useFixedFrame
+            : (window.FLEET_ATTENDANCE_USE_FIXED_FRAME !== false);
         return window.fleetNormalizeSelfieOrientation(dataUrl, orientOpts).then(function(uprightUrl) {
             var framedP = (useFixedFrame && typeof window.fleetComposeAttendanceFixedFrame === 'function')
                 ? window.fleetComposeAttendanceFixedFrame(uprightUrl)
