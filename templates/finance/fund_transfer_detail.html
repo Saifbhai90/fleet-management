@@ -167,9 +167,15 @@
         </div>
         {% endif %}
         <div class="feinv-field">
-          <div class="feinv-k">Receipt / file</div>
+          <div class="feinv-k">Receipt / files</div>
           <div class="feinv-v">
-            {% if rec.attachment %}
+            {% if rec.attachments.count() %}
+              {% for att in rec.attachments %}
+              <a href="{{ att.file_path|media_url }}" target="_blank" rel="noopener" class="text-decoration-none text-primary d-block">
+                <i class="bi bi-box-arrow-up-right me-1"></i>{{ att.original_name or 'Attachment' }}
+              </a>
+              {% endfor %}
+            {% elif rec.attachment %}
             <a href="{{ rec.attachment|media_url }}" target="_blank" rel="noopener" class="text-decoration-none text-primary">
               <i class="bi bi-box-arrow-up-right me-1"></i>Open attachment
             </a>

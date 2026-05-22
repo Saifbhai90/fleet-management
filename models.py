@@ -2151,6 +2151,20 @@ class FundTransfer(db.Model):
     project = db.relationship('Project', backref='fund_transfers', lazy='select')
     journal_entry = db.relationship('JournalEntry', backref='fund_transfer', lazy='select')
     created_by = db.relationship('User', foreign_keys=[created_by_user_id], backref='created_fund_transfers', lazy='select')
+    attachments = db.relationship(
+        'FundTransferAttachment',
+        backref='fund_transfer',
+        lazy='dynamic',
+        cascade='all, delete-orphan',
+        order_by='FundTransferAttachment.id',
+    )
+
+    @property
+    def attachment_count(self):
+        n = self.attachments.count()
+        if n:
+            return n
+        return 1 if (self.attachment or '').strip() else 0
 
     @property
     def from_name(self):
@@ -2182,6 +2196,19 @@ class FundTransfer(db.Model):
 
     def __repr__(self):
         return f'<FundTransfer {self.transfer_number} {self.amount}>'
+
+
+class FundTransferAttachment(db.Model):
+    __tablename__ = 'fund_transfer_attachment'
+    id = db.Column(db.Integer, primary_key=True)
+    fund_transfer_id = db.Column(db.Integer, db.ForeignKey('fund_transfer.id', ondelete='CASCADE'), nullable=False, index=True)
+    file_path = db.Column(db.String(2048), nullable=False)
+    file_type = db.Column(db.String(20), nullable=True)
+    original_name = db.Column(db.String(255), nullable=True)
+    created_at = db.Column(db.DateTime, default=pk_now)
+
+    def __repr__(self):
+        return f'<FundTransferAttachment {self.file_path}>'
 
 
 # ────────────────────────────────────────────────

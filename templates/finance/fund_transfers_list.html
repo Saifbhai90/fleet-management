@@ -149,7 +149,7 @@
                             {% if umc %}
                             <td class="text-center">
                                 <button type="button" class="btn btn-sm p-0 border-0 bg-transparent ft-upload-status-btn" title="Upload status">
-                                    {% if ft.attachment %}
+                                    {% if ft.attachment_count %}
                                     <span class="badge bg-success">Success</span>
                                     {% else %}
                                     <span class="badge bg-secondary">None</span>
@@ -157,9 +157,9 @@
                                 </button>
                             </td>
                             <td class="text-center">
-                                {% if not ft.attachment %}
+                                {% if not ft.attachment_count %}
                                 <span class="text-muted">—</span>
-                                {% elif ft.attachment.startswith('http://') or ft.attachment.startswith('https://') %}
+                                {% elif ft.attachment and (ft.attachment.startswith('http://') or ft.attachment.startswith('https://')) %}
                                 <span class="badge bg-success" title="Receipt on Cloudflare / R2">Cloud</span>
                                 {% else %}
                                 <span class="badge bg-warning text-dark" title="On app server (relative path)">Local</span>
@@ -191,10 +191,10 @@
                                         <button type="button" class="btn-close btn-sm ft-upload-inline-close" aria-label="Close"></button>
                                     </div>
                                     <div class="progress mb-2" style="height:1.25rem;">
-                                        <div class="progress-bar bg-success" style="width:{% if ft.attachment %}100{% else %}0{% endif %}%">{% if ft.attachment %}100%{% else %}0%{% endif %}</div>
+                                        <div class="progress-bar bg-success" style="width:{% if ft.attachment_count %}100{% else %}0{% endif %}%">{% if ft.attachment_count %}100%{% else %}0%{% endif %}</div>
                                     </div>
-                                    <div class="small text-muted ft-inline-meta">{% if ft.attachment %}1 / 1 file (Success){% else %}0 / 0 file{% endif %}</div>
-                                    {% if ft.attachment %}
+                                    <div class="small text-muted ft-inline-meta">{% if ft.attachment_count %}{{ ft.attachment_count }} / {{ ft.attachment_count }} file(s) (Success){% else %}0 / 0 file{% endif %}</div>
+                                    {% if ft.attachment_count %}
                                     <div class="small mt-2">Storage: <span class="badge bg-success">{% if ft.attachment.startswith('http://') or ft.attachment.startswith('https://') %}Cloud / R2{% else %}Local{% endif %}</span></div>
                                     <div class="mt-1 text-break"><a href="{{ ft.attachment|media_url }}" target="_blank" rel="noopener" class="small">Open attachment</a> · <a class="small" href="{{ url_for('fund_transfer_media', pk=ft.id) }}">Media gallery</a></div>
                                     {% else %}

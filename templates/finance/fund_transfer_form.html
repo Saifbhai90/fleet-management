@@ -14,6 +14,9 @@
 .ft-file-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid #dbe4ea;border-radius:8px;background:#fff;color:#374151;font-size:.8rem;max-width:280px}
 .ft-file-chip .name{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ft-paste-hint{font-size:.72rem;color:#999;margin-top:4px}
+.ft-preview-grid{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:6px}
+.ft-existing-list{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.ft-existing-item{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:6px 10px;border:1px solid #e2e8f0;border-radius:8px;background:#f8fafc;font-size:.8rem}
 
 /* Description autocomplete (aligned with Workspace Transfer) */
 .ft-desc-suggest{position:absolute;left:0;right:0;top:100%;border:1px solid #dee2e6;border-top:none;background:#fff;border-radius:0 0 8px 8px;box-shadow:0 8px 18px rgba(0,0,0,.12);z-index:1050;max-height:220px;overflow-y:auto;display:none}
@@ -168,42 +171,46 @@
                                 </div>
                             </div>
 
-                            {# ── Attachment upload ── #}
+                            {# ── Attachment upload (multiple images/PDF) ── #}
                             <div class="col-12">
-                                <label class="form-label fw-bold">Attachment (Image/PDF)</label>
+                                <label class="form-label fw-bold">Attachments (Images / PDF)</label>
                                 <div class="ft-upload-zone" id="ftUploadZone" tabindex="0">
-                                    <input type="file" name="attachment" id="ftFileInput" accept="image/*,.pdf" style="display:none">
+                                    <input type="file" name="attachments" id="ftFileInput" accept="image/*,.pdf" multiple style="display:none">
                                     <div id="ftPlaceholder" class="ft-placeholder">
                                         <i class="bi bi-cloud-arrow-up"></i>
-                                        Click to browse, drag &amp; drop image/PDF, or paste an image
+                                        Click to browse, drag &amp; drop, or paste — multiple images/PDF allowed
                                     </div>
-                                    <div id="ftPreview" style="display:none" class="ft-preview-wrap">
-                                        <img id="ftPreviewImg" src="" alt="preview">
-                                        <button type="button" class="ft-remove" id="ftRemoveBtn" title="Remove"><i class="bi bi-x"></i></button>
-                                    </div>
-                                    <div id="ftFileChip" style="display:none" class="ft-file-chip">
-                                        <i class="bi bi-file-earmark-pdf text-danger"></i>
-                                        <span id="ftFileName" class="name"></span>
-                                        <button type="button" class="btn btn-sm btn-link text-danger p-0 ms-1" id="ftFileChipRemove" title="Remove"><i class="bi bi-x-circle"></i></button>
-                                    </div>
-                                    <div class="ft-paste-hint">Ctrl+V to paste from clipboard</div>
+                                    <div id="ftPreviewGrid" class="ft-preview-grid" style="display:none"></div>
+                                    <div class="ft-paste-hint">Ctrl+V to paste image · hold Ctrl/Cmd to pick several files</div>
                                 </div>
-                                {% if existing_attachment %}
-                                {% set is_pdf_attachment = existing_attachment.lower().endswith('.pdf') %}
-                                <div class="mt-2" id="ftExisting">
-                                    <small class="text-muted">Current:</small>
-                                    {% if is_pdf_attachment %}
-                                        <a href="{{ existing_attachment }}" target="_blank" class="ms-1 text-decoration-none">
-                                            <i class="bi bi-file-earmark-pdf text-danger"></i> View current PDF
+                                {% if existing_attachments %}
+                                <div class="ft-existing-list" id="ftExisting">
+                                    <small class="text-muted d-block mb-1">Saved files:</small>
+                                    {% for att in existing_attachments %}
+                                    {% set att_url = att.path|media_url if att.path and not (att.path.startswith('http://') or att.path.startswith('https://')) else att.path %}
+                                    {% set is_pdf = att.path and att.path.lower().endswith('.pdf') %}
+                                    <div class="ft-existing-item">
+                                        {% if is_pdf %}
+                                        <a href="{{ att_url }}" target="_blank" rel="noopener" class="text-decoration-none">
+                                            <i class="bi bi-file-earmark-pdf text-danger me-1"></i>{{ att.name }}
                                         </a>
-                                    {% else %}
-                                        <a href="{{ existing_attachment }}" target="_blank" class="ms-1">
-                                            <img src="{{ existing_attachment }}" style="max-height:50px;border-radius:4px" alt="current">
+                                        {% else %}
+                                        <a href="{{ att_url }}" target="_blank" rel="noopener">
+                                            <img src="{{ att_url }}" style="max-height:44px;border-radius:4px;vertical-align:middle" alt="">
                                         </a>
-                                    {% endif %}
-                                    <label class="ms-2 text-danger" style="font-size:.78rem;cursor:pointer">
-                                        <input type="checkbox" name="remove_attachment" value="1" class="form-check-input form-check-input-sm me-1">Remove
-                                    </label>
+                                        <span class="text-muted small">{{ att.name }}</span>
+                                        {% endif %}
+                                        {% if att.legacy %}
+                                        <label class="ms-auto text-danger mb-0" style="font-size:.78rem;cursor:pointer">
+                                            <input type="checkbox" name="remove_attachment" value="1" class="form-check-input form-check-input-sm me-1">Remove
+                                        </label>
+                                        {% else %}
+                                        <label class="ms-auto text-danger mb-0" style="font-size:.78rem;cursor:pointer">
+                                            <input type="checkbox" name="remove_attachment_ids" value="{{ att.id }}" class="form-check-input form-check-input-sm me-1">Remove
+                                        </label>
+                                        {% endif %}
+                                    </div>
+                                    {% endfor %}
                                 </div>
                                 {% endif %}
                             </div>
@@ -273,68 +280,86 @@
 
 <script>
 (function(){
-    /* ── Image Upload ── */
+    /* ── Multi attachment upload ── */
     var zone = document.getElementById('ftUploadZone'),
         inp  = document.getElementById('ftFileInput'),
         ph   = document.getElementById('ftPlaceholder'),
-        prev = document.getElementById('ftPreview'),
-        img  = document.getElementById('ftPreviewImg'),
-        fileChip = document.getElementById('ftFileChip'),
-        fileName = document.getElementById('ftFileName'),
-        fileChipRemove = document.getElementById('ftFileChipRemove'),
-        rmBtn= document.getElementById('ftRemoveBtn');
+        grid = document.getElementById('ftPreviewGrid');
     var toSel = document.getElementById('to_person');
     var amountInput = document.getElementById('amount');
+    var pendingFiles = [];
 
-    function showPreview(file){
-        if(!file) return;
-        ph.style.display='none';
-        if(file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '')){
-            if(prev) prev.style.display='none';
-            if(fileChip){
-                fileChip.style.display='inline-flex';
-                if(fileName) fileName.textContent = file.name || 'attachment.pdf';
-            }
-            return;
-        }
-        if(file.type.startsWith('image/')){
-            var reader = new FileReader();
-            reader.onload = function(e){
-                img.src = e.target.result;
-                if(prev) prev.style.display='inline-block';
-                if(fileChip) fileChip.style.display='none';
-            };
-            reader.readAsDataURL(file);
-            return;
-        }
-        clearPreview();
+    function isAllowedFtFile(file){
+        if(!file) return false;
+        return file.type.startsWith('image/') || file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '');
     }
-    function clearPreview(){
-        inp.value='';
-        img.src='';
-        if(prev) prev.style.display='none';
-        if(fileChip) fileChip.style.display='none';
-        if(fileName) fileName.textContent='';
-        ph.style.display='';
-        var dt = new DataTransfer(); inp.files = dt.files;
+    function syncInputFiles(){
+        var dt = new DataTransfer();
+        pendingFiles.forEach(function(f){ dt.items.add(f); });
+        inp.files = dt.files;
+    }
+    function addFiles(fileList){
+        if(!fileList || !fileList.length) return;
+        for(var i=0;i<fileList.length;i++){
+            var f = fileList[i];
+            if(isAllowedFtFile(f)) pendingFiles.push(f);
+        }
+        syncInputFiles();
+        renderPreviews();
+    }
+    function removePendingAt(idx){
+        pendingFiles.splice(idx, 1);
+        syncInputFiles();
+        renderPreviews();
+    }
+    function renderPreviews(){
+        if(!grid) return;
+        grid.innerHTML = '';
+        if(!pendingFiles.length){
+            grid.style.display = 'none';
+            if(ph) ph.style.display = '';
+            return;
+        }
+        if(ph) ph.style.display = 'none';
+        grid.style.display = 'flex';
+        pendingFiles.forEach(function(file, idx){
+            var wrap = document.createElement('div');
+            wrap.className = 'ft-preview-wrap';
+            var rm = document.createElement('button');
+            rm.type = 'button';
+            rm.className = 'ft-remove';
+            rm.title = 'Remove';
+            rm.innerHTML = '<i class="bi bi-x"></i>';
+            rm.addEventListener('click', function(e){ e.stopPropagation(); removePendingAt(idx); });
+            if(file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '')){
+                var chip = document.createElement('div');
+                chip.className = 'ft-file-chip';
+                chip.innerHTML = '<i class="bi bi-file-earmark-pdf text-danger"></i><span class="name"></span>';
+                chip.querySelector('.name').textContent = file.name || 'attachment.pdf';
+                wrap.appendChild(chip);
+            } else {
+                var img = document.createElement('img');
+                img.alt = 'preview';
+                var reader = new FileReader();
+                reader.onload = function(e){ img.src = e.target.result; };
+                reader.readAsDataURL(file);
+                wrap.appendChild(img);
+            }
+            wrap.appendChild(rm);
+            grid.appendChild(wrap);
+        });
     }
     zone.addEventListener('click', function(e){
         if(e.target.closest('.ft-remove')) return;
         zone.focus();
         inp.click();
     });
-    inp.addEventListener('change', function(){ if(this.files && this.files[0]) showPreview(this.files[0]); });
+    inp.addEventListener('change', function(){ addFiles(this.files); });
     zone.addEventListener('dragover', function(e){ e.preventDefault(); zone.classList.add('drag-over'); });
     zone.addEventListener('dragleave', function(){ zone.classList.remove('drag-over'); });
     zone.addEventListener('drop', function(e){
         e.preventDefault(); zone.classList.remove('drag-over');
-        var f = e.dataTransfer.files;
-        if(f && f[0]){
-            var ok = f[0].type.startsWith('image/') || f[0].type === 'application/pdf' || /\.pdf$/i.test(f[0].name || '');
-            if(ok){
-                var dt=new DataTransfer(); dt.items.add(f[0]); inp.files=dt.files; showPreview(f[0]);
-            }
-        }
+        addFiles(e.dataTransfer.files);
     });
     document.addEventListener('paste', function(e){
         var ae = document.activeElement;
@@ -343,13 +368,13 @@
         var items = (e.clipboardData||e.originalEvent.clipboardData).items;
         for(var i=0;i<items.length;i++){
             if(items[i].type.indexOf('image')!==-1){
-                var blob=items[i].getAsFile(); var dt=new DataTransfer(); dt.items.add(blob); inp.files=dt.files;
-                showPreview(blob); e.preventDefault(); break;
+                var blob = items[i].getAsFile();
+                if(blob){ pendingFiles.push(blob); syncInputFiles(); renderPreviews(); }
+                e.preventDefault();
+                break;
             }
         }
     });
-    rmBtn.addEventListener('click', function(e){ e.stopPropagation(); clearPreview(); });
-    if(fileChipRemove){ fileChipRemove.addEventListener('click', function(e){ e.stopPropagation(); clearPreview(); }); }
 
     /* ── Bank Directory Panel ── */
     var bdList     = document.getElementById('bdList'),

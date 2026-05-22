@@ -7,7 +7,7 @@ import io
 from sqlalchemy import and_, or_, not_
 from models import (db, Account, JournalEntry, JournalEntryLine, PaymentVoucher, ReceiptVoucher,
                     BankEntry, EmployeeExpense, District, Project, Party, Company, Employee, Driver, User,
-                    FundTransfer, BankAccountDirectory, FundTransferCategory, WorkspaceAccount, WorkspaceJournalEntry,
+                    FundTransfer, FundTransferAttachment, BankAccountDirectory, FundTransferCategory, WorkspaceAccount, WorkspaceJournalEntry,
                     WorkspaceMonthClose, WorkspaceExpense)
 from forms import (PaymentVoucherForm, ReceiptVoucherForm, BankEntryForm, JournalVoucherForm,
                    EmployeeExpenseForm, AccountLedgerFilterForm, BalanceSheetFilterForm,
@@ -1794,6 +1794,103 @@ def _delete_ft_attachment(url):
         pass
 
 
+def _ft_attachment_file_type(filename, content_type=''):
+    fn = (filename or '').lower()
+    ct = (content_type or '').lower()
+    if fn.endswith('.pdf') or ct == 'application/pdf':
+        return 'pdf'
+    return 'image'
+
+
+def _ft_files_from_request():
+    """New uploads: prefer multi field `attachments`, fall back to legacy `attachment`."""
+    files = request.files.getlist('attachments') or []
+    files = [f for f in files if f and getattr(f, 'filename', None)]
+    if not files:
+        single = request.files.get('attachment')
+        if single and getattr(single, 'filename', None):
+            files = [single]
+    return files
+
+
+def _add_ft_attachments_from_request(files, fund_transfer_id):
+    """Upload and persist attachment rows. Caller commits."""
+    skipped = []
+    for f in files:
+        fn = secure_filename(f.filename or '') or 'attachment'
+        url = _upload_ft_attachment(f)
+        if not url:
+            skipped.append(fn)
+            continue
+        ft = _ft_attachment_file_type(fn, getattr(f, 'content_type', '') or '')
+        db.session.add(FundTransferAttachment(
+            fund_transfer_id=fund_transfer_id,
+            file_path=url,
+            file_type=ft,
+            original_name=fn,
+        ))
+    return skipped
+
+
+def _sync_ft_primary_attachment(transfer):
+    """Keep legacy `attachment` column in sync with first stored file (list/media UX)."""
+    first = transfer.attachments.order_by(FundTransferAttachment.id).first()
+    transfer.attachment = first.file_path if first else None
+
+
+def _ft_existing_attachments_for_form(transfer):
+    """Rows for edit form: {id, path, name, legacy}."""
+    items = []
+    for att in transfer.attachments.order_by(FundTransferAttachment.id):
+        items.append({
+            'id': att.id,
+            'path': att.file_path,
+            'name': att.original_name or 'Attachment',
+            'legacy': False,
+        })
+    leg = (transfer.attachment or '').strip()
+    if leg and not items:
+        items.append({'id': None, 'path': leg, 'name': 'Attachment', 'legacy': True})
+    return items
+
+
+def _apply_ft_attachment_edits(transfer):
+    """Remove selected files and append new uploads from the current request."""
+    for rid in request.form.getlist('remove_attachment_ids'):
+        try:
+            att_id = int(rid)
+        except (TypeError, ValueError):
+            continue
+        att = FundTransferAttachment.query.filter_by(id=att_id, fund_transfer_id=transfer.id).first()
+        if att:
+            _delete_ft_attachment(att.file_path)
+            db.session.delete(att)
+    if request.form.get('remove_attachment') == '1':
+        for att in list(transfer.attachments.all()):
+            _delete_ft_attachment(att.file_path)
+            db.session.delete(att)
+        _delete_ft_attachment(transfer.attachment)
+        transfer.attachment = None
+    skipped = _add_ft_attachments_from_request(_ft_files_from_request(), transfer.id)
+    _sync_ft_primary_attachment(transfer)
+    return skipped
+
+
+def _delete_all_ft_attachments(transfer):
+    for att in list(transfer.attachments.all()):
+        _delete_ft_attachment(att.file_path)
+    _delete_ft_attachment(transfer.attachment)
+
+
+def _ft_media_items_for_transfer(transfer):
+    items = []
+    for att in transfer.attachments.order_by(FundTransferAttachment.id):
+        items.extend(_ft_media_items_from_path(att.file_path, att.original_name or 'Receipt'))
+    if not items and (transfer.attachment or '').strip():
+        items = _ft_media_items_from_path(transfer.attachment, 'Receipt')
+    return items
+
+
 def _reverse_workspace_company_funding_mirror(transfer_id):
     if not transfer_id:
         return
@@ -1935,7 +2032,7 @@ def fund_transfer_add():
             'finance/fund_transfer_form.html',
             form=form,
             title='New Fund Transfer',
-            existing_attachment=None,
+            existing_attachments=[],
             last_saved_transfer=last_saved_transfer,
         )
 
@@ -1949,7 +2046,7 @@ def fund_transfer_add():
                     'finance/fund_transfer_form.html',
                     form=form,
                     title='New Fund Transfer',
-                    existing_attachment=None,
+                    existing_attachments=[],
                     last_saved_transfer=last_saved_transfer,
                 )
 
@@ -1960,7 +2057,7 @@ def fund_transfer_add():
                     'finance/fund_transfer_form.html',
                     form=form,
                     title='New Fund Transfer',
-                    existing_attachment=None,
+                    existing_attachments=[],
                     last_saved_transfer=last_saved_transfer,
                 )
             category_val = (form.category.data or '').strip()
@@ -1970,14 +2067,12 @@ def fund_transfer_add():
                     'finance/fund_transfer_form.html',
                     form=form,
                     title='New Fund Transfer',
-                    existing_attachment=None,
+                    existing_attachments=[],
                     last_saved_transfer=last_saved_transfer,
                 )
 
             from_wallet = ensure_wallet_account(from_type, from_id)
             to_wallet = ensure_wallet_account(to_type, to_id)
-
-            attachment_url = _upload_ft_attachment(request.files.get('attachment'))
 
             transfer = FundTransfer(
                 transfer_number=generate_entry_number('FT', form.transfer_date.data),
@@ -1996,7 +2091,7 @@ def fund_transfer_add():
                 payment_mode=form.payment_mode.data,
                 reference_no=form.reference_no.data,
                 description=form.description.data,
-                attachment=attachment_url,
+                attachment=None,
                 is_salary=form.is_salary.data or False,
                 category=category_val,
                 district_id=form.district_id.data or None,
@@ -2005,6 +2100,11 @@ def fund_transfer_add():
             )
             db.session.add(transfer)
             db.session.flush()
+
+            skipped = _add_ft_attachments_from_request(_ft_files_from_request(), transfer.id)
+            _sync_ft_primary_attachment(transfer)
+            if skipped:
+                flash('Some attachments could not be uploaded: ' + ', '.join(skipped[:5]), 'warning')
 
             je = create_fund_transfer_journal(transfer, from_wallet, to_wallet)
             transfer.journal_entry_id = je.id
@@ -2020,7 +2120,7 @@ def fund_transfer_add():
         'finance/fund_transfer_form.html',
         form=form,
         title='New Fund Transfer',
-        existing_attachment=None,
+        existing_attachments=[],
         last_saved_transfer=last_saved_transfer,
     )
 
@@ -2071,7 +2171,7 @@ def fund_transfer_edit(pk):
     if request.method == 'POST' and not form.validate_on_submit():
         _flash_fund_transfer_form_errors(form)
         return render_template('finance/fund_transfer_form.html', form=form, title='Edit Fund Transfer',
-                               existing_attachment=transfer.attachment)
+                               existing_attachments=_ft_existing_attachments_for_form(transfer))
 
     if form.validate_on_submit():
         try:
@@ -2090,12 +2190,12 @@ def fund_transfer_edit(pk):
             if amount_val <= Decimal('0'):
                 flash('Amount must be greater than 0.', 'danger')
                 return render_template('finance/fund_transfer_form.html', form=form, title='Edit Fund Transfer',
-                                       existing_attachment=transfer.attachment)
+                                       existing_attachments=_ft_existing_attachments_for_form(transfer))
             category_val = (form.category.data or '').strip()
             if not category_val:
                 flash('Category / Purpose is required.', 'danger')
                 return render_template('finance/fund_transfer_form.html', form=form, title='Edit Fund Transfer',
-                                       existing_attachment=transfer.attachment)
+                                       existing_attachments=_ft_existing_attachments_for_form(transfer))
             from_wallet = ensure_wallet_account(from_type, from_id)
             to_wallet = ensure_wallet_account(to_type, to_id)
 
@@ -2119,13 +2219,9 @@ def fund_transfer_edit(pk):
             transfer.is_salary = form.is_salary.data or False
             transfer.category = category_val
 
-            if request.form.get('remove_attachment') == '1':
-                _delete_ft_attachment(transfer.attachment)
-                transfer.attachment = None
-            new_att = _upload_ft_attachment(request.files.get('attachment'))
-            if new_att:
-                _delete_ft_attachment(transfer.attachment)
-                transfer.attachment = new_att
+            skipped = _apply_ft_attachment_edits(transfer)
+            if skipped:
+                flash('Some new attachments could not be uploaded: ' + ', '.join(skipped[:5]), 'warning')
 
             db.session.flush()
 
@@ -2140,7 +2236,7 @@ def fund_transfer_edit(pk):
             flash(f'Error: {e}', 'danger')
 
     return render_template('finance/fund_transfer_form.html', form=form, title='Edit Fund Transfer',
-                           existing_attachment=transfer.attachment)
+                           existing_attachments=_ft_existing_attachments_for_form(transfer))
 
 
 def fund_transfer_delete(pk):
@@ -2149,6 +2245,7 @@ def fund_transfer_delete(pk):
         return auth_check
     transfer = FundTransfer.query.get_or_404(pk)
     try:
+        _delete_all_ft_attachments(transfer)
         _reverse_workspace_company_funding_mirror(transfer.id)
         if transfer.journal_entry_id:
             je = JournalEntry.query.get(transfer.journal_entry_id)
@@ -2337,7 +2434,7 @@ def fund_transfer_media(pk):
     rec = FundTransfer.query.get_or_404(pk)
     back_default = url_for('fund_transfers_list')
     back_url = _safe_internal_path(request.args.get('return_to'), back_default)
-    media_items = _ft_media_items_from_path(rec.attachment, 'Receipt')
+    media_items = _ft_media_items_for_transfer(rec)
     sub = f"Transfer: {rec.transfer_number} | {rec.transfer_date.strftime('%d-%m-%Y') if rec.transfer_date else '—'}"
     tmpl = dict(
         rec=rec,
