@@ -149,12 +149,14 @@
           <div id="dutyOffMessage" class="status-box warning d-none mb-2">
             <i class="bi bi-calendar-x me-1"></i><span id="dutyOffText">—</span>
           </div>
+          <div id="attendanceActionMessage" class="status-box success d-none mb-2" role="status"></div>
           <div class="d-grid mt-2">
             <button type="button" id="btnMarkAttendance" class="btn btn-success btn-mark" disabled>
               <i class="bi bi-camera-fill me-2"></i>Mark Attendance
             </button>
           </div>
-          <hr class="my-3">
+          <hr class="my-3" id="checkinMediaSectionRule">
+          <div id="checkinMediaSection">
           <div class="section-title"><i class="bi bi-image me-1"></i>Latest Check-in image</div>
           <div class="media-preview-wrap mb-2">
             <img id="checkinPreviewImage" class="d-none" alt="Latest check-in">
@@ -168,6 +170,7 @@
           <button type="button" id="btnRetryPendingCheckin" class="btn btn-outline-primary btn-sm d-none">
             <i class="bi bi-arrow-clockwise me-1"></i>Retry Upload (Current Date)
           </button>
+          </div>
         </div>
       </div>
     </div>
@@ -307,6 +310,8 @@
   var checkinUploadMeta = document.getElementById('checkinUploadMeta');
   var btnRetryPendingCheckin = document.getElementById('btnRetryPendingCheckin');
   var checkinPreviewTapHint = document.getElementById('checkinPreviewTapHint');
+  var checkinMediaSection = document.getElementById('checkinMediaSection');
+  var checkinMediaSectionRule = document.getElementById('checkinMediaSectionRule');
 
   var currentPosition = null;
   var parkingCoords = null;
@@ -320,10 +325,84 @@
   var serverAutoShift = {{ auto_shift | tojson }};
   var timeWindow = {};
   var PENDING_PREFIX = 'gps-attendance:checkin:';
+  /** Default blocked until server confirms — button stays off before check completes. */
+  var gpsSubmitStatus = { can_submit: false, state: 'checking', message: '' };
+  var attendanceActionMessage = document.getElementById('attendanceActionMessage');
 
   function gpsApiJsonMessage(body) {
     if (!body || typeof body !== 'object') return '';
     return body.message || body.error || '';
+  }
+
+  /** Server rejected rules (already checked in) — do not save misleading local pending. */
+  function gpsAttendanceKeepPendingOnFailure(res) {
+    if (!res || res.ok) return false;
+    if (res.status >= 500) return true;
+    var msg = (gpsApiJsonMessage(res.body) || '').toLowerCase();
+    if (res.status === 400 || res.status === 404) {
+      if (msg.indexOf('maximum') >= 0 || msg.indexOf('pehle') >= 0 || msg.indexOf('ho chuka') >= 0
+          || msg.indexOf('allowed') >= 0 || msg.indexOf('duty off') >= 0 || msg.indexOf('pending') >= 0
+          || msg.indexOf('check-out') >= 0) {
+        return false;
+      }
+    }
+    return res.status === 0;
+  }
+
+  function fetchGpsSubmitStatus() {
+    var driverId = selectedDriverId();
+    var vId = vehicleSelect.tomselect ? vehicleSelect.tomselect.getValue() : vehicleSelect.value;
+    var pId = projectSelect.tomselect ? projectSelect.tomselect.getValue() : projectSelect.value;
+    if (!driverId && !vId) {
+      gpsSubmitStatus = { can_submit: false, state: 'idle', message: '' };
+      applyGpsSubmitStatusUI();
+      return Promise.resolve();
+    }
+    gpsSubmitStatus = { can_submit: false, state: 'checking', message: '' };
+    btnMarkAttendance.disabled = true;
+    var params = ['kind=checkin'];
+    if (driverId) params.push('driver_id=' + encodeURIComponent(driverId));
+    if (vId) params.push('vehicle_id=' + encodeURIComponent(vId));
+    if (pId) params.push('project_id=' + encodeURIComponent(pId));
+    return fetch('{{ url_for("api_attendance_gps_submit_status") }}?' + params.join('&'))
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        gpsSubmitStatus = data || { can_submit: false, state: 'blocked', message: '' };
+        if (gpsSubmitStatus.state === 'complete' && driverId) clearPendingCheckin(String(driverId));
+        applyGpsSubmitStatusUI();
+      })
+      .catch(function() {
+        gpsSubmitStatus = { can_submit: false, state: 'checking', message: '' };
+        applyGpsSubmitStatusUI();
+      });
+  }
+
+  function refreshAttendanceGate() {
+    return fetchGpsSubmitStatus().then(function() {
+      updateDistanceUI();
+    });
+  }
+
+  function applyGpsSubmitStatusUI() {
+    if (!attendanceActionMessage) return;
+    var st = gpsSubmitStatus.state || 'allowed';
+    var msg = gpsSubmitStatus.message || '';
+    if (st === 'complete' && msg) {
+      attendanceActionMessage.className = 'status-box success mb-2';
+      attendanceActionMessage.innerHTML = '<i class="bi bi-check-circle-fill me-1"></i>' + msg;
+      attendanceActionMessage.classList.remove('d-none');
+      btnMarkAttendance.disabled = true;
+      return;
+    }
+    if ((st === 'checkout_pending' || st === 'blocked') && msg) {
+      attendanceActionMessage.className = 'status-box warning mb-2';
+      attendanceActionMessage.innerHTML = '<i class="bi bi-info-circle me-1"></i>' + msg;
+      attendanceActionMessage.classList.remove('d-none');
+      btnMarkAttendance.disabled = true;
+      return;
+    }
+    attendanceActionMessage.classList.add('d-none');
+    attendanceActionMessage.textContent = '';
   }
 
   function gpsJsonPostHeaders() {
@@ -489,6 +568,11 @@
       return;
     }
     timeWindowMessage.classList.add('d-none');
+    if (!gpsSubmitStatus.can_submit) {
+      btnMarkAttendance.disabled = true;
+      applyGpsSubmitStatusUI();
+      return;
+    }
     btnMarkAttendance.disabled = false;
   }
 
@@ -565,7 +649,6 @@
       syncTS(shiftSelect, SHIFT_OPTS, false);
     }
     fetchTimeWindow();
-    updateDistanceUI();
     loadDrivers();
   }
 
@@ -573,7 +656,6 @@
 
   function onShiftChange() {
     loadDrivers();
-    if (currentPosition && parkingCoords) updateDistanceUI();
   }
 
   function loadDrivers() {
@@ -582,6 +664,8 @@
     var shift = shiftSelect.tomselect ? shiftSelect.tomselect.getValue() : shiftSelect.value;
     if (!projectId || !vehicleId || !shift) {
       resetField(driverSelect, [], true);
+      gpsSubmitStatus = { can_submit: false, state: 'idle', message: '' };
+      applyGpsSubmitStatusUI();
       refreshCheckinMediaPanel();
       return;
     }
@@ -601,7 +685,8 @@
       var isAutoLocked = districtSelect.disabled && projectSelect.disabled && vehicleSelect.disabled;
       syncTS(driverSelect, opts, isAutoLocked);
       if (autoVal && driverSelect.tomselect) driverSelect.tomselect.setValue(autoVal, true);
-      updateDistanceUI();
+      return refreshAttendanceGate();
+    }).then(function() {
       if ((driverSelect.tomselect ? driverSelect.tomselect.getValue() : driverSelect.value) && parkingLat.value && parkingLng.value) fetchLocation();
       refreshCheckinMediaPanel();
     }).catch(function() {
@@ -625,15 +710,16 @@
       return r.json();
     }).then(function(data) {
       timeWindow = data || {};
-      if (currentPosition) updateDistanceUI();
+      if (currentPosition) refreshAttendanceGate();
     }).catch(function() { timeWindow = {}; });
   }
 
   function onDriverChange() {
     fetchTimeWindow();
-    updateDistanceUI();
-    if (driverSelect.value && parkingLat.value && parkingLng.value) fetchLocation();
-    refreshCheckinMediaPanel();
+    refreshAttendanceGate().then(function() {
+      if (driverSelect.value && parkingLat.value && parkingLng.value) fetchLocation();
+      refreshCheckinMediaPanel();
+    });
   }
 
   function fetchLocation() {
@@ -727,9 +813,15 @@
     checkinUploadStatus.textContent = text;
   }
 
+  function setCheckinMediaSectionVisible(show) {
+    if (checkinMediaSection) checkinMediaSection.classList.toggle('d-none', !show);
+    if (checkinMediaSectionRule) checkinMediaSectionRule.classList.toggle('d-none', !show);
+  }
+
   function refreshCheckinMediaPanel() {
     var driverId = selectedDriverId();
     if (!driverId) {
+      setCheckinMediaSectionVisible(true);
       setMediaFallback('Driver select karein.');
       setUploadStatus('Upload status: Waiting for driver selection.', 'neutral');
       checkinUploadMeta.textContent = '';
@@ -738,6 +830,7 @@
     }
     var pending = loadPendingCheckin(driverId);
     if (pending && pending.photo_base64) {
+      setCheckinMediaSectionVisible(true);
       checkinPreviewImage.src = pending.photo_base64;
       checkinPreviewImage.classList.remove('d-none');
       checkinPreviewFallback.classList.add('d-none');
@@ -753,6 +846,11 @@
       .then(function(r) { return r.json(); })
       .then(function(data) {
         if (!data || !data.ok) throw new Error('status');
+        if (data.check_out_time) {
+          setCheckinMediaSectionVisible(false);
+          return;
+        }
+        setCheckinMediaSectionVisible(true);
         if (!data.has_record || !data.media || !data.media.has_media) {
           setMediaFallback(data.pending_text || 'Check IN pending');
           setUploadStatus('Upload status: No uploaded check-in image for current date.', 'neutral');
@@ -767,6 +865,7 @@
         checkinUploadMeta.textContent = 'Media: Server uploaded | Check-in Time: ' + (data.check_in_time || '-') + ' | Date: ' + (data.attendance_date || currentDateDmy());
       })
       .catch(function() {
+        setCheckinMediaSectionVisible(true);
         setMediaFallback('Check IN pending');
         setUploadStatus('Upload status verify nahi ho saka. Network check karein.', 'warning');
         checkinUploadMeta.textContent = 'Media info unavailable';
@@ -1054,6 +1153,10 @@
       alert('Aaj ki date par is driver ki duty Off mark hai — attendance nahi lag sakti.');
       return;
     }
+    if (!gpsSubmitStatus.can_submit) {
+      alert(gpsSubmitStatus.message || 'Aaj check-in allowed nahi. Neeche status dekhein.');
+      return;
+    }
     if (!currentPosition || !parkingCoords) return;
     if (!driverSelect.value) { alert('Please select a driver.'); return; }
     if (!parkingId.value || !parkingLat.value || !parkingLng.value) {
@@ -1097,18 +1200,29 @@
       btnConfirmUpload.disabled = true;
       btnConfirmUpload.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Saving...';
       document.getElementById('savingOverlay').style.display = 'flex';
-      savePendingCheckin(String(payload.driver_id), payload);
-      refreshCheckinMediaPanel();
       postCheckinPayload(payload).then(function(res) {
         if (res.ok && res.body && res.body.ok) {
           clearPendingCheckin(String(payload.driver_id));
+          fetchGpsSubmitStatus();
           refreshCheckinMediaPanel();
-          setUploadStatus('Upload status: Uploaded successfully.', 'success');
+          setUploadStatus('Check-in successful — attendance lag gayi.', 'success');
         } else {
-          setUploadStatus('Upload pending: ' + (gpsApiJsonMessage(res.body) || 'Server rejected upload. Neeche Retry karein.'), 'warning');
-          btnRetryPendingCheckin.classList.remove('d-none');
+          var errMsg = gpsApiJsonMessage(res.body) || 'Server rejected upload.';
+          if (gpsAttendanceKeepPendingOnFailure(res)) {
+            savePendingCheckin(String(payload.driver_id), payload);
+            setUploadStatus('Upload pending: ' + errMsg + ' Neeche Retry karein.', 'warning');
+            btnRetryPendingCheckin.classList.remove('d-none');
+          } else {
+            clearPendingCheckin(String(payload.driver_id));
+            fetchGpsSubmitStatus();
+            refreshCheckinMediaPanel();
+            setUploadStatus(errMsg, 'warning');
+            alert(errMsg + '\n\nAttendance dubara nahi lagi. Agar pehle success dikha tha to check-in ho chuka hai.');
+          }
         }
       }).catch(function() {
+        savePendingCheckin(String(payload.driver_id), payload);
+        refreshCheckinMediaPanel();
         setUploadStatus('Upload pending: Network issue. Neeche Retry Upload karein.', 'warning');
         btnRetryPendingCheckin.classList.remove('d-none');
       }).finally(function() {

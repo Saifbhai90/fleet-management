@@ -149,6 +149,7 @@
           <div id="noCheckinMessage" class="status-box warning d-none mb-2">
             <i class="bi bi-exclamation-triangle me-1"></i>Is driver ka aaj Check-in (GPS + Camera) maujood nahi. Pehle <strong>Mark At Attendance</strong> se Check-in karein, phir Check-out karein.
           </div>
+          <div id="attendanceActionMessage" class="status-box success d-none mb-2" role="status"></div>
           <div class="d-grid mt-2">
             <button type="button" id="btnMarkCheckout" class="btn btn-danger btn-mark" disabled>
               <i class="bi bi-box-arrow-right me-2"></i>Mark Check-out
@@ -321,10 +322,79 @@
   var effectiveCheckoutEnd = null;
   var checkoutCrossShift = false;
   var PENDING_PREFIX = 'gps-attendance:checkout:';
+  var gpsSubmitStatus = { can_submit: true, state: 'allowed', message: '' };
+  var attendanceActionMessage = document.getElementById('attendanceActionMessage');
 
   function gpsApiJsonMessage(body) {
     if (!body || typeof body !== 'object') return '';
     return body.message || body.error || '';
+  }
+
+  function gpsAttendanceKeepPendingOnFailure(res) {
+    if (!res || res.ok) return false;
+    if (res.status >= 500) return true;
+    var msg = (gpsApiJsonMessage(res.body) || '').toLowerCase();
+    if (res.status === 400 || res.status === 404) {
+      if (msg.indexOf('maximum') >= 0 || msg.indexOf('pehle') >= 0 || msg.indexOf('ho chuka') >= 0
+          || msg.indexOf('allowed') >= 0 || msg.indexOf('nahi mila') >= 0 || msg.indexOf('check-in') >= 0) {
+        return false;
+      }
+    }
+    return res.status === 0;
+  }
+
+  function fetchGpsSubmitStatus() {
+    var driverId = driverSelect.value;
+    if (!driverId) {
+      gpsSubmitStatus = { can_submit: false, state: 'idle', message: '' };
+      applyGpsSubmitStatusUI();
+      return Promise.resolve();
+    }
+    var params = ['driver_id=' + encodeURIComponent(driverId), 'kind=checkout'];
+    var vId = vehicleSelect.tomselect ? vehicleSelect.tomselect.getValue() : vehicleSelect.value;
+    var pId = projectSelect.tomselect ? projectSelect.tomselect.getValue() : projectSelect.value;
+    if (vId) params.push('vehicle_id=' + encodeURIComponent(vId));
+    if (pId) params.push('project_id=' + encodeURIComponent(pId));
+    return fetch('{{ url_for("api_attendance_gps_submit_status") }}?' + params.join('&'))
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        gpsSubmitStatus = data || { can_submit: true, state: 'allowed', message: '' };
+        if (gpsSubmitStatus.state === 'checkout_pending') hasGpsCheckin = true;
+        if (gpsSubmitStatus.state === 'complete' || gpsSubmitStatus.state === 'no_checkin') hasGpsCheckin = false;
+        if (gpsSubmitStatus.state === 'complete' && driverId) clearPendingCheckout(String(driverId));
+        applyGpsSubmitStatusUI();
+      })
+      .catch(function() {
+        gpsSubmitStatus = { can_submit: true, state: 'allowed', message: '' };
+        applyGpsSubmitStatusUI();
+      });
+  }
+
+  function applyGpsSubmitStatusUI() {
+    if (!attendanceActionMessage) return;
+    var st = gpsSubmitStatus.state || 'allowed';
+    var msg = gpsSubmitStatus.message || '';
+    if (st === 'complete' && msg) {
+      attendanceActionMessage.className = 'status-box success mb-2';
+      attendanceActionMessage.innerHTML = '<i class="bi bi-check-circle-fill me-1"></i>' + msg;
+      attendanceActionMessage.classList.remove('d-none');
+      noCheckinMessage.classList.add('d-none');
+      btnMarkCheckout.disabled = true;
+      return;
+    }
+    if (st === 'no_checkin' && msg) {
+      attendanceActionMessage.classList.add('d-none');
+      return;
+    }
+    if ((st === 'blocked') && msg) {
+      attendanceActionMessage.className = 'status-box warning mb-2';
+      attendanceActionMessage.innerHTML = '<i class="bi bi-info-circle me-1"></i>' + msg;
+      attendanceActionMessage.classList.remove('d-none');
+      btnMarkCheckout.disabled = true;
+      return;
+    }
+    attendanceActionMessage.classList.add('d-none');
+    attendanceActionMessage.textContent = '';
   }
 
   /** Flask-WTF CSRF: JSON POSTs must send the same token as the page form (see handle_csrf_error in routes). */
@@ -499,6 +569,11 @@
       return;
     }
     timeWindowMessage.classList.add('d-none');
+    if (!gpsSubmitStatus.can_submit) {
+      btnMarkCheckout.disabled = true;
+      applyGpsSubmitStatusUI();
+      return;
+    }
     btnMarkCheckout.disabled = false;
   }
 
@@ -524,8 +599,9 @@
         effectiveCheckoutStart = data.effective_checkout_start || null;
         effectiveCheckoutEnd = data.effective_checkout_end || null;
         checkoutCrossShift = !!data.checkout_cross_shift;
-        updateDistanceUI();
+        return fetchGpsSubmitStatus();
       })
+      .then(function() { updateDistanceUI(); })
       .catch(function() {
         hasGpsCheckin = false;
         effectiveCheckoutStart = null;
@@ -1098,6 +1174,10 @@
   }
 
   btnMarkCheckout.addEventListener('click', function() {
+    if (!gpsSubmitStatus.can_submit) {
+      alert(gpsSubmitStatus.message || 'Aaj check-out allowed nahi. Neeche status dekhein.');
+      return;
+    }
     if (!currentPosition || !parkingCoords) return;
     if (!driverSelect.value) { alert('Please select a driver.'); return; }
     if (!parkingId.value || !parkingLat.value || !parkingLng.value) {
@@ -1141,18 +1221,29 @@
       btnConfirmUpload.disabled = true;
       btnConfirmUpload.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Saving...';
       document.getElementById('savingOverlay').style.display = 'flex';
-      savePendingCheckout(String(payload.driver_id), payload);
-      refreshCheckoutMediaPanel();
       postCheckoutPayload(payload).then(function(res) {
         if (res.ok && res.body && res.body.ok) {
           clearPendingCheckout(String(payload.driver_id));
+          fetchHasGpsCheckin();
           refreshCheckoutMediaPanel();
-          setUploadStatus('Upload status: Uploaded successfully.', 'success');
+          setUploadStatus('Check-out successful — attendance complete.', 'success');
         } else {
-          setUploadStatus('Upload pending: ' + (gpsApiJsonMessage(res.body) || 'Server rejected upload. Neeche Retry karein.'), 'warning');
-          btnRetryPendingCheckout.classList.remove('d-none');
+          var errMsg = gpsApiJsonMessage(res.body) || 'Server rejected upload.';
+          if (gpsAttendanceKeepPendingOnFailure(res)) {
+            savePendingCheckout(String(payload.driver_id), payload);
+            setUploadStatus('Upload pending: ' + errMsg + ' Neeche Retry karein.', 'warning');
+            btnRetryPendingCheckout.classList.remove('d-none');
+          } else {
+            clearPendingCheckout(String(payload.driver_id));
+            fetchHasGpsCheckin();
+            refreshCheckoutMediaPanel();
+            setUploadStatus(errMsg, 'warning');
+            alert(errMsg + '\n\nCheck-out dubara nahi hua. Agar pehle success dikha tha to check-out ho chuka hai.');
+          }
         }
       }).catch(function() {
+        savePendingCheckout(String(payload.driver_id), payload);
+        refreshCheckoutMediaPanel();
         setUploadStatus('Upload pending: Network issue. Neeche Retry Upload karein.', 'warning');
         btnRetryPendingCheckout.classList.remove('d-none');
       }).finally(function() {

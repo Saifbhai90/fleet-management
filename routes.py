@@ -19072,6 +19072,148 @@ def api_attendance_time_window():
     })
 
 
+def _gps_checkin_submit_status(driver_id, vehicle_id=None, project_id=None):
+    """Whether GPS check-in can be submitted now (prevents duplicate selfie + misleading local pending)."""
+    today = _attendance_local_date()
+    driver = Driver.query.options(joinedload(Driver.vehicle)).get(driver_id) if driver_id else None
+    if driver_id and not driver:
+        return {'ok': False, 'can_submit': False, 'state': 'blocked', 'message': 'Invalid driver.'}
+    vehicle = None
+    if vehicle_id:
+        vehicle = Vehicle.query.get(vehicle_id)
+    if not vehicle and driver:
+        vehicle = driver.vehicle
+    if not driver_id and vehicle_id:
+        pending_msg = _vehicle_pending_checkout_block_message(0, vehicle)
+        if pending_msg:
+            return {
+                'ok': True,
+                'can_submit': False,
+                'state': 'blocked',
+                'message': pending_msg,
+                'vehicle_blocked': True,
+            }
+        return {'ok': True, 'can_submit': True, 'state': 'allowed', 'message': '', 'vehicle_ok': True}
+    if _driver_marked_duty_off_no_checkin(driver_id, today):
+        return {
+            'ok': True,
+            'can_submit': False,
+            'state': 'blocked',
+            'message': 'Aaj ki date par is driver ki duty Off mark hai — GPS/Camera se attendance nahi lag sakti.',
+        }
+    blocked_msg = _manual_checkin_blocked_by_vehicle_rules(driver_id, vehicle, today)
+    if blocked_msg:
+        return {'ok': True, 'can_submit': False, 'state': 'blocked', 'message': blocked_msg}
+    open_rec = _open_gps_driver_attendance_session(driver_id, today)
+    if open_rec:
+        ci_t = open_rec.check_in.strftime('%H:%M') if open_rec.check_in else None
+        return {
+            'ok': True,
+            'can_submit': False,
+            'state': 'checkout_pending',
+            'message': (
+                'Pehle check-out complete karein — check-in session abhi open hai'
+                + ((' (' + ci_t + ')') if ci_t else '') + '.'
+            ),
+            'check_in_time': ci_t,
+            'has_open_session': True,
+        }
+    cap = _vehicle_capacity_value(vehicle)
+    if _count_driver_segments_with_checkin(driver_id, today) >= cap:
+        last = (
+            DriverAttendance.query.filter(
+                DriverAttendance.driver_id == driver_id,
+                DriverAttendance.attendance_date == today,
+                DriverAttendance.check_in.isnot(None),
+            )
+            .order_by(DriverAttendance.attendance_segment.desc(), DriverAttendance.id.desc())
+            .first()
+        )
+        ci_t = last.check_in.strftime('%H:%M') if last and last.check_in else None
+        return {
+            'ok': True,
+            'can_submit': False,
+            'state': 'complete',
+            'message': (
+                'Aaj ka check-in pehle ho chuka hai'
+                + ((' (' + ci_t + ')') if ci_t else '')
+                + '. Dubara selfie ya check-in ki zaroorat nahi.'
+            ),
+            'check_in_time': ci_t,
+            'segments_used': int(_count_driver_segments_with_checkin(driver_id, today)),
+            'capacity': cap,
+        }
+    return {'ok': True, 'can_submit': True, 'state': 'allowed', 'message': ''}
+
+
+def _gps_checkout_submit_status(driver_id, vehicle_id=None, project_id=None):
+    """Whether GPS check-out can be submitted now."""
+    today = _attendance_local_date()
+    driver = Driver.query.get(driver_id)
+    if not driver:
+        return {'ok': False, 'can_submit': False, 'state': 'blocked', 'message': 'Invalid driver.'}
+    open_rec = _open_gps_driver_attendance_for_checkout(driver_id, today)
+    if open_rec:
+        ci_t = open_rec.check_in.strftime('%H:%M') if open_rec.check_in else None
+        return {
+            'ok': True,
+            'can_submit': True,
+            'state': 'checkout_pending',
+            'message': '',
+            'check_in_time': ci_t,
+            'has_open_session': True,
+        }
+    done = (
+        DriverAttendance.query.filter(
+            DriverAttendance.driver_id == driver_id,
+            DriverAttendance.attendance_date == today,
+            DriverAttendance.check_in.isnot(None),
+            DriverAttendance.check_out.isnot(None),
+        )
+        .order_by(DriverAttendance.attendance_segment.desc(), DriverAttendance.id.desc())
+        .first()
+    )
+    if done and _gps_marked_attendance_row(done):
+        co_t = done.check_out.strftime('%H:%M') if done.check_out else None
+        return {
+            'ok': True,
+            'can_submit': False,
+            'state': 'complete',
+            'message': (
+                'Aaj ka check-out pehle ho chuka hai'
+                + ((' (' + co_t + ')') if co_t else '')
+                + '. Dubara selfie ki zaroorat nahi.'
+            ),
+            'check_out_time': co_t,
+            'check_in_time': done.check_in.strftime('%H:%M') if done.check_in else None,
+        }
+    return {
+        'ok': True,
+        'can_submit': False,
+        'state': 'no_checkin',
+        'message': 'Pehle Mark Attendance se check-in karein, phir check-out karein.',
+    }
+
+
+@app.route('/api/attendance/gps-submit-status')
+def api_attendance_gps_submit_status():
+    """Pre-flight: can driver submit GPS check-in/out now? Avoids duplicate selfie + false local pending."""
+    driver_id = request.args.get('driver_id', type=int)
+    kind = (request.args.get('kind') or 'checkin').strip().lower()
+    vehicle_id = request.args.get('vehicle_id', type=int)
+    project_id = request.args.get('project_id', type=int)
+    if not driver_id and not vehicle_id:
+        return jsonify({'ok': False, 'message': 'Driver or vehicle is required.'}), 400
+    if not driver_id and kind == 'checkout':
+        return jsonify({'ok': False, 'message': 'Driver is required for check-out.'}), 400
+    if kind == 'checkout':
+        payload = _gps_checkout_submit_status(driver_id, vehicle_id, project_id)
+    else:
+        payload = _gps_checkin_submit_status(driver_id, vehicle_id, project_id)
+    payload['kind'] = kind
+    return jsonify(payload)
+
+
 @app.route('/api/attendance-has-gps-checkin')
 def api_attendance_has_gps_checkin():
     """Check if driver has GPS+Camera check-in for today (for Check-out form: button enable only if true)."""
