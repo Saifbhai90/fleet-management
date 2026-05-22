@@ -4316,7 +4316,7 @@
         ctx.closePath();
     }
 
-    /** Bottom-centre GPS stamp for captured photos. opts: line1Prefix, lat, lng, accuracyMeters, sizeScale. */
+    /** Bottom-centre GPS stamp for captured photos. opts: line1Prefix, lat, lng, accuracyMeters, sizeScale, vehicleNo, driverName, maxRows, compactHeight. */
     window.pktDrawReadableGpsStamp = function(ctx, w, h, opts) {
         opts = opts || {};
         var sizeScale = (opts.sizeScale != null && Number(opts.sizeScale) > 0) ? Number(opts.sizeScale) : 1;
@@ -4331,25 +4331,54 @@
         var stampLines = [];
         stampLines.push({ text: prefix, scale: 1.0 });
         stampLines.push({ text: _od.dateTimeDisplay || (_od.dateStr + ' ' + _od.timeStr), scale: 0.88 });
-        if (lat != null && lng != null && !isNaN(lat) && !isNaN(lng)) {
-            stampLines.push({
-                text: 'Lat ' + Number(lat).toFixed(6) + '\u00b0   Long ' + Number(lng).toFixed(6) + '\u00b0',
-                scale: 0.82
-            });
+        var vehicleNo = opts.vehicleNo ? String(opts.vehicleNo).trim() : '';
+        var driverName = opts.driverName ? String(opts.driverName).trim() : '';
+        if (vehicleNo || driverName) {
+            var vdText = '';
+            if (vehicleNo) vdText += 'Vehicle: ' + vehicleNo;
+            if (driverName) {
+                if (vdText) vdText += '   \u00b7   ';
+                vdText += 'Driver: ' + driverName;
+            }
+            stampLines.push({ text: vdText, scale: 0.84 });
         }
+        var latLngText = null;
+        if (lat != null && lng != null && !isNaN(lat) && !isNaN(lng)) {
+            latLngText = 'Lat ' + Number(lat).toFixed(6) + '\u00b0   Long ' + Number(lng).toFixed(6) + '\u00b0';
+        }
+        var accText = null;
         if (accuracyM != null && !isNaN(accuracyM) && isFinite(accuracyM)) {
-            stampLines.push({ text: 'Accuracy: ~' + Math.round(Number(accuracyM)) + ' m', scale: 0.78 });
+            accText = 'Acc ~' + Math.round(Number(accuracyM)) + ' m';
+        }
+        if (latLngText && accText) {
+            stampLines.push({ text: latLngText + '   \u00b7   ' + accText, scale: 0.78 });
+        } else if (latLngText) {
+            stampLines.push({ text: latLngText, scale: 0.82 });
+        } else if (accText) {
+            stampLines.push({ text: accText, scale: 0.78 });
+        }
+        var maxRows = opts.maxRows != null ? Number(opts.maxRows) : 0;
+        if (maxRows > 0 && stampLines.length > maxRows) {
+            while (stampLines.length > maxRows) {
+                var tail = stampLines.pop();
+                var prev = stampLines.pop();
+                stampLines.push({
+                    text: prev.text + '   \u00b7   ' + tail.text,
+                    scale: Math.min(prev.scale, tail.scale)
+                });
+            }
         }
         var fullBleed = !!opts.fullBleed;
+        var compact = !!opts.compactHeight;
         var padBottom = fullBleed
-            ? (opts.padBottom != null ? opts.padBottom : 6)
+            ? (opts.padBottom != null ? opts.padBottom : (compact ? 4 : 6))
             : Math.round(Math.min(32, Math.max(16, h * 0.04)) * sizeScale);
         var padSide = fullBleed
-            ? (opts.padSide != null ? opts.padSide : 8)
+            ? (opts.padSide != null ? opts.padSide : (compact ? 6 : 8))
             : Math.round(Math.min(24, Math.max(10, w * 0.028)) * sizeScale);
-        var innerPadX = Math.round(20 * sizeScale);
-        var innerPadY = Math.round(16 * sizeScale);
-        var lineGap = Math.round(8 * sizeScale);
+        var innerPadX = Math.round((compact ? 14 : 20) * sizeScale);
+        var innerPadY = Math.round((compact ? 10 : 16) * sizeScale);
+        var lineGap = Math.round((compact ? 5 : 8) * sizeScale);
         var cornerR = fullBleed ? Math.round(10 * Math.min(sizeScale, 2)) : Math.round(12 * sizeScale);
         var maxBoxW = fullBleed ? Math.max(1, w - 2 * padSide) : Math.max(Math.round(160 * sizeScale), w - 2 * padSide);
         var fontDivisor = 20 / sizeScale;
@@ -4426,7 +4455,28 @@
 
     /** Odometer reference scale (task_report_odometer_upload.html). Attendance stamp is slightly larger. */
     window.FLEET_ODOMETER_STAMP_SCALE = 2.5;
-    window.FLEET_ATTENDANCE_STAMP_SCALE = 6.5;
+    window.FLEET_ATTENDANCE_STAMP_SCALE = 5.5;
+
+    /** Selected vehicle/driver labels for attendance photo stamp (check-in/out pages). */
+    window.fleetGetAttendanceStampVehicleDriver = function() {
+        var vehicleNo = '';
+        var driverName = '';
+        var vSel = document.getElementById('vehicleSelect');
+        var dSel = document.getElementById('driverSelect');
+        if (vSel && vSel.selectedIndex >= 0) {
+            var vOpt = vSel.options[vSel.selectedIndex];
+            if (vOpt && vOpt.value) vehicleNo = String(vOpt.textContent || '').trim();
+        }
+        if (dSel && dSel.selectedIndex >= 0) {
+            var dOpt = dSel.options[dSel.selectedIndex];
+            if (dOpt && dOpt.value) {
+                driverName = String(dOpt.textContent || '').trim();
+                var paren = driverName.indexOf('(');
+                if (paren > 0) driverName = driverName.slice(0, paren).trim();
+            }
+        }
+        return { vehicleNo: vehicleNo, driverName: driverName };
+    };
     /** false = system camera (production). true = in-app CameraPreview (see docs/archive/). */
     window.FLEET_ATTENDANCE_USE_INAPP_PREVIEW = false;
     window.FLEET_ATTENDANCE_CAPTURE_MAX_SIDE = 2048;
@@ -4623,10 +4673,14 @@
                             lat: stampOpts.lat,
                             lng: stampOpts.lng,
                             accuracyMeters: stampOpts.accuracyMeters,
+                            vehicleNo: stampOpts.vehicleNo,
+                            driverName: stampOpts.driverName,
+                            maxRows: 4,
                             sizeScale: stampScale,
                             fullBleed: true,
-                            padBottom: 6,
-                            padSide: 8
+                            compactHeight: true,
+                            padBottom: 4,
+                            padSide: 6
                         });
                     }
                     var nowCap = new Date(Date.now() + (typeof _pktOffset !== 'undefined' ? _pktOffset : 0));
@@ -4665,14 +4719,33 @@
             ? pktOverlayDateTimeStrings(now)
             : { dateTimeDisplay: '--' };
         var lines = [prefix, _od.dateTimeDisplay || '--'];
+        var vehicleNo = stampOpts.vehicleNo ? String(stampOpts.vehicleNo).trim() : '';
+        var driverName = stampOpts.driverName ? String(stampOpts.driverName).trim() : '';
+        if (vehicleNo || driverName) {
+            var vd = '';
+            if (vehicleNo) vd += 'Vehicle: ' + vehicleNo;
+            if (driverName) {
+                if (vd) vd += '   \u00b7   ';
+                vd += 'Driver: ' + driverName;
+            }
+            lines.push(vd);
+        }
         var lat = stampOpts.lat;
         var lng = stampOpts.lng;
+        var latLine = null;
         if (lat != null && lng != null && !isNaN(lat) && !isNaN(lng)) {
-            lines.push('Lat ' + Number(lat).toFixed(6) + '\u00b0   Long ' + Number(lng).toFixed(6) + '\u00b0');
+            latLine = 'Lat ' + Number(lat).toFixed(6) + '\u00b0   Long ' + Number(lng).toFixed(6) + '\u00b0';
         }
         var acc = stampOpts.accuracyMeters;
-        if (acc != null && !isNaN(acc) && isFinite(acc)) {
-            lines.push('Accuracy: ~' + Math.round(Number(acc)) + ' m');
+        var accLine = (acc != null && !isNaN(acc) && isFinite(acc))
+            ? ('Acc ~' + Math.round(Number(acc)) + ' m') : null;
+        if (latLine && accLine) lines.push(latLine + '   \u00b7   ' + accLine);
+        else if (latLine) lines.push(latLine);
+        else if (accLine) lines.push(accLine);
+        while (lines.length > 4) {
+            var tailL = lines.pop();
+            var prevL = lines.pop();
+            lines.push(prevL + '   \u00b7   ' + tailL);
         }
         return lines.map(function(t) {
             return '<div class="fleet-live-gps-line">' + String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</div>';

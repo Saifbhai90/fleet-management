@@ -900,11 +900,15 @@
   }
 
   function stampOptsForCheckout() {
+    var vd = (typeof window.fleetGetAttendanceStampVehicleDriver === 'function')
+      ? window.fleetGetAttendanceStampVehicleDriver() : {};
     return {
       line1Prefix: 'Check-out GPS+Cam',
       lat: (currentPosition && currentPosition.coords) ? currentPosition.coords.latitude : null,
       lng: (currentPosition && currentPosition.coords) ? currentPosition.coords.longitude : null,
       accuracyMeters: (currentPosition && currentPosition.coords) ? currentPosition.coords.accuracy : null,
+      vehicleNo: vd.vehicleNo || '',
+      driverName: vd.driverName || '',
       sizeScale: (window.FLEET_ATTENDANCE_STAMP_SCALE != null) ? window.FLEET_ATTENDANCE_STAMP_SCALE : 1
     };
   }
