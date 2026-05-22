@@ -16,7 +16,7 @@ Implementation: `window.fleetTakeSystemCameraPhoto()` in `templates/base.html` (
 
 - Odometer photos: `ODOM_STAMP_SCALE = 2.5` in `task_report_odometer_upload.html`.
 - Attendance frame: `FLEET_ATTENDANCE_FRAME_W×H` = 1080×1440; photo scaled to fit entirely (landscape/portrait). Letterbox uses edge colour, not black side bars.
-- Stamp: overlay on photo (not a separate strip below), fixed `FLEET_ATTENDANCE_STAMP_BASE_FONT` px, max 4 rows, each row shrinks to fit width if needed.
+- Stamp: overlay on photo, fixed `FLEET_ATTENDANCE_STAMP_BASE_FONT` (44px), up to 5 rows: title, date/time, Project·Vehicle·Driver, District·🇵🇰 country, Lat·Acc. Each row shrinks to fit width if needed.
 - While preview modal is open: Tom Select dropdowns are closed/hidden (`fleetSetAttendanceModalOpen`).
 
 ## Archived custom in-app camera

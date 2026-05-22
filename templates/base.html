@@ -4316,6 +4316,91 @@
         ctx.closePath();
     }
 
+    /** ISO 3166-1 alpha-2 → flag emoji (e.g. PK → 🇵🇰). */
+    window.fleetCountryCodeToFlagEmoji = function(code) {
+        var c = String(code || '').trim().toUpperCase();
+        if (c.length !== 2 || c.charCodeAt(0) < 65 || c.charCodeAt(0) > 90 || c.charCodeAt(1) < 65 || c.charCodeAt(1) > 90) {
+            return '';
+        }
+        return String.fromCodePoint(0x1F1E6 + c.charCodeAt(0) - 65, 0x1F1E6 + c.charCodeAt(1) - 65);
+    };
+
+    /** Attendance stamp rows: title, time, project·vehicle·driver, district·country·flag, GPS. */
+    window.fleetBuildAttendanceStampLines = function(opts) {
+        opts = opts || {};
+        var prefix = (opts.line1Prefix != null && opts.line1Prefix !== '') ? String(opts.line1Prefix) : 'GPS+Cam';
+        var now = new Date(Date.now() + (typeof _pktOffset !== 'undefined' ? _pktOffset : 0));
+        var _od = (typeof pktOverlayDateTimeStrings === 'function')
+            ? pktOverlayDateTimeStrings(now)
+            : { dateStr: '--', timeStr: '--', dateTimeDisplay: '--' };
+        var stampLines = [];
+        stampLines.push({ text: prefix, scale: 1.0 });
+        stampLines.push({ text: _od.dateTimeDisplay || (_od.dateStr + ' ' + _od.timeStr), scale: 0.9, fitWidth: true });
+        var projectName = opts.projectName ? String(opts.projectName).trim() : '';
+        var vehicleNo = opts.vehicleNo ? String(opts.vehicleNo).trim() : '';
+        var driverName = opts.driverName ? String(opts.driverName).trim() : '';
+        if (projectName || vehicleNo || driverName) {
+            var pvd = '';
+            if (projectName) pvd += 'Project: ' + projectName;
+            if (vehicleNo) {
+                if (pvd) pvd += '   \u00b7   ';
+                pvd += 'Vehicle: ' + vehicleNo;
+            }
+            if (driverName) {
+                if (pvd) pvd += '   \u00b7   ';
+                pvd += 'Driver: ' + driverName;
+            }
+            stampLines.push({ text: pvd, scale: 0.78, fitWidth: true });
+        }
+        var districtName = opts.districtName ? String(opts.districtName).trim() : '';
+        var countryName = opts.countryName ? String(opts.countryName).trim() : '';
+        var countryFlag = opts.countryFlag ? String(opts.countryFlag).trim() : '';
+        if (!countryFlag && opts.countryCode) {
+            countryFlag = window.fleetCountryCodeToFlagEmoji(opts.countryCode);
+        }
+        if (districtName || countryName || countryFlag) {
+            var geo = '';
+            if (districtName) geo += 'District: ' + districtName;
+            if (countryName || countryFlag) {
+                if (geo) geo += '   \u00b7   ';
+                if (countryFlag) geo += countryFlag + ' ';
+                if (countryName) geo += countryName;
+            }
+            stampLines.push({ text: geo.trim(), scale: 0.82, fitWidth: true });
+        }
+        var lat = opts.lat;
+        var lng = opts.lng;
+        var accuracyM = opts.accuracyMeters;
+        var latLngText = null;
+        if (lat != null && lng != null && !isNaN(lat) && !isNaN(lng)) {
+            latLngText = 'Lat ' + Number(lat).toFixed(6) + '\u00b0   Long ' + Number(lng).toFixed(6) + '\u00b0';
+        }
+        var accText = null;
+        if (accuracyM != null && !isNaN(accuracyM) && isFinite(accuracyM)) {
+            accText = 'Acc ~' + Math.round(Number(accuracyM)) + ' m';
+        }
+        if (latLngText && accText) {
+            stampLines.push({ text: latLngText + '   \u00b7   ' + accText, scale: 0.8, fitWidth: true });
+        } else if (latLngText) {
+            stampLines.push({ text: latLngText, scale: 0.82, fitWidth: true });
+        } else if (accText) {
+            stampLines.push({ text: accText, scale: 0.8, fitWidth: true });
+        }
+        var maxRows = opts.maxRows != null ? Number(opts.maxRows) : 5;
+        if (maxRows > 0 && stampLines.length > maxRows) {
+            while (stampLines.length > maxRows) {
+                var tail = stampLines.pop();
+                var prev = stampLines.pop();
+                stampLines.push({
+                    text: prev.text + '   \u00b7   ' + tail.text,
+                    scale: Math.min(prev.scale, tail.scale),
+                    fitWidth: true
+                });
+            }
+        }
+        return stampLines;
+    };
+
     /** Bottom-centre GPS stamp for captured photos. opts: line1Prefix, lat, lng, accuracyMeters, sizeScale, vehicleNo, driverName, maxRows, compactHeight. */
     window.pktDrawReadableGpsStamp = function(ctx, w, h, opts) {
         opts = opts || {};
@@ -4324,11 +4409,15 @@
         var lat = opts.lat;
         var lng = opts.lng;
         var accuracyM = opts.accuracyMeters;
+        var stampLines;
+        if (opts.attendanceStamp && typeof window.fleetBuildAttendanceStampLines === 'function') {
+            stampLines = window.fleetBuildAttendanceStampLines(opts);
+        } else {
         var now = new Date(Date.now() + (typeof _pktOffset !== 'undefined' ? _pktOffset : 0));
         var _od = (typeof pktOverlayDateTimeStrings === 'function')
             ? pktOverlayDateTimeStrings(now)
             : { dateStr: '--', timeStr: '--', dateTimeDisplay: '--' };
-        var stampLines = [];
+        stampLines = [];
         stampLines.push({ text: prefix, scale: 1.0 });
         stampLines.push({ text: _od.dateTimeDisplay || (_od.dateStr + ' ' + _od.timeStr), scale: 0.88 });
         var vehicleNo = opts.vehicleNo ? String(opts.vehicleNo).trim() : '';
@@ -4367,6 +4456,7 @@
                     scale: Math.min(prev.scale, tail.scale)
                 });
             }
+        }
         }
         var fullBleed = !!opts.fullBleed;
         var fixedLayout = !!opts.fixedStampLayout;
@@ -4507,7 +4597,9 @@
     window.FLEET_ATTENDANCE_FRAME_W = 1080;
     window.FLEET_ATTENDANCE_FRAME_H = 1440;
     window.FLEET_ATTENDANCE_USE_FIXED_FRAME = true;
-    window.FLEET_ATTENDANCE_STAMP_BASE_FONT = 28;
+    window.FLEET_ATTENDANCE_STAMP_BASE_FONT = 44;
+    window.FLEET_ATTENDANCE_COUNTRY_NAME = 'Pakistan';
+    window.FLEET_ATTENDANCE_COUNTRY_CODE = 'PK';
 
     /** Average border colour for letterbox fill (avoids black side bars). */
     window.fleetSampleImageBorderColor = function(img, iw, ih) {
@@ -4585,29 +4677,52 @@
         return s;
     };
 
-    /** Selected vehicle/driver labels for attendance photo stamp (check-in/out pages). */
-    window.fleetGetAttendanceStampVehicleDriver = function() {
+    /** Project, district, vehicle, driver, country for attendance stamp (check-in/out pages). */
+    window.fleetGetAttendanceStampContext = function() {
+        var strip = (typeof window.fleetStripSelectOptionLabel === 'function')
+            ? window.fleetStripSelectOptionLabel
+            : function(l) { return String(l || '').trim(); };
+        var projectName = '';
+        var districtName = '';
         var vehicleNo = '';
         var driverName = '';
+        var pSel = document.getElementById('projectSelect');
+        var dSelDist = document.getElementById('districtSelect');
         var vSel = document.getElementById('vehicleSelect');
         var dSel = document.getElementById('driverSelect');
+        if (pSel && pSel.selectedIndex >= 0) {
+            var pOpt = pSel.options[pSel.selectedIndex];
+            if (pOpt && pOpt.value) projectName = strip(pOpt.textContent);
+        }
+        if (dSelDist && dSelDist.selectedIndex >= 0) {
+            var distOpt = dSelDist.options[dSelDist.selectedIndex];
+            if (distOpt && distOpt.value) districtName = strip(distOpt.textContent);
+        }
         if (vSel && vSel.selectedIndex >= 0) {
             var vOpt = vSel.options[vSel.selectedIndex];
-            if (vOpt && vOpt.value) {
-                vehicleNo = (typeof window.fleetStripSelectOptionLabel === 'function')
-                    ? window.fleetStripSelectOptionLabel(vOpt.textContent)
-                    : String(vOpt.textContent || '').trim();
-            }
+            if (vOpt && vOpt.value) vehicleNo = strip(vOpt.textContent);
         }
         if (dSel && dSel.selectedIndex >= 0) {
             var dOpt = dSel.options[dSel.selectedIndex];
-            if (dOpt && dOpt.value) {
-                driverName = (typeof window.fleetStripSelectOptionLabel === 'function')
-                    ? window.fleetStripSelectOptionLabel(dOpt.textContent)
-                    : String(dOpt.textContent || '').trim();
-            }
+            if (dOpt && dOpt.value) driverName = strip(dOpt.textContent);
         }
-        return { vehicleNo: vehicleNo, driverName: driverName };
+        var countryName = window.FLEET_ATTENDANCE_COUNTRY_NAME || 'Pakistan';
+        var countryCode = window.FLEET_ATTENDANCE_COUNTRY_CODE || 'PK';
+        return {
+            projectName: projectName,
+            districtName: districtName,
+            vehicleNo: vehicleNo,
+            driverName: driverName,
+            countryName: countryName,
+            countryCode: countryCode,
+            countryFlag: window.fleetCountryCodeToFlagEmoji(countryCode)
+        };
+    };
+
+    /** @deprecated use fleetGetAttendanceStampContext */
+    window.fleetGetAttendanceStampVehicleDriver = function() {
+        var c = window.fleetGetAttendanceStampContext();
+        return { vehicleNo: c.vehicleNo, driverName: c.driverName };
     };
     /** false = system camera (production). true = in-app CameraPreview (see docs/archive/). */
     window.FLEET_ATTENDANCE_USE_INAPP_PREVIEW = false;
@@ -4827,21 +4942,28 @@
                             lat: stampOpts.lat,
                             lng: stampOpts.lng,
                             accuracyMeters: stampOpts.accuracyMeters,
+                            projectName: stampOpts.projectName,
+                            districtName: stampOpts.districtName,
+                            countryName: stampOpts.countryName,
+                            countryCode: stampOpts.countryCode,
+                            countryFlag: stampOpts.countryFlag,
                             vehicleNo: stampOpts.vehicleNo,
                             driverName: stampOpts.driverName,
-                            maxRows: 4,
+                            attendanceStamp: true,
+                            maxRows: 5,
                             fullBleed: true,
                             compactHeight: true,
-                            padBottom: 6,
+                            padBottom: 8,
                             padSide: 6
                         };
                         if (useFixedFrame) {
                             stampDrawOpts.fixedStampLayout = true;
                             stampDrawOpts.fitAllStampRows = true;
-                            stampDrawOpts.baseFontPx = window.FLEET_ATTENDANCE_STAMP_BASE_FONT || 28;
-                            stampDrawOpts.innerPadX = 14;
-                            stampDrawOpts.innerPadY = 10;
-                            stampDrawOpts.lineGap = 5;
+                            stampDrawOpts.baseFontPx = window.FLEET_ATTENDANCE_STAMP_BASE_FONT || 44;
+                            stampDrawOpts.innerPadX = 16;
+                            stampDrawOpts.innerPadY = 12;
+                            stampDrawOpts.lineGap = 6;
+                            stampDrawOpts.minFontPx = 14;
                         } else {
                             stampDrawOpts.sizeScale = stampScale;
                             stampDrawOpts.padBottom = 4;
@@ -4876,42 +4998,28 @@
 
     window.fleetFormatLiveGpsStampHtml = function(stampOpts) {
         stampOpts = stampOpts || {};
-        var prefix = stampOpts.line1Prefix || 'GPS+Cam';
-        var now = new Date(Date.now() + (typeof _pktOffset !== 'undefined' ? _pktOffset : 0));
-        var _od = (typeof pktOverlayDateTimeStrings === 'function')
-            ? pktOverlayDateTimeStrings(now)
-            : { dateTimeDisplay: '--' };
-        var lines = [prefix, _od.dateTimeDisplay || '--'];
-        var vehicleNo = stampOpts.vehicleNo ? String(stampOpts.vehicleNo).trim() : '';
-        var driverName = stampOpts.driverName ? String(stampOpts.driverName).trim() : '';
-        if (vehicleNo || driverName) {
-            var vd = '';
-            if (vehicleNo) vd += 'Vehicle: ' + vehicleNo;
-            if (driverName) {
-                if (vd) vd += '   \u00b7   ';
-                vd += 'Driver: ' + driverName;
-            }
-            lines.push(vd);
+        var rows;
+        if (typeof window.fleetBuildAttendanceStampLines === 'function') {
+            var buildOpts = {
+                line1Prefix: stampOpts.line1Prefix || 'GPS+Cam',
+                lat: stampOpts.lat,
+                lng: stampOpts.lng,
+                accuracyMeters: stampOpts.accuracyMeters,
+                projectName: stampOpts.projectName,
+                districtName: stampOpts.districtName,
+                countryName: stampOpts.countryName,
+                countryCode: stampOpts.countryCode,
+                countryFlag: stampOpts.countryFlag,
+                vehicleNo: stampOpts.vehicleNo,
+                driverName: stampOpts.driverName,
+                maxRows: 5
+            };
+            rows = window.fleetBuildAttendanceStampLines(buildOpts);
+        } else {
+            rows = [{ text: stampOpts.line1Prefix || 'GPS+Cam' }];
         }
-        var lat = stampOpts.lat;
-        var lng = stampOpts.lng;
-        var latLine = null;
-        if (lat != null && lng != null && !isNaN(lat) && !isNaN(lng)) {
-            latLine = 'Lat ' + Number(lat).toFixed(6) + '\u00b0   Long ' + Number(lng).toFixed(6) + '\u00b0';
-        }
-        var acc = stampOpts.accuracyMeters;
-        var accLine = (acc != null && !isNaN(acc) && isFinite(acc))
-            ? ('Acc ~' + Math.round(Number(acc)) + ' m') : null;
-        if (latLine && accLine) lines.push(latLine + '   \u00b7   ' + accLine);
-        else if (latLine) lines.push(latLine);
-        else if (accLine) lines.push(accLine);
-        while (lines.length > 4) {
-            var tailL = lines.pop();
-            var prevL = lines.pop();
-            lines.push(prevL + '   \u00b7   ' + tailL);
-        }
-        return lines.map(function(t) {
-            return '<div class="fleet-live-gps-line">' + String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</div>';
+        return rows.map(function(row) {
+            return '<div class="fleet-live-gps-line">' + String(row.text).replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</div>';
         }).join('');
     };
 
