@@ -4369,23 +4369,52 @@
             }
         }
         var fullBleed = !!opts.fullBleed;
+        var fixedLayout = !!opts.fixedStampLayout;
         var compact = !!opts.compactHeight;
-        var padBottom = fullBleed
-            ? (opts.padBottom != null ? opts.padBottom : (compact ? 4 : 6))
-            : Math.round(Math.min(32, Math.max(16, h * 0.04)) * sizeScale);
-        var padSide = fullBleed
-            ? (opts.padSide != null ? opts.padSide : (compact ? 6 : 8))
-            : Math.round(Math.min(24, Math.max(10, w * 0.028)) * sizeScale);
-        var innerPadX = Math.round((compact ? 14 : 20) * sizeScale);
-        var innerPadY = Math.round((compact ? 10 : 16) * sizeScale);
-        var lineGap = Math.round((compact ? 5 : 8) * sizeScale);
-        var cornerR = fullBleed ? Math.round(10 * Math.min(sizeScale, 2)) : Math.round(12 * sizeScale);
-        var maxBoxW = fullBleed ? Math.max(1, w - 2 * padSide) : Math.max(Math.round(160 * sizeScale), w - 2 * padSide);
-        var fontDivisor = 20 / sizeScale;
-        var minFont = Math.round(20 * sizeScale);
-        var maxFont = Math.round(40 * sizeScale);
-        var baseFont = Math.max(minFont, Math.min(maxFont, Math.floor(w / fontDivisor)));
+        if (fixedLayout && opts.fitAllStampRows) {
+            for (var fxi = 0; fxi < stampLines.length; fxi++) {
+                stampLines[fxi].fitWidth = true;
+            }
+        }
+        var padBottom;
+        var padSide;
+        var innerPadX;
+        var innerPadY;
+        var lineGap;
+        var cornerR;
+        var maxBoxW;
+        var minFont;
+        var maxFont;
+        var baseFont;
         var fontFamily = 'system-ui, "Segoe UI", Arial, sans-serif';
+        if (fixedLayout) {
+            padBottom = opts.padBottom != null ? opts.padBottom : 6;
+            padSide = opts.padSide != null ? opts.padSide : 6;
+            innerPadX = opts.innerPadX != null ? opts.innerPadX : 14;
+            innerPadY = opts.innerPadY != null ? opts.innerPadY : 10;
+            lineGap = opts.lineGap != null ? opts.lineGap : 5;
+            cornerR = opts.cornerR != null ? opts.cornerR : 10;
+            maxBoxW = Math.max(1, w - 2 * padSide);
+            baseFont = opts.baseFontPx != null ? Number(opts.baseFontPx) : 28;
+            minFont = opts.minFontPx != null ? Number(opts.minFontPx) : 12;
+            maxFont = baseFont;
+        } else {
+            padBottom = fullBleed
+                ? (opts.padBottom != null ? opts.padBottom : (compact ? 4 : 6))
+                : Math.round(Math.min(32, Math.max(16, h * 0.04)) * sizeScale);
+            padSide = fullBleed
+                ? (opts.padSide != null ? opts.padSide : (compact ? 6 : 8))
+                : Math.round(Math.min(24, Math.max(10, w * 0.028)) * sizeScale);
+            innerPadX = Math.round((compact ? 14 : 20) * sizeScale);
+            innerPadY = Math.round((compact ? 10 : 16) * sizeScale);
+            lineGap = Math.round((compact ? 5 : 8) * sizeScale);
+            cornerR = fullBleed ? Math.round(10 * Math.min(sizeScale, 2)) : Math.round(12 * sizeScale);
+            maxBoxW = fullBleed ? Math.max(1, w - 2 * padSide) : Math.max(Math.round(160 * sizeScale), w - 2 * padSide);
+            var fontDivisor = 20 / sizeScale;
+            minFont = Math.round(20 * sizeScale);
+            maxFont = Math.round(40 * sizeScale);
+            baseFont = Math.max(minFont, Math.min(maxFont, Math.floor(w / fontDivisor)));
+        }
 
         function measureBlock(fs) {
             var maxW = 0;
@@ -4397,20 +4426,23 @@
             return maxW + 2 * innerPadX;
         }
 
-        var minShrink = Math.round(14 * sizeScale);
-        while (baseFont > minShrink && measureBlock(baseFont) > maxBoxW) baseFont -= 1;
+        var minShrink = fixedLayout ? minFont : Math.round(14 * sizeScale);
+        if (!fixedLayout) {
+            while (baseFont > minShrink && measureBlock(baseFont) > maxBoxW) baseFont -= 1;
+        }
 
         var lineHeights = [];
         var totalH = innerPadY * 2;
         for (var j = 0; j < stampLines.length; j++) {
-            var fsJ = Math.max(Math.round(14 * sizeScale), Math.round(baseFont * stampLines[j].scale));
+            var fsMin = fixedLayout ? minFont : Math.round(14 * sizeScale);
+            var fsJ = Math.max(fsMin, Math.round(baseFont * stampLines[j].scale));
             lineHeights.push(fsJ);
             totalH += fsJ;
             if (j < stampLines.length - 1) totalH += lineGap;
         }
         var boxW = fullBleed ? maxBoxW : Math.min(maxBoxW, Math.ceil(measureBlock(baseFont)));
         var maxTextW = boxW - 2 * innerPadX;
-        var minFitFont = Math.round(12 * sizeScale);
+        var minFitFont = fixedLayout ? minFont : Math.round(12 * sizeScale);
         for (var fj = 0; fj < stampLines.length; fj++) {
             if (!stampLines[fj].fitWidth) continue;
             var fsFit = lineHeights[fj];
@@ -4471,6 +4503,79 @@
     /** Odometer reference scale (task_report_odometer_upload.html). Attendance stamp is slightly larger. */
     window.FLEET_ODOMETER_STAMP_SCALE = 2.5;
     window.FLEET_ATTENDANCE_STAMP_SCALE = 5.5;
+    /** Fixed attendance output frame (portrait 3:4). Photo: contain fit, no crop. Stamp: overlay, fixed px font. */
+    window.FLEET_ATTENDANCE_FRAME_W = 1080;
+    window.FLEET_ATTENDANCE_FRAME_H = 1440;
+    window.FLEET_ATTENDANCE_USE_FIXED_FRAME = true;
+    window.FLEET_ATTENDANCE_STAMP_BASE_FONT = 28;
+
+    /** Average border colour for letterbox fill (avoids black side bars). */
+    window.fleetSampleImageBorderColor = function(img, iw, ih) {
+        var tmp = document.createElement('canvas');
+        tmp.width = iw;
+        tmp.height = ih;
+        var t = tmp.getContext('2d');
+        t.drawImage(img, 0, 0, iw, ih);
+        var bands = [
+            t.getImageData(0, 0, iw, 1),
+            t.getImageData(0, Math.max(0, ih - 1), iw, 1),
+            t.getImageData(0, 0, 1, ih),
+            t.getImageData(Math.max(0, iw - 1), 0, 1, ih)
+        ];
+        var r = 0;
+        var g = 0;
+        var b = 0;
+        var n = 0;
+        for (var bi = 0; bi < bands.length; bi++) {
+            var d = bands[bi].data;
+            for (var i = 0; i < d.length; i += 4) {
+                r += d[i];
+                g += d[i + 1];
+                b += d[i + 2];
+                n++;
+            }
+        }
+        if (!n) return '#1a1a1a';
+        return 'rgb(' + Math.round(r / n) + ',' + Math.round(g / n) + ',' + Math.round(b / n) + ')';
+    };
+
+    /**
+     * Fit full camera image into fixed frame (contain, no crop). Letterbox uses edge colour, not black bars.
+     */
+    window.fleetComposeAttendanceFixedFrame = function(dataUrl) {
+        return new Promise(function(resolve, reject) {
+            if (!dataUrl) {
+                reject(new Error('No photo'));
+                return;
+            }
+            var frameW = window.FLEET_ATTENDANCE_FRAME_W || 1080;
+            var frameH = window.FLEET_ATTENDANCE_FRAME_H || 1440;
+            var img = new Image();
+            img.onload = function() {
+                var iw = img.naturalWidth || img.width;
+                var ih = img.naturalHeight || img.height;
+                if (!iw || !ih) {
+                    reject(new Error('Invalid image'));
+                    return;
+                }
+                var scale = Math.min(frameW / iw, frameH / ih);
+                var dw = Math.max(1, Math.round(iw * scale));
+                var dh = Math.max(1, Math.round(ih * scale));
+                var dx = Math.round((frameW - dw) / 2);
+                var dy = Math.round((frameH - dh) / 2);
+                var canvas = document.createElement('canvas');
+                canvas.width = frameW;
+                canvas.height = frameH;
+                var ctx = canvas.getContext('2d');
+                ctx.fillStyle = window.fleetSampleImageBorderColor(img, iw, ih);
+                ctx.fillRect(0, 0, frameW, frameH);
+                ctx.drawImage(img, dx, dy, dw, dh);
+                resolve(canvas);
+            };
+            img.onerror = function() { reject(new Error('Image load failed')); };
+            img.src = dataUrl;
+        });
+    };
 
     /** Drop "(Type)" suffix from vehicle/driver select option text. */
     window.fleetStripSelectOptionLabel = function(label) {
@@ -4675,27 +4780,49 @@
         var maxSide = stampOpts.maxSide || window.FLEET_ATTENDANCE_CAPTURE_MAX_SIDE || 2048;
         var quality = stampOpts.quality != null ? stampOpts.quality : (window.FLEET_ATTENDANCE_CAPTURE_QUALITY || 0.92);
         var orientOpts = stampOpts.fromCameraPreview ? { fromCameraPreview: true } : {};
+        var useFixedFrame = window.FLEET_ATTENDANCE_USE_FIXED_FRAME !== false;
         return window.fleetNormalizeSelfieOrientation(dataUrl, orientOpts).then(function(uprightUrl) {
-            return new Promise(function(resolve, reject) {
-                if (!uprightUrl) {
-                    reject(new Error('No photo'));
-                    return;
-                }
-                var img = new Image();
-                img.onload = function() {
-                    var w = img.naturalWidth || img.width;
-                    var h = img.naturalHeight || img.height;
-                    if (!w || !h) {
+            var framedP = (useFixedFrame && typeof window.fleetComposeAttendanceFixedFrame === 'function')
+                ? window.fleetComposeAttendanceFixedFrame(uprightUrl)
+                : new Promise(function(resolve, reject) {
+                    if (!uprightUrl) {
+                        reject(new Error('No photo'));
+                        return;
+                    }
+                    var img = new Image();
+                    img.onload = function() {
+                        var w = img.naturalWidth || img.width;
+                        var h = img.naturalHeight || img.height;
+                        if (!w || !h) {
+                            reject(new Error('Invalid image'));
+                            return;
+                        }
+                        var canvas = document.createElement('canvas');
+                        canvas.width = w;
+                        canvas.height = h;
+                        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                        resolve(canvas);
+                    };
+                    img.onerror = function() { reject(new Error('Image load failed')); };
+                    img.src = uprightUrl;
+                });
+            return framedP.then(function(framedCanvas) {
+                return new Promise(function(resolve, reject) {
+                    if (!framedCanvas || !framedCanvas.width || !framedCanvas.height) {
                         reject(new Error('Invalid image'));
                         return;
                     }
-                    var canvas = canvasEl || document.createElement('canvas');
-                    canvas.width = w;
-                    canvas.height = h;
+                    var canvas = canvasEl || framedCanvas;
+                    if (canvasEl && canvasEl !== framedCanvas) {
+                        canvas.width = framedCanvas.width;
+                        canvas.height = framedCanvas.height;
+                        canvas.getContext('2d').drawImage(framedCanvas, 0, 0);
+                    }
+                    var w = canvas.width;
+                    var h = canvas.height;
                     var ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, w, h);
                     if (typeof window.pktDrawReadableGpsStamp === 'function') {
-                        window.pktDrawReadableGpsStamp(ctx, w, h, {
+                        var stampDrawOpts = {
                             line1Prefix: stampOpts.line1Prefix || 'GPS+Cam',
                             lat: stampOpts.lat,
                             lng: stampOpts.lng,
@@ -4703,12 +4830,23 @@
                             vehicleNo: stampOpts.vehicleNo,
                             driverName: stampOpts.driverName,
                             maxRows: 4,
-                            sizeScale: stampScale,
                             fullBleed: true,
                             compactHeight: true,
-                            padBottom: 4,
+                            padBottom: 6,
                             padSide: 6
-                        });
+                        };
+                        if (useFixedFrame) {
+                            stampDrawOpts.fixedStampLayout = true;
+                            stampDrawOpts.fitAllStampRows = true;
+                            stampDrawOpts.baseFontPx = window.FLEET_ATTENDANCE_STAMP_BASE_FONT || 28;
+                            stampDrawOpts.innerPadX = 14;
+                            stampDrawOpts.innerPadY = 10;
+                            stampDrawOpts.lineGap = 5;
+                        } else {
+                            stampDrawOpts.sizeScale = stampScale;
+                            stampDrawOpts.padBottom = 4;
+                        }
+                        window.pktDrawReadableGpsStamp(ctx, w, h, stampDrawOpts);
                     }
                     var nowCap = new Date(Date.now() + (typeof _pktOffset !== 'undefined' ? _pktOffset : 0));
                     var _odCap = (typeof pktOverlayDateTimeStrings === 'function')
@@ -4718,9 +4856,7 @@
                         dataUrl: window.fleetJpegDataUrlMaxSide(canvas, maxSide, quality),
                         timeStr: _odCap.timeStr
                     });
-                };
-                img.onerror = function() { reject(new Error('Image load failed')); };
-                img.src = uprightUrl;
+                });
             });
         });
     };

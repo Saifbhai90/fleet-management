@@ -7,7 +7,7 @@
    - `source: 'CAMERA'` — gallery picker **not** offered.
    - `direction: 'FRONT'` — front / selfie camera.
    - `saveToGallery: false` — photo **not** saved to gallery.
-3. After capture → `fleetStampAttendancePhoto()` adds GPS stamp on canvas.
+3. After capture → `fleetNormalizeSelfieOrientation()` then `fleetComposeAttendanceFixedFrame()` (1080×1440, full image contain, no crop) → `fleetStampAttendancePhoto()` draws GPS stamp **over** the photo (fixed font size).
 4. In-app **Preview** modal → Save or **Dobara lein** (re-opens system camera).
 
 Implementation: `window.fleetTakeSystemCameraPhoto()` in `templates/base.html` (uses `FleetBridge.takeSelfie` when available).
@@ -15,7 +15,8 @@ Implementation: `window.fleetTakeSystemCameraPhoto()` in `templates/base.html` (
 ## GPS stamp size
 
 - Odometer photos: `ODOM_STAMP_SCALE = 2.5` in `task_report_odometer_upload.html`.
-- Attendance: `FLEET_ATTENDANCE_STAMP_SCALE = 5.5`, full-width compact bottom stamp (max 4 rows: title, date/time, vehicle·driver, lat·accuracy).
+- Attendance frame: `FLEET_ATTENDANCE_FRAME_W×H` = 1080×1440; photo scaled to fit entirely (landscape/portrait). Letterbox uses edge colour, not black side bars.
+- Stamp: overlay on photo (not a separate strip below), fixed `FLEET_ATTENDANCE_STAMP_BASE_FONT` px, max 4 rows, each row shrinks to fit width if needed.
 - While preview modal is open: Tom Select dropdowns are closed/hidden (`fleetSetAttendanceModalOpen`).
 
 ## Archived custom in-app camera
