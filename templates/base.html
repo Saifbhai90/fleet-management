@@ -2856,6 +2856,8 @@
         function _colIsNumeric(ci,rowsIn){var rows=rowsIn||getRows(),nums=0,tot=0;rows.forEach(function(r){var v=getCellVal(r,ci);if(v===''||v==='-')return;tot++;if(!isNaN(numVal(v)))nums++});return tot>0&&nums/tot>=0.6}
 
         ths.forEach(function(th,ci){
+          if(th.classList.contains('no-ft-filter')) return;
+          var colIdx = th.hasAttribute('data-ft-col') ? parseInt(th.getAttribute('data-ft-col'), 10) : ci;
           th.classList.add('ft-sort');
           var wrap=document.createElement('span');wrap.className='ft-filter-wrap';
           var fbtn=document.createElement('i');fbtn.className='bi bi-funnel-fill ft-filter-btn';fbtn.title='Filter';
@@ -2864,10 +2866,10 @@
 
           th.addEventListener('click',function(e){
             if(e.target.closest('.ft-filter-wrap'))return;
-            if(_sortCol===ci){_sortAsc=!_sortAsc}else{_sortCol=ci;_sortAsc=true}
+            if(_sortCol===colIdx){_sortAsc=!_sortAsc}else{_sortCol=colIdx;_sortAsc=true}
             ths.forEach(function(h){h.classList.remove('asc','desc')});th.classList.add(_sortAsc?'asc':'desc');
             var rows=getRows();_ensureRowSeq(rows);rows.sort(function(a,b){
-              var va=getCellVal(a,ci),vb=getCellVal(b,ci),da=dateVal(va),db=dateVal(vb),cmp=0;
+              var va=getCellVal(a,colIdx),vb=getCellVal(b,colIdx),da=dateVal(va),db=dateVal(vb),cmp=0;
               if(da!==null&&db!==null){cmp=_sortAsc?da-db:db-da}
               else{
                 var na=numVal(va),nb=numVal(vb);
@@ -2893,15 +2895,15 @@
             document.body.appendChild(dd);_openDd=dd;_openDdBtn=fbtn;
 
             var vals={},rows=_allRowsHtml?_rowsFromHtml(_allRowsHtml):getRows();
-            rows.forEach(function(r){var v=getCellVal(r,ci);vals[v]=true});
+            rows.forEach(function(r){var v=getCellVal(r,colIdx);vals[v]=true});
             var sorted=Object.keys(vals).sort(function(a,b){var na=numVal(a),nb=numVal(b);if(!isNaN(na)&&!isNaN(nb))return na-nb;return a.localeCompare(b)});
-            var activeSet=_filters[ci]||null,isNumCol=_colIsNumeric(ci,rows);
+            var activeSet=_filters[colIdx]||null,isNumCol=_colIsNumeric(colIdx,rows);
             var colName=(th.childNodes[0]?th.childNodes[0].textContent.trim():'');
 
             var headerDiv=document.createElement('div');headerDiv.className='ft-dd-header';
             var headerTitle=document.createElement('span');headerTitle.textContent='Filter: '+colName;headerDiv.appendChild(headerTitle);
-            var hasFilter=!!_filters[ci]||!!_numFilters[ci]||!!_txtFilters[ci]||!!_customFilters[ci];
-            if(hasFilter){var clr=document.createElement('span');clr.className='ft-dd-clear';clr.textContent='Clear Filter';clr.addEventListener('click',function(ev){ev.stopPropagation();delete _filters[ci];delete _numFilters[ci];delete _txtFilters[ci];delete _customFilters[ci];fbtn.classList.remove('active');applyFilters();dd.remove()});headerDiv.appendChild(clr)}
+            var hasFilter=!!_filters[colIdx]||!!_numFilters[colIdx]||!!_txtFilters[colIdx]||!!_customFilters[colIdx];
+            if(hasFilter){var clr=document.createElement('span');clr.className='ft-dd-clear';clr.textContent='Clear Filter';clr.addEventListener('click',function(ev){ev.stopPropagation();delete _filters[colIdx];delete _numFilters[colIdx];delete _txtFilters[colIdx];delete _customFilters[colIdx];fbtn.classList.remove('active');applyFilters();dd.remove()});headerDiv.appendChild(clr)}
             dd.appendChild(headerDiv);
 
             var searchDiv=document.createElement('div');searchDiv.className='ft-dd-search';
@@ -2925,27 +2927,27 @@
                 row.addEventListener('click',function(ev2){
                   ev2.stopPropagation();sub.remove();_openSub=null;
                   if(it.k==='custom'){
-                    _openAutoFilterDlg(colName,isNumCol,_customFilters[ci],function(result){
-                      if(result){_customFilters[ci]=result}else{delete _customFilters[ci]}
-                      fbtn.classList.toggle('active',!!_filters[ci]||!!_numFilters[ci]||!!_txtFilters[ci]||!!_customFilters[ci]);
+                    _openAutoFilterDlg(colName,isNumCol,_customFilters[colIdx],function(result){
+                      if(result){_customFilters[colIdx]=result}else{delete _customFilters[colIdx]}
+                      fbtn.classList.toggle('active',!!_filters[colIdx]||!!_numFilters[colIdx]||!!_txtFilters[colIdx]||!!_customFilters[colIdx]);
                       applyFilters();
                     });dd.remove();_openDd=null;_openDdBtn=null;
                   } else if(it.k==='above'||it.k==='below'){
-                    var allNums=[];rows.forEach(function(r){var n=numVal(getCellVal(r,ci));if(!isNaN(n))allNums.push(n)});
+                    var allNums=[];rows.forEach(function(r){var n=numVal(getCellVal(r,colIdx));if(!isNaN(n))allNums.push(n)});
                     var avg=allNums.length?allNums.reduce(function(a,b){return a+b},0)/allNums.length:0;
-                    _numFilters[ci]={type:it.k,val1:avg};fbtn.classList.add('active');applyFilters();dd.remove();_openDd=null;_openDdBtn=null;
+                    _numFilters[colIdx]={type:it.k,val1:avg};fbtn.classList.add('active');applyFilters();dd.remove();_openDd=null;_openDdBtn=null;
                   } else if(it.k==='top10'){
-                    var n=prompt('Show Top N rows:','10');if(n&&!isNaN(parseInt(n))){_numFilters[ci]={type:'top10',val1:parseInt(n)};fbtn.classList.add('active');applyFilters()}
+                    var n=prompt('Show Top N rows:','10');if(n&&!isNaN(parseInt(n))){_numFilters[colIdx]={type:'top10',val1:parseInt(n)};fbtn.classList.add('active');applyFilters()}
                     dd.remove();_openDd=null;_openDdBtn=null;
                   } else if(it.k==='between'){
                     _openAutoFilterDlg(colName,true,{op1:'gte',val1:'',op2:'lte',val2:'',mode:'and'},function(result){
-                      if(result){_customFilters[ci]=result}else{delete _customFilters[ci]}
-                      fbtn.classList.toggle('active',!!_filters[ci]||!!_numFilters[ci]||!!_txtFilters[ci]||!!_customFilters[ci]);applyFilters();
+                      if(result){_customFilters[colIdx]=result}else{delete _customFilters[colIdx]}
+                      fbtn.classList.toggle('active',!!_filters[colIdx]||!!_numFilters[colIdx]||!!_txtFilters[colIdx]||!!_customFilters[colIdx]);applyFilters();
                     });dd.remove();_openDd=null;_openDdBtn=null;
                   } else {
                     _openAutoFilterDlg(colName,isNumCol,{op1:it.k,val1:'',mode:'and'},function(result){
-                      if(result){_customFilters[ci]=result}else{delete _customFilters[ci]}
-                      fbtn.classList.toggle('active',!!_filters[ci]||!!_numFilters[ci]||!!_txtFilters[ci]||!!_customFilters[ci]);applyFilters();
+                      if(result){_customFilters[colIdx]=result}else{delete _customFilters[colIdx]}
+                      fbtn.classList.toggle('active',!!_filters[colIdx]||!!_numFilters[colIdx]||!!_txtFilters[colIdx]||!!_customFilters[colIdx]);applyFilters();
                     });dd.remove();_openDd=null;_openDdBtn=null;
                   }
                 });sub.appendChild(row);
@@ -2972,8 +2974,8 @@
             btnOk.addEventListener('click',function(ev){
               ev.stopPropagation();
               var sel=new Set();listDiv.querySelectorAll('input[type=checkbox]:checked').forEach(function(c){sel.add(c.value)});
-              if(sel.size===sorted.length||sel.size===0){delete _filters[ci]}else{_filters[ci]=sel}
-              fbtn.classList.toggle('active',!!_filters[ci]||!!_numFilters[ci]||!!_txtFilters[ci]||!!_customFilters[ci]);
+              if(sel.size===sorted.length||sel.size===0){delete _filters[colIdx]}else{_filters[colIdx]=sel}
+              fbtn.classList.toggle('active',!!_filters[colIdx]||!!_numFilters[colIdx]||!!_txtFilters[colIdx]||!!_customFilters[colIdx]);
               applyFilters();dd.remove();_openDd=null;_openDdBtn=null;
             });
 

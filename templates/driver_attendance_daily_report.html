@@ -3,7 +3,7 @@
 
 {% block content %}
 <style>
-  .daily-attn-page { --daily-accent: #0f766e; --daily-grid-border: #cbd5e1; --daily-header-bg: #0f766e; --daily-frozen-bg: #f8fafc; }
+  .daily-attn-page { --daily-accent: #0f766e; --daily-grid-border: #cbd5e1; --daily-header-bg: #0f766e; --daily-frozen-bg: #f8fafc; --daily-hdr-row1-h: 30px; }
   .daily-attn-page .filter-card { border-radius: 14px; border: 1px solid #e2e8f0; box-shadow: 0 4px 18px rgba(15, 118, 110, 0.08); }
   .daily-attn-page .filter-card .form-label { font-size: 0.78rem; font-weight: 600; color: #475569; margin-bottom: 0.2rem; }
   .daily-attn-shell {
@@ -21,46 +21,47 @@
   }
   .daily-attn-scroll { overflow: auto; max-height: calc(100vh - 280px); }
   .daily-attn-table {
-    font-size: 0.72rem; border-collapse: collapse; min-width: max-content; width: 100%;
-    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif; table-layout: fixed;
+    font-size: 0.72rem; border-collapse: collapse; min-width: max-content; width: max-content;
+    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif; table-layout: auto;
   }
   .daily-attn-table th, .daily-attn-table td {
     border: 1px solid var(--daily-grid-border); padding: 4px 5px; text-align: center;
-    white-space: nowrap; vertical-align: middle; box-sizing: border-box;
+    vertical-align: middle; box-sizing: border-box;
   }
   .daily-attn-table thead th {
     background: var(--daily-header-bg); color: #fff; font-weight: 600;
-    position: sticky; z-index: 3;
+    position: sticky; z-index: 3; line-height: 1.2; padding: 3px 4px;
   }
   .daily-attn-table thead tr.hdr-row-1 th { top: 0; }
-  .daily-attn-table thead tr.hdr-row-2 th { top: 52px; background: #115e59; font-size: 0.68rem; z-index: 3; }
-  .daily-attn-table thead .days-total-hdr {
-    background: #fef3c7 !important; color: #92400e !important;
+  .daily-attn-table thead tr.hdr-row-2 th {
+    top: var(--daily-hdr-row1-h); background: #115e59; font-size: 0.68rem; z-index: 3;
+    white-space: nowrap;
   }
-  .daily-attn-table .hdr-filter {
-    display: block; width: 100%; margin-top: 3px; padding: 1px 3px; font-size: 0.62rem;
-    border: 1px solid rgba(255,255,255,0.35); border-radius: 3px; background: rgba(255,255,255,0.15);
-    color: #fff;
+  .daily-attn-table thead .date-hdr {
+    font-size: 0.65rem; padding: 2px 3px; white-space: nowrap;
   }
-  .daily-attn-table .hdr-filter::placeholder { color: rgba(255,255,255,0.65); }
-  .daily-attn-table tr.hdr-row-2 .hdr-filter {
-    background: rgba(255,255,255,0.2); border-color: rgba(255,255,255,0.4);
+  .daily-attn-table thead .days-total-hdr,
+  .daily-attn-table tbody .days-total,
+  .daily-attn-table tfoot .days-total {
+    background: #fef3c7 !important; color: #92400e !important; font-weight: 700;
+    border: 1px solid #fcd34d !important;
   }
+  .daily-attn-table thead .days-total-hdr { border-bottom: 1px solid #fcd34d !important; }
   .daily-attn-table .frozen-col {
-    position: sticky; left: 0; z-index: 4; background: var(--daily-frozen-bg); text-align: left; font-weight: 600;
-    box-shadow: 2px 0 4px rgba(0,0,0,0.06);
+    position: sticky; z-index: 4; background: var(--daily-frozen-bg); text-align: left; font-weight: 600;
+    box-shadow: 2px 0 4px rgba(0,0,0,0.04); white-space: nowrap;
   }
   .daily-attn-table thead .frozen-col { z-index: 6; background: #134e4a; color: #fff; }
   .daily-attn-table thead .frozen-col.days-total-hdr { background: #fef3c7 !important; color: #92400e !important; }
-  .daily-attn-table .fc-1 { left: 0; min-width: 38px; width: 38px; }
-  .daily-attn-table .fc-2 { left: 38px; min-width: 88px; width: 88px; }
-  .daily-attn-table .fc-3 { left: 126px; min-width: 96px; width: 96px; }
-  .daily-attn-table .fc-4 { left: 222px; min-width: 88px; width: 88px; }
-  .daily-attn-table .fc-5 { left: 310px; min-width: 72px; width: 72px; }
-  .daily-attn-table .fc-6 { left: 382px; min-width: 96px; width: 96px; }
-  .daily-attn-table .fc-7 { left: 478px; min-width: 58px; width: 58px; box-shadow: 2px 0 6px rgba(0,0,0,0.08); }
-  .daily-attn-table .day-col { min-width: 26px; width: 26px; }
-  .daily-attn-table .sum-col { min-width: 42px; width: 42px; background: #f0fdf4; font-weight: 600; }
+  .daily-attn-table .fc-1 { left: 0; min-width: 34px; }
+  .daily-attn-table .fc-2 { left: 34px; min-width: 86px; }
+  .daily-attn-table .fc-3 { left: 120px; min-width: 92px; }
+  .daily-attn-table .fc-4 { left: 212px; min-width: 86px; }
+  .daily-attn-table .fc-5 { left: 298px; min-width: 64px; }
+  .daily-attn-table .fc-6 { left: 362px; min-width: 148px; max-width: 200px; white-space: normal; word-break: break-word; }
+  .daily-attn-table .fc-7 { left: 510px; min-width: 46px; box-shadow: 2px 0 6px rgba(0,0,0,0.06); text-align: center; }
+  .daily-attn-table .day-col { min-width: 24px; width: 24px; white-space: nowrap; padding: 2px; }
+  .daily-attn-table .sum-col { min-width: 40px; background: #f0fdf4; font-weight: 600; white-space: nowrap; }
   .daily-attn-table thead .sum-col { background: #166534; color: #fff; }
   .daily-attn-table tbody tr:nth-child(even) td:not(.frozen-col):not(.sum-col) { background: #fafafa; }
   .daily-attn-table tbody tr:hover td { background: #ecfdf5 !important; }
@@ -71,18 +72,13 @@
   .daily-attn-table .cell-half { background: #f3f4f6 !important; color: #374151; font-weight: 700; }
   .daily-attn-table .cell-off { background: #e5e7eb !important; color: #111827; font-weight: 700; }
   .daily-attn-table .cell-empty { color: #cbd5e1; }
-  .daily-attn-table .days-total { background: #fef3c7 !important; font-weight: 700; color: #92400e; }
   .daily-attn-table tfoot td {
     background: #ecfdf5; font-weight: 700; color: #065f46; position: sticky; bottom: 0; z-index: 2;
   }
   .daily-attn-table tfoot .frozen-col { background: #d1fae5; z-index: 5; }
+  .daily-attn-table thead .ft-filter-wrap { margin-left: 4px; }
   .daily-attn-footnote { font-size: 0.75rem; color: #64748b; padding: 0.65rem 0.85rem; background: #f8fafc; border-top: 1px solid #e2e8f0; }
-  #dailyReportExportButtons .btn { min-width: 110px; }
-  @media print {
-    .no-print { display: none !important; }
-    .daily-attn-scroll { max-height: none; overflow: visible; }
-    .daily-attn-table { font-size: 6px; }
-  }
+  #dailyReportExportButtons .btn { min-width: 118px; }
 </style>
 
 <div class="container-fluid daily-attn-page">
@@ -167,24 +163,24 @@
       <table class="daily-attn-table" id="dailyReportTable">
         <thead>
           <tr class="hdr-row-1">
-            <th rowspan="2" class="frozen-col fc-1">Sr</th>
-            <th rowspan="2" class="frozen-col fc-2">District<input type="text" class="hdr-filter col-filter" data-col="1" placeholder="Filter"></th>
-            <th rowspan="2" class="frozen-col fc-3">Project<input type="text" class="hdr-filter col-filter" data-col="2" placeholder="Filter"></th>
-            <th rowspan="2" class="frozen-col fc-4">Vehicle<input type="text" class="hdr-filter col-filter" data-col="3" placeholder="Filter"></th>
-            <th rowspan="2" class="frozen-col fc-5">Shift<input type="text" class="hdr-filter col-filter" data-col="4" placeholder="Filter"></th>
-            <th rowspan="2" class="frozen-col fc-6">Driver<input type="text" class="hdr-filter col-filter" data-col="5" placeholder="Filter"></th>
-            <th rowspan="2" class="frozen-col fc-7 days-total-hdr">Days<br>in Month</th>
+            <th rowspan="2" class="frozen-col fc-1 no-ft-filter">Sr</th>
+            <th rowspan="2" class="frozen-col fc-2" data-ft-col="1">District</th>
+            <th rowspan="2" class="frozen-col fc-3" data-ft-col="2">Project</th>
+            <th rowspan="2" class="frozen-col fc-4" data-ft-col="3">Vehicle</th>
+            <th rowspan="2" class="frozen-col fc-5" data-ft-col="4">Shift</th>
+            <th rowspan="2" class="frozen-col fc-6" data-ft-col="5">Driver</th>
+            <th rowspan="2" class="frozen-col fc-7 days-total-hdr no-ft-filter">Days<br>in Month</th>
             {% for d in day_headers %}
-            <th colspan="2">{{ d.strftime('%d-%b-%y') }}</th>
+            <th colspan="2" class="date-hdr no-ft-filter">{{ d.strftime('%d-%b-%y') }}</th>
             {% endfor %}
             {% for st in status_columns %}
-            <th rowspan="2" class="sum-col">{{ st }}</th>
+            <th rowspan="2" class="sum-col" data-ft-col="{{ 7 + (day_headers|length * 2) + loop.index0 }}">{{ st }}</th>
             {% endfor %}
           </tr>
           <tr class="hdr-row-2">
             {% for d in day_headers %}
-            <th class="day-col">M<input type="text" class="hdr-filter day-filter" data-day="{{ d.day }}" data-slot="M" placeholder="·"></th>
-            <th class="day-col">E<input type="text" class="hdr-filter day-filter" data-day="{{ d.day }}" data-slot="E" placeholder="·"></th>
+            <th class="day-col" data-ft-col="{{ 7 + (d.day - 1) * 2 }}">M</th>
+            <th class="day-col" data-ft-col="{{ 8 + (d.day - 1) * 2 }}">E</th>
             {% endfor %}
           </tr>
         </thead>
@@ -196,7 +192,7 @@
             <td class="frozen-col fc-3">{{ row.project_name }}</td>
             <td class="frozen-col fc-4">{{ row.vehicle_no }}</td>
             <td class="frozen-col fc-5">{{ row.shift }}</td>
-            <td class="frozen-col fc-6"><small>{{ row.driver_name }}</small></td>
+            <td class="frozen-col fc-6">{{ row.driver_name }}</td>
             <td class="frozen-col fc-7 days-total">{{ row.days_in_month }}</td>
             {% for d in day_headers %}
             {% set day_num = d.day %}
@@ -238,15 +234,6 @@
   {% endif %}
 </div>
 
-<link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
-<link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.bootstrap5.min.css">
-<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
-<script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
-<script src="https://cdn.datatables.net/buttons/2.4.1/js/dataTables.buttons.min.js"></script>
-<script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.bootstrap5.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-<script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.html5.min.js"></script>
-<script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.print.min.js"></script>
 <script>
 (function() {
   var projectSelect = document.getElementById('dailyProjectSelect');
@@ -334,39 +321,13 @@
   if (districtSelect) districtSelect.addEventListener('change', function() { loadVehicles(); refreshDriverDropdown(); });
   if (vehicleSelect) vehicleSelect.addEventListener('change', refreshDriverDropdown);
 
-  function applyGridFilters() {
-    var colFilters = {};
-    document.querySelectorAll('.col-filter').forEach(function(inp) {
-      var q = (inp.value || '').trim().toLowerCase();
-      if (q) colFilters[inp.getAttribute('data-col')] = q;
-    });
-    var dayFilters = {};
-    document.querySelectorAll('.day-filter').forEach(function(inp) {
-      var q = (inp.value || '').trim().toLowerCase();
-      if (q) dayFilters[inp.getAttribute('data-day') + '-' + inp.getAttribute('data-slot')] = q;
-    });
-    var globalQ = (document.getElementById('dailyTableSearch') || {}).value || '';
-    globalQ = globalQ.trim().toLowerCase();
-
-    document.querySelectorAll('#dailyReportTable tbody tr').forEach(function(tr) {
-      var show = true;
-      if (globalQ && tr.textContent.toLowerCase().indexOf(globalQ) < 0) show = false;
-      if (show) {
-        Object.keys(colFilters).forEach(function(colIdx) {
-          var cell = tr.cells[parseInt(colIdx, 10)];
-          if (cell && cell.textContent.toLowerCase().indexOf(colFilters[colIdx]) < 0) show = false;
-        });
-      }
-      if (show && Object.keys(dayFilters).length) {
-        Object.keys(dayFilters).forEach(function(key) {
-          var parts = key.split('-');
-          var cell = tr.querySelector('.day-cell[data-day="' + parts[0] + '"][data-slot="' + parts[1] + '"]');
-          if (cell && cell.textContent.toLowerCase().indexOf(dayFilters[key]) < 0) show = false;
-        });
-      }
-      tr.style.display = show ? '' : 'none';
-    });
-    updateDayFootTotals();
+  function syncStickyHeaderHeight() {
+    var tbl = document.getElementById('dailyReportTable');
+    if (!tbl) return;
+    var r1 = tbl.querySelector('thead tr.hdr-row-1');
+    if (!r1) return;
+    var h = Math.ceil(r1.getBoundingClientRect().height);
+    tbl.closest('.daily-attn-page').style.setProperty('--daily-hdr-row1-h', h + 'px');
   }
 
   function updateDayFootTotals() {
@@ -386,53 +347,114 @@
     });
   }
 
-  document.querySelectorAll('.col-filter, .day-filter').forEach(function(inp) {
-    inp.addEventListener('input', applyGridFilters);
-  });
+  function refreshRowVisibility() {
+    var globalQ = ((document.getElementById('dailyTableSearch') || {}).value || '').trim().toLowerCase();
+    document.querySelectorAll('#dailyReportTable tbody tr').forEach(function(tr) {
+      var fleetOk = tr.getAttribute('data-ft-match') !== '0';
+      var searchOk = !globalQ || tr.textContent.toLowerCase().indexOf(globalQ) >= 0;
+      tr.style.display = (fleetOk && searchOk) ? '' : 'none';
+    });
+    updateDayFootTotals();
+  }
+
   var searchInput = document.getElementById('dailyTableSearch');
-  if (searchInput) searchInput.addEventListener('input', applyGridFilters);
+  if (searchInput) searchInput.addEventListener('input', refreshRowVisibility);
 
   {% if report %}
-  updateDayFootTotals();
+  var reportTitleText = {{ report_title | tojson }};
 
-  function dailyPrintCustomize(win) {
-    if (window._dtPrintCustomize) {
-      window._dtPrintCustomize('Day Wise Attendance Report', '#0f766e', 'calendar3-week')(win);
-    }
-    var doc = win.document;
-    var sty = doc.createElement('style');
-    sty.textContent = '@page{size:landscape;margin:3mm;} body{margin:0;padding:0;} .daily-attn-scroll{max-height:none!important;overflow:visible!important;} table{font-size:5px!important;table-layout:fixed!important;width:100%!important;border-collapse:collapse!important;} th,td{padding:1px 2px!important;overflow:hidden;border:1px solid #ccc!important;} thead th{font-size:4.5px!important;line-height:1.05;} .hdr-filter{display:none!important;} .frozen-col{position:static!important;box-shadow:none!important;} tfoot td{font-weight:700;background:#ecfdf5!important;}';
-    doc.head.appendChild(sty);
+  function cloneTableForExport() {
+    var src = document.getElementById('dailyReportTable');
+    if (!src) return null;
+    var tbl = src.cloneNode(true);
+    tbl.querySelectorAll('.ft-filter-wrap').forEach(function(el) { el.remove(); });
+    tbl.classList.remove('daily-attn-table');
+    tbl.classList.add('daily-preview-table');
+    tbl.style.position = 'static';
+    tbl.querySelectorAll('.frozen-col').forEach(function(el) {
+      el.classList.remove('frozen-col');
+      el.style.position = 'static';
+      el.style.boxShadow = 'none';
+      el.style.left = 'auto';
+    });
+    return tbl;
   }
 
   function openDailyPrintPreview() {
-    var src = document.getElementById('dailyReportTable');
-    if (!src) return;
-    var tbl = src.cloneNode(true);
-    tbl.querySelectorAll('.hdr-filter').forEach(function(el) { el.remove(); });
+    var tbl = cloneTableForExport();
+    if (!tbl) return;
     var win = window.open('', '_blank');
     if (!win) return;
-    win.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Day Wise Attendance Report</title></head><body><div class="daily-attn-scroll">' + tbl.outerHTML + '</div></body></html>');
+    var styles = [
+      '@page{size:landscape;margin:5mm;}',
+      'body{margin:0;padding:0;font-family:Inter,Segoe UI,system-ui,sans-serif;background:#f1f5f9;color:#1e293b;}',
+      '.pv-header{background:linear-gradient(135deg,#0f766e,#115e59);color:#fff;padding:14px 20px;display:flex;align-items:center;gap:12px;}',
+      '.pv-header h1{margin:0;font-size:1.05rem;font-weight:700;}',
+      '.pv-header .sub{font-size:0.76rem;opacity:0.9;margin-top:2px;}',
+      '.pv-toolbar{display:flex;gap:8px;padding:10px 20px;align-items:center;background:#fff;border-bottom:1px solid #e2e8f0;}',
+      '.pv-toolbar button{border:none;border-radius:8px;padding:8px 16px;font-size:0.82rem;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;}',
+      '.pv-close{background:#475569;color:#fff;}.pv-print{background:#2563eb;color:#fff;}.pv-pdf{background:#dc2626;color:#fff;}',
+      '.pv-hint{margin-left:auto;color:#94a3b8;font-size:0.74rem;}',
+      '.pv-wrap{padding:12px 16px 20px;overflow:auto;}',
+      '.daily-preview-table{border-collapse:collapse;width:max-content;min-width:100%;table-layout:auto;font-size:9px;background:#fff;box-shadow:0 1px 6px rgba(0,0,0,0.08);border-radius:8px;overflow:hidden;}',
+      '.daily-preview-table th,.daily-preview-table td{border:1px solid #cbd5e1;padding:3px 5px;text-align:center;vertical-align:middle;white-space:nowrap;}',
+      '.daily-preview-table thead th{background:#0f766e;color:#fff;font-size:8px;font-weight:700;line-height:1.15;}',
+      '.daily-preview-table thead tr.hdr-row-2 th{background:#115e59;}',
+      '.daily-preview-table .fc-2,.daily-preview-table .fc-3,.daily-preview-table .fc-4,.daily-preview-table .fc-6{text-align:left;}',
+      '.daily-preview-table .fc-6{min-width:110px;max-width:160px;white-space:normal;word-break:break-word;}',
+      '.daily-preview-table .fc-2{min-width:72px;}.daily-preview-table .fc-3{min-width:68px;}.daily-preview-table .fc-4{min-width:72px;}',
+      '.daily-preview-table .day-col{min-width:18px;width:auto;padding:2px 3px;}',
+      '.daily-preview-table .sum-col{background:#f0fdf4;font-weight:700;min-width:36px;}',
+      '.daily-preview-table thead .sum-col{background:#166534;color:#fff;}',
+      '.daily-preview-table .days-total-hdr,.daily-preview-table .days-total{background:#fef3c7!important;color:#92400e!important;border-color:#fcd34d!important;}',
+      '.daily-preview-table .cell-present{background:#dcfce7!important;color:#166534;font-weight:700;}',
+      '.daily-preview-table .cell-absent{background:#fee2e2!important;color:#991b1b;font-weight:700;}',
+      '.daily-preview-table .cell-leave{background:#dbeafe!important;color:#1e40af;font-weight:700;}',
+      '.daily-preview-table .cell-late{background:#fef9c3!important;color:#854d0e;font-weight:700;}',
+      '.daily-preview-table .cell-half{background:#f3f4f6!important;}',
+      '.daily-preview-table .cell-off{background:#e5e7eb!important;}',
+      '.daily-preview-table tfoot td{background:#ecfdf5;font-weight:700;color:#065f46;}',
+      '.pv-legend{padding:8px 20px 14px;color:#64748b;font-size:0.72rem;}',
+      '@media print{.pv-toolbar,.pv-hint{display:none!important;}.pv-wrap{padding:0;}.daily-preview-table{box-shadow:none;font-size:7px;}.daily-preview-table th,.daily-preview-table td{padding:1px 2px;}}'
+    ].join('');
+    win.document.open();
+    win.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Day Wise Attendance Report</title>');
+    win.document.write('<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">');
+    win.document.write('<style>' + styles + '</style></head><body>');
+    win.document.write('<div class="pv-header"><i class="bi bi-calendar3-week" style="font-size:1.3rem;"></i><div><h1>Day Wise Attendance Report</h1><div class="sub">' + reportTitleText + '</div></div></div>');
+    win.document.write('<div class="pv-toolbar pv-print-toolbar">');
+    win.document.write('<button type="button" class="pv-close" onclick="window.close()"><i class="bi bi-arrow-left"></i> Close</button>');
+    win.document.write('<button type="button" class="pv-print" onclick="window.print()"><i class="bi bi-printer"></i> Print</button>');
+    win.document.write('<button type="button" class="pv-pdf" onclick="saveDailyPdf()"><i class="bi bi-file-earmark-pdf"></i> Save as PDF</button>');
+    win.document.write('<span class="pv-hint"><i class="bi bi-info-circle"></i> Ctrl+P se bhi print kar sakte hain</span></div>');
+    win.document.write('<div class="pv-wrap">' + tbl.outerHTML + '</div>');
+    win.document.write('<div class="pv-legend"><strong>M</strong>=Morning · <strong>E</strong>=Evening · <strong>P</strong>=Present · <strong>A</strong>=Absent · <strong>L</strong>=Leave · <strong>Lt</strong>=Late · <strong>H</strong>=Half-Day · <strong>O</strong>=Off</div>');
+    win.document.write('<script>function saveDailyPdf(){var tb=document.querySelector(".pv-print-toolbar");var s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.2/html2pdf.bundle.min.js";s.onload=function(){if(tb)tb.style.display="none";html2pdf().set({margin:[4,3,4,3],filename:"Day_Wise_Attendance_Report.pdf",image:{type:"jpeg",quality:0.95},html2canvas:{scale:2,useCORS:true,logging:false},jsPDF:{unit:"mm",format:"a3",orientation:"landscape"},pagebreak:{mode:["css","legacy"]}}).from(document.querySelector(".pv-wrap")).save().then(function(){if(tb)tb.style.display="";}).catch(function(){if(tb)tb.style.display="";alert("PDF generate nahi ho saki. Print se Save as PDF try karein.");});};document.head.appendChild(s);}<\/script>');
+    win.document.write('</body></html>');
     win.document.close();
-    win.onload = function() { dailyPrintCustomize(win); };
   }
 
   function exportDailyExcel() {
     var tbl = document.getElementById('dailyReportTable');
-    if (!tbl || typeof $ === 'undefined' || !$.fn.DataTable) return;
-    var $wrap = $('<div style="position:absolute;left:-9999px;top:0;"></div>').appendTo('body');
-    var $clone = $(tbl).clone();
-    $clone.find('.hdr-filter').remove();
-    $clone.find('tfoot').remove();
-    $wrap.append($clone);
-    var dt = $clone.DataTable({
-      paging: false, searching: false, ordering: false, info: false,
-      dom: 'Bfrtip',
-      buttons: [{ extend: 'excelHtml5', title: 'Day Wise Attendance Report' }]
+    if (!tbl) return;
+    var lines = [];
+    tbl.querySelectorAll('thead tr, tbody tr, tfoot tr').forEach(function(tr) {
+      if (tr.style.display === 'none') return;
+      var cells = [];
+      tr.querySelectorAll('th, td').forEach(function(td) {
+        if (td.style.display === 'none') return;
+        var txt = (td.textContent || '').replace(/\s+/g, ' ').trim();
+        cells.push('"' + txt.replace(/"/g, '""') + '"');
+      });
+      if (cells.length) lines.push(cells.join(','));
     });
-    dt.button(0).trigger();
-    dt.destroy(true);
-    $wrap.remove();
+    var blob = new Blob(['\ufeff' + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'Day_Wise_Attendance_Report.csv';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function() { URL.revokeObjectURL(a.href); a.remove(); }, 500);
   }
 
   var exportWrap = document.getElementById('dailyReportExportButtons');
@@ -449,6 +471,19 @@
     printBtn.addEventListener('click', openDailyPrintPreview);
     exportWrap.appendChild(excelBtn);
     exportWrap.appendChild(printBtn);
+  }
+
+  function initDailyGrid() {
+    syncStickyHeaderHeight();
+    updateDayFootTotals();
+    window.addEventListener('resize', syncStickyHeaderHeight);
+    document.addEventListener('fleet:after-filter', refreshRowVisibility);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() { setTimeout(initDailyGrid, 80); });
+  } else {
+    setTimeout(initDailyGrid, 80);
   }
   {% endif %}
 })();
