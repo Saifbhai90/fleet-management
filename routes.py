@@ -652,18 +652,6 @@ def _vehicle_pending_checkout_block_message(driver_id, vehicle):
     )
 
 
-def _other_shift_checkin_window_active(driver, tw, now_time):
-    """True jab 'dusri shift' ka check-in window abhi chal raha ho (Morning↔Night)."""
-    if not driver or not tw or not now_time:
-        return False
-    shift_l = (driver.shift or '').strip().lower()
-    if shift_l == 'morning':
-        return _attendance_time_in_window(now_time, tw.get('night_start'), tw.get('night_end'))
-    if shift_l == 'night':
-        return _attendance_time_in_window(now_time, tw.get('morning_start'), tw.get('morning_end'))
-    return False
-
-
 def _attendance_checkin_stamp(rec):
     dt = rec.attendance_date.strftime('%d-%m-%Y') if rec and rec.attendance_date else ''
     ci = format_time_ampm(rec.check_in) if rec and rec.check_in else ''
@@ -700,6 +688,60 @@ def _minutes_span_contains(m, start_m, end_m):
     if start_m <= end_m:
         return start_m <= m <= end_m
     return m >= start_m or m <= end_m
+
+
+def _checkin_window_slot_from_time(tw, check_in_time):
+    """Morning vs night check-in window from Time Overrides + actual check-in time (not assigned shift)."""
+    if not tw or not check_in_time:
+        return None
+    m = _time_to_minutes_day(check_in_time)
+    if m is None:
+        return None
+    ms = _time_to_minutes_day(tw.get('morning_start'))
+    me = _time_to_minutes_day(tw.get('morning_end'))
+    ns = _time_to_minutes_day(tw.get('night_start'))
+    ne = _time_to_minutes_day(tw.get('night_end'))
+    has_m = ms is not None and me is not None
+    has_n = ns is not None and ne is not None
+    in_m = _minutes_span_contains(m, ms, me) if has_m else False
+    in_n = _minutes_span_contains(m, ns, ne) if has_n else False
+    if in_m and not in_n:
+        return 'morning'
+    if in_n and not in_m:
+        return 'night'
+    if in_m and in_n:
+        return 'morning'
+    if has_m and not has_n:
+        return 'morning' if in_m else None
+    if has_n and not has_m:
+        return 'night' if in_n else None
+    return 'morning' if (6 * 60) <= m < (13 * 60) else 'night'
+
+
+def _checkin_window_active_now(tw, slot, now_time):
+    """Is the given slot's check-in window active at now_time?"""
+    if not tw or not now_time or slot not in ('morning', 'night'):
+        return False
+    if slot == 'morning':
+        start_t, end_t = tw.get('morning_start'), tw.get('morning_end')
+    else:
+        start_t, end_t = tw.get('night_start'), tw.get('night_end')
+    if start_t is None or end_t is None:
+        return False
+    return _attendance_time_in_window(now_time, start_t, end_t)
+
+
+def _alternate_checkin_window_active(tw, session_check_in_time, now_time):
+    """
+    True when the other check-in window (relative to session check-in) is active now.
+    Uses Time Overrides only — not driver assigned shift.
+    """
+    slot = _checkin_window_slot_from_time(tw, session_check_in_time)
+    if slot == 'morning':
+        return _checkin_window_active_now(tw, 'night', now_time)
+    if slot == 'night':
+        return _checkin_window_active_now(tw, 'morning', now_time)
+    return False
 
 
 def _duty_shift_fallback_from_minutes(m):
@@ -19133,7 +19175,7 @@ def _gps_checkin_submit_status(driver_id, vehicle_id=None, project_id=None):
     if open_rec_self and _gps_marked_attendance_row(open_rec_self):
         ci_t = open_rec_self.check_in.strftime('%H:%M') if open_rec_self.check_in else None
         dt_s, ci_s = _attendance_checkin_stamp(open_rec_self)
-        if not _other_shift_checkin_window_active(driver, tw, now_time):
+        if not _alternate_checkin_window_active(tw, open_rec_self.check_in, now_time):
             return {
                 'ok': True,
                 'can_submit': False,
@@ -19165,7 +19207,7 @@ def _gps_checkin_submit_status(driver_id, vehicle_id=None, project_id=None):
     if pending_rec and pending_driver and pending_driver.id != driver_id:
         pd_name = (pending_driver.name or '').strip() or 'Driver'
         dt_s, ci_s = _attendance_checkin_stamp(pending_rec)
-        other_shift_on = _other_shift_checkin_window_active(pending_driver, tw, now_time)
+        other_shift_on = _alternate_checkin_window_active(tw, pending_rec.check_in, now_time)
         if other_shift_on:
             return {
                 'ok': True,
