@@ -183,8 +183,9 @@
             <td class="frozen-col frozen-col-7 days-total">{{ row.days_in_month }}</td>
             {% for d in day_headers %}
             {% set day_num = d.day %}
-            <td class="{% if row.grid.get((day_num, 'M')) %}cell-present{% else %}cell-empty{% endif %}">{{ row.grid.get((day_num, 'M'), '') or '·' }}</td>
-            <td class="{% if row.grid.get((day_num, 'E')) %}cell-present{% else %}cell-empty{% endif %}">{{ row.grid.get((day_num, 'E'), '') or '·' }}</td>
+            {% set day_cells = row.grid.get(day_num, {}) %}
+            <td class="{% if day_cells.get('M') %}cell-present{% else %}cell-empty{% endif %}">{{ day_cells.get('M', '') or '·' }}</td>
+            <td class="{% if day_cells.get('E') %}cell-present{% else %}cell-empty{% endif %}">{{ day_cells.get('E', '') or '·' }}</td>
             {% endfor %}
           </tr>
           {% endfor %}

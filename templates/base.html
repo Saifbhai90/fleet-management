@@ -2050,6 +2050,14 @@
                     <i class="bi bi-list-ul text-primary"></i><span>Attendance List</span>
                 </a>
                 {% endif %}
+                {% if can_see_page('driver_attendance_report') %}
+                <a href="{{ url_for('driver_attendance_report') }}" class="collapse-item {% if request.endpoint == 'driver_attendance_report' %}active-link{% endif %}">
+                    <i class="bi bi-bar-chart text-primary"></i><span>Monthly Attendance Report</span>
+                </a>
+                <a href="{{ url_for('driver_attendance_daily_report') }}" class="collapse-item {% if request.endpoint == 'driver_attendance_daily_report' %}active-link{% endif %}">
+                    <i class="bi bi-calendar3-week text-primary"></i><span>Day Wise Attendance Report</span>
+                </a>
+                {% endif %}
                 </div>
             </div>
         </div>

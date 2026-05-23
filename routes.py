@@ -20379,7 +20379,6 @@ def driver_attendance_daily_report():
         vehicles_query = Vehicle.query.options(
             joinedload(Vehicle.district),
             joinedload(Vehicle.project),
-            joinedload(Vehicle.driver),
         ).filter(Vehicle.project_id.isnot(None))
 
         if scope_projects:
@@ -20396,15 +20395,20 @@ def driver_attendance_daily_report():
             vehicles_query = vehicles_query.filter(Vehicle.id == vehicle_id)
         if driver_id_filter:
             vehicles_query = vehicles_query.filter(Vehicle.driver_id == driver_id_filter)
-        if shift:
-            vehicles_query = vehicles_query.join(Driver, Vehicle.driver_id == Driver.id).filter(Driver.shift == shift)
-        if search:
+        if shift or search:
             vehicles_query = vehicles_query.outerjoin(Driver, Vehicle.driver_id == Driver.id)
-            flt = _multi_word_filter(search, Vehicle.vehicle_no, Vehicle.vehicle_type, Driver.name, Driver.driver_id)
-            if flt is not None:
-                vehicles_query = vehicles_query.filter(flt)
+            if shift:
+                vehicles_query = vehicles_query.filter(Driver.shift == shift)
+            if search:
+                flt = _multi_word_filter(search, Vehicle.vehicle_no, Vehicle.vehicle_type, Driver.name, Driver.driver_id)
+                if flt is not None:
+                    vehicles_query = vehicles_query.filter(flt)
 
         vehicles = vehicles_query.distinct().order_by(Vehicle.vehicle_no).all()
+        driver_ids = {v.driver_id for v in vehicles if v.driver_id}
+        drivers_by_id = {}
+        if driver_ids:
+            drivers_by_id = {d.id: d for d in Driver.query.filter(Driver.id.in_(driver_ids)).all()}
         _, ndays = monthrange(year, month)
         start_d = date(year, month, 1)
         end_d = date(year, month, ndays)
@@ -20440,9 +20444,11 @@ def driver_attendance_daily_report():
             for r in att_by_vehicle.get(v.id, []):
                 day_num = r.attendance_date.day
                 slot = _attendance_daily_slot_key(r)
-                grid[(day_num, slot)] = 'P'
+                if day_num not in grid:
+                    grid[day_num] = {}
+                grid[day_num][slot] = 'P'
                 complete_count += 1
-            primary = v.driver
+            primary = drivers_by_id.get(v.driver_id) if v.driver_id else None
             report.append({
                 'vehicle': v,
                 'district_name': (v.district.name if v.district else '-') or '-',
