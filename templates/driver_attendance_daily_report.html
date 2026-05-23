@@ -24,7 +24,7 @@
   .daily-attn-shell.daily-grid-pending .daily-attn-scroll { visibility: hidden; }
   .daily-attn-shell.daily-grid-ready .daily-attn-scroll { visibility: visible; }
   .daily-attn-table {
-    font-size: 0.72rem; border-collapse: collapse; width: max-content;
+    font-size: 0.78rem; border-collapse: collapse; width: max-content;
     font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif; table-layout: fixed;
   }
   .daily-attn-table th, .daily-attn-table td {
@@ -37,9 +37,9 @@
   }
   .daily-attn-table thead tr.hdr-row-1 th { top: 0; }
   .daily-attn-table thead tr.hdr-row-2 th {
-    top: var(--daily-hdr-row1-h); background: #115e59; font-size: 0.65rem; z-index: 3;
+    top: var(--daily-hdr-row1-h); background: #115e59; font-size: 0.72rem; z-index: 3;
   }
-  .daily-attn-table thead .date-hdr { font-size: 0.65rem; padding: 2px 1px; width: 34px; min-width: 34px; max-width: 34px; }
+  .daily-attn-table thead .date-hdr { font-size: 0.72rem; padding: 2px 1px; width: 34px; min-width: 34px; max-width: 34px; }
   .daily-attn-table .info-col { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .daily-attn-table .info-col.fc-6 { white-space: nowrap; text-overflow: ellipsis; max-width: none; }
   .daily-attn-table .fc-1 { left: 0; text-align: center; width: 32px; min-width: 32px; max-width: 32px; }
@@ -47,10 +47,10 @@
   .daily-attn-table .fc-3 { left: 120px; width: 72px; min-width: 72px; max-width: 82px; }
   .daily-attn-table .fc-4 { left: 192px; width: 78px; min-width: 78px; max-width: 88px; }
   .daily-attn-table .fc-5 { left: 270px; width: 52px; min-width: 52px; max-width: 58px; }
-  .daily-attn-table .fc-6 { left: 322px; width: 120px; min-width: 120px; max-width: 150px; }
-  .daily-attn-table .fc-7 { left: 442px; width: 36px; min-width: 36px; max-width: 36px; text-align: center; box-shadow: 2px 0 6px rgba(0,0,0,0.06); }
-  .daily-attn-table .day-col { width: 16px; min-width: 16px; max-width: 16px; white-space: nowrap; padding: 1px 2px; font-size: 0.65rem; }
-  .daily-attn-table .sum-col { width: 36px; min-width: 36px; max-width: 42px; background: #f0fdf4; font-weight: 600; white-space: nowrap; padding: 2px 3px; font-size: 0.62rem; }
+  .daily-attn-table .fc-6 { left: 322px; width: 130px; min-width: 130px; max-width: 160px; font-size: 0.88rem; font-weight: 700; }
+  .daily-attn-table .fc-7 { left: 452px; width: 36px; min-width: 36px; max-width: 36px; text-align: center; box-shadow: 2px 0 6px rgba(0,0,0,0.06); }
+  .daily-attn-table .day-col { width: 16px; min-width: 16px; max-width: 16px; white-space: nowrap; padding: 1px 2px; font-size: 0.74rem; }
+  .daily-attn-table .sum-col { width: 36px; min-width: 36px; max-width: 42px; background: #f0fdf4; font-weight: 600; white-space: nowrap; padding: 2px 3px; font-size: 0.72rem; }
   .daily-attn-table thead .days-total-hdr,
   .daily-attn-table tbody .days-total,
   .daily-attn-table tfoot .days-total {
@@ -522,24 +522,25 @@
       '.pv-toolbar button{border:none;border-radius:8px;padding:7px 14px;font-size:0.8rem;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;}',
       '.pv-close{background:#475569;color:#fff;}.pv-print{background:#2563eb;color:#fff;}.pv-pdf{background:#dc2626;color:#fff;}',
       '.pv-hint{margin-left:auto;color:#94a3b8;font-size:0.72rem;}',
-      '.pv-scale-wrap{padding:8px 10px 14px;overflow:hidden;}',
+      '.pv-scale-wrap{padding:6px 8px 10px;overflow:hidden;width:100%;}',
       '.pv-scale-inner{transform-origin:top left;display:inline-block;}',
       '.daily-preview-table{border-collapse:collapse;table-layout:auto;width:max-content;background:#fff;}',
-      '.daily-preview-table th,.daily-preview-table td{border:1px solid #94a3b8;padding:2px 3px;text-align:center;vertical-align:middle;font-size:7px;line-height:1.15;}',
-      '.daily-preview-table thead th{background:#0f766e;color:#fff;font-weight:700;}',
-      '.daily-preview-table thead tr.hdr-row-2 th{background:#115e59;font-size:6px;padding:1px;}',
+      '.daily-preview-table th,.daily-preview-table td{border:1px solid #94a3b8;padding:3px 4px;text-align:center;vertical-align:middle;font-size:9px;line-height:1.2;}',
+      '.daily-preview-table thead th{background:#0f766e;color:#fff;font-weight:700;font-size:9px;}',
+      '.daily-preview-table thead tr.hdr-row-2 th{background:#115e59;font-size:8px;padding:2px;}',
       '.daily-preview-table .pv-dp,.daily-preview-table .pv-ds,.daily-preview-table .pv-veh{text-align:left;white-space:normal;word-break:break-word;}',
-      '.daily-preview-table .pv-dp{max-width:52px;min-width:42px;}',
-      '.daily-preview-table .pv-veh{max-width:48px;white-space:nowrap;}',
-      '.daily-preview-table .pv-ds{max-width:58px;min-width:46px;}',
+      '.daily-preview-table .pv-dp{max-width:72px;min-width:58px;}',
+      '.daily-preview-table .pv-veh{max-width:64px;white-space:nowrap;}',
+      '.daily-preview-table .pv-ds{max-width:82px;min-width:64px;}',
       '.daily-preview-table .pv-dp-line,.daily-preview-table .pv-ds-line{display:block;}',
-      '.daily-preview-table .pv-muted{font-size:5.5px;color:#475569;font-weight:500;}',
-      '.daily-preview-table .pv-sr,.daily-preview-table .pv-days{width:1%;padding:1px 3px;}',
-      '.daily-preview-table .day-col{width:1%;min-width:9px;max-width:12px;padding:1px;font-size:6px;}',
-      '.daily-preview-table .date-hdr{font-size:6px;padding:1px 2px;min-width:18px;}',
-      '.daily-preview-table .sum-col{width:1%;min-width:10px;padding:1px 2px;font-size:6px;background:#f0fdf4;font-weight:700;}',
+      '.daily-preview-table .pv-ds-line:first-child{font-size:10px;font-weight:700;}',
+      '.daily-preview-table .pv-muted{font-size:7.5px;color:#475569;font-weight:500;}',
+      '.daily-preview-table .pv-sr,.daily-preview-table .pv-days{width:1%;padding:2px 4px;}',
+      '.daily-preview-table .day-col{width:1%;min-width:12px;max-width:16px;padding:2px;font-size:8px;}',
+      '.daily-preview-table .date-hdr{font-size:8px;padding:2px 3px;min-width:24px;}',
+      '.daily-preview-table .sum-col{width:1%;min-width:14px;padding:2px 3px;font-size:8px;background:#f0fdf4;font-weight:700;}',
       '.daily-preview-table thead .sum-col{background:#166534;color:#fff;}',
-      '.daily-preview-table .sum-vhdr{writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap;height:46px;max-width:14px;min-width:10px;padding:1px;font-size:5.5px;line-height:1;}',
+      '.daily-preview-table .sum-vhdr{writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap;height:52px;max-width:18px;min-width:14px;padding:2px;font-size:8px;line-height:1;}',
       '.daily-preview-table .days-total-hdr,.daily-preview-table .days-total{background:#fef3c7!important;color:#92400e!important;}',
       '.daily-preview-table .cell-present{background:#dcfce7!important;color:#166534;font-weight:700;}',
       '.daily-preview-table .cell-absent{background:#fee2e2!important;color:#991b1b;font-weight:700;}',
@@ -547,10 +548,10 @@
       '.daily-preview-table .cell-late{background:#fef9c3!important;color:#854d0e;font-weight:700;}',
       '.daily-preview-table .cell-half{background:#f3f4f6!important;}',
       '.daily-preview-table .cell-off{background:#e5e7eb!important;}',
-      '.daily-preview-table tfoot td{background:#ecfdf5;font-weight:700;color:#065f46;font-size:6px;}',
-      '.daily-preview-table .pv-total-label{text-align:left;padding-left:4px;}',
+      '.daily-preview-table tfoot td{background:#ecfdf5;font-weight:700;color:#065f46;font-size:8px;}',
+      '.daily-preview-table .pv-total-label{text-align:left;padding-left:6px;}',
       '.pv-legend{padding:6px 16px 10px;color:#64748b;font-size:0.68rem;}',
-      '@media print{.pv-toolbar,.pv-hint{display:none!important;}.pv-scale-wrap{padding:0;overflow:visible;}.pv-scale-inner{transform:scale(var(--print-scale,1))!important;}.daily-preview-table th,.daily-preview-table td{font-size:5.5px;padding:0 1px;}}'
+      '@media print{body{background:#fff!important;}.pv-toolbar,.pv-hint,.pv-header,.pv-legend{display:none!important;}.pv-scale-wrap{padding:0;overflow:visible;width:100%;}.pv-scale-inner{transform:scale(var(--print-scale,1))!important;transform-origin:top left!important;}}'
     ].join('');
     win.document.open();
     win.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Day Wise Attendance Report</title>');
@@ -564,7 +565,7 @@
     win.document.write('<span class="pv-hint"><i class="bi bi-info-circle"></i> Landscape A3 · auto-fit</span></div>');
     win.document.write('<div class="pv-scale-wrap"><div class="pv-scale-inner" id="pvScaleInner">' + tbl.outerHTML + '</div></div>');
     win.document.write('<div class="pv-legend"><strong>M</strong>=Morning · <strong>E</strong>=Evening · <strong>P</strong>=Present · <strong>A</strong>=Absent · <strong>L</strong>=Leave</div>');
-    win.document.write('<script>function fitPrintScale(){var inner=document.getElementById("pvScaleInner");if(!inner)return 1;var tbl=inner.querySelector("table");var pageW=window.innerWidth-16;var needed=tbl?tbl.offsetWidth:inner.scrollWidth;var scale=needed>pageW?Math.max(0.45,pageW/needed):1;inner.style.transform="scale("+scale+")";document.documentElement.style.setProperty("--print-scale",String(scale));return scale;}function fitAndPrint(){fitPrintScale();setTimeout(function(){window.print();},120);}function saveDailyPdf(){var tb=document.querySelector(".pv-print-toolbar");var s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.2/html2pdf.bundle.min.js";s.onload=function(){fitPrintScale();if(tb)tb.style.display="none";html2pdf().set({margin:[2,2,2,2],filename:"Day_Wise_Attendance_Report.pdf",image:{type:"jpeg",quality:0.92},html2canvas:{scale:2,useCORS:true,logging:false,windowWidth:document.getElementById("pvScaleInner").scrollWidth},jsPDF:{unit:"mm",format:"a3",orientation:"landscape"},pagebreak:{mode:["css","legacy"]}}).from(document.getElementById("pvScaleInner")).save().then(function(){if(tb)tb.style.display="";}).catch(function(){if(tb)tb.style.display="";alert("PDF error — Print se Save as PDF try karein.");});};document.head.appendChild(s);}window.addEventListener("load",function(){setTimeout(fitPrintScale,50);});window.addEventListener("resize",fitPrintScale);<\/script>');
+    win.document.write('<script>function fitPrintScale(forPrint){var inner=document.getElementById("pvScaleInner");if(!inner)return 1;inner.style.transform="none";var tbl=inner.querySelector("table");var neededW=tbl?tbl.offsetWidth:inner.scrollWidth;var neededH=tbl?tbl.offsetHeight:inner.scrollHeight;if(!neededW||!neededH)return 1;var pad=12,targetW,targetH;if(forPrint){targetW=16.5*96-pad;targetH=11.4*96-pad;}else{var hdr=document.querySelector(".pv-header");var tb=document.querySelector(".pv-toolbar");var leg=document.querySelector(".pv-legend");var used=(hdr?hdr.offsetHeight:0)+(tb?tb.offsetHeight:0)+(leg?leg.offsetHeight:0)+20;targetW=window.innerWidth-pad;targetH=window.innerHeight-used;}var scale=Math.min(targetW/neededW,targetH/neededH);scale=Math.max(0.6,Math.min(scale,5));inner.style.transform="scale("+scale+")";inner.style.transformOrigin="top left";var wrap=inner.parentElement;if(wrap){wrap.style.width="100%";wrap.style.minHeight=Math.ceil(neededH*scale+6)+"px";}document.documentElement.style.setProperty("--print-scale",String(scale));return scale;}function fitAndPrint(){fitPrintScale(true);setTimeout(function(){window.print();},150);}function saveDailyPdf(){var tb=document.querySelector(".pv-print-toolbar");var s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.2/html2pdf.bundle.min.js";s.onload=function(){fitPrintScale(true);if(tb)tb.style.display="none";html2pdf().set({margin:[2,2,2,2],filename:"Day_Wise_Attendance_Report.pdf",image:{type:"jpeg",quality:0.92},html2canvas:{scale:2,useCORS:true,logging:false,windowWidth:Math.ceil(document.getElementById("pvScaleInner").scrollWidth*parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--print-scale")||1))},jsPDF:{unit:"mm",format:"a3",orientation:"landscape"},pagebreak:{mode:["css","legacy"]}}).from(document.getElementById("pvScaleInner")).save().then(function(){if(tb)tb.style.display="";}).catch(function(){if(tb)tb.style.display="";alert("PDF error — Print se Save as PDF try karein.");});};document.head.appendChild(s);}window.addEventListener("load",function(){setTimeout(function(){fitPrintScale(false);},80);});window.addEventListener("resize",function(){fitPrintScale(false);});window.addEventListener("beforeprint",function(){fitPrintScale(true);});window.addEventListener("afterprint",function(){fitPrintScale(false);});<\/script>');
     win.document.write('</body></html>');
     win.document.close();
   }
