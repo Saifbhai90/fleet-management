@@ -639,7 +639,7 @@ def _vehicle_pending_checkout_block_message(driver_id, vehicle):
         return None
     vno = (getattr(vehicle, 'vehicle_no', None) or '').strip() or 'Vehicle'
     dt = rec.attendance_date.strftime('%d-%m-%Y') if rec.attendance_date else ''
-    ci = rec.check_in.strftime('%I:%M %p') if rec.check_in else ''
+    ci = format_time_ampm(rec.check_in) if rec.check_in else ''
     if d and d.id == driver_id:
         return (
             f'{vno}: aap ka {dt} ka check-in ({ci}) abhi check-out pending hai — '
@@ -650,6 +650,28 @@ def _vehicle_pending_checkout_block_message(driver_id, vehicle):
         f'{vno}: {dname} ka {dt} ka check-in ({ci}) check-out pending hai — '
         'pehle us session ka check-out complete karein, phir is gari par kisi driver ka naya check-in.'
     )
+
+
+def _other_shift_checkin_window_active(driver, tw, now_time):
+    """True jab 'dusri shift' ka check-in window abhi chal raha ho (Morning↔Night)."""
+    if not driver or not tw or not now_time:
+        return False
+    shift_l = (driver.shift or '').strip().lower()
+    if shift_l == 'morning':
+        return _attendance_time_in_window(now_time, tw.get('night_start'), tw.get('night_end'))
+    if shift_l == 'night':
+        return _attendance_time_in_window(now_time, tw.get('morning_start'), tw.get('morning_end'))
+    return False
+
+
+def _attendance_checkin_stamp(rec):
+    dt = rec.attendance_date.strftime('%d-%m-%Y') if rec and rec.attendance_date else ''
+    ci = format_time_ampm(rec.check_in) if rec and rec.check_in else ''
+    return dt, ci
+
+
+def _vehicle_label(vehicle):
+    return (getattr(vehicle, 'vehicle_no', None) or '').strip() or 'Vehicle'
 
 
 def _vehicle_capacity_value(vehicle):
@@ -19075,6 +19097,7 @@ def api_attendance_time_window():
 def _gps_checkin_submit_status(driver_id, vehicle_id=None, project_id=None):
     """Whether GPS check-in can be submitted now (prevents duplicate selfie + misleading local pending)."""
     today = _attendance_local_date()
+    now_time = _attendance_local_time()
     driver = Driver.query.options(joinedload(Driver.vehicle)).get(driver_id) if driver_id else None
     if driver_id and not driver:
         return {'ok': False, 'can_submit': False, 'state': 'blocked', 'message': 'Invalid driver.'}
@@ -19101,23 +19124,76 @@ def _gps_checkin_submit_status(driver_id, vehicle_id=None, project_id=None):
             'state': 'blocked',
             'message': 'Aaj ki date par is driver ki duty Off mark hai — GPS/Camera se attendance nahi lag sakti.',
         }
-    blocked_msg = _manual_checkin_blocked_by_vehicle_rules(driver_id, vehicle, today)
-    if blocked_msg:
-        return {'ok': True, 'can_submit': False, 'state': 'blocked', 'message': blocked_msg}
-    open_rec = _open_gps_driver_attendance_session(driver_id, today)
-    if open_rec:
-        ci_t = open_rec.check_in.strftime('%H:%M') if open_rec.check_in else None
+
+    tw = _get_effective_time_window(driver=driver, vehicle_id=vehicle_id, project_id=project_id)
+    vno = _vehicle_label(vehicle)
+    cap = _vehicle_capacity_value(vehicle)
+
+    open_rec_self = _open_gps_driver_attendance_session(driver_id, today)
+    if open_rec_self and _gps_marked_attendance_row(open_rec_self):
+        ci_t = open_rec_self.check_in.strftime('%H:%M') if open_rec_self.check_in else None
+        dt_s, ci_s = _attendance_checkin_stamp(open_rec_self)
+        if not _other_shift_checkin_window_active(driver, tw, now_time):
+            return {
+                'ok': True,
+                'can_submit': False,
+                'state': 'complete',
+                'message': (
+                    'Aap ka check-in complete ho gaya hai. Dubara Mark Attendance ki zaroorat nahi — '
+                    'check-out ke liye Check-out page use karein.'
+                ),
+                'check_in_time': ci_t,
+                'has_open_session': True,
+                'awaiting_checkout': True,
+            }
         return {
             'ok': True,
             'can_submit': False,
             'state': 'checkout_pending',
             'message': (
-                'Pehle check-out complete karein — check-in session abhi open hai'
-                + ((' (' + ci_t + ')') if ci_t else '') + '.'
+                f'{vno}: aap ka {dt_s} ka check-in ({ci_s}) abhi check-out pending hai — '
+                'pehle us session ka check-out complete karein, phir naya check-in ho ga.'
             ),
             'check_in_time': ci_t,
             'has_open_session': True,
         }
+
+    pending_rec, pending_driver = (None, None)
+    if vehicle and getattr(vehicle, 'id', None):
+        pending_rec, pending_driver = _vehicle_oldest_pending_checkout(vehicle.id)
+
+    if pending_rec and pending_driver and pending_driver.id != driver_id:
+        pd_name = (pending_driver.name or '').strip() or 'Driver'
+        dt_s, ci_s = _attendance_checkin_stamp(pending_rec)
+        other_shift_on = _other_shift_checkin_window_active(pending_driver, tw, now_time)
+        if other_shift_on:
+            return {
+                'ok': True,
+                'can_submit': False,
+                'state': 'blocked',
+                'message': (
+                    f'{vno}: {pd_name} ka check-out abhi pending hai ({dt_s} check-in {ci_s}) — '
+                    'un se check-out karwaen, phir aap ka check-in ho ga.'
+                ),
+                'vehicle_blocked': True,
+                'pending_driver_name': pd_name,
+            }
+        return {
+            'ok': True,
+            'can_submit': False,
+            'state': 'blocked',
+            'message': (
+                f'Is gari ke dusre driver {pd_name} ne {dt_s} ko {ci_s} par attendance laga di hai. '
+                'Jab tak wo check-out nahi karte, aap ki attendance nahi lag sakti.'
+            ),
+            'vehicle_blocked': True,
+            'pending_driver_name': pd_name,
+        }
+
+    blocked_msg = _manual_checkin_blocked_by_vehicle_rules(driver_id, vehicle, today)
+    if blocked_msg:
+        return {'ok': True, 'can_submit': False, 'state': 'blocked', 'message': blocked_msg}
+
     cap = _vehicle_capacity_value(vehicle)
     if _count_driver_segments_with_checkin(driver_id, today) >= cap:
         last = (
@@ -19136,7 +19212,7 @@ def _gps_checkin_submit_status(driver_id, vehicle_id=None, project_id=None):
             'state': 'complete',
             'message': (
                 'Aaj ka check-in pehle ho chuka hai'
-                + ((' (' + ci_t + ')') if ci_t else '')
+                + ((' (' + format_time_ampm(last.check_in) + ')') if last and last.check_in else '')
                 + '. Dubara selfie ya check-in ki zaroorat nahi.'
             ),
             'check_in_time': ci_t,

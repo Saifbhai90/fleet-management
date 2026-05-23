@@ -394,9 +394,9 @@
       btnMarkAttendance.disabled = true;
       return;
     }
-    if ((st === 'checkout_pending' || st === 'blocked') && msg) {
+    if (st === 'checkout_pending' || st === 'blocked') && msg) {
       attendanceActionMessage.className = 'status-box warning mb-2';
-      attendanceActionMessage.innerHTML = '<i class="bi bi-info-circle me-1"></i>' + msg;
+      attendanceActionMessage.innerHTML = '<i class="bi bi-exclamation-triangle me-1"></i>' + msg;
       attendanceActionMessage.classList.remove('d-none');
       btnMarkAttendance.disabled = true;
       return;
