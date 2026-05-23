@@ -1,0 +1,320 @@
+{% extends "base.html" %}
+{% block title %}Day Wise Attendance Report{% endblock %}
+
+{% block content %}
+<style>
+  .daily-attn-page { --daily-accent: #0f766e; --daily-grid-border: #cbd5e1; --daily-header-bg: #0f766e; --daily-frozen-bg: #f8fafc; }
+  .daily-attn-page .filter-card { border-radius: 14px; border: 1px solid #e2e8f0; box-shadow: 0 4px 18px rgba(15, 118, 110, 0.08); }
+  .daily-attn-page .filter-card .form-label { font-size: 0.78rem; font-weight: 600; color: #475569; margin-bottom: 0.2rem; }
+  .daily-attn-shell {
+    border-radius: 12px; overflow: hidden; border: 1px solid #94a3b8;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12); background: #fff;
+  }
+  .daily-attn-toolbar {
+    background: linear-gradient(180deg, #f1f5f9 0%, #e2e8f0 100%);
+    border-bottom: 1px solid #94a3b8; padding: 0.45rem 0.75rem;
+    display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;
+  }
+  .daily-attn-toolbar .title-chip {
+    font-size: 0.82rem; font-weight: 700; color: #0f172a;
+    background: #fff; border: 1px solid #cbd5e1; border-radius: 6px; padding: 0.2rem 0.55rem;
+  }
+  .daily-attn-scroll { overflow: auto; max-height: calc(100vh - 280px); }
+  .daily-attn-table {
+    font-size: 0.72rem; border-collapse: separate; border-spacing: 0; min-width: max-content; width: 100%;
+    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  }
+  .daily-attn-table th, .daily-attn-table td {
+    border: 1px solid var(--daily-grid-border); padding: 4px 6px; text-align: center; white-space: nowrap; vertical-align: middle;
+  }
+  .daily-attn-table thead th {
+    background: var(--daily-header-bg); color: #fff; font-weight: 600; position: sticky; top: 0; z-index: 3;
+  }
+  .daily-attn-table thead tr:nth-child(2) th { top: 29px; z-index: 3; background: #115e59; font-size: 0.68rem; }
+  .daily-attn-table .frozen-col {
+    position: sticky; left: 0; z-index: 4; background: var(--daily-frozen-bg); text-align: left; font-weight: 600;
+    box-shadow: 2px 0 4px rgba(0,0,0,0.06);
+  }
+  .daily-attn-table thead .frozen-col { z-index: 5; background: #134e4a; color: #fff; }
+  .daily-attn-table .frozen-col-2 { left: 42px; }
+  .daily-attn-table .frozen-col-3 { left: 130px; }
+  .daily-attn-table .frozen-col-4 { left: 230px; }
+  .daily-attn-table .frozen-col-5 { left: 320px; }
+  .daily-attn-table .frozen-col-6 { left: 400px; }
+  .daily-attn-table .frozen-col-7 { left: 470px; box-shadow: 2px 0 6px rgba(0,0,0,0.08); }
+  .daily-attn-table tbody tr:nth-child(even) td:not(.frozen-col) { background: #fafafa; }
+  .daily-attn-table tbody tr:hover td { background: #ecfdf5 !important; }
+  .daily-attn-table .cell-present {
+    background: #dcfce7 !important; color: #166534; font-weight: 700;
+  }
+  .daily-attn-table .cell-empty { color: #cbd5e1; }
+  .daily-attn-table .days-total { background: #fef3c7 !important; font-weight: 700; color: #92400e; }
+  .daily-attn-footnote { font-size: 0.75rem; color: #64748b; padding: 0.65rem 0.85rem; background: #f8fafc; border-top: 1px solid #e2e8f0; }
+  @media print {
+    .no-print { display: none !important; }
+    .daily-attn-scroll { max-height: none; overflow: visible; }
+    .daily-attn-table { font-size: 7px; }
+  }
+</style>
+
+<div class="container-fluid daily-attn-page">
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h2 class="mb-0"><i class="bi bi-calendar3-week me-2" style="color:var(--daily-accent);"></i>Day Wise Attendance Report</h2>
+    <div id="dailyReportExportButtons" class="d-flex gap-2 no-print"></div>
+  </div>
+
+  <div class="card filter-card mb-4 no-print">
+    <div class="card-body">
+      <form method="post" action="{{ url_for('driver_attendance_daily_report') }}" id="dailyReportForm">
+        {{ form.hidden_tag() }}
+        <div class="row g-3 align-items-end">
+          <div class="col-md-2 col-lg-1">
+            <label class="form-label">Month</label>
+            <input type="number" name="month" class="form-control form-control-sm" min="1" max="12" value="{{ form.month.data or '' }}" required>
+          </div>
+          <div class="col-md-2 col-lg-1">
+            <label class="form-label">Year</label>
+            <input type="number" name="year" class="form-control form-control-sm" min="2020" max="2030" value="{{ form.year.data or '' }}" required>
+          </div>
+          <div class="col-md-2 col-lg-2">
+            <label class="form-label">Project</label>
+            <select name="project_id" id="dailyProjectSelect" class="form-select form-select-sm search-select" {% if disable_project %}disabled{% endif %}>
+              {% for val, label in form.project_id.choices %}
+              <option value="{{ val }}" {% if form.project_id.data == val %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+            {% if disable_project %}<input type="hidden" name="project_id" value="{{ form.project_id.data or 0 }}">{% endif %}
+          </div>
+          <div class="col-md-2 col-lg-2">
+            <label class="form-label">District</label>
+            <select name="district_id" id="dailyDistrictSelect" class="form-select form-select-sm search-select" {% if disable_district %}disabled{% endif %}>
+              {% for val, label in form.district_id.choices %}
+              <option value="{{ val }}" {% if form.district_id.data == val %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+            {% if disable_district %}<input type="hidden" name="district_id" value="{{ form.district_id.data or 0 }}">{% endif %}
+          </div>
+          <div class="col-md-2 col-lg-2">
+            <label class="form-label">Vehicle</label>
+            <select name="vehicle_id" id="dailyVehicleSelect" class="form-select form-select-sm search-select">
+              <option value="0">-- All Vehicles --</option>
+              {% for v_id, v_label in vehicle_choices %}
+              <option value="{{ v_id }}" {% if selected_vehicle_id == v_id %}selected{% endif %}>{{ v_label }}</option>
+              {% endfor %}
+              {% if has_single_scope and single_vehicle and not vehicle_choices %}
+              <option value="{{ single_vehicle.id }}" selected>{{ single_vehicle.vehicle_no }}</option>
+              {% endif %}
+            </select>
+          </div>
+          <div class="col-md-2 col-lg-2">
+            <label class="form-label">Shift</label>
+            {% set allowed_shifts = session.get('allowed_shifts') or [] %}
+            <select name="shift" id="dailyShiftSelect" class="form-select form-select-sm search-select">
+              <option value="">-- All Shifts --</option>
+              {% if not allowed_shifts %}
+              <option value="Morning" {% if (selected_shift or '') == 'Morning' %}selected{% endif %}>Morning</option>
+              <option value="Night" {% if (selected_shift or '') == 'Night' %}selected{% endif %}>Night</option>
+              {% else %}
+              {% for s in allowed_shifts %}
+              <option value="{{ s }}" {% if (selected_shift or '') == s %}selected{% endif %}>{{ s }}</option>
+              {% endfor %}
+              {% endif %}
+            </select>
+          </div>
+          <div class="col-md-2 col-lg-2">
+            <label class="form-label">Driver</label>
+            <select name="driver_id" id="dailyDriverSelect" class="form-select form-select-sm search-select">
+              <option value="0">-- All Drivers --</option>
+              {% for d in vehicle_drivers %}
+              <option value="{{ d.id }}" {% if selected_driver_id == d.id %}selected{% endif %}>{{ d.name }} ({{ d.driver_id or '-' }})</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-4 col-lg-2">
+            <label class="form-label">Search</label>
+            <div class="input-group input-group-sm">
+              <input type="text" name="search" class="form-control" placeholder="Vehicle, Driver..." value="{{ form.search.data or '' }}">
+              <button type="submit" class="btn btn-success"><i class="bi bi-search me-1"></i>Show</button>
+            </div>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  {% if report %}
+  <div class="daily-attn-shell">
+    <div class="daily-attn-toolbar no-print">
+      <span class="title-chip"><i class="bi bi-table me-1"></i>{{ report_title }}</span>
+      <div class="d-flex align-items-center gap-2">
+        <input type="text" id="dailyTableSearch" class="form-control form-control-sm" style="max-width:200px;height:30px;" placeholder="Search in grid...">
+      </div>
+    </div>
+    <div class="daily-attn-scroll">
+      <table class="daily-attn-table" id="dailyReportTable">
+        <thead>
+          <tr>
+            <th rowspan="2" class="frozen-col frozen-col-1" style="min-width:42px;">Sr</th>
+            <th rowspan="2" class="frozen-col frozen-col-2" style="min-width:88px;">District</th>
+            <th rowspan="2" class="frozen-col frozen-col-3" style="min-width:100px;">Project</th>
+            <th rowspan="2" class="frozen-col frozen-col-4" style="min-width:90px;">Vehicle</th>
+            <th rowspan="2" class="frozen-col frozen-col-5" style="min-width:80px;">Shift</th>
+            <th rowspan="2" class="frozen-col frozen-col-6" style="min-width:70px;">Driver</th>
+            <th rowspan="2" class="frozen-col frozen-col-7 days-total" style="min-width:72px;">Days<br>in Month</th>
+            {% for d in day_headers %}
+            <th colspan="2">{{ d.strftime('%d-%b-%y') }}</th>
+            {% endfor %}
+          </tr>
+          <tr>
+            {% for d in day_headers %}
+            <th>M</th><th>E</th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in report %}
+          <tr>
+            <td class="frozen-col frozen-col-1">{{ loop.index }}</td>
+            <td class="frozen-col frozen-col-2">{{ row.district_name }}</td>
+            <td class="frozen-col frozen-col-3">{{ row.project_name }}</td>
+            <td class="frozen-col frozen-col-4">{{ row.vehicle.vehicle_no if row.vehicle else '-' }}</td>
+            <td class="frozen-col frozen-col-5">{{ row.shift }}</td>
+            <td class="frozen-col frozen-col-6"><small>{{ row.driver_name }}</small></td>
+            <td class="frozen-col frozen-col-7 days-total">{{ row.days_in_month }}</td>
+            {% for d in day_headers %}
+            {% set day_num = d.day %}
+            <td class="{% if row.grid.get((day_num, 'M')) %}cell-present{% else %}cell-empty{% endif %}">{{ row.grid.get((day_num, 'M'), '') or '·' }}</td>
+            <td class="{% if row.grid.get((day_num, 'E')) %}cell-present{% else %}cell-empty{% endif %}">{{ row.grid.get((day_num, 'E'), '') or '·' }}</td>
+            {% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="daily-attn-footnote">
+      <strong>M</strong> = Morning duty · <strong>E</strong> = Evening duty · <strong>P</strong> = complete attendance (check-in + check-out dono maujood).
+      Days in Month = total complete sessions is month mein.
+    </div>
+  </div>
+  {% else %}
+  <div class="alert alert-info border-0 no-print">
+    <i class="bi bi-info-circle me-2"></i>Month, year aur filters select karke <strong>Show</strong> dabayein — day-wise M/E grid dikhegi.
+  </div>
+  {% endif %}
+</div>
+
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
+<link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.bootstrap5.min.css">
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.1/js/dataTables.buttons.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.bootstrap5.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.html5.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.print.min.js"></script>
+<script>
+(function() {
+  var projectSelect = document.getElementById('dailyProjectSelect');
+  var districtSelect = document.getElementById('dailyDistrictSelect');
+  var vehicleSelect = document.getElementById('dailyVehicleSelect');
+  var shiftSelect = document.getElementById('dailyShiftSelect');
+  var driverSelect = document.getElementById('dailyDriverSelect');
+  var scope = {
+    projects: {{ (session.get('allowed_projects') or []) | tojson }},
+    districts: {{ (session.get('allowed_districts') or []) | tojson }},
+    vehicles: {{ (session.get('allowed_vehicles') or []) | tojson }},
+    shifts: {{ (session.get('allowed_shifts') or []) | tojson }}
+  };
+  var hasSingle = scope.projects.length === 1 && scope.districts.length === 1 && scope.vehicles.length === 1 && scope.shifts.length === 1;
+
+  function loadDistricts(projectId) {
+    if (hasSingle || !districtSelect) return;
+    districtSelect.innerHTML = '<option value="0">-- All Districts --</option>';
+    if (!projectId || projectId === '0') {
+      if (vehicleSelect) vehicleSelect.innerHTML = '<option value="0">-- All Vehicles --</option>';
+      return;
+    }
+    fetch('/api/filter/districts-by-project?project_id=' + projectId)
+      .then(function(r) { return r.json(); })
+      .then(function(districts) {
+        districts.forEach(function(d) {
+          var opt = document.createElement('option');
+          opt.value = d.id;
+          opt.textContent = d.name;
+          districtSelect.appendChild(opt);
+        });
+        loadVehicles();
+      });
+  }
+
+  function loadVehicles() {
+    if (!vehicleSelect) return;
+    var pid = projectSelect ? (projectSelect.value || '0') : '0';
+    var did = districtSelect ? (districtSelect.value || '0') : '0';
+    vehicleSelect.innerHTML = '<option value="0">-- All Vehicles --</option>';
+    fetch('/api/filter/all-vehicles-by-project-district?project_id=' + encodeURIComponent(pid) + '&district_id=' + encodeURIComponent(did))
+      .then(function(r) { return r.json(); })
+      .then(function(vehicles) {
+        vehicles.forEach(function(v) {
+          var opt = document.createElement('option');
+          opt.value = v.id;
+          opt.textContent = v.vehicle_no + (v.vehicle_type ? ' (' + v.vehicle_type + ')' : '');
+          vehicleSelect.appendChild(opt);
+        });
+      });
+  }
+
+  function refreshDriverDropdown() {
+    if (!driverSelect) return;
+    var pid = projectSelect ? (projectSelect.value || '0') : '0';
+    var did = districtSelect ? (districtSelect.value || '0') : '0';
+    var vid = vehicleSelect ? (vehicleSelect.value || '0') : '0';
+    var sh = shiftSelect ? (shiftSelect.value || '') : '';
+    fetch('/api/attendance/filtered-drivers?project_id=' + pid + '&district_id=' + did + '&vehicle_id=' + vid + '&shift=' + encodeURIComponent(sh))
+      .then(function(r) { return r.json(); })
+      .then(function(arr) {
+        var cur = driverSelect.value;
+        driverSelect.innerHTML = '<option value="0">-- All Drivers --</option>';
+        arr.forEach(function(d) {
+          var opt = document.createElement('option');
+          opt.value = d.id;
+          opt.textContent = d.name + ' (' + (d.driver_id || '-') + ')';
+          if (String(d.id) === String(cur)) opt.selected = true;
+          driverSelect.appendChild(opt);
+        });
+      });
+  }
+
+  if (projectSelect) projectSelect.addEventListener('change', function() { loadDistricts(this.value); refreshDriverDropdown(); });
+  if (districtSelect) districtSelect.addEventListener('change', function() { loadVehicles(); refreshDriverDropdown(); });
+  if (vehicleSelect) vehicleSelect.addEventListener('change', refreshDriverDropdown);
+  if (shiftSelect) shiftSelect.addEventListener('change', refreshDriverDropdown);
+
+  var searchInput = document.getElementById('dailyTableSearch');
+  if (searchInput) {
+    searchInput.addEventListener('input', function() {
+      var q = this.value.toLowerCase();
+      document.querySelectorAll('#dailyReportTable tbody tr').forEach(function(tr) {
+        tr.style.display = tr.textContent.toLowerCase().indexOf(q) >= 0 ? '' : 'none';
+      });
+    });
+  }
+
+  {% if report %}
+  if (typeof $ !== 'undefined' && $.fn.DataTable) {
+    var dt = $('#dailyReportTable').DataTable({
+      paging: false, searching: false, ordering: false, info: false,
+      scrollX: true, scrollCollapse: true,
+      dom: 'Bfrtip',
+      buttons: [
+        { extend: 'excelHtml5', className: 'btn btn-sm btn-success', text: '<i class="bi bi-file-earmark-excel me-1"></i>Excel' },
+        { extend: 'print', className: 'btn btn-sm btn-outline-secondary', text: '<i class="bi bi-printer me-1"></i>Print',
+          customize: window._dtPrintCustomize ? window._dtPrintCustomize('Day Wise Attendance Report', '#0f766e', 'calendar3-week') : undefined }
+      ]
+    });
+    dt.buttons().container().appendTo('#dailyReportExportButtons');
+  }
+  {% endif %}
+})();
+</script>
+{% endblock %}

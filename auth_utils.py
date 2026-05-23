@@ -323,6 +323,7 @@ ENDPOINT_PERMISSION_MAP = [
     ('ai_debug_status', 'report_ai'),
     ('ai.ai_debug_status', 'report_ai'),
     ('driver_attendance_report', 'driver_attendance_report'),
+    ('driver_attendance_daily_report', 'driver_attendance_report'),
     ('active_drivers_report', 'active_drivers_report'),
     ('driver_salary_slip', 'driver_salary_slip'),
     ('api_salary_slip_driver', 'driver_salary_slip'),

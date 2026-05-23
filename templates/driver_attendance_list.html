@@ -289,16 +289,18 @@
                   {% if can_att_list_manual_edit|default(false) or can_att_list_manual_delete|default(false) %}
                   <br>
                   {% if can_att_list_manual_edit|default(false) %}
-                  <a href="{{ url_for('driver_attendance_manual_checkin') }}?driver_id={{ driver.id }}&date={{ rec.attendance_date.strftime('%d-%m-%Y') }}&attendance_id={{ rec.id }}&back_to=attendance_list{% if list_qs %}&{{ list_qs }}{% endif %}" class="small text-decoration-none">Edit check-in</a>{% endif %}{% if can_att_list_manual_edit|default(false) and can_att_list_manual_delete|default(false) %}<span class="text-muted mx-1">·</span>{% endif %}{% if can_att_list_manual_delete|default(false) %}
+                  <a href="{{ url_for('driver_attendance_manual_checkin') }}?driver_id={{ driver.id }}&date={{ rec.attendance_date.strftime('%d-%m-%Y') }}&attendance_id={{ rec.id }}&back_to=attendance_list{% if list_qs %}&{{ list_qs }}{% endif %}" class="small text-decoration-none">Edit check-in</a>{% endif %}                  {% if can_att_list_manual_edit|default(false) and can_att_list_manual_delete|default(false) %}<span class="text-muted mx-1">·</span>{% endif %}{% if can_att_list_manual_delete|default(false) and not rec.check_out %}
                   <form method="post" action="{{ url_for('driver_attendance_list_clear_times') }}" class="d-inline"
-                    onsubmit="return confirm('Check-in ka time, GPS aur photo hat jaye ga. Agar check-out tha to wo bhi hat jaye ga. Status record rahay ga. Continue?');">
+                    onsubmit="return confirm('Check-in ka time, GPS aur photo hat jaye ga. Sirf GPS attendance thi to poori row list se hat jayegi. Continue?');">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="hidden" name="clear_kind" value="checkin">
                     <input type="hidden" name="attendance_id" value="{{ rec.id }}">
                     <input type="hidden" name="date" value="{{ rec.attendance_date.strftime('%d-%m-%Y') }}">
                     {{ att_list_redirect_hidden() }}
                     <button type="submit" class="btn btn-link btn-sm text-danger p-0 align-baseline text-decoration-none">Delete check-in</button>
-                  </form>{% endif %}
+                  </form>{% elif can_att_list_manual_delete|default(false) and rec.check_out %}
+                  <br><small class="text-muted">Pehle check-out delete karein</small>
+                  {% endif %}
                   {% endif %}
                 {% else %}-{% endif %}
               </td>

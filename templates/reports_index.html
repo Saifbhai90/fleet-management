@@ -310,6 +310,10 @@
               <i class="bi bi-star text-warning me-2"></i>Attendance Report
               <small class="text-muted d-block ms-4">Monthly driver attendance summary</small>
             </a>
+            <a href="{{ url_for('driver_attendance_daily_report') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
+              <i class="bi bi-star text-warning me-2"></i>Day Wise Attendance Report
+              <small class="text-muted d-block ms-4">Daily M/E grid — complete check-in + check-out only</small>
+            </a>
             {% endif %}
             {% if can_see_page('driver_attendance_tra_report') %}
             <a href="{{ url_for('driver_attendance_tra_report') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
