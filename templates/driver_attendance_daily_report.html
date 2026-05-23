@@ -21,9 +21,11 @@
     background: #fff; border: 1px solid #cbd5e1; border-radius: 6px; padding: 0.2rem 0.55rem;
   }
   .daily-attn-scroll { overflow: auto; max-height: calc(100vh - 200px); }
+  .daily-attn-shell.daily-grid-pending .daily-attn-scroll { visibility: hidden; }
+  .daily-attn-shell.daily-grid-ready .daily-attn-scroll { visibility: visible; }
   .daily-attn-table {
     font-size: 0.72rem; border-collapse: collapse; width: max-content;
-    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif; table-layout: auto;
+    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif; table-layout: fixed;
   }
   .daily-attn-table th, .daily-attn-table td {
     border: 1px solid var(--daily-grid-border); padding: 3px 5px; text-align: center;
@@ -37,26 +39,32 @@
   .daily-attn-table thead tr.hdr-row-2 th {
     top: var(--daily-hdr-row1-h); background: #115e59; font-size: 0.65rem; z-index: 3;
   }
-  .daily-attn-table thead .date-hdr { font-size: 0.65rem; padding: 2px 3px; min-width: 22px; }
+  .daily-attn-table thead .date-hdr { font-size: 0.65rem; padding: 2px 1px; width: 34px; min-width: 34px; max-width: 34px; }
+  .daily-attn-table .info-col { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .daily-attn-table .info-col.fc-6 { white-space: nowrap; text-overflow: ellipsis; max-width: none; }
+  .daily-attn-table .fc-1 { left: 0; text-align: center; width: 32px; min-width: 32px; max-width: 32px; }
+  .daily-attn-table .fc-2 { left: 32px; width: 88px; min-width: 88px; max-width: 100px; }
+  .daily-attn-table .fc-3 { left: 120px; width: 72px; min-width: 72px; max-width: 82px; }
+  .daily-attn-table .fc-4 { left: 192px; width: 78px; min-width: 78px; max-width: 88px; }
+  .daily-attn-table .fc-5 { left: 270px; width: 52px; min-width: 52px; max-width: 58px; }
+  .daily-attn-table .fc-6 { left: 322px; width: 120px; min-width: 120px; max-width: 150px; }
+  .daily-attn-table .fc-7 { left: 442px; width: 36px; min-width: 36px; max-width: 36px; text-align: center; box-shadow: 2px 0 6px rgba(0,0,0,0.06); }
+  .daily-attn-table .day-col { width: 16px; min-width: 16px; max-width: 16px; white-space: nowrap; padding: 1px 2px; font-size: 0.65rem; }
+  .daily-attn-table .sum-col { width: 36px; min-width: 36px; max-width: 42px; background: #f0fdf4; font-weight: 600; white-space: nowrap; padding: 2px 3px; font-size: 0.62rem; }
   .daily-attn-table thead .days-total-hdr,
   .daily-attn-table tbody .days-total,
   .daily-attn-table tfoot .days-total {
     background: #fef3c7 !important; color: #92400e !important; font-weight: 700;
     border: 1px solid #fcd34d !important;
   }
+  .daily-attn-table thead .days-total-hdr { border-bottom: 1px solid #fcd34d !important; }
   .daily-attn-table .frozen-col {
     position: sticky; z-index: 4; background: var(--daily-frozen-bg); text-align: left; font-weight: 600;
     box-shadow: 2px 0 4px rgba(0,0,0,0.04);
   }
   .daily-attn-table thead .frozen-col { z-index: 6; background: #134e4a; color: #fff; }
   .daily-attn-table thead .frozen-col.days-total-hdr { background: #fef3c7 !important; color: #92400e !important; }
-  .daily-attn-table .info-col { white-space: nowrap; width: 1%; }
-  .daily-attn-table .info-col.fc-6 { white-space: normal; word-break: break-word; max-width: 160px; }
-  .daily-attn-table .fc-1 { left: 0; text-align: center; }
-  .daily-attn-table .fc-7 { text-align: center; box-shadow: 2px 0 6px rgba(0,0,0,0.06); }
-  .daily-attn-table .day-col { width: 1%; min-width: 20px; white-space: nowrap; padding: 2px; font-size: 0.68rem; }
-  .daily-attn-table .sum-col { width: 1%; background: #f0fdf4; font-weight: 600; white-space: nowrap; padding: 2px 4px; }
-  .daily-attn-table thead .sum-col { background: #166534; color: #fff; font-size: 0.62rem; }
+  .daily-attn-table thead .sum-col { background: #166534; color: #fff; }
   .daily-attn-table tbody tr:nth-child(even) td:not(.frozen-col):not(.sum-col) { background: #fafafa; }
   .daily-attn-table tbody tr:hover td { background: #ecfdf5 !important; }
   .daily-attn-table .cell-present { background: #dcfce7 !important; color: #166534; font-weight: 700; }
@@ -146,7 +154,7 @@
   </div>
 
   {% if report %}
-  <div class="daily-attn-shell" id="dailyReportResults">
+  <div class="daily-attn-shell daily-grid-pending" id="dailyReportResults">
     <div class="daily-attn-toolbar no-print">
       <span class="title-chip"><i class="bi bi-table me-1"></i>{{ report_title }}</span>
       <div class="d-flex align-items-center gap-2">
@@ -321,34 +329,33 @@
     var r1 = tbl.querySelector('thead tr.hdr-row-1');
     if (!r1) return;
     var h = Math.ceil(r1.getBoundingClientRect().height);
-    tbl.closest('.daily-attn-page').style.setProperty('--daily-hdr-row1-h', h + 'px');
+    var page = tbl.closest('.daily-attn-page');
+    if (page) page.style.setProperty('--daily-hdr-row1-h', h + 'px');
   }
 
-  function autoFitFrozenColumns() {
-    var tbl = document.getElementById('dailyReportTable');
-    if (!tbl) return;
-    var groups = ['fc-1', 'fc-2', 'fc-3', 'fc-4', 'fc-5', 'fc-6', 'fc-7'];
-    var left = 0;
-    groups.forEach(function(cls) {
-      var cells = tbl.querySelectorAll('.' + cls);
-      if (!cells.length) return;
-      var maxW = 0;
-      cells.forEach(function(c) {
-        c.style.width = 'auto';
-        c.style.minWidth = '0';
-        maxW = Math.max(maxW, c.scrollWidth);
-      });
-      var floor = cls === 'fc-1' ? 28 : (cls === 'fc-7' ? 32 : 36);
-      var cap = cls === 'fc-6' ? 160 : (cls === 'fc-2' || cls === 'fc-3' ? 110 : 90);
-      var w = Math.min(Math.max(maxW + 8, floor), cap);
-      cells.forEach(function(c) {
-        c.style.minWidth = w + 'px';
-        c.style.width = w + 'px';
-        if (c.classList.contains('frozen-col')) c.style.left = left + 'px';
-      });
-      left += w;
-    });
+  function revealDailyGrid() {
+    var shell = document.getElementById('dailyReportResults');
     syncStickyHeaderHeight();
+    if (shell) {
+      shell.classList.remove('daily-grid-pending');
+      shell.classList.add('daily-grid-ready');
+    }
+  }
+
+  function waitForFleetThenInit(attempts) {
+    attempts = attempts || 0;
+    var tbl = document.getElementById('dailyReportTable');
+    if (!tbl) {
+      revealDailyGrid();
+      return;
+    }
+    if (tbl.dataset.ftEnhanced === '1' || attempts > 50) {
+      revealDailyGrid();
+      updateDayFootTotals();
+      scrollToReport();
+      return;
+    }
+    setTimeout(function() { waitForFleetThenInit(attempts + 1); }, 40);
   }
 
   function updateDayFootTotals() {
@@ -426,10 +433,11 @@
 
     var r2 = document.createElement('tr');
     r2.className = 'hdr-row-2';
-    src.querySelectorAll('thead tr.hdr-row-2 th.day-col').forEach(function() {
+    var dayCount = src.querySelectorAll('thead tr.hdr-row-1 th.date-hdr').length;
+    for (var di = 0; di < dayCount; di++) {
       r2.appendChild(th('M', { cls: 'day-col' }));
       r2.appendChild(th('E', { cls: 'day-col' }));
-    });
+    }
     thead.appendChild(r2);
     tbl.appendChild(thead);
 
@@ -517,7 +525,7 @@
       '.pv-scale-wrap{padding:8px 10px 14px;overflow:hidden;}',
       '.pv-scale-inner{transform-origin:top left;display:inline-block;}',
       '.daily-preview-table{border-collapse:collapse;table-layout:auto;width:max-content;background:#fff;}',
-      '.daily-preview-table th,.daily-preview-table td{border:1px solid #94a3b8;padding:1px 2px;text-align:center;vertical-align:middle;font-size:6.5px;line-height:1.1;}',
+      '.daily-preview-table th,.daily-preview-table td{border:1px solid #94a3b8;padding:2px 3px;text-align:center;vertical-align:middle;font-size:7px;line-height:1.15;}',
       '.daily-preview-table thead th{background:#0f766e;color:#fff;font-weight:700;}',
       '.daily-preview-table thead tr.hdr-row-2 th{background:#115e59;font-size:6px;padding:1px;}',
       '.daily-preview-table .pv-dp,.daily-preview-table .pv-ds,.daily-preview-table .pv-veh{text-align:left;white-space:normal;word-break:break-word;}',
@@ -607,20 +615,18 @@
   }
 
   function initDailyGrid() {
-    autoFitFrozenColumns();
-    updateDayFootTotals();
-    scrollToReport();
-    window.addEventListener('resize', function() { autoFitFrozenColumns(); });
+    waitForFleetThenInit(0);
+    window.addEventListener('resize', syncStickyHeaderHeight);
     document.addEventListener('fleet:after-filter', function() {
       refreshRowVisibility();
-      autoFitFrozenColumns();
+      syncStickyHeaderHeight();
     });
   }
 
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function() { setTimeout(initDailyGrid, 100); });
+    document.addEventListener('DOMContentLoaded', initDailyGrid);
   } else {
-    setTimeout(initDailyGrid, 100);
+    initDailyGrid();
   }
   {% endif %}
 })();
