@@ -20683,6 +20683,7 @@ def driver_attendance_daily_report():
     """Day-wise attendance grid: M/E slots per calendar day (complete check-in + check-out only)."""
     from auth_utils import get_user_context
     from calendar import monthrange
+    from datetime import date
 
     user_id = session.get('user_id')
     user_context = get_user_context(user_id) if user_id else {}
@@ -20834,6 +20835,17 @@ def driver_attendance_daily_report():
     vehicle_drivers = vd_q.order_by(Driver.name).all()
     selected_driver_id = (request.form.get('driver_id', type=int) or 0) if request.method == 'POST' else 0
 
+    cal_today_day = None
+    if report is not None:
+        try:
+            _m = int(form.month.data)
+            _y = int(form.year.data)
+            _today = date.today()
+            if _m == _today.month and _y == _today.year:
+                cal_today_day = _today.day
+        except (TypeError, ValueError):
+            cal_today_day = None
+
     return render_template(
         'driver_attendance_daily_report.html',
         form=form,
@@ -20853,6 +20865,7 @@ def driver_attendance_daily_report():
         grand_totals=grand_totals,
         status_columns=status_columns,
         filter_message=filter_message,
+        cal_today_day=cal_today_day,
     )
 
 

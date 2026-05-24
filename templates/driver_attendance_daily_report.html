@@ -162,6 +162,15 @@
   }
   .daily-legend-note i { color: #0f766e; font-size: 0.85rem; }
   #dailyReportExportButtons .btn { min-width: 118px; }
+  .daily-export-native { display: none !important; }
+  html.capacitor-native .daily-export-web { display: none !important; }
+  html.capacitor-native .daily-export-native {
+    display: inline-flex !important; align-items: center; gap: 0.5rem;
+  }
+  html.capacitor-native #dailyReportExportButtons .daily-export-web,
+  html.capacitor-native #dailyReportExportButtons .btn:not(.btn-daily-export-icon) {
+    display: none !important;
+  }
   .daily-filter-required { color: #dc2626; }
 
   /* Web: native card layout hidden */
@@ -193,10 +202,65 @@
   html.capacitor-native .daily-attn-page #dailyReportExportButtons .btn-daily-export-icon:disabled {
     opacity: 0.55;
   }
-  html.capacitor-native #dailyAttendanceLegend .daily-legend-group[aria-label="Shift slots"],
-  html.capacitor-native #dailyAttendanceLegend > .daily-legend-sep:first-of-type {
-    display: none !important;
+  html.capacitor-native .daily-attn-footnote {
+    padding: 0.5rem 0.75rem 0.65rem;
   }
+  html.capacitor-native .daily-legend-toggle {
+    display: inline-flex; align-items: center; justify-content: center; gap: 0.35rem;
+    width: 36px; height: 36px; padding: 0; border: 1px solid #bae6fd;
+    background: #fff; border-radius: 50%; color: #0f766e; font-size: 1.05rem;
+    box-shadow: 0 2px 8px rgba(15, 118, 110, 0.12); cursor: pointer;
+    transition: background 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+  }
+  html.capacitor-native .daily-legend-toggle:active { transform: scale(0.96); }
+  html.capacitor-native #dailyAttendanceLegend.is-legend-open .daily-legend-toggle {
+    background: #0f766e; color: #fff; border-color: #0f766e;
+  }
+  html.capacitor-native .daily-legend-toggle__label { display: none; }
+  html.capacitor-native .daily-legend-panel {
+    display: none; margin-top: 0.65rem; padding-top: 0.65rem;
+    border-top: 1px solid #e2e8f0;
+    animation: dailyLegendIn 0.22s ease;
+  }
+  html.capacitor-native #dailyAttendanceLegend.is-legend-open .daily-legend-panel {
+    display: block;
+  }
+  @keyframes dailyLegendIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  html.capacitor-native #dailyAttendanceLegend .daily-attn-legend {
+    flex-direction: column; align-items: stretch; gap: 0.7rem;
+  }
+  html.capacitor-native #dailyAttendanceLegend .daily-legend-group {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 0.4rem;
+    padding: 0.5rem 0.55rem; background: #fff; border: 1px solid #e2e8f0;
+    border-radius: 12px; box-shadow: 0 1px 4px rgba(15, 23, 42, 0.05);
+  }
+  html.capacitor-native #dailyAttendanceLegend .daily-legend-group-label {
+    margin-right: 0; margin-bottom: 0.05rem; font-size: 0.62rem;
+  }
+  html.capacitor-native #dailyAttendanceLegend .daily-legend-group {
+    flex-direction: row; flex-wrap: wrap; align-items: center;
+  }
+  html.capacitor-native #dailyAttendanceLegend .daily-legend-group-label {
+    flex: 0 0 100%; width: 100%;
+  }
+  html.capacitor-native #dailyAttendanceLegend .daily-legend-sep { display: none; }
+  html.capacitor-native #dailyAttendanceLegend .daily-legend-note {
+    margin-top: 0.55rem; font-size: 0.68rem; padding: 0.45rem 0.5rem;
+    background: #f8fafc; border-radius: 10px; border: 1px solid #e2e8f0;
+  }
+  html.capacitor-native #dailyAttendanceLegend:not(.is-legend-open) {
+    display: flex; justify-content: center; padding: 0.45rem 0.75rem;
+  }
+  html.capacitor-native #dailyAttendanceLegend.is-legend-open {
+    display: block; padding: 0.55rem 0.75rem 0.65rem;
+  }
+  html.capacitor-native #dailyAttendanceLegend.is-legend-open .daily-legend-toggle {
+    margin: 0 auto 0; display: flex;
+  }
+  .daily-legend-toggle { display: none; }
   html.capacitor-native .daily-attn-page #dailyTableSearch {
     max-width: none !important; width: 100%; height: 38px !important;
   }
@@ -211,7 +275,7 @@
   }
   html.capacitor-native .daily-driver-card.is-hidden { display: none !important; }
   html.capacitor-native .daily-driver-card__head {
-    display: flex; align-items: center; gap: 0.5rem; width: 100%;
+    display: flex; align-items: flex-start; gap: 0.5rem; width: 100%;
     padding: 0.7rem 0.75rem; border: none; text-align: left;
     background: linear-gradient(135deg, #0f766e, #115e59); color: #fff;
   }
@@ -229,14 +293,36 @@
   html.capacitor-native .daily-native-list.is-multi-driver .daily-driver-card.is-expanded .daily-driver-card__sr {
     background: rgba(255,255,255,0.2); color: #fff;
   }
-  html.capacitor-native .daily-native-list.is-multi-driver .daily-driver-card__score {
-    background: #f0fdfa; color: #0f766e;
+  html.capacitor-native .daily-driver-card__present { margin-top: 0.2rem; width: 100%; }
+  html.capacitor-native .daily-driver-card__present-text {
+    margin: 0 0 0.35rem; font-size: 0.72rem; line-height: 1.3; opacity: 0.95;
   }
-  html.capacitor-native .daily-native-list.is-multi-driver .daily-driver-card.is-expanded .daily-driver-card__score {
-    background: rgba(255,255,255,0.18); color: #fff;
+  html.capacitor-native .daily-driver-card__present-text strong {
+    font-weight: 800; font-size: 0.78rem;
+  }
+  html.capacitor-native .daily-driver-card__progress {
+    height: 7px; border-radius: 999px; overflow: hidden;
+    background: rgba(255, 255, 255, 0.28);
+  }
+  html.capacitor-native .daily-driver-card__progress-fill {
+    display: block; height: 100%; border-radius: 999px;
+    background: linear-gradient(90deg, #4ade80, #22c55e);
+    min-width: 0; transition: width 0.35s ease;
+  }
+  html.capacitor-native .daily-native-list.is-multi-driver .daily-driver-card__progress {
+    background: #d1fae5;
+  }
+  html.capacitor-native .daily-native-list.is-multi-driver .daily-driver-card.is-expanded .daily-driver-card__progress {
+    background: rgba(255, 255, 255, 0.28);
+  }
+  html.capacitor-native .daily-native-list.is-multi-driver .daily-driver-card__progress-fill {
+    background: linear-gradient(90deg, #22c55e, #16a34a);
+  }
+  html.capacitor-native .daily-native-list.is-multi-driver .daily-driver-card.is-expanded .daily-driver-card__progress-fill {
+    background: linear-gradient(90deg, #4ade80, #22c55e);
   }
   html.capacitor-native .daily-driver-card__chev {
-    flex-shrink: 0; font-size: 1rem; opacity: 0.85;
+    flex-shrink: 0; font-size: 1rem; opacity: 0.85; margin-top: 0.2rem;
     transition: transform 0.2s ease;
   }
   html.capacitor-native .daily-native-list.is-single-driver .daily-driver-card__chev { display: none; }
@@ -247,17 +333,13 @@
     display: block;
   }
   html.capacitor-native .daily-driver-card__sr {
-    flex-shrink: 0; width: 28px; height: 28px; border-radius: 8px;
+    flex-shrink: 0; width: 28px; height: 28px; border-radius: 8px; margin-top: 0.05rem;
     background: rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center;
     font-size: 0.78rem; font-weight: 800;
   }
   html.capacitor-native .daily-driver-card__title-wrap { min-width: 0; flex: 1; }
   html.capacitor-native .daily-driver-card__name {
     font-size: 0.95rem; font-weight: 700; line-height: 1.3; word-break: break-word;
-  }
-  html.capacitor-native .daily-driver-card__score {
-    display: inline-block; margin-top: 0.15rem; font-size: 0.72rem; font-weight: 700;
-    background: rgba(255,255,255,0.18); border-radius: 999px; padding: 0.12rem 0.5rem;
   }
   html.capacitor-native .daily-driver-card__meta {
     display: grid; grid-template-columns: 1fr 1fr; gap: 0.45rem 0.55rem;
@@ -301,6 +383,46 @@
     box-shadow: 0 2px 6px rgba(15, 118, 110, 0.18);
     outline: 1px solid rgba(15, 118, 110, 0.2);
   }
+  html.capacitor-native .daily-cal-day--today {
+    position: relative; z-index: 2;
+    background: linear-gradient(165deg, #fffbeb 0%, #fef9c3 48%, #fff 100%) !important;
+    box-shadow:
+      0 0 0 2px #f59e0b,
+      0 0 14px rgba(245, 158, 11, 0.45),
+      0 4px 12px rgba(245, 158, 11, 0.2) !important;
+    outline: none;
+    animation: dailyCalTodayGlow 2.8s ease-in-out infinite;
+  }
+  html.capacitor-native .daily-cal-day--today.daily-cal-day--active {
+    background: linear-gradient(165deg, #ecfdf5 0%, #fef9c3 55%, #f0fdf4 100%) !important;
+    box-shadow:
+      0 0 0 2px #f59e0b,
+      0 0 12px rgba(15, 118, 110, 0.3),
+      0 0 16px rgba(245, 158, 11, 0.42) !important;
+  }
+  @keyframes dailyCalTodayGlow {
+    0%, 100% {
+      box-shadow:
+        0 0 0 2px #fbbf24,
+        0 0 10px rgba(245, 158, 11, 0.38),
+        0 3px 10px rgba(245, 158, 11, 0.18);
+    }
+    50% {
+      box-shadow:
+        0 0 0 3px #f59e0b,
+        0 0 18px rgba(245, 158, 11, 0.58),
+        0 4px 14px rgba(245, 158, 11, 0.28);
+    }
+  }
+  html.capacitor-native .daily-cal-day--today .daily-cal-day-num {
+    background: linear-gradient(135deg, #0f766e 0%, #059669 100%);
+    color: #fff;
+    box-shadow: 0 1px 5px rgba(15, 118, 110, 0.4);
+  }
+  html.capacitor-native .daily-cal-day--today.daily-cal-day--active .daily-cal-day-num {
+    background: linear-gradient(135deg, #047857 0%, #0f766e 100%);
+    color: #fff;
+  }
   html.capacitor-native .daily-cal-day-num {
     align-self: center; font-size: 0.6rem; font-weight: 800; color: #475569;
     background: #f1f5f9; border-radius: 6px; padding: 1px 4px; line-height: 1.2;
@@ -333,51 +455,55 @@
     padding: 0.55rem 0.65rem 0.65rem; background: linear-gradient(180deg, #f0f9ff 0%, #e0f2fe 100%);
     border-top: 1px solid #bae6fd;
   }
-  html.capacitor-native .daily-totals-hero {
-    display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.4rem; margin-bottom: 0.45rem;
+  html.capacitor-native .daily-totals-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.45rem;
   }
-  html.capacitor-native .daily-totals-hero__item {
-    background: #fff; border-radius: 12px; padding: 0.4rem 0.35rem; text-align: center;
-    border: 1px solid #e2e8f0; box-shadow: 0 1px 4px rgba(15, 23, 42, 0.06);
+  html.capacitor-native .daily-totals-card {
+    background: #fff; border-radius: 12px; padding: 0.45rem 0.35rem 0.4rem;
+    text-align: center; border: 1px solid #e0f2fe;
+    box-shadow: 0 1px 5px rgba(14, 116, 144, 0.08);
   }
-  html.capacitor-native .daily-totals-hero__item--present { border-color: #86efac; background: #f0fdf4; }
-  html.capacitor-native .daily-totals-hero__item--morning { border-color: #5eead4; background: #f0fdfa; }
-  html.capacitor-native .daily-totals-hero__item--evening { border-color: #a5b4fc; background: #eef2ff; }
-  html.capacitor-native .daily-totals-hero__badge {
+  html.capacitor-native .daily-totals-card--present { border-color: #bbf7d0; background: #fafffb; }
+  html.capacitor-native .daily-totals-card--absent { border-color: #fecaca; background: #fffbfb; }
+  html.capacitor-native .daily-totals-card--leave { border-color: #bfdbfe; background: #f8fbff; }
+  html.capacitor-native .daily-totals-card--late { border-color: #fde68a; background: #fffef5; }
+  html.capacitor-native .daily-totals-card--half { border-color: #e5e7eb; }
+  html.capacitor-native .daily-totals-card--off { border-color: #d1d5db; background: #fafafa; }
+  html.capacitor-native .daily-totals-card__badge {
     display: inline-flex; align-items: center; justify-content: center;
-    width: 24px; height: 24px; border-radius: 50%; font-size: 0.68rem; font-weight: 800;
-    margin-bottom: 0.12rem;
+    width: 24px; height: 24px; border-radius: 50%; font-size: 0.66rem; font-weight: 800;
+    margin-bottom: 0.1rem;
   }
-  html.capacitor-native .daily-totals-hero__item--present .daily-totals-hero__badge {
-    background: #dcfce7; color: #166534; border: 1px solid #86efac;
+  html.capacitor-native .daily-totals-card__label {
+    display: block; font-size: 0.58rem; font-weight: 600; color: #64748b;
+    line-height: 1.15; margin-bottom: 0.12rem;
   }
-  html.capacitor-native .daily-totals-hero__item--morning .daily-totals-hero__badge {
-    background: #ccfbf1; color: #0f766e; border: 1px solid #5eead4;
+  html.capacitor-native .daily-totals-card__value {
+    display: block; font-size: 1.12rem; font-weight: 800; color: #0c4a6e; line-height: 1.1;
   }
-  html.capacitor-native .daily-totals-hero__item--evening .daily-totals-hero__badge {
-    background: #e0e7ff; color: #3730a3; border: 1px solid #a5b4fc;
+  html.capacitor-native .daily-totals-card__slots {
+    display: flex; align-items: center; justify-content: center; gap: 0.3rem;
+    margin-top: 0.32rem; padding-top: 0.3rem; border-top: 1px dashed #e2e8f0;
   }
-  html.capacitor-native .daily-totals-hero__label {
-    display: block; font-size: 0.56rem; font-weight: 600; color: #64748b;
-    text-transform: uppercase; letter-spacing: 0.03em; line-height: 1.1;
+  html.capacitor-native .daily-totals-card__slot {
+    display: inline-flex; align-items: center; gap: 0.18rem;
+    font-size: 0.58rem; line-height: 1; padding: 0.14rem 0.32rem;
+    border-radius: 6px; font-weight: 700;
   }
-  html.capacitor-native .daily-totals-hero__value {
-    display: block; font-size: 1.05rem; font-weight: 800; color: #0f172a; line-height: 1.15;
-    margin-top: 0.08rem;
+  html.capacitor-native .daily-totals-card__slot--m {
+    color: #0f766e; background: linear-gradient(180deg, #f0fdfa, #ccfbf1);
+    border: 1px solid #99f6e4;
   }
-  html.capacitor-native .daily-totals-status-row {
-    display: flex; flex-wrap: wrap; gap: 0.35rem; justify-content: center;
+  html.capacitor-native .daily-totals-card__slot--e {
+    color: #3730a3; background: linear-gradient(180deg, #eef2ff, #e0e7ff);
+    border: 1px solid #c7d2fe;
   }
-  html.capacitor-native .daily-totals-chip {
-    display: inline-flex; align-items: center; gap: 0.28rem;
-    background: #fff; border: 1px solid #e2e8f0; border-radius: 999px;
-    padding: 0.18rem 0.45rem 0.18rem 0.22rem; font-size: 0.68rem; color: #475569;
+  html.capacitor-native .daily-totals-card__slot-key {
+    font-size: 0.54rem; font-weight: 800; opacity: 0.9;
   }
-  html.capacitor-native .daily-totals-chip__badge {
-    width: 18px; height: 18px; border-radius: 50%; font-size: 0.58rem; font-weight: 800;
-    display: inline-flex; align-items: center; justify-content: center;
+  html.capacitor-native .daily-totals-card__slot-val {
+    font-size: 0.62rem; font-weight: 800; min-width: 0.85em;
   }
-  html.capacitor-native .daily-totals-chip__val { font-weight: 800; color: #0f172a; }
   html.capacitor-native .daily-native-grand {
     margin-top: 0.25rem; background: #fff; border: 1px solid #bae6fd; border-radius: 14px;
     box-shadow: 0 2px 10px rgba(14, 116, 144, 0.1); overflow: hidden;
@@ -405,7 +531,26 @@
 <div class="container-fluid daily-attn-page">
   <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
     <h2 class="mb-0"><i class="bi bi-calendar3-week me-2" style="color:var(--daily-accent);"></i>Day Wise Attendance Report</h2>
-    <div id="dailyReportExportButtons" class="d-flex gap-2 no-print"></div>
+    <div id="dailyReportExportButtons" class="d-flex gap-2 no-print">
+      <span class="daily-export-web d-flex gap-2">
+        <button type="button" class="btn btn-sm btn-success" id="dailyExportExcelWeb" title="Export to Excel">
+          <i class="bi bi-file-earmark-excel me-1" aria-hidden="true"></i>Excel
+        </button>
+        <button type="button" class="btn btn-sm btn-secondary" id="dailyExportPrintWeb" title="Print / Preview">
+          <i class="bi bi-printer me-1" aria-hidden="true"></i>Print / Preview
+        </button>
+      </span>
+      <span class="daily-export-native">
+        <button type="button" class="btn btn-success btn-daily-export-icon" id="dailyExportExcelNative" title="Excel">
+          <i class="bi bi-file-earmark-excel" aria-hidden="true"></i>
+          <span class="visually-hidden">Excel</span>
+        </button>
+        <button type="button" class="btn btn-danger btn-daily-export-icon" id="dailyExportPdfNative" title="PDF">
+          <i class="bi bi-file-earmark-pdf" aria-hidden="true"></i>
+          <span class="visually-hidden">PDF</span>
+        </button>
+      </span>
+    </div>
   </div>
 
   <div class="card filter-card mb-4 no-print">
@@ -480,58 +625,44 @@
 
   {% if report %}
   {% set sum_short = {'Present': 'P', 'Absent': 'A', 'Leave': 'L', 'Late': 'Lt', 'Half-Day': 'H', 'Off': 'O'} %}
-  {% macro render_native_totals_panel(totals_map, grid, days_in_month) %}
-  {% set slot_ns = namespace(m=0, e=0) %}
-  {% for d in range(1, days_in_month + 1) %}
-    {% set cells = grid.get(d, {}) %}
-    {% set mc = cells.get('M') or {} %}
-    {% set mv = mc.get('v', '') if mc is mapping else (mc or '') %}
-    {% set ec = cells.get('E') or {} %}
-    {% set ev = ec.get('v', '') if ec is mapping else (ec or '') %}
-    {% if mv == 'P' %}{% set slot_ns.m = slot_ns.m + 1 %}{% endif %}
-    {% if ev == 'P' %}{% set slot_ns.e = slot_ns.e + 1 %}{% endif %}
-  {% endfor %}
-  <div class="daily-driver-card__totals">
-    <div class="daily-totals-hero">
-      <div class="daily-totals-hero__item daily-totals-hero__item--present">
-        <span class="daily-totals-hero__badge">P</span>
-        <span class="daily-totals-hero__label">Present</span>
-        <span class="daily-totals-hero__value">{{ totals_map.get('Present', 0) }}</span>
-      </div>
-      <div class="daily-totals-hero__item daily-totals-hero__item--morning">
-        <span class="daily-totals-hero__badge">M</span>
-        <span class="daily-totals-hero__label">Morning</span>
-        <span class="daily-totals-hero__value">{{ slot_ns.m }}</span>
-      </div>
-      <div class="daily-totals-hero__item daily-totals-hero__item--evening">
-        <span class="daily-totals-hero__badge">E</span>
-        <span class="daily-totals-hero__label">Evening</span>
-        <span class="daily-totals-hero__value">{{ slot_ns.e }}</span>
-      </div>
-    </div>
-    <div class="daily-totals-status-row">
-      {% for st in status_columns if st != 'Present' %}
-      <span class="daily-totals-chip">
-        <span class="daily-totals-chip__badge daily-legend-badge daily-legend-badge--{{ 'absent' if st == 'Absent' else ('leave' if st == 'Leave' else ('late' if st == 'Late' else ('half' if st == 'Half-Day' else 'off'))) }}">{{ sum_short.get(st, st[:1]) }}</span>
-        <span>{{ st }}</span>
-        <span class="daily-totals-chip__val">{{ totals_map.get(st, 0) }}</span>
+  {% set card_theme = {'Present': 'present', 'Absent': 'absent', 'Leave': 'leave', 'Late': 'late', 'Half-Day': 'half', 'Off': 'off'} %}
+  {% macro render_native_status_card(st, total, me_m, me_e, sum_short, card_theme, grand_attr='') %}
+  <div class="daily-totals-card daily-totals-card--{{ card_theme.get(st, 'off') }}">
+    <span class="daily-totals-card__badge daily-legend-badge daily-legend-badge--{{ card_theme.get(st, 'off') }}">{{ sum_short.get(st, st[:1]) }}</span>
+    <span class="daily-totals-card__label">{{ st }}</span>
+    <span class="daily-totals-card__value"{% if grand_attr %} data-grand-st="{{ st }}"{% endif %}>{{ total }}</span>
+    <div class="daily-totals-card__slots" aria-label="{{ st }} morning and evening counts">
+      <span class="daily-totals-card__slot daily-totals-card__slot--m">
+        <span class="daily-totals-card__slot-key">M</span>
+        <span class="daily-totals-card__slot-val"{% if grand_attr %} data-grand-st-m="{{ st }}"{% endif %}>{{ me_m }}</span>
       </span>
+      <span class="daily-totals-card__slot daily-totals-card__slot--e">
+        <span class="daily-totals-card__slot-key">E</span>
+        <span class="daily-totals-card__slot-val"{% if grand_attr %} data-grand-st-e="{{ st }}"{% endif %}>{{ me_e }}</span>
+      </span>
+    </div>
+  </div>
+  {% endmacro %}
+  {% macro render_native_totals_panel(totals_map, grid, days_in_month) %}
+  <div class="daily-driver-card__totals">
+    <div class="daily-totals-grid">
+      {% for st in status_columns %}
+      {% set st_abbr = sum_short.get(st, st[:1]) %}
+      {% set me = namespace(m=0, e=0) %}
+      {% for d in range(1, days_in_month + 1) %}
+        {% set cells = grid.get(d, {}) %}
+        {% set mc = cells.get('M') or {} %}
+        {% set mv = mc.get('v', '') if mc is mapping else (mc or '') %}
+        {% set ec = cells.get('E') or {} %}
+        {% set ev = ec.get('v', '') if ec is mapping else (ec or '') %}
+        {% if mv == st_abbr %}{% set me.m = me.m + 1 %}{% endif %}
+        {% if ev == st_abbr %}{% set me.e = me.e + 1 %}{% endif %}
+      {% endfor %}
+      {{ render_native_status_card(st, totals_map.get(st, 0), me.m, me.e, sum_short, card_theme) }}
       {% endfor %}
     </div>
   </div>
   {% endmacro %}
-  {% set grand_slot_ns = namespace(m=0, e=0) %}
-  {% for row in report %}
-    {% for d in range(1, row.days_in_month + 1) %}
-      {% set cells = row.grid.get(d, {}) %}
-      {% set mc = cells.get('M') or {} %}
-      {% set mv = mc.get('v', '') if mc is mapping else (mc or '') %}
-      {% set ec = cells.get('E') or {} %}
-      {% set ev = ec.get('v', '') if ec is mapping else (ec or '') %}
-      {% if mv == 'P' %}{% set grand_slot_ns.m = grand_slot_ns.m + 1 %}{% endif %}
-      {% if ev == 'P' %}{% set grand_slot_ns.e = grand_slot_ns.e + 1 %}{% endif %}
-    {% endfor %}
-  {% endfor %}
   {% set cal_month_label = day_headers[0].strftime('%B %Y') if day_headers else '' %}
   {% set cal_start_pad = ((day_headers[0].weekday() + 1) % 7) if day_headers else 0 %}
   <div class="daily-attn-shell daily-grid-pending" id="dailyReportResults">
@@ -622,7 +753,15 @@
             <span class="daily-driver-card__sr">{{ loop.index }}</span>
             <div class="daily-driver-card__title-wrap">
               <div class="daily-driver-card__name">{{ row.driver_name }}</div>
-              <span class="daily-driver-card__score">{{ row.month_present_days }}/{{ row.days_in_month }} present days</span>
+              {% set present_pct = ((row.month_present_days * 100 / row.days_in_month)|round(0, 'floor')|int) if row.days_in_month else 0 %}
+              <div class="daily-driver-card__present">
+                <p class="daily-driver-card__present-text">
+                  <strong>{{ row.month_present_days }}/{{ row.days_in_month }}</strong> present days this month
+                </p>
+                <div class="daily-driver-card__progress" role="progressbar" aria-valuenow="{{ row.month_present_days }}" aria-valuemin="0" aria-valuemax="{{ row.days_in_month }}" aria-label="Present days this month">
+                  <span class="daily-driver-card__progress-fill" style="width: {{ present_pct }}%;"></span>
+                </div>
+              </div>
             </div>
             <i class="bi bi-chevron-down daily-driver-card__chev" aria-hidden="true"></i>
           </button>
@@ -650,7 +789,8 @@
               {% set mtip = mcell.get('tip', '') if mcell is mapping else '' %}
               {% set etip = ecell.get('tip', '') if ecell is mapping else '' %}
               {% set day_has_data = mv or ev %}
-              <div class="daily-cal-day{% if day_has_data %} daily-cal-day--active{% endif %}" title="Day {{ '%02d'|format(day_num) }}">
+              {% set is_cal_today = cal_today_day and day_num == cal_today_day %}
+              <div class="daily-cal-day{% if day_has_data %} daily-cal-day--active{% endif %}{% if is_cal_today %} daily-cal-day--today{% endif %}" data-cal-day="{{ day_num }}"{% if is_cal_today %} aria-current="date"{% endif %} title="{% if is_cal_today %}Today — {% endif %}Day {{ '%02d'|format(day_num) }}">
                 <span class="daily-cal-day-num">{{ '%02d'|format(day_num) }}</span>
                 <div class="daily-cal-slots">
                   <div class="daily-cal-slot-row">
@@ -674,38 +814,34 @@
       <div class="daily-native-grand is-suppressed" id="dailyNativeGrand">
         <div class="daily-native-grand__head">Month totals (all drivers)</div>
         <div class="daily-native-grand__totals">
-          <div class="daily-totals-hero">
-            <div class="daily-totals-hero__item daily-totals-hero__item--present">
-              <span class="daily-totals-hero__badge">P</span>
-              <span class="daily-totals-hero__label">Present</span>
-              <span class="daily-totals-hero__value" data-grand-st="Present">{{ grand_totals.get('Present', 0) }}</span>
-            </div>
-            <div class="daily-totals-hero__item daily-totals-hero__item--morning">
-              <span class="daily-totals-hero__badge">M</span>
-              <span class="daily-totals-hero__label">Morning</span>
-              <span class="daily-totals-hero__value" data-grand-slot="M">{{ grand_slot_ns.m }}</span>
-            </div>
-            <div class="daily-totals-hero__item daily-totals-hero__item--evening">
-              <span class="daily-totals-hero__badge">E</span>
-              <span class="daily-totals-hero__label">Evening</span>
-              <span class="daily-totals-hero__value" data-grand-slot="E">{{ grand_slot_ns.e }}</span>
-            </div>
-          </div>
-          <div class="daily-totals-status-row">
-            {% for st in status_columns if st != 'Present' %}
-            <span class="daily-totals-chip">
-              <span class="daily-totals-chip__badge daily-legend-badge daily-legend-badge--{{ 'absent' if st == 'Absent' else ('leave' if st == 'Leave' else ('late' if st == 'Late' else ('half' if st == 'Half-Day' else 'off'))) }}">{{ sum_short.get(st, st[:1]) }}</span>
-              <span>{{ st }}</span>
-              <span class="daily-totals-chip__val" data-grand-st="{{ st }}">{{ grand_totals.get(st, 0) }}</span>
-            </span>
+          <div class="daily-totals-grid">
+            {% for st in status_columns %}
+            {% set st_abbr = sum_short.get(st, st[:1]) %}
+            {% set me = namespace(m=0, e=0) %}
+            {% for row in report %}
+              {% for d in range(1, row.days_in_month + 1) %}
+                {% set cells = row.grid.get(d, {}) %}
+                {% set mc = cells.get('M') or {} %}
+                {% set mv = mc.get('v', '') if mc is mapping else (mc or '') %}
+                {% set ec = cells.get('E') or {} %}
+                {% set ev = ec.get('v', '') if ec is mapping else (ec or '') %}
+                {% if mv == st_abbr %}{% set me.m = me.m + 1 %}{% endif %}
+                {% if ev == st_abbr %}{% set me.e = me.e + 1 %}{% endif %}
+              {% endfor %}
+            {% endfor %}
+            {{ render_native_status_card(st, grand_totals.get(st, 0), me.m, me.e, sum_short, card_theme, 'grand') }}
             {% endfor %}
           </div>
         </div>
-      </div>
       <div class="daily-native-empty d-none" id="dailyNativeEmpty">No driver matches your search.</div>
     </div>
 
     <div class="daily-attn-footnote" id="dailyAttendanceLegend">
+      <button type="button" class="daily-legend-toggle" id="dailyLegendToggle" aria-expanded="false" aria-controls="dailyLegendPanel" title="Slots &amp; status legend">
+        <i class="bi bi-info-circle" aria-hidden="true"></i>
+        <span class="daily-legend-toggle__label">Legend</span>
+      </button>
+      <div class="daily-legend-panel" id="dailyLegendPanel">
       <div class="daily-attn-legend" role="list" aria-label="Attendance legend">
         <div class="daily-legend-group" role="group" aria-label="Shift slots">
           <span class="daily-legend-group-label">Slots</span>
@@ -748,9 +884,10 @@
         </div>
       </div>
       <p class="daily-legend-note mb-0">
-        <i class="bi bi-info-circle" aria-hidden="true"></i>
-        <span>Colored badges match grid cells · Driver (2/31) = present days / days in month · Hover a cell for check-in/out times</span>
+        <i class="bi bi-lightbulb" aria-hidden="true"></i>
+        <span>Colored badges match calendar cells · (2/31) = present days this month · Tap a day for check-in/out details</span>
       </p>
+      </div>
     </div>
   </div>
   {% elif not filter_message %}
@@ -763,6 +900,8 @@
 <script>
 (function() {
   function isDailyNativeApp() {
+    if (window.FleetBridge && window.FleetBridge.isNative) return true;
+    if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) return true;
     return document.documentElement.classList.contains('capacitor-native');
   }
 
@@ -1054,6 +1193,49 @@
 
   var _nativeCardsBound = false;
 
+  function highlightNativeCalendarToday() {
+    if (!isDailyNativeApp()) return;
+    var monthEl = document.querySelector('#dailyReportForm input[name="month"]');
+    var yearEl = document.querySelector('#dailyReportForm input[name="year"]');
+    var m = monthEl ? parseInt(monthEl.value, 10) : NaN;
+    var y = yearEl ? parseInt(yearEl.value, 10) : NaN;
+    var now = new Date();
+    var isCurrentMonth = !isNaN(m) && !isNaN(y) &&
+      now.getFullYear() === y && (now.getMonth() + 1) === m;
+    var todayDay = now.getDate();
+    document.querySelectorAll('.daily-cal-day').forEach(function(el) {
+      el.classList.remove('daily-cal-day--today');
+      if (el.getAttribute('aria-current') === 'date') {
+        el.removeAttribute('aria-current');
+      }
+    });
+    if (!isCurrentMonth) return;
+    document.querySelectorAll('.daily-cal-day').forEach(function(el) {
+      var dayNum = parseInt(el.getAttribute('data-cal-day'), 10);
+      if (dayNum === todayDay) {
+        el.classList.add('daily-cal-day--today');
+        el.setAttribute('aria-current', 'date');
+        var label = 'Today — Day ' + String(dayNum).padStart(2, '0');
+        if (!el.getAttribute('title') || el.getAttribute('title').indexOf('Today') < 0) {
+          el.setAttribute('title', label);
+        }
+      }
+    });
+  }
+
+  function initDailyLegendToggle() {
+    if (!isDailyNativeApp()) return;
+    var wrap = document.getElementById('dailyAttendanceLegend');
+    var btn = document.getElementById('dailyLegendToggle');
+    var panel = document.getElementById('dailyLegendPanel');
+    if (!wrap || !btn || !panel || btn._dailyLegendBound) return;
+    btn._dailyLegendBound = true;
+    btn.addEventListener('click', function() {
+      var open = wrap.classList.toggle('is-legend-open');
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+  }
+
   function bindNativeDriverCards() {
     if (!isDailyNativeApp() || _nativeCardsBound) return;
     _nativeCardsBound = true;
@@ -1144,6 +1326,8 @@
     if (nativeView && isDailyNativeApp()) {
       nativeView.setAttribute('aria-hidden', 'false');
       bindNativeDriverCards();
+      initDailyLegendToggle();
+      highlightNativeCalendarToday();
       syncNativeCardVisibility();
     }
   }
@@ -1661,38 +1845,32 @@
     window.location.href = url;
   }
 
-  var exportWrap = document.getElementById('dailyReportExportButtons');
-  if (exportWrap) {
-    var excelBtn = document.createElement('button');
-    excelBtn.type = 'button';
-    excelBtn.addEventListener('click', exportDailyExcel);
-    if (isDailyNativeApp()) {
-      excelBtn.className = 'btn btn-success btn-daily-export-icon';
-      excelBtn.innerHTML = '<i class="bi bi-file-earmark-excel" aria-hidden="true"></i>';
-      excelBtn.setAttribute('aria-label', 'Export to Excel');
-      var pdfBtn = document.createElement('button');
-      pdfBtn.type = 'button';
-      pdfBtn.className = 'btn btn-danger btn-daily-export-icon';
-      pdfBtn.innerHTML = '<i class="bi bi-file-earmark-pdf" aria-hidden="true"></i>';
-      pdfBtn.setAttribute('aria-label', 'Download PDF');
-      pdfBtn.addEventListener('click', function() {
-        pdfBtn.disabled = true;
-        exportDailyPdfNative(function() { pdfBtn.disabled = false; });
+  function initDailyExportButtons() {
+    var excelWeb = document.getElementById('dailyExportExcelWeb');
+    var printWeb = document.getElementById('dailyExportPrintWeb');
+    var excelNative = document.getElementById('dailyExportExcelNative');
+    var pdfNative = document.getElementById('dailyExportPdfNative');
+    if (excelWeb && !excelWeb._dailyBound) {
+      excelWeb._dailyBound = true;
+      excelWeb.addEventListener('click', exportDailyExcel);
+    }
+    if (printWeb && !printWeb._dailyBound) {
+      printWeb._dailyBound = true;
+      printWeb.addEventListener('click', openDailyPrintPreview);
+    }
+    if (excelNative && !excelNative._dailyBound) {
+      excelNative._dailyBound = true;
+      excelNative.addEventListener('click', exportDailyExcel);
+    }
+    if (pdfNative && !pdfNative._dailyBound) {
+      pdfNative._dailyBound = true;
+      pdfNative.addEventListener('click', function() {
+        pdfNative.disabled = true;
+        exportDailyPdfNative(function() { pdfNative.disabled = false; });
       });
-      exportWrap.appendChild(excelBtn);
-      exportWrap.appendChild(pdfBtn);
-    } else {
-      excelBtn.className = 'btn btn-sm btn-success';
-      excelBtn.innerHTML = '<i class="bi bi-file-earmark-excel me-1"></i>Excel';
-      var printBtn = document.createElement('button');
-      printBtn.type = 'button';
-      printBtn.className = 'btn btn-sm btn-secondary';
-      printBtn.innerHTML = '<i class="bi bi-printer me-1"></i>Print / Preview';
-      printBtn.addEventListener('click', openDailyPrintPreview);
-      exportWrap.appendChild(excelBtn);
-      exportWrap.appendChild(printBtn);
     }
   }
+  initDailyExportButtons();
 
   function scrollToReport() {
     var el = document.getElementById('dailyReportResults');
