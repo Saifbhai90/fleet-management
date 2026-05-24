@@ -182,10 +182,20 @@
   }
   html.capacitor-native .daily-attn-page h2.mb-0 { font-size: 1.15rem; }
   html.capacitor-native .daily-attn-page #dailyReportExportButtons {
-    width: 100%; flex-wrap: wrap;
+    width: auto; flex-wrap: nowrap; gap: 0.5rem; flex-shrink: 0;
   }
-  html.capacitor-native .daily-attn-page #dailyReportExportButtons .btn {
-    flex: 1 1 45%; min-width: 0;
+  html.capacitor-native .daily-attn-page #dailyReportExportButtons .btn-daily-export-icon {
+    width: 42px; height: 42px; padding: 0; border-radius: 12px;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 1.2rem; line-height: 1; flex: 0 0 auto;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
+  }
+  html.capacitor-native .daily-attn-page #dailyReportExportButtons .btn-daily-export-icon:disabled {
+    opacity: 0.55;
+  }
+  html.capacitor-native #dailyAttendanceLegend .daily-legend-group[aria-label="Shift slots"],
+  html.capacitor-native #dailyAttendanceLegend > .daily-legend-sep:first-of-type {
+    display: none !important;
   }
   html.capacitor-native .daily-attn-page #dailyTableSearch {
     max-width: none !important; width: 100%; height: 38px !important;
@@ -320,24 +330,54 @@
   html.capacitor-native .daily-cal-slot--half { background: #f3f4f6; color: #374151; }
   html.capacitor-native .daily-cal-slot--off { background: #e5e7eb; color: #111827; }
   html.capacitor-native .daily-driver-card__totals {
-    display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.45rem;
-    padding: 0.6rem 0.65rem 0.7rem; background: #f0f9ff; border-top: 1px solid #bae6fd;
+    padding: 0.55rem 0.65rem 0.65rem; background: linear-gradient(180deg, #f0f9ff 0%, #e0f2fe 100%);
+    border-top: 1px solid #bae6fd;
   }
-  html.capacitor-native .daily-total-pill {
-    background: #fff; border: 1px solid #e0f2fe; border-radius: 10px;
-    padding: 0.35rem 0.4rem; text-align: center;
+  html.capacitor-native .daily-totals-hero {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.4rem; margin-bottom: 0.45rem;
   }
-  html.capacitor-native .daily-total-pill__badge {
+  html.capacitor-native .daily-totals-hero__item {
+    background: #fff; border-radius: 12px; padding: 0.4rem 0.35rem; text-align: center;
+    border: 1px solid #e2e8f0; box-shadow: 0 1px 4px rgba(15, 23, 42, 0.06);
+  }
+  html.capacitor-native .daily-totals-hero__item--present { border-color: #86efac; background: #f0fdf4; }
+  html.capacitor-native .daily-totals-hero__item--morning { border-color: #5eead4; background: #f0fdfa; }
+  html.capacitor-native .daily-totals-hero__item--evening { border-color: #a5b4fc; background: #eef2ff; }
+  html.capacitor-native .daily-totals-hero__badge {
     display: inline-flex; align-items: center; justify-content: center;
-    width: 22px; height: 22px; border-radius: 50%; font-size: 0.65rem; font-weight: 800;
-    margin-bottom: 0.15rem;
+    width: 24px; height: 24px; border-radius: 50%; font-size: 0.68rem; font-weight: 800;
+    margin-bottom: 0.12rem;
   }
-  html.capacitor-native .daily-total-pill__label {
-    display: block; font-size: 0.58rem; color: #64748b; line-height: 1.15;
+  html.capacitor-native .daily-totals-hero__item--present .daily-totals-hero__badge {
+    background: #dcfce7; color: #166534; border: 1px solid #86efac;
   }
-  html.capacitor-native .daily-total-pill__value {
-    font-size: 0.95rem; font-weight: 800; color: #0c4a6e; line-height: 1.1;
+  html.capacitor-native .daily-totals-hero__item--morning .daily-totals-hero__badge {
+    background: #ccfbf1; color: #0f766e; border: 1px solid #5eead4;
   }
+  html.capacitor-native .daily-totals-hero__item--evening .daily-totals-hero__badge {
+    background: #e0e7ff; color: #3730a3; border: 1px solid #a5b4fc;
+  }
+  html.capacitor-native .daily-totals-hero__label {
+    display: block; font-size: 0.56rem; font-weight: 600; color: #64748b;
+    text-transform: uppercase; letter-spacing: 0.03em; line-height: 1.1;
+  }
+  html.capacitor-native .daily-totals-hero__value {
+    display: block; font-size: 1.05rem; font-weight: 800; color: #0f172a; line-height: 1.15;
+    margin-top: 0.08rem;
+  }
+  html.capacitor-native .daily-totals-status-row {
+    display: flex; flex-wrap: wrap; gap: 0.35rem; justify-content: center;
+  }
+  html.capacitor-native .daily-totals-chip {
+    display: inline-flex; align-items: center; gap: 0.28rem;
+    background: #fff; border: 1px solid #e2e8f0; border-radius: 999px;
+    padding: 0.18rem 0.45rem 0.18rem 0.22rem; font-size: 0.68rem; color: #475569;
+  }
+  html.capacitor-native .daily-totals-chip__badge {
+    width: 18px; height: 18px; border-radius: 50%; font-size: 0.58rem; font-weight: 800;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  html.capacitor-native .daily-totals-chip__val { font-weight: 800; color: #0f172a; }
   html.capacitor-native .daily-native-grand {
     margin-top: 0.25rem; background: #fff; border: 1px solid #bae6fd; border-radius: 14px;
     box-shadow: 0 2px 10px rgba(14, 116, 144, 0.1); overflow: hidden;
@@ -348,8 +388,15 @@
     font-size: 0.82rem; font-weight: 700; text-align: center;
   }
   html.capacitor-native .daily-native-grand__totals {
-    display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.45rem; padding: 0.65rem;
+    padding: 0.55rem 0.65rem 0.65rem;
   }
+  html.capacitor-native .daily-native-pdf-host .pv-header {
+    background: linear-gradient(135deg, #0f766e, #115e59); color: #fff;
+    padding: 10px 16px; display: flex; align-items: flex-start; gap: 10px;
+  }
+  html.capacitor-native .daily-native-pdf-host .pv-header h1 { margin: 0; font-size: 1rem; font-weight: 700; }
+  html.capacitor-native .daily-native-pdf-host .pv-header .sub { font-size: 0.78rem; opacity: 0.9; margin-top: 2px; }
+  html.capacitor-native .daily-native-pdf-host .pv-header .pv-meta { font-size: 0.75rem; opacity: 0.95; margin-top: 5px; }
   html.capacitor-native .daily-native-empty {
     text-align: center; padding: 2rem 1rem; color: #64748b; font-size: 0.88rem;
   }
@@ -433,6 +480,58 @@
 
   {% if report %}
   {% set sum_short = {'Present': 'P', 'Absent': 'A', 'Leave': 'L', 'Late': 'Lt', 'Half-Day': 'H', 'Off': 'O'} %}
+  {% macro render_native_totals_panel(totals_map, grid, days_in_month) %}
+  {% set slot_ns = namespace(m=0, e=0) %}
+  {% for d in range(1, days_in_month + 1) %}
+    {% set cells = grid.get(d, {}) %}
+    {% set mc = cells.get('M') or {} %}
+    {% set mv = mc.get('v', '') if mc is mapping else (mc or '') %}
+    {% set ec = cells.get('E') or {} %}
+    {% set ev = ec.get('v', '') if ec is mapping else (ec or '') %}
+    {% if mv == 'P' %}{% set slot_ns.m = slot_ns.m + 1 %}{% endif %}
+    {% if ev == 'P' %}{% set slot_ns.e = slot_ns.e + 1 %}{% endif %}
+  {% endfor %}
+  <div class="daily-driver-card__totals">
+    <div class="daily-totals-hero">
+      <div class="daily-totals-hero__item daily-totals-hero__item--present">
+        <span class="daily-totals-hero__badge">P</span>
+        <span class="daily-totals-hero__label">Present</span>
+        <span class="daily-totals-hero__value">{{ totals_map.get('Present', 0) }}</span>
+      </div>
+      <div class="daily-totals-hero__item daily-totals-hero__item--morning">
+        <span class="daily-totals-hero__badge">M</span>
+        <span class="daily-totals-hero__label">Morning</span>
+        <span class="daily-totals-hero__value">{{ slot_ns.m }}</span>
+      </div>
+      <div class="daily-totals-hero__item daily-totals-hero__item--evening">
+        <span class="daily-totals-hero__badge">E</span>
+        <span class="daily-totals-hero__label">Evening</span>
+        <span class="daily-totals-hero__value">{{ slot_ns.e }}</span>
+      </div>
+    </div>
+    <div class="daily-totals-status-row">
+      {% for st in status_columns if st != 'Present' %}
+      <span class="daily-totals-chip">
+        <span class="daily-totals-chip__badge daily-legend-badge daily-legend-badge--{{ 'absent' if st == 'Absent' else ('leave' if st == 'Leave' else ('late' if st == 'Late' else ('half' if st == 'Half-Day' else 'off'))) }}">{{ sum_short.get(st, st[:1]) }}</span>
+        <span>{{ st }}</span>
+        <span class="daily-totals-chip__val">{{ totals_map.get(st, 0) }}</span>
+      </span>
+      {% endfor %}
+    </div>
+  </div>
+  {% endmacro %}
+  {% set grand_slot_ns = namespace(m=0, e=0) %}
+  {% for row in report %}
+    {% for d in range(1, row.days_in_month + 1) %}
+      {% set cells = row.grid.get(d, {}) %}
+      {% set mc = cells.get('M') or {} %}
+      {% set mv = mc.get('v', '') if mc is mapping else (mc or '') %}
+      {% set ec = cells.get('E') or {} %}
+      {% set ev = ec.get('v', '') if ec is mapping else (ec or '') %}
+      {% if mv == 'P' %}{% set grand_slot_ns.m = grand_slot_ns.m + 1 %}{% endif %}
+      {% if ev == 'P' %}{% set grand_slot_ns.e = grand_slot_ns.e + 1 %}{% endif %}
+    {% endfor %}
+  {% endfor %}
   {% set cal_month_label = day_headers[0].strftime('%B %Y') if day_headers else '' %}
   {% set cal_start_pad = ((day_headers[0].weekday() + 1) % 7) if day_headers else 0 %}
   <div class="daily-attn-shell daily-grid-pending" id="dailyReportResults">
@@ -567,15 +666,7 @@
               {% endfor %}
             </div>
           </div>
-          <div class="daily-driver-card__totals">
-            {% for st in status_columns %}
-            <div class="daily-total-pill">
-              <span class="daily-total-pill__badge daily-legend-badge daily-legend-badge--{{ 'present' if st == 'Present' else ('absent' if st == 'Absent' else ('leave' if st == 'Leave' else ('late' if st == 'Late' else ('half' if st == 'Half-Day' else 'off')))) }}">{{ sum_short.get(st, st[:1]) }}</span>
-              <span class="daily-total-pill__label">{{ st }}</span>
-              <span class="daily-total-pill__value">{{ row.status_totals.get(st, 0) }}</span>
-            </div>
-            {% endfor %}
-          </div>
+          {{ render_native_totals_panel(row.status_totals, row.grid, row.days_in_month) }}
           </div>
         </article>
         {% endfor %}
@@ -583,13 +674,32 @@
       <div class="daily-native-grand is-suppressed" id="dailyNativeGrand">
         <div class="daily-native-grand__head">Month totals (all drivers)</div>
         <div class="daily-native-grand__totals">
-          {% for st in status_columns %}
-          <div class="daily-total-pill">
-            <span class="daily-total-pill__badge daily-legend-badge daily-legend-badge--{{ 'present' if st == 'Present' else ('absent' if st == 'Absent' else ('leave' if st == 'Leave' else ('late' if st == 'Late' else ('half' if st == 'Half-Day' else 'off')))) }}">{{ sum_short.get(st, st[:1]) }}</span>
-            <span class="daily-total-pill__label">{{ st }}</span>
-            <span class="daily-total-pill__value" data-grand-st="{{ st }}">{{ grand_totals.get(st, 0) }}</span>
+          <div class="daily-totals-hero">
+            <div class="daily-totals-hero__item daily-totals-hero__item--present">
+              <span class="daily-totals-hero__badge">P</span>
+              <span class="daily-totals-hero__label">Present</span>
+              <span class="daily-totals-hero__value" data-grand-st="Present">{{ grand_totals.get('Present', 0) }}</span>
+            </div>
+            <div class="daily-totals-hero__item daily-totals-hero__item--morning">
+              <span class="daily-totals-hero__badge">M</span>
+              <span class="daily-totals-hero__label">Morning</span>
+              <span class="daily-totals-hero__value" data-grand-slot="M">{{ grand_slot_ns.m }}</span>
+            </div>
+            <div class="daily-totals-hero__item daily-totals-hero__item--evening">
+              <span class="daily-totals-hero__badge">E</span>
+              <span class="daily-totals-hero__label">Evening</span>
+              <span class="daily-totals-hero__value" data-grand-slot="E">{{ grand_slot_ns.e }}</span>
+            </div>
           </div>
-          {% endfor %}
+          <div class="daily-totals-status-row">
+            {% for st in status_columns if st != 'Present' %}
+            <span class="daily-totals-chip">
+              <span class="daily-totals-chip__badge daily-legend-badge daily-legend-badge--{{ 'absent' if st == 'Absent' else ('leave' if st == 'Leave' else ('late' if st == 'Late' else ('half' if st == 'Half-Day' else 'off'))) }}">{{ sum_short.get(st, st[:1]) }}</span>
+              <span>{{ st }}</span>
+              <span class="daily-totals-chip__val" data-grand-st="{{ st }}">{{ grand_totals.get(st, 0) }}</span>
+            </span>
+            {% endfor %}
+          </div>
         </div>
       </div>
       <div class="daily-native-empty d-none" id="dailyNativeEmpty">No driver matches your search.</div>
@@ -1375,33 +1485,213 @@
     win.document.close();
   }
 
-  function exportDailyExcel() {
+  var DAILY_PDF_OPTS = {
+    margin: [5, 5, 5, 5],
+    filename: 'Day_Wise_Attendance_Report.pdf',
+    image: { type: 'jpeg', quality: 0.96 },
+    html2canvas: { scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff' },
+    jsPDF: { unit: 'mm', format: 'a3', orientation: 'landscape' },
+    pagebreak: { mode: ['css', 'legacy'], avoid: '.pv-total-row' }
+  };
+
+  function getDailyExportParams() {
     var form = document.getElementById('dailyReportForm');
-    if (!form) return;
+    if (!form) return null;
     var params = new URLSearchParams(new FormData(form));
     var pid = params.get('project_id');
     var did = params.get('district_id');
     if (!pid || pid === '0' || !did || did === '0') {
-      alert('Pehle Project aur District select karein, phir Excel export karein.');
+      alert('Pehle Project aur District select karein.');
+      return null;
+    }
+    return params;
+  }
+
+  function getDailyExcelExportUrl() {
+    var params = getDailyExportParams();
+    if (!params) return null;
+    return '{{ url_for("driver_attendance_daily_report_export") }}?' + params.toString();
+  }
+
+  function loadDailyHtml2pdf() {
+    return new Promise(function(resolve, reject) {
+      if (typeof html2pdf !== 'undefined') {
+        resolve(html2pdf);
+        return;
+      }
+      var s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.2/html2pdf.bundle.min.js';
+      s.onload = function() { resolve(window.html2pdf); };
+      s.onerror = function() { reject(new Error('PDF library load failed')); };
+      document.head.appendChild(s);
+    });
+  }
+
+  function getDailyPdfHostStyles() {
+    return [
+      '.daily-native-pdf-host{font-family:Inter,Segoe UI,system-ui,sans-serif;background:#fff;color:#1e293b;}',
+      '.daily-native-pdf-host .pv-scale-wrap{width:100%;padding:8px 10px;}',
+      '.daily-native-pdf-host .pv-scale-inner{width:100%;}',
+      '.daily-native-pdf-host .daily-preview-table{border-collapse:collapse;table-layout:fixed;width:100%;font-size:8px;}',
+      '.daily-native-pdf-host .daily-preview-table th,.daily-native-pdf-host .daily-preview-table td{border:1px solid #94a3b8;padding:1px 2px;text-align:center;vertical-align:middle;font-size:8px;line-height:1.15;}',
+      '.daily-native-pdf-host .daily-preview-table thead th{background:#0f766e;color:#fff;font-weight:700;font-size:7px;}',
+      '.daily-native-pdf-host .daily-preview-table thead tr.hdr-row-2 th{background:#115e59;font-size:7px;}',
+      '.daily-native-pdf-host .daily-preview-table .pv-driver-col{text-align:left;vertical-align:top;}',
+      '.daily-native-pdf-host .daily-preview-table .pv-sr{padding:2px 3px;}',
+      '.daily-native-pdf-host .daily-preview-table .day-col{padding:1px;font-size:7px;}',
+      '.daily-native-pdf-host .daily-preview-table .date-hdr{font-size:7px;writing-mode:vertical-rl;transform:rotate(180deg);height:26px;}',
+      '.daily-native-pdf-host .daily-preview-table .sum-col{padding:1px 2px;font-size:7px;background:#e0f2fe;color:#0c4a6e;font-weight:700;}',
+      '.daily-native-pdf-host .daily-preview-table thead .sum-col{background:#0369a1;color:#fff;}',
+      '.daily-native-pdf-host .daily-preview-table tr.pv-total-row td{background:#ecfdf5;font-weight:700;color:#065f46;}',
+      '.daily-native-pdf-host .daily-preview-table .cell-present{background:#dcfce7!important;color:#166534;font-weight:700;}',
+      '.daily-native-pdf-host .daily-preview-table .cell-absent{background:#fee2e2!important;color:#991b1b;font-weight:700;}',
+      '.daily-native-pdf-host .daily-preview-table .cell-leave{background:#dbeafe!important;color:#1e40af;font-weight:700;}',
+      '.daily-native-pdf-host .daily-preview-table .cell-late{background:#fef9c3!important;color:#854d0e;font-weight:700;}',
+      '.daily-native-pdf-host .daily-preview-table .cell-half{background:#f3f4f6!important;}',
+      '.daily-native-pdf-host .daily-preview-table .cell-off{background:#e5e7eb!important;}',
+      '.daily-native-pdf-host .pv-legend{padding:6px 16px 10px;}',
+      '.daily-native-pdf-host .daily-attn-footnote{padding:0.65rem 1rem;background:#f8fafc;border-top:1px solid #e2e8f0;}'
+    ].join('');
+  }
+
+  function mountDailyPdfPrintRoot(tbl, printMetaLine) {
+    var host = document.createElement('div');
+    host.id = 'dailyNativePdfHost';
+    host.className = 'daily-native-pdf-host';
+    host.style.cssText = 'position:fixed;left:-12000px;top:0;width:1400px;z-index:-1;opacity:0;pointer-events:none;';
+    var styleEl = document.createElement('style');
+    styleEl.textContent = getDailyPdfHostStyles();
+    host.appendChild(styleEl);
+    var area = document.createElement('div');
+    area.id = 'pvPrintArea';
+    area.className = 'pv-print-area';
+    var header = document.createElement('div');
+    header.className = 'pv-header';
+    header.innerHTML = '<div><h1>Day Wise Attendance Report</h1><div class="sub">' + reportTitleText + '</div>' +
+      (printMetaLine ? '<div class="pv-meta">' + printMetaLine.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</div>' : '') +
+      '</div>';
+    var scaleWrap = document.createElement('div');
+    scaleWrap.className = 'pv-scale-wrap';
+    var scaleInner = document.createElement('div');
+    scaleInner.className = 'pv-scale-inner';
+    scaleInner.id = 'pvScaleInner';
+    scaleInner.appendChild(tbl);
+    scaleWrap.appendChild(scaleInner);
+    area.appendChild(header);
+    area.appendChild(scaleWrap);
+    host.appendChild(area);
+    var legendSrc = document.getElementById('dailyAttendanceLegend');
+    if (legendSrc) {
+      var leg = document.createElement('div');
+      leg.className = 'pv-legend';
+      leg.innerHTML = legendSrc.innerHTML;
+      host.appendChild(leg);
+    }
+    document.body.appendChild(host);
+    return host;
+  }
+
+  function prepareDailyPdfHost(host) {
+    var inner = host.querySelector('#pvScaleInner');
+    if (!inner) return;
+    var tbl = inner.querySelector('table');
+    inner.style.transform = 'none';
+    inner.style.width = '100%';
+    if (tbl) {
+      tbl.style.tableLayout = 'fixed';
+      tbl.style.width = '100%';
+      tbl.style.maxWidth = '100%';
+    }
+  }
+
+  function exportDailyPdfNative(done) {
+    var src = document.getElementById('dailyReportTable');
+    var tbl = buildPrintTable();
+    if (!tbl || !src) {
+      alert('Report data nahi mila.');
+      if (done) done();
       return;
     }
-    window.location.href = '{{ url_for("driver_attendance_daily_report_export") }}?' + params.toString();
+    var printMetaLine = buildPrintMetaLine(src);
+    var host = mountDailyPdfPrintRoot(tbl, printMetaLine);
+    prepareDailyPdfHost(host);
+    if (window.FleetBridge && window.FleetBridge._toast) {
+      window.FleetBridge._toast('Generating PDF...');
+    }
+    loadDailyHtml2pdf().then(function(h2p) {
+      var area = host.querySelector('#pvPrintArea');
+      return h2p().set(DAILY_PDF_OPTS).from(area).output('blob');
+    }).then(function(blob) {
+      if (host.parentNode) host.parentNode.removeChild(host);
+      if (!window.FleetBridge || !window.FleetBridge.downloadBlob) {
+        throw new Error('Native download not available');
+      }
+      return window.FleetBridge.downloadBlob(blob, 'Day_Wise_Attendance_Report.pdf');
+    }).catch(function(err) {
+      if (host.parentNode) host.parentNode.removeChild(host);
+      console.error('Daily PDF export failed:', err);
+      alert('PDF download nahi ho saki. Dubara try karein.');
+    }).finally(function() {
+      if (done) done();
+    });
+  }
+
+  function exportDailyExcel() {
+    var url = getDailyExcelExportUrl();
+    if (!url) return;
+    if (isDailyNativeApp() && window.FleetBridge && window.FleetBridge.downloadBlob) {
+      if (window.FleetBridge._toast) window.FleetBridge._toast('Downloading Excel...');
+      fetch(url, { credentials: 'include' })
+        .then(function(r) {
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          var cd = r.headers.get('Content-Disposition') || '';
+          var m = cd.match(/filename[^;=\n]*=\s*["']?([^"';\n]+)/);
+          var fname = (m && m[1]) ? m[1] : 'Day_Wise_Attendance_Report.xlsx';
+          return r.blob().then(function(blob) { return { blob: blob, fname: fname }; });
+        })
+        .then(function(o) {
+          return window.FleetBridge.downloadBlob(o.blob, o.fname);
+        })
+        .catch(function(err) {
+          console.error('Excel export failed:', err);
+          alert('Excel download nahi ho saki. Dubara try karein.');
+        });
+      return;
+    }
+    window.location.href = url;
   }
 
   var exportWrap = document.getElementById('dailyReportExportButtons');
   if (exportWrap) {
     var excelBtn = document.createElement('button');
     excelBtn.type = 'button';
-    excelBtn.className = 'btn btn-sm btn-success';
-    excelBtn.innerHTML = '<i class="bi bi-file-earmark-excel me-1"></i>Excel';
     excelBtn.addEventListener('click', exportDailyExcel);
-    var printBtn = document.createElement('button');
-    printBtn.type = 'button';
-    printBtn.className = 'btn btn-sm btn-secondary';
-    printBtn.innerHTML = '<i class="bi bi-printer me-1"></i>Print / Preview';
-    printBtn.addEventListener('click', openDailyPrintPreview);
-    exportWrap.appendChild(excelBtn);
-    exportWrap.appendChild(printBtn);
+    if (isDailyNativeApp()) {
+      excelBtn.className = 'btn btn-success btn-daily-export-icon';
+      excelBtn.innerHTML = '<i class="bi bi-file-earmark-excel" aria-hidden="true"></i>';
+      excelBtn.setAttribute('aria-label', 'Export to Excel');
+      var pdfBtn = document.createElement('button');
+      pdfBtn.type = 'button';
+      pdfBtn.className = 'btn btn-danger btn-daily-export-icon';
+      pdfBtn.innerHTML = '<i class="bi bi-file-earmark-pdf" aria-hidden="true"></i>';
+      pdfBtn.setAttribute('aria-label', 'Download PDF');
+      pdfBtn.addEventListener('click', function() {
+        pdfBtn.disabled = true;
+        exportDailyPdfNative(function() { pdfBtn.disabled = false; });
+      });
+      exportWrap.appendChild(excelBtn);
+      exportWrap.appendChild(pdfBtn);
+    } else {
+      excelBtn.className = 'btn btn-sm btn-success';
+      excelBtn.innerHTML = '<i class="bi bi-file-earmark-excel me-1"></i>Excel';
+      var printBtn = document.createElement('button');
+      printBtn.type = 'button';
+      printBtn.className = 'btn btn-sm btn-secondary';
+      printBtn.innerHTML = '<i class="bi bi-printer me-1"></i>Print / Preview';
+      printBtn.addEventListener('click', openDailyPrintPreview);
+      exportWrap.appendChild(excelBtn);
+      exportWrap.appendChild(printBtn);
+    }
   }
 
   function scrollToReport() {
