@@ -1,13 +1,13 @@
 {% extends "base.html" %}
 {% block title %}Report Centre{% endblock %}
 {% block content %}
-<div class="container-fluid">
+<div class="container-fluid rc-page">
 
-  <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
-    <h4 class="mb-0"><i class="bi bi-bar-chart-line me-2 text-primary"></i>Report Centre</h4>
+  <div class="rc-page-header d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+    <h4 class="mb-0 rc-page-title"><i class="bi bi-bar-chart-line me-2 text-primary"></i>Report Centre</h4>
     {% if rc.any_tab %}
-    <div class="position-relative" style="width:260px;max-width:100%;">
-      <i class="bi bi-search position-absolute" style="left:10px;top:50%;transform:translateY(-50%);color:#999;"></i>
+    <div class="position-relative rc-search-wrap">
+      <i class="bi bi-search position-absolute rc-search-icon"></i>
       <input type="text" id="reportSearchBox" class="form-control form-control-sm ps-4" placeholder="Search reports..." autocomplete="off">
     </div>
     {% endif %}
@@ -17,8 +17,13 @@
   <div class="alert alert-light border text-muted mb-0"><i class="bi bi-info-circle me-2"></i>No report shortcuts are assigned for your role. Ask an administrator to grant specific reports under <strong>Reports & Analytics</strong>.</div>
   {% else %}
 
-  <!-- Tab Navigation (only tabs that have at least one permitted report) -->
-  <ul class="nav nav-tabs mb-0" id="reportTabs" role="tablist" style="border-bottom:2px solid #dee2e6;">
+  <div class="rc-native-empty" id="rcNativeSearchEmpty" aria-live="polite">
+    <i class="bi bi-search d-block mb-2" style="font-size:1.5rem;opacity:0.45;"></i>
+    No report matches your search.
+  </div>
+
+  <!-- Tab Navigation — web only (mobile uses stacked sections + icon grid) -->
+  <ul class="nav nav-tabs mb-0 rc-web-tabs" id="reportTabs" role="tablist" style="border-bottom:2px solid #dee2e6;">
     {% if rc.show_fleet %}
     <li class="nav-item" role="presentation">
       <button class="nav-link fw-semibold {% if rc.first_tab == 'fleet' %}active{% endif %}" id="fleet-tab" data-bs-toggle="tab" data-bs-target="#fleet" type="button" role="tab" aria-controls="fleet" aria-selected="{{ 'true' if rc.first_tab == 'fleet' else 'false' }}">
@@ -57,15 +62,19 @@
   </ul>
 
   <!-- Tab Content -->
-  <div class="tab-content border border-top-0 rounded-bottom bg-white p-4" id="reportTabContent">
+  <div class="tab-content border border-top-0 rounded-bottom bg-white p-4 rc-report-body" id="reportTabContent">
 
     <!-- ═══════════════ Fleet & Operations ═══════════════ -->
     {% if rc.show_fleet %}
     <div class="tab-pane fade {% if rc.first_tab == 'fleet' %}show active{% endif %}" id="fleet" role="tabpanel" aria-labelledby="fleet-tab">
+      <div class="rc-mobile-section-banner" data-rc-section="fleet">
+        <span class="rc-mobile-section-banner__icon"><i class="bi bi-truck"></i></span>
+        <span class="rc-mobile-section-banner__text">Fleet & Operations</span>
+      </div>
       <div class="row">
         <!-- Vehicle Reports -->
         {% if rc.fleet_vehicle_col %}
-        <div class="col-lg-4 col-md-6 mb-4">
+        <div class="col-lg-4 col-md-6 mb-4 rc-report-col">
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-truck me-1"></i>Vehicle Reports</h6>
           <div class="list-group list-group-flush report-link-group">
             {% if can_see_page('report_vehicle_summary') %}
@@ -89,7 +98,7 @@
         {% endif %}
         <!-- Project / District -->
         {% if rc.fleet_project_col %}
-        <div class="col-lg-4 col-md-6 mb-4">
+        <div class="col-lg-4 col-md-6 mb-4 rc-report-col">
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-briefcase me-1"></i>Project & District</h6>
           <div class="list-group list-group-flush report-link-group">
             {% if can_see_page('report_project_summary') %}
@@ -112,7 +121,7 @@
         {% endif %}
         <!-- Expense Reports -->
         {% if rc.fleet_expense_col %}
-        <div class="col-lg-4 col-md-6 mb-4">
+        <div class="col-lg-4 col-md-6 mb-4 rc-report-col">
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-fuel-pump me-1"></i>Expense Reports</h6>
           <div class="list-group list-group-flush report-link-group">
             {% if can_see_page('fuel_expense_list') %}
@@ -157,10 +166,14 @@
     <!-- ═══════════════ Task & Logbook ═══════════════ -->
     {% if rc.show_task %}
     <div class="tab-pane fade {% if rc.first_tab == 'task' %}show active{% endif %}" id="task" role="tabpanel" aria-labelledby="task-tab">
+      <div class="rc-mobile-section-banner" data-rc-section="task">
+        <span class="rc-mobile-section-banner__icon"><i class="bi bi-journal-text"></i></span>
+        <span class="rc-mobile-section-banner__text">Task & Logbook</span>
+      </div>
       <div class="row">
         <!-- Daily Task Reports -->
         {% if rc.task_daily_col %}
-        <div class="col-lg-4 col-md-6 mb-4">
+        <div class="col-lg-4 col-md-6 mb-4 rc-report-col">
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-clipboard-data me-1"></i>Daily Task Reports</h6>
           <div class="list-group list-group-flush report-link-group">
             {% if can_see_page('task_report_list') %}
@@ -223,7 +236,7 @@
         {% endif %}
         <!-- Logbook -->
         {% if rc.task_logbook_col %}
-        <div class="col-lg-4 col-md-6 mb-4">
+        <div class="col-lg-4 col-md-6 mb-4 rc-report-col">
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-book me-1"></i>Logbook</h6>
           <div class="list-group list-group-flush report-link-group">
             {% if can_see_page('task_report_logbook_cover') %}
@@ -236,7 +249,7 @@
         {% endif %}
         <!-- Workbook Upload -->
         {% if rc.task_upload_col %}
-        <div class="col-lg-4 col-md-6 mb-4">
+        <div class="col-lg-4 col-md-6 mb-4 rc-report-col">
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-cloud-upload me-1"></i>Workbook Upload</h6>
           <div class="list-group list-group-flush report-link-group">
             {% if can_see_page('task_report_upload') %}
@@ -259,10 +272,14 @@
     <!-- ═══════════════ HR & Workforce ═══════════════ -->
     {% if rc.show_hr %}
     <div class="tab-pane fade {% if rc.first_tab == 'hr' %}show active{% endif %}" id="hr" role="tabpanel" aria-labelledby="hr-tab">
+      <div class="rc-mobile-section-banner" data-rc-section="hr">
+        <span class="rc-mobile-section-banner__icon"><i class="bi bi-people"></i></span>
+        <span class="rc-mobile-section-banner__text">HR & Workforce</span>
+      </div>
       <div class="row">
         <!-- Driver Reports -->
         {% if rc.hr_driver_col %}
-        <div class="col-lg-4 col-md-6 mb-4">
+        <div class="col-lg-4 col-md-6 mb-4 rc-report-col">
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-person-badge me-1"></i>Driver Reports</h6>
           <div class="list-group list-group-flush report-link-group">
             {% if linked_driver_id and can_see_page('report_driver_profile') %}
@@ -302,7 +319,7 @@
         {% endif %}
         <!-- Attendance Reports -->
         {% if rc.hr_att_col %}
-        <div class="col-lg-4 col-md-6 mb-4">
+        <div class="col-lg-4 col-md-6 mb-4 rc-report-col">
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-calendar-check me-1"></i>Attendance Reports</h6>
           <div class="list-group list-group-flush report-link-group">
             {% if can_see_page('driver_attendance_report') %}
@@ -330,7 +347,7 @@
         {% endif %}
         <!-- Workforce -->
         {% if rc.hr_workforce_col %}
-        <div class="col-lg-4 col-md-6 mb-4">
+        <div class="col-lg-4 col-md-6 mb-4 rc-report-col">
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-person-dash me-1"></i>Workforce</h6>
           <div class="list-group list-group-flush report-link-group">
             {% if can_see_page('driver_job_left_list') %}
@@ -353,10 +370,14 @@
     <!-- ═══════════════ Finance ═══════════════ -->
     {% if rc.show_finance %}
     <div class="tab-pane fade {% if rc.first_tab == 'finance' %}show active{% endif %}" id="finance" role="tabpanel" aria-labelledby="finance-tab">
+      <div class="rc-mobile-section-banner" data-rc-section="finance">
+        <span class="rc-mobile-section-banner__icon"><i class="bi bi-wallet2"></i></span>
+        <span class="rc-mobile-section-banner__text">Finance</span>
+      </div>
       <div class="row">
         <!-- Books of Account -->
         {% if rc.finance_books_col %}
-        <div class="col-lg-4 col-md-6 mb-4">
+        <div class="col-lg-4 col-md-6 mb-4 rc-report-col">
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-journal-bookmark me-1"></i>Books of Account</h6>
           <div class="list-group list-group-flush report-link-group">
             {% if can_see_page('payment_vouchers_list') %}
@@ -384,7 +405,7 @@
         {% endif %}
         <!-- Ledger & Statements -->
         {% if rc.finance_ledger_col %}
-        <div class="col-lg-4 col-md-6 mb-4">
+        <div class="col-lg-4 col-md-6 mb-4 rc-report-col">
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-receipt me-1"></i>Ledger & Statements</h6>
           <div class="list-group list-group-flush report-link-group">
             {% if can_see_page('accounts_account_ledger') %}
@@ -407,7 +428,7 @@
         {% endif %}
         <!-- Final Accounts -->
         {% if rc.finance_final_col %}
-        <div class="col-lg-4 col-md-6 mb-4">
+        <div class="col-lg-4 col-md-6 mb-4 rc-report-col">
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-clipboard-data me-1"></i>Final Accounts</h6>
           <div class="list-group list-group-flush report-link-group">
             {% if can_see_page('accounts_balance_sheet') %}
@@ -430,10 +451,14 @@
     <!-- ═══════════════ Administration ═══════════════ -->
     {% if rc.show_admin %}
     <div class="tab-pane fade {% if rc.first_tab == 'admin' %}show active{% endif %}" id="admin" role="tabpanel" aria-labelledby="admin-tab">
+      <div class="rc-mobile-section-banner" data-rc-section="admin">
+        <span class="rc-mobile-section-banner__icon"><i class="bi bi-gear"></i></span>
+        <span class="rc-mobile-section-banner__text">Administration</span>
+      </div>
       <div class="row">
         <!-- Activity & Logs -->
         {% if rc.admin_activity_col %}
-        <div class="col-lg-4 col-md-6 mb-4">
+        <div class="col-lg-4 col-md-6 mb-4 rc-report-col">
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-journal-check me-1"></i>Activity & Logs</h6>
           <div class="list-group list-group-flush report-link-group">
             {% if can_see_page('activity_log_report') %}
@@ -447,7 +472,7 @@
         {% endif %}
         <!-- AI Tools -->
         {% if rc.admin_ai_col %}
-        <div class="col-lg-4 col-md-6 mb-4">
+        <div class="col-lg-4 col-md-6 mb-4 rc-report-col">
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-robot me-1"></i>AI Tools</h6>
           <div class="list-group list-group-flush report-link-group">
             {% if can_see_page('report_ai') %}
@@ -461,7 +486,7 @@
         {% endif %}
         <!-- Book Management -->
         {% if rc.admin_books_col %}
-        <div class="col-lg-4 col-md-6 mb-4">
+        <div class="col-lg-4 col-md-6 mb-4 rc-report-col">
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-book me-1"></i>Book Management</h6>
           <div class="list-group list-group-flush report-link-group">
             {% if can_see_page('book_inventory_list') %}
@@ -493,6 +518,189 @@
 </div><!-- /container-fluid -->
 
 <style>
+/* ── Mobile app: section stacks + 4-column icon grid (Easypaisa-style) ── */
+html.capacitor-native .rc-page {
+  padding-left: 0;
+  padding-right: 0;
+}
+html.capacitor-native .rc-page-header {
+  flex-direction: column;
+  align-items: stretch !important;
+  margin-bottom: 0.75rem !important;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: #f1f5f9;
+  padding-top: 0.15rem;
+  padding-bottom: 0.65rem;
+}
+html.capacitor-native .rc-page-title {
+  font-size: 1.15rem;
+  font-weight: 800;
+}
+html.capacitor-native .rc-search-wrap {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+html.capacitor-native .rc-search-icon {
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #94a3b8;
+}
+html.capacitor-native .rc-search-wrap .form-control {
+  height: 42px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  font-size: 0.9rem;
+}
+html.capacitor-native .rc-web-tabs {
+  display: none !important;
+}
+html.capacitor-native .rc-report-body {
+  border: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  padding: 0 !important;
+  min-height: 0 !important;
+}
+html.capacitor-native .rc-report-body .tab-pane {
+  display: block !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  padding-bottom: 0.25rem;
+}
+html.capacitor-native .rc-report-body .tab-pane.rc-native-pane-hidden {
+  display: none !important;
+}
+html.capacitor-native .rc-mobile-section-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 1rem 0 0.5rem;
+  padding: 0 0.15rem;
+}
+html.capacitor-native .rc-mobile-section-banner:first-child {
+  margin-top: 0.35rem;
+}
+html.capacitor-native .rc-mobile-section-banner.rc-native-hidden {
+  display: none !important;
+}
+html.capacitor-native .rc-mobile-section-banner__icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: linear-gradient(145deg, #0f766e, #115e59);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+html.capacitor-native .rc-mobile-section-banner__text {
+  font-size: 1rem;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.02em;
+}
+html.capacitor-native .rc-report-col {
+  width: 100%;
+  max-width: 100%;
+  flex: 0 0 100%;
+  margin-bottom: 0.65rem !important;
+  padding: 0 0.1rem;
+}
+html.capacitor-native .rc-report-col.rc-native-hidden {
+  display: none !important;
+}
+html.capacitor-native .rc-report-col > h6 {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+  border-bottom: none;
+  padding-bottom: 0.35rem;
+  margin-bottom: 0.45rem !important;
+}
+html.capacitor-native .rc-report-col > h6 .bi {
+  color: #0f766e;
+}
+html.capacitor-native .report-link-group {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px 8px;
+}
+@media (max-width: 380px) {
+  html.capacitor-native .report-link-group {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+html.capacitor-native .report-link-group .report-link {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  text-align: center;
+  padding: 10px 4px 8px;
+  min-height: 78px;
+  border-radius: 14px;
+  background: #fff;
+  border: 1px solid #e8edf2;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.06);
+  font-size: 0.62rem;
+  font-weight: 600;
+  line-height: 1.25;
+  color: #334155;
+  text-decoration: none;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
+}
+html.capacitor-native .report-link-group .report-link:active {
+  transform: scale(0.96);
+  border-color: #99f6e4;
+  box-shadow: 0 2px 8px rgba(15, 118, 110, 0.15);
+}
+html.capacitor-native .report-link-group .report-link .bi {
+  display: block;
+  font-size: 1.35rem !important;
+  margin: 0 0 6px 0 !important;
+  line-height: 1;
+}
+html.capacitor-native .report-link-group .report-link .bi-star {
+  color: #f59e0b !important;
+}
+html.capacitor-native .report-link-group .report-link .bi-stars,
+html.capacitor-native .report-link-group .report-link .bi-robot {
+  color: #8b5cf6 !important;
+}
+html.capacitor-native .report-link-group .report-link .bi-person-badge,
+html.capacitor-native .report-link-group .report-link .bi-bank2 {
+  color: #2563eb !important;
+}
+html.capacitor-native .report-link-group .report-link .bi-journal-bookmark,
+html.capacitor-native .report-link-group .report-link .bi-cloud-upload {
+  color: #64748b !important;
+}
+html.capacitor-native .report-link-group .report-link small {
+  display: none !important;
+}
+html.capacitor-native .rc-native-empty {
+  display: none;
+  text-align: center;
+  padding: 2rem 1rem;
+  color: #64748b;
+  font-size: 0.88rem;
+}
+html.capacitor-native .rc-native-empty.is-visible {
+  display: block;
+}
+
+.rc-mobile-section-banner {
+  display: none;
+}
+
 #reportTabs .nav-link{
   color:#555; border:none; padding:.6rem 1.2rem; font-size:.88rem;
   border-bottom:3px solid transparent; transition:all .2s;
@@ -516,46 +724,70 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function(){
-  // Active tab is set server-side (rc.first_tab). If no tab is active (edge), open first pane with links.
-  (function ensureActiveTab(){
-    if (document.querySelector('#reportTabs .nav-link.active')) return;
-    var order = ['fleet', 'task', 'hr', 'finance', 'admin'];
-    for (var i = 0; i < order.length; i++) {
-      var pane = document.getElementById(order[i]);
-      if (pane && pane.querySelector('a.report-link')) {
-        var b = document.getElementById(order[i] + '-tab');
-        if (b) try { new bootstrap.Tab(b).show(); } catch (e) {}
-        break;
+  var isNative = document.documentElement.classList.contains('capacitor-native') ||
+    (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+
+  if (!isNative) {
+    (function ensureActiveTab(){
+      if (document.querySelector('#reportTabs .nav-link.active')) return;
+      var order = ['fleet', 'task', 'hr', 'finance', 'admin'];
+      for (var i = 0; i < order.length; i++) {
+        var pane = document.getElementById(order[i]);
+        if (pane && pane.querySelector('a.report-link')) {
+          var b = document.getElementById(order[i] + '-tab');
+          if (b) try { new bootstrap.Tab(b).show(); } catch (e) {}
+          break;
+        }
       }
-    }
-  })();
+    })();
+  }
 
   var searchBox = document.getElementById('reportSearchBox');
-  if(!searchBox) return;
-  searchBox.addEventListener('input', function(){
-    var q = this.value.toLowerCase().trim();
-    document.querySelectorAll('.report-link').forEach(function(el){
-      if(!q){
-        el.classList.remove('d-none');
-      } else {
-        var txt = el.textContent.toLowerCase();
-        el.classList.toggle('d-none', txt.indexOf(q) === -1);
-      }
+  if (!searchBox) return;
+
+  function syncReportSearchVisibility() {
+    var q = searchBox.value.toLowerCase().trim();
+    var anyVisible = false;
+
+    document.querySelectorAll('.report-link').forEach(function(el) {
+      var show = !q || el.textContent.toLowerCase().indexOf(q) >= 0;
+      el.classList.toggle('d-none', !show);
+      if (show) anyVisible = true;
     });
-    if(q){
-      document.querySelectorAll('#reportTabContent .tab-pane').forEach(function(pane){
+
+    if (isNative) {
+      document.querySelectorAll('.rc-report-col').forEach(function(col) {
+        var colVisible = col.querySelector('.report-link:not(.d-none)');
+        col.classList.toggle('rc-native-hidden', !colVisible);
+      });
+      document.querySelectorAll('.rc-mobile-section-banner').forEach(function(banner) {
+        var section = banner.getAttribute('data-rc-section');
+        var pane = section ? document.getElementById(section) : null;
+        var paneVisible = pane && pane.querySelector('.report-link:not(.d-none)');
+        banner.classList.toggle('rc-native-hidden', !paneVisible);
+        if (pane) pane.classList.toggle('rc-native-pane-hidden', !paneVisible);
+      });
+      var emptyEl = document.getElementById('rcNativeSearchEmpty');
+      if (emptyEl) emptyEl.classList.toggle('is-visible', q.length > 0 && !anyVisible);
+      return;
+    }
+
+    if (q) {
+      document.querySelectorAll('#reportTabContent .tab-pane').forEach(function(pane) {
         var hasVisible = pane.querySelector('.report-link:not(.d-none)');
-        if(hasVisible){
+        if (hasVisible) {
           var tabId = pane.id;
-          var tabBtn = document.querySelector('#reportTabs button[data-bs-target="#'+tabId+'"]');
-          if(tabBtn && !tabBtn.classList.contains('active')){
-            var tab = new bootstrap.Tab(tabBtn);
-            tab.show();
+          var tabBtn = document.querySelector('#reportTabs button[data-bs-target="#' + tabId + '"]');
+          if (tabBtn && !tabBtn.classList.contains('active')) {
+            try { new bootstrap.Tab(tabBtn).show(); } catch (e) {}
           }
         }
       });
     }
-  });
+  }
+
+  searchBox.addEventListener('input', syncReportSearchVisibility);
+  if (isNative) syncReportSearchVisibility();
 });
 </script>
 {% endblock %}
