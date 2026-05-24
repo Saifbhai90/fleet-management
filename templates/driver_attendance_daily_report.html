@@ -192,7 +192,7 @@
           </div>
           <div class="col-md-2 col-lg-2">
             <label class="form-label">Project <span class="daily-filter-required">*</span></label>
-            <select name="project_id" id="dailyProjectSelect" class="form-select form-select-sm search-select" {% if disable_project %}disabled{% endif %}>
+            <select name="project_id" id="dailyProjectSelect" class="form-select search-select" {% if disable_project %}disabled{% endif %}>
               {% for val, label in form.project_id.choices %}
               <option value="{{ val }}" {% if form.project_id.data == val %}selected{% endif %}>{{ label }}</option>
               {% endfor %}
@@ -201,7 +201,7 @@
           </div>
           <div class="col-md-2 col-lg-2">
             <label class="form-label">District <span class="daily-filter-required">*</span></label>
-            <select name="district_id" id="dailyDistrictSelect" class="form-select form-select-sm search-select" {% if disable_district %}disabled{% endif %}>
+            <select name="district_id" id="dailyDistrictSelect" class="form-select search-select" {% if disable_district %}disabled{% endif %}>
               {% for val, label in form.district_id.choices %}
               <option value="{{ val }}" {% if form.district_id.data == val %}selected{% endif %}>{{ label }}</option>
               {% endfor %}
@@ -210,7 +210,7 @@
           </div>
           <div class="col-md-2 col-lg-2">
             <label class="form-label">Vehicle</label>
-            <select name="vehicle_id" id="dailyVehicleSelect" class="form-select form-select-sm search-select">
+            <select name="vehicle_id" id="dailyVehicleSelect" class="form-select search-select">
               <option value="0">-- All Vehicles --</option>
               {% for v_id, v_label in vehicle_choices %}
               <option value="{{ v_id }}" {% if selected_vehicle_id == v_id %}selected{% endif %}>{{ v_label }}</option>
@@ -222,7 +222,7 @@
           </div>
           <div class="col-md-2 col-lg-2">
             <label class="form-label">Driver</label>
-            <select name="driver_id" id="dailyDriverSelect" class="form-select form-select-sm search-select">
+            <select name="driver_id" id="dailyDriverSelect" class="form-select search-select">
               <option value="0">-- All Drivers --</option>
               {% for d in vehicle_drivers %}
               <option value="{{ d.id }}" {% if selected_driver_id == d.id %}selected{% endif %}>{{ d.name }} ({{ d.driver_id or '-' }}) - {{ d.shift or '-' }}</option>
@@ -381,7 +381,7 @@
   var districtSelect = document.getElementById('dailyDistrictSelect');
   var vehicleSelect = document.getElementById('dailyVehicleSelect');
   var driverSelect = document.getElementById('dailyDriverSelect');
-  var allDistricts = {{ (district_options or []) | tojson }};
+  var hasServerVehicles = {{ 'true' if vehicle_choices else 'false' }};
   var scope = {
     projects: {{ (session.get('allowed_projects') or []) | tojson }},
     districts: {{ (session.get('allowed_districts') or []) | tojson }},
@@ -390,10 +390,10 @@
   };
   var hasSingle = scope.projects.length === 1 && scope.districts.length === 1 && scope.vehicles.length === 1 && scope.shifts.length === 1;
 
-  function dailySelectValue(sel) {
+  function selectValue(sel) {
     if (!sel) return '0';
     if (sel.disabled && sel.name) {
-      var wrap = sel.closest('.col-md-2, .col-lg-2, .col-md-3');
+      var wrap = sel.closest('.col-md-2, .col-lg-2, .col-md-3, .col-md-4');
       if (wrap) {
         var hidden = wrap.querySelector('input[type="hidden"][name="' + sel.name + '"]');
         if (hidden && hidden.value) return String(hidden.value);
@@ -401,151 +401,177 @@
     }
     if (sel.tomselect) {
       var v = sel.tomselect.getValue();
-      return v == null || v === '' ? '0' : String(v);
+      return (v == null || v === '') ? '0' : String(v);
     }
     return sel.value || '0';
   }
 
-  function dailyRebuildTomSelect(selectEl, scopeRoot) {
-    if (!selectEl) return;
-    var saved = selectEl.value || '0';
-    if (selectEl.tomselect) {
-      try { selectEl.tomselect.destroy(); } catch (e) {}
-      delete selectEl.tomselect;
+  function reinitDropdown(el) {
+    if (!el) return;
+    if (el.tomselect) {
+      try { el.tomselect.destroy(); } catch (e) {}
+      delete el.tomselect;
     }
     if (typeof window.initSearchableDropdowns === 'function') {
-      window.initSearchableDropdowns(scopeRoot || selectEl.closest('.filter-card') || document);
+      window.initSearchableDropdowns(el.parentElement || el.closest('.filter-card') || document);
     }
-    if (saved && saved !== '0') {
-      if (selectEl.tomselect) {
-        try { selectEl.tomselect.setValue(saved, true); } catch (e) { selectEl.value = saved; }
-      } else {
-        selectEl.value = saved;
-      }
-    }
-  }
-
-  function fillDistrictOptions(list) {
-    if (!districtSelect) return;
-    var cur = dailySelectValue(districtSelect);
-    districtSelect.innerHTML = '<option value="0">-- Select District --</option>';
-    (list || []).forEach(function(d) {
-      var opt = document.createElement('option');
-      opt.value = d.id;
-      opt.textContent = d.name;
-      if (String(d.id) === String(cur)) opt.selected = true;
-      districtSelect.appendChild(opt);
-    });
-    dailyRebuildTomSelect(districtSelect);
   }
 
   function loadDistricts(projectId) {
     if (hasSingle || !districtSelect) return;
+    var cur = selectValue(districtSelect);
+    if (districtSelect.tomselect) {
+      try { districtSelect.tomselect.destroy(); } catch (e) {}
+      delete districtSelect.tomselect;
+    }
+    districtSelect.innerHTML = '<option value="0">-- Select District --</option>';
     if (!projectId || projectId === '0') {
-      fillDistrictOptions([]);
+      reinitDropdown(districtSelect);
       loadVehicles();
       return;
     }
     fetch('/api/filter/districts-by-project?project_id=' + encodeURIComponent(projectId))
-      .then(function(r) {
-        if (!r.ok) throw new Error('districts fetch failed');
-        return r.json();
-      })
+      .then(function(r) { return r.json(); })
       .then(function(districts) {
-        fillDistrictOptions(Array.isArray(districts) ? districts : []);
+        (districts || []).forEach(function(d) {
+          var opt = document.createElement('option');
+          opt.value = d.id;
+          opt.textContent = d.name;
+          districtSelect.appendChild(opt);
+        });
+        if (cur && cur !== '0') {
+          var hasCur = Array.prototype.some.call(districtSelect.options, function(o) { return o.value === String(cur); });
+          districtSelect.value = hasCur ? cur : '0';
+        }
+        reinitDropdown(districtSelect);
         loadVehicles();
       })
       .catch(function() {
-        fillDistrictOptions([]);
+        reinitDropdown(districtSelect);
         loadVehicles();
       });
   }
 
   function loadVehicles() {
     if (!vehicleSelect) return;
-    var pid = dailySelectValue(projectSelect);
-    var did = dailySelectValue(districtSelect);
-    var cur = dailySelectValue(vehicleSelect);
+    var pid = selectValue(projectSelect);
+    var did = selectValue(districtSelect);
+    var cur = selectValue(vehicleSelect);
+    if (vehicleSelect.tomselect) {
+      try { vehicleSelect.tomselect.destroy(); } catch (e) {}
+      delete vehicleSelect.tomselect;
+    }
     vehicleSelect.innerHTML = '<option value="0">-- All Vehicles --</option>';
     fetch('/api/filter/all-vehicles-by-project-district?project_id=' + encodeURIComponent(pid) + '&district_id=' + encodeURIComponent(did))
       .then(function(r) { return r.json(); })
       .then(function(vehicles) {
-        vehicles.forEach(function(v) {
+        (vehicles || []).forEach(function(v) {
           var opt = document.createElement('option');
           opt.value = v.id;
           opt.textContent = v.vehicle_no + (v.vehicle_type ? ' (' + v.vehicle_type + ')' : '');
-          if (String(v.id) === String(cur)) opt.selected = true;
           vehicleSelect.appendChild(opt);
         });
-        dailyRebuildTomSelect(vehicleSelect);
+        if (cur && cur !== '0') {
+          var hasCur = Array.prototype.some.call(vehicleSelect.options, function(o) { return o.value === String(cur); });
+          vehicleSelect.value = hasCur ? cur : '0';
+        }
+        if (hasSingle && scope.vehicles.length === 1) {
+          vehicleSelect.value = String(scope.vehicles[0]);
+          vehicleSelect.disabled = true;
+        }
+        reinitDropdown(vehicleSelect);
+        refreshDriverDropdown();
+      })
+      .catch(function() {
+        reinitDropdown(vehicleSelect);
       });
   }
 
-  function refreshDriverDropdown() {
-    if (!driverSelect) return;
-    var pid = dailySelectValue(projectSelect);
-    var did = dailySelectValue(districtSelect);
-    var vid = dailySelectValue(vehicleSelect);
-    fetch('/api/attendance/filtered-drivers?project_id=' + pid + '&district_id=' + did + '&vehicle_id=' + vid)
+  function refreshDriverDropdown(onDone) {
+    if (!driverSelect) {
+      if (typeof onDone === 'function') onDone();
+      return;
+    }
+    var pid = selectValue(projectSelect);
+    var did = selectValue(districtSelect);
+    var vid = selectValue(vehicleSelect);
+    var cur = selectValue(driverSelect);
+    if (driverSelect.tomselect) {
+      try { driverSelect.tomselect.destroy(); } catch (e) {}
+      delete driverSelect.tomselect;
+    }
+    fetch('/api/attendance/filtered-drivers?project_id=' + encodeURIComponent(pid) + '&district_id=' + encodeURIComponent(did) + '&vehicle_id=' + encodeURIComponent(vid))
       .then(function(r) { return r.json(); })
       .then(function(arr) {
-        var cur = driverSelect.value;
         driverSelect.innerHTML = '<option value="0">-- All Drivers --</option>';
-        arr.forEach(function(d) {
+        (arr || []).forEach(function(d) {
           var opt = document.createElement('option');
           opt.value = d.id;
           opt.textContent = d.name + ' (' + (d.driver_id || '-') + ') - ' + (d.shift || '-');
-          if (String(d.id) === String(cur)) opt.selected = true;
           driverSelect.appendChild(opt);
         });
-        dailyRebuildTomSelect(driverSelect);
+        if (cur && cur !== '0') {
+          var hasCur = Array.prototype.some.call(driverSelect.options, function(o) { return o.value === String(cur); });
+          driverSelect.value = hasCur ? cur : '0';
+        }
+        reinitDropdown(driverSelect);
+        if (typeof onDone === 'function') onDone();
+      })
+      .catch(function() {
+        reinitDropdown(driverSelect);
+        if (typeof onDone === 'function') onDone();
       });
   }
 
   if (projectSelect) {
     projectSelect.addEventListener('change', function() {
-      loadDistricts(dailySelectValue(projectSelect));
-      refreshDriverDropdown();
+      loadDistricts(this.value || '0');
     });
   }
   if (districtSelect) {
     districtSelect.addEventListener('change', function() {
       loadVehicles();
-      refreshDriverDropdown();
     });
   }
-  if (vehicleSelect) vehicleSelect.addEventListener('change', refreshDriverDropdown);
-
-  function dailyFilterProjectId() {
-    return dailySelectValue(projectSelect);
+  if (vehicleSelect) {
+    vehicleSelect.addEventListener('change', refreshDriverDropdown);
   }
 
-  function dailyFilterDistrictId() {
-    return dailySelectValue(districtSelect);
-  }
-
-  function dailyInitFilterCascade() {
-    if (hasSingle) return;
-    var pid = dailyFilterProjectId();
-    if (pid && pid !== '0') {
-      loadDistricts(pid);
-    } else {
-      fillDistrictOptions([]);
+  if (hasSingle) {
+    if (scope.projects.length === 1 && projectSelect) {
+      projectSelect.value = String(scope.projects[0]);
+      projectSelect.disabled = true;
+    }
+    if (scope.districts.length === 1 && districtSelect) {
+      districtSelect.value = String(scope.districts[0]);
+      districtSelect.disabled = true;
+    }
+    if (scope.vehicles.length === 1 && vehicleSelect) {
+      vehicleSelect.value = String(scope.vehicles[0]);
+      vehicleSelect.disabled = true;
     }
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function() { setTimeout(dailyInitFilterCascade, 80); });
-  } else {
-    setTimeout(dailyInitFilterCascade, 80);
-  }
+  setTimeout(function() {
+    reinitDropdown(projectSelect);
+    reinitDropdown(districtSelect);
+    reinitDropdown(vehicleSelect);
+    reinitDropdown(driverSelect);
+    if (!hasServerVehicles) {
+      var pid = selectValue(projectSelect);
+      var did = selectValue(districtSelect);
+      if (pid && pid !== '0' && did && did !== '0') {
+        loadVehicles();
+      }
+    }
+  }, 100);
 
   var dailyReportForm = document.getElementById('dailyReportForm');
   var dailyFilterClientAlert = document.getElementById('dailyFilterClientAlert');
   if (dailyReportForm) {
     dailyReportForm.addEventListener('submit', function(e) {
-      var pid = dailyFilterProjectId();
-      var did = dailyFilterDistrictId();
+      var pid = selectValue(projectSelect);
+      var did = selectValue(districtSelect);
       var msg = '';
       if ((!pid || pid === '0') && (!did || did === '0')) {
         msg = 'Pehle Project aur District select karein, phir Show button dabayein.';

@@ -20376,11 +20376,11 @@ def driver_attendance_daily_report():
         districts = districts_query.order_by(District.name).all()
         form.district_id.choices = [(0, '-- Select District --')] + [(d.id, d.name) for d in districts]
     else:
-        form.district_id.choices = [(0, '-- Select District --')]
-        if disable_district and scope_districts:
-            districts_query = District.query.filter(District.id.in_(scope_districts))
-            districts = districts_query.order_by(District.name).all()
-            form.district_id.choices = [(0, '-- Select District --')] + [(d.id, d.name) for d in districts]
+        districts_query = District.query
+        if scope_districts:
+            districts_query = districts_query.filter(District.id.in_(scope_districts))
+        districts = districts_query.order_by(District.name).all()
+        form.district_id.choices = [(0, '-- Select District --')] + [(d.id, d.name) for d in districts]
 
     today = pk_date()
     form.month.data = form.month.data or today.month
