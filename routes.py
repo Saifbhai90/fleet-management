@@ -968,6 +968,47 @@ def _attendance_daily_slot_key(rec):
     return 'E' if seg >= 2 else 'M'
 
 
+def _format_attendance_time_display(t):
+    """12-hour time for day-wise grid tooltips."""
+    if not t:
+        return None
+    s = t.strftime('%I:%M %p')
+    return s[1:] if s.startswith('0') else s
+
+
+def _attendance_daily_cell_tooltip(rec):
+    """Hover text for day-wise attendance grid cells."""
+    if not rec:
+        return ''
+    status = (rec.status or '').strip()
+    parts = []
+    ci = _format_attendance_time_display(rec.check_in)
+    co = _format_attendance_time_display(rec.check_out)
+    if status and status != 'Present':
+        parts.append(status)
+    if ci:
+        parts.append(f'Check-in: {ci}')
+    if co:
+        parts.append(f'Check-out: {co}')
+    if not parts:
+        return status or ''
+    return ', '.join(parts)
+
+
+def _count_month_present_days(grid):
+    """Distinct calendar days with at least one Present (P) slot."""
+    days = set()
+    for day_num, slots in (grid or {}).items():
+        if not isinstance(slots, dict):
+            continue
+        for slot_val in slots.values():
+            abbr = slot_val.get('v', '') if isinstance(slot_val, dict) else (slot_val or '')
+            if abbr == 'P':
+                days.add(day_num)
+                break
+    return len(days)
+
+
 def _driver_attendance_mark_redirect_url():
     """Rebuild mark form URL after clear/save."""
     date_str = (request.form.get('attendance_date') or request.args.get('date') or '').strip()
@@ -20475,7 +20516,10 @@ def driver_attendance_daily_report():
                 abbr = _attendance_status_abbr(status)
                 if day_num not in grid:
                     grid[day_num] = {}
-                grid[day_num][slot] = abbr
+                grid[day_num][slot] = {
+                    'v': abbr,
+                    'tip': _attendance_daily_cell_tooltip(r),
+                }
                 if status in status_totals:
                     status_totals[status] += 1
                     grand_totals[status] += 1
@@ -20496,6 +20540,7 @@ def driver_attendance_daily_report():
                 'shift': (d.shift or '-') or '-',
                 'driver_name': (d.name or '-') or '-',
                 'days_in_month': ndays,
+                'month_present_days': _count_month_present_days(grid),
                 'grid': grid,
                 'status_totals': status_totals,
             })

@@ -81,7 +81,12 @@
   .daily-attn-table tfoot .fc-1 { z-index: 17; }
   .daily-attn-table tfoot .fc-7 { z-index: 17; }
   .daily-attn-table .day-col { width: 16px; min-width: 16px; max-width: 16px; white-space: nowrap; padding: 1px 2px; font-size: 0.74rem; }
-  .daily-attn-table .sum-col { width: 36px; min-width: 36px; max-width: 42px; background: #f0fdf4; font-weight: 600; white-space: nowrap; padding: 2px 3px; font-size: 0.72rem; }
+  .daily-attn-table .sum-col {
+    width: 36px; min-width: 36px; max-width: 42px;
+    background: #e0f2fe; color: #0c4a6e; font-weight: 700;
+    white-space: nowrap; padding: 2px 3px; font-size: 0.72rem;
+    border-left: 1px solid #bae6fd;
+  }
   .daily-attn-table thead .days-total-hdr,
   .daily-attn-table tbody .days-total,
   .daily-attn-table tfoot .days-total {
@@ -95,22 +100,78 @@
   }
   .daily-attn-table thead .frozen-col { background: #134e4a; color: #fff; }
   .daily-attn-table thead .frozen-col.days-total-hdr { background: #fef3c7 !important; color: #92400e !important; }
-  .daily-attn-table thead .sum-col { background: #166534; color: #fff; }
+  .daily-attn-table thead .sum-col { background: #0369a1; color: #fff; border-left-color: #0284c7; }
   .daily-attn-table tbody tr:nth-child(even) td:not(.frozen-col):not(.sum-col) { background: #fafafa; }
-  .daily-attn-table tbody tr:hover td { background: #ecfdf5 !important; }
+  .daily-attn-table tbody tr:nth-child(even) td.sum-col { background: #dbeafe; }
+  .daily-attn-table tbody tr:hover td:not(.frozen-col):not(.sum-col) { background: #ecfdf5 !important; }
+  .daily-attn-table tbody tr:hover td.sum-col { background: #bfdbfe !important; }
+  .daily-driver-cell { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; max-width: 100%; }
+  .daily-driver-name { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+  .daily-driver-score {
+    font-size: 0.66rem; font-weight: 700; line-height: 1.3; color: #0f766e;
+    background: #ccfbf1; border: 1px solid #5eead4; border-radius: 10px; padding: 0 6px;
+    white-space: nowrap;
+  }
+  .daily-attn-table .day-cell[title] { cursor: help; }
   .daily-attn-table .cell-present { background: #dcfce7 !important; color: #166534; font-weight: 700; }
   .daily-attn-table .cell-absent { background: #fee2e2 !important; color: #991b1b; font-weight: 700; }
   .daily-attn-table .cell-leave { background: #dbeafe !important; color: #1e40af; font-weight: 700; }
   .daily-attn-table .cell-late { background: #fef9c3 !important; color: #854d0e; font-weight: 700; }
   .daily-attn-table .cell-half { background: #f3f4f6 !important; color: #374151; font-weight: 700; }
   .daily-attn-table .cell-off { background: #e5e7eb !important; color: #111827; font-weight: 700; }
-  .daily-attn-table .cell-empty { color: #cbd5e1; }
+  .daily-attn-table .cell-empty { background: transparent !important; color: transparent; }
   .daily-attn-table tfoot td {
-    background: #ecfdf5; font-weight: 700; color: #065f46; position: sticky; bottom: 0; z-index: 2;
+    background: #bae6fd; font-weight: 700; color: #0c4a6e; position: sticky; bottom: 0; z-index: 2;
   }
-  .daily-attn-table tfoot .frozen-col { background: #d1fae5; z-index: 5; }
+  .daily-attn-table tfoot .sum-col { background: #7dd3fc !important; color: #0c4a6e !important; }
+  .daily-attn-table tfoot .frozen-col { background: #bae6fd; z-index: 5; }
+  .daily-attn-table tfoot .day-foot { background: #e0f2fe !important; color: #0369a1; }
   .daily-attn-table thead .ft-filter-wrap { margin-left: 3px; }
-  .daily-attn-footnote { font-size: 0.75rem; color: #64748b; padding: 0.65rem 0.85rem; background: #f8fafc; border-top: 1px solid #e2e8f0; }
+  .daily-attn-footnote {
+    padding: 0.75rem 1rem 0.85rem;
+    background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+    border-top: 1px solid #e2e8f0;
+  }
+  .daily-attn-legend {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 0.45rem 0.55rem;
+  }
+  .daily-legend-group {
+    display: inline-flex; align-items: center; flex-wrap: wrap; gap: 0.35rem 0.45rem;
+  }
+  .daily-legend-group-label {
+    font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+    color: #94a3b8; margin-right: 0.1rem;
+  }
+  .daily-legend-item {
+    display: inline-flex; align-items: center; gap: 0.38rem;
+    padding: 0.18rem 0.55rem 0.18rem 0.22rem;
+    background: #fff; border: 1px solid #e2e8f0; border-radius: 999px;
+    font-size: 0.76rem; color: #475569; line-height: 1.2;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+  }
+  .daily-legend-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 22px; height: 22px; border-radius: 50%;
+    font-size: 0.68rem; font-weight: 800; line-height: 1; flex-shrink: 0;
+    border: 1px solid transparent;
+  }
+  .daily-legend-badge--slot-m { background: #ccfbf1; color: #0f766e; border-color: #5eead4; }
+  .daily-legend-badge--slot-e { background: #e0e7ff; color: #3730a3; border-color: #a5b4fc; }
+  .daily-legend-badge--present { background: #dcfce7; color: #166534; border-color: #86efac; }
+  .daily-legend-badge--absent { background: #fee2e2; color: #991b1b; border-color: #fca5a5; }
+  .daily-legend-badge--leave { background: #dbeafe; color: #1e40af; border-color: #93c5fd; }
+  .daily-legend-badge--late { background: #fef9c3; color: #854d0e; border-color: #fde047; font-size: 0.58rem; }
+  .daily-legend-badge--half { background: #f3f4f6; color: #374151; border-color: #d1d5db; }
+  .daily-legend-badge--off { background: #e5e7eb; color: #111827; border-color: #9ca3af; }
+  .daily-legend-badge--days { background: #fef3c7; color: #92400e; border-color: #fcd34d; font-size: 0.62rem; }
+  .daily-legend-sep {
+    width: 1px; height: 22px; background: #cbd5e1; margin: 0 0.15rem; flex-shrink: 0;
+  }
+  .daily-legend-note {
+    margin: 0.55rem 0 0; font-size: 0.72rem; color: #64748b;
+    display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;
+  }
+  .daily-legend-note i { color: #0f766e; font-size: 0.85rem; }
   #dailyReportExportButtons .btn { min-width: 118px; }
 </style>
 
@@ -225,15 +286,24 @@
             <td class="frozen-col fc-3 info-col">{{ row.project_name }}</td>
             <td class="frozen-col fc-4 info-col">{{ row.vehicle_no }}</td>
             <td class="frozen-col fc-5 info-col">{{ row.shift }}</td>
-            <td class="frozen-col fc-6 info-col">{{ row.driver_name }}</td>
+            <td class="frozen-col fc-6 info-col">
+              <div class="daily-driver-cell">
+                <span class="daily-driver-name">{{ row.driver_name }}</span>
+                <span class="daily-driver-score" title="Present days this month">{{ row.month_present_days }}/{{ row.days_in_month }}</span>
+              </div>
+            </td>
             <td class="frozen-col fc-7 days-total info-col">{{ row.days_in_month }}</td>
             {% for d in day_headers %}
             {% set day_num = d.day %}
             {% set day_cells = row.grid.get(day_num, {}) %}
-            {% set mv = day_cells.get('M', '') %}
-            {% set ev = day_cells.get('E', '') %}
-            <td class="day-col day-cell {% if mv == 'P' %}cell-present{% elif mv == 'A' %}cell-absent{% elif mv == 'L' %}cell-leave{% elif mv == 'Lt' %}cell-late{% elif mv == 'H' %}cell-half{% elif mv == 'O' %}cell-off{% elif mv %}cell-present{% else %}cell-empty{% endif %}" data-day="{{ day_num }}" data-slot="M">{{ mv or '·' }}</td>
-            <td class="day-col day-cell {% if ev == 'P' %}cell-present{% elif ev == 'A' %}cell-absent{% elif ev == 'L' %}cell-leave{% elif ev == 'Lt' %}cell-late{% elif ev == 'H' %}cell-half{% elif ev == 'O' %}cell-off{% elif ev %}cell-present{% else %}cell-empty{% endif %}" data-day="{{ day_num }}" data-slot="E">{{ ev or '·' }}</td>
+            {% set mcell = day_cells.get('M') or {} %}
+            {% set ecell = day_cells.get('E') or {} %}
+            {% set mv = mcell.get('v', '') if mcell is mapping else (mcell or '') %}
+            {% set ev = ecell.get('v', '') if ecell is mapping else (ecell or '') %}
+            {% set mtip = mcell.get('tip', '') if mcell is mapping else '' %}
+            {% set etip = ecell.get('tip', '') if ecell is mapping else '' %}
+            <td class="day-col day-cell {% if mv == 'P' %}cell-present{% elif mv == 'A' %}cell-absent{% elif mv == 'L' %}cell-leave{% elif mv == 'Lt' %}cell-late{% elif mv == 'H' %}cell-half{% elif mv == 'O' %}cell-off{% elif mv %}cell-present{% else %}cell-empty{% endif %}" data-day="{{ day_num }}" data-slot="M"{% if mtip %} title="{{ mtip }}"{% endif %}>{{ mv }}</td>
+            <td class="day-col day-cell {% if ev == 'P' %}cell-present{% elif ev == 'A' %}cell-absent{% elif ev == 'L' %}cell-leave{% elif ev == 'Lt' %}cell-late{% elif ev == 'H' %}cell-half{% elif ev == 'O' %}cell-off{% elif ev %}cell-present{% else %}cell-empty{% endif %}" data-day="{{ day_num }}" data-slot="E"{% if etip %} title="{{ etip }}"{% endif %}>{{ ev }}</td>
             {% endfor %}
             {% for st in status_columns %}
             <td class="sum-col">{{ row.status_totals.get(st, 0) }}</td>
@@ -255,9 +325,57 @@
         </tfoot>
       </table>
     </div>
-    <div class="daily-attn-footnote">
-      <strong>M</strong> = Morning · <strong>E</strong> = Evening · <strong>P</strong> Present · <strong>A</strong> Absent · <strong>L</strong> Leave · <strong>Lt</strong> Late · <strong>H</strong> Half-Day · <strong>O</strong> Off.
-      Days = calendar days in selected month.
+    <div class="daily-attn-footnote" id="dailyAttendanceLegend">
+      <div class="daily-attn-legend" role="list" aria-label="Attendance legend">
+        <div class="daily-legend-group" role="group" aria-label="Shift slots">
+          <span class="daily-legend-group-label">Slots</span>
+          <span class="daily-legend-item" role="listitem">
+            <span class="daily-legend-badge daily-legend-badge--slot-m" aria-hidden="true">M</span>
+            <span>Morning</span>
+          </span>
+          <span class="daily-legend-item" role="listitem">
+            <span class="daily-legend-badge daily-legend-badge--slot-e" aria-hidden="true">E</span>
+            <span>Evening</span>
+          </span>
+        </div>
+        <span class="daily-legend-sep" aria-hidden="true"></span>
+        <div class="daily-legend-group" role="group" aria-label="Attendance status">
+          <span class="daily-legend-group-label">Status</span>
+          <span class="daily-legend-item" role="listitem">
+            <span class="daily-legend-badge daily-legend-badge--present" aria-hidden="true">P</span>
+            <span>Present</span>
+          </span>
+          <span class="daily-legend-item" role="listitem">
+            <span class="daily-legend-badge daily-legend-badge--absent" aria-hidden="true">A</span>
+            <span>Absent</span>
+          </span>
+          <span class="daily-legend-item" role="listitem">
+            <span class="daily-legend-badge daily-legend-badge--leave" aria-hidden="true">L</span>
+            <span>Leave</span>
+          </span>
+          <span class="daily-legend-item" role="listitem">
+            <span class="daily-legend-badge daily-legend-badge--late" aria-hidden="true">Lt</span>
+            <span>Late</span>
+          </span>
+          <span class="daily-legend-item" role="listitem">
+            <span class="daily-legend-badge daily-legend-badge--half" aria-hidden="true">H</span>
+            <span>Half-Day</span>
+          </span>
+          <span class="daily-legend-item" role="listitem">
+            <span class="daily-legend-badge daily-legend-badge--off" aria-hidden="true">O</span>
+            <span>Off</span>
+          </span>
+        </div>
+        <span class="daily-legend-sep" aria-hidden="true"></span>
+        <span class="daily-legend-item" role="listitem">
+          <span class="daily-legend-badge daily-legend-badge--days" aria-hidden="true">D</span>
+          <span>Days in month</span>
+        </span>
+      </div>
+      <p class="daily-legend-note mb-0">
+        <i class="bi bi-info-circle" aria-hidden="true"></i>
+        <span>Colored badges match grid cells · Driver score = present days / month days · Hover a cell for check-in/out · Days = calendar days in month</span>
+      </p>
     </div>
   </div>
   {% else %}
@@ -387,7 +505,7 @@
       { cls: 'fc-3', min: 60, max: 110 },
       { cls: 'fc-4', min: 68, max: 100 },
       { cls: 'fc-5', min: 56, max: 92 },
-      { cls: 'fc-6', min: 100, max: 210 },
+      { cls: 'fc-6', min: 110, max: 220 },
       { cls: 'fc-7', min: 44, max: 56 }
     ];
     var pad = 12;
@@ -457,7 +575,7 @@
         var cell = tr.querySelector('.day-cell[data-day="' + day + '"][data-slot="' + slot + '"]');
         if (cell) {
           var v = (cell.textContent || '').trim();
-          if (v && v !== '·') count += 1;
+          if (v) count += 1;
         }
       });
       td.textContent = count;
@@ -547,9 +665,14 @@
       var proj = cellText(srcRow.querySelector('.fc-3'));
       tr.appendChild(td('<span class="pv-dp-line">' + dist + '</span><span class="pv-dp-line pv-muted">' + proj + '</span>', 'pv-dp'));
       tr.appendChild(td(cellText(srcRow.querySelector('.fc-4')), 'pv-veh'));
-      var driver = cellText(srcRow.querySelector('.fc-6'));
+      var driverCell = srcRow.querySelector('.fc-6');
+      var driverNameEl = driverCell ? driverCell.querySelector('.daily-driver-name') : null;
+      var driverScoreEl = driverCell ? driverCell.querySelector('.daily-driver-score') : null;
+      var driver = driverNameEl ? driverNameEl.textContent.trim() : cellText(driverCell);
+      var driverScore = driverScoreEl ? driverScoreEl.textContent.trim() : '';
       var shift = cellText(srcRow.querySelector('.fc-5'));
-      tr.appendChild(td('<span class="pv-ds-line">' + driver + '</span><span class="pv-ds-line pv-muted">' + shift + '</span>', 'pv-ds'));
+      var driverLine = driver + (driverScore ? ' <span class="pv-score">(' + driverScore + ')</span>' : '');
+      tr.appendChild(td('<span class="pv-ds-line">' + driverLine + '</span><span class="pv-ds-line pv-muted">' + shift + '</span>', 'pv-ds'));
       tr.appendChild(td(cellText(srcRow.querySelector('.fc-7')), 'pv-days days-total'));
       srcRow.querySelectorAll('.day-cell').forEach(function(c) {
         var n = document.createElement('td');
@@ -631,8 +754,10 @@
       '.daily-preview-table .pv-days{min-width:42px;white-space:nowrap;padding:2px 6px;}',
       '.daily-preview-table .day-col{width:1%;min-width:12px;max-width:16px;padding:2px;font-size:8px;}',
       '.daily-preview-table .date-hdr{font-size:8px;padding:2px 3px;min-width:24px;}',
-      '.daily-preview-table .sum-col{width:1%;min-width:14px;padding:2px 3px;font-size:8px;background:#f0fdf4;font-weight:700;}',
-      '.daily-preview-table thead .sum-col{background:#166534;color:#fff;}',
+      '.daily-preview-table .sum-col{width:1%;min-width:14px;padding:2px 3px;font-size:8px;background:#e0f2fe;color:#0c4a6e;font-weight:700;}',
+      '.daily-preview-table thead .sum-col{background:#0369a1;color:#fff;}',
+      '.daily-preview-table tfoot .sum-col{background:#7dd3fc!important;color:#0c4a6e!important;}',
+      '.daily-preview-table .pv-score{font-size:8px;font-weight:700;color:#0f766e;}',
       '.daily-preview-table .sum-vhdr{writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap;height:52px;max-width:18px;min-width:14px;padding:2px;font-size:8px;line-height:1;}',
       '.daily-preview-table .days-total-hdr,.daily-preview-table .days-total{background:#fef3c7!important;color:#92400e!important;}',
       '.daily-preview-table .cell-present{background:#dcfce7!important;color:#166534;font-weight:700;}',
@@ -643,7 +768,25 @@
       '.daily-preview-table .cell-off{background:#e5e7eb!important;}',
       '.daily-preview-table tfoot td{background:#ecfdf5;font-weight:700;color:#065f46;font-size:8px;}',
       '.daily-preview-table .pv-total-label{text-align:left;padding-left:6px;}',
-      '.pv-legend{padding:6px 16px 10px;color:#64748b;font-size:0.68rem;flex-shrink:0;}',
+      '.pv-legend{padding:6px 16px 10px;flex-shrink:0;}',
+      '.daily-attn-footnote{padding:0.65rem 1rem;background:linear-gradient(180deg,#f8fafc,#f1f5f9);border-top:1px solid #e2e8f0;}',
+      '.daily-attn-legend{display:flex;flex-wrap:wrap;align-items:center;gap:0.4rem 0.5rem;}',
+      '.daily-legend-group{display:inline-flex;align-items:center;flex-wrap:wrap;gap:0.3rem 0.4rem;}',
+      '.daily-legend-group-label{font-size:0.62rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#94a3b8;}',
+      '.daily-legend-item{display:inline-flex;align-items:center;gap:0.32rem;padding:0.15rem 0.5rem 0.15rem 0.2rem;background:#fff;border:1px solid #e2e8f0;border-radius:999px;font-size:0.7rem;color:#475569;}',
+      '.daily-legend-badge{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;font-size:0.64rem;font-weight:800;border:1px solid transparent;}',
+      '.daily-legend-badge--slot-m{background:#ccfbf1;color:#0f766e;border-color:#5eead4;}',
+      '.daily-legend-badge--slot-e{background:#e0e7ff;color:#3730a3;border-color:#a5b4fc;}',
+      '.daily-legend-badge--present{background:#dcfce7;color:#166534;border-color:#86efac;}',
+      '.daily-legend-badge--absent{background:#fee2e2;color:#991b1b;border-color:#fca5a5;}',
+      '.daily-legend-badge--leave{background:#dbeafe;color:#1e40af;border-color:#93c5fd;}',
+      '.daily-legend-badge--late{background:#fef9c3;color:#854d0e;border-color:#fde047;font-size:0.54rem;}',
+      '.daily-legend-badge--half{background:#f3f4f6;color:#374151;border-color:#d1d5db;}',
+      '.daily-legend-badge--off{background:#e5e7eb;color:#111827;border-color:#9ca3af;}',
+      '.daily-legend-badge--days{background:#fef3c7;color:#92400e;border-color:#fcd34d;font-size:0.58rem;}',
+      '.daily-legend-sep{width:1px;height:18px;background:#cbd5e1;margin:0 0.1rem;}',
+      '.daily-legend-note{margin:0.45rem 0 0;font-size:0.66rem;color:#64748b;display:flex;align-items:center;gap:0.35rem;}',
+      '.daily-legend-note i{color:#0f766e;}',
       '@media print{',
       'body{display:block!important;overflow:visible!important;background:#fff!important;}',
       '.pv-toolbar,.pv-hint,.pv-header,.pv-legend{display:none!important;}',
@@ -672,7 +815,8 @@
     win.document.write('<button type="button" class="pv-pdf" onclick="saveDailyPdf()"><i class="bi bi-file-earmark-pdf"></i> Save as PDF</button>');
     win.document.write('<span class="pv-hint"><i class="bi bi-info-circle"></i> Print dialog: <strong>Landscape</strong> + A3</span></div>');
     win.document.write('<div class="pv-scale-wrap"><div class="pv-scale-inner" id="pvScaleInner">' + tbl.outerHTML + '</div></div>');
-    win.document.write('<div class="pv-legend"><strong>M</strong>=Morning · <strong>E</strong>=Evening · <strong>P</strong>=Present · <strong>A</strong>=Absent · <strong>L</strong>=Leave</div>');
+    var legendSrc = document.getElementById('dailyAttendanceLegend');
+    win.document.write('<div class="pv-legend">' + (legendSrc ? legendSrc.innerHTML : '') + '</div>');
     win.document.write('<script>function applyPrintLayout(on){var inner=document.getElementById("pvScaleInner");if(!inner)return;var tbl=inner.querySelector("table");var wrap=inner.parentElement;if(on){inner.style.transform="none";inner.style.marginBottom="";inner.style.marginRight="";inner.style.width="100%";inner.style.display="block";if(tbl){tbl.style.width="100%";tbl.style.tableLayout="fixed";}if(wrap){wrap.style.width="100%";wrap.style.minHeight="";wrap.style.overflow="visible";}document.documentElement.style.setProperty("--print-scale","1");}else{if(tbl){tbl.style.width="";tbl.style.tableLayout="";}inner.style.width="";inner.style.display="";}}function fitPrintScale(forPrint){var inner=document.getElementById("pvScaleInner");if(!inner)return 1;if(forPrint){applyPrintLayout(true);return 1;}applyPrintLayout(false);inner.style.transform="none";inner.style.marginBottom="";inner.style.marginRight="";var tbl=inner.querySelector("table");var neededW=tbl?tbl.offsetWidth:inner.scrollWidth;var neededH=tbl?tbl.offsetHeight:inner.scrollHeight;if(!neededW||!neededH)return 1;var pad=16;var hdr=document.querySelector(".pv-header");var tb=document.querySelector(".pv-toolbar");var leg=document.querySelector(".pv-legend");var used=(hdr?hdr.offsetHeight:0)+(tb?tb.offsetHeight:0)+(leg?leg.offsetHeight:0)+24;var targetW=window.innerWidth-pad;var scale=targetW/neededW;scale=Math.max(0.35,Math.min(scale,5));inner.style.transform="scale("+scale+")";inner.style.transformOrigin="top left";var wrap=inner.parentElement;if(wrap){wrap.style.width="100%";var scaledH=neededH*scale;var scaledW=neededW*scale;wrap.style.minHeight=Math.ceil(scaledH+8)+"px";inner.style.marginBottom=Math.max(0,Math.ceil(scaledH-neededH))+"px";inner.style.marginRight=Math.max(0,Math.ceil(scaledW-neededW))+"px";}document.documentElement.style.setProperty("--print-scale",String(scale));return scale;}function fitAndPrint(){fitPrintScale(true);setTimeout(function(){window.print();},200);}function saveDailyPdf(){var tb=document.querySelector(".pv-print-toolbar");var s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.2/html2pdf.bundle.min.js";s.onload=function(){fitPrintScale(true);if(tb)tb.style.display="none";var el=document.getElementById("pvScaleInner");html2pdf().set({margin:[2,2,2,2],filename:"Day_Wise_Attendance_Report.pdf",image:{type:"jpeg",quality:0.92},html2canvas:{scale:2,useCORS:true,logging:false,windowWidth:el?el.scrollWidth:1200},jsPDF:{unit:"mm",format:"a3",orientation:"landscape"},pagebreak:{mode:["css","legacy"]}}).from(el).save().then(function(){if(tb)tb.style.display="";fitPrintScale(false);}).catch(function(){if(tb)tb.style.display="";fitPrintScale(false);alert("PDF error — Print se Save as PDF try karein.");});};document.head.appendChild(s);}window.addEventListener("load",function(){setTimeout(function(){fitPrintScale(false);},80);});window.addEventListener("resize",function(){fitPrintScale(false);});window.addEventListener("beforeprint",function(){fitPrintScale(true);});window.addEventListener("afterprint",function(){fitPrintScale(false);});<\/script>');
     win.document.write('</body></html>');
     win.document.close();
