@@ -32205,6 +32205,91 @@ def _linked_driver_id_for_current_user():
     return None
 
 
+def _report_centre_badge_counts(can_page, is_master):
+    """Actionable counts for Report Centre mobile tiles (permission-gated, best-effort)."""
+    badges = {}
+
+    def _set(key, val):
+        n = int(val or 0)
+        if n > 0:
+            badges[key] = n if n < 100 else 99
+
+    try:
+        if can_page('missing_documents_report'):
+            miss_q = Driver.query.filter(Driver.status != 'Left').filter(
+                db.or_(
+                    Driver.photo_path.is_(None), Driver.photo_path == '',
+                    Driver.cnic_front_path.is_(None), Driver.cnic_front_path == '',
+                    Driver.cnic_back_path.is_(None), Driver.cnic_back_path == '',
+                    Driver.license_front_path.is_(None), Driver.license_front_path == '',
+                    Driver.license_back_path.is_(None), Driver.license_back_path == '',
+                    Driver.document_path.is_(None), Driver.document_path == '',
+                )
+            )
+            _set('missing-docs', miss_q.count())
+    except Exception:
+        pass
+
+    try:
+        if can_page('book_pending_returns'):
+            from models import BookAssignment
+            _set('book-return', BookAssignment.query.filter_by(status='Active').count())
+    except Exception:
+        pass
+
+    try:
+        if can_page('oil_change_alert_report'):
+            from auth_utils import get_user_context
+            uid = session.get('user_id')
+            ctx = get_user_context(uid) if uid else {}
+            rows = _oil_change_alert_rows(
+                statuses=['near', 'crossed'],
+                allowed_projects=ctx.get('allowed_projects'),
+                allowed_districts=ctx.get('allowed_districts'),
+                allowed_vehicles=ctx.get('allowed_vehicles'),
+                is_master_or_admin=ctx.get('is_master_or_admin', is_master),
+            )
+            _set('oil-alert', len(rows))
+    except Exception:
+        pass
+
+    try:
+        if can_page('red_task_list'):
+            from models import RedTask
+            today = pk_date()
+            _set('red-task', RedTask.query.filter(RedTask.task_date == today).count())
+    except Exception:
+        pass
+
+    try:
+        if can_page('report_expiry'):
+            from datetime import timedelta
+            from auth_utils import get_user_context
+            uid = session.get('user_id')
+            ctx = get_user_context(uid) if uid else {}
+            today = pk_date()
+            horizon = today + timedelta(days=30)
+            exp_q = Driver.query.filter(
+                Driver.status != 'Left',
+                Driver.vehicle_id.isnot(None),
+            )
+            if not ctx.get('is_master_or_admin', is_master):
+                av = ctx.get('allowed_vehicles') or set()
+                if av:
+                    exp_q = exp_q.filter(Driver.vehicle_id.in_(list(av)))
+            exp_q = exp_q.filter(
+                db.or_(
+                    db.and_(Driver.license_expiry_date.isnot(None), Driver.license_expiry_date <= horizon),
+                    db.and_(Driver.cnic_expiry_date.isnot(None), Driver.cnic_expiry_date <= horizon),
+                )
+            )
+            _set('expiry', exp_q.count())
+    except Exception:
+        pass
+
+    return badges
+
+
 def _report_centre_visibility(linked_driver_id=None):
     """Which Report Centre tabs/columns have at least one permitted link (same rules as can_see_page in template)."""
     from permissions_config import can_see_page as _can_pg
@@ -32276,9 +32361,12 @@ def _report_centre_visibility(linked_driver_id=None):
 
     any_tab = bool(show_fleet or show_task or show_hr or show_finance or show_admin)
 
+    badges = _report_centre_badge_counts(c, is_master)
+
     return {
         'first_tab': first_tab,
         'any_tab': any_tab,
+        'badges': badges,
         'show_fleet': show_fleet,
         'show_task': show_task,
         'show_hr': show_hr,

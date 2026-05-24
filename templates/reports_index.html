@@ -1,9 +1,14 @@
 {% extends "base.html" %}
 {% block title %}Report Centre{% endblock %}
 {% macro report_link(href, icon, label, tile='', hint='') %}
-<a href="{{ href }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link rc-tile {{ tile }}">
+{% set rc_key = tile[9:] if tile and tile.startswith('rc-tile--') else '' %}
+{% set rc_badges = rc.badges if rc is defined and rc.badges is defined else {} %}
+<a href="{{ href }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link rc-tile {{ tile }}"{% if rc_key %} data-rc-key="{{ rc_key }}"{% endif %}>
   <span class="rc-tile-icon" aria-hidden="true"><i class="bi {{ icon }}"></i></span>
   <span class="rc-tile-label">{{ label }}</span>
+  {% if rc_key and rc_badges.get(rc_key) %}
+  <span class="rc-tile-badge" aria-label="{{ rc_badges[rc_key] }} items">{{ rc_badges[rc_key] if rc_badges[rc_key] < 99 else '99+' }}</span>
+  {% endif %}
   {% if hint %}<small class="text-muted d-block ms-4 rc-tile-hint">{{ hint }}</small>{% endif %}
 </a>
 {% endmacro %}
@@ -29,7 +34,22 @@
     No report matches your search.
   </div>
 
-  <!-- Tab Navigation — web only (mobile uses stacked sections + icon grid) -->
+  <!-- Mobile-only: horizontal pager chrome (built by JS on Capacitor) -->
+  <div class="rc-native-chrome" id="rcNativeChrome" aria-hidden="true">
+    <div class="rc-pager-dots" id="rcPagerDots" role="tablist" aria-label="Report categories"></div>
+    <div class="rc-chip-scroller-wrap">
+      <div class="rc-chip-scroller" id="rcChipScroller"></div>
+    </div>
+  </div>
+  <div class="rc-pager-viewport" id="rcPagerViewport" aria-hidden="true">
+    <div class="rc-pager-track" id="rcPagerTrack"></div>
+  </div>
+  <div class="rc-search-mode" id="rcSearchMode" hidden>
+    <p class="rc-search-mode-label" id="rcSearchModeLabel"></p>
+    <div class="rc-search-mode-grid" id="rcSearchGrid"></div>
+  </div>
+
+  <!-- Tab Navigation — web only -->
   <ul class="nav nav-tabs mb-0 rc-web-tabs" id="reportTabs" role="tablist" style="border-bottom:2px solid #dee2e6;">
     {% if rc.show_fleet %}
     <li class="nav-item" role="presentation">
@@ -69,7 +89,7 @@
   </ul>
 
   <!-- Tab Content -->
-  <div class="tab-content border border-top-0 rounded-bottom bg-white p-4 rc-report-body" id="reportTabContent">
+  <div class="tab-content border border-top-0 rounded-bottom bg-white p-4 rc-report-body rc-source-catalog" id="reportTabContent">
 
     <!-- ═══════════════ Fleet & Operations ═══════════════ -->
     {% if rc.show_fleet %}
@@ -412,165 +432,271 @@
 </div><!-- /container-fluid -->
 
 <style>
-/* ── Mobile app: section stacks + 4-column icon grid (Easypaisa-style) ── */
+/* ── Mobile app: horizontal pager + 3-column premium cards ── */
+.rc-native-chrome,
+.rc-pager-viewport,
+.rc-search-mode { display: none; }
+
 html.capacitor-native .rc-page {
-  padding-left: 0;
-  padding-right: 0;
+  padding: 0;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background: #f8fafc;
+  min-height: 100%;
 }
 html.capacitor-native .rc-page-header {
   flex-direction: column;
   align-items: stretch !important;
-  margin-bottom: 0.75rem !important;
+  margin-bottom: 0 !important;
   position: sticky;
   top: 0;
-  z-index: 20;
-  background: #f1f5f9;
-  padding-top: 0.15rem;
-  padding-bottom: 0.65rem;
+  z-index: 30;
+  background: rgba(248, 250, 252, 0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  padding: 0.35rem 0.75rem 0.55rem;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.9);
 }
 html.capacitor-native .rc-page-title {
-  font-size: 1.15rem;
+  font-size: 1.2rem;
   font-weight: 800;
+  letter-spacing: -0.03em;
+  color: #0f172a;
+  margin-bottom: 0.5rem;
+}
+html.capacitor-native .rc-page-title .bi {
+  color: #0f766e !important;
 }
 html.capacitor-native .rc-search-wrap {
   width: 100% !important;
   max-width: 100% !important;
 }
 html.capacitor-native .rc-search-icon {
-  left: 12px;
+  left: 14px;
   top: 50%;
   transform: translateY(-50%);
   color: #94a3b8;
 }
 html.capacitor-native .rc-search-wrap .form-control {
-  height: 42px;
-  border-radius: 12px;
+  height: 44px;
+  border-radius: 14px;
   border: 1px solid #e2e8f0;
   background: #fff;
   font-size: 0.9rem;
+  font-family: inherit;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
 }
-html.capacitor-native .rc-web-tabs {
-  display: none !important;
-}
-html.capacitor-native .rc-report-body {
-  border: none !important;
-  box-shadow: none !important;
-  background: transparent !important;
+html.capacitor-native .rc-web-tabs { display: none !important; }
+html.capacitor-native .rc-report-body.rc-source-catalog {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
   padding: 0 !important;
-  min-height: 0 !important;
+  margin: -1px !important;
 }
-html.capacitor-native .rc-report-body .tab-pane {
-  display: block !important;
-  opacity: 1 !important;
-  visibility: visible !important;
-  padding-bottom: 0.25rem;
+
+html.capacitor-native .rc-native-chrome {
+  display: block;
+  position: sticky;
+  z-index: 25;
+  background: rgba(248, 250, 252, 0.95);
+  backdrop-filter: blur(10px);
+  padding: 0 0.75rem 0.5rem;
 }
-html.capacitor-native .rc-report-body .tab-pane.rc-native-pane-hidden {
-  display: none !important;
-}
-html.capacitor-native .rc-mobile-section-banner {
-  display: flex;
-  align-items: center;
-  gap: 0.55rem;
-  margin: 1rem 0 0.5rem;
-  padding: 0 0.15rem;
-}
-html.capacitor-native .rc-mobile-section-banner:first-child {
-  margin-top: 0.35rem;
-}
-html.capacitor-native .rc-mobile-section-banner.rc-native-hidden {
-  display: none !important;
-}
-html.capacitor-native .rc-mobile-section-banner__icon {
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  background: linear-gradient(145deg, #0f766e, #115e59);
-  color: #fff;
+html.capacitor-native .rc-pager-dots {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1rem;
-  flex-shrink: 0;
+  gap: 6px;
+  min-height: 28px;
+  margin-bottom: 0.55rem;
 }
-html.capacitor-native .rc-mobile-section-banner__text {
-  font-size: 1rem;
-  font-weight: 800;
-  color: #0f172a;
-  letter-spacing: -0.02em;
+html.capacitor-native .rc-pager-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  border: none;
+  padding: 0;
+  background: #cbd5e1;
+  transition: width 0.28s cubic-bezier(0.4, 0, 0.2, 1), background 0.2s ease;
 }
-html.capacitor-native .rc-report-col {
-  width: 100%;
-  max-width: 100%;
-  flex: 0 0 100%;
-  margin-bottom: 0.65rem !important;
-  padding: 0 0.1rem;
+html.capacitor-native .rc-pager-dot.is-active {
+  width: 26px;
+  background: linear-gradient(90deg, #0f766e, #14b8a6);
 }
-html.capacitor-native .rc-report-col.rc-native-hidden {
-  display: none !important;
+html.capacitor-native .rc-chip-scroller-wrap {
+  margin: 0 -0.75rem;
+  padding: 0 0.75rem;
 }
-html.capacitor-native .rc-report-col > h6 {
+html.capacitor-native .rc-chip-scroller {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding-bottom: 2px;
+}
+html.capacitor-native .rc-chip-scroller::-webkit-scrollbar { display: none; }
+html.capacitor-native .rc-chip {
+  flex: 0 0 auto;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #475569;
   font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.4rem 0.85rem;
+  border-radius: 999px;
+  font-family: inherit;
+  transition: background 0.15s, color 0.15s, border-color 0.15s, transform 0.12s;
+}
+html.capacitor-native .rc-chip.is-active {
+  background: #0f766e;
+  border-color: #0f766e;
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(15, 118, 110, 0.25);
+}
+html.capacitor-native .rc-chip:active { transform: scale(0.96); }
+
+html.capacitor-native .rc-pager-viewport {
+  display: block;
+  overflow: hidden;
+  touch-action: pan-y;
+}
+html.capacitor-native .rc-pager-viewport.is-searching { display: none; }
+html.capacitor-native .rc-pager-track {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  scroll-behavior: smooth;
+}
+html.capacitor-native .rc-pager-track::-webkit-scrollbar { display: none; }
+html.capacitor-native .rc-pager-slide {
+  flex: 0 0 100%;
+  width: 100%;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  padding: 0.35rem 0.75rem 1.25rem;
+  box-sizing: border-box;
+  max-height: calc(100dvh - var(--rc-sticky-offset, 108px) - 88px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+html.capacitor-native .rc-slide-title {
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: #0f172a;
+  margin: 0 0 0.15rem;
+}
+html.capacitor-native .rc-slide-sub {
+  font-size: 0.7rem;
+  color: #64748b;
+  margin: 0 0 0.75rem;
+  font-weight: 500;
+}
+html.capacitor-native .rc-slide-subhead {
+  grid-column: 1 / -1;
+  font-size: 0.65rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: #64748b;
-  border-bottom: none;
-  padding-bottom: 0.35rem;
-  margin-bottom: 0.45rem !important;
+  letter-spacing: 0.06em;
+  color: #94a3b8;
+  margin: 0.35rem 0 0.15rem;
+  padding-top: 0.25rem;
 }
-html.capacitor-native .rc-report-col > h6 .bi {
-  color: #0f766e;
-}
-html.capacitor-native .report-link-group {
+html.capacitor-native .rc-slide-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
 }
-@media (max-width: 380px) {
-  html.capacitor-native .report-link-group {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-html.capacitor-native .report-link-group .report-link.rc-tile {
+html.capacitor-native .rc-pager-slide .report-link.rc-tile {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-start;
   text-align: center;
-  padding: 10px 4px 8px;
-  min-height: 78px;
-  border-radius: 14px;
+  padding: 12px 6px 10px;
+  min-height: 96px;
+  border-radius: 16px;
   background: #fff;
-  border: 1px solid #e8edf2;
-  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.06);
-  font-size: 0.62rem;
-  font-weight: 600;
-  line-height: 1.25;
-  color: #334155;
+  border: 1px solid #f1f5f9;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
   text-decoration: none;
-  transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
+  color: #334155;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.3;
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.18s ease;
+  -webkit-tap-highlight-color: transparent;
 }
-html.capacitor-native .report-link-group .report-link:active {
-  transform: scale(0.96);
-  border-color: #99f6e4;
-  box-shadow: 0 2px 8px rgba(15, 118, 110, 0.15);
+html.capacitor-native .rc-pager-slide .report-link.rc-tile.rc-tap-pop {
+  animation: rcTilePop 0.32s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
-html.capacitor-native .report-link-group .report-link .rc-tile-icon {
-  width: 44px;
-  height: 44px;
-  border-radius: 14px;
-  margin: 0 0 7px 0 !important;
-  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08);
+@keyframes rcTilePop {
+  0% { transform: scale(1); }
+  40% { transform: scale(0.94); }
+  100% { transform: scale(1); }
 }
-html.capacitor-native .report-link-group .report-link .rc-tile-icon .bi {
-  font-size: 1.22rem !important;
-  margin: 0 !important;
-  line-height: 1;
+html.capacitor-native .rc-pager-slide .report-link.rc-tile .rc-tile-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+  margin: 0 0 8px 0 !important;
+  box-shadow: none;
 }
-html.capacitor-native .report-link-group .report-link .rc-tile-hint,
-html.capacitor-native .report-link-group .report-link small {
-  display: none !important;
+html.capacitor-native .rc-pager-slide .report-link.rc-tile .rc-tile-icon .bi {
+  font-size: 1.28rem !important;
+}
+html.capacitor-native .rc-pager-slide .report-link.rc-tile .rc-tile-label {
+  display: block;
+  max-width: 100%;
+}
+html.capacitor-native .rc-pager-slide .report-link.rc-tile .rc-tile-hint,
+html.capacitor-native .rc-pager-slide .report-link.rc-tile small { display: none !important; }
+html.capacitor-native .rc-tile-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  box-shadow: 0 2px 6px rgba(239, 68, 68, 0.45);
+}
+html.capacitor-native .report-link.rc-tile.is-search-hit {
+  outline: 2px solid #14b8a6;
+  outline-offset: 2px;
+  box-shadow: 0 4px 16px rgba(20, 184, 166, 0.25);
+}
+html.capacitor-native .report-link.rc-tile.d-none { display: none !important; }
+
+html.capacitor-native .rc-search-mode {
+  display: none;
+  padding: 0.5rem 0.75rem 1.5rem;
+}
+html.capacitor-native .rc-search-mode.is-active { display: block; }
+html.capacitor-native .rc-search-mode-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #64748b;
+  margin-bottom: 0.65rem;
+}
+html.capacitor-native .rc-search-mode-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
 }
 html.capacitor-native .rc-native-empty {
   display: none;
@@ -578,14 +704,13 @@ html.capacitor-native .rc-native-empty {
   padding: 2rem 1rem;
   color: #64748b;
   font-size: 0.88rem;
+  font-family: inherit;
 }
-html.capacitor-native .rc-native-empty.is-visible {
-  display: block;
-}
+html.capacitor-native .rc-native-empty.is-visible { display: block; }
+html.capacitor-native .rc-native-chrome.is-searching,
+html.capacitor-native .rc-pager-viewport.is-searching { display: none !important; }
 
-.rc-mobile-section-banner {
-  display: none;
-}
+.rc-mobile-section-banner { display: none; }
 
 /* Report tile icons — web list + mobile grid */
 .rc-tile-icon {
@@ -714,49 +839,329 @@ document.addEventListener('DOMContentLoaded', function(){
   var searchBox = document.getElementById('reportSearchBox');
   if (!searchBox) return;
 
-  function syncReportSearchVisibility() {
-    var q = searchBox.value.toLowerCase().trim();
-    var anyVisible = false;
-
-    document.querySelectorAll('.report-link').forEach(function(el) {
-      var show = !q || el.textContent.toLowerCase().indexOf(q) >= 0;
-      el.classList.toggle('d-none', !show);
-      if (show) anyVisible = true;
+  if (!isNative) {
+    searchBox.addEventListener('input', function(){
+      var q = searchBox.value.toLowerCase().trim();
+      document.querySelectorAll('.report-link').forEach(function(el) {
+        var show = !q || el.textContent.toLowerCase().indexOf(q) >= 0;
+        el.classList.toggle('d-none', !show);
+      });
+      if (q) {
+        document.querySelectorAll('#reportTabContent .tab-pane').forEach(function(pane) {
+          if (pane.querySelector('.report-link:not(.d-none)')) {
+            var tabBtn = document.querySelector('#reportTabs button[data-bs-target="#' + pane.id + '"]');
+            if (tabBtn && !tabBtn.classList.contains('active')) {
+              try { new bootstrap.Tab(tabBtn).show(); } catch (e) {}
+            }
+          }
+        });
+      }
     });
+    return;
+  }
 
-    if (isNative) {
-      document.querySelectorAll('.rc-report-col').forEach(function(col) {
-        var colVisible = col.querySelector('.report-link:not(.d-none)');
-        col.classList.toggle('rc-native-hidden', !colVisible);
-      });
-      document.querySelectorAll('.rc-mobile-section-banner').forEach(function(banner) {
-        var section = banner.getAttribute('data-rc-section');
-        var pane = section ? document.getElementById(section) : null;
-        var paneVisible = pane && pane.querySelector('.report-link:not(.d-none)');
-        banner.classList.toggle('rc-native-hidden', !paneVisible);
-        if (pane) pane.classList.toggle('rc-native-pane-hidden', !paneVisible);
-      });
-      var emptyEl = document.getElementById('rcNativeSearchEmpty');
-      if (emptyEl) emptyEl.classList.toggle('is-visible', q.length > 0 && !anyVisible);
-      return;
+  initRcMobilePager();
+
+  function rcHapticLight() {
+    try {
+      var h = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Haptics;
+      if (h) h.impact({ style: 'LIGHT' }).catch(function(){});
+    } catch (e) {}
+  }
+
+  function initRcMobilePager() {
+    var track = document.getElementById('rcPagerTrack');
+    var viewport = document.getElementById('rcPagerViewport');
+    var dotsEl = document.getElementById('rcPagerDots');
+    var chipsEl = document.getElementById('rcChipScroller');
+    var chrome = document.getElementById('rcNativeChrome');
+    var searchMode = document.getElementById('rcSearchMode');
+    var searchGrid = document.getElementById('rcSearchGrid');
+    var searchLabel = document.getElementById('rcSearchModeLabel');
+    var emptyEl = document.getElementById('rcNativeSearchEmpty');
+    var header = document.querySelector('.rc-page-header');
+    if (!track || !viewport) return;
+
+    var LS_FAV = 'rc_report_favorites_v1';
+    var LS_USAGE = 'rc_report_usage_v1';
+    var DEFAULT_FAV_KEYS = ['daily-att', 'daily-task', 'vehicle-summary', 'fuel', 'missing-docs', 'driver-profile'];
+
+    var CATEGORIES = [
+      { id: 'favorites', title: 'For You', subtitle: 'Recommended & recently used', icon: 'bi-stars' },
+      { id: 'fleet', title: 'Fleet & Operations', subtitle: 'Vehicles, projects & expenses', icon: 'bi-truck' },
+      { id: 'task', title: 'Task & Logbook', subtitle: 'Daily tasks & logbooks', icon: 'bi-journal-text' },
+      { id: 'hr', title: 'HR & Workforce', subtitle: 'Drivers, attendance & workforce', icon: 'bi-people' },
+      { id: 'finance', title: 'Finance', subtitle: 'Vouchers, ledger & accounts', icon: 'bi-wallet2' },
+      { id: 'admin', title: 'Administration', subtitle: 'Logs, AI & books', icon: 'bi-gear' }
+    ];
+
+    var sourceLinks = [];
+    document.querySelectorAll('#reportTabContent a.report-link').forEach(function(a) {
+      sourceLinks.push(a);
+    });
+    if (!sourceLinks.length) return;
+
+    function linkKey(a) {
+      return a.getAttribute('data-rc-key') || (a.getAttribute('href') || '').split('?')[0];
     }
 
-    if (q) {
-      document.querySelectorAll('#reportTabContent .tab-pane').forEach(function(pane) {
-        var hasVisible = pane.querySelector('.report-link:not(.d-none)');
-        if (hasVisible) {
-          var tabId = pane.id;
-          var tabBtn = document.querySelector('#reportTabs button[data-bs-target="#' + tabId + '"]');
-          if (tabBtn && !tabBtn.classList.contains('active')) {
-            try { new bootstrap.Tab(tabBtn).show(); } catch (e) {}
-          }
+    function usageMap() {
+      try { return JSON.parse(localStorage.getItem(LS_USAGE) || '{}') || {}; } catch (e) { return {}; }
+    }
+
+    function bumpUsage(key) {
+      if (!key) return;
+      var m = usageMap();
+      m[key] = (m[key] || 0) + 1;
+      try { localStorage.setItem(LS_USAGE, JSON.stringify(m)); } catch (e) {}
+    }
+
+    function favoriteKeys() {
+      var usage = usageMap();
+      var ranked = sourceLinks.slice().sort(function(a, b) {
+        return (usage[linkKey(b)] || 0) - (usage[linkKey(a)] || 0);
+      }).map(linkKey).filter(Boolean);
+      var keys = [];
+      ranked.forEach(function(k) {
+        if (keys.indexOf(k) < 0) keys.push(k);
+      });
+      DEFAULT_FAV_KEYS.forEach(function(k) {
+        if (keys.indexOf(k) < 0) keys.push(k);
+      });
+      return keys.slice(0, 9);
+    }
+
+    function linksForCategory(catId) {
+      if (catId === 'favorites') {
+        var fav = favoriteKeys();
+        var out = [];
+        fav.forEach(function(k) {
+          sourceLinks.forEach(function(a) {
+            if (linkKey(a) === k && out.indexOf(a) < 0) out.push(a);
+          });
+        });
+        if (!out.length) out = sourceLinks.slice(0, Math.min(6, sourceLinks.length));
+        return out;
+      }
+      var pane = document.getElementById(catId);
+      if (!pane) return [];
+      return Array.prototype.slice.call(pane.querySelectorAll('a.report-link'));
+    }
+
+    var slides = [];
+    CATEGORIES.forEach(function(cat) {
+      var links = linksForCategory(cat.id);
+      if (!links.length) return;
+      slides.push({ meta: cat, links: links });
+    });
+    if (!slides.length) return;
+
+    track.innerHTML = '';
+    slides.forEach(function(slide) {
+      var section = document.createElement('section');
+      section.className = 'rc-pager-slide';
+      section.setAttribute('data-slide-id', slide.meta.id);
+      section.innerHTML = '<h2 class="rc-slide-title">' + slide.meta.title + '</h2>' +
+        '<p class="rc-slide-sub">' + slide.meta.subtitle + '</p>';
+      var grid = document.createElement('div');
+      grid.className = 'rc-slide-grid';
+
+      if (slide.meta.id === 'favorites') {
+        slide.links.forEach(function(a) {
+          grid.appendChild(a.cloneNode(true));
+        });
+      } else {
+        var pane = document.getElementById(slide.meta.id);
+        if (pane) {
+          pane.querySelectorAll('.rc-report-col').forEach(function(col) {
+            var h6 = col.querySelector('h6');
+            var colLinks = col.querySelectorAll('a.report-link');
+            if (!colLinks.length) return;
+            if (h6) {
+              var sub = document.createElement('div');
+              sub.className = 'rc-slide-subhead';
+              sub.textContent = h6.textContent.replace(/\s+/g, ' ').trim();
+              grid.appendChild(sub);
+            }
+            colLinks.forEach(function(a) {
+              grid.appendChild(a.cloneNode(true));
+            });
+          });
+        }
+      }
+      section.appendChild(grid);
+      track.appendChild(section);
+    });
+
+    chrome.setAttribute('aria-hidden', 'false');
+    viewport.setAttribute('aria-hidden', 'false');
+
+    function setStickyOffset() {
+      if (!header) return;
+      var h = header.offsetHeight;
+      document.documentElement.style.setProperty('--rc-sticky-offset', h + 'px');
+      if (chrome) chrome.style.top = h + 'px';
+    }
+    setStickyOffset();
+    window.addEventListener('resize', setStickyOffset);
+
+    dotsEl.innerHTML = '';
+    chipsEl.innerHTML = '';
+
+    var allChip = document.createElement('button');
+    allChip.type = 'button';
+    allChip.className = 'rc-chip is-active';
+    allChip.textContent = 'All';
+    allChip.setAttribute('data-slide-idx', '-1');
+    allChip.addEventListener('click', function() {
+      chipsEl.querySelectorAll('.rc-chip').forEach(function(c) { c.classList.remove('is-active'); });
+      allChip.classList.add('is-active');
+      dotsEl.querySelectorAll('.rc-pager-dot').forEach(function(d) { d.classList.remove('is-active'); });
+      rcHapticLight();
+    });
+    chipsEl.appendChild(allChip);
+
+    slides.forEach(function(slide, idx) {
+      var dot = document.createElement('button');
+      dot.type = 'button';
+      dot.className = 'rc-pager-dot' + (idx === 0 ? ' is-active' : '');
+      dot.setAttribute('aria-label', slide.meta.title);
+      dot.setAttribute('data-slide-idx', String(idx));
+      dot.addEventListener('click', function() { goToSlide(idx, true); });
+      dotsEl.appendChild(dot);
+
+      var chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'rc-chip' + (idx === 0 ? ' is-active' : '');
+      chip.textContent = slide.meta.id === 'favorites' ? 'For You' : slide.meta.title.split('&')[0].trim();
+      chip.setAttribute('data-slide-idx', String(idx));
+      chip.addEventListener('click', function() { goToSlide(idx, true); rcHapticLight(); });
+      chipsEl.appendChild(chip);
+    });
+
+    var scrollRaf = 0;
+    var activeIdx = 0;
+
+    function slideWidth() {
+      return viewport.clientWidth || window.innerWidth;
+    }
+
+    function goToSlide(idx, smooth) {
+      idx = Math.max(0, Math.min(slides.length - 1, idx));
+      activeIdx = idx;
+      track.scrollTo({ left: idx * slideWidth(), behavior: smooth ? 'smooth' : 'auto' });
+      syncPagerUi(idx);
+    }
+
+    function syncPagerUi(idx) {
+      dotsEl.querySelectorAll('.rc-pager-dot').forEach(function(d, i) {
+        d.classList.toggle('is-active', i === idx);
+      });
+      chipsEl.querySelectorAll('.rc-chip').forEach(function(c) {
+        var cIdx = parseInt(c.getAttribute('data-slide-idx'), 10);
+        var on = cIdx === idx;
+        c.classList.toggle('is-active', on);
+        if (on && cIdx >= 0) {
+          c.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+        }
+      });
+      if (allChip) allChip.classList.remove('is-active');
+    }
+
+    function onTrackScroll() {
+      if (scrollRaf) return;
+      scrollRaf = requestAnimationFrame(function() {
+        scrollRaf = 0;
+        var w = slideWidth();
+        if (!w) return;
+        var idx = Math.round(track.scrollLeft / w);
+        if (idx !== activeIdx) {
+          activeIdx = idx;
+          syncPagerUi(idx);
         }
       });
     }
-  }
+    track.addEventListener('scroll', onTrackScroll, { passive: true });
 
-  searchBox.addEventListener('input', syncReportSearchVisibility);
-  if (isNative) syncReportSearchVisibility();
+    track.querySelectorAll('a.report-link').forEach(function(a) {
+      a.addEventListener('click', function() {
+        bumpUsage(linkKey(a));
+        rcHapticLight();
+        a.classList.add('rc-tap-pop');
+        setTimeout(function() { a.classList.remove('rc-tap-pop'); }, 320);
+      });
+    });
+
+    var allPagerLinks = function() {
+      return track.querySelectorAll('a.report-link');
+    };
+
+    function setSearchMode(on) {
+      var q = searchBox.value.trim();
+      chrome.classList.toggle('is-searching', on);
+      viewport.classList.toggle('is-searching', on);
+      searchMode.classList.toggle('is-active', on);
+      emptyEl.classList.toggle('is-visible', on && !searchGrid.children.length);
+    }
+
+    function syncReportSearch() {
+      var q = searchBox.value.toLowerCase().trim();
+      if (!q) {
+        setSearchMode(false);
+        searchGrid.innerHTML = '';
+        allPagerLinks().forEach(function(a) { a.classList.remove('is-search-hit', 'd-none'); });
+        return;
+      }
+
+      setSearchMode(true);
+      searchGrid.innerHTML = '';
+      var hits = [];
+      var hitSlides = {};
+
+      allPagerLinks().forEach(function(a) {
+        var text = (a.textContent || '').toLowerCase();
+        var match = text.indexOf(q) >= 0;
+        a.classList.toggle('is-search-hit', match);
+        if (match) {
+          hits.push(a);
+          var slide = a.closest('.rc-pager-slide');
+          if (slide) hitSlides[slide.getAttribute('data-slide-id')] = true;
+        }
+      });
+
+      hits.forEach(function(a) {
+        var clone = a.cloneNode(true);
+        clone.classList.add('is-search-hit');
+        clone.addEventListener('click', function() {
+          bumpUsage(linkKey(a));
+          rcHapticLight();
+        });
+        searchGrid.appendChild(clone);
+      });
+
+      var slideNames = Object.keys(hitSlides).map(function(id) {
+        var s = slides.filter(function(x) { return x.meta.id === id; })[0];
+        return s ? s.meta.title : id;
+      });
+      if (hits.length) {
+        searchLabel.textContent = hits.length + ' result' + (hits.length > 1 ? 's' : '') +
+          (slideNames.length ? ' · ' + slideNames.slice(0, 3).join(', ') : '');
+      } else {
+        searchLabel.textContent = '';
+      }
+      emptyEl.classList.toggle('is-visible', !hits.length);
+    }
+
+    var searchDebounce = 0;
+    searchBox.addEventListener('input', function() {
+      clearTimeout(searchDebounce);
+      searchDebounce = setTimeout(syncReportSearch, 120);
+    });
+
+    window.addEventListener('orientationchange', function() {
+      setTimeout(function() { goToSlide(activeIdx, false); setStickyOffset(); }, 100);
+    });
+  }
 });
 </script>
 {% endblock %}
