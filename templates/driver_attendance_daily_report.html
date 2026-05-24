@@ -1096,31 +1096,69 @@
 
   var dailyReportForm = document.getElementById('dailyReportForm');
   var dailyFilterClientAlert = document.getElementById('dailyFilterClientAlert');
+  var dailyShowBtn = dailyReportForm ? dailyReportForm.querySelector('button[type="submit"]') : null;
+  var dailyShowBtnHtml = dailyShowBtn ? dailyShowBtn.innerHTML : '';
+
+  function resetDailyShowBtn() {
+    if (!dailyShowBtn) return;
+    dailyShowBtn.classList.remove('btn-loading');
+    dailyShowBtn.disabled = false;
+    dailyShowBtn.innerHTML = dailyShowBtnHtml;
+  }
+
+  function dailyReportFilterMessage() {
+    var pid = selectValue(projectSelect);
+    var did = selectValue(districtSelect);
+    if ((!pid || pid === '0') && (!did || did === '0')) {
+      return 'Pehle Project aur District select karein, phir Show button dabayein.';
+    }
+    if (!pid || pid === '0') {
+      return 'Pehle Project select karein, phir Show button dabayein.';
+    }
+    if (!did || did === '0') {
+      return 'Pehle District select karein, phir Show button dabayein.';
+    }
+    return '';
+  }
+
+  function showDailyFilterAlert(msg) {
+    resetDailyShowBtn();
+    if (dailyFilterClientAlert) {
+      dailyFilterClientAlert.innerHTML = '<i class="bi bi-exclamation-triangle me-1"></i>' + msg;
+      dailyFilterClientAlert.classList.remove('d-none');
+      dailyFilterClientAlert.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    } else {
+      alert(msg);
+    }
+  }
+
+  function guardDailyReportSubmit(e) {
+    if (!dailyReportForm || e.target !== dailyReportForm) return;
+    var msg = dailyReportFilterMessage();
+    if (!msg) {
+      if (dailyFilterClientAlert) dailyFilterClientAlert.classList.add('d-none');
+      return;
+    }
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+    showDailyFilterAlert(msg);
+  }
+
   if (dailyReportForm) {
-    dailyReportForm.addEventListener('submit', function(e) {
-      var pid = selectValue(projectSelect);
-      var did = selectValue(districtSelect);
-      var msg = '';
-      if ((!pid || pid === '0') && (!did || did === '0')) {
-        msg = 'Pehle Project aur District select karein, phir Show button dabayein.';
-      } else if (!pid || pid === '0') {
-        msg = 'Pehle Project select karein, phir Show button dabayein.';
-      } else if (!did || did === '0') {
-        msg = 'Pehle District select karein, phir Show button dabayein.';
-      }
-      if (msg) {
+    /* Capture phase: run before base.html global submit spinner (same phase, earlier registration). */
+    document.addEventListener('submit', guardDailyReportSubmit, true);
+    dailyReportForm.addEventListener('submit', guardDailyReportSubmit, true);
+    if (dailyShowBtn) {
+      dailyShowBtn.addEventListener('click', function(e) {
+        var msg = dailyReportFilterMessage();
+        if (!msg) return;
         e.preventDefault();
-        if (dailyFilterClientAlert) {
-          dailyFilterClientAlert.innerHTML = '<i class="bi bi-exclamation-triangle me-1"></i>' + msg;
-          dailyFilterClientAlert.classList.remove('d-none');
-          dailyFilterClientAlert.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        } else {
-          alert(msg);
-        }
-      } else if (dailyFilterClientAlert) {
-        dailyFilterClientAlert.classList.add('d-none');
-      }
-    });
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        showDailyFilterAlert(msg);
+      }, true);
+    }
   }
 
   function syncStickyHeaderHeight() {

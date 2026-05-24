@@ -20782,7 +20782,21 @@ def driver_attendance_daily_report():
         did = form.district_id.data or 0
         vehicle_choices = _build_vehicle_choices(pid, did)
 
-    if request.method == 'POST' and form.validate_on_submit():
+        project_id_early = int(form.project_id.data or 0)
+        district_id_early = int(form.district_id.data or 0)
+        if disable_project and scope_projects:
+            project_id_early = scope_projects[0]
+        if disable_district and scope_districts:
+            district_id_early = scope_districts[0]
+        if not project_id_early or not district_id_early:
+            if not project_id_early and not district_id_early:
+                filter_message = 'Pehle Project aur District select karein, phir Show button dabayein.'
+            elif not project_id_early:
+                filter_message = 'Pehle Project select karein, phir Show button dabayein.'
+            else:
+                filter_message = 'Pehle District select karein, phir Show button dabayein.'
+
+    if request.method == 'POST' and not filter_message and form.validate_on_submit():
         month = form.month.data
         year = form.year.data
         project_id = int(form.project_id.data or 0)
@@ -20792,14 +20806,7 @@ def driver_attendance_daily_report():
         if disable_district and scope_districts:
             district_id = scope_districts[0]
 
-        if not project_id or not district_id:
-            if not project_id and not district_id:
-                filter_message = 'Pehle Project aur District select karein, phir Show button dabayein.'
-            elif not project_id:
-                filter_message = 'Pehle Project select karein, phir Show button dabayein.'
-            else:
-                filter_message = 'Pehle District select karein, phir Show button dabayein.'
-        else:
+        if project_id and district_id:
             vehicle_id = request.form.get('vehicle_id', type=int) or 0
             if vehicle_id == 0:
                 vehicle_id = None
