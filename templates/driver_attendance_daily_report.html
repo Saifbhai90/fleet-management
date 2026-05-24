@@ -40,15 +40,46 @@
     top: var(--daily-hdr-row1-h); background: #115e59; font-size: 0.72rem; z-index: 3;
   }
   .daily-attn-table thead .date-hdr { font-size: 0.72rem; padding: 2px 1px; width: 34px; min-width: 34px; max-width: 34px; }
-  .daily-attn-table .info-col { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .daily-attn-table .info-col.fc-6 { white-space: nowrap; text-overflow: ellipsis; max-width: none; }
-  .daily-attn-table .fc-1 { left: 0; text-align: center; width: 32px; min-width: 32px; max-width: 32px; }
-  .daily-attn-table .fc-2 { left: 32px; width: 88px; min-width: 88px; max-width: 100px; }
-  .daily-attn-table .fc-3 { left: 120px; width: 72px; min-width: 72px; max-width: 82px; }
-  .daily-attn-table .fc-4 { left: 192px; width: 78px; min-width: 78px; max-width: 88px; }
-  .daily-attn-table .fc-5 { left: 270px; width: 52px; min-width: 52px; max-width: 58px; }
-  .daily-attn-table .fc-6 { left: 322px; width: 130px; min-width: 130px; max-width: 160px; font-size: 0.88rem; font-weight: 700; }
-  .daily-attn-table .fc-7 { left: 452px; width: 36px; min-width: 36px; max-width: 36px; text-align: center; box-shadow: 2px 0 6px rgba(0,0,0,0.06); }
+  .daily-attn-table .frozen-col.info-col {
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .daily-attn-table .fc-1 {
+    left: var(--daily-fc-1-left, 0); width: var(--daily-fc-1-w, 32px); min-width: var(--daily-fc-1-w, 32px); max-width: var(--daily-fc-1-w, 32px);
+    text-align: center; z-index: 10;
+  }
+  .daily-attn-table .fc-2 {
+    left: var(--daily-fc-2-left, 32px); width: var(--daily-fc-2-w, 88px); min-width: var(--daily-fc-2-w, 88px); max-width: var(--daily-fc-2-w, 88px);
+    z-index: 11;
+  }
+  .daily-attn-table .fc-3 {
+    left: var(--daily-fc-3-left, 120px); width: var(--daily-fc-3-w, 72px); min-width: var(--daily-fc-3-w, 72px); max-width: var(--daily-fc-3-w, 72px);
+    z-index: 12;
+  }
+  .daily-attn-table .fc-4 {
+    left: var(--daily-fc-4-left, 192px); width: var(--daily-fc-4-w, 78px); min-width: var(--daily-fc-4-w, 78px); max-width: var(--daily-fc-4-w, 78px);
+    z-index: 13;
+  }
+  .daily-attn-table .fc-5 {
+    left: var(--daily-fc-5-left, 270px); width: var(--daily-fc-5-w, 68px); min-width: var(--daily-fc-5-w, 68px); max-width: var(--daily-fc-5-w, 68px);
+    z-index: 14;
+  }
+  .daily-attn-table .fc-6 {
+    left: var(--daily-fc-6-left, 338px); width: var(--daily-fc-6-w, 130px); min-width: var(--daily-fc-6-w, 130px); max-width: var(--daily-fc-6-w, 130px);
+    font-size: 0.88rem; font-weight: 700; z-index: 15;
+  }
+  .daily-attn-table .fc-7 {
+    left: var(--daily-fc-7-left, 468px); width: var(--daily-fc-7-w, 44px); min-width: var(--daily-fc-7-w, 44px); max-width: var(--daily-fc-7-w, 44px);
+    text-align: center; box-shadow: 2px 0 6px rgba(0,0,0,0.06); z-index: 16;
+  }
+  .daily-attn-table thead .fc-1 { z-index: 20; }
+  .daily-attn-table thead .fc-2 { z-index: 21; }
+  .daily-attn-table thead .fc-3 { z-index: 22; }
+  .daily-attn-table thead .fc-4 { z-index: 23; }
+  .daily-attn-table thead .fc-5 { z-index: 24; }
+  .daily-attn-table thead .fc-6 { z-index: 25; }
+  .daily-attn-table thead .fc-7 { z-index: 26; }
+  .daily-attn-table tfoot .fc-1 { z-index: 17; }
+  .daily-attn-table tfoot .fc-7 { z-index: 17; }
   .daily-attn-table .day-col { width: 16px; min-width: 16px; max-width: 16px; white-space: nowrap; padding: 1px 2px; font-size: 0.74rem; }
   .daily-attn-table .sum-col { width: 36px; min-width: 36px; max-width: 42px; background: #f0fdf4; font-weight: 600; white-space: nowrap; padding: 2px 3px; font-size: 0.72rem; }
   .daily-attn-table thead .days-total-hdr,
@@ -59,10 +90,10 @@
   }
   .daily-attn-table thead .days-total-hdr { border-bottom: 1px solid #fcd34d !important; }
   .daily-attn-table .frozen-col {
-    position: sticky; z-index: 4; background: var(--daily-frozen-bg); text-align: left; font-weight: 600;
+    position: sticky; background: var(--daily-frozen-bg); text-align: left; font-weight: 600;
     box-shadow: 2px 0 4px rgba(0,0,0,0.04);
   }
-  .daily-attn-table thead .frozen-col { z-index: 6; background: #134e4a; color: #fff; }
+  .daily-attn-table thead .frozen-col { background: #134e4a; color: #fff; }
   .daily-attn-table thead .frozen-col.days-total-hdr { background: #fef3c7 !important; color: #92400e !important; }
   .daily-attn-table thead .sum-col { background: #166534; color: #fff; }
   .daily-attn-table tbody tr:nth-child(even) td:not(.frozen-col):not(.sum-col) { background: #fafafa; }
@@ -333,9 +364,67 @@
     if (page) page.style.setProperty('--daily-hdr-row1-h', h + 'px');
   }
 
+  var _dailyColMeasurer = null;
+  function _measureDailyColText(text, refEl) {
+    if (!_dailyColMeasurer) {
+      _dailyColMeasurer = document.createElement('span');
+      _dailyColMeasurer.setAttribute('aria-hidden', 'true');
+      _dailyColMeasurer.style.cssText = 'position:absolute;left:-9999px;top:0;visibility:hidden;white-space:nowrap;';
+      document.body.appendChild(_dailyColMeasurer);
+    }
+    var cs = getComputedStyle(refEl);
+    _dailyColMeasurer.style.font = cs.font;
+    _dailyColMeasurer.textContent = text || '';
+    return _dailyColMeasurer.offsetWidth;
+  }
+
+  function fitFrozenInfoColumns() {
+    var tbl = document.getElementById('dailyReportTable');
+    if (!tbl) return;
+    var cols = [
+      { cls: 'fc-1', min: 32, max: 40 },
+      { cls: 'fc-2', min: 70, max: 130 },
+      { cls: 'fc-3', min: 60, max: 110 },
+      { cls: 'fc-4', min: 68, max: 100 },
+      { cls: 'fc-5', min: 56, max: 92 },
+      { cls: 'fc-6', min: 100, max: 210 },
+      { cls: 'fc-7', min: 44, max: 56 }
+    ];
+    var pad = 12;
+    var left = 0;
+    cols.forEach(function(col) {
+      var refEl = tbl.querySelector('tbody .' + col.cls) || tbl.querySelector('.' + col.cls) || tbl;
+      var maxW = col.min;
+      var th = tbl.querySelector('thead th.' + col.cls);
+      if (th) {
+        var hdrText = (th.childNodes[0] && th.childNodes[0].nodeType === 3)
+          ? th.childNodes[0].textContent
+          : (th.textContent || '');
+        maxW = Math.max(maxW, _measureDailyColText(hdrText.trim(), th) + pad);
+        if (th.offsetWidth > maxW) maxW = th.offsetWidth;
+      }
+      tbl.querySelectorAll('tbody tr').forEach(function(tr) {
+        if (tr.style.display === 'none') return;
+        var cell = tr.querySelector('.' + col.cls);
+        if (!cell) return;
+        var txt = (cell.textContent || '').trim();
+        maxW = Math.max(maxW, _measureDailyColText(txt, cell) + pad);
+      });
+      maxW = Math.min(Math.max(maxW, col.min), col.max);
+      tbl.style.setProperty('--daily-' + col.cls + '-w', maxW + 'px');
+      tbl.style.setProperty('--daily-' + col.cls + '-left', left + 'px');
+      left += maxW;
+      tbl.querySelectorAll('.' + col.cls + '.info-col').forEach(function(cell) {
+        var t = (cell.textContent || '').trim();
+        cell.title = t;
+      });
+    });
+    syncStickyHeaderHeight();
+  }
+
   function revealDailyGrid() {
     var shell = document.getElementById('dailyReportResults');
-    syncStickyHeaderHeight();
+    fitFrozenInfoColumns();
     if (shell) {
       shell.classList.remove('daily-grid-pending');
       shell.classList.add('daily-grid-ready');
@@ -383,6 +472,7 @@
       tr.style.display = (fleetOk && searchOk) ? '' : 'none';
     });
     updateDayFootTotals();
+    fitFrozenInfoColumns();
   }
 
   var searchInput = document.getElementById('dailyTableSearch');
@@ -513,29 +603,32 @@
     if (!win) return;
     var styles = [
       '@page{size:A3 landscape;margin:2mm;}',
+      '@media print{@page{size:A3 landscape!important;margin:2mm!important;}}',
       '*{box-sizing:border-box;}',
-      'body{margin:0;padding:0;font-family:Inter,Segoe UI,system-ui,sans-serif;background:#f1f5f9;color:#1e293b;}',
-      '.pv-header{background:linear-gradient(135deg,#0f766e,#115e59);color:#fff;padding:10px 16px;display:flex;align-items:center;gap:10px;}',
+      'html,body{height:100%;}',
+      'body{margin:0;padding:0;font-family:Inter,Segoe UI,system-ui,sans-serif;background:#f1f5f9;color:#1e293b;display:flex;flex-direction:column;min-height:100vh;overflow:hidden;}',
+      '.pv-header{background:linear-gradient(135deg,#0f766e,#115e59);color:#fff;padding:10px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0;}',
       '.pv-header h1{margin:0;font-size:0.95rem;font-weight:700;}',
       '.pv-header .sub{font-size:0.72rem;opacity:0.9;margin-top:2px;}',
-      '.pv-toolbar{display:flex;gap:8px;padding:8px 16px;align-items:center;background:#fff;border-bottom:1px solid #e2e8f0;}',
+      '.pv-toolbar{display:flex;gap:8px;padding:8px 16px;align-items:center;background:#fff;border-bottom:1px solid #e2e8f0;flex-shrink:0;}',
       '.pv-toolbar button{border:none;border-radius:8px;padding:7px 14px;font-size:0.8rem;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;}',
       '.pv-close{background:#475569;color:#fff;}.pv-print{background:#2563eb;color:#fff;}.pv-pdf{background:#dc2626;color:#fff;}',
       '.pv-hint{margin-left:auto;color:#94a3b8;font-size:0.72rem;}',
-      '.pv-scale-wrap{padding:6px 8px 10px;overflow:hidden;width:100%;}',
-      '.pv-scale-inner{transform-origin:top left;display:inline-block;}',
+      '.pv-scale-wrap{flex:1;overflow:auto;width:100%;padding:6px 8px 10px;-webkit-overflow-scrolling:touch;}',
+      '.pv-scale-inner{transform-origin:top left;display:inline-block;will-change:transform;}',
       '.daily-preview-table{border-collapse:collapse;table-layout:auto;width:max-content;background:#fff;}',
       '.daily-preview-table th,.daily-preview-table td{border:1px solid #94a3b8;padding:3px 4px;text-align:center;vertical-align:middle;font-size:9px;line-height:1.2;}',
       '.daily-preview-table thead th{background:#0f766e;color:#fff;font-weight:700;font-size:9px;}',
       '.daily-preview-table thead tr.hdr-row-2 th{background:#115e59;font-size:8px;padding:2px;}',
       '.daily-preview-table .pv-dp,.daily-preview-table .pv-ds,.daily-preview-table .pv-veh{text-align:left;white-space:normal;word-break:break-word;}',
-      '.daily-preview-table .pv-dp{max-width:72px;min-width:58px;}',
-      '.daily-preview-table .pv-veh{max-width:64px;white-space:nowrap;}',
-      '.daily-preview-table .pv-ds{max-width:82px;min-width:64px;}',
+      '.daily-preview-table .pv-dp{min-width:72px;}',
+      '.daily-preview-table .pv-veh{min-width:72px;white-space:nowrap;}',
+      '.daily-preview-table .pv-ds{min-width:120px;}',
       '.daily-preview-table .pv-dp-line,.daily-preview-table .pv-ds-line{display:block;}',
       '.daily-preview-table .pv-ds-line:first-child{font-size:10px;font-weight:700;}',
       '.daily-preview-table .pv-muted{font-size:7.5px;color:#475569;font-weight:500;}',
-      '.daily-preview-table .pv-sr,.daily-preview-table .pv-days{width:1%;padding:2px 4px;}',
+      '.daily-preview-table .pv-sr{width:1%;padding:2px 4px;white-space:nowrap;}',
+      '.daily-preview-table .pv-days{min-width:42px;white-space:nowrap;padding:2px 6px;}',
       '.daily-preview-table .day-col{width:1%;min-width:12px;max-width:16px;padding:2px;font-size:8px;}',
       '.daily-preview-table .date-hdr{font-size:8px;padding:2px 3px;min-width:24px;}',
       '.daily-preview-table .sum-col{width:1%;min-width:14px;padding:2px 3px;font-size:8px;background:#f0fdf4;font-weight:700;}',
@@ -550,8 +643,23 @@
       '.daily-preview-table .cell-off{background:#e5e7eb!important;}',
       '.daily-preview-table tfoot td{background:#ecfdf5;font-weight:700;color:#065f46;font-size:8px;}',
       '.daily-preview-table .pv-total-label{text-align:left;padding-left:6px;}',
-      '.pv-legend{padding:6px 16px 10px;color:#64748b;font-size:0.68rem;}',
-      '@media print{body{background:#fff!important;}.pv-toolbar,.pv-hint,.pv-header,.pv-legend{display:none!important;}.pv-scale-wrap{padding:0;overflow:visible;width:100%;}.pv-scale-inner{transform:scale(var(--print-scale,1))!important;transform-origin:top left!important;}}'
+      '.pv-legend{padding:6px 16px 10px;color:#64748b;font-size:0.68rem;flex-shrink:0;}',
+      '@media print{',
+      'body{display:block!important;overflow:visible!important;background:#fff!important;}',
+      '.pv-toolbar,.pv-hint,.pv-header,.pv-legend{display:none!important;}',
+      '.pv-scale-wrap{padding:0;margin:0;overflow:visible;width:100%!important;flex:none;}',
+      '.pv-scale-inner{transform:none!important;width:100%!important;display:block!important;margin:0!important;}',
+      '.daily-preview-table{width:100%!important;table-layout:fixed!important;font-size:7px!important;}',
+      '.daily-preview-table th,.daily-preview-table td{padding:1px 2px!important;font-size:7px!important;line-height:1.15!important;}',
+      '.daily-preview-table .pv-dp,.daily-preview-table .pv-ds,.daily-preview-table .pv-veh{min-width:0!important;}',
+      '.daily-preview-table .pv-days{min-width:0!important;}',
+      '.daily-preview-table .day-col,.daily-preview-table .date-hdr{min-width:0!important;max-width:none!important;width:auto!important;}',
+      '.daily-preview-table .sum-col,.daily-preview-table .sum-vhdr{min-width:0!important;max-width:none!important;}',
+      '.daily-preview-table thead th,.daily-preview-table tfoot td{-webkit-print-color-adjust:exact;print-color-adjust:exact;}',
+      '.daily-preview-table .cell-present,.daily-preview-table .cell-absent,.daily-preview-table .cell-leave,',
+      '.daily-preview-table .cell-late,.daily-preview-table .cell-half,.daily-preview-table .cell-off,',
+      '.daily-preview-table .days-total-hdr,.daily-preview-table .days-total{-webkit-print-color-adjust:exact;print-color-adjust:exact;}',
+      '}'
     ].join('');
     win.document.open();
     win.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Day Wise Attendance Report</title>');
@@ -562,10 +670,10 @@
     win.document.write('<button type="button" class="pv-close" onclick="window.close()"><i class="bi bi-arrow-left"></i> Close</button>');
     win.document.write('<button type="button" class="pv-print" onclick="fitAndPrint()"><i class="bi bi-printer"></i> Print</button>');
     win.document.write('<button type="button" class="pv-pdf" onclick="saveDailyPdf()"><i class="bi bi-file-earmark-pdf"></i> Save as PDF</button>');
-    win.document.write('<span class="pv-hint"><i class="bi bi-info-circle"></i> Landscape A3 · auto-fit</span></div>');
+    win.document.write('<span class="pv-hint"><i class="bi bi-info-circle"></i> Print dialog: <strong>Landscape</strong> + A3</span></div>');
     win.document.write('<div class="pv-scale-wrap"><div class="pv-scale-inner" id="pvScaleInner">' + tbl.outerHTML + '</div></div>');
     win.document.write('<div class="pv-legend"><strong>M</strong>=Morning · <strong>E</strong>=Evening · <strong>P</strong>=Present · <strong>A</strong>=Absent · <strong>L</strong>=Leave</div>');
-    win.document.write('<script>function fitPrintScale(forPrint){var inner=document.getElementById("pvScaleInner");if(!inner)return 1;inner.style.transform="none";var tbl=inner.querySelector("table");var neededW=tbl?tbl.offsetWidth:inner.scrollWidth;var neededH=tbl?tbl.offsetHeight:inner.scrollHeight;if(!neededW||!neededH)return 1;var pad=12,targetW,targetH;if(forPrint){targetW=16.5*96-pad;targetH=11.4*96-pad;}else{var hdr=document.querySelector(".pv-header");var tb=document.querySelector(".pv-toolbar");var leg=document.querySelector(".pv-legend");var used=(hdr?hdr.offsetHeight:0)+(tb?tb.offsetHeight:0)+(leg?leg.offsetHeight:0)+20;targetW=window.innerWidth-pad;targetH=window.innerHeight-used;}var scale=Math.min(targetW/neededW,targetH/neededH);scale=Math.max(0.6,Math.min(scale,5));inner.style.transform="scale("+scale+")";inner.style.transformOrigin="top left";var wrap=inner.parentElement;if(wrap){wrap.style.width="100%";wrap.style.minHeight=Math.ceil(neededH*scale+6)+"px";}document.documentElement.style.setProperty("--print-scale",String(scale));return scale;}function fitAndPrint(){fitPrintScale(true);setTimeout(function(){window.print();},150);}function saveDailyPdf(){var tb=document.querySelector(".pv-print-toolbar");var s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.2/html2pdf.bundle.min.js";s.onload=function(){fitPrintScale(true);if(tb)tb.style.display="none";html2pdf().set({margin:[2,2,2,2],filename:"Day_Wise_Attendance_Report.pdf",image:{type:"jpeg",quality:0.92},html2canvas:{scale:2,useCORS:true,logging:false,windowWidth:Math.ceil(document.getElementById("pvScaleInner").scrollWidth*parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--print-scale")||1))},jsPDF:{unit:"mm",format:"a3",orientation:"landscape"},pagebreak:{mode:["css","legacy"]}}).from(document.getElementById("pvScaleInner")).save().then(function(){if(tb)tb.style.display="";}).catch(function(){if(tb)tb.style.display="";alert("PDF error — Print se Save as PDF try karein.");});};document.head.appendChild(s);}window.addEventListener("load",function(){setTimeout(function(){fitPrintScale(false);},80);});window.addEventListener("resize",function(){fitPrintScale(false);});window.addEventListener("beforeprint",function(){fitPrintScale(true);});window.addEventListener("afterprint",function(){fitPrintScale(false);});<\/script>');
+    win.document.write('<script>function applyPrintLayout(on){var inner=document.getElementById("pvScaleInner");if(!inner)return;var tbl=inner.querySelector("table");var wrap=inner.parentElement;if(on){inner.style.transform="none";inner.style.marginBottom="";inner.style.marginRight="";inner.style.width="100%";inner.style.display="block";if(tbl){tbl.style.width="100%";tbl.style.tableLayout="fixed";}if(wrap){wrap.style.width="100%";wrap.style.minHeight="";wrap.style.overflow="visible";}document.documentElement.style.setProperty("--print-scale","1");}else{if(tbl){tbl.style.width="";tbl.style.tableLayout="";}inner.style.width="";inner.style.display="";}}function fitPrintScale(forPrint){var inner=document.getElementById("pvScaleInner");if(!inner)return 1;if(forPrint){applyPrintLayout(true);return 1;}applyPrintLayout(false);inner.style.transform="none";inner.style.marginBottom="";inner.style.marginRight="";var tbl=inner.querySelector("table");var neededW=tbl?tbl.offsetWidth:inner.scrollWidth;var neededH=tbl?tbl.offsetHeight:inner.scrollHeight;if(!neededW||!neededH)return 1;var pad=16;var hdr=document.querySelector(".pv-header");var tb=document.querySelector(".pv-toolbar");var leg=document.querySelector(".pv-legend");var used=(hdr?hdr.offsetHeight:0)+(tb?tb.offsetHeight:0)+(leg?leg.offsetHeight:0)+24;var targetW=window.innerWidth-pad;var scale=targetW/neededW;scale=Math.max(0.35,Math.min(scale,5));inner.style.transform="scale("+scale+")";inner.style.transformOrigin="top left";var wrap=inner.parentElement;if(wrap){wrap.style.width="100%";var scaledH=neededH*scale;var scaledW=neededW*scale;wrap.style.minHeight=Math.ceil(scaledH+8)+"px";inner.style.marginBottom=Math.max(0,Math.ceil(scaledH-neededH))+"px";inner.style.marginRight=Math.max(0,Math.ceil(scaledW-neededW))+"px";}document.documentElement.style.setProperty("--print-scale",String(scale));return scale;}function fitAndPrint(){fitPrintScale(true);setTimeout(function(){window.print();},200);}function saveDailyPdf(){var tb=document.querySelector(".pv-print-toolbar");var s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.2/html2pdf.bundle.min.js";s.onload=function(){fitPrintScale(true);if(tb)tb.style.display="none";var el=document.getElementById("pvScaleInner");html2pdf().set({margin:[2,2,2,2],filename:"Day_Wise_Attendance_Report.pdf",image:{type:"jpeg",quality:0.92},html2canvas:{scale:2,useCORS:true,logging:false,windowWidth:el?el.scrollWidth:1200},jsPDF:{unit:"mm",format:"a3",orientation:"landscape"},pagebreak:{mode:["css","legacy"]}}).from(el).save().then(function(){if(tb)tb.style.display="";fitPrintScale(false);}).catch(function(){if(tb)tb.style.display="";fitPrintScale(false);alert("PDF error — Print se Save as PDF try karein.");});};document.head.appendChild(s);}window.addEventListener("load",function(){setTimeout(function(){fitPrintScale(false);},80);});window.addEventListener("resize",function(){fitPrintScale(false);});window.addEventListener("beforeprint",function(){fitPrintScale(true);});window.addEventListener("afterprint",function(){fitPrintScale(false);});<\/script>');
     win.document.write('</body></html>');
     win.document.close();
   }
@@ -615,13 +723,17 @@
     }, 120);
   }
 
+  var _dailyResizeTimer = null;
   function initDailyGrid() {
     waitForFleetThenInit(0);
-    window.addEventListener('resize', syncStickyHeaderHeight);
-    document.addEventListener('fleet:after-filter', function() {
-      refreshRowVisibility();
-      syncStickyHeaderHeight();
+    window.addEventListener('resize', function() {
+      clearTimeout(_dailyResizeTimer);
+      _dailyResizeTimer = setTimeout(function() {
+        fitFrozenInfoColumns();
+        syncStickyHeaderHeight();
+      }, 120);
     });
+    document.addEventListener('fleet:after-filter', refreshRowVisibility);
   }
 
   if (document.readyState === 'loading') {
