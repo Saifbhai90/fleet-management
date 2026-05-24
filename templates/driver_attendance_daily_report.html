@@ -168,7 +168,7 @@
     display: inline-flex !important; align-items: center; gap: 0.5rem;
   }
   html.capacitor-native #dailyReportExportButtons .daily-export-web,
-  html.capacitor-native #dailyReportExportButtons .btn:not(.btn-daily-export-icon) {
+  html.capacitor-native #dailyReportExportButtons .btn:not(.daily-export-tile) {
     display: none !important;
   }
   .daily-filter-required { color: #dc2626; }
@@ -193,14 +193,23 @@
   html.capacitor-native .daily-attn-page #dailyReportExportButtons {
     width: auto; flex-wrap: nowrap; gap: 0.5rem; flex-shrink: 0;
   }
-  html.capacitor-native .daily-attn-page #dailyReportExportButtons .btn-daily-export-icon {
-    width: 42px; height: 42px; padding: 0; border-radius: 12px;
+  html.capacitor-native .daily-export-tile {
+    width: 48px; height: 48px; padding: 0; border-radius: 14px;
     display: inline-flex; align-items: center; justify-content: center;
-    font-size: 1.2rem; line-height: 1; flex: 0 0 auto;
-    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
+    font-size: 1.5rem; line-height: 1; flex: 0 0 auto;
+    background: #fff; border: 2px solid; cursor: pointer;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
   }
-  html.capacitor-native .daily-attn-page #dailyReportExportButtons .btn-daily-export-icon:disabled {
-    opacity: 0.55;
+  html.capacitor-native .daily-export-tile:active { transform: scale(0.94); }
+  html.capacitor-native .daily-export-tile--pdf {
+    border-color: #ef4444; color: #dc2626;
+  }
+  html.capacitor-native .daily-export-tile--excel {
+    border-color: #22c55e; color: #16a34a;
+  }
+  html.capacitor-native .daily-export-tile:disabled {
+    opacity: 0.5; pointer-events: none;
   }
   html.capacitor-native .daily-attn-footnote {
     padding: 0.5rem 0.75rem 0.65rem;
@@ -375,9 +384,16 @@
   }
   html.capacitor-native .daily-cal-pad { min-height: 46px; }
   html.capacitor-native .daily-cal-day {
-    min-height: 46px; border: none; border-radius: 10px;
+    min-height: 46px; border: 1px solid transparent; border-radius: 10px;
     padding: 3px 2px; display: flex; flex-direction: column;
     background: #fff; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+    cursor: pointer; font: inherit; color: inherit; width: 100%;
+    text-align: center; -webkit-tap-highlight-color: transparent;
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+  }
+  html.capacitor-native .daily-cal-day:active { transform: scale(0.96); }
+  html.capacitor-native .daily-cal-day--has-detail.daily-cal-day--active {
+    box-shadow: 0 2px 6px rgba(15, 118, 110, 0.22);
   }
   html.capacitor-native .daily-cal-day--active {
     box-shadow: 0 2px 6px rgba(15, 118, 110, 0.18);
@@ -526,6 +542,104 @@
   html.capacitor-native .daily-native-empty {
     text-align: center; padding: 2rem 1rem; color: #64748b; font-size: 0.88rem;
   }
+
+  html.capacitor-native body.daily-cal-sheet-open {
+    overflow: hidden; touch-action: none;
+  }
+  html.capacitor-native .daily-export-tile__icon {
+    width: 26px; height: 26px; flex-shrink: 0;
+  }
+
+  /* Day detail bottom sheet (mobile native) */
+  .daily-cal-sheet { display: none !important; }
+  html.capacitor-native .daily-cal-sheet {
+    display: flex !important;
+    position: fixed; inset: 0; z-index: 12050;
+    flex-direction: column; justify-content: flex-end;
+    pointer-events: none; visibility: hidden;
+  }
+  html.capacitor-native .daily-cal-sheet.is-open {
+    pointer-events: auto; visibility: visible;
+  }
+  html.capacitor-native .daily-cal-sheet__backdrop {
+    position: absolute; inset: 0; background: rgba(15, 23, 42, 0.45);
+    opacity: 0; transition: opacity 0.25s ease;
+  }
+  html.capacitor-native .daily-cal-sheet.is-open .daily-cal-sheet__backdrop {
+    opacity: 1;
+  }
+  html.capacitor-native .daily-cal-sheet__panel {
+    position: relative; background: #fff; border-radius: 20px 20px 0 0;
+    max-height: min(78vh, 520px); display: flex; flex-direction: column;
+    box-shadow: 0 -12px 40px rgba(15, 23, 42, 0.22);
+    transform: translateY(100%); transition: transform 0.32s cubic-bezier(0.32, 0.72, 0, 1);
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+  html.capacitor-native .daily-cal-sheet.is-open .daily-cal-sheet__panel {
+    transform: translateY(0);
+  }
+  html.capacitor-native .daily-cal-sheet__handle {
+    width: 40px; height: 4px; border-radius: 999px; background: #cbd5e1;
+    margin: 10px auto 4px; flex-shrink: 0;
+  }
+  html.capacitor-native .daily-cal-sheet__head {
+    display: flex; align-items: flex-start; gap: 0.5rem;
+    padding: 0.35rem 1rem 0.75rem; border-bottom: 1px solid #f1f5f9;
+  }
+  html.capacitor-native .daily-cal-sheet__head-text { flex: 1; min-width: 0; }
+  html.capacitor-native .daily-cal-sheet__title {
+    font-size: 1.05rem; font-weight: 800; color: #0f172a; line-height: 1.25;
+  }
+  html.capacitor-native .daily-cal-sheet__sub {
+    font-size: 0.78rem; color: #64748b; margin-top: 0.15rem;
+    word-break: break-word;
+  }
+  html.capacitor-native .daily-cal-sheet__close {
+    flex-shrink: 0; width: 34px; height: 34px; border: none; border-radius: 50%;
+    background: #f1f5f9; color: #475569; font-size: 1.35rem; line-height: 1;
+    display: flex; align-items: center; justify-content: center; cursor: pointer;
+  }
+  html.capacitor-native .daily-cal-sheet__body {
+    overflow-y: auto; padding: 0.85rem 1rem 1.1rem;
+    -webkit-overflow-scrolling: touch;
+  }
+  html.capacitor-native .daily-cal-sheet__slot {
+    border-radius: 14px; padding: 0.75rem 0.85rem; margin-bottom: 0.65rem;
+    border: 1px solid #e2e8f0; background: #f8fafc;
+  }
+  html.capacitor-native .daily-cal-sheet__slot:last-child { margin-bottom: 0; }
+  html.capacitor-native .daily-cal-sheet__slot-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
+    margin-bottom: 0.45rem;
+  }
+  html.capacitor-native .daily-cal-sheet__slot-label {
+    font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.04em; color: #64748b;
+  }
+  html.capacitor-native .daily-cal-sheet__slot-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 28px; height: 28px; padding: 0 0.35rem; border-radius: 8px;
+    font-size: 0.78rem; font-weight: 800;
+  }
+  html.capacitor-native .daily-cal-sheet__slot-badge--present { background: #dcfce7; color: #166534; }
+  html.capacitor-native .daily-cal-sheet__slot-badge--absent { background: #fee2e2; color: #991b1b; }
+  html.capacitor-native .daily-cal-sheet__slot-badge--leave { background: #dbeafe; color: #1e40af; }
+  html.capacitor-native .daily-cal-sheet__slot-badge--late { background: #fef9c3; color: #854d0e; }
+  html.capacitor-native .daily-cal-sheet__slot-badge--half { background: #f3f4f6; color: #374151; }
+  html.capacitor-native .daily-cal-sheet__slot-badge--off { background: #e5e7eb; color: #111827; }
+  html.capacitor-native .daily-cal-sheet__slot-badge--empty { background: #f1f5f9; color: #94a3b8; }
+  html.capacitor-native .daily-cal-sheet__slot-status {
+    font-size: 0.88rem; font-weight: 700; color: #0f172a;
+  }
+  html.capacitor-native .daily-cal-sheet__slot-meta {
+    font-size: 0.76rem; color: #475569; line-height: 1.45;
+  }
+  html.capacitor-native .daily-cal-sheet__slot-meta div + div { margin-top: 0.2rem; }
+  html.capacitor-native .daily-cal-sheet__slot--empty {
+    background: #fafafa; border-style: dashed; color: #94a3b8;
+  }
+  html.capacitor-native .daily-cal-sheet__slot--m { border-left: 3px solid #14b8a6; }
+  html.capacitor-native .daily-cal-sheet__slot--e { border-left: 3px solid #6366f1; }
 </style>
 
 <div class="container-fluid daily-attn-page">
@@ -541,13 +655,19 @@
         </button>
       </span>
       <span class="daily-export-native">
-        <button type="button" class="btn btn-success btn-daily-export-icon" id="dailyExportExcelNative" title="Excel">
-          <i class="bi bi-file-earmark-excel" aria-hidden="true"></i>
-          <span class="visually-hidden">Excel</span>
+        <button type="button" class="daily-export-tile daily-export-tile--pdf" id="dailyExportPdfNative" title="Download PDF" aria-label="Download PDF">
+          <svg class="daily-export-tile__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M7 3h7l5 5v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/>
+            <path d="M14 3v6h6"/>
+            <path d="M8.5 14.5h7M8.5 17h5.5" stroke-width="1.5"/>
+          </svg>
         </button>
-        <button type="button" class="btn btn-danger btn-daily-export-icon" id="dailyExportPdfNative" title="PDF">
-          <i class="bi bi-file-earmark-pdf" aria-hidden="true"></i>
-          <span class="visually-hidden">PDF</span>
+        <button type="button" class="daily-export-tile daily-export-tile--excel" id="dailyExportExcelNative" title="Export Excel" aria-label="Export Excel">
+          <svg class="daily-export-tile__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M7 3h7l5 5v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/>
+            <path d="M14 3v6h6"/>
+            <path d="M9.5 13.5 14.5 18M14.5 13.5 9.5 18" stroke-width="1.6"/>
+          </svg>
         </button>
       </span>
     </div>
@@ -748,7 +868,7 @@
     <div class="daily-native-view" id="dailyNativeView" aria-hidden="true">
       <div class="daily-native-list" id="dailyNativeList">
         {% for row in report %}
-        <article class="daily-driver-card" data-native-row="{{ loop.index0 }}" data-search-text="{{ (row.driver_name ~ ' ' ~ row.district_name ~ ' ' ~ row.project_name ~ ' ' ~ row.vehicle_no ~ ' ' ~ row.shift)|lower }}">
+        <article class="daily-driver-card" data-native-row="{{ loop.index0 }}" data-driver-name="{{ row.driver_name|e }}" data-search-text="{{ (row.driver_name ~ ' ' ~ row.district_name ~ ' ' ~ row.project_name ~ ' ' ~ row.vehicle_no ~ ' ' ~ row.shift)|lower }}">
           <button type="button" class="daily-driver-card__head" aria-expanded="false" aria-controls="daily-native-body-{{ loop.index }}">
             <span class="daily-driver-card__sr">{{ loop.index }}</span>
             <div class="daily-driver-card__title-wrap">
@@ -790,7 +910,7 @@
               {% set etip = ecell.get('tip', '') if ecell is mapping else '' %}
               {% set day_has_data = mv or ev %}
               {% set is_cal_today = cal_today_day and day_num == cal_today_day %}
-              <div class="daily-cal-day{% if day_has_data %} daily-cal-day--active{% endif %}{% if is_cal_today %} daily-cal-day--today{% endif %}" data-cal-day="{{ day_num }}"{% if is_cal_today %} aria-current="date"{% endif %} title="{% if is_cal_today %}Today — {% endif %}Day {{ '%02d'|format(day_num) }}">
+              <button type="button" class="daily-cal-day{% if day_has_data %} daily-cal-day--active daily-cal-day--has-detail{% endif %}{% if is_cal_today %} daily-cal-day--today{% endif %}" data-cal-day="{{ day_num }}" data-m-status="{{ mv }}" data-e-status="{{ ev }}" data-m-tip="{{ mtip|e }}" data-e-tip="{{ etip|e }}" aria-label="Day {{ '%02d'|format(day_num) }} attendance details"{% if is_cal_today %} aria-current="date"{% endif %}>
                 <span class="daily-cal-day-num">{{ '%02d'|format(day_num) }}</span>
                 <div class="daily-cal-slots">
                   <div class="daily-cal-slot-row">
@@ -802,7 +922,7 @@
                     <span class="daily-cal-slot {% if ev == 'P' %}daily-cal-slot--present{% elif ev == 'A' %}daily-cal-slot--absent{% elif ev == 'L' %}daily-cal-slot--leave{% elif ev == 'Lt' %}daily-cal-slot--late{% elif ev == 'H' %}daily-cal-slot--half{% elif ev == 'O' %}daily-cal-slot--off{% elif ev %}daily-cal-slot--present{% else %}daily-cal-slot--empty{% endif %}"{% if etip %} title="{{ etip }}"{% endif %}>{{ ev }}</span>
                   </div>
                 </div>
-              </div>
+              </button>
               {% endfor %}
             </div>
           </div>
@@ -834,6 +954,21 @@
           </div>
         </div>
       <div class="daily-native-empty d-none" id="dailyNativeEmpty">No driver matches your search.</div>
+    </div>
+
+    <div id="dailyCalDaySheet" class="daily-cal-sheet" aria-hidden="true">
+      <div class="daily-cal-sheet__backdrop" data-cal-sheet-close="1" aria-hidden="true"></div>
+      <div class="daily-cal-sheet__panel" role="dialog" aria-modal="true" aria-labelledby="dailyCalSheetTitle">
+        <div class="daily-cal-sheet__handle" aria-hidden="true"></div>
+        <div class="daily-cal-sheet__head">
+          <div class="daily-cal-sheet__head-text">
+            <div class="daily-cal-sheet__title" id="dailyCalSheetTitle">Day detail</div>
+            <div class="daily-cal-sheet__sub" id="dailyCalSheetSub"></div>
+          </div>
+          <button type="button" class="daily-cal-sheet__close" data-cal-sheet-close="1" aria-label="Close">&times;</button>
+        </div>
+        <div class="daily-cal-sheet__body" id="dailyCalSheetBody"></div>
+      </div>
     </div>
 
     <div class="daily-attn-footnote" id="dailyAttendanceLegend">
@@ -1231,6 +1366,146 @@
 
   var _nativeCardsBound = false;
 
+  var _dailyCalSheetBound = false;
+  var _dailyStatusNames = {
+    P: 'Present', A: 'Absent', L: 'Leave', Lt: 'Late', H: 'Half-Day', O: 'Off'
+  };
+
+  function _dailySlotBadgeClass(code) {
+    if (code === 'P') return 'present';
+    if (code === 'A') return 'absent';
+    if (code === 'L') return 'leave';
+    if (code === 'Lt') return 'late';
+    if (code === 'H') return 'half';
+    if (code === 'O') return 'off';
+    return 'empty';
+  }
+
+  function _escapeDailyHtml(s) {
+    if (!s) return '';
+    var el = document.createElement('span');
+    el.textContent = s;
+    return el.innerHTML;
+  }
+
+  function _parseDailyTipLines(tip) {
+    if (!tip) return [];
+    return tip.split(/,\s*/).map(function(s) { return s.trim(); }).filter(Boolean);
+  }
+
+  function _formatDailySheetDate(dayNum) {
+    var monthEl = document.querySelector('#dailyReportForm input[name="month"]');
+    var yearEl = document.querySelector('#dailyReportForm input[name="year"]');
+    var m = monthEl ? parseInt(monthEl.value, 10) : NaN;
+    var y = yearEl ? parseInt(yearEl.value, 10) : NaN;
+    if (isNaN(m) || isNaN(y) || !dayNum) {
+      return 'Day ' + String(dayNum).padStart(2, '0');
+    }
+    var dt = new Date(y, m - 1, dayNum);
+    if (isNaN(dt.getTime())) {
+      return 'Day ' + String(dayNum).padStart(2, '0');
+    }
+    return dt.toLocaleDateString(undefined, {
+      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+    });
+  }
+
+  function _buildDailySheetSlotHtml(slotKey, slotLabel, code, tip) {
+    var badgeCls = _dailySlotBadgeClass(code);
+    var statusName = code ? (_dailyStatusNames[code] || code) : 'No attendance';
+    var lines = _parseDailyTipLines(tip);
+    var metaHtml = '';
+    if (!code) {
+      metaHtml = '<div class="daily-cal-sheet__slot-meta">No check-in recorded for this slot.</div>';
+    } else if (lines.length) {
+      metaHtml = '<div class="daily-cal-sheet__slot-meta">' +
+        lines.map(function(line) { return '<div>' + _escapeDailyHtml(line) + '</div>'; }).join('') +
+        '</div>';
+    } else {
+      metaHtml = '<div class="daily-cal-sheet__slot-meta">Status: ' + statusName + '</div>';
+    }
+    return '<div class="daily-cal-sheet__slot daily-cal-sheet__slot--' + slotKey + (code ? '' : ' daily-cal-sheet__slot--empty') + '">' +
+      '<div class="daily-cal-sheet__slot-head">' +
+      '<span class="daily-cal-sheet__slot-label">' + slotLabel + ' (' + slotKey + ')</span>' +
+      '<span class="daily-cal-sheet__slot-badge daily-cal-sheet__slot-badge--' + badgeCls + '">' + (code || '—') + '</span>' +
+      '</div>' +
+      '<div class="daily-cal-sheet__slot-status">' + statusName + '</div>' +
+      metaHtml +
+      '</div>';
+  }
+
+  function closeDailyCalDaySheet() {
+    var sheet = document.getElementById('dailyCalDaySheet');
+    if (!sheet) return;
+    sheet.classList.remove('is-open');
+    sheet.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('daily-cal-sheet-open');
+  }
+
+  function openDailyCalDaySheet(dayBtn) {
+    if (!isDailyNativeApp() || !dayBtn) return;
+    var sheet = document.getElementById('dailyCalDaySheet');
+    var titleEl = document.getElementById('dailyCalSheetTitle');
+    var subEl = document.getElementById('dailyCalSheetSub');
+    var bodyEl = document.getElementById('dailyCalSheetBody');
+    if (!sheet || !bodyEl) return;
+
+    var card = dayBtn.closest('.daily-driver-card');
+    var driverName = card ? (card.getAttribute('data-driver-name') || '') : '';
+    var dayNum = parseInt(dayBtn.getAttribute('data-cal-day'), 10);
+    var mCode = (dayBtn.getAttribute('data-m-status') || '').trim();
+    var eCode = (dayBtn.getAttribute('data-e-status') || '').trim();
+    var mTip = dayBtn.getAttribute('data-m-tip') || '';
+    var eTip = dayBtn.getAttribute('data-e-tip') || '';
+
+    if (titleEl) titleEl.textContent = _formatDailySheetDate(dayNum);
+    if (subEl) subEl.textContent = driverName || 'Driver';
+
+    bodyEl.innerHTML =
+      _buildDailySheetSlotHtml('m', 'Morning', mCode, mTip) +
+      _buildDailySheetSlotHtml('e', 'Evening', eCode, eTip);
+
+    sheet.classList.add('is-open');
+    sheet.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('daily-cal-sheet-open');
+
+    if (window.FleetBridge && window.FleetBridge.isNative && window.Capacitor &&
+        window.Capacitor.Plugins && window.Capacitor.Plugins.Haptics) {
+      window.Capacitor.Plugins.Haptics.impact({ style: 'LIGHT' }).catch(function() {});
+    }
+  }
+
+  function initDailyCalDaySheet() {
+    if (!isDailyNativeApp() || _dailyCalSheetBound) return;
+    _dailyCalSheetBound = true;
+
+    var sheet = document.getElementById('dailyCalDaySheet');
+    var nativeView = document.getElementById('dailyNativeView');
+    if (!sheet || !nativeView) return;
+
+    nativeView.addEventListener('click', function(e) {
+      if (e.target.closest('[data-cal-sheet-close]')) return;
+      var dayBtn = e.target.closest('.daily-cal-day');
+      if (!dayBtn) return;
+      e.preventDefault();
+      e.stopPropagation();
+      openDailyCalDaySheet(dayBtn);
+    });
+
+    sheet.addEventListener('click', function(e) {
+      if (e.target.closest('[data-cal-sheet-close]')) {
+        e.preventDefault();
+        closeDailyCalDaySheet();
+      }
+    });
+
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape' && sheet.classList.contains('is-open')) {
+        closeDailyCalDaySheet();
+      }
+    });
+  }
+
   function highlightNativeCalendarToday() {
     if (!isDailyNativeApp()) return;
     var monthEl = document.querySelector('#dailyReportForm input[name="month"]');
@@ -1351,6 +1626,7 @@
     });
     if (emptyEl) emptyEl.classList.toggle('d-none', visible > 0);
     updateNativeListMode(visible);
+    closeDailyCalDaySheet();
   }
 
   function revealDailyGrid() {
@@ -1365,6 +1641,7 @@
       nativeView.setAttribute('aria-hidden', 'false');
       bindNativeDriverCards();
       initDailyLegendToggle();
+      initDailyCalDaySheet();
       highlightNativeCalendarToday();
       syncNativeCardVisibility();
     }
