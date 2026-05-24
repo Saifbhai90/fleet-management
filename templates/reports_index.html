@@ -1,827 +1,1837 @@
 {% extends "base.html" %}
+
 {% block title %}Report Centre{% endblock %}
+
 {% macro report_link(href, icon, label, tile='', hint='') %}
+
 {% set rc_key = tile[9:] if tile and tile.startswith('rc-tile--') else '' %}
+
 {% set rc_badges = rc.badges if rc is defined and rc.badges is defined else {} %}
-<a href="{{ href }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link rc-tile {{ tile }}"{% if rc_key %} data-rc-key="{{ rc_key }}"{% endif %}>
-  <span class="rc-tile-icon" aria-hidden="true"><i class="bi {{ icon }}"></i></span>
-  <span class="rc-tile-label">{{ label }}</span>
+
+{% set desc = hint if hint else ('View and export ' ~ label ~ ' data from Fleet Manager.') %}
+
+<a href="{{ href }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link rc-tile rc-report-card {{ tile }}"{% if rc_key %} data-rc-key="{{ rc_key }}"{% endif %} data-rc-desc="{{ desc|e }}">
+
+  <button type="button" class="rc-card-star" aria-label="Add to favorites" title="Favorite"><i class="bi bi-star"></i></button>
+
   {% if rc_key and rc_badges.get(rc_key) %}
+
   <span class="rc-tile-badge" aria-label="{{ rc_badges[rc_key] }} items">{{ rc_badges[rc_key] if rc_badges[rc_key] < 99 else '99+' }}</span>
+
   {% endif %}
+
+  <div class="rc-card-content">
+
+    <span class="rc-tile-icon" aria-hidden="true"><i class="bi {{ icon }}"></i></span>
+
+    <div class="rc-card-text">
+
+      <span class="rc-tile-label">{{ label }}</span>
+
+      <span class="rc-card-desc">{{ desc }}</span>
+
+      <div class="rc-card-meta">
+
+        <span class="rc-card-tag"></span>
+
+        <span class="rc-card-last"></span>
+
+      </div>
+
+    </div>
+
+  </div>
+
   {% if hint %}<small class="text-muted d-block ms-4 rc-tile-hint">{{ hint }}</small>{% endif %}
+
 </a>
+
 {% endmacro %}
+
 {% block content %}
+
 <div class="container-fluid rc-page">
 
-  <div class="rc-page-header d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
-    <h4 class="mb-0 rc-page-title"><i class="bi bi-bar-chart-line me-2 text-primary"></i>Report Centre</h4>
-    {% if rc.any_tab %}
-    <div class="position-relative rc-search-wrap">
-      <i class="bi bi-search position-absolute rc-search-icon"></i>
-      <input type="text" id="reportSearchBox" class="form-control form-control-sm ps-4" placeholder="Search reports..." autocomplete="off">
+
+
+  <!-- Web-only SaaS hero (hidden on Capacitor native) -->
+
+  <header class="rc-web-hero rc-web-only">
+
+    <div class="rc-web-hero-inner">
+
+      <h1 class="rc-web-hero-title">Report Centre</h1>
+
+      <p class="rc-web-hero-sub">Insights across fleet, workforce, finance, and operations</p>
+
+      {% if rc.any_tab %}
+
+      <div class="rc-web-search-glass">
+
+        <i class="bi bi-search rc-web-search-glass-icon" aria-hidden="true"></i>
+
+        <input type="text" id="reportSearchBoxWeb" class="rc-web-search-input" placeholder="Search reports by name or category…" autocomplete="off" aria-label="Search reports">
+
+      </div>
+
+      {% endif %}
+
     </div>
+
+  </header>
+
+
+
+  <section class="rc-web-recent rc-web-only" id="rcWebRecent" hidden aria-label="Recently viewed reports">
+
+    <div class="rc-web-recent-head">
+
+      <h2 class="rc-web-recent-title"><i class="bi bi-clock-history me-2"></i>Recently viewed</h2>
+
+    </div>
+
+    <div class="rc-web-recent-track" id="rcWebRecentTrack" role="list"></div>
+
+  </section>
+
+
+
+  <div class="rc-page-header d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+
+    <h4 class="mb-0 rc-page-title"><i class="bi bi-bar-chart-line me-2 text-primary"></i>Report Centre</h4>
+
+    {% if rc.any_tab %}
+
+    <div class="position-relative rc-search-wrap">
+
+      <i class="bi bi-search position-absolute rc-search-icon"></i>
+
+      <input type="text" id="reportSearchBox" class="form-control form-control-sm ps-4" placeholder="Search reports..." autocomplete="off">
+
+    </div>
+
     {% endif %}
+
   </div>
+
+
 
   {% if not rc.any_tab %}
+
   <div class="alert alert-light border text-muted mb-0"><i class="bi bi-info-circle me-2"></i>No report shortcuts are assigned for your role. Ask an administrator to grant specific reports under <strong>Reports & Analytics</strong>.</div>
+
   {% else %}
 
+
+
   <div class="rc-native-empty" id="rcNativeSearchEmpty" aria-live="polite">
+
     <i class="bi bi-search d-block mb-2" style="font-size:1.5rem;opacity:0.45;"></i>
+
     No report matches your search.
+
   </div>
+
+
+
+  <div class="rc-web-empty rc-web-only" id="rcWebSearchEmpty" hidden aria-live="polite">
+
+    <div class="rc-web-empty-art" aria-hidden="true">
+
+      <svg width="120" height="100" viewBox="0 0 120 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+
+        <rect x="12" y="20" width="96" height="64" rx="12" fill="#ecfdf5" stroke="#a7f3d0" stroke-width="2"/>
+
+        <circle cx="42" cy="48" r="14" fill="#d1fae5"/>
+
+        <path d="M38 48h8M42 44v8" stroke="#065f46" stroke-width="2" stroke-linecap="round"/>
+
+        <rect x="62" y="40" width="36" height="6" rx="3" fill="#cbd5e1"/>
+
+        <rect x="62" y="52" width="28" height="6" rx="3" fill="#e2e8f0"/>
+
+      </svg>
+
+    </div>
+
+    <h3 class="rc-web-empty-title">No reports match your search</h3>
+
+    <p class="rc-web-empty-sub">Try a different keyword or clear filters to see all reports.</p>
+
+    <button type="button" class="btn rc-web-clear-btn" id="rcWebClearSearch"><i class="bi bi-x-circle me-1"></i>Clear filters</button>
+
+  </div>
+
+
 
   <!-- Mobile-only: horizontal pager chrome (built by JS on Capacitor) -->
+
   <div class="rc-native-chrome" id="rcNativeChrome" aria-hidden="true">
+
     <div class="rc-pager-dots" id="rcPagerDots" role="tablist" aria-label="Report categories"></div>
+
     <div class="rc-chip-scroller-wrap">
+
       <div class="rc-chip-scroller" id="rcChipScroller"></div>
+
     </div>
+
   </div>
+
   <div class="rc-pager-viewport" id="rcPagerViewport" aria-hidden="true">
+
     <div class="rc-pager-track" id="rcPagerTrack"></div>
+
   </div>
+
   <div class="rc-search-mode" id="rcSearchMode" hidden>
+
     <p class="rc-search-mode-label" id="rcSearchModeLabel"></p>
+
     <div class="rc-search-mode-grid" id="rcSearchGrid"></div>
+
   </div>
+
+
 
   <!-- Tab Navigation — web only -->
-  <ul class="nav nav-tabs mb-0 rc-web-tabs" id="reportTabs" role="tablist" style="border-bottom:2px solid #dee2e6;">
+
+  <ul class="nav nav-tabs mb-0 rc-web-tabs rc-web-only" id="reportTabs" role="tablist">
+
     {% if rc.show_fleet %}
+
     <li class="nav-item" role="presentation">
+
       <button class="nav-link fw-semibold {% if rc.first_tab == 'fleet' %}active{% endif %}" id="fleet-tab" data-bs-toggle="tab" data-bs-target="#fleet" type="button" role="tab" aria-controls="fleet" aria-selected="{{ 'true' if rc.first_tab == 'fleet' else 'false' }}">
+
         <i class="bi bi-truck me-1"></i>Fleet & Operations
+
       </button>
+
     </li>
+
     {% endif %}
+
     {% if rc.show_task %}
+
     <li class="nav-item" role="presentation">
+
       <button class="nav-link fw-semibold {% if rc.first_tab == 'task' %}active{% endif %}" id="task-tab" data-bs-toggle="tab" data-bs-target="#task" type="button" role="tab" aria-controls="task" aria-selected="{{ 'true' if rc.first_tab == 'task' else 'false' }}">
+
         <i class="bi bi-journal-text me-1"></i>Task & Logbook
+
       </button>
+
     </li>
+
     {% endif %}
+
     {% if rc.show_hr %}
+
     <li class="nav-item" role="presentation">
+
       <button class="nav-link fw-semibold {% if rc.first_tab == 'hr' %}active{% endif %}" id="hr-tab" data-bs-toggle="tab" data-bs-target="#hr" type="button" role="tab" aria-controls="hr" aria-selected="{{ 'true' if rc.first_tab == 'hr' else 'false' }}">
+
         <i class="bi bi-people me-1"></i>HR & Workforce
+
       </button>
+
     </li>
+
     {% endif %}
+
     {% if rc.show_finance %}
+
     <li class="nav-item" role="presentation">
+
       <button class="nav-link fw-semibold {% if rc.first_tab == 'finance' %}active{% endif %}" id="finance-tab" data-bs-toggle="tab" data-bs-target="#finance" type="button" role="tab" aria-controls="finance" aria-selected="{{ 'true' if rc.first_tab == 'finance' else 'false' }}">
+
         <i class="bi bi-wallet2 me-1"></i>Finance
+
       </button>
+
     </li>
+
     {% endif %}
+
     {% if rc.show_admin %}
+
     <li class="nav-item" role="presentation">
+
       <button class="nav-link fw-semibold {% if rc.first_tab == 'admin' %}active{% endif %}" id="admin-tab" data-bs-toggle="tab" data-bs-target="#admin" type="button" role="tab" aria-controls="admin" aria-selected="{{ 'true' if rc.first_tab == 'admin' else 'false' }}">
+
         <i class="bi bi-gear me-1"></i>Administration
+
       </button>
+
     </li>
+
     {% endif %}
+
   </ul>
 
+
+
   <!-- Tab Content -->
+
   <div class="tab-content border border-top-0 rounded-bottom bg-white p-4 rc-report-body rc-source-catalog" id="reportTabContent">
 
+
+
     <!-- ═══════════════ Fleet & Operations ═══════════════ -->
+
     {% if rc.show_fleet %}
+
     <div class="tab-pane fade {% if rc.first_tab == 'fleet' %}show active{% endif %}" id="fleet" role="tabpanel" aria-labelledby="fleet-tab">
+
       <div class="rc-mobile-section-banner" data-rc-section="fleet">
+
         <span class="rc-mobile-section-banner__icon"><i class="bi bi-truck"></i></span>
+
         <span class="rc-mobile-section-banner__text">Fleet & Operations</span>
+
       </div>
+
       <div class="row">
+
         <!-- Vehicle Reports -->
+
         {% if rc.fleet_vehicle_col %}
+
         <div class="col-lg-4 col-md-6 mb-4 rc-report-col">
+
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-truck me-1"></i>Vehicle Reports</h6>
+
           <div class="list-group list-group-flush report-link-group">
+
             {% if can_see_page('report_vehicle_summary') %}
+
             {{ report_link(url_for('report_vehicle_summary'), 'bi-truck-front-fill', 'Vehicle Summary', 'rc-tile--vehicle-summary') }}
+
             {% endif %}
+
             {% if can_see_page('vehicles_list') or can_see_page('report_vehicle_profile') %}
+
             {{ report_link(url_for('vehicles_list'), 'bi-card-list', 'Vehicle Profile', 'rc-tile--vehicle-profile', 'Full vehicle history, transfers, driver assignments') }}
+
             {% endif %}
+
             {% if can_see_page('report_parking_utilization') %}
+
             {{ report_link(url_for('report_parking_utilization'), 'bi-p-square-fill', 'Parking Utilization', 'rc-tile--parking') }}
+
             {% endif %}
+
           </div>
+
         </div>
+
         {% endif %}
+
         <!-- Project / District -->
+
         {% if rc.fleet_project_col %}
+
         <div class="col-lg-4 col-md-6 mb-4 rc-report-col">
+
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-briefcase me-1"></i>Project & District</h6>
+
           <div class="list-group list-group-flush report-link-group">
+
             {% if can_see_page('report_project_summary') %}
+
             {{ report_link(url_for('report_project_summary'), 'bi-kanban-fill', 'Project Summary', 'rc-tile--project') }}
+
             {% endif %}
+
             {% if can_see_page('report_district_summary') %}
+
             {{ report_link(url_for('report_district_summary'), 'bi-geo-alt-fill', 'District Summary', 'rc-tile--district') }}
+
             {% endif %}
+
             {% if can_see_page('report_company_profile') %}
+
             {{ report_link(url_for('companies', mode='report'), 'bi-building-fill', 'Company Profile', 'rc-tile--company') }}
+
             {% endif %}
+
           </div>
+
         </div>
+
         {% endif %}
+
         <!-- Expense Reports -->
+
         {% if rc.fleet_expense_col %}
+
         <div class="col-lg-4 col-md-6 mb-4 rc-report-col">
+
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-fuel-pump me-1"></i>Expense Reports</h6>
+
           <div class="list-group list-group-flush report-link-group">
+
             {% if can_see_page('fuel_expense_list') %}
+
             {{ report_link(url_for('fuel_expense_list'), 'bi-fuel-pump-fill', 'Fuel Expense Report', 'rc-tile--fuel') }}
+
             {% endif %}
+
             {% if can_see_page('oil_expense_list') %}
+
             {{ report_link(url_for('oil_expense_list'), 'bi-droplet-fill', 'Oil Expense Report', 'rc-tile--oil') }}
+
             {% endif %}
+
             {% if can_see_page('maintenance_expense_list') %}
+
             {{ report_link(url_for('maintenance_expense_list'), 'bi-wrench-adjustable-circle-fill', 'Maintenance Expense Report', 'rc-tile--maintenance') }}
+
             {% endif %}
+
             {% if can_see_page('maintenance_expense_list') %}
+
             {{ report_link(url_for('maintenance_work_order_list'), 'bi-clipboard2-check-fill', 'Maintenance Work Order Report', 'rc-tile--work-order') }}
+
             {% endif %}
+
             {% if can_see_page('oil_change_alert_report') %}
+
             {{ report_link(url_for('oil_change_alert_report'), 'bi-bell-fill', 'Oil Change Alert Report', 'rc-tile--oil-alert', 'Vehicle family limit ke near / crossed alerts') }}
+
             {% endif %}
+
             {% if can_see_page('maintenance_expense_list') %}
+
             {{ report_link(url_for('maintenance_baseline_alert_report'), 'bi-graph-up-arrow', 'Maintenance Baseline Alert Report', 'rc-tile--baseline-alert', 'Product + Job Category tracking with due status') }}
+
             {% endif %}
+
           </div>
+
         </div>
+
         {% endif %}
+
       </div>
+
     </div>
+
     {% endif %}
+
+
 
     <!-- ═══════════════ Task & Logbook ═══════════════ -->
+
     {% if rc.show_task %}
+
     <div class="tab-pane fade {% if rc.first_tab == 'task' %}show active{% endif %}" id="task" role="tabpanel" aria-labelledby="task-tab">
+
       <div class="rc-mobile-section-banner" data-rc-section="task">
+
         <span class="rc-mobile-section-banner__icon"><i class="bi bi-journal-text"></i></span>
+
         <span class="rc-mobile-section-banner__text">Task & Logbook</span>
+
       </div>
+
       <div class="row">
+
         <!-- Daily Task Reports -->
+
         {% if rc.task_daily_col %}
+
         <div class="col-lg-4 col-md-6 mb-4 rc-report-col">
+
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-clipboard-data me-1"></i>Daily Task Reports</h6>
+
           <div class="list-group list-group-flush report-link-group">
+
             {% if can_see_page('task_report_list') %}
+
             {{ report_link(url_for('task_report_list'), 'bi-calendar2-check-fill', 'Vehicles Daily Task Report', 'rc-tile--daily-task') }}
+
             {% endif %}
+
             {% if can_see_page('task_report_entry') or can_see_page('task_report_add') %}
+
             {{ report_link(url_for('task_report_new'), 'bi-plus-circle-fill', 'New Task Entry', 'rc-tile--new-task') }}
+
             {% endif %}
+
             {% if can_see_page('red_task_list') %}
+
             {{ report_link(url_for('red_task_list'), 'bi-flag-fill', 'Red Task Justification', 'rc-tile--red-task') }}
+
             {% endif %}
+
             {% if can_see_page('without_task_list') %}
+
             {{ report_link(url_for('without_task_list'), 'bi-sign-stop-fill', 'Vehicle Move Without Task', 'rc-tile--no-task') }}
+
             {% endif %}
+
             {% if can_see_page('speed_monitoring_report') %}
+
             {{ report_link(url_for('speed_monitoring_report'), 'bi-speedometer2', 'Speed Monitoring Report', 'rc-tile--speed') }}
+
             {% endif %}
+
             {% if can_see_page('mileage_report') %}
+
             {{ report_link(url_for('mileage_report'), 'bi-signpost-split-fill', 'Mileage Report', 'rc-tile--mileage') }}
+
             {% endif %}
+
             {% if can_see_page('tracker_difference_report') %}
+
             {{ report_link(url_for('tracker_difference_report'), 'bi-broadcast-pin', 'Tracker Difference Report', 'rc-tile--tracker') }}
+
             {% endif %}
+
             {% if can_see_page('unauthorized_movement_report') %}
+
             {{ report_link(url_for('unauthorized_movement_report'), 'bi-shield-exclamation', 'Unauthorized Movement Report', 'rc-tile--unauthorized') }}
+
             {% endif %}
+
             {% if can_see_page('task_start_delay_report') %}
+
             {{ report_link(url_for('task_start_delay_report'), 'bi-hourglass-split', 'Driver Response Time Report', 'rc-tile--response') }}
+
             {% endif %}
+
             {% if can_see_page('task_turnaround_report') %}
+
             {{ report_link(url_for('task_turnaround_report'), 'bi-arrow-repeat', 'Task Turnaround Report', 'rc-tile--turnaround') }}
+
             {% endif %}
+
             {% if can_see_page('unexecuted_task_report') %}
+
             {{ report_link(url_for('unexecuted_task_report'), 'bi-x-octagon-fill', 'Unexecuted Task Report', 'rc-tile--unexecuted') }}
+
             {% endif %}
+
           </div>
+
         </div>
+
         {% endif %}
+
         <!-- Logbook -->
+
         {% if rc.task_logbook_col %}
+
         <div class="col-lg-4 col-md-6 mb-4 rc-report-col">
+
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-book me-1"></i>Logbook</h6>
+
           <div class="list-group list-group-flush report-link-group">
+
             {% if can_see_page('task_report_logbook_cover') %}
+
             {{ report_link(url_for('task_report_logbook_cover'), 'bi-journal-richtext', 'Logbook Cover Pages', 'rc-tile--logbook') }}
+
             {% endif %}
+
           </div>
+
         </div>
+
         {% endif %}
+
         <!-- Workbook Upload -->
+
         {% if rc.task_upload_col %}
+
         <div class="col-lg-4 col-md-6 mb-4 rc-report-col">
+
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-cloud-upload me-1"></i>Workbook Upload</h6>
+
           <div class="list-group list-group-flush report-link-group">
+
             {% if can_see_page('task_report_upload') %}
+
             {{ report_link(url_for('task_report_upload'), 'bi-cloud-arrow-up-fill', 'Upload Workbooks (Admin)', 'rc-tile--upload') }}
+
             {% endif %}
+
             {% if can_see_page('task_report_upload') or can_see_page('task_report_upload_list') %}
+
             {{ report_link(url_for('task_report_upload_list'), 'bi-journal-check', 'Workbook Upload Log', 'rc-tile--upload-log') }}
+
             {% endif %}
+
           </div>
+
         </div>
+
         {% endif %}
+
       </div>
+
     </div>
+
     {% endif %}
+
+
 
     <!-- ═══════════════ HR & Workforce ═══════════════ -->
+
     {% if rc.show_hr %}
+
     <div class="tab-pane fade {% if rc.first_tab == 'hr' %}show active{% endif %}" id="hr" role="tabpanel" aria-labelledby="hr-tab">
+
       <div class="rc-mobile-section-banner" data-rc-section="hr">
+
         <span class="rc-mobile-section-banner__icon"><i class="bi bi-people"></i></span>
+
         <span class="rc-mobile-section-banner__text">HR & Workforce</span>
+
       </div>
+
       <div class="row">
+
         <!-- Driver Reports -->
+
         {% if rc.hr_driver_col %}
+
         <div class="col-lg-4 col-md-6 mb-4 rc-report-col">
+
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-person-badge me-1"></i>Driver Reports</h6>
+
           <div class="list-group list-group-flush report-link-group">
+
             {% if linked_driver_id and can_see_page('report_driver_profile') %}
+
             {{ report_link(url_for('report_driver_profile', driver_id=linked_driver_id, ref=url_for('reports_index')), 'bi-person-vcard-fill', 'Driver Profile', 'rc-tile--driver-profile', 'Your driver record (linked to this login)') }}
+
             {% endif %}
+
             {% if can_see_page('active_drivers_report') %}
+
             {{ report_link(url_for('active_drivers_report'), 'bi-people-fill', 'Active Driver Summary', 'rc-tile--active-drivers') }}
+
             {% endif %}
+
             {% if can_see_page('driver_seat_available_report') %}
+
             {{ report_link(url_for('driver_seat_available_report'), 'bi-person-workspace', 'Driver Seat Available', 'rc-tile--seat') }}
+
             {% endif %}
+
             {% if can_see_page('missing_documents_report') %}
+
             {{ report_link(url_for('missing_documents_report'), 'bi-file-earmark-x-fill', 'Missing Documents', 'rc-tile--missing-docs') }}
+
             {% endif %}
+
             {% if can_see_page('penalty_record_list') %}
+
             {{ report_link(url_for('penalty_record_list'), 'bi-exclamation-octagon-fill', 'Driver Penalty Records', 'rc-tile--penalty') }}
+
             {% endif %}
+
             {% if can_see_page('driver_salary_slip') %}
+
             {{ report_link(url_for('driver_salary_slip'), 'bi-bank2', 'Driver Salary Slip (Bank)', 'rc-tile--salary', 'Loan / bank file: driver auto-fill, salary details manually.') }}
+
             {% endif %}
+
           </div>
+
         </div>
+
         {% endif %}
+
         <!-- Attendance Reports -->
+
         {% if rc.hr_att_col %}
+
         <div class="col-lg-4 col-md-6 mb-4 rc-report-col">
+
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-calendar-check me-1"></i>Attendance Reports</h6>
+
           <div class="list-group list-group-flush report-link-group">
+
             {% if can_see_page('driver_attendance_report') %}
+
             {{ report_link(url_for('driver_attendance_report'), 'bi-calendar3-week-fill', 'Monthly Attendance Report', 'rc-tile--monthly-att', 'Monthly driver attendance summary') }}
+
             {{ report_link(url_for('driver_attendance_daily_report'), 'bi-grid-3x3-gap-fill', 'Day Wise Attendance Report', 'rc-tile--daily-att', 'Daily M/E grid — complete check-in + check-out only') }}
+
             {% endif %}
+
             {% if can_see_page('driver_attendance_tra_report') %}
+
             {{ report_link(url_for('driver_attendance_tra_report'), 'bi-table', 'TRA Attendance Sheet', 'rc-tile--tra-att') }}
+
             {% endif %}
+
             {% if can_see_page('report_expiry') %}
+
             {{ report_link(url_for('report_expiry'), 'bi-passport-fill', 'License / CNIC Expiry', 'rc-tile--expiry') }}
+
             {% endif %}
+
           </div>
+
         </div>
+
         {% endif %}
+
         <!-- Workforce -->
+
         {% if rc.hr_workforce_col %}
+
         <div class="col-lg-4 col-md-6 mb-4 rc-report-col">
+
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-person-dash me-1"></i>Workforce</h6>
+
           <div class="list-group list-group-flush report-link-group">
+
             {% if can_see_page('driver_job_left_list') %}
+
             {{ report_link(url_for('driver_job_left_list'), 'bi-box-arrow-right', 'Resignation / Exit Report', 'rc-tile--resignation') }}
+
             {% endif %}
+
             {% if can_see_page('driver_rejoin_list') %}
+
             {{ report_link(url_for('driver_rejoin_list'), 'bi-person-check-fill', 'Re-employment Report', 'rc-tile--rejoin') }}
+
             {% endif %}
+
           </div>
+
         </div>
+
         {% endif %}
+
       </div>
+
     </div>
+
     {% endif %}
+
+
 
     <!-- ═══════════════ Finance ═══════════════ -->
+
     {% if rc.show_finance %}
+
     <div class="tab-pane fade {% if rc.first_tab == 'finance' %}show active{% endif %}" id="finance" role="tabpanel" aria-labelledby="finance-tab">
+
       <div class="rc-mobile-section-banner" data-rc-section="finance">
+
         <span class="rc-mobile-section-banner__icon"><i class="bi bi-wallet2"></i></span>
+
         <span class="rc-mobile-section-banner__text">Finance</span>
+
       </div>
+
       <div class="row">
+
         <!-- Books of Account -->
+
         {% if rc.finance_books_col %}
+
         <div class="col-lg-4 col-md-6 mb-4 rc-report-col">
+
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-journal-bookmark me-1"></i>Books of Account</h6>
+
           <div class="list-group list-group-flush report-link-group">
+
             {% if can_see_page('payment_vouchers_list') %}
+
             {{ report_link(url_for('payment_vouchers_list'), 'bi-cash-coin', 'Payment Vouchers', 'rc-tile--payment') }}
+
             {% endif %}
+
             {% if can_see_page('receipt_vouchers_list') %}
+
             {{ report_link(url_for('receipt_vouchers_list'), 'bi-receipt-cutoff', 'Receipt Vouchers', 'rc-tile--receipt') }}
+
             {% endif %}
+
             {% if can_see_page('bank_entries_list') %}
+
             {{ report_link(url_for('bank_entries_list'), 'bi-bank', 'Bank Entries', 'rc-tile--bank-entry') }}
+
             {% endif %}
+
             {% if can_see_page('journal_vouchers_list') %}
+
             {{ report_link(url_for('journal_vouchers_list'), 'bi-journal-plus', 'Journal Vouchers', 'rc-tile--journal-v') }}
+
             {% endif %}
+
           </div>
+
         </div>
+
         {% endif %}
+
         <!-- Ledger & Statements -->
+
         {% if rc.finance_ledger_col %}
+
         <div class="col-lg-4 col-md-6 mb-4 rc-report-col">
+
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-receipt me-1"></i>Ledger & Statements</h6>
+
           <div class="list-group list-group-flush report-link-group">
+
             {% if can_see_page('accounts_account_ledger') %}
+
             {{ report_link(url_for('accounts_account_ledger'), 'bi-journal-text', 'Account Ledger', 'rc-tile--ledger') }}
+
             {% endif %}
+
             {% if can_see_page('wallet_dashboard') %}
+
             {{ report_link(url_for('wallet_dashboard'), 'bi-wallet2', 'Wallet Dashboard', 'rc-tile--wallet') }}
+
             {% endif %}
+
             {% if can_see_page('fund_transfers_list') %}
+
             {{ report_link(url_for('fund_transfers_list'), 'bi-arrow-left-right', 'Fund Transfers', 'rc-tile--transfer') }}
+
             {% endif %}
+
           </div>
+
         </div>
+
         {% endif %}
+
         <!-- Final Accounts -->
+
         {% if rc.finance_final_col %}
+
         <div class="col-lg-4 col-md-6 mb-4 rc-report-col">
+
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-clipboard-data me-1"></i>Final Accounts</h6>
+
           <div class="list-group list-group-flush report-link-group">
+
             {% if can_see_page('accounts_balance_sheet') %}
+
             {{ report_link(url_for('accounts_balance_sheet'), 'bi-pie-chart-fill', 'Balance Sheet', 'rc-tile--balance') }}
+
             {% endif %}
+
             {% if can_see_page('chart_of_accounts_list') %}
+
             {{ report_link(url_for('chart_of_accounts_list'), 'bi-diagram-3-fill', 'Chart of Accounts', 'rc-tile--chart-accounts') }}
+
             {% endif %}
+
           </div>
+
         </div>
+
         {% endif %}
+
       </div>
+
     </div>
+
     {% endif %}
 
+
+
     <!-- ═══════════════ Administration ═══════════════ -->
+
     {% if rc.show_admin %}
+
     <div class="tab-pane fade {% if rc.first_tab == 'admin' %}show active{% endif %}" id="admin" role="tabpanel" aria-labelledby="admin-tab">
+
       <div class="rc-mobile-section-banner" data-rc-section="admin">
+
         <span class="rc-mobile-section-banner__icon"><i class="bi bi-gear"></i></span>
+
         <span class="rc-mobile-section-banner__text">Administration</span>
+
       </div>
+
       <div class="row">
+
         <!-- Activity & Logs -->
+
         {% if rc.admin_activity_col %}
+
         <div class="col-lg-4 col-md-6 mb-4 rc-report-col">
+
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-journal-check me-1"></i>Activity & Logs</h6>
+
           <div class="list-group list-group-flush report-link-group">
+
             {% if can_see_page('activity_log_report') %}
+
             {{ report_link(url_for('activity_log_report'), 'bi-activity', 'Activity & Login Log', 'rc-tile--activity', 'Login sessions, device info, IP, geolocation') }}
+
             {% endif %}
+
           </div>
+
         </div>
+
         {% endif %}
+
         <!-- AI Tools -->
+
         {% if rc.admin_ai_col %}
+
         <div class="col-lg-4 col-md-6 mb-4 rc-report-col">
+
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-robot me-1"></i>AI Tools</h6>
+
           <div class="list-group list-group-flush report-link-group">
+
             {% if can_see_page('report_ai') %}
+
             {{ report_link(url_for('ai.ai_assistant'), 'bi-stars', 'Master Mind AI', 'rc-tile--ai', 'Conversational analytics, SQL insights, and charts') }}
+
             {% endif %}
+
           </div>
+
         </div>
+
         {% endif %}
+
         <!-- Book Management -->
+
         {% if rc.admin_books_col %}
+
         <div class="col-lg-4 col-md-6 mb-4 rc-report-col">
+
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-book me-1"></i>Book Management</h6>
+
           <div class="list-group list-group-flush report-link-group">
+
             {% if can_see_page('book_inventory_list') %}
+
             {{ report_link(url_for('book_inventory_list'), 'bi-bookshelf', 'Book Inventory', 'rc-tile--book-inv') }}
+
             {% endif %}
+
             {% if can_see_page('book_assignment_list') %}
+
             {{ report_link(url_for('book_assignment_list'), 'bi-bookmark-star-fill', 'Book Assignments', 'rc-tile--book-assign') }}
+
             {% endif %}
+
             {% if can_see_page('book_pending_returns') %}
+
             {{ report_link(url_for('book_pending_returns'), 'bi-arrow-return-left', 'Pending Book Returns', 'rc-tile--book-return') }}
+
             {% endif %}
+
           </div>
+
         </div>
+
         {% endif %}
+
       </div>
+
     </div>
+
     {% endif %}
+
+
 
   </div><!-- /tab-content -->
 
+
+
   {% endif %}
+
+
 
 </div><!-- /container-fluid -->
 
+
+
 <style>
+
 /* ── Mobile app: horizontal pager + 3-column premium cards ── */
+
 .rc-native-chrome,
+
 .rc-pager-viewport,
+
 .rc-search-mode { display: none; }
 
+
+
 html.capacitor-native .rc-page {
+
   padding: 0;
+
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
+
   background: #f8fafc;
+
   min-height: 100%;
+
 }
+
 html.capacitor-native .rc-page-header {
+
   flex-direction: column;
+
   align-items: stretch !important;
+
   margin-bottom: 0 !important;
+
   position: sticky;
+
   top: 0;
+
   z-index: 30;
+
   background: rgba(248, 250, 252, 0.92);
+
   backdrop-filter: blur(12px);
+
   -webkit-backdrop-filter: blur(12px);
+
   padding: 0.35rem 0.75rem 0.55rem;
+
   border-bottom: 1px solid rgba(226, 232, 240, 0.9);
+
 }
+
 html.capacitor-native .rc-page-title {
+
   font-size: 1.2rem;
+
   font-weight: 800;
+
   letter-spacing: -0.03em;
+
   color: #0f172a;
+
   margin-bottom: 0.5rem;
+
 }
+
 html.capacitor-native .rc-page-title .bi {
+
   color: #0f766e !important;
+
 }
+
 html.capacitor-native .rc-search-wrap {
+
   width: 100% !important;
+
   max-width: 100% !important;
+
 }
+
 html.capacitor-native .rc-search-icon {
+
   left: 14px;
+
   top: 50%;
+
   transform: translateY(-50%);
+
   color: #94a3b8;
+
 }
+
 html.capacitor-native .rc-search-wrap .form-control {
+
   height: 44px;
+
   border-radius: 14px;
+
   border: 1px solid #e2e8f0;
+
   background: #fff;
+
   font-size: 0.9rem;
+
   font-family: inherit;
+
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+
 }
+
 html.capacitor-native .rc-web-tabs { display: none !important; }
+
 html.capacitor-native .rc-report-body.rc-source-catalog {
+
   position: absolute !important;
+
   width: 1px !important;
+
   height: 1px !important;
+
   overflow: hidden !important;
+
   clip: rect(0, 0, 0, 0) !important;
+
   white-space: nowrap !important;
+
   border: 0 !important;
+
   padding: 0 !important;
+
   margin: -1px !important;
+
 }
+
+
 
 html.capacitor-native .rc-native-chrome {
+
   display: block;
+
   position: sticky;
+
   z-index: 25;
+
   background: rgba(248, 250, 252, 0.95);
+
   backdrop-filter: blur(10px);
+
   padding: 0 0.75rem 0.5rem;
+
 }
+
 html.capacitor-native .rc-pager-dots {
+
   display: flex;
+
   align-items: center;
+
   justify-content: center;
+
   gap: 6px;
+
   min-height: 28px;
+
   margin-bottom: 0.55rem;
+
 }
+
 html.capacitor-native .rc-pager-dot {
+
   width: 7px;
+
   height: 7px;
+
   border-radius: 999px;
+
   border: none;
+
   padding: 0;
+
   background: #cbd5e1;
+
   transition: width 0.28s cubic-bezier(0.4, 0, 0.2, 1), background 0.2s ease;
+
 }
+
 html.capacitor-native .rc-pager-dot.is-active {
+
   width: 26px;
+
   background: linear-gradient(90deg, #0f766e, #14b8a6);
+
 }
+
 html.capacitor-native .rc-chip-scroller-wrap {
+
   margin: 0 -0.75rem;
+
   padding: 0 0.75rem;
+
 }
+
 html.capacitor-native .rc-chip-scroller {
+
   display: flex;
+
   gap: 8px;
+
   overflow-x: auto;
+
   scroll-snap-type: x proximity;
+
   -webkit-overflow-scrolling: touch;
+
   scrollbar-width: none;
+
   padding-bottom: 2px;
+
 }
+
 html.capacitor-native .rc-chip-scroller::-webkit-scrollbar { display: none; }
+
 html.capacitor-native .rc-chip {
+
   flex: 0 0 auto;
+
   border: 1px solid #e2e8f0;
+
   background: #fff;
+
   color: #475569;
+
   font-size: 0.72rem;
+
   font-weight: 600;
+
   padding: 0.4rem 0.85rem;
+
   border-radius: 999px;
+
   font-family: inherit;
+
   transition: background 0.15s, color 0.15s, border-color 0.15s, transform 0.12s;
+
 }
+
 html.capacitor-native .rc-chip.is-active {
+
   background: #0f766e;
+
   border-color: #0f766e;
+
   color: #fff;
+
   box-shadow: 0 4px 12px rgba(15, 118, 110, 0.25);
+
 }
+
 html.capacitor-native .rc-chip:active { transform: scale(0.96); }
 
+
+
 html.capacitor-native .rc-pager-viewport {
+
   display: block;
+
   overflow: hidden;
+
   touch-action: pan-y;
+
 }
+
 html.capacitor-native .rc-pager-viewport.is-searching { display: none; }
+
 html.capacitor-native .rc-pager-track {
+
   display: flex;
+
   overflow-x: auto;
+
   scroll-snap-type: x mandatory;
+
   -webkit-overflow-scrolling: touch;
+
   scrollbar-width: none;
+
   scroll-behavior: smooth;
+
 }
+
 html.capacitor-native .rc-pager-track::-webkit-scrollbar { display: none; }
+
 html.capacitor-native .rc-pager-slide {
+
   flex: 0 0 100%;
+
   width: 100%;
+
   scroll-snap-align: start;
+
   scroll-snap-stop: always;
+
   padding: 0.35rem 0.75rem 1.25rem;
+
   box-sizing: border-box;
+
   max-height: calc(100dvh - var(--rc-sticky-offset, 108px) - 88px);
+
   overflow-y: auto;
+
   -webkit-overflow-scrolling: touch;
+
 }
+
 html.capacitor-native .rc-slide-title {
+
   font-size: 1.05rem;
+
   font-weight: 800;
+
   letter-spacing: -0.02em;
+
   color: #0f172a;
+
   margin: 0 0 0.15rem;
+
 }
+
 html.capacitor-native .rc-slide-sub {
+
   font-size: 0.7rem;
+
   color: #64748b;
+
   margin: 0 0 0.75rem;
+
   font-weight: 500;
+
 }
+
 html.capacitor-native .rc-slide-subhead {
+
   grid-column: 1 / -1;
+
   font-size: 0.65rem;
+
   font-weight: 700;
+
   text-transform: uppercase;
+
   letter-spacing: 0.06em;
+
   color: #94a3b8;
+
   margin: 0.35rem 0 0.15rem;
+
   padding-top: 0.25rem;
+
 }
+
 html.capacitor-native .rc-slide-grid {
+
   display: grid;
+
   grid-template-columns: repeat(3, minmax(0, 1fr));
+
   gap: 10px;
+
 }
+
 html.capacitor-native .rc-pager-slide .report-link.rc-tile {
+
   position: relative;
+
   display: flex;
+
   flex-direction: column;
+
   align-items: center;
+
   text-align: center;
+
   padding: 12px 6px 10px;
+
   min-height: 96px;
+
   border-radius: 16px;
+
   background: #fff;
+
   border: 1px solid #f1f5f9;
+
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+
   text-decoration: none;
+
   color: #334155;
+
   font-size: 10px;
+
   font-weight: 600;
+
   line-height: 1.3;
+
   transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.18s ease;
+
   -webkit-tap-highlight-color: transparent;
+
 }
+
 html.capacitor-native .rc-pager-slide .report-link.rc-tile.rc-tap-pop {
+
   animation: rcTilePop 0.32s cubic-bezier(0.34, 1.56, 0.64, 1);
+
 }
+
 @keyframes rcTilePop {
+
   0% { transform: scale(1); }
+
   40% { transform: scale(0.94); }
+
   100% { transform: scale(1); }
+
 }
+
 html.capacitor-native .rc-pager-slide .report-link.rc-tile .rc-tile-icon {
+
   width: 48px;
+
   height: 48px;
+
   border-radius: 16px;
+
   margin: 0 0 8px 0 !important;
+
   box-shadow: none;
+
 }
+
 html.capacitor-native .rc-pager-slide .report-link.rc-tile .rc-tile-icon .bi {
+
   font-size: 1.28rem !important;
+
 }
+
 html.capacitor-native .rc-pager-slide .report-link.rc-tile .rc-tile-label {
+
   display: block;
+
   max-width: 100%;
+
 }
+
 html.capacitor-native .rc-pager-slide .report-link.rc-tile .rc-tile-hint,
+
 html.capacitor-native .rc-pager-slide .report-link.rc-tile small { display: none !important; }
+
 html.capacitor-native .rc-tile-badge {
+
   position: absolute;
+
   top: 6px;
+
   right: 6px;
+
   min-width: 18px;
+
   height: 18px;
+
   padding: 0 5px;
+
   border-radius: 999px;
+
   background: #ef4444;
+
   color: #fff;
+
   font-size: 10px;
+
   font-weight: 700;
+
   line-height: 18px;
+
   text-align: center;
+
   box-shadow: 0 2px 6px rgba(239, 68, 68, 0.45);
+
 }
+
 html.capacitor-native .report-link.rc-tile.is-search-hit {
+
   outline: 2px solid #14b8a6;
+
   outline-offset: 2px;
+
   box-shadow: 0 4px 16px rgba(20, 184, 166, 0.25);
+
 }
+
 html.capacitor-native .report-link.rc-tile.d-none { display: none !important; }
 
+
+
 html.capacitor-native .rc-search-mode {
+
   display: none;
+
   padding: 0.5rem 0.75rem 1.5rem;
+
 }
+
 html.capacitor-native .rc-search-mode.is-active { display: block; }
+
 html.capacitor-native .rc-search-mode-label {
+
   font-size: 0.75rem;
+
   font-weight: 600;
+
   color: #64748b;
+
   margin-bottom: 0.65rem;
+
 }
+
 html.capacitor-native .rc-search-mode-grid {
+
   display: grid;
+
   grid-template-columns: repeat(3, minmax(0, 1fr));
+
   gap: 10px;
+
 }
+
 html.capacitor-native .rc-native-empty {
+
   display: none;
+
   text-align: center;
+
   padding: 2rem 1rem;
+
   color: #64748b;
+
   font-size: 0.88rem;
+
   font-family: inherit;
+
 }
+
 html.capacitor-native .rc-native-empty.is-visible { display: block; }
+
 html.capacitor-native .rc-native-chrome.is-searching,
+
 html.capacitor-native .rc-pager-viewport.is-searching { display: none !important; }
+
+
 
 .rc-mobile-section-banner { display: none; }
 
+html.capacitor-native .rc-web-only { display: none !important; }
+html.capacitor-native .rc-card-star,
+html.capacitor-native .rc-card-desc,
+html.capacitor-native .rc-card-meta,
+html.capacitor-native .rc-card-text { display: none !important; }
+html.capacitor-native .rc-pager-slide .rc-card-content {
+  display: flex; flex-direction: column; align-items: center;
+}
+
+/* Web desktop: SaaS dashboard */
+html:not(.capacitor-native) .rc-page {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  max-width: 1280px; margin: 0 auto; padding: 0 1.25rem 2.5rem;
+}
+html:not(.capacitor-native) .rc-page-header { display: none !important; }
+html:not(.capacitor-native) .rc-native-empty { display: none !important; }
+html:not(.capacitor-native) .rc-web-hero { text-align: center; padding: 1.75rem 0 1.25rem; }
+html:not(.capacitor-native) .rc-web-hero-title {
+  font-size: 1.75rem; font-weight: 800; letter-spacing: -0.03em; color: #0f172a; margin: 0 0 0.35rem;
+}
+html:not(.capacitor-native) .rc-web-hero-sub { font-size: 0.95rem; color: #64748b; margin: 0 0 1.25rem; }
+html:not(.capacitor-native) .rc-web-search-glass {
+  max-width: 520px; margin: 0 auto; position: relative; border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.65); background: rgba(255,255,255,0.55);
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 8px 32px rgba(15,23,42,0.08), inset 0 1px 0 rgba(255,255,255,0.8);
+}
+html:not(.capacitor-native) .rc-web-search-glass-icon {
+  position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: #64748b;
+}
+html:not(.capacitor-native) .rc-web-search-input {
+  width: 100%; height: 48px; border: none; background: transparent; padding: 0 1rem 0 2.75rem;
+  font-size: 0.92rem; font-family: inherit; color: #0f172a; border-radius: 12px;
+}
+html:not(.capacitor-native) .rc-web-search-input:focus { outline: none; box-shadow: 0 0 0 3px rgba(6,95,70,0.2); }
+html:not(.capacitor-native) .rc-web-recent { margin-bottom: 1.35rem; }
+html:not(.capacitor-native) .rc-web-recent-title {
+  font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #64748b; margin: 0 0 0.65rem;
+}
+html:not(.capacitor-native) .rc-web-recent-track { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; }
+html:not(.capacitor-native) .rc-web-recent-card {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 10px; padding: 0.55rem 0.85rem;
+  border-radius: 12px; border: 1px solid #e5e7eb; background: #fff; text-decoration: none;
+  color: #334155; font-size: 0.8rem; font-weight: 600; max-width: 240px;
+  transition: box-shadow 0.18s ease, transform 0.18s ease;
+}
+html:not(.capacitor-native) .rc-web-recent-card:hover {
+  box-shadow: 0 6px 16px rgba(0,0,0,0.08); transform: translateY(-2px); color: #065f46;
+}
+html:not(.capacitor-native) .rc-web-recent-card .rc-tile-icon { width: 36px; height: 36px; margin: 0 !important; border-radius: 10px; }
+html:not(.capacitor-native) #reportTabs { border: none !important; gap: 8px; flex-wrap: wrap; margin-bottom: 1rem !important; }
+html:not(.capacitor-native) #reportTabs .nav-link {
+  border: 1px solid #e5e7eb !important; border-radius: 999px !important; padding: 0.45rem 1rem !important;
+  font-size: 0.82rem !important; font-weight: 600 !important; color: #475569 !important; background: #fff !important;
+}
+html:not(.capacitor-native) #reportTabs .nav-link:hover { color: #065f46 !important; border-color: #a7f3d0 !important; background: #f0fdf4 !important; }
+html:not(.capacitor-native) #reportTabs .nav-link.active {
+  color: #fff !important; background: #065f46 !important; border-color: #065f46 !important;
+  box-shadow: 0 4px 14px rgba(6,95,70,0.28);
+}
+html:not(.capacitor-native) .rc-report-body { border: none !important; box-shadow: none !important; background: transparent !important; padding: 0 !important; }
+html:not(.capacitor-native) .rc-report-col { width: 100%; max-width: 100%; flex: 0 0 100%; margin-bottom: 1.5rem !important; }
+html:not(.capacitor-native) .rc-report-col > h6 {
+  font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+  color: #94a3b8; border: none !important; padding: 0 0 0.65rem !important; margin-bottom: 0.75rem !important;
+}
+html:not(.capacitor-native) .report-link-group { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+@media (max-width: 1100px) { html:not(.capacitor-native) .report-link-group { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 720px) { html:not(.capacitor-native) .report-link-group { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+html:not(.capacitor-native) .report-link-group .report-link.rc-report-card {
+  position: relative; display: flex; flex-direction: column; padding: 1rem; min-height: 168px;
+  border-radius: 12px; border: 1px solid #e5e7eb; background: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04); text-decoration: none; color: inherit;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+html:not(.capacitor-native) .report-link-group .report-link.rc-report-card:hover {
+  transform: translateY(-4px); box-shadow: 0 12px 28px rgba(0,0,0,0.08); border-color: #d1d5db; color: inherit; padding-left: 1rem !important;
+}
+html:not(.capacitor-native) .rc-card-star {
+  position: absolute; top: 10px; right: 10px; z-index: 2; width: 30px; height: 30px;
+  border: none; border-radius: 8px; background: #f8fafc; color: #94a3b8;
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+html:not(.capacitor-native) .rc-card-star.is-starred { background: #fef3c7; color: #d97706; }
+html:not(.capacitor-native) .rc-card-star.is-starred .bi-star::before { content: "\f586"; }
+html:not(.capacitor-native) .rc-card-content { display: flex; flex-direction: column; gap: 0.75rem; flex: 1; }
+html:not(.capacitor-native) .report-link-group .rc-tile-icon { width: 48px; height: 48px; border-radius: 12px; margin: 0 !important; }
+html:not(.capacitor-native) .rc-tile-label { font-size: 0.92rem; font-weight: 700; color: #0f172a; line-height: 1.3; }
+html:not(.capacitor-native) .rc-card-desc {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  font-size: 0.78rem; line-height: 1.45; color: #64748b; min-height: 2.4em;
+}
+html:not(.capacitor-native) .rc-card-meta {
+  display: flex; justify-content: space-between; gap: 8px; margin-top: auto; padding-top: 0.65rem; border-top: 1px solid #f1f5f9;
+}
+html:not(.capacitor-native) .rc-card-tag {
+  font-size: 0.65rem; font-weight: 700; text-transform: uppercase; color: #065f46;
+  background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 6px; padding: 0.15rem 0.45rem;
+}
+html:not(.capacitor-native) .rc-card-last { font-size: 0.65rem; color: #94a3b8; white-space: nowrap; }
+html:not(.capacitor-native) .rc-tile-badge { top: 10px; left: 10px; right: auto; }
+html:not(.capacitor-native) .report-link .rc-tile-hint { display: none !important; }
+html:not(.capacitor-native) .rc-web-empty { text-align: center; padding: 3rem 1.5rem; border-radius: 12px; border: 1px dashed #e5e7eb; background: #fafafa; margin: 1rem 0 2rem; }
+html:not(.capacitor-native) .rc-web-empty:not([hidden]) { display: block; }
+html:not(.capacitor-native) .rc-web-empty-title { font-size: 1.1rem; font-weight: 700; color: #0f172a; margin: 1rem 0 0.35rem; }
+html:not(.capacitor-native) .rc-web-clear-btn { background: #065f46; color: #fff; border: none; border-radius: 12px; padding: 0.5rem 1.1rem; font-weight: 600; }
+.rc-mobile-section-banner { display: none; }
+
+
+
 /* Report tile icons — web list + mobile grid */
+
 .rc-tile-icon {
+
   display: inline-flex;
+
   align-items: center;
+
   justify-content: center;
+
   width: 1.75rem;
+
   height: 1.75rem;
+
   border-radius: 8px;
+
   margin-right: 0.55rem;
+
   flex-shrink: 0;
+
   vertical-align: middle;
+
 }
+
 .rc-tile-icon .bi {
+
   font-size: 0.92rem;
+
   line-height: 1;
+
   margin: 0 !important;
+
 }
+
 .report-link-group .report-link.rc-tile {
+
   display: flex;
+
   align-items: flex-start;
+
 }
+
 .report-link-group .report-link.rc-tile .rc-tile-label {
+
   flex: 1;
+
   min-width: 0;
+
 }
+
 .report-link-group .report-link.rc-tile .rc-tile-hint {
+
   margin-left: 2.3rem;
+
 }
+
+
 
 /* Per-report icon colors (teal / blue / amber / rose / violet / emerald) */
+
 .rc-tile--vehicle-summary .rc-tile-icon,
+
 .rc-tile--vehicle-profile .rc-tile-icon,
+
 .rc-tile--parking .rc-tile-icon { background: linear-gradient(145deg, #ccfbf1, #99f6e4); color: #0f766e; }
+
 .rc-tile--project .rc-tile-icon,
+
 .rc-tile--district .rc-tile-icon,
+
 .rc-tile--company .rc-tile-icon { background: linear-gradient(145deg, #e0e7ff, #c7d2fe); color: #4338ca; }
+
 .rc-tile--fuel .rc-tile-icon { background: linear-gradient(145deg, #fef3c7, #fde68a); color: #b45309; }
+
 .rc-tile--oil .rc-tile-icon { background: linear-gradient(145deg, #dbeafe, #bfdbfe); color: #1d4ed8; }
+
 .rc-tile--maintenance .rc-tile-icon,
+
 .rc-tile--work-order .rc-tile-icon { background: linear-gradient(145deg, #ffedd5, #fed7aa); color: #c2410c; }
+
 .rc-tile--oil-alert .rc-tile-icon,
+
 .rc-tile--baseline-alert .rc-tile-icon { background: linear-gradient(145deg, #ffe4e6, #fecdd3); color: #be123c; }
+
 .rc-tile--daily-task .rc-tile-icon,
+
 .rc-tile--new-task .rc-tile-icon,
+
 .rc-tile--logbook .rc-tile-icon { background: linear-gradient(145deg, #d1fae5, #a7f3d0); color: #047857; }
+
 .rc-tile--red-task .rc-tile-icon { background: linear-gradient(145deg, #fecaca, #fca5a5); color: #b91c1c; }
+
 .rc-tile--no-task .rc-tile-icon,
+
 .rc-tile--unauthorized .rc-tile-icon { background: linear-gradient(145deg, #fee2e2, #fecaca); color: #dc2626; }
+
 .rc-tile--speed .rc-tile-icon,
+
 .rc-tile--mileage .rc-tile-icon,
+
 .rc-tile--tracker .rc-tile-icon { background: linear-gradient(145deg, #cffafe, #a5f3fc); color: #0e7490; }
+
 .rc-tile--response .rc-tile-icon,
+
 .rc-tile--turnaround .rc-tile-icon { background: linear-gradient(145deg, #ede9fe, #ddd6fe); color: #6d28d9; }
+
 .rc-tile--unexecuted .rc-tile-icon { background: linear-gradient(145deg, #e0e7ff, #c7d2fe); color: #4f46e5; }
+
 .rc-tile--upload .rc-tile-icon,
+
 .rc-tile--upload-log .rc-tile-icon { background: linear-gradient(145deg, #f1f5f9, #e2e8f0); color: #475569; }
+
 .rc-tile--driver-profile .rc-tile-icon,
+
 .rc-tile--active-drivers .rc-tile-icon,
+
 .rc-tile--seat .rc-tile-icon { background: linear-gradient(145deg, #dbeafe, #bfdbfe); color: #1d4ed8; }
+
 .rc-tile--missing-docs .rc-tile-icon,
+
 .rc-tile--penalty .rc-tile-icon { background: linear-gradient(145deg, #ffedd5, #fed7aa); color: #c2410c; }
+
 .rc-tile--salary .rc-tile-icon { background: linear-gradient(145deg, #e0f2fe, #bae6fd); color: #0369a1; }
+
 .rc-tile--monthly-att .rc-tile-icon,
+
 .rc-tile--daily-att .rc-tile-icon,
+
 .rc-tile--tra-att .rc-tile-icon { background: linear-gradient(145deg, #ccfbf1, #99f6e4); color: #0f766e; }
+
 .rc-tile--expiry .rc-tile-icon { background: linear-gradient(145deg, #fef9c3, #fef08a); color: #a16207; }
+
 .rc-tile--resignation .rc-tile-icon { background: linear-gradient(145deg, #f1f5f9, #e2e8f0); color: #64748b; }
+
 .rc-tile--rejoin .rc-tile-icon { background: linear-gradient(145deg, #d1fae5, #6ee7b7); color: #047857; }
+
 .rc-tile--payment .rc-tile-icon,
+
 .rc-tile--receipt .rc-tile-icon,
+
 .rc-tile--bank-entry .rc-tile-icon,
+
 .rc-tile--journal-v .rc-tile-icon { background: linear-gradient(145deg, #d1fae5, #a7f3d0); color: #047857; }
+
 .rc-tile--ledger .rc-tile-icon,
+
 .rc-tile--wallet .rc-tile-icon,
+
 .rc-tile--transfer .rc-tile-icon { background: linear-gradient(145deg, #ccfbf1, #5eead4); color: #0f766e; }
+
 .rc-tile--balance .rc-tile-icon,
+
 .rc-tile--chart-accounts .rc-tile-icon { background: linear-gradient(145deg, #e0e7ff, #a5b4fc); color: #4338ca; }
+
 .rc-tile--activity .rc-tile-icon { background: linear-gradient(145deg, #f1f5f9, #cbd5e1); color: #334155; }
+
 .rc-tile--ai .rc-tile-icon { background: linear-gradient(145deg, #ede9fe, #c4b5fd); color: #7c3aed; }
+
 .rc-tile--book-inv .rc-tile-icon,
+
 .rc-tile--book-assign .rc-tile-icon,
+
 .rc-tile--book-return .rc-tile-icon { background: linear-gradient(145deg, #ffedd5, #fdba74); color: #9a3412; }
 
-#reportTabs .nav-link{
-  color:#555; border:none; padding:.6rem 1.2rem; font-size:.88rem;
-  border-bottom:3px solid transparent; transition:all .2s;
-}
-#reportTabs .nav-link:hover{ color:#0d6efd; background:#f0f6ff; }
-#reportTabs .nav-link.active{
-  color:#0d6efd; background:transparent;
-  border-bottom:3px solid #0d6efd;
-}
-.report-link-group .report-link{
-  font-size:.875rem; color:#333; transition:all .15s;
-}
-.report-link-group .report-link:hover{
-  color:#0d6efd; background:#f8f9ff; padding-left:6px !important;
-}
-.report-link-group .report-link .rc-tile-hint,
-.report-link-group .report-link small{ font-size:.75rem; line-height:1.2; }
-.tab-content{ min-height:300px; box-shadow:0 2px 8px rgba(0,0,0,.05); }
+
+
 .report-link.d-none{ display:none !important; }
+
 </style>
 
+
+
 <script>
+
 document.addEventListener('DOMContentLoaded', function(){
+
   var isNative = document.documentElement.classList.contains('capacitor-native') ||
+
     (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
 
+
+
   if (!isNative) {
+    initRcWebDashboard();
+    return;
+  }
+
+  var searchBox = document.getElementById('reportSearchBox');
+  if (!searchBox) return;
+
+  function initRcWebDashboard() {
+    var TAB_TAGS = { fleet: 'Fleet', task: 'Tasks', hr: 'HR', finance: 'Finance', admin: 'Admin' };
+    var LS_STAR = 'rc_web_starred_v1';
+    var LS_RECENT = 'rc_web_recent_v1';
+    var LS_LAST = 'rc_web_last_opened_v1';
+
+    var searchBox = document.getElementById('reportSearchBoxWeb');
+    var emptyEl = document.getElementById('rcWebSearchEmpty');
+    var clearBtn = document.getElementById('rcWebClearSearch');
+    var recentWrap = document.getElementById('rcWebRecent');
+    var recentTrack = document.getElementById('rcWebRecentTrack');
+    var body = document.getElementById('reportTabContent');
+    if (!searchBox || !body) return;
+
     (function ensureActiveTab(){
       if (document.querySelector('#reportTabs .nav-link.active')) return;
       var order = ['fleet', 'task', 'hr', 'finance', 'admin'];
@@ -834,18 +1844,102 @@ document.addEventListener('DOMContentLoaded', function(){
         }
       }
     })();
-  }
 
-  var searchBox = document.getElementById('reportSearchBox');
-  if (!searchBox) return;
+    function readJson(key) {
+      try { return JSON.parse(localStorage.getItem(key) || '{}') || {}; } catch (e) { return {}; }
+    }
+    function writeJson(key, val) {
+      try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) {}
+    }
+    function linkKey(a) {
+      return a.getAttribute('data-rc-key') || (a.getAttribute('href') || '').split('?')[0];
+    }
+    function formatLast(iso) {
+      if (!iso) return '';
+      var d = new Date(iso);
+      if (isNaN(d.getTime())) return '';
+      var diff = (Date.now() - d.getTime()) / 60000;
+      if (diff < 2) return 'Just now';
+      if (diff < 60) return Math.floor(diff) + 'm ago';
+      if (diff < 1440) return Math.floor(diff / 60) + 'h ago';
+      return d.toLocaleDateString();
+    }
 
-  if (!isNative) {
-    searchBox.addEventListener('input', function(){
-      var q = searchBox.value.toLowerCase().trim();
-      document.querySelectorAll('.report-link').forEach(function(el) {
-        var show = !q || el.textContent.toLowerCase().indexOf(q) >= 0;
-        el.classList.toggle('d-none', !show);
+    var cards = Array.prototype.slice.call(body.querySelectorAll('a.report-link'));
+    cards.forEach(function(card) {
+      var pane = card.closest('.tab-pane');
+      var tag = pane ? (TAB_TAGS[pane.id] || 'Report') : 'Report';
+      var tagEl = card.querySelector('.rc-card-tag');
+      if (tagEl) tagEl.textContent = tag;
+      var lastEl = card.querySelector('.rc-card-last');
+      var lastMap = readJson(LS_LAST);
+      var lk = linkKey(card);
+      if (lastEl) {
+        lastEl.textContent = lastMap[lk] ? ('Opened ' + formatLast(lastMap[lk])) : 'Not opened yet';
+      }
+      var star = card.querySelector('.rc-card-star');
+      if (star) {
+        var stars = readJson(LS_STAR);
+        if (stars[lk]) star.classList.add('is-starred');
+        star.addEventListener('click', function(ev) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          var m = readJson(LS_STAR);
+          if (m[lk]) delete m[lk]; else m[lk] = 1;
+          writeJson(LS_STAR, m);
+          star.classList.toggle('is-starred', !!m[lk]);
+        });
+      }
+      card.addEventListener('click', function() {
+        var m = readJson(LS_LAST);
+        m[lk] = new Date().toISOString();
+        writeJson(LS_LAST, m);
+        var recent = readJson(LS_RECENT);
+        if (!recent._order) recent._order = [];
+        recent._order = recent._order.filter(function(k) { return k !== lk; });
+        recent._order.unshift(lk);
+        recent._order = recent._order.slice(0, 12);
+        writeJson(LS_RECENT, recent);
+        setTimeout(renderRecent, 0);
       });
+    });
+
+    function renderRecent() {
+      if (!recentTrack || !recentWrap) return;
+      var order = (readJson(LS_RECENT)._order) || [];
+      recentTrack.innerHTML = '';
+      var added = 0;
+      order.forEach(function(k) {
+        var card = cards.filter(function(c) { return linkKey(c) === k; })[0];
+        if (!card) return;
+        var mini = document.createElement('a');
+        mini.className = 'rc-web-recent-card';
+        mini.href = card.getAttribute('href');
+        var icon = card.querySelector('.rc-tile-icon');
+        var label = card.querySelector('.rc-tile-label');
+        if (icon) mini.appendChild(icon.cloneNode(true));
+        var span = document.createElement('span');
+        span.textContent = label ? label.textContent.trim() : 'Report';
+        mini.appendChild(span);
+        recentTrack.appendChild(mini);
+        added++;
+      });
+      recentWrap.hidden = added === 0;
+    }
+    renderRecent();
+
+    function syncSearch() {
+      var q = searchBox.value.toLowerCase().trim();
+      var any = false;
+      cards.forEach(function(card) {
+        var text = (card.textContent || '').toLowerCase();
+        var show = !q || text.indexOf(q) >= 0;
+        card.classList.toggle('d-none', !show);
+        card.classList.toggle('is-search-hit', !!q && show);
+        if (show) any = true;
+      });
+      if (emptyEl) emptyEl.hidden = !q || any;
+      if (body) body.classList.toggle('is-search-empty', !!q && !any);
       if (q) {
         document.querySelectorAll('#reportTabContent .tab-pane').forEach(function(pane) {
           if (pane.querySelector('.report-link:not(.d-none)')) {
@@ -856,312 +1950,625 @@ document.addEventListener('DOMContentLoaded', function(){
           }
         });
       }
-    });
-    return;
+    }
+    searchBox.addEventListener('input', syncSearch);
+    if (clearBtn) {
+      clearBtn.addEventListener('click', function() {
+        searchBox.value = '';
+        syncSearch();
+        searchBox.focus();
+      });
+    }
   }
+
 
   initRcMobilePager();
 
+
+
   function rcHapticLight() {
+
     try {
+
       var h = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Haptics;
+
       if (h) h.impact({ style: 'LIGHT' }).catch(function(){});
+
     } catch (e) {}
+
   }
+
+
 
   function initRcMobilePager() {
+
     var track = document.getElementById('rcPagerTrack');
+
     var viewport = document.getElementById('rcPagerViewport');
+
     var dotsEl = document.getElementById('rcPagerDots');
+
     var chipsEl = document.getElementById('rcChipScroller');
+
     var chrome = document.getElementById('rcNativeChrome');
+
     var searchMode = document.getElementById('rcSearchMode');
+
     var searchGrid = document.getElementById('rcSearchGrid');
+
     var searchLabel = document.getElementById('rcSearchModeLabel');
+
     var emptyEl = document.getElementById('rcNativeSearchEmpty');
+
     var header = document.querySelector('.rc-page-header');
+
     if (!track || !viewport) return;
 
+
+
     var LS_FAV = 'rc_report_favorites_v1';
+
     var LS_USAGE = 'rc_report_usage_v1';
+
     var DEFAULT_FAV_KEYS = ['daily-att', 'daily-task', 'vehicle-summary', 'fuel', 'missing-docs', 'driver-profile'];
 
+
+
     var CATEGORIES = [
+
       { id: 'favorites', title: 'For You', subtitle: 'Recommended & recently used', icon: 'bi-stars' },
+
       { id: 'fleet', title: 'Fleet & Operations', subtitle: 'Vehicles, projects & expenses', icon: 'bi-truck' },
+
       { id: 'task', title: 'Task & Logbook', subtitle: 'Daily tasks & logbooks', icon: 'bi-journal-text' },
+
       { id: 'hr', title: 'HR & Workforce', subtitle: 'Drivers, attendance & workforce', icon: 'bi-people' },
+
       { id: 'finance', title: 'Finance', subtitle: 'Vouchers, ledger & accounts', icon: 'bi-wallet2' },
+
       { id: 'admin', title: 'Administration', subtitle: 'Logs, AI & books', icon: 'bi-gear' }
+
     ];
 
+
+
     var sourceLinks = [];
+
     document.querySelectorAll('#reportTabContent a.report-link').forEach(function(a) {
+
       sourceLinks.push(a);
+
     });
+
     if (!sourceLinks.length) return;
 
+
+
     function linkKey(a) {
+
       return a.getAttribute('data-rc-key') || (a.getAttribute('href') || '').split('?')[0];
+
     }
+
+
 
     function usageMap() {
+
       try { return JSON.parse(localStorage.getItem(LS_USAGE) || '{}') || {}; } catch (e) { return {}; }
+
     }
+
+
 
     function bumpUsage(key) {
+
       if (!key) return;
+
       var m = usageMap();
+
       m[key] = (m[key] || 0) + 1;
+
       try { localStorage.setItem(LS_USAGE, JSON.stringify(m)); } catch (e) {}
+
     }
+
+
 
     function favoriteKeys() {
+
       var usage = usageMap();
+
       var ranked = sourceLinks.slice().sort(function(a, b) {
+
         return (usage[linkKey(b)] || 0) - (usage[linkKey(a)] || 0);
+
       }).map(linkKey).filter(Boolean);
+
       var keys = [];
+
       ranked.forEach(function(k) {
+
         if (keys.indexOf(k) < 0) keys.push(k);
+
       });
+
       DEFAULT_FAV_KEYS.forEach(function(k) {
+
         if (keys.indexOf(k) < 0) keys.push(k);
+
       });
+
       return keys.slice(0, 9);
+
     }
+
+
 
     function linksForCategory(catId) {
+
       if (catId === 'favorites') {
+
         var fav = favoriteKeys();
+
         var out = [];
+
         fav.forEach(function(k) {
+
           sourceLinks.forEach(function(a) {
+
             if (linkKey(a) === k && out.indexOf(a) < 0) out.push(a);
+
           });
+
         });
+
         if (!out.length) out = sourceLinks.slice(0, Math.min(6, sourceLinks.length));
+
         return out;
+
       }
+
       var pane = document.getElementById(catId);
+
       if (!pane) return [];
+
       return Array.prototype.slice.call(pane.querySelectorAll('a.report-link'));
+
     }
+
+
 
     var slides = [];
+
     CATEGORIES.forEach(function(cat) {
+
       var links = linksForCategory(cat.id);
+
       if (!links.length) return;
+
       slides.push({ meta: cat, links: links });
+
     });
+
     if (!slides.length) return;
 
+
+
     track.innerHTML = '';
+
     slides.forEach(function(slide) {
+
       var section = document.createElement('section');
+
       section.className = 'rc-pager-slide';
+
       section.setAttribute('data-slide-id', slide.meta.id);
+
       section.innerHTML = '<h2 class="rc-slide-title">' + slide.meta.title + '</h2>' +
+
         '<p class="rc-slide-sub">' + slide.meta.subtitle + '</p>';
+
       var grid = document.createElement('div');
+
       grid.className = 'rc-slide-grid';
 
+
+
       if (slide.meta.id === 'favorites') {
+
         slide.links.forEach(function(a) {
+
           grid.appendChild(a.cloneNode(true));
+
         });
+
       } else {
+
         var pane = document.getElementById(slide.meta.id);
+
         if (pane) {
+
           pane.querySelectorAll('.rc-report-col').forEach(function(col) {
+
             var h6 = col.querySelector('h6');
+
             var colLinks = col.querySelectorAll('a.report-link');
+
             if (!colLinks.length) return;
+
             if (h6) {
+
               var sub = document.createElement('div');
+
               sub.className = 'rc-slide-subhead';
+
               sub.textContent = h6.textContent.replace(/\s+/g, ' ').trim();
+
               grid.appendChild(sub);
+
             }
+
             colLinks.forEach(function(a) {
+
               grid.appendChild(a.cloneNode(true));
+
             });
+
           });
+
         }
+
       }
+
       section.appendChild(grid);
+
       track.appendChild(section);
+
     });
+
+
 
     chrome.setAttribute('aria-hidden', 'false');
+
     viewport.setAttribute('aria-hidden', 'false');
 
+
+
     function setStickyOffset() {
+
       if (!header) return;
+
       var h = header.offsetHeight;
+
       document.documentElement.style.setProperty('--rc-sticky-offset', h + 'px');
+
       if (chrome) chrome.style.top = h + 'px';
+
     }
+
     setStickyOffset();
+
     window.addEventListener('resize', setStickyOffset);
 
+
+
     dotsEl.innerHTML = '';
+
     chipsEl.innerHTML = '';
 
+
+
     var allChip = document.createElement('button');
+
     allChip.type = 'button';
+
     allChip.className = 'rc-chip is-active';
+
     allChip.textContent = 'All';
+
     allChip.setAttribute('data-slide-idx', '-1');
+
     allChip.addEventListener('click', function() {
+
       chipsEl.querySelectorAll('.rc-chip').forEach(function(c) { c.classList.remove('is-active'); });
+
       allChip.classList.add('is-active');
+
       dotsEl.querySelectorAll('.rc-pager-dot').forEach(function(d) { d.classList.remove('is-active'); });
+
       rcHapticLight();
+
     });
+
     chipsEl.appendChild(allChip);
 
+
+
     slides.forEach(function(slide, idx) {
+
       var dot = document.createElement('button');
+
       dot.type = 'button';
+
       dot.className = 'rc-pager-dot' + (idx === 0 ? ' is-active' : '');
+
       dot.setAttribute('aria-label', slide.meta.title);
+
       dot.setAttribute('data-slide-idx', String(idx));
+
       dot.addEventListener('click', function() { goToSlide(idx, true); });
+
       dotsEl.appendChild(dot);
 
+
+
       var chip = document.createElement('button');
+
       chip.type = 'button';
+
       chip.className = 'rc-chip' + (idx === 0 ? ' is-active' : '');
+
       chip.textContent = slide.meta.id === 'favorites' ? 'For You' : slide.meta.title.split('&')[0].trim();
+
       chip.setAttribute('data-slide-idx', String(idx));
+
       chip.addEventListener('click', function() { goToSlide(idx, true); rcHapticLight(); });
+
       chipsEl.appendChild(chip);
+
     });
+
+
 
     var scrollRaf = 0;
+
     var activeIdx = 0;
 
+
+
     function slideWidth() {
+
       return viewport.clientWidth || window.innerWidth;
+
     }
+
+
 
     function goToSlide(idx, smooth) {
+
       idx = Math.max(0, Math.min(slides.length - 1, idx));
+
       activeIdx = idx;
+
       track.scrollTo({ left: idx * slideWidth(), behavior: smooth ? 'smooth' : 'auto' });
+
       syncPagerUi(idx);
+
     }
+
+
 
     function syncPagerUi(idx) {
+
       dotsEl.querySelectorAll('.rc-pager-dot').forEach(function(d, i) {
+
         d.classList.toggle('is-active', i === idx);
+
       });
+
       chipsEl.querySelectorAll('.rc-chip').forEach(function(c) {
+
         var cIdx = parseInt(c.getAttribute('data-slide-idx'), 10);
+
         var on = cIdx === idx;
+
         c.classList.toggle('is-active', on);
+
         if (on && cIdx >= 0) {
+
           c.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+
         }
+
       });
+
       if (allChip) allChip.classList.remove('is-active');
+
     }
+
+
 
     function onTrackScroll() {
+
       if (scrollRaf) return;
+
       scrollRaf = requestAnimationFrame(function() {
+
         scrollRaf = 0;
+
         var w = slideWidth();
+
         if (!w) return;
+
         var idx = Math.round(track.scrollLeft / w);
+
         if (idx !== activeIdx) {
+
           activeIdx = idx;
+
           syncPagerUi(idx);
+
         }
+
       });
+
     }
+
     track.addEventListener('scroll', onTrackScroll, { passive: true });
 
+
+
     track.querySelectorAll('a.report-link').forEach(function(a) {
+
       a.addEventListener('click', function() {
+
         bumpUsage(linkKey(a));
+
         rcHapticLight();
+
         a.classList.add('rc-tap-pop');
+
         setTimeout(function() { a.classList.remove('rc-tap-pop'); }, 320);
+
       });
+
     });
+
+
 
     var allPagerLinks = function() {
+
       return track.querySelectorAll('a.report-link');
+
     };
 
+
+
     function setSearchMode(on) {
+
       var q = searchBox.value.trim();
+
       chrome.classList.toggle('is-searching', on);
+
       viewport.classList.toggle('is-searching', on);
+
       searchMode.classList.toggle('is-active', on);
+
       emptyEl.classList.toggle('is-visible', on && !searchGrid.children.length);
+
     }
+
+
 
     function syncReportSearch() {
+
       var q = searchBox.value.toLowerCase().trim();
+
       if (!q) {
+
         setSearchMode(false);
+
         searchGrid.innerHTML = '';
+
         allPagerLinks().forEach(function(a) { a.classList.remove('is-search-hit', 'd-none'); });
+
         return;
+
       }
+
+
 
       setSearchMode(true);
+
       searchGrid.innerHTML = '';
+
       var hits = [];
+
       var hitSlides = {};
 
+
+
       allPagerLinks().forEach(function(a) {
+
         var text = (a.textContent || '').toLowerCase();
+
         var match = text.indexOf(q) >= 0;
+
         a.classList.toggle('is-search-hit', match);
+
         if (match) {
+
           hits.push(a);
+
           var slide = a.closest('.rc-pager-slide');
+
           if (slide) hitSlides[slide.getAttribute('data-slide-id')] = true;
+
         }
+
       });
+
+
 
       hits.forEach(function(a) {
+
         var clone = a.cloneNode(true);
+
         clone.classList.add('is-search-hit');
+
         clone.addEventListener('click', function() {
+
           bumpUsage(linkKey(a));
+
           rcHapticLight();
+
         });
+
         searchGrid.appendChild(clone);
+
       });
+
+
 
       var slideNames = Object.keys(hitSlides).map(function(id) {
+
         var s = slides.filter(function(x) { return x.meta.id === id; })[0];
+
         return s ? s.meta.title : id;
+
       });
+
       if (hits.length) {
+
         searchLabel.textContent = hits.length + ' result' + (hits.length > 1 ? 's' : '') +
+
           (slideNames.length ? ' · ' + slideNames.slice(0, 3).join(', ') : '');
+
       } else {
+
         searchLabel.textContent = '';
+
       }
+
       emptyEl.classList.toggle('is-visible', !hits.length);
+
     }
 
+
+
     var searchDebounce = 0;
+
     searchBox.addEventListener('input', function() {
+
       clearTimeout(searchDebounce);
+
       searchDebounce = setTimeout(syncReportSearch, 120);
+
     });
 
+
+
     window.addEventListener('orientationchange', function() {
+
       setTimeout(function() { goToSlide(activeIdx, false); setStickyOffset(); }, 100);
+
     });
+
   }
+
 });
+
 </script>
+
 {% endblock %}
+
