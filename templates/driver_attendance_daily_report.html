@@ -602,9 +602,34 @@
   {% if report %}
   var reportTitleText = {{ report_title | tojson }};
   var statusLabels = {{ status_columns | tojson }};
+  var dailyMonthDays = {{ ndays|tojson }};
   var sumShort = { 'Present': 'P', 'Absent': 'A', 'Leave': 'L', 'Late': 'Lt', 'Half-Day': 'H', 'Off': 'O' };
 
   function cellText(el) { return el ? (el.textContent || '').trim() : ''; }
+
+  function buildPrintMetaLine(src) {
+    var districts = {}, projects = {};
+    src.querySelectorAll('tbody tr').forEach(function(tr) {
+      if (tr.style.display === 'none' || tr.getAttribute('data-ft-match') === '0') return;
+      var d = cellText(tr.querySelector('.fc-2'));
+      var p = cellText(tr.querySelector('.fc-3'));
+      if (d && d !== '-') districts[d] = 1;
+      if (p && p !== '-') projects[p] = 1;
+    });
+    function uniq(map) {
+      var keys = Object.keys(map);
+      if (!keys.length) return '';
+      if (keys.length === 1) return keys[0];
+      return keys.length + ' values';
+    }
+    var parts = [];
+    var pr = uniq(projects);
+    var di = uniq(districts);
+    if (pr) parts.push('Project: ' + pr);
+    if (di) parts.push('District: ' + di);
+    if (dailyMonthDays) parts.push('Days in month: ' + dailyMonthDays);
+    return parts.join(' | ');
+  }
 
   function buildPrintTable() {
     var src = document.getElementById('dailyReportTable');
@@ -627,17 +652,15 @@
     }
 
     r1.appendChild(th('Sr', { rowspan: 2, cls: 'pv-sr' }));
-    r1.appendChild(th('District/Project', { rowspan: 2, cls: 'pv-dp' }));
-    r1.appendChild(th('Vehicle', { rowspan: 2, cls: 'pv-veh' }));
-    r1.appendChild(th('Driver-Shift', { rowspan: 2, cls: 'pv-ds' }));
-    r1.appendChild(th('Days', { rowspan: 2, cls: 'pv-days days-total-hdr' }));
+    r1.appendChild(th('Driver / Vehicle', { rowspan: 2, cls: 'pv-driver-col' }));
 
     src.querySelectorAll('thead tr.hdr-row-1 th.date-hdr').forEach(function(h) {
       r1.appendChild(th(h.textContent.trim(), { colspan: 2, cls: 'date-hdr' }));
     });
     statusLabels.forEach(function(st) {
-      var el = th(st, { rowspan: 2, cls: 'sum-col sum-vhdr' });
+      var el = th(sumShort[st] || st, { rowspan: 2, cls: 'sum-col sum-vhdr' });
       el.setAttribute('data-sum-label', st);
+      el.title = st;
       r1.appendChild(el);
     });
     thead.appendChild(r1);
@@ -665,19 +688,19 @@
         return el;
       }
       tr.appendChild(td(cellText(srcRow.querySelector('.fc-1')), 'pv-sr'));
-      var dist = cellText(srcRow.querySelector('.fc-2'));
-      var proj = cellText(srcRow.querySelector('.fc-3'));
-      tr.appendChild(td('<span class="pv-dp-line">' + dist + '</span><span class="pv-dp-line pv-muted">' + proj + '</span>', 'pv-dp'));
-      tr.appendChild(td(cellText(srcRow.querySelector('.fc-4')), 'pv-veh'));
       var driverCell = srcRow.querySelector('.fc-6');
       var driverNameEl = driverCell ? driverCell.querySelector('.daily-driver-name') : null;
       var driverScoreEl = driverCell ? driverCell.querySelector('.daily-driver-score') : null;
       var driver = driverNameEl ? driverNameEl.textContent.trim() : cellText(driverCell);
       var driverScore = driverScoreEl ? driverScoreEl.textContent.trim() : '';
+      var veh = cellText(srcRow.querySelector('.fc-4'));
       var shift = cellText(srcRow.querySelector('.fc-5'));
-      var driverLine = driver + (driverScore ? ' <span class="pv-score">(' + driverScore + ')</span>' : '');
-      tr.appendChild(td('<span class="pv-ds-line pv-ds-main">' + driverLine + '</span><span class="pv-ds-line pv-muted">' + shift + '</span>', 'pv-ds'));
-      tr.appendChild(td(cellText(srcRow.querySelector('.fc-7')), 'pv-days days-total'));
+      var vehShift = veh;
+      if (shift && shift !== '-') vehShift += ' (' + shift + ')';
+      var driverBlock = '<div class="pv-driver-block">' +
+        '<div class="pv-ds-line pv-ds-main">' + driver + (driverScore ? ' <span class="pv-score">' + driverScore + '</span>' : '') + '</div>' +
+        '<div class="pv-ds-line pv-veh-shift">' + vehShift + '</div></div>';
+      tr.appendChild(td(driverBlock, 'pv-driver-col'));
       srcRow.querySelectorAll('.day-cell').forEach(function(c) {
         var n = document.createElement('td');
         n.className = c.className.replace(/\bfrozen-col\b|\bfc-\d+\b|\binfo-col\b/g, '').trim();
@@ -700,7 +723,7 @@
       var ftr = document.createElement('tr');
       ftr.appendChild((function() {
         var el = document.createElement('td');
-        el.colSpan = 5;
+        el.colSpan = 2;
         el.textContent = 'Total';
         el.className = 'pv-total-label';
         return el;
@@ -724,48 +747,45 @@
   }
 
   function openDailyPrintPreview() {
+    var src = document.getElementById('dailyReportTable');
     var tbl = buildPrintTable();
-    if (!tbl) return;
+    if (!tbl || !src) return;
+    var printMetaLine = buildPrintMetaLine(src);
     var win = window.open('', '_blank');
     if (!win) return;
     var styles = [
-      '@page{size:A3 landscape;margin:2mm;}',
-      '@media print{@page{size:A3 landscape!important;margin:2mm!important;}}',
+      '@page{size:A3 landscape;margin:5mm;}',
       '*{box-sizing:border-box;}',
       'html,body{min-height:100%;}',
       'body{margin:0;padding:0;font-family:Inter,Segoe UI,system-ui,sans-serif;background:#f1f5f9;color:#1e293b;overflow-y:auto;overflow-x:auto;}',
-      '.pv-header{background:linear-gradient(135deg,#0f766e,#115e59);color:#fff;padding:10px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0;}',
+      'body.pv-compact{zoom:0.82;}',
+      '.pv-header{background:linear-gradient(135deg,#0f766e,#115e59);color:#fff;padding:10px 16px;display:flex;align-items:flex-start;gap:10px;flex-shrink:0;}',
       '.pv-header h1{margin:0;font-size:0.95rem;font-weight:700;}',
       '.pv-header .sub{font-size:0.72rem;opacity:0.9;margin-top:2px;}',
+      '.pv-header .pv-meta{font-size:0.7rem;opacity:0.95;margin-top:5px;line-height:1.35;}',
       '.pv-toolbar{display:flex;gap:8px;padding:8px 16px;align-items:center;background:#fff;border-bottom:1px solid #e2e8f0;flex-shrink:0;}',
       '.pv-toolbar button{border:none;border-radius:8px;padding:7px 14px;font-size:0.8rem;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;}',
       '.pv-close{background:#475569;color:#fff;}.pv-print{background:#2563eb;color:#fff;}.pv-pdf{background:#dc2626;color:#fff;}',
       '.pv-hint{margin-left:auto;color:#94a3b8;font-size:0.72rem;}',
       '.pv-scale-wrap{width:100%;padding:6px 8px 10px;overflow:visible;}',
       '.pv-scale-inner{display:block;width:100%;}',
-      '.daily-preview-table{border-collapse:collapse;table-layout:fixed;width:100%;background:#fff;}',
-      '.daily-preview-table th,.daily-preview-table td{border:1px solid #94a3b8;padding:3px 4px;text-align:center;vertical-align:middle;font-size:9px;line-height:1.2;}',
-      '.daily-preview-table thead th{background:#0f766e;color:#fff;font-weight:700;font-size:9px;}',
-      '.daily-preview-table thead tr.hdr-row-2 th{background:#115e59;font-size:8px;padding:2px;}',
-      '.daily-preview-table .pv-dp,.daily-preview-table .pv-ds,.daily-preview-table .pv-veh{text-align:left;white-space:normal;word-break:break-word;}',
-      '.daily-preview-table .pv-dp{min-width:72px;}',
-      '.daily-preview-table .pv-veh{min-width:72px;white-space:nowrap;}',
-      '.daily-preview-table .pv-ds{min-width:100px;}',
-      '.daily-preview-table .pv-dp-line{display:block;}',
-      '.daily-preview-table .pv-ds-line{display:block;line-height:1.25;}',
-      '.daily-preview-table .pv-ds-line.pv-ds-main{font-size:10px;font-weight:700;}',
-      '.daily-preview-table .pv-ds-line.pv-ds-main .pv-score{display:inline;margin-left:4px;font-size:9px;font-weight:700;color:#0f766e;}',
-      '.daily-preview-table .pv-muted{font-size:7.5px;color:#475569;font-weight:500;}',
-      '.daily-preview-table .pv-sr{width:1%;padding:2px 4px;white-space:nowrap;}',
-      '.daily-preview-table .pv-days{min-width:42px;white-space:nowrap;padding:2px 6px;}',
-      '.daily-preview-table .day-col{width:1%;min-width:12px;max-width:16px;padding:2px;font-size:8px;}',
-      '.daily-preview-table .date-hdr{font-size:8px;padding:2px 3px;min-width:24px;}',
-      '.daily-preview-table .sum-col{width:1%;min-width:14px;padding:2px 3px;font-size:8px;background:#e0f2fe;color:#0c4a6e;font-weight:700;}',
+      '.daily-preview-table{border-collapse:collapse;table-layout:fixed;width:100%;background:#fff;font-size:7px;}',
+      '.daily-preview-table th,.daily-preview-table td{border:1px solid #94a3b8;padding:1px 2px;text-align:center;vertical-align:middle;font-size:7px;line-height:1.15;}',
+      '.daily-preview-table thead th{background:#0f766e;color:#fff;font-weight:700;font-size:7px;}',
+      '.daily-preview-table thead tr.hdr-row-2 th{background:#115e59;font-size:6px;padding:1px;}',
+      '.daily-preview-table .pv-driver-col{width:13%;min-width:96px;max-width:128px;text-align:left;vertical-align:top;}',
+      '.daily-preview-table .pv-driver-block{text-align:left;line-height:1.2;}',
+      '.daily-preview-table .pv-ds-line{display:block;}',
+      '.daily-preview-table .pv-ds-line.pv-ds-main{font-size:8px;font-weight:700;}',
+      '.daily-preview-table .pv-ds-line.pv-veh-shift{font-size:7px;color:#475569;font-weight:500;}',
+      '.daily-preview-table .pv-ds-line.pv-ds-main .pv-score{display:inline;margin-left:3px;font-size:7px;font-weight:700;color:#0f766e;}',
+      '.daily-preview-table .pv-sr{width:22px;min-width:22px;max-width:28px;padding:1px 2px;white-space:nowrap;}',
+      '.daily-preview-table .day-col{padding:1px;font-size:7px;width:auto;}',
+      '.daily-preview-table .date-hdr{font-size:7px;padding:1px;line-height:1;writing-mode:vertical-rl;transform:rotate(180deg);height:26px;max-width:11px;}',
+      '.daily-preview-table .sum-col{padding:1px 2px;font-size:7px;background:#e0f2fe;color:#0c4a6e;font-weight:700;width:auto;}',
       '.daily-preview-table thead .sum-col{background:#0369a1;color:#fff;}',
       '.daily-preview-table tfoot .sum-col{background:#7dd3fc!important;color:#0c4a6e!important;}',
-      '.daily-preview-table .pv-score{font-size:8px;font-weight:700;color:#0f766e;}',
-      '.daily-preview-table .sum-vhdr{writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap;height:52px;max-width:18px;min-width:14px;padding:2px;font-size:8px;line-height:1;}',
-      '.daily-preview-table .days-total-hdr,.daily-preview-table .days-total{background:#fef3c7!important;color:#92400e!important;}',
+      '.daily-preview-table .sum-vhdr{writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap;height:36px;max-width:12px;min-width:10px;padding:1px;font-size:6px;line-height:1;}',
       '.daily-preview-table .cell-present{background:#dcfce7!important;color:#166534;font-weight:700;}',
       '.daily-preview-table .cell-absent{background:#fee2e2!important;color:#991b1b;font-weight:700;}',
       '.daily-preview-table .cell-leave{background:#dbeafe!important;color:#1e40af;font-weight:700;}',
@@ -794,27 +814,24 @@
       '.daily-legend-note{margin:0.45rem 0 0;font-size:0.66rem;color:#64748b;display:flex;align-items:center;gap:0.35rem;}',
       '.daily-legend-note i{color:#0f766e;}',
       '@media print{',
-      'body{display:block!important;overflow:visible!important;background:#fff!important;}',
-      '.pv-toolbar,.pv-hint,.pv-header,.pv-legend{display:none!important;}',
-      '.pv-scale-wrap{padding:0;margin:0;overflow:visible;width:100%!important;flex:none;}',
-      '.pv-scale-inner{transform:none!important;width:100%!important;display:block!important;margin:0!important;}',
-      '.daily-preview-table{width:100%!important;table-layout:fixed!important;font-size:7px!important;}',
-      '.daily-preview-table th,.daily-preview-table td{padding:1px 2px!important;font-size:7px!important;line-height:1.15!important;}',
-      '.daily-preview-table .pv-dp,.daily-preview-table .pv-ds,.daily-preview-table .pv-veh{min-width:0!important;}',
-      '.daily-preview-table .pv-days{min-width:0!important;}',
-      '.daily-preview-table .day-col,.daily-preview-table .date-hdr{min-width:0!important;max-width:none!important;width:auto!important;}',
-      '.daily-preview-table .sum-col,.daily-preview-table .sum-vhdr{min-width:0!important;max-width:none!important;}',
-      '.daily-preview-table thead th,.daily-preview-table tfoot td{-webkit-print-color-adjust:exact;print-color-adjust:exact;}',
-      '.daily-preview-table .cell-present,.daily-preview-table .cell-absent,.daily-preview-table .cell-leave,',
-      '.daily-preview-table .cell-late,.daily-preview-table .cell-half,.daily-preview-table .cell-off,',
-      '.daily-preview-table .days-total-hdr,.daily-preview-table .days-total{-webkit-print-color-adjust:exact;print-color-adjust:exact;}',
+      '@page{size:A3 landscape;margin:5mm;}',
+      'body{display:block!important;overflow:visible!important;background:#fff!important;zoom:0.8;-webkit-print-color-adjust:exact;print-color-adjust:exact;}',
+      '.pv-toolbar,.pv-hint,.pv-legend{display:none!important;}',
+      '.pv-header{display:block!important;padding:4mm 5mm 3mm!important;}',
+      '.pv-scale-wrap{padding:0;margin:0;overflow:visible;width:100%!important;}',
+      '.pv-scale-inner{width:100%!important;display:block!important;margin:0!important;}',
+      '.daily-preview-table{width:100%!important;table-layout:fixed!important;}',
+      '.daily-preview-table thead th,.daily-preview-table tfoot td,.daily-preview-table .cell-present,.daily-preview-table .cell-absent,',
+      '.daily-preview-table .cell-leave,.daily-preview-table .cell-late,.daily-preview-table .cell-half,.daily-preview-table .cell-off{',
+      '-webkit-print-color-adjust:exact;print-color-adjust:exact;}',
       '}'
     ].join('');
     win.document.open();
     win.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Day Wise Attendance Report</title>');
     win.document.write('<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">');
     win.document.write('<style>' + styles + '</style></head><body>');
-    win.document.write('<div class="pv-header"><i class="bi bi-calendar3-week" style="font-size:1.2rem;"></i><div><h1>Day Wise Attendance Report</h1><div class="sub">' + reportTitleText + '</div></div></div>');
+    win.document.write('<div class="pv-header"><i class="bi bi-calendar3-week" style="font-size:1.2rem;"></i><div><h1>Day Wise Attendance Report</h1><div class="sub">' + reportTitleText + '</div>' +
+      (printMetaLine ? '<div class="pv-meta">' + printMetaLine.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</div>' : '') + '</div></div>');
     win.document.write('<div class="pv-toolbar pv-print-toolbar">');
     win.document.write('<button type="button" class="pv-close" onclick="window.close()"><i class="bi bi-arrow-left"></i> Close</button>');
     win.document.write('<button type="button" class="pv-print" onclick="fitAndPrint()"><i class="bi bi-printer"></i> Print</button>');
@@ -823,7 +840,7 @@
     win.document.write('<div class="pv-scale-wrap"><div class="pv-scale-inner" id="pvScaleInner">' + tbl.outerHTML + '</div></div>');
     var legendSrc = document.getElementById('dailyAttendanceLegend');
     win.document.write('<div class="pv-legend">' + (legendSrc ? legendSrc.innerHTML : '') + '</div>');
-    win.document.write('<script>function applyPrintLayout(){var inner=document.getElementById("pvScaleInner");if(!inner)return;var tbl=inner.querySelector("table");var wrap=inner.parentElement;inner.style.transform="none";inner.style.marginBottom="";inner.style.marginRight="";inner.style.width="100%";inner.style.display="block";if(tbl){tbl.style.width="100%";tbl.style.tableLayout="fixed";}if(wrap){wrap.style.width="100%";wrap.style.minHeight="";wrap.style.overflow="visible";}var rows=inner.querySelectorAll("tbody tr").length;var hint=document.querySelector(".pv-hint");if(hint&&rows){hint.innerHTML="<i class=\\"bi bi-info-circle\\"></i> Landscape + A3 · <strong>"+rows+"</strong> drivers · scroll for all rows";}}function fitAndPrint(){applyPrintLayout();setTimeout(function(){window.print();},200);}function saveDailyPdf(){var tb=document.querySelector(".pv-print-toolbar");var s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.2/html2pdf.bundle.min.js";s.onload=function(){applyPrintLayout();if(tb)tb.style.display="none";var el=document.getElementById("pvScaleInner");html2pdf().set({margin:[2,2,2,2],filename:"Day_Wise_Attendance_Report.pdf",image:{type:"jpeg",quality:0.92},html2canvas:{scale:2,useCORS:true,logging:false,windowWidth:document.documentElement.scrollWidth||1200,windowHeight:document.documentElement.scrollHeight||800},jsPDF:{unit:"mm",format:"a3",orientation:"landscape"},pagebreak:{mode:["css","legacy"]}}).from(el).save().then(function(){if(tb)tb.style.display="";}).catch(function(){if(tb)tb.style.display="";alert("PDF error — Print se Save as PDF try karein.");});};document.head.appendChild(s);}window.addEventListener("load",function(){setTimeout(applyPrintLayout,80);});window.addEventListener("beforeprint",applyPrintLayout);<\/script>');
+    win.document.write('<script>function applyPrintLayout(){document.body.classList.add("pv-compact");var inner=document.getElementById("pvScaleInner");if(!inner)return;var tbl=inner.querySelector("table");var wrap=inner.parentElement;inner.style.transform="none";inner.style.width="100%";inner.style.display="block";if(tbl){tbl.style.width="100%";tbl.style.tableLayout="fixed";}if(wrap){wrap.style.width="100%";wrap.style.overflow="visible";}var rows=inner.querySelectorAll("tbody tr").length;var hint=document.querySelector(".pv-hint");if(hint&&rows){hint.innerHTML="<i class=\\"bi bi-info-circle\\"></i> A3 Landscape · <strong>"+rows+"</strong> drivers · compact columns";}}function fitAndPrint(){applyPrintLayout();setTimeout(function(){window.print();},200);}function saveDailyPdf(){var tb=document.querySelector(".pv-print-toolbar");var s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.2/html2pdf.bundle.min.js";s.onload=function(){applyPrintLayout();if(tb)tb.style.display="none";var el=document.body;html2pdf().set({margin:[3,3,3,3],filename:"Day_Wise_Attendance_Report.pdf",image:{type:"jpeg",quality:0.92},html2canvas:{scale:2,useCORS:true,logging:false,windowWidth:document.documentElement.scrollWidth||1400,windowHeight:document.documentElement.scrollHeight||900},jsPDF:{unit:"mm",format:"a3",orientation:"landscape"},pagebreak:{mode:["css","legacy"]}}).from(el).save().then(function(){if(tb)tb.style.display="";}).catch(function(){if(tb)tb.style.display="";alert("PDF error — Print se Save as PDF try karein.");});};document.head.appendChild(s);}window.addEventListener("load",function(){setTimeout(applyPrintLayout,80);});window.addEventListener("beforeprint",applyPrintLayout);<\/script>');
     win.document.write('</body></html>');
     win.document.close();
   }
