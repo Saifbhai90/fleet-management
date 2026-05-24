@@ -1,5 +1,12 @@
 {% extends "base.html" %}
 {% block title %}Report Centre{% endblock %}
+{% macro report_link(href, icon, label, tile='', hint='') %}
+<a href="{{ href }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link rc-tile {{ tile }}">
+  <span class="rc-tile-icon" aria-hidden="true"><i class="bi {{ icon }}"></i></span>
+  <span class="rc-tile-label">{{ label }}</span>
+  {% if hint %}<small class="text-muted d-block ms-4 rc-tile-hint">{{ hint }}</small>{% endif %}
+</a>
+{% endmacro %}
 {% block content %}
 <div class="container-fluid rc-page">
 
@@ -78,20 +85,13 @@
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-truck me-1"></i>Vehicle Reports</h6>
           <div class="list-group list-group-flush report-link-group">
             {% if can_see_page('report_vehicle_summary') %}
-            <a href="{{ url_for('report_vehicle_summary') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
-              <i class="bi bi-star text-warning me-2"></i>Vehicle Summary
-            </a>
+            {{ report_link(url_for('report_vehicle_summary'), 'bi-truck-front-fill', 'Vehicle Summary', 'rc-tile--vehicle-summary') }}
             {% endif %}
             {% if can_see_page('vehicles_list') or can_see_page('report_vehicle_profile') %}
-            <a href="{{ url_for('vehicles_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
-              <i class="bi bi-star text-warning me-2"></i>Vehicle Profile
-              <small class="text-muted d-block ms-4">Full vehicle history, transfers, driver assignments</small>
-            </a>
+            {{ report_link(url_for('vehicles_list'), 'bi-card-list', 'Vehicle Profile', 'rc-tile--vehicle-profile', 'Full vehicle history, transfers, driver assignments') }}
             {% endif %}
             {% if can_see_page('report_parking_utilization') %}
-            <a href="{{ url_for('report_parking_utilization') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
-              <i class="bi bi-star text-warning me-2"></i>Parking Utilization
-            </a>
+            {{ report_link(url_for('report_parking_utilization'), 'bi-p-square-fill', 'Parking Utilization', 'rc-tile--parking') }}
             {% endif %}
           </div>
         </div>
@@ -102,19 +102,13 @@
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-briefcase me-1"></i>Project & District</h6>
           <div class="list-group list-group-flush report-link-group">
             {% if can_see_page('report_project_summary') %}
-            <a href="{{ url_for('report_project_summary') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
-              <i class="bi bi-star text-warning me-2"></i>Project Summary
-            </a>
+            {{ report_link(url_for('report_project_summary'), 'bi-kanban-fill', 'Project Summary', 'rc-tile--project') }}
             {% endif %}
             {% if can_see_page('report_district_summary') %}
-            <a href="{{ url_for('report_district_summary') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
-              <i class="bi bi-star text-warning me-2"></i>District Summary
-            </a>
+            {{ report_link(url_for('report_district_summary'), 'bi-geo-alt-fill', 'District Summary', 'rc-tile--district') }}
             {% endif %}
             {% if can_see_page('report_company_profile') %}
-            <a href="{{ url_for('companies', mode='report') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
-              <i class="bi bi-star text-warning me-2"></i>Company Profile
-            </a>
+            {{ report_link(url_for('companies', mode='report'), 'bi-building-fill', 'Company Profile', 'rc-tile--company') }}
             {% endif %}
           </div>
         </div>
@@ -125,36 +119,22 @@
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-fuel-pump me-1"></i>Expense Reports</h6>
           <div class="list-group list-group-flush report-link-group">
             {% if can_see_page('fuel_expense_list') %}
-            <a href="{{ url_for('fuel_expense_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
-              <i class="bi bi-star text-warning me-2"></i>Fuel Expense Report
-            </a>
+            {{ report_link(url_for('fuel_expense_list'), 'bi-fuel-pump-fill', 'Fuel Expense Report', 'rc-tile--fuel') }}
             {% endif %}
             {% if can_see_page('oil_expense_list') %}
-            <a href="{{ url_for('oil_expense_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
-              <i class="bi bi-star text-warning me-2"></i>Oil Expense Report
-            </a>
+            {{ report_link(url_for('oil_expense_list'), 'bi-droplet-fill', 'Oil Expense Report', 'rc-tile--oil') }}
             {% endif %}
             {% if can_see_page('maintenance_expense_list') %}
-            <a href="{{ url_for('maintenance_expense_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
-              <i class="bi bi-star text-warning me-2"></i>Maintenance Expense Report
-            </a>
+            {{ report_link(url_for('maintenance_expense_list'), 'bi-wrench-adjustable-circle-fill', 'Maintenance Expense Report', 'rc-tile--maintenance') }}
             {% endif %}
             {% if can_see_page('maintenance_expense_list') %}
-            <a href="{{ url_for('maintenance_work_order_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
-              <i class="bi bi-star text-warning me-2"></i>Maintenance Work Order Report
-            </a>
+            {{ report_link(url_for('maintenance_work_order_list'), 'bi-clipboard2-check-fill', 'Maintenance Work Order Report', 'rc-tile--work-order') }}
             {% endif %}
             {% if can_see_page('oil_change_alert_report') %}
-            <a href="{{ url_for('oil_change_alert_report') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
-              <i class="bi bi-star text-warning me-2"></i>Oil Change Alert Report
-              <small class="text-muted d-block ms-4">Vehicle family limit ke near / crossed alerts</small>
-            </a>
+            {{ report_link(url_for('oil_change_alert_report'), 'bi-bell-fill', 'Oil Change Alert Report', 'rc-tile--oil-alert', 'Vehicle family limit ke near / crossed alerts') }}
             {% endif %}
             {% if can_see_page('maintenance_expense_list') %}
-            <a href="{{ url_for('maintenance_baseline_alert_report') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
-              <i class="bi bi-star text-warning me-2"></i>Maintenance Baseline Alert Report
-              <small class="text-muted d-block ms-4">Product + Job Category tracking with due status</small>
-            </a>
+            {{ report_link(url_for('maintenance_baseline_alert_report'), 'bi-graph-up-arrow', 'Maintenance Baseline Alert Report', 'rc-tile--baseline-alert', 'Product + Job Category tracking with due status') }}
             {% endif %}
           </div>
         </div>
@@ -177,59 +157,37 @@
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-clipboard-data me-1"></i>Daily Task Reports</h6>
           <div class="list-group list-group-flush report-link-group">
             {% if can_see_page('task_report_list') %}
-            <a href="{{ url_for('task_report_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
-              <i class="bi bi-star text-warning me-2"></i>Vehicles Daily Task Report
-            </a>
+            {{ report_link(url_for('task_report_list'), 'bi-calendar2-check-fill', 'Vehicles Daily Task Report', 'rc-tile--daily-task') }}
             {% endif %}
             {% if can_see_page('task_report_entry') or can_see_page('task_report_add') %}
-            <a href="{{ url_for('task_report_new') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
-              <i class="bi bi-star text-warning me-2"></i>New Task Entry
-            </a>
+            {{ report_link(url_for('task_report_new'), 'bi-plus-circle-fill', 'New Task Entry', 'rc-tile--new-task') }}
             {% endif %}
             {% if can_see_page('red_task_list') %}
-            <a href="{{ url_for('red_task_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
-              <i class="bi bi-star text-warning me-2"></i>Red Task Justification
-            </a>
+            {{ report_link(url_for('red_task_list'), 'bi-flag-fill', 'Red Task Justification', 'rc-tile--red-task') }}
             {% endif %}
             {% if can_see_page('without_task_list') %}
-            <a href="{{ url_for('without_task_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
-              <i class="bi bi-star text-warning me-2"></i>Vehicle Move Without Task
-            </a>
+            {{ report_link(url_for('without_task_list'), 'bi-sign-stop-fill', 'Vehicle Move Without Task', 'rc-tile--no-task') }}
             {% endif %}
             {% if can_see_page('speed_monitoring_report') %}
-            <a href="{{ url_for('speed_monitoring_report') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
-              <i class="bi bi-star text-warning me-2"></i>Speed Monitoring Report
-            </a>
+            {{ report_link(url_for('speed_monitoring_report'), 'bi-speedometer2', 'Speed Monitoring Report', 'rc-tile--speed') }}
             {% endif %}
             {% if can_see_page('mileage_report') %}
-            <a href="{{ url_for('mileage_report') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
-              <i class="bi bi-star text-warning me-2"></i>Mileage Report
-            </a>
+            {{ report_link(url_for('mileage_report'), 'bi-signpost-split-fill', 'Mileage Report', 'rc-tile--mileage') }}
             {% endif %}
             {% if can_see_page('tracker_difference_report') %}
-            <a href="{{ url_for('tracker_difference_report') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
-              <i class="bi bi-star text-warning me-2"></i>Tracker Difference Report
-            </a>
+            {{ report_link(url_for('tracker_difference_report'), 'bi-broadcast-pin', 'Tracker Difference Report', 'rc-tile--tracker') }}
             {% endif %}
             {% if can_see_page('unauthorized_movement_report') %}
-            <a href="{{ url_for('unauthorized_movement_report') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
-              <i class="bi bi-star text-warning me-2"></i>Unauthorized Movement Report
-            </a>
+            {{ report_link(url_for('unauthorized_movement_report'), 'bi-shield-exclamation', 'Unauthorized Movement Report', 'rc-tile--unauthorized') }}
             {% endif %}
             {% if can_see_page('task_start_delay_report') %}
-            <a href="{{ url_for('task_start_delay_report') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
-              <i class="bi bi-star text-warning me-2"></i>Driver Response Time Report
-            </a>
+            {{ report_link(url_for('task_start_delay_report'), 'bi-hourglass-split', 'Driver Response Time Report', 'rc-tile--response') }}
             {% endif %}
             {% if can_see_page('task_turnaround_report') %}
-            <a href="{{ url_for('task_turnaround_report') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
-              <i class="bi bi-star text-success me-2"></i>Task Turnaround Report
-            </a>
+            {{ report_link(url_for('task_turnaround_report'), 'bi-arrow-repeat', 'Task Turnaround Report', 'rc-tile--turnaround') }}
             {% endif %}
             {% if can_see_page('unexecuted_task_report') %}
-            <a href="{{ url_for('unexecuted_task_report') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
-              <i class="bi bi-x-octagon me-2" style="color:#4f46e5;"></i>Unexecuted Task Report
-            </a>
+            {{ report_link(url_for('unexecuted_task_report'), 'bi-x-octagon-fill', 'Unexecuted Task Report', 'rc-tile--unexecuted') }}
             {% endif %}
           </div>
         </div>
@@ -240,9 +198,7 @@
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-book me-1"></i>Logbook</h6>
           <div class="list-group list-group-flush report-link-group">
             {% if can_see_page('task_report_logbook_cover') %}
-            <a href="{{ url_for('task_report_logbook_cover') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
-              <i class="bi bi-star text-warning me-2"></i>Logbook Cover Pages
-            </a>
+            {{ report_link(url_for('task_report_logbook_cover'), 'bi-journal-richtext', 'Logbook Cover Pages', 'rc-tile--logbook') }}
             {% endif %}
           </div>
         </div>
@@ -253,14 +209,10 @@
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-cloud-upload me-1"></i>Workbook Upload</h6>
           <div class="list-group list-group-flush report-link-group">
             {% if can_see_page('task_report_upload') %}
-            <a href="{{ url_for('task_report_upload') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
-              <i class="bi bi-star text-warning me-2"></i>Upload Workbooks (Admin)
-            </a>
+            {{ report_link(url_for('task_report_upload'), 'bi-cloud-arrow-up-fill', 'Upload Workbooks (Admin)', 'rc-tile--upload') }}
             {% endif %}
             {% if can_see_page('task_report_upload') or can_see_page('task_report_upload_list') %}
-            <a href="{{ url_for('task_report_upload_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
-              <i class="bi bi-journal-bookmark me-2 text-secondary"></i>Workbook Upload Log
-            </a>
+            {{ report_link(url_for('task_report_upload_list'), 'bi-journal-check', 'Workbook Upload Log', 'rc-tile--upload-log') }}
             {% endif %}
           </div>
         </div>
@@ -283,36 +235,22 @@
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-person-badge me-1"></i>Driver Reports</h6>
           <div class="list-group list-group-flush report-link-group">
             {% if linked_driver_id and can_see_page('report_driver_profile') %}
-            <a href="{{ url_for('report_driver_profile', driver_id=linked_driver_id, ref=url_for('reports_index')) }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
-              <i class="bi bi-person-badge text-primary me-2"></i>Driver Profile
-              <small class="text-muted d-block ms-4">Your driver record (linked to this login)</small>
-            </a>
+            {{ report_link(url_for('report_driver_profile', driver_id=linked_driver_id, ref=url_for('reports_index')), 'bi-person-vcard-fill', 'Driver Profile', 'rc-tile--driver-profile', 'Your driver record (linked to this login)') }}
             {% endif %}
             {% if can_see_page('active_drivers_report') %}
-            <a href="{{ url_for('active_drivers_report') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
-              <i class="bi bi-star text-warning me-2"></i>Active Driver Summary
-            </a>
+            {{ report_link(url_for('active_drivers_report'), 'bi-people-fill', 'Active Driver Summary', 'rc-tile--active-drivers') }}
             {% endif %}
             {% if can_see_page('driver_seat_available_report') %}
-            <a href="{{ url_for('driver_seat_available_report') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
-              <i class="bi bi-star text-warning me-2"></i>Driver Seat Available
-            </a>
+            {{ report_link(url_for('driver_seat_available_report'), 'bi-person-workspace', 'Driver Seat Available', 'rc-tile--seat') }}
             {% endif %}
             {% if can_see_page('missing_documents_report') %}
-            <a href="{{ url_for('missing_documents_report') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
-              <i class="bi bi-star text-warning me-2"></i>Missing Documents
-            </a>
+            {{ report_link(url_for('missing_documents_report'), 'bi-file-earmark-x-fill', 'Missing Documents', 'rc-tile--missing-docs') }}
             {% endif %}
             {% if can_see_page('penalty_record_list') %}
-            <a href="{{ url_for('penalty_record_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
-              <i class="bi bi-star text-warning me-2"></i>Driver Penalty Records
-            </a>
+            {{ report_link(url_for('penalty_record_list'), 'bi-exclamation-octagon-fill', 'Driver Penalty Records', 'rc-tile--penalty') }}
             {% endif %}
             {% if can_see_page('driver_salary_slip') %}
-            <a href="{{ url_for('driver_salary_slip') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
-              <i class="bi bi-bank2 text-primary me-2"></i>Driver Salary Slip (Bank)
-              <small class="text-muted d-block ms-4">Loan / bank file: driver auto-fill, salary details manually.</small>
-            </a>
+            {{ report_link(url_for('driver_salary_slip'), 'bi-bank2', 'Driver Salary Slip (Bank)', 'rc-tile--salary', 'Loan / bank file: driver auto-fill, salary details manually.') }}
             {% endif %}
           </div>
         </div>
@@ -323,24 +261,14 @@
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-calendar-check me-1"></i>Attendance Reports</h6>
           <div class="list-group list-group-flush report-link-group">
             {% if can_see_page('driver_attendance_report') %}
-            <a href="{{ url_for('driver_attendance_report') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
-              <i class="bi bi-star text-warning me-2"></i>Monthly Attendance Report
-              <small class="text-muted d-block ms-4">Monthly driver attendance summary</small>
-            </a>
-            <a href="{{ url_for('driver_attendance_daily_report') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
-              <i class="bi bi-star text-warning me-2"></i>Day Wise Attendance Report
-              <small class="text-muted d-block ms-4">Daily M/E grid — complete check-in + check-out only</small>
-            </a>
+            {{ report_link(url_for('driver_attendance_report'), 'bi-calendar3-week-fill', 'Monthly Attendance Report', 'rc-tile--monthly-att', 'Monthly driver attendance summary') }}
+            {{ report_link(url_for('driver_attendance_daily_report'), 'bi-grid-3x3-gap-fill', 'Day Wise Attendance Report', 'rc-tile--daily-att', 'Daily M/E grid — complete check-in + check-out only') }}
             {% endif %}
             {% if can_see_page('driver_attendance_tra_report') %}
-            <a href="{{ url_for('driver_attendance_tra_report') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
-              <i class="bi bi-star text-warning me-2"></i>TRA Attendance Sheet
-            </a>
+            {{ report_link(url_for('driver_attendance_tra_report'), 'bi-table', 'TRA Attendance Sheet', 'rc-tile--tra-att') }}
             {% endif %}
             {% if can_see_page('report_expiry') %}
-            <a href="{{ url_for('report_expiry') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
-              <i class="bi bi-star text-warning me-2"></i>License / CNIC Expiry
-            </a>
+            {{ report_link(url_for('report_expiry'), 'bi-passport-fill', 'License / CNIC Expiry', 'rc-tile--expiry') }}
             {% endif %}
           </div>
         </div>
@@ -351,14 +279,10 @@
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-person-dash me-1"></i>Workforce</h6>
           <div class="list-group list-group-flush report-link-group">
             {% if can_see_page('driver_job_left_list') %}
-            <a href="{{ url_for('driver_job_left_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
-              <i class="bi bi-star text-warning me-2"></i>Resignation / Exit Report
-            </a>
+            {{ report_link(url_for('driver_job_left_list'), 'bi-box-arrow-right', 'Resignation / Exit Report', 'rc-tile--resignation') }}
             {% endif %}
             {% if can_see_page('driver_rejoin_list') %}
-            <a href="{{ url_for('driver_rejoin_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
-              <i class="bi bi-star text-warning me-2"></i>Re-employment Report
-            </a>
+            {{ report_link(url_for('driver_rejoin_list'), 'bi-person-check-fill', 'Re-employment Report', 'rc-tile--rejoin') }}
             {% endif %}
           </div>
         </div>
@@ -381,24 +305,16 @@
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-journal-bookmark me-1"></i>Books of Account</h6>
           <div class="list-group list-group-flush report-link-group">
             {% if can_see_page('payment_vouchers_list') %}
-            <a href="{{ url_for('payment_vouchers_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
-              <i class="bi bi-star text-warning me-2"></i>Payment Vouchers
-            </a>
+            {{ report_link(url_for('payment_vouchers_list'), 'bi-cash-coin', 'Payment Vouchers', 'rc-tile--payment') }}
             {% endif %}
             {% if can_see_page('receipt_vouchers_list') %}
-            <a href="{{ url_for('receipt_vouchers_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
-              <i class="bi bi-star text-warning me-2"></i>Receipt Vouchers
-            </a>
+            {{ report_link(url_for('receipt_vouchers_list'), 'bi-receipt-cutoff', 'Receipt Vouchers', 'rc-tile--receipt') }}
             {% endif %}
             {% if can_see_page('bank_entries_list') %}
-            <a href="{{ url_for('bank_entries_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
-              <i class="bi bi-star text-warning me-2"></i>Bank Entries
-            </a>
+            {{ report_link(url_for('bank_entries_list'), 'bi-bank', 'Bank Entries', 'rc-tile--bank-entry') }}
             {% endif %}
             {% if can_see_page('journal_vouchers_list') %}
-            <a href="{{ url_for('journal_vouchers_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
-              <i class="bi bi-star text-warning me-2"></i>Journal Vouchers
-            </a>
+            {{ report_link(url_for('journal_vouchers_list'), 'bi-journal-plus', 'Journal Vouchers', 'rc-tile--journal-v') }}
             {% endif %}
           </div>
         </div>
@@ -409,19 +325,13 @@
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-receipt me-1"></i>Ledger & Statements</h6>
           <div class="list-group list-group-flush report-link-group">
             {% if can_see_page('accounts_account_ledger') %}
-            <a href="{{ url_for('accounts_account_ledger') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
-              <i class="bi bi-star text-warning me-2"></i>Account Ledger
-            </a>
+            {{ report_link(url_for('accounts_account_ledger'), 'bi-journal-text', 'Account Ledger', 'rc-tile--ledger') }}
             {% endif %}
             {% if can_see_page('wallet_dashboard') %}
-            <a href="{{ url_for('wallet_dashboard') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
-              <i class="bi bi-star text-warning me-2"></i>Wallet Dashboard
-            </a>
+            {{ report_link(url_for('wallet_dashboard'), 'bi-wallet2', 'Wallet Dashboard', 'rc-tile--wallet') }}
             {% endif %}
             {% if can_see_page('fund_transfers_list') %}
-            <a href="{{ url_for('fund_transfers_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
-              <i class="bi bi-star text-warning me-2"></i>Fund Transfers
-            </a>
+            {{ report_link(url_for('fund_transfers_list'), 'bi-arrow-left-right', 'Fund Transfers', 'rc-tile--transfer') }}
             {% endif %}
           </div>
         </div>
@@ -432,14 +342,10 @@
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-clipboard-data me-1"></i>Final Accounts</h6>
           <div class="list-group list-group-flush report-link-group">
             {% if can_see_page('accounts_balance_sheet') %}
-            <a href="{{ url_for('accounts_balance_sheet') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
-              <i class="bi bi-star text-warning me-2"></i>Balance Sheet
-            </a>
+            {{ report_link(url_for('accounts_balance_sheet'), 'bi-pie-chart-fill', 'Balance Sheet', 'rc-tile--balance') }}
             {% endif %}
             {% if can_see_page('chart_of_accounts_list') %}
-            <a href="{{ url_for('chart_of_accounts_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
-              <i class="bi bi-star text-warning me-2"></i>Chart of Accounts
-            </a>
+            {{ report_link(url_for('chart_of_accounts_list'), 'bi-diagram-3-fill', 'Chart of Accounts', 'rc-tile--chart-accounts') }}
             {% endif %}
           </div>
         </div>
@@ -462,10 +368,7 @@
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-journal-check me-1"></i>Activity & Logs</h6>
           <div class="list-group list-group-flush report-link-group">
             {% if can_see_page('activity_log_report') %}
-            <a href="{{ url_for('activity_log_report') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
-              <i class="bi bi-star text-warning me-2"></i>Activity & Login Log
-              <small class="text-muted d-block ms-4">Login sessions, device info, IP, geolocation</small>
-            </a>
+            {{ report_link(url_for('activity_log_report'), 'bi-activity', 'Activity & Login Log', 'rc-tile--activity', 'Login sessions, device info, IP, geolocation') }}
             {% endif %}
           </div>
         </div>
@@ -476,10 +379,7 @@
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-robot me-1"></i>AI Tools</h6>
           <div class="list-group list-group-flush report-link-group">
             {% if can_see_page('report_ai') %}
-            <a href="{{ url_for('ai.ai_assistant') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
-              <i class="bi bi-stars text-warning me-2"></i>Master Mind AI
-              <small class="text-muted d-block ms-4">Conversational analytics, SQL insights, and charts</small>
-            </a>
+            {{ report_link(url_for('ai.ai_assistant'), 'bi-stars', 'Master Mind AI', 'rc-tile--ai', 'Conversational analytics, SQL insights, and charts') }}
             {% endif %}
           </div>
         </div>
@@ -490,19 +390,13 @@
           <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-book me-1"></i>Book Management</h6>
           <div class="list-group list-group-flush report-link-group">
             {% if can_see_page('book_inventory_list') %}
-            <a href="{{ url_for('book_inventory_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
-              <i class="bi bi-star text-warning me-2"></i>Book Inventory
-            </a>
+            {{ report_link(url_for('book_inventory_list'), 'bi-bookshelf', 'Book Inventory', 'rc-tile--book-inv') }}
             {% endif %}
             {% if can_see_page('book_assignment_list') %}
-            <a href="{{ url_for('book_assignment_list') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
-              <i class="bi bi-star text-warning me-2"></i>Book Assignments
-            </a>
+            {{ report_link(url_for('book_assignment_list'), 'bi-bookmark-star-fill', 'Book Assignments', 'rc-tile--book-assign') }}
             {% endif %}
             {% if can_see_page('book_pending_returns') %}
-            <a href="{{ url_for('book_pending_returns') }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link">
-              <i class="bi bi-star text-warning me-2"></i>Pending Book Returns
-            </a>
+            {{ report_link(url_for('book_pending_returns'), 'bi-arrow-return-left', 'Pending Book Returns', 'rc-tile--book-return') }}
             {% endif %}
           </div>
         </div>
@@ -638,7 +532,7 @@ html.capacitor-native .report-link-group {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
-html.capacitor-native .report-link-group .report-link {
+html.capacitor-native .report-link-group .report-link.rc-tile {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -662,27 +556,19 @@ html.capacitor-native .report-link-group .report-link:active {
   border-color: #99f6e4;
   box-shadow: 0 2px 8px rgba(15, 118, 110, 0.15);
 }
-html.capacitor-native .report-link-group .report-link .bi {
-  display: block;
-  font-size: 1.35rem !important;
-  margin: 0 0 6px 0 !important;
+html.capacitor-native .report-link-group .report-link .rc-tile-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  margin: 0 0 7px 0 !important;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08);
+}
+html.capacitor-native .report-link-group .report-link .rc-tile-icon .bi {
+  font-size: 1.22rem !important;
+  margin: 0 !important;
   line-height: 1;
 }
-html.capacitor-native .report-link-group .report-link .bi-star {
-  color: #f59e0b !important;
-}
-html.capacitor-native .report-link-group .report-link .bi-stars,
-html.capacitor-native .report-link-group .report-link .bi-robot {
-  color: #8b5cf6 !important;
-}
-html.capacitor-native .report-link-group .report-link .bi-person-badge,
-html.capacitor-native .report-link-group .report-link .bi-bank2 {
-  color: #2563eb !important;
-}
-html.capacitor-native .report-link-group .report-link .bi-journal-bookmark,
-html.capacitor-native .report-link-group .report-link .bi-cloud-upload {
-  color: #64748b !important;
-}
+html.capacitor-native .report-link-group .report-link .rc-tile-hint,
 html.capacitor-native .report-link-group .report-link small {
   display: none !important;
 }
@@ -701,6 +587,89 @@ html.capacitor-native .rc-native-empty.is-visible {
   display: none;
 }
 
+/* Report tile icons — web list + mobile grid */
+.rc-tile-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 8px;
+  margin-right: 0.55rem;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+.rc-tile-icon .bi {
+  font-size: 0.92rem;
+  line-height: 1;
+  margin: 0 !important;
+}
+.report-link-group .report-link.rc-tile {
+  display: flex;
+  align-items: flex-start;
+}
+.report-link-group .report-link.rc-tile .rc-tile-label {
+  flex: 1;
+  min-width: 0;
+}
+.report-link-group .report-link.rc-tile .rc-tile-hint {
+  margin-left: 2.3rem;
+}
+
+/* Per-report icon colors (teal / blue / amber / rose / violet / emerald) */
+.rc-tile--vehicle-summary .rc-tile-icon,
+.rc-tile--vehicle-profile .rc-tile-icon,
+.rc-tile--parking .rc-tile-icon { background: linear-gradient(145deg, #ccfbf1, #99f6e4); color: #0f766e; }
+.rc-tile--project .rc-tile-icon,
+.rc-tile--district .rc-tile-icon,
+.rc-tile--company .rc-tile-icon { background: linear-gradient(145deg, #e0e7ff, #c7d2fe); color: #4338ca; }
+.rc-tile--fuel .rc-tile-icon { background: linear-gradient(145deg, #fef3c7, #fde68a); color: #b45309; }
+.rc-tile--oil .rc-tile-icon { background: linear-gradient(145deg, #dbeafe, #bfdbfe); color: #1d4ed8; }
+.rc-tile--maintenance .rc-tile-icon,
+.rc-tile--work-order .rc-tile-icon { background: linear-gradient(145deg, #ffedd5, #fed7aa); color: #c2410c; }
+.rc-tile--oil-alert .rc-tile-icon,
+.rc-tile--baseline-alert .rc-tile-icon { background: linear-gradient(145deg, #ffe4e6, #fecdd3); color: #be123c; }
+.rc-tile--daily-task .rc-tile-icon,
+.rc-tile--new-task .rc-tile-icon,
+.rc-tile--logbook .rc-tile-icon { background: linear-gradient(145deg, #d1fae5, #a7f3d0); color: #047857; }
+.rc-tile--red-task .rc-tile-icon { background: linear-gradient(145deg, #fecaca, #fca5a5); color: #b91c1c; }
+.rc-tile--no-task .rc-tile-icon,
+.rc-tile--unauthorized .rc-tile-icon { background: linear-gradient(145deg, #fee2e2, #fecaca); color: #dc2626; }
+.rc-tile--speed .rc-tile-icon,
+.rc-tile--mileage .rc-tile-icon,
+.rc-tile--tracker .rc-tile-icon { background: linear-gradient(145deg, #cffafe, #a5f3fc); color: #0e7490; }
+.rc-tile--response .rc-tile-icon,
+.rc-tile--turnaround .rc-tile-icon { background: linear-gradient(145deg, #ede9fe, #ddd6fe); color: #6d28d9; }
+.rc-tile--unexecuted .rc-tile-icon { background: linear-gradient(145deg, #e0e7ff, #c7d2fe); color: #4f46e5; }
+.rc-tile--upload .rc-tile-icon,
+.rc-tile--upload-log .rc-tile-icon { background: linear-gradient(145deg, #f1f5f9, #e2e8f0); color: #475569; }
+.rc-tile--driver-profile .rc-tile-icon,
+.rc-tile--active-drivers .rc-tile-icon,
+.rc-tile--seat .rc-tile-icon { background: linear-gradient(145deg, #dbeafe, #bfdbfe); color: #1d4ed8; }
+.rc-tile--missing-docs .rc-tile-icon,
+.rc-tile--penalty .rc-tile-icon { background: linear-gradient(145deg, #ffedd5, #fed7aa); color: #c2410c; }
+.rc-tile--salary .rc-tile-icon { background: linear-gradient(145deg, #e0f2fe, #bae6fd); color: #0369a1; }
+.rc-tile--monthly-att .rc-tile-icon,
+.rc-tile--daily-att .rc-tile-icon,
+.rc-tile--tra-att .rc-tile-icon { background: linear-gradient(145deg, #ccfbf1, #99f6e4); color: #0f766e; }
+.rc-tile--expiry .rc-tile-icon { background: linear-gradient(145deg, #fef9c3, #fef08a); color: #a16207; }
+.rc-tile--resignation .rc-tile-icon { background: linear-gradient(145deg, #f1f5f9, #e2e8f0); color: #64748b; }
+.rc-tile--rejoin .rc-tile-icon { background: linear-gradient(145deg, #d1fae5, #6ee7b7); color: #047857; }
+.rc-tile--payment .rc-tile-icon,
+.rc-tile--receipt .rc-tile-icon,
+.rc-tile--bank-entry .rc-tile-icon,
+.rc-tile--journal-v .rc-tile-icon { background: linear-gradient(145deg, #d1fae5, #a7f3d0); color: #047857; }
+.rc-tile--ledger .rc-tile-icon,
+.rc-tile--wallet .rc-tile-icon,
+.rc-tile--transfer .rc-tile-icon { background: linear-gradient(145deg, #ccfbf1, #5eead4); color: #0f766e; }
+.rc-tile--balance .rc-tile-icon,
+.rc-tile--chart-accounts .rc-tile-icon { background: linear-gradient(145deg, #e0e7ff, #a5b4fc); color: #4338ca; }
+.rc-tile--activity .rc-tile-icon { background: linear-gradient(145deg, #f1f5f9, #cbd5e1); color: #334155; }
+.rc-tile--ai .rc-tile-icon { background: linear-gradient(145deg, #ede9fe, #c4b5fd); color: #7c3aed; }
+.rc-tile--book-inv .rc-tile-icon,
+.rc-tile--book-assign .rc-tile-icon,
+.rc-tile--book-return .rc-tile-icon { background: linear-gradient(145deg, #ffedd5, #fdba74); color: #9a3412; }
+
 #reportTabs .nav-link{
   color:#555; border:none; padding:.6rem 1.2rem; font-size:.88rem;
   border-bottom:3px solid transparent; transition:all .2s;
@@ -716,7 +685,7 @@ html.capacitor-native .rc-native-empty.is-visible {
 .report-link-group .report-link:hover{
   color:#0d6efd; background:#f8f9ff; padding-left:6px !important;
 }
-.report-link-group .report-link .bi-star{ font-size:.65rem; }
+.report-link-group .report-link .rc-tile-hint,
 .report-link-group .report-link small{ font-size:.75rem; line-height:1.2; }
 .tab-content{ min-height:300px; box-shadow:0 2px 8px rgba(0,0,0,.05); }
 .report-link.d-none{ display:none !important; }
