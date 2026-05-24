@@ -532,13 +532,6 @@
   html.capacitor-native .daily-native-grand__totals {
     padding: 0.55rem 0.65rem 0.65rem;
   }
-  html.capacitor-native .daily-native-pdf-host .pv-header {
-    background: linear-gradient(135deg, #0f766e, #115e59); color: #fff;
-    padding: 10px 16px; display: flex; align-items: flex-start; gap: 10px;
-  }
-  html.capacitor-native .daily-native-pdf-host .pv-header h1 { margin: 0; font-size: 1rem; font-weight: 700; }
-  html.capacitor-native .daily-native-pdf-host .pv-header .sub { font-size: 0.78rem; opacity: 0.9; margin-top: 2px; }
-  html.capacitor-native .daily-native-pdf-host .pv-header .pv-meta { font-size: 0.75rem; opacity: 0.95; margin-top: 5px; }
   html.capacitor-native .daily-native-empty {
     text-align: center; padding: 2rem 1rem; color: #64748b; font-size: 0.88rem;
   }
@@ -1748,6 +1741,7 @@
 
   {% if report %}
   var reportTitleText = {{ report_title | tojson }};
+  var dailyPdfLogoUrl = {{ url_for('static', filename='images/icon.svg') | tojson }};
   var statusLabels = {{ status_columns | tojson }};
   var dailyMonthDays = {{ ndays|tojson }};
   var sumShort = { 'Present': 'P', 'Absent': 'A', 'Leave': 'L', 'Late': 'Lt', 'Half-Day': 'H', 'Off': 'O' };
@@ -2032,21 +2026,434 @@
     win.document.close();
   }
 
-  var DAILY_PDF_OPTS = {
-    margin: [4, 4, 6, 4],
-    filename: 'Day_Wise_Attendance_Report.pdf',
-    image: { type: 'jpeg', quality: 0.98 },
-    html2canvas: {
-      scale: 2.5,
-      useCORS: true,
-      logging: false,
-      backgroundColor: '#ffffff',
-      letterRendering: true,
-      windowWidth: 1680
-    },
-    jsPDF: { unit: 'mm', format: 'a3', orientation: 'landscape' },
-    pagebreak: { mode: ['css', 'legacy'], avoid: '.pv-total-row' }
+  var DAILY_PDF_THEME = {
+    headerGreen: [27, 67, 50],
+    headerGreen2: [17, 94, 89],
+    sumHeader: [3, 105, 161],
+    gridLine: [224, 224, 224],
+    zebra: [249, 249, 249],
+    weekend: [232, 240, 248],
+    sumTint: [224, 242, 254],
+    totalRow: [236, 253, 245],
+    statusText: {
+      P: [40, 167, 69],
+      A: [220, 53, 69],
+      L: [30, 64, 175],
+      Lt: [133, 77, 14],
+      H: [55, 65, 81],
+      O: [17, 24, 39]
+    }
   };
+
+  function loadDailyScriptOnce(src, globalCheck) {
+    return new Promise(function(resolve, reject) {
+      if (globalCheck()) {
+        resolve();
+        return;
+      }
+      if (document.querySelector('script[data-daily-src="' + src + '"]')) {
+        var tries = 0;
+        var wait = setInterval(function() {
+          tries += 1;
+          if (globalCheck() || tries > 80) {
+            clearInterval(wait);
+            globalCheck() ? resolve() : reject(new Error('Script timeout'));
+          }
+        }, 50);
+        return;
+      }
+      var s = document.createElement('script');
+      s.src = src;
+      s.setAttribute('data-daily-src', src);
+      s.onload = function() { resolve(); };
+      s.onerror = function() { reject(new Error('Failed to load ' + src)); };
+      document.head.appendChild(s);
+    });
+  }
+
+  function loadDailyPdfLibs() {
+    return loadDailyScriptOnce(
+      'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js',
+      function() { return !!(window.jspdf && window.jspdf.jsPDF); }
+    ).then(function() {
+      return loadDailyScriptOnce(
+        'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.4/jspdf.plugin.autotable.min.js',
+        function() {
+          try {
+            var J = window.jspdf && window.jspdf.jsPDF;
+            if (!J) return false;
+            return typeof new J().autoTable === 'function';
+          } catch (e) {
+            return false;
+          }
+        }
+      );
+    }).then(function() {
+      return window.jspdf.jsPDF;
+    });
+  }
+
+  function loadDailyPdfLogo(url) {
+    if (!url) return Promise.resolve(null);
+    return new Promise(function(resolve) {
+      var img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = function() {
+        try {
+          var size = 96;
+          var canvas = document.createElement('canvas');
+          canvas.width = size;
+          canvas.height = size;
+          var ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, size, size);
+          resolve(canvas.toDataURL('image/png'));
+        } catch (e) {
+          resolve(null);
+        }
+      };
+      img.onerror = function() { resolve(null); };
+      img.src = url;
+    });
+  }
+
+  function getDailyReportYearMonth() {
+    var form = document.getElementById('dailyReportForm');
+    if (!form) {
+      var now = new Date();
+      return { year: now.getFullYear(), month: now.getMonth() + 1 };
+    }
+    return {
+      year: parseInt(form.querySelector('[name="year"]').value, 10) || new Date().getFullYear(),
+      month: parseInt(form.querySelector('[name="month"]').value, 10) || (new Date().getMonth() + 1)
+    };
+  }
+
+  function isDailyWeekendSlot(dayNum, ym) {
+    var dow = new Date(ym.year, ym.month - 1, dayNum).getDay();
+    return dow === 0 || dow === 6;
+  }
+
+  function collectDailyPdfExportModel(src) {
+    if (!src) return null;
+    var ym = getDailyReportYearMonth();
+    var dayHeaders = [];
+    src.querySelectorAll('thead tr.hdr-row-1 th.date-hdr').forEach(function(th) {
+      var n = parseInt((th.textContent || '').trim(), 10);
+      if (!isNaN(n)) dayHeaders.push(n);
+    });
+    var dayCount = dayHeaders.length;
+    var sumStartCol = 2 + dayCount * 2;
+
+    var headRow1 = [
+      { content: 'Sr', rowSpan: 2, styles: { halign: 'center', valign: 'middle' } },
+      { content: 'Driver / Vehicle', rowSpan: 2, styles: { halign: 'left', valign: 'middle' } }
+    ];
+    dayHeaders.forEach(function(d) {
+      headRow1.push({
+        content: String(d).padStart(2, '0'),
+        colSpan: 2,
+        styles: { halign: 'center', valign: 'middle' }
+      });
+    });
+    statusLabels.forEach(function(st) {
+      headRow1.push({
+        content: sumShort[st] || st,
+        rowSpan: 2,
+        styles: { halign: 'center', valign: 'middle', fillColor: DAILY_PDF_THEME.sumHeader }
+      });
+    });
+
+    var headRow2 = [];
+    dayHeaders.forEach(function() {
+      headRow2.push({ content: 'M', styles: { halign: 'center', fillColor: DAILY_PDF_THEME.headerGreen2 } });
+      headRow2.push({ content: 'E', styles: { halign: 'center', fillColor: DAILY_PDF_THEME.headerGreen2 } });
+    });
+
+    var body = [];
+    var rowFlags = [];
+
+    src.querySelectorAll('tbody tr').forEach(function(tr) {
+      if (tr.style.display === 'none' || tr.getAttribute('data-ft-match') === '0') return;
+      var driverCell = tr.querySelector('.fc-6');
+      var driverNameEl = driverCell ? driverCell.querySelector('.daily-driver-name') : null;
+      var driverScoreEl = driverCell ? driverCell.querySelector('.daily-driver-score') : null;
+      var driver = driverNameEl ? driverNameEl.textContent.trim() : cellText(driverCell);
+      var driverScore = driverScoreEl ? driverScoreEl.textContent.trim() : '';
+      var veh = cellText(tr.querySelector('.fc-4'));
+      var shift = cellText(tr.querySelector('.fc-5'));
+      var vehShift = veh;
+      if (shift && shift !== '-') vehShift += ' (' + shift + ')';
+      var driverText = driver + (driverScore ? ' ' + driverScore : '') + '\n' + vehShift;
+
+      var row = [cellText(tr.querySelector('.fc-1')), driverText];
+      var flags = { weekendCols: {}, statusCols: {}, isTotal: false };
+
+      tr.querySelectorAll('.day-cell').forEach(function(c, idx) {
+        var v = (c.textContent || '').trim();
+        row.push(v);
+        if (isDailyWeekendSlot(dayHeaders[Math.floor(idx / 2)], ym)) {
+          flags.weekendCols[2 + idx] = true;
+        }
+        flags.statusCols[2 + idx] = v;
+      });
+      tr.querySelectorAll('.sum-col').forEach(function(c, sidx) {
+        row.push((c.textContent || '').trim());
+        flags.sumCol = sumStartCol + sidx;
+      });
+      body.push(row);
+      rowFlags.push(flags);
+    });
+
+    var srcFoot = src.querySelector('tfoot tr');
+    if (srcFoot) {
+      var foot = [{ content: 'Total', colSpan: 2, styles: { halign: 'left', fontStyle: 'bold' } }];
+      var footFlags = { weekendCols: {}, statusCols: {}, isTotal: true };
+      srcFoot.querySelectorAll('.day-foot').forEach(function(c, idx) {
+        foot.push((c.textContent || '').trim());
+        if (isDailyWeekendSlot(dayHeaders[Math.floor(idx / 2)], ym)) {
+          footFlags.weekendCols[2 + idx] = true;
+        }
+      });
+      srcFoot.querySelectorAll('.sum-col').forEach(function(c) {
+        foot.push((c.textContent || '').trim());
+      });
+      body.push(foot);
+      rowFlags.push(footFlags);
+    }
+
+    return {
+      ym: ym,
+      dayHeaders: dayHeaders,
+      head: [headRow1, headRow2],
+      body: body,
+      rowFlags: rowFlags,
+      sumStartCol: sumStartCol,
+      metaLine: buildPrintMetaLine(src)
+    };
+  }
+
+  function drawDailyPdfPageChrome(doc, chrome) {
+    var pw = doc.internal.pageSize.getWidth();
+    var ph = doc.internal.pageSize.getHeight();
+    var top = 7;
+    if (chrome.logoDataUrl) {
+      try {
+        doc.addImage(chrome.logoDataUrl, 'PNG', 8, top, 16, 16);
+      } catch (e) { /* ignore */ }
+    }
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(15);
+    doc.setTextColor.apply(doc, DAILY_PDF_THEME.headerGreen);
+    doc.text('Day Wise Attendance Report', pw / 2, top + 10, { align: 'center' });
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9.5);
+    doc.setTextColor(71, 85, 105);
+    doc.text(chrome.dateRange || '', pw / 2, top + 16, { align: 'center' });
+    if (chrome.metaLine) {
+      doc.setFontSize(8);
+      doc.text(chrome.metaLine, pw / 2, top + 21, { align: 'center' });
+    }
+    doc.setDrawColor.apply(doc, DAILY_PDF_THEME.gridLine);
+    doc.setLineWidth(0.2);
+    doc.line(8, 26, pw - 8, 26);
+    doc.setFontSize(7.5);
+    doc.setTextColor(100, 116, 139);
+    doc.text(chrome.generatedText, 8, ph - 5);
+    doc.text('Page ' + chrome.pageNum + ' of ' + chrome.pageTotal, pw - 8, ph - 5, { align: 'right' });
+  }
+
+  function drawDailyPdfLegend(doc, startY) {
+    var pw = doc.internal.pageSize.getWidth();
+    var y = startY;
+    if (y > doc.internal.pageSize.getHeight() - 28) {
+      doc.addPage();
+      y = 32;
+    }
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(71, 85, 105);
+    doc.text('Legend — Slots & Status', 8, y);
+    y += 5;
+    var items = [
+      { label: 'M Morning', fill: [204, 251, 241], text: [15, 118, 110] },
+      { label: 'E Evening', fill: [224, 231, 255], text: [55, 48, 163] },
+      { label: 'P Present', fill: [220, 252, 231], text: [22, 101, 52] },
+      { label: 'A Absent', fill: [254, 226, 226], text: [153, 27, 27] },
+      { label: 'L Leave', fill: [219, 234, 254], text: [30, 64, 175] },
+      { label: 'Lt Late', fill: [254, 249, 195], text: [133, 77, 14] },
+      { label: 'H Half-Day', fill: [243, 244, 246], text: [55, 65, 81] },
+      { label: 'O Off', fill: [229, 231, 235], text: [17, 24, 39] }
+    ];
+    var x = 8;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    items.forEach(function(it) {
+      var w = doc.getTextWidth(it.label) + 10;
+      if (x + w > pw - 8) {
+        x = 8;
+        y += 6;
+      }
+      doc.setFillColor.apply(doc, it.fill);
+      doc.roundedRect(x, y - 3.2, 4.5, 4.5, 1, 1, 'F');
+      doc.setTextColor.apply(doc, it.text);
+      doc.text(it.label, x + 6, y);
+      x += w + 4;
+    });
+    return y + 8;
+  }
+
+  function buildDailyNativePdfBlob(src, logoDataUrl) {
+    var model = collectDailyPdfExportModel(src);
+    if (!model || !model.body.length) {
+      return Promise.reject(new Error('No rows'));
+    }
+    var JsPDF = window.jspdf.jsPDF;
+    var doc = new JsPDF({ orientation: 'landscape', unit: 'mm', format: 'a3' });
+    var generatedAt = new Date();
+    var generatedText = 'Generated on: ' + generatedAt.toLocaleDateString(undefined, {
+      day: '2-digit', month: 'short', year: 'numeric'
+    }) + ' at ' + generatedAt.toLocaleTimeString(undefined, {
+      hour: '2-digit', minute: '2-digit'
+    });
+    var chromeBase = {
+      logoDataUrl: logoDataUrl,
+      dateRange: reportTitleText,
+      metaLine: model.metaLine,
+      generatedText: generatedText
+    };
+
+    var pageW = doc.internal.pageSize.getWidth();
+    var marginL = 8;
+    var marginR = 8;
+    var usableW = pageW - marginL - marginR;
+    var daySlots = model.dayHeaders.length * 2;
+    var sumCount = statusLabels.length;
+    var srW = 7;
+    var driverW = Math.min(42, Math.max(30, usableW * 0.14));
+    var sumEachW = 7.5;
+    var daySlotW = (usableW - srW - driverW - sumEachW * sumCount) / Math.max(daySlots, 1);
+
+    var columnStyles = {
+      0: { cellWidth: srW, halign: 'center', valign: 'middle' },
+      1: { cellWidth: driverW, halign: 'left', valign: 'top', overflow: 'linebreak' }
+    };
+    for (var ci = 2; ci < 2 + daySlots; ci++) {
+      columnStyles[ci] = { cellWidth: daySlotW, halign: 'center', valign: 'middle', fontSize: 5.5 };
+    }
+    for (var si = 0; si < sumCount; si++) {
+      columnStyles[model.sumStartCol + si] = {
+        cellWidth: sumEachW, halign: 'center', valign: 'middle', fontStyle: 'bold'
+      };
+    }
+
+    doc.autoTable({
+      head: model.head,
+      body: model.body,
+      startY: 30,
+      margin: { top: 30, left: marginL, right: marginR, bottom: 14 },
+      theme: 'grid',
+      styles: {
+        font: 'helvetica',
+        fontSize: 6,
+        cellPadding: 1.1,
+        lineColor: DAILY_PDF_THEME.gridLine,
+        lineWidth: 0.15,
+        textColor: [30, 41, 59],
+        valign: 'middle'
+      },
+      headStyles: {
+        fillColor: DAILY_PDF_THEME.headerGreen,
+        textColor: 255,
+        fontStyle: 'bold',
+        fontSize: 6,
+        halign: 'center',
+        valign: 'middle',
+        lineColor: DAILY_PDF_THEME.gridLine,
+        lineWidth: 0.15
+      },
+      alternateRowStyles: { fillColor: DAILY_PDF_THEME.zebra },
+      columnStyles: columnStyles,
+      showHead: 'everyPage',
+      rowPageBreak: 'auto',
+      didDrawPage: function() {
+        drawDailyPdfPageChrome(doc, Object.assign({}, chromeBase, {
+          pageNum: doc.internal.getCurrentPageInfo().pageNumber,
+          pageTotal: doc.internal.getNumberOfPages()
+        }));
+      },
+      didParseCell: function(data) {
+        if (data.section === 'head') {
+          data.cell.styles.fillColor = DAILY_PDF_THEME.headerGreen;
+          data.cell.styles.textColor = 255;
+          data.cell.styles.fontStyle = 'bold';
+          if (data.row.index === 1) {
+            data.cell.styles.fillColor = DAILY_PDF_THEME.headerGreen2;
+          }
+          if (data.column.index >= model.sumStartCol) {
+            data.cell.styles.fillColor = DAILY_PDF_THEME.sumHeader;
+          }
+          return;
+        }
+        if (data.section !== 'body') return;
+        var flags = model.rowFlags[data.row.index];
+        if (!flags) return;
+        var col = data.column.index;
+        if (flags.isTotal) {
+          data.cell.styles.fontStyle = 'bold';
+          data.cell.styles.fillColor = DAILY_PDF_THEME.totalRow;
+          if (col >= model.sumStartCol) {
+            data.cell.styles.fillColor = DAILY_PDF_THEME.sumTint;
+          }
+          if (flags.weekendCols[col]) {
+            data.cell.styles.fillColor = [220, 236, 246];
+          }
+          return;
+        }
+        if (col >= model.sumStartCol) {
+          data.cell.styles.fillColor = DAILY_PDF_THEME.sumTint;
+          data.cell.styles.fontStyle = 'bold';
+          data.cell.styles.textColor = [12, 74, 110];
+          return;
+        }
+        if (flags.weekendCols[col]) {
+          data.cell.styles.fillColor = DAILY_PDF_THEME.weekend;
+        }
+        if (col >= 2 && col < model.sumStartCol) {
+          var code = flags.statusCols[col];
+          if (code && DAILY_PDF_THEME.statusText[code]) {
+            data.cell.styles.textColor = DAILY_PDF_THEME.statusText[code];
+            data.cell.styles.fontStyle = 'bold';
+          }
+        }
+        if (col === 1) {
+          data.cell.styles.fontSize = 5.8;
+        }
+      }
+    });
+
+    var totalPages = doc.internal.getNumberOfPages();
+    for (var p = 1; p <= totalPages; p++) {
+      doc.setPage(p);
+      drawDailyPdfPageChrome(doc, Object.assign({}, chromeBase, {
+        pageNum: p,
+        pageTotal: totalPages
+      }));
+    }
+
+    var legendY = (doc.lastAutoTable && doc.lastAutoTable.finalY) ? doc.lastAutoTable.finalY + 6 : 30;
+    drawDailyPdfLegend(doc, legendY);
+
+    totalPages = doc.internal.getNumberOfPages();
+    for (p = 1; p <= totalPages; p++) {
+      doc.setPage(p);
+      drawDailyPdfPageChrome(doc, Object.assign({}, chromeBase, {
+        pageNum: p,
+        pageTotal: totalPages
+      }));
+    }
+
+    return doc.output('blob');
+  }
 
   function getDailyExportParams() {
     var form = document.getElementById('dailyReportForm');
@@ -2067,209 +2474,32 @@
     return '{{ url_for("driver_attendance_daily_report_export") }}?' + params.toString();
   }
 
-  function loadDailyHtml2pdf() {
-    return new Promise(function(resolve, reject) {
-      if (typeof html2pdf !== 'undefined') {
-        resolve(html2pdf);
-        return;
-      }
-      var s = document.createElement('script');
-      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.2/html2pdf.bundle.min.js';
-      s.onload = function() { resolve(window.html2pdf); };
-      s.onerror = function() { reject(new Error('PDF library load failed')); };
-      document.head.appendChild(s);
-    });
-  }
-
-  function getDailyPdfHostStyles() {
-    return [
-      '.daily-native-pdf-host{box-sizing:border-box;font-family:Inter,Segoe UI,system-ui,sans-serif;background:#f1f5f9;color:#1e293b;line-height:1.3;}',
-      '.daily-native-pdf-host *{box-sizing:border-box;}',
-      '.daily-native-pdf-host .dn-pdf-page{background:#f1f5f9;padding:0 0 14px;}',
-      '.daily-native-pdf-host .pv-header{background:linear-gradient(135deg,#0f766e 0%,#115e59 55%,#134e4a 100%);color:#fff;padding:14px 18px;display:flex;align-items:flex-start;gap:12px;}',
-      '.daily-native-pdf-host .pv-header__icon{width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,0.18);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}',
-      '.daily-native-pdf-host .pv-header__text{flex:1;min-width:0;}',
-      '.daily-native-pdf-host .pv-header h1{margin:0;font-size:15px;font-weight:800;line-height:1.25;letter-spacing:-0.02em;}',
-      '.daily-native-pdf-host .pv-header .sub{font-size:11px;opacity:0.92;margin-top:3px;font-weight:500;}',
-      '.daily-native-pdf-host .pv-header .pv-meta{font-size:10px;opacity:0.95;margin-top:6px;line-height:1.45;font-weight:500;}',
-      '.daily-native-pdf-host .dn-pdf-table-card{margin:10px 12px 0;background:#fff;border:1px solid #cbd5e1;border-radius:10px;overflow:hidden;box-shadow:0 2px 8px rgba(15,23,42,0.08);}',
-      '.daily-native-pdf-host .pv-scale-wrap{width:100%;padding:8px 10px 10px;}',
-      '.daily-native-pdf-host .pv-scale-inner{width:100%;display:block;}',
-      '.daily-native-pdf-host .daily-preview-table{border-collapse:collapse;table-layout:fixed;width:100%;max-width:100%;background:#fff;font-size:8px;}',
-      '.daily-native-pdf-host .daily-preview-table th,.daily-native-pdf-host .daily-preview-table td{border:1px solid #94a3b8;padding:2px 3px;text-align:center;vertical-align:middle;font-size:8px;line-height:1.2;}',
-      '.daily-native-pdf-host .daily-preview-table thead th{background:#0f766e;color:#fff;font-weight:700;font-size:7px;}',
-      '.daily-native-pdf-host .daily-preview-table thead tr.hdr-row-2 th{background:#115e59;font-size:7px;padding:2px 1px;}',
-      '.daily-native-pdf-host .daily-preview-table tbody tr:nth-child(even) td{background:#f8fafc;}',
-      '.daily-native-pdf-host .daily-preview-table .pv-sr{background:#f1f5f9!important;font-weight:700;color:#334155;padding:3px 4px;white-space:nowrap;}',
-      '.daily-native-pdf-host .daily-preview-table .pv-driver-col{text-align:left;vertical-align:top;background:#fff!important;word-wrap:break-word;overflow-wrap:anywhere;padding:3px 5px;}',
-      '.daily-native-pdf-host .daily-preview-table .pv-driver-block{text-align:left;line-height:1.3;}',
-      '.daily-native-pdf-host .daily-preview-table .pv-ds-line{display:block;}',
-      '.daily-native-pdf-host .daily-preview-table .pv-ds-line.pv-ds-main{font-size:8px;font-weight:800;color:#0f172a;}',
-      '.daily-native-pdf-host .daily-preview-table .pv-ds-line.pv-veh-shift{font-size:7px;color:#475569;font-weight:600;margin-top:1px;}',
-      '.daily-native-pdf-host .daily-preview-table .pv-ds-line.pv-ds-main .pv-score{display:inline;margin-left:3px;font-size:7px;font-weight:800;color:#0f766e;}',
-      '.daily-native-pdf-host .daily-preview-table .day-col{padding:2px 1px;font-size:7px;font-weight:700;}',
-      '.daily-native-pdf-host .daily-preview-table .date-hdr{font-size:7px;padding:2px 1px;line-height:1;writing-mode:vertical-rl;transform:rotate(180deg);height:28px;letter-spacing:0.02em;}',
-      '.daily-native-pdf-host .daily-preview-table .sum-col{padding:2px 3px;font-size:7px;background:#e0f2fe!important;color:#0c4a6e;font-weight:800;}',
-      '.daily-native-pdf-host .daily-preview-table thead .sum-col{background:#0369a1!important;color:#fff!important;}',
-      '.daily-native-pdf-host .daily-preview-table .sum-vhdr{writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap;height:34px;padding:2px;font-size:7px;line-height:1;}',
-      '.daily-native-pdf-host .daily-preview-table tr.pv-total-row td{background:#ecfdf5!important;font-weight:800;color:#065f46;font-size:8px;border-top:2px solid #0f766e;}',
-      '.daily-native-pdf-host .daily-preview-table tr.pv-total-row .sum-col{background:#7dd3fc!important;color:#0c4a6e!important;}',
-      '.daily-native-pdf-host .daily-preview-table .pv-total-label{text-align:left;padding-left:8px;font-size:9px;}',
-      '.daily-native-pdf-host .daily-preview-table .cell-present{background:#dcfce7!important;color:#166534!important;font-weight:800;}',
-      '.daily-native-pdf-host .daily-preview-table .cell-absent{background:#fee2e2!important;color:#991b1b!important;font-weight:800;}',
-      '.daily-native-pdf-host .daily-preview-table .cell-leave{background:#dbeafe!important;color:#1e40af!important;font-weight:800;}',
-      '.daily-native-pdf-host .daily-preview-table .cell-late{background:#fef9c3!important;color:#854d0e!important;font-weight:800;}',
-      '.daily-native-pdf-host .daily-preview-table .cell-half{background:#f3f4f6!important;color:#374151!important;font-weight:700;}',
-      '.daily-native-pdf-host .daily-preview-table .cell-off{background:#e5e7eb!important;color:#111827!important;font-weight:700;}',
-      '.daily-native-pdf-host .daily-preview-table .cell-empty{background:#fafafa!important;color:#cbd5e1;}',
-      '.daily-native-pdf-host .pv-legend{margin:10px 12px 0;padding:10px 12px;background:linear-gradient(180deg,#f8fafc,#f1f5f9);border:1px solid #e2e8f0;border-radius:10px;}',
-      '.daily-native-pdf-host .dn-pdf-legend-title{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:0.06em;color:#64748b;margin-bottom:6px;}',
-      '.daily-native-pdf-host .daily-legend-toggle{display:none!important;}',
-      '.daily-native-pdf-host .daily-legend-panel{display:block!important;}',
-      '.daily-native-pdf-host .daily-attn-footnote{padding:0;border:none;background:transparent;}',
-      '.daily-native-pdf-host .daily-attn-legend{display:flex;flex-wrap:wrap;align-items:center;gap:5px 6px;}',
-      '.daily-native-pdf-host .daily-legend-group{display:inline-flex;align-items:center;flex-wrap:wrap;gap:4px 5px;}',
-      '.daily-native-pdf-host .daily-legend-group-label{font-size:8px;font-weight:800;text-transform:uppercase;letter-spacing:0.05em;color:#94a3b8;}',
-      '.daily-native-pdf-host .daily-legend-item{display:inline-flex;align-items:center;gap:4px;padding:3px 8px 3px 4px;background:#fff;border:1px solid #e2e8f0;border-radius:999px;font-size:8px;color:#475569;font-weight:600;}',
-      '.daily-native-pdf-host .daily-legend-badge{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;font-size:7px;font-weight:800;border:1px solid transparent;}',
-      '.daily-native-pdf-host .daily-legend-badge--slot-m{background:#ccfbf1;color:#0f766e;border-color:#5eead4;}',
-      '.daily-native-pdf-host .daily-legend-badge--slot-e{background:#e0e7ff;color:#3730a3;border-color:#a5b4fc;}',
-      '.daily-native-pdf-host .daily-legend-badge--present{background:#dcfce7;color:#166534;border-color:#86efac;}',
-      '.daily-native-pdf-host .daily-legend-badge--absent{background:#fee2e2;color:#991b1b;border-color:#fca5a5;}',
-      '.daily-native-pdf-host .daily-legend-badge--leave{background:#dbeafe;color:#1e40af;border-color:#93c5fd;}',
-      '.daily-native-pdf-host .daily-legend-badge--late{background:#fef9c3;color:#854d0e;border-color:#fde047;font-size:6px;}',
-      '.daily-native-pdf-host .daily-legend-badge--half{background:#f3f4f6;color:#374151;border-color:#d1d5db;}',
-      '.daily-native-pdf-host .daily-legend-badge--off{background:#e5e7eb;color:#111827;border-color:#9ca3af;}',
-      '.daily-native-pdf-host .daily-legend-badge--days{background:#fef3c7;color:#92400e;border-color:#fcd34d;font-size:6px;}',
-      '.daily-native-pdf-host .daily-legend-sep{width:1px;height:16px;background:#cbd5e1;margin:0 2px;}',
-      '.daily-native-pdf-host .daily-legend-note{margin:6px 0 0;font-size:8px;color:#64748b;}',
-      '.daily-native-pdf-host .dn-pdf-footer{margin:8px 12px 0;padding:8px 12px;font-size:8px;color:#64748b;text-align:center;border-top:1px dashed #cbd5e1;}'
-    ].join('');
-  }
-
-  function mountDailyPdfPrintRoot(tbl, printMetaLine) {
-    var host = document.createElement('div');
-    host.id = 'dailyNativePdfHost';
-    host.className = 'daily-native-pdf-host';
-    host.style.cssText = 'position:fixed;left:-16000px;top:0;width:1680px;z-index:-1;opacity:1;pointer-events:none;';
-    var styleEl = document.createElement('style');
-    styleEl.textContent = getDailyPdfHostStyles();
-    host.appendChild(styleEl);
-
-    var page = document.createElement('div');
-    page.className = 'dn-pdf-page';
-
-    var area = document.createElement('div');
-    area.id = 'pvPrintArea';
-    area.className = 'pv-print-area';
-
-    var header = document.createElement('div');
-    header.className = 'pv-header';
-    header.innerHTML =
-      '<div class="pv-header__icon" aria-hidden="true">&#128197;</div>' +
-      '<div class="pv-header__text"><h1>Day Wise Attendance Report</h1>' +
-      '<div class="sub">' + reportTitleText + '</div>' +
-      (printMetaLine ? '<div class="pv-meta">' + printMetaLine.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</div>' : '') +
-      '</div>';
-
-    var tableCard = document.createElement('div');
-    tableCard.className = 'dn-pdf-table-card';
-    var scaleWrap = document.createElement('div');
-    scaleWrap.className = 'pv-scale-wrap';
-    var scaleInner = document.createElement('div');
-    scaleInner.className = 'pv-scale-inner';
-    scaleInner.id = 'pvScaleInner';
-    scaleInner.appendChild(tbl);
-    scaleWrap.appendChild(scaleInner);
-    tableCard.appendChild(scaleWrap);
-
-    area.appendChild(header);
-    area.appendChild(tableCard);
-    page.appendChild(area);
-
-    var legendSrc = document.getElementById('dailyAttendanceLegend');
-    var legendPanel = legendSrc ? legendSrc.querySelector('#dailyLegendPanel') : null;
-    if (legendPanel) {
-      var leg = document.createElement('div');
-      leg.className = 'pv-legend';
-      var legTitle = document.createElement('div');
-      legTitle.className = 'dn-pdf-legend-title';
-      legTitle.textContent = 'Legend — Slots & Status';
-      leg.appendChild(legTitle);
-      var footnote = document.createElement('div');
-      footnote.className = 'daily-attn-footnote';
-      footnote.appendChild(legendPanel.cloneNode(true));
-      leg.appendChild(footnote);
-      page.appendChild(leg);
-    }
-
-    var footer = document.createElement('div');
-    footer.className = 'dn-pdf-footer';
-    footer.textContent = 'Fleet Management · Exported ' +
-      new Date().toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
-    page.appendChild(footer);
-
-    host.appendChild(page);
-    document.body.appendChild(host);
-    return host;
-  }
-
-  function prepareDailyPdfHost(host) {
-    var inner = host.querySelector('#pvScaleInner');
-    if (!inner) return;
-    var tbl = inner.querySelector('table');
-    inner.style.transform = 'none';
-    inner.style.width = '100%';
-    if (tbl) {
-      tbl.style.tableLayout = 'fixed';
-      tbl.style.width = '100%';
-      tbl.style.maxWidth = '100%';
-      tbl.style.borderCollapse = 'collapse';
-    }
-    host.querySelectorAll('.daily-legend-toggle').forEach(function(el) {
-      el.style.display = 'none';
-    });
-    host.querySelectorAll('.daily-legend-panel').forEach(function(el) {
-      el.style.display = 'block';
-    });
-  }
-
   function exportDailyPdfNative(done) {
     var src = document.getElementById('dailyReportTable');
-    var tbl = buildPrintTable();
-    if (!tbl || !src) {
+    if (!src) {
       alert('Report data nahi mila.');
       if (done) done();
       return;
     }
-    var printMetaLine = buildPrintMetaLine(src);
-    var host = mountDailyPdfPrintRoot(tbl, printMetaLine);
-    prepareDailyPdfHost(host);
     if (window.FleetBridge && window.FleetBridge._toast) {
       window.FleetBridge._toast('Generating PDF...');
     }
-    loadDailyHtml2pdf().then(function(h2p) {
-      return new Promise(function(resolve) {
-        requestAnimationFrame(function() {
-          requestAnimationFrame(resolve);
-        });
-      }).then(function() {
-        var area = host.querySelector('.dn-pdf-page') || host.querySelector('#pvPrintArea');
-        return h2p().set(DAILY_PDF_OPTS).from(area).output('blob');
+    loadDailyPdfLibs()
+      .then(function() { return loadDailyPdfLogo(dailyPdfLogoUrl); })
+      .then(function(logo) { return buildDailyNativePdfBlob(src, logo); })
+      .then(function(blob) {
+        if (!window.FleetBridge || !window.FleetBridge.downloadBlob) {
+          throw new Error('Native download not available');
+        }
+        return window.FleetBridge.downloadBlob(blob, 'Day_Wise_Attendance_Report.pdf');
+      })
+      .catch(function(err) {
+        console.error('Daily PDF export failed:', err);
+        alert('PDF download nahi ho saki. Dubara try karein.');
+      })
+      .finally(function() {
+        if (done) done();
       });
-    }).then(function(blob) {
-      if (host.parentNode) host.parentNode.removeChild(host);
-      if (!window.FleetBridge || !window.FleetBridge.downloadBlob) {
-        throw new Error('Native download not available');
-      }
-      return window.FleetBridge.downloadBlob(blob, 'Day_Wise_Attendance_Report.pdf');
-    }).catch(function(err) {
-      if (host.parentNode) host.parentNode.removeChild(host);
-      console.error('Daily PDF export failed:', err);
-      alert('PDF download nahi ho saki. Dubara try karein.');
-    }).finally(function() {
-      if (done) done();
-    });
   }
 
   function exportDailyExcel() {
