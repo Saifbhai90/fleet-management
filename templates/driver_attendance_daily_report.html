@@ -643,6 +643,26 @@
   }
   html.capacitor-native .daily-cal-sheet__slot--m { border-left: 3px solid #14b8a6; }
   html.capacitor-native .daily-cal-sheet__slot--e { border-left: 3px solid #6366f1; }
+
+  /* Native export progress overlay */
+  .daily-export-progress {
+    position: fixed; inset: 0; z-index: 13000;
+    background: rgba(15, 23, 42, 0.55);
+    display: flex; align-items: center; justify-content: center;
+    padding: 16px;
+  }
+  .daily-export-progress.d-none { display: none !important; }
+  .daily-export-progress__card {
+    width: 100%; max-width: 380px; background: #fff; border-radius: 14px;
+    padding: 1rem 1.1rem; box-shadow: 0 12px 40px rgba(15, 23, 42, 0.25);
+  }
+  .daily-export-progress__title {
+    font-size: 0.9rem; font-weight: 700; color: #0f172a; margin-bottom: 0.65rem;
+  }
+  .daily-export-progress .progress { height: 26px; border-radius: 8px; overflow: hidden; }
+  .daily-export-progress__detail {
+    font-size: 0.78rem; color: #64748b; margin-top: 0.5rem; text-align: center;
+  }
 </style>
 
 <div class="container-fluid daily-attn-page">
@@ -1033,6 +1053,16 @@
     <i class="bi bi-info-circle me-2"></i>Month, year select karein, <strong>Project</strong> aur <strong>District</strong> lazmi hain — phir <strong>Show</strong> dabayein.
   </div>
   {% endif %}
+
+  <div id="dailyExportProgressOverlay" class="daily-export-progress d-none" aria-hidden="true" role="alertdialog" aria-busy="true" aria-labelledby="dailyExportProgressTitle">
+    <div class="daily-export-progress__card">
+      <div class="daily-export-progress__title" id="dailyExportProgressTitle">Preparing download…</div>
+      <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+        <div id="dailyExportProgressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" style="width:0%">0%</div>
+      </div>
+      <div class="daily-export-progress__detail" id="dailyExportProgressDetail">Please wait</div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -1742,6 +1772,8 @@
   {% if report %}
   var reportTitleText = {{ report_title | tojson }};
   var dailyPdfLogoUrl = {{ url_for('static', filename='images/icon.svg') | tojson }};
+  var dailyJspdfSrc = {{ url_for('static', filename='vendor/jspdf.umd.min.js') | tojson }};
+  var dailyAutotableSrc = {{ url_for('static', filename='vendor/jspdf.plugin.autotable.min.js') | tojson }};
   var statusLabels = {{ status_columns | tojson }};
   var dailyMonthDays = {{ ndays|tojson }};
   var sumShort = { 'Present': 'P', 'Absent': 'A', 'Leave': 'L', 'Late': 'Lt', 'Half-Day': 'H', 'Off': 'O' };
@@ -2071,25 +2103,110 @@
     });
   }
 
+  function loadDailyScriptWithFallbacks(urls, globalCheck) {
+    var idx = 0;
+    function attempt() {
+      if (globalCheck()) return Promise.resolve();
+      if (idx >= urls.length) return Promise.reject(new Error('All script sources failed'));
+      var src = urls[idx++];
+      return loadDailyScriptOnce(src, globalCheck).catch(function() { return attempt(); });
+    }
+    return attempt();
+  }
+
+  function dailyPdfLibsReady() {
+    try {
+      var J = getDailyJsPDFClass();
+      return !!(J && typeof new J().autoTable === 'function');
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function getDailyJsPDFClass() {
+    if (window.jspdf && window.jspdf.jsPDF) return window.jspdf.jsPDF;
+    if (window.jsPDF) return window.jsPDF;
+    return null;
+  }
+
   function loadDailyPdfLibs() {
-    return loadDailyScriptOnce(
-      'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js',
-      function() { return !!(window.jspdf && window.jspdf.jsPDF); }
+    return loadDailyScriptWithFallbacks(
+      [dailyJspdfSrc, 'https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js'],
+      function() { return !!getDailyJsPDFClass(); }
     ).then(function() {
-      return loadDailyScriptOnce(
-        'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.4/jspdf.plugin.autotable.min.js',
-        function() {
-          try {
-            var J = window.jspdf && window.jspdf.jsPDF;
-            if (!J) return false;
-            return typeof new J().autoTable === 'function';
-          } catch (e) {
-            return false;
-          }
-        }
+      return loadDailyScriptWithFallbacks(
+        [dailyAutotableSrc, 'https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js'],
+        dailyPdfLibsReady
       );
     }).then(function() {
-      return window.jspdf.jsPDF;
+      var J = getDailyJsPDFClass();
+      if (!J) throw new Error('jsPDF not available');
+      return J;
+    });
+  }
+
+  function showDailyExportProgress(title, detail) {
+    var ov = document.getElementById('dailyExportProgressOverlay');
+    var bar = document.getElementById('dailyExportProgressBar');
+    var titleEl = document.getElementById('dailyExportProgressTitle');
+    var detailEl = document.getElementById('dailyExportProgressDetail');
+    if (!ov || !bar) return;
+    ov.classList.remove('d-none');
+    ov.setAttribute('aria-hidden', 'false');
+    if (titleEl) titleEl.textContent = title || 'Downloading…';
+    if (detailEl) detailEl.textContent = detail || 'Please wait';
+    bar.style.width = '0%';
+    bar.textContent = '0%';
+    bar.setAttribute('aria-valuenow', '0');
+    bar.classList.add('progress-bar-animated', 'progress-bar-striped');
+  }
+
+  function updateDailyExportProgress(pct, title, detail) {
+    var ov = document.getElementById('dailyExportProgressOverlay');
+    var bar = document.getElementById('dailyExportProgressBar');
+    var titleEl = document.getElementById('dailyExportProgressTitle');
+    var detailEl = document.getElementById('dailyExportProgressDetail');
+    if (!ov || !bar) return;
+    var n = Math.max(0, Math.min(100, Math.round(pct || 0)));
+    bar.style.width = n + '%';
+    bar.textContent = n + '%';
+    bar.setAttribute('aria-valuenow', String(n));
+    if (title && titleEl) titleEl.textContent = title;
+    if (detail && detailEl) detailEl.textContent = detail;
+  }
+
+  function hideDailyExportProgress() {
+    var ov = document.getElementById('dailyExportProgressOverlay');
+    if (!ov) return;
+    ov.classList.add('d-none');
+    ov.setAttribute('aria-hidden', 'true');
+  }
+
+  function fleetDownloadBlobWithProgress(blob, filename) {
+    if (!window.FleetBridge || !window.FleetBridge.downloadBlob) {
+      return Promise.reject(new Error('Native download not available'));
+    }
+    return window.FleetBridge.downloadBlob(blob, filename, {
+      onProgress: function(phase, pct, detail) {
+        if (phase === 'error') {
+          updateDailyExportProgress(0, 'Download failed', detail || 'Please try again');
+          return;
+        }
+        if (phase === 'sharing') {
+          updateDailyExportProgress(92, 'Opening share…', detail || 'Choose Share or Open');
+          return;
+        }
+        if (phase === 'done') {
+          var bar = document.getElementById('dailyExportProgressBar');
+          if (bar) {
+            bar.classList.remove('progress-bar-animated', 'progress-bar-striped');
+          }
+          updateDailyExportProgress(100, 'Download complete', detail || 'Share / Open file');
+          setTimeout(hideDailyExportProgress, 700);
+          return;
+        }
+        updateDailyExportProgress(Math.max(55, pct || 50), 'Saving file…', detail || 'Writing to device…');
+      }
     });
   }
 
@@ -2294,7 +2411,7 @@
         y += 6;
       }
       doc.setFillColor.apply(doc, it.fill);
-      doc.roundedRect(x, y - 3.2, 4.5, 4.5, 1, 1, 'F');
+      doc.rect(x, y - 3.2, 4.5, 4.5, 'F');
       doc.setTextColor.apply(doc, it.text);
       doc.text(it.label, x + 6, y);
       x += w + 4;
@@ -2305,10 +2422,18 @@
   function buildDailyNativePdfBlob(src, logoDataUrl) {
     var model = collectDailyPdfExportModel(src);
     if (!model || !model.body.length) {
-      return Promise.reject(new Error('No rows'));
+      return Promise.reject(new Error('No attendance rows to export'));
     }
-    var JsPDF = window.jspdf.jsPDF;
-    var doc = new JsPDF({ orientation: 'landscape', unit: 'mm', format: 'a3' });
+    var JsPDF = getDailyJsPDFClass();
+    if (!JsPDF || typeof new JsPDF().autoTable !== 'function') {
+      return Promise.reject(new Error('PDF table plugin not ready'));
+    }
+    var doc;
+    try {
+      doc = new JsPDF({ orientation: 'landscape', unit: 'mm', format: 'a3' });
+    } catch (e) {
+      return Promise.reject(e);
+    }
     var generatedAt = new Date();
     var generatedText = 'Generated on: ' + generatedAt.toLocaleDateString(undefined, {
       day: '2-digit', month: 'short', year: 'numeric'
@@ -2331,11 +2456,11 @@
     var srW = 7;
     var driverW = Math.min(42, Math.max(30, usableW * 0.14));
     var sumEachW = 7.5;
-    var daySlotW = (usableW - srW - driverW - sumEachW * sumCount) / Math.max(daySlots, 1);
+    var daySlotW = Math.max(2.1, (usableW - srW - driverW - sumEachW * sumCount) / Math.max(daySlots, 1));
 
     var columnStyles = {
       0: { cellWidth: srW, halign: 'center', valign: 'middle' },
-      1: { cellWidth: driverW, halign: 'left', valign: 'top', overflow: 'linebreak' }
+      1: { cellWidth: driverW, halign: 'left', valign: 'top' }
     };
     for (var ci = 2; ci < 2 + daySlots; ci++) {
       columnStyles[ci] = { cellWidth: daySlotW, halign: 'center', valign: 'middle', fontSize: 5.5 };
@@ -2346,6 +2471,7 @@
       };
     }
 
+    try {
     doc.autoTable({
       head: model.head,
       body: model.body,
@@ -2375,10 +2501,10 @@
       columnStyles: columnStyles,
       showHead: 'everyPage',
       rowPageBreak: 'auto',
-      didDrawPage: function() {
+      didDrawPage: function(data) {
         drawDailyPdfPageChrome(doc, Object.assign({}, chromeBase, {
-          pageNum: doc.internal.getCurrentPageInfo().pageNumber,
-          pageTotal: doc.internal.getNumberOfPages()
+          pageNum: data.pageNumber,
+          pageTotal: data.pageCount
         }));
       },
       didParseCell: function(data) {
@@ -2430,6 +2556,9 @@
         }
       }
     });
+    } catch (tableErr) {
+      return Promise.reject(tableErr);
+    }
 
     var totalPages = doc.internal.getNumberOfPages();
     for (var p = 1; p <= totalPages; p++) {
@@ -2441,7 +2570,9 @@
     }
 
     var legendY = (doc.lastAutoTable && doc.lastAutoTable.finalY) ? doc.lastAutoTable.finalY + 6 : 30;
-    drawDailyPdfLegend(doc, legendY);
+    try {
+      drawDailyPdfLegend(doc, legendY);
+    } catch (legErr) { /* legend optional */ }
 
     totalPages = doc.internal.getNumberOfPages();
     for (p = 1; p <= totalPages; p++) {
@@ -2452,7 +2583,11 @@
       }));
     }
 
-    return doc.output('blob');
+    try {
+      return Promise.resolve(doc.output('blob'));
+    } catch (outErr) {
+      return Promise.reject(outErr);
+    }
   }
 
   function getDailyExportParams() {
@@ -2481,21 +2616,30 @@
       if (done) done();
       return;
     }
-    if (window.FleetBridge && window.FleetBridge._toast) {
-      window.FleetBridge._toast('Generating PDF...');
-    }
+    showDailyExportProgress('Generating PDF…', 'Loading PDF tools…');
+    updateDailyExportProgress(8, 'Generating PDF…', 'Please wait');
     loadDailyPdfLibs()
-      .then(function() { return loadDailyPdfLogo(dailyPdfLogoUrl); })
-      .then(function(logo) { return buildDailyNativePdfBlob(src, logo); })
+      .then(function() {
+        updateDailyExportProgress(22, 'Generating PDF…', 'Loading logo…');
+        return loadDailyPdfLogo(dailyPdfLogoUrl);
+      })
+      .then(function(logo) {
+        updateDailyExportProgress(42, 'Generating PDF…', 'Building table…');
+        return buildDailyNativePdfBlob(src, logo);
+      })
       .then(function(blob) {
-        if (!window.FleetBridge || !window.FleetBridge.downloadBlob) {
-          throw new Error('Native download not available');
-        }
-        return window.FleetBridge.downloadBlob(blob, 'Day_Wise_Attendance_Report.pdf');
+        updateDailyExportProgress(52, 'Saving PDF…', 'Writing file to device…');
+        return fleetDownloadBlobWithProgress(blob, 'Day_Wise_Attendance_Report.pdf');
       })
       .catch(function(err) {
         console.error('Daily PDF export failed:', err);
-        alert('PDF download nahi ho saki. Dubara try karein.');
+        hideDailyExportProgress();
+        var msg = (err && err.message) ? String(err.message) : '';
+        if (msg.indexOf('No attendance') >= 0) {
+          alert('Export ke liye koi driver row nahi mili. Pehle report Show karein.');
+        } else {
+          alert('PDF download nahi ho saki. Internet check karein aur dubara try karein.');
+        }
       })
       .finally(function() {
         if (done) done();
@@ -2506,20 +2650,24 @@
     var url = getDailyExcelExportUrl();
     if (!url) return;
     if (isDailyNativeApp() && window.FleetBridge && window.FleetBridge.downloadBlob) {
-      if (window.FleetBridge._toast) window.FleetBridge._toast('Downloading Excel...');
+      showDailyExportProgress('Downloading Excel…', 'Connecting to server…');
+      updateDailyExportProgress(10, 'Downloading Excel…', 'Please wait');
       fetch(url, { credentials: 'include' })
         .then(function(r) {
           if (!r.ok) throw new Error('HTTP ' + r.status);
+          updateDailyExportProgress(35, 'Downloading Excel…', 'Receiving file…');
           var cd = r.headers.get('Content-Disposition') || '';
           var m = cd.match(/filename[^;=\n]*=\s*["']?([^"';\n]+)/);
           var fname = (m && m[1]) ? m[1] : 'Day_Wise_Attendance_Report.xlsx';
           return r.blob().then(function(blob) { return { blob: blob, fname: fname }; });
         })
         .then(function(o) {
-          return window.FleetBridge.downloadBlob(o.blob, o.fname);
+          updateDailyExportProgress(48, 'Saving Excel…', 'Writing file to device…');
+          return fleetDownloadBlobWithProgress(o.blob, o.fname);
         })
         .catch(function(err) {
           console.error('Excel export failed:', err);
+          hideDailyExportProgress();
           alert('Excel download nahi ho saki. Dubara try karein.');
         });
       return;

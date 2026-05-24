@@ -6709,8 +6709,13 @@
          * Mobile/WebView: Capacitor Filesystem plugin writes file to Downloads,
          * then shows a toast notification.
          */
-        function downloadBlob(blob, filename) {
+        function downloadBlob(blob, filename, options) {
             var fname = filename || 'download';
+            options = options || {};
+            var onProgress = typeof options.onProgress === 'function' ? options.onProgress : null;
+            function report(phase, pct, detail) {
+                if (onProgress) onProgress(phase, pct, detail || '');
+            }
 
             if (!_isNative) {
                 var url = URL.createObjectURL(blob);
@@ -6718,19 +6723,49 @@
                 a.href = url; a.download = fname;
                 document.body.appendChild(a); a.click();
                 setTimeout(function() { document.body.removeChild(a); URL.revokeObjectURL(url); }, 2000);
+                report('done', 100, 'Download started');
                 return Promise.resolve();
             }
 
-            _toast('Saving file...');
+            report('saving', 12, 'Saving file...');
             var Filesystem = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem;
             var Share = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Share;
             if (!Filesystem) {
                 console.error('Filesystem plugin not available');
                 _toast('Download not available. Please update the app.');
-                return Promise.resolve();
+                report('error', 0, 'Filesystem not available');
+                return Promise.reject(new Error('Filesystem not available'));
+            }
+
+            function openShareSheet(result) {
+                report('saved', 78, 'File saved');
+                if (!Share) {
+                    _toast('Saved to Downloads: ' + fname);
+                    report('done', 100, 'Saved to Downloads');
+                    return Promise.resolve(result);
+                }
+                report('sharing', 92, 'Opening share...');
+                return Share.share({
+                    title: fname,
+                    text: 'File saved: ' + fname,
+                    url: result.uri,
+                    dialogTitle: 'Share / Open ' + fname
+                }).then(function() {
+                    report('done', 100, 'Complete');
+                    return result;
+                }).catch(function(shareErr) {
+                    if (shareErr && shareErr.message && String(shareErr.message).toLowerCase().indexOf('cancel') >= 0) {
+                        report('done', 100, 'Saved — share cancelled');
+                        return result;
+                    }
+                    _toast('Saved to Downloads: ' + fname);
+                    report('done', 100, 'Saved to Downloads');
+                    return result;
+                });
             }
 
             return _blobToBase64(blob).then(function(base64data) {
+                report('saving', 35, 'Writing to Downloads...');
                 return Filesystem.writeFile({
                     path: 'Download/' + fname,
                     data: base64data,
@@ -6739,21 +6774,11 @@
                 });
             }).then(function(result) {
                 console.log('File saved to:', result.uri);
-                if (Share) {
-                    return Share.share({
-                        title: fname,
-                        text: 'File saved: ' + fname,
-                        url: result.uri,
-                        dialogTitle: 'Open ' + fname
-                    }).catch(function() {
-                        _toast('Saved to Downloads: ' + fname);
-                    });
-                } else {
-                    _toast('Saved to Downloads: ' + fname);
-                }
+                return openShareSheet(result);
             }).catch(function(err) {
                 console.error('Filesystem write failed:', err);
                 _toast('Trying alternative save...');
+                report('saving', 45, 'Trying alternative save...');
                 return _blobToBase64(blob).then(function(b64) {
                     return Filesystem.writeFile({
                         path: fname,
@@ -6762,16 +6787,13 @@
                         recursive: true
                     });
                 }).then(function(result) {
-                    _toast('File saved: ' + fname);
-                    if (Share) {
-                        return Share.share({
-                            title: fname, url: result.uri, dialogTitle: 'Open ' + fname
-                        }).catch(function() {});
-                    }
+                    return openShareSheet(result);
                 });
             }).catch(function(err2) {
                 console.error('All save attempts failed:', err2);
                 _toast('Save failed. Please try again.');
+                report('error', 0, 'Save failed');
+                return Promise.reject(err2);
             });
         }
 
