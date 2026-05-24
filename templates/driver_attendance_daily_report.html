@@ -2033,10 +2033,17 @@
   }
 
   var DAILY_PDF_OPTS = {
-    margin: [5, 5, 5, 5],
+    margin: [4, 4, 6, 4],
     filename: 'Day_Wise_Attendance_Report.pdf',
-    image: { type: 'jpeg', quality: 0.96 },
-    html2canvas: { scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff' },
+    image: { type: 'jpeg', quality: 0.98 },
+    html2canvas: {
+      scale: 2.5,
+      useCORS: true,
+      logging: false,
+      backgroundColor: '#ffffff',
+      letterRendering: true,
+      windowWidth: 1680
+    },
     jsPDF: { unit: 'mm', format: 'a3', orientation: 'landscape' },
     pagebreak: { mode: ['css', 'legacy'], avoid: '.pv-total-row' }
   };
@@ -2076,28 +2083,67 @@
 
   function getDailyPdfHostStyles() {
     return [
-      '.daily-native-pdf-host{font-family:Inter,Segoe UI,system-ui,sans-serif;background:#fff;color:#1e293b;}',
-      '.daily-native-pdf-host .pv-scale-wrap{width:100%;padding:8px 10px;}',
-      '.daily-native-pdf-host .pv-scale-inner{width:100%;}',
-      '.daily-native-pdf-host .daily-preview-table{border-collapse:collapse;table-layout:fixed;width:100%;font-size:8px;}',
-      '.daily-native-pdf-host .daily-preview-table th,.daily-native-pdf-host .daily-preview-table td{border:1px solid #94a3b8;padding:1px 2px;text-align:center;vertical-align:middle;font-size:8px;line-height:1.15;}',
+      '.daily-native-pdf-host{box-sizing:border-box;font-family:Inter,Segoe UI,system-ui,sans-serif;background:#f1f5f9;color:#1e293b;line-height:1.3;}',
+      '.daily-native-pdf-host *{box-sizing:border-box;}',
+      '.daily-native-pdf-host .dn-pdf-page{background:#f1f5f9;padding:0 0 14px;}',
+      '.daily-native-pdf-host .pv-header{background:linear-gradient(135deg,#0f766e 0%,#115e59 55%,#134e4a 100%);color:#fff;padding:14px 18px;display:flex;align-items:flex-start;gap:12px;}',
+      '.daily-native-pdf-host .pv-header__icon{width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,0.18);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}',
+      '.daily-native-pdf-host .pv-header__text{flex:1;min-width:0;}',
+      '.daily-native-pdf-host .pv-header h1{margin:0;font-size:15px;font-weight:800;line-height:1.25;letter-spacing:-0.02em;}',
+      '.daily-native-pdf-host .pv-header .sub{font-size:11px;opacity:0.92;margin-top:3px;font-weight:500;}',
+      '.daily-native-pdf-host .pv-header .pv-meta{font-size:10px;opacity:0.95;margin-top:6px;line-height:1.45;font-weight:500;}',
+      '.daily-native-pdf-host .dn-pdf-table-card{margin:10px 12px 0;background:#fff;border:1px solid #cbd5e1;border-radius:10px;overflow:hidden;box-shadow:0 2px 8px rgba(15,23,42,0.08);}',
+      '.daily-native-pdf-host .pv-scale-wrap{width:100%;padding:8px 10px 10px;}',
+      '.daily-native-pdf-host .pv-scale-inner{width:100%;display:block;}',
+      '.daily-native-pdf-host .daily-preview-table{border-collapse:collapse;table-layout:fixed;width:100%;max-width:100%;background:#fff;font-size:8px;}',
+      '.daily-native-pdf-host .daily-preview-table th,.daily-native-pdf-host .daily-preview-table td{border:1px solid #94a3b8;padding:2px 3px;text-align:center;vertical-align:middle;font-size:8px;line-height:1.2;}',
       '.daily-native-pdf-host .daily-preview-table thead th{background:#0f766e;color:#fff;font-weight:700;font-size:7px;}',
-      '.daily-native-pdf-host .daily-preview-table thead tr.hdr-row-2 th{background:#115e59;font-size:7px;}',
-      '.daily-native-pdf-host .daily-preview-table .pv-driver-col{text-align:left;vertical-align:top;}',
-      '.daily-native-pdf-host .daily-preview-table .pv-sr{padding:2px 3px;}',
-      '.daily-native-pdf-host .daily-preview-table .day-col{padding:1px;font-size:7px;}',
-      '.daily-native-pdf-host .daily-preview-table .date-hdr{font-size:7px;writing-mode:vertical-rl;transform:rotate(180deg);height:26px;}',
-      '.daily-native-pdf-host .daily-preview-table .sum-col{padding:1px 2px;font-size:7px;background:#e0f2fe;color:#0c4a6e;font-weight:700;}',
-      '.daily-native-pdf-host .daily-preview-table thead .sum-col{background:#0369a1;color:#fff;}',
-      '.daily-native-pdf-host .daily-preview-table tr.pv-total-row td{background:#ecfdf5;font-weight:700;color:#065f46;}',
-      '.daily-native-pdf-host .daily-preview-table .cell-present{background:#dcfce7!important;color:#166534;font-weight:700;}',
-      '.daily-native-pdf-host .daily-preview-table .cell-absent{background:#fee2e2!important;color:#991b1b;font-weight:700;}',
-      '.daily-native-pdf-host .daily-preview-table .cell-leave{background:#dbeafe!important;color:#1e40af;font-weight:700;}',
-      '.daily-native-pdf-host .daily-preview-table .cell-late{background:#fef9c3!important;color:#854d0e;font-weight:700;}',
-      '.daily-native-pdf-host .daily-preview-table .cell-half{background:#f3f4f6!important;}',
-      '.daily-native-pdf-host .daily-preview-table .cell-off{background:#e5e7eb!important;}',
-      '.daily-native-pdf-host .pv-legend{padding:6px 16px 10px;}',
-      '.daily-native-pdf-host .daily-attn-footnote{padding:0.65rem 1rem;background:#f8fafc;border-top:1px solid #e2e8f0;}'
+      '.daily-native-pdf-host .daily-preview-table thead tr.hdr-row-2 th{background:#115e59;font-size:7px;padding:2px 1px;}',
+      '.daily-native-pdf-host .daily-preview-table tbody tr:nth-child(even) td{background:#f8fafc;}',
+      '.daily-native-pdf-host .daily-preview-table .pv-sr{background:#f1f5f9!important;font-weight:700;color:#334155;padding:3px 4px;white-space:nowrap;}',
+      '.daily-native-pdf-host .daily-preview-table .pv-driver-col{text-align:left;vertical-align:top;background:#fff!important;word-wrap:break-word;overflow-wrap:anywhere;padding:3px 5px;}',
+      '.daily-native-pdf-host .daily-preview-table .pv-driver-block{text-align:left;line-height:1.3;}',
+      '.daily-native-pdf-host .daily-preview-table .pv-ds-line{display:block;}',
+      '.daily-native-pdf-host .daily-preview-table .pv-ds-line.pv-ds-main{font-size:8px;font-weight:800;color:#0f172a;}',
+      '.daily-native-pdf-host .daily-preview-table .pv-ds-line.pv-veh-shift{font-size:7px;color:#475569;font-weight:600;margin-top:1px;}',
+      '.daily-native-pdf-host .daily-preview-table .pv-ds-line.pv-ds-main .pv-score{display:inline;margin-left:3px;font-size:7px;font-weight:800;color:#0f766e;}',
+      '.daily-native-pdf-host .daily-preview-table .day-col{padding:2px 1px;font-size:7px;font-weight:700;}',
+      '.daily-native-pdf-host .daily-preview-table .date-hdr{font-size:7px;padding:2px 1px;line-height:1;writing-mode:vertical-rl;transform:rotate(180deg);height:28px;letter-spacing:0.02em;}',
+      '.daily-native-pdf-host .daily-preview-table .sum-col{padding:2px 3px;font-size:7px;background:#e0f2fe!important;color:#0c4a6e;font-weight:800;}',
+      '.daily-native-pdf-host .daily-preview-table thead .sum-col{background:#0369a1!important;color:#fff!important;}',
+      '.daily-native-pdf-host .daily-preview-table .sum-vhdr{writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap;height:34px;padding:2px;font-size:7px;line-height:1;}',
+      '.daily-native-pdf-host .daily-preview-table tr.pv-total-row td{background:#ecfdf5!important;font-weight:800;color:#065f46;font-size:8px;border-top:2px solid #0f766e;}',
+      '.daily-native-pdf-host .daily-preview-table tr.pv-total-row .sum-col{background:#7dd3fc!important;color:#0c4a6e!important;}',
+      '.daily-native-pdf-host .daily-preview-table .pv-total-label{text-align:left;padding-left:8px;font-size:9px;}',
+      '.daily-native-pdf-host .daily-preview-table .cell-present{background:#dcfce7!important;color:#166534!important;font-weight:800;}',
+      '.daily-native-pdf-host .daily-preview-table .cell-absent{background:#fee2e2!important;color:#991b1b!important;font-weight:800;}',
+      '.daily-native-pdf-host .daily-preview-table .cell-leave{background:#dbeafe!important;color:#1e40af!important;font-weight:800;}',
+      '.daily-native-pdf-host .daily-preview-table .cell-late{background:#fef9c3!important;color:#854d0e!important;font-weight:800;}',
+      '.daily-native-pdf-host .daily-preview-table .cell-half{background:#f3f4f6!important;color:#374151!important;font-weight:700;}',
+      '.daily-native-pdf-host .daily-preview-table .cell-off{background:#e5e7eb!important;color:#111827!important;font-weight:700;}',
+      '.daily-native-pdf-host .daily-preview-table .cell-empty{background:#fafafa!important;color:#cbd5e1;}',
+      '.daily-native-pdf-host .pv-legend{margin:10px 12px 0;padding:10px 12px;background:linear-gradient(180deg,#f8fafc,#f1f5f9);border:1px solid #e2e8f0;border-radius:10px;}',
+      '.daily-native-pdf-host .dn-pdf-legend-title{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:0.06em;color:#64748b;margin-bottom:6px;}',
+      '.daily-native-pdf-host .daily-legend-toggle{display:none!important;}',
+      '.daily-native-pdf-host .daily-legend-panel{display:block!important;}',
+      '.daily-native-pdf-host .daily-attn-footnote{padding:0;border:none;background:transparent;}',
+      '.daily-native-pdf-host .daily-attn-legend{display:flex;flex-wrap:wrap;align-items:center;gap:5px 6px;}',
+      '.daily-native-pdf-host .daily-legend-group{display:inline-flex;align-items:center;flex-wrap:wrap;gap:4px 5px;}',
+      '.daily-native-pdf-host .daily-legend-group-label{font-size:8px;font-weight:800;text-transform:uppercase;letter-spacing:0.05em;color:#94a3b8;}',
+      '.daily-native-pdf-host .daily-legend-item{display:inline-flex;align-items:center;gap:4px;padding:3px 8px 3px 4px;background:#fff;border:1px solid #e2e8f0;border-radius:999px;font-size:8px;color:#475569;font-weight:600;}',
+      '.daily-native-pdf-host .daily-legend-badge{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;font-size:7px;font-weight:800;border:1px solid transparent;}',
+      '.daily-native-pdf-host .daily-legend-badge--slot-m{background:#ccfbf1;color:#0f766e;border-color:#5eead4;}',
+      '.daily-native-pdf-host .daily-legend-badge--slot-e{background:#e0e7ff;color:#3730a3;border-color:#a5b4fc;}',
+      '.daily-native-pdf-host .daily-legend-badge--present{background:#dcfce7;color:#166534;border-color:#86efac;}',
+      '.daily-native-pdf-host .daily-legend-badge--absent{background:#fee2e2;color:#991b1b;border-color:#fca5a5;}',
+      '.daily-native-pdf-host .daily-legend-badge--leave{background:#dbeafe;color:#1e40af;border-color:#93c5fd;}',
+      '.daily-native-pdf-host .daily-legend-badge--late{background:#fef9c3;color:#854d0e;border-color:#fde047;font-size:6px;}',
+      '.daily-native-pdf-host .daily-legend-badge--half{background:#f3f4f6;color:#374151;border-color:#d1d5db;}',
+      '.daily-native-pdf-host .daily-legend-badge--off{background:#e5e7eb;color:#111827;border-color:#9ca3af;}',
+      '.daily-native-pdf-host .daily-legend-badge--days{background:#fef3c7;color:#92400e;border-color:#fcd34d;font-size:6px;}',
+      '.daily-native-pdf-host .daily-legend-sep{width:1px;height:16px;background:#cbd5e1;margin:0 2px;}',
+      '.daily-native-pdf-host .daily-legend-note{margin:6px 0 0;font-size:8px;color:#64748b;}',
+      '.daily-native-pdf-host .dn-pdf-footer{margin:8px 12px 0;padding:8px 12px;font-size:8px;color:#64748b;text-align:center;border-top:1px dashed #cbd5e1;}'
     ].join('');
   }
 
@@ -2105,18 +2151,29 @@
     var host = document.createElement('div');
     host.id = 'dailyNativePdfHost';
     host.className = 'daily-native-pdf-host';
-    host.style.cssText = 'position:fixed;left:-12000px;top:0;width:1400px;z-index:-1;opacity:0;pointer-events:none;';
+    host.style.cssText = 'position:fixed;left:-16000px;top:0;width:1680px;z-index:-1;opacity:1;pointer-events:none;';
     var styleEl = document.createElement('style');
     styleEl.textContent = getDailyPdfHostStyles();
     host.appendChild(styleEl);
+
+    var page = document.createElement('div');
+    page.className = 'dn-pdf-page';
+
     var area = document.createElement('div');
     area.id = 'pvPrintArea';
     area.className = 'pv-print-area';
+
     var header = document.createElement('div');
     header.className = 'pv-header';
-    header.innerHTML = '<div><h1>Day Wise Attendance Report</h1><div class="sub">' + reportTitleText + '</div>' +
+    header.innerHTML =
+      '<div class="pv-header__icon" aria-hidden="true">&#128197;</div>' +
+      '<div class="pv-header__text"><h1>Day Wise Attendance Report</h1>' +
+      '<div class="sub">' + reportTitleText + '</div>' +
       (printMetaLine ? '<div class="pv-meta">' + printMetaLine.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</div>' : '') +
       '</div>';
+
+    var tableCard = document.createElement('div');
+    tableCard.className = 'dn-pdf-table-card';
     var scaleWrap = document.createElement('div');
     scaleWrap.className = 'pv-scale-wrap';
     var scaleInner = document.createElement('div');
@@ -2124,16 +2181,35 @@
     scaleInner.id = 'pvScaleInner';
     scaleInner.appendChild(tbl);
     scaleWrap.appendChild(scaleInner);
+    tableCard.appendChild(scaleWrap);
+
     area.appendChild(header);
-    area.appendChild(scaleWrap);
-    host.appendChild(area);
+    area.appendChild(tableCard);
+    page.appendChild(area);
+
     var legendSrc = document.getElementById('dailyAttendanceLegend');
-    if (legendSrc) {
+    var legendPanel = legendSrc ? legendSrc.querySelector('#dailyLegendPanel') : null;
+    if (legendPanel) {
       var leg = document.createElement('div');
       leg.className = 'pv-legend';
-      leg.innerHTML = legendSrc.innerHTML;
-      host.appendChild(leg);
+      var legTitle = document.createElement('div');
+      legTitle.className = 'dn-pdf-legend-title';
+      legTitle.textContent = 'Legend — Slots & Status';
+      leg.appendChild(legTitle);
+      var footnote = document.createElement('div');
+      footnote.className = 'daily-attn-footnote';
+      footnote.appendChild(legendPanel.cloneNode(true));
+      leg.appendChild(footnote);
+      page.appendChild(leg);
     }
+
+    var footer = document.createElement('div');
+    footer.className = 'dn-pdf-footer';
+    footer.textContent = 'Fleet Management · Exported ' +
+      new Date().toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+    page.appendChild(footer);
+
+    host.appendChild(page);
     document.body.appendChild(host);
     return host;
   }
@@ -2148,7 +2224,14 @@
       tbl.style.tableLayout = 'fixed';
       tbl.style.width = '100%';
       tbl.style.maxWidth = '100%';
+      tbl.style.borderCollapse = 'collapse';
     }
+    host.querySelectorAll('.daily-legend-toggle').forEach(function(el) {
+      el.style.display = 'none';
+    });
+    host.querySelectorAll('.daily-legend-panel').forEach(function(el) {
+      el.style.display = 'block';
+    });
   }
 
   function exportDailyPdfNative(done) {
@@ -2166,8 +2249,14 @@
       window.FleetBridge._toast('Generating PDF...');
     }
     loadDailyHtml2pdf().then(function(h2p) {
-      var area = host.querySelector('#pvPrintArea');
-      return h2p().set(DAILY_PDF_OPTS).from(area).output('blob');
+      return new Promise(function(resolve) {
+        requestAnimationFrame(function() {
+          requestAnimationFrame(resolve);
+        });
+      }).then(function() {
+        var area = host.querySelector('.dn-pdf-page') || host.querySelector('#pvPrintArea');
+        return h2p().set(DAILY_PDF_OPTS).from(area).output('blob');
+      });
     }).then(function(blob) {
       if (host.parentNode) host.parentNode.removeChild(host);
       if (!window.FleetBridge || !window.FleetBridge.downloadBlob) {
