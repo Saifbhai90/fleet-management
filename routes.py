@@ -996,17 +996,17 @@ def _attendance_daily_cell_tooltip(rec):
 
 
 def _count_month_present_days(grid):
-    """Distinct calendar days with at least one Present (P) slot."""
-    days = set()
-    for day_num, slots in (grid or {}).items():
+    """Total Present (P) cells in the driver row — Morning + Evening, any shift."""
+    total = 0
+    for _day_num, slots in (grid or {}).items():
         if not isinstance(slots, dict):
             continue
-        for slot_val in slots.values():
-            abbr = slot_val.get('v', '') if isinstance(slot_val, dict) else (slot_val or '')
+        for slot_key in ('M', 'E'):
+            cell = slots.get(slot_key) or {}
+            abbr = cell.get('v', '') if isinstance(cell, dict) else (cell or '')
             if abbr == 'P':
-                days.add(day_num)
-                break
-    return len(days)
+                total += 1
+    return total
 
 
 def _driver_attendance_mark_redirect_url():

@@ -850,7 +850,7 @@
             <td class="frozen-col fc-6 info-col">
               <div class="daily-driver-cell">
                 <span class="daily-driver-line">
-                  <span class="daily-driver-name">{{ row.driver_name }}</span><span class="daily-driver-score" title="Present days this month">({{ row.month_present_days }}/{{ row.days_in_month }})</span>
+                  <span class="daily-driver-name">{{ row.driver_name }}</span><span class="daily-driver-score" title="Present (P) count in row — all M and E slots">({{ row.month_present_days }}/{{ row.days_in_month }})</span>
                 </span>
               </div>
             </td>
@@ -896,12 +896,14 @@
             <span class="daily-driver-card__sr">{{ loop.index }}</span>
             <div class="daily-driver-card__title-wrap">
               <div class="daily-driver-card__name">{{ row.driver_name }}</div>
-              {% set present_pct = ((row.month_present_days * 100 / row.days_in_month)|round(0, 'floor')|int) if row.days_in_month else 0 %}
+              {% set present_slot_max = row.days_in_month * 2 %}
+              {% set present_pct = ((row.month_present_days * 100 / present_slot_max)|round(0, 'floor')|int) if present_slot_max else 0 %}
+              {% if present_pct > 100 %}{% set present_pct = 100 %}{% endif %}
               <div class="daily-driver-card__present">
                 <p class="daily-driver-card__present-text">
-                  <strong>{{ row.month_present_days }}/{{ row.days_in_month }}</strong> present days this month
+                  <strong>{{ row.month_present_days }}/{{ row.days_in_month }}</strong> present (P) in row — all shifts
                 </p>
-                <div class="daily-driver-card__progress" role="progressbar" aria-valuenow="{{ row.month_present_days }}" aria-valuemin="0" aria-valuemax="{{ row.days_in_month }}" aria-label="Present days this month">
+                <div class="daily-driver-card__progress" role="progressbar" aria-valuenow="{{ row.month_present_days }}" aria-valuemin="0" aria-valuemax="{{ present_slot_max }}" aria-label="Present P count in row">
                   <span class="daily-driver-card__progress-fill" style="width: {{ present_pct }}%;"></span>
                 </div>
               </div>
@@ -1043,7 +1045,7 @@
       </div>
       <p class="daily-legend-note mb-0">
         <i class="bi bi-lightbulb" aria-hidden="true"></i>
-        <span>Colored badges match calendar cells · (2/31) = present days this month · Tap a day for check-in/out details</span>
+        <span>Colored badges match calendar cells · (6/31) = total P in row (M+E, all shifts) · Tap a day for check-in/out details</span>
       </p>
       </div>
     </div>
