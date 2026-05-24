@@ -543,20 +543,30 @@
     text-align: center; padding: 2rem 1rem; color: #64748b; font-size: 0.88rem;
   }
 
-  html.capacitor-native body.daily-cal-sheet-open {
-    overflow: hidden; touch-action: none;
+  html.capacitor-native body.daily-cal-sheet-open #mainContent {
+    overflow: hidden !important;
+    touch-action: none;
   }
   html.capacitor-native .daily-export-tile__icon {
     width: 26px; height: 26px; flex-shrink: 0;
   }
 
-  /* Day detail bottom sheet (mobile native) */
+  /* Day detail bottom sheet — portaled to #appNativeShell (not scrollable #mainContent) */
   .daily-cal-sheet { display: none !important; }
   html.capacitor-native .daily-cal-sheet {
     display: flex !important;
     position: fixed; inset: 0; z-index: 12050;
     flex-direction: column; justify-content: flex-end;
     pointer-events: none; visibility: hidden;
+  }
+  html.capacitor-native #appNativeShell > .daily-cal-sheet {
+    position: absolute !important;
+    inset: 0 !important;
+    z-index: 60 !important;
+  }
+  html.capacitor-native #appNativeShell > .daily-cal-sheet .daily-cal-sheet__panel {
+    margin-bottom: calc(60px + env(safe-area-inset-bottom, 0px));
+    max-height: min(72vh, 480px);
   }
   html.capacitor-native .daily-cal-sheet.is-open {
     pointer-events: auto; visibility: visible;
@@ -1434,6 +1444,23 @@
       '</div>';
   }
 
+  function ensureDailyCalDaySheetPortal() {
+    var sheet = document.getElementById('dailyCalDaySheet');
+    if (!sheet) return null;
+    if (sheet.getAttribute('data-daily-sheet-portaled') === '1') return sheet;
+    var host = document.getElementById('appNativeShell');
+    if (!host && isDailyNativeApp()) {
+      setTimeout(ensureDailyCalDaySheetPortal, 80);
+      return sheet;
+    }
+    host = host || document.body;
+    if (sheet.parentNode !== host) {
+      host.appendChild(sheet);
+    }
+    sheet.setAttribute('data-daily-sheet-portaled', '1');
+    return sheet;
+  }
+
   function closeDailyCalDaySheet() {
     var sheet = document.getElementById('dailyCalDaySheet');
     if (!sheet) return;
@@ -1444,6 +1471,7 @@
 
   function openDailyCalDaySheet(dayBtn) {
     if (!isDailyNativeApp() || !dayBtn) return;
+    ensureDailyCalDaySheetPortal();
     var sheet = document.getElementById('dailyCalDaySheet');
     var titleEl = document.getElementById('dailyCalSheetTitle');
     var subEl = document.getElementById('dailyCalSheetSub');
@@ -1465,6 +1493,25 @@
       _buildDailySheetSlotHtml('m', 'Morning', mCode, mTip) +
       _buildDailySheetSlotHtml('e', 'Evening', eCode, eTip);
 
+    var calWrap = dayBtn.closest('.daily-driver-card__calendar');
+    var scrollEl = document.getElementById('mainContent');
+    if (calWrap) {
+      try {
+        calWrap.scrollIntoView({ block: 'center', behavior: 'smooth', inline: 'nearest' });
+      } catch (e) {
+        calWrap.scrollIntoView(true);
+      }
+    } else if (scrollEl) {
+      var card = dayBtn.closest('.daily-driver-card');
+      if (card) {
+        try {
+          card.scrollIntoView({ block: 'center', behavior: 'smooth', inline: 'nearest' });
+        } catch (e2) {
+          card.scrollIntoView(true);
+        }
+      }
+    }
+
     sheet.classList.add('is-open');
     sheet.setAttribute('aria-hidden', 'false');
     document.body.classList.add('daily-cal-sheet-open');
@@ -1482,6 +1529,7 @@
     var sheet = document.getElementById('dailyCalDaySheet');
     var nativeView = document.getElementById('dailyNativeView');
     if (!sheet || !nativeView) return;
+    ensureDailyCalDaySheetPortal();
 
     nativeView.addEventListener('click', function(e) {
       if (e.target.closest('[data-cal-sheet-close]')) return;
