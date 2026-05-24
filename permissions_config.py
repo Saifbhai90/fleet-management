@@ -1417,6 +1417,23 @@ def can_see_section(permission_codes, section_code):
     return bool(codes & set(code for code, _ in items))
 
 
+def can_see_administration_menu(permission_codes):
+    """
+    True only when the user can open at least one Administration sidebar item.
+    Unlike can_see_section('users_manage'), granular codes such as notification_list or
+    whats_new (grouped under Administration in the role tree) do not show an empty menu.
+    """
+    if not permission_codes:
+        return False
+    if can_see_page(permission_codes, 'user_list'):
+        return True
+    if can_see_page(permission_codes, 'role_list'):
+        return True
+    if user_has_any_form_control_tab(permission_codes):
+        return True
+    return False
+
+
 def expand_permission_dependencies(permission_codes):
     """Given set of permission codes, add all required dependencies (e.g. companies_list when companies_add is present)."""
     codes = set(permission_codes or [])

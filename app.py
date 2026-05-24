@@ -157,21 +157,33 @@ def inject_current_permissions():
     perms = session.get('permissions') or []
     is_master = session.get('is_master', False)
     try:
-        from permissions_config import can_see_page, can_see_section, can_see_report_centre
+        from permissions_config import (
+            can_see_page,
+            can_see_section,
+            can_see_report_centre,
+            can_see_administration_menu,
+        )
         # Master ke liye role ki value nahi: hamesha sab dikhe, koi permission miss na ho
         can_see_p = (lambda key: True) if is_master else (lambda key: can_see_page(perms, key))
         can_see_s = (lambda key: True) if is_master else (lambda key: can_see_section(perms, key))
         can_see_rc = (lambda: True) if is_master else (lambda: can_see_report_centre(perms))
+        can_see_admin = (
+            (lambda: True)
+            if is_master
+            else (lambda: can_see_administration_menu(perms))
+        )
     except Exception:
         can_see_p = lambda key: True
         can_see_s = lambda key: True
         can_see_rc = lambda: True
+        can_see_admin = lambda: True
     return dict(
         current_permissions=perms,
         current_user_is_master=is_master,
         can_see_page=can_see_p,
         can_see_section=can_see_s,
         can_see_report_centre=can_see_rc,
+        can_see_administration_menu=can_see_admin,
     )
 
 

@@ -2330,8 +2330,8 @@
         </div>
         {% endif %}
 
-        <!-- Administration -->
-        {% if can_see_section('users_manage') %}
+        <!-- Administration (only if at least one submenu item is visible) -->
+        {% if can_see_administration_menu() %}
         <div>
             <a class="dropdown-toggle" data-bs-toggle="collapse" href="#userAccessMenu" role="button" aria-expanded="{{ 'true' if users_open else 'false' }}">
                 <i class="bi bi-shield-lock"></i><span>Administration</span>
