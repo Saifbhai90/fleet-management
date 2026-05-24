@@ -20320,6 +20320,364 @@ def driver_attendance_report():
     return render_template('driver_attendance_report.html', form=form, report=report, single_vehicle=single_vehicle, has_single_scope=has_single_scope, selected_vehicle_id=selected_vehicle_id, selected_shift=selected_shift, vehicle_choices=vehicle_choices, disable_project=disable_project, disable_district=disable_district, vehicle_drivers=vehicle_drivers, selected_driver_id=selected_driver_id)
 
 
+def _build_driver_daily_attendance_report_payload(
+    month,
+    year,
+    project_id,
+    district_id,
+    vehicle_id=None,
+    driver_id_filter=0,
+    search='',
+    scope_projects=None,
+    scope_districts=None,
+    scope_vehicles=None,
+    scope_shifts=None,
+):
+    """Build day-wise attendance grid data for page render or Excel export."""
+    from calendar import monthrange
+
+    scope_projects = scope_projects or []
+    scope_districts = scope_districts or []
+    scope_vehicles = scope_vehicles or []
+    scope_shifts = scope_shifts or []
+    status_columns = ['Present', 'Absent', 'Leave', 'Late', 'Half-Day', 'Off']
+
+    if not month or not year or not project_id or not district_id:
+        return None
+
+    drivers_query = Driver.query.filter(
+        Driver.status == 'Active',
+        Driver.vehicle_id.isnot(None),
+    ).options(
+        joinedload(Driver.vehicle).joinedload(Vehicle.district),
+        joinedload(Driver.vehicle).joinedload(Vehicle.project),
+        joinedload(Driver.project),
+        joinedload(Driver.district),
+    ).outerjoin(Vehicle, Driver.vehicle_id == Vehicle.id)
+
+    if scope_projects:
+        drivers_query = drivers_query.filter(
+            db.or_(Driver.project_id.in_(scope_projects),
+                   Vehicle.project_id.in_(scope_projects))
+        )
+    if scope_districts:
+        drivers_query = drivers_query.filter(
+            db.or_(Driver.district_id.in_(scope_districts),
+                   Vehicle.district_id.in_(scope_districts))
+        )
+    if scope_vehicles:
+        drivers_query = drivers_query.filter(Driver.vehicle_id.in_(scope_vehicles))
+    if scope_shifts:
+        drivers_query = drivers_query.filter(Driver.shift.in_(scope_shifts))
+    drivers_query = drivers_query.filter(
+        db.or_(Driver.project_id == project_id, Vehicle.project_id == project_id)
+    )
+    drivers_query = drivers_query.filter(
+        db.or_(Driver.district_id == district_id, Vehicle.district_id == district_id)
+    )
+    if vehicle_id:
+        drivers_query = drivers_query.filter(Driver.vehicle_id == vehicle_id)
+    if driver_id_filter:
+        drivers_query = drivers_query.filter(Driver.id == driver_id_filter)
+    if search:
+        flt = _multi_word_filter(search, Driver.name, Driver.driver_id, Vehicle.vehicle_no)
+        if flt is not None:
+            drivers_query = drivers_query.filter(flt)
+
+    drivers = drivers_query.distinct().order_by(Driver.name).all()
+    _, ndays = monthrange(year, month)
+    start_d = date(year, month, 1)
+    end_d = date(year, month, ndays)
+    day_headers = [date(year, month, d) for d in range(1, ndays + 1)]
+    report_title = f'Day Wise Attendance — {start_d.strftime("%d-%b-%Y")} to {end_d.strftime("%d-%b-%Y")}'
+
+    driver_ids = [d.id for d in drivers]
+    att_by_driver = {did: [] for did in driver_ids}
+    if driver_ids:
+        att_rows = (
+            DriverAttendance.query.options(
+                joinedload(DriverAttendance.driver).joinedload(Driver.vehicle),
+            )
+            .filter(
+                DriverAttendance.driver_id.in_(driver_ids),
+                DriverAttendance.attendance_date >= start_d,
+                DriverAttendance.attendance_date <= end_d,
+            )
+            .order_by(DriverAttendance.attendance_date, DriverAttendance.attendance_segment)
+            .all()
+        )
+        for r in att_rows:
+            if not _attendance_record_counts_in_report(r):
+                continue
+            att_by_driver[r.driver_id].append(r)
+
+    report = []
+    grand_totals = {s: 0 for s in status_columns}
+    for d in drivers:
+        grid = {}
+        status_totals = {s: 0 for s in status_columns}
+        for r in att_by_driver.get(d.id, []):
+            day_num = r.attendance_date.day
+            slot = _attendance_daily_slot_key(r)
+            status = (r.status or '').strip()
+            abbr = _attendance_status_abbr(status)
+            if day_num not in grid:
+                grid[day_num] = {}
+            grid[day_num][slot] = {'v': abbr, 'tip': _attendance_daily_cell_tooltip(r)}
+            if status in status_totals:
+                status_totals[status] += 1
+                grand_totals[status] += 1
+        veh = d.vehicle
+        report.append({
+            'district_name': (
+                (d.district.name if d.district else None)
+                or (veh.district.name if veh and veh.district else None)
+                or '-'
+            ),
+            'project_name': (
+                (d.project.name if d.project else None)
+                or (veh.project.name if veh and veh.project else None)
+                or '-'
+            ),
+            'vehicle_no': (veh.vehicle_no if veh else '-') or '-',
+            'shift': (d.shift or '-') or '-',
+            'driver_name': (d.name or '-') or '-',
+            'month_present_days': _count_month_present_days(grid),
+            'days_in_month': ndays,
+            'grid': grid,
+            'status_totals': status_totals,
+        })
+
+    return {
+        'report': report,
+        'day_headers': day_headers,
+        'report_title': report_title,
+        'ndays': ndays,
+        'grand_totals': grand_totals,
+        'status_columns': status_columns,
+    }
+
+
+def _daily_attendance_slot_day_totals(report, ndays):
+    """Per-day M/E counts across all drivers (for Excel total row)."""
+    totals = {(day, slot): 0 for day in range(1, ndays + 1) for slot in ('M', 'E')}
+    for row in report:
+        grid = row.get('grid') or {}
+        for day in range(1, ndays + 1):
+            slots = grid.get(day) or {}
+            for slot in ('M', 'E'):
+                cell = slots.get(slot) or {}
+                v = cell.get('v', '') if isinstance(cell, dict) else (cell or '')
+                if str(v).strip():
+                    totals[(day, slot)] += 1
+    return totals
+
+
+def _generate_driver_daily_attendance_excel(payload):
+    """Export formatted Day Wise Attendance Report (.xlsx)."""
+    report = payload['report']
+    day_headers = payload['day_headers']
+    report_title = payload['report_title']
+    ndays = payload['ndays']
+    grand_totals = payload['grand_totals']
+    status_columns = payload['status_columns']
+
+    info_cols = 6
+    day_slot_cols = ndays * 2
+    sum_cols = len(status_columns)
+    last_col = info_cols + day_slot_cols + sum_cols - 1
+    hdr_row_top = 2
+    hdr_row_sub = 3
+    data_start = 4
+
+    output = BytesIO()
+    wb = xlsxwriter.Workbook(output, {'in_memory': True})
+    ws = wb.add_worksheet('Day Wise Attendance')
+
+    dark = '#1B4332'
+    dark2 = '#2D6A4F'
+    white = '#FFFFFF'
+    border_white = '#FFFFFF'
+    border_grey = '#CBD5E1'
+    zebra = '#F8FAFC'
+    total_bg = '#D1FAE5'
+
+    title_fmt = wb.add_format({
+        'bold': True, 'font_size': 16, 'font_color': white,
+        'bg_color': dark, 'align': 'center', 'valign': 'vcenter',
+    })
+    sub_fmt = wb.add_format({
+        'bold': True, 'font_size': 12, 'font_color': white,
+        'bg_color': dark2, 'align': 'center', 'valign': 'vcenter',
+    })
+    hdr_fmt = wb.add_format({
+        'bold': True, 'font_color': white, 'bg_color': dark,
+        'align': 'center', 'valign': 'vcenter', 'border': 1, 'border_color': border_white,
+    })
+    cell_fmt = wb.add_format({
+        'border': 1, 'border_color': border_grey, 'align': 'center', 'valign': 'vcenter',
+    })
+    cell_left_fmt = wb.add_format({
+        'border': 1, 'border_color': border_grey, 'align': 'left', 'valign': 'vcenter',
+    })
+    zebra_fmt = wb.add_format({
+        'border': 1, 'border_color': border_grey, 'align': 'center', 'valign': 'vcenter',
+        'bg_color': zebra,
+    })
+    zebra_left_fmt = wb.add_format({
+        'border': 1, 'border_color': border_grey, 'align': 'left', 'valign': 'vcenter',
+        'bg_color': zebra,
+    })
+    total_fmt = wb.add_format({
+        'bold': True, 'bg_color': total_bg, 'border': 1, 'border_color': border_grey,
+        'align': 'center', 'valign': 'vcenter',
+    })
+    total_left_fmt = wb.add_format({
+        'bold': True, 'bg_color': total_bg, 'border': 1, 'border_color': border_grey,
+        'align': 'left', 'valign': 'vcenter',
+    })
+
+    ws.set_row(0, 22)
+    ws.set_row(1, 18)
+    ws.merge_range(0, 0, 0, last_col, 'Day Wise Attendance Report', title_fmt)
+    ws.merge_range(1, 0, 1, last_col, report_title, sub_fmt)
+
+    info_labels = ['Sr', 'District', 'Project', 'Vehicle', 'Shift', 'Driver']
+    for c, label in enumerate(info_labels):
+        ws.merge_range(hdr_row_top, c, hdr_row_sub, c, label, hdr_fmt)
+
+    for i, _d in enumerate(day_headers):
+        c0 = info_cols + i * 2
+        ws.merge_range(hdr_row_top, c0, hdr_row_top, c0 + 1, f'{_d.day:02d}', hdr_fmt)
+        ws.write(hdr_row_sub, c0, 'M', hdr_fmt)
+        ws.write(hdr_row_sub, c0 + 1, 'E', hdr_fmt)
+
+    for j, st in enumerate(status_columns):
+        c = info_cols + day_slot_cols + j
+        ws.merge_range(hdr_row_top, c, hdr_row_sub, c, st, hdr_fmt)
+
+    slot_totals = _daily_attendance_slot_day_totals(report, ndays)
+    row_idx = data_start
+    for i, row in enumerate(report, 1):
+        use_zebra = i % 2 == 0
+        cf = zebra_fmt if use_zebra else cell_fmt
+        lf = zebra_left_fmt if use_zebra else cell_left_fmt
+        driver_label = (
+            f"{row['driver_name']} ({row['month_present_days']}/{row['days_in_month']})"
+        )
+        ws.write(row_idx, 0, i, cf)
+        ws.write(row_idx, 1, row['district_name'], lf)
+        ws.write(row_idx, 2, row['project_name'], lf)
+        ws.write(row_idx, 3, row['vehicle_no'], lf)
+        ws.write(row_idx, 4, row['shift'], lf)
+        ws.write(row_idx, 5, driver_label, lf)
+        grid = row.get('grid') or {}
+        for day in range(1, ndays + 1):
+            slots = grid.get(day) or {}
+            for si, slot in enumerate(('M', 'E')):
+                cell = slots.get(slot) or {}
+                v = cell.get('v', '') if isinstance(cell, dict) else (cell or '')
+                ws.write(row_idx, info_cols + (day - 1) * 2 + si, v or '', cf)
+        for j, st in enumerate(status_columns):
+            ws.write(row_idx, info_cols + day_slot_cols + j, row['status_totals'].get(st, 0), cf)
+        row_idx += 1
+
+    ws.write(row_idx, 0, 'Total', total_left_fmt)
+    for c in range(1, info_cols):
+        ws.write(row_idx, c, '', total_fmt)
+    for day in range(1, ndays + 1):
+        for si, slot in enumerate(('M', 'E')):
+            ws.write(row_idx, info_cols + (day - 1) * 2 + si, slot_totals.get((day, slot), 0), total_fmt)
+    for j, st in enumerate(status_columns):
+        ws.write(row_idx, info_cols + day_slot_cols + j, grand_totals.get(st, 0), total_fmt)
+
+    data_end = row_idx
+    att_first = info_cols
+    att_last = info_cols + day_slot_cols - 1
+    if data_end >= data_start and att_last >= att_first:
+        green_fmt = wb.add_format({'font_color': '#166534', 'border': 1, 'border_color': border_grey})
+        red_fmt = wb.add_format({'font_color': '#991b1b', 'border': 1, 'border_color': border_grey})
+        ws.conditional_format(data_start, att_first, data_end, att_last, {
+            'type': 'text', 'criteria': 'containing', 'value': 'P', 'format': green_fmt,
+        })
+        ws.conditional_format(data_start, att_first, data_end, att_last, {
+            'type': 'text', 'criteria': 'containing', 'value': 'A', 'format': red_fmt,
+        })
+
+    ws.freeze_panes(data_start, info_cols)
+    ws.autofilter(hdr_row_sub, 0, data_end, last_col)
+
+    ws.set_column(0, 0, 5)
+    ws.set_column(1, 4, 14)
+    ws.set_column(5, 5, 32)
+    if day_slot_cols:
+        ws.set_column(info_cols, info_cols + day_slot_cols - 1, 3.5)
+    if sum_cols:
+        ws.set_column(info_cols + day_slot_cols, last_col, 9)
+
+    wb.close()
+    output.seek(0)
+    fname = f"Day_Wise_Attendance_{pk_now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    return send_file(
+        output,
+        download_name=fname,
+        as_attachment=True,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+
+
+@app.route('/driver-attendance/daily-report/export')
+def driver_attendance_daily_report_export():
+    """Download formatted Day Wise Attendance Report as .xlsx."""
+    from auth_utils import get_user_context
+
+    if not user_can_access(session.get('permissions') or [], 'driver_attendance_daily_report'):
+        flash('Access denied.', 'danger')
+        return redirect(url_for('driver_attendance_daily_report'))
+
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    scope_projects = list(user_context.get('allowed_projects') or [])
+    scope_districts = list(user_context.get('allowed_districts') or [])
+    scope_vehicles = list(user_context.get('allowed_vehicles') or [])
+    scope_shifts = list(user_context.get('allowed_shifts') or [])
+
+    month = request.args.get('month', type=int)
+    year = request.args.get('year', type=int)
+    project_id = request.args.get('project_id', type=int) or 0
+    district_id = request.args.get('district_id', type=int) or 0
+    if scope_projects and len(scope_projects) == 1:
+        project_id = scope_projects[0]
+    if scope_districts and len(scope_districts) == 1:
+        district_id = scope_districts[0]
+
+    vehicle_id = request.args.get('vehicle_id', type=int) or 0
+    if vehicle_id == 0:
+        vehicle_id = None
+    driver_id_filter = request.args.get('driver_id', type=int) or 0
+    search = (request.args.get('search') or '').strip()
+
+    if not project_id or not district_id:
+        flash('Excel export ke liye Project aur District select karein.', 'warning')
+        return redirect(url_for('driver_attendance_daily_report'))
+
+    payload = _build_driver_daily_attendance_report_payload(
+        month, year, project_id, district_id,
+        vehicle_id=vehicle_id,
+        driver_id_filter=driver_id_filter,
+        search=search,
+        scope_projects=scope_projects,
+        scope_districts=scope_districts,
+        scope_vehicles=scope_vehicles,
+        scope_shifts=scope_shifts,
+    )
+    if not payload or not payload.get('report'):
+        flash('Is filter par koi data nahi mila.', 'warning')
+        return redirect(url_for('driver_attendance_daily_report'))
+
+    return _generate_driver_daily_attendance_excel(payload)
+
+
 @app.route('/driver-attendance/daily-report', methods=['GET', 'POST'])
 def driver_attendance_daily_report():
     """Day-wise attendance grid: M/E slots per calendar day (complete check-in + check-out only)."""
@@ -20446,112 +20804,22 @@ def driver_attendance_daily_report():
                 vehicle_id = None
             search = (form.search.data or '').strip()
             driver_id_filter = request.form.get('driver_id', type=int) or 0
-
-            drivers_query = Driver.query.filter(
-                Driver.status == 'Active',
-                Driver.vehicle_id.isnot(None),
-            ).options(
-                joinedload(Driver.vehicle).joinedload(Vehicle.district),
-                joinedload(Driver.vehicle).joinedload(Vehicle.project),
-                joinedload(Driver.project),
-                joinedload(Driver.district),
-            ).outerjoin(Vehicle, Driver.vehicle_id == Vehicle.id)
-
-            if scope_projects:
-                drivers_query = drivers_query.filter(
-                    db.or_(Driver.project_id.in_(scope_projects),
-                           Vehicle.project_id.in_(scope_projects))
-                )
-            if scope_districts:
-                drivers_query = drivers_query.filter(
-                    db.or_(Driver.district_id.in_(scope_districts),
-                           Vehicle.district_id.in_(scope_districts))
-                )
-            if scope_vehicles:
-                drivers_query = drivers_query.filter(Driver.vehicle_id.in_(scope_vehicles))
-            if scope_shifts:
-                drivers_query = drivers_query.filter(Driver.shift.in_(scope_shifts))
-            drivers_query = drivers_query.filter(
-                db.or_(Driver.project_id == project_id, Vehicle.project_id == project_id)
+            payload = _build_driver_daily_attendance_report_payload(
+                month, year, project_id, district_id,
+                vehicle_id=vehicle_id,
+                driver_id_filter=driver_id_filter,
+                search=search,
+                scope_projects=scope_projects,
+                scope_districts=scope_districts,
+                scope_vehicles=scope_vehicles,
+                scope_shifts=scope_shifts,
             )
-            drivers_query = drivers_query.filter(
-                db.or_(Driver.district_id == district_id, Vehicle.district_id == district_id)
-            )
-            if vehicle_id:
-                drivers_query = drivers_query.filter(Driver.vehicle_id == vehicle_id)
-            if driver_id_filter:
-                drivers_query = drivers_query.filter(Driver.id == driver_id_filter)
-            if search:
-                flt = _multi_word_filter(search, Driver.name, Driver.driver_id, Vehicle.vehicle_no)
-                if flt is not None:
-                    drivers_query = drivers_query.filter(flt)
-
-            drivers = drivers_query.distinct().order_by(Driver.name).all()
-            _, ndays = monthrange(year, month)
-            start_d = date(year, month, 1)
-            end_d = date(year, month, ndays)
-            day_headers = [date(year, month, d) for d in range(1, ndays + 1)]
-            report_title = f'Day Wise Attendance — {start_d.strftime("%d-%b-%Y")} to {end_d.strftime("%d-%b-%Y")}'
-
-            driver_ids = [d.id for d in drivers]
-            att_by_driver = {did: [] for did in driver_ids}
-            if driver_ids:
-                att_rows = (
-                    DriverAttendance.query.options(
-                        joinedload(DriverAttendance.driver).joinedload(Driver.vehicle),
-                    )
-                    .filter(
-                        DriverAttendance.driver_id.in_(driver_ids),
-                        DriverAttendance.attendance_date >= start_d,
-                        DriverAttendance.attendance_date <= end_d,
-                    )
-                    .order_by(DriverAttendance.attendance_date, DriverAttendance.attendance_segment)
-                    .all()
-                )
-                for r in att_rows:
-                    if not _attendance_record_counts_in_report(r):
-                        continue
-                    att_by_driver[r.driver_id].append(r)
-
-            grand_totals = {s: 0 for s in status_columns}
-            for d in drivers:
-                grid = {}
-                status_totals = {s: 0 for s in status_columns}
-                for r in att_by_driver.get(d.id, []):
-                    day_num = r.attendance_date.day
-                    slot = _attendance_daily_slot_key(r)
-                    status = (r.status or '').strip()
-                    abbr = _attendance_status_abbr(status)
-                    if day_num not in grid:
-                        grid[day_num] = {}
-                    grid[day_num][slot] = {
-                        'v': abbr,
-                        'tip': _attendance_daily_cell_tooltip(r),
-                    }
-                    if status in status_totals:
-                        status_totals[status] += 1
-                        grand_totals[status] += 1
-                veh = d.vehicle
-                report.append({
-                    'driver': d,
-                    'district_name': (
-                        (d.district.name if d.district else None)
-                        or (veh.district.name if veh and veh.district else None)
-                        or '-'
-                    ),
-                    'project_name': (
-                        (d.project.name if d.project else None)
-                        or (veh.project.name if veh and veh.project else None)
-                        or '-'
-                    ),
-                    'vehicle_no': (veh.vehicle_no if veh else '-') or '-',
-                    'shift': (d.shift or '-') or '-',
-                    'driver_name': (d.name or '-') or '-',
-                    'days_in_month': ndays,
-                    'month_present_days': _count_month_present_days(grid),
-                    'grid': grid,
-                    'status_totals': status_totals,
-                })
+            if payload:
+                report = payload['report']
+                day_headers = payload['day_headers']
+                report_title = payload['report_title']
+                ndays = payload['ndays']
+                grand_totals = payload['grand_totals']
 
     district_options = [{'id': d.id, 'name': d.name} for d in (
         District.query.filter(District.id.in_(scope_districts)).order_by(District.name).all()

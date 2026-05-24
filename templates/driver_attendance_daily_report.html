@@ -1005,24 +1005,16 @@
   }
 
   function exportDailyExcel() {
-    var tbl = buildPrintTable() || document.getElementById('dailyReportTable');
-    if (!tbl) return;
-    var lines = [];
-    tbl.querySelectorAll('thead tr, tbody tr').forEach(function(tr) {
-      var cells = [];
-      tr.querySelectorAll('th, td').forEach(function(td) {
-        var txt = (td.textContent || '').replace(/\s+/g, ' ').trim();
-        cells.push('"' + txt.replace(/"/g, '""') + '"');
-      });
-      if (cells.length) lines.push(cells.join(','));
-    });
-    var blob = new Blob(['\ufeff' + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
-    var a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'Day_Wise_Attendance_Report.csv';
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(function() { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+    var form = document.getElementById('dailyReportForm');
+    if (!form) return;
+    var params = new URLSearchParams(new FormData(form));
+    var pid = params.get('project_id');
+    var did = params.get('district_id');
+    if (!pid || pid === '0' || !did || did === '0') {
+      alert('Pehle Project aur District select karein, phir Excel export karein.');
+      return;
+    }
+    window.location.href = '{{ url_for("driver_attendance_daily_report_export") }}?' + params.toString();
   }
 
   var exportWrap = document.getElementById('dailyReportExportButtons');
