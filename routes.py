@@ -20353,7 +20353,7 @@ def driver_attendance_daily_report():
     project_query = Project.query.filter(Project.company_id.isnot(None))
     if scope_projects:
         project_query = project_query.filter(Project.id.in_(scope_projects))
-    form.project_id.choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in project_query.order_by(Project.name).all()]
+    form.project_id.choices = [(0, '-- Select Project --')] + [(p.id, p.name) for p in project_query.order_by(Project.name).all()]
 
     if disable_project:
         form.project_id.data = scope_projects[0]
@@ -20370,17 +20370,17 @@ def driver_attendance_daily_report():
         if pid and pid != 0:
             districts_query = District.query.join(project_district).filter(project_district.c.project_id == pid)
         else:
-            districts_query = District.query
+            districts_query = District.query.filter(False)
         if scope_districts:
             districts_query = districts_query.filter(District.id.in_(scope_districts))
         districts = districts_query.order_by(District.name).all()
-        form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in districts]
+        form.district_id.choices = [(0, '-- Select District --')] + [(d.id, d.name) for d in districts]
     else:
-        districts_query = District.query
-        if scope_districts:
-            districts_query = districts_query.filter(District.id.in_(scope_districts))
-        districts = districts_query.order_by(District.name).all()
-        form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in districts]
+        form.district_id.choices = [(0, '-- Select District --')]
+        if disable_district and scope_districts:
+            districts_query = District.query.filter(District.id.in_(scope_districts))
+            districts = districts_query.order_by(District.name).all()
+            form.district_id.choices = [(0, '-- Select District --')] + [(d.id, d.name) for d in districts]
 
     today = pk_date()
     form.month.data = form.month.data or today.month
@@ -20389,6 +20389,7 @@ def driver_attendance_daily_report():
     report = []
     day_headers = []
     report_title = ''
+    filter_message = None
     selected_vehicle_id = 0
     vehicle_choices = []
     ndays = 0
@@ -20425,125 +20426,132 @@ def driver_attendance_daily_report():
     if request.method == 'POST' and form.validate_on_submit():
         month = form.month.data
         year = form.year.data
-        project_id = form.project_id.data or 0
-        if project_id == 0:
-            project_id = None
-        district_id = form.district_id.data or 0
-        if district_id == 0:
-            district_id = None
-        vehicle_id = request.form.get('vehicle_id', type=int) or 0
-        if vehicle_id == 0:
-            vehicle_id = None
-        search = (form.search.data or '').strip()
-        driver_id_filter = request.form.get('driver_id', type=int) or 0
+        project_id = int(form.project_id.data or 0)
+        district_id = int(form.district_id.data or 0)
+        if disable_project and scope_projects:
+            project_id = scope_projects[0]
+        if disable_district and scope_districts:
+            district_id = scope_districts[0]
 
-        drivers_query = Driver.query.filter(
-            Driver.status == 'Active',
-            Driver.vehicle_id.isnot(None),
-        ).options(
-            joinedload(Driver.vehicle).joinedload(Vehicle.district),
-            joinedload(Driver.vehicle).joinedload(Vehicle.project),
-            joinedload(Driver.project),
-            joinedload(Driver.district),
-        ).outerjoin(Vehicle, Driver.vehicle_id == Vehicle.id)
+        if not project_id or not district_id:
+            if not project_id and not district_id:
+                filter_message = 'Pehle Project aur District select karein, phir Show button dabayein.'
+            elif not project_id:
+                filter_message = 'Pehle Project select karein, phir Show button dabayein.'
+            else:
+                filter_message = 'Pehle District select karein, phir Show button dabayein.'
+        else:
+            vehicle_id = request.form.get('vehicle_id', type=int) or 0
+            if vehicle_id == 0:
+                vehicle_id = None
+            search = (form.search.data or '').strip()
+            driver_id_filter = request.form.get('driver_id', type=int) or 0
 
-        if scope_projects:
-            drivers_query = drivers_query.filter(
-                db.or_(Driver.project_id.in_(scope_projects),
-                       Vehicle.project_id.in_(scope_projects))
-            )
-        if scope_districts:
-            drivers_query = drivers_query.filter(
-                db.or_(Driver.district_id.in_(scope_districts),
-                       Vehicle.district_id.in_(scope_districts))
-            )
-        if scope_vehicles:
-            drivers_query = drivers_query.filter(Driver.vehicle_id.in_(scope_vehicles))
-        if scope_shifts:
-            drivers_query = drivers_query.filter(Driver.shift.in_(scope_shifts))
-        if project_id:
+            drivers_query = Driver.query.filter(
+                Driver.status == 'Active',
+                Driver.vehicle_id.isnot(None),
+            ).options(
+                joinedload(Driver.vehicle).joinedload(Vehicle.district),
+                joinedload(Driver.vehicle).joinedload(Vehicle.project),
+                joinedload(Driver.project),
+                joinedload(Driver.district),
+            ).outerjoin(Vehicle, Driver.vehicle_id == Vehicle.id)
+
+            if scope_projects:
+                drivers_query = drivers_query.filter(
+                    db.or_(Driver.project_id.in_(scope_projects),
+                           Vehicle.project_id.in_(scope_projects))
+                )
+            if scope_districts:
+                drivers_query = drivers_query.filter(
+                    db.or_(Driver.district_id.in_(scope_districts),
+                           Vehicle.district_id.in_(scope_districts))
+                )
+            if scope_vehicles:
+                drivers_query = drivers_query.filter(Driver.vehicle_id.in_(scope_vehicles))
+            if scope_shifts:
+                drivers_query = drivers_query.filter(Driver.shift.in_(scope_shifts))
             drivers_query = drivers_query.filter(
                 db.or_(Driver.project_id == project_id, Vehicle.project_id == project_id)
             )
-        if district_id:
             drivers_query = drivers_query.filter(
                 db.or_(Driver.district_id == district_id, Vehicle.district_id == district_id)
             )
-        if vehicle_id:
-            drivers_query = drivers_query.filter(Driver.vehicle_id == vehicle_id)
-        if driver_id_filter:
-            drivers_query = drivers_query.filter(Driver.id == driver_id_filter)
-        if search:
-            flt = _multi_word_filter(search, Driver.name, Driver.driver_id, Vehicle.vehicle_no)
-            if flt is not None:
-                drivers_query = drivers_query.filter(flt)
+            if vehicle_id:
+                drivers_query = drivers_query.filter(Driver.vehicle_id == vehicle_id)
+            if driver_id_filter:
+                drivers_query = drivers_query.filter(Driver.id == driver_id_filter)
+            if search:
+                flt = _multi_word_filter(search, Driver.name, Driver.driver_id, Vehicle.vehicle_no)
+                if flt is not None:
+                    drivers_query = drivers_query.filter(flt)
 
-        drivers = drivers_query.distinct().order_by(Driver.name).all()
-        _, ndays = monthrange(year, month)
-        start_d = date(year, month, 1)
-        end_d = date(year, month, ndays)
-        day_headers = [date(year, month, d) for d in range(1, ndays + 1)]
-        report_title = f'Day Wise Attendance — {start_d.strftime("%d-%b-%Y")} to {end_d.strftime("%d-%b-%Y")}'
+            drivers = drivers_query.distinct().order_by(Driver.name).all()
+            _, ndays = monthrange(year, month)
+            start_d = date(year, month, 1)
+            end_d = date(year, month, ndays)
+            day_headers = [date(year, month, d) for d in range(1, ndays + 1)]
+            report_title = f'Day Wise Attendance — {start_d.strftime("%d-%b-%Y")} to {end_d.strftime("%d-%b-%Y")}'
 
-        driver_ids = [d.id for d in drivers]
-        att_by_driver = {did: [] for did in driver_ids}
-        if driver_ids:
-            att_rows = (
-                DriverAttendance.query.options(
-                    joinedload(DriverAttendance.driver).joinedload(Driver.vehicle),
+            driver_ids = [d.id for d in drivers]
+            att_by_driver = {did: [] for did in driver_ids}
+            if driver_ids:
+                att_rows = (
+                    DriverAttendance.query.options(
+                        joinedload(DriverAttendance.driver).joinedload(Driver.vehicle),
+                    )
+                    .filter(
+                        DriverAttendance.driver_id.in_(driver_ids),
+                        DriverAttendance.attendance_date >= start_d,
+                        DriverAttendance.attendance_date <= end_d,
+                    )
+                    .order_by(DriverAttendance.attendance_date, DriverAttendance.attendance_segment)
+                    .all()
                 )
-                .filter(
-                    DriverAttendance.driver_id.in_(driver_ids),
-                    DriverAttendance.attendance_date >= start_d,
-                    DriverAttendance.attendance_date <= end_d,
-                )
-                .order_by(DriverAttendance.attendance_date, DriverAttendance.attendance_segment)
-                .all()
-            )
-            for r in att_rows:
-                if not _attendance_record_counts_in_report(r):
-                    continue
-                att_by_driver[r.driver_id].append(r)
+                for r in att_rows:
+                    if not _attendance_record_counts_in_report(r):
+                        continue
+                    att_by_driver[r.driver_id].append(r)
 
-        grand_totals = {s: 0 for s in status_columns}
-        for d in drivers:
-            grid = {}
-            status_totals = {s: 0 for s in status_columns}
-            for r in att_by_driver.get(d.id, []):
-                day_num = r.attendance_date.day
-                slot = _attendance_daily_slot_key(r)
-                status = (r.status or '').strip()
-                abbr = _attendance_status_abbr(status)
-                if day_num not in grid:
-                    grid[day_num] = {}
-                grid[day_num][slot] = {
-                    'v': abbr,
-                    'tip': _attendance_daily_cell_tooltip(r),
-                }
-                if status in status_totals:
-                    status_totals[status] += 1
-                    grand_totals[status] += 1
-            veh = d.vehicle
-            report.append({
-                'driver': d,
-                'district_name': (
-                    (d.district.name if d.district else None)
-                    or (veh.district.name if veh and veh.district else None)
-                    or '-'
-                ),
-                'project_name': (
-                    (d.project.name if d.project else None)
-                    or (veh.project.name if veh and veh.project else None)
-                    or '-'
-                ),
-                'vehicle_no': (veh.vehicle_no if veh else '-') or '-',
-                'shift': (d.shift or '-') or '-',
-                'driver_name': (d.name or '-') or '-',
-                'days_in_month': ndays,
-                'month_present_days': _count_month_present_days(grid),
-                'grid': grid,
-                'status_totals': status_totals,
-            })
+            grand_totals = {s: 0 for s in status_columns}
+            for d in drivers:
+                grid = {}
+                status_totals = {s: 0 for s in status_columns}
+                for r in att_by_driver.get(d.id, []):
+                    day_num = r.attendance_date.day
+                    slot = _attendance_daily_slot_key(r)
+                    status = (r.status or '').strip()
+                    abbr = _attendance_status_abbr(status)
+                    if day_num not in grid:
+                        grid[day_num] = {}
+                    grid[day_num][slot] = {
+                        'v': abbr,
+                        'tip': _attendance_daily_cell_tooltip(r),
+                    }
+                    if status in status_totals:
+                        status_totals[status] += 1
+                        grand_totals[status] += 1
+                veh = d.vehicle
+                report.append({
+                    'driver': d,
+                    'district_name': (
+                        (d.district.name if d.district else None)
+                        or (veh.district.name if veh and veh.district else None)
+                        or '-'
+                    ),
+                    'project_name': (
+                        (d.project.name if d.project else None)
+                        or (veh.project.name if veh and veh.project else None)
+                        or '-'
+                    ),
+                    'vehicle_no': (veh.vehicle_no if veh else '-') or '-',
+                    'shift': (d.shift or '-') or '-',
+                    'driver_name': (d.name or '-') or '-',
+                    'days_in_month': ndays,
+                    'month_present_days': _count_month_present_days(grid),
+                    'grid': grid,
+                    'status_totals': status_totals,
+                })
 
     district_options = [{'id': d.id, 'name': d.name} for d in (
         District.query.filter(District.id.in_(scope_districts)).order_by(District.name).all()
@@ -20576,6 +20584,7 @@ def driver_attendance_daily_report():
         district_options=district_options,
         grand_totals=grand_totals,
         status_columns=status_columns,
+        filter_message=filter_message,
     )
 
 

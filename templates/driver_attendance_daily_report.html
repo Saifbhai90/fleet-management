@@ -66,10 +66,7 @@
   .daily-attn-table .fc-6 {
     left: var(--daily-fc-6-left, 338px); width: var(--daily-fc-6-w, 130px); min-width: var(--daily-fc-6-w, 130px); max-width: var(--daily-fc-6-w, 130px);
     font-size: 0.88rem; font-weight: 700; z-index: 15;
-  }
-  .daily-attn-table .fc-7 {
-    left: var(--daily-fc-7-left, 468px); width: var(--daily-fc-7-w, 44px); min-width: var(--daily-fc-7-w, 44px); max-width: var(--daily-fc-7-w, 44px);
-    text-align: center; box-shadow: 2px 0 6px rgba(0,0,0,0.06); z-index: 16;
+    box-shadow: 2px 0 6px rgba(0,0,0,0.06);
   }
   .daily-attn-table thead .fc-1 { z-index: 20; }
   .daily-attn-table thead .fc-2 { z-index: 21; }
@@ -77,9 +74,7 @@
   .daily-attn-table thead .fc-4 { z-index: 23; }
   .daily-attn-table thead .fc-5 { z-index: 24; }
   .daily-attn-table thead .fc-6 { z-index: 25; }
-  .daily-attn-table thead .fc-7 { z-index: 26; }
   .daily-attn-table tfoot .fc-1 { z-index: 17; }
-  .daily-attn-table tfoot .fc-7 { z-index: 17; }
   .daily-attn-table .day-col { width: 16px; min-width: 16px; max-width: 16px; white-space: nowrap; padding: 1px 2px; font-size: 0.74rem; }
   .daily-attn-table .sum-col {
     width: 36px; min-width: 36px; max-width: 42px;
@@ -87,19 +82,11 @@
     white-space: nowrap; padding: 2px 3px; font-size: 0.72rem;
     border-left: 1px solid #bae6fd;
   }
-  .daily-attn-table thead .days-total-hdr,
-  .daily-attn-table tbody .days-total,
-  .daily-attn-table tfoot .days-total {
-    background: #fef3c7 !important; color: #92400e !important; font-weight: 700;
-    border: 1px solid #fcd34d !important;
-  }
-  .daily-attn-table thead .days-total-hdr { border-bottom: 1px solid #fcd34d !important; }
   .daily-attn-table .frozen-col {
     position: sticky; background: var(--daily-frozen-bg); text-align: left; font-weight: 600;
     box-shadow: 2px 0 4px rgba(0,0,0,0.04);
   }
   .daily-attn-table thead .frozen-col { background: #134e4a; color: #fff; }
-  .daily-attn-table thead .frozen-col.days-total-hdr { background: #fef3c7 !important; color: #92400e !important; }
   .daily-attn-table thead .sum-col { background: #0369a1; color: #fff; border-left-color: #0284c7; }
   .daily-attn-table tbody tr:nth-child(even) td:not(.frozen-col):not(.sum-col) { background: #fafafa; }
   .daily-attn-table tbody tr:nth-child(even) td.sum-col { background: #dbeafe; }
@@ -175,6 +162,7 @@
   }
   .daily-legend-note i { color: #0f766e; font-size: 0.85rem; }
   #dailyReportExportButtons .btn { min-width: 118px; }
+  .daily-filter-required { color: #dc2626; }
 </style>
 
 <div class="container-fluid daily-attn-page">
@@ -185,6 +173,12 @@
 
   <div class="card filter-card mb-4 no-print">
     <div class="card-body">
+      <div id="dailyFilterClientAlert" class="alert alert-warning py-2 d-none" role="alert"></div>
+      {% if filter_message %}
+      <div class="alert alert-warning py-2 mb-3" role="alert">
+        <i class="bi bi-exclamation-triangle me-1"></i>{{ filter_message }}
+      </div>
+      {% endif %}
       <form method="post" action="{{ url_for('driver_attendance_daily_report') }}" id="dailyReportForm">
         {{ form.hidden_tag() }}
         <div class="row g-3 align-items-end">
@@ -197,7 +191,7 @@
             <input type="number" name="year" class="form-control form-control-sm" min="2020" max="2030" value="{{ form.year.data or '' }}" required>
           </div>
           <div class="col-md-2 col-lg-2">
-            <label class="form-label">Project</label>
+            <label class="form-label">Project <span class="daily-filter-required">*</span></label>
             <select name="project_id" id="dailyProjectSelect" class="form-select form-select-sm search-select" {% if disable_project %}disabled{% endif %}>
               {% for val, label in form.project_id.choices %}
               <option value="{{ val }}" {% if form.project_id.data == val %}selected{% endif %}>{{ label }}</option>
@@ -206,7 +200,7 @@
             {% if disable_project %}<input type="hidden" name="project_id" value="{{ form.project_id.data or 0 }}">{% endif %}
           </div>
           <div class="col-md-2 col-lg-2">
-            <label class="form-label">District</label>
+            <label class="form-label">District <span class="daily-filter-required">*</span></label>
             <select name="district_id" id="dailyDistrictSelect" class="form-select form-select-sm search-select" {% if disable_district %}disabled{% endif %}>
               {% for val, label in form.district_id.choices %}
               <option value="{{ val }}" {% if form.district_id.data == val %}selected{% endif %}>{{ label }}</option>
@@ -265,18 +259,17 @@
             <th rowspan="2" class="frozen-col fc-4 info-col" data-ft-col="3">Vehicle</th>
             <th rowspan="2" class="frozen-col fc-5 info-col" data-ft-col="4">Shift</th>
             <th rowspan="2" class="frozen-col fc-6 info-col" data-ft-col="5">Driver</th>
-            <th rowspan="2" class="frozen-col fc-7 days-total-hdr no-ft-filter info-col">Days</th>
             {% for d in day_headers %}
             <th colspan="2" class="date-hdr no-ft-filter">{{ '%02d'|format(d.day) }}</th>
             {% endfor %}
             {% for st in status_columns %}
-            <th rowspan="2" class="sum-col" data-ft-col="{{ 7 + (day_headers|length * 2) + loop.index0 }}">{{ st }}</th>
+            <th rowspan="2" class="sum-col" data-ft-col="{{ 6 + (day_headers|length * 2) + loop.index0 }}">{{ st }}</th>
             {% endfor %}
           </tr>
           <tr class="hdr-row-2">
             {% for d in day_headers %}
-            <th class="day-col" data-ft-col="{{ 7 + (d.day - 1) * 2 }}">M</th>
-            <th class="day-col" data-ft-col="{{ 8 + (d.day - 1) * 2 }}">E</th>
+            <th class="day-col" data-ft-col="{{ 6 + (d.day - 1) * 2 }}">M</th>
+            <th class="day-col" data-ft-col="{{ 7 + (d.day - 1) * 2 }}">E</th>
             {% endfor %}
           </tr>
         </thead>
@@ -295,7 +288,6 @@
                 </span>
               </div>
             </td>
-            <td class="frozen-col fc-7 days-total info-col">{{ row.days_in_month }}</td>
             {% for d in day_headers %}
             {% set day_num = d.day %}
             {% set day_cells = row.grid.get(day_num, {}) %}
@@ -316,7 +308,7 @@
         </tbody>
         <tfoot>
           <tr>
-            <td class="frozen-col fc-1" colspan="7" style="text-align:left;">Total</td>
+            <td class="frozen-col fc-1" colspan="6" style="text-align:left;">Total</td>
             {% for d in day_headers %}
             <td class="day-col day-foot" data-day="{{ d.day }}" data-slot="M">0</td>
             <td class="day-col day-foot" data-day="{{ d.day }}" data-slot="E">0</td>
@@ -369,21 +361,16 @@
             <span>Off</span>
           </span>
         </div>
-        <span class="daily-legend-sep" aria-hidden="true"></span>
-        <span class="daily-legend-item" role="listitem">
-          <span class="daily-legend-badge daily-legend-badge--days" aria-hidden="true">D</span>
-          <span>Days in month</span>
-        </span>
       </div>
       <p class="daily-legend-note mb-0">
         <i class="bi bi-info-circle" aria-hidden="true"></i>
-        <span>Colored badges match grid cells · Driver score = present days / month days · Hover a cell for check-in/out · Days = calendar days in month</span>
+        <span>Colored badges match grid cells · Driver (2/31) = present days / days in month · Hover a cell for check-in/out times</span>
       </p>
     </div>
   </div>
-  {% else %}
+  {% elif not filter_message %}
   <div class="alert alert-info border-0 no-print">
-    <i class="bi bi-info-circle me-2"></i>Month, year aur filters select karke <strong>Show</strong> dabayein — day-wise M/E grid dikhegi.
+    <i class="bi bi-info-circle me-2"></i>Month, year select karein, <strong>Project</strong> aur <strong>District</strong> lazmi hain — phir <strong>Show</strong> dabayein.
   </div>
   {% endif %}
 </div>
@@ -406,7 +393,7 @@
   function fillDistrictOptions(list) {
     if (!districtSelect) return;
     var cur = districtSelect.value;
-    districtSelect.innerHTML = '<option value="0">-- All Districts --</option>';
+    districtSelect.innerHTML = '<option value="0">-- Select District --</option>';
     list.forEach(function(d) {
       var opt = document.createElement('option');
       opt.value = d.id;
@@ -419,11 +406,11 @@
   function loadDistricts(projectId) {
     if (hasSingle || !districtSelect) return;
     if (!projectId || projectId === '0') {
-      fillDistrictOptions(allDistricts);
+      fillDistrictOptions([]);
       loadVehicles();
       return;
     }
-    districtSelect.innerHTML = '<option value="0">-- All Districts --</option>';
+    districtSelect.innerHTML = '<option value="0">-- Select District --</option>';
     fetch('/api/filter/districts-by-project?project_id=' + projectId)
       .then(function(r) { return r.json(); })
       .then(function(districts) {
@@ -475,6 +462,49 @@
   if (districtSelect) districtSelect.addEventListener('change', function() { loadVehicles(); refreshDriverDropdown(); });
   if (vehicleSelect) vehicleSelect.addEventListener('change', refreshDriverDropdown);
 
+  function dailyFilterProjectId() {
+    if (!projectSelect) return '0';
+    var hidden = document.querySelector('input[type="hidden"][name="project_id"]');
+    if (projectSelect.disabled && hidden) return hidden.value || '0';
+    return projectSelect.value || '0';
+  }
+
+  function dailyFilterDistrictId() {
+    if (!districtSelect) return '0';
+    var hidden = document.querySelector('input[type="hidden"][name="district_id"]');
+    if (districtSelect.disabled && hidden) return hidden.value || '0';
+    return districtSelect.value || '0';
+  }
+
+  var dailyReportForm = document.getElementById('dailyReportForm');
+  var dailyFilterClientAlert = document.getElementById('dailyFilterClientAlert');
+  if (dailyReportForm) {
+    dailyReportForm.addEventListener('submit', function(e) {
+      var pid = dailyFilterProjectId();
+      var did = dailyFilterDistrictId();
+      var msg = '';
+      if ((!pid || pid === '0') && (!did || did === '0')) {
+        msg = 'Pehle Project aur District select karein, phir Show button dabayein.';
+      } else if (!pid || pid === '0') {
+        msg = 'Pehle Project select karein, phir Show button dabayein.';
+      } else if (!did || did === '0') {
+        msg = 'Pehle District select karein, phir Show button dabayein.';
+      }
+      if (msg) {
+        e.preventDefault();
+        if (dailyFilterClientAlert) {
+          dailyFilterClientAlert.innerHTML = '<i class="bi bi-exclamation-triangle me-1"></i>' + msg;
+          dailyFilterClientAlert.classList.remove('d-none');
+          dailyFilterClientAlert.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        } else {
+          alert(msg);
+        }
+      } else if (dailyFilterClientAlert) {
+        dailyFilterClientAlert.classList.add('d-none');
+      }
+    });
+  }
+
   function syncStickyHeaderHeight() {
     var tbl = document.getElementById('dailyReportTable');
     if (!tbl) return;
@@ -508,8 +538,7 @@
       { cls: 'fc-3', min: 60, max: 110 },
       { cls: 'fc-4', min: 68, max: 100 },
       { cls: 'fc-5', min: 56, max: 92 },
-      { cls: 'fc-6', min: 110, max: 220 },
-      { cls: 'fc-7', min: 44, max: 56 }
+      { cls: 'fc-6', min: 110, max: 220 }
     ];
     var pad = 12;
     var left = 0;
