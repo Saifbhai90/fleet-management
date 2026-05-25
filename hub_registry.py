@@ -362,7 +362,9 @@ def build_hub_sections(slug, can_see_page_fn, is_master=False):
             elif perm and not can_see_page_fn(perm):
                 continue
             try:
-                href = url_for(it['route'], **it.get('kwargs', {}))
+                kwargs = dict(it.get('kwargs', {}))
+                kwargs['nav_from'] = f'hub:{slug}'
+                href = url_for(it['route'], **kwargs)
             except Exception:
                 from flask import current_app
                 current_app.logger.warning(

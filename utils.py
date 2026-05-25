@@ -255,3 +255,29 @@ def load_driver_profile_share_token(secret_key: str, token: str) -> Optional[int
         return int(d) if d is not None else None
     except (BadSignature, SignatureExpired, TypeError, ValueError, Exception):
         return None
+
+
+def user_profile_avatar_path(user) -> Optional[str]:
+    """
+    Profile photo for sidebar / account: linked driver's photo_path when
+    login username matches driver CNIC (same logic as account profile page).
+    """
+    if user is None:
+        return None
+    try:
+        from models import Driver
+        from sqlalchemy import func
+    except Exception:
+        return None
+    uname = (getattr(user, 'username', None) or '').strip()
+    if not uname:
+        return None
+    variants = [uname]
+    digits = re.sub(r'\D', '', uname)
+    if len(digits) == 13:
+        variants.append(digits[:5] + '-' + digits[5:12] + '-' + digits[12:])
+    for c in variants:
+        drv = Driver.query.filter(func.lower(Driver.cnic_no) == c.lower()).first()
+        if drv and getattr(drv, 'photo_path', None):
+            return drv.photo_path
+    return None

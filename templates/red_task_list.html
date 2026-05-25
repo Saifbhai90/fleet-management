@@ -3,7 +3,11 @@
 {% block content %}
 <div class="container-fluid">
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
-    <h2 class="mb-0"><i class="bi bi-exclamation-triangle-fill me-2 text-danger"></i>Red Task Report</h2>
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+      {% from 'partials/nav_back_button.html' import nav_back_button %}
+      {{ nav_back_button() }}
+      <h2 class="mb-0"><i class="bi bi-exclamation-triangle-fill me-2 text-danger"></i>Red Task Report</h2>
+    </div>
     <div class="d-flex align-items-center gap-2 flex-wrap">
       <a href="{{ url_for('red_task_summary', from_date=from_date.strftime('%d-%m-%Y'), to_date=to_date.strftime('%d-%m-%Y'), district_id=form.district_id.data or 0, project_id=form.project_id.data or 0, show=1) }}" class="btn btn-outline-danger btn-sm" title="Summary by district / project">
         <i class="bi bi-pie-chart-fill me-1"></i>Red Task Summary

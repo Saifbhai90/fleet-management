@@ -3,12 +3,10 @@
 {% block content %}
 <div class="container-fluid">
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
-    <h2 class="mb-0"><i class="bi bi-journal-bookmark me-2 text-primary"></i>Workbook Upload Log</h2>
-    <div class="d-flex gap-2">
-      <a href="{{ url_for('task_report_upload') }}" class="btn btn-outline-primary btn-sm">
-        <i class="bi bi-cloud-upload me-1"></i>New Upload
-      </a>
-      <a href="{{ url_for('task_report_list') }}" class="btn btn-outline-secondary btn-sm">Daily Task Report</a>
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+      {% from 'partials/nav_back_button.html' import nav_back_button %}
+      {{ nav_back_button() }}
+      <h2 class="mb-0"><i class="bi bi-journal-bookmark me-2 text-primary"></i>Workbook Upload Log</h2>
     </div>
   </div>
 
@@ -16,6 +14,8 @@
     <div class="card-body">
       <p class="text-muted small mb-3">Yeh list database mein save imported rows se banai jaati hai (EmergencyTaskReport, Vehicle Mileage, Tracker Activity). Har workbook ka asal Excel file server par store nahi hota — filename sirf activity import ke liye maujood hai.</p>
       <form method="get" action="{{ url_for('task_report_upload_list') }}" class="row g-3 align-items-end">
+        {% from 'partials/nav_back_button.html' import nav_from_hidden %}
+        {{ nav_from_hidden() }}
         <div class="col-md-2">
           <label class="form-label">From Date</label>
           {{ form.from_date(class="form-control datepicker") }}

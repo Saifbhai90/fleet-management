@@ -468,67 +468,61 @@
 
             {% if can_see_page('task_report_list') %}
 
-            {{ report_link(url_for('task_report_list'), 'fa-solid fa-calendar-day', 'Vehicles Daily Task Report', 'rc-tile--daily-task') }}
-
-            {% endif %}
-
-            {% if can_see_page('task_report_entry') or can_see_page('task_report_add') %}
-
-            {{ report_link(url_for('task_report_new'), 'fa-solid fa-plus-circle', 'New Task Entry', 'rc-tile--new-task') }}
+            {{ report_link(url_for('task_report_list', nav_from='reports'), 'fa-solid fa-calendar-day', 'Vehicles Daily Task Report', 'rc-tile--daily-task') }}
 
             {% endif %}
 
             {% if can_see_page('red_task_list') %}
 
-            {{ report_link(url_for('red_task_list'), 'fa-solid fa-flag', 'Red Task Justification', 'rc-tile--red-task') }}
+            {{ report_link(url_for('red_task_list', nav_from='reports'), 'fa-solid fa-flag', 'Red Task Justification', 'rc-tile--red-task') }}
 
             {% endif %}
 
             {% if can_see_page('without_task_list') %}
 
-            {{ report_link(url_for('without_task_list'), 'fa-solid fa-circle-stop', 'Vehicle Move Without Task', 'rc-tile--no-task') }}
+            {{ report_link(url_for('without_task_list', nav_from='reports'), 'fa-solid fa-circle-stop', 'Vehicle Move Without Task', 'rc-tile--no-task') }}
 
             {% endif %}
 
             {% if can_see_page('speed_monitoring_report') %}
 
-            {{ report_link(url_for('speed_monitoring_report'), 'fa-solid fa-gauge-high', 'Speed Monitoring Report', 'rc-tile--speed') }}
+            {{ report_link(url_for('speed_monitoring_report', nav_from='reports'), 'fa-solid fa-gauge-high', 'Speed Monitoring Report', 'rc-tile--speed') }}
 
             {% endif %}
 
             {% if can_see_page('mileage_report') %}
 
-            {{ report_link(url_for('mileage_report'), 'fa-solid fa-route', 'Mileage Report', 'rc-tile--mileage') }}
+            {{ report_link(url_for('mileage_report', nav_from='reports'), 'fa-solid fa-route', 'Mileage Report', 'rc-tile--mileage') }}
 
             {% endif %}
 
             {% if can_see_page('tracker_difference_report') %}
 
-            {{ report_link(url_for('tracker_difference_report'), 'fa-solid fa-tower-broadcast', 'Tracker Difference Report', 'rc-tile--tracker') }}
+            {{ report_link(url_for('tracker_difference_report', nav_from='reports'), 'fa-solid fa-tower-broadcast', 'Tracker Difference Report', 'rc-tile--tracker') }}
 
             {% endif %}
 
             {% if can_see_page('unauthorized_movement_report') %}
 
-            {{ report_link(url_for('unauthorized_movement_report'), 'fa-solid fa-triangle-exclamation', 'Unauthorized Movement Report', 'rc-tile--unauthorized') }}
+            {{ report_link(url_for('unauthorized_movement_report', nav_from='reports'), 'fa-solid fa-triangle-exclamation', 'Unauthorized Movement Report', 'rc-tile--unauthorized') }}
 
             {% endif %}
 
             {% if can_see_page('task_start_delay_report') %}
 
-            {{ report_link(url_for('task_start_delay_report'), 'fa-solid fa-hourglass-half', 'Driver Response Time Report', 'rc-tile--response') }}
+            {{ report_link(url_for('task_start_delay_report', nav_from='reports'), 'fa-solid fa-hourglass-half', 'Driver Response Time Report', 'rc-tile--response') }}
 
             {% endif %}
 
             {% if can_see_page('task_turnaround_report') %}
 
-            {{ report_link(url_for('task_turnaround_report'), 'fa-solid fa-arrows-rotate', 'Task Turnaround Report', 'rc-tile--turnaround') }}
+            {{ report_link(url_for('task_turnaround_report', nav_from='reports'), 'fa-solid fa-arrows-rotate', 'Task Turnaround Report', 'rc-tile--turnaround') }}
 
             {% endif %}
 
             {% if can_see_page('unexecuted_task_report') %}
 
-            {{ report_link(url_for('unexecuted_task_report'), 'fa-solid fa-circle-xmark', 'Unexecuted Task Report', 'rc-tile--unexecuted') }}
+            {{ report_link(url_for('unexecuted_task_report', nav_from='reports'), 'fa-solid fa-circle-xmark', 'Unexecuted Task Report', 'rc-tile--unexecuted') }}
 
             {% endif %}
 
@@ -550,35 +544,7 @@
 
             {% if can_see_page('task_report_logbook_cover') %}
 
-            {{ report_link(url_for('task_report_logbook_cover'), 'fa-solid fa-book-open', 'Logbook Cover Pages', 'rc-tile--logbook') }}
-
-            {% endif %}
-
-          </div>
-
-        </div>
-
-        {% endif %}
-
-        <!-- Workbook Upload -->
-
-        {% if rc.task_upload_col %}
-
-        <div class="col-lg-4 col-md-6 mb-4 rc-report-col">
-
-          <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2"><i class="bi bi-cloud-upload me-1"></i>Workbook Upload</h6>
-
-          <div class="list-group list-group-flush report-link-group">
-
-            {% if can_see_page('task_report_upload') %}
-
-            {{ report_link(url_for('task_report_upload'), 'fa-solid fa-cloud-arrow-up', 'Upload Workbooks (Admin)', 'rc-tile--upload') }}
-
-            {% endif %}
-
-            {% if can_see_page('task_report_upload') or can_see_page('task_report_upload_list') %}
-
-            {{ report_link(url_for('task_report_upload_list'), 'fa-solid fa-file-shield', 'Workbook Upload Log', 'rc-tile--upload-log') }}
+            {{ report_link(url_for('task_report_logbook_cover', nav_from='reports'), 'fa-solid fa-book-open', 'Logbook Cover Pages', 'rc-tile--logbook') }}
 
             {% endif %}
 
@@ -674,15 +640,15 @@
 
             {% if can_see_page('driver_attendance_report') %}
 
-            {{ report_link(url_for('driver_attendance_report'), 'fa-solid fa-calendar-check', 'Monthly Attendance Report', 'rc-tile--monthly-att', 'Monthly driver attendance summary') }}
+            {{ report_link(url_for('driver_attendance_report', nav_from='reports'), 'fa-solid fa-calendar-check', 'Monthly Attendance Report', 'rc-tile--monthly-att', 'Monthly driver attendance summary') }}
 
-            {{ report_link(url_for('driver_attendance_daily_report'), 'fa-solid fa-calendar-days', 'Day Wise Attendance Report', 'rc-tile--daily-att', 'Daily M/E grid — complete check-in + check-out only') }}
+            {{ report_link(url_for('driver_attendance_daily_report', nav_from='reports'), 'fa-solid fa-calendar-days', 'Day Wise Attendance Report', 'rc-tile--daily-att', 'Daily M/E grid — complete check-in + check-out only') }}
 
             {% endif %}
 
             {% if can_see_page('driver_attendance_tra_report') %}
 
-            {{ report_link(url_for('driver_attendance_tra_report'), 'fa-solid fa-table-list', 'TRA Attendance Sheet', 'rc-tile--tra-att') }}
+            {{ report_link(url_for('driver_attendance_tra_report', nav_from='reports'), 'fa-solid fa-table-list', 'TRA Attendance Sheet', 'rc-tile--tra-att') }}
 
             {% endif %}
 

@@ -1,0 +1,9 @@
+{% macro nav_back_button(extra_class='') %}
+{% if nav_back_url %}
+<a href="{{ nav_back_url }}" class="fm-page-back hub-back {{ extra_class }}"><i class="bi bi-arrow-left"></i> {{ nav_back_label|default('Back') }}</a>
+{% endif %}
+{% endmacro %}
+
+{% macro nav_from_hidden() %}
+{% if nav_from %}<input type="hidden" name="nav_from" value="{{ nav_from|e }}">{% endif %}
+{% endmacro %}

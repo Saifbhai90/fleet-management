@@ -44,9 +44,8 @@
 <div class="container-fluid mark-att-page">
   <div class="page-header d-flex flex-wrap justify-content-between align-items-center">
     <h1 class="page-title mb-0"><i class="bi bi-pencil-square me-2 text-success"></i>Leave / Late / Half Day / Off</h1>
-    <a href="{{ url_for('driver_attendance_list') }}?date={{ view_date.strftime('%d-%m-%Y') }}{% if project_id %}&project_id={{ project_id }}{% endif %}{% if district_id %}&district_id={{ district_id }}{% endif %}{% if search %}&search={{ search|e }}{% endif %}" class="btn btn-outline-primary">
-      <i class="bi bi-arrow-left me-1"></i>Back to List
-    </a>
+    {% from 'partials/nav_back_button.html' import nav_back_button %}
+    {{ nav_back_button() }}
   </div>
 
   <div class="card shadow-sm border-0 mb-4 mark-att-filter">
@@ -127,6 +126,8 @@
   </div>
 
   <form method="post" action="{{ url_for('driver_attendance_mark') }}" enctype="multipart/form-data">
+    {% from 'partials/nav_back_button.html' import nav_from_hidden %}
+    {{ nav_from_hidden() }}
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="save_attendance" value="1">
     <input type="hidden" name="attendance_date" value="{{ view_date.strftime('%d-%m-%Y') }}">

@@ -78,6 +78,20 @@ html.capacitor-native .sb-drawer-profile {
   font-size: 1.35rem;
   flex-shrink: 0;
   box-shadow: 0 4px 14px rgba(14, 165, 233, 0.35);
+  overflow: hidden;
+}
+
+.sb-drawer-avatar--photo {
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  background: #e2e8f0;
+}
+
+.sb-drawer-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .sb-drawer-name {

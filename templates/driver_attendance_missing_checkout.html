@@ -35,9 +35,8 @@
       <a href="{{ url_for('driver_attendance_missing_checkout') }}?date={{ view_date.strftime('%d-%m-%Y') }}{% if project_id %}&project_id={{ project_id }}{% endif %}{% if district_id %}&district_id={{ district_id }}{% endif %}{% if duty_shift_filter %}&duty_shift={{ duty_shift_filter|e }}{% endif %}&export=excel" class="btn btn-success btn-sm" title="Export to Excel"><i class="bi bi-file-earmark-excel me-1"></i>Excel</a>
       <button type="button" class="btn btn-outline-secondary btn-sm" title="Print Preview" onclick="printPreview()"><i class="bi bi-printer me-1"></i>Print</button>
       {% endif %}
-      <a href="{{ url_for('driver_attendance_list') }}?date={{ view_date.strftime('%d-%m-%Y') }}{% if project_id %}&project_id={{ project_id }}{% endif %}{% if district_id %}&district_id={{ district_id }}{% endif %}{% if search %}&search={{ search|e }}{% endif %}" class="btn btn-outline-primary btn-sm">
-        <i class="bi bi-arrow-left me-1"></i>Back to List
-      </a>
+      {% from 'partials/nav_back_button.html' import nav_back_button %}
+      {{ nav_back_button() }}
     </div>
   </div>
 
@@ -48,6 +47,8 @@
     </div>
     <div class="card-body">
       <form method="get" action="{{ url_for('driver_attendance_missing_checkout') }}" id="filterForm" class="row g-2 align-items-end">
+        {% from 'partials/nav_back_button.html' import nav_from_hidden %}
+        {{ nav_from_hidden() }}
         <input type="hidden" name="project_id" id="hiddenProjectId" value="{{ project_id or '' }}">
         <input type="hidden" name="district_id" id="hiddenDistrictId" value="{{ district_id or '' }}">
         <input type="hidden" name="vehicle_id" id="hiddenVehicleId" value="{{ vehicle_id or '' }}">

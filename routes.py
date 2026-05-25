@@ -1019,7 +1019,22 @@ def _driver_attendance_mark_redirect_url():
         v = request.form.get(k) or request.args.get(k)
         if v is not None and str(v).strip() not in ('', '0'):
             params[k] = v
-    return url_for('driver_attendance_mark', **params)
+    return url_for('driver_attendance_mark', **_preserve_nav_from(params))
+
+
+def _nav_back_ctx(default_url, default_label='Back', show_without_nav_from=False):
+    from nav_back import nav_back_context
+    return nav_back_context(default_url, default_label, show_without_nav_from=show_without_nav_from)
+
+
+def _preserve_nav_from(params=None):
+    from nav_back import preserve_nav_from
+    return preserve_nav_from(params)
+
+
+def _resolve_nav_back_url(default_url):
+    from nav_back import get_nav_from, resolve_nav_back
+    return resolve_nav_back(get_nav_from(), default_url, 'Back')[0]
 
 
 def _attendance_list_manual_checkout_allowed():
@@ -3739,18 +3754,8 @@ def reminder_toggle(pk):
 
 def _user_profile_avatar_path(user):
     """Driver photo_path when login username matches driver CNIC (same variants as login)."""
-    uname = (user.username or '').strip()
-    if not uname:
-        return None
-    variants = [uname]
-    digits = re.sub(r'\D', '', uname)
-    if len(digits) == 13:
-        variants.append(digits[:5] + '-' + digits[5:12] + '-' + digits[12:])
-    for c in variants:
-        drv = Driver.query.filter(func.lower(Driver.cnic_no) == c.lower()).first()
-        if drv and getattr(drv, 'photo_path', None):
-            return drv.photo_path
-    return None
+    from utils import user_profile_avatar_path
+    return user_profile_avatar_path(user)
 
 
 @app.route('/account/profile')
@@ -13268,6 +13273,7 @@ def speed_monitoring_report():
         project_choices=project_choices,
         district_choices=district_choices,
         vehicle_choices=vehicle_choices,
+        **_nav_back_ctx(url_for('reports_index'), show_without_nav_from=True),
     )
 
 
@@ -13620,6 +13626,7 @@ def mileage_report():
         project_choices=project_choices,
         district_choices=district_choices,
         vehicle_choices=vehicle_choices,
+        **_nav_back_ctx(url_for('reports_index'), show_without_nav_from=True),
     )
 
 
@@ -14355,6 +14362,7 @@ def unauthorized_movement_report():
         project_choices=project_choices,
         district_choices=district_choices,
         vehicle_choices=vehicle_choices,
+        **_nav_back_ctx(url_for('reports_index'), show_without_nav_from=True),
     )
 
 
@@ -14783,6 +14791,7 @@ def task_start_delay_report():
         from_date=from_date, to_date=to_date, project_id=project_id, district_id=district_id, vehicle_id=vehicle_id,
         check_type=check_type, delay_limit=delay_limit_raw,
         project_choices=project_choices, district_choices=district_choices, vehicle_choices=vehicle_choices,
+        **_nav_back_ctx(url_for('reports_index'), show_without_nav_from=True),
     )
 
 
@@ -15126,6 +15135,7 @@ def task_turnaround_report():
         from_date=from_date, to_date=to_date, project_id=project_id, district_id=district_id, vehicle_id=vehicle_id,
         check_type=check_type, duration_limit=duration_limit_raw,
         project_choices=project_choices, district_choices=district_choices, vehicle_choices=vehicle_choices,
+        **_nav_back_ctx(url_for('reports_index'), show_without_nav_from=True),
     )
 
 
@@ -15400,6 +15410,7 @@ def tracker_difference_report():
         project_choices=project_choices,
         district_choices=district_choices,
         vehicle_choices=vehicle_choices,
+        **_nav_back_ctx(url_for('reports_index'), show_without_nav_from=True),
     )
 
 
@@ -16875,6 +16886,7 @@ def driver_attendance_list():
         can_att_list_manual_checkout=can_att_list_manual_checkout,
         can_att_list_manual_edit=can_att_list_manual_edit,
         can_att_list_manual_delete=can_att_list_manual_delete,
+        **_nav_back_ctx(url_for('module_hub', hub_slug='attendance')),
     )
 
 
@@ -17703,6 +17715,7 @@ def driver_attendance_mark():
         disable_district=disable_district,
         driver_history=driver_history,
         mark_clearable=mark_clearable,
+        **_nav_back_ctx(_driver_attendance_mark_redirect_url(), show_without_nav_from=True),
     )
 
 
@@ -17972,6 +17985,7 @@ def driver_attendance_bulk_off():
         last_bulk_action=last_bulk_action,
         bulk_history=bulk_history,
         status_choices=ATTENDANCE_STATUS_CHOICES,
+        **_nav_back_ctx(url_for('driver_attendance_list'), show_without_nav_from=True),
     )
 
 
@@ -18128,6 +18142,7 @@ def driver_attendance_pending():
         disable_vehicle=disable_vehicle,
         disable_shift=disable_shift,
         checked_in_vehicle_count=checked_in_vehicle_count,
+        **_nav_back_ctx(url_for('driver_attendance_list', date=view_date.strftime('%d-%m-%Y')), show_without_nav_from=True),
     )
 
 
@@ -18323,6 +18338,7 @@ def driver_attendance_missing_checkout():
         disable_district=disable_district,
         disable_vehicle=disable_vehicle,
         disable_shift=disable_shift,
+        **_nav_back_ctx(url_for('driver_attendance_list', date=view_date.strftime('%d-%m-%Y')), show_without_nav_from=True),
     )
 
 
@@ -18426,10 +18442,11 @@ def driver_attendance_manual_checkin():
         driver=driver,
         view_date=view_date,
         back_url=back_url,
-        back_params={k: v for k, v in back_params.items() if k != 'back_to'},
+        back_params=_preserve_nav_from({k: v for k, v in back_params.items() if k != 'back_to'}),
         edit_mode=bool(edit_rec),
         edit_rec=edit_rec,
         back_to=back_to,
+        **_nav_back_ctx(back_url, show_without_nav_from=True),
     )
 
     if request.method == 'POST':
@@ -18579,10 +18596,11 @@ def driver_attendance_manual_checkout():
         rec=rec,
         view_date=view_date,
         back_url=back_url,
-        back_params={k: v for k, v in back_params.items() if k != 'back_to'},
+        back_params=_preserve_nav_from({k: v for k, v in back_params.items() if k != 'back_to'}),
         allow_future_checkout=allow_future,
         back_to=back_to,
         checkout_edit_mode=checkout_edit_mode,
+        **_nav_back_ctx(back_url, show_without_nav_from=True),
     )
 
     if request.method == 'POST':
@@ -19944,7 +19962,9 @@ def driver_attendance_checkin():
         scope_shifts_list=scope_shifts_list,
         all_vehicles_by_project=all_vehicles_by_project,
         geofence_radius=_geofence_radius,
-        geofence_enabled=_geofence_enabled)
+        geofence_enabled=_geofence_enabled,
+        **_nav_back_ctx(url_for('driver_attendance_list'), show_without_nav_from=True),
+    )
 
 
 @app.route('/driver-attendance/checkout', methods=['GET', 'POST'])
@@ -20118,7 +20138,9 @@ def driver_attendance_checkout():
         scope_shifts_list=scope_shifts_list,
         all_vehicles_by_project=all_vehicles_by_project,
         geofence_radius=_geofence_radius,
-        geofence_enabled=_geofence_enabled)
+        geofence_enabled=_geofence_enabled,
+        **_nav_back_ctx(url_for('driver_attendance_list'), show_without_nav_from=True),
+    )
 
 
 @app.route('/driver-attendance/report', methods=['GET', 'POST'])
@@ -20317,7 +20339,7 @@ def driver_attendance_report():
         vd_q = vd_q.filter(Driver.vehicle_id.in_(scope_vehicles))
     vehicle_drivers = vd_q.order_by(Driver.name).all()
     selected_driver_id = (request.form.get('driver_id', type=int) or 0) if request.method == 'POST' else 0
-    return render_template('driver_attendance_report.html', form=form, report=report, single_vehicle=single_vehicle, has_single_scope=has_single_scope, selected_vehicle_id=selected_vehicle_id, selected_shift=selected_shift, vehicle_choices=vehicle_choices, disable_project=disable_project, disable_district=disable_district, vehicle_drivers=vehicle_drivers, selected_driver_id=selected_driver_id)
+    return render_template('driver_attendance_report.html', form=form, report=report, single_vehicle=single_vehicle, has_single_scope=has_single_scope, selected_vehicle_id=selected_vehicle_id, selected_shift=selected_shift, vehicle_choices=vehicle_choices, disable_project=disable_project, disable_district=disable_district, vehicle_drivers=vehicle_drivers, selected_driver_id=selected_driver_id, **_nav_back_ctx(url_for('reports_index')))
 
 
 def _build_driver_daily_attendance_report_payload(
@@ -20873,6 +20895,7 @@ def driver_attendance_daily_report():
         status_columns=status_columns,
         filter_message=filter_message,
         cal_today_day=cal_today_day,
+        **_nav_back_ctx(url_for('reports_index')),
     )
 
 
@@ -21237,7 +21260,9 @@ def driver_attendance_tra_report():
         selected_vehicle_id=selected_vehicle_id, selected_shift=selected_shift,
         vehicle_choices=vehicle_choices, disable_project=disable_project,
         disable_district=disable_district, vehicle_drivers=vehicle_drivers,
-        selected_driver_id=selected_driver_id)
+        selected_driver_id=selected_driver_id,
+        **_nav_back_ctx(url_for('reports_index')),
+    )
 
 
 # ────────────────────────────────────────────────
@@ -21280,7 +21305,9 @@ def leave_request_list():
         requests=requests_list, counts=counts, drivers=drivers,
         status_filter=status_filter, driver_id_filter=driver_id_filter,
         search=search, page=page, per_page=per_page,
-        total=total, total_pages=total_pages)
+        total=total, total_pages=total_pages,
+        **_nav_back_ctx(url_for('driver_attendance_list'), show_without_nav_from=True),
+    )
 
 
 @app.route('/leave-requests/new', methods=['GET', 'POST'])
@@ -21331,7 +21358,7 @@ def leave_request_new():
         flash('Leave request submit ho gayi hai. Supervisor ke approval ka wait karein.', 'success')
         return redirect(url_for('leave_request_list'))
 
-    return render_template('leave_request_form.html', drivers=drivers)
+    return render_template('leave_request_form.html', drivers=drivers, **_nav_back_ctx(url_for('leave_request_list'), show_without_nav_from=True))
 
 
 @app.route('/leave-requests/<int:req_id>/review', methods=['POST'])
@@ -21740,7 +21767,8 @@ def task_report_list():
                            total_kms=total_kms, total_tracker=total_tracker, total_diff=total_diff, total_pct=total_pct,
                            total_tasks=total_tasks, total_emg=total_emg, total_task_diff=total_task_diff,
                            pagination=pagination, per_page=per_page, search=search,
-                           task_report_filter_lock=task_report_filter_lock)
+                           task_report_filter_lock=task_report_filter_lock,
+                           **_nav_back_ctx(url_for('module_hub', hub_slug='task-logbook'), show_without_nav_from=True))
 
 
 def _logbook_vehicle_aggregate(vehicle_id, from_date, to_date):
@@ -21853,7 +21881,8 @@ def task_report_logbook_cover():
     per_page = request.args.get('per_page', 20, type=int)
     pagination = SimplePagination(rows, page, per_page)
     rows = pagination.items
-    return render_template('logbook_cover_list.html', form=form, rows=rows, from_date=from_date, to_date=to_date, pagination=pagination, per_page=per_page, search=search)
+    return render_template('logbook_cover_list.html', form=form, rows=rows, from_date=from_date, to_date=to_date, pagination=pagination, per_page=per_page, search=search,
+                          **_nav_back_ctx(url_for('reports_index'), show_without_nav_from=True))
 
 
 @app.route('/task-report/logbook-view')
@@ -22181,6 +22210,7 @@ def task_report_new():
             task_entry_odometer_required=odom_required_setting,
             task_entry_date_hint=_hint,
             pending_task_count=len(_filter_pending_task_rows(rows_list)) if rows_list else 0,
+            **_nav_back_ctx(url_for('module_hub', hub_slug='task-logbook'), show_without_nav_from=True),
         )
 
     if request.method == 'POST' and request.form.get('save_batch'):
@@ -22419,6 +22449,7 @@ def task_report_pending():
         projects=_projects_ui(district_id),
         task_entry_filter=task_entry_filter,
         pending_filter_qs=pending_qs,
+        **_nav_back_ctx(url_for('module_hub', hub_slug='task-logbook'), show_without_nav_from=True),
     )
 
 
@@ -22820,7 +22851,8 @@ def task_report_upload_emergency():
             db.session.rollback()
             app.logger.exception("EmergencyTaskReport upload failed for date=%s", task_date)
             flash(_build_upload_error_message('EmergencyTaskReport', e), 'danger')
-    return render_template('task_report_upload_emergency.html', form=form)
+    return render_template('task_report_upload_emergency.html', form=form,
+                          **_nav_back_ctx(url_for('module_hub', hub_slug='task-logbook')))
 
 
 @app.route('/task-report/upload/mileage', methods=['GET', 'POST'])
@@ -22841,7 +22873,8 @@ def task_report_upload_mileage():
             db.session.rollback()
             app.logger.exception("Vehicle Mileage upload failed for date=%s", task_date)
             flash(_build_upload_error_message('Vehicle Mileage report', e), 'danger')
-    return render_template('task_report_upload_mileage.html', form=form)
+    return render_template('task_report_upload_mileage.html', form=form,
+                          **_nav_back_ctx(url_for('module_hub', hub_slug='task-logbook')))
 
 
 # Excel header -> model field mapping for EmergencyTaskRecord
@@ -23417,7 +23450,8 @@ def task_report_upload():
                 bool(fa),
             )
             flash(_build_upload_error_message('Upload Workbooks', e), 'danger')
-    return render_template('task_report_upload.html', form=form)
+    return render_template('task_report_upload.html', form=form,
+                          **_nav_back_ctx(url_for('module_hub', hub_slug='task-logbook')))
 
 
 @app.route('/task-report/upload/list', methods=['GET'])
@@ -23532,6 +23566,7 @@ def task_report_upload_list():
         to_date=to_date,
         pagination=pagination,
         per_page=per_page,
+        **_nav_back_ctx(url_for('module_hub', hub_slug='task-logbook')),
     )
 
 
@@ -23600,7 +23635,8 @@ def red_task_list():
     per_page = request.args.get('per_page', 20, type=int)
     pagination = SimplePagination(rows, page, per_page)
     rows = pagination.items
-    return render_template('red_task_list.html', form=form, rows=rows, from_date=from_date, to_date=to_date, pagination=pagination, per_page=per_page, search=search)
+    return render_template('red_task_list.html', form=form, rows=rows, from_date=from_date, to_date=to_date, pagination=pagination, per_page=per_page, search=search,
+                          **_nav_back_ctx(url_for('reports_index'), show_without_nav_from=True))
 
 
 @app.route('/red-task/summary', methods=['GET'])
@@ -23971,7 +24007,8 @@ def red_task_new():
             })
     return render_template('red_task_form.html', rows=rows, view_date=view_date,
                            district_id=district_id, project_id=project_id,
-                           districts=districts, projects=projects, title='Add Red Task')
+                           districts=districts, projects=projects, title='Add Red Task',
+                           **_nav_back_ctx(url_for('red_task_list'), show_without_nav_from=True))
 
 
 @app.route('/red-task/<int:pk>/edit', methods=['GET', 'POST'])
@@ -24020,7 +24057,8 @@ def red_task_edit(pk):
         db.session.commit()
         flash('Red Task updated.', 'success')
         return redirect(url_for('red_task_list'))
-    return render_template('red_task_edit.html', form=form, title='Edit Red Task', rec=rec)
+    return render_template('red_task_edit.html', form=form, title='Edit Red Task', rec=rec,
+                          **_nav_back_ctx(url_for('red_task_list'), show_without_nav_from=True))
 
 
 # ────────────────────────────────────────────────
@@ -24092,7 +24130,8 @@ def without_task_list():
     per_page = request.args.get('per_page', 20, type=int)
     pagination = SimplePagination(rows, page, per_page)
     rows = pagination.items
-    return render_template('without_task_list.html', form=form, rows=rows, from_date=from_date, to_date=to_date, pagination=pagination, per_page=per_page, search=search)
+    return render_template('without_task_list.html', form=form, rows=rows, from_date=from_date, to_date=to_date, pagination=pagination, per_page=per_page, search=search,
+                          **_nav_back_ctx(url_for('reports_index'), show_without_nav_from=True))
 
 
 def _ensure_unexecuted_task_table():
@@ -24501,6 +24540,7 @@ def unexecuted_task_report():
         districts=districts,
         projects=projects,
         vehicles=vehicles,
+        **_nav_back_ctx(url_for('reports_index'), show_without_nav_from=True),
     )
 
 
@@ -24824,7 +24864,8 @@ def without_task_new():
     return render_template('without_task_form.html', rows=rows, view_date=view_date,
                            district_id=district_id, project_id=project_id,
                            districts=districts, projects=projects, load_attempted=load_attempted,
-                           title='Add Vehicle Move without Task')
+                           title='Add Vehicle Move without Task',
+                           **_nav_back_ctx(url_for('without_task_list'), show_without_nav_from=True))
 
 
 @app.route('/vehicle-move-without-task/<int:pk>/edit', methods=['GET', 'POST'])
@@ -24877,7 +24918,8 @@ def without_task_edit(pk):
         db.session.commit()
         flash('Vehicle Move without Task updated.', 'success')
         return redirect(url_for('without_task_list'))
-    return render_template('without_task_edit.html', form=form, title='Edit Vehicle Move without Task', rec=rec)
+    return render_template('without_task_edit.html', form=form, title='Edit Vehicle Move without Task', rec=rec,
+                          **_nav_back_ctx(url_for('without_task_list'), show_without_nav_from=True))
 
 
 # ────────────────────────────────────────────────

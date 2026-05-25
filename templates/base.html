@@ -1535,6 +1535,7 @@
     <!-- Mobile-Perfect responsive overrides (zero desktop impact) -->
     <link rel="stylesheet" href="/static/css/mobile_perfect.css">
     <link rel="stylesheet" href="/static/css/fm_aurora_theme.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/fm_hub_pages.css') }}">
     <link rel="stylesheet" href="/static/css/mobile_native_sidebar.css">
     {% block extra_head %}{% endblock %}
 </head>
@@ -1781,7 +1782,13 @@
 <div class="sidebar shadow {% if workspace_open or (request.endpoint != 'dashboard' and request.cookies.get('workspace_sidebar_open') != '1') %}collapsed{% endif %}" id="sidebar">
     <div class="sb-drawer-profile" role="region" aria-label="Signed in user">
         <div class="sb-drawer-profile-inner">
-            <div class="sb-drawer-avatar" aria-hidden="true"><i class="bi bi-person-badge"></i></div>
+            <div class="sb-drawer-avatar{% if sidebar_profile_avatar_path %} sb-drawer-avatar--photo{% endif %}" aria-hidden="true">
+                {% if sidebar_profile_avatar_path %}
+                <img src="{{ sidebar_profile_avatar_path | media_url }}" alt="" class="sb-drawer-avatar-img" loading="lazy" decoding="async">
+                {% else %}
+                <i class="bi bi-person-badge"></i>
+                {% endif %}
+            </div>
             <div>
                 <div class="sb-drawer-name">{{ session.get('user', 'Guest') }}</div>
                 <div class="sb-drawer-role">{% if current_user_is_master %}Super Administrator{% else %}Fleet Manager{% endif %}</div>

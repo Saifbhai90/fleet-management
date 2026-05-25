@@ -232,6 +232,24 @@ def inject_hub_navigation():
 
 
 @app.context_processor
+def inject_sidebar_profile_avatar():
+    """Driver-linked profile photo for mobile sidebar header."""
+    try:
+        from flask import session
+        from models import User
+        from utils import user_profile_avatar_path
+        user_id = session.get('user_id')
+        path = None
+        if user_id:
+            user = User.query.get(user_id)
+            if user:
+                path = user_profile_avatar_path(user)
+    except Exception:
+        path = None
+    return dict(sidebar_profile_avatar_path=path)
+
+
+@app.context_processor
 def inject_workspace_context():
     """Expose selected workspace employee in templates."""
     try:

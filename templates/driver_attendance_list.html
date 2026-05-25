@@ -21,6 +21,8 @@
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
     <h2 class="mb-0"><i class="bi bi-calendar-check me-2 text-primary"></i>Attendance List</h2>
     <div class="d-flex flex-wrap gap-2">
+      {% from 'partials/nav_back_button.html' import nav_back_button %}
+      {{ nav_back_button() }}
       <button type="button" class="btn btn-sm btn-outline-secondary" title="Attendance photos gallery" onclick="openAttendanceImageViewWizard()"><i class="bi bi-images me-1"></i>Image view</button>
       <button type="button" class="btn btn-sm btn-outline-secondary" title="Share Photos" onclick="openSharePhotosWizard()"><i class="bi bi-share me-1"></i>Share</button>
       {% if absent_whatsapp_rows|length > 0 %}
@@ -33,9 +35,6 @@
       </a>
       <a href="{{ url_for('driver_attendance_print') }}?from_date={{ from_date or view_date.strftime('%d-%m-%Y') }}&to_date={{ to_date or view_date.strftime('%d-%m-%Y') }}{% if project_id %}&project_id={{ project_id }}{% endif %}{% if district_id %}&district_id={{ district_id }}{% endif %}{% if vehicle_id %}&vehicle_id={{ vehicle_id }}{% endif %}{% if shift %}&shift={{ shift|e }}{% endif %}{% if duty_shift_filter %}&duty_shift={{ duty_shift_filter|e }}{% endif %}{% if status_filter_selected %}&status_filter={{ status_filter_selected|join(',')|urlencode }}{% endif %}{% if list_filter %}&list_filter={{ list_filter|e }}{% endif %}{% if search %}&search={{ search|e }}{% endif %}{% if driver_id %}&driver_id={{ driver_id }}{% endif %}" target="_blank" class="btn btn-outline-primary btn-sm">
         <i class="bi bi-printer me-1"></i>Print
-      </a>
-      <a href="{{ url_for('driver_attendance_report') }}" class="btn btn-outline-info btn-sm">
-        <i class="bi bi-bar-chart me-1"></i>Report
       </a>
     </div>
   </div>
