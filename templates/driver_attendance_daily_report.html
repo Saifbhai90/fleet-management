@@ -372,12 +372,34 @@
   }
   .daily-filter-required { color: #dc2626; }
 
-  /* Web: native card layout hidden */
+  /* Web vs native: never show both */
   .daily-native-view { display: none; }
+  .daily-attn-web-only { display: block; }
 
-  /* ── Capacitor app only: card + calendar (web table unchanged) ── */
+  html.capacitor-native .daily-attn-page .daily-attn-web-only,
+  html.daily-report-native .daily-attn-page .daily-attn-web-only {
+    display: none !important;
+    visibility: hidden !important;
+    position: absolute !important;
+    left: -9999px !important;
+    width: 0 !important;
+    height: 0 !important;
+    overflow: hidden !important;
+    pointer-events: none !important;
+  }
+  html.capacitor-native .daily-attn-page .daily-native-view,
+  html.daily-report-native .daily-attn-page .daily-native-view {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+  html.capacitor-native .daily-attn-shell.daily-grid-pending .daily-native-view,
+  html.daily-report-native .daily-attn-shell.daily-grid-pending .daily-native-view {
+    visibility: visible !important;
+  }
+
+  /* ── Capacitor app only: card + calendar (web table hidden above) ── */
   html.capacitor-native .daily-attn-page .daily-attn-scroll { display: none !important; }
-  html.capacitor-native .daily-attn-page .daily-native-view { display: block !important; }
   html.capacitor-native .daily-attn-page .daily-attn-shell {
     border: none; box-shadow: none; background: transparent; border-radius: 0;
   }
@@ -469,7 +491,16 @@
     margin: 0 auto 0; display: flex;
   }
   .daily-legend-toggle { display: none; }
-  html.capacitor-native .daily-attn-page #dailyTableSearch {
+  html.capacitor-native .daily-attn-page .daily-attn-toolbar__web-title { display: none !important; }
+  html.capacitor-native .daily-attn-page .daily-attn-toolbar--shared {
+    border: none; background: transparent; padding: 0 0 0.5rem; margin: 0;
+    box-shadow: none;
+  }
+  html.capacitor-native .daily-attn-page .daily-attn-toolbar__search-wrap {
+    width: 100%; max-width: none;
+  }
+  html.capacitor-native .daily-attn-page #dailyTableSearch,
+  html.capacitor-native .daily-attn-page .daily-attn-toolbar__search {
     max-width: none !important; width: 100%; height: 38px !important;
   }
 
@@ -973,6 +1004,18 @@
   </div>
 
   {% if report %}
+  <script>
+  (function() {
+    var native = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())
+      || !!(window.FleetBridge && window.FleetBridge.isNative)
+      || document.documentElement.classList.contains('capacitor-native');
+    if (native) {
+      document.documentElement.classList.add('daily-report-native');
+      var page = document.querySelector('.daily-attn-page');
+      if (page) page.classList.add('daily-mode-native');
+    }
+  })();
+  </script>
   {% set sum_short = {'Present': 'P', 'Absent': 'A', 'Leave': 'L', 'Late': 'Lt', 'Half-Day': 'H', 'Off': 'O'} %}
   {% set card_theme = {'Present': 'present', 'Absent': 'absent', 'Leave': 'leave', 'Late': 'late', 'Half-Day': 'half', 'Off': 'off'} %}
   {% macro render_native_status_card(st, total, me_m, me_e, sum_short, card_theme, grand_attr='') %}
@@ -1015,12 +1058,13 @@
   {% set cal_month_label = day_headers[0].strftime('%B %Y') if day_headers else '' %}
   {% set cal_start_pad = ((day_headers[0].weekday() + 1) % 7) if day_headers else 0 %}
   <div class="daily-attn-shell daily-grid-pending" id="dailyReportResults">
-    <div class="daily-attn-toolbar no-print">
-      <span class="title-chip"><i class="bi bi-calendar-check me-1"></i>{{ report_title }}</span>
-      <div class="d-flex align-items-center gap-2">
-        <input type="text" id="dailyTableSearch" class="form-control form-control-sm" style="max-width:200px;height:30px;" placeholder="Search in grid...">
+    <div class="daily-attn-toolbar no-print daily-attn-toolbar--shared">
+      <span class="title-chip daily-attn-toolbar__web-title"><i class="bi bi-calendar-check me-1"></i>{{ report_title }}</span>
+      <div class="d-flex align-items-center gap-2 daily-attn-toolbar__search-wrap">
+        <input type="text" id="dailyTableSearch" class="form-control form-control-sm daily-attn-toolbar__search" placeholder="Search drivers...">
       </div>
     </div>
+    <div class="daily-attn-web-only" id="dailyReportWebGrid">
     <div class="daily-attn-scroll">
       <table class="daily-attn-table" id="dailyReportTable" data-ft-ignore="1">
         <colgroup>
@@ -1100,6 +1144,7 @@
         </tfoot>
       </table>
     </div>
+    </div>{# /.daily-attn-web-only #}
 
     {# Capacitor app only — card + calendar (hidden on web via CSS) #}
     <div class="daily-native-view" id="dailyNativeView" aria-hidden="true">
@@ -1115,7 +1160,7 @@
               {% if present_pct > 100 %}{% set present_pct = 100 %}{% endif %}
               <div class="daily-driver-card__present">
                 <p class="daily-driver-card__present-text">
-                  <strong>{{ row.month_present_days }}/{{ row.days_in_month }}</strong> present (P) in row — all shifts
+                  <strong>{{ row.month_present_days }}/{{ row.days_in_month }}</strong> present days this month
                 </p>
                 <div class="daily-driver-card__progress" role="progressbar" aria-valuenow="{{ row.month_present_days }}" aria-valuemin="0" aria-valuemax="{{ present_slot_max }}" aria-label="Present P count in row">
                   <span class="daily-driver-card__progress-fill" style="width: {{ present_pct }}%;"></span>
@@ -1972,7 +2017,12 @@
   }
 
   var searchInput = document.getElementById('dailyTableSearch');
-  if (searchInput) searchInput.addEventListener('input', refreshRowVisibility);
+  if (searchInput) {
+    searchInput.addEventListener('input', function() {
+      if (isDailyNativeApp()) syncNativeCardVisibility();
+      else refreshRowVisibility();
+    });
+  }
 
   {% if report %}
   var reportTitleText = {{ report_title | tojson }};
@@ -2917,6 +2967,12 @@
 
   var _dailyResizeTimer = null;
   function initDailyGrid() {
+    if (isDailyNativeApp()) {
+      var page = document.querySelector('.daily-attn-page');
+      if (page) page.classList.add('daily-mode-native');
+      revealDailyGrid();
+      return;
+    }
     waitForFleetThenInit(0);
     window.addEventListener('resize', function() {
       if (isDailyNativeApp()) return;
