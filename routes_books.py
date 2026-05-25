@@ -11,6 +11,10 @@ from utils import pk_date
 from datetime import datetime, date
 
 
+
+def _books_nav():
+    from nav_back import hub_nav_back_context
+    return hub_nav_back_context('books')
 def _check_auth(permission_code=None):
     if 'user_id' not in session:
         return redirect(url_for('login'))
@@ -65,7 +69,7 @@ def book_inventory_list():
     return render_template('books/inventory_list.html',
                            books=pagination.items, pagination=pagination,
                            page=page, per_page=per_page, search=search,
-                           status_filter=status_filter, type_filter=type_filter, stats=stats)
+                           status_filter=status_filter, type_filter=type_filter, stats=stats, **_books_nav())
 
 
 def book_stock_entry():
@@ -79,7 +83,7 @@ def book_stock_entry():
         existing = db.session.query(PhysicalBook).filter(PhysicalBook.serial_no == form.serial_no.data.strip()).first()
         if existing:
             flash(f'Book with serial "{form.serial_no.data}" already exists.', 'danger')
-            return render_template('books/stock_entry.html', form=form)
+            return render_template('books/stock_entry.html', form=form, **_books_nav())
 
         book = PhysicalBook(
             serial_no=form.serial_no.data.strip(),
@@ -94,7 +98,7 @@ def book_stock_entry():
         flash(f'Book "{book.serial_no}" added to inventory.', 'success')
         return redirect(url_for('book_inventory_list'))
 
-    return render_template('books/stock_entry.html', form=form)
+    return render_template('books/stock_entry.html', form=form, **_books_nav())
 
 
 def book_stock_edit(pk):
@@ -115,7 +119,7 @@ def book_stock_edit(pk):
         ).first()
         if dup:
             flash(f'Book with serial "{form.serial_no.data}" already exists.', 'danger')
-            return render_template('books/stock_entry.html', form=form, book=book)
+            return render_template('books/stock_entry.html', form=form, book=book, **_books_nav())
 
         book.serial_no = form.serial_no.data.strip()
         book.book_type = form.book_type.data
@@ -126,7 +130,7 @@ def book_stock_edit(pk):
         flash(f'Book "{book.serial_no}" updated.', 'success')
         return redirect(url_for('book_inventory_list'))
 
-    return render_template('books/stock_entry.html', form=form, book=book)
+    return render_template('books/stock_entry.html', form=form, book=book, **_books_nav())
 
 
 def book_stock_delete(pk):
@@ -240,7 +244,7 @@ def book_issue():
         flash(f'Book "{book.serial_no}" issued to vehicle {assignment.vehicle.vehicle_no}.', 'success')
         return redirect(url_for('book_assignment_list'))
 
-    return render_template('books/issue_form.html', form=form)
+    return render_template('books/issue_form.html', form=form, **_books_nav())
 
 
 # ════════════════════════════════════════════════════════════════════════════════
@@ -284,7 +288,7 @@ def book_assignment_list():
     return render_template('books/assignment_list.html',
                            assignments=pagination.items, pagination=pagination,
                            page=page, per_page=per_page, search=search,
-                           status_filter=status_filter)
+                           status_filter=status_filter, **_books_nav())
 
 
 def book_return(pk):
@@ -319,7 +323,7 @@ def book_return(pk):
         flash(f'Book "{assignment.book.serial_no}" returned successfully.', 'success')
         return redirect(url_for('book_assignment_list'))
 
-    return render_template('books/return_form.html', form=form, assignment=assignment)
+    return render_template('books/return_form.html', form=form, assignment=assignment, **_books_nav())
 
 
 # ════════════════════════════════════════════════════════════════════════════════
@@ -348,7 +352,7 @@ def book_pending_returns():
     return render_template('books/pending_returns.html',
                            pending=pending, total=total,
                            logbooks=logbooks, maint_books=maint_books,
-                           today=pk_date())
+                           today=pk_date(), **_books_nav())
 
 
 # ════════════════════════════════════════════════════════════════════════════════

@@ -10,7 +10,8 @@
         <!-- Header -->
         <div class="card-header employee-form-header py-2 px-3 d-flex align-items-center justify-content-between flex-wrap gap-1">
           <h6 class="mb-0 fw-bold text-white"><i class="bi bi-person-badge me-1"></i>{{ title }}</h6>
-          <a href="{{ url_for('employees_list') }}" class="btn btn-sm btn-light opacity-90">List</a>
+          {% from 'partials/nav_back_button.html' import nav_back_button %}
+          {{ nav_back_button() }}
         </div>
 
         <!-- Status -->

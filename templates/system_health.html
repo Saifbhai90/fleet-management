@@ -144,6 +144,7 @@
 
 {% block content %}
 <div class="container-fluid py-4" style="max-width:1300px;">
+<div class="mb-3">{% from 'partials/nav_back_button.html' import nav_back_button %}{{ nav_back_button() }}</div>
 
 {% set svc     = data.service %}
 {% set dep     = data.last_deploy %}

@@ -2,6 +2,9 @@
 {% block title %}{{ title }}{% endblock %}
 
 {% block content %}
+
+{% from 'partials/nav_back_button.html' import nav_back_button %}
+<div class="mb-2">{{ nav_back_button() }}</div>
 <style>
 /* Upload zone */
 .ft-upload-zone{border:2px dashed #ccc;border-radius:8px;padding:20px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;position:relative;min-height:100px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#fafbfc}

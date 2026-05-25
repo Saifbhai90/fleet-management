@@ -23,9 +23,12 @@
   {% set page_subtitle = 'Batch form par Close−Start (KM driven) validation aur Odoo meter policy yahan set hoti hai.' %}
 {% endif %}
 <div class="container-fluid">
-  <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
-    <h2 class="mb-0"><i class="bi bi-sliders me-2 text-primary"></i>{{ page_title }}</h2>
-    <a href="{{ url_for('user_list') }}" class="btn btn-outline-primary"><i class="bi bi-arrow-left me-1"></i>User & Access</a>
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+      {% from 'partials/nav_back_button.html' import nav_back_button %}
+      {{ nav_back_button() }}
+      <h2 class="mb-0"><i class="bi bi-sliders me-2 text-primary"></i>{{ page_title }}</h2>
+    </div>
   </div>
 
   <p class="text-muted mb-4">

@@ -25,7 +25,8 @@
 <div class="container py-4">
     <div class="d-flex justify-content-between mb-3 no-print">
         <!-- Yahan change kiya gaya hai: driver_job_left_list ko driver_rejoin_list se badal diya gaya hai -->
-        <a href="{{ url_for('driver_rejoin_list') }}" class="btn btn-light rounded-pill px-4 border"><i class="bi bi-arrow-left me-2"></i>Back to History</a>
+        {% from 'partials/nav_back_button.html' import nav_back_button %}
+        {{ nav_back_button() }}
         <button onclick="window.print()" class="btn-print shadow-sm"><i class="bi bi-printer me-2"></i>Print Report</button>
     </div>
 

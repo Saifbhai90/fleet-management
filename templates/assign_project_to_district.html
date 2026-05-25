@@ -80,7 +80,9 @@
     <div class="page-header-gradient">
         <div class="d-flex justify-content-between align-items-center">
             <div>
-                <h2><i class="bi bi-geo-alt-fill me-2"></i>District to Project Assignments</h2>
+                        {% from 'partials/nav_back_button.html' import nav_back_button %}
+        {{ nav_back_button() }}
+<h2><i class="bi bi-geo-alt-fill me-2"></i>District to Project Assignments</h2>
                 <p class="subtitle mb-0"><i class="bi bi-info-circle me-1"></i>Manage district assignments to projects</p>
             </div>
             <div class="d-flex gap-2">

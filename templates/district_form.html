@@ -4,7 +4,9 @@
 
 {% block content %}
 <div class="container mt-4">
-  <h2 class="mb-4 text-center"><i class="bi bi-geo-alt me-2"></i>District Entry Form</h2>
+  {% from 'partials/nav_back_button.html' import nav_back_button %}
+<div class="mb-3">{{ nav_back_button() }}</div>
+<h2 class="mb-4 text-center"><i class="bi bi-geo-alt me-2"></i>District Entry Form</h2>
 
   <form method="POST" class="needs-validation" novalidate>
     {{ form.hidden_tag() }}

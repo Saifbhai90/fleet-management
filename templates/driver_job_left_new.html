@@ -40,7 +40,9 @@ textarea.form-control { height: auto !important; }
 {% block content %}
 <div class="page-shell">
     <div class="page-hdr">
-        <h5><i class="bi bi-person-x-fill me-2 text-danger"></i>Job Left — Initiation</h5>
+                {% from 'partials/nav_back_button.html' import nav_back_button %}
+        {{ nav_back_button() }}
+<h5><i class="bi bi-person-x-fill me-2 text-danger"></i>Job Left — Initiation</h5>
         <a href="{{ url_for('driver_job_left_list') }}" class="btn btn-sm btn-outline-light fw-bold">
             <i class="bi bi-arrow-left-circle me-1"></i> Back to List
         </a>

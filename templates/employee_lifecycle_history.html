@@ -27,7 +27,9 @@ body { background: #f1f5f9; font-family: 'Plus Jakarta Sans', sans-serif; }
 {% block content %}
 <div class="page-shell">
     <div class="page-hdr">
-        <h5><i class="bi bi-clock-history me-2"></i>{{ title }}</h5>
+                {% from 'partials/nav_back_button.html' import nav_back_button %}
+        {{ nav_back_button() }}
+<h5><i class="bi bi-clock-history me-2"></i>{{ title }}</h5>
         <div class="hdr-actions">
             <a href="{{ url_for('employee_lifecycle_assign') }}" class="btn btn-success btn-sm"><i class="bi bi-plus-circle me-1"></i>Assign</a>
             <a href="{{ url_for('employee_lifecycle_deassign') }}" class="btn btn-danger btn-sm"><i class="bi bi-dash-circle me-1"></i>Deassign</a>

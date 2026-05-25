@@ -16,6 +16,10 @@ from decimal import Decimal
 import calendar
 
 
+
+def _payroll_nav():
+    from nav_back import hub_nav_back_context
+    return hub_nav_back_context('payroll')
 def check_auth(permission_code=None):
     if 'user_id' not in session:
         return redirect(url_for('login'))
@@ -172,7 +176,7 @@ def payroll_salary_config_list():
 
     return render_template('payroll/salary_config_list.html',
                            configs=configs, pagination=pagination,
-                           page=page, per_page=per_page, search=search)
+                           page=page, per_page=per_page, search=search, **_payroll_nav())
 
 
 def payroll_salary_config_form(pk=None):
@@ -206,7 +210,7 @@ def payroll_salary_config_form(pk=None):
         ptype, pid = _parse_person_id(form.person_id.data)
         if not ptype or not pid:
             flash('Please select a valid Employee.', 'danger')
-            return render_template('payroll/salary_config_form.html', form=form, title='New Employee Salary Configuration', config=config)
+            return render_template('payroll/salary_config_form.html', form=form, title='New Employee Salary Configuration', config=config, **_payroll_nav())
 
         if config:
             config.basic_salary = form.basic_salary.data
@@ -239,7 +243,7 @@ def payroll_salary_config_form(pk=None):
         return redirect(url_for('payroll_salary_config_list'))
 
     title = 'Edit Salary Configuration' if pk else 'New Employee Salary Configuration'
-    return render_template('payroll/salary_config_form.html', form=form, title=title, config=config)
+    return render_template('payroll/salary_config_form.html', form=form, title=title, config=config, **_payroll_nav())
 
 
 def payroll_salary_config_delete(pk):
@@ -311,7 +315,7 @@ def payroll_list():
                            payrolls=payrolls, pagination=pagination,
                            page=page, per_page=per_page, search=search,
                            status_filter=status_filter, month_filter=month_filter,
-                           year_filter=year_filter, year_list=year_list)
+                           year_filter=year_filter, year_list=year_list, **_payroll_nav())
 
 
 def payroll_generate():
@@ -401,7 +405,7 @@ def payroll_generate():
         flash(f'Payroll generated for {name} – {calendar.month_name[m]} {y}.', 'success')
         return redirect(url_for('payroll_view', pk=payroll.id))
 
-    return render_template('payroll/payroll_generate.html', form=form)
+    return render_template('payroll/payroll_generate.html', form=form, **_payroll_nav())
 
 
 def payroll_view(pk):
@@ -409,7 +413,7 @@ def payroll_view(pk):
     if auth_check:
         return auth_check
     payroll = MonthlyPayroll.query.get_or_404(pk)
-    return render_template('payroll/payroll_view.html', payroll=payroll)
+    return render_template('payroll/payroll_view.html', payroll=payroll, **_payroll_nav())
 
 
 def payroll_edit(pk):
@@ -445,7 +449,7 @@ def payroll_edit(pk):
         flash('Payroll updated successfully.', 'success')
         return redirect(url_for('payroll_view', pk=pk))
 
-    return render_template('payroll/payroll_edit.html', form=form, payroll=payroll)
+    return render_template('payroll/payroll_edit.html', form=form, payroll=payroll, **_payroll_nav())
 
 
 def payroll_recalc_attendance(pk):
@@ -569,7 +573,7 @@ def payroll_pay(pk):
         flash(f'Payment recorded for {payroll.person_name}. Journal entry created.', 'success')
         return redirect(url_for('payroll_view', pk=pk))
 
-    return render_template('payroll/payroll_pay.html', form=form, payroll=payroll)
+    return render_template('payroll/payroll_pay.html', form=form, payroll=payroll, **_payroll_nav())
 
 
 def payroll_revert(pk):
@@ -625,7 +629,7 @@ def payroll_pending():
         by_month[key]['total'] += float(p.net_payable)
 
     return render_template('payroll/payroll_pending.html',
-                           pending=pending, total_pending=total_pending, by_month=by_month)
+                           pending=pending, total_pending=total_pending, by_month=by_month, **_payroll_nav())
 
 
 # ════════════════════════════════════════════════════════════════════════════════
@@ -698,7 +702,7 @@ def payroll_bulk_generate():
     current_year = pk_date().year
     years = list(range(current_year - 2, current_year + 2))
     return render_template('payroll/payroll_bulk_generate.html', years=years,
-                           now_month=pk_date().month, now_year=current_year)
+                           now_month=pk_date().month, now_year=current_year, **_payroll_nav())
 
 
 # ════════════════════════════════════════════════════════════════════════════════
@@ -767,33 +771,33 @@ def payroll_driver_bulk_salary():
             pid = form.project_id.data
             if not pid:
                 flash('Please select a Project.', 'danger')
-                return render_template('payroll/driver_bulk_salary.html', form=form, result=None)
+                return render_template('payroll/driver_bulk_salary.html', form=form, result=None, **_payroll_nav())
             target_drivers = Driver.query.filter_by(project_id=pid, status='Active').all()
         elif mode == 'district':
             did = form.district_id.data
             if not did:
                 flash('Please select a District.', 'danger')
-                return render_template('payroll/driver_bulk_salary.html', form=form, result=None)
+                return render_template('payroll/driver_bulk_salary.html', form=form, result=None, **_payroll_nav())
             target_drivers = Driver.query.filter_by(district_id=did, status='Active').all()
         elif mode == 'both':
             pid = form.project_id.data
             did = form.district_id.data
             if not pid or not did:
                 flash('Please select both Project and District.', 'danger')
-                return render_template('payroll/driver_bulk_salary.html', form=form, result=None)
+                return render_template('payroll/driver_bulk_salary.html', form=form, result=None, **_payroll_nav())
             target_drivers = Driver.query.filter_by(project_id=pid, district_id=did, status='Active').all()
         elif mode == 'individual':
             did = form.driver_id.data
             if not did:
                 flash('Please select a Driver.', 'danger')
-                return render_template('payroll/driver_bulk_salary.html', form=form, result=None)
+                return render_template('payroll/driver_bulk_salary.html', form=form, result=None, **_payroll_nav())
             d = Driver.query.get(did)
             if d:
                 target_drivers = [d]
 
         if not target_drivers:
             flash('No active drivers found for this selection.', 'warning')
-            return render_template('payroll/driver_bulk_salary.html', form=form, result=None)
+            return render_template('payroll/driver_bulk_salary.html', form=form, result=None, **_payroll_nav())
 
         created = 0
         updated = 0
@@ -828,7 +832,7 @@ def payroll_driver_bulk_salary():
         result = {'total': len(target_drivers), 'created': created, 'updated': updated, 'skipped': skipped}
         flash(f'Done! {created} created, {updated} updated, {skipped} skipped (already configured).', 'success')
 
-    return render_template('payroll/driver_bulk_salary.html', form=form, result=result)
+    return render_template('payroll/driver_bulk_salary.html', form=form, result=result, **_payroll_nav())
 
 
 def api_driver_bulk_preview():
@@ -877,4 +881,4 @@ def payroll_payslip(pk):
         return auth_check
     payroll = MonthlyPayroll.query.get_or_404(pk)
     generated_at = pk_now().strftime('%d %b %Y, %I:%M %p')
-    return render_template('payroll/payslip.html', payroll=payroll, generated_at=generated_at)
+    return render_template('payroll/payslip.html', payroll=payroll, generated_at=generated_at, **_payroll_nav())

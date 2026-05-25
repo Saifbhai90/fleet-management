@@ -158,9 +158,8 @@
     
     <!-- TOP BUTTONS -->
     <div class="action-bar no-print">
-        <a href="{{ url_for('driver_job_left_list') }}" class="btn btn-light shadow-sm rounded-pill px-4">
-            <i class="bi bi-arrow-left me-2"></i> Back to History
-        </a>
+        {% from 'partials/nav_back_button.html' import nav_back_button %}
+        {{ nav_back_button() }}
         <button onclick="window.print()" class="btn btn-dark shadow-sm rounded-pill px-4">
             <i class="bi bi-printer me-2"></i> Export / Print PDF
         </button>

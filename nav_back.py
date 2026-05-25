@@ -157,6 +157,18 @@ def build_auto_nav_back():
     }
 
 
+def hub_nav_back_context(hub_slug, fallback_endpoint=None, default_label='Back'):
+    """Back to module hub when opened from hub; else list/page fallback."""
+    if fallback_endpoint:
+        try:
+            default_url = url_for(fallback_endpoint)
+        except Exception:
+            default_url = url_for('module_hub', hub_slug=hub_slug)
+    else:
+        default_url = url_for('module_hub', hub_slug=hub_slug)
+    return nav_back_context(default_url, default_label)
+
+
 def preserve_nav_from(params=None, req=None):
     out = dict(params or {})
     nf = get_nav_from(req)

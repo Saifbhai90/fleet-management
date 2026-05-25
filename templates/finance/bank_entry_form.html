@@ -2,6 +2,9 @@
 {% block title %}{{ title }}{% endblock %}
 
 {% block content %}
+
+{% from 'partials/nav_back_button.html' import nav_back_button %}
+<div class="mb-2">{{ nav_back_button() }}</div>
 <div class="container-fluid py-3">
     <div class="section-heading bg-info">
         <i class="bi bi-bank2 me-2"></i>{{ title }}

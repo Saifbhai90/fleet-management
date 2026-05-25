@@ -1027,6 +1027,42 @@ def _nav_back_ctx(default_url, default_label='Back', show_without_nav_from=True)
     return nav_back_context(default_url, default_label, show_without_nav_from=show_without_nav_from)
 
 
+def _master_nav_back():
+    return _nav_back_ctx(url_for('module_hub', hub_slug='master-data'))
+
+
+def _assignments_nav_back():
+    return _nav_back_ctx(url_for('module_hub', hub_slug='assignments'))
+
+
+def _transfers_nav_back():
+    return _nav_back_ctx(url_for('module_hub', hub_slug='transfers'))
+
+
+def _workforce_nav_back():
+    return _nav_back_ctx(url_for('module_hub', hub_slug='workforce'))
+
+
+def _finance_nav_back():
+    return _nav_back_ctx(url_for('module_hub', hub_slug='finance'))
+
+
+def _payroll_nav_back():
+    return _nav_back_ctx(url_for('module_hub', hub_slug='payroll'))
+
+
+def _books_nav_back():
+    return _nav_back_ctx(url_for('module_hub', hub_slug='books'))
+
+
+def _notifications_nav_back():
+    return _nav_back_ctx(url_for('module_hub', hub_slug='notifications'))
+
+
+def _administration_nav_back():
+    return _nav_back_ctx(url_for('module_hub', hub_slug='administration'))
+
+
 def _preserve_nav_from(params=None):
     from nav_back import preserve_nav_from
     return preserve_nav_from(params)
@@ -3628,7 +3664,7 @@ def notification_list():
     per_page = request.args.get('per_page', 20, type=int)
     pagination = SimplePagination(filtered, page, per_page)
     notifications = pagination.items
-    return render_template('notification_list.html', notifications=notifications, read_ids=read_ids, pagination=pagination, per_page=per_page)
+    return render_template('notification_list.html', notifications=notifications, read_ids=read_ids, pagination=pagination, per_page=per_page, **_notifications_nav_back())
 
 
 @app.route('/notifications/new', methods=['GET', 'POST'])
@@ -3645,7 +3681,7 @@ def notification_add():
             'info',
         )
         return redirect(url_for('notification_list'))
-    return render_template('notification_form.html', form=form)
+    return render_template('notification_form.html', form=form, **_notifications_nav_back())
 
 
 # ────────────────────────────────────────────────
@@ -3677,7 +3713,7 @@ def reminder_list():
     per_page = request.args.get('per_page', 20, type=int)
     pagination = SimplePagination(reminders, page, per_page)
     reminders = pagination.items
-    return render_template('reminder_list.html', reminders=reminders, pagination=pagination, per_page=per_page)
+    return render_template('reminder_list.html', reminders=reminders, pagination=pagination, per_page=per_page, **_notifications_nav_back())
 
 
 @app.route('/reminders/new', methods=['GET', 'POST'])
@@ -3700,7 +3736,7 @@ def reminder_add():
         db.session.commit()
         flash('Reminder saved.', 'success')
         return redirect(url_for('reminder_list'))
-    return render_template('reminder_form.html', form=form)
+    return render_template('reminder_form.html', form=form, **_notifications_nav_back())
 
 
 @app.route('/reminders/<int:pk>/edit', methods=['GET', 'POST'])
@@ -3720,7 +3756,7 @@ def reminder_edit(pk):
         return redirect(url_for('reminder_list'))
     if request.method == 'GET':
         form.reminder_time.data = r.reminder_time.strftime('%H:%M') if r.reminder_time else ''
-    return render_template('reminder_form.html', form=form, reminder=r)
+    return render_template('reminder_form.html', form=form, reminder=r, **_notifications_nav_back())
 
 
 @app.route('/reminders/<int:pk>/delete', methods=['POST'])
@@ -4001,7 +4037,8 @@ def companies():
                 Company.name.desc() if sort_order == 'desc' else Company.name.asc()
     pagination = query.order_by(order_col).paginate(page=page, per_page=per_page, error_out=False)
     return render_template('companies.html', companies=pagination.items, search=search,
-                           pagination=pagination, per_page=per_page, sort_by=sort_by, sort_order=sort_order)
+                           pagination=pagination, per_page=per_page, sort_by=sort_by, sort_order=sort_order,
+                           **_master_nav_back())
 
 
 @app.route('/company/add', methods=['GET', 'POST'])
@@ -4028,7 +4065,8 @@ def company_form(id=None):
         except Exception as e:
             db.session.rollback()
             flash(f'Error saving company: {str(e)}', 'danger')
-    return render_template('company_form.html', form=form, title='Company', back_url=url_for('companies'))
+    return render_template('company_form.html', form=form, title='Company', back_url=url_for('companies'),
+                           **_nav_back_ctx(url_for('companies')))
 
 
 @app.route('/company/delete/<int:id>', methods=['POST'])
@@ -4139,7 +4177,8 @@ def projects_list():
     projects = pagination.items
     return render_template('projects_list.html', projects=projects, search=search,
                            from_date=from_date_str, to_date=to_date_str,
-                           sort_by=sort_by, sort_order=sort_order, pagination=pagination, per_page=per_page)
+                           sort_by=sort_by, sort_order=sort_order, pagination=pagination, per_page=per_page,
+                           **_master_nav_back())
 
 
 @app.route('/projects/export')
@@ -4245,7 +4284,8 @@ def project_form(id=None):
             )
             if form.status.data == 'Inactive' and not form.inactive_date.data:
                 flash('Inactive Date is required when status is Inactive.', 'danger')
-                return render_template('project_form.html', form=form, title='Project', back_url=url_for('projects_list'))
+                return render_template('project_form.html', form=form, title='Project', back_url=url_for('projects_list'),
+                                       **_nav_back_ctx(url_for('projects_list')))
             if not id:
                 db.session.add(project)
             db.session.commit()
@@ -4255,7 +4295,8 @@ def project_form(id=None):
             db.session.rollback()
             flash(f'Error saving project: {str(e)}', 'danger')
     back_url = url_for('projects_list')
-    return render_template('project_form.html', form=form, title='Project', back_url=back_url)
+    return render_template('project_form.html', form=form, title='Project', back_url=back_url,
+                           **_nav_back_ctx(url_for('projects_list')))
 
 
 @app.route('/project/delete/<int:id>', methods=['POST'])
@@ -4264,7 +4305,7 @@ def delete_project(id):
     linked_districts = db.session.query(project_district).filter_by(project_id=project.id).count()
     if linked_districts > 0:
         flash(f'Cannot delete "{project.name}". It is linked to {linked_districts} district(s). Remove district assignments first.', 'danger')
-        return redirect(url_for('assign_project_to_company'))
+        return redirect(url_for('assign_project_to_company', **_preserve_nav_from()))
     try:
         db.session.delete(project)
         db.session.commit()
@@ -4362,7 +4403,8 @@ def vehicles_list():
     vehicles = pagination.items
     return render_template('vehicles_list.html', vehicles=vehicles, search=search,
                            from_date=from_date_str, to_date=to_date_str,
-                           pagination=pagination, per_page=per_page, sort_by=sort_by, sort_order=sort_order)
+                           pagination=pagination, per_page=per_page, sort_by=sort_by, sort_order=sort_order,
+                           **_master_nav_back())
 
 
 @app.route('/whats-new')
@@ -5147,7 +5189,8 @@ def vehicle_form(id=None):
             db.session.rollback()
             flash(f'Error saving vehicle: {str(e)}', 'danger')
     back_url = url_for('vehicles_list')
-    return render_template('vehicle_form.html', form=form, vehicle=vehicle, title='Vehicle', back_url=back_url)
+    return render_template('vehicle_form.html', form=form, vehicle=vehicle, title='Vehicle', back_url=back_url,
+                           **_nav_back_ctx(url_for('vehicles_list')))
 
 
 @app.route('/vehicle/delete/<int:id>', methods=['POST'])
@@ -5234,7 +5277,8 @@ def drivers_list():
     return render_template('drivers_list.html', drivers=drivers, search=search, today=today,
                            stats=stats, driver_projects=driver_projects,
                            districts_list=districts_list,
-                           f_status=f_status, f_cnic=f_cnic, f_license=f_license)
+                           f_status=f_status, f_cnic=f_cnic, f_license=f_license,
+                           **_master_nav_back())
 
 
 @app.route('/drivers/export')
@@ -5736,7 +5780,8 @@ def driver_form(id=None):
         .distinct().order_by(Driver.emergency_relation).all()
     ]
     return render_template('driver_form.html', form=form, title=title, driver=driver,
-                           relation_suggestions=relation_suggestions)
+                           relation_suggestions=relation_suggestions,
+                           **_nav_back_ctx(url_for('drivers_list')))
 # Employees (non-driver staff)
 # ────────────────────────────────────────────────
 @app.route('/employees')
@@ -5808,7 +5853,8 @@ def employees_list():
     employees = pagination.items
     return render_template('employees_list.html', employees=employees, search=search,
                            from_date=from_date_str, to_date=to_date_str,
-                           pagination=pagination, per_page=per_page, sort_by=sort_by, sort_order=sort_order)
+                           pagination=pagination, per_page=per_page, sort_by=sort_by, sort_order=sort_order,
+                           **_master_nav_back())
 
 
 @app.route('/employee/add', methods=['GET', 'POST'])
@@ -5983,6 +6029,7 @@ def employee_form(id=None):
         title=title, employee=emp, departments=departments,
         tab=tab, step1_done=step1_done, step2_done=step2_done,
         employee_documents=employee_documents,
+        **_nav_back_ctx(url_for('employees_list')),
     )
 
 
@@ -6236,7 +6283,7 @@ def employee_lifecycle_assign():
                            sel_project_ids=sel_project_ids,
                            sel_district_ids=sel_district_ids,
                            sel_date=sel_date,
-                           sel_remarks=sel_remarks)
+                           sel_remarks=sel_remarks, **_workforce_nav_back())
 
 
 @app.route('/employee/lifecycle/deassign', methods=['GET', 'POST'])
@@ -6308,7 +6355,7 @@ def employee_lifecycle_deassign():
                            emp_choices=emp_choices, cur_projects=cur_projects, cur_districts=cur_districts,
                            sel_emp_id=sel_emp_id, emp_name=emp_name,
                            sel_project_ids=sel_project_ids, sel_district_ids=sel_district_ids,
-                           sel_date=sel_date, sel_reason=sel_reason, sel_remarks=sel_remarks)
+                           sel_date=sel_date, sel_reason=sel_reason, sel_remarks=sel_remarks, **_workforce_nav_back())
 
 
 @app.route('/employee/lifecycle/left', methods=['GET', 'POST'])
@@ -6338,7 +6385,7 @@ def employee_lifecycle_left():
             flash(f'Error: {str(e)}', 'danger')
 
     return render_template('employee_lifecycle_left.html', form=form, title='Employee Left',
-                           active_emps=active_emps)
+                           active_emps=active_emps, **_workforce_nav_back())
 
 
 @app.route('/employee/lifecycle/rejoin', methods=['GET', 'POST'])
@@ -6390,7 +6437,7 @@ def employee_lifecycle_rejoin():
                            emp_choices=emp_choices, project_choices=project_choices,
                            district_choices=district_choices, sel_emp_id=sel_emp_id,
                            sel_project_ids=sel_project_ids, sel_district_ids=sel_district_ids,
-                           sel_date=sel_date, sel_remarks=sel_remarks)
+                           sel_date=sel_date, sel_remarks=sel_remarks, **_workforce_nav_back())
 
 
 @app.route('/employee/lifecycle/history')
@@ -6483,7 +6530,7 @@ def employee_lifecycle_history():
                            district_id=district_id, project_id=project_id,
                            districts=districts, projects=projects,
                            actions=actions, per_page=per_page,
-                           title='Employee Assignment History')
+                           title='Employee Assignment History', **_workforce_nav_back())
 
 
 @app.route('/employee/lifecycle/history/export')
@@ -6716,7 +6763,8 @@ def _employee_lifecycle_list(action_types, title, add_url, add_label, template_n
                            from_date=from_date, to_date=to_date,
                            districts=districts, projects=projects,
                            per_page=per_page, title=title,
-                           add_url=add_url, add_label=add_label)
+                           add_url=add_url, add_label=add_label,
+                           **_workforce_nav_back())
 
 
 @app.route('/employee/lifecycle/assign/list')
@@ -6775,7 +6823,7 @@ def employee_lifecycle_assign_list():
                            search=search, district_id=district_id, project_id=project_id,
                            districts=districts, projects=projects,
                            per_page=per_page, title='Employee Assignments',
-                           add_url='employee_lifecycle_assign', add_label='New Assignment')
+                           add_url='employee_lifecycle_assign', add_label='New Assignment', **_workforce_nav_back())
 
 @app.route('/employee/lifecycle/deassign/list')
 def employee_lifecycle_deassign_list():
@@ -7640,7 +7688,7 @@ def user_list():
     per_page = request.args.get('per_page', 20, type=int)
     pagination = SimplePagination(users_all, page, per_page)
     users = pagination.items
-    return render_template('user_list.html', users=users, search=search, pagination=pagination, per_page=per_page)
+    return render_template('user_list.html', users=users, search=search, pagination=pagination, per_page=per_page, **_administration_nav_back())
 
 
 @app.route('/users/<int:pk>/delete', methods=['POST'])
@@ -7742,7 +7790,7 @@ def user_form():
     form.employee_post_id.choices = [(0, '-- No Post --')] + [(p.id, p.full_name) for p in posts]
 
     if request.method == 'GET':
-        return render_template('user_form.html', form=form, user=None, allowed_roles_master_only=is_master, master_user_form_read_only=master_user_form_read_only)
+        return render_template('user_form.html', form=form, user=None, allowed_roles_master_only=is_master, master_user_form_read_only=master_user_form_read_only, **_administration_nav_back())
     if form.validate_on_submit():
         employee_post_id = form.employee_post_id.data if form.employee_post_id.data else None
         role_id = None
@@ -7753,23 +7801,23 @@ def user_form():
                 role = Role.query.get(role_id)
                 if role and _role_name(role) in ('Master',) and not is_master:
                     flash('Only Master (Developer) can assign Master access.', 'danger')
-                    return render_template('user_form.html', form=form, user=None, allowed_roles_master_only=is_master, master_user_form_read_only=master_user_form_read_only)
+                    return render_template('user_form.html', form=form, user=None, allowed_roles_master_only=is_master, master_user_form_read_only=master_user_form_read_only, **_administration_nav_back())
                 # Delegation rule: non-master can only assign roles whose effective permissions are subset of their own
                 if role and not is_master:
                     current_codes = _current_user_effective_permission_codes()
                     role_codes = _role_effective_permission_codes(role)
                     if not role_codes.issubset(current_codes):
                         flash('Aap apne se zyada access assign nahi kar sakte. Pehle apne permissions update karwayen.', 'danger')
-                        return render_template('user_form.html', form=form, user=None, allowed_roles_master_only=is_master, master_user_form_read_only=master_user_form_read_only)
+                        return render_template('user_form.html', form=form, user=None, allowed_roles_master_only=is_master, master_user_form_read_only=master_user_form_read_only, **_administration_nav_back())
         username = (form.username.data or '').strip()
         if User.query.filter(func.lower(User.username) == username.lower()).first():
             flash('Username already exists.', 'danger')
-            return render_template('user_form.html', form=form, user=None, allowed_roles_master_only=is_master, master_user_form_read_only=master_user_form_read_only)
+            return render_template('user_form.html', form=form, user=None, allowed_roles_master_only=is_master, master_user_form_read_only=master_user_form_read_only, **_administration_nav_back())
 
         password = (form.password.data or '').strip()
         if not password or len(password) < 4:
             flash('Password must be at least 4 characters.', 'danger')
-            return render_template('user_form.html', form=form, user=None, allowed_roles_master_only=is_master, master_user_form_read_only=master_user_form_read_only)
+            return render_template('user_form.html', form=form, user=None, allowed_roles_master_only=is_master, master_user_form_read_only=master_user_form_read_only, **_administration_nav_back())
         user = User(
             username=username,
             password_hash=generate_password_hash(password),
@@ -7782,7 +7830,7 @@ def user_form():
         db.session.commit()
         flash('User created successfully.', 'success')
         return redirect(url_for('user_list'))
-    return render_template('user_form.html', form=form, user=None, allowed_roles_master_only=is_master, master_user_form_read_only=master_user_form_read_only)
+    return render_template('user_form.html', form=form, user=None, allowed_roles_master_only=is_master, master_user_form_read_only=master_user_form_read_only, **_administration_nav_back())
 
 
 @app.route('/users/<int:pk>/edit', methods=['GET', 'POST'])
@@ -7812,7 +7860,8 @@ def user_edit(pk):
             user=user,
             allowed_roles_master_only=is_master,
             master_user_form_read_only=master_user_form_read_only,
-        )
+        **_administration_nav_back(),
+    )
     if form.validate_on_submit():
         if is_master and not _master_may_post_user_edit(user):
             flash('Master sirf apna account ya Admin role wale user ki details yahan badal sakta hai.', 'danger')
@@ -7832,7 +7881,8 @@ def user_edit(pk):
                         user=user,
                         allowed_roles_master_only=is_master,
                         master_user_form_read_only=master_user_form_read_only,
-                    )
+                    **_administration_nav_back(),
+    )
                 if role and not is_master:
                     current_codes = _current_user_effective_permission_codes()
                     role_codes = _role_effective_permission_codes(role)
@@ -7844,7 +7894,8 @@ def user_edit(pk):
                             user=user,
                             allowed_roles_master_only=is_master,
                             master_user_form_read_only=master_user_form_read_only,
-                        )
+                        **_administration_nav_back(),
+    )
         username = (form.username.data or '').strip()
         other = User.query.filter(func.lower(User.username) == username.lower()).filter(User.id != pk).first()
         if other:
@@ -7855,7 +7906,8 @@ def user_edit(pk):
                 user=user,
                 allowed_roles_master_only=is_master,
                 master_user_form_read_only=master_user_form_read_only,
-            )
+            **_administration_nav_back(),
+    )
 
         user.username = username
         user.full_name = (form.full_name.data or '').strip() or None
@@ -7874,7 +7926,8 @@ def user_edit(pk):
                     user=user,
                     allowed_roles_master_only=is_master,
                     master_user_form_read_only=master_user_form_read_only,
-                )
+                **_administration_nav_back(),
+    )
             user.password_hash = generate_password_hash(password)
             # Manual new password set kiya gaya: first-login flag hata dein
             if getattr(user, 'force_password_change', None):
@@ -7892,6 +7945,7 @@ def user_edit(pk):
         user=user,
         allowed_roles_master_only=is_master,
         master_user_form_read_only=master_user_form_read_only,
+    **_administration_nav_back(),
     )
 
 
@@ -7906,7 +7960,7 @@ def role_list():
     per_page = request.args.get('per_page', 20, type=int)
     pagination = SimplePagination(roles_all, page, per_page)
     roles = pagination.items
-    return render_template('role_list.html', roles=roles, pagination=pagination, per_page=per_page)
+    return render_template('role_list.html', roles=roles, pagination=pagination, per_page=per_page, **_administration_nav_back())
 
 
 # ────────────────────────────────────────────────
@@ -8014,7 +8068,8 @@ def form_control():
             oil_change_limits=oil_change_limits,
             settings_active_tab=active_tab,
             fc_tab_allowed=fc_tab_allowed,
-        )
+        **_administration_nav_back(),
+    )
 
     action = request.form.get('action', '')
     def parse_time(s):
@@ -8282,6 +8337,7 @@ def form_control():
         oil_change_limits=oil_change_limits,
         settings_active_tab=active_tab,
         fc_tab_allowed=fc_tab_allowed,
+    **_administration_nav_back(),
     )
 
 
@@ -8491,7 +8547,8 @@ def role_form():
             permission_matrix=permission_matrix,
             permission_dependencies=PERMISSION_DEPENDENCIES,
             master_role_matrix_read_only=master_role_matrix_read_only,
-        )
+        **_administration_nav_back(),
+    )
     if form.validate_on_submit():
         if is_master:
             flash('Naye roles sirf Admin login bana sakta hai. Master sirf Admin role ki permissions change kar sakta hai.', 'warning')
@@ -8507,7 +8564,8 @@ def role_form():
                 permission_matrix=permission_matrix,
                 permission_dependencies=PERMISSION_DEPENDENCIES,
                 master_role_matrix_read_only=master_role_matrix_read_only,
-            )
+            **_administration_nav_back(),
+    )
         post = EmployeePost.query.get(post_id)
         if not post:
             flash('Selected post not found.', 'danger')
@@ -8519,7 +8577,8 @@ def role_form():
                 permission_matrix=permission_matrix,
                 permission_dependencies=PERMISSION_DEPENDENCIES,
                 master_role_matrix_read_only=master_role_matrix_read_only,
-            )
+            **_administration_nav_back(),
+    )
         name = (post.full_name or '').strip()
         if not name:
             flash('Post has no name.', 'danger')
@@ -8531,7 +8590,8 @@ def role_form():
                 permission_matrix=permission_matrix,
                 permission_dependencies=PERMISSION_DEPENDENCIES,
                 master_role_matrix_read_only=master_role_matrix_read_only,
-            )
+            **_administration_nav_back(),
+    )
         if Role.query.filter(func.lower(Role.name) == name.lower()).first():
             flash('A role with this post name already exists. Select another post or edit the existing role.', 'danger')
             return render_template(
@@ -8542,7 +8602,8 @@ def role_form():
                 permission_matrix=permission_matrix,
                 permission_dependencies=PERMISSION_DEPENDENCIES,
                 master_role_matrix_read_only=master_role_matrix_read_only,
-            )
+            **_administration_nav_back(),
+    )
         role = Role(name=name, description=(form.description.data or '').strip() or None)
         db.session.add(role)
         db.session.commit()
@@ -8573,7 +8634,8 @@ def role_form():
                 permission_matrix=permission_matrix,
                 permission_dependencies=PERMISSION_DEPENDENCIES,
                 master_role_matrix_read_only=master_role_matrix_read_only,
-            )
+            **_administration_nav_back(),
+    )
 
 
 @app.route('/roles/<int:pk>/edit', methods=['GET', 'POST'])
@@ -8642,7 +8704,8 @@ def role_edit(pk):
             permission_matrix=permission_matrix,
             permission_dependencies=PERMISSION_DEPENDENCIES,
             master_role_matrix_read_only=master_role_matrix_read_only,
-        ))
+        **_administration_nav_back(),
+    ))
         resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
         return resp
     if form.validate_on_submit():
@@ -8773,6 +8836,7 @@ def role_edit(pk):
         permission_matrix=permission_matrix,
         permission_dependencies=PERMISSION_DEPENDENCIES,
         master_role_matrix_read_only=master_role_matrix_read_only,
+    **_administration_nav_back(),
     )
 
 
@@ -8863,7 +8927,8 @@ def parking_list():
     parkings = parkings_pagination.items
     return render_template('parking_list.html', parkings=parkings, search=search,
                            pagination=parkings_pagination, per_page=per_page,
-                           sort_by=sort_by, sort_order=sort_order)
+                           sort_by=sort_by, sort_order=sort_order,
+                           **_master_nav_back())
 
 
 @app.route('/parking/import', methods=['GET', 'POST'])
@@ -9093,7 +9158,8 @@ def parking_form(id=None):
                 existing_q = existing_q.filter(ParkingStation.id != parking.id)
             if existing_q.first():
                 flash('Parking Station with this name already exists. Please use a different name.', 'danger')
-                return render_template('parking_form.html', form=form, title='Parking Station', back_url=url_for('parking_list'))
+                return render_template('parking_form.html', form=form, title='Parking Station', back_url=url_for('parking_list'),
+                                       **_nav_back_ctx(url_for('parking_list')))
 
             if not id:
                 db.session.add(parking)
@@ -9104,7 +9170,8 @@ def parking_form(id=None):
             db.session.rollback()
             flash(f'Error saving parking station: {str(e)}', 'danger')
     back_url = url_for('parking_list')
-    return render_template('parking_form.html', form=form, title='Parking Station', back_url=back_url)
+    return render_template('parking_form.html', form=form, title='Parking Station', back_url=back_url,
+                           **_nav_back_ctx(url_for('parking_list')))
 
 
 @app.route('/parking/delete/<int:id>', methods=['POST'])
@@ -9166,7 +9233,8 @@ def districts_list():
     return render_template('districts_list.html', districts=districts, search=search,
                            from_date=from_date_str, to_date=to_date_str,
                            pagination=districts_pagination, per_page=per_page,
-                           sort_by=sort_by, sort_order=sort_order)
+                           sort_by=sort_by, sort_order=sort_order,
+                           **_master_nav_back())
 
 
 @app.route('/districts/export')
@@ -9227,7 +9295,8 @@ def district_form(id=None):
             db.session.rollback()
             flash(f'Error saving district: {str(e)}', 'danger')
     back_url = url_for('districts_list')
-    return render_template('district_form.html', form=form, title='District', back_url=back_url)
+    return render_template('district_form.html', form=form, title='District', back_url=back_url,
+                           **_nav_back_ctx(url_for('districts_list')))
 
 
 @app.route('/district/delete/<int:id>', methods=['POST'])
@@ -9349,7 +9418,8 @@ def assign_project_to_company():
         sort_order=sort_order,
         pagination=pagination,
         per_page=per_page,
-        project_ids_with_districts=project_ids_with_districts
+        project_ids_with_districts=project_ids_with_districts,
+        **_assignments_nav_back(),
     )
 
 
@@ -9406,11 +9476,12 @@ def assign_project_to_company_new():
                 project.assign_remarks = form.assign_remarks.data
                 db.session.commit()
                 flash(f'Project "{project.name}" assigned to "{company.name}".', 'success')
-                return redirect(url_for('assign_project_to_company'))
+                return redirect(url_for('assign_project_to_company', **_preserve_nav_from()))
         except Exception as e:
             db.session.rollback()
             flash(f'Error: {str(e)}', 'danger')
-    return render_template('assign_project_to_company_new.html', form=form)
+    return render_template('assign_project_to_company_new.html', form=form,
+                           **_nav_back_ctx(url_for('assign_project_to_company')))
 
 
 @app.route('/assign_project_to_company/edit/<int:project_id>', methods=['GET', 'POST'])
@@ -9423,7 +9494,7 @@ def assign_project_to_company_edit(project_id):
             'Remove district assignment first (Assignment → District → Project).',
             'danger'
         )
-        return redirect(url_for('assign_project_to_company'))
+        return redirect(url_for('assign_project_to_company', **_preserve_nav_from()))
     form = EditProjectAssignmentForm()
     form.company_id.choices = [(c.id, c.name) for c in Company.query.order_by(Company.name).all()]
     available_projects = Project.query.filter((Project.company_id == None) | (Project.id == project_id)).all()
@@ -9453,11 +9524,12 @@ def assign_project_to_company_edit(project_id):
             
             db.session.commit()
             flash('Assignment updated successfully.', 'success')
-            return redirect(url_for('assign_project_to_company'))
+            return redirect(url_for('assign_project_to_company', **_preserve_nav_from()))
         except Exception as e:
             db.session.rollback()
             flash(f'Error: {str(e)}', 'danger')
-    return render_template('assign_project_to_company_edit.html', form=form, project=old_project)
+    return render_template('assign_project_to_company_edit.html', form=form, project=old_project,
+                           **_nav_back_ctx(url_for('assign_project_to_company')))
 
 
 @app.route('/assign_project_to_company/desassign/<int:project_id>', methods=['POST'])
@@ -9465,7 +9537,7 @@ def desassign_project_from_company(project_id):
     project = Project.query.get_or_404(project_id)
     if not project.company_id:
         flash("This project is not assigned to any company.", 'info')
-        return redirect(url_for('assign_project_to_company'))
+        return redirect(url_for('assign_project_to_company', **_preserve_nav_from()))
     # Block deassign if project is linked to any district
     if project.districts.count() > 0:
         district_names = ', '.join(d.name for d in project.districts.all())
@@ -9474,7 +9546,7 @@ def desassign_project_from_company(project_id):
             'Remove district assignment first (Assignment → District → Project).',
             'danger'
         )
-        return redirect(url_for('assign_project_to_company'))
+        return redirect(url_for('assign_project_to_company', **_preserve_nav_from()))
     try:
         company_name = project.company.name if project.company else 'N/A'
         project.company_id = None
@@ -9485,7 +9557,7 @@ def desassign_project_from_company(project_id):
     except Exception as e:
         db.session.rollback()
         flash(f'Error desassigning project: {str(e)}', 'danger')
-    return redirect(url_for('assign_project_to_company'))
+    return redirect(url_for('assign_project_to_company', **_preserve_nav_from()))
 
 
 # ────────────────────────────────────────────────
@@ -9617,6 +9689,7 @@ def assign_project_to_district():
         per_page=per_page,
         sort_by=sort_by,
         sort_order=sort_order,
+        **_assignments_nav_back(),
     )
 
 
@@ -9723,11 +9796,12 @@ def assign_project_to_district_new():
                 )
                 db.session.commit()
                 flash(f'District "{district.name}" assigned to "{project.name}".', 'success')
-                return redirect(url_for('assign_project_to_district'))
+                return redirect(url_for('assign_project_to_district', **_preserve_nav_from()))
         except Exception as e:
             db.session.rollback()
             flash(f'Error: {str(e)}', 'danger')
-    return render_template('assign_project_to_district_new.html', form=form)
+    return render_template('assign_project_to_district_new.html', form=form,
+                           **_nav_back_ctx(url_for('assign_project_to_district')))
 
 
 @app.route('/assign_project_to_district/edit/<int:project_id>/<int:district_id>', methods=['GET', 'POST'])
@@ -9735,7 +9809,7 @@ def assign_project_to_district_edit(project_id, district_id):
     link = db.session.query(project_district).filter_by(project_id=project_id, district_id=district_id).first()
     if not link:
         flash("Assignment not found.", 'danger')
-        return redirect(url_for('assign_project_to_district'))
+        return redirect(url_for('assign_project_to_district', **_preserve_nav_from()))
     project = Project.query.get_or_404(project_id)
     district = District.query.get_or_404(district_id)
     form = AssignProjectToDistrictForm()
@@ -9759,11 +9833,12 @@ def assign_project_to_district_edit(project_id, district_id):
             )
             db.session.commit()
             flash("Assignment updated successfully!", "success")
-            return redirect(url_for('assign_project_to_district'))
+            return redirect(url_for('assign_project_to_district', **_preserve_nav_from()))
         except Exception as e:
             db.session.rollback()
             flash(f"Error: {str(e)}", "danger")
-    return render_template('assign_project_to_district_edit.html', form=form, project=project, district=district)
+    return render_template('assign_project_to_district_edit.html', form=form, project=project, district=district,
+                           **_nav_back_ctx(url_for('assign_project_to_district')))
 
 
 @app.route('/assign_project_to_district/desassign/<int:project_id>/<int:district_id>', methods=['POST'])
@@ -9780,7 +9855,7 @@ def desassign_district_from_project(project_id, district_id):
             'Remove vehicle assignment first (Assignment → Vehicle → District).',
             'danger'
         )
-        return redirect(url_for('assign_project_to_district'))
+        return redirect(url_for('assign_project_to_district', **_preserve_nav_from()))
     try:
         db.session.execute(
             project_district.delete().where(
@@ -9793,7 +9868,7 @@ def desassign_district_from_project(project_id, district_id):
     except Exception as e:
         db.session.rollback()
         flash(f'Error desassigning: {str(e)}', 'danger')
-    return redirect(url_for('assign_project_to_district'))
+    return redirect(url_for('assign_project_to_district', **_preserve_nav_from()))
 
 
 # ────────────────────────────────────────────────
@@ -9905,6 +9980,7 @@ def assign_vehicle_to_district():
         disable_district=disable_district,
         pagination=pagination,
         per_page=per_page,
+        **_assignments_nav_back(),
     )
 
 
@@ -9978,11 +10054,12 @@ def assign_vehicle_to_district_new():
                 vehicle.assignment_remarks = form.remarks.data
                 db.session.commit()
                 flash(f"Vehicle {vehicle.vehicle_no} assigned successfully!", "success")
-                return redirect(url_for('assign_vehicle_to_district'))
+                return redirect(url_for('assign_vehicle_to_district', **_preserve_nav_from()))
         except Exception as e:
             db.session.rollback()
             flash(f"Error: {str(e)}", "danger")
-    return render_template('assign_vehicle_to_district_new.html', form=form)
+    return render_template('assign_vehicle_to_district_new.html', form=form,
+                           **_nav_back_ctx(url_for('assign_vehicle_to_district')))
 
 
 @app.route('/get_districts_by_project/<int:project_id>')
@@ -10024,13 +10101,13 @@ def desassign_vehicle_from_district(vehicle_id):
             'Remove parking assignment or driver assignment first.',
             'danger'
         )
-        return redirect(url_for('assign_vehicle_to_district'))
+        return redirect(url_for('assign_vehicle_to_district', **_preserve_nav_from()))
     vehicle.district_id = None
     vehicle.assign_to_district_date = None
     vehicle.assignment_remarks = None
     db.session.commit()
     flash("Vehicle desassigned successfully.", "info")
-    return redirect(url_for('assign_vehicle_to_district'))
+    return redirect(url_for('assign_vehicle_to_district', **_preserve_nav_from()))
 
 @app.route('/company/report/<int:id>')
 def company_report(id):
@@ -10053,7 +10130,7 @@ def assign_vehicle_to_district_edit(vehicle_id):
             'Remove parking or driver assignment first.',
             'danger'
         )
-        return redirect(url_for('assign_vehicle_to_district'))
+        return redirect(url_for('assign_vehicle_to_district', **_preserve_nav_from()))
     form = AssignVehicleToDistrictForm()
     form.project_id.choices = [
         (p.id, p.name) for p in Project.query.filter(Project.company_id.isnot(None)).order_by(Project.name).all()
@@ -10094,12 +10171,13 @@ def assign_vehicle_to_district_edit(vehicle_id):
             
             db.session.commit()
             flash("Assignment updated successfully!", "success")
-            return redirect(url_for('assign_vehicle_to_district'))
+            return redirect(url_for('assign_vehicle_to_district', **_preserve_nav_from()))
         except Exception as e:
             db.session.rollback()
             flash(f"Error: {str(e)}", "danger")
 
-    return render_template('assign_vehicle_to_district_edit.html', form=form, vehicle=vehicle)
+    return render_template('assign_vehicle_to_district_edit.html', form=form, vehicle=vehicle,
+                           **_nav_back_ctx(url_for('assign_vehicle_to_district')))
 
 
 @app.route('/get_parking_by_project/<int:project_id>')
@@ -10155,12 +10233,13 @@ def assign_vehicle_to_parking_new():
             vehicle.parking_remarks = form.remarks.data
             db.session.commit()
             flash("Vehicle assigned to parking successfully!", "success")
-            return redirect(url_for('assign_vehicle_to_parking_list'))
+            return redirect(url_for('assign_vehicle_to_parking_list', **_preserve_nav_from()))
         except Exception as e:
             db.session.rollback()
             flash(f"Error: {str(e)}", "danger")
 
-    return render_template('assign_vehicle_to_parking_new.html', form=form)
+    return render_template('assign_vehicle_to_parking_new.html', form=form,
+                           **_nav_back_ctx(url_for('assign_vehicle_to_parking_list')))
 
 @app.route('/get_vehicles_by_district/<int:project_id>/<int:district_id>')
 def get_vehicles_by_district(project_id, district_id):
@@ -10271,6 +10350,7 @@ def assign_vehicle_to_parking_list():
         disable_district=disable_district,
         pagination=pagination,
         per_page=per_page,
+        **_assignments_nav_back(),
     )
 
 
@@ -10386,12 +10466,12 @@ def desassign_vehicle_from_parking(vehicle_id):
             'Remove driver assignment first (Assignment → Driver to Vehicle).',
             'danger'
         )
-        return redirect(url_for('assign_vehicle_to_parking_list'))
+        return redirect(url_for('assign_vehicle_to_parking_list', **_preserve_nav_from()))
     station_name = vehicle.parking_station.name if vehicle.parking_station else "Parking"
     vehicle.parking_station_id = None
     db.session.commit()
     flash(f"Vehicle {vehicle.vehicle_no} removed from {station_name}.", "info")
-    return redirect(url_for('assign_vehicle_to_parking_list'))
+    return redirect(url_for('assign_vehicle_to_parking_list', **_preserve_nav_from()))
 
 @app.route('/assign_vehicle_to_parking/edit/<int:vehicle_id>', methods=['GET', 'POST'])
 def assign_vehicle_to_parking_edit(vehicle_id):
@@ -10403,7 +10483,7 @@ def assign_vehicle_to_parking_edit(vehicle_id):
             'Remove driver assignment first (Assignment → Driver to Vehicle).',
             'danger'
         )
-        return redirect(url_for('assign_vehicle_to_parking_list'))
+        return redirect(url_for('assign_vehicle_to_parking_list', **_preserve_nav_from()))
     form = AssignVehicleToParkingForm()
     
     form.project_id.choices = [
@@ -10453,7 +10533,8 @@ def assign_vehicle_to_parking_edit(vehicle_id):
                 occupied = Vehicle.query.filter_by(parking_station_id=new_ps_id).count()
                 if occupied >= parking.capacity:
                     flash(f"Error: {parking.name} is full!", "danger")
-                    return render_template('assign_vehicle_to_parking_edit.html', form=form, vehicle=vehicle)
+                    return render_template('assign_vehicle_to_parking_edit.html', form=form, vehicle=vehicle,
+                                           **_nav_back_ctx(url_for('assign_vehicle_to_parking_list')))
             
             if vehicle.id != form.vehicle_id.data:
                 vehicle.parking_station_id = None
@@ -10464,12 +10545,13 @@ def assign_vehicle_to_parking_edit(vehicle_id):
             vehicle.parking_remarks = form.remarks.data
             db.session.commit()
             flash("Parking assignment updated successfully!", "success")
-            return redirect(url_for('assign_vehicle_to_parking_list'))
+            return redirect(url_for('assign_vehicle_to_parking_list', **_preserve_nav_from()))
         except Exception as e:
             db.session.rollback()
             flash(f"Error: {str(e)}", "danger")
 
-    return render_template('assign_vehicle_to_parking_edit.html', form=form, vehicle=vehicle)
+    return render_template('assign_vehicle_to_parking_edit.html', form=form, vehicle=vehicle,
+                           **_nav_back_ctx(url_for('assign_vehicle_to_parking_list')))
 
 @app.route('/get_driver_details/<int:driver_id>')
 def get_driver_details(driver_id):
@@ -10643,7 +10725,8 @@ def assign_driver_to_vehicle_new():
 
         if not vehicle or not driver:
             flash("Selected vehicle or driver not found.", "danger")
-            return render_template('assign_driver_to_vehicle_new.html', form=form)
+            return render_template('assign_driver_to_vehicle_new.html', form=form,
+                                   **_nav_back_ctx(url_for('assign_driver_to_vehicle_list')))
 
         if not vehicle.parking_station_id:
             flash("Pehle es vehicle ko Parking Station assign karo.", "danger")
@@ -10662,22 +10745,26 @@ def assign_driver_to_vehicle_new():
                     ]
             if not form.district_id.choices: form.district_id.choices = [(0, '-- Select District --')]
             if not form.vehicle_id.choices:  form.vehicle_id.choices  = [(0, '-- Select Vehicle --')]
-            return render_template('assign_driver_to_vehicle_new.html', form=form, disable_project=disable_project)
+            return render_template('assign_driver_to_vehicle_new.html', form=form, disable_project=disable_project,
+                                   **_nav_back_ctx(url_for('assign_driver_to_vehicle_list')))
 
         current_count = Driver.query.filter_by(vehicle_id=vehicle.id).count()
         if current_count >= (vehicle.driver_capacity or 1):
             flash(f"Vehicle capacity ({vehicle.driver_capacity or 1}) already reached!", "danger")
-            return render_template('assign_driver_to_vehicle_new.html', form=form, disable_project=disable_project)
+            return render_template('assign_driver_to_vehicle_new.html', form=form, disable_project=disable_project,
+                                   **_nav_back_ctx(url_for('assign_driver_to_vehicle_list')))
 
         shift_taken = Driver.query.filter_by(vehicle_id=vehicle.id, shift=form.shift.data).first()
         if shift_taken:
             flash(f"{form.shift.data} shift already assigned to this vehicle!", "danger")
-            return render_template('assign_driver_to_vehicle_new.html', form=form, disable_project=disable_project)
+            return render_template('assign_driver_to_vehicle_new.html', form=form, disable_project=disable_project,
+                                   **_nav_back_ctx(url_for('assign_driver_to_vehicle_list')))
 
         cap = vehicle.driver_capacity or 1
         if cap == 1 and form.shift.data != 'Morning':
             flash("Is vehicle ki capacity 1 hai — sirf Morning shift allowed.", "danger")
-            return render_template('assign_driver_to_vehicle_new.html', form=form, disable_project=disable_project)
+            return render_template('assign_driver_to_vehicle_new.html', form=form, disable_project=disable_project,
+                                   **_nav_back_ctx(url_for('assign_driver_to_vehicle_list')))
 
         try:
             driver.vehicle_id = vehicle.id
@@ -10688,14 +10775,15 @@ def assign_driver_to_vehicle_new():
             driver.assign_remarks = form.remarks.data
             db.session.commit()
             flash(f"Driver {driver.name} assigned to {vehicle.vehicle_no} ({form.shift.data}) successfully!", "success")
-            return redirect(url_for('assign_driver_to_vehicle_list'))
+            return redirect(url_for('assign_driver_to_vehicle_list', **_preserve_nav_from()))
         except Exception as e:
             db.session.rollback()
             flash(f"Error saving assignment: {str(e)}", "danger")
 
     if not form.district_id.choices: form.district_id.choices = [(0, '-- Select District --')]
     if not form.vehicle_id.choices:  form.vehicle_id.choices  = [(0, '-- Select Vehicle --')]
-    return render_template('assign_driver_to_vehicle_new.html', form=form, disable_project=disable_project)
+    return render_template('assign_driver_to_vehicle_new.html', form=form, disable_project=disable_project,
+                           **_nav_back_ctx(url_for('assign_driver_to_vehicle_list')))
 
 @app.route('/get_vehicle_capacity_info/<int:vehicle_id>')
 def get_vehicle_capacity_info(vehicle_id):
@@ -10815,6 +10903,7 @@ def assign_driver_to_vehicle_list():
         disable_district=disable_district,
         pagination=pagination,
         per_page=per_page,
+        **_assignments_nav_back(),
     )
 
 
@@ -10907,7 +10996,7 @@ def desassign_driver_from_vehicle(driver_id):
     db.session.commit()
     
     flash(f"Driver '{driver.name}' successfully removed from Vehicle '{vehicle_no}'.", "info")
-    return redirect(url_for('assign_driver_to_vehicle_list'))
+    return redirect(url_for('assign_driver_to_vehicle_list', **_preserve_nav_from()))
 
 @app.route('/assign_driver_to_vehicle/edit/<int:driver_id>', methods=['GET', 'POST'])
 def assign_driver_to_vehicle_edit(driver_id):
@@ -10951,25 +11040,29 @@ def assign_driver_to_vehicle_edit(driver_id):
         vehicle = Vehicle.query.get(form.vehicle_id.data)
         if not vehicle:
             flash("Vehicle not found", "danger")
-            return render_template('assign_driver_to_vehicle_edit.html', form=form, driver=driver)
+            return render_template('assign_driver_to_vehicle_edit.html', form=form, driver=driver,
+                                   **_nav_back_ctx(url_for('assign_driver_to_vehicle_list')))
 
         if vehicle.id != driver.vehicle_id:
             count = Driver.query.filter_by(vehicle_id=vehicle.id).count()
             if count >= (vehicle.driver_capacity or 1):
                 flash("Target vehicle capacity reached", "danger")
-                return render_template('assign_driver_to_vehicle_edit.html', form=form, driver=driver)
+                return render_template('assign_driver_to_vehicle_edit.html', form=form, driver=driver,
+                                   **_nav_back_ctx(url_for('assign_driver_to_vehicle_list')))
 
         conflict = Driver.query.filter(
             Driver.vehicle_id == vehicle.id, Driver.shift == form.shift.data, Driver.id != driver.id
         ).first()
         if conflict:
             flash(f"{form.shift.data} shift already taken", "danger")
-            return render_template('assign_driver_to_vehicle_edit.html', form=form, driver=driver)
+            return render_template('assign_driver_to_vehicle_edit.html', form=form, driver=driver,
+                                   **_nav_back_ctx(url_for('assign_driver_to_vehicle_list')))
 
         cap = vehicle.driver_capacity or 1
         if cap == 1 and form.shift.data != 'Morning':
             flash("Is vehicle ki capacity 1 hai — sirf Morning shift allowed.", "danger")
-            return render_template('assign_driver_to_vehicle_edit.html', form=form, driver=driver)
+            return render_template('assign_driver_to_vehicle_edit.html', form=form, driver=driver,
+                                   **_nav_back_ctx(url_for('assign_driver_to_vehicle_list')))
 
         try:
             new_driver_id = form.driver_id.data
@@ -10995,12 +11088,13 @@ def assign_driver_to_vehicle_edit(driver_id):
 
             db.session.commit()
             flash("Assignment updated successfully", "success")
-            return redirect(url_for('assign_driver_to_vehicle_list'))
+            return redirect(url_for('assign_driver_to_vehicle_list', **_preserve_nav_from()))
         except Exception as e:
             db.session.rollback()
             flash(f"Error: {str(e)}", "danger")
 
-    return render_template('assign_driver_to_vehicle_edit.html', form=form, driver=driver)
+    return render_template('assign_driver_to_vehicle_edit.html', form=form, driver=driver,
+                           **_nav_back_ctx(url_for('assign_driver_to_vehicle_list')))
 
 
 # Transfer Section - Project
@@ -11046,7 +11140,7 @@ def project_transfers():
         query = query.order_by(order_col.desc())
     
     transfers = query.all()
-    return render_template('project_transfers.html', transfers=transfers, search=search, sort_by=sort_by, sort_order=sort_order)
+    return render_template('project_transfers.html', transfers=transfers, search=search, sort_by=sort_by, sort_order=sort_order, **_transfers_nav_back())
 
 @app.route('/project-transfer/new', methods=['GET', 'POST'])
 def project_transfer_new():
@@ -11061,10 +11155,10 @@ def project_transfer_new():
     if form.validate_on_submit():
         if not form.project_id.data or form.project_id.data == 0:
             flash('Please select a project.', 'danger')
-            return render_template('project_transfer_new.html', form=form)
+            return render_template('project_transfer_new.html', form=form, **_transfers_nav_back())
         if not form.new_company_id.data or form.new_company_id.data == 0:
             flash('Please select transfer to company.', 'danger')
-            return render_template('project_transfer_new.html', form=form)
+            return render_template('project_transfer_new.html', form=form, **_transfers_nav_back())
         try:
             project = Project.query.get_or_404(form.project_id.data)
             new_company = Company.query.get_or_404(form.new_company_id.data)
@@ -11092,7 +11186,7 @@ def project_transfer_new():
             db.session.rollback()
             flash(f'Error during transfer: {str(e)}', 'danger')
 
-    return render_template('project_transfer_new.html', form=form)
+    return render_template('project_transfer_new.html', form=form, **_transfers_nav_back())
 
 @app.route('/project-transfer/edit/<int:id>', methods=['GET', 'POST'])
 def project_transfer_edit(id):
@@ -11108,7 +11202,7 @@ def project_transfer_edit(id):
         db.session.commit()
         flash('Transfer updated successfully!', 'success')
         return redirect(url_for('project_transfers'))
-    return render_template('project_transfer_edit.html', form=form, transfer=transfer)
+    return render_template('project_transfer_edit.html', form=form, transfer=transfer, **_transfers_nav_back())
 
 @app.route('/project-transfer/delete/<int:id>', methods=['POST'])
 def project_transfer_delete(id):
@@ -11292,6 +11386,7 @@ def vehicle_transfers():
         district_choices=districts,
         disable_project=disable_project,
         disable_district=disable_district,
+    **_transfers_nav_back(),
     )
 
 @app.route('/vehicle-transfer/new', methods=['GET', 'POST'])
@@ -11392,7 +11487,7 @@ def vehicle_transfer_new():
     if not form.new_district_id.choices: form.new_district_id.choices = [(0, '-- Select District --')]
     if not form.new_parking_id.choices: form.new_parking_id.choices = [(0, '-- Select Parking --')]
 
-    return render_template('vehicle_transfer_new.html', form=form, disable_from_project=disable_from_project, disable_new_project=disable_new_project)
+    return render_template('vehicle_transfer_new.html', form=form, disable_from_project=disable_from_project, disable_new_project=disable_new_project, **_transfers_nav_back())
 
 @app.route('/vehicle-transfer/edit/<int:id>', methods=['GET', 'POST'])
 def vehicle_transfer_edit(id):
@@ -11433,7 +11528,7 @@ def vehicle_transfer_edit(id):
             occupied = Vehicle.query.filter(Vehicle.parking_station_id == new_park_id, Vehicle.id != vehicle.id).count()
             if occupied >= parking.capacity:
                 flash(f"Cannot update! '{parking.name}' is FULL.", "danger")
-                return render_template('vehicle_transfer_edit.html', form=form, transfer=transfer)
+                return render_template('vehicle_transfer_edit.html', form=form, transfer=transfer, **_transfers_nav_back())
 
         try:
             transfer.new_project_id = form.new_project_id.data
@@ -11453,7 +11548,7 @@ def vehicle_transfer_edit(id):
             db.session.rollback()
             flash(f"Error: {str(e)}", "danger")
 
-    return render_template('vehicle_transfer_edit.html', form=form, transfer=transfer)
+    return render_template('vehicle_transfer_edit.html', form=form, transfer=transfer, **_transfers_nav_back())
 
 @app.route('/vehicle-transfer/delete/<int:id>', methods=['POST'])
 def vehicle_transfer_delete(id):
@@ -11774,6 +11869,7 @@ def driver_transfers():
         district_choices=districts,
         disable_project=disable_project,
         disable_district=disable_district,
+    **_transfers_nav_back(),
     )
 
 @app.route('/driver-transfer/new', methods=['GET', 'POST'])
@@ -11869,21 +11965,21 @@ def driver_transfer_new():
                 t_date = _dt.strptime(transfer_date_raw, '%d-%m-%Y').date()
                 if t_date > pk_date():
                     flash('Transfer date cannot be in the future.', 'danger')
-                    return render_template('driver_transfer_new.html', form=form, disable_from_project=disable_from_project, disable_new_project=disable_new_project)
+                    return render_template('driver_transfer_new.html', form=form, disable_from_project=disable_from_project, disable_new_project=disable_new_project, **_transfers_nav_back())
 
                 driver = Driver.query.get_or_404(driver_id_val)
                 target_vehicle = driver.vehicle
                 if not target_vehicle:
                     flash("Driver is not assigned to any vehicle.", "danger")
-                    return render_template('driver_transfer_new.html', form=form, disable_from_project=disable_from_project, disable_new_project=disable_new_project)
+                    return render_template('driver_transfer_new.html', form=form, disable_from_project=disable_from_project, disable_new_project=disable_new_project, **_transfers_nav_back())
 
                 if (target_vehicle.driver_capacity or 1) < 2:
                     flash(f"Vehicle {target_vehicle.vehicle_no} has capacity 1 — shift change is not applicable.", "danger")
-                    return render_template('driver_transfer_new.html', form=form, disable_from_project=disable_from_project, disable_new_project=disable_new_project)
+                    return render_template('driver_transfer_new.html', form=form, disable_from_project=disable_from_project, disable_new_project=disable_new_project, **_transfers_nav_back())
 
                 if driver.shift == new_shift_val:
                     flash(f"Driver '{driver.name}' is already on {new_shift_val} shift.", "warning")
-                    return render_template('driver_transfer_new.html', form=form, disable_from_project=disable_from_project, disable_new_project=disable_new_project)
+                    return render_template('driver_transfer_new.html', form=form, disable_from_project=disable_from_project, disable_new_project=disable_new_project, **_transfers_nav_back())
 
                 other_driver = Driver.query.filter(
                     Driver.vehicle_id == target_vehicle.id,
@@ -11940,7 +12036,7 @@ def driver_transfer_new():
         else:
             flash("Please select Driver, New Shift and Date.", "danger")
 
-        return render_template('driver_transfer_new.html', form=form, disable_from_project=disable_from_project, disable_new_project=disable_new_project)
+        return render_template('driver_transfer_new.html', form=form, disable_from_project=disable_from_project, disable_new_project=disable_new_project, **_transfers_nav_back())
 
     if form.validate_on_submit():
         try:
@@ -11954,7 +12050,7 @@ def driver_transfer_new():
 
             if existing_count >= (new_vehicle.driver_capacity or 1):
                 flash(f"Vehicle {new_vehicle.vehicle_no} is full (capacity reached).", "danger")
-                return render_template('driver_transfer_new.html', form=form, disable_from_project=disable_from_project, disable_new_project=disable_new_project)
+                return render_template('driver_transfer_new.html', form=form, disable_from_project=disable_from_project, disable_new_project=disable_new_project, **_transfers_nav_back())
 
             shift_taken = Driver.query.filter(
                 Driver.vehicle_id == new_vehicle.id,
@@ -11964,7 +12060,7 @@ def driver_transfer_new():
 
             if shift_taken:
                 flash(f"Shift '{form.new_shift.data}' already assigned in vehicle {new_vehicle.vehicle_no}.", "danger")
-                return render_template('driver_transfer_new.html', form=form, disable_from_project=disable_from_project, disable_new_project=disable_new_project)
+                return render_template('driver_transfer_new.html', form=form, disable_from_project=disable_from_project, disable_new_project=disable_new_project, **_transfers_nav_back())
 
             transfer = DriverTransfer(
                 driver_id=driver.id,
@@ -11995,7 +12091,7 @@ def driver_transfer_new():
             db.session.rollback()
             flash(f"Error: {str(e)}", "danger")
 
-    return render_template('driver_transfer_new.html', form=form, disable_from_project=disable_from_project, disable_new_project=disable_new_project)
+    return render_template('driver_transfer_new.html', form=form, disable_from_project=disable_from_project, disable_new_project=disable_new_project, **_transfers_nav_back())
 
 @app.route('/driver-transfer/delete/<int:id>', methods=['POST'])
 def driver_transfer_delete(id):
@@ -16115,7 +16211,7 @@ def driver_job_left_new():
         else:
             flash("Please correct the errors below.", "danger")
     
-    return render_template('driver_job_left_new.html', form=form)
+    return render_template('driver_job_left_new.html', form=form, **_workforce_nav_back())
 
 # --- 1. REJOIN MAIN ROUTE ---
 @app.route('/driver/rejoin/new', methods=['GET', 'POST'])
@@ -16233,6 +16329,7 @@ def driver_rejoin_new():
         old_vehicle_id=old_vehicle_id,
         old_districts=old_districts,
         old_vehicles=old_vehicles,
+    **_workforce_nav_back(),
     )
 
 @app.route('/driver/job-left/list')
@@ -16332,12 +16429,13 @@ def driver_job_left_list():
         disable_district=disable_district,
         pagination=pagination,
         per_page=per_page,
+    **_workforce_nav_back(),
     )
 
 @app.route('/driver-job-left/view/<int:id>')
 def driver_job_left_view(id):
     record = DriverStatusChange.query.get_or_404(id)
-    return render_template('driver_job_left_view.html', record=record)
+    return render_template('driver_job_left_view.html', record=record, **_workforce_nav_back())
 
 # 2. EDIT ROUTE
 @app.route('/driver-job-left/edit/<int:id>', methods=['GET', 'POST'])
@@ -16378,7 +16476,7 @@ def driver_job_left_edit(id):
         flash('Record updated successfully!', 'success')
         return redirect(url_for('driver_job_left_view', id=record.id))
         
-    return render_template('driver_job_left_edit.html', record=record, form=form)
+    return render_template('driver_job_left_edit.html', record=record, form=form, **_workforce_nav_back())
 
 # 3. DELETE ROUTE
 @app.route('/driver-job-left/delete/<int:id>', methods=['POST'])
@@ -16583,6 +16681,7 @@ def driver_rejoin_list():
         disable_district=disable_district,
         pagination=pagination,
         per_page=per_page,
+    **_workforce_nav_back(),
     )
 
 @app.route('/driver/rejoin/print')
@@ -16642,7 +16741,7 @@ def driver_rejoin_view(id):
     record = DriverStatusChange.query.get_or_404(id)
     
     # 2. Record ko 'driver_rejoin_view.html' template par bhej do
-    return render_template('driver_rejoin_view.html', record=record)
+    return render_template('driver_rejoin_view.html', record=record, **_workforce_nav_back())
 @app.route('/driver-attendance/')
 def driver_attendance_list():
     from auth_utils import get_user_context
@@ -24986,7 +25085,7 @@ def penalty_record_list():
     per_page = request.args.get('per_page', 20, type=int)
     pagination = SimplePagination(rows, page, per_page)
     rows = pagination.items
-    return render_template('penalty_record_list.html', form=form, rows=rows, from_date=from_date, to_date=to_date, district_id=district_id, project_id=project_id, pagination=pagination, per_page=per_page, search=search)
+    return render_template('penalty_record_list.html', form=form, rows=rows, from_date=from_date, to_date=to_date, district_id=district_id, project_id=project_id, pagination=pagination, per_page=per_page, search=search, **_workforce_nav_back())
 
 
 def _penalty_record_query(from_date, to_date, district_id=0, project_id=0):
@@ -25071,7 +25170,7 @@ def penalty_record_new():
         db.session.commit()
         flash('Penalty record saved.', 'success')
         return redirect(url_for('penalty_record_list'))
-    return render_template('penalty_record_form.html', form=form, title='Add Penalty Record')
+    return render_template('penalty_record_form.html', form=form, title='Add Penalty Record', **_workforce_nav_back())
 
 
 @app.route('/penalty-record/<int:pk>/edit', methods=['GET', 'POST'])
@@ -25118,7 +25217,7 @@ def penalty_record_edit(pk):
         db.session.commit()
         flash('Penalty record updated.', 'success')
         return redirect(url_for('penalty_record_list'))
-    return render_template('penalty_record_form.html', form=form, title='Edit Penalty Record', rec=rec)
+    return render_template('penalty_record_form.html', form=form, title='Edit Penalty Record', rec=rec, **_workforce_nav_back())
 
 
 # ────────────────────────────────────────────────
@@ -25149,8 +25248,9 @@ def driver_post_list():
     pagination = query.order_by(order_col).paginate(page=page, per_page=per_page, error_out=False)
     posts = pagination.items
     
-    return render_template('driver_post_list.html', posts=posts, search=search, 
-                         pagination=pagination, per_page=per_page, sort_by=sort_by, sort_order=sort_order)
+    return render_template('driver_post_list.html', posts=posts, search=search,
+                         pagination=pagination, per_page=per_page, sort_by=sort_by, sort_order=sort_order,
+                         **_master_nav_back())
 
 
 @app.route('/driver-post/add', methods=['GET', 'POST'])
@@ -25173,7 +25273,8 @@ def driver_post_form(id=None):
         return redirect(url_for('driver_post_list'))
     if request.method == 'GET' and post:
         form.role_id.data = post.role_id or 0
-    return render_template('driver_post_form.html', form=form, post=post)
+    return render_template('driver_post_form.html', form=form, post=post,
+                           **_nav_back_ctx(url_for('driver_post_list')))
 
 
 @app.route('/driver-post/delete/<int:id>', methods=['POST'])
@@ -34046,7 +34147,7 @@ def system_health():
         'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'R2_ENDPOINT_URL', 'R2_BUCKET_NAME',
         'DATABASE_URL', 'SECRET_KEY',
     ]}
-    return render_template('system_health.html', data=data, env_vars_set=env_vars_set)
+    return render_template('system_health.html', data=data, env_vars_set=env_vars_set, **_administration_nav_back())
 
 
 @app.route('/admin/system-health/api')

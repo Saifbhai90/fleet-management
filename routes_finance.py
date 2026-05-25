@@ -26,6 +26,10 @@ from werkzeug.utils import secure_filename
 from werkzeug.datastructures import FileStorage
 
 
+
+def _finance_nav():
+    from nav_back import hub_nav_back_context
+    return hub_nav_back_context('finance')
 # Helper function for authentication and permission checks
 def check_auth(permission_code=None):
     """Check if user is logged in and has permission"""
@@ -211,7 +215,7 @@ def accounts_quick_payment():
             db.session.rollback()
             flash(f'Error creating payment voucher: {str(e)}', 'danger')
     
-    return render_template('finance/payment_voucher_form.html', form=form, title='Payment Voucher')
+    return render_template('finance/payment_voucher_form.html', form=form, title='Payment Voucher', **_finance_nav())
 
 
 def payment_vouchers_list():
@@ -291,7 +295,7 @@ def payment_vouchers_list():
                          from_date=from_date, to_date=to_date,
                          district_id=district_id, project_id=project_id,
                          sort_by=sort_by, sort_order=sort_order,
-                         page=page, per_page=per_page, search=search)
+                         page=page, per_page=per_page, search=search, **_finance_nav())
 
 
 def payment_voucher_edit(pk):
@@ -342,7 +346,7 @@ def payment_voucher_edit(pk):
             db.session.rollback()
             flash(f'Error updating payment voucher: {str(e)}', 'danger')
     
-    return render_template('finance/payment_voucher_form.html', form=form, title='Edit Payment Voucher', pv=pv)
+    return render_template('finance/payment_voucher_form.html', form=form, title='Edit Payment Voucher', pv=pv, **_finance_nav())
 
 
 def payment_voucher_delete(pk):
@@ -413,7 +417,7 @@ def accounts_quick_receipt():
             db.session.rollback()
             flash(f'Error creating receipt voucher: {str(e)}', 'danger')
     
-    return render_template('finance/receipt_voucher_form.html', form=form, title='Receipt Voucher')
+    return render_template('finance/receipt_voucher_form.html', form=form, title='Receipt Voucher', **_finance_nav())
 
 
 def receipt_vouchers_list():
@@ -477,7 +481,7 @@ def receipt_vouchers_list():
                          vouchers=vouchers, pagination=pagination,
                          from_date=from_date, to_date=to_date,
                          sort_by=sort_by, sort_order=sort_order,
-                         page=page, per_page=per_page, search=search)
+                         page=page, per_page=per_page, search=search, **_finance_nav())
 
 
 # ════════════════════════════════════════════════════════════════════════════════
@@ -523,7 +527,7 @@ def accounts_bank_entry():
             db.session.rollback()
             flash(f'Error creating bank entry: {str(e)}', 'danger')
     
-    return render_template('finance/bank_entry_form.html', form=form, title='Bank Entry')
+    return render_template('finance/bank_entry_form.html', form=form, title='Bank Entry', **_finance_nav())
 
 
 def bank_entries_list():
@@ -574,7 +578,7 @@ def bank_entries_list():
     return render_template('finance/bank_entries_list.html',
                          entries=entries, pagination=pagination,
                          from_date=from_date, to_date=to_date,
-                         page=page, per_page=per_page, search=search)
+                         page=page, per_page=per_page, search=search, **_finance_nav())
 
 
 # ════════════════════════════════════════════════════════════════════════════════
@@ -641,7 +645,7 @@ def accounts_account_ledger():
     return render_template('finance/account_ledger.html',
                          form=form, ledger_data=ledger_data, dto_summary=dto_summary,
                          category_choices=category_choices, selected_categories=selected_categories,
-                         title='Account Ledger')
+                         title='Account Ledger', **_finance_nav())
 
 
 # ════════════════════════════════════════════════════════════════════════════════
@@ -776,7 +780,7 @@ def accounts_balance_sheet():
     return render_template('finance/balance_sheet.html',
                          form=form, as_of_date=as_of_date,
                          balance_sheet_data=balance_sheet_data,
-                         title='Balance Sheet')
+                         title='Balance Sheet', **_finance_nav())
 
 
 # ════════════════════════════════════════════════════════════════════════════════
@@ -1373,7 +1377,7 @@ def chart_of_accounts_list():
     return render_template('finance/chart_of_accounts.html',
                            title='Chart of Accounts', accounts=page_accounts,
                            pagination=pagination, per_page=per_page, search=search,
-                           movement_map=movement_map)
+                           movement_map=movement_map, **_finance_nav())
 
 
 def chart_of_accounts_add():
@@ -1406,7 +1410,7 @@ def chart_of_accounts_add():
             db.session.rollback()
             flash(f'Error: {e}', 'danger')
 
-    return render_template('finance/account_form.html', form=form, title='Add Account')
+    return render_template('finance/account_form.html', form=form, title='Add Account', **_finance_nav())
 
 
 def chart_of_accounts_edit(pk):
@@ -1438,7 +1442,7 @@ def chart_of_accounts_edit(pk):
             db.session.rollback()
             flash(f'Error: {e}', 'danger')
 
-    return render_template('finance/account_form.html', form=form, title='Edit Account')
+    return render_template('finance/account_form.html', form=form, title='Edit Account', **_finance_nav())
 
 
 def chart_of_accounts_toggle(pk):
@@ -2034,7 +2038,8 @@ def fund_transfer_add():
             title='New Fund Transfer',
             existing_attachments=[],
             last_saved_transfer=last_saved_transfer,
-        )
+        **_finance_nav(),
+    )
 
     if form.validate_on_submit():
         try:
@@ -2048,7 +2053,8 @@ def fund_transfer_add():
                     title='New Fund Transfer',
                     existing_attachments=[],
                     last_saved_transfer=last_saved_transfer,
-                )
+                **_finance_nav(),
+    )
 
             amount_val = Decimal(str(form.amount.data or 0))
             if amount_val <= Decimal('0'):
@@ -2059,7 +2065,8 @@ def fund_transfer_add():
                     title='New Fund Transfer',
                     existing_attachments=[],
                     last_saved_transfer=last_saved_transfer,
-                )
+                **_finance_nav(),
+    )
             category_val = (form.category.data or '').strip()
             if not category_val:
                 flash('Category / Purpose is required.', 'danger')
@@ -2069,7 +2076,8 @@ def fund_transfer_add():
                     title='New Fund Transfer',
                     existing_attachments=[],
                     last_saved_transfer=last_saved_transfer,
-                )
+                **_finance_nav(),
+    )
 
             from_wallet = ensure_wallet_account(from_type, from_id)
             to_wallet = ensure_wallet_account(to_type, to_id)
@@ -2122,6 +2130,7 @@ def fund_transfer_add():
         title='New Fund Transfer',
         existing_attachments=[],
         last_saved_transfer=last_saved_transfer,
+    **_finance_nav(),
     )
 
 
@@ -2171,7 +2180,7 @@ def fund_transfer_edit(pk):
     if request.method == 'POST' and not form.validate_on_submit():
         _flash_fund_transfer_form_errors(form)
         return render_template('finance/fund_transfer_form.html', form=form, title='Edit Fund Transfer',
-                               existing_attachments=_ft_existing_attachments_for_form(transfer))
+                               existing_attachments=_ft_existing_attachments_for_form(transfer), **_finance_nav())
 
     if form.validate_on_submit():
         try:
@@ -2190,12 +2199,12 @@ def fund_transfer_edit(pk):
             if amount_val <= Decimal('0'):
                 flash('Amount must be greater than 0.', 'danger')
                 return render_template('finance/fund_transfer_form.html', form=form, title='Edit Fund Transfer',
-                                       existing_attachments=_ft_existing_attachments_for_form(transfer))
+                                       existing_attachments=_ft_existing_attachments_for_form(transfer), **_finance_nav())
             category_val = (form.category.data or '').strip()
             if not category_val:
                 flash('Category / Purpose is required.', 'danger')
                 return render_template('finance/fund_transfer_form.html', form=form, title='Edit Fund Transfer',
-                                       existing_attachments=_ft_existing_attachments_for_form(transfer))
+                                       existing_attachments=_ft_existing_attachments_for_form(transfer), **_finance_nav())
             from_wallet = ensure_wallet_account(from_type, from_id)
             to_wallet = ensure_wallet_account(to_type, to_id)
 
@@ -2236,7 +2245,7 @@ def fund_transfer_edit(pk):
             flash(f'Error: {e}', 'danger')
 
     return render_template('finance/fund_transfer_form.html', form=form, title='Edit Fund Transfer',
-                           existing_attachments=_ft_existing_attachments_for_form(transfer))
+                           existing_attachments=_ft_existing_attachments_for_form(transfer), **_finance_nav())
 
 
 def fund_transfer_delete(pk):
@@ -2375,7 +2384,7 @@ def fund_transfers_list():
                            category_choices=category_choices,
                            page_amount_subtotal=page_amount_subtotal,
                            overall_amount_total=overall_amount_total,
-                           show_upload_media_columns=show_upload_media_columns)
+                           show_upload_media_columns=show_upload_media_columns, **_finance_nav())
 
 
 def _ft_media_items_from_path(attachment, display_name='Attachment'):
@@ -2655,7 +2664,7 @@ def wallet_dashboard():
 
     return render_template('finance/wallet_dashboard.html',
                            form=form, wallets=wallets, summary=summary,
-                           search=search)
+                           search=search, **_finance_nav())
 
 
 def _sum_transfers_received(person_type, person_id):
@@ -2740,7 +2749,7 @@ def journal_voucher_add():
             flash(f'Error: {e}', 'danger')
 
     return render_template('finance/journal_voucher_form.html',
-                           form=form, title='New Journal Voucher', accounts=accounts)
+                           form=form, title='New Journal Voucher', accounts=accounts, **_finance_nav())
 
 
 def journal_vouchers_list():
@@ -2814,7 +2823,7 @@ def journal_vouchers_list():
 
     return render_template('finance/journal_vouchers_list.html',
                            entries=entries, from_date=from_date, to_date=to_date, per_page=per_page, search=search,
-                           totals_map=totals_map, scope_map=scope_map)
+                           totals_map=totals_map, scope_map=scope_map, **_finance_nav())
 
 
 def journal_voucher_detail(pk):

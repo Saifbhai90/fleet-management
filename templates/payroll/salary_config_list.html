@@ -9,6 +9,8 @@
         <div class="card-header py-3 px-4 d-flex flex-wrap justify-content-between align-items-center gap-2"
              style="background:linear-gradient(135deg,#0f766e 0%,#14b8a6 100%);color:#fff;">
           <div>
+            {% from 'partials/nav_back_button.html' import nav_back_button %}
+            {{ nav_back_button() }}
             <h6 class="mb-0 fw-bold"><i class="bi bi-gear-wide-connected me-2"></i>Salary Configuration</h6>
             <small class="opacity-75">{{ pagination.total if pagination else 0 }} record{{ 's' if (pagination and pagination.total != 1) }} configured</small>
           </div>

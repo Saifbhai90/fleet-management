@@ -2,6 +2,9 @@
 {% block title %}Edit Job Left Record{% endblock %}
 
 {% block content %}
+
+{% from 'partials/nav_back_button.html' import nav_back_button %}
+<div class="mb-2">{{ nav_back_button() }}</div>
 <style>
     /* Same CSS as your New Job Left page */
     .page-wrapper { min-height: calc(100vh - 80px); display: flex; align-items: center; justify-content: center; padding: 20px; background-color: #f4f7f9; }

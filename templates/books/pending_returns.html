@@ -30,6 +30,8 @@
       <div class="card shadow-sm border-0 rounded-3 overflow-hidden">
         <div class="card-header py-3 px-4"
              style="background:linear-gradient(135deg,#dc2626 0%,#f87171 100%);color:#fff;">
+          {% from 'partials/nav_back_button.html' import nav_back_button %}
+          {{ nav_back_button() }}
           <h6 class="mb-0 fw-bold"><i class="bi bi-exclamation-triangle me-2"></i>Pending Book Returns</h6>
           <small class="opacity-75">Books that have been issued but not yet returned</small>
         </div>

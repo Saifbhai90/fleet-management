@@ -4,7 +4,9 @@
 {% block content %}
 <div class="container-fluid py-3">
     <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
-        <h2 class="mb-0"><i class="bi bi-arrow-left-right me-2 text-success"></i>Fund Transfers</h2>
+                {% from 'partials/nav_back_button.html' import nav_back_button %}
+        {{ nav_back_button() }}
+<h2 class="mb-0"><i class="bi bi-arrow-left-right me-2 text-success"></i>Fund Transfers</h2>
         <div class="d-flex align-items-center gap-2">
             <button class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#acctVerifyModal" title="Account Verify"><i class="bi bi-bank me-1"></i>Account Verify</button>
             <button class="btn btn-outline-secondary btn-sm" id="btnPrintReport" title="Print / Preview"><i class="bi bi-eye me-1"></i>Print / Preview</button>
