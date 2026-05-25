@@ -1,6 +1,27 @@
 {% extends "base.html" %}
 {% block title %}Day Wise Attendance Report{% endblock %}
 
+{% block extra_head %}
+<script>
+(function() {
+  function markDailyNativeRoot() {
+    var native = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())
+      || !!(window.FleetBridge && window.FleetBridge.isNative)
+      || document.documentElement.classList.contains('capacitor-native');
+    if (!native) return;
+    document.documentElement.classList.add('daily-report-native');
+    var page = document.querySelector('.daily-attn-page');
+    if (page) page.classList.add('daily-mode-native');
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', markDailyNativeRoot);
+  } else {
+    markDailyNativeRoot();
+  }
+})();
+</script>
+{% endblock %}
+
 {% block content %}
 <style>
   .daily-attn-page {
@@ -29,9 +50,34 @@
   }
   .daily-attn-page .filter-card { border-radius: 14px; border: 1px solid #e2e8f0; box-shadow: 0 4px 18px rgba(15, 118, 110, 0.08); }
   .daily-attn-page .filter-card .form-label { font-size: 0.78rem; font-weight: 600; color: #475569; margin-bottom: 0.2rem; }
+  .daily-attn-web-only .fuel-list-card {
+    border: 1px solid #e9ecef; border-radius: 12px;
+    box-shadow: 0 2px 10px rgba(16, 24, 40, 0.06);
+  }
+  .daily-attn-web-only .fuel-list-card .card-header {
+    background: linear-gradient(to right, #f8f9fa 0%, #fff 100%);
+    font-weight: 600; font-size: 0.87rem;
+  }
+  .daily-attn-web-only #dailyReportTable { white-space: nowrap; }
+  .daily-attn-web-only #dailyReportTable thead th { text-align: center; vertical-align: middle; }
+  .daily-attn-web-only #dailyReportTable .fc-1,
+  .daily-attn-web-only #dailyReportTable .fc-2,
+  .daily-attn-web-only #dailyReportTable .fc-3,
+  .daily-attn-web-only #dailyReportTable .fc-4,
+  .daily-attn-web-only #dailyReportTable .fc-5,
+  .daily-attn-web-only #dailyReportTable .fc-6 { text-align: left; }
+  .daily-attn-web-only #dailyReportTable .day-col { min-width: 22px; text-align: center; }
+  .daily-attn-web-only #dailyReportTable .sum-col { background-color: #e0f2fe; color: #0369a1; font-weight: 700; text-align: center; }
+  .daily-attn-web-only #dailyReportTable .day-cell[title] { cursor: help; }
+  .daily-attn-web-only #dailyReportTable .cell-present { background-color: #ecfdf5 !important; color: #059669 !important; font-weight: 700; }
+  .daily-attn-web-only #dailyReportTable .cell-absent { background-color: #fef2f2 !important; color: #dc2626 !important; font-weight: 700; }
+  .daily-attn-web-only #dailyReportTable .cell-leave { background-color: #fffbeb !important; color: #d97706 !important; font-weight: 700; }
+  .daily-attn-web-only #dailyReportTable .cell-late { background-color: #fef9c3 !important; color: #854d0e !important; font-weight: 700; }
+  .daily-attn-web-only #dailyReportTable .cell-half { background-color: #f3f4f6 !important; color: #374151 !important; font-weight: 700; }
+  .daily-attn-web-only #dailyReportTable .cell-off { background-color: #f5f5f4 !important; color: #57534e !important; font-weight: 700; }
+  .daily-attn-web-only #dailyReportTable .cell-empty { color: transparent; }
   .daily-attn-shell {
-    border-radius: 14px; overflow: visible; border: 1px solid #e2e8f0;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08); background: #fff;
+    border-radius: 14px; overflow: visible; border: none; box-shadow: none; background: transparent;
     scroll-margin-top: 12px;
   }
   .daily-attn-toolbar {
@@ -377,7 +423,8 @@
   .daily-attn-web-only { display: block; }
 
   html.capacitor-native .daily-attn-page .daily-attn-web-only,
-  html.daily-report-native .daily-attn-page .daily-attn-web-only {
+  html.daily-report-native .daily-attn-page .daily-attn-web-only,
+  .daily-attn-page.daily-mode-native .daily-attn-web-only {
     display: none !important;
     visibility: hidden !important;
     position: absolute !important;
@@ -388,18 +435,21 @@
     pointer-events: none !important;
   }
   html.capacitor-native .daily-attn-page .daily-native-view,
-  html.daily-report-native .daily-attn-page .daily-native-view {
+  html.daily-report-native .daily-attn-page .daily-native-view,
+  .daily-attn-page.daily-mode-native .daily-native-view {
     display: block !important;
     visibility: visible !important;
     opacity: 1 !important;
   }
   html.capacitor-native .daily-attn-shell.daily-grid-pending .daily-native-view,
-  html.daily-report-native .daily-attn-shell.daily-grid-pending .daily-native-view {
+  html.daily-report-native .daily-attn-shell.daily-grid-pending .daily-native-view,
+  .daily-attn-page.daily-mode-native .daily-attn-shell.daily-grid-pending .daily-native-view {
     visibility: visible !important;
   }
 
   /* ── Capacitor app only: card + calendar (web table hidden above) ── */
-  html.capacitor-native .daily-attn-page .daily-attn-scroll { display: none !important; }
+  html.capacitor-native .daily-attn-page .daily-attn-scroll,
+  .daily-attn-page.daily-mode-native .daily-attn-scroll { display: none !important; }
   html.capacitor-native .daily-attn-page .daily-attn-shell {
     border: none; box-shadow: none; background: transparent; border-radius: 0;
   }
@@ -491,8 +541,10 @@
     margin: 0 auto 0; display: flex;
   }
   .daily-legend-toggle { display: none; }
-  html.capacitor-native .daily-attn-page .daily-attn-toolbar__web-title { display: none !important; }
-  html.capacitor-native .daily-attn-page .daily-attn-toolbar--shared {
+  html.capacitor-native .daily-attn-page .daily-attn-toolbar__web-title,
+  .daily-attn-page.daily-mode-native .daily-attn-toolbar__web-title { display: none !important; }
+  html.capacitor-native .daily-attn-page .daily-attn-toolbar--shared,
+  .daily-attn-page.daily-mode-native .daily-attn-toolbar--shared {
     border: none; background: transparent; padding: 0 0 0.5rem; margin: 0;
     box-shadow: none;
   }
@@ -1011,8 +1063,10 @@
       || document.documentElement.classList.contains('capacitor-native');
     if (native) {
       document.documentElement.classList.add('daily-report-native');
+      document.documentElement.classList.add('capacitor-native');
       var page = document.querySelector('.daily-attn-page');
       if (page) page.classList.add('daily-mode-native');
+      document.body.classList.add('capacitor-native');
     }
   })();
   </script>
@@ -1057,7 +1111,7 @@
   {% endmacro %}
   {% set cal_month_label = day_headers[0].strftime('%B %Y') if day_headers else '' %}
   {% set cal_start_pad = ((day_headers[0].weekday() + 1) % 7) if day_headers else 0 %}
-  <div class="daily-attn-shell daily-grid-pending" id="dailyReportResults">
+  <div class="daily-attn-shell daily-grid-ready" id="dailyReportResults">
     <div class="daily-attn-toolbar no-print daily-attn-toolbar--shared">
       <span class="title-chip daily-attn-toolbar__web-title"><i class="bi bi-calendar-check me-1"></i>{{ report_title }}</span>
       <div class="d-flex align-items-center gap-2 daily-attn-toolbar__search-wrap">
@@ -1065,26 +1119,20 @@
       </div>
     </div>
     <div class="daily-attn-web-only" id="dailyReportWebGrid">
-    <div class="daily-attn-scroll">
-      <table class="daily-attn-table" id="dailyReportTable" data-ft-ignore="1">
-        <colgroup>
-          <col style="width:var(--daily-fc-1-w)">
-          <col style="width:var(--daily-fc-2-w)">
-          <col style="width:var(--daily-fc-3-w)">
-          <col style="width:var(--daily-fc-4-w)">
-          <col style="width:var(--daily-fc-5-w)">
-          <col style="width:var(--daily-fc-6-w)">
-        </colgroup>
-        <thead>
+    <div class="card fuel-list-card overflow-hidden">
+      <div class="card-body p-0">
+      <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0 small" id="dailyReportTable">
+        <thead class="table-light">
           <tr class="hdr-row-1">
-            <th rowspan="2" class="frozen-col fc-1 hdr-frozen no-ft-filter info-col"><span class="daily-frozen-hdr-text">Sr</span></th>
-            <th rowspan="2" class="frozen-col fc-2 hdr-frozen no-ft-filter info-col"><span class="daily-frozen-hdr-text">District</span></th>
-            <th rowspan="2" class="frozen-col fc-3 hdr-frozen no-ft-filter info-col"><span class="daily-frozen-hdr-text">Project</span></th>
-            <th rowspan="2" class="frozen-col fc-4 hdr-frozen no-ft-filter info-col"><span class="daily-frozen-hdr-text">Vehicle</span></th>
-            <th rowspan="2" class="frozen-col fc-5 hdr-frozen no-ft-filter info-col"><span class="daily-frozen-hdr-text">Shift</span></th>
-            <th rowspan="2" class="frozen-col fc-6 hdr-frozen no-ft-filter info-col"><span class="daily-frozen-hdr-text">Driver Name</span></th>
+            <th rowspan="2" class="fc-1 info-col">Sr</th>
+            <th rowspan="2" class="fc-2 info-col">District</th>
+            <th rowspan="2" class="fc-3 info-col">Project</th>
+            <th rowspan="2" class="fc-4 info-col">Vehicle</th>
+            <th rowspan="2" class="fc-5 info-col">Shift</th>
+            <th rowspan="2" class="fc-6 info-col">Driver Name</th>
             {% for d in day_headers %}
-            <th colspan="2" class="date-hdr no-ft-filter">{{ '%02d'|format(d.day) }}</th>
+            <th colspan="2" class="date-hdr text-center">{{ '%02d'|format(d.day) }}</th>
             {% endfor %}
             {% for st in status_columns %}
             <th rowspan="2" class="sum-col" data-ft-col="{{ 6 + (day_headers|length * 2) + loop.index0 }}">{{ st }}</th>
@@ -1143,6 +1191,8 @@
           </tr>
         </tfoot>
       </table>
+      </div>
+      </div>
     </div>
     </div>{# /.daily-attn-web-only #}
 
@@ -1624,7 +1674,7 @@
   function fitFrozenInfoColumns() {
     if (isDailyNativeApp()) return;
     var tbl = document.getElementById('dailyReportTable');
-    if (!tbl) return;
+    if (!tbl || !tbl.classList.contains('daily-attn-table')) return;
     var page = tbl.closest('.daily-attn-page');
     if (page) {
       var blockW = 0;
@@ -1975,7 +2025,7 @@
       revealDailyGrid();
       return;
     }
-    if (tbl.dataset.ftEnhanced === '1' || tbl.getAttribute('data-ft-ignore') === '1' || attempts > 50) {
+    if (tbl.dataset.ftEnhanced === '1' || attempts > 50) {
       revealDailyGrid();
       updateDayFootTotals();
       scrollToReport();
@@ -2968,11 +3018,14 @@
   var _dailyResizeTimer = null;
   function initDailyGrid() {
     if (isDailyNativeApp()) {
+      document.documentElement.classList.add('daily-report-native');
       var page = document.querySelector('.daily-attn-page');
       if (page) page.classList.add('daily-mode-native');
       revealDailyGrid();
       return;
     }
+    revealDailyGrid();
+    if (window.fleetTableEnhance) window.fleetTableEnhance('dailyReportTable');
     waitForFleetThenInit(0);
     window.addEventListener('resize', function() {
       if (isDailyNativeApp()) return;

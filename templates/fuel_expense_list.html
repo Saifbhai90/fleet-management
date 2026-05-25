@@ -1,13 +1,15 @@
 {% extends "base.html" %}
 {% block title %}Fuel Expense{% endblock %}
 {% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/fleet_data_grid.css') }}">
 <style>
   .fuel-list-wrap { max-width: min(1700px, calc(100vw - 96px)); margin: 0 auto; }
   .fuel-list-head { background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%); color:#fff; border-radius: 12px; padding: .65rem 1rem; }
   .fuel-list-card { border: 1px solid #e9ecef; border-radius: 12px; box-shadow: 0 2px 10px rgba(16,24,40,.06); }
   .fuel-list-card .card-header { background: linear-gradient(to right, #f8f9fa 0%, #fff 100%); font-weight: 600; font-size: .87rem; }
+  .fuel-grid-page .fuel-list-card .card-body.p-0 { padding: 0 !important; }
 </style>
-<div class="container-fluid py-3">
+<div class="container-fluid py-3 fuel-grid-page">
   <script type="application/json" id="locationCascadeData">{{ location_cascade|tojson }}</script>
   <div class="fuel-list-wrap">
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 fuel-list-head">
@@ -102,11 +104,11 @@
     </div>
     <div class="card-body p-0">
       {% set umc = show_upload_media_columns|default(true) %}
-      <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0 small" id="fuelExpenseTable">
-          <thead class="table-light">
-            <tr>
-              <th class="ps-3">#</th>
+      <div class="daily-attn-scroll">
+        <table class="daily-attn-table mb-0" id="fuelExpenseTable">
+          <thead>
+            <tr class="hdr-row-1">
+              <th class="ps-3 text-center" style="min-width:42px;width:42px;">#</th>
               <th>District</th>
               <th>Vehicle</th>
               <th>Fuel Type</th>
@@ -129,7 +131,7 @@
               <th class="text-center">Upload Status</th>
               <th class="text-center">Media</th>
               {% endif %}
-              <th class="text-center pe-3">Actions</th>
+              <th class="text-center pe-3" style="min-width:120px;">Actions</th>
             </tr>
           </thead>
           <tbody>
