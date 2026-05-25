@@ -60,28 +60,61 @@
     background: linear-gradient(to right, #f8f9fa 0%, #fff 100%);
     font-weight: 600; font-size: 0.87rem;
   }
-  .daily-attn-web-only .table-responsive {
-    max-height: calc(100vh - 220px);
+  .daily-attn-web-only .table-responsive.daily-web-table-scroll {
+    --daily-body-font: 11px;
+    --daily-head-font: 12px;
+    --daily-row-h: 34px;
+    --daily-hdr-block-h: 72px;
+    --daily-foot-h: 38px;
+    max-height: calc(var(--daily-hdr-block-h) + var(--daily-foot-h) + (20 * var(--daily-row-h)));
     overflow: auto;
     border-radius: 0 0 12px 12px;
     -webkit-overflow-scrolling: touch;
+    border: 1px solid #94a3b8;
+    background: #fff;
   }
   .daily-attn-web-only #dailyReportTable {
     white-space: nowrap;
     width: max-content;
     min-width: 100%;
     margin-bottom: 0;
-    font-size: 9px;
-    border-collapse: collapse;
+    font-size: var(--daily-body-font);
+    border-collapse: separate;
+    border-spacing: 0;
     --bs-table-bg: transparent;
     --bs-table-hover-bg: #f0f9ff;
+    --bs-table-border-color: #94a3b8;
+  }
+  .daily-attn-web-only #dailyReportTable > :not(caption) > * > * {
+    border: 1px solid #94a3b8 !important;
+    box-shadow: none !important;
   }
   .daily-attn-web-only #dailyReportTable th,
   .daily-attn-web-only #dailyReportTable td {
-    border: 1px solid var(--daily-grid-line) !important;
     text-align: center;
     vertical-align: middle;
-    padding: 3px 4px;
+    padding: 5px 7px;
+    line-height: 1.3;
+  }
+  .daily-attn-web-only #dailyReportTable thead th {
+    position: sticky;
+    z-index: 12;
+    font-size: var(--daily-head-font);
+  }
+  .daily-attn-web-only #dailyReportTable thead tr.hdr-row-1 th {
+    top: 0;
+  }
+  .daily-attn-web-only #dailyReportTable thead tr.hdr-row-2 th.day-col {
+    top: var(--daily-hdr-row1-h, 34px);
+    z-index: 11;
+  }
+  .daily-attn-web-only #dailyReportTable tfoot td {
+    position: sticky;
+    bottom: 0;
+    z-index: 12;
+  }
+  .daily-attn-web-only #dailyReportTable tbody tr {
+    height: var(--daily-row-h);
   }
   .daily-attn-web-only #dailyReportTable thead th.fc-1,
   .daily-attn-web-only #dailyReportTable thead th.fc-2,
@@ -91,35 +124,46 @@
   .daily-attn-web-only #dailyReportTable thead th.fc-6 {
     background: var(--daily-frozen-hdr-bg) !important;
     color: var(--daily-frozen-hdr-text) !important;
-    border-color: var(--daily-frozen-hdr-border) !important;
+    border-color: #5eead4 !important;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.04em;
-    font-size: 9px;
+    letter-spacing: 0.03em;
+    font-size: var(--daily-head-font);
   }
   .daily-attn-web-only #dailyReportTable thead th.date-hdr {
     background: #0f172a !important;
     color: #fff !important;
-    border-color: #1e293b !important;
+    border-color: #334155 !important;
     font-weight: 700;
-    font-size: 10px;
+    font-size: calc(var(--daily-head-font) + 1px);
   }
   .daily-attn-web-only #dailyReportTable thead tr.hdr-row-2 th.day-col {
     background: #166534 !important;
     color: #ecfdf5 !important;
     border-color: #14532d !important;
     font-weight: 700;
-    font-size: 9px;
+    font-size: var(--daily-head-font);
+    min-width: 30px;
+    padding: 4px 6px;
+  }
+  .daily-attn-web-only #dailyReportTable thead tr.hdr-row-2 th.day-col .ft-filter-btn {
+    opacity: 0.75;
+    color: #ecfdf5;
+    font-size: 10px;
+  }
+  .daily-attn-web-only #dailyReportTable thead tr.hdr-row-2 th.day-col .ft-filter-btn:hover,
+  .daily-attn-web-only #dailyReportTable thead tr.hdr-row-2 th.day-col .ft-filter-btn.active {
+    opacity: 1;
+    color: #fff;
   }
   .daily-attn-web-only #dailyReportTable thead th.sum-col {
     background: #2563eb !important;
     color: #fff !important;
     border-color: #1d4ed8 !important;
     font-weight: 700;
-    font-size: 10px;
+    font-size: var(--daily-head-font);
   }
-  .daily-attn-web-only #dailyReportTable thead th.date-hdr .ft-filter-wrap,
-  .daily-attn-web-only #dailyReportTable thead th.day-col .ft-filter-wrap { display: none !important; }
+  .daily-attn-web-only #dailyReportTable thead th.date-hdr .ft-filter-wrap { display: none !important; }
   .daily-attn-web-only #dailyReportTable .fc-1,
   .daily-attn-web-only #dailyReportTable .fc-2,
   .daily-attn-web-only #dailyReportTable .fc-3,
@@ -129,24 +173,27 @@
   .daily-attn-web-only #dailyReportTable tbody .frozen-col.info-col {
     text-align: left;
     background: var(--daily-frozen-bg);
-    font-size: 9px;
+    font-size: var(--daily-body-font);
   }
   .daily-attn-web-only #dailyReportTable tbody tr:nth-child(even) .frozen-col.info-col {
     background: var(--daily-frozen-bg-alt);
   }
   .daily-attn-web-only #dailyReportTable .daily-driver-name {
-    font-size: 11px;
+    font-size: calc(var(--daily-body-font) + 2px);
     font-weight: 700;
   }
-  .daily-attn-web-only #dailyReportTable .day-col { min-width: 22px; text-align: center; }
+  .daily-attn-web-only #dailyReportTable .day-col { min-width: 28px; text-align: center; font-size: var(--daily-body-font); }
   .daily-attn-web-only #dailyReportTable tbody td.sum-col {
     background-color: #e0f2fe !important;
     color: #0369a1;
     font-weight: 700;
-    font-size: 10px;
+    font-size: calc(var(--daily-body-font) + 1px);
   }
-  .daily-attn-web-only #dailyReportTable tbody tr:nth-child(even) td.day-cell:not([class*="cell-"]) {
+  .daily-attn-web-only #dailyReportTable tbody tr:nth-child(even) td:not(.sum-col):not([class*="cell-"]) {
     background: var(--daily-frozen-bg-alt);
+  }
+  .daily-attn-web-only #dailyReportTable tbody tr:hover td {
+    filter: brightness(0.98);
   }
   .daily-attn-web-only #dailyReportTable .day-cell[title] { cursor: help; }
   .daily-attn-web-only #dailyReportTable .cell-present { background-color: #ecfdf5 !important; color: #059669 !important; font-weight: 700; }
@@ -160,7 +207,7 @@
     background: linear-gradient(180deg, #e0f2fe 0%, #bae6fd 55%, #7dd3fc 100%) !important;
     color: #0c4a6e !important;
     font-weight: 800;
-    font-size: 10px;
+    font-size: calc(var(--daily-body-font) + 1px);
   }
   .daily-attn-web-only #dailyReportTable tfoot .tfoot-frozen-label {
     background: linear-gradient(90deg, #0369a1 0%, #0284c7 100%) !important;
@@ -208,9 +255,11 @@
   }
   .daily-attn-scroll::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
   .daily-attn-shell.daily-grid-pending .daily-attn-scroll,
-  .daily-attn-shell.daily-grid-pending .daily-attn-web-only .table-responsive { visibility: hidden; }
+  .daily-attn-shell.daily-grid-pending .daily-attn-web-only .table-responsive,
+  .daily-attn-shell.daily-grid-pending .daily-attn-web-only .daily-web-table-scroll { visibility: hidden; }
   .daily-attn-shell.daily-grid-ready .daily-attn-scroll,
-  .daily-attn-shell.daily-grid-ready .daily-attn-web-only .table-responsive { visibility: visible; }
+  .daily-attn-shell.daily-grid-ready .daily-attn-web-only .table-responsive,
+  .daily-attn-shell.daily-grid-ready .daily-attn-web-only .daily-web-table-scroll { visibility: visible; }
   .daily-attn-table {
     table-layout: fixed;
     border-collapse: separate;
@@ -1681,8 +1730,8 @@
     <div class="daily-attn-web-only" id="dailyReportWebGrid">
     <div class="card fuel-list-card overflow-hidden">
       <div class="card-body p-0">
-      <div class="table-responsive">
-      <table class="table table-hover align-middle mb-0 small" id="dailyReportTable">
+      <div class="table-responsive daily-web-table-scroll">
+      <table class="table table-hover table-bordered align-middle mb-0" id="dailyReportTable">
         <thead>
           <tr class="hdr-row-1">
             <th rowspan="2" class="fc-1 info-col">Sr</th>
@@ -1692,7 +1741,7 @@
             <th rowspan="2" class="fc-5 info-col">Shift</th>
             <th rowspan="2" class="fc-6 info-col">Driver Name</th>
             {% for d in day_headers %}
-            <th colspan="2" class="date-hdr text-center">{{ '%02d'|format(d.day) }}</th>
+            <th colspan="2" class="date-hdr text-center no-ft-filter">{{ '%02d'|format(d.day) }}</th>
             {% endfor %}
             {% set sum_hdr = {'Present': 'Pres', 'Absent': 'Abs', 'Leave': 'Leave', 'Late': 'Late', 'Half-Day': 'Half', 'Off': 'Off'} %}
             {% for st in status_columns %}
@@ -1979,7 +2028,7 @@
       shell.classList.add('daily-grid-ready');
     }
 
-    document.querySelectorAll('#dailyReportTable thead th.date-hdr, #dailyReportTable thead th.day-col').forEach(function(th) {
+    document.querySelectorAll('#dailyReportTable thead th.date-hdr').forEach(function(th) {
       th.querySelectorAll('.ft-filter-wrap').forEach(function(w) { w.remove(); });
     });
   }
@@ -2637,6 +2686,11 @@
       return;
     }
     if (tbl.dataset.ftEnhanced === '1' || attempts > 50) {
+      document.querySelectorAll('#dailyReportTable thead th.date-hdr').forEach(function(th) {
+        th.querySelectorAll('.ft-filter-wrap').forEach(function(w) { w.remove(); });
+        th.classList.remove('ft-sort');
+      });
+      fitFrozenInfoColumns();
       revealDailyGrid();
       updateDayFootTotals();
       scrollToReport();
@@ -3636,7 +3690,7 @@
     revealDailyGrid();
     if (window.fleetTableEnhance) window.fleetTableEnhance('dailyReportTable');
     setTimeout(function() {
-      document.querySelectorAll('#dailyReportTable thead th.date-hdr, #dailyReportTable thead th.day-col').forEach(function(th) {
+      document.querySelectorAll('#dailyReportTable thead th.date-hdr').forEach(function(th) {
         th.querySelectorAll('.ft-filter-wrap').forEach(function(w) { w.remove(); });
       });
       fitFrozenInfoColumns();
