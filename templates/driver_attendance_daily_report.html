@@ -52,48 +52,117 @@
   .daily-attn-page .filter-card { border-radius: 14px; border: 1px solid #e2e8f0; box-shadow: 0 4px 18px rgba(15, 118, 110, 0.08); }
   .daily-attn-page .filter-card .form-label { font-size: 0.78rem; font-weight: 600; color: #475569; margin-bottom: 0.2rem; }
   .daily-attn-web-only .fuel-list-card {
-    border: 1px solid #cbd5e1; border-radius: 12px;
-    box-shadow: 0 4px 18px rgba(15, 23, 42, 0.08);
+    border: 1px solid #e9ecef; border-radius: 12px;
+    box-shadow: 0 2px 10px rgba(16, 24, 40, 0.06);
     overflow: hidden;
   }
-  .daily-attn-web-only .daily-web-scroll {
+  .daily-attn-web-only .fuel-list-card .card-header {
+    background: linear-gradient(to right, #f8f9fa 0%, #fff 100%);
+    font-weight: 600; font-size: 0.87rem;
+  }
+  .daily-attn-web-only .table-responsive {
     max-height: calc(100vh - 220px);
     overflow: auto;
     border-radius: 0 0 12px 12px;
     -webkit-overflow-scrolling: touch;
   }
-  .daily-attn-web-only .daily-attn-table thead th.date-hdr .ft-filter-wrap,
-  .daily-attn-web-only .daily-attn-table thead th.day-col .ft-filter-wrap { display: none !important; }
-  .daily-attn-web-only .daily-attn-table thead th.hdr-frozen {
+  .daily-attn-web-only #dailyReportTable {
+    white-space: nowrap;
+    width: max-content;
+    min-width: 100%;
+    margin-bottom: 0;
+    font-size: 9px;
+    border-collapse: collapse;
+    --bs-table-bg: transparent;
+    --bs-table-hover-bg: #f0f9ff;
+  }
+  .daily-attn-web-only #dailyReportTable th,
+  .daily-attn-web-only #dailyReportTable td {
+    border: 1px solid var(--daily-grid-line) !important;
+    text-align: center;
+    vertical-align: middle;
+    padding: 3px 4px;
+  }
+  .daily-attn-web-only #dailyReportTable thead th.fc-1,
+  .daily-attn-web-only #dailyReportTable thead th.fc-2,
+  .daily-attn-web-only #dailyReportTable thead th.fc-3,
+  .daily-attn-web-only #dailyReportTable thead th.fc-4,
+  .daily-attn-web-only #dailyReportTable thead th.fc-5,
+  .daily-attn-web-only #dailyReportTable thead th.fc-6 {
+    background: var(--daily-frozen-hdr-bg) !important;
+    color: var(--daily-frozen-hdr-text) !important;
+    border-color: var(--daily-frozen-hdr-border) !important;
+    font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.04em;
     font-size: 9px;
   }
-  .daily-attn-web-only .daily-attn-table thead tr.hdr-row-2 th.day-col {
-    background-color: #166534 !important;
-    color: #ecfdf5 !important;
+  .daily-attn-web-only #dailyReportTable thead th.date-hdr {
+    background: #0f172a !important;
+    color: #fff !important;
+    border-color: #1e293b !important;
     font-weight: 700;
+    font-size: 10px;
   }
-  .daily-attn-web-only .daily-attn-table .fc-6,
-  .daily-attn-web-only .daily-attn-table .daily-driver-name {
+  .daily-attn-web-only #dailyReportTable thead tr.hdr-row-2 th.day-col {
+    background: #166534 !important;
+    color: #ecfdf5 !important;
+    border-color: #14532d !important;
+    font-weight: 700;
+    font-size: 9px;
+  }
+  .daily-attn-web-only #dailyReportTable thead th.sum-col {
+    background: #2563eb !important;
+    color: #fff !important;
+    border-color: #1d4ed8 !important;
+    font-weight: 700;
+    font-size: 10px;
+  }
+  .daily-attn-web-only #dailyReportTable thead th.date-hdr .ft-filter-wrap,
+  .daily-attn-web-only #dailyReportTable thead th.day-col .ft-filter-wrap { display: none !important; }
+  .daily-attn-web-only #dailyReportTable .fc-1,
+  .daily-attn-web-only #dailyReportTable .fc-2,
+  .daily-attn-web-only #dailyReportTable .fc-3,
+  .daily-attn-web-only #dailyReportTable .fc-4,
+  .daily-attn-web-only #dailyReportTable .fc-5,
+  .daily-attn-web-only #dailyReportTable .fc-6,
+  .daily-attn-web-only #dailyReportTable tbody .frozen-col.info-col {
+    text-align: left;
+    background: var(--daily-frozen-bg);
+    font-size: 9px;
+  }
+  .daily-attn-web-only #dailyReportTable tbody tr:nth-child(even) .frozen-col.info-col {
+    background: var(--daily-frozen-bg-alt);
+  }
+  .daily-attn-web-only #dailyReportTable .daily-driver-name {
     font-size: 11px;
     font-weight: 700;
   }
-  .daily-attn-web-only .daily-attn-table tbody td:not(.fc-6):not(.sum-col) {
-    font-size: 9px;
-  }
-  .daily-attn-web-only .daily-attn-table tbody .sum-col,
-  .daily-attn-web-only .daily-attn-table thead .sum-col {
+  .daily-attn-web-only #dailyReportTable .day-col { min-width: 22px; text-align: center; }
+  .daily-attn-web-only #dailyReportTable tbody td.sum-col {
+    background-color: #e0f2fe !important;
+    color: #0369a1;
+    font-weight: 700;
     font-size: 10px;
   }
-  .daily-attn-web-only .daily-attn-table tfoot tr.daily-tfoot-total td {
+  .daily-attn-web-only #dailyReportTable tbody tr:nth-child(even) td.day-cell:not([class*="cell-"]) {
+    background: var(--daily-frozen-bg-alt);
+  }
+  .daily-attn-web-only #dailyReportTable .day-cell[title] { cursor: help; }
+  .daily-attn-web-only #dailyReportTable .cell-present { background-color: #ecfdf5 !important; color: #059669 !important; font-weight: 700; }
+  .daily-attn-web-only #dailyReportTable .cell-absent { background-color: #fef2f2 !important; color: #dc2626 !important; font-weight: 700; }
+  .daily-attn-web-only #dailyReportTable .cell-leave { background-color: #fffbeb !important; color: #d97706 !important; font-weight: 700; }
+  .daily-attn-web-only #dailyReportTable .cell-late { background-color: #fef9c3 !important; color: #854d0e !important; font-weight: 700; }
+  .daily-attn-web-only #dailyReportTable .cell-half { background-color: #f3f4f6 !important; color: #374151 !important; font-weight: 700; }
+  .daily-attn-web-only #dailyReportTable .cell-off { background-color: #f5f5f4 !important; color: #57534e !important; font-weight: 700; }
+  .daily-attn-web-only #dailyReportTable .cell-empty { color: transparent; }
+  .daily-attn-web-only #dailyReportTable tfoot tr.daily-tfoot-total td {
     background: linear-gradient(180deg, #e0f2fe 0%, #bae6fd 55%, #7dd3fc 100%) !important;
     color: #0c4a6e !important;
     font-weight: 800;
     font-size: 10px;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
   }
-  .daily-attn-web-only .daily-attn-table tfoot .tfoot-frozen-label {
+  .daily-attn-web-only #dailyReportTable tfoot .tfoot-frozen-label {
     background: linear-gradient(90deg, #0369a1 0%, #0284c7 100%) !important;
     color: #fff !important;
     text-align: right;
@@ -101,12 +170,12 @@
     border: 2px solid #0369a1 !important;
     letter-spacing: 0.03em;
   }
-  .daily-attn-web-only .daily-attn-table tfoot .day-foot {
+  .daily-attn-web-only #dailyReportTable tfoot .day-foot {
     background: linear-gradient(180deg, #e0f2fe 0%, #bae6fd 100%) !important;
     color: #0369a1 !important;
     font-weight: 700;
   }
-  .daily-attn-web-only .daily-attn-table tfoot .sum-col {
+  .daily-attn-web-only #dailyReportTable tfoot .sum-col {
     background: linear-gradient(180deg, #93c5fd 0%, #60a5fa 100%) !important;
     color: #1e3a8a !important;
     font-weight: 800;
@@ -138,8 +207,10 @@
     background: #cbd5e1; border-radius: 10px; border: 2px solid #f1f5f9;
   }
   .daily-attn-scroll::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-  .daily-attn-shell.daily-grid-pending .daily-attn-scroll { visibility: hidden; }
-  .daily-attn-shell.daily-grid-ready .daily-attn-scroll { visibility: visible; }
+  .daily-attn-shell.daily-grid-pending .daily-attn-scroll,
+  .daily-attn-shell.daily-grid-pending .daily-attn-web-only .table-responsive { visibility: hidden; }
+  .daily-attn-shell.daily-grid-ready .daily-attn-scroll,
+  .daily-attn-shell.daily-grid-ready .daily-attn-web-only .table-responsive { visibility: visible; }
   .daily-attn-table {
     table-layout: fixed;
     border-collapse: separate;
@@ -1610,18 +1681,18 @@
     <div class="daily-attn-web-only" id="dailyReportWebGrid">
     <div class="card fuel-list-card overflow-hidden">
       <div class="card-body p-0">
-      <div class="daily-attn-scroll daily-web-scroll">
-      <table class="daily-attn-table mb-0" id="dailyReportTable">
+      <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0 small" id="dailyReportTable">
         <thead>
           <tr class="hdr-row-1">
-            <th rowspan="2" class="frozen-col fc-1 hdr-frozen no-ft-filter info-col">Sr</th>
-            <th rowspan="2" class="frozen-col fc-2 hdr-frozen no-ft-filter info-col">District</th>
-            <th rowspan="2" class="frozen-col fc-3 hdr-frozen no-ft-filter info-col">Project</th>
-            <th rowspan="2" class="frozen-col fc-4 hdr-frozen no-ft-filter info-col">Vehicle</th>
-            <th rowspan="2" class="frozen-col fc-5 hdr-frozen no-ft-filter info-col">Shift</th>
-            <th rowspan="2" class="frozen-col fc-6 hdr-frozen no-ft-filter info-col">Driver Name</th>
+            <th rowspan="2" class="fc-1 info-col">Sr</th>
+            <th rowspan="2" class="fc-2 info-col">District</th>
+            <th rowspan="2" class="fc-3 info-col">Project</th>
+            <th rowspan="2" class="fc-4 info-col">Vehicle</th>
+            <th rowspan="2" class="fc-5 info-col">Shift</th>
+            <th rowspan="2" class="fc-6 info-col">Driver Name</th>
             {% for d in day_headers %}
-            <th colspan="2" class="date-hdr no-ft-filter">{{ '%02d'|format(d.day) }}</th>
+            <th colspan="2" class="date-hdr text-center">{{ '%02d'|format(d.day) }}</th>
             {% endfor %}
             {% set sum_hdr = {'Present': 'Pres', 'Absent': 'Abs', 'Leave': 'Leave', 'Late': 'Late', 'Half-Day': 'Half', 'Off': 'Off'} %}
             {% for st in status_columns %}
@@ -1630,8 +1701,8 @@
           </tr>
           <tr class="hdr-row-2">
             {% for d in day_headers %}
-            <th class="day-col no-ft-filter" data-slot="M" data-ft-col="{{ 6 + (d.day - 1) * 2 }}">M</th>
-            <th class="day-col no-ft-filter" data-slot="E" data-ft-col="{{ 7 + (d.day - 1) * 2 }}">E</th>
+            <th class="day-col" data-slot="M" data-ft-col="{{ 6 + (d.day - 1) * 2 }}">M</th>
+            <th class="day-col" data-slot="E" data-ft-col="{{ 7 + (d.day - 1) * 2 }}">E</th>
             {% endfor %}
           </tr>
         </thead>
@@ -1669,7 +1740,7 @@
           {% endfor %}
         </tbody>
         <tfoot>
-          <tr class="daily-tfoot-total">
+          <tr class="daily-tfoot-total table-light">
             <td class="frozen-col tfoot-frozen-label" colspan="6">Total Monthly Count</td>
             {% for d in day_headers %}
             <td class="day-col day-foot" data-day="{{ d.day }}" data-slot="M">0</td>
@@ -2223,16 +2294,7 @@
   function fitFrozenInfoColumns() {
     if (isDailyNativeApp()) return;
     var tbl = document.getElementById('dailyReportTable');
-    if (!tbl || !tbl.classList.contains('daily-attn-table')) return;
-    var page = tbl.closest('.daily-attn-page');
-    if (page) {
-      var blockW = 0;
-      ['fc-1', 'fc-2', 'fc-3', 'fc-4', 'fc-5', 'fc-6'].forEach(function(cls) {
-        var v = parseFloat(getComputedStyle(page).getPropertyValue('--daily-' + cls + '-w')) || 0;
-        blockW += v;
-      });
-      if (blockW > 0) page.style.setProperty('--daily-frozen-block-w', blockW + 'px');
-    }
+    if (!tbl) return;
     tbl.querySelectorAll('.frozen-col.info-col').forEach(function(cell) {
       var t = (cell.textContent || '').trim();
       if (t) cell.title = t;
