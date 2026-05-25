@@ -194,6 +194,8 @@
 
   </div>
 
+  <div class="rc-mobile-scroll" id="rcMobileScroll">
+
   <div class="rc-page-header d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
 
     <h4 class="mb-0 rc-page-title"><i class="bi bi-bar-chart-line me-2 text-primary"></i>Report Centre</h4>
@@ -282,7 +284,13 @@
 
   </div>
 
-  <!-- Tab Content -->
+  {% endif %}
+
+  </div><!-- /rc-mobile-scroll -->
+
+  {% if rc.any_tab %}
+
+  <!-- Tab Content (source catalog for mobile clones; hidden on native) -->
 
   <div class="tab-content rc-report-body rc-source-catalog" id="reportTabContent">
 
@@ -1008,9 +1016,11 @@
 
 }
 
-html.capacitor-native .main-content:has(.rc-page) {
+html.capacitor-native.page-report-centre .main-content:has(.rc-page) {
 
   scroll-behavior: auto !important;
+
+  overflow: hidden !important;
 
 }
 
@@ -1180,89 +1190,175 @@ html:not(.capacitor-native) .rc-web-shell {
 
 }
 
-/* Native shell: navbar hidden — reclaim vertical space for scroll area */
+/* Web: wrapper is transparent — no extra scroll layer */
 
-html.capacitor-native:has(.rc-page) #appNativeShell {
+html:not(.capacitor-native) .rc-mobile-scroll { display: contents; }
 
-  top: max(env(safe-area-inset-top, 0px), 6px) !important;
+/* Native: flex chain + dedicated scroll viewport (#rcMobileScroll) */
+
+html.capacitor-native.page-report-centre #appNativeShell {
+
+  top: max(env(safe-area-inset-top, 0px), 4px) !important;
 
   bottom: 0 !important;
 
 }
 
-html.capacitor-native #appNativeShell .main-content:has(.rc-page) {
+html.capacitor-native.page-report-centre #appNativeShell .main-content {
 
-  overflow-y: auto !important;
+  overflow: hidden !important;
 
-  -webkit-overflow-scrolling: touch !important;
+  display: flex !important;
 
-  overscroll-behavior-y: auto !important;
-
-  touch-action: pan-y !important;
-
-  scroll-behavior: auto !important;
-
-  padding: 8px 0 12px !important;
-
-  min-height: 0 !important;
+  flex-direction: column !important;
 
   flex: 1 1 auto !important;
 
-}
+  min-height: 0 !important;
 
-html.capacitor-native .main-content:has(.rc-page) {
+  height: auto !important;
 
-  padding-top: max(env(safe-area-inset-top, 0px), 4px) !important;
+  padding: 0 !important;
 
-  padding-bottom: calc(70px + env(safe-area-inset-bottom, 0px)) !important;
-
-}
-
-html.capacitor-native #appNativeShell .main-content:has(.rc-page) {
-
-  padding-bottom: 12px !important;
+  background: transparent !important;
 
 }
 
-html.capacitor-native .rc-glass-panel {
+html.capacitor-native.page-report-centre .container-fluid.rc-page {
 
-  border-radius: 0;
+  display: flex !important;
 
-  min-height: min-content;
+  flex-direction: column !important;
+
+  flex: 1 1 auto !important;
+
+  min-height: 0 !important;
+
+  height: 100% !important;
+
+  padding: 0 !important;
+
+  margin: 0 !important;
+
+  width: 100% !important;
+
+  overflow: hidden !important;
+
+  isolation: auto !important;
+
+}
+
+html.capacitor-native.page-report-centre .rc-aurora-bg {
+
+  position: fixed;
+
+  inset: 0;
+
+  z-index: 0;
+
+}
+
+html.capacitor-native.page-report-centre .rc-glass-panel {
+
+  display: flex !important;
+
+  flex-direction: column !important;
+
+  flex: 1 1 auto !important;
+
+  min-height: 0 !important;
+
+  height: 100% !important;
+
+  max-height: 100% !important;
+
+  overflow: hidden !important;
+
+  padding: 0 !important;
+
+  border: none !important;
+
+  border-radius: 0 !important;
+
+  backdrop-filter: none !important;
+
+  -webkit-backdrop-filter: none !important;
+
+  background: transparent !important;
+
+  box-shadow: none !important;
+
+}
+
+html.capacitor-native.page-report-centre #rcMobileScroll {
+
+  flex: 1 1 auto;
+
+  min-height: 0;
+
+  width: 100%;
+
+  overflow-x: hidden;
+
+  overflow-y: scroll;
+
+  -webkit-overflow-scrolling: touch;
+
+  overscroll-behavior-y: contain;
+
+  touch-action: pan-y;
+
+  padding: 0.35rem 0.5rem calc(12px + env(safe-area-inset-bottom, 0px));
+
+  position: relative;
+
+  z-index: 1;
+
+}
+
+html.capacitor-native.page-report-centre .rc-native-chrome,
+
+html.capacitor-native.page-report-centre .rc-pager-viewport,
+
+html.capacitor-native.page-report-centre .rc-search-mode {
 
   overflow: visible;
 
-  padding: 0.35rem 0.5rem 0.35rem;
+}
 
-  border-top: none;
+html.capacitor-native.page-report-centre .rc-chip-scroller-wrap {
 
-  touch-action: pan-y;
+  overflow: hidden;
+
+  margin: 0 -0.5rem;
+
+  padding: 0 0.5rem;
 
 }
 
-html.capacitor-native .rc-native-chrome,
+html.capacitor-native.page-report-centre .rc-chip-scroller {
 
-html.capacitor-native .rc-pager-viewport,
+  display: flex;
 
-html.capacitor-native .rc-search-mode {
+  gap: 8px;
 
-  touch-action: pan-y;
+  overflow-x: auto;
 
-}
+  overflow-y: hidden;
 
-html.capacitor-native .rc-chip-scroller-wrap {
+  -webkit-overflow-scrolling: touch;
 
-  touch-action: pan-x;
-
-}
-
-html.capacitor-native .rc-chip-scroller {
-
-  touch-action: pan-x;
+  scroll-behavior: smooth;
 
   overscroll-behavior-x: contain;
 
+  scrollbar-width: none;
+
+  padding-bottom: 2px;
+
 }
+
+html.capacitor-native.page-report-centre .rc-chip-scroller::-webkit-scrollbar { display: none; }
 
 html.capacitor-native .rc-page-header.mb-3 { margin-bottom: 0.35rem !important; }
 
@@ -1712,26 +1808,6 @@ html.capacitor-native .rc-page-header.mb-3 { margin-bottom: 0.35rem !important; 
 
 .rc-search-mode { display: none; }
 
-html.capacitor-native .rc-page {
-
-  padding: 0;
-
-  min-height: min-content;
-
-  margin: 0 !important;
-
-  width: 100% !important;
-
-  overflow: visible;
-
-  isolation: auto;
-
-  touch-action: pan-y;
-
-  -webkit-overflow-scrolling: touch;
-
-}
-
 html.capacitor-native .rc-page-header {
 
   flex-direction: column;
@@ -1910,38 +1986,6 @@ html.capacitor-native .rc-pager-dot.is-active {
 
 }
 
-html.capacitor-native .rc-chip-scroller-wrap {
-
-  margin: 0 -0.75rem;
-
-  padding: 0 0.75rem;
-
-}
-
-html.capacitor-native .rc-chip-scroller {
-
-  display: flex;
-
-  gap: 8px;
-
-  overflow-x: auto;
-
-  scroll-snap-type: x proximity;
-
-  -webkit-overflow-scrolling: touch;
-
-  scroll-behavior: smooth;
-
-  overscroll-behavior-x: contain;
-
-  scrollbar-width: none;
-
-  padding-bottom: 2px;
-
-}
-
-html.capacitor-native .rc-chip-scroller::-webkit-scrollbar { display: none; }
-
 html.capacitor-native .rc-chip {
 
   flex: 0 0 auto;
@@ -1997,10 +2041,6 @@ html.capacitor-native .rc-chip:active { transform: scale(0.96); }
 html.capacitor-native .rc-pager-viewport {
 
   display: block;
-
-  overflow: visible;
-
-  touch-action: auto;
 
 }
 
@@ -2838,6 +2878,12 @@ document.addEventListener('DOMContentLoaded', function(){
 
     (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
 
+  if (isNative) {
+
+    document.documentElement.classList.add('page-report-centre');
+
+  }
+
   var searchBox = document.getElementById('reportSearchBox');
 
   function initRcWebDashboard() {
@@ -3195,6 +3241,10 @@ document.addEventListener('DOMContentLoaded', function(){
 
     function getScrollRoot() {
 
+      var mobileScroll = document.getElementById('rcMobileScroll');
+
+      if (mobileScroll) return mobileScroll;
+
       return document.getElementById('mainContent')
 
         || document.querySelector('#appNativeShell .main-content')
@@ -3204,6 +3254,28 @@ document.addEventListener('DOMContentLoaded', function(){
         || document.scrollingElement
 
         || document.documentElement;
+
+    }
+
+    function layoutRcMobileScroll() {
+
+      var scrollEl = document.getElementById('rcMobileScroll');
+
+      if (!scrollEl) return;
+
+      var top = scrollEl.getBoundingClientRect().top;
+
+      var bottomNav = document.getElementById('mobileBottomNav');
+
+      var bottom = bottomNav ? bottomNav.getBoundingClientRect().top : window.innerHeight;
+
+      var h = Math.max(220, Math.floor(bottom - top - 6));
+
+      scrollEl.style.flex = '0 0 auto';
+
+      scrollEl.style.height = h + 'px';
+
+      scrollEl.style.maxHeight = h + 'px';
 
     }
 
@@ -3436,6 +3508,22 @@ document.addEventListener('DOMContentLoaded', function(){
     chrome.setAttribute('aria-hidden', 'false');
 
     viewport.setAttribute('aria-hidden', 'false');
+
+    layoutRcMobileScroll();
+
+    requestAnimationFrame(layoutRcMobileScroll);
+
+    setTimeout(layoutRcMobileScroll, 80);
+
+    setTimeout(layoutRcMobileScroll, 350);
+
+    window.addEventListener('resize', layoutRcMobileScroll);
+
+    window.addEventListener('orientationchange', function() {
+
+      setTimeout(layoutRcMobileScroll, 120);
+
+    });
 
     dotsEl.innerHTML = '';
 
@@ -3749,7 +3837,13 @@ document.addEventListener('DOMContentLoaded', function(){
 
     window.addEventListener('orientationchange', function() {
 
-      setTimeout(function() { goToSlide(activeIdx, false); }, 100);
+      setTimeout(function() {
+
+        layoutRcMobileScroll();
+
+        goToSlide(activeIdx, false);
+
+      }, 120);
 
     });
 
