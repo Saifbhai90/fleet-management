@@ -12,15 +12,19 @@
 
 <a href="{{ href }}" class="list-group-item list-group-item-action border-0 py-2 px-0 report-link rc-tile rc-report-card {{ tile }}"{% if rc_key %} data-rc-key="{{ rc_key }}"{% endif %} data-rc-desc="{{ desc|e }}">
 
-  {% if rc_key and rc_badges.get(rc_key) %}
-
-  <span class="rc-tile-badge" aria-label="{{ rc_badges[rc_key] }} items">{{ rc_badges[rc_key] if rc_badges[rc_key] < 99 else '99+' }}</span>
-
-  {% endif %}
-
   <div class="rc-card-top">
 
-    <span class="rc-tile-icon" aria-hidden="true"><i class="bi {{ icon }}"></i></span>
+    <span class="rc-tile-icon" aria-hidden="true">
+
+      {% if rc_key and rc_badges.get(rc_key) %}
+
+      <span class="rc-tile-badge" aria-label="{{ rc_badges[rc_key] }} items">{{ rc_badges[rc_key] if rc_badges[rc_key] < 99 else '99+' }}</span>
+
+      {% endif %}
+
+      <i class="bi {{ icon }}"></i>
+
+    </span>
 
     <button type="button" class="rc-card-star" aria-label="Add to favorites" title="Favorite"><i class="bi bi-star"></i></button>
 
@@ -984,9 +988,17 @@
 
   background: transparent !important;
 
-  padding-left: 8px !important;
+  padding: 0 !important;
 
-  padding-right: 8px !important;
+  scroll-behavior: smooth;
+
+  -webkit-overflow-scrolling: touch;
+
+}
+
+html:not(.capacitor-native) .main-content:has(.rc-page) {
+
+  min-height: calc(100dvh - 60px);
 
 }
 
@@ -1000,13 +1012,13 @@
 
   margin: 0 !important;
 
-  padding: 0.5rem 0.4rem 1.5rem;
+  padding: 0;
 
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
 
-  min-height: calc(100dvh - 72px);
+  min-height: 100%;
 
-  overflow: hidden;
+  overflow: visible;
 
   isolation: isolate;
 
@@ -1098,9 +1110,9 @@
 
   max-width: none;
 
-  margin: 0 auto;
+  margin: 0;
 
-  padding: 1.25rem 1rem 1.5rem;
+  padding: 0.65rem 1rem 0.5rem;
 
   background: rgba(255, 255, 255, 0.18);
 
@@ -1108,11 +1120,19 @@
 
   -webkit-backdrop-filter: blur(35px);
 
-  border-radius: 28px;
+  border-radius: 0;
 
-  border: 1.5px solid rgba(255, 255, 255, 0.45);
+  border: none;
 
-  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.06);
+  border-top: 1.5px solid rgba(255, 255, 255, 0.45);
+
+  border-bottom: 1.5px solid rgba(255, 255, 255, 0.35);
+
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.05);
+
+  min-height: calc(100dvh - 60px);
+
+  box-sizing: border-box;
 
 }
 
@@ -1120,21 +1140,33 @@
 
   .rc-glass-panel {
 
-    padding: 1.75rem 1.5rem 2rem;
-
-    border-radius: 40px;
+    padding: 0.85rem 1.35rem 0.65rem;
 
   }
 
 }
 
-html.capacitor-native .rc-glass-panel {
+html.capacitor-native .main-content:has(.rc-page) {
 
-  border-radius: 24px 24px 0 0;
+  padding-top: max(env(safe-area-inset-top, 0px), 4px) !important;
 
-  min-height: calc(100dvh - 56px);
+  padding-bottom: calc(70px + env(safe-area-inset-bottom, 0px)) !important;
 
 }
+
+html.capacitor-native .rc-glass-panel {
+
+  border-radius: 0;
+
+  min-height: 0;
+
+  padding: 0.35rem 0.5rem 0.2rem;
+
+  border-top: none;
+
+}
+
+html.capacitor-native .rc-page-header.mb-3 { margin-bottom: 0.35rem !important; }
 
 /* Premium glass icon grid (reference launcher) */
 
@@ -1434,29 +1466,45 @@ html:not(.capacitor-native) .rc-page .report-link-group .report-link.rc-report-c
 
 }
 
+.rc-page .rc-tile-icon { position: relative; }
+
 .rc-page .rc-tile-badge {
 
-  top: 4px;
+  position: absolute;
 
-  right: 4px;
+  top: -6px;
+
+  right: -6px;
 
   left: auto;
 
-  min-width: 20px;
+  z-index: 12;
 
-  height: 20px;
+  min-width: 24px;
 
-  padding: 0 6px;
+  height: 24px;
 
-  font-size: 11px;
+  padding: 0 7px;
+
+  font-size: 12px;
 
   font-weight: 800;
 
-  border: 2px solid #fff;
+  line-height: 24px;
 
-  border-radius: 12px;
+  text-align: center;
 
-  box-shadow: 0 4px 12px rgba(255, 71, 87, 0.35);
+  color: #fff;
+
+  background: #ff4757;
+
+  border: 3px solid #fff;
+
+  border-radius: 14px;
+
+  box-shadow: 0 4px 14px rgba(255, 71, 87, 0.55);
+
+  pointer-events: none;
 
 }
 
@@ -1470,15 +1518,13 @@ html:not(.capacitor-native) .rc-page .report-link-group .report-link.rc-report-c
 
 html.capacitor-native .rc-page {
 
-  padding: 0 0.5rem 1rem;
+  padding: 0;
 
-  min-height: 100%;
+  min-height: 0;
 
-  margin-left: -12px !important;
+  margin: 0 !important;
 
-  margin-right: -12px !important;
-
-  width: calc(100% + 24px) !important;
+  width: 100% !important;
 
 }
 
@@ -1490,21 +1536,21 @@ html.capacitor-native .rc-page-header {
 
   margin-bottom: 0 !important;
 
-  position: sticky;
+  position: relative;
 
-  top: 0;
+  top: auto;
 
-  z-index: 30;
+  z-index: 1;
 
-  background: rgba(255, 255, 255, 0.35);
+  background: transparent;
 
-  backdrop-filter: blur(16px) saturate(1.2);
+  backdrop-filter: none;
 
-  -webkit-backdrop-filter: blur(16px) saturate(1.2);
+  -webkit-backdrop-filter: none;
 
-  padding: 0.35rem 0.75rem 0.55rem;
+  padding: 0.25rem 0.65rem 0.45rem;
 
-  border-bottom: 1px solid rgba(255, 255, 255, 0.5);
+  border-bottom: none;
 
 }
 
@@ -1600,15 +1646,17 @@ html.capacitor-native .rc-native-chrome {
 
   display: block;
 
-  position: sticky;
+  position: relative;
 
-  z-index: 25;
+  top: auto;
 
-  background: rgba(255, 255, 255, 0.3);
+  z-index: 1;
 
-  backdrop-filter: blur(14px);
+  background: transparent;
 
-  padding: 0 0.75rem 0.5rem;
+  backdrop-filter: none;
+
+  padding: 0 0.65rem 0.4rem;
 
 }
 
@@ -1674,6 +1722,10 @@ html.capacitor-native .rc-chip-scroller {
 
   -webkit-overflow-scrolling: touch;
 
+  scroll-behavior: smooth;
+
+  overscroll-behavior-x: contain;
+
   scrollbar-width: none;
 
   padding-bottom: 2px;
@@ -1724,9 +1776,9 @@ html.capacitor-native .rc-pager-viewport {
 
   display: block;
 
-  overflow: hidden;
+  overflow: visible;
 
-  touch-action: pan-y;
+  touch-action: auto;
 
 }
 
@@ -1736,39 +1788,39 @@ html.capacitor-native .rc-pager-track {
 
   display: flex;
 
-  overflow-x: auto;
+  flex-direction: column;
 
-  scroll-snap-type: x mandatory;
+  gap: 0;
 
-  -webkit-overflow-scrolling: touch;
+  overflow: visible;
 
-  scrollbar-width: none;
-
-  scroll-behavior: smooth;
+  scroll-snap-type: none;
 
 }
 
-html.capacitor-native .rc-pager-track::-webkit-scrollbar { display: none; }
-
 html.capacitor-native .rc-pager-slide {
 
-  flex: 0 0 100%;
+  flex: none;
 
   width: 100%;
 
-  scroll-snap-align: start;
+  scroll-snap-align: none;
 
-  scroll-snap-stop: always;
-
-  padding: 0.35rem 0.75rem 1.25rem;
+  padding: 0.5rem 0.65rem 1rem;
 
   box-sizing: border-box;
 
-  max-height: calc(100dvh - var(--rc-sticky-offset, 108px) - 88px);
+  max-height: none;
 
-  overflow-y: auto;
+  overflow: visible;
 
-  -webkit-overflow-scrolling: touch;
+}
+
+html.capacitor-native .rc-pager-slide + .rc-pager-slide {
+
+  border-top: 1px solid rgba(255, 255, 255, 0.35);
+
+  padding-top: 0.85rem;
 
 }
 
@@ -1856,37 +1908,7 @@ html.capacitor-native .rc-search-mode-grid .report-link.rc-tile .rc-tile-hint,
 
 html.capacitor-native .rc-search-mode-grid .report-link.rc-tile small { display: none !important; }
 
-html.capacitor-native .rc-tile-badge {
-
-  position: absolute;
-
-  top: 6px;
-
-  right: 6px;
-
-  min-width: 18px;
-
-  height: 18px;
-
-  padding: 0 5px;
-
-  border-radius: 999px;
-
-  background: #ef4444;
-
-  color: #fff;
-
-  font-size: 10px;
-
-  font-weight: 700;
-
-  line-height: 18px;
-
-  text-align: center;
-
-  box-shadow: 0 2px 6px rgba(239, 68, 68, 0.45);
-
-}
+/* mobile badges use unified .rc-page .rc-tile-badge on .rc-tile-icon */
 
 html.capacitor-native .report-link.rc-tile.is-search-hit .rc-tile-icon {
 
@@ -1962,13 +1984,11 @@ html.capacitor-native .rc-web-only { display: none !important; }
 
 html:not(.capacitor-native) .rc-page {
 
-  margin-left: -12px !important;
+  margin: 0 !important;
 
-  margin-right: -12px !important;
+  width: 100% !important;
 
-  width: calc(100% + 24px) !important;
-
-  padding: 1rem 0.85rem 2.5rem;
+  padding: 0;
 
 }
 
@@ -3157,22 +3177,6 @@ document.addEventListener('DOMContentLoaded', function(){
 
     viewport.setAttribute('aria-hidden', 'false');
 
-    function setStickyOffset() {
-
-      if (!header) return;
-
-      var h = header.offsetHeight;
-
-      document.documentElement.style.setProperty('--rc-sticky-offset', h + 'px');
-
-      if (chrome) chrome.style.top = h + 'px';
-
-    }
-
-    setStickyOffset();
-
-    window.addEventListener('resize', setStickyOffset);
-
     dotsEl.innerHTML = '';
 
     chipsEl.innerHTML = '';
@@ -3194,6 +3198,20 @@ document.addEventListener('DOMContentLoaded', function(){
       allChip.classList.add('is-active');
 
       dotsEl.querySelectorAll('.rc-pager-dot').forEach(function(d) { d.classList.remove('is-active'); });
+
+      var panel = document.querySelector('.rc-glass-panel');
+
+      var scrollRoot = document.querySelector('.main-content') || document.scrollingElement;
+
+      if (panel) {
+
+        panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+      } else if (scrollRoot && scrollRoot.scrollTo) {
+
+        scrollRoot.scrollTo({ top: 0, behavior: 'smooth' });
+
+      }
 
       rcHapticLight();
 
@@ -3233,15 +3251,9 @@ document.addEventListener('DOMContentLoaded', function(){
 
     });
 
-    var scrollRaf = 0;
-
     var activeIdx = 0;
 
-    function slideWidth() {
-
-      return viewport.clientWidth || window.innerWidth;
-
-    }
+    var scrollRoot = document.querySelector('.main-content') || null;
 
     function goToSlide(idx, smooth) {
 
@@ -3249,7 +3261,15 @@ document.addEventListener('DOMContentLoaded', function(){
 
       activeIdx = idx;
 
-      track.scrollTo({ left: idx * slideWidth(), behavior: smooth ? 'smooth' : 'auto' });
+      var slideEl = track.children[idx];
+
+      if (slideEl) {
+
+        var behavior = smooth ? 'smooth' : 'auto';
+
+        slideEl.scrollIntoView({ behavior: behavior, block: 'start' });
+
+      }
 
       syncPagerUi(idx);
 
@@ -3283,21 +3303,29 @@ document.addEventListener('DOMContentLoaded', function(){
 
     }
 
-    function onTrackScroll() {
+    if (typeof IntersectionObserver !== 'undefined') {
 
-      if (scrollRaf) return;
+      var sectionObserver = new IntersectionObserver(function(entries) {
 
-      scrollRaf = requestAnimationFrame(function() {
+        var best = null;
 
-        scrollRaf = 0;
+        entries.forEach(function(entry) {
 
-        var w = slideWidth();
+          if (!entry.isIntersecting) return;
 
-        if (!w) return;
+          if (!best || entry.intersectionRatio > best.ratio) {
 
-        var idx = Math.round(track.scrollLeft / w);
+            best = { el: entry.target, ratio: entry.intersectionRatio };
 
-        if (idx !== activeIdx) {
+          }
+
+        });
+
+        if (!best || !best.el) return;
+
+        var idx = Array.prototype.indexOf.call(track.children, best.el);
+
+        if (idx >= 0 && idx !== activeIdx) {
 
           activeIdx = idx;
 
@@ -3305,11 +3333,23 @@ document.addEventListener('DOMContentLoaded', function(){
 
         }
 
+      }, {
+
+        root: scrollRoot,
+
+        rootMargin: '-8% 0px -52% 0px',
+
+        threshold: [0.12, 0.28, 0.45]
+
+      });
+
+      Array.prototype.forEach.call(track.children, function(slide) {
+
+        sectionObserver.observe(slide);
+
       });
 
     }
-
-    track.addEventListener('scroll', onTrackScroll, { passive: true });
 
     track.querySelectorAll('a.report-link').forEach(function(a) {
 
@@ -3445,7 +3485,7 @@ document.addEventListener('DOMContentLoaded', function(){
 
     window.addEventListener('orientationchange', function() {
 
-      setTimeout(function() { goToSlide(activeIdx, false); setStickyOffset(); }, 100);
+      setTimeout(function() { goToSlide(activeIdx, false); }, 100);
 
     });
 
