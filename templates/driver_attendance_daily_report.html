@@ -3,7 +3,7 @@
 
 {% block content %}
 <style>
-  .daily-attn-page { --daily-accent: #0f766e; --daily-grid-border: #cbd5e1; --daily-header-bg: #0f766e; --daily-frozen-bg: #f8fafc; --daily-hdr-row1-h: 28px; }
+  .daily-attn-page { --daily-accent: #0f766e; --daily-grid-border: #94a3b8; --daily-header-bg: #0f766e; --daily-frozen-bg: #f8fafc; --daily-hdr-row1-h: 32px; }
   .daily-attn-page .filter-card { border-radius: 14px; border: 1px solid #e2e8f0; box-shadow: 0 4px 18px rgba(15, 118, 110, 0.08); }
   .daily-attn-page .filter-card .form-label { font-size: 0.78rem; font-weight: 600; color: #475569; margin-bottom: 0.2rem; }
   .daily-attn-shell {
@@ -39,7 +39,13 @@
   .daily-attn-table thead tr.hdr-row-2 th {
     top: var(--daily-hdr-row1-h); background: #115e59; font-size: 0.72rem; z-index: 3;
   }
-  .daily-attn-table thead .date-hdr { font-size: 0.72rem; padding: 2px 1px; width: 34px; min-width: 34px; max-width: 34px; }
+  .daily-attn-table thead tr.hdr-row-1 th.date-hdr {
+    z-index: 4; min-height: var(--daily-hdr-row1-h, 32px); height: var(--daily-hdr-row1-h, 32px);
+    font-size: 0.68rem; padding: 2px 1px; width: 36px; min-width: 36px; max-width: 36px;
+    line-height: 1; white-space: nowrap;
+    writing-mode: vertical-rl; transform: rotate(180deg); text-orientation: mixed;
+  }
+  .daily-attn-table thead tr.hdr-row-1 th.sum-col { z-index: 4; }
   .daily-attn-table .frozen-col.info-col {
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
@@ -75,7 +81,15 @@
   .daily-attn-table thead .fc-5 { z-index: 24; }
   .daily-attn-table thead .fc-6 { z-index: 25; }
   .daily-attn-table tfoot .fc-1 { z-index: 17; }
-  .daily-attn-table .day-col { width: 18px; min-width: 18px; max-width: 18px; white-space: nowrap; padding: 1px 2px; font-size: 0.8rem; }
+  .daily-attn-table .day-col {
+    width: 18px; min-width: 18px; max-width: 18px; white-space: nowrap; padding: 1px 2px; font-size: 0.8rem;
+    border-left: 1px solid var(--daily-grid-border); border-right: 1px solid var(--daily-grid-border);
+  }
+  .daily-attn-table .day-col[data-slot="M"],
+  .daily-attn-table tbody .day-cell[data-slot="M"],
+  .daily-attn-table tfoot .day-foot[data-slot="M"] {
+    border-right: 1px solid #64748b;
+  }
   .daily-attn-table .sum-col {
     width: 36px; min-width: 36px; max-width: 42px;
     background: #e0f2fe; color: #0c4a6e; font-weight: 700;
@@ -108,7 +122,8 @@
   .daily-attn-table .cell-late { background: #fef9c3 !important; color: #854d0e; font-weight: 700; }
   .daily-attn-table .cell-half { background: #f3f4f6 !important; color: #374151; font-weight: 700; }
   .daily-attn-table .cell-off { background: #e5e7eb !important; color: #111827; font-weight: 700; }
-  .daily-attn-table .cell-empty { background: transparent !important; color: transparent; }
+  .daily-attn-table .cell-empty { background: #fff !important; color: transparent; }
+  .daily-attn-table tbody tr:nth-child(even) .cell-empty { background: #fafafa !important; }
   .daily-attn-table tfoot td {
     background: #bae6fd; font-weight: 700; color: #0c4a6e; position: sticky; bottom: 0; z-index: 2;
   }
@@ -841,8 +856,8 @@
           </tr>
           <tr class="hdr-row-2">
             {% for d in day_headers %}
-            <th class="day-col" data-ft-col="{{ 6 + (d.day - 1) * 2 }}">M</th>
-            <th class="day-col" data-ft-col="{{ 7 + (d.day - 1) * 2 }}">E</th>
+            <th class="day-col" data-slot="M" data-ft-col="{{ 6 + (d.day - 1) * 2 }}">M</th>
+            <th class="day-col" data-slot="E" data-ft-col="{{ 7 + (d.day - 1) * 2 }}">E</th>
             {% endfor %}
           </tr>
         </thead>
@@ -1343,7 +1358,15 @@
     if (!tbl) return;
     var r1 = tbl.querySelector('thead tr.hdr-row-1');
     if (!r1) return;
-    var h = Math.ceil(r1.getBoundingClientRect().height);
+    var sample = r1.querySelector('th.date-hdr') || r1.querySelector('th.frozen-col') || r1;
+    var h = Math.ceil(sample.getBoundingClientRect().height);
+    if (!h || h < 24) {
+      var rects = r1.querySelectorAll('th.date-hdr, th.frozen-col, th.sum-col');
+      rects.forEach(function(th) {
+        h = Math.max(h, Math.ceil(th.getBoundingClientRect().height));
+      });
+    }
+    h = Math.max(h || 0, 32);
     var page = tbl.closest('.daily-attn-page');
     if (page) page.style.setProperty('--daily-hdr-row1-h', h + 'px');
   }
@@ -1711,10 +1734,16 @@
 
   function revealDailyGrid() {
     var shell = document.getElementById('dailyReportResults');
-    if (!isDailyNativeApp()) fitFrozenInfoColumns();
     if (shell) {
       shell.classList.remove('daily-grid-pending');
       shell.classList.add('daily-grid-ready');
+    }
+    if (!isDailyNativeApp()) {
+      fitFrozenInfoColumns();
+      requestAnimationFrame(function() {
+        syncStickyHeaderHeight();
+        requestAnimationFrame(syncStickyHeaderHeight);
+      });
     }
     var nativeView = document.getElementById('dailyNativeView');
     if (nativeView && isDailyNativeApp()) {
