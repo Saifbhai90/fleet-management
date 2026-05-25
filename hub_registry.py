@@ -378,7 +378,7 @@ def build_hub_sections(slug, can_see_page_fn, is_master=False):
                 'tile': it['tile'],
             })
         if items:
-            out_sections.append({'title': sec['title'], 'items': items})
+            out_sections.append({'title': sec['title'], 'links': items})
     return hub, out_sections
 
 

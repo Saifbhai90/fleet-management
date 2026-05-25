@@ -31,7 +31,7 @@
     <section class="hub-section" aria-labelledby="hub-sec-{{ loop.index }}">
       <h2 class="hub-section-tag" id="hub-sec-{{ loop.index }}">{{ section.title }}</h2>
       <div class="hub-grid rc-report-section" role="list">
-        {% for item in section.items %}
+        {% for item in section.links %}
         <a href="{{ item.href }}" class="report-link rc-tile rc-report-card {{ item.tile }}" role="listitem">
           <div class="rc-card-top">
             <span class="rc-tile-icon" aria-hidden="true"><i class="{{ item.icon }}"></i></span>
