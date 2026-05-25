@@ -1,0 +1,290 @@
+/* ═══ Fleet Manager — Global Aurora Theme (Report Centre style) ═══ */
+
+@keyframes fmMeshFlow {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes fmFloatOrb {
+  from { transform: translate(0, 0); }
+  to { transform: translate(80px, 60px); }
+}
+
+.fm-aurora-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  background: linear-gradient(-45deg, #e0f2fe, #f5f3ff, #f0fdf4, #e0f2fe);
+  background-size: 400% 400%;
+  animation: fmMeshFlow 15s ease infinite;
+}
+
+.fm-aurora-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(100px);
+  opacity: 0.32;
+  pointer-events: none;
+}
+
+.fm-aurora-orb--1 {
+  width: min(50vw, 520px);
+  height: min(50vw, 520px);
+  background: #60a5fa;
+  top: -10%;
+  left: -8%;
+  animation: fmFloatOrb 15s ease-in-out infinite alternate;
+}
+
+.fm-aurora-orb--2 {
+  width: min(50vw, 520px);
+  height: min(50vw, 520px);
+  background: #a78bfa;
+  bottom: -10%;
+  right: -8%;
+  animation: fmFloatOrb 18s ease-in-out infinite alternate-reverse;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fm-aurora-bg { animation: none; }
+  .fm-aurora-orb { animation: none; }
+}
+
+/* Hide aurora on dark mode & public driver profile */
+body.dark-mode .fm-aurora-bg,
+html.driver-profile-public-view .fm-aurora-bg {
+  display: none !important;
+}
+
+/* ── App shell layering ── */
+body.fm-aurora-theme:not(.dark-mode) {
+  background: transparent !important;
+  color: #1e293b;
+  font-family: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+body.fm-aurora-theme:not(.dark-mode) .navbar,
+body.fm-aurora-theme:not(.dark-mode) .sidebar,
+body.fm-aurora-theme:not(.dark-mode) .main-content,
+body.fm-aurora-theme:not(.dark-mode) #appNativeShell {
+  position: relative;
+  z-index: 1;
+}
+
+/* ── Top navbar (glass) ── */
+body.fm-aurora-theme:not(.dark-mode) .navbar.bg-dark,
+body.fm-aurora-theme:not(.dark-mode) .navbar.navbar-dark {
+  background: rgba(255, 255, 255, 0.58) !important;
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.75) !important;
+  box-shadow: 0 4px 24px rgba(15, 23, 42, 0.06) !important;
+  color: #1e293b !important;
+}
+
+body.fm-aurora-theme:not(.dark-mode) .navbar .text-white,
+body.fm-aurora-theme:not(.dark-mode) .navbar .text-light,
+body.fm-aurora-theme:not(.dark-mode) .navbar .btn-link.text-light,
+body.fm-aurora-theme:not(.dark-mode) .navbar .ms-auto {
+  color: #475569 !important;
+}
+
+body.fm-aurora-theme:not(.dark-mode) .navbar #liveDateTime,
+body.fm-aurora-theme:not(.dark-mode) .navbar #liveNetworkHealth {
+  color: #64748b !important;
+}
+
+body.fm-aurora-theme:not(.dark-mode) .navbar .btn-outline-light {
+  border-color: rgba(148, 163, 184, 0.45) !important;
+  color: #334155 !important;
+  background: rgba(255, 255, 255, 0.35) !important;
+}
+
+body.fm-aurora-theme:not(.dark-mode) .navbar .btn-outline-light:hover {
+  background: rgba(255, 255, 255, 0.75) !important;
+  color: #0284c7 !important;
+}
+
+body.fm-aurora-theme:not(.dark-mode) .navbar .dropdown-menu {
+  background: rgba(255, 255, 255, 0.95) !important;
+  border: 1px solid rgba(255, 255, 255, 0.8) !important;
+  box-shadow: 0 12px 40px rgba(15, 23, 42, 0.12) !important;
+}
+
+body.fm-aurora-theme:not(.dark-mode) .navbar .dropdown-item {
+  color: #334155 !important;
+}
+
+body.fm-aurora-theme:not(.dark-mode) .navbar .dropdown-item:hover {
+  background: rgba(14, 165, 233, 0.1) !important;
+  color: #0284c7 !important;
+}
+
+/* ── Sidebar (glass) ── */
+body.fm-aurora-theme:not(.dark-mode) .sidebar {
+  background: rgba(255, 255, 255, 0.52) !important;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-right: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow: 4px 0 24px rgba(15, 23, 42, 0.05);
+}
+
+body.fm-aurora-theme:not(.dark-mode) .sidebar a {
+  color: #475569 !important;
+}
+
+body.fm-aurora-theme:not(.dark-mode) .sidebar a:hover {
+  background: rgba(14, 165, 233, 0.1) !important;
+  color: #0284c7 !important;
+}
+
+body.fm-aurora-theme:not(.dark-mode) .sidebar .active-link {
+  background: rgba(14, 165, 233, 0.16) !important;
+  color: #0369a1 !important;
+  border-left: 4px solid #0ea5e9 !important;
+}
+
+body.fm-aurora-theme:not(.dark-mode) .sidebar .collapse-item-container {
+  background: rgba(255, 255, 255, 0.25) !important;
+}
+
+body.fm-aurora-theme:not(.dark-mode) .sidebar .sb-sub-toggle {
+  color: #64748b !important;
+}
+
+body.fm-aurora-theme:not(.dark-mode) .sidebar::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.25);
+}
+
+/* ── Main content area ── */
+body.fm-aurora-theme:not(.dark-mode) .main-content {
+  background: transparent !important;
+}
+
+body.fm-aurora-theme:not(.dark-mode) .capacitor-native .main-content,
+body.fm-aurora-theme:not(.dark-mode) #appNativeShell .main-content {
+  background: transparent !important;
+}
+
+/* Cards & panels — subtle glass for readability */
+body.fm-aurora-theme:not(.dark-mode) .main-content > .card,
+body.fm-aurora-theme:not(.dark-mode) .main-content .card:not(.stat-card):not(.bg-gradient-primary):not(.bg-gradient-success):not(.bg-gradient-info):not(.bg-gradient-warning):not(.bg-gradient-danger) {
+  background: rgba(255, 255, 255, 0.72) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.85) !important;
+  box-shadow: 0 8px 32px rgba(15, 23, 42, 0.06) !important;
+}
+
+body.fm-aurora-theme:not(.dark-mode) .bc-light {
+  background: rgba(255, 255, 255, 0.55) !important;
+  border-color: rgba(255, 255, 255, 0.8) !important;
+  color: #334155 !important;
+}
+
+body.fm-aurora-theme:not(.dark-mode) .ws-global-mini .card {
+  background: rgba(255, 255, 255, 0.78) !important;
+}
+
+/* ── Native mobile chrome ── */
+body.fm-aurora-theme:not(.dark-mode) .mobile-menu-btn {
+  background: rgba(255, 255, 255, 0.82) !important;
+  color: #334155 !important;
+  border: 1px solid rgba(255, 255, 255, 0.9) !important;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.1) !important;
+}
+
+body.fm-aurora-theme:not(.dark-mode) .mobile-bottom-nav {
+  background: rgba(255, 255, 255, 0.82) !important;
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border-top: 1px solid rgba(255, 255, 255, 0.9) !important;
+  box-shadow: 0 -4px 20px rgba(15, 23, 42, 0.08) !important;
+}
+
+body.fm-aurora-theme:not(.dark-mode) .mobile-nav-item {
+  color: #64748b !important;
+}
+
+body.fm-aurora-theme:not(.dark-mode) .mobile-nav-item.active {
+  color: #0284c7 !important;
+}
+
+body.fm-aurora-theme:not(.dark-mode) .more-drawer-panel {
+  background: rgba(255, 255, 255, 0.94) !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.9) !important;
+  color: #334155;
+}
+
+body.fm-aurora-theme:not(.dark-mode) .more-drawer-handle {
+  background: rgba(100, 116, 139, 0.25);
+}
+
+body.fm-aurora-theme:not(.dark-mode) .more-drawer-item {
+  background: rgba(241, 245, 249, 0.8) !important;
+  color: #475569 !important;
+}
+
+body.fm-aurora-theme:not(.dark-mode) .more-drawer-item.active,
+body.fm-aurora-theme:not(.dark-mode) .more-drawer-item:active {
+  background: rgba(14, 165, 233, 0.12) !important;
+  color: #0284c7 !important;
+}
+
+body.fm-aurora-theme:not(.dark-mode) .more-icon {
+  background: rgba(255, 255, 255, 0.9) !important;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+}
+
+body.fm-aurora-theme:not(.dark-mode) .more-drawer-user {
+  background: rgba(241, 245, 249, 0.9) !important;
+  color: #64748b !important;
+}
+
+body.fm-aurora-theme:not(.dark-mode) .more-drawer-user strong {
+  color: #1e293b !important;
+}
+
+body.fm-aurora-theme:not(.dark-mode) .fab-dial-label {
+  background: rgba(255, 255, 255, 0.92);
+  color: #334155;
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.1);
+}
+
+body.fm-aurora-theme:not(.dark-mode) .fab-dial-btn {
+  background: rgba(255, 255, 255, 0.9);
+  color: #334155;
+  border: 1px solid rgba(226, 232, 240, 0.8);
+}
+
+/* Report Centre: avoid double aurora layer */
+body.fm-aurora-theme .rc-aurora-bg {
+  display: none !important;
+}
+
+body.fm-aurora-theme:not(.dark-mode) .rc-page {
+  background: transparent !important;
+}
+
+/* Dark mode: restore classic dark chrome */
+body.dark-mode .navbar.bg-dark,
+body.dark-mode .navbar.navbar-dark {
+  background: #212529 !important;
+}
+
+body.dark-mode .sidebar {
+  background: linear-gradient(180deg, #1e293b, #0f172a) !important;
+  border-right: none !important;
+}
+
+body.dark-mode .sidebar a {
+  color: #cbd5e1 !important;
+}
+
+body.dark-mode .mobile-bottom-nav {
+  background: linear-gradient(180deg, #1e293b, #0f172a) !important;
+}
