@@ -17,11 +17,17 @@
     -webkit-backdrop-filter: none !important;
     border-right: 1px solid rgba(15, 23, 42, 0.08) !important;
     box-shadow: 10px 0 25px rgba(15, 23, 42, 0.12) !important;
-    z-index: 1060 !important;
-    transform: translateX(-100%);
-    transition: transform 0.25s ease !important;
+    z-index: 9999 !important;
+    -webkit-transform: translate3d(-100%, 0, 0);
+    transform: translate3d(-100%, 0, 0);
+    transition: -webkit-transform 0.25s ease, transform 0.25s ease !important;
     will-change: transform;
     isolation: isolate;
+    visibility: visible !important;
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+    filter: none !important;
+    -webkit-filter: none !important;
   }
 
   body.fm-aurora-theme.dark-mode .sidebar {
@@ -31,7 +37,8 @@
   }
 
   .sidebar.mobile-open {
-    transform: translateX(0) !important;
+    -webkit-transform: translate3d(0, 0, 0) !important;
+    transform: translate3d(0, 0, 0) !important;
   }
 }
 
@@ -342,44 +349,100 @@ html.capacitor-native .sidebar .collapse-item-container > .collapse-item {
   .sidebar-overlay {
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
-    background: rgba(0, 0, 0, 0.5) !important;
-    z-index: 1050 !important;
+    filter: none !important;
+    -webkit-filter: none !important;
+    background-color: rgba(0, 0, 0, 0.4) !important;
+    z-index: 9998 !important;
     transition: opacity 0.25s ease !important;
+    pointer-events: none;
   }
 
   .sidebar-overlay.show {
-    background: rgba(0, 0, 0, 0.5) !important;
+    background-color: rgba(0, 0, 0, 0.4) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    filter: none !important;
+    pointer-events: auto;
+  }
+
+  /* Freeze background — no blur/filter bleed on Vivo Y21 / Android 11 WebView */
+  body.mobile-sidebar-open,
+  body.sidebar-open {
+    overflow: hidden !important;
+    touch-action: none;
+  }
+
+  body.mobile-sidebar-open .main-content,
+  body.mobile-sidebar-open #appNativeShell,
+  body.mobile-sidebar-open #app-container,
+  body.sidebar-open .main-content,
+  body.sidebar-open #appNativeShell,
+  body.sidebar-open #app-container {
+    filter: none !important;
+    -webkit-filter: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    pointer-events: none;
+  }
+
+  body.mobile-sidebar-open .navbar,
+  body.sidebar-open .navbar {
+    filter: none !important;
+    -webkit-filter: none !important;
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
   }
 
-  /* Never blur main content when drawer is open */
-  body.mobile-sidebar-open .main-content,
-  body.mobile-sidebar-open #appNativeShell,
-  body.mobile-sidebar-open .navbar {
+  body.mobile-sidebar-open .fm-aurora-bg,
+  body.mobile-sidebar-open .fm-aurora-orb,
+  body.sidebar-open .fm-aurora-bg,
+  body.sidebar-open .fm-aurora-orb {
     filter: none !important;
     -webkit-filter: none !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
+  }
+
+  body.mobile-sidebar-open .sidebar,
+  body.mobile-sidebar-open .sidebar-overlay.show,
+  body.sidebar-open .sidebar,
+  body.sidebar-open .sidebar-overlay.show {
+    pointer-events: auto;
+  }
+
+  .sb-drawer-profile {
+    background: #ffffff !important;
   }
 }
 
 html.capacitor-native .sidebar-overlay {
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
-  background: rgba(0, 0, 0, 0.5) !important;
-  z-index: 1050 !important;
+  filter: none !important;
+  background-color: rgba(0, 0, 0, 0.4) !important;
+  z-index: 9998 !important;
 }
 
 html.capacitor-native .sidebar-overlay.show {
-  background: rgba(0, 0, 0, 0.5) !important;
+  background-color: rgba(0, 0, 0, 0.4) !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
+  filter: none !important;
 }
 
 html.capacitor-native body.fm-aurora-theme:not(.dark-mode) .sidebar,
 html.capacitor-native body.fm-aurora-theme.dark-mode .sidebar {
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
-  z-index: 1060 !important;
+  filter: none !important;
+  z-index: 9999 !important;
+  -webkit-transform: translate3d(-100%, 0, 0);
+  transform: translate3d(-100%, 0, 0);
+}
+
+html.capacitor-native .sidebar.mobile-open {
+  -webkit-transform: translate3d(0, 0, 0) !important;
+  transform: translate3d(0, 0, 0) !important;
 }
 
 /* ── Snappier accordion open/close (Bootstrap default ~350ms) ── */

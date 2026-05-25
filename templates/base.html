@@ -476,12 +476,16 @@
         /* Mobile: sidebar hidden by default, overlay when open */
         @media (max-width: 991.98px) {
             .sidebar {
-                transform: translateX(-100%);
+                -webkit-transform: translate3d(-100%, 0, 0);
+                transform: translate3d(-100%, 0, 0);
                 width: min(300px, 85vw);
                 box-shadow: 4px 0 15px rgba(0,0,0,0.2);
                 padding-bottom: env(safe-area-inset-bottom);
             }
-            .sidebar.mobile-open { transform: translateX(0); }
+            .sidebar.mobile-open {
+                -webkit-transform: translate3d(0, 0, 0);
+                transform: translate3d(0, 0, 0);
+            }
             .sidebar a {
                 min-height: 48px;
                 padding: 14px 20px;
@@ -918,22 +922,29 @@
             top: 0 !important;
             height: 100vh !important;
             max-height: 100vh !important;
-            transform: translateX(-100%);
+            -webkit-transform: translate3d(-100%, 0, 0);
+            transform: translate3d(-100%, 0, 0);
             width: min(300px, 88vw) !important;
-            z-index: 1060 !important;
+            z-index: 9999 !important;
             background: #fff !important;
             backdrop-filter: none !important;
             -webkit-backdrop-filter: none !important;
-            transition: transform 0.25s ease !important;
+            filter: none !important;
+            transition: -webkit-transform 0.25s ease, transform 0.25s ease !important;
+            will-change: transform;
+            -webkit-backface-visibility: hidden;
+            backface-visibility: hidden;
         }
         .capacitor-native .sidebar.mobile-open {
-            transform: translateX(0) !important;
+            -webkit-transform: translate3d(0, 0, 0) !important;
+            transform: translate3d(0, 0, 0) !important;
         }
         .capacitor-native .sidebar-overlay.show {
-            z-index: 1050 !important;
+            z-index: 9998 !important;
             backdrop-filter: none !important;
             -webkit-backdrop-filter: none !important;
-            background: rgba(0,0,0,0.5) !important;
+            filter: none !important;
+            background-color: rgba(0,0,0,0.4) !important;
         }
 
         /* ── Native App Shell: single fixed container; nav is a flex child — never scrolls ── */
@@ -8030,6 +8041,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!sidebar) return;
         sidebar.classList.add('mobile-open');
         document.body.classList.add('mobile-sidebar-open');
+        document.body.classList.add('sidebar-open');
         if (overlay) {
             overlay.classList.add('show');
             overlay.setAttribute('aria-hidden', 'false');
@@ -8051,6 +8063,7 @@ document.addEventListener('DOMContentLoaded', function() {
         var overlay = document.getElementById('sidebarOverlay');
         if (sidebar) sidebar.classList.remove('mobile-open');
         document.body.classList.remove('mobile-sidebar-open');
+        document.body.classList.remove('sidebar-open');
         if (overlay) {
             overlay.classList.remove('show');
             overlay.style.display = '';
