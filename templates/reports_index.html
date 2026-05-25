@@ -1004,9 +1004,13 @@
 
   padding: 0 !important;
 
-  scroll-behavior: smooth;
-
   -webkit-overflow-scrolling: touch;
+
+}
+
+html.capacitor-native .main-content:has(.rc-page) {
+
+  scroll-behavior: auto !important;
 
 }
 
@@ -1176,6 +1180,36 @@ html:not(.capacitor-native) .rc-web-shell {
 
 }
 
+/* Native shell: navbar hidden — reclaim vertical space for scroll area */
+
+html.capacitor-native:has(.rc-page) #appNativeShell {
+
+  top: max(env(safe-area-inset-top, 0px), 6px) !important;
+
+  bottom: 0 !important;
+
+}
+
+html.capacitor-native #appNativeShell .main-content:has(.rc-page) {
+
+  overflow-y: auto !important;
+
+  -webkit-overflow-scrolling: touch !important;
+
+  overscroll-behavior-y: auto !important;
+
+  touch-action: pan-y !important;
+
+  scroll-behavior: auto !important;
+
+  padding: 8px 0 12px !important;
+
+  min-height: 0 !important;
+
+  flex: 1 1 auto !important;
+
+}
+
 html.capacitor-native .main-content:has(.rc-page) {
 
   padding-top: max(env(safe-area-inset-top, 0px), 4px) !important;
@@ -1184,15 +1218,49 @@ html.capacitor-native .main-content:has(.rc-page) {
 
 }
 
+html.capacitor-native #appNativeShell .main-content:has(.rc-page) {
+
+  padding-bottom: 12px !important;
+
+}
+
 html.capacitor-native .rc-glass-panel {
 
   border-radius: 0;
 
-  min-height: 0;
+  min-height: min-content;
 
-  padding: 0.35rem 0.5rem 0.2rem;
+  overflow: visible;
+
+  padding: 0.35rem 0.5rem 0.35rem;
 
   border-top: none;
+
+  touch-action: pan-y;
+
+}
+
+html.capacitor-native .rc-native-chrome,
+
+html.capacitor-native .rc-pager-viewport,
+
+html.capacitor-native .rc-search-mode {
+
+  touch-action: pan-y;
+
+}
+
+html.capacitor-native .rc-chip-scroller-wrap {
+
+  touch-action: pan-x;
+
+}
+
+html.capacitor-native .rc-chip-scroller {
+
+  touch-action: pan-x;
+
+  overscroll-behavior-x: contain;
 
 }
 
@@ -1648,11 +1716,19 @@ html.capacitor-native .rc-page {
 
   padding: 0;
 
-  min-height: 0;
+  min-height: min-content;
 
   margin: 0 !important;
 
   width: 100% !important;
+
+  overflow: visible;
+
+  isolation: auto;
+
+  touch-action: pan-y;
+
+  -webkit-overflow-scrolling: touch;
 
 }
 
@@ -1804,17 +1880,7 @@ html.capacitor-native .rc-native-chrome {
 
 html.capacitor-native .rc-pager-dots {
 
-  display: flex;
-
-  align-items: center;
-
-  justify-content: center;
-
-  gap: 6px;
-
-  min-height: 28px;
-
-  margin-bottom: 0.55rem;
+  display: none;
 
 }
 
@@ -1952,6 +2018,8 @@ html.capacitor-native .rc-pager-track {
 
   scroll-snap-type: none;
 
+  padding-bottom: 1rem;
+
 }
 
 html.capacitor-native .rc-pager-slide {
@@ -2068,7 +2136,9 @@ html.capacitor-native .rc-search-mode {
 
   display: none;
 
-  padding: 0.5rem 0.75rem 1.5rem;
+  padding: 0.5rem 0.65rem 1.25rem;
+
+  overflow: visible;
 
 }
 
@@ -3123,6 +3193,46 @@ document.addEventListener('DOMContentLoaded', function(){
 
     if (!track || !viewport) return;
 
+    function getScrollRoot() {
+
+      return document.getElementById('mainContent')
+
+        || document.querySelector('#appNativeShell .main-content')
+
+        || document.querySelector('.main-content')
+
+        || document.scrollingElement
+
+        || document.documentElement;
+
+    }
+
+    function scrollToElement(el, smooth, offsetTop) {
+
+      if (!el) return;
+
+      var root = getScrollRoot();
+
+      var gap = typeof offsetTop === 'number' ? offsetTop : 10;
+
+      if (!root || root === document.documentElement || root === document.body) {
+
+        el.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'start' });
+
+        return;
+
+      }
+
+      var rootRect = root.getBoundingClientRect();
+
+      var elRect = el.getBoundingClientRect();
+
+      var top = elRect.top - rootRect.top + root.scrollTop - gap;
+
+      root.scrollTo({ top: Math.max(0, top), behavior: smooth ? 'smooth' : 'auto' });
+
+    }
+
     var LS_FAV = 'rc_report_favorites_v1';
 
     var LS_USAGE = 'rc_report_usage_v1';
@@ -3349,17 +3459,11 @@ document.addEventListener('DOMContentLoaded', function(){
 
       dotsEl.querySelectorAll('.rc-pager-dot').forEach(function(d) { d.classList.remove('is-active'); });
 
-      var panel = document.querySelector('.rc-glass-panel');
+      var root = getScrollRoot();
 
-      var scrollRoot = document.querySelector('.main-content') || document.scrollingElement;
+      if (root && root.scrollTo) {
 
-      if (panel) {
-
-        panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-
-      } else if (scrollRoot && scrollRoot.scrollTo) {
-
-        scrollRoot.scrollTo({ top: 0, behavior: 'smooth' });
+        root.scrollTo({ top: 0, behavior: 'smooth' });
 
       }
 
@@ -3403,7 +3507,7 @@ document.addEventListener('DOMContentLoaded', function(){
 
     var activeIdx = 0;
 
-    var scrollRoot = document.querySelector('.main-content') || null;
+    var scrollRoot = getScrollRoot();
 
     function goToSlide(idx, smooth) {
 
@@ -3411,15 +3515,7 @@ document.addEventListener('DOMContentLoaded', function(){
 
       activeIdx = idx;
 
-      var slideEl = track.children[idx];
-
-      if (slideEl) {
-
-        var behavior = smooth ? 'smooth' : 'auto';
-
-        slideEl.scrollIntoView({ behavior: behavior, block: 'start' });
-
-      }
+      scrollToElement(track.children[idx], smooth, 12);
 
       syncPagerUi(idx);
 
@@ -3453,53 +3549,71 @@ document.addEventListener('DOMContentLoaded', function(){
 
     }
 
-    if (typeof IntersectionObserver !== 'undefined') {
+    (function bindNativeScrollSpy() {
 
-      var sectionObserver = new IntersectionObserver(function(entries) {
+      var root = getScrollRoot();
 
-        var best = null;
+      if (!root || !root.addEventListener) return;
 
-        entries.forEach(function(entry) {
+      var spyRaf = 0;
 
-          if (!entry.isIntersecting) return;
+      function updateActiveFromScroll() {
 
-          if (!best || entry.intersectionRatio > best.ratio) {
+        if (!track.children.length) return;
 
-            best = { el: entry.target, ratio: entry.intersectionRatio };
+        var anchor = 88;
+
+        if (scrollRoot && scrollRoot.getBoundingClientRect) {
+
+          anchor = scrollRoot.getBoundingClientRect().top + 72;
+
+        }
+
+        var bestIdx = 0;
+
+        var bestDist = Infinity;
+
+        Array.prototype.forEach.call(track.children, function(slide, idx) {
+
+          var dist = Math.abs(slide.getBoundingClientRect().top - anchor);
+
+          if (dist < bestDist) {
+
+            bestDist = dist;
+
+            bestIdx = idx;
 
           }
 
         });
 
-        if (!best || !best.el) return;
+        if (bestIdx !== activeIdx) {
 
-        var idx = Array.prototype.indexOf.call(track.children, best.el);
+          activeIdx = bestIdx;
 
-        if (idx >= 0 && idx !== activeIdx) {
-
-          activeIdx = idx;
-
-          syncPagerUi(idx);
+          syncPagerUi(bestIdx);
 
         }
 
-      }, {
+      }
 
-        root: scrollRoot,
+      root.addEventListener('scroll', function() {
 
-        rootMargin: '-8% 0px -52% 0px',
+        if (spyRaf) return;
 
-        threshold: [0.12, 0.28, 0.45]
+        spyRaf = requestAnimationFrame(function() {
 
-      });
+          spyRaf = 0;
 
-      Array.prototype.forEach.call(track.children, function(slide) {
+          updateActiveFromScroll();
 
-        sectionObserver.observe(slide);
+        });
 
-      });
+      }, { passive: true });
 
-    }
+      updateActiveFromScroll();
+
+    })();
 
     track.querySelectorAll('a.report-link').forEach(function(a) {
 
