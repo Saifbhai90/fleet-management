@@ -32412,7 +32412,7 @@ def module_hub(hub_slug):
         is_master = session.get('is_master', False)
         can_p = (lambda k: True) if is_master else (lambda k: can_see_page(perms, k))
         can_s = (lambda k: True) if is_master else (lambda k: can_see_section(perms, k))
-        can_admin = (lambda: True) if is_master else (lambda: can_see_administration_menu(perms)
+        can_admin = (lambda: True) if is_master else (lambda: can_see_administration_menu(perms))
     except Exception:
         can_p = lambda k: True
         can_s = lambda k: True
