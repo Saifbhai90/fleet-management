@@ -194,39 +194,11 @@
 
   </div>
 
-  <div class="rc-mobile-scroll" id="rcMobileScroll">
-
-  <div class="rc-page-header d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
-
-    <h4 class="mb-0 rc-page-title"><i class="bi bi-bar-chart-line me-2 text-primary"></i>Report Centre</h4>
-
-    {% if rc.any_tab %}
-
-    <div class="position-relative rc-search-wrap">
-
-      <i class="bi bi-search position-absolute rc-search-icon"></i>
-
-      <input type="text" id="reportSearchBox" class="form-control form-control-sm ps-4" placeholder="Search reports..." autocomplete="off">
-
-    </div>
-
-    {% endif %}
-
-  </div>
-
   {% if not rc.any_tab %}
 
   <div class="alert alert-light border text-muted mb-0"><i class="bi bi-info-circle me-2"></i>No report shortcuts are assigned for your role. Ask an administrator to grant specific reports under <strong>Reports & Analytics</strong>.</div>
 
   {% else %}
-
-  <div class="rc-native-empty" id="rcNativeSearchEmpty" aria-live="polite">
-
-    <i class="bi bi-search d-block mb-2" style="font-size:1.5rem;opacity:0.45;"></i>
-
-    No report matches your search.
-
-  </div>
 
   <div class="rc-web-empty rc-web-only" id="rcWebSearchEmpty" hidden aria-live="polite">
 
@@ -256,37 +228,57 @@
 
   </div>
 
-  <!-- Mobile-only: horizontal pager chrome (built by JS on Capacitor) -->
+  <!-- Mobile: unified scroll (Capacitor only; hidden on web) -->
 
-  <div class="rc-native-chrome" id="rcNativeChrome" aria-hidden="true">
+  <div class="rc-mobile-wrapper" id="rcMobileWrapper" aria-hidden="true">
 
-    <div class="rc-pager-dots" id="rcPagerDots" role="tablist" aria-label="Report categories"></div>
+    <div class="rc-mobile-topbar">
 
-    <div class="rc-chip-scroller-wrap">
+      <h4 class="mb-0 rc-page-title"><i class="bi bi-bar-chart-line me-2 text-primary"></i>Report Centre</h4>
 
-      <div class="rc-chip-scroller" id="rcChipScroller"></div>
+    </div>
+
+    <div class="rc-mobile-sticky-header">
+
+      <div class="position-relative rc-search-wrap">
+
+        <i class="bi bi-search position-absolute rc-search-icon"></i>
+
+        <input type="text" id="reportSearchBox" class="form-control form-control-sm ps-4" placeholder="Search reports..." autocomplete="off" aria-label="Search reports">
+
+      </div>
+
+      <div class="rc-chip-container" id="rcChipScroller" role="tablist" aria-label="Report categories"></div>
+
+    </div>
+
+    <div class="rc-scroll-content" id="mainScrollArea">
+
+      <div class="rc-native-empty" id="rcNativeSearchEmpty" aria-live="polite">
+
+        <i class="bi bi-search d-block mb-2" style="font-size:1.5rem;opacity:0.45;"></i>
+
+        No report matches your search.
+
+      </div>
+
+      <div id="rcMobileSections"></div>
+
+      <div class="rc-search-mode" id="rcSearchMode" hidden>
+
+        <p class="rc-search-mode-label" id="rcSearchModeLabel"></p>
+
+        <div class="rc-search-mode-grid" id="rcSearchGrid"></div>
+
+      </div>
+
+      <div class="rc-bottom-spacer" aria-hidden="true"></div>
 
     </div>
 
   </div>
 
-  <div class="rc-pager-viewport" id="rcPagerViewport" aria-hidden="true">
-
-    <div class="rc-pager-track" id="rcPagerTrack"></div>
-
-  </div>
-
-  <div class="rc-search-mode" id="rcSearchMode" hidden>
-
-    <p class="rc-search-mode-label" id="rcSearchModeLabel"></p>
-
-    <div class="rc-search-mode-grid" id="rcSearchGrid"></div>
-
-  </div>
-
   {% endif %}
-
-  </div><!-- /rc-mobile-scroll -->
 
   {% if rc.any_tab %}
 
@@ -1190,11 +1182,11 @@ html:not(.capacitor-native) .rc-web-shell {
 
 }
 
-/* Web: wrapper is transparent — no extra scroll layer */
+/* Web: mobile unified scroll shell is not used */
 
-html:not(.capacitor-native) .rc-mobile-scroll { display: contents; }
+html:not(.capacitor-native) .rc-mobile-wrapper { display: none !important; }
 
-/* Native: flex chain + dedicated scroll viewport (#rcMobileScroll) */
+/* Native: flex height chain + single vertical scroll (#mainScrollArea) */
 
 html.capacitor-native.page-report-centre #appNativeShell {
 
@@ -1290,55 +1282,55 @@ html.capacitor-native.page-report-centre .rc-glass-panel {
 
 }
 
-html.capacitor-native.page-report-centre #rcMobileScroll {
+html.capacitor-native.page-report-centre .rc-mobile-wrapper {
+
+  display: flex;
+
+  flex-direction: column;
 
   flex: 1 1 auto;
 
   min-height: 0;
 
+  height: 100%;
+
   width: 100%;
 
-  overflow-x: hidden;
-
-  overflow-y: scroll;
-
-  -webkit-overflow-scrolling: touch;
-
-  overscroll-behavior-y: contain;
-
-  touch-action: pan-y;
-
-  padding: 0.35rem 0.5rem calc(12px + env(safe-area-inset-bottom, 0px));
+  overflow: hidden;
 
   position: relative;
 
   z-index: 1;
 
-}
-
-html.capacitor-native.page-report-centre .rc-native-chrome,
-
-html.capacitor-native.page-report-centre .rc-pager-viewport,
-
-html.capacitor-native.page-report-centre .rc-search-mode {
-
-  overflow: visible;
+  background: transparent;
 
 }
 
-html.capacitor-native.page-report-centre .rc-chip-scroller-wrap {
+html.capacitor-native.page-report-centre .rc-mobile-topbar {
 
-  overflow: hidden;
+  flex-shrink: 0;
 
-  margin: 0 -0.5rem;
-
-  padding: 0 0.5rem;
+  padding: 0.35rem 0.65rem 0.25rem;
 
 }
 
-html.capacitor-native.page-report-centre .rc-chip-scroller {
+html.capacitor-native.page-report-centre .rc-mobile-sticky-header {
+
+  flex-shrink: 0;
+
+  padding: 0 0.65rem 0.4rem;
+
+  background: rgba(255, 255, 255, 0.92);
+
+  z-index: 10;
+
+}
+
+html.capacitor-native.page-report-centre .rc-chip-container {
 
   display: flex;
+
+  flex-wrap: nowrap;
 
   gap: 8px;
 
@@ -1354,13 +1346,49 @@ html.capacitor-native.page-report-centre .rc-chip-scroller {
 
   scrollbar-width: none;
 
-  padding-bottom: 2px;
+  padding: 0.5rem 0 0.15rem;
+
+  margin: 0 -0.15rem;
 
 }
 
-html.capacitor-native.page-report-centre .rc-chip-scroller::-webkit-scrollbar { display: none; }
+html.capacitor-native.page-report-centre .rc-chip-container::-webkit-scrollbar { display: none; }
 
-html.capacitor-native .rc-page-header.mb-3 { margin-bottom: 0.35rem !important; }
+html.capacitor-native.page-report-centre #mainScrollArea.rc-scroll-content {
+
+  flex: 1 1 auto;
+
+  min-height: 0;
+
+  overflow-x: hidden;
+
+  overflow-y: auto;
+
+  -webkit-overflow-scrolling: touch;
+
+  scroll-behavior: smooth;
+
+  overscroll-behavior-y: contain;
+
+  touch-action: pan-y;
+
+  padding: 0 0.5rem calc(12px + env(safe-area-inset-bottom, 0px));
+
+}
+
+html.capacitor-native.page-report-centre .rc-bottom-spacer {
+
+  height: 100px;
+
+  flex-shrink: 0;
+
+}
+
+html.capacitor-native.page-report-centre .rc-scroll-content.is-searching #rcMobileSections {
+
+  display: none;
+
+}
 
 /* Premium glass icon grid (reference launcher) */
 
@@ -1414,7 +1442,7 @@ html.capacitor-native .rc-page-header.mb-3 { margin-bottom: 0.35rem !important; 
 
 .rc-page .report-link-group .report-link.rc-report-card,
 
-.rc-page .rc-pager-slide .report-link.rc-tile,
+.rc-page .rc-report-section .report-link.rc-tile,
 
 .rc-page .rc-search-mode-grid .report-link.rc-tile {
 
@@ -1450,7 +1478,7 @@ html.capacitor-native .rc-page-header.mb-3 { margin-bottom: 0.35rem !important; 
 
 .rc-page .report-link-group .report-link.rc-report-card:hover,
 
-.rc-page .rc-pager-slide .report-link.rc-tile:hover,
+.rc-page .rc-report-section .report-link.rc-tile:hover,
 
 .rc-page .rc-search-mode-grid .report-link.rc-tile:hover {
 
@@ -1476,7 +1504,7 @@ html.capacitor-native .rc-page-header.mb-3 { margin-bottom: 0.35rem !important; 
 
 }
 
-.rc-page .rc-pager-slide .report-link.rc-tile:active,
+.rc-page .rc-report-section .report-link.rc-tile:active,
 
 .rc-page .rc-search-mode-grid .report-link.rc-tile:active {
 
@@ -1502,7 +1530,7 @@ html.capacitor-native .rc-page-header.mb-3 { margin-bottom: 0.35rem !important; 
 
 .rc-page .report-link-group .rc-tile-icon,
 
-.rc-page .rc-pager-slide .rc-tile-icon,
+.rc-page .rc-report-section .rc-tile-icon,
 
 .rc-page .rc-search-mode-grid .rc-tile-icon {
 
@@ -1534,7 +1562,7 @@ html.capacitor-native .rc-page-header.mb-3 { margin-bottom: 0.35rem !important; 
 
 .rc-page .report-link-group .rc-tile-icon::before,
 
-.rc-page .rc-pager-slide .rc-tile-icon::before,
+.rc-page .rc-report-section .rc-tile-icon::before,
 
 .rc-page .rc-search-mode-grid .rc-tile-icon::before {
 
@@ -1564,7 +1592,7 @@ html.capacitor-native .rc-page-header.mb-3 { margin-bottom: 0.35rem !important; 
 
 .rc-page .report-link-group .rc-tile-icon::after,
 
-.rc-page .rc-pager-slide .rc-tile-icon::after,
+.rc-page .rc-report-section .rc-tile-icon::after,
 
 .rc-page .rc-search-mode-grid .rc-tile-icon::after {
 
@@ -1604,7 +1632,7 @@ html.capacitor-native .rc-page-header.mb-3 { margin-bottom: 0.35rem !important; 
 
 .rc-page .report-link-group .rc-tile-icon .bi,
 
-.rc-page .rc-pager-slide .rc-tile-icon .bi,
+.rc-page .rc-report-section .rc-tile-icon .bi,
 
 .rc-page .rc-search-mode-grid .rc-tile-icon .bi {
 
@@ -1632,7 +1660,7 @@ html.capacitor-native .rc-page-header.mb-3 { margin-bottom: 0.35rem !important; 
 
   .rc-page .report-link-group .rc-tile-icon,
 
-  .rc-page .rc-pager-slide .rc-tile-icon,
+  .rc-page .rc-report-section .rc-tile-icon,
 
   .rc-page .rc-search-mode-grid .rc-tile-icon {
 
@@ -1646,7 +1674,7 @@ html.capacitor-native .rc-page-header.mb-3 { margin-bottom: 0.35rem !important; 
 
   .rc-page .report-link-group .rc-tile-icon .bi,
 
-  .rc-page .rc-pager-slide .rc-tile-icon .bi,
+  .rc-page .rc-report-section .rc-tile-icon .bi,
 
   .rc-page .rc-search-mode-grid .rc-tile-icon .bi {
 
@@ -1732,7 +1760,7 @@ html.capacitor-native .rc-page-header.mb-3 { margin-bottom: 0.35rem !important; 
 
 .rc-page .rc-report-col:first-child > h6,
 
-.rc-page .rc-pager-slide .rc-slide-subhead:first-child { margin-top: 0.5rem !important; }
+.rc-page .rc-report-section .rc-slide-subhead:first-child { margin-top: 0.5rem !important; }
 
 .rc-page .rc-card-desc,
 
@@ -1800,39 +1828,13 @@ html.capacitor-native .rc-page-header.mb-3 { margin-bottom: 0.35rem !important; 
 
 }
 
-/* ── Mobile app: horizontal pager + launcher grid ── */
+/* ── Mobile app: unified vertical scroll + launcher grid ── */
 
-.rc-native-chrome,
+.rc-mobile-wrapper { display: none; }
 
-.rc-pager-viewport,
+html.capacitor-native .rc-mobile-wrapper { display: flex; flex-direction: column; }
 
-.rc-search-mode { display: none; }
-
-html.capacitor-native .rc-page-header {
-
-  flex-direction: column;
-
-  align-items: stretch !important;
-
-  margin-bottom: 0 !important;
-
-  position: relative;
-
-  top: auto;
-
-  z-index: 1;
-
-  background: transparent;
-
-  backdrop-filter: none;
-
-  -webkit-backdrop-filter: none;
-
-  padding: 0.25rem 0.65rem 0.45rem;
-
-  border-bottom: none;
-
-}
+html.capacitor-native .rc-search-mode { display: none; }
 
 html.capacitor-native .rc-page-title {
 
@@ -1882,9 +1884,11 @@ html.capacitor-native .rc-search-wrap .form-control {
 
   border: 1px solid var(--rc-glass-border);
 
-  background: rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.92);
 
-  backdrop-filter: blur(12px);
+  backdrop-filter: none;
+
+  -webkit-backdrop-filter: none;
 
   color: var(--rc-text-dark);
 
@@ -1936,56 +1940,6 @@ html.capacitor-native .rc-report-body.rc-source-catalog {
 
 }
 
-html.capacitor-native .rc-native-chrome {
-
-  display: block;
-
-  position: relative;
-
-  top: auto;
-
-  z-index: 1;
-
-  background: transparent;
-
-  backdrop-filter: none;
-
-  padding: 0 0.65rem 0.4rem;
-
-}
-
-html.capacitor-native .rc-pager-dots {
-
-  display: none;
-
-}
-
-html.capacitor-native .rc-pager-dot {
-
-  width: 7px;
-
-  height: 7px;
-
-  border-radius: 999px;
-
-  border: none;
-
-  padding: 0;
-
-  background: #cbd5e1;
-
-  transition: width 0.28s cubic-bezier(0.4, 0, 0.2, 1), background 0.2s ease;
-
-}
-
-html.capacitor-native .rc-pager-dot.is-active {
-
-  width: 26px;
-
-  background: linear-gradient(90deg, #0284c7, #38bdf8);
-
-}
-
 html.capacitor-native .rc-chip {
 
   flex: 0 0 auto;
@@ -1994,7 +1948,9 @@ html.capacitor-native .rc-chip {
 
   background: var(--rc-glass-bg);
 
-  backdrop-filter: blur(10px);
+  backdrop-filter: none;
+
+  -webkit-backdrop-filter: none;
 
   color: var(--rc-text-muted);
 
@@ -2038,53 +1994,21 @@ html.capacitor-native .rc-chip:hover:not(.is-active) {
 
 html.capacitor-native .rc-chip:active { transform: scale(0.96); }
 
-html.capacitor-native .rc-pager-viewport {
+html.capacitor-native .rc-report-section {
 
-  display: block;
+  padding: 1rem 0.15rem 1.25rem;
 
-}
-
-html.capacitor-native .rc-pager-viewport.is-searching { display: none; }
-
-html.capacitor-native .rc-pager-track {
-
-  display: flex;
-
-  flex-direction: column;
-
-  gap: 0;
-
-  overflow: visible;
-
-  scroll-snap-type: none;
-
-  padding-bottom: 1rem;
-
-}
-
-html.capacitor-native .rc-pager-slide {
-
-  flex: none;
-
-  width: 100%;
-
-  scroll-snap-align: none;
-
-  padding: 0.5rem 0.65rem 1rem;
+  min-height: 200px;
 
   box-sizing: border-box;
 
-  max-height: none;
-
-  overflow: visible;
-
 }
 
-html.capacitor-native .rc-pager-slide + .rc-pager-slide {
+html.capacitor-native .rc-report-section + .rc-report-section {
 
   border-top: 1px solid rgba(255, 255, 255, 0.35);
 
-  padding-top: 0.85rem;
+  padding-top: 1.1rem;
 
 }
 
@@ -2130,7 +2054,7 @@ html.capacitor-native .rc-slide-grid {
 
 }
 
-html.capacitor-native .rc-pager-slide .report-link.rc-tile.rc-tap-pop,
+html.capacitor-native .rc-report-section .report-link.rc-tile.rc-tap-pop,
 
 html.capacitor-native .rc-search-mode-grid .report-link.rc-tile.rc-tap-pop {
 
@@ -2150,9 +2074,9 @@ html.capacitor-native .rc-search-mode-grid .report-link.rc-tile.rc-tap-pop {
 
 /* mobile pager tiles use unified .rc-page launcher rules above */
 
-html.capacitor-native .rc-pager-slide .report-link.rc-tile .rc-tile-hint,
+html.capacitor-native .rc-report-section .report-link.rc-tile .rc-tile-hint,
 
-html.capacitor-native .rc-pager-slide .report-link.rc-tile small,
+html.capacitor-native .rc-report-section .report-link.rc-tile small,
 
 html.capacitor-native .rc-search-mode-grid .report-link.rc-tile .rc-tile-hint,
 
@@ -2224,9 +2148,7 @@ html.capacitor-native .rc-native-empty {
 
 html.capacitor-native .rc-native-empty.is-visible { display: block; }
 
-html.capacitor-native .rc-native-chrome.is-searching,
-
-html.capacitor-native .rc-pager-viewport.is-searching { display: none !important; }
+html.capacitor-native.page-report-centre .rc-scroll-content.is-searching #rcMobileSections { display: none !important; }
 
 .rc-mobile-section-banner { display: none; }
 
@@ -3201,7 +3123,7 @@ document.addEventListener('DOMContentLoaded', function(){
 
   }
 
-  initRcMobilePager();
+  initRcMobileUnified();
 
   function rcHapticLight() {
 
@@ -3215,17 +3137,15 @@ document.addEventListener('DOMContentLoaded', function(){
 
   }
 
-  function initRcMobilePager() {
+  function initRcMobileUnified() {
 
-    var track = document.getElementById('rcPagerTrack');
+    var sectionsEl = document.getElementById('rcMobileSections');
 
-    var viewport = document.getElementById('rcPagerViewport');
-
-    var dotsEl = document.getElementById('rcPagerDots');
+    var scrollContainer = document.getElementById('mainScrollArea');
 
     var chipsEl = document.getElementById('rcChipScroller');
 
-    var chrome = document.getElementById('rcNativeChrome');
+    var mobileWrapper = document.getElementById('rcMobileWrapper');
 
     var searchMode = document.getElementById('rcSearchMode');
 
@@ -3235,73 +3155,21 @@ document.addEventListener('DOMContentLoaded', function(){
 
     var emptyEl = document.getElementById('rcNativeSearchEmpty');
 
-    var header = document.querySelector('.rc-page-header');
+    if (!sectionsEl || !scrollContainer || !chipsEl || !searchBox) return;
 
-    if (!track || !viewport) return;
+    function scrollToSection(sectionId, smooth) {
 
-    function getScrollRoot() {
+      var target = document.getElementById(sectionId);
 
-      var mobileScroll = document.getElementById('rcMobileScroll');
+      if (!scrollContainer || !target) return;
 
-      if (mobileScroll) return mobileScroll;
+      var rootRect = scrollContainer.getBoundingClientRect();
 
-      return document.getElementById('mainContent')
+      var targetRect = target.getBoundingClientRect();
 
-        || document.querySelector('#appNativeShell .main-content')
+      var top = targetRect.top - rootRect.top + scrollContainer.scrollTop - 10;
 
-        || document.querySelector('.main-content')
-
-        || document.scrollingElement
-
-        || document.documentElement;
-
-    }
-
-    function layoutRcMobileScroll() {
-
-      var scrollEl = document.getElementById('rcMobileScroll');
-
-      if (!scrollEl) return;
-
-      var top = scrollEl.getBoundingClientRect().top;
-
-      var bottomNav = document.getElementById('mobileBottomNav');
-
-      var bottom = bottomNav ? bottomNav.getBoundingClientRect().top : window.innerHeight;
-
-      var h = Math.max(220, Math.floor(bottom - top - 6));
-
-      scrollEl.style.flex = '0 0 auto';
-
-      scrollEl.style.height = h + 'px';
-
-      scrollEl.style.maxHeight = h + 'px';
-
-    }
-
-    function scrollToElement(el, smooth, offsetTop) {
-
-      if (!el) return;
-
-      var root = getScrollRoot();
-
-      var gap = typeof offsetTop === 'number' ? offsetTop : 10;
-
-      if (!root || root === document.documentElement || root === document.body) {
-
-        el.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'start' });
-
-        return;
-
-      }
-
-      var rootRect = root.getBoundingClientRect();
-
-      var elRect = el.getBoundingClientRect();
-
-      var top = elRect.top - rootRect.top + root.scrollTop - gap;
-
-      root.scrollTo({ top: Math.max(0, top), behavior: smooth ? 'smooth' : 'auto' });
+      scrollContainer.scrollTo({ top: Math.max(0, top), behavior: smooth ? 'smooth' : 'auto' });
 
     }
 
@@ -3435,15 +3303,17 @@ document.addEventListener('DOMContentLoaded', function(){
 
     if (!slides.length) return;
 
-    track.innerHTML = '';
+    sectionsEl.innerHTML = '';
 
     slides.forEach(function(slide) {
 
       var section = document.createElement('section');
 
-      section.className = 'rc-pager-slide';
+      section.className = 'rc-report-section';
 
-      section.setAttribute('data-slide-id', slide.meta.id);
+      section.id = slide.meta.id;
+
+      section.setAttribute('data-section-id', slide.meta.id);
 
       section.innerHTML = '<h2 class="rc-slide-title">' + slide.meta.title + '</h2>' +
 
@@ -3501,31 +3371,11 @@ document.addEventListener('DOMContentLoaded', function(){
 
       section.appendChild(grid);
 
-      track.appendChild(section);
+      sectionsEl.appendChild(section);
 
     });
 
-    chrome.setAttribute('aria-hidden', 'false');
-
-    viewport.setAttribute('aria-hidden', 'false');
-
-    layoutRcMobileScroll();
-
-    requestAnimationFrame(layoutRcMobileScroll);
-
-    setTimeout(layoutRcMobileScroll, 80);
-
-    setTimeout(layoutRcMobileScroll, 350);
-
-    window.addEventListener('resize', layoutRcMobileScroll);
-
-    window.addEventListener('orientationchange', function() {
-
-      setTimeout(layoutRcMobileScroll, 120);
-
-    });
-
-    dotsEl.innerHTML = '';
+    if (mobileWrapper) mobileWrapper.setAttribute('aria-hidden', 'false');
 
     chipsEl.innerHTML = '';
 
@@ -3533,11 +3383,11 @@ document.addEventListener('DOMContentLoaded', function(){
 
     allChip.type = 'button';
 
-    allChip.className = 'rc-chip is-active';
+    allChip.className = 'rc-chip';
 
     allChip.textContent = 'All';
 
-    allChip.setAttribute('data-slide-idx', '-1');
+    allChip.setAttribute('data-section-id', '');
 
     allChip.addEventListener('click', function() {
 
@@ -3545,15 +3395,7 @@ document.addEventListener('DOMContentLoaded', function(){
 
       allChip.classList.add('is-active');
 
-      dotsEl.querySelectorAll('.rc-pager-dot').forEach(function(d) { d.classList.remove('is-active'); });
-
-      var root = getScrollRoot();
-
-      if (root && root.scrollTo) {
-
-        root.scrollTo({ top: 0, behavior: 'smooth' });
-
-      }
+      scrollContainer.scrollTo({ top: 0, behavior: 'smooth' });
 
       rcHapticLight();
 
@@ -3563,20 +3405,6 @@ document.addEventListener('DOMContentLoaded', function(){
 
     slides.forEach(function(slide, idx) {
 
-      var dot = document.createElement('button');
-
-      dot.type = 'button';
-
-      dot.className = 'rc-pager-dot' + (idx === 0 ? ' is-active' : '');
-
-      dot.setAttribute('aria-label', slide.meta.title);
-
-      dot.setAttribute('data-slide-idx', String(idx));
-
-      dot.addEventListener('click', function() { goToSlide(idx, true); });
-
-      dotsEl.appendChild(dot);
-
       var chip = document.createElement('button');
 
       chip.type = 'button';
@@ -3585,107 +3413,95 @@ document.addEventListener('DOMContentLoaded', function(){
 
       chip.textContent = slide.meta.id === 'favorites' ? 'For You' : slide.meta.title.split('&')[0].trim();
 
-      chip.setAttribute('data-slide-idx', String(idx));
+      chip.setAttribute('data-section-id', slide.meta.id);
 
-      chip.addEventListener('click', function() { goToSlide(idx, true); rcHapticLight(); });
+      chip.setAttribute('role', 'tab');
+
+      chip.addEventListener('click', function() {
+
+        scrollToSection(slide.meta.id, true);
+
+        syncChipUi(slide.meta.id);
+
+        rcHapticLight();
+
+      });
 
       chipsEl.appendChild(chip);
 
     });
 
-    var activeIdx = 0;
+    var activeSectionId = slides[0].meta.id;
 
-    var scrollRoot = getScrollRoot();
+    function syncChipUi(sectionId) {
 
-    function goToSlide(idx, smooth) {
-
-      idx = Math.max(0, Math.min(slides.length - 1, idx));
-
-      activeIdx = idx;
-
-      scrollToElement(track.children[idx], smooth, 12);
-
-      syncPagerUi(idx);
-
-    }
-
-    function syncPagerUi(idx) {
-
-      dotsEl.querySelectorAll('.rc-pager-dot').forEach(function(d, i) {
-
-        d.classList.toggle('is-active', i === idx);
-
-      });
+      activeSectionId = sectionId || '';
 
       chipsEl.querySelectorAll('.rc-chip').forEach(function(c) {
 
-        var cIdx = parseInt(c.getAttribute('data-slide-idx'), 10);
+        var sid = c.getAttribute('data-section-id') || '';
 
-        var on = cIdx === idx;
+        var on = sid === activeSectionId;
 
         c.classList.toggle('is-active', on);
 
-        if (on && cIdx >= 0) {
+        if (on && sid) {
 
-          c.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+          try { c.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' }); } catch (e) {}
 
         }
 
       });
 
-      if (allChip) allChip.classList.remove('is-active');
+      if (allChip && activeSectionId) allChip.classList.remove('is-active');
+
+      if (allChip && !activeSectionId) allChip.classList.add('is-active');
 
     }
 
     (function bindNativeScrollSpy() {
 
-      var root = getScrollRoot();
-
-      if (!root || !root.addEventListener) return;
+      if (!scrollContainer.addEventListener) return;
 
       var spyRaf = 0;
 
       function updateActiveFromScroll() {
 
-        if (!track.children.length) return;
+        if (!sectionsEl.children.length || scrollContainer.classList.contains('is-searching')) return;
 
-        var anchor = 88;
+        var anchor = scrollContainer.getBoundingClientRect().top + 72;
 
-        if (scrollRoot && scrollRoot.getBoundingClientRect) {
-
-          anchor = scrollRoot.getBoundingClientRect().top + 72;
-
-        }
-
-        var bestIdx = 0;
+        var bestId = slides[0].meta.id;
 
         var bestDist = Infinity;
 
-        Array.prototype.forEach.call(track.children, function(slide, idx) {
+        Array.prototype.forEach.call(sectionsEl.children, function(section) {
 
-          var dist = Math.abs(slide.getBoundingClientRect().top - anchor);
+          var dist = Math.abs(section.getBoundingClientRect().top - anchor);
 
           if (dist < bestDist) {
 
             bestDist = dist;
 
-            bestIdx = idx;
+            bestId = section.id || section.getAttribute('data-section-id') || bestId;
 
           }
 
         });
 
-        if (bestIdx !== activeIdx) {
+        if (scrollContainer.scrollTop < 40) {
 
-          activeIdx = bestIdx;
+          syncChipUi('');
 
-          syncPagerUi(bestIdx);
+          return;
 
         }
 
+        if (bestId !== activeSectionId) syncChipUi(bestId);
+
       }
 
-      root.addEventListener('scroll', function() {
+      scrollContainer.addEventListener('scroll', function() {
 
         if (spyRaf) return;
 
@@ -3703,7 +3519,7 @@ document.addEventListener('DOMContentLoaded', function(){
 
     })();
 
-    track.querySelectorAll('a.report-link').forEach(function(a) {
+    sectionsEl.querySelectorAll('a.report-link').forEach(function(a) {
 
       a.addEventListener('click', function() {
 
@@ -3719,19 +3535,17 @@ document.addEventListener('DOMContentLoaded', function(){
 
     });
 
-    var allPagerLinks = function() {
+    var allSectionLinks = function() {
 
-      return track.querySelectorAll('a.report-link');
+      return sectionsEl.querySelectorAll('a.report-link');
 
     };
 
     function setSearchMode(on) {
 
-      var q = searchBox.value.trim();
+      scrollContainer.classList.toggle('is-searching', on);
 
-      chrome.classList.toggle('is-searching', on);
-
-      viewport.classList.toggle('is-searching', on);
+      if (searchMode) searchMode.hidden = !on;
 
       searchMode.classList.toggle('is-active', on);
 
@@ -3749,7 +3563,7 @@ document.addEventListener('DOMContentLoaded', function(){
 
         searchGrid.innerHTML = '';
 
-        allPagerLinks().forEach(function(a) { a.classList.remove('is-search-hit', 'd-none'); });
+        allSectionLinks().forEach(function(a) { a.classList.remove('is-search-hit', 'd-none'); });
 
         return;
 
@@ -3763,7 +3577,7 @@ document.addEventListener('DOMContentLoaded', function(){
 
       var hitSlides = {};
 
-      allPagerLinks().forEach(function(a) {
+      allSectionLinks().forEach(function(a) {
 
         var text = (a.textContent || '').toLowerCase();
 
@@ -3775,9 +3589,9 @@ document.addEventListener('DOMContentLoaded', function(){
 
           hits.push(a);
 
-          var slide = a.closest('.rc-pager-slide');
+          var slide = a.closest('.rc-report-section');
 
-          if (slide) hitSlides[slide.getAttribute('data-slide-id')] = true;
+          if (slide) hitSlides[slide.getAttribute('data-section-id') || slide.id] = true;
 
         }
 
@@ -3832,18 +3646,6 @@ document.addEventListener('DOMContentLoaded', function(){
       clearTimeout(searchDebounce);
 
       searchDebounce = setTimeout(syncReportSearch, 120);
-
-    });
-
-    window.addEventListener('orientationchange', function() {
-
-      setTimeout(function() {
-
-        layoutRcMobileScroll();
-
-        goToSlide(activeIdx, false);
-
-      }, 120);
 
     });
 
