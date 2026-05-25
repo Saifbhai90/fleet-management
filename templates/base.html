@@ -9,7 +9,9 @@
     <title>{% block title %}Fleet Manager{% endblock %}</title>
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <link rel="manifest" href="/manifest.json">
-    <link rel="apple-touch-icon" href="/static/images/icon.svg">
+    <link rel="apple-touch-icon" href="/static/images/icon-192.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/static/images/icon-192.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="/static/images/icon-512.png">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="application-name" content="Fleet Mgr">
     <meta name="apple-mobile-web-app-title" content="Fleet Mgr">
@@ -914,10 +916,11 @@
 
         /* ── Sidebar: hidden by default, swipe-open via More button ── */
         .capacitor-native .sidebar {
-            top: calc(var(--safe-top) + var(--nav-h)) !important;
-            height: calc(100vh - var(--safe-top) - var(--nav-h)) !important;
+            top: 0 !important;
+            height: 100vh !important;
+            max-height: 100vh !important;
             transform: translateX(-100%);
-            width: min(280px, 82vw) !important;
+            width: min(300px, 88vw) !important;
             z-index: 2000 !important;
         }
         .capacitor-native .sidebar.mobile-open {
@@ -1533,6 +1536,7 @@
     <!-- Mobile-Perfect responsive overrides (zero desktop impact) -->
     <link rel="stylesheet" href="/static/css/mobile_perfect.css">
     <link rel="stylesheet" href="/static/css/fm_aurora_theme.css">
+    <link rel="stylesheet" href="/static/css/mobile_native_sidebar.css">
     {% block extra_head %}{% endblock %}
 </head>
 <body{% if request.endpoint == 'dashboard' %} class="page-dashboard fm-aurora-theme"{% elif request.endpoint == 'report_driver_profile_public' %} class="driver-profile-public-view"{% else %} class="fm-aurora-theme"{% endif %}>
@@ -1776,6 +1780,16 @@
 {% set workspace_nav_hidden_endpoints = ['fuel_expense_add', 'fuel_expense_edit'] %}
 {% set workspace_open = (request.endpoint in workspace_endpoints) and (request.endpoint not in workspace_nav_hidden_endpoints) %}
 <div class="sidebar shadow {% if workspace_open or (request.endpoint != 'dashboard' and request.cookies.get('workspace_sidebar_open') != '1') %}collapsed{% endif %}" id="sidebar">
+    <div class="sb-drawer-profile" role="region" aria-label="Signed in user">
+        <div class="sb-drawer-profile-inner">
+            <div class="sb-drawer-avatar" aria-hidden="true"><i class="bi bi-person-badge"></i></div>
+            <div>
+                <div class="sb-drawer-name">{{ session.get('user', 'Guest') }}</div>
+                <div class="sb-drawer-role">{% if current_user_is_master %}Super Administrator{% else %}Fleet Manager{% endif %}</div>
+            </div>
+        </div>
+    </div>
+    <div class="sb-drawer-nav">
     <div id="sidebarAccordion">
         {% set master_endpoints = ['companies', 'company_form', 'projects_list', 'project_detail', 'project_form', 'districts_list', 'district_form', 'vehicles_list', 'vehicle_form', 'parking_list', 'parking_form', 'drivers_list', 'driver_form', 'employees_list', 'employee_form', 'driver_post_list', 'driver_post_form'] %}
         {% set assignment_endpoints = ['assign_project_to_company', 'assign_project_to_district', 'assign_vehicle_to_district', 'assign_vehicle_to_parking_list', 'assign_vehicle_to_parking_new', 'assign_vehicle_to_parking_edit', 'assign_driver_to_vehicle_list', 'assign_driver_to_vehicle_new', 'assign_driver_to_vehicle_edit'] %}
@@ -2400,6 +2414,7 @@
                 <i class="bi bi-box-arrow-right" style="color:#f87171;"></i><span>Logout</span>
             </a>
         </div>
+    </div>
     </div>
 </div>
 
@@ -7165,7 +7180,19 @@
         if (!sidebar) return;
 
         function closeSB() { window.fleetCloseMobileSidebar(); }
-        function openSB() { window.fleetOpenMobileSidebar(); }
+        function openSB() {
+            window.fleetOpenMobileSidebar();
+            var nav = sidebar.querySelector('.sb-drawer-nav');
+            var active = sidebar.querySelector('.active-link');
+            if (nav && active) {
+                requestAnimationFrame(function() {
+                    try {
+                        var top = active.offsetTop - nav.clientHeight * 0.25;
+                        nav.scrollTop = Math.max(0, top);
+                    } catch (e) {}
+                });
+            }
+        }
 
         if (btn) {
             btn.addEventListener('click', function() {
@@ -7187,7 +7214,8 @@
                     e.preventDefault();
                     return;
                 }
-                if (window.innerWidth < 992) closeSB();
+                var native = document.documentElement.classList.contains('capacitor-native');
+                if (native || window.innerWidth < 992) closeSB();
             });
         });
 
@@ -8507,6 +8535,16 @@ document.addEventListener('DOMContentLoaded', function() {
             overlay.setAttribute('aria-hidden', 'false');
         }
         document.body.style.overflow = 'hidden';
+        var nav = sidebar.querySelector('.sb-drawer-nav');
+        var active = sidebar.querySelector('.active-link');
+        if (nav && active) {
+            requestAnimationFrame(function() {
+                try {
+                    var top = active.offsetTop - nav.clientHeight * 0.25;
+                    nav.scrollTop = Math.max(0, top);
+                } catch (e) {}
+            });
+        }
     };
     window.fleetCloseMobileSidebar = function() {
         var sidebar = document.getElementById('sidebar');

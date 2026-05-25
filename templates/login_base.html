@@ -93,7 +93,8 @@
         min-height: auto; padding: 0 0 24px;
         padding-top: 0;
       }
-      .lp-logo-ring { width: 68px; height: 68px; margin-bottom: 14px; }
+      .lp-logo-ring { width: min(280px, 100%); margin-bottom: 14px; }
+      .lp-logo-ring .lp-brand-hero-img { max-height: 180px; }
       .lp-app-name  { font-size: 1.4rem; }
       .lp-sheet {
         border-radius: 20px !important;
@@ -105,14 +106,27 @@
       .lp-sheet-handle { display: none; }
     }
     .lp-logo-ring {
-      width: 80px; height: 80px;
-      background: linear-gradient(135deg, rgba(37,99,235,0.25), rgba(59,130,246,0.12));
-      border: 1.5px solid rgba(59,130,246,0.35);
-      border-radius: 24px;
-      display: flex; align-items: center; justify-content: center;
+      width: min(92vw, 280px);
+      height: auto;
+      aspect-ratio: 1;
+      background: transparent;
+      border: none;
+      border-radius: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       margin-bottom: 18px;
-      box-shadow: 0 0 0 8px rgba(37,99,235,0.08), 0 8px 32px rgba(0,0,0,0.3);
-      animation: logoPulse 3s ease-in-out infinite;
+      box-shadow: none;
+      animation: none;
+      overflow: visible;
+    }
+    .lp-logo-ring .lp-brand-hero-img {
+      width: 100%;
+      height: auto;
+      max-height: 220px;
+      object-fit: contain;
+      display: block;
+      filter: drop-shadow(0 12px 28px rgba(37, 99, 235, 0.35));
     }
     @keyframes logoPulse {
       0%,100% { box-shadow: 0 0 0 8px rgba(37,99,235,0.08), 0 8px 32px rgba(0,0,0,0.3); }
@@ -358,20 +372,7 @@
     <!-- Brand Header -->
     <div class="lp-brand">
       <div class="lp-logo-ring">
-        <!-- Fleet SVG icon -->
-        <svg width="44" height="44" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <rect x="10" y="44" width="52" height="30" rx="6" fill="white" opacity="0.95"/>
-          <path d="M60 32 L82 32 Q88 32 88 38 L88 74 L60 74 Z" fill="white" opacity="0.95"/>
-          <rect x="63" y="35" width="22" height="18" rx="3" fill="#3b82f6" opacity="0.5"/>
-          <circle cx="24" cy="74" r="10" fill="#1e3a8a"/>
-          <circle cx="24" cy="74" r="6"  fill="#60a5fa"/>
-          <circle cx="24" cy="74" r="2.5" fill="white"/>
-          <circle cx="72" cy="74" r="10" fill="#1e3a8a"/>
-          <circle cx="72" cy="74" r="6"  fill="#60a5fa"/>
-          <circle cx="72" cy="74" r="2.5" fill="white"/>
-          <path d="M3 58 L10 44" stroke="#60a5fa" stroke-width="3" stroke-linecap="round"/>
-          <path d="M5 66 L12 54" stroke="#93c5fd" stroke-width="2" stroke-linecap="round" opacity="0.5"/>
-        </svg>
+        <img src="{{ url_for('static', filename='images/fleet-brand-hero.png') }}" alt="Fleet Manager" class="lp-brand-hero-img" width="280" height="280" loading="eager" decoding="async">
       </div>
       <div class="lp-app-name">Fleet<span>Manager</span></div>
       <div class="lp-tagline">SECURE FLEET CONSOLE</div>
