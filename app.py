@@ -214,6 +214,26 @@ def inject_freeze_data_status():
     return dict(freeze_data_status=cfg)
 
 
+@app.before_request
+def sync_navigation_origin():
+    """Keep nav_from in session so Back works after POST/filter and without query string."""
+    try:
+        from nav_back import sync_nav_from_session
+        sync_nav_from_session()
+    except Exception:
+        pass
+
+
+@app.context_processor
+def inject_nav_back_auto():
+    """Fallback Back URL for hub/report pages (used when route omits nav_back_url)."""
+    try:
+        from nav_back import build_auto_nav_back
+        return build_auto_nav_back()
+    except Exception:
+        return dict(nav_back_url_auto=None, nav_back_label_auto='Back', nav_from='')
+
+
 @app.context_processor
 def inject_hub_navigation():
     """Hub nav helpers for sidebar (flat links → /hub/<slug>)."""

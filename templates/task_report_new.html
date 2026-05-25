@@ -630,13 +630,15 @@
 </style>
 <div class="container-fluid task-batch-page px-2 px-md-3">
   <div class="d-flex justify-content-between align-items-center mb-3 mb-md-4 flex-wrap gap-2 task-batch-page-header">
-    <h2 class="mb-0 task-batch-page-title"><i class="bi bi-plus-circle me-2 text-success"></i>New Task Entry</h2>
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+      {% from 'partials/nav_back_button.html' import nav_back_button %}
+      {{ nav_back_button() }}
+      <h2 class="mb-0 task-batch-page-title"><i class="bi bi-plus-circle me-2 text-success"></i>New Task Entry</h2>
+    </div>
     <div class="d-flex flex-wrap gap-2">
       <a href="{{ url_for('task_report_pending') }}?date={{ view_date.strftime('%d-%m-%Y') }}{% if district_id %}&district_id={{ district_id }}{% endif %}{% if project_id %}&project_id={{ project_id }}{% endif %}{% if nav_from %}&nav_from={{ nav_from|urlencode }}{% endif %}" class="btn btn-warning btn-sm rounded-pill px-3">
         <i class="bi bi-hourglass-split me-1"></i>Pending Task Report{% if pending_task_count %} ({{ pending_task_count }}){% endif %}
       </a>
-      {% from 'partials/nav_back_button.html' import nav_back_button %}
-      {{ nav_back_button() }}
     </div>
   </div>
 
@@ -655,6 +657,8 @@
   <div class="card shadow border-0 rounded-3 mb-4 task-batch-filter-card">
     <div class="card-body">
       <form method="GET" action="{{ url_for('task_report_new') }}" id="filterForm" class="row g-3 align-items-end mx-0">
+        {% from 'partials/nav_back_button.html' import nav_from_hidden %}
+        {{ nav_from_hidden() }}
         <div class="col-12 col-md-2">
           <label class="form-label">Date <span class="text-danger">*</span></label>
           <input type="text" name="date" class="form-control datepicker" placeholder="dd-mm-yyyy" value="{{ view_date.strftime('%d-%m-%Y') }}">

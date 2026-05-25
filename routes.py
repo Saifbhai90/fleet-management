@@ -1022,7 +1022,7 @@ def _driver_attendance_mark_redirect_url():
     return url_for('driver_attendance_mark', **_preserve_nav_from(params))
 
 
-def _nav_back_ctx(default_url, default_label='Back', show_without_nav_from=False):
+def _nav_back_ctx(default_url, default_label='Back', show_without_nav_from=True):
     from nav_back import nav_back_context
     return nav_back_context(default_url, default_label, show_without_nav_from=show_without_nav_from)
 
@@ -16886,7 +16886,7 @@ def driver_attendance_list():
         can_att_list_manual_checkout=can_att_list_manual_checkout,
         can_att_list_manual_edit=can_att_list_manual_edit,
         can_att_list_manual_delete=can_att_list_manual_delete,
-        **_nav_back_ctx(url_for('module_hub', hub_slug='attendance')),
+        **_nav_back_ctx(url_for('module_hub', hub_slug='attendance'), show_without_nav_from=True),
     )
 
 
@@ -20339,7 +20339,7 @@ def driver_attendance_report():
         vd_q = vd_q.filter(Driver.vehicle_id.in_(scope_vehicles))
     vehicle_drivers = vd_q.order_by(Driver.name).all()
     selected_driver_id = (request.form.get('driver_id', type=int) or 0) if request.method == 'POST' else 0
-    return render_template('driver_attendance_report.html', form=form, report=report, single_vehicle=single_vehicle, has_single_scope=has_single_scope, selected_vehicle_id=selected_vehicle_id, selected_shift=selected_shift, vehicle_choices=vehicle_choices, disable_project=disable_project, disable_district=disable_district, vehicle_drivers=vehicle_drivers, selected_driver_id=selected_driver_id, **_nav_back_ctx(url_for('reports_index')))
+    return render_template('driver_attendance_report.html', form=form, report=report, single_vehicle=single_vehicle, has_single_scope=has_single_scope, selected_vehicle_id=selected_vehicle_id, selected_shift=selected_shift, vehicle_choices=vehicle_choices, disable_project=disable_project, disable_district=disable_district, vehicle_drivers=vehicle_drivers, selected_driver_id=selected_driver_id, **_nav_back_ctx(url_for('reports_index'), show_without_nav_from=True))
 
 
 def _build_driver_daily_attendance_report_payload(
@@ -20895,7 +20895,7 @@ def driver_attendance_daily_report():
         status_columns=status_columns,
         filter_message=filter_message,
         cal_today_day=cal_today_day,
-        **_nav_back_ctx(url_for('reports_index')),
+        **_nav_back_ctx(url_for('reports_index'), show_without_nav_from=True),
     )
 
 
@@ -21261,7 +21261,7 @@ def driver_attendance_tra_report():
         vehicle_choices=vehicle_choices, disable_project=disable_project,
         disable_district=disable_district, vehicle_drivers=vehicle_drivers,
         selected_driver_id=selected_driver_id,
-        **_nav_back_ctx(url_for('reports_index')),
+        **_nav_back_ctx(url_for('reports_index'), show_without_nav_from=True),
     )
 
 
@@ -22852,7 +22852,7 @@ def task_report_upload_emergency():
             app.logger.exception("EmergencyTaskReport upload failed for date=%s", task_date)
             flash(_build_upload_error_message('EmergencyTaskReport', e), 'danger')
     return render_template('task_report_upload_emergency.html', form=form,
-                          **_nav_back_ctx(url_for('module_hub', hub_slug='task-logbook')))
+                          **_nav_back_ctx(url_for('module_hub', hub_slug='task-logbook'), show_without_nav_from=True))
 
 
 @app.route('/task-report/upload/mileage', methods=['GET', 'POST'])
@@ -22874,7 +22874,7 @@ def task_report_upload_mileage():
             app.logger.exception("Vehicle Mileage upload failed for date=%s", task_date)
             flash(_build_upload_error_message('Vehicle Mileage report', e), 'danger')
     return render_template('task_report_upload_mileage.html', form=form,
-                          **_nav_back_ctx(url_for('module_hub', hub_slug='task-logbook')))
+                          **_nav_back_ctx(url_for('module_hub', hub_slug='task-logbook'), show_without_nav_from=True))
 
 
 # Excel header -> model field mapping for EmergencyTaskRecord
@@ -23451,7 +23451,7 @@ def task_report_upload():
             )
             flash(_build_upload_error_message('Upload Workbooks', e), 'danger')
     return render_template('task_report_upload.html', form=form,
-                          **_nav_back_ctx(url_for('module_hub', hub_slug='task-logbook')))
+                          **_nav_back_ctx(url_for('module_hub', hub_slug='task-logbook'), show_without_nav_from=True))
 
 
 @app.route('/task-report/upload/list', methods=['GET'])
@@ -23566,7 +23566,7 @@ def task_report_upload_list():
         to_date=to_date,
         pagination=pagination,
         per_page=per_page,
-        **_nav_back_ctx(url_for('module_hub', hub_slug='task-logbook')),
+        **_nav_back_ctx(url_for('module_hub', hub_slug='task-logbook'), show_without_nav_from=True),
     )
 
 

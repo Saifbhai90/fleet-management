@@ -55,10 +55,10 @@
 </style>
 
 <div class="container-fluid gps-attendance-page">
-  <div class="d-flex flex-wrap justify-content-between align-items-center page-header">
-    <h2 class="mb-0"><i class="bi bi-geo-alt-fill me-2 text-primary"></i>Mark At Attendance (GPS + Camera)</h2>
+  <div class="d-flex flex-wrap align-items-center page-header gap-2">
     {% from 'partials/nav_back_button.html' import nav_back_button %}
     {{ nav_back_button() }}
+    <h2 class="mb-0"><i class="bi bi-geo-alt-fill me-2 text-primary"></i>Mark At Attendance (GPS + Camera)</h2>
   </div>
 
   <p class="text-muted hint">District → Project → Vehicle (parking auto) → Shift → Driver. {% if geofence_enabled %}Pehle distance ({{ geofence_radius | default(150) }} m), phir time check.{% else %}Distance check OFF — kisi bhi jagah se attendance.{% endif %} Dono OK hon par Mark Attendance → selfie.</p>

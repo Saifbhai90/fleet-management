@@ -2,13 +2,15 @@
 {% block title %}Vehicles Daily Task Report{% endblock %}
 {% block content %}
 <div class="container-fluid">
-  <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
-    <h2 class="mb-0"><i class="bi bi-clipboard2-data me-2 text-primary"></i>Vehicles Daily Task Report</h2>
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+      {% from 'partials/nav_back_button.html' import nav_back_button, nav_from_hidden %}
+      {{ nav_back_button() }}
+      <h2 class="mb-0"><i class="bi bi-clipboard2-data me-2 text-primary"></i>Vehicles Daily Task Report</h2>
+    </div>
     <div class="d-flex align-items-center gap-2">
       <button class="btn btn-outline-secondary btn-sm" id="btnPrintReport" title="Print / Preview"><i class="bi bi-eye me-1"></i>Print / Preview</button>
       <button class="btn btn-outline-success btn-sm" id="btnExportReport" title="Export to Excel"><i class="bi bi-file-earmark-excel me-1"></i>Export</button>
-      {% from 'partials/nav_back_button.html' import nav_back_button %}
-      {{ nav_back_button() }}
     </div>
   </div>
 
@@ -16,6 +18,7 @@
     <div class="card-body">
       <form method="POST" action="{{ url_for('task_report_list') }}" class="row g-3 align-items-end">
         {{ form.hidden_tag() }}
+        {{ nav_from_hidden() }}
         <div class="col-md-2">
           <label class="form-label">From Date</label>
           {{ form.from_date(class="form-control datepicker") }}

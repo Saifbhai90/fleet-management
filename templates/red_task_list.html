@@ -24,6 +24,8 @@
     <div class="card-body">
       <form method="POST" action="{{ url_for('red_task_list') }}" class="row g-3 align-items-end">
         {{ form.hidden_tag() }}
+        {% from 'partials/nav_back_button.html' import nav_from_hidden %}
+        {{ nav_from_hidden() }}
         <div class="col-md-2">
           <label class="form-label">From Date</label>
           {{ form.from_date(class="form-control datepicker") }}
