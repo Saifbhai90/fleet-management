@@ -3,15 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" id="metaViewport" content="{% if request.endpoint == 'report_driver_profile_public' %}width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=3, user-scalable=yes, viewport-fit=cover{% else %}width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover{% endif %}">
-    <meta name="theme-color" content="#e0f2fe" id="metaThemeColor">
+    <meta name="theme-color" content="#0f172a" id="metaThemeColor">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>{% block title %}Fleet Manager{% endblock %}</title>
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <link rel="manifest" href="/manifest.json">
-    <link rel="apple-touch-icon" href="/static/images/icon-192.png">
-    <link rel="icon" type="image/png" sizes="192x192" href="/static/images/icon-192.png">
-    <link rel="icon" type="image/png" sizes="512x512" href="/static/images/icon-512.png">
+    <link rel="apple-touch-icon" href="/static/images/icon.svg">
+    <link rel="icon" type="image/svg+xml" href="/static/images/icon.svg">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="application-name" content="Fleet Mgr">
     <meta name="apple-mobile-web-app-title" content="Fleet Mgr">
@@ -562,7 +561,7 @@
         }
         .sb-sub-toggle::after {
             content: '\f285'; font-family: 'bootstrap-icons';
-            font-size: .6rem; margin-left: auto; transition: transform .25s;
+            font-size: .6rem; margin-left: auto; transition: transform .12s;
             color: rgba(255,255,255,.35);
         }
         .sb-sub-toggle:not(.collapsed)::after { transform: rotate(90deg); }
@@ -7206,6 +7205,27 @@
         }
 
         if (overlay) overlay.addEventListener('click', closeSB);
+
+        /* Mobile drawer: faster menus — skip closing other top-level sections first */
+        function tuneMobileSidebarMenus() {
+            var native = document.documentElement.classList.contains('capacitor-native');
+            var mobile = native || window.innerWidth < 992;
+            sidebar.querySelectorAll('#sidebarAccordion > div > .collapse').forEach(function(el) {
+                var parent = el.getAttribute('data-bs-parent');
+                var saved = el.getAttribute('data-sb-parent');
+                if (mobile) {
+                    if (parent === '#sidebarAccordion') {
+                        el.setAttribute('data-sb-parent', parent);
+                        el.removeAttribute('data-bs-parent');
+                    }
+                } else if (saved) {
+                    el.setAttribute('data-bs-parent', saved);
+                    el.removeAttribute('data-sb-parent');
+                }
+            });
+        }
+        tuneMobileSidebarMenus();
+        window.addEventListener('resize', tuneMobileSidebarMenus);
 
         sidebar.querySelectorAll('a').forEach(function(a) {
             a.addEventListener('click', function(e) {

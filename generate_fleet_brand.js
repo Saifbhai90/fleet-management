@@ -1,4 +1,5 @@
 /**
+ * DEPRECATED: App icons use static/images/icon.svg — run generate_icon.js instead.
  * Generate PWA / Capacitor assets from static/images/fleet-brand-hero.png
  * Run: node generate_fleet_brand.js
  */

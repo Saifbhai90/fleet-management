@@ -166,7 +166,7 @@ html.capacitor-native .sb-drawer-nav {
     font-family: bootstrap-icons !important;
     font-size: 0.7rem !important;
     color: #94a3b8 !important;
-    transition: transform 0.25s ease, color 0.2s ease !important;
+    transition: transform 0.12s ease, color 0.12s ease !important;
     transform-origin: center;
   }
 
@@ -280,7 +280,7 @@ html.capacitor-native .sidebar .dropdown-toggle::after {
   font-family: bootstrap-icons !important;
   font-size: 0.7rem !important;
   color: #94a3b8 !important;
-  transition: transform 0.25s ease !important;
+  transition: transform 0.12s ease !important;
 }
 
 html.capacitor-native .sidebar .dropdown-toggle[aria-expanded="true"]::after {
@@ -327,4 +327,25 @@ html.capacitor-native .sidebar-overlay.show {
   background: rgba(15, 23, 42, 0.45) !important;
   backdrop-filter: blur(4px) !important;
   -webkit-backdrop-filter: blur(4px) !important;
+}
+
+/* ── Snappier accordion open/close (Bootstrap default ~350ms) ── */
+@media (max-width: 991.98px) {
+  .sidebar .collapse.collapsing,
+  .sidebar .collapsing {
+    transition: height 0.12s ease-out !important;
+  }
+
+  .sidebar .sb-sub-toggle::after {
+    transition: transform 0.12s ease, color 0.12s ease !important;
+  }
+}
+
+html.capacitor-native .sidebar .collapse.collapsing,
+html.capacitor-native .sidebar .collapsing {
+  transition: height 0.12s ease-out !important;
+}
+
+html.capacitor-native .sidebar .sb-sub-toggle::after {
+  transition: transform 0.12s ease, color 0.12s ease !important;
 }
