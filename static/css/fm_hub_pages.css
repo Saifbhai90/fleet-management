@@ -99,6 +99,45 @@ a.fm-page-back:hover {
   background: #f0f9ff;
 }
 
+/* Force-visible Back control on report / attendance / task pages */
+a.btn-nav-back-rounded {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 4px;
+  background-color: #f3f4f6;
+  color: #374151 !important;
+  padding: 6px 14px;
+  border-radius: 50px;
+  text-decoration: none !important;
+  font-size: 14px;
+  font-weight: 500;
+  border: 1px solid #d1d5db;
+  transition: all 0.2s ease;
+  margin-right: 12px;
+  flex-shrink: 0;
+  visibility: visible !important;
+  opacity: 1 !important;
+  vertical-align: middle;
+}
+
+a.btn-nav-back-rounded:hover {
+  background-color: #e5e7eb;
+  color: #111827 !important;
+  border-color: #9ca3af;
+}
+
+a.btn-nav-back-rounded i {
+  font-size: 1.4rem;
+  line-height: 0;
+}
+
+@media print {
+  a.btn-nav-back-rounded,
+  a.fm-page-back {
+    display: none !important;
+  }
+}
+
 .hub-page-title {
   display: flex;
   align-items: center;

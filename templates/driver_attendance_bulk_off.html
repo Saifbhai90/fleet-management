@@ -14,10 +14,10 @@
      which traps fixed positioning — Bootstrap’s body-level backdrop would then sit above the dialog and block clicks. */
 </style>
 <div class="container-fluid bulk-off-page">
-  <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
-    <h2 class="mb-0"><i class="bi bi-calendar-x me-2 text-secondary"></i>Bulk Status</h2>
+  <div class="d-flex align-items-center mb-4 flex-wrap gap-2">
     {% from 'partials/nav_back_button.html' import nav_back_button %}
     {{ nav_back_button() }}
+    <h2 class="mb-0"><i class="bi bi-calendar-x me-2 text-secondary"></i>Bulk Status</h2>
   </div>
 
   <p class="text-muted mb-4">Drivers ko bulk mein <strong>Off</strong>, <strong>Leave</strong> ya <strong>Half-Day</strong> mark karein. Date range select karke multiple dates ke liye ek sath mark kar sakte hain (e.g. Eid holidays).</p>

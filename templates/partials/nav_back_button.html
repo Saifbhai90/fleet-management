@@ -1,8 +1,16 @@
-{% macro nav_back_button(extra_class='') %}
+{% macro nav_back_button() %}
 {% set back_href = nav_back_url or nav_back_url_auto %}
-{% set back_lbl = nav_back_label|default(nav_back_label_auto|default('Back')) %}
-{% if back_href %}
-<a href="{{ back_href }}" class="fm-page-back hub-back {{ extra_class }}"><i class="bi bi-arrow-left"></i> {{ back_lbl }}</a>
+{% set use_history = nav_back_use_history or (not back_href) or back_href == 'javascript:history.back()' %}
+{% if use_history %}
+<a href="#" class="btn-nav-back-rounded" title="Go Back" onclick="history.back(); return false;">
+  <i class="bi bi-arrow-left-short"></i>
+  <span>{{ nav_back_label|default(nav_back_label_auto|default('Back')) }}</span>
+</a>
+{% else %}
+<a href="{{ back_href }}" class="btn-nav-back-rounded" title="Go Back">
+  <i class="bi bi-arrow-left-short"></i>
+  <span>{{ nav_back_label|default(nav_back_label_auto|default('Back')) }}</span>
+</a>
 {% endif %}
 {% endmacro %}
 

@@ -1,26 +1,26 @@
-"""Resolve Back navigation from hub / Report Centre via nav_from query param."""
+"""Resolve Back navigation — hub / Report Centre / referrer / browser history fallback."""
 from __future__ import annotations
 
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 
-from flask import request, url_for
+from flask import request, session, url_for
 
 REPORTS_NAV_FROM = 'reports'
+HISTORY_BACK = 'javascript:history.back()'
 
 
 def get_nav_from(req=None):
-    """Query/form param first, then session (survives POST filters and redirects)."""
-    from flask import session
+    """URL/form param first; persist to session; else session value."""
     req = req or request
     nf = (req.args.get('nav_from') or req.form.get('nav_from') or '').strip()
-    if not nf:
-        nf = (session.get('nav_from') or '').strip()
-    return nf
+    if nf:
+        session['nav_from'] = nf
+        return nf
+    return (session.get('nav_from') or '').strip()
 
 
 def sync_nav_from_session():
     """Remember navigation origin from URL, hub page, or Report Centre."""
-    from flask import session
     nf = (request.args.get('nav_from') or request.form.get('nav_from') or '').strip()
     if nf:
         session['nav_from'] = nf
@@ -33,8 +33,29 @@ def sync_nav_from_session():
         session['nav_from'] = REPORTS_NAV_FROM
 
 
+def _safe_referrer_url():
+    """Same-host referrer only (open-redirect safe)."""
+    ref = request.referrer
+    if not ref or not isinstance(ref, str):
+        return None
+    try:
+        cur = urlparse(request.url)
+        prev = urlparse(ref)
+        if prev.scheme not in ('http', 'https'):
+            return None
+        host = (request.host or '').split(':')[0].lower()
+        ref_host = (prev.netloc or '').split(':')[0].lower()
+        if not ref_host or (host and ref_host != host):
+            return None
+        if prev.path == cur.path and prev.query == cur.query:
+            return None
+        return ref
+    except Exception:
+        return None
+
+
 def default_back_url_for_endpoint(endpoint):
-    """Fallback Back target when nav_from is missing (sidebar / bookmark)."""
+    """Sensible default when nav_from and referrer are unavailable."""
     if not endpoint:
         return None
     report_endpoints = {
@@ -67,27 +88,6 @@ def default_back_url_for_endpoint(endpoint):
     return None
 
 
-def build_auto_nav_back():
-    """Context for templates: always compute a Back URL for the current page."""
-    from flask import request as req
-    ep = req.endpoint or ''
-    default = default_back_url_for_endpoint(ep)
-    if not default:
-        return {'nav_back_url_auto': None, 'nav_back_label_auto': 'Back', 'nav_from': get_nav_from()}
-    nf = get_nav_from()
-    url, label = resolve_nav_back(nf, default)
-    return {'nav_back_url_auto': url, 'nav_back_label_auto': label, 'nav_from': nf}
-
-
-def preserve_nav_from(params=None, req=None):
-    """Copy nav_from from current request into url_for kwargs / redirect params."""
-    out = dict(params or {})
-    nf = get_nav_from(req)
-    if nf:
-        out['nav_from'] = nf
-    return out
-
-
 def resolve_nav_back(nav_from, default_url, default_label='Back'):
     """Return (url, label). nav_from: reports | hub:<slug>."""
     if nav_from == REPORTS_NAV_FROM:
@@ -95,7 +95,7 @@ def resolve_nav_back(nav_from, default_url, default_label='Back'):
             return url_for('reports_index'), 'Back'
         except Exception:
             pass
-    if nav_from.startswith('hub:'):
+    if nav_from and nav_from.startswith('hub:'):
         slug = nav_from[4:].strip()
         if slug:
             try:
@@ -107,22 +107,65 @@ def resolve_nav_back(nav_from, default_url, default_label='Back'):
     return default_url, default_label
 
 
-def nav_back_context(default_url, default_label='Back', req=None, show_without_nav_from=True):
-    """
-    Template context: nav_back_url, nav_back_label, nav_from.
-    Back is shown by default; resolves hub/reports when nav_from is set (or in session).
-    """
+def _pick_final_back_url(default_url, nav_from):
+    """Hub/reports → default endpoint → safe referrer → history."""
+    if not default_url:
+        default_url = default_back_url_for_endpoint(request.endpoint)
+    if not default_url:
+        try:
+            default_url = url_for('dashboard')
+        except Exception:
+            default_url = '/'
+
+    url, _label = resolve_nav_back(nav_from, default_url, 'Back')
+
+    if nav_from:
+        return url
+
+    ref = _safe_referrer_url()
+    if ref:
+        return ref
+
+    if url and url not in ('/', ''):
+        return url
+
+    return HISTORY_BACK
+
+
+def nav_back_context(default_url=None, default_label='Back', req=None, show_without_nav_from=True):
+    """Always returns nav_back_url so templates can force-show Back."""
+    del show_without_nav_from  # kept for callers; back is always shown
     nf = get_nav_from(req)
-    if not nf and not show_without_nav_from:
-        return {'nav_back_url': None, 'nav_back_label': 'Back', 'nav_from': ''}
-    url, label = resolve_nav_back(nf or '', default_url, default_label)
-    if not nf:
-        return {'nav_back_url': default_url, 'nav_back_label': default_label, 'nav_from': ''}
-    return {'nav_back_url': url, 'nav_back_label': label, 'nav_from': nf}
+    final_url = _pick_final_back_url(default_url, nf)
+    return {
+        'nav_back_url': final_url,
+        'nav_back_label': default_label,
+        'nav_from': nf or '',
+        'nav_back_use_history': final_url == HISTORY_BACK,
+    }
+
+
+def build_auto_nav_back():
+    """Global template fallback when a route omits nav_back_url."""
+    nf = get_nav_from()
+    final_url = _pick_final_back_url(None, nf)
+    return {
+        'nav_back_url_auto': final_url,
+        'nav_back_label_auto': 'Back',
+        'nav_from': nf or '',
+        'nav_back_use_history': final_url == HISTORY_BACK,
+    }
+
+
+def preserve_nav_from(params=None, req=None):
+    out = dict(params or {})
+    nf = get_nav_from(req)
+    if nf:
+        out['nav_from'] = nf
+    return out
 
 
 def nav_from_amp(nav_from=None, req=None):
-    """Append &nav_from=... for template hrefs (empty if none)."""
     nf = nav_from if nav_from is not None else get_nav_from(req)
     return ('&nav_from=' + quote(nf, safe='')) if nf else ''
 
