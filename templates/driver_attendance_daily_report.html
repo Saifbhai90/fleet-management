@@ -7,20 +7,24 @@
     --daily-accent: #059669;
     --daily-grid-border: #cbd5e1;
     --daily-header-bg: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+    --daily-frozen-hdr-bg: #ccfbf1;
+    --daily-frozen-hdr-text: #065f46;
+    --daily-frozen-hdr-border: #5eead4;
     --daily-frozen-bg: #fff;
-    --daily-hdr-row1-h: 28px;
-    --daily-fc-1-w: 34px; --daily-fc-1-left: 0;
-    --daily-fc-2-w: 78px; --daily-fc-2-left: 34px;
-    --daily-fc-3-w: 68px; --daily-fc-3-left: 112px;
-    --daily-fc-4-w: 82px; --daily-fc-4-left: 180px;
-    --daily-fc-5-w: 54px; --daily-fc-5-left: 262px;
-    --daily-fc-6-w: 128px; --daily-fc-6-left: 316px;
+    --daily-hdr-row1-h: 30px;
+    --daily-fc-1-w: 38px; --daily-fc-1-left: 0px;
+    --daily-fc-2-w: 84px; --daily-fc-2-left: 38px;
+    --daily-fc-3-w: 72px; --daily-fc-3-left: 122px;
+    --daily-fc-4-w: 88px; --daily-fc-4-left: 194px;
+    --daily-fc-5-w: 56px; --daily-fc-5-left: 282px;
+    --daily-fc-6-w: 142px; --daily-fc-6-left: 338px;
+    --daily-frozen-block-w: 480px;
   }
   .daily-attn-page .filter-card { border-radius: 14px; border: 1px solid #e2e8f0; box-shadow: 0 4px 18px rgba(15, 118, 110, 0.08); }
   .daily-attn-page .filter-card .form-label { font-size: 0.78rem; font-weight: 600; color: #475569; margin-bottom: 0.2rem; }
   .daily-attn-shell {
-    border-radius: 14px; overflow: hidden; border: 1px solid #e2e8f0;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08); background: rgba(255, 255, 255, 0.92);
+    border-radius: 14px; overflow: visible; border: 1px solid #e2e8f0;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08); background: #fff;
     scroll-margin-top: 12px;
   }
   .daily-attn-toolbar {
@@ -34,9 +38,16 @@
   }
   .daily-attn-scroll {
     overflow: auto; max-height: calc(100vh - 200px); position: relative;
+    scroll-behavior: smooth; -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    border-radius: 0 0 14px 14px;
   }
-  .daily-attn-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
-  .daily-attn-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 8px; }
+  .daily-attn-scroll::-webkit-scrollbar { width: 10px; height: 10px; }
+  .daily-attn-scroll::-webkit-scrollbar-track { background: #f1f5f9; }
+  .daily-attn-scroll::-webkit-scrollbar-thumb {
+    background: #cbd5e1; border-radius: 10px; border: 2px solid #f1f5f9;
+  }
+  .daily-attn-scroll::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
   .daily-attn-shell.daily-grid-pending .daily-attn-scroll { visibility: hidden; }
   .daily-attn-shell.daily-grid-ready .daily-attn-scroll { visibility: visible; }
   .daily-attn-table {
@@ -51,27 +62,41 @@
   }
   .daily-attn-table thead th {
     position: sticky; color: #fff; font-weight: 600; line-height: 1.2;
-    font-size: 9px; text-transform: uppercase; letter-spacing: 0.02em;
-    background: var(--daily-header-bg);
+    font-size: 9px; letter-spacing: 0.02em;
+    background-color: #0f172a;
+    background-image: var(--daily-header-bg);
   }
   .daily-attn-table thead tr.hdr-row-1 th { top: 0; z-index: 20; }
-  .daily-attn-table thead tr.hdr-row-2 th {
-    top: var(--daily-hdr-row1-h, 28px); z-index: 18;
-    background: #1e293b; font-size: 8px; padding: 2px 1px; opacity: 0.95;
+  .daily-attn-table thead tr.hdr-row-2 th.day-col {
+    top: var(--daily-hdr-row1-h, 30px); z-index: 18;
+    background-color: #1e293b; background-image: none;
+    font-size: 8px; padding: 2px 1px; text-transform: uppercase;
   }
   .daily-attn-table thead tr.hdr-row-1 th.hdr-frozen {
-    z-index: 50 !important;
-    background: var(--daily-header-bg) !important;
-    color: #fff !important;
+    z-index: 60 !important;
+    background-color: var(--daily-frozen-hdr-bg) !important;
+    background-image: none !important;
+    color: var(--daily-frozen-hdr-text) !important;
+    border: 1px solid var(--daily-frozen-hdr-border) !important;
     vertical-align: middle;
     text-align: center;
     white-space: normal;
     overflow: visible;
     writing-mode: horizontal-tb;
     transform: none;
-    text-transform: uppercase;
-    padding: 5px 3px;
-    min-height: calc(var(--daily-hdr-row1-h, 28px) + 22px);
+    text-transform: none;
+    padding: 6px 4px;
+    font-size: 10px;
+    font-weight: 700;
+    box-shadow: none;
+  }
+  .daily-attn-table thead th.hdr-frozen .daily-frozen-hdr-text {
+    display: block;
+    color: var(--daily-frozen-hdr-text);
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1.25;
+    pointer-events: none;
   }
   .daily-attn-table thead tr.hdr-row-1 th.date-hdr {
     z-index: 22; background: #0f172a !important;
@@ -134,7 +159,18 @@
     font-size: 10px; padding: 2px;
   }
   .daily-attn-table .frozen-col {
-    position: sticky; background: var(--daily-frozen-bg); text-align: left; font-weight: 500;
+    position: sticky;
+    background-color: var(--daily-frozen-bg); text-align: left; font-weight: 500;
+    background-clip: padding-box;
+  }
+  .daily-attn-table tfoot td.tfoot-frozen-label {
+    left: 0 !important;
+    width: var(--daily-frozen-block-w) !important;
+    min-width: var(--daily-frozen-block-w) !important;
+    max-width: var(--daily-frozen-block-w) !important;
+    text-align: right;
+    padding-right: 10px;
+    z-index: 40;
   }
   .daily-attn-table thead .sum-col { background: #0369a1 !important; color: #fff !important; }
   .daily-attn-table tbody tr:nth-child(even) td:not(.frozen-col):not(.sum-col) { background: rgba(248, 250, 252, 0.65); }
@@ -166,8 +202,7 @@
   .daily-attn-table tfoot .sum-col { background: #cbd5e1 !important; color: #0c4a6e !important; }
   .daily-attn-table tfoot .frozen-col { background: #cbd5e1 !important; z-index: 35; }
   .daily-attn-table tfoot .day-foot { background: #e2e8f0 !important; color: #0369a1; font-weight: 700; }
-  .daily-attn-table thead .ft-filter-wrap { margin-left: 2px; vertical-align: middle; }
-  .daily-attn-table thead .ft-filter-btn { font-size: 8px; }
+  .daily-attn-table thead th.hdr-frozen .ft-filter-wrap { display: none !important; }
   .daily-attn-footnote {
     padding: 0.75rem 1rem 0.85rem;
     background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
@@ -875,15 +910,23 @@
       </div>
     </div>
     <div class="daily-attn-scroll">
-      <table class="daily-attn-table" id="dailyReportTable">
+      <table class="daily-attn-table" id="dailyReportTable" data-ft-ignore="1">
+        <colgroup>
+          <col style="width:var(--daily-fc-1-w)">
+          <col style="width:var(--daily-fc-2-w)">
+          <col style="width:var(--daily-fc-3-w)">
+          <col style="width:var(--daily-fc-4-w)">
+          <col style="width:var(--daily-fc-5-w)">
+          <col style="width:var(--daily-fc-6-w)">
+        </colgroup>
         <thead>
           <tr class="hdr-row-1">
-            <th rowspan="2" class="frozen-col fc-1 hdr-frozen no-ft-filter info-col">Sr</th>
-            <th rowspan="2" class="frozen-col fc-2 hdr-frozen info-col" data-ft-col="1">District</th>
-            <th rowspan="2" class="frozen-col fc-3 hdr-frozen info-col" data-ft-col="2">Project</th>
-            <th rowspan="2" class="frozen-col fc-4 hdr-frozen info-col" data-ft-col="3">Vehicle</th>
-            <th rowspan="2" class="frozen-col fc-5 hdr-frozen info-col" data-ft-col="4">Shift</th>
-            <th rowspan="2" class="frozen-col fc-6 hdr-frozen info-col" data-ft-col="5">Driver Name</th>
+            <th rowspan="2" class="frozen-col fc-1 hdr-frozen no-ft-filter info-col"><span class="daily-frozen-hdr-text">Sr</span></th>
+            <th rowspan="2" class="frozen-col fc-2 hdr-frozen no-ft-filter info-col"><span class="daily-frozen-hdr-text">District</span></th>
+            <th rowspan="2" class="frozen-col fc-3 hdr-frozen no-ft-filter info-col"><span class="daily-frozen-hdr-text">Project</span></th>
+            <th rowspan="2" class="frozen-col fc-4 hdr-frozen no-ft-filter info-col"><span class="daily-frozen-hdr-text">Vehicle</span></th>
+            <th rowspan="2" class="frozen-col fc-5 hdr-frozen no-ft-filter info-col"><span class="daily-frozen-hdr-text">Shift</span></th>
+            <th rowspan="2" class="frozen-col fc-6 hdr-frozen no-ft-filter info-col"><span class="daily-frozen-hdr-text">Driver Name</span></th>
             {% for d in day_headers %}
             <th colspan="2" class="date-hdr no-ft-filter">{{ '%02d'|format(d.day) }}</th>
             {% endfor %}
@@ -933,7 +976,7 @@
         </tbody>
         <tfoot>
           <tr>
-            <td class="frozen-col fc-1" colspan="6" style="text-align:right;padding-right:10px;">Total Monthly Count</td>
+            <td class="frozen-col tfoot-frozen-label" colspan="6">Total Monthly Count</td>
             {% for d in day_headers %}
             <td class="day-col day-foot" data-day="{{ d.day }}" data-slot="M">0</td>
             <td class="day-col day-foot" data-day="{{ d.day }}" data-slot="E">0</td>
@@ -1425,43 +1468,18 @@
     if (isDailyNativeApp()) return;
     var tbl = document.getElementById('dailyReportTable');
     if (!tbl) return;
-    var cols = [
-      { cls: 'fc-1', min: 34, max: 38 },
-      { cls: 'fc-2', min: 72, max: 92 },
-      { cls: 'fc-3', min: 62, max: 82 },
-      { cls: 'fc-4', min: 74, max: 92 },
-      { cls: 'fc-5', min: 50, max: 62 },
-      { cls: 'fc-6', min: 108, max: 148 }
-    ];
-    var pad = 8;
-    var left = 0;
-    cols.forEach(function(col) {
-      var maxW = col.min;
-      var th = tbl.querySelector('thead th.' + col.cls);
-      if (th) {
-        var hdrText = (th.textContent || '').replace(/\s+/g, ' ').trim();
-        var labelOnly = hdrText.replace(/[\uF000-\uF8FF]/g, '').trim();
-        maxW = Math.max(maxW, _measureDailyColText(labelOnly || hdrText, th) + pad);
-      }
-      tbl.querySelectorAll('tbody tr').forEach(function(tr) {
-        if (tr.style.display === 'none') return;
-        var cell = tr.querySelector('.' + col.cls);
-        if (!cell) return;
-        var txt = (cell.textContent || '').trim();
-        if (col.cls === 'fc-6') {
-          var nameEl = cell.querySelector('.daily-driver-name');
-          txt = nameEl ? (nameEl.textContent || '').trim() : txt.split('(')[0].trim();
-        }
-        maxW = Math.max(maxW, _measureDailyColText(txt, cell) + pad);
+    var page = tbl.closest('.daily-attn-page');
+    if (page) {
+      var blockW = 0;
+      ['fc-1', 'fc-2', 'fc-3', 'fc-4', 'fc-5', 'fc-6'].forEach(function(cls) {
+        var v = parseFloat(getComputedStyle(page).getPropertyValue('--daily-' + cls + '-w')) || 0;
+        blockW += v;
       });
-      maxW = Math.min(Math.max(maxW, col.min), col.max);
-      tbl.style.setProperty('--daily-' + col.cls + '-w', maxW + 'px');
-      tbl.style.setProperty('--daily-' + col.cls + '-left', left + 'px');
-      left += maxW;
-      tbl.querySelectorAll('.' + col.cls + '.info-col').forEach(function(cell) {
-        var t = (cell.textContent || '').trim();
-        cell.title = t;
-      });
+      if (blockW > 0) page.style.setProperty('--daily-frozen-block-w', blockW + 'px');
+    }
+    tbl.querySelectorAll('.frozen-col.info-col').forEach(function(cell) {
+      var t = (cell.textContent || '').trim();
+      if (t) cell.title = t;
     });
     syncStickyHeaderHeight();
   }
@@ -1800,7 +1818,7 @@
       revealDailyGrid();
       return;
     }
-    if (tbl.dataset.ftEnhanced === '1' || attempts > 50) {
+    if (tbl.dataset.ftEnhanced === '1' || tbl.getAttribute('data-ft-ignore') === '1' || attempts > 50) {
       revealDailyGrid();
       updateDayFootTotals();
       scrollToReport();
