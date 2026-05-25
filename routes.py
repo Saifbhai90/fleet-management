@@ -32397,6 +32397,37 @@ def reports_index():
     return render_template('reports_index.html', linked_driver_id=_lid, rc=rc)
 
 
+@app.route('/hub/<hub_slug>')
+def module_hub(hub_slug):
+    """Module hub launcher (Master Data, Assignments, etc.) — replaces sidebar dropdowns."""
+    from flask import abort, session
+    from hub_registry import HUBS, build_hub_sections, _hub_access
+
+    if hub_slug not in HUBS:
+        abort(404)
+    hub_def = HUBS[hub_slug]
+    try:
+        from permissions_config import can_see_page, can_see_section, can_see_administration_menu
+        perms = session.get('permissions') or []
+        is_master = session.get('is_master', False)
+        can_p = (lambda k: True) if is_master else (lambda k: can_see_page(perms, k))
+        can_s = (lambda k: True) if is_master else (lambda k: can_see_section(perms, k))
+        can_admin = (lambda: True) if is_master else (lambda: can_see_administration_menu(perms)
+    except Exception:
+        can_p = lambda k: True
+        can_s = lambda k: True
+        can_admin = lambda: True
+        is_master = session.get('is_master', False)
+
+    if not _hub_access(hub_def, can_s, can_p, can_admin, is_master):
+        abort(403)
+
+    hub, sections = build_hub_sections(hub_slug, can_p, is_master=is_master)
+    if not sections:
+        abort(403)
+    return render_template('module_hub.html', hub=hub, sections=sections, hub_slug=hub_slug)
+
+
 @app.route('/reports/activity-log')
 def activity_log_report():
     """Single report: (1) Login sessions + server-side activity, (2) Client activity with device ID & geolocation (lat/long, View on Map)."""

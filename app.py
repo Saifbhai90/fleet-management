@@ -215,6 +215,21 @@ def inject_freeze_data_status():
 
 
 @app.context_processor
+def inject_hub_navigation():
+    """Hub nav helpers for sidebar (flat links → /hub/<slug>)."""
+    from flask import request
+    from hub_registry import HUB_ACTIVE_ENDPOINTS
+
+    def hub_nav_active(slug):
+        if request.endpoint == 'module_hub' and request.view_args.get('hub_slug') == slug:
+            return True
+        eps = HUB_ACTIVE_ENDPOINTS.get(slug, frozenset())
+        return request.endpoint in eps
+
+    return dict(hub_nav_active=hub_nav_active, HUB_ACTIVE_ENDPOINTS=HUB_ACTIVE_ENDPOINTS)
+
+
+@app.context_processor
 def inject_workspace_context():
     """Expose selected workspace employee in templates."""
     try:

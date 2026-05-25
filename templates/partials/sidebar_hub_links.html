@@ -1,0 +1,60 @@
+{# Flat hub links — replaces nested sidebar dropdowns #}
+        {% if can_see_section('master') %}
+        <a href="{{ url_for('module_hub', hub_slug='master-data') }}" class="{% if hub_nav_active('master-data') %}active-link{% endif %}">
+            <i class="bi bi-folder2-open"></i><span>Master Data</span>
+        </a>
+        {% endif %}
+
+        {% if can_see_section('assignment') %}
+        <a href="{{ url_for('module_hub', hub_slug='assignments') }}" class="{% if hub_nav_active('assignments') %}active-link{% endif %}">
+            <i class="bi bi-link-45deg"></i><span>Assignments</span>
+        </a>
+        {% endif %}
+
+        {% if can_see_section('transfer') %}
+        <a href="{{ url_for('module_hub', hub_slug='transfers') }}" class="{% if hub_nav_active('transfers') %}active-link{% endif %}">
+            <i class="bi bi-arrow-left-right text-warning"></i><span>Transfers</span>
+        </a>
+        {% endif %}
+
+        {% if can_see_section('driver_status') %}
+        <a href="{{ url_for('module_hub', hub_slug='workforce') }}" class="{% if hub_nav_active('workforce') %}active-link{% endif %}">
+            <i class="bi bi-person-gear"></i><span>Workforce</span>
+        </a>
+        {% endif %}
+
+        {% if can_see_section('attendance') %}
+        <a href="{{ url_for('module_hub', hub_slug='attendance') }}" class="{% if hub_nav_active('attendance') %}active-link{% endif %}">
+            <i class="bi bi-calendar-check"></i><span>Attendance</span>
+        </a>
+        {% endif %}
+
+        {% if can_see_section('task_report') %}
+        <a href="{{ url_for('module_hub', hub_slug='task-logbook') }}" class="{% if hub_nav_active('task-logbook') %}active-link{% endif %}">
+            <i class="bi bi-clipboard2-data"></i><span>Task & Logbook</span>
+        </a>
+        {% endif %}
+
+        {% if can_see_section('accounts') %}
+        <a href="{{ url_for('module_hub', hub_slug='finance') }}" class="{% if hub_nav_active('finance') %}active-link{% endif %}">
+            <i class="bi bi-bank"></i><span>Finance</span>
+        </a>
+        {% endif %}
+
+        {% if can_see_section('workspace') %}
+        <a href="{{ url_for('workspace_dashboard') }}" class="{% if workspace_open %}active-link{% endif %}" id="workspaceSidebarEntry">
+            <i class="bi bi-grid-1x2"></i><span>Employee Workspace</span>
+        </a>
+        {% endif %}
+
+        {% if can_see_section('payroll') %}
+        <a href="{{ url_for('module_hub', hub_slug='payroll') }}" class="{% if hub_nav_active('payroll') %}active-link{% endif %}">
+            <i class="bi bi-cash-stack"></i><span>Payroll</span>
+        </a>
+        {% endif %}
+
+        {% if can_see_section('books') %}
+        <a href="{{ url_for('module_hub', hub_slug='books') }}" class="{% if hub_nav_active('books') %}active-link{% endif %}">
+            <i class="bi bi-book"></i><span>Book Management</span>
+        </a>
+        {% endif %}

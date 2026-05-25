@@ -1,0 +1,193 @@
+/* Show aurora orbs on hub (body rule hides duplicate .rc-aurora-bg elsewhere) */
+body.fm-aurora-theme .hub-page .rc-aurora-bg.fm-aurora-bg {
+  display: block !important;
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Module Hub pages — Report Centre launcher style (no grid boxes on icons) */
+.hub-page.rc-page {
+  --rc-text-dark: #1e293b;
+  --rc-text-muted: #64748b;
+  position: relative;
+  padding: 0;
+  min-height: calc(100vh - var(--fm-nav-h, 60px));
+}
+
+.hub-page .hub-glass-panel {
+  position: relative;
+  z-index: 1;
+  margin: 0 auto;
+  max-width: 1200px;
+  padding: 28px 20px 40px;
+  background: rgba(255, 255, 255, 0.22);
+  backdrop-filter: blur(40px);
+  -webkit-backdrop-filter: blur(40px);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 28px;
+  box-shadow: 0 25px 50px rgba(15, 23, 42, 0.06);
+}
+
+@media (max-width: 991.98px) {
+  .hub-page .hub-glass-panel {
+    margin: 0;
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+    padding: 20px 14px 32px;
+    min-height: calc(100vh - var(--fm-nav-h, 60px));
+  }
+}
+
+html.capacitor-native .hub-page .hub-glass-panel {
+  margin-top: 0;
+  min-height: 100%;
+}
+
+.hub-page-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 32px;
+  flex-wrap: wrap;
+}
+
+.hub-page-header .hub-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--rc-text-muted);
+  text-decoration: none;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+}
+
+.hub-page-header .hub-back:hover {
+  color: #0ea5e9;
+}
+
+.hub-page-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 1.65rem;
+  font-weight: 800;
+  color: var(--rc-text-dark);
+  margin: 0;
+  font-family: 'Plus Jakarta Sans', Inter, sans-serif;
+  letter-spacing: -0.02em;
+}
+
+.hub-page-title > i {
+  font-size: 1.5rem;
+  color: #0ea5e9;
+}
+
+.hub-section {
+  margin-bottom: 40px;
+}
+
+.hub-section-tag {
+  font-size: 0.6875rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #0ea5e9;
+  margin: 0 0 22px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.hub-section-tag::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: rgba(15, 23, 42, 0.08);
+}
+
+.hub-page .hub-grid.rc-report-section {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 28px 16px;
+  justify-items: center;
+}
+
+.hub-page .hub-grid .report-link.rc-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  text-decoration: none;
+  padding: 0;
+  border: none;
+  background: transparent;
+  width: 100%;
+  max-width: 130px;
+}
+
+.hub-page .hub-grid .rc-card-top {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+.hub-page .hub-grid .rc-tile-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent !important;
+  border: none !important;
+  transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.hub-page .hub-grid .rc-tile-icon > i {
+  font-size: 2.2rem !important;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 4px 8px rgba(15, 23, 42, 0.12));
+}
+
+.hub-page .hub-grid .report-link:hover .rc-tile-icon {
+  transform: translateY(-4px) scale(1.06);
+}
+
+.hub-page .hub-grid .rc-tile-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--rc-text-dark);
+  line-height: 1.25;
+  text-align: center;
+  width: 100%;
+}
+
+.hub-page .hub-empty {
+  text-align: center;
+  padding: 48px 20px;
+  color: var(--rc-text-muted);
+}
+
+.hub-page .rc-card-desc,
+.hub-page .rc-card-footer,
+.hub-page .rc-card-star {
+  display: none !important;
+}
+
+@media (max-width: 480px) {
+  .hub-page .hub-grid.rc-report-section {
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 22px 10px;
+  }
+  .hub-page .hub-grid .rc-tile-icon > i {
+    font-size: 1.85rem !important;
+  }
+}

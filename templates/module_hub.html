@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block title %}{{ hub.title }} Hub{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/rc_tile_gradients.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/fm_hub_pages.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid rc-page hub-page page-module-hub">
+  <div class="rc-aurora-bg fm-aurora-bg" aria-hidden="true">
+    <span class="rc-orb rc-orb--1 fm-orb fm-orb--1"></span>
+    <span class="rc-orb rc-orb--2 fm-orb fm-orb--2"></span>
+  </div>
+
+  <div class="hub-glass-panel">
+    <header class="hub-page-header">
+      <a href="{{ url_for('dashboard') }}" class="hub-back"><i class="bi bi-arrow-left"></i> Dashboard</a>
+      <h1 class="hub-page-title"><i class="bi {{ hub.header_icon }}"></i> {{ hub.title }} Hub</h1>
+    </header>
+
+    {% if not sections %}
+    <div class="hub-empty">
+      <i class="bi bi-lock fs-2 d-block mb-2 opacity-50"></i>
+      <p class="mb-0">No shortcuts are available for your role in this hub.</p>
+    </div>
+    {% else %}
+    {% for section in sections %}
+    <section class="hub-section" aria-labelledby="hub-sec-{{ loop.index }}">
+      <h2 class="hub-section-tag" id="hub-sec-{{ loop.index }}">{{ section.title }}</h2>
+      <div class="hub-grid rc-report-section" role="list">
+        {% for item in section.items %}
+        <a href="{{ item.href }}" class="report-link rc-tile rc-report-card {{ item.tile }}" role="listitem">
+          <div class="rc-card-top">
+            <span class="rc-tile-icon" aria-hidden="true"><i class="{{ item.icon }}"></i></span>
+          </div>
+          <span class="rc-tile-label">{{ item.label }}</span>
+        </a>
+        {% endfor %}
+      </div>
+    </section>
+    {% endfor %}
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
