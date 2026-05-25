@@ -504,10 +504,10 @@
                 left: 0;
                 right: 0;
                 bottom: 0;
-                background: rgba(0,0,0,0.55);
-                -webkit-backdrop-filter: blur(2px);
-                backdrop-filter: blur(2px);
-                z-index: 1038;
+                background: rgba(0,0,0,0.5);
+                -webkit-backdrop-filter: none;
+                backdrop-filter: none;
+                z-index: 1050;
                 transition: opacity 0.25s ease;
                 opacity: 0;
             }
@@ -920,13 +920,20 @@
             max-height: 100vh !important;
             transform: translateX(-100%);
             width: min(300px, 88vw) !important;
-            z-index: 2000 !important;
+            z-index: 1060 !important;
+            background: #fff !important;
+            backdrop-filter: none !important;
+            -webkit-backdrop-filter: none !important;
+            transition: transform 0.25s ease !important;
         }
         .capacitor-native .sidebar.mobile-open {
             transform: translateX(0) !important;
         }
         .capacitor-native .sidebar-overlay.show {
-            z-index: 1990 !important;
+            z-index: 1050 !important;
+            backdrop-filter: none !important;
+            -webkit-backdrop-filter: none !important;
+            background: rgba(0,0,0,0.5) !important;
         }
 
         /* ── Native App Shell: single fixed container; nav is a flex child — never scrolls ── */
@@ -8022,6 +8029,7 @@ document.addEventListener('DOMContentLoaded', function() {
         var overlay = document.getElementById('sidebarOverlay');
         if (!sidebar) return;
         sidebar.classList.add('mobile-open');
+        document.body.classList.add('mobile-sidebar-open');
         if (overlay) {
             overlay.classList.add('show');
             overlay.setAttribute('aria-hidden', 'false');
@@ -8042,6 +8050,7 @@ document.addEventListener('DOMContentLoaded', function() {
         var sidebar = document.getElementById('sidebar');
         var overlay = document.getElementById('sidebarOverlay');
         if (sidebar) sidebar.classList.remove('mobile-open');
+        document.body.classList.remove('mobile-sidebar-open');
         if (overlay) {
             overlay.classList.remove('show');
             overlay.style.display = '';

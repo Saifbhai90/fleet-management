@@ -270,6 +270,9 @@ body.fm-aurora-theme:not(.dark-mode) .stat-card {
     height: 100vh !important;
     bottom: 0 !important;
     width: min(300px, 85vw) !important;
+    background: #ffffff !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
   }
 }
 
@@ -285,6 +288,9 @@ html.capacitor-native body.fm-aurora-theme:not(.dark-mode) .sidebar {
   top: 0 !important;
   height: 100vh !important;
   max-height: 100vh !important;
+  background: #ffffff !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
 
 html.capacitor-native body.fm-aurora-theme:not(.dark-mode) .navbar {
