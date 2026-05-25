@@ -356,11 +356,20 @@ def build_hub_sections(slug, can_see_page_fn, is_master=False):
             if it.get('master_only') and not is_master:
                 continue
             perm = it.get('perm')
-            if perm and not can_see_page_fn(perm):
+            if perm == 'task_report_entry':
+                if not (can_see_page_fn('task_report_entry') or can_see_page_fn('task_report_add')):
+                    continue
+            elif perm and not can_see_page_fn(perm):
                 continue
             try:
                 href = url_for(it['route'], **it.get('kwargs', {}))
             except Exception:
+                from flask import current_app
+                current_app.logger.warning(
+                    'hub_registry: url_for failed for route=%s kwargs=%s',
+                    it.get('route'),
+                    it.get('kwargs'),
+                )
                 continue
             items.append({
                 'href': href,

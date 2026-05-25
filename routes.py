@@ -32414,6 +32414,7 @@ def module_hub(hub_slug):
         can_s = (lambda k: True) if is_master else (lambda k: can_see_section(perms, k))
         can_admin = (lambda: True) if is_master else (lambda: can_see_administration_menu(perms))
     except Exception:
+        app.logger.exception('module_hub: permission helpers failed for %s', hub_slug)
         can_p = lambda k: True
         can_s = lambda k: True
         can_admin = lambda: True
@@ -32422,10 +32423,25 @@ def module_hub(hub_slug):
     if not _hub_access(hub_def, can_s, can_p, can_admin, is_master):
         abort(403)
 
-    hub, sections = build_hub_sections(hub_slug, can_p, is_master=is_master)
-    if not sections:
-        abort(403)
-    return render_template('module_hub.html', hub=hub, sections=sections, hub_slug=hub_slug)
+    try:
+        hub, sections = build_hub_sections(hub_slug, can_p, is_master=is_master)
+    except Exception:
+        app.logger.exception('module_hub: build_hub_sections failed for %s', hub_slug)
+        abort(500)
+
+    if not hub:
+        abort(404)
+
+    hub_page = {
+        'title': hub.get('title', 'Module'),
+        'header_icon': hub.get('header_icon', 'bi-grid'),
+    }
+    return render_template(
+        'module_hub.html',
+        hub_page=hub_page,
+        sections=sections or [],
+        hub_slug=hub_slug,
+    )
 
 
 @app.route('/reports/activity-log')

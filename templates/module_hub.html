@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}{{ hub.title }} Hub{% endblock %}
+{% block title %}{{ hub_page.title }} Hub{% endblock %}
 
 {% block extra_head %}
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
@@ -18,7 +18,7 @@
   <div class="hub-glass-panel">
     <header class="hub-page-header">
       <a href="{{ url_for('dashboard') }}" class="hub-back"><i class="bi bi-arrow-left"></i> Dashboard</a>
-      <h1 class="hub-page-title"><i class="bi {{ hub.header_icon }}"></i> {{ hub.title }} Hub</h1>
+      <h1 class="hub-page-title"><i class="bi {{ hub_page.header_icon }}"></i> {{ hub_page.title }} Hub</h1>
     </header>
 
     {% if not sections %}

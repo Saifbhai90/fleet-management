@@ -475,6 +475,8 @@ def get_required_permission(endpoint):
     Uses longest matching key so e.g. assign_vehicle_to_parking_list matches before parking_list."""
     if not endpoint:
         return None
+    if endpoint == 'module_hub':
+        return None
     endpoint = endpoint.lower()
     best_perm = None
     best_key_len = 0

@@ -221,10 +221,12 @@ def inject_hub_navigation():
     from hub_registry import HUB_ACTIVE_ENDPOINTS
 
     def hub_nav_active(slug):
-        if request.endpoint == 'module_hub' and request.view_args.get('hub_slug') == slug:
+        view_args = getattr(request, 'view_args', None) or {}
+        if request.endpoint == 'module_hub' and view_args.get('hub_slug') == slug:
             return True
         eps = HUB_ACTIVE_ENDPOINTS.get(slug, frozenset())
-        return request.endpoint in eps
+        ep = request.endpoint or ''
+        return ep in eps
 
     return dict(hub_nav_active=hub_nav_active, HUB_ACTIVE_ENDPOINTS=HUB_ACTIVE_ENDPOINTS)
 
