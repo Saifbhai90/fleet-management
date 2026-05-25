@@ -1,6 +1,17 @@
-/* ═══ Fleet Manager — Global Aurora Theme (Report Centre style) ═══ */
+/* ═══ GLOBAL AURORA THEME & LAYOUT SHELL FIX ═══ */
 
-@keyframes fmMeshFlow {
+:root {
+  --fm-nav-h: 60px;
+  --fm-sidebar-w: 300px;
+  --fm-sidebar-collapsed-w: 70px;
+  --fm-text: #1e293b;
+  --fm-text-muted: #64748b;
+  --fm-accent: #0ea5e9;
+  --fm-glass-border: rgba(255, 255, 255, 0.55);
+  --fm-glass-surface: rgba(255, 255, 255, 0.45);
+}
+
+@keyframes fmGlobalAurora {
   0% { background-position: 0% 50%; }
   50% { background-position: 100% 50%; }
   100% { background-position: 0% 50%; }
@@ -11,22 +22,34 @@
   to { transform: translate(80px, 60px); }
 }
 
+/* ── 1. Global animated background (body + optional orbs layer) ── */
+body.fm-aurora-theme:not(.dark-mode) {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  width: 100%;
+  overflow-x: hidden;
+  color: var(--fm-text);
+  font-family: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, sans-serif;
+  background: linear-gradient(-45deg, #e0f2fe, #f5f3ff, #f0fdf4, #eef2ff) !important;
+  background-size: 400% 400% !important;
+  animation: fmGlobalAurora 15s ease infinite;
+}
+
 .fm-aurora-bg {
   position: fixed;
   inset: 0;
   z-index: 0;
   pointer-events: none;
   overflow: hidden;
-  background: linear-gradient(-45deg, #e0f2fe, #f5f3ff, #f0fdf4, #e0f2fe);
-  background-size: 400% 400%;
-  animation: fmMeshFlow 15s ease infinite;
+  background: transparent;
 }
 
 .fm-aurora-orb {
   position: absolute;
   border-radius: 50%;
   filter: blur(100px);
-  opacity: 0.32;
+  opacity: 0.28;
   pointer-events: none;
 }
 
@@ -49,67 +72,53 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .fm-aurora-bg { animation: none; }
+  body.fm-aurora-theme:not(.dark-mode) { animation: none; }
   .fm-aurora-orb { animation: none; }
 }
 
-/* Hide aurora on dark mode & public driver profile */
 body.dark-mode .fm-aurora-bg,
-html.driver-profile-public-view .fm-aurora-bg {
+html.driver-profile-public-view .fm-aurora-bg,
+body.dark-mode.fm-aurora-theme {
   display: none !important;
 }
 
-/* ── App shell (keep navbar/sidebar fixed — never set position:relative here) ── */
-body.fm-aurora-theme:not(.dark-mode) {
-  background: transparent !important;
-  color: #1e293b;
-  font-family: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, sans-serif;
+body.dark-mode {
+  animation: none !important;
 }
 
-body.fm-aurora-theme:not(.dark-mode) .navbar.fixed-top {
+/* ── 2. Top bar — fixed at top, glass ── */
+body.fm-aurora-theme:not(.dark-mode) .navbar,
+body.fm-aurora-theme:not(.dark-mode) .navbar.fixed-top,
+body.fm-aurora-theme:not(.dark-mode) .top-bar {
   position: fixed !important;
   top: 0 !important;
   left: 0 !important;
   right: 0 !important;
+  width: 100% !important;
+  height: var(--fm-nav-h) !important;
+  min-height: var(--fm-nav-h) !important;
+  max-height: var(--fm-nav-h) !important;
   z-index: 1050 !important;
-}
-
-body.fm-aurora-theme:not(.dark-mode) .sidebar {
-  position: fixed !important;
-  top: 60px !important;
-  left: 0 !important;
-  height: calc(100vh - 60px) !important;
-  max-height: calc(100vh - 60px) !important;
-  z-index: 1040 !important;
-}
-
-body.fm-aurora-theme:not(.dark-mode) .main-content {
-  margin-top: 60px !important;
-  min-height: calc(100vh - 60px);
-  z-index: 1;
-}
-
-/* ── Top navbar (glass) ── */
-body.fm-aurora-theme:not(.dark-mode) .navbar.bg-dark,
-body.fm-aurora-theme:not(.dark-mode) .navbar.navbar-dark {
-  background: rgba(255, 255, 255, 0.58) !important;
+  margin: 0 !important;
+  background: rgba(255, 255, 255, 0.55) !important;
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.75) !important;
+  border-bottom: 1px solid var(--fm-glass-border) !important;
   box-shadow: 0 4px 24px rgba(15, 23, 42, 0.06) !important;
-  color: #1e293b !important;
+  color: var(--fm-text) !important;
 }
 
 body.fm-aurora-theme:not(.dark-mode) .navbar .text-white,
 body.fm-aurora-theme:not(.dark-mode) .navbar .text-light,
 body.fm-aurora-theme:not(.dark-mode) .navbar .btn-link.text-light,
-body.fm-aurora-theme:not(.dark-mode) .navbar .ms-auto {
+body.fm-aurora-theme:not(.dark-mode) .navbar .ms-auto,
+body.fm-aurora-theme:not(.dark-mode) .navbar-brand {
   color: #475569 !important;
 }
 
 body.fm-aurora-theme:not(.dark-mode) .navbar #liveDateTime,
 body.fm-aurora-theme:not(.dark-mode) .navbar #liveNetworkHealth {
-  color: #64748b !important;
+  color: var(--fm-text-muted) !important;
 }
 
 body.fm-aurora-theme:not(.dark-mode) .navbar .btn-outline-light {
@@ -119,13 +128,13 @@ body.fm-aurora-theme:not(.dark-mode) .navbar .btn-outline-light {
 }
 
 body.fm-aurora-theme:not(.dark-mode) .navbar .btn-outline-light:hover {
-  background: rgba(255, 255, 255, 0.75) !important;
-  color: #0284c7 !important;
+  background: rgba(255, 255, 255, 0.8) !important;
+  color: var(--fm-accent) !important;
 }
 
 body.fm-aurora-theme:not(.dark-mode) .navbar .dropdown-menu {
-  background: rgba(255, 255, 255, 0.95) !important;
-  border: 1px solid rgba(255, 255, 255, 0.8) !important;
+  background: rgba(255, 255, 255, 0.96) !important;
+  border: 1px solid rgba(255, 255, 255, 0.85) !important;
   box-shadow: 0 12px 40px rgba(15, 23, 42, 0.12) !important;
 }
 
@@ -135,16 +144,32 @@ body.fm-aurora-theme:not(.dark-mode) .navbar .dropdown-item {
 
 body.fm-aurora-theme:not(.dark-mode) .navbar .dropdown-item:hover {
   background: rgba(14, 165, 233, 0.1) !important;
-  color: #0284c7 !important;
+  color: var(--fm-accent) !important;
 }
 
-/* ── Sidebar (glass) ── */
+/* ── 3. Sidebar — flush under navbar, full height, glass ── */
 body.fm-aurora-theme:not(.dark-mode) .sidebar {
-  background: rgba(255, 255, 255, 0.52) !important;
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border-right: 1px solid rgba(255, 255, 255, 0.7);
+  position: fixed !important;
+  top: var(--fm-nav-h) !important;
+  left: 0 !important;
+  bottom: 0 !important;
+  width: var(--fm-sidebar-w) !important;
+  height: auto !important;
+  max-height: none !important;
+  margin: 0 !important;
+  padding-top: 15px;
+  z-index: 1040 !important;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  background: rgba(255, 255, 255, 0.42) !important;
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+  border-right: 1px solid var(--fm-glass-border) !important;
   box-shadow: 4px 0 24px rgba(15, 23, 42, 0.05);
+}
+
+body.fm-aurora-theme:not(.dark-mode) .sidebar.collapsed {
+  width: var(--fm-sidebar-collapsed-w) !important;
 }
 
 body.fm-aurora-theme:not(.dark-mode) .sidebar a {
@@ -152,46 +177,68 @@ body.fm-aurora-theme:not(.dark-mode) .sidebar a {
 }
 
 body.fm-aurora-theme:not(.dark-mode) .sidebar a:hover {
-  background: rgba(14, 165, 233, 0.1) !important;
-  color: #0284c7 !important;
+  background: rgba(14, 165, 233, 0.12) !important;
+  color: var(--fm-accent) !important;
 }
 
 body.fm-aurora-theme:not(.dark-mode) .sidebar .active-link {
-  background: rgba(14, 165, 233, 0.16) !important;
+  background: rgba(14, 165, 233, 0.18) !important;
   color: #0369a1 !important;
-  border-left: 4px solid #0ea5e9 !important;
+  border-left: 4px solid var(--fm-accent) !important;
 }
 
 body.fm-aurora-theme:not(.dark-mode) .sidebar .collapse-item-container {
-  background: rgba(255, 255, 255, 0.25) !important;
+  background: rgba(255, 255, 255, 0.22) !important;
 }
 
 body.fm-aurora-theme:not(.dark-mode) .sidebar .sb-sub-toggle {
-  color: #64748b !important;
+  color: var(--fm-text-muted) !important;
+}
+
+body.fm-aurora-theme:not(.dark-mode) .sidebar .sb-sub-toggle::before,
+body.fm-aurora-theme:not(.dark-mode) .sidebar .sb-sub-toggle::after,
+body.fm-aurora-theme:not(.dark-mode) .sidebar .sb-sub-items::before,
+body.fm-aurora-theme:not(.dark-mode) .sidebar .sb-sub-items .collapse-item::before {
+  background: rgba(100, 116, 139, 0.2) !important;
+  color: #94a3b8 !important;
 }
 
 body.fm-aurora-theme:not(.dark-mode) .sidebar::-webkit-scrollbar-thumb {
-  background: rgba(100, 116, 139, 0.25);
+  background: rgba(100, 116, 139, 0.28);
 }
 
-/* ── Main content area ── */
-body.fm-aurora-theme:not(.dark-mode) .main-content {
+/* ── 4. Main content — no extra top gap; starts under navbar ── */
+body.fm-aurora-theme:not(.dark-mode) .main-content,
+body.fm-aurora-theme:not(.dark-mode) #content-wrapper {
+  position: relative;
+  z-index: 1;
+  margin-top: var(--fm-nav-h) !important;
+  margin-left: var(--fm-sidebar-w) !important;
+  padding: 25px;
+  min-height: calc(100vh - var(--fm-nav-h));
   background: transparent !important;
+  box-sizing: border-box;
 }
 
-body.fm-aurora-theme:not(.dark-mode) .capacitor-native .main-content,
-body.fm-aurora-theme:not(.dark-mode) #appNativeShell .main-content {
-  background: transparent !important;
+body.fm-aurora-theme:not(.dark-mode) .main-content.expanded {
+  margin-left: var(--fm-sidebar-collapsed-w) !important;
 }
 
-/* Cards & panels — subtle glass for readability */
+body.fm-aurora-theme:not(.dark-mode) .main-content.ws-mini-open {
+  padding-right: 235px;
+}
+
+/* ── 5. Glass panels (dashboard, forms, cards) ── */
 body.fm-aurora-theme:not(.dark-mode) .main-content > .card,
-body.fm-aurora-theme:not(.dark-mode) .main-content .card:not(.stat-card):not(.bg-gradient-primary):not(.bg-gradient-success):not(.bg-gradient-info):not(.bg-gradient-warning):not(.bg-gradient-danger) {
-  background: rgba(255, 255, 255, 0.72) !important;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.85) !important;
-  box-shadow: 0 8px 32px rgba(15, 23, 42, 0.06) !important;
+body.fm-aurora-theme:not(.dark-mode) .main-content .card:not(.stat-card):not(.bg-gradient-primary):not(.bg-gradient-success):not(.bg-gradient-info):not(.bg-gradient-warning):not(.bg-gradient-danger),
+body.fm-aurora-theme:not(.dark-mode) .dashboard-container,
+body.fm-aurora-theme:not(.dark-mode) .form-container {
+  background: rgba(255, 255, 255, 0.55) !important;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.65) !important;
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06) !important;
 }
 
 body.fm-aurora-theme:not(.dark-mode) .bc-light {
@@ -204,16 +251,54 @@ body.fm-aurora-theme:not(.dark-mode) .ws-global-mini .card {
   background: rgba(255, 255, 255, 0.78) !important;
 }
 
-/* ── Native mobile chrome ── */
+/* Stat cards keep their gradient colours */
+body.fm-aurora-theme:not(.dark-mode) .stat-card {
+  backdrop-filter: none;
+}
+
+/* ── 6. Tablet / mobile web ── */
+@media (max-width: 991.98px) {
+  body.fm-aurora-theme:not(.dark-mode) .main-content,
+  body.fm-aurora-theme:not(.dark-mode) .main-content.expanded {
+    margin-left: 0 !important;
+    margin-top: var(--fm-nav-h) !important;
+    padding: 15px 12px !important;
+  }
+
+  body.fm-aurora-theme:not(.dark-mode) .sidebar {
+    top: 0 !important;
+    height: 100vh !important;
+    bottom: 0 !important;
+    width: min(300px, 85vw) !important;
+  }
+}
+
+/* ── 7. Capacitor native (no top navbar — no 60px offset) ── */
+html.capacitor-native body.fm-aurora-theme:not(.dark-mode) .main-content,
+html.capacitor-native body.fm-aurora-theme:not(.dark-mode) #appNativeShell .main-content {
+  margin-top: 0 !important;
+  margin-left: 0 !important;
+  min-height: 0 !important;
+}
+
+html.capacitor-native body.fm-aurora-theme:not(.dark-mode) .sidebar {
+  top: calc(env(safe-area-inset-top, 0px) + var(--fm-nav-h)) !important;
+}
+
+html.capacitor-native body.fm-aurora-theme:not(.dark-mode) .navbar {
+  display: none !important;
+}
+
+/* ── 8. Native mobile chrome ── */
 body.fm-aurora-theme:not(.dark-mode) .mobile-menu-btn {
-  background: rgba(255, 255, 255, 0.82) !important;
+  background: rgba(255, 255, 255, 0.85) !important;
   color: #334155 !important;
   border: 1px solid rgba(255, 255, 255, 0.9) !important;
   box-shadow: 0 4px 16px rgba(15, 23, 42, 0.1) !important;
 }
 
 body.fm-aurora-theme:not(.dark-mode) .mobile-bottom-nav {
-  background: rgba(255, 255, 255, 0.82) !important;
+  background: rgba(255, 255, 255, 0.85) !important;
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
   border-top: 1px solid rgba(255, 255, 255, 0.9) !important;
@@ -221,15 +306,15 @@ body.fm-aurora-theme:not(.dark-mode) .mobile-bottom-nav {
 }
 
 body.fm-aurora-theme:not(.dark-mode) .mobile-nav-item {
-  color: #64748b !important;
+  color: var(--fm-text-muted) !important;
 }
 
 body.fm-aurora-theme:not(.dark-mode) .mobile-nav-item.active {
-  color: #0284c7 !important;
+  color: var(--fm-accent) !important;
 }
 
 body.fm-aurora-theme:not(.dark-mode) .more-drawer-panel {
-  background: rgba(255, 255, 255, 0.94) !important;
+  background: rgba(255, 255, 255, 0.96) !important;
   border-top: 1px solid rgba(255, 255, 255, 0.9) !important;
   color: #334155;
 }
@@ -239,28 +324,28 @@ body.fm-aurora-theme:not(.dark-mode) .more-drawer-handle {
 }
 
 body.fm-aurora-theme:not(.dark-mode) .more-drawer-item {
-  background: rgba(241, 245, 249, 0.8) !important;
+  background: rgba(241, 245, 249, 0.85) !important;
   color: #475569 !important;
 }
 
 body.fm-aurora-theme:not(.dark-mode) .more-drawer-item.active,
 body.fm-aurora-theme:not(.dark-mode) .more-drawer-item:active {
   background: rgba(14, 165, 233, 0.12) !important;
-  color: #0284c7 !important;
+  color: var(--fm-accent) !important;
 }
 
 body.fm-aurora-theme:not(.dark-mode) .more-icon {
-  background: rgba(255, 255, 255, 0.9) !important;
+  background: rgba(255, 255, 255, 0.92) !important;
   border: 1px solid rgba(226, 232, 240, 0.9);
 }
 
 body.fm-aurora-theme:not(.dark-mode) .more-drawer-user {
   background: rgba(241, 245, 249, 0.9) !important;
-  color: #64748b !important;
+  color: var(--fm-text-muted) !important;
 }
 
 body.fm-aurora-theme:not(.dark-mode) .more-drawer-user strong {
-  color: #1e293b !important;
+  color: var(--fm-text) !important;
 }
 
 body.fm-aurora-theme:not(.dark-mode) .fab-dial-label {
@@ -276,7 +361,7 @@ body.fm-aurora-theme:not(.dark-mode) .fab-dial-btn {
   border: 1px solid rgba(226, 232, 240, 0.8);
 }
 
-/* Report Centre: avoid double aurora layer */
+/* Report Centre — single aurora layer (body), hide page duplicate */
 body.fm-aurora-theme .rc-aurora-bg {
   display: none !important;
 }
@@ -285,7 +370,7 @@ body.fm-aurora-theme:not(.dark-mode) .rc-page {
   background: transparent !important;
 }
 
-/* Dark mode: restore classic dark chrome */
+/* ── Dark mode: classic shell (no aurora layout overrides) ── */
 body.dark-mode .navbar.bg-dark,
 body.dark-mode .navbar.navbar-dark {
   background: #212529 !important;
@@ -298,6 +383,17 @@ body.dark-mode .sidebar {
 
 body.dark-mode .sidebar a {
   color: #cbd5e1 !important;
+}
+
+body.dark-mode .sidebar a:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: #fff !important;
+}
+
+body.dark-mode .sidebar .active-link {
+  background: rgba(13, 110, 253, 0.2) !important;
+  color: #fff !important;
+  border-left: 4px solid #0d6efd !important;
 }
 
 body.dark-mode .mobile-bottom-nav {
