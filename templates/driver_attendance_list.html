@@ -58,6 +58,8 @@
   <div class="card shadow-sm border-0 rounded-3 mb-4" style="position:relative; overflow:visible;">
     <div class="card-body" style="overflow:visible;">
       <form method="GET" action="{{ url_for('driver_attendance_list') }}" id="filterForm" class="mb-2">
+        {% from 'partials/nav_back_button.html' import nav_from_hidden %}
+        {{ nav_from_hidden() }}
         <input type="hidden" name="project_id" id="hiddenProjectId" value="{{ project_id or '0' }}">
         <input type="hidden" name="district_id" id="hiddenDistrictId" value="{{ district_id or '0' }}">
         <input type="hidden" name="vehicle_id" id="hiddenVehicleId" value="{{ vehicle_id or '0' }}">

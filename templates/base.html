@@ -5350,17 +5350,12 @@
                 b.disabled = false;
                 b.classList.remove('btn-loading');
             });
-            var href = el && el.getAttribute('data-fleet-nav-back-href');
-            var useHistory = el && el.getAttribute('data-fleet-nav-back-history') === '1';
-            if (href && href !== '#') {
-                window.location.href = href;
+            var href = (el && el.getAttribute('data-fleet-nav-back-href')) || (el && el.getAttribute('href'));
+            if (href && href !== '#' && href.indexOf('javascript:') !== 0) {
+                window.location.assign(href);
                 return false;
             }
-            if (useHistory && window.history.length > 1) {
-                window.history.back();
-                return false;
-            }
-            window.location.href = '/dashboard';
+            window.location.assign('/dashboard');
             return false;
         };
 

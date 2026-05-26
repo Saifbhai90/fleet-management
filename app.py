@@ -216,7 +216,7 @@ def inject_freeze_data_status():
 
 @app.before_request
 def sync_navigation_origin():
-    """Keep nav_from in session so Back works after POST/filter and without query string."""
+    """Lock Back return URL when a report opens; keep it across filter/view (no history.back)."""
     try:
         from nav_back import sync_nav_from_session
         sync_nav_from_session()
