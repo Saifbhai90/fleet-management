@@ -107,8 +107,18 @@ def resolve_nav_back(nav_from, default_url, default_label='Back'):
     return default_url, default_label
 
 
+def _current_endpoint_base_url():
+    """Same route without query string — used after filter/view so Back does not rely on history.back()."""
+    if not request.endpoint:
+        return None
+    try:
+        return url_for(request.endpoint)
+    except Exception:
+        return None
+
+
 def _pick_final_back_url(default_url, nav_from):
-    """Hub/reports → default endpoint → safe referrer → history."""
+    """Hub/reports → safe referrer → base route (no query) → default hub → history."""
     if not default_url:
         default_url = default_back_url_for_endpoint(request.endpoint)
     if not default_url:
@@ -125,6 +135,12 @@ def _pick_final_back_url(default_url, nav_from):
     ref = _safe_referrer_url()
     if ref:
         return ref
+
+    # Filter/view pages: direct link beats history.back() (avoids bfcache + stuck View "Loading…")
+    if request.args:
+        base = _current_endpoint_base_url()
+        if base:
+            return base
 
     if url and url not in ('/', ''):
         return url

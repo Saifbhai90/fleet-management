@@ -1,17 +1,15 @@
 {% macro nav_back_button() %}
 {% set back_href = nav_back_url or nav_back_url_auto %}
 {% set use_history = nav_back_use_history or (not back_href) or back_href == 'javascript:history.back()' %}
-{% if use_history %}
-<a href="#" class="btn-nav-back-rounded" title="Go Back" onclick="history.back(); return false;">
+<a href="{{ '#' if use_history else back_href }}"
+   class="btn-nav-back-rounded"
+   title="Go Back"
+   data-fleet-nav-back="1"
+   {% if use_history %}data-fleet-nav-back-history="1"{% else %}data-fleet-nav-back-href="{{ back_href|e }}"{% endif %}
+   onclick="return window.fleetNavigateBack(event, this);">
   <i class="bi bi-arrow-left-short"></i>
   <span>{{ nav_back_label|default(nav_back_label_auto|default('Back')) }}</span>
 </a>
-{% else %}
-<a href="{{ back_href }}" class="btn-nav-back-rounded" title="Go Back">
-  <i class="bi bi-arrow-left-short"></i>
-  <span>{{ nav_back_label|default(nav_back_label_auto|default('Back')) }}</span>
-</a>
-{% endif %}
 {% endmacro %}
 
 {% macro nav_from_hidden() %}
