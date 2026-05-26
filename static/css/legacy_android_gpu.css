@@ -1,0 +1,95 @@
+/**
+ * Low-end / legacy Android WebView (e.g. Android 8.1, Oppo A5s CPH1909).
+ * backdrop-filter and heavy CSS filter blur break compositing — whole screen looks foggy
+ * when drawer/overlays open. html.legacy-android-gpu is set via UA + Capacitor Device API.
+ */
+
+html.legacy-android-gpu .fm-aurora-bg,
+html.legacy-android-gpu .fm-aurora-orb {
+  display: none !important;
+  visibility: hidden !important;
+  filter: none !important;
+  -webkit-filter: none !important;
+}
+
+html.legacy-android-gpu body.fm-aurora-theme:not(.dark-mode) {
+  animation: none !important;
+  background: #f1f5f9 !important;
+  background-size: auto !important;
+}
+
+html.legacy-android-gpu .navbar,
+html.legacy-android-gpu .mobile-bottom-nav,
+html.legacy-android-gpu .mobile-menu-btn,
+html.legacy-android-gpu .fab-backdrop,
+html.legacy-android-gpu .fab-backdrop.show,
+html.legacy-android-gpu .more-drawer-overlay,
+html.legacy-android-gpu .more-drawer-overlay.open,
+html.legacy-android-gpu .sidebar-overlay,
+html.legacy-android-gpu .sidebar-overlay.show,
+html.legacy-android-gpu #cmdPalette,
+html.legacy-android-gpu .modal-backdrop,
+html.legacy-android-gpu .native-submit-sticky {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  filter: none !important;
+  -webkit-filter: none !important;
+}
+
+html.legacy-android-gpu .mobile-bottom-nav {
+  background: #ffffff !important;
+  border-top: 1px solid #e2e8f0 !important;
+}
+
+html.legacy-android-gpu .mobile-menu-btn {
+  background: #1e293b !important;
+}
+
+html.legacy-android-gpu .sidebar,
+html.legacy-android-gpu.capacitor-native .sidebar,
+html.legacy-android-gpu body.fm-aurora-theme .sidebar {
+  background: #ffffff !important;
+  will-change: auto !important;
+  -webkit-backface-visibility: visible !important;
+  backface-visibility: visible !important;
+}
+
+html.legacy-android-gpu .sb-drawer-profile {
+  background: #ffffff !important;
+}
+
+html.legacy-android-gpu .sidebar-overlay,
+html.legacy-android-gpu .sidebar-overlay.show,
+html.legacy-android-gpu.capacitor-native .sidebar-overlay.show {
+  background-color: rgba(0, 0, 0, 0.45) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  filter: none !important;
+  -webkit-filter: none !important;
+}
+
+html.legacy-android-gpu body.mobile-sidebar-open .main-content,
+html.legacy-android-gpu body.sidebar-open .main-content,
+html.legacy-android-gpu body.mobile-sidebar-open #appNativeShell,
+html.legacy-android-gpu body.sidebar-open #appNativeShell,
+html.legacy-android-gpu body.mobile-sidebar-open #app-container,
+html.legacy-android-gpu body.sidebar-open #app-container,
+html.legacy-android-gpu body.mobile-sidebar-open .navbar,
+html.legacy-android-gpu body.sidebar-open .navbar,
+html.legacy-android-gpu body.mobile-sidebar-open .mobile-bottom-nav,
+html.legacy-android-gpu body.sidebar-open .mobile-bottom-nav {
+  filter: none !important;
+  -webkit-filter: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  transform: none !important;
+  -webkit-transform: none !important;
+  opacity: 1 !important;
+}
+
+html.legacy-android-gpu .card,
+html.legacy-android-gpu .stat-card,
+html.legacy-android-gpu .bc-light {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}

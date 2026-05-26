@@ -761,7 +761,7 @@
         .more-drawer-overlay {
             display: none; position: fixed; inset: 0;
             background: rgba(0,0,0,0.55); z-index: 1060;
-            backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
+            backdrop-filter: none; -webkit-backdrop-filter: none;
         }
         .more-drawer-overlay.open { display: block; }
         .more-drawer-panel {
@@ -1188,7 +1188,8 @@
             display: none; position: fixed;
             top: max(env(safe-area-inset-top, 10px), 10px); left: 14px;
             width: 42px; height: 42px;
-            background: rgba(15,23,42,0.88); backdrop-filter: blur(10px);
+            background: rgba(15,23,42,0.92);
+            backdrop-filter: none; -webkit-backdrop-filter: none;
             border: none; border-radius: 12px; color: #e2e8f0;
             align-items: center; justify-content: center;
             z-index: 1055; box-shadow: 0 2px 12px rgba(0,0,0,0.3); cursor: pointer;
@@ -1244,7 +1245,7 @@
         .fab-backdrop {
             display: none; position: fixed; inset: 0;
             background: rgba(0,0,0,0.4);
-            backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
+            backdrop-filter: none; -webkit-backdrop-filter: none;
             z-index: 1050;
             animation: backdropFadeIn 0.2s ease;
         }
@@ -1555,6 +1556,11 @@
     <link rel="stylesheet" href="/static/css/fm_aurora_theme.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/fm_hub_pages.css') }}">
     <link rel="stylesheet" href="/static/css/mobile_native_sidebar.css">
+    <script>
+    (function(){var u=navigator.userAgent||'';if(!/Android/i.test(u))return;var legacy=/CPH1909|OPPO\s*A5/i.test(u);if(!legacy){var m=u.match(/Android\s+([\d.]+)/i);if(m){var v=parseInt(m[1],10);if(!isNaN(v)&&v<=9)legacy=true;}}if(legacy)document.documentElement.classList.add('legacy-android-gpu');})();
+    </script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/legacy_android_gpu.css') }}">
+    <script src="{{ url_for('static', filename='js/legacy_android_gpu.js') }}" defer></script>
     {% block extra_head %}{% endblock %}
 </head>
 <body{% if request.endpoint == 'dashboard' %} class="page-dashboard fm-aurora-theme"{% elif request.endpoint == 'report_driver_profile_public' %} class="driver-profile-public-view"{% else %} class="fm-aurora-theme"{% endif %}>
@@ -8039,12 +8045,23 @@ document.addEventListener('DOMContentLoaded', function() {
         var sidebar = document.getElementById('sidebar');
         var overlay = document.getElementById('sidebarOverlay');
         if (!sidebar) return;
+        var legacyGpu = document.documentElement.classList.contains('legacy-android-gpu');
+        if (legacyGpu) {
+            var auroraBg = document.querySelector('.fm-aurora-bg');
+            if (auroraBg) auroraBg.style.display = 'none';
+        }
         sidebar.classList.add('mobile-open');
         document.body.classList.add('mobile-sidebar-open');
         document.body.classList.add('sidebar-open');
         if (overlay) {
             overlay.classList.add('show');
             overlay.setAttribute('aria-hidden', 'false');
+            if (legacyGpu) {
+                overlay.style.backdropFilter = 'none';
+                overlay.style.webkitBackdropFilter = 'none';
+                overlay.style.filter = 'none';
+                overlay.style.backgroundColor = 'rgba(0,0,0,0.45)';
+            }
         }
         document.body.style.overflow = 'hidden';
         var nav = sidebar.querySelector('.sb-drawer-nav');
