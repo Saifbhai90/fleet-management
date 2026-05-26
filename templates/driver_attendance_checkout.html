@@ -836,11 +836,110 @@
   function savePendingCheckout(driverId, payload) {
     if (!driverId) return;
     localStorage.setItem(pendingStorageKey(driverId), JSON.stringify(payload));
+    startPendingAutoRetry();
   }
 
   function clearPendingCheckout(driverId) {
     if (!driverId) return;
     localStorage.removeItem(pendingStorageKey(driverId));
+    stopPendingAutoRetry();
+  }
+
+  var PENDING_AUTO_RETRY_MS = 15000;
+  var pendingAutoRetryTimer = null;
+  var pendingRetryInFlight = false;
+  var pendingAutoRetryDebounce = null;
+
+  function hasPendingCheckoutForSelected() {
+    var driverId = selectedDriverId();
+    if (!driverId) return false;
+    var pending = loadPendingCheckout(driverId);
+    return !!(pending && pending.photo_base64);
+  }
+
+  function startPendingAutoRetry() {
+    if (pendingAutoRetryTimer || !hasPendingCheckoutForSelected()) return;
+    pendingAutoRetryTimer = setInterval(function() {
+      if (!hasPendingCheckoutForSelected()) {
+        stopPendingAutoRetry();
+        return;
+      }
+      retryPendingCheckoutUpload(true);
+    }, PENDING_AUTO_RETRY_MS);
+  }
+
+  function stopPendingAutoRetry() {
+    if (pendingAutoRetryTimer) {
+      clearInterval(pendingAutoRetryTimer);
+      pendingAutoRetryTimer = null;
+    }
+  }
+
+  function triggerPendingAutoRetrySoon() {
+    if (!hasPendingCheckoutForSelected()) return;
+    if (pendingAutoRetryDebounce) clearTimeout(pendingAutoRetryDebounce);
+    pendingAutoRetryDebounce = setTimeout(function() {
+      pendingAutoRetryDebounce = null;
+      if (!hasPendingCheckoutForSelected()) return;
+      startPendingAutoRetry();
+      retryPendingCheckoutUpload(true);
+    }, 400);
+  }
+
+  function setupPendingAutoRetryListeners() {
+    window.addEventListener('online', triggerPendingAutoRetrySoon);
+    if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App) {
+      window.Capacitor.Plugins.App.addListener('appStateChange', function(state) {
+        if (state && state.isActive) triggerPendingAutoRetrySoon();
+      });
+    }
+    document.addEventListener('visibilitychange', function() {
+      if (!document.hidden) triggerPendingAutoRetrySoon();
+    });
+  }
+
+  function retryPendingCheckoutUpload(isAuto) {
+    var driverId = selectedDriverId();
+    var pending = loadPendingCheckout(driverId);
+    if (!pending || !pending.photo_base64) {
+      stopPendingAutoRetry();
+      return Promise.resolve(false);
+    }
+    if (pendingRetryInFlight) return Promise.resolve(false);
+    pendingRetryInFlight = true;
+    if (!isAuto) {
+      setUploadStatus('Retry upload in progress...', 'info');
+    } else {
+      setUploadStatus('Auto retry: upload ho raha hai...', 'info');
+    }
+    return postCheckoutPayload(pending).then(function(res) {
+      if (res.ok && res.body && res.body.ok) {
+        clearPendingCheckout(driverId);
+        fetchHasGpsCheckin();
+        refreshCheckoutMediaPanel();
+        setUploadStatus(isAuto ? 'Check-out upload ho gaya (auto retry).' : 'Check-out successful — attendance complete.', 'success');
+        return true;
+      }
+      var errMsg = gpsApiJsonMessage(res.body) || 'Upload failed.';
+      if (gpsAttendanceKeepPendingOnFailure(res)) {
+        setUploadStatus('Upload pending: ' + errMsg + (isAuto ? ' Auto retry jari hai.' : ' Neeche Retry karein.'), 'warning');
+        btnRetryPendingCheckout.classList.remove('d-none');
+        startPendingAutoRetry();
+      } else {
+        clearPendingCheckout(driverId);
+        fetchHasGpsCheckin();
+        refreshCheckoutMediaPanel();
+        setUploadStatus(errMsg, 'warning');
+      }
+      return false;
+    }).catch(function() {
+      setUploadStatus('Upload pending: Network issue.' + (isAuto ? ' Auto retry jari hai.' : ' Neeche Retry karein.'), 'warning');
+      btnRetryPendingCheckout.classList.remove('d-none');
+      startPendingAutoRetry();
+      return false;
+    }).finally(function() {
+      pendingRetryInFlight = false;
+    });
   }
 
   function setMediaFallback(text) {
@@ -859,6 +958,7 @@
   function refreshCheckoutMediaPanel() {
     var driverId = selectedDriverId();
     if (!driverId) {
+      stopPendingAutoRetry();
       setMediaFallback('Driver select karein.');
       setUploadStatus('Upload status: Waiting for driver selection.', 'neutral');
       checkoutUploadMeta.textContent = '';
@@ -871,11 +971,13 @@
       checkoutPreviewImage.classList.remove('d-none');
       checkoutPreviewFallback.classList.add('d-none');
       if (checkoutPreviewTapHint) checkoutPreviewTapHint.classList.remove('d-none');
-      setUploadStatus('Upload pending: Network issue ki wajah se server par nahi gaya.', 'warning');
+      setUploadStatus('Upload pending: Network issue ki wajah se server par nahi gaya. Har 15 sec auto retry.', 'warning');
       checkoutUploadMeta.textContent = 'Media: Local pending | Time: ' + (pending.captured_at || '-') + ' | Date: ' + currentDateDmy();
       btnRetryPendingCheckout.classList.remove('d-none');
+      startPendingAutoRetry();
       return;
     }
+    stopPendingAutoRetry();
     btnRetryPendingCheckout.classList.add('d-none');
     setUploadStatus('Upload status fetch ho raha hai...', 'info');
     fetch('{{ url_for("api_attendance_latest_gps_media") }}?kind=checkout&driver_id=' + encodeURIComponent(driverId) + '&attendance_date=' + encodeURIComponent(currentDateDmy()))
@@ -1260,26 +1362,15 @@
   }
 
   btnRetryPendingCheckout.addEventListener('click', function() {
-    var driverId = selectedDriverId();
-    var pending = loadPendingCheckout(driverId);
-    if (!pending) {
+    if (!hasPendingCheckoutForSelected()) {
       btnRetryPendingCheckout.classList.add('d-none');
       refreshCheckoutMediaPanel();
       return;
     }
-    setUploadStatus('Retry upload in progress...', 'info');
-    postCheckoutPayload(pending).then(function(res) {
-      if (res.ok && res.body && res.body.ok) {
-        clearPendingCheckout(driverId);
-        refreshCheckoutMediaPanel();
-      } else {
-        setUploadStatus('Retry failed: ' + (gpsApiJsonMessage(res.body) || 'Upload failed.'), 'warning');
-      }
-    }).catch(function() {
-      setUploadStatus('Retry failed: Network issue.', 'warning');
-    });
+    retryPendingCheckoutUpload(false);
   });
 
+  setupPendingAutoRetryListeners();
   refreshCheckoutMediaPanel();
 })();
 </script>
