@@ -116,8 +116,13 @@ body.fm-aurora-theme:not(.dark-mode) .navbar-brand {
   color: #475569 !important;
 }
 
-body.fm-aurora-theme:not(.dark-mode) .navbar #liveDateTime,
-body.fm-aurora-theme:not(.dark-mode) .navbar #liveNetworkHealth {
+body.fm-aurora-theme:not(.dark-mode) .navbar #liveDateTime {
+  color: var(--fm-text-muted) !important;
+}
+
+body.fm-aurora-theme:not(.dark-mode) .navbar .fleet-net-pill {
+  background: rgba(255, 255, 255, 0.65) !important;
+  border-color: rgba(148, 163, 184, 0.35) !important;
   color: var(--fm-text-muted) !important;
 }
 

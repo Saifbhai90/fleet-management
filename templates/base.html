@@ -1672,8 +1672,78 @@
 </style>
 
 <!-- NAVBAR -->
+<style>
+  .navbar-status-cluster {
+    display: none;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  @media (min-width: 768px) {
+    .navbar-status-cluster { display: flex; }
+  }
+  .fleet-conn-pill,
+  .fleet-net-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 11px;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    line-height: 1;
+    border: 1px solid transparent;
+    white-space: nowrap;
+    transition: background 0.2s, color 0.2s, border-color 0.2s;
+  }
+  .fleet-conn-pill i,
+  .fleet-net-pill i { font-size: 0.9rem; }
+  .fleet-conn-pill[data-state="online"] {
+    background: rgba(16, 185, 129, 0.14);
+    border-color: rgba(16, 185, 129, 0.35);
+    color: #059669;
+  }
+  .fleet-conn-pill[data-state="offline"] {
+    background: rgba(239, 68, 68, 0.12);
+    border-color: rgba(239, 68, 68, 0.35);
+    color: #dc2626;
+  }
+  .fleet-conn-pill[data-state="slow"] {
+    background: rgba(245, 158, 11, 0.14);
+    border-color: rgba(245, 158, 11, 0.4);
+    color: #d97706;
+  }
+  .fleet-conn-pill[data-state="checking"] {
+    background: rgba(148, 163, 184, 0.12);
+    border-color: rgba(148, 163, 184, 0.3);
+    color: #64748b;
+  }
+  .fleet-net-pill {
+    background: rgba(148, 163, 184, 0.1);
+    border-color: rgba(148, 163, 184, 0.28);
+    color: #64748b;
+  }
+  body.dark-mode .fleet-conn-pill[data-state="online"] {
+    background: rgba(16, 185, 129, 0.2);
+    color: #6ee7b7;
+  }
+  body.dark-mode .fleet-conn-pill[data-state="offline"] {
+    background: rgba(239, 68, 68, 0.2);
+    color: #fca5a5;
+  }
+  body.dark-mode .fleet-conn-pill[data-state="slow"] {
+    background: rgba(245, 158, 11, 0.2);
+    color: #fcd34d;
+  }
+  body.dark-mode .fleet-net-pill {
+    background: rgba(51, 65, 85, 0.5);
+    border-color: rgba(71, 85, 105, 0.6);
+    color: #cbd5e1;
+  }
+</style>
 <nav class="navbar navbar-dark bg-dark fixed-top px-3 shadow">
-    <div class="d-flex align-items-center">
+    <div class="d-flex align-items-center min-w-0 flex-grow-1">
         <button class="btn btn-outline-light btn-sm d-lg-none me-2" id="sidebarToggleMobile" type="button" aria-label="Menu">
             <i class="bi bi-list"></i>
         </button>
@@ -1703,14 +1773,20 @@
             </svg>
             <span style="font-family:'Inter',sans-serif;font-weight:700;letter-spacing:-0.01em;">Fleet<span style="color:#60a5fa;">Manager</span></span>
         </a>
+        <div class="navbar-status-cluster" id="navbarStatusCluster" aria-live="polite">
+            <div id="liveConnStatus" class="fleet-conn-pill" data-state="checking" title="Connection status">
+                <i id="liveConnStatusIcon" class="bi bi-arrow-repeat"></i>
+                <span id="liveConnStatusText">Checking</span>
+            </div>
+            <div id="liveNetworkHealth" class="fleet-net-pill" title="Network speed">
+                <i id="liveNetworkSignalIcon" class="bi bi-reception-0 text-secondary"></i>
+                <span id="liveNetworkSpeedText">-- Mbps</span>
+            </div>
+        </div>
     </div>
 
     <div class="ms-auto d-flex align-items-center text-white flex-shrink-0">
         <div class="me-2 me-md-4 d-none d-md-block" id="liveDateTime" style="font-size: 0.9rem; color: #cbd5e1;"></div>
-        <div class="me-2 d-none d-md-flex align-items-center" id="liveNetworkHealth" style="font-size:0.8rem;color:#cbd5e1;gap:6px;min-width:142px;">
-            <i id="liveNetworkSignalIcon" class="bi bi-reception-3 text-success" style="font-size:0.95rem;"></i>
-            <span id="liveNetworkSpeedText">-- Mbps</span>
-        </div>
 
         <!-- Command palette trigger (Ctrl+K) -->
         <button id="cmdPaletteBtn" class="btn btn-link text-light p-2 me-1"
@@ -4754,7 +4830,7 @@
         return msg.indexOf('cancel') >= 0 || msg.indexOf('no image') >= 0 || msg.indexOf('no file') >= 0 || msg.indexOf('user denied') >= 0;
     };
 
-    // Live network quality (speed + signal bars)
+    // Live connection status + network speed (left of navbar, after logo)
     (function() {
         var _netTimer = null;
         function _signalLevel(mbps, rttMs) {
@@ -4764,41 +4840,87 @@
             if (mbps > 0) return 1;
             return 0;
         }
-        function _updateNetUI(mbps, rttMs) {
+        function _connState(mbps, rttMs, online) {
+            if (!online) return 'offline';
+            var level = _signalLevel(mbps, rttMs);
+            if (level <= 1 || mbps < 0.85 || rttMs > 520) return 'slow';
+            return 'online';
+        }
+        function _updateConnStatus(state) {
+            var pill = document.getElementById('liveConnStatus');
+            var icon = document.getElementById('liveConnStatusIcon');
+            var text = document.getElementById('liveConnStatusText');
+            if (!pill) return;
+            pill.setAttribute('data-state', state);
+            var map = {
+                online: { icon: 'bi-wifi', label: 'Online' },
+                offline: { icon: 'bi-wifi-off', label: 'Offline' },
+                slow: { icon: 'bi-exclamation-triangle', label: 'Network slow' },
+                checking: { icon: 'bi-arrow-repeat', label: 'Checking' }
+            };
+            var cfg = map[state] || map.checking;
+            if (icon) icon.className = 'bi ' + cfg.icon;
+            if (text) text.textContent = cfg.label;
+        }
+        function _updateNetUI(mbps, rttMs, online) {
             var icon = document.getElementById('liveNetworkSignalIcon');
             var speedEl = document.getElementById('liveNetworkSpeedText');
-            var level = _signalLevel(mbps, rttMs);
+            var level = online ? _signalLevel(mbps, rttMs) : 0;
             if (icon) {
                 icon.className = 'bi bi-reception-' + level;
-                icon.classList.add(level >= 3 ? 'text-success' : (level === 2 ? 'text-warning' : 'text-danger'));
+                icon.classList.remove('text-success', 'text-warning', 'text-danger', 'text-secondary');
+                icon.classList.add(
+                    !online ? 'text-danger' :
+                    (level >= 3 ? 'text-success' : (level === 2 ? 'text-warning' : 'text-danger'))
+                );
             }
             if (speedEl) {
-                var rttLabel = isFinite(rttMs) ? (' · ' + Math.round(rttMs) + 'ms') : '';
-                speedEl.textContent = (isFinite(mbps) ? mbps.toFixed(2) : '--') + ' Mbps' + rttLabel;
+                if (!online) {
+                    speedEl.textContent = 'No connection';
+                } else {
+                    var rttLabel = isFinite(rttMs) ? (' · ' + Math.round(rttMs) + 'ms') : '';
+                    speedEl.textContent = (isFinite(mbps) ? mbps.toFixed(2) : '--') + ' Mbps' + rttLabel;
+                }
             }
+            _updateConnStatus(_connState(mbps, rttMs, online));
         }
         function _sampleNetwork() {
+            if (!navigator.onLine) {
+                _updateNetUI(0, 999, false);
+                return;
+            }
             var start = performance.now();
             fetch('/network-probe?kb=24&t=' + Date.now(), { cache: 'no-store' })
-                .then(function(r) { return r.text(); })
+                .then(function(r) {
+                    if (!r.ok) throw new Error('probe failed');
+                    return r.text();
+                })
                 .then(function(txt) {
                     var elapsedSec = Math.max((performance.now() - start) / 1000, 0.001);
                     var bytes = (txt || '').length;
                     var mbps = (bytes * 8) / (elapsedSec * 1000 * 1000);
                     var conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
                     var rtt = (conn && conn.rtt) ? conn.rtt : (performance.now() - start);
-                    _updateNetUI(mbps, rtt);
+                    _updateNetUI(mbps, rtt, true);
                 })
                 .catch(function() {
-                    _updateNetUI(0, 999);
+                    _updateNetUI(0, 999, false);
                 });
         }
         function _startNetworkTicker() {
             if (!document.getElementById('liveNetworkHealth')) return;
+            _updateConnStatus('checking');
             _sampleNetwork();
             if (_netTimer) clearInterval(_netTimer);
             _netTimer = setInterval(_sampleNetwork, 12000);
         }
+        window.addEventListener('online', function() {
+            _updateConnStatus('checking');
+            _sampleNetwork();
+        });
+        window.addEventListener('offline', function() {
+            _updateNetUI(0, 999, false);
+        });
         document.addEventListener('DOMContentLoaded', _startNetworkTicker);
         if (document.readyState !== 'loading') _startNetworkTicker();
     })();
