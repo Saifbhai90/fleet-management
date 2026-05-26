@@ -1,4 +1,4 @@
-"""Resolve Back navigation — hub / Report Centre / locked session return URL (never history)."""
+"""Resolve Back navigation — lock hub / Report Centre URL when a report opens (never dashboard or history)."""
 from __future__ import annotations
 
 from urllib.parse import urlparse
@@ -9,6 +9,7 @@ REPORTS_NAV_FROM = 'reports'
 HISTORY_BACK = 'javascript:history.back()'
 SESSION_NAV_BACK_HREF = 'nav_back_href'
 SESSION_NAV_BACK_SCOPE = 'nav_back_scope'
+SESSION_NAV_RETURN_BASE = 'nav_return_base'
 
 
 def get_nav_from(req=None):
@@ -19,6 +20,16 @@ def get_nav_from(req=None):
         session['nav_from'] = nf
         return nf
     return (session.get('nav_from') or '').strip()
+
+
+def _is_dashboard_url(url):
+    if not url:
+        return True
+    try:
+        path = (urlparse(url).path or '').rstrip('/')
+        return path == '' or path.endswith('/dashboard')
+    except Exception:
+        return False
 
 
 def _safe_referrer_url():
@@ -37,13 +48,30 @@ def _safe_referrer_url():
             return None
         if prev.path == cur.path and prev.query == cur.query:
             return None
+        if _is_dashboard_url(ref):
+            return None
         return ref
     except Exception:
         return None
 
 
+def _referrer_is_hub_or_reports(ref):
+    if not ref:
+        return False
+    try:
+        path = urlparse(ref).path or ''
+        if '/hub/' in path:
+            return True
+        reports_path = urlparse(url_for('reports_index')).path.rstrip('/')
+        if path.rstrip('/') == reports_path:
+            return True
+    except Exception:
+        pass
+    return False
+
+
 def default_back_url_for_endpoint(endpoint):
-    """Sensible default when nav_from and referrer are unavailable."""
+    """Hub or Report Centre for report routes — not dashboard."""
     if not endpoint:
         return None
     report_endpoints = {
@@ -57,9 +85,11 @@ def default_back_url_for_endpoint(endpoint):
         'task_start_delay_report_preview', 'task_turnaround_report', 'task_turnaround_report_export',
         'task_turnaround_report_print', 'task_turnaround_report_preview', 'unexecuted_task_report',
         'unexecuted_task_report_export', 'driver_attendance_report', 'driver_attendance_daily_report',
-        'driver_attendance_tra_report', 'driver_attendance_list', 'red_task_list', 'red_task_summary',
-        'red_task_summary_detail', 'without_task_list', 'task_report_logbook_cover', 'task_report_logbook_view',
-        'task_report_logbook_view_all', 'task_report_list',
+        'driver_attendance_tra_report', 'driver_attendance_list', 'driver_attendance_mark',
+        'driver_attendance_pending', 'driver_attendance_missing_checkout', 'red_task_list',
+        'red_task_summary', 'red_task_summary_detail', 'without_task_list', 'task_report_logbook_cover',
+        'task_report_logbook_view', 'task_report_logbook_view_all', 'task_report_list',
+        'task_report_new', 'activity_log_report',
     }
     if endpoint in report_endpoints:
         try:
@@ -92,10 +122,13 @@ def resolve_nav_back(nav_from, default_url, default_label='Back'):
                     return url_for('module_hub', hub_slug=slug), 'Back'
             except Exception:
                 pass
-    if default_url:
+    if default_url and not _is_dashboard_url(default_url):
         return default_url, default_label
+    fb = default_back_url_for_endpoint(request.endpoint)
+    if fb:
+        return fb, default_label
     try:
-        return url_for('dashboard'), 'Back'
+        return url_for('reports_index'), 'Back'
     except Exception:
         return '/', default_label
 
@@ -104,45 +137,57 @@ def _href_from_nav_from(nav_from):
     if not nav_from:
         return None
     url, _ = resolve_nav_back(nav_from, None, 'Back')
-    if not url or url == HISTORY_BACK:
+    if not url or url == HISTORY_BACK or _is_dashboard_url(url):
         return None
     return url
 
 
 def _lock_nav_back(href, scope_endpoint):
-    """Save return URL once for this page workspace (filters/views do not change it)."""
-    if not href or href == HISTORY_BACK:
+    """Save return URL once for this report (filters/views do not change it)."""
+    if not href or href == HISTORY_BACK or _is_dashboard_url(href):
         return
     session[SESSION_NAV_BACK_HREF] = href
     if scope_endpoint:
         session[SESSION_NAV_BACK_SCOPE] = scope_endpoint
 
 
+def _resolve_origin_href(endpoint):
+    """Best back target for a report page — hub, Report Centre, or last hub/reports visit."""
+    nf = session.get('nav_from') or ''
+    href = _href_from_nav_from(nf)
+    if href:
+        return href
+    base = session.get(SESSION_NAV_RETURN_BASE)
+    if base and not _is_dashboard_url(base):
+        return base
+    ref = _safe_referrer_url()
+    if ref and _referrer_is_hub_or_reports(ref):
+        return ref
+    return default_back_url_for_endpoint(endpoint)
+
+
 def sync_nav_from_session():
-    """Remember where the user opened this page from; keep locked URL across filter/view."""
+    """On report open: lock where user came from. Hub/Report Centre store their URL for the next open."""
     nf = (request.args.get('nav_from') or request.form.get('nav_from') or '').strip()
-    if nf:
-        session['nav_from'] = nf
-        href = _href_from_nav_from(nf)
-        if not href:
-            href = default_back_url_for_endpoint(request.endpoint)
-        if not href:
-            try:
-                href = url_for('dashboard')
-            except Exception:
-                href = '/'
-        _lock_nav_back(href, request.endpoint)
-        return
 
     if request.endpoint == 'module_hub':
         slug = (request.view_args or {}).get('hub_slug')
         if slug:
             session['nav_from'] = f'hub:{slug}'
+        session[SESSION_NAV_RETURN_BASE] = request.url
+        session.pop(SESSION_NAV_BACK_HREF, None)
         session.pop(SESSION_NAV_BACK_SCOPE, None)
         return
 
     if request.endpoint == 'reports_index':
         session['nav_from'] = REPORTS_NAV_FROM
+        session[SESSION_NAV_RETURN_BASE] = request.url
+        session.pop(SESSION_NAV_BACK_HREF, None)
+        session.pop(SESSION_NAV_BACK_SCOPE, None)
+        return
+
+    if request.endpoint == 'dashboard':
+        session.pop(SESSION_NAV_BACK_HREF, None)
         session.pop(SESSION_NAV_BACK_SCOPE, None)
         return
 
@@ -150,43 +195,48 @@ def sync_nav_from_session():
     if not endpoint:
         return
 
-    locked_scope = session.get(SESSION_NAV_BACK_SCOPE)
-    if locked_scope == endpoint and session.get(SESSION_NAV_BACK_HREF):
+    # Click from hub/reports tile (?nav_from=...) — save origin immediately
+    if nf:
+        session['nav_from'] = nf
+        href = _href_from_nav_from(nf) or session.get(SESSION_NAV_RETURN_BASE)
+        if not href:
+            href = default_back_url_for_endpoint(endpoint)
+        if href:
+            _lock_nav_back(href, endpoint)
         return
 
-    href = _href_from_nav_from(session.get('nav_from') or '')
-    ref = _safe_referrer_url()
-    if ref:
-        ref_path = urlparse(ref).path
-        cur_path = urlparse(request.url).path
-        if ref_path != cur_path:
-            href = ref
-    if not href:
-        href = default_back_url_for_endpoint(endpoint)
-    if not href:
-        try:
-            href = url_for('dashboard')
-        except Exception:
-            href = '/'
-    _lock_nav_back(href, endpoint)
+    # Filter / View on same report — keep first locked URL
+    if session.get(SESSION_NAV_BACK_SCOPE) == endpoint and session.get(SESSION_NAV_BACK_HREF):
+        locked = session.get(SESSION_NAV_BACK_HREF)
+        if locked and not _is_dashboard_url(locked):
+            return
+
+    href = _resolve_origin_href(endpoint)
+    if href:
+        _lock_nav_back(href, endpoint)
 
 
 def _pick_final_back_url(default_url, nav_from):
-    """Always use locked session URL — never history.back()."""
+    """Always locked session URL; never dashboard or history.back()."""
     locked = session.get(SESSION_NAV_BACK_HREF)
-    if locked and locked != HISTORY_BACK:
+    if locked and not _is_dashboard_url(locked):
         return locked
 
-    if not default_url:
-        default_url = default_back_url_for_endpoint(request.endpoint)
-    url, _label = resolve_nav_back(nav_from, default_url, 'Back')
-    if url and url != HISTORY_BACK:
-        _lock_nav_back(url, request.endpoint)
-        return url
-    try:
-        return url_for('dashboard')
-    except Exception:
-        return '/'
+    href = _href_from_nav_from(nav_from or session.get('nav_from') or '')
+    if not href:
+        href = session.get(SESSION_NAV_RETURN_BASE)
+    if not href and default_url and not _is_dashboard_url(default_url):
+        href = default_url
+    if not href:
+        href = default_back_url_for_endpoint(request.endpoint)
+    if not href:
+        try:
+            href = url_for('reports_index')
+        except Exception:
+            href = '/'
+    if href and not _is_dashboard_url(href):
+        _lock_nav_back(href, request.endpoint)
+    return href
 
 
 def nav_back_context(default_url=None, default_label='Back', req=None, show_without_nav_from=True):
