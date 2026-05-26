@@ -833,22 +833,21 @@
     }
   }
 
+  function notifyGlobalPending() {
+    if (window.FleetGpsPendingUpload) window.FleetGpsPendingUpload.refresh();
+  }
+
   function savePendingCheckout(driverId, payload) {
     if (!driverId) return;
     localStorage.setItem(pendingStorageKey(driverId), JSON.stringify(payload));
-    startPendingAutoRetry();
+    notifyGlobalPending();
   }
 
   function clearPendingCheckout(driverId) {
     if (!driverId) return;
     localStorage.removeItem(pendingStorageKey(driverId));
-    stopPendingAutoRetry();
+    notifyGlobalPending();
   }
-
-  var PENDING_AUTO_RETRY_MS = 15000;
-  var pendingAutoRetryTimer = null;
-  var pendingRetryInFlight = false;
-  var pendingAutoRetryDebounce = null;
 
   function hasPendingCheckoutForSelected() {
     var driverId = selectedDriverId();
@@ -857,88 +856,36 @@
     return !!(pending && pending.photo_base64);
   }
 
-  function startPendingAutoRetry() {
-    if (pendingAutoRetryTimer || !hasPendingCheckoutForSelected()) return;
-    pendingAutoRetryTimer = setInterval(function() {
-      if (!hasPendingCheckoutForSelected()) {
-        stopPendingAutoRetry();
-        return;
-      }
-      retryPendingCheckoutUpload(true);
-    }, PENDING_AUTO_RETRY_MS);
-  }
-
-  function stopPendingAutoRetry() {
-    if (pendingAutoRetryTimer) {
-      clearInterval(pendingAutoRetryTimer);
-      pendingAutoRetryTimer = null;
-    }
-  }
-
-  function triggerPendingAutoRetrySoon() {
-    if (!hasPendingCheckoutForSelected()) return;
-    if (pendingAutoRetryDebounce) clearTimeout(pendingAutoRetryDebounce);
-    pendingAutoRetryDebounce = setTimeout(function() {
-      pendingAutoRetryDebounce = null;
-      if (!hasPendingCheckoutForSelected()) return;
-      startPendingAutoRetry();
-      retryPendingCheckoutUpload(true);
-    }, 400);
-  }
-
-  function setupPendingAutoRetryListeners() {
-    window.addEventListener('online', triggerPendingAutoRetrySoon);
-    if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App) {
-      window.Capacitor.Plugins.App.addListener('appStateChange', function(state) {
-        if (state && state.isActive) triggerPendingAutoRetrySoon();
-      });
-    }
-    document.addEventListener('visibilitychange', function() {
-      if (!document.hidden) triggerPendingAutoRetrySoon();
-    });
-  }
-
   function retryPendingCheckoutUpload(isAuto) {
     var driverId = selectedDriverId();
-    var pending = loadPendingCheckout(driverId);
-    if (!pending || !pending.photo_base64) {
-      stopPendingAutoRetry();
-      return Promise.resolve(false);
+    if (!hasPendingCheckoutForSelected()) return Promise.resolve(false);
+    if (!isAuto) setUploadStatus('Retry upload in progress…', 'info');
+    if (window.FleetGpsPendingUpload) {
+      return window.FleetGpsPendingUpload.retryDriver('checkout', driverId, isAuto).then(function(ok) {
+        if (ok) {
+          fetchHasGpsCheckin();
+          refreshCheckoutMediaPanel();
+          setUploadStatus(isAuto ? 'Check-out uploaded (auto-retry).' : 'Check-out successful — attendance complete.', 'success');
+        } else if (hasPendingCheckoutForSelected()) {
+          setUploadStatus('Upload still pending. Auto-retry continues in the background.', 'warning');
+          btnRetryPendingCheckout.classList.remove('d-none');
+        }
+        return ok;
+      });
     }
-    if (pendingRetryInFlight) return Promise.resolve(false);
-    pendingRetryInFlight = true;
-    if (!isAuto) {
-      setUploadStatus('Retry upload in progress...', 'info');
-    } else {
-      setUploadStatus('Auto retry: upload ho raha hai...', 'info');
-    }
-    return postCheckoutPayload(pending).then(function(res) {
+    return postCheckoutPayload(loadPendingCheckout(driverId)).then(function(res) {
       if (res.ok && res.body && res.body.ok) {
         clearPendingCheckout(driverId);
         fetchHasGpsCheckin();
         refreshCheckoutMediaPanel();
-        setUploadStatus(isAuto ? 'Check-out upload ho gaya (auto retry).' : 'Check-out successful — attendance complete.', 'success');
+        setUploadStatus('Check-out successful — attendance complete.', 'success');
         return true;
       }
-      var errMsg = gpsApiJsonMessage(res.body) || 'Upload failed.';
-      if (gpsAttendanceKeepPendingOnFailure(res)) {
-        setUploadStatus('Upload pending: ' + errMsg + (isAuto ? ' Auto retry jari hai.' : ' Neeche Retry karein.'), 'warning');
-        btnRetryPendingCheckout.classList.remove('d-none');
-        startPendingAutoRetry();
-      } else {
-        clearPendingCheckout(driverId);
-        fetchHasGpsCheckin();
-        refreshCheckoutMediaPanel();
-        setUploadStatus(errMsg, 'warning');
-      }
+      setUploadStatus('Upload failed. Try again.', 'warning');
       return false;
     }).catch(function() {
-      setUploadStatus('Upload pending: Network issue.' + (isAuto ? ' Auto retry jari hai.' : ' Neeche Retry karein.'), 'warning');
-      btnRetryPendingCheckout.classList.remove('d-none');
-      startPendingAutoRetry();
+      setUploadStatus('Network issue. Try again.', 'warning');
       return false;
-    }).finally(function() {
-      pendingRetryInFlight = false;
     });
   }
 
@@ -958,7 +905,6 @@
   function refreshCheckoutMediaPanel() {
     var driverId = selectedDriverId();
     if (!driverId) {
-      stopPendingAutoRetry();
       setMediaFallback('Driver select karein.');
       setUploadStatus('Upload status: Waiting for driver selection.', 'neutral');
       checkoutUploadMeta.textContent = '';
@@ -971,13 +917,12 @@
       checkoutPreviewImage.classList.remove('d-none');
       checkoutPreviewFallback.classList.add('d-none');
       if (checkoutPreviewTapHint) checkoutPreviewTapHint.classList.remove('d-none');
-      setUploadStatus('Upload pending: Network issue ki wajah se server par nahi gaya. Har 15 sec auto retry.', 'warning');
-      checkoutUploadMeta.textContent = 'Media: Local pending | Time: ' + (pending.captured_at || '-') + ' | Date: ' + currentDateDmy();
+      setUploadStatus('Upload pending — saved on this device only. Auto-retry every 15 seconds.', 'warning');
+      checkoutUploadMeta.textContent = 'Local pending | Time: ' + (pending.captured_at || '-') + ' | Date: ' + currentDateDmy();
       btnRetryPendingCheckout.classList.remove('d-none');
-      startPendingAutoRetry();
+      notifyGlobalPending();
       return;
     }
-    stopPendingAutoRetry();
     btnRetryPendingCheckout.classList.add('d-none');
     setUploadStatus('Upload status fetch ho raha hai...', 'info');
     fetch('{{ url_for("api_attendance_latest_gps_media") }}?kind=checkout&driver_id=' + encodeURIComponent(driverId) + '&attendance_date=' + encodeURIComponent(currentDateDmy()))
@@ -1337,7 +1282,7 @@
           var errMsg = gpsApiJsonMessage(res.body) || 'Server rejected upload.';
           if (gpsAttendanceKeepPendingOnFailure(res)) {
             savePendingCheckout(String(payload.driver_id), payload);
-            setUploadStatus('Upload pending: ' + errMsg + ' Neeche Retry karein.', 'warning');
+            setUploadStatus('Upload pending: ' + errMsg + ' Use Retry or wait for auto-retry.', 'warning');
             btnRetryPendingCheckout.classList.remove('d-none');
           } else {
             clearPendingCheckout(String(payload.driver_id));
@@ -1350,7 +1295,7 @@
       }).catch(function() {
         savePendingCheckout(String(payload.driver_id), payload);
         refreshCheckoutMediaPanel();
-        setUploadStatus('Upload pending: Network issue. Neeche Retry Upload karein.', 'warning');
+        setUploadStatus('Upload pending: Network issue. Auto-retry will continue.', 'warning');
         btnRetryPendingCheckout.classList.remove('d-none');
       }).finally(function() {
         document.getElementById('savingOverlay').style.display = 'none';
@@ -1370,7 +1315,10 @@
     retryPendingCheckoutUpload(false);
   });
 
-  setupPendingAutoRetryListeners();
+  document.addEventListener('fleet-gps-pending-changed', function() {
+    refreshCheckoutMediaPanel();
+    fetchHasGpsCheckin();
+  });
   refreshCheckoutMediaPanel();
 })();
 </script>

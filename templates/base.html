@@ -1563,7 +1563,7 @@
     <script src="{{ url_for('static', filename='js/legacy_android_gpu.js') }}" defer></script>
     {% block extra_head %}{% endblock %}
 </head>
-<body{% if request.endpoint == 'dashboard' %} class="page-dashboard fm-aurora-theme"{% elif request.endpoint == 'report_driver_profile_public' %} class="driver-profile-public-view"{% else %} class="fm-aurora-theme"{% endif %}>
+<body{% if request.endpoint == 'dashboard' %} class="page-dashboard fm-aurora-theme" data-fleet-page="dashboard"{% elif request.endpoint == 'report_driver_profile_public' %} class="driver-profile-public-view"{% else %} class="fm-aurora-theme"{% endif %}>
 <script>if(localStorage.getItem('fleetDarkMode')==='on'){document.body.classList.remove('fm-aurora-theme');document.body.classList.add('dark-mode');}</script>
 <div id="topLoadBar"></div>
 
@@ -1740,6 +1740,133 @@
     background: rgba(51, 65, 85, 0.5);
     border-color: rgba(71, 85, 105, 0.6);
     color: #cbd5e1;
+  }
+  /* GPS pending upload banner (global) */
+  .fleet-gps-pending-banner {
+    margin: 0 0 16px;
+    padding: 14px 16px;
+    border-radius: 16px;
+    border: 1px solid transparent;
+    box-shadow: 0 4px 24px rgba(15, 23, 42, 0.08);
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    position: relative;
+    overflow: hidden;
+    animation: fleetGpsBannerIn 0.35s ease both;
+  }
+  .fleet-gps-pending-banner::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    opacity: 0.45;
+    pointer-events: none;
+    background: radial-gradient(120% 80% at 0% 0%, rgba(255,255,255,0.9) 0%, transparent 55%);
+  }
+  .fleet-gps-pending--warn {
+    background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 48%, #fde68a 100%);
+    border-color: rgba(245, 158, 11, 0.45);
+    color: #92400e;
+  }
+  .fleet-gps-pending--retry {
+    background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 55%, #bfdbfe 100%);
+    border-color: rgba(59, 130, 246, 0.4);
+    color: #1e40af;
+  }
+  .fleet-gps-pending--success {
+    background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 50%, #a7f3d0 100%);
+    border-color: rgba(16, 185, 129, 0.45);
+    color: #065f46;
+  }
+  .fleet-gps-pending-banner__icon {
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.15rem;
+    position: relative;
+    z-index: 1;
+  }
+  .fleet-gps-pending--warn .fleet-gps-pending-banner__icon {
+    background: rgba(245, 158, 11, 0.2);
+    color: #d97706;
+  }
+  .fleet-gps-pending--retry .fleet-gps-pending-banner__icon {
+    background: rgba(59, 130, 246, 0.18);
+    color: #2563eb;
+  }
+  .fleet-gps-pending--success .fleet-gps-pending-banner__icon {
+    background: rgba(16, 185, 129, 0.2);
+    color: #059669;
+  }
+  .fleet-gps-pending-banner__body {
+    flex: 1;
+    min-width: 0;
+    position: relative;
+    z-index: 1;
+  }
+  .fleet-gps-pending-banner__title {
+    font-weight: 700;
+    font-size: 0.92rem;
+    line-height: 1.3;
+    margin: 0 0 4px;
+  }
+  .fleet-gps-pending-banner__detail {
+    font-size: 0.78rem;
+    line-height: 1.45;
+    margin: 0;
+    opacity: 0.92;
+  }
+  .fleet-gps-pending-banner__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .fleet-gps-pending-banner__actions a {
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 5px 12px;
+    border-radius: 999px;
+    text-decoration: none;
+    border: 1px solid rgba(15, 23, 42, 0.12);
+    background: rgba(255, 255, 255, 0.65);
+    color: inherit;
+  }
+  .fleet-gps-pending--retry .fleet-gps-pending-banner__icon .spinner-border {
+    width: 1.1rem;
+    height: 1.1rem;
+    border-width: 2px;
+  }
+  body.dark-mode .fleet-gps-pending--warn {
+    background: linear-gradient(135deg, #422006 0%, #78350f 100%);
+    border-color: rgba(251, 191, 36, 0.35);
+    color: #fde68a;
+  }
+  body.dark-mode .fleet-gps-pending--retry {
+    background: linear-gradient(135deg, #1e3a5f 0%, #1e40af 100%);
+    border-color: rgba(96, 165, 250, 0.35);
+    color: #bfdbfe;
+  }
+  body.dark-mode .fleet-gps-pending--success {
+    background: linear-gradient(135deg, #064e3b 0%, #047857 100%);
+    border-color: rgba(52, 211, 153, 0.35);
+    color: #a7f3d0;
+  }
+  body.dark-mode .fleet-gps-pending-banner__actions a {
+    background: rgba(15, 23, 42, 0.35);
+    border-color: rgba(255, 255, 255, 0.12);
+    color: inherit;
+  }
+  @keyframes fleetGpsBannerIn {
+    from { opacity: 0; transform: translateY(-6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  html.capacitor-native .fleet-gps-pending-banner {
+    margin-top: 4px;
   }
 </style>
 <nav class="navbar navbar-dark bg-dark fixed-top px-3 shadow">
@@ -2003,6 +2130,26 @@
             </div>
         {% endif %}
     {% endwith %}
+    {% if can_see_page('driver_attendance_checkin') or can_see_page('driver_attendance_checkout') %}
+    <div id="fleetGpsPendingBanner" class="fleet-gps-pending-banner d-none" data-state="hidden" role="status" aria-live="polite">
+        <div class="fleet-gps-pending-banner__icon" data-role="icon-wrap">
+            <i class="bi bi-cloud-upload" data-role="icon-static"></i>
+            <span class="spinner-border spinner-border-sm d-none" data-role="icon-spin" role="status" aria-hidden="true"></span>
+        </div>
+        <div class="fleet-gps-pending-banner__body">
+            <p class="fleet-gps-pending-banner__title" data-role="title">Attendance upload</p>
+            <p class="fleet-gps-pending-banner__detail" data-role="detail"></p>
+            <div class="fleet-gps-pending-banner__actions d-none" data-role="action">
+                {% if can_see_page('driver_attendance_checkin') %}
+                <a href="{{ url_for('driver_attendance_checkin') }}" data-link="checkin">Open Check-in</a>
+                {% endif %}
+                {% if can_see_page('driver_attendance_checkout') %}
+                <a href="{{ url_for('driver_attendance_checkout') }}" data-link="checkout">Open Check-out</a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
     <style>
     /* ── AJAX Live-Search ─────────────────────────────────────────── */
 
@@ -8697,6 +8844,46 @@ window._dtPrintCustomize = function(title, color, icon) {
   setTimeout(function() {
     window.fleetSessionSounds.play('login');
   }, 120);
+})();
+</script>
+{% endif %}
+
+{% if can_see_page('driver_attendance_checkin') or can_see_page('driver_attendance_checkout') %}
+<script>
+window.__fleetGpsPendingConfig = {
+  checkinUrl: {{ url_for('api_attendance_gps_checkin_submit') | tojson }},
+  checkoutUrl: {{ url_for('api_attendance_gps_checkout_submit') | tojson }},
+  checkinPageUrl: {{ url_for('driver_attendance_checkin') | tojson }},
+  checkoutPageUrl: {{ url_for('driver_attendance_checkout') | tojson }}
+};
+</script>
+<script src="{{ url_for('static', filename='js/gps_attendance_pending_upload.js') }}?v=1"></script>
+<script>
+(function() {
+  function syncGpsBannerIcons() {
+    var banner = document.getElementById('fleetGpsPendingBanner');
+    if (!banner) return;
+    var state = banner.getAttribute('data-state') || 'hidden';
+    var spin = banner.querySelector('[data-role="icon-spin"]');
+    var icon = banner.querySelector('[data-role="icon-static"]');
+    var isRetry = state === 'retrying';
+    if (spin) spin.classList.toggle('d-none', !isRetry);
+    if (icon) {
+      icon.classList.toggle('d-none', isRetry);
+      if (state === 'success') icon.className = 'bi bi-check-circle-fill';
+      else if (state === 'pending' || state === 'retrying') icon.className = 'bi bi-exclamation-triangle-fill';
+      else icon.className = 'bi bi-cloud-upload';
+    }
+  }
+  document.addEventListener('fleet-gps-pending-changed', syncGpsBannerIcons);
+  var obs = new MutationObserver(syncGpsBannerIcons);
+  var b = document.getElementById('fleetGpsPendingBanner');
+  if (b) obs.observe(b, { attributes: true, attributeFilter: ['data-state', 'class'] });
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', syncGpsBannerIcons);
+  } else {
+    syncGpsBannerIcons();
+  }
 })();
 </script>
 {% endif %}
