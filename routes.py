@@ -32587,6 +32587,9 @@ def module_hub(hub_slug):
     )
 
 
+_ACTIVITY_LOG_MAX_DAYS = 10
+
+
 @app.route('/reports/activity-log')
 def activity_log_report():
     """Single report: (1) Login sessions + server-side activity, (2) Client activity with device ID & geolocation (lat/long, View on Map)."""
@@ -32596,58 +32599,96 @@ def activity_log_report():
     username_q = request.args.get('username', '').strip()
     device_id_q = request.args.get('device_id', '').strip()
 
-    # ─── 1. Login sessions (LoginLog + ActivityLog) ───
-    query_sessions = LoginLog.query.join(User).order_by(LoginLog.login_at.desc())
-    if date_from_s:
-        try:
-            df = datetime.strptime(date_from_s, '%Y-%m-%d').replace(tzinfo=timezone.utc)
-            query_sessions = query_sessions.filter(LoginLog.login_at >= df)
-        except ValueError:
-            pass
-    if date_to_s:
-        try:
-            dt = datetime.strptime(date_to_s + ' 23:59:59', '%Y-%m-%d %H:%M:%S').replace(tzinfo=timezone.utc)
-            query_sessions = query_sessions.filter(LoginLog.login_at <= dt)
-        except ValueError:
-            pass
-    if user_id_q:
-        query_sessions = query_sessions.filter(LoginLog.user_id == user_id_q)
-    if username_q:
-        flt = _multi_word_filter(username_q, User.username, User.full_name)
-        if flt is not None:
-            query_sessions = query_sessions.filter(flt)
-    sessions = query_sessions.limit(500).all()
-    log_ids = [s.id for s in sessions]
+    sessions = []
     activities_by_log = {}
-    if log_ids:
-        for a in ActivityLog.query.filter(ActivityLog.login_log_id.in_(log_ids)).order_by(ActivityLog.created_at.asc()).all():
-            activities_by_log.setdefault(a.login_log_id, []).append(a)
+    client_logs = []
+    report_ready = False
+    report_message = (
+        'Pehle <strong>Date From</strong> aur <strong>Date To</strong> select karein '
+        f'(zyada se zyada {_ACTIVITY_LOG_MAX_DAYS} din), phir <strong>Search</strong> dabayein. '
+        'Report tabhi load hogi.'
+    )
+    report_message_level = 'info'
 
-    # ─── 2. Client activity logs (device_id, lat/long, View on Map) ───
-    query_client = ClientActivityLog.query.join(User).order_by(ClientActivityLog.created_at.desc())
-    if date_from_s:
-        try:
-            df = datetime.strptime(date_from_s, '%Y-%m-%d').replace(tzinfo=timezone.utc)
-            query_client = query_client.filter(ClientActivityLog.created_at >= df)
-        except ValueError:
-            pass
-    if date_to_s:
-        try:
-            dt = datetime.strptime(date_to_s + ' 23:59:59', '%Y-%m-%d %H:%M:%S').replace(tzinfo=timezone.utc)
-            query_client = query_client.filter(ClientActivityLog.created_at <= dt)
-        except ValueError:
-            pass
-    if user_id_q:
-        query_client = query_client.filter(ClientActivityLog.user_id == user_id_q)
-    if device_id_q:
-        flt = _multi_word_filter(device_id_q, ClientActivityLog.device_id)
-        if flt is not None:
-            query_client = query_client.filter(flt)
-    if username_q:
-        flt = _multi_word_filter(username_q, User.username, User.full_name)
-        if flt is not None:
-            query_client = query_client.filter(flt)
-    client_logs = query_client.limit(1000).all()
+    date_from_dt = None
+    date_to_dt = None
+    if date_from_s or date_to_s:
+        if not date_from_s or not date_to_s:
+            report_message = (
+                f'Dono dates zaroori hain — Date From aur Date To (maximum {_ACTIVITY_LOG_MAX_DAYS} din).'
+            )
+            report_message_level = 'warning'
+        else:
+            try:
+                date_from_dt = datetime.strptime(date_from_s, '%Y-%m-%d').replace(tzinfo=timezone.utc)
+                date_to_dt = datetime.strptime(date_to_s + ' 23:59:59', '%Y-%m-%d %H:%M:%S').replace(
+                    tzinfo=timezone.utc
+                )
+                if date_to_dt < date_from_dt:
+                    report_message = 'Date To, Date From se pehle nahi ho sakti.'
+                    report_message_level = 'warning'
+                else:
+                    span_days = (date_to_dt.date() - date_from_dt.date()).days + 1
+                    if span_days > _ACTIVITY_LOG_MAX_DAYS:
+                        report_message = (
+                            f'Sirf {_ACTIVITY_LOG_MAX_DAYS} din ya us se kam ki range select karein '
+                            f'(aap ne {span_days} din select kiye).'
+                        )
+                        report_message_level = 'warning'
+                    else:
+                        report_ready = True
+                        report_message = None
+            except ValueError:
+                report_message = 'Dates sahi format mein hon (YYYY-MM-DD).'
+                report_message_level = 'warning'
+
+    if report_ready and date_from_dt and date_to_dt:
+        # ─── 1. Login sessions (LoginLog + ActivityLog) ───
+        query_sessions = (
+            LoginLog.query.join(User)
+            .filter(LoginLog.login_at >= date_from_dt, LoginLog.login_at <= date_to_dt)
+            .order_by(LoginLog.login_at.desc())
+        )
+        if user_id_q:
+            query_sessions = query_sessions.filter(LoginLog.user_id == user_id_q)
+        if username_q:
+            flt = _multi_word_filter(username_q, User.username, User.full_name)
+            if flt is not None:
+                query_sessions = query_sessions.filter(flt)
+        sessions = query_sessions.limit(500).all()
+        log_ids = [s.id for s in sessions]
+        if log_ids:
+            for a in (
+                ActivityLog.query.filter(
+                    ActivityLog.login_log_id.in_(log_ids),
+                    ActivityLog.created_at >= date_from_dt,
+                    ActivityLog.created_at <= date_to_dt,
+                )
+                .order_by(ActivityLog.created_at.asc())
+                .all()
+            ):
+                activities_by_log.setdefault(a.login_log_id, []).append(a)
+
+        # ─── 2. Client activity logs (device_id, lat/long, View on Map) ───
+        query_client = (
+            ClientActivityLog.query.join(User)
+            .filter(
+                ClientActivityLog.created_at >= date_from_dt,
+                ClientActivityLog.created_at <= date_to_dt,
+            )
+            .order_by(ClientActivityLog.created_at.desc())
+        )
+        if user_id_q:
+            query_client = query_client.filter(ClientActivityLog.user_id == user_id_q)
+        if device_id_q:
+            flt = _multi_word_filter(device_id_q, ClientActivityLog.device_id)
+            if flt is not None:
+                query_client = query_client.filter(flt)
+        if username_q:
+            flt = _multi_word_filter(username_q, User.username, User.full_name)
+            if flt is not None:
+                query_client = query_client.filter(flt)
+        client_logs = query_client.limit(1000).all()
 
     users_for_filter = User.query.order_by(User.username).all()
     return render_template(
@@ -32661,6 +32702,10 @@ def activity_log_report():
         user_id_q=user_id_q,
         username_q=username_q,
         device_id_q=device_id_q,
+        report_ready=report_ready,
+        report_message=report_message,
+        report_message_level=report_message_level,
+        activity_log_max_days=_ACTIVITY_LOG_MAX_DAYS,
     )
 
 
