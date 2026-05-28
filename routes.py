@@ -3638,6 +3638,25 @@ def notification_read(pk):
     return redirect(next_url)
 
 
+@app.route('/notification/<int:pk>/dismiss', methods=['POST'])
+def notification_dismiss(pk):
+    """Remove notification from this user's inbox (mark read / dismissed)."""
+    if not session.get('user_id'):
+        return jsonify({'ok': False, 'message': 'Not signed in.'}), 401
+    if not session.get('is_master') and not user_can_access(session.get('permissions') or [], 'notification_list'):
+        return jsonify({'ok': False, 'message': 'Permission denied.'}), 403
+    Notification.query.get_or_404(pk)
+    user_id = session.get('user_id')
+    nr = NotificationRead.query.filter_by(notification_id=pk, user_id=user_id).first()
+    if not nr:
+        nr = NotificationRead(notification_id=pk, user_id=user_id, read_at=pk_now())
+        db.session.add(nr)
+    else:
+        nr.read_at = pk_now()
+    db.session.commit()
+    return jsonify({'ok': True, 'message': 'Notification deleted.'})
+
+
 # ────────────────────────────────────────────────
 # Notifications (user-created broadcast; all users see and mark read)
 # ────────────────────────────────────────────────

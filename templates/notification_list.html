@@ -1,19 +1,97 @@
 {% extends "base.html" %}
 {% block title %}Notifications{% endblock %}
 {% block content %}
-<div class="container-fluid">
-  <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
-            {% from 'partials/nav_back_button.html' import nav_back_button %}
-        {{ nav_back_button() }}
-<h2 class="mb-0"><i class="bi bi-bell me-2 text-primary"></i>Notifications</h2>
+<style>
+  .fleet-notif-page { max-width: 720px; margin: 0 auto; }
+  .fleet-notif-stack { display: flex; flex-direction: column; gap: 12px; }
+  .fleet-notif-card {
+    position: relative;
+    border-radius: 16px;
+    overflow: hidden;
+    background: #fff;
+    box-shadow: 0 4px 24px rgba(15, 23, 42, 0.06);
+    border: 1px solid rgba(148, 163, 184, 0.25);
+  }
+  .fleet-notif-card--unread {
+    border-color: rgba(59, 130, 246, 0.45);
+    box-shadow: 0 6px 28px rgba(59, 130, 246, 0.12);
+  }
+  .fleet-notif-card__delete-bg {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 20px;
+    gap: 8px;
+    background: linear-gradient(90deg, transparent 0%, #ef4444 42%);
+    color: #fff;
+    font-weight: 600;
+    font-size: 0.85rem;
+    pointer-events: none;
+  }
+  .fleet-notif-card__track { position: relative; z-index: 1; background: inherit; will-change: transform; }
+  .fleet-notif-card__content { padding: 14px 16px; background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%); }
+  .fleet-notif-card--unread .fleet-notif-card__content {
+    background: linear-gradient(135deg, #eff6ff 0%, #f8fafc 100%);
+  }
+  .fleet-notif-card__top { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .fleet-notif-card__badge {
+    font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+    padding: 3px 8px; border-radius: 999px;
+  }
+  .fleet-notif-card__badge--info { background: #dbeafe; color: #1d4ed8; }
+  .fleet-notif-card__badge--success { background: #d1fae5; color: #047857; }
+  .fleet-notif-card__badge--warning { background: #fef3c7; color: #b45309; }
+  .fleet-notif-card__badge--danger { background: #fee2e2; color: #b91c1c; }
+  .fleet-notif-card__time { font-size: 0.72rem; color: #64748b; white-space: nowrap; }
+  .fleet-notif-card__title { font-size: 0.92rem; font-weight: 700; color: #0f172a; line-height: 1.35; }
+  .fleet-notif-card__message { font-size: 0.8rem; color: #475569; margin-top: 4px; line-height: 1.45; }
+  .fleet-notif-card__footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; }
+  .fleet-notif-card__link {
+    font-size: 0.78rem; font-weight: 600; color: #2563eb; text-decoration: none;
+    padding: 6px 12px; border-radius: 999px; background: rgba(37, 99, 235, 0.08);
+  }
+  .fleet-notif-delete-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    border: 1px solid rgba(239, 68, 68, 0.35); background: rgba(254, 242, 242, 0.9);
+    color: #dc2626; font-size: 0.75rem; font-weight: 600; padding: 6px 12px; border-radius: 999px;
+    cursor: pointer; transition: background 0.15s, transform 0.15s;
+  }
+  .fleet-notif-delete-btn:hover { background: #fee2e2; transform: translateY(-1px); }
+  body:not(.fleet-notif-mobile) .fleet-notif-delete-label { display: inline; }
+  .fleet-notif-card--removed { opacity: 0; transform: scale(0.96); transition: opacity 0.28s, transform 0.28s; }
+  .fleet-notif-toast-host {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    z-index: 10050; pointer-events: none;
+  }
+  .fleet-notif-toast {
+    background: #0f172a; color: #f8fafc; padding: 10px 18px; border-radius: 12px;
+    font-size: 0.82rem; font-weight: 600; box-shadow: 0 12px 40px rgba(0,0,0,0.25);
+    animation: fleetNotifToastIn 0.28s ease both;
+  }
+  .fleet-notif-toast--out { animation: fleetNotifToastOut 0.28s ease both; }
+  @keyframes fleetNotifToastIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes fleetNotifToastOut { from { opacity: 1; } to { opacity: 0; transform: translateY(6px); } }
+  body.dark-mode .fleet-notif-card { background: #1e293b; border-color: rgba(71, 85, 105, 0.6); }
+  body.dark-mode .fleet-notif-card__content { background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); }
+  body.dark-mode .fleet-notif-card__title { color: #f1f5f9; }
+  body.dark-mode .fleet-notif-card__message { color: #94a3b8; }
+</style>
+<div class="container-fluid fleet-notif-page">
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
+    {% from 'partials/nav_back_button.html' import nav_back_button %}
+    {{ nav_back_button() }}
+    <h2 class="mb-0"><i class="bi bi-bell me-2 text-primary"></i>Notifications</h2>
     {% if can_see_page('notification_add') %}
     <a href="{{ url_for('notification_add') }}" class="btn btn-primary btn-sm">
       <i class="bi bi-plus-circle me-1"></i>Add Notification
     </a>
     {% endif %}
   </div>
+  <p class="text-muted small mb-3">Mobile: swipe right to left to delete. Web &amp; mobile: use the Delete button.</p>
 
-  <div class="d-flex justify-content-end align-items-center mb-2">
+  <div class="d-flex justify-content-end align-items-center mb-3">
     <span class="text-muted small me-2">Per Page:</span>
     <select class="form-select form-select-sm" style="width:80px;" onchange="(function(v){var u=new URLSearchParams(window.location.search);u.set('per_page',v);u.set('page',1);window.location.search=u.toString();})(this.value)">
       <option value="10" {% if per_page == 10 %}selected{% endif %}>10</option>
@@ -22,55 +100,31 @@
       <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
     </select>
   </div>
-  <div class="card border-0 shadow-sm">
-    <div class="card-body p-0">
-      {% if notifications %}
-      <ul class="list-group list-group-flush">
-        {% for n in notifications %}
-        <li class="list-group-item d-flex justify-content-between align-items-start {% if n.id not in read_ids %}bg-light{% endif %}">
-          <div class="flex-grow-1">
-            <span class="badge bg-{{ n.notification_type or 'info' }} me-2">{{ n.notification_type or 'info' }}</span>
-            <strong>{{ n.title }}</strong>
-            {% if n.created_by %}<small class="text-muted ms-2">by {{ n.created_by.full_name or n.created_by.username }}</small>{% endif %}
-            {% if n.message %}<div class="text-muted small mt-1">{{ n.message }}</div>{% endif %}
-            {% if n.link %}
-            <a href="{{ n.link }}" class="btn btn-sm btn-outline-primary mt-2">{{ n.link_text or 'View' }}</a>
-            {% endif %}
-            <div class="small text-muted mt-1">{{ n.created_at.strftime('%d-%m-%Y %H:%M') if n.created_at else '' }}</div>
-          </div>
-          {% if n.id not in read_ids %}
-          <form action="{{ url_for('notification_read', pk=n.id) }}" method="POST" class="ms-2">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="hidden" name="next" value="{{ url_for('notification_list') }}">
-            <button type="submit" class="btn btn-sm btn-outline-success" title="Mark as read"><i class="bi bi-check2"></i></button>
-          </form>
-          {% else %}
-          <span class="badge bg-secondary">Read</span>
-          {% endif %}
-        </li>
-        {% endfor %}
-      </ul>
-      {% else %}
-      <div class="text-center py-5 text-muted">
-        <i class="bi bi-bell display-6"></i>
-        <p class="mt-2 mb-0">No notifications yet.{% if can_see_page('notification_add') %} <a href="{{ url_for('notification_add') }}">Add one</a> to create a notification.{% endif %}</p>
-      </div>
-      {% endif %}
-    <div class="card-footer bg-white border-top pt-2 pb-3 px-3">
-      <div class="d-flex justify-content-between align-items-center">
-        <small class="text-muted"><i class="bi bi-list-ul me-1"></i>Showing
-          {% if pagination %}{{ (pagination.page - 1) * per_page + 1 if notifications|length > 0 else 0 }} to {{ (pagination.page - 1) * per_page + notifications|length }} of {{ pagination.total }}{% else %}{{ '1' if notifications|length > 0 else '0' }} to {{ notifications|length }} of {{ notifications|length }}{% endif %} entries
-        </small>
-        {% if pagination and pagination.pages > 1 %}
-        <nav><ul class="pagination pagination-sm mb-0">
-          <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}"><a class="page-link" style="cursor:pointer" onclick="goPage({{ pagination.prev_num }})"><i class="bi bi-chevron-left"></i></a></li>
-          {% for p in pagination.iter_pages(left_edge=1,right_edge=1,left_current=2,right_current=2) %}{% if p %}<li class="page-item {% if p == pagination.page %}active{% endif %}"><a class="page-link" style="cursor:pointer" onclick="goPage({{ p }})">{{ p }}</a></li>{% else %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}{% endfor %}
-          <li class="page-item {% if not pagination.has_next %}disabled{% endif %}"><a class="page-link" style="cursor:pointer" onclick="goPage({{ pagination.next_num }})"><i class="bi bi-chevron-right"></i></a></li>
-        </ul></nav>
-        {% endif %}
-      </div>
-    </div>
-    </div>
+
+  {% if notifications %}
+  <div class="fleet-notif-stack" id="fleetNotifStack">
+    {% for n in notifications %}
+      {% include 'partials/notification_card.html' %}
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="text-center py-5 text-muted">
+    <i class="bi bi-bell display-6"></i>
+    <p class="mt-2 mb-0">No notifications yet.</p>
+  </div>
+  {% endif %}
+
+  <div class="d-flex justify-content-between align-items-center mt-4">
+    <small class="text-muted">
+      {% if pagination %}Showing {{ (pagination.page - 1) * per_page + 1 if notifications|length > 0 else 0 }}–{{ (pagination.page - 1) * per_page + notifications|length }} of {{ pagination.total }}{% endif %}
+    </small>
+    {% if pagination and pagination.pages > 1 %}
+    <nav><ul class="pagination pagination-sm mb-0">
+      <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}"><a class="page-link" style="cursor:pointer" onclick="goPage({{ pagination.prev_num }})"><i class="bi bi-chevron-left"></i></a></li>
+      {% for p in pagination.iter_pages(left_edge=1,right_edge=1,left_current=2,right_current=2) %}{% if p %}<li class="page-item {% if p == pagination.page %}active{% endif %}"><a class="page-link" style="cursor:pointer" onclick="goPage({{ p }})">{{ p }}</a></li>{% else %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}{% endfor %}
+      <li class="page-item {% if not pagination.has_next %}disabled{% endif %}"><a class="page-link" style="cursor:pointer" onclick="goPage({{ pagination.next_num }})"><i class="bi bi-chevron-right"></i></a></li>
+    </ul></nav>
+    {% endif %}
   </div>
 </div>
 <script>

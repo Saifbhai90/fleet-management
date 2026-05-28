@@ -114,6 +114,32 @@
     }
   }
 
+  function taskDateDmy() {
+    var inp = document.querySelector('#batchForm input[name="task_date"]') || document.querySelector('#filterForm input[name="date"]');
+    return (inp && inp.value) ? inp.value.trim() : '';
+  }
+
+  function vehicleIdForRow(rowId) {
+    var tr = document.querySelector('tr.task-row[data-vehicle-id="' + rowId + '"]');
+    return tr ? tr.getAttribute('data-vehicle-id') : String(rowId);
+  }
+
+  function vehicleNoForRow(rowId) {
+    var tr = document.querySelector('tr.task-row[data-vehicle-id="' + rowId + '"]');
+    return tr ? (tr.getAttribute('data-vehicle') || '') : '';
+  }
+
+  function queueOdometerPending(rowId, jpegDataUrl) {
+    if (!window.FleetGpsPendingUpload || !jpegDataUrl) return;
+    var vid = vehicleIdForRow(rowId);
+    window.FleetGpsPendingUpload.saveOdometerPending(vid, taskDateDmy(), {
+      photo_base64: jpegDataUrl,
+      vehicle_no: vehicleNoForRow(rowId),
+      vehicle_id: vid
+    });
+    if (window.FleetGpsPendingUpload.refresh) window.FleetGpsPendingUpload.refresh();
+  }
+
   function uploadJpeg(rowId, jpegDataUrl) {
     return fetch(UP, {
       method: 'POST',
@@ -126,8 +152,19 @@
         return { ok: r.ok, body: body };
       });
     }).then(function(res) {
-      if (!res.ok || !res.body.ok) throw new Error((res.body && res.body.message) || 'Upload failed');
+      if (!res.ok || !res.body.ok) {
+        queueOdometerPending(rowId, jpegDataUrl);
+        throw new Error((res.body && res.body.message) || 'Upload failed — saved on device, auto-retry will continue.');
+      }
+      if (window.FleetGpsPendingUpload) {
+        window.FleetGpsPendingUpload.clearOdometerPending(vehicleIdForRow(rowId), taskDateDmy());
+      }
       setRowPhotoUi(rowId, res.body.url);
+    }).catch(function(err) {
+      if (jpegDataUrl && (!err.message || err.message.indexOf('auto-retry') < 0)) {
+        queueOdometerPending(rowId, jpegDataUrl);
+      }
+      throw err;
     });
   }
 
@@ -243,6 +280,15 @@
       }
     });
   }
+  document.addEventListener('fleet-odometer-uploaded', function(e) {
+    var d = e.detail || {};
+    if (!d.vehicleId || !d.url) return;
+    var row = document.querySelector('tr.task-row[data-vehicle-id="' + d.vehicleId + '"]');
+    if (!row) return;
+    var inp = row.querySelector('.odom-url-input');
+    if (inp) setRowPhotoUi(inp.getAttribute('data-row'), d.url);
+  });
+
   window.taskEntrySetRowPhotoUi = setRowPhotoUi;
 })();
 </script>

@@ -1,12 +1,13 @@
 /**
- * Global GPS check-in / check-out pending upload queue (localStorage).
- * Auto-retry, top banner, works on dashboard and all pages.
+ * Global R2 pending upload queue (localStorage): GPS check-in/out + task odometer photos.
+ * Auto-retry, top banner, per-record error lines only.
  */
 (function (global) {
   'use strict';
 
   var CHECKIN_PREFIX = 'gps-attendance:checkin:';
   var CHECKOUT_PREFIX = 'gps-attendance:checkout:';
+  var ODOMETER_PREFIX = 'task-odometer:';
   var RETRY_MS = 15000;
   var retryTimer = null;
   var retryInFlight = false;
@@ -40,9 +41,16 @@
   }
 
   function parseStorageKey(key) {
-    var m = String(key || '').match(/^gps-attendance:(checkin|checkout):(\d{2}-\d{2}-\d{4}):(.+)$/);
-    if (!m) return null;
-    return { kind: m[1], date: m[2], driverId: m[3], key: key };
+    var s = String(key || '');
+    var m = s.match(/^gps-attendance:(checkin|checkout):(\d{2}-\d{2}-\d{4}):(.+)$/);
+    if (m) {
+      return { kind: m[1], date: m[2], entityId: m[3], driverId: m[3], key: key };
+    }
+    m = s.match(/^task-odometer:(\d{2}-\d{2}-\d{4}):(.+)$/);
+    if (m) {
+      return { kind: 'odometer', date: m[1], entityId: m[2], vehicleId: m[2], key: key };
+    }
+    return null;
   }
 
   function listAllPending() {
@@ -51,7 +59,9 @@
       for (var i = 0; i < localStorage.length; i++) {
         var key = localStorage.key(i);
         if (!key) continue;
-        if (key.indexOf(CHECKIN_PREFIX) !== 0 && key.indexOf(CHECKOUT_PREFIX) !== 0) continue;
+        if (key.indexOf(CHECKIN_PREFIX) !== 0 && key.indexOf(CHECKOUT_PREFIX) !== 0 && key.indexOf(ODOMETER_PREFIX) !== 0) {
+          continue;
+        }
         var meta = parseStorageKey(key);
         if (!meta) continue;
         var raw = localStorage.getItem(key);
@@ -67,12 +77,36 @@
           kind: meta.kind,
           date: meta.date,
           driverId: meta.driverId,
+          vehicleId: meta.vehicleId,
+          entityId: meta.entityId,
           key: key,
           payload: payload,
         });
       }
     } catch (e) { /* private mode */ }
     return out;
+  }
+
+  function itemLabel(item) {
+    var p = item.payload || {};
+    if (item.kind === 'checkin') {
+      return 'Check-in photo' + (p.driver_name ? ' — ' + p.driver_name : '');
+    }
+    if (item.kind === 'checkout') {
+      return 'Check-out photo' + (p.driver_name ? ' — ' + p.driver_name : '');
+    }
+    if (item.kind === 'odometer') {
+      return 'Odometer photo' + (p.vehicle_no ? ' — ' + p.vehicle_no : '');
+    }
+    return 'Record upload pending';
+  }
+
+  function pendingDetailHtml(items) {
+    if (!items.length) return '';
+    var lines = items.map(function (it) {
+      return '<li>' + itemLabel(it) + ' — <strong>not uploaded yet</strong> (auto-retry active)</li>';
+    });
+    return '<ul class="fleet-gps-pending-banner__list mb-0 ps-3">' + lines.join('') + '</ul>';
   }
 
   function keepPendingOnFailure(res, kind) {
@@ -82,8 +116,10 @@
     if (res.status === 400 || res.status === 404) {
       var block = ['maximum', 'pehle', 'ho chuka', 'allowed', 'duty off', 'pending'];
       if (kind === 'checkin') block.push('check-out');
-      else {
+      else if (kind === 'checkout') {
         block.push('check-in', 'nahi mila');
+      } else if (kind === 'odometer') {
+        block = ['permission', 'invalid', 'csrf'];
       }
       for (var j = 0; j < block.length; j++) {
         if (msg.indexOf(block[j]) >= 0) return false;
@@ -94,7 +130,10 @@
 
   function postPayload(kind, payload) {
     var c = cfg();
-    var url = kind === 'checkin' ? c.checkinUrl : c.checkoutUrl;
+    var url;
+    if (kind === 'checkin') url = c.checkinUrl;
+    else if (kind === 'checkout') url = c.checkoutUrl;
+    else if (kind === 'odometer') url = c.odometerUploadUrl;
     if (!url) return Promise.reject(new Error('missing_url'));
     return fetch(url, {
       method: 'POST',
@@ -115,10 +154,29 @@
     });
   }
 
+  function dispatchOdometerUploaded(vehicleId, url) {
+    try {
+      document.dispatchEvent(new CustomEvent('fleet-odometer-uploaded', {
+        detail: { vehicleId: String(vehicleId), url: url },
+      }));
+    } catch (e) {
+      var ev = document.createEvent('CustomEvent');
+      ev.initCustomEvent('fleet-odometer-uploaded', true, true, { vehicleId: String(vehicleId), url: url });
+      document.dispatchEvent(ev);
+    }
+  }
+
   function retryItem(item) {
-    return postPayload(item.kind, item.payload).then(function (res) {
+    var body = item.payload;
+    if (item.kind === 'odometer') {
+      body = { photo_base64: item.payload.photo_base64 };
+    }
+    return postPayload(item.kind, body).then(function (res) {
       if (res.ok && res.body && res.body.ok) {
         localStorage.removeItem(item.key);
+        if (item.kind === 'odometer' && res.body.url) {
+          dispatchOdometerUploaded(item.vehicleId || item.entityId, res.body.url);
+        }
         return { ok: true, kind: item.kind };
       }
       if (!keepPendingOnFailure(res, item.kind)) {
@@ -145,33 +203,23 @@
     return p === '/' || p === '/dashboard' || document.body.getAttribute('data-fleet-page') === 'dashboard';
   }
 
-  function isNativeApp() {
-    return !!(global.Capacitor && global.Capacitor.isNativePlatform && global.Capacitor.isNativePlatform());
-  }
-
   function pendingSummary(items) {
     var hasIn = false;
     var hasOut = false;
+    var hasOdom = false;
     items.forEach(function (it) {
       if (it.kind === 'checkin') hasIn = true;
-      else hasOut = true;
+      else if (it.kind === 'checkout') hasOut = true;
+      else hasOdom = true;
     });
-    if (hasIn && hasOut) {
-      return {
-        title: 'Check-in & check-out uploads pending',
-        detail: items.length + ' record(s) waiting to reach the server.',
-      };
-    }
-    if (hasIn) {
-      return {
-        title: 'Check-in photo not uploaded',
-        detail: 'Your check-in is saved on this device only until upload completes.',
-      };
-    }
-    return {
-      title: 'Check-out photo not uploaded',
-      detail: 'Your check-out is saved on this device only until upload completes.',
-    };
+    var parts = [];
+    if (hasIn) parts.push('check-in');
+    if (hasOut) parts.push('check-out');
+    if (hasOdom) parts.push('odometer');
+    var title = parts.length > 1
+      ? 'Uploads pending (' + parts.join(', ') + ')'
+      : (hasOdom ? 'Odometer photo not uploaded' : (hasIn ? 'Check-in photo not uploaded' : 'Check-out photo not uploaded'));
+    return { title: title };
   }
 
   function getBannerEl() {
@@ -198,33 +246,48 @@
     if (state === 'success') {
       el.classList.add('fleet-gps-pending--success');
       if (titleEl) titleEl.textContent = 'All records uploaded successfully';
-      if (detailEl) detailEl.textContent = 'GPS attendance photos are synced with the server.';
+      if (detailEl) {
+        detailEl.textContent = '';
+        detailEl.innerHTML = '';
+        detailEl.classList.add('d-none');
+      }
       if (actionEl) actionEl.classList.add('d-none');
       return;
     }
 
+    if (detailEl) detailEl.classList.remove('d-none');
+
     if (state === 'retrying') {
       el.classList.add('fleet-gps-pending--retry');
-      if (titleEl) titleEl.textContent = opts.title || 'Uploading attendance…';
-      if (detailEl) detailEl.textContent = opts.detail || 'Please keep mobile data or Wi‑Fi on.';
+      if (titleEl) titleEl.textContent = opts.title || 'Uploading…';
+      if (detailEl) {
+        var retryItems = opts.items || listAllPending();
+        if (retryItems.length) {
+          detailEl.innerHTML = pendingDetailHtml(retryItems);
+        } else {
+          detailEl.textContent = opts.detail || 'Please keep mobile data or Wi‑Fi on.';
+        }
+      }
       if (actionEl) actionEl.classList.remove('d-none');
       return;
     }
 
     el.classList.add('fleet-gps-pending--warn');
-    var summary = pendingSummary(opts.items || listAllPending());
+    var items = opts.items || listAllPending();
+    var summary = pendingSummary(items);
     if (titleEl) titleEl.textContent = opts.title || summary.title;
     if (detailEl) {
-      detailEl.textContent = opts.detail || (summary.detail + ' Auto-retry every 15 seconds.');
+      detailEl.innerHTML = pendingDetailHtml(items);
     }
     if (actionEl) {
       actionEl.classList.remove('d-none');
       var linkIn = actionEl.querySelector('[data-link="checkin"]');
       var linkOut = actionEl.querySelector('[data-link="checkout"]');
+      var linkTask = actionEl.querySelector('[data-link="task"]');
       var c = cfg();
-      var items = opts.items || listAllPending();
       var hasIn = items.some(function (x) { return x.kind === 'checkin'; });
       var hasOut = items.some(function (x) { return x.kind === 'checkout'; });
+      var hasOdom = items.some(function (x) { return x.kind === 'odometer'; });
       if (linkIn) {
         linkIn.classList.toggle('d-none', !hasIn || !c.checkinPageUrl);
         if (c.checkinPageUrl) linkIn.setAttribute('href', c.checkinPageUrl);
@@ -232,6 +295,10 @@
       if (linkOut) {
         linkOut.classList.toggle('d-none', !hasOut || !c.checkoutPageUrl);
         if (c.checkoutPageUrl) linkOut.setAttribute('href', c.checkoutPageUrl);
+      }
+      if (linkTask) {
+        linkTask.classList.toggle('d-none', !hasOdom || !c.taskEntryPageUrl);
+        if (c.taskEntryPageUrl) linkTask.setAttribute('href', c.taskEntryPageUrl);
       }
     }
   }
@@ -267,10 +334,8 @@
     }
     if (retryInFlight) return Promise.resolve([]);
     retryInFlight = true;
-    var summary = pendingSummary(items);
     setBannerState('retrying', {
-      title: isAuto ? 'Auto-retry: uploading attendance…' : 'Retrying upload…',
-      detail: summary.detail,
+      title: isAuto ? 'Auto-retry: uploading…' : 'Retrying upload…',
       items: items,
     });
 
@@ -339,16 +404,35 @@
       });
     }
     global.addEventListener('storage', function (e) {
-      if (!e.key || e.key.indexOf('gps-attendance:') !== 0) return;
+      if (!e.key) return;
+      if (e.key.indexOf('gps-attendance:') !== 0 && e.key.indexOf('task-odometer:') !== 0) return;
       refreshBanner();
       if (listAllPending().length) startGlobalAutoRetry();
       else stopGlobalAutoRetry();
     });
   }
 
+  function odometerStorageKey(taskDate, vehicleId) {
+    return ODOMETER_PREFIX + (taskDate || currentDateDmy()) + ':' + String(vehicleId || '');
+  }
+
+  function saveOdometerPending(vehicleId, taskDate, payload) {
+    if (!vehicleId || !payload || !payload.photo_base64) return;
+    localStorage.setItem(odometerStorageKey(taskDate, vehicleId), JSON.stringify(payload));
+    triggerSoon();
+  }
+
+  function clearOdometerPending(vehicleId, taskDate) {
+    if (!vehicleId) return;
+    localStorage.removeItem(odometerStorageKey(taskDate, vehicleId));
+    refreshBanner();
+    dispatchChanged();
+  }
+
   function init() {
     var el = getBannerEl();
-    if (!el || !cfg().checkinUrl) return;
+    var c = cfg();
+    if (!el || (!c.checkinUrl && !c.odometerUploadUrl)) return;
     setupListeners();
     refreshBanner();
     if (listAllPending().length) {
@@ -399,6 +483,8 @@
     retryAll: retryAllPending,
     retryDriver: retryDriver,
     listPending: listAllPending,
+    saveOdometerPending: saveOdometerPending,
+    clearOdometerPending: clearOdometerPending,
     init: init,
     stop: stopGlobalAutoRetry,
   };

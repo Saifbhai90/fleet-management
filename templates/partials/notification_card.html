@@ -1,0 +1,23 @@
+{# Modern notification card — swipe dismiss (mobile) + delete button. Expects: n; optional read_ids #}
+{% set _read_ids = read_ids if read_ids is defined else [] %}
+<div class="fleet-notif-card{% if n.id not in _read_ids %} fleet-notif-card--unread{% endif %}" data-notification-id="{{ n.id }}">
+  <div class="fleet-notif-card__delete-bg" aria-hidden="true"><i class="bi bi-trash3"></i> Delete</div>
+  <div class="fleet-notif-card__track">
+    <div class="fleet-notif-card__content">
+      <div class="fleet-notif-card__top">
+        <span class="fleet-notif-card__badge fleet-notif-card__badge--{{ n.notification_type or 'info' }}">{{ n.notification_type or 'info' }}</span>
+        <span class="fleet-notif-card__time">{{ n.created_at.strftime('%d-%m-%Y %H:%M') if n.created_at else '' }}</span>
+      </div>
+      <div class="fleet-notif-card__title">{{ n.title }}</div>
+      {% if n.message %}<div class="fleet-notif-card__message">{{ n.message }}</div>{% endif %}
+      <div class="fleet-notif-card__footer">
+        {% if n.link %}
+        <a href="{{ url_for('notification_read', pk=n.id) }}?next={{ n.link | urlencode }}" class="fleet-notif-card__link">Open</a>
+        {% endif %}
+        <button type="button" class="fleet-notif-delete-btn" title="Delete notification" aria-label="Delete notification">
+          <i class="bi bi-trash3"></i><span class="fleet-notif-delete-label">Delete</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
