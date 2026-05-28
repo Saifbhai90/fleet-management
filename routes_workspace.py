@@ -4139,7 +4139,8 @@ def workspace_mpg_report():
 
     districts = District.query.order_by(District.name.asc()).all()
     projects = Project.query.order_by(Project.name.asc()).all()
-    vehicles = Vehicle.query.order_by(Vehicle.vehicle_no.asc()).all()
+    from vehicle_sort_utils import vehicle_order_by
+    vehicles = Vehicle.query.order_by(*vehicle_order_by()).all()
     district_obj = next((d for d in districts if int(d.id) == int(district_id)), None) if district_id else None
     project_obj = next((p for p in projects if int(p.id) == int(project_id)), None) if project_id else None
     selected_district_name = district_obj.name if district_obj else "All Districts"

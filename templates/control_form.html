@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}
 {% set _tab = request.args.get('settings_tab', 'attendance') %}
-{% if _tab == 'freeze' %}Freeze Data Control{% elif _tab == 'oil_limits' %}Oil Change Limits{% elif _tab == 'accounting_maintenance' %}Accounting Maintenance{% elif _tab == 'daily_task_entry' %}New Task Entry{% else %}Attendance Time Control{% endif %}
+{% if _tab == 'freeze' %}Freeze Data Control{% elif _tab == 'oil_limits' %}Oil Change Limits{% elif _tab == 'accounting_maintenance' %}Accounting Maintenance{% elif _tab == 'daily_task_entry' %}New Task Entry{% elif _tab == 'vehicle_sort' %}Vehicle Sort Order{% else %}Attendance Time Control{% endif %}
 {% endblock %}
 
 {% block content %}
@@ -21,6 +21,9 @@
 {% elif active_tab == 'daily_task_entry' %}
   {% set page_title = 'New Task Entry — Rules' %}
   {% set page_subtitle = 'Batch form par Close−Start (KM driven) validation aur Odoo meter policy yahan set hoti hai.' %}
+{% elif active_tab == 'vehicle_sort' %}
+  {% set page_title = 'Project-wise Vehicle Sort Order' %}
+  {% set page_subtitle = 'Har project ke vehicles ki default list order yahan set karein. Dropdowns, reports aur New Task Entry sab is order mein vehicles dikhayenge (khali sort = vehicle number).' %}
 {% endif %}
 <div class="container-fluid">
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
@@ -41,7 +44,7 @@
   <ul class="nav nav-pills mb-3" id="settingsMainTabs">
     {% if fc_tab.get('attendance') %}
     <li class="nav-item">
-      <button type="button" class="nav-link {% if active_tab not in ['freeze', 'oil_limits', 'accounting_maintenance', 'daily_task_entry'] %}active{% endif %}" data-settings-tab="attendance">
+      <button type="button" class="nav-link {% if active_tab not in ['freeze', 'oil_limits', 'accounting_maintenance', 'daily_task_entry', 'vehicle_sort'] %}active{% endif %}" data-settings-tab="attendance">
         <i class="bi bi-clock-history me-1"></i>Attendance Control
       </button>
     </li>
@@ -67,6 +70,13 @@
       </button>
     </li>
     {% endif %}
+    {% if fc_tab.get('vehicle_sort') %}
+    <li class="nav-item">
+      <button type="button" class="nav-link {% if active_tab == 'vehicle_sort' %}active{% endif %}" data-settings-tab="vehicle_sort">
+        <i class="bi bi-sort-numeric-down me-1"></i>Vehicle Sort Order
+      </button>
+    </li>
+    {% endif %}
     {% if fc_tab.get('accounting_maintenance') %}
     <li class="nav-item">
       <button type="button" class="nav-link {% if active_tab == 'accounting_maintenance' %}active{% endif %}" data-settings-tab="accounting_maintenance">
@@ -76,7 +86,7 @@
     {% endif %}
   </ul>
 
-  <div id="attendanceControlPane" {% if active_tab in ['freeze', 'oil_limits', 'accounting_maintenance', 'daily_task_entry'] or not fc_tab.get('attendance') %}style="display:none"{% endif %}>
+  <div id="attendanceControlPane" {% if active_tab in ['freeze', 'oil_limits', 'accounting_maintenance', 'daily_task_entry', 'vehicle_sort'] or not fc_tab.get('attendance') %}style="display:none"{% endif %}>
 
   <!-- ═══════════════ GLOBAL DEFAULT ═══════════════ -->
   <div class="row mb-4">
@@ -796,6 +806,80 @@
 </div>
 {% endif %}
 
+{% if fc_tab.get('vehicle_sort') %}
+<div id="vehicleSortPane" {% if active_tab != 'vehicle_sort' %}style="display:none"{% endif %}>
+  <div class="row mb-4">
+    <div class="col-lg-10">
+      <div class="card shadow-sm border-0 rounded-3">
+        <div class="card-header text-white py-3" style="background: linear-gradient(135deg, #1d4ed8 0%, #2563eb 100%);">
+          <h5 class="mb-0"><i class="bi bi-sort-numeric-down me-2"></i>Project-wise Vehicle Sort Order</h5>
+        </div>
+        <div class="card-body">
+          <form method="get" action="{{ url_for('form_control') }}" class="row g-3 align-items-end mb-4">
+            <input type="hidden" name="settings_tab" value="vehicle_sort">
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Project</label>
+              <select name="project_id" class="form-select" onchange="this.form.submit()">
+                {% for p in projects %}
+                <option value="{{ p.id }}" {% if vehicle_sort_project_id == p.id %}selected{% endif %}>{{ p.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-6">
+              <div class="form-text">Upar ↑ / neeche ↓ se order badlein, phir Save. Jis project par set nahi kiya — vehicle number se sort.</div>
+            </div>
+          </form>
+
+          {% if vehicle_sort_project_id %}
+          <form method="post" action="{{ url_for('form_control', settings_tab='vehicle_sort', project_id=vehicle_sort_project_id) }}" id="vehicleSortForm">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="save_vehicle_sort_order">
+            <input type="hidden" name="project_id" value="{{ vehicle_sort_project_id }}">
+            <div class="table-responsive mb-3">
+              <table class="table table-sm table-bordered align-middle mb-0" id="vehicleSortTable">
+                <thead class="table-light">
+                  <tr>
+                    <th style="width:4rem;">#</th>
+                    <th>Vehicle No</th>
+                    <th>Type</th>
+                    <th>District</th>
+                    <th style="width:7rem;" class="text-center">Move</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for v in vehicle_sort_rows %}
+                  <tr data-vehicle-id="{{ v.id }}">
+                    <td class="text-muted row-num">{{ loop.index }}</td>
+                    <td class="fw-semibold">{{ v.vehicle_no }}</td>
+                    <td>{{ v.vehicle_type or '—' }}</td>
+                    <td>{{ v.district.name if v.district else '—' }}</td>
+                    <td class="text-center text-nowrap">
+                      <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 vehicle-sort-up" title="Upar" aria-label="Upar"><i class="bi bi-arrow-up"></i></button>
+                      <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 vehicle-sort-down" title="Neeche" aria-label="Neeche"><i class="bi bi-arrow-down"></i></button>
+                    </td>
+                  </tr>
+                  {% else %}
+                  <tr>
+                    <td colspan="5" class="text-center text-muted py-3">Is project par koi vehicle assign nahi.</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            {% if vehicle_sort_rows %}
+            <button type="submit" class="btn btn-primary"><i class="bi bi-save me-1"></i>Save Sort Order</button>
+            {% endif %}
+          </form>
+          {% else %}
+          <p class="text-muted mb-0">Pehle project select karein.</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
 {% if fc_tab.get('accounting_maintenance') %}
 <div id="accountingMaintenancePane" {% if active_tab != 'accounting_maintenance' %}style="display:none"{% endif %}>
   <div class="row mb-4">
@@ -847,12 +931,14 @@ document.addEventListener('DOMContentLoaded', function() {
   const freezePane = document.getElementById('freezeControlPane');
   const oilPane = document.getElementById('oilLimitsPane');
   const dailyTaskPane = document.getElementById('dailyTaskEntryPane');
+  const vehicleSortPane = document.getElementById('vehicleSortPane');
   const accountingPane = document.getElementById('accountingMaintenancePane');
   function hideAllPanes() {
     if (attendancePane) attendancePane.style.display = 'none';
     if (freezePane) freezePane.style.display = 'none';
     if (oilPane) oilPane.style.display = 'none';
     if (dailyTaskPane) dailyTaskPane.style.display = 'none';
+    if (vehicleSortPane) vehicleSortPane.style.display = 'none';
     if (accountingPane) accountingPane.style.display = 'none';
   }
   tabBtns.forEach(function(btn){
@@ -872,6 +958,10 @@ document.addEventListener('DOMContentLoaded', function() {
         hideAllPanes();
         if (dailyTaskPane) dailyTaskPane.style.display = '';
         history.replaceState({}, '', '{{ url_for("form_control") }}?settings_tab=daily_task_entry');
+      } else if (t === 'vehicle_sort') {
+        hideAllPanes();
+        if (vehicleSortPane) vehicleSortPane.style.display = '';
+        history.replaceState({}, '', '{{ url_for("form_control") }}?settings_tab=vehicle_sort');
       } else if (t === 'accounting_maintenance') {
         hideAllPanes();
         if (accountingPane) accountingPane.style.display = '';
@@ -897,6 +987,44 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   scopeSel.addEventListener('change', toggleFields);
   toggleFields();
+
+  const vehicleSortForm = document.getElementById('vehicleSortForm');
+  const vehicleSortTable = document.getElementById('vehicleSortTable');
+  function refreshVehicleSortRowNums() {
+    if (!vehicleSortTable) return;
+    vehicleSortTable.querySelectorAll('tbody tr[data-vehicle-id]').forEach(function(tr, idx) {
+      var cell = tr.querySelector('.row-num');
+      if (cell) cell.textContent = String(idx + 1);
+    });
+  }
+  if (vehicleSortTable) {
+    vehicleSortTable.addEventListener('click', function(ev) {
+      var btn = ev.target.closest('.vehicle-sort-up, .vehicle-sort-down');
+      if (!btn) return;
+      var tr = btn.closest('tr[data-vehicle-id]');
+      if (!tr) return;
+      var tbody = tr.parentNode;
+      if (btn.classList.contains('vehicle-sort-up') && tr.previousElementSibling) {
+        tbody.insertBefore(tr, tr.previousElementSibling);
+      } else if (btn.classList.contains('vehicle-sort-down') && tr.nextElementSibling) {
+        tbody.insertBefore(tr.nextElementSibling, tr);
+      }
+      refreshVehicleSortRowNums();
+    });
+  }
+  if (vehicleSortForm) {
+    vehicleSortForm.addEventListener('submit', function() {
+      vehicleSortForm.querySelectorAll('input[name="vehicle_sort_ids[]"]').forEach(function(el) { el.remove(); });
+      if (!vehicleSortTable) return;
+      vehicleSortTable.querySelectorAll('tbody tr[data-vehicle-id]').forEach(function(tr) {
+        var inp = document.createElement('input');
+        inp.type = 'hidden';
+        inp.name = 'vehicle_sort_ids[]';
+        inp.value = tr.getAttribute('data-vehicle-id');
+        vehicleSortForm.appendChild(inp);
+      });
+    });
+  }
 
   const freezeMatrixSearch = document.getElementById('freezeMatrixSearch');
   const freezeMatrixBody = document.getElementById('freezeMatrixBody');

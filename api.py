@@ -643,7 +643,8 @@ def mobile_vehicles():
             Vehicle.vehicle_no.ilike(like) |
             Vehicle.model.ilike(like)
         )
-    pagination = q.order_by(Vehicle.vehicle_no).paginate(page=page, per_page=per_page, error_out=False)
+    from vehicle_sort_utils import vehicle_order_by
+    pagination = q.order_by(*vehicle_order_by()).paginate(page=page, per_page=per_page, error_out=False)
     return _ok(
         [{'id': v.id, 'vehicle_no': v.vehicle_no, 'model': v.model,
           'vehicle_type': v.vehicle_type, 'district_id': v.district_id,

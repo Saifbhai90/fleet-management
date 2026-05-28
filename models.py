@@ -266,6 +266,9 @@ class Vehicle(db.Model):
     remarks = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=pk_now)
 
+    # Per-project display order (Settings → Vehicle Sort Order); null = fallback to vehicle_no
+    project_sort_order = db.Column(db.Integer, nullable=True, index=True)
+
     # Assignment Links
     project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=True, index=True)
     district_id = db.Column(db.Integer, db.ForeignKey('district.id'), nullable=True, index=True)

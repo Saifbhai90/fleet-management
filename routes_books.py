@@ -200,7 +200,8 @@ def book_issue():
         for b in available_books
     ]
 
-    vehicles = db.session.query(Vehicle).order_by(Vehicle.vehicle_no).all()
+    from vehicle_sort_utils import vehicle_order_by
+    vehicles = db.session.query(Vehicle).order_by(*vehicle_order_by()).all()
     form.vehicle_id.choices = [(0, '-- Select Vehicle --')] + [
         (v.id, f"{v.vehicle_no} – {v.model}") for v in vehicles
     ]

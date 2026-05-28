@@ -16,6 +16,7 @@ FORM_CONTROL_TAB_KEYS = (
     'freeze',
     'oil_limits',
     'daily_task_entry',
+    'vehicle_sort',
     'accounting_maintenance',
 )
 FORM_CONTROL_TAB_CODES = {
@@ -23,6 +24,7 @@ FORM_CONTROL_TAB_CODES = {
     'freeze': 'form_control_freeze',
     'oil_limits': 'form_control_oil_limits',
     'daily_task_entry': 'form_control_daily_task_entry',
+    'vehicle_sort': 'form_control_vehicle_sort',
     'accounting_maintenance': 'form_control_accounting_maintenance',
 }
 FORM_CONTROL_ALL_TAB_CODES = tuple(FORM_CONTROL_TAB_CODES.values())
@@ -357,6 +359,7 @@ PERMISSION_TREE = {
         ('form_control_freeze', 'Setting – Freeze Data Control'),
         ('form_control_oil_limits', 'Setting – Oil Change Limits'),
         ('form_control_daily_task_entry', 'Setting – New Task Entry'),
+        ('form_control_vehicle_sort', 'Setting – Vehicle Sort Order'),
         ('form_control_accounting_maintenance', 'Setting – Accounting Maintenance'),
         ('notification_list', 'Notifications – List / View'),
         ('notification_add', 'Notifications – Create'),
@@ -1020,6 +1023,7 @@ SECTION_PAGE_GROUPS = {
         ('Freeze Data Control', [('form_control_freeze', 'Freeze Data Control')]),
         ('Oil Change Limits', [('form_control_oil_limits', 'Oil Change Limits')]),
         ('New Task Entry', [('form_control_daily_task_entry', 'New Task Entry')]),
+        ('Vehicle Sort Order', [('form_control_vehicle_sort', 'Vehicle Sort Order')]),
         ('Accounting Maintenance', [('form_control_accounting_maintenance', 'Accounting Maintenance')]),
         ('Notifications', [
             ('notification_list', 'List / View'),
