@@ -753,9 +753,39 @@
               <input type="number" name="daily_task_entry_max_kms_driven" class="form-control" min="0" step="1" placeholder="Khali = koi limit nahi" value="{% if att_settings and att_settings.daily_task_entry_max_kms_driven is not none %}{{ att_settings.daily_task_entry_max_kms_driven }}{% endif %}">
               <div class="form-text">Close Reading − Start Reading agar is se zyada ho to Save block. Zero ya khali = limit off.</div>
             </div>
-            <div class="form-check form-switch mb-3">
+            <div class="form-check form-switch mb-4">
               <input class="form-check-input" type="checkbox" role="switch" id="dailyTaskOdomRequired" name="daily_task_odometer_photo_required" value="1" {% if att_settings and att_settings.daily_task_odometer_photo_required %}checked{% endif %}>
               <label class="form-check-label fw-semibold" for="dailyTaskOdomRequired">Odoo meter photo zaroori (ON = baghair photo save nahi hoga)</label>
+            </div>
+
+            <hr class="my-4">
+            <h6 class="fw-semibold mb-2">New Task Entry — kal ki date default tak (per project)</h6>
+            <p class="form-text mb-3">24h duty: subah tak New Task Entry par date kal default (e.g. 12:00). Khali = hamesha aaj ki date. Sirf jin projects par time set ho wahi apply honge.</p>
+            <div class="table-responsive mb-3" style="max-height: 420px; overflow-y: auto;">
+              <table class="table table-sm table-bordered align-middle mb-0">
+                <thead class="table-light sticky-top">
+                  <tr>
+                    <th style="width: 3rem;">#</th>
+                    <th>Project</th>
+                    <th style="min-width: 11rem;">Until (HH:MM)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for p in projects %}
+                  <tr>
+                    <td class="text-muted">{{ loop.index }}</td>
+                    <td class="fw-semibold">{{ p.name }}</td>
+                    <td>
+                      <input type="text" name="task_entry_yesterday_until_{{ p.id }}" class="form-control form-control-sm" placeholder="12:00" value="{% if p.task_entry_yesterday_default_until %}{{ p.task_entry_yesterday_default_until.strftime('%H:%M') }}{% endif %}">
+                    </td>
+                  </tr>
+                  {% else %}
+                  <tr>
+                    <td colspan="3" class="text-center text-muted py-3">No projects found.</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
             </div>
             <button type="submit" class="btn btn-primary"><i class="bi bi-save me-1"></i>Save</button>
           </form>

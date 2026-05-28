@@ -39,11 +39,6 @@ class ProjectForm(FlaskForm):
     inactive_date = DateField('Inactive Date (Close Date)', format='%d-%m-%Y',
                               render_kw={"class": "form-control datepicker"},
                               validators=[Optional()])
-    task_entry_yesterday_default_until = StringField(
-        'New Task Entry — kal ki date default tak (HH:MM)',
-        validators=[Optional()],
-        render_kw={'class': 'form-control', 'placeholder': '12:00 (khali = hamesha aaj ki date)'},
-    )
 
     submit = SubmitField('Save')
 

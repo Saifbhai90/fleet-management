@@ -67,11 +67,6 @@
             <h5 class="mb-0"><i class="bi bi-journal-text me-2"></i>Remarks</h5>
           </div>
           <div class="card-body p-4">
-            <div class="mb-3">
-              <label class="form-label fw-bold">{{ form.task_entry_yesterday_default_until.label.text }}</label>
-              {{ form.task_entry_yesterday_default_until(class="form-control") }}
-              <div class="form-text">24h duty: subah tak New Task Entry par date kal default (e.g. 12:00). Khali = hamesha aaj.</div>
-            </div>
             <div class="mb-3 h-100">
               <label class="form-label fw-bold">{{ form.remarks.label.text }}</label>
               {{ form.remarks(class="form-control", rows=9, placeholder="Enter any additional notes here...") }}

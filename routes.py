@@ -4272,16 +4272,11 @@ def company_projects(company_id):
 def project_form(id=None):
     project = Project.query.get_or_404(id) if id else None
     form = ProjectForm(obj=project)
-    if project and project.task_entry_yesterday_default_until:
-        form.task_entry_yesterday_default_until.data = project.task_entry_yesterday_default_until.strftime('%H:%M')
     if form.validate_on_submit():
         try:
             if not project:
                 project = Project()
             form.populate_obj(project)
-            project.task_entry_yesterday_default_until = _parse_hhmm_time_optional(
-                form.task_entry_yesterday_default_until.data
-            )
             if form.status.data == 'Inactive' and not form.inactive_date.data:
                 flash('Inactive Date is required when status is Inactive.', 'danger')
                 return render_template('project_form.html', form=form, title='Project', back_url=url_for('projects_list'),
@@ -8060,6 +8055,7 @@ def form_control():
             overrides=overrides,
             global_override=glob,
             att_settings=att_settings,
+            projects=projects,
             freeze_cfg=freeze_cfg,
             freeze_forms=freeze_forms,
             freeze_matrix_rows=freeze_matrix_rows,
@@ -8208,6 +8204,20 @@ def form_control():
                 flash('Max KM invalid — number likhein ya khali chhor dein.', 'warning')
                 return redirect(url_for('form_control', settings_tab='daily_task_entry'))
         att_s.daily_task_odometer_photo_required = bool(request.form.get('daily_task_odometer_photo_required'))
+        invalid_projects = []
+        for p in Project.query.all():
+            raw = (request.form.get(f'task_entry_yesterday_until_{p.id}') or '').strip()
+            if raw and _parse_hhmm_time_optional(raw) is None:
+                invalid_projects.append(p.name)
+                continue
+            p.task_entry_yesterday_default_until = _parse_hhmm_time_optional(raw)
+        if invalid_projects:
+            flash(
+                'Invalid time (HH:MM) for: ' + ', '.join(invalid_projects[:8])
+                + ('…' if len(invalid_projects) > 8 else ''),
+                'warning',
+            )
+            return redirect(url_for('form_control', settings_tab='daily_task_entry'))
         db.session.commit()
         flash('New Task Entry settings saved.', 'success')
         return redirect(url_for('form_control', settings_tab='daily_task_entry'))
