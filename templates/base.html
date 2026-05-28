@@ -2113,7 +2113,7 @@
         {% set payroll_open = request.endpoint in payroll_endpoints %}
         {% set books_endpoints = ['book_inventory_list', 'book_stock_entry', 'book_stock_edit', 'book_issue', 'book_assignment_list', 'book_return', 'book_pending_returns'] %}
         {% set books_open = request.endpoint in books_endpoints %}
-        {% set users_manage_endpoints = ['user_list', 'user_form', 'user_edit', 'role_list', 'role_form', 'role_edit', 'form_control', 'admin_app_releases', 'admin_personal_tools', 'admin_personal_tools_quick_print', 'admin_personal_tools_library', 'admin_personal_tools_library_detail'] %}
+        {% set users_manage_endpoints = ['user_list', 'user_form', 'user_edit', 'role_list', 'role_form', 'role_edit', 'form_control', 'admin_app_releases', 'admin_personal_tools', 'admin_personal_tools_quick_print', 'admin_personal_tools_library', 'admin_personal_tools_library_detail', 'tool_workstation_index', 'tool_workstation_tool', 'tool_workstation_api_tools'] %}
         {% set users_open = request.endpoint in users_manage_endpoints %}
 
         <!-- Dashboard -->

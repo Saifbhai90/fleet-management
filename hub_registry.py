@@ -315,6 +315,7 @@ HUBS = {
             'form_control', 'system_health', 'admin_app_releases', 'admin_personal_tools',
             'admin_personal_tools_quick_print', 'admin_personal_tools_library',
             'admin_personal_tools_library_detail',
+            'tool_workstation_index', 'tool_workstation_tool', 'tool_workstation_api_tools',
         ),
         'sections': [
             {
@@ -326,6 +327,7 @@ HUBS = {
                     _item('system_health', 'System Health', 'fa-solid fa-heart-pulse', 'rc-tile--red-task', master_only=True),
                     _item('admin_app_releases', 'App Updates', 'fa-solid fa-mobile-screen', 'rc-tile--hub-admin', master_only=True),
                     _item('admin_personal_tools', 'Personal Tool', 'fa-solid fa-screwdriver-wrench', 'rc-tile--hub-admin', master_only=True),
+                    _item('tool_workstation_index', 'Tool Workstation', 'fa-solid fa-toolbox', 'rc-tile--hub-admin', master_only=True),
                 ],
             },
         ],

@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}{% block tw_title %}Tool Workstation{% endblock %} — Fleet{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
+<link rel="stylesheet" href="{{ url_for('static', filename='tool_workstation/css/tool_workstation.css') }}">
+<div class="tw-app" id="twApp" data-fleet-endpoint="{{ request.endpoint }}">
+  {% block tw_body %}{% endblock %}
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@15.0.6/marked.min.js" defer></script>
+<script src="{{ url_for('static', filename='tool_workstation/js/fuzzy.js') }}" defer></script>
+<script src="{{ url_for('static', filename='tool_workstation/js/workers/image-worker.js') }}" defer></script>
+<script src="{{ url_for('static', filename='tool_workstation/js/engines/text-engine.js') }}" defer></script>
+<script src="{{ url_for('static', filename='tool_workstation/js/engines/pdf-engine.js') }}" defer></script>
+<script src="{{ url_for('static', filename='tool_workstation/js/engines/image-engine.js') }}" defer></script>
+<script src="{{ url_for('static', filename='tool_workstation/js/core.js') }}" defer></script>
+{% block tw_scripts %}{% endblock %}
+{% endblock %}

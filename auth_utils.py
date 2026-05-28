@@ -172,6 +172,9 @@ ENDPOINT_PERMISSION_MAP = [
     ('admin_personal_tools_os_calculator', 'users_manage'),
     ('admin_personal_tools_library', 'users_manage'),
     ('admin_personal_tools_library_detail', 'users_manage'),
+    ('tool_workstation_index', 'users_manage'),
+    ('tool_workstation_tool', 'users_manage'),
+    ('tool_workstation_api_tools', 'users_manage'),
     # Task & Logbook
     ('task_report_upload_list', 'task_report_upload_list'),
     ('task_report_upload', 'task_report_upload'),

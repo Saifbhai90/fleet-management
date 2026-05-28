@@ -550,6 +550,7 @@ if _run_startup_tasks:
 
 # Import routes after app & db are ready
 from routes import *  # noqa: E402,F401
+import routes_tool_workstation  # noqa: E402,F401 — Tool Workstation (120 utilities)
 
 # Book management: explicit registration so endpoints always exist (avoids BuildError if routes.py tail not loaded)
 from routes_books import register_book_routes  # noqa: E402

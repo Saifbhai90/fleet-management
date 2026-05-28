@@ -1,0 +1,71 @@
+{% extends "tool_workstation/layout.html" %}
+{% block tw_title %}{{ tool.title }}{% endblock %}
+
+{% block tw_body %}
+<header class="tw-header tw-header--compact" id="twHeader">
+  <div class="tw-header__inner">
+    <a href="{{ url_for('tool_workstation_index') }}" class="tw-header__brand">
+      <i class="bi bi-arrow-left"></i>
+      <span>Tool Workstation</span>
+    </a>
+    <div class="tw-header__search-wrap">
+      <i class="bi bi-search tw-header__search-icon"></i>
+      <input type="search" id="twGlobalSearch" class="tw-header__search" placeholder="Search tools…" autocomplete="off">
+    </div>
+    <button type="button" class="tw-header__menu-btn" id="twMenuToggle" aria-label="Menu"><i class="bi bi-list"></i></button>
+  </div>
+</header>
+
+<div class="tw-drawer" id="twDrawer" aria-hidden="true">
+  <div class="tw-drawer__backdrop" id="twDrawerBackdrop"></div>
+  <aside class="tw-drawer__panel">
+    <div class="tw-drawer__head">
+      <strong>All tools</strong>
+      <button type="button" id="twDrawerClose"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="tw-drawer__links" id="twDrawerLinks"></div>
+  </aside>
+</div>
+
+<main class="tw-main tw-main--tool">
+  <article class="tw-tool-page" itemscope itemtype="https://schema.org/WebApplication">
+    <header class="tw-tool-page__head">
+      <span class="tw-tool-page__badge">{{ tool.category|upper }}</span>
+      <h1 itemprop="name">{{ tool.h1 }}</h1>
+      <p class="tw-tool-page__intro" itemprop="description">{{ tool.intro }}</p>
+    </header>
+
+    <section class="tw-workspace" aria-label="Tool workspace">
+      <div id="twToolMount" class="tw-workspace__mount" data-engine="{{ tool.engine }}" data-method="{{ tool.method }}"></div>
+    </section>
+
+    <section class="tw-seo-block">
+      <h2>How to Use</h2>
+      <ol>
+        {% for step in tool.steps %}
+        <li>{{ step }}</li>
+        {% endfor %}
+      </ol>
+    </section>
+
+    <section class="tw-seo-block" itemscope itemtype="https://schema.org/FAQPage">
+      <h2>Frequently Asked Questions</h2>
+      {% for item in tool.faq %}
+      <details class="tw-faq" itemscope itemprop="mainEntity" itemtype="https://schema.org/Question">
+        <summary itemprop="name">{{ item.q }}</summary>
+        <div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer">
+          <p itemprop="text">{{ item.a }}</p>
+        </div>
+      </details>
+      {% endfor %}
+    </section>
+  </article>
+</main>
+
+<script>
+  window.TW_TOOLS_JSON = {{ tools_json|safe }};
+  window.TW_PAGE = 'tool';
+  window.TW_TOOL = {{ tool|tojson }};
+</script>
+<script src="{{ url_for('static', filename='tool_workstation/js/tool-runner.js') }}" defer></script>
+{% endblock %}

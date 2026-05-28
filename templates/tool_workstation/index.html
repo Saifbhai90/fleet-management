@@ -1,0 +1,96 @@
+{% extends "tool_workstation/layout.html" %}
+{% block tw_title %}Tool Workstation — 120 Utilities{% endblock %}
+
+{% block tw_body %}
+<header class="tw-header" id="twHeader">
+  <div class="tw-header__inner">
+    <a href="{{ url_for('module_hub', hub_slug='administration') }}" class="tw-header__brand">
+      <i class="bi bi-grid-1x2-fill"></i>
+      <span>Tool Workstation</span>
+    </a>
+    <div class="tw-header__search-wrap">
+      <i class="bi bi-search tw-header__search-icon"></i>
+      <input type="search" id="twGlobalSearch" class="tw-header__search" placeholder="Search 120 tools…" autocomplete="off" aria-label="Search tools">
+      <kbd class="tw-header__kbd">⌘K</kbd>
+    </div>
+    <nav class="tw-header__nav" aria-label="Categories">
+      <button type="button" class="tw-header__nav-btn active" data-tw-filter="all">All</button>
+      <button type="button" class="tw-header__nav-btn" data-tw-filter="image">Image</button>
+      <button type="button" class="tw-header__nav-btn" data-tw-filter="pdf">PDF</button>
+      <button type="button" class="tw-header__nav-btn" data-tw-filter="utility">Dev</button>
+    </nav>
+    <button type="button" class="tw-header__menu-btn" id="twMenuToggle" aria-label="Open menu">
+      <i class="bi bi-list"></i>
+    </button>
+  </div>
+  <div class="tw-mega" id="twMega" hidden>
+    <div class="tw-mega__grid" id="twMegaGrid"></div>
+  </div>
+</header>
+
+<div class="tw-drawer" id="twDrawer" aria-hidden="true">
+  <div class="tw-drawer__backdrop" id="twDrawerBackdrop"></div>
+  <aside class="tw-drawer__panel">
+    <div class="tw-drawer__head">
+      <strong>Navigation</strong>
+      <button type="button" id="twDrawerClose" aria-label="Close"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="tw-drawer__search">
+      <input type="search" id="twDrawerSearch" placeholder="Find a tool…" class="form-control">
+    </div>
+    <div class="tw-drawer__links" id="twDrawerLinks"></div>
+    <a href="{{ url_for('module_hub', hub_slug='administration') }}" class="tw-drawer__admin">
+      <i class="bi bi-shield-lock"></i> Administration Hub
+    </a>
+  </aside>
+</div>
+
+<main class="tw-main">
+  <section class="tw-hero">
+    <div class="tw-hero__copy">
+      <p class="tw-hero__eyebrow">Fleet Administration</p>
+      <h1 class="tw-hero__title">Your premium tool workstation</h1>
+      <p class="tw-hero__sub">120 privacy-first utilities for images, PDFs, and everyday data work — entirely in your browser.</p>
+      <div class="tw-hero__actions">
+        <a href="#twDashboard" class="tw-btn tw-btn--primary">Browse tools</a>
+        <a href="{{ url_for('tool_workstation_tool', slug='json-validator') }}" class="tw-btn tw-btn--ghost">Try JSON Validator</a>
+      </div>
+      <dl class="tw-hero__stats">
+        <div><dt>120</dt><dd>Utilities</dd></div>
+        <div><dt>0</dt><dd>API keys</dd></div>
+        <div><dt>100%</dt><dd>Client-side</dd></div>
+      </dl>
+    </div>
+    <div class="tw-hero__visual">
+      <img src="{{ url_for('static', filename='tool_workstation/images/hero_pfp.jpg') }}" alt="Tool Workstation profile" class="tw-hero__pfp" width="280" height="280">
+      <img src="{{ url_for('static', filename='tool_workstation/images/convert-spin.svg') }}" alt="" class="tw-hero__spin" width="120" height="120">
+    </div>
+  </section>
+
+  <div id="twDashboard" class="tw-dashboard">
+    {% for cat_key, cat_label in categories.items() %}
+    <section class="tw-section" data-tw-section="{{ cat_key }}">
+      <header class="tw-section__head">
+        <h2>{{ cat_label }}</h2>
+        <span class="tw-section__count">{{ tools|selectattr('category', 'equalto', cat_key)|list|length }} tools</span>
+      </header>
+      <div class="tw-grid" data-tw-grid="{{ cat_key }}">
+        {% for t in tools if t.category == cat_key %}
+        <a href="{{ url_for('tool_workstation_tool', slug=t.slug) }}" class="tw-card" data-tw-card data-slug="{{ t.slug }}" data-category="{{ t.category }}" data-keywords="{{ t.name|lower }} {{ t.slug }}">
+          <span class="tw-card__icon"><i class="fa-solid {{ t.icon }}"></i></span>
+          <span class="tw-card__name">{{ t.name }}</span>
+          <span class="tw-card__meta">#{{ t.id }} · Open tool</span>
+        </a>
+        {% endfor %}
+      </div>
+    </section>
+    {% endfor %}
+    <p class="tw-empty" id="twEmpty" hidden>No tools match your search.</p>
+  </div>
+</main>
+
+<script>
+  window.TW_TOOLS_JSON = {{ tools_json|safe }};
+  window.TW_PAGE = 'index';
+</script>
+{% endblock %}
