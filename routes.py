@@ -8145,6 +8145,7 @@ def form_control():
             glob = AttendanceTimeOverride(scope='global')
             db.session.add(glob)
         glob.allow_future_checkout = bool(request.form.get('allow_future_checkout'))
+        glob.auto_gps_checkout_on_window_end = bool(request.form.get('auto_gps_checkout_on_window_end'))
         db.session.commit()
         flash('Manual check-out setting saved.', 'success')
         return redirect(url_for('form_control'))
@@ -8162,6 +8163,10 @@ def form_control():
         glob.allow_night_driver_morning_gps_checkin = bool(
             request.form.get('allow_night_driver_morning_gps_checkin')
         )
+        mode_raw = (request.form.get('capacity_one_checkin_mode') or 'both').strip().lower()
+        if mode_raw not in ('both', 'morning_only', 'night_only'):
+            mode_raw = 'both'
+        glob.capacity_one_checkin_mode = mode_raw
         db.session.commit()
         flash('GPS check-in setting saved.', 'success')
         return redirect(url_for('form_control'))
@@ -19178,6 +19183,22 @@ def _attendance_allow_night_driver_morning_gps_checkin():
     return bool(glob and glob.allow_night_driver_morning_gps_checkin)
 
 
+def _attendance_auto_gps_checkout_on_window_end_enabled():
+    glob = AttendanceTimeOverride.query.filter_by(scope='global').first()
+    return bool(glob and glob.auto_gps_checkout_on_window_end)
+
+
+def _attendance_capacity_one_checkin_mode():
+    """Global policy for capacity-1 vehicles: both / morning_only / night_only."""
+    glob = AttendanceTimeOverride.query.filter_by(scope='global').first()
+    raw = ((glob.capacity_one_checkin_mode if glob else None) or 'both').strip().lower()
+    if raw in ('morning', 'morning_only', 'morning-only'):
+        return 'morning_only'
+    if raw in ('night', 'evening', 'night_only', 'night-only', 'evening_only', 'evening-only'):
+        return 'night_only'
+    return 'both'
+
+
 def _checkin_in_morning_window(tw, check_in_time):
     return _attendance_time_in_window(
         check_in_time, tw.get('morning_start'), tw.get('morning_end'),
@@ -19262,8 +19283,21 @@ def _gps_checkout_window_ok(driver, now_time, tw, check_in_time):
     return True, None
 
 
-def _gps_checkin_shift_window_ok(shift, now_time, tw):
+def _gps_checkin_shift_window_ok(shift, now_time, tw, driver=None, vehicle=None):
     """GPS check-in allowed for assigned shift and configured windows."""
+    v = vehicle or (driver.vehicle if driver is not None else None)
+    cap = _vehicle_capacity_value(v)
+    if cap == 1:
+        cap_mode = _attendance_capacity_one_checkin_mode()
+        if cap_mode == 'morning_only':
+            if _attendance_time_in_window(now_time, tw.get('morning_start'), tw.get('morning_end')):
+                return True, None
+            return False, 'Capacity-1 vehicle: attendance sirf morning window mein allowed hai (settings).'
+        if cap_mode == 'night_only':
+            if _attendance_time_in_window(now_time, tw.get('night_start'), tw.get('night_end')):
+                return True, None
+            return False, 'Capacity-1 vehicle: attendance sirf evening/night window mein allowed hai (settings).'
+
     shift_l = (shift or '').strip().lower()
     if shift_l == 'morning':
         if _attendance_time_in_window(now_time, tw.get('morning_start'), tw.get('morning_end')):
@@ -19380,6 +19414,8 @@ def api_attendance_time_window():
         'source': w.get('source', ''),
         'allow_morning_driver_night_gps_checkin': _attendance_allow_morning_driver_night_gps_checkin(),
         'allow_night_driver_morning_gps_checkin': _attendance_allow_night_driver_morning_gps_checkin(),
+        'capacity_one_checkin_mode': _attendance_capacity_one_checkin_mode(),
+        'auto_gps_checkout_on_window_end': _attendance_auto_gps_checkout_on_window_end_enabled(),
     })
 
 
@@ -19508,6 +19544,10 @@ def _gps_checkin_submit_status(driver_id, vehicle_id=None, project_id=None):
             'segments_used': int(_count_driver_segments_with_checkin(driver_id, today)),
             'capacity': cap,
         }
+    shift = (driver.shift or '').strip().lower() if driver else ''
+    ci_ok, ci_msg = _gps_checkin_shift_window_ok(shift, now_time, tw, driver=driver, vehicle=vehicle)
+    if not ci_ok:
+        return {'ok': True, 'can_submit': False, 'state': 'blocked', 'message': ci_msg}
     return {'ok': True, 'can_submit': True, 'state': 'allowed', 'message': ''}
 
 
@@ -19764,7 +19804,7 @@ def api_attendance_gps_checkin_submit():
         _ci_project_id = int(body.get('project_id') or 0) or None
         tw = _get_effective_time_window(driver=driver, vehicle_id=_ci_vehicle_id, project_id=_ci_project_id)
         shift = (driver.shift or '').strip().lower()
-        ci_ok, ci_msg = _gps_checkin_shift_window_ok(shift, now_time, tw)
+        ci_ok, ci_msg = _gps_checkin_shift_window_ok(shift, now_time, tw, driver=driver, vehicle=driver.vehicle)
         if not ci_ok:
             return jsonify({'ok': False, 'message': ci_msg}), 400
         try:
@@ -19991,7 +20031,7 @@ def driver_attendance_checkin():
         _ci_project_id = request.form.get('project_id', type=int)
         tw = _get_effective_time_window(driver=driver, vehicle_id=_ci_vehicle_id, project_id=_ci_project_id)
         shift = (driver.shift or '').strip()
-        ci_ok, ci_msg = _gps_checkin_shift_window_ok(shift, now_time, tw)
+        ci_ok, ci_msg = _gps_checkin_shift_window_ok(shift, now_time, tw, driver=driver, vehicle=driver.vehicle)
         if not ci_ok:
             flash(ci_msg, 'danger')
             return redirect(url_for('driver_attendance_checkin'))

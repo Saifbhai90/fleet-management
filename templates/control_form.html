@@ -167,9 +167,17 @@
               <input class="form-check-input" type="checkbox" role="switch" id="allowFutureCheckout" name="allow_future_checkout" value="1" {% if global_override and global_override.allow_future_checkout %}checked{% endif %}>
               <label class="form-check-label fw-semibold" for="allowFutureCheckout">Allow Future Manual Check-out</label>
             </div>
+            <div class="form-check form-switch mb-3">
+              <input class="form-check-input" type="checkbox" role="switch" id="autoGpsCheckoutOnWindowEnd" name="auto_gps_checkout_on_window_end" value="1" {% if global_override and global_override.auto_gps_checkout_on_window_end %}checked{% endif %}>
+              <label class="form-check-label fw-semibold" for="autoGpsCheckoutOnWindowEnd">Auto GPS Check-out after time window ends</label>
+            </div>
             <div class="form-text mb-3">
               <strong>ON:</strong> Night shift drivers ka manual check-out agle din ki date par bhi allowed hoga (attendance_date + 1 day), chahe abhi woh din na aaya ho.<br>
               <strong>OFF:</strong> Sirf aaj tak ki date allowed hogi — admin ko agle din aane ka wait karna hoga.
+            </div>
+            <div class="form-text mb-3">
+              <strong>Auto GPS Check-out ON:</strong> Time Overrides (Project/District/Vehicle) ka check-out end pass hote hi jinka check-out pending hoga unka system auto check-out mark kar dega.<br>
+              <strong>OFF:</strong> Existing behavior same rahega (manual/user GPS check-out required).
             </div>
             <button type="submit" class="btn btn-warning"><i class="bi bi-check2-circle me-1"></i>Save Setting</button>
           </form>
@@ -213,6 +221,20 @@
               <strong>OFF (default):</strong> Profile par <em>Night</em> shift wale driver sirf night check-in window mein GPS lag sakte hain.<br>
               <strong>ON:</strong> Night assigned driver subah ke <em>Morning check-in window</em> mein bhi GPS check-in kar sakta hai (extra morning duty). Duty column <em>Morning duty</em> dikhegi.<br>
               Windows <strong>Global Default Time</strong> (upar) se aati hain — pehle Morning / Night Start-End set karein.
+            </div>
+            <div class="row g-2 mb-3">
+              <div class="col-md-6">
+                <label class="form-label fw-semibold" for="capacityOneCheckinMode">Capacity-1 Vehicle Attendance Mode</label>
+                <select class="form-select" id="capacityOneCheckinMode" name="capacity_one_checkin_mode">
+                  {% set _cap1_mode = global_override.capacity_one_checkin_mode if global_override and global_override.capacity_one_checkin_mode else 'both' %}
+                  <option value="both" {% if _cap1_mode == 'both' %}selected{% endif %}>Allow Morning + Evening</option>
+                  <option value="morning_only" {% if _cap1_mode == 'morning_only' %}selected{% endif %}>Only Morning</option>
+                  <option value="night_only" {% if _cap1_mode == 'night_only' %}selected{% endif %}>Only Evening</option>
+                </select>
+                <div class="form-text">
+                  Capacity-1 vehicles par GPS check-in aur pending notifications isi mode ke mutabiq chalenge.
+                </div>
+              </div>
             </div>
             <button type="submit" class="btn btn-success"><i class="bi bi-check2-circle me-1"></i>Save Settings</button>
           </form>

@@ -26,7 +26,7 @@ def start_attendance_reminder_scheduler(app):
             try:
                 from attendance_reminder_service import run_attendance_reminders
                 result = run_attendance_reminders(app)
-                if result.get('checkin_sent') or result.get('checkout_sent'):
+                if result.get('checkin_sent') or result.get('checkout_sent') or result.get('auto_checkout_done'):
                     logger.info('Attendance reminders: %s', result)
             except Exception as exc:
                 logger.warning('Attendance reminder job failed: %s', exc)

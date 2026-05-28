@@ -80,6 +80,67 @@ def _combine_date_time(d, t):
     return datetime.combine(d, t)
 
 
+def _window_end_due(attendance_date, start_t, end_t, now_dt):
+    """Whether checkout window end has passed for this attendance date."""
+    if not attendance_date or not end_t or not now_dt:
+        return False
+    if start_t and end_t and end_t < start_t:
+        end_date = attendance_date + timedelta(days=1)
+    else:
+        end_date = attendance_date
+    end_dt = datetime.combine(end_date, end_t)
+    return now_dt >= end_dt
+
+
+def _run_auto_gps_checkout(now_dt, helpers):
+    """Auto mark check-out after checkout window end for pending GPS sessions."""
+    from models import Driver, DriverAttendance, db
+
+    if not helpers['auto_checkout_enabled']():
+        return 0
+
+    rows = (
+        DriverAttendance.query.join(Driver, Driver.id == DriverAttendance.driver_id)
+        .filter(
+            Driver.status == 'Active',
+            Driver.vehicle_id.isnot(None),
+            DriverAttendance.check_in.isnot(None),
+            DriverAttendance.check_out.is_(None),
+        )
+        .order_by(DriverAttendance.attendance_date.asc(), DriverAttendance.id.asc())
+        .all()
+    )
+    updated = 0
+    for rec in rows:
+        driver = rec.driver
+        if not driver:
+            continue
+        if not helpers['gps_marked'](rec):
+            continue
+        tw = helpers['time_window'](driver=driver)
+        co_s, co_e, _cross = helpers['checkout_bounds'](driver, tw, rec.check_in)
+        if not co_e:
+            continue
+        if not _window_end_due(rec.attendance_date, co_s, co_e, now_dt):
+            continue
+
+        rec.check_out = now_dt.time()
+        rec.check_out_date = now_dt.date()
+        rec.updated_at = now_dt
+        remark = (rec.remarks or '').strip()
+        tag = 'Auto check-out by settings'
+        if tag.lower() not in remark.lower():
+            rec.remarks = ((remark + ' | ') if remark else '') + tag
+        updated += 1
+    if updated:
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            return 0
+    return updated
+
+
 def _vehicle_has_gps_checkin_today(vehicle_id, today, helpers):
     if not vehicle_id:
         return False
@@ -164,7 +225,7 @@ def _driver_needs_checkin_reminder(driver, today, helpers):
         return False, None
     now_time = helpers['now_time']()
     tw = helpers['time_window'](driver=driver)
-    ok, _msg = helpers['checkin_window_ok'](driver.shift, now_time, tw)
+    ok, _msg = helpers['checkin_window_ok'](driver.shift, now_time, tw, driver=driver, vehicle=vehicle)
     if not ok:
         return False, None
     starts = _active_checkin_window_starts(driver, tw, now_time, helpers)
@@ -180,6 +241,14 @@ def _driver_needs_checkout_reminder(driver, today, helpers):
         return False, None
     now_time = helpers['now_time']()
     tw = helpers['time_window'](driver=driver)
+    cap = helpers['vehicle_cap'](driver.vehicle)
+    if cap == 1:
+        mode = helpers['capacity_one_mode']()
+        slot = helpers['checkin_slot'](tw, open_rec.check_in)
+        if mode == 'morning_only' and slot != 'morning':
+            return False, None
+        if mode == 'night_only' and slot != 'night':
+            return False, None
     ok, _msg = helpers['checkout_window_ok'](driver, now_time, tw, open_rec.check_in)
     if not ok:
         return False, None
@@ -223,6 +292,9 @@ def _build_helpers():
         _gps_checkout_window_bounds,
         _gps_checkout_window_ok,
         _gps_marked_attendance_row,
+        _attendance_auto_gps_checkout_on_window_end_enabled,
+        _attendance_capacity_one_checkin_mode,
+        _checkin_window_slot_from_time,
         _manual_checkin_blocked_by_vehicle_rules,
         _open_gps_driver_attendance_for_checkout,
         _open_gps_driver_attendance_session,
@@ -246,6 +318,9 @@ def _build_helpers():
         'checkout_bounds': _gps_checkout_window_bounds,
         'duty_off': _driver_marked_duty_off_no_checkin,
         'vehicle_pending_msg': _manual_checkin_blocked_by_vehicle_rules,
+        'auto_checkout_enabled': _attendance_auto_gps_checkout_on_window_end_enabled,
+        'capacity_one_mode': _attendance_capacity_one_checkin_mode,
+        'checkin_slot': _checkin_window_slot_from_time,
         'vehicle_cap': _vehicle_capacity_value,
         'segment_count': _count_driver_segments_with_checkin,
         'open_session': _open_gps_driver_attendance_session,
@@ -281,6 +356,7 @@ def run_attendance_reminders(app=None):
         state = _load_last_sent()
         checkin_sent = 0
         checkout_sent = 0
+        auto_checkout_done = _run_auto_gps_checkout(now, helpers)
 
         try:
             from flask import url_for
@@ -341,7 +417,11 @@ def run_attendance_reminders(app=None):
                     checkout_sent += 1
 
         _save_last_sent(state)
-        return {'checkin_sent': checkin_sent, 'checkout_sent': checkout_sent}
+        return {
+            'checkin_sent': checkin_sent,
+            'checkout_sent': checkout_sent,
+            'auto_checkout_done': auto_checkout_done,
+        }
     except Exception as exc:
         logger.exception('run_attendance_reminders failed: %s', exc)
         return {'error': str(exc)}
