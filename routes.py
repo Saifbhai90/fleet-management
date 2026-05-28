@@ -1075,8 +1075,8 @@ def _redirect_with_nav(endpoint, **params):
 
 
 def _resolve_nav_back_url(default_url):
-    from nav_back import get_nav_from, resolve_nav_back
-    return resolve_nav_back(get_nav_from(), default_url, 'Back')[0]
+    from nav_back import back_url_for_request
+    return back_url_for_request(default_url=default_url)
 
 
 def _attendance_list_manual_checkout_allowed():

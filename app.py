@@ -240,13 +240,13 @@ def inject_hub_navigation():
     from flask import request
     from hub_registry import HUB_ACTIVE_ENDPOINTS
 
+    from hub_registry import hub_slug_for_endpoint
+
     def hub_nav_active(slug):
         view_args = getattr(request, 'view_args', None) or {}
         if request.endpoint == 'module_hub' and view_args.get('hub_slug') == slug:
             return True
-        eps = HUB_ACTIVE_ENDPOINTS.get(slug, frozenset())
-        ep = request.endpoint or ''
-        return ep in eps
+        return hub_slug_for_endpoint(request.endpoint) == slug
 
     return dict(hub_nav_active=hub_nav_active, HUB_ACTIVE_ENDPOINTS=HUB_ACTIVE_ENDPOINTS)
 

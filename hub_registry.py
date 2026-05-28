@@ -396,3 +396,37 @@ def hub_active_endpoints():
 
 
 HUB_ACTIVE_ENDPOINTS = hub_active_endpoints()
+
+
+def _build_endpoint_to_hub_slug():
+    """Map Flask endpoint name → hub slug (same registry sidebar highlight uses)."""
+    mapping = {}
+    for slug, eps in HUB_ACTIVE_ENDPOINTS.items():
+        for ep in eps:
+            mapping.setdefault(ep, slug)
+    return mapping
+
+
+ENDPOINT_TO_HUB_SLUG = _build_endpoint_to_hub_slug()
+
+
+def hub_slug_for_endpoint(endpoint=None):
+    """Which sidebar hub owns this route (e.g. driver_attendance_list → attendance)."""
+    if not endpoint:
+        return None
+    return ENDPOINT_TO_HUB_SLUG.get(endpoint)
+
+
+def hub_url_for_slug(slug):
+    if not slug or slug not in HUBS:
+        return None
+    try:
+        return url_for('module_hub', hub_slug=slug)
+    except Exception:
+        return None
+
+
+def hub_url_for_endpoint(endpoint=None):
+    """Module hub URL for the page's owning section (sidebar-equivalent home)."""
+    slug = hub_slug_for_endpoint(endpoint)
+    return hub_url_for_slug(slug) if slug else None

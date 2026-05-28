@@ -1,18 +1,12 @@
 {% macro nav_back_button() %}
 {% set back_href = nav_back_url or nav_back_url_auto %}
-{% if not back_href and nav_from and nav_from.startswith('hub:') %}
-  {% set back_href = url_for('module_hub', hub_slug=nav_from[4:]) %}
-{% elif not back_href and nav_from == 'reports' %}
-  {% set back_href = url_for('reports_index') %}
-{% elif not back_href %}
-  {% set back_href = url_for('reports_index') %}
-{% endif %}
 <a href="{{ back_href }}"
    class="btn-nav-back-rounded"
    title="Go Back"
    data-fleet-nav-back="1"
    data-fleet-nav-back-href="{{ back_href|e }}"
    data-nav-from="{{ (nav_from or '')|e }}"
+   data-hub-slug="{{ (nav_back_hub_slug or '')|e }}"
    onclick="return window.fleetNavigateBack(event, this);">
   <i class="bi bi-arrow-left-short"></i>
   <span>{{ nav_back_label|default(nav_back_label_auto|default('Back')) }}</span>
