@@ -138,11 +138,10 @@ def inject_notification_badge():
         cached = _notif_cache.get(cache_key)
         if cached and (_time.time() - cached[1]) < 60:
             return dict(unread_notification_count=cached[0])
-        subq = db.session.query(NotificationRead.notification_id).filter(NotificationRead.user_id == user_id)
-        count = Notification.query.filter(
-            Notification.target_user_id == user_id,
-            ~Notification.id.in_(subq),
-        ).count()
+        from notification_service import count_unread_inbox_for_user
+        user_perms = set(session.get('permissions') or [])
+        is_master = session.get('is_master', False)
+        count = count_unread_inbox_for_user(user_id, user_perms, is_master)
         _notif_cache[cache_key] = (count, _time.time())
     except Exception as e:
         app.logger.warning('Notification badge error: %s', e)

@@ -66,12 +66,11 @@
         setTimeout(function () { cardEl.remove(); }, 280);
       }
       showUserMessage(data.message || 'Notification deleted.');
-      var badge = document.querySelector('.navbar .badge.bg-danger');
-      if (badge) {
+      document.querySelectorAll('.navbar .badge.bg-danger, .more-notif-badge').forEach(function (badge) {
         var n = parseInt(badge.textContent, 10) || 0;
         if (n <= 1) badge.remove();
         else badge.textContent = String(n - 1);
-      }
+      });
     }).catch(function () {
       showUserMessage('Network error — try again.');
       if (cardEl) {

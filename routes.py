@@ -2635,30 +2635,12 @@ def _is_parking_full_notification(notification):
 
 
 def _unread_notifications_for_user(user_id, limit=20):
-    """Notifications not yet read by this user, filtered by role permissions.
-    Notifications with required_permission are only shown to users who have
-    at least one of the listed permission codes. Notifications without
-    required_permission are visible to everyone (broadcast)."""
-    read_stmt = select(NotificationRead.notification_id).where(NotificationRead.user_id == user_id)
-    candidates = (
-        Notification.query.filter(Notification.id.not_in(read_stmt))
-        .order_by(Notification.created_at.desc())
-        .limit(limit * 5)
-        .all()
-    )
+    """Unread inbox for dashboard dropdown — same rules as bell badge."""
+    from notification_service import unread_inbox_for_user
 
     user_perms = set(session.get('permissions') or [])
     is_master = session.get('is_master', False)
-
-    from notification_service import notification_visible_to_user
-    out = []
-    for n in candidates:
-        if not notification_visible_to_user(n, user_id, user_perms, is_master):
-            continue
-        out.append(n)
-        if len(out) >= limit:
-            break
-    return out
+    return unread_inbox_for_user(user_id, user_perms, is_master)[:limit]
 
 
 @app.route('/api/v1/me')
@@ -3298,16 +3280,10 @@ def poll_notifications():
 
     user_perms = set(session.get('permissions') or [])
     is_master = session.get('is_master', False)
-    read_ids = {r.notification_id for r in NotificationRead.query.filter_by(user_id=uid).all()}
-    all_n = Notification.query.order_by(Notification.created_at.desc()).limit(50).all()
+    from notification_service import unread_inbox_for_user
 
-    from notification_service import notification_visible_to_user
     result = []
-    for n in all_n:
-        if n.id in read_ids:
-            continue
-        if not notification_visible_to_user(n, uid, user_perms, is_master):
-            continue
+    for n in unread_inbox_for_user(uid, user_perms, is_master)[:20]:
         result.append({
             'id': n.id,
             'title': n.title,
@@ -3315,8 +3291,6 @@ def poll_notifications():
             'link': n.link,
             'created_at': n.created_at.isoformat() if n.created_at else None,
         })
-        if len(result) >= 20:
-            break
 
     return jsonify({'notifications': result})
 
@@ -3625,11 +3599,18 @@ def dashboard():
                            from_login=request.args.get('from_login') == '1')
 
 
-@app.route('/notification/<int:pk>/read', methods=['POST'])
+@app.route('/notification/<int:pk>/read', methods=['GET', 'POST'])
 def notification_read(pk):
+    """Mark read and redirect (Open link uses GET; AJAX may POST)."""
     n = Notification.query.get_or_404(pk)
     user_id = session.get('user_id')
     if user_id:
+        user_perms = set(session.get('permissions') or [])
+        is_master = session.get('is_master', False)
+        from notification_service import notification_visible_to_user, _invalidate_notif_cache
+        if not notification_visible_to_user(n, user_id, user_perms, is_master):
+            flash('You do not have access to this notification.', 'danger')
+            return redirect(url_for('notification_list'))
         nr = NotificationRead.query.filter_by(notification_id=pk, user_id=user_id).first()
         if not nr:
             nr = NotificationRead(notification_id=pk, user_id=user_id, read_at=pk_now())
@@ -3637,28 +3618,39 @@ def notification_read(pk):
         else:
             nr.read_at = pk_now()
         db.session.commit()
+        _invalidate_notif_cache([user_id])
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return jsonify({'ok': True})
-    next_url = request.args.get('next') or url_for('dashboard')
+    next_url = request.args.get('next') or n.link or url_for('dashboard')
     return redirect(next_url)
 
 
 @app.route('/notification/<int:pk>/dismiss', methods=['POST'])
 def notification_dismiss(pk):
-    """Remove notification from this user's inbox (mark read / dismissed)."""
+    """Remove notification from this user's inbox — delete personal rows, hide broadcasts."""
     if not session.get('user_id'):
         return jsonify({'ok': False, 'message': 'Not signed in.'}), 401
     if not session.get('is_master') and not user_can_access(session.get('permissions') or [], 'notification_list'):
         return jsonify({'ok': False, 'message': 'Permission denied.'}), 403
-    Notification.query.get_or_404(pk)
+    n = Notification.query.get_or_404(pk)
     user_id = session.get('user_id')
-    nr = NotificationRead.query.filter_by(notification_id=pk, user_id=user_id).first()
-    if not nr:
-        nr = NotificationRead(notification_id=pk, user_id=user_id, read_at=pk_now())
-        db.session.add(nr)
+    user_perms = set(session.get('permissions') or [])
+    is_master = session.get('is_master', False)
+    from notification_service import notification_visible_to_user, _invalidate_notif_cache
+    if not notification_visible_to_user(n, user_id, user_perms, is_master):
+        return jsonify({'ok': False, 'message': 'Permission denied.'}), 403
+    tid = getattr(n, 'target_user_id', None)
+    if tid is not None and int(tid) == int(user_id):
+        db.session.delete(n)
     else:
-        nr.read_at = pk_now()
+        nr = NotificationRead.query.filter_by(notification_id=pk, user_id=user_id).first()
+        if not nr:
+            nr = NotificationRead(notification_id=pk, user_id=user_id, read_at=pk_now())
+            db.session.add(nr)
+        else:
+            nr.read_at = pk_now()
     db.session.commit()
+    _invalidate_notif_cache([user_id])
     return jsonify({'ok': True, 'message': 'Notification deleted.'})
 
 
@@ -3674,16 +3666,9 @@ def notification_list():
     read_ids = set()
     if user_id:
         read_ids = {r.notification_id for r in NotificationRead.query.filter_by(user_id=user_id).all()}
-    all_n = Notification.query.order_by(Notification.created_at.desc()).limit(200).all()
+    from notification_service import unread_inbox_for_user
 
-    from notification_service import notification_visible_to_user
-    filtered = []
-    for n in all_n:
-        if not notification_visible_to_user(n, user_id, user_perms, is_master):
-            continue
-        filtered.append(n)
-        if len(filtered) >= 100:
-            break
+    filtered = unread_inbox_for_user(user_id, user_perms, is_master)
 
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)

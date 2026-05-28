@@ -9,6 +9,7 @@ Fleet Manager notification service (v2).
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 
 from sqlalchemy import func
 
@@ -51,6 +52,77 @@ def notification_visible_to_user(notification, user_id, user_perms=None, is_mast
         req_codes = set((notification.required_permission or '').split(','))
         return bool(set(user_perms or []) & req_codes)
     return False
+
+
+def _unread_read_subq(user_id):
+    from sqlalchemy import select
+    from models import NotificationRead
+
+    return select(NotificationRead.notification_id).where(NotificationRead.user_id == user_id)
+
+
+def unread_inbox_for_user(user_id, user_perms=None, is_master=False):
+    """
+    Unread notifications for this user's inbox — same scope as the bell badge.
+    Personal (target_user_id) rows plus permission-based broadcasts not yet read.
+    """
+    from models import Notification
+
+    if not user_id:
+        return []
+    user_perms = user_perms if user_perms is not None else set()
+    read_subq = _unread_read_subq(user_id)
+    personal = (
+        Notification.query.filter(
+            Notification.target_user_id == user_id,
+            ~Notification.id.in_(read_subq),
+        )
+        .order_by(Notification.created_at.desc())
+        .all()
+    )
+    broadcast = (
+        Notification.query.filter(
+            Notification.target_user_id.is_(None),
+            Notification.required_permission.isnot(None),
+            ~Notification.id.in_(read_subq),
+        )
+        .order_by(Notification.created_at.desc())
+        .limit(300)
+        .all()
+    )
+    out = list(personal)
+    seen = {n.id for n in out}
+    for n in broadcast:
+        if n.id in seen:
+            continue
+        if notification_visible_to_user(n, user_id, user_perms, is_master):
+            out.append(n)
+            seen.add(n.id)
+    out.sort(key=lambda n: n.created_at or datetime.min, reverse=True)
+    return out
+
+
+def count_unread_inbox_for_user(user_id, user_perms=None, is_master=False):
+    """Fast unread count aligned with unread_inbox_for_user (badge)."""
+    from models import Notification
+
+    if not user_id:
+        return 0
+    user_perms = user_perms if user_perms is not None else set()
+    read_subq = _unread_read_subq(user_id)
+    personal = Notification.query.filter(
+        Notification.target_user_id == user_id,
+        ~Notification.id.in_(read_subq),
+    ).count()
+    extra = 0
+    for n in Notification.query.filter(
+        Notification.target_user_id.is_(None),
+        Notification.required_permission.isnot(None),
+        ~Notification.id.in_(read_subq),
+    ).order_by(Notification.created_at.desc()).limit(300):
+        if notification_visible_to_user(n, user_id, user_perms, is_master):
+            extra += 1
+    return personal + extra
 
 
 def _ensure_target_user_id_column():
