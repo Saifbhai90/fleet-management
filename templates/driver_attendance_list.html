@@ -238,7 +238,11 @@
               {% set check_in_remarks_text = '' %}
             {% endif %}
             {# Manual check-out ki remarks ko bhi priority dein #}
-            {% if rec and rec.remarks and 'Manual check-out' in (rec.remarks or '') %}
+            {% if rec and rec.remarks and 'Auto check-out:' in (rec.remarks or '') %}
+              {% set _parts = (rec.remarks or '').split('Auto check-out:') %}
+              {% set _after = _parts[1].split(' | ')[0].strip() if _parts|length > 1 else '' %}
+              {% set check_out_remarks_text = ('Auto check-out: ' ~ _after) if _after else 'Auto check-out: Checkout window ended (system setting)' %}
+            {% elif rec and rec.remarks and 'Manual check-out' in (rec.remarks or '') %}
               {% set _parts = (rec.remarks or '').split('Manual check-out') %}
               {% set _after = _parts[1].split(' | ')[0].strip() if _parts|length > 1 else '' %}
               {% set check_out_remarks_text = (_after[2:].strip() if _after.startswith(': ') else _after) or 'Manual check-out' %}

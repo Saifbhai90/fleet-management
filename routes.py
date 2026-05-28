@@ -17285,6 +17285,9 @@ def _attendance_check_out_remarks(rec):
     if rec.check_out_photo_path or (rec.check_out_latitude is not None and rec.check_out_longitude is not None):
         return 'Check-out via GPS & Camera'
     r = rec.remarks or ''
+    if 'Auto check-out:' in r:
+        part = r.split('Auto check-out:', 1)[1].split(' | ')[0].strip()
+        return ('Auto check-out: ' + part).strip() if part else GPS_AUTO_CHECKOUT_REMARK
     if 'Manual check-out' in r:
         part = r.split('Manual check-out', 1)[1].split(' | ')[0].strip()
         if part.startswith(': '):
@@ -19243,8 +19246,8 @@ def _gps_checkout_window_bounds(driver, tw, check_in_time):
             co_s = tw.get('night_checkout_start')
             co_e = tw.get('night_checkout_end')
             if not co_s and not co_e:
-                co_s = tw.get('morning_start')
-                co_e = tw.get('morning_end')
+                co_s = tw.get('night_start')
+                co_e = tw.get('night_end')
         else:
             co_s = tw.get('morning_checkout_start')
             co_e = tw.get('morning_checkout_end')
@@ -19265,6 +19268,32 @@ def _gps_checkout_window_bounds(driver, tw, check_in_time):
                 co_s = tw.get('morning_start')
                 co_e = tw.get('morning_end')
     return co_s, co_e, cross
+
+
+def _checkout_window_end_datetime(attendance_date, check_in_time, start_t, end_t):
+    """Datetime when this session's checkout window ends (must be after check-in)."""
+    if not attendance_date or not end_t:
+        return None
+    if start_t and end_t and end_t < start_t:
+        end_date = attendance_date + timedelta(days=1)
+    else:
+        end_date = attendance_date
+    end_dt = datetime.combine(end_date, end_t)
+    if check_in_time:
+        check_in_dt = datetime.combine(attendance_date, check_in_time)
+        if end_dt <= check_in_dt:
+            end_dt = datetime.combine(end_date + timedelta(days=1), end_t)
+    return end_dt
+
+
+def _checkout_window_end_passed(attendance_date, check_in_time, start_t, end_t, now_dt):
+    end_dt = _checkout_window_end_datetime(attendance_date, check_in_time, start_t, end_t)
+    if not end_dt or not now_dt:
+        return False
+    return now_dt >= end_dt
+
+
+GPS_AUTO_CHECKOUT_REMARK = 'Auto check-out: Checkout window ended (system setting)'
 
 
 def _gps_checkout_window_ok(driver, now_time, tw, check_in_time):

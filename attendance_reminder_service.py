@@ -80,18 +80,6 @@ def _combine_date_time(d, t):
     return datetime.combine(d, t)
 
 
-def _window_end_due(attendance_date, start_t, end_t, now_dt):
-    """Whether checkout window end has passed for this attendance date."""
-    if not attendance_date or not end_t or not now_dt:
-        return False
-    if start_t and end_t and end_t < start_t:
-        end_date = attendance_date + timedelta(days=1)
-    else:
-        end_date = attendance_date
-    end_dt = datetime.combine(end_date, end_t)
-    return now_dt >= end_dt
-
-
 def _run_auto_gps_checkout(now_dt, helpers):
     """Auto mark check-out after checkout window end for pending GPS sessions."""
     from models import Driver, DriverAttendance, db
@@ -121,16 +109,22 @@ def _run_auto_gps_checkout(now_dt, helpers):
         co_s, co_e, _cross = helpers['checkout_bounds'](driver, tw, rec.check_in)
         if not co_e:
             continue
-        if not _window_end_due(rec.attendance_date, co_s, co_e, now_dt):
+        if not _checkout_window_end_passed(rec.attendance_date, rec.check_in, co_s, co_e, now_dt):
             continue
 
-        rec.check_out = now_dt.time()
-        rec.check_out_date = now_dt.date()
+        end_dt = _checkout_window_end_datetime(
+            rec.attendance_date, rec.check_in, co_s, co_e,
+        )
+        if not end_dt:
+            continue
+
+        rec.check_out = end_dt.time()
+        rec.check_out_date = end_dt.date()
         rec.updated_at = now_dt
         remark = (rec.remarks or '').strip()
-        tag = 'Auto check-out by settings'
-        if tag.lower() not in remark.lower():
-            rec.remarks = ((remark + ' | ') if remark else '') + tag
+        auto_tag = GPS_AUTO_CHECKOUT_REMARK
+        if auto_tag.lower() not in remark.lower():
+            rec.remarks = ((remark + ' | ') if remark else '') + auto_tag
         updated += 1
     if updated:
         try:
@@ -295,6 +289,9 @@ def _build_helpers():
         _attendance_auto_gps_checkout_on_window_end_enabled,
         _attendance_capacity_one_checkin_mode,
         _checkin_window_slot_from_time,
+        _checkout_window_end_datetime,
+        _checkout_window_end_passed,
+        GPS_AUTO_CHECKOUT_REMARK,
         _manual_checkin_blocked_by_vehicle_rules,
         _open_gps_driver_attendance_for_checkout,
         _open_gps_driver_attendance_session,
