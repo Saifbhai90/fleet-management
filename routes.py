@@ -1069,6 +1069,11 @@ def _preserve_nav_from(params=None):
     return preserve_nav_from(params)
 
 
+def _redirect_with_nav(endpoint, **params):
+    """Redirect and keep nav_from so Back stays on hub / Report Centre after refresh."""
+    return redirect(url_for(endpoint, **_preserve_nav_from(params)))
+
+
 def _resolve_nav_back_url(default_url):
     from nav_back import get_nav_from, resolve_nav_back
     return resolve_nav_back(get_nav_from(), default_url, 'Back')[0]

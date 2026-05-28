@@ -1563,7 +1563,7 @@
     <script src="{{ url_for('static', filename='js/legacy_android_gpu.js') }}" defer></script>
     {% block extra_head %}{% endblock %}
 </head>
-<body{% if request.endpoint == 'dashboard' %} class="page-dashboard fm-aurora-theme" data-fleet-page="dashboard"{% elif request.endpoint == 'report_driver_profile_public' %} class="driver-profile-public-view"{% else %} class="fm-aurora-theme"{% endif %}>
+<body{% if request.endpoint == 'dashboard' %} class="page-dashboard fm-aurora-theme" data-fleet-page="dashboard"{% elif request.endpoint == 'report_driver_profile_public' %} class="driver-profile-public-view"{% else %} class="fm-aurora-theme"{% endif %}{% if request.endpoint %} data-fleet-endpoint="{{ request.endpoint }}"{% endif %}>
 <script>if(localStorage.getItem('fleetDarkMode')==='on'){document.body.classList.remove('fm-aurora-theme');document.body.classList.add('dark-mode');}</script>
 <div id="topLoadBar"></div>
 
@@ -5672,6 +5672,14 @@
             });
         };
 
+        window.fleetPersistNavBack = function(href, navFrom, scope) {
+            try {
+                if (href) sessionStorage.setItem('fleet_nav_back_href', href);
+                if (navFrom) sessionStorage.setItem('fleet_nav_from', navFrom);
+                if (scope) sessionStorage.setItem('fleet_nav_back_scope', scope);
+            } catch (err) { /* private mode */ }
+        };
+
         window.fleetNavigateBack = function(e, el) {
             if (e) {
                 e.preventDefault();
@@ -5682,7 +5690,11 @@
                 b.disabled = false;
                 b.classList.remove('btn-loading');
             });
-            var href = (el && el.getAttribute('data-fleet-nav-back-href')) || (el && el.getAttribute('href'));
+            var href = null;
+            try { href = sessionStorage.getItem('fleet_nav_back_href'); } catch (err) {}
+            if (!href || href.indexOf('javascript:') === 0) {
+                href = (el && el.getAttribute('data-fleet-nav-back-href')) || (el && el.getAttribute('href'));
+            }
             if (href && href !== '#' && href.indexOf('javascript:') !== 0) {
                 window.location.assign(href);
                 return false;
@@ -5690,6 +5702,15 @@
             window.location.assign('/dashboard');
             return false;
         };
+
+        document.addEventListener('DOMContentLoaded', function() {
+            var btn = document.querySelector('[data-fleet-nav-back="1"]');
+            if (!btn) return;
+            var href = btn.getAttribute('data-fleet-nav-back-href') || btn.getAttribute('href');
+            var nf = btn.getAttribute('data-nav-from') || '';
+            var scope = document.body.getAttribute('data-fleet-endpoint') || '';
+            if (href) window.fleetPersistNavBack(href, nf, scope);
+        });
 
         // ── Loading spinner on filter form submit ──
         document.addEventListener('submit', function(e) {

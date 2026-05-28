@@ -1,7 +1,7 @@
-"""Resolve Back navigation — lock hub / Report Centre URL when a report opens (never dashboard or history)."""
+"""Resolve Back navigation — return to hub or Report Centre where the user opened the page (not browser history)."""
 from __future__ import annotations
 
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 from flask import request, session, url_for
 
@@ -10,6 +10,21 @@ HISTORY_BACK = 'javascript:history.back()'
 SESSION_NAV_BACK_HREF = 'nav_back_href'
 SESSION_NAV_BACK_SCOPE = 'nav_back_scope'
 SESSION_NAV_RETURN_BASE = 'nav_return_base'
+
+# Analytics / reports that live primarily under Report Centre (not hub default for back)
+REPORT_CENTRE_ONLY_ENDPOINTS = frozenset({
+    'speed_monitoring_report', 'speed_monitoring_report_export', 'speed_monitoring_report_print',
+    'speed_monitoring_report_preview', 'mileage_report', 'mileage_report_export',
+    'mileage_report_print', 'mileage_report_preview', 'tracker_difference_report',
+    'tracker_difference_report_export', 'tracker_difference_report_print',
+    'tracker_difference_report_preview', 'unauthorized_movement_report',
+    'unauthorized_movement_report_export', 'unauthorized_movement_report_print',
+    'unauthorized_movement_report_preview', 'task_start_delay_report',
+    'task_start_delay_report_export', 'task_start_delay_report_print',
+    'task_start_delay_report_preview', 'task_turnaround_report', 'task_turnaround_report_export',
+    'task_turnaround_report_print', 'task_turnaround_report_preview', 'unexecuted_task_report',
+    'unexecuted_task_report_export', 'activity_log_report',
+})
 
 
 def get_nav_from(req=None):
@@ -70,39 +85,42 @@ def _referrer_is_hub_or_reports(ref):
     return False
 
 
-def default_back_url_for_endpoint(endpoint):
-    """Hub or Report Centre for report routes — not dashboard."""
+def _hub_slug_for_endpoint(endpoint):
     if not endpoint:
         return None
-    report_endpoints = {
-        'speed_monitoring_report', 'speed_monitoring_report_export', 'speed_monitoring_report_print',
-        'speed_monitoring_report_preview', 'mileage_report', 'mileage_report_export', 'mileage_report_print',
-        'mileage_report_preview', 'tracker_difference_report', 'tracker_difference_report_export',
-        'tracker_difference_report_print', 'tracker_difference_report_preview',
-        'unauthorized_movement_report', 'unauthorized_movement_report_export',
-        'unauthorized_movement_report_print', 'unauthorized_movement_report_preview',
-        'task_start_delay_report', 'task_start_delay_report_export', 'task_start_delay_report_print',
-        'task_start_delay_report_preview', 'task_turnaround_report', 'task_turnaround_report_export',
-        'task_turnaround_report_print', 'task_turnaround_report_preview', 'unexecuted_task_report',
-        'unexecuted_task_report_export', 'driver_attendance_report', 'driver_attendance_daily_report',
-        'driver_attendance_tra_report', 'driver_attendance_list', 'driver_attendance_mark',
-        'driver_attendance_pending', 'driver_attendance_missing_checkout', 'red_task_list',
-        'red_task_summary', 'red_task_summary_detail', 'without_task_list', 'task_report_logbook_cover',
-        'task_report_logbook_view', 'task_report_logbook_view_all', 'task_report_list',
-        'task_report_new', 'activity_log_report',
-    }
-    if endpoint in report_endpoints:
-        try:
-            return url_for('reports_index')
-        except Exception:
-            pass
     try:
         from hub_registry import HUB_ACTIVE_ENDPOINTS
         for slug, eps in HUB_ACTIVE_ENDPOINTS.items():
             if endpoint in eps:
-                return url_for('module_hub', hub_slug=slug)
+                return slug
     except Exception:
         pass
+    return None
+
+
+def default_back_url_for_endpoint(endpoint):
+    """Best default Back target: nav_from session, then owning hub, then Report Centre."""
+    if not endpoint:
+        return None
+
+    nf = (session.get('nav_from') or '').strip()
+    href = _href_from_nav_from(nf)
+    if href:
+        return href
+
+    slug = _hub_slug_for_endpoint(endpoint)
+    if slug:
+        try:
+            return url_for('module_hub', hub_slug=slug)
+        except Exception:
+            pass
+
+    if endpoint in REPORT_CENTRE_ONLY_ENDPOINTS:
+        try:
+            return url_for('reports_index')
+        except Exception:
+            pass
+
     return None
 
 
@@ -293,3 +311,18 @@ def nav_from_amp(nav_from=None, req=None):
 
 def hub_nav_from(slug):
     return f'hub:{slug}'
+
+
+def merge_nav_from_into_url(url, nav_from=None):
+    """Append nav_from query param so refresh/bookmark keeps Back origin."""
+    nf = (nav_from if nav_from is not None else get_nav_from() or '').strip()
+    if not nf or not url:
+        return url
+    try:
+        parts = urlparse(url)
+        q = parse_qs(parts.query, keep_blank_values=True)
+        q['nav_from'] = [nf]
+        new_query = urlencode(q, doseq=True)
+        return urlunparse((parts.scheme, parts.netloc, parts.path, parts.params, new_query, parts.fragment))
+    except Exception:
+        return url
