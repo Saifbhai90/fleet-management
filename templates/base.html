@@ -5672,9 +5672,42 @@
             });
         };
 
+        window.fleetIsDashboardNavUrl = function(href) {
+            if (!href || href === '#') return true;
+            if (href.indexOf('javascript:') === 0) return true;
+            try {
+                var p = new URL(href, window.location.origin).pathname.replace(/\/+$/, '') || '/';
+                return p === '/' || p === '/dashboard';
+            } catch (err) {
+                return href === '/' || href.indexOf('/dashboard') >= 0;
+            }
+        };
+
+        window.fleetResolveNavBackHref = function(el) {
+            var href = (el && el.getAttribute('data-fleet-nav-back-href')) || (el && el.getAttribute('href'));
+            if (href && !window.fleetIsDashboardNavUrl(href)) return href;
+            var nf = (el && el.getAttribute('data-nav-from')) || '';
+            try { if (!nf) nf = sessionStorage.getItem('fleet_nav_from') || ''; } catch (err) {}
+            if (nf.indexOf('hub:') === 0) {
+                href = '/hub/' + encodeURIComponent(nf.slice(4));
+                if (!window.fleetIsDashboardNavUrl(href)) return href;
+            }
+            if (nf === 'reports') {
+                href = '{{ url_for("reports_index") }}';
+                if (!window.fleetIsDashboardNavUrl(href)) return href;
+            }
+            try {
+                href = sessionStorage.getItem('fleet_nav_back_href');
+                if (href && !window.fleetIsDashboardNavUrl(href)) return href;
+            } catch (err) {}
+            return null;
+        };
+
         window.fleetPersistNavBack = function(href, navFrom, scope) {
             try {
-                if (href) sessionStorage.setItem('fleet_nav_back_href', href);
+                if (href && !window.fleetIsDashboardNavUrl(href)) {
+                    sessionStorage.setItem('fleet_nav_back_href', href);
+                }
                 if (navFrom) sessionStorage.setItem('fleet_nav_from', navFrom);
                 if (scope) sessionStorage.setItem('fleet_nav_back_scope', scope);
             } catch (err) { /* private mode */ }
@@ -5690,25 +5723,30 @@
                 b.disabled = false;
                 b.classList.remove('btn-loading');
             });
-            var href = null;
-            try { href = sessionStorage.getItem('fleet_nav_back_href'); } catch (err) {}
-            if (!href || href.indexOf('javascript:') === 0) {
-                href = (el && el.getAttribute('data-fleet-nav-back-href')) || (el && el.getAttribute('href'));
-            }
-            if (href && href !== '#' && href.indexOf('javascript:') !== 0) {
+            var href = window.fleetResolveNavBackHref(el);
+            if (href) {
                 window.location.assign(href);
                 return false;
             }
-            window.location.assign('/dashboard');
+            window.location.assign('{{ url_for("reports_index") }}');
             return false;
         };
 
         document.addEventListener('DOMContentLoaded', function() {
+            if (document.body.getAttribute('data-fleet-page') === 'dashboard') {
+                try {
+                    sessionStorage.removeItem('fleet_nav_back_href');
+                    sessionStorage.removeItem('fleet_nav_back_scope');
+                } catch (err) {}
+            }
             var btn = document.querySelector('[data-fleet-nav-back="1"]');
             if (!btn) return;
             var href = btn.getAttribute('data-fleet-nav-back-href') || btn.getAttribute('href');
             var nf = btn.getAttribute('data-nav-from') || '';
             var scope = document.body.getAttribute('data-fleet-endpoint') || '';
+            if (!href || window.fleetIsDashboardNavUrl(href)) {
+                href = window.fleetResolveNavBackHref(btn);
+            }
             if (href) window.fleetPersistNavBack(href, nf, scope);
         });
 

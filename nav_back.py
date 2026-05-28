@@ -243,6 +243,8 @@ def _pick_final_back_url(default_url, nav_from):
     href = _href_from_nav_from(nav_from or session.get('nav_from') or '')
     if not href:
         href = session.get(SESSION_NAV_RETURN_BASE)
+    if href and _is_dashboard_url(href):
+        href = None
     if not href and default_url and not _is_dashboard_url(default_url):
         href = default_url
     if not href:
@@ -251,10 +253,22 @@ def _pick_final_back_url(default_url, nav_from):
         try:
             href = url_for('reports_index')
         except Exception:
-            href = '/'
+            href = None
+    if not href:
+        slug = _hub_slug_for_endpoint(request.endpoint)
+        if slug:
+            try:
+                href = url_for('module_hub', hub_slug=slug)
+            except Exception:
+                href = None
     if href and not _is_dashboard_url(href):
         _lock_nav_back(href, request.endpoint)
-    return href
+    if href:
+        return href
+    try:
+        return url_for('reports_index')
+    except Exception:
+        return default_url if default_url and not _is_dashboard_url(default_url) else None
 
 
 def nav_back_context(default_url=None, default_label='Back', req=None, show_without_nav_from=True):

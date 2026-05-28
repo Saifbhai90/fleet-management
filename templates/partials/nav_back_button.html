@@ -1,5 +1,12 @@
 {% macro nav_back_button() %}
-{% set back_href = nav_back_url or nav_back_url_auto or url_for('dashboard') %}
+{% set back_href = nav_back_url or nav_back_url_auto %}
+{% if not back_href and nav_from and nav_from.startswith('hub:') %}
+  {% set back_href = url_for('module_hub', hub_slug=nav_from[4:]) %}
+{% elif not back_href and nav_from == 'reports' %}
+  {% set back_href = url_for('reports_index') %}
+{% elif not back_href %}
+  {% set back_href = url_for('reports_index') %}
+{% endif %}
 <a href="{{ back_href }}"
    class="btn-nav-back-rounded"
    title="Go Back"
