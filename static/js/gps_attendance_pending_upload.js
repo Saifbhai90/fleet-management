@@ -53,6 +53,59 @@
     return null;
   }
 
+  // Max days a pending record is valid (checkin/checkout: today only; odometer: 3 days).
+  var CHECKIN_CHECKOUT_MAX_AGE_DAYS = 0;
+  var ODOMETER_MAX_AGE_DAYS = 3;
+
+  function parseDmy(dmy) {
+    // Parses dd-mm-yyyy into a Date at midnight PKT.
+    if (!dmy) return null;
+    var parts = dmy.split('-');
+    if (parts.length !== 3) return null;
+    return new Date(parseInt(parts[2], 10), parseInt(parts[1], 10) - 1, parseInt(parts[0], 10));
+  }
+
+  function daysDiff(dmy) {
+    // How many calendar days ago was this date? Positive = in the past.
+    var d = parseDmy(dmy);
+    if (!d) return 999;
+    var todayStr = currentDateDmy();
+    var today = parseDmy(todayStr);
+    if (!today) return 999;
+    return Math.round((today - d) / 86400000);
+  }
+
+  function isStale(item) {
+    // Checkin/checkout records from a previous date are STALE — must NOT be uploaded.
+    // Uploading an old photo to today's attendance record is incorrect.
+    if (item.kind === 'checkin' || item.kind === 'checkout') {
+      return daysDiff(item.date) > CHECKIN_CHECKOUT_MAX_AGE_DAYS;
+    }
+    // Odometer records are allowed up to ODOMETER_MAX_AGE_DAYS old.
+    if (item.kind === 'odometer') {
+      return daysDiff(item.date) > ODOMETER_MAX_AGE_DAYS;
+    }
+    return false;
+  }
+
+  function purgeStalePending() {
+    // Remove any localStorage entries that are too old to be uploaded correctly.
+    try {
+      var keysToRemove = [];
+      for (var i = 0; i < localStorage.length; i++) {
+        var key = localStorage.key(i);
+        if (!key) continue;
+        if (key.indexOf(CHECKIN_PREFIX) !== 0 && key.indexOf(CHECKOUT_PREFIX) !== 0 && key.indexOf(ODOMETER_PREFIX) !== 0) continue;
+        var meta = parseStorageKey(key);
+        if (!meta) continue;
+        if (isStale({ kind: meta.kind, date: meta.date })) {
+          keysToRemove.push(key);
+        }
+      }
+      keysToRemove.forEach(function (k) { localStorage.removeItem(k); });
+    } catch (e) { /* private mode */ }
+  }
+
   function listAllPending() {
     var out = [];
     try {
@@ -64,6 +117,8 @@
         }
         var meta = parseStorageKey(key);
         if (!meta) continue;
+        // Skip stale records — uploading old photos to today's record is wrong.
+        if (isStale({ kind: meta.kind, date: meta.date })) continue;
         var raw = localStorage.getItem(key);
         if (!raw) continue;
         var payload;
@@ -433,6 +488,7 @@
     var el = getBannerEl();
     var c = cfg();
     if (!el || (!c.checkinUrl && !c.odometerUploadUrl)) return;
+    purgeStalePending();  // Remove old-date checkin/checkout records before doing anything.
     setupListeners();
     refreshBanner();
     if (listAllPending().length) {
