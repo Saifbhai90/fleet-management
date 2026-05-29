@@ -225,20 +225,23 @@ def _run_tracker_job_inner(job_id: int, app, jlog: 'JobLogger'):
     jlog.info('Step 2: Chromium browser launch ho raha hai...')
     jlog.flush_now()
 
-    # Force Playwright browser path — absolute non-hidden dir, no env-var dependency
-    _PW_PATH = '/opt/render/project/src/playwright-browsers'
-    os.environ['PLAYWRIGHT_BROWSERS_PATH'] = _PW_PATH
-    jlog.info(f'Forcing PLAYWRIGHT_BROWSERS_PATH = {_PW_PATH}')
-    if os.path.isdir(_PW_PATH):
-        jlog.ok(f'Browser dir EXISTS: {_PW_PATH}')
-        try:
-            _subdirs = [d for d in os.listdir(_PW_PATH) if 'chromium' in d.lower()]
-            jlog.info(f'Chromium dirs found: {_subdirs}')
-        except Exception:
-            pass
+    # Log effective Playwright browsers path for debug
+    _pw_env = os.environ.get('PLAYWRIGHT_BROWSERS_PATH', '')
+    if _pw_env:
+        jlog.info(f'PLAYWRIGHT_BROWSERS_PATH (env) = {_pw_env}')
+        if os.path.isdir(_pw_env):
+            jlog.ok(f'Browser dir EXISTS: {_pw_env}')
+        else:
+            jlog.warn(f'Browser dir NOT FOUND at env path: {_pw_env}')
     else:
-        jlog.warn(f'Browser dir NOT FOUND: {_PW_PATH}')
-        jlog.warn('Build mein playwright install fail hua hoga — Render Dashboard > Logs > Build check karein.')
+        jlog.info('PLAYWRIGHT_BROWSERS_PATH not set — using Playwright default path')
+        # Check common default locations for debug info
+        for _d in ['/root/.cache/ms-playwright', '/home/render/.cache/ms-playwright']:
+            if os.path.isdir(_d):
+                jlog.ok(f'Default browser dir found at: {_d}')
+                break
+        else:
+            jlog.warn('Default browser dirs not found — relying on Playwright internal resolution')
     jlog.flush_now()
 
     # RAM check before launching heavy browser
