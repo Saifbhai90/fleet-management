@@ -46,3 +46,6 @@ firebase-service-account.json
 *.swp
 .DS_Store
 Thumbs.db
+
+# Playwright browser binaries (downloaded on Render during build)
+.playwright-browsers/

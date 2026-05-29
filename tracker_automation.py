@@ -225,11 +225,18 @@ def _run_tracker_job_inner(job_id: int, app, jlog: 'JobLogger'):
     jlog.info('Step 2: Chromium browser launch ho raha hai...')
     jlog.flush_now()
 
-    # Ensure Playwright finds the binary installed during Render build
-    _pw_cache = '/opt/render/.cache/ms-playwright'
-    if os.path.isdir(_pw_cache):
-        os.environ.setdefault('PLAYWRIGHT_BROWSERS_PATH', _pw_cache)
-        jlog.info(f'PLAYWRIGHT_BROWSERS_PATH set to {_pw_cache}')
+    # Ensure Playwright finds the binary installed during Render build.
+    # Priority: project-local path (persisted by Render) > old cache path > default.
+    for _pw_candidate in [
+        '/opt/render/project/src/.playwright-browsers',
+        '/opt/render/.cache/ms-playwright',
+    ]:
+        if os.path.isdir(_pw_candidate):
+            os.environ['PLAYWRIGHT_BROWSERS_PATH'] = _pw_candidate
+            jlog.info(f'PLAYWRIGHT_BROWSERS_PATH = {_pw_candidate}')
+            break
+    else:
+        jlog.warn('PLAYWRIGHT_BROWSERS_PATH: koi known path nahi mila — default use hoga')
     jlog.flush_now()
 
     try:
