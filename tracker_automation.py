@@ -286,13 +286,20 @@ def _run_tracker_job_inner(job_id: int, app, jlog: 'JobLogger'):
 
                     # Check login success
                     current_url = page.url
+                    page_title = page.title()
+
+                    # Extract any error/alert message shown on page
+                    portal_msg = _extract_page_message(page)
+                    if portal_msg:
+                        jlog.info(f'Portal message: "{portal_msg}"')
+
                     if _is_logged_in(page, portal_url):
                         logged_in = True
                         jlog.ok(f'Login successful! URL: {current_url}')
                         jlog.flush_now()
                         break
                     else:
-                        jlog.warn(f'Login fail — URL: {current_url} — retry...')
+                        jlog.warn(f'Login fail — Title: "{page_title}" — URL: {current_url}')
                         jlog.flush_now()
                         page.goto(portal_url, wait_until='domcontentloaded', timeout=30000)
                         time.sleep(1.5)
@@ -419,6 +426,35 @@ def _is_logged_in(page, portal_url: str) -> bool:
         if ind in url or ind in title:
             return False
     return True
+
+
+def _extract_page_message(page) -> str:
+    """
+    Try to extract any visible error or success message from the portal page.
+    Checks common alert/validation selectors used by ASP.NET and generic portals.
+    Returns the message text or empty string.
+    """
+    selectors = [
+        # Bootstrap alerts
+        '.alert', '.alert-danger', '.alert-success', '.alert-warning', '.alert-info',
+        # ASP.NET validator / label
+        'span[id*="error" i]', 'span[id*="msg" i]', 'span[id*="Error" i]',
+        'label[id*="error" i]', 'div[id*="error" i]',
+        # Generic
+        '.error-message', '.success-message', '.validation-summary-errors',
+        '#lblMessage', '#lblError', '#lblStatus', '#ErrorMessage',
+        'div[class*="error" i]', 'div[class*="alert" i]', 'p[class*="error" i]',
+    ]
+    for sel in selectors:
+        try:
+            el = page.locator(sel).first
+            if el.count() > 0:
+                txt = (el.inner_text() or '').strip()
+                if txt and len(txt) < 300:
+                    return txt
+        except Exception:
+            pass
+    return ''
 
 
 def _do_relogin(page, portal_url: str, username: str, password: str, jlog: JobLogger):
