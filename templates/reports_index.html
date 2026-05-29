@@ -326,19 +326,19 @@
 
             {% if can_see_page('report_vehicle_summary') %}
 
-            {{ report_link(url_for('report_vehicle_summary'), 'fa-solid fa-bus', 'Vehicle Summary', 'rc-tile--vehicle-summary') }}
+            {{ report_link(url_for('report_vehicle_summary', nav_from='reports'), 'fa-solid fa-bus', 'Vehicle Summary', 'rc-tile--vehicle-summary') }}
 
             {% endif %}
 
             {% if can_see_page('vehicles_list') or can_see_page('report_vehicle_profile') %}
 
-            {{ report_link(url_for('vehicles_list'), 'fa-solid fa-id-card', 'Vehicle Profile', 'rc-tile--vehicle-profile', 'Full vehicle history, transfers, driver assignments') }}
+            {{ report_link(url_for('vehicles_list', nav_from='reports'), 'fa-solid fa-id-card', 'Vehicle Profile', 'rc-tile--vehicle-profile', 'Full vehicle history, transfers, driver assignments') }}
 
             {% endif %}
 
             {% if can_see_page('report_parking_utilization') %}
 
-            {{ report_link(url_for('report_parking_utilization'), 'fa-solid fa-square-parking', 'Parking Utilization', 'rc-tile--parking') }}
+            {{ report_link(url_for('report_parking_utilization', nav_from='reports'), 'fa-solid fa-square-parking', 'Parking Utilization', 'rc-tile--parking') }}
 
             {% endif %}
 
@@ -360,19 +360,19 @@
 
             {% if can_see_page('report_project_summary') %}
 
-            {{ report_link(url_for('report_project_summary'), 'fa-solid fa-diagram-project', 'Project Summary', 'rc-tile--project') }}
+            {{ report_link(url_for('report_project_summary', nav_from='reports'), 'fa-solid fa-diagram-project', 'Project Summary', 'rc-tile--project') }}
 
             {% endif %}
 
             {% if can_see_page('report_district_summary') %}
 
-            {{ report_link(url_for('report_district_summary'), 'fa-solid fa-location-dot', 'District Summary', 'rc-tile--district') }}
+            {{ report_link(url_for('report_district_summary', nav_from='reports'), 'fa-solid fa-location-dot', 'District Summary', 'rc-tile--district') }}
 
             {% endif %}
 
             {% if can_see_page('report_company_profile') %}
 
-            {{ report_link(url_for('companies', mode='report'), 'fa-solid fa-city', 'Company Profile', 'rc-tile--company') }}
+            {{ report_link(url_for('companies', mode='report', nav_from='reports'), 'fa-solid fa-city', 'Company Profile', 'rc-tile--company') }}
 
             {% endif %}
 
@@ -394,37 +394,37 @@
 
             {% if can_see_page('fuel_expense_list') %}
 
-            {{ report_link(url_for('fuel_expense_list'), 'fa-solid fa-gas-pump', 'Fuel Expense Report', 'rc-tile--fuel') }}
+            {{ report_link(url_for('fuel_expense_list', nav_from='reports'), 'fa-solid fa-gas-pump', 'Fuel Expense Report', 'rc-tile--fuel') }}
 
             {% endif %}
 
             {% if can_see_page('oil_expense_list') %}
 
-            {{ report_link(url_for('oil_expense_list'), 'fa-solid fa-droplet', 'Oil Expense Report', 'rc-tile--oil') }}
+            {{ report_link(url_for('oil_expense_list', nav_from='reports'), 'fa-solid fa-droplet', 'Oil Expense Report', 'rc-tile--oil') }}
 
             {% endif %}
 
             {% if can_see_page('maintenance_expense_list') %}
 
-            {{ report_link(url_for('maintenance_expense_list'), 'fa-solid fa-wrench', 'Maintenance Expense Report', 'rc-tile--maintenance') }}
+            {{ report_link(url_for('maintenance_expense_list', nav_from='reports'), 'fa-solid fa-wrench', 'Maintenance Expense Report', 'rc-tile--maintenance') }}
 
             {% endif %}
 
             {% if can_see_page('maintenance_expense_list') %}
 
-            {{ report_link(url_for('maintenance_work_order_list'), 'fa-solid fa-clipboard-check', 'Maintenance Work Order Report', 'rc-tile--work-order') }}
+            {{ report_link(url_for('maintenance_work_order_list', nav_from='reports'), 'fa-solid fa-clipboard-check', 'Maintenance Work Order Report', 'rc-tile--work-order') }}
 
             {% endif %}
 
             {% if can_see_page('oil_change_alert_report') %}
 
-            {{ report_link(url_for('oil_change_alert_report'), 'fa-solid fa-bell', 'Oil Change Alert Report', 'rc-tile--oil-alert', 'Vehicle family limit ke near / crossed alerts') }}
+            {{ report_link(url_for('oil_change_alert_report', nav_from='reports'), 'fa-solid fa-bell', 'Oil Change Alert Report', 'rc-tile--oil-alert', 'Vehicle family limit ke near / crossed alerts') }}
 
             {% endif %}
 
             {% if can_see_page('maintenance_expense_list') %}
 
-            {{ report_link(url_for('maintenance_baseline_alert_report'), 'fa-solid fa-chart-line', 'Maintenance Baseline Alert Report', 'rc-tile--baseline-alert', 'Product + Job Category tracking with due status') }}
+            {{ report_link(url_for('maintenance_baseline_alert_report', nav_from='reports'), 'fa-solid fa-chart-line', 'Maintenance Baseline Alert Report', 'rc-tile--baseline-alert', 'Product + Job Category tracking with due status') }}
 
             {% endif %}
 
@@ -594,31 +594,31 @@
 
             {% if can_see_page('active_drivers_report') %}
 
-            {{ report_link(url_for('active_drivers_report'), 'fa-solid fa-users', 'Active Driver Summary', 'rc-tile--active-drivers') }}
+            {{ report_link(url_for('active_drivers_report', nav_from='reports'), 'fa-solid fa-users', 'Active Driver Summary', 'rc-tile--active-drivers') }}
 
             {% endif %}
 
             {% if can_see_page('driver_seat_available_report') %}
 
-            {{ report_link(url_for('driver_seat_available_report'), 'fa-solid fa-id-badge', 'Driver Seat Available', 'rc-tile--seat') }}
+            {{ report_link(url_for('driver_seat_available_report', nav_from='reports'), 'fa-solid fa-id-badge', 'Driver Seat Available', 'rc-tile--seat') }}
 
             {% endif %}
 
             {% if can_see_page('missing_documents_report') %}
 
-            {{ report_link(url_for('missing_documents_report'), 'fa-solid fa-file-circle-xmark', 'Missing Documents', 'rc-tile--missing-docs') }}
+            {{ report_link(url_for('missing_documents_report', nav_from='reports'), 'fa-solid fa-file-circle-xmark', 'Missing Documents', 'rc-tile--missing-docs') }}
 
             {% endif %}
 
             {% if can_see_page('penalty_record_list') %}
 
-            {{ report_link(url_for('penalty_record_list'), 'fa-solid fa-circle-exclamation', 'Driver Penalty Records', 'rc-tile--penalty') }}
+            {{ report_link(url_for('penalty_record_list', nav_from='reports'), 'fa-solid fa-circle-exclamation', 'Driver Penalty Records', 'rc-tile--penalty') }}
 
             {% endif %}
 
             {% if can_see_page('driver_salary_slip') %}
 
-            {{ report_link(url_for('driver_salary_slip'), 'fa-solid fa-building-columns', 'Driver Salary Slip (Bank)', 'rc-tile--salary', 'Loan / bank file: driver auto-fill, salary details manually.') }}
+            {{ report_link(url_for('driver_salary_slip', nav_from='reports'), 'fa-solid fa-building-columns', 'Driver Salary Slip (Bank)', 'rc-tile--salary', 'Loan / bank file: driver auto-fill, salary details manually.') }}
 
             {% endif %}
 
@@ -654,7 +654,7 @@
 
             {% if can_see_page('report_expiry') %}
 
-            {{ report_link(url_for('report_expiry'), 'fa-solid fa-address-card', 'License / CNIC Expiry', 'rc-tile--expiry') }}
+            {{ report_link(url_for('report_expiry', nav_from='reports'), 'fa-solid fa-address-card', 'License / CNIC Expiry', 'rc-tile--expiry') }}
 
             {% endif %}
 
@@ -676,13 +676,13 @@
 
             {% if can_see_page('driver_job_left_list') %}
 
-            {{ report_link(url_for('driver_job_left_list'), 'fa-solid fa-user-minus', 'Resignation / Exit Report', 'rc-tile--resignation') }}
+            {{ report_link(url_for('driver_job_left_list', nav_from='reports'), 'fa-solid fa-user-minus', 'Resignation / Exit Report', 'rc-tile--resignation') }}
 
             {% endif %}
 
             {% if can_see_page('driver_rejoin_list') %}
 
-            {{ report_link(url_for('driver_rejoin_list'), 'fa-solid fa-user-plus', 'Re-employment Report', 'rc-tile--rejoin') }}
+            {{ report_link(url_for('driver_rejoin_list', nav_from='reports'), 'fa-solid fa-user-plus', 'Re-employment Report', 'rc-tile--rejoin') }}
 
             {% endif %}
 
@@ -726,25 +726,25 @@
 
             {% if can_see_page('payment_vouchers_list') %}
 
-            {{ report_link(url_for('payment_vouchers_list'), 'fa-solid fa-money-bill-wave', 'Payment Vouchers', 'rc-tile--payment') }}
+            {{ report_link(url_for('payment_vouchers_list', nav_from='reports'), 'fa-solid fa-money-bill-wave', 'Payment Vouchers', 'rc-tile--payment') }}
 
             {% endif %}
 
             {% if can_see_page('receipt_vouchers_list') %}
 
-            {{ report_link(url_for('receipt_vouchers_list'), 'fa-solid fa-file-invoice-dollar', 'Receipt Vouchers', 'rc-tile--receipt') }}
+            {{ report_link(url_for('receipt_vouchers_list', nav_from='reports'), 'fa-solid fa-file-invoice-dollar', 'Receipt Vouchers', 'rc-tile--receipt') }}
 
             {% endif %}
 
             {% if can_see_page('bank_entries_list') %}
 
-            {{ report_link(url_for('bank_entries_list'), 'fa-solid fa-university', 'Bank Entries', 'rc-tile--bank-entry') }}
+            {{ report_link(url_for('bank_entries_list', nav_from='reports'), 'fa-solid fa-university', 'Bank Entries', 'rc-tile--bank-entry') }}
 
             {% endif %}
 
             {% if can_see_page('journal_vouchers_list') %}
 
-            {{ report_link(url_for('journal_vouchers_list'), 'fa-solid fa-book', 'Journal Vouchers', 'rc-tile--journal-v') }}
+            {{ report_link(url_for('journal_vouchers_list', nav_from='reports'), 'fa-solid fa-book', 'Journal Vouchers', 'rc-tile--journal-v') }}
 
             {% endif %}
 
@@ -766,19 +766,19 @@
 
             {% if can_see_page('accounts_account_ledger') %}
 
-            {{ report_link(url_for('accounts_account_ledger'), 'fa-solid fa-list-check', 'Account Ledger', 'rc-tile--ledger') }}
+            {{ report_link(url_for('accounts_account_ledger', nav_from='reports'), 'fa-solid fa-list-check', 'Account Ledger', 'rc-tile--ledger') }}
 
             {% endif %}
 
             {% if can_see_page('wallet_dashboard') %}
 
-            {{ report_link(url_for('wallet_dashboard'), 'fa-solid fa-wallet', 'Wallet Dashboard', 'rc-tile--wallet') }}
+            {{ report_link(url_for('wallet_dashboard', nav_from='reports'), 'fa-solid fa-wallet', 'Wallet Dashboard', 'rc-tile--wallet') }}
 
             {% endif %}
 
             {% if can_see_page('fund_transfers_list') %}
 
-            {{ report_link(url_for('fund_transfers_list'), 'fa-solid fa-right-left', 'Fund Transfers', 'rc-tile--transfer') }}
+            {{ report_link(url_for('fund_transfers_list', nav_from='reports'), 'fa-solid fa-right-left', 'Fund Transfers', 'rc-tile--transfer') }}
 
             {% endif %}
 
@@ -800,13 +800,13 @@
 
             {% if can_see_page('accounts_balance_sheet') %}
 
-            {{ report_link(url_for('accounts_balance_sheet'), 'fa-solid fa-chart-pie', 'Balance Sheet', 'rc-tile--balance') }}
+            {{ report_link(url_for('accounts_balance_sheet', nav_from='reports'), 'fa-solid fa-chart-pie', 'Balance Sheet', 'rc-tile--balance') }}
 
             {% endif %}
 
             {% if can_see_page('chart_of_accounts_list') %}
 
-            {{ report_link(url_for('chart_of_accounts_list'), 'fa-solid fa-sitemap', 'Chart of Accounts', 'rc-tile--chart-accounts') }}
+            {{ report_link(url_for('chart_of_accounts_list', nav_from='reports'), 'fa-solid fa-sitemap', 'Chart of Accounts', 'rc-tile--chart-accounts') }}
 
             {% endif %}
 
@@ -850,7 +850,7 @@
 
             {% if can_see_page('activity_log_report') %}
 
-            {{ report_link(url_for('activity_log_report'), 'fa-solid fa-wave-square', 'Activity & Login Log', 'rc-tile--activity', 'Login sessions, device info, IP, geolocation') }}
+            {{ report_link(url_for('activity_log_report', nav_from='reports'), 'fa-solid fa-wave-square', 'Activity & Login Log', 'rc-tile--activity', 'Login sessions, device info, IP, geolocation') }}
 
             {% endif %}
 
@@ -894,19 +894,19 @@
 
             {% if can_see_page('book_inventory_list') %}
 
-            {{ report_link(url_for('book_inventory_list'), 'fa-solid fa-stairs', 'Book Inventory', 'rc-tile--book-inv') }}
+            {{ report_link(url_for('book_inventory_list', nav_from='reports'), 'fa-solid fa-stairs', 'Book Inventory', 'rc-tile--book-inv') }}
 
             {% endif %}
 
             {% if can_see_page('book_assignment_list') %}
 
-            {{ report_link(url_for('book_assignment_list'), 'fa-solid fa-bookmark', 'Book Assignments', 'rc-tile--book-assign') }}
+            {{ report_link(url_for('book_assignment_list', nav_from='reports'), 'fa-solid fa-bookmark', 'Book Assignments', 'rc-tile--book-assign') }}
 
             {% endif %}
 
             {% if can_see_page('book_pending_returns') %}
 
-            {{ report_link(url_for('book_pending_returns'), 'fa-solid fa-arrow-rotate-left', 'Pending Book Returns', 'rc-tile--book-return') }}
+            {{ report_link(url_for('book_pending_returns', nav_from='reports'), 'fa-solid fa-arrow-rotate-left', 'Pending Book Returns', 'rc-tile--book-return') }}
 
             {% endif %}
 
