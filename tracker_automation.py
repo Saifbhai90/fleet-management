@@ -16,6 +16,7 @@ import os
 import re
 import threading
 import time
+import traceback
 import zipfile
 from datetime import datetime
 from pathlib import Path
@@ -73,48 +74,64 @@ class JobLogger:
         self._job_id = job_id
         self._app = app
         self._lines: list[str] = []
+        self._lock = threading.Lock()
+        self._last_flush: float = 0.0
+        self._flush_interval = 4.0  # seconds between DB writes
 
     def _ts(self) -> str:
         return datetime.now().strftime('%H:%M:%S')
 
+    def _append(self, line: str):
+        with self._lock:
+            self._lines.append(line)
+        self._flush(force=False)
+
     def info(self, msg: str):
-        line = f'[{self._ts()}] ℹ {msg}'
-        self._lines.append(line)
+        line = f'[{self._ts()}] i {msg}'
         logger.info('Job %s: %s', self._job_id, msg)
-        self._flush()
+        self._append(line)
 
     def ok(self, msg: str):
-        line = f'[{self._ts()}] ✅ {msg}'
-        self._lines.append(line)
+        line = f'[{self._ts()}] OK {msg}'
         logger.info('Job %s: %s', self._job_id, msg)
-        self._flush()
+        self._append(line)
 
     def warn(self, msg: str):
-        line = f'[{self._ts()}] ⚠️ {msg}'
-        self._lines.append(line)
+        line = f'[{self._ts()}] WARN {msg}'
         logger.warning('Job %s: %s', self._job_id, msg)
-        self._flush()
+        self._append(line)
 
     def error(self, msg: str):
-        line = f'[{self._ts()}] ❌ {msg}'
-        self._lines.append(line)
+        line = f'[{self._ts()}] ERROR {msg}'
         logger.error('Job %s: %s', self._job_id, msg)
-        self._flush()
+        self._append(line)
+        self._flush(force=True)  # always flush errors immediately
 
-    def _flush(self):
-        from models import TrackerAutomationJob, db
-        with self._app.app_context():
-            job = TrackerAutomationJob.query.get(self._job_id)
-            if job:
-                job.log_text = '\n'.join(self._lines[-300:])
-                try:
+    def _flush(self, force: bool = False):
+        now = time.time()
+        if not force and (now - self._last_flush) < self._flush_interval:
+            return
+        self._last_flush = now
+        with self._lock:
+            text = '\n'.join(self._lines[-500:])
+        try:
+            from models import TrackerAutomationJob, db
+            with self._app.app_context():
+                job = db.session.get(TrackerAutomationJob, self._job_id)
+                if job:
+                    job.log_text = text
                     db.session.commit()
-                except Exception:
-                    db.session.rollback()
+        except Exception as fe:
+            logger.warning('JobLogger flush error (non-fatal): %s', fe)
+
+    def flush_now(self):
+        """Force immediate DB write — call at end of job."""
+        self._flush(force=True)
 
     @property
     def full_log(self) -> str:
-        return '\n'.join(self._lines)
+        with self._lock:
+            return '\n'.join(self._lines)
 
 
 # ── Captcha OCR helper ───────────────────────────────────────────────────────
@@ -151,8 +168,22 @@ def run_tracker_job(job_id: int, app):
 
     jlog = JobLogger(job_id, app)
 
+    # ── Outer safety net: ANY unhandled exception → mark job failed ────────
+    try:
+        _run_tracker_job_inner(job_id, app, jlog)
+    except Exception as top_e:
+        tb = traceback.format_exc()
+        jlog.error(f'UNHANDLED CRASH: {top_e}')
+        jlog.error(f'Traceback:\n{tb}')
+        _mark_failed(job_id, app, jlog)
+
+
+def _run_tracker_job_inner(job_id: int, app, jlog: 'JobLogger'):
+    from models import TrackerAutomationJob, TrackerAutomationSettings, db
+    from utils import pk_now
+
     with app.app_context():
-        job = TrackerAutomationJob.query.get(job_id)
+        job = db.session.get(TrackerAutomationJob, job_id)
         if not job:
             return
         settings = TrackerAutomationSettings.query.first()
@@ -175,24 +206,36 @@ def run_tracker_job(job_id: int, app):
     jlog.info(f'Job #{job_id} shuru ho raha hai...')
     jlog.info(f'Portal: {portal_url}')
     jlog.info(f'Date range: {date_from_str} → {date_to_str}')
+    jlog.flush_now()
 
+    jlog.info('Step 1: Playwright import check...')
+    jlog.flush_now()
     try:
         from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
+        jlog.ok('Playwright import OK.')
+        jlog.flush_now()
     except ImportError:
-        jlog.error('Playwright install nahi hai. `pip install playwright` aur `playwright install chromium` run karein.')
+        jlog.error('Playwright install nahi hai. Render build logs check karein — `playwright install chromium` hona chahiye.')
         _mark_failed(job_id, app, jlog)
         return
 
     dl_dir = job_dir(job_id)
     downloaded_files: list[Path] = []
 
+    jlog.info('Step 2: Chromium browser launch ho raha hai...')
+    jlog.flush_now()
+
     try:
         with sync_playwright() as pw:
+            jlog.info('Step 3: Browser launching (headless mode)...')
+            jlog.flush_now()
             browser = pw.chromium.launch(
                 headless=True,
                 args=['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
                 downloads_path=str(dl_dir),
             )
+            jlog.ok('Browser launch successful.')
+            jlog.flush_now()
             context = browser.new_context(
                 accept_downloads=True,
                 viewport={'width': 1280, 'height': 900},
@@ -201,8 +244,11 @@ def run_tracker_job(job_id: int, app):
             page.set_default_timeout(30000)
 
             # ── Login ──────────────────────────────────────────────────────
-            jlog.info('Portal kholte hain...')
+            jlog.info('Step 4: Portal URL pe navigate kar rahe hain...')
+            jlog.flush_now()
             page.goto(portal_url, wait_until='domcontentloaded', timeout=45000)
+            jlog.ok(f'Page load OK. URL: {page.url}')
+            jlog.flush_now()
 
             max_login_tries = 5
             logged_in = False
@@ -232,28 +278,35 @@ def run_tracker_job(job_id: int, app):
                     page.wait_for_load_state('domcontentloaded', timeout=20000)
 
                     # Check login success
+                    current_url = page.url
                     if _is_logged_in(page, portal_url):
                         logged_in = True
-                        jlog.ok('Login successful!')
+                        jlog.ok(f'Login successful! URL: {current_url}')
+                        jlog.flush_now()
                         break
                     else:
-                        jlog.warn(f'Login fail — retry...')
+                        jlog.warn(f'Login fail — URL: {current_url} — retry...')
+                        jlog.flush_now()
                         page.goto(portal_url, wait_until='domcontentloaded', timeout=30000)
                         time.sleep(1.5)
                 except PWTimeout as te:
                     jlog.warn(f'Attempt {attempt} timeout: {te}')
+                    jlog.flush_now()
                     if attempt < max_login_tries:
                         page.reload(wait_until='domcontentloaded', timeout=20000)
                         time.sleep(2)
 
             if not logged_in:
-                jlog.error('5 attempts ke baad bhi login fail. Credentials check karein.')
+                jlog.error('5 attempts ke baad bhi login fail. Credentials / captcha check karein.')
+                jlog.error(f'Last page title: {page.title()}')
+                jlog.error(f'Last URL: {page.url}')
                 _mark_failed(job_id, app, jlog)
                 browser.close()
                 return
 
             # ── Navigate to Activity Report ────────────────────────────────
-            jlog.info('Activity Report page par navigate kar rahe hain...')
+            jlog.info('Step 5: Activity Report page par navigate kar rahe hain...')
+            jlog.flush_now()
             nav_ok = _navigate_to_activity_report(page, jlog)
             if not nav_ok:
                 jlog.error('Activity Report page nahi mila. Portal structure check karein.')
@@ -262,16 +315,20 @@ def run_tracker_job(job_id: int, app):
                 return
 
             # ── Get vehicle list ───────────────────────────────────────────
+            jlog.info('Step 6: Vehicle list extract kar rahe hain...')
+            jlog.flush_now()
             vehicles = _get_vehicle_list(page, jlog)
-            jlog.info(f'Kul {len(vehicles)} vehicles mile.')
+            jlog.info(f'Step 6 done: {len(vehicles)} vehicles mile.')
+            jlog.flush_now()
 
             with app.app_context():
-                job = TrackerAutomationJob.query.get(job_id)
+                job = db.session.get(TrackerAutomationJob, job_id)
                 job.total_vehicles = len(vehicles)
                 db.session.commit()
 
             if not vehicles:
                 jlog.warn('Koi vehicle nahi mila. ZIP empty hoga.')
+                jlog.flush_now()
 
             # ── Loop each vehicle ──────────────────────────────────────────
             done_count = 0
@@ -297,10 +354,11 @@ def run_tracker_job(job_id: int, app):
                     jlog.error(f'{veh_name} — error: {ve}')
 
                 with app.app_context():
-                    job = TrackerAutomationJob.query.get(job_id)
+                    job = db.session.get(TrackerAutomationJob, job_id)
                     job.done_vehicles = done_count
                     job.failed_vehicles = fail_count
                     db.session.commit()
+                jlog.flush_now()
 
                 # Re-login check after every 10 vehicles
                 if idx % 10 == 0 and not _is_logged_in(page, portal_url):
@@ -311,7 +369,9 @@ def run_tracker_job(job_id: int, app):
             browser.close()
 
     except Exception as e:
+        tb = traceback.format_exc()
         jlog.error(f'Engine crash: {e}')
+        jlog.error(f'Traceback: {tb}')
         _mark_failed(job_id, app, jlog)
         return
 
@@ -328,16 +388,17 @@ def run_tracker_job(job_id: int, app):
         _mark_failed(job_id, app, jlog)
         return
 
+    jlog.ok(f'Job #{job_id} mukammal! {done_count} reports ZIP mein.')
+    jlog.flush_now()
+
     with app.app_context():
         from utils import pk_now
-        job = TrackerAutomationJob.query.get(job_id)
+        job = db.session.get(TrackerAutomationJob, job_id)
         job.status = 'done'
         job.zip_path = str(zip_path)
         job.finished_at = pk_now()
         job.log_text = jlog.full_log
         db.session.commit()
-
-    jlog.ok(f'🎉 Job #{job_id} mukammal! {done_count} reports ZIP mein.')
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
