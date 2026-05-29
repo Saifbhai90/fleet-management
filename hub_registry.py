@@ -316,6 +316,9 @@ HUBS = {
             'admin_personal_tools_quick_print', 'admin_personal_tools_library',
             'admin_personal_tools_library_detail',
             'tool_workstation_index', 'tool_workstation_tool', 'tool_workstation_api_tools',
+            'tracker_automation', 'tracker_automation_save_settings',
+            'tracker_automation_start', 'tracker_automation_job_status',
+            'tracker_automation_download_zip',
         ),
         'sections': [
             {
@@ -328,6 +331,7 @@ HUBS = {
                     _item('admin_app_releases', 'App Updates', 'fa-solid fa-mobile-screen', 'rc-tile--hub-admin', master_only=True),
                     _item('admin_personal_tools', 'Personal Tool', 'fa-solid fa-screwdriver-wrench', 'rc-tile--hub-admin', master_only=True),
                     _item('tool_workstation_index', 'Tool Workstation', 'fa-solid fa-toolbox', 'rc-tile--hub-admin', master_only=True),
+                    _item('tracker_automation', 'Tracker Automation', 'fa-solid fa-robot', 'rc-tile--tracker', master_only=True),
                 ],
             },
         ],

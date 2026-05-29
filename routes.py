@@ -34590,3 +34590,152 @@ def fix_driver_status():
             updated += 1
     db.session.commit()
     print(f'Done. {updated} driver(s) updated out of {len(drivers)} total.')
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Tracker Automation — TrackingWorld portal robot
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.route('/administration/tracker-automation', methods=['GET'])
+def tracker_automation():
+    """Main Tracker Automation page — settings + start job + live status."""
+    if not _is_admin():
+        flash('Access denied.', 'danger')
+        return redirect(url_for('dashboard'))
+    from models import TrackerAutomationSettings, TrackerAutomationJob
+    settings = TrackerAutomationSettings.query.first()
+    today = _attendance_local_date().strftime('%Y-%m-%d')
+    # Latest job (running or most recent)
+    job = TrackerAutomationJob.query.filter(
+        TrackerAutomationJob.status.in_(['running', 'pending'])
+    ).order_by(TrackerAutomationJob.id.desc()).first()
+    if not job:
+        job = TrackerAutomationJob.query.order_by(TrackerAutomationJob.id.desc()).first()
+    active_job = TrackerAutomationJob.query.filter(
+        TrackerAutomationJob.status.in_(['running', 'pending'])
+    ).first()
+    past_jobs = TrackerAutomationJob.query.filter(
+        TrackerAutomationJob.status.in_(['done', 'failed'])
+    ).order_by(TrackerAutomationJob.id.desc()).limit(10).all()
+    return render_template(
+        'tracker_automation.html',
+        settings=settings,
+        job=job,
+        active_job=active_job,
+        past_jobs=past_jobs,
+        today=today,
+        **_nav_back_ctx(url_for('module_hub', hub_slug='administration'), show_without_nav_from=True),
+    )
+
+
+@app.route('/administration/tracker-automation/save-settings', methods=['POST'])
+def tracker_automation_save_settings():
+    """Save portal credentials (password encrypted with Fernet)."""
+    if not _is_admin():
+        flash('Access denied.', 'danger')
+        return redirect(url_for('dashboard'))
+    from models import TrackerAutomationSettings
+    from tracker_automation import encrypt_password
+    portal_url = (request.form.get('portal_url') or '').strip()
+    username = (request.form.get('username') or '').strip()
+    password_plain = (request.form.get('password') or '').strip()
+    settings = TrackerAutomationSettings.query.first()
+    if not settings:
+        settings = TrackerAutomationSettings()
+        db.session.add(settings)
+    settings.portal_url = portal_url
+    settings.username = username
+    if password_plain:
+        settings.password_enc = encrypt_password(password_plain)
+    db.session.commit()
+    flash('Settings save ho gayi.', 'success')
+    return redirect(url_for('tracker_automation'))
+
+
+@app.route('/administration/tracker-automation/start', methods=['POST'])
+def tracker_automation_start():
+    """Create a new job and launch background Playwright thread."""
+    if not _is_admin():
+        flash('Access denied.', 'danger')
+        return redirect(url_for('dashboard'))
+    from models import TrackerAutomationJob, TrackerAutomationSettings
+    from tracker_automation import launch_tracker_job
+    settings = TrackerAutomationSettings.query.first()
+    if not settings or not settings.portal_url:
+        flash('Pehle portal credentials save karein.', 'warning')
+        return redirect(url_for('tracker_automation'))
+    # Block if a job is already running
+    active = TrackerAutomationJob.query.filter(
+        TrackerAutomationJob.status.in_(['running', 'pending'])
+    ).first()
+    if active:
+        flash(f'Job #{active.id} abhi chal raha hai. Pehle complete hone dein.', 'warning')
+        return redirect(url_for('tracker_automation'))
+    date_from_str = (request.form.get('date_from') or '').strip()
+    date_to_str = (request.form.get('date_to') or '').strip()
+    try:
+        from datetime import datetime as _dt
+        date_from = _dt.strptime(date_from_str, '%Y-%m-%d').date()
+        date_to = _dt.strptime(date_to_str, '%Y-%m-%d').date()
+    except (ValueError, TypeError):
+        flash('Date format galat hai.', 'danger')
+        return redirect(url_for('tracker_automation'))
+    if date_from > date_to:
+        flash('From date, To date se pehle honi chahiye.', 'warning')
+        return redirect(url_for('tracker_automation'))
+    job = TrackerAutomationJob(
+        date_from=date_from,
+        date_to=date_to,
+        status='pending',
+        log_text='Job queue mein hai...',
+    )
+    db.session.add(job)
+    db.session.commit()
+    launch_tracker_job(job.id, app)
+    flash(f'Job #{job.id} shuru ho gaya. Status neeche dekhein.', 'success')
+    return redirect(url_for('tracker_automation'))
+
+
+@app.route('/api/tracker-automation/job-status/<int:job_id>')
+def tracker_automation_job_status(job_id):
+    """JSON polling endpoint for live job status update."""
+    if not _is_admin():
+        return jsonify({'ok': False}), 403
+    from models import TrackerAutomationJob
+    job = TrackerAutomationJob.query.get_or_404(job_id)
+    return jsonify({
+        'ok': True,
+        'status': job.status,
+        'total_vehicles': job.total_vehicles,
+        'done_vehicles': job.done_vehicles,
+        'failed_vehicles': job.failed_vehicles,
+        'log_text': job.log_text or '',
+        'zip_path': job.zip_path or '',
+        'finished_at': job.finished_at.strftime('%d-%m-%Y %H:%M:%S') if job.finished_at else None,
+    })
+
+
+@app.route('/administration/tracker-automation/download-zip/<int:job_id>')
+def tracker_automation_download_zip(job_id):
+    """Stream the completed ZIP file to the browser."""
+    if not _is_admin():
+        flash('Access denied.', 'danger')
+        return redirect(url_for('dashboard'))
+    from models import TrackerAutomationJob
+    import pathlib
+    job = TrackerAutomationJob.query.get_or_404(job_id)
+    if job.status != 'done' or not job.zip_path:
+        flash('ZIP file abhi ready nahi hai.', 'warning')
+        return redirect(url_for('tracker_automation'))
+    zip_path = pathlib.Path(job.zip_path)
+    if not zip_path.exists():
+        flash('ZIP file server pe nahi mili (shayad expire ho gaya).', 'danger')
+        return redirect(url_for('tracker_automation'))
+    from flask import send_file
+    download_name = f'activity_reports_{job.date_from.strftime("%d-%m-%Y")}_to_{job.date_to.strftime("%d-%m-%Y")}.zip'
+    return send_file(
+        str(zip_path),
+        as_attachment=True,
+        download_name=download_name,
+        mimetype='application/zip',
+    )

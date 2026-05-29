@@ -175,6 +175,11 @@ ENDPOINT_PERMISSION_MAP = [
     ('tool_workstation_index', 'users_manage'),
     ('tool_workstation_tool', 'users_manage'),
     ('tool_workstation_api_tools', 'users_manage'),
+    ('tracker_automation', 'users_manage'),
+    ('tracker_automation_save_settings', 'users_manage'),
+    ('tracker_automation_start', 'users_manage'),
+    ('tracker_automation_job_status', 'users_manage'),
+    ('tracker_automation_download_zip', 'users_manage'),
     # Task & Logbook
     ('task_report_upload_list', 'task_report_upload_list'),
     ('task_report_upload', 'task_report_upload'),

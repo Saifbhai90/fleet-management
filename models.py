@@ -2703,3 +2703,39 @@ class EmployeeAssignment(db.Model):
 
     def __repr__(self):
         return f'<EmployeeAssignment {self.employee_id} {self.action}>'
+
+
+# ────────────────────────────────────────────────
+# Tracker Automation: TrackingWorld portal sync
+# ────────────────────────────────────────────────
+class TrackerAutomationSettings(db.Model):
+    __tablename__ = 'tracker_automation_settings'
+    id = db.Column(db.Integer, primary_key=True)
+    portal_url = db.Column(db.String(500), nullable=False, default='')
+    username = db.Column(db.String(200), nullable=False, default='')
+    password_enc = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=pk_now)
+    updated_at = db.Column(db.DateTime, default=pk_now, onupdate=pk_now)
+
+    def __repr__(self):
+        return f'<TrackerAutomationSettings {self.username}>'
+
+
+class TrackerAutomationJob(db.Model):
+    __tablename__ = 'tracker_automation_job'
+    id = db.Column(db.Integer, primary_key=True)
+    date_from = db.Column(db.Date, nullable=False)
+    date_to = db.Column(db.Date, nullable=False)
+    status = db.Column(db.String(30), nullable=False, default='pending')
+    # pending | running | done | failed
+    total_vehicles = db.Column(db.Integer, default=0)
+    done_vehicles = db.Column(db.Integer, default=0)
+    failed_vehicles = db.Column(db.Integer, default=0)
+    zip_path = db.Column(db.String(500), nullable=True)
+    log_text = db.Column(db.Text, nullable=True)
+    started_at = db.Column(db.DateTime, nullable=True)
+    finished_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=pk_now)
+
+    def __repr__(self):
+        return f'<TrackerAutomationJob {self.id} {self.status}>'
