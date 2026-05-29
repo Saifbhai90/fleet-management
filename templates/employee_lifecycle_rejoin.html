@@ -41,7 +41,7 @@ textarea.form-control { height: auto !important; }
 {% block content %}
 <div class="page-shell">
     <div class="page-hdr">
-                {% from 'partials/nav_back_button.html' import nav_back_button %}
+                {% from 'partials/nav_back_button.html' import nav_back_button with context %}
         {{ nav_back_button() }}
 <h5><i class="bi bi-person-check-fill me-2 text-info"></i>{{ title }}</h5>
         <a href="{{ url_for('employee_lifecycle_rejoin_list') }}" class="btn btn-sm btn-outline-light fw-bold">

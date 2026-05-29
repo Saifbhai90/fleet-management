@@ -11,7 +11,7 @@
           <div class="p-4" style="background:linear-gradient(135deg,#1e3a8a 0%,#3b82f6 100%);color:#fff;">
             <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
               <div>
-                {% from 'partials/nav_back_button.html' import nav_back_button %}
+                {% from 'partials/nav_back_button.html' import nav_back_button with context %}
                 {{ nav_back_button() }}
                 <h5 class="fw-bold mb-1">{{ payroll.person_name }}</h5>
                 <div class="d-flex align-items-center gap-2 flex-wrap">

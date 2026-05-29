@@ -4,7 +4,7 @@
 
 {% block content %}
 <div class="container mt-4">
-  {% from 'partials/nav_back_button.html' import nav_back_button %}
+  {% from 'partials/nav_back_button.html' import nav_back_button with context %}
 <div class="mb-3">{{ nav_back_button() }}</div>
 <h3 class="mb-4 text-center fw-bold"><i class="bi bi-briefcase me-2 text-primary"></i>Project Entry Form</h3>
 

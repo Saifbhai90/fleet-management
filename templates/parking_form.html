@@ -4,7 +4,7 @@
 
 {% block content %}
 <div class="container mt-4">
-  {% from 'partials/nav_back_button.html' import nav_back_button %}
+  {% from 'partials/nav_back_button.html' import nav_back_button with context %}
 <div class="mb-3">{{ nav_back_button() }}</div>
 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
     <h3 class="mb-0 text-center text-md-start fw-bold"><i class="bi bi-p-square me-2 text-primary"></i>Parking Station Entry Form</h3>

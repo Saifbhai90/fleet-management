@@ -4,7 +4,7 @@
 {% block content %}
 <div class="container-fluid">
   <div class="d-flex align-items-center mb-4 flex-wrap gap-2">
-    {% from 'partials/nav_back_button.html' import nav_back_button %}
+    {% from 'partials/nav_back_button.html' import nav_back_button with context %}
     {{ nav_back_button() }}
     <h2 class="mb-0"><i class="bi bi-pencil-square me-2 text-success"></i>{% if edit_mode %}Edit Check-in{% else %}Manual Check-in{% endif %}</h2>
   </div>

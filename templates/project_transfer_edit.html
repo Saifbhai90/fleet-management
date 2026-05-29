@@ -4,7 +4,7 @@
 
 {% block content %}
 
-{% from 'partials/nav_back_button.html' import nav_back_button %}
+{% from 'partials/nav_back_button.html' import nav_back_button with context %}
 <div class="mb-2">{{ nav_back_button() }}</div>
 <div class="container mt-4">
   <div class="card shadow-sm mx-auto" style="max-width: 850px; border: none; border-radius: 15px;">

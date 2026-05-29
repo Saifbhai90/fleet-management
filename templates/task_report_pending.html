@@ -3,7 +3,7 @@
 {% block content %}
 <div class="container-fluid px-2 px-md-3">
   <div class="d-flex align-items-center mb-3 flex-wrap gap-2">
-    {% from 'partials/nav_back_button.html' import nav_back_button %}
+    {% from 'partials/nav_back_button.html' import nav_back_button with context %}
     {{ nav_back_button() }}
     <h2 class="mb-0"><i class="bi bi-hourglass-split me-2 text-warning"></i>Pending Task Report</h2>
   </div>

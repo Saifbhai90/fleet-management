@@ -68,7 +68,7 @@ textarea.da-input{height:auto!important;min-height:42px}
 
 {% block content %}
 
-{% from 'partials/nav_back_button.html' import nav_back_button %}
+{% from 'partials/nav_back_button.html' import nav_back_button with context %}
 <div class="mb-2">{{ nav_back_button() }}</div>
 <div class="da-shell">
     <div class="da-hdr">

@@ -43,7 +43,7 @@
         <div class="card-header py-3 px-4 d-flex flex-wrap justify-content-between align-items-center gap-2"
              style="background:linear-gradient(135deg,#7c3aed 0%,#a78bfa 100%);color:#fff;">
           <div>
-            {% from 'partials/nav_back_button.html' import nav_back_button %}
+            {% from 'partials/nav_back_button.html' import nav_back_button with context %}
             {{ nav_back_button() }}
             <h6 class="mb-0 fw-bold"><i class="bi bi-book me-2"></i>Book Inventory</h6>
             <small class="opacity-75">{{ pagination.total }} book{{ 's' if pagination.total != 1 }}</small>
