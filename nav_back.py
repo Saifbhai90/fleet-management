@@ -174,13 +174,19 @@ def merge_nav_from_into_url(url, nav_from=None):
 # Keep sync on hub/reports visits so nav_from=reports / hub:X stays accurate when opening tiles
 def sync_nav_from_session():
     nf = (request.args.get('nav_from') or request.form.get('nav_from') or '').strip()
+
+    # Hub root visit — always reset to this hub (clears any stale previous origin)
     if request.endpoint == 'module_hub':
         slug = (request.view_args or {}).get('hub_slug')
         if slug:
             session['nav_from'] = f'hub:{slug}'
         return
+
+    # Report Center root visit — always reset to reports (clears any stale previous origin)
     if request.endpoint == 'reports_index':
         session['nav_from'] = REPORTS_NAV_FROM
         return
+
+    # Any other page with explicit nav_from in URL — update session immediately
     if nf:
         session['nav_from'] = nf

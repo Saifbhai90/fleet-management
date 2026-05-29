@@ -1023,7 +1023,7 @@ def _driver_attendance_mark_redirect_url():
     return url_for('driver_attendance_mark', **_preserve_nav_from(params))
 
 
-def _nav_back_ctx(default_url, default_label='Back', show_without_nav_from=True):
+def _nav_back_ctx(default_url, default_label=None, show_without_nav_from=True):
     from nav_back import nav_back_context
     return nav_back_context(default_url, default_label, show_without_nav_from=show_without_nav_from)
 

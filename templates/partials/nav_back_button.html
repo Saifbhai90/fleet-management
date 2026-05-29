@@ -1,7 +1,7 @@
 {% macro nav_back_button() %}
 {% set back_href = nav_back_url or nav_back_url_auto %}
-{% set _raw_label = nav_back_label if nav_back_label is defined and nav_back_label else (nav_back_label_auto if nav_back_label_auto is defined and nav_back_label_auto else 'Back') %}
-{% set _btn_label = ('Back to ' ~ _raw_label) if _raw_label and _raw_label != 'Back' else 'Back' %}
+{% set back_label = nav_back_label if (nav_back_label is defined and nav_back_label and nav_back_label != 'Back') else (nav_back_label_auto if (nav_back_label_auto is defined and nav_back_label_auto and nav_back_label_auto != 'Back') else 'Back') %}
+{% if back_label != 'Back' %}{% set _btn_label = 'Back to ' ~ back_label %}{% else %}{% set _btn_label = 'Back' %}{% endif %}
 <a href="{{ back_href }}"
    class="btn-nav-back-rounded"
    title="{{ _btn_label }}"
