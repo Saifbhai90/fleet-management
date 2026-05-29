@@ -392,60 +392,67 @@
   var jobId = {{ job.id if job else 'null' }};
   var jobStatus = {{ job.status | tojson if job else '"none"' }};
 
-  if (jobId && (jobStatus === 'running' || jobStatus === 'pending')) {
-    var pollInterval = setInterval(function() {
-      fetch('/api/tracker-automation/job-status/' + jobId)
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-          // Update log terminal
-          var term = document.getElementById('logTerminal');
-          if (term && data.log_text) {
-            term.innerHTML = colorizeLog(data.log_text);
-            term.scrollTop = term.scrollHeight;
-          }
-          // Update counters
-          var el;
-          if ((el = document.getElementById('totalVeh'))) el.textContent = data.total_vehicles || 0;
-          if ((el = document.getElementById('doneVeh')))  el.textContent = data.done_vehicles || 0;
-          if ((el = document.getElementById('failVeh')))  el.textContent = data.failed_vehicles || 0;
-
-          var total = data.total_vehicles || 0;
-          var done  = (data.done_vehicles || 0) + (data.failed_vehicles || 0);
-          var pct   = total > 0 ? Math.round(done / total * 100) : 0;
-          if ((el = document.getElementById('pctVeh')))  el.textContent = total > 0 ? pct + '%' : '—';
-
-          var bar = document.getElementById('progBar');
-          if (bar) bar.style.width = pct + '%';
-
-          // Update badge
-          var badge = document.getElementById('jobBadge');
-          if (badge) {
-            badge.textContent = (data.status || '').toUpperCase();
-            badge.className = 'ta-badge ta-badge-' + (data.status || 'pending') + ' ms-2';
-          }
-
-          // Job finished
-          if (data.status === 'done' || data.status === 'failed') {
-            clearInterval(pollInterval);
-            // Reload page to show ZIP download button
-            setTimeout(function() { window.location.reload(); }, 1200);
-          }
-        })
-        .catch(function() { /* ignore network errors during polling */ });
-    }, 3000);
-  }
-
-  // ── Colorize log lines
+  // ── Colorize log lines (matches text prefixes: OK / ERROR / WARN / i)
   function colorizeLog(text) {
     if (!text) return '';
     return text.split('\n').map(function(line) {
       var escaped = line.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-      if (escaped.indexOf('✅') !== -1) return '<span class="log-ok">' + escaped + '</span>';
-      if (escaped.indexOf('❌') !== -1) return '<span class="log-err">' + escaped + '</span>';
-      if (escaped.indexOf('⚠️') !== -1 || escaped.indexOf('⚠') !== -1) return '<span class="log-warn">' + escaped + '</span>';
-      if (escaped.indexOf('ℹ') !== -1) return '<span class="log-info">' + escaped + '</span>';
+      // Match prefixes set by JobLogger: "] OK ", "] ERROR ", "] WARN ", "] i "
+      if (/\] OK /.test(escaped))    return '<span class="log-ok">'   + escaped + '</span>';
+      if (/\] ERROR /.test(escaped)) return '<span class="log-err">'  + escaped + '</span>';
+      if (/\] WARN /.test(escaped))  return '<span class="log-warn">' + escaped + '</span>';
+      if (/\] i /.test(escaped))     return '<span class="log-info">' + escaped + '</span>';
+      // Legacy emoji fallback
+      if (escaped.indexOf('\u2705') !== -1) return '<span class="log-ok">'   + escaped + '</span>';
+      if (escaped.indexOf('\u274c') !== -1) return '<span class="log-err">'  + escaped + '</span>';
+      if (escaped.indexOf('\u26a0') !== -1) return '<span class="log-warn">' + escaped + '</span>';
       return '<span class="log-plain">' + escaped + '</span>';
     }).join('\n');
+  }
+
+  function updateTerminal(data) {
+    var term = document.getElementById('logTerminal');
+    if (term && data.log_text) {
+      var wasAtBottom = (term.scrollHeight - term.scrollTop - term.clientHeight) < 40;
+      term.innerHTML = colorizeLog(data.log_text);
+      if (wasAtBottom) term.scrollTop = term.scrollHeight;
+    }
+    var el;
+    if ((el = document.getElementById('totalVeh'))) el.textContent = data.total_vehicles || 0;
+    if ((el = document.getElementById('doneVeh')))  el.textContent = data.done_vehicles  || 0;
+    if ((el = document.getElementById('failVeh')))  el.textContent = data.failed_vehicles || 0;
+
+    var total = data.total_vehicles || 0;
+    var done  = (data.done_vehicles || 0) + (data.failed_vehicles || 0);
+    var pct   = total > 0 ? Math.round(done / total * 100) : 0;
+    if ((el = document.getElementById('pctVeh'))) el.textContent = total > 0 ? pct + '%' : '\u2014';
+
+    var bar = document.getElementById('progBar');
+    if (bar) bar.style.width = pct + '%';
+
+    var badge = document.getElementById('jobBadge');
+    if (badge) {
+      badge.textContent = (data.status || '').toUpperCase();
+      badge.className = 'ta-badge ta-badge-' + (data.status || 'pending') + ' ms-2';
+    }
+  }
+
+  if (jobId && (jobStatus === 'running' || jobStatus === 'pending')) {
+    // Fetch immediately on page load, then every 2 seconds
+    function doPoll() {
+      fetch('/api/tracker-automation/job-status/' + jobId)
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          updateTerminal(data);
+          if (data.status === 'done' || data.status === 'failed') {
+            clearInterval(pollInterval);
+            setTimeout(function() { window.location.reload(); }, 1500);
+          }
+        })
+        .catch(function() { /* ignore transient network errors */ });
+    }
+    doPoll(); // immediate first fetch
+    var pollInterval = setInterval(doPoll, 2000);
   }
 
   // Colorize initial log on load

@@ -225,19 +225,33 @@ def _run_tracker_job_inner(job_id: int, app, jlog: 'JobLogger'):
     jlog.info('Step 2: Chromium browser launch ho raha hai...')
     jlog.flush_now()
 
-    # Ensure Playwright finds the binary installed during Render build.
-    # Priority: project-local path (persisted by Render) > old cache path > default.
-    for _pw_candidate in [
-        '/opt/render/project/src/.playwright-browsers',
-        '/opt/render/.cache/ms-playwright',
-    ]:
-        if os.path.isdir(_pw_candidate):
-            os.environ['PLAYWRIGHT_BROWSERS_PATH'] = _pw_candidate
-            jlog.info(f'PLAYWRIGHT_BROWSERS_PATH = {_pw_candidate}')
-            break
+    # Log where Playwright will look for its binary
+    _pw_env = os.environ.get('PLAYWRIGHT_BROWSERS_PATH', '')
+    if _pw_env:
+        jlog.info(f'PLAYWRIGHT_BROWSERS_PATH (env) = {_pw_env}')
+        # Resolve relative path to absolute (relative to project src dir)
+        if not os.path.isabs(_pw_env):
+            _pw_abs = os.path.join('/opt/render/project/src', _pw_env.lstrip('./'))
+            os.environ['PLAYWRIGHT_BROWSERS_PATH'] = _pw_abs
+            jlog.info(f'Resolved to absolute: {_pw_abs}')
+            if os.path.isdir(_pw_abs):
+                jlog.ok(f'Browser dir exists: {_pw_abs}')
+            else:
+                jlog.warn(f'Browser dir NOT found: {_pw_abs} — binary missing?')
     else:
-        jlog.warn('PLAYWRIGHT_BROWSERS_PATH: koi known path nahi mila — default use hoga')
+        jlog.warn('PLAYWRIGHT_BROWSERS_PATH env not set — Playwright will use default ~/.cache/ms-playwright')
     jlog.flush_now()
+
+    # RAM check before launching heavy browser
+    try:
+        import psutil
+        mem = psutil.virtual_memory()
+        jlog.info(f'RAM: total={mem.total//1024//1024}MB, available={mem.available//1024//1024}MB, used={mem.percent}%')
+        if mem.available < 150 * 1024 * 1024:  # less than 150MB free
+            jlog.warn(f'RAM bahut kam hai ({mem.available//1024//1024}MB) — browser crash ho sakta hai (OOM). Render free plan pe 512MB RAM hoti hai.')
+        jlog.flush_now()
+    except ImportError:
+        pass  # psutil not installed, skip RAM check
 
     try:
         with sync_playwright() as pw:
