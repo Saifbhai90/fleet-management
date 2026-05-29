@@ -53,8 +53,11 @@
     return null;
   }
 
-  // Max days a pending record is valid (checkin/checkout: today only; odometer: 3 days).
-  var CHECKIN_CHECKOUT_MAX_AGE_DAYS = 0;
+  // Max days a pending record stays in the retry queue.
+  // checkin/checkout: 1 day back allowed (overnight shift e.g. captured 16 May, retried 17 May morning).
+  // Older records are NOT deleted — they are skipped from auto-retry (no data loss).
+  // The server decides what to do with capture_date in the payload.
+  var CHECKIN_CHECKOUT_MAX_AGE_DAYS = 1;
   var ODOMETER_MAX_AGE_DAYS = 3;
 
   function parseDmy(dmy) {
@@ -76,34 +79,16 @@
   }
 
   function isStale(item) {
-    // Checkin/checkout records from a previous date are STALE — must NOT be uploaded.
-    // Uploading an old photo to today's attendance record is incorrect.
+    // Records older than max age are skipped from auto-retry queue.
+    // They are NOT deleted from localStorage — no data loss.
+    // The server handles captured_date in the payload for correct placement.
     if (item.kind === 'checkin' || item.kind === 'checkout') {
       return daysDiff(item.date) > CHECKIN_CHECKOUT_MAX_AGE_DAYS;
     }
-    // Odometer records are allowed up to ODOMETER_MAX_AGE_DAYS old.
     if (item.kind === 'odometer') {
       return daysDiff(item.date) > ODOMETER_MAX_AGE_DAYS;
     }
     return false;
-  }
-
-  function purgeStalePending() {
-    // Remove any localStorage entries that are too old to be uploaded correctly.
-    try {
-      var keysToRemove = [];
-      for (var i = 0; i < localStorage.length; i++) {
-        var key = localStorage.key(i);
-        if (!key) continue;
-        if (key.indexOf(CHECKIN_PREFIX) !== 0 && key.indexOf(CHECKOUT_PREFIX) !== 0 && key.indexOf(ODOMETER_PREFIX) !== 0) continue;
-        var meta = parseStorageKey(key);
-        if (!meta) continue;
-        if (isStale({ kind: meta.kind, date: meta.date })) {
-          keysToRemove.push(key);
-        }
-      }
-      keysToRemove.forEach(function (k) { localStorage.removeItem(k); });
-    } catch (e) { /* private mode */ }
   }
 
   function listAllPending() {
@@ -488,7 +473,6 @@
     var el = getBannerEl();
     var c = cfg();
     if (!el || (!c.checkinUrl && !c.odometerUploadUrl)) return;
-    purgeStalePending();  // Remove old-date checkin/checkout records before doing anything.
     setupListeners();
     refreshBanner();
     if (listAllPending().length) {

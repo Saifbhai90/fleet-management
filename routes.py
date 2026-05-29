@@ -19894,15 +19894,93 @@ def api_attendance_gps_checkin_submit():
         if not driver:
             return jsonify({'ok': False, 'message': 'Invalid driver.'}), 404
         today = _attendance_local_date()
-        if _driver_marked_duty_off_no_checkin(driver_id, today):
+
+        # --- Delayed-sync: honour capture_date from payload (offline retry support) ---
+        # JS sends capture_date (dd-mm-yyyy) = date when photo was actually taken.
+        # We allow max 1 calendar day back (overnight shift: captured 23:xx, retried next morning).
+        # Anything older than 1 day = reject (prevents fake backdated attendance).
+        _raw_capture_date = (body.get('capture_date') or '').strip()
+        is_delayed_sync = False
+        attendance_date = today
+        if _raw_capture_date and _raw_capture_date != today.strftime('%d-%m-%Y'):
+            try:
+                from datetime import datetime as _dt
+                _cap_date = _dt.strptime(_raw_capture_date, '%d-%m-%Y').date()
+                _days_back = (today - _cap_date).days
+                if _days_back < 0:
+                    return jsonify({'ok': False, 'message': 'Capture date future mein nahi ho sakti.'}), 400
+                if _days_back > 1:
+                    return jsonify({'ok': False, 'message': f'Purani photo upload allowed nahi ({_days_back} din pehle ki). Sirf kal tak ki photo accept hoti hai.'}), 400
+                attendance_date = _cap_date
+                is_delayed_sync = True
+            except (ValueError, TypeError):
+                pass  # Malformed date — fall back to today silently
+
+        # --- Delayed-sync: check if record already exists for this driver+date ---
+        # If record exists and check_in_photo_path is empty → fill photo only (no new record).
+        # If record exists and photo already set → duplicate, reject silently (data integrity).
+        if is_delayed_sync:
+            existing_rec = DriverAttendance.query.filter_by(
+                driver_id=driver_id, attendance_date=attendance_date
+            ).filter(DriverAttendance.check_in.isnot(None)).first()
+            if existing_rec:
+                if existing_rec.check_in_photo_path:
+                    app.logger.info(
+                        'GPS checkin delayed-sync: duplicate photo ignored for driver=%s date=%s',
+                        driver_id, attendance_date
+                    )
+                    return jsonify({
+                        'ok': True,
+                        'message': 'Photo pehle se upload ho chuki hai (duplicate ignored).',
+                        'record': {
+                            'check_in_time': existing_rec.check_in.strftime('%H:%M') if existing_rec.check_in else None,
+                            'media': _attendance_media_payload(existing_rec, 'checkin'),
+                        },
+                    })
+                # Photo slot is empty — fill it (delayed sync)
+                try:
+                    photo_path = _upload_attendance_photo_from_form_or_b64(None, photo_b64, required=True)
+                except ValueError as ve:
+                    return jsonify({'ok': False, 'message': str(ve) or 'Image required.'}), 400
+                except Exception as photo_exc:
+                    app.logger.warning('GPS check-in delayed photo upload failed: %s', photo_exc)
+                    return jsonify({'ok': False, 'message': 'Image upload failed. Network check karein.'}), 502
+                existing_rec.check_in_photo_path = photo_path
+                existing_rec.check_in_latitude = existing_rec.check_in_latitude or lat_val
+                existing_rec.check_in_longitude = existing_rec.check_in_longitude or lng_val
+                existing_rec.updated_at = pk_now()
+                _sync_note = f' | Photo delayed-sync {today.strftime("%d-%m-%Y")}'
+                if _sync_note not in (existing_rec.remarks or ''):
+                    existing_rec.remarks = (existing_rec.remarks or '').rstrip() + _sync_note
+                db.session.commit()
+                app.logger.info(
+                    'GPS checkin delayed-sync: photo filled for driver=%s date=%s', driver_id, attendance_date
+                )
+                return jsonify({
+                    'ok': True,
+                    'message': f'Check-in photo sync ho gaya ({attendance_date.strftime("%d-%m-%Y")} ki attendance update).',
+                    'record': {
+                        'check_in_time': existing_rec.check_in.strftime('%H:%M') if existing_rec.check_in else None,
+                        'media': _attendance_media_payload(existing_rec, 'checkin'),
+                    },
+                })
+            # No existing record for that date and it's a delayed date → reject.
+            # We cannot create a backdated attendance record without the original context.
+            return jsonify({
+                'ok': False,
+                'message': f'{attendance_date.strftime("%d-%m-%Y")} ka koi check-in record nahi mila. Delayed photo upload sirf existing record pe hi ho sakti hai.',
+            }), 400
+
+        # --- Normal (same-day) path ---
+        if _driver_marked_duty_off_no_checkin(driver_id, attendance_date):
             return jsonify({'ok': False, 'message': 'Driver duty off hai; GPS/Camera attendance allowed nahi.'}), 400
         cap = _vehicle_capacity_value(driver.vehicle)
-        blocked_msg = _manual_checkin_blocked_by_vehicle_rules(driver_id, driver.vehicle, today)
+        blocked_msg = _manual_checkin_blocked_by_vehicle_rules(driver_id, driver.vehicle, attendance_date)
         if blocked_msg:
             return jsonify({'ok': False, 'message': blocked_msg}), 400
-        if _driver_has_open_segment(driver_id, today):
+        if _driver_has_open_segment(driver_id, attendance_date):
             return jsonify({'ok': False, 'message': 'Check-out pending hai. Pehle previous session close karein.'}), 400
-        if _count_driver_segments_with_checkin(driver_id, today) >= cap:
+        if _count_driver_segments_with_checkin(driver_id, attendance_date) >= cap:
             return jsonify({'ok': False, 'message': f'Aaj maximum {cap} GPS check-in allowed hain.'}), 400
         now = pk_now()
         now_time = _attendance_local_time()
@@ -19922,8 +20000,8 @@ def api_attendance_gps_checkin_submit():
             return jsonify({'ok': False, 'message': 'Image upload failed. Network check karein.'}), 502
         rec = DriverAttendance(
             driver_id=driver_id,
-            attendance_date=today,
-            attendance_segment=_next_attendance_segment(driver_id, today),
+            attendance_date=attendance_date,
+            attendance_segment=_next_attendance_segment(driver_id, attendance_date),
             status='Present',
             check_in=now.time(),
             project_id=driver.project_id,
@@ -19972,7 +20050,76 @@ def api_attendance_gps_checkout_submit():
         if not driver:
             return jsonify({'ok': False, 'message': 'Invalid driver.'}), 404
         today = _attendance_local_date()
-        existing = _open_gps_driver_attendance_for_checkout(driver_id, today)
+
+        # --- Delayed-sync: honour capture_date from payload (offline retry support) ---
+        _raw_capture_date = (body.get('capture_date') or '').strip()
+        is_delayed_sync = False
+        lookup_date = today
+        if _raw_capture_date and _raw_capture_date != today.strftime('%d-%m-%Y'):
+            try:
+                from datetime import datetime as _dt
+                _cap_date = _dt.strptime(_raw_capture_date, '%d-%m-%Y').date()
+                _days_back = (today - _cap_date).days
+                if _days_back < 0:
+                    return jsonify({'ok': False, 'message': 'Capture date future mein nahi ho sakti.'}), 400
+                if _days_back > 1:
+                    return jsonify({'ok': False, 'message': f'Purani photo upload allowed nahi ({_days_back} din pehle ki). Sirf kal tak ki photo accept hoti hai.'}), 400
+                lookup_date = _cap_date
+                is_delayed_sync = True
+            except (ValueError, TypeError):
+                pass
+
+        existing = _open_gps_driver_attendance_for_checkout(driver_id, lookup_date)
+
+        if is_delayed_sync and existing:
+            # Delayed-sync checkout: only fill photo slot if empty; reject duplicate.
+            if existing.check_out_photo_path:
+                app.logger.info(
+                    'GPS checkout delayed-sync: duplicate photo ignored for driver=%s date=%s',
+                    driver_id, lookup_date
+                )
+                return jsonify({
+                    'ok': True,
+                    'message': 'Check-out photo pehle se upload ho chuki hai (duplicate ignored).',
+                    'record': {
+                        'check_out_time': existing.check_out.strftime('%H:%M') if existing.check_out else None,
+                        'media': _attendance_media_payload(existing, 'checkout'),
+                    },
+                })
+            try:
+                photo_path = _upload_attendance_photo_from_form_or_b64(None, photo_b64, required=True)
+            except ValueError as ve:
+                return jsonify({'ok': False, 'message': str(ve) or 'Image required.'}), 400
+            except Exception as photo_exc:
+                app.logger.warning('GPS check-out delayed photo upload failed: %s', photo_exc)
+                return jsonify({'ok': False, 'message': 'Image upload failed. Network check karein.'}), 502
+            existing.check_out_photo_path = photo_path
+            existing.check_out_latitude = existing.check_out_latitude or lat_val
+            existing.check_out_longitude = existing.check_out_longitude or lng_val
+            existing.updated_at = pk_now()
+            _sync_note = f' | Checkout photo delayed-sync {today.strftime("%d-%m-%Y")}'
+            if _sync_note not in (existing.remarks or ''):
+                existing.remarks = (existing.remarks or '').rstrip() + _sync_note
+            db.session.commit()
+            app.logger.info(
+                'GPS checkout delayed-sync: photo filled for driver=%s date=%s', driver_id, lookup_date
+            )
+            return jsonify({
+                'ok': True,
+                'message': f'Check-out photo sync ho gaya ({lookup_date.strftime("%d-%m-%Y")} ki attendance update).',
+                'record': {
+                    'check_out_time': existing.check_out.strftime('%H:%M') if existing.check_out else None,
+                    'media': _attendance_media_payload(existing, 'checkout'),
+                },
+            })
+
+        if is_delayed_sync and not existing:
+            return jsonify({
+                'ok': False,
+                'message': f'{lookup_date.strftime("%d-%m-%Y")} ka koi open check-in session nahi mila. Delayed photo upload sirf existing record pe hi ho sakti hai.',
+            }), 400
+
+        # --- Normal (same-day) path ---
         if not existing:
             return jsonify({'ok': False, 'message': 'Current date ke liye GPS check-in nahi mila.'}), 400
         now = pk_now()

@@ -1159,6 +1159,7 @@
       vehicle_id: Number(formVehicleId.value || 0),
       project_id: Number(formProjectId.value || 0),
       captured_at: shot.timeStr,
+      capture_date: currentDateDmy(),
     };
     showCameraPreviewMode(shot.dataUrl);
     cameraModalInstance.show();
