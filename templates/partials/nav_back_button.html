@@ -1,17 +1,17 @@
 {% macro nav_back_button() %}
 {% set back_href = nav_back_url or nav_back_url_auto %}
-{% set back_label = nav_back_label if (nav_back_label is defined and nav_back_label and nav_back_label != 'Back') else (nav_back_label_auto if (nav_back_label_auto is defined and nav_back_label_auto and nav_back_label_auto != 'Back') else 'Back') %}
-{% if back_label != 'Back' %}{% set _btn_label = 'Back to ' ~ back_label %}{% else %}{% set _btn_label = 'Back' %}{% endif %}
+{% set back_label = nav_back_label or nav_back_label_auto %}
 <a href="{{ back_href }}"
    class="btn-nav-back-rounded"
-   title="{{ _btn_label }}"
+   title="{% if back_label and back_label != 'Back' %}Back to {{ back_label }}{% else %}Back{% endif %}"
    data-fleet-nav-back="1"
    data-fleet-nav-back-href="{{ back_href|e }}"
    data-nav-from="{{ (nav_from or '')|e }}"
+   data-nav-source="{{ (back_label or '')|e }}"
    data-hub-slug="{{ (nav_back_hub_slug or '')|e }}"
    onclick="return window.fleetNavigateBack(event, this);">
   <i class="bi bi-arrow-left-short"></i>
-  <span>{{ _btn_label }}</span>
+  <span>{% if back_label and back_label != 'Back' %}Back to {{ back_label }}{% else %}Back{% endif %}</span>
 </a>
 {% endmacro %}
 

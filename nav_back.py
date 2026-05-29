@@ -10,27 +10,50 @@ REPORT_CENTRE_URL_KEY = 'reports_index'
 
 # Human-readable labels for each nav_from origin key.
 # hub:<slug> labels are resolved dynamically from hub_registry.HUBS at runtime.
+# Static hub fallbacks guarantee correct labels even if the registry import fails.
 NAV_FROM_LABELS: dict[str, str] = {
     'reports': 'Report Center',
+}
+
+_HUB_SLUG_LABELS: dict[str, str] = {
+    'master-data':      'Master Data Hub',
+    'assignments':      'Assignments Hub',
+    'transfers':        'Transfers Hub',
+    'workforce':        'Workforce Hub',
+    'attendance':       'Attendance Hub',
+    'task-logbook':     'Task & Logbook Hub',
+    'expenses':         'Expenses Hub',
+    'finance':          'Finance Hub',
+    'workspace':        'Workspace Hub',
+    'payroll':          'Payroll Hub',
+    'books':            'Books Hub',
+    'notifications':    'Notifications Hub',
+    'administration':   'Administration Hub',
 }
 
 
 def nav_back_label_for(nav_from: str | None) -> str:
     """Resolve a human-readable source name for the given nav_from key.
 
-    Examples:
-        'reports'        -> 'Report Center'
-        'hub:attendance' -> 'Attendance Hub'
-        'hub:finance'    -> 'Finance Hub'
-        None / unknown   -> 'Back'
+    Priority:
+        1) NAV_FROM_LABELS exact match  ('reports' -> 'Report Center')
+        2) _HUB_SLUG_LABELS static map  ('hub:attendance' -> 'Attendance Hub')
+        3) hub_registry.HUBS dynamic    (any new hub added later)
+        4) Slug title-case fallback     ('hub:my-hub' -> 'My Hub Hub')
+        5) 'Back'                       (unknown / empty)
     """
     nf = (nav_from or '').strip()
     if not nf:
         return 'Back'
+    # Exact match first (e.g. 'reports')
     if nf in NAV_FROM_LABELS:
         return NAV_FROM_LABELS[nf]
     if nf.startswith('hub:'):
         slug = nf[4:].strip()
+        # Static lookup — always works, no import needed
+        if slug in _HUB_SLUG_LABELS:
+            return _HUB_SLUG_LABELS[slug]
+        # Dynamic lookup from registry
         try:
             from hub_registry import HUBS
             hub = HUBS.get(slug)
@@ -38,17 +61,25 @@ def nav_back_label_for(nav_from: str | None) -> str:
                 return hub['title'] + ' Hub'
         except Exception:
             pass
+        # Final slug-based fallback
         return slug.replace('-', ' ').title() + ' Hub'
     return 'Back'
 
 
 def get_nav_from(req=None):
-    """URL/form param first; persist to session; else session value."""
+    """URL query param has ABSOLUTE priority over session — always."""
     req = req or request
-    nf = (req.args.get('nav_from') or req.form.get('nav_from') or '').strip()
-    if nf:
-        session['nav_from'] = nf
-        return nf
+    # 1) URL query string — highest priority, immediately wins and overwrites session
+    url_nf = (req.args.get('nav_from') or '').strip()
+    if url_nf:
+        session['nav_from'] = url_nf
+        return url_nf
+    # 2) POST form param — second priority
+    form_nf = (req.form.get('nav_from') or '').strip()
+    if form_nf:
+        session['nav_from'] = form_nf
+        return form_nf
+    # 3) Session fallback — used when navigating sub-pages (filters, pagination)
     return (session.get('nav_from') or '').strip()
 
 
@@ -175,6 +206,11 @@ def merge_nav_from_into_url(url, nav_from=None):
 def sync_nav_from_session():
     nf = (request.args.get('nav_from') or request.form.get('nav_from') or '').strip()
 
+    # Dashboard visit — clear nav_from entirely (user is at home, no active origin)
+    if request.endpoint in ('dashboard', 'index'):
+        session.pop('nav_from', None)
+        return
+
     # Hub root visit — always reset to this hub (clears any stale previous origin)
     if request.endpoint == 'module_hub':
         slug = (request.view_args or {}).get('hub_slug')
@@ -187,6 +223,6 @@ def sync_nav_from_session():
         session['nav_from'] = REPORTS_NAV_FROM
         return
 
-    # Any other page with explicit nav_from in URL — update session immediately
+    # Any other page: explicit nav_from in URL always wins and updates session immediately
     if nf:
         session['nav_from'] = nf
