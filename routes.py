@@ -34599,9 +34599,8 @@ def fix_driver_status():
 @app.route('/administration/tracker-automation', methods=['GET'])
 def tracker_automation():
     """Main Tracker Automation page — settings + start job + live status."""
-    if not _is_admin():
-        flash('Access denied.', 'danger')
-        return redirect(url_for('dashboard'))
+    if not session.get('is_master'):
+        abort(403)
     from models import TrackerAutomationSettings, TrackerAutomationJob
     settings = TrackerAutomationSettings.query.first()
     today = _attendance_local_date().strftime('%Y-%m-%d')
@@ -34624,16 +34623,15 @@ def tracker_automation():
         active_job=active_job,
         past_jobs=past_jobs,
         today=today,
-        **_nav_back_ctx(url_for('module_hub', hub_slug='administration'), show_without_nav_from=True),
+        **_administration_nav_back(),
     )
 
 
 @app.route('/administration/tracker-automation/save-settings', methods=['POST'])
 def tracker_automation_save_settings():
     """Save portal credentials (password encrypted with Fernet)."""
-    if not _is_admin():
-        flash('Access denied.', 'danger')
-        return redirect(url_for('dashboard'))
+    if not session.get('is_master'):
+        abort(403)
     from models import TrackerAutomationSettings
     from tracker_automation import encrypt_password
     portal_url = (request.form.get('portal_url') or '').strip()
@@ -34655,9 +34653,8 @@ def tracker_automation_save_settings():
 @app.route('/administration/tracker-automation/start', methods=['POST'])
 def tracker_automation_start():
     """Create a new job and launch background Playwright thread."""
-    if not _is_admin():
-        flash('Access denied.', 'danger')
-        return redirect(url_for('dashboard'))
+    if not session.get('is_master'):
+        abort(403)
     from models import TrackerAutomationJob, TrackerAutomationSettings
     from tracker_automation import launch_tracker_job
     settings = TrackerAutomationSettings.query.first()
@@ -34699,7 +34696,7 @@ def tracker_automation_start():
 @app.route('/api/tracker-automation/job-status/<int:job_id>')
 def tracker_automation_job_status(job_id):
     """JSON polling endpoint for live job status update."""
-    if not _is_admin():
+    if not session.get('is_master'):
         return jsonify({'ok': False}), 403
     from models import TrackerAutomationJob
     job = TrackerAutomationJob.query.get_or_404(job_id)
@@ -34718,9 +34715,8 @@ def tracker_automation_job_status(job_id):
 @app.route('/administration/tracker-automation/download-zip/<int:job_id>')
 def tracker_automation_download_zip(job_id):
     """Stream the completed ZIP file to the browser."""
-    if not _is_admin():
-        flash('Access denied.', 'danger')
-        return redirect(url_for('dashboard'))
+    if not session.get('is_master'):
+        abort(403)
     from models import TrackerAutomationJob
     import pathlib
     job = TrackerAutomationJob.query.get_or_404(job_id)
