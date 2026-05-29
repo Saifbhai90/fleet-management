@@ -76,7 +76,7 @@ class JobLogger:
         self._lines: list[str] = []
         self._lock = threading.Lock()
         self._last_flush: float = 0.0
-        self._flush_interval = 4.0  # seconds between DB writes
+        self._flush_interval = 2.0  # seconds between DB writes
 
     def _ts(self) -> str:
         return datetime.now().strftime('%H:%M:%S')
@@ -259,7 +259,13 @@ def _run_tracker_job_inner(job_id: int, app, jlog: 'JobLogger'):
             jlog.flush_now()
             browser = pw.chromium.launch(
                 headless=True,
-                args=['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
+                args=[
+                    '--no-sandbox',
+                    '--disable-dev-shm-usage',
+                    '--disable-gpu',
+                    '--disable-setuid-sandbox',
+                ],
+                timeout=90000,
                 downloads_path=str(dl_dir),
             )
             jlog.ok('Browser launch successful.')

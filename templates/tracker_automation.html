@@ -119,6 +119,18 @@
 .ta-terminal .log-info  { color: #60a5fa; }
 .ta-terminal .log-plain { color: #94a3b8; }
 
+/* ── Connection pulse ─────────────────────────── */
+.ta-pulse-wrap { display:inline-flex; align-items:center; gap:6px; font-size:0.75rem; color:#64748b; }
+.ta-pulse {
+  width:8px; height:8px; border-radius:50%; background:#22c55e;
+  animation: taPulse 1s ease-in-out infinite;
+}
+.ta-pulse.off { background:#94a3b8; animation:none; }
+@keyframes taPulse {
+  0%,100% { opacity:1; transform:scale(1); }
+  50%      { opacity:.4; transform:scale(.7); }
+}
+
 /* ── Vehicle counter ──────────────────────────── */
 .ta-veh-counters { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 12px; }
 .ta-veh-box {
@@ -295,6 +307,13 @@
       {# Log terminal #}
       <div class="ta-terminal" id="logTerminal">{{ job.log_text or 'Job shuru hone ka intezaar...' }}</div>
 
+      {% if job.status in ('running', 'pending') %}
+      <div class="mt-2 ta-pulse-wrap" id="pulseWrap">
+        <span class="ta-pulse" id="taPulse"></span>
+        <span id="taPulseLabel">Connecting...</span>
+      </div>
+      {% endif %}
+
       {# Download ZIP button #}
       {% if job.status == 'done' and job.zip_path %}
       <div class="mt-3 d-flex align-items-center gap-3 flex-wrap">
@@ -452,7 +471,17 @@
         .catch(function() { /* ignore transient network errors */ });
     }
     doPoll(); // immediate first fetch
-    var pollInterval = setInterval(doPoll, 2000);
+    var pollInterval = setInterval(doPoll, 1000);
+
+    // Connection pulse — blink every second to show frontend is polling
+    var pulse = document.getElementById('taPulse');
+    var pulseLabel = document.getElementById('taPulseLabel');
+    var _tick = 0;
+    setInterval(function() {
+      _tick++;
+      if (pulse) pulse.style.opacity = (_tick % 2 === 0) ? '1' : '0.3';
+      if (pulseLabel) pulseLabel.textContent = 'Checking... (' + _tick + ')';
+    }, 1000);
   }
 
   // Colorize initial log on load

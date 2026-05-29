@@ -11,7 +11,7 @@ services:
     name: fleet-manager
     runtime: python
     plan: free
-    buildCommand: pip install -r requirements.txt && PLAYWRIGHT_BROWSERS_PATH=/opt/render/project/src/.cache/ms-playwright python -m playwright install chromium && python -m playwright install-deps chromium || true
+    buildCommand: pip install -r requirements.txt && mkdir -p /opt/render/project/src/.cache/ms-playwright && PLAYWRIGHT_BROWSERS_PATH=/opt/render/project/src/.cache/ms-playwright python -m playwright install --with-deps chromium
     # Matches Procfile; bind 0.0.0.0:$PORT per https://render.com/docs/web-services#port-binding
     # Starter ~512MB: use 1 worker so backup + Flask stays under RAM (was OOM with workers=2)
     startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --timeout 600 --workers 1 --worker-class gthread --threads 4
