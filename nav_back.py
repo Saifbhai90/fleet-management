@@ -8,6 +8,39 @@ from flask import request, session, url_for
 REPORTS_NAV_FROM = 'reports'
 REPORT_CENTRE_URL_KEY = 'reports_index'
 
+# Human-readable labels for each nav_from origin key.
+# hub:<slug> labels are resolved dynamically from hub_registry.HUBS at runtime.
+NAV_FROM_LABELS: dict[str, str] = {
+    'reports': 'Report Center',
+}
+
+
+def nav_back_label_for(nav_from: str | None) -> str:
+    """Resolve a human-readable source name for the given nav_from key.
+
+    Examples:
+        'reports'        -> 'Report Center'
+        'hub:attendance' -> 'Attendance Hub'
+        'hub:finance'    -> 'Finance Hub'
+        None / unknown   -> 'Back'
+    """
+    nf = (nav_from or '').strip()
+    if not nf:
+        return 'Back'
+    if nf in NAV_FROM_LABELS:
+        return NAV_FROM_LABELS[nf]
+    if nf.startswith('hub:'):
+        slug = nf[4:].strip()
+        try:
+            from hub_registry import HUBS
+            hub = HUBS.get(slug)
+            if hub and hub.get('title'):
+                return hub['title'] + ' Hub'
+        except Exception:
+            pass
+        return slug.replace('-', ' ').title() + ' Hub'
+    return 'Back'
+
 
 def get_nav_from(req=None):
     """URL/form param first; persist to session; else session value."""
@@ -70,15 +103,16 @@ def back_url_for_request(endpoint=None, nav_from=None, default_url=None):
     return u or '/'
 
 
-def nav_back_context(default_url=None, default_label='Back', req=None, show_without_nav_from=True):
+def nav_back_context(default_url=None, default_label=None, req=None, show_without_nav_from=True):
     del show_without_nav_from
     del req
     nf = get_nav_from()
     from hub_registry import hub_slug_for_endpoint
     final_url = back_url_for_request(nav_from=nf, default_url=default_url)
+    label = default_label if default_label is not None else nav_back_label_for(nf)
     return {
         'nav_back_url': final_url,
-        'nav_back_label': default_label,
+        'nav_back_label': label,
         'nav_from': nf or '',
         'nav_back_hub_slug': hub_slug_for_endpoint(request.endpoint) or '',
         'nav_back_use_history': False,
@@ -90,14 +124,14 @@ def build_auto_nav_back():
     from hub_registry import hub_slug_for_endpoint
     return {
         'nav_back_url_auto': back_url_for_request(nav_from=nf),
-        'nav_back_label_auto': 'Back',
+        'nav_back_label_auto': nav_back_label_for(nf),
         'nav_from': nf or '',
         'nav_back_hub_slug': hub_slug_for_endpoint(request.endpoint) or '',
         'nav_back_use_history': False,
     }
 
 
-def hub_nav_back_context(hub_slug, fallback_endpoint=None, default_label='Back'):
+def hub_nav_back_context(hub_slug, fallback_endpoint=None, default_label=None):
     try:
         default_url = url_for('module_hub', hub_slug=hub_slug)
     except Exception:

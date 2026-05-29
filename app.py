@@ -230,7 +230,7 @@ def inject_nav_back_auto():
         from nav_back import build_auto_nav_back
         return build_auto_nav_back()
     except Exception:
-        return dict(nav_back_url_auto=None, nav_back_label_auto='Back', nav_from='')
+        return dict(nav_back_url_auto=None, nav_back_label_auto='Back', nav_from='', nav_back_hub_slug='')
 
 
 @app.context_processor
