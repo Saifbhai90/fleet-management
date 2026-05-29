@@ -8,7 +8,7 @@ echo "=== Step 1: pip install ==="
 pip install -r requirements.txt
 
 echo "=== Step 2: Playwright install chromium (relative path) ==="
-export PLAYWRIGHT_BROWSERS_PATH=/opt/render/project/src/.cache/ms-playwright
+export PLAYWRIGHT_BROWSERS_PATH=/opt/render/project/src/playwright-browsers
 echo "PLAYWRIGHT_BROWSERS_PATH=$PLAYWRIGHT_BROWSERS_PATH"
 python -m playwright install chromium
 python -m playwright install-deps chromium || echo "install-deps: skipped (may need root)"

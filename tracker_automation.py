@@ -225,13 +225,12 @@ def _run_tracker_job_inner(job_id: int, app, jlog: 'JobLogger'):
     jlog.info('Step 2: Chromium browser launch ho raha hai...')
     jlog.flush_now()
 
-    # Force Playwright browser path — absolute, no env-var dependency
-    _PW_PATH = '/opt/render/project/src/.cache/ms-playwright'
+    # Force Playwright browser path — absolute non-hidden dir, no env-var dependency
+    _PW_PATH = '/opt/render/project/src/playwright-browsers'
     os.environ['PLAYWRIGHT_BROWSERS_PATH'] = _PW_PATH
     jlog.info(f'Forcing PLAYWRIGHT_BROWSERS_PATH = {_PW_PATH}')
     if os.path.isdir(_PW_PATH):
         jlog.ok(f'Browser dir EXISTS: {_PW_PATH}')
-        # List chromium subdirs for debug
         try:
             _subdirs = [d for d in os.listdir(_PW_PATH) if 'chromium' in d.lower()]
             jlog.info(f'Chromium dirs found: {_subdirs}')
@@ -239,7 +238,7 @@ def _run_tracker_job_inner(job_id: int, app, jlog: 'JobLogger'):
             pass
     else:
         jlog.warn(f'Browser dir NOT FOUND: {_PW_PATH}')
-        jlog.warn('Build mein playwright install fail hua hoga — Render build logs check karein.')
+        jlog.warn('Build mein playwright install fail hua hoga — Render Dashboard > Logs > Build check karein.')
     jlog.flush_now()
 
     # RAM check before launching heavy browser

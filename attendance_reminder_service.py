@@ -83,6 +83,7 @@ def _combine_date_time(d, t):
 def _run_auto_gps_checkout(now_dt, helpers):
     """Auto mark check-out after checkout window end for pending GPS sessions."""
     from models import Driver, DriverAttendance, db
+    from routes import _checkout_window_end_passed, _checkout_window_end_datetime  # noqa: F401
 
     if not helpers['auto_checkout_enabled']():
         return 0
