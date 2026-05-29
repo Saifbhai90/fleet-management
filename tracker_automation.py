@@ -225,6 +225,13 @@ def _run_tracker_job_inner(job_id: int, app, jlog: 'JobLogger'):
     jlog.info('Step 2: Chromium browser launch ho raha hai...')
     jlog.flush_now()
 
+    # Ensure Playwright finds the binary installed during Render build
+    _pw_cache = '/opt/render/.cache/ms-playwright'
+    if os.path.isdir(_pw_cache):
+        os.environ.setdefault('PLAYWRIGHT_BROWSERS_PATH', _pw_cache)
+        jlog.info(f'PLAYWRIGHT_BROWSERS_PATH set to {_pw_cache}')
+    jlog.flush_now()
+
     try:
         with sync_playwright() as pw:
             jlog.info('Step 3: Browser launching (headless mode)...')
