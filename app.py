@@ -50,14 +50,48 @@ if database_url:
     database_url = database_url.strip()
     if database_url.startswith('postgres://'):
         database_url = 'postgresql://' + database_url[9:]
+    # Normalize SQLite paths: resolve to absolute, use forward slashes only
+    if database_url.startswith('sqlite:///'):
+        _db_path_raw = database_url[10:]  # strip sqlite:///
+        _db_path_raw = _db_path_raw.replace('\\', '/')
+        if not os.path.isabs(_db_path_raw):
+            _db_path_raw = os.path.join(_app_dir, _db_path_raw)
+        _db_path_abs = os.path.abspath(_db_path_raw).replace('\\', '/')
+        database_url = 'sqlite:///' + _db_path_abs
 app.config['SQLALCHEMY_DATABASE_URI'] = database_url or 'sqlite:///company_management.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
-    'pool_size': 10,
-    'max_overflow': 20,
-    'pool_pre_ping': True,
-    'pool_recycle': 300,
-}
+
+# ── DB Path Guarantee (local dev mode) ──────────────────────────────────────
+if os.environ.get('LOCAL_DB_GUARANTEED'):
+    _db_uri = app.config['SQLALCHEMY_DATABASE_URI']
+    _db_file = _db_uri.split('///')[-1] if 'sqlite' in _db_uri else _db_uri
+    print(f"  [DB GUARANTEE] Using Database: {_db_uri}")
+    # HARD BLOCK: must point to db/local.db — nothing else allowed
+    if not _db_file.replace('\\', '/').endswith('db/local.db'):
+        print("  [FATAL] LOCAL_DB_GUARANTEED is set but DATABASE_URL does not point to db/local.db!")
+        print(f"  [FATAL] Got: {_db_uri}")
+        print("  [FATAL] Set DATABASE_URL=sqlite:///db/local.db in your environment.")
+        sys.exit(1)
+    # Verify the file actually exists
+    if not os.path.exists(_db_file):
+        print(f"  [FATAL] Database file not found: {_db_file}")
+        print("  [FATAL] Run FULL SYNC first to create the local database.")
+        sys.exit(1)
+    print(f"  [DB GUARANTEE] File size: {os.path.getsize(_db_file) / (1024*1024):.1f} MB")
+
+# Engine options: SQLite doesn't support pool_size/max_overflow (uses StaticPool)
+_is_sqlite = app.config['SQLALCHEMY_DATABASE_URI'].startswith('sqlite')
+if _is_sqlite:
+    app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+        'pool_pre_ping': True,
+    }
+else:
+    app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+        'pool_size': 10,
+        'max_overflow': 20,
+        'pool_pre_ping': True,
+        'pool_recycle': 300,
+    }
 app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50 MB max upload
 app.config['TEMPLATES_AUTO_RELOAD'] = os.environ.get('FLASK_DEBUG', '0') == '1'

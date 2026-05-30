@@ -49,3 +49,7 @@ Thumbs.db
 
 # Playwright browser binaries (downloaded on Render during build)
 .playwright-browsers/
+
+# Sync logs
+logs/*.log
+sync_state.json

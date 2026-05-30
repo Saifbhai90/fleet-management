@@ -180,6 +180,7 @@ ENDPOINT_PERMISSION_MAP = [
     ('tracker_automation_start', 'users_manage'),
     ('tracker_automation_job_status', 'users_manage'),
     ('tracker_automation_download_zip', 'users_manage'),
+    ('driver_doc_updates_list', 'drivers'),
     ('driver_update_portal', 'drivers'),
     ('driver_update_portal_info', 'drivers'),
     ('driver_update_portal_save', 'drivers'),

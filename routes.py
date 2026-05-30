@@ -15958,6 +15958,7 @@ def missing_documents_report():
         ('cnic_back',     'cnic_back_path',       'CNIC Back'),
         ('license_front', 'license_front_path',   'License Front'),
         ('license_back',  'license_back_path',    'License Back'),
+        ('verify_license','verify_license_photo_path', 'Verify License'),
         ('driver_file',   'document_path',        'Complete Driver File'),
     ]
     all_doc_keys = [k for k, _, _ in DOC_FIELDS]
@@ -16099,6 +16100,7 @@ def missing_documents_report_print():
         ('cnic_back',     'cnic_back_path',       'CNIC Back'),
         ('license_front', 'license_front_path',   'License Front'),
         ('license_back',  'license_back_path',    'License Back'),
+        ('verify_license','verify_license_photo_path', 'Verify License'),
         ('driver_file',   'document_path',        'Complete Driver File'),
     ]
     all_doc_keys = [k for k, _, _ in DOC_FIELDS]
@@ -32660,6 +32662,7 @@ def _report_centre_badge_counts(can_page, is_master):
                     Driver.cnic_back_path.is_(None), Driver.cnic_back_path == '',
                     Driver.license_front_path.is_(None), Driver.license_front_path == '',
                     Driver.license_back_path.is_(None), Driver.license_back_path == '',
+                    Driver.verify_license_photo_path.is_(None), Driver.verify_license_photo_path == '',
                     Driver.document_path.is_(None), Driver.document_path == '',
                 )
             )
@@ -34740,8 +34743,64 @@ def tracker_automation_download_zip(job_id):
 
 
 # ════════════════════════════════════════════════════════════════════════════════
-# DRIVER DOCUMENT UPDATE PORTAL
+# DRIVER DOCUMENT UPDATE PORTAL – LIST + PORTAL
 # ════════════════════════════════════════════════════════════════════════════════
+@app.route('/driver-doc-updates')
+def driver_doc_updates_list():
+    if not session.get('is_master'):
+        abort(403)
+    from models import DriverDocumentHistory
+
+    project_id = request.args.get('project_id', type=int) or 0
+    district_id = request.args.get('district_id', type=int) or 0
+    update_type = request.args.get('update_type', '').strip()
+    q = (request.args.get('q') or '').strip()
+    per_page = request.args.get('per_page', 20, type=int)
+    page = request.args.get('page', 1, type=int)
+
+    query = DriverDocumentHistory.query.join(Driver, DriverDocumentHistory.driver_id == Driver.id)
+
+    if project_id:
+        query = query.filter(Driver.project_id == project_id)
+    if district_id:
+        query = query.filter(Driver.district_id == district_id)
+    if update_type:
+        query = query.filter(DriverDocumentHistory.update_type == update_type)
+    if q:
+        like = f'%{q}%'
+        query = query.filter(db.or_(
+            Driver.name.ilike(like),
+            Driver.driver_id.ilike(like),
+            Driver.cnic_no.ilike(like),
+            DriverDocumentHistory.field_name.ilike(like),
+            DriverDocumentHistory.updated_by.ilike(like),
+        ))
+
+    query = query.options(db.joinedload(DriverDocumentHistory.driver))
+    pagination = query.order_by(DriverDocumentHistory.updated_at.desc()).paginate(
+        page=page, per_page=per_page, error_out=False)
+    records = pagination.items
+
+    projects_list = Project.query.order_by(Project.name).all()
+    project_choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in projects_list]
+    districts_list = District.query.order_by(District.name).all()
+    district_choices = [(0, '-- All Districts --')] + [(d2.id, d2.name) for d2 in districts_list]
+
+    return render_template(
+        'driver_doc_updates_list.html',
+        records=records,
+        pagination=pagination,
+        per_page=per_page,
+        project_id=project_id,
+        district_id=district_id,
+        update_type=update_type,
+        q=q,
+        project_choices=project_choices,
+        district_choices=district_choices,
+        **_master_nav_back(),
+    )
+
+
 @app.route('/driver-update-portal')
 def driver_update_portal():
     if not session.get('is_master'):

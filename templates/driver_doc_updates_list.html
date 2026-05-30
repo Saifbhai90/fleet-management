@@ -1,0 +1,329 @@
+{% extends "base.html" %}
+{% block title %}Driver Document Update Portal{% endblock %}
+
+{% block content %}
+{% from 'partials/nav_back_button.html' import nav_back_button, nav_from_hidden with context %}
+<style>
+    body { background: #f8f9fa; }
+    .page-header-gradient {
+        background: #fff;
+        padding: 0;
+        margin-bottom: 1rem;
+    }
+    .page-header-gradient h2 { color: #2c3e50; margin: 0; font-size: 1.4rem; font-weight: 600; padding: 1rem 0; }
+    .page-header-gradient .subtitle { color: #6c757d; font-size: 0.875rem; margin-top: 0.25rem; }
+    .section-heading {
+        background: linear-gradient(135deg, #1565c0 0%, #0d47a1 100%);
+        color: white;
+        padding: 0.75rem 1rem;
+        font-size: 1rem;
+        font-weight: 600;
+        border-radius: 4px 4px 0 0;
+        margin: 0;
+    }
+    .filter-bar { background: #fff; border-radius: 8px; padding: 0.9rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 1rem; }
+    .filter-input { border: 1px solid #ddd; border-radius: 4px; padding: 0.4rem 0.75rem; font-size: 0.875rem; }
+    .filter-input:focus { border-color: #1565c0; box-shadow: 0 0 0 2px rgba(21,101,192,0.12); }
+    .data-table-wrapper { background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    .compact-table { font-size: 0.875rem; margin: 0; }
+    .compact-table thead { background: #f5f5f5; border-bottom: 2px solid #1565c0; }
+    .compact-table thead th { padding: 0.6rem 0.75rem; font-weight: 600; font-size: 0.8125rem; color: #2c3e50; border: none; text-transform: uppercase; letter-spacing: 0.3px; }
+    .compact-table tbody tr { border-bottom: 1px solid #f0f0f0; transition: all 0.3s ease; }
+    .compact-table tbody tr:hover {
+        background: linear-gradient(to right, #e3f2fd 0%, #ffffff 100%);
+        transform: translateX(3px);
+        box-shadow: 0 2px 8px rgba(21,101,192,0.12);
+    }
+    .compact-table tbody td { padding: 0.5rem 0.75rem; vertical-align: middle; }
+    .badge-sm { padding: 0.15rem 0.5rem; border-radius: 3px; font-size: 0.75rem; font-weight: 500; }
+    .badge-primary { background: linear-gradient(135deg, #1565c0 0%, #0d47a1 100%); color: white; }
+    .type-badge-cnic { background: #e8f5e9; color: #2e7d32; border: 1px solid #a5d6a7; font-size: 0.72rem; font-weight: 600; padding: 0.12rem 0.5rem; border-radius: 4px; }
+    .type-badge-license { background: #fff3e0; color: #e65100; border: 1px solid #ffcc80; font-size: 0.72rem; font-weight: 600; padding: 0.12rem 0.5rem; border-radius: 4px; }
+    .type-badge-bank_uniform { background: #e3f2fd; color: #1565c0; border: 1px solid #90caf9; font-size: 0.72rem; font-weight: 600; padding: 0.12rem 0.5rem; border-radius: 4px; }
+    .field-tag { display: inline-block; background: #f5f5f5; border: 1px solid #e0e0e0; border-radius: 4px; font-size: 0.72rem; padding: 0.08rem 0.4rem; color: #455a64; }
+    .val-cell { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.78rem; color: #546e7a; }
+    .top-btn-compact { padding: 0.45rem 0.9rem; font-size: 0.875rem; border-radius: 6px; font-weight: 500; transition: all 0.3s; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .btn-primary-compact { background: #1565c0; color: white; border: none; }
+    .btn-primary-compact:hover { background: #0d47a1; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(21,101,192,0.4); color: #fff; }
+    .btn-success-compact { background: #2e7d32; color: white; border: none; }
+    .btn-success-compact:hover { background: #1b5e20; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(46,125,50,0.4); color: #fff; }
+    .table-footer { background: #f8f9fa; padding: 0.75rem 1rem; border-top: 1px solid #e0e0e0; font-size: 0.875rem; color: #666; }
+    .stat-card {
+        background: #fff; border-radius: 10px; padding: 1rem 1.2rem;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.08); text-align: center;
+        transition: transform 0.2s, box-shadow 0.2s; border-left: 4px solid transparent;
+    }
+    .stat-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+    .stat-card .stat-count { font-size: 1.6rem; font-weight: 700; }
+    .stat-card .stat-label { font-size: 0.78rem; color: #78909c; font-weight: 500; margin-top: 0.2rem; }
+    .stat-cnic { border-left-color: #2e7d32; }
+    .stat-cnic .stat-count { color: #2e7d32; }
+    .stat-license { border-left-color: #e65100; }
+    .stat-license .stat-count { color: #e65100; }
+    .stat-bank { border-left-color: #1565c0; }
+    .stat-bank .stat-count { color: #1565c0; }
+    .stat-total { border-left-color: #37474f; }
+    .stat-total .stat-count { color: #37474f; }
+    .heading-search-input { width: 200px; border: 1px solid rgba(255,255,255,0.4); background: rgba(255,255,255,0.15); color: #fff; border-radius: 5px; font-size: 0.82rem; padding: 0.3rem 0.6rem; }
+    .heading-search-input::placeholder { color: rgba(255,255,255,0.7); }
+    .heading-search-input:focus { background: rgba(255,255,255,0.25); border-color: rgba(255,255,255,0.6); outline: none; color: #fff; }
+    .heading-per-page-label { color: rgba(255,255,255,0.8); font-size: 0.78rem; font-weight: 500; white-space: nowrap; }
+    .heading-per-page-select { width: auto; border: 1px solid rgba(255,255,255,0.4); background: rgba(255,255,255,0.15); color: #fff; border-radius: 5px; font-size: 0.78rem; padding: 0.2rem 0.4rem; }
+    .heading-per-page-select:focus { background: rgba(255,255,255,0.25); border-color: rgba(255,255,255,0.6); outline: none; }
+    .heading-per-page-select option { color: #333; background: #fff; }
+    @media (max-width: 767px) {
+        .filter-bar .row > div { margin-bottom: 0.45rem; }
+        .stat-card { padding: 0.7rem 0.8rem; }
+        .stat-card .stat-count { font-size: 1.2rem; }
+    }
+</style>
+
+<div class="container-fluid py-4 px-4">
+    <div class="page-header-gradient">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div>
+                {% from 'partials/nav_back_button.html' import nav_back_button with context %}
+                {{ nav_back_button() }}
+                <h2><i class="bi bi-pen-fill me-2"></i>Driver Document Update Portal</h2>
+                <p class="subtitle mb-0"><i class="bi bi-info-circle me-1"></i>View update history and manage driver document changes</p>
+            </div>
+            <div class="d-flex gap-2">
+                <a href="{{ url_for('driver_update_portal') }}" class="btn btn-success-compact top-btn-compact">
+                    <i class="bi bi-plus-lg me-1"></i>New Update
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="row g-3 mb-3">
+        <div class="col-6 col-md-3">
+            <div class="stat-card stat-total">
+                <div class="stat-count">{{ pagination.total }}</div>
+                <div class="stat-label"><i class="bi bi-clock-history me-1"></i>Total Updates</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="stat-card stat-cnic">
+                <div class="stat-count" id="cnt_cnic">-</div>
+                <div class="stat-label"><i class="bi bi-person-vcard me-1"></i>CNIC Updates</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="stat-card stat-license">
+                <div class="stat-count" id="cnt_license">-</div>
+                <div class="stat-label"><i class="bi bi-card-checklist me-1"></i>License Updates</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="stat-card stat-bank">
+                <div class="stat-count" id="cnt_bank">-</div>
+                <div class="stat-label"><i class="bi bi-bank me-1"></i>Bank & Uniform</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter Bar -->
+    <div class="filter-bar">
+        <form method="GET" action="{{ url_for('driver_doc_updates_list') }}">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label mb-1" style="font-size:0.78rem;font-weight:600;color:#455a64;">Project</label>
+                    <select name="project_id" class="form-select filter-input search-select">
+                        {% for val, label in project_choices %}
+                        <option value="{{ val }}" {% if project_id == val %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label mb-1" style="font-size:0.78rem;font-weight:600;color:#455a64;">District</label>
+                    <select name="district_id" class="form-select filter-input search-select">
+                        {% for val, label in district_choices %}
+                        <option value="{{ val }}" {% if district_id == val %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label mb-1" style="font-size:0.78rem;font-weight:600;color:#455a64;">Update Type</label>
+                    <select name="update_type" class="form-select filter-input">
+                        <option value="">-- All Types --</option>
+                        <option value="cnic" {% if update_type == 'cnic' %}selected{% endif %}>CNIC</option>
+                        <option value="license" {% if update_type == 'license' %}selected{% endif %}>License</option>
+                        <option value="bank_uniform" {% if update_type == 'bank_uniform' %}selected{% endif %}>Bank & Uniform</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label mb-1" style="font-size:0.78rem;font-weight:600;color:#455a64;">Search</label>
+                    <input type="text" name="q" class="form-control filter-input" placeholder="Name, CNIC..." value="{{ q }}">
+                </div>
+                <div class="col-md-2 d-flex gap-1">
+                    <button type="submit" class="btn btn-primary-compact w-100" style="padding:0.45rem 0.75rem;">
+                        <i class="bi bi-funnel-fill me-1"></i>Filter
+                    </button>
+                </div>
+            </div>
+            {% if project_id or district_id or update_type or q %}
+            <div class="mt-2">
+                <a href="{{ url_for('driver_doc_updates_list') }}" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-x-circle me-1"></i>Clear Filters
+                </a>
+            </div>
+            {% endif %}
+        </form>
+    </div>
+
+    <!-- Table -->
+    <div class="data-table-wrapper">
+        <div class="section-heading d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <span><i class="bi bi-clock-history me-2"></i>Document Update History</span>
+            <div class="d-flex align-items-center gap-2">
+                <input type="text" id="tableRTSearch" class="form-control form-control-sm heading-search-input"
+                       placeholder="&#128269; Quick search..." autocomplete="off">
+                <span class="heading-per-page-label">Per Page:</span>
+                <select class="form-select form-select-sm heading-per-page-select"
+                        onchange="(function(v){var u=new URLSearchParams(window.location.search);u.set('per_page',v);u.set('page',1);window.location.search=u.toString();})(this.value)">
+                    <option value="10"  {% if per_page == 10  %}selected{% endif %}>10</option>
+                    <option value="20"  {% if per_page == 20  %}selected{% endif %}>20</option>
+                    <option value="50"  {% if per_page == 50  %}selected{% endif %}>50</option>
+                    <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
+                </select>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0 compact-table" id="updatesTable">
+                <thead>
+                    <tr>
+                        <th style="width:4%">Sr</th>
+                        <th style="width:18%">Driver</th>
+                        <th style="width:10%">Type</th>
+                        <th style="width:14%">Field</th>
+                        <th style="width:16%">Old Value</th>
+                        <th style="width:16%">New Value</th>
+                        <th style="width:10%">Updated By</th>
+                        <th style="width:12%">Date & Time</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for rec in records %}
+                    <tr>
+                        <td class="text-center"><span class="badge-sm badge-primary">{{ (pagination.page - 1) * pagination.per_page + loop.index }}</span></td>
+                        <td>
+                            <div class="fw-bold" style="color:#1a237e;font-size:0.84rem;">{{ rec.driver.name if rec.driver else '—' }}</div>
+                            <div style="font-size:0.72rem;color:#78909c;">
+                                {{ rec.driver.driver_id or '' }}
+                                {% if rec.driver and rec.driver.cnic_no %} · {{ rec.driver.cnic_no }}{% endif %}
+                            </div>
+                        </td>
+                        <td>
+                            {% if rec.update_type == 'cnic' %}
+                                <span class="type-badge-cnic"><i class="bi bi-person-vcard me-1"></i>CNIC</span>
+                            {% elif rec.update_type == 'license' %}
+                                <span class="type-badge-license"><i class="bi bi-card-checklist me-1"></i>License</span>
+                            {% else %}
+                                <span class="type-badge-bank_uniform"><i class="bi bi-bank me-1"></i>Bank & Uniform</span>
+                            {% endif %}
+                        </td>
+                        <td><span class="field-tag">{{ rec.field_name | replace('_', ' ') | title }}</span></td>
+                        <td class="val-cell" title="{{ rec.old_value or '-' }}">
+                            {% if rec.old_value and rec.old_value.startswith(('http', 'uploads/')) %}
+                                <a href="{{ rec.old_value | media_url }}" target="_blank" class="text-primary" style="font-size:0.76rem;"><i class="bi bi-image me-1"></i>View</a>
+                            {% else %}
+                                {{ rec.old_value or '—' }}
+                            {% endif %}
+                        </td>
+                        <td class="val-cell" title="{{ rec.new_value or '-' }}">
+                            {% if rec.new_value and rec.new_value.startswith(('http', 'uploads/')) %}
+                                <a href="{{ rec.new_value | media_url }}" target="_blank" class="text-success" style="font-size:0.76rem;"><i class="bi bi-image me-1"></i>View</a>
+                            {% else %}
+                                {{ rec.new_value or '—' }}
+                            {% endif %}
+                        </td>
+                        <td style="font-size:0.78rem;color:#455a64;">{{ rec.updated_by or '—' }}</td>
+                        <td style="font-size:0.76rem;color:#78909c;">
+                            {% if rec.updated_at %}
+                                {{ rec.updated_at.strftime('%d-%m-%Y') }}<br>
+                                <span style="font-size:0.68rem;">{{ rec.updated_at.strftime('%I:%M %p') }}</span>
+                            {% else %}—{% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="8" class="text-center py-4 text-muted">
+                            <i class="bi bi-inbox me-2" style="font-size:1.4rem;"></i>
+                            <span style="font-size:0.95rem;">No document updates found. Click <strong>New Update</strong> to start.</span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% if pagination.pages > 1 %}
+        <div class="table-footer d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <span>
+                Showing {{ (pagination.page - 1) * pagination.per_page + 1 }}–{{ [pagination.page * pagination.per_page, pagination.total] | min }}
+                of {{ pagination.total }} records
+            </span>
+            <nav>
+                <ul class="pagination pagination-sm mb-0">
+                    {% if pagination.has_prev %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('driver_doc_updates_list', page=pagination.prev_num, per_page=per_page, project_id=project_id, district_id=district_id, update_type=update_type, q=q) }}">
+                            <i class="bi bi-chevron-left"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+                    {% for p in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                        {% if p %}
+                        <li class="page-item {{ 'active' if p == pagination.page }}">
+                            <a class="page-link" href="{{ url_for('driver_doc_updates_list', page=p, per_page=per_page, project_id=project_id, district_id=district_id, update_type=update_type, q=q) }}">{{ p }}</a>
+                        </li>
+                        {% else %}
+                        <li class="page-item disabled"><span class="page-link">…</span></li>
+                        {% endif %}
+                    {% endfor %}
+                    {% if pagination.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('driver_doc_updates_list', page=pagination.next_num, per_page=per_page, project_id=project_id, district_id=district_id, update_type=update_type, q=q) }}">
+                            <i class="bi bi-chevron-right"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{{ nav_from_hidden() }}
+
+<script>
+(function() {
+    // Quick client-side search within visible rows
+    var searchInput = document.getElementById('tableRTSearch');
+    if (searchInput) {
+        searchInput.addEventListener('input', function() {
+            var val = this.value.toLowerCase().trim();
+            var rows = document.querySelectorAll('#updatesTable tbody tr');
+            rows.forEach(function(row) {
+                if (!val) { row.style.display = ''; return; }
+                row.style.display = row.textContent.toLowerCase().indexOf(val) > -1 ? '' : 'none';
+            });
+        });
+    }
+
+    // Count badges by type from visible page data
+    var cnic = 0, lic = 0, bank = 0;
+    document.querySelectorAll('#updatesTable tbody .type-badge-cnic').forEach(function() { cnic++; });
+    document.querySelectorAll('#updatesTable tbody .type-badge-license').forEach(function() { lic++; });
+    document.querySelectorAll('#updatesTable tbody .type-badge-bank_uniform').forEach(function() { bank++; });
+    var ce = document.getElementById('cnt_cnic');
+    var le = document.getElementById('cnt_license');
+    var be = document.getElementById('cnt_bank');
+    if (ce) ce.textContent = cnic;
+    if (le) le.textContent = lic;
+    if (be) be.textContent = bank;
+})();
+</script>
+{% endblock %}
