@@ -33552,7 +33552,8 @@ def _driver_profile_view_core(driver_id):
     if driver.dob:
         driver_age = _today.year - driver.dob.year - ((_today.month, _today.day) < (driver.dob.month, driver.dob.day))
     doc_fields = [driver.photo_path, driver.cnic_front_path, driver.cnic_back_path,
-                  driver.license_front_path, driver.license_back_path, driver.document_path]
+                  driver.license_front_path, driver.license_back_path,
+                  driver.verify_license_photo_path, driver.document_path]
     doc_uploaded = sum(1 for d in doc_fields if d)
     doc_total = len(doc_fields)
     jh_counts = {'assignment': 0, 'transfer': 0, 'shift_change': 0, 'left': 0, 'rejoin': 0}

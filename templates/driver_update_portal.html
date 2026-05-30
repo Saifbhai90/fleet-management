@@ -376,7 +376,26 @@
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <script>
-document.addEventListener('DOMContentLoaded', function() {
+(function() {
+  // ─── TomSelect-aware helpers (same pattern as Driver Transfer Portal) ───
+  function rebuildSel(el, html) {
+    if (!el) return;
+    if (el.tomselect) { el.tomselect.destroy(); }
+    el.innerHTML = html;
+    el.disabled = false;
+    if (typeof initSearchableDropdowns === 'function') {
+      initSearchableDropdowns(el.parentNode);
+    }
+  }
+  function resetSel(el, placeholder) {
+    rebuildSel(el, '<option value="">' + (placeholder || '-- Select --') + '</option>');
+  }
+  function getVal(el) {
+    if (!el) return '';
+    if (el.tomselect) return el.tomselect.getValue() || '';
+    return el.value || '';
+  }
+
   // Initialize flatpickr
   flatpickr('.datepicker', { dateFormat: 'd-m-Y', allowInput: true });
 
@@ -387,49 +406,69 @@ document.addEventListener('DOMContentLoaded', function() {
     var vehi = document.getElementById(prefix + '_vehicle');
     var drv  = document.getElementById(prefix + '_driver');
 
-    function reset(sel, msg) {
-      sel.innerHTML = '<option value="">' + (msg || '-- Select --') + '</option>';
-      sel.disabled = true;
-    }
-
-    proj.addEventListener('change', function() {
-      reset(dist, '-- Loading... --'); reset(vehi, '-- Select District first --'); reset(drv, '-- Select Vehicle first --');
+    function onProjectChange() {
+      var pid = getVal(proj);
+      resetSel(dist, '-- Select District --');
+      resetSel(vehi, '-- Select District first --');
+      resetSel(drv, '-- Select Vehicle first --');
       hideForm(prefix); hideProfile(prefix);
-      if (!this.value) return;
-      fetch('/get_districts_by_project/' + this.value).then(r => r.json()).then(function(data) {
+      if (!pid) return;
+      fetch('/get_districts_by_project/' + pid).then(function(r){return r.json();}).then(function(data) {
         var html = '<option value="">-- Select District --</option>';
         data.forEach(function(d) { html += '<option value="' + d.id + '">' + d.name + '</option>'; });
-        dist.innerHTML = html; dist.disabled = false;
+        rebuildSel(dist, html);
       });
-    });
+    }
 
-    dist.addEventListener('change', function() {
-      reset(vehi, '-- Loading... --'); reset(drv, '-- Select Vehicle first --');
+    function onDistrictChange() {
+      var pid = getVal(proj), did = getVal(dist);
+      resetSel(vehi, '-- Select Vehicle --');
+      resetSel(drv, '-- Select Vehicle first --');
       hideForm(prefix); hideProfile(prefix);
-      if (!this.value) return;
-      fetch('/get_vehicles_by_district/' + proj.value + '/' + this.value).then(r => r.json()).then(function(data) {
+      if (!pid || !did) return;
+      fetch('/get_vehicles_by_district/' + pid + '/' + did).then(function(r){return r.json();}).then(function(data) {
         var html = '<option value="">-- Select Vehicle --</option>';
         data.forEach(function(v) { html += '<option value="' + v.id + '">' + v.no + '</option>'; });
-        vehi.innerHTML = html; vehi.disabled = false;
+        rebuildSel(vehi, html);
       });
-    });
+    }
 
-    vehi.addEventListener('change', function() {
-      reset(drv, '-- Loading... --');
+    function onVehicleChange() {
+      var vid = getVal(vehi);
+      resetSel(drv, '-- Select Driver --');
       hideForm(prefix); hideProfile(prefix);
-      if (!this.value) return;
-      fetch('/get_drivers_by_vehicle/' + this.value).then(r => r.json()).then(function(data) {
+      if (!vid) return;
+      fetch('/get_drivers_by_vehicle/' + vid).then(function(r){return r.json();}).then(function(data) {
         var html = '<option value="">-- Select Driver --</option>';
         data.forEach(function(d) { html += '<option value="' + d.id + '">' + d.name + '</option>'; });
-        drv.innerHTML = html; drv.disabled = false;
+        rebuildSel(drv, html);
+        // Re-attach change listener on driver after TomSelect rebuild
+        if (drv.tomselect) {
+          drv.tomselect.on('change', onDriverChange);
+        }
       });
-    });
+    }
 
-    drv.addEventListener('change', function() {
+    function onDriverChange() {
+      var drvId = getVal(drv);
       hideForm(prefix); hideProfile(prefix);
-      if (!this.value) return;
-      loadDriverData(prefix, this.value);
-    });
+      if (!drvId) return;
+      loadDriverData(prefix, drvId);
+    }
+
+    // Attach listeners — handle both native and TomSelect
+    function attachChange(el, fn) {
+      if (!el) return;
+      el.addEventListener('change', fn);
+      if (el.tomselect) {
+        el.tomselect.on('change', fn);
+      }
+    }
+
+    attachChange(proj, onProjectChange);
+    attachChange(dist, onDistrictChange);
+    attachChange(vehi, onVehicleChange);
+    attachChange(drv, onDriverChange);
   }
 
   function hideForm(prefix) {
@@ -441,13 +480,8 @@ document.addEventListener('DOMContentLoaded', function() {
     if (prof) prof.style.display = 'none';
   }
 
-  function fmtDate(d) {
-    if (!d) return '-';
-    return d;
-  }
-
   function loadDriverData(prefix, driverId) {
-    fetch('/api/driver-update-portal/driver-info/' + driverId).then(r => r.json()).then(function(d) {
+    fetch('/api/driver-update-portal/driver-info/' + driverId).then(function(r){return r.json();}).then(function(d) {
       if (d.error) { alert(d.error); return; }
 
       // Show profile
@@ -485,9 +519,8 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('cnic_issue_date_display').value = d.cnic_issue_date || '-';
         var expiryInput = document.getElementById('cnic_expiry_date_input');
         expiryInput.value = d.cnic_expiry_date || '';
-        expiryInput._flatpickr && expiryInput._flatpickr.setDate(d.cnic_expiry_date || '', true, 'd-m-Y');
+        if (expiryInput._flatpickr) expiryInput._flatpickr.setDate(d.cnic_expiry_date || '', true, 'd-m-Y');
 
-        // Show current docs
         var docsDiv = document.getElementById('cnic_current_docs');
         var docsHtml = '<h6 class="fw-bold small text-muted mb-2">Current Documents</h6><div class="d-flex gap-2 flex-wrap">';
         if (d.cnic_front_url) docsHtml += '<a href="' + d.cnic_front_url + '" target="_blank"><img src="' + d.cnic_front_url + '" class="doc-thumb" title="CNIC Front"></a>';
@@ -505,11 +538,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
         var vfInput = document.getElementById('lic_valid_from_input');
         vfInput.value = d.license_valid_from || '';
-        vfInput._flatpickr && vfInput._flatpickr.setDate(d.license_valid_from || '', true, 'd-m-Y');
+        if (vfInput._flatpickr) vfInput._flatpickr.setDate(d.license_valid_from || '', true, 'd-m-Y');
 
         var vtInput = document.getElementById('lic_valid_to_input');
         vtInput.value = d.license_valid_to || '';
-        vtInput._flatpickr && vtInput._flatpickr.setDate(d.license_valid_to || '', true, 'd-m-Y');
+        if (vtInput._flatpickr) vtInput._flatpickr.setDate(d.license_valid_to || '', true, 'd-m-Y');
 
         var docsDiv = document.getElementById('lic_current_docs');
         var docsHtml = '<h6 class="fw-bold small text-muted mb-2">Current Documents</h6><div class="d-flex gap-2 flex-wrap">';
@@ -547,6 +580,6 @@ document.addEventListener('DOMContentLoaded', function() {
   setupCascade('cnic');
   setupCascade('lic');
   setupCascade('bank');
-});
+})();
 </script>
 {% endblock %}

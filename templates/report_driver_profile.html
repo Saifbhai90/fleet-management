@@ -1090,7 +1090,11 @@ body.driver-profile-public-view .profile-page { min-height: auto !important; }
             <div class="info-value">{{ driver.license_issue_date|ddmmyyyy if driver.license_issue_date else '—' }}</div>
           </div>
           <div class="info-item">
-            <div class="info-label"><i class="bi bi-calendar-x"></i> Expiry Date</div>
+            <div class="info-label"><i class="bi bi-calendar-check"></i> Valid From</div>
+            <div class="info-value">{{ driver.license_valid_from|ddmmyyyy if driver.license_valid_from else '—' }}</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label"><i class="bi bi-calendar-x"></i> Valid To</div>
             <div class="info-value">{{ driver.license_expiry_date|ddmmyyyy if driver.license_expiry_date else '—' }}{% if driver.license_issue_date %}{% set lic_age = (today - driver.license_issue_date).days %}{% set lic_y = lic_age // 365 %}{% set lic_m = (lic_age % 365) // 30 %}{% set lic_d = (lic_age % 365) % 30 %} <span class="license-age-badge">{% if lic_y %}{{ lic_y }}y {% endif %}{% if lic_m %}{{ lic_m }}m {% endif %}{{ lic_d }}d</span>{% endif %}</div>
           </div>
         </div>
@@ -1151,7 +1155,7 @@ body.driver-profile-public-view .profile-page { min-height: auto !important; }
   </div>
 
   <!-- Photos & Documents -->
-  {% set _has_any_doc = driver.photo_path or driver.cnic_front_path or driver.cnic_back_path or driver.license_front_path or driver.license_back_path or driver.document_path %}
+  {% set _has_any_doc = driver.photo_path or driver.cnic_front_path or driver.cnic_back_path or driver.license_front_path or driver.license_back_path or driver.verify_license_photo_path or driver.document_path %}
   {% set dc_pct = ((doc_uploaded / doc_total) * 100)|int if doc_total else 0 %}
   {% set dc_level = 'dc-complete' if doc_uploaded == doc_total else ('dc-partial' if doc_uploaded >= 3 else 'dc-low') %}
   <div class="section-card" id="photos-docs-section">
@@ -1226,7 +1230,7 @@ body.driver-profile-public-view .profile-page { min-height: auto !important; }
         </div>
       </div><!-- /photo-row 1 -->
 
-      <!-- Row 2: License Front, License Back, Complete Driver File -->
+      <!-- Row 2: License Front, License Back, Verify License -->
       <div class="photo-row">
         <!-- License Front -->
         <div class="doc-photo-item">
@@ -1258,6 +1262,24 @@ body.driver-profile-public-view .profile-page { min-height: auto !important; }
           {% endif %}
         </div>
 
+        <!-- Verify License -->
+        <div class="doc-photo-item">
+          <div class="doc-photo-label"><i class="bi bi-patch-check me-1"></i>Verify License</div>
+          {% if driver.verify_license_photo_path %}
+          <div class="doc-photo-thumb-wrap" data-doc-url="{{ driver.verify_license_photo_path | media_url }}" data-doc-name="Verify_License" onclick="openDocModal('{{ driver.verify_license_photo_path | media_url }}','Verify License')">
+            <img src="{{ driver.verify_license_photo_path | media_url }}" alt="Verify License"
+                 onerror="this.parentElement.parentElement.querySelector('.doc-photo-label').insertAdjacentHTML('afterend','<div class=\'doc-photo-missing\'><i class=\'bi bi-exclamation-triangle\'></i><span>Load Error</span></div>');this.parentElement.remove();">
+            <button class="doc-dl-btn" onclick="event.stopPropagation();dlDoc(this)" title="Download"><i class="bi bi-download"></i></button>
+            <div class="zoom-overlay"><i class="bi bi-zoom-in"></i></div>
+          </div>
+          {% else %}
+          <div class="doc-photo-missing"><i class="bi bi-cloud-arrow-up"></i><span>❌ Not Uploaded</span></div>
+          {% endif %}
+        </div>
+      </div><!-- /photo-row 2 -->
+
+      <!-- Row 3: Complete Driver File -->
+      <div class="photo-row">
         <!-- Complete Driver File (PDF) -->
         <div class="doc-photo-item">
           <div class="doc-photo-label"><i class="bi bi-file-earmark-pdf me-1"></i>Complete Driver File</div>
