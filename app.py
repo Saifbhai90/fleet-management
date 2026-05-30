@@ -336,6 +336,8 @@ if _run_startup_tasks:
                 ('workspace_month_close', 'district_id', 'INTEGER REFERENCES district(id)'),
                 ('workspace_month_close', 'project_id', 'INTEGER REFERENCES project(id)'),
                 ('vehicle', 'vehicle_family', 'VARCHAR(100)'),
+                ('driver', 'license_valid_from', 'DATE'),
+                ('driver', 'verify_license_photo_path', 'VARCHAR(500)'),
             ]
             for _tbl, _col, _coltype in _col_additions:
                 if _tbl in _inspector.get_table_names():

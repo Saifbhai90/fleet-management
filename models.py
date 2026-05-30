@@ -204,7 +204,8 @@ class Driver(db.Model):
     # License
     license_no = db.Column(db.String(50), unique=True)
     license_issue_date = db.Column(db.Date)
-    license_expiry_date = db.Column(db.Date)
+    license_valid_from = db.Column(db.Date, nullable=True)
+    license_expiry_date = db.Column(db.Date)       # = License Valid To
     license_status = db.Column(db.String(20)) # Valid/Expired
     issue_district = db.Column(db.String(50))
     license_type = db.Column(db.String(50))
@@ -231,6 +232,7 @@ class Driver(db.Model):
     cnic_back_path = db.Column(db.String(500), nullable=True)
     license_front_path = db.Column(db.String(500), nullable=True)
     license_back_path = db.Column(db.String(500), nullable=True)
+    verify_license_photo_path = db.Column(db.String(500), nullable=True)
     document_path = db.Column(db.String(500), nullable=True)
 
     # Links
@@ -245,6 +247,27 @@ class Driver(db.Model):
 
     def __repr__(self):
         return f'<Driver {self.name}>'
+
+
+# ────────────────────────────────────────────────
+# Driver Document History (for update portal auditing)
+# ────────────────────────────────────────────────
+class DriverDocumentHistory(db.Model):
+    __tablename__ = 'driver_document_history'
+    id = db.Column(db.Integer, primary_key=True)
+    driver_id = db.Column(db.Integer, db.ForeignKey('driver.id'), nullable=False, index=True)
+    update_type = db.Column(db.String(30), nullable=False)  # 'cnic', 'license', 'bank_uniform'
+    field_name = db.Column(db.String(50), nullable=False)   # e.g. 'cnic_expiry_date', 'cnic_front_path'
+    old_value = db.Column(db.Text, nullable=True)
+    new_value = db.Column(db.Text, nullable=True)
+    updated_by = db.Column(db.String(100), nullable=True)
+    updated_at = db.Column(db.DateTime, default=pk_now, nullable=False)
+
+    driver = db.relationship('Driver', backref=db.backref('document_history', lazy='dynamic'))
+
+    def __repr__(self):
+        return f'<DriverDocumentHistory {self.driver_id} {self.update_type} {self.field_name}>'
+
 
 # ────────────────────────────────────────────────
 # Vehicle Model

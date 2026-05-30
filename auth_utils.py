@@ -180,6 +180,9 @@ ENDPOINT_PERMISSION_MAP = [
     ('tracker_automation_start', 'users_manage'),
     ('tracker_automation_job_status', 'users_manage'),
     ('tracker_automation_download_zip', 'users_manage'),
+    ('driver_update_portal', 'drivers'),
+    ('driver_update_portal_info', 'drivers'),
+    ('driver_update_portal_save', 'drivers'),
     # Task & Logbook
     ('task_report_upload_list', 'task_report_upload_list'),
     ('task_report_upload', 'task_report_upload'),

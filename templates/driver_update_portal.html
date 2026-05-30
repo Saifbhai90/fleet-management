@@ -1,0 +1,552 @@
+{% extends "base.html" %}
+{% block title %}Driver Document Update Portal{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<style>
+:root { --navy: #1e3a8a; --light-bg: #f8fafc; }
+.portal-card { background: #fff; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+.portal-header { background: var(--navy); color: white; padding: 15px 25px; border-radius: 12px 12px 0 0; }
+.portal-body { padding: 25px; }
+.section-title { font-size: 0.95rem; font-weight: 700; color: var(--navy); margin-bottom: 15px; text-transform: uppercase; border-left: 4px solid var(--navy); padding-left: 10px; }
+.driver-info-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 20px; }
+.driver-info-card .info-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px dotted #e2e8f0; font-size: 0.9rem; }
+.driver-info-card .info-row:last-child { border-bottom: none; }
+.driver-info-card .info-label { font-weight: 600; color: #475569; }
+.driver-info-card .info-value { color: #1e293b; font-weight: 500; }
+.tab-portal .nav-link { font-weight: 600; color: #64748b; border: 1px solid transparent; }
+.tab-portal .nav-link.active { background: var(--navy); color: #fff; border-color: var(--navy); }
+.readonly-field { background-color: #f1f5f9 !important; font-weight: 600; cursor: not-allowed; }
+.status-badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 0.8rem; font-weight: 700; }
+.status-valid { background: #dcfce7; color: #166534; }
+.status-expired { background: #fee2e2; color: #991b1b; }
+.doc-thumb { max-height: 90px; border-radius: 8px; border: 1px solid #dee2e6; object-fit: cover; }
+.history-table { font-size: 0.82rem; }
+.history-table td, .history-table th { padding: 5px 8px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+      {% from 'partials/nav_back_button.html' import nav_back_button, nav_from_hidden with context %}
+      {{ nav_back_button() }}
+      <h2 class="mb-0"><i class="bi bi-pencil-square me-2 text-primary"></i>Driver Document Update Portal</h2>
+    </div>
+  </div>
+
+  <!-- Tab Navigation -->
+  <ul class="nav nav-pills mb-4 tab-portal" id="portalTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+      <button class="nav-link {{ 'active' if active_tab == 'cnic' }}" id="cnic-tab" data-bs-toggle="pill" data-bs-target="#cnic-pane" type="button" role="tab">
+        <i class="bi bi-person-vcard me-1"></i>CNIC Update
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link {{ 'active' if active_tab == 'license' }}" id="license-tab" data-bs-toggle="pill" data-bs-target="#license-pane" type="button" role="tab">
+        <i class="bi bi-card-heading me-1"></i>License Update
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link {{ 'active' if active_tab == 'bank' }}" id="bank-tab" data-bs-toggle="pill" data-bs-target="#bank-pane" type="button" role="tab">
+        <i class="bi bi-bank me-1"></i>Bank & Uniform
+      </button>
+    </li>
+  </ul>
+
+  <div class="tab-content" id="portalTabContent">
+    <!-- ═══════════════ CNIC UPDATE TAB ═══════════════ -->
+    <div class="tab-pane fade {{ 'show active' if active_tab == 'cnic' }}" id="cnic-pane" role="tabpanel">
+      <div class="row g-4">
+        <!-- Left: Selection -->
+        <div class="col-lg-7">
+          <div class="portal-card">
+            <div class="portal-header"><i class="bi bi-funnel me-2"></i>Select Driver</div>
+            <div class="portal-body">
+              <div class="row g-3 mb-3">
+                <div class="col-md-6">
+                  <label class="form-label fw-semibold">Project</label>
+                  <select id="cnic_project" class="form-select search-select">
+                    <option value="">-- Select Project --</option>
+                    {% for p in projects %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}
+                  </select>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label fw-semibold">District</label>
+                  <select id="cnic_district" class="form-select search-select" disabled>
+                    <option value="">-- Select Project first --</option>
+                  </select>
+                </div>
+              </div>
+              <div class="row g-3 mb-3">
+                <div class="col-md-6">
+                  <label class="form-label fw-semibold">Vehicle</label>
+                  <select id="cnic_vehicle" class="form-select search-select" disabled>
+                    <option value="">-- Select District first --</option>
+                  </select>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label fw-semibold">Driver</label>
+                  <select id="cnic_driver" class="form-select search-select" disabled>
+                    <option value="">-- Select Vehicle first --</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- CNIC Update Form (hidden until driver selected) -->
+              <div id="cnic_form_area" style="display:none;">
+                <hr>
+                <h6 class="section-title"><i class="bi bi-person-vcard me-1"></i>Update CNIC Details</h6>
+                <form method="POST" action="{{ url_for('driver_update_portal_save', update_type='cnic') }}" enctype="multipart/form-data" id="cnicUpdateForm">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <input type="hidden" name="driver_id" id="cnic_driver_id_hidden">
+                  <div class="row g-3 mb-3">
+                    <div class="col-md-4">
+                      <label class="form-label fw-semibold">CNIC No</label>
+                      <input type="text" id="cnic_no_display" class="form-control readonly-field" readonly>
+                    </div>
+                    <div class="col-md-4">
+                      <label class="form-label fw-semibold">CNIC Issue Date</label>
+                      <input type="text" id="cnic_issue_date_display" class="form-control readonly-field" readonly>
+                    </div>
+                    <div class="col-md-4">
+                      <label class="form-label fw-semibold required-label">CNIC Expiry Date <span class="text-danger">*</span></label>
+                      <input type="text" name="cnic_expiry_date" id="cnic_expiry_date_input" class="form-control datepicker" placeholder="dd-mm-yyyy" required>
+                    </div>
+                  </div>
+                  <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                      <label class="form-label fw-semibold">New CNIC Front Photo</label>
+                      <input type="file" name="cnic_front" class="form-control" accept=".jpg,.jpeg,.png,.gif,.webp">
+                    </div>
+                    <div class="col-md-6">
+                      <label class="form-label fw-semibold">New CNIC Back Photo</label>
+                      <input type="file" name="cnic_back" class="form-control" accept=".jpg,.jpeg,.png,.gif,.webp">
+                    </div>
+                  </div>
+                  <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Update CNIC</button>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: Driver Profile Info -->
+        <div class="col-lg-5">
+          <div id="cnic_driver_profile" style="display:none;">
+            <div class="portal-card">
+              <div class="portal-header"><i class="bi bi-person-circle me-2"></i>Driver Profile</div>
+              <div class="portal-body">
+                <div class="text-center mb-3">
+                  <img id="cnic_driver_photo" src="" alt="Driver Photo" class="rounded-circle border" style="width:80px;height:80px;object-fit:cover;display:none;">
+                </div>
+                <div class="driver-info-card" id="cnic_info_card"></div>
+                <div class="mt-3" id="cnic_current_docs"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ LICENSE UPDATE TAB ═══════════════ -->
+    <div class="tab-pane fade {{ 'show active' if active_tab == 'license' }}" id="license-pane" role="tabpanel">
+      <div class="row g-4">
+        <div class="col-lg-7">
+          <div class="portal-card">
+            <div class="portal-header"><i class="bi bi-funnel me-2"></i>Select Driver</div>
+            <div class="portal-body">
+              <div class="row g-3 mb-3">
+                <div class="col-md-6">
+                  <label class="form-label fw-semibold">Project</label>
+                  <select id="lic_project" class="form-select search-select">
+                    <option value="">-- Select Project --</option>
+                    {% for p in projects %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}
+                  </select>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label fw-semibold">District</label>
+                  <select id="lic_district" class="form-select search-select" disabled>
+                    <option value="">-- Select Project first --</option>
+                  </select>
+                </div>
+              </div>
+              <div class="row g-3 mb-3">
+                <div class="col-md-6">
+                  <label class="form-label fw-semibold">Vehicle</label>
+                  <select id="lic_vehicle" class="form-select search-select" disabled>
+                    <option value="">-- Select District first --</option>
+                  </select>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label fw-semibold">Driver</label>
+                  <select id="lic_driver" class="form-select search-select" disabled>
+                    <option value="">-- Select Vehicle first --</option>
+                  </select>
+                </div>
+              </div>
+
+              <div id="lic_form_area" style="display:none;">
+                <hr>
+                <h6 class="section-title"><i class="bi bi-card-heading me-1"></i>Update License Details</h6>
+                <form method="POST" action="{{ url_for('driver_update_portal_save', update_type='license') }}" enctype="multipart/form-data" id="licUpdateForm">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <input type="hidden" name="driver_id" id="lic_driver_id_hidden">
+                  <div class="row g-3 mb-3">
+                    <div class="col-md-4">
+                      <label class="form-label fw-semibold">License No</label>
+                      <input type="text" id="lic_no_display" class="form-control readonly-field" readonly>
+                    </div>
+                    <div class="col-md-4">
+                      <label class="form-label fw-semibold">License Type</label>
+                      <input type="text" id="lic_type_display" class="form-control readonly-field" readonly>
+                    </div>
+                    <div class="col-md-4">
+                      <label class="form-label fw-semibold">Issue District</label>
+                      <input type="text" id="lic_district_display" class="form-control readonly-field" readonly>
+                    </div>
+                  </div>
+                  <div class="row g-3 mb-3">
+                    <div class="col-md-4">
+                      <label class="form-label fw-semibold">License Issue Date</label>
+                      <input type="text" id="lic_issue_date_display" class="form-control readonly-field" readonly>
+                    </div>
+                    <div class="col-md-4">
+                      <label class="form-label fw-semibold">License Valid From <span class="text-danger">*</span></label>
+                      <input type="text" name="license_valid_from" id="lic_valid_from_input" class="form-control datepicker" placeholder="dd-mm-yyyy">
+                    </div>
+                    <div class="col-md-4">
+                      <label class="form-label fw-semibold">License Valid To <span class="text-danger">*</span></label>
+                      <input type="text" name="license_valid_to" id="lic_valid_to_input" class="form-control datepicker" placeholder="dd-mm-yyyy" required>
+                    </div>
+                  </div>
+                  <div class="row g-3 mb-3">
+                    <div class="col-md-4">
+                      <label class="form-label fw-semibold">New License Front Photo</label>
+                      <input type="file" name="license_front" class="form-control" accept=".jpg,.jpeg,.png,.gif,.webp">
+                    </div>
+                    <div class="col-md-4">
+                      <label class="form-label fw-semibold">New License Back Photo</label>
+                      <input type="file" name="license_back" class="form-control" accept=".jpg,.jpeg,.png,.gif,.webp">
+                    </div>
+                    <div class="col-md-4">
+                      <label class="form-label fw-semibold">Verify License Photo</label>
+                      <input type="file" name="verify_license_photo" class="form-control" accept=".jpg,.jpeg,.png,.gif,.webp">
+                    </div>
+                  </div>
+                  <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Update License</button>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-lg-5">
+          <div id="lic_driver_profile" style="display:none;">
+            <div class="portal-card">
+              <div class="portal-header"><i class="bi bi-person-circle me-2"></i>Driver Profile</div>
+              <div class="portal-body">
+                <div class="text-center mb-3">
+                  <img id="lic_driver_photo" src="" alt="Driver Photo" class="rounded-circle border" style="width:80px;height:80px;object-fit:cover;display:none;">
+                </div>
+                <div class="driver-info-card" id="lic_info_card"></div>
+                <div class="mt-3" id="lic_current_docs"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ BANK & UNIFORM TAB ═══════════════ -->
+    <div class="tab-pane fade {{ 'show active' if active_tab == 'bank' }}" id="bank-pane" role="tabpanel">
+      <div class="row g-4">
+        <div class="col-lg-7">
+          <div class="portal-card">
+            <div class="portal-header"><i class="bi bi-funnel me-2"></i>Select Driver</div>
+            <div class="portal-body">
+              <div class="row g-3 mb-3">
+                <div class="col-md-6">
+                  <label class="form-label fw-semibold">Project</label>
+                  <select id="bank_project" class="form-select search-select">
+                    <option value="">-- Select Project --</option>
+                    {% for p in projects %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}
+                  </select>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label fw-semibold">District</label>
+                  <select id="bank_district" class="form-select search-select" disabled>
+                    <option value="">-- Select Project first --</option>
+                  </select>
+                </div>
+              </div>
+              <div class="row g-3 mb-3">
+                <div class="col-md-6">
+                  <label class="form-label fw-semibold">Vehicle</label>
+                  <select id="bank_vehicle" class="form-select search-select" disabled>
+                    <option value="">-- Select District first --</option>
+                  </select>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label fw-semibold">Driver</label>
+                  <select id="bank_driver" class="form-select search-select" disabled>
+                    <option value="">-- Select Vehicle first --</option>
+                  </select>
+                </div>
+              </div>
+
+              <div id="bank_form_area" style="display:none;">
+                <hr>
+                <h6 class="section-title"><i class="bi bi-bank me-1"></i>Update Bank & Uniform Details</h6>
+                <form method="POST" action="{{ url_for('driver_update_portal_save', update_type='bank_uniform') }}" enctype="multipart/form-data" id="bankUpdateForm">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <input type="hidden" name="driver_id" id="bank_driver_id_hidden">
+                  <div class="row g-3 mb-3">
+                    <div class="col-md-4">
+                      <label class="form-label fw-semibold">Bank Name</label>
+                      <input type="text" name="bank_name" id="bank_name_input" class="form-control" placeholder="e.g. HBL">
+                    </div>
+                    <div class="col-md-4">
+                      <label class="form-label fw-semibold">Account No</label>
+                      <input type="text" name="account_no" id="bank_account_no_input" class="form-control" placeholder="Account number">
+                    </div>
+                    <div class="col-md-4">
+                      <label class="form-label fw-semibold">Account Title</label>
+                      <input type="text" name="account_title" id="bank_account_title_input" class="form-control" placeholder="Account holder name">
+                    </div>
+                  </div>
+                  <div class="row g-3 mb-3">
+                    <div class="col-md-4">
+                      <label class="form-label fw-semibold">Shirt Size</label>
+                      <select name="shirt_size" id="bank_shirt_size" class="form-select">
+                        <option value="">-- Size --</option>
+                        <option value="2XS">2XS</option><option value="XS">XS</option><option value="S">S</option>
+                        <option value="M">M</option><option value="L">L</option><option value="XL">XL</option>
+                        <option value="XXL">XXL</option><option value="3XL">3XL</option><option value="4XL">4XL</option>
+                      </select>
+                    </div>
+                    <div class="col-md-4">
+                      <label class="form-label fw-semibold">Trouser Size</label>
+                      <select name="trouser_size" id="bank_trouser_size" class="form-select">
+                        <option value="">-- Size --</option>
+                        <option value="26">26</option><option value="28">28</option><option value="30">30</option>
+                        <option value="32">32</option><option value="34">34</option><option value="36">36</option>
+                        <option value="38">38</option><option value="40">40</option><option value="42">42</option><option value="44">44</option>
+                      </select>
+                    </div>
+                    <div class="col-md-4">
+                      <label class="form-label fw-semibold">Jacket Size</label>
+                      <select name="jacket_size" id="bank_jacket_size" class="form-select">
+                        <option value="">-- Size --</option>
+                        <option value="2XS">2XS</option><option value="XS">XS</option><option value="S">S</option>
+                        <option value="M">M</option><option value="L">L</option><option value="XL">XL</option>
+                        <option value="XXL">XXL</option><option value="3XL">3XL</option><option value="4XL">4XL</option>
+                      </select>
+                    </div>
+                  </div>
+                  <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Update Bank & Uniform</button>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-lg-5">
+          <div id="bank_driver_profile" style="display:none;">
+            <div class="portal-card">
+              <div class="portal-header"><i class="bi bi-person-circle me-2"></i>Driver Profile</div>
+              <div class="portal-body">
+                <div class="text-center mb-3">
+                  <img id="bank_driver_photo" src="" alt="Driver Photo" class="rounded-circle border" style="width:80px;height:80px;object-fit:cover;display:none;">
+                </div>
+                <div class="driver-info-card" id="bank_info_card"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{{ nav_from_hidden() }}
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  // Initialize flatpickr
+  flatpickr('.datepicker', { dateFormat: 'd-m-Y', allowInput: true });
+
+  // ─── Generic cascade logic ───
+  function setupCascade(prefix) {
+    var proj = document.getElementById(prefix + '_project');
+    var dist = document.getElementById(prefix + '_district');
+    var vehi = document.getElementById(prefix + '_vehicle');
+    var drv  = document.getElementById(prefix + '_driver');
+
+    function reset(sel, msg) {
+      sel.innerHTML = '<option value="">' + (msg || '-- Select --') + '</option>';
+      sel.disabled = true;
+    }
+
+    proj.addEventListener('change', function() {
+      reset(dist, '-- Loading... --'); reset(vehi, '-- Select District first --'); reset(drv, '-- Select Vehicle first --');
+      hideForm(prefix); hideProfile(prefix);
+      if (!this.value) return;
+      fetch('/get_districts_by_project/' + this.value).then(r => r.json()).then(function(data) {
+        var html = '<option value="">-- Select District --</option>';
+        data.forEach(function(d) { html += '<option value="' + d.id + '">' + d.name + '</option>'; });
+        dist.innerHTML = html; dist.disabled = false;
+      });
+    });
+
+    dist.addEventListener('change', function() {
+      reset(vehi, '-- Loading... --'); reset(drv, '-- Select Vehicle first --');
+      hideForm(prefix); hideProfile(prefix);
+      if (!this.value) return;
+      fetch('/get_vehicles_by_district/' + proj.value + '/' + this.value).then(r => r.json()).then(function(data) {
+        var html = '<option value="">-- Select Vehicle --</option>';
+        data.forEach(function(v) { html += '<option value="' + v.id + '">' + v.no + '</option>'; });
+        vehi.innerHTML = html; vehi.disabled = false;
+      });
+    });
+
+    vehi.addEventListener('change', function() {
+      reset(drv, '-- Loading... --');
+      hideForm(prefix); hideProfile(prefix);
+      if (!this.value) return;
+      fetch('/get_drivers_by_vehicle/' + this.value).then(r => r.json()).then(function(data) {
+        var html = '<option value="">-- Select Driver --</option>';
+        data.forEach(function(d) { html += '<option value="' + d.id + '">' + d.name + '</option>'; });
+        drv.innerHTML = html; drv.disabled = false;
+      });
+    });
+
+    drv.addEventListener('change', function() {
+      hideForm(prefix); hideProfile(prefix);
+      if (!this.value) return;
+      loadDriverData(prefix, this.value);
+    });
+  }
+
+  function hideForm(prefix) {
+    var area = document.getElementById(prefix + '_form_area');
+    if (area) area.style.display = 'none';
+  }
+  function hideProfile(prefix) {
+    var prof = document.getElementById(prefix + '_driver_profile');
+    if (prof) prof.style.display = 'none';
+  }
+
+  function fmtDate(d) {
+    if (!d) return '-';
+    return d;
+  }
+
+  function loadDriverData(prefix, driverId) {
+    fetch('/api/driver-update-portal/driver-info/' + driverId).then(r => r.json()).then(function(d) {
+      if (d.error) { alert(d.error); return; }
+
+      // Show profile
+      var prof = document.getElementById(prefix + '_driver_profile');
+      if (prof) prof.style.display = 'block';
+
+      // Photo
+      var photo = document.getElementById(prefix + '_driver_photo');
+      if (photo) {
+        if (d.photo_url) { photo.src = d.photo_url; photo.style.display = 'block'; }
+        else { photo.style.display = 'none'; }
+      }
+
+      // Hidden driver ID
+      var hidden = document.getElementById(prefix + '_driver_id_hidden');
+      if (hidden) hidden.value = d.id;
+
+      // Info card
+      var card = document.getElementById(prefix + '_info_card');
+      if (card) {
+        var html = '';
+        html += infoRow('Name', d.name);
+        html += infoRow('Father Name', d.father_name);
+        html += infoRow('Driver ID', d.driver_id);
+        html += infoRow('CNIC', d.cnic_no);
+        html += infoRow('Phone', d.phone1);
+        html += infoRow('Vehicle', d.vehicle_no);
+        html += infoRow('District', d.driver_district);
+        card.innerHTML = html;
+      }
+
+      // Tab-specific logic
+      if (prefix === 'cnic') {
+        document.getElementById('cnic_no_display').value = d.cnic_no || '-';
+        document.getElementById('cnic_issue_date_display').value = d.cnic_issue_date || '-';
+        var expiryInput = document.getElementById('cnic_expiry_date_input');
+        expiryInput.value = d.cnic_expiry_date || '';
+        expiryInput._flatpickr && expiryInput._flatpickr.setDate(d.cnic_expiry_date || '', true, 'd-m-Y');
+
+        // Show current docs
+        var docsDiv = document.getElementById('cnic_current_docs');
+        var docsHtml = '<h6 class="fw-bold small text-muted mb-2">Current Documents</h6><div class="d-flex gap-2 flex-wrap">';
+        if (d.cnic_front_url) docsHtml += '<a href="' + d.cnic_front_url + '" target="_blank"><img src="' + d.cnic_front_url + '" class="doc-thumb" title="CNIC Front"></a>';
+        if (d.cnic_back_url) docsHtml += '<a href="' + d.cnic_back_url + '" target="_blank"><img src="' + d.cnic_back_url + '" class="doc-thumb" title="CNIC Back"></a>';
+        docsHtml += '</div>';
+        if (docsDiv) docsDiv.innerHTML = docsHtml;
+
+        document.getElementById('cnic_form_area').style.display = 'block';
+      }
+      else if (prefix === 'lic') {
+        document.getElementById('lic_no_display').value = d.license_no || '-';
+        document.getElementById('lic_type_display').value = d.license_type || '-';
+        document.getElementById('lic_district_display').value = d.issue_district || '-';
+        document.getElementById('lic_issue_date_display').value = d.license_issue_date || '-';
+
+        var vfInput = document.getElementById('lic_valid_from_input');
+        vfInput.value = d.license_valid_from || '';
+        vfInput._flatpickr && vfInput._flatpickr.setDate(d.license_valid_from || '', true, 'd-m-Y');
+
+        var vtInput = document.getElementById('lic_valid_to_input');
+        vtInput.value = d.license_valid_to || '';
+        vtInput._flatpickr && vtInput._flatpickr.setDate(d.license_valid_to || '', true, 'd-m-Y');
+
+        var docsDiv = document.getElementById('lic_current_docs');
+        var docsHtml = '<h6 class="fw-bold small text-muted mb-2">Current Documents</h6><div class="d-flex gap-2 flex-wrap">';
+        if (d.license_front_url) docsHtml += '<a href="' + d.license_front_url + '" target="_blank"><img src="' + d.license_front_url + '" class="doc-thumb" title="License Front"></a>';
+        if (d.license_back_url) docsHtml += '<a href="' + d.license_back_url + '" target="_blank"><img src="' + d.license_back_url + '" class="doc-thumb" title="License Back"></a>';
+        if (d.verify_license_url) docsHtml += '<a href="' + d.verify_license_url + '" target="_blank"><img src="' + d.verify_license_url + '" class="doc-thumb" title="Verify License"></a>';
+        docsHtml += '</div>';
+        if (docsDiv) docsDiv.innerHTML = docsHtml;
+
+        document.getElementById('lic_form_area').style.display = 'block';
+      }
+      else if (prefix === 'bank') {
+        document.getElementById('bank_name_input').value = d.bank_name || '';
+        document.getElementById('bank_account_no_input').value = d.account_no || '';
+        document.getElementById('bank_account_title_input').value = d.account_title || '';
+        setSelectVal('bank_shirt_size', d.shirt_size);
+        setSelectVal('bank_trouser_size', d.trouser_size);
+        setSelectVal('bank_jacket_size', d.jacket_size);
+
+        document.getElementById('bank_form_area').style.display = 'block';
+      }
+    });
+  }
+
+  function infoRow(label, value) {
+    return '<div class="info-row"><span class="info-label">' + label + '</span><span class="info-value">' + (value || '-') + '</span></div>';
+  }
+
+  function setSelectVal(id, val) {
+    var sel = document.getElementById(id);
+    if (sel && val) sel.value = val;
+  }
+
+  // Setup cascades for all three tabs
+  setupCascade('cnic');
+  setupCascade('lic');
+  setupCascade('bank');
+});
+</script>
+{% endblock %}

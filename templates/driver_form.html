@@ -651,7 +651,14 @@
                 {% endfor %}
               </div>
               <div class="col-md-3">
-                <label class="form-label required">License Expiry Date</label>
+                <label class="form-label">License Valid From</label>
+                {{ form.license_valid_from(type="text", class="form-control datepicker", placeholder="dd-mm-yyyy") }}
+                {% for error in form.license_valid_from.errors %}
+                  <div class="text-danger small">{{ error }}</div>
+                {% endfor %}
+              </div>
+              <div class="col-md-3">
+                <label class="form-label required">License Valid To</label>
                 {{ form.license_expiry_date(type="text", class="form-control datepicker expiry-trigger", data_target="license_status_display", data_hidden="license_status_hidden", required=True, placeholder="dd-mm-yyyy") }}
                 {% for error in form.license_expiry_date.errors %}
                   <div class="text-danger small">{{ error }}</div>
@@ -924,6 +931,50 @@
                   </div>
                 </div>
               </div>
+              <div class="col-md-4">
+                <label class="form-label fw-semibold"><i class="bi bi-patch-check me-1 text-success"></i>Verify License Photo</label>
+                {{ form.verify_license_photo(class="form-control", accept=".jpg,.jpeg,.png,.gif,.webp", id="inp-verify_license_photo") }}
+                <div class="form-text">Online verify screenshot</div>
+                {% if driver and driver.verify_license_photo_path %}
+                <div class="mt-2 text-center doc-slot" id="doc-card-verify_license_photo_path" data-field="verify_license_photo_path" data-r2url="{{ driver.verify_license_photo_path | media_url }}">
+                  <div class="doc-thumb-wrap">
+                    <img src="{{ driver.verify_license_photo_path | media_url }}" alt="Verify License"
+                         class="img-thumbnail rounded" style="max-height:80px; max-width:100%;"
+                         onerror="this.style.display='none'">
+                    {% if driver.id %}
+                    <button type="button" class="doc-rotate-btn" title="90° clockwise rotate karein">
+                      <i class="bi bi-arrow-clockwise"></i>
+                    </button>
+                    <button type="button" class="doc-crop-btn" title="Crop image">
+                      <i class="bi bi-crop"></i>Crop
+                    </button>
+                    <button type="button" class="doc-img-del-btn" title="Yeh photo delete karein">
+                      <i class="bi bi-x-lg"></i>
+                    </button>
+                    {% endif %}
+                  </div>
+                  <div class="doc-saved-badge"><i class="bi bi-check-circle-fill me-1"></i>Uploaded</div>
+                </div>
+                {% endif %}
+                <div class="doc-new-preview" id="new-preview-verify_license_photo">
+                  <img src="" alt="New verify license preview">
+                  <div class="doc-new-actions">
+                    <button type="button" class="doc-new-crop-btn" data-target="inp-verify_license_photo" data-preview="new-preview-verify_license_photo" title="Crop image">
+                      <i class="bi bi-crop"></i>
+                    </button>
+                    <button type="button" class="doc-new-rotate-btn" data-target="inp-verify_license_photo" data-preview="new-preview-verify_license_photo" title="Rotate 90° clockwise">
+                      <i class="bi bi-arrow-clockwise"></i>
+                    </button>
+                    <button type="button" class="doc-new-clr-btn" data-target="inp-verify_license_photo" data-preview="new-preview-verify_license_photo" title="Clear selection">
+                      <i class="bi bi-x-lg"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Row 3: Complete File PDF -->
+            <div class="row g-3 align-items-start">
               <div class="col-md-4">
                 <label class="form-label fw-semibold"><i class="bi bi-file-earmark-pdf me-1 text-danger"></i>Complete Driver File (PDF)</label>
                 {{ form.document(class="form-control", accept=".pdf", id="inp-document") }}

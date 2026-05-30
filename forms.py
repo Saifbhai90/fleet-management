@@ -189,7 +189,8 @@ class DriverForm(FlaskForm):
     ], validators=[DataRequired()], render_kw={'class': 'form-select search-select'})
     issue_district = StringField('Issue District', validators=[DataRequired()])
     license_issue_date = DateField('License Issue Date', format='%d-%m-%Y', validators=[DataRequired()])
-    license_expiry_date = DateField('License Expiry Date', format='%d-%m-%Y', validators=[DataRequired()])
+    license_valid_from = DateField('License Valid From', format='%d-%m-%Y', validators=[Optional()])
+    license_expiry_date = DateField('License Valid To', format='%d-%m-%Y', validators=[DataRequired()])
     license_status = StringField('License Status', render_kw={'readonly': True})
     
     # Bank & Uniform
@@ -218,6 +219,8 @@ class DriverForm(FlaskForm):
     license_front = FileField('License Front Photo', validators=[Optional(),
         FileAllowed(['jpg', 'jpeg', 'png', 'gif', 'webp'], 'Only image files allowed')])
     license_back = FileField('License Back Photo', validators=[Optional(),
+        FileAllowed(['jpg', 'jpeg', 'png', 'gif', 'webp'], 'Only image files allowed')])
+    verify_license_photo = FileField('Verify License Photo', validators=[Optional(),
         FileAllowed(['jpg', 'jpeg', 'png', 'gif', 'webp'], 'Only image files allowed')])
     document = FileField('Complete Driver File (PDF)', validators=[Optional(),
         FileAllowed(['pdf'], 'Only PDF allowed')])

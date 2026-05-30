@@ -26,7 +26,8 @@ HUBS = {
             'districts_list', 'district_form', 'vehicles_list', 'vehicle_form', 'parking_list',
             'parking_form', 'drivers_list', 'driver_form', 'employees_list', 'employee_form',
             'driver_post_list', 'driver_post_form', 'report_vehicle_profile', 'report_driver_profile',
-            'employee_profile_print',
+            'employee_profile_print', 'driver_update_portal', 'driver_update_portal_info',
+            'driver_update_portal_save',
         ),
         'sections': [
             {
@@ -49,6 +50,7 @@ HUBS = {
                 'items': [
                     _item('employees_list', 'Employees', 'fa-solid fa-users', 'rc-tile--active-drivers', 'employees'),
                     _item('drivers_list', 'Drivers', 'fa-solid fa-id-card', 'rc-tile--driver-profile', 'drivers'),
+                    _item('driver_update_portal', 'Driver Update Portal', 'fa-solid fa-pen-to-square', 'rc-tile--driver-profile', master_only=True),
                     _item('driver_post_list', 'Designations', 'fa-solid fa-id-badge', 'rc-tile--seat', 'driver_post'),
                 ],
             },
