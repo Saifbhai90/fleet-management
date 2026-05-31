@@ -380,13 +380,15 @@ document.addEventListener('DOMContentLoaded', function() {
   var _wsSlipJustPasted = false;
   if (transferDateInput) {
     window.setTimeout(function() {
-      if (_wsSlipJustPasted) return; // Don't steal focus from Category after paste
-      transferDateInput.focus();
-      if (typeof transferDateInput.select === 'function') {
-        transferDateInput.select();
-      }
+      if (_wsSlipJustPasted) return;
+      transferDateInput.focus({preventScroll: true});
+      window.scrollTo(0, 0);
     }, 80);
   }
+  // Always ensure page stays at top on load
+  window.scrollTo(0, 0);
+  setTimeout(function(){ window.scrollTo(0, 0); }, 200);
+  setTimeout(function(){ window.scrollTo(0, 0); }, 500);
 
   var slipPreviewPanel = document.getElementById('wsSlipPreviewPanel');
   var slipLargeImg = document.getElementById('wsSlipLargeImg');
