@@ -293,9 +293,13 @@
   }
 
   function setBannerState(state, opts) {
+    opts = opts || {};
+    // Always update navbar pill even if main banner element is absent
+    if (state === 'success') updateNavPill('success');
+    else if (state === 'retrying') updateNavPill('retrying');
+    else if (state === 'pending') updateNavPill('pending', opts.items || listAllPending());
     var el = getBannerEl();
     if (!el) return;
-    opts = opts || {};
     el.setAttribute('data-state', state);
     el.classList.remove('d-none', 'fleet-gps-pending--success', 'fleet-gps-pending--warn', 'fleet-gps-pending--retry');
 
@@ -323,7 +327,6 @@
         detailEl.classList.add('d-none');
       }
       if (actionEl) actionEl.classList.add('d-none');
-      updateNavPill('success');
       return;
     }
 
@@ -341,7 +344,6 @@
         }
       }
       if (actionEl) actionEl.classList.remove('d-none');
-      updateNavPill('retrying');
       return;
     }
 
@@ -374,7 +376,6 @@
         if (c.taskEntryPageUrl) linkTask.setAttribute('href', c.taskEntryPageUrl);
       }
     }
-    updateNavPill('pending', items);
   }
 
   function isNativeApp() {
