@@ -289,7 +289,12 @@
 
     if (state === 'success') {
       el.classList.add('fleet-gps-pending--success');
-      if (titleEl) titleEl.textContent = 'All records uploaded successfully';
+      var speedTxt = '';
+      var speedEl = document.getElementById('liveNetworkSpeedText');
+      if (speedEl && speedEl.textContent && speedEl.textContent !== '-- Mbps') {
+        speedTxt = ' · ' + speedEl.textContent;
+      }
+      if (titleEl) titleEl.textContent = 'All records uploaded successfully' + speedTxt;
       if (detailEl) {
         detailEl.textContent = '';
         detailEl.innerHTML = '';
@@ -347,6 +352,10 @@
     }
   }
 
+  function isNativeApp() {
+    return !!(global.Capacitor && global.Capacitor.isNativePlatform && global.Capacitor.isNativePlatform());
+  }
+
   function refreshBanner() {
     var items = listAllPending();
     if (items.length) {
@@ -358,15 +367,22 @@
       return;
     }
     stopGlobalAutoRetry();
-    if (isDashboardPage()) {
-      setBannerState('success');
-      if (successHideTimer) clearTimeout(successHideTimer);
-      successHideTimer = setTimeout(function () {
-        successHideTimer = null;
-        if (!listAllPending().length) setBannerState('hidden');
-      }, 8000);
+    if (isNativeApp()) {
+      // Mobile app: keep old behaviour — show success briefly on dashboard, else hide
+      if (isDashboardPage()) {
+        setBannerState('success');
+        if (successHideTimer) clearTimeout(successHideTimer);
+        successHideTimer = setTimeout(function () {
+          successHideTimer = null;
+          if (!listAllPending().length) setBannerState('hidden');
+        }, 8000);
+      } else {
+        setBannerState('hidden');
+      }
     } else {
-      setBannerState('hidden');
+      // Web: always show success banner — never hide
+      if (successHideTimer) { clearTimeout(successHideTimer); successHideTimer = null; }
+      setBannerState('success');
     }
   }
 
