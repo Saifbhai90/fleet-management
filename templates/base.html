@@ -1741,6 +1741,25 @@
     border-color: rgba(71, 85, 105, 0.6);
     color: #cbd5e1;
   }
+  /* Navbar upload status pill states */
+  #navUploadStatusPill[data-state="success"] {
+    background: rgba(16, 185, 129, 0.14);
+    border-color: rgba(16, 185, 129, 0.35);
+    color: #059669;
+  }
+  #navUploadStatusPill[data-state="pending"] {
+    background: rgba(245, 158, 11, 0.14);
+    border-color: rgba(245, 158, 11, 0.4);
+    color: #d97706;
+  }
+  #navUploadStatusPill[data-state="retrying"] {
+    background: rgba(59, 130, 246, 0.14);
+    border-color: rgba(59, 130, 246, 0.35);
+    color: #2563eb;
+  }
+  body.dark-mode #navUploadStatusPill[data-state="success"] { background: rgba(16,185,129,0.2); color: #6ee7b7; }
+  body.dark-mode #navUploadStatusPill[data-state="pending"] { background: rgba(245,158,11,0.2); color: #fcd34d; }
+  body.dark-mode #navUploadStatusPill[data-state="retrying"] { background: rgba(59,130,246,0.2); color: #93c5fd; }
   /* GPS pending upload banner (global) */
   .fleet-gps-pending-banner {
     margin: 0 0 16px;
@@ -1969,6 +1988,12 @@
                 <i id="liveNetworkSignalIcon" class="bi bi-reception-0 text-secondary"></i>
                 <span id="liveNetworkSpeedText">-- Mbps</span>
             </div>
+            {% if can_see_page('driver_attendance_checkin') or can_see_page('driver_attendance_checkout') or can_see_page('task_report_entry') %}
+            <div id="navUploadStatusPill" class="fleet-conn-pill" data-state="checking" title="Upload status" style="display:none;">
+                <i id="navUploadStatusIcon" class="bi bi-cloud-upload"></i>
+                <span id="navUploadStatusText">Upload status</span>
+            </div>
+            {% endif %}
         </div>
     </div>
 

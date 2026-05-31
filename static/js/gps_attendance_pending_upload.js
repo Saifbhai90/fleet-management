@@ -270,6 +270,28 @@
     return document.getElementById('fleetGpsPendingBanner');
   }
 
+  function updateNavPill(state, items) {
+    var pill = document.getElementById('navUploadStatusPill');
+    var icon = document.getElementById('navUploadStatusIcon');
+    var text = document.getElementById('navUploadStatusText');
+    if (!pill) return;
+    pill.style.display = '';
+    pill.setAttribute('data-state', state);
+    if (state === 'success') {
+      if (icon) icon.className = 'bi bi-cloud-check';
+      var speedEl = document.getElementById('liveNetworkSpeedText');
+      var spd = speedEl && speedEl.textContent !== '-- Mbps' ? ' · ' + speedEl.textContent : '';
+      if (text) text.textContent = 'All uploaded' + spd;
+    } else if (state === 'pending') {
+      var cnt = (items || []).length;
+      if (icon) icon.className = 'bi bi-cloud-arrow-up';
+      if (text) text.textContent = cnt + ' upload' + (cnt !== 1 ? 's' : '') + ' pending';
+    } else if (state === 'retrying') {
+      if (icon) icon.className = 'bi bi-arrow-repeat';
+      if (text) text.textContent = 'Uploading\u2026';
+    }
+  }
+
   function setBannerState(state, opts) {
     var el = getBannerEl();
     if (!el) return;
@@ -301,6 +323,7 @@
         detailEl.classList.add('d-none');
       }
       if (actionEl) actionEl.classList.add('d-none');
+      updateNavPill('success');
       return;
     }
 
@@ -318,6 +341,7 @@
         }
       }
       if (actionEl) actionEl.classList.remove('d-none');
+      updateNavPill('retrying');
       return;
     }
 
@@ -350,6 +374,7 @@
         if (c.taskEntryPageUrl) linkTask.setAttribute('href', c.taskEntryPageUrl);
       }
     }
+    updateNavPill('pending', items);
   }
 
   function isNativeApp() {
