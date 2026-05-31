@@ -44,7 +44,7 @@ def start_expiry_reminder_scheduler(app):
         _SCHEDULER.add_job(
             _job,
             'interval',
-            hours=1,
+            minutes=5,
             id='fleet_expiry_reminders',
             replace_existing=True,
             max_instances=1,
@@ -52,7 +52,7 @@ def start_expiry_reminder_scheduler(app):
         )
         _SCHEDULER.start()
         if hasattr(app, 'logger'):
-            app.logger.info('Expiry/Oil change reminder scheduler started (every 1 hour).')
+            app.logger.info('Expiry/Oil change reminder scheduler started (every 5 min).')
     except Exception as exc:
         if hasattr(app, 'logger'):
             app.logger.warning('Expiry reminder scheduler failed: %s', exc)
