@@ -229,14 +229,34 @@ def run_oil_change_reminders(app):
 
 
 def _send_oil_change_notification(vehicle, title, message, notify_user, get_dto_user_ids_for_scope):
-    """Send oil change notification to DTOs for this vehicle's scope."""
+    """Send oil change notification to driver + DTOs for this vehicle's scope."""
+    from models import Driver
+    from push_notifications import get_user_id_for_driver
+
+    # Notify driver assigned to this vehicle
+    driver = None
+    if vehicle.driver_id:
+        driver = Driver.query.get(vehicle.driver_id)
+    else:
+        driver = Driver.query.filter_by(
+            vehicle_id=vehicle.id, status='Active'
+        ).first()
+    if driver:
+        uid = get_user_id_for_driver(driver)
+        if uid:
+            notify_user(uid, title, message, notification_type='warning', link=None)
+
+    # Notify DTOs
     district_id = vehicle.district_id
     project_id = vehicle.project_id
     if not district_id or not project_id:
         return
 
     v_no = (vehicle.vehicle_no or '').strip()
+    driver_name = (driver.name or '').strip() if driver else ''
     dto_body = f'{message}\nVehicle: {v_no}'
+    if driver_name:
+        dto_body += f' | Driver: {driver_name}'
     for dto_uid in get_dto_user_ids_for_scope(district_id, project_id):
         notify_user(dto_uid, title, dto_body, notification_type='warning', link=None)
 
