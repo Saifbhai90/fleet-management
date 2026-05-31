@@ -24,30 +24,50 @@
     .ws-attach-zone { border: 2px dashed #ced4da; border-radius: 8px; padding: .6rem; text-align: center; cursor: pointer; transition: all .15s; }
     .ws-attach-zone:hover, .ws-attach-zone.drag-over { border-color: #198754; background: #f3fbf6; }
     .ws-attach-preview img { max-height: 90px; border-radius: 6px; object-fit: contain; }
-    /* Large sticky slip preview after upload */
-    .ws-slip-preview-panel { position: sticky; top: 12px; }
-    .ws-slip-preview-panel img { width: 100%; max-height: calc(100vh - 180px); object-fit: contain; border-radius: 10px; border: 1px solid #dee2e6; cursor: zoom-in; transition: box-shadow .2s; background: #f8f9fa; }
-    .ws-slip-preview-panel img:hover { box-shadow: 0 4px 20px rgba(0,0,0,.15); }
-    .ws-slip-preview-panel .ws-zoom-hint { font-size: .72rem; color: #6c757d; text-align: center; margin-top: 6px; }
-    /* Fullscreen modal */
-    .ws-slip-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.85); z-index: 9999; display: flex; align-items: center; justify-content: center; cursor: zoom-out; opacity: 0; visibility: hidden; transition: opacity .2s, visibility .2s; }
-    .ws-slip-modal-overlay.active { opacity: 1; visibility: visible; }
-    .ws-slip-modal-overlay img { max-width: 95vw; max-height: 95vh; object-fit: contain; border-radius: 8px; }
   </style>
 
   <div class="ws-transfer-form-wrap">
+    <div class="d-flex justify-content-between align-items-center ws-tf-header mb-3">
+      <h5 class="mb-0"><i class="bi bi-arrow-left-right me-2"></i>{{ 'Edit' if row else 'Add' }} Workspace Transfer</h5>
+      <div class="d-flex gap-2">
+        <a href="{{ url_for('workspace_fund_transfers_list') }}" class="btn btn-outline-light btn-sm">Back to List</a>
+      </div>
+    </div>
+
+    {% if not row and last_saved_transfer %}
+    <div class="xfer-last-saved-compact alert alert-light border shadow-sm mb-3" role="status">
+      <div class="d-flex flex-wrap align-items-center column-gap-2 row-gap-1 justify-content-between">
+        <div class="min-w-0 flex-grow-1 d-flex flex-wrap align-items-baseline gap-x-2 gap-y-0">
+          <span class="text-muted small text-nowrap"><i class="bi bi-clock-history me-1"></i>Last transfer you saved</span>
+          <strong class="text-nowrap">{{ last_saved_transfer.transfer_number or ('#' ~ last_saved_transfer.id) }}</strong>
+          <span class="small text-muted text-nowrap">
+            {{ last_saved_transfer.transfer_date|ddmmyyyy if last_saved_transfer.transfer_date else '—' }}
+            · <span class="text-success fw-semibold">{{ last_saved_transfer.amount }}</span>
+            {% if last_saved_transfer.payment_mode %}· {{ last_saved_transfer.payment_mode }}{% endif %}
+          </span>
+          <span class="small text-truncate" style="max-width:min(480px,70vw)" title="{{ account_display_map.get(last_saved_transfer.from_account_id, '—') }} → {{ account_display_map.get(last_saved_transfer.to_account_id, '—') }}">
+            <span class="text-muted">From</span> {{ account_display_map.get(last_saved_transfer.from_account_id, '—') }}
+            <span class="text-muted">→</span> {{ account_display_map.get(last_saved_transfer.to_account_id, '—') }}
+          </span>
+          {% if last_saved_transfer.description %}
+          <span class="small text-muted text-truncate" style="max-width:min(360px,55vw)" title="{{ last_saved_transfer.description }}">
+            · {{ last_saved_transfer.description[:72] }}{% if last_saved_transfer.description|length > 72 %}…{% endif %}
+          </span>
+          {% endif %}
+        </div>
+        <a href="{{ url_for('workspace_fund_transfer_edit', pk=last_saved_transfer.id) }}" class="btn btn-sm btn-outline-secondary flex-shrink-0"><i class="bi bi-pencil me-1"></i>Open</a>
+      </div>
+    </div>
+    {% endif %}
+
     <form method="post" enctype="multipart/form-data" id="wsTransferForm">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <div class="row g-2 align-items-start">
-        <div class="col-xl-7">
-          <div class="d-flex justify-content-between align-items-center ws-tf-header mb-2">
-            <h5 class="mb-0"><i class="bi bi-arrow-left-right me-2"></i>{{ 'Edit' if row else 'Add' }} Workspace Transfer</h5>
-            <a href="{{ url_for('workspace_fund_transfers_list') }}" class="btn btn-outline-light btn-sm">Back to List</a>
-          </div>
-          <div class="card ws-tf-card" style="min-height:420px">
-            <div class="card-header py-1"><i class="bi bi-list-check me-1 text-success"></i>Transfer Details</div>
-            <div class="card-body py-2">
-              <div class="row g-2">
+      <div class="row g-3">
+        <div class="col-xl-8">
+          <div class="card ws-tf-card h-100">
+            <div class="card-header"><i class="bi bi-list-check me-1 text-success"></i>Transfer Details</div>
+            <div class="card-body">
+              <div class="row g-3">
                 <div class="col-md-3">
                   <label class="form-label">Transfer Date</label>
                   <input type="text" id="wsTransferDateInput" name="transfer_date" class="form-control datepicker" value="{{ row.transfer_date|ddmmyyyy if row and row.transfer_date else '' }}" placeholder="dd-mm-yyyy" required>
@@ -68,7 +88,7 @@
                 </div>
                 <div class="col-md-3">
                   <label class="form-label">Category / Purpose</label>
-                  <select name="category" id="wsCategorySelect" class="form-select search-select">
+                  <select name="category" class="form-select search-select">
                     <option value="">-- Select / Optional --</option>
                     {% for c in categories %}
                     <option value="{{ c.name }}" {% if row and row.category == c.name %}selected{% endif %}>{{ c.name }}</option>
@@ -102,50 +122,18 @@
                 <div class="col-12">
                   <label class="form-label">Description</label>
                   <div style="position:relative">
-                    <textarea name="description" id="wsTransferDesc" class="form-control" rows="2" placeholder="Type or select from recent descriptions...">{{ row.description if row else '' }}</textarea>
+                    <textarea name="description" id="wsTransferDesc" class="form-control" rows="3" placeholder="Type or select from recent descriptions...">{{ row.description if row else '' }}</textarea>
                     <div id="wsDescSuggest" class="ws-desc-suggest"></div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
-          {% if not row and last_saved_transfer %}
-          <div class="xfer-last-saved-compact alert alert-light border shadow-sm mt-2 mb-0" role="status">
-            <div class="d-flex flex-wrap align-items-center column-gap-2 row-gap-1 justify-content-between">
-              <div class="min-w-0 flex-grow-1 d-flex flex-wrap align-items-baseline gap-x-2 gap-y-0">
-                <span class="text-muted small text-nowrap"><i class="bi bi-clock-history me-1"></i>Last saved</span>
-                <strong class="text-nowrap" style="font-size:.78rem">{{ last_saved_transfer.transfer_number or ('#' ~ last_saved_transfer.id) }}</strong>
-                <span class="small text-muted text-nowrap">
-                  {{ last_saved_transfer.transfer_date|ddmmyyyy if last_saved_transfer.transfer_date else '—' }}
-                  · <span class="text-success fw-semibold">{{ last_saved_transfer.amount }}</span>
-                  {% if last_saved_transfer.payment_mode %}· {{ last_saved_transfer.payment_mode }}{% endif %}
-                </span>
-                <span class="small text-truncate" style="max-width:min(400px,60vw)" title="{{ account_display_map.get(last_saved_transfer.from_account_id, '—') }} → {{ account_display_map.get(last_saved_transfer.to_account_id, '—') }}">
-                  <span class="text-muted">From</span> {{ account_display_map.get(last_saved_transfer.from_account_id, '—') }}
-                  <span class="text-muted">→</span> {{ account_display_map.get(last_saved_transfer.to_account_id, '—') }}
-                </span>
-                {% if last_saved_transfer.description %}
-                <span class="small text-muted text-truncate" style="max-width:min(360px,55vw)" title="{{ last_saved_transfer.description }}">
-                  · {{ last_saved_transfer.description[:80] }}{% if last_saved_transfer.description|length > 80 %}…{% endif %}
-                </span>
-                {% endif %}
-              </div>
-              <a href="{{ url_for('workspace_fund_transfer_edit', pk=last_saved_transfer.id) }}" class="btn btn-sm btn-outline-secondary flex-shrink-0"><i class="bi bi-pencil me-1"></i>Open</a>
-            </div>
-          </div>
-          {% endif %}
-          <div class="d-flex gap-2 justify-content-end mt-2" id="wsTransferFormActions">
-            <a href="{{ url_for('workspace_fund_transfers_list') }}" class="btn btn-outline-secondary btn-sm">Cancel</a>
-            {% if not row %}
-            <button type="submit" name="_save_action" value="save_add" class="btn btn-outline-success btn-sm px-3" id="wsTransferSaveAddBtn"><i class="bi bi-plus-circle me-1"></i>Save &amp; Add Next</button>
-            {% endif %}
-            <button type="submit" name="_save_action" value="save_list" class="btn btn-success btn-sm px-3" id="wsTransferSaveBtn"><i class="bi bi-check2-circle me-1"></i>Save Transfer</button>
-          </div>
         </div>
-        <div class="col-xl-5" id="wsAttachCol">
-          <div class="card ws-tf-card" id="wsAttachCard">
-            <div class="card-header py-1"><i class="bi bi-paperclip me-1 text-success"></i>Attachment (Image)</div>
-            <div class="card-body py-2">
+        <div class="col-xl-4">
+          <div class="card ws-tf-card h-100">
+            <div class="card-header"><i class="bi bi-paperclip me-1 text-success"></i>Attachment (Image)</div>
+            <div class="card-body">
               <div class="ws-attach-zone" id="wsAttachZone" tabindex="0">
                 <input type="file" name="attachment" id="wsTransferAttachmentInput" class="form-control d-none" accept="image/*">
                 <div id="wsAttachPlaceholder">
@@ -155,33 +143,32 @@
                   <img id="wsAttachPreviewImg" src="" alt="preview">
                 </div>
               </div>
-              <small class="text-muted d-block mt-1" style="font-size:.72rem">Upload transfer proof image. Ctrl+V also works.</small>
+              <small class="text-muted d-block mt-2">Upload transfer proof image (optional). Ctrl+V also works.</small>
               {% if existing_attachment %}
-              <div class="mt-2">
+              <div class="mt-3">
                 <small class="text-muted">Current:</small>
                 <a href="{{ existing_attachment }}" target="_blank" class="d-block mt-1">
-                  <img src="{{ existing_attachment }}" style="max-height:70px;border-radius:6px" alt="current">
+                  <img src="{{ existing_attachment }}" style="max-height:90px;border-radius:6px" alt="current">
                 </a>
-                <label class="mt-1 text-danger" style="font-size:.75rem;cursor:pointer">
-                  <input type="checkbox" name="remove_attachment" value="1" class="form-check-input form-check-input-sm me-1">Remove
+                <label class="mt-2 text-danger" style="font-size:.82rem;cursor:pointer">
+                  <input type="checkbox" name="remove_attachment" value="1" class="form-check-input form-check-input-sm me-1">Remove current image
                 </label>
               </div>
               {% endif %}
             </div>
           </div>
-          <!-- Large sticky slip preview (shown after image upload) -->
-          <div class="ws-slip-preview-panel mt-2" id="wsSlipPreviewPanel" style="display:none;">
-            <img id="wsSlipLargeImg" src="" alt="Slip Preview" title="Click to zoom full screen">
-            <div class="ws-zoom-hint"><i class="bi bi-zoom-in me-1"></i>Click image for full-screen view</div>
-          </div>
         </div>
+      </div>
+
+      <div class="d-flex gap-2 justify-content-end mt-3" id="wsTransferFormActions">
+        <a href="{{ url_for('workspace_fund_transfers_list') }}" class="btn btn-outline-secondary">Cancel</a>
+        {% if not row %}
+        <button type="submit" name="_save_action" value="save_add" class="btn btn-outline-success px-4" id="wsTransferSaveAddBtn"><i class="bi bi-plus-circle me-1"></i>Save &amp; Add Next</button>
+        {% endif %}
+        <button type="submit" name="_save_action" value="save_list" class="btn btn-success px-4" id="wsTransferSaveBtn"><i class="bi bi-check2-circle me-1"></i>Save Transfer</button>
       </div>
     </form>
   </div>
-</div>
-<!-- Fullscreen slip zoom modal -->
-<div class="ws-slip-modal-overlay" id="wsSlipModal">
-  <img id="wsSlipModalImg" src="" alt="Slip Full View">
 </div>
 <script>
 var _wsAcctBalanceMap = {{ account_balance_json | tojson }};
@@ -225,50 +212,15 @@ document.addEventListener('DOMContentLoaded', function() {
     if (url) window.open(url, '_blank');
   }
 
-  /* Auto-fill Description helper */
-  var catSelect = document.getElementById('wsCategorySelect');
-  function _extractAccountName(selectEl) {
-    if (!selectEl || !selectEl.value) return '';
-    var txt = selectEl.options[selectEl.selectedIndex].textContent || '';
-    // Format: "22025 - Driver - Ansar Abbas | Vehicle: GBC-23-953 (Asset)" or "2310 - Transfer Clearing (Liability)"
-    // Remove trailing (AccountType)
-    txt = txt.replace(/\s*\([^)]*\)\s*$/, '').trim();
-    // Remove everything after | (vehicle info)
-    if (txt.indexOf('|') !== -1) txt = txt.split('|')[0].trim();
-    // Remove code prefix: "22025 - " or "22025 - Driver - "
-    var parts = txt.split(' - ');
-    if (parts.length >= 3) {
-      // e.g. ["22025", "Driver", "Ansar Abbas"] → take last part
-      return parts.slice(2).join(' - ').trim();
-    } else if (parts.length === 2) {
-      // e.g. ["2310", "Transfer Clearing"] → take second part
-      return parts[1].trim();
-    }
-    return txt;
-  }
-  function _autoFillDescription() {
-    if (!descBox) return;
-    var fromName = _extractAccountName(fromSelect);
-    var toName = _extractAccountName(toSelect);
-    if (!fromName || !toName) return;
-    var category = catSelect ? (catSelect.value || '') : '';
-    var desc = 'Payment Transfer From ' + fromName + ' Account to ' + toName + ' Account';
-    if (category) desc += ' for ' + category;
-    descBox.value = desc;
-  }
-
   if (fromSelect) {
-    fromSelect.addEventListener('change', function() { _applyWsAcctHint(fromHint, this.value || ''); _autoFillDescription(); });
+    fromSelect.addEventListener('change', function() { _applyWsAcctHint(fromHint, this.value || ''); });
     if (fromHint) fromHint.addEventListener('click', function() { _hintClick(this); });
     _applyWsAcctHint(fromHint, fromSelect.value || '');
   }
   if (toSelect) {
-    toSelect.addEventListener('change', function() { _applyWsAcctHint(toHint, this.value || ''); _autoFillDescription(); });
+    toSelect.addEventListener('change', function() { _applyWsAcctHint(toHint, this.value || ''); });
     if (toHint) toHint.addEventListener('click', function() { _hintClick(this); });
     _applyWsAcctHint(toHint, toSelect.value || '');
-  }
-  if (catSelect) {
-    catSelect.addEventListener('change', function() { _autoFillDescription(); });
   }
 
   document.addEventListener('keydown', function(e) {
@@ -278,232 +230,24 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   });
 
-  /* Enter key → move to next field instead of submitting */
-  var _wsFieldOrder = [
-    'wsTransferDateInput', 'amount', 'payment_mode', 'wsCategorySelect',
-    'wsFromAccountSelect', 'wsToAccountSelect', 'wsTransferRefInput', 'wsTransferDesc'
-  ];
-  var formEl2 = document.getElementById('wsTransferForm');
-  if (formEl2) {
-    formEl2.addEventListener('keydown', function(e) {
-      if (e.key !== 'Enter') return;
-      var target = e.target;
-      if (target.tagName === 'TEXTAREA') return; // allow newline in textarea
-      if (target.tagName === 'BUTTON' || target.type === 'submit') return;
-      e.preventDefault();
-      e.stopPropagation();
-      // Find current field index and move to next
-      var currentId = target.id || target.name;
-      var idx = _wsFieldOrder.indexOf(currentId);
-      if (idx < 0) return;
-      for (var ni = idx + 1; ni < _wsFieldOrder.length; ni++) {
-        var nextEl = document.getElementById(_wsFieldOrder[ni]) || formEl2.querySelector('[name="' + _wsFieldOrder[ni] + '"]');
-        if (nextEl && !nextEl.disabled) { nextEl.focus(); return; }
-      }
-    });
-  }
-
-  /* Slip OCR: on image paste/drop → call AI to extract data and auto-fill fields */
-  var _ocrProcessing = false;
-  var _ocrStatusEl = null;
-  function _showOcrStatus(msg, isError) {
-    if (!_ocrStatusEl) {
-      _ocrStatusEl = document.createElement('div');
-      _ocrStatusEl.className = 'small mt-1 fw-semibold';
-      _ocrStatusEl.style.cssText = 'font-size:.78rem;padding:4px 8px;border-radius:6px;';
-      // Place status below the slip preview panel (visible even when attach card is hidden)
-      var previewPanel = document.getElementById('wsSlipPreviewPanel');
-      if (previewPanel && previewPanel.parentNode) {
-        previewPanel.parentNode.insertBefore(_ocrStatusEl, previewPanel.nextSibling);
-      } else {
-        var zone = document.getElementById('wsAttachZone');
-        if (zone && zone.parentNode) zone.parentNode.insertBefore(_ocrStatusEl, zone.nextSibling);
-      }
-    }
-    _ocrStatusEl.textContent = msg;
-    _ocrStatusEl.style.color = isError ? '#dc3545' : '#198754';
-    _ocrStatusEl.style.background = msg ? (isError ? '#fff5f5' : '#f0fdf4') : 'transparent';
-    if (!msg) _ocrStatusEl.style.display = 'none'; else _ocrStatusEl.style.display = 'block';
-  }
-  function _compressImage(dataUrl, maxPx, quality, cb) {
-    var img = new Image();
-    img.onload = function() {
-      var w = img.width, h = img.height;
-      if (w > maxPx || h > maxPx) {
-        if (w > h) { h = Math.round(h * maxPx / w); w = maxPx; }
-        else       { w = Math.round(w * maxPx / h); h = maxPx; }
-      }
-      var c = document.createElement('canvas');
-      c.width = w; c.height = h;
-      c.getContext('2d').drawImage(img, 0, 0, w, h);
-      cb(c.toDataURL('image/jpeg', quality));
-    };
-    img.src = dataUrl;
-  }
-  function _runSlipOcr(file) {
-    if (_ocrProcessing || !file) return;
-    _ocrProcessing = true;
-    _showOcrStatus('Reading slip...', false);
-    var reader = new FileReader();
-    reader.onload = function(ev) {
-      _compressImage(ev.target.result, 800, 0.75, function(b64) {
-      var csrfEl = document.querySelector('[name=csrf_token]') || document.querySelector('input[name=csrf_token]');
-      var csrfToken = csrfEl ? csrfEl.value : '';
-      fetch('/api/workspace-transfer-slip-ocr', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
-        body: JSON.stringify({image: b64})
-      })
-      .then(function(r){
-        if (!r.ok) { throw new Error('HTTP ' + r.status); }
-        return r.json();
-      })
-      .then(function(resp) {
-        _ocrProcessing = false;
-        if (!resp.ok || !resp.data) {
-          _showOcrStatus(resp.error || 'Could not read slip.', true);
-          return;
-        }
-        var d = resp.data;
-        var provider = resp.provider || '';
-        var providerLabel = '';
-        if (provider === 'gemini') {
-          providerLabel = ' (Gemini)';
-        } else if (provider.indexOf('openrouter:') === 0) {
-          providerLabel = ' (' + provider.replace('openrouter:', '') + ')';
-        } else if (provider === 'openrouter') {
-          providerLabel = ' (OpenRouter)';
-        }
-        _showOcrStatus('Slip read! ' + providerLabel, false);
-        // Fill Transfer Date
-        if (d.transaction_date) {
-          var dtInput = document.getElementById('wsTransferDateInput');
-          if (dtInput && !dtInput.value) dtInput.value = d.transaction_date;
-        }
-        // Fill Amount
-        if (d.amount) {
-          var amtInput = formEl2.querySelector('[name="amount"]');
-          if (amtInput && !amtInput.value) amtInput.value = d.amount;
-        }
-        // Fill Payment Mode
-        if (d.payment_mode) {
-          var pmSelect = formEl2.querySelector('[name="payment_mode"]');
-          if (pmSelect) {
-            var pmVal = d.payment_mode;
-            for (var oi = 0; oi < pmSelect.options.length; oi++) {
-              if (pmSelect.options[oi].value.toLowerCase() === pmVal.toLowerCase() ||
-                  pmSelect.options[oi].textContent.toLowerCase().indexOf(pmVal.toLowerCase()) !== -1) {
-                pmSelect.selectedIndex = oi; break;
-              }
-            }
-          }
-        }
-        // Fill Reference No
-        if (d.reference_no) {
-          var refInput = document.getElementById('wsTransferRefInput');
-          if (refInput && !refInput.value) refInput.value = d.reference_no;
-        }
-        // Fill Description from OCR (from_name → to_name or raw description)
-        if (descBox && !descBox.value.trim()) {
-          var ocrDesc = '';
-          if (d.from_name && d.to_name) {
-            ocrDesc = 'Transfer from ' + d.from_name + ' to ' + d.to_name;
-          } else if (d.description) {
-            ocrDesc = d.description;
-          }
-          if (ocrDesc) descBox.value = ocrDesc;
-        }
-        // Highlight filled fields briefly
-        setTimeout(function(){ _showOcrStatus('', false); }, 5000);
-      })
-      .catch(function(err) {
-        _ocrProcessing = false;
-        _showOcrStatus('OCR failed: ' + (err.message || err), true);
-      });
-      }); // end _compressImage
-    };
-    reader.readAsDataURL(file);
-  }
-
-  var _wsSlipJustPasted = false;
   if (transferDateInput) {
     window.setTimeout(function() {
-      if (_wsSlipJustPasted) return;
-      transferDateInput.focus({preventScroll: true});
-      window.scrollTo(0, 0);
+      transferDateInput.focus();
+      if (typeof transferDateInput.select === 'function') {
+        transferDateInput.select();
+      }
     }, 80);
   }
-  // Always ensure page stays at top on load
-  window.scrollTo(0, 0);
-  setTimeout(function(){ window.scrollTo(0, 0); }, 200);
-  setTimeout(function(){ window.scrollTo(0, 0); }, 500);
-
-  var slipPreviewPanel = document.getElementById('wsSlipPreviewPanel');
-  var slipLargeImg = document.getElementById('wsSlipLargeImg');
-  var slipModal = document.getElementById('wsSlipModal');
-  var slipModalImg = document.getElementById('wsSlipModalImg');
 
   function showAttachPreview(file) {
     if (!file || !file.type || file.type.indexOf('image/') !== 0) return;
-    _wsSlipJustPasted = true; // Immediately prevent date auto-focus
     var reader = new FileReader();
     reader.onload = function(e) {
       attachPreviewImg.src = e.target.result;
       attachPreview.style.display = 'block';
       attachPlaceholder.style.display = 'none';
-      // Hide small attachment card, show large sticky preview only
-      var attachCard = document.getElementById('wsAttachCard');
-      if (attachCard) attachCard.style.display = 'none';
-      if (slipLargeImg && slipPreviewPanel) {
-        slipLargeImg.src = e.target.result;
-        slipPreviewPanel.style.display = 'block';
-      }
-      // Auto-select "Online Payment" when slip image is attached
-      var pmSelect = document.querySelector('[name="payment_mode"]');
-      if (pmSelect) {
-        if (pmSelect.tomselect) {
-          pmSelect.tomselect.setValue('Online', true);
-        } else {
-          pmSelect.value = 'Online';
-          pmSelect.dispatchEvent(new Event('change', {bubbles: true}));
-        }
-      }
-      // Mark that slip was just pasted (prevent date focus override)
-      _wsSlipJustPasted = true;
-      // Prevent auto-scroll down
-      var scrollX = window.scrollX, scrollY = window.scrollY;
-      setTimeout(function(){ window.scrollTo(scrollX, scrollY); }, 50);
-      setTimeout(function(){ window.scrollTo(scrollX, scrollY); }, 150);
-      // Immediately focus Category/Purpose (without scrolling)
-      setTimeout(function(){
-        if (catSelect && catSelect.tomselect) {
-          catSelect.tomselect.focus();
-        } else if (catSelect) {
-          catSelect.focus();
-        }
-        window.scrollTo(scrollX, scrollY);
-      }, 120);
     };
     reader.readAsDataURL(file);
-  }
-
-  // Click large preview → open fullscreen modal
-  if (slipLargeImg && slipModal && slipModalImg) {
-    slipLargeImg.addEventListener('click', function() {
-      slipModalImg.src = this.src;
-      slipModal.classList.add('active');
-    });
-  }
-  // Click modal → close
-  if (slipModal) {
-    slipModal.addEventListener('click', function() {
-      slipModal.classList.remove('active');
-    });
-    document.addEventListener('keydown', function(e) {
-      if (e.key === 'Escape' && slipModal.classList.contains('active')) {
-        slipModal.classList.remove('active');
-      }
-    });
   }
 
   if (attachZone && attachInput) {
@@ -521,7 +265,7 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     });
     attachInput.addEventListener('change', function(){
-      if (this.files && this.files[0]) { showAttachPreview(this.files[0]); _runSlipOcr(this.files[0]); }
+      if (this.files && this.files[0]) showAttachPreview(this.files[0]);
     });
     attachZone.addEventListener('dragover', function(e){ e.preventDefault(); attachZone.classList.add('drag-over'); });
     attachZone.addEventListener('dragleave', function(){ attachZone.classList.remove('drag-over'); });
@@ -534,7 +278,6 @@ document.addEventListener('DOMContentLoaded', function() {
       dt.items.add(f);
       attachInput.files = dt.files;
       showAttachPreview(f);
-      _runSlipOcr(f);
     });
     attachZone.addEventListener('paste', function(e){
       var items = (e.clipboardData || e.originalEvent.clipboardData).items || [];
@@ -545,7 +288,6 @@ document.addEventListener('DOMContentLoaded', function() {
           dt.items.add(file);
           attachInput.files = dt.files;
           showAttachPreview(file);
-          _runSlipOcr(file);
           e.preventDefault();
           break;
         }
@@ -562,7 +304,6 @@ document.addEventListener('DOMContentLoaded', function() {
         dt.items.add(file);
         attachInput.files = dt.files;
         showAttachPreview(file);
-        _runSlipOcr(file);
         break;
       }
     }
@@ -616,18 +357,13 @@ document.addEventListener('DOMContentLoaded', function() {
           if (_active >= 0 && rows[_active]) {
             descBox.value = rows[_active].getAttribute('data-val');
             sugBox.style.display = 'none';
-            descBox._enterReady = true;
             return;
           }
         }
-        var targetBtn = saveAddBtn && !saveAddBtn.disabled ? saveAddBtn : saveBtn;
-        if (!targetBtn) return;
-        if (descBox._enterReady) {
-          descBox._enterReady = false;
-          targetBtn.click();
-        } else {
-          descBox._enterReady = true;
-          targetBtn.focus();
+        if (attachZone) {
+          attachZone.focus();
+        } else if (attachInput) {
+          attachInput.focus();
         }
         return;
       }
@@ -639,7 +375,7 @@ document.addEventListener('DOMContentLoaded', function() {
       rows.forEach(function(el, idx){ el.classList.toggle('active', idx === _active); });
       if (_active >= 0) rows[_active].scrollIntoView({ block: 'nearest' });
     });
-    descBox.addEventListener('blur', function(){ setTimeout(function(){ sugBox.style.display = 'none'; }, 120); descBox._enterReady = false; });
+    descBox.addEventListener('blur', function(){ setTimeout(function(){ sugBox.style.display = 'none'; }, 120); });
   }
 
   /* Auto-scroll: Description / lower area → show lower; Reference No & fields above → show upper */
