@@ -4361,6 +4361,10 @@ def workspace_transfer_description_suggestions_api():
     return jsonify(out)
 
 
+def workspace_transfer_slip_ocr_api():
+    return jsonify({'error': 'OCR service is currently disabled.'}), 503
+
+
 def workspace_account_balance_api():
     guard, emp = _workspace_guard("workspace_ledger")
     if guard:
