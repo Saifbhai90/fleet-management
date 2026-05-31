@@ -4361,6 +4361,180 @@ def workspace_transfer_description_suggestions_api():
     return jsonify(out)
 
 
+def workspace_transfer_slip_ocr_api():
+    """Parse a pasted transfer slip image using a multi-model fallback chain.
+    Order: OpenRouter free vision models (one by one) → Gemini Vision (if GOOGLE_API_KEY set).
+    Each model is tried in sequence; on rate-limit or error the next one is attempted automatically.
+    """
+    guard, emp = _workspace_guard("workspace_transfer_add")
+    if guard:
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    import os, json, re as _re
+    from urllib import request as url_request, error as url_error
+
+    data = request.get_json(silent=True) or {}
+    image_b64 = (data.get('image') or '').strip()
+    if not image_b64:
+        return jsonify({'error': 'No image provided'}), 400
+
+    # Strip data URI prefix — keep mime type
+    mime_type = "image/png"
+    if ',' in image_b64 and image_b64.startswith('data:'):
+        header, image_b64 = image_b64.split(',', 1)
+        if 'jpeg' in header or 'jpg' in header:
+            mime_type = "image/jpeg"
+        elif 'webp' in header:
+            mime_type = "image/webp"
+
+    prompt_text = (
+        "You are an OCR assistant. Extract the following fields from this bank/mobile transfer slip image. "
+        "Return ONLY valid JSON with these keys (use null if not found):\n"
+        "{\n"
+        '  "transaction_date": "DD-MM-YYYY format",\n'
+        '  "amount": numeric value (no commas),\n'
+        '  "reference_no": "transaction ID or reference number as string",\n'
+        '  "payment_mode": one of "Cash", "Bank Transfer", "Online", "Cheque",\n'
+        '  "from_name": "sender/from account title",\n'
+        '  "to_name": "beneficiary/receiver name",\n'
+        '  "description": "purpose or comments if any"\n'
+        "}\n"
+        "Important: transaction_date must be DD-MM-YYYY. amount must be a number without commas."
+    )
+
+    def _parse_json_from_text(txt):
+        fenced = _re.search(r"```(?:json)?\s*(.*?)```", txt, _re.IGNORECASE | _re.DOTALL)
+        if fenced:
+            txt = fenced.group(1).strip()
+        obj_match = _re.search(r"\{.*\}", txt, _re.DOTALL)
+        return json.loads(obj_match.group(0) if obj_match else txt)
+
+    def _do_http(url, payload_dict, extra_headers=None, timeout=12):
+        req_data = json.dumps(payload_dict).encode("utf-8")
+        req = url_request.Request(url, data=req_data, method="POST")
+        req.add_header("Content-Type", "application/json")
+        for k, v in (extra_headers or {}).items():
+            req.add_header(k, v)
+        with url_request.urlopen(req, timeout=timeout) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+
+    def _is_rate_limited(exc):
+        """Detect 429 / rate-limit errors from OpenRouter."""
+        msg = str(exc).lower()
+        if isinstance(exc, url_error.HTTPError) and exc.code == 429:
+            return True
+        return 'rate' in msg or '429' in msg or 'limit' in msg or 'quota' in msg
+
+    last_error = "No AI provider configured."
+
+    # -----------------------------------------------------------------------
+    # 1. OpenRouter — try each free vision model in order
+    # -----------------------------------------------------------------------
+    openrouter_key = (os.environ.get("OPENROUTER_API_KEY") or "").strip()
+    if openrouter_key:
+        # Primary model from env (if set), then the full free vision model list
+        env_model = (os.environ.get("OPENROUTER_VISION_MODEL") or "").strip()
+        openrouter_models = []
+        if env_model:
+            openrouter_models.append(env_model)
+        # Free vision-capable models on OpenRouter — ordered by OCR quality (best first)
+        # Only models with image input modality are included
+        _free_vision_models = [
+            "google/gemini-2.0-flash-exp:free",            # #1 — Gemini Flash, best OCR accuracy, fast
+            "meta-llama/llama-4-maverick:free",            # #2 — Llama 4 Maverick, large multimodal
+            "meta-llama/llama-4-scout:free",               # #3 — Llama 4 Scout, fast multimodal
+            "qwen/qwen2.5-vl-72b-instruct:free",           # #4 — Qwen VL 72B, strong vision
+            "nvidia/nemotron-nano-12b-v2-vl:free",         # #5 — Nvidia 12B vision
+            "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",  # #6 — Nvidia Omni 30B
+        ]
+        for m in _free_vision_models:
+            if m not in openrouter_models:
+                openrouter_models.append(m)
+
+        or_headers = {
+            "Authorization": f"Bearer {openrouter_key}",
+            "HTTP-Referer": "fleet-management",
+            "X-Title": "Fleet Transfer OCR",
+        }
+        for model_id in openrouter_models:
+            try:
+                or_payload = {
+                    "model": model_id,
+                    "temperature": 0.0,
+                    "max_tokens": 300,
+                    "messages": [{
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt_text},
+                            {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{image_b64}"}},
+                        ]
+                    }]
+                }
+                body = _do_http("https://openrouter.ai/api/v1/chat/completions", or_payload, or_headers)
+                # Check for API-level error in body (some errors return 200 with error key)
+                if body.get("error"):
+                    err_msg = str(body["error"])
+                    last_error = f"{model_id}: {err_msg[:120]}"
+                    if 'rate' in err_msg.lower() or '429' in err_msg or 'limit' in err_msg.lower():
+                        continue  # try next model
+                    continue
+                raw_text = ((((body.get("choices") or [{}])[0]).get("message") or {}).get("content") or "").strip()
+                if not raw_text:
+                    last_error = f"{model_id}: empty response"
+                    continue
+                try:
+                    result = _parse_json_from_text(raw_text)
+                    short_name = model_id.split("/")[-1].replace(":free", "")
+                    return jsonify({'ok': True, 'data': result, 'provider': f'openrouter:{short_name}'})
+                except Exception as pe:
+                    last_error = f"{model_id}: JSON parse error {str(pe)[:80]}"
+                    continue
+            except url_error.HTTPError as he:
+                last_error = f"{model_id}: HTTP {he.code}"
+                if he.code in (429, 402, 503):
+                    continue  # rate-limited or unavailable — try next
+                continue
+            except Exception as exc:
+                last_error = f"{model_id}: {str(exc)[:100]}"
+                if _is_rate_limited(exc):
+                    continue
+                continue  # always try next model
+
+    # -----------------------------------------------------------------------
+    # 2. Fallback: Gemini Vision (direct Google API)
+    # -----------------------------------------------------------------------
+    google_key = (os.environ.get("GOOGLE_API_KEY") or "").strip()
+    if google_key:
+        try:
+            gemini_model = (os.environ.get("GEMINI_MODEL") or "").strip() or "gemini-2.5-flash"
+            gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/{gemini_model}:generateContent?key={google_key}"
+            gem_payload = {
+                "generationConfig": {"temperature": 0.0, "maxOutputTokens": 300},
+                "contents": [{
+                    "role": "user",
+                    "parts": [
+                        {"text": prompt_text},
+                        {"inlineData": {"mimeType": mime_type, "data": image_b64}},
+                    ]
+                }],
+            }
+            body = _do_http(gemini_url, gem_payload, timeout=20)
+            candidates = body.get("candidates") or []
+            if not candidates:
+                return jsonify({'error': 'Gemini returned no response'}), 500
+            parts = (((candidates[0] or {}).get("content") or {}).get("parts")) or []
+            raw_text = "".join(p.get("text", "") for p in parts if isinstance(p, dict)).strip()
+            try:
+                result = _parse_json_from_text(raw_text)
+                return jsonify({'ok': True, 'data': result, 'provider': 'gemini'})
+            except Exception as pe:
+                last_error = f"Gemini: JSON parse error {str(pe)[:80]}"
+        except Exception as exc:
+            last_error = f"Gemini: {str(exc)[:150]}"
+
+    return jsonify({'error': f'All OCR providers failed. Last error: {last_error}'}), 500
+
+
 def workspace_account_balance_api():
     guard, emp = _workspace_guard("workspace_ledger")
     if guard:
