@@ -4361,6 +4361,88 @@ def workspace_transfer_description_suggestions_api():
     return jsonify(out)
 
 
+def workspace_transfer_slip_ocr_api():
+    """Parse a pasted transfer slip image via Gemini Vision and return extracted fields."""
+    guard, emp = _workspace_guard("workspace_transfer_add")
+    if guard:
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    import os, json, base64, time
+    from urllib import request as url_request, error as url_error
+
+    data = request.get_json(silent=True) or {}
+    image_b64 = (data.get('image') or '').strip()
+    if not image_b64:
+        return jsonify({'error': 'No image provided'}), 400
+
+    # Strip data URI prefix if present
+    if ',' in image_b64 and image_b64.startswith('data:'):
+        image_b64 = image_b64.split(',', 1)[1]
+
+    api_key = (os.environ.get("GOOGLE_API_KEY") or "").strip()
+    if not api_key:
+        return jsonify({'error': 'AI service not configured'}), 500
+
+    model = (os.environ.get("GEMINI_MODEL") or "").strip() or "gemini-2.5-flash"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+
+    prompt_text = (
+        "You are an OCR assistant. Extract the following fields from this bank/mobile transfer slip image. "
+        "Return ONLY valid JSON with these keys (use null if not found):\n"
+        "{\n"
+        '  "transaction_date": "DD-MM-YYYY format",\n'
+        '  "amount": numeric value (no commas),\n'
+        '  "reference_no": "transaction ID or reference number as string",\n'
+        '  "payment_mode": one of "Cash", "Bank Transfer", "Online", "Cheque",\n'
+        '  "from_name": "sender/from account title",\n'
+        '  "to_name": "beneficiary/receiver name",\n'
+        '  "description": "purpose or comments if any"\n'
+        "}\n"
+        "Important: transaction_date must be DD-MM-YYYY. amount must be a number without commas."
+    )
+
+    payload = {
+        "generationConfig": {"temperature": 0.0},
+        "contents": [{
+            "role": "user",
+            "parts": [
+                {"text": prompt_text},
+                {"inlineData": {"mimeType": "image/png", "data": image_b64}},
+            ]
+        }],
+    }
+
+    try:
+        req_data = json.dumps(payload).encode("utf-8")
+        req = url_request.Request(url, data=req_data, method="POST")
+        req.add_header("Content-Type", "application/json")
+        with url_request.urlopen(req, timeout=25) as resp:
+            body = json.loads(resp.read().decode("utf-8"))
+
+        candidates = body.get("candidates") or []
+        if not candidates:
+            return jsonify({'error': 'AI returned no response'}), 500
+
+        parts = (((candidates[0] or {}).get("content") or {}).get("parts")) or []
+        raw_text = "".join(p.get("text", "") for p in parts if isinstance(p, dict)).strip()
+
+        # Parse JSON from response
+        import re as _re
+        fenced = _re.search(r"```(?:json)?\s*(.*?)```", raw_text, _re.IGNORECASE | _re.DOTALL)
+        if fenced:
+            raw_text = fenced.group(1).strip()
+        obj_match = _re.search(r"\{.*\}", raw_text, _re.DOTALL)
+        if obj_match:
+            result = json.loads(obj_match.group(0))
+        else:
+            result = json.loads(raw_text)
+
+        return jsonify({'ok': True, 'data': result})
+
+    except Exception as exc:
+        return jsonify({'error': f'OCR failed: {str(exc)[:200]}'}), 500
+
+
 def workspace_account_balance_api():
     guard, emp = _workspace_guard("workspace_ledger")
     if guard:

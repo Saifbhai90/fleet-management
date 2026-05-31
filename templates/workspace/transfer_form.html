@@ -230,6 +230,105 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   });
 
+  /* Enter key → move to next field instead of submitting */
+  var _wsFieldOrder = [
+    'wsTransferDateInput', 'amount', 'payment_mode', 'category',
+    'wsFromAccountSelect', 'wsToAccountSelect', 'wsTransferRefInput', 'wsTransferDesc'
+  ];
+  var formEl2 = document.getElementById('wsTransferForm');
+  if (formEl2) {
+    formEl2.addEventListener('keydown', function(e) {
+      if (e.key !== 'Enter') return;
+      var target = e.target;
+      if (target.tagName === 'TEXTAREA') return; // allow newline in textarea
+      if (target.tagName === 'BUTTON' || target.type === 'submit') return;
+      e.preventDefault();
+      e.stopPropagation();
+      // Find current field index and move to next
+      var currentId = target.id || target.name;
+      var idx = _wsFieldOrder.indexOf(currentId);
+      if (idx < 0) return;
+      for (var ni = idx + 1; ni < _wsFieldOrder.length; ni++) {
+        var nextEl = document.getElementById(_wsFieldOrder[ni]) || formEl2.querySelector('[name="' + _wsFieldOrder[ni] + '"]');
+        if (nextEl && !nextEl.disabled) { nextEl.focus(); return; }
+      }
+    });
+  }
+
+  /* Slip OCR: on image paste/drop → call AI to extract data and auto-fill fields */
+  var _ocrProcessing = false;
+  var _ocrStatusEl = null;
+  function _showOcrStatus(msg, isError) {
+    if (!_ocrStatusEl) {
+      _ocrStatusEl = document.createElement('div');
+      _ocrStatusEl.className = 'small mt-2 fw-semibold';
+      var zone = document.getElementById('wsAttachZone');
+      if (zone && zone.parentNode) zone.parentNode.insertBefore(_ocrStatusEl, zone.nextSibling);
+    }
+    _ocrStatusEl.textContent = msg;
+    _ocrStatusEl.style.color = isError ? '#dc3545' : '#198754';
+    if (!msg) _ocrStatusEl.style.display = 'none'; else _ocrStatusEl.style.display = 'block';
+  }
+  function _runSlipOcr(file) {
+    if (_ocrProcessing || !file) return;
+    _ocrProcessing = true;
+    _showOcrStatus('Reading slip... please wait.', false);
+    var reader = new FileReader();
+    reader.onload = function(ev) {
+      var b64 = ev.target.result; // data:image/...;base64,xxxxx
+      fetch('/api/workspace-transfer-slip-ocr', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('[name=csrf_token]').value},
+        body: JSON.stringify({image: b64})
+      })
+      .then(function(r){ return r.json(); })
+      .then(function(resp) {
+        _ocrProcessing = false;
+        if (!resp.ok || !resp.data) {
+          _showOcrStatus(resp.error || 'Could not read slip.', true);
+          return;
+        }
+        var d = resp.data;
+        _showOcrStatus('Slip read successfully!', false);
+        // Fill Transfer Date
+        if (d.transaction_date) {
+          var dtInput = document.getElementById('wsTransferDateInput');
+          if (dtInput && !dtInput.value) dtInput.value = d.transaction_date;
+        }
+        // Fill Amount
+        if (d.amount) {
+          var amtInput = formEl2.querySelector('[name="amount"]');
+          if (amtInput && !amtInput.value) amtInput.value = d.amount;
+        }
+        // Fill Payment Mode
+        if (d.payment_mode) {
+          var pmSelect = formEl2.querySelector('[name="payment_mode"]');
+          if (pmSelect) {
+            var pmVal = d.payment_mode;
+            for (var oi = 0; oi < pmSelect.options.length; oi++) {
+              if (pmSelect.options[oi].value.toLowerCase() === pmVal.toLowerCase() ||
+                  pmSelect.options[oi].textContent.toLowerCase().indexOf(pmVal.toLowerCase()) !== -1) {
+                pmSelect.selectedIndex = oi; break;
+              }
+            }
+          }
+        }
+        // Fill Reference No
+        if (d.reference_no) {
+          var refInput = document.getElementById('wsTransferRefInput');
+          if (refInput && !refInput.value) refInput.value = d.reference_no;
+        }
+        // Highlight filled fields briefly
+        setTimeout(function(){ _showOcrStatus('', false); }, 4000);
+      })
+      .catch(function(err) {
+        _ocrProcessing = false;
+        _showOcrStatus('OCR request failed.', true);
+      });
+    };
+    reader.readAsDataURL(file);
+  }
+
   if (transferDateInput) {
     window.setTimeout(function() {
       transferDateInput.focus();
@@ -265,7 +364,7 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     });
     attachInput.addEventListener('change', function(){
-      if (this.files && this.files[0]) showAttachPreview(this.files[0]);
+      if (this.files && this.files[0]) { showAttachPreview(this.files[0]); _runSlipOcr(this.files[0]); }
     });
     attachZone.addEventListener('dragover', function(e){ e.preventDefault(); attachZone.classList.add('drag-over'); });
     attachZone.addEventListener('dragleave', function(){ attachZone.classList.remove('drag-over'); });
@@ -278,6 +377,7 @@ document.addEventListener('DOMContentLoaded', function() {
       dt.items.add(f);
       attachInput.files = dt.files;
       showAttachPreview(f);
+      _runSlipOcr(f);
     });
     attachZone.addEventListener('paste', function(e){
       var items = (e.clipboardData || e.originalEvent.clipboardData).items || [];
@@ -288,6 +388,7 @@ document.addEventListener('DOMContentLoaded', function() {
           dt.items.add(file);
           attachInput.files = dt.files;
           showAttachPreview(file);
+          _runSlipOcr(file);
           e.preventDefault();
           break;
         }
@@ -304,6 +405,7 @@ document.addEventListener('DOMContentLoaded', function() {
         dt.items.add(file);
         attachInput.files = dt.files;
         showAttachPreview(file);
+        _runSlipOcr(file);
         break;
       }
     }
