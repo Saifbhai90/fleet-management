@@ -345,7 +345,16 @@ document.addEventListener('DOMContentLoaded', function() {
           return;
         }
         var d = resp.data;
-        _showOcrStatus('Slip read successfully!', false);
+        var provider = resp.provider || '';
+        var providerLabel = '';
+        if (provider === 'gemini') {
+          providerLabel = ' (Gemini)';
+        } else if (provider.indexOf('openrouter:') === 0) {
+          providerLabel = ' (' + provider.replace('openrouter:', '') + ')';
+        } else if (provider === 'openrouter') {
+          providerLabel = ' (OpenRouter)';
+        }
+        _showOcrStatus('Slip read! ' + providerLabel, false);
         // Fill Transfer Date
         if (d.transaction_date) {
           var dtInput = document.getElementById('wsTransferDateInput');
@@ -374,8 +383,18 @@ document.addEventListener('DOMContentLoaded', function() {
           var refInput = document.getElementById('wsTransferRefInput');
           if (refInput && !refInput.value) refInput.value = d.reference_no;
         }
+        // Fill Description from OCR (from_name → to_name or raw description)
+        if (descBox && !descBox.value.trim()) {
+          var ocrDesc = '';
+          if (d.from_name && d.to_name) {
+            ocrDesc = 'Transfer from ' + d.from_name + ' to ' + d.to_name;
+          } else if (d.description) {
+            ocrDesc = d.description;
+          }
+          if (ocrDesc) descBox.value = ocrDesc;
+        }
         // Highlight filled fields briefly
-        setTimeout(function(){ _showOcrStatus('', false); }, 4000);
+        setTimeout(function(){ _showOcrStatus('', false); }, 5000);
       })
       .catch(function(err) {
         _ocrProcessing = false;
