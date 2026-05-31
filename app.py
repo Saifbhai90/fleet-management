@@ -813,6 +813,11 @@ if _run_startup_tasks:
             start_attendance_reminder_scheduler(app)
         except Exception as e:
             app.logger.warning('Attendance reminder scheduler failed to start: %s', e)
+        try:
+            from expiry_reminder_scheduler import start_expiry_reminder_scheduler
+            start_expiry_reminder_scheduler(app)
+        except Exception as e:
+            app.logger.warning('Expiry/Oil reminder scheduler failed to start: %s', e)
 
 
 if __name__ == '__main__':
