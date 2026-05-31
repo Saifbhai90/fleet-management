@@ -371,8 +371,6 @@ document.addEventListener('DOMContentLoaded', function() {
           var refInput = document.getElementById('wsTransferRefInput');
           if (refInput && !refInput.value) refInput.value = d.reference_no;
         }
-        // Focus Category/Purpose after OCR fill
-        if (catSelect) catSelect.focus();
         // Highlight filled fields briefly
         setTimeout(function(){ _showOcrStatus('', false); }, 4000);
       })
@@ -410,6 +408,15 @@ document.addEventListener('DOMContentLoaded', function() {
         slipLargeImg.src = e.target.result;
         slipPreviewPanel.style.display = 'block';
       }
+      // Auto-select "Online Payment" when slip image is attached
+      var pmSelect = document.querySelector('[name="payment_mode"]');
+      if (pmSelect) {
+        for (var pi = 0; pi < pmSelect.options.length; pi++) {
+          if (pmSelect.options[pi].value === 'Online') { pmSelect.selectedIndex = pi; break; }
+        }
+      }
+      // Immediately focus Category/Purpose
+      if (catSelect) setTimeout(function(){ catSelect.focus(); }, 50);
     };
     reader.readAsDataURL(file);
   }
