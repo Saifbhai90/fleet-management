@@ -26,7 +26,7 @@
     .ws-attach-preview img { max-height: 90px; border-radius: 6px; object-fit: contain; }
     /* Large sticky slip preview after upload */
     .ws-slip-preview-panel { position: sticky; top: 12px; }
-    .ws-slip-preview-panel img { width: 100%; max-height: calc(100vh - 100px); object-fit: contain; border-radius: 10px; border: 1px solid #dee2e6; cursor: zoom-in; transition: box-shadow .2s; background: #f8f9fa; }
+    .ws-slip-preview-panel img { width: 100%; max-height: calc(100vh - 180px); object-fit: contain; border-radius: 10px; border: 1px solid #dee2e6; cursor: zoom-in; transition: box-shadow .2s; background: #f8f9fa; }
     .ws-slip-preview-panel img:hover { box-shadow: 0 4px 20px rgba(0,0,0,.15); }
     .ws-slip-preview-panel .ws-zoom-hint { font-size: .72rem; color: #6c757d; text-align: center; margin-top: 6px; }
     /* Fullscreen modal */
@@ -44,7 +44,7 @@
             <h5 class="mb-0"><i class="bi bi-arrow-left-right me-2"></i>{{ 'Edit' if row else 'Add' }} Workspace Transfer</h5>
             <a href="{{ url_for('workspace_fund_transfers_list') }}" class="btn btn-outline-light btn-sm">Back to List</a>
           </div>
-          <div class="card ws-tf-card">
+          <div class="card ws-tf-card" style="min-height:420px">
             <div class="card-header py-1"><i class="bi bi-list-check me-1 text-success"></i>Transfer Details</div>
             <div class="card-body py-2">
               <div class="row g-2">
@@ -120,6 +120,15 @@
                   · <span class="text-success fw-semibold">{{ last_saved_transfer.amount }}</span>
                   {% if last_saved_transfer.payment_mode %}· {{ last_saved_transfer.payment_mode }}{% endif %}
                 </span>
+                <span class="small text-truncate" style="max-width:min(400px,60vw)" title="{{ account_display_map.get(last_saved_transfer.from_account_id, '—') }} → {{ account_display_map.get(last_saved_transfer.to_account_id, '—') }}">
+                  <span class="text-muted">From</span> {{ account_display_map.get(last_saved_transfer.from_account_id, '—') }}
+                  <span class="text-muted">→</span> {{ account_display_map.get(last_saved_transfer.to_account_id, '—') }}
+                </span>
+                {% if last_saved_transfer.description %}
+                <span class="small text-muted text-truncate" style="max-width:min(360px,55vw)" title="{{ last_saved_transfer.description }}">
+                  · {{ last_saved_transfer.description[:80] }}{% if last_saved_transfer.description|length > 80 %}…{% endif %}
+                </span>
+                {% endif %}
               </div>
               <a href="{{ url_for('workspace_fund_transfer_edit', pk=last_saved_transfer.id) }}" class="btn btn-sm btn-outline-secondary flex-shrink-0"><i class="bi bi-pencil me-1"></i>Open</a>
             </div>
@@ -411,18 +420,18 @@ document.addEventListener('DOMContentLoaded', function() {
       }
       // Mark that slip was just pasted (prevent date focus override)
       _wsSlipJustPasted = true;
-      // Compact form: reduce description rows, hide last-saved bar
-      var descEl = document.getElementById('wsTransferDesc');
-      if (descEl) descEl.rows = 2;
-      var lastSavedBar = document.querySelector('.xfer-last-saved-compact');
-      if (lastSavedBar) lastSavedBar.style.display = 'none';
-      // Immediately focus Category/Purpose
+      // Prevent auto-scroll down
+      var scrollX = window.scrollX, scrollY = window.scrollY;
+      setTimeout(function(){ window.scrollTo(scrollX, scrollY); }, 50);
+      setTimeout(function(){ window.scrollTo(scrollX, scrollY); }, 150);
+      // Immediately focus Category/Purpose (without scrolling)
       setTimeout(function(){
         if (catSelect && catSelect.tomselect) {
           catSelect.tomselect.focus();
         } else if (catSelect) {
           catSelect.focus();
         }
+        window.scrollTo(scrollX, scrollY);
       }, 120);
     };
     reader.readAsDataURL(file);
