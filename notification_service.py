@@ -398,8 +398,13 @@ def notify_task_report_saved(vehicle, task_date, *, driver=None):
 
     if not vehicle:
         return
-    if not driver and vehicle.driver_id:
-        driver = Driver.query.get(vehicle.driver_id)
+    if not driver:
+        if vehicle.driver_id:
+            driver = Driver.query.get(vehicle.driver_id)
+        else:
+            driver = Driver.query.filter_by(
+                vehicle_id=vehicle.id, status='Active'
+            ).first()
     district_id = vehicle.district_id
     project_id = vehicle.project_id
     if not district_id or not project_id:
