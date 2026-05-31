@@ -24,6 +24,15 @@
     .ws-attach-zone { border: 2px dashed #ced4da; border-radius: 8px; padding: .6rem; text-align: center; cursor: pointer; transition: all .15s; }
     .ws-attach-zone:hover, .ws-attach-zone.drag-over { border-color: #198754; background: #f3fbf6; }
     .ws-attach-preview img { max-height: 90px; border-radius: 6px; object-fit: contain; }
+    /* Large sticky slip preview after upload */
+    .ws-slip-preview-panel { position: sticky; top: 12px; }
+    .ws-slip-preview-panel img { width: 100%; max-height: calc(100vh - 80px); object-fit: contain; border-radius: 10px; border: 1px solid #dee2e6; cursor: zoom-in; transition: box-shadow .2s; }
+    .ws-slip-preview-panel img:hover { box-shadow: 0 4px 20px rgba(0,0,0,.15); }
+    .ws-slip-preview-panel .ws-zoom-hint { font-size: .72rem; color: #6c757d; text-align: center; margin-top: 6px; }
+    /* Fullscreen modal */
+    .ws-slip-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.85); z-index: 9999; display: flex; align-items: center; justify-content: center; cursor: zoom-out; opacity: 0; visibility: hidden; transition: opacity .2s, visibility .2s; }
+    .ws-slip-modal-overlay.active { opacity: 1; visibility: visible; }
+    .ws-slip-modal-overlay img { max-width: 95vw; max-height: 95vh; object-fit: contain; border-radius: 8px; }
   </style>
 
   <div class="ws-transfer-form-wrap">
@@ -130,8 +139,8 @@
             </div>
           </div>
         </div>
-        <div class="col-xl-4">
-          <div class="card ws-tf-card h-100">
+        <div class="col-xl-4" id="wsAttachCol">
+          <div class="card ws-tf-card" id="wsAttachCard">
             <div class="card-header"><i class="bi bi-paperclip me-1 text-success"></i>Attachment (Image)</div>
             <div class="card-body">
               <div class="ws-attach-zone" id="wsAttachZone" tabindex="0">
@@ -157,6 +166,11 @@
               {% endif %}
             </div>
           </div>
+          <!-- Large sticky slip preview (shown after image upload) -->
+          <div class="ws-slip-preview-panel mt-3" id="wsSlipPreviewPanel" style="display:none;">
+            <img id="wsSlipLargeImg" src="" alt="Slip Preview" title="Click to zoom full screen">
+            <div class="ws-zoom-hint"><i class="bi bi-zoom-in me-1"></i>Click image for full-screen view</div>
+          </div>
         </div>
       </div>
 
@@ -169,6 +183,10 @@
       </div>
     </form>
   </div>
+</div>
+<!-- Fullscreen slip zoom modal -->
+<div class="ws-slip-modal-overlay" id="wsSlipModal">
+  <img id="wsSlipModalImg" src="" alt="Slip Full View">
 </div>
 <script>
 var _wsAcctBalanceMap = {{ account_balance_json | tojson }};
@@ -375,6 +393,11 @@ document.addEventListener('DOMContentLoaded', function() {
     }, 80);
   }
 
+  var slipPreviewPanel = document.getElementById('wsSlipPreviewPanel');
+  var slipLargeImg = document.getElementById('wsSlipLargeImg');
+  var slipModal = document.getElementById('wsSlipModal');
+  var slipModalImg = document.getElementById('wsSlipModalImg');
+
   function showAttachPreview(file) {
     if (!file || !file.type || file.type.indexOf('image/') !== 0) return;
     var reader = new FileReader();
@@ -382,8 +405,32 @@ document.addEventListener('DOMContentLoaded', function() {
       attachPreviewImg.src = e.target.result;
       attachPreview.style.display = 'block';
       attachPlaceholder.style.display = 'none';
+      // Show large sticky preview
+      if (slipLargeImg && slipPreviewPanel) {
+        slipLargeImg.src = e.target.result;
+        slipPreviewPanel.style.display = 'block';
+      }
     };
     reader.readAsDataURL(file);
+  }
+
+  // Click large preview → open fullscreen modal
+  if (slipLargeImg && slipModal && slipModalImg) {
+    slipLargeImg.addEventListener('click', function() {
+      slipModalImg.src = this.src;
+      slipModal.classList.add('active');
+    });
+  }
+  // Click modal → close
+  if (slipModal) {
+    slipModal.addEventListener('click', function() {
+      slipModal.classList.remove('active');
+    });
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape' && slipModal.classList.contains('active')) {
+        slipModal.classList.remove('active');
+      }
+    });
   }
 
   if (attachZone && attachInput) {
