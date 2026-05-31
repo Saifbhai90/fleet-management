@@ -279,9 +279,7 @@
     pill.setAttribute('data-state', state);
     if (state === 'success') {
       if (icon) icon.className = 'bi bi-cloud-check';
-      var speedEl = document.getElementById('liveNetworkSpeedText');
-      var spd = speedEl && speedEl.textContent !== '-- Mbps' ? ' · ' + speedEl.textContent : '';
-      if (text) text.textContent = 'All uploaded' + spd;
+      if (text) text.textContent = 'All uploaded';
     } else if (state === 'pending') {
       var cnt = (items || []).length;
       if (icon) icon.className = 'bi bi-cloud-arrow-up';
@@ -315,12 +313,7 @@
 
     if (state === 'success') {
       el.classList.add('fleet-gps-pending--success');
-      var speedTxt = '';
-      var speedEl = document.getElementById('liveNetworkSpeedText');
-      if (speedEl && speedEl.textContent && speedEl.textContent !== '-- Mbps') {
-        speedTxt = ' · ' + speedEl.textContent;
-      }
-      if (titleEl) titleEl.textContent = 'All records uploaded successfully' + speedTxt;
+      if (titleEl) titleEl.textContent = 'All records uploaded successfully';
       if (detailEl) {
         detailEl.textContent = '';
         detailEl.innerHTML = '';

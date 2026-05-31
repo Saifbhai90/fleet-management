@@ -5118,8 +5118,6 @@
                 }
             }
             _updateConnStatus(_connState(mbps, rttMs, online));
-            // Refresh GPS pending banner so network speed shows in success title
-            if (window.FleetGpsPendingUpload) window.FleetGpsPendingUpload.refresh();
         }
         function _sampleNetwork() {
             if (!navigator.onLine) {
