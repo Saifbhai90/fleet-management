@@ -26,7 +26,7 @@
     .ws-attach-preview img { max-height: 90px; border-radius: 6px; object-fit: contain; }
     /* Large sticky slip preview after upload */
     .ws-slip-preview-panel { position: sticky; top: 12px; }
-    .ws-slip-preview-panel img { width: 100%; max-height: calc(100vh - 80px); object-fit: contain; border-radius: 10px; border: 1px solid #dee2e6; cursor: zoom-in; transition: box-shadow .2s; }
+    .ws-slip-preview-panel img { width: 100%; max-height: calc(100vh - 160px); object-fit: contain; border-radius: 10px; border: 1px solid #dee2e6; cursor: zoom-in; transition: box-shadow .2s; background: #f8f9fa; }
     .ws-slip-preview-panel img:hover { box-shadow: 0 4px 20px rgba(0,0,0,.15); }
     .ws-slip-preview-panel .ws-zoom-hint { font-size: .72rem; color: #6c757d; text-align: center; margin-top: 6px; }
     /* Fullscreen modal */
@@ -403,7 +403,9 @@ document.addEventListener('DOMContentLoaded', function() {
       attachPreviewImg.src = e.target.result;
       attachPreview.style.display = 'block';
       attachPlaceholder.style.display = 'none';
-      // Show large sticky preview
+      // Hide small attachment card, show large sticky preview only
+      var attachCard = document.getElementById('wsAttachCard');
+      if (attachCard) attachCard.style.display = 'none';
       if (slipLargeImg && slipPreviewPanel) {
         slipLargeImg.src = e.target.result;
         slipPreviewPanel.style.display = 'block';
