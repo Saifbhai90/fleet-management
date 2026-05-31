@@ -309,12 +309,20 @@ document.addEventListener('DOMContentLoaded', function() {
   function _showOcrStatus(msg, isError) {
     if (!_ocrStatusEl) {
       _ocrStatusEl = document.createElement('div');
-      _ocrStatusEl.className = 'small mt-2 fw-semibold';
-      var zone = document.getElementById('wsAttachZone');
-      if (zone && zone.parentNode) zone.parentNode.insertBefore(_ocrStatusEl, zone.nextSibling);
+      _ocrStatusEl.className = 'small mt-1 fw-semibold';
+      _ocrStatusEl.style.cssText = 'font-size:.78rem;padding:4px 8px;border-radius:6px;';
+      // Place status below the slip preview panel (visible even when attach card is hidden)
+      var previewPanel = document.getElementById('wsSlipPreviewPanel');
+      if (previewPanel && previewPanel.parentNode) {
+        previewPanel.parentNode.insertBefore(_ocrStatusEl, previewPanel.nextSibling);
+      } else {
+        var zone = document.getElementById('wsAttachZone');
+        if (zone && zone.parentNode) zone.parentNode.insertBefore(_ocrStatusEl, zone.nextSibling);
+      }
     }
     _ocrStatusEl.textContent = msg;
     _ocrStatusEl.style.color = isError ? '#dc3545' : '#198754';
+    _ocrStatusEl.style.background = msg ? (isError ? '#fff5f5' : '#f0fdf4') : 'transparent';
     if (!msg) _ocrStatusEl.style.display = 'none'; else _ocrStatusEl.style.display = 'block';
   }
   function _runSlipOcr(file) {
