@@ -209,7 +209,11 @@
   function retryItem(item) {
     var body = item.payload;
     if (item.kind === 'odometer') {
-      body = { photo_base64: item.payload.photo_base64 };
+      body = {
+        photo_base64: item.payload.photo_base64,
+        vehicle_id: item.payload.vehicle_id || item.vehicleId || item.entityId || '',
+        task_date: item.date || ''
+      };
     }
     return postPayload(item.kind, body).then(function (res) {
       if (res.ok && res.body && res.body.ok) {

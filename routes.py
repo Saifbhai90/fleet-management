@@ -23075,6 +23075,18 @@ def api_task_report_odometer_photo_upload():
         url = _upload_attendance_image_bytes_with_fallback(data, folder='task_odometer')
         if not url:
             return jsonify({'ok': False, 'message': 'Upload save nahi ho saka.'}), 502
+        _link_vehicle_id = body.get('vehicle_id')
+        _link_task_date = parse_date(body.get('task_date') or '')
+        if _link_vehicle_id and _link_task_date:
+            try:
+                _vdt = VehicleDailyTask.query.filter_by(
+                    vehicle_id=int(_link_vehicle_id), task_date=_link_task_date
+                ).first()
+                if _vdt and not (_vdt.odometer_photo_path or '').strip():
+                    _vdt.odometer_photo_path = url
+                    db.session.commit()
+            except Exception:
+                db.session.rollback()
         return jsonify({'ok': True, 'url': url})
     except Exception as e:
         app.logger.warning('task odometer photo upload: %s', e)

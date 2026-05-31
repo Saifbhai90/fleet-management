@@ -144,7 +144,11 @@
     return fetch(UP, {
       method: 'POST',
       headers: csrfHeaders(),
-      body: JSON.stringify({ photo_base64: jpegDataUrl })
+      body: JSON.stringify({
+        photo_base64: jpegDataUrl,
+        vehicle_id: vehicleIdForRow(rowId),
+        task_date: taskDateDmy()
+      })
     }).then(function(r) {
       return r.text().then(function(txt) {
         var body = {};
