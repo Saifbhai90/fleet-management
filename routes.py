@@ -24545,6 +24545,11 @@ def _parse_emg_datetime(raw):
         '%Y-%m-%d %I:%M:%S %p', '%Y-%m-%d %I:%M %p',
         '%d-%m-%Y %I:%M:%S %p', '%d-%m-%Y %I:%M %p',
         '%d/%m/%Y %I:%M:%S %p', '%d/%m/%Y %I:%M %p',
+        '%d-%m-%y %H:%M:%S', '%d-%m-%y %H:%M',
+        '%d/%m/%y %H:%M:%S', '%d/%m/%y %H:%M',
+        '%d-%m-%y %I:%M:%S %p', '%d-%m-%y %I:%M %p',
+        '%d/%m/%y %I:%M:%S %p', '%d/%m/%y %I:%M %p',
+        '%Y-%m-%d', '%d-%m-%Y', '%d/%m/%Y', '%d-%m-%y', '%d/%m/%y',
     ):
         try:
             return datetime.strptime(s, fmt)
