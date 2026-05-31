@@ -90,17 +90,31 @@ def _should_remind_for_days_left(days_left):
     return False
 
 
-def _expiry_message(driver_name, doc_type, days_left):
-    """Generate appropriate notification title and message."""
+def _expiry_message(driver_name, doc_type, days_left, expiry_date=None):
+    """Generate appropriate notification title and message in Urdu format."""
+    date_str = expiry_date.strftime('%d-%b-%Y') if expiry_date else ''
     if days_left > 0:
-        title = f'{doc_type} Expiry Warning'
-        message = f"Driver {driver_name}'s {doc_type} will expire in {days_left} day{'s' if days_left != 1 else ''}."
+        title = f'\u26a0\ufe0f {doc_type} Near Expiry'
+        message = (
+            f'\u26a0\ufe0f Attention!\n'
+            f'Driver {driver_name} ap ka {doc_type} expire honay mein {days_left} din baqi hain. '
+            f'Date {date_str} ko expiry ho jaye ga.\n'
+            f'Barah-e-karam jaldi renewal karwa lain.'
+        )
     elif days_left == 0:
-        title = f'{doc_type} Expires Today'
-        message = f"Driver {driver_name}'s {doc_type} expires today. Immediate action required."
+        title = f'\U0001f6a8 {doc_type} Expires Today'
+        message = (
+            f'\U0001f6a8 Urgent Attention Required!\n'
+            f'Driver {driver_name} ap ka {doc_type} aaj {date_str} ko expire ho raha hai.\n'
+            f'Barah-e-karam foran renewal karwa lain.'
+        )
     else:
-        title = f'{doc_type} Expired'
-        message = f"Driver {driver_name}'s {doc_type} has expired. Immediate action required."
+        title = f'\U0001f6a8 {doc_type} Expired'
+        message = (
+            f'\U0001f6a8 Urgent Attention Required!\n'
+            f'Driver {driver_name} ap ka {doc_type} {date_str} ko expire ho chuka hai.\n'
+            f'Barah-e-karam foran renewal karwa lain.'
+        )
     return title, message
 
 
@@ -128,7 +142,7 @@ def run_license_cnic_reminders(app):
                 if _should_remind_for_days_left(days_left):
                     state_key = f'lic:{driver.id}:{today_str}'
                     if _should_send_today(state, state_key, today_str):
-                        title, message = _expiry_message(driver_name, 'License', days_left)
+                        title, message = _expiry_message(driver_name, 'License', days_left, driver.license_expiry_date)
                         _send_expiry_notification(
                             driver, title, message,
                             notify_user, get_user_id_for_driver, get_dto_user_ids_for_scope
@@ -144,7 +158,7 @@ def run_license_cnic_reminders(app):
                 if _should_remind_for_days_left(days_left):
                     state_key = f'cnic:{driver.id}:{today_str}'
                     if _should_send_today(state, state_key, today_str):
-                        title, message = _expiry_message(driver_name, 'CNIC', days_left)
+                        title, message = _expiry_message(driver_name, 'CNIC', days_left, driver.cnic_expiry_date)
                         _send_expiry_notification(
                             driver, title, message,
                             notify_user, get_user_id_for_driver, get_dto_user_ids_for_scope
@@ -209,12 +223,22 @@ def run_oil_change_reminders(app):
                 continue
 
             if status == 'near':
-                title = 'Oil Change Due Soon'
-                message = f'Vehicle {v_no} requires an oil change within {int(max(0, remaining_km))} KM.'
+                title = '\u26a0\ufe0f Oil Change Due Soon'
+                message = (
+                    f'\u26a0\ufe0f Attention!\n'
+                    f'Vehicle {v_no} ka oil change honay mein baqi {int(max(0, remaining_km))} KMs reh gaye hain.\n'
+                    f'Barah-e-karam jaldi oil change karwa lain.'
+                )
                 results['near_sent'] += 1
             elif status == 'crossed':
-                title = 'Oil Change Overdue'
-                message = f'Vehicle {v_no} has exceeded its oil change limit. Immediate maintenance is required.'
+                over_km = abs(int(remaining_km))
+                title = '\U0001f6a8 Oil Change Overdue'
+                message = (
+                    f'\U0001f6a8 Urgent Attention Required!\n'
+                    f'Vehicle {v_no} ka oil change due time cross ho chuka hai '
+                    f'aur {over_km} KMs gari over chal gayi hai.\n'
+                    f'Barah-e-karam foran oil change karwa lain.'
+                )
                 results['crossed_sent'] += 1
             else:
                 continue
