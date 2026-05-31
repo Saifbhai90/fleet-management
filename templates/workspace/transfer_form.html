@@ -131,7 +131,7 @@
                 <div class="col-12">
                   <label class="form-label">Description</label>
                   <div style="position:relative">
-                    <textarea name="description" id="wsTransferDesc" class="form-control" rows="3" placeholder="Type or select from recent descriptions...">{{ row.description if row else '' }}</textarea>
+                    <textarea name="description" id="wsTransferDesc" class="form-control" rows="2" placeholder="Type or select from recent descriptions...">{{ row.description if row else '' }}</textarea>
                     <div id="wsDescSuggest" class="ws-desc-suggest"></div>
                   </div>
                 </div>
@@ -382,8 +382,10 @@ document.addEventListener('DOMContentLoaded', function() {
     reader.readAsDataURL(file);
   }
 
+  var _wsSlipJustPasted = false;
   if (transferDateInput) {
     window.setTimeout(function() {
+      if (_wsSlipJustPasted) return; // Don't steal focus from Category after paste
       transferDateInput.focus();
       if (typeof transferDateInput.select === 'function') {
         transferDateInput.select();
@@ -398,6 +400,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function showAttachPreview(file) {
     if (!file || !file.type || file.type.indexOf('image/') !== 0) return;
+    _wsSlipJustPasted = true; // Immediately prevent date auto-focus
     var reader = new FileReader();
     reader.onload = function(e) {
       attachPreviewImg.src = e.target.result;
@@ -413,12 +416,28 @@ document.addEventListener('DOMContentLoaded', function() {
       // Auto-select "Online Payment" when slip image is attached
       var pmSelect = document.querySelector('[name="payment_mode"]');
       if (pmSelect) {
-        for (var pi = 0; pi < pmSelect.options.length; pi++) {
-          if (pmSelect.options[pi].value === 'Online') { pmSelect.selectedIndex = pi; break; }
+        if (pmSelect.tomselect) {
+          pmSelect.tomselect.setValue('Online', true);
+        } else {
+          pmSelect.value = 'Online';
+          pmSelect.dispatchEvent(new Event('change', {bubbles: true}));
         }
       }
+      // Mark that slip was just pasted (prevent date focus override)
+      _wsSlipJustPasted = true;
+      // Compact form: reduce description rows, hide last-saved bar
+      var descEl = document.getElementById('wsTransferDesc');
+      if (descEl) descEl.rows = 2;
+      var lastSavedBar = document.querySelector('.xfer-last-saved-compact');
+      if (lastSavedBar) lastSavedBar.style.display = 'none';
       // Immediately focus Category/Purpose
-      if (catSelect) setTimeout(function(){ catSelect.focus(); }, 50);
+      setTimeout(function(){
+        if (catSelect && catSelect.tomselect) {
+          catSelect.tomselect.focus();
+        } else if (catSelect) {
+          catSelect.focus();
+        }
+      }, 120);
     };
     reader.readAsDataURL(file);
   }
