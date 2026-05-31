@@ -347,12 +347,17 @@ document.addEventListener('DOMContentLoaded', function() {
     var reader = new FileReader();
     reader.onload = function(ev) {
       _compressImage(ev.target.result, 1024, 0.82, function(b64) {
+      var csrfEl = document.querySelector('[name=csrf_token]') || document.querySelector('input[name=csrf_token]');
+      var csrfToken = csrfEl ? csrfEl.value : '';
       fetch('/api/workspace-transfer-slip-ocr', {
         method: 'POST',
-        headers: {'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('[name=csrf_token]').value},
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
         body: JSON.stringify({image: b64})
       })
-      .then(function(r){ return r.json(); })
+      .then(function(r){
+        if (!r.ok) { throw new Error('HTTP ' + r.status); }
+        return r.json();
+      })
       .then(function(resp) {
         _ocrProcessing = false;
         if (!resp.ok || !resp.data) {
@@ -413,7 +418,7 @@ document.addEventListener('DOMContentLoaded', function() {
       })
       .catch(function(err) {
         _ocrProcessing = false;
-        _showOcrStatus('OCR request failed.', true);
+        _showOcrStatus('OCR failed: ' + (err.message || err), true);
       });
       }); // end _compressImage
     };
