@@ -1136,7 +1136,12 @@ window.TASK_REPORT_NEW_LOCK_PROJECT = {{ task_entry_filter.lock_project|tojson }
     batchTable.querySelectorAll('.task-row').forEach(updateRow);
     updateTotals();
 
+    var _batchSubmitting = false;
     document.getElementById('batchForm').addEventListener('submit', function(e) {
+      if (_batchSubmitting) {
+        e.preventDefault();
+        return false;
+      }
       var empty = [];
       batchTable.querySelectorAll('.close-input').forEach(function(inp) {
         var rowId = inp.getAttribute('data-row');
@@ -1154,6 +1159,12 @@ window.TASK_REPORT_NEW_LOCK_PROJECT = {{ task_entry_filter.lock_project|tojson }
         e.preventDefault();
         alert('Sab vehicles ke liye Close Reading zaroori hai. Missing: ' + empty.join(', '));
         return false;
+      }
+      _batchSubmitting = true;
+      var btn = document.getElementById('saveBtn');
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Saving...';
       }
     });
 

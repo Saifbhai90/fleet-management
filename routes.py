@@ -22668,6 +22668,19 @@ def task_report_new():
             rows = _build_vehicle_rows(vehicles, task_date, request.form)
             return _task_report_new_render(rows, view_date)
         if not to_save:
+            _all_already_saved = all(
+                VehicleDailyTask.query.filter_by(vehicle_id=v.id, task_date=task_date).first() is not None
+                for v in vehicles
+            )
+            if _all_already_saved:
+                flash('Task entries pehle se saved hain — duplicate save nahi hua.', 'info')
+                return redirect(url_for(
+                    'task_report_new',
+                    date=task_date.strftime('%d-%m-%Y'),
+                    district_id=district_id,
+                    project_id=project_id,
+                    batch_saved='1',
+                ))
             flash(
                 'Koi record save nahi hua: tamam rows locked thin (Edit ke baghair) ya koi row update ke liye tayyar nahi. '
                 'Zarurat ho to pehle row par Edit karein, phir Close Reading bharen aur dubara Save All dabaen.',
