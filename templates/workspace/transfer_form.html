@@ -88,7 +88,7 @@
                 </div>
                 <div class="col-md-3">
                   <label class="form-label">Category / Purpose</label>
-                  <select name="category" class="form-select search-select">
+                  <select name="category" id="wsCategorySelect" class="form-select search-select">
                     <option value="">-- Select / Optional --</option>
                     {% for c in categories %}
                     <option value="{{ c.name }}" {% if row and row.category == c.name %}selected{% endif %}>{{ c.name }}</option>
@@ -212,15 +212,50 @@ document.addEventListener('DOMContentLoaded', function() {
     if (url) window.open(url, '_blank');
   }
 
+  /* Auto-fill Description helper */
+  var catSelect = document.getElementById('wsCategorySelect');
+  function _extractAccountName(selectEl) {
+    if (!selectEl || !selectEl.value) return '';
+    var txt = selectEl.options[selectEl.selectedIndex].textContent || '';
+    // Format: "22025 - Driver - Ansar Abbas | Vehicle: GBC-23-953 (Asset)" or "2310 - Transfer Clearing (Liability)"
+    // Remove trailing (AccountType)
+    txt = txt.replace(/\s*\([^)]*\)\s*$/, '').trim();
+    // Remove everything after | (vehicle info)
+    if (txt.indexOf('|') !== -1) txt = txt.split('|')[0].trim();
+    // Remove code prefix: "22025 - " or "22025 - Driver - "
+    var parts = txt.split(' - ');
+    if (parts.length >= 3) {
+      // e.g. ["22025", "Driver", "Ansar Abbas"] → take last part
+      return parts.slice(2).join(' - ').trim();
+    } else if (parts.length === 2) {
+      // e.g. ["2310", "Transfer Clearing"] → take second part
+      return parts[1].trim();
+    }
+    return txt;
+  }
+  function _autoFillDescription() {
+    if (!descBox) return;
+    var fromName = _extractAccountName(fromSelect);
+    var toName = _extractAccountName(toSelect);
+    if (!fromName || !toName) return;
+    var category = catSelect ? (catSelect.value || '') : '';
+    var desc = 'Payment Transfer From ' + fromName + ' Account to ' + toName + ' Account';
+    if (category) desc += ' for ' + category;
+    descBox.value = desc;
+  }
+
   if (fromSelect) {
-    fromSelect.addEventListener('change', function() { _applyWsAcctHint(fromHint, this.value || ''); });
+    fromSelect.addEventListener('change', function() { _applyWsAcctHint(fromHint, this.value || ''); _autoFillDescription(); });
     if (fromHint) fromHint.addEventListener('click', function() { _hintClick(this); });
     _applyWsAcctHint(fromHint, fromSelect.value || '');
   }
   if (toSelect) {
-    toSelect.addEventListener('change', function() { _applyWsAcctHint(toHint, this.value || ''); });
+    toSelect.addEventListener('change', function() { _applyWsAcctHint(toHint, this.value || ''); _autoFillDescription(); });
     if (toHint) toHint.addEventListener('click', function() { _hintClick(this); });
     _applyWsAcctHint(toHint, toSelect.value || '');
+  }
+  if (catSelect) {
+    catSelect.addEventListener('change', function() { _autoFillDescription(); });
   }
 
   document.addEventListener('keydown', function(e) {
@@ -232,7 +267,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   /* Enter key → move to next field instead of submitting */
   var _wsFieldOrder = [
-    'wsTransferDateInput', 'amount', 'payment_mode', 'category',
+    'wsTransferDateInput', 'amount', 'payment_mode', 'wsCategorySelect',
     'wsFromAccountSelect', 'wsToAccountSelect', 'wsTransferRefInput', 'wsTransferDesc'
   ];
   var formEl2 = document.getElementById('wsTransferForm');
@@ -318,6 +353,8 @@ document.addEventListener('DOMContentLoaded', function() {
           var refInput = document.getElementById('wsTransferRefInput');
           if (refInput && !refInput.value) refInput.value = d.reference_no;
         }
+        // Focus Category/Purpose after OCR fill
+        if (catSelect) catSelect.focus();
         // Highlight filled fields briefly
         setTimeout(function(){ _showOcrStatus('', false); }, 4000);
       })
