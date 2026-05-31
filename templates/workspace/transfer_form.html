@@ -325,13 +325,28 @@ document.addEventListener('DOMContentLoaded', function() {
     _ocrStatusEl.style.background = msg ? (isError ? '#fff5f5' : '#f0fdf4') : 'transparent';
     if (!msg) _ocrStatusEl.style.display = 'none'; else _ocrStatusEl.style.display = 'block';
   }
+  function _compressImage(dataUrl, maxPx, quality, cb) {
+    var img = new Image();
+    img.onload = function() {
+      var w = img.width, h = img.height;
+      if (w > maxPx || h > maxPx) {
+        if (w > h) { h = Math.round(h * maxPx / w); w = maxPx; }
+        else       { w = Math.round(w * maxPx / h); h = maxPx; }
+      }
+      var c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      c.getContext('2d').drawImage(img, 0, 0, w, h);
+      cb(c.toDataURL('image/jpeg', quality));
+    };
+    img.src = dataUrl;
+  }
   function _runSlipOcr(file) {
     if (_ocrProcessing || !file) return;
     _ocrProcessing = true;
-    _showOcrStatus('Reading slip... please wait.', false);
+    _showOcrStatus('Reading slip...', false);
     var reader = new FileReader();
     reader.onload = function(ev) {
-      var b64 = ev.target.result; // data:image/...;base64,xxxxx
+      _compressImage(ev.target.result, 1024, 0.82, function(b64) {
       fetch('/api/workspace-transfer-slip-ocr', {
         method: 'POST',
         headers: {'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('[name=csrf_token]').value},
@@ -400,6 +415,7 @@ document.addEventListener('DOMContentLoaded', function() {
         _ocrProcessing = false;
         _showOcrStatus('OCR request failed.', true);
       });
+      }); // end _compressImage
     };
     reader.readAsDataURL(file);
   }

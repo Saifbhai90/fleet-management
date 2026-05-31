@@ -4409,13 +4409,13 @@ def workspace_transfer_slip_ocr_api():
         obj_match = _re.search(r"\{.*\}", txt, _re.DOTALL)
         return json.loads(obj_match.group(0) if obj_match else txt)
 
-    def _do_http(url, payload_dict, extra_headers=None):
+    def _do_http(url, payload_dict, extra_headers=None, timeout=12):
         req_data = json.dumps(payload_dict).encode("utf-8")
         req = url_request.Request(url, data=req_data, method="POST")
         req.add_header("Content-Type", "application/json")
         for k, v in (extra_headers or {}).items():
             req.add_header(k, v)
-        with url_request.urlopen(req, timeout=30) as resp:
+        with url_request.urlopen(req, timeout=timeout) as resp:
             return json.loads(resp.read().decode("utf-8"))
 
     def _is_rate_limited(exc):
@@ -4461,6 +4461,7 @@ def workspace_transfer_slip_ocr_api():
                 or_payload = {
                     "model": model_id,
                     "temperature": 0.0,
+                    "max_tokens": 300,
                     "messages": [{
                         "role": "user",
                         "content": [
@@ -4504,7 +4505,7 @@ def workspace_transfer_slip_ocr_api():
             gemini_model = (os.environ.get("GEMINI_MODEL") or "").strip() or "gemini-2.5-flash"
             gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/{gemini_model}:generateContent?key={google_key}"
             gem_payload = {
-                "generationConfig": {"temperature": 0.0},
+                "generationConfig": {"temperature": 0.0, "maxOutputTokens": 300},
                 "contents": [{
                     "role": "user",
                     "parts": [
@@ -4513,7 +4514,7 @@ def workspace_transfer_slip_ocr_api():
                     ]
                 }],
             }
-            body = _do_http(gemini_url, gem_payload)
+            body = _do_http(gemini_url, gem_payload, timeout=20)
             candidates = body.get("candidates") or []
             if not candidates:
                 return jsonify({'error': 'Gemini returned no response'}), 500
