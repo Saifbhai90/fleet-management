@@ -369,6 +369,8 @@ if _run_startup_tasks:
                 ('workspace_fuel_oil_opening_expense', 'fuel_oil_month_close_id', 'INTEGER REFERENCES workspace_fuel_oil_month_close(id)'),
                 ('workspace_month_close', 'district_id', 'INTEGER REFERENCES district(id)'),
                 ('workspace_month_close', 'project_id', 'INTEGER REFERENCES project(id)'),
+                ('workspace_journal_entry', 'district_id', 'INTEGER REFERENCES district(id)'),
+                ('workspace_journal_entry', 'project_id', 'INTEGER REFERENCES project(id)'),
                 ('vehicle', 'vehicle_family', 'VARCHAR(100)'),
                 ('driver', 'license_valid_from', 'DATE'),
                 ('driver', 'verify_license_photo_path', 'VARCHAR(500)'),
@@ -628,6 +630,8 @@ from routes_workspace import (
     workspace_fund_transfers_list, workspace_fund_transfer_form, workspace_fund_transfer_delete,
     workspace_fund_transfer_view, workspace_fund_transfer_media,
     workspace_ledger, workspace_ledger_transfer_detail, workspace_ledger_journal_detail, workspace_balance_sheet, workspace_month_close, workspace_month_close_list, workspace_month_close_reverse, workspace_reports, workspace_mpg_report, workspace_dashboard_financial_report,
+    workspace_journal_voucher_add, workspace_journal_vouchers_list, workspace_journal_voucher_detail, workspace_jv_backfill_district_project,
+    workspace_journal_voucher_edit, workspace_journal_voucher_delete, workspace_journal_vouchers_export,
     workspace_transfer_description_suggestions_api,
     workspace_transfer_slip_ocr_api,
     workspace_account_balance_api,
@@ -759,6 +763,13 @@ app.add_url_rule('/workspace/transfer/<int:pk>/view', 'workspace_fund_transfer_v
 app.add_url_rule('/workspace/transfer/<int:pk>/media', 'workspace_fund_transfer_media', workspace_fund_transfer_media, methods=['GET'])
 app.add_url_rule('/workspace/transfer/<int:pk>/edit', 'workspace_fund_transfer_edit', workspace_fund_transfer_form, methods=['GET', 'POST'])
 app.add_url_rule('/workspace/transfer/<int:pk>/delete', 'workspace_fund_transfer_delete', workspace_fund_transfer_delete, methods=['POST'])
+app.add_url_rule('/workspace/journal-voucher', 'workspace_journal_voucher_add', workspace_journal_voucher_add, methods=['GET', 'POST'])
+app.add_url_rule('/workspace/journal-vouchers', 'workspace_journal_vouchers_list', workspace_journal_vouchers_list, methods=['GET', 'POST'])
+app.add_url_rule('/workspace/journal-voucher/<int:pk>', 'workspace_journal_voucher_detail', workspace_journal_voucher_detail, methods=['GET'])
+app.add_url_rule('/workspace/journal-voucher/<int:pk>/edit', 'workspace_journal_voucher_edit', workspace_journal_voucher_edit, methods=['GET', 'POST'])
+app.add_url_rule('/workspace/journal-voucher/<int:pk>/delete', 'workspace_journal_voucher_delete', workspace_journal_voucher_delete, methods=['POST'])
+app.add_url_rule('/workspace/journal-vouchers/export', 'workspace_journal_vouchers_export', workspace_journal_vouchers_export, methods=['GET'])
+app.add_url_rule('/workspace/journal-vouchers/backfill', 'workspace_jv_backfill_district_project', workspace_jv_backfill_district_project, methods=['GET'])
 app.add_url_rule('/api/workspace-transfer-descriptions', 'workspace_transfer_description_suggestions', workspace_transfer_description_suggestions_api, methods=['GET'])
 app.add_url_rule('/api/workspace-transfer-slip-ocr', 'workspace_transfer_slip_ocr', workspace_transfer_slip_ocr_api, methods=['POST'])
 app.add_url_rule('/api/workspace-account-balance', 'workspace_account_balance_api', workspace_account_balance_api, methods=['GET'])

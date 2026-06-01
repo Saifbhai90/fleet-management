@@ -627,6 +627,7 @@
         .ws-global-mini a.active { background: #eaf1ff; color: #1d4ed8; font-weight: 600; }
         .ws-global-mini .ws-mini-title { font-size: .86rem; font-weight: 700; color: #0f172a; margin-bottom: .45rem; }
         .ws-global-mini .ws-mini-emp { font-size: .76rem; color: #64748b; margin-bottom: .55rem; }
+        .ws-global-mini .ws-mini-section-title { font-size: .70rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: .03em; margin: .75rem 0 .35rem 0; padding-left: .25rem; border-left: 2px solid #3b82f6; }
         @media (max-width: 991.98px) {
             .main-content { margin-left: 0; }
             .main-content.ws-mini-open { padding-right: 25px; }
@@ -3304,10 +3305,25 @@
                 var td = a.closest('td');
                 if (td) td.textContent = (a.textContent || '').trim() || '-';
             });
+            // Remove Edit/Actions columns and their corresponding cells
             var ths = clone.querySelectorAll('thead th');
-            ths.forEach(function(th){
+            var indicesToRemove = [];
+            ths.forEach(function(th, index){
                 var t = th.textContent.trim();
-                if (t === 'Edit' || t === 'Actions' || t === 'Action') th.remove();
+                if (t === 'Edit' || t === 'Actions' || t === 'Action'){
+                    indicesToRemove.push(index);
+                    th.remove();
+                }
+            });
+            // Remove corresponding td cells in each row
+            clone.querySelectorAll('tbody tr, tfoot tr').forEach(function(row){
+                var cells = row.querySelectorAll('td, th');
+                // Remove cells from right to left to avoid index shift
+                for(var i = indicesToRemove.length - 1; i >= 0; i--){
+                    if(cells[indicesToRemove[i]]){
+                        cells[indicesToRemove[i]].remove();
+                    }
+                }
             });
             return clone;
         }
@@ -3457,23 +3473,26 @@
           <div class="ws-mini-emp">Employee: {{ workspace_selected_employee.name }}</div>
           {% endif %}
           <a href="{{ url_for('workspace_home') }}" class="{% if request.endpoint == 'workspace_home' %}active{% endif %}"><i class="bi bi-speedometer2"></i>Dashboard</a>
+          <div class="ws-mini-section-title">Master Data</div>
           <a href="{{ url_for('workspace_parties_list') }}" class="{% if request.endpoint in ['workspace_parties_list', 'workspace_party_new', 'workspace_party_edit'] %}active{% endif %}"><i class="bi bi-building"></i>Parties</a>
           <a href="{{ url_for('workspace_products_list') }}" class="{% if request.endpoint in ['workspace_products_list', 'workspace_product_new', 'workspace_product_edit'] %}active{% endif %}"><i class="bi bi-box-seam"></i>Products</a>
-          <a href="{{ url_for('workspace_accounts_list') }}" class="{% if request.endpoint in ['workspace_accounts_list', 'workspace_account_new', 'workspace_account_edit'] %}active{% endif %}"><i class="bi bi-diagram-3"></i>Workspace COA</a>
+          <a href="{{ url_for('workspace_accounts_list') }}" class="{% if request.endpoint in ['workspace_accounts_list', 'workspace_account_new', 'workspace_account_edit'] %}active{% endif %}"><i class="bi bi-diagram-3"></i>Chart of Accounts</a>
+          <div class="ws-mini-section-title">Expenses</div>
           <a href="{{ url_for('fuel_expense_list') }}" class="{% if request.endpoint in ['fuel_expense_list', 'fuel_expense_add', 'fuel_expense_edit'] %}active{% endif %}"><i class="bi bi-fuel-pump"></i>Fuel Expense</a>
           <a href="{{ url_for('oil_expense_list') }}" class="{% if request.endpoint in ['oil_expense_list', 'oil_expense_form'] %}active{% endif %}"><i class="bi bi-droplet"></i>Oil & Lubricants</a>
           <a href="{{ url_for('maintenance_expense_list') }}" class="{% if request.endpoint in ['maintenance_expense_list', 'maintenance_expense_form', 'maintenance_expense_history'] %}active{% endif %}"><i class="bi bi-wrench"></i>Maintenance Bills</a>
-          <a href="{{ url_for('maintenance_expense_history') }}" class="{% if request.endpoint == 'maintenance_expense_history' %}active{% endif %}"><i class="bi bi-graph-up-arrow"></i>Maintenance History</a>
-          <a href="{{ url_for('maintenance_work_order_list') }}" class="{% if request.endpoint in ['maintenance_work_order_list', 'maintenance_work_order_form', 'maintenance_work_order_detail'] %}active{% endif %}"><i class="bi bi-clipboard2-check"></i>Maintenance Work Orders</a>
+          <a href="{{ url_for('maintenance_work_order_list') }}" class="{% if request.endpoint in ['maintenance_work_order_list', 'maintenance_work_order_form', 'maintenance_work_order_detail'] %}active{% endif %}"><i class="bi bi-clipboard2-check"></i>Work Orders</a>
           <a href="{{ url_for('employee_expense_list') }}" class="{% if request.endpoint in ['employee_expense_list', 'employee_expense_form', 'employee_expense_form_edit'] %}active{% endif %}"><i class="bi bi-person-badge"></i>Employee Expense</a>
-          <a href="{{ url_for('vehicle_reading_setup_list') }}" class="{% if request.endpoint in ['vehicle_reading_setup_list', 'vehicle_reading_setup_form'] %}active{% endif %}"><i class="bi bi-speedometer2"></i>Vehicle Reading Setup</a>
           <a href="{{ url_for('workspace_opening_expenses_list') }}" class="{% if request.endpoint in ['workspace_opening_expenses_list', 'workspace_opening_expense_new', 'workspace_opening_expense_edit'] %}active{% endif %}"><i class="bi bi-cash-coin"></i>Opening Expense</a>
           <a href="{{ url_for('workspace_fuel_oil_openings_list') }}" class="{% if request.endpoint in ['workspace_fuel_oil_openings_list', 'workspace_fuel_oil_opening_new', 'workspace_fuel_oil_opening_edit'] %}active{% endif %}"><i class="bi bi-fuel-pump-diesel"></i>Fuel/Oil Opening</a>
-          <a href="{{ url_for('workspace_fund_transfers_list') }}" class="{% if request.endpoint in ['workspace_fund_transfers_list', 'workspace_fund_transfer_new', 'workspace_fund_transfer_edit'] %}active{% endif %}"><i class="bi bi-arrow-left-right"></i>Fund Transfers</a>
-          <a href="{{ url_for('workspace_ledger') }}" class="{% if request.endpoint == 'workspace_ledger' %}active{% endif %}"><i class="bi bi-journal-text"></i>Workspace Ledger</a>
-          <a href="{{ url_for('workspace_balance_sheet') }}" class="{% if request.endpoint == 'workspace_balance_sheet' %}active{% endif %}"><i class="bi bi-file-earmark-bar-graph"></i>Workspace Balance Sheet</a>
+          <div class="ws-mini-section-title">Transactions</div>
+          <a href="{{ url_for('workspace_fund_transfers_list') }}" class="{% if request.endpoint in ['workspace_fund_transfers_list', 'workspace_fund_transfer_new', 'workspace_fund_transfer_edit'] %}active{% endif %}"><i class="bi bi-arrow-left-right"></i>Fund Transfer</a>
+          <a href="{{ url_for('workspace_journal_vouchers_list') }}" class="{% if request.endpoint in ['workspace_journal_vouchers_list', 'workspace_journal_voucher_add'] %}active{% endif %}"><i class="bi bi-journal-text"></i>Journal Vouchers</a>
+          <a href="{{ url_for('workspace_ledger') }}" class="{% if request.endpoint == 'workspace_ledger' %}active{% endif %}"><i class="bi bi-journal-text"></i>Ledger</a>
+          <div class="ws-mini-section-title">Closing & Reports</div>
           <a href="{{ url_for('workspace_month_close_list') }}" class="{% if request.endpoint in ['workspace_month_close', 'workspace_month_close_list'] %}active{% endif %}"><i class="bi bi-calendar2-check"></i>Month Close</a>
           <a href="{{ url_for('workspace_fuel_oil_month_close_list') }}" class="{% if request.endpoint in ['workspace_fuel_oil_month_close', 'workspace_fuel_oil_month_close_list'] %}active{% endif %}"><i class="bi bi-calendar2-week"></i>Fuel/Oil Close</a>
+          <a href="{{ url_for('workspace_balance_sheet') }}" class="{% if request.endpoint == 'workspace_balance_sheet' %}active{% endif %}"><i class="bi bi-file-earmark-bar-graph"></i>Balance Sheet</a>
           <a href="{{ url_for('workspace_reports') }}" class="{% if request.endpoint == 'workspace_reports' %}active{% endif %}"><i class="bi bi-bar-chart"></i>Reports</a>
         </div>
       </div>

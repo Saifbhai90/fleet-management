@@ -1,0 +1,295 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+  {% include "workspace/_nav.html" %}
+  
+  <style>
+    .ws-jv-form-wrap { max-width: min(1700px, calc(100vw - 96px)); margin: 0 auto; }
+    @media (max-width: 991.98px) { .ws-jv-form-wrap { max-width: 100%; } }
+    .ws-jv-header { background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%); color:#212529; border-radius: 12px; padding: .65rem 1rem; }
+    .ws-jv-card { border: 1px solid #e9ecef; border-radius: 12px; box-shadow: 0 2px 10px rgba(16,24,40,.06); }
+    .ws-jv-card .card-header { background: linear-gradient(to right, #f8f9fa 0%, #fff 100%); font-weight: 600; font-size: .87rem; }
+    .ws-jv-card .form-label { font-weight: 600; font-size: .8rem; color: #495057; margin-bottom: .25rem; }
+    .ws-jv-lines-table th { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; }
+    .ws-jv-lines-table td { vertical-align: middle; }
+    .ws-jv-account-select { min-width: 280px; }
+    .ws-jv-totals { background: #fff3cd; border-top: 2px solid #ffc107; }
+    .ws-jv-totals td { font-weight: 700; }
+  </style>
+
+  <div class="ws-jv-form-wrap">
+    <div class="d-flex justify-content-between align-items-center ws-jv-header mb-3">
+      <h5 class="mb-0"><i class="bi bi-journal-text me-2"></i>{{ title }}</h5>
+      <div class="d-flex gap-2">
+        <a href="{{ url_for('workspace_journal_vouchers_list') }}" class="btn btn-outline-dark btn-sm">Back to List</a>
+      </div>
+    </div>
+
+    <form method="post" id="wsJVForm" class="needs-validation" novalidate>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      
+      <div class="row g-3">
+        <div class="col-md-3">
+          <label class="form-label">Entry Date</label>
+          <input type="text" name="entry_date" class="form-control datepicker" placeholder="dd-mm-yyyy"
+                 value="{{ entry_date|default('', true) }}" required autocomplete="off">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">District</label>
+          <select name="district_id" class="form-select search-select" onfocus="this.tomselect && this.tomselect.open();">
+            <option value="">-- Select District --</option>
+            {% for d in districts %}
+            <option value="{{ d.id }}" {% if district_id|default(0) == d.id %}selected{% endif %}>{{ d.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Project</label>
+          <select name="project_id" class="form-select search-select" onfocus="this.tomselect && this.tomselect.open();">
+            <option value="">-- Select Project --</option>
+            {% for p in projects %}
+            <option value="{{ p.id }}" {% if project_id|default(0) == p.id %}selected{% endif %}>{{ p.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Description <small class="text-muted">(auto-copies to lines)</small></label>
+          <input type="text" name="description" id="mainDescription" class="form-control"
+                 value="{{ description|default('', true) }}" placeholder="Journal entry description..." required>
+        </div>
+      </div>
+
+      <!-- Journal Lines -->
+      <div class="card ws-jv-card mt-3">
+        <div class="card-header bg-light">
+          <h6 class="mb-0"><i class="bi bi-list-columns-reverse me-1"></i>Journal Lines</h6>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-bordered mb-0 ws-jv-lines-table" id="jvLinesTable">
+              <thead class="table-light">
+                <tr>
+                  <th class="ws-jv-account-select">Account</th>
+                  <th style="width:140px;" class="text-end">Debit</th>
+                  <th style="width:140px;" class="text-end">Credit</th>
+                  <th style="min-width:200px;">Description</th>
+                  <th style="width:80px;" class="text-center">Action</th>
+                </tr>
+              </thead>
+              <tbody id="jvLinesBody">
+                {% if lines is defined and lines %}
+                  {% for line in lines %}
+                  <tr class="jv-line">
+                    <td>
+                      <select name="lines[{{ loop.index0 }}].account_id" class="form-select form-select-sm search-select" required data-search-text="{% for acc in accounts %}{{ acc.code }} {{ acc.name }} {{ acc.account_type }}{% if acc.entity_type == 'driver' and driver_vehicle_map.get(acc.entity_id) %} {{ driver_vehicle_map.get(acc.entity_id) }}{% endif %}|{% endfor %}">
+                        <option value="">-- Select Account --</option>
+                        {% for acc in accounts %}
+                        {% set vno = driver_vehicle_map.get(acc.entity_id) if acc.entity_type == 'driver' else None %}
+                        <option value="{{ acc.id }}" {% if acc.id == line.account_id %}selected{% endif %} data-vehicle="{{ vno or '' }}" data-search="{{ acc.code }} {{ acc.name }} {{ acc.account_type }} {{ vno or '' }}">
+                          {{ acc.code }} - {{ acc.name }}{% if vno %} ({{ vno }}){% endif %} - {{ acc.account_type }}
+                        </option>
+                        {% endfor %}
+                      </select>
+                    </td>
+                    <td><input type="number" name="lines[{{ loop.index0 }}].debit" class="form-control form-control-sm text-end jv-debit" step="0.01" min="0" value="{{ line.debit|default(0) }}" oninput="updateTotals()" onblur="autoFillDescription(this)"></td>
+                    <td><input type="number" name="lines[{{ loop.index0 }}].credit" class="form-control form-control-sm text-end jv-credit" step="0.01" min="0" value="{{ line.credit|default(0) }}" oninput="updateTotals()"></td>
+                    <td><input type="text" name="lines[{{ loop.index0 }}].description" class="form-control form-control-sm jv-line-desc" value="{{ line.description|default('') }}" onkeydown="if(event.key==='Enter'){event.preventDefault();addLineAndFocus();}"></td>
+                    <td class="text-center">
+                      <button type="button" class="btn btn-sm btn-warning btn-add-line-row" title="Add Line"><i class="bi bi-plus-circle"></i></button>
+                      <button type="button" class="btn btn-sm btn-outline-danger btn-remove-line ms-1" title="Remove"><i class="bi bi-x-lg"></i></button>
+                    </td>
+                  </tr>
+                  {% endfor %}
+                {% endif %}
+              </tbody>
+              <tfoot class="ws-jv-totals">
+                <tr>
+                  <td class="text-end">Totals</td>
+                  <td class="text-end" id="totalDebit">0.00</td>
+                  <td class="text-end" id="totalCredit">0.00</td>
+                  <td colspan="2">
+                    <span id="balanceWarning" class="text-danger small d-none">
+                      <i class="bi bi-exclamation-triangle me-1"></i>Debits and Credits must be equal
+                    </span>
+                    <span id="balanceOk" class="text-success small d-none">
+                      <i class="bi bi-check-circle me-1"></i>Balanced
+                    </span>
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-3 d-flex gap-2 justify-content-end">
+        <a href="{{ url_for('workspace_journal_vouchers_list') }}" class="btn btn-outline-secondary">Cancel</a>
+        <button type="submit" class="btn btn-warning px-4" id="btnSubmitJV">
+          <i class="bi bi-check-circle me-1"></i>Save Journal Voucher
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+var lineIndex = document.querySelectorAll('#jvLinesBody .jv-line').length;
+var accountOptions = '<option value="">-- Select Account --</option>';
+{% for acc in accounts %}
+{% set vno = driver_vehicle_map.get(acc.entity_id) if acc.entity_type == 'driver' else None %}
+accountOptions += '<option value="{{ acc.id }}" data-vehicle="{{ vno or '' }}" data-search="{{ acc.code }} {{ acc.name }} {{ acc.account_type }} {{ vno or '' }}">{{ acc.code }} - {{ acc.name }}{% if vno %} ({{ vno }}){% endif %} - {{ acc.account_type }}</option>';
+{% endfor %}
+
+function addLine(){
+    var mainDesc = document.getElementById('mainDescription')?.value || '';
+    var row = document.createElement('tr');
+    row.className = 'jv-line';
+    row.innerHTML =
+        '<td><select name="lines['+lineIndex+'].account_id" class="form-select form-select-sm search-select jv-account" required data-search-text="'+accountOptions.replace(/<option[^>]*>/g, '').replace(/<\/option>/g, ' ')+'">'+accountOptions+'</select></td>'+
+        '<td><input type="number" name="lines['+lineIndex+'].debit" class="form-control form-control-sm text-end jv-debit" step="0.01" min="0" value="0" oninput="updateTotals()" onblur="autoFillDescription(this)"></td>'+
+        '<td><input type="number" name="lines['+lineIndex+'].credit" class="form-control form-control-sm text-end jv-credit" step="0.01" min="0" value="0" oninput="updateTotals()"></td>'+
+        '<td><input type="text" name="lines['+lineIndex+'].description" class="form-control form-control-sm jv-line-desc" value="'+mainDesc.replace(/"/g, '&quot;')+'" onkeydown="if(event.key===\'Enter\'){event.preventDefault();addLineAndFocus();}"></td>'+
+        '<td class="text-center">'+
+        '<button type="button" class="btn btn-sm btn-warning btn-add-line-row" title="Add Line"><i class="bi bi-plus-circle"></i></button>'+
+        '<button type="button" class="btn btn-sm btn-outline-danger btn-remove-line ms-1" title="Remove"><i class="bi bi-x-lg"></i></button>'+
+        '</td>';
+    document.getElementById('jvLinesBody').appendChild(row);
+    lineIndex++;
+
+    if(window.initSearchSelect){
+        row.querySelectorAll('.search-select').forEach(function(el){ window.initSearchSelect(el); });
+    }
+    updateTotals();
+    return row;
+}
+
+function addLineAndFocus(){
+    var newRow = addLine();
+    // Scroll new row into view
+    newRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    
+    // Single attempt after initSearchSelect completes (300ms is enough)
+    setTimeout(function(){
+        // Find the select element
+        var sel = newRow.querySelector('select[name^="lines["]');
+        if(!sel) return;
+        
+        // Check if TomSelect was initialized
+        if(sel.tomselect){
+            // Use TomSelect's API to focus and open
+            sel.tomselect.focus();
+            sel.tomselect.open();
+        } else {
+            // Regular select - just focus it
+            sel.focus();
+        }
+    }, 300);
+}
+
+function removeLine(btn){
+    var row = btn.closest('tr');
+    if(document.querySelectorAll('#jvLinesBody .jv-line').length > 1){
+        row.remove();
+        reindexLines();
+        updateTotals();
+    }
+}
+
+function reindexLines(){
+    var rows = document.querySelectorAll('#jvLinesBody .jv-line');
+    rows.forEach(function(row, idx){
+        row.querySelectorAll('[name]').forEach(function(el){
+            el.name = el.name.replace(/lines\[\d+\]/, 'lines['+idx+']');
+        });
+    });
+    lineIndex = rows.length;
+}
+
+function updateTotals(){
+    var debits = document.querySelectorAll('.jv-debit');
+    var credits = document.querySelectorAll('.jv-credit');
+    var totalDebit = 0, totalCredit = 0;
+    debits.forEach(function(el){ totalDebit += parseFloat(el.value) || 0; });
+    credits.forEach(function(el){ totalCredit += parseFloat(el.value) || 0; });
+
+    document.getElementById('totalDebit').textContent = totalDebit.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    document.getElementById('totalCredit').textContent = totalCredit.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+
+    var warn = document.getElementById('balanceWarning');
+    var ok = document.getElementById('balanceOk');
+    if(totalDebit > 0 || totalCredit > 0){
+        if(Math.abs(totalDebit - totalCredit) < 0.01){
+            warn.classList.add('d-none');
+            ok.classList.remove('d-none');
+        } else {
+            warn.classList.remove('d-none');
+            ok.classList.add('d-none');
+        }
+    } else {
+        warn.classList.add('d-none');
+        ok.classList.add('d-none');
+    }
+}
+
+document.getElementById('jvLinesBody').addEventListener('click', function(e){
+    var removeBtn = e.target.closest('.btn-remove-line');
+    if(removeBtn) removeLine(removeBtn);
+    
+    var addBtn = e.target.closest('.btn-add-line-row');
+    if(addBtn) addLineAndFocus();
+});
+
+document.getElementById('wsJVForm').addEventListener('submit', function(e){
+    updateTotals();
+    var debits = 0, credits = 0;
+    document.querySelectorAll('.jv-debit').forEach(function(el){ debits += parseFloat(el.value) || 0; });
+    document.querySelectorAll('.jv-credit').forEach(function(el){ credits += parseFloat(el.value) || 0; });
+    if(Math.abs(debits - credits) >= 0.01){
+        e.preventDefault();
+        alert('Total Debits must equal Total Credits before saving.');
+        return false;
+    }
+    if(document.querySelectorAll('#jvLinesBody .jv-line').length === 0){
+        e.preventDefault();
+        alert('Please add at least one journal line.');
+        return false;
+    }
+});
+
+document.addEventListener('DOMContentLoaded', function(){
+    // Focus Entry Date field on page load
+    var entryDate = document.querySelector('input[name="entry_date"]');
+    if(entryDate) entryDate.focus();
+    
+    if(document.querySelectorAll('#jvLinesBody .jv-line').length === 0){
+        addLine(); // Start with only 1 line by default
+    }
+    
+    updateTotals();
+});
+
+// Auto-fill description when moving from Debit field
+function autoFillDescription(debitInput){
+    var row = debitInput.closest('.jv-line');
+    var descInput = row?.querySelector('.jv-line-desc');
+    var mainDesc = document.getElementById('mainDescription')?.value || '';
+    if(descInput && !descInput.value && mainDesc){
+        descInput.value = mainDesc;
+    }
+}
+
+// Alt+S keyboard shortcut to save form
+document.addEventListener('keydown', function(e){
+    // Check for Alt+S (key code 83)
+    if(e.altKey && e.key === 's'){
+        e.preventDefault();
+        var form = document.getElementById('wsJVForm');
+        if(form){
+            form.submit();
+        }
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,286 @@
+{% extends "base.html" %}
+{% block title %}Workspace Journal Vouchers{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+  {% include "workspace/_nav.html" %}
+
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
+    <h2 class="mb-0"><i class="bi bi-journal-text me-2 text-warning"></i>Workspace Journal Vouchers</h2>
+    <div class="d-flex align-items-center gap-2">
+      <a href="{{ url_for('workspace_jv_backfill_district_project') }}" class="btn btn-danger btn-sm" onclick="return confirm('This will fill District/Project for old entries. Continue?')">
+        <i class="bi bi-database-fill-up me-1"></i>Backfill Old Data
+      </a>
+      <button class="btn btn-outline-secondary btn-sm" id="btnPrintReport" title="Print / Preview Current Page"><i class="bi bi-eye me-1"></i>Print / Preview</button>
+      <a href="{{ url_for('workspace_journal_vouchers_export', **request.args) }}" class="btn btn-outline-success btn-sm" title="Export All to Excel"><i class="bi bi-file-earmark-excel me-1"></i>Export All</a>
+      <a href="{{ url_for('workspace_journal_voucher_add') }}" class="btn btn-warning btn-sm text-dark">
+        <i class="bi bi-plus-circle me-1"></i>New JV
+      </a>
+    </div>
+  </div>
+
+  <div class="section-heading bg-warning">
+    <i class="bi bi-journal-text me-2"></i>Journal Vouchers
+  </div>
+
+  <!-- Filter Form -->
+  <div class="card shadow-sm border-0 mt-3 mb-3">
+    <div class="card-body py-2">
+      <form method="GET" action="" class="row g-2 align-items-end">
+        <div class="col-6 col-md-3">
+          <label class="form-label form-label-sm mb-1">From Date</label>
+          <input type="text" name="from_date" value="{{ from_date.strftime('%d-%m-%Y') if from_date else '' }}" class="form-control form-control-sm datepicker" placeholder="dd-mm-yyyy" autocomplete="off">
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label form-label-sm mb-1">To Date</label>
+          <input type="text" name="to_date" value="{{ to_date.strftime('%d-%m-%Y') if to_date else '' }}" class="form-control form-control-sm datepicker" placeholder="dd-mm-yyyy" autocomplete="off">
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label form-label-sm mb-1">Type</label>
+          <input type="hidden" name="entry_type_filter" id="typeHidden" value="{{ (selected_types or [])|join(',') }}">
+          <div id="typeMultiWrap">
+            <button type="button" class="form-select form-select-sm text-start" id="typeMultiBtn" style="overflow:hidden;text-overflow:ellipsis;padding-right:20px;line-height:1.5;">-- All Types --</button>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label form-label-sm mb-1">District</label>
+          <select name="district_id" class="form-select form-select-sm search-select" onfocus="this.tomselect && this.tomselect.open();">
+            <option value="" {% if not district_id %}selected{% endif %}>-- All Districts --</option>
+            {% for d in districts %}
+            <option value="{{ d.id }}" {% if district_id == d.id %}selected{% endif %}>{{ d.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label form-label-sm mb-1">Project</label>
+          <select name="project_id" class="form-select form-select-sm search-select" onfocus="this.tomselect && this.tomselect.open();">
+            <option value="" {% if not project_id %}selected{% endif %}>-- All Projects --</option>
+            {% for p in projects %}
+            <option value="{{ p.id }}" {% if project_id == p.id %}selected{% endif %}>{{ p.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-6 col-md-3 d-flex gap-1">
+          <button type="submit" class="btn btn-warning btn-sm text-dark flex-fill">
+            <i class="bi bi-funnel me-1"></i>Filter
+          </button>
+          <a href="{{ url_for('workspace_journal_vouchers_list') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-x-lg"></i>
+          </a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Table Card -->
+  <div class="card shadow-sm border-0">
+    <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <div class="d-flex align-items-center gap-2">
+        <label class="mb-0 small">Show</label>
+        <select id="jvPerPage" class="form-select form-select-sm" style="width:auto;" onchange="var u=new URLSearchParams(window.location.search);u.set('per_page',this.value);u.set('page','1');window.location.search=u.toString();">
+          {% for val in [25,50,100,200] %}
+          <option value="{{ val }}" {% if per_page|default(25) == val %}selected{% endif %}>{{ val }}</option>
+          {% endfor %}
+        </select>
+        <label class="mb-0 small">entries</label>
+      </div>
+      <div>
+        <input type="text" id="jvSearch" class="form-control form-control-sm" placeholder="Search all pages..." style="width:200px;" autocomplete="off" value="{{ search or '' }}" onkeydown="if(event.key==='Enter'){var u=new URLSearchParams(window.location.search);u.set('search',this.value.trim());u.set('page','1');window.location.search=u.toString();}">
+      </div>
+    </div>
+    <div class="card-body p-0">
+      <div class="data-table-wrapper">
+        <table class="table table-hover compact-table mb-0" id="jvTable">
+          <thead class="table-light">
+            <tr>
+              <th class="text-center" style="width:46px;">#</th>
+              <th>Entry No</th>
+              <th>Date</th>
+              <th>Type</th>
+              <th>District</th>
+              <th>Project</th>
+              <th>Description</th>
+              <th class="text-end">Total Amount</th>
+              <th class="text-center">Lines</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% set items = entries.items if entries.items is defined else entries %}
+            {% for jv in items %}
+            <tr>
+              <td class="text-center text-muted small">{{ ((entries.page - 1) * per_page + loop.index) if entries.page is defined else loop.index }}</td>
+              <td>
+                <a class="fw-semibold text-decoration-none" href="{{ url_for('workspace_journal_voucher_detail', pk=jv.id) }}">{{ jv.entry_number|default(jv.id) }}</a>
+              </td>
+              <td>{{ jv.entry_date|ddmmyyyy }}</td>
+              <td>
+                {% if jv.entry_type == 'Transfer' %}
+                <span class="badge bg-primary">{{ jv.entry_type }}</span>
+                {% elif jv.entry_type == 'Journal' and jv.category == 'Fund Transfer Mirror' %}
+                <span class="badge bg-info text-dark">FundTransfer</span>
+                {% elif jv.entry_type == 'Journal' %}
+                <span class="badge bg-warning text-dark">{{ jv.entry_type }}</span>
+                {% elif jv.entry_type == 'Expense' %}
+                  {% if jv.reference_type == 'FuelExpense' %}
+                    <span class="badge bg-info">Fuel Expense</span>
+                  {% elif jv.reference_type == 'OilExpense' %}
+                    <span class="badge bg-info">Oil Expense</span>
+                  {% elif jv.reference_type == 'MaintenanceExpense' %}
+                    <span class="badge bg-info">Maintenance Expense</span>
+                  {% else %}
+                    <span class="badge bg-info">{{ jv.entry_type }}</span>
+                  {% endif %}
+                {% elif jv.entry_type == 'Opening' %}
+                <span class="badge bg-success">{{ jv.entry_type }}</span>
+                {% elif jv.entry_type == 'MonthClose' %}
+                <span class="badge bg-danger">{{ jv.entry_type }}</span>
+                {% elif jv.entry_type == 'FuelOilMonthClose' %}
+                <span class="badge bg-dark">{{ jv.entry_type }}</span>
+                {% else %}
+                <span class="badge bg-secondary">{{ jv.entry_type|default('Journal') }}</span>
+                {% endif %}
+              </td>
+              <td>{{ jv.district.name if jv.district else '-' }}</td>
+              <td>{{ jv.project.name if jv.project else '-' }}</td>
+              <td title="{{ jv.description }}">{{ jv.description[:60] if jv.description else '-' }}{% if jv.description and jv.description|length > 60 %}…{% endif %}</td>
+              <td class="text-end fw-semibold">{{ "{:,.2f}".format((totals_map.get(jv.id, 0) if totals_map else 0)) }}</td>
+              <td class="text-center">{{ line_counts.get(jv.id, 0) if line_counts else 0 }}</td>
+              <td>
+                <a href="{{ url_for('workspace_journal_voucher_detail', pk=jv.id) }}" class="btn btn-sm btn-outline-primary" title="View">
+                  <i class="bi bi-eye"></i>
+                </a>
+                {% if jv.entry_type == 'Journal' and jv.category != 'Fund Transfer Mirror' %}
+                <a href="{{ url_for('workspace_journal_voucher_edit', pk=jv.id) }}" class="btn btn-sm btn-outline-warning ms-1" title="Edit">
+                  <i class="bi bi-pencil"></i>
+                </a>
+                <form method="post" action="{{ url_for('workspace_journal_voucher_delete', pk=jv.id) }}" class="d-inline" onsubmit="return confirm('Are you sure you want to delete this journal voucher?')">
+                  <button type="submit" class="btn btn-sm btn-outline-danger ms-1" title="Delete">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </form>
+                {% endif %}
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="10" class="text-center py-5 text-muted">
+                <i class="bi bi-journal-text display-6 d-block mb-2 opacity-25"></i>
+                No journal vouchers found{% if from_date or to_date %} for the selected date range{% endif %}.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card-footer bg-white border-top pt-2 pb-3 px-3">
+      <div class="d-flex justify-content-between align-items-center">
+        <small class="text-muted"><i class="bi bi-list-ul me-1"></i>Showing {{ (entries.page - 1) * per_page + 1 if entries.items|length > 0 else 0 }} to {{ (entries.page - 1) * per_page + entries.items|length }} of {{ entries.total }} entries</small>
+        {% if entries.pages > 1 %}
+        <nav><ul class="pagination pagination-sm mb-0">
+          <li class="page-item {% if not entries.has_prev %}disabled{% endif %}"><a class="page-link" style="cursor:pointer" onclick="goPage({{ entries.prev_num }})"><i class="bi bi-chevron-left"></i></a></li>
+          {% for p in entries.iter_pages(left_edge=1,right_edge=1,left_current=2,right_current=2) %}{% if p %}<li class="page-item {% if p == entries.page %}active{% endif %}"><a class="page-link" style="cursor:pointer" onclick="goPage({{ p }})">{{ p }}</a></li>{% else %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}{% endfor %}
+          <li class="page-item {% if not entries.has_next %}disabled{% endif %}"><a class="page-link" style="cursor:pointer" onclick="goPage({{ entries.next_num }})"><i class="bi bi-chevron-right"></i></a></li>
+        </ul></nav>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page',n);window.location.search=u.toString();}
+document.addEventListener('DOMContentLoaded', function(){
+    if(window.fleetTableEnhance) window.fleetTableEnhance('jvTable');
+    // Print/Preview button - Custom preview modal (Company JV style)
+    document.getElementById('btnPrintReport') && document.getElementById('btnPrintReport').addEventListener('click', function(){
+        var table = document.getElementById('jvTable');
+        if(!table) return;
+        
+        // Clone table and clean it for print preview
+        var cleanTable = table.cloneNode(true);
+        
+        // Remove Actions column (last th and all td in last column)
+        var headerRow = cleanTable.querySelector('thead tr');
+        if(headerRow){
+            var lastTh = headerRow.querySelector('th:last-child');
+            if(lastTh && lastTh.textContent.trim() === 'Actions'){
+                lastTh.style.display = 'none';
+            }
+        }
+        
+        // Hide all Actions cells and make Entry No plain text
+        cleanTable.querySelectorAll('tbody tr').forEach(function(row){
+            // Hide Actions column
+            var lastTd = row.querySelector('td:last-child');
+            if(lastTd){
+                lastTd.style.display = 'none';
+            }
+            
+            // Make Entry No plain text (remove links)
+            var entryLink = row.querySelector('td:nth-child(2) a');
+            if(entryLink){
+                var plainText = document.createTextNode(entryLink.textContent);
+                entryLink.parentNode.replaceChild(plainText, entryLink);
+            }
+        });
+        
+        // Company JV style print preview
+        var previewCss = 
+            '@page{size:A4 landscape;margin:8mm;}' +
+            'body{font-family:Arial,sans-serif;font-size:10px;margin:0;padding:8px 12px;}' +
+            '.toolbar{position:sticky;top:0;z-index:99;background:#1e293b;color:#fff;padding:8px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;border-radius:0 0 6px 6px;box-shadow:0 2px 8px rgba(0,0,0,.2);margin:-8px -12px 12px;}' +
+            '.toolbar h4{margin:0;font-size:14px;font-weight:600;}' +
+            '.toolbar button{padding:5px 16px;border:none;border-radius:4px;font-size:12px;font-weight:600;cursor:pointer;}' +
+            '.btn-p{background:#3b82f6;color:#fff;}.btn-p:hover{background:#2563eb;}' +
+            '.btn-c{background:#64748b;color:#fff;margin-left:6px;}.btn-c:hover{background:#475569;}' +
+            'h3{text-align:center;margin:6px 0 10px;font-size:14px;}' +
+            'table{width:100%;border-collapse:collapse;table-layout:auto;}' +
+            'th,td{border:1px solid #555;padding:3px 5px;text-align:left;vertical-align:top;}' +
+            'th{background:#e9ecef;font-size:9px;}' +
+            '.text-end{text-align:right;}.text-center{text-align:center;}' +
+            '@media print{.toolbar{display:none!important;}}';
+        
+        // Open in new window like Company JV
+        var w = window.open('', '_blank');
+        if(w){
+            w.document.write('<!DOCTYPE html><html><head><title>Workspace Journal Vouchers</title>');
+            w.document.write('<style>' + previewCss + '</style></head><body>');
+            w.document.write('<div class="toolbar"><h4>Workspace Journal Vouchers</h4><div>');
+            w.document.write('<button class="btn-p" onclick="window.print()">&#128438; Print</button>');
+            w.document.write('<button class="btn-c" onclick="window.close()">&#10005; Close</button>');
+            w.document.write('</div></div>');
+            w.document.write('<h3>Workspace Journal Vouchers</h3>');
+            w.document.write(cleanTable.outerHTML);
+            w.document.write('</body></html>');
+            w.document.close();
+        }
+    });
+
+    // Type multi-select
+    var TYPES = [
+        ['Journal', 'Journal (Manual)'],
+        ['Transfer', 'Transfer (Workspace)'],
+        ['FundTransferMirror', 'Fund Transfer (Company)'],
+        ['Expense', 'Expense (Posted)'],
+        ['Opening', 'Opening Expense'],
+        ['MonthClose', 'Month Close'],
+        ['FuelOilMonthClose', 'Fuel/Oil Close']
+    ];
+    var PRE_TYPE = [
+        {% for t in (selected_types or []) %}
+        '{{ t|e }}'{% if not loop.last %},{% endif %}
+        {% endfor %}
+    ];
+    if(window._catMultiSelect) {
+        window._catMultiSelect('typeMultiBtn', 'typeHidden', TYPES, PRE_TYPE);
+        // Fix default button text after init
+        setTimeout(function(){
+            var btn = document.getElementById('typeMultiBtn');
+            if(btn && btn.textContent === '-- All Categories --') btn.textContent = '-- All Types --';
+        }, 50);
+    }
+});
+</script>
+{% endblock %}

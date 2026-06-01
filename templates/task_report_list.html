@@ -120,7 +120,11 @@
                   <img src="{{ row.odometer_photo_path }}" alt="" class="rounded border" style="max-height:40px;max-width:56px;object-fit:cover;">
                 </button>
                 {% else %}
-                <span class="text-muted">—</span>
+                <button type="button" class="att-photo-fullview-btn p-0 border-0 bg-transparent d-inline-block" title="No odometer photo available"
+                        data-task-report-odom="1"
+                        data-url="/static/images/no-image-placeholder.png" data-label="No odometer photo available">
+                  <span class="badge bg-secondary"><i class="bi bi-image"></i></span>
+                </button>
                 {% endif %}
               </td>
               <td class="text-end">{{ row.kms_driven }}</td>

@@ -2352,7 +2352,12 @@ class WorkspaceJournalEntry(db.Model):
     posted_at = db.Column(db.DateTime, nullable=True)
     created_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
     company_journal_entry_id = db.Column(db.Integer, db.ForeignKey('journal_entry.id'), nullable=True)
+    district_id = db.Column(db.Integer, db.ForeignKey('district.id'), nullable=True)
+    project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=True)
     created_at = db.Column(db.DateTime, default=pk_now)
+
+    district = db.relationship('District', backref='workspace_journal_entries', lazy='select')
+    project = db.relationship('Project', backref='workspace_journal_entries', lazy='select')
 
     employee = db.relationship('Employee', backref=db.backref('workspace_journal_entries', lazy='dynamic'))
     created_by = db.relationship('User', backref='workspace_journal_entries', lazy='select')

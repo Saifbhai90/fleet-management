@@ -960,7 +960,8 @@ def ensure_workspace_counterparty_account(employee_id, *, party_id=None, driver_
 
 
 def workspace_create_journal_entry(employee_id, entry_type, entry_date, description, lines,
-                                   reference_type=None, reference_id=None, created_by_user_id=None, category=None):
+                                   reference_type=None, reference_id=None, created_by_user_id=None, category=None,
+                                   district_id=None, project_id=None):
     entry_number = workspace_generate_entry_number('WJ', entry_date, employee_id)
     je = WorkspaceJournalEntry(
         employee_id=employee_id,
@@ -971,6 +972,8 @@ def workspace_create_journal_entry(employee_id, entry_type, entry_date, descript
         reference_type=reference_type,
         reference_id=reference_id,
         category=category,
+        district_id=district_id,
+        project_id=project_id,
         is_posted=True,
         posted_at=pk_now(),
         created_by_user_id=created_by_user_id,

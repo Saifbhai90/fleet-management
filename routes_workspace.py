@@ -4392,3 +4392,821 @@ def workspace_account_balance_api():
         'balance_str': f'{abs(bal):,.2f} {side}',
         'ledger_url': f'/workspace/ledger?account_id={acct.id}',
     })
+
+
+def workspace_journal_voucher_add():
+    """Workspace Journal Voucher - Multi-line journal entry for employee workspace."""
+    guard, emp = _workspace_guard("workspace_ledger")
+    if guard:
+        return guard
+
+    from finance_utils import workspace_create_journal_entry
+    from utils import parse_date
+
+    # Get all active workspace accounts for this employee
+    accounts = WorkspaceAccount.query.filter_by(
+        employee_id=emp.id, is_active=True
+    ).order_by(WorkspaceAccount.code).all()
+
+    # Build driver-vehicle mapping for driver accounts
+    driver_vehicle_map = {}
+    driver_ids = [acc.entity_id for acc in accounts if acc.entity_type == 'driver' and acc.entity_id]
+    if driver_ids:
+        drivers = Driver.query.filter(Driver.id.in_(driver_ids)).all()
+        for d in drivers:
+            vehicle_no = d.vehicle.vehicle_no if d.vehicle else None
+            driver_vehicle_map[d.id] = vehicle_no
+
+    # Get districts and projects for dropdowns
+    districts = District.query.order_by(District.name).all()
+    projects = Project.query.order_by(Project.name).all()
+
+    if request.method == "POST":
+        try:
+            entry_date_str = request.form.get("entry_date", "").strip()
+            description = request.form.get("description", "").strip()
+            district_id = request.form.get("district_id", "").strip()
+            project_id = request.form.get("project_id", "").strip()
+            district_id_int = int(district_id) if district_id else None
+            project_id_int = int(project_id) if project_id else None
+
+            if not entry_date_str:
+                flash("Entry date is required.", "danger")
+                return render_template(
+                    "workspace/journal_voucher_form.html",
+                    title="New Workspace Journal Voucher",
+                    accounts=accounts,
+                    districts=districts,
+                    projects=projects,
+                    entry_date=entry_date_str,
+                    description=description,
+                    district_id=district_id_int,
+                    project_id=project_id_int,
+                )
+
+            entry_date = parse_date(entry_date_str)
+            if not entry_date:
+                flash("Invalid entry date format. Use dd-mm-yyyy.", "danger")
+                return render_template(
+                    "workspace/journal_voucher_form.html",
+                    title="New Workspace Journal Voucher",
+                    accounts=accounts,
+                    districts=districts,
+                    projects=projects,
+                    entry_date=entry_date_str,
+                    description=description,
+                    district_id=district_id_int,
+                    project_id=project_id_int,
+                )
+
+            # Parse journal lines from form (format: lines[0].account_id, lines[0].debit, etc.)
+            lines = []
+            i = 0
+            while True:
+                acct_id_key = f"lines[{i}].account_id"
+                debit_key = f"lines[{i}].debit"
+                credit_key = f"lines[{i}].credit"
+                desc_key = f"lines[{i}].description"
+
+                if acct_id_key not in request.form:
+                    break
+
+                acct_id_val = request.form.get(acct_id_key, "").strip()
+                debit_val = request.form.get(debit_key, "0").strip()
+                credit_val = request.form.get(credit_key, "0").strip()
+                desc_val = request.form.get(desc_key, "").strip()
+
+                acct_id = int(acct_id_val) if acct_id_val else 0
+                debit = Decimal(debit_val or "0")
+                credit = Decimal(credit_val or "0")
+
+                if acct_id and (debit or credit):
+                    lines.append({
+                        "account_id": acct_id,
+                        "debit": debit,
+                        "credit": credit,
+                        "description": desc_val,
+                    })
+                i += 1
+
+            if not lines:
+                flash("Please add at least one journal line.", "danger")
+                return render_template(
+                    "workspace/journal_voucher_form.html",
+                    title="New Workspace Journal Voucher",
+                    accounts=accounts,
+                    districts=districts,
+                    projects=projects,
+                    entry_date=entry_date_str,
+                    description=description,
+                    district_id=district_id_int,
+                    project_id=project_id_int,
+                )
+
+            # Validate total debits = total credits
+            total_debit = sum(l["debit"] for l in lines)
+            total_credit = sum(l["credit"] for l in lines)
+            if abs(total_debit - total_credit) > Decimal("0.01"):
+                flash("Total Debits must equal Total Credits.", "danger")
+                return render_template(
+                    "workspace/journal_voucher_form.html",
+                    title="New Workspace Journal Voucher",
+                    accounts=accounts,
+                    districts=districts,
+                    projects=projects,
+                    entry_date=entry_date_str,
+                    description=description,
+                    district_id=district_id_int,
+                    project_id=project_id_int,
+                    lines=lines,
+                )
+
+            # Create the workspace journal entry
+            je = workspace_create_journal_entry(
+                employee_id=emp.id,
+                entry_type="Journal",
+                entry_date=entry_date,
+                description=description,
+                lines=lines,
+                reference_type="Manual",
+                created_by_user_id=session.get("user_id"),
+                district_id=district_id_int,
+                project_id=project_id_int,
+            )
+            db.session.commit()
+            flash(f"Workspace Journal Voucher {je.entry_number} created successfully!", "success")
+            return redirect(url_for("workspace_journal_vouchers_list"))
+
+        except ValueError as e:
+            db.session.rollback()
+            flash(f"Validation error: {e}", "danger")
+        except Exception as e:
+            db.session.rollback()
+            flash(f"Error creating journal voucher: {e}", "danger")
+
+    return render_template(
+        "workspace/journal_voucher_form.html",
+        title="New Workspace Journal Voucher",
+        accounts=accounts,
+        driver_vehicle_map=driver_vehicle_map,
+        districts=districts,
+        projects=projects,
+    )
+
+
+def workspace_journal_vouchers_list():
+    """Workspace Journal Vouchers List with filtering and pagination."""
+    guard, emp = _workspace_guard("workspace_ledger")
+    if guard:
+        return guard
+
+    from_date = None
+    to_date = None
+    per_page = int(request.args.get("per_page", request.form.get("per_page", 25)))
+    page = int(request.args.get("page", 1))
+    search = (request.args.get("search") or "").strip()
+    entry_type = request.args.get("entry_type", "").strip()
+    # Multi-select type filter (comma-separated)
+    entry_type_filter = request.args.get("entry_type_filter", "").strip()
+    selected_types = [t.strip() for t in entry_type_filter.split(",") if t.strip()] if entry_type_filter else []
+    # District and Project filters
+    district_id = request.args.get("district_id", "").strip()
+    project_id = request.args.get("project_id", "").strip()
+    district_id_int = int(district_id) if district_id else None
+    project_id_int = int(project_id) if project_id else None
+
+    def _parse_date(val):
+        if not val:
+            return None
+        for fmt in ("%Y-%m-%d", "%d-%m-%Y"):
+            try:
+                return datetime.strptime(val, fmt).date()
+            except ValueError:
+                continue
+        return None
+
+    fd = request.values.get("from_date", "")
+    td = request.values.get("to_date", "")
+    from_date = _parse_date(fd)
+    to_date = _parse_date(td)
+
+    # Default to today's date if no date range provided
+    today = date.today()
+    if not from_date and not to_date:
+        from_date = today
+        to_date = today
+
+    # Valid entry types for Workspace Journal Vouchers
+    valid_types = ["Journal", "Transfer", "Expense", "Opening", "MonthClose", "FuelOilMonthClose"]
+
+    # Base query - this employee's journal entries (all types)
+    if selected_types:
+        # Multi-select types from new filter
+        # Check if FundTransferMirror is included
+        has_mirror = "FundTransferMirror" in selected_types
+        regular_types = [t for t in selected_types if t != "FundTransferMirror" and t in valid_types]
+
+        if has_mirror and regular_types:
+            # Both FundTransferMirror and regular types
+            query = WorkspaceJournalEntry.query.filter(
+                WorkspaceJournalEntry.employee_id == emp.id,
+                or_(
+                    and_(
+                        WorkspaceJournalEntry.entry_type == "Journal",
+                        WorkspaceJournalEntry.category == "Fund Transfer Mirror"
+                    ),
+                    WorkspaceJournalEntry.entry_type.in_(regular_types)
+                )
+            )
+        elif has_mirror:
+            # Only FundTransferMirror
+            query = WorkspaceJournalEntry.query.filter(
+                WorkspaceJournalEntry.employee_id == emp.id,
+                WorkspaceJournalEntry.entry_type == "Journal",
+                WorkspaceJournalEntry.category == "Fund Transfer Mirror"
+            )
+        elif regular_types:
+            # Only regular types
+            query = WorkspaceJournalEntry.query.filter(
+                WorkspaceJournalEntry.employee_id == emp.id,
+                WorkspaceJournalEntry.entry_type.in_(regular_types)
+            )
+        else:
+            # Show all valid types
+            query = WorkspaceJournalEntry.query.filter(
+                WorkspaceJournalEntry.employee_id == emp.id,
+                WorkspaceJournalEntry.entry_type.in_(valid_types)
+            )
+    elif entry_type == "FundTransferMirror":
+        # Legacy single type filter - FundTransferMirror
+        query = WorkspaceJournalEntry.query.filter(
+            WorkspaceJournalEntry.employee_id == emp.id,
+            WorkspaceJournalEntry.entry_type == "Journal",
+            WorkspaceJournalEntry.category == "Fund Transfer Mirror"
+        )
+    elif entry_type and entry_type in valid_types:
+        # Legacy single type filter
+        query = WorkspaceJournalEntry.query.filter(
+            WorkspaceJournalEntry.employee_id == emp.id,
+            WorkspaceJournalEntry.entry_type == entry_type
+        )
+    else:
+        # Show all valid types
+        query = WorkspaceJournalEntry.query.filter(
+            WorkspaceJournalEntry.employee_id == emp.id,
+            WorkspaceJournalEntry.entry_type.in_(valid_types)
+        )
+
+    if from_date and to_date:
+        query = query.filter(WorkspaceJournalEntry.entry_date.between(from_date, to_date))
+    elif from_date:
+        query = query.filter(WorkspaceJournalEntry.entry_date >= from_date)
+    elif to_date:
+        query = query.filter(WorkspaceJournalEntry.entry_date <= to_date)
+
+    query = query.order_by(WorkspaceJournalEntry.entry_date.desc(), WorkspaceJournalEntry.id.desc())
+
+    # Apply District filter
+    if district_id_int:
+        query = query.filter(WorkspaceJournalEntry.district_id == district_id_int)
+
+    # Apply Project filter
+    if project_id_int:
+        query = query.filter(WorkspaceJournalEntry.project_id == project_id_int)
+
+    if search:
+        tokens = [t.lower() for t in search.split() if t]
+        for tok in tokens:
+            like = f"%{tok}%"
+            query = query.filter(
+                or_(
+                    WorkspaceJournalEntry.entry_number.ilike(like),
+                    WorkspaceJournalEntry.description.ilike(like),
+                )
+            )
+
+    entries = query.paginate(page=page, per_page=per_page, error_out=False)
+    items = entries.items
+    entry_ids = [e.id for e in items]
+
+    # Get districts and projects for filter dropdowns
+    districts = District.query.order_by(District.name).all()
+    projects = Project.query.order_by(Project.name).all()
+
+    # Calculate totals per entry
+    totals_map = {}
+    line_counts = {}
+    if entry_ids:
+        amount_rows = db.session.query(
+            WorkspaceJournalEntryLine.journal_entry_id,
+            db.func.coalesce(db.func.sum(WorkspaceJournalEntryLine.debit), 0),
+            db.func.count(WorkspaceJournalEntryLine.id),
+        ).filter(
+            WorkspaceJournalEntryLine.journal_entry_id.in_(entry_ids)
+        ).group_by(WorkspaceJournalEntryLine.journal_entry_id).all()
+        totals_map = {r[0]: Decimal(str(r[1] or 0)) for r in amount_rows}
+        line_counts = {r[0]: r[2] for r in amount_rows}
+
+    return render_template(
+        "workspace/journal_vouchers_list.html",
+        title="Workspace Journal Vouchers",
+        entries=entries,
+        from_date=from_date,
+        to_date=to_date,
+        per_page=per_page,
+        search=search,
+        entry_type=entry_type,
+        selected_types=selected_types,
+        district_id=district_id_int,
+        project_id=project_id_int,
+        districts=districts,
+        projects=projects,
+        totals_map=totals_map,
+        line_counts=line_counts,
+    )
+
+
+def workspace_jv_backfill_district_project():
+    """Temporary route to backfill district/project for old journal entries."""
+    guard, emp = _workspace_guard("workspace_ledger")
+    if guard:
+        return guard
+    
+    updated = 0
+    
+    # 1. Update Expense entries from related tables
+    # Fuel Expense
+    entries = db.session.query(
+        WorkspaceJournalEntry, FuelExpense
+    ).join(
+        FuelExpense, WorkspaceJournalEntry.reference_id == FuelExpense.id
+    ).filter(
+        WorkspaceJournalEntry.reference_type == 'FuelExpense',
+        WorkspaceJournalEntry.district_id.is_(None)
+    ).all()
+    for wje, fe in entries:
+        wje.district_id = fe.district_id
+        wje.project_id = fe.project_id
+        updated += 1
+    
+    # Oil Expense
+    entries = db.session.query(
+        WorkspaceJournalEntry, OilExpense
+    ).join(
+        OilExpense, WorkspaceJournalEntry.reference_id == OilExpense.id
+    ).filter(
+        WorkspaceJournalEntry.reference_type == 'OilExpense',
+        WorkspaceJournalEntry.district_id.is_(None)
+    ).all()
+    for wje, oe in entries:
+        wje.district_id = oe.district_id
+        wje.project_id = oe.project_id
+        updated += 1
+    
+    # Maintenance Expense
+    entries = db.session.query(
+        WorkspaceJournalEntry, MaintenanceExpense
+    ).join(
+        MaintenanceExpense, WorkspaceJournalEntry.reference_id == MaintenanceExpense.id
+    ).filter(
+        WorkspaceJournalEntry.reference_type == 'MaintenanceExpense',
+        WorkspaceJournalEntry.district_id.is_(None)
+    ).all()
+    for wje, me in entries:
+        wje.district_id = me.district_id
+        wje.project_id = me.project_id
+        updated += 1
+    
+    # Employee Expense
+    entries = db.session.query(
+        WorkspaceJournalEntry, EmployeeExpense
+    ).join(
+        EmployeeExpense, WorkspaceJournalEntry.reference_id == EmployeeExpense.id
+    ).filter(
+        WorkspaceJournalEntry.reference_type == 'EmployeeExpense',
+        WorkspaceJournalEntry.district_id.is_(None)
+    ).all()
+    for wje, ee in entries:
+        wje.district_id = ee.district_id
+        wje.project_id = ee.project_id
+        updated += 1
+    
+    # Opening Expenses
+    entries = db.session.query(
+        WorkspaceJournalEntry, WorkspaceOpeningExpense
+    ).join(
+        WorkspaceOpeningExpense, WorkspaceJournalEntry.reference_id == WorkspaceOpeningExpense.id
+    ).filter(
+        WorkspaceJournalEntry.entry_type == 'Opening',
+        WorkspaceJournalEntry.district_id.is_(None)
+    ).all()
+    for wje, woe in entries:
+        wje.district_id = woe.district_id
+        wje.project_id = woe.project_id
+        updated += 1
+    
+    # Fuel/Oil Opening
+    entries = db.session.query(
+        WorkspaceJournalEntry, WorkspaceFuelOilOpeningExpense
+    ).join(
+        WorkspaceFuelOilOpeningExpense, WorkspaceJournalEntry.reference_id == WorkspaceFuelOilOpeningExpense.id
+    ).filter(
+        WorkspaceJournalEntry.entry_type == 'Opening',
+        WorkspaceJournalEntry.district_id.is_(None)
+    ).all()
+    for wje, wfooe in entries:
+        wje.district_id = wfooe.district_id
+        wje.project_id = wfooe.project_id
+        updated += 1
+    
+    db.session.commit()
+    flash(f'Backfill complete! Updated {updated} entries with District/Project data.', 'success')
+    return redirect(url_for('workspace_journal_vouchers_list'))
+
+
+def workspace_journal_voucher_detail(pk):
+    """Workspace Journal Voucher Detail view."""
+    guard, emp = _workspace_guard("workspace_ledger")
+    if guard:
+        return guard
+
+    je = WorkspaceJournalEntry.query.filter_by(id=pk, employee_id=emp.id).first_or_404()
+
+    # Get all lines with account details
+    lines_query = db.session.query(
+        WorkspaceJournalEntryLine,
+        WorkspaceAccount
+    ).join(
+        WorkspaceAccount,
+        WorkspaceJournalEntryLine.account_id == WorkspaceAccount.id
+    ).filter(
+        WorkspaceJournalEntryLine.journal_entry_id == je.id
+    ).order_by(WorkspaceJournalEntryLine.sort_order).all()
+
+    lines = []
+    total_debit = Decimal("0")
+    total_credit = Decimal("0")
+
+    for line, account in lines_query:
+        lines.append({
+            'account_code': account.code,
+            'account_name': account.name,
+            'description': line.description,
+            'debit': line.debit or 0,
+            'credit': line.credit or 0,
+        })
+        total_debit += line.debit or 0
+        total_credit += line.credit or 0
+
+    return render_template(
+        "workspace/journal_voucher_detail.html",
+        title=f"JV {je.entry_number}",
+        je=je,
+        lines=lines,
+        total_debit=total_debit,
+        total_credit=total_credit,
+    )
+
+
+def workspace_journal_voucher_edit(pk):
+    """Edit a manual Journal entry (only for entry_type='Journal')."""
+    guard, emp = _workspace_guard("workspace_ledger")
+    if guard:
+        return guard
+
+    je = WorkspaceJournalEntry.query.filter_by(id=pk, employee_id=emp.id).first_or_404()
+
+    # Only allow editing manual Journal entries
+    if je.entry_type != 'Journal':
+        flash("Only manual Journal entries can be edited.", "warning")
+        return redirect(url_for('workspace_journal_voucher_detail', pk=pk))
+
+    from finance_utils import workspace_create_journal_entry
+    from utils import parse_date
+
+    # Get all active workspace accounts for this employee
+    accounts = WorkspaceAccount.query.filter_by(
+        employee_id=emp.id, is_active=True
+    ).order_by(WorkspaceAccount.code).all()
+
+    # Build driver-vehicle mapping for driver accounts
+    driver_vehicle_map = {}
+    driver_ids = [acc.entity_id for acc in accounts if acc.entity_type == 'driver' and acc.entity_id]
+    if driver_ids:
+        drivers = Driver.query.filter(Driver.id.in_(driver_ids)).all()
+        for d in drivers:
+            vehicle_no = d.vehicle.vehicle_no if d.vehicle else None
+            driver_vehicle_map[d.id] = vehicle_no
+
+    # Get districts and projects for dropdowns
+    districts = District.query.order_by(District.name).all()
+    projects = Project.query.order_by(Project.name).all()
+
+    # Get existing lines
+    existing_lines = db.session.query(
+        WorkspaceJournalEntryLine,
+        WorkspaceAccount
+    ).join(
+        WorkspaceAccount,
+        WorkspaceJournalEntryLine.account_id == WorkspaceAccount.id
+    ).filter(
+        WorkspaceJournalEntryLine.journal_entry_id == je.id
+    ).order_by(WorkspaceJournalEntryLine.sort_order).all()
+
+    lines_data = []
+    for line, account in existing_lines:
+        lines_data.append({
+            'account_id': line.account_id,
+            'debit': float(line.debit or 0),
+            'credit': float(line.credit or 0),
+            'description': line.description or '',
+        })
+
+    if request.method == "POST":
+        try:
+            entry_date_str = request.form.get("entry_date", "").strip()
+            description = request.form.get("description", "").strip()
+            district_id = request.form.get("district_id", "").strip()
+            project_id = request.form.get("project_id", "").strip()
+
+            # Validate required fields
+            if not entry_date_str:
+                flash("Entry date is required.", "warning")
+                return render_template(
+                    "workspace/journal_voucher_form.html",
+                    title="Edit Workspace Journal Voucher",
+                    accounts=accounts,
+                    driver_vehicle_map=driver_vehicle_map,
+                    districts=districts,
+                    projects=projects,
+                    entry_date=entry_date_str,
+                    description=description,
+                    district_id=int(district_id) if district_id else None,
+                    project_id=int(project_id) if project_id else None,
+                    lines=lines_data,
+                    edit_mode=True,
+                    je=je,
+                )
+
+            # Parse date
+            entry_date = parse_date(entry_date_str)
+            if not entry_date:
+                flash("Invalid entry date format. Use dd-mm-yyyy.", "warning")
+                return render_template(
+                    "workspace/journal_voucher_form.html",
+                    title="Edit Workspace Journal Voucher",
+                    accounts=accounts,
+                    driver_vehicle_map=driver_vehicle_map,
+                    districts=districts,
+                    projects=projects,
+                    entry_date=entry_date_str,
+                    description=description,
+                    district_id=int(district_id) if district_id else None,
+                    project_id=int(project_id) if project_id else None,
+                    lines=lines_data,
+                    edit_mode=True,
+                    je=je,
+                )
+
+            district_id_int = int(district_id) if district_id else None
+            project_id_int = int(project_id) if project_id else None
+
+            # Process lines
+            lines = []
+            line_idx = 0
+            while True:
+                account_id = request.form.get(f"lines[{line_idx}].account_id", "").strip()
+                if not account_id:
+                    break
+                debit = request.form.get(f"lines[{line_idx}].debit", "0").strip()
+                credit = request.form.get(f"lines[{line_idx}].credit", "0").strip()
+                line_desc = request.form.get(f"lines[{line_idx}].description", "").strip()
+                lines.append({
+                    "account_id": int(account_id),
+                    "debit": Decimal(debit) if debit else Decimal("0"),
+                    "credit": Decimal(credit) if credit else Decimal("0"),
+                    "description": line_desc,
+                })
+                line_idx += 1
+
+            if not lines:
+                flash("Please add at least one journal line.", "warning")
+                return render_template(
+                    "workspace/journal_voucher_form.html",
+                    title="Edit Workspace Journal Voucher",
+                    accounts=accounts,
+                    driver_vehicle_map=driver_vehicle_map,
+                    districts=districts,
+                    projects=projects,
+                    entry_date=entry_date_str,
+                    description=description,
+                    district_id=district_id_int,
+                    project_id=project_id_int,
+                    lines=lines,
+                    edit_mode=True,
+                    je=je,
+                )
+
+            # Validate total debits = total credits
+            total_debit = sum(l["debit"] for l in lines)
+            total_credit = sum(l["credit"] for l in lines)
+            if abs(total_debit - total_credit) > Decimal("0.01"):
+                flash("Total Debits must equal Total Credits.", "danger")
+                return render_template(
+                    "workspace/journal_voucher_form.html",
+                    title="Edit Workspace Journal Voucher",
+                    accounts=accounts,
+                    driver_vehicle_map=driver_vehicle_map,
+                    districts=districts,
+                    projects=projects,
+                    entry_date=entry_date_str,
+                    description=description,
+                    district_id=district_id_int,
+                    project_id=project_id_int,
+                    lines=lines,
+                    edit_mode=True,
+                    je=je,
+                )
+
+            # Delete old lines
+            WorkspaceJournalEntryLine.query.filter_by(journal_entry_id=je.id).delete()
+
+            # Update entry
+            je.entry_date = entry_date
+            je.description = description
+            je.district_id = district_id_int
+            je.project_id = project_id_int
+
+            # Create new lines
+            for idx, line in enumerate(lines):
+                wjl = WorkspaceJournalEntryLine(
+                    journal_entry_id=je.id,
+                    account_id=line["account_id"],
+                    debit=line["debit"],
+                    credit=line["credit"],
+                    description=line["description"],
+                    sort_order=idx,
+                )
+                db.session.add(wjl)
+
+            db.session.commit()
+            flash(f"Journal Voucher {je.entry_number} updated successfully!", "success")
+            return redirect(url_for("workspace_journal_voucher_detail", pk=pk))
+
+        except ValueError as e:
+            db.session.rollback()
+            flash(f"Validation error: {e}", "danger")
+        except Exception as e:
+            db.session.rollback()
+            flash(f"Error updating journal voucher: {e}", "danger")
+
+    return render_template(
+        "workspace/journal_voucher_form.html",
+        title=f"Edit JV {je.entry_number}",
+        accounts=accounts,
+        driver_vehicle_map=driver_vehicle_map,
+        districts=districts,
+        projects=projects,
+        entry_date=je.entry_date.strftime('%d-%m-%Y') if je.entry_date else '',
+        description=je.description or '',
+        district_id=je.district_id,
+        project_id=je.project_id,
+        lines=lines_data,
+        edit_mode=True,
+        je=je,
+    )
+
+
+def workspace_journal_voucher_delete(pk):
+    """Delete a manual Journal entry (only for entry_type='Journal')."""
+    guard, emp = _workspace_guard("workspace_ledger")
+    if guard:
+        return guard
+
+    je = WorkspaceJournalEntry.query.filter_by(id=pk, employee_id=emp.id).first_or_404()
+
+    # Only allow deleting manual Journal entries
+    if je.entry_type != 'Journal':
+        flash("Only manual Journal entries can be deleted.", "warning")
+        return redirect(url_for('workspace_journal_voucher_detail', pk=pk))
+
+    try:
+        entry_number = je.entry_number
+        db.session.delete(je)
+        db.session.commit()
+        flash(f"Journal Voucher {entry_number} deleted successfully!", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Error deleting journal voucher: {e}", "danger")
+
+    return redirect(url_for('workspace_journal_vouchers_list'))
+
+
+def workspace_journal_vouchers_export():
+    """Export all Journal Vouchers to CSV (no pagination)."""
+    guard, emp = _workspace_guard("workspace_ledger")
+    if guard:
+        return guard
+
+    # Get filter parameters
+    from_date_str = request.args.get("from_date", "").strip()
+    to_date_str = request.args.get("to_date", "").strip()
+    search = request.args.get("search", "").strip()
+    entry_type = request.args.get("entry_type", "").strip()
+    district_id = request.args.get("district_id", "").strip()
+    project_id = request.args.get("project_id", "").strip()
+
+    # Build base query - NO PAGINATION, get all
+    query = WorkspaceJournalEntry.query.filter(
+        WorkspaceJournalEntry.employee_id == emp.id
+    )
+
+    # Apply filters
+    if from_date_str:
+        try:
+            from_date = datetime.strptime(from_date_str, "%d-%m-%Y").date()
+            query = query.filter(WorkspaceJournalEntry.entry_date >= from_date)
+        except:
+            pass
+
+    if to_date_str:
+        try:
+            to_date = datetime.strptime(to_date_str, "%d-%m-%Y").date()
+            query = query.filter(WorkspaceJournalEntry.entry_date <= to_date)
+        except:
+            pass
+
+    if search:
+        search_filter = or_(
+            WorkspaceJournalEntry.entry_number.ilike(f"%{search}%"),
+            WorkspaceJournalEntry.description.ilike(f"%{search}%"),
+        )
+        query = query.filter(search_filter)
+
+    if entry_type:
+        valid_types = ['Journal', 'Transfer', 'Expense', 'Opening', 'MonthClose', 'FuelOilMonthClose']
+        if entry_type in valid_types:
+            query = query.filter(WorkspaceJournalEntry.entry_type == entry_type)
+
+    if district_id and district_id.isdigit():
+        query = query.filter(WorkspaceJournalEntry.district_id == int(district_id))
+
+    if project_id and project_id.isdigit():
+        query = query.filter(WorkspaceJournalEntry.project_id == int(project_id))
+
+    # Get all entries without pagination
+    entries = query.order_by(WorkspaceJournalEntry.entry_date.desc(), WorkspaceJournalEntry.id.desc()).all()
+
+    # Calculate totals for each entry
+    totals_map = {}
+    line_counts = {}
+    entry_ids = [e.id for e in entries]
+
+    if entry_ids:
+        line_sums = db.session.query(
+            WorkspaceJournalEntryLine.journal_entry_id,
+            func.sum(WorkspaceJournalEntryLine.debit).label('total_debit'),
+            func.count(WorkspaceJournalEntryLine.id).label('line_count')
+        ).filter(
+            WorkspaceJournalEntryLine.journal_entry_id.in_(entry_ids)
+        ).group_by(WorkspaceJournalEntryLine.journal_entry_id).all()
+
+        for je_id, total_debit, count in line_sums:
+            totals_map[je_id] = float(total_debit or 0)
+            line_counts[je_id] = count
+
+    # Create CSV
+    import csv
+    import io
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    # Header
+    writer.writerow(['#', 'Entry Number', 'Date', 'Type', 'District', 'Project', 'Total Amount', 'Lines', 'Description'])
+
+    # Data
+    for idx, jv in enumerate(entries, 1):
+        writer.writerow([
+            idx,
+            jv.entry_number,
+            jv.entry_date.strftime('%d-%m-%Y') if jv.entry_date else '',
+            jv.entry_type or 'Journal',
+            jv.district.name if jv.district else '-',
+            jv.project.name if jv.project else '-',
+            f"{totals_map.get(jv.id, 0):,.2f}",
+            line_counts.get(jv.id, 0),
+            (jv.description or '')[:50]
+        ])
+
+    output.seek(0)
+
+    from flask import Response
+    return Response(
+        output.getvalue(),
+        mimetype='text/csv',
+        headers={
+            'Content-Disposition': 'attachment; filename=Workspace_Journal_Vouchers_All.csv',
+            'Content-Type': 'text/csv; charset=utf-8'
+        }
+    )

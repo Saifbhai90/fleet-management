@@ -232,32 +232,43 @@
             {% endif %}
           </div>
 
-          <div class="ws-section-title">Finance, Ledger & Closing</div>
-          <div class="row g-3">
-            {% if can_see_page('workspace_account_list') %}
-            <div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6">
-              <a href="{{ url_for('workspace_accounts_list') }}" class="ws-module-card p-3">
-                <div class="ws-module-icon bg-secondary-subtle text-secondary mb-2"><i class="bi bi-diagram-3"></i></div>
-                <div class="fw-semibold">Workspace COA</div>
-                <small class="text-muted">Employee level chart of accounts.</small>
-              </a>
-            </div>
-            {% endif %}
+          <div class="ws-section-title">Transactions</div>
+          <div class="row g-3 mb-3">
             {% if can_see_page('workspace_transfer_list') %}
             <div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6">
               <a href="{{ url_for('workspace_fund_transfers_list') }}" class="ws-module-card p-3">
                 <div class="ws-module-icon bg-primary-subtle text-primary mb-2"><i class="bi bi-arrow-left-right"></i></div>
-                <div class="fw-semibold">Fund Transfers</div>
+                <div class="fw-semibold">Fund Transfer</div>
                 <small class="text-muted">Transfer between workspace accounts.</small>
               </a>
             </div>
             {% endif %}
             {% if can_see_page('workspace_ledger') %}
             <div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6">
+              <a href="{{ url_for('workspace_journal_vouchers_list') }}" class="ws-module-card p-3">
+                <div class="ws-module-icon bg-warning-subtle text-warning mb-2"><i class="bi bi-journal-text"></i></div>
+                <div class="fw-semibold">Journal Vouchers</div>
+                <small class="text-muted">List and manage journal vouchers.</small>
+              </a>
+            </div>
+            <div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6">
               <a href="{{ url_for('workspace_ledger') }}" class="ws-module-card p-3">
                 <div class="ws-module-icon bg-dark-subtle text-dark mb-2"><i class="bi bi-journal-text"></i></div>
-                <div class="fw-semibold">Workspace Ledger</div>
+                <div class="fw-semibold">Ledger</div>
                 <small class="text-muted">Detailed account ledger view.</small>
+              </a>
+            </div>
+            {% endif %}
+          </div>
+
+          <div class="ws-section-title">Accounts & Closing</div>
+          <div class="row g-3">
+            {% if can_see_page('workspace_account_list') %}
+            <div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6">
+              <a href="{{ url_for('workspace_accounts_list') }}" class="ws-module-card p-3">
+                <div class="ws-module-icon bg-secondary-subtle text-secondary mb-2"><i class="bi bi-diagram-3"></i></div>
+                <div class="fw-semibold">Chart of Accounts</div>
+                <small class="text-muted">Employee level chart of accounts.</small>
               </a>
             </div>
             {% endif %}
@@ -269,8 +280,6 @@
                 <small class="text-muted">Period close aur bridge posting.</small>
               </a>
             </div>
-            {% endif %}
-            {% if can_see_page('workspace_month_close') %}
             <div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6">
               <a href="{{ url_for('workspace_fuel_oil_month_close_list') }}" class="ws-module-card p-3">
                 <div class="ws-module-icon bg-info-subtle text-info mb-2"><i class="bi bi-calendar2-week"></i></div>
