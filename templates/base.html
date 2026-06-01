@@ -2015,14 +2015,6 @@
             <i id="darkModeIcon" data-lucide="moon" style="width:18px;height:18px;"></i>
         </button>
 
-        <!-- Language toggle (EN ⇔ UR) -->
-        <button id="langToggleBtn" class="btn btn-link text-light p-2 me-1"
-                title="زبان تبدیل کریں / Change Language"
-                onclick="toggleLang()"
-                style="min-width:44px;min-height:44px;opacity:0.8;font-size:0.8rem;font-weight:700;line-height:1;">
-            <span id="langBtnLabel" style="font-family:'Noto Nastaliq Urdu','Segoe UI',sans-serif;font-size:0.85rem;">عر</span>
-        </button>
-
         <!-- Notification bell (touch-friendly on mobile) -->
         {% if can_see_page('notification_list') %}
         <a href="{{ url_for('notification_list') }}" class="btn btn-link text-light position-relative me-1 me-sm-3 p-2" title="Notifications" style="min-width: 44px; min-height: 44px;">
@@ -3614,12 +3606,6 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
             </div>
             <span style="font-weight: 700; font-size: 0.74rem;">Full menu</span>
-        </button>
-
-        <!-- Language Toggle -->
-        <button type="button" class="more-drawer-item" id="moreDrawerLangBtn" onclick="toggleLang(); syncMoreLangLabel();">
-            <div class="more-icon" id="moreDrawerLangIcon">عر</div>
-            <span id="moreDrawerLangText">Language</span>
         </button>
 
         <!-- Dark Mode -->
@@ -8482,8 +8468,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     window.toggleLang = function() {
-        if (_lang === 'en') applyUrdu();
-        else applyEnglish();
+        // Language toggle disabled - forcing English only
+        applyEnglish();
     };
 
     /* ── Left sidebar (mobile / Capacitor): shared open/close ── */
@@ -8552,7 +8538,6 @@ document.addEventListener('DOMContentLoaded', function() {
         var overlay = document.getElementById('moreDrawerOverlay');
         var panel   = document.getElementById('moreDrawerPanel');
         if (!overlay || !panel) return;
-        syncMoreLangLabel();
         overlay.classList.add('open');
         panel.classList.add('open');
         var fabWrap = document.getElementById('mobileFabWrap');
@@ -8611,16 +8596,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     window.syncMoreLangLabel = function() {
-        var icon = document.getElementById('moreDrawerLangIcon');
-        var text = document.getElementById('moreDrawerLangText');
-        if (!icon || !text) return;
-        if (_lang === 'ur') {
-            icon.textContent = 'EN';
-            text.textContent = 'English';
-        } else {
-            icon.textContent = '\u0639\u0631';
-            text.textContent = '\u0627\u0631\u062F\u0648';
-        }
+        // Language toggle removed - English only
     };
 
     /* Swipe-down to close More drawer */
@@ -8649,11 +8625,11 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     })();
 
-    /* Apply on DOMContentLoaded if preference saved */
+    /* Force English on load - disable Urdu */
     document.addEventListener('DOMContentLoaded', function() {
-        if (localStorage.getItem('fleetLang') === 'ur') {
-            applyUrdu();
-        }
+        // Clear any saved Urdu preference and force English
+        localStorage.setItem('fleetLang', 'en');
+        applyEnglish();
     });
 
     /* Block Urdu characters in ID-type fields */
