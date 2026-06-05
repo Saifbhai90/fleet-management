@@ -157,13 +157,16 @@
           <tbody>
             {% for row in report %}
             {% set d = row.driver %}
+            {% set disp_veh = row.display_vehicle %}
+            {% set disp_dist = row.display_district %}
+            {% set disp_proj = row.display_project %}
             <tr>
               <td class="text-center">{{ loop.index }}</td>
-              <td>{{ d.district.name if d.district else (d.vehicle.district.name if d.vehicle and d.vehicle.district else '-') }}</td>
-              <td>{{ d.project.name if d.project else '-' }}</td>
-              <td>{{ d.vehicle.parking_station.name if d.vehicle and d.vehicle.parking_station else '-' }}</td>
-              <td class="fw-medium">{{ d.vehicle.vehicle_no if d.vehicle else '-' }}</td>
-              <td class="text-center">{{ d.shift or '-' }}</td>
+              <td>{{ disp_dist.name if disp_dist else (disp_veh.district.name if disp_veh and disp_veh.district else '-') }}</td>
+              <td>{{ disp_proj.name if disp_proj else (disp_veh.project.name if disp_veh and disp_veh.project else '-') }}</td>
+              <td>{{ disp_veh.parking_station.name if disp_veh and disp_veh.parking_station else '-' }}</td>
+              <td class="fw-medium">{{ disp_veh.vehicle_no if disp_veh else '-' }}</td>
+              <td class="text-center">{{ row.display_shift or '-' }}</td>
               <td class="fw-medium text-nowrap">{{ d.name }}</td>
               <td class="text-center">{{ row.date_of_joining.strftime('%d-%b-%y') if row.date_of_joining else '' }}</td>
               <td class="text-center">{{ row.date_of_leaving.strftime('%d-%m-%Y') if row.date_of_leaving else '' }}</td>
@@ -171,12 +174,12 @@
               <td class="text-center">{{ row.transfer_date.strftime('%d-%m-%Y') if row.transfer_date else '' }}</td>
               <td class="text-center">{{ row.working_days }}</td>
               <td class="text-center">{{ row.present_days }}</td>
-              <td class="text-center">{{ row.maintenance_days }}</td>
+              <td class="text-center">{{ row.maintenance_days or '' }}</td>
               <td class="text-center {% if row.total_working_days < 0 %}text-danger fw-bold{% endif %}">{{ row.total_working_days }}</td>
               <td>{{ d.bank_name or '-' }}</td>
               <td>{{ d.account_title or '-' }}</td>
               <td>{{ d.account_no or '-' }}</td>
-              <td class="remarks-col">{{ row.remarks or '' }}</td>
+              <td class="remarks-col">{{ row.remarks or '-' }}</td>
             </tr>
             {% endfor %}
           </tbody>
