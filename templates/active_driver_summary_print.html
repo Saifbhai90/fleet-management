@@ -88,7 +88,7 @@
                 <th>Project</th>
                 <th>District</th>
                 <th>Vehicle No (Model) (Type)</th>
-                <th>Driver Name (ID) / CNIC</th>
+                <th>Driver Name (ID) / CNIC / Mobile</th>
                 <th style="width:7%">Shift</th>
                 <th style="width:10%">Assign Date</th>
                 <th style="width:10%">Rejoin Date</th>
@@ -114,6 +114,7 @@
                     <div class="driver-name">{{ driver.name }}</div>
                     <div class="driver-sub">{{ driver.driver_id or '-' }}</div>
                     <div class="driver-sub"><i class="bi bi-person-vcard me-1"></i>{{ driver.cnic_no or '-' }}</div>
+                    <div class="driver-sub"><i class="bi bi-phone me-1"></i>{{ driver.phone1 or '-' }}</div>
                 </td>
                 <td class="text-center">
                     {% if driver.shift == 'Morning' %}
@@ -130,7 +131,7 @@
                 </td>
             </tr>
             {% else %}
-            <tr><td colspan="8" class="text-center py-4 text-muted"><i class="bi bi-info-circle me-2"></i>No active drivers found.</td></tr>
+            <tr><td colspan="9" class="text-center py-4 text-muted"><i class="bi bi-info-circle me-2"></i>No active drivers found.</td></tr>
             {% endfor %}
         </tbody>
     </table>
