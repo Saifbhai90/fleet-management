@@ -279,8 +279,14 @@ function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page
   document.getElementById('emgCloseBtn').addEventListener('click', function() { _hidePanel(emgPanel); });
   document.getElementById('emgCloseBtnFooter').addEventListener('click', function() { _hidePanel(emgPanel); });
 
+  function _useMobileTaskPanel() {
+    return document.documentElement.classList.contains('capacitor-native')
+      || window.matchMedia('(max-width: 768px)').matches;
+  }
+
   document.querySelectorAll('.emg-link').forEach(function(a) {
     a.addEventListener('click', function(e) {
+      if (_useMobileTaskPanel()) return;
       e.preventDefault();
       var vno = this.dataset.vno, dt = this.dataset.date;
       document.getElementById('emgVehicleNo').textContent = vno;
@@ -353,6 +359,7 @@ function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page
 
   document.querySelectorAll('.tracker-link').forEach(function(a) {
     a.addEventListener('click', function(e) {
+      if (_useMobileTaskPanel()) return;
       e.preventDefault();
       _trackerLinkEl = this;
       var vno = this.dataset.vno, dt = this.dataset.date;
@@ -739,6 +746,7 @@ document.addEventListener('click', function (e) {
         font-weight: 600;
     }
     .mobile-task-badge.green { background: #e8f5e9; color: #2e7d32; }
+    .mobile-task-badge.warning { background: #fff8e1; color: #f57f17; }
     .mobile-task-badge.red { background: #ffebee; color: #c62828; }
     .mobile-task-badge.blue { background: #e3f2fd; color: #1565c0; }
     .mobile-task-badge.gray { background: #f5f5f5; color: #666; }
@@ -791,143 +799,123 @@ document.addEventListener('click', function (e) {
         document.getElementById('mobileTaskModal').classList.add('d-none');
         document.body.style.overflow = '';
     };
+
+    function _mobileHe(s) {
+        var d = document.createElement('div');
+        d.textContent = s == null ? '' : String(s);
+        return d.innerHTML;
+    }
+
+    function _useMobileTaskPanel() {
+        return document.documentElement.classList.contains('capacitor-native')
+            || window.matchMedia('(max-width: 768px)').matches;
+    }
+
+    function _mobileCategoryBadge(cat) {
+        if (cat === 'Green') return 'green';
+        if (cat === 'Yellow') return 'warning';
+        return 'blue';
+    }
+
+    function _renderMobileEmgCards(rows) {
+        if (!rows.length) {
+            return '<div class="mobile-task-empty"><i class="bi bi-inbox"></i><p>No emergency tasks found</p></div>';
+        }
+        var html = '';
+        rows.forEach(function(task, index) {
+            var cat = task.category || '';
+            html += '<div class="mobile-task-card">'
+                + '<div class="mobile-task-card-header">'
+                + '<div class="mobile-task-icon emg"><i class="bi bi-telephone-fill"></i></div>'
+                + '<div><h6 class="mobile-task-card-title">' + _mobileHe(task.task_id || ('EMG-' + (index + 1))) + '</h6>'
+                + '<p class="mobile-task-card-subtitle">' + _mobileHe(cat || 'Emergency Task') + '</p></div>'
+                + '</div>'
+                + '<div class="mobile-task-info-row"><span class="mobile-task-info-label">Phone</span><span class="mobile-task-info-value">' + _mobileHe(task.phone || '-') + '</span></div>'
+                + '<div class="mobile-task-info-row"><span class="mobile-task-info-label">CLI</span><span class="mobile-task-info-value">' + _mobileHe(task.cli || '-') + '</span></div>'
+                + '<div class="mobile-task-info-row"><span class="mobile-task-info-label">Name</span><span class="mobile-task-info-value">' + _mobileHe(task.name || '-') + '</span></div>'
+                + '<div class="mobile-task-info-row"><span class="mobile-task-info-label">Address</span><span class="mobile-task-info-value">' + _mobileHe(task.address || '-') + '</span></div>'
+                + '<div class="mobile-task-info-row"><span class="mobile-task-info-label">Received By</span><span class="mobile-task-info-value">' + _mobileHe(task.received_by || '-') + '</span></div>'
+                + '<div class="mobile-task-info-row"><span class="mobile-task-info-label">Facility</span><span class="mobile-task-info-value">' + _mobileHe(task.facility_name || '-') + '</span></div>'
+                + '<div class="mobile-task-info-row"><span class="mobile-task-info-label">Category</span>'
+                + '<span class="mobile-task-badge ' + _mobileCategoryBadge(cat) + '">' + _mobileHe(cat || '-') + '</span></div>'
+                + '<div class="mobile-task-info-row"><span class="mobile-task-info-label">Completed</span><span class="mobile-task-info-value">' + _mobileHe(task.completed_date_time || '-') + '</span></div>'
+                + '</div>';
+        });
+        return html;
+    }
+
+    function _renderMobileTrackerCards(d, vno, date) {
+        if (!d || !d.id) {
+            return '<div class="mobile-task-empty"><i class="bi bi-inbox"></i><p>No tracker record found for ' + _mobileHe(vno) + ' on ' + _mobileHe(date) + '</p></div>';
+        }
+        var autoVal = Math.max(parseFloat(d.mileage) || 0, parseFloat(d.ptop) || 0);
+        var effective = d.effective_km != null ? d.effective_km : autoVal;
+        return '<div class="mobile-task-card">'
+            + '<div class="mobile-task-card-header">'
+            + '<div class="mobile-task-icon tracker"><i class="bi bi-geo-alt-fill"></i></div>'
+            + '<div><h6 class="mobile-task-card-title">Tracker KM — ' + _mobileHe(effective) + '</h6>'
+            + '<p class="mobile-task-card-subtitle">' + _mobileHe(vno) + ' · ' + _mobileHe(date) + '</p></div>'
+            + '</div>'
+            + '<div class="mobile-task-info-row"><span class="mobile-task-info-label">From</span><span class="mobile-task-info-value">' + _mobileHe((d.date_from || '-') + ' ' + (d.time_from || '')) + '</span></div>'
+            + '<div class="mobile-task-info-row"><span class="mobile-task-info-label">To</span><span class="mobile-task-info-value">' + _mobileHe((d.date_to || '-') + ' ' + (d.time_to || '')) + '</span></div>'
+            + '<div class="mobile-task-info-row"><span class="mobile-task-info-label">Mileage</span><span class="mobile-task-info-value">' + _mobileHe(d.mileage) + ' km</span></div>'
+            + '<div class="mobile-task-info-row"><span class="mobile-task-info-label">P to P</span><span class="mobile-task-info-value">' + _mobileHe(d.ptop) + ' km</span></div>'
+            + '<div class="mobile-task-info-row"><span class="mobile-task-info-label">Selected KM</span><span class="mobile-task-info-value">' + (d.selected_km != null ? _mobileHe(d.selected_km) + ' km' : 'Auto (MAX)') + '</span></div>'
+            + '<div class="mobile-task-info-row"><span class="mobile-task-info-label">Used in Report</span><span class="mobile-task-info-value"><span class="mobile-task-badge green">' + _mobileHe(effective) + ' km</span></span></div>'
+            + '<p class="text-muted mb-0 mt-2" style="font-size:0.82rem;">Auto = MAX(Mileage, P to P) = ' + autoVal.toFixed(2) + ' km</p>'
+            + '</div>';
+    }
     
-    // EMG Link Handler
+    // EMG Link Handler (mobile / Capacitor only)
     document.addEventListener('click', function(e) {
         var emgLink = e.target.closest('.emg-link');
-        if (!emgLink) return;
+        if (!emgLink || !_useMobileTaskPanel()) return;
         e.preventDefault();
+        e.stopPropagation();
         
         var vno = emgLink.getAttribute('data-vno') || '';
         var date = emgLink.getAttribute('data-date') || '';
         var badge = emgLink.querySelector('.badge');
-        var emgCount = badge ? badge.textContent : '0';
+        var emgCount = parseInt((badge ? badge.textContent : '0') || '0', 10) || 0;
         
-        if (parseInt(emgCount) === 0) {
-            window.openMobileTaskModal('Emergency Tasks', `
-                <div class="mobile-task-empty">
-                    <i class="bi bi-inbox"></i>
-                    <p>No emergency tasks for this vehicle on ${date}</p>
-                </div>
-            `);
+        if (emgCount === 0) {
+            window.openMobileTaskModal('Emergency Tasks', '<div class="mobile-task-empty"><i class="bi bi-inbox"></i><p>No emergency tasks for this vehicle on ' + _mobileHe(date) + '</p></div>');
             return;
         }
         
-        window.openMobileTaskModal('Emergency Tasks - ' + vno, `
-            <div class="text-center py-4">
-                <div class="spinner-border text-primary" role="status"></div>
-                <p class="text-muted mt-2">Loading emergency tasks...</p>
-            </div>
-        `);
+        window.openMobileTaskModal('Emergency Tasks - ' + vno, '<div class="text-center py-4"><div class="spinner-border text-primary" role="status"></div><p class="text-muted mt-2">Loading emergency tasks...</p></div>');
         
-        // Fetch EMG details
-        fetch('/api/task-report/emg-tasks?vno=' + encodeURIComponent(vno) + '&date=' + encodeURIComponent(date))
+        fetch('/api/task-report/emg-detail?date=' + encodeURIComponent(date) + '&vehicle_no=' + encodeURIComponent(vno))
             .then(function(r) { return r.json(); })
-            .then(function(data) {
-                if (!data || !data.tasks || data.tasks.length === 0) {
-                    document.getElementById('mobileTaskBody').innerHTML = `
-                        <div class="mobile-task-empty">
-                            <i class="bi bi-inbox"></i>
-                            <p>No emergency tasks found</p>
-                        </div>
-                    `;
-                    return;
-                }
-                
-                var html = '';
-                data.tasks.forEach(function(task, index) {
-                    html += `
-                    <div class="mobile-task-card">
-                        <div class="mobile-task-card-header">
-                            <div class="mobile-task-icon emg">
-                                <i class="bi bi-telephone-fill"></i>
-                            </div>
-                            <div>
-                                <h6 class="mobile-task-card-title">${task.task_id || 'EMG-' + (index + 1)}</h6>
-                                <p class="mobile-task-card-subtitle">${task.category || 'Emergency Task'}</p>
-                            </div>
-                        </div>
-                        <div class="mobile-task-info-row">
-                            <span class="mobile-task-info-label">Phone</span>
-                            <span class="mobile-task-info-value">${task.phone || '-'}</span>
-                        </div>
-                        <div class="mobile-task-info-row">
-                            <span class="mobile-task-info-label">Name</span>
-                            <span class="mobile-task-info-value">${task.name || '-'}</span>
-                        </div>
-                        <div class="mobile-task-info-row">
-                            <span class="mobile-task-info-label">Address</span>
-                            <span class="mobile-task-info-value">${task.address || '-'}</span>
-                        </div>
-                        <div class="mobile-task-info-row">
-                            <span class="mobile-task-info-label">Status</span>
-                            <span class="mobile-task-badge ${task.status === 'Completed' ? 'green' : task.status === 'Pending' ? 'red' : 'blue'}">${task.status || 'Unknown'}</span>
-                        </div>
-                    </div>`;
-                });
-                document.getElementById('mobileTaskBody').innerHTML = html;
+            .then(function(rows) {
+                document.getElementById('mobileTaskBody').innerHTML = _renderMobileEmgCards(Array.isArray(rows) ? rows : []);
             })
             .catch(function() {
-                document.getElementById('mobileTaskBody').innerHTML = `
-                    <div class="mobile-task-empty">
-                        <i class="bi bi-exclamation-circle"></i>
-                        <p>Failed to load emergency tasks</p>
-                    </div>
-                `;
+                document.getElementById('mobileTaskBody').innerHTML = '<div class="mobile-task-empty"><i class="bi bi-exclamation-circle"></i><p>Failed to load emergency tasks</p></div>';
             });
-    });
+    }, true);
     
-    // Tracker Link Handler
+    // Tracker Link Handler (mobile / Capacitor only)
     document.addEventListener('click', function(e) {
         var trackerLink = e.target.closest('.tracker-link');
-        if (!trackerLink) return;
+        if (!trackerLink || !_useMobileTaskPanel()) return;
         e.preventDefault();
+        e.stopPropagation();
         
         var vno = trackerLink.getAttribute('data-vno') || '';
         var date = trackerLink.getAttribute('data-date') || '';
-        var badge = trackerLink.querySelector('.badge');
-        var trackerKm = badge ? badge.textContent : '0';
         
-        window.openMobileTaskModal('Tracker Details - ' + vno, `
-            <div class="mobile-task-card">
-                <div class="mobile-task-card-header">
-                    <div class="mobile-task-icon tracker">
-                        <i class="bi bi-geo-alt-fill"></i>
-                    </div>
-                    <div>
-                        <h6 class="mobile-task-card-title">Vehicle Tracker</h6>
-                        <p class="mobile-task-card-subtitle">${vno}</p>
-                    </div>
-                </div>
-                <div class="mobile-task-info-row">
-                    <span class="mobile-task-info-label">Date</span>
-                    <span class="mobile-task-info-value">${date}</span>
-                </div>
-                <div class="mobile-task-info-row">
-                    <span class="mobile-task-info-label">Tracker KM</span>
-                    <span class="mobile-task-info-value">${trackerKm} km</span>
-                </div>
-                <div class="mobile-task-info-row">
-                    <span class="mobile-task-info-label">Status</span>
-                    <span class="mobile-task-badge ${parseFloat(trackerKm) > 0 ? 'green' : 'gray'}">${parseFloat(trackerKm) > 0 ? 'Active' : 'No Data'}</span>
-                </div>
-            </div>
-            <div class="mobile-task-card">
-                <div class="mobile-task-card-header">
-                    <div class="mobile-task-icon info">
-                        <i class="bi bi-info-circle"></i>
-                    </div>
-                    <div>
-                        <h6 class="mobile-task-card-title">Tracker Information</h6>
-                    </div>
-                </div>
-                <p class="text-muted mb-0" style="font-size:0.9rem;line-height:1.6;">
-                    Tracker data shows the distance recorded by the GPS device installed in the vehicle. 
-                    This helps verify actual distance traveled vs reported distance.
-                </p>
-            </div>
-        `);
-    });
+        window.openMobileTaskModal('Tracker KM - ' + vno, '<div class="text-center py-4"><div class="spinner-border text-primary" role="status"></div><p class="text-muted mt-2">Loading tracker details...</p></div>');
+        
+        fetch('/api/task-report/tracker-detail?date=' + encodeURIComponent(date) + '&vehicle_no=' + encodeURIComponent(vno))
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                document.getElementById('mobileTaskBody').innerHTML = _renderMobileTrackerCards(d, vno, date);
+            })
+            .catch(function() {
+                document.getElementById('mobileTaskBody').innerHTML = '<div class="mobile-task-empty"><i class="bi bi-exclamation-circle"></i><p>Failed to load tracker details</p></div>';
+            });
+    }, true);
     
     // Swipe down to close on mobile
     var touchStartY = 0;
