@@ -578,6 +578,44 @@ body.driver-profile-public-view .profile-page { min-height: auto !important; }
   }
   .scroll-top-btn.visible { display: flex; opacity: 1; transform: translateY(0); }
   .scroll-top-btn:hover { background: var(--brand-dark); transform: translateY(-2px); }
+
+  /* Driver Update Text — top floating panel, profile scroll stays free */
+  #driverUpdateTextModal {
+    z-index: 10050 !important;
+    pointer-events: none;
+  }
+  #driverUpdateTextModal.show { display: block !important; }
+  #driverUpdateTextModal .modal-dialog {
+    pointer-events: auto;
+    margin: 1.25rem auto;
+    max-width: 720px;
+    filter: drop-shadow(0 16px 48px rgba(15, 23, 42, .28));
+  }
+  #driverUpdateTextModal .modal-content {
+    border: 1px solid #dbeafe;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  #driverUpdateTextModal .ts-wrapper,
+  #driverUpdateTextModal .ts-control {
+    width: 100%;
+    min-height: 31px;
+  }
+  #driverUpdateTextModal .datepicker {
+    cursor: pointer;
+    background-color: #fff;
+  }
+  #driverUpdateTextModal .datepicker:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 0.2rem rgba(59, 130, 246, 0.15);
+  }
+  body.driver-update-modal-open > .ts-dropdown {
+    z-index: 10120 !important;
+  }
+  body.driver-update-modal-open > .flatpickr-calendar.open {
+    z-index: 10125 !important;
+  }
+
   /* ── Image download overlay ── */
   .doc-photo-thumb-wrap { position: relative; }
   .doc-dl-btn {
@@ -812,6 +850,11 @@ body.driver-profile-public-view .profile-page { min-height: auto !important; }
         <i class="bi bi-pencil me-1"></i>Edit
       </a>
       {% endif %}
+      {% if driver_update_parts is defined %}
+      <button type="button" class="btn btn-success btn-action" id="driverUpdateTextBtn" onclick="openDriverUpdateTextModal()">
+        <i class="bi bi-whatsapp me-1"></i>Driver Update Text
+      </button>
+      {% endif %}
       <div class="desktop-actions d-flex gap-2">
         <button onclick="doPrint()" class="btn btn-outline-primary btn-action" id="printBtn">
           <i class="bi bi-printer me-1"></i>Print
@@ -841,6 +884,9 @@ body.driver-profile-public-view .profile-page { min-height: auto !important; }
           <button onclick="downloadAsImages();closeQA();" id="imagesBtnM"><i class="bi bi-images"></i> Images</button>
           {% if driver.document_path %}
           <a href="{{ driver.document_path | media_url }}" target="_blank" onclick="closeQA();"><i class="bi bi-file-earmark-pdf"></i> Docs</a>
+          {% endif %}
+          {% if driver_update_parts is defined %}
+          <button type="button" onclick="openDriverUpdateTextModal();closeQA();"><i class="bi bi-whatsapp"></i> Driver Update Text</button>
           {% endif %}
           <button onclick="shareProfile();closeQA();"><i class="bi bi-link-45deg"></i> Share link</button>
         </div>
@@ -2490,4 +2536,295 @@ body.driver-profile-public-view .profile-page { min-height: auto !important; }
 {% endif %}
 
 </div>
+
+{% if driver_update_parts is defined %}
+<div class="modal fade" id="driverUpdateTextModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="false" data-bs-keyboard="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="driverUpdateTextModalTitle">
+          <i class="bi bi-whatsapp me-1 text-success"></i>Driver Update Text — {{ driver.name }}
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="small text-muted mb-2">Driver verify karein, Vehicle No aur Date change kar sakte hain, phir copy ya WhatsApp par bhejein.</div>
+        <div class="row g-2 mb-2">
+          <div class="col-md-6">
+            <label class="form-label small mb-1" for="driverUpdateVehicleInput">Vehicle No</label>
+            <select id="driverUpdateVehicleInput" class="form-select form-select-sm driver-update-vehicle-select">
+              {% for vno in driver_update_vehicle_choices %}
+              <option value="{{ vno }}" {% if vno == driver_update_parts.vehicle_no %}selected{% endif %}>{{ vno }}</option>
+              {% else %}
+              {% if driver_update_parts.vehicle_no %}
+              <option value="{{ driver_update_parts.vehicle_no }}" selected>{{ driver_update_parts.vehicle_no }}</option>
+              {% endif %}
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label small mb-1" for="driverUpdateDateInput">Date</label>
+            <input type="text"
+                   id="driverUpdateDateInput"
+                   class="form-control form-control-sm datepicker"
+                   placeholder="dd-mm-yyyy"
+                   autocomplete="off"
+                   value="{{ driver_update_parts.report_date }}">
+          </div>
+        </div>
+        <textarea id="driverUpdateTextArea" class="form-control" rows="18" readonly></textarea>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-outline-primary btn-sm" id="driverUpdateTextCopyBtn">
+          <i class="bi bi-clipboard me-1"></i>Copy Text
+        </button>
+        <button type="button" class="btn btn-success btn-sm" id="driverUpdateTextWhatsappBtn">
+          <i class="bi bi-whatsapp me-1"></i>Open WhatsApp
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+{% if driver_update_parts is defined %}
+<script>
+(function () {
+  var driverFields = {{ driver_update_parts.fields|tojson }};
+  var defaultVehicle = {{ driver_update_parts.vehicle_no|tojson }};
+  var defaultDate = {{ driver_update_parts.report_date|tojson }};
+  var modalEl = document.getElementById('driverUpdateTextModal');
+  var textEl = document.getElementById('driverUpdateTextArea');
+  var vehicleSelect = document.getElementById('driverUpdateVehicleInput');
+  var dateInput = document.getElementById('driverUpdateDateInput');
+  var copyBtn = document.getElementById('driverUpdateTextCopyBtn');
+  var waBtn = document.getElementById('driverUpdateTextWhatsappBtn');
+  var driverUpdateModal = null;
+  var vehicleTomSelect = null;
+  var pickersReady = false;
+  var WA_SEP = '━━━━━━━━━━━━━━━━';
+
+  function restoreBodyScroll() {
+    document.body.classList.remove('modal-open');
+    document.body.style.removeProperty('overflow');
+    document.body.style.removeProperty('padding-right');
+  }
+
+  function setDriverUpdateModalOpen(on) {
+    if (on) document.body.classList.add('driver-update-modal-open');
+    else document.body.classList.remove('driver-update-modal-open');
+  }
+
+  function getDriverUpdateModal() {
+    if (!modalEl || !window.bootstrap || !window.bootstrap.Modal) return null;
+    if (!driverUpdateModal) {
+      driverUpdateModal = new window.bootstrap.Modal(modalEl, {
+        backdrop: false,
+        focus: false,
+        keyboard: true
+      });
+    }
+    return driverUpdateModal;
+  }
+
+  if (modalEl) {
+    modalEl.addEventListener('show.bs.modal', restoreBodyScroll);
+    modalEl.addEventListener('shown.bs.modal', function () {
+      restoreBodyScroll();
+      setDriverUpdateModalOpen(true);
+      initDriverUpdatePickers();
+      setVehicleValue(defaultVehicle || '');
+      setDateValue(defaultDate || '');
+      rebuildDriverUpdateText();
+    });
+    modalEl.addEventListener('hidden.bs.modal', function () {
+      restoreBodyScroll();
+      setDriverUpdateModalOpen(false);
+      if (vehicleTomSelect && vehicleTomSelect.isOpen) vehicleTomSelect.close();
+    });
+  }
+
+  function safeVal(v) {
+    var s = (v == null ? '' : String(v)).trim();
+    return s || '—';
+  }
+
+  function bulletLine(label, value) {
+    return '• *' + label + ':* ' + safeVal(value);
+  }
+
+  function buildDriverUpdateBody(f) {
+    return [
+      '',
+      '👤 *DRIVER DETAIL*',
+      WA_SEP,
+      bulletLine('District', f.district),
+      bulletLine('Name', f.name),
+      bulletLine('Father Name', f.father_name),
+      bulletLine('CNIC', f.cnic),
+      bulletLine('Date of Birth', f.dob),
+      '',
+      '📋 *LICENSE DETAIL*',
+      WA_SEP,
+      bulletLine('Type', f.license_type),
+      bulletLine('Number', f.license_no),
+      bulletLine('Issue District', f.issue_district),
+      bulletLine('Issue Date', f.license_issue_date),
+      bulletLine('Expiry Date', f.license_expiry_date),
+      '',
+      '🏠 *ADDRESS*',
+      safeVal(f.address),
+      '',
+      '📞 *CONTACT*',
+      WA_SEP,
+      '📱 *Mobile:* ' + safeVal(f.phone),
+      '💬 *WhatsApp:* ' + safeVal(f.phone),
+      '',
+      '🏦 *BANK DETAIL*',
+      WA_SEP,
+      bulletLine('Bank Name', f.bank_name),
+      bulletLine('Account No', f.account_no),
+      bulletLine('Account Title', f.account_title),
+      '',
+      '📝 *Remarks:* ' + safeVal(f.remarks),
+      '',
+      '*Please update this Driver.*'
+    ].join('\n');
+  }
+
+  function buildDriverUpdateText(vehicle, date, f) {
+    var header = [
+      '*DRIVER UPDATE*',
+      WA_SEP,
+      '🚙 *Vehicle:* ' + safeVal(vehicle),
+      '📅 *Date:* ' + safeVal(date),
+      ''
+    ].join('\n');
+    return header + buildDriverUpdateBody(f);
+  }
+
+  function setDriverUpdateText(txt) {
+    if (textEl) textEl.value = txt || '';
+  }
+
+  function getSelectedVehicle() {
+    if (vehicleTomSelect) {
+      var val = vehicleTomSelect.getValue();
+      if (Array.isArray(val)) val = val[0];
+      return (val || defaultVehicle || '-').trim() || '-';
+    }
+    if (vehicleSelect && vehicleSelect.value) {
+      return vehicleSelect.value.trim() || defaultVehicle || '-';
+    }
+    return defaultVehicle || '-';
+  }
+
+  function getSelectedDate() {
+    if (dateInput && dateInput.value) {
+      return dateInput.value.trim() || defaultDate;
+    }
+    return defaultDate;
+  }
+
+  function setVehicleValue(value) {
+    var v = (value || defaultVehicle || '').trim();
+    if (vehicleTomSelect) {
+      if (v && !vehicleTomSelect.options[v]) {
+        vehicleTomSelect.addOption({ value: v, text: v });
+      }
+      vehicleTomSelect.setValue(v || '', true);
+      return;
+    }
+    if (vehicleSelect) vehicleSelect.value = v;
+  }
+
+  function setDateValue(value) {
+    var d = (value || defaultDate || '').trim();
+    if (dateInput && dateInput._flatpickr) {
+      if (d) dateInput._flatpickr.setDate(d, false);
+      else dateInput._flatpickr.clear();
+    }
+    if (dateInput) dateInput.value = d;
+  }
+
+  function initDriverUpdateVehicleSelect() {
+    if (!vehicleSelect || vehicleTomSelect || typeof TomSelect === 'undefined') return;
+    vehicleTomSelect = new TomSelect(vehicleSelect, {
+      create: false,
+      allowEmptyOption: false,
+      openOnFocus: true,
+      selectOnTab: true,
+      maxOptions: 500,
+      dropdownParent: 'body',
+      placeholder: 'Search vehicle...',
+      render: {
+        no_results: function (data, escape) {
+          var q = data.input ? escape(data.input) : '';
+          return '<div class="no-results px-2 py-2 text-muted small">No vehicle found' +
+            (q ? ' for &ldquo;' + q + '&rdquo;' : '') + '</div>';
+        }
+      },
+      onChange: rebuildDriverUpdateText
+    });
+  }
+
+  function initDriverUpdatePickers() {
+    if (pickersReady || !modalEl) return;
+    initDriverUpdateVehicleSelect();
+    if (dateInput && !dateInput._smartDateInit && typeof window.initSmartDateFields === 'function') {
+      window.initSmartDateFields('#driverUpdateDateInput');
+    }
+    if (dateInput) {
+      dateInput.addEventListener('change', rebuildDriverUpdateText);
+      dateInput.addEventListener('input', rebuildDriverUpdateText);
+    }
+    pickersReady = true;
+  }
+
+  function rebuildDriverUpdateText() {
+    setDriverUpdateText(buildDriverUpdateText(getSelectedVehicle(), getSelectedDate(), driverFields));
+  }
+
+  window.openDriverUpdateTextModal = function () {
+    var modal = getDriverUpdateModal();
+    if (!modal || !modalEl) return;
+    if (modalEl.parentElement !== document.body) {
+      document.body.appendChild(modalEl);
+    }
+    restoreBodyScroll();
+    modal.show();
+  };
+
+  if (copyBtn) {
+    copyBtn.addEventListener('click', function () {
+      var txt = (textEl && textEl.value) ? textEl.value : '';
+      if (!txt) return;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(txt).then(function () {
+          copyBtn.innerHTML = '<i class="bi bi-check2 me-1"></i>Copied';
+          setTimeout(function () {
+            copyBtn.innerHTML = '<i class="bi bi-clipboard me-1"></i>Copy Text';
+          }, 1200);
+        });
+      } else if (textEl) {
+        textEl.select();
+        document.execCommand('copy');
+      }
+    });
+  }
+
+  if (waBtn) {
+    waBtn.addEventListener('click', function () {
+      var txt = (textEl && textEl.value) ? textEl.value.trim() : '';
+      if (!txt) return;
+      window.open('https://wa.me/?text=' + encodeURIComponent(txt), '_blank');
+    });
+  }
+})();
+</script>
+{% endif %}
 {% endblock %}

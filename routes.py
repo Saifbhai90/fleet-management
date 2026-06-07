@@ -5346,6 +5346,157 @@ def drivers_list():
                            **_master_nav_back())
 
 
+def _driver_update_field_data(driver):
+    def _val(v):
+        if v is None:
+            return ''
+        if hasattr(v, 'strftime'):
+            return v.strftime('%d-%m-%Y')
+        return str(v).strip()
+
+    def _safe(text):
+        s = (text or '').strip()
+        return s if s else '—'
+
+    district = driver.driver_district or (driver.district.name if getattr(driver, 'district', None) else '') or '—'
+    phone = format_phone(driver.phone1) or '—'
+    cnic = format_cnic(driver.cnic_no) or '—'
+    address = (driver.address or '').replace('\r\n', ' ').replace('\n', ' ').strip() or '—'
+
+    return {
+        'district': _safe(district),
+        'name': _safe(driver.name),
+        'father_name': _safe(driver.father_name),
+        'cnic': _safe(cnic),
+        'dob': _safe(_val(driver.dob)),
+        'license_type': _safe(driver.license_type),
+        'license_no': _safe(driver.license_no),
+        'issue_district': _safe(driver.issue_district),
+        'license_issue_date': _safe(_val(driver.license_issue_date)),
+        'license_expiry_date': _safe(_val(driver.license_expiry_date)),
+        'address': _safe(address),
+        'phone': _safe(phone),
+        'bank_name': _safe(driver.bank_name),
+        'account_no': _safe(driver.account_no),
+        'account_title': _safe(driver.account_title),
+        'remarks': _safe(driver.remarks),
+    }
+
+
+def _format_driver_update_whatsapp_body(fields):
+    def _bullet(label, value):
+        return f'• *{label}:* {value}'
+
+    sep = '━━━━━━━━━━━━━━━━'
+    f = fields
+    detail_lines = [
+        '',
+        '👤 *DRIVER DETAIL*',
+        sep,
+        _bullet('District', f['district']),
+        _bullet('Name', f['name']),
+        _bullet('Father Name', f['father_name']),
+        _bullet('CNIC', f['cnic']),
+        _bullet('Date of Birth', f['dob']),
+        '',
+        '📋 *LICENSE DETAIL*',
+        sep,
+        _bullet('Type', f['license_type']),
+        _bullet('Number', f['license_no']),
+        _bullet('Issue District', f['issue_district']),
+        _bullet('Issue Date', f['license_issue_date']),
+        _bullet('Expiry Date', f['license_expiry_date']),
+        '',
+        '🏠 *ADDRESS*',
+        f['address'],
+        '',
+        '📞 *CONTACT*',
+        sep,
+        f'📱 *Mobile:* {f["phone"]}',
+        f'💬 *WhatsApp:* {f["phone"]}',
+        '',
+        '🏦 *BANK DETAIL*',
+        sep,
+        _bullet('Bank Name', f['bank_name']),
+        _bullet('Account No', f['account_no']),
+        _bullet('Account Title', f['account_title']),
+        '',
+        f'📝 *Remarks:* {f["remarks"]}',
+        '',
+        '*Please update this Driver.*',
+    ]
+    return '\n'.join(detail_lines)
+
+
+def _build_driver_update_whatsapp_parts(driver):
+    vehicle_no = (driver.vehicle.vehicle_no if getattr(driver, 'vehicle', None) else '') or '-'
+    today = pk_date().strftime('%d-%m-%Y')
+    fields = _driver_update_field_data(driver)
+    detail_text = _format_driver_update_whatsapp_body(fields)
+    return {
+        'vehicle_no': vehicle_no,
+        'report_date': today,
+        'fields': fields,
+        'detail_text': detail_text,
+    }
+
+
+def _build_driver_update_whatsapp_header(vehicle_no=None, report_date=None):
+    vehicle = (vehicle_no or '-').strip() or '-'
+    date = (report_date or '').strip() or '—'
+    sep = '━━━━━━━━━━━━━━━━'
+    return '\n'.join([
+        '*DRIVER UPDATE*',
+        sep,
+        f'🚙 *Vehicle:* {vehicle}',
+        f'📅 *Date:* {date}',
+        '',
+    ])
+
+
+def _build_driver_update_whatsapp_text(driver, vehicle_no=None, report_date=None):
+    parts = _build_driver_update_whatsapp_parts(driver)
+    v = (vehicle_no if vehicle_no is not None else parts['vehicle_no']) or '-'
+    d = (report_date if report_date is not None else parts['report_date']) or ''
+    header = _build_driver_update_whatsapp_header(v, d)
+    return header + parts['detail_text']
+
+
+@app.route('/api/driver/update-text/<int:pk>')
+def api_driver_update_text(pk):
+    from auth_utils import get_user_context
+
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles = user_context.get('allowed_vehicles', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+
+    driver = Driver.query.options(
+        joinedload(Driver.vehicle),
+        joinedload(Driver.district),
+    ).get_or_404(pk)
+
+    if not is_master_or_admin:
+        if allowed_projects and driver.project_id and driver.project_id not in allowed_projects:
+            return jsonify({'ok': False, 'error': 'forbidden'}), 403
+        if allowed_districts and driver.district_id and driver.district_id not in allowed_districts:
+            return jsonify({'ok': False, 'error': 'forbidden'}), 403
+        if allowed_vehicles and driver.vehicle_id and driver.vehicle_id not in allowed_vehicles:
+            return jsonify({'ok': False, 'error': 'forbidden'}), 403
+
+    parts = _build_driver_update_whatsapp_parts(driver)
+    return jsonify({
+        'ok': True,
+        'driver_name': driver.name or '-',
+        'vehicle_no': parts['vehicle_no'],
+        'report_date': parts['report_date'],
+        'detail_text': parts['detail_text'],
+        'update_text': _build_driver_update_whatsapp_text(driver),
+    })
+
+
 @app.route('/drivers/export')
 def drivers_export():
     """Export drivers list (with optional search) to CSV."""
@@ -34910,6 +35061,48 @@ def _driver_profile_view_core(driver_id):
     }
 
 
+def _driver_update_vehicle_choices(driver=None):
+    """Vehicle numbers from Vehicle Parking Inventory (permission-scoped)."""
+    from auth_utils import get_user_context
+
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles = user_context.get('allowed_vehicles', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+
+    q = Vehicle.query.filter(
+        Vehicle.parking_station_id.isnot(None),
+        Vehicle.vehicle_no.isnot(None),
+        Vehicle.vehicle_no != '',
+    )
+    if not is_master_or_admin:
+        if allowed_projects:
+            q = q.filter(Vehicle.project_id.in_(list(allowed_projects)))
+        if allowed_districts:
+            q = q.filter(Vehicle.district_id.in_(list(allowed_districts)))
+        if allowed_vehicles:
+            q = q.filter(Vehicle.id.in_(list(allowed_vehicles)))
+    vehicles = q.order_by(*vehicle_order_by()).all()
+
+    choices = []
+    seen = set()
+    for v in vehicles:
+        vno = (v.vehicle_no or '').strip()
+        key = vno.lower()
+        if vno and key not in seen:
+            seen.add(key)
+            choices.append(vno)
+
+    if driver:
+        default = (driver.vehicle.vehicle_no if getattr(driver, 'vehicle', None) else '') or ''
+        default = default.strip()
+        if default and default.lower() not in seen:
+            choices.insert(0, default)
+    return choices
+
+
 @app.route('/reports/driver-profile/<int:driver_id>')
 def report_driver_profile(driver_id):
     ctx = _driver_profile_view_core(driver_id)
@@ -34926,6 +35119,8 @@ def report_driver_profile(driver_id):
     profile_url = url_for('report_driver_profile', driver_id=driver_id, _external=True)
     share_tok = make_driver_profile_share_token(app.config['SECRET_KEY'], driver_id)
     public_share_url = url_for('report_driver_profile_public', token=share_tok, _external=True)
+    driver_update_parts = _build_driver_update_whatsapp_parts(ctx['driver'])
+    driver_update_vehicle_choices = _driver_update_vehicle_choices(ctx['driver'])
     return render_template(
         'report_driver_profile.html',
         public_view=False,
@@ -34934,6 +35129,8 @@ def report_driver_profile(driver_id):
         ref=ref,
         came_from=came_from,
         hide_edit=hide_edit,
+        driver_update_parts=driver_update_parts,
+        driver_update_vehicle_choices=driver_update_vehicle_choices,
         **ctx,
     )
 

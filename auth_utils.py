@@ -405,6 +405,7 @@ ENDPOINT_PERMISSION_MAP = [
     # Internal API helpers – tied to their feature permissions
     ('api_check_cnic', 'drivers_list'),
     ('api_check_license', 'drivers_list'),
+    ('api_driver_update_text', 'drivers_list'),
     ('get_left_drivers_by_vehicle', 'driver_rejoin_list'),
     ('check_vehicle_shifts', 'assign_driver_to_vehicle'),
     # Fuel expense helper APIs
