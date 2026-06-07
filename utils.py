@@ -40,6 +40,19 @@ def format_time_ampm(t: Optional[Union[dt_time, datetime]]) -> str:
     return t.strftime('%I:%M %p').lstrip('0') or t.strftime('%I:%M %p')
 
 
+def format_reading(value: Optional[Union[int, float]]) -> str:
+    """Format odometer reading: show integer when fractional part is zero, else show decimals."""
+    if value is None:
+        return ''
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return str(value)
+    if abs(v - round(v)) < 1e-9:
+        return str(int(round(v)))
+    return f'{v:.2f}'.rstrip('0').rstrip('.')
+
+
 def format_date_ddmmyyyy(d: Optional[date]) -> str:
     """Format date as dd-mm-yyyy. Returns '' if None."""
     if d is None:

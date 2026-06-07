@@ -141,8 +141,8 @@
             <td>{{ r.project.name if r.project else '-' }}</td>
             <td>{{ r.vehicle.vehicle_type if r.vehicle else '-' }}</td>
             <td>{{ r.vehicle.vehicle_no if r.vehicle else '-' }}</td>
-            <td>{{ '%.2f'|format(r.start_reading) }}</td>
-            <td>{{ '%.2f'|format(r.close_reading) }}</td>
+            <td>{{ r.start_reading|reading }}</td>
+            <td>{{ r.close_reading|reading }}</td>
             <td class="fw-semibold">{{ '%.2f'|format(r.total_km) }}</td>
             <td>{{ r.tasks_count }}</td>
             <td>

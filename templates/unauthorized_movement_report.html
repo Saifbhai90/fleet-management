@@ -15,11 +15,116 @@
   .total-badge { background: #fef3c7; color: #92400e; padding: .25rem .8rem; border-radius: 20px; font-size: .82rem; font-weight: 700; }
   .umr-wait-inline { background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: .65rem .8rem; margin-bottom: .9rem; display: none; }
   .umr-detail-link { cursor: pointer; text-decoration: underline dotted; text-underline-offset: 2px; }
-  .umr-seg-badge { font-size: .7rem; padding: .2rem .45rem; border-radius: 12px; }
-  .umr-seg-task { background: #dbeafe; color: #1e3a8a; }
-  .umr-seg-return { background: #dcfce7; color: #166534; }
-  .umr-seg-without { background: #fee2e2; color: #991b1b; }
-  #unauthorizedMovementHistoryBody td, #unauthorizedMovementHistoryBody th { font-size: .8rem; }
+  .umr-seg-badge { display: inline-flex; align-items: center; gap: .22rem; font-size: .62rem; padding: .1rem .36rem; border-radius: 999px; font-weight: 700; white-space: nowrap; border: 1px solid transparent; letter-spacing: .01em; line-height: 1.15; }
+  .umr-seg-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; display: inline-block; }
+  .umr-seg-task { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
+  .umr-seg-task .umr-seg-dot { background: #2563eb; }
+  .umr-seg-return { background: #f0fdf4; color: #15803d; border-color: #bbf7d0; }
+  .umr-seg-return .umr-seg-dot { background: #16a34a; }
+  .umr-seg-without { background: #fef2f2; color: #b91c1c; border-color: #fecaca; }
+  .umr-seg-without .umr-seg-dot { background: #dc2626; }
+  .umr-segments-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem; padding: .35rem .6rem; background: #fff; border-bottom: 1px solid #e2e8f0; }
+  .umr-segments-toolbar .form-control-sm, .umr-segments-toolbar .form-select-sm { border-radius: 6px; font-size: .7rem; padding: .2rem .45rem; border-color: #cbd5e1; min-height: 28px; }
+  .umr-segments-toolbar .form-control-sm:focus, .umr-segments-toolbar .form-select-sm:focus { border-color: #f59e0b; box-shadow: 0 0 0 .12rem rgba(245,158,11,.15); }
+  .umr-segments-count { margin-left: auto; font-size: .68rem; font-weight: 700; color: #64748b; white-space: nowrap; }
+  .umr-segments-table-wrap { max-height: calc(100vh - 290px); min-height: 240px; overflow: auto; }
+  .umr-segments-table { margin-bottom: 0; border-collapse: collapse; width: 100%; }
+  .umr-segments-table thead th { position: sticky; top: 0; z-index: 2; background: #f8fafc; color: #475569; font-size: .62rem; font-weight: 800; text-transform: uppercase; letter-spacing: .3px; border-bottom: 1px solid #e2e8f0 !important; border-top: 0 !important; padding: .3rem .45rem; white-space: nowrap; box-shadow: inset 0 -1px 0 #e2e8f0; line-height: 1.2; }
+  .umr-segments-table tbody td { padding: .22rem .45rem; vertical-align: middle; border-color: #eef2f7 !important; font-size: .72rem; background: #fff; line-height: 1.25; }
+  .umr-segments-table tbody tr:hover td { background: #fafbfc; }
+  .umr-seg-row-task td:first-child { border-left: 3px solid #2563eb !important; }
+  .umr-seg-row-return td:first-child { border-left: 3px solid #16a34a !important; }
+  .umr-seg-row-without td { background: #fffbeb !important; }
+  .umr-seg-row-without td:first-child { border-left: 3px solid #f59e0b !important; }
+  .umr-seg-row-without:hover td { background: #fef3c7 !important; }
+  .umr-seg-row-hidden { display: none; }
+  .umr-dt-cell { line-height: 1.2; white-space: nowrap; font-variant-numeric: tabular-nums; font-size: .71rem; }
+  .umr-dt-date { display: inline; font-size: .68rem; color: #64748b; font-weight: 600; }
+  .umr-dt-time { display: inline; font-size: .71rem; color: #0f172a; font-weight: 700; margin-left: .28rem; }
+  .umr-task-id-chip { display: inline-block; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .68rem; font-weight: 700; color: #334155; background: #f1f5f9; border: 1px solid #e2e8f0; padding: .06rem .32rem; border-radius: 4px; letter-spacing: .02em; line-height: 1.2; }
+  .umr-task-id-empty { color: #cbd5e1; font-weight: 600; font-size: .72rem; }
+  .umr-km-cell { text-align: right; font-weight: 800; font-variant-numeric: tabular-nums; color: #0f172a; white-space: nowrap; min-width: 48px; font-size: .74rem; }
+  .umr-segments-table tfoot td { background: #f8fafc; border-top: 1px solid #e2e8f0 !important; font-size: .68rem; font-weight: 800; color: #334155; padding: .28rem .45rem; line-height: 1.2; white-space: nowrap; }
+  .umr-segments-table tfoot .umr-km-cell { color: #92400e; font-size: .76rem; }
+  /* Movement Timeline Detail — modern header + breakdown */
+  .umr-tl-modal .modal-dialog { max-width: min(96vw, 1480px); width: 96vw; margin: .75rem auto; max-height: calc(100vh - 1.5rem); }
+  .umr-tl-modal .modal-content { border: none; border-radius: 14px; overflow: hidden; box-shadow: 0 18px 48px rgba(15,23,42,.18); max-height: calc(100vh - 1.5rem); display: flex; flex-direction: column; }
+  .umr-tl-modal .modal-body { background: #f8fafc; padding: 1.1rem 1.25rem 1.2rem; flex: 1 1 auto; overflow-y: auto; }
+  .umr-tl-modal .umr-tl-header .modal-title { font-size: 1.2rem; }
+  .umr-tl-modal .umr-tl-icon { width: 46px; height: 46px; font-size: 1.2rem; }
+  .umr-tl-modal .umr-meta-pill { font-size: .8rem; padding: .22rem .62rem; }
+  .umr-tl-modal .umr-tl-actions .btn { font-size: .8rem; padding: .34rem .72rem; }
+  .umr-tl-modal .umr-summary-title { font-size: .85rem; }
+  .umr-tl-modal .umr-summary-total { font-size: .85rem; }
+  .umr-tl-modal .umr-stat-label { font-size: .74rem; }
+  .umr-tl-modal .umr-stat-value { font-size: 1.05rem; }
+  .umr-tl-modal .umr-stat-pct { font-size: .78rem; }
+  .umr-tl-modal .umr-collapse-toggle { font-size: .88rem; padding: .5rem .75rem; }
+  .umr-tl-modal .umr-collapse-panel .table thead th { font-size: .82rem; padding: .45rem .6rem; }
+  .umr-tl-modal .umr-collapse-panel .table td { font-size: .84rem; padding: .4rem .6rem; }
+  .umr-tl-modal .umr-segments-table thead th { font-size: .72rem; padding: .4rem .55rem; }
+  .umr-tl-modal .umr-segments-table tbody td { font-size: .8rem; padding: .32rem .55rem; }
+  .umr-tl-modal .umr-seg-badge { font-size: .68rem; padding: .14rem .42rem; }
+  .umr-tl-modal .umr-dt-cell { font-size: .78rem; }
+  .umr-tl-modal .umr-dt-date { font-size: .72rem; }
+  .umr-tl-modal .umr-dt-time { font-size: .78rem; }
+  .umr-tl-modal .umr-task-id-chip { font-size: .74rem; padding: .1rem .38rem; }
+  .umr-tl-modal .umr-km-cell { font-size: .8rem; }
+  .umr-tl-modal .umr-segments-table-wrap { max-height: calc(100vh - 380px); min-height: 280px; }
+  .umr-tl-header { background: linear-gradient(135deg, #92400e 0%, #d97706 55%, #f59e0b 100%); color: #fff; border: 0; padding: .85rem 1rem; align-items: flex-start; }
+  .umr-tl-modal .umr-tl-header { padding: .95rem 1.15rem; }
+  .umr-tl-header .btn-close { filter: invert(1); opacity: .9; margin-top: .15rem; }
+  .umr-tl-header-main { display: flex; align-items: flex-start; gap: .75rem; flex: 1; min-width: 0; }
+  .umr-tl-icon { width: 42px; height: 42px; border-radius: 12px; background: rgba(255,255,255,.18); display: flex; align-items: center; justify-content: center; font-size: 1.15rem; flex-shrink: 0; box-shadow: inset 0 0 0 1px rgba(255,255,255,.15); }
+  .umr-tl-header .modal-title { font-weight: 800; font-size: 1.05rem; letter-spacing: .01em; margin: 0; color: #fff; }
+  .umr-tl-meta { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .45rem; }
+  .umr-meta-pill { display: inline-flex; align-items: center; gap: .3rem; padding: .18rem .55rem; border-radius: 999px; background: rgba(255,255,255,.16); border: 1px solid rgba(255,255,255,.22); font-size: .72rem; font-weight: 600; color: #fffbeb; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+  .umr-meta-pill i { font-size: .68rem; opacity: .9; }
+  .umr-meta-pill.umr-meta-focus { background: rgba(255,255,255,.92); color: #92400e; border-color: transparent; font-weight: 700; }
+  .umr-tl-actions { display: flex; align-items: center; gap: .4rem; flex-shrink: 0; }
+  .umr-tl-actions .btn { border-radius: 8px; font-size: .74rem; font-weight: 700; padding: .28rem .65rem; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+  .umr-tl-actions .btn-light { background: rgba(255,255,255,.95); border-color: transparent; color: #334155; }
+  .umr-tl-actions .btn-light:hover { background: #fff; }
+  .umr-summary-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: .85rem .95rem; margin-bottom: 1rem; box-shadow: 0 1px 3px rgba(15,23,42,.05); }
+  .umr-summary-head { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin-bottom: .7rem; flex-wrap: wrap; }
+  .umr-summary-title { font-size: .78rem; font-weight: 800; text-transform: uppercase; letter-spacing: .45px; color: #64748b; margin: 0; }
+  .umr-summary-total { font-size: .78rem; font-weight: 700; color: #0f172a; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 999px; padding: .2rem .65rem; }
+  .umr-breakdown-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .55rem; }
+  .umr-stat-card { border-radius: 10px; padding: .55rem .65rem; border: 1px solid #e2e8f0; background: #fafafa; position: relative; overflow: hidden; }
+  .umr-stat-card::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; }
+  .umr-stat-card.task::before { background: #2563eb; }
+  .umr-stat-card.return::before { background: #16a34a; }
+  .umr-stat-card.without::before { background: #dc2626; }
+  .umr-stat-label { font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .35px; color: #64748b; margin-bottom: .15rem; }
+  .umr-stat-value { font-size: .95rem; font-weight: 800; color: #0f172a; line-height: 1.1; }
+  .umr-stat-pct { font-size: .72rem; color: #64748b; margin-top: .12rem; font-weight: 600; }
+  .umr-collapse-panel { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; box-shadow: 0 1px 2px rgba(15,23,42,.04); }
+  .umr-collapse-toggle { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: .4rem .65rem; border: 0; background: #f8fafc; color: #0f172a; font-size: .78rem; font-weight: 800; text-align: left; cursor: pointer; line-height: 1.2; }
+  .umr-collapse-toggle:hover { background: #f1f5f9; }
+  .umr-collapse-toggle .umr-collapse-icon { font-size: .85rem; color: #64748b; transition: transform .2s ease; }
+  .umr-collapse-toggle[aria-expanded="false"] .umr-collapse-icon { transform: rotate(-90deg); }
+  .umr-collapse-panel .table-responsive { border-top: 1px solid #e2e8f0; }
+  .umr-collapse-panel .table { margin-bottom: 0; }
+  .umr-collapse-panel .table thead th { background: #fff; font-size: .76rem; }
+  @media (max-width: 767.98px) {
+    .umr-breakdown-stats { grid-template-columns: 1fr; }
+    .umr-tl-header { flex-wrap: wrap; gap: .65rem; }
+    .umr-tl-actions { width: 100%; justify-content: flex-end; }
+    .umr-tl-modal .modal-dialog { width: calc(100vw - .5rem); max-width: calc(100vw - .5rem); margin: .25rem auto; max-height: calc(100vh - .5rem); }
+    .umr-tl-modal .umr-segments-table-wrap { max-height: calc(100vh - 340px); }
+  }
+  .umr-toast-host { position: fixed; top: 78px; right: 20px; z-index: 10060; display: flex; flex-direction: column; gap: .45rem; pointer-events: none; max-width: min(420px, calc(100vw - 24px)); }
+  .umr-toast { display: flex; align-items: flex-start; background: #0f172a; color: #f8fafc; padding: .62rem .85rem; border-radius: 10px; font-size: .82rem; font-weight: 600; box-shadow: 0 12px 40px rgba(0,0,0,.22); animation: umrToastIn .28s ease both; line-height: 1.35; }
+  .umr-toast i { flex-shrink: 0; margin-top: .1rem; }
+  .umr-toast--success { border-left: 4px solid #16a34a; }
+  .umr-toast--info { border-left: 4px solid #2563eb; }
+  .umr-toast--error { border-left: 4px solid #dc2626; }
+  .umr-toast--out { animation: umrToastOut .28s ease both; }
+  @keyframes umrToastIn { from { opacity: 0; transform: translateX(12px); } to { opacity: 1; transform: translateX(0); } }
+  @keyframes umrToastOut { from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(12px); } }
+  @media (max-width: 767.98px) {
+    .umr-toast-host { top: 68px; right: 12px; left: 12px; max-width: none; }
+  }
 </style>
 
 <div class="container-fluid py-3 px-3 px-md-4">
@@ -157,45 +262,101 @@
   </div>
 </div>
 
-<div class="modal fade" id="unauthorizedMovementHistoryModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+<div class="modal fade umr-tl-modal" id="unauthorizedMovementHistoryModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable umr-tl-dialog">
     <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">Movement Timeline Detail</h5>
-        <div class="d-flex align-items-center gap-2">
-          <button type="button" class="btn btn-outline-success btn-sm" id="unauthorizedMovementHistoryExportBtn">
-            <i class="bi bi-file-earmark-excel me-1"></i>Export
+      <div class="modal-header umr-tl-header">
+        <div class="umr-tl-header-main me-2">
+          <div class="umr-tl-icon"><i class="bi bi-clock-history"></i></div>
+          <div class="min-w-0">
+            <h5 class="modal-title">Movement Timeline Detail</h5>
+            <div id="unauthorizedMovementHistoryMeta" class="umr-tl-meta"></div>
+          </div>
+        </div>
+        <div class="umr-tl-actions">
+          <button type="button" class="btn btn-light btn-sm" id="unauthorizedMovementHistoryExportBtn">
+            <i class="bi bi-file-earmark-spreadsheet me-1"></i>Export
           </button>
-          <button type="button" class="btn btn-outline-secondary btn-sm" id="unauthorizedMovementHistoryPrintBtn">
+          <button type="button" class="btn btn-light btn-sm" id="unauthorizedMovementHistoryPrintBtn">
             <i class="bi bi-printer me-1"></i>Print
+          </button>
+          <button type="button" class="btn btn-light btn-sm" id="unauthorizedMovementHistoryScreenshotBtn">
+            <i class="bi bi-camera me-1"></i>Screenshot
           </button>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
       </div>
       <div class="modal-body">
         <div id="unauthorizedMovementHistoryPrintable">
-          <div id="unauthorizedMovementHistoryMeta" class="small text-muted mb-2"></div>
-          <div class="row g-2 mb-3" id="unauthorizedMovementTotals"></div>
+          <div class="umr-summary-card" id="unauthorizedMovementTotals"></div>
 
-          <div class="table-responsive mb-3">
-            <table class="table table-sm table-bordered">
-              <thead><tr><th colspan="4">Task Windows</th></tr><tr><th>Task ID</th><th>Assign</th><th>Close</th><th>Task Running KM</th></tr></thead>
-              <tbody id="unauthorizedMovementTasksBody"></tbody>
-            </table>
+          <div class="umr-collapse-panel mb-3">
+            <button class="umr-collapse-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#umrTaskWindowsPanel" aria-expanded="true" aria-controls="umrTaskWindowsPanel">
+              <span>Task Windows</span>
+              <i class="bi bi-chevron-down umr-collapse-icon"></i>
+            </button>
+            <div class="collapse show" id="umrTaskWindowsPanel">
+              <div class="table-responsive">
+                <table class="table table-sm table-bordered mb-0">
+                  <thead><tr><th>Task ID</th><th>Assign</th><th>Close</th><th>Task Running KM</th></tr></thead>
+                  <tbody id="unauthorizedMovementTasksBody"></tbody>
+                </table>
+              </div>
+            </div>
           </div>
 
-          <div class="table-responsive mb-3">
-            <table class="table table-sm table-bordered">
-              <thead><tr><th colspan="5">Return Windows</th></tr><tr><th>Task ID</th><th>Start</th><th>End</th><th>KM</th><th>Stop Reason</th></tr></thead>
-              <tbody id="unauthorizedMovementReturnBody"></tbody>
-            </table>
+          <div class="umr-collapse-panel mb-3">
+            <button class="umr-collapse-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#umrReturnWindowsPanel" aria-expanded="true" aria-controls="umrReturnWindowsPanel">
+              <span>Return Windows</span>
+              <i class="bi bi-chevron-down umr-collapse-icon"></i>
+            </button>
+            <div class="collapse show" id="umrReturnWindowsPanel">
+              <div class="table-responsive">
+                <table class="table table-sm table-bordered mb-0">
+                  <thead><tr><th>Task ID</th><th>Start</th><th>End</th><th>KM</th><th>Stop Reason</th></tr></thead>
+                  <tbody id="unauthorizedMovementReturnBody"></tbody>
+                </table>
+              </div>
+            </div>
           </div>
 
-          <div class="table-responsive">
-            <table class="table table-sm table-bordered">
-              <thead><tr><th colspan="5">Full Activity Segments (verify-friendly)</th></tr><tr><th>Type</th><th>Task ID</th><th>From Time</th><th>To Time</th><th>KM</th></tr></thead>
-              <tbody id="unauthorizedMovementHistoryBody"></tbody>
-            </table>
+          <div class="umr-collapse-panel mb-0">
+            <button class="umr-collapse-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#umrActivitySegmentsPanel" aria-expanded="true" aria-controls="umrActivitySegmentsPanel">
+              <span><i class="bi bi-list-ul me-1 text-secondary"></i>Activity Timeline <span class="fw-normal text-muted">(verify-friendly)</span></span>
+              <i class="bi bi-chevron-down umr-collapse-icon"></i>
+            </button>
+            <div class="collapse show" id="umrActivitySegmentsPanel">
+              <div class="umr-segments-toolbar">
+                <input type="text" id="umrSegmentsSearch" class="form-control form-control-sm" placeholder="Search task, time..." style="max-width:210px;">
+                <select id="umrSegmentsTypeFilter" class="form-select form-select-sm" style="max-width:170px;">
+                  <option value="">All types</option>
+                  <option value="task_running">Task Running</option>
+                  <option value="return_to_parking">Return to Parking</option>
+                  <option value="without_task">Without Task</option>
+                </select>
+                <span id="umrSegmentsCount" class="umr-segments-count"></span>
+              </div>
+              <div class="table-responsive umr-segments-table-wrap">
+                <table class="table table-sm table-bordered mb-0 umr-segments-table" id="umrActivitySegmentsTable">
+                  <thead>
+                    <tr>
+                      <th>Type</th>
+                      <th>Task ID</th>
+                      <th>From Time</th>
+                      <th>To Time</th>
+                      <th class="text-end">KM</th>
+                    </tr>
+                  </thead>
+                  <tbody id="unauthorizedMovementHistoryBody"></tbody>
+                  <tfoot id="umrSegmentsTableFoot">
+                    <tr>
+                      <td colspan="4" class="text-end text-muted"><span class="umr-seg-total-label">Visible segments total</span></td>
+                      <td class="umr-km-cell" id="umrSegmentsKmTotal">0</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -293,9 +454,14 @@ document.addEventListener('DOMContentLoaded', function () {
   var tasksBody = document.getElementById('unauthorizedMovementTasksBody');
   var returnBody = document.getElementById('unauthorizedMovementReturnBody');
   var segBody = document.getElementById('unauthorizedMovementHistoryBody');
+  var segSearch = document.getElementById('umrSegmentsSearch');
+  var segTypeFilter = document.getElementById('umrSegmentsTypeFilter');
+  var segCountEl = document.getElementById('umrSegmentsCount');
+  var segKmTotalEl = document.getElementById('umrSegmentsKmTotal');
   var printableEl = document.getElementById('unauthorizedMovementHistoryPrintable');
   var exportBtn = document.getElementById('unauthorizedMovementHistoryExportBtn');
   var printBtn = document.getElementById('unauthorizedMovementHistoryPrintBtn');
+  var screenshotBtn = document.getElementById('unauthorizedMovementHistoryScreenshotBtn');
   var historyState = null;
 
   function esc(s) {
@@ -303,10 +469,75 @@ document.addEventListener('DOMContentLoaded', function () {
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
+  function showUmrToast(message, variant) {
+    var kind = variant || 'success';
+    var icon = kind === 'error' ? 'bi-exclamation-circle' : (kind === 'info' ? 'bi-info-circle' : 'bi-check-circle-fill');
+    var host = document.getElementById('umrToastHost');
+    if (!host) {
+      host = document.createElement('div');
+      host.id = 'umrToastHost';
+      host.className = 'umr-toast-host';
+      document.body.appendChild(host);
+    }
+    var toast = document.createElement('div');
+    toast.className = 'umr-toast umr-toast--' + kind;
+    toast.innerHTML = '<i class="bi ' + icon + ' me-2"></i><span>' + esc(message) + '</span>';
+    host.appendChild(toast);
+    setTimeout(function () {
+      toast.classList.add('umr-toast--out');
+      setTimeout(function () {
+        if (toast.parentNode) toast.parentNode.removeChild(toast);
+      }, 280);
+    }, 3600);
+  }
   function segBadge(label) {
-    if (label === 'task_running') return '<span class="umr-seg-badge umr-seg-task">Task Running</span>';
-    if (label === 'return_to_parking') return '<span class="umr-seg-badge umr-seg-return">Return to Parking</span>';
-    return '<span class="umr-seg-badge umr-seg-without">Without Task</span>';
+    if (label === 'task_running') return '<span class="umr-seg-badge umr-seg-task"><span class="umr-seg-dot"></span>Task Running</span>';
+    if (label === 'return_to_parking') return '<span class="umr-seg-badge umr-seg-return"><span class="umr-seg-dot"></span>Return to Parking</span>';
+    return '<span class="umr-seg-badge umr-seg-without"><span class="umr-seg-dot"></span>Without Task</span>';
+  }
+  function segRowClass(label) {
+    var cls = 'umr-seg-row ';
+    if (label === 'task_running') cls += 'umr-seg-row-task';
+    else if (label === 'return_to_parking') cls += 'umr-seg-row-return';
+    else cls += 'umr-seg-row-without';
+    return cls;
+  }
+  function formatDateTimeCell(ts) {
+    if (!ts || ts === '-') return '<span class="umr-task-id-empty">-</span>';
+    var m = String(ts).match(/^(\d{2}-\d{2}-\d{4})\s+(.+)$/);
+    if (!m) return esc(ts);
+    return '<span class="umr-dt-cell"><span class="umr-dt-date">' + esc(m[1]) + '</span><span class="umr-dt-time">' + esc(m[2]) + '</span></span>';
+  }
+  function formatTaskIdCell(taskId) {
+    var id = String(taskId || '').trim();
+    if (!id || id === '-') return '<span class="umr-task-id-empty">-</span>';
+    return '<span class="umr-task-id-chip">' + esc(id) + '</span>';
+  }
+  function applySegmentsFilter() {
+    if (!segBody) return;
+    var q = ((segSearch && segSearch.value) || '').toLowerCase().trim();
+    var typeVal = (segTypeFilter && segTypeFilter.value) || '';
+    var rows = segBody.querySelectorAll('tr[data-seg-label]');
+    var visible = 0;
+    var kmSum = 0;
+    rows.forEach(function (tr) {
+      var label = tr.getAttribute('data-seg-label') || '';
+      var text = (tr.textContent || '').toLowerCase();
+      var show = (!typeVal || label === typeVal) && (!q || text.indexOf(q) !== -1);
+      tr.classList.toggle('umr-seg-row-hidden', !show);
+      if (show) {
+        visible += 1;
+        kmSum += parseFloat(tr.getAttribute('data-seg-km') || '0') || 0;
+      }
+    });
+    if (segCountEl) segCountEl.textContent = visible + ' of ' + rows.length + ' segments';
+    if (segKmTotalEl) segKmTotalEl.textContent = fmtKm(kmSum);
+  }
+  function resetSegmentsFilter() {
+    if (segSearch) segSearch.value = '';
+    if (segTypeFilter) segTypeFilter.value = '';
+    if (segCountEl) segCountEl.textContent = '';
+    if (segKmTotalEl) segKmTotalEl.textContent = '0';
   }
   function reasonText(r) {
     if (r === 'next_task_started') return 'Next task started';
@@ -324,78 +555,401 @@ document.addEventListener('DOMContentLoaded', function () {
     target.innerHTML = rows.map(rowBuilder).join('');
   }
 
-  function csvEscape(v) {
-    var s = String(v == null ? '' : v);
-    return '"' + s.replace(/"/g, '""') + '"';
+  function fmtKm(v) {
+    var n = parseFloat(v);
+    if (isNaN(n)) return '0';
+    if (Math.abs(n - Math.round(n)) < 1e-9) return String(Math.round(n));
+    var s = n.toFixed(2);
+    if (s.indexOf('.') >= 0) s = s.replace(/0+$/, '').replace(/\.$/, '');
+    return s;
   }
 
-  function downloadHistoryCsv() {
-    if (!historyState || !historyState.ok) return;
-    var lines = [];
-    lines.push(['Vehicle', historyState.vehicle_no || '-', 'From', historyState.from_date || '-', 'To', historyState.to_date || '-']);
-    lines.push([]);
-    lines.push(['Totals']);
-    lines.push(['Task Running KM', (historyState.totals && historyState.totals.task_running_km) || 0]);
-    lines.push(['Return to Parking KM', (historyState.totals && historyState.totals.return_to_parking_km) || 0]);
-    lines.push(['Without Task KM', (historyState.totals && historyState.totals.without_task_km) || 0]);
-    lines.push([]);
-    lines.push(['Task Windows']);
-    lines.push(['Task ID', 'Assign', 'Close', 'Task Running KM']);
-    (historyState.tasks || []).forEach(function(t) {
-      lines.push([t.task_id || '-', t.assign || '-', t.close || '-', t.running_km || 0]);
-    });
-    lines.push([]);
-    lines.push(['Return Windows']);
-    lines.push(['Task ID', 'Start', 'End', 'KM', 'Stop Reason']);
-    (historyState.return_windows || []).forEach(function(r) {
-      lines.push([r.task_id || '-', r.start || '-', r.end || '-', r.km || 0, reasonText(r.reason)]);
-    });
-    lines.push([]);
-    lines.push(['Full Activity Segments']);
-    lines.push(['Type', 'Task ID', 'From Time', 'To Time', 'KM']);
-    (historyState.segments || []).forEach(function(s) {
-      var typeLabel = s.label === 'task_running' ? 'Task Running' : (s.label === 'return_to_parking' ? 'Return to Parking' : 'Without Task');
-      lines.push([typeLabel, s.task_id || '-', s.start || '-', s.end || '-', s.km || 0]);
-    });
+  function fmtPct(n) {
+    return (Math.round(n * 10) / 10).toFixed(1);
+  }
 
-    var csv = '\uFEFF' + lines.map(function(row) {
-      return (row || []).map(csvEscape).join(',');
-    }).join('\n');
-    var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  function focusLabel(focus) {
+    if (focus === 'task_running') return 'Task Running';
+    if (focus === 'return_to_parking') return 'Return to Parking';
+    if (focus === 'without_task') return 'Without Task';
+    return '';
+  }
+
+  function renderHistoryMeta(data, focus) {
+    if (!metaEl) return;
+    if (!data) {
+      metaEl.innerHTML = '<span class="umr-meta-pill"><span class="spinner-border spinner-border-sm" role="status" style="width:.75rem;height:.75rem;border-width:.12em;"></span> Loading...</span>';
+      return;
+    }
+    var pills = [
+      '<span class="umr-meta-pill"><i class="bi bi-truck"></i>' + esc(data.vehicle_no || '-') + '</span>',
+      '<span class="umr-meta-pill"><i class="bi bi-calendar3"></i>' + esc(data.from_date || '-') + ' – ' + esc(data.to_date || '-') + '</span>'
+    ];
+    var fl = focusLabel(focus);
+    if (fl) pills.push('<span class="umr-meta-pill umr-meta-focus"><i class="bi bi-crosshair"></i>Focus: ' + esc(fl) + '</span>');
+    metaEl.innerHTML = pills.join('');
+  }
+
+  function renderMovementBreakdown(totals) {
+    if (!totalsEl) return;
+    var task = parseFloat(totals.task_running_km) || 0;
+    var ret = parseFloat(totals.return_to_parking_km) || 0;
+    var without = parseFloat(totals.without_task_km) || 0;
+    var total = task + ret + without;
+    var taskPct = total ? (task / total * 100) : 0;
+    var retPct = total ? (ret / total * 100) : 0;
+    var withoutPct = total ? (without / total * 100) : 0;
+
+    totalsEl.innerHTML = [
+      '<div class="umr-summary-head">',
+        '<p class="umr-summary-title mb-0"><i class="bi bi-pie-chart me-1"></i>Movement Breakdown</p>',
+        '<span class="umr-summary-total">Total ' + fmtKm(total) + ' KM</span>',
+      '</div>',
+      '<div class="umr-breakdown-stats">',
+        '<div class="umr-stat-card task"><div class="umr-stat-label">Task Running</div><div class="umr-stat-value">' + fmtKm(task) + ' KM</div><div class="umr-stat-pct">' + fmtPct(taskPct) + '% of movement</div></div>',
+        '<div class="umr-stat-card return"><div class="umr-stat-label">Return to Parking</div><div class="umr-stat-value">' + fmtKm(ret) + ' KM</div><div class="umr-stat-pct">' + fmtPct(retPct) + '% of movement</div></div>',
+        '<div class="umr-stat-card without"><div class="umr-stat-label">Without Task</div><div class="umr-stat-value">' + fmtKm(without) + ' KM</div><div class="umr-stat-pct">' + fmtPct(withoutPct) + '% of movement</div></div>',
+      '</div>'
+    ].join('');
+  }
+
+
+  function downloadHistoryExcel() {
+    if (!historyState || !historyState.ok || !historyState.vehicle_id) {
+      showUmrToast('Pehle timeline data load hone ka wait karein.', 'info');
+      return;
+    }
+    var u = new URL('/unauthorized-movement-report/history/export', window.location.origin);
+    u.searchParams.set('vehicle_id', historyState.vehicle_id);
+    u.searchParams.set('from_date', historyState.from_date || '');
+    u.searchParams.set('to_date', historyState.to_date || '');
+    window.location.href = u.toString();
+  }
+
+  function preparePrintableContent() {
+    if (!printableEl) return '';
+    var clone = printableEl.cloneNode(true);
+    clone.querySelectorAll('.umr-segments-toolbar').forEach(function (el) { el.remove(); });
+    clone.querySelectorAll('.umr-collapse-toggle').forEach(function (btn) {
+      var title = document.createElement('div');
+      title.className = 'umr-print-section-title';
+      title.textContent = (btn.innerText || btn.textContent || '').replace(/\s+/g, ' ').trim();
+      btn.parentNode.replaceChild(title, btn);
+    });
+    clone.querySelectorAll('.collapse').forEach(function (el) {
+      el.classList.add('show');
+      el.style.display = 'block';
+      el.style.height = 'auto';
+    });
+    clone.querySelectorAll('.umr-seg-row-hidden').forEach(function (tr) {
+      tr.classList.remove('umr-seg-row-hidden');
+    });
+    var segKmTotal = 0;
+    clone.querySelectorAll('[id="unauthorizedMovementHistoryBody"] tr[data-seg-km]').forEach(function (tr) {
+      segKmTotal += parseFloat(tr.getAttribute('data-seg-km') || '0') || 0;
+    });
+    var totalEl = clone.querySelector('[id="umrSegmentsKmTotal"]');
+    if (totalEl) totalEl.textContent = fmtKm(segKmTotal);
+    return clone.innerHTML;
+  }
+
+  function getPrintPreviewStyles() {
+    return [
+      '*{box-sizing:border-box;}',
+      'body{font-family:Segoe UI,Arial,sans-serif;margin:0;background:#f1f5f9;color:#0f172a;-webkit-print-color-adjust:exact;print-color-adjust:exact;}',
+      '.preview-toolbar{position:sticky;top:0;z-index:20;background:#111827;color:#fff;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;gap:12px;}',
+      '.preview-toolbar .btn{border:1px solid #d1d5db;background:#fff;color:#111827;padding:7px 12px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;}',
+      '.preview-toolbar .btn-primary{background:#2563eb;color:#fff;border-color:#2563eb;}',
+      '.umr-print-page{max-width:1180px;margin:0 auto;padding:16px 18px 24px;}',
+      '.umr-print-header{background:linear-gradient(135deg,#92400e 0%,#d97706 55%,#f59e0b 100%);color:#fff;border-radius:12px;padding:14px 16px;margin-bottom:12px;}',
+      '.umr-print-title{font-size:1.25rem;font-weight:800;margin:0 0 8px;}',
+      '.umr-print-meta{display:flex;flex-wrap:wrap;gap:6px;}',
+      '.umr-print-pill{display:inline-block;padding:4px 10px;border-radius:999px;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.25);font-size:12px;font-weight:600;}',
+      '.umr-print-vehicle-banner{background:#fff;border-bottom:3px solid #d97706;padding:12px 16px;text-align:center;margin-bottom:14px;border-radius:0 0 10px 10px;}',
+      '.umr-print-vehicle-label{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:#92400e;margin-bottom:4px;}',
+      '.umr-print-vehicle-no{font-size:1.55rem;font-weight:900;color:#0f172a;font-family:Consolas,monospace;letter-spacing:.06em;}',
+      '.umr-print-vehicle-range{font-size:12px;font-weight:600;color:#64748b;margin-top:4px;}',
+      '.umr-summary-card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px 16px;margin-bottom:14px;}',
+      '.umr-summary-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;flex-wrap:wrap;}',
+      '.umr-summary-title{font-size:13px;font-weight:800;text-transform:uppercase;color:#64748b;margin:0;letter-spacing:.04em;}',
+      '.umr-summary-total{font-size:13px;font-weight:700;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:999px;padding:4px 10px;}',
+      '.umr-breakdown-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;}',
+      '.umr-stat-card{border:1px solid #e2e8f0;border-radius:10px;padding:10px 12px;background:#fafafa;}',
+      '.umr-stat-card.task{border-left:4px solid #2563eb;}',
+      '.umr-stat-card.return{border-left:4px solid #16a34a;}',
+      '.umr-stat-card.without{border-left:4px solid #dc2626;}',
+      '.umr-stat-label{font-size:11px;font-weight:700;text-transform:uppercase;color:#64748b;margin-bottom:3px;}',
+      '.umr-stat-value{font-size:16px;font-weight:800;color:#0f172a;}',
+      '.umr-stat-pct{font-size:12px;color:#64748b;margin-top:2px;font-weight:600;}',
+      '.umr-collapse-panel{background:#fff;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:12px;overflow:hidden;}',
+      '.umr-print-section-title{padding:10px 14px;background:#f8fafc;border-bottom:1px solid #e2e8f0;font-size:14px;font-weight:800;color:#0f172a;}',
+      'table{width:100%;border-collapse:collapse;background:#fff;}',
+      'th,td{border:1px solid #dbe3ee;padding:7px 9px;font-size:12px;text-align:left;vertical-align:middle;}',
+      'thead th{background:#f8fafc;color:#475569;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;}',
+      '.umr-segments-table tbody td{font-size:12px;}',
+      '.umr-seg-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:999px;font-size:11px;font-weight:700;white-space:nowrap;}',
+      '.umr-seg-dot{width:6px;height:6px;border-radius:50%;display:inline-block;}',
+      '.umr-seg-task{background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;}',
+      '.umr-seg-task .umr-seg-dot{background:#2563eb;}',
+      '.umr-seg-return{background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0;}',
+      '.umr-seg-return .umr-seg-dot{background:#16a34a;}',
+      '.umr-seg-without{background:#fef2f2;color:#b91c1c;border:1px solid #fecaca;}',
+      '.umr-seg-without .umr-seg-dot{background:#dc2626;}',
+      '.umr-seg-row-without td{background:#fffbeb!important;}',
+      '.umr-seg-row-task td:first-child{border-left:3px solid #2563eb;}',
+      '.umr-seg-row-return td:first-child{border-left:3px solid #16a34a;}',
+      '.umr-seg-row-without td:first-child{border-left:3px solid #f59e0b;}',
+      '.umr-dt-date,.umr-dt-time{display:inline;}',
+      '.umr-dt-time{margin-left:6px;font-weight:700;}',
+      '.umr-dt-date{color:#64748b;}',
+      '.umr-task-id-chip{display:inline-block;font-family:Consolas,monospace;font-size:11px;font-weight:700;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:4px;padding:2px 6px;}',
+      '.umr-km-cell{text-align:right;font-weight:800;}',
+      '.umr-segments-table tfoot td{background:#f8fafc;font-weight:800;}',
+      '.umr-segments-table tfoot .umr-km-cell{color:#92400e;}',
+      '.umr-print-stamp{text-align:right;font-size:11px;color:#64748b;padding:10px 4px 0;border-top:1px dashed #cbd5e1;margin-top:8px;}',
+      '@media print{.preview-toolbar{display:none!important;}.umr-print-page{padding:0;max-width:none;}}'
+    ].join('');
+  }
+
+  function printHistory() {
+    if (!printableEl || !historyState || !historyState.ok) {
+      showUmrToast('Pehle timeline data load hone ka wait karein.', 'info');
+      return;
+    }
+    var win = window.open('', '_blank', 'width=1280,height=900');
+    if (!win) return;
+    var vehicleNo = historyState.vehicle_no || '-';
+    var fromDate = historyState.from_date || '-';
+    var toDate = historyState.to_date || '-';
+    var printedAt = new Date().toLocaleString('en-GB', { hour12: true });
+    var content = preparePrintableContent();
+    win.document.open();
+    win.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Movement Timeline Detail</title>');
+    win.document.write('<style>' + getPrintPreviewStyles() + '</style></head><body>');
+    win.document.write('<div class="preview-toolbar"><div><strong>Movement Timeline Detail</strong> <span style="opacity:.85;">(Print / Preview)</span></div><div><button class="btn" type="button" onclick="window.close()">Close</button> <button class="btn btn-primary" type="button" onclick="window.print()">Print</button></div></div>');
+    win.document.write('<div class="umr-print-page">');
+    win.document.write('<div class="umr-print-header"><div class="umr-print-title">Movement Timeline Detail</div><div class="umr-print-meta">');
+    win.document.write('<span class="umr-print-pill">Vehicle: ' + esc(vehicleNo) + '</span>');
+    win.document.write('<span class="umr-print-pill">' + esc(fromDate) + ' — ' + esc(toDate) + '</span></div></div>');
+    win.document.write('<div class="umr-print-vehicle-banner"><div class="umr-print-vehicle-label">Vehicle Number</div><div class="umr-print-vehicle-no">' + esc(vehicleNo) + '</div><div class="umr-print-vehicle-range">' + esc(fromDate) + ' — ' + esc(toDate) + '</div></div>');
+    win.document.write(content);
+    win.document.write('<div class="umr-print-stamp">Printed ' + esc(printedAt) + '</div>');
+    win.document.write('</div></body></html>');
+    win.document.close();
+    win.focus();
+  }
+
+  function ensureHtml2Canvas() {
+    if (typeof html2canvas === 'function') return Promise.resolve();
+    return new Promise(function (resolve, reject) {
+      var existing = document.getElementById('umrHtml2CanvasScript');
+      if (existing) {
+        existing.addEventListener('load', function () { resolve(); }, { once: true });
+        existing.addEventListener('error', function () { reject(new Error('Screenshot library load nahi ho saki.')); }, { once: true });
+        return;
+      }
+      var script = document.createElement('script');
+      script.id = 'umrHtml2CanvasScript';
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+      script.onload = function () { resolve(); };
+      script.onerror = function () { reject(new Error('Screenshot library load nahi ho saki.')); };
+      document.head.appendChild(script);
+    });
+  }
+
+  function downloadScreenshotBlob(blob) {
     var a = document.createElement('a');
-    var safeVehicle = (historyState.vehicle_no || 'vehicle').replace(/[^\w\-]+/g, '_');
+    var safeVehicle = ((historyState && historyState.vehicle_no) || 'vehicle').replace(/[^\w\-]+/g, '_');
     a.href = URL.createObjectURL(blob);
-    a.download = 'Movement_Timeline_' + safeVehicle + '_' + (historyState.from_date || '') + '_to_' + (historyState.to_date || '') + '.csv';
+    a.download = 'Movement_Timeline_' + safeVehicle + '.png';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(a.href);
   }
 
-  function printHistory() {
-    if (!printableEl) return;
-    var win = window.open('', '_blank', 'width=1100,height=800');
-    if (!win) return;
-    win.document.write('<html><head><title>Movement Timeline Detail</title>');
-    win.document.write('<style>body{font-family:Arial,sans-serif;padding:14px;background:#f8fafc;}table{width:100%;border-collapse:collapse;margin-bottom:12px;background:#fff;}th,td{border:1px solid #999;padding:6px 8px;font-size:12px;text-align:left;}thead th{background:#f2f2f2;}h3{margin:0 0 10px 0;} .preview-toolbar{position:sticky;top:0;z-index:10;background:#111827;color:#fff;padding:10px 12px;border-radius:8px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;gap:10px;} .preview-toolbar .btn{border:1px solid #d1d5db;background:#fff;color:#111827;padding:6px 10px;border-radius:6px;font-size:12px;cursor:pointer;} .preview-toolbar .btn-primary{background:#2563eb;color:#fff;border-color:#2563eb;} @media print {.preview-toolbar{display:none;} body{background:#fff;padding:0;}}</style>');
-    win.document.write('</head><body>');
-    win.document.write('<div class="preview-toolbar"><div><strong>Movement Timeline Detail</strong> <span style="opacity:.85;">(Print / Preview)</span></div><div><button class="btn" onclick="window.close()">Close</button> <button class="btn btn-primary" onclick="window.print()">Print</button></div></div>');
-    win.document.write('<h3>Movement Timeline Detail</h3>');
-    win.document.write(printableEl.innerHTML);
-    win.document.write('</body></html>');
-    win.document.close();
-    win.focus();
+  function prepareTimelineCaptureClone(sourceEl) {
+    var clone = sourceEl.cloneNode(true);
+    clone.removeAttribute('id');
+    clone.classList.add('umr-capture-root');
+    clone.style.cssText = 'position:fixed;left:-100000px;top:0;z-index:-1;width:' + sourceEl.offsetWidth + 'px;pointer-events:none;background:#f8fafc;';
+    var actions = clone.querySelector('.umr-tl-actions');
+    if (actions) actions.remove();
+    clone.querySelectorAll('.umr-collapse-toggle').forEach(function (btn) {
+      btn.removeAttribute('data-bs-toggle');
+      btn.removeAttribute('data-bs-target');
+      btn.type = 'button';
+      btn.disabled = true;
+      btn.style.cursor = 'default';
+      btn.style.pointerEvents = 'none';
+      var icon = btn.querySelector('.umr-collapse-icon');
+      if (icon) icon.remove();
+    });
+    clone.querySelectorAll('.umr-segments-toolbar').forEach(function (el) { el.remove(); });
+    clone.querySelectorAll('.collapse').forEach(function (el) {
+      el.classList.add('show');
+      el.style.display = 'block';
+      el.style.height = 'auto';
+      el.style.visibility = 'visible';
+    });
+    var body = clone.querySelector('.modal-body');
+    if (body) {
+      body.style.overflow = 'visible';
+      body.style.maxHeight = 'none';
+      body.style.padding = '1rem 1.1rem 1.15rem';
+    }
+    clone.querySelectorAll('.umr-segments-table-wrap').forEach(function (el) {
+      el.style.maxHeight = 'none';
+      el.style.overflow = 'visible';
+    });
+    clone.querySelectorAll('.umr-seg-row-hidden').forEach(function (tr) {
+      tr.classList.remove('umr-seg-row-hidden');
+    });
+    clone.querySelectorAll('.umr-seg-badge').forEach(function (badge) {
+      if (!badge.querySelector('.umr-seg-dot')) {
+        var dot = document.createElement('span');
+        dot.className = 'umr-seg-dot';
+        badge.insertBefore(dot, badge.firstChild);
+      }
+    });
+    var vehicleNo = (historyState && historyState.vehicle_no) || '-';
+    var fromDate = (historyState && historyState.from_date) || '-';
+    var toDate = (historyState && historyState.to_date) || '-';
+    var header = clone.querySelector('.modal-header');
+    if (header) {
+      var banner = document.createElement('div');
+      banner.className = 'umr-capture-vehicle-banner';
+      banner.innerHTML = '<div class="umr-capture-vehicle-label"><i class="bi bi-truck me-1"></i>Vehicle Number</div>'
+        + '<div class="umr-capture-vehicle-no">' + esc(vehicleNo) + '</div>'
+        + '<div class="umr-capture-vehicle-range">' + esc(fromDate) + ' — ' + esc(toDate) + '</div>';
+      header.parentNode.insertBefore(banner, header.nextSibling);
+      clone.querySelectorAll('.umr-meta-pill').forEach(function (pill) {
+        if (pill.querySelector('.bi-truck')) pill.style.display = 'none';
+      });
+    }
+    if (body) {
+      var stamp = document.createElement('div');
+      stamp.className = 'umr-capture-stamp';
+      stamp.textContent = 'Captured ' + new Date().toLocaleString('en-GB', { hour12: true });
+      body.appendChild(stamp);
+    }
+    var captureStyle = document.createElement('style');
+    captureStyle.textContent = [
+      '.umr-capture-root .modal-header{position:relative;}',
+      '.umr-capture-root .umr-capture-vehicle-banner{background:#fff;border-bottom:3px solid #d97706;padding:.7rem 1rem;text-align:center;-webkit-print-color-adjust:exact;print-color-adjust:exact;}',
+      '.umr-capture-root .umr-capture-vehicle-label{font-size:.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:#92400e;margin-bottom:.18rem;}',
+      '.umr-capture-root .umr-capture-vehicle-no{font-size:1.5rem;font-weight:900;color:#0f172a;letter-spacing:.08em;font-family:ui-monospace,Consolas,monospace;line-height:1.1;}',
+      '.umr-capture-root .umr-capture-vehicle-range{font-size:.74rem;font-weight:600;color:#64748b;margin-top:.22rem;}',
+      '.umr-capture-root .umr-capture-stamp{font-size:.68rem;color:#64748b;text-align:right;padding:.45rem .65rem .55rem;border-top:1px dashed #cbd5e1;background:#fff;}',
+      '.umr-capture-root .umr-collapse-toggle{display:flex!important;background:#f8fafc!important;color:#0f172a!important;border-bottom:1px solid #e2e8f0;}',
+      '.umr-capture-root .umr-seg-badge{-webkit-print-color-adjust:exact;print-color-adjust:exact;}',
+      '.umr-capture-root .umr-seg-row-without td{background:#fffbeb!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}',
+      '.umr-capture-root .umr-stat-card::before{display:block!important;}',
+      '.umr-capture-root .umr-dt-date,.umr-capture-root .umr-dt-time{display:inline!important;white-space:nowrap!important;}',
+      '.umr-capture-root .umr-dt-time{margin-left:.35rem!important;}',
+      '.umr-capture-root .umr-segments-table tfoot td{white-space:nowrap!important;letter-spacing:normal!important;word-spacing:normal!important;}',
+      '.umr-capture-root .umr-seg-row-task td:first-child{border-left:3px solid #2563eb!important;box-shadow:none!important;}',
+      '.umr-capture-root .umr-seg-row-return td:first-child{border-left:3px solid #16a34a!important;box-shadow:none!important;}',
+      '.umr-capture-root .umr-seg-row-without td:first-child{border-left:3px solid #f59e0b!important;box-shadow:none!important;}'
+    ].join('');
+    clone.insertBefore(captureStyle, clone.firstChild);
+    document.body.appendChild(clone);
+    return clone;
+  }
+
+  function copyScreenshotCanvas(canvas) {
+    return new Promise(function (resolve, reject) {
+      canvas.toBlob(function (blob) {
+        if (!blob) {
+          reject(new Error('Screenshot image create nahi ho saki.'));
+          return;
+        }
+        if (navigator.clipboard && window.ClipboardItem) {
+          navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
+            .then(function () { resolve('clipboard'); })
+            .catch(function () {
+              downloadScreenshotBlob(blob);
+              resolve('download');
+            });
+          return;
+        }
+        downloadScreenshotBlob(blob);
+        resolve('download');
+      }, 'image/png');
+    });
+  }
+
+  function captureHistoryScreenshot() {
+    if (!historyState || !historyState.ok) {
+      showUmrToast('Pehle timeline data load hone ka wait karein.', 'info');
+      return;
+    }
+    var source = historyModalEl ? historyModalEl.querySelector('.modal-content') : null;
+    if (!source || !screenshotBtn) return;
+    var oldHtml = screenshotBtn.innerHTML;
+    screenshotBtn.disabled = true;
+    screenshotBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status"></span>Capturing...';
+    var clone = null;
+    ensureHtml2Canvas().then(function () {
+      clone = prepareTimelineCaptureClone(source);
+      var captureW = Math.max(clone.scrollWidth, source.offsetWidth);
+      var captureH = clone.scrollHeight;
+      var scale = 3;
+      if (captureW * scale > 16000 || captureH * scale > 16000) scale = 2;
+      return new Promise(function (resolve) {
+        requestAnimationFrame(function () {
+          setTimeout(resolve, 80);
+        });
+      }).then(function () {
+        return html2canvas(clone, {
+          scale: scale,
+          useCORS: true,
+          allowTaint: true,
+          backgroundColor: '#f8fafc',
+          logging: false,
+          letterRendering: true,
+          width: captureW,
+          height: captureH,
+          windowWidth: captureW,
+          windowHeight: captureH,
+          scrollX: 0,
+          scrollY: 0,
+          onclone: function (_doc, node) {
+            node.querySelectorAll('.umr-seg-badge').forEach(function (badge) {
+              badge.style.display = 'inline-flex';
+              badge.style.alignItems = 'center';
+            });
+          }
+        });
+      });
+    }).then(function (canvas) {
+      return copyScreenshotCanvas(canvas);
+    }).then(function (mode) {
+      if (mode === 'clipboard') {
+        showUmrToast('Screenshot clipboard mein copy ho gayi. Ab Ctrl+V se paste karein.', 'success');
+      } else {
+        showUmrToast('Clipboard permission nahi mili — PNG file download ho gayi.', 'info');
+      }
+    }).catch(function (err) {
+      showUmrToast((err && err.message) ? err.message : 'Screenshot capture fail ho gaya.', 'error');
+    }).finally(function () {
+      if (clone && clone.parentNode) clone.parentNode.removeChild(clone);
+      screenshotBtn.disabled = false;
+      screenshotBtn.innerHTML = oldHtml;
+    });
   }
 
   async function openHistory(vehicleId, focus) {
     if (!vehicleId || !historyModal) return;
     var fromDate = (document.querySelector('input[name="from_date"]') || {}).value || '';
     var toDate = (document.querySelector('input[name="to_date"]') || {}).value || '';
-    metaEl.textContent = 'Loading...';
+    metaEl.textContent = '';
+    renderHistoryMeta(null, '');
     totalsEl.innerHTML = '';
     tasksBody.innerHTML = '';
     returnBody.innerHTML = '';
     segBody.innerHTML = '';
+    resetSegmentsFilter();
     historyModal.show();
     try {
       var u = new URL('{{ url_for("unauthorized_movement_report_history") }}', window.location.origin);
@@ -407,13 +961,8 @@ document.addEventListener('DOMContentLoaded', function () {
       if (!res.ok || !data.ok) throw new Error(data.message || 'Unable to load history.');
       historyState = data;
 
-      metaEl.textContent = 'Vehicle: ' + (data.vehicle_no || '-') + ' | Date range: ' + (data.from_date || '-') + ' to ' + (data.to_date || '-');
-      var totals = data.totals || {};
-      totalsEl.innerHTML = [
-        '<div class="col-md-4"><div class="border rounded p-2 bg-light small"><b>Task Running KM</b><br>' + esc((totals.task_running_km || 0).toFixed ? totals.task_running_km.toFixed(2) : totals.task_running_km) + '</div></div>',
-        '<div class="col-md-4"><div class="border rounded p-2 bg-light small"><b>Return to Parking KM</b><br>' + esc((totals.return_to_parking_km || 0).toFixed ? totals.return_to_parking_km.toFixed(2) : totals.return_to_parking_km) + '</div></div>',
-        '<div class="col-md-4"><div class="border rounded p-2 bg-light small"><b>Without Task KM</b><br>' + esc((totals.without_task_km || 0).toFixed ? totals.without_task_km.toFixed(2) : totals.without_task_km) + '</div></div>'
-      ].join('');
+      renderHistoryMeta(data, focus || '');
+      renderMovementBreakdown(data.totals || {});
 
       fillRows(tasksBody, data.tasks || [], function (t) {
         return '<tr><td>' + esc(t.task_id || '-') + '</td><td>' + esc(t.assign || '-') + '</td><td>' + esc(t.close || '-') + '</td><td>' + esc(t.running_km) + '</td></tr>';
@@ -422,16 +971,22 @@ document.addEventListener('DOMContentLoaded', function () {
         return '<tr><td>' + esc(r.task_id || '-') + '</td><td>' + esc(r.start || '-') + '</td><td>' + esc(r.end || '-') + '</td><td>' + esc(r.km) + '</td><td>' + esc(reasonText(r.reason)) + '</td></tr>';
       }, 5);
       fillRows(segBody, data.segments || [], function (s) {
-        return '<tr><td>' + segBadge(s.label) + '</td><td>' + esc(s.task_id || '-') + '</td><td>' + esc(s.start || '-') + '</td><td>' + esc(s.end || '-') + '</td><td>' + esc(s.km) + '</td></tr>';
+        var label = s.label || 'without_task';
+        var km = parseFloat(s.km) || 0;
+        return '<tr class="' + segRowClass(label) + '" data-seg-label="' + esc(label) + '" data-seg-km="' + esc(km) + '">'
+          + '<td>' + segBadge(label) + '</td>'
+          + '<td>' + formatTaskIdCell(s.task_id) + '</td>'
+          + '<td>' + formatDateTimeCell(s.start) + '</td>'
+          + '<td>' + formatDateTimeCell(s.end) + '</td>'
+          + '<td class="umr-km-cell">' + esc(fmtKm(km)) + '</td>'
+          + '</tr>';
       }, 5);
-
-      if (focus && segBody) {
-        var target = focus === 'task_running' ? 'Task Running' : (focus === 'return_to_parking' ? 'Return to Parking' : 'Without Task');
-        metaEl.textContent += ' | Focus: ' + target;
-      }
+      if (segTypeFilter && focus === 'without_task') segTypeFilter.value = 'without_task';
+      else if (segTypeFilter && !focus) segTypeFilter.value = '';
+      applySegmentsFilter();
     } catch (err) {
       historyState = null;
-      metaEl.textContent = (err && err.message) ? err.message : 'Failed to load history.';
+      metaEl.innerHTML = '<span class="umr-meta-pill umr-meta-focus">' + esc((err && err.message) ? err.message : 'Failed to load history.') + '</span>';
     }
   }
 
@@ -444,10 +999,19 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 
   if (exportBtn) {
-    exportBtn.addEventListener('click', function () { downloadHistoryCsv(); });
+    exportBtn.addEventListener('click', function () { downloadHistoryExcel(); });
   }
   if (printBtn) {
     printBtn.addEventListener('click', function () { printHistory(); });
+  }
+  if (screenshotBtn) {
+    screenshotBtn.addEventListener('click', function () { captureHistoryScreenshot(); });
+  }
+  if (segSearch) {
+    segSearch.addEventListener('input', applySegmentsFilter);
+  }
+  if (segTypeFilter) {
+    segTypeFilter.addEventListener('change', applySegmentsFilter);
   }
 });
 </script>

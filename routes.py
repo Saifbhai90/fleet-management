@@ -73,7 +73,7 @@ from sqlalchemy import String as SAString
 from sqlalchemy.exc import OperationalError, IntegrityError, DataError
 from sqlalchemy.orm import joinedload
 from utils import (
-    generate_csv_response, parse_date, generate_excel_template, format_cnic, format_phone, format_date_ddmmyyyy,
+    generate_csv_response, parse_date, generate_excel_template, format_cnic, format_phone, format_date_ddmmyyyy, format_reading,
     format_time_ampm,
     pk_now, pk_date, pk_time,
     make_driver_profile_share_token, load_driver_profile_share_token,
@@ -13916,8 +13916,8 @@ def mileage_report_export():
                 r['project'].name if r.get('project') else '',
                 vtype_txt,
                 v.vehicle_no if v else '',
-                f"{r['start_reading']:.2f}",
-                f"{r['close_reading']:.2f}",
+                format_reading(r['start_reading']),
+                format_reading(r['close_reading']),
                 f"{r['total_km']:.2f}",
                 str(r['tasks_count']),
                 r.get('check_result') or '',
@@ -13943,8 +13943,8 @@ def mileage_report_export():
             r['project'].name if r['project'] else '-',
             vtype_disp,
             v.vehicle_no if v else '-',
-            r['start_reading'],
-            r['close_reading'],
+            format_reading(r['start_reading']),
+            format_reading(r['close_reading']),
             r['total_km'],
             r['tasks_count'],
             r['check_result'] or '-',
@@ -14008,8 +14008,8 @@ def _mileage_report_preview_context():
                 r['project'].name if r.get('project') else '',
                 vtype_txt,
                 v.vehicle_no if v else '',
-                f"{r['start_reading']:.2f}",
-                f"{r['close_reading']:.2f}",
+                format_reading(r['start_reading']),
+                format_reading(r['close_reading']),
                 f"{r['total_km']:.2f}",
                 str(r['tasks_count']),
                 r.get('check_result') or '',
@@ -14509,6 +14509,244 @@ def _build_unauthorized_movement_timeline(vehicle, from_date, to_date):
     }
 
 
+def _umr_timeline_reason_label(reason):
+    return {
+        'next_task_started': 'Next task started',
+        'geofence_500m': 'Geofence <= 500m',
+        'km_cap_reached': 'KM cap reached',
+        'cutoff_120m': '120 min cutoff',
+    }.get(reason or '', reason or '-')
+
+
+def _umr_segment_type_label(label):
+    return {
+        'task_running': 'Task Running',
+        'return_to_parking': 'Return to Parking',
+        'without_task': 'Without Task',
+    }.get(label or '', label or '-')
+
+
+def _split_umr_datetime(ts):
+    if not ts or ts == '-':
+        return '-', '-'
+    m = re.match(r'^(\d{2}-\d{2}-\d{4})\s+(.+)$', str(ts).strip())
+    if m:
+        return m.group(1), m.group(2)
+    return str(ts), '-'
+
+
+def _build_umr_timeline_excel(payload, *, vehicle_no, project_name, district_name, from_date, to_date):
+    output = io.BytesIO()
+    wb = xlsxwriter.Workbook(output, {'in_memory': True})
+    safe_sheet = re.sub(r'[^\w\- ]', '_', (vehicle_no or 'Timeline'))[:28] or 'Timeline'
+    ws = wb.add_worksheet(safe_sheet)
+    ws.hide_gridlines(2)
+    ws.set_landscape()
+    ws.set_margins(left=0.5, right=0.5, top=0.5, bottom=0.5)
+    ws.set_default_row(18)
+
+    font = 'Segoe UI'
+    cols = 6
+    exported_at = pk_now().strftime('%d/%m/%Y, %I:%M:%S %p')
+    period_txt = f'{from_date.strftime("%d-%m-%Y")} — {to_date.strftime("%d-%m-%Y")}'
+    totals = payload.get('totals') or {}
+    tasks = payload.get('tasks') or []
+    return_windows = payload.get('return_windows') or []
+    segments = payload.get('segments') or []
+    task_km = float(totals.get('task_running_km') or 0.0)
+    return_km = float(totals.get('return_to_parking_km') or 0.0)
+    without_km = float(totals.get('without_task_km') or 0.0)
+    total_km = round(task_km + return_km + without_km, 2)
+    seg_total = round(sum(float(s.get('km') or 0.0) for s in segments), 2)
+
+    def pct(part):
+        return round(float(part or 0) * 100.0 / total_km, 1) if total_km > 0 else 0.0
+
+    def fmt(**kw):
+        base = {'font_name': font, 'valign': 'vcenter'}
+        base.update(kw)
+        return wb.add_format(base)
+
+    header_fmt = fmt(bold=True, font_size=15, font_color='#FFFFFF', bg_color='#D97706', align='left', indent=1)
+    header_period_fmt = fmt(font_size=10, font_color='#FFFFFF', bg_color='#D97706', align='right')
+    header_sub_fmt = fmt(font_size=10, font_color='#FFEDD5', bg_color='#D97706', align='left', indent=1)
+
+    bd_title_fmt = fmt(bold=True, font_size=10, font_color='#64748B', bg_color='#FFFFFF', align='left', indent=1)
+    bd_total_fmt = fmt(bold=True, font_size=10, font_color='#0F172A', bg_color='#F1F5F9', align='right',
+                       top=1, bottom=1, left=1, right=1, top_color='#E2E8F0', bottom_color='#E2E8F0',
+                       left_color='#E2E8F0', right_color='#E2E8F0')
+
+    def stat_lbl_f(accent):
+        return fmt(font_size=9, font_color='#64748B', bg_color='#FAFAFA', align='left', bold=True, indent=1,
+                   left=3, left_color=accent, right=1, right_color='#E2E8F0', top=1, top_color='#E2E8F0')
+
+    def stat_val_f(accent, warn=False):
+        return fmt(bold=True, font_size=15, font_color='#DC2626' if warn else '#0F172A', bg_color='#FAFAFA',
+                   align='left', indent=1, left=3, left_color=accent, right=1, right_color='#E2E8F0')
+
+    def stat_pct_f(accent):
+        return fmt(font_size=9, font_color='#64748B', bg_color='#FAFAFA', align='left', indent=1,
+                   left=3, left_color=accent, right=1, right_color='#E2E8F0', bottom=1, bottom_color='#E2E8F0')
+
+    sec_fmt = fmt(bold=True, font_size=11, font_color='#0F172A', bg_color='#FFFFFF', align='left', indent=1,
+                  top=1, bottom=1, top_color='#E2E8F0', bottom_color='#E2E8F0')
+    th_fmt = fmt(bold=True, font_size=9, font_color='#475569', bg_color='#F8FAFC', align='left',
+                 bottom=1, bottom_color='#DBE3EE')
+    th_c_fmt = fmt(bold=True, font_size=9, font_color='#475569', bg_color='#F8FAFC', align='center',
+                   bottom=1, bottom_color='#DBE3EE')
+    th_r_fmt = fmt(bold=True, font_size=9, font_color='#475569', bg_color='#F8FAFC', align='right',
+                   bottom=1, bottom_color='#DBE3EE')
+    td_fmt = fmt(font_size=10, font_color='#0F172A', align='left', bottom=1, bottom_color='#DBE3EE', indent=1)
+    td_c_fmt = fmt(font_size=10, font_color='#0F172A', align='center', bottom=1, bottom_color='#DBE3EE')
+    td_km_fmt = fmt(bold=True, font_size=10, font_color='#0F172A', align='right', bottom=1, bottom_color='#DBE3EE', num_format='0.00')
+    td_warn_fmt = fmt(font_size=10, font_color='#0F172A', align='left', bottom=1, bottom_color='#DBE3EE',
+                      bg_color='#FFFBEB', indent=1)
+    td_warn_c_fmt = fmt(font_size=10, font_color='#0F172A', align='center', bottom=1, bottom_color='#DBE3EE', bg_color='#FFFBEB')
+    td_warn_km_fmt = fmt(bold=True, font_size=10, font_color='#92400E', align='right', bottom=1, bottom_color='#DBE3EE',
+                         bg_color='#FFFBEB', num_format='0.00')
+    badge_task = fmt(bold=True, font_size=9, font_color='#1D4ED8', bg_color='#EFF6FF', align='center',
+                     bottom=1, bottom_color='#DBE3EE')
+    badge_return = fmt(bold=True, font_size=9, font_color='#15803D', bg_color='#F0FDF4', align='center',
+                       bottom=1, bottom_color='#DBE3EE')
+    badge_without = fmt(bold=True, font_size=9, font_color='#B91C1C', bg_color='#FEF2F2', align='center',
+                          bottom=1, bottom_color='#DBE3EE')
+    foot_fmt = fmt(bold=True, font_size=10, font_color='#475569', bg_color='#F8FAFC', align='right', bottom=1, bottom_color='#DBE3EE')
+    foot_km_fmt = fmt(bold=True, font_size=10, font_color='#92400E', bg_color='#F8FAFC', align='right',
+                      bottom=1, bottom_color='#DBE3EE', num_format='0.00')
+    stamp_fmt = fmt(font_size=9, font_color='#64748B', italic=True, align='right')
+    empty_fmt = fmt(font_size=10, font_color='#94A3B8', italic=True, align='center', bottom=1, bottom_color='#DBE3EE')
+
+    def write_simple_table(title, headers, widths, rows_data, row_fn, foot_fn=None):
+        nonlocal row
+        ws.set_row(row, 24)
+        ws.merge_range(row, 0, row, cols - 1, title, sec_fmt)
+        row += 1
+        ws.set_row(row, 22)
+        for i, h in enumerate(headers):
+            f = th_r_fmt if h.endswith('KM') or h == 'KM' else (th_c_fmt if h in ('Task ID', 'Sr') else th_fmt)
+            ws.write(row, i, h, f)
+        row += 1
+        if not rows_data:
+            ws.merge_range(row, 0, row, len(headers) - 1, 'No data', empty_fmt)
+            row += 1
+        else:
+            for item in rows_data:
+                ws.set_row(row, 20)
+                row_fn(row, item)
+                row += 1
+        if foot_fn:
+            ws.set_row(row, 22)
+            foot_fn(row)
+            row += 1
+        ws.set_row(row, 10)
+        row += 1
+        for i, w in enumerate(widths):
+            ws.set_column(i, i, w)
+
+    row = 0
+    ws.set_row(row, 32)
+    ws.merge_range(row, 0, row, 3, 'Movement Timeline Detail', header_fmt)
+    ws.merge_range(row, 4, row, cols - 1, period_txt, header_period_fmt)
+    row += 1
+    meta_bits = [f'Vehicle: {vehicle_no or "-"}']
+    if project_name and project_name != '-':
+        meta_bits.append(f'Project: {project_name}')
+    if district_name and district_name != '-':
+        meta_bits.append(f'District: {district_name}')
+    ws.set_row(row, 20)
+    ws.merge_range(row, 0, row, cols - 1, '   ·   '.join(meta_bits), header_sub_fmt)
+    row += 1
+    ws.set_row(row, 10)
+    row += 1
+
+    ws.set_row(row, 24)
+    ws.write(row, 0, 'MOVEMENT BREAKDOWN', bd_title_fmt)
+    ws.merge_range(row, 4, row, cols - 1, f'Total {total_km:.2f} KM', bd_total_fmt)
+    row += 1
+    stat_row = row
+    cards = [
+        (0, 1, '#2563EB', 'Task Running', task_km, pct(task_km), False),
+        (2, 3, '#16A34A', 'Return to Parking', return_km, pct(return_km), False),
+        (4, 5, '#DC2626', 'Without Task', without_km, pct(without_km), True),
+    ]
+    for c0, c1, accent, label, val, pc, warn in cards:
+        ws.merge_range(stat_row, c0, stat_row, c1, label.upper(), stat_lbl_f(accent))
+        ws.merge_range(stat_row + 1, c0, stat_row + 1, c1, f'{val:.2f} KM', stat_val_f(accent, warn))
+        ws.merge_range(stat_row + 2, c0, stat_row + 2, c1, f'{pc:.1f}% of movement', stat_pct_f(accent))
+    for rr in range(3):
+        ws.set_row(stat_row + rr, 18 if rr != 1 else 24)
+    row = stat_row + 3
+    ws.set_row(row, 12)
+    row += 1
+
+    write_simple_table(
+        'Task Windows',
+        ['Task ID', 'Assign', 'Close', 'Task Running KM'],
+        [16, 26, 26, 14],
+        tasks,
+        lambda r, t: (
+            ws.write(r, 0, t.get('task_id') or '-', td_c_fmt),
+            ws.write(r, 1, t.get('assign') or '-', td_fmt),
+            ws.write(r, 2, t.get('close') or '-', td_fmt),
+            ws.write(r, 3, float(t.get('running_km') or 0.0), td_km_fmt),
+        ),
+    )
+
+    write_simple_table(
+        'Return Windows',
+        ['Task ID', 'Start', 'End', 'KM', 'Stop Reason'],
+        [16, 24, 24, 10, 22],
+        return_windows,
+        lambda r, w: (
+            ws.write(r, 0, w.get('task_id') or '-', td_c_fmt),
+            ws.write(r, 1, w.get('start') or '-', td_fmt),
+            ws.write(r, 2, w.get('end') or '-', td_fmt),
+            ws.write(r, 3, float(w.get('km') or 0.0), td_km_fmt),
+            ws.write(r, 4, _umr_timeline_reason_label(w.get('reason')), td_fmt),
+        ),
+    )
+
+    def seg_row_fn(r, s):
+        label = s.get('label') or 'without_task'
+        is_without = label == 'without_task'
+        bf = badge_task if label == 'task_running' else (badge_return if label == 'return_to_parking' else badge_without)
+        bl = 'Task Running' if label == 'task_running' else ('Return to Parking' if label == 'return_to_parking' else 'Without Task')
+        if is_without:
+            ws.write(r, 0, bl, badge_without)
+            ws.write(r, 1, s.get('task_id') or '-', td_warn_c_fmt)
+            ws.write(r, 2, s.get('start') or '-', td_warn_fmt)
+            ws.write(r, 3, s.get('end') or '-', td_warn_fmt)
+            ws.write(r, 4, float(s.get('km') or 0.0), td_warn_km_fmt)
+        else:
+            ws.write(r, 0, bl, bf)
+            ws.write(r, 1, s.get('task_id') or '-', td_c_fmt)
+            ws.write(r, 2, s.get('start') or '-', td_fmt)
+            ws.write(r, 3, s.get('end') or '-', td_fmt)
+            ws.write(r, 4, float(s.get('km') or 0.0), td_km_fmt)
+
+    def seg_foot_fn(r):
+        ws.merge_range(r, 0, r, 3, 'Visible segment total', foot_fmt)
+        ws.write(r, 4, seg_total, foot_km_fmt)
+
+    write_simple_table(
+        'Activity Timeline',
+        ['Type', 'Task ID', 'From Time', 'To Time', 'KM'],
+        [18, 16, 26, 26, 12],
+        segments,
+        seg_row_fn,
+        seg_foot_fn,
+    )
+
+    ws.merge_range(row, 0, row, cols - 1, f'Exported {exported_at}', stamp_fmt)
+    ws.freeze_panes(3, 0)
+    try:
+        ws.autofit()
+    except Exception:
+        pass
+    wb.close()
+    output.seek(0)
+    return output
+
 @app.route('/unauthorized-movement-report')
 def unauthorized_movement_report():
     from auth_utils import get_user_context
@@ -14631,11 +14869,68 @@ def unauthorized_movement_report_history():
     payload = _build_unauthorized_movement_timeline(v, from_date, to_date)
     payload.update({
         'ok': True,
+        'vehicle_id': vehicle_id,
         'vehicle_no': v.vehicle_no or '-',
         'from_date': from_date.strftime('%d-%m-%Y'),
         'to_date': to_date.strftime('%d-%m-%Y'),
     })
     return jsonify(payload)
+
+
+@app.route('/unauthorized-movement-report/history/export')
+def unauthorized_movement_report_history_export():
+    from auth_utils import get_user_context
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = set(user_context.get('allowed_projects', set()) or [])
+    allowed_districts = set(user_context.get('allowed_districts', set()) or [])
+    allowed_vehicles = set(user_context.get('allowed_vehicles', set()) or [])
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+
+    vehicle_id = request.args.get('vehicle_id', type=int) or 0
+    from_date = parse_date(request.args.get('from_date')) or pk_date()
+    to_date = parse_date(request.args.get('to_date')) or pk_date()
+    if from_date > to_date:
+        from_date, to_date = to_date, from_date
+    if not vehicle_id:
+        flash('Vehicle is required for export.', 'danger')
+        return redirect(url_for('unauthorized_movement_report'))
+
+    vq = Vehicle.query.options(
+        joinedload(Vehicle.project),
+        joinedload(Vehicle.district),
+    ).filter(Vehicle.id == vehicle_id)
+    if not is_master_or_admin:
+        if allowed_vehicles:
+            vq = vq.filter(Vehicle.id.in_(list(allowed_vehicles)))
+        if allowed_projects:
+            vq = vq.filter(Vehicle.project_id.in_(list(allowed_projects)))
+        if allowed_districts:
+            vq = vq.filter(Vehicle.district_id.in_(list(allowed_districts)))
+    v = vq.first()
+    if not v:
+        flash('Vehicle not found or not allowed.', 'danger')
+        return redirect(url_for('unauthorized_movement_report'))
+
+    payload = _build_unauthorized_movement_timeline(v, from_date, to_date)
+    project_name = v.project.name if getattr(v, 'project', None) else '-'
+    district_name = v.district.name if getattr(v, 'district', None) else '-'
+    output = _build_umr_timeline_excel(
+        payload,
+        vehicle_no=v.vehicle_no or '-',
+        project_name=project_name,
+        district_name=district_name,
+        from_date=from_date,
+        to_date=to_date,
+    )
+    safe_vehicle = re.sub(r'[^\w\-]+', '_', (v.vehicle_no or 'vehicle'))
+    download_name = f'Movement_Timeline_{safe_vehicle}_{from_date.strftime("%d-%m-%Y")}_to_{to_date.strftime("%d-%m-%Y")}.xlsx'
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=download_name,
+    )
 
 
 @app.route('/unauthorized-movement-report/export')
@@ -15691,8 +15986,8 @@ def tracker_difference_report_export():
                 r['district'].name if r.get('district') else '',
                 r['project'].name if r.get('project') else '',
                 r['vehicle'].vehicle_no if r.get('vehicle') else '',
-                f"{r['start_reading']:.2f}",
-                f"{r['close_reading']:.2f}",
+                format_reading(r['start_reading']),
+                format_reading(r['close_reading']),
                 f"{r['total_km']:.2f}",
                 f"{r['tracker_mileage']:.2f}",
                 f"{r['diff_km']:.2f}",
@@ -15711,8 +16006,8 @@ def tracker_difference_report_export():
             r['district'].name if r['district'] else '-',
             r['project'].name if r['project'] else '-',
             r['vehicle'].vehicle_no if r['vehicle'] else '-',
-            r['start_reading'],
-            r['close_reading'],
+            format_reading(r['start_reading']),
+            format_reading(r['close_reading']),
             r['total_km'],
             r['tracker_mileage'],
             r['diff_km'],
@@ -15768,8 +16063,8 @@ def _tracker_difference_report_preview_context():
                 r['district'].name if r.get('district') else '',
                 r['project'].name if r.get('project') else '',
                 r['vehicle'].vehicle_no if r.get('vehicle') else '',
-                f"{r['start_reading']:.2f}",
-                f"{r['close_reading']:.2f}",
+                format_reading(r['start_reading']),
+                format_reading(r['close_reading']),
                 f"{r['total_km']:.2f}",
                 f"{r['tracker_mileage']:.2f}",
                 f"{r['diff_km']:.2f}",

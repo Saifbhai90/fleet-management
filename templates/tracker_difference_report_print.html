@@ -17,7 +17,7 @@
   .rpt-table th, .rpt-table td { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .check-pill { display: inline-block; padding: .13rem .5rem; border-radius: 10px; font-size: .72rem; font-weight: 700; }
   .check-above { background: #ffebee; color: #b91c1c; border: 1px solid #fecaca; }
-  .check-below { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
+  .check-below { background: #fff8e1; color: #f57f17; border: 1px solid #ffe082; }
   .check-equal { background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa; }
   .print-container { max-width: none !important; width: calc(100vw - 16px) !important; margin: 0 auto !important; padding: 10px 8px 20px 8px !important; }
   .preview-search-wrap { display: flex; justify-content: flex-end; margin: 6px 0 10px 0; }
@@ -64,8 +64,8 @@
         <td>{{ r.district.name if r.district else '-' }}</td>
         <td>{{ r.project.name if r.project else '-' }}</td>
         <td>{{ r.vehicle.vehicle_no if r.vehicle else '-' }}</td>
-        <td>{{ '%.2f'|format(r.start_reading) }}</td>
-        <td>{{ '%.2f'|format(r.close_reading) }}</td>
+        <td>{{ r.start_reading|reading }}</td>
+        <td>{{ r.close_reading|reading }}</td>
         <td>{{ '%.2f'|format(r.total_km) }}</td>
         <td>{{ '%.2f'|format(r.tracker_mileage) }}</td>
         <td>{{ '%.2f'|format(r.diff_km) }}</td>

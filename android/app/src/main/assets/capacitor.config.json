@@ -13,7 +13,7 @@
 		"captureInput": true,
 		"webContentsDebuggingEnabled": false,
 		"overScrollMode": "never",
-		"backgroundColor": "#ffffff",
+		"backgroundColor": "#00000000",
 		"initialFocus": false,
 		"androidEdgeToEdge": true
 	},
