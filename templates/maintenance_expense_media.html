@@ -323,8 +323,14 @@
     var it = ITEMS[cur];
     if (!it) return;
     var dlUrl = it.download_url || it.url;
+    if (it.download_url) {
+      window.location.href = dlUrl;
+      return;
+    }
     var a = document.createElement('a');
     a.href = dlUrl;
+    a.target = '_blank';
+    a.rel = 'noopener';
     a.download = it.name || 'attachment';
     document.body.appendChild(a);
     a.click();

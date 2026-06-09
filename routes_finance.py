@@ -2,8 +2,12 @@
 Finance & Accounting Routes
 All routes for vouchers, journal entries, ledgers, and financial reports
 """
-from flask import render_template, request, redirect, url_for, flash, jsonify, session, current_app
+from flask import render_template, request, redirect, url_for, flash, jsonify, session, current_app, send_file, after_this_request
 import io
+import mimetypes
+import tempfile
+import zipfile
+from urllib.request import Request, urlopen
 from sqlalchemy import and_, or_, not_
 from models import (db, Account, JournalEntry, JournalEntryLine, PaymentVoucher, ReceiptVoucher,
                     BankEntry, EmployeeExpense, District, Project, Party, Company, Employee, Driver, User,
@@ -1278,6 +1282,163 @@ def employee_expense_receipt_push_cloud(pk):
     return redirect(request.referrer or url_for('employee_expense_list'))
 
 
+def _employee_expense_receipt_download_name(expense):
+    rp = (expense.receipt_path or '').strip()
+    base = os.path.basename(rp.split('?')[0]) or 'receipt'
+    base = secure_filename(base) or 'receipt'
+    root, ext = os.path.splitext(base)
+    if not ext:
+        path_l = rp.lower()
+        if path_l.rstrip('/').split('?')[0].endswith('.pdf'):
+            ext = '.pdf'
+        elif any(path_l.rstrip('/').split('?')[0].endswith(x) for x in ('.mp4', '.webm', '.mov')):
+            ext = '.mp4'
+        else:
+            ext = '.jpg'
+        base = root + ext
+    if expense.expense_date:
+        return f"{expense.expense_date.strftime('%Y%m%d')}_employee_expense_{os.path.splitext(base)[0]}{os.path.splitext(base)[1]}"
+    return base
+
+
+def _employee_expense_receipt_read_bytes(receipt_path):
+    s = (receipt_path or '').strip()
+    if not s:
+        return b'', 'application/octet-stream'
+
+    local = _employee_expense_local_receipt_filesystem_path(s)
+    if local:
+        with open(local, 'rb') as fh:
+            data = fh.read()
+        mt, _ = mimetypes.guess_type(local)
+        return data, (mt or 'application/octet-stream')
+
+    if s.startswith('uploads/receipts/'):
+        static_full = os.path.join(current_app.root_path, 'static', s.replace('/', os.sep))
+        if os.path.isfile(static_full):
+            with open(static_full, 'rb') as fh:
+                data = fh.read()
+            mt, _ = mimetypes.guess_type(static_full)
+            return data, (mt or 'application/octet-stream')
+
+    url = _employee_receipt_public_url(s)
+    if url.startswith('http://') or url.startswith('https://'):
+        req = Request(url, headers={'User-Agent': 'fleet-manager/employee-expense-download'})
+        with urlopen(req, timeout=90) as resp:
+            data = resp.read()
+            ct = (resp.headers.get('Content-Type') or 'application/octet-stream').split(';')[0].strip()
+        return data, (ct or 'application/octet-stream')
+
+    return b'', 'application/octet-stream'
+
+
+def _employee_expense_media_access_guard(expense, workspace_employee_id):
+    if workspace_employee_id and expense.employee_id and expense.employee_id != workspace_employee_id:
+        flash('This employee expense does not belong to selected workspace employee.', 'danger')
+        return redirect(url_for('employee_expense_list'))
+    if not (expense.receipt_path or '').strip():
+        flash('No receipt/bill media found for this expense.', 'warning')
+        return redirect(url_for('employee_expense_list'))
+    return None
+
+
+def employee_expense_media_download(pk):
+    _guard = _require_workspace_employee_for_expenses()
+    if _guard:
+        return _guard
+    workspace_employee_id = _workspace_employee_id()
+    expense = EmployeeExpense.query.get_or_404(pk)
+    access = _employee_expense_media_access_guard(expense, workspace_employee_id)
+    if access:
+        return access
+
+    dl_name = _employee_expense_receipt_download_name(expense)
+    local_full = _employee_expense_local_receipt_filesystem_path(expense.receipt_path)
+    if local_full:
+        return send_file(local_full, as_attachment=True, download_name=dl_name, conditional=True, max_age=0)
+
+    if (expense.receipt_path or '').strip().startswith('uploads/receipts/'):
+        static_full = os.path.join(
+            current_app.root_path,
+            'static',
+            expense.receipt_path.replace('/', os.sep),
+        )
+        if os.path.isfile(static_full):
+            return send_file(static_full, as_attachment=True, download_name=dl_name, conditional=True, max_age=0)
+
+    try:
+        blob, mime = _employee_expense_receipt_read_bytes(expense.receipt_path)
+    except Exception as ex:
+        current_app.logger.warning('Employee expense media download failed (%s): %s', pk, ex)
+        flash('Download failed for this receipt.', 'danger')
+        return redirect(url_for('employee_expense_media', pk=expense.id))
+    if not blob:
+        flash('Receipt file is empty.', 'warning')
+        return redirect(url_for('employee_expense_media', pk=expense.id))
+    return send_file(
+        io.BytesIO(blob),
+        as_attachment=True,
+        download_name=dl_name,
+        mimetype=(mime or 'application/octet-stream'),
+        max_age=0,
+    )
+
+
+def employee_expense_media_download_all(pk):
+    _guard = _require_workspace_employee_for_expenses()
+    if _guard:
+        return _guard
+    workspace_employee_id = _workspace_employee_id()
+    expense = EmployeeExpense.query.get_or_404(pk)
+    access = _employee_expense_media_access_guard(expense, workspace_employee_id)
+    if access:
+        return access
+
+    dl_name = _employee_expense_receipt_download_name(expense)
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.zip')
+    zip_path = tmp.name
+    tmp.close()
+    added = 0
+    try:
+        with zipfile.ZipFile(zip_path, mode='w', compression=zipfile.ZIP_DEFLATED) as zf:
+            local_full = _employee_expense_local_receipt_filesystem_path(expense.receipt_path)
+            if local_full:
+                zf.write(local_full, arcname=dl_name)
+                added = 1
+            else:
+                blob, _mime = _employee_expense_receipt_read_bytes(expense.receipt_path)
+                if blob:
+                    zf.writestr(dl_name, blob)
+                    added = 1
+        if added == 0:
+            try:
+                os.remove(zip_path)
+            except OSError:
+                pass
+            flash('Download ke liye media file read nahi ho saki.', 'danger')
+            return redirect(url_for('employee_expense_media', pk=expense.id))
+    except Exception as ex:
+        try:
+            os.remove(zip_path)
+        except OSError:
+            pass
+        current_app.logger.warning('Employee expense media zip failed (%s): %s', pk, ex)
+        flash('ZIP download error.', 'danger')
+        return redirect(url_for('employee_expense_media', pk=expense.id))
+
+    zip_label = f"employee_expense_{pk}_media.zip"
+
+    @after_this_request
+    def _cleanup_employee_expense_media_zip(resp):
+        try:
+            os.remove(zip_path)
+        except OSError:
+            pass
+        return resp
+
+    return send_file(zip_path, as_attachment=True, download_name=zip_label, mimetype='application/zip', max_age=0)
+
+
 def employee_expense_media(pk):
     _guard = _require_workspace_employee_for_expenses()
     if _guard:
@@ -1309,8 +1470,8 @@ def employee_expense_media(pk):
         'created_at_iso': expense.created_at.isoformat() if expense.created_at else '',
         'size_bytes': None,
         'size_label': '',
-        'download_url': receipt_url,
-        'is_local_file': not (receipt_url.startswith('http://') or receipt_url.startswith('https://')),
+        'download_url': url_for('employee_expense_media_download', pk=expense.id),
+        'is_local_file': bool(_employee_expense_local_receipt_filesystem_path(expense.receipt_path)),
     }]
 
     date_label = expense.expense_date.strftime('%d-%m-%Y') if expense.expense_date else '-'
@@ -1327,8 +1488,7 @@ def employee_expense_media(pk):
         media_date_label=date_label,
         media_header_subline=subline,
         back_url=back_url,
-        download_all_url=receipt_url,
-        show_download_all=False,
+        download_all_url=url_for('employee_expense_media_download_all', pk=expense.id),
     )
 
 
