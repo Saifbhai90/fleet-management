@@ -289,7 +289,8 @@ def serialize_value(val):
     if isinstance(val, bool):
         return 1 if val else 0
     if isinstance(val, datetime):
-        return val.isoformat()
+        # Match SQLAlchemy/SQLite string format so range filters work after sync.
+        return val.strftime('%Y-%m-%d %H:%M:%S.%f')
     if isinstance(val, date):
         return val.isoformat()
     if isinstance(val, time_type):

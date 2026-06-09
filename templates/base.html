@@ -8673,10 +8673,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
 <script>
 /* ═══════════════════════════════════════════════════════════════════
-   App Lifecycle: No auto-logout on background.
-   Fresh-start login is handled by startPath=/mobile-init in capacitor.config.json.
-   Resume from Recent Apps keeps the session alive.
-   Fresh-start (app killed) detection uses sessionStorage which Android clears on kill.
+   App Lifecycle (Capacitor): WebView reload after camera/file picker clears
+   sessionStorage but Flask session cookie may still be valid — do NOT force
+   /mobile-init logout when the server already rendered a logged-in page.
+   Cold app start still uses startPath=/mobile-init (valid session → dashboard).
    ═══════════════════════════════════════════════════════════════════ */
 (function() {
   'use strict';
@@ -8685,19 +8685,17 @@ document.addEventListener('DOMContentLoaded', function() {
   var SESSION_KEY = '_fleetAppSession';
   var currentPath = window.location.pathname;
 
-  /* sessionStorage is wiped when Android kills the app process.
-     On fresh start it will be empty → redirect to /mobile-init to clear Flask session.
-     On resume from Recent Apps it will still have the key → do nothing. */
-  if (!sessionStorage.getItem(SESSION_KEY)) {
-    /* Mark this session so resume doesn't re-trigger */
-    sessionStorage.setItem(SESSION_KEY, '1');
+  if (sessionStorage.getItem(SESSION_KEY)) return;
 
-    /* Only redirect if we are NOT already on login or mobile-init
-       (prevents infinite loop if user is already on login page) */
-    if (currentPath !== '/mobile-init' && currentPath !== '/login') {
-      window.location.replace('/mobile-init');
-    }
-  }
+  sessionStorage.setItem(SESSION_KEY, '1');
+
+  {% if session.get('user_id') %}
+  /* Logged-in page reload (e.g. after native camera) — keep session, stay here. */
+  return;
+  {% endif %}
+
+  if (currentPath === '/mobile-init' || currentPath === '/login') return;
+  window.location.replace('/mobile-init');
 })();
 
 /* ═══════════════════════════════════════════════════════════════════

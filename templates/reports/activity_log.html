@@ -2,7 +2,76 @@
 {% block title %}Activity &amp; Login Log Report{% endblock %}
 
 {% block content %}
-<div class="container-fluid">
+<style>
+  .activity-log-page .filter-card {
+    border-radius: 12px;
+    border: 1px solid rgba(0,0,0,0.06);
+    box-shadow: 0 2px 14px rgba(0,0,0,0.06);
+    overflow: visible;
+  }
+  .activity-log-page .filter-card .card-header {
+    background: linear-gradient(135deg, #f8fafc 0%, #eef2ff 100%);
+    border-bottom: 1px solid #e2e8f0;
+    font-weight: 600;
+    color: #334155;
+    padding: 0.65rem 1rem;
+  }
+  .activity-log-page .filter-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #475569;
+    margin-bottom: 0.35rem;
+  }
+  .activity-log-page .date-input-wrap {
+    position: relative;
+  }
+  .activity-log-page .date-input-wrap .form-control {
+    padding-left: 2.35rem;
+    min-height: 40px;
+    border-radius: 8px;
+    border-color: #dbeafe;
+    background: #fff;
+  }
+  .activity-log-page .date-input-wrap .form-control:focus {
+    border-color: #6366f1;
+    box-shadow: 0 0 0 0.2rem rgba(99, 102, 241, 0.15);
+  }
+  .activity-log-page .date-input-wrap .date-icon {
+    position: absolute;
+    left: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #6366f1;
+    pointer-events: none;
+    z-index: 2;
+  }
+  .activity-log-page .filter-card .form-control,
+  .activity-log-page .filter-card .form-select {
+    min-height: 40px;
+    border-radius: 8px;
+    border-color: #e2e8f0;
+  }
+  .activity-log-page .filter-card .form-control:focus,
+  .activity-log-page .filter-card .form-select:focus {
+    border-color: #6366f1;
+    box-shadow: 0 0 0 0.2rem rgba(99, 102, 241, 0.12);
+  }
+  .activity-log-page .filter-card .ts-wrapper .ts-control {
+    min-height: 40px;
+    border-radius: 8px;
+    border-color: #e2e8f0;
+  }
+  .activity-log-page .filter-card .ts-wrapper.focus .ts-control {
+    border-color: #6366f1;
+    box-shadow: 0 0 0 0.2rem rgba(99, 102, 241, 0.12);
+  }
+  .activity-log-page .btn-search-report {
+    min-height: 40px;
+    border-radius: 8px;
+    font-weight: 600;
+  }
+</style>
+<div class="container-fluid activity-log-page">
   <h2 class="mb-4"><i class="bi bi-journal-check me-2 text-primary"></i>Activity &amp; Login Log Report</h2>
   <p class="text-muted">Ek hi report: (1) Login sessions — kaun login hua, kab, device/browser, IP, aur session mein kya-kya kiya. (2) Client activity — device ID, action, aur <strong>latitude/longitude</strong> (jab browser location allow ho) with View on Map.</p>
   <p class="text-muted small mb-0"><i class="bi bi-info-circle me-1"></i>Performance ke liye pehle <strong>Date From</strong> aur <strong>Date To</strong> select karein (zyada se zyada <strong>{{ activity_log_max_days|default(10) }} din</strong>), phir Search — tab hi data load hoga.</p>
@@ -13,20 +82,29 @@
   </div>
   {% endif %}
 
-  <div class="card shadow-sm border-0 rounded-3 mb-4 mt-3">
+  <div class="card shadow-sm border-0 filter-card mb-4 mt-3">
+    <div class="card-header">
+      <i class="bi bi-funnel me-2"></i>Filters
+    </div>
     <div class="card-body">
       <form method="get" action="{{ url_for('activity_log_report') }}" id="activityLogFilterForm" class="row g-3 align-items-end">
         <div class="col-md-2">
-          <label class="form-label">Date From <span class="text-danger">*</span></label>
-          <input type="date" name="date_from" id="activityDateFrom" class="form-control" value="{{ date_from or '' }}" required>
+          <label class="filter-label">Date From <span class="text-danger">*</span></label>
+          <div class="date-input-wrap">
+            <i class="bi bi-calendar3 date-icon"></i>
+            <input type="text" name="date_from" id="activityDateFrom" class="form-control datepicker" placeholder="dd-mm-yyyy" value="{{ date_from or '' }}" autocomplete="off" required>
+          </div>
         </div>
         <div class="col-md-2">
-          <label class="form-label">Date To <span class="text-danger">*</span></label>
-          <input type="date" name="date_to" id="activityDateTo" class="form-control" value="{{ date_to or '' }}" required>
+          <label class="filter-label">Date To <span class="text-danger">*</span></label>
+          <div class="date-input-wrap">
+            <i class="bi bi-calendar3 date-icon"></i>
+            <input type="text" name="date_to" id="activityDateTo" class="form-control datepicker" placeholder="dd-mm-yyyy" value="{{ date_to or '' }}" autocomplete="off" required>
+          </div>
         </div>
         <div class="col-md-2">
-          <label class="form-label">User ID</label>
-          <select name="user_id" class="form-select search-select">
+          <label class="filter-label">User ID</label>
+          <select name="user_id" class="form-select search-select" data-placeholder="Search user ID..." onfocus="if(this.tomselect){this.tomselect.open();}">
             <option value="">-- All --</option>
             {% for u in users_for_filter %}
               <option value="{{ u.id }}" {% if user_id_q == u.id %}selected{% endif %}>{{ u.id }} - {{ u.username }}</option>
@@ -34,15 +112,20 @@
           </select>
         </div>
         <div class="col-md-2">
-          <label class="form-label">User / Name</label>
-          <input type="text" name="username" class="form-control" placeholder="Username or name" value="{{ username_q or '' }}">
+          <label class="filter-label">User / Name</label>
+          <select name="username" id="activityUsernameSelect" class="form-select search-select" data-placeholder="Type username or name..." onfocus="if(this.tomselect){this.tomselect.open();}">
+            <option value="">-- All --</option>
+            {% for u in users_for_filter %}
+              <option value="{{ u.username }}" {% if username_q and (username_q == u.username or username_q == u.full_name) %}selected{% endif %}>{{ u.username }}{% if u.full_name %} — {{ u.full_name }}{% endif %}</option>
+            {% endfor %}
+          </select>
         </div>
         <div class="col-md-2">
-          <label class="form-label">Device ID</label>
+          <label class="filter-label">Device ID</label>
           <input type="text" name="device_id" class="form-control" placeholder="Client device UUID" value="{{ device_id_q or '' }}">
         </div>
         <div class="col-md-2">
-          <button type="submit" class="btn btn-primary w-100">
+          <button type="submit" class="btn btn-primary w-100 btn-search-report">
             <i class="bi bi-search me-1"></i>Search
           </button>
         </div>
@@ -202,19 +285,34 @@
   var maxDays = {{ activity_log_max_days|default(10) }};
   var form = document.getElementById('activityLogFilterForm');
   if (!form) return;
+
+  function parseDmy(value) {
+    var m = /^(\d{2})-(\d{2})-(\d{4})$/.exec((value || '').trim());
+    if (!m) return null;
+    return new Date(parseInt(m[3], 10), parseInt(m[2], 10) - 1, parseInt(m[1], 10));
+  }
+
+  setTimeout(function() {
+    var usernameEl = document.getElementById('activityUsernameSelect');
+    if (!usernameEl || !usernameEl.tomselect) return;
+    var ts = usernameEl.tomselect;
+    ts.on('focus', function() { ts.open(); });
+    ts.on('type', function() { ts.open(); });
+  }, 120);
+
   form.addEventListener('submit', function(e) {
     var fromEl = document.getElementById('activityDateFrom');
     var toEl = document.getElementById('activityDateTo');
-    if (!fromEl || !toEl || !fromEl.value || !toEl.value) {
+    if (!fromEl || !toEl || !fromEl.value.trim() || !toEl.value.trim()) {
       e.preventDefault();
       alert('Date From aur Date To dono select karein.');
       return;
     }
-    var from = new Date(fromEl.value + 'T00:00:00');
-    var to = new Date(toEl.value + 'T00:00:00');
-    if (isNaN(from.getTime()) || isNaN(to.getTime())) {
+    var from = parseDmy(fromEl.value);
+    var to = parseDmy(toEl.value);
+    if (!from || !to || isNaN(from.getTime()) || isNaN(to.getTime())) {
       e.preventDefault();
-      alert('Dates sahi select karein.');
+      alert('Dates dd-mm-yyyy format mein sahi hon.');
       return;
     }
     if (to < from) {

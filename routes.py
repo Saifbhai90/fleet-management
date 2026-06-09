@@ -3894,7 +3894,20 @@ def biometric_token():
 
 @app.route('/mobile-init')
 def mobile_init():
-    """Capacitor mobile app startup: always clear session and go to login."""
+    """Capacitor cold start: restore valid server session; clear only when unauthenticated or user inactive."""
+    uid = session.get('user_id')
+    if uid:
+        try:
+            user = User.query.get(uid)
+            if user and user.is_active:
+                session['last_activity'] = pk_now()
+                session['_user_active_ts'] = _time_mod.time()
+                nxt = (request.args.get('next') or '').strip()
+                if nxt.startswith('/') and not nxt.startswith('//'):
+                    return redirect(nxt)
+                return redirect(url_for('dashboard'))
+        except Exception:
+            pass
     session.clear()
     return redirect(url_for('login'))
 
@@ -34359,6 +34372,11 @@ def module_hub(hub_slug):
 _ACTIVITY_LOG_MAX_DAYS = 10
 
 
+def _activity_log_datetime_in_range(column, date_from, date_to):
+    """Calendar-date filter safe for SQLite ISO strings (T) from sync_master."""
+    return and_(func.date(column) >= date_from, func.date(column) <= date_to)
+
+
 @app.route('/reports/activity-log')
 def activity_log_report():
     """Single report: (1) Login sessions + server-side activity, (2) Client activity with device ID & geolocation (lat/long, View on Map)."""
@@ -34388,16 +34406,21 @@ def activity_log_report():
             )
             report_message_level = 'warning'
         else:
-            try:
-                date_from_dt = datetime.strptime(date_from_s, '%Y-%m-%d').replace(tzinfo=timezone.utc)
-                date_to_dt = datetime.strptime(date_to_s + ' 23:59:59', '%Y-%m-%d %H:%M:%S').replace(
-                    tzinfo=timezone.utc
-                )
+            date_from_parsed = parse_date(date_from_s)
+            date_to_parsed = parse_date(date_to_s)
+            if not date_from_parsed or not date_to_parsed:
+                report_message = 'Dates sahi format mein hon (dd-mm-yyyy).'
+                report_message_level = 'warning'
+            else:
+                date_from_s = date_from_parsed.strftime('%d-%m-%Y')
+                date_to_s = date_to_parsed.strftime('%d-%m-%Y')
+                date_from_dt = date_from_parsed
+                date_to_dt = date_to_parsed
                 if date_to_dt < date_from_dt:
                     report_message = 'Date To, Date From se pehle nahi ho sakti.'
                     report_message_level = 'warning'
                 else:
-                    span_days = (date_to_dt.date() - date_from_dt.date()).days + 1
+                    span_days = (date_to_dt - date_from_dt).days + 1
                     if span_days > _ACTIVITY_LOG_MAX_DAYS:
                         report_message = (
                             f'Sirf {_ACTIVITY_LOG_MAX_DAYS} din ya us se kam ki range select karein '
@@ -34407,15 +34430,12 @@ def activity_log_report():
                     else:
                         report_ready = True
                         report_message = None
-            except ValueError:
-                report_message = 'Dates sahi format mein hon (YYYY-MM-DD).'
-                report_message_level = 'warning'
 
     if report_ready and date_from_dt and date_to_dt:
         # ─── 1. Login sessions (LoginLog + ActivityLog) ───
         query_sessions = (
             LoginLog.query.join(User)
-            .filter(LoginLog.login_at >= date_from_dt, LoginLog.login_at <= date_to_dt)
+            .filter(_activity_log_datetime_in_range(LoginLog.login_at, date_from_dt, date_to_dt))
             .order_by(LoginLog.login_at.desc())
         )
         if user_id_q:
@@ -34430,8 +34450,7 @@ def activity_log_report():
             for a in (
                 ActivityLog.query.filter(
                     ActivityLog.login_log_id.in_(log_ids),
-                    ActivityLog.created_at >= date_from_dt,
-                    ActivityLog.created_at <= date_to_dt,
+                    _activity_log_datetime_in_range(ActivityLog.created_at, date_from_dt, date_to_dt),
                 )
                 .order_by(ActivityLog.created_at.asc())
                 .all()
@@ -34441,10 +34460,7 @@ def activity_log_report():
         # ─── 2. Client activity logs (device_id, lat/long, View on Map) ───
         query_client = (
             ClientActivityLog.query.join(User)
-            .filter(
-                ClientActivityLog.created_at >= date_from_dt,
-                ClientActivityLog.created_at <= date_to_dt,
-            )
+            .filter(_activity_log_datetime_in_range(ClientActivityLog.created_at, date_from_dt, date_to_dt))
             .order_by(ClientActivityLog.created_at.desc())
         )
         if user_id_q:
