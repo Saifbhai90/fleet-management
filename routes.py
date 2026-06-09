@@ -30860,6 +30860,31 @@ def api_maintenance_expense_invoice_detail(pk):
     })
 
 
+def _maintenance_approval_qty_label(qty_val):
+    try:
+        qv = Decimal(str(qty_val))
+    except Exception:
+        qv = Decimal('0')
+    qv = qv.quantize(Decimal('0.01'))
+    s = format(qv, 'f')
+    if '.' in s:
+        s = s.rstrip('0').rstrip('.')
+    return s or '0'
+
+
+def _maintenance_approval_detail_line(p_name, qty, amount):
+    amt = int(round(float(amount or 0)))
+    if 'labour' in (p_name or '').lower():
+        return f'* {p_name} = Rs. {amt:,}'
+    qty_lbl = _maintenance_approval_qty_label(qty)
+    return f'* {p_name} ×{qty_lbl} = Rs. {amt:,}'
+
+
+def _maintenance_approval_total_line(total):
+    amt = int(round(float(total or 0)))
+    return f'💰 Total Amount: Rs. {amt:,}/-'
+
+
 @app.route('/api/maintenance-expense/approval-text/<int:pk>')
 def api_maintenance_expense_approval_text(pk):
     _guard = _require_workspace_employee_for_expense_management()
@@ -30904,16 +30929,6 @@ def api_maintenance_expense_approval_text(pk):
     total_amount = 0.0
     current_product_ids = []
     current_product_names = {}
-    def _approval_qty_label(qty_val):
-        try:
-            qv = Decimal(str(qty_val))
-        except Exception:
-            qv = Decimal('0')
-        qv = qv.quantize(Decimal('0.01'))
-        s = format(qv, 'f')
-        if '.' in s:
-            s = s.rstrip('0').rstrip('.')
-        return s or '0'
 
     for it in item_rows:
         qty = float(it.qty or 0)
@@ -30921,7 +30936,7 @@ def api_maintenance_expense_approval_text(pk):
         amount = float(it.amount or (qty * price))
         total_amount += amount
         p_name = (it.product.name if it.product else f'Product #{it.product_id}')
-        detail_lines.append(f"{p_name} {_approval_qty_label(qty)}x{price:.0f}={amount:.0f}")
+        detail_lines.append(_maintenance_approval_detail_line(p_name, qty, amount))
         if it.product_id and it.product_id not in current_product_ids:
             current_product_ids.append(it.product_id)
             current_product_names[it.product_id] = p_name
@@ -30961,7 +30976,7 @@ def api_maintenance_expense_approval_text(pk):
     vehicle_label = f"{vehicle_no} ({project_name})" if project_name and project_name != '-' else vehicle_no
     reading_txt = f"{float(rec.current_reading):.0f}" if rec.current_reading is not None else '-'
     date_txt = rec.expense_date.strftime('%d-%m-%Y') if rec.expense_date else '-'
-    total_txt = f"{float(rec.total_bill_amount if rec.total_bill_amount is not None else total_amount):.0f}"
+    bill_total = float(rec.total_bill_amount if rec.total_bill_amount is not None else total_amount)
 
     message_mode = (request.args.get('message_mode') or 'approval_required').strip().lower()
     heading_text = "Work done" if message_mode == 'work_done' else "Approval Required"
@@ -30976,7 +30991,7 @@ def api_maintenance_expense_approval_text(pk):
     ]
     lines.extend(detail_lines or ['-'])
     lines.extend([
-        f"Total: {total_txt}",
+        _maintenance_approval_total_line(bill_total),
         "Previous Work Detail:",
     ])
     lines.extend(previous_work_lines or ['No previous work record found.'])
@@ -31047,16 +31062,6 @@ def api_maintenance_work_order_approval_text(pk):
     grand_total = 0.0
     current_product_ids = []
     current_product_names = {}
-    def _approval_qty_label(qty_val):
-        try:
-            qv = Decimal(str(qty_val))
-        except Exception:
-            qv = Decimal('0')
-        qv = qv.quantize(Decimal('0.01'))
-        s = format(qv, 'f')
-        if '.' in s:
-            s = s.rstrip('0').rstrip('.')
-        return s or '0'
 
     for ex in expenses:
         ex_total = float(ex.total_bill_amount or 0)
@@ -31068,7 +31073,7 @@ def api_maintenance_work_order_approval_text(pk):
             qty = float(it.qty or 0)
             price = float(it.price or 0)
             amount = float(it.amount or (qty * price))
-            detail_lines.append(f"{len(detail_lines) + 1}- {p_name} {_approval_qty_label(qty)}x{price:.0f}={amount:.0f}")
+            detail_lines.append(_maintenance_approval_detail_line(p_name, qty, amount))
             if it.product_id and it.product_id not in current_product_ids:
                 current_product_ids.append(it.product_id)
                 current_product_names[it.product_id] = p_name
@@ -31117,7 +31122,7 @@ def api_maintenance_work_order_approval_text(pk):
     ]
     lines.extend(detail_lines)
     lines.extend([
-        f"Total: {grand_total:.0f}",
+        _maintenance_approval_total_line(grand_total),
         "Previous Work Detail:",
     ])
     lines.extend(previous_work_lines)
