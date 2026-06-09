@@ -288,6 +288,10 @@ ENDPOINT_PERMISSION_MAP = [
     ('workspace_fund_transfer_media', 'workspace_transfer_list'),
     ('workspace_fund_transfer_edit', 'workspace_transfer_edit'),
     ('workspace_fund_transfer_delete', 'workspace_transfer_delete'),
+    ('workspace_slip_profiles', 'workspace_transfer_add'),
+    ('workspace_slip_profile_delete', 'workspace_transfer_add'),
+    ('workspace_slip_profile_update', 'workspace_transfer_add'),
+    ('workspace_transfer_ref_check', 'workspace_transfer_add'),
     ('fund_transfers_list', 'fund_transfer'),
     ('fund_transfer_add', 'fund_transfer'),
     ('fund_transfer_view', 'fund_transfer'),
@@ -597,6 +601,7 @@ def seed_auth_tables(app):
             ('assign_vehicle_to_parking_add', 'Vehicle to Parking – Add New'),
             ('assign_vehicle_to_parking_edit', 'Vehicle to Parking – Edit'),
             ('assign_vehicle_to_parking_desassign', 'Vehicle to Parking – Deassign'),
+            ('workspace_slip_design_manage', 'Workspace Transfers - Slip Design (Add/Edit/Delete)'),
         ]:
             if not Permission.query.filter_by(code=code).first():
                 p = Permission(code=code, name=name, category='Assignments')

@@ -331,6 +331,13 @@ if _run_startup_tasks:
         except Exception as _e2:
             print(f"Second db.create_all() warning: {_e2}")
 
+        try:
+            from models import WorkspaceSlipProfile, WorkspaceSlipProfileField
+            WorkspaceSlipProfile.__table__.create(db.engine, checkfirst=True)
+            WorkspaceSlipProfileField.__table__.create(db.engine, checkfirst=True)
+        except Exception as _e:
+            print(f"workspace_slip_profile ensure warning (non-fatal): {_e}")
+
         # Auto-add missing columns to existing tables
         try:
             from sqlalchemy import inspect as _sa_inspect, text as _sa_text
@@ -636,7 +643,10 @@ from routes_workspace import (
     workspace_journal_voucher_add, workspace_journal_vouchers_list, workspace_journal_voucher_detail, workspace_jv_backfill_district_project,
     workspace_journal_voucher_edit, workspace_journal_voucher_delete, workspace_journal_vouchers_export,
     workspace_transfer_description_suggestions_api,
-    workspace_transfer_slip_ocr_api,
+    workspace_slip_profiles_api,
+    workspace_slip_profile_delete_api,
+    workspace_slip_profile_update_api,
+    workspace_transfer_ref_check_api,
     workspace_account_balance_api,
 )  # noqa: E402
 
@@ -784,7 +794,10 @@ app.add_url_rule('/workspace/journal-voucher/<int:pk>/delete', 'workspace_journa
 app.add_url_rule('/workspace/journal-vouchers/export', 'workspace_journal_vouchers_export', workspace_journal_vouchers_export, methods=['GET'])
 app.add_url_rule('/workspace/journal-vouchers/backfill', 'workspace_jv_backfill_district_project', workspace_jv_backfill_district_project, methods=['GET'])
 app.add_url_rule('/api/workspace-transfer-descriptions', 'workspace_transfer_description_suggestions', workspace_transfer_description_suggestions_api, methods=['GET'])
-app.add_url_rule('/api/workspace-transfer-slip-ocr', 'workspace_transfer_slip_ocr', workspace_transfer_slip_ocr_api, methods=['POST'])
+app.add_url_rule('/api/workspace-slip-profiles', 'workspace_slip_profiles', workspace_slip_profiles_api, methods=['GET', 'POST'])
+app.add_url_rule('/api/workspace-slip-profiles/<int:pk>', 'workspace_slip_profile_delete', workspace_slip_profile_delete_api, methods=['DELETE'])
+app.add_url_rule('/api/workspace-slip-profiles/<int:pk>', 'workspace_slip_profile_update', workspace_slip_profile_update_api, methods=['PATCH'])
+app.add_url_rule('/api/workspace-transfer-ref-check', 'workspace_transfer_ref_check', workspace_transfer_ref_check_api, methods=['GET'])
 app.add_url_rule('/api/workspace-account-balance', 'workspace_account_balance_api', workspace_account_balance_api, methods=['GET'])
 app.add_url_rule('/workspace/ledger', 'workspace_ledger', workspace_ledger)
 app.add_url_rule('/workspace/ledger/fund-transfer/<int:transfer_id>', 'workspace_ledger_transfer_detail', workspace_ledger_transfer_detail)

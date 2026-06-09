@@ -2511,6 +2511,42 @@ class WorkspaceFundTransfer(db.Model):
     created_by = db.relationship('User', backref='workspace_fund_transfers_created', lazy='select')
 
 
+class WorkspaceSlipProfile(db.Model):
+    """Saved bank/mobile slip layout for template OCR on workspace transfers (company-wide)."""
+    __tablename__ = 'workspace_slip_profile'
+
+    id = db.Column(db.Integer, primary_key=True)
+    employee_id = db.Column(db.Integer, db.ForeignKey('employee.id', ondelete='SET NULL'), nullable=True, index=True)
+    name = db.Column(db.String(120), nullable=False)
+    fingerprint_keywords = db.Column(db.Text, nullable=True)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+    created_at = db.Column(db.DateTime, default=pk_now)
+    updated_at = db.Column(db.DateTime, default=pk_now, onupdate=pk_now)
+
+    employee = db.relationship('Employee', backref=db.backref('workspace_slip_profiles', lazy='dynamic'))
+    fields = db.relationship(
+        'WorkspaceSlipProfileField',
+        backref='profile',
+        cascade='all, delete-orphan',
+        lazy='joined',
+    )
+
+
+class WorkspaceSlipProfileField(db.Model):
+    __tablename__ = 'workspace_slip_profile_field'
+    __table_args__ = (
+        db.UniqueConstraint('profile_id', 'field_key', name='uq_ws_slip_profile_field'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    profile_id = db.Column(db.Integer, db.ForeignKey('workspace_slip_profile.id', ondelete='CASCADE'), nullable=False, index=True)
+    field_key = db.Column(db.String(30), nullable=False)
+    region_x = db.Column(db.Numeric(6, 2), nullable=False, default=0)
+    region_y = db.Column(db.Numeric(6, 2), nullable=False, default=0)
+    region_w = db.Column(db.Numeric(6, 2), nullable=False, default=100)
+    region_h = db.Column(db.Numeric(6, 2), nullable=False, default=100)
+
+
 class WorkspaceMonthClose(db.Model):
     __tablename__ = 'workspace_month_close'
     __table_args__ = (

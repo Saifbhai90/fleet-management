@@ -24,9 +24,37 @@
     .ws-attach-zone { border: 2px dashed #ced4da; border-radius: 8px; padding: .6rem; text-align: center; cursor: pointer; transition: all .15s; }
     .ws-attach-zone:hover, .ws-attach-zone.drag-over { border-color: #198754; background: #f3fbf6; }
     .ws-attach-preview img { max-height: 90px; border-radius: 6px; object-fit: contain; }
+    .ws-slip-ocr-status { font-size: .78rem; padding: .35rem .55rem; border-radius: 8px; margin-top: .5rem; }
+    .ws-slip-ocr-status.ok { background: #f0fdf4; color: #157347; border: 1px solid #bbf7d0; }
+    .ws-slip-ocr-status.warn { background: #fff8e6; color: #856404; border: 1px solid #ffeeba; }
+    .ws-slip-ocr-status.err { background: #fff5f5; color: #b02a37; border: 1px solid #f5c2c7; }
+    .ws-slip-ocr-status.busy { background: #eef6ff; color: #0a58ca; border: 1px solid #cfe2ff; }
+    .ws-slip-filled { box-shadow: 0 0 0 2px rgba(25,135,84,.35) !important; }
+    .ws-slip-low-conf { box-shadow: 0 0 0 2px rgba(255,193,7,.65) !important; background-color: #fffdf5 !important; }
+    .ws-slip-teach-wrap { max-height: 62vh; overflow: auto; border: 1px solid #dee2e6; border-radius: 10px; background: #f8f9fa; transition: background .2s ease; }
+    .ws-slip-teach-stage { position: relative; display: block; width: 100%; line-height: 0; }
+    .ws-slip-teach-stage img { display: block; width: 100%; max-width: 100%; height: auto; user-select: none; }
+    .ws-slip-teach-stage canvas { position: absolute; left: 0; top: 0; cursor: crosshair; touch-action: none; pointer-events: auto; }
+    .ws-slip-field-btn.active { box-shadow: 0 0 0 2px rgba(13,110,253,.45); }
+    .ws-slip-region-tag { position: absolute; font-size: .65rem; font-weight: 700; color: #fff; padding: 1px 5px; border-radius: 4px; pointer-events: none; }
+    .ws-slip-teach-panel { border: 0; border-radius: 12px; overflow: hidden; }
+    .ws-slip-teach-panel .modal-header { background: linear-gradient(to right, #f0fdf4 0%, #fff 100%); border-bottom: 1px solid #dee2e6; }
+    #wsSlipTeachModal { pointer-events: none; }
+    .ws-tf-card .invalid-feedback { display: none; font-size: .72rem; }
+    .ws-tf-card .form-control.is-invalid ~ .invalid-feedback,
+    .ws-tf-card .form-select.is-invalid ~ .invalid-feedback { display: block; }
+    .ws-tf-card .ts-wrapper.is-invalid + .invalid-feedback { display: block; }
+    .ws-tf-card .ts-wrapper.is-invalid .ts-control { border-color: #dc3545 !important; box-shadow: 0 0 0 .2rem rgba(220,53,69,.15); }
+    #wsSlipTeachModal .modal-dialog {
+      pointer-events: auto;
+      margin: 1.75rem auto;
+      max-width: min(920px, 96vw);
+    }
+    #wsSlipTeachModal .modal-body { max-height: calc(100vh - 210px); overflow-y: auto; }
+    #wsSlipTeachModal .ws-slip-teach-wrap { max-height: 52vh; }
   </style>
 
-  <div class="ws-transfer-form-wrap">
+  <div class="ws-transfer-form-wrap" id="wsTransferFormWrap" data-slip-template="{{ '1' if not row else '0' }}">
     <div class="d-flex justify-content-between align-items-center ws-tf-header mb-3">
       <h5 class="mb-0"><i class="bi bi-arrow-left-right me-2"></i>{{ 'Edit' if row else 'Add' }} Workspace Transfer</h5>
       <div class="d-flex gap-2">
@@ -60,7 +88,7 @@
     </div>
     {% endif %}
 
-    <form method="post" enctype="multipart/form-data" id="wsTransferForm">
+    <form method="post" enctype="multipart/form-data" id="wsTransferForm" novalidate>
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="row g-3">
         <div class="col-xl-8">
@@ -71,15 +99,17 @@
                 <div class="col-md-3">
                   <label class="form-label">Transfer Date</label>
                   <input type="text" id="wsTransferDateInput" name="transfer_date" class="form-control datepicker" value="{{ row.transfer_date|ddmmyyyy if row and row.transfer_date else '' }}" placeholder="dd-mm-yyyy" required>
+                  <div class="invalid-feedback">Transfer Date likhein (dd-mm-yyyy).</div>
                 </div>
                 <div class="col-md-3">
                   <label class="form-label">Amount</label>
-                  <input type="number" step="0.01" name="amount" class="form-control" value="{{ row.amount if row else '' }}" required>
+                  <input type="number" step="0.01" name="amount" id="wsTransferAmountInput" class="form-control" value="{{ row.amount if row else '' }}" required>
+                  <div class="invalid-feedback">Amount zero se zyada likhein.</div>
                 </div>
                 <div class="col-md-3">
                   <label class="form-label">Payment Mode</label>
                   {% set pm = (row.payment_mode if row else 'Cash') %}
-                  <select name="payment_mode" class="form-select search-select">
+                  <select name="payment_mode" id="wsPaymentModeSelect" class="form-select search-select">
                     <option value="Cash" {% if pm == 'Cash' %}selected{% endif %}>Cash</option>
                     <option value="Bank Transfer" {% if pm == 'Bank Transfer' %}selected{% endif %}>Bank Transfer</option>
                     <option value="Cheque" {% if pm == 'Cheque' %}selected{% endif %}>Cheque</option>
@@ -88,7 +118,7 @@
                 </div>
                 <div class="col-md-3">
                   <label class="form-label">Category / Purpose</label>
-                  <select name="category" class="form-select search-select">
+                  <select name="category" id="wsTransferCategorySelect" class="form-select search-select">
                     <option value="">-- Select / Optional --</option>
                     {% for c in categories %}
                     <option value="{{ c.name }}" {% if row and row.category == c.name %}selected{% endif %}>{{ c.name }}</option>
@@ -103,6 +133,7 @@
                     <option value="{{ a.id }}" {% if row and row.from_account_id == a.id %}selected{% endif %}>{{ account_display_map.get(a.id, (a.code ~ ' - ' ~ a.name)) }}</option>
                     {% endfor %}
                   </select>
+                  <div class="invalid-feedback">From Account select karein.</div>
                   <div id="fromAccountBalanceHint" class="small mt-1 d-none" style="cursor:default" title=""></div>
                 </div>
                 <div class="col-md-6">
@@ -113,6 +144,7 @@
                     <option value="{{ a.id }}" {% if row and row.to_account_id == a.id %}selected{% endif %}>{{ account_display_map.get(a.id, (a.code ~ ' - ' ~ a.name)) }} ({{ a.account_type }})</option>
                     {% endfor %}
                   </select>
+                  <div class="invalid-feedback">To Account select karein.</div>
                   <div id="toAccountBalanceHint" class="small mt-1 d-none" style="cursor:default" title=""></div>
                 </div>
                 <div class="col-md-4">
@@ -144,6 +176,17 @@
                 </div>
               </div>
               <small class="text-muted d-block mt-2">Upload transfer proof image (optional). Ctrl+V also works.</small>
+              <div id="wsSlipOcrStatus" class="ws-slip-ocr-status d-none" role="status"></div>
+              {% if not row %}
+              {% if can_manage_slip_profiles %}
+              <button type="button" class="btn btn-outline-success btn-sm mt-2" id="wsSlipTeachOpenBtn">
+                <i class="bi bi-bounding-box me-1"></i>Teach slip design
+              </button>
+              {% else %}
+              <div class="small text-muted mt-2"><i class="bi bi-shield-lock me-1"></i>Slip designs sab employee workspaces par shared hain. Design add/edit/delete ke liye <strong>Slip Design</strong> permission chahiye (Master ko permission ki zaroorat nahi).</div>
+              {% endif %}
+              <div id="wsSlipProfileList" class="small text-muted mt-2"></div>
+              {% endif %}
               {% if existing_attachment %}
               <div class="mt-3">
                 <small class="text-muted">Current:</small>
@@ -170,8 +213,74 @@
     </form>
   </div>
 </div>
+
+{% if not row %}
+<div class="modal fade" id="wsSlipTeachModal" tabindex="-1" aria-labelledby="wsSlipTeachModalLabel" aria-hidden="true" data-bs-backdrop="false" data-bs-keyboard="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable modal-dialog-centered">
+    <div class="modal-content ws-slip-teach-panel">
+      <div class="modal-header py-2">
+        <h5 class="modal-title fw-semibold" id="wsSlipTeachModalLabel">
+          <i class="bi bi-bounding-box-circles me-2 text-success"></i>Slip design — fields mark karein
+        </h5>
+        <button type="button" class="btn-close" id="wsSlipTeachCloseBtn" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-info small py-2 mb-3">
+          <strong>Pehli dafa (naya design):</strong> design ka naam likhein, phir <strong>Date → Amount → Reference</strong> par box drag karein.
+          <span class="d-block mt-1 text-muted">Saved design se galat read ho to field edit karein — system us field ka box auto-update karega.</span>
+        </div>
+        <div class="row g-3">
+          <div class="col-lg-8">
+            <div class="ws-slip-teach-wrap" id="wsSlipTeachWrap">
+              <div class="ws-slip-teach-stage" id="wsSlipTeachStage">
+                <img id="wsSlipTeachImg" src="" alt="Slip">
+                <canvas id="wsSlipTeachCanvas"></canvas>
+              </div>
+            </div>
+            <div class="small text-muted mt-2">Active field par box draw karein (mouse drag). Teenon fields mark karna zaroori hai.</div>
+          </div>
+          <div class="col-lg-4">
+            <label class="form-label fw-semibold small">Design name</label>
+            <input type="text" id="wsSlipDesignName" class="form-control form-control-sm mb-3" placeholder="e.g. JazzCash Send Money">
+            <div class="d-flex flex-wrap gap-2 mb-3">
+              <button type="button" class="btn btn-sm btn-outline-primary ws-slip-field-btn" data-field="date">1. Date</button>
+              <button type="button" class="btn btn-sm btn-outline-success ws-slip-field-btn" data-field="amount">2. Amount</button>
+              <button type="button" class="btn btn-sm btn-outline-warning ws-slip-field-btn" data-field="reference_no">3. Reference</button>
+            </div>
+            <div class="card border-0 bg-light">
+              <div class="card-body py-2 small">
+                <div class="fw-semibold mb-1">Preview (marked areas se)</div>
+                <div>Date: <span id="wsSlipPreviewDate" class="text-muted">—</span></div>
+                <div>Amount: <span id="wsSlipPreviewAmount" class="text-muted">—</span></div>
+                <div>Reference: <span id="wsSlipPreviewRef" class="text-muted">—</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer py-2 d-flex flex-wrap gap-2 justify-content-end">
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="wsSlipTeachCancelBtn" data-bs-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-outline-primary btn-sm" id="wsSlipTeachPreviewBtn">Test read</button>
+        {% if can_manage_slip_profiles %}
+        <button type="button" class="btn btn-success btn-sm" id="wsSlipTeachSaveBtn"><i class="bi bi-save me-1"></i>Save design &amp; fill form</button>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<script>
+window.__wsSlipTesseractConfig = {
+  baseUrl: {{ url_for('static', filename='vendor/tesseract/') | tojson }},
+  langUrl: {{ url_for('static', filename='vendor/tesseract/tessdata/') | tojson }}
+};
+</script>
+<script src="{{ url_for('static', filename='js/workspace_slip_template.js') }}?v=1.4.1"></script>
 <script>
 var _wsAcctBalanceMap = {{ account_balance_json | tojson }};
+var _wsAcctDisplayMap = {{ account_display_map | tojson }};
+var _wsIsAddForm = {{ (not row) | tojson }};
 document.addEventListener('DOMContentLoaded', function() {
   var descBox = document.getElementById('wsTransferDesc');
   var sugBox = document.getElementById('wsDescSuggest');
@@ -184,6 +293,10 @@ document.addEventListener('DOMContentLoaded', function() {
   var saveBtn = document.getElementById('wsTransferSaveBtn');
   var saveAddBtn = document.getElementById('wsTransferSaveAddBtn');
   var transferDateInput = document.getElementById('wsTransferDateInput');
+  var amountInput = document.getElementById('wsTransferAmountInput');
+  var categorySelect = document.getElementById('wsTransferCategorySelect');
+  var _wsDescAutoManaged = false;
+  var _wsLastAutoDesc = '';
   function _wsFocusAfterAttachment() {
     var t = (saveAddBtn && !saveAddBtn.disabled) ? saveAddBtn : saveBtn;
     if (t) t.focus();
@@ -191,6 +304,81 @@ document.addEventListener('DOMContentLoaded', function() {
 
   var fromSelect = document.getElementById('wsFromAccountSelect');
   var toSelect = document.getElementById('wsToAccountSelect');
+
+  function _wsAccountNameForDesc(accountId, selectEl, stripTypeSuffix) {
+    var raw = '';
+    if (accountId && _wsAcctDisplayMap && _wsAcctDisplayMap[String(accountId)] != null) {
+      raw = _wsAcctDisplayMap[String(accountId)];
+    } else if (selectEl && selectEl.selectedIndex >= 0) {
+      raw = selectEl.options[selectEl.selectedIndex].textContent || '';
+    }
+    raw = String(raw || '').trim();
+    raw = raw.replace(/\s*\|\s*Vehicle:.*$/i, '').trim();
+    if (stripTypeSuffix) {
+      raw = raw.replace(/\s*\([^)]+\)\s*$/, '').trim();
+    }
+    var m = raw.match(/^\s*\S+\s*-\s*(.+)$/);
+    if (m) return m[1].trim();
+    return raw;
+  }
+
+  function _wsCategoryLabelForDesc(selectEl) {
+    if (!selectEl || !selectEl.value) return '';
+    var opt = selectEl.options[selectEl.selectedIndex];
+    var label = opt ? (opt.textContent || selectEl.value) : selectEl.value;
+    return String(label || '').trim().toLowerCase();
+  }
+
+  function _wsBuildAutoDescription() {
+    var fromName = _wsAccountNameForDesc(fromSelect ? fromSelect.value : '', fromSelect, false);
+    var toName = _wsAccountNameForDesc(toSelect ? toSelect.value : '', toSelect, true);
+    var cat = _wsCategoryLabelForDesc(categorySelect);
+    if (!fromName && !toName && !cat) return '';
+    var text = 'Payment Transfer';
+    if (fromName) text += ' From ' + fromName;
+    if (toName) text += ' to ' + toName + ' Account';
+    if (cat) text += ' for Cash ' + cat;
+    return text;
+  }
+
+  function _wsUpdateAutoDescription(enableAuto) {
+    if (!_wsIsAddForm || !descBox) return;
+    if (enableAuto) _wsDescAutoManaged = true;
+    if (!_wsDescAutoManaged) return;
+    var text = _wsBuildAutoDescription();
+    if (!text) return;
+    _wsLastAutoDesc = text;
+    descBox.value = text;
+  }
+
+  function _wsFocusCategoryField() {
+    if (!categorySelect) return;
+    function doFocus() {
+      if (categorySelect.tomselect) {
+        try { categorySelect.tomselect.focus(); } catch (e) { categorySelect.focus(); }
+      } else {
+        categorySelect.focus();
+      }
+    }
+    window.setTimeout(doFocus, categorySelect.tomselect ? 0 : 120);
+  }
+
+  if (_wsIsAddForm) {
+    if (categorySelect) {
+      categorySelect.addEventListener('change', function() { _wsUpdateAutoDescription(false); });
+    }
+    if (fromSelect) {
+      fromSelect.addEventListener('change', function() { _wsUpdateAutoDescription(false); });
+    }
+    if (toSelect) {
+      toSelect.addEventListener('change', function() { _wsUpdateAutoDescription(false); });
+    }
+    if (descBox) {
+      descBox.addEventListener('input', function() {
+        if (this.value !== _wsLastAutoDesc) _wsDescAutoManaged = false;
+      });
+    }
+  }
   var fromHint = document.getElementById('fromAccountBalanceHint');
   var toHint = document.getElementById('toAccountBalanceHint');
 
@@ -250,6 +438,25 @@ document.addEventListener('DOMContentLoaded', function() {
     reader.readAsDataURL(file);
   }
 
+  function onWsAttachFile(file) {
+    if (!file) return;
+    showAttachPreview(file);
+    _wsFocusCategoryField();
+    if (_wsIsAddForm) {
+      _wsUpdateAutoDescription(true);
+    }
+    if (typeof window.__wsSlipAttachHook === 'function') {
+      window.__wsSlipAttachHook(file);
+    }
+  }
+
+  function assignAttachInputFile(file) {
+    if (!attachInput || !file) return;
+    var dt = new DataTransfer();
+    dt.items.add(file);
+    attachInput.files = dt.files;
+  }
+
   if (attachZone && attachInput) {
     attachZone.addEventListener('click', function(){ attachInput.click(); });
     attachZone.addEventListener('keydown', function(e){
@@ -265,7 +472,7 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     });
     attachInput.addEventListener('change', function(){
-      if (this.files && this.files[0]) showAttachPreview(this.files[0]);
+      if (this.files && this.files[0]) onWsAttachFile(this.files[0]);
     });
     attachZone.addEventListener('dragover', function(e){ e.preventDefault(); attachZone.classList.add('drag-over'); });
     attachZone.addEventListener('dragleave', function(){ attachZone.classList.remove('drag-over'); });
@@ -277,17 +484,15 @@ document.addEventListener('DOMContentLoaded', function() {
       var dt = new DataTransfer();
       dt.items.add(f);
       attachInput.files = dt.files;
-      showAttachPreview(f);
+      onWsAttachFile(f);
     });
     attachZone.addEventListener('paste', function(e){
       var items = (e.clipboardData || e.originalEvent.clipboardData).items || [];
       for (var i = 0; i < items.length; i++) {
         if (items[i].type && items[i].type.indexOf('image') !== -1) {
           var file = items[i].getAsFile();
-          var dt = new DataTransfer();
-          dt.items.add(file);
-          attachInput.files = dt.files;
-          showAttachPreview(file);
+          assignAttachInputFile(file);
+          onWsAttachFile(file);
           e.preventDefault();
           break;
         }
@@ -300,10 +505,8 @@ document.addEventListener('DOMContentLoaded', function() {
     for (var i = 0; i < items.length; i++) {
       if (items[i].type && items[i].type.indexOf('image') !== -1) {
         var file = items[i].getAsFile();
-        var dt = new DataTransfer();
-        dt.items.add(file);
-        attachInput.files = dt.files;
-        showAttachPreview(file);
+        assignAttachInputFile(file);
+        onWsAttachFile(file);
         break;
       }
     }
@@ -324,6 +527,7 @@ document.addEventListener('DOMContentLoaded', function() {
       d.addEventListener('mousedown', function(e){
         e.preventDefault();
         descBox.value = txt;
+        _wsDescAutoManaged = false;
         sugBox.style.display = 'none';
       });
       sugBox.appendChild(d);
@@ -409,6 +613,942 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!formEl || !formEl.contains(ev.target)) return;
     requestAnimationFrame(function() { _wsScrollFormForFocus(ev.target); });
   });
+
+  function _wsClearFieldInvalid(el) {
+    if (!el) return;
+    el.classList.remove('is-invalid');
+    if (el.tomselect && el.tomselect.wrapper) {
+      el.tomselect.wrapper.classList.remove('is-invalid');
+    }
+  }
+
+  function _wsMarkFieldInvalid(el) {
+    if (!el) return;
+    el.classList.add('is-invalid');
+    if (el.tomselect && el.tomselect.wrapper) {
+      el.tomselect.wrapper.classList.add('is-invalid');
+    }
+  }
+
+  function _wsClearTransferFormErrors() {
+    [transferDateInput, amountInput, fromSelect, toSelect].forEach(_wsClearFieldInvalid);
+  }
+
+  function _wsValidateTransferDate(value) {
+    var v = (value || '').trim();
+    if (!v) return 'Transfer Date bharna zaroori hai.';
+    if (!/^\d{2}-\d{2}-\d{4}$/.test(v)) return 'Transfer Date sahi format mein likhein (dd-mm-yyyy).';
+    return '';
+  }
+
+  function _wsValidateTransferForm() {
+    _wsClearTransferFormErrors();
+    var errors = [];
+    var firstBad = null;
+
+    function addError(msg, el) {
+      if (errors.indexOf(msg) === -1) errors.push(msg);
+      _wsMarkFieldInvalid(el);
+      if (!firstBad && el) firstBad = el;
+    }
+
+    var dateErr = _wsValidateTransferDate(transferDateInput && transferDateInput.value);
+    if (dateErr) addError(dateErr, transferDateInput);
+
+    var amountVal = (amountInput && amountInput.value || '').trim();
+    var amountNum = parseFloat(amountVal);
+    if (!amountVal) addError('Amount bharna zaroori hai.', amountInput);
+    else if (!isFinite(amountNum) || amountNum <= 0) addError('Amount zero se zyada hona chahiye.', amountInput);
+
+    var fromVal = fromSelect && fromSelect.value;
+    if (!fromVal) addError('From Account select karein.', fromSelect);
+
+    var toVal = toSelect && toSelect.value;
+    if (!toVal) addError('To Account select karein.', toSelect);
+    else if (fromVal && toVal && String(fromVal) === String(toVal)) {
+      addError('From aur To Account alag hone chahiye.', fromSelect);
+      addError('From aur To Account alag hone chahiye.', toSelect);
+    }
+
+    if (firstBad) {
+      var scrollTarget = (firstBad.tomselect && firstBad.tomselect.wrapper) ? firstBad.tomselect.wrapper : firstBad;
+      if (scrollTarget && scrollTarget.scrollIntoView) {
+        scrollTarget.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+      }
+      if (firstBad.tomselect) {
+        try { firstBad.tomselect.focus(); } catch (e) { firstBad.focus(); }
+      } else if (typeof firstBad.focus === 'function') {
+        firstBad.focus();
+      }
+    }
+    return errors;
+  }
+
+  if (formEl) {
+    [transferDateInput, amountInput, fromSelect, toSelect].forEach(function(el) {
+      if (!el) return;
+      el.addEventListener('input', function() { _wsClearFieldInvalid(el); });
+      el.addEventListener('change', function() { _wsClearFieldInvalid(el); });
+    });
+    formEl.addEventListener('submit', function(ev) {
+      if (_wsValidateTransferForm().length) {
+        ev.preventDefault();
+      }
+    });
+  }
+
+  var slipEnabled = document.getElementById('wsTransferFormWrap') && document.getElementById('wsTransferFormWrap').getAttribute('data-slip-template') === '1';
+  if (slipEnabled && window.WorkspaceSlipTemplate) {
+    (function initWsSlipTemplate() {
+      var WST = window.WorkspaceSlipTemplate;
+      var statusEl = document.getElementById('wsSlipOcrStatus');
+      var refInput = document.getElementById('wsTransferRefInput');
+      var amountInput = document.getElementById('wsTransferAmountInput');
+      var pmSelect = document.getElementById('wsPaymentModeSelect');
+      var teachModalEl = document.getElementById('wsSlipTeachModal');
+      var teachModal = (teachModalEl && window.bootstrap)
+        ? new bootstrap.Modal(teachModalEl, { backdrop: false, focus: false, keyboard: true })
+        : null;
+
+      function restoreTeachModalBodyScroll() {
+        document.body.classList.remove('modal-open');
+        document.body.style.removeProperty('overflow');
+        document.body.style.removeProperty('padding-right');
+      }
+      var profiles = [];
+      var pendingSlipFile = null;
+      var teachImg = document.getElementById('wsSlipTeachImg');
+      var teachCanvas = document.getElementById('wsSlipTeachCanvas');
+      var teachWrap = document.getElementById('wsSlipTeachWrap');
+      var designNameInput = document.getElementById('wsSlipDesignName');
+      var profileListEl = document.getElementById('wsSlipProfileList');
+      var activeField = 'date';
+      var regions = {};
+      var teachImageObj = null;
+      var teachFingerprint = [];
+      var drawing = false;
+      var drawStart = null;
+      var drawingField = null;
+      var csrfEl = document.querySelector('[name=csrf_token]');
+      var slipSession = null;
+      var correctionLabels = { date: 'Date', amount: 'Amount', reference_no: 'Reference' };
+      var previewCache = { date: null, amount: null, reference_no: null, fieldMeta: {} };
+      var previewRunSeq = 0;
+      var canManageSlipProfiles = {{ 'true' if can_manage_slip_profiles else 'false' }};
+
+      function resetPreviewCache() {
+        previewCache = { date: null, amount: null, reference_no: null, fieldMeta: {} };
+        updatePreviewSpans(previewCache, false);
+      }
+
+      function showPreviewWorkerError(msg) {
+        var text = msg || 'Worker Error / Offline';
+        ['wsSlipPreviewDate', 'wsSlipPreviewAmount', 'wsSlipPreviewRef'].forEach(function(id) {
+          var el = document.getElementById(id);
+          if (!el) return;
+          el.textContent = text;
+          el.className = 'text-danger fw-semibold small';
+        });
+      }
+
+      function ensureOcrReady() {
+        try {
+          if (!WST.prewarmWorker && WST.ensureTesseract) {
+            WST.prewarmWorker = function() { return WST.ensureTesseract(); };
+          }
+          var fn = WST.prepareOcrEngine || WST.prewarmWorker || WST.ensureTesseract;
+          if (typeof fn !== 'function') {
+            return Promise.reject(new Error('OCR module incomplete — Ctrl+F5 hard refresh karein.'));
+          }
+          return fn.call(WST);
+        } catch (err) {
+          return Promise.reject(err);
+        }
+      }
+
+      function handleOcrEngineError(err, contextLabel) {
+        var msg = (err && err.message) ? err.message : String(err || 'Worker Error / Offline');
+        if (/offline|503|load failed|network/i.test(msg)) {
+          msg = 'Worker offline — local OCR load fail. Internet/CDN ya Ctrl+F5 try karein.';
+        }
+        showPreviewWorkerError('Worker Error');
+        setStatus((contextLabel || 'OCR') + ' fail: ' + msg, 'err');
+        return null;
+      }
+
+      function setSlipSession(data, file) {
+        if (!data || !data.profileId) {
+          slipSession = null;
+          return;
+        }
+        slipSession = {
+          profileId: data.profileId,
+          profile: data.profile,
+          file: file,
+          img: data.img || null,
+          ocrText: data.ocrText || '',
+          extracted: {
+            date: data.date || null,
+            amount: data.amount || null,
+            reference_no: data.reference_no || null,
+          },
+          learning: {},
+        };
+      }
+
+      function pushCorrectionToProfile(fieldKey, userVal, inputEl) {
+        if (!canManageSlipProfiles) return;
+        if (!slipSession || !slipSession.profileId) return;
+        setStatus('Design update (' + (correctionLabels[fieldKey] || fieldKey) + ')…', 'busy');
+        var learn = function(img) {
+          return WST.learnFieldCorrection(img, slipSession.profile, fieldKey, userVal, slipSession.ocrText)
+            .then(function(result) {
+              if (!result || !result.region) {
+                slipSession.extracted[fieldKey] = userVal;
+                setStatus('Correction note ho gayi — agli slip par dubara verify karein.', 'warn');
+                return;
+              }
+              return fetch('/api/workspace-slip-profiles/' + slipSession.profileId, {
+                method: 'PATCH',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'X-CSRFToken': (csrfEl && csrfEl.value) || '',
+                },
+                body: JSON.stringify({
+                  fields: [{
+                    field_key: fieldKey,
+                    region_x: result.region.region_x,
+                    region_y: result.region.region_y,
+                    region_w: result.region.region_w,
+                    region_h: result.region.region_h,
+                  }],
+                  fingerprint_keywords: result.keywords || [],
+                  merge_fingerprint: true,
+                }),
+              }).then(function(r) { return r.json(); })
+                .then(function(j) {
+                  if (!j || !j.ok) {
+                    setStatus((j && j.error) || 'Design update fail.', 'err');
+                    return;
+                  }
+                  slipSession.extracted[fieldKey] = userVal;
+                  if (j.profile) {
+                    slipSession.profile = j.profile;
+                    var idx = -1;
+                    for (var pi = 0; pi < profiles.length; pi++) {
+                      if (profiles[pi].id === j.profile.id) { idx = pi; break; }
+                    }
+                    if (idx >= 0) profiles[idx] = j.profile;
+                    if (WST.cacheProfiles) WST.cacheProfiles(profiles);
+                    renderProfileList();
+                  }
+                  if (inputEl) inputEl.classList.remove('ws-slip-low-conf');
+                  setStatus('Design auto-updated: ' + (correctionLabels[fieldKey] || fieldKey) + ' region save ho gaya.', 'ok');
+                });
+            })
+            .catch(function() {
+              setStatus('Design update fail.', 'err');
+            });
+        };
+        if (slipSession.img) {
+          learn(slipSession.img);
+        } else if (slipSession.file && WST.loadImageFromFile) {
+          WST.loadImageFromFile(slipSession.file).then(function(img) {
+            slipSession.img = img;
+            learn(img);
+          }).catch(function() {
+            setStatus('Design update fail — image load.', 'err');
+          });
+        }
+      }
+
+      function scheduleCorrectionLearn(fieldKey, inputEl) {
+        if (!slipSession || !slipSession.profileId || !inputEl) return;
+        var userVal = inputEl.value.trim();
+        if (!userVal) return;
+        if (WST.fieldValuesMatch && WST.fieldValuesMatch(fieldKey, userVal, slipSession.extracted[fieldKey])) return;
+        if (slipSession.learning[fieldKey]) window.clearTimeout(slipSession.learning[fieldKey]);
+        slipSession.learning[fieldKey] = window.setTimeout(function() {
+          slipSession.learning[fieldKey] = null;
+          pushCorrectionToProfile(fieldKey, userVal, inputEl);
+        }, 900);
+      }
+
+      function bindCorrectionLearning(inputEl, fieldKey) {
+        if (!inputEl) return;
+        function onEdit() { scheduleCorrectionLearn(fieldKey, inputEl); }
+        inputEl.addEventListener('change', onEdit);
+        inputEl.addEventListener('blur', onEdit);
+      }
+
+      function setStatus(msg, kind) {
+        if (!statusEl) return;
+        if (!msg) { statusEl.className = 'ws-slip-ocr-status d-none'; statusEl.textContent = ''; return; }
+        statusEl.className = 'ws-slip-ocr-status ' + (kind || 'ok');
+        statusEl.textContent = msg;
+      }
+
+      function flashFilled(el) {
+        if (!el) return;
+        el.classList.add('ws-slip-filled');
+        window.setTimeout(function() { el.classList.remove('ws-slip-filled'); }, 4500);
+      }
+
+      function setPaymentModeOnline() {
+        if (!pmSelect) return;
+        pmSelect.value = 'Online';
+        if (pmSelect.tomselect) pmSelect.tomselect.setValue('Online', true);
+        flashFilled(pmSelect);
+      }
+
+      function applyExtracted(data) {
+        if (!data) return;
+        var filled = [];
+        var meta = data.fieldMeta || {};
+        var lowConf = WST.LOW_CONFIDENCE || 0.52;
+
+        function markField(el, key, label) {
+          if (!el) return;
+          el.classList.remove('ws-slip-low-conf');
+          var m = meta[key];
+          if (m && m.confidence && m.confidence < lowConf) {
+            el.classList.add('ws-slip-low-conf');
+          }
+        }
+
+        if (data.date && data.date !== '—' && transferDateInput && !transferDateInput.value.trim()) {
+          transferDateInput.value = data.date;
+          flashFilled(transferDateInput);
+          markField(transferDateInput, 'date', 'Date');
+          filled.push('Date');
+        }
+        if (data.amount && data.amount !== '—' && amountInput && !amountInput.value.trim()) {
+          amountInput.value = data.amount;
+          flashFilled(amountInput);
+          markField(amountInput, 'amount', 'Amount');
+          filled.push('Amount');
+        }
+        if (data.reference_no && data.reference_no !== '—' && refInput && !refInput.value.trim()) {
+          refInput.value = data.reference_no;
+          flashFilled(refInput);
+          markField(refInput, 'reference_no', 'Reference');
+          filled.push('Reference');
+          checkReferenceDuplicate(data.reference_no);
+        }
+        setPaymentModeOnline();
+        return filled;
+      }
+
+      function checkReferenceDuplicate(refNo) {
+        if (!refNo || refNo === '—') return;
+        fetch('/api/workspace-transfer-ref-check?reference_no=' + encodeURIComponent(refNo))
+          .then(function(r) { return r.json(); })
+          .then(function(j) {
+            if (j && j.ok && j.exists) {
+              setStatus('Warning: Ref ' + refNo + ' pehle transfer ' + (j.transfer_number || '') + ' mein use ho chuka — verify karein.', 'warn');
+            }
+          })
+          .catch(function() {});
+      }
+
+      function loadProfiles() {
+        var cached = WST.readCachedProfiles && WST.readCachedProfiles();
+        if (cached && cached.length) {
+          profiles = cached;
+          renderProfileList();
+        }
+        return fetch('/api/workspace-slip-profiles')
+          .then(function(r) { return r.json(); })
+          .then(function(j) {
+            profiles = (j && j.ok && j.profiles) ? j.profiles : (cached || []);
+            if (j && typeof j.can_manage === 'boolean') canManageSlipProfiles = j.can_manage;
+            if (WST.cacheProfiles) WST.cacheProfiles(profiles);
+            renderProfileList();
+          })
+          .catch(function() {
+            if (!profiles.length && cached) profiles = cached;
+          });
+      }
+
+      function renderProfileList() {
+        if (!profileListEl) return;
+        if (!profiles.length) {
+          profileListEl.innerHTML = 'No saved slip designs yet.';
+          return;
+        }
+        profileListEl.innerHTML = profiles.map(function(p) {
+          var delBtn = canManageSlipProfiles
+            ? ' <button type="button" class="btn-close btn-close-sm ms-1" style="font-size:.55rem" data-del-profile="' + p.id + '" title="Remove"></button>'
+            : '';
+          return '<span class="badge text-bg-light border me-1 mb-1">' +
+            (p.name || 'Design') + delBtn + '</span>';
+        }).join('');
+        if (canManageSlipProfiles) {
+          profileListEl.querySelectorAll('[data-del-profile]').forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+              e.preventDefault();
+              var id = btn.getAttribute('data-del-profile');
+              if (!id || !confirm('Remove slip design "' + (btn.parentElement.textContent || '').trim() + '"?')) return;
+              fetch('/api/workspace-slip-profiles/' + id, {
+                method: 'DELETE',
+                headers: { 'X-CSRFToken': (csrfEl && csrfEl.value) || '' },
+              }).then(function(r) { return r.json(); })
+                .then(function(j) {
+                  if (!j || !j.ok) {
+                    alert((j && j.error) || 'Remove failed.');
+                    return;
+                  }
+                  loadProfiles();
+                })
+                .catch(function() { alert('Remove failed.'); });
+            });
+          });
+        }
+      }
+
+      function teachDisplaySize() {
+        if (!teachImg) return { w: 0, h: 0 };
+        var w = teachImg.offsetWidth || teachImg.clientWidth || 0;
+        var h = teachImg.offsetHeight || teachImg.clientHeight || 0;
+        if ((!w || !h) && teachImg.getBoundingClientRect) {
+          var rect = teachImg.getBoundingClientRect();
+          w = w || rect.width || 0;
+          h = h || rect.height || 0;
+        }
+        return { w: w, h: h };
+      }
+
+      function syncCanvasSize() {
+        if (!teachImg || !teachCanvas || !teachWrap) return;
+        if (!teachImg.naturalWidth) return;
+        var disp = teachDisplaySize();
+        if (!disp.w || !disp.h) return;
+        teachCanvas.width = Math.max(1, Math.round(disp.w));
+        teachCanvas.height = Math.max(1, Math.round(disp.h));
+        teachCanvas.style.width = disp.w + 'px';
+        teachCanvas.style.height = disp.h + 'px';
+        redrawTeachCanvas();
+      }
+
+      /** Map canvas overlay pixels → % of raw image (naturalWidth × naturalHeight). */
+      function displayRectToPercent(x, y, w, h) {
+        if (!teachImg || !teachCanvas || !teachImg.naturalWidth || !teachImg.naturalHeight) return null;
+        var cw = teachCanvas.width || 1;
+        var ch = teachCanvas.height || 1;
+        var pct = {
+          region_x: Math.max(0, (x / cw) * 100),
+          region_y: Math.max(0, (y / ch) * 100),
+          region_w: Math.max(1, (w / cw) * 100),
+          region_h: Math.max(1, (h / ch) * 100),
+        };
+        if (window.__wsSlipOcrDebug !== false && WST.logRegionMapping) {
+          WST.logRegionMapping('teach-draw', teachImg, pct);
+        }
+        return pct;
+      }
+
+      function percentToDisplayRect(region) {
+        if (!teachImg || !teachCanvas) return null;
+        var x = (region.region_x / 100) * teachCanvas.width;
+        var y = (region.region_y / 100) * teachCanvas.height;
+        var w = (region.region_w / 100) * teachCanvas.width;
+        var h = (region.region_h / 100) * teachCanvas.height;
+        return { x: x, y: y, w: w, h: h };
+      }
+
+      function redrawTeachCanvas() {
+        if (!teachCanvas) return;
+        var ctx = teachCanvas.getContext('2d');
+        ctx.clearRect(0, 0, teachCanvas.width, teachCanvas.height);
+        ['date', 'amount', 'reference_no'].forEach(function(key) {
+          var region = regions[key];
+          if (!region) return;
+          var r = percentToDisplayRect(region);
+          if (!r) return;
+          ctx.strokeStyle = WST.FIELD_COLORS[key] || '#333';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(r.x, r.y, r.w, r.h);
+          ctx.fillStyle = WST.FIELD_COLORS[key] || '#333';
+          ctx.fillRect(r.x, r.y, Math.min(r.w, 70), 16);
+          ctx.fillStyle = '#fff';
+          ctx.font = 'bold 10px sans-serif';
+          ctx.fillText(WST.FIELD_LABELS[key] || key, r.x + 4, r.y + 12);
+        });
+      }
+
+      function setActiveField(field) {
+        if (drawing) return;
+        activeField = field;
+        document.querySelectorAll('.ws-slip-field-btn').forEach(function(btn) {
+          btn.classList.toggle('active', btn.getAttribute('data-field') === field);
+        });
+        if (teachWrap && WST.FIELD_TINTS && WST.FIELD_TINTS[field]) {
+          teachWrap.style.background = WST.FIELD_TINTS[field];
+        }
+        if (teachCanvas) teachCanvas.style.cursor = 'crosshair';
+        redrawTeachCanvas();
+      }
+
+      function updatePreviewSpans(data, loading, loadingField) {
+        var dEl = document.getElementById('wsSlipPreviewDate');
+        var aEl = document.getElementById('wsSlipPreviewAmount');
+        var rEl = document.getElementById('wsSlipPreviewRef');
+        var lowConf = WST.LOW_CONFIDENCE || 0.52;
+        var src = data || previewCache;
+        function show(el, val, key) {
+          if (!el) return;
+          if (loading && (!loadingField || loadingField === key)) {
+            el.textContent = '…';
+            el.className = 'text-muted';
+            return;
+          }
+          var v = (src && src[key]) ? src[key] : val;
+          el.textContent = v || '—';
+          el.className = (src && src.fieldMeta && src.fieldMeta[key] && src.fieldMeta[key].confidence < lowConf)
+            ? 'text-warning fw-semibold' : (v ? 'text-success fw-semibold' : 'text-muted');
+        }
+        show(dEl, src && src.date, 'date');
+        show(aEl, src && src.amount, 'amount');
+        show(rEl, src && src.reference_no, 'reference_no');
+      }
+
+      function showTeachPanel() {
+        if (teachModal) {
+          teachModal.show();
+          return;
+        }
+        if (teachModalEl) teachModalEl.classList.add('show');
+        window.setTimeout(syncCanvasSize, 150);
+      }
+
+      function hideTeachPanel() {
+        if (teachModal) {
+          teachModal.hide();
+          return;
+        }
+        if (teachModalEl) teachModalEl.classList.remove('show');
+      }
+
+      if (teachModalEl) {
+        teachModalEl.addEventListener('show.bs.modal', restoreTeachModalBodyScroll);
+        teachModalEl.addEventListener('shown.bs.modal', function() {
+          restoreTeachModalBodyScroll();
+          window.setTimeout(syncCanvasSize, 80);
+        });
+        teachModalEl.addEventListener('hidden.bs.modal', restoreTeachModalBodyScroll);
+      }
+
+      function openTeachModal(file, suggestName) {
+        if (!canManageSlipProfiles) {
+          setStatus('Slip design permission nahi — Role Management se permission mangwaein.', 'warn');
+          return;
+        }
+        if (!teachModalEl || !file) return;
+        pendingSlipFile = file;
+        regions = {};
+        resetPreviewCache();
+        teachFingerprint = [];
+        teachImageObj = null;
+        if (designNameInput) {
+          if (suggestName) {
+            var sn = String(suggestName);
+            designNameInput.value = sn.charAt(0).toUpperCase() + sn.slice(1);
+          } else {
+            designNameInput.value = '';
+          }
+        }
+        setActiveField('date');
+        var reader = new FileReader();
+        reader.onload = function(ev) {
+          teachImg.onload = function() {
+            teachImageObj = teachImg;
+            syncCanvasSize();
+          };
+          teachImg.src = ev.target.result;
+          showTeachPanel();
+          ensureOcrReady().catch(function(err) {
+            console.warn('[ws-slip-ocr] prewarm on open failed', err);
+          });
+          window.setTimeout(syncCanvasSize, 150);
+        };
+        reader.readAsDataURL(file);
+      }
+
+      function ensureTeachImageObj() {
+        function useDomImg() {
+          if (!teachImg || !teachImg.naturalWidth) return null;
+          teachImageObj = teachImg;
+          return teachImg;
+        }
+        var ready = useDomImg();
+        if (ready) return Promise.resolve(ready);
+        if (teachImg && teachImg.src) {
+          return new Promise(function(resolve, reject) {
+            if (teachImg.complete && teachImg.naturalWidth) {
+              resolve(useDomImg());
+              return;
+            }
+            var done = function() {
+              var img = useDomImg();
+              if (img) resolve(img);
+              else reject(new Error('Slip image decode fail — dubara paste karein.'));
+            };
+            teachImg.addEventListener('load', done, { once: true });
+            teachImg.addEventListener('error', function() {
+              reject(new Error('Slip image load fail — dubara paste karein.'));
+            }, { once: true });
+          });
+        }
+        if (teachImageObj && (teachImageObj.naturalWidth || teachImageObj.width)) {
+          return Promise.resolve(teachImageObj);
+        }
+        if (pendingSlipFile && WST.loadImageFromFile) {
+          return WST.loadImageFromFile(pendingSlipFile).then(function(img) {
+            teachImageObj = img;
+            return img;
+          });
+        }
+        return Promise.reject(new Error('Slip image ready nahi — thora wait karein ya dubara paste karein.'));
+      }
+
+      function runAutoPreviewForField(fieldKey) {
+        if (!fieldKey || !regions[fieldKey]) return Promise.resolve(null);
+        var seq = ++previewRunSeq;
+        updatePreviewSpans(previewCache, true, fieldKey);
+        return ensureOcrReady().then(function() {
+          return ensureTeachImageObj();
+        }).then(function(img) {
+          if (seq !== previewRunSeq) return null;
+          if (window.__wsSlipOcrDebug !== false) {
+            console.log('[ws-slip-ocr] auto-preview image', {
+              field: fieldKey,
+              natural: { w: img.naturalWidth, h: img.naturalHeight },
+              canvas: { w: teachCanvas && teachCanvas.width, h: teachCanvas && teachCanvas.height },
+              display: teachDisplaySize(),
+              region: regions[fieldKey],
+            });
+          }
+          return WST.previewFieldRegion(img, fieldKey, regions[fieldKey]);
+        }).then(function(res) {
+          if (seq !== previewRunSeq || !res) return null;
+          previewCache[fieldKey] = res.value || null;
+          if (!previewCache.fieldMeta) previewCache.fieldMeta = {};
+          previewCache.fieldMeta[fieldKey] = res;
+          updatePreviewSpans(previewCache, false);
+          if (res.value) {
+            setStatus((correctionLabels[fieldKey] || fieldKey) + ' preview: ' + res.value, 'ok');
+          } else {
+            setStatus((correctionLabels[fieldKey] || fieldKey) + ' read nahi hua — box thora adjust karein.', 'warn');
+          }
+          return previewCache;
+        }).catch(function(err) {
+          if (seq !== previewRunSeq) return null;
+          updatePreviewSpans(previewCache, false);
+          return handleOcrEngineError(err, 'Preview');
+        });
+      }
+
+      function runPreviewFromRegions() {
+        var seq = ++previewRunSeq;
+        var regionPayload = {};
+        ['date', 'amount', 'reference_no'].forEach(function(k) {
+          if (regions[k]) regionPayload[k] = regions[k];
+        });
+        if (!Object.keys(regionPayload).length) {
+          return Promise.resolve(null);
+        }
+        updatePreviewSpans(previewCache, true);
+        return ensureOcrReady().then(function() {
+          return ensureTeachImageObj();
+        }).then(function(img) {
+          if (seq !== previewRunSeq) return null;
+          if (window.__wsSlipOcrDebug !== false) {
+            console.log('[ws-slip-ocr] test-read image', {
+              natural: { w: img.naturalWidth, h: img.naturalHeight },
+              canvas: { w: teachCanvas && teachCanvas.width, h: teachCanvas && teachCanvas.height },
+              display: teachDisplaySize(),
+              regions: regionPayload,
+            });
+          }
+          return WST.previewRegions(img, regionPayload);
+        }).then(function(data) {
+          if (seq !== previewRunSeq || !data) return data;
+          previewCache.date = data.date;
+          previewCache.amount = data.amount;
+          previewCache.reference_no = data.reference_no;
+          previewCache.fieldMeta = data.fieldMeta || {};
+          updatePreviewSpans(previewCache, false);
+          return previewCache;
+        }).catch(function(err) {
+          if (seq !== previewRunSeq) throw err;
+          updatePreviewSpans(previewCache, false);
+          handleOcrEngineError(err, 'Test read');
+          throw err;
+        });
+      }
+
+      function processSlipFile(file) {
+        if (!file) return;
+        pendingSlipFile = file;
+        setStatus('Slip read ho rahi hai…', 'busy');
+        WST.extractFromSlip(file, profiles).then(function(data) {
+          setSlipSession(data, file);
+          var named = data.profileName ? ('Design: ' + data.profileName) : (data.provider ? ('Provider: ' + data.provider) : 'Generic read');
+          var hasAny = data.date || data.amount || data.reference_no;
+          if (data.profileName && hasAny) {
+            var filled = applyExtracted(data);
+            var lowNote = '';
+            if (data.fieldMeta) {
+              var low = ['date', 'amount', 'reference_no'].filter(function(k) {
+                return data.fieldMeta[k] && data.fieldMeta[k].value && data.fieldMeta[k].confidence < (WST.LOW_CONFIDENCE || 0.52);
+              });
+              if (low.length) lowNote = ' (yellow = verify ' + low.join(', ') + ')';
+            }
+            setStatus(named + ' — ' + (filled && filled.length ? filled.join(', ') : 'verify fields') + lowNote + '. Payment Mode: Online.', 'ok');
+            return;
+          }
+          if (!data.profileName && data.date && data.amount && data.reference_no) {
+            applyExtracted(data);
+            setStatus('Slip read (no saved design). Payment Mode: Online.', 'ok');
+            return;
+          }
+          if (hasAny) {
+            applyExtracted(data);
+            setStatus(named + ' — partial read; ' + (canManageSlipProfiles ? 'design save karein for better accuracy.' : 'Slip Design permission wale user se design save karwaein.'), 'warn');
+            return;
+          }
+          if (canManageSlipProfiles) {
+            if (data.profileName) {
+              setStatus(named + ' — design match hua lekin fields read nahi hui. Dubara slip paste karein ya Teach se boxes verify karein.', 'warn');
+            } else {
+              setStatus('Naya slip design — fields mark karein (pehli dafa setup).', 'warn');
+              openTeachModal(file, data.provider || '');
+            }
+          } else {
+            setStatus('Slip read fail — saved design nahi mila. Slip Design permission wale se setup karwaein.', 'warn');
+          }
+        }).catch(function(err) {
+          if (canManageSlipProfiles) {
+            setStatus('Slip read fail — design mark karein.', 'err');
+            openTeachModal(file, '');
+          } else {
+            setStatus('Slip read fail — Slip Design permission wale se setup karwaein.', 'err');
+          }
+        });
+      }
+
+      window.__wsSlipAttachHook = processSlipFile;
+
+      document.querySelectorAll('.ws-slip-field-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          setActiveField(btn.getAttribute('data-field') || 'date');
+        });
+      });
+
+      function canvasPoint(evt) {
+        if (!teachCanvas) return { x: 0, y: 0 };
+        var rect = teachCanvas.getBoundingClientRect();
+        var clientX = evt.clientX;
+        var clientY = evt.clientY;
+        if (evt.changedTouches && evt.changedTouches[0]) {
+          clientX = evt.changedTouches[0].clientX;
+          clientY = evt.changedTouches[0].clientY;
+        } else if (evt.touches && evt.touches[0]) {
+          clientX = evt.touches[0].clientX;
+          clientY = evt.touches[0].clientY;
+        }
+        var cssX = clientX - rect.left;
+        var cssY = clientY - rect.top;
+        var scaleX = teachCanvas.width / (rect.width || 1);
+        var scaleY = teachCanvas.height / (rect.height || 1);
+        return { x: cssX * scaleX, y: cssY * scaleY };
+      }
+
+      function setDrawingUi(on) {
+        document.querySelectorAll('.ws-slip-field-btn').forEach(function(btn) {
+          btn.disabled = !!on;
+          btn.style.opacity = on ? '0.65' : '';
+        });
+      }
+
+      function onDrawStart(evt) {
+        if (!activeField || drawing) return;
+        drawing = true;
+        drawingField = activeField;
+        drawStart = canvasPoint(evt);
+        setDrawingUi(true);
+        redrawTeachCanvas();
+        evt.preventDefault();
+      }
+      function onDrawMove(evt) {
+        if (!drawing || !drawStart || !drawingField) return;
+        var p = canvasPoint(evt);
+        var ctx = teachCanvas.getContext('2d');
+        redrawTeachCanvas();
+        ctx.strokeStyle = WST.FIELD_COLORS[drawingField] || '#333';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4, 3]);
+        ctx.strokeRect(drawStart.x, drawStart.y, p.x - drawStart.x, p.y - drawStart.y);
+        ctx.setLineDash([]);
+        evt.preventDefault();
+      }
+      function onDrawEnd(evt) {
+        if (!drawing || !drawStart || !drawingField) return;
+        var p = canvasPoint(evt);
+        var fieldKey = drawingField;
+        drawing = false;
+        drawingField = null;
+        var x = Math.min(drawStart.x, p.x);
+        var y = Math.min(drawStart.y, p.y);
+        var w = Math.abs(p.x - drawStart.x);
+        var h = Math.abs(p.y - drawStart.y);
+        drawStart = null;
+        setDrawingUi(false);
+        if (w < 8 || h < 8) { redrawTeachCanvas(); return; }
+        var pct = displayRectToPercent(x, y, w, h);
+        if (pct) regions[fieldKey] = pct;
+        redrawTeachCanvas();
+        runAutoPreviewForField(fieldKey);
+      }
+
+      if (teachCanvas) {
+        teachCanvas.addEventListener('mousedown', onDrawStart);
+        teachCanvas.addEventListener('mousemove', onDrawMove);
+        teachCanvas.addEventListener('mouseup', onDrawEnd);
+        teachCanvas.addEventListener('touchstart', onDrawStart, { passive: false });
+        teachCanvas.addEventListener('touchmove', onDrawMove, { passive: false });
+        teachCanvas.addEventListener('touchend', onDrawEnd);
+      }
+      document.addEventListener('mouseup', function(evt) {
+        if (!drawing || !drawStart) return;
+        if (teachCanvas && (evt.target === teachCanvas || teachCanvas.contains(evt.target))) return;
+        onDrawEnd(evt);
+      });
+      window.addEventListener('resize', function() { syncCanvasSize(); });
+      if (typeof ResizeObserver !== 'undefined' && teachImg) {
+        var teachResizeObs = new ResizeObserver(function() { syncCanvasSize(); });
+        teachResizeObs.observe(teachImg);
+      }
+
+      var previewBtn = document.getElementById('wsSlipTeachPreviewBtn');
+      if (previewBtn) {
+        previewBtn.addEventListener('click', function() {
+          previewBtn.disabled = true;
+          setStatus('Marked areas se read ho raha hai…', 'busy');
+          runPreviewFromRegions()
+            .then(function(data) {
+              if (!data || (!data.date && !data.amount && !data.reference_no)) {
+                setStatus('Preview: koi field nahi mili — boxes thore adjust karein.', 'warn');
+              } else {
+                setStatus('Preview ready — verify karein.', 'ok');
+              }
+            })
+            .catch(function(err) {
+              updatePreviewSpans(previewCache, false);
+              setStatus('Preview fail: ' + (err && err.message ? err.message : err), 'err');
+            })
+            .finally(function() { previewBtn.disabled = false; });
+        });
+      }
+
+      var saveBtnTeach = document.getElementById('wsSlipTeachSaveBtn');
+      if (saveBtnTeach) {
+        saveBtnTeach.addEventListener('click', function() {
+          var name = designNameInput ? designNameInput.value.trim() : '';
+          if (!name) { alert('Design name likhein (e.g. JazzCash).'); return; }
+          var missing = ['date', 'amount', 'reference_no'].filter(function(k) { return !regions[k]; });
+          if (missing.length) { alert('Teeno fields mark karein: Date, Amount, Reference.'); return; }
+          var saveBtnLabel = saveBtnTeach.innerHTML;
+          saveBtnTeach.disabled = true;
+          saveBtnTeach.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status"></span>Saving…';
+          setStatus('Design save ho raha hai (OCR + save)…', 'busy');
+
+          ensureTeachImageObj()
+            .then(function() { return runPreviewFromRegions(); })
+            .then(function(previewData) {
+              previewData = previewData || { date: null, amount: null, reference_no: null, fieldMeta: {} };
+              return WST.buildFingerprintFromImage(teachImageObj).then(function(fp) {
+                teachFingerprint = fp.keywords || [];
+                name.split(/[^A-Za-z0-9]+/).forEach(function(w) {
+                  w = String(w || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+                  if (w.length >= 3 && teachFingerprint.indexOf(w) === -1) {
+                    teachFingerprint.unshift(w);
+                  }
+                });
+                var payload = {
+                  name: name,
+                  fingerprint_keywords: teachFingerprint,
+                  fields: ['date', 'amount', 'reference_no'].map(function(k) {
+                    var r = regions[k];
+                    return { field_key: k, region_x: r.region_x, region_y: r.region_y, region_w: r.region_w, region_h: r.region_h };
+                  }),
+                };
+                return fetch('/api/workspace-slip-profiles', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': (csrfEl && csrfEl.value) || '',
+                  },
+                  body: JSON.stringify(payload),
+                }).then(function(r) {
+                  return r.json().then(function(j) {
+                    if (!r.ok && j && j.error) {
+                      throw new Error(j.error);
+                    }
+                    return { j: j, previewData: previewData };
+                  });
+                });
+              });
+            })
+            .then(function(result) {
+              var j = result && result.j;
+              var previewData = result && result.previewData;
+              if (!j || !j.ok) {
+                throw new Error((j && j.error) || 'Save failed');
+              }
+              return loadProfiles().then(function() {
+                applyExtracted(previewData);
+                hideTeachPanel();
+                var filledNote = (previewData.date || previewData.amount || previewData.reference_no)
+                  ? ' Fields auto-filled.'
+                  : ' Boxes saved — fields manually verify karein.';
+                setStatus('Design saved: ' + name + '.' + filledNote + ' Payment Mode: Online.', 'ok');
+              });
+            })
+            .catch(function(err) {
+              setStatus('Design save fail: ' + (err && err.message ? err.message : err), 'err');
+              alert('Save failed: ' + (err && err.message ? err.message : err));
+            })
+            .finally(function() {
+              saveBtnTeach.disabled = false;
+              saveBtnTeach.innerHTML = saveBtnLabel;
+            });
+        });
+      }
+
+      var teachCloseBtn = document.getElementById('wsSlipTeachCloseBtn');
+      var teachCancelBtn = document.getElementById('wsSlipTeachCancelBtn');
+      if (teachCloseBtn) teachCloseBtn.addEventListener('click', hideTeachPanel);
+      if (teachCancelBtn) teachCancelBtn.addEventListener('click', hideTeachPanel);
+
+      var teachOpenBtn = document.getElementById('wsSlipTeachOpenBtn');
+      if (teachOpenBtn) {
+        teachOpenBtn.addEventListener('click', function() {
+          var f = attachInput && attachInput.files && attachInput.files[0];
+          if (!f) { alert('Pehle slip image paste ya upload karein.'); return; }
+          openTeachModal(f, designNameInput ? designNameInput.value : '');
+        });
+      }
+
+      loadProfiles();
+      bindCorrectionLearning(transferDateInput, 'date');
+      bindCorrectionLearning(amountInput, 'amount');
+      bindCorrectionLearning(refInput, 'reference_no');
+      ensureOcrReady().catch(function(err) {
+        console.warn('[ws-slip-ocr] init prewarm failed', err);
+      });
+    })();
+  }
 
 });
 </script>
