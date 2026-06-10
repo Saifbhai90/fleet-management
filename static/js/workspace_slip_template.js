@@ -1,5 +1,6 @@
 /**
- * Template-Matching Zonal OCR for Workspace Transfer slips (Tesseract.js, no AI).
+ * Template-Matching Zonal OCR for Workspace Transfer slips (Tesseract.js).
+ * Pipeline: preprocess → zonal multi-pass OCR → word-box parsing → anchor fallback.
  */
 (function (global) {
   'use strict';
@@ -44,13 +45,105 @@
     { id: 'nayapay', keys: ['NAYAPAY', 'NAYA PAY'] },
   ];
 
+  /** Typical amount box placement (% of image) when saved design zones drift. */
+  var PROVIDER_AMOUNT_REGIONS = {
+    hbl: { region_x: 6, region_y: 16, region_w: 88, region_h: 20 },
+    jazzcash: { region_x: 5, region_y: 22, region_w: 90, region_h: 18 },
+    easypaisa: { region_x: 5, region_y: 22, region_w: 90, region_h: 18 },
+    meezan: { region_x: 6, region_y: 18, region_w: 88, region_h: 20 },
+    ubl: { region_x: 6, region_y: 18, region_w: 88, region_h: 20 },
+    mcb: { region_x: 6, region_y: 18, region_w: 88, region_h: 20 },
+    raast: { region_x: 6, region_y: 18, region_w: 88, region_h: 20 },
+    sadapay: { region_x: 5, region_y: 20, region_w: 90, region_h: 18 },
+    nayapay: { region_x: 5, region_y: 20, region_w: 90, region_h: 18 },
+  };
+
+  var AMOUNT_MIN = 10;
+  var AMOUNT_MAX = 50000000;
+
   var _tesseractWarm = null;
   var _ocrWorker = null;
   var _ocrWorkerReady = null;
   var _ocrJobChain = Promise.resolve();
   var _lastOcrEngineError = null;
+  var _slipPrepCache = new WeakMap();
+  var _fullTextCache = new WeakMap();
   var TESSERACT_VERSION = '5.1.1';
   var FULL_OCR_WHITELIST = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz .:/-#@$%&*()+_ RSrsPKRpkr,';
+
+  function ocrConfig() {
+    var cfg = global.__wsSlipOcrConfig || {};
+    return {
+      mode: cfg.mode || 'balanced',
+      preprocess: cfg.preprocess !== false,
+      debug: cfg.debug === true,
+      minImageWidth: cfg.minImageWidth || 1280,
+    };
+  }
+
+  function ocrModeIsFast() {
+    return ocrConfig().mode === 'fast';
+  }
+
+  function ocrModeIsAccurate() {
+    return ocrConfig().mode === 'accurate';
+  }
+
+  function slipDrawTarget(img) {
+    return img && img._slipCanvas ? img._slipCanvas : img;
+  }
+
+  function normalizeSlipImage(img) {
+    if (!img) return img;
+    if (img._slipReady) return img;
+    var cfg = ocrConfig();
+    if (!cfg.preprocess) {
+      img._slipReady = true;
+      _slipPrepCache.set(img, img);
+      return img;
+    }
+    if (_slipPrepCache.has(img)) return _slipPrepCache.get(img);
+
+    var size = {
+      w: img.naturalWidth || img.width || 0,
+      h: img.naturalHeight || img.height || 0,
+    };
+    var minW = cfg.minImageWidth || 1280;
+    var scale = size.w && size.w < minW ? (minW / size.w) : 1;
+    var needsEnhance = scale > 1.03 || (size.w && size.w < 1000);
+
+    if (!needsEnhance) {
+      img._slipReady = true;
+      _slipPrepCache.set(img, img);
+      return img;
+    }
+
+    var c = document.createElement('canvas');
+    c.width = Math.max(1, Math.round(size.w * scale));
+    c.height = Math.max(1, Math.round(size.h * scale));
+    var ctx = c.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, c.width, c.height);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(img, 0, 0, c.width, c.height);
+    enhanceCanvas(ctx, c, 'photo-fix');
+
+    var wrapped = {
+      naturalWidth: c.width,
+      naturalHeight: c.height,
+      width: c.width,
+      height: c.height,
+      complete: true,
+      _slipCanvas: c,
+      _slipReady: true,
+      _raw: img,
+      src: img.src || '',
+    };
+    _slipPrepCache.set(img, wrapped);
+    ocrLog('normalizeSlipImage', { from: size, to: { w: c.width, h: c.height }, scale: scale });
+    return wrapped;
+  }
 
   function tesseractBaseUrl() {
     var cfg = global.__wsSlipTesseractConfig || {};
@@ -308,13 +401,14 @@
     if (mode === 'reference_no') {
       return t
         .replace(/[OoQD]/g, '0')
-        .replace(/[lI|]/g, '1')
+        .replace(/[lI|!]/g, '1')
         .replace(/[Ss$]/g, '5')
         .replace(/[Bb]/g, '8')
         .replace(/[Zz]/g, '2')
         .replace(/[Gg]/g, '6')
-        .replace(/[^\w#-]/g, ' ')
-        .replace(/\s+/g, '')
+        .replace(/[^\w#\- ]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
         .toUpperCase();
     }
     return t
@@ -371,32 +465,180 @@
     return best;
   }
 
-  function parseAmountFromText(text) {
-    var t = fixOcrText(text, 'amount');
-    var candidates = [];
-    var reRs = /(?:RS\.?|PKR\.?|AMOUNT\s*PAID|AMOUNT|TOTAL|SENT|TRANSFERRED)\s*[:\-]?\s*([\d,]+(?:\.\d{1,2})?)/gi;
-    var m;
-    while ((m = reRs.exec(t)) !== null) {
-      candidates.push({ val: m[1], score: 100 });
+  function normalizeAmountRaw(raw) {
+    if (!raw) return null;
+    var cleaned = String(raw).replace(/,/g, '').replace(/\.(?=.*\.)/g, '');
+    var num = parseFloat(cleaned);
+    if (!isFinite(num) || num <= 0) return null;
+    return num % 1 === 0 ? String(Math.round(num)) : num.toFixed(2);
+  }
+
+  function amountValuesClose(a, b) {
+    var na = parseFloat(String(a || '').replace(/,/g, ''));
+    var nb = parseFloat(String(b || '').replace(/,/g, ''));
+    if (!isFinite(na) || !isFinite(nb)) return false;
+    if (na === nb) return true;
+    return Math.abs(na - nb) <= Math.max(1, na * 0.02);
+  }
+
+  function isLikelyTransactionIdDigits(digits, fullText) {
+    if (!digits || digits.length < 8) return false;
+    var upper = String(fullText || '').toUpperCase();
+    if (/(?:TRANSACTION|TID|TXN|REFERENCE|REF)\s*(?:ID|NO)?\s*#?\s*\d*/i.test(upper) && upper.indexOf(digits) !== -1) {
+      return true;
     }
+    return digits.length >= 8;
+  }
+
+  function isLikelyTimeFragment(digits, fullText) {
+    if (!digits || digits.length < 4) return false;
+    var timeRe = /\b(\d{1,2})\s*:\s*(\d{2})\s*:\s*(\d{2})\b/g;
+    var m;
+    while ((m = timeRe.exec(String(fullText || ''))) !== null) {
+      var compact = pad2(parseInt(m[1], 10)) + m[2] + m[3];
+      if (digits === compact || compact.indexOf(digits) !== -1 || digits.indexOf(compact) !== -1) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function isLikelyMaskedAccountSuffix(digits, fullText) {
+    if (!digits || digits.length !== 4) return false;
+    return new RegExp('\\*\\s*' + digits + '\\b').test(String(fullText || ''));
+  }
+
+  function isLikelyYearFragment(digits, fullText) {
+    var y = parseInt(digits, 10);
+    if (!isFinite(y) || y < 2000 || y > 2100) return false;
+    return /\b(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\b/i.test(String(fullText || '')) ||
+      /\b20\d{2}\b/.test(String(fullText || ''));
+  }
+
+  function validateAmountCandidate(val, fullText, options) {
+    options = options || {};
+    var num = parseFloat(String(val || '').replace(/,/g, ''));
+    if (!isFinite(num) || num <= 0) return false;
+    if (!options.allowSmall && num < AMOUNT_MIN) return false;
+    if (num > AMOUNT_MAX) return false;
+    var digits = String(Math.round(num));
+    if (isLikelyTransactionIdDigits(digits, fullText)) return false;
+    if (isLikelyTimeFragment(digits, fullText)) return false;
+    if (isLikelyMaskedAccountSuffix(digits, fullText)) return false;
+    if (isLikelyYearFragment(digits, fullText)) return false;
+    return true;
+  }
+
+  function scoreAmountCandidate(raw, score, fullText, context) {
+    context = context || {};
+    var val = normalizeAmountRaw(raw);
+    if (!val || !validateAmountCandidate(val, fullText, context)) return null;
+    var total = score;
+    if (/,\d{3}/.test(String(raw))) total += 18;
+    if (context.afterAmountLabel) total += 22;
+    if (context.afterCurrency) total += 28;
+    if (context.beforeDetails) total += 12;
+    if (/^\d{1,3}(?:,\d{3})+$/.test(String(raw))) total += 10;
+    var num = parseFloat(val);
+    if (num >= 100 && num <= 500000) total += 8;
+    return { val: val, score: total };
+  }
+
+  function parseProviderAmount(text, providerId) {
+    if (!text || !providerId) return null;
+    var upper = String(text).toUpperCase();
+    var detailIdx = upper.search(/TRANSACTION\s*TYPE|FUND\s*TRANSFER|FROM\s*ACCOUNT|RECEIVER\s*NAME|DATE\s*&\s*TIME/);
+    var head = detailIdx > 40 ? text.slice(0, detailIdx) : text;
+
+    if (providerId === 'hbl') {
+      var blockRe = /AMOUNT\b[\s\S]{0,72}?(?:PKR|RS\.?)\s*([\d,]+(?:\.\d{1,2})?)/i;
+      var blockMatch = blockRe.exec(head);
+      if (blockMatch) {
+        var blockVal = scoreAmountCandidate(blockMatch[1], 118, text, {
+          afterAmountLabel: true,
+          afterCurrency: true,
+          beforeDetails: true,
+        });
+        if (blockVal) return fieldResult(blockVal.val, 0.93, 'hbl-amount-block');
+      }
+      var pkrRe = /(?:PKR|RS\.?)\s*([\d]{1,3}(?:,\d{3})+(?:\.\d{1,2})?|\d{3,7}(?:\.\d{1,2})?)/gi;
+      var best = null;
+      var bestScore = 0;
+      var pm;
+      while ((pm = pkrRe.exec(head)) !== null) {
+        var scored = scoreAmountCandidate(pm[1], 102, text, {
+          afterCurrency: true,
+          beforeDetails: true,
+        });
+        if (scored && scored.score > bestScore) {
+          bestScore = scored.score;
+          best = scored.val;
+        }
+      }
+      if (best) return fieldResult(best, 0.9, 'hbl-pkr-head');
+    }
+
+    if (providerId === 'jazzcash' || providerId === 'easypaisa') {
+      var walletRe = /(?:AMOUNT\s*PAID|AMOUNT|SENT|TRANSFERRED|TOTAL)\s*[:\-]?\s*(?:RS\.?|PKR\.?)?\s*([\d,]+(?:\.\d{1,2})?)/gi;
+      var wm;
+      var walletBest = null;
+      var walletScore = 0;
+      while ((wm = walletRe.exec(text)) !== null) {
+        var walletCand = scoreAmountCandidate(wm[1], 108, text, { afterAmountLabel: true });
+        if (walletCand && walletCand.score > walletScore) {
+          walletScore = walletCand.score;
+          walletBest = walletCand.val;
+        }
+      }
+      if (walletBest) return fieldResult(walletBest, 0.9, providerId + '-wallet');
+    }
+
+    return null;
+  }
+
+  function parseAmountFromText(text, options) {
+    options = options || {};
+    var rawText = String(text || '');
+    var t = fixOcrText(rawText, 'amount');
+    var candidates = [];
+    var m;
+
+    var reRs = /(?:RS\.?|PKR\.?)\s*([\d]{1,3}(?:,\d{3})+(?:\.\d{1,2})?|\d{3,7}(?:\.\d{1,2})?)/gi;
+    while ((m = reRs.exec(t)) !== null) {
+      var rsCand = scoreAmountCandidate(m[1], 112, rawText, { afterCurrency: true });
+      if (rsCand) candidates.push(rsCand);
+    }
+
+    var reLabel = /(?:AMOUNT\s*PAID|AMOUNT|TOTAL|SENT|TRANSFERRED)\s*[:\-]?\s*([\d,]+(?:\.\d{1,2})?)/gi;
+    while ((m = reLabel.exec(t)) !== null) {
+      var labelCand = scoreAmountCandidate(m[1], 96, rawText, { afterAmountLabel: true });
+      if (labelCand) candidates.push(labelCand);
+    }
+
     var reNum = /\b([\d]{1,3}(?:,\d{3})+(?:\.\d{1,2})?)\b/g;
     while ((m = reNum.exec(t)) !== null) {
-      candidates.push({ val: m[1], score: 75 });
+      var commaCand = scoreAmountCandidate(m[1], 78, rawText);
+      if (commaCand) candidates.push(commaCand);
     }
-    var rePlain = /\b(\d{3,}(?:\.\d{1,2})?)\b/g;
-    while ((m = rePlain.exec(t)) !== null) {
-      candidates.push({ val: m[1], score: 55 });
+
+    if (!options.strict) {
+      var rePlain = /\b(\d{4,7}(?:\.\d{1,2})?)\b/g;
+      while ((m = rePlain.exec(t)) !== null) {
+        var plainCand = scoreAmountCandidate(m[1], 48, rawText);
+        if (plainCand) candidates.push(plainCand);
+      }
     }
+
     if (!candidates.length) {
       var digits = t.replace(/[^\d.]/g, '');
-      if (digits.length >= 3) candidates.push({ val: digits, score: 40 });
+      if (digits.length >= 3 && digits.length <= 8) {
+        var looseCand = scoreAmountCandidate(digits, 34, rawText, { allowSmall: true });
+        if (looseCand) candidates.push(looseCand);
+      }
     }
     if (!candidates.length) return null;
     candidates.sort(function (a, b) { return b.score - a.score; });
-    var raw = String(candidates[0].val).replace(/,/g, '').replace(/\.(?=.*\.)/g, '');
-    var num = parseFloat(raw);
-    if (!isFinite(num) || num <= 0) return null;
-    return num % 1 === 0 ? String(Math.round(num)) : num.toFixed(2);
+    return candidates[0].val;
   }
 
   var REF_LABEL_RE = /(?:TID|TXN|TRANSACTION\s*ID|REFERENCE\s*NO?|REF\s*NO?|TRX\s*ID|RAAST\s*ID|TRANSACTION|REFERENCE|SUCCESSFUL|TRANSFER)\s*/gi;
@@ -404,10 +646,201 @@
     TRANSACTION: 1, REFERENCE: 1, SUCCESSFUL: 1, TRANSFER: 1, SUCCESS: 1, PAYMENT: 1, AMOUNT: 1,
   };
 
+  function mergeReferenceDigitTokens(text) {
+    var tokens = String(text || '').split(/\s+/).filter(function (tok) {
+      return /^\d{1,9}$/.test(tok);
+    });
+    if (tokens.length < 2) return null;
+    var joined = tokens.join('');
+    if (joined.length >= 6 && joined.length <= 16) {
+      return joined;
+    }
+    return null;
+  }
+
+  function scoreReferenceDigits(val, baseScore) {
+    var score = baseScore + val.length * 6;
+    if (/^\d+$/.test(val)) {
+      score += 30;
+      if (val.length >= 8 && val.length <= 14) score += 28;
+      if (val.length === 7) score -= 18;
+      if (val.length === 6) score -= 8;
+    }
+    return score;
+  }
+
+  function expandReferenceRegion(region) {
+    var x = region.region_x || 0;
+    var w = region.region_w || 10;
+    var extraRight = Math.max(3.5, w * 0.18);
+    return {
+      region_x: Math.max(0, x - 0.6),
+      region_y: region.region_y || 0,
+      region_w: Math.min(100 - Math.max(0, x - 0.6), w + extraRight),
+      region_h: region.region_h || 10,
+    };
+  }
+
+  function mergeAdjacentDigitWords(words) {
+    var sorted = (words || []).filter(function (w) {
+      return w && w.bbox && /\d/.test(String(w.text || ''));
+    }).sort(function (a, b) {
+      return a.bbox.x0 - b.bbox.x0;
+    });
+    var groups = [];
+    var current = null;
+    sorted.forEach(function (w) {
+      var digits = normalizeReferenceDigitRun(w.text);
+      if (!digits) return;
+      if (!current) {
+        current = { digits: digits, bbox: { x0: w.bbox.x0, y0: w.bbox.y0, x1: w.bbox.x1, y1: w.bbox.y1 } };
+        return;
+      }
+      var gap = w.bbox.x0 - current.bbox.x1;
+      var lineOverlap = Math.min(current.bbox.y1, w.bbox.y1) - Math.max(current.bbox.y0, w.bbox.y0);
+      var sameLine = lineOverlap > 0 || Math.abs((w.bbox.y0 + w.bbox.y1) - (current.bbox.y0 + current.bbox.y1)) < 18;
+      if (sameLine && gap < 42) {
+        current.digits += digits;
+        current.bbox.x1 = Math.max(current.bbox.x1, w.bbox.x1);
+        current.bbox.y0 = Math.min(current.bbox.y0, w.bbox.y0);
+        current.bbox.y1 = Math.max(current.bbox.y1, w.bbox.y1);
+      } else {
+        groups.push(current);
+        current = { digits: digits, bbox: { x0: w.bbox.x0, y0: w.bbox.y0, x1: w.bbox.x1, y1: w.bbox.y1 } };
+      }
+    });
+    if (current) groups.push(current);
+    return groups;
+  }
+
+  function extractReferenceFromWords(words, canvasWidth) {
+    var candidates = [];
+    function add(val, score, xNorm, source) {
+      if (!val || val.length < 6 || !/^\d+$/.test(val)) return;
+      candidates.push({
+        val: val,
+        score: score,
+        xNorm: xNorm || 0,
+        source: source || 'words',
+        conf: 0.78,
+      });
+    }
+
+    mergeAdjacentDigitWords(words).forEach(function (group) {
+      var xCenter = (group.bbox.x0 + group.bbox.x1) / 2;
+      var xNorm = canvasWidth ? xCenter / canvasWidth : 0;
+      add(group.digits, scoreReferenceDigits(group.digits, 120) + xNorm * 35, xNorm, 'words-merged');
+    });
+
+    (words || []).forEach(function (w) {
+      var raw = String(w.text || '').trim();
+      if (!raw) return;
+      var xCenter = w.bbox ? ((w.bbox.x0 + w.bbox.x1) / 2) : 0;
+      var xNorm = canvasWidth ? xCenter / canvasWidth : 0;
+      var direct = normalizeReferenceDigitRun(raw);
+      if (/^\d{6,}$/.test(direct)) {
+        add(direct, scoreReferenceDigits(direct, 108) + xNorm * 28, xNorm, 'words');
+      }
+      var re = /\d{5,}/g;
+      var m;
+      while ((m = re.exec(raw)) !== null) {
+        var run = normalizeReferenceDigitRun(m[0]);
+        if (run.length >= 6) add(run, scoreReferenceDigits(run, 100) + xNorm * 24, xNorm, 'words-run');
+      }
+    });
+
+    if (!candidates.length) return null;
+    candidates.sort(function (a, b) {
+      if (b.score !== a.score) return b.score - a.score;
+      return b.val.length - a.val.length;
+    });
+    return candidates[0];
+  }
+
+  function isPlausibleReferenceId(val) {
+    if (!val) return false;
+    var v = String(val).replace(/\s/g, '').toUpperCase();
+    if (!v || v.length < 6) return false;
+    if (/^\d{6,14}$/.test(v)) return true;
+    var letters = (v.match(/[A-Z]/g) || []).length;
+    var digits = (v.match(/[0-9]/g) || []).length;
+    if (digits >= 6 && letters <= 1) return true;
+    return false;
+  }
+
+  function pickBestReferenceCandidate(candidates) {
+    if (!candidates || !candidates.length) return fieldResult(null, 0, 'none');
+    var filtered = candidates.filter(function (c) {
+      return c && c.val && isPlausibleReferenceId(c.val);
+    });
+    if (!filtered.length) filtered = candidates;
+    var scored = filtered.map(function (c) {
+      var total = c.score || scoreReferenceDigits(c.val, 80);
+      if (c.rank) total += c.rank * 0.35;
+      if (c.xNorm > 0.55) total += 22;
+      if (c.source && c.source.indexOf('words') === 0) total += 18;
+      if (c.conf) total += c.conf * 20;
+      if (/^\d+$/.test(String(c.val))) total += 45;
+      if (!/^\d+$/.test(String(c.val))) total -= 80;
+      return { val: c.val, total: total, conf: c.conf || 0.7, source: c.source || 'zone' };
+    });
+    scored.sort(function (a, b) {
+      if (b.total !== a.total) return b.total - a.total;
+      return b.val.length - a.val.length;
+    });
+
+    var best = scored[0];
+    var eightDigit = scored.filter(function (s) { return s.val.length === 8; });
+    if (eightDigit.length) {
+      eightDigit.sort(function (a, b) { return b.total - a.total; });
+      if (!best || best.val.length < 8 || eightDigit[0].total >= best.total - 12) {
+        best = eightDigit[0];
+      }
+    }
+
+    if (best && best.val.length === 7 && scored.length > 1) {
+      var prefixMatch = scored.find(function (s) {
+        return s.val.length === 8 && s.val.indexOf(best.val) === 0;
+      });
+      if (prefixMatch) best = prefixMatch;
+    }
+
+    return fieldResult(best.val, Math.min(0.98, best.conf), best.source);
+  }
+
+  function normalizeReferenceDigitRun(raw) {
+    return String(raw || '')
+      .replace(/[OoQD]/g, '0')
+      .replace(/[lI|!]/g, '1')
+      .replace(/[Ss$]/g, '5')
+      .replace(/[Bb]/g, '8')
+      .replace(/[Zz]/g, '2')
+      .replace(/[Gg]/g, '6')
+      .replace(/\s+/g, '');
+  }
+
+  function extractReferenceIdFromRaw(raw) {
+    var text = String(raw || '');
+    if (!text.trim()) return null;
+    var labeled = text.match(/(?:TRANSACTION\s*ID|TID|TXN|TRANSACTION|REFERENCE\s*NO?|REF\s*NO?|RAAST\s*ID)\s*#?\s*([0-9OIl|!\s]{6,})/i);
+    if (labeled && labeled[1]) {
+      var fromLabel = normalizeReferenceDigitRun(labeled[1]);
+      if (fromLabel.length >= 6) return fromLabel;
+    }
+    var afterHash = text.match(/#\s*([0-9OIl|!\s]{6,})/);
+    if (afterHash && afterHash[1]) {
+      var fromHash = normalizeReferenceDigitRun(afterHash[1]);
+      if (fromHash.length >= 6) return fromHash;
+    }
+    return null;
+  }
+
   /** Zonal crop parser — prefer pure digit runs (e.g. JazzCash 66556000), not label garbage. */
   function parseReferenceFromZone(text) {
     var raw = String(text || '');
     if (!raw.trim()) return null;
+    var direct = extractReferenceIdFromRaw(raw);
+    if (direct) return direct;
     var t = fixOcrText(raw, 'reference_no');
     t = t.replace(REF_LABEL_RE, ' ').replace(/\bID\b\s*[:\-#]?\s*/gi, ' ');
     t = t.replace(/[#:\-]/g, ' ').replace(/\s+/g, ' ').trim();
@@ -417,38 +850,47 @@
       var re = /\d{6,}/g;
       var m;
       while ((m = re.exec(source)) !== null) {
-        candidates.push({ val: m[0], score: baseScore + m[0].length * 5 });
+        candidates.push({ val: m[0], score: scoreReferenceDigits(m[0], baseScore) });
+      }
+      var merged = mergeReferenceDigitTokens(source.replace(/[^\d\s]/g, ' ').replace(/\s+/g, ' ').trim());
+      if (merged) {
+        candidates.push({ val: merged, score: scoreReferenceDigits(merged, baseScore + 24) });
       }
     }
     addDigitRuns(t, 140);
-    addDigitRuns(fixOcrText(raw, 'reference_no'), 120);
+    addDigitRuns(raw.replace(/[^\d\s]/g, ' ').replace(/\s+/g, ' ').trim(), 132);
 
-    var alnumRe = /\b[A-Z0-9]{6,}\b/gi;
-    var m;
-    while ((m = alnumRe.exec(t)) !== null) {
-      var val = String(m[0] || '').toUpperCase();
-      if (val.length < 6 || /^\d+$/.test(val)) continue;
-      if (REF_STOPWORDS[val]) continue;
-      if (!/[A-Z]/.test(val) || !/[0-9]/.test(val)) continue;
-      candidates.push({ val: val, score: 55 + val.length * 2 });
+    var afterHash = raw.match(/#\s*([\d\s]{6,})/);
+    if (afterHash && afterHash[1]) {
+      var hashDigits = afterHash[1].replace(/\s+/g, '');
+      if (hashDigits.length >= 6) {
+        candidates.push({ val: hashDigits, score: scoreReferenceDigits(hashDigits, 150) });
+      }
+      var hashMerged = mergeReferenceDigitTokens(afterHash[1]);
+      if (hashMerged) {
+        candidates.push({ val: hashMerged, score: scoreReferenceDigits(hashMerged, 165) });
+      }
     }
 
     if (!candidates.length) return null;
-    candidates.sort(function (a, b) { return b.score - a.score; });
+    candidates.sort(function (a, b) {
+      if (b.score !== a.score) return b.score - a.score;
+      return b.val.length - a.val.length;
+    });
     return candidates[0].val;
   }
 
   function parseReferenceFromText(text) {
+    var direct = extractReferenceIdFromRaw(text);
+    if (direct && isPlausibleReferenceId(direct)) return direct;
     var zoneVal = parseReferenceFromZone(text);
-    if (zoneVal && String(text || '').length < 160) return zoneVal;
+    if (zoneVal && isPlausibleReferenceId(zoneVal)) return zoneVal;
 
     var t = fixOcrText(text, 'reference_no');
     var patterns = [
       /(?:TID|TXN|TRANSACTION\s*ID|REFERENCE\s*NO?|REF\s*NO?|TRX\s*ID|RAAST\s*ID)\s*[:\-#]?\s*([0-9]{6,})/gi,
       /\b([0-9]{8,})\b/g,
       /\b([0-9]{6,})\b/g,
-      /(?:TID|TXN|TRANSACTION\s*ID|REFERENCE\s*NO?|REF\s*NO?|TRX\s*ID|RAAST\s*ID)\s*[:\-#]?\s*([A-Z0-9]{6,})/gi,
-      /\b([A-Z0-9]{8,})\b/g,
     ];
     var best = null;
     var bestScore = -1;
@@ -458,6 +900,7 @@
       while ((m = re.exec(t)) !== null) {
         var val = (m[1] || '').replace(/\s/g, '');
         if (val.length < 6) continue;
+        if (!isPlausibleReferenceId(val)) continue;
         if (REF_STOPWORDS[val]) continue;
         var score = 96 - idx * 11 + Math.min(val.length, 20);
         if (/^\d+$/.test(val)) score += 35;
@@ -469,19 +912,26 @@
         }
       }
     });
-    return best || zoneVal;
+    if (best && isPlausibleReferenceId(best)) return best;
+    if (zoneVal && isPlausibleReferenceId(zoneVal)) return zoneVal;
+    return null;
   }
 
   function fieldValueRank(fieldKey, val, ocrConf) {
     if (!val) return 0;
     var rank = (ocrConf || 0.5) * 100;
     if (fieldKey === 'reference_no') {
-      if (/^\d+$/.test(val)) rank += 90;
-      else if (/[A-Z]/.test(val) && /[0-9]/.test(val)) rank += 25;
+      if (/^\d+$/.test(val)) {
+        rank += 90;
+        if (val.length >= 8 && val.length <= 14) rank += 30;
+        if (val.length === 7) rank -= 12;
+      } else if (/[A-Z]/.test(val) && /[0-9]/.test(val)) rank += 25;
       else rank -= 30;
       rank += Math.min(val.length, 18) * 2;
     } else if (fieldKey === 'amount') {
       rank += 20;
+      if (!validateAmountCandidate(val, '', { allowSmall: true })) rank -= 120;
+      if (/^\d{8,}$/.test(String(val).replace(/[.,]/g, ''))) rank -= 150;
     } else if (fieldKey === 'date') {
       if (/^\d{2}-\d{2}-\d{4}$/.test(val)) rank += 140;
       else if (/^\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}$/.test(val)) rank += 100;
@@ -490,30 +940,187 @@
     return rank;
   }
 
-  function fieldOcrVariants(fieldKey, fast) {
+  function isViableOcrCrop(px, fieldKey) {
+    if (!px || !px.w || !px.h) return false;
+    if (fieldKey === 'reference_no') return px.w >= 36 && px.h >= 10;
+    return px.w >= 20 && px.h >= 8;
+  }
+
+  function referenceFromFullTextInline(fullText) {
+    if (!fullText) return null;
+    var direct = extractReferenceIdFromRaw(fullText);
+    if (direct && isPlausibleReferenceId(direct)) return fieldResult(direct, 0.74, 'full-inline');
+    var parsed = parseReferenceFromText(fullText);
+    if (parsed && isPlausibleReferenceId(parsed)) return fieldResult(parsed, 0.68, 'full-parse');
+    return null;
+  }
+
+  function fieldOcrVariants(fieldKey, fast, variantOpts) {
+    variantOpts = variantOpts || {};
     if (fieldKey === 'date') {
       if (fast) {
-        return [{ scale: 3.0, mode: 'normal', variant: 'date-fast', psm: '7', padPct: 0.8 }];
+        return [{ scale: 3.0, mode: 'photo-fix', variant: 'date-fast', psm: '7', padPct: 0.8 }];
       }
       return [
-        { scale: 3.2, mode: 'normal', variant: 'date-normal-3.2', psm: '7', padPct: 0.8 },
+        { scale: 3.2, mode: 'photo-fix', variant: 'date-photo-3.2', psm: '7', padPct: 0.8 },
         { scale: 3.0, mode: 'gray-boost', variant: 'date-gray-3.0', psm: '7', padPct: 0.8 },
-        { scale: 2.8, mode: 'normal', variant: 'date-normal-2.8', psm: '8', padPct: 1 },
-        { scale: 3.4, mode: 'gray-boost', noWhitelist: true, variant: 'date-nowl-3.4', psm: '7', padPct: 0.6 },
+        { scale: 2.8, mode: 'contrast', variant: 'date-contrast-2.8', psm: '8', padPct: 1 },
+        { scale: 3.4, mode: 'sharp', noWhitelist: true, variant: 'date-sharp-3.4', psm: '7', padPct: 0.6 },
+      ];
+    }
+    if (fieldKey === 'amount') {
+      if (fast) {
+        return [
+          { scale: 3.4, mode: 'photo-fix', variant: 'amt-fast-photo', psm: '7', padPct: 1.2 },
+          { scale: 3.0, mode: 'gray-boost', variant: 'amt-fast-gray', psm: '7', padPct: 1.5 },
+        ];
+      }
+      return [
+        { scale: 4.0, mode: 'photo-fix', variant: 'amt-photo-4.0', psm: '7', padPct: 1.2 },
+        { scale: 3.6, mode: 'contrast', variant: 'amt-contrast-3.6', psm: '7', padPct: 1.3 },
+        { scale: 3.4, mode: 'gray-boost', variant: 'amt-gray-3.4', psm: '7', padPct: 1.5 },
+        { scale: 3.0, mode: 'sharp', variant: 'amt-sharp-3.0', psm: '8', padPct: 2 },
+      ];
+    }
+    if (fieldKey === 'reference_no' && variantOpts.teachPreview) {
+      return [
+        {
+          scale: 4.2,
+          mode: 'photo-fix',
+          variant: 'teach-mixed-line',
+          psm: '7',
+          padPct: 1.2,
+          padAsym: { left: 0.6, right: 5.5, top: 1, bottom: 1 },
+          canvasMargin: { right: 0.24 },
+        },
+        {
+          scale: 5.2,
+          mode: 'contrast',
+          variant: 'teach-tail35',
+          digitsOnly: true,
+          psm: '8',
+          regionSlice: 'right35',
+          padPct: 0.6,
+          padAsym: { left: 0.3, right: 6, top: 1, bottom: 1 },
+          canvasMargin: { left: 0.02, right: 0.32 },
+        },
+        {
+          scale: 4.8,
+          mode: 'gray-boost',
+          variant: 'teach-tail40',
+          digitsOnly: true,
+          psm: '7',
+          regionSlice: 'right40',
+          padPct: 0.7,
+          padAsym: { left: 0.4, right: 5.5, top: 1, bottom: 1 },
+          canvasMargin: { left: 0.03, right: 0.28 },
+        },
       ];
     }
     if (fast) {
       if (fieldKey === 'reference_no') {
-        return [{ scale: 2.8, mode: 'gray-boost', variant: 'ref-fast', digitsOnly: true, psm: '7', padPct: 0.8 }];
+        return [
+          {
+            scale: 5.2,
+            mode: 'photo-fix',
+            variant: 'ref-fast-tail30',
+            digitsOnly: true,
+            psm: '8',
+            regionSlice: 'right30',
+            padPct: 0.6,
+            padAsym: { left: 0.3, right: 5.5, top: 1, bottom: 1 },
+            canvasMargin: { left: 0.02, right: 0.32 },
+          },
+          {
+            scale: 4.8,
+            mode: 'normal',
+            variant: 'ref-fast-tail40',
+            digitsOnly: true,
+            psm: '7',
+            regionSlice: 'right40',
+            padPct: 0.8,
+            padAsym: { left: 0.4, right: 5, top: 1, bottom: 1 },
+            canvasMargin: { left: 0.03, right: 0.28 },
+          },
+          {
+            scale: 4,
+            mode: 'normal',
+            variant: 'ref-fast-mixed',
+            psm: '7',
+            padPct: 1.2,
+            padAsym: { left: 0.8, right: 5, top: 1, bottom: 1 },
+            canvasMargin: { right: 0.22 },
+          },
+        ];
       }
       return [{ scale: 2.4, mode: 'gray-boost', variant: 'fast', padPct: 1.5 }];
     }
     if (fieldKey === 'reference_no') {
       return [
-        { scale: 3.2, mode: 'gray-boost', variant: 'ref-digits-3.2', digitsOnly: true, psm: '7', padPct: 0.8 },
-        { scale: 2.8, mode: 'gray-boost', variant: 'ref-digits-2.8', digitsOnly: true, psm: '8', padPct: 0.8 },
-        { scale: 2.4, mode: 'normal', variant: 'ref-digits-2.4', digitsOnly: true, psm: '7', padPct: 1 },
-        { scale: 3.0, mode: 'gray-boost', variant: 'ref-mixed-3.0', psm: '7', padPct: 1 },
+        {
+          scale: 4,
+          mode: 'normal',
+          variant: 'ref-mixed-line',
+          psm: '7',
+          padPct: 1.5,
+          padAsym: { left: 0.8, right: 5.5, top: 1.2, bottom: 1.2 },
+          canvasMargin: { right: 0.24 },
+        },
+        {
+          scale: 5.4,
+          mode: 'normal',
+          variant: 'ref-tail-30',
+          digitsOnly: true,
+          psm: '8',
+          regionSlice: 'right30',
+          padPct: 0.6,
+          padAsym: { left: 0.3, right: 6, top: 1.2, bottom: 1.2 },
+          canvasMargin: { left: 0.02, right: 0.34 },
+        },
+        {
+          scale: 5,
+          mode: 'normal',
+          variant: 'ref-tail-35',
+          digitsOnly: true,
+          psm: '8',
+          regionSlice: 'right35',
+          padPct: 0.7,
+          padAsym: { left: 0.35, right: 5.5, top: 1.2, bottom: 1.2 },
+          canvasMargin: { left: 0.02, right: 0.3 },
+        },
+        {
+          scale: 4.8,
+          mode: 'normal',
+          variant: 'ref-tail-40',
+          digitsOnly: true,
+          psm: '7',
+          regionSlice: 'right40',
+          padPct: 0.8,
+          padAsym: { left: 0.4, right: 5.2, top: 1.2, bottom: 1.2 },
+          canvasMargin: { left: 0.03, right: 0.28 },
+        },
+        {
+          scale: 4.6,
+          mode: 'normal',
+          variant: 'ref-tail-45',
+          digitsOnly: true,
+          psm: '7',
+          regionSlice: 'right45',
+          padPct: 0.8,
+          padAsym: { left: 0.4, right: 5, top: 1.2, bottom: 1.2 },
+          canvasMargin: { left: 0.03, right: 0.26 },
+        },
+        {
+          scale: 4.2,
+          mode: 'gray-boost',
+          variant: 'ref-tail-55',
+          digitsOnly: true,
+          psm: '8',
+          regionSlice: 'right55',
+          padPct: 1,
+          padAsym: { left: 0.5, right: 4.5, top: 1, bottom: 1 },
+          canvasMargin: { left: 0.04, right: 0.22 },
+        },
       ];
     }
     return [
@@ -634,21 +1241,35 @@
   function selectProfileCandidates(ranked, options) {
     options = options || {};
     var minScore = typeof options.minScore === 'number' ? options.minScore : 0.16;
-    var margin = typeof options.margin === 'number' ? options.margin : 0.16;
-    var maxTry = typeof options.maxTry === 'number' ? options.maxTry : 4;
+    var margin = typeof options.margin === 'number' ? options.margin : 0.14;
+    var maxTry = typeof options.maxTry === 'number'
+      ? options.maxTry
+      : (ocrModeIsAccurate() ? 3 : (ocrModeIsFast() ? 1 : 2));
     if (!ranked || !ranked.length) return [];
     var filtered = ranked.filter(function (r) { return r.score >= minScore; });
     if (!filtered.length) filtered = ranked.slice(0, 1);
     var top = filtered[0].score;
+    if (top >= 0.52) return [filtered[0]];
+    if (top >= 0.38 && filtered.length > 1 && (top - filtered[1].score) >= 0.14) {
+      return [filtered[0]];
+    }
     var out = [filtered[0]];
     for (var i = 1; i < filtered.length && out.length < maxTry; i++) {
       if (top - filtered[i].score <= margin) out.push(filtered[i]);
       else break;
     }
-    if (out.length === 1 && ranked.length > 1 && ranked[1].score >= minScore) {
-      out.push(ranked[1]);
-    }
     return out;
+  }
+
+  function isGoodEnoughExtract(data) {
+    if (!data) return false;
+    var q = extractionQuality(data);
+    if (q >= 235) return true;
+    var filled = 0;
+    ['date', 'amount', 'reference_no'].forEach(function (k) {
+      if (data[k] && data[k] !== '—') filled++;
+    });
+    return filled >= 2 && q >= 175;
   }
 
   function attachProfileMeta(data, profile, score, fullText, provider, img) {
@@ -662,36 +1283,59 @@
     return data;
   }
 
-  function tryProfilesExtract(img, candidates, fullText, useFast) {
+  function tryProfilesExtractSequential(img, candidates, fullText, useFast, options) {
+    options = options || {};
+    var skipIds = options.skipIds || {};
     if (!candidates || !candidates.length) return Promise.resolve(null);
-    return Promise.all(candidates.map(function (c) {
-      return extractWithProfile(img, c.profile, fullText, {
-        fast: useFast,
-        parallel: true,
-      }).then(function (data) {
-        attachProfileMeta(data, c.profile, c.score, fullText, detectProvider(fullText), img);
-        data._quality = extractionQuality(data);
-        return data;
+    var best = null;
+    var tried = 0;
+    var chain = Promise.resolve();
+    candidates.forEach(function (c) {
+      if (skipIds[c.profile.id]) return;
+      chain = chain.then(function () {
+        if (best && isGoodEnoughExtract(best)) return;
+        tried++;
+        return extractWithProfile(img, c.profile, fullText, {
+          fast: useFast,
+          parallel: true,
+        }).then(function (data) {
+          attachProfileMeta(data, c.profile, c.score, fullText, detectProvider(fullText), img);
+          data._quality = extractionQuality(data);
+          if (!best || data._quality > best._quality ||
+              (data._quality === best._quality && (c.score || 0) > (best.matchScore || 0))) {
+            best = data;
+          }
+          ocrLog('tryProfilesExtractSequential step', {
+            profile: c.profile.name,
+            quality: data._quality,
+            tried: tried,
+            goodEnough: isGoodEnoughExtract(data),
+          });
+        });
       });
-    })).then(function (results) {
-      results.sort(function (a, b) {
-        if (b._quality !== a._quality) return b._quality - a._quality;
-        return (b.matchScore || 0) - (a.matchScore || 0);
-      });
-      return results[0] || null;
     });
+    return chain.then(function () { return best; });
   }
 
-  function tryBestProfileExtract(img, ranked, fullText, useFast) {
-    var candidates = selectProfileCandidates(ranked);
-    return tryProfilesExtract(img, candidates, fullText, useFast).then(function (best) {
+  function tryBestProfileExtract(img, ranked, fullText, useFast, options) {
+    options = options || {};
+    var candidates = selectProfileCandidates(ranked, options.selectOptions);
+    return tryProfilesExtractSequential(img, candidates, fullText, useFast, options).then(function (best) {
       if (best && extractionQuality(best) > 0) return best;
-      if (useFast) {
-        var retry = ranked.slice(0, Math.min(3, ranked.length));
-        return tryProfilesExtract(img, retry, fullText, false);
+      if (useFast && ranked.length) {
+        var slowTop = ranked.slice(0, 1);
+        return tryProfilesExtractSequential(img, slowTop, fullText, false, options);
       }
       return best;
     });
+  }
+
+  function findProfileById(profiles, id) {
+    if (!id || !profiles || !profiles.length) return null;
+    for (var i = 0; i < profiles.length; i++) {
+      if (profiles[i].id === id) return profiles[i];
+    }
+    return null;
   }
 
   function detectProvider(ocrText) {
@@ -751,16 +1395,110 @@
     });
   }
 
-  function enhanceCanvas(ctx, canvas, mode) {
-    if (mode !== 'gray-boost') return;
-    var id = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    var d = id.data;
+  function clamp255(v) {
+    return v < 0 ? 0 : (v > 255 ? 255 : Math.round(v));
+  }
+
+  function applyGrayscalePixels(d) {
     for (var i = 0; i < d.length; i += 4) {
       var g = (0.299 * d[i]) + (0.587 * d[i + 1]) + (0.114 * d[i + 2]);
-      g = g > 150 ? 255 : (g < 70 ? 0 : Math.min(255, g * 1.28));
+      d[i] = d[i + 1] = d[i + 2] = Math.round(g);
+    }
+  }
+
+  function applyContrastPixels(d, factor) {
+    factor = factor || 1.35;
+    for (var i = 0; i < d.length; i += 4) {
+      d[i] = clamp255((d[i] - 128) * factor + 128);
+      d[i + 1] = clamp255((d[i + 1] - 128) * factor + 128);
+      d[i + 2] = clamp255((d[i + 2] - 128) * factor + 128);
+    }
+  }
+
+  function applyGrayBoostPixels(d, contrastFactor) {
+    contrastFactor = contrastFactor || 1.28;
+    for (var i = 0; i < d.length; i += 4) {
+      var g = (0.299 * d[i]) + (0.587 * d[i + 1]) + (0.114 * d[i + 2]);
+      g = g > 150 ? 255 : (g < 70 ? 0 : Math.min(255, g * contrastFactor));
       d[i] = d[i + 1] = d[i + 2] = g;
     }
+  }
+
+  function applyAdaptiveBinaryPixels(d) {
+    var gray = [];
+    var sum = 0;
+    var i;
+    for (i = 0; i < d.length; i += 4) {
+      var g = (0.299 * d[i]) + (0.587 * d[i + 1]) + (0.114 * d[i + 2]);
+      gray.push(g);
+      sum += g;
+    }
+    var threshold = (sum / gray.length) * 0.9;
+    for (i = 0; i < gray.length; i++) {
+      var v = gray[i] > threshold ? 255 : 0;
+      var j = i * 4;
+      d[j] = d[j + 1] = d[j + 2] = v;
+    }
+  }
+
+  function applySharpenCanvas(ctx, canvas) {
+    try {
+      var c2 = document.createElement('canvas');
+      c2.width = canvas.width;
+      c2.height = canvas.height;
+      var ctx2 = c2.getContext('2d');
+      ctx2.filter = 'contrast(1.22) brightness(1.04)';
+      ctx2.drawImage(canvas, 0, 0);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(c2, 0, 0);
+    } catch (e) { /* ignore */ }
+  }
+
+  function applyPhotoFix(ctx, canvas) {
+    var id = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    var d = id.data;
+    applyGrayscalePixels(d);
+    applyContrastPixels(d, 1.32);
+    applyGrayBoostPixels(d, 1.15);
     ctx.putImageData(id, 0, 0);
+    applySharpenCanvas(ctx, canvas);
+  }
+
+  function enhanceCanvas(ctx, canvas, mode) {
+    if (!mode || mode === 'none') return;
+    if (mode === 'normal') {
+      applySharpenCanvas(ctx, canvas);
+      return;
+    }
+    if (mode === 'photo-fix') {
+      applyPhotoFix(ctx, canvas);
+      return;
+    }
+    if (mode === 'contrast') {
+      var idC = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      applyGrayscalePixels(idC.data);
+      applyContrastPixels(idC.data, 1.45);
+      ctx.putImageData(idC, 0, 0);
+      applySharpenCanvas(ctx, canvas);
+      return;
+    }
+    if (mode === 'sharp') {
+      applySharpenCanvas(ctx, canvas);
+      var idS = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      applyContrastPixels(idS.data, 1.18);
+      ctx.putImageData(idS, 0, 0);
+      return;
+    }
+    if (mode === 'binary') {
+      var idB = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      applyGrayscalePixels(idB.data);
+      applyAdaptiveBinaryPixels(idB.data);
+      ctx.putImageData(idB, 0, 0);
+      return;
+    }
+    var idG = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    applyGrayBoostPixels(idG.data, 1.28);
+    ctx.putImageData(idG, 0, 0);
   }
 
   /** Regions stored as 0–100 % of natural image width/height (resolution independent). */
@@ -772,7 +1510,9 @@
   }
 
   function ocrDebugEnabled() {
-    return global.__wsSlipOcrDebug !== false;
+    if (global.__wsSlipOcrDebug === true) return true;
+    if (global.__wsSlipOcrDebug === false) return false;
+    return ocrConfig().debug;
   }
 
   function ocrLog(label, payload) {
@@ -787,14 +1527,14 @@
   }
 
   /** Convert % region → raw pixel crop rect on the source image. */
-  function regionToPixelRect(img, region, padPct) {
+  function regionToPixelRect(img, region, padPct, padAsym) {
     var size = imagePixelSize(img);
     if (!size.w || !size.h) return null;
-    region = padRegionPercent(region, typeof padPct === 'number' ? padPct : 2);
+    region = padRegionPercent(region, typeof padPct === 'number' ? padPct : 2, padAsym);
     var rx = Math.max(0, Math.floor(size.w * (region.region_x || 0) / 100));
     var ry = Math.max(0, Math.floor(size.h * (region.region_y || 0) / 100));
-    var rw = Math.max(1, Math.floor(size.w * (region.region_w || 10) / 100));
-    var rh = Math.max(1, Math.floor(size.h * (region.region_h || 10) / 100));
+    var rw = Math.max(24, Math.floor(size.w * (region.region_w || 10) / 100));
+    var rh = Math.max(8, Math.floor(size.h * (region.region_h || 10) / 100));
     rw = Math.min(rw, size.w - rx);
     rh = Math.min(rh, size.h - ry);
     return {
@@ -814,34 +1554,90 @@
     return px;
   }
 
-  function padRegionPercent(region, padPct) {
+  /** When user boxes full "Transaction ID # 12345" line, OCR only the numeric tail. */
+  function sliceRegion(region, slice) {
+    if (!slice || !region) return region;
+    var x = region.region_x || 0;
+    var y = region.region_y || 0;
+    var w = region.region_w || 10;
+    var h = region.region_h || 10;
+    var keep = 0.45;
+    if (slice === 'right30') keep = 0.3;
+    else if (slice === 'right35') keep = 0.35;
+    else if (slice === 'right40') keep = 0.4;
+    else if (slice === 'right45') keep = 0.45;
+    else if (slice === 'right50') keep = 0.5;
+    else if (slice === 'right55') keep = 0.55;
+    else return region;
+    var start = Math.max(0, 1 - keep);
+    return {
+      region_x: x + w * start,
+      region_y: y,
+      region_w: Math.max(1, w * keep),
+      region_h: h,
+    };
+  }
+
+  function padRegionPercent(region, padPct, padAsym) {
     padPct = typeof padPct === 'number' ? padPct : 2.5;
-    var x = Math.max(0, (region.region_x || 0) - padPct);
-    var y = Math.max(0, (region.region_y || 0) - padPct);
-    var w = Math.min(100 - x, (region.region_w || 10) + padPct * 2);
-    var h = Math.min(100 - y, (region.region_h || 10) + padPct * 2);
+    padAsym = padAsym || {};
+    var left = typeof padAsym.left === 'number' ? padAsym.left : padPct;
+    var right = typeof padAsym.right === 'number' ? padAsym.right : padPct;
+    var top = typeof padAsym.top === 'number' ? padAsym.top : padPct;
+    var bottom = typeof padAsym.bottom === 'number' ? padAsym.bottom : padPct;
+    var x = Math.max(0, (region.region_x || 0) - left);
+    var y = Math.max(0, (region.region_y || 0) - top);
+    var w = Math.min(100 - x, (region.region_w || 10) + left + right);
+    var h = Math.min(100 - y, (region.region_h || 10) + top + bottom);
     return { region_x: x, region_y: y, region_w: w, region_h: h };
   }
 
-  function makeRegionCanvas(img, region, scale, mode, padPct) {
-    var px = regionToPixelRect(img, region, typeof padPct === 'number' ? padPct : 2);
+  function addCanvasMargin(canvas, margins) {
+    margins = margins || {};
+    var left = margins.left || 0;
+    var right = margins.right || 0;
+    var top = margins.top || 0;
+    var bottom = margins.bottom || 0;
+    if (!left && !right && !top && !bottom) return canvas;
+    var leftPx = Math.max(0, Math.round(canvas.width * left));
+    var rightPx = Math.max(0, Math.round(canvas.width * right));
+    var topPx = Math.max(0, Math.round(canvas.height * top));
+    var bottomPx = Math.max(0, Math.round(canvas.height * bottom));
+    var out = document.createElement('canvas');
+    out.width = canvas.width + leftPx + rightPx;
+    out.height = canvas.height + topPx + bottomPx;
+    var ctx = out.getContext('2d');
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, out.width, out.height);
+    ctx.drawImage(canvas, leftPx, topPx);
+    return out;
+  }
+
+  function makeRegionCanvas(img, region, scale, mode, padPct, padAsym, canvasMargin) {
+    var px = regionToPixelRect(img, region, typeof padPct === 'number' ? padPct : 2, padAsym);
     if (!px) {
       ocrLog('makeRegionCanvas: missing image pixels', { region: region });
       var c0 = document.createElement('canvas');
       c0.width = c0.height = 1;
       return c0;
     }
+    var minCanvasW = 120;
+    var minCanvasH = 48;
+    var effScale = scale;
+    if (px.w > 0) effScale = Math.max(effScale, minCanvasW / px.w);
+    if (px.h > 0) effScale = Math.max(effScale, minCanvasH / px.h);
     var c = document.createElement('canvas');
-    var targetW = Math.max(48, Math.round(px.w * scale));
-    var targetH = Math.max(24, Math.round(px.h * scale));
+    var targetW = Math.max(48, Math.round(px.w * effScale));
+    var targetH = Math.max(24, Math.round(px.h * effScale));
     c.width = targetW;
     c.height = targetH;
     var ctx = c.getContext('2d');
     ctx.fillStyle = '#fff';
     ctx.fillRect(0, 0, c.width, c.height);
     ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
     try {
-      ctx.drawImage(img, px.x, px.y, px.w, px.h, 0, 0, c.width, c.height);
+      ctx.drawImage(slipDrawTarget(img), px.x, px.y, px.w, px.h, 0, 0, c.width, c.height);
     } catch (drawErr) {
       ocrLog('makeRegionCanvas: drawImage failed', {
         error: drawErr && drawErr.message ? drawErr.message : drawErr,
@@ -851,6 +1647,7 @@
       });
     }
     enhanceCanvas(ctx, c, mode);
+    if (canvasMargin) c = addCanvasMargin(c, canvasMargin);
     ocrLog('makeRegionCanvas', {
       mode: mode,
       scale: scale,
@@ -858,8 +1655,23 @@
       canvas: { w: c.width, h: c.height },
       natural: { w: px.naturalW, h: px.naturalH },
       regionPct: px.region,
+      canvasMargin: canvasMargin || null,
     });
     return c;
+  }
+
+  function ocrCanvasRaw(canvas, fieldKey, opts) {
+    opts = opts || {};
+    return runOcrJob(function () {
+      return getOcrWorker().then(function (worker) {
+        return worker.setParameters(buildOcrParams(fieldKey, opts)).then(function () {
+          return worker.recognize(canvas);
+        });
+      }).catch(function (err) {
+        ocrLog('ocrCanvasRaw worker fallback', { error: err && err.message ? err.message : err });
+        return recognizeCanvasOnce(canvas, fieldKey, opts);
+      });
+    });
   }
 
   function ocrCanvas(canvas, fieldKey, opts) {
@@ -935,8 +1747,159 @@
     return null;
   }
 
+  function ocrHeaderReferenceScan(img) {
+    var region = { region_x: 0, region_y: 0, region_w: 100, region_h: 30 };
+    var modes = ocrModeIsFast()
+      ? [{ scale: 2.8, mode: 'photo-fix', psm: '6', variant: 'header-fast' }]
+      : [
+        { scale: 3.2, mode: 'photo-fix', psm: '6', variant: 'header-photo' },
+        { scale: 3.6, mode: 'contrast', psm: '7', variant: 'header-contrast' },
+      ];
+    if (ocrModeIsAccurate()) {
+      modes.push({ scale: 3.8, mode: 'binary', psm: '7', variant: 'header-binary' });
+    }
+    var candidates = [];
+    var chain = Promise.resolve();
+    modes.forEach(function (m) {
+      chain = chain.then(function () {
+        var canvas = makeRegionCanvas(img, region, m.scale, m.mode, 0.5);
+        return ocrCanvasRaw(canvas, 'reference_no', {
+          psm: m.psm,
+          noWhitelist: true,
+          variant: m.variant,
+        }).then(function (raw) {
+          var text = (raw && raw.data && raw.data.text) ? raw.data.text : '';
+          var words = (raw && raw.data && raw.data.words) ? raw.data.words : [];
+          var conf = (raw && raw.data && typeof raw.data.confidence === 'number') ? raw.data.confidence / 100 : 0.55;
+          var direct = extractReferenceIdFromRaw(text);
+          if (direct && isPlausibleReferenceId(direct)) {
+            candidates.push({
+              val: direct,
+              conf: Math.min(0.96, conf + 0.14),
+              score: scoreReferenceDigits(direct, 132),
+              source: 'header-inline',
+            });
+          }
+          var wordHit = extractReferenceFromWords(words, canvas.width);
+          if (wordHit) {
+            candidates.push({
+              val: wordHit.val,
+              conf: wordHit.conf,
+              score: wordHit.score,
+              source: wordHit.source || 'header-words',
+            });
+          }
+        });
+      });
+    });
+    return chain.then(function () {
+      var best = pickBestReferenceCandidate(candidates);
+      ocrLog('ocrHeaderReferenceScan', { candidates: candidates, best: best });
+      return best && best.value
+        ? fieldResult(best.value, best.confidence, best.source || 'header-scan')
+        : fieldResult(null, 0, 'none');
+    });
+  }
+
+  function ocrReferenceRegionField(img, region, opts) {
+    opts = opts || {};
+    region = expandReferenceRegion(region);
+    var variants = fieldOcrVariants('reference_no', !!opts.fast, opts);
+    var candidates = [];
+    var chain = Promise.resolve();
+
+    ocrLog('ocrReferenceRegionField start', {
+      fast: !!opts.fast,
+      teachPreview: !!opts.teachPreview,
+      region: region,
+      pixels: regionToPixelRect(img, region, 0),
+    });
+
+    variants.forEach(function (v) {
+      chain = chain.then(function () {
+        var cropRegion = v.regionSlice ? sliceRegion(region, v.regionSlice) : region;
+        var cropPx = regionToPixelRect(img, cropRegion, v.padPct, v.padAsym);
+        if (!isViableOcrCrop(cropPx, 'reference_no')) {
+          ocrLog('ocrReferenceRegionField skip tiny crop', { variant: v.variant, cropPx: cropPx });
+          return;
+        }
+        var canvas = makeRegionCanvas(img, cropRegion, v.scale, v.mode, v.padPct, v.padAsym, v.canvasMargin);
+        return ocrCanvasRaw(canvas, 'reference_no', {
+          noWhitelist: v.noWhitelist,
+          digitsOnly: v.digitsOnly,
+          psm: v.psm,
+          variant: v.variant,
+        }).then(function (raw) {
+          var text = (raw && raw.data && raw.data.text) ? raw.data.text : '';
+          var conf = (raw && raw.data && typeof raw.data.confidence === 'number') ? raw.data.confidence / 100 : 0.55;
+          var val = parseFieldLoose('reference_no', text, { zone: true });
+          ocrLog('ocrReferenceRegionField parse', {
+            variant: v.variant,
+            rawText: text,
+            parsed: val,
+          });
+          if (val) {
+            var rank = fieldValueRank('reference_no', val, conf);
+            candidates.push({
+              val: val,
+              conf: Math.min(0.98, conf + (v.digitsOnly ? 0.08 : 0)),
+              rank: rank,
+              source: v.variant,
+            });
+          }
+          var wordHit = extractReferenceFromWords(
+            (raw && raw.data && raw.data.words) ? raw.data.words : [],
+            canvas.width
+          );
+          if (wordHit) {
+            candidates.push({
+              val: wordHit.val,
+              conf: wordHit.conf,
+              score: wordHit.score,
+              xNorm: wordHit.xNorm,
+              source: wordHit.source,
+            });
+          }
+        });
+      });
+    });
+
+    return chain.then(function () {
+      var best = pickBestReferenceCandidate(candidates);
+      var needsHeader = !best || !best.value || (best.confidence || 0) < 0.68;
+      if (needsHeader && opts.fullText && extractReferenceIdFromRaw(opts.fullText)) {
+        needsHeader = false;
+      }
+      if (needsHeader && opts.fast) {
+        needsHeader = false;
+      }
+      var headerPromise = needsHeader ? ocrHeaderReferenceScan(img) : Promise.resolve(null);
+      return headerPromise.then(function (headerRes) {
+        if (headerRes && headerRes.value) {
+          candidates.push({
+            val: headerRes.value,
+            conf: headerRes.confidence,
+            score: scoreReferenceDigits(headerRes.value, 128),
+            source: headerRes.source || 'header-scan',
+          });
+          best = pickBestReferenceCandidate(candidates);
+        }
+        if (opts.fullText) {
+          best = reconcileReferencePreview(best, opts.fullText);
+        } else if (!best || !best.value) {
+          best = fieldResult(null, 0, 'none');
+        }
+        ocrLog('ocrReferenceRegionField done', { candidates: candidates, best: best });
+        return best;
+      });
+    });
+  }
+
   function ocrRegionField(img, region, fieldKey, opts) {
     opts = opts || {};
+    if (fieldKey === 'reference_no') {
+      return ocrReferenceRegionField(img, region, opts);
+    }
     ocrLog('ocrRegionField start', {
       field: fieldKey,
       fast: !!opts.fast,
@@ -950,7 +1913,8 @@
     variants.forEach(function (v) {
       chain = chain.then(function () {
         if (best.value && bestRank >= 175) return;
-        var canvas = makeRegionCanvas(img, region, v.scale, v.mode, v.padPct);
+        var cropRegion = v.regionSlice ? sliceRegion(region, v.regionSlice) : region;
+        var canvas = makeRegionCanvas(img, cropRegion, v.scale, v.mode, v.padPct, v.padAsym, v.canvasMargin);
         return ocrCanvas(canvas, fieldKey, {
           noWhitelist: v.noWhitelist,
           digitsOnly: v.digitsOnly,
@@ -982,32 +1946,209 @@
     });
   }
 
+  function buildAmountFallbacks(fullText) {
+    var provider = detectProvider(fullText);
+    var providerAmt = provider ? parseProviderAmount(fullText, provider.id) : null;
+    var anchorAmt = fieldResult(
+      parseNearAnchor(fullText, ['AMOUNT', 'PKR', 'RS', 'SENT', 'PAID'], function (slice) {
+        return parseAmountFromText(slice, { strict: true });
+      }),
+      0.72,
+      'anchor'
+    );
+    var fullAmt = fieldResult(parseAmountFromText(fullText), 0.64, 'full');
+    var amount = mergeFieldResults(providerAmt, mergeFieldResults(anchorAmt, fullAmt, 0.55), 0.58);
+    return { provider: provider, amount: amount };
+  }
+
   function fullTextFallback(fullText) {
+    var amountPack = buildAmountFallbacks(fullText);
     return {
       date: fieldResult(parseDateFromText(fullText), 0.62, 'full'),
-      amount: fieldResult(parseAmountFromText(fullText), 0.6, 'full'),
+      amount: amountPack.amount,
       reference_no: fieldResult(parseReferenceFromText(fullText), 0.58, 'full'),
     };
   }
 
   function anchorFallback(fullText) {
+    var amountPack = buildAmountFallbacks(fullText);
     return {
-      date: fieldResult(parseNearAnchor(fullText, ['DATE', 'ON', 'TIME'], parseDateFromText), 0.68, 'anchor'),
-      amount: fieldResult(parseNearAnchor(fullText, ['AMOUNT', 'PKR', 'RS', 'SENT', 'PAID'], parseAmountFromText), 0.68, 'anchor'),
-      reference_no: fieldResult(parseNearAnchor(fullText, ['TID', 'TRANSACTION', 'REFERENCE', 'RAAST', 'TRX'], parseReferenceFromText), 0.66, 'anchor'),
+      date: fieldResult(parseNearAnchor(fullText, ['DATE & TIME', 'DATE', 'ON', 'TIME'], parseDateFromText), 0.7, 'anchor'),
+      amount: amountPack.amount,
+      reference_no: fieldResult(parseNearAnchor(fullText, ['TRANSACTION ID', 'TID', 'TRANSACTION', 'REFERENCE', 'RAAST', 'TRX'], parseReferenceFromText), 0.68, 'anchor'),
     };
   }
 
+  function reconcileAmountResult(zoneRes, fullText) {
+    if (!fullText) return zoneRes || fieldResult(null, 0, 'none');
+    var pack = buildAmountFallbacks(fullText);
+    var fallback = pack.amount;
+    if (!zoneRes || !zoneRes.value) {
+      return fallback && fallback.value ? fallback : (zoneRes || fieldResult(null, 0, 'none'));
+    }
+    if (!fallback || !fallback.value) return zoneRes;
+    if (amountValuesClose(zoneRes.value, fallback.value)) {
+      return fieldResult(
+        zoneRes.value,
+        Math.min(0.98, Math.max(zoneRes.confidence || 0.5, fallback.confidence || 0.5) + 0.06),
+        'zone+verified'
+      );
+    }
+    if ((fallback.confidence || 0) >= (zoneRes.confidence || 0) - 0.04) {
+      ocrLog('reconcileAmountResult prefer fallback', {
+        zone: zoneRes,
+        fallback: fallback,
+      });
+      return fallback;
+    }
+    return fieldResult(zoneRes.value, Math.max(0.42, (zoneRes.confidence || 0.5) - 0.12), 'zone-uncertain');
+  }
+
+  function reconcileReferencePreview(zoneRes, fullText) {
+    if (!fullText) return zoneRes || fieldResult(null, 0, 'none');
+    var fb = fullTextFallback(fullText);
+    var ab = anchorFallback(fullText);
+    var fallback = mergeFieldResults(ab.reference_no, fb.reference_no, 0.55);
+    var candidates = [];
+
+    if (zoneRes && zoneRes.value) {
+      candidates.push({
+        val: zoneRes.value,
+        conf: zoneRes.confidence,
+        rank: fieldValueRank('reference_no', zoneRes.value, zoneRes.confidence),
+        source: zoneRes.source || 'zone',
+      });
+    }
+    if (fallback && fallback.value) {
+      candidates.push({
+        val: fallback.value,
+        conf: fallback.confidence,
+        score: scoreReferenceDigits(fallback.value, 112),
+        source: 'full-fallback',
+      });
+    }
+    if (!candidates.length) return fieldResult(null, 0, 'none');
+
+    var best = pickBestReferenceCandidate(candidates);
+    if (zoneRes && zoneRes.value && best.value === zoneRes.value) {
+      return fieldResult(
+        best.value,
+        Math.min(0.98, Math.max(best.confidence || 0.5, zoneRes.confidence || 0.5) + 0.05),
+        'zone+verified'
+      );
+    }
+    if (fallback && fallback.value && best.value === fallback.value) {
+      return fieldResult(
+        best.value,
+        Math.max(0.5, (fallback.confidence || 0.62) - 0.04),
+        zoneRes && zoneRes.value ? 'full-fallback-picked' : 'full-fallback'
+      );
+    }
+    return best;
+  }
+
+  function previewRegionFieldWithFallback(img, fieldKey, region, fullText) {
+    var fb = fullText ? fullTextFallback(fullText) : null;
+    var ab = fullText ? anchorFallback(fullText) : null;
+
+    if (!region) {
+      if (!fullText || !fb || !ab) return Promise.resolve(fieldResult(null, 0, 'none'));
+      return Promise.resolve(mergeFieldResults(ab[fieldKey], fb[fieldKey], 0.5));
+    }
+
+    return ocrRegionField(img, region, fieldKey, {
+      fast: false,
+      teachPreview: true,
+      fullText: fullText,
+    }).then(function (zoneRes) {
+      if (fieldKey === 'reference_no') {
+        return zoneRes;
+      }
+      if (fieldKey === 'amount') {
+        return reconcileAmountResult(zoneRes, fullText);
+      }
+      if (zoneRes && zoneRes.value) return zoneRes;
+      if (!fullText || !fb || !ab) return zoneRes;
+      return mergeFieldResults(zoneRes, mergeFieldResults(ab[fieldKey], fb[fieldKey], 0.5), 0.48);
+    });
+  }
+
+  function sanitizeFieldMap(fieldMap, fullText) {
+    if (!fieldMap) return fieldMap;
+    var refVal = fieldMap.reference_no && fieldMap.reference_no.value;
+    var amtVal = fieldMap.amount && fieldMap.amount.value;
+    if (refVal && amtVal) {
+      var refNorm = String(refVal).replace(/\D/g, '');
+      var amtNorm = String(amtVal).replace(/\D/g, '');
+      if (refNorm && amtNorm && (refNorm === amtNorm || refNorm.indexOf(amtNorm) !== -1 || amtNorm.indexOf(refNorm) !== -1)) {
+        var pack = buildAmountFallbacks(fullText || '');
+        if (pack.amount && pack.amount.value && !amountValuesClose(pack.amount.value, refVal)) {
+          fieldMap.amount = pack.amount;
+        } else {
+          fieldMap.amount = fieldResult(null, 0, 'conflict-ref');
+        }
+      }
+    }
+    if (fieldMap.amount && fieldMap.amount.value && fullText &&
+        !validateAmountCandidate(fieldMap.amount.value, fullText)) {
+      var repaired = buildAmountFallbacks(fullText).amount;
+      if (repaired && repaired.value) fieldMap.amount = repaired;
+      else fieldMap.amount = fieldResult(fieldMap.amount.value, 0.38, 'invalid-amount');
+    }
+    return fieldMap;
+  }
+
+  function ocrProviderAmountFallback(img, fullText) {
+    var provider = detectProvider(fullText);
+    if (!provider || !PROVIDER_AMOUNT_REGIONS[provider.id]) {
+      return Promise.resolve(fieldResult(null, 0, 'none'));
+    }
+    return ocrRegionField(img, PROVIDER_AMOUNT_REGIONS[provider.id], 'amount', { fast: false }).then(function (res) {
+      if (res && res.value) {
+        res.source = (res.source || 'zone') + '+' + provider.id + '-layout';
+        if (!validateAmountCandidate(res.value, fullText)) {
+          return fieldResult(null, 0, 'layout-invalid');
+        }
+      }
+      return res;
+    });
+  }
+
+  function ocrFullImageCached(img) {
+    img = normalizeSlipImage(img);
+    var cacheKey = img._raw || img;
+    if (_fullTextCache.has(cacheKey)) {
+      return Promise.resolve(_fullTextCache.get(cacheKey));
+    }
+    return ocrFullImage(img).then(function (text) {
+      _fullTextCache.set(cacheKey, text);
+      return text;
+    });
+  }
+
   function ocrFullImage(img) {
+    img = normalizeSlipImage(img);
+    var fast = ocrModeIsFast();
     var canvases = [];
     var size = imagePixelSize(img);
-    var fullScale = size.w && size.w < 1600 ? (1600 / size.w) : 1.1;
+    var fullScale = size.w && size.w < 1600 ? (1600 / size.w) : 1.05;
     var c1 = document.createElement('canvas');
     c1.width = Math.round(size.w * fullScale);
     c1.height = Math.round(size.h * fullScale);
-    c1.getContext('2d').drawImage(img, 0, 0, c1.width, c1.height);
+    var ctx1 = c1.getContext('2d');
+    ctx1.fillStyle = '#ffffff';
+    ctx1.fillRect(0, 0, c1.width, c1.height);
+    ctx1.drawImage(slipDrawTarget(img), 0, 0, c1.width, c1.height);
+    enhanceCanvas(ctx1, c1, 'photo-fix');
     canvases.push(c1);
-    canvases.push(makeRegionCanvas(img, { region_x: 0, region_y: 40, region_w: 100, region_h: 60 }, 1.9, 'gray-boost'));
+    canvases.push(makeRegionCanvas(img, { region_x: 0, region_y: 0, region_w: 100, region_h: 28 }, fast ? 2.4 : 2.8, 'photo-fix'));
+    canvases.push(makeRegionCanvas(img, { region_x: 0, region_y: 8, region_w: 100, region_h: 42 }, fast ? 2.0 : 2.4, 'contrast'));
+    if (!fast) {
+      canvases.push(makeRegionCanvas(img, { region_x: 0, region_y: 35, region_w: 100, region_h: 55 }, 2.0, 'gray-boost'));
+    }
+    if (ocrModeIsAccurate()) {
+      canvases.push(makeRegionCanvas(img, { region_x: 0, region_y: 12, region_w: 100, region_h: 38 }, 2.6, 'binary'));
+    }
     var texts = [];
     var chain = Promise.resolve();
     canvases.forEach(function (canvas) {
@@ -1030,6 +2171,7 @@
   }
 
   function matchProfileFromImage(img, profiles) {
+    img = normalizeSlipImage(img);
     profiles = profiles || [];
     if (!profiles.length) {
       return Promise.resolve({ profile: null, score: 0, provider: null, fullText: '' });
@@ -1047,7 +2189,11 @@
     var c = document.createElement('canvas');
     c.width = Math.max(1, Math.round(size.w * scale));
     c.height = Math.max(1, Math.round(size.h * scale));
-    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    var mctx = c.getContext('2d');
+    mctx.fillStyle = '#ffffff';
+    mctx.fillRect(0, 0, c.width, c.height);
+    mctx.drawImage(slipDrawTarget(img), 0, 0, c.width, c.height);
+    enhanceCanvas(mctx, c, 'photo-fix');
     return ocrCanvas(c, null, { variant: 'match-light' }).then(function (ocr) {
       var match = matchProfile(profiles, ocr.text);
       return {
@@ -1061,156 +2207,226 @@
 
   function extractWithProfile(img, profile, fullText, opts) {
     opts = opts || {};
-    var fieldMap = {};
-    (profile.fields || []).forEach(function (f) { fieldMap[f.field_key] = f; });
+    img = normalizeSlipImage(img);
+    var fieldRegions = {};
+    (profile.fields || []).forEach(function (f) { fieldRegions[f.field_key] = f; });
     var keys = ['date', 'amount', 'reference_no'];
-    var fb = fullText ? fullTextFallback(fullText) : null;
-    var ab = fullText ? anchorFallback(fullText) : null;
 
-    function runKey(key) {
-      var region = fieldMap[key];
-      if (!region) {
-        if (opts.fast || !fullText) {
-          return Promise.resolve({ key: key, result: fieldResult(null, 0, 'none') });
+    return (fullText ? Promise.resolve(fullText) : ocrFullImageCached(img)).then(function (resolvedText) {
+      var fb = fullTextFallback(resolvedText);
+      var ab = anchorFallback(resolvedText);
+
+      function runKey(key) {
+        var region = fieldRegions[key];
+        if (!region) {
+          return Promise.resolve({ key: key, result: mergeFieldResults(ab[key], fb[key], 0.5) });
         }
-        return Promise.resolve({ key: key, result: mergeFieldResults(fb[key], ab[key], 0.5) });
-      }
-      return ocrRegionField(img, region, key, { fast: opts.fast }).then(function (zoneRes) {
-        if (zoneRes && zoneRes.value) return { key: key, result: zoneRes };
-        if (opts.fast || !fullText) return { key: key, result: zoneRes };
-        return {
-          key: key,
-          result: mergeFieldResults(zoneRes, mergeFieldResults(ab[key], fb[key], 0.5), 0.48),
-        };
-      });
-    }
-
-    var runAll = opts.parallel
-      ? Promise.all(keys.map(runKey))
-      : keys.reduce(function (chain, key) {
-          return chain.then(function (rows) {
-            return runKey(key).then(function (row) {
-              rows.push(row);
-              return rows;
+        return ocrRegionField(img, region, key, {
+          fast: opts.fast,
+          fullText: resolvedText,
+        }).then(function (zoneRes) {
+          if (key === 'amount') {
+            return ocrProviderAmountFallback(img, resolvedText).then(function (layoutRes) {
+              var mergedZone = zoneRes;
+              if (layoutRes && layoutRes.value) {
+                if (!mergedZone || !mergedZone.value ||
+                    (layoutRes.confidence || 0) > (mergedZone.confidence || 0) + 0.05) {
+                  mergedZone = layoutRes;
+                } else if (mergedZone && mergedZone.value &&
+                    !amountValuesClose(mergedZone.value, layoutRes.value) &&
+                    (layoutRes.confidence || 0) >= (mergedZone.confidence || 0)) {
+                  mergedZone = layoutRes;
+                }
+              }
+              return {
+                key: key,
+                result: reconcileAmountResult(mergedZone, resolvedText),
+              };
             });
-          });
-        }, Promise.resolve([]));
+          }
+          if (zoneRes && zoneRes.value) return { key: key, result: zoneRes };
+          return {
+            key: key,
+            result: mergeFieldResults(zoneRes, mergeFieldResults(ab[key], fb[key], 0.5), 0.48),
+          };
+        });
+      }
 
-    return runAll.then(function (rows) {
-      var out = {};
-      rows.forEach(function (row) { out[row.key] = row.result; });
-      var flat = flattenResults(out);
-      flat.profileName = profile.name;
-      return flat;
+      var runAll = opts.parallel
+        ? Promise.all(keys.map(runKey))
+        : keys.reduce(function (chain, key) {
+            return chain.then(function (rows) {
+              return runKey(key).then(function (row) {
+                rows.push(row);
+                return rows;
+              });
+            });
+          }, Promise.resolve([]));
+
+      return runAll.then(function (rows) {
+        var out = {};
+        rows.forEach(function (row) { out[row.key] = row.result; });
+        sanitizeFieldMap(out, resolvedText);
+        var flat = flattenResults(out);
+        flat.profileName = profile.name;
+        flat.ocrText = resolvedText;
+        return flat;
+      });
     });
   }
 
   function extractGeneric(img, fullTextOptional) {
+    img = normalizeSlipImage(img);
     var chain = fullTextOptional
       ? Promise.resolve(fullTextOptional)
       : ocrFullImage(img);
     return chain.then(function (text) {
-      var fb = fullTextFallback(text);
-      var ab = anchorFallback(text);
-      var out = {
-        date: mergeFieldResults(ab.date, fb.date, 0.5),
-        amount: mergeFieldResults(ab.amount, fb.amount, 0.5),
-        reference_no: mergeFieldResults(ab.reference_no, fb.reference_no, 0.5),
-      };
-      var flat = flattenResults(out);
-      flat.profileName = null;
-      flat.ocrText = text;
-      return flat;
+      return ocrProviderAmountFallback(img, text).then(function (layoutAmt) {
+        var fb = fullTextFallback(text);
+        var ab = anchorFallback(text);
+        var amount = mergeFieldResults(layoutAmt, mergeFieldResults(ab.amount, fb.amount, 0.55), 0.52);
+        amount = reconcileAmountResult(amount, text);
+        var out = {
+          date: mergeFieldResults(ab.date, fb.date, 0.5),
+          amount: amount,
+          reference_no: mergeFieldResults(ab.reference_no, fb.reference_no, 0.5),
+        };
+        sanitizeFieldMap(out, text);
+
+        function finishGeneric() {
+          var flat = flattenResults(out);
+          flat.profileName = null;
+          flat.ocrText = text;
+          return flat;
+        }
+
+        if (out.reference_no && out.reference_no.value &&
+            ((out.reference_no.confidence || 0) >= 0.62 || ocrModeIsFast())) {
+          return finishGeneric();
+        }
+        return ocrHeaderReferenceScan(img).then(function (headerRef) {
+          if (headerRef && headerRef.value) {
+            out.reference_no = mergeFieldResults(headerRef, out.reference_no, 0.55);
+            sanitizeFieldMap(out, text);
+          }
+          return finishGeneric();
+        });
+      });
     });
   }
 
   function extractFromSlip(file, profiles, options) {
     options = options || {};
     profiles = profiles || [];
-    var useFast = options.fast !== false;
+    var useFast = options.fast !== false && !ocrModeIsAccurate();
+    var preferredId = options.preferredProfileId || null;
     var t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : 0;
-    return prewarmWorker().then(function () {
-      return loadImageFromFile(file).then(function (img) {
-        if (profiles.length === 1) {
-          return extractWithProfile(img, profiles[0], '', {
-            fast: useFast,
-            parallel: true,
-          }).then(function (data) {
-            attachProfileMeta(data, profiles[0], 1, '', detectProvider(''), img);
-            if (t0) {
-              ocrLog('extractFromSlip single-profile', {
-                ms: Math.round(performance.now() - t0),
-                profile: profiles[0].name,
-              });
-            }
-            return data;
+
+    function finishExtract(data, label) {
+      if (data && t0) {
+        ocrLog(label || 'extractFromSlip', {
+          ms: Math.round(performance.now() - t0),
+          profile: data.profileName || null,
+          quality: extractionQuality(data),
+          score: data.matchScore,
+          profiles: profiles.length,
+        });
+      }
+      return data;
+    }
+
+    function runRankedExtract(img, fullText, ranked, tryOptions) {
+      return tryBestProfileExtract(img, ranked, fullText, useFast, tryOptions || {}).then(function (data) {
+        if (data && extractionQuality(data) > 0) {
+          data.ocrText = fullText;
+          data.img = img;
+          return data;
+        }
+        if (!useFast) {
+          return extractGeneric(img, fullText).then(function (generic) {
+            generic.ocrText = fullText;
+            generic.img = img;
+            return generic;
           });
         }
+        return extractWithProfile(img, ranked[0].profile, fullText, {
+          fast: false,
+          parallel: true,
+        }).then(function (slowData) {
+          attachProfileMeta(slowData, ranked[0].profile, ranked[0].score, fullText, detectProvider(fullText), img);
+          if (extractionQuality(slowData) > 0) {
+            slowData.ocrText = fullText;
+            slowData.img = img;
+            return slowData;
+          }
+          return extractGeneric(img, fullText).then(function (generic) {
+            generic.matchScore = ranked[0] ? ranked[0].score : 0;
+            generic.provider = detectProvider(fullText) ? detectProvider(fullText).id : null;
+            generic.ocrText = fullText;
+            generic.img = img;
+            return generic;
+          });
+        });
+      });
+    }
+
+    return prewarmWorker().then(function () {
+      return loadImageFromFile(file).then(function (rawImg) {
+        var img = normalizeSlipImage(rawImg);
         if (!profiles.length) {
-          return ocrFullImage(img).then(function (fullText) {
+          return ocrFullImageCached(img).then(function (fullText) {
             return extractGeneric(img, fullText).then(function (data) {
               data.ocrText = fullText;
               data.img = img;
-              return data;
+              return finishExtract(data, 'extractFromSlip generic');
             });
           });
         }
 
-        function finishExtract(data, label) {
-          if (data && t0) {
-            ocrLog(label || 'extractFromSlip', {
-              ms: Math.round(performance.now() - t0),
-              profile: data.profileName || null,
-              quality: extractionQuality(data),
-              score: data.matchScore,
+        return ocrFullImageCached(img).then(function (fullText) {
+          if (profiles.length === 1) {
+            return extractWithProfile(img, profiles[0], fullText, {
+              fast: useFast,
+              parallel: true,
+            }).then(function (data) {
+              attachProfileMeta(data, profiles[0], 1, fullText, detectProvider(fullText), img);
+              data.ocrText = fullText;
+              data.img = img;
+              return finishExtract(data, 'extractFromSlip single-profile');
             });
           }
-          return data;
-        }
 
-        return matchProfileFromImage(img, profiles).then(function (match) {
-          var fullText = match.fullText || '';
           var ranked = rankProfiles(profiles, fullText);
-          return tryBestProfileExtract(img, ranked, fullText, useFast).then(function (data) {
-            if (data && extractionQuality(data) > 0) {
-              return finishExtract(data, 'extractFromSlip matched');
+          var preferred = findProfileById(profiles, preferredId);
+
+          function afterPreferred(prefData) {
+            if (prefData && isGoodEnoughExtract(prefData)) {
+              return finishExtract(prefData, 'extractFromSlip preferred');
             }
-            return ocrFullImage(img).then(function (fullText2) {
-              var ranked2 = rankProfiles(profiles, fullText2);
-              return tryBestProfileExtract(img, ranked2, fullText2, false).then(function (data2) {
-                if (data2 && extractionQuality(data2) > 0) {
-                  data2.ocrText = fullText2;
-                  data2.img = img;
-                  return finishExtract(data2, 'extractFromSlip full-ocr');
-                }
-                var top = ranked2[0];
-                if (top && top.score >= 0.22) {
-                  return extractWithProfile(img, top.profile, fullText2, {
-                    fast: false,
-                    parallel: true,
-                  }).then(function (data3) {
-                    attachProfileMeta(data3, top.profile, top.score, fullText2, detectProvider(fullText2), img);
-                    if (extractionQuality(data3) > 0) {
-                      return finishExtract(data3, 'extractFromSlip top-score');
-                    }
-                    return extractGeneric(img, fullText2).then(function (generic) {
-                      generic.matchScore = top.score;
-                      generic.provider = detectProvider(fullText2) ? detectProvider(fullText2).id : null;
-                      generic.ocrText = fullText2;
-                      generic.img = img;
-                      return generic;
-                    });
-                  });
-                }
-                return extractGeneric(img, fullText2).then(function (generic) {
-                  generic.matchScore = top ? top.score : 0;
-                  generic.provider = detectProvider(fullText2) ? detectProvider(fullText2).id : null;
-                  generic.ocrText = fullText2;
-                  generic.img = img;
-                  return generic;
-                });
-              });
+            var skipIds = {};
+            if (preferred) skipIds[preferred.id] = true;
+            return runRankedExtract(img, fullText, ranked, { skipIds: skipIds }).then(function (data) {
+              if (prefData && (!data || extractionQuality(prefData) > extractionQuality(data))) {
+                return finishExtract(prefData, 'extractFromSlip preferred-fallback');
+              }
+              return finishExtract(data, 'extractFromSlip multi-profile');
             });
+          }
+
+          if (preferred) {
+            return extractWithProfile(img, preferred, fullText, {
+              fast: useFast,
+              parallel: true,
+            }).then(function (prefData) {
+              attachProfileMeta(prefData, preferred, 1, fullText, detectProvider(fullText), img);
+              prefData.ocrText = fullText;
+              prefData.img = img;
+              return afterPreferred(prefData);
+            });
+          }
+
+          return runRankedExtract(img, fullText, ranked).then(function (data) {
+            return finishExtract(data, 'extractFromSlip multi-profile');
           });
         });
       });
@@ -1218,38 +2434,38 @@
   }
 
   function previewRegions(img, regionsByKey) {
+    img = normalizeSlipImage(img);
     ocrLog('previewRegions start', { keys: Object.keys(regionsByKey || {}) });
     return prewarmWorker().then(function () {
-      var keys = ['date', 'amount', 'reference_no'];
-      return Promise.all(keys.map(function (key) {
-        var region = regionsByKey[key];
-        if (!region) {
-          return Promise.resolve({ key: key, result: fieldResult(null, 0, 'none') });
-        }
-        logRegionMapping('previewRegions:' + key, img, region);
-        return ocrRegionField(img, region, key).then(function (res) {
-          return { key: key, result: res };
+      return ocrFullImageCached(img).then(function (fullText) {
+        var keys = ['date', 'amount', 'reference_no'];
+        return Promise.all(keys.map(function (key) {
+          var region = regionsByKey ? regionsByKey[key] : null;
+          if (region) logRegionMapping('previewRegions:' + key, img, region);
+          return previewRegionFieldWithFallback(img, key, region, fullText).then(function (result) {
+            return { key: key, result: result };
+          });
+        })).then(function (rows) {
+          var out = {};
+          rows.forEach(function (row) { out[row.key] = row.result; });
+          sanitizeFieldMap(out, fullText);
+          var flat = flattenResults(out);
+          flat.ocrText = fullText;
+          ocrLog('previewRegions done', flat);
+          return flat;
         });
-      })).then(function (rows) {
-        var out = {};
-        rows.forEach(function (row) { out[row.key] = row.result; });
-        var flat = {
-          date: out.date ? out.date.value : null,
-          amount: out.amount ? out.amount.value : null,
-          reference_no: out.reference_no ? out.reference_no.value : null,
-          fieldMeta: out,
-        };
-        ocrLog('previewRegions done', flat);
-        return flat;
       });
     });
   }
 
   function previewFieldRegion(img, fieldKey, region) {
+    img = normalizeSlipImage(img);
     ocrLog('previewFieldRegion start', { field: fieldKey, region: region });
-    logRegionMapping('previewFieldRegion:' + fieldKey, img, region);
+    if (region) logRegionMapping('previewFieldRegion:' + fieldKey, img, region);
     return prewarmWorker().then(function () {
-      return ocrRegionField(img, region, fieldKey);
+      return ocrFullImageCached(img).then(function (fullText) {
+        return previewRegionFieldWithFallback(img, fieldKey, region, fullText);
+      });
     });
   }
 
@@ -1384,7 +2600,11 @@
     var canvas = document.createElement('canvas');
     canvas.width = Math.round(size.w * scale);
     canvas.height = Math.round(size.h * scale);
-    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+    var lctx = canvas.getContext('2d');
+    lctx.fillStyle = '#ffffff';
+    lctx.fillRect(0, 0, canvas.width, canvas.height);
+    lctx.drawImage(slipDrawTarget(normalizeSlipImage(img)), 0, 0, canvas.width, canvas.height);
+    enhanceCanvas(lctx, canvas, 'photo-fix');
 
     return ensureTesseract().then(function (Tesseract) {
       return Tesseract.recognize(canvas, 'eng', tesseractWorkerOptions({
@@ -1458,7 +2678,7 @@
   }
 
   global.WorkspaceSlipTemplate = {
-    VERSION: '1.4.1',
+    VERSION: '1.7.1',
     FIELD_LABELS: FIELD_LABELS,
     FIELD_COLORS: FIELD_COLORS,
     FIELD_TINTS: FIELD_TINTS,
@@ -1491,6 +2711,11 @@
     normalizeFieldValue: normalizeFieldValue,
     fieldValuesMatch: fieldValuesMatch,
     learnFieldCorrection: learnFieldCorrection,
-    LOW_CONFIDENCE: 0.52,
+    LOW_CONFIDENCE: 0.58,
+    validateAmountCandidate: validateAmountCandidate,
+    parseProviderAmount: parseProviderAmount,
+    normalizeSlipImage: normalizeSlipImage,
+    ocrConfig: ocrConfig,
+    enhanceCanvas: enhanceCanvas,
   };
 })(window);

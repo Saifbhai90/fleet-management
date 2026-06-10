@@ -29,8 +29,17 @@
     .ws-slip-ocr-status.warn { background: #fff8e6; color: #856404; border: 1px solid #ffeeba; }
     .ws-slip-ocr-status.err { background: #fff5f5; color: #b02a37; border: 1px solid #f5c2c7; }
     .ws-slip-ocr-status.busy { background: #eef6ff; color: #0a58ca; border: 1px solid #cfe2ff; }
-    .ws-slip-filled { box-shadow: 0 0 0 2px rgba(25,135,84,.35) !important; }
-    .ws-slip-low-conf { box-shadow: 0 0 0 2px rgba(255,193,7,.65) !important; background-color: #fffdf5 !important; }
+    .ws-slip-field-hint {
+      font-size: .67rem;
+      line-height: 1.3;
+      margin-top: .18rem;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      box-shadow: none;
+    }
+    .ws-slip-field-hint.ok { color: #157347; }
+    .ws-slip-field-hint.verify { color: #9a6700; }
     .ws-slip-teach-wrap { max-height: 62vh; overflow: auto; border: 1px solid #dee2e6; border-radius: 10px; background: #f8f9fa; transition: background .2s ease; }
     .ws-slip-teach-stage { position: relative; display: block; width: 100%; line-height: 0; }
     .ws-slip-teach-stage img { display: block; width: 100%; max-width: 100%; height: auto; user-select: none; }
@@ -100,11 +109,13 @@
                   <label class="form-label">Transfer Date</label>
                   <input type="text" id="wsTransferDateInput" name="transfer_date" class="form-control datepicker" value="{{ row.transfer_date|ddmmyyyy if row and row.transfer_date else '' }}" placeholder="dd-mm-yyyy" required>
                   <div class="invalid-feedback">Transfer Date likhein (dd-mm-yyyy).</div>
+                  <div id="wsSlipHintDate" class="ws-slip-field-hint d-none" aria-live="polite"></div>
                 </div>
                 <div class="col-md-3">
                   <label class="form-label">Amount</label>
                   <input type="number" step="0.01" name="amount" id="wsTransferAmountInput" class="form-control" value="{{ row.amount if row else '' }}" required>
                   <div class="invalid-feedback">Amount zero se zyada likhein.</div>
+                  <div id="wsSlipHintAmount" class="ws-slip-field-hint d-none" aria-live="polite"></div>
                 </div>
                 <div class="col-md-3">
                   <label class="form-label">Payment Mode</label>
@@ -115,6 +126,7 @@
                     <option value="Cheque" {% if pm == 'Cheque' %}selected{% endif %}>Cheque</option>
                     <option value="Online" {% if pm == 'Online' %}selected{% endif %}>Online Payment</option>
                   </select>
+                  <div id="wsSlipHintPaymentMode" class="ws-slip-field-hint d-none" aria-live="polite"></div>
                 </div>
                 <div class="col-md-3">
                   <label class="form-label">Category / Purpose</label>
@@ -150,6 +162,7 @@
                 <div class="col-md-4">
                   <label class="form-label">Reference No</label>
                   <input type="text" id="wsTransferRefInput" name="reference_no" class="form-control" value="{{ row.reference_no if row else '' }}">
+                  <div id="wsSlipHintRef" class="ws-slip-field-hint d-none" aria-live="polite"></div>
                 </div>
                 <div class="col-12">
                   <label class="form-label">Description</label>
@@ -238,6 +251,7 @@
               </div>
             </div>
             <div class="small text-muted mt-2">Active field par box draw karein (mouse drag). Teenon fields mark karna zaroori hai.</div>
+            <div class="small text-muted mt-1">Reference: poore "Transaction ID # ..." line par box drag karein. Preview zone fail ho to poori slip se bhi try hoti hai (yellow = box adjust karein).</div>
           </div>
           <div class="col-lg-4">
             <label class="form-label fw-semibold small">Design name</label>
@@ -275,8 +289,14 @@ window.__wsSlipTesseractConfig = {
   baseUrl: {{ url_for('static', filename='vendor/tesseract/') | tojson }},
   langUrl: {{ url_for('static', filename='vendor/tesseract/tessdata/') | tojson }}
 };
+window.__wsSlipOcrConfig = {
+  mode: 'balanced',
+  preprocess: true,
+  debug: false,
+  minImageWidth: 1280
+};
 </script>
-<script src="{{ url_for('static', filename='js/workspace_slip_template.js') }}?v=1.4.1"></script>
+<script src="{{ url_for('static', filename='js/workspace_slip_template.js') }}?v=1.7.1"></script>
 <script>
 var _wsAcctBalanceMap = {{ account_balance_json | tojson }};
 var _wsAcctDisplayMap = {{ account_display_map | tojson }};
@@ -842,7 +862,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (WST.cacheProfiles) WST.cacheProfiles(profiles);
                     renderProfileList();
                   }
-                  if (inputEl) inputEl.classList.remove('ws-slip-low-conf');
+                  clearSlipFieldHint(fieldKey);
                   setStatus('Design auto-updated: ' + (correctionLabels[fieldKey] || fieldKey) + ' region save ho gaya.', 'ok');
                 });
             })
@@ -888,17 +908,47 @@ document.addEventListener('DOMContentLoaded', function() {
         statusEl.textContent = msg;
       }
 
-      function flashFilled(el) {
+      var slipFieldHints = {
+        date: document.getElementById('wsSlipHintDate'),
+        amount: document.getElementById('wsSlipHintAmount'),
+        reference_no: document.getElementById('wsSlipHintRef'),
+        payment_mode: document.getElementById('wsSlipHintPaymentMode'),
+      };
+
+      function clearSlipFieldHint(fieldKey) {
+        var el = slipFieldHints[fieldKey];
         if (!el) return;
-        el.classList.add('ws-slip-filled');
-        window.setTimeout(function() { el.classList.remove('ws-slip-filled'); }, 4500);
+        el.className = 'ws-slip-field-hint d-none';
+        el.textContent = '';
+      }
+
+      function setSlipFieldHint(fieldKey, kind, message) {
+        var el = slipFieldHints[fieldKey];
+        if (!el) return;
+        var isVerify = kind === 'verify';
+        el.className = 'ws-slip-field-hint ' + (isVerify ? 'verify' : 'ok');
+        el.innerHTML = '<i class="bi bi-' + (isVerify ? 'exclamation-triangle' : 'check-circle') + ' me-1"></i>' +
+          (message || (isVerify ? 'Slip se auto-filled — verify karein' : 'Slip se auto-filled'));
+      }
+
+      function bindSlipHintClear(inputEl, fieldKey) {
+        if (!inputEl) return;
+        function onUserEdit() { clearSlipFieldHint(fieldKey); }
+        inputEl.addEventListener('input', onUserEdit);
+        inputEl.addEventListener('change', onUserEdit);
+      }
+
+      function showSlipFieldHint(fieldKey, meta, lowConf) {
+        var m = meta && meta[fieldKey];
+        var needsVerify = m && m.confidence && m.confidence < lowConf;
+        setSlipFieldHint(fieldKey, needsVerify ? 'verify' : 'ok');
       }
 
       function setPaymentModeOnline() {
         if (!pmSelect) return;
         pmSelect.value = 'Online';
         if (pmSelect.tomselect) pmSelect.tomselect.setValue('Online', true);
-        flashFilled(pmSelect);
+        setSlipFieldHint('payment_mode', 'ok', 'Slip se Online set hua');
       }
 
       function applyExtracted(data) {
@@ -906,36 +956,34 @@ document.addEventListener('DOMContentLoaded', function() {
         var filled = [];
         var meta = data.fieldMeta || {};
         var lowConf = WST.LOW_CONFIDENCE || 0.52;
-
-        function markField(el, key, label) {
-          if (!el) return;
-          el.classList.remove('ws-slip-low-conf');
-          var m = meta[key];
-          if (m && m.confidence && m.confidence < lowConf) {
-            el.classList.add('ws-slip-low-conf');
-          }
-        }
+        var active = document.activeElement;
 
         if (data.date && data.date !== '—' && transferDateInput && !transferDateInput.value.trim()) {
           transferDateInput.value = data.date;
-          flashFilled(transferDateInput);
-          markField(transferDateInput, 'date', 'Date');
+          showSlipFieldHint('date', meta, lowConf);
           filled.push('Date');
         }
         if (data.amount && data.amount !== '—' && amountInput && !amountInput.value.trim()) {
-          amountInput.value = data.amount;
-          flashFilled(amountInput);
-          markField(amountInput, 'amount', 'Amount');
-          filled.push('Amount');
+          var amtMeta = meta.amount;
+          var skipAmount = amtMeta && amtMeta.confidence && amtMeta.confidence < 0.42;
+          if (!skipAmount && (!WST.validateAmountCandidate || WST.validateAmountCandidate(data.amount, data.ocrText || ''))) {
+            amountInput.value = data.amount;
+            showSlipFieldHint('amount', meta, lowConf);
+            filled.push('Amount');
+          } else if (!skipAmount) {
+            setSlipFieldHint('amount', 'verify');
+          }
         }
         if (data.reference_no && data.reference_no !== '—' && refInput && !refInput.value.trim()) {
           refInput.value = data.reference_no;
-          flashFilled(refInput);
-          markField(refInput, 'reference_no', 'Reference');
+          showSlipFieldHint('reference_no', meta, lowConf);
           filled.push('Reference');
           checkReferenceDuplicate(data.reference_no);
         }
         setPaymentModeOnline();
+        if (active && typeof active.focus === 'function' && document.body.contains(active)) {
+          try { active.focus({ preventScroll: true }); } catch (e) { active.focus(); }
+        }
         return filled;
       }
 
@@ -1182,6 +1230,16 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         var ready = useDomImg();
         if (ready) return Promise.resolve(ready);
+        if (pendingSlipFile && WST.loadImageFromFile) {
+          if (teachImageObj && teachImageObj.__wsSlipFile === pendingSlipFile) {
+            return Promise.resolve(teachImageObj);
+          }
+          return WST.loadImageFromFile(pendingSlipFile).then(function(img) {
+            img.__wsSlipFile = pendingSlipFile;
+            teachImageObj = img;
+            return img;
+          });
+        }
         if (teachImg && teachImg.src) {
           return new Promise(function(resolve, reject) {
             if (teachImg.complete && teachImg.naturalWidth) {
@@ -1236,7 +1294,15 @@ document.addEventListener('DOMContentLoaded', function() {
           previewCache.fieldMeta[fieldKey] = res;
           updatePreviewSpans(previewCache, false);
           if (res.value) {
-            setStatus((correctionLabels[fieldKey] || fieldKey) + ' preview: ' + res.value, 'ok');
+            var srcNote = '';
+            if (res.source && String(res.source).indexOf('full-fallback') >= 0) {
+              srcNote = ' (box weak — poori slip se mila; box adjust karein)';
+            } else if (res.source === 'zone+verified') {
+              srcNote = ' (box + slip verify)';
+            }
+            var kind = (res.source && String(res.source).indexOf('full-fallback') >= 0 && fieldKey === 'reference_no')
+              ? 'warn' : 'ok';
+            setStatus((correctionLabels[fieldKey] || fieldKey) + ' preview: ' + res.value + srcNote, kind);
           } else {
             setStatus((correctionLabels[fieldKey] || fieldKey) + ' read nahi hua — box thora adjust karein.', 'warn');
           }
@@ -1277,7 +1343,14 @@ document.addEventListener('DOMContentLoaded', function() {
           previewCache.amount = data.amount;
           previewCache.reference_no = data.reference_no;
           previewCache.fieldMeta = data.fieldMeta || {};
+          previewCache.ocrText = data.ocrText || '';
           updatePreviewSpans(previewCache, false);
+          var refMeta = previewCache.fieldMeta.reference_no;
+          if (refMeta && refMeta.value && refMeta.source && String(refMeta.source).indexOf('full-fallback') >= 0) {
+            setStatus('Reference preview: ' + refMeta.value + ' (box se weak — poori slip se mila). Box thora right extend karein.', 'warn');
+          } else if (data.reference_no) {
+            setStatus('Test read OK — Date, Amount, Reference verify karein.', 'ok');
+          }
           return previewCache;
         }).catch(function(err) {
           if (seq !== previewRunSeq) throw err;
@@ -1287,12 +1360,31 @@ document.addEventListener('DOMContentLoaded', function() {
         });
       }
 
+      function rememberSlipProfile(id) {
+        if (!id) return;
+        try { localStorage.setItem('wsSlipLastProfileId', String(id)); } catch (e) { /* ignore */ }
+      }
+
+      function readLastSlipProfileId() {
+        try {
+          var v = localStorage.getItem('wsSlipLastProfileId');
+          return v ? parseInt(v, 10) : null;
+        } catch (e) {
+          return null;
+        }
+      }
+
       function processSlipFile(file) {
         if (!file) return;
         pendingSlipFile = file;
         setStatus('Slip read ho rahi hai…', 'busy');
-        WST.extractFromSlip(file, profiles).then(function(data) {
+        var lastProfileId = readLastSlipProfileId();
+        WST.extractFromSlip(file, profiles, {
+          preferredProfileId: lastProfileId,
+          fast: profiles.length > 1 ? true : undefined
+        }).then(function(data) {
           setSlipSession(data, file);
+          if (data && data.profileId) rememberSlipProfile(data.profileId);
           var named = data.profileName ? ('Design: ' + data.profileName) : (data.provider ? ('Provider: ' + data.provider) : 'Generic read');
           var hasAny = data.date || data.amount || data.reference_no;
           if (data.profileName && hasAny) {
@@ -1302,7 +1394,7 @@ document.addEventListener('DOMContentLoaded', function() {
               var low = ['date', 'amount', 'reference_no'].filter(function(k) {
                 return data.fieldMeta[k] && data.fieldMeta[k].value && data.fieldMeta[k].confidence < (WST.LOW_CONFIDENCE || 0.52);
               });
-              if (low.length) lowNote = ' (yellow = verify ' + low.join(', ') + ')';
+              if (low.length) lowNote = ' (field ke neeche verify hint: ' + low.join(', ') + ')';
             }
             setStatus(named + ' — ' + (filled && filled.length ? filled.join(', ') : 'verify fields') + lowNote + '. Payment Mode: Online.', 'ok');
             return;
@@ -1544,6 +1636,10 @@ document.addEventListener('DOMContentLoaded', function() {
       bindCorrectionLearning(transferDateInput, 'date');
       bindCorrectionLearning(amountInput, 'amount');
       bindCorrectionLearning(refInput, 'reference_no');
+      bindSlipHintClear(transferDateInput, 'date');
+      bindSlipHintClear(amountInput, 'amount');
+      bindSlipHintClear(refInput, 'reference_no');
+      bindSlipHintClear(pmSelect, 'payment_mode');
       ensureOcrReady().catch(function(err) {
         console.warn('[ws-slip-ocr] init prewarm failed', err);
       });
