@@ -193,7 +193,7 @@ ENDPOINT_PERMISSION_MAP = [
     ('task-report', 'task_report_list'),
     ('task_report_list', 'task_report_list'),
     ('task_report_new', 'task_report_entry'),
-    ('task_report_pending', 'task_report_entry'),
+    ('task_report_pending', 'task_report_pending'),
     ('task_report_new_delete_row', 'task_report_entry_delete'),
     ('api_task_report_odometer_photo_upload', 'task_report_entry'),
     # Red Task
@@ -570,43 +570,36 @@ def user_can_access(permission_codes, required_code):
     return False
 
 
-def seed_auth_tables(app):
-    """Create permissions from tree, Master/Admin roles, and default users if not present."""
-    from models import db, Permission, Role, User
+def ensure_config_permissions_exist():
+    """Insert any permission from config tree that is missing in DB (safe to call on each request)."""
+    from models import db, Permission
     try:
         from permissions_config import flatten_permission_tree
         tree_perms = list(flatten_permission_tree())
     except Exception:
         tree_perms = []
+    legacy_codes = {code for code, _name, _category in ALL_PERMISSION_CODES}
+    added = False
+    for code, name, category in ALL_PERMISSION_CODES:
+        if not Permission.query.filter_by(code=code).first():
+            db.session.add(Permission(code=code, name=name, category=category))
+            added = True
+    for code, name, category in tree_perms:
+        if code in legacy_codes:
+            continue
+        if not Permission.query.filter_by(code=code).first():
+            db.session.add(Permission(code=code, name=name, category=category))
+            added = True
+    if added:
+        db.session.commit()
+
+
+def seed_auth_tables(app):
+    """Create permissions from tree, Master/Admin roles, and default users if not present."""
+    from models import db, Permission, Role, User
 
     with app.app_context():
-        # Create permissions from tree (and legacy flat list for backward compat)
-        for code, name, category in ALL_PERMISSION_CODES:
-            p = Permission.query.filter_by(code=code).first()
-            if not p:
-                p = Permission(code=code, name=name, category=category)
-                db.session.add(p)
-        for code, name, category in tree_perms:
-            if code in [x[0] for x in ALL_PERMISSION_CODES]:
-                continue
-            p = Permission.query.filter_by(code=code).first()
-            if not p:
-                p = Permission(code=code, name=name, category=category)
-                db.session.add(p)
-        db.session.commit()
-
-        # Ensure assignment granular permissions exist (in case added to config after first seed)
-        for code, name in [
-            ('assign_vehicle_to_parking', 'Vehicle to Parking – List / View'),
-            ('assign_vehicle_to_parking_add', 'Vehicle to Parking – Add New'),
-            ('assign_vehicle_to_parking_edit', 'Vehicle to Parking – Edit'),
-            ('assign_vehicle_to_parking_desassign', 'Vehicle to Parking – Deassign'),
-            ('workspace_slip_design_manage', 'Workspace Transfers - Slip Design (Add/Edit/Delete)'),
-        ]:
-            if not Permission.query.filter_by(code=code).first():
-                p = Permission(code=code, name=name, category='Assignments')
-                db.session.add(p)
-        db.session.commit()
+        ensure_config_permissions_exist()
 
         all_perms = Permission.query.all()
 

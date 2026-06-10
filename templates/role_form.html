@@ -3,97 +3,344 @@
 
 {% block extra_head %}
 <style>
-/* ── Permission form ── */
-.perm-item .form-check-input {
-  width: 18px; height: 18px; cursor: pointer;
-  margin-top: 2px; flex-shrink: 0;
-  border: 1.5px solid #94a3b8;
-  border-radius: 4px;
-}
-.perm-item .form-check-input:checked { background-color: #2563eb; border-color: #2563eb; }
-.perm-item .form-check-input:indeterminate { background-color: #7c3aed; border-color: #7c3aed; }
-.perm-item .form-check-label {
-  cursor: pointer; font-size: 0.82rem; font-weight: 500;
-  padding-left: 2px; line-height: 1.4;
-  color: #334155;
-  user-select: none;
-}
-.perm-item .form-check-label:hover { color: #1d4ed8; }
-
-/* Full / parent checkbox gets bigger */
-.perm-full-cb .form-check-input {
-  width: 20px; height: 20px;
-}
-.perm-full-cb .form-check-label {
-  font-weight: 700 !important; color: #0f172a; font-size: 0.85rem;
-}
-
-/* Touch target: min 44px height */
-.perm-item {
-  display: flex; align-items: flex-start;
-  min-height: 44px; padding: 6px 8px;
-  border-radius: 8px;
-  border: 1px solid transparent;
-  transition: background 0.12s, border-color 0.12s;
+/* Freeze Matrix–style role permission table */
+.role-perm-page .perm-matrix-wrap {
   background: #fff;
+  border-radius: 10px;
+  overflow: hidden;
 }
-.perm-item:hover { background: #eff6ff; border-color: #bfdbfe; }
-.perm-item:has(.form-check-input:checked) {
-  background: #eff6ff;
-  border-color: #93c5fd;
+.role-perm-page .perm-matrix-table {
+  margin-bottom: 0;
+  border-collapse: separate;
+  border-spacing: 0;
 }
-
-/* Table cells: compact permission checks (Enterprise Freeze–style matrix) */
-.perm-matrix-table td { vertical-align: middle; }
-.perm-matrix-table .perm-item {
-  min-height: auto;
-  padding: 4px 6px;
-  margin-bottom: 4px;
+.role-perm-page .perm-matrix-table thead th {
+  font-size: .76rem;
+  font-weight: 600;
+  white-space: nowrap;
+  padding: .55rem .45rem;
+  color: #475569;
+  background: #f8fafc;
+  border-bottom: 2px solid #e2e8f0;
 }
-.perm-matrix-table .perm-full-cb {
-  background: #f0f7ff;
-  border: 1px solid #bfdbfe !important;
-  border-radius: 8px;
-  padding: 6px 8px;
+.role-perm-page .perm-matrix-table thead th.th-action {
+  font-size: .7rem;
+  font-weight: 600;
+  letter-spacing: .02em;
+  color: #64748b;
 }
-
-/* Section header badge + buttons row */
-.section-header {
+.role-perm-page .perm-matrix-table thead th.th-action i {
+  display: block;
+  font-size: .82rem;
+  margin-bottom: 2px;
+  opacity: .85;
+}
+.role-perm-page .perm-matrix-table td {
+  vertical-align: middle;
+}
+/* Bootstrap 5 table-bordered = vertical cell borders only; add row separators */
+.role-perm-page .perm-matrix-table tbody > tr > td {
+  border-bottom: 1px solid #e2e8f0;
+}
+body.dark-mode .role-perm-page .perm-matrix-table tbody > tr > td {
+  border-bottom-color: var(--dm-border, #334155);
+}
+.role-perm-page .perm-matrix-section-row td {
+  background: linear-gradient(90deg, #f1f5f9 0%, #f8fafc 100%);
+  border-top: 2px solid #e2e8f0;
+  border-left: 4px solid #3b82f6;
+  padding: .5rem .85rem;
+}
+.role-perm-page .perm-matrix-section-row .section-title {
+  font-weight: 700;
+  font-size: .84rem;
+  color: #1e293b;
+  letter-spacing: -.01em;
+}
+.role-perm-page .perm-matrix-table thead th.th-feature {
+  text-align: left;
+  padding: .65rem 1rem;
+  min-width: 220px;
+  background: #fff;
+  border-bottom: 2px solid #e2e8f0;
+  vertical-align: middle;
+  position: sticky;
+  left: 0;
+  z-index: 4;
+  box-shadow: 4px 0 8px rgba(15, 23, 42, .04);
+}
+.role-perm-page .perm-feature-col-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.role-perm-page .perm-feature-head-label {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  font-size: .88rem;
+  font-weight: 600;
+  color: #0f172a;
+  letter-spacing: -.02em;
+  line-height: 1.25;
+}
+.role-perm-page .perm-feature-head-label i {
+  font-size: .95rem;
+  color: #3b82f6;
+  opacity: .9;
+}
+.role-perm-page .perm-feature-head-hint {
+  font-size: .68rem;
+  font-weight: 500;
+  color: #94a3b8;
+  padding-left: 1.35rem;
+  line-height: 1.2;
+}
+.role-perm-page .perm-matrix-page-row .perm-feature-cell {
+  padding: .6rem 1rem;
+  min-width: 220px;
+  background: #fff;
+  border-right: 1px solid #eef2f6;
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  box-shadow: 4px 0 8px rgba(15, 23, 42, .03);
+}
+.role-perm-page .perm-feature-name-wrap {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 10px;
+  gap: .65rem;
+  min-height: 1.75rem;
 }
-
-/* Select All / None buttons */
-.btn-xs { padding: 3px 10px; font-size: 0.72rem; font-weight: 600; border-radius: 20px; }
-.btn-xs:focus { box-shadow: none; }
-
-/* Danger label */
-.label-danger { color: #dc2626 !important; font-weight: 700 !important; }
-
-/* Section count badge */
-.section-count { font-size: 0.68rem; color: #64748b; font-weight: 600; }
-
-/* Search highlight */
-.perm-highlight { background: #fef9c3 !important; border-color: #fde047 !important; }
-tr.perm-matrix-page-row.perm-highlight td { box-shadow: inset 0 0 0 999px rgba(254, 249, 195, 0.65); }
-
-/* Selected count chip */
-#selectedCount {
-  background: #eff6ff; color: #1d4ed8;
-  border-radius: 20px; font-size: 0.75rem;
-  font-weight: 700; padding: 3px 10px;
-  transition: all 0.2s;
+.role-perm-page .perm-feature-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #cbd5e1;
+  flex-shrink: 0;
+  transition: background .2s ease, box-shadow .2s ease, transform .2s ease;
 }
-
-/* Mobile tweaks */
-@media (max-width: 767px) {
-  .perm-item .form-check-input { width: 22px; height: 22px; }
-  .perm-item .form-check-label { font-size: 0.85rem; }
-  .section-header { gap: 6px; }
+.role-perm-page .perm-feature-name {
+  font-weight: 600;
+  font-size: .86rem;
+  color: #1e293b;
+  line-height: 1.35;
+  letter-spacing: -.02em;
+  transition: color .2s ease;
+}
+.role-perm-page .perm-matrix-page-row:nth-child(even) .perm-feature-cell {
+  background: #fcfdff;
+}
+.role-perm-page .perm-matrix-page-row:hover td {
+  background: #f8faff;
+}
+.role-perm-page .perm-matrix-page-row:hover .perm-feature-cell {
+  background: #f0f6ff;
+}
+.role-perm-page .perm-matrix-page-row:hover .perm-feature-dot {
+  background: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, .2);
+  transform: scale(1.15);
+}
+.role-perm-page .perm-matrix-page-row:hover .perm-feature-name {
+  color: #1d4ed8;
+}
+.role-perm-page .perm-matrix-page-row.perm-highlight .perm-feature-cell {
+  background: #fefce8;
+}
+/* Modern permission checkboxes — ring glow on hover / check */
+.role-perm-page {
+  --perm-ring: rgba(148, 163, 184, .45);
+  --perm-ring-hover: rgba(59, 130, 246, .42);
+  --perm-ring-checked: rgba(37, 99, 235, .5);
+  --perm-ring-indeterminate: rgba(124, 58, 237, .48);
+  --perm-ring-danger: rgba(220, 38, 38, .48);
+  --perm-ring-full: rgba(29, 78, 216, .55);
+}
+.role-perm-page .perm-cb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 1.35rem;
+  height: 1.35rem;
+  min-width: 1.35rem;
+  min-height: 1.35rem;
+  cursor: pointer;
+  margin: 0;
+  border: 2px solid #94a3b8;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, .08),
+    0 0 0 0 var(--perm-ring);
+  transition:
+    border-color .2s ease,
+    background-color .2s ease,
+    box-shadow .25s ease,
+    transform .15s ease;
+  vertical-align: middle;
+  position: relative;
+}
+.role-perm-page .perm-cb:hover,
+.role-perm-page .perm-cb-tile:hover .perm-cb,
+.role-perm-page .perm-other-label:hover .perm-cb {
+  border-color: #3b82f6;
+  transform: scale(1.06);
+  box-shadow:
+    0 2px 6px rgba(37, 99, 235, .12),
+    0 0 0 4px var(--perm-ring-hover);
+}
+.role-perm-page .perm-cb:focus-visible,
+.role-perm-page .perm-cb-tile:focus-within .perm-cb,
+.role-perm-page .perm-other-label:focus-within .perm-cb {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow:
+    0 2px 6px rgba(37, 99, 235, .15),
+    0 0 0 4px var(--perm-ring-hover),
+    0 0 0 7px rgba(37, 99, 235, .12);
+}
+.role-perm-page .perm-cb:checked {
+  background-color: #2563eb;
+  border-color: #1d4ed8;
+  transform: scale(1.02);
+  box-shadow:
+    0 2px 8px rgba(37, 99, 235, .28),
+    0 0 0 4px var(--perm-ring-checked);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='white'%3E%3Cpath d='M12.736 3.97a.733.733 0 0 1 1.047 0c.286.289.29.756.01 1.05L7.088 12.01a.733.733 0 0 1-1.065.003L3.217 8.384a.757.757 0 0 1 0-1.06.733.733 0 0 1 1.047 0l2.594 2.593 5.18-5.877Z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 1rem 1rem;
+}
+.role-perm-page .perm-cb:checked:hover,
+.role-perm-page .perm-cb-tile:hover .perm-cb:checked,
+.role-perm-page .perm-other-label:hover .perm-cb:checked {
+  box-shadow:
+    0 3px 10px rgba(37, 99, 235, .32),
+    0 0 0 5px var(--perm-ring-checked),
+    0 0 0 9px rgba(37, 99, 235, .14);
+}
+.role-perm-page .perm-cb:indeterminate {
+  background-color: #7c3aed;
+  border-color: #6d28d9;
+  box-shadow:
+    0 2px 8px rgba(124, 58, 237, .25),
+    0 0 0 4px var(--perm-ring-indeterminate);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='white'%3E%3Cpath d='M2 8a1 1 0 0 1 1-1h10a1 1 0 1 1 0 2H3a1 1 0 0 1-1-1z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: .9rem .9rem;
+}
+.role-perm-page .perm-cb.perm-cb--full {
+  width: 1.5rem;
+  height: 1.5rem;
+  min-width: 1.5rem;
+  min-height: 1.5rem;
+  border-width: 2.5px;
+  border-color: #64748b;
+}
+.role-perm-page .perm-cb.perm-cb--full:checked {
+  background-color: #1d4ed8;
+  border-color: #1e3a8a;
+  box-shadow:
+    0 3px 10px rgba(29, 78, 216, .3),
+    0 0 0 5px var(--perm-ring-full);
+}
+.role-perm-page .perm-cb.perm-danger:checked {
+  background-color: #dc2626;
+  border-color: #b91c1c;
+  box-shadow:
+    0 2px 8px rgba(220, 38, 38, .28),
+    0 0 0 4px var(--perm-ring-danger);
+}
+.role-perm-page .perm-cb.perm-danger:checked:hover,
+.role-perm-page .perm-other-label:hover .perm-cb.perm-danger:checked {
+  box-shadow:
+    0 3px 10px rgba(220, 38, 38, .32),
+    0 0 0 5px var(--perm-ring-danger),
+    0 0 0 9px rgba(220, 38, 38, .12);
+}
+.role-perm-page .perm-cb-tile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.65rem;
+  min-height: 2.65rem;
+  padding: .4rem;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background .2s ease, border-color .2s ease, box-shadow .2s ease;
+}
+.role-perm-page .perm-cb-tile:hover {
+  background: rgba(241, 245, 249, .9);
+}
+.role-perm-page .perm-cb-tile:has(.perm-cb:checked) {
+  background: rgba(239, 246, 255, .95);
+}
+.role-perm-page .perm-cb-tile:has(.perm-cb:indeterminate) {
+  background: rgba(245, 243, 255, .95);
+}
+.role-perm-page .perm-other-label {
+  display: inline-flex;
+  align-items: center;
+  gap: .55rem;
+  margin: 0 .5rem .4rem 0;
+  padding: .4rem .6rem;
+  font-size: .82rem;
+  font-weight: 500;
+  cursor: pointer;
+  user-select: none;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: #fafbfc;
+  transition: background .2s ease, border-color .2s ease, color .2s ease, box-shadow .2s ease;
+}
+.role-perm-page .perm-other-label:hover {
+  color: #1d4ed8;
+  border-color: #bfdbfe;
+  background: #f8fafc;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, .1);
+}
+.role-perm-page .perm-other-label:has(.perm-cb:checked) {
+  background: #eff6ff;
+  border-color: #93c5fd;
+  color: #1e40af;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, .14);
+}
+.role-perm-page .perm-other-label.flex-column {
+  margin: 0 auto .35rem;
+  font-size: .76rem;
+  text-align: center;
+  min-width: 4.75rem;
+}
+.role-perm-page .perm-other-label.flex-column span { line-height: 1.25; }
+.role-perm-page .perm-other-label.label-danger:hover {
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, .1);
+}
+.role-perm-page .perm-other-label.label-danger:has(.perm-cb:checked) {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #b91c1c;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, .14);
+}
+.role-perm-page .label-danger { color: #dc2626 !important; font-weight: 600 !important; }
+.role-perm-page .perm-highlight td { background: #fefce8 !important; }
+.role-perm-page .section-count { font-size: .75rem; color: #64748b; }
+.role-perm-page .btn-xs { padding: 2px 8px; font-size: .7rem; font-weight: 600; border-radius: 999px; }
+.role-perm-page #sectionTabs .section-tab-btn {
+  font-size: .72rem;
+  padding: 3px 10px;
+  border-radius: 999px;
+}
+.role-perm-page #sectionTabs .section-tab-btn.active {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+}
+.role-perm-page #selectedCount {
+  font-size: .78rem;
+  font-weight: 600;
+  color: #475569;
 }
 </style>
 {% endblock %}
@@ -102,15 +349,14 @@ tr.perm-matrix-page-row.perm-highlight td { box-shadow: inset 0 0 0 999px rgba(2
 
 {% from 'partials/nav_back_button.html' import nav_back_button with context %}
 <div class="mb-2">{{ nav_back_button() }}</div>
-<div class="container-fluid">
-  <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
+
+<div class="container-fluid role-perm-page px-2 px-md-3">
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
     <div>
-      <h2 class="mb-1">
+      <h2 class="mb-1 h4">
         <i class="bi bi-shield-plus me-2 text-primary"></i>{{ 'Edit Role' if role else 'Add Role' }}
       </h2>
-      <p class="text-muted small mb-0">
-        Role ka naam / description select karein, phir neeche se sections ke hisaab se permissions choose karein.
-      </p>
+      <p class="text-muted small mb-0">Role details set karein, phir neeche matrix se permissions choose karein.</p>
     </div>
     <a href="{{ url_for('role_list') }}" class="btn btn-outline-secondary btn-sm">
       <i class="bi bi-arrow-left me-1"></i>Back to Roles
@@ -129,197 +375,232 @@ tr.perm-matrix-page-row.perm-highlight td { box-shadow: inset 0 0 0 999px rgba(2
   {% set _mro = master_role_matrix_read_only|default(false) %}
   {% if _mro %}
   <div class="alert alert-info border-0 shadow-sm mb-3">
-    <i class="bi bi-eye me-2"></i><strong>View only:</strong> Master login sirf <strong>Admin</strong> role ki permissions change kar sakta hai. Baqi roles / naye role yahan sirf dekh sakte hain — save / naya role <strong>Admin</strong> karega.
+    <i class="bi bi-eye me-2"></i><strong>View only:</strong> Master login sirf <strong>Admin</strong> role ki permissions change kar sakta hai.
   </div>
   {% endif %}
 
   {% set selected_perm_ids = (role.permissions | map(attribute='id') | list) if role and role.permissions else [] %}
-  {% macro perm_matrix_cell(cell, section_label, page_label, uid) %}
+
+  {# Compact cell: View / Add / Edit / Delete — prominent tile checkbox #}
+  {% macro perm_matrix_cell_compact(cell, section_label, page_label, uid) %}
     {% if cell %}
       {% set is_full = '(full)' in cell.name %}
       {% set input_id = ('perm-' ~ uid ~ '-' ~ cell.id)|replace(' ','_')|replace('/','_')|replace('.','_')|replace(':','_')|replace('(','')|replace(')','') %}
-      <div class="form-check perm-item {% if is_full %}perm-full-cb{% endif %} justify-content-center text-start" style="min-height:auto;margin:0 0 6px 0;">
-        <input type="checkbox" name="permission_ids" value="{{ cell.id }}" class="form-check-input perm-cb" id="{{ input_id }}"
+      <label class="perm-cb-tile" for="{{ input_id }}" title="{{ cell.name }}">
+        <input type="checkbox" name="permission_ids" value="{{ cell.id }}"
+          class="perm-cb{% if is_full %} perm-cb--full{% endif %}{% if cell.code and cell.code.endswith('_delete') %} perm-danger{% endif %}" id="{{ input_id }}"
           data-code="{{ cell.code }}" data-section="{{ section_label }}" data-page="{{ page_label }}"
           {% if is_full %}data-full="1"{% endif %}
           {% if cell.id in selected_perm_ids %}checked{% endif %}
           {% if _mro %}disabled{% endif %}>
-        <label class="form-check-label small{% if cell.code and cell.code.endswith('_delete') %} label-danger{% endif %}" for="{{ input_id }}">{{ cell.name }}</label>
-      </div>
+      </label>
     {% else %}
-      <span class="text-muted small">—</span>
+      <span class="text-muted">-</span>
+    {% endif %}
+  {% endmacro %}
+
+  {# Labeled checkbox — Other column only #}
+  {% macro perm_matrix_cell_other(cell, section_label, page_label, uid) %}
+    {% if cell %}
+      {% set is_full = '(full)' in cell.name %}
+      {% set input_id = ('perm-' ~ uid ~ '-' ~ cell.id)|replace(' ','_')|replace('/','_')|replace('.','_')|replace(':','_')|replace('(','')|replace(')','') %}
+      <label class="perm-other-label{% if cell.code and cell.code.endswith('_delete') %} label-danger{% endif %}" for="{{ input_id }}">
+        <input type="checkbox" name="permission_ids" value="{{ cell.id }}"
+          class="perm-cb{% if is_full %} perm-cb--full{% endif %}{% if cell.code and cell.code.endswith('_delete') %} perm-danger{% endif %}" id="{{ input_id }}"
+          data-code="{{ cell.code }}" data-section="{{ section_label }}" data-page="{{ page_label }}"
+          {% if is_full %}data-full="1"{% endif %}
+          {% if cell.id in selected_perm_ids %}checked{% endif %}
+          {% if _mro %}disabled{% endif %}>
+        <span>{{ cell.name }}</span>
+      </label>
     {% endif %}
   {% endmacro %}
 
   <form method="POST" action="" id="role-permission-form">
     {{ form.hidden_tag() }}
-    <input type="hidden" name="role_form_template_version" value="role_form_v7_submit_and_matrix_scope" />
+    <input type="hidden" name="role_form_template_version" value="role_form_v11_compact_import_export_print" />
     {% if role %}<input type="hidden" name="post_id" value="0" />{% endif %}
     {% if _mro %}<fieldset disabled class="border-0 p-0 m-0">{% endif %}
-    <div class="row">
-      <!-- Role basics -->
-      <div class="col-lg-5 col-xl-4 mb-4">
-        <div class="card shadow-sm border-0 rounded-3 h-100">
-          <div class="card-body">
-            <h6 class="text-uppercase text-muted fw-bold small mb-3">Role Details</h6>
-            {% if not role %}
-            <div class="mb-3">
-              {{ form.post_id.label(class="form-label fw-semibold") }}
-              {{ form.post_id(class="form-select search-select" + (" is-invalid" if form.post_id.errors else "")) }}
-              <small class="text-muted d-block mt-1">Employee Posts se post search karein, role ka naam auto set ho jayega.</small>
-              {% for e in form.post_id.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
+
+    <!-- Role details -->
+    <div class="card shadow-sm border-0 rounded-3 mb-3">
+      <div class="card-body py-3">
+        <h6 class="text-uppercase text-muted fw-bold small mb-3">Role Details</h6>
+        <div class="row g-3">
+          {% if not role %}
+          <div class="col-md-6">
+            {{ form.post_id.label(class="form-label fw-semibold") }}
+            {{ form.post_id(class="form-select search-select" + (" is-invalid" if form.post_id.errors else "")) }}
+            <small class="text-muted">Employee Post se role naam auto set hoga.</small>
+            {% for e in form.post_id.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
+          </div>
+          <div class="col-md-6">
+            {{ form.description.label(class="form-label fw-semibold") }}
+            {{ form.description(class="form-control", rows="2") }}
+          </div>
+          {% else %}
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Role Name</label>
+            <div class="form-control-plaintext fw-bold py-0">{{ role.name }}</div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Description</label>
+            <div class="form-control-plaintext py-0">{{ role.description or '-' }}</div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Permission matrix (Freeze Matrix layout) -->
+    <div class="card shadow-sm border-0 rounded-3 mb-3">
+      <div class="card-body">
+        <div class="alert alert-light border small mb-0 perm-matrix-wrap">
+          <div class="fw-semibold mb-1"><i class="bi bi-grid-3x3-gap me-1"></i>Per Role Permission Matrix</div>
+          <div class="text-muted mb-2">Tick = access allow. Columns: View, Add, Edit, Delete, Import, Export, Print/Preview, Other. Dependencies auto apply.</div>
+
+          <div class="row g-2 mb-2 align-items-center">
+            <div class="col-md-8 col-lg-6">
+              <input type="text" id="permissionSearch" class="form-control form-control-sm"
+                     placeholder="Search permissions (real-time, multi-word) e.g. task pending delete"
+                     autocomplete="off">
             </div>
-            <div class="mb-3">
-              {{ form.description.label(class="form-label fw-semibold") }}
-              {{ form.description(class="form-control", rows="2") }}
-              <small class="text-muted d-block mt-1">Short description taake baad mein samajhna asaan ho.</small>
+            <div class="col-md-4 col-lg-6 d-flex align-items-center flex-wrap gap-2">
+              <span id="permissionSearchMeta" class="text-muted small">Showing all permissions</span>
+              <span id="selectedCount" class="ms-auto">0 selected</span>
+            </div>
+          </div>
+
+          {% if permission_tree %}
+          <div class="d-flex flex-wrap gap-1 mb-2 pb-2 border-bottom" id="sectionTabs">
+            {% for section_label, pages in permission_tree %}
+            <button type="button" class="btn btn-outline-primary btn-sm section-tab-btn"
+                    data-section="{{ section_label }}"
+                    onclick="scrollToSection('{{ section_label|replace("'","") }}')">
+              {{ section_label }}
+            </button>
+            {% endfor %}
+          </div>
+          {% endif %}
+
+          <div id="permissionsBody">
+            {% if permission_matrix %}
+            <div class="table-responsive">
+              <table class="table table-sm table-bordered align-middle mb-0 perm-matrix-table">
+                <thead class="table-light">
+                  <tr>
+                    <th class="th-feature">
+                      <div class="perm-feature-col-head">
+                        <span class="perm-feature-head-label">
+                          <i class="bi bi-folder2-open" aria-hidden="true"></i>Form / Feature
+                        </span>
+                        <span class="perm-feature-head-hint">Module &amp; screen name</span>
+                      </div>
+                    </th>
+                    <th class="text-center th-action" style="width: 72px;"><i class="bi bi-eye" aria-hidden="true"></i>View</th>
+                    <th class="text-center th-action" style="width: 72px;"><i class="bi bi-plus-lg" aria-hidden="true"></i>Add</th>
+                    <th class="text-center th-action" style="width: 72px;"><i class="bi bi-pencil" aria-hidden="true"></i>Edit</th>
+                    <th class="text-center th-action" style="width: 72px;"><i class="bi bi-trash" aria-hidden="true"></i>Delete</th>
+                    <th class="text-center th-action" style="width: 72px;"><i class="bi bi-box-arrow-in-down" aria-hidden="true"></i>Import</th>
+                    <th class="text-center th-action" style="width: 72px;"><i class="bi bi-box-arrow-up" aria-hidden="true"></i>Export</th>
+                    <th class="text-center th-action" style="width: 72px;"><i class="bi bi-printer" aria-hidden="true"></i>Print</th>
+                    <th class="th-action" style="width: 24%;"><i class="bi bi-three-dots" aria-hidden="true"></i>Other</th>
+                  </tr>
+                </thead>
+                <tbody id="permMatrixBody">
+                  {% for row in permission_matrix %}
+                    {% if row.type == 'section' %}
+                    <tr class="perm-matrix-section-row"
+                        id="sec-{{ row.label|replace(' ','_')|replace('/','_') }}"
+                        data-section="{{ row.label }}">
+                      <td colspan="9">
+                        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                          <span class="section-title">{{ row.label }}</span>
+                          <div class="d-flex align-items-center gap-2">
+                            <span class="section-count">0 / 0</span>
+                            <button type="button" class="btn btn-outline-success btn-xs section-select-all" data-section="{{ row.label }}">
+                              <i class="bi bi-check-all"></i> All
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary btn-xs section-clear-all" data-section="{{ row.label }}">
+                              <i class="bi bi-x-circle"></i> None
+                            </button>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                    {% elif row.type == 'page' %}
+                    {% set c = row.cells %}
+                    {% set other_txt = (c.other | map(attribute='name') | join(' ')) if c.other else '' %}
+                    {% set print_txt = (c.col_print | map(attribute='name') | join(' ')) if c.col_print else '' %}
+                    {% set search_blob = row.section_label ~ ' ' ~ row.page_label ~ ' ' ~ (c.full.name if c.full else '') ~ ' ' ~ (c.list.name if c.list else '') ~ ' ' ~ (c.add.name if c.add else '') ~ ' ' ~ (c.edit.name if c.edit else '') ~ ' ' ~ (c.delete.name if c.delete else '') ~ ' ' ~ (c.col_import.name if c.col_import else '') ~ ' ' ~ (c.col_export.name if c.col_export else '') ~ ' ' ~ print_txt ~ ' ' ~ other_txt %}
+                    <tr class="perm-matrix-page-row"
+                        data-section="{{ row.section_label }}"
+                        data-page="{{ row.page_label }}"
+                        data-search="{{ search_blob|lower|e }}">
+                      <td class="perm-feature-cell">
+                        <div class="perm-feature-name-wrap">
+                          <span class="perm-feature-dot" aria-hidden="true"></span>
+                          <span class="perm-feature-name">{{ row.page_label }}</span>
+                        </div>
+                      </td>
+                      <td class="text-center">
+                        {% if c.full %}{{ perm_matrix_cell_compact(c.full, row.section_label, row.page_label, row.section_label ~ '-' ~ row.page_label ~ '-full') }}{% endif %}
+                        {% if c.list %}{% if c.full %}<br>{% endif %}{{ perm_matrix_cell_compact(c.list, row.section_label, row.page_label, row.section_label ~ '-' ~ row.page_label ~ '-list') }}{% endif %}
+                        {% if not c.full and not c.list %}<span class="text-muted">-</span>{% endif %}
+                      </td>
+                      <td class="text-center">{{ perm_matrix_cell_compact(c.add, row.section_label, row.page_label, row.section_label ~ '-' ~ row.page_label ~ '-add') }}</td>
+                      <td class="text-center">{{ perm_matrix_cell_compact(c.edit, row.section_label, row.page_label, row.section_label ~ '-' ~ row.page_label ~ '-edit') }}</td>
+                      <td class="text-center">{{ perm_matrix_cell_compact(c.delete, row.section_label, row.page_label, row.section_label ~ '-' ~ row.page_label ~ '-delete') }}</td>
+                      <td class="text-center">{{ perm_matrix_cell_compact(c.col_import, row.section_label, row.page_label, row.section_label ~ '-' ~ row.page_label ~ '-import') }}</td>
+                      <td class="text-center">{{ perm_matrix_cell_compact(c.col_export, row.section_label, row.page_label, row.section_label ~ '-' ~ row.page_label ~ '-export') }}</td>
+                      <td class="text-center">
+                        {% if c.col_print %}
+                          {% for cell in c.col_print %}
+                            {% if not loop.first %}<br>{% endif %}
+                            {{ perm_matrix_cell_compact(cell, row.section_label, row.page_label, row.section_label ~ '-' ~ row.page_label ~ '-print-' ~ loop.index) }}
+                          {% endfor %}
+                        {% else %}
+                          <span class="text-muted">-</span>
+                        {% endif %}
+                      </td>
+                      <td>
+                        {% if c.other %}
+                          {% for cell in c.other %}
+                            {{ perm_matrix_cell_other(cell, row.section_label, row.page_label, row.section_label ~ '-' ~ row.page_label ~ '-other-' ~ loop.index) }}
+                          {% endfor %}
+                        {% else %}
+                          <span class="text-muted">-</span>
+                        {% endif %}
+                      </td>
+                    </tr>
+                    {% endif %}
+                  {% endfor %}
+                  <tr id="permMatrixNoResults" class="d-none">
+                    <td colspan="9" class="text-center text-muted py-2">No permission matched your search.</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
             {% else %}
-            <div class="mb-3">
-              <label class="form-label fw-semibold">Role Name</label>
-              <div class="form-control-plaintext fw-bold">{{ role.name }}</div>
-            </div>
-            <div class="mb-3">
-              <label class="form-label fw-semibold">Description</label>
-              <div class="form-control-plaintext">{{ role.description or '-' }}</div>
-            </div>
+            <p class="text-muted small mb-0">No permissions loaded. Run app once so permissions are seeded.</p>
             {% endif %}
           </div>
         </div>
       </div>
-    </div>
 
-    <div class="row">
-      <!-- Permissions matrix (full width table, Freeze Control–style) -->
-      <div class="col-12">
-      <div class="card shadow-sm border-0 rounded-3 mb-3">
-        <!-- Header: search + count -->
-        <div class="card-body border-bottom pb-3">
-          <div class="d-flex flex-wrap justify-content-between align-items-start gap-2">
-            <div>
-              <h6 class="text-uppercase text-muted fw-bold small mb-1">Permissions</h6>
-              <p class="text-muted small mb-0">
-                Har row ek <strong>page / feature</strong> hai — columns <strong>View / List</strong>, <strong>Add</strong>, <strong>Edit</strong>, <strong>Delete</strong>, <strong>Other</strong> (Enterprise Freeze Data jaisa matrix). Dependencies auto apply hoti hain.
-              </p>
-            </div>
-            <div class="d-flex align-items-center gap-2 flex-wrap">
-              <span id="selectedCount">0 selected</span>
-              <div style="min-width:230px;">
-                <div class="input-group input-group-sm">
-                  <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
-                  <input type="text" id="permissionSearch" class="form-control border-start-0 ps-0"
-                         placeholder="Search sections / pages / actions..." autocomplete="off">
-                  <button class="btn btn-outline-secondary btn-sm" type="button" id="permSearchClear" title="Clear search" style="display:none;">
-                    <i class="bi bi-x"></i>
-                  </button>
-                </div>
-              </div>
-            </div>
+      <div class="card-footer bg-light border-0 d-flex flex-wrap justify-content-between align-items-center gap-2 py-3">
+        <div class="text-muted small">Dependencies automatically handle base permissions.</div>
+        <div class="text-end">
+          <div id="dangerSummary" class="text-danger small fw-semibold d-none mb-1">
+            <i class="bi bi-exclamation-triangle-fill me-1"></i>
+            <span id="dangerSummaryText"></span>
           </div>
-        </div>
-
-        <!-- Section tabs (quick-jump) -->
-        <div class="px-3 pt-2 pb-1 border-bottom d-flex flex-wrap gap-1" id="sectionTabs">
-          {% for section_label, pages in permission_tree %}
-          <button type="button" class="btn btn-outline-primary btn-sm rounded-pill section-tab-btn"
-                  style="font-size:0.72rem;padding:3px 10px;"
-                  onclick="scrollToSection('{{ section_label|replace("'","") }}')">
-            {{ section_label }}
-          </button>
-          {% endfor %}
-        </div>
-
-        <div class="card-body p-0" id="permissionsBody">
-          {% if permission_matrix %}
-          <div class="table-responsive">
-            <table class="table table-sm table-bordered align-middle mb-0 perm-matrix-table">
-              <thead class="table-light">
-                <tr>
-                  <th style="min-width: 180px;">Form / Feature</th>
-                  <th class="text-center" style="width: 11%;">View / List</th>
-                  <th class="text-center" style="width: 9%;">Add</th>
-                  <th class="text-center" style="width: 9%;">Edit</th>
-                  <th class="text-center" style="width: 9%;">Delete</th>
-                  <th style="min-width: 220px;">Other</th>
-                </tr>
-              </thead>
-              <tbody id="permMatrixBody">
-                {% for row in permission_matrix %}
-                  {% if row.type == 'section' %}
-                  <tr class="table-secondary perm-matrix-section-row border-top border-2"
-                      id="sec-{{ row.label|replace(' ','_')|replace('/','_') }}"
-                      data-section="{{ row.label }}">
-                    <td colspan="6" class="bg-body-secondary py-2">
-                      <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 px-1">
-                        <span class="fw-bold text-primary">{{ row.label }}</span>
-                        <div class="d-flex align-items-center gap-2">
-                          <span class="section-count small text-muted">0 / 0</span>
-                          <button type="button" class="btn btn-outline-success btn-xs section-select-all" data-section="{{ row.label }}">
-                            <i class="bi bi-check-all"></i> All
-                          </button>
-                          <button type="button" class="btn btn-outline-secondary btn-xs section-clear-all" data-section="{{ row.label }}">
-                            <i class="bi bi-x-circle"></i> None
-                          </button>
-                        </div>
-                      </div>
-                    </td>
-                  </tr>
-                  {% elif row.type == 'page' %}
-                  {% set c = row.cells %}
-                  {% set other_txt = (c.other | map(attribute='name') | join(' ')) if c.other else '' %}
-                  {% set search_blob = row.section_label ~ ' ' ~ row.page_label ~ ' ' ~ (c.full.name if c.full else '') ~ ' ' ~ (c.list.name if c.list else '') ~ ' ' ~ (c.add.name if c.add else '') ~ ' ' ~ (c.edit.name if c.edit else '') ~ ' ' ~ (c.delete.name if c.delete else '') ~ ' ' ~ other_txt %}
-                  <tr class="perm-matrix-page-row"
-                      data-section="{{ row.section_label }}"
-                      data-page="{{ row.page_label }}"
-                      data-search="{{ search_blob|lower|e }}">
-                    <td class="fw-semibold small">{{ row.page_label }}</td>
-                    <td class="text-center align-top small py-2">
-                      {% if c.full %}{{ perm_matrix_cell(c.full, row.section_label, row.page_label, row.section_label ~ '-' ~ row.page_label ~ '-full') }}{% endif %}
-                      {% if c.list %}{{ perm_matrix_cell(c.list, row.section_label, row.page_label, row.section_label ~ '-' ~ row.page_label ~ '-list') }}{% endif %}
-                      {% if not c.full and not c.list %}<span class="text-muted small">—</span>{% endif %}
-                    </td>
-                    <td class="text-center align-top small py-2">{{ perm_matrix_cell(c.add, row.section_label, row.page_label, row.section_label ~ '-' ~ row.page_label ~ '-add') }}</td>
-                    <td class="text-center align-top small py-2">{{ perm_matrix_cell(c.edit, row.section_label, row.page_label, row.section_label ~ '-' ~ row.page_label ~ '-edit') }}</td>
-                    <td class="text-center align-top small py-2">{{ perm_matrix_cell(c.delete, row.section_label, row.page_label, row.section_label ~ '-' ~ row.page_label ~ '-delete') }}</td>
-                    <td class="align-top small py-2">
-                      {% if c.other %}
-                        {% for cell in c.other %}
-                          {{ perm_matrix_cell(cell, row.section_label, row.page_label, row.section_label ~ '-' ~ row.page_label ~ '-other-' ~ loop.index) }}
-                        {% endfor %}
-                      {% else %}
-                        <span class="text-muted small">—</span>
-                      {% endif %}
-                    </td>
-                  </tr>
-                  {% endif %}
-                {% endfor %}
-                <tr id="permMatrixNoResults" class="d-none">
-                  <td colspan="6" class="text-center text-muted py-3">Koi permission match nahi hui — search clear kar ke dubara try karein.</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          {% else %}
-          <div class="p-4"><p class="text-muted small mb-0">No permissions loaded. Run app once so permissions are seeded.</p></div>
-          {% endif %}
-        </div>
-
-        <div class="card-footer bg-light border-0 d-flex flex-wrap justify-content-between align-items-center gap-2 py-3">
-          <div class="text-muted small">
-            Dependencies automatically handle base permissions (List/View &rarr; Add/Edit/Delete).
-          </div>
-          <div class="text-end">
-            <div id="dangerSummary" class="text-danger small fw-semibold d-none mb-1">
-              <i class="bi bi-exclamation-triangle-fill me-1"></i>
-              <span id="dangerSummaryText"></span>
-            </div>
-            {{ form.submit(class="btn btn-primary") }}
-            <a href="{{ url_for('role_list') }}" class="btn btn-outline-secondary ms-2">Cancel</a>
-          </div>
+          {{ form.submit(class="btn btn-primary") }}
+          <a href="{{ url_for('role_list') }}" class="btn btn-outline-secondary ms-2">Cancel</a>
         </div>
       </div>
     </div>
-    </div>
+
   {% if _mro %}</fieldset>{% endif %}
   </form>
 </div>
@@ -330,17 +611,15 @@ tr.perm-matrix-page-row.perm-highlight td { box-shadow: inset 0 0 0 999px rgba(2
   var form = document.getElementById('role-permission-form');
   if (!form) return;
   var matrixBody = document.getElementById('permMatrixBody');
-  /* Prefer matrix tbody so we never index stray .perm-cb outside the table (future-proof). */
   var indexRoot = matrixBody || form;
   var deps = {{ permission_dependencies | tojson | safe }};
-  var codeToId  = {};   // code -> first checkbox element
-  var codeToCbs = {};   // code -> checkbox elements[]
-  var valueToCbs = {};  // permission_id(value) -> checkbox elements[]
-  var sections  = {};   // section_label -> [all cb in section]
-  var sectionFull = {}; // section_label -> full-cb element
-  var sectionCountEl = {}; // section_label -> counter span
+  var codeToId  = {};
+  var codeToCbs = {};
+  var valueToCbs = {};
+  var sections  = {};
+  var sectionFull = {};
+  var sectionCountEl = {};
 
-  /* ── Index all checkboxes ── */
   indexRoot.querySelectorAll('input.perm-cb[type="checkbox"]').forEach(function(cb) {
     var code    = cb.getAttribute('data-code');
     var section = cb.getAttribute('data-section') || '';
@@ -351,8 +630,6 @@ tr.perm-matrix-page-row.perm-highlight td { box-shadow: inset 0 0 0 999px rgba(2
     if (!valueToCbs[val]) valueToCbs[val] = [];
     valueToCbs[val].push(cb);
     if (!sections[section]) sections[section] = [];
-    /* One logical row per permission id per section: duplicate matrix cells must not inflate
-       "all children checked" counts (else section-full stays checked and keeps re-ticking). */
     var isFullCb = cb.getAttribute('data-full') === '1';
     if (isFullCb) {
       sections[section].push(cb);
@@ -365,25 +642,21 @@ tr.perm-matrix-page-row.perm-highlight td { box-shadow: inset 0 0 0 999px rgba(2
     if (cb.getAttribute('data-full') === '1') {
       sectionFull[section] = cb;
     }
-    /* Style delete-level */
     if (code && code.endsWith('_delete')) {
       cb.classList.add('perm-danger');
-      var lbl = cb.closest('.perm-item') && cb.closest('.perm-item').querySelector('label');
+      var lbl = cb.closest('.perm-other-label');
       if (lbl) lbl.classList.add('label-danger');
     }
   });
 
-  /* ── Map section counter spans (table section header rows) ── */
   document.querySelectorAll('.perm-matrix-section-row').forEach(function(el) {
     var sec  = el.getAttribute('data-section');
     var cnt  = el.querySelector('.section-count');
     if (sec && cnt) sectionCountEl[sec] = cnt;
   });
 
-  /* ── Dependency helpers ── */
   function setCodeChecked(code, checked) {
-    var list = codeToCbs[code] || [];
-    list.forEach(function(cb) {
+    (codeToCbs[code] || []).forEach(function(cb) {
       cb.checked = !!checked;
       if (!checked) cb.indeterminate = false;
     });
@@ -394,8 +667,7 @@ tr.perm-matrix-page-row.perm-highlight td { box-shadow: inset 0 0 0 999px rgba(2
     if (!required || !required.length) return;
     required.forEach(function(reqCode) {
       var reqList = codeToCbs[reqCode] || [];
-      var anyChecked = reqList.some(function(c) { return c.checked; });
-      if (reqList.length && !anyChecked) {
+      if (reqList.length && !reqList.some(function(c) { return c.checked; })) {
         setCodeChecked(reqCode, true);
         ensureDependencies(reqCode);
       }
@@ -406,8 +678,7 @@ tr.perm-matrix-page-row.perm-highlight td { box-shadow: inset 0 0 0 999px rgba(2
     Object.keys(deps).forEach(function(permCode) {
       if ((deps[permCode] || []).indexOf(code) !== -1) {
         var depList = codeToCbs[permCode] || [];
-        var anyChecked = depList.some(function(c) { return c.checked; });
-        if (anyChecked) {
+        if (depList.some(function(c) { return c.checked; })) {
           setCodeChecked(permCode, false);
           uncheckDependents(permCode);
         }
@@ -415,64 +686,42 @@ tr.perm-matrix-page-row.perm-highlight td { box-shadow: inset 0 0 0 999px rgba(2
     });
   }
 
-  /* Same permission id may appear in multiple matrix cells — keep DOM copies aligned after programmatic toggles. */
   function syncValueDupes(cb) {
     if (!cb || !cb.value) return;
     (valueToCbs[cb.value] || []).forEach(function(o) {
-      if (o !== cb) {
-        o.checked = cb.checked;
-        o.indeterminate = false;
-      }
+      if (o !== cb) { o.checked = cb.checked; o.indeterminate = false; }
     });
   }
 
-  /* ── Sync section "full" checkbox state + indeterminate ── */
   function syncSectionFull(section) {
     var fullCb = sectionFull[section];
     var list   = sections[section] || [];
     if (!fullCb) return;
-
     var children = list.filter(function(cb) { return cb !== fullCb; });
     if (!children.length) return;
-
-    var checkedCount = children.filter(function(cb) { return cb.checked; }).length;
-
-    if (checkedCount === 0) {
-      fullCb.checked       = false;
-      fullCb.indeterminate = false;
-    } else if (checkedCount === children.length) {
-      fullCb.checked       = true;
-      fullCb.indeterminate = false;
-    } else {
-      fullCb.checked       = false;
-      fullCb.indeterminate = true;   /* ← the "minus" state */
-    }
+    var n = children.filter(function(cb) { return cb.checked; }).length;
+    if (n === 0) { fullCb.checked = false; fullCb.indeterminate = false; }
+    else if (n === children.length) { fullCb.checked = true; fullCb.indeterminate = false; }
+    else { fullCb.checked = false; fullCb.indeterminate = true; }
   }
 
-  /* ── Section counter ── */
   function updateSectionCount(section) {
     var list = sections[section] || [];
     var fullCb = sectionFull[section];
     var children = list.filter(function(cb) { return cb !== fullCb; });
-    var total   = children.length;
-    var checked = children.filter(function(cb) { return cb.checked; }).length;
     var el = sectionCountEl[section];
-    if (el) el.textContent = checked + ' / ' + total;
+    if (el) el.textContent = children.filter(function(cb) { return cb.checked; }).length + ' / ' + children.length;
   }
 
-  /* ── Global selected counter (unique permission ids; avoids double-counting matrix duplicates) ── */
   function updateTotalCount() {
     var seen = {};
     indexRoot.querySelectorAll('input.perm-cb[type="checkbox"]:checked').forEach(function(cb) {
-      if (cb.disabled || !cb.value) return;
-      seen[cb.value] = true;
+      if (!cb.disabled && cb.value) seen[cb.value] = true;
     });
-    var total = Object.keys(seen).length;
     var el = document.getElementById('selectedCount');
-    if (el) el.textContent = total + ' selected';
+    if (el) el.textContent = Object.keys(seen).length + ' selected';
   }
 
-  /* ── Danger summary ── */
   function updateDangerSummary() {
     var count = 0;
     Object.keys(codeToId).forEach(function(code) {
@@ -489,7 +738,6 @@ tr.perm-matrix-page-row.perm-highlight td { box-shadow: inset 0 0 0 999px rgba(2
     }
   }
 
-  /* ── Run all sync functions for a section ── */
   function syncSection(section) {
     syncSectionFull(section);
     updateSectionCount(section);
@@ -497,16 +745,12 @@ tr.perm-matrix-page-row.perm-highlight td { box-shadow: inset 0 0 0 999px rgba(2
     updateDangerSummary();
   }
 
-  /* ── Initialise on load ── */
   Object.keys(sections).forEach(function(section) { syncSection(section); });
 
-  /* Before POST: every matrix cell for the same id must be checked to count as on (fixes ghost ticks). */
   function collatePermissionIdsForSubmit() {
     var selected = {};
-    var root = matrixBody || form;
-    if (!root) return selected;
     var groups = {};
-    root.querySelectorAll('input.perm-cb[type="checkbox"]').forEach(function(cb) {
+    (matrixBody || form).querySelectorAll('input.perm-cb[type="checkbox"]').forEach(function(cb) {
       if (cb.disabled || !cb.value) return;
       if (!groups[cb.value]) groups[cb.value] = [];
       groups[cb.value].push(cb);
@@ -514,37 +758,23 @@ tr.perm-matrix-page-row.perm-highlight td { box-shadow: inset 0 0 0 999px rgba(2
     Object.keys(groups).forEach(function(v) {
       var list = groups[v];
       var allOn = list.length > 0 && list.every(function(x) { return x.checked; });
-      list.forEach(function(x) {
-        x.checked = allOn;
-        x.indeterminate = false;
-      });
-      (valueToCbs[v] || []).forEach(function(x) {
-        x.checked = allOn;
-        x.indeterminate = false;
-      });
+      list.forEach(function(x) { x.checked = allOn; x.indeterminate = false; });
+      (valueToCbs[v] || []).forEach(function(x) { x.checked = allOn; x.indeterminate = false; });
       if (allOn) selected[v] = true;
     });
     return selected;
   }
 
-  /* ── Main change handler ── */
   form.addEventListener('change', function(ev) {
     if (!ev.target.classList.contains('perm-cb')) return;
-
-    var cb      = ev.target;
-    var code    = cb.getAttribute('data-code');
+    var cb = ev.target;
+    var code = cb.getAttribute('data-code');
     var section = cb.getAttribute('data-section') || '';
-    var isFull  = cb.getAttribute('data-full') === '1';
-    // Keep duplicate instances of the same permission id in sync.
+    var isFull = cb.getAttribute('data-full') === '1';
     (valueToCbs[cb.value] || []).forEach(function(other) {
-      if (other !== cb) {
-        other.checked = cb.checked;
-        other.indeterminate = false;
-      }
+      if (other !== cb) { other.checked = cb.checked; other.indeterminate = false; }
     });
-
     if (isFull) {
-      /* Full checkbox clicked: check/uncheck all siblings in section */
       var list = sections[section] || [];
       if (cb.checked) {
         cb.indeterminate = false;
@@ -570,23 +800,14 @@ tr.perm-matrix-page-row.perm-highlight td { box-shadow: inset 0 0 0 999px rgba(2
       updateDangerSummary();
       return;
     }
-
-    /* Child permission toggled */
-    if (cb.checked) {
-      ensureDependencies(code);
-    } else {
-      uncheckDependents(code);
-    }
-
+    if (cb.checked) ensureDependencies(code);
+    else uncheckDependents(code);
     syncSection(section);
   });
 
-  // Submit: matrix-scoped AND across duplicate cells, then unique hidden permission_ids.
   form.addEventListener('submit', function() {
     var selected = collatePermissionIdsForSubmit();
-    form.querySelectorAll('input[name="permission_ids"]').forEach(function(inp) {
-      inp.removeAttribute('name');
-    });
+    form.querySelectorAll('input[name="permission_ids"]').forEach(function(inp) { inp.removeAttribute('name'); });
     form.querySelectorAll('.perm-cb-hidden').forEach(function(n) { n.remove(); });
     Object.keys(selected).forEach(function(v) {
       var h = document.createElement('input');
@@ -603,15 +824,13 @@ tr.perm-matrix-page-row.perm-highlight td { box-shadow: inset 0 0 0 999px rgba(2
       mark.name = 'role_form_submit_marker';
       form.appendChild(mark);
     }
-    mark.value = 'submit_v7_matrix_and_submit_scope';
+    mark.value = 'submit_v10_import_export_print_cols';
   }, true);
 
-  /* ── "Select All" / "None" buttons ── */
   document.querySelectorAll('.section-select-all').forEach(function(btn) {
     btn.addEventListener('click', function() {
-      var sec  = btn.getAttribute('data-section');
-      var list = sections[sec] || [];
-      list.forEach(function(cb) {
+      var sec = btn.getAttribute('data-section');
+      (sections[sec] || []).forEach(function(cb) {
         if (!cb.checked) {
           cb.checked = true;
           ensureDependencies(cb.getAttribute('data-code'));
@@ -624,9 +843,8 @@ tr.perm-matrix-page-row.perm-highlight td { box-shadow: inset 0 0 0 999px rgba(2
 
   document.querySelectorAll('.section-clear-all').forEach(function(btn) {
     btn.addEventListener('click', function() {
-      var sec  = btn.getAttribute('data-section');
-      var list = sections[sec] || [];
-      list.forEach(function(cb) {
+      var sec = btn.getAttribute('data-section');
+      (sections[sec] || []).forEach(function(cb) {
         if (cb.checked) {
           cb.checked = false;
           cb.indeterminate = false;
@@ -638,70 +856,53 @@ tr.perm-matrix-page-row.perm-highlight td { box-shadow: inset 0 0 0 999px rgba(2
     });
   });
 
-  /* ── Search ── */
   var searchInput = document.getElementById('permissionSearch');
-  var searchClear = document.getElementById('permSearchClear');
+  var searchMeta  = document.getElementById('permissionSearchMeta');
   var searchTimer = null;
 
+  function normalizeSearchText(v) {
+    return String(v || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  }
+
   function runSearch(q) {
-    q = (q || '').toLowerCase().trim();
+    q = normalizeSearchText(q);
+    var terms = q ? q.split(' ').filter(Boolean) : [];
     document.querySelectorAll('.perm-matrix-page-row').forEach(function(tr) {
       tr.classList.remove('perm-highlight');
     });
-    if (searchClear) searchClear.style.display = q ? '' : 'none';
-
     var pageRows = document.querySelectorAll('.perm-matrix-page-row');
-    var visibleCount = 0;
+    var visible = 0;
     pageRows.forEach(function(tr) {
-      if (!q) {
-        tr.classList.remove('d-none');
-        visibleCount++;
-        return;
-      }
-      var hay = (tr.getAttribute('data-search') || tr.textContent || '').toLowerCase();
-      if (hay.indexOf(q) !== -1) {
-        tr.classList.remove('d-none');
-        tr.classList.add('perm-highlight');
-        visibleCount++;
-      } else {
-        tr.classList.add('d-none');
-      }
+      var hay = normalizeSearchText(tr.getAttribute('data-search') || tr.textContent || '');
+      var matched = !terms.length || terms.every(function(t) { return hay.indexOf(t) !== -1; });
+      tr.classList.toggle('d-none', !matched);
+      if (matched) { visible++; if (terms.length) tr.classList.add('perm-highlight'); }
     });
-
     document.querySelectorAll('.perm-matrix-section-row').forEach(function(secTr) {
       var sec = secTr.getAttribute('data-section');
-      if (!sec) return;
       var any = false;
       document.querySelectorAll('.perm-matrix-page-row').forEach(function(pr) {
         if (pr.getAttribute('data-section') === sec && !pr.classList.contains('d-none')) any = true;
       });
-      if (!q) {
-        secTr.classList.remove('d-none');
-      } else {
-        secTr.classList.toggle('d-none', !any);
-      }
+      secTr.classList.toggle('d-none', !!(terms.length && !any));
     });
-
     var emptyRow = document.getElementById('permMatrixNoResults');
-    if (emptyRow) emptyRow.classList.toggle('d-none', visibleCount > 0 || !q);
+    if (emptyRow) emptyRow.classList.toggle('d-none', visible > 0 || !terms.length);
+    if (searchMeta) {
+      searchMeta.textContent = terms.length
+        ? ('Showing ' + visible + ' matched permission(s)')
+        : 'Showing all permissions';
+    }
   }
 
   if (searchInput) {
     searchInput.addEventListener('input', function() {
       clearTimeout(searchTimer);
-      searchTimer = setTimeout(function() { runSearch(searchInput.value); }, 120);
+      searchTimer = setTimeout(function() { runSearch(searchInput.value); }, 100);
     });
-    searchInput.addEventListener('keydown', function(e) {
-      if (e.key === 'Escape') { searchInput.value = ''; runSearch(''); searchInput.blur(); }
-    });
-  }
-  if (searchClear) {
-    searchClear.addEventListener('click', function() {
-      searchInput.value = ''; runSearch(''); searchInput.focus();
-    });
+    searchInput.addEventListener('search', function() { runSearch(searchInput.value); });
   }
 
-  /* ── Scroll-to-section ── */
   window.scrollToSection = function(label) {
     var id = 'sec-' + label.replace(/ /g, '_').replace(/\//g, '_');
     var el = document.getElementById(id);
@@ -710,15 +911,12 @@ tr.perm-matrix-page-row.perm-highlight td { box-shadow: inset 0 0 0 999px rgba(2
         if (row.getAttribute('data-section') === label) el = row;
       });
     }
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      el.style.transition = 'background 0.3s';
-      el.style.background = 'rgba(37,99,235,0.06)';
-      setTimeout(function() { el.style.background = ''; }, 1000);
-    }
+    document.querySelectorAll('.section-tab-btn').forEach(function(t) {
+      t.classList.toggle('active', t.getAttribute('data-section') === label);
+    });
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
-  /* Highlight active tab on scroll */
   var tabs = document.querySelectorAll('.section-tab-btn');
   var secEls = document.querySelectorAll('.perm-matrix-section-row');
   if (tabs.length && secEls.length && 'IntersectionObserver' in window) {
@@ -727,11 +925,7 @@ tr.perm-matrix-page-row.perm-highlight td { box-shadow: inset 0 0 0 999px rgba(2
         if (entry.isIntersecting) {
           var sec = entry.target.getAttribute('data-section');
           tabs.forEach(function(t) {
-            if (t.textContent.trim() === sec) {
-              t.classList.add('active');
-            } else {
-              t.classList.remove('active');
-            }
+            t.classList.toggle('active', t.getAttribute('data-section') === sec);
           });
         }
       });

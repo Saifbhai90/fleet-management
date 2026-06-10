@@ -214,6 +214,7 @@ PERMISSION_TREE = {
         ('task_report_entry', 'New Task Entry – Form access'),
         ('task_report_entry_edit', 'New Task Entry – Edit saved rows'),
         ('task_report_entry_delete', 'New Task Entry – Delete saved rows'),
+        ('task_report_pending', 'Pending Task Report – List / View'),
         # Red Task
         ('red_task', 'Red Task – List / View'),
         ('red_task_add', 'Red Task – Add New'),
@@ -589,6 +590,7 @@ PERMISSION_DEPENDENCIES = {
     'task_report_entry': ['task_report_list'],
     'task_report_entry_edit': ['task_report_entry'],
     'task_report_entry_delete': ['task_report_entry'],
+    'task_report_pending': [],
     'red_task': [],
     'red_task_add': ['red_task'],
     'red_task_edit': ['red_task'],
@@ -840,6 +842,7 @@ SECTION_PAGE_GROUPS = {
         ('Daily Task Report', [
             ('task_report_list', 'List / View'),
             ('task_report_entry', 'New Task Entry'),
+            ('task_report_pending', 'Pending Task Report (New Task Entry button)'),
             ('task_report_entry_edit', 'Edit saved rows (New Task Entry)'),
             ('task_report_entry_delete', 'Delete saved rows (New Task Entry)'),
         ]),
@@ -927,6 +930,9 @@ SECTION_PAGE_GROUPS = {
             ('workspace_transfer_add', 'Add'),
             ('workspace_transfer_edit', 'Edit'),
             ('workspace_transfer_delete', 'Delete'),
+        ]),
+        ('Slip Design (Teach)', [
+            ('workspace_slip_design_manage', 'Add / Edit / Delete'),
         ]),
         ('Reports & Close', [
             ('workspace_ledger', 'Ledger'),
@@ -1163,6 +1169,7 @@ PAGE_VISIBLE = {
     'task_report_entry': ['task_report', 'task_report_entry', 'task_report_add'],
     'task_report_entry_edit': ['task_report', 'task_report_entry_edit'],
     'task_report_entry_delete': ['task_report', 'task_report_entry_delete'],
+    'task_report_pending': ['task_report', 'task_report_pending'],
     'red_task': ['task_report', 'red_task'],
     'without_task': ['task_report', 'without_task'],
     'task_report_logbook': ['task_report', 'task_report_logbook'],
@@ -1253,7 +1260,7 @@ PAGE_VISIBLE = {
     'red_task_summary_detail': ['task_report', 'red_task'],
     'without_task_list': ['task_report', 'without_task'],
     'task_report_new': ['task_report', 'task_report_list', 'task_report_entry', 'task_report_add'],
-    'task_report_pending': ['task_report', 'task_report_list', 'task_report_entry', 'task_report_add'],
+    'task_report_pending': ['task_report', 'task_report_pending'],
     'task_report_new_delete_row': ['task_report', 'task_report_list', 'task_report_entry', 'task_report_entry_delete'],
     'task_report_logbook_cover': ['task_report', 'task_report_logbook'],
     'penalty_record_list': ['driver_status', 'penalty_record'],
@@ -1351,13 +1358,24 @@ def get_permission_tree_grouped_filtered(permission_by_code, allowed_codes=None)
 
 
 def _perm_matrix_bucket(code, name):
-    """Map one permission into table columns: full | list | add | edit | delete | other."""
+    """Map one permission into table columns for role_form matrix."""
     code_l = (code or '').lower()
     name_l = (name or '').lower().strip()
     if '(full)' in name_l:
         return 'full'
     if code_l.endswith('_delete') or name_l == 'delete':
         return 'delete'
+    if code_l.endswith('_import') or name_l == 'import':
+        return 'import'
+    if code_l.endswith('_export') or name_l == 'export':
+        return 'export'
+    if (
+        code_l.endswith('_print')
+        or code_l.endswith('_preview')
+        or 'print / preview' in name_l
+        or name_l in ('print', 'preview', 'print / preview')
+    ):
+        return 'print'
     if code_l.endswith('_add') or name_l == 'add new':
         return 'add'
     if code_l.endswith('_edit') or name_l == 'edit':
@@ -1367,10 +1385,33 @@ def _perm_matrix_bucket(code, name):
     return 'other'
 
 
+def _sweep_import_export_print_from_other(cells):
+    """Move import/export/print permissions out of Other into dedicated columns (by code suffix)."""
+    kept = []
+    for cell in cells.get('other') or []:
+        code_l = (cell.get('code') or '').lower()
+        if code_l.endswith('_import'):
+            if cells.get('col_import') is None:
+                cells['col_import'] = cell
+            else:
+                kept.append(cell)
+        elif code_l.endswith('_export'):
+            if cells.get('col_export') is None:
+                cells['col_export'] = cell
+            else:
+                kept.append(cell)
+        elif code_l.endswith('_print') or code_l.endswith('_preview'):
+            cells.setdefault('col_print', [])
+            cells['col_print'].append(cell)
+        else:
+            kept.append(cell)
+    cells['other'] = kept
+
+
 def build_permission_matrix_rows(permission_tree_grouped):
     """
     Flatten grouped permission tree into table rows for role_form.html.
-    Each page becomes one row with cells: full, list, add, edit, delete, other (list of triples).
+    Each page becomes one row with cells: full, list, add, edit, delete, import, export, print, other.
     Also emits section header rows: {'type': 'section', 'label': str}.
     Page rows: {'type': 'page', 'section_label', 'page_label', 'cells': dict}.
     """
@@ -1378,12 +1419,20 @@ def build_permission_matrix_rows(permission_tree_grouped):
     for section_label, pages in permission_tree_grouped or []:
         out.append({'type': 'section', 'label': section_label})
         for page_label, rows in pages:
-            cells = {'full': None, 'list': None, 'add': None, 'edit': None, 'delete': None, 'other': []}
+            cells = {
+                'full': None, 'list': None, 'add': None, 'edit': None, 'delete': None,
+                'col_import': None, 'col_export': None, 'col_print': [], 'other': [],
+            }
             for perm_id, perm_code, perm_name in rows:
                 b = _perm_matrix_bucket(perm_code, perm_name)
                 cell = {'id': perm_id, 'code': perm_code, 'name': perm_name}
-                key_map = {'full': 'full', 'list': 'list', 'add': 'add', 'edit': 'edit', 'delete': 'delete'}
-                if b in key_map:
+                key_map = {
+                    'full': 'full', 'list': 'list', 'add': 'add', 'edit': 'edit', 'delete': 'delete',
+                    'import': 'col_import', 'export': 'col_export',
+                }
+                if b == 'print':
+                    cells['col_print'].append(cell)
+                elif b in key_map:
                     k = key_map[b]
                     if cells[k] is None:
                         cells[k] = cell
@@ -1391,6 +1440,7 @@ def build_permission_matrix_rows(permission_tree_grouped):
                         cells['other'].append(cell)
                 else:
                     cells['other'].append(cell)
+            _sweep_import_export_print_from_other(cells)
             out.append({
                 'type': 'page',
                 'section_label': section_label,

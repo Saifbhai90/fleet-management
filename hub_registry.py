@@ -195,6 +195,7 @@ HUBS = {
                 'title': 'Reports',
                 'items': [
                     _item('task_report_list', 'Daily Task Report', 'fa-solid fa-calendar-day', 'rc-tile--daily-task', 'task_report_list'),
+                    _item('task_report_pending', 'Pending Task Report', 'fa-solid fa-hourglass-half', 'rc-tile--pending-task', 'task_report_pending'),
                     _item('red_task_list', 'Red Task Justification', 'fa-solid fa-flag', 'rc-tile--red-task', 'red_task'),
                     _item('without_task_list', 'Movement without Task', 'fa-solid fa-circle-stop', 'rc-tile--no-task', 'without_task'),
                     _item('task_report_logbook_cover', 'Logbook Covers', 'fa-solid fa-book-open', 'rc-tile--logbook', 'task_report_logbook'),

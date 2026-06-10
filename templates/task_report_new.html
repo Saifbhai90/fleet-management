@@ -635,11 +635,13 @@
       {{ nav_back_button() }}
       <h2 class="mb-0 task-batch-page-title"><i class="bi bi-plus-circle me-2 text-success"></i>New Task Entry</h2>
     </div>
+    {% if can_see_page('task_report_pending') %}
     <div class="d-flex flex-wrap gap-2">
       <a href="{{ url_for('task_report_pending') }}?date={{ view_date.strftime('%d-%m-%Y') }}{% if district_id %}&district_id={{ district_id }}{% endif %}{% if project_id %}&project_id={{ project_id }}{% endif %}{% if nav_from %}&nav_from={{ nav_from|urlencode }}{% endif %}" class="btn btn-warning btn-sm rounded-pill px-3">
         <i class="bi bi-hourglass-split me-1"></i>Pending Task Report{% if pending_task_count %} ({{ pending_task_count }}){% endif %}
       </a>
     </div>
+    {% endif %}
   </div>
 
   {% if task_entry_max_km_driven is not none and (task_entry_max_km_driven | int) > 0 %}

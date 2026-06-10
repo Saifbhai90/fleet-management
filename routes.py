@@ -7752,6 +7752,22 @@ def _clamp_role_to_admin_cap(role):
         _replace_role_permissions(role, keep)
 
 
+def _current_user_assignable_permission_codes():
+    """
+    Exact permission codes on the current user's role (no section-full expansion).
+    Role form / grant caps use this so Admin only sees permissions Master actually assigned.
+    """
+    if session.get('is_master'):
+        return None
+    user_id = session.get('user_id')
+    if not user_id:
+        return set()
+    user = User.query.get(user_id)
+    if not user or not user.role:
+        return set()
+    return set(user.permission_codes())
+
+
 def _current_user_effective_permission_codes():
     """Effective permission codes for current user, including section-level expansions."""
     codes = set(session.get('permissions') or [])
@@ -8826,26 +8842,24 @@ def role_form():
     form = RoleForm()
     posts = EmployeePost.query.order_by(EmployeePost.full_name).all()
     form.post_id.choices = [(0, '-- Select Post (searchable) --')] + [(p.id, p.full_name) for p in posts]
-    # Current user sirf apne paas wale permissions hi kisi role ko de sakta hai
+    # Current user sirf apne paas wale permissions hi kisi role ko de sakta hai (exact DB grants, no section-full expansion)
     is_master = _current_user_is_master()
-    user_perm_codes = set(session.get('permissions') or []) if not is_master else None
+    assignable_codes = _current_user_assignable_permission_codes()
+    from auth_utils import ensure_config_permissions_exist
     from permissions_config import (
         get_permission_tree_grouped_filtered,
         PERMISSION_DEPENDENCIES,
-        expand_login_permissions,
         build_permission_matrix_rows,
     )
+    ensure_config_permissions_exist()
     permission_by_code = {p.code: p for p in Permission.query.all()}
-    user_perm_codes_expanded = (
-        set(expand_login_permissions(list(user_perm_codes or []))) if user_perm_codes is not None else None
-    )
-    codes_for_allowed = list(user_perm_codes_expanded or [])
+    codes_for_allowed = list(assignable_codes or [])
     allowed_permission_ids = None if is_master else {
         p.id for p in Permission.query.filter(Permission.code.in_(codes_for_allowed)).all()
     }
     try:
         permission_tree = get_permission_tree_grouped_filtered(
-            permission_by_code, allowed_codes=user_perm_codes_expanded
+            permission_by_code, allowed_codes=assignable_codes
         )
         permission_matrix = build_permission_matrix_rows(permission_tree)
     except Exception:
@@ -8963,25 +8977,23 @@ def role_edit(pk):
     # Admin apni (Admin) role edit na kar sake – sirf Master change kar sakta hai; yahan lock dikhayenge, URL se bhi 404
     if not is_master and role.name == 'Admin':
         abort(404)
-    # Current user sirf apne paas wale permissions hi is role ko assign kar sakta hai
-    user_perm_codes = set(session.get('permissions') or []) if not is_master else None
+    # Current user sirf apne paas wale permissions hi is role ko assign kar sakta hai (exact DB grants, no section-full expansion)
+    assignable_codes = _current_user_assignable_permission_codes()
+    from auth_utils import ensure_config_permissions_exist
     from permissions_config import (
         get_permission_tree_grouped_filtered,
         PERMISSION_DEPENDENCIES,
-        expand_login_permissions,
         build_permission_matrix_rows,
     )
+    ensure_config_permissions_exist()
     permission_by_code = {p.code: p for p in Permission.query.all()}
-    user_perm_codes_expanded = (
-        set(expand_login_permissions(list(user_perm_codes or []))) if user_perm_codes is not None else None
-    )
-    codes_for_allowed = list(user_perm_codes_expanded or [])
+    codes_for_allowed = list(assignable_codes or [])
     allowed_permission_ids = None if is_master else {
         p.id for p in Permission.query.filter(Permission.code.in_(codes_for_allowed)).all()
     }
     try:
         permission_tree = get_permission_tree_grouped_filtered(
-            permission_by_code, allowed_codes=user_perm_codes_expanded
+            permission_by_code, allowed_codes=assignable_codes
         )
         permission_matrix = build_permission_matrix_rows(permission_tree)
     except Exception:
