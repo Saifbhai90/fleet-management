@@ -202,7 +202,65 @@
   .daily-attn-web-only #dailyReportTable .cell-late { background-color: #fef9c3 !important; color: #854d0e !important; font-weight: 700; }
   .daily-attn-web-only #dailyReportTable .cell-half { background-color: #f3f4f6 !important; color: #374151 !important; font-weight: 700; }
   .daily-attn-web-only #dailyReportTable .cell-off { background-color: #f5f5f4 !important; color: #57534e !important; font-weight: 700; }
+  .daily-attn-web-only #dailyReportTable .cell-post-left {
+    background-color: #e2e8f0 !important;
+    color: #64748b !important;
+    font-weight: 700;
+    cursor: help;
+  }
+  .daily-attn-web-only #dailyReportTable tr.daily-row-ex-driver td {
+    background-color: #f8fafc !important;
+  }
+  .daily-attn-web-only #dailyReportTable tr.daily-row-ex-driver td.cell-post-left {
+    background-color: #e2e8f0 !important;
+  }
+  .daily-attn-web-only #dailyReportTable tr.daily-row-ex-driver:nth-child(even) td:not(.cell-post-left) {
+    background-color: #f1f5f9 !important;
+  }
   .daily-attn-web-only #dailyReportTable .cell-empty { color: transparent; }
+  .daily-driver-name--left {
+    text-decoration: line-through;
+    text-decoration-color: #cbd5e1;
+    color: #64748b;
+  }
+  .daily-driver-left-tag {
+    display: block;
+    margin-top: 2px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: #dc2626;
+    line-height: 1.2;
+  }
+  .daily-driver-lifecycle-tags {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-top: 2px;
+  }
+  .daily-driver-lifecycle-tag {
+    display: block;
+    font-size: 0.66rem;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+  .daily-driver-lifecycle-tag--assign { color: #2563eb; }
+  .daily-driver-lifecycle-tag--rejoin { color: #059669; }
+  .daily-driver-lifecycle-tag--transfer { color: #b45309; }
+  .daily-attn-web-only #dailyReportTable .cell-inactive {
+    background-color: #f8fafc !important;
+    color: #94a3b8 !important;
+    font-style: italic;
+    cursor: help;
+  }
+  .daily-attn-web-only #dailyReportTable .cell-transfer {
+    background-color: #dbeafe !important;
+    color: #1d4ed8 !important;
+    font-weight: 700;
+    cursor: help;
+  }
+  .daily-driver-card--ex .daily-driver-card__head {
+    background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  }
   .daily-attn-web-only #dailyReportTable tfoot tr.daily-tfoot-total td {
     background: linear-gradient(180deg, #e0f2fe 0%, #bae6fd 55%, #7dd3fc 100%) !important;
     color: #0c4a6e !important;
@@ -554,6 +612,9 @@
   .daily-legend-badge--late { background: #fef9c3; color: #854d0e; border-color: #fde047; font-size: 0.58rem; }
   .daily-legend-badge--half { background: #f3f4f6; color: #374151; border-color: #d1d5db; }
   .daily-legend-badge--off { background: #e5e7eb; color: #111827; border-color: #9ca3af; }
+  .daily-legend-badge--post-left { background: #e2e8f0; color: #64748b; border-color: #94a3b8; font-weight: 800; }
+  .daily-legend-badge--inactive { background: #f8fafc; color: #94a3b8; border-color: #cbd5e1; font-style: italic; }
+  .daily-legend-badge--transfer { background: #dbeafe; color: #1d4ed8; border-color: #93c5fd; font-weight: 800; }
   .daily-legend-badge--days { background: #fef3c7; color: #92400e; border-color: #fcd34d; font-size: 0.62rem; }
   .daily-legend-sep {
     width: 1px; height: 22px; background: #cbd5e1; margin: 0 0.15rem; flex-shrink: 0;
@@ -1185,6 +1246,24 @@
   html.daily-report-native .daily-cal-slot--off,
   html.daily-attn-native-active .daily-cal-slot--off,
   .daily-attn-page.daily-mode-native .daily-cal-slot--off { background: #e5e7eb; color: #111827; }
+  html.capacitor-native .daily-cal-slot--post-left,
+  html.daily-report-native .daily-cal-slot--post-left,
+  html.daily-attn-native-active .daily-cal-slot--post-left,
+  .daily-attn-page.daily-mode-native .daily-cal-slot--post-left {
+    background: #e2e8f0; color: #64748b; font-weight: 700;
+  }
+  html.capacitor-native .daily-cal-slot--inactive,
+  html.daily-report-native .daily-cal-slot--inactive,
+  html.daily-attn-native-active .daily-cal-slot--inactive,
+  .daily-attn-page.daily-mode-native .daily-cal-slot--inactive {
+    background: #f8fafc; color: #94a3b8; font-style: italic;
+  }
+  html.capacitor-native .daily-cal-slot--transfer,
+  html.daily-report-native .daily-cal-slot--transfer,
+  html.daily-attn-native-active .daily-cal-slot--transfer,
+  .daily-attn-page.daily-mode-native .daily-cal-slot--transfer {
+    background: #dbeafe; color: #1d4ed8; font-weight: 700;
+  }
   html.capacitor-native .daily-driver-card__totals,
   html.daily-report-native .daily-driver-card__totals,
   html.daily-attn-native-active .daily-driver-card__totals,
@@ -1681,6 +1760,34 @@
   </script>
   {% set sum_short = {'Present': 'P', 'Absent': 'A', 'Leave': 'L', 'Late': 'Lt', 'Half-Day': 'H', 'Off': 'O'} %}
   {% set card_theme = {'Present': 'present', 'Absent': 'absent', 'Leave': 'leave', 'Late': 'late', 'Half-Day': 'half', 'Off': 'off'} %}
+  {% macro daily_day_cell_class(cell, v) -%}
+  {%- if cell is mapping and cell.get('kind') == 'left' -%}cell-post-left
+  {%- elif cell is mapping and cell.get('kind') == 'inactive' -%}cell-inactive
+  {%- elif cell is mapping and cell.get('kind') == 'transfer' -%}cell-transfer
+  {%- elif v == 'P' -%}cell-present
+  {%- elif v == 'A' -%}cell-absent
+  {%- elif v == 'L' -%}cell-leave
+  {%- elif v == 'Lt' -%}cell-late
+  {%- elif v == 'H' -%}cell-half
+  {%- elif v == 'O' -%}cell-off
+  {%- elif v -%}cell-present
+  {%- else -%}cell-empty
+  {%- endif -%}
+  {%- endmacro %}
+  {% macro daily_cal_slot_class(cell, v) -%}
+  {%- if cell is mapping and cell.get('kind') == 'left' -%}daily-cal-slot--post-left
+  {%- elif cell is mapping and cell.get('kind') == 'inactive' -%}daily-cal-slot--inactive
+  {%- elif cell is mapping and cell.get('kind') == 'transfer' -%}daily-cal-slot--transfer
+  {%- elif v == 'P' -%}daily-cal-slot--present
+  {%- elif v == 'A' -%}daily-cal-slot--absent
+  {%- elif v == 'L' -%}daily-cal-slot--leave
+  {%- elif v == 'Lt' -%}daily-cal-slot--late
+  {%- elif v == 'H' -%}daily-cal-slot--half
+  {%- elif v == 'O' -%}daily-cal-slot--off
+  {%- elif v -%}daily-cal-slot--present
+  {%- else -%}daily-cal-slot--empty
+  {%- endif -%}
+  {%- endmacro %}
   {% macro render_native_status_card(st, total, me_m, me_e, sum_short, card_theme, grand_attr='') %}
   <div class="daily-totals-card daily-totals-card--{{ card_theme.get(st, 'off') }}">
     <span class="daily-totals-card__badge daily-legend-badge daily-legend-badge--{{ card_theme.get(st, 'off') }}">{{ sum_short.get(st, st[:1]) }}</span>
@@ -1757,7 +1864,7 @@
         </thead>
         <tbody>
           {% for row in report %}
-          <tr>
+          <tr class="{% if row.date_of_leaving %}daily-row-ex-driver{% endif %}">
             <td class="frozen-col fc-1 info-col">{{ loop.index }}</td>
             <td class="frozen-col fc-2 info-col">{{ row.district_name }}</td>
             <td class="frozen-col fc-3 info-col">{{ row.project_name }}</td>
@@ -1766,8 +1873,18 @@
             <td class="frozen-col fc-6 info-col">
               <div class="daily-driver-cell">
                 <span class="daily-driver-line">
-                  <span class="daily-driver-name">{{ row.driver_name }}</span><span class="daily-driver-score" title="Present (P) count in row — all M and E slots">({{ row.month_present_days }}/{{ row.days_in_month }})</span>
+                  <span class="daily-driver-name{% if row.date_of_leaving %} daily-driver-name--left{% endif %}">{{ row.driver_name }}</span><span class="daily-driver-score" title="Present (P) count in row — all M and E slots">({{ row.month_present_days }}/{{ row.days_in_month }})</span>
                 </span>
+                {% if row.date_of_leaving or row.lifecycle_badges %}
+                <span class="daily-driver-lifecycle-tags">
+                  {% if row.date_of_leaving %}
+                  <span class="daily-driver-lifecycle-tag daily-driver-left-tag" title="Ex-employee — Job Left {{ row.date_of_leaving.strftime('%d-%b-%Y') }}">Left {{ row.date_of_leaving.strftime('%d-%b-%Y') }}</span>
+                  {% endif %}
+                  {% for badge in row.lifecycle_badges or [] %}
+                  <span class="daily-driver-lifecycle-tag daily-driver-lifecycle-tag--{{ badge.type }}" title="{{ badge.title|e }}">{{ badge.text }}</span>
+                  {% endfor %}
+                </span>
+                {% endif %}
               </div>
             </td>
             {% for d in day_headers %}
@@ -1779,8 +1896,8 @@
             {% set ev = ecell.get('v', '') if ecell is mapping else (ecell or '') %}
             {% set mtip = mcell.get('tip', '') if mcell is mapping else '' %}
             {% set etip = ecell.get('tip', '') if ecell is mapping else '' %}
-            <td class="day-col day-cell {% if mv == 'P' %}cell-present{% elif mv == 'A' %}cell-absent{% elif mv == 'L' %}cell-leave{% elif mv == 'Lt' %}cell-late{% elif mv == 'H' %}cell-half{% elif mv == 'O' %}cell-off{% elif mv %}cell-present{% else %}cell-empty{% endif %}" data-day="{{ day_num }}" data-slot="M"{% if mtip %} title="{{ mtip }}"{% endif %}>{{ mv }}</td>
-            <td class="day-col day-cell {% if ev == 'P' %}cell-present{% elif ev == 'A' %}cell-absent{% elif ev == 'L' %}cell-leave{% elif ev == 'Lt' %}cell-late{% elif ev == 'H' %}cell-half{% elif ev == 'O' %}cell-off{% elif ev %}cell-present{% else %}cell-empty{% endif %}" data-day="{{ day_num }}" data-slot="E"{% if etip %} title="{{ etip }}"{% endif %}>{{ ev }}</td>
+            <td class="day-col day-cell {{ daily_day_cell_class(mcell, mv) }}" data-day="{{ day_num }}" data-slot="M"{% if mtip %} title="{{ mtip }}"{% endif %}>{{ mv }}</td>
+            <td class="day-col day-cell {{ daily_day_cell_class(ecell, ev) }}" data-day="{{ day_num }}" data-slot="E"{% if etip %} title="{{ etip }}"{% endif %}>{{ ev }}</td>
             {% endfor %}
             {% for st in status_columns %}
             <td class="sum-col">{{ row.status_totals.get(st, 0) }}</td>
@@ -1810,11 +1927,21 @@
     <div class="daily-native-view" id="dailyNativeView" aria-hidden="true">
       <div class="daily-native-list" id="dailyNativeList">
         {% for row in report %}
-        <article class="daily-driver-card" data-native-row="{{ loop.index0 }}" data-driver-name="{{ row.driver_name|e }}" data-search-text="{{ (row.driver_name ~ ' ' ~ row.district_name ~ ' ' ~ row.project_name ~ ' ' ~ row.vehicle_no ~ ' ' ~ row.shift)|lower }}">
+        <article class="daily-driver-card{% if row.date_of_leaving %} daily-driver-card--ex{% endif %}" data-native-row="{{ loop.index0 }}" data-driver-name="{{ row.driver_name|e }}" data-search-text="{{ (row.driver_name ~ ' ' ~ row.district_name ~ ' ' ~ row.project_name ~ ' ' ~ row.vehicle_no ~ ' ' ~ row.shift)|lower }}">
           <button type="button" class="daily-driver-card__head" aria-expanded="false" aria-controls="daily-native-body-{{ loop.index }}">
             <span class="daily-driver-card__sr">{{ loop.index }}</span>
             <div class="daily-driver-card__title-wrap">
-              <div class="daily-driver-card__name">{{ row.driver_name }}</div>
+              <div class="daily-driver-card__name"><span class="{% if row.date_of_leaving %}daily-driver-name--left{% endif %}">{{ row.driver_name }}</span></div>
+              {% if row.date_of_leaving or row.lifecycle_badges %}
+              <div class="daily-driver-lifecycle-tags" style="margin-top:4px;">
+                {% if row.date_of_leaving %}
+                <span class="daily-driver-lifecycle-tag daily-driver-left-tag">Left {{ row.date_of_leaving.strftime('%d-%b-%Y') }}</span>
+                {% endif %}
+                {% for badge in row.lifecycle_badges or [] %}
+                <span class="daily-driver-lifecycle-tag daily-driver-lifecycle-tag--{{ badge.type }}" title="{{ badge.title|e }}">{{ badge.text }}</span>
+                {% endfor %}
+              </div>
+              {% endif %}
               {% set present_slot_max = row.days_in_month * 2 %}
               {% set present_pct = ((row.month_present_days * 100 / present_slot_max)|round(0, 'floor')|int) if present_slot_max else 0 %}
               {% if present_pct > 100 %}{% set present_pct = 100 %}{% endif %}
@@ -1859,11 +1986,11 @@
                 <div class="daily-cal-slots">
                   <div class="daily-cal-slot-row">
                     <span class="daily-cal-slot daily-cal-slot--label" aria-hidden="true">M</span>
-                    <span class="daily-cal-slot {% if mv == 'P' %}daily-cal-slot--present{% elif mv == 'A' %}daily-cal-slot--absent{% elif mv == 'L' %}daily-cal-slot--leave{% elif mv == 'Lt' %}daily-cal-slot--late{% elif mv == 'H' %}daily-cal-slot--half{% elif mv == 'O' %}daily-cal-slot--off{% elif mv %}daily-cal-slot--present{% else %}daily-cal-slot--empty{% endif %}"{% if mtip %} title="{{ mtip }}"{% endif %}>{{ mv }}</span>
+                    <span class="daily-cal-slot {{ daily_cal_slot_class(mcell, mv) }}"{% if mtip %} title="{{ mtip }}"{% endif %}>{{ mv }}</span>
                   </div>
                   <div class="daily-cal-slot-row">
                     <span class="daily-cal-slot daily-cal-slot--label" aria-hidden="true">E</span>
-                    <span class="daily-cal-slot {% if ev == 'P' %}daily-cal-slot--present{% elif ev == 'A' %}daily-cal-slot--absent{% elif ev == 'L' %}daily-cal-slot--leave{% elif ev == 'Lt' %}daily-cal-slot--late{% elif ev == 'H' %}daily-cal-slot--half{% elif ev == 'O' %}daily-cal-slot--off{% elif ev %}daily-cal-slot--present{% else %}daily-cal-slot--empty{% endif %}"{% if etip %} title="{{ etip }}"{% endif %}>{{ ev }}</span>
+                    <span class="daily-cal-slot {{ daily_cal_slot_class(ecell, ev) }}"{% if etip %} title="{{ etip }}"{% endif %}>{{ ev }}</span>
                   </div>
                 </div>
               </button>
@@ -1960,11 +2087,23 @@
             <span class="daily-legend-badge daily-legend-badge--off" aria-hidden="true">O</span>
             <span>Off</span>
           </span>
+          <span class="daily-legend-item" role="listitem">
+            <span class="daily-legend-badge daily-legend-badge--post-left" aria-hidden="true">Ex</span>
+            <span>Ex-employee (after job left)</span>
+          </span>
+          <span class="daily-legend-item" role="listitem">
+            <span class="daily-legend-badge daily-legend-badge--inactive" aria-hidden="true">NA</span>
+            <span>Not assigned / before rejoin or transfer</span>
+          </span>
+          <span class="daily-legend-item" role="listitem">
+            <span class="daily-legend-badge daily-legend-badge--transfer" aria-hidden="true">Tf</span>
+            <span>Transferred to another vehicle</span>
+          </span>
         </div>
       </div>
       <p class="daily-legend-note mb-0">
         <i class="bi bi-lightbulb" aria-hidden="true"></i>
-        <span>Colored badges match calendar cells · (6/31) = total P in row (M+E, all shifts) · Tap a day for check-in/out details</span>
+        <span>NA = before assign/rejoin/transfer · Tf = transferred out · Ex = job left · Tags: blue Assigned, green Rejoined, amber Transfer · (6/31) = P count</span>
       </p>
       </div>
     </div>
@@ -2967,6 +3106,9 @@
       '.daily-preview-table .cell-late{background:#fef9c3!important;color:#854d0e;font-weight:700;}',
       '.daily-preview-table .cell-half{background:#f3f4f6!important;}',
       '.daily-preview-table .cell-off{background:#e5e7eb!important;}',
+      '.daily-preview-table .cell-post-left{background:#e2e8f0!important;color:#64748b!important;font-weight:700;}',
+      '.daily-preview-table .cell-inactive{background:#f8fafc!important;color:#94a3b8!important;font-style:italic;}',
+      '.daily-preview-table .cell-transfer{background:#dbeafe!important;color:#1d4ed8!important;font-weight:700;}',
       '.daily-preview-table .pv-total-label{text-align:left;padding-left:6px;}',
       '.pv-legend{padding:6px 16px 10px;flex-shrink:0;}',
       '.daily-attn-footnote{padding:0.65rem 1rem;background:linear-gradient(180deg,#f8fafc,#f1f5f9);border-top:1px solid #e2e8f0;}',
@@ -2983,6 +3125,9 @@
       '.daily-legend-badge--late{background:#fef9c3;color:#854d0e;border-color:#fde047;font-size:0.54rem;}',
       '.daily-legend-badge--half{background:#f3f4f6;color:#374151;border-color:#d1d5db;}',
       '.daily-legend-badge--off{background:#e5e7eb;color:#111827;border-color:#9ca3af;}',
+      '.daily-legend-badge--post-left{background:#e2e8f0;color:#64748b;border-color:#94a3b8;font-weight:800;}',
+      '.daily-legend-badge--inactive{background:#f8fafc;color:#94a3b8;border-color:#cbd5e1;font-style:italic;}',
+      '.daily-legend-badge--transfer{background:#dbeafe;color:#1d4ed8;border-color:#93c5fd;font-weight:800;}',
       '.daily-legend-badge--days{background:#fef3c7;color:#92400e;border-color:#fcd34d;font-size:0.58rem;}',
       '.daily-legend-sep{width:1px;height:18px;background:#cbd5e1;margin:0 0.1rem;}',
       '.daily-legend-note{margin:0.45rem 0 0;font-size:0.66rem;color:#64748b;display:flex;align-items:center;gap:0.35rem;}',

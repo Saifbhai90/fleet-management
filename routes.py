@@ -1063,6 +1063,142 @@ def _count_month_present_days(grid):
     return total
 
 
+DAILY_ATTENDANCE_EX_MARKER = 'Ex'
+DAILY_ATTENDANCE_INACTIVE_MARKER = 'NA'
+DAILY_ATTENDANCE_TRANSFER_MARKER = 'Tf'
+
+
+def _daily_attendance_grid_cell_value(cell):
+    """Display value from a day-wise grid cell (dict or legacy string)."""
+    if isinstance(cell, dict):
+        return (cell.get('v') or '').strip()
+    return (cell or '').strip()
+
+
+def _daily_attendance_grid_cell_skip_totals(cell):
+    """Synthetic cells (Ex / NA / Tf) must not count in footer or status totals."""
+    return isinstance(cell, dict) and cell.get('kind') in ('left', 'inactive', 'transfer')
+
+
+def _daily_attendance_pre_segment_tip(driver, segment, tra_cache, seg_start):
+    """Why days before segment_start are NA on this row."""
+    rejoin_rec = tra_cache.rejoin_in_month.get(driver.id)
+    if rejoin_rec and rejoin_rec.change_date and rejoin_rec.change_date == seg_start:
+        return f'Before rejoin — Rejoined {rejoin_rec.change_date.strftime("%d-%b-%Y")}'
+    transfer_in = segment.get('transfer_in')
+    if transfer_in and transfer_in.transfer_date and seg_start:
+        new_vehicle_start = transfer_in.transfer_date + timedelta(days=1)
+        if seg_start >= new_vehicle_start:
+            old_v = transfer_in.old_vehicle.vehicle_no if transfer_in.old_vehicle else '?'
+            new_v = transfer_in.new_vehicle.vehicle_no if transfer_in.new_vehicle else '?'
+            return (
+                f'Before transfer — Moved from {old_v} to {new_v} on '
+                f'{transfer_in.transfer_date.strftime("%d-%b-%Y")}'
+            )
+    if driver.assign_date and driver.assign_date == seg_start:
+        return f'Before assignment — Joined {driver.assign_date.strftime("%d-%b-%Y")}'
+    return f'Not on this vehicle before {seg_start.strftime("%d-%b-%Y")}'
+
+
+def _daily_attendance_post_segment_transfer_tip(segment, seg_end):
+    """Transferred away after segment_end on this vehicle row."""
+    transfer_out = segment.get('transfer_out')
+    if not transfer_out:
+        return None
+    old_v = transfer_out.old_vehicle.vehicle_no if transfer_out.old_vehicle else '?'
+    new_v = transfer_out.new_vehicle.vehicle_no if transfer_out.new_vehicle else '?'
+    return (
+        f'Transferred — From {old_v} to {new_v} on '
+        f'{transfer_out.transfer_date.strftime("%d-%b-%Y")} (duty ended {seg_end.strftime("%d-%b-%Y")})'
+    )
+
+
+def _daily_attendance_put_grid_marker(grid, day_num, slot, value, tip, kind):
+    if day_num not in grid:
+        grid[day_num] = {}
+    existing = grid[day_num].get(slot)
+    if _daily_attendance_grid_cell_value(existing):
+        return
+    grid[day_num][slot] = {'v': value, 'tip': tip, 'kind': kind}
+
+
+def _daily_attendance_fill_segment_boundary_cells(
+    grid, year, month, seg_start, seg_end, segment, driver, left_date, tra_cache,
+):
+    """Mark NA (pre-duty), Tf (transferred out), and Ex (job left) on empty M/E slots."""
+    from calendar import monthrange
+
+    _, ndays = monthrange(year, month)
+    pre_tip = _daily_attendance_pre_segment_tip(driver, segment, tra_cache, seg_start)
+    transfer_tip = _daily_attendance_post_segment_transfer_tip(segment, seg_end)
+    ex_tip = (
+        f'Ex-employee — Job Left {left_date.strftime("%d-%b-%Y")}'
+        if left_date else None
+    )
+
+    for day_num in range(1, ndays + 1):
+        att_d = date(year, month, day_num)
+        for slot in ('M', 'E'):
+            if att_d < seg_start:
+                _daily_attendance_put_grid_marker(
+                    grid, day_num, slot,
+                    DAILY_ATTENDANCE_INACTIVE_MARKER, pre_tip, 'inactive',
+                )
+            elif left_date and att_d > left_date and att_d <= seg_end and ex_tip:
+                _daily_attendance_put_grid_marker(
+                    grid, day_num, slot,
+                    DAILY_ATTENDANCE_EX_MARKER, ex_tip, 'left',
+                )
+            elif att_d > seg_end and transfer_tip:
+                _daily_attendance_put_grid_marker(
+                    grid, day_num, slot,
+                    DAILY_ATTENDANCE_TRANSFER_MARKER, transfer_tip, 'transfer',
+                )
+
+
+def _daily_attendance_row_lifecycle_badges(driver, segment, tra_cache, start_d, end_d, seg_start):
+    """Tags under driver name: Assigned / Rejoined / Transferred (same rules as TRA segments)."""
+    badges = []
+    rejoin_rec = tra_cache.rejoin_in_month.get(driver.id)
+    transfer_in = segment.get('transfer_in')
+    transfer_out = segment.get('transfer_out')
+
+    if driver.assign_date and start_d <= driver.assign_date <= end_d and driver.assign_date == seg_start:
+        badges.append({
+            'type': 'assign',
+            'text': f'Assigned {driver.assign_date.strftime("%d-%b-%Y")}',
+            'title': f'Driver assigned on {driver.assign_date.strftime("%d-%b-%Y")}',
+        })
+    if rejoin_rec and rejoin_rec.change_date and rejoin_rec.change_date == seg_start:
+        badges.append({
+            'type': 'rejoin',
+            'text': f'Rejoined {rejoin_rec.change_date.strftime("%d-%b-%Y")}',
+            'title': f'Driver rejoined on {rejoin_rec.change_date.strftime("%d-%b-%Y")}',
+        })
+    if transfer_in:
+        old_v = transfer_in.old_vehicle.vehicle_no if transfer_in.old_vehicle else '?'
+        new_v = transfer_in.new_vehicle.vehicle_no if transfer_in.new_vehicle else '?'
+        t_d = transfer_in.transfer_date
+        badges.append({
+            'type': 'transfer',
+            'text': f'Transferred {t_d.strftime("%d-%b-%Y")} · {old_v} → {new_v}',
+            'title': f'Transferred from {old_v} to {new_v} on {t_d.strftime("%d-%b-%Y")}',
+        })
+    elif transfer_out:
+        old_v = transfer_out.old_vehicle.vehicle_no if transfer_out.old_vehicle else '?'
+        new_v = transfer_out.new_vehicle.vehicle_no if transfer_out.new_vehicle else '?'
+        t_d = transfer_out.transfer_date
+        badges.append({
+            'type': 'transfer',
+            'text': f'Transferred {t_d.strftime("%d-%b-%Y")} · {old_v} → {new_v}',
+            'title': (
+                f'Transferred from {old_v} to {new_v} on {t_d.strftime("%d-%b-%Y")} '
+                f'(last day on {old_v}: {(t_d - timedelta(days=1)).strftime("%d-%b-%Y")})'
+            ),
+        })
+    return badges
+
+
 def _driver_attendance_mark_redirect_url():
     """Rebuild mark form URL after clear/save."""
     date_str = (request.form.get('attendance_date') or request.args.get('date') or '').strip()
@@ -11100,6 +11236,8 @@ def assign_driver_to_vehicle_new():
             driver.district_id = form.district_id.data if (form.district_id.data and form.district_id.data != 0) else vehicle.district_id
             driver.assign_date = form.assign_date.data
             driver.assign_remarks = form.remarks.data
+            if (driver.status or '').strip().lower() == 'left':
+                driver.status = 'Active'
             db.session.commit()
             flash(f"Driver {driver.name} assigned to {vehicle.vehicle_no} ({form.shift.data}) successfully!", "success")
             return redirect(url_for('assign_driver_to_vehicle_list', **_preserve_nav_from()))
@@ -11406,12 +11544,16 @@ def assign_driver_to_vehicle_edit(driver_id):
                     new_driver.project_id = form.project_id.data
                     new_driver.assign_date = form.assign_date.data
                     new_driver.assign_remarks = form.remarks.data
+                    if (new_driver.status or '').strip().lower() == 'left':
+                        new_driver.status = 'Active'
             else:
                 driver.vehicle_id = vehicle.id
                 driver.shift = form.shift.data
                 driver.project_id = form.project_id.data
                 driver.assign_date = form.assign_date.data
                 driver.assign_remarks = form.remarks.data
+                if (driver.status or '').strip().lower() == 'left':
+                    driver.status = 'Active'
 
             db.session.commit()
             flash("Assignment updated successfully", "success")
@@ -21304,122 +21446,107 @@ def _build_driver_daily_attendance_report_payload(
     _, ndays = monthrange(year, month)
     start_d = date(year, month, 1)
     end_d = date(year, month, ndays)
-
-    drivers_query = Driver.query.filter(
-        Driver.status == 'Active',
-        Driver.vehicle_id.isnot(None),
-    ).options(
-        joinedload(Driver.vehicle).joinedload(Vehicle.district),
-        joinedload(Driver.vehicle).joinedload(Vehicle.project),
-        joinedload(Driver.project),
-        joinedload(Driver.district),
-    ).outerjoin(Vehicle, Driver.vehicle_id == Vehicle.id)
-
-    if scope_projects:
-        drivers_query = drivers_query.filter(
-            db.or_(Driver.project_id.in_(scope_projects),
-                   Vehicle.project_id.in_(scope_projects))
-        )
-    if scope_districts:
-        drivers_query = drivers_query.filter(
-            db.or_(Driver.district_id.in_(scope_districts),
-                   Vehicle.district_id.in_(scope_districts))
-        )
-    if scope_vehicles:
-        drivers_query = drivers_query.filter(Driver.vehicle_id.in_(scope_vehicles))
-    if scope_shifts:
-        drivers_query = drivers_query.filter(Driver.shift.in_(scope_shifts))
-    drivers_query = drivers_query.filter(
-        db.or_(Driver.project_id == project_id, Vehicle.project_id == project_id)
-    )
-    drivers_query = drivers_query.filter(
-        db.or_(Driver.district_id == district_id, Vehicle.district_id == district_id)
-    )
-    if vehicle_id:
-        target_v = Vehicle.query.get(vehicle_id)
-        extra_driver_ids = []
-        if target_v and target_v.parking_station_id:
-            extra_driver_ids = [
-                row[0]
-                for row in db.session.query(DriverAttendance.driver_id)
-                .filter(
-                    DriverAttendance.attendance_date >= start_d,
-                    DriverAttendance.attendance_date <= end_d,
-                    DriverAttendance.parking_station_id == target_v.parking_station_id,
-                )
-                .distinct()
-                .all()
-            ]
-        if extra_driver_ids:
-            drivers_query = drivers_query.filter(
-                db.or_(Driver.vehicle_id == vehicle_id, Driver.id.in_(extra_driver_ids))
-            )
-        else:
-            drivers_query = drivers_query.filter(Driver.vehicle_id == vehicle_id)
-    if driver_id_filter:
-        drivers_query = drivers_query.filter(Driver.id == driver_id_filter)
-    if search:
-        flt = _multi_word_filter(search, Driver.name, Driver.driver_id, Vehicle.vehicle_no)
-        if flt is not None:
-            drivers_query = drivers_query.filter(flt)
-
-    drivers = drivers_query.distinct().order_by(Driver.name).all()
     day_headers = [date(year, month, d) for d in range(1, ndays + 1)]
     report_title = f'Day Wise Attendance — {start_d.strftime("%d-%b-%Y")} to {end_d.strftime("%d-%b-%Y")}'
+    empty_totals = {s: 0 for s in status_columns}
 
-    driver_ids = [d.id for d in drivers]
-    att_by_driver = {did: [] for did in driver_ids}
-    if driver_ids:
-        att_rows = (
-            DriverAttendance.query.options(
-                joinedload(DriverAttendance.driver).joinedload(Driver.vehicle),
-            )
-            .filter(
-                DriverAttendance.driver_id.in_(driver_ids),
-                DriverAttendance.attendance_date >= start_d,
-                DriverAttendance.attendance_date <= end_d,
-            )
-            .order_by(DriverAttendance.attendance_date, DriverAttendance.attendance_segment)
-            .all()
+    # Same driver pool + assignment rules as TRA Attendance Sheet
+    eligible_ids = _tra_report_driver_ids_for_month(
+        start_d,
+        end_d,
+        project_id,
+        district_id,
+        vehicle_id,
+        None,
+        scope_projects,
+        scope_districts,
+        scope_vehicles,
+        scope_shifts,
+    )
+    if driver_id_filter:
+        eligible_ids = {driver_id_filter} if driver_id_filter in eligible_ids else set()
+    if not eligible_ids:
+        return {
+            'report': [],
+            'day_headers': day_headers,
+            'report_title': report_title,
+            'ndays': ndays,
+            'grand_totals': empty_totals,
+            'status_columns': status_columns,
+        }
+
+    drivers = (
+        Driver.query.filter(Driver.id.in_(eligible_ids))
+        .order_by(Driver.name)
+        .all()
+    )
+    tra_cache = _TraMonthCache(start_d, end_d, eligible_ids)
+    tra_cache.load()
+    tra_cache.prewarm(drivers)
+
+    att_by_driver = {did: [] for did in eligible_ids}
+    att_rows = (
+        DriverAttendance.query.options(
+            joinedload(DriverAttendance.driver).joinedload(Driver.vehicle),
         )
-        for r in att_rows:
-            if not _attendance_record_counts_in_report(r):
-                continue
-            att_by_driver[r.driver_id].append(r)
+        .filter(
+            DriverAttendance.driver_id.in_(eligible_ids),
+            DriverAttendance.attendance_date >= start_d,
+            DriverAttendance.attendance_date <= end_d,
+        )
+        .order_by(DriverAttendance.attendance_date, DriverAttendance.attendance_segment)
+        .all()
+    )
+    for r in att_rows:
+        if not _attendance_record_counts_in_report(r):
+            continue
+        att_by_driver[r.driver_id].append(r)
 
     report = []
     grand_totals = {s: 0 for s in status_columns}
     for d in drivers:
+        if not tra_cache.driver_on_duty_in_month(d):
+            continue
+
         records = att_by_driver.get(d.id, [])
-        by_vehicle = {}
-        for r in records:
-            veh = _vehicle_for_attendance_record(r, driver=d)
-            vid = veh.id if veh else (d.vehicle_id or 0)
-            by_vehicle.setdefault(vid, {'vehicle': veh, 'records': []})
-            if veh and not by_vehicle[vid]['vehicle']:
-                by_vehicle[vid]['vehicle'] = veh
-            by_vehicle[vid]['records'].append(r)
+        for segment in tra_cache.segments(d):
+            eff = segment['eff']
+            seg_start = segment['segment_start']
+            seg_end = segment['segment_end']
+            eff_vehicle_id = eff.get('vehicle_id')
 
-        if not by_vehicle:
-            veh = d.vehicle
-            by_vehicle[veh.id if veh else 0] = {'vehicle': veh, 'records': []}
-
-        def _vehicle_sort_key(item):
-            vid, bundle = item
-            veh = bundle.get('vehicle')
-            return ((veh.vehicle_no if veh else ''), vid)
-
-        for vid, bundle in sorted(by_vehicle.items(), key=_vehicle_sort_key):
-            veh = bundle['vehicle']
-            if vehicle_id and vid and vid != vehicle_id:
+            if search and not _tra_search_matches(search, d, eff):
                 continue
-            if vehicle_id and not vid:
+            if not _tra_driver_matches_scope(
+                eff,
+                project_id,
+                district_id,
+                vehicle_id,
+                None,
+                scope_projects,
+                scope_districts,
+                scope_vehicles,
+                scope_shifts,
+            ):
                 continue
+
+            vehicle = eff.get('vehicle')
+            display_district = eff.get('district')
+            display_project = eff.get('project')
             grid = {}
             status_totals = {s: 0 for s in status_columns}
-            for r in bundle['records']:
-                day_num = r.attendance_date.day
-                slot = _attendance_daily_slot_key(r, driver=d, vehicle=veh)
+
+            for r in records:
+                att_d = r.attendance_date
+                if att_d < seg_start or att_d > seg_end:
+                    continue
+                if not tra_cache.driver_duty_on_date(d.id, att_d):
+                    continue
+                if tra_cache.vehicle_id_on_date(d.id, att_d) != eff_vehicle_id:
+                    continue
+
+                day_num = att_d.day
+                slot = _attendance_daily_slot_key(r, driver=d, vehicle=vehicle)
                 status = (r.status or '').strip()
                 abbr = _attendance_status_abbr(status)
                 if day_num not in grid:
@@ -21428,25 +21555,41 @@ def _build_driver_daily_attendance_report_payload(
                 if status in status_totals:
                     status_totals[status] += 1
                     grand_totals[status] += 1
+
+            left_rec = tra_cache.left_rec(d.id)
+            left_date = None
+            if left_rec and left_rec.change_date and start_d <= left_rec.change_date <= end_d:
+                left_date = left_rec.change_date
+            _daily_attendance_fill_segment_boundary_cells(
+                grid, year, month, seg_start, seg_end, segment, d, left_date, tra_cache,
+            )
+            lifecycle_badges = _daily_attendance_row_lifecycle_badges(
+                d, segment, tra_cache, start_d, end_d, seg_start,
+            )
+
             report.append({
                 'district_name': (
-                    (veh.district.name if veh and veh.district else None)
-                    or (d.district.name if d.district else None)
+                    (display_district.name if display_district else None)
+                    or (vehicle.district.name if vehicle and vehicle.district else None)
                     or '-'
                 ),
                 'project_name': (
-                    (veh.project.name if veh and veh.project else None)
-                    or (d.project.name if d.project else None)
+                    (display_project.name if display_project else None)
+                    or (vehicle.project.name if vehicle and vehicle.project else None)
                     or '-'
                 ),
-                'vehicle_no': (veh.vehicle_no if veh else '-') or '-',
-                'shift': (d.shift or '-') or '-',
+                'vehicle_no': (vehicle.vehicle_no if vehicle else '-') or '-',
+                'shift': (eff.get('shift') or d.shift or '-') or '-',
                 'driver_name': (d.name or '-') or '-',
+                'date_of_leaving': left_date,
+                'lifecycle_badges': lifecycle_badges,
                 'month_present_days': _count_month_present_days(grid),
                 'days_in_month': ndays,
                 'grid': grid,
                 'status_totals': status_totals,
             })
+
+    report.sort(key=lambda row: (row.get('driver_name') or '', row.get('vehicle_no') or ''))
 
     return {
         'report': report,
@@ -21467,8 +21610,9 @@ def _daily_attendance_slot_day_totals(report, ndays):
             slots = grid.get(day) or {}
             for slot in ('M', 'E'):
                 cell = slots.get(slot) or {}
-                v = cell.get('v', '') if isinstance(cell, dict) else (cell or '')
-                if str(v).strip():
+                if _daily_attendance_grid_cell_skip_totals(cell):
+                    continue
+                if _daily_attendance_grid_cell_value(cell):
                     totals[(day, slot)] += 1
     return totals
 
@@ -21528,6 +21672,30 @@ def _generate_driver_daily_attendance_excel(payload):
         'border': 1, 'border_color': border_grey, 'align': 'left', 'valign': 'vcenter',
         'bg_color': zebra,
     })
+    ex_cell_fmt = wb.add_format({
+        'border': 1, 'border_color': border_grey, 'align': 'center', 'valign': 'vcenter',
+        'font_color': '#64748B', 'bg_color': '#E2E8F0', 'bold': True,
+    })
+    ex_cell_zebra_fmt = wb.add_format({
+        'border': 1, 'border_color': border_grey, 'align': 'center', 'valign': 'vcenter',
+        'font_color': '#64748B', 'bg_color': '#CBD5E1', 'bold': True,
+    })
+    inactive_cell_fmt = wb.add_format({
+        'border': 1, 'border_color': border_grey, 'align': 'center', 'valign': 'vcenter',
+        'font_color': '#94A3B8', 'bg_color': '#F8FAFC', 'italic': True,
+    })
+    inactive_cell_zebra_fmt = wb.add_format({
+        'border': 1, 'border_color': border_grey, 'align': 'center', 'valign': 'vcenter',
+        'font_color': '#94A3B8', 'bg_color': '#F1F5F9', 'italic': True,
+    })
+    transfer_cell_fmt = wb.add_format({
+        'border': 1, 'border_color': border_grey, 'align': 'center', 'valign': 'vcenter',
+        'font_color': '#1D4ED8', 'bg_color': '#DBEAFE', 'bold': True,
+    })
+    transfer_cell_zebra_fmt = wb.add_format({
+        'border': 1, 'border_color': border_grey, 'align': 'center', 'valign': 'vcenter',
+        'font_color': '#1D4ED8', 'bg_color': '#BFDBFE', 'bold': True,
+    })
     total_fmt = wb.add_format({
         'bold': True, 'bg_color': total_bg, 'border': 1, 'border_color': border_grey,
         'align': 'center', 'valign': 'vcenter',
@@ -21576,8 +21744,16 @@ def _generate_driver_daily_attendance_excel(payload):
             slots = grid.get(day) or {}
             for si, slot in enumerate(('M', 'E')):
                 cell = slots.get(slot) or {}
-                v = cell.get('v', '') if isinstance(cell, dict) else (cell or '')
-                ws.write(row_idx, info_cols + (day - 1) * 2 + si, v or '', cf)
+                v = _daily_attendance_grid_cell_value(cell)
+                if isinstance(cell, dict) and cell.get('kind') == 'left':
+                    slot_cf = ex_cell_zebra_fmt if use_zebra else ex_cell_fmt
+                elif isinstance(cell, dict) and cell.get('kind') == 'inactive':
+                    slot_cf = inactive_cell_zebra_fmt if use_zebra else inactive_cell_fmt
+                elif isinstance(cell, dict) and cell.get('kind') == 'transfer':
+                    slot_cf = transfer_cell_zebra_fmt if use_zebra else transfer_cell_fmt
+                else:
+                    slot_cf = cf
+                ws.write(row_idx, info_cols + (day - 1) * 2 + si, v or '', slot_cf)
         for j, st in enumerate(status_columns):
             ws.write(row_idx, info_cols + day_slot_cols + j, row['status_totals'].get(st, 0), cf)
         row_idx += 1
@@ -21877,7 +22053,81 @@ def driver_attendance_daily_report():
     )
 
 
-def _tra_effective_assignment(driver, left_rec=None):
+def _tra_pack_rejoin_assignment(rejoin_rec):
+    """Assignment captured on Driver Rejoin form."""
+    return {
+        'vehicle': rejoin_rec.new_vehicle,
+        'vehicle_id': rejoin_rec.new_vehicle_id,
+        'project': rejoin_rec.new_project,
+        'district': rejoin_rec.new_district,
+        'shift': rejoin_rec.new_shift,
+    }
+
+
+def _tra_status_events_up_to(driver_id, on_date, status_events=None):
+    """Left/rejoin timeline up to and including on_date (ascending)."""
+    if status_events is not None:
+        return [ev for ev in status_events if ev.change_date and ev.change_date <= on_date]
+    return (
+        DriverStatusChange.query.filter(
+            DriverStatusChange.driver_id == driver_id,
+            DriverStatusChange.action_type.in_(['left', 'rejoin']),
+            DriverStatusChange.change_date <= on_date,
+        )
+        .order_by(DriverStatusChange.change_date.asc(), DriverStatusChange.id.asc())
+        .all()
+    )
+
+
+def _tra_applicable_rejoin_on_date(driver_id, on_date, status_events=None):
+    """Latest rejoin effective on on_date (must follow a prior left)."""
+    events = _tra_status_events_up_to(driver_id, on_date, status_events)
+    last_left = None
+    applicable = None
+    for ev in events:
+        if ev.action_type == 'left':
+            last_left = ev
+            applicable = None
+        elif (
+            ev.action_type == 'rejoin'
+            and last_left
+            and ev.change_date
+            and last_left.change_date
+            and ev.change_date > last_left.change_date
+        ):
+            applicable = ev
+    if applicable and applicable.change_date and applicable.change_date <= on_date:
+        return applicable
+    return None
+
+
+def _tra_driver_duty_active_on_date(driver, on_date, status_events=None):
+    """On duty on a calendar day — respects assign_date and left/rejoin cycles."""
+    if driver.assign_date and on_date < driver.assign_date:
+        return False
+    events = _tra_status_events_up_to(driver.id, on_date, status_events)
+    last_left = None
+    last_rejoin = None
+    for ev in events:
+        if ev.action_type == 'left' and ev.change_date and ev.change_date <= on_date:
+            last_left = ev.change_date
+        elif ev.action_type == 'rejoin' and ev.change_date and ev.change_date <= on_date:
+            last_rejoin = ev.change_date
+    if last_left is None:
+        return True
+    if last_rejoin and last_rejoin >= last_left:
+        return True
+    if (
+        driver.vehicle_id
+        and driver.assign_date
+        and driver.assign_date > last_left
+        and driver.assign_date <= on_date
+    ):
+        return True
+    return False
+
+
+def _tra_effective_assignment(driver, left_rec=None, rejoin_rec=None):
     """Project/vehicle/district/shift for TRA row when Job Left cleared current assignment."""
     if driver and driver.vehicle_id and driver.vehicle:
         return {
@@ -21887,6 +22137,8 @@ def _tra_effective_assignment(driver, left_rec=None):
             'district': driver.district,
             'shift': driver.shift,
         }
+    if rejoin_rec and rejoin_rec.new_vehicle_id:
+        return _tra_pack_rejoin_assignment(rejoin_rec)
     if left_rec:
         veh = left_rec.left_vehicle
         return {
@@ -21929,6 +22181,14 @@ def _tra_non_shift_transfer_filter():
 
 def _tra_assignment_for_report_month(driver, left_rec, start_d, end_d):
     """Vehicle/project/district/shift as they were during the report month (not current assignment)."""
+    rejoin_during = DriverStatusChange.query.filter(
+        DriverStatusChange.driver_id == driver.id,
+        DriverStatusChange.action_type == 'rejoin',
+        DriverStatusChange.change_date >= start_d,
+        DriverStatusChange.change_date <= end_d,
+    ).order_by(DriverStatusChange.change_date.desc(), DriverStatusChange.id.desc()).first()
+    if not driver.vehicle_id and rejoin_during and rejoin_during.new_vehicle_id:
+        return _tra_pack_rejoin_assignment(rejoin_during)
     if not driver.vehicle_id and left_rec:
         if left_rec.change_date and left_rec.change_date > end_d:
             return _tra_effective_assignment(driver, left_rec)
@@ -21990,17 +22250,86 @@ def _tra_assignment_as_of(driver, left_rec, as_of_date):
         DriverTransfer.transfer_date <= as_of_date,
     ).order_by(DriverTransfer.transfer_date.desc(), DriverTransfer.id.desc()).first()
     if past_t:
+        if past_t.transfer_date == as_of_date:
+            return _tra_pack_transfer_side(past_t, 'old')
         return _tra_pack_transfer_side(past_t, 'new')
 
     return _tra_effective_assignment(driver, left_rec)
 
 
 def _tra_driver_duty_on_date(driver, left_rec, on_date):
-    if driver.assign_date and on_date < driver.assign_date:
-        return False
-    if left_rec and left_rec.change_date and on_date > left_rec.change_date:
-        return False
-    return True
+    return _tra_driver_duty_active_on_date(driver, on_date)
+
+
+def _tra_vehicle_id_from_transfer_list(transfers, on_date, driver=None, left_rec=None):
+    """Vehicle on a calendar date from non-shift transfer history (transfer day = last day on old vehicle)."""
+    future = [t for t in transfers if t.transfer_date > on_date]
+    if future:
+        return future[0].old_vehicle_id
+    past = [t for t in transfers if t.transfer_date <= on_date]
+    if past:
+        t = past[-1]
+        if t.transfer_date == on_date:
+            return t.old_vehicle_id
+        return t.new_vehicle_id
+    if driver and driver.vehicle_id:
+        return driver.vehicle_id
+    if left_rec:
+        return left_rec.left_vehicle_id
+    return None
+
+
+def _tra_build_in_month_transfer_segments(
+    transfers,
+    start_d,
+    end_d,
+    driver,
+    left_date,
+    rejoin_rec,
+):
+    """
+    Build vehicle segments for in-month transfers.
+    Transfer date D is the last day on the old vehicle; new vehicle starts D+1.
+    """
+    segments = []
+    cursor = start_d
+    for t in transfers:
+        t_date = t.transfer_date
+        old_eff = _tra_pack_transfer_side(t, 'old')
+        if t_date >= cursor and old_eff.get('vehicle_id'):
+            seg_s, seg_e = _tra_clamp_segment_bounds(
+                cursor, t_date, start_d, end_d, driver.assign_date, left_date,
+            )
+            if rejoin_rec and rejoin_rec.change_date and seg_s and rejoin_rec.change_date > seg_s:
+                seg_s = max(seg_s, rejoin_rec.change_date)
+            if seg_s is not None and seg_s <= seg_e:
+                segments.append({
+                    'eff': old_eff,
+                    'segment_start': seg_s,
+                    'segment_end': seg_e,
+                    'transfer_in': None,
+                    'transfer_out': t,
+                })
+        cursor = t_date + timedelta(days=1)
+
+    if transfers and cursor <= end_d:
+        last_t = transfers[-1]
+        new_eff = _tra_pack_transfer_side(last_t, 'new')
+        if new_eff.get('vehicle_id'):
+            seg_s, seg_e = _tra_clamp_segment_bounds(
+                cursor, end_d, start_d, end_d, driver.assign_date, left_date,
+            )
+            if rejoin_rec and rejoin_rec.change_date and seg_s and rejoin_rec.change_date > seg_s:
+                seg_s = max(seg_s, rejoin_rec.change_date)
+            if seg_s is not None and seg_s <= seg_e:
+                segments.append({
+                    'eff': new_eff,
+                    'segment_start': seg_s,
+                    'segment_end': seg_e,
+                    'transfer_in': last_t,
+                    'transfer_out': None,
+                })
+    return segments
 
 
 def _tra_clamp_segment_bounds(seg_start, seg_end, month_start, month_end, assign_date, left_date):
@@ -22060,45 +22389,9 @@ def _tra_driver_vehicle_segments(driver, left_rec, start_d, end_d):
         })
         return segments
 
-    cursor = start_d
-    for t in transfers:
-        t_date = t.transfer_date
-        old_eff = _tra_pack_transfer_side(t, 'old')
-        if t_date > cursor and old_eff.get('vehicle_id'):
-            seg_s, seg_e = _tra_clamp_segment_bounds(
-                cursor, t_date - timedelta(days=1), start_d, end_d,
-                driver.assign_date, left_date,
-            )
-            if rejoin_rec and rejoin_rec.change_date and seg_s and rejoin_rec.change_date > seg_s:
-                seg_s = max(seg_s, rejoin_rec.change_date)
-            if seg_s is not None and seg_s <= seg_e:
-                segments.append({
-                    'eff': old_eff,
-                    'segment_start': seg_s,
-                    'segment_end': seg_e,
-                    'transfer_in': None,
-                    'transfer_out': t,
-                })
-        cursor = max(cursor, t_date)
-
-    last_t = transfers[-1]
-    new_eff = _tra_pack_transfer_side(last_t, 'new')
-    if new_eff.get('vehicle_id') and cursor <= end_d:
-        seg_s, seg_e = _tra_clamp_segment_bounds(
-            cursor, end_d, start_d, end_d, driver.assign_date, left_date,
-        )
-        if rejoin_rec and rejoin_rec.change_date and seg_s and rejoin_rec.change_date > seg_s:
-            seg_s = max(seg_s, rejoin_rec.change_date)
-        if seg_s is not None and seg_s <= seg_e:
-            segments.append({
-                'eff': new_eff,
-                'segment_start': seg_s,
-                'segment_end': seg_e,
-                'transfer_in': last_t,
-                'transfer_out': None,
-            })
-
-    return segments
+    return _tra_build_in_month_transfer_segments(
+        transfers, start_d, end_d, driver, left_date, rejoin_rec,
+    )
 
 
 def _tra_count_drivers_on_vehicle_day(vehicle_id, on_date, month_start, month_end):
@@ -22192,6 +22485,23 @@ def _tra_driver_on_duty_in_month(driver_id, start_d, end_d, assign_date):
         ).first()
         if has_att:
             return True
+        sf = _tra_non_shift_transfer_filter()
+        transferred_in_month = DriverTransfer.query.filter(
+            DriverTransfer.driver_id == driver_id,
+            sf,
+            DriverTransfer.transfer_date >= start_d,
+            DriverTransfer.transfer_date <= end_d,
+        ).first()
+        if transferred_in_month:
+            return True
+        rejoined_in_month = DriverStatusChange.query.filter(
+            DriverStatusChange.driver_id == driver_id,
+            DriverStatusChange.action_type == 'rejoin',
+            DriverStatusChange.change_date >= start_d,
+            DriverStatusChange.change_date <= end_d,
+        ).first()
+        if rejoined_in_month:
+            return True
         left_in_month = DriverStatusChange.query.filter(
             DriverStatusChange.driver_id == driver_id,
             DriverStatusChange.action_type == 'left',
@@ -22207,6 +22517,15 @@ def _tra_driver_on_duty_in_month(driver_id, start_d, end_d, assign_date):
     ).order_by(DriverStatusChange.change_date.desc()).first()
 
     if left_before_month:
+        driver = Driver.query.get(driver_id)
+        if (
+            driver
+            and driver.vehicle_id
+            and assign_date
+            and assign_date > left_before_month.change_date
+            and assign_date <= end_d
+        ):
+            return True
         rejoined = DriverStatusChange.query.filter(
             DriverStatusChange.driver_id == driver_id,
             DriverStatusChange.action_type == 'rejoin',
@@ -22236,7 +22555,6 @@ def _tra_report_driver_ids_for_month(
 
     assigned_q = Driver.query.filter(
         Driver.vehicle_id.isnot(None),
-        db.or_(Driver.assign_date.is_(None), Driver.assign_date <= end_d),
     ).outerjoin(Vehicle, Driver.vehicle_id == Vehicle.id)
     if scope_projects:
         assigned_q = assigned_q.filter(
@@ -22322,6 +22640,54 @@ def _tra_report_driver_ids_for_month(
     for row in worked_left_q.with_entities(DriverStatusChange.driver_id).distinct():
         ids.add(row[0])
 
+    rejoin_q = DriverStatusChange.query.join(Driver).filter(
+        DriverStatusChange.action_type == 'rejoin',
+        DriverStatusChange.change_date >= start_d,
+        DriverStatusChange.change_date <= end_d,
+    )
+    if scope_projects:
+        rejoin_q = rejoin_q.filter(
+            DriverStatusChange.new_project_id.in_(scope_projects)
+        )
+    if scope_districts:
+        rejoin_q = rejoin_q.filter(
+            DriverStatusChange.new_district_id.in_(scope_districts)
+        )
+    if scope_vehicles:
+        rejoin_q = rejoin_q.filter(
+            DriverStatusChange.new_vehicle_id.in_(scope_vehicles)
+        )
+    if scope_shifts:
+        rejoin_q = rejoin_q.filter(
+            DriverStatusChange.new_shift.in_(scope_shifts)
+        )
+    if project_id:
+        rejoin_q = rejoin_q.filter(
+            DriverStatusChange.new_project_id == project_id
+        )
+    if district_id:
+        rejoin_q = rejoin_q.filter(
+            DriverStatusChange.new_district_id == district_id
+        )
+    if vehicle_id:
+        rejoin_q = rejoin_q.filter(
+            DriverStatusChange.new_vehicle_id == vehicle_id
+        )
+    if shift:
+        rejoin_q = rejoin_q.filter(
+            DriverStatusChange.new_shift == shift
+        )
+    for row in rejoin_q.with_entities(DriverStatusChange.driver_id).distinct():
+        ids.add(row[0])
+
+    vehicle_ids_to_scan = []
+    if vehicle_id:
+        vehicle_ids_to_scan = [vehicle_id]
+    elif scope_vehicles:
+        vehicle_ids_to_scan = list(scope_vehicles)
+    for vid in vehicle_ids_to_scan:
+        ids.update(_tra_vehicle_driver_ids_in_month(vid, start_d, end_d))
+
     return ids
 
 
@@ -22335,6 +22701,7 @@ class _TraMonthCache:
         self.drivers = {}
         self.left_by_driver = {}
         self.rejoin_in_month = {}
+        self.status_events_by_driver = {}
         self.transfers_by_driver = {}
         self._att_in_month = set()
         self._vehicle_on_date = {}
@@ -22357,10 +22724,18 @@ class _TraMonthCache:
         }
         ids = list(self.driver_ids)
 
+        self.status_events_by_driver = {did: [] for did in ids}
         for sc in DriverStatusChange.query.filter(
             DriverStatusChange.driver_id.in_(ids),
             DriverStatusChange.action_type.in_(['left', 'rejoin']),
-        ).order_by(DriverStatusChange.change_date.desc(), DriverStatusChange.id.desc()):
+        ).order_by(DriverStatusChange.change_date.asc(), DriverStatusChange.id.asc()):
+            self.status_events_by_driver.setdefault(sc.driver_id, []).append(sc)
+        for sc in reversed(
+            DriverStatusChange.query.filter(
+                DriverStatusChange.driver_id.in_(ids),
+                DriverStatusChange.action_type.in_(['left', 'rejoin']),
+            ).order_by(DriverStatusChange.change_date.desc(), DriverStatusChange.id.desc()).all()
+        ):
             if sc.action_type == 'left' and sc.driver_id not in self.left_by_driver:
                 self.left_by_driver[sc.driver_id] = sc
             elif (
@@ -22398,7 +22773,14 @@ class _TraMonthCache:
         for sc in DriverStatusChange.query.filter(
             DriverStatusChange.driver_id.in_(new_ids),
             DriverStatusChange.action_type.in_(['left', 'rejoin']),
-        ).order_by(DriverStatusChange.change_date.desc(), DriverStatusChange.id.desc()):
+        ).order_by(DriverStatusChange.change_date.asc(), DriverStatusChange.id.asc()):
+            self.status_events_by_driver.setdefault(sc.driver_id, []).append(sc)
+        for sc in reversed(
+            DriverStatusChange.query.filter(
+                DriverStatusChange.driver_id.in_(new_ids),
+                DriverStatusChange.action_type.in_(['left', 'rejoin']),
+            ).order_by(DriverStatusChange.change_date.desc(), DriverStatusChange.id.desc()).all()
+        ):
             if sc.action_type == 'left' and sc.driver_id not in self.left_by_driver:
                 self.left_by_driver[sc.driver_id] = sc
             elif (
@@ -22431,25 +22813,39 @@ class _TraMonthCache:
         if assign_date and assign_date > self.end_d:
             if driver.id in self._att_in_month:
                 return True
+            if any(
+                t.transfer_date
+                and self.start_d <= t.transfer_date <= self.end_d
+                for t in self.transfers_by_driver.get(driver.id, [])
+            ):
+                return True
+            rejoin_rec = self.rejoin_in_month.get(driver.id)
+            if rejoin_rec and rejoin_rec.change_date:
+                return True
             return any(
                 sc.change_date and self.start_d <= sc.change_date <= self.end_d
                 for sc in [self.left_by_driver.get(driver.id)]
                 if sc
             )
-        left_before = None
-        for sc in [self.left_by_driver.get(driver.id)]:
-            if sc and sc.change_date and sc.change_date < self.start_d:
-                left_before = sc
-        if left_before:
-            rejoined = any(
-                sc.change_date
-                and sc.change_date > left_before.change_date
-                and sc.change_date <= self.end_d
-                for sc in [self.rejoin_in_month.get(driver.id)]
-                if sc
-            )
-            if not rejoined:
-                return False
+        left_rec = self.left_by_driver.get(driver.id)
+        if left_rec and left_rec.change_date:
+            if (
+                driver.vehicle_id
+                and assign_date
+                and assign_date > left_rec.change_date
+                and assign_date <= self.end_d
+            ):
+                return True
+            if left_rec.change_date < self.start_d:
+                rejoined = any(
+                    sc.change_date
+                    and sc.change_date > left_rec.change_date
+                    and sc.change_date <= self.end_d
+                    for sc in [self.rejoin_in_month.get(driver.id)]
+                    if sc
+                )
+                if not rejoined:
+                    return False
         return True
 
     def vehicle_id_on_date(self, driver_id, on_date):
@@ -22460,31 +22856,19 @@ class _TraMonthCache:
         if not driver:
             self._vehicle_on_date[key] = None
             return None
+        status_events = self.status_events_by_driver.get(driver_id, [])
+        rejoin = _tra_applicable_rejoin_on_date(driver_id, on_date, status_events)
+        if rejoin and rejoin.new_vehicle_id and rejoin.change_date and on_date >= rejoin.change_date:
+            self._vehicle_on_date[key] = rejoin.new_vehicle_id
+            return rejoin.new_vehicle_id
         left = self.left_rec(driver_id)
-        if not driver.vehicle_id and left:
-            if left.change_date and left.change_date > on_date:
-                vid = left.left_vehicle_id
-                self._vehicle_on_date[key] = vid
-                return vid
-            if left.change_date and left.change_date <= on_date:
-                vid = left.left_vehicle_id
-                self._vehicle_on_date[key] = vid
-                return vid
+        if not driver.vehicle_id and left and left.change_date and left.change_date > on_date:
+            vid = left.left_vehicle_id
+            self._vehicle_on_date[key] = vid
+            return vid
 
         transfers = self.transfers_by_driver.get(driver_id, [])
-        future = [t for t in transfers if t.transfer_date > on_date]
-        if future:
-            vid = future[0].old_vehicle_id
-        else:
-            past = [t for t in transfers if t.transfer_date <= on_date]
-            if past:
-                vid = past[-1].new_vehicle_id
-            elif driver.vehicle_id:
-                vid = driver.vehicle_id
-            elif left:
-                vid = left.left_vehicle_id
-            else:
-                vid = None
+        vid = _tra_vehicle_id_from_transfer_list(transfers, on_date, driver, left)
         self._vehicle_on_date[key] = vid
         return vid
 
@@ -22492,12 +22876,9 @@ class _TraMonthCache:
         driver = self.drivers.get(driver_id)
         if not driver:
             return False
-        if driver.assign_date and on_date < driver.assign_date:
-            return False
-        left = self.left_rec(driver_id)
-        if left and left.change_date and on_date > left.change_date:
-            return False
-        return True
+        return _tra_driver_duty_active_on_date(
+            driver, on_date, self.status_events_by_driver.get(driver_id),
+        )
 
     def segments(self, driver):
         if driver.id in self._segments:
@@ -22538,45 +22919,9 @@ class _TraMonthCache:
             self._segments[driver.id] = segments
             return segments
 
-        cursor = self.start_d
-        for t in transfers:
-            t_date = t.transfer_date
-            old_eff = _tra_pack_transfer_side(t, 'old')
-            if t_date > cursor and old_eff.get('vehicle_id'):
-                seg_s, seg_e = _tra_clamp_segment_bounds(
-                    cursor, t_date - timedelta(days=1), self.start_d, self.end_d,
-                    driver.assign_date, left_date,
-                )
-                if rejoin_rec and rejoin_rec.change_date and seg_s and rejoin_rec.change_date > seg_s:
-                    seg_s = max(seg_s, rejoin_rec.change_date)
-                if seg_s is not None and seg_s <= seg_e:
-                    segments.append({
-                        'eff': old_eff,
-                        'segment_start': seg_s,
-                        'segment_end': seg_e,
-                        'transfer_in': None,
-                        'transfer_out': t,
-                    })
-            cursor = max(cursor, t_date)
-
-        last_t = transfers[-1]
-        new_eff = _tra_pack_transfer_side(last_t, 'new')
-        if new_eff.get('vehicle_id') and cursor <= self.end_d:
-            seg_s, seg_e = _tra_clamp_segment_bounds(
-                cursor, self.end_d, self.start_d, self.end_d,
-                driver.assign_date, left_date,
-            )
-            if rejoin_rec and rejoin_rec.change_date and seg_s and rejoin_rec.change_date > seg_s:
-                seg_s = max(seg_s, rejoin_rec.change_date)
-            if seg_s is not None and seg_s <= seg_e:
-                segments.append({
-                    'eff': new_eff,
-                    'segment_start': seg_s,
-                    'segment_end': seg_e,
-                    'transfer_in': last_t,
-                    'transfer_out': None,
-                })
-
+        segments = _tra_build_in_month_transfer_segments(
+            transfers, self.start_d, self.end_d, driver, left_date, rejoin_rec,
+        )
         self._segments[driver.id] = segments
         return segments
 
