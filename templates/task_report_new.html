@@ -1121,6 +1121,40 @@ window.TASK_REPORT_NEW_LOCK_PROJECT = {{ task_entry_filter.lock_project|tojson }
     sessionStorage.setItem('task_batch_skip_draft_reset', '1');
   }
 
+  function taskEntryUnlockRowForOdom(rowId) {
+    if (!rowId) return;
+    var editMode = document.getElementById('row_' + rowId + '_edit_mode');
+    if (editMode) editMode.value = '1';
+    document.querySelectorAll('.task-editable-field[data-row="' + rowId + '"]').forEach(function(el) {
+      el.disabled = false;
+    });
+    document.querySelectorAll('.odom-ctrl-wrap[data-row="' + rowId + '"]').forEach(function(w) {
+      w.classList.remove('odom-wrap-locked');
+      w.setAttribute('tabindex', '0');
+      w.style.opacity = '';
+      w.title = 'Paste (Ctrl+V) when focused, or click speedometer for file / mobile rear camera';
+    });
+    var btn = document.querySelector('.task-row-edit-btn[data-row="' + rowId + '"]');
+    if (btn) {
+      btn.classList.remove('btn-outline-primary');
+      btn.classList.add('btn-primary');
+      btn.innerHTML = '<i class="bi bi-check2-circle me-1"></i>Editing';
+      btn.disabled = true;
+    }
+  }
+
+  (function taskEntryResumeAfterCamera() {
+    var resumeRow = sessionStorage.getItem('fleet_resume_odom_row');
+    if (!resumeRow) return;
+    sessionStorage.removeItem('fleet_resume_odom_row');
+    taskEntryUnlockRowForOdom(resumeRow);
+    window.setTimeout(function() {
+      if (window.FleetGpsPendingUpload && typeof window.FleetGpsPendingUpload.retryAll === 'function') {
+        window.FleetGpsPendingUpload.retryAll(true);
+      }
+    }, 500);
+  })();
+
   var batchTable = document.getElementById('batchTable');
   if (batchTable) {
     batchTable.addEventListener('input', function(e) {

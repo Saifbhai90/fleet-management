@@ -56,7 +56,10 @@
       return Promise.reject(new Error('Photo stamp not loaded — refresh the page.'));
     }
     return window.fleetStampAttendancePhoto(dataUrl, null, odometerStampOpts(rowId, lat, lng, accuracyMeters))
-      .then(function(res) { return uploadJpeg(rowId, res.dataUrl); });
+      .then(function(res) {
+        if (res && res.dataUrl) queueOdometerPending(rowId, res.dataUrl);
+        return uploadJpeg(rowId, res.dataUrl);
+      });
   }
 
   function setRowPhotoUi(rowId, url) {
@@ -164,6 +167,7 @@
         window.FleetGpsPendingUpload.clearOdometerPending(vehicleIdForRow(rowId), taskDateDmy());
       }
       setRowPhotoUi(rowId, res.body.url);
+      if (window.fleetClearResumePath) window.fleetClearResumePath();
     }).catch(function(err) {
       if (jpegDataUrl && (!err.message || err.message.indexOf('auto-retry') < 0)) {
         queueOdometerPending(rowId, jpegDataUrl);
@@ -185,6 +189,7 @@
   }
 
   function runWithGps(rowId, dataUrl, fromRear) {
+    if (window.fleetSetResumePath) window.fleetSetResumePath({ odomRow: rowId });
     setOdomBusy(rowId, true);
     fetchGpsForOdometer(function(lat, lng, acc) {
       var opts = odometerStampOpts(rowId, lat, lng, acc);
@@ -204,6 +209,7 @@
   var pendingRowId = null;
 
   function openFilePickerForRow(rowId) {
+    if (window.fleetSetResumePath) window.fleetSetResumePath({ odomRow: rowId });
     pendingRowId = rowId;
     fileInp.value = '';
     fileInp.click();
@@ -221,6 +227,7 @@
   });
 
   function nativeRearCamera(rowId) {
+    if (window.fleetSetResumePath) window.fleetSetResumePath({ odomRow: rowId });
     var Cam = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Camera;
     if (!Cam || !Cam.getPhoto) {
       openFilePickerForRow(rowId);

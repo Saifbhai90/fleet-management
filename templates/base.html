@@ -8677,6 +8677,72 @@ document.addEventListener('DOMContentLoaded', function() {
 
 <script>
 /* ═══════════════════════════════════════════════════════════════════
+   Resume path after native camera / file picker (localStorage + cookie).
+   Survives Android WebView process kill; returns user to Task Report etc.
+   ═══════════════════════════════════════════════════════════════════ */
+(function() {
+  'use strict';
+  var FLEET_RESUME_KEY = 'fleet_resume_url';
+  var FLEET_RESUME_ROW = 'fleet_resume_odom_row';
+  var FLEET_RESUME_TS = 'fleet_resume_ts';
+  var RESUME_MAX_AGE_MS = 30 * 60 * 1000;
+
+  function _resumeCookieSuffix() {
+    return (location.protocol === 'https:') ? '; Secure' : '';
+  }
+
+  window.fleetClearResumePath = function() {
+    try {
+      localStorage.removeItem(FLEET_RESUME_KEY);
+      localStorage.removeItem(FLEET_RESUME_ROW);
+      localStorage.removeItem(FLEET_RESUME_TS);
+      document.cookie = 'fleet_resume_path=; path=/; max-age=0; SameSite=Lax' + _resumeCookieSuffix();
+    } catch (e) { /* ignore */ }
+  };
+
+  window.fleetSetResumePath = function(opts) {
+    opts = opts || {};
+    try {
+      var url = location.pathname + location.search + location.hash;
+      localStorage.setItem(FLEET_RESUME_KEY, url);
+      localStorage.setItem(FLEET_RESUME_TS, String(Date.now()));
+      if (opts.odomRow) localStorage.setItem(FLEET_RESUME_ROW, String(opts.odomRow));
+      else localStorage.removeItem(FLEET_RESUME_ROW);
+      document.cookie = 'fleet_resume_path=' + encodeURIComponent(url) + '; path=/; max-age=1800; SameSite=Lax' + _resumeCookieSuffix();
+    } catch (e) { /* ignore */ }
+  };
+
+  function _resumeLandingPaths() {
+    return { '/': 1, '/dashboard': 1, '/mobile-init': 1 };
+  }
+
+  window.fleetApplyResumeRedirect = function() {
+    try {
+      var url = localStorage.getItem(FLEET_RESUME_KEY);
+      var ts = parseInt(localStorage.getItem(FLEET_RESUME_TS) || '0', 10);
+      if (!url || !ts || (Date.now() - ts) > RESUME_MAX_AGE_MS) {
+        window.fleetClearResumePath();
+        return false;
+      }
+      var current = location.pathname + location.search + location.hash;
+      if (current === url) {
+        window.fleetClearResumePath();
+        return false;
+      }
+      if (!_resumeLandingPaths()[location.pathname]) return false;
+      var odomRow = localStorage.getItem(FLEET_RESUME_ROW);
+      sessionStorage.setItem('task_batch_skip_draft_reset', '1');
+      if (odomRow) sessionStorage.setItem('fleet_resume_odom_row', odomRow);
+      window.fleetClearResumePath();
+      window.location.replace(url);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  };
+})();
+
+/* ═══════════════════════════════════════════════════════════════════
    App Lifecycle (Capacitor): WebView reload after camera/file picker clears
    sessionStorage but Flask session cookie may still be valid — do NOT force
    /mobile-init logout when the server already rendered a logged-in page.
@@ -8685,6 +8751,10 @@ document.addEventListener('DOMContentLoaded', function() {
 (function() {
   'use strict';
   if (!window.Capacitor || Capacitor.getPlatform() === 'web') return;
+
+  {% if session.get('user_id') %}
+  if (window.fleetApplyResumeRedirect && window.fleetApplyResumeRedirect()) return;
+  {% endif %}
 
   var SESSION_KEY = '_fleetAppSession';
   var currentPath = window.location.pathname;
@@ -8700,6 +8770,21 @@ document.addEventListener('DOMContentLoaded', function() {
 
   if (currentPath === '/mobile-init' || currentPath === '/login') return;
   window.location.replace('/mobile-init');
+})();
+
+(function() {
+  'use strict';
+  if (!window.Capacitor || Capacitor.getPlatform() === 'web') return;
+  {% if session.get('user_id') %}
+  var App = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App;
+  if (App && App.addListener) {
+    App.addListener('appStateChange', function(state) {
+      if (state && state.isActive && window.fleetApplyResumeRedirect) {
+        window.fleetApplyResumeRedirect();
+      }
+    });
+  }
+  {% endif %}
 })();
 
 /* ═══════════════════════════════════════════════════════════════════

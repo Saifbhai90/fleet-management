@@ -3892,6 +3892,16 @@ def biometric_token():
     return jsonify({'ok': True, 'token': token, 'username': user.username, 'display_name': display_name})
 
 
+def _safe_mobile_resume_path(path):
+    """Relative in-app path only — used after native camera kills the WebView."""
+    if not path or not path.startswith('/') or path.startswith('//'):
+        return None
+    low = path.lower()
+    if low.startswith('/login') or low.startswith('/mobile-init'):
+        return None
+    return path.split('#')[0] or None
+
+
 @app.route('/mobile-init')
 def mobile_init():
     """Capacitor cold start: restore valid server session; clear only when unauthenticated or user inactive."""
@@ -3902,9 +3912,14 @@ def mobile_init():
             if user and user.is_active:
                 session['last_activity'] = pk_now()
                 session['_user_active_ts'] = _time_mod.time()
-                nxt = (request.args.get('next') or '').strip()
-                if nxt.startswith('/') and not nxt.startswith('//'):
-                    return redirect(nxt)
+                from urllib.parse import unquote
+                nxt = _safe_mobile_resume_path((request.args.get('next') or '').strip())
+                if not nxt:
+                    nxt = _safe_mobile_resume_path(unquote(request.cookies.get('fleet_resume_path', '') or '').strip())
+                if nxt:
+                    resp = make_response(redirect(nxt))
+                    resp.set_cookie('fleet_resume_path', '', max_age=0, path='/')
+                    return resp
                 return redirect(url_for('dashboard'))
         except Exception:
             pass
