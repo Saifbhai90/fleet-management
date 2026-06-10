@@ -994,6 +994,16 @@
           canvasMargin: { right: 0.24 },
         },
         {
+          scale: 4.4,
+          mode: 'gray-boost',
+          variant: 'teach-block',
+          noWhitelist: true,
+          psm: '6',
+          padPct: 1.4,
+          padAsym: { left: 0.8, right: 5.5, top: 1.4, bottom: 1.4 },
+          canvasMargin: { right: 0.2 },
+        },
+        {
           scale: 5.2,
           mode: 'contrast',
           variant: 'teach-tail35',
@@ -1014,6 +1024,26 @@
           padPct: 0.7,
           padAsym: { left: 0.4, right: 5.5, top: 1, bottom: 1 },
           canvasMargin: { left: 0.03, right: 0.28 },
+        },
+        {
+          scale: 4.6,
+          mode: 'binary',
+          variant: 'teach-binary-line',
+          psm: '7',
+          padPct: 1.0,
+          padAsym: { left: 0.6, right: 5.5, top: 1.2, bottom: 1.2 },
+          canvasMargin: { right: 0.22 },
+        },
+        {
+          scale: 5.0,
+          mode: 'sharp',
+          variant: 'teach-tail50',
+          digitsOnly: true,
+          psm: '7',
+          regionSlice: 'right50',
+          padPct: 0.8,
+          padAsym: { left: 0.4, right: 5, top: 1.2, bottom: 1.2 },
+          canvasMargin: { left: 0.03, right: 0.25 },
         },
       ];
     }
@@ -1263,13 +1293,23 @@
 
   function isGoodEnoughExtract(data) {
     if (!data) return false;
-    var q = extractionQuality(data);
-    if (q >= 235) return true;
     var filled = 0;
     ['date', 'amount', 'reference_no'].forEach(function (k) {
       if (data[k] && data[k] !== '—') filled++;
     });
+    var q = extractionQuality(data);
+    if (filled >= 3 && q >= 200) return true;
+    if (q >= 235) return true;
     return filled >= 2 && q >= 175;
+  }
+
+  function isCompleteExtract(data) {
+    if (!data) return false;
+    if (!data.date || data.date === '—') return false;
+    if (!data.amount || data.amount === '—') return false;
+    if (!data.reference_no || data.reference_no === '—') return false;
+    if (!isPlausibleReferenceId(data.reference_no)) return false;
+    return isGoodEnoughExtract(data);
   }
 
   function attachProfileMeta(data, profile, score, fullText, provider, img) {
@@ -1297,7 +1337,7 @@
         tried++;
         return extractWithProfile(img, c.profile, fullText, {
           fast: useFast,
-          parallel: true,
+          smart: true,
         }).then(function (data) {
           attachProfileMeta(data, c.profile, c.score, fullText, detectProvider(fullText), img);
           data._quality = extractionQuality(data);
@@ -1801,11 +1841,30 @@
     });
   }
 
+  function applyReferenceConsensus(candidates) {
+    var counts = {};
+    candidates.forEach(function (c) {
+      if (!c || !c.val) return;
+      counts[c.val] = (counts[c.val] || 0) + 1;
+    });
+    candidates.forEach(function (c) {
+      if (!c || !c.val) return;
+      var n = counts[c.val] || 0;
+      if (n >= 2) {
+        c.score = (c.score || scoreReferenceDigits(c.val, 80)) + 45 + (n - 2) * 25;
+        c.conf = Math.min(0.98, (c.conf || 0.6) + 0.08 + (n - 2) * 0.04);
+      }
+    });
+    return candidates;
+  }
+
   function ocrReferenceRegionField(img, region, opts) {
     opts = opts || {};
     region = expandReferenceRegion(region);
     var variants = fieldOcrVariants('reference_no', !!opts.fast, opts);
     var candidates = [];
+    var labeledHits = 0;
+    var stopEarly = false;
     var chain = Promise.resolve();
 
     ocrLog('ocrReferenceRegionField start', {
@@ -1817,6 +1876,7 @@
 
     variants.forEach(function (v) {
       chain = chain.then(function () {
+        if (stopEarly) return;
         var cropRegion = v.regionSlice ? sliceRegion(region, v.regionSlice) : region;
         var cropPx = regionToPixelRect(img, cropRegion, v.padPct, v.padAsym);
         if (!isViableOcrCrop(cropPx, 'reference_no')) {
@@ -1832,11 +1892,29 @@
         }).then(function (raw) {
           var text = (raw && raw.data && raw.data.text) ? raw.data.text : '';
           var conf = (raw && raw.data && typeof raw.data.confidence === 'number') ? raw.data.confidence / 100 : 0.55;
+
+          // Logic 1: labeled match ("Transaction ID # 65872871") — strongest signal
+          var labeled = extractReferenceIdFromRaw(text);
+          if (labeled && isPlausibleReferenceId(labeled)) {
+            labeledHits++;
+            candidates.push({
+              val: labeled,
+              conf: Math.min(0.97, conf + 0.18),
+              score: scoreReferenceDigits(labeled, 160),
+              source: v.variant + '-labeled',
+            });
+            if (conf >= 0.55 || labeledHits >= 2) {
+              stopEarly = true;
+            }
+          }
+
+          // Logic 2: loose zone parse (digit runs, merged tokens)
           var val = parseFieldLoose('reference_no', text, { zone: true });
           ocrLog('ocrReferenceRegionField parse', {
             variant: v.variant,
             rawText: text,
             parsed: val,
+            labeled: labeled || null,
           });
           if (val) {
             var rank = fieldValueRank('reference_no', val, conf);
@@ -1847,6 +1925,8 @@
               source: v.variant,
             });
           }
+
+          // Logic 3: word-box scan (positional digit groups)
           var wordHit = extractReferenceFromWords(
             (raw && raw.data && raw.data.words) ? raw.data.words : [],
             canvas.width
@@ -1860,17 +1940,34 @@
               source: wordHit.source,
             });
           }
+
+          // Logic 4: digits-only consensus early stop (2 passes same value)
+          if (!stopEarly && candidates.length >= 2) {
+            var seen = {};
+            candidates.forEach(function (c) {
+              if (c && c.val && /^\d{6,}$/.test(c.val)) seen[c.val] = (seen[c.val] || 0) + 1;
+            });
+            Object.keys(seen).forEach(function (k) {
+              if (seen[k] >= 3) stopEarly = true;
+            });
+          }
         });
       });
     });
 
     return chain.then(function () {
+      // Logic 5: consensus voting — same value in multiple passes wins
+      applyReferenceConsensus(candidates);
       var best = pickBestReferenceCandidate(candidates);
       var needsHeader = !best || !best.value || (best.confidence || 0) < 0.68;
       if (needsHeader && opts.fullText && extractReferenceIdFromRaw(opts.fullText)) {
         needsHeader = false;
       }
-      if (needsHeader && opts.fast) {
+      if (needsHeader && opts.fast && best && best.value && isPlausibleReferenceId(best.value) &&
+          (best.confidence || 0) >= 0.52) {
+        needsHeader = false;
+      }
+      if (opts.zoneOnly) {
         needsHeader = false;
       }
       var headerPromise = needsHeader ? ocrHeaderReferenceScan(img) : Promise.resolve(null);
@@ -1886,6 +1983,8 @@
         }
         if (opts.fullText) {
           best = reconcileReferencePreview(best, opts.fullText);
+        } else if (best && best.value && !isPlausibleReferenceId(best.value)) {
+          best = fieldResult(null, 0, 'none');
         } else if (!best || !best.value) {
           best = fieldResult(null, 0, 'none');
         }
@@ -2047,20 +2146,26 @@
     return best;
   }
 
-  function previewRegionFieldWithFallback(img, fieldKey, region, fullText) {
+  function previewRegionFieldWithFallback(img, fieldKey, region, fullText, opts) {
+    opts = opts || {};
+    var zoneOnly = !!opts.zoneOnly;
     var fb = fullText ? fullTextFallback(fullText) : null;
     var ab = fullText ? anchorFallback(fullText) : null;
 
     if (!region) {
-      if (!fullText || !fb || !ab) return Promise.resolve(fieldResult(null, 0, 'none'));
+      if (zoneOnly || !fullText || !fb || !ab) return Promise.resolve(fieldResult(null, 0, 'none'));
       return Promise.resolve(mergeFieldResults(ab[fieldKey], fb[fieldKey], 0.5));
     }
 
     return ocrRegionField(img, region, fieldKey, {
       fast: false,
       teachPreview: true,
-      fullText: fullText,
+      zoneOnly: zoneOnly,
+      fullText: zoneOnly ? '' : fullText,
     }).then(function (zoneRes) {
+      if (zoneOnly) {
+        return zoneRes || fieldResult(null, 0, 'zone');
+      }
       if (fieldKey === 'reference_no') {
         return zoneRes;
       }
@@ -2123,6 +2228,262 @@
     return ocrFullImage(img).then(function (text) {
       _fullTextCache.set(cacheKey, text);
       return text;
+    });
+  }
+
+  function scoreFullTextCoverage(text) {
+    if (!text) return 0;
+    var ab = anchorFallback(text);
+    var fb = fullTextFallback(text);
+    var score = 0;
+    ['date', 'amount', 'reference_no'].forEach(function (k) {
+      var m = mergeFieldResults(ab[k], fb[k], 0.5);
+      if (!m || !m.value) return;
+      if (k === 'reference_no' && !isPlausibleReferenceId(m.value)) return;
+      if (k === 'amount' && !validateAmountCandidate(m.value, text)) return;
+      score += fieldValueRank(k, m.value, m.confidence || 0.55);
+    });
+    return score;
+  }
+
+  function ocrFullImagePass(img, passId) {
+    img = normalizeSlipImage(img);
+    var size = imagePixelSize(img);
+    var canvas;
+    if (passId === 'full') {
+      var fullScale = size.w && size.w < 1500 ? (1500 / size.w) : 1.05;
+      canvas = document.createElement('canvas');
+      canvas.width = Math.round(size.w * fullScale);
+      canvas.height = Math.round(size.h * fullScale);
+      var ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(slipDrawTarget(img), 0, 0, canvas.width, canvas.height);
+      enhanceCanvas(ctx, canvas, 'photo-fix');
+    } else if (passId === 'header') {
+      canvas = makeRegionCanvas(img, { region_x: 0, region_y: 0, region_w: 100, region_h: 30 }, 2.5, 'photo-fix', 0);
+    } else if (passId === 'body') {
+      canvas = makeRegionCanvas(img, { region_x: 0, region_y: 10, region_w: 100, region_h: 45 }, 2.2, 'contrast', 0);
+    } else {
+      canvas = makeRegionCanvas(img, { region_x: 0, region_y: 52, region_w: 100, region_h: 45 }, 2.0, 'gray-boost', 0);
+    }
+    return ocrCanvas(canvas, null, { variant: 'smart-' + passId }).then(function (ocr) {
+      return ocr.text || '';
+    });
+  }
+
+  function ocrFullImageSmart(img) {
+    img = normalizeSlipImage(img);
+    var parts = [];
+    function combined() {
+      return parts.filter(Boolean).join('\n');
+    }
+    function quality() {
+      return scoreFullTextCoverage(combined());
+    }
+    ocrLog('ocrFullImageSmart start');
+    return ocrFullImagePass(img, 'full').then(function (t1) {
+      parts.push(t1);
+      if (quality() >= 215) {
+        ocrLog('ocrFullImageSmart stop after full', { quality: quality() });
+        return combined();
+      }
+      return ocrFullImagePass(img, 'header').then(function (t2) {
+        parts.push(t2);
+        if (quality() >= 195) {
+          ocrLog('ocrFullImageSmart stop after header', { quality: quality() });
+          return combined();
+        }
+        return ocrFullImagePass(img, 'body').then(function (t3) {
+          parts.push(t3);
+          if (quality() >= 175) {
+            ocrLog('ocrFullImageSmart stop after body', { quality: quality() });
+            return combined();
+          }
+          return ocrFullImagePass(img, 'footer').then(function (t4) {
+            parts.push(t4);
+            ocrLog('ocrFullImageSmart done all passes', { quality: quality() });
+            return combined();
+          });
+        });
+      });
+    });
+  }
+
+  function getSlipFullTextForExtract(img) {
+    img = normalizeSlipImage(img);
+    var cacheKey = img._raw || img;
+    if (_fullTextCache.has(cacheKey)) {
+      return Promise.resolve(_fullTextCache.get(cacheKey));
+    }
+    return ocrFullImageSmart(img).then(function (text) {
+      _fullTextCache.set(cacheKey, text);
+      return text;
+    });
+  }
+
+  function seededFieldResult(key, ab, fb, fullText, minConf) {
+    var merged = mergeFieldResults(ab[key], fb[key], 0.5);
+    if (!merged || !merged.value) return null;
+    if (key === 'reference_no' && !isPlausibleReferenceId(merged.value)) return null;
+    if (key === 'amount' && !validateAmountCandidate(merged.value, fullText)) return null;
+    if ((merged.confidence || 0) < (minConf || 0.58)) return null;
+    return merged;
+  }
+
+  function shouldSkipZoneOcr(key, seed, fullText, region) {
+    if (!region || !seed || !seed.value) return false;
+    if (key === 'reference_no') {
+      if (!isPlausibleReferenceId(seed.value)) return false;
+      if (seed.source === 'anchor' && (seed.confidence || 0) >= 0.62) return true;
+      return (seed.confidence || 0) >= 0.66;
+    }
+    if (key === 'amount') {
+      return (seed.confidence || 0) >= 0.68 && validateAmountCandidate(seed.value, fullText);
+    }
+    if (key === 'date') {
+      return (seed.confidence || 0) >= 0.6;
+    }
+    return false;
+  }
+
+  function profileHasAllZones(profile) {
+    if (!profile || !profile.fields || !profile.fields.length) return false;
+    var have = { date: false, amount: false, reference_no: false };
+    profile.fields.forEach(function (f) {
+      if (f && f.field_key && have.hasOwnProperty(f.field_key)) {
+        have[f.field_key] = true;
+      }
+    });
+    return have.date && have.amount && have.reference_no;
+  }
+
+  function profileRegionMap(profile) {
+    var regions = {};
+    ((profile && profile.fields) || []).forEach(function (f) {
+      if (f && f.field_key) regions[f.field_key] = f;
+    });
+    return regions;
+  }
+
+  function extractZonesOnly(img, profile, opts) {
+    opts = opts || {};
+    img = normalizeSlipImage(img);
+    var zoneOnly = !!opts.zoneOnly;
+    var fieldRegions = {};
+    (profile.fields || []).forEach(function (f) { fieldRegions[f.field_key] = f; });
+    var keys = ['date', 'amount', 'reference_no'];
+    var chain = Promise.resolve([]);
+
+    keys.forEach(function (key) {
+      chain = chain.then(function (rows) {
+        var region = fieldRegions[key];
+        if (!region) {
+          rows.push({ key: key, result: fieldResult(null, 0, 'none') });
+          return rows;
+        }
+        return ocrRegionField(img, region, key, {
+          fast: true,
+          zoneOnly: zoneOnly,
+          teachPreview: zoneOnly && key === 'reference_no',
+          fullText: opts.fullText || '',
+        }).then(function (zoneRes) {
+          var result = zoneRes || fieldResult(null, 0, 'zone');
+          if (key === 'amount' && result.value) {
+            result = reconcileAmountResult(result, opts.fullText || '');
+          }
+          if (!zoneOnly && key === 'reference_no' && (!result || !result.value || !isPlausibleReferenceId(result.value))) {
+            return ocrHeaderReferenceScan(img).then(function (headerRes) {
+              if (headerRes && headerRes.value && isPlausibleReferenceId(headerRes.value)) {
+                result = headerRes;
+              }
+              rows.push({ key: key, result: result });
+              if (typeof opts.onProgress === 'function' && result.value) {
+                opts.onProgress({
+                  key: key,
+                  value: result.value,
+                  result: result,
+                  profileName: profile.name,
+                });
+              }
+              return rows;
+            });
+          }
+          rows.push({ key: key, result: result });
+          if (typeof opts.onProgress === 'function' && result.value) {
+            opts.onProgress({
+              key: key,
+              value: result.value,
+              result: result,
+              profileName: profile.name,
+            });
+          }
+          return rows;
+        });
+      });
+    });
+
+    return chain.then(function (rows) {
+      var out = {};
+      rows.forEach(function (row) { out[row.key] = row.result; });
+      var pseudo = rows.map(function (r) {
+        return r.result && r.result.value ? String(r.result.value) : '';
+      }).filter(Boolean).join('\n');
+      sanitizeFieldMap(out, pseudo);
+      var flat = flattenResults(out);
+      flat.profileName = profile.name;
+      flat.ocrText = opts.fullText || pseudo;
+      ocrLog('extractZonesOnly done', {
+        profile: profile.name,
+        quality: extractionQuality(flat),
+        fields: { date: flat.date, amount: flat.amount, reference_no: flat.reference_no },
+      });
+      return flat;
+    });
+  }
+
+  function reinforceExtract(img, profile, fullText, data) {
+    var fieldRegions = {};
+    (profile.fields || []).forEach(function (f) { fieldRegions[f.field_key] = f; });
+    var keysNeeding = ['date', 'amount', 'reference_no'].filter(function (k) {
+      var meta = data.fieldMeta && data.fieldMeta[k];
+      if (!meta || !meta.value) return !!fieldRegions[k];
+      if ((meta.confidence || 0) < 0.55) return true;
+      if (k === 'reference_no' && !isPlausibleReferenceId(meta.value)) return true;
+      if (k === 'amount' && !validateAmountCandidate(meta.value, fullText)) return true;
+      return false;
+    });
+    if (!keysNeeding.length) return Promise.resolve(data);
+    ocrLog('reinforceExtract', { profile: profile.name, keys: keysNeeding });
+    var chain = Promise.resolve(data);
+    keysNeeding.forEach(function (key) {
+      chain = chain.then(function (current) {
+        var region = fieldRegions[key];
+        if (!region) return current;
+        return ocrRegionField(img, region, key, { fast: false, fullText: fullText }).then(function (zoneRes) {
+          var finalRes = key === 'amount' ? reconcileAmountResult(zoneRes, fullText) : zoneRes;
+          if (finalRes && finalRes.value) {
+            current.fieldMeta = current.fieldMeta || {};
+            current.fieldMeta[key] = finalRes;
+            current[key] = finalRes.value;
+          }
+          return current;
+        });
+      });
+    });
+    return chain.then(function (current) {
+      var out = {};
+      ['date', 'amount', 'reference_no'].forEach(function (k) {
+        out[k] = current.fieldMeta && current.fieldMeta[k]
+          ? current.fieldMeta[k]
+          : fieldResult(current[k], current[k] ? 0.5 : 0, 'reinforce');
+      });
+      sanitizeFieldMap(out, fullText);
+      var flat = flattenResults(out);
+      flat.profileName = current.profileName || profile.name;
+      flat.ocrText = fullText;
+      flat.fieldMeta = out;
+      return flat;
     });
   }
 
@@ -2208,11 +2569,12 @@
   function extractWithProfile(img, profile, fullText, opts) {
     opts = opts || {};
     img = normalizeSlipImage(img);
+    var useSmart = opts.smart !== false;
     var fieldRegions = {};
     (profile.fields || []).forEach(function (f) { fieldRegions[f.field_key] = f; });
     var keys = ['date', 'amount', 'reference_no'];
 
-    return (fullText ? Promise.resolve(fullText) : ocrFullImageCached(img)).then(function (resolvedText) {
+    return (fullText ? Promise.resolve(fullText) : getSlipFullTextForExtract(img)).then(function (resolvedText) {
       var fb = fullTextFallback(resolvedText);
       var ab = anchorFallback(resolvedText);
 
@@ -2221,11 +2583,24 @@
         if (!region) {
           return Promise.resolve({ key: key, result: mergeFieldResults(ab[key], fb[key], 0.5) });
         }
+        var seed = useSmart
+          ? seededFieldResult(key, ab, fb, resolvedText, key === 'amount' ? 0.68 : 0.62)
+          : null;
+        if (useSmart && shouldSkipZoneOcr(key, seed, resolvedText, region)) {
+          ocrLog('extractWithProfile skip zone', { key: key, seed: seed.value, source: seed.source });
+          return Promise.resolve({ key: key, result: seed });
+        }
         return ocrRegionField(img, region, key, {
           fast: opts.fast,
           fullText: resolvedText,
         }).then(function (zoneRes) {
           if (key === 'amount') {
+            var needLayout = !zoneRes || !zoneRes.value ||
+              (zoneRes.confidence || 0) < 0.55 ||
+              !validateAmountCandidate(zoneRes.value, resolvedText);
+            if (useSmart && !needLayout) {
+              return { key: key, result: reconcileAmountResult(zoneRes, resolvedText) };
+            }
             return ocrProviderAmountFallback(img, resolvedText).then(function (layoutRes) {
               var mergedZone = zoneRes;
               if (layoutRes && layoutRes.value) {
@@ -2245,6 +2620,7 @@
             });
           }
           if (zoneRes && zoneRes.value) return { key: key, result: zoneRes };
+          if (seed && seed.value) return { key: key, result: seed };
           return {
             key: key,
             result: mergeFieldResults(zoneRes, mergeFieldResults(ab[key], fb[key], 0.5), 0.48),
@@ -2252,16 +2628,14 @@
         });
       }
 
-      var runAll = opts.parallel
-        ? Promise.all(keys.map(runKey))
-        : keys.reduce(function (chain, key) {
-            return chain.then(function (rows) {
-              return runKey(key).then(function (row) {
-                rows.push(row);
-                return rows;
-              });
-            });
-          }, Promise.resolve([]));
+      var runAll = keys.reduce(function (chain, key) {
+        return chain.then(function (rows) {
+          return runKey(key).then(function (row) {
+            rows.push(row);
+            return rows;
+          });
+        });
+      }, Promise.resolve([]));
 
       return runAll.then(function (rows) {
         var out = {};
@@ -2279,7 +2653,7 @@
     img = normalizeSlipImage(img);
     var chain = fullTextOptional
       ? Promise.resolve(fullTextOptional)
-      : ocrFullImage(img);
+      : getSlipFullTextForExtract(img);
     return chain.then(function (text) {
       return ocrProviderAmountFallback(img, text).then(function (layoutAmt) {
         var fb = fullTextFallback(text);
@@ -2351,7 +2725,7 @@
         }
         return extractWithProfile(img, ranked[0].profile, fullText, {
           fast: false,
-          parallel: true,
+          smart: true,
         }).then(function (slowData) {
           attachProfileMeta(slowData, ranked[0].profile, ranked[0].score, fullText, detectProvider(fullText), img);
           if (extractionQuality(slowData) > 0) {
@@ -2370,11 +2744,191 @@
       });
     }
 
-    return prewarmWorker().then(function () {
-      return loadImageFromFile(file).then(function (rawImg) {
-        var img = normalizeSlipImage(rawImg);
+    var useZoneFirst = options.zoneFirst !== false;
+    var zoneStrict = options.zoneStrict === true;
+    var onProgress = typeof options.onProgress === 'function' ? options.onProgress : null;
+
+    function resolvePreferred() {
+      var preferred = findProfileById(profiles, preferredId);
+      if (!preferred && profiles.length === 1) preferred = profiles[0];
+      return preferred;
+    }
+
+    function packageProfileData(data, profile, score, fullText, slipImg) {
+      attachProfileMeta(data, profile, score, fullText || data.ocrText || '', detectProvider(fullText || ''), slipImg);
+      data.ocrText = fullText || data.ocrText || '';
+      data.img = slipImg;
+      return data;
+    }
+
+    function tryAlternateProfile(partialData, skipProfileId, fullText, ranked, slipImg) {
+      var altList = selectProfileCandidates(ranked, { maxTry: 1 }).filter(function (c) {
+        return c.profile.id !== skipProfileId;
+      });
+      if (!altList.length) return Promise.resolve(partialData);
+      var alt = altList[0];
+      return extractWithProfile(slipImg, alt.profile, fullText, {
+        fast: useFast,
+        smart: true,
+      }).then(function (altData) {
+        packageProfileData(altData, alt.profile, alt.score, fullText, slipImg);
+        if (!partialData || extractionQuality(altData) >= extractionQuality(partialData)) {
+          return altData;
+        }
+        return partialData;
+      });
+    }
+
+    function finishProfileExtract(data, profile, score, fullText, ranked, label, slipImg) {
+      packageProfileData(data, profile, score, fullText, slipImg);
+      if (isGoodEnoughExtract(data)) {
+        return finishExtract(data, label || 'extractFromSlip profile-ok');
+      }
+      return reinforceExtract(slipImg, profile, fullText, data).then(function (reinforced) {
+        packageProfileData(reinforced, profile, score, fullText, slipImg);
+        if (isGoodEnoughExtract(reinforced)) {
+          return finishExtract(reinforced, (label || 'extract') + '-reinforced');
+        }
+        return tryAlternateProfile(reinforced, profile.id, fullText, ranked, slipImg).then(function (finalData) {
+          return finishExtract(finalData, (label || 'extract') + '-alt');
+        });
+      });
+    }
+
+    function runFullExtract(slipImg, preferred) {
+      return getSlipFullTextForExtract(slipImg).then(function (fullText) {
+        var ranked = rankProfiles(profiles, fullText);
+        if (preferred) {
+          var prefRank = ranked.filter(function (r) { return r.profile.id === preferred.id; })[0];
+          var prefScore = prefRank ? prefRank.score : 1;
+          return extractWithProfile(slipImg, preferred, fullText, {
+            fast: useFast,
+            smart: true,
+          }).then(function (data) {
+            return finishProfileExtract(data, preferred, prefScore, fullText, ranked, 'extractFromSlip preferred', slipImg);
+          });
+        }
+        return runRankedExtract(slipImg, fullText, ranked).then(function (data) {
+          return finishExtract(data, 'extractFromSlip multi-profile');
+        });
+      });
+    }
+
+    // Sequential design gate (zone-strict): har design par pehle date zone check,
+    // date na milay to next design; date milay to amount check, amount na milay
+    // to next design; dono milein to usi design se reference utha kar finish.
+    function runZoneStrictGate(slipImg, ordered) {
+      ocrLog('extractFromSlip zone-strict gate', {
+        designs: ordered.map(function (p) { return p.name; }),
+      });
+      var idx = 0;
+
+      function tryNext() {
+        if (idx >= ordered.length) {
+          // Koi design gate pass nahi kar saka — pehle design par normal
+          // zone-only read kar ke jo bhi mila woh de do.
+          var pref = ordered[0];
+          ocrLog('zone-strict gate: no design matched — fallback', { profile: pref.name });
+          return extractZonesOnly(slipImg, pref, {
+            fast: true,
+            zoneOnly: true,
+            onProgress: onProgress,
+          }).then(function (zoneData) {
+            packageProfileData(zoneData, pref, 1, '', slipImg);
+            return finishExtract(zoneData, 'extractFromSlip zone-strict-fallback');
+          });
+        }
+        var profile = ordered[idx++];
+        var regions = profileRegionMap(profile);
+
+        // Gate 1: date
+        return ocrRegionField(slipImg, regions.date, 'date', {
+          fast: true, zoneOnly: true, fullText: '',
+        }).then(function (dateRes) {
+          if (!dateRes || !dateRes.value) {
+            ocrLog('zone-strict gate: date nahi mili — next design', { profile: profile.name });
+            return tryNext();
+          }
+          // Gate 2: amount
+          return ocrRegionField(slipImg, regions.amount, 'amount', {
+            fast: true, zoneOnly: true, fullText: '',
+          }).then(function (amtRes) {
+            if (amtRes && amtRes.value) amtRes = reconcileAmountResult(amtRes, '');
+            if (!amtRes || !amtRes.value) {
+              ocrLog('zone-strict gate: amount nahi mila — next design', { profile: profile.name });
+              return tryNext();
+            }
+            // Design matched — date + amount fill, phir isi design se reference
+            if (onProgress) {
+              onProgress({ key: 'date', value: dateRes.value, result: dateRes, profileName: profile.name });
+              onProgress({ key: 'amount', value: amtRes.value, result: amtRes, profileName: profile.name });
+            }
+            var refPromise = regions.reference_no
+              ? ocrRegionField(slipImg, regions.reference_no, 'reference_no', {
+                  fast: true, zoneOnly: true, teachPreview: true, fullText: '',
+                })
+              : Promise.resolve(fieldResult(null, 0, 'none'));
+            return refPromise.then(function (refRes) {
+              refRes = refRes || fieldResult(null, 0, 'none');
+              if (onProgress && refRes.value) {
+                onProgress({ key: 'reference_no', value: refRes.value, result: refRes, profileName: profile.name });
+              }
+              var out = { date: dateRes, amount: amtRes, reference_no: refRes };
+              var pseudo = [dateRes.value, amtRes.value, refRes.value].filter(Boolean).join('\n');
+              sanitizeFieldMap(out, pseudo);
+              var flat = flattenResults(out);
+              flat.profileName = profile.name;
+              flat.ocrText = pseudo;
+              packageProfileData(flat, profile, 1, '', slipImg);
+              return finishExtract(flat, 'extractFromSlip zone-strict-gate');
+            });
+          });
+        });
+      }
+
+      return tryNext();
+    }
+
+    function runZoneFirst(slipImg, preferred) {
+      ocrLog('extractFromSlip zone-first', { profile: preferred.name, strict: zoneStrict });
+      return extractZonesOnly(slipImg, preferred, {
+        fast: true,
+        zoneOnly: zoneStrict,
+        onProgress: onProgress,
+      }).then(function (zoneData) {
+        packageProfileData(zoneData, preferred, 1, '', slipImg);
+        if (zoneStrict) {
+          return finishExtract(zoneData, 'extractFromSlip zone-strict');
+        }
+        if (isCompleteExtract(zoneData)) {
+          return finishExtract(zoneData, 'extractFromSlip zone-first');
+        }
+        return getSlipFullTextForExtract(slipImg).then(function (fullText) {
+          zoneData.ocrText = fullText;
+          return reinforceExtract(slipImg, preferred, fullText, zoneData).then(function (reinforced) {
+            packageProfileData(reinforced, preferred, 1, fullText, slipImg);
+            if (typeof onProgress === 'function' && reinforced.reference_no) {
+              onProgress({
+                key: 'reference_no',
+                value: reinforced.reference_no,
+                result: reinforced.fieldMeta && reinforced.fieldMeta.reference_no,
+                profileName: preferred.name,
+              });
+            }
+            if (isCompleteExtract(reinforced)) {
+              return finishExtract(reinforced, 'extractFromSlip zone-reinforced');
+            }
+            var ranked = rankProfiles(profiles, fullText);
+            return finishProfileExtract(reinforced, preferred, 1, fullText, ranked, 'extractFromSlip zone-fallback', slipImg);
+          });
+        });
+      });
+    }
+
+    return Promise.all([prewarmWorker(), loadImageFromFile(file)]).then(function (parts) {
+        var img = normalizeSlipImage(parts[1]);
         if (!profiles.length) {
-          return ocrFullImageCached(img).then(function (fullText) {
+          return getSlipFullTextForExtract(img).then(function (fullText) {
             return extractGeneric(img, fullText).then(function (data) {
               data.ocrText = fullText;
               data.img = img;
@@ -2383,86 +2937,79 @@
           });
         }
 
-        return ocrFullImageCached(img).then(function (fullText) {
-          if (profiles.length === 1) {
-            return extractWithProfile(img, profiles[0], fullText, {
-              fast: useFast,
-              parallel: true,
-            }).then(function (data) {
-              attachProfileMeta(data, profiles[0], 1, fullText, detectProvider(fullText), img);
-              data.ocrText = fullText;
-              data.img = img;
-              return finishExtract(data, 'extractFromSlip single-profile');
-            });
-          }
-
-          var ranked = rankProfiles(profiles, fullText);
-          var preferred = findProfileById(profiles, preferredId);
-
-          function afterPreferred(prefData) {
-            if (prefData && isGoodEnoughExtract(prefData)) {
-              return finishExtract(prefData, 'extractFromSlip preferred');
-            }
-            var skipIds = {};
-            if (preferred) skipIds[preferred.id] = true;
-            return runRankedExtract(img, fullText, ranked, { skipIds: skipIds }).then(function (data) {
-              if (prefData && (!data || extractionQuality(prefData) > extractionQuality(data))) {
-                return finishExtract(prefData, 'extractFromSlip preferred-fallback');
-              }
-              return finishExtract(data, 'extractFromSlip multi-profile');
-            });
-          }
-
-          if (preferred) {
-            return extractWithProfile(img, preferred, fullText, {
-              fast: useFast,
-              parallel: true,
-            }).then(function (prefData) {
-              attachProfileMeta(prefData, preferred, 1, fullText, detectProvider(fullText), img);
-              prefData.ocrText = fullText;
-              prefData.img = img;
-              return afterPreferred(prefData);
-            });
-          }
-
-          return runRankedExtract(img, fullText, ranked).then(function (data) {
-            return finishExtract(data, 'extractFromSlip multi-profile');
+        var preferred = resolvePreferred();
+        if (useZoneFirst && zoneStrict) {
+          // Gate-eligible designs: jin mein date + amount dono zones hain.
+          var gateList = profiles.filter(function (p) {
+            var regions = profileRegionMap(p);
+            return regions.date && regions.amount;
           });
-        });
-      });
+          if (preferred) {
+            gateList = gateList.filter(function (p) { return p.id !== preferred.id; });
+            var prefRegions = profileRegionMap(preferred);
+            if (prefRegions.date && prefRegions.amount) gateList.unshift(preferred);
+          }
+          if (gateList.length) {
+            return runZoneStrictGate(img, gateList);
+          }
+        }
+        var hasAnyZone = preferred && (preferred.fields || []).length > 0;
+        if (useZoneFirst && preferred && (profileHasAllZones(preferred) || (zoneStrict && hasAnyZone))) {
+          return runZoneFirst(img, preferred);
+        }
+        return runFullExtract(img, preferred);
     });
   }
 
-  function previewRegions(img, regionsByKey) {
+  function previewRegions(img, regionsByKey, options) {
+    options = options || {};
     img = normalizeSlipImage(img);
-    ocrLog('previewRegions start', { keys: Object.keys(regionsByKey || {}) });
-    return prewarmWorker().then(function () {
-      return ocrFullImageCached(img).then(function (fullText) {
-        var keys = ['date', 'amount', 'reference_no'];
-        return Promise.all(keys.map(function (key) {
+    var zoneOnly = options.zoneOnly !== false;
+    ocrLog('previewRegions start', { keys: Object.keys(regionsByKey || {}), zoneOnly: zoneOnly });
+
+    function runKeys(fullText) {
+      var keys = ['date', 'amount', 'reference_no'];
+      var chain = Promise.resolve([]);
+      keys.forEach(function (key) {
+        chain = chain.then(function (rows) {
           var region = regionsByKey ? regionsByKey[key] : null;
           if (region) logRegionMapping('previewRegions:' + key, img, region);
-          return previewRegionFieldWithFallback(img, key, region, fullText).then(function (result) {
-            return { key: key, result: result };
-          });
-        })).then(function (rows) {
-          var out = {};
-          rows.forEach(function (row) { out[row.key] = row.result; });
-          sanitizeFieldMap(out, fullText);
-          var flat = flattenResults(out);
-          flat.ocrText = fullText;
-          ocrLog('previewRegions done', flat);
-          return flat;
+          return previewRegionFieldWithFallback(img, key, region, fullText, { zoneOnly: zoneOnly })
+            .then(function (result) {
+              rows.push({ key: key, result: result });
+              return rows;
+            });
         });
       });
+      return chain.then(function (rows) {
+        var out = {};
+        rows.forEach(function (row) { out[row.key] = row.result; });
+        sanitizeFieldMap(out, fullText || '');
+        var flat = flattenResults(out);
+        flat.ocrText = fullText || '';
+        ocrLog('previewRegions done', flat);
+        return flat;
+      });
+    }
+
+    return prewarmWorker().then(function () {
+      if (zoneOnly) {
+        return runKeys('');
+      }
+      return ocrFullImageCached(img).then(runKeys);
     });
   }
 
-  function previewFieldRegion(img, fieldKey, region) {
+  function previewFieldRegion(img, fieldKey, region, options) {
+    options = options || {};
     img = normalizeSlipImage(img);
-    ocrLog('previewFieldRegion start', { field: fieldKey, region: region });
+    var zoneOnly = options.zoneOnly !== false;
+    ocrLog('previewFieldRegion start', { field: fieldKey, region: region, zoneOnly: zoneOnly });
     if (region) logRegionMapping('previewFieldRegion:' + fieldKey, img, region);
     return prewarmWorker().then(function () {
+      if (zoneOnly) {
+        return previewRegionFieldWithFallback(img, fieldKey, region, '', { zoneOnly: true });
+      }
       return ocrFullImageCached(img).then(function (fullText) {
         return previewRegionFieldWithFallback(img, fieldKey, region, fullText);
       });
@@ -2678,7 +3225,7 @@
   }
 
   global.WorkspaceSlipTemplate = {
-    VERSION: '1.7.1',
+    VERSION: '1.8.0',
     FIELD_LABELS: FIELD_LABELS,
     FIELD_COLORS: FIELD_COLORS,
     FIELD_TINTS: FIELD_TINTS,

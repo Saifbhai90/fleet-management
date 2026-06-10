@@ -5453,9 +5453,13 @@
                     // TS internally refocuses control_input after selection;
                     // keep _justSelected true through that synthetic focus so
                     // we don't re-open the dropdown.
+                    // Only refocus when the user was actually interacting with
+                    // THIS select — programmatic setValue() (e.g. slip OCR
+                    // auto-fill) must never steal focus from the user's field.
+                    var _wasFocused = ts.isFocused || ts.wrapper.classList.contains('focus');
                     setTimeout(function() {
                         ts._justSelected = true;
-                        ts.control_input.focus();
+                        if (_wasFocused) ts.control_input.focus();
                     }, 0);
                 });
 

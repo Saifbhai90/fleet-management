@@ -1,29 +1,133 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="container-fluid py-3">
-  {% include "workspace/_nav.html" %}
   <style>
-    .ws-transfer-form-wrap { max-width: min(1700px, calc(100vw - 96px)); margin: 0 auto; }
+    .ws-transfer-form-wrap { max-width: min(1750px, calc(100vw - 80px)); margin: 0 auto; }
     @media (max-width: 991.98px) { .ws-transfer-form-wrap { max-width: 100%; } }
-    .ws-tf-header { background: linear-gradient(135deg, #198754 0%, #157347 100%); color:#fff; border-radius: 12px; padding: .65rem 1rem; }
-    .ws-tf-card { border: 1px solid #e9ecef; border-radius: 12px; box-shadow: 0 2px 10px rgba(16,24,40,.06); }
-    .ws-tf-card .card-header { background: linear-gradient(to right, #f8f9fa 0%, #fff 100%); font-weight: 600; font-size: .87rem; }
-    .ws-tf-card .form-label { font-weight: 600; font-size: .8rem; color: #495057; margin-bottom: .25rem; }
+    .ws-tf-header {
+      background: linear-gradient(135deg, #14532d 0%, #157347 55%, #198754 100%);
+      color:#fff; border-radius: 14px; padding: .6rem 1rem;
+      box-shadow: 0 10px 26px rgba(20,83,45,.28);
+    }
+    .ws-tf-chip {
+      display:inline-block; background: rgba(255,255,255,.16); color:#d1fae5;
+      font-size:.62rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase;
+      padding:.22rem .55rem; border-radius:999px; vertical-align:middle;
+    }
+    .ws-tf-header .btn-light { color:#157347; font-weight:700; }
+    .ws-tf-card { border: 0; border-radius: 16px; box-shadow: 0 6px 26px rgba(16,24,40,.08); }
+    .ws-tf-card .card-header {
+      background: transparent; border-bottom: 1px solid #f1f3f5;
+      font-weight: 700; font-size: .78rem; letter-spacing:.05em; text-transform: uppercase; color:#495057;
+      padding: .65rem 1rem;
+    }
+    .ws-tf-card .form-label {
+      font-weight: 700; font-size: .66rem; letter-spacing:.05em; text-transform: uppercase;
+      color: #6c757d; margin-bottom: .28rem;
+    }
+    .ws-tf-card .form-control, .ws-tf-card .form-select {
+      border-radius: 10px; border-color:#e5e7eb;
+    }
+    .ws-tf-card .form-control:focus, .ws-tf-card .form-select:focus {
+      border-color:#198754; box-shadow: 0 0 0 .18rem rgba(25,135,84,.14);
+    }
+    .ws-tf-card .ts-wrapper .ts-control { border-radius: 10px; border-color: #e5e7eb; }
+    .ws-tf-card .form-control::placeholder, .ws-tf-card textarea::placeholder { color: #b3bcc5; }
+    #wsTransferFormActions { border-top: 1px solid #f1f3f5; padding-top: .85rem; }
+    #wsTransferAmountInput { font-weight: 700; font-size: 1.05rem; color:#157347; }
+    #wsTransferRefInput {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-weight: 600; font-size: 1.02rem; letter-spacing: .12em;
+    }
     .ws-transfer-form-wrap.compact .ws-tf-header h5 { font-size: .96rem; }
     .ws-transfer-form-wrap.compact .ws-tf-card .card-header { font-size: .77rem; padding: .45rem .75rem; }
     .ws-transfer-form-wrap.compact .ws-tf-card .card-body { padding: .75rem; }
     .ws-transfer-form-wrap.compact .ws-tf-card .form-label { font-size: .68rem; margin-bottom: .12rem; }
     .ws-transfer-form-wrap.compact .ws-tf-card .form-control,
     .ws-transfer-form-wrap.compact .ws-tf-card .form-select { font-size: .74rem; min-height: 30px; padding: .26rem .42rem; }
-    .xfer-last-saved-compact { border-radius: 10px; background: linear-gradient(to right, #f8fffb 0%, #fff 100%); border-color: #d1e7dd !important; box-shadow: 0 1px 6px rgba(16,24,40,.06) !important; padding: .45rem .75rem !important; margin-bottom: 0; }
-    .xfer-last-saved-compact .btn { padding: .2rem .55rem; font-size: .75rem; }
+    /* Last saved transfer — animated gradient border card */
+    .ws-last-saved {
+      position: relative;
+      border-radius: 14px;
+      padding: 2px;
+      background: linear-gradient(120deg, #198754, #4ade80, #0dcaf0, #36d399, #198754);
+      background-size: 320% 320%;
+      animation: wsLastSavedFlow 7s ease-in-out infinite;
+      box-shadow: 0 4px 16px rgba(25,135,84,.16);
+    }
+    @keyframes wsLastSavedFlow {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+    .ws-last-saved-inner {
+      background: linear-gradient(135deg, #f8fffb 0%, #ffffff 60%);
+      border-radius: 12px;
+      padding: .55rem .8rem;
+    }
+    .ws-last-saved .ws-ls-label {
+      font-size: .64rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #157347;
+    }
+    .ws-last-saved .ws-ls-num { font-weight: 700; color: #14532d; }
+    .ws-last-saved .ws-ls-amount { font-weight: 700; color: #157347; }
+    .ws-last-saved .btn { padding: .15rem .55rem; font-size: .73rem; }
+    .ws-last-saved .ws-ls-line { font-size: .78rem; line-height: 1.45; }
     .ws-desc-suggest { position: absolute; left: 0; right: 0; top: 100%; border: 1px solid #dee2e6; border-top: none; background: #fff; border-radius: 0 0 8px 8px; box-shadow: 0 8px 18px rgba(0,0,0,.12); z-index: 10; max-height: 220px; overflow-y: auto; display: none; }
     .ws-desc-item { padding: 7px 10px; font-size: .8rem; border-bottom: 1px solid #f2f2f2; cursor: pointer; }
     .ws-desc-item:last-child { border-bottom: none; }
     .ws-desc-item:hover, .ws-desc-item.active { background: #e8f5e9; color: #1b5e20; }
     .ws-attach-zone { border: 2px dashed #ced4da; border-radius: 8px; padding: .6rem; text-align: center; cursor: pointer; transition: all .15s; }
     .ws-attach-zone:hover, .ws-attach-zone.drag-over { border-color: #198754; background: #f3fbf6; }
-    .ws-attach-preview img { max-height: 90px; border-radius: 6px; object-fit: contain; }
+    .ws-attach-footer { min-height: 0; }
+    .ws-attach-footer .ws-slip-ocr-status { margin-top: 0; padding: .2rem .5rem; font-size: .73rem; flex: 1 1 auto; }
+    .ws-attach-footer small { font-size: .7rem; }
+    /* Full-view attachment preview (right pane) with magnifier */
+    .ws-attach-preview {
+      position: relative;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: #fbfcfd;
+      border: 1px solid #e9ecef;
+      border-radius: 12px;
+      overflow: hidden;
+      margin-top: .5rem;
+      cursor: zoom-in;
+      flex: 1 1 auto;
+      min-height: 0;
+    }
+    .ws-attach-preview img {
+      max-width: 100%; max-height: 56vh; border-radius: 6px; object-fit: contain;
+      box-shadow: 0 2px 12px rgba(16,24,40,.10);
+    }
+    .ws-mag-glass {
+      position: absolute;
+      border: 3px solid #14532d;
+      border-radius: 50%;
+      width: 170px; height: 170px;
+      display: none;
+      pointer-events: none;
+      background-repeat: no-repeat;
+      background-color: #fff;
+      box-shadow: 0 12px 30px rgba(0,0,0,.35), inset 0 0 8px rgba(0,0,0,.12);
+      z-index: 50;
+    }
+    .ws-attach-body { display: flex; flex-direction: column; }
+    .ws-attach-toolbar {
+      display: flex; align-items: center; justify-content: space-between;
+      font-size: .68rem; color:#8a94a0; margin-top:.4rem;
+    }
+    /* Split view: fixed viewport height on desktop — no page scroll */
+    @media (min-width: 1200px) {
+      .ws-tf-split.ws-fixed > [class*="col-"] { height: 100%; }
+      .ws-tf-split.ws-fixed .ws-tf-card { display: flex; flex-direction: column; height: 100%; }
+      .ws-tf-split.ws-fixed .ws-tf-card > .card-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+      .ws-tf-split.ws-fixed .ws-tf-leftcol { display: flex; flex-direction: column; }
+      .ws-tf-split.ws-fixed .ws-tf-leftcol .ws-tf-header { flex: 0 0 auto; }
+      .ws-tf-split.ws-fixed .ws-tf-leftcol .ws-tf-card { flex: 1 1 auto; height: auto; min-height: 0; }
+      .ws-tf-split.ws-fixed .ws-attach-card > .card-body { overflow: hidden; }
+      .ws-tf-split.ws-fixed .ws-attach-preview img { width: 100%; height: 100%; max-height: 100%; }
+    }
     .ws-slip-ocr-status { font-size: .78rem; padding: .35rem .55rem; border-radius: 8px; margin-top: .5rem; }
     .ws-slip-ocr-status.ok { background: #f0fdf4; color: #157347; border: 1px solid #bbf7d0; }
     .ws-slip-ocr-status.warn { background: #fff8e6; color: #856404; border: 1px solid #ffeeba; }
@@ -38,8 +142,8 @@
       background: transparent;
       box-shadow: none;
     }
-    .ws-slip-field-hint.ok { color: #157347; }
-    .ws-slip-field-hint.verify { color: #9a6700; }
+    .ws-slip-field-hint.ok { color: #157347; font-weight: 600; }
+    .ws-slip-field-hint.verify { color: #9a6700; font-weight: 700; }
     .ws-slip-teach-wrap { max-height: 62vh; overflow: auto; border: 1px solid #dee2e6; border-radius: 10px; background: #f8f9fa; transition: background .2s ease; }
     .ws-slip-teach-stage { position: relative; display: block; width: 100%; line-height: 0; }
     .ws-slip-teach-stage img { display: block; width: 100%; max-width: 100%; height: auto; user-select: none; }
@@ -64,43 +168,23 @@
   </style>
 
   <div class="ws-transfer-form-wrap" id="wsTransferFormWrap" data-slip-template="{{ '1' if not row else '0' }}">
-    <div class="d-flex justify-content-between align-items-center ws-tf-header mb-3">
-      <h5 class="mb-0"><i class="bi bi-arrow-left-right me-2"></i>{{ 'Edit' if row else 'Add' }} Workspace Transfer</h5>
-      <div class="d-flex gap-2">
-        <a href="{{ url_for('workspace_fund_transfers_list') }}" class="btn btn-outline-light btn-sm">Back to List</a>
-      </div>
-    </div>
-
-    {% if not row and last_saved_transfer %}
-    <div class="xfer-last-saved-compact alert alert-light border shadow-sm mb-3" role="status">
-      <div class="d-flex flex-wrap align-items-center column-gap-2 row-gap-1 justify-content-between">
-        <div class="min-w-0 flex-grow-1 d-flex flex-wrap align-items-baseline gap-x-2 gap-y-0">
-          <span class="text-muted small text-nowrap"><i class="bi bi-clock-history me-1"></i>Last transfer you saved</span>
-          <strong class="text-nowrap">{{ last_saved_transfer.transfer_number or ('#' ~ last_saved_transfer.id) }}</strong>
-          <span class="small text-muted text-nowrap">
-            {{ last_saved_transfer.transfer_date|ddmmyyyy if last_saved_transfer.transfer_date else '—' }}
-            · <span class="text-success fw-semibold">{{ last_saved_transfer.amount }}</span>
-            {% if last_saved_transfer.payment_mode %}· {{ last_saved_transfer.payment_mode }}{% endif %}
-          </span>
-          <span class="small text-truncate" style="max-width:min(480px,70vw)" title="{{ account_display_map.get(last_saved_transfer.from_account_id, '—') }} → {{ account_display_map.get(last_saved_transfer.to_account_id, '—') }}">
-            <span class="text-muted">From</span> {{ account_display_map.get(last_saved_transfer.from_account_id, '—') }}
-            <span class="text-muted">→</span> {{ account_display_map.get(last_saved_transfer.to_account_id, '—') }}
-          </span>
-          {% if last_saved_transfer.description %}
-          <span class="small text-muted text-truncate" style="max-width:min(360px,55vw)" title="{{ last_saved_transfer.description }}">
-            · {{ last_saved_transfer.description[:72] }}{% if last_saved_transfer.description|length > 72 %}…{% endif %}
-          </span>
-          {% endif %}
-        </div>
-        <a href="{{ url_for('workspace_fund_transfer_edit', pk=last_saved_transfer.id) }}" class="btn btn-sm btn-outline-secondary flex-shrink-0"><i class="bi bi-pencil me-1"></i>Open</a>
-      </div>
-    </div>
-    {% endif %}
-
     <form method="post" enctype="multipart/form-data" id="wsTransferForm" novalidate>
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <div class="row g-3">
-        <div class="col-xl-8">
+      <div class="row g-3 ws-tf-split" id="wsTfSplit">
+        <div class="col-xl-7 ws-tf-leftcol">
+          <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 ws-tf-header mb-3">
+            <h5 class="mb-0">
+              <i class="bi bi-arrow-left-right me-2"></i>{{ 'Edit' if row else 'Add' }} Workspace Transfer
+            </h5>
+            <div class="d-flex gap-2 align-items-center">
+              {% if employee %}
+              <span class="badge bg-light text-success d-none d-md-inline">Employee: {{ employee.name }}</span>
+              {% endif %}
+              <a class="btn btn-outline-light btn-sm" href="{{ url_for('workspace_home') }}">
+                <i class="bi bi-arrow-left-circle me-1"></i>Dashboard
+              </a>
+            </div>
+          </div>
           <div class="card ws-tf-card h-100">
             <div class="card-header"><i class="bi bi-list-check me-1 text-success"></i>Transfer Details</div>
             <div class="card-body">
@@ -159,52 +243,92 @@
                   <div class="invalid-feedback">To Account select karein.</div>
                   <div id="toAccountBalanceHint" class="small mt-1 d-none" style="cursor:default" title=""></div>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-3">
                   <label class="form-label">Reference No</label>
                   <input type="text" id="wsTransferRefInput" name="reference_no" class="form-control" value="{{ row.reference_no if row else '' }}">
                   <div id="wsSlipHintRef" class="ws-slip-field-hint d-none" aria-live="polite"></div>
                 </div>
-                <div class="col-12">
+                <div class="col-md-9">
                   <label class="form-label">Description</label>
                   <div style="position:relative">
-                    <textarea name="description" id="wsTransferDesc" class="form-control" rows="3" placeholder="Type or select from recent descriptions...">{{ row.description if row else '' }}</textarea>
+                    <textarea name="description" id="wsTransferDesc" class="form-control" rows="2" placeholder="Type or select from recent descriptions...">{{ row.description if row else '' }}</textarea>
                     <div id="wsDescSuggest" class="ws-desc-suggest"></div>
                   </div>
                 </div>
+                <div class="col-12">
+                  <div class="d-flex gap-2 justify-content-end" id="wsTransferFormActions">
+                    <a href="{{ url_for('workspace_fund_transfers_list') }}" class="btn btn-outline-secondary">Cancel</a>
+                    {% if not row %}
+                    <button type="submit" name="_save_action" value="save_add" class="btn btn-outline-success px-4" id="wsTransferSaveAddBtn"><i class="bi bi-plus-circle me-1"></i>Save &amp; Add Next</button>
+                    {% endif %}
+                    <button type="submit" name="_save_action" value="save_list" class="btn btn-success px-4 fw-bold" id="wsTransferSaveBtn" title="Ctrl+S"><i class="bi bi-check2-circle me-1"></i>Save Transfer</button>
+                  </div>
+                </div>
               </div>
+              {% if not row and last_saved_transfer %}
+              <div class="ws-last-saved mt-3" role="status">
+                <div class="ws-last-saved-inner">
+                  <div class="d-flex justify-content-between align-items-center flex-wrap column-gap-2">
+                    <span class="ws-ls-label"><i class="bi bi-clock-history me-1"></i>Last transfer you saved</span>
+                    <a href="{{ url_for('workspace_fund_transfer_edit', pk=last_saved_transfer.id) }}" class="btn btn-sm btn-outline-success flex-shrink-0"><i class="bi bi-pencil me-1"></i>Open</a>
+                  </div>
+                  <div class="d-flex flex-wrap align-items-baseline column-gap-3 row-gap-1 mt-1 ws-ls-line">
+                    <span class="ws-ls-num">{{ last_saved_transfer.transfer_number or ('#' ~ last_saved_transfer.id) }}</span>
+                    <span><i class="bi bi-calendar3 me-1 text-success"></i>{{ last_saved_transfer.transfer_date|ddmmyyyy if last_saved_transfer.transfer_date else '—' }}</span>
+                    <span class="ws-ls-amount"><i class="bi bi-cash-stack me-1"></i>{{ last_saved_transfer.amount }}</span>
+                    {% if last_saved_transfer.payment_mode %}
+                    <span class="text-muted">{{ last_saved_transfer.payment_mode }}</span>
+                    {% endif %}
+                  </div>
+                  <div class="ws-ls-line mt-1">
+                    <span class="text-muted">From</span> {{ account_display_map.get(last_saved_transfer.from_account_id, '—') }}
+                    <i class="bi bi-arrow-right mx-1 text-success"></i>
+                    <span class="text-muted">To</span> {{ account_display_map.get(last_saved_transfer.to_account_id, '—') }}
+                  </div>
+                  {% if last_saved_transfer.description %}
+                  <div class="ws-ls-line text-muted mt-1"><i class="bi bi-chat-left-text me-1"></i>{{ last_saved_transfer.description }}</div>
+                  {% endif %}
+                </div>
+              </div>
+              {% endif %}
             </div>
           </div>
         </div>
-        <div class="col-xl-4">
-          <div class="card ws-tf-card h-100">
-            <div class="card-header"><i class="bi bi-paperclip me-1 text-success"></i>Attachment (Image)</div>
-            <div class="card-body">
+        <div class="col-xl-5">
+          <div class="card ws-tf-card ws-attach-card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+              <span><i class="bi bi-paperclip me-1 text-success"></i>Attachment (Image) <span class="text-muted fw-normal small ms-1 d-none d-lg-inline">— auto-fetch data verify karein</span></span>
+              {% if not row and can_manage_slip_profiles %}
+              <button type="button" class="btn btn-outline-success btn-sm py-0 px-2" id="wsSlipTeachOpenBtn" style="font-size:.72rem">
+                <i class="bi bi-bounding-box me-1"></i>Teach design
+              </button>
+              {% endif %}
+            </div>
+            <div class="card-body ws-attach-body">
               <div class="ws-attach-zone" id="wsAttachZone" tabindex="0">
                 <input type="file" name="attachment" id="wsTransferAttachmentInput" class="form-control d-none" accept="image/*">
                 <div id="wsAttachPlaceholder">
                   <i class="bi bi-cloud-arrow-up me-1"></i>Click, drag-drop, or paste image
                 </div>
-                <div class="ws-attach-preview mt-2" id="wsAttachPreview" style="display:none;">
-                  <img id="wsAttachPreviewImg" src="" alt="preview">
-                </div>
               </div>
-              <small class="text-muted d-block mt-2">Upload transfer proof image (optional). Ctrl+V also works.</small>
-              <div id="wsSlipOcrStatus" class="ws-slip-ocr-status d-none" role="status"></div>
-              {% if not row %}
-              {% if can_manage_slip_profiles %}
-              <button type="button" class="btn btn-outline-success btn-sm mt-2" id="wsSlipTeachOpenBtn">
-                <i class="bi bi-bounding-box me-1"></i>Teach slip design
-              </button>
-              {% else %}
-              <div class="small text-muted mt-2"><i class="bi bi-shield-lock me-1"></i>Slip designs sab employee workspaces par shared hain. Design add/edit/delete ke liye <strong>Slip Design</strong> permission chahiye (Master ko permission ki zaroorat nahi).</div>
-              {% endif %}
-              <div id="wsSlipProfileList" class="small text-muted mt-2"></div>
-              {% endif %}
+              <div class="ws-attach-preview" id="wsAttachPreview" title="Hover: zoom · Double-click: change image">
+                <img id="wsAttachPreviewImg" src="" alt="preview">
+              </div>
+              <div class="d-flex align-items-center flex-wrap column-gap-2 row-gap-1 mt-1 ws-attach-footer">
+                <small class="text-muted" id="wsAttachHint">Upload transfer proof image (optional). Ctrl+V also works.</small>
+                <div id="wsSlipOcrStatus" class="ws-slip-ocr-status d-none" role="status"></div>
+                {% if not row %}
+                {% if not can_manage_slip_profiles %}
+                <small class="text-muted" title="Slip designs sab employee workspaces par shared hain. Design add/edit/delete ke liye Slip Design permission chahiye (Master ko permission ki zaroorat nahi)."><i class="bi bi-shield-lock me-1"></i>Slip Design permission required</small>
+                {% endif %}
+                <div id="wsSlipProfileList" class="small text-muted ms-auto"></div>
+                {% endif %}
+              </div>
               {% if existing_attachment %}
-              <div class="mt-3">
+              <div class="mt-2 d-flex flex-column flex-grow-1" style="min-height:0">
                 <small class="text-muted">Current:</small>
-                <a href="{{ existing_attachment }}" target="_blank" class="d-block mt-1">
-                  <img src="{{ existing_attachment }}" style="max-height:90px;border-radius:6px" alt="current">
+                <a href="{{ existing_attachment }}" target="_blank" class="ws-attach-preview mt-1" style="display:flex" id="wsExistingAttach" title="Hover: zoom · Click: open full size">
+                  <img src="{{ existing_attachment }}" alt="current">
                 </a>
                 <label class="mt-2 text-danger" style="font-size:.82rem;cursor:pointer">
                   <input type="checkbox" name="remove_attachment" value="1" class="form-check-input form-check-input-sm me-1">Remove current image
@@ -216,13 +340,6 @@
         </div>
       </div>
 
-      <div class="d-flex gap-2 justify-content-end mt-3" id="wsTransferFormActions">
-        <a href="{{ url_for('workspace_fund_transfers_list') }}" class="btn btn-outline-secondary">Cancel</a>
-        {% if not row %}
-        <button type="submit" name="_save_action" value="save_add" class="btn btn-outline-success px-4" id="wsTransferSaveAddBtn"><i class="bi bi-plus-circle me-1"></i>Save &amp; Add Next</button>
-        {% endif %}
-        <button type="submit" name="_save_action" value="save_list" class="btn btn-success px-4" id="wsTransferSaveBtn"><i class="bi bi-check2-circle me-1"></i>Save Transfer</button>
-      </div>
     </form>
   </div>
 </div>
@@ -251,7 +368,7 @@
               </div>
             </div>
             <div class="small text-muted mt-2">Active field par box draw karein (mouse drag). Teenon fields mark karna zaroori hai.</div>
-            <div class="small text-muted mt-1">Reference: poore "Transaction ID # ..." line par box drag karein. Preview zone fail ho to poori slip se bhi try hoti hai (yellow = box adjust karein).</div>
+            <div class="small text-muted mt-1">Reference: poore "Transaction ID # ..." line par box drag karein. Preview sirf aapke drag kiye box se read hota hai — value na aaye to box adjust karein.</div>
           </div>
           <div class="col-lg-4">
             <label class="form-label fw-semibold small">Design name</label>
@@ -296,7 +413,7 @@ window.__wsSlipOcrConfig = {
   minImageWidth: 1280
 };
 </script>
-<script src="{{ url_for('static', filename='js/workspace_slip_template.js') }}?v=1.7.1"></script>
+<script src="{{ url_for('static', filename='js/workspace_slip_template.js') }}?v=1.8.0"></script>
 <script>
 var _wsAcctBalanceMap = {{ account_balance_json | tojson }};
 var _wsAcctDisplayMap = {{ account_display_map | tojson }};
@@ -447,26 +564,111 @@ document.addEventListener('DOMContentLoaded', function() {
     }, 80);
   }
 
+  // ── Split view: fit form + attachment in viewport (no page scroll on desktop) ──
+  var tfSplit = document.getElementById('wsTfSplit');
+  function _wsSizeSplit() {
+    if (!tfSplit) return;
+    if (window.innerWidth < 1200) {
+      tfSplit.classList.remove('ws-fixed');
+      tfSplit.style.height = '';
+      return;
+    }
+    tfSplit.classList.add('ws-fixed');
+    var top = tfSplit.getBoundingClientRect().top;
+    var h = Math.floor(window.innerHeight - top - 22);
+    if (h < 430) h = 430;
+    tfSplit.style.height = h + 'px';
+  }
+  window.addEventListener('resize', _wsSizeSplit);
+  window.setTimeout(_wsSizeSplit, 50);
+
   function showAttachPreview(file) {
     if (!file || !file.type || file.type.indexOf('image/') !== 0) return;
     var reader = new FileReader();
     reader.onload = function(e) {
       attachPreviewImg.src = e.target.result;
-      attachPreview.style.display = 'block';
-      attachPlaceholder.style.display = 'none';
+      attachPreview.style.display = 'flex';
+      if (attachZone) attachZone.style.display = 'none';
+      var hintEl = document.getElementById('wsAttachHint');
+      if (hintEl) {
+        hintEl.innerHTML = '<i class="bi bi-zoom-in me-1"></i>Hover: zoom · Wheel: +/− · Double-click ya Ctrl+V: change';
+      }
+      _wsSizeSplit();
     };
     reader.readAsDataURL(file);
   }
 
+  // ── Magnifier glass: hover to zoom slip, wheel to adjust ──
+  function _wsAttachMagnifier(container, img) {
+    if (!container || !img) return;
+    var zoom = 2.5;
+    var glass = document.createElement('div');
+    glass.className = 'ws-mag-glass';
+    container.appendChild(glass);
+
+    // Visible (object-fit: contain) image area — element box may be letterboxed
+    function containedRect() {
+      var r = img.getBoundingClientRect();
+      var nw = img.naturalWidth, nh = img.naturalHeight;
+      if (!nw || !nh || !r.width || !r.height) return r;
+      var s = Math.min(r.width / nw, r.height / nh);
+      var w = nw * s, h = nh * s;
+      return { left: r.left + (r.width - w) / 2, top: r.top + (r.height - h) / 2, width: w, height: h };
+    }
+
+    function refreshBg() {
+      var imgR = containedRect();
+      glass.style.backgroundImage = "url('" + img.src + "')";
+      glass.style.backgroundSize = (imgR.width * zoom) + 'px ' +
+        (imgR.height * zoom) + 'px';
+    }
+
+    function moveGlass(e) {
+      var imgR = containedRect();
+      var contR = container.getBoundingClientRect();
+      var x = e.clientX - imgR.left;
+      var y = e.clientY - imgR.top;
+      if (x < 0 || y < 0 || x > imgR.width || y > imgR.height) {
+        glass.style.display = 'none';
+        return;
+      }
+      glass.style.display = 'block';
+      var gw = glass.offsetWidth / 2;
+      var gh = glass.offsetHeight / 2;
+      glass.style.left = (e.clientX - contR.left - gw) + 'px';
+      glass.style.top = (e.clientY - contR.top - gh) + 'px';
+      glass.style.backgroundPosition = '-' + (x * zoom - gw) + 'px -' + (y * zoom - gh) + 'px';
+    }
+
+    container.addEventListener('mouseenter', refreshBg);
+    container.addEventListener('mousemove', moveGlass);
+    container.addEventListener('mouseleave', function() { glass.style.display = 'none'; });
+    container.addEventListener('wheel', function(e) {
+      if (glass.style.display !== 'block') return;
+      e.preventDefault();
+      zoom = Math.max(1.6, Math.min(5, zoom + (e.deltaY < 0 ? 0.4 : -0.4)));
+      refreshBg();
+      moveGlass(e);
+    }, { passive: false });
+  }
+  _wsAttachMagnifier(attachPreview, attachPreviewImg);
+  if (attachPreview && attachInput) {
+    attachPreview.addEventListener('dblclick', function() { attachInput.click(); });
+  }
+  var existingAttach = document.getElementById('wsExistingAttach');
+  if (existingAttach) {
+    _wsAttachMagnifier(existingAttach, existingAttach.querySelector('img'));
+  }
+
   function onWsAttachFile(file) {
     if (!file) return;
+    if (typeof window.__wsSlipAttachHook === 'function') {
+      window.__wsSlipAttachHook(file);
+    }
     showAttachPreview(file);
     _wsFocusCategoryField();
     if (_wsIsAddForm) {
       _wsUpdateAutoDescription(true);
-    }
-    if (typeof window.__wsSlipAttachHook === 'function') {
-      window.__wsSlipAttachHook(file);
     }
   }
 
@@ -607,7 +809,12 @@ document.addEventListener('DOMContentLoaded', function() {
   var formActionsEl = document.getElementById('wsTransferFormActions');
   function _wsScrollFormForFocus(focusTarget) {
     if (!formEl || !descBox || !focusTarget || !formEl.contains(focusTarget)) return;
-    var attachCol = attachZone ? attachZone.closest('.col-xl-4') : null;
+    // Fixed split view: card body is the scroll container — only scroll when it actually overflows
+    if (tfSplit && tfSplit.classList.contains('ws-fixed')) {
+      var cb = focusTarget.closest('.card-body');
+      if (!cb || cb.scrollHeight <= cb.clientHeight + 4) return;
+    }
+    var attachCol = attachZone ? attachZone.closest('.col-xl-5') : null;
     if (attachCol && attachCol.contains(focusTarget)) {
       focusTarget.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
       return;
@@ -946,6 +1153,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
       function setPaymentModeOnline() {
         if (!pmSelect) return;
+        var current = pmSelect.tomselect ? pmSelect.tomselect.getValue() : pmSelect.value;
+        if (current === 'Online') return;
         pmSelect.value = 'Online';
         if (pmSelect.tomselect) pmSelect.tomselect.setValue('Online', true);
         setSlipFieldHint('payment_mode', 'ok', 'Slip se Online set hua');
@@ -981,9 +1190,17 @@ document.addEventListener('DOMContentLoaded', function() {
           checkReferenceDuplicate(data.reference_no);
         }
         setPaymentModeOnline();
-        if (active && typeof active.focus === 'function' && document.body.contains(active)) {
-          try { active.focus({ preventScroll: true }); } catch (e) { active.focus(); }
+        // Auto-fill must be invisible to the user: never move their focus.
+        // Sync restore + delayed guard (TomSelect refocuses in setTimeout(0)).
+        function restoreFocus() {
+          if (active && typeof active.focus === 'function' &&
+              document.body.contains(active) && document.activeElement !== active) {
+            try { active.focus({ preventScroll: true }); } catch (e) { try { active.focus(); } catch (e2) {} }
+          }
         }
+        restoreFocus();
+        window.setTimeout(restoreFocus, 30);
+        window.setTimeout(restoreFocus, 120);
         return filled;
       }
 
@@ -1379,9 +1596,22 @@ document.addEventListener('DOMContentLoaded', function() {
         pendingSlipFile = file;
         setStatus('Slip read ho rahi hai…', 'busy');
         var lastProfileId = readLastSlipProfileId();
+        if (profiles.length === 1 && profiles[0].id) {
+          lastProfileId = profiles[0].id;
+        }
         WST.extractFromSlip(file, profiles, {
           preferredProfileId: lastProfileId,
-          fast: profiles.length > 1 ? true : undefined
+          smart: true,
+          fast: true,
+          zoneFirst: true,
+          zoneStrict: true,
+          onProgress: function(partial) {
+            if (!partial || !partial.key || !partial.value) return;
+            var chunk = { fieldMeta: {} };
+            chunk[partial.key] = partial.value;
+            chunk.fieldMeta[partial.key] = partial.result || { value: partial.value, confidence: 0.5, source: 'zone' };
+            applyExtracted(chunk);
+          }
         }).then(function(data) {
           setSlipSession(data, file);
           if (data && data.profileId) rememberSlipProfile(data.profileId);
