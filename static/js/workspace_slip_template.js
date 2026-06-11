@@ -1225,8 +1225,66 @@
     return null;
   }
 
+  function ocrEarlyExitRank(opts) {
+    opts = opts || {};
+    if (opts.gateMini) return 125;
+    return 175;
+  }
+
   function fieldOcrVariants(fieldKey, fast, variantOpts) {
     variantOpts = variantOpts || {};
+    if (variantOpts.gateMini) {
+      if (fieldKey === 'date') {
+        return [
+          { scale: 3.4, mode: 'photo-fix', variant: 'gate-date-photo', psm: '7', padPct: 0.8, noWhitelist: true },
+          { scale: 4.2, mode: 'invert', variant: 'gate-date-invert', psm: '7', padPct: 1, noWhitelist: true },
+        ];
+      }
+      if (fieldKey === 'amount') {
+        return [
+          {
+            scale: 4.4,
+            mode: 'photo-fix',
+            variant: 'gate-amt-photo',
+            psm: '7',
+            padPct: 1.4,
+            padAsym: { left: 0.5, right: 5.5, top: 1, bottom: 1.2 },
+            noWhitelist: true,
+          },
+          {
+            scale: 4.6,
+            mode: 'colored-ink',
+            variant: 'gate-amt-colored',
+            psm: '7',
+            padPct: 1.4,
+            padAsym: { left: 0.5, right: 5.5, top: 1, bottom: 1.2 },
+            noWhitelist: true,
+          },
+        ];
+      }
+      if (fieldKey === 'reference_no') {
+        return [
+          {
+            scale: 4.4,
+            mode: 'photo-fix',
+            variant: 'gate-ref-photo',
+            psm: '7',
+            padPct: 1.2,
+            padAsym: { left: 0.4, right: 5.5, top: 1, bottom: 1 },
+            noWhitelist: true,
+          },
+          {
+            scale: 4.6,
+            mode: 'invert',
+            variant: 'gate-ref-invert',
+            psm: '7',
+            padPct: 1.2,
+            padAsym: { left: 0.4, right: 5.5, top: 1, bottom: 1 },
+            noWhitelist: true,
+          },
+        ];
+      }
+    }
     if (fieldKey === 'date' && variantOpts.teachPreview) {
       return [
         {
@@ -2477,6 +2535,7 @@
       pixels: regionToPixelRect(img, region, 0),
     });
 
+    var exitRank = ocrEarlyExitRank(opts);
     variants.forEach(function (v) {
       chain = chain.then(function () {
         if (stopEarly) return;
@@ -2612,9 +2671,10 @@
       pixels: regionToPixelRect(img, region, 0),
     });
 
+    var exitRank = ocrEarlyExitRank(opts);
     variants.forEach(function (v) {
       chain = chain.then(function () {
-        if (best.value && bestRank >= 175) return;
+        if (best.value && bestRank >= exitRank) return;
         var cropRegion = v.regionSlice ? sliceRegion(region, v.regionSlice) : region;
         var canvas = makeRegionCanvas(img, cropRegion, v.scale, v.mode, v.padPct, v.padAsym, v.canvasMargin);
         return ocrCanvasRaw(canvas, 'amount', {
@@ -2685,10 +2745,11 @@
     var variants = fieldOcrVariants(fieldKey, !!opts.fast, opts);
     var best = fieldResult(null, 0, 'zone');
     var bestRank = 0;
+    var exitRank = ocrEarlyExitRank(opts);
     var chain = Promise.resolve();
     variants.forEach(function (v) {
       chain = chain.then(function () {
-        if (best.value && bestRank >= 175) return;
+        if (best.value && bestRank >= exitRank) return;
         var cropRegion = v.regionSlice ? sliceRegion(region, v.regionSlice) : region;
         var canvas = makeRegionCanvas(img, cropRegion, v.scale, v.mode, v.padPct, v.padAsym, v.canvasMargin);
         return ocrCanvas(canvas, fieldKey, {
@@ -3062,7 +3123,8 @@
         return ocrRegionField(img, region, key, {
           fast: true,
           zoneOnly: zoneOnly,
-          teachPreview: zoneOnly,
+          teachPreview: !!opts.teachPreview,
+          gateMini: !!opts.gateMini,
           fullText: opts.fullText || '',
         }).then(function (zoneRes) {
           var result = zoneRes || fieldResult(null, 0, 'zone');
@@ -3509,6 +3571,7 @@
           return extractZonesOnly(slipImg, pref, {
             fast: true,
             zoneOnly: true,
+            gateMini: true,
             onProgress: onProgress,
           }).then(function (zoneData) {
             packageProfileData(zoneData, pref, 1, '', slipImg);
@@ -3518,23 +3581,26 @@
         var profile = ordered[idx++];
         var regions = profileRegionMap(profile);
 
-        // Gate 1: date
-        return ocrRegionField(slipImg, regions.date, 'date', {
-          fast: true, zoneOnly: true, teachPreview: true, fullText: '',
-        }).then(function (dateRes) {
+        // Gate: date + amount parallel (gateMini = 2 OCR passes each, not teach-preview)
+        return Promise.all([
+          ocrRegionField(slipImg, regions.date, 'date', {
+            fast: true, zoneOnly: true, gateMini: true, fullText: '',
+          }),
+          ocrRegionField(slipImg, regions.amount, 'amount', {
+            fast: true, zoneOnly: true, gateMini: true, fullText: '',
+          }),
+        ]).then(function (gateRes) {
+          var dateRes = gateRes[0];
+          var amtRes = gateRes[1];
           if (!dateRes || !dateRes.value) {
             ocrLog('zone-strict gate: date nahi mili — next design', { profile: profile.name });
             return tryNext();
           }
-          // Gate 2: amount
-          return ocrRegionField(slipImg, regions.amount, 'amount', {
-            fast: true, zoneOnly: true, teachPreview: true, fullText: '',
-          }).then(function (amtRes) {
-            if (amtRes && amtRes.value) amtRes = reconcileAmountResult(amtRes, '');
-            if (!amtRes || !amtRes.value) {
-              ocrLog('zone-strict gate: amount nahi mila — next design', { profile: profile.name });
-              return tryNext();
-            }
+          if (amtRes && amtRes.value) amtRes = reconcileAmountResult(amtRes, '');
+          if (!amtRes || !amtRes.value) {
+            ocrLog('zone-strict gate: amount nahi mila — next design', { profile: profile.name });
+            return tryNext();
+          }
             // Design matched — date + amount fill, phir isi design se reference
             if (onProgress) {
               onProgress({ key: 'date', value: dateRes.value, result: dateRes, profileName: profile.name });
@@ -3542,7 +3608,7 @@
             }
             var refPromise = regions.reference_no
               ? ocrRegionField(slipImg, regions.reference_no, 'reference_no', {
-                  fast: true, zoneOnly: true, teachPreview: true, fullText: '',
+                  fast: true, zoneOnly: true, fullText: '',
                 })
               : Promise.resolve(fieldResult(null, 0, 'none'));
             return refPromise.then(function (refRes) {
@@ -3559,7 +3625,6 @@
               packageProfileData(flat, profile, 1, '', slipImg);
               return finishExtract(flat, 'extractFromSlip zone-strict-gate');
             });
-          });
         });
       }
 
@@ -3902,7 +3967,7 @@
   }
 
   global.WorkspaceSlipTemplate = {
-    VERSION: '1.10.0',
+    VERSION: '1.10.1',
     FIELD_LABELS: FIELD_LABELS,
     FIELD_COLORS: FIELD_COLORS,
     FIELD_TINTS: FIELD_TINTS,

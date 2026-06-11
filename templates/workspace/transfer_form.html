@@ -415,7 +415,7 @@ window.__wsSlipOcrConfig = {
   minImageWidth: 1280
 };
 </script>
-<script src="{{ url_for('static', filename='js/workspace_slip_template.js') }}?v=1.10.0"></script>
+<script src="{{ url_for('static', filename='js/workspace_slip_template.js') }}?v=1.10.1"></script>
 <script>
 var _wsAcctBalanceMap = {{ account_balance_json | tojson }};
 var _wsAcctDisplayMap = {{ account_display_map | tojson }};
@@ -1224,6 +1224,7 @@ document.addEventListener('DOMContentLoaded', function() {
           profiles = cached;
           renderProfileList();
         }
+        ensureOcrReady().catch(function() {});
         return fetch('/api/workspace-slip-profiles')
           .then(function(r) { return r.json(); })
           .then(function(j) {
