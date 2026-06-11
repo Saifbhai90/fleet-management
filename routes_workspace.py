@@ -4421,6 +4421,40 @@ def _clean_slip_fingerprint_keywords(keywords, limit=40):
     return clean_keywords
 
 
+def _sanitize_slip_ocr_recipe(raw):
+    if not isinstance(raw, dict):
+        return None
+    variant = (raw.get('variant') or '').strip()
+    if not variant:
+        return None
+    recipe = {'variant': variant[:80]}
+    if raw.get('mode'):
+        recipe['mode'] = str(raw.get('mode'))[:40]
+    for num_key in ('scale', 'padPct', 'canvasMargin'):
+        if raw.get(num_key) is not None:
+            try:
+                recipe[num_key] = float(raw.get(num_key))
+            except (TypeError, ValueError):
+                pass
+    if raw.get('psm') is not None:
+        recipe['psm'] = str(raw.get('psm'))[:4]
+    for bool_key in ('noWhitelist', 'digitsOnly'):
+        if raw.get(bool_key) is not None:
+            recipe[bool_key] = bool(raw.get(bool_key))
+    pad_asym = raw.get('padAsym')
+    if isinstance(pad_asym, dict):
+        cleaned = {}
+        for side in ('left', 'right', 'top', 'bottom'):
+            if pad_asym.get(side) is not None:
+                try:
+                    cleaned[side] = float(pad_asym.get(side))
+                except (TypeError, ValueError):
+                    pass
+        if cleaned:
+            recipe['padAsym'] = cleaned
+    return recipe
+
+
 def _coerce_slip_profile_field_map(raw_fields, required_all=False):
     allowed_keys = {'date', 'amount', 'reference_no'}
     field_map = {}
@@ -4431,12 +4465,16 @@ def _coerce_slip_profile_field_map(raw_fields, required_all=False):
         if key not in allowed_keys:
             continue
         try:
-            field_map[key] = {
+            entry = {
                 'region_x': max(0.0, min(100.0, float(item.get('region_x', 0)))),
                 'region_y': max(0.0, min(100.0, float(item.get('region_y', 0)))),
                 'region_w': max(1.0, min(100.0, float(item.get('region_w', 1)))),
                 'region_h': max(1.0, min(100.0, float(item.get('region_h', 1)))),
             }
+            recipe = _sanitize_slip_ocr_recipe(item.get('ocr_recipe'))
+            if recipe:
+                entry['ocr_recipe'] = recipe
+            field_map[key] = entry
         except (TypeError, ValueError):
             continue
     if required_all:
@@ -4449,7 +4487,6 @@ def _coerce_slip_profile_field_map(raw_fields, required_all=False):
 def _active_slip_profiles_query():
     """Company-wide slip designs — shared across all employee workspaces."""
     return WorkspaceSlipProfile.query.filter_by(is_active=True).order_by(
-        WorkspaceSlipProfile.name.asc(),
         WorkspaceSlipProfile.id.asc(),
     )
 
@@ -4461,6 +4498,14 @@ def _get_slip_profile(pk, active_only=True):
     return q.first()
 
 
+def _validated_last_slip_profile_id(employee):
+    pid = getattr(employee, 'last_slip_profile_id', None)
+    if not pid:
+        return None
+    profile = _get_slip_profile(pid, active_only=True)
+    return profile.id if profile else None
+
+
 def _serialize_workspace_slip_profile(profile):
     try:
         keywords = json.loads(profile.fingerprint_keywords or '[]')
@@ -4470,12 +4515,21 @@ def _serialize_workspace_slip_profile(profile):
         keywords = []
     fields = []
     for f in profile.fields or []:
+        ocr_recipe = None
+        if f.ocr_recipe_json:
+            try:
+                parsed = json.loads(f.ocr_recipe_json)
+                if isinstance(parsed, dict):
+                    ocr_recipe = _sanitize_slip_ocr_recipe(parsed)
+            except Exception:
+                ocr_recipe = None
         fields.append({
             'field_key': f.field_key,
             'region_x': float(f.region_x or 0),
             'region_y': float(f.region_y or 0),
             'region_w': float(f.region_w or 0),
             'region_h': float(f.region_h or 0),
+            'ocr_recipe': ocr_recipe,
         })
     return {
         'id': profile.id,
@@ -4483,6 +4537,20 @@ def _serialize_workspace_slip_profile(profile):
         'fingerprint_keywords': keywords,
         'fields': fields,
     }
+
+
+def _apply_slip_profile_field_rows(profile, field_map):
+    for key, region in field_map.items():
+        row = WorkspaceSlipProfileField.query.filter_by(profile_id=profile.id, field_key=key).first()
+        if not row:
+            row = WorkspaceSlipProfileField(profile_id=profile.id, field_key=key)
+            db.session.add(row)
+        row.region_x = region['region_x']
+        row.region_y = region['region_y']
+        row.region_w = region['region_w']
+        row.region_h = region['region_h']
+        recipe = region.get('ocr_recipe')
+        row.ocr_recipe_json = json.dumps(recipe, ensure_ascii=False) if recipe else None
 
 
 def workspace_slip_profiles_api():
@@ -4496,6 +4564,7 @@ def workspace_slip_profiles_api():
             'ok': True,
             'profiles': [_serialize_workspace_slip_profile(p) for p in rows],
             'can_manage': _can_manage_slip_profiles(),
+            'last_profile_id': _validated_last_slip_profile_id(emp),
         })
 
     if not _can_manage_slip_profiles():
@@ -4527,15 +4596,7 @@ def workspace_slip_profiles_api():
     )
     db.session.add(profile)
     db.session.flush()
-    for key, region in field_map.items():
-        db.session.add(WorkspaceSlipProfileField(
-            profile_id=profile.id,
-            field_key=key,
-            region_x=region['region_x'],
-            region_y=region['region_y'],
-            region_w=region['region_w'],
-            region_h=region['region_h'],
-        ))
+    _apply_slip_profile_field_rows(profile, field_map)
     try:
         db.session.commit()
     except Exception as exc:
@@ -4582,14 +4643,7 @@ def workspace_slip_profile_update_api(pk):
             profile.fingerprint_keywords = json.dumps(new_kw, ensure_ascii=False)
 
     for key, region in field_map.items():
-        row = WorkspaceSlipProfileField.query.filter_by(profile_id=profile.id, field_key=key).first()
-        if not row:
-            row = WorkspaceSlipProfileField(profile_id=profile.id, field_key=key)
-            db.session.add(row)
-        row.region_x = region['region_x']
-        row.region_y = region['region_y']
-        row.region_w = region['region_w']
-        row.region_h = region['region_h']
+        _apply_slip_profile_field_rows(profile, {key: region})
 
     try:
         db.session.commit()
@@ -4597,6 +4651,38 @@ def workspace_slip_profile_update_api(pk):
         db.session.rollback()
         return jsonify({'ok': False, 'error': str(exc)}), 500
     return jsonify({'ok': True, 'profile': _serialize_workspace_slip_profile(profile)})
+
+
+def workspace_slip_last_profile_api():
+    guard, emp = _workspace_guard("workspace_transfer_add")
+    if guard:
+        return jsonify({'ok': False, 'error': 'Unauthorized'}), 403
+
+    if request.method == 'GET':
+        return jsonify({
+            'ok': True,
+            'profile_id': _validated_last_slip_profile_id(emp),
+        })
+
+    data = request.get_json(silent=True) or {}
+    profile_id = data.get('profile_id')
+    if profile_id in (None, '', 0, '0'):
+        emp.last_slip_profile_id = None
+    else:
+        try:
+            profile_id = int(profile_id)
+        except (TypeError, ValueError):
+            return jsonify({'ok': False, 'error': 'Invalid profile id.'}), 400
+        profile = _get_slip_profile(profile_id, active_only=True)
+        if not profile:
+            return jsonify({'ok': False, 'error': 'Design not found.'}), 404
+        emp.last_slip_profile_id = profile.id
+    try:
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({'ok': False, 'error': str(exc)}), 500
+    return jsonify({'ok': True, 'profile_id': _validated_last_slip_profile_id(emp)})
 
 
 def workspace_slip_profile_delete_api(pk):

@@ -180,6 +180,11 @@
               {% if employee %}
               <span class="badge bg-light text-success d-none d-md-inline">Employee: {{ employee.name }}</span>
               {% endif %}
+              {% if can_see_page('workspace_transfer_list') %}
+              <a class="btn btn-outline-light btn-sm" href="{{ url_for('workspace_fund_transfers_list') }}">
+                <i class="bi bi-list-ul me-1"></i>Transfers List
+              </a>
+              {% endif %}
               <a class="btn btn-outline-light btn-sm" href="{{ url_for('workspace_home') }}">
                 <i class="bi bi-arrow-left-circle me-1"></i>Dashboard
               </a>
@@ -415,7 +420,7 @@ window.__wsSlipOcrConfig = {
   minImageWidth: 1280
 };
 </script>
-<script src="{{ url_for('static', filename='js/workspace_slip_template.js') }}?v=1.10.0"></script>
+<script src="{{ url_for('static', filename='js/workspace_slip_template.js') }}?v=1.11.0"></script>
 <script>
 var _wsAcctBalanceMap = {{ account_balance_json | tojson }};
 var _wsAcctDisplayMap = {{ account_display_map | tojson }};
@@ -784,14 +789,14 @@ document.addEventListener('DOMContentLoaded', function() {
           if (_active < 0) _active = 0;
           if (_active >= 0 && rows[_active]) {
             descBox.value = rows[_active].getAttribute('data-val');
+            _wsDescAutoManaged = false;
             sugBox.style.display = 'none';
             return;
           }
         }
-        if (attachZone) {
-          attachZone.focus();
-        } else if (attachInput) {
-          attachInput.focus();
+        var saveTarget = (saveAddBtn && !saveAddBtn.disabled) ? saveAddBtn : saveBtn;
+        if (saveTarget) {
+          saveTarget.focus();
         }
         return;
       }
@@ -945,6 +950,7 @@ document.addEventListener('DOMContentLoaded', function() {
         document.body.style.removeProperty('padding-right');
       }
       var profiles = [];
+      var lastProfileIdFromServer = null;
       var pendingSlipFile = null;
       var teachImg = document.getElementById('wsSlipTeachImg');
       var teachCanvas = document.getElementById('wsSlipTeachCanvas');
@@ -1229,6 +1235,7 @@ document.addEventListener('DOMContentLoaded', function() {
           .then(function(j) {
             profiles = (j && j.ok && j.profiles) ? j.profiles : (cached || []);
             if (j && typeof j.can_manage === 'boolean') canManageSlipProfiles = j.can_manage;
+            if (j && j.last_profile_id) lastProfileIdFromServer = j.last_profile_id;
             if (WST.cacheProfiles) WST.cacheProfiles(profiles);
             renderProfileList();
           })
@@ -1581,16 +1588,78 @@ document.addEventListener('DOMContentLoaded', function() {
 
       function rememberSlipProfile(id) {
         if (!id) return;
+        lastProfileIdFromServer = id;
         try { localStorage.setItem('wsSlipLastProfileId', String(id)); } catch (e) { /* ignore */ }
+        fetch('/api/workspace-slip-last-profile', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': (csrfEl && csrfEl.value) || '',
+          },
+          body: JSON.stringify({ profile_id: id }),
+        }).catch(function() {});
       }
 
       function readLastSlipProfileId() {
+        if (lastProfileIdFromServer) return lastProfileIdFromServer;
         try {
           var v = localStorage.getItem('wsSlipLastProfileId');
           return v ? parseInt(v, 10) : null;
         } catch (e) {
           return null;
         }
+      }
+
+      function maybePersistLearnedRecipes(profileId, fieldMeta) {
+        if (!canManageSlipProfiles || !profileId || !fieldMeta) return;
+        var profile = null;
+        for (var i = 0; i < profiles.length; i++) {
+          if (profiles[i].id === profileId) { profile = profiles[i]; break; }
+        }
+        if (!profile || !profile.fields) return;
+        var updates = [];
+        ['date', 'amount', 'reference_no'].forEach(function(key) {
+          var meta = fieldMeta[key];
+          if (!meta || !meta.recipe) return;
+          var existing = null;
+          for (var fi = 0; fi < profile.fields.length; fi++) {
+            if (profile.fields[fi].field_key === key) {
+              existing = profile.fields[fi];
+              break;
+            }
+          }
+          if (existing && existing.ocr_recipe && existing.ocr_recipe.variant) return;
+          var region = existing || {};
+          updates.push({
+            field_key: key,
+            region_x: region.region_x != null ? region.region_x : 0,
+            region_y: region.region_y != null ? region.region_y : 0,
+            region_w: region.region_w != null ? region.region_w : 100,
+            region_h: region.region_h != null ? region.region_h : 100,
+            ocr_recipe: meta.recipe,
+          });
+        });
+        if (!updates.length) return;
+        fetch('/api/workspace-slip-profiles/' + profileId, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': (csrfEl && csrfEl.value) || '',
+          },
+          body: JSON.stringify({ fields: updates }),
+        }).then(function(r) { return r.json(); })
+          .then(function(j) {
+            if (j && j.ok && j.profile) {
+              for (var pi = 0; pi < profiles.length; pi++) {
+                if (profiles[pi].id === profileId) {
+                  profiles[pi] = j.profile;
+                  break;
+                }
+              }
+              if (WST.cacheProfiles) WST.cacheProfiles(profiles);
+            }
+          })
+          .catch(function() {});
       }
 
       function processSlipFile(file) {
@@ -1616,7 +1685,10 @@ document.addEventListener('DOMContentLoaded', function() {
           }
         }).then(function(data) {
           setSlipSession(data, file);
-          if (data && data.profileId) rememberSlipProfile(data.profileId);
+          if (data && data.profileId) {
+            rememberSlipProfile(data.profileId);
+            maybePersistLearnedRecipes(data.profileId, data.fieldMeta);
+          }
           var named = data.profileName ? ('Design: ' + data.profileName) : (data.provider ? ('Provider: ' + data.provider) : 'Generic read');
           var hasAny = data.date || data.amount || data.reference_no;
           if (data.profileName && hasAny) {
@@ -1804,7 +1876,16 @@ document.addEventListener('DOMContentLoaded', function() {
                   fingerprint_keywords: teachFingerprint,
                   fields: ['date', 'amount', 'reference_no'].map(function(k) {
                     var r = regions[k];
-                    return { field_key: k, region_x: r.region_x, region_y: r.region_y, region_w: r.region_w, region_h: r.region_h };
+                    var meta = previewData.fieldMeta && previewData.fieldMeta[k];
+                    var row = {
+                      field_key: k,
+                      region_x: r.region_x,
+                      region_y: r.region_y,
+                      region_w: r.region_w,
+                      region_h: r.region_h,
+                    };
+                    if (meta && meta.recipe) row.ocr_recipe = meta.recipe;
+                    return row;
                   }),
                 };
                 return fetch('/api/workspace-slip-profiles', {
@@ -1832,6 +1913,7 @@ document.addEventListener('DOMContentLoaded', function() {
               }
               return loadProfiles().then(function() {
                 applyExtracted(previewData);
+                if (j.profile && j.profile.id) rememberSlipProfile(j.profile.id);
                 hideTeachPanel();
                 var filledNote = (previewData.date || previewData.amount || previewData.reference_no)
                   ? ' Fields auto-filled.'

@@ -1048,7 +1048,12 @@
       if (prefixMatch) best = prefixMatch;
     }
 
-    return fieldResult(best.val, Math.min(0.98, best.conf), best.source);
+    var winner = fieldResult(best.val, Math.min(0.98, best.conf), best.source);
+    var sourceCand = filtered.find(function (c) {
+      return c && c.val === best.val && (!best.source || c.source === best.source);
+    }) || filtered.find(function (c) { return c && c.val === best.val; });
+    if (sourceCand && sourceCand.recipe) winner.recipe = sourceCand.recipe;
+    return winner;
   }
 
   function normalizeReferenceDigitRun(raw) {
@@ -1657,6 +1662,110 @@
       { scale: 2.8, mode: 'gray-boost', variant: 'gray-2.8', padPct: 2 },
       { scale: 3.2, mode: 'gray-boost', noWhitelist: true, variant: 'gray-nowl-3.2', padPct: 2 },
     ];
+  }
+
+  function serializeVariantRecipe(v) {
+    if (!v) return null;
+    var recipe = {
+      variant: v.variant,
+      scale: v.scale,
+      mode: v.mode,
+      psm: v.psm,
+      padPct: v.padPct,
+      noWhitelist: v.noWhitelist,
+      digitsOnly: v.digitsOnly,
+      canvasMargin: v.canvasMargin,
+    };
+    if (v.padAsym) recipe.padAsym = v.padAsym;
+    if (v.regionSlice) recipe.regionSlice = v.regionSlice;
+    return recipe;
+  }
+
+  function findVariantByRecipe(fieldKey, recipe, variantOpts) {
+    if (!recipe || !recipe.variant) return null;
+    var pool = fieldOcrVariants(fieldKey, false, variantOpts || { teachPreview: true });
+    for (var i = 0; i < pool.length; i++) {
+      if (pool[i].variant === recipe.variant) return pool[i];
+    }
+    return {
+      scale: recipe.scale || 3.5,
+      mode: recipe.mode || 'invert',
+      variant: recipe.variant,
+      psm: recipe.psm || '7',
+      padPct: recipe.padPct != null ? recipe.padPct : 1,
+      padAsym: recipe.padAsym,
+      noWhitelist: recipe.noWhitelist,
+      digitsOnly: recipe.digitsOnly,
+      regionSlice: recipe.regionSlice,
+      canvasMargin: recipe.canvasMargin,
+    };
+  }
+
+  function resolveOcrVariants(fieldKey, opts) {
+    opts = opts || {};
+    var fast = !!opts.fast;
+    var list = [];
+    if (opts.recipe) {
+      var primary = findVariantByRecipe(fieldKey, opts.recipe, opts);
+      if (primary) list.push(primary);
+    }
+    if (opts.gateMode) {
+      if (!list.length) {
+        list = fieldOcrVariants(fieldKey, true, opts).slice(0, 2);
+      } else if (opts.recipeFallback !== false) {
+        var fallbacks = fieldOcrVariants(fieldKey, true, opts);
+        for (var fi = 0; fi < fallbacks.length; fi++) {
+          if (!list[0] || fallbacks[fi].variant !== list[0].variant) {
+            list.push(fallbacks[fi]);
+            break;
+          }
+        }
+      }
+      return list;
+    }
+    if (opts.teachPreview) return fieldOcrVariants(fieldKey, fast, opts);
+    if (list.length) {
+      var seen = {};
+      list.forEach(function (v) { seen[v.variant] = true; });
+      fieldOcrVariants(fieldKey, fast, opts).forEach(function (v) {
+        if (!seen[v.variant]) list.push(v);
+      });
+      return list;
+    }
+    return fieldOcrVariants(fieldKey, fast, opts);
+  }
+
+  function gateExitRank(opts) {
+    return opts && opts.gateMode ? 105 : 175;
+  }
+
+  function profileFieldRecipe(profile, fieldKey) {
+    var regions = profileRegionMap(profile);
+    var field = regions[fieldKey];
+    return field && field.ocr_recipe ? field.ocr_recipe : null;
+  }
+
+  function orderGateProfiles(profiles, preferredId) {
+    var eligible = (profiles || []).filter(function (p) {
+      var regions = profileRegionMap(p);
+      return regions.date && regions.amount;
+    });
+    var preferred = findProfileById(eligible, preferredId);
+    var rest = eligible.filter(function (p) {
+      return !preferred || p.id !== preferred.id;
+    });
+    if (preferred) return [preferred].concat(rest);
+    return rest;
+  }
+
+  function gateFieldOpts(profile, fieldKey) {
+    return {
+      fast: true,
+      zoneOnly: true,
+      gateMode: true,
+      recipe: profileFieldRecipe(profile, fieldKey),
+      fullText: '',
+    };
   }
 
   function parseNearAnchor(fullText, anchors, parser) {
@@ -2464,7 +2573,7 @@
   function ocrReferenceRegionField(img, region, opts) {
     opts = opts || {};
     region = expandReferenceRegion(region);
-    var variants = fieldOcrVariants('reference_no', !!opts.fast, opts);
+    var variants = resolveOcrVariants('reference_no', opts);
     var candidates = [];
     var labeledHits = 0;
     var stopEarly = false;
@@ -2505,6 +2614,7 @@
               conf: Math.min(0.97, conf + 0.18),
               score: scoreReferenceDigits(labeled, 160),
               source: v.variant + '-labeled',
+              recipe: serializeVariantRecipe(v),
             });
             if (conf >= 0.55 || labeledHits >= 2) {
               stopEarly = true;
@@ -2526,6 +2636,7 @@
               conf: Math.min(0.98, conf + (v.digitsOnly ? 0.08 : 0)),
               rank: rank,
               source: v.variant,
+              recipe: serializeVariantRecipe(v),
             });
           }
 
@@ -2600,10 +2711,11 @@
   function ocrAmountRegionField(img, region, opts) {
     opts = opts || {};
     region = expandAmountRegion(region);
-    var variants = fieldOcrVariants('amount', !!opts.fast, opts);
+    var variants = resolveOcrVariants('amount', opts);
     var candidates = [];
     var best = fieldResult(null, 0, 'zone');
     var bestRank = 0;
+    var exitRank = gateExitRank(opts);
     var chain = Promise.resolve();
 
     ocrLog('ocrAmountRegionField start', {
@@ -2614,7 +2726,7 @@
 
     variants.forEach(function (v) {
       chain = chain.then(function () {
-        if (best.value && bestRank >= 175) return;
+        if (best.value && bestRank >= exitRank) return;
         var cropRegion = v.regionSlice ? sliceRegion(region, v.regionSlice) : region;
         var canvas = makeRegionCanvas(img, cropRegion, v.scale, v.mode, v.padPct, v.padAsym, v.canvasMargin);
         return ocrCanvasRaw(canvas, 'amount', {
@@ -2637,6 +2749,7 @@
             if (!best.value || rank > bestRank) {
               bestRank = rank;
               best = fieldResult(val, conf, 'zone');
+              best.recipe = serializeVariantRecipe(v);
             }
           }
           var wordHit = extractAmountFromWords(
@@ -2679,16 +2792,18 @@
     ocrLog('ocrRegionField start', {
       field: fieldKey,
       fast: !!opts.fast,
+      gateMode: !!opts.gateMode,
       region: region,
       pixels: regionToPixelRect(img, region, 0),
     });
-    var variants = fieldOcrVariants(fieldKey, !!opts.fast, opts);
+    var variants = resolveOcrVariants(fieldKey, opts);
     var best = fieldResult(null, 0, 'zone');
     var bestRank = 0;
+    var exitRank = gateExitRank(opts);
     var chain = Promise.resolve();
     variants.forEach(function (v) {
       chain = chain.then(function () {
-        if (best.value && bestRank >= 175) return;
+        if (best.value && bestRank >= exitRank) return;
         var cropRegion = v.regionSlice ? sliceRegion(region, v.regionSlice) : region;
         var canvas = makeRegionCanvas(img, cropRegion, v.scale, v.mode, v.padPct, v.padAsym, v.canvasMargin);
         return ocrCanvas(canvas, fieldKey, {
@@ -2712,6 +2827,7 @@
           if (!best.value || rank > bestRank) {
             bestRank = rank;
             best = fieldResult(val, conf, 'zone');
+            best.recipe = serializeVariantRecipe(v);
           }
         });
       });
@@ -3062,7 +3178,9 @@
         return ocrRegionField(img, region, key, {
           fast: true,
           zoneOnly: zoneOnly,
-          teachPreview: zoneOnly,
+          gateMode: !!opts.gateMode,
+          recipe: opts.gateMode ? profileFieldRecipe(profile, key) : null,
+          teachPreview: zoneOnly && !opts.gateMode,
           fullText: opts.fullText || '',
         }).then(function (zoneRes) {
           var result = zoneRes || fieldResult(null, 0, 'zone');
@@ -3509,6 +3627,7 @@
           return extractZonesOnly(slipImg, pref, {
             fast: true,
             zoneOnly: true,
+            gateMode: true,
             onProgress: onProgress,
           }).then(function (zoneData) {
             packageProfileData(zoneData, pref, 1, '', slipImg);
@@ -3519,17 +3638,13 @@
         var regions = profileRegionMap(profile);
 
         // Gate 1: date
-        return ocrRegionField(slipImg, regions.date, 'date', {
-          fast: true, zoneOnly: true, teachPreview: true, fullText: '',
-        }).then(function (dateRes) {
+        return ocrRegionField(slipImg, regions.date, 'date', gateFieldOpts(profile, 'date')).then(function (dateRes) {
           if (!dateRes || !dateRes.value) {
             ocrLog('zone-strict gate: date nahi mili — next design', { profile: profile.name });
             return tryNext();
           }
           // Gate 2: amount
-          return ocrRegionField(slipImg, regions.amount, 'amount', {
-            fast: true, zoneOnly: true, teachPreview: true, fullText: '',
-          }).then(function (amtRes) {
+          return ocrRegionField(slipImg, regions.amount, 'amount', gateFieldOpts(profile, 'amount')).then(function (amtRes) {
             if (amtRes && amtRes.value) amtRes = reconcileAmountResult(amtRes, '');
             if (!amtRes || !amtRes.value) {
               ocrLog('zone-strict gate: amount nahi mila — next design', { profile: profile.name });
@@ -3541,9 +3656,7 @@
               onProgress({ key: 'amount', value: amtRes.value, result: amtRes, profileName: profile.name });
             }
             var refPromise = regions.reference_no
-              ? ocrRegionField(slipImg, regions.reference_no, 'reference_no', {
-                  fast: true, zoneOnly: true, teachPreview: true, fullText: '',
-                })
+              ? ocrRegionField(slipImg, regions.reference_no, 'reference_no', gateFieldOpts(profile, 'reference_no'))
               : Promise.resolve(fieldResult(null, 0, 'none'));
             return refPromise.then(function (refRes) {
               refRes = refRes || fieldResult(null, 0, 'none');
@@ -3616,16 +3729,7 @@
 
         var preferred = resolvePreferred();
         if (useZoneFirst && zoneStrict) {
-          // Gate-eligible designs: jin mein date + amount dono zones hain.
-          var gateList = profiles.filter(function (p) {
-            var regions = profileRegionMap(p);
-            return regions.date && regions.amount;
-          });
-          if (preferred) {
-            gateList = gateList.filter(function (p) { return p.id !== preferred.id; });
-            var prefRegions = profileRegionMap(preferred);
-            if (prefRegions.date && prefRegions.amount) gateList.unshift(preferred);
-          }
+          var gateList = orderGateProfiles(profiles, preferred ? preferred.id : preferredId);
           if (gateList.length) {
             return runZoneStrictGate(img, gateList);
           }

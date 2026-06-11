@@ -152,6 +152,12 @@ class Employee(db.Model):
     created_at = db.Column(db.DateTime, default=pk_now)
 
     wallet_account_id = db.Column(db.Integer, db.ForeignKey('account.id'), nullable=True)
+    last_slip_profile_id = db.Column(
+        db.Integer,
+        db.ForeignKey('workspace_slip_profile.id', ondelete='SET NULL'),
+        nullable=True,
+        index=True,
+    )
 
     post = db.relationship('EmployeePost', backref='employees')
     wallet_account = db.relationship('Account', foreign_keys=[wallet_account_id], backref='wallet_employee', lazy='select')
@@ -2545,6 +2551,7 @@ class WorkspaceSlipProfileField(db.Model):
     region_y = db.Column(db.Numeric(6, 2), nullable=False, default=0)
     region_w = db.Column(db.Numeric(6, 2), nullable=False, default=100)
     region_h = db.Column(db.Numeric(6, 2), nullable=False, default=100)
+    ocr_recipe_json = db.Column(db.Text, nullable=True)
 
 
 class WorkspaceMonthClose(db.Model):

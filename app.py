@@ -356,6 +356,8 @@ if _run_startup_tasks:
                 ('vehicle_activity_record', 'latitude', 'NUMERIC(10,6)'),
                 ('vehicle_activity_record', 'longitude', 'NUMERIC(10,6)'),
                 ('employee', 'wallet_account_id', 'INTEGER REFERENCES account(id)'),
+                ('employee', 'last_slip_profile_id', 'INTEGER REFERENCES workspace_slip_profile(id)'),
+                ('workspace_slip_profile_field', 'ocr_recipe_json', 'TEXT'),
                 ('driver', 'wallet_account_id', 'INTEGER REFERENCES account(id)'),
                 ('account', 'entity_type', 'VARCHAR(30)'),
                 ('account', 'entity_id', 'INTEGER'),
@@ -646,6 +648,7 @@ from routes_workspace import (
     workspace_slip_profiles_api,
     workspace_slip_profile_delete_api,
     workspace_slip_profile_update_api,
+    workspace_slip_last_profile_api,
     workspace_transfer_ref_check_api,
     workspace_account_balance_api,
 )  # noqa: E402
@@ -797,6 +800,7 @@ app.add_url_rule('/api/workspace-transfer-descriptions', 'workspace_transfer_des
 app.add_url_rule('/api/workspace-slip-profiles', 'workspace_slip_profiles', workspace_slip_profiles_api, methods=['GET', 'POST'])
 app.add_url_rule('/api/workspace-slip-profiles/<int:pk>', 'workspace_slip_profile_delete', workspace_slip_profile_delete_api, methods=['DELETE'])
 app.add_url_rule('/api/workspace-slip-profiles/<int:pk>', 'workspace_slip_profile_update', workspace_slip_profile_update_api, methods=['PATCH'])
+app.add_url_rule('/api/workspace-slip-last-profile', 'workspace_slip_last_profile', workspace_slip_last_profile_api, methods=['GET', 'POST'])
 app.add_url_rule('/api/workspace-transfer-ref-check', 'workspace_transfer_ref_check', workspace_transfer_ref_check_api, methods=['GET'])
 app.add_url_rule('/api/workspace-account-balance', 'workspace_account_balance_api', workspace_account_balance_api, methods=['GET'])
 app.add_url_rule('/workspace/ledger', 'workspace_ledger', workspace_ledger)
