@@ -59,7 +59,7 @@
   };
 
   var AMOUNT_MIN = 10;
-  var AMOUNT_MAX = 50000000;
+  var AMOUNT_MAX = 10000000000;
 
   var _tesseractWarm = null;
   var _ocrWorker = null;
@@ -374,16 +374,177 @@
     return bestScore >= 0.55 ? best : raw.slice(0, 3);
   }
 
+  function isMonthDayYearLead(text) {
+    return /^(?:on\s+)?(?:january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec)\s+\d{1,2}\b/i.test(
+      String(text || '').trim()
+    );
+  }
+
   function fixOcrTextForDate(text) {
     var t = String(text || '').replace(/\s+/g, ' ').replace(/—/g, '-').trim();
+    t = t.replace(/^0n\b/i, 'On');
+    t = t.replace(/\b(?:transaction|posting)\s*date\s*[:\-]?\s*/gi, ' ').trim();
+    var monthDayLead = isMonthDayYearLead(t);
     t = t.split('|')[0].split(/\s+at\s+/i)[0].trim();
-    t = t.replace(/^(?:date\s*(?:&\s*time)?|on|time)\s*[:\-]?\s*/i, '');
+    // Drop clock time — "27-Mar-2023 5:29 PM" / "23/12/2025 15:25:52"
+    t = t.replace(/\s+\d{1,2}:\d{2}(?::\d{2})?\s*(?:AM|PM)?\b/gi, '').trim();
+    monthDayLead = monthDayLead || isMonthDayYearLead(t);
+    t = t.replace(/^(?:transaction\s*)?date\s*(?:&\s*time)?\s*[:\-]?\s*/i, '');
+    t = t.replace(/^(?:on|time)\s*[:\-]?\s*/i, '');
     t = t.replace(/\b([OolI|])(?=\d)/g, '0');
     t = t.replace(/(\d)[Oo](\d)/g, '$10$2');
-    t = t.replace(/\b(\d{1,2})\s+([A-Za-z0-9]{2,9})\s+(\d{2,4})\b/g, function (_, d, mon, y) {
-      return d + ' ' + fuzzyFixMonthToken(mon) + ' ' + y;
-    });
+    // DD-Mon-YYYY — "27-Mar-2023"
+    t = t.replace(
+      /\b(\d{1,2})[\/\-.]([A-Za-z]{3,9})[\/\-.](\d{2,4})\b/g,
+      function (_, d, mon, y) {
+        return d + ' ' + fuzzyFixMonthToken(mon) + ' ' + y;
+      }
+    );
+    if (monthDayLead) {
+      // Month Day, Year — "June 11, 2026" / "Jun 11 2026"
+      t = t.replace(
+        /\b([A-Za-z]{3,9})\s+(\d{1,2})\s*,\s*(\d{2,4})\b/g,
+        function (_, mon, d, y) {
+          return fuzzyFixMonthToken(mon) + ' ' + d + ' ' + y;
+        }
+      );
+      t = t.replace(
+        /\b([A-Za-z]{3,9})\s+(\d{1,2})\s+((?:19|20)\d{2})\b/g,
+        function (_, mon, d, y) {
+          return fuzzyFixMonthToken(mon) + ' ' + d + ' ' + y;
+        }
+      );
+    } else {
+      // Day Month Year — "11 June 2026"
+      t = t.replace(/\b(\d{1,2})\s+([A-Za-z0-9]{2,9})\s+(\d{2,4})\b/g, function (_, d, mon, y) {
+        return d + ' ' + fuzzyFixMonthToken(mon) + ' ' + y;
+      });
+    }
     return t.trim();
+  }
+
+  function fixOcrAmountText(text) {
+    var t = String(text || '').replace(/\s+/g, ' ').replace(/—/g, '-').trim();
+    t = t.replace(/\b(?:transferred\s*)?amount\s*[:\-]?\s*/gi, '');
+    t = t.replace(/(^|\s)-\s*(?=(?:RS\.?|PKR\.?|R\s*5))/gi, '$1');
+    t = t.replace(/\bP\s*K\s*R\.?\s*/gi, 'PKR ');
+    t = t.replace(/\bR\s*[5S]\s*\.?\s*/gi, 'Rs. ');
+    // Merge split decimals before digit cleanup (Rs. 2000 00 / small superscript .00)
+    t = t.replace(
+      /(?:RS\.?|PKR\.?)\s*(\d{1,3}(?:,\d{3})+|\d{3,7})\s*(?:\.\s*)?(\d{2})\b/gi,
+      '$1.$2'
+    );
+    t = t.replace(/\b(\d{3,7})\s*(?:\.\s*)?(\d{2})\b/g, '$1.$2');
+    t = t.replace(/\b(\d{1,3}(?:,\d{3})+)\s*(?:\.\s*)?(\d{2})\b/g, '$1.$2');
+    t = t.replace(/(\d)\s+(\d{3})(?:\s*\.\s*|\s+)(\d{2})\b/g, '$1,$2.$3');
+    t = t.replace(/(\d{1,3})\s+(\d{3})(?:\s*\.\s*(\d{1,2}))?\b/g, function (_, a, b, dec) {
+      return dec ? (a + ',' + b + '.' + dec) : (a + ',' + b);
+    });
+    t = t.replace(/(?:RS\.?|PKR\.?)\s*/gi, '');
+    return fixOcrText(t, 'amount');
+  }
+
+  function expandAmountRegion(region) {
+    if (!region) return region;
+    var x = region.region_x || 0;
+    var w = region.region_w || 10;
+    var h = region.region_h || 8;
+    var extraRight = Math.max(4.5, w * 0.24);
+    return {
+      region_x: Math.max(0, x - 0.4),
+      region_y: Math.max(0, (region.region_y || 0) - 0.3),
+      region_w: Math.min(100 - Math.max(0, x - 0.4), w + extraRight),
+      region_h: Math.min(100 - Math.max(0, (region.region_y || 0) - 0.3), h + 1.2),
+    };
+  }
+
+  function normalizeAmountWordDigits(text) {
+    return fixOcrText(String(text || ''), 'amount').replace(/\s+/g, '');
+  }
+
+  function extractAmountFromWords(words, canvasWidth) {
+    var sorted = (words || []).filter(function (w) {
+      return w && w.bbox && String(w.text || '').trim();
+    }).sort(function (a, b) {
+      return a.bbox.x0 - b.bbox.x0;
+    });
+    if (!sorted.length) return null;
+
+    var tokens = sorted.map(function (w) {
+      return {
+        raw: String(w.text || '').trim(),
+        norm: normalizeAmountWordDigits(w.text),
+        bbox: w.bbox,
+        h: Math.max(1, w.bbox.y1 - w.bbox.y0),
+      };
+    });
+
+    var candidates = [];
+    function pushAmount(raw, score, conf, source) {
+      var scored = scoreAmountCandidate(raw, score, '', { afterCurrency: true });
+      if (!scored) scored = scoreAmountCandidate(raw, score - 8, '', {});
+      if (!scored) return;
+      candidates.push({
+        val: scored.val,
+        score: scored.score,
+        conf: conf || 0.8,
+        source: source || 'amount-words',
+      });
+    }
+
+    tokens.forEach(function (tok, i) {
+      var main = tok.norm.replace(/[^\d.,]/g, '');
+      if (!/^\d{1,12}(?:\.\d{1,2})?$/.test(main) && !/^\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?$/.test(main)) return;
+      var merged = main;
+      var bonus = 0;
+
+      for (var j = i + 1; j < tokens.length && j <= i + 2; j++) {
+        var next = tokens[j];
+        var gap = next.bbox.x0 - tok.bbox.x1;
+        if (gap > 64) break;
+        var nextNorm = next.norm.replace(/[^\d.]/g, '');
+        var isSmall = next.h > 0 && tok.h > 0 && next.h < tok.h * 0.78;
+        if (/^\.?\d{2}$/.test(nextNorm)) {
+          var dec = nextNorm.replace(/^\./, '');
+          if (dec.length === 2 && !/\.\d{2}$/.test(merged)) {
+            merged = merged.replace(/,/g, '') + '.' + dec;
+            bonus += isSmall ? 42 : 24;
+            break;
+          }
+        }
+        if (nextNorm === '.' && j + 1 < tokens.length) {
+          var decTok = tokens[j + 1].norm.replace(/[^\d]/g, '');
+          if (/^\d{2}$/.test(decTok) && !/\.\d{2}$/.test(merged)) {
+            merged = merged.replace(/,/g, '') + '.' + decTok;
+            bonus += 36;
+            break;
+          }
+        }
+      }
+
+      var hasCurrencyBefore = tokens.slice(0, i).some(function (t) {
+        return /^(?:RS|RS\.|PKR|PKR\.)$/i.test(t.raw.replace(/\s/g, ''));
+      });
+      pushAmount(
+        merged,
+        108 + bonus + (hasCurrencyBefore ? 18 : 0),
+        0.84,
+        'amount-words-merged'
+      );
+    });
+
+    var lineText = tokens.map(function (t) { return t.raw; }).join(' ');
+    var parsed = parseAmountFromText(lineText);
+    if (parsed) {
+      pushAmount(parsed, 96, 0.78, 'amount-words-line');
+    }
+
+    if (!candidates.length) return null;
+    candidates.sort(function (a, b) {
+      if (b.score !== a.score) return b.score - a.score;
+      return (b.conf || 0) - (a.conf || 0);
+    });
+    return candidates[0];
   }
 
   function fixOcrText(text, mode) {
@@ -424,31 +585,59 @@
   }
 
   function parseDateFromText(text) {
-    var t = fixOcrTextForDate(text);
+    var raw = String(text || '');
+    var t = fixOcrTextForDate(raw);
     var patterns = [
-      /\b(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})\b/g,
-      /\b(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})\b/g,
-      /\b(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{4})\b/gi,
-      /\b(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{2})\b/gi,
+      {
+        re: /\b(\d{1,2})[\/\-.](Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[\/\-.](\d{4})\b/gi,
+        kind: 'dmy4',
+        bonus: 14,
+      },
+      {
+        re: /\b(\d{1,2})[\/\-.](Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[\/\-.](\d{2})\b/gi,
+        kind: 'dmy2',
+        bonus: 12,
+      },
+      { re: /\b(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})\b/g, kind: 'dmy', bonus: 8 },
+      { re: /\b(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})\b/g, kind: 'ymd' },
+      {
+        re: /\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{1,2}),?\s+(\d{4})\b/gi,
+        kind: 'mdy4',
+        bonus: 10,
+      },
+      {
+        re: /\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{1,2}),?\s+(\d{2})\b/gi,
+        kind: 'mdy2',
+        bonus: 8,
+      },
+      { re: /\b(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{4})\b/gi, kind: 'dmy4', bonus: 10 },
+      { re: /\b(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{2})\b/gi, kind: 'dmy2', bonus: 4 },
     ];
     var months = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
     var best = null;
     var bestScore = -1;
     var m;
-    patterns.forEach(function (re, idx) {
-      re.lastIndex = 0;
-      while ((m = re.exec(t)) !== null) {
-        var d, mo, y, score = 80;
-        if (idx === 2 || idx === 3) {
+    patterns.forEach(function (pat) {
+      pat.re.lastIndex = 0;
+      while ((m = pat.re.exec(t)) !== null) {
+        var d, mo, y, score = 80 + (pat.bonus || 0);
+        if (pat.kind === 'mdy4' || pat.kind === 'mdy2') {
+          mo = months[String(m[1]).slice(0, 3).toLowerCase()] || 0;
+          d = parseInt(m[2], 10);
+          y = parseInt(m[3], 10);
+          if (/\bon\b/i.test(raw)) score += 6;
+          if (/\bat\b/i.test(raw)) score += 6;
+          if (pat.kind === 'mdy2' && y < 100) y += 2000;
+        } else if (pat.kind === 'dmy4' || pat.kind === 'dmy2') {
           d = parseInt(m[1], 10);
           mo = months[String(m[2]).slice(0, 3).toLowerCase()] || 0;
           y = parseInt(m[3], 10);
-          score += 6;
-          if (idx === 3 && y < 100) y += 2000;
-        } else if (idx === 0) {
+          if (pat.kind === 'dmy2' && y < 100) y += 2000;
+        } else if (pat.kind === 'dmy') {
           d = parseInt(m[1], 10);
           mo = parseInt(m[2], 10);
           y = parseInt(m[3], 10);
+          if (/\d{1,2}:\d{2}/.test(raw)) score += 6;
         } else {
           y = parseInt(m[1], 10);
           mo = parseInt(m[2], 10);
@@ -484,10 +673,12 @@
   function isLikelyTransactionIdDigits(digits, fullText) {
     if (!digits || digits.length < 8) return false;
     var upper = String(fullText || '').toUpperCase();
-    if (/(?:TRANSACTION|TID|TXN|REFERENCE|REF)\s*(?:ID|NO)?\s*#?\s*\d*/i.test(upper) && upper.indexOf(digits) !== -1) {
+    if (/(?:RS\.?|PKR\.?|AMOUNT|TRANSFERRED|PAID|SENT|TOTAL)/i.test(upper)) return false;
+    if (/(?:TID|TXN|REFERENCE|REF)\s*(?:ID|NO)?\s*#?\s*\d*/i.test(upper) && upper.indexOf(digits) !== -1) {
       return true;
     }
-    return digits.length >= 8;
+    if (/\bID\s*#\s*\d*/i.test(upper) && upper.replace(/\D/g, '').indexOf(digits) !== -1) return true;
+    return digits.length >= 9 && digits.length <= 16 && !/\d{1,3}(?:,\d{3})+/.test(upper);
   }
 
   function isLikelyTimeFragment(digits, fullText) {
@@ -511,8 +702,11 @@
   function isLikelyYearFragment(digits, fullText) {
     var y = parseInt(digits, 10);
     if (!isFinite(y) || y < 2000 || y > 2100) return false;
-    return /\b(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\b/i.test(String(fullText || '')) ||
-      /\b20\d{2}\b/.test(String(fullText || ''));
+    var ctx = String(fullText || '');
+    if (/(?:RS\.?|PKR\.?|AMOUNT|PAID|SENT|TRANSFERRED|TOTAL)/i.test(ctx)) return false;
+    if (/\d{1,3}(?:,\d{3})*\.\d{1,2}|\d{3,7}\.\d{1,2}/.test(ctx)) return false;
+    if (/\b(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\b/i.test(ctx)) return true;
+    return false;
   }
 
   function validateAmountCandidate(val, fullText, options) {
@@ -539,8 +733,10 @@
     if (context.afterCurrency) total += 28;
     if (context.beforeDetails) total += 12;
     if (/^\d{1,3}(?:,\d{3})+$/.test(String(raw))) total += 10;
+    if (/^\d{1,3}(?:,\d{3}){2,}$/.test(String(raw))) total += 14;
     var num = parseFloat(val);
     if (num >= 100 && num <= 500000) total += 8;
+    if (num > 500000 && /(?:RS\.?|PKR\.?|TRANSFERRED\s*AMOUNT)/i.test(String(fullText || ''))) total += 12;
     return { val: val, score: total };
   }
 
@@ -599,17 +795,59 @@
   function parseAmountFromText(text, options) {
     options = options || {};
     var rawText = String(text || '');
-    var t = fixOcrText(rawText, 'amount');
+    var t = fixOcrAmountText(rawText);
     var candidates = [];
     var m;
 
-    var reRs = /(?:RS\.?|PKR\.?)\s*([\d]{1,3}(?:,\d{3})+(?:\.\d{1,2})?|\d{3,7}(?:\.\d{1,2})?)/gi;
+    var reNegPkr = /-\s*(?:RS\.?|PKR\.?|R\s*5\.?)\s*([\d]{1,3}(?:,\d{3})+(?:\.\d{1,2})?|\d{3,12}(?:\.\d{1,2})?)/gi;
+    while ((m = reNegPkr.exec(rawText)) !== null) {
+      var negCand = scoreAmountCandidate(m[1], 118, rawText, { afterCurrency: true, afterAmountLabel: true });
+      if (negCand) candidates.push(negCand);
+    }
+
+    var reRsRaw = /(?:RS\.?|PKR\.?|R\s*5\.?)\s*([\d]{1,3}(?:,\d{3})+(?:\.\d{1,2})?|\d{3,12}(?:\.\d{1,2})?)/gi;
+    while ((m = reRsRaw.exec(rawText)) !== null) {
+      var rsRawCand = scoreAmountCandidate(m[1], 114, rawText, { afterCurrency: true });
+      if (!rsRawCand) {
+        rsRawCand = scoreAmountCandidate(m[1], 108, rawText, { afterCurrency: true, allowSmall: true });
+      }
+      if (rsRawCand) candidates.push(rsRawCand);
+    }
+
+    var reRsSmall = /(?:RS\.?|PKR\.?)\s*(\d{1,2})(?!\d|[,.])/gi;
+    while ((m = reRsSmall.exec(rawText)) !== null) {
+      var smallCand = scoreAmountCandidate(m[1], 102, rawText, { afterCurrency: true, allowSmall: true });
+      if (smallCand) candidates.push(smallCand);
+    }
+
+    var reRs = /(?:RS\.?|PKR\.?)\s*([\d]{1,3}(?:,\d{3})+(?:\.\d{1,2})?|\d{3,12}(?:\.\d{1,2})?)/gi;
     while ((m = reRs.exec(t)) !== null) {
       var rsCand = scoreAmountCandidate(m[1], 112, rawText, { afterCurrency: true });
+      if (!rsCand) {
+        rsCand = scoreAmountCandidate(m[1], 106, rawText, { afterCurrency: true, allowSmall: true });
+      }
       if (rsCand) candidates.push(rsCand);
     }
 
-    var reLabel = /(?:AMOUNT\s*PAID|AMOUNT|TOTAL|SENT|TRANSFERRED)\s*[:\-]?\s*([\d,]+(?:\.\d{1,2})?)/gi;
+    var reTransferred = /TRANSFERRED\s*AMOUNT\s*(?:RS\.?|PKR\.?)?\s*([\d]{1,3}(?:,\d{3})+(?:\.\d{1,2})?|\d{3,12}(?:\.\d{1,2})?)/gi;
+    while ((m = reTransferred.exec(rawText)) !== null) {
+      var xferCand = scoreAmountCandidate(m[1], 120, rawText, { afterAmountLabel: true, afterCurrency: true });
+      if (xferCand) candidates.push(xferCand);
+    }
+
+    var rePkrStacked = /(?:RS\.?|PKR\.?)\s*([\d]{1,3}(?:,\d{3})+(?:\.\d{1,2})?|\d{3,12}(?:\.\d{1,2})?)\s*TRANSFERRED/gi;
+    while ((m = rePkrStacked.exec(rawText)) !== null) {
+      var stackedCand = scoreAmountCandidate(m[1], 122, rawText, { afterCurrency: true, afterAmountLabel: true });
+      if (stackedCand) candidates.push(stackedCand);
+    }
+
+    var reAmtBeforePkr = /([\d]{1,3}(?:,\d{3})+(?:\.\d{1,2})?|\d{3,12}(?:\.\d{1,2})?)\s*(?:RS\.?|PKR\.?)/gi;
+    while ((m = reAmtBeforePkr.exec(rawText)) !== null) {
+      var suffixCand = scoreAmountCandidate(m[1], 104, rawText, { afterCurrency: true });
+      if (suffixCand) candidates.push(suffixCand);
+    }
+
+    var reLabel = /(?:TRANSFERRED\s*AMOUNT|AMOUNT\s*PAID|AMOUNT|TOTAL|SENT|TRANSFERRED)\s*[:\-]?\s*(?:RS\.?|PKR\.?)?\s*([\d]{1,3}(?:,\d{3})+(?:\.\d{1,2})?|\d{3,12}(?:\.\d{1,2})?)/gi;
     while ((m = reLabel.exec(t)) !== null) {
       var labelCand = scoreAmountCandidate(m[1], 96, rawText, { afterAmountLabel: true });
       if (labelCand) candidates.push(labelCand);
@@ -622,7 +860,7 @@
     }
 
     if (!options.strict) {
-      var rePlain = /\b(\d{4,7}(?:\.\d{1,2})?)\b/g;
+      var rePlain = /\b(\d{3,7}(?:\.\d{1,2})?)\b/g;
       while ((m = rePlain.exec(t)) !== null) {
         var plainCand = scoreAmountCandidate(m[1], 48, rawText);
         if (plainCand) candidates.push(plainCand);
@@ -641,7 +879,7 @@
     return candidates[0].val;
   }
 
-  var REF_LABEL_RE = /(?:TID|TXN|TRANSACTION\s*ID|REFERENCE\s*NO?|REF\s*NO?|TRX\s*ID|RAAST\s*ID|TRANSACTION|REFERENCE|SUCCESSFUL|TRANSFER)\s*/gi;
+  var REF_LABEL_RE = /(?:TID|TXN|TRANSACTION\s*REFERENCE\s*NO?\.?|TRANSACTION\s*ID|REFERENCE\s*NUMBER|REFERENCE\s*NO?\.?|REF\s*NO?|TRX\s*ID|RAAST\s*ID|TRANSACTION|REFERENCE|SUCCESSFUL|TRANSFER|VIA\s*IBT|NUMBER)\s*/gi;
   var REF_STOPWORDS = {
     TRANSACTION: 1, REFERENCE: 1, SUCCESSFUL: 1, TRANSFER: 1, SUCCESS: 1, PAYMENT: 1, AMOUNT: 1,
   };
@@ -650,6 +888,10 @@
     var tokens = String(text || '').split(/\s+/).filter(function (tok) {
       return /^\d{1,9}$/.test(tok);
     });
+    if (!tokens.length) return null;
+    var longTokens = tokens.filter(function (tok) { return tok.length >= 6; });
+    if (longTokens.length === 1) return longTokens[0];
+    if (longTokens.length > 1) return null;
     if (tokens.length < 2) return null;
     var joined = tokens.join('');
     if (joined.length >= 6 && joined.length <= 16) {
@@ -662,7 +904,8 @@
     var score = baseScore + val.length * 6;
     if (/^\d+$/.test(val)) {
       score += 30;
-      if (val.length >= 8 && val.length <= 14) score += 28;
+      if (val.length >= 8 && val.length <= 24) score += 28;
+      if (val.length >= 14 && val.length <= 20) score += 16;
       if (val.length === 7) score -= 18;
       if (val.length === 6) score -= 8;
     }
@@ -761,7 +1004,7 @@
     if (!val) return false;
     var v = String(val).replace(/\s/g, '').toUpperCase();
     if (!v || v.length < 6) return false;
-    if (/^\d{6,14}$/.test(v)) return true;
+    if (/^\d{6,24}$/.test(v)) return true;
     var letters = (v.match(/[A-Z]/g) || []).length;
     var digits = (v.match(/[0-9]/g) || []).length;
     if (digits >= 6 && letters <= 1) return true;
@@ -822,10 +1065,23 @@
   function extractReferenceIdFromRaw(raw) {
     var text = String(raw || '');
     if (!text.trim()) return null;
-    var labeled = text.match(/(?:TRANSACTION\s*ID|TID|TXN|TRANSACTION|REFERENCE\s*NO?|REF\s*NO?|RAAST\s*ID)\s*#?\s*([0-9OIl|!\s]{6,})/i);
-    if (labeled && labeled[1]) {
-      var fromLabel = normalizeReferenceDigitRun(labeled[1]);
-      if (fromLabel.length >= 6) return fromLabel;
+    var labelPatterns = [
+      /TRANSACTION\s*ID\s*\(\s*TID\s*\)\s*:\s*([0-9OIl|!\s]{4,20})/i,
+      /TRANSACTION\s*REFERENCE\s*NO\.?\s*([0-9OIl|!\s]{6,20})/i,
+      /\bI[DL1l]\s*#\s*([0-9OIl|!\s]{6,20})/i,
+      /(?:T[IL1l]D|TXN)\s*#\s*([0-9OIl|!\s]{6,20})/i,
+      /(?:T[IL1l]D|TXN)\s*:\s*([0-9OIl|!\s]{6,20})/i,
+      /REFERENCE\s*NUMBER\s*:\s*([0-9OIl|!\s]{6,24})/i,
+      /REFERENCE\s*NUMBER\s*#\s*([0-9OIl|!\s]{6,24})/i,
+      /(?:TRANSACTION\s*ID|TRANSACTION|REFERENCE\s*(?:NO|NUMBER)?|REF\s*(?:NO|NUMBER)?|RAAST\s*ID)\s*[:\-#.]?\s*([0-9OIl|!\s]{6,})/i,
+    ];
+    var i;
+    for (i = 0; i < labelPatterns.length; i++) {
+      var labeled = text.match(labelPatterns[i]);
+      if (labeled && labeled[1]) {
+        var fromLabel = normalizeReferenceDigitRun(labeled[1]);
+        if (fromLabel.length >= 6) return fromLabel;
+      }
     }
     var afterHash = text.match(/#\s*([0-9OIl|!\s]{6,})/);
     if (afterHash && afterHash[1]) {
@@ -841,7 +1097,13 @@
     if (!raw.trim()) return null;
     var direct = extractReferenceIdFromRaw(raw);
     if (direct) return direct;
-    var t = fixOcrText(raw, 'reference_no');
+    var t = raw.replace(/TRANSACTION\s*ID\s*\(\s*TID\s*\)\s*:\s*/gi, ' ');
+    t = fixOcrText(t, 'reference_no');
+    t = t.replace(/TRANSACTION\s*REFERENCE\s*NO\.?\s*/gi, ' ');
+    t = t.replace(/REFERENCE\s*NUMBER\s*[:#]?\s*/gi, ' ');
+    t = t.replace(/\bI[DL1l]\s*#\s*/gi, ' ');
+    t = t.replace(/(?:T[IL1l]D|TXN)\s*#\s*/gi, ' ');
+    t = t.replace(/(?:T[IL1l]D|TXN)\s*:\s*/gi, ' ');
     t = t.replace(REF_LABEL_RE, ' ').replace(/\bID\b\s*[:\-#]?\s*/gi, ' ');
     t = t.replace(/[#:\-]/g, ' ').replace(/\s+/g, ' ').trim();
 
@@ -888,7 +1150,14 @@
 
     var t = fixOcrText(text, 'reference_no');
     var patterns = [
-      /(?:TID|TXN|TRANSACTION\s*ID|REFERENCE\s*NO?|REF\s*NO?|TRX\s*ID|RAAST\s*ID)\s*[:\-#]?\s*([0-9]{6,})/gi,
+      /TRANSACTION\s*ID\s*\(\s*TID\s*\)\s*:\s*([0-9]{4,20})/gi,
+      /\bI[DL1l]\s*#\s*([0-9]{6,20})/gi,
+      /(?:T[IL1l]D|TXN)\s*#\s*([0-9]{6,20})/gi,
+      /(?:T[IL1l]D|TXN)\s*[:#\-\s]*([0-9]{6,20})/gi,
+      /REFERENCE\s*NUMBER\s*:\s*([0-9]{6,24})/gi,
+      /REFERENCE\s*NUMBER\s*#\s*([0-9]{6,24})/gi,
+      /TRANSACTION\s*REFERENCE\s*NO\.?\s*([0-9]{6,24})/gi,
+      /(?:TID|TXN|TRANSACTION\s*ID|REFERENCE\s*(?:NO|NUMBER)?|REF\s*(?:NO|NUMBER)?|TRX\s*ID|RAAST\s*ID)\s*[:\-#.]?\s*([0-9]{6,})/gi,
       /\b([0-9]{8,})\b/g,
       /\b([0-9]{6,})\b/g,
     ];
@@ -905,6 +1174,7 @@
         var score = 96 - idx * 11 + Math.min(val.length, 20);
         if (/^\d+$/.test(val)) score += 35;
         if (/^\d+$/.test(val) && val.length >= 10) score += 10;
+        if (/^\d+$/.test(val) && val.length >= 6 && val.length <= 7) score += 8;
         if (!/^\d+$/.test(val) && !/[A-Z]/.test(val)) score -= 20;
         if (score > bestScore) {
           bestScore = score;
@@ -957,33 +1227,199 @@
 
   function fieldOcrVariants(fieldKey, fast, variantOpts) {
     variantOpts = variantOpts || {};
+    if (fieldKey === 'date' && variantOpts.teachPreview) {
+      return [
+        {
+          scale: 4.4,
+          mode: 'invert',
+          variant: 'date-teach-invert',
+          psm: '7',
+          padPct: 1,
+          padAsym: { left: 0.4, right: 4, top: 1, bottom: 1 },
+          noWhitelist: true,
+        },
+        { scale: 3.8, mode: 'photo-fix', variant: 'date-teach-photo', psm: '7', padPct: 0.8, noWhitelist: true },
+        { scale: 3.6, mode: 'contrast', variant: 'date-teach-contrast', psm: '7', padPct: 1, noWhitelist: true },
+        { scale: 3.4, mode: 'gray-boost', variant: 'date-teach-gray', psm: '7', padPct: 0.8 },
+      ];
+    }
     if (fieldKey === 'date') {
       if (fast) {
-        return [{ scale: 3.0, mode: 'photo-fix', variant: 'date-fast', psm: '7', padPct: 0.8 }];
+        return [
+          { scale: 4.2, mode: 'invert', variant: 'date-fast-invert', psm: '7', padPct: 1, noWhitelist: true },
+          { scale: 3.4, mode: 'photo-fix', variant: 'date-fast', psm: '7', padPct: 0.8, noWhitelist: true },
+          { scale: 3.2, mode: 'contrast', variant: 'date-fast-contrast', psm: '7', padPct: 1, noWhitelist: true },
+        ];
       }
       return [
+        { scale: 4.2, mode: 'invert', variant: 'date-invert', psm: '7', padPct: 1, noWhitelist: true },
         { scale: 3.2, mode: 'photo-fix', variant: 'date-photo-3.2', psm: '7', padPct: 0.8 },
         { scale: 3.0, mode: 'gray-boost', variant: 'date-gray-3.0', psm: '7', padPct: 0.8 },
         { scale: 2.8, mode: 'contrast', variant: 'date-contrast-2.8', psm: '8', padPct: 1 },
         { scale: 3.4, mode: 'sharp', noWhitelist: true, variant: 'date-sharp-3.4', psm: '7', padPct: 0.6 },
       ];
     }
+    if (fieldKey === 'amount' && variantOpts.teachPreview) {
+      return [
+        {
+          scale: 4.8,
+          mode: 'blue-ink',
+          variant: 'amt-teach-blue',
+          psm: '7',
+          padPct: 1.6,
+          padAsym: { left: 0.5, right: 6.5, top: 1.2, bottom: 1.4 },
+          noWhitelist: true,
+        },
+        {
+          scale: 4.6,
+          mode: 'colored-ink',
+          variant: 'amt-teach-colored',
+          psm: '7',
+          padPct: 1.6,
+          padAsym: { left: 0.5, right: 6, top: 1.2, bottom: 1.4 },
+          noWhitelist: true,
+        },
+        {
+          scale: 4.8,
+          mode: 'invert',
+          variant: 'amt-teach-invert',
+          psm: '7',
+          padPct: 1.5,
+          padAsym: { left: 0.5, right: 6, top: 1, bottom: 1.2 },
+          noWhitelist: true,
+        },
+        {
+          scale: 4.6,
+          mode: 'warm-ink',
+          variant: 'amt-teach-warm',
+          psm: '7',
+          padPct: 1.6,
+          padAsym: { left: 0.5, right: 6, top: 1, bottom: 1.2 },
+          noWhitelist: true,
+        },
+        {
+          scale: 4.6,
+          mode: 'photo-fix',
+          variant: 'amt-teach-photo',
+          psm: '6',
+          padPct: 1.5,
+          padAsym: { left: 0.6, right: 6, top: 1, bottom: 1.2 },
+          noWhitelist: true,
+        },
+        {
+          scale: 4.4,
+          mode: 'contrast',
+          variant: 'amt-teach-contrast',
+          psm: '7',
+          padPct: 1.5,
+          padAsym: { left: 0.5, right: 5.5, top: 1, bottom: 1 },
+          noWhitelist: true,
+        },
+      ];
+    }
     if (fieldKey === 'amount') {
       if (fast) {
         return [
-          { scale: 3.4, mode: 'photo-fix', variant: 'amt-fast-photo', psm: '7', padPct: 1.2 },
-          { scale: 3.0, mode: 'gray-boost', variant: 'amt-fast-gray', psm: '7', padPct: 1.5 },
+          {
+            scale: 4.8,
+            mode: 'blue-ink',
+            variant: 'amt-fast-blue',
+            psm: '7',
+            padPct: 1.6,
+            padAsym: { left: 0.5, right: 6.5, top: 1.2, bottom: 1.4 },
+            noWhitelist: true,
+          },
+          {
+            scale: 4.6,
+            mode: 'colored-ink',
+            variant: 'amt-fast-colored',
+            psm: '7',
+            padPct: 1.6,
+            padAsym: { left: 0.5, right: 6, top: 1.2, bottom: 1.4 },
+            noWhitelist: true,
+          },
+          {
+            scale: 4.8,
+            mode: 'invert',
+            variant: 'amt-fast-invert',
+            psm: '7',
+            padPct: 1.5,
+            padAsym: { left: 0.5, right: 6, top: 1, bottom: 1.2 },
+            noWhitelist: true,
+          },
+          {
+            scale: 4.8,
+            mode: 'red-ink',
+            variant: 'amt-fast-red',
+            psm: '7',
+            padPct: 1.6,
+            padAsym: { left: 0.5, right: 6.5, top: 1, bottom: 1.2 },
+            noWhitelist: true,
+          },
+          { scale: 4.6, mode: 'warm-ink', variant: 'amt-fast-warm', psm: '7', padPct: 1.6, padAsym: { left: 0.5, right: 6, top: 1, bottom: 1.2 }, noWhitelist: true },
+          { scale: 4.4, mode: 'colored-ink', variant: 'amt-fast-colored', psm: '7', padPct: 1.6, padAsym: { left: 0.5, right: 5.5, top: 1, bottom: 1 }, noWhitelist: true },
+          { scale: 4.4, mode: 'photo-fix', variant: 'amt-fast-photo-dec', psm: '6', padPct: 1.5, padAsym: { left: 0.6, right: 6, top: 1, bottom: 1.2 }, noWhitelist: true },
+          { scale: 3.4, mode: 'photo-fix', variant: 'amt-fast-photo', psm: '7', padPct: 1.2, padAsym: { right: 3.5 } },
+          { scale: 3.2, mode: 'contrast', variant: 'amt-fast-contrast', psm: '7', padPct: 1.5, padAsym: { right: 3.5 } },
         ];
       }
       return [
-        { scale: 4.0, mode: 'photo-fix', variant: 'amt-photo-4.0', psm: '7', padPct: 1.2 },
-        { scale: 3.6, mode: 'contrast', variant: 'amt-contrast-3.6', psm: '7', padPct: 1.3 },
+        {
+          scale: 4.8,
+          mode: 'red-ink',
+          variant: 'amt-red-4.8',
+          psm: '7',
+          padPct: 1.6,
+          padAsym: { left: 0.5, right: 6.5, top: 1, bottom: 1.2 },
+          noWhitelist: true,
+        },
+        { scale: 4.6, mode: 'warm-ink', variant: 'amt-warm-4.6', psm: '7', padPct: 1.6, padAsym: { left: 0.5, right: 6, top: 1, bottom: 1.2 }, noWhitelist: true },
+        { scale: 4.6, mode: 'colored-ink', variant: 'amt-colored-4.6', psm: '7', padPct: 1.6, padAsym: { left: 0.5, right: 5.5, top: 1, bottom: 1 }, noWhitelist: true },
+        { scale: 4.6, mode: 'photo-fix', variant: 'amt-photo-dec-4.6', psm: '6', padPct: 1.5, padAsym: { left: 0.6, right: 6, top: 1, bottom: 1.2 }, noWhitelist: true },
+        {
+          scale: 4.8,
+          mode: 'invert',
+          variant: 'amt-invert',
+          psm: '7',
+          padPct: 1.5,
+          padAsym: { left: 0.5, right: 7, top: 1, bottom: 1.2 },
+          noWhitelist: true,
+        },
+        { scale: 4.0, mode: 'photo-fix', variant: 'amt-photo-4.0', psm: '7', padPct: 1.2, padAsym: { right: 3.5 } },
+        { scale: 3.6, mode: 'contrast', variant: 'amt-contrast-3.6', psm: '7', padPct: 1.3, padAsym: { right: 3.5 } },
         { scale: 3.4, mode: 'gray-boost', variant: 'amt-gray-3.4', psm: '7', padPct: 1.5 },
         { scale: 3.0, mode: 'sharp', variant: 'amt-sharp-3.0', psm: '8', padPct: 2 },
       ];
     }
     if (fieldKey === 'reference_no' && variantOpts.teachPreview) {
       return [
+        {
+          scale: 4.8,
+          mode: 'colored-ink',
+          variant: 'teach-orange-ref',
+          psm: '7',
+          padPct: 1.2,
+          padAsym: { left: 0.4, right: 6, top: 1, bottom: 1 },
+          noWhitelist: true,
+        },
+        {
+          scale: 4.6,
+          mode: 'warm-ink',
+          variant: 'teach-warm-ref',
+          psm: '7',
+          padPct: 1.2,
+          padAsym: { left: 0.4, right: 6, top: 1, bottom: 1 },
+          noWhitelist: true,
+        },
+        {
+          scale: 4.6,
+          mode: 'invert',
+          variant: 'teach-invert-line',
+          psm: '7',
+          padPct: 1.2,
+          padAsym: { left: 0.4, right: 6, top: 1, bottom: 1 },
+          noWhitelist: true,
+        },
         {
           scale: 4.2,
           mode: 'photo-fix',
@@ -1051,6 +1487,51 @@
       if (fieldKey === 'reference_no') {
         return [
           {
+            scale: 4.6,
+            mode: 'invert',
+            variant: 'ref-fast-invert',
+            psm: '7',
+            padPct: 1.2,
+            padAsym: { left: 0.4, right: 6, top: 1, bottom: 1 },
+            noWhitelist: true,
+          },
+          {
+            scale: 4.8,
+            mode: 'colored-ink',
+            variant: 'ref-fast-orange',
+            psm: '7',
+            padPct: 1.2,
+            padAsym: { left: 0.4, right: 6, top: 1, bottom: 1 },
+            noWhitelist: true,
+          },
+          {
+            scale: 4.6,
+            mode: 'warm-ink',
+            variant: 'ref-fast-warm',
+            psm: '7',
+            padPct: 1.2,
+            padAsym: { left: 0.4, right: 6, top: 1, bottom: 1 },
+            noWhitelist: true,
+          },
+          {
+            scale: 4.6,
+            mode: 'invert',
+            variant: 'ref-fast-invert',
+            psm: '7',
+            padPct: 1.2,
+            padAsym: { left: 0.4, right: 6, top: 1, bottom: 1 },
+            noWhitelist: true,
+          },
+          {
+            scale: 4.4,
+            mode: 'contrast',
+            variant: 'ref-fast-contrast-line',
+            psm: '7',
+            padPct: 1.3,
+            padAsym: { left: 0.5, right: 5.5, top: 1, bottom: 1 },
+            noWhitelist: true,
+          },
+          {
             scale: 5.2,
             mode: 'photo-fix',
             variant: 'ref-fast-tail30',
@@ -1087,6 +1568,24 @@
     }
     if (fieldKey === 'reference_no') {
       return [
+        {
+          scale: 4.8,
+          mode: 'colored-ink',
+          variant: 'ref-orange-line',
+          psm: '7',
+          padPct: 1.2,
+          padAsym: { left: 0.4, right: 6, top: 1, bottom: 1 },
+          noWhitelist: true,
+        },
+        {
+          scale: 4.6,
+          mode: 'warm-ink',
+          variant: 'ref-warm-line',
+          psm: '7',
+          padPct: 1.2,
+          padAsym: { left: 0.4, right: 6, top: 1, bottom: 1 },
+          noWhitelist: true,
+        },
         {
           scale: 4,
           mode: 'normal',
@@ -1459,8 +1958,73 @@
     contrastFactor = contrastFactor || 1.28;
     for (var i = 0; i < d.length; i += 4) {
       var g = (0.299 * d[i]) + (0.587 * d[i + 1]) + (0.114 * d[i + 2]);
-      g = g > 150 ? 255 : (g < 70 ? 0 : Math.min(255, g * contrastFactor));
+      g = g > 200 ? 255 : (g < 70 ? 0 : Math.min(255, g * contrastFactor));
       d[i] = d[i + 1] = d[i + 2] = g;
+    }
+  }
+
+  /** Orange / terracotta slip amounts (e.g. Rs. 2,500.00) — gray-boost turns these white. */
+  function applyWarmInkPixels(d) {
+    for (var i = 0; i < d.length; i += 4) {
+      var r = d[i];
+      var g = d[i + 1];
+      var b = d[i + 2];
+      var warm = r - (g * 0.55) - (b * 0.3);
+      var v = warm > 25 ? 0 : 255;
+      d[i] = d[i + 1] = d[i + 2] = v;
+    }
+  }
+
+  /** Dark red / maroon slip amounts (e.g. - PKR 20,000.00). */
+  function applyRedInkPixels(d) {
+    for (var i = 0; i < d.length; i += 4) {
+      var r = d[i];
+      var g = d[i + 1];
+      var b = d[i + 2];
+      var warm = r - (g * 0.55) - (b * 0.3);
+      var maroon = r > 55 && r > g * 1.25 && r > b * 1.25 && (r - g) > 18;
+      var v = (warm > 25 || maroon) ? 0 : 255;
+      d[i] = d[i + 1] = d[i + 2] = v;
+    }
+  }
+
+  /** Colored ink on white slips: orange Rs. amounts and green bank headers. */
+  function applyColoredInkPixels(d) {
+    for (var i = 0; i < d.length; i += 4) {
+      var r = d[i];
+      var gch = d[i + 1];
+      var b = d[i + 2];
+      var max = Math.max(r, gch, b);
+      var min = Math.min(r, gch, b);
+      var sat = max - min;
+      var warm = r - (gch * 0.55) - (b * 0.3);
+      var cool = gch - (r * 0.5) - (b * 0.2);
+      var blue = b - (r * 0.42) - (gch * 0.28);
+      var isInk = sat > 30 && max < 245 && (warm > 25 || cool > 20 || blue > 22);
+      var v = isInk ? 0 : 255;
+      d[i] = d[i + 1] = d[i + 2] = v;
+    }
+  }
+
+  /** Bold blue slip amounts (e.g. PKR 1,000.00 TRANSFERRED). */
+  function applyBlueInkPixels(d) {
+    for (var i = 0; i < d.length; i += 4) {
+      var r = d[i];
+      var g = d[i + 1];
+      var b = d[i + 2];
+      var blue = b - (r * 0.45) - (g * 0.25);
+      var isBlue = blue > 18 && b > 55 && b > r && b > g;
+      var v = isBlue ? 0 : 255;
+      d[i] = d[i + 1] = d[i + 2] = v;
+    }
+  }
+
+  /** White text on dark slip bars (e.g. TID # 12345…). */
+  function applyInvertPixels(d) {
+    for (var i = 0; i < d.length; i += 4) {
+      d[i] = 255 - d[i];
+      d[i + 1] = 255 - d[i + 1];
+      d[i + 2] = 255 - d[i + 2];
     }
   }
 
@@ -1534,6 +2098,43 @@
       applyGrayscalePixels(idB.data);
       applyAdaptiveBinaryPixels(idB.data);
       ctx.putImageData(idB, 0, 0);
+      return;
+    }
+    if (mode === 'warm-ink') {
+      var idW = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      applyWarmInkPixels(idW.data);
+      ctx.putImageData(idW, 0, 0);
+      applySharpenCanvas(ctx, canvas);
+      return;
+    }
+    if (mode === 'red-ink') {
+      var idR = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      applyRedInkPixels(idR.data);
+      ctx.putImageData(idR, 0, 0);
+      applySharpenCanvas(ctx, canvas);
+      return;
+    }
+    if (mode === 'colored-ink') {
+      var idCInk = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      applyColoredInkPixels(idCInk.data);
+      ctx.putImageData(idCInk, 0, 0);
+      applySharpenCanvas(ctx, canvas);
+      return;
+    }
+    if (mode === 'blue-ink') {
+      var idBlue = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      applyBlueInkPixels(idBlue.data);
+      ctx.putImageData(idBlue, 0, 0);
+      applySharpenCanvas(ctx, canvas);
+      return;
+    }
+    if (mode === 'invert') {
+      var idInv = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      applyInvertPixels(idInv.data);
+      applyGrayscalePixels(idInv.data);
+      applyContrastPixels(idInv.data, 1.35);
+      applyAdaptiveBinaryPixels(idInv.data);
+      ctx.putImageData(idInv, 0, 0);
       return;
     }
     var idG = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -1768,7 +2369,9 @@
       if (alnum.length >= 6 && !REF_STOPWORDS[alnum]) return alnum;
     }
     if (fieldKey === 'amount') {
-      var cleaned = t.replace(/[^\d.,]/g, '').replace(/,/g, '');
+      var parsedAmt = parseAmountFromText(text, { strict: false });
+      if (parsedAmt) return parsedAmt;
+      var cleaned = fixOcrAmountText(text).replace(/,/g, '');
       var num = parseFloat(cleaned);
       if (isFinite(num) && num > 0) {
         return num % 1 === 0 ? String(Math.round(num)) : num.toFixed(2);
@@ -1994,10 +2597,84 @@
     });
   }
 
+  function ocrAmountRegionField(img, region, opts) {
+    opts = opts || {};
+    region = expandAmountRegion(region);
+    var variants = fieldOcrVariants('amount', !!opts.fast, opts);
+    var candidates = [];
+    var best = fieldResult(null, 0, 'zone');
+    var bestRank = 0;
+    var chain = Promise.resolve();
+
+    ocrLog('ocrAmountRegionField start', {
+      fast: !!opts.fast,
+      region: region,
+      pixels: regionToPixelRect(img, region, 0),
+    });
+
+    variants.forEach(function (v) {
+      chain = chain.then(function () {
+        if (best.value && bestRank >= 175) return;
+        var cropRegion = v.regionSlice ? sliceRegion(region, v.regionSlice) : region;
+        var canvas = makeRegionCanvas(img, cropRegion, v.scale, v.mode, v.padPct, v.padAsym, v.canvasMargin);
+        return ocrCanvasRaw(canvas, 'amount', {
+          noWhitelist: v.noWhitelist,
+          digitsOnly: v.digitsOnly,
+          psm: v.psm,
+          variant: v.variant,
+        }).then(function (raw) {
+          var text = (raw && raw.data && raw.data.text) ? raw.data.text : '';
+          var conf = (raw && raw.data && typeof raw.data.confidence === 'number') ? raw.data.confidence / 100 : 0.55;
+          var val = parseFieldLoose('amount', text, { zone: true });
+          ocrLog('ocrAmountRegionField parse', {
+            variant: v.variant,
+            rawText: text,
+            parsed: val,
+          });
+          if (val) {
+            var rank = fieldValueRank('amount', val, conf);
+            candidates.push({ val: val, conf: conf, rank: rank, source: v.variant });
+            if (!best.value || rank > bestRank) {
+              bestRank = rank;
+              best = fieldResult(val, conf, 'zone');
+            }
+          }
+          var wordHit = extractAmountFromWords(
+            (raw && raw.data && raw.data.words) ? raw.data.words : [],
+            canvas.width
+          );
+          if (wordHit) {
+            candidates.push({
+              val: wordHit.val,
+              conf: wordHit.conf,
+              rank: fieldValueRank('amount', wordHit.val, wordHit.conf) + 24,
+              source: wordHit.source,
+            });
+            if (!best.value || fieldValueRank('amount', wordHit.val, wordHit.conf) + 24 > bestRank) {
+              bestRank = fieldValueRank('amount', wordHit.val, wordHit.conf) + 24;
+              best = fieldResult(wordHit.val, wordHit.conf, wordHit.source || 'amount-words');
+            }
+          }
+        });
+      });
+    });
+
+    return chain.then(function () {
+      if (opts.fullText) {
+        best = reconcileAmountResult(best, opts.fullText);
+      }
+      ocrLog('ocrAmountRegionField done', { candidates: candidates, best: best, bestRank: bestRank });
+      return best;
+    });
+  }
+
   function ocrRegionField(img, region, fieldKey, opts) {
     opts = opts || {};
     if (fieldKey === 'reference_no') {
       return ocrReferenceRegionField(img, region, opts);
+    }
+    if (fieldKey === 'amount') {
+      return ocrAmountRegionField(img, region, opts);
     }
     ocrLog('ocrRegionField start', {
       field: fieldKey,
@@ -2005,7 +2682,7 @@
       region: region,
       pixels: regionToPixelRect(img, region, 0),
     });
-    var variants = fieldOcrVariants(fieldKey, !!opts.fast);
+    var variants = fieldOcrVariants(fieldKey, !!opts.fast, opts);
     var best = fieldResult(null, 0, 'zone');
     var bestRank = 0;
     var chain = Promise.resolve();
@@ -2049,7 +2726,7 @@
     var provider = detectProvider(fullText);
     var providerAmt = provider ? parseProviderAmount(fullText, provider.id) : null;
     var anchorAmt = fieldResult(
-      parseNearAnchor(fullText, ['AMOUNT', 'PKR', 'RS', 'SENT', 'PAID'], function (slice) {
+      parseNearAnchor(fullText, ['TRANSFERRED AMOUNT', 'AMOUNT', 'PKR', 'RS', 'SENT', 'PAID'], function (slice) {
         return parseAmountFromText(slice, { strict: true });
       }),
       0.72,
@@ -2072,9 +2749,9 @@
   function anchorFallback(fullText) {
     var amountPack = buildAmountFallbacks(fullText);
     return {
-      date: fieldResult(parseNearAnchor(fullText, ['DATE & TIME', 'DATE', 'ON', 'TIME'], parseDateFromText), 0.7, 'anchor'),
+      date: fieldResult(parseNearAnchor(fullText, ['POSTING DATE', 'TRANSACTION DATE', 'DATE & TIME', 'DATE', 'ON', 'TIME'], parseDateFromText), 0.7, 'anchor'),
       amount: amountPack.amount,
-      reference_no: fieldResult(parseNearAnchor(fullText, ['TRANSACTION ID', 'TID', 'TRANSACTION', 'REFERENCE', 'RAAST', 'TRX'], parseReferenceFromText), 0.68, 'anchor'),
+      reference_no: fieldResult(parseNearAnchor(fullText, ['TRANSACTION ID (TID)', 'TRANSACTION REFERENCE NO', 'ID#', 'ID #', 'REFERENCE NUMBER', 'TRANSACTION ID', 'TID', 'TXN', 'TRANSACTION', 'REFERENCE', 'RAAST', 'TRX'], parseReferenceFromText), 0.68, 'anchor'),
     };
   }
 
@@ -2385,7 +3062,7 @@
         return ocrRegionField(img, region, key, {
           fast: true,
           zoneOnly: zoneOnly,
-          teachPreview: zoneOnly && key === 'reference_no',
+          teachPreview: zoneOnly,
           fullText: opts.fullText || '',
         }).then(function (zoneRes) {
           var result = zoneRes || fieldResult(null, 0, 'zone');
@@ -2843,7 +3520,7 @@
 
         // Gate 1: date
         return ocrRegionField(slipImg, regions.date, 'date', {
-          fast: true, zoneOnly: true, fullText: '',
+          fast: true, zoneOnly: true, teachPreview: true, fullText: '',
         }).then(function (dateRes) {
           if (!dateRes || !dateRes.value) {
             ocrLog('zone-strict gate: date nahi mili — next design', { profile: profile.name });
@@ -2851,7 +3528,7 @@
           }
           // Gate 2: amount
           return ocrRegionField(slipImg, regions.amount, 'amount', {
-            fast: true, zoneOnly: true, fullText: '',
+            fast: true, zoneOnly: true, teachPreview: true, fullText: '',
           }).then(function (amtRes) {
             if (amtRes && amtRes.value) amtRes = reconcileAmountResult(amtRes, '');
             if (!amtRes || !amtRes.value) {
@@ -3225,7 +3902,7 @@
   }
 
   global.WorkspaceSlipTemplate = {
-    VERSION: '1.8.0',
+    VERSION: '1.10.0',
     FIELD_LABELS: FIELD_LABELS,
     FIELD_COLORS: FIELD_COLORS,
     FIELD_TINTS: FIELD_TINTS,

@@ -368,7 +368,9 @@
               </div>
             </div>
             <div class="small text-muted mt-2">Active field par box draw karein (mouse drag). Teenon fields mark karna zaroori hai.</div>
-            <div class="small text-muted mt-1">Reference: poore "Transaction ID # ..." line par box drag karein. Preview sirf aapke drag kiye box se read hota hai — value na aaye to box adjust karein.</div>
+            <div class="small text-muted mt-1">Date: poore line par box lagayein — <strong>29 Feb 2024 at 3:17 PM</strong>, <strong>21 Feb 2022 11:47 AM</strong>, <strong>10-Jan-2025</strong>, ya <strong>23/12/2025 15:25:52</strong>.</div>
+            <div class="small text-muted mt-1">Amount: <strong>PKR 1,000.00</strong> (blue) ya stacked <strong>PKR + 1,000.00 + TRANSFERRED</strong> — amount line par box; <strong>.00</strong> tak right extend karein.</div>
+            <div class="small text-muted mt-1">Reference: <strong>Reference Number: 2024060885930188</strong>, <strong>Transaction ID (TID): 939872</strong>, ya <strong>ID#20946766829</strong> — number line par box, lambi 16-digit ref ke liye right extend karein.</div>
           </div>
           <div class="col-lg-4">
             <label class="form-label fw-semibold small">Design name</label>
@@ -413,7 +415,7 @@ window.__wsSlipOcrConfig = {
   minImageWidth: 1280
 };
 </script>
-<script src="{{ url_for('static', filename='js/workspace_slip_template.js') }}?v=1.8.0"></script>
+<script src="{{ url_for('static', filename='js/workspace_slip_template.js') }}?v=1.10.0"></script>
 <script>
 var _wsAcctBalanceMap = {{ account_balance_json | tojson }};
 var _wsAcctDisplayMap = {{ account_display_map | tojson }};
