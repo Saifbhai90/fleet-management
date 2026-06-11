@@ -1768,6 +1768,47 @@
     };
   }
 
+  /** Teach preview uses more OCR variants; retry when fast gate/recipe misses amount. */
+  function reinforceAmountZoneRead(img, region, contextText) {
+    if (!region) return Promise.resolve(fieldResult(null, 0, 'none'));
+    return ocrAmountRegionField(img, region, {
+      fast: false,
+      teachPreview: true,
+      zoneOnly: true,
+      fullText: contextText || '',
+    }).then(function (res) {
+      if (res && res.value) {
+        return reconcileAmountResult(res, contextText || '');
+      }
+      return ocrAmountRegionField(img, region, {
+        fast: false,
+        zoneOnly: true,
+        fullText: contextText || '',
+      }).then(function (fullRes) {
+        if (fullRes && fullRes.value) {
+          return reconcileAmountResult(fullRes, contextText || '');
+        }
+        return fieldResult(null, 0, 'none');
+      });
+    });
+  }
+
+  function ocrGateField(img, profile, fieldKey) {
+    var regions = profileRegionMap(profile);
+    var region = regions[fieldKey];
+    if (!region) return Promise.resolve(fieldResult(null, 0, 'none'));
+    if (fieldKey === 'amount') {
+      return ocrAmountRegionField(img, region, gateFieldOpts(profile, fieldKey)).then(function (res) {
+        if (res && res.value) {
+          return reconcileAmountResult(res, '');
+        }
+        ocrLog('gate amount fast miss — teachPreview reinforce', { profile: profile.name });
+        return reinforceAmountZoneRead(img, region, '');
+      });
+    }
+    return ocrRegionField(img, region, fieldKey, gateFieldOpts(profile, fieldKey));
+  }
+
   function parseNearAnchor(fullText, anchors, parser) {
     var upper = String(fullText || '').toUpperCase();
     for (var i = 0; i < anchors.length; i++) {
@@ -3225,15 +3266,39 @@
         return r.result && r.result.value ? String(r.result.value) : '';
       }).filter(Boolean).join('\n');
       sanitizeFieldMap(out, pseudo);
-      var flat = flattenResults(out);
-      flat.profileName = profile.name;
-      flat.ocrText = opts.fullText || pseudo;
-      ocrLog('extractZonesOnly done', {
-        profile: profile.name,
-        quality: extractionQuality(flat),
-        fields: { date: flat.date, amount: flat.amount, reference_no: flat.reference_no },
-      });
-      return flat;
+      var finishFlat = function () {
+        var flat = flattenResults(out);
+        flat.profileName = profile.name;
+        flat.ocrText = opts.fullText || pseudo;
+        ocrLog('extractZonesOnly done', {
+          profile: profile.name,
+          quality: extractionQuality(flat),
+          fields: { date: flat.date, amount: flat.amount, reference_no: flat.reference_no },
+        });
+        return flat;
+      };
+      if (!out.amount || !out.amount.value) {
+        var amountRegion = fieldRegions.amount;
+        if (amountRegion) {
+          return reinforceAmountZoneRead(img, amountRegion, opts.fullText || pseudo).then(function (amtRes) {
+            if (amtRes && amtRes.value) {
+              out.amount = amtRes;
+              pseudo = [pseudo, amtRes.value].filter(Boolean).join('\n');
+              sanitizeFieldMap(out, pseudo);
+              if (typeof opts.onProgress === 'function') {
+                opts.onProgress({
+                  key: 'amount',
+                  value: amtRes.value,
+                  result: amtRes,
+                  profileName: profile.name,
+                });
+              }
+            }
+            return finishFlat();
+          });
+        }
+      }
+      return finishFlat();
     });
   }
 
@@ -3638,14 +3703,13 @@
         var regions = profileRegionMap(profile);
 
         // Gate 1: date
-        return ocrRegionField(slipImg, regions.date, 'date', gateFieldOpts(profile, 'date')).then(function (dateRes) {
+        return ocrGateField(slipImg, profile, 'date').then(function (dateRes) {
           if (!dateRes || !dateRes.value) {
             ocrLog('zone-strict gate: date nahi mili — next design', { profile: profile.name });
             return tryNext();
           }
           // Gate 2: amount
-          return ocrRegionField(slipImg, regions.amount, 'amount', gateFieldOpts(profile, 'amount')).then(function (amtRes) {
-            if (amtRes && amtRes.value) amtRes = reconcileAmountResult(amtRes, '');
+          return ocrGateField(slipImg, profile, 'amount').then(function (amtRes) {
             if (!amtRes || !amtRes.value) {
               ocrLog('zone-strict gate: amount nahi mila — next design', { profile: profile.name });
               return tryNext();
@@ -3656,7 +3720,7 @@
               onProgress({ key: 'amount', value: amtRes.value, result: amtRes, profileName: profile.name });
             }
             var refPromise = regions.reference_no
-              ? ocrRegionField(slipImg, regions.reference_no, 'reference_no', gateFieldOpts(profile, 'reference_no'))
+              ? ocrGateField(slipImg, profile, 'reference_no')
               : Promise.resolve(fieldResult(null, 0, 'none'));
             return refPromise.then(function (refRes) {
               refRes = refRes || fieldResult(null, 0, 'none');
