@@ -133,10 +133,21 @@
     .ws-slip-ocr-status.warn { background: #fff8e6; color: #856404; border: 1px solid #ffeeba; }
     .ws-slip-ocr-status.err { background: #fff5f5; color: #b02a37; border: 1px solid #f5c2c7; }
     .ws-slip-ocr-status.busy { background: #eef6ff; color: #0a58ca; border: 1px solid #cfe2ff; }
+    /* Reserved hint row — label appearing must not shift fields below */
+    .ws-slip-hint-slot {
+      position: relative;
+      min-height: 1.05rem;
+      margin-top: .18rem;
+      pointer-events: none;
+    }
     .ws-slip-field-hint {
+      position: absolute;
+      left: 0;
+      top: 0;
+      right: 0;
       font-size: .67rem;
       line-height: 1.3;
-      margin-top: .18rem;
+      margin: 0;
       padding: 0;
       border: 0;
       background: transparent;
@@ -198,13 +209,13 @@
                   <label class="form-label">Transfer Date</label>
                   <input type="text" id="wsTransferDateInput" name="transfer_date" class="form-control datepicker" value="{{ row.transfer_date|ddmmyyyy if row and row.transfer_date else '' }}" placeholder="dd-mm-yyyy" required>
                   <div class="invalid-feedback">Transfer Date likhein (dd-mm-yyyy).</div>
-                  <div id="wsSlipHintDate" class="ws-slip-field-hint d-none" aria-live="polite"></div>
+                  <div class="ws-slip-hint-slot"><div id="wsSlipHintDate" class="ws-slip-field-hint d-none" aria-live="polite"></div></div>
                 </div>
                 <div class="col-md-3">
                   <label class="form-label">Amount</label>
                   <input type="number" step="0.01" name="amount" id="wsTransferAmountInput" class="form-control" value="{{ row.amount if row else '' }}" required>
                   <div class="invalid-feedback">Amount zero se zyada likhein.</div>
-                  <div id="wsSlipHintAmount" class="ws-slip-field-hint d-none" aria-live="polite"></div>
+                  <div class="ws-slip-hint-slot"><div id="wsSlipHintAmount" class="ws-slip-field-hint d-none" aria-live="polite"></div></div>
                 </div>
                 <div class="col-md-3">
                   <label class="form-label">Payment Mode</label>
@@ -215,7 +226,7 @@
                     <option value="Cheque" {% if pm == 'Cheque' %}selected{% endif %}>Cheque</option>
                     <option value="Online" {% if pm == 'Online' %}selected{% endif %}>Online Payment</option>
                   </select>
-                  <div id="wsSlipHintPaymentMode" class="ws-slip-field-hint d-none" aria-live="polite"></div>
+                  <div class="ws-slip-hint-slot"><div id="wsSlipHintPaymentMode" class="ws-slip-field-hint d-none" aria-live="polite"></div></div>
                 </div>
                 <div class="col-md-3">
                   <label class="form-label">Category / Purpose</label>
@@ -251,7 +262,7 @@
                 <div class="col-md-3">
                   <label class="form-label">Reference No</label>
                   <input type="text" id="wsTransferRefInput" name="reference_no" class="form-control" value="{{ row.reference_no if row else '' }}">
-                  <div id="wsSlipHintRef" class="ws-slip-field-hint d-none" aria-live="polite"></div>
+                  <div class="ws-slip-hint-slot"><div id="wsSlipHintRef" class="ws-slip-field-hint d-none" aria-live="polite"></div></div>
                 </div>
                 <div class="col-md-9">
                   <label class="form-label">Description</label>
@@ -411,7 +422,8 @@
 <script>
 window.__wsSlipTesseractConfig = {
   baseUrl: {{ url_for('static', filename='vendor/tesseract/') | tojson }},
-  langUrl: {{ url_for('static', filename='vendor/tesseract/tessdata/') | tojson }}
+  langUrl: {{ url_for('static', filename='vendor/tesseract/tessdata/') | tojson }},
+  preferLocal: true
 };
 window.__wsSlipOcrConfig = {
   mode: 'balanced',
@@ -420,7 +432,13 @@ window.__wsSlipOcrConfig = {
   minImageWidth: 1280
 };
 </script>
-<script src="{{ url_for('static', filename='js/workspace_slip_template.js') }}?v=1.11.1"></script>
+<script src="{{ url_for('static', filename='js/ws_slip_ocr/01_constants.js') }}?v=2.0.7"></script>
+<script src="{{ url_for('static', filename='js/ws_slip_ocr/02_engine.js') }}?v=2.0.7"></script>
+<script src="{{ url_for('static', filename='js/ws_slip_ocr/03_image.js') }}?v=2.0.7"></script>
+<script src="{{ url_for('static', filename='js/ws_slip_ocr/04_parser.js') }}?v=2.0.7"></script>
+<script src="{{ url_for('static', filename='js/ws_slip_ocr/05_extract.js') }}?v=2.0.7"></script>
+<script src="{{ url_for('static', filename='js/ws_slip_ocr/06_profiles.js') }}?v=2.0.7"></script>
+<script src="{{ url_for('static', filename='js/ws_slip_ocr/07_bridge.js') }}?v=2.0.7"></script>
 <script>
 var _wsAcctBalanceMap = {{ account_balance_json | tojson }};
 var _wsAcctDisplayMap = {{ account_display_map | tojson }};
@@ -439,8 +457,6 @@ document.addEventListener('DOMContentLoaded', function() {
   var transferDateInput = document.getElementById('wsTransferDateInput');
   var amountInput = document.getElementById('wsTransferAmountInput');
   var categorySelect = document.getElementById('wsTransferCategorySelect');
-  var _wsDescAutoManaged = false;
-  var _wsLastAutoDesc = '';
   function _wsFocusAfterAttachment() {
     var t = (saveAddBtn && !saveAddBtn.disabled) ? saveAddBtn : saveBtn;
     if (t) t.focus();
@@ -448,6 +464,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
   var fromSelect = document.getElementById('wsFromAccountSelect');
   var toSelect = document.getElementById('wsToAccountSelect');
+  var pmSelect = document.getElementById('wsPaymentModeSelect');
+  var refInput = document.getElementById('wsTransferRefInput');
+  var formEl = document.getElementById('wsTransferForm');
 
   function _wsAccountNameForDesc(accountId, selectEl, stripTypeSuffix) {
     var raw = '';
@@ -485,44 +504,25 @@ document.addEventListener('DOMContentLoaded', function() {
     return text;
   }
 
-  function _wsUpdateAutoDescription(enableAuto) {
-    if (!_wsIsAddForm || !descBox) return;
-    if (enableAuto) _wsDescAutoManaged = true;
-    if (!_wsDescAutoManaged) return;
-    var text = _wsBuildAutoDescription();
-    if (!text) return;
-    _wsLastAutoDesc = text;
-    descBox.value = text;
-  }
+  var _wsAutoFill = window.WorkspaceSlipTemplate.createAutoFill({
+    form: formEl,
+    categoryEl: categorySelect,
+    fields: [
+      { el: transferDateInput, key: 'date' },
+      { el: amountInput, key: 'amount' },
+      { el: refInput, key: 'reference_no' },
+      { el: pmSelect, key: 'payment_mode' },
+      { el: categorySelect, key: 'category' },
+      { el: fromSelect, key: 'from_account' },
+      { el: toSelect, key: 'to_account' },
+    ],
+    description: _wsIsAddForm ? {
+      el: descBox,
+      build: _wsBuildAutoDescription,
+      watch: [categorySelect, fromSelect, toSelect],
+    } : null,
+  });
 
-  function _wsFocusCategoryField() {
-    if (!categorySelect) return;
-    function doFocus() {
-      if (categorySelect.tomselect) {
-        try { categorySelect.tomselect.focus(); } catch (e) { categorySelect.focus(); }
-      } else {
-        categorySelect.focus();
-      }
-    }
-    window.setTimeout(doFocus, categorySelect.tomselect ? 0 : 120);
-  }
-
-  if (_wsIsAddForm) {
-    if (categorySelect) {
-      categorySelect.addEventListener('change', function() { _wsUpdateAutoDescription(false); });
-    }
-    if (fromSelect) {
-      fromSelect.addEventListener('change', function() { _wsUpdateAutoDescription(false); });
-    }
-    if (toSelect) {
-      toSelect.addEventListener('change', function() { _wsUpdateAutoDescription(false); });
-    }
-    if (descBox) {
-      descBox.addEventListener('input', function() {
-        if (this.value !== _wsLastAutoDesc) _wsDescAutoManaged = false;
-      });
-    }
-  }
   var fromHint = document.getElementById('fromAccountBalanceHint');
   var toHint = document.getElementById('toAccountBalanceHint');
 
@@ -669,14 +669,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function onWsAttachFile(file) {
     if (!file) return;
+    if (_wsIsAddForm) _wsAutoFill.onSlipAttach();
     if (typeof window.__wsSlipAttachHook === 'function') {
       window.__wsSlipAttachHook(file);
     }
     showAttachPreview(file);
-    _wsFocusCategoryField();
-    if (_wsIsAddForm) {
-      _wsUpdateAutoDescription(true);
-    }
   }
 
   function assignAttachInputFile(file) {
@@ -756,7 +753,7 @@ document.addEventListener('DOMContentLoaded', function() {
       d.addEventListener('mousedown', function(e){
         e.preventDefault();
         descBox.value = txt;
-        _wsDescAutoManaged = false;
+        _wsAutoFill.releaseDescription();
         sugBox.style.display = 'none';
       });
       sugBox.appendChild(d);
@@ -789,7 +786,7 @@ document.addEventListener('DOMContentLoaded', function() {
           if (_active < 0) _active = 0;
           if (_active >= 0 && rows[_active]) {
             descBox.value = rows[_active].getAttribute('data-val');
-            _wsDescAutoManaged = false;
+            _wsAutoFill.releaseDescription();
             sugBox.style.display = 'none';
             return;
           }
@@ -812,7 +809,6 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   /* Auto-scroll: Description / lower area → show lower; Reference No & fields above → show upper */
-  var formEl = document.getElementById('wsTransferForm');
   var formActionsEl = document.getElementById('wsTransferFormActions');
   function _wsScrollFormForFocus(focusTarget) {
     if (!formEl || !descBox || !focusTarget || !formEl.contains(focusTarget)) return;
@@ -936,9 +932,7 @@ document.addEventListener('DOMContentLoaded', function() {
     (function initWsSlipTemplate() {
       var WST = window.WorkspaceSlipTemplate;
       var statusEl = document.getElementById('wsSlipOcrStatus');
-      var refInput = document.getElementById('wsTransferRefInput');
-      var amountInput = document.getElementById('wsTransferAmountInput');
-      var pmSelect = document.getElementById('wsPaymentModeSelect');
+      /* refInput, amountInput, pmSelect — defined in outer scope */
       var teachModalEl = document.getElementById('wsSlipTeachModal');
       var teachModal = (teachModalEl && window.bootstrap)
         ? new bootstrap.Modal(teachModalEl, { backdrop: false, focus: false, keyboard: true })
@@ -991,11 +985,19 @@ document.addEventListener('DOMContentLoaded', function() {
           if (!WST.prewarmWorker && WST.ensureTesseract) {
             WST.prewarmWorker = function() { return WST.ensureTesseract(); };
           }
-          var fn = WST.prepareOcrEngine || WST.prewarmWorker || WST.ensureTesseract;
-          if (typeof fn !== 'function') {
+          var warmMain = WST.prepareOcrEngine || WST.prewarmWorker || WST.ensureTesseract;
+          if (typeof warmMain !== 'function') {
             return Promise.reject(new Error('OCR module incomplete — Ctrl+F5 hard refresh karein.'));
           }
-          return fn.call(WST);
+          var warmInstant = WST.prewarmInstantWorkers;
+          var warmHot = WST.warmOcrWorkersOnce;
+          if (typeof warmHot === 'function') {
+            return warmHot.call(WST);
+          }
+          if (typeof warmInstant === 'function') {
+            return Promise.all([warmMain.call(WST), warmInstant.call(WST)]);
+          }
+          return warmMain.call(WST);
         } catch (err) {
           return Promise.reject(err);
         }
@@ -1159,56 +1161,43 @@ document.addEventListener('DOMContentLoaded', function() {
         setSlipFieldHint(fieldKey, needsVerify ? 'verify' : 'ok');
       }
 
-      function setPaymentModeOnline() {
-        if (!pmSelect) return;
-        var current = pmSelect.tomselect ? pmSelect.tomselect.getValue() : pmSelect.value;
-        if (current === 'Online') return;
-        pmSelect.value = 'Online';
-        if (pmSelect.tomselect) pmSelect.tomselect.setValue('Online', true);
-        setSlipFieldHint('payment_mode', 'ok', 'Slip se Online set hua');
-      }
-
       function applyExtracted(data) {
-        if (!data) return;
+        if (!data) return [];
         var filled = [];
         var meta = data.fieldMeta || {};
         var lowConf = WST.LOW_CONFIDENCE || 0.52;
-        var active = document.activeElement;
+        var amtMeta = meta.amount;
+        var skipAmount = !!(amtMeta && amtMeta.confidence && amtMeta.confidence < 0.42);
+        var badAmount = !!(data.amount && data.amount !== '—' && amountInput &&
+          WST.validateAmountCandidate && !WST.validateAmountCandidate(data.amount, data.ocrText || ''));
 
-        if (data.date && data.date !== '—' && transferDateInput && !transferDateInput.value.trim()) {
-          transferDateInput.value = data.date;
-          showSlipFieldHint('date', meta, lowConf);
-          filled.push('Date');
-        }
-        if (data.amount && data.amount !== '—' && amountInput && !amountInput.value.trim()) {
-          var amtMeta = meta.amount;
-          var skipAmount = amtMeta && amtMeta.confidence && amtMeta.confidence < 0.42;
-          if (!skipAmount && (!WST.validateAmountCandidate || WST.validateAmountCandidate(data.amount, data.ocrText || ''))) {
-            amountInput.value = data.amount;
+        if (!skipAmount && badAmount) setSlipFieldHint('amount', 'verify');
+
+        _wsAutoFill.applyOcrExtracted({
+          date: data.date,
+          amount: data.amount,
+          reference_no: data.reference_no,
+          dateEl: transferDateInput,
+          amountEl: amountInput,
+          refEl: refInput,
+          pmEl: pmSelect,
+          skipAmount: skipAmount || badAmount,
+        }).forEach(function (k) {
+          if (k === 'date') {
+            showSlipFieldHint('date', meta, lowConf);
+            filled.push('Date');
+          } else if (k === 'amount') {
             showSlipFieldHint('amount', meta, lowConf);
             filled.push('Amount');
-          } else if (!skipAmount) {
-            setSlipFieldHint('amount', 'verify');
+          } else if (k === 'reference_no') {
+            showSlipFieldHint('reference_no', meta, lowConf);
+            filled.push('Reference');
+            if (data.reference_no) checkReferenceDuplicate(data.reference_no);
+          } else if (k === 'payment_mode') {
+            setSlipFieldHint('payment_mode', 'ok', 'Slip se auto-filled');
           }
-        }
-        if (data.reference_no && data.reference_no !== '—' && refInput && !refInput.value.trim()) {
-          refInput.value = data.reference_no;
-          showSlipFieldHint('reference_no', meta, lowConf);
-          filled.push('Reference');
-          checkReferenceDuplicate(data.reference_no);
-        }
-        setPaymentModeOnline();
-        // Auto-fill must be invisible to the user: never move their focus.
-        // Sync restore + delayed guard (TomSelect refocuses in setTimeout(0)).
-        function restoreFocus() {
-          if (active && typeof active.focus === 'function' &&
-              document.body.contains(active) && document.activeElement !== active) {
-            try { active.focus({ preventScroll: true }); } catch (e) { try { active.focus(); } catch (e2) {} }
-          }
-        }
-        restoreFocus();
-        window.setTimeout(restoreFocus, 30);
-        window.setTimeout(restoreFocus, 120);
+        });
+
         return filled;
       }
 
@@ -1674,6 +1663,7 @@ document.addEventListener('DOMContentLoaded', function() {
           preferredProfileId: lastProfileId,
           smart: true,
           fast: true,
+          instant: true,
           zoneFirst: true,
           zoneStrict: true,
           onProgress: function(partial) {
@@ -1682,6 +1672,8 @@ document.addEventListener('DOMContentLoaded', function() {
             chunk[partial.key] = partial.value;
             chunk.fieldMeta[partial.key] = partial.result || { value: partial.value, confidence: 0.5, source: 'zone' };
             applyExtracted(chunk);
+            var labels = { date: 'Date', amount: 'Amount', reference_no: 'Reference' };
+            setStatus((labels[partial.key] || partial.key) + ' fill…', 'busy');
           }
         }).then(function(data) {
           setSlipSession(data, file);
@@ -1954,12 +1946,13 @@ document.addEventListener('DOMContentLoaded', function() {
       bindSlipHintClear(amountInput, 'amount');
       bindSlipHintClear(refInput, 'reference_no');
       bindSlipHintClear(pmSelect, 'payment_mode');
-      ensureOcrReady().catch(function(err) {
-        console.warn('[ws-slip-ocr] init prewarm failed', err);
+      ensureOcrReady().catch(function () {
+        if (window.WsSlipOcr) window.WsSlipOcr.ocrLog('init prewarm failed');
       });
     })();
   }
 
+  window._wsAutoFill = _wsAutoFill;
 });
 </script>
 {% endblock %}

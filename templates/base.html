@@ -5419,6 +5419,7 @@
                 }
 
                 ts.on('focus', function() {
+                    if (ts._wsSilentFill || window._wsOcrIsUpdating) return;
                     // _justSelected guards against re-opening immediately after
                     // the user confirms a selection (TS internally refocuses then).
                     if (ts._justSelected) {
@@ -5450,6 +5451,7 @@
                 ts.on('item_add', function() {
                     ts._justSelected = true;
                     _setOverwriteReady(false);
+                    if (ts._wsSilentFill || window._wsOcrIsUpdating) return;
                     // TS internally refocuses control_input after selection;
                     // keep _justSelected true through that synthetic focus so
                     // we don't re-open the dropdown.
@@ -5459,7 +5461,9 @@
                     var _wasFocused = ts.isFocused || ts.wrapper.classList.contains('focus');
                     setTimeout(function() {
                         ts._justSelected = true;
-                        if (_wasFocused) ts.control_input.focus();
+                        if (_wasFocused && !ts._wsSilentFill && !window._wsOcrIsUpdating) {
+                            ts.control_input.focus();
+                        }
                     }, 0);
                 });
 
