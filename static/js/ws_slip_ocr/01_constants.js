@@ -6,7 +6,7 @@
 
   var Ws = global.WsSlipOcr = global.WsSlipOcr || {};
 
-  Ws.VERSION = '2.0.7';
+  Ws.VERSION = '2.0.9';
 
   /** OCR may ONLY write these element ids (+ payment mode). */
   Ws.OCR_FIELD_IDS = {
@@ -103,7 +103,7 @@
 
   /** Fingerprint hints only — extraction uses anchor keywords, not bank IDs. */
   Ws.PROVIDER_TEMPLATES = [
-    { id: 'jazzcash', keys: ['JAZZCASH', 'JAZZ CASH'] },
+    { id: 'jazzcash', keys: ['JAZZCASH', 'JAZZ CASH', 'SECURELY PAID VIA', 'TRANSACTION SUCCESSFUL'] },
     { id: 'easypaisa', keys: ['EASYPAISA', 'EASY PAISA'] },
     { id: 'hbl', keys: ['HBL', 'HABIB BANK'] },
     { id: 'meezan', keys: ['MEEZAN', 'MEEZAN BANK'] },

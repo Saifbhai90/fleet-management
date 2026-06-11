@@ -11,13 +11,26 @@
   var Parser = {};
   Ws.Parser = Parser;
 
-  var MONTHS = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
+  var MONTHS = {
+    january: 1, jan: 1, february: 2, feb: 2, march: 3, mar: 3, april: 4, apr: 4, may: 5,
+    june: 6, jun: 6, july: 7, jul: 7, august: 8, aug: 8, september: 9, sep: 9, sept: 9,
+    october: 10, oct: 10, november: 11, nov: 11, december: 12, dec: 12,
+  };
   var MONTH_FIX = {
     JUN: 'JUN', JUL: 'JUL', JAN: 'JAN', FEB: 'FEB', MAR: 'MAR', APR: 'APR', MAY: 'MAY',
     AUG: 'AUG', SEP: 'SEP', OCT: 'OCT', NOV: 'NOV', DEC: 'DEC', '1UN': 'JUN', IUN: 'JUN',
   };
+  var MONTH_NAME_RE = 'January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec';
 
   function pad2(n) { return Ws.pad2(n); }
+
+  function monthFromName(name) {
+    var cleaned = String(name || '').toLowerCase().replace(/[^a-z]/g, '');
+    if (!cleaned) return 0;
+    if (MONTHS[cleaned] != null) return MONTHS[cleaned];
+    var abbr = cleaned.slice(0, 3);
+    return MONTHS[abbr] || 0;
+  }
 
   function fixOcrDigits(text) {
     return String(text || '')
@@ -26,6 +39,14 @@
       .replace(/([lI|])(?=[\d,])/g, '1')
       .replace(/(?<=[\d,])[lI|]/g, '1');
   }
+
+  /** OCR digit fixes for currency amounts (O→0, l→1, etc.). */
+  Parser.fixDigitalAmountChars = function fixDigitalAmountChars(text) {
+    return fixOcrDigits(String(text || ''));
+  };
+
+  /** Plain digits or comma-grouped thousands; optional .XX decimal (not a thousands dot). */
+  var AMOUNT_NUM = '(\\d{1,3}(?:,\\d{3})+|\\d+)(?:\\.\\d{2})?';
 
   function fixMonthToken(tok) {
     var t = String(tok || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -47,19 +68,28 @@
     t = t.replace(/\b(\d{1,2})\s+([A-Za-z0-9]{2,9})\s+(\d{2,4})\b/g, function (_, d, mon, y) {
       return d + ' ' + fixMonthToken(mon) + ' ' + y;
     });
+    /* JazzCash — "On June 11, 2026 at 12:25" → "11 JUN 2026" */
+    t = t.replace(new RegExp('\\b(?:On\\s+)?(' + MONTH_NAME_RE + ')[a-z]*\\s+(\\d{1,2}),?\\s+(20\\d{2})\\b', 'gi'), function (_, mon, d, y) {
+      return d + ' ' + fixMonthToken(mon) + ' ' + y;
+    });
     return t.trim();
   };
 
   function normalizeAmount(val) {
     if (!val) return null;
-    var cleaned = String(val).replace(/,/g, '').replace(/\.(?=.*\.)/g, '');
+    var cleaned = Parser.fixDigitalAmountChars(val).replace(/\s/g, '').replace(/,/g, '');
+    if (/^\d+\.\d{2}$/.test(cleaned)) {
+      /* JazzCash-style decimal — single dot is cents, not thousands */
+    } else {
+      cleaned = cleaned.replace(/\.(?=.*\.)/g, '');
+    }
     var num = parseFloat(cleaned);
     if (!isFinite(num) || num < Ws.AMOUNT_MIN || num > Ws.AMOUNT_MAX) return null;
     return num % 1 === 0 ? String(Math.round(num)) : num.toFixed(2);
   }
 
   function scoreAmount(raw, bonus, fullText) {
-    var val = normalizeAmount(fixOcrDigits(raw));
+    var val = normalizeAmount(raw);
     if (!val) return null;
     var score = bonus || 80;
     if (/(?:RS\.|PKR\.?)/i.test(String(fullText || ''))) score += 8;
@@ -68,13 +98,14 @@
 
   Parser.huntAmount = function huntAmount(text, opts) {
     opts = opts || {};
-    var raw = fixOcrDigits(String(text || ''));
+    var raw = Parser.fixDigitalAmountChars(String(text || ''));
     if (!raw.trim()) return null;
     var candidates = [];
     var m;
     var patterns = [
-      { re: /Rs\.\s*(\d{1,3}(?:,\d{3})*(?:\.\d{2})?|\d{2,12}(?:\.\d{2})?)/gi, bonus: 130 },
-      { re: /(?:PKR|RS\.?)\s*(\d{1,3}(?:,\d{3})*(?:\.\d{2})?|\d{2,12}(?:\.\d{2})?)/gi, bonus: 120 },
+      /* JazzCash — "Rs. 2000.00" (Rs. anchor; .00 is decimal, not thousands) */
+      { re: new RegExp('Rs\\.\\s*' + AMOUNT_NUM, 'gi'), bonus: 135 },
+      { re: new RegExp('(?:PKR|RS\\.?)\\s*' + AMOUNT_NUM, 'gi'), bonus: 120 },
       { re: /(?:TRANSFERRED\s*AMOUNT|AMOUNT\s*PAID|AMOUNT)\s*[:\-]?\s*(?:PKR|RS\.?)?\s*([\d,]+(?:\.\d{2})?)/gi, bonus: 115 },
       { re: /\b(\d{1,3}(?:,\d{3})+(?:\.\d{2})?)\b/g, bonus: 70 },
     ];
@@ -93,7 +124,10 @@
       }
     }
     if (!candidates.length) return null;
-    candidates.sort(function (a, b) { return b.score - a.score; });
+    candidates.sort(function (a, b) {
+      if (b.score !== a.score) return b.score - a.score;
+      return parseFloat(b.val) - parseFloat(a.val);
+    });
     return candidates[0].val;
   };
 
@@ -101,6 +135,8 @@
     var raw = String(text || '');
     var t = Parser.fixOcrTextForDate(raw);
     var patterns = [
+      /* JazzCash — "On June 11, 2026" / "June 11, 2026" */
+      { re: new RegExp('\\b(?:On\\s+)?(' + MONTH_NAME_RE + ')[a-z]*\\s+(\\d{1,2}),?\\s+(\\d{4})\\b', 'gi'), kind: 'mdy4', bonus: 24 },
       /* YYYY-MM-DD — myABL / ISO */
       { re: /\b(20\d{2})-(\d{2})-(\d{2})\b/g, kind: 'ymd', bonus: 22 },
       { re: /\b(20\d{2})[\/.-](\d{1,2})[\/.-](\d{1,2})\b/g, kind: 'ymd', bonus: 18 },
@@ -119,9 +155,13 @@
       pat.re.lastIndex = 0;
       while ((m = pat.re.exec(t)) !== null) {
         var d, mo, y, score = 80 + (pat.bonus || 0);
-        if (pat.kind === 'dmy4' || pat.kind === 'dmy2') {
+        if (pat.kind === 'mdy4') {
+          mo = monthFromName(m[1]);
+          d = parseInt(m[2], 10);
+          y = parseInt(m[3], 10);
+        } else if (pat.kind === 'dmy4' || pat.kind === 'dmy2') {
           d = parseInt(m[1], 10);
-          mo = MONTHS[String(m[2]).slice(0, 3).toLowerCase()] || 0;
+          mo = monthFromName(m[2]);
           y = parseInt(m[3], 10);
           if (pat.kind === 'dmy2' && y < 100) y += 2000;
         } else if (pat.kind === 'dmy') {
@@ -158,6 +198,8 @@
     var raw = String(text || '');
     if (!raw.trim()) return null;
     var labelRes = [
+      /* JazzCash — "TID: 714429714344" */
+      /\bTID\s*:\s*(\d{5,})/gi,
       /* Allied Bank — "Reference Number# 527017" */
       /Reference\s*Number\s*#\s*(\d{5,})/gi,
       /REFERENCE\s*NUMBER\s*#\s*(\d{5,})/gi,
@@ -165,7 +207,7 @@
       /* Compact Ref# anchor */
       /\bRef\s*#\s*(\d{5,})/gi,
       /\bREF\s*#\s*(\d{5,})/gi,
-      /(?:Transaction\s*ID|TID|Txn)\s*#?\s*(\d{6,})/gi,
+      /(?:Transaction\s*ID|TID|Txn)\s*[:\-#]?\s*(\d{6,})/gi,
       /(?:TRANSACTION\s*ID|TRANSACTION\s*REFERENCE|TID|TXN|REF(?:ERENCE)?)\s*[:\-#]?\s*(\d{6,})/gi,
       /(?:ID\s*#)\s*(\d{6,})/gi,
     ];
