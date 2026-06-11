@@ -161,6 +161,11 @@ class Employee(db.Model):
 
     post = db.relationship('EmployeePost', backref='employees')
     wallet_account = db.relationship('Account', foreign_keys=[wallet_account_id], backref='wallet_employee', lazy='select')
+    last_slip_profile = db.relationship(
+        'WorkspaceSlipProfile',
+        foreign_keys=[last_slip_profile_id],
+        lazy='select',
+    )
     projects = db.relationship('Project', secondary=employee_project, backref=db.backref('employees', lazy='dynamic'), lazy='dynamic')
     districts = db.relationship('District', secondary=employee_district, backref=db.backref('employees', lazy='dynamic'), lazy='dynamic')
     documents = db.relationship('EmployeeDocument', backref='employee', lazy=True, cascade='all, delete-orphan')
@@ -2529,7 +2534,11 @@ class WorkspaceSlipProfile(db.Model):
     created_at = db.Column(db.DateTime, default=pk_now)
     updated_at = db.Column(db.DateTime, default=pk_now, onupdate=pk_now)
 
-    employee = db.relationship('Employee', backref=db.backref('workspace_slip_profiles', lazy='dynamic'))
+    employee = db.relationship(
+        'Employee',
+        foreign_keys=[employee_id],
+        backref=db.backref('workspace_slip_profiles', lazy='dynamic'),
+    )
     fields = db.relationship(
         'WorkspaceSlipProfileField',
         backref='profile',
