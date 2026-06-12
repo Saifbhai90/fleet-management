@@ -481,6 +481,123 @@ def _save_fuel_market_scan(data):
     SystemSetting.set(_FUEL_MARKET_SCAN_KEY, json.dumps(data or {}, ensure_ascii=True))
 
 
+def _fuel_expense_last_saved_rec(workspace_employee_id, last_id=None):
+    """Latest saved fuel expense for the add-form Last Saved strip."""
+    if last_id:
+        rec = FuelExpense.query.get(last_id)
+        if rec and (not workspace_employee_id or not rec.employee_id or rec.employee_id == workspace_employee_id):
+            return rec
+    q = FuelExpense.query
+    if workspace_employee_id:
+        q = q.filter(FuelExpense.employee_id == workspace_employee_id)
+    return q.order_by(FuelExpense.id.desc()).first()
+
+
+def _fuel_expense_last_entry_payload(rec):
+    if not rec:
+        return None
+    pump_name = ''
+    if rec.workspace_pump:
+        pump_name = rec.workspace_pump.name or ''
+    elif rec.fuel_pump:
+        pump_name = rec.fuel_pump.name or ''
+    elif rec.workspace_pump_id:
+        wp = WorkspaceParty.query.get(rec.workspace_pump_id)
+        if wp:
+            pump_name = wp.name or ''
+    fuel_type = (rec.fuel_type or '').strip()
+    if rec.vehicle and not fuel_type and rec.vehicle.fuel_type:
+        fuel_type = (rec.vehicle.fuel_type or '').strip()
+    km_out_task = float(rec.km_out_task) if rec.km_out_task is not None else None
+    km_in_task = float(rec.km_in_task) if rec.km_in_task is not None else None
+    if km_out_task is None and km_in_task is None and rec.fueling_date and rec.vehicle_id:
+        km_out_task, km_in_task = _fuel_expense_task_readings(rec.vehicle_id, rec.fueling_date)
+        km_out_task = float(km_out_task) if km_out_task is not None else None
+        km_in_task = float(km_in_task) if km_in_task is not None else None
+    km_val = float(rec.km) if rec.km is not None else None
+    if km_val is None and rec.previous_reading is not None and rec.current_reading is not None:
+        km_val = float(rec.current_reading) - float(rec.previous_reading)
+    return {
+        'id': rec.id,
+        'fueling_date': rec.fueling_date.strftime('%d-%m-%Y') if rec.fueling_date else '',
+        'card_swipe_date': rec.card_swipe_date.strftime('%d-%m-%Y') if rec.card_swipe_date else '',
+        'district': rec.district.name if rec.district else '',
+        'project': rec.project.name if rec.project else '',
+        'vehicle_no': rec.vehicle.vehicle_no if rec.vehicle else '',
+        'payment_type': (rec.payment_type or '').strip(),
+        'slip_no': (rec.slip_no or '').strip(),
+        'fuel_type': fuel_type or 'Petrol',
+        'pump_name': pump_name,
+        'amount': float(rec.amount) if rec.amount is not None else None,
+        'liters': float(rec.liters) if rec.liters is not None else None,
+        'mpg': float(rec.mpg) if rec.mpg is not None else None,
+        'fuel_price': float(rec.fuel_price) if rec.fuel_price is not None else None,
+        'km': km_val,
+        'current_reading': float(rec.current_reading) if rec.current_reading is not None else None,
+        'previous_reading': float(rec.previous_reading) if rec.previous_reading is not None else None,
+        'km_out_task': km_out_task,
+        'km_in_task': km_in_task,
+        'meter_reading_matched': (rec.meter_reading_matched or '').strip(),
+        'upload_status': rec.upload_status or '',
+        'media_url': url_for('fuel_expense_media', pk=rec.id),
+        'has_media': rec.attachments.count() > 0,
+        'edit_url': url_for('fuel_expense_edit', pk=rec.id),
+    }
+
+
+def _fuel_expense_add_form_ctx(workspace_employee_id, last_id=None):
+    from fuel_expense_settings import fuel_expense_settings_payload
+    return {
+        'location_cascade': _fuel_expense_location_cascade_dict(),
+        'last_rec': _fuel_expense_last_saved_rec(workspace_employee_id, last_id),
+        'from_save': last_id is not None,
+        'fuel_market_scan': _read_fuel_market_scan() or None,
+        'fuel_expense_settings': fuel_expense_settings_payload(),
+    }
+
+
+def _fuel_expense_month_mpg(vehicle_id, fueling_date, workspace_employee_id=None, exclude_id=None):
+    """Month-to-date MPG for a vehicle (MPG report formula)."""
+    if not vehicle_id or not fueling_date:
+        return None
+    month_start = fueling_date.replace(day=1)
+    month_end = fueling_date
+    fuel_q = FuelExpense.query.filter(
+        FuelExpense.vehicle_id == vehicle_id,
+        FuelExpense.fueling_date >= month_start,
+        FuelExpense.fueling_date <= month_end,
+    )
+    if workspace_employee_id:
+        fuel_q = fuel_q.filter(FuelExpense.employee_id == workspace_employee_id)
+    if exclude_id:
+        fuel_q = fuel_q.filter(FuelExpense.id != exclude_id)
+    rows = fuel_q.order_by(
+        FuelExpense.fueling_date.asc(),
+        db.case((FuelExpense.current_reading.is_(None), 1), else_=0).asc(),
+        FuelExpense.current_reading.asc(),
+        FuelExpense.id.asc(),
+    ).all()
+    if not rows:
+        return None
+    same_start_rows = [r for r in rows if r.fueling_date == month_start]
+    same_end_rows = [r for r in rows if r.fueling_date == month_end]
+    first_row = same_start_rows[0] if same_start_rows else rows[0]
+    last_row = same_end_rows[-1] if same_end_rows else rows[-1]
+    previous_reading = float(first_row.previous_reading) if first_row.previous_reading is not None else None
+    current_reading = float(last_row.current_reading) if last_row.current_reading is not None else None
+    km = (current_reading - previous_reading) if (previous_reading is not None and current_reading is not None) else None
+    total_ltr = sum(float(r.liters or 0) for r in rows)
+    mpg = round(km / total_ltr, 2) if (km is not None and total_ltr > 0) else None
+    return {
+        'mpg': mpg,
+        'from_date': month_start.strftime('%d-%m-%Y'),
+        'to_date': month_end.strftime('%d-%m-%Y'),
+        'km': round(km, 2) if km is not None else None,
+        'total_liters': round(total_ltr, 2),
+        'entries': len(rows),
+    }
+
+
 def _scan_fuel_market_rates(force=False):
     """Scan PSO for today's rate. Stores per-date rates in a 'rates' dict."""
     today_s = pk_date().strftime('%Y-%m-%d')
@@ -8434,6 +8551,9 @@ def form_control():
     freeze_matrix_rows = _build_freeze_matrix_rows(freeze_forms, freeze_allowed_set)
     oil_family_options = _get_vehicle_family_options()
     oil_change_limits = _get_vehicle_family_oil_change_limits()
+    from fuel_expense_settings import fuel_expense_settings_payload, get_fuel_km_gap_rules
+    fuel_expense_cfg = get_fuel_km_gap_rules()
+    fuel_expense_settings = fuel_expense_settings_payload()
 
     requested_tab = request.args.get('settings_tab', 'attendance')
     active_tab = _resolve_form_control_settings_tab(requested_tab)
@@ -8441,7 +8561,7 @@ def form_control():
         flash('You do not have permission to access Settings.', 'danger')
         return redirect(url_for('user_list'))
     fc_tab_allowed = {k: _form_control_tab_allowed(k) for k in (
-        'attendance', 'freeze', 'oil_limits', 'daily_task_entry', 'vehicle_sort', 'accounting_maintenance',
+        'attendance', 'freeze', 'oil_limits', 'daily_task_entry', 'vehicle_sort', 'accounting_maintenance', 'fuel_expense',
     )}
     vehicle_sort_project_id = request.args.get('project_id', type=int) or (
         projects[0].id if projects else None
@@ -8469,6 +8589,7 @@ def form_control():
             global_override=glob,
             att_settings=att_settings,
             projects=projects,
+            districts=districts,
             vehicle_sort_project_id=vehicle_sort_project_id,
             vehicle_sort_rows=vehicle_sort_rows,
             freeze_cfg=freeze_cfg,
@@ -8477,6 +8598,8 @@ def form_control():
             freeze_allowed_set=freeze_allowed_set,
             oil_family_options=oil_family_options,
             oil_change_limits=oil_change_limits,
+            fuel_expense_cfg=fuel_expense_cfg,
+            fuel_expense_settings=fuel_expense_settings,
             settings_active_tab=active_tab,
             fc_tab_allowed=fc_tab_allowed,
         **_administration_nav_back(),
@@ -8704,6 +8827,29 @@ def form_control():
         flash('Vehicle family oil change limits saved successfully.', 'success')
         return redirect(url_for('form_control', settings_tab='oil_limits'))
 
+    if action == 'save_fuel_expense_settings':
+        denied = _form_control_tab_guard('fuel_expense')
+        if denied:
+            return denied
+        from fuel_expense_settings import save_fuel_price_tolerance_rs, save_fuel_km_gap_rules
+        save_fuel_price_tolerance_rs(request.form.get('fuel_price_tolerance_rs'))
+        default_max = request.form.get('fuel_km_gap_default_max_km')
+        posted_districts = request.form.getlist('fuel_km_gap_district_id')
+        posted_projects = request.form.getlist('fuel_km_gap_project_id')
+        posted_families = request.form.getlist('fuel_km_gap_vehicle_family')
+        posted_max_km = request.form.getlist('fuel_km_gap_max_km')
+        rules = []
+        for idx, d_raw in enumerate(posted_districts):
+            rules.append({
+                'district_id': d_raw,
+                'project_id': posted_projects[idx] if idx < len(posted_projects) else '',
+                'vehicle_family': posted_families[idx] if idx < len(posted_families) else '',
+                'max_km': posted_max_km[idx] if idx < len(posted_max_km) else '',
+            })
+        save_fuel_km_gap_rules(default_max, rules)
+        flash('Fuel expense settings saved successfully.', 'success')
+        return redirect(url_for('form_control', settings_tab='fuel_expense'))
+
     if action == 'add_override':
         denied = _form_control_tab_guard('attendance')
         if denied:
@@ -8802,6 +8948,10 @@ def form_control():
         freeze_allowed_set=freeze_allowed_set,
         oil_family_options=oil_family_options,
         oil_change_limits=oil_change_limits,
+        fuel_expense_cfg=fuel_expense_cfg,
+        fuel_expense_settings=fuel_expense_settings,
+        projects=projects,
+        districts=districts,
         settings_active_tab=active_tab,
         fc_tab_allowed=fc_tab_allowed,
     **_administration_nav_back(),
@@ -23690,7 +23840,14 @@ def get_vehicles_by_project_district():
     if scope_vehicles:
         q = q.filter(Vehicle.id.in_(scope_vehicles))
     vehicles = q.order_by(*vehicle_order_by()).all()
-    resp = make_response(jsonify([{'id': v.id, 'vehicle_no': v.vehicle_no, 'vehicle_type': v.vehicle_type or '', 'fuel_type': v.fuel_type or 'Petrol'} for v in vehicles]))
+    resp = make_response(jsonify([{
+        'id': v.id,
+        'vehicle_no': v.vehicle_no,
+        'vehicle_type': v.vehicle_type or '',
+        'fuel_type': v.fuel_type or 'Petrol',
+        'fuel_tank_capacity': float(v.fuel_tank_capacity or 0),
+        'vehicle_family': v.vehicle_family or '',
+    } for v in vehicles]))
     resp.headers['Cache-Control'] = 'private, max-age=60'
     return resp
 
@@ -23729,6 +23886,8 @@ def _fuel_expense_location_cascade_dict():
                 "project_id": v.project_id,
                 "district_id": v.district_id,
                 "fuel_type": (v.fuel_type or "Petrol"),
+                "fuel_tank_capacity": float(v.fuel_tank_capacity or 0),
+                "vehicle_family": (v.vehicle_family or ""),
             }
         )
     return {"projects_by_district": pbd, "vehicles": vehicles}
@@ -28589,6 +28748,44 @@ def api_fuel_expense_last_reading():
     return jsonify({'previous_reading': previous_reading, 'fuel_type': vehicle_fuel_type})
 
 
+@app.route('/api/fuel-expense/last-entry')
+def api_fuel_expense_last_entry():
+    """Latest fuel expense for a specific vehicle (shown under Vehicle No on the form)."""
+    vehicle_id = request.args.get('vehicle_id', type=int)
+    exclude_id = request.args.get('exclude_id', type=int)
+    if not vehicle_id:
+        return jsonify({'ok': True, 'entry': None})
+    q = FuelExpense.query.filter(FuelExpense.vehicle_id == vehicle_id)
+    if exclude_id:
+        q = q.filter(FuelExpense.id != exclude_id)
+    rec = q.options(
+        joinedload(FuelExpense.workspace_pump),
+        joinedload(FuelExpense.fuel_pump),
+        joinedload(FuelExpense.district),
+        joinedload(FuelExpense.project),
+        joinedload(FuelExpense.vehicle),
+    ).order_by(FuelExpense.fueling_date.desc(), FuelExpense.id.desc()).first()
+    return jsonify({'ok': True, 'entry': _fuel_expense_last_entry_payload(rec)})
+
+
+@app.route('/api/fuel-expense/detail/<int:pk>')
+def api_fuel_expense_detail(pk):
+    """Full fuel entry payload for detail popups (Last Saved, etc.)."""
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    rec = FuelExpense.query.options(
+        joinedload(FuelExpense.workspace_pump),
+        joinedload(FuelExpense.fuel_pump),
+        joinedload(FuelExpense.district),
+        joinedload(FuelExpense.project),
+        joinedload(FuelExpense.vehicle),
+    ).filter_by(id=pk).first()
+    if not rec:
+        return jsonify({'ok': False, 'entry': None}), 404
+    if workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
+        return jsonify({'ok': False, 'entry': None, 'error': 'forbidden'}), 403
+    return jsonify({'ok': True, 'entry': _fuel_expense_last_entry_payload(rec)})
+
+
 @app.route('/api/fuel-expense/task-readings')
 def api_fuel_expense_task_readings():
     """Return km_out (Day Start) and km_in (Day Close) from task report for vehicle_id and fueling_date."""
@@ -28790,6 +28987,108 @@ def api_fuel_expense_price_history():
         'all_pumps': [_fmt_row(r) for r in all_rows],
         'date_snapshot': date_snapshot_rows,
     })
+
+
+@app.route('/api/fuel-expense/check-duplicate')
+def api_fuel_expense_check_duplicate():
+    """Warn when an identical fuel entry already exists."""
+    vehicle_id = request.args.get('vehicle_id', type=int)
+    fuel_pump_id = request.args.get('fuel_pump_id', type=int)
+    fueling_date = parse_date(request.args.get('fueling_date', ''))
+    current_reading = request.args.get('current_reading', type=float)
+    amount = request.args.get('amount', type=float)
+    exclude_id = request.args.get('exclude_id', type=int)
+    if not all([vehicle_id, fuel_pump_id, fueling_date, current_reading is not None, amount is not None]):
+        return jsonify({'duplicate': False})
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    q = FuelExpense.query.filter(
+        FuelExpense.vehicle_id == vehicle_id,
+        FuelExpense.workspace_pump_id == fuel_pump_id,
+        FuelExpense.fueling_date == fueling_date,
+        FuelExpense.current_reading == current_reading,
+        FuelExpense.amount == amount,
+    )
+    if workspace_employee_id:
+        q = q.filter(FuelExpense.employee_id == workspace_employee_id)
+    if exclude_id:
+        q = q.filter(FuelExpense.id != exclude_id)
+    existing = q.order_by(FuelExpense.id.desc()).first()
+    if not existing:
+        return jsonify({'duplicate': False})
+    return jsonify({
+        'duplicate': True,
+        'summary': ' | '.join(filter(None, [
+            existing.district.name if existing.district else '',
+            existing.vehicle.vehicle_no if existing.vehicle else '',
+            existing.fueling_date.strftime('%d-%m-%Y') if existing.fueling_date else '',
+            'Rs {:,.0f}'.format(float(existing.amount)) if existing.amount is not None else '',
+        ])),
+        'id': existing.id,
+        'vehicle_no': existing.vehicle.vehicle_no if existing.vehicle else '',
+        'pump_name': existing.workspace_pump.name if existing.workspace_pump else '',
+        'fueling_date': existing.fueling_date.strftime('%d-%m-%Y') if existing.fueling_date else '',
+        'current_reading': float(existing.current_reading) if existing.current_reading is not None else None,
+        'amount': float(existing.amount) if existing.amount is not None else None,
+    })
+
+
+@app.route('/api/fuel-expense/month-mpg')
+def api_fuel_expense_month_mpg():
+    vehicle_id = request.args.get('vehicle_id', type=int)
+    fueling_date = parse_date(request.args.get('fueling_date', ''))
+    exclude_id = request.args.get('exclude_id', type=int)
+    if not vehicle_id or not fueling_date:
+        return jsonify({'ok': False})
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    payload = _fuel_expense_month_mpg(
+        vehicle_id, fueling_date, workspace_employee_id, exclude_id=exclude_id,
+    )
+    if not payload:
+        return jsonify({'ok': False})
+    return jsonify({'ok': True, **payload})
+
+
+@app.route('/api/fuel-market-scan-trend')
+def api_fuel_market_scan_trend():
+    """Last 7 days of cached PSO scan rates."""
+    scan_data = _read_fuel_market_scan()
+    rates = scan_data.get('rates') or {}
+    trend = []
+    for date_key in sorted(rates.keys(), reverse=True)[:7]:
+        entry = rates.get(date_key) or {}
+        trend.append({
+            'date': date_key,
+            'scanned_at': entry.get('scanned_at', ''),
+            'ok': bool(entry.get('ok')),
+            'petrol': entry.get('petrol'),
+            'diesel': entry.get('diesel'),
+            'error': entry.get('error', ''),
+        })
+    trend.reverse()
+    return jsonify({
+        'source': 'PSO',
+        'scanned_at': scan_data.get('scanned_at', ''),
+        'trend': trend,
+    })
+
+
+@app.route('/api/fuel-expense/km-gap-limit')
+def api_fuel_expense_km_gap_limit():
+    from fuel_expense_settings import resolve_fuel_km_gap_max
+    district_id = request.args.get('district_id', type=int)
+    project_id = request.args.get('project_id', type=int)
+    vehicle_id = request.args.get('vehicle_id', type=int)
+    vehicle_family = (request.args.get('vehicle_family') or '').strip()
+    if vehicle_id and not vehicle_family:
+        vehicle = Vehicle.query.get(vehicle_id)
+        if vehicle:
+            vehicle_family = vehicle.vehicle_family or ''
+            if not district_id:
+                district_id = vehicle.district_id
+            if not project_id:
+                project_id = vehicle.project_id
+    max_km = resolve_fuel_km_gap_max(district_id, project_id, vehicle_family)
+    return jsonify({'ok': True, 'max_km': max_km})
 
 
 @app.route('/expenses/fuel', methods=['GET', 'POST'])
@@ -29478,7 +29777,7 @@ def fuel_expense_add():
     selected_vehicle_id = request.args.get('vehicle_id', type=int) if request.method == 'GET' else None
     selected_payment_type = request.args.get('payment_type', '') if request.method == 'GET' else ''
     last_id = request.args.get('last_id', type=int) if request.method == 'GET' else None
-    last_rec = FuelExpense.query.get(last_id) if last_id else None
+    add_ctx = _fuel_expense_add_form_ctx(workspace_employee_id, last_id)
     if request.method == 'GET' and not selected_district_id and default_district_id:
         selected_district_id = default_district_id
     if selected_district_id:
@@ -29510,7 +29809,7 @@ def fuel_expense_add():
                 'fuel_expense_form.html',
                 form=form,
                 title='Add Fuel Expense',
-                location_cascade=_fuel_expense_location_cascade_dict(),
+                **add_ctx,
             )
         vehicle = Vehicle.query.get_or_404(vehicle_id)
         district_id = form.district_id.data or None
@@ -29529,7 +29828,7 @@ def fuel_expense_add():
                 'fuel_expense_form.html',
                 form=form,
                 title='Add Fuel Expense',
-                location_cascade=_fuel_expense_location_cascade_dict(),
+                **add_ctx,
             )
         if payment_type in ('Cash', 'Credit'):
             card_swipe_date = None
@@ -29544,7 +29843,7 @@ def fuel_expense_add():
                 'fuel_expense_form.html',
                 form=form,
                 title='Add Fuel Expense',
-                location_cascade=_fuel_expense_location_cascade_dict(),
+                **add_ctx,
             )
         previous_reading = form.previous_reading.data
         current_reading = form.current_reading.data
@@ -29681,8 +29980,7 @@ def fuel_expense_add():
         form=form,
         rec=None,
         title='Add Fuel Expense',
-        last_rec=last_rec,
-        location_cascade=_fuel_expense_location_cascade_dict(),
+        **add_ctx,
     )
 
 
@@ -29912,6 +30210,7 @@ def fuel_expense_edit(pk):
         except Exception:
             db.session.rollback()
             raise
+    from fuel_expense_settings import fuel_expense_settings_payload
     return render_template(
         'fuel_expense_form.html',
         form=form,
@@ -29919,7 +30218,9 @@ def fuel_expense_edit(pk):
         rec=rec,
         back_url=back_url,
         return_to_path=request.full_path,
+        fuel_market_scan=_read_fuel_market_scan() or None,
         location_cascade=_fuel_expense_location_cascade_dict(),
+        fuel_expense_settings=fuel_expense_settings_payload(),
     )
 
 

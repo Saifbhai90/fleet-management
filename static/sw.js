@@ -129,3 +129,14 @@ self.addEventListener('fetch', function(event) {
         })
     );
 });
+
+self.addEventListener('sync', function(event) {
+    if (event.tag !== 'fleet-fuel-sync') return;
+    event.waitUntil(
+        self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clients) {
+            clients.forEach(function(client) {
+                client.postMessage({ type: 'fleet-fuel-sync' });
+            });
+        })
+    );
+});

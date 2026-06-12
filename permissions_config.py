@@ -18,6 +18,7 @@ FORM_CONTROL_TAB_KEYS = (
     'daily_task_entry',
     'vehicle_sort',
     'accounting_maintenance',
+    'fuel_expense',
 )
 FORM_CONTROL_TAB_CODES = {
     'attendance': 'form_control_attendance',
@@ -26,6 +27,7 @@ FORM_CONTROL_TAB_CODES = {
     'daily_task_entry': 'form_control_daily_task_entry',
     'vehicle_sort': 'form_control_vehicle_sort',
     'accounting_maintenance': 'form_control_accounting_maintenance',
+    'fuel_expense': 'form_control_fuel_expense',
 }
 FORM_CONTROL_ALL_TAB_CODES = tuple(FORM_CONTROL_TAB_CODES.values())
 
@@ -363,6 +365,7 @@ PERMISSION_TREE = {
         ('form_control_daily_task_entry', 'Setting – New Task Entry'),
         ('form_control_vehicle_sort', 'Setting – Vehicle Sort Order'),
         ('form_control_accounting_maintenance', 'Setting – Accounting Maintenance'),
+        ('form_control_fuel_expense', 'Setting – Fuel Expense Rules'),
         ('notification_list', 'Notifications – List / View'),
         ('notification_add', 'Notifications – Create'),
         ('whats_new', "What's New"),
@@ -1033,6 +1036,7 @@ SECTION_PAGE_GROUPS = {
         ('New Task Entry', [('form_control_daily_task_entry', 'New Task Entry')]),
         ('Vehicle Sort Order', [('form_control_vehicle_sort', 'Vehicle Sort Order')]),
         ('Accounting Maintenance', [('form_control_accounting_maintenance', 'Accounting Maintenance')]),
+        ('Fuel Expense Rules', [('form_control_fuel_expense', 'Fuel Expense Rules')]),
         ('Notifications', [
             ('notification_list', 'List / View'),
             ('notification_add', 'Create'),

@@ -10,12 +10,191 @@
     background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);
     color: #fff;
     padding: 0.85rem 1.1rem;
-    border-radius: 14px;
-    margin-bottom: 1rem;
+    border-radius: 14px 14px 0 0;
+    margin-bottom: 0;
     box-shadow: 0 8px 20px rgba(13, 110, 253, 0.25);
   }
   .fuel-form-wrap .page-header h4 { margin: 0; font-weight: 700; font-size: 1.35rem; letter-spacing: 0.2px; }
   .fuel-form-wrap .page-header .btn-outline-light:hover { color: #0d6efd; }
+  .fuel-form-wrap .fuel-info-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.45rem 0.65rem;
+    padding: 0.55rem 1rem;
+    margin-bottom: 1rem;
+    border-radius: 0 0 14px 14px;
+    background: linear-gradient(180deg, #ecfdf5 0%, #d1fae5 100%);
+    border: 1px solid #a7f3d0;
+    border-top: 0;
+    box-shadow: 0 8px 20px rgba(13, 110, 253, 0.12);
+    font-size: 0.84rem;
+    color: #0f172a;
+    line-height: 1.45;
+  }
+  .fuel-form-wrap .fuel-info-bar strong { font-weight: 700; }
+  .fuel-form-wrap .fuel-info-bar .fuel-info-sep { color: #64748b; font-weight: 700; }
+  .fuel-form-wrap .fuel-info-scan .scan-ok { color: #15803d; font-weight: 700; }
+  .fuel-form-wrap .fuel-info-scan .scan-bad { color: #b91c1c; font-weight: 700; }
+  .fuel-form-wrap .fuel-info-saved .badge { font-size: 0.72rem; vertical-align: middle; }
+  .fuel-form-wrap .fuel-info-saved .btn { font-size: 0.72rem; padding: 0.1rem 0.45rem; }
+  .fuel-form-wrap .vehicle-last-entry-strip {
+    font-size: 0.78rem;
+    margin-top: 0.35rem;
+    padding: 0.4rem 0.55rem;
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    border-radius: 6px;
+    color: #14532d;
+    line-height: 1.45;
+  }
+  .fuel-form-wrap .vehicle-last-entry-strip.fuel-info-click:hover { background: #dcfce7; }
+  .fuel-info-float-panel--wide { width: min(520px, calc(100vw - 24px)); }
+  .fuel-info-float-panel--entry-detail {
+    max-height: none;
+    min-width: 300px;
+    max-width: calc(100vw - 16px);
+    z-index: 1045;
+    margin: 0;
+  }
+  .fuel-info-float-panel--entry-detail:not(.is-user-resized) {
+    height: auto;
+  }
+  .fuel-info-float-panel--entry-detail:not(.is-user-resized) .fuel-info-float-body {
+    overflow: visible;
+    flex: 0 0 auto;
+  }
+  .fuel-info-float-panel--entry-detail.is-user-resized {
+    min-height: 240px;
+    max-height: calc(100vh - 16px);
+  }
+  .fuel-info-float-panel--entry-detail.is-user-resized .fuel-info-float-body {
+    overflow: auto;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  .fuel-info-float-resize-handle {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    width: 18px;
+    height: 18px;
+    cursor: nwse-resize;
+    z-index: 3;
+    background: linear-gradient(135deg, transparent 0%, transparent 50%, #94a3b8 50%, #94a3b8 100%);
+    border-radius: 0 0 8px 0;
+    touch-action: none;
+  }
+  .fuel-entry-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.45rem 0.65rem; }
+  .fuel-entry-detail-item { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 0.35rem 0.5rem; }
+  .fuel-entry-detail-item .lbl { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.04em; color: #64748b; margin-bottom: 0.1rem; }
+  .fuel-entry-detail-item .val { font-size: 0.82rem; font-weight: 600; color: #0f172a; word-break: break-word; }
+  .fuel-entry-detail-total { background: linear-gradient(135deg, #1d4ed8 0%, #1e3a8a 100%); color: #fff; border-radius: 8px; padding: 0.65rem 0.75rem; margin-top: 0.5rem; }
+  .fuel-entry-detail-total .lbl { font-size: 0.68rem; text-transform: uppercase; opacity: 0.9; }
+  .fuel-entry-detail-total .val { font-size: 1.25rem; font-weight: 800; }
+  .fuel-form-wrap .fuel-info-click { cursor: pointer; border-radius: 6px; padding: 0.1rem 0.25rem; transition: background 0.15s; }
+  .fuel-form-wrap .fuel-info-click:hover { background: rgba(255,255,255,0.55); }
+  .fuel-form-wrap .fuel-info-click.is-open { background: rgba(255,255,255,0.75); box-shadow: inset 0 0 0 1px rgba(13, 110, 253, 0.25); }
+  .fuel-info-float-panel {
+    position: fixed;
+    z-index: 1040;
+    width: min(420px, calc(100vw - 24px));
+    max-height: min(70vh, 520px);
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+    border: 1px solid #cbd5e1;
+    border-radius: 10px;
+    box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
+    overflow: hidden;
+  }
+  .fuel-info-float-panel.d-none { display: none !important; }
+  .fuel-info-float-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid #e2e8f0;
+    background: #f8fafc;
+    flex-shrink: 0;
+  }
+  .fuel-info-float-header h6 { margin: 0; font-size: 0.92rem; font-weight: 700; }
+  .fuel-info-float-body {
+    padding: 0.65rem 0.75rem;
+    font-size: 0.84rem;
+    overflow: auto;
+    flex: 1 1 auto;
+  }
+  .fuel-info-float-footer {
+    padding: 0.45rem 0.75rem;
+    border-top: 1px solid #e2e8f0;
+    background: #fff;
+    flex-shrink: 0;
+    text-align: right;
+  }
+  .fuel-form-wrap .field-invalid { border-color: #dc3545 !important; box-shadow: 0 0 0 2px rgba(220,53,69,0.15) !important; }
+  .fuel-form-wrap .field-error-msg { color: #dc3545; font-size: 0.78rem; margin-top: 0.2rem; }
+  .fuel-form-wrap .km-gap-warn { color: #b45309; font-size: 0.78rem; margin-top: 0.2rem; }
+  .fuel-form-wrap .price-tolerance-warn { color: #b45309; font-size: 0.78rem; margin-top: 0.2rem; }
+  .fuel-form-wrap .month-mpg-note {
+    font-size: 0.72rem; line-height: 1.35; margin-top: 0.25rem; padding: 0.25rem 0.35rem;
+    background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; color: #1e40af;
+  }
+  .fuel-form-wrap .matched-detail { font-size: 0.72rem; line-height: 1.35; margin-top: 0.2rem; }
+  .fuel-form-wrap .odometer-gauge-wrap {
+    margin-top: 0.35rem; padding: 0.45rem 0.55rem; background: #f8fafc;
+    border: 1px solid #e2e8f0; border-radius: 8px;
+  }
+  .fuel-form-wrap .odometer-gauge-track {
+    position: relative; height: 12px; background: #e2e8f0; border-radius: 999px; margin: 0.4rem 0 0.25rem;
+  }
+  .fuel-form-wrap .odometer-gauge-zone {
+    position: absolute; top: 0; height: 100%; background: rgba(34, 197, 94, 0.35); border-radius: 999px;
+  }
+  .fuel-form-wrap .odometer-gauge-marker {
+    position: absolute; top: 50%; width: 16px; height: 16px; border-radius: 50%;
+    transform: translate(-50%, -50%); border: 2px solid #fff;
+    box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.2); z-index: 2;
+  }
+  .fuel-form-wrap .odometer-gauge-marker.in-range { background: #22c55e; }
+  .fuel-form-wrap .odometer-gauge-marker.out-range { background: #ef4444; }
+  .fuel-form-wrap .odometer-gauge-tick {
+    position: absolute; top: -3px; width: 2px; height: 18px; background: #64748b; transform: translateX(-50%); z-index: 1;
+  }
+  .fuel-form-wrap .tank-capacity-warn {
+    font-size: 0.78rem; color: #92400e; background: #fffbeb;
+    border: 1px solid #fcd34d; border-radius: 6px; padding: 0.35rem 0.5rem; margin-top: 0.25rem;
+  }
+  .fuel-form-wrap .fuel-attach-zone {
+    border: 2px dashed #ced4da;
+    border-radius: 8px;
+    padding: 0.75rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.15s;
+    color: #475569;
+    background: #fff;
+  }
+  .fuel-form-wrap .fuel-attach-zone:hover,
+  .fuel-form-wrap .fuel-attach-zone.drag-over {
+    border-color: #0d6efd;
+    background: #eff6ff;
+    color: #0d6efd;
+  }
+  .fuel-form-wrap .fuel-attach-zone:focus {
+    outline: none;
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.15);
+  }
+  @media (max-width: 1199.98px) {
+    .fuel-form-wrap .fuel-insights-collapse:not(.show) { display: none; }
+    .fuel-form-wrap .fuel-insights-toggle { display: flex !important; }
+  }
+  @media (min-width: 1200px) {
+    .fuel-form-wrap .fuel-insights-collapse { display: block !important; height: auto !important; visibility: visible !important; }
+    .fuel-form-wrap .fuel-insights-toggle { display: none !important; }
+  }
   .fuel-form-wrap .form-section {
     background: #fff;
     border-radius: 12px;
@@ -97,37 +276,53 @@
   .fuel-form-wrap .ts-wrapper .ts-control input { font-size: 0.92rem; line-height: 1.3; }
 </style>
 <div class="container-fluid fuel-form-wrap py-2">
-  <div class="page-header d-flex justify-content-between align-items-center">
-    <h4><i class="bi bi-fuel-pump-fill me-2"></i>{{ title }}</h4>
-    <div class="d-flex gap-2">
+  <div class="page-header">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+      <h4 class="mb-0"><i class="bi bi-fuel-pump-fill me-2"></i>{{ title }}</h4>
       <a href="{{ url_for('fuel_expense_list') }}" class="btn btn-outline-light btn-sm">Back to List</a>
     </div>
   </div>
-  <div id="fuelMarketScanStatusBar" class="alert alert-secondary py-2 px-3 mb-2 small">
-    <i class="bi bi-broadcast me-1"></i>PSO scan status loading...
+  <div class="fuel-info-bar">
+    <div id="fuelMarketScanStatusBar" class="fuel-info-scan fuel-info-click" role="button" tabindex="0" title="Click for scan details">
+      {% if fuel_market_scan and fuel_market_scan.sources %}
+      {% set pso = fuel_market_scan.sources['pso'] if fuel_market_scan.sources is mapping else {} %}
+      <strong>Last Scan:</strong> {{ fuel_market_scan.scanned_at or '-' }}
+      {% if pso.ok %}
+      | PSO: <span class="scan-ok">OK</span>
+      {% if pso.petrol is not none %}| Petrol: Rs {{ '%.2f'|format(pso.petrol|float) }}{% endif %}
+      {% if pso.diesel is not none %}| Diesel: Rs {{ '%.2f'|format(pso.diesel|float) }}{% endif %}
+      {% else %}
+      | PSO: <span class="scan-bad">{{ pso.error or 'Scan failed' }}</span>
+      {% endif %}
+      {% else %}
+      <strong>Last Scan:</strong> <span class="text-muted">Loading...</span>
+      {% endif %}
+    </div>
+    {% if not rec %}
+    <span class="fuel-info-sep">•</span>
+    <div id="fuelLastSavedBar" class="fuel-info-saved d-flex flex-wrap align-items-center gap-1 fuel-info-click" role="button" tabindex="0" title="Click for last entry preview">
+      <strong>Last Saved:</strong>
+      {% if last_rec %}
+      <span>Fueling Date: {{ last_rec.fueling_date.strftime('%d-%m-%Y') if last_rec.fueling_date else '—' }}</span>
+      <span class="text-muted">|</span>
+      <span>{{ last_rec.district.name if last_rec.district else '—' }}</span>
+      <span class="text-muted">|</span>
+      <span>{{ last_rec.vehicle.vehicle_no if last_rec.vehicle else '—' }}</span>
+      <span class="text-muted">|</span>
+      <strong>Rs {{ '{:,.0f}'.format(last_rec.amount|float) if last_rec.amount else '—' }}</strong>
+      {% set us = last_rec.upload_status or '' %}
+      <span class="badge {% if us == 'success' %}bg-success{% elif us == 'processing' %}bg-warning text-dark{% elif us == 'failed' %}bg-danger{% else %}bg-secondary{% endif %}">{{ (us or 'No Files')|upper }}</span>
+      <a href="{{ url_for('fuel_expense_edit', pk=last_rec.id) }}" class="btn btn-outline-primary btn-sm py-0 px-2 ms-1"><i class="bi bi-pencil-square"></i></a>
+      {% else %}
+      <span class="text-muted">No fuel expense saved yet.</span>
+      {% endif %}
+    </div>
+    {% endif %}
   </div>
-  {% if last_rec %}
-  <div class="alert alert-success border-0 py-2 px-3 mb-2 d-flex flex-wrap align-items-center gap-2 small shadow-sm">
-    <i class="bi bi-check-circle-fill text-success"></i>
-    <strong>Last Saved:</strong>
-    <span class="badge bg-secondary">{{ last_rec.district.name if last_rec.district else '—' }}</span>
-    <span class="text-muted">›</span>
-    <span class="badge bg-secondary">{{ last_rec.project.name if last_rec.project else '—' }}</span>
-    <span class="text-muted">›</span>
-    <span class="badge bg-primary">{{ last_rec.vehicle.vehicle_no if last_rec.vehicle else '—' }}</span>
-    <span class="text-muted mx-1">|</span>
-    <span>{{ last_rec.fueling_date.strftime('%d %b %Y') if last_rec.fueling_date else '—' }}</span>
-    <span class="text-muted mx-1">|</span>
-    <strong>Rs {{ '{:,.0f}'.format(last_rec.amount|float) if last_rec.amount else '—' }}</strong>
-    <span class="text-muted mx-1">|</span>
-    {% set us = last_rec.upload_status or '' %}
-    <span class="badge {% if us == 'success' %}bg-success{% elif us == 'processing' %}bg-warning text-dark{% elif us == 'failed' %}bg-danger{% else %}bg-secondary{% endif %}">{{ us or 'No Files' }}</span>
-    <a href="{{ url_for('fuel_expense_edit', pk=last_rec.id) }}" class="ms-auto btn btn-outline-success btn-sm py-0 px-2"><i class="bi bi-pencil-square me-1"></i>Edit Last</a>
-  </div>
-  {% endif %}
 
   <form method="POST" action="" id="fuelExpenseForm" data-record-id="{{ rec.id if rec else '' }}" enctype="multipart/form-data">
     <script type="application/json" id="locationCascadeData">{{ location_cascade|tojson }}</script>
+    <script type="application/json" id="fuelExpenseSettingsData">{{ fuel_expense_settings|default({'price_tolerance_rs': 5, 'km_gap_default_max_km': 500, 'km_gap_rules': []})|tojson }}</script>
     {{ form.hidden_tag() }}
     {% if return_to_path is defined and return_to_path %}
     <input type="hidden" name="return_to" value="{{ return_to_path }}">
@@ -138,7 +333,7 @@
         <div class="row g-0">
           <!-- Left: Location & Fueling -->
           <div class="col-lg-6 pe-lg-2">
-            <div class="form-section h-100">
+            <div class="form-section h-100" id="fuelLocationSection">
               <div class="form-section-header">
                 <i class="bi bi-geo-alt-fill"></i>
                 Location & Fueling Details
@@ -159,6 +354,7 @@
                       {{ form.vehicle_id(class="form-select search-select", id="vehicleSelect") }}
                       <a href="{{ url_for('vehicle_reading_setup_form') }}" class="btn btn-outline-success btn-sm text-nowrap" title="Set Fuel/Oil previous readings">Set Reading</a>
                     </div>
+                    <div id="vehicleLastEntryStrip" class="vehicle-last-entry-strip fuel-info-click d-none" role="button" tabindex="0" title="Click for full entry details"></div>
                   </div>
                   <div class="col-12 field-group">
                     <label class="form-label">Fuel Pump Name</label>
@@ -218,30 +414,53 @@
                   <div class="col-6 col-md-3 field-group">
                     <label class="form-label">Current Reading <span class="text-danger">*</span></label>
                     {{ form.current_reading(class="form-control", id="currentReading", step="0.01", placeholder="0") }}
+                    <div id="currentReadingError" class="field-error-msg d-none"></div>
+                  </div>
+                  <div class="col-12 field-group">
+                    <div id="odometerGaugeWrap" class="odometer-gauge-wrap d-none">
+                      <div class="d-flex justify-content-between align-items-center small text-muted">
+                        <span>Prev: <strong id="gaugePrevLabel" class="text-dark">—</strong></span>
+                        <span id="gaugeTaskOutLabel" class="d-none">Out: <strong class="text-dark">—</strong></span>
+                        <span>Task In: <strong id="gaugeTaskInLabel" class="text-dark">—</strong></span>
+                      </div>
+                      <div class="odometer-gauge-track">
+                        <div id="gaugeTaskZone" class="odometer-gauge-zone d-none"></div>
+                        <div id="gaugeTaskOutTick" class="odometer-gauge-tick d-none"></div>
+                        <div id="gaugeCurrentMarker" class="odometer-gauge-marker d-none"></div>
+                      </div>
+                      <div id="gaugeStatusText" class="small"></div>
+                    </div>
                   </div>
                   <div class="col-6 col-md-3 field-group">
                     <label class="form-label">KM</label>
                     <input type="text" id="kmDisplay" class="form-control bg-light" readonly placeholder="—">
+                    <div id="kmGapWarn" class="km-gap-warn d-none"></div>
                   </div>
                   <div class="col-6 col-md-3 field-group">
                     <label class="form-label">Matched</label>
                     <input type="text" id="meterMatched" class="form-control bg-light" readonly placeholder="Yes/No">
+                    <div id="meterMatchedDetail" class="matched-detail text-danger d-none"></div>
                   </div>
                   <div class="col-6 col-md-3 field-group">
                     <label class="form-label">Amount</label>
                     {{ form.amount(class="form-control", id="amountInput", step="0.01", placeholder="0") }}
+                    <div id="amountInputError" class="field-error-msg d-none"></div>
                   </div>
                   <div class="col-6 col-md-3 field-group">
                     <label class="form-label">Fuel Price</label>
                     {{ form.fuel_price(class="form-control", id="fuelPrice", step="0.01", placeholder="0") }}
+                    <div id="fuelPriceToleranceWarn" class="price-tolerance-warn d-none"></div>
                   </div>
                   <div class="col-6 col-md-3 field-group">
-                    <label class="form-label">Ltr <small class="text-muted">(Auto)</small></label>
-                    <input type="text" id="litersDisplay" class="form-control bg-light" readonly placeholder="—">
+                    <label class="form-label">Ltr</label>
+                    <input type="number" id="litersInput" class="form-control" step="0.01" min="0" placeholder="0">
+                    <div id="litersInputError" class="field-error-msg d-none"></div>
+                    <div id="tankCapacityWarn" class="tank-capacity-warn d-none"></div>
                   </div>
                   <div class="col-6 col-md-3 field-group">
                     <label class="form-label">MPG</label>
                     <input type="text" id="mpgDisplay" class="form-control bg-light" readonly placeholder="—">
+                    <div id="monthMpgNote" class="month-mpg-note d-none"></div>
                   </div>
                   <div class="col-12 col-md-6 field-group d-flex align-items-end">
                     <div id="psoRateDatePanel" class="small border rounded px-3 py-2 bg-light text-muted w-100" style="display:none;">
@@ -260,8 +479,13 @@
             Photos / Videos
           </div>
           <div class="form-section-body">
-            <input type="file" name="attachments" id="fuelAttachmentFiles" multiple accept="image/*,video/*" class="form-control">
-            <small class="text-muted">Multiple images/videos can be selected. You can also paste with Ctrl+V.</small>
+            <div class="fuel-attach-zone" id="fuelAttachZone" tabindex="0">
+              <input type="file" name="attachments" id="fuelAttachmentFiles" multiple accept="image/*,video/*" class="d-none">
+              <div id="fuelAttachPlaceholder">
+                <i class="bi bi-cloud-arrow-up me-1"></i>Click, drag-drop, or paste image/video
+              </div>
+            </div>
+            <small class="text-muted d-block mt-2">Mobile par click se camera ya gallery — dono options ek hi picker me milenge. Ctrl+V se bhi add kar sakte hain.</small>
             <div class="small text-success mt-1" id="fuelAttachmentPasteHint"></div>
             {% if rec and rec.attachments.count() %}
             <div class="mt-2">
@@ -299,8 +523,13 @@
         </div>
       </div>
 
-      <div class="col-xl-4">
-        <div class="form-section fuel-insights-panel">
+      <div class="col-xl-4 order-xl-2 order-3">
+        <button type="button" class="btn btn-outline-primary btn-sm w-100 mb-2 fuel-insights-toggle align-items-center justify-content-center gap-2" data-bs-toggle="collapse" data-bs-target="#fuelInsightsCollapse" aria-expanded="false" aria-controls="fuelInsightsCollapse">
+          <i class="bi bi-bar-chart-line-fill"></i> Fuel Price Insights
+          <i class="bi bi-chevron-down small"></i>
+        </button>
+        <div class="collapse fuel-insights-collapse" id="fuelInsightsCollapse">
+        <div class="form-section fuel-insights-panel mb-0">
           <div class="form-section-header">
             <i class="bi bi-bar-chart-line-fill"></i>
             Fuel Price Insights
@@ -322,9 +551,86 @@
             </div>
           </div>
         </div>
+        </div>
       </div>
     </div>
   </form>
+</div>
+
+{% if last_rec %}
+<script type="application/json" id="lastSavedPreviewData">{{ {
+  'id': last_rec.id,
+  'district': last_rec.district.name if last_rec.district else '',
+  'project': last_rec.project.name if last_rec.project else '',
+  'vehicle_no': last_rec.vehicle.vehicle_no if last_rec.vehicle else '',
+  'fueling_date': last_rec.fueling_date.strftime('%d-%m-%Y') if last_rec.fueling_date else '',
+  'amount': last_rec.amount|float if last_rec.amount is not none else None,
+  'liters': last_rec.liters|float if last_rec.liters is not none else None,
+  'mpg': last_rec.mpg|float if last_rec.mpg is not none else None,
+  'fuel_price': last_rec.fuel_price|float if last_rec.fuel_price is not none else None,
+  'upload_status': last_rec.upload_status or '',
+  'edit_url': url_for('fuel_expense_edit', pk=last_rec.id)
+}|tojson }}</script>
+{% else %}
+<script type="application/json" id="lastSavedPreviewData">null</script>
+{% endif %}
+
+<div id="fuelScanDetailPanel" class="fuel-info-float-panel d-none" aria-hidden="true" role="dialog" aria-label="PSO Scan Details">
+  <div class="fuel-info-float-header">
+    <h6>PSO Scan Details</h6>
+    <button type="button" class="btn-close btn-close-sm fuel-info-float-close" aria-label="Close"></button>
+  </div>
+  <div class="fuel-info-float-body" id="fuelScanDetailBody">Loading...</div>
+</div>
+<div id="vehicleLastEntryPanel" class="fuel-info-float-panel fuel-info-float-panel--wide fuel-info-float-panel--entry-detail d-none" aria-hidden="true" role="dialog" aria-label="Fuel Entry Detail">
+  <div class="fuel-info-float-header">
+    <h6>Fuel Entry Detail</h6>
+    <button type="button" class="btn-close btn-close-sm fuel-info-float-close" aria-label="Close"></button>
+  </div>
+  <div class="fuel-info-float-body" id="vehicleLastEntryBody"></div>
+  <div class="fuel-info-float-footer">
+    <a href="#" id="vehicleLastEntryViewLink" class="btn btn-outline-primary btn-sm me-1 d-none" target="_blank" rel="noopener"><i class="bi bi-images me-1"></i>View Media</a>
+    <a href="#" id="vehicleLastEntryEditLink" class="btn btn-primary btn-sm d-none">Edit Entry</a>
+  </div>
+  <div class="fuel-info-float-resize-handle" aria-hidden="true"></div>
+</div>
+<div class="modal fade" id="fuelDuplicateModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header py-2"><h6 class="modal-title text-warning"><i class="bi bi-exclamation-triangle me-1"></i>Duplicate Entry</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body" id="fuelDuplicateBody"></div>
+      <div class="modal-footer py-2">
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-warning btn-sm" id="fuelDuplicateContinueBtn">Continue Anyway</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="fuelTankCapacityModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header py-2"><h6 class="modal-title text-warning"><i class="bi bi-exclamation-triangle me-1"></i>Tank Capacity Warning</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body" id="fuelTankCapacityBody"></div>
+      <div class="modal-footer py-2">
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-warning btn-sm" id="fuelTankCapacityContinueBtn">Continue Anyway</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="fuelKmGapModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header py-2"><h6 class="modal-title text-warning"><i class="bi bi-exclamation-triangle me-1"></i>High KM Gap</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body" id="fuelKmGapBody"></div>
+      <div class="modal-footer py-2">
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-warning btn-sm" id="fuelKmGapContinueBtn">Continue Anyway</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -368,6 +674,29 @@ document.addEventListener('DOMContentLoaded', function() {
     return out;
   }
   var _vehicleFuelTypeMap = {};
+  var _vehicleTankCapacityMap = {};
+  var _vehicleFamilyMap = {};
+  var FUEL_SETTINGS = { price_tolerance_rs: 5, km_gap_default_max_km: 500, km_gap_rules: [] };
+  try {
+    var _fsEl = document.getElementById('fuelExpenseSettingsData');
+    if (_fsEl && _fsEl.textContent) {
+      FUEL_SETTINGS = JSON.parse(_fsEl.textContent);
+    }
+  } catch (eFs) { /* keep defaults */ }
+  var _lastSuggestedBenchmark = null;
+  if (FUEL_CASCADE && FUEL_CASCADE.vehicles) {
+    FUEL_CASCADE.vehicles.forEach(function(v) {
+      _vehicleFuelTypeMap[String(v.id)] = v.fuel_type || 'Petrol';
+      _vehicleTankCapacityMap[String(v.id)] = parseFloat(v.fuel_tank_capacity || 0) || 0;
+      _vehicleFamilyMap[String(v.id)] = v.vehicle_family || '';
+    });
+  }
+  function _rememberVehicleMeta(v) {
+    if (!v || v.id == null) return;
+    _vehicleFuelTypeMap[String(v.id)] = v.fuel_type || 'Petrol';
+    _vehicleTankCapacityMap[String(v.id)] = parseFloat(v.fuel_tank_capacity || 0) || 0;
+    _vehicleFamilyMap[String(v.id)] = v.vehicle_family || '';
+  }
   function _smoothFillSelect(sel, arr, buildOptionFn) {
     if (!sel) return;
     if (sel.tomselect) {
@@ -405,7 +734,40 @@ document.addEventListener('DOMContentLoaded', function() {
   var cardSwipeDateInput = document.getElementById('cardSwipeDate');
   var expenseBySelect = document.getElementById('expenseBySelect');
   var expenseByBalanceHint = document.getElementById('expenseByBalanceHint');
-  var litersDisplay = document.getElementById('litersDisplay');
+  var litersInput = document.getElementById('litersInput');
+  var litersInputError = document.getElementById('litersInputError');
+  var currentReadingError = document.getElementById('currentReadingError');
+  var amountInputError = document.getElementById('amountInputError');
+  var meterMatchedDetail = document.getElementById('meterMatchedDetail');
+  var monthMpgNote = document.getElementById('monthMpgNote');
+  var fuelLastSavedBar = document.getElementById('fuelLastSavedBar');
+  var fuelAttachZone = document.getElementById('fuelAttachZone');
+  var fuelAttachPlaceholder = document.getElementById('fuelAttachPlaceholder');
+  var vehicleLastEntryStrip = document.getElementById('vehicleLastEntryStrip');
+  var vehicleLastEntryPanel = document.getElementById('vehicleLastEntryPanel');
+  var vehicleLastEntryBody = document.getElementById('vehicleLastEntryBody');
+  var vehicleLastEntryViewLink = document.getElementById('vehicleLastEntryViewLink');
+  var vehicleLastEntryEditLink = document.getElementById('vehicleLastEntryEditLink');
+  var _vehicleLastEntryCache = null;
+  var fuelDuplicateModalEl = document.getElementById('fuelDuplicateModal');
+  var fuelDuplicateBody = document.getElementById('fuelDuplicateBody');
+  var fuelDuplicateContinueBtn = document.getElementById('fuelDuplicateContinueBtn');
+  var tankCapacityWarn = document.getElementById('tankCapacityWarn');
+  var odometerGaugeWrap = document.getElementById('odometerGaugeWrap');
+  var gaugePrevLabel = document.getElementById('gaugePrevLabel');
+  var gaugeTaskInLabel = document.getElementById('gaugeTaskInLabel');
+  var gaugeTaskOutLabel = document.getElementById('gaugeTaskOutLabel');
+  var gaugeTaskZone = document.getElementById('gaugeTaskZone');
+  var gaugeTaskOutTick = document.getElementById('gaugeTaskOutTick');
+  var gaugeCurrentMarker = document.getElementById('gaugeCurrentMarker');
+  var gaugeStatusText = document.getElementById('gaugeStatusText');
+  var fuelTankCapacityModalEl = document.getElementById('fuelTankCapacityModal');
+  var fuelTankCapacityBody = document.getElementById('fuelTankCapacityBody');
+  var fuelTankCapacityContinueBtn = document.getElementById('fuelTankCapacityContinueBtn');
+  var _tankCapacityBypass = false;
+  var _pendingSubmitBtn = null;
+  var _duplicateBypass = false;
+  var _calcFromLiters = false;
   var kmOutTask = document.getElementById('kmOutTask');
   var kmInTask = document.getElementById('kmInTask');
   var meterMatched = document.getElementById('meterMatched');
@@ -419,6 +781,12 @@ document.addEventListener('DOMContentLoaded', function() {
   var psoRateDatePanel = document.getElementById('psoRateDatePanel');
   var psoRateDateText = document.getElementById('psoRateDateText');
   var fuelMarketScanStatusBar = document.getElementById('fuelMarketScanStatusBar');
+  var kmGapWarn = document.getElementById('kmGapWarn');
+  var fuelPriceToleranceWarn = document.getElementById('fuelPriceToleranceWarn');
+  var fuelKmGapModalEl = document.getElementById('fuelKmGapModal');
+  var fuelKmGapBody = document.getElementById('fuelKmGapBody');
+  var fuelKmGapContinueBtn = document.getElementById('fuelKmGapContinueBtn');
+  var _kmGapBypass = false;
   var taskStartReading = null;
   var taskCloseReading = null;
   var cashExpenseByValue = '';
@@ -461,6 +829,8 @@ document.addEventListener('DOMContentLoaded', function() {
       .then(function(data) {
         if (!fuelPriceInput) return;
         if (!data || data.fuel_price == null) {
+          _lastSuggestedBenchmark = null;
+          checkFuelPriceTolerance();
           if (fuelPriceInput.dataset.autoSuggested === '1') {
             fuelPriceInput.value = '';
             fuelPriceInput.dataset.autoSuggested = '0';
@@ -470,6 +840,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         var suggested = parseFloat(data.fuel_price);
         if (!isFinite(suggested) || suggested <= 0) return;
+        _lastSuggestedBenchmark = suggested;
         fuelPriceInput.setAttribute('placeholder', 'Suggested: ' + suggested.toFixed(2));
         var entered = parseNum(fuelPriceInput.value);
         if (entered == null || entered <= 0 || fuelPriceInput.dataset.autoSuggested === '1') {
@@ -477,8 +848,275 @@ document.addEventListener('DOMContentLoaded', function() {
           fuelPriceInput.dataset.autoSuggested = '1';
           computeMpgAndLiters();
         }
+        checkFuelPriceTolerance();
       })
       .catch(function() {});
+  }
+
+  function checkFuelPriceTolerance() {
+    if (!fuelPriceInput || !fuelPriceToleranceWarn) return;
+    var tolerance = parseFloat(FUEL_SETTINGS.price_tolerance_rs);
+    if (!isFinite(tolerance) || tolerance <= 0) {
+      fuelPriceToleranceWarn.classList.add('d-none');
+      fuelPriceToleranceWarn.textContent = '';
+      fuelPriceInput.classList.remove('field-invalid');
+      return;
+    }
+    var benchmark = _lastSuggestedBenchmark;
+    if (benchmark == null || !isFinite(benchmark) || benchmark <= 0) {
+      fuelPriceToleranceWarn.classList.add('d-none');
+      fuelPriceToleranceWarn.textContent = '';
+      fuelPriceInput.classList.remove('field-invalid');
+      return;
+    }
+    var entered = parseNum(fuelPriceInput.value);
+    if (entered == null || entered <= 0) {
+      fuelPriceToleranceWarn.classList.add('d-none');
+      fuelPriceToleranceWarn.textContent = '';
+      fuelPriceInput.classList.remove('field-invalid');
+      return;
+    }
+    var diff = Math.abs(entered - benchmark);
+    if (diff > tolerance) {
+      fuelPriceToleranceWarn.classList.remove('d-none');
+      fuelPriceToleranceWarn.innerHTML = '<i class="bi bi-exclamation-triangle me-1"></i>Price Rs ' + entered.toFixed(2) +
+        ' is Rs ' + diff.toFixed(2) + ' away from benchmark Rs ' + benchmark.toFixed(2) +
+        ' (max ± Rs ' + tolerance.toFixed(2) + ' allowed).';
+      fuelPriceInput.classList.add('field-invalid');
+    } else {
+      fuelPriceToleranceWarn.classList.add('d-none');
+      fuelPriceToleranceWarn.textContent = '';
+      fuelPriceInput.classList.remove('field-invalid');
+    }
+  }
+
+  function resolveKmGapMaxClient() {
+    var defaultMax = parseInt(FUEL_SETTINGS.km_gap_default_max_km, 10);
+    if (!isFinite(defaultMax) || defaultMax <= 0) defaultMax = 500;
+    var districtId = districtSelect && districtSelect.value && districtSelect.value !== '0' ? parseInt(districtSelect.value, 10) : null;
+    var projectId = projectSelect && projectSelect.value && projectSelect.value !== '0' ? parseInt(projectSelect.value, 10) : null;
+    var vehicleFamily = '';
+    if (vehicleSelect && vehicleSelect.value && vehicleSelect.value !== '0') {
+      vehicleFamily = (_vehicleFamilyMap[String(vehicleSelect.value)] || '').toLowerCase();
+    }
+    var rules = FUEL_SETTINGS.km_gap_rules || [];
+    var best = null;
+    var bestScore = -1;
+    rules.forEach(function(rule) {
+      var score = 0;
+      var rid = rule.district_id != null ? parseInt(rule.district_id, 10) : null;
+      var rpid = rule.project_id != null ? parseInt(rule.project_id, 10) : null;
+      var rfam = (rule.vehicle_family || '').toLowerCase();
+      if (rid && rid !== districtId) return;
+      if (rid) score += 1;
+      if (rpid && rpid !== projectId) return;
+      if (rpid) score += 4;
+      if (rfam && rfam !== vehicleFamily) return;
+      if (rfam) score += 2;
+      if (score > bestScore) {
+        bestScore = score;
+        best = rule;
+      }
+    });
+    if (best && best.max_km) return parseInt(best.max_km, 10);
+    return defaultMax;
+  }
+
+  function getKmGapWarningText() {
+    var prev = parseNum(previousReadingInput ? previousReadingInput.value : null);
+    var curr = parseNum(currentReadingInput ? currentReadingInput.value : null);
+    if (prev == null || curr == null || curr <= prev) return '';
+    var gap = curr - prev;
+    var maxKm = resolveKmGapMaxClient();
+    if (!isFinite(maxKm) || maxKm <= 0 || gap <= maxKm) return '';
+    return 'Gap too high (' + gap.toFixed(0) + ' KM vs max ' + maxKm + ' KM). Was a middle fueling slip missed?';
+  }
+
+  function updateKmGapWarning() {
+    if (!kmGapWarn) return;
+    var msg = getKmGapWarningText();
+    if (!msg) {
+      kmGapWarn.classList.add('d-none');
+      kmGapWarn.textContent = '';
+      if (kmDisplay) kmDisplay.classList.remove('field-invalid');
+      return;
+    }
+    kmGapWarn.classList.remove('d-none');
+    kmGapWarn.innerHTML = '<i class="bi bi-exclamation-triangle me-1"></i>' + msg;
+    if (kmDisplay) kmDisplay.classList.add('field-invalid');
+  }
+
+  function _selectedVehicleId() {
+    if (!vehicleSelect) return '';
+    if (vehicleSelect.tomselect) {
+      var v = vehicleSelect.tomselect.getValue();
+      if (Array.isArray(v)) return v.length ? String(v[0]) : '';
+      return v ? String(v) : '';
+    }
+    return vehicleSelect.value || '';
+  }
+
+  function _fmtEntryNum(val, digits) {
+    if (val == null || val === '') return '—';
+    var n = parseFloat(val);
+    if (isNaN(n)) return '—';
+    return n.toLocaleString(undefined, { maximumFractionDigits: digits != null ? digits : 2 });
+  }
+
+  function formatVehicleLastEntryStrip(entry) {
+    var parts = ['<strong>Last Entry:</strong>'];
+    parts.push('<span>' + (entry.fueling_date || '—') + '</span>');
+    parts.push('<span class="text-muted">|</span>');
+    parts.push('<span>' + (entry.current_reading != null ? _fmtEntryNum(entry.current_reading, 0) : '—') + '</span>');
+    parts.push('<span class="text-muted">|</span>');
+    parts.push('<strong>Rs ' + (entry.amount != null ? _fmtEntryNum(entry.amount, 0) : '—') + '</strong>');
+    if (entry.liters != null) {
+      parts.push('<span class="text-muted">|</span>');
+      parts.push('<span>' + parseFloat(entry.liters).toFixed(2) + ' L</span>');
+    }
+    if (entry.fuel_price != null) {
+      parts.push('<span class="text-muted">|</span>');
+      parts.push('<span>@ Rs ' + parseFloat(entry.fuel_price).toFixed(2) + '</span>');
+    }
+    return parts.join(' ');
+  }
+
+  function renderFuelEntryDetail(entry) {
+    if (!vehicleLastEntryBody || !entry) return;
+    function displayVal(val) {
+      if (val === null || val === undefined || val === '') return '—';
+      return String(val);
+    }
+    function item(label, val) {
+      return '<div class="fuel-entry-detail-item"><div class="lbl">' + label + '</div><div class="val">' + displayVal(val) + '</div></div>';
+    }
+    var html = '<div class="small text-muted mb-2">Entry #' + (entry.id || '—') + '</div><div class="fuel-entry-detail-grid">';
+    html += item('Fueling Date', entry.fueling_date);
+    html += item('Vehicle', entry.vehicle_no);
+    html += item('District', entry.district);
+    html += item('Project', entry.project);
+    html += item('Pump', entry.pump_name);
+    html += item('Fuel Type', entry.fuel_type);
+    html += item('Payment', entry.payment_type);
+    html += item('Slip No', entry.slip_no);
+    html += item('Card Swipe', entry.card_swipe_date);
+    html += item('Prev Reading', entry.previous_reading != null ? _fmtEntryNum(entry.previous_reading, 0) : '—');
+    html += item('Current Reading', entry.current_reading != null ? _fmtEntryNum(entry.current_reading, 0) : '—');
+    html += item('KM', entry.km != null ? _fmtEntryNum(entry.km, 2) : '—');
+    html += item('KM Out (Task)', entry.km_out_task != null ? _fmtEntryNum(entry.km_out_task, 2) : '—');
+    html += item('KM In (Task)', entry.km_in_task != null ? _fmtEntryNum(entry.km_in_task, 2) : '—');
+    html += item('Matched', entry.meter_reading_matched);
+    html += item('MPG', entry.mpg != null ? _fmtEntryNum(entry.mpg, 2) : '—');
+    html += item('Liters', entry.liters != null ? _fmtEntryNum(entry.liters, 2) + ' L' : '—');
+    html += item('Price/Ltr', entry.fuel_price != null ? 'Rs ' + _fmtEntryNum(entry.fuel_price, 2) : '—');
+    html += item('Upload', (entry.upload_status || '—').toUpperCase());
+    html += '</div>';
+    html += '<div class="fuel-entry-detail-total"><div class="lbl">Amount</div><div class="val">Rs ' +
+      (entry.amount != null ? _fmtEntryNum(entry.amount, 0) : '—') + '</div></div>';
+    vehicleLastEntryBody.innerHTML = html;
+    if (vehicleLastEntryViewLink) {
+      if (entry.media_url && entry.has_media) {
+        vehicleLastEntryViewLink.href = entry.media_url;
+        vehicleLastEntryViewLink.classList.remove('d-none');
+      } else {
+        vehicleLastEntryViewLink.classList.add('d-none');
+      }
+    }
+    if (vehicleLastEntryEditLink) {
+      if (entry.edit_url) {
+        vehicleLastEntryEditLink.href = entry.edit_url;
+        vehicleLastEntryEditLink.classList.remove('d-none');
+      } else {
+        vehicleLastEntryEditLink.classList.add('d-none');
+      }
+    }
+  }
+
+  function loadFuelEntryDetailById(entryId) {
+    if (!vehicleLastEntryBody || !entryId) return;
+    vehicleLastEntryBody.innerHTML = '<span class="text-muted">Loading...</span>';
+    fetch('/api/fuel-expense/detail/' + encodeURIComponent(entryId))
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        var entry = data && data.entry;
+        if (!entry) {
+          vehicleLastEntryBody.innerHTML = '<span class="text-muted">No entry found.</span>';
+          if (vehicleLastEntryViewLink) vehicleLastEntryViewLink.classList.add('d-none');
+          if (vehicleLastEntryEditLink) vehicleLastEntryEditLink.classList.add('d-none');
+          return;
+        }
+        renderFuelEntryDetail(entry);
+        scheduleVehicleLastEntryPanelPosition();
+      })
+      .catch(function() {
+        vehicleLastEntryBody.innerHTML = '<span class="text-danger">Could not load entry.</span>';
+      });
+  }
+
+  function _vehicleLastEntryFetchUrl() {
+    var vid = _selectedVehicleId();
+    var recId = fuelExpenseForm ? (fuelExpenseForm.getAttribute('data-record-id') || '') : '';
+    if (!vid || vid === '0') return null;
+    var url = '/api/fuel-expense/last-entry?vehicle_id=' + encodeURIComponent(vid);
+    if (recId) url += '&exclude_id=' + encodeURIComponent(recId);
+    return url;
+  }
+
+  function loadVehicleLastEntryDetail() {
+    var url = _vehicleLastEntryFetchUrl();
+    if (!url || !vehicleLastEntryBody) return;
+    vehicleLastEntryBody.innerHTML = '<span class="text-muted">Loading...</span>';
+    fetch(url)
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        var entry = data && data.entry;
+        if (!entry) {
+          vehicleLastEntryBody.innerHTML = '<span class="text-muted">No entry found.</span>';
+          return;
+        }
+        _vehicleLastEntryCache = entry;
+        renderFuelEntryDetail(entry);
+        scheduleVehicleLastEntryPanelPosition();
+        if (vehicleLastEntryStrip) {
+          vehicleLastEntryStrip.classList.remove('d-none');
+          vehicleLastEntryStrip.innerHTML = formatVehicleLastEntryStrip(entry);
+        }
+      })
+      .catch(function() {
+        vehicleLastEntryBody.innerHTML = '<span class="text-danger">Could not load entry.</span>';
+      });
+  }
+
+  function fetchVehicleLastEntry() {
+    if (!vehicleLastEntryStrip) return;
+    var url = _vehicleLastEntryFetchUrl();
+    if (!url) {
+      _vehicleLastEntryCache = null;
+      vehicleLastEntryStrip.classList.add('d-none');
+      vehicleLastEntryStrip.classList.remove('is-open');
+      vehicleLastEntryStrip.innerHTML = '';
+      return;
+    }
+    fetch(url)
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        var entry = data && data.entry;
+        if (!entry) {
+          _vehicleLastEntryCache = null;
+          vehicleLastEntryStrip.classList.remove('d-none', 'is-open');
+          vehicleLastEntryStrip.innerHTML = '<strong>Last Entry:</strong> <span class="text-muted">No previous fuel entry for this vehicle.</span>';
+          return;
+        }
+        _vehicleLastEntryCache = entry;
+        vehicleLastEntryStrip.classList.remove('d-none');
+        vehicleLastEntryStrip.innerHTML = formatVehicleLastEntryStrip(entry);
+      })
+      .catch(function() {
+        _vehicleLastEntryCache = null;
+        vehicleLastEntryStrip.classList.add('d-none');
+        vehicleLastEntryStrip.classList.remove('is-open');
+        vehicleLastEntryStrip.innerHTML = '';
+      });
   }
 
   function fetchLastReading() {
@@ -511,6 +1149,8 @@ document.addEventListener('DOMContentLoaded', function() {
         fetchPriceHistory();
         fetchPsoRateForDate();
         computeKm();
+        fetchMonthMpg();
+        updateOdometerGauge();
       });
   }
 
@@ -538,18 +1178,33 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function updateMatchedState() {
-        var curr = parseNum(currentReadingInput.value);
-        if (curr == null || taskStartReading == null || taskCloseReading == null) {
-          meterMatched.value = '';
-          meterMatched.classList.remove('text-success', 'text-danger');
-          return;
-        }
-        var low = Math.min(taskStartReading, taskCloseReading);
-        var high = Math.max(taskStartReading, taskCloseReading);
-        var matched = curr >= low && curr <= high;
-        meterMatched.value = matched ? 'Yes' : 'No';
-        meterMatched.classList.toggle('text-success', matched);
-        meterMatched.classList.toggle('text-danger', !matched);
+    var curr = parseNum(currentReadingInput.value);
+    if (curr == null || taskStartReading == null || taskCloseReading == null) {
+      meterMatched.value = '';
+      meterMatched.classList.remove('text-success', 'text-danger');
+      if (meterMatchedDetail) {
+        meterMatchedDetail.classList.add('d-none');
+        meterMatchedDetail.textContent = '';
+      }
+      return;
+    }
+    var low = Math.min(taskStartReading, taskCloseReading);
+    var high = Math.max(taskStartReading, taskCloseReading);
+    var matched = curr >= low && curr <= high;
+    meterMatched.value = matched ? 'Yes' : 'No';
+    meterMatched.classList.toggle('text-success', matched);
+    meterMatched.classList.toggle('text-danger', !matched);
+    if (meterMatchedDetail) {
+      if (matched) {
+        meterMatchedDetail.classList.add('d-none');
+        meterMatchedDetail.textContent = '';
+      } else {
+        var diff = curr < low ? (low - curr) : (curr - high);
+        meterMatchedDetail.classList.remove('d-none');
+        meterMatchedDetail.textContent = 'Task KM Out: ' + taskStartReading + ', KM In: ' + taskCloseReading +
+          ', Your reading: ' + curr + ' — outside range by ' + diff.toFixed(0) + ' KM.';
+      }
+    }
   }
 
   function computeKm() {
@@ -562,7 +1217,107 @@ document.addEventListener('DOMContentLoaded', function() {
       kmDisplay.value = '';
     }
     updateMatchedState();
+    updateOdometerGauge();
+    updateKmGapWarning();
     computeMpgAndLiters();
+  }
+
+  function getSelectedVehicleTankCapacity() {
+    if (!vehicleSelect || !vehicleSelect.value || vehicleSelect.value === '0') return 0;
+    return parseFloat(_vehicleTankCapacityMap[String(vehicleSelect.value)] || 0) || 0;
+  }
+
+  function getTankCapacityWarningText() {
+    var cap = getSelectedVehicleTankCapacity();
+    var liters = parseNum(litersInput ? litersInput.value : null);
+    if (cap <= 0 || liters == null || liters <= cap) return '';
+    return 'Calculated Liters (' + liters.toFixed(0) + 'L) exceed vehicle\'s max tank capacity (' + cap.toFixed(0) + 'L).';
+  }
+
+  function updateTankCapacityWarning() {
+    if (!tankCapacityWarn) return;
+    var msg = getTankCapacityWarningText();
+    if (!msg) {
+      tankCapacityWarn.classList.add('d-none');
+      tankCapacityWarn.textContent = '';
+      if (litersInput) litersInput.classList.remove('field-invalid');
+      return;
+    }
+    tankCapacityWarn.classList.remove('d-none');
+    tankCapacityWarn.innerHTML = '<i class="bi bi-exclamation-triangle me-1"></i>' + msg;
+    if (litersInput) litersInput.classList.add('field-invalid');
+  }
+
+  function updateOdometerGauge() {
+    if (!odometerGaugeWrap) return;
+    var prev = parseNum(previousReadingInput ? previousReadingInput.value : null);
+    var curr = parseNum(currentReadingInput ? currentReadingInput.value : null);
+    var taskIn = taskCloseReading;
+    var taskOut = taskStartReading;
+    if (prev == null || taskIn == null) {
+      odometerGaugeWrap.classList.add('d-none');
+      return;
+    }
+    odometerGaugeWrap.classList.remove('d-none');
+    var trackMin = Math.min(prev, taskIn);
+    var trackMax = Math.max(prev, taskIn);
+    if (trackMax <= trackMin) trackMax = trackMin + 1;
+    if (gaugePrevLabel) gaugePrevLabel.textContent = prev.toLocaleString(undefined, { maximumFractionDigits: 0 });
+    if (gaugeTaskInLabel) gaugeTaskInLabel.textContent = taskIn.toLocaleString(undefined, { maximumFractionDigits: 0 });
+    if (gaugeTaskOutLabel) {
+      if (taskOut != null) {
+        gaugeTaskOutLabel.classList.remove('d-none');
+        gaugeTaskOutLabel.innerHTML = 'Out: <strong class="text-dark">' + taskOut.toLocaleString(undefined, { maximumFractionDigits: 0 }) + '</strong>';
+      } else {
+        gaugeTaskOutLabel.classList.add('d-none');
+      }
+    }
+    function pctFor(val) {
+      return Math.max(0, Math.min(100, ((val - trackMin) / (trackMax - trackMin)) * 100));
+    }
+    if (gaugeTaskZone && taskOut != null) {
+      var zoneLow = Math.min(taskOut, taskIn);
+      var zoneHigh = Math.max(taskOut, taskIn);
+      gaugeTaskZone.classList.remove('d-none');
+      gaugeTaskZone.style.left = pctFor(zoneLow) + '%';
+      gaugeTaskZone.style.width = Math.max(0, pctFor(zoneHigh) - pctFor(zoneLow)) + '%';
+    } else if (gaugeTaskZone) {
+      gaugeTaskZone.classList.add('d-none');
+    }
+    if (gaugeTaskOutTick && taskOut != null) {
+      gaugeTaskOutTick.classList.remove('d-none');
+      gaugeTaskOutTick.style.left = pctFor(taskOut) + '%';
+    } else if (gaugeTaskOutTick) {
+      gaugeTaskOutTick.classList.add('d-none');
+    }
+    if (gaugeCurrentMarker) {
+      if (curr != null) {
+        gaugeCurrentMarker.classList.remove('d-none');
+        gaugeCurrentMarker.style.left = pctFor(curr) + '%';
+        var inTaskRange = taskOut != null && curr >= Math.min(taskOut, taskIn) && curr <= Math.max(taskOut, taskIn);
+        gaugeCurrentMarker.classList.toggle('in-range', inTaskRange);
+        gaugeCurrentMarker.classList.toggle('out-range', !inTaskRange);
+        if (gaugeStatusText) {
+          if (inTaskRange) {
+            gaugeStatusText.className = 'small text-success';
+            gaugeStatusText.textContent = 'Current reading ' + curr.toLocaleString(undefined, { maximumFractionDigits: 0 }) + ' is inside task range.';
+          } else {
+            var low = taskOut != null ? Math.min(taskOut, taskIn) : Math.min(prev, taskIn);
+            var high = taskOut != null ? Math.max(taskOut, taskIn) : Math.max(prev, taskIn);
+            var diff = curr < low ? (low - curr) : (curr - high);
+            gaugeStatusText.className = 'small text-danger';
+            gaugeStatusText.textContent = 'Current reading ' + curr.toLocaleString(undefined, { maximumFractionDigits: 0 }) +
+              ' is outside task range by ' + diff.toFixed(0) + ' KM.';
+          }
+        }
+      } else {
+        gaugeCurrentMarker.classList.add('d-none');
+        if (gaugeStatusText) {
+          gaugeStatusText.className = 'small text-muted';
+          gaugeStatusText.textContent = 'Enter current reading to see position on gauge.';
+        }
+      }
+    }
   }
 
   function fetchPsoRateForDate() {
@@ -603,20 +1358,17 @@ document.addEventListener('DOMContentLoaded', function() {
   function renderFuelMarketStatus(data) {
     if (!fuelMarketScanStatusBar) return;
     if (!data || !data.sources) {
-      fuelMarketScanStatusBar.className = 'alert alert-secondary py-2 px-3 mb-2 small';
-      fuelMarketScanStatusBar.innerHTML = '<i class="bi bi-broadcast me-1"></i>PSO scan status not available.';
+      fuelMarketScanStatusBar.innerHTML = '<strong>Last Scan:</strong> <span class="text-muted">Not available</span>';
       return;
     }
     var pso = data.sources.pso || {};
-    var cls = pso.ok ? 'alert-success' : 'alert-danger';
-    fuelMarketScanStatusBar.className = 'alert ' + cls + ' py-2 px-3 mb-2 small';
-    var parts = ['<i class="bi bi-broadcast me-1"></i>Last Scan: ' + (data.scanned_at || '-')];
+    var parts = ['<strong>Last Scan:</strong> ' + (data.scanned_at || '-')];
     if (pso.ok) {
-      parts.push('PSO: <strong class="text-success">OK</strong>');
+      parts.push('PSO: <span class="scan-ok">OK</span>');
       if (pso.petrol != null) parts.push('Petrol: Rs ' + parseFloat(pso.petrol).toFixed(2));
       if (pso.diesel != null) parts.push('Diesel: Rs ' + parseFloat(pso.diesel).toFixed(2));
     } else {
-      parts.push('PSO: <strong class="text-danger">' + (pso.error || 'Scan failed') + '</strong>');
+      parts.push('PSO: <span class="scan-bad">' + (pso.error || 'Scan failed') + '</span>');
     }
     fuelMarketScanStatusBar.innerHTML = parts.join(' | ');
   }
@@ -686,20 +1438,235 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function computeMpgAndLiters() {
+    if (_calcFromLiters) return;
     var km = parseNum(kmDisplay ? kmDisplay.value : null);
     var amount = parseNum(amountInput ? amountInput.value : null);
     var price = parseNum(fuelPriceInput ? fuelPriceInput.value : null);
     if (price != null && price > 0 && amount != null) {
-      litersDisplay.value = (amount / price).toFixed(2);
-    } else {
-      litersDisplay.value = '';
+      if (litersInput) litersInput.value = (amount / price).toFixed(2);
+    } else if (!(litersInput && parseNum(litersInput.value) != null)) {
+      if (litersInput) litersInput.value = '';
     }
-    var lit = parseNum(litersDisplay ? litersDisplay.value : null);
+    updateMpgFromValues(km);
+    updateTankCapacityWarning();
+  }
+
+  function computeFromLitersInput() {
+    var liters = parseNum(litersInput ? litersInput.value : null);
+    var amount = parseNum(amountInput ? amountInput.value : null);
+    var price = parseNum(fuelPriceInput ? fuelPriceInput.value : null);
+    if (!liters || liters <= 0) {
+      computeMpgAndLiters();
+      return;
+    }
+    _calcFromLiters = true;
+    if (amount != null && amount > 0) {
+      if (fuelPriceInput) {
+        fuelPriceInput.value = (amount / liters).toFixed(2);
+        fuelPriceInput.dataset.autoSuggested = '0';
+      }
+    } else if (price != null && price > 0) {
+      if (amountInput) amountInput.value = (price * liters).toFixed(2);
+    }
+    _calcFromLiters = false;
+    updateMpgFromValues(parseNum(kmDisplay ? kmDisplay.value : null));
+    updateTankCapacityWarning();
+  }
+
+  function updateMpgFromValues(km) {
+    var lit = parseNum(litersInput ? litersInput.value : null);
     if (lit && lit > 0 && km != null) {
       mpgDisplay.value = (km / lit).toFixed(2);
     } else {
       mpgDisplay.value = '';
     }
+  }
+
+  function fetchMonthMpg() {
+    if (!monthMpgNote) return;
+    var vid = vehicleSelect && vehicleSelect.value;
+    var fDate = fuelingDateInput && fuelingDateInput.value;
+    var recId = fuelExpenseForm ? (fuelExpenseForm.getAttribute('data-record-id') || '') : '';
+    if (!vid || vid === '0' || !fDate) {
+      monthMpgNote.classList.add('d-none');
+      monthMpgNote.textContent = '';
+      return;
+    }
+    var url = '/api/fuel-expense/month-mpg?vehicle_id=' + encodeURIComponent(vid) + '&fueling_date=' + encodeURIComponent(fDate);
+    if (recId) url += '&exclude_id=' + encodeURIComponent(recId);
+    fetch(url)
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (!data || !data.ok || data.mpg == null) {
+          monthMpgNote.classList.add('d-none');
+          monthMpgNote.textContent = '';
+          return;
+        }
+        monthMpgNote.classList.remove('d-none');
+        monthMpgNote.innerHTML = '<strong>Month MPG:</strong> ' + parseFloat(data.mpg).toFixed(2) +
+          ' <span class="text-muted">(' + (data.from_date || '') + ' to ' + (data.to_date || '') + ')</span>';
+      })
+      .catch(function() {
+        monthMpgNote.classList.add('d-none');
+      });
+  }
+
+  function clearFieldError(inputEl, errorEl) {
+    if (inputEl) inputEl.classList.remove('field-invalid');
+    if (errorEl) { errorEl.classList.add('d-none'); errorEl.textContent = ''; }
+  }
+
+  function setFieldError(inputEl, errorEl, message) {
+    if (inputEl) inputEl.classList.add('field-invalid');
+    if (errorEl) { errorEl.classList.remove('d-none'); errorEl.textContent = message; }
+  }
+
+  function validateFuelFormClient() {
+    var ok = true;
+    var firstBad = null;
+    clearFieldError(currentReadingInput, currentReadingError);
+    clearFieldError(amountInput, amountInputError);
+    clearFieldError(litersInput, litersInputError);
+    if (vehicleSelect && (!vehicleSelect.value || vehicleSelect.value === '0')) {
+      ok = false;
+      if (!firstBad && vehicleSelect) firstBad = vehicleSelect;
+    }
+    var prev = parseNum(previousReadingInput ? previousReadingInput.value : null);
+    var curr = parseNum(currentReadingInput ? currentReadingInput.value : null);
+    if (curr == null || curr <= 0) {
+      setFieldError(currentReadingInput, currentReadingError, 'Current reading is required.');
+      ok = false;
+      if (!firstBad) firstBad = currentReadingInput;
+    } else if (prev != null && curr <= prev) {
+      setFieldError(currentReadingInput, currentReadingError, 'Current reading must be greater than previous (' + prev + ').');
+      ok = false;
+      if (!firstBad) firstBad = currentReadingInput;
+    }
+    var amount = parseNum(amountInput ? amountInput.value : null);
+    if (amount == null || amount <= 0) {
+      setFieldError(amountInput, amountInputError, 'Amount cannot be 0.');
+      ok = false;
+      if (!firstBad) firstBad = amountInput;
+    }
+    if (firstBad) {
+      try { firstBad.scrollIntoView({ behavior: 'smooth', block: 'center' }); firstBad.focus(); } catch (e) {}
+    }
+    return ok;
+  }
+
+  function unlockFuelSubmit() {
+    fuelSubmitLocked = false;
+    if (fuelForm) {
+      fuelForm.querySelectorAll('button[type="submit"], input[type="submit"]').forEach(function(btn) {
+        btn.disabled = false;
+      });
+    }
+  }
+
+  var _allowNativeSubmit = false;
+
+  function submitFuelFormNative(submitter) {
+    submitFuelFormWithOffline(submitter);
+  }
+
+  function submitFuelFormWithOffline(submitter) {
+    if (!fuelForm) return;
+    fuelSubmitLocked = true;
+    fuelForm.querySelectorAll('button[type="submit"], input[type="submit"]').forEach(function(btn) {
+      btn.disabled = true;
+    });
+    if (window.FuelExpenseOffline && typeof window.FuelExpenseOffline.submitWithOfflineFallback === 'function') {
+      window.FuelExpenseOffline.submitWithOfflineFallback(fuelForm, submitter)
+        .then(function() {
+          if (!window.navigator.onLine) unlockFuelSubmit();
+        })
+        .catch(function(err) {
+          unlockFuelSubmit();
+          alert(err && err.message ? err.message : 'Save failed. Please try again.');
+        });
+      return;
+    }
+    _allowNativeSubmit = true;
+    if (submitter && typeof fuelForm.requestSubmit === 'function') {
+      fuelForm.requestSubmit(submitter);
+    } else {
+      fuelForm.submit();
+    }
+  }
+
+  function checkKmGapThenSubmit(submitter) {
+    var msg = getKmGapWarningText();
+    if (_kmGapBypass || !msg) {
+      checkDuplicateThenSubmit(submitter);
+      return;
+    }
+    _pendingSubmitBtn = submitter;
+    if (fuelKmGapBody) fuelKmGapBody.textContent = msg;
+    if (fuelKmGapModalEl && window.bootstrap) {
+      bootstrap.Modal.getOrCreateInstance(fuelKmGapModalEl).show();
+    } else if (window.confirm(msg + ' Continue anyway?')) {
+      checkDuplicateThenSubmit(submitter);
+    } else {
+      unlockFuelSubmit();
+    }
+  }
+
+  function checkTankCapacityThenSubmit(submitter) {
+    var msg = getTankCapacityWarningText();
+    if (_tankCapacityBypass || !msg) {
+      submitFuelFormNative(submitter);
+      return;
+    }
+    _pendingSubmitBtn = submitter;
+    if (fuelTankCapacityBody) fuelTankCapacityBody.textContent = msg;
+    if (fuelTankCapacityModalEl && window.bootstrap) {
+      bootstrap.Modal.getOrCreateInstance(fuelTankCapacityModalEl).show();
+    } else if (window.confirm(msg + ' Continue anyway?')) {
+      submitFuelFormNative(submitter);
+    } else {
+      unlockFuelSubmit();
+    }
+  }
+
+  function checkDuplicateThenSubmit(submitter) {
+    var vid = vehicleSelect && vehicleSelect.value;
+    var pumpId = fuelPumpSelect && fuelPumpSelect.value;
+    var fDate = fuelingDateInput && fuelingDateInput.value;
+    var curr = currentReadingInput && currentReadingInput.value;
+    var amount = amountInput && amountInput.value;
+    var recId = fuelExpenseForm ? (fuelExpenseForm.getAttribute('data-record-id') || '') : '';
+    if (_duplicateBypass || !vid || vid === '0' || !pumpId || pumpId === '0' || !fDate || !curr || !amount) {
+      checkTankCapacityThenSubmit(submitter);
+      return;
+    }
+    var url = '/api/fuel-expense/check-duplicate?vehicle_id=' + encodeURIComponent(vid) +
+      '&fuel_pump_id=' + encodeURIComponent(pumpId) +
+      '&fueling_date=' + encodeURIComponent(fDate) +
+      '&current_reading=' + encodeURIComponent(curr) +
+      '&amount=' + encodeURIComponent(amount);
+    if (recId) url += '&exclude_id=' + encodeURIComponent(recId);
+    fetch(url)
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (!data || !data.duplicate) {
+          checkTankCapacityThenSubmit(submitter);
+          return;
+        }
+        _pendingSubmitBtn = submitter;
+        if (fuelDuplicateBody) {
+          fuelDuplicateBody.innerHTML = '<p class="mb-2">Same vehicle, pump, date, current reading and amount already saved:</p>' +
+            '<div class="border rounded p-2 bg-light small"><strong>' + (data.summary || 'Duplicate') + '</strong></div>';
+        }
+        if (fuelDuplicateModalEl && window.bootstrap) {
+          var dupModal = bootstrap.Modal.getOrCreateInstance(fuelDuplicateModalEl);
+          dupModal.show();
+        } else if (window.confirm((data.summary || 'Duplicate entry') + ' — continue anyway?')) {
+          checkTankCapacityThenSubmit(submitter);
+        } else {
+          unlockFuelSubmit();
+        }
+      })
+      .catch(function() { checkTankCapacityThenSubmit(submitter); });
   }
 
   if (districtSelect && projectSelect) {
@@ -709,6 +1676,7 @@ document.addEventListener('DOMContentLoaded', function() {
       _smoothFillSelect(vehicleSelect, [], function(v) { return {value: String(v.id), text: v.vehicle_no}; });
       if (fuelTypeSelect) fuelTypeSelect.value = '';
       if (fuelTypeDisplay) fuelTypeDisplay.value = '';
+      fetchVehicleLastEntry();
       if (did && did !== '0') {
         var _cKey = 'proj_d' + did;
         var coldP = projectsFromColdCache(did);
@@ -737,14 +1705,15 @@ document.addEventListener('DOMContentLoaded', function() {
       _smoothFillSelect(vehicleSelect, [], function(v) { return {value: String(v.id), text: v.vehicle_no}; });
       if (fuelTypeSelect) fuelTypeSelect.value = '';
       if (fuelTypeDisplay) fuelTypeDisplay.value = '';
+      fetchVehicleLastEntry();
       if (pid && pid !== '0') {
         var _vKey = 'veh_p' + pid + '_d' + (did || '0');
         var coldV = vehiclesFromColdCache(pid, did);
         if (coldV !== null) {
-          coldV.forEach(function(v) { _vehicleFuelTypeMap[String(v.id)] = v.fuel_type || 'Petrol'; });
+          coldV.forEach(_rememberVehicleMeta);
           _smoothFillSelect(vehicleSelect, coldV, function(v) { return {value: String(v.id), text: v.vehicle_no}; });
         } else if (window._cascadeCache[_vKey]) {
-          window._cascadeCache[_vKey].forEach(function(v) { _vehicleFuelTypeMap[String(v.id)] = v.fuel_type || 'Petrol'; });
+          window._cascadeCache[_vKey].forEach(_rememberVehicleMeta);
           _smoothFillSelect(vehicleSelect, window._cascadeCache[_vKey], function(v) { return {value: String(v.id), text: v.vehicle_no}; });
         } else {
           _smoothLoadingSelect(vehicleSelect);
@@ -752,7 +1721,7 @@ document.addEventListener('DOMContentLoaded', function() {
           if (did && did !== '0') url += '&district_id=' + did;
           fetch(url).then(function(r) { return r.json(); }).then(function(arr) {
             window._cascadeCache[_vKey] = arr;
-            arr.forEach(function(v) { _vehicleFuelTypeMap[String(v.id)] = v.fuel_type || 'Petrol'; });
+            arr.forEach(_rememberVehicleMeta);
             _smoothFillSelect(vehicleSelect, arr, function(v) { return {value: String(v.id), text: v.vehicle_no}; });
           }).catch(function() { _smoothFillSelect(vehicleSelect, [], function(v) { return v; }); });
         }
@@ -772,13 +1741,21 @@ document.addEventListener('DOMContentLoaded', function() {
       fetchPsoRateForDate();
       fetchLastReading();
       fetchTaskReadings();
+      fetchMonthMpg();
+      fetchVehicleLastEntry();
+      updateTankCapacityWarning();
     });
   }
 
-  if (fuelingDateInput) fuelingDateInput.addEventListener('change', function() { fetchLastReading(); fetchTaskReadings(); fetchPsoRateForDate(); fetchSuggestedPrice(); });
+  if (fuelingDateInput) fuelingDateInput.addEventListener('change', function() {
+    fetchLastReading(); fetchTaskReadings(); fetchPsoRateForDate(); fetchSuggestedPrice(); fetchMonthMpg();
+  });
   if (previousReadingInput) previousReadingInput.addEventListener('input', function() { computeKm(); fetchTaskReadings(); });
   if (currentReadingInput) {
-    currentReadingInput.addEventListener('input', computeKm);
+    currentReadingInput.addEventListener('input', function() {
+      clearFieldError(currentReadingInput, currentReadingError);
+      computeKm();
+    });
     currentReadingInput.addEventListener('change', function() {
       computeKm();
       fetchLastReading();
@@ -801,8 +1778,9 @@ document.addEventListener('DOMContentLoaded', function() {
       if (m) window.open('/workspace/ledger?account_id=' + m[1], '_blank');
     });
   }
-  if (amountInput) amountInput.addEventListener('input', computeMpgAndLiters);
+  if (amountInput) amountInput.addEventListener('input', function() { clearFieldError(amountInput, amountInputError); computeMpgAndLiters(); });
   if (fuelPriceInput) fuelPriceInput.addEventListener('input', function() { fuelPriceInput.dataset.autoSuggested = '0'; computeMpgAndLiters(); });
+  if (litersInput) litersInput.addEventListener('input', function() { clearFieldError(litersInput, litersInputError); computeFromLitersInput(); });
 
   function renderHistoryRows(targetEl, rows) {
     if (!targetEl) return;
@@ -869,11 +1847,13 @@ document.addEventListener('DOMContentLoaded', function() {
   window.setTimeout(function() { fetchTaskReadings(); }, 250);
   computeKm();
   computeMpgAndLiters();
+  fetchMonthMpg();
   handlePaymentTypeBehavior(false);
   updateExpenseByBalanceHint();
   fetchPriceHistory();
   fetchPsoRateForDate();
   fetchFuelMarketScan();
+  window.setTimeout(function() { fetchVehicleLastEntry(); }, 300);
 
   function updateAttachmentHint(text) {
     if (!fuelAttachmentPasteHint) return;
@@ -892,8 +1872,8 @@ document.addEventListener('DOMContentLoaded', function() {
     return !active || formEl.contains(active);
   }
 
-  function appendPastedFiles(fileList) {
-    if (!fuelAttachmentFiles || !window.DataTransfer) return;
+  function mergeAttachmentFiles(fileList) {
+    if (!fuelAttachmentFiles || !window.DataTransfer) return 0;
     var current = Array.prototype.slice.call(fuelAttachmentFiles.files || []);
     var dt = new DataTransfer();
     current.forEach(function(f) { dt.items.add(f); });
@@ -908,12 +1888,367 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     if (added > 0) {
       fuelAttachmentFiles.files = dt.files;
-      updateAttachmentHint(added + ' file(s) pasted from clipboard.');
+      updateAttachmentHint(dt.files.length + ' file(s) ready for upload.');
+    }
+    return added;
+  }
+
+  function appendPastedFiles(fileList) {
+    var added = mergeAttachmentFiles(fileList);
+    if (added > 0) updateAttachmentHint(added + ' file(s) pasted from clipboard.');
+  }
+
+  if (fuelAttachZone && fuelAttachmentFiles) {
+    var _fuelAttachStash = [];
+    fuelAttachZone.addEventListener('click', function() {
+      _fuelAttachStash = Array.prototype.slice.call(fuelAttachmentFiles.files || []);
+      fuelAttachmentFiles.click();
+    });
+    fuelAttachmentFiles.addEventListener('change', function() {
+      var picked = Array.prototype.slice.call(this.files || []);
+      if (_fuelAttachStash.length) {
+        var dt = new DataTransfer();
+        _fuelAttachStash.forEach(function(f) { dt.items.add(f); });
+        picked.forEach(function(f) {
+          var ct = String(f.type || '').toLowerCase();
+          if (ct.indexOf('image/') === 0 || ct.indexOf('video/') === 0) dt.items.add(f);
+        });
+        fuelAttachmentFiles.files = dt.files;
+        picked = Array.prototype.slice.call(fuelAttachmentFiles.files || []);
+        _fuelAttachStash = [];
+      }
+      if (picked.length) updateAttachmentHint(picked.length + ' file(s) ready for upload.');
+      else updateAttachmentHint('');
+    });
+    fuelAttachZone.addEventListener('dragover', function(e) {
+      e.preventDefault();
+      fuelAttachZone.classList.add('drag-over');
+    });
+    fuelAttachZone.addEventListener('dragleave', function() {
+      fuelAttachZone.classList.remove('drag-over');
+    });
+    fuelAttachZone.addEventListener('drop', function(e) {
+      e.preventDefault();
+      fuelAttachZone.classList.remove('drag-over');
+      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) {
+        mergeAttachmentFiles(e.dataTransfer.files);
+      }
+    });
+    fuelAttachZone.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        fuelAttachmentFiles.click();
+      }
+    });
+  }
+
+  var fuelScanDetailPanel = document.getElementById('fuelScanDetailPanel');
+
+  function closeFuelEntryDetailPanel() {
+    closeFuelInfoPanel(vehicleLastEntryPanel, vehicleLastEntryStrip);
+    if (fuelLastSavedBar) fuelLastSavedBar.classList.remove('is-open');
+  }
+
+  function openFuelEntryDetailPanel(anchorEl, loadFn) {
+    if (!vehicleLastEntryPanel) return;
+    var isOpen = !vehicleLastEntryPanel.classList.contains('d-none');
+    if (isOpen && anchorEl && anchorEl.classList.contains('is-open')) {
+      closeFuelEntryDetailPanel();
+      return;
+    }
+    closeAllFuelInfoPanels();
+    if (typeof loadFn === 'function') loadFn();
+    vehicleLastEntryPanel.classList.remove('d-none');
+    vehicleLastEntryPanel.setAttribute('aria-hidden', 'false');
+    if (anchorEl) anchorEl.classList.add('is-open');
+    scheduleVehicleLastEntryPanelPosition();
+  }
+
+  function positionFuelInfoPanel(panel, anchor) {
+    if (!panel || !anchor) return;
+    if (panel.dataset.userPositioned === '1') return;
+    panel.classList.remove('d-none');
+    panel.style.visibility = 'hidden';
+    panel.style.left = '0';
+    panel.style.top = '0';
+    var rect = anchor.getBoundingClientRect();
+    var panelW = panel.offsetWidth || 360;
+    var panelH = panel.offsetHeight || 240;
+    var left = Math.min(rect.left, window.innerWidth - panelW - 12);
+    left = Math.max(12, left);
+    var top = rect.bottom + 8;
+    if (top + panelH > window.innerHeight - 12) {
+      top = Math.max(12, rect.top - panelH - 8);
+    }
+    panel.style.left = left + 'px';
+    panel.style.top = top + 'px';
+    panel.style.visibility = '';
+  }
+
+  function mountFuelFloatPanelToBody(panel) {
+    if (panel && panel.parentElement !== document.body) {
+      document.body.appendChild(panel);
     }
   }
 
+  function getFuelEntryPanelTop() {
+    var nav = document.querySelector('nav.navbar.fixed-top, nav.navbar');
+    if (nav) {
+      var navRect = nav.getBoundingClientRect();
+      if (navRect.height > 0) {
+        return Math.round(navRect.bottom);
+      }
+    }
+    return 60;
+  }
+
+  function getFuelEntryPanelLeft(panelW) {
+    var anchor = document.getElementById('fuelLocationSection');
+    var mainEl = document.getElementById('mainContent');
+    var left = 12;
+    if (anchor) {
+      left = anchor.getBoundingClientRect().left;
+    } else if (mainEl) {
+      left = mainEl.getBoundingClientRect().left + 12;
+    }
+    return Math.max(12, Math.min(left, window.innerWidth - panelW - 12));
+  }
+
+  function fitVehicleLastEntryPanelHeight(panel) {
+    if (!panel || panel.classList.contains('is-user-resized')) return;
+    var header = panel.querySelector('.fuel-info-float-header');
+    var body = panel.querySelector('.fuel-info-float-body');
+    var footer = panel.querySelector('.fuel-info-float-footer');
+    if (!body) return;
+    panel.style.height = 'auto';
+    panel.style.maxHeight = 'none';
+    body.style.overflow = 'visible';
+    var totalH = (header ? header.offsetHeight : 0) + body.scrollHeight + (footer ? footer.offsetHeight : 0);
+    panel.style.height = totalH + 'px';
+  }
+
+  function positionVehicleLastEntryPanel(panel) {
+    if (!panel) return;
+    mountFuelFloatPanelToBody(panel);
+    panel.classList.remove('d-none');
+    panel.style.visibility = 'hidden';
+    panel.style.right = 'auto';
+    panel.style.bottom = 'auto';
+    panel.style.left = '0';
+    panel.style.top = '0';
+    if (!panel.classList.contains('is-user-resized')) {
+      panel.style.width = Math.min(520, window.innerWidth - 24) + 'px';
+      panel.style.height = 'auto';
+      panel.style.maxHeight = 'none';
+    }
+    fitVehicleLastEntryPanelHeight(panel);
+    var panelW = panel.offsetWidth || 520;
+    panel.style.left = getFuelEntryPanelLeft(panelW) + 'px';
+    panel.style.top = getFuelEntryPanelTop() + 'px';
+    panel.style.visibility = '';
+  }
+
+  function scheduleVehicleLastEntryPanelPosition() {
+    if (!vehicleLastEntryPanel || vehicleLastEntryPanel.classList.contains('d-none')) return;
+    positionVehicleLastEntryPanel(vehicleLastEntryPanel);
+    requestAnimationFrame(function() {
+      positionVehicleLastEntryPanel(vehicleLastEntryPanel);
+    });
+  }
+
+  function initResizableVehicleEntryPanel(panel) {
+    if (!panel || panel.dataset.resizeInit === '1') return;
+    panel.dataset.resizeInit = '1';
+    var resizeHandle = panel.querySelector('.fuel-info-float-resize-handle');
+    if (!resizeHandle) return;
+    var resizing = false;
+    var startX = 0;
+    var startY = 0;
+    var startW = 0;
+    var startH = 0;
+
+    function onMouseMove(e) {
+      if (!resizing) return;
+      var w = Math.max(280, startW + e.clientX - startX);
+      var h = Math.max(220, startH + e.clientY - startY);
+      w = Math.min(w, window.innerWidth - 8);
+      h = Math.min(h, window.innerHeight - 8);
+      panel.style.width = w + 'px';
+      panel.style.height = h + 'px';
+      panel.style.maxHeight = 'none';
+      panel.classList.add('is-user-resized');
+    }
+
+    function onMouseUp() {
+      resizing = false;
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    }
+
+    resizeHandle.addEventListener('mousedown', function(e) {
+      if (e.button !== 0) return;
+      var rect = panel.getBoundingClientRect();
+      resizing = true;
+      startX = e.clientX;
+      startY = e.clientY;
+      startW = rect.width;
+      startH = rect.height;
+      panel.style.width = startW + 'px';
+      panel.style.height = startH + 'px';
+      panel.style.maxHeight = 'none';
+      panel.classList.add('is-user-resized');
+      e.preventDefault();
+      e.stopPropagation();
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+    });
+  }
+
+  function closeFuelInfoPanel(panel, anchor) {
+    if (!panel) return;
+    panel.classList.add('d-none');
+    panel.setAttribute('aria-hidden', 'true');
+    if (anchor) anchor.classList.remove('is-open');
+    if (panel === vehicleLastEntryPanel) {
+      panel.classList.remove('is-user-resized');
+      panel.style.width = '';
+      panel.style.height = '';
+      panel.style.maxHeight = '';
+    }
+  }
+
+  function closeAllFuelInfoPanels() {
+    closeFuelInfoPanel(fuelScanDetailPanel, fuelMarketScanStatusBar);
+    closeFuelEntryDetailPanel();
+  }
+
+  function toggleFuelInfoPanel(panel, anchor, onOpen) {
+    if (!panel || !anchor) return;
+    var isOpen = !panel.classList.contains('d-none');
+    if (isOpen) {
+      closeFuelInfoPanel(panel, anchor);
+      return;
+    }
+    closeAllFuelInfoPanels();
+    if (typeof onOpen === 'function') onOpen();
+    panel.classList.remove('d-none');
+    panel.setAttribute('aria-hidden', 'false');
+    anchor.classList.add('is-open');
+    if (panel === vehicleLastEntryPanel) {
+      scheduleVehicleLastEntryPanelPosition();
+    } else {
+      positionFuelInfoPanel(panel, anchor);
+    }
+  }
+
+  if (fuelScanDetailPanel || vehicleLastEntryPanel) {
+    document.querySelectorAll('.fuel-info-float-close').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var panel = btn.closest('.fuel-info-float-panel');
+        if (panel === fuelScanDetailPanel) closeFuelInfoPanel(panel, fuelMarketScanStatusBar);
+        else if (panel === vehicleLastEntryPanel) closeFuelEntryDetailPanel();
+        else closeFuelInfoPanel(panel, null);
+      });
+    });
+
+    window.addEventListener('resize', function() {
+      if (fuelScanDetailPanel && !fuelScanDetailPanel.classList.contains('d-none') && fuelMarketScanStatusBar) {
+        positionFuelInfoPanel(fuelScanDetailPanel, fuelMarketScanStatusBar);
+      }
+      if (vehicleLastEntryPanel && !vehicleLastEntryPanel.classList.contains('d-none')) {
+        scheduleVehicleLastEntryPanelPosition();
+      }
+    });
+  }
+
+  if (vehicleLastEntryPanel) {
+    mountFuelFloatPanelToBody(vehicleLastEntryPanel);
+    initResizableVehicleEntryPanel(vehicleLastEntryPanel);
+  }
+
+  if (vehicleLastEntryStrip && vehicleLastEntryPanel) {
+    vehicleLastEntryStrip.addEventListener('click', function() {
+      var vid = _selectedVehicleId();
+      if (!vid || vid === '0') return;
+      openFuelEntryDetailPanel(vehicleLastEntryStrip, loadVehicleLastEntryDetail);
+    });
+    vehicleLastEntryStrip.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        vehicleLastEntryStrip.click();
+      }
+    });
+  }
+
+  if (fuelMarketScanStatusBar) {
+    fuelMarketScanStatusBar.addEventListener('click', function() {
+      var body = document.getElementById('fuelScanDetailBody');
+      if (!body || !fuelScanDetailPanel) return;
+      toggleFuelInfoPanel(fuelScanDetailPanel, fuelMarketScanStatusBar, function() {
+        body.textContent = 'Loading...';
+        fetch('/api/fuel-market-scan-trend')
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            var rows = (data && data.trend) ? data.trend : [];
+            if (!rows.length) {
+              body.innerHTML = '<span class="text-muted">No scan history available.</span>';
+              positionFuelInfoPanel(fuelScanDetailPanel, fuelMarketScanStatusBar);
+              return;
+            }
+            body.innerHTML = '<div class="mb-2"><strong>Source:</strong> ' + (data.source || 'PSO') + '</div>' +
+              rows.map(function(row) {
+                var line = '<div class="border-bottom py-1"><strong>' + (row.date || '-') + '</strong>';
+                if (row.ok) {
+                  line += '<br>Petrol: Rs ' + parseFloat(row.petrol || 0).toFixed(2) +
+                    ' | Diesel: Rs ' + parseFloat(row.diesel || 0).toFixed(2);
+                } else {
+                  line += '<br><span class="text-danger">' + (row.error || 'Scan failed') + '</span>';
+                }
+                if (row.scanned_at) line += '<br><span class="text-muted">' + row.scanned_at + '</span>';
+                return line + '</div>';
+              }).join('');
+            positionFuelInfoPanel(fuelScanDetailPanel, fuelMarketScanStatusBar);
+          })
+          .catch(function() {
+            body.textContent = 'Unable to load scan trend.';
+            positionFuelInfoPanel(fuelScanDetailPanel, fuelMarketScanStatusBar);
+          });
+      });
+    });
+    fuelMarketScanStatusBar.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fuelMarketScanStatusBar.click(); }
+    });
+  }
+
+  if (fuelLastSavedBar) {
+    fuelLastSavedBar.addEventListener('click', function(e) {
+      if (e.target.closest('a')) return;
+      var preview = null;
+      try {
+        var el = document.getElementById('lastSavedPreviewData');
+        if (el && el.textContent) preview = JSON.parse(el.textContent);
+      } catch (err) { preview = null; }
+      if (!preview || !preview.id) {
+        openFuelEntryDetailPanel(fuelLastSavedBar, function() {
+          if (vehicleLastEntryBody) {
+            vehicleLastEntryBody.innerHTML = '<span class="text-muted">No fuel expense saved yet.</span>';
+          }
+          if (vehicleLastEntryViewLink) vehicleLastEntryViewLink.classList.add('d-none');
+          if (vehicleLastEntryEditLink) vehicleLastEntryEditLink.classList.add('d-none');
+        });
+        return;
+      }
+      openFuelEntryDetailPanel(fuelLastSavedBar, function() {
+        loadFuelEntryDetailById(preview.id);
+      });
+    });
+    fuelLastSavedBar.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fuelLastSavedBar.click(); }
+    });
+  }
+
   if (fuelAttachmentFiles) {
-    fuelAttachmentFiles.addEventListener('change', function() { updateAttachmentHint(''); });
     document.addEventListener('paste', function(e) {
       if (!canPasteIntoFuelForm()) return;
       var items = (e.clipboardData && e.clipboardData.items) ? Array.prototype.slice.call(e.clipboardData.items) : [];
@@ -930,18 +2265,75 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
+  if (fuelDuplicateContinueBtn) {
+    fuelDuplicateContinueBtn.addEventListener('click', function() {
+      _duplicateBypass = true;
+      if (fuelDuplicateModalEl && window.bootstrap) {
+        bootstrap.Modal.getOrCreateInstance(fuelDuplicateModalEl).hide();
+      }
+      checkTankCapacityThenSubmit(_pendingSubmitBtn);
+    });
+  }
+  if (fuelDuplicateModalEl) {
+    fuelDuplicateModalEl.addEventListener('hidden.bs.modal', function() {
+      if (!_duplicateBypass) unlockFuelSubmit();
+      _duplicateBypass = false;
+      if (!_tankCapacityBypass) _pendingSubmitBtn = null;
+    });
+  }
+  if (fuelTankCapacityContinueBtn) {
+    fuelTankCapacityContinueBtn.addEventListener('click', function() {
+      _tankCapacityBypass = true;
+      if (fuelTankCapacityModalEl && window.bootstrap) {
+        bootstrap.Modal.getOrCreateInstance(fuelTankCapacityModalEl).hide();
+      }
+      submitFuelFormNative(_pendingSubmitBtn);
+    });
+  }
+  if (fuelTankCapacityModalEl) {
+    fuelTankCapacityModalEl.addEventListener('hidden.bs.modal', function() {
+      if (!_tankCapacityBypass) unlockFuelSubmit();
+      _tankCapacityBypass = false;
+      _pendingSubmitBtn = null;
+    });
+  }
+  if (fuelKmGapContinueBtn) {
+    fuelKmGapContinueBtn.addEventListener('click', function() {
+      _kmGapBypass = true;
+      if (fuelKmGapModalEl && window.bootstrap) {
+        bootstrap.Modal.getOrCreateInstance(fuelKmGapModalEl).hide();
+      }
+      checkDuplicateThenSubmit(_pendingSubmitBtn);
+    });
+  }
+  if (fuelKmGapModalEl) {
+    fuelKmGapModalEl.addEventListener('hidden.bs.modal', function() {
+      if (!_kmGapBypass) unlockFuelSubmit();
+      _kmGapBypass = false;
+      if (!_duplicateBypass && !_tankCapacityBypass) _pendingSubmitBtn = null;
+    });
+  }
+  if (fuelPriceInput) {
+    fuelPriceInput.addEventListener('input', function() {
+      fuelPriceInput.dataset.autoSuggested = '0';
+      checkFuelPriceTolerance();
+      computeMpgAndLiters();
+    });
+  }
+
   var fuelForm = document.getElementById('fuelExpenseForm');
   var fuelSubmitLocked = false;
   if (fuelForm) {
     fuelForm.addEventListener('submit', function(e) {
-      if (fuelSubmitLocked) {
-        e.preventDefault();
+      if (_allowNativeSubmit) {
+        _allowNativeSubmit = false;
         return;
       }
-      fuelSubmitLocked = true;
-      fuelForm.querySelectorAll('button[type="submit"], input[type="submit"]').forEach(function(btn) {
-        btn.disabled = true;
-      });
+      e.preventDefault();
+      if (fuelSubmitLocked) return;
+      var submitter = e.submitter || fuelForm.querySelector('button[type="submit"]');
+      if (!validateFuelFormClient()) return;
+      checkKmGapThenSubmit(submitter);
     });
   }
 
@@ -1014,7 +2406,7 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 
   // ── Auto-focus ─────────────────────────────────────────────────────────
-  var _isFromSave = {{ 'true' if last_rec else 'false' }};
+  var _isFromSave = {{ 'true' if (from_save is defined and from_save) else 'false' }};
   window.setTimeout(function() {
     if (_isFromSave) {
       if (fuelPumpSelect && fuelPumpSelect.tomselect) { fuelPumpSelect.tomselect.focus(); }
@@ -1029,4 +2421,7 @@ document.addEventListener('DOMContentLoaded', function() {
   }, 150);
 });
 </script>
+{% endblock %}
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/fuel_expense_offline.js') }}"></script>
 {% endblock %}

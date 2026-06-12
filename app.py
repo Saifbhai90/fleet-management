@@ -861,6 +861,11 @@ if _run_startup_tasks:
             start_expiry_reminder_scheduler(app)
         except Exception as e:
             app.logger.warning('Expiry/Oil reminder scheduler failed to start: %s', e)
+        try:
+            from fuel_market_scan_scheduler import start_fuel_market_scan_scheduler
+            start_fuel_market_scan_scheduler(app)
+        except Exception as e:
+            app.logger.warning('Fuel market scan scheduler failed to start: %s', e)
 
 
 if __name__ == '__main__':

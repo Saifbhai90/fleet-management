@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}
 {% set _tab = request.args.get('settings_tab', 'attendance') %}
-{% if _tab == 'freeze' %}Freeze Data Control{% elif _tab == 'oil_limits' %}Oil Change Limits{% elif _tab == 'accounting_maintenance' %}Accounting Maintenance{% elif _tab == 'daily_task_entry' %}New Task Entry{% elif _tab == 'vehicle_sort' %}Vehicle Sort Order{% else %}Attendance Time Control{% endif %}
+{% if _tab == 'freeze' %}Freeze Data Control{% elif _tab == 'oil_limits' %}Oil Change Limits{% elif _tab == 'fuel_expense' %}Fuel Expense Rules{% elif _tab == 'accounting_maintenance' %}Accounting Maintenance{% elif _tab == 'daily_task_entry' %}New Task Entry{% elif _tab == 'vehicle_sort' %}Vehicle Sort Order{% else %}Attendance Time Control{% endif %}
 {% endblock %}
 
 {% block content %}
@@ -15,6 +15,9 @@
 {% elif active_tab == 'oil_limits' %}
   {% set page_title = 'Vehicle Family Wise Oil Change Limits' %}
   {% set page_subtitle = 'Har vehicle family ke liye oil change KM limit aur near alert threshold set karein.' %}
+{% elif active_tab == 'fuel_expense' %}
+  {% set page_title = 'Fuel Expense Rules' %}
+  {% set page_subtitle = 'Fuel price benchmark tolerance aur odometer KM gap alerts yahan configure karein (field fuel entry form par apply honge).' %}
 {% elif active_tab == 'accounting_maintenance' %}
   {% set page_title = 'Accounting Maintenance' %}
   {% set page_subtitle = 'One-time repair/backfill tools. Daily flow mein auto backfill disabled hai; yahan se manual run karein.' %}
@@ -44,7 +47,7 @@
   <ul class="nav nav-pills mb-3" id="settingsMainTabs">
     {% if fc_tab.get('attendance') %}
     <li class="nav-item">
-      <button type="button" class="nav-link {% if active_tab not in ['freeze', 'oil_limits', 'accounting_maintenance', 'daily_task_entry', 'vehicle_sort'] %}active{% endif %}" data-settings-tab="attendance">
+      <button type="button" class="nav-link {% if active_tab not in ['freeze', 'oil_limits', 'fuel_expense', 'accounting_maintenance', 'daily_task_entry', 'vehicle_sort'] %}active{% endif %}" data-settings-tab="attendance">
         <i class="bi bi-clock-history me-1"></i>Attendance Control
       </button>
     </li>
@@ -60,6 +63,13 @@
     <li class="nav-item">
       <button type="button" class="nav-link {% if active_tab == 'oil_limits' %}active{% endif %}" data-settings-tab="oil_limits">
         <i class="bi bi-droplet-half me-1"></i>Oil Change Limits
+      </button>
+    </li>
+    {% endif %}
+    {% if fc_tab.get('fuel_expense') %}
+    <li class="nav-item">
+      <button type="button" class="nav-link {% if active_tab == 'fuel_expense' %}active{% endif %}" data-settings-tab="fuel_expense">
+        <i class="bi bi-fuel-pump me-1"></i>Fuel Expense Rules
       </button>
     </li>
     {% endif %}
@@ -86,7 +96,7 @@
     {% endif %}
   </ul>
 
-  <div id="attendanceControlPane" {% if active_tab in ['freeze', 'oil_limits', 'accounting_maintenance', 'daily_task_entry', 'vehicle_sort'] or not fc_tab.get('attendance') %}style="display:none"{% endif %}>
+  <div id="attendanceControlPane" {% if active_tab in ['freeze', 'oil_limits', 'fuel_expense', 'accounting_maintenance', 'daily_task_entry', 'vehicle_sort'] or not fc_tab.get('attendance') %}style="display:none"{% endif %}>
 
   <!-- ═══════════════ GLOBAL DEFAULT ═══════════════ -->
   <div class="row mb-4">
@@ -746,6 +756,143 @@
 </div>
 {% endif %}
 
+{% if fc_tab.get('fuel_expense') %}
+<div id="fuelExpensePane" {% if active_tab != 'fuel_expense' %}style="display:none"{% endif %}>
+  <div class="row mb-4">
+    <div class="col-lg-10">
+      <div class="card shadow-sm border-0 rounded-3">
+        <div class="card-header text-white py-3" style="background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%);">
+          <h5 class="mb-0"><i class="bi bi-fuel-pump me-2"></i>Fuel Expense Rules</h5>
+        </div>
+        <div class="card-body">
+          <form method="post" action="{{ url_for('form_control', settings_tab='fuel_expense') }}" id="fuelExpenseSettingsForm">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="save_fuel_expense_settings">
+
+            <h6 class="fw-semibold mb-2">Fuel Price Tolerance (Benchmark ± Rs.)</h6>
+            <div class="alert alert-light border small mb-3">
+              <i class="bi bi-info-circle me-1"></i>
+              OGRA / PSO benchmark se zyada farq par fuel entry form par foran warning show hogi (local pump commission ke liye margin).
+            </div>
+            <div class="row g-3 mb-4">
+              <div class="col-md-4">
+                <label class="form-label fw-semibold">Max ± variation (Rs.)</label>
+                <input type="number" min="0" step="0.01" class="form-control" name="fuel_price_tolerance_rs"
+                  value="{{ fuel_expense_settings.price_tolerance_rs if fuel_expense_settings is defined else 5 }}" placeholder="e.g. 5">
+                <div class="form-text">Default: 5. Zero = sirf exact match par koi warning nahi.</div>
+              </div>
+            </div>
+
+            <hr class="my-4">
+            <h6 class="fw-semibold mb-2">Odometer KM Gap Alert</h6>
+            <div class="alert alert-light border small mb-3">
+              <i class="bi bi-info-circle me-1"></i>
+              Current − Previous reading agar limit se zyada ho to form par alert: middle fueling slip miss ho sakti hai.
+              Specific rules District / Project / Vehicle Family ke liye set kar sakte hain.
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Default max KM gap</label>
+              <input type="number" min="1" step="1" class="form-control" style="max-width: 220px;" name="fuel_km_gap_default_max_km"
+                value="{{ fuel_expense_cfg.default_max_km if fuel_expense_cfg is defined else 500 }}" placeholder="e.g. 500">
+            </div>
+
+            <div class="table-responsive mb-2">
+              <table class="table table-sm table-bordered align-middle" id="fuelKmGapRulesTable">
+                <thead class="table-light">
+                  <tr>
+                    <th style="width:22%">District</th>
+                    <th style="width:22%">Project</th>
+                    <th style="width:24%">Vehicle Family</th>
+                    <th style="width:18%">Max KM Gap</th>
+                    <th style="width:8%"></th>
+                  </tr>
+                </thead>
+                <tbody id="fuelKmGapRulesBody">
+                  {% for rule in (fuel_expense_cfg.rules if fuel_expense_cfg is defined else []) %}
+                  <tr>
+                    <td>
+                      <select class="form-select form-select-sm" name="fuel_km_gap_district_id">
+                        <option value="">Any</option>
+                        {% for d in districts %}
+                        <option value="{{ d.id }}" {% if rule.district_id == d.id %}selected{% endif %}>{{ d.name }}</option>
+                        {% endfor %}
+                      </select>
+                    </td>
+                    <td>
+                      <select class="form-select form-select-sm" name="fuel_km_gap_project_id">
+                        <option value="">Any</option>
+                        {% for p in projects %}
+                        <option value="{{ p.id }}" {% if rule.project_id == p.id %}selected{% endif %}>{{ p.name }}</option>
+                        {% endfor %}
+                      </select>
+                    </td>
+                    <td>
+                      <select class="form-select form-select-sm" name="fuel_km_gap_vehicle_family">
+                        <option value="">Any</option>
+                        {% for fam in oil_family_options %}
+                        <option value="{{ fam }}" {% if rule.vehicle_family == fam %}selected{% endif %}>{{ fam }}</option>
+                        {% endfor %}
+                      </select>
+                    </td>
+                    <td>
+                      <input type="number" min="1" step="1" class="form-control form-control-sm" name="fuel_km_gap_max_km" value="{{ rule.max_km }}">
+                    </td>
+                    <td class="text-center">
+                      <button type="button" class="btn btn-outline-danger btn-sm fuel-km-gap-remove" title="Remove"><i class="bi bi-trash"></i></button>
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            <button type="button" class="btn btn-outline-secondary btn-sm mb-3" id="fuelKmGapAddRowBtn"><i class="bi bi-plus-lg me-1"></i>Add Rule Row</button>
+
+            <template id="fuelKmGapRowTemplate">
+              <tr>
+                <td>
+                  <select class="form-select form-select-sm" name="fuel_km_gap_district_id">
+                    <option value="">Any</option>
+                    {% for d in districts %}
+                    <option value="{{ d.id }}">{{ d.name }}</option>
+                    {% endfor %}
+                  </select>
+                </td>
+                <td>
+                  <select class="form-select form-select-sm" name="fuel_km_gap_project_id">
+                    <option value="">Any</option>
+                    {% for p in projects %}
+                    <option value="{{ p.id }}">{{ p.name }}</option>
+                    {% endfor %}
+                  </select>
+                </td>
+                <td>
+                  <select class="form-select form-select-sm" name="fuel_km_gap_vehicle_family">
+                    <option value="">Any</option>
+                    {% for fam in oil_family_options %}
+                    <option value="{{ fam }}">{{ fam }}</option>
+                    {% endfor %}
+                  </select>
+                </td>
+                <td>
+                  <input type="number" min="1" step="1" class="form-control form-control-sm" name="fuel_km_gap_max_km" placeholder="e.g. 400">
+                </td>
+                <td class="text-center">
+                  <button type="button" class="btn btn-outline-danger btn-sm fuel-km-gap-remove" title="Remove"><i class="bi bi-trash"></i></button>
+                </td>
+              </tr>
+            </template>
+
+            <div class="d-flex justify-content-end">
+              <button type="submit" class="btn btn-primary"><i class="bi bi-save me-1"></i>Save Fuel Expense Rules</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
 {% if fc_tab.get('daily_task_entry') %}
 <div id="dailyTaskEntryPane" {% if active_tab != 'daily_task_entry' %}style="display:none"{% endif %}>
   <div class="row mb-4">
@@ -930,6 +1077,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const attendancePane = document.getElementById('attendanceControlPane');
   const freezePane = document.getElementById('freezeControlPane');
   const oilPane = document.getElementById('oilLimitsPane');
+  const fuelExpensePane = document.getElementById('fuelExpensePane');
   const dailyTaskPane = document.getElementById('dailyTaskEntryPane');
   const vehicleSortPane = document.getElementById('vehicleSortPane');
   const accountingPane = document.getElementById('accountingMaintenancePane');
@@ -937,6 +1085,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (attendancePane) attendancePane.style.display = 'none';
     if (freezePane) freezePane.style.display = 'none';
     if (oilPane) oilPane.style.display = 'none';
+    if (fuelExpensePane) fuelExpensePane.style.display = 'none';
     if (dailyTaskPane) dailyTaskPane.style.display = 'none';
     if (vehicleSortPane) vehicleSortPane.style.display = 'none';
     if (accountingPane) accountingPane.style.display = 'none';
@@ -954,6 +1103,10 @@ document.addEventListener('DOMContentLoaded', function() {
         hideAllPanes();
         if (oilPane) oilPane.style.display = '';
         history.replaceState({}, '', '{{ url_for("form_control") }}?settings_tab=oil_limits');
+      } else if (t === 'fuel_expense') {
+        hideAllPanes();
+        if (fuelExpensePane) fuelExpensePane.style.display = '';
+        history.replaceState({}, '', '{{ url_for("form_control") }}?settings_tab=fuel_expense');
       } else if (t === 'daily_task_entry') {
         hideAllPanes();
         if (dailyTaskPane) dailyTaskPane.style.display = '';
@@ -1061,6 +1214,28 @@ document.addEventListener('DOMContentLoaded', function() {
     freezeMatrixSearch.addEventListener('input', filterFreezeMatrix);
     freezeMatrixSearch.addEventListener('search', filterFreezeMatrix);
     filterFreezeMatrix();
+  }
+
+  const fuelKmGapRulesBody = document.getElementById('fuelKmGapRulesBody');
+  const fuelKmGapAddRowBtn = document.getElementById('fuelKmGapAddRowBtn');
+  const fuelKmGapRowTemplate = document.getElementById('fuelKmGapRowTemplate');
+  function bindFuelKmGapRemove(btn) {
+    if (!btn) return;
+    btn.addEventListener('click', function() {
+      var tr = btn.closest('tr');
+      if (tr && tr.parentNode) tr.parentNode.removeChild(tr);
+    });
+  }
+  if (fuelKmGapRulesBody) {
+    fuelKmGapRulesBody.querySelectorAll('.fuel-km-gap-remove').forEach(bindFuelKmGapRemove);
+  }
+  if (fuelKmGapAddRowBtn && fuelKmGapRowTemplate && fuelKmGapRulesBody) {
+    fuelKmGapAddRowBtn.addEventListener('click', function() {
+      var clone = fuelKmGapRowTemplate.content.cloneNode(true);
+      var removeBtn = clone.querySelector('.fuel-km-gap-remove');
+      bindFuelKmGapRemove(removeBtn);
+      fuelKmGapRulesBody.appendChild(clone);
+    });
   }
 });
 </script>
