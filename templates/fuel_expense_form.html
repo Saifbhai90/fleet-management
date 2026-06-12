@@ -536,6 +536,12 @@
     border-color: #0d6efd;
     box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.15);
   }
+  .fuel-form-wrap .fuel-attach-zone.field-invalid {
+    border-color: #dc3545 !important;
+    background: #fff5f5;
+    color: #991b1b;
+    box-shadow: 0 0 0 2px rgba(220, 53, 69, 0.15);
+  }
   @media (max-width: 1199.98px) {
     .fuel-form-wrap .fuel-insights-collapse:not(.show) { display: none; }
     .fuel-form-wrap .fuel-insights-toggle { display: flex !important; }
@@ -619,6 +625,9 @@
     align-items: center;
     gap: 0.55rem;
   }
+  .fuel-form-wrap .action-bar .fuel-action-btn--cancel { order: 1; }
+  .fuel-form-wrap .action-bar .fuel-action-btn--list { order: 2; }
+  .fuel-form-wrap .action-bar .fuel-action-btn--primary { order: 3; }
   .fuel-form-wrap .fuel-action-btn {
     display: inline-flex;
     align-items: center;
@@ -753,7 +762,7 @@
     {% endif %}
   </div>
 
-  <form method="POST" action="" id="fuelExpenseForm" data-record-id="{{ rec.id if rec else '' }}" enctype="multipart/form-data">
+  <form method="POST" action="" id="fuelExpenseForm" data-record-id="{{ rec.id if rec else '' }}" data-no-spinner="1" enctype="multipart/form-data">
     <script type="application/json" id="locationCascadeData">{{ location_cascade|tojson }}</script>
     <script type="application/json" id="fuelExpenseSettingsData">{{ fuel_expense_settings|default({'price_tolerance_rs': 5, 'km_gap_default_max_km': 500, 'km_gap_rules': []})|tojson }}</script>
     {{ form.hidden_tag() }}
@@ -968,6 +977,7 @@
             </div>
             <small class="text-muted d-block mt-2">Mobile par click se camera ya gallery — dono options ek hi picker me milenge. Ctrl+V se bhi add kar sakte hain.</small>
             <div class="small text-success mt-1" id="fuelAttachmentPasteHint"></div>
+            <div id="fuelAttachmentError" class="field-error-msg d-none mt-2"></div>
             {% if rec and rec.attachments.count() %}
             <div class="mt-2">
               <strong>Existing:</strong>
@@ -991,11 +1001,11 @@
           <div class="action-bar">
             <a href="{{ back_url if back_url is defined else url_for('fuel_expense_list') }}" class="fuel-action-btn fuel-action-btn--cancel">Cancel</a>
             {% if not rec %}
-            <button type="submit" name="_save_action" value="save_list" class="fuel-action-btn fuel-action-btn--list">
-              <i class="bi bi-list-ul"></i>Save to List
-            </button>
             <button type="submit" name="_save_action" value="save_add" id="fuelSaveAddNextBtn" class="fuel-action-btn fuel-action-btn--primary">
               <i class="bi bi-plus-circle"></i>Save &amp; Add Next
+            </button>
+            <button type="submit" name="_save_action" value="save_list" class="fuel-action-btn fuel-action-btn--list">
+              <i class="bi bi-list-ul"></i>Save to List
             </button>
             {% else %}
             {{ form.submit(class="fuel-action-btn fuel-action-btn--primary") }}
@@ -1075,16 +1085,21 @@
   </div>
   <div class="fuel-info-float-resize-handle" aria-hidden="true"></div>
 </div>
-<div class="modal fade" id="fuelDuplicateModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content">
-      <div class="modal-header py-2"><h6 class="modal-title text-warning"><i class="bi bi-exclamation-triangle me-1"></i>Duplicate Entry</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-      <div class="modal-body" id="fuelDuplicateBody"></div>
-      <div class="modal-footer py-2">
-        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
-        <button type="button" class="btn btn-warning btn-sm" id="fuelDuplicateContinueBtn">Continue Anyway</button>
+<div id="fuelDuplicatePanel" class="fuel-info-float-panel fuel-warning-float-panel d-none" aria-hidden="true" role="alert" aria-labelledby="fuelDuplicatePanelLabel">
+  <div class="fuel-info-float-header fuel-warning-float-panel__header">
+    <div class="fuel-warning-float-panel__title-wrap">
+      <div class="fuel-warning-float-panel__icon" aria-hidden="true"><i class="bi bi-exclamation-triangle-fill"></i></div>
+      <div>
+        <h6 id="fuelDuplicatePanelLabel">Duplicate Entry</h6>
+        <div class="fuel-warning-float-panel__subtitle">Same details already saved</div>
       </div>
     </div>
+    <button type="button" class="btn-close btn-close-sm fuel-info-float-close" aria-label="Close"></button>
+  </div>
+  <div class="fuel-info-float-body fuel-warning-float-panel__body" id="fuelDuplicateBody"></div>
+  <div class="fuel-info-float-footer fuel-warning-float-panel__footer d-flex justify-content-end gap-2">
+    <button type="button" class="btn btn-outline-secondary btn-sm" id="fuelDuplicateCancelBtn">Cancel</button>
+    <button type="button" class="btn btn-warning btn-sm" id="fuelDuplicateContinueBtn">Continue Anyway</button>
   </div>
 </div>
 
@@ -1132,6 +1147,25 @@
   </div>
   <div class="fuel-info-float-footer fuel-warning-float-panel__footer">
     <button type="button" class="btn btn-primary btn-sm px-3" id="fuelMeterMatchOkBtn">Understood</button>
+  </div>
+</div>
+
+<div id="fuelAttachmentWarningPanel" class="fuel-info-float-panel fuel-warning-float-panel d-none" aria-hidden="true" role="alert" aria-labelledby="fuelAttachmentWarningPanelLabel">
+  <div class="fuel-info-float-header fuel-warning-float-panel__header">
+    <div class="fuel-warning-float-panel__title-wrap">
+      <div class="fuel-warning-float-panel__icon" aria-hidden="true"><i class="bi bi-exclamation-triangle-fill"></i></div>
+      <div>
+        <h6 id="fuelAttachmentWarningPanelLabel">Attachment Required</h6>
+        <div class="fuel-warning-float-panel__subtitle">Photos / Videos</div>
+      </div>
+    </div>
+    <button type="button" class="btn-close btn-close-sm fuel-info-float-close" aria-label="Close"></button>
+  </div>
+  <div class="fuel-info-float-body fuel-warning-float-panel__body">
+    <p class="fuel-warning-float-panel__lead mb-0">Please attach at least one photo or video before saving.</p>
+  </div>
+  <div class="fuel-info-float-footer fuel-warning-float-panel__footer">
+    <button type="button" class="btn btn-warning btn-sm px-3" id="fuelAttachmentWarningOkBtn">Understood</button>
   </div>
 </div>
 
@@ -1221,6 +1255,7 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   var fuelExpenseForm = document.getElementById('fuelExpenseForm');
+  var fuelSubmitLocked = false;
   var districtSelect = document.getElementById('districtSelect');
   var projectSelect = document.getElementById('projectSelect');
   var vehicleSelect = document.getElementById('vehicleSelect');
@@ -1236,6 +1271,7 @@ document.addEventListener('DOMContentLoaded', function() {
   var cardSwipeDateInput = document.getElementById('cardSwipeDate');
   var expenseBySelect = document.getElementById('expenseBySelect');
   var expenseByBalanceHint = document.getElementById('expenseByBalanceHint');
+  var fuelSaveAddNextBtn = document.getElementById('fuelSaveAddNextBtn');
   var litersInput = document.getElementById('litersInput');
   var litersInputError = document.getElementById('litersInputError');
   var currentReadingError = document.getElementById('currentReadingError');
@@ -1253,9 +1289,10 @@ document.addEventListener('DOMContentLoaded', function() {
   var vehicleLastEntryViewLink = document.getElementById('vehicleLastEntryViewLink');
   var vehicleLastEntryEditLink = document.getElementById('vehicleLastEntryEditLink');
   var _vehicleLastEntryCache = null;
-  var fuelDuplicateModalEl = document.getElementById('fuelDuplicateModal');
+  var fuelDuplicatePanel = document.getElementById('fuelDuplicatePanel');
   var fuelDuplicateBody = document.getElementById('fuelDuplicateBody');
   var fuelDuplicateContinueBtn = document.getElementById('fuelDuplicateContinueBtn');
+  var fuelDuplicateCancelBtn = document.getElementById('fuelDuplicateCancelBtn');
   var tankCapacityWarn = null;
   var odometerGaugeWrap = document.getElementById('odometerGaugeWrap');
   var gaugePrevLabel = document.getElementById('gaugePrevLabel');
@@ -1279,6 +1316,10 @@ document.addEventListener('DOMContentLoaded', function() {
   var mpgDisplay = document.getElementById('mpgDisplay');
   var fuelAttachmentFiles = document.getElementById('fuelAttachmentFiles');
   var fuelAttachmentPasteHint = document.getElementById('fuelAttachmentPasteHint');
+  var fuelAttachmentError = document.getElementById('fuelAttachmentError');
+  var fuelAttachmentWarningPanel = document.getElementById('fuelAttachmentWarningPanel');
+  var fuelAttachmentWarningOkBtn = document.getElementById('fuelAttachmentWarningOkBtn');
+  var _fuelExistingAttachmentCount = {{ rec.attachments.count() if rec else 0 }};
   var datePumpHistoryWrap = document.getElementById('datePumpHistoryWrap');
   var pumpOrDateHistoryWrap = document.getElementById('pumpOrDateHistoryWrap');
   var allPumpHistoryWrap = document.getElementById('allPumpHistoryWrap');
@@ -2185,46 +2226,153 @@ document.addEventListener('DOMContentLoaded', function() {
     if (errorEl) { errorEl.classList.remove('d-none'); errorEl.textContent = message; }
   }
 
+  function resetFuelPageLoadBar() {
+    var bar = document.getElementById('topLoadBar');
+    if (!bar) return;
+    bar.classList.remove('tlb-loading', 'tlb-done', 'loading', 'done');
+    bar.style.width = '0%';
+  }
+
+  function clearAttachmentFieldError() {
+    clearFieldError(fuelAttachZone, fuelAttachmentError);
+    closeAttachmentWarningPopup();
+  }
+
+  function dismissAttachmentWarningPopup() {
+    closeAttachmentWarningPopup();
+    clearFieldError(fuelAttachZone, fuelAttachmentError);
+    focusFuelSaveAddNext();
+  }
+
+  function closeAttachmentWarningPopup() {
+    if (!fuelAttachmentWarningPanel) return;
+    fuelAttachmentWarningPanel.classList.add('d-none');
+    fuelAttachmentWarningPanel.setAttribute('aria-hidden', 'true');
+  }
+
+  function isAttachmentWarningOpen() {
+    return !!(fuelAttachmentWarningPanel && !fuelAttachmentWarningPanel.classList.contains('d-none'));
+  }
+
+  function focusAttachmentWarningOk() {
+    if (!fuelAttachmentWarningOkBtn || !isAttachmentWarningOpen()) return;
+    fuelAttachmentWarningOkBtn.focus({ preventScroll: true });
+    requestAnimationFrame(function() {
+      if (isAttachmentWarningOpen() && document.activeElement !== fuelAttachmentWarningOkBtn) {
+        fuelAttachmentWarningOkBtn.focus({ preventScroll: true });
+      }
+    });
+  }
+
+  function showAttachmentWarningPopup() {
+    if (!fuelAttachmentWarningPanel) return;
+    unlockFuelSubmit();
+    resetFuelPageLoadBar();
+    setFieldError(fuelAttachZone, fuelAttachmentError, 'Please attach at least one photo or video.');
+    mountFuelFloatPanelToBody(fuelAttachmentWarningPanel);
+    fuelAttachmentWarningPanel.classList.remove('d-none');
+    fuelAttachmentWarningPanel.setAttribute('aria-hidden', 'false');
+    positionFuelInfoPanel(fuelAttachmentWarningPanel, fuelAttachZone || fuelAttachmentFiles);
+    window.setTimeout(function() {
+      focusAttachmentWarningOk();
+    }, 30);
+  }
+
+  function isValidFuelAttachmentFile(f) {
+    if (!f) return false;
+    var ct = String(f.type || '').toLowerCase();
+    if (ct.indexOf('image/') === 0 || ct.indexOf('video/') === 0) return true;
+    var name = String(f.name || '').toLowerCase();
+    return /\.(jpe?g|png|gif|webp|bmp|heic|heif|mp4|mov|webm|avi|mkv|3gp|m4v)$/.test(name);
+  }
+
+  function countValidFuelAttachmentFiles() {
+    var count = 0;
+    if (!fuelAttachmentFiles || !fuelAttachmentFiles.files) return 0;
+    Array.prototype.forEach.call(fuelAttachmentFiles.files, function(f) {
+      if (isValidFuelAttachmentFile(f)) count += 1;
+    });
+    return count;
+  }
+
+  function getFuelAttachmentCount() {
+    return countValidFuelAttachmentFiles() + (_fuelExistingAttachmentCount || 0);
+  }
+
+  function hasFuelAttachments() {
+    return getFuelAttachmentCount() > 0;
+  }
+
+  function ensureFuelAttachmentsBeforeProceed() {
+    if (hasFuelAttachments()) return true;
+    showAttachmentWarningPopup();
+    return false;
+  }
+
   function validateFuelFormClient() {
-    var ok = true;
-    var firstBad = null;
     clearFieldError(currentReadingInput, currentReadingError);
     clearFieldError(amountInput, amountInputError);
     clearFieldError(litersInput, litersInputError);
+    clearFieldError(fuelAttachZone, fuelAttachmentError);
+    closeAttachmentWarningPopup();
+
+    var firstBad = null;
     if (vehicleSelect && (!vehicleSelect.value || vehicleSelect.value === '0')) {
-      ok = false;
-      if (!firstBad && vehicleSelect) firstBad = vehicleSelect;
+      if (!firstBad) firstBad = vehicleSelect;
     }
     var prev = parseNum(previousReadingInput ? previousReadingInput.value : null);
     var curr = parseNum(currentReadingInput ? currentReadingInput.value : null);
     if (curr == null || curr <= 0) {
       setFieldError(currentReadingInput, currentReadingError, 'Current reading is required.');
-      ok = false;
       if (!firstBad) firstBad = currentReadingInput;
     } else if (prev != null && curr <= prev) {
       setFieldError(currentReadingInput, currentReadingError, 'Current reading must be greater than previous (' + prev + ').');
-      ok = false;
       if (!firstBad) firstBad = currentReadingInput;
     }
     var amount = parseNum(amountInput ? amountInput.value : null);
     if (amount == null || amount <= 0) {
       setFieldError(amountInput, amountInputError, 'Amount cannot be 0.');
-      ok = false;
       if (!firstBad) firstBad = amountInput;
     }
+
     if (firstBad) {
+      resetFuelPageLoadBar();
       try { firstBad.scrollIntoView({ behavior: 'smooth', block: 'center' }); firstBad.focus(); } catch (e) {}
+      return false;
     }
-    return ok;
+
+    if (!hasFuelAttachments()) {
+      showAttachmentWarningPopup();
+      return false;
+    }
+
+    return true;
   }
 
   function unlockFuelSubmit() {
     fuelSubmitLocked = false;
-    if (fuelForm) {
-      fuelForm.querySelectorAll('button[type="submit"], input[type="submit"]').forEach(function(btn) {
+    if (fuelExpenseForm) {
+      fuelExpenseForm.querySelectorAll('button[type="submit"], input[type="submit"]').forEach(function(btn) {
         btn.disabled = false;
+        btn.classList.remove('btn-loading');
       });
     }
+  }
+
+  function setFuelSubmitLoading(submitter) {
+    if (!fuelExpenseForm) return;
+    var btns = submitter ? [submitter] : fuelExpenseForm.querySelectorAll('button[type="submit"], input[type="submit"]');
+    Array.prototype.forEach.call(btns, function(btn) {
+      if (!btn) return;
+      if (!btn.querySelector('.btn-spinner')) {
+        var sp = document.createElement('span');
+        sp.className = 'btn-spinner';
+        sp.setAttribute('aria-hidden', 'true');
+        btn.insertBefore(sp, btn.firstChild);
+      }
+      btn.classList.add('btn-loading');
+      btn.disabled = true;
+    });
   }
 
   var _allowNativeSubmit = false;
@@ -2234,13 +2382,12 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function submitFuelFormWithOffline(submitter) {
-    if (!fuelForm) return;
+    if (!fuelExpenseForm) return;
+    if (!ensureFuelAttachmentsBeforeProceed()) return;
     fuelSubmitLocked = true;
-    fuelForm.querySelectorAll('button[type="submit"], input[type="submit"]').forEach(function(btn) {
-      btn.disabled = true;
-    });
+    setFuelSubmitLoading(submitter);
     if (window.FuelExpenseOffline && typeof window.FuelExpenseOffline.submitWithOfflineFallback === 'function') {
-      window.FuelExpenseOffline.submitWithOfflineFallback(fuelForm, submitter)
+      window.FuelExpenseOffline.submitWithOfflineFallback(fuelExpenseForm, submitter)
         .then(function() {
           if (!window.navigator.onLine) unlockFuelSubmit();
         })
@@ -2251,14 +2398,15 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
     _allowNativeSubmit = true;
-    if (submitter && typeof fuelForm.requestSubmit === 'function') {
-      fuelForm.requestSubmit(submitter);
+    if (submitter && typeof fuelExpenseForm.requestSubmit === 'function') {
+      fuelExpenseForm.requestSubmit(submitter);
     } else {
-      fuelForm.submit();
+      fuelExpenseForm.submit();
     }
   }
 
   function checkKmGapThenSubmit(submitter) {
+    if (!ensureFuelAttachmentsBeforeProceed()) return;
     var msg = getKmGapWarningText();
     if (_kmGapBypass || !msg) {
       checkDuplicateThenSubmit(submitter);
@@ -2292,6 +2440,51 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
+  function isFuelDuplicatePanelOpen() {
+    return !!(fuelDuplicatePanel && !fuelDuplicatePanel.classList.contains('d-none'));
+  }
+
+  function focusFuelDuplicateContinueBtn() {
+    if (!fuelDuplicateContinueBtn || !isFuelDuplicatePanelOpen()) return;
+    fuelDuplicateContinueBtn.focus({ preventScroll: true });
+    requestAnimationFrame(function() {
+      if (isFuelDuplicatePanelOpen() && document.activeElement !== fuelDuplicateContinueBtn) {
+        fuelDuplicateContinueBtn.focus({ preventScroll: true });
+      }
+    });
+  }
+
+  function closeFuelDuplicatePanel(keepPending) {
+    if (!fuelDuplicatePanel) return;
+    fuelDuplicatePanel.classList.add('d-none');
+    fuelDuplicatePanel.setAttribute('aria-hidden', 'true');
+    if (!keepPending) _pendingSubmitBtn = null;
+  }
+
+  function showFuelDuplicatePanel() {
+    if (!fuelDuplicatePanel) return;
+    unlockFuelSubmit();
+    resetFuelPageLoadBar();
+    mountFuelFloatPanelToBody(fuelDuplicatePanel);
+    fuelDuplicatePanel.classList.remove('d-none');
+    fuelDuplicatePanel.setAttribute('aria-hidden', 'false');
+    positionFuelInfoPanel(fuelDuplicatePanel, fuelSaveAddNextBtn || fuelExpenseForm);
+    window.setTimeout(focusFuelDuplicateContinueBtn, 30);
+  }
+
+  function dismissFuelDuplicatePanel() {
+    _duplicateBypass = false;
+    closeFuelDuplicatePanel(false);
+    unlockFuelSubmit();
+  }
+
+  function continueFuelDuplicatePanel() {
+    _duplicateBypass = true;
+    closeFuelDuplicatePanel(true);
+    checkTankCapacityThenSubmit(_pendingSubmitBtn);
+    _duplicateBypass = false;
+  }
+
   function checkDuplicateThenSubmit(submitter) {
     var vid = vehicleSelect && vehicleSelect.value;
     var pumpId = fuelPumpSelect && fuelPumpSelect.value;
@@ -2318,12 +2511,11 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         _pendingSubmitBtn = submitter;
         if (fuelDuplicateBody) {
-          fuelDuplicateBody.innerHTML = '<p class="mb-2">Same vehicle, pump, date, current reading and amount already saved:</p>' +
-            '<div class="border rounded p-2 bg-light small"><strong>' + (data.summary || 'Duplicate') + '</strong></div>';
+          fuelDuplicateBody.innerHTML = '<p class="fuel-warning-float-panel__lead mb-2">Same vehicle, pump, date, current reading and amount already saved:</p>' +
+            '<div class="fuel-warning-float-panel__detail"><strong>' + (data.summary || 'Duplicate') + '</strong></div>';
         }
-        if (fuelDuplicateModalEl && window.bootstrap) {
-          var dupModal = bootstrap.Modal.getOrCreateInstance(fuelDuplicateModalEl);
-          dupModal.show();
+        if (fuelDuplicatePanel) {
+          showFuelDuplicatePanel();
         } else if (window.confirm((data.summary || 'Duplicate entry') + ' — continue anyway?')) {
           checkTankCapacityThenSubmit(submitter);
         } else {
@@ -2446,45 +2638,99 @@ document.addEventListener('DOMContentLoaded', function() {
       var m = val.match(/^acct-(\d+)$/);
       if (m) window.open('/workspace/ledger?account_id=' + m[1], '_blank');
     });
-    function focusFuelSaveAddNext() {
-      var btn = document.getElementById('fuelSaveAddNextBtn') ||
-        (fuelExpenseForm && fuelExpenseForm.querySelector('button[name="_save_action"][value="save_add"]')) ||
-        (fuelExpenseForm && fuelExpenseForm.querySelector('.fuel-action-btn--primary[type="submit"]'));
-      if (btn) btn.focus();
+  }
+
+  function focusFuelSaveAddNext() {
+    if (isAttachmentWarningOpen()) {
+      focusAttachmentWarningOk();
+      return;
     }
-    function wireExpenseByEnterToSave() {
-      if (!expenseBySelect || expenseBySelect.dataset.enterSaveWired === '1') return;
-      function onExpenseByEnter(e) {
-        if (e.key !== 'Enter' || e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return;
-        var ts = expenseBySelect.tomselect;
-        if (ts && ts.isOpen) {
-          window.setTimeout(function() {
-            if (expenseBySelect.value) focusFuelSaveAddNext();
-          }, 50);
-          return;
-        }
-        if (!expenseBySelect.value) return;
-        e.preventDefault();
-        e.stopPropagation();
-        focusFuelSaveAddNext();
-      }
-      var ts = expenseBySelect.tomselect;
-      if (ts && ts.control_input) {
-        ts.control_input.addEventListener('keydown', onExpenseByEnter);
-        expenseBySelect.dataset.enterSaveWired = '1';
+    var saveTarget = (fuelSaveAddNextBtn && !fuelSaveAddNextBtn.disabled)
+      ? fuelSaveAddNextBtn
+      : (fuelExpenseForm && fuelExpenseForm.querySelector('button[name="_save_action"][value="save_list"]'));
+    if (saveTarget) saveTarget.focus();
+  }
+
+  function focusFuelAttachZone() {
+    if (!fuelAttachZone) return;
+    fuelAttachZone.focus();
+    if (typeof fuelAttachZone.scrollIntoView === 'function') {
+      fuelAttachZone.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }
+
+  var _blockExpenseByEnterSubmitUntil = 0;
+
+  function wireExpenseByEnterToSave() {
+    if (!expenseBySelect || expenseBySelect.dataset.enterSaveWired === '1') return;
+    var ts = expenseBySelect.tomselect;
+    if (!ts || !ts.control_input) return;
+
+    ts.control_input.addEventListener('keydown', function(e) {
+      if (e.key !== 'Enter' || e.shiftKey) return;
+
+      if (ts.isOpen) {
+        _blockExpenseByEnterSubmitUntil = Date.now() + 300;
         return;
       }
-      if (!expenseBySelect.tomselect) return;
-      expenseBySelect.addEventListener('keydown', onExpenseByEnter);
-      expenseBySelect.dataset.enterSaveWired = '1';
-    }
-    var _expenseByEnterTries = 0;
-    (function retryExpenseByEnterWire() {
-      wireExpenseByEnterToSave();
-      if (expenseBySelect && expenseBySelect.dataset.enterSaveWired !== '1' && _expenseByEnterTries++ < 30) {
-        window.setTimeout(retryExpenseByEnterWire, 200);
+
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      e.stopPropagation();
+      focusFuelSaveAddNext();
+    });
+
+    expenseBySelect.dataset.enterSaveWired = '1';
+  }
+
+  if (fuelExpenseForm) {
+    fuelExpenseForm.addEventListener('submit', function(e) {
+      if (_allowNativeSubmit) {
+        _allowNativeSubmit = false;
+        return;
       }
-    })();
+      if (Date.now() < _blockExpenseByEnterSubmitUntil) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        resetFuelPageLoadBar();
+        return;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      if (fuelSubmitLocked) return;
+      if (isAttachmentWarningOpen()) {
+        unlockFuelSubmit();
+        resetFuelPageLoadBar();
+        focusAttachmentWarningOk();
+        return;
+      }
+      var submitter = e.submitter || fuelExpenseForm.querySelector('button[type="submit"]');
+      if (!validateFuelFormClient()) {
+        unlockFuelSubmit();
+        resetFuelPageLoadBar();
+        return;
+      }
+      checkKmGapThenSubmit(submitter);
+    }, true);
+  }
+
+  var _expenseByEnterTries = 0;
+  (function retryExpenseByEnterWire() {
+    wireExpenseByEnterToSave();
+    if (expenseBySelect && expenseBySelect.dataset.enterSaveWired !== '1' && _expenseByEnterTries++ < 30) {
+      window.setTimeout(retryExpenseByEnterWire, 200);
+    }
+  })();
+
+  if (fuelPriceInput) {
+    fuelPriceInput.addEventListener('keydown', function(e) {
+      if (e.key !== 'Enter' || e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (!litersInput || !litersInput.disabled) return;
+      if (parseNum(fuelPriceInput.value) == null) return;
+      e.preventDefault();
+      e.stopPropagation();
+      focusFuelAttachZone();
+    });
   }
   if (amountInput) amountInput.addEventListener('input', function() { clearFieldError(amountInput, amountInputError); computeMpgAndLiters(); });
   if (fuelPriceInput) fuelPriceInput.addEventListener('input', function() { fuelPriceInput.dataset.autoSuggested = '0'; computeMpgAndLiters(); });
@@ -2569,7 +2815,7 @@ document.addEventListener('DOMContentLoaded', function() {
       fuelAttachmentPasteHint.textContent = text;
       return;
     }
-    var count = (fuelAttachmentFiles && fuelAttachmentFiles.files) ? fuelAttachmentFiles.files.length : 0;
+    var count = countValidFuelAttachmentFiles();
     fuelAttachmentPasteHint.textContent = count ? (count + ' file(s) ready for upload.') : '';
   }
 
@@ -2587,16 +2833,14 @@ document.addEventListener('DOMContentLoaded', function() {
     current.forEach(function(f) { dt.items.add(f); });
     var added = 0;
     Array.prototype.slice.call(fileList || []).forEach(function(f) {
-      if (!f) return;
-      var ct = String(f.type || '').toLowerCase();
-      if (ct.indexOf('image/') === 0 || ct.indexOf('video/') === 0) {
-        dt.items.add(f);
-        added += 1;
-      }
+      if (!isValidFuelAttachmentFile(f)) return;
+      dt.items.add(f);
+      added += 1;
     });
     if (added > 0) {
       fuelAttachmentFiles.files = dt.files;
       updateAttachmentHint(dt.files.length + ' file(s) ready for upload.');
+      clearAttachmentFieldError();
     }
     return added;
   }
@@ -2618,15 +2862,16 @@ document.addEventListener('DOMContentLoaded', function() {
         var dt = new DataTransfer();
         _fuelAttachStash.forEach(function(f) { dt.items.add(f); });
         picked.forEach(function(f) {
-          var ct = String(f.type || '').toLowerCase();
-          if (ct.indexOf('image/') === 0 || ct.indexOf('video/') === 0) dt.items.add(f);
+          if (isValidFuelAttachmentFile(f)) dt.items.add(f);
         });
         fuelAttachmentFiles.files = dt.files;
         picked = Array.prototype.slice.call(fuelAttachmentFiles.files || []);
         _fuelAttachStash = [];
       }
-      if (picked.length) updateAttachmentHint(picked.length + ' file(s) ready for upload.');
-      else updateAttachmentHint('');
+      if (picked.length) {
+        updateAttachmentHint(picked.length + ' file(s) ready for upload.');
+        clearAttachmentFieldError();
+      } else updateAttachmentHint('');
     });
     fuelAttachZone.addEventListener('dragover', function(e) {
       e.preventDefault();
@@ -2858,13 +3103,15 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
-  if (fuelScanDetailPanel || vehicleLastEntryPanel) {
+  if (fuelScanDetailPanel || vehicleLastEntryPanel || fuelAttachmentWarningPanel || fuelDuplicatePanel) {
     document.querySelectorAll('.fuel-info-float-close').forEach(function(btn) {
       btn.addEventListener('click', function(e) {
         e.stopPropagation();
         var panel = btn.closest('.fuel-info-float-panel');
         if (panel === fuelScanDetailPanel) closeFuelInfoPanel(panel, fuelMarketScanStatusBar);
         else if (panel === vehicleLastEntryPanel) closeFuelEntryDetailPanel();
+        else if (panel === fuelAttachmentWarningPanel) closeAttachmentWarningPopup();
+        else if (panel === fuelDuplicatePanel) dismissFuelDuplicatePanel();
         else closeFuelInfoPanel(panel, null);
       });
     });
@@ -2879,7 +3126,32 @@ document.addEventListener('DOMContentLoaded', function() {
       if (fuelMeterMatchPanel && !fuelMeterMatchPanel.classList.contains('d-none')) {
         positionMeterMatchWarningPanel();
       }
+      if (fuelAttachmentWarningPanel && !fuelAttachmentWarningPanel.classList.contains('d-none')) {
+        positionFuelInfoPanel(fuelAttachmentWarningPanel, fuelAttachZone || fuelAttachmentFiles);
+      }
+      if (fuelDuplicatePanel && !fuelDuplicatePanel.classList.contains('d-none')) {
+        positionFuelInfoPanel(fuelDuplicatePanel, fuelSaveAddNextBtn || fuelExpenseForm);
+      }
     });
+  }
+
+  if (fuelDuplicatePanel) {
+    mountFuelFloatPanelToBody(fuelDuplicatePanel);
+  }
+
+  if (fuelAttachmentWarningPanel) {
+    mountFuelFloatPanelToBody(fuelAttachmentWarningPanel);
+    if (fuelAttachmentWarningOkBtn) {
+      fuelAttachmentWarningOkBtn.addEventListener('click', function() {
+        dismissAttachmentWarningPopup();
+      });
+      fuelAttachmentWarningOkBtn.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          dismissAttachmentWarningPopup();
+        }
+      });
+    }
   }
 
   if (fuelMeterMatchPanel) {
@@ -2993,20 +3265,16 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   if (fuelDuplicateContinueBtn) {
-    fuelDuplicateContinueBtn.addEventListener('click', function() {
-      _duplicateBypass = true;
-      if (fuelDuplicateModalEl && window.bootstrap) {
-        bootstrap.Modal.getOrCreateInstance(fuelDuplicateModalEl).hide();
+    fuelDuplicateContinueBtn.addEventListener('click', continueFuelDuplicatePanel);
+    fuelDuplicateContinueBtn.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        continueFuelDuplicatePanel();
       }
-      checkTankCapacityThenSubmit(_pendingSubmitBtn);
     });
   }
-  if (fuelDuplicateModalEl) {
-    fuelDuplicateModalEl.addEventListener('hidden.bs.modal', function() {
-      if (!_duplicateBypass) unlockFuelSubmit();
-      _duplicateBypass = false;
-      if (!_tankCapacityBypass) _pendingSubmitBtn = null;
-    });
+  if (fuelDuplicateCancelBtn) {
+    fuelDuplicateCancelBtn.addEventListener('click', dismissFuelDuplicatePanel);
   }
   if (fuelTankCapacityContinueBtn) {
     fuelTankCapacityContinueBtn.addEventListener('click', function() {
@@ -3045,22 +3313,6 @@ document.addEventListener('DOMContentLoaded', function() {
       fuelPriceInput.dataset.autoSuggested = '0';
       checkFuelPriceTolerance();
       computeMpgAndLiters();
-    });
-  }
-
-  var fuelForm = document.getElementById('fuelExpenseForm');
-  var fuelSubmitLocked = false;
-  if (fuelForm) {
-    fuelForm.addEventListener('submit', function(e) {
-      if (_allowNativeSubmit) {
-        _allowNativeSubmit = false;
-        return;
-      }
-      e.preventDefault();
-      if (fuelSubmitLocked) return;
-      var submitter = e.submitter || fuelForm.querySelector('button[type="submit"]');
-      if (!validateFuelFormClient()) return;
-      checkKmGapThenSubmit(submitter);
     });
   }
 
