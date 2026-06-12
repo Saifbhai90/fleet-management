@@ -31,6 +31,7 @@
 
 .rc-tile--fuel .rc-tile-icon > i,
 .rc-tile--expiry .rc-tile-icon > i,
+.rc-tile--pending-task .rc-tile-icon > i,
 .rc-tile--book-inv .rc-tile-icon > i,
 .rc-tile--book-assign .rc-tile-icon > i,
 .rc-tile--book-return .rc-tile-icon > i,
