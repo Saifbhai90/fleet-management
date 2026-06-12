@@ -142,29 +142,378 @@
     background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; color: #1e40af;
   }
   .fuel-form-wrap .matched-detail { font-size: 0.72rem; line-height: 1.35; margin-top: 0.2rem; }
-  .fuel-form-wrap .odometer-gauge-wrap {
-    margin-top: 0.35rem; padding: 0.45rem 0.55rem; background: #f8fafc;
-    border: 1px solid #e2e8f0; border-radius: 8px;
+  .fuel-form-wrap .meter-section .field-group { margin-bottom: 0; }
+  .fuel-form-wrap .meter-section .field-extra {
+    min-height: 0;
+    margin-top: 0.1rem;
+    font-size: 0.72rem;
+    line-height: 1.3;
   }
+  .fuel-form-wrap .meter-section .field-extra--alert {
+    min-height: 1.15rem;
+  }
+  .fuel-form-wrap .meter-section .field-extra .month-mpg-note,
+  .fuel-form-wrap .meter-section .field-extra .tank-capacity-warn,
+  .fuel-form-wrap .meter-section .field-extra .km-gap-warn,
+  .fuel-form-wrap .meter-section .field-extra .price-tolerance-warn,
+  .fuel-form-wrap .meter-section .field-extra .matched-detail,
+  .fuel-form-wrap .meter-section .field-extra .field-error-msg {
+    margin-top: 0;
+  }
+  .fuel-form-wrap .odometer-gauge-wrap {
+    margin: 0 0 0.45rem;
+    padding: 0.4rem 0.55rem 0.45rem;
+    background: linear-gradient(180deg, #f8fafc 0%, #fff 100%);
+    border: 1px solid #cbd5e1;
+    border-left: 4px solid #1e40af;
+    border-radius: 6px;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+  }
+  .fuel-form-wrap .odometer-gauge-labels {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 0.65rem;
+    font-size: 0.66rem;
+    color: #64748b;
+    margin-bottom: 0.2rem;
+  }
+  .fuel-form-wrap .odometer-gauge-labels strong { color: #0f172a; font-weight: 700; }
   .fuel-form-wrap .odometer-gauge-track {
-    position: relative; height: 12px; background: #e2e8f0; border-radius: 999px; margin: 0.4rem 0 0.25rem;
+    position: relative;
+    height: 8px;
+    background: #e2e8f0;
+    border-radius: 999px;
+    margin: 0.15rem 0;
   }
   .fuel-form-wrap .odometer-gauge-zone {
-    position: absolute; top: 0; height: 100%; background: rgba(34, 197, 94, 0.35); border-radius: 999px;
+    position: absolute; top: 0; height: 100%; background: rgba(34, 197, 94, 0.4); border-radius: 999px;
   }
   .fuel-form-wrap .odometer-gauge-marker {
-    position: absolute; top: 50%; width: 16px; height: 16px; border-radius: 50%;
+    position: absolute; top: 50%; width: 11px; height: 11px; border-radius: 50%;
     transform: translate(-50%, -50%); border: 2px solid #fff;
-    box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.2); z-index: 2;
+    box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.18); z-index: 2;
+    transition: left 0.12s ease;
   }
   .fuel-form-wrap .odometer-gauge-marker.in-range { background: #22c55e; }
   .fuel-form-wrap .odometer-gauge-marker.out-range { background: #ef4444; }
   .fuel-form-wrap .odometer-gauge-tick {
-    position: absolute; top: -3px; width: 2px; height: 18px; background: #64748b; transform: translateX(-50%); z-index: 1;
+    position: absolute; top: -2px; width: 2px; height: 12px; background: #64748b; transform: translateX(-50%); z-index: 1;
+  }
+  .fuel-form-wrap .odometer-gauge-status {
+    font-size: 0.68rem;
+    line-height: 1.25;
+    margin-top: 0.2rem;
+    min-height: 1rem;
+  }
+  .fuel-form-wrap .odometer-gauge-status.is-ok { color: #15803d; font-weight: 600; }
+  .fuel-form-wrap .odometer-gauge-status.is-bad { color: #b91c1c; font-weight: 600; }
+  .fuel-form-wrap .odometer-gauge-status.is-muted { color: #64748b; }
+  .fuel-form-wrap .fuel-metric-display {
+    min-height: 2.85rem;
+    display: flex;
+    align-items: center;
+    padding: 0.52rem 0.7rem;
+    font-size: 1.05rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.2;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    background: #f1f3f5;
+    color: #495057;
+    box-shadow: none;
+    cursor: not-allowed;
+    pointer-events: none;
+    user-select: none;
+    transition: border-color 0.15s ease, color 0.15s ease;
+  }
+  .fuel-form-wrap .fuel-metric-display.is-neutral {
+    color: #64748b;
+  }
+  .fuel-form-wrap .fuel-metric-display.is-ok {
+    border-color: #cbd5e1;
+    color: #0f172a;
+  }
+  .fuel-form-wrap .fuel-metric-display.is-bad {
+    border-color: #b91c1c;
+    color: #991b1b;
+    box-shadow: inset 0 0 0 1px rgba(185, 28, 28, 0.12);
+  }
+  .fuel-form-wrap .meter-metrics-block {
+    margin-top: 0;
+  }
+  .fuel-form-wrap .meter-metrics-row {
+    --bs-gutter-x: 0.65rem;
+    --bs-gutter-y: 0.35rem;
+    align-items: stretch;
+  }
+  .fuel-form-wrap .meter-input-cell {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+  }
+  .fuel-form-wrap .meter-input-cell .form-label {
+    margin-bottom: 0.35rem;
+  }
+  .fuel-form-wrap .meter-input-cell .form-control.field-invalid {
+    border-color: #b91c1c;
+    background: #fffafa;
+    box-shadow: 0 0 0 3px rgba(185, 28, 28, 0.1);
+  }
+  .fuel-form-wrap .meter-input-cell .field-extra {
+    min-height: 0;
+    margin-top: 0.2rem;
+  }
+  @media (max-width: 575.98px) {
+    .fuel-form-wrap .meter-metrics-row > .col-4 {
+      flex: 0 0 100%;
+      max-width: 100%;
+    }
+  }
+  .fuel-form-wrap .meter-info-strip {
+    margin-top: 0.35rem;
+    padding: 0;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+    overflow: hidden;
+  }
+  .fuel-form-wrap .meter-info-strip.d-none { display: none !important; }
+  .fuel-form-wrap .meter-info-strip__head {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.65rem;
+    background: linear-gradient(180deg, #eff6ff 0%, #f8fafc 100%);
+    border-bottom: 1px solid #cbd5e1;
+    font-size: 0.62rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #1e3a8a;
+  }
+  .fuel-form-wrap .meter-info-strip__head i {
+    font-size: 0.82rem;
+    color: #1d4ed8;
+  }
+  .fuel-form-wrap .meter-info-strip__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  }
+  .fuel-form-wrap .meter-info-tile {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.45rem 0.6rem;
+    min-height: 0;
+    border-right: 1px solid #e2e8f0;
+    background: #fff;
+  }
+  .fuel-form-wrap .meter-info-tile:last-child {
+    border-right: none;
+  }
+  .fuel-form-wrap .meter-info-tile--rate {
+    border-left: 4px solid #1d4ed8;
+    background: linear-gradient(180deg, #f8fbff 0%, #fff 100%);
+  }
+  .fuel-form-wrap .meter-info-tile--mpg {
+    border-left: 4px solid #047857;
+    background: linear-gradient(180deg, #f0fdf4 0%, #fff 100%);
+  }
+  .fuel-form-wrap .meter-info-tile.is-loading .meter-info-tile__value {
+    color: #64748b;
+    font-size: 0.95rem;
+    font-weight: 600;
+  }
+  .fuel-form-wrap .meter-info-tile.is-bad {
+    border-left-color: #b91c1c;
+    background: linear-gradient(180deg, #fef2f2 0%, #fff 100%);
+  }
+  .fuel-form-wrap .meter-info-tile.is-bad .meter-info-tile__icon {
+    background: #fee2e2;
+    color: #991b1b;
+  }
+  .fuel-form-wrap .meter-info-tile.is-bad .meter-info-tile__label { color: #991b1b; }
+  .fuel-form-wrap .meter-info-tile.is-bad .meter-info-tile__value { color: #991b1b; }
+  .fuel-form-wrap .meter-info-tile__icon {
+    flex: 0 0 1.65rem;
+    width: 1.65rem;
+    height: 1.65rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    font-size: 0.78rem;
+    background: #dbeafe;
+    color: #1d4ed8;
+  }
+  .fuel-form-wrap .meter-info-tile--mpg .meter-info-tile__icon {
+    background: #d1fae5;
+    color: #047857;
+  }
+  .fuel-form-wrap .meter-info-tile__body {
+    flex: 1;
+    min-width: 0;
+  }
+  .fuel-form-wrap .meter-info-tile__label {
+    font-size: 0.58rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #475569;
+    margin-bottom: 0.05rem;
+    line-height: 1.2;
+  }
+  .fuel-form-wrap .meter-info-tile--rate .meter-info-tile__label { color: #1e40af; }
+  .fuel-form-wrap .meter-info-tile--mpg .meter-info-tile__label { color: #065f46; }
+  .fuel-form-wrap .meter-info-tile__value {
+    font-size: 0.95rem;
+    font-weight: 800;
+    line-height: 1.15;
+    color: #0f172a;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+  .fuel-form-wrap .meter-info-tile--rate .meter-info-tile__value { color: #047857; }
+  .fuel-form-wrap .meter-info-tile--mpg .meter-info-tile__value { color: #047857; }
+  .fuel-form-wrap .meter-info-tile__unit {
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: #64748b;
+    margin-left: 0.1rem;
+  }
+  .fuel-form-wrap .meter-info-tile__meta {
+    margin-top: 0.1rem;
+    font-size: 0.64rem;
+    line-height: 1.25;
+    color: #64748b;
+    font-weight: 500;
+  }
+  .fuel-form-wrap .meter-info-tile__meta strong {
+    color: #334155;
+    font-weight: 700;
+  }
+  @media (max-width: 575.98px) {
+    .fuel-form-wrap .meter-info-strip__grid {
+      grid-template-columns: 1fr;
+    }
+    .fuel-form-wrap .meter-info-tile {
+      border-right: none;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    .fuel-form-wrap .meter-info-tile:last-child {
+      border-bottom: none;
+    }
+  }
+  .fuel-form-wrap .meter-alerts-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    margin-top: 0.15rem;
+  }
+  .fuel-form-wrap .meter-alerts-panel.d-none { display: none !important; }
+  .fuel-form-wrap .meter-alert-item {
+    font-size: 0.76rem;
+    line-height: 1.45;
+    padding: 0.5rem 0.65rem;
+    border-radius: 6px;
+    border: 1px solid #fed7aa;
+    border-left: 4px solid #c2410c;
+    background: #fffbeb;
+    color: #7c2d12;
+  }
+  .fuel-form-wrap .meter-alert-item strong {
+    color: #9a3412;
+    font-weight: 700;
   }
   .fuel-form-wrap .tank-capacity-warn {
     font-size: 0.78rem; color: #92400e; background: #fffbeb;
     border: 1px solid #fcd34d; border-radius: 6px; padding: 0.35rem 0.5rem; margin-top: 0.25rem;
+  }
+  .fuel-warning-float-panel {
+    width: min(480px, calc(100vw - 24px));
+    max-height: none;
+    z-index: 1055;
+    border: 1px solid #fed7aa;
+    box-shadow: 0 16px 40px rgba(15, 23, 42, 0.22);
+  }
+  .fuel-meter-match-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1050;
+    background: rgba(15, 23, 42, 0.32);
+    display: none;
+  }
+  .fuel-meter-match-backdrop.is-open {
+    display: block;
+  }
+  .fuel-warning-float-panel__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+    background: linear-gradient(180deg, #fff7ed 0%, #fffbeb 100%);
+    border-bottom: 1px solid #fed7aa;
+  }
+  .fuel-warning-float-panel__title-wrap {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.65rem;
+    min-width: 0;
+  }
+  .fuel-warning-float-panel__icon {
+    flex: 0 0 2.25rem;
+    width: 2.25rem;
+    height: 2.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    background: #ffedd5;
+    color: #c2410c;
+    font-size: 1.1rem;
+  }
+  .fuel-warning-float-panel__subtitle {
+    font-size: 0.72rem;
+    color: #9a3412;
+    font-weight: 600;
+    margin-top: 0.12rem;
+  }
+  .fuel-warning-float-panel__body {
+    background: #fff;
+  }
+  .fuel-warning-float-panel__lead {
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: #7c2d12;
+    line-height: 1.45;
+  }
+  .fuel-warning-float-panel__hint {
+    font-size: 0.84rem;
+    color: #475569;
+    line-height: 1.5;
+  }
+  .fuel-warning-float-panel__detail {
+    margin-top: 0.75rem;
+    padding: 0.65rem 0.75rem;
+    border-radius: 6px;
+    border: 1px solid #fecaca;
+    border-left: 4px solid #b91c1c;
+    background: #fef2f2;
+    font-size: 0.8rem;
+    line-height: 1.45;
+    color: #7f1d1d;
+  }
+  .fuel-warning-float-panel__detail strong {
+    color: #991b1b;
+  }
+  .fuel-warning-float-panel__footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.45rem;
+    background: #f8fafc;
   }
   .fuel-form-wrap .fuel-attach-zone {
     border: 2px dashed #ced4da;
@@ -217,43 +566,115 @@
   .fuel-form-wrap .form-section-header i { color: #0d6efd; font-size: 1rem; }
   .fuel-form-wrap .form-section-body { padding: 0.95rem 1rem; }
   .fuel-form-wrap .form-label {
-    font-size: 0.92rem;
-    font-weight: 600;
-    color: #334155;
+    font-size: 0.64rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: #475569;
     margin-bottom: 0.35rem;
   }
   .fuel-form-wrap .form-control,
   .fuel-form-wrap .form-select {
-    border-radius: 8px;
-    border: 1px solid #dee2e6;
-    font-size: 0.95rem;
+    min-height: 2.85rem;
+    border-radius: 6px;
+    border: 1px solid #cbd5e1;
+    font-size: 1.05rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
     padding: 0.52rem 0.7rem;
-    min-height: 40px;
+    background: #fff;
+    color: #0f172a;
+    box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
   }
   .fuel-form-wrap .form-control:focus,
   .fuel-form-wrap .form-select:focus {
-    border-color: #0d6efd;
-    box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.15);
+    border-color: #1d4ed8;
+    box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.12);
   }
   .fuel-form-wrap .form-control.bg-light,
-  .fuel-form-wrap input[readonly].form-control {
+  .fuel-form-wrap input[readonly].form-control,
+  .fuel-form-wrap input:disabled.form-control,
+  .fuel-form-wrap select:disabled.form-select {
     background-color: #f1f3f5 !important;
     color: #495057;
     cursor: default;
+    box-shadow: none;
+  }
+  .fuel-form-wrap .form-control.field-invalid,
+  .fuel-form-wrap .form-select.field-invalid {
+    border-color: #b91c1c;
+    background: #fffafa;
+    box-shadow: 0 0 0 3px rgba(185, 28, 28, 0.1);
   }
   .fuel-form-wrap .field-group { margin-bottom: 0.55rem; }
   .fuel-form-wrap .field-group:last-child { margin-bottom: 0; }
   .fuel-form-wrap .action-bar {
-    padding: 0.78rem 1rem;
-    background: #f8fafc;
-    border-top: 1px solid #e9ecef;
+    padding: 0.85rem 1rem;
+    background: linear-gradient(180deg, #fff 0%, #f8fafc 100%);
+    border-top: 1px solid #e2e8f0;
     border-radius: 0 0 12px 12px;
     display: flex;
+    flex-wrap: wrap;
     justify-content: flex-end;
-    gap: 0.5rem;
+    align-items: center;
+    gap: 0.55rem;
   }
-  .fuel-form-wrap .btn-save { padding: 0.48rem 1.4rem; font-weight: 700; font-size: 0.95rem; border-radius: 8px; }
-  .fuel-form-wrap .btn-cancel { border-radius: 8px; font-size: 0.92rem; }
+  .fuel-form-wrap .fuel-action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    min-height: 2.55rem;
+    padding: 0.5rem 1.1rem;
+    font-size: 0.86rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease, border-color 0.12s ease;
+    text-decoration: none;
+    line-height: 1.2;
+  }
+  .fuel-form-wrap .fuel-action-btn:hover {
+    transform: translateY(-1px);
+    text-decoration: none;
+  }
+  .fuel-form-wrap .fuel-action-btn:active {
+    transform: translateY(0);
+  }
+  .fuel-form-wrap .fuel-action-btn--cancel {
+    background: #fff;
+    border-color: #cbd5e1;
+    color: #475569;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+  }
+  .fuel-form-wrap .fuel-action-btn--cancel:hover {
+    background: #f8fafc;
+    border-color: #94a3b8;
+    color: #334155;
+  }
+  .fuel-form-wrap .fuel-action-btn--list {
+    background: #fff;
+    border-color: #93c5fd;
+    color: #1d4ed8;
+    box-shadow: 0 1px 2px rgba(29, 78, 216, 0.08);
+  }
+  .fuel-form-wrap .fuel-action-btn--list:hover {
+    background: #eff6ff;
+    border-color: #60a5fa;
+    color: #1e40af;
+  }
+  .fuel-form-wrap .fuel-action-btn--primary {
+    background: linear-gradient(180deg, #2563eb 0%, #1d4ed8 100%);
+    border-color: #1d4ed8;
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(29, 78, 216, 0.28);
+  }
+  .fuel-form-wrap .fuel-action-btn--primary:hover {
+    background: linear-gradient(180deg, #1d4ed8 0%, #1e40af 100%);
+    color: #fff;
+    box-shadow: 0 6px 16px rgba(29, 78, 216, 0.32);
+  }
   .fuel-form-wrap #priceHintPanel { font-size: 0.82rem; padding: 0.45rem 0.55rem; margin-top: 0.35rem; }
   .fuel-form-wrap #suggestedPriceWrap { font-size: 0.82rem; margin-top: 0.3rem; }
   .fuel-form-wrap .price-history-box { border: 1px solid #e9ecef; border-radius: 8px; background: #f8fafc; padding: 0.55rem; min-height: 130px; }
@@ -272,8 +693,20 @@
       top: 84px;
     }
   }
-  .fuel-form-wrap .ts-wrapper .ts-control { min-height: 40px; }
-  .fuel-form-wrap .ts-wrapper .ts-control input { font-size: 0.92rem; line-height: 1.3; }
+  .fuel-form-wrap .ts-wrapper .ts-control {
+    min-height: 2.85rem;
+    border-radius: 6px;
+    border: 1px solid #cbd5e1;
+    font-size: 1.05rem;
+    font-weight: 700;
+    box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
+  }
+  .fuel-form-wrap .ts-wrapper.focus .ts-control,
+  .fuel-form-wrap .ts-wrapper.dropdown-active .ts-control {
+    border-color: #1d4ed8;
+    box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.12);
+  }
+  .fuel-form-wrap .ts-wrapper .ts-control input { font-size: 1.05rem; line-height: 1.3; font-weight: 700; }
 </style>
 <div class="container-fluid fuel-form-wrap py-2">
   <div class="page-header">
@@ -398,7 +831,22 @@
                 Meter Readings & Amount
               </div>
               <div class="form-section-body">
-                <div class="row g-2">
+                <div class="row g-2 meter-section">
+                  <div class="col-12 field-group">
+                    <div id="odometerGaugeWrap" class="odometer-gauge-wrap d-none">
+                      <div class="odometer-gauge-labels">
+                        <span>Prev: <strong id="gaugePrevLabel">—</strong></span>
+                        <span id="gaugeTaskOutLabel" class="d-none">Out: <strong>—</strong></span>
+                        <span>Task In: <strong id="gaugeTaskInLabel">—</strong></span>
+                      </div>
+                      <div class="odometer-gauge-track">
+                        <div id="gaugeTaskZone" class="odometer-gauge-zone d-none"></div>
+                        <div id="gaugeTaskOutTick" class="odometer-gauge-tick d-none"></div>
+                        <div id="gaugeCurrentMarker" class="odometer-gauge-marker d-none"></div>
+                      </div>
+                      <div id="gaugeStatusText" class="odometer-gauge-status is-muted"></div>
+                    </div>
+                  </div>
                   <div class="col-6 col-md-3 field-group">
                     <label class="form-label" title="KM Out (Day Start) from Task Report">KM Out</label>
                     <input type="text" id="kmOutTask" class="form-control bg-light" readonly placeholder="—">
@@ -412,59 +860,92 @@
                     {{ form.previous_reading(class="form-control bg-light", id="previousReading", step="0.01", placeholder="Auto", readonly=True) }}
                   </div>
                   <div class="col-6 col-md-3 field-group">
-                    <label class="form-label">Current Reading <span class="text-danger">*</span></label>
-                    {{ form.current_reading(class="form-control", id="currentReading", step="0.01", placeholder="0") }}
-                    <div id="currentReadingError" class="field-error-msg d-none"></div>
+                    <label class="form-label">Current <span class="text-danger">*</span></label>
+                    {{ form.current_reading(class="form-control", id="currentReading", step="0.01", placeholder="0", autocomplete="off") }}
+                    <div class="field-extra field-extra--alert"><div id="currentReadingError" class="field-error-msg d-none"></div></div>
                   </div>
-                  <div class="col-12 field-group">
-                    <div id="odometerGaugeWrap" class="odometer-gauge-wrap d-none">
-                      <div class="d-flex justify-content-between align-items-center small text-muted">
-                        <span>Prev: <strong id="gaugePrevLabel" class="text-dark">—</strong></span>
-                        <span id="gaugeTaskOutLabel" class="d-none">Out: <strong class="text-dark">—</strong></span>
-                        <span>Task In: <strong id="gaugeTaskInLabel" class="text-dark">—</strong></span>
+                  <div class="col-12 field-group meter-metrics-block">
+                    <div class="row meter-metrics-row">
+                      <div class="col-4">
+                        <div class="meter-input-cell">
+                          <label class="form-label">KM</label>
+                          <div id="kmMetricCard" class="fuel-metric-display is-neutral bg-light" aria-live="polite" aria-disabled="true" tabindex="-1">
+                            <span id="kmDisplay">—</span>
+                          </div>
+                        </div>
                       </div>
-                      <div class="odometer-gauge-track">
-                        <div id="gaugeTaskZone" class="odometer-gauge-zone d-none"></div>
-                        <div id="gaugeTaskOutTick" class="odometer-gauge-tick d-none"></div>
-                        <div id="gaugeCurrentMarker" class="odometer-gauge-marker d-none"></div>
+                      <div class="col-4">
+                        <div class="meter-input-cell">
+                          <label class="form-label">Matched</label>
+                          <div id="matchedMetricCard" class="fuel-metric-display is-neutral bg-light" aria-live="polite" aria-disabled="true" tabindex="-1">
+                            <span id="meterMatched">—</span>
+                          </div>
+                        </div>
                       </div>
-                      <div id="gaugeStatusText" class="small"></div>
+                      <div class="col-4">
+                        <div class="meter-input-cell">
+                          <label class="form-label" for="amountInput">Amount</label>
+                          {{ form.amount(class="form-control", id="amountInput", step="0.01", placeholder="0") }}
+                          <div class="field-extra field-extra--alert"><div id="amountInputError" class="field-error-msg d-none"></div></div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="row meter-metrics-row">
+                      <div class="col-4">
+                        <div class="meter-input-cell">
+                          <label class="form-label" for="fuelPrice">Fuel Price</label>
+                          {{ form.fuel_price(class="form-control", id="fuelPrice", step="0.01", placeholder="0") }}
+                        </div>
+                      </div>
+                      <div class="col-4">
+                        <div class="meter-input-cell">
+                          <label class="form-label" for="litersInput">Ltr</label>
+                          <input type="number" id="litersInput" class="form-control" step="0.01" min="0" placeholder="0">
+                          <div class="field-extra field-extra--alert"><div id="litersInputError" class="field-error-msg d-none"></div></div>
+                        </div>
+                      </div>
+                      <div class="col-4">
+                        <div class="meter-input-cell">
+                          <label class="form-label">MPG</label>
+                          <div id="mpgMetricCard" class="fuel-metric-display is-neutral bg-light" aria-live="polite" aria-disabled="true" tabindex="-1">
+                            <span id="mpgDisplay">—</span>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                  <div class="col-6 col-md-3 field-group">
-                    <label class="form-label">KM</label>
-                    <input type="text" id="kmDisplay" class="form-control bg-light" readonly placeholder="—">
-                    <div id="kmGapWarn" class="km-gap-warn d-none"></div>
+                  <div class="col-12 field-group">
+                    <div id="meterInfoStrip" class="meter-info-strip d-none">
+                      <div class="meter-info-strip__head">
+                        <i class="bi bi-journal-text" aria-hidden="true"></i>
+                        <span>Reference Information</span>
+                      </div>
+                      <div class="meter-info-strip__grid">
+                        <div id="psoRateDatePanel" class="meter-info-tile meter-info-tile--rate" style="display:none;">
+                          <div class="meter-info-tile__icon" aria-hidden="true"><i class="bi bi-fuel-pump"></i></div>
+                          <div class="meter-info-tile__body">
+                            <div id="psoRateLabel" class="meter-info-tile__label">PSO Rate</div>
+                            <div id="psoRateValue" class="meter-info-tile__value">—</div>
+                            <div id="psoRateMeta" class="meter-info-tile__meta"></div>
+                          </div>
+                        </div>
+                        <div id="monthMpgInfo" class="meter-info-tile meter-info-tile--mpg d-none">
+                          <div class="meter-info-tile__icon" aria-hidden="true"><i class="bi bi-speedometer2"></i></div>
+                          <div class="meter-info-tile__body">
+                            <div class="meter-info-tile__label">Month MPG</div>
+                            <div id="monthMpgValue" class="meter-info-tile__value">—</div>
+                            <div id="monthMpgMeta" class="meter-info-tile__meta"></div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                  <div class="col-6 col-md-3 field-group">
-                    <label class="form-label">Matched</label>
-                    <input type="text" id="meterMatched" class="form-control bg-light" readonly placeholder="Yes/No">
-                    <div id="meterMatchedDetail" class="matched-detail text-danger d-none"></div>
-                  </div>
-                  <div class="col-6 col-md-3 field-group">
-                    <label class="form-label">Amount</label>
-                    {{ form.amount(class="form-control", id="amountInput", step="0.01", placeholder="0") }}
-                    <div id="amountInputError" class="field-error-msg d-none"></div>
-                  </div>
-                  <div class="col-6 col-md-3 field-group">
-                    <label class="form-label">Fuel Price</label>
-                    {{ form.fuel_price(class="form-control", id="fuelPrice", step="0.01", placeholder="0") }}
-                    <div id="fuelPriceToleranceWarn" class="price-tolerance-warn d-none"></div>
-                  </div>
-                  <div class="col-6 col-md-3 field-group">
-                    <label class="form-label">Ltr</label>
-                    <input type="number" id="litersInput" class="form-control" step="0.01" min="0" placeholder="0">
-                    <div id="litersInputError" class="field-error-msg d-none"></div>
-                    <div id="tankCapacityWarn" class="tank-capacity-warn d-none"></div>
-                  </div>
-                  <div class="col-6 col-md-3 field-group">
-                    <label class="form-label">MPG</label>
-                    <input type="text" id="mpgDisplay" class="form-control bg-light" readonly placeholder="—">
-                    <div id="monthMpgNote" class="month-mpg-note d-none"></div>
-                  </div>
-                  <div class="col-12 col-md-6 field-group d-flex align-items-end">
-                    <div id="psoRateDatePanel" class="small border rounded px-3 py-2 bg-light text-muted w-100" style="display:none;">
-                      <i class="bi bi-fuel-pump me-1"></i><span id="psoRateDateText"></span>
+                  <div class="col-12 field-group">
+                    <div id="meterAlertsPanel" class="meter-alerts-panel d-none">
+                      <div id="alertOdometerGap" class="meter-alert-item d-none"></div>
+                      <div id="alertRangeAlignment" class="meter-alert-item d-none"></div>
+                      <div id="alertVolumeCapacity" class="meter-alert-item d-none"></div>
+                      <div id="alertPriceBenchmark" class="meter-alert-item d-none"></div>
                     </div>
                   </div>
                 </div>
@@ -508,16 +989,16 @@
             </div>
           </div>
           <div class="action-bar">
-            <a href="{{ back_url if back_url is defined else url_for('fuel_expense_list') }}" class="btn btn-outline-secondary btn-cancel">Cancel</a>
+            <a href="{{ back_url if back_url is defined else url_for('fuel_expense_list') }}" class="fuel-action-btn fuel-action-btn--cancel">Cancel</a>
             {% if not rec %}
-            <button type="submit" name="_save_action" value="save_list" class="btn btn-outline-primary btn-save">
-              <i class="bi bi-list-ul me-1"></i>Save to List
+            <button type="submit" name="_save_action" value="save_list" class="fuel-action-btn fuel-action-btn--list">
+              <i class="bi bi-list-ul"></i>Save to List
             </button>
-            <button type="submit" name="_save_action" value="save_add" class="btn btn-primary btn-save">
-              <i class="bi bi-plus-circle me-1"></i>Save &amp; Add Next
+            <button type="submit" name="_save_action" value="save_add" class="fuel-action-btn fuel-action-btn--primary">
+              <i class="bi bi-plus-circle"></i>Save &amp; Add Next
             </button>
             {% else %}
-            {{ form.submit(class="btn btn-primary btn-save") }}
+            {{ form.submit(class="fuel-action-btn fuel-action-btn--primary") }}
             {% endif %}
           </div>
         </div>
@@ -633,6 +1114,27 @@
   </div>
 </div>
 
+<div id="fuelMeterMatchBackdrop" class="fuel-meter-match-backdrop" aria-hidden="true"></div>
+<div id="fuelMeterMatchPanel" class="fuel-info-float-panel fuel-warning-float-panel d-none" aria-hidden="true" aria-modal="true" role="alertdialog" aria-labelledby="fuelMeterMatchPanelLabel">
+  <div class="fuel-info-float-header fuel-warning-float-panel__header">
+    <div class="fuel-warning-float-panel__title-wrap">
+      <div class="fuel-warning-float-panel__icon" aria-hidden="true"><i class="bi bi-exclamation-triangle-fill"></i></div>
+      <div>
+        <h6 id="fuelMeterMatchPanelLabel">Meter Reading Warning</h6>
+        <div class="fuel-warning-float-panel__subtitle">Verify reading before entering amount</div>
+      </div>
+    </div>
+  </div>
+  <div class="fuel-info-float-body fuel-warning-float-panel__body">
+    <p class="fuel-warning-float-panel__lead mb-2">The meter reading does not match the task report (<strong>Matched = No</strong>).</p>
+    <p class="fuel-warning-float-panel__hint mb-0">Please verify KM Out, KM In, and Current Reading before entering the amount.</p>
+    <div id="fuelMeterMatchDetail" class="fuel-warning-float-panel__detail d-none"></div>
+  </div>
+  <div class="fuel-info-float-footer fuel-warning-float-panel__footer">
+    <button type="button" class="btn btn-primary btn-sm px-3" id="fuelMeterMatchOkBtn">Understood</button>
+  </div>
+</div>
+
 <script>
 document.addEventListener('DOMContentLoaded', function() {
   window._cascadeCache = window._cascadeCache || {};
@@ -738,8 +1240,10 @@ document.addEventListener('DOMContentLoaded', function() {
   var litersInputError = document.getElementById('litersInputError');
   var currentReadingError = document.getElementById('currentReadingError');
   var amountInputError = document.getElementById('amountInputError');
-  var meterMatchedDetail = document.getElementById('meterMatchedDetail');
-  var monthMpgNote = document.getElementById('monthMpgNote');
+  var meterMatchedDetail = null;
+  var monthMpgNote = document.getElementById('monthMpgInfo');
+  var monthMpgValue = document.getElementById('monthMpgValue');
+  var monthMpgMeta = document.getElementById('monthMpgMeta');
   var fuelLastSavedBar = document.getElementById('fuelLastSavedBar');
   var fuelAttachZone = document.getElementById('fuelAttachZone');
   var fuelAttachPlaceholder = document.getElementById('fuelAttachPlaceholder');
@@ -752,7 +1256,7 @@ document.addEventListener('DOMContentLoaded', function() {
   var fuelDuplicateModalEl = document.getElementById('fuelDuplicateModal');
   var fuelDuplicateBody = document.getElementById('fuelDuplicateBody');
   var fuelDuplicateContinueBtn = document.getElementById('fuelDuplicateContinueBtn');
-  var tankCapacityWarn = document.getElementById('tankCapacityWarn');
+  var tankCapacityWarn = null;
   var odometerGaugeWrap = document.getElementById('odometerGaugeWrap');
   var gaugePrevLabel = document.getElementById('gaugePrevLabel');
   var gaugeTaskInLabel = document.getElementById('gaugeTaskInLabel');
@@ -779,13 +1283,30 @@ document.addEventListener('DOMContentLoaded', function() {
   var pumpOrDateHistoryWrap = document.getElementById('pumpOrDateHistoryWrap');
   var allPumpHistoryWrap = document.getElementById('allPumpHistoryWrap');
   var psoRateDatePanel = document.getElementById('psoRateDatePanel');
-  var psoRateDateText = document.getElementById('psoRateDateText');
+  var psoRateLabel = document.getElementById('psoRateLabel');
+  var psoRateValue = document.getElementById('psoRateValue');
+  var psoRateMeta = document.getElementById('psoRateMeta');
   var fuelMarketScanStatusBar = document.getElementById('fuelMarketScanStatusBar');
-  var kmGapWarn = document.getElementById('kmGapWarn');
-  var fuelPriceToleranceWarn = document.getElementById('fuelPriceToleranceWarn');
+  var kmMetricCard = document.getElementById('kmMetricCard');
+  var matchedMetricCard = document.getElementById('matchedMetricCard');
+  var mpgMetricCard = document.getElementById('mpgMetricCard');
+  var meterInfoStrip = document.getElementById('meterInfoStrip');
+  var meterAlertsPanel = document.getElementById('meterAlertsPanel');
+  var alertOdometerGap = document.getElementById('alertOdometerGap');
+  var alertRangeAlignment = document.getElementById('alertRangeAlignment');
+  var alertVolumeCapacity = document.getElementById('alertVolumeCapacity');
+  var alertPriceBenchmark = document.getElementById('alertPriceBenchmark');
+  var kmGapWarn = null;
+  var fuelPriceToleranceWarn = alertPriceBenchmark;
   var fuelKmGapModalEl = document.getElementById('fuelKmGapModal');
   var fuelKmGapBody = document.getElementById('fuelKmGapBody');
   var fuelKmGapContinueBtn = document.getElementById('fuelKmGapContinueBtn');
+  var fuelMeterMatchBackdrop = document.getElementById('fuelMeterMatchBackdrop');
+  var fuelMeterMatchPanel = document.getElementById('fuelMeterMatchPanel');
+  var fuelMeterMatchDetail = document.getElementById('fuelMeterMatchDetail');
+  var fuelMeterMatchOkBtn = document.getElementById('fuelMeterMatchOkBtn');
+  var _meterMatchTrapHandler = null;
+  var _meterMatchFocusGuard = null;
   var _kmGapBypass = false;
   var taskStartReading = null;
   var taskCloseReading = null;
@@ -853,41 +1374,129 @@ document.addEventListener('DOMContentLoaded', function() {
       .catch(function() {});
   }
 
+  function setMetricCard(cardEl, valueEl, value, state) {
+    if (valueEl) valueEl.textContent = (value === null || value === undefined || value === '') ? '—' : String(value);
+    if (!cardEl) return;
+    cardEl.classList.remove('is-ok', 'is-bad', 'is-neutral');
+    cardEl.classList.add(state || 'is-neutral');
+  }
+
+  function parseMetricText(el) {
+    if (!el) return null;
+    var raw = (el.textContent || '').replace(/,/g, '').trim();
+    if (!raw || raw === '—') return null;
+    return parseNum(raw);
+  }
+
+  function refreshMeterInfoStrip() {
+    if (!meterInfoStrip) return;
+    var hasPso = psoRateDatePanel && psoRateDatePanel.style.display !== 'none';
+    var hasMpg = monthMpgNote && !monthMpgNote.classList.contains('d-none');
+    meterInfoStrip.classList.toggle('d-none', !hasPso && !hasMpg);
+  }
+
+  function setPsoRateTileLoading(label) {
+    if (!psoRateDatePanel) return;
+    psoRateDatePanel.style.display = 'flex';
+    psoRateDatePanel.classList.add('is-loading');
+    psoRateDatePanel.classList.remove('is-bad');
+    if (psoRateLabel) psoRateLabel.textContent = label || 'PSO Rate';
+    if (psoRateValue) psoRateValue.textContent = 'Checking...';
+    if (psoRateMeta) psoRateMeta.textContent = '';
+    refreshMeterInfoStrip();
+  }
+
+  function renderPsoRateTile(label, valueHtml, metaHtml, isBad) {
+    if (!psoRateDatePanel) return;
+    psoRateDatePanel.style.display = 'flex';
+    psoRateDatePanel.classList.remove('is-loading');
+    psoRateDatePanel.classList.toggle('is-bad', !!isBad);
+    if (psoRateLabel) psoRateLabel.textContent = label || 'PSO Rate';
+    if (psoRateValue) psoRateValue.innerHTML = valueHtml || '—';
+    if (psoRateMeta) psoRateMeta.innerHTML = metaHtml || '';
+    refreshMeterInfoStrip();
+  }
+
+  function renderMonthMpgTile(mpg, fromDate, toDate) {
+    if (!monthMpgNote) return;
+    if (mpg == null) {
+      monthMpgNote.classList.add('d-none');
+      if (monthMpgValue) monthMpgValue.textContent = '—';
+      if (monthMpgMeta) monthMpgMeta.textContent = '';
+      refreshMeterInfoStrip();
+      return;
+    }
+    monthMpgNote.classList.remove('d-none');
+    if (monthMpgValue) monthMpgValue.textContent = parseFloat(mpg).toFixed(2);
+    if (monthMpgMeta) {
+      monthMpgMeta.innerHTML = '<strong>Period:</strong> ' + (fromDate || '—') + ' <span aria-hidden="true">→</span> ' + (toDate || '—');
+    }
+    refreshMeterInfoStrip();
+  }
+
+  function setMeterAlert(el, html) {
+    if (!el) return false;
+    if (html) {
+      el.innerHTML = html;
+      el.classList.remove('d-none');
+      return true;
+    }
+    el.innerHTML = '';
+    el.classList.add('d-none');
+    return false;
+  }
+
+  function updateMeterAlertsPanel() {
+    var any = false;
+    any = setMeterAlert(alertOdometerGap, getKmGapAlertHtml()) || any;
+    any = setMeterAlert(alertRangeAlignment, getRangeAlignmentAlertHtml()) || any;
+    any = setMeterAlert(alertVolumeCapacity, getVolumeCapacityAlertHtml()) || any;
+    any = setMeterAlert(alertPriceBenchmark, getPriceBenchmarkAlertHtml()) || any;
+    if (meterAlertsPanel) meterAlertsPanel.classList.toggle('d-none', !any);
+  }
+
   function checkFuelPriceTolerance() {
-    if (!fuelPriceInput || !fuelPriceToleranceWarn) return;
+    if (!fuelPriceInput) return;
     var tolerance = parseFloat(FUEL_SETTINGS.price_tolerance_rs);
     if (!isFinite(tolerance) || tolerance <= 0) {
-      fuelPriceToleranceWarn.classList.add('d-none');
-      fuelPriceToleranceWarn.textContent = '';
       fuelPriceInput.classList.remove('field-invalid');
+      updateMeterAlertsPanel();
       return;
     }
     var benchmark = _lastSuggestedBenchmark;
     if (benchmark == null || !isFinite(benchmark) || benchmark <= 0) {
-      fuelPriceToleranceWarn.classList.add('d-none');
-      fuelPriceToleranceWarn.textContent = '';
       fuelPriceInput.classList.remove('field-invalid');
+      updateMeterAlertsPanel();
       return;
     }
     var entered = parseNum(fuelPriceInput.value);
     if (entered == null || entered <= 0) {
-      fuelPriceToleranceWarn.classList.add('d-none');
-      fuelPriceToleranceWarn.textContent = '';
       fuelPriceInput.classList.remove('field-invalid');
+      updateMeterAlertsPanel();
       return;
     }
     var diff = Math.abs(entered - benchmark);
     if (diff > tolerance) {
-      fuelPriceToleranceWarn.classList.remove('d-none');
-      fuelPriceToleranceWarn.innerHTML = '<i class="bi bi-exclamation-triangle me-1"></i>Price Rs ' + entered.toFixed(2) +
-        ' is Rs ' + diff.toFixed(2) + ' away from benchmark Rs ' + benchmark.toFixed(2) +
-        ' (max ± Rs ' + tolerance.toFixed(2) + ' allowed).';
       fuelPriceInput.classList.add('field-invalid');
     } else {
-      fuelPriceToleranceWarn.classList.add('d-none');
-      fuelPriceToleranceWarn.textContent = '';
       fuelPriceInput.classList.remove('field-invalid');
     }
+    updateMeterAlertsPanel();
+  }
+
+  function getPriceBenchmarkAlertHtml() {
+    if (!fuelPriceInput) return '';
+    var tolerance = parseFloat(FUEL_SETTINGS.price_tolerance_rs);
+    if (!isFinite(tolerance) || tolerance <= 0) return '';
+    var benchmark = _lastSuggestedBenchmark;
+    if (benchmark == null || !isFinite(benchmark) || benchmark <= 0) return '';
+    var entered = parseNum(fuelPriceInput.value);
+    if (entered == null || entered <= 0) return '';
+    var diff = Math.abs(entered - benchmark);
+    if (diff <= tolerance) return '';
+    return '<strong>Price Benchmark:</strong> Price Rs ' + entered.toFixed(2) +
+      ' is Rs ' + diff.toFixed(2) + ' away from benchmark Rs ' + benchmark.toFixed(2) +
+      ' (max ± Rs ' + tolerance.toFixed(2) + ' allowed).';
   }
 
   function resolveKmGapMaxClient() {
@@ -922,28 +1531,58 @@ document.addEventListener('DOMContentLoaded', function() {
     return defaultMax;
   }
 
-  function getKmGapWarningText() {
+  function getKmGapAlertHtml() {
     var prev = parseNum(previousReadingInput ? previousReadingInput.value : null);
     var curr = parseNum(currentReadingInput ? currentReadingInput.value : null);
     if (prev == null || curr == null || curr <= prev) return '';
     var gap = curr - prev;
     var maxKm = resolveKmGapMaxClient();
     if (!isFinite(maxKm) || maxKm <= 0 || gap <= maxKm) return '';
-    return 'Gap too high (' + gap.toFixed(0) + ' KM vs max ' + maxKm + ' KM). Was a middle fueling slip missed?';
+    return '<strong>Odometer Gap:</strong> ' + gap.toLocaleString(undefined, { maximumFractionDigits: 0 }) +
+      ' KM running delta vs max ' + maxKm.toLocaleString(undefined, { maximumFractionDigits: 0 }) +
+      ' KM configured threshold. Was a middle fueling slip missed?';
+  }
+
+  function getRangeAlignmentAlertHtml() {
+    var curr = parseNum(currentReadingInput ? currentReadingInput.value : null);
+    if (curr == null || taskStartReading == null || taskCloseReading == null) return '';
+    var low = Math.min(taskStartReading, taskCloseReading);
+    var high = Math.max(taskStartReading, taskCloseReading);
+    if (curr >= low && curr <= high) return '';
+    var diff = curr < low ? (low - curr) : (curr - high);
+    return '<strong>Range Alignment:</strong> Task KM Out: ' + taskStartReading +
+      ', KM In: ' + taskCloseReading + '. Your entry reading is outside range by ' +
+      diff.toLocaleString(undefined, { maximumFractionDigits: 0 }) + ' KM.';
+  }
+
+  function getVolumeCapacityAlertHtml() {
+    var cap = getSelectedVehicleTankCapacity();
+    var liters = parseNum(litersInput ? litersInput.value : null);
+    if (cap <= 0 || liters == null || liters <= cap) return '';
+    return '<strong>Volume Capacity:</strong> Calculated Liters (' + liters.toFixed(2) +
+      'L) exceed this vehicle profile\'s maximum physical tank capacity (' + cap.toFixed(0) + 'L).';
+  }
+
+  function getKmGapWarningText() {
+    var html = getKmGapAlertHtml();
+    if (!html) return '';
+    return html.replace(/<\/?strong>/gi, '');
+  }
+
+  function updateKmMetricCard() {
+    var km = parseMetricText(kmDisplay);
+    var hasGap = !!getKmGapAlertHtml();
+    if (km == null) {
+      setMetricCard(kmMetricCard, kmDisplay, '—', 'is-neutral');
+      return;
+    }
+    var label = km.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    setMetricCard(kmMetricCard, kmDisplay, label, hasGap ? 'is-bad' : 'is-ok');
   }
 
   function updateKmGapWarning() {
-    if (!kmGapWarn) return;
-    var msg = getKmGapWarningText();
-    if (!msg) {
-      kmGapWarn.classList.add('d-none');
-      kmGapWarn.textContent = '';
-      if (kmDisplay) kmDisplay.classList.remove('field-invalid');
-      return;
-    }
-    kmGapWarn.classList.remove('d-none');
-    kmGapWarn.innerHTML = '<i class="bi bi-exclamation-triangle me-1"></i>' + msg;
-    if (kmDisplay) kmDisplay.classList.add('field-invalid');
+    updateKmMetricCard();
+    updateMeterAlertsPanel();
   }
 
   function _selectedVehicleId() {
@@ -1160,9 +1799,10 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!vid || vid === '0' || !d) {
       kmOutTask.value = '';
       kmInTask.value = '';
-      meterMatched.value = '';
       taskStartReading = null;
       taskCloseReading = null;
+      updateMatchedState();
+      updateOdometerGauge();
       return;
     }
     fetch('/api/fuel-expense/task-readings?vehicle_id=' + vid + '&fueling_date=' + encodeURIComponent(d))
@@ -1172,39 +1812,24 @@ document.addEventListener('DOMContentLoaded', function() {
         kmInTask.value = data.km_in_task != null ? data.km_in_task : '';
         taskStartReading = parseNum(data.km_out_task);
         taskCloseReading = parseNum(data.km_in_task);
-        // Recompute KM with fresh task readings when previous reading is not available.
         computeKm();
+        updateOdometerGauge();
       });
   }
 
   function updateMatchedState() {
     var curr = parseNum(currentReadingInput.value);
     if (curr == null || taskStartReading == null || taskCloseReading == null) {
-      meterMatched.value = '';
-      meterMatched.classList.remove('text-success', 'text-danger');
-      if (meterMatchedDetail) {
-        meterMatchedDetail.classList.add('d-none');
-        meterMatchedDetail.textContent = '';
-      }
+      setMetricCard(matchedMetricCard, meterMatched, '—', 'is-neutral');
+      updateMeterAlertsPanel();
       return;
     }
     var low = Math.min(taskStartReading, taskCloseReading);
     var high = Math.max(taskStartReading, taskCloseReading);
     var matched = curr >= low && curr <= high;
-    meterMatched.value = matched ? 'Yes' : 'No';
-    meterMatched.classList.toggle('text-success', matched);
-    meterMatched.classList.toggle('text-danger', !matched);
-    if (meterMatchedDetail) {
-      if (matched) {
-        meterMatchedDetail.classList.add('d-none');
-        meterMatchedDetail.textContent = '';
-      } else {
-        var diff = curr < low ? (low - curr) : (curr - high);
-        meterMatchedDetail.classList.remove('d-none');
-        meterMatchedDetail.textContent = 'Task KM Out: ' + taskStartReading + ', KM In: ' + taskCloseReading +
-          ', Your reading: ' + curr + ' — outside range by ' + diff.toFixed(0) + ' KM.';
-      }
-    }
+    setMetricCard(matchedMetricCard, meterMatched, matched ? 'Yes' : 'No', matched ? 'is-ok' : 'is-bad');
+    if (matched) closeMeterMatchWarning();
+    updateMeterAlertsPanel();
   }
 
   function computeKm() {
@@ -1212,9 +1837,9 @@ document.addEventListener('DOMContentLoaded', function() {
     var curr = parseNum(currentReadingInput ? currentReadingInput.value : null);
     var baseReading = prev != null ? prev : taskStartReading;
     if (baseReading != null && curr != null) {
-      kmDisplay.value = (curr - baseReading).toFixed(2);
-    } else {
-      kmDisplay.value = '';
+      if (kmDisplay) kmDisplay.textContent = (curr - baseReading).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    } else if (kmDisplay) {
+      kmDisplay.textContent = '—';
     }
     updateMatchedState();
     updateOdometerGauge();
@@ -1234,18 +1859,24 @@ document.addEventListener('DOMContentLoaded', function() {
     return 'Calculated Liters (' + liters.toFixed(0) + 'L) exceed vehicle\'s max tank capacity (' + cap.toFixed(0) + 'L).';
   }
 
-  function updateTankCapacityWarning() {
-    if (!tankCapacityWarn) return;
-    var msg = getTankCapacityWarningText();
-    if (!msg) {
-      tankCapacityWarn.classList.add('d-none');
-      tankCapacityWarn.textContent = '';
-      if (litersInput) litersInput.classList.remove('field-invalid');
+  function updateMpgMetricCard(km, lit) {
+    if (km != null && lit != null && lit > 0) {
+      var mpg = km / lit;
+      var label = mpg.toFixed(2);
+      setMetricCard(mpgMetricCard, mpgDisplay, label, mpg > 0 ? 'is-ok' : 'is-bad');
       return;
     }
-    tankCapacityWarn.classList.remove('d-none');
-    tankCapacityWarn.innerHTML = '<i class="bi bi-exclamation-triangle me-1"></i>' + msg;
-    if (litersInput) litersInput.classList.add('field-invalid');
+    setMetricCard(mpgMetricCard, mpgDisplay, '—', 'is-neutral');
+  }
+
+  function updateTankCapacityWarning() {
+    var msg = getTankCapacityWarningText();
+    if (!msg) {
+      if (litersInput) litersInput.classList.remove('field-invalid');
+    } else if (litersInput) {
+      litersInput.classList.add('field-invalid');
+    }
+    updateMeterAlertsPanel();
   }
 
   function updateOdometerGauge() {
@@ -1254,20 +1885,28 @@ document.addEventListener('DOMContentLoaded', function() {
     var curr = parseNum(currentReadingInput ? currentReadingInput.value : null);
     var taskIn = taskCloseReading;
     var taskOut = taskStartReading;
-    if (prev == null || taskIn == null) {
+    if (taskIn == null) {
       odometerGaugeWrap.classList.add('d-none');
       return;
     }
     odometerGaugeWrap.classList.remove('d-none');
-    var trackMin = Math.min(prev, taskIn);
-    var trackMax = Math.max(prev, taskIn);
+    var trackMin = prev != null ? Math.min(prev, taskIn) : (taskOut != null ? Math.min(taskOut, taskIn) : taskIn - 50);
+    var trackMax = prev != null ? Math.max(prev, taskIn) : (taskOut != null ? Math.max(taskOut, taskIn) : taskIn + 50);
+    if (taskOut != null) {
+      trackMin = Math.min(trackMin, taskOut, taskIn);
+      trackMax = Math.max(trackMax, taskOut, taskIn);
+    }
+    if (curr != null) {
+      trackMin = Math.min(trackMin, curr);
+      trackMax = Math.max(trackMax, curr);
+    }
     if (trackMax <= trackMin) trackMax = trackMin + 1;
-    if (gaugePrevLabel) gaugePrevLabel.textContent = prev.toLocaleString(undefined, { maximumFractionDigits: 0 });
+    if (gaugePrevLabel) gaugePrevLabel.textContent = prev != null ? prev.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—';
     if (gaugeTaskInLabel) gaugeTaskInLabel.textContent = taskIn.toLocaleString(undefined, { maximumFractionDigits: 0 });
     if (gaugeTaskOutLabel) {
       if (taskOut != null) {
         gaugeTaskOutLabel.classList.remove('d-none');
-        gaugeTaskOutLabel.innerHTML = 'Out: <strong class="text-dark">' + taskOut.toLocaleString(undefined, { maximumFractionDigits: 0 }) + '</strong>';
+        gaugeTaskOutLabel.innerHTML = 'Out: <strong>' + taskOut.toLocaleString(undefined, { maximumFractionDigits: 0 }) + '</strong>';
       } else {
         gaugeTaskOutLabel.classList.add('d-none');
       }
@@ -1294,64 +1933,79 @@ document.addEventListener('DOMContentLoaded', function() {
       if (curr != null) {
         gaugeCurrentMarker.classList.remove('d-none');
         gaugeCurrentMarker.style.left = pctFor(curr) + '%';
-        var inTaskRange = taskOut != null && curr >= Math.min(taskOut, taskIn) && curr <= Math.max(taskOut, taskIn);
+        var rangeLow = taskOut != null ? Math.min(taskOut, taskIn) : Math.min(prev != null ? prev : taskIn, taskIn);
+        var rangeHigh = taskOut != null ? Math.max(taskOut, taskIn) : Math.max(prev != null ? prev : taskIn, taskIn);
+        var inTaskRange = curr >= rangeLow && curr <= rangeHigh;
         gaugeCurrentMarker.classList.toggle('in-range', inTaskRange);
         gaugeCurrentMarker.classList.toggle('out-range', !inTaskRange);
         if (gaugeStatusText) {
+          var currLabel = curr.toLocaleString(undefined, { maximumFractionDigits: 0 });
           if (inTaskRange) {
-            gaugeStatusText.className = 'small text-success';
-            gaugeStatusText.textContent = 'Current reading ' + curr.toLocaleString(undefined, { maximumFractionDigits: 0 }) + ' is inside task range.';
+            gaugeStatusText.className = 'odometer-gauge-status is-ok';
+            gaugeStatusText.textContent = 'Reading ' + currLabel + ' is inside task range.';
           } else {
-            var low = taskOut != null ? Math.min(taskOut, taskIn) : Math.min(prev, taskIn);
-            var high = taskOut != null ? Math.max(taskOut, taskIn) : Math.max(prev, taskIn);
-            var diff = curr < low ? (low - curr) : (curr - high);
-            gaugeStatusText.className = 'small text-danger';
-            gaugeStatusText.textContent = 'Current reading ' + curr.toLocaleString(undefined, { maximumFractionDigits: 0 }) +
-              ' is outside task range by ' + diff.toFixed(0) + ' KM.';
+            var diff = curr < rangeLow ? (rangeLow - curr) : (curr - rangeHigh);
+            gaugeStatusText.className = 'odometer-gauge-status is-bad';
+            gaugeStatusText.textContent = 'Reading ' + currLabel + ' is outside task range by ' + diff.toFixed(0) + ' KM.';
           }
         }
       } else {
         gaugeCurrentMarker.classList.add('d-none');
         if (gaugeStatusText) {
-          gaugeStatusText.className = 'small text-muted';
-          gaugeStatusText.textContent = 'Enter current reading to see position on gauge.';
+          gaugeStatusText.className = 'odometer-gauge-status is-muted';
+          gaugeStatusText.textContent = 'Type current reading to update gauge.';
         }
       }
     }
   }
 
   function fetchPsoRateForDate() {
-    if (!psoRateDatePanel || !psoRateDateText) return;
+    if (!psoRateDatePanel) return;
     var ft = (fuelTypeSelect && fuelTypeSelect.value) || '';
     var dateVal = (fuelingDateInput && fuelingDateInput.value) || '';
     if (!ft || (ft !== 'Diesel' && ft !== 'Super' && ft !== 'Petrol') || !dateVal) {
       psoRateDatePanel.style.display = 'none';
+      refreshMeterInfoStrip();
       return;
     }
-    psoRateDateText.innerHTML = '<span class="text-muted">Checking PSO rate...</span>';
-    psoRateDatePanel.style.display = 'block';
+    var label = (ft === 'Diesel') ? 'PSO Diesel Rate' : 'PSO Petrol Rate';
+    setPsoRateTileLoading(label);
     fetch('/api/fuel-market-rate-for-date?date=' + encodeURIComponent(dateVal))
       .then(function(r) { return r.json(); })
       .then(function(data) {
         var key = (ft === 'Diesel') ? 'diesel' : 'petrol';
-        var label = (ft === 'Diesel') ? 'Diesel' : 'Petrol';
+        var rateLabel = (ft === 'Diesel') ? 'PSO Diesel Rate' : 'PSO Petrol Rate';
         if (!data || !data.ok) {
           var noDate = data && data.no_record_date ? data.no_record_date : dateVal;
-          psoRateDateText.innerHTML = '<strong class="text-dark">PSO ' + label + ' Rate:</strong> <span class="text-danger fw-semibold">No Record on ' + noDate + '</span>';
-          psoRateDatePanel.style.display = 'block';
+          renderPsoRateTile(
+            rateLabel,
+            'No Record',
+            '<strong>Date:</strong> ' + noDate,
+            true
+          );
           return;
         }
         var rate = data[key];
         if (rate == null) {
-          psoRateDateText.innerHTML = '<strong class="text-dark">PSO ' + label + ' Rate:</strong> <span class="text-danger fw-semibold">No Record on ' + dateVal + '</span>';
+          renderPsoRateTile(
+            rateLabel,
+            'No Record',
+            '<strong>Date:</strong> ' + dateVal,
+            true
+          );
         } else {
-          psoRateDateText.innerHTML = '<strong class="text-dark">PSO ' + label + ' Rate:</strong> <span class="text-success fw-bold">Rs ' + parseFloat(rate).toFixed(2) + '/Ltr</span>' +
-            ' <span class="text-muted">(Scan: ' + (data.scanned_at || data.scan_date || '-') + ')</span>';
+          var scanAt = data.scanned_at || data.scan_date || '—';
+          renderPsoRateTile(
+            rateLabel,
+            'Rs ' + parseFloat(rate).toFixed(2) + '<span class="meter-info-tile__unit">/ Ltr</span>',
+            '<strong>Last Scan:</strong> ' + scanAt,
+            false
+          );
         }
-        psoRateDatePanel.style.display = 'block';
       })
       .catch(function() {
         psoRateDatePanel.style.display = 'none';
+        refreshMeterInfoStrip();
       });
   }
 
@@ -1437,21 +2091,38 @@ document.addEventListener('DOMContentLoaded', function() {
     expenseByBalanceHint.title = hasAcct ? 'Click to open ledger' : '';
   }
 
-  function computeMpgAndLiters() {
-    if (_calcFromLiters) return;
-    var km = parseNum(kmDisplay ? kmDisplay.value : null);
+  function updateLitersFieldState() {
+    if (!litersInput) return;
     var amount = parseNum(amountInput ? amountInput.value : null);
     var price = parseNum(fuelPriceInput ? fuelPriceInput.value : null);
-    if (price != null && price > 0 && amount != null) {
+    var autoCalc = amount != null && amount > 0 && price != null && price > 0;
+    litersInput.readOnly = autoCalc;
+    litersInput.disabled = autoCalc;
+    litersInput.classList.toggle('bg-light', autoCalc);
+    if (autoCalc) {
+      litersInput.title = 'Auto calculated from Amount ÷ Fuel Price';
+    } else {
+      litersInput.removeAttribute('title');
+    }
+  }
+
+  function computeMpgAndLiters() {
+    if (_calcFromLiters) return;
+    var km = parseMetricText(kmDisplay);
+    var amount = parseNum(amountInput ? amountInput.value : null);
+    var price = parseNum(fuelPriceInput ? fuelPriceInput.value : null);
+    if (price != null && price > 0 && amount != null && amount > 0) {
       if (litersInput) litersInput.value = (amount / price).toFixed(2);
     } else if (!(litersInput && parseNum(litersInput.value) != null)) {
       if (litersInput) litersInput.value = '';
     }
+    updateLitersFieldState();
     updateMpgFromValues(km);
     updateTankCapacityWarning();
   }
 
   function computeFromLitersInput() {
+    if (litersInput && litersInput.disabled) return;
     var liters = parseNum(litersInput ? litersInput.value : null);
     var amount = parseNum(amountInput ? amountInput.value : null);
     var price = parseNum(fuelPriceInput ? fuelPriceInput.value : null);
@@ -1469,17 +2140,14 @@ document.addEventListener('DOMContentLoaded', function() {
       if (amountInput) amountInput.value = (price * liters).toFixed(2);
     }
     _calcFromLiters = false;
-    updateMpgFromValues(parseNum(kmDisplay ? kmDisplay.value : null));
+    updateLitersFieldState();
+    updateMpgFromValues(parseMetricText(kmDisplay));
     updateTankCapacityWarning();
   }
 
   function updateMpgFromValues(km) {
     var lit = parseNum(litersInput ? litersInput.value : null);
-    if (lit && lit > 0 && km != null) {
-      mpgDisplay.value = (km / lit).toFixed(2);
-    } else {
-      mpgDisplay.value = '';
-    }
+    updateMpgMetricCard(km, lit);
   }
 
   function fetchMonthMpg() {
@@ -1488,8 +2156,7 @@ document.addEventListener('DOMContentLoaded', function() {
     var fDate = fuelingDateInput && fuelingDateInput.value;
     var recId = fuelExpenseForm ? (fuelExpenseForm.getAttribute('data-record-id') || '') : '';
     if (!vid || vid === '0' || !fDate) {
-      monthMpgNote.classList.add('d-none');
-      monthMpgNote.textContent = '';
+      renderMonthMpgTile(null);
       return;
     }
     var url = '/api/fuel-expense/month-mpg?vehicle_id=' + encodeURIComponent(vid) + '&fueling_date=' + encodeURIComponent(fDate);
@@ -1498,16 +2165,13 @@ document.addEventListener('DOMContentLoaded', function() {
       .then(function(r) { return r.json(); })
       .then(function(data) {
         if (!data || !data.ok || data.mpg == null) {
-          monthMpgNote.classList.add('d-none');
-          monthMpgNote.textContent = '';
+          renderMonthMpgTile(null);
           return;
         }
-        monthMpgNote.classList.remove('d-none');
-        monthMpgNote.innerHTML = '<strong>Month MPG:</strong> ' + parseFloat(data.mpg).toFixed(2) +
-          ' <span class="text-muted">(' + (data.from_date || '') + ' to ' + (data.to_date || '') + ')</span>';
+        renderMonthMpgTile(data.mpg, data.from_date, data.to_date);
       })
       .catch(function() {
-        monthMpgNote.classList.add('d-none');
+        renderMonthMpgTile(null);
       });
   }
 
@@ -1754,9 +2418,14 @@ document.addEventListener('DOMContentLoaded', function() {
   if (currentReadingInput) {
     currentReadingInput.addEventListener('input', function() {
       clearFieldError(currentReadingInput, currentReadingError);
+      updateOdometerGauge();
       computeKm();
     });
+    currentReadingInput.addEventListener('keyup', function() {
+      updateOdometerGauge();
+    });
     currentReadingInput.addEventListener('change', function() {
+      updateOdometerGauge();
       computeKm();
       fetchLastReading();
     });
@@ -2002,6 +2671,15 @@ document.addEventListener('DOMContentLoaded', function() {
     return 60;
   }
 
+  function getFuelPageHeaderBottom() {
+    var header = document.querySelector('.fuel-form-wrap .page-header');
+    if (header) {
+      var rect = header.getBoundingClientRect();
+      if (rect.height > 0) return Math.round(rect.bottom) + 8;
+    }
+    return getFuelEntryPanelTop() + 8;
+  }
+
   function getFuelEntryPanelLeft(panelW) {
     var anchor = document.getElementById('fuelLocationSection');
     var mainEl = document.getElementById('mainContent');
@@ -2159,7 +2837,17 @@ document.addEventListener('DOMContentLoaded', function() {
       if (vehicleLastEntryPanel && !vehicleLastEntryPanel.classList.contains('d-none')) {
         scheduleVehicleLastEntryPanelPosition();
       }
+      if (fuelMeterMatchPanel && !fuelMeterMatchPanel.classList.contains('d-none')) {
+        positionMeterMatchWarningPanel();
+      }
     });
+  }
+
+  if (fuelMeterMatchPanel) {
+    mountFuelFloatPanelToBody(fuelMeterMatchPanel);
+  }
+  if (fuelMeterMatchBackdrop) {
+    mountFuelFloatPanelToBody(fuelMeterMatchBackdrop);
   }
 
   if (vehicleLastEntryPanel) {
@@ -2377,17 +3065,169 @@ document.addEventListener('DOMContentLoaded', function() {
     if (fuelPumpSelect.value && fuelPumpSelect.value !== '0') _fetchPumpBalance(fuelPumpSelect.value);
   }
 
-  // ── Amount focus: alert if meter reading mismatch ──────────────────────
+  // ── Amount focus: warn if meter reading mismatch ───────────────────────
   var _matchedAlertShown = false;
   function _resetMatchedAlert() { _matchedAlertShown = false; }
+
+  function focusCurrentReadingField() {
+    if (!currentReadingInput) return;
+    currentReadingInput.focus();
+    if (typeof currentReadingInput.select === 'function') currentReadingInput.select();
+  }
+
+  function isMeterMatchWarningOpen() {
+    return !!(fuelMeterMatchPanel && !fuelMeterMatchPanel.classList.contains('d-none'));
+  }
+
+  function focusMeterMatchOkButton() {
+    if (amountInput && document.activeElement === amountInput) {
+      amountInput.blur();
+    }
+    if (!fuelMeterMatchOkBtn) return;
+    fuelMeterMatchOkBtn.focus({ preventScroll: true });
+    requestAnimationFrame(function() {
+      if (!isMeterMatchWarningOpen()) return;
+      if (document.activeElement !== fuelMeterMatchOkBtn) {
+        fuelMeterMatchOkBtn.focus({ preventScroll: true });
+      }
+    });
+  }
+
+  function enableMeterMatchFocusTrap() {
+    if (!_meterMatchTrapHandler) {
+      _meterMatchTrapHandler = function(e) {
+        if (!isMeterMatchWarningOpen()) return;
+        if (e.key === 'Tab') {
+          e.preventDefault();
+          focusMeterMatchOkButton();
+          return;
+        }
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          dismissMeterMatchWarning();
+        }
+      };
+      document.addEventListener('keydown', _meterMatchTrapHandler, true);
+    }
+    if (!_meterMatchFocusGuard) {
+      _meterMatchFocusGuard = function(e) {
+        if (!isMeterMatchWarningOpen()) return;
+        if (e.target === fuelMeterMatchOkBtn) return;
+        if (fuelMeterMatchPanel && fuelMeterMatchPanel.contains(e.target)) return;
+        if (e.target && typeof e.target.blur === 'function') {
+          e.target.blur();
+        }
+        focusMeterMatchOkButton();
+      };
+      document.addEventListener('focusin', _meterMatchFocusGuard, true);
+    }
+  }
+
+  function disableMeterMatchFocusTrap() {
+    if (_meterMatchTrapHandler) {
+      document.removeEventListener('keydown', _meterMatchTrapHandler, true);
+      _meterMatchTrapHandler = null;
+    }
+    if (_meterMatchFocusGuard) {
+      document.removeEventListener('focusin', _meterMatchFocusGuard, true);
+      _meterMatchFocusGuard = null;
+    }
+  }
+
+  function closeMeterMatchWarning() {
+    if (fuelMeterMatchBackdrop) {
+      fuelMeterMatchBackdrop.classList.remove('is-open');
+      fuelMeterMatchBackdrop.setAttribute('aria-hidden', 'true');
+    }
+    if (fuelMeterMatchPanel) {
+      fuelMeterMatchPanel.classList.add('d-none');
+      fuelMeterMatchPanel.setAttribute('aria-hidden', 'true');
+    }
+    disableMeterMatchFocusTrap();
+  }
+
+  function dismissMeterMatchWarning() {
+    closeMeterMatchWarning();
+    window.setTimeout(focusCurrentReadingField, 50);
+  }
+
+  function positionMeterMatchWarningPanel() {
+    if (!fuelMeterMatchPanel) return;
+    mountFuelFloatPanelToBody(fuelMeterMatchPanel);
+    if (fuelMeterMatchBackdrop) mountFuelFloatPanelToBody(fuelMeterMatchBackdrop);
+
+    if (fuelMeterMatchBackdrop) {
+      fuelMeterMatchBackdrop.classList.add('is-open');
+      fuelMeterMatchBackdrop.setAttribute('aria-hidden', 'false');
+    }
+
+    fuelMeterMatchPanel.classList.remove('d-none');
+    fuelMeterMatchPanel.setAttribute('aria-hidden', 'false');
+    fuelMeterMatchPanel.style.visibility = 'hidden';
+
+    var panelW = Math.min(480, window.innerWidth - 24);
+    fuelMeterMatchPanel.style.width = panelW + 'px';
+    var wrap = document.querySelector('.fuel-form-wrap');
+    var left = 12;
+    if (wrap) {
+      left = wrap.getBoundingClientRect().left + 12;
+    } else {
+      left = getFuelEntryPanelLeft(panelW);
+    }
+    left = Math.max(12, Math.min(left, window.innerWidth - panelW - 12));
+    fuelMeterMatchPanel.style.left = left + 'px';
+    fuelMeterMatchPanel.style.top = getFuelPageHeaderBottom() + 'px';
+    fuelMeterMatchPanel.style.visibility = '';
+
+    enableMeterMatchFocusTrap();
+    focusMeterMatchOkButton();
+  }
+
+  function showMeterMatchWarning() {
+    var detailHtml = getRangeAlignmentAlertHtml();
+    if (fuelMeterMatchDetail) {
+      if (detailHtml) {
+        fuelMeterMatchDetail.innerHTML = detailHtml;
+        fuelMeterMatchDetail.classList.remove('d-none');
+      } else {
+        fuelMeterMatchDetail.innerHTML = '';
+        fuelMeterMatchDetail.classList.add('d-none');
+      }
+    }
+    positionMeterMatchWarningPanel();
+  }
+
+  if (fuelMeterMatchOkBtn) {
+    fuelMeterMatchOkBtn.addEventListener('click', dismissMeterMatchWarning);
+  }
+  if (fuelMeterMatchBackdrop) {
+    fuelMeterMatchBackdrop.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+    });
+  }
+
   if (amountInput) {
-    amountInput.addEventListener('focus', function() {
-      var matched = meterMatched ? (meterMatched.value || '').trim() : '';
+    amountInput.addEventListener('mousedown', function(e) {
+      var matched = meterMatched ? (meterMatched.textContent || '').trim() : '';
       if (matched === 'No' && !_matchedAlertShown) {
+        e.preventDefault();
         _matchedAlertShown = true;
-        setTimeout(function() {
-          alert('⚠️ Meter reading task report se match nahi karti (Matched = No).\nAmount enter karnay say pehle readings zaroor verify karein.');
-        }, 0);
+        showMeterMatchWarning();
+      }
+    });
+    amountInput.addEventListener('focus', function() {
+      var matched = meterMatched ? (meterMatched.textContent || '').trim() : '';
+      if (matched !== 'No') return;
+      if (!_matchedAlertShown) {
+        _matchedAlertShown = true;
+        amountInput.blur();
+        showMeterMatchWarning();
+        return;
+      }
+      if (isMeterMatchWarningOpen()) {
+        amountInput.blur();
+        focusMeterMatchOkButton();
       }
     });
   }
