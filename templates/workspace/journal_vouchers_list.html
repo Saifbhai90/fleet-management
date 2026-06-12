@@ -10,6 +10,20 @@
     <div class="d-flex align-items-center gap-2">
       <button class="btn btn-outline-secondary btn-sm" id="btnPrintReport" title="Print / Preview Current Page"><i class="bi bi-eye me-1"></i>Print / Preview</button>
       <a href="{{ url_for('workspace_journal_vouchers_export', **request.args) }}" class="btn btn-outline-success btn-sm" title="Export All to Excel"><i class="bi bi-file-earmark-excel me-1"></i>Export All</a>
+      {% set manual_toggle_args = {} %}
+      {% for k, v in request.args.items() %}
+        {% if k not in ['manual_only', 'page'] %}
+          {% if manual_toggle_args.update({k: v}) %}{% endif %}
+        {% endif %}
+      {% endfor %}
+      {% if not manual_only %}
+        {% if manual_toggle_args.update({'manual_only': '1'}) %}{% endif %}
+      {% endif %}
+      <a href="{{ url_for('workspace_journal_vouchers_list', **manual_toggle_args) }}"
+         class="btn btn-sm {% if manual_only %}btn-dark{% else %}btn-outline-dark{% endif %}"
+         title="{% if manual_only %}Show all journal entries{% else %}Show manual journal vouchers only{% endif %}">
+        <i class="bi bi-journal-bookmark me-1"></i>Manual JVs Only
+      </a>
       <a href="{{ url_for('workspace_journal_voucher_add') }}" class="btn btn-warning btn-sm text-dark">
         <i class="bi bi-plus-circle me-1"></i>New JV
       </a>
@@ -17,13 +31,14 @@
   </div>
 
   <div class="section-heading bg-warning">
-    <i class="bi bi-journal-text me-2"></i>Journal Vouchers
+    <i class="bi bi-journal-text me-2"></i>Journal Vouchers{% if manual_only %} — Manual Only{% endif %}
   </div>
 
   <!-- Filter Form -->
   <div class="card shadow-sm border-0 mt-3 mb-3">
     <div class="card-body py-2">
       <form method="GET" action="" class="row g-2 align-items-end">
+        {% if manual_only %}<input type="hidden" name="manual_only" value="1">{% endif %}
         <div class="col-6 col-md-3">
           <label class="form-label form-label-sm mb-1">From Date</label>
           <input type="text" name="from_date" value="{{ from_date.strftime('%d-%m-%Y') if from_date else '' }}" class="form-control form-control-sm datepicker" placeholder="dd-mm-yyyy" autocomplete="off">
@@ -147,7 +162,10 @@
                 <a href="{{ url_for('workspace_journal_voucher_detail', pk=jv.id) }}" class="btn btn-sm btn-outline-primary" title="View">
                   <i class="bi bi-eye"></i>
                 </a>
-                {% if jv.entry_type == 'Journal' and jv.category != 'Fund Transfer Mirror' %}
+                {% if jv.entry_type == 'Journal' and jv.reference_type == 'Manual' and jv.category != 'Fund Transfer Mirror' %}
+                <a href="{{ url_for('workspace_journal_voucher_duplicate', pk=jv.id) }}" class="btn btn-sm btn-outline-success ms-1" title="Duplicate">
+                  <i class="bi bi-copy"></i>
+                </a>
                 <a href="{{ url_for('workspace_journal_voucher_edit', pk=jv.id) }}" class="btn btn-sm btn-outline-warning ms-1" title="Edit">
                   <i class="bi bi-pencil"></i>
                 </a>

@@ -643,7 +643,7 @@ from routes_workspace import (
     workspace_fund_transfer_view, workspace_fund_transfer_media,
     workspace_ledger, workspace_ledger_transfer_detail, workspace_ledger_journal_detail, workspace_balance_sheet, workspace_month_close, workspace_month_close_list, workspace_month_close_reverse, workspace_reports, workspace_mpg_report, workspace_dashboard_financial_report,
     workspace_journal_voucher_add, workspace_journal_vouchers_list, workspace_journal_voucher_detail, workspace_jv_backfill_district_project,
-    workspace_journal_voucher_edit, workspace_journal_voucher_delete, workspace_journal_vouchers_export,
+    workspace_journal_voucher_edit, workspace_journal_voucher_delete, workspace_journal_voucher_duplicate, workspace_journal_vouchers_export,
     workspace_transfer_description_suggestions_api,
     workspace_slip_profiles_api,
     workspace_slip_profile_delete_api,
@@ -794,6 +794,7 @@ app.add_url_rule('/workspace/journal-vouchers', 'workspace_journal_vouchers_list
 app.add_url_rule('/workspace/journal-voucher/<int:pk>', 'workspace_journal_voucher_detail', workspace_journal_voucher_detail, methods=['GET'])
 app.add_url_rule('/workspace/journal-voucher/<int:pk>/edit', 'workspace_journal_voucher_edit', workspace_journal_voucher_edit, methods=['GET', 'POST'])
 app.add_url_rule('/workspace/journal-voucher/<int:pk>/delete', 'workspace_journal_voucher_delete', workspace_journal_voucher_delete, methods=['POST'])
+app.add_url_rule('/workspace/journal-voucher/<int:pk>/duplicate', 'workspace_journal_voucher_duplicate', workspace_journal_voucher_duplicate, methods=['GET'])
 app.add_url_rule('/workspace/journal-vouchers/export', 'workspace_journal_vouchers_export', workspace_journal_vouchers_export, methods=['GET'])
 app.add_url_rule('/workspace/journal-vouchers/backfill', 'workspace_jv_backfill_district_project', workspace_jv_backfill_district_project, methods=['GET'])
 app.add_url_rule('/api/workspace-transfer-descriptions', 'workspace_transfer_description_suggestions', workspace_transfer_description_suggestions_api, methods=['GET'])

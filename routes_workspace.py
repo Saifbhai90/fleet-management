@@ -4754,6 +4754,54 @@ def workspace_account_balance_api():
     })
 
 
+def _is_manual_workspace_journal(je):
+    return (
+        je.entry_type == 'Journal'
+        and je.reference_type == 'Manual'
+        and (je.category or '') != 'Fund Transfer Mirror'
+    )
+
+
+def _workspace_journal_lines_payload(je):
+    lines = []
+    for line in je.lines.order_by(WorkspaceJournalEntryLine.sort_order).all():
+        lines.append({
+            'account_id': line.account_id,
+            'debit': float(line.debit or 0),
+            'credit': float(line.credit or 0),
+            'description': line.description or '',
+        })
+    return lines
+
+
+def _load_journal_voucher_copy(emp, copy_from_id):
+    if not copy_from_id:
+        return None
+    source = WorkspaceJournalEntry.query.filter_by(id=copy_from_id, employee_id=emp.id).first()
+    if not source or not _is_manual_workspace_journal(source):
+        return None
+    return {
+        'entry_date': date.today().strftime('%d-%m-%Y'),
+        'description': source.description or '',
+        'district_id': source.district_id,
+        'project_id': source.project_id,
+        'lines': _workspace_journal_lines_payload(source),
+        'source_entry_number': source.entry_number,
+        'source_id': source.id,
+    }
+
+
+def _manual_workspace_journal_filter(query):
+    return query.filter(
+        WorkspaceJournalEntry.entry_type == 'Journal',
+        WorkspaceJournalEntry.reference_type == 'Manual',
+        or_(
+            WorkspaceJournalEntry.category.is_(None),
+            WorkspaceJournalEntry.category != 'Fund Transfer Mirror',
+        ),
+    )
+
+
 def workspace_journal_voucher_add():
     """Workspace Journal Voucher - Multi-line journal entry for employee workspace."""
     guard, emp = _workspace_guard("workspace_ledger")
@@ -4904,14 +4952,44 @@ def workspace_journal_voucher_add():
             db.session.rollback()
             flash(f"Error creating journal voucher: {e}", "danger")
 
-    return render_template(
-        "workspace/journal_voucher_form.html",
-        title="New Workspace Journal Voucher",
-        accounts=accounts,
-        driver_vehicle_map=driver_vehicle_map,
-        districts=districts,
-        projects=projects,
-    )
+    copy_from = request.args.get('copy_from', type=int)
+    copy_data = _load_journal_voucher_copy(emp, copy_from)
+    if copy_from and not copy_data:
+        flash('Could not duplicate that entry. Only your manual journal vouchers can be copied.', 'warning')
+
+    template_kwargs = {
+        'title': 'New Workspace Journal Voucher',
+        'accounts': accounts,
+        'driver_vehicle_map': driver_vehicle_map,
+        'districts': districts,
+        'projects': projects,
+    }
+    if copy_data:
+        template_kwargs.update({
+            'entry_date': copy_data['entry_date'],
+            'description': copy_data['description'],
+            'district_id': copy_data['district_id'],
+            'project_id': copy_data['project_id'],
+            'lines': copy_data['lines'],
+            'copy_from_id': copy_data['source_id'],
+            'copy_from_number': copy_data['source_entry_number'],
+        })
+    return render_template('workspace/journal_voucher_form.html', **template_kwargs)
+
+
+def workspace_journal_voucher_duplicate(pk):
+    """Open New JV form pre-filled from an existing manual journal voucher."""
+    guard, emp = _workspace_guard("workspace_ledger")
+    if guard:
+        return guard
+
+    je = WorkspaceJournalEntry.query.filter_by(id=pk, employee_id=emp.id).first_or_404()
+    if not _is_manual_workspace_journal(je):
+        flash('Only manual journal vouchers created from New JV can be duplicated.', 'warning')
+        return redirect(url_for('workspace_journal_voucher_detail', pk=pk))
+
+    flash(f'Duplicating {je.entry_number}. Update the date if needed, then save.', 'info')
+    return redirect(url_for('workspace_journal_voucher_add', copy_from=pk))
 
 
 def workspace_journal_vouchers_list():
@@ -4926,6 +5004,7 @@ def workspace_journal_vouchers_list():
     page = int(request.args.get("page", 1))
     search = (request.args.get("search") or "").strip()
     entry_type = request.args.get("entry_type", "").strip()
+    manual_only = request.args.get("manual_only", "").strip().lower() in ("1", "true", "yes")
     # Multi-select type filter (comma-separated)
     entry_type_filter = request.args.get("entry_type_filter", "").strip()
     selected_types = [t.strip() for t in entry_type_filter.split(",") if t.strip()] if entry_type_filter else []
@@ -4959,8 +5038,13 @@ def workspace_journal_vouchers_list():
     # Valid entry types for Workspace Journal Vouchers
     valid_types = ["Journal", "Transfer", "Expense", "Opening", "MonthClose", "FuelOilMonthClose"]
 
-    # Base query - this employee's journal entries (all types)
-    if selected_types:
+    # Base query - this employee's journal entries
+    if manual_only:
+        query = WorkspaceJournalEntry.query.filter(
+            WorkspaceJournalEntry.employee_id == emp.id,
+        )
+        query = _manual_workspace_journal_filter(query)
+    elif selected_types:
         # Multi-select types from new filter
         # Check if FundTransferMirror is included
         has_mirror = "FundTransferMirror" in selected_types
@@ -5083,6 +5167,7 @@ def workspace_journal_vouchers_list():
         projects=projects,
         totals_map=totals_map,
         line_counts=line_counts,
+        manual_only=manual_only,
     )
 
 
@@ -5473,6 +5558,7 @@ def workspace_journal_vouchers_export():
     to_date_str = request.args.get("to_date", "").strip()
     search = request.args.get("search", "").strip()
     entry_type = request.args.get("entry_type", "").strip()
+    manual_only = request.args.get("manual_only", "").strip().lower() in ("1", "true", "yes")
     district_id = request.args.get("district_id", "").strip()
     project_id = request.args.get("project_id", "").strip()
 
@@ -5480,6 +5566,8 @@ def workspace_journal_vouchers_export():
     query = WorkspaceJournalEntry.query.filter(
         WorkspaceJournalEntry.employee_id == emp.id
     )
+    if manual_only:
+        query = _manual_workspace_journal_filter(query)
 
     # Apply filters
     if from_date_str:
