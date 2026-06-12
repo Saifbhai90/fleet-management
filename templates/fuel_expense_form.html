@@ -994,7 +994,7 @@
             <button type="submit" name="_save_action" value="save_list" class="fuel-action-btn fuel-action-btn--list">
               <i class="bi bi-list-ul"></i>Save to List
             </button>
-            <button type="submit" name="_save_action" value="save_add" class="fuel-action-btn fuel-action-btn--primary">
+            <button type="submit" name="_save_action" value="save_add" id="fuelSaveAddNextBtn" class="fuel-action-btn fuel-action-btn--primary">
               <i class="bi bi-plus-circle"></i>Save &amp; Add Next
             </button>
             {% else %}
@@ -2446,6 +2446,45 @@ document.addEventListener('DOMContentLoaded', function() {
       var m = val.match(/^acct-(\d+)$/);
       if (m) window.open('/workspace/ledger?account_id=' + m[1], '_blank');
     });
+    function focusFuelSaveAddNext() {
+      var btn = document.getElementById('fuelSaveAddNextBtn') ||
+        (fuelExpenseForm && fuelExpenseForm.querySelector('button[name="_save_action"][value="save_add"]')) ||
+        (fuelExpenseForm && fuelExpenseForm.querySelector('.fuel-action-btn--primary[type="submit"]'));
+      if (btn) btn.focus();
+    }
+    function wireExpenseByEnterToSave() {
+      if (!expenseBySelect || expenseBySelect.dataset.enterSaveWired === '1') return;
+      function onExpenseByEnter(e) {
+        if (e.key !== 'Enter' || e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return;
+        var ts = expenseBySelect.tomselect;
+        if (ts && ts.isOpen) {
+          window.setTimeout(function() {
+            if (expenseBySelect.value) focusFuelSaveAddNext();
+          }, 50);
+          return;
+        }
+        if (!expenseBySelect.value) return;
+        e.preventDefault();
+        e.stopPropagation();
+        focusFuelSaveAddNext();
+      }
+      var ts = expenseBySelect.tomselect;
+      if (ts && ts.control_input) {
+        ts.control_input.addEventListener('keydown', onExpenseByEnter);
+        expenseBySelect.dataset.enterSaveWired = '1';
+        return;
+      }
+      if (!expenseBySelect.tomselect) return;
+      expenseBySelect.addEventListener('keydown', onExpenseByEnter);
+      expenseBySelect.dataset.enterSaveWired = '1';
+    }
+    var _expenseByEnterTries = 0;
+    (function retryExpenseByEnterWire() {
+      wireExpenseByEnterToSave();
+      if (expenseBySelect && expenseBySelect.dataset.enterSaveWired !== '1' && _expenseByEnterTries++ < 30) {
+        window.setTimeout(retryExpenseByEnterWire, 200);
+      }
+    })();
   }
   if (amountInput) amountInput.addEventListener('input', function() { clearFieldError(amountInput, amountInputError); computeMpgAndLiters(); });
   if (fuelPriceInput) fuelPriceInput.addEventListener('input', function() { fuelPriceInput.dataset.autoSuggested = '0'; computeMpgAndLiters(); });
