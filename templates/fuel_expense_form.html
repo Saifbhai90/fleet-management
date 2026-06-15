@@ -47,6 +47,16 @@
     border-radius: 6px;
     color: #14532d;
     line-height: 1.45;
+    min-height: 2.35rem;
+  }
+  .fuel-form-wrap .vehicle-last-entry-strip.is-loading {
+    background: #f8fafc;
+    border-color: #e2e8f0;
+    color: #64748b;
+  }
+  .fuel-form-wrap #fuelAttachmentPasteHint {
+    display: block;
+    min-height: 1.25rem;
   }
   .fuel-form-wrap .vehicle-last-entry-strip.fuel-info-click:hover { background: #dcfce7; }
   .fuel-info-float-panel--wide { width: min(520px, calc(100vw - 24px)); }
@@ -796,7 +806,7 @@
                       {{ form.vehicle_id(class="form-select search-select", id="vehicleSelect") }}
                       <a href="{{ url_for('vehicle_reading_setup_form') }}" class="btn btn-outline-success btn-sm text-nowrap" title="Set Fuel/Oil previous readings">Set Reading</a>
                     </div>
-                    <div id="vehicleLastEntryStrip" class="vehicle-last-entry-strip fuel-info-click d-none" role="button" tabindex="0" title="Click for full entry details"></div>
+                    <div id="vehicleLastEntryStrip" class="vehicle-last-entry-strip fuel-info-click fleet-enter-skip d-none" role="button" tabindex="0" title="Click for full entry details"></div>
                   </div>
                   <div class="col-12 field-group">
                     <label class="form-label">Fuel Pump Name</label>
@@ -1294,6 +1304,37 @@ document.addEventListener('DOMContentLoaded', function() {
   var vehicleLastEntryViewLink = document.getElementById('vehicleLastEntryViewLink');
   var vehicleLastEntryEditLink = document.getElementById('vehicleLastEntryEditLink');
   var _vehicleLastEntryCache = null;
+
+  function scheduleFuelTomSelectReposition() {
+    if (typeof window.fleetRepositionOpenTomSelects !== 'function') return;
+    window.fleetRepositionOpenTomSelects();
+    requestAnimationFrame(function() {
+      window.fleetRepositionOpenTomSelects();
+    });
+  }
+
+  function showVehicleLastEntryLoading() {
+    if (!vehicleLastEntryStrip) return;
+    vehicleLastEntryStrip.classList.remove('d-none', 'is-open');
+    vehicleLastEntryStrip.classList.add('is-loading');
+    vehicleLastEntryStrip.innerHTML = '<span class="text-muted">Loading last entry...</span>';
+    scheduleFuelTomSelectReposition();
+  }
+
+  function renderVehicleLastEntryStrip(html) {
+    if (!vehicleLastEntryStrip) return;
+    vehicleLastEntryStrip.classList.remove('d-none', 'is-loading');
+    vehicleLastEntryStrip.innerHTML = html;
+    scheduleFuelTomSelectReposition();
+  }
+
+  function hideVehicleLastEntryStrip() {
+    if (!vehicleLastEntryStrip) return;
+    vehicleLastEntryStrip.classList.add('d-none');
+    vehicleLastEntryStrip.classList.remove('is-open', 'is-loading');
+    vehicleLastEntryStrip.innerHTML = '';
+    scheduleFuelTomSelectReposition();
+  }
   var fuelDuplicatePanel = document.getElementById('fuelDuplicatePanel');
   var fuelDuplicateBody = document.getElementById('fuelDuplicateBody');
   var fuelDuplicateContinueBtn = document.getElementById('fuelDuplicateContinueBtn');
@@ -1764,8 +1805,7 @@ document.addEventListener('DOMContentLoaded', function() {
         renderFuelEntryDetail(entry);
         scheduleVehicleLastEntryPanelPosition();
         if (vehicleLastEntryStrip) {
-          vehicleLastEntryStrip.classList.remove('d-none');
-          vehicleLastEntryStrip.innerHTML = formatVehicleLastEntryStrip(entry);
+          renderVehicleLastEntryStrip(formatVehicleLastEntryStrip(entry));
         }
       })
       .catch(function() {
@@ -1778,30 +1818,25 @@ document.addEventListener('DOMContentLoaded', function() {
     var url = _vehicleLastEntryFetchUrl();
     if (!url) {
       _vehicleLastEntryCache = null;
-      vehicleLastEntryStrip.classList.add('d-none');
-      vehicleLastEntryStrip.classList.remove('is-open');
-      vehicleLastEntryStrip.innerHTML = '';
+      hideVehicleLastEntryStrip();
       return;
     }
+    showVehicleLastEntryLoading();
     fetch(url)
       .then(function(r) { return r.json(); })
       .then(function(data) {
         var entry = data && data.entry;
         if (!entry) {
           _vehicleLastEntryCache = null;
-          vehicleLastEntryStrip.classList.remove('d-none', 'is-open');
-          vehicleLastEntryStrip.innerHTML = '<strong>Last Entry:</strong> <span class="text-muted">No previous fuel entry for this vehicle.</span>';
+          renderVehicleLastEntryStrip('<strong>Last Entry:</strong> <span class="text-muted">No previous fuel entry for this vehicle.</span>');
           return;
         }
         _vehicleLastEntryCache = entry;
-        vehicleLastEntryStrip.classList.remove('d-none');
-        vehicleLastEntryStrip.innerHTML = formatVehicleLastEntryStrip(entry);
+        renderVehicleLastEntryStrip(formatVehicleLastEntryStrip(entry));
       })
       .catch(function() {
         _vehicleLastEntryCache = null;
-        vehicleLastEntryStrip.classList.add('d-none');
-        vehicleLastEntryStrip.classList.remove('is-open');
-        vehicleLastEntryStrip.innerHTML = '';
+        hideVehicleLastEntryStrip();
       });
   }
 
@@ -2120,6 +2155,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!opt || !opt.value) {
       expenseByBalanceHint.className = 'small mt-1 text-muted';
       expenseByBalanceHint.textContent = 'Balance: auto/default account will be used.';
+      scheduleFuelTomSelectReposition();
       return;
     }
     var txt = (opt.textContent || '');
@@ -2127,6 +2163,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!m) {
       expenseByBalanceHint.className = 'small mt-1 text-muted';
       expenseByBalanceHint.textContent = '';
+      scheduleFuelTomSelectReposition();
       return;
     }
     var bal = m[1].trim();
@@ -2136,6 +2173,7 @@ document.addEventListener('DOMContentLoaded', function() {
     expenseByBalanceHint.textContent = 'Current Balance: ' + bal;
     expenseByBalanceHint.style.cursor = hasAcct ? 'pointer' : 'default';
     expenseByBalanceHint.title = hasAcct ? 'Click to open ledger' : '';
+    scheduleFuelTomSelectReposition();
   }
 
   function updateLitersFieldState() {
@@ -2706,6 +2744,17 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
+  function focusFuelExpenseBy() {
+    if (!expenseBySelect) return;
+    window.setTimeout(function() {
+      if (expenseBySelect.tomselect) {
+        expenseBySelect.tomselect.focus();
+      } else {
+        expenseBySelect.focus();
+      }
+    }, 30);
+  }
+
   var _blockExpenseByEnterSubmitUntil = 0;
 
   function wireExpenseByEnterToSave() {
@@ -2769,15 +2818,43 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   })();
 
-  if (fuelPriceInput) {
-    fuelPriceInput.addEventListener('keydown', function(e) {
+  if (vehicleSelect && fuelPumpSelect) {
+    window.addEventListener('keydown', function(e) {
       if (e.key !== 'Enter' || e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return;
-      if (!litersInput || !litersInput.disabled) return;
-      if (parseNum(fuelPriceInput.value) == null) return;
+      if (!fuelExpenseForm || !fuelExpenseForm.contains(e.target)) return;
+      var vts = vehicleSelect.tomselect;
+      if (!vts || e.target !== vts.control_input || vts.isOpen) return;
       e.preventDefault();
-      e.stopPropagation();
+      e.stopImmediatePropagation();
+      if (fuelPumpSelect.tomselect) fuelPumpSelect.tomselect.focus();
+      else fuelPumpSelect.focus();
+    }, true);
+  }
+
+  if (fuelPriceInput) {
+    window.addEventListener('keydown', function(e) {
+      if (e.key !== 'Enter' || e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (!fuelExpenseForm || !fuelExpenseForm.contains(e.target)) return;
+      if (e.target !== fuelPriceInput) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      if (litersInput && !litersInput.disabled) {
+        litersInput.focus();
+        try { litersInput.select(); } catch (err) {}
+        return;
+      }
       focusFuelAttachZone();
-    });
+    }, true);
+  }
+  if (litersInput) {
+    window.addEventListener('keydown', function(e) {
+      if (e.key !== 'Enter' || e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (!fuelExpenseForm || !fuelExpenseForm.contains(e.target)) return;
+      if (e.target !== litersInput || litersInput.disabled) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      focusFuelAttachZone();
+    }, true);
   }
   if (amountInput) amountInput.addEventListener('input', function() { clearFieldError(amountInput, amountInputError); computeMpgAndLiters(); });
   if (fuelPriceInput) fuelPriceInput.addEventListener('input', function() { fuelPriceInput.dataset.autoSuggested = '0'; computeMpgAndLiters(); });
@@ -2860,10 +2937,12 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!fuelAttachmentPasteHint) return;
     if (text) {
       fuelAttachmentPasteHint.textContent = text;
+      scheduleFuelTomSelectReposition();
       return;
     }
     var count = countValidFuelAttachmentFiles();
     fuelAttachmentPasteHint.textContent = count ? (count + ' file(s) ready for upload.') : '';
+    scheduleFuelTomSelectReposition();
   }
 
   function canPasteIntoFuelForm() {
@@ -2894,7 +2973,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function appendPastedFiles(fileList) {
     var added = mergeAttachmentFiles(fileList);
-    if (added > 0) updateAttachmentHint(added + ' file(s) pasted from clipboard.');
+    if (added > 0) {
+      updateAttachmentHint(added + ' file(s) pasted from clipboard.');
+      focusFuelExpenseBy();
+    }
   }
 
   if (fuelAttachZone && fuelAttachmentFiles) {

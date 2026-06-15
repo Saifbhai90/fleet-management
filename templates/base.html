@@ -35,7 +35,11 @@
         /* Full-width TS wrapper */
         .ts-wrapper { width: 100%; }
         /* Body-level dropdown must sit above cards/tables/modals */
-        body > .ts-dropdown { z-index: 1060 !important; }
+        body > .ts-dropdown {
+            z-index: 1060 !important;
+            position: fixed !important;
+            margin: 0 !important;
+        }
         /* Native app: bottom nav z-index 1065 — TS dropdown must clear it */
         html.capacitor-native body > .ts-dropdown { z-index: 12050 !important; }
         /* GPS attendance modal must sit above Tom Select body dropdowns */
@@ -5208,6 +5212,30 @@
         }
     });
 
+    function _fleetEnterTabSkip(el) {
+        return !!(el && el.classList && el.classList.contains('fleet-enter-skip'));
+    }
+
+    function _fleetNextEnterFocus(all, idx) {
+        for (var i = idx + 1; i < all.length; i++) {
+            if (_fleetEnterTabSkip(all[i])) continue;
+            return all[i];
+        }
+        return null;
+    }
+
+    function _fleetFocusField(el) {
+        if (!el) return;
+        if (el.tagName === 'SELECT' && el.tomselect) {
+            el.tomselect.focus();
+            return;
+        }
+        el.focus();
+        if (el.tagName !== 'BUTTON' && typeof el.select === 'function') {
+            try { el.select(); } catch(x) {}
+        }
+    }
+
     // ── kickFocusToNext: document-wide focus-jump utility ──────────────────
     // Searches the ENTIRE document (not just the parent form) so it works
     // regardless of how fields are nested. Only truly visible elements are
@@ -5217,18 +5245,17 @@
             'input:not([type="hidden"]):not([disabled]):not([readonly]), ' +
             'select:not([disabled]), ' +
             'textarea:not([disabled]):not([readonly]), ' +
-            'button[type="submit"]'
+            'button[type="submit"], ' +
+            '[tabindex]:not([tabindex="-1"])'
         )).filter(function(f) {
+            if (f.tabIndex < 0) return false;
             return f.offsetParent !== null;
         });
         var idx = all.indexOf(currentEl);
         if (idx < 0) return;
-        var next = all[idx + 1];
+        var next = _fleetNextEnterFocus(all, idx);
         if (!next) return;
-        next.focus();
-        if (next.tagName !== 'BUTTON' && typeof next.select === 'function') {
-            try { next.select(); } catch(x) {}
-        }
+        _fleetFocusField(next);
     }
 
     // ── Tom Select: Global Searchable Dropdowns ────────────────────────────
@@ -5274,6 +5301,63 @@
             '<span class="ts-empty-hint">Try a different filter or check your selection</span>' +
             '</div>';
     }
+
+    /** Viewport-fixed Tom Select placement (works when #mainContent scrolls, not window). */
+    window.fleetPositionTomSelectDropdown = function(ts) {
+        if (!ts || !ts.control || !ts.dropdown) return;
+        var control = ts.control;
+        var dropdown = ts.dropdown;
+        var content = ts.dropdown_content;
+        var rect = control.getBoundingClientRect();
+        if (!rect.width && !rect.height) return;
+
+        var vv = window.visualViewport;
+        var vpTop = (vv && vv.offsetTop) || 0;
+        var vpLeft = (vv && vv.offsetLeft) || 0;
+        var vpHeight = (vv && vv.height) || window.innerHeight;
+        var vpWidth = (vv && vv.width) || window.innerWidth;
+        var gap = 4;
+        var edge = 8;
+        var prefMax = 240;
+
+        var width = Math.max(rect.width, 160);
+        var left = rect.left;
+        if (left + width > vpLeft + vpWidth - edge) {
+            left = Math.max(vpLeft + edge, vpLeft + vpWidth - width - edge);
+        }
+        if (left < vpLeft + edge) left = vpLeft + edge;
+
+        var spaceBelow = vpTop + vpHeight - rect.bottom - edge;
+        var spaceAbove = rect.top - vpTop - edge;
+        var openBelow = spaceBelow >= 100 || spaceBelow >= spaceAbove;
+
+        dropdown.style.position = 'fixed';
+        dropdown.style.left = left + 'px';
+        dropdown.style.width = width + 'px';
+        dropdown.style.margin = '0';
+        dropdown.style.right = 'auto';
+        dropdown.style.bottom = 'auto';
+
+        if (openBelow) {
+            var maxBelow = Math.min(prefMax, Math.max(72, spaceBelow - gap));
+            if (content) content.style.maxHeight = maxBelow + 'px';
+            dropdown.style.top = (rect.bottom + gap) + 'px';
+            return;
+        }
+
+        var maxAbove = Math.min(prefMax, Math.max(72, spaceAbove - gap));
+        if (content) content.style.maxHeight = maxAbove + 'px';
+        dropdown.style.visibility = 'hidden';
+        dropdown.style.display = 'block';
+        var dropdownHeight = dropdown.offsetHeight || maxAbove;
+        var top = rect.top - gap - dropdownHeight;
+        if (top < vpTop + edge) top = vpTop + edge;
+        if (top + dropdownHeight > rect.top - gap) {
+            top = Math.max(vpTop + edge, rect.top - gap - dropdownHeight);
+        }
+        dropdown.style.top = top + 'px';
+        dropdown.style.visibility = '';
+    };
 
     window.initSearchableDropdowns = function(scope) {
         if (typeof TomSelect === 'undefined') return;
@@ -5388,8 +5472,16 @@
                 //    opens and there are literally zero options to display.
                 //    TomSelect's render.no_results only fires during a text search;
                 //    this covers the "options list is empty on open" case too.
+                ts.positionDropdown = function() {
+                    window.fleetPositionTomSelectDropdown(ts);
+                };
+
                 ts.on('dropdown_open', function() {
+                    if (typeof window.fleetTomSelectDropdownOpened === 'function') {
+                        window.fleetTomSelectDropdownOpened();
+                    }
                     requestAnimationFrame(function() {
+                        window.fleetPositionTomSelectDropdown(ts);
                         var dc = ts.dropdown_content;
                         if (!dc) return;
                         dc.querySelectorAll('.ts-empty-forced').forEach(function(n){ n.remove(); });
@@ -5403,7 +5495,16 @@
                             div.innerHTML = _emptyStateHTML(lbl);
                             dc.appendChild(div);
                         }
+                        requestAnimationFrame(function() {
+                            window.fleetPositionTomSelectDropdown(ts);
+                        });
                     });
+                });
+
+                ts.on('dropdown_close', function() {
+                    if (typeof window.fleetTomSelectDropdownClosed === 'function') {
+                        window.fleetTomSelectDropdownClosed();
+                    }
                 });
 
                 // ── Highlight-and-Overwrite (SAP/Excel-style) ─────────────────
@@ -5513,20 +5614,72 @@
     // Run immediately — content block is above scripts in the rendered HTML
     window.initSearchableDropdowns();
 
-    /* Close Tom Select only when the main content column scrolls (not window/visualViewport —
-     * keyboard open fires visualViewport resize and was killing the dropdown while typing). */
+    /* Keep body-attached Tom Select menus aligned while scroll / layout shifts. */
     (function() {
-        function _closeAllTomSelects() {
-            try {
-                document.querySelectorAll('select.search-select').forEach(function(sel) {
-                    var t = sel.tomselect;
-                    if (t && t.isOpen) t.close();
-                });
-            } catch (e) {}
+        var _tsRepositionScheduled = false;
+        var _tsLayoutMo = null;
+
+        window.fleetRepositionOpenTomSelects = function() {
+            if (_tsRepositionScheduled) return;
+            _tsRepositionScheduled = true;
+            requestAnimationFrame(function() {
+                _tsRepositionScheduled = false;
+                try {
+                    document.querySelectorAll('select.search-select').forEach(function(sel) {
+                        var t = sel.tomselect;
+                        if (t && t.isOpen) window.fleetPositionTomSelectDropdown(t);
+                    });
+                } catch (e) {}
+            });
+        };
+
+        function _startTomSelectLayoutWatch() {
+            if (_tsLayoutMo) return;
+            var root = document.getElementById('mainContent') || document.body;
+            if (!root || typeof MutationObserver === 'undefined') return;
+            _tsLayoutMo = new MutationObserver(function() {
+                window.fleetRepositionOpenTomSelects();
+            });
+            _tsLayoutMo.observe(root, {
+                childList: true,
+                subtree: true,
+                characterData: true,
+                attributes: true,
+                attributeFilter: ['class', 'style', 'hidden']
+            });
+        }
+
+        function _stopTomSelectLayoutWatch() {
+            if (!_tsLayoutMo) return;
+            _tsLayoutMo.disconnect();
+            _tsLayoutMo = null;
+        }
+
+        window.fleetTomSelectDropdownOpened = function() {
+            _startTomSelectLayoutWatch();
+        };
+
+        window.fleetTomSelectDropdownClosed = function() {
+            requestAnimationFrame(function() {
+                var anyOpen = false;
+                try {
+                    document.querySelectorAll('select.search-select').forEach(function(sel) {
+                        if (sel.tomselect && sel.tomselect.isOpen) anyOpen = true;
+                    });
+                } catch (e) {}
+                if (!anyOpen) _stopTomSelectLayoutWatch();
+            });
+        };
+
+        window.addEventListener('resize', window.fleetRepositionOpenTomSelects, { passive: true });
+        window.addEventListener('scroll', window.fleetRepositionOpenTomSelects, true);
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', window.fleetRepositionOpenTomSelects, { passive: true });
+            window.visualViewport.addEventListener('scroll', window.fleetRepositionOpenTomSelects, { passive: true });
         }
         var mc = document.getElementById('mainContent');
         if (mc) {
-            mc.addEventListener('scroll', _closeAllTomSelects, { passive: true });
+            mc.addEventListener('scroll', window.fleetRepositionOpenTomSelects, { passive: true });
         }
     })();
 
@@ -5840,13 +5993,21 @@
             ).filter(function(f) {
                 if (f.type === 'hidden') return false;
                 if (f.disabled || f.readOnly) return false;
+                if (f.hasAttribute('tabindex') && f.tabIndex < 0) return false;
                 if (f.offsetParent === null) return false;
                 try { if (getComputedStyle(f).visibility === 'hidden') return false; } catch(x) {}
                 return true;
             });
 
             var idx = focusable.indexOf(el);
-            var nextEl = (idx !== -1 && idx < focusable.length - 1) ? focusable[idx + 1] : null;
+            var nextEl = null;
+            if (idx !== -1) {
+                for (var j = idx + 1; j < focusable.length; j++) {
+                    if (_fleetEnterTabSkip(focusable[j])) continue;
+                    nextEl = focusable[j];
+                    break;
+                }
+            }
 
             // Last element or no next → allow form submit
             if (!nextEl) return;
@@ -5875,7 +6036,7 @@
                 setTimeout(function() { kickFocusToNext(el); }, 50);
             } else {
                 el.blur();
-                kickFocusToNext(el);
+                _fleetFocusField(nextEl);
             }
         }, true);
 

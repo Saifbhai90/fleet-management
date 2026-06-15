@@ -2180,6 +2180,14 @@ document.addEventListener('DOMContentLoaded', function() {
     maintAttachmentPasteHint.textContent = count ? (count + ' file(s) ready for upload.') : '';
   }
 
+  function focusMaintExpenseBy() {
+    if (!expenseBySelect) return;
+    window.setTimeout(function() {
+      if (expenseBySelect.tomselect) expenseBySelect.tomselect.focus();
+      else expenseBySelect.focus();
+    }, 30);
+  }
+
   function canPasteIntoMaintenanceForm() {
     var formNode = document.getElementById('maintenanceExpenseForm');
     if (!formNode) return false;
@@ -2204,7 +2212,19 @@ document.addEventListener('DOMContentLoaded', function() {
     if (added > 0) {
       maintAttachmentFiles.files = dt.files;
       updateAttachmentHint(added + ' file(s) pasted from clipboard.');
+      focusMaintExpenseBy();
     }
+  }
+
+  var maintRemarksField = maintenanceExpenseForm
+    ? maintenanceExpenseForm.querySelector('textarea[name="remarks"]')
+    : null;
+  if (maintRemarksField && maintAttachmentFiles) {
+    maintRemarksField.addEventListener('keydown', function(e) {
+      if (e.key !== 'Enter' || e.shiftKey) return;
+      e.preventDefault();
+      maintAttachmentFiles.focus();
+    });
   }
 
   if (maintAttachmentFiles) {
