@@ -5595,7 +5595,7 @@ def drivers_list():
 
     if search:
         flt = _multi_word_filter(search,
-            Driver.driver_id, Driver.name, Driver.cnic_no,
+            Driver.driver_id, Driver.name, Driver.father_name, Driver.cnic_no,
             Driver.cnic_status, Driver.license_no, Driver.license_status,
             Driver.phone1, Driver.driver_district, Driver.shift,
             Vehicle.vehicle_no, Project.name, District.name)
@@ -5784,21 +5784,20 @@ def drivers_export():
     search = request.args.get('search', '').strip()
     query = Driver.query
     if search:
-        flt = _multi_word_filter(search, Driver.driver_id, Driver.name, Driver.cnic_no, Driver.cnic_status, Driver.license_no, Driver.license_status, Driver.phone1, Driver.driver_district)
+        flt = _multi_word_filter(search, Driver.driver_id, Driver.name, Driver.father_name, Driver.cnic_no, Driver.cnic_status, Driver.license_no, Driver.license_status, Driver.phone1, Driver.driver_district)
         if flt is not None:
             query = query.filter(flt)
     drivers = query.order_by(Driver.id.asc()).all()
-    # List/Print jaisi same columns: Driver ID, Name, CNIC No, CNIC Status, License No, License Status, Phone, Driver District
-    headers = ['Driver ID', 'Name', 'CNIC No', 'CNIC Status', 'License No', 'License Status', 'Phone', 'Driver District']
+    # List/Print jaisi same columns: Driver ID, Name, Father Name, CNIC No, License No, Phone, Driver District
+    headers = ['Driver ID', 'Name', 'Father Name', 'CNIC No', 'License No', 'Phone', 'Driver District']
     rows = []
     for d in drivers:
         rows.append([
             d.driver_id or '',
             d.name or '',
+            d.father_name or '-',
             format_cnic(d.cnic_no) if d.cnic_no else '-',
-            d.cnic_status or 'N/A',
             d.license_no or '-',
-            d.license_status or 'N/A',
             format_phone(d.phone1) if d.phone1 else '-',
             d.driver_district or '-',
         ])
@@ -6032,7 +6031,7 @@ def drivers_print():
     search = request.args.get('search', '').strip()
     query = Driver.query
     if search:
-        flt = _multi_word_filter(search, Driver.driver_id, Driver.name, Driver.cnic_no, Driver.cnic_status, Driver.license_no, Driver.license_status, Driver.phone1, Driver.driver_district)
+        flt = _multi_word_filter(search, Driver.driver_id, Driver.name, Driver.father_name, Driver.cnic_no, Driver.cnic_status, Driver.license_no, Driver.license_status, Driver.phone1, Driver.driver_district)
         if flt is not None:
             query = query.filter(flt)
     drivers = query.order_by(Driver.id.asc()).all()

@@ -264,11 +264,10 @@
             <th style="width:3%">Sr #</th>
             <th>Driver ID</th>
             <th>Driver Name</th>
+            <th>Father Name</th>
             <th>Driver Status</th>
             <th>CNIC No</th>
-            <th>CNIC Status</th>
             <th>License No</th>
-            <th>License Status</th>
             <th>Phone</th>
             <th>Driver District</th>
             <th style="width:9%">Actions</th>
@@ -298,6 +297,7 @@
               {% if driver.photo_path %} <i class="bi bi-image text-info" style="font-size:0.65rem;" title="Photo uploaded"></i>{% endif %}
               {% if driver.document_path %} <a href="{{ url_for('uploaded_file', filename=driver.document_path) }}" target="_blank" class="text-primary ms-1" title="View documents" onclick="event.stopPropagation();"><i class="bi bi-file-earmark-pdf" style="font-size:0.65rem;"></i></a>{% endif %}
             </td>
+            <td style="white-space:nowrap;">{{ driver.father_name or '-' }}</td>
             <td>
               {% if driver.status == 'Left' %}
                 <span class="badge-left"><i class="bi bi-dash-circle me-1"></i>Left</span>
@@ -306,25 +306,7 @@
               {% endif %}
             </td>
             <td style="white-space:nowrap;">{{ driver.cnic_no|cnic_fmt or '-' }}</td>
-            <td>
-              {% if driver.cnic_status == 'Valid' %}
-                <span class="badge bg-success" style="font-size:0.67rem;">Valid</span>
-              {% elif driver.cnic_status == 'Expired' %}
-                <span class="badge bg-danger" style="font-size:0.67rem;">Expired</span>
-              {% else %}
-                <span class="badge bg-secondary" style="font-size:0.67rem;">N/A</span>
-              {% endif %}
-            </td>
             <td style="white-space:nowrap;">{{ driver.license_no or '-' }}</td>
-            <td>
-              {% if driver.license_status == 'Valid' %}
-                <span class="badge bg-success" style="font-size:0.67rem;">Valid</span>
-              {% elif driver.license_status == 'Expired' %}
-                <span class="badge bg-danger" style="font-size:0.67rem;">Expired</span>
-              {% else %}
-                <span class="badge bg-secondary" style="font-size:0.67rem;">N/A</span>
-              {% endif %}
-            </td>
             <td style="white-space:nowrap;">{{ driver.phone1|phone_fmt or '-' }}</td>
             <td>{{ driver.driver_district or '-' }}</td>
             <td class="text-center" style="white-space:nowrap;" onclick="event.stopPropagation();">
@@ -348,7 +330,7 @@
           </tr>
           {% else %}
           <tr>
-            <td colspan="11" class="text-center py-5">
+            <td colspan="10" class="text-center py-5">
               <div class="alert alert-info border-0 shadow-sm mb-0">
                 <i class="bi bi-info-circle-fill me-2 fs-4"></i>
                 No drivers found.
@@ -398,7 +380,7 @@ $(document).ready(function () {
         lengthMenu: [[25, 50, 100, -1], [25, 50, 100, 'All']],
         order: [],
         columnDefs: [
-            { orderable: false, targets: [0, 10] }
+            { orderable: false, targets: [0, 9] }
         ],
         language: {
             info: 'Showing _START_ to _END_ of _TOTAL_ drivers',

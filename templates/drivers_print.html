@@ -24,10 +24,9 @@
             <tr>
               <th>Driver ID</th>
               <th>Name</th>
+              <th>Father Name</th>
               <th>CNIC No</th>
-              <th>CNIC Status</th>
               <th>License No</th>
-              <th>License Status</th>
               <th>Phone</th>
               <th>Driver District</th>
             </tr>
@@ -37,16 +36,15 @@
             <tr>
               <td>{{ d.driver_id }}</td>
               <td>{{ d.name }}</td>
+              <td>{{ d.father_name or '-' }}</td>
               <td>{{ d.cnic_no|cnic_fmt or '-' }}</td>
-              <td>{{ d.cnic_status or 'N/A' }}</td>
               <td>{{ d.license_no or '-' }}</td>
-              <td>{{ d.license_status or 'N/A' }}</td>
               <td>{{ d.phone1|phone_fmt or '-' }}</td>
               <td>{{ d.driver_district or '-' }}</td>
             </tr>
             {% else %}
             <tr>
-              <td colspan="8" class="text-center py-4 text-muted">
+              <td colspan="7" class="text-center py-4 text-muted">
                 No drivers found.
               </td>
             </tr>
