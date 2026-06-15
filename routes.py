@@ -11,7 +11,7 @@ from models import (
     Party, Product, FuelExpense, FuelExpenseAttachment, ProductBalance, OilExpense, OilExpenseItem, OilExpenseAttachment,
     MaintenanceWorkOrder, MaintenanceWorkOrderAttachment, MaintenanceExpense, MaintenanceExpenseItem, MaintenanceExpenseAttachment,
     WorkspaceProduct,
-    WorkspaceParty, WorkspaceAccount, WorkspaceJournalEntry, WorkspaceVehicleReadingSetup, WorkspaceVehicleMaintenanceBaseline, WorkspaceExpense, ExpenseDeleteCleanupJob,
+    WorkspaceParty, WorkspaceAccount, WorkspaceJournalEntry, WorkspaceJournalEntryLine, WorkspaceVehicleReadingSetup, WorkspaceVehicleMaintenanceBaseline, WorkspaceExpense, ExpenseDeleteCleanupJob,
     Notification, NotificationRead,
     User, Role, Permission, role_permissions,
     LoginLog, ActivityLog, ClientActivityLog,
@@ -29201,24 +29201,9 @@ def fuel_expense_list():
     if vehicle_id:
         query = query.filter(FuelExpense.vehicle_id == vehicle_id)
     if search_q:
-        like_q = f"%{search_q}%"
-        query = query.filter(
-            db.or_(
-                FuelExpense.slip_no.ilike(like_q),
-                FuelExpense.payment_type.ilike(like_q),
-                FuelExpense.fuel_type.ilike(like_q),
-                db.cast(FuelExpense.id, db.String).ilike(like_q),
-                db.cast(FuelExpense.current_reading, db.String).ilike(like_q),
-                db.cast(FuelExpense.previous_reading, db.String).ilike(like_q),
-                db.cast(FuelExpense.amount, db.String).ilike(like_q),
-                db.cast(FuelExpense.liters, db.String).ilike(like_q),
-                db.cast(FuelExpense.km, db.String).ilike(like_q),
-                FuelExpense.vehicle.has(Vehicle.vehicle_no.ilike(like_q)),
-                FuelExpense.project.has(Project.name.ilike(like_q)),
-                FuelExpense.district.has(District.name.ilike(like_q)),
-                FuelExpense.workspace_pump.has(WorkspaceParty.name.ilike(like_q)),
-            )
-        )
+        search_filter = _fuel_expense_list_search_filter(search_q, workspace_employee_id)
+        if search_filter is not None:
+            query = query.filter(search_filter)
     query = query.order_by(
         FuelExpense.fueling_date.asc(),
         db.case((FuelExpense.current_reading.is_(None), 1), else_=0).asc(),
@@ -29250,12 +29235,18 @@ def fuel_expense_list():
 
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
     rows = pagination.items
+    expense_by_labels = {}
+    if workspace_employee_id and rows:
+        expense_by_labels = _workspace_expense_by_labels_for_references(
+            workspace_employee_id, 'FuelExpense', [r.id for r in rows]
+        )
     cleanup_status = _latest_expense_cleanup_status('fuel', workspace_employee_id)
     return render_template('fuel_expense_list.html', form=form, rows=rows,
                            from_date=from_d, to_date=to_d, totals=totals,
                            pagination=pagination, page=page, per_page=per_page,
                            district_id=district_id, project_id=project_id, vehicle_id=vehicle_id,
                            q=search_q,
+                           expense_by_labels=expense_by_labels,
                            cleanup_status=cleanup_status,
                            show_upload_media_columns=show_upload_media_columns,
                            location_cascade=_fuel_expense_location_cascade_dict())
@@ -29453,32 +29444,203 @@ def _workspace_account_id_from_expense_by(expense_by_val, employee_id):
     return acct.id if acct else None
 
 
-def _workspace_expense_by_for_reference(employee_id, reference_type, reference_id):
+def _workspace_journal_expense_by_account_id(journal_entry, lines_by_je, exclude_account_ids, accounts_by_id):
+    """Credit-side workspace account used to pay/settle an expense (Expense By)."""
+    lines = lines_by_je.get(journal_entry.id, [])
+    credit_lines = sorted(
+        [
+            ln for ln in lines
+            if Decimal(str(ln.credit or 0)) > 0 and ln.account_id not in exclude_account_ids
+        ],
+        key=lambda x: Decimal(str(x.credit or 0)),
+        reverse=True,
+    )
+    for ln in credit_lines:
+        acct = accounts_by_id.get(ln.account_id)
+        if acct and acct.code not in ('5100', '5000'):
+            return acct.id
+    return None
+
+
+def _workspace_expense_by_account_id_for_reference(employee_id, reference_type, reference_id):
     if not employee_id or not reference_type or not reference_id:
-        return ''
+        return None
     rows = WorkspaceJournalEntry.query.filter_by(
         employee_id=employee_id,
         reference_type=reference_type,
         reference_id=reference_id,
     ).order_by(WorkspaceJournalEntry.id.desc()).all()
     if not rows:
-        return ''
+        return None
+    lines_by_je = {}
+    line_rows = WorkspaceJournalEntryLine.query.filter(
+        WorkspaceJournalEntryLine.journal_entry_id.in_([je.id for je in rows])
+    ).all()
+    for ln in line_rows:
+        lines_by_je.setdefault(ln.journal_entry_id, []).append(ln)
+    ensure_workspace_base_accounts(employee_id)
+    expense_head = WorkspaceAccount.query.filter_by(employee_id=employee_id, code='5100').first()
+    exclude_ids = {expense_head.id} if expense_head else set()
+    acct_ids = {ln.account_id for ln in line_rows}
+    accounts_by_id = {}
+    if acct_ids:
+        for acct in WorkspaceAccount.query.filter(
+            WorkspaceAccount.id.in_(list(acct_ids)),
+            WorkspaceAccount.employee_id == employee_id,
+            WorkspaceAccount.is_active == True,
+        ).all():
+            accounts_by_id[acct.id] = acct
     transfer_rows = [je for je in rows if (je.entry_type or '').strip().lower() == 'transfer']
-    for je in transfer_rows:
-        credit_lines = sorted(
-            [ln for ln in (je.lines or []) if Decimal(str(ln.credit or 0)) > 0],
-            key=lambda x: Decimal(str(x.credit or 0)),
-            reverse=True,
+    expense_rows = [je for je in rows if (je.entry_type or '').strip().lower() == 'expense']
+    for group in (transfer_rows, expense_rows):
+        for je in group:
+            acct_id = _workspace_journal_expense_by_account_id(je, lines_by_je, exclude_ids, accounts_by_id)
+            if acct_id:
+                return acct_id
+    return None
+
+
+def _workspace_expense_by_label_for_reference(employee_id, reference_type, reference_id):
+    acct_id = _workspace_expense_by_account_id_for_reference(employee_id, reference_type, reference_id)
+    if not acct_id:
+        return ''
+    acct = WorkspaceAccount.query.filter_by(id=acct_id, employee_id=employee_id, is_active=True).first()
+    if not acct:
+        return ''
+    return f"{acct.code} - {acct.name}"
+
+
+def _workspace_expense_by_labels_for_references(employee_id, reference_type, reference_ids):
+    ids = sorted({int(x) for x in reference_ids if x})
+    if not employee_id or not reference_type or not ids:
+        return {}
+    entries = WorkspaceJournalEntry.query.filter(
+        WorkspaceJournalEntry.employee_id == employee_id,
+        WorkspaceJournalEntry.reference_type == reference_type,
+        WorkspaceJournalEntry.reference_id.in_(ids),
+    ).order_by(
+        WorkspaceJournalEntry.reference_id.asc(),
+        WorkspaceJournalEntry.id.desc(),
+    ).all()
+    if not entries:
+        return {ref_id: '' for ref_id in ids}
+    lines_by_je = {}
+    line_rows = WorkspaceJournalEntryLine.query.filter(
+        WorkspaceJournalEntryLine.journal_entry_id.in_([je.id for je in entries])
+    ).all()
+    for ln in line_rows:
+        lines_by_je.setdefault(ln.journal_entry_id, []).append(ln)
+    ensure_workspace_base_accounts(employee_id)
+    expense_head = WorkspaceAccount.query.filter_by(employee_id=employee_id, code='5100').first()
+    exclude_ids = {expense_head.id} if expense_head else set()
+    acct_ids = {ln.account_id for ln in line_rows}
+    accounts_by_id = {}
+    if acct_ids:
+        for acct in WorkspaceAccount.query.filter(
+            WorkspaceAccount.id.in_(list(acct_ids)),
+            WorkspaceAccount.employee_id == employee_id,
+            WorkspaceAccount.is_active == True,
+        ).all():
+            accounts_by_id[acct.id] = acct
+    by_ref = {}
+    for je in entries:
+        by_ref.setdefault(je.reference_id, []).append(je)
+    labels = {}
+    for ref_id in ids:
+        acct_id = None
+        je_list = by_ref.get(ref_id, [])
+        transfer_rows = [je for je in je_list if (je.entry_type or '').strip().lower() == 'transfer']
+        expense_rows = [je for je in je_list if (je.entry_type or '').strip().lower() == 'expense']
+        for group in (transfer_rows, expense_rows):
+            for je in group:
+                acct_id = _workspace_journal_expense_by_account_id(je, lines_by_je, exclude_ids, accounts_by_id)
+                if acct_id:
+                    break
+            if acct_id:
+                break
+        acct = accounts_by_id.get(acct_id) if acct_id else None
+        labels[ref_id] = f"{acct.code} - {acct.name}" if acct else ''
+    return labels
+
+
+def _workspace_expense_by_for_reference(employee_id, reference_type, reference_id):
+    acct_id = _workspace_expense_by_account_id_for_reference(employee_id, reference_type, reference_id)
+    return f'acct-{acct_id}' if acct_id else ''
+
+
+def _fuel_expense_ids_matching_expense_by_search(employee_id, search_token):
+    """Fuel expense IDs whose Workspace COA payer account matches a single search token."""
+    if not employee_id or not search_token:
+        return None
+    like_q = f"%{search_token.strip()}%"
+    driver_join = db.and_(
+        func.lower(WorkspaceAccount.entity_type) == 'driver',
+        WorkspaceAccount.entity_id == Driver.id,
+    )
+    return (
+        db.session.query(WorkspaceJournalEntry.reference_id)
+        .join(
+            WorkspaceJournalEntryLine,
+            WorkspaceJournalEntryLine.journal_entry_id == WorkspaceJournalEntry.id,
         )
-        for ln in credit_lines:
-            acct = WorkspaceAccount.query.filter_by(
-                id=ln.account_id,
-                employee_id=employee_id,
-                is_active=True,
-            ).first()
-            if acct:
-                return f'acct-{acct.id}'
-    return ''
+        .join(
+            WorkspaceAccount,
+            WorkspaceAccount.id == WorkspaceJournalEntryLine.account_id,
+        )
+        .outerjoin(Driver, driver_join)
+        .filter(
+            WorkspaceJournalEntry.employee_id == employee_id,
+            WorkspaceJournalEntry.reference_type == 'FuelExpense',
+            WorkspaceJournalEntry.reference_id.isnot(None),
+            WorkspaceJournalEntry.entry_type.in_(['Expense', 'Transfer']),
+            WorkspaceJournalEntryLine.credit > 0,
+            WorkspaceAccount.employee_id == employee_id,
+            ~WorkspaceAccount.code.in_(['5100', '5000']),
+            or_(
+                WorkspaceAccount.name.ilike(like_q),
+                WorkspaceAccount.code.ilike(like_q),
+                (WorkspaceAccount.code + ' - ' + WorkspaceAccount.name).ilike(like_q),
+                Driver.name.ilike(like_q),
+            ),
+        )
+        .distinct()
+    )
+
+
+def _fuel_expense_list_search_filter(search_q, workspace_employee_id):
+    """Multi-word AND search: each token must match at least one searchable field."""
+    tokens = [t for t in (search_q or '').split() if t]
+    if not tokens:
+        return None
+    search_columns = [
+        FuelExpense.slip_no,
+        FuelExpense.payment_type,
+        FuelExpense.fuel_type,
+        cast(FuelExpense.id, SAString),
+        cast(FuelExpense.current_reading, SAString),
+        cast(FuelExpense.previous_reading, SAString),
+        cast(FuelExpense.amount, SAString),
+        cast(FuelExpense.liters, SAString),
+        cast(FuelExpense.km, SAString),
+        cast(FuelExpense.fueling_date, SAString),
+        cast(FuelExpense.card_swipe_date, SAString),
+    ]
+    token_clauses = []
+    for tok in tokens:
+        like_tok = f'%{tok}%'
+        token_or_parts = [col.ilike(like_tok) for col in search_columns]
+        token_or_parts.extend([
+            FuelExpense.vehicle_id.in_(db.session.query(Vehicle.id).filter(Vehicle.vehicle_no.ilike(like_tok))),
+            FuelExpense.project_id.in_(db.session.query(Project.id).filter(Project.name.ilike(like_tok))),
+            FuelExpense.district_id.in_(db.session.query(District.id).filter(District.name.ilike(like_tok))),
+            FuelExpense.workspace_pump_id.in_(db.session.query(WorkspaceParty.id).filter(WorkspaceParty.name.ilike(like_tok))),
+            FuelExpense.fuel_pump_id.in_(db.session.query(Party.id).filter(Party.name.ilike(like_tok))),
+        ])
+        expense_by_ids = _fuel_expense_ids_matching_expense_by_search(workspace_employee_id, tok)
+        if expense_by_ids is not None:
+            token_or_parts.append(FuelExpense.id.in_(expense_by_ids))
+        token_clauses.append(or_(*token_or_parts))
+    return and_(*token_clauses)
 
 
 def _require_workspace_employee_for_expense_management():
@@ -30256,9 +30418,11 @@ def fuel_expense_view(pk):
         return redirect(url_for('fuel_expense_list'))
     default_back = url_for('fuel_expense_list')
     back_url = _safe_internal_path(request.args.get('return_to'), default_back)
+    expense_by_label = _workspace_expense_by_label_for_reference(workspace_employee_id, 'FuelExpense', rec.id)
     return render_template(
         'fuel_expense_detail.html',
         rec=rec,
+        expense_by_label=expense_by_label,
         title='Fuel Expense Detail',
         back_url=back_url,
         return_to_path=request.full_path,

@@ -8,6 +8,8 @@
   .fuel-list-card { border: 1px solid #e9ecef; border-radius: 12px; box-shadow: 0 2px 10px rgba(16,24,40,.06); }
   .fuel-list-card .card-header { background: linear-gradient(to right, #f8f9fa 0%, #fff 100%); font-weight: 600; font-size: .87rem; }
   .fuel-grid-page .fuel-list-card .card-body.p-0 { padding: 0 !important; }
+  .fuel-expense-by-cell { max-width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: .74rem; color: #334155; }
+  .fuel-fueling-date-cell { cursor: help; white-space: nowrap; }
 </style>
 <div class="container-fluid py-3 fuel-grid-page">
   <script type="application/json" id="locationCascadeData">{{ location_cascade|tojson }}</script>
@@ -100,7 +102,7 @@
   <div class="card fuel-list-card overflow-hidden">
     <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
       <span class="fw-semibold">Fuel Expense from {{ from_date|ddmmyyyy }} to {{ to_date|ddmmyyyy }}</span>
-      <input type="text" id="fuelExpenseSearch" class="form-control form-control-sm bg-white text-dark" placeholder="Search all pages..." style="max-width: 240px;" autocomplete="off" value="{{ q or '' }}">
+      <input type="text" id="fuelExpenseSearch" class="form-control form-control-sm bg-white text-dark" placeholder="Search — press Enter" style="max-width: 240px;" autocomplete="off" value="{{ q or '' }}">
     </div>
     <div class="card-body p-0">
       {% set umc = show_upload_media_columns|default(true) %}
@@ -116,6 +118,7 @@
               <th>KM Out (Task)</th>
               <th>KM In (Task)</th>
               <th>Payment</th>
+              <th>Expense By</th>
               <th>Fueling Date</th>
               <th>Card Swipe</th>
               <th>Slip No</th>
@@ -136,6 +139,7 @@
           </thead>
           <tbody>
             {% for r in rows %}
+            {% set expense_by_label = (expense_by_labels.get(r.id) if expense_by_labels else '') or '' %}
             <tr class="fuel-expense-row" data-liters="{{ r.liters if r.liters is not none else '' }}" data-amount="{{ r.amount if r.amount is not none else '' }}">
               <td class="ps-3">{{ loop.index }}</td>
               <td>{{ r.district.name if r.district else '-' }}</td>
@@ -145,7 +149,18 @@
               <td>{{ r.km_out_task|round(2) if r.km_out_task is not none else '-' }}</td>
               <td>{{ r.km_in_task|round(2) if r.km_in_task is not none else '-' }}</td>
               <td>{{ r.payment_type or '-' }}</td>
-              <td>{{ r.fueling_date|ddmmyyyy }}</td>
+              <td class="fuel-expense-by-cell"
+                  {% if expense_by_label %}title="Expense By: {{ expense_by_label|e }}" data-bs-toggle="tooltip" data-bs-placement="top"{% endif %}>
+                {% if expense_by_label %}
+                  <i class="bi bi-wallet2 text-primary me-1" style="font-size:.72rem;"></i>{{ expense_by_label }}
+                {% else %}
+                  <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+              <td class="fuel-fueling-date-cell"
+                  {% if expense_by_label %}title="Expense By: {{ expense_by_label|e }}" data-bs-toggle="tooltip" data-bs-placement="top"{% endif %}>
+                {{ r.fueling_date|ddmmyyyy }}
+              </td>
               <td>{{ r.card_swipe_date|ddmmyyyy if r.card_swipe_date else '-' }}</td>
               <td>{{ r.slip_no or '-' }}</td>
               <td>{{ r.previous_reading|round(2) if r.previous_reading is not none else '-' }}</td>
@@ -227,7 +242,7 @@
               </td>
             </tr>
             <tr class="fuel-upload-expand-row d-none" data-record-id="{{ r.id }}">
-              <td colspan="{% if umc %}22{% else %}20{% endif %}" class="p-0 bg-body-secondary border-0">
+              <td colspan="{% if umc %}23{% else %}21{% endif %}" class="p-0 bg-body-secondary border-0">
                 <div class="px-3 py-2 m-2 ms-3 small shadow-sm bg-white border-start border-4 border-primary rounded-1">
                   <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
                     <span class="fw-semibold text-body"><i class="bi bi-cloud-upload me-1"></i>Upload status</span>
@@ -247,7 +262,7 @@
             </tr>
             {% else %}
             <tr id="fuelExpenseNoDataRow">
-              <td colspan="{% if umc %}22{% else %}20{% endif %}" class="text-center py-5 text-muted">
+              <td colspan="{% if umc %}23{% else %}21{% endif %}" class="text-center py-5 text-muted">
                 <i class="bi bi-fuel-pump display-6 d-block mb-2"></i>
                 No fuel expense entries. <a href="{{ url_for('fuel_expense_add') }}">Add Fuel Expense</a>
               </td>
@@ -258,6 +273,7 @@
           <tfoot class="table-light fw-semibold">
             <tr>
               <td colspan="4" class="ps-3">Total</td>
+              <td></td>
               <td></td>
               <td></td>
               <td></td>
@@ -487,36 +503,71 @@
 (function() {
   var searchInput = document.getElementById('fuelExpenseSearch');
   var filterQueryInput = document.getElementById('fuelListFilterQuery');
+  var filterForm = document.getElementById('fuelListFilterForm');
+
+  function buildSearchUrl(qVal) {
+    var params = new URLSearchParams(window.location.search || '');
+    if (filterForm) {
+      var fromEl = filterForm.querySelector('[name="from_date"]');
+      var toEl = filterForm.querySelector('[name="to_date"]');
+      var distEl = filterForm.querySelector('[name="district_id"]');
+      var projEl = filterForm.querySelector('[name="project_id"]');
+      var vehEl = filterForm.querySelector('[name="vehicle_id"]');
+      if (fromEl && fromEl.value) params.set('from_date', fromEl.value);
+      if (toEl && toEl.value) params.set('to_date', toEl.value);
+      if (distEl) params.set('district_id', distEl.value || '0');
+      if (projEl) params.set('project_id', projEl.value || '0');
+      if (vehEl) params.set('vehicle_id', vehEl.value || '0');
+    }
+    if (qVal) params.set('q', qVal);
+    else params.delete('q');
+    params.set('page', '1');
+    return window.location.pathname + (params.toString() ? ('?' + params.toString()) : '');
+  }
+
+  function initFuelSearchTooltips() {
+    if (!window.bootstrap || !bootstrap.Tooltip) return;
+    document.querySelectorAll('#fuelExpenseTable [data-bs-toggle="tooltip"]').forEach(function(el) {
+      var existing = bootstrap.Tooltip.getInstance(el);
+      if (existing) existing.dispose();
+      new bootstrap.Tooltip(el, { trigger: 'hover focus', container: 'body' });
+    });
+  }
+
   if (searchInput) {
-    var searchTimer = null;
-    var searchDelayMs = 450;
-    var initialQuery = (searchInput.value || '').trim();
     function navigateWithSearch(qVal) {
-      var params = new URLSearchParams(window.location.search || '');
-      if (qVal) params.set('q', qVal);
-      else params.delete('q');
-      params.set('page', '1');
-      var next = window.location.pathname + (params.toString() ? ('?' + params.toString()) : '');
-      window.location.assign(next);
+      try {
+        sessionStorage.setItem('fuelExpenseSearchFocus', '1');
+        sessionStorage.setItem('fuelExpenseSearchCaret', String((qVal || '').length));
+      } catch (e) {}
+      window.location.assign(buildSearchUrl(qVal));
     }
     searchInput.addEventListener('input', function() {
       var qVal = (searchInput.value || '').trim();
       if (filterQueryInput) filterQueryInput.value = qVal;
-      window.clearTimeout(searchTimer);
-      searchTimer = window.setTimeout(function() {
-        if (qVal === initialQuery) return;
-        navigateWithSearch(qVal);
-      }, searchDelayMs);
     });
     searchInput.addEventListener('keydown', function(e) {
       if (e.key !== 'Enter') return;
       e.preventDefault();
-      window.clearTimeout(searchTimer);
+      e.stopPropagation();
       var qVal = (searchInput.value || '').trim();
       if (filterQueryInput) filterQueryInput.value = qVal;
-      if (qVal !== initialQuery) navigateWithSearch(qVal);
+      navigateWithSearch(qVal);
     });
+    try {
+      if (sessionStorage.getItem('fuelExpenseSearchFocus') === '1') {
+        sessionStorage.removeItem('fuelExpenseSearchFocus');
+        var caret = parseInt(sessionStorage.getItem('fuelExpenseSearchCaret') || String(searchInput.value.length), 10);
+        sessionStorage.removeItem('fuelExpenseSearchCaret');
+        searchInput.focus({ preventScroll: true });
+        if (!isNaN(caret)) {
+          try { searchInput.setSelectionRange(caret, caret); } catch (err) {}
+        }
+      }
+    } catch (e2) {}
   }
+
+  window.initFuelSearchTooltips = initFuelSearchTooltips;
 
   var activeEls = null;
   var activeId = null;
@@ -643,6 +694,7 @@
 <script>
 if (window.fleetTableEnhance) window.fleetTableEnhance('fuelExpenseTable');
 if (window.fleetPrintExport) window.fleetPrintExport('fuelExpenseTable', 'Fuel Expense', 'Fuel_Expense.csv');
+if (window.initFuelSearchTooltips) window.initFuelSearchTooltips();
 </script>
 
 {% if pagination and pagination.pages > 1 %}
