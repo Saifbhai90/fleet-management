@@ -33,10 +33,6 @@
   .sc-active .sc-icon, .sc-active .sc-num { color: #2e7d32; }
   .sc-left   { border-left-color: #e65100; }
   .sc-left .sc-icon, .sc-left .sc-num   { color: #e65100; }
-  .sc-cnic   { border-left-color: #d84315; }
-  .sc-cnic .sc-icon, .sc-cnic .sc-num   { color: #d84315; }
-  .sc-lic    { border-left-color: #c62828; }
-  .sc-lic .sc-icon, .sc-lic .sc-num    { color: #c62828; }
 
   /* ── Filter bar ── */
   .filter-bar { background: #fff; border-radius: 6px; padding: 0.7rem 0.85rem; box-shadow: 0 1px 3px rgba(0,0,0,0.08); margin-bottom: 0.75rem; }
@@ -154,7 +150,7 @@
   <!-- Summary Stats Bar — dashboard-style left-border cards -->
   <div class="row g-2 mb-2">
     <div class="col-6 col-lg">
-      <div class="stat-card sc-total{% if not f_status and not f_cnic and not f_license %} active-card{% endif %}" onclick="applyFilter('')">
+      <div class="stat-card sc-total{% if not f_status %} active-card{% endif %}" onclick="applyFilter('')">
         <i class="bi bi-people-fill sc-icon"></i>
         <div>
           <div class="sc-num">{{ stats.total }}</div>
@@ -180,31 +176,13 @@
         </div>
       </div>
     </div>
-    <div class="col-6 col-lg">
-      <div class="stat-card sc-cnic{% if f_cnic == 'Expired' %} active-card{% endif %}" onclick="applyFilter('cnic_status=Expired')">
-        <i class="bi bi-credit-card-2-front sc-icon"></i>
-        <div>
-          <div class="sc-num">{{ stats.expired_cnic }}</div>
-          <div class="sc-label">Expired CNIC</div>
-        </div>
-      </div>
-    </div>
-    <div class="col-6 col-lg">
-      <div class="stat-card sc-lic{% if f_license == 'Expired' %} active-card{% endif %}" onclick="applyFilter('license_status=Expired')">
-        <i class="bi bi-card-heading sc-icon"></i>
-        <div>
-          <div class="sc-num">{{ stats.expired_license }}</div>
-          <div class="sc-label">Expired License</div>
-        </div>
-      </div>
-    </div>
   </div>
 
   <!-- Filter Bar -->
   <div class="filter-bar">
     <form method="GET" action="{{ url_for('drivers_list') }}" id="filterForm">
       <div class="row g-2 align-items-end">
-        <div class="col-6 col-md-3">
+        <div class="col-6 col-md-4 col-lg-3">
           <div class="filter-lbl">Driver Status</div>
           <select name="status" class="form-select filter-input">
             <option value="">All Status</option>
@@ -212,25 +190,9 @@
             <option value="Left" {% if f_status == 'Left' %}selected{% endif %}>Left</option>
           </select>
         </div>
-        <div class="col-6 col-md-3">
-          <div class="filter-lbl">CNIC Status</div>
-          <select name="cnic_status" class="form-select filter-input">
-            <option value="">All CNIC</option>
-            <option value="Valid" {% if f_cnic == 'Valid' %}selected{% endif %}>Valid</option>
-            <option value="Expired" {% if f_cnic == 'Expired' %}selected{% endif %}>Expired</option>
-          </select>
-        </div>
-        <div class="col-6 col-md-3">
-          <div class="filter-lbl">License Status</div>
-          <select name="license_status" class="form-select filter-input">
-            <option value="">All License</option>
-            <option value="Valid" {% if f_license == 'Valid' %}selected{% endif %}>Valid</option>
-            <option value="Expired" {% if f_license == 'Expired' %}selected{% endif %}>Expired</option>
-          </select>
-        </div>
-        <div class="col-6 col-md-3 d-flex gap-1">
+        <div class="col-6 col-md-4 col-lg-3 d-flex gap-1">
           <button type="submit" class="btn btn-filter w-100"><i class="bi bi-funnel-fill me-1"></i>Filter</button>
-          {% if f_status or f_cnic or f_license %}
+          {% if f_status %}
           <a href="{{ url_for('drivers_list') }}" class="btn btn-outline-secondary btn-sm" style="white-space:nowrap;font-size:0.78rem;"><i class="bi bi-x-circle"></i></a>
           {% endif %}
         </div>

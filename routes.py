@@ -5567,8 +5567,6 @@ def drivers_list():
 
     search = request.args.get('search', '').strip()
     f_status = request.args.get('status', '').strip()
-    f_cnic = request.args.get('cnic_status', '').strip()
-    f_license = request.args.get('license_status', '').strip()
 
     query = (
         db.session.query(Driver, Project)
@@ -5588,10 +5586,6 @@ def drivers_list():
 
     if f_status in ('Active', 'Left'):
         query = query.filter(Driver.status == f_status)
-    if f_cnic in ('Valid', 'Expired'):
-        query = query.filter(Driver.cnic_status == f_cnic)
-    if f_license in ('Valid', 'Expired'):
-        query = query.filter(Driver.license_status == f_license)
 
     if search:
         flt = _multi_word_filter(search,
@@ -5614,8 +5608,6 @@ def drivers_list():
         'total': len(drivers),
         'active': sum(1 for d in drivers if d.status == 'Active'),
         'left': sum(1 for d in drivers if d.status == 'Left'),
-        'expired_cnic': sum(1 for d in drivers if d.cnic_status == 'Expired'),
-        'expired_license': sum(1 for d in drivers if d.license_status == 'Expired'),
     }
 
     districts_list = sorted(set(d.driver_district for d in drivers if d.driver_district))
@@ -5623,7 +5615,7 @@ def drivers_list():
     return render_template('drivers_list.html', drivers=drivers, search=search, today=today,
                            stats=stats, driver_projects=driver_projects,
                            districts_list=districts_list,
-                           f_status=f_status, f_cnic=f_cnic, f_license=f_license,
+                           f_status=f_status,
                            **_master_nav_back())
 
 
