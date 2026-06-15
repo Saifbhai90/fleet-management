@@ -1113,16 +1113,21 @@
   </div>
 </div>
 
-<div class="modal fade" id="fuelTankCapacityModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content">
-      <div class="modal-header py-2"><h6 class="modal-title text-warning"><i class="bi bi-exclamation-triangle me-1"></i>Tank Capacity Warning</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-      <div class="modal-body" id="fuelTankCapacityBody"></div>
-      <div class="modal-footer py-2">
-        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
-        <button type="button" class="btn btn-warning btn-sm" id="fuelTankCapacityContinueBtn">Continue Anyway</button>
+<div id="fuelTankCapacityPanel" class="fuel-info-float-panel fuel-warning-float-panel d-none" aria-hidden="true" role="alert" aria-labelledby="fuelTankCapacityPanelLabel">
+  <div class="fuel-info-float-header fuel-warning-float-panel__header">
+    <div class="fuel-warning-float-panel__title-wrap">
+      <div class="fuel-warning-float-panel__icon" aria-hidden="true"><i class="bi bi-exclamation-triangle-fill"></i></div>
+      <div>
+        <h6 id="fuelTankCapacityPanelLabel">Tank Capacity Warning</h6>
+        <div class="fuel-warning-float-panel__subtitle">Calculated liters exceed tank limit</div>
       </div>
     </div>
+    <button type="button" class="btn-close btn-close-sm fuel-info-float-close" aria-label="Close"></button>
+  </div>
+  <div class="fuel-info-float-body fuel-warning-float-panel__body" id="fuelTankCapacityBody"></div>
+  <div class="fuel-info-float-footer fuel-warning-float-panel__footer d-flex justify-content-end gap-2">
+    <button type="button" class="btn btn-outline-secondary btn-sm" id="fuelTankCapacityCancelBtn">Cancel</button>
+    <button type="button" class="btn btn-warning btn-sm" id="fuelTankCapacityContinueBtn">Continue Anyway</button>
   </div>
 </div>
 
@@ -1348,9 +1353,10 @@ document.addEventListener('DOMContentLoaded', function() {
   var gaugeTaskOutTick = document.getElementById('gaugeTaskOutTick');
   var gaugeCurrentMarker = document.getElementById('gaugeCurrentMarker');
   var gaugeStatusText = document.getElementById('gaugeStatusText');
-  var fuelTankCapacityModalEl = document.getElementById('fuelTankCapacityModal');
+  var fuelTankCapacityPanel = document.getElementById('fuelTankCapacityPanel');
   var fuelTankCapacityBody = document.getElementById('fuelTankCapacityBody');
   var fuelTankCapacityContinueBtn = document.getElementById('fuelTankCapacityContinueBtn');
+  var fuelTankCapacityCancelBtn = document.getElementById('fuelTankCapacityCancelBtn');
   var _tankCapacityBypass = false;
   var _pendingSubmitBtn = null;
   var _duplicateBypass = false;
@@ -2515,14 +2521,55 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
     _pendingSubmitBtn = submitter;
-    if (fuelTankCapacityBody) fuelTankCapacityBody.textContent = msg;
-    if (fuelTankCapacityModalEl && window.bootstrap) {
-      bootstrap.Modal.getOrCreateInstance(fuelTankCapacityModalEl).show();
-    } else if (window.confirm(msg + ' Continue anyway?')) {
-      submitFuelFormNative(submitter);
-    } else {
-      unlockFuelSubmit();
+    showFuelTankCapacityPanel(msg);
+  }
+
+  function isFuelTankCapacityPanelOpen() {
+    return !!(fuelTankCapacityPanel && !fuelTankCapacityPanel.classList.contains('d-none'));
+  }
+
+  function focusFuelTankCapacityContinueBtn() {
+    if (!fuelTankCapacityContinueBtn || !isFuelTankCapacityPanelOpen()) return;
+    fuelTankCapacityContinueBtn.focus({ preventScroll: true });
+    requestAnimationFrame(function() {
+      if (isFuelTankCapacityPanelOpen() && document.activeElement !== fuelTankCapacityContinueBtn) {
+        fuelTankCapacityContinueBtn.focus({ preventScroll: true });
+      }
+    });
+  }
+
+  function closeFuelTankCapacityPanel(keepPending) {
+    if (!fuelTankCapacityPanel) return;
+    fuelTankCapacityPanel.classList.add('d-none');
+    fuelTankCapacityPanel.setAttribute('aria-hidden', 'true');
+    if (!keepPending) _pendingSubmitBtn = null;
+  }
+
+  function showFuelTankCapacityPanel(msg) {
+    if (!fuelTankCapacityPanel) return;
+    unlockFuelSubmit();
+    resetFuelPageLoadBar();
+    if (fuelTankCapacityBody) {
+      fuelTankCapacityBody.innerHTML = '<p class="fuel-warning-float-panel__lead mb-0">' + msg + '</p>';
     }
+    mountFuelFloatPanelToBody(fuelTankCapacityPanel);
+    fuelTankCapacityPanel.classList.remove('d-none');
+    fuelTankCapacityPanel.setAttribute('aria-hidden', 'false');
+    positionFuelInfoPanel(fuelTankCapacityPanel, litersInput || amountInput || fuelSaveAddNextBtn || fuelExpenseForm);
+    window.setTimeout(focusFuelTankCapacityContinueBtn, 30);
+  }
+
+  function dismissFuelTankCapacityPanel() {
+    _tankCapacityBypass = false;
+    closeFuelTankCapacityPanel(false);
+    unlockFuelSubmit();
+  }
+
+  function continueFuelTankCapacityPanel() {
+    _tankCapacityBypass = true;
+    closeFuelTankCapacityPanel(true);
+    submitFuelFormNative(_pendingSubmitBtn);
+    _tankCapacityBypass = false;
   }
 
   function isFuelDuplicatePanelOpen() {
@@ -3232,7 +3279,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
-  if (fuelScanDetailPanel || vehicleLastEntryPanel || fuelAttachmentWarningPanel || fuelDuplicatePanel || fuelKmGapPanel) {
+  if (fuelScanDetailPanel || vehicleLastEntryPanel || fuelAttachmentWarningPanel || fuelDuplicatePanel || fuelKmGapPanel || fuelTankCapacityPanel) {
     document.querySelectorAll('.fuel-info-float-close').forEach(function(btn) {
       btn.addEventListener('click', function(e) {
         e.stopPropagation();
@@ -3242,6 +3289,7 @@ document.addEventListener('DOMContentLoaded', function() {
         else if (panel === fuelAttachmentWarningPanel) closeAttachmentWarningPopup();
         else if (panel === fuelDuplicatePanel) dismissFuelDuplicatePanel();
         else if (panel === fuelKmGapPanel) dismissFuelKmGapPanel();
+        else if (panel === fuelTankCapacityPanel) dismissFuelTankCapacityPanel();
         else closeFuelInfoPanel(panel, null);
       });
     });
@@ -3265,7 +3313,14 @@ document.addEventListener('DOMContentLoaded', function() {
       if (fuelKmGapPanel && !fuelKmGapPanel.classList.contains('d-none')) {
         positionFuelInfoPanel(fuelKmGapPanel, currentReadingInput || fuelSaveAddNextBtn || fuelExpenseForm);
       }
+      if (fuelTankCapacityPanel && !fuelTankCapacityPanel.classList.contains('d-none')) {
+        positionFuelInfoPanel(fuelTankCapacityPanel, litersInput || amountInput || fuelSaveAddNextBtn || fuelExpenseForm);
+      }
     });
+  }
+
+  if (fuelTankCapacityPanel) {
+    mountFuelFloatPanelToBody(fuelTankCapacityPanel);
   }
 
   if (fuelKmGapPanel) {
@@ -3414,20 +3469,16 @@ document.addEventListener('DOMContentLoaded', function() {
     fuelDuplicateCancelBtn.addEventListener('click', dismissFuelDuplicatePanel);
   }
   if (fuelTankCapacityContinueBtn) {
-    fuelTankCapacityContinueBtn.addEventListener('click', function() {
-      _tankCapacityBypass = true;
-      if (fuelTankCapacityModalEl && window.bootstrap) {
-        bootstrap.Modal.getOrCreateInstance(fuelTankCapacityModalEl).hide();
+    fuelTankCapacityContinueBtn.addEventListener('click', continueFuelTankCapacityPanel);
+    fuelTankCapacityContinueBtn.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        continueFuelTankCapacityPanel();
       }
-      submitFuelFormNative(_pendingSubmitBtn);
     });
   }
-  if (fuelTankCapacityModalEl) {
-    fuelTankCapacityModalEl.addEventListener('hidden.bs.modal', function() {
-      if (!_tankCapacityBypass) unlockFuelSubmit();
-      _tankCapacityBypass = false;
-      _pendingSubmitBtn = null;
-    });
+  if (fuelTankCapacityCancelBtn) {
+    fuelTankCapacityCancelBtn.addEventListener('click', dismissFuelTankCapacityPanel);
   }
   if (fuelKmGapContinueBtn) {
     fuelKmGapContinueBtn.addEventListener('click', continueFuelKmGapPanel);
