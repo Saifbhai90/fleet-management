@@ -24515,11 +24515,11 @@ def task_report_new():
     lap = set(allowed_projects) if allowed_projects else set()
     lav = set(allowed_vehicles) if allowed_vehicles else set()
 
-    def apply_task_entry_assignment_locks(did, pid):
+    def apply_task_entry_assignment_locks(did, pid, vid=0):
         """Non-admin: single district → fix district; single district+project+vehicle → fix project too."""
         if is_master_or_admin:
-            return did, pid, {'lock_district': False, 'lock_project': False}
-        tef = {'lock_district': False, 'lock_project': False}
+            return did, pid, vid, {'lock_district': False, 'lock_project': False, 'lock_vehicle': False}
+        tef = {'lock_district': False, 'lock_project': False, 'lock_vehicle': False}
         if len(lad) == 1:
             only_d = next(iter(lad))
             did = only_d
@@ -24529,24 +24529,53 @@ def task_report_new():
             if scoped_project_ids is None or only_p in scoped_project_ids:
                 pid = only_p
                 tef['lock_project'] = True
+        if len(lav) == 1:
+            only_v = next(iter(lav))
+            vid = only_v
+            tef['lock_vehicle'] = True
         if did and valid_district_ids and did not in valid_district_ids:
             did = 0
         if pid and scoped_project_ids is not None and pid not in scoped_project_ids:
             pid = 0
-        return did, pid, tef
+        return did, pid, vid, tef
+
+    def _task_report_new_vehicles_ui(did, pid):
+        q = _vehicle_query_task_report_scope(is_master_or_admin, allowed_projects, allowed_districts, allowed_vehicles)
+        if pid:
+            q = q.filter(Vehicle.project_id == pid)
+        if did:
+            q = q.filter(Vehicle.district_id == did)
+        return q.order_by(*vehicle_order_by()).all()
+
+    def _task_report_new_scoped_vehicle_ids(did, pid):
+        return {v.id for v in _task_report_new_vehicles_ui(did, pid)}
+
+    def _task_report_new_vehicle_query(did, pid, vid=0):
+        q = _vehicle_query_task_report_scope(is_master_or_admin, allowed_projects, allowed_districts, allowed_vehicles)
+        if pid:
+            q = q.filter(Vehicle.project_id == pid)
+        if did:
+            q = q.filter(Vehicle.district_id == did)
+        if vid:
+            q = q.filter(Vehicle.id == vid)
+        return q.order_by(*vehicle_order_by())
 
     _explicit_task_date = parse_date(request.args.get('date') or request.form.get('task_date'))
     if request.method == 'POST':
         district_id = request.form.get('district_id', type=int) or request.args.get('district_id', type=int) or 0
         project_id = request.form.get('project_id', type=int) or request.args.get('project_id', type=int) or 0
+        vehicle_id = request.form.get('vehicle_id', type=int) or request.args.get('vehicle_id', type=int) or 0
     else:
         district_id = request.args.get('district_id', type=int) or request.form.get('district_id', type=int) or 0
         project_id = request.args.get('project_id', type=int) or request.form.get('project_id', type=int) or 0
+        vehicle_id = request.args.get('vehicle_id', type=int) or request.form.get('vehicle_id', type=int) or 0
     if district_id and valid_district_ids and district_id not in valid_district_ids:
         district_id = 0
     if project_id and scoped_project_ids is not None and project_id not in scoped_project_ids:
         project_id = 0
-    district_id, project_id, task_entry_filter = apply_task_entry_assignment_locks(district_id, project_id)
+    district_id, project_id, vehicle_id, task_entry_filter = apply_task_entry_assignment_locks(district_id, project_id, vehicle_id)
+    if vehicle_id and vehicle_id not in _task_report_new_scoped_vehicle_ids(district_id, project_id):
+        vehicle_id = 0
 
     if _explicit_task_date:
         view_date = _explicit_task_date
@@ -24575,16 +24604,22 @@ def task_report_new():
     def _task_report_new_render(rows_list, v_date):
         _tp = Project.query.get(project_id) if project_id else None
         _hint = _task_entry_date_hint_for_project(_tp, v_date)
+        _tef = dict(task_entry_filter or {})
+        _tef.setdefault('lock_district', False)
+        _tef.setdefault('lock_project', False)
+        _tef.setdefault('lock_vehicle', False)
         return render_template(
             'task_report_new.html',
             rows=rows_list,
             view_date=v_date,
-            district_id=district_id,
-            project_id=project_id,
+            district_id=district_id or 0,
+            project_id=project_id or 0,
+            vehicle_id=vehicle_id or 0,
             districts=districts,
             projects=_task_report_new_projects_ui(district_id),
+            filter_vehicles=_task_report_new_vehicles_ui(district_id, project_id),
             show_batch_totals=_show_task_batch_totals(user_context, rows_list),
-            task_entry_filter=task_entry_filter,
+            task_entry_filter=_tef,
             can_edit_saved_task_rows=can_edit_saved_task_rows,
             can_delete_saved_task_rows=can_delete_saved_task_rows,
             task_entry_max_km_driven=max_km_setting,
@@ -24598,11 +24633,14 @@ def task_report_new():
         task_date = parse_date(request.form.get('task_date')) or view_date
         district_id = request.form.get('district_id', type=int) or 0
         project_id = request.form.get('project_id', type=int) or 0
+        vehicle_id = request.form.get('vehicle_id', type=int) or 0
         if district_id and valid_district_ids and district_id not in valid_district_ids:
             district_id = 0
         if project_id and scoped_project_ids is not None and project_id not in scoped_project_ids:
             project_id = 0
-        district_id, project_id, task_entry_filter = apply_task_entry_assignment_locks(district_id, project_id)
+        district_id, project_id, vehicle_id, task_entry_filter = apply_task_entry_assignment_locks(district_id, project_id, vehicle_id)
+        if vehicle_id and vehicle_id not in _task_report_new_scoped_vehicle_ids(district_id, project_id):
+            vehicle_id = 0
         if not project_id:
             flash('Project select karna zaroori hai — baghair project ke save nahi ho sakta.', 'danger')
             view_date = task_date
@@ -24612,18 +24650,12 @@ def task_report_new():
         if not ok_date:
             flash(date_msg, 'danger')
             view_date = task_date
-            q = _vehicle_query_task_report_scope(is_master_or_admin, allowed_projects, allowed_districts, allowed_vehicles)
-            q = q.filter(Vehicle.project_id == project_id)
-            if district_id:
-                q = q.filter(Vehicle.district_id == district_id)
-            vehicles = q.order_by(*vehicle_order_by()).all()
+            q = _task_report_new_vehicle_query(district_id, project_id, vehicle_id)
+            vehicles = q.all()
             rows = _build_vehicle_rows(vehicles, task_date, request.form)
             return _task_report_new_render(rows, view_date)
-        q = _vehicle_query_task_report_scope(is_master_or_admin, allowed_projects, allowed_districts, allowed_vehicles)
-        q = q.filter(Vehicle.project_id == project_id)
-        if district_id:
-            q = q.filter(Vehicle.district_id == district_id)
-        vehicles = q.order_by(*vehicle_order_by()).all()
+        q = _task_report_new_vehicle_query(district_id, project_id, vehicle_id)
+        vehicles = q.all()
         missing = []
         to_save = []
         for v in vehicles:
@@ -24728,13 +24760,15 @@ def task_report_new():
             except Exception:
                 pass
             flash('Task entries saved successfully.', 'success')
-            return redirect(url_for(
-                'task_report_new',
-                date=task_date.strftime('%d-%m-%Y'),
-                district_id=district_id,
-                project_id=project_id,
-                batch_saved='1',
-            ))
+            _redirect_kwargs = {
+                'date': task_date.strftime('%d-%m-%Y'),
+                'district_id': district_id or None,
+                'project_id': project_id or None,
+                'batch_saved': '1',
+            }
+            if vehicle_id:
+                _redirect_kwargs['vehicle_id'] = vehicle_id
+            return redirect(url_for('task_report_new', **_redirect_kwargs))
         except Exception as e:
             db.session.rollback()
             flash(f'Error: {str(e)}', 'danger')
@@ -24745,12 +24779,7 @@ def task_report_new():
     rows = []
     _has_filter = request.args.get('date') is not None
     if _has_filter or district_id or project_id:
-        q = _vehicle_query_task_report_scope(is_master_or_admin, allowed_projects, allowed_districts, allowed_vehicles)
-        if project_id:
-            q = q.filter(Vehicle.project_id == project_id)
-        if district_id:
-            q = q.filter(Vehicle.district_id == district_id)
-        vehicles = q.order_by(*vehicle_order_by()).all()
+        vehicles = _task_report_new_vehicle_query(district_id, project_id, vehicle_id).all()
         rows = _build_vehicle_rows(vehicles, view_date, request.form)
     return _task_report_new_render(rows, view_date)
 

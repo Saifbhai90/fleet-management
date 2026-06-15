@@ -641,6 +641,7 @@ from routes_workspace import (
     workspace_fuel_oil_month_close, workspace_fuel_oil_month_close_list, workspace_fuel_oil_month_close_reverse,
     workspace_fund_transfers_list, workspace_fund_transfer_form, workspace_fund_transfer_delete,
     workspace_fund_transfer_view, workspace_fund_transfer_media,
+    workspace_fund_transfer_media_download, workspace_fund_transfer_media_download_all,
     workspace_ledger, workspace_ledger_transfer_detail, workspace_ledger_journal_detail, workspace_balance_sheet, workspace_month_close, workspace_month_close_list, workspace_month_close_reverse, workspace_reports, workspace_mpg_report, workspace_dashboard_financial_report,
     workspace_journal_voucher_add, workspace_journal_vouchers_list, workspace_journal_voucher_detail, workspace_jv_backfill_district_project,
     workspace_journal_voucher_edit, workspace_journal_voucher_delete, workspace_journal_voucher_duplicate, workspace_journal_vouchers_export,
@@ -787,6 +788,8 @@ app.add_url_rule('/workspace/transfers', 'workspace_fund_transfers_list', worksp
 app.add_url_rule('/workspace/transfer/new', 'workspace_fund_transfer_new', workspace_fund_transfer_form, methods=['GET', 'POST'])
 app.add_url_rule('/workspace/transfer/<int:pk>/view', 'workspace_fund_transfer_view', workspace_fund_transfer_view, methods=['GET'])
 app.add_url_rule('/workspace/transfer/<int:pk>/media', 'workspace_fund_transfer_media', workspace_fund_transfer_media, methods=['GET'])
+app.add_url_rule('/workspace/transfer/<int:pk>/media/download', 'workspace_fund_transfer_media_download', workspace_fund_transfer_media_download, methods=['GET'])
+app.add_url_rule('/workspace/transfer/<int:pk>/media/download-all', 'workspace_fund_transfer_media_download_all', workspace_fund_transfer_media_download_all, methods=['GET'])
 app.add_url_rule('/workspace/transfer/<int:pk>/edit', 'workspace_fund_transfer_edit', workspace_fund_transfer_form, methods=['GET', 'POST'])
 app.add_url_rule('/workspace/transfer/<int:pk>/delete', 'workspace_fund_transfer_delete', workspace_fund_transfer_delete, methods=['POST'])
 app.add_url_rule('/workspace/journal-voucher', 'workspace_journal_voucher_add', workspace_journal_voucher_add, methods=['GET', 'POST'])

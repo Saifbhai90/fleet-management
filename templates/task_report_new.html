@@ -1,6 +1,9 @@
 {% extends "base.html" %}
 {% block title %}New Task Entry{% endblock %}
 {% block content %}
+{% set tef = task_entry_filter if task_entry_filter is defined else {} %}
+{% set vehicle_id = vehicle_id if vehicle_id is defined else 0 %}
+{% set filter_vehicles = filter_vehicles if filter_vehicles is defined else [] %}
 {% macro mobile_vehicle_summary(row) -%}
 {% set v = row.vehicle %}
 <div class="task-batch-mobile-summary d-md-none">
@@ -15,6 +18,19 @@
 </div>
 {%- endmacro %}
 <style>
+  /* Long multi-vehicle lists: one smooth scroll root (Capacitor shell + mobile browser) */
+  body[data-fleet-endpoint="task_report_new"] #appNativeShell .main-content,
+  body[data-fleet-endpoint="task_report_new"] .main-content {
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    overscroll-behavior-y: auto !important;
+    scroll-behavior: smooth;
+    touch-action: pan-y;
+  }
+  html.capacitor-native body[data-fleet-endpoint="task_report_new"] .main-content {
+    padding-bottom: max(150px, calc(110px + env(safe-area-inset-bottom, 0px))) !important;
+  }
+
   /* Mobile app: Save footer needs visible overflow for sticky thumb-zone bar (base.html adds .native-submit-sticky) */
   html.capacitor-native .task-batch-card .card-footer.native-submit-sticky {
     flex-wrap: wrap;
@@ -63,7 +79,7 @@
       border: none !important;
       border-radius: 20px !important;
       box-shadow: 0 8px 32px rgba(15, 23, 42, 0.08), 0 0 0 1px rgba(15, 23, 42, 0.05) !important;
-      overflow: hidden;
+      overflow: visible;
       background: #fff !important;
     }
     .task-batch-page .task-batch-list-header {
@@ -171,6 +187,11 @@
 
     html, body {
       overflow-x: hidden;
+    }
+    body[data-fleet-endpoint="task_report_new"] .task-batch-card > .card-body,
+    body[data-fleet-endpoint="task_report_new"] .task-batch-table-wrap {
+      overflow: visible !important;
+      max-height: none !important;
     }
     /*
       base.html forces .table-responsive table { min-width: 500px–600px } for horizontal scroll tables.
@@ -637,7 +658,7 @@
     </div>
     {% if can_see_page('task_report_pending') %}
     <div class="d-flex flex-wrap gap-2">
-      <a href="{{ url_for('task_report_pending') }}?date={{ view_date.strftime('%d-%m-%Y') }}{% if district_id %}&district_id={{ district_id }}{% endif %}{% if project_id %}&project_id={{ project_id }}{% endif %}{% if nav_from %}&nav_from={{ nav_from|urlencode }}{% endif %}" class="btn btn-warning btn-sm rounded-pill px-3">
+      <a href="{{ url_for('task_report_pending') }}?date={{ view_date.strftime('%d-%m-%Y') }}{% if district_id %}&district_id={{ district_id }}{% endif %}{% if project_id %}&project_id={{ project_id }}{% endif %}{% if vehicle_id %}&vehicle_id={{ vehicle_id }}{% endif %}{% if nav_from %}&nav_from={{ nav_from|urlencode }}{% endif %}" class="btn btn-warning btn-sm rounded-pill px-3">
         <i class="bi bi-hourglass-split me-1"></i>Pending Task Report{% if pending_task_count %} ({{ pending_task_count }}){% endif %}
       </a>
     </div>
@@ -667,7 +688,7 @@
         </div>
         <div class="col-12 col-md-2">
           <label class="form-label">District</label>
-          {% if task_entry_filter.lock_district %}
+          {% if tef.get('lock_district') %}
           <input type="hidden" name="district_id" value="{{ district_id }}">
           <div class="form-control bg-light text-body-secondary" id="districtSelectLocked" title="Aap ko sirf yeh district assign hai">{% for d in districts %}{% if d.id == district_id %}{{ d.name }}{% endif %}{% endfor %}</div>
           {% else %}
@@ -681,7 +702,7 @@
         </div>
         <div class="col-12 col-md-2">
           <label class="form-label" for="projectSelect">Project</label>
-          {% if task_entry_filter.lock_project %}
+          {% if tef.get('lock_project') %}
           <input type="hidden" name="project_id" value="{{ project_id }}">
           <div class="form-control bg-light text-body-secondary" id="projectSelectLocked" title="Aap ko sirf yeh project assign hai">{% for p in projects %}{% if p.id == project_id %}{{ p.name }}{% endif %}{% endfor %}</div>
           {% else %}
@@ -689,6 +710,20 @@
             <option value="0">-- All Projects --</option>
             {% for p in projects %}
               <option value="{{ p.id }}" {% if project_id == p.id %}selected{% endif %}>{{ p.name }}</option>
+            {% endfor %}
+          </select>
+          {% endif %}
+        </div>
+        <div class="col-12 col-md-2">
+          <label class="form-label" for="vehicleSelect">Vehicle</label>
+          {% if tef.get('lock_vehicle') %}
+          <input type="hidden" name="vehicle_id" value="{{ vehicle_id }}">
+          <div class="form-control bg-light text-body-secondary" id="vehicleSelectLocked" title="Aap ko sirf yeh vehicle assign hai">{% for v in filter_vehicles %}{% if v.id == vehicle_id %}{{ v.vehicle_no }}{% endif %}{% endfor %}{% if not vehicle_id and filter_vehicles|length == 1 %}{{ filter_vehicles[0].vehicle_no }}{% endif %}</div>
+          {% else %}
+          <select name="vehicle_id" id="vehicleSelect" class="form-select search-select">
+            <option value="0">-- All Vehicles --</option>
+            {% for v in filter_vehicles %}
+              <option value="{{ v.id }}" {% if vehicle_id == v.id %}selected{% endif %}>{{ v.vehicle_no }}</option>
             {% endfor %}
           </select>
           {% endif %}
@@ -709,6 +744,7 @@
     <input type="hidden" name="task_date" value="{{ view_date.strftime('%d-%m-%Y') }}">
     <input type="hidden" name="district_id" value="{{ district_id }}">
     <input type="hidden" name="project_id" value="{{ project_id }}">
+    <input type="hidden" name="vehicle_id" value="{{ vehicle_id }}">
 
     {# overflow-hidden removed so Capacitor sticky Save bar (native-submit-sticky) works; rounded clip via card-body only #}
     <div class="card shadow border-0 rounded-3 task-batch-card">
@@ -718,7 +754,7 @@
           <input type="text" id="taskEntrySearch" class="form-control form-control-sm flex-shrink-0 task-batch-entry-search" placeholder="Search vehicles..." autocomplete="off">
       </div>
       </div>
-      <div class="card-body p-0 overflow-hidden">
+      <div class="card-body p-0">
         <div class="table-responsive task-batch-table-wrap">
           <table class="table table-hover align-middle mb-0 task-batch-table" id="batchTable" data-mp-skip-cards="1" role="grid">
             <thead class="table-light">
@@ -871,7 +907,7 @@
   </form>
   {% else %}
   <div class="alert alert-info">
-    <i class="bi bi-info-circle me-2"></i>Date, District aur Project select karke <strong>Load Vehicles</strong> par click karein. Us ke baad saari vehicles ki list yahan aayegi, jahan aap Close Reading aur Task's enter karke ek hi baar Save kar sakte hain.
+    <i class="bi bi-info-circle me-2"></i>Date, District, Project{% if not tef.get('lock_vehicle') %} aur Vehicle (optional){% endif %} select karke <strong>Load Vehicles</strong> par click karein. Us ke baad saari vehicles ki list yahan aayegi, jahan aap Close Reading aur Task's enter karke ek hi baar Save kar sakte hain.
   </div>
   {% endif %}
 </div>
@@ -941,14 +977,49 @@
 </div>
 
 <script>
-window.TASK_REPORT_NEW_LOCK_DISTRICT = {{ task_entry_filter.lock_district|tojson }};
-window.TASK_REPORT_NEW_LOCK_PROJECT = {{ task_entry_filter.lock_project|tojson }};
+window.TASK_REPORT_NEW_LOCK_DISTRICT = {{ tef.get('lock_district', false)|tojson }};
+window.TASK_REPORT_NEW_LOCK_PROJECT = {{ tef.get('lock_project', false)|tojson }};
+window.TASK_REPORT_NEW_LOCK_VEHICLE = {{ tef.get('lock_vehicle', false)|tojson }};
 </script>
 <script>
 (function() {
   var lockDistrict = !!(window.TASK_REPORT_NEW_LOCK_DISTRICT);
+  var lockVehicle = !!(window.TASK_REPORT_NEW_LOCK_VEHICLE);
   var projectSelect = document.getElementById('projectSelect');
   var districtSelect = document.getElementById('districtSelect');
+  var vehicleSelect = document.getElementById('vehicleSelect');
+
+  function reloadTaskEntryVehicles() {
+    if (!vehicleSelect || vehicleSelect.tagName !== 'SELECT' || lockVehicle) return;
+    var pid = projectSelect ? (projectSelect.tomselect ? projectSelect.tomselect.getValue() : projectSelect.value) : '0';
+    var did = districtSelect ? (districtSelect.tomselect ? districtSelect.tomselect.getValue() : districtSelect.value) : '0';
+    var keep = vehicleSelect.tomselect ? vehicleSelect.tomselect.getValue() : vehicleSelect.value;
+    if (vehicleSelect.tomselect) { vehicleSelect.tomselect.destroy(); }
+    vehicleSelect.innerHTML = '<option value="0">-- All Vehicles --</option>';
+    var url = '/get_vehicles_by_project_district?project_id=' + encodeURIComponent(pid || 0) + '&district_id=' + encodeURIComponent(did || 0);
+    fetch(url)
+      .then(function(r) { return r.json(); })
+      .then(function(arr) {
+        arr.forEach(function(v) {
+          var o = document.createElement('option');
+          o.value = v.id;
+          o.textContent = v.vehicle_no;
+          vehicleSelect.appendChild(o);
+        });
+        if (keep && keep !== '0' && vehicleSelect.querySelector('option[value="' + keep + '"]')) {
+          vehicleSelect.value = keep;
+        }
+        if (typeof initSearchableDropdowns === 'function') {
+          initSearchableDropdowns(vehicleSelect.parentNode);
+        }
+      })
+      .catch(function() {
+        if (typeof initSearchableDropdowns === 'function') {
+          initSearchableDropdowns(vehicleSelect.parentNode);
+        }
+      });
+  }
+
   if (projectSelect && districtSelect && !lockDistrict) {
     districtSelect.addEventListener('change', function() {
       var did = this.value;
@@ -967,11 +1038,13 @@ window.TASK_REPORT_NEW_LOCK_PROJECT = {{ task_entry_filter.lock_project|tojson }
             if (typeof initSearchableDropdowns === 'function') {
             initSearchableDropdowns(projectSelect.parentNode);
             }
+            reloadTaskEntryVehicles();
           });
       } else {
         if (typeof initSearchableDropdowns === 'function') {
         initSearchableDropdowns(projectSelect.parentNode);
         }
+        reloadTaskEntryVehicles();
       }
     });
   }
@@ -1003,6 +1076,7 @@ window.TASK_REPORT_NEW_LOCK_PROJECT = {{ task_entry_filter.lock_project|tojson }
     projectSelect.addEventListener('change', function() {
       var pid = projectSelect.tomselect ? projectSelect.tomselect.getValue() : projectSelect.value;
       applyTaskEntryDefaultDate(pid);
+      reloadTaskEntryVehicles();
     });
     var initPid = projectSelect.tomselect ? projectSelect.tomselect.getValue() : projectSelect.value;
     if (initPid && initPid !== '0') {

@@ -286,6 +286,8 @@ ENDPOINT_PERMISSION_MAP = [
     ('workspace_fund_transfer_new', 'workspace_transfer_add'),
     ('workspace_fund_transfer_view', 'workspace_transfer_list'),
     ('workspace_fund_transfer_media', 'workspace_transfer_list'),
+    ('workspace_fund_transfer_media_download', 'workspace_transfer_list'),
+    ('workspace_fund_transfer_media_download_all', 'workspace_transfer_list'),
     ('workspace_fund_transfer_edit', 'workspace_transfer_edit'),
     ('workspace_fund_transfer_delete', 'workspace_transfer_delete'),
     ('workspace_slip_profiles', 'workspace_transfer_add'),

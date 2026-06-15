@@ -2,71 +2,133 @@
 .rc-page [class*="rc-tile--"] .rc-tile-icon { background: transparent !important; border: none !important; }
 
 .rc-tile--vehicle-summary .rc-tile-icon > i,
+.hub-page .hub-grid .rc-tile--vehicle-summary .rc-tile-icon > i,
 .rc-tile--vehicle-profile .rc-tile-icon > i,
+.hub-page .hub-grid .rc-tile--vehicle-profile .rc-tile-icon > i,
 .rc-tile--parking .rc-tile-icon > i,
+.hub-page .hub-grid .rc-tile--parking .rc-tile-icon > i,
 .rc-tile--monthly-att .rc-tile-icon > i,
+.hub-page .hub-grid .rc-tile--monthly-att .rc-tile-icon > i,
 .rc-tile--daily-att .rc-tile-icon > i,
+.hub-page .hub-grid .rc-tile--daily-att .rc-tile-icon > i,
 .rc-tile--tra-att .rc-tile-icon > i,
+.hub-page .hub-grid .rc-tile--tra-att .rc-tile-icon > i,
 .rc-tile--ledger .rc-tile-icon > i,
+.hub-page .hub-grid .rc-tile--ledger .rc-tile-icon > i,
 .rc-tile--wallet .rc-tile-icon > i,
+.hub-page .hub-grid .rc-tile--wallet .rc-tile-icon > i,
 .rc-tile--transfer .rc-tile-icon > i,
+.hub-page .hub-grid .rc-tile--transfer .rc-tile-icon > i,
 .rc-tile--oil .rc-tile-icon > i,
+.hub-page .hub-grid .rc-tile--oil .rc-tile-icon > i,
 .rc-tile--driver-profile .rc-tile-icon > i,
+.hub-page .hub-grid .rc-tile--driver-profile .rc-tile-icon > i,
 .rc-tile--active-drivers .rc-tile-icon > i,
+.hub-page .hub-grid .rc-tile--active-drivers .rc-tile-icon > i,
 .rc-tile--seat .rc-tile-icon > i,
+.hub-page .hub-grid .rc-tile--seat .rc-tile-icon > i,
 .rc-tile--salary .rc-tile-icon > i,
+.hub-page .hub-grid .rc-tile--salary .rc-tile-icon > i,
 .rc-tile--speed .rc-tile-icon > i,
+.hub-page .hub-grid .rc-tile--speed .rc-tile-icon > i,
 .rc-tile--mileage .rc-tile-icon > i,
-.rc-tile--tracker .rc-tile-icon > i { background-image: linear-gradient(135deg, #38bdf8, #0284c7); }
+.hub-page .hub-grid .rc-tile--mileage .rc-tile-icon > i,
+.rc-tile--tracker .rc-tile-icon > i,
+.hub-page .hub-grid .rc-tile--tracker .rc-tile-icon > i { background-image: linear-gradient(135deg, #38bdf8, #0284c7); }
 
 .rc-tile--project .rc-tile-icon > i,
+.hub-page .hub-grid .rc-tile--project .rc-tile-icon > i,
 .rc-tile--district .rc-tile-icon > i,
+.hub-page .hub-grid .rc-tile--district .rc-tile-icon > i,
 .rc-tile--company .rc-tile-icon > i,
+.hub-page .hub-grid .rc-tile--company .rc-tile-icon > i,
 .rc-tile--response .rc-tile-icon > i,
+.hub-page .hub-grid .rc-tile--response .rc-tile-icon > i,
 .rc-tile--turnaround .rc-tile-icon > i,
+.hub-page .hub-grid .rc-tile--turnaround .rc-tile-icon > i,
 .rc-tile--unexecuted .rc-tile-icon > i,
+.hub-page .hub-grid .rc-tile--unexecuted .rc-tile-icon > i,
 .rc-tile--balance .rc-tile-icon > i,
+.hub-page .hub-grid .rc-tile--balance .rc-tile-icon > i,
 .rc-tile--chart-accounts .rc-tile-icon > i,
-.rc-tile--ai .rc-tile-icon > i { background-image: linear-gradient(135deg, #a78bfa, #7c3aed); }
+.hub-page .hub-grid .rc-tile--chart-accounts .rc-tile-icon > i,
+.rc-tile--ai .rc-tile-icon > i,
+.hub-page .hub-grid .rc-tile--ai .rc-tile-icon > i { background-image: linear-gradient(135deg, #a78bfa, #7c3aed); }
 
 .rc-tile--fuel .rc-tile-icon > i,
+.hub-page .hub-grid .rc-tile--fuel .rc-tile-icon > i,
 .rc-tile--expiry .rc-tile-icon > i,
+.hub-page .hub-grid .rc-tile--expiry .rc-tile-icon > i,
 .rc-tile--pending-task .rc-tile-icon > i,
+.hub-page .hub-grid .rc-tile--pending-task .rc-tile-icon > i,
 .rc-tile--book-inv .rc-tile-icon > i,
+.hub-page .hub-grid .rc-tile--book-inv .rc-tile-icon > i,
 .rc-tile--book-assign .rc-tile-icon > i,
+.hub-page .hub-grid .rc-tile--book-assign .rc-tile-icon > i,
 .rc-tile--book-return .rc-tile-icon > i,
+.hub-page .hub-grid .rc-tile--book-return .rc-tile-icon > i,
 .rc-tile--maintenance .rc-tile-icon > i,
+.hub-page .hub-grid .rc-tile--maintenance .rc-tile-icon > i,
 .rc-tile--work-order .rc-tile-icon > i,
+.hub-page .hub-grid .rc-tile--work-order .rc-tile-icon > i,
 .rc-tile--missing-docs .rc-tile-icon > i,
-.rc-tile--penalty .rc-tile-icon > i { background-image: linear-gradient(135deg, #fbbf24, #d97706); }
+.hub-page .hub-grid .rc-tile--missing-docs .rc-tile-icon > i,
+.rc-tile--penalty .rc-tile-icon > i,
+.hub-page .hub-grid .rc-tile--penalty .rc-tile-icon > i { background-image: linear-gradient(135deg, #fbbf24, #d97706); }
 
 .rc-tile--oil-alert .rc-tile-icon > i,
+.hub-page .hub-grid .rc-tile--oil-alert .rc-tile-icon > i,
 .rc-tile--baseline-alert .rc-tile-icon > i,
+.hub-page .hub-grid .rc-tile--baseline-alert .rc-tile-icon > i,
 .rc-tile--red-task .rc-tile-icon > i,
+.hub-page .hub-grid .rc-tile--red-task .rc-tile-icon > i,
 .rc-tile--no-task .rc-tile-icon > i,
-.rc-tile--unauthorized .rc-tile-icon > i { background-image: linear-gradient(135deg, #f87171, #dc2626); }
+.hub-page .hub-grid .rc-tile--no-task .rc-tile-icon > i,
+.rc-tile--unauthorized .rc-tile-icon > i,
+.hub-page .hub-grid .rc-tile--unauthorized .rc-tile-icon > i { background-image: linear-gradient(135deg, #f87171, #dc2626); }
 
 .rc-tile--daily-task .rc-tile-icon > i,
+.hub-page .hub-grid .rc-tile--daily-task .rc-tile-icon > i,
 .rc-tile--new-task .rc-tile-icon > i,
+.hub-page .hub-grid .rc-tile--new-task .rc-tile-icon > i,
 .rc-tile--logbook .rc-tile-icon > i,
+.hub-page .hub-grid .rc-tile--logbook .rc-tile-icon > i,
 .rc-tile--payment .rc-tile-icon > i,
+.hub-page .hub-grid .rc-tile--payment .rc-tile-icon > i,
 .rc-tile--receipt .rc-tile-icon > i,
+.hub-page .hub-grid .rc-tile--receipt .rc-tile-icon > i,
 .rc-tile--bank-entry .rc-tile-icon > i,
+.hub-page .hub-grid .rc-tile--bank-entry .rc-tile-icon > i,
 .rc-tile--journal-v .rc-tile-icon > i,
-.rc-tile--rejoin .rc-tile-icon > i { background-image: linear-gradient(135deg, #4ade80, #16a34a); }
+.hub-page .hub-grid .rc-tile--journal-v .rc-tile-icon > i,
+.rc-tile--rejoin .rc-tile-icon > i,
+.hub-page .hub-grid .rc-tile--rejoin .rc-tile-icon > i { background-image: linear-gradient(135deg, #4ade80, #16a34a); }
 
 .rc-tile--upload .rc-tile-icon > i,
+.hub-page .hub-grid .rc-tile--upload .rc-tile-icon > i,
 .rc-tile--upload-log .rc-tile-icon > i,
+.hub-page .hub-grid .rc-tile--upload-log .rc-tile-icon > i,
 .rc-tile--resignation .rc-tile-icon > i,
-.rc-tile--activity .rc-tile-icon > i { background-image: linear-gradient(135deg, #94a3b8, #475569); }
+.hub-page .hub-grid .rc-tile--resignation .rc-tile-icon > i,
+.rc-tile--activity .rc-tile-icon > i,
+.hub-page .hub-grid .rc-tile--activity .rc-tile-icon > i { background-image: linear-gradient(135deg, #94a3b8, #475569); }
 
 /* Hub-only tiles (no Report Centre duplicate) */
 .rc-tile--hub-link .rc-tile-icon > i,
-.rc-tile--hub-assign .rc-tile-icon > i { background-image: linear-gradient(135deg, #38bdf8, #0284c7); }
+.hub-page .hub-grid .rc-tile--hub-link .rc-tile-icon > i,
+.rc-tile--hub-assign .rc-tile-icon > i,
+.hub-page .hub-grid .rc-tile--hub-assign .rc-tile-icon > i { background-image: linear-gradient(135deg, #38bdf8, #0284c7); }
 .rc-tile--hub-people .rc-tile-icon > i,
-.rc-tile--hub-workforce .rc-tile-icon > i { background-image: linear-gradient(135deg, #a78bfa, #7c3aed); }
-.rc-tile--hub-att-check .rc-tile-icon > i { background-image: linear-gradient(135deg, #4ade80, #16a34a); }
-.rc-tile--hub-att-mgmt .rc-tile-icon > i { background-image: linear-gradient(135deg, #fbbf24, #d97706); }
-.rc-tile--hub-payroll .rc-tile-icon > i { background-image: linear-gradient(135deg, #4ade80, #16a34a); }
-.rc-tile--hub-notify .rc-tile-icon > i { background-image: linear-gradient(135deg, #fbbf24, #d97706); }
-.rc-tile--hub-admin .rc-tile-icon > i { background-image: linear-gradient(135deg, #94a3b8, #475569); }
+.hub-page .hub-grid .rc-tile--hub-people .rc-tile-icon > i,
+.rc-tile--hub-workforce .rc-tile-icon > i,
+.hub-page .hub-grid .rc-tile--hub-workforce .rc-tile-icon > i { background-image: linear-gradient(135deg, #a78bfa, #7c3aed); }
+.rc-tile--hub-att-check .rc-tile-icon > i,
+.hub-page .hub-grid .rc-tile--hub-att-check .rc-tile-icon > i { background-image: linear-gradient(135deg, #4ade80, #16a34a); }
+.rc-tile--hub-att-mgmt .rc-tile-icon > i,
+.hub-page .hub-grid .rc-tile--hub-att-mgmt .rc-tile-icon > i { background-image: linear-gradient(135deg, #fbbf24, #d97706); }
+.rc-tile--hub-payroll .rc-tile-icon > i,
+.hub-page .hub-grid .rc-tile--hub-payroll .rc-tile-icon > i { background-image: linear-gradient(135deg, #4ade80, #16a34a); }
+.rc-tile--hub-notify .rc-tile-icon > i,
+.hub-page .hub-grid .rc-tile--hub-notify .rc-tile-icon > i { background-image: linear-gradient(135deg, #fbbf24, #d97706); }
+.rc-tile--hub-admin .rc-tile-icon > i,
+.hub-page .hub-grid .rc-tile--hub-admin .rc-tile-icon > i { background-image: linear-gradient(135deg, #94a3b8, #475569); }

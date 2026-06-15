@@ -1,11 +1,16 @@
 import difflib
 import json
+import os
 import re
+import tempfile
+import zipfile
 from datetime import datetime, date, timedelta
 from calendar import monthrange
 from decimal import Decimal, InvalidOperation
+from io import BytesIO
 
-from flask import flash, redirect, render_template, request, session, url_for, make_response, jsonify
+from flask import flash, redirect, render_template, request, session, url_for, make_response, jsonify, send_file, after_this_request, current_app
+from werkzeug.utils import secure_filename
 from sqlalchemy import and_, or_, not_, cast, String, select, exists, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import aliased, joinedload
@@ -64,6 +69,47 @@ def _delete_workspace_transfer_attachment(url):
         delete_file_by_url(url)
     except Exception:
         pass
+
+
+def _ws_ft_attachment_download_name(stored_path, display_name='Receipt'):
+    name = secure_filename((display_name or '').strip())
+    path_only = (stored_path or '').split('?')[0]
+    if not name or name.lower() == 'receipt':
+        name = secure_filename(os.path.basename(path_only.replace('\\', '/'))) or 'receipt'
+    if '.' not in name:
+        low = path_only.lower()
+        if any(low.endswith(x) for x in ('.mp4', '.webm', '.mov', '.m4v')):
+            name += '.mp4'
+        elif low.endswith('.pdf'):
+            name += '.pdf'
+        else:
+            name += '.jpg'
+    return name
+
+
+def _ws_ft_read_attachment_bytes(stored_path):
+    from routes import _maintenance_attachment_read_bytes
+    return _maintenance_attachment_read_bytes(stored_path)
+
+
+def _ws_ft_media_items_for_transfer(row):
+    items = _ft_media_items_from_path(row.attachment, 'Receipt')
+    if not items:
+        return []
+    for item in items:
+        item['download_url'] = url_for('workspace_fund_transfer_media_download', pk=row.id)
+    return items
+
+
+def _ws_ft_get_transfer_for_media(pk):
+    guard, emp = _workspace_guard('workspace_transfer_list')
+    if guard:
+        return guard, None
+    row = WorkspaceFundTransfer.query.filter_by(employee_id=emp.id, id=pk).first()
+    if not row:
+        flash('Transfer not found.', 'warning')
+        return redirect(url_for('workspace_fund_transfers_list')), None
+    return None, row
 
 
 def _workspace_multi_word_filter(search_text, *columns):
@@ -3420,7 +3466,7 @@ def workspace_fund_transfer_media(pk):
     row = WorkspaceFundTransfer.query.filter_by(employee_id=emp.id, id=pk).first_or_404()
     back_default = url_for("workspace_fund_transfers_list")
     back_url = _safe_internal_path(request.args.get("return_to"), back_default)
-    media_items = _ft_media_items_from_path(row.attachment, "Receipt")
+    media_items = _ws_ft_media_items_for_transfer(row)
     sub = f"Transfer: {row.transfer_number} | {row.transfer_date.strftime('%d-%m-%Y') if row.transfer_date else '—'}"
     tmpl = dict(
         rec=row,
@@ -3429,11 +3475,107 @@ def workspace_fund_transfer_media(pk):
         media_header_subline=sub,
         back_url=back_url,
         back_link_label="Back to list",
-        show_download_all=False,
+        download_all_url=url_for("workspace_fund_transfer_media_download_all", pk=row.id),
     )
     if not media_items:
         tmpl["media_empty_hint"] = "No receipt or attachment for this transfer."
+        tmpl["show_download_all"] = False
     return render_template("maintenance_expense_media.html", **tmpl)
+
+
+def workspace_fund_transfer_media_download(pk):
+    err, row = _ws_ft_get_transfer_for_media(pk)
+    if err:
+        return err
+    stored_path = (row.attachment or '').strip()
+    if not stored_path:
+        flash('No attachment available for download.', 'warning')
+        return redirect(url_for('workspace_fund_transfer_media', pk=row.id))
+
+    dl_name = _ws_ft_attachment_download_name(stored_path, 'Receipt')
+    from routes import _maintenance_attachment_local_full_path
+    local_full = _maintenance_attachment_local_full_path(stored_path)
+    if local_full:
+        return send_file(local_full, as_attachment=True, download_name=dl_name, conditional=True, max_age=0)
+
+    try:
+        blob, mime = _ws_ft_read_attachment_bytes(stored_path)
+    except Exception as ex:
+        current_app.logger.warning('Workspace transfer media download failed (%s): %s', row.id, ex)
+        flash('Download failed for this attachment.', 'danger')
+        return redirect(url_for('workspace_fund_transfer_media', pk=row.id))
+    if not blob:
+        flash('Attachment file is empty.', 'warning')
+        return redirect(url_for('workspace_fund_transfer_media', pk=row.id))
+    return send_file(
+        BytesIO(blob),
+        as_attachment=True,
+        download_name=dl_name,
+        mimetype=(mime or 'application/octet-stream'),
+        max_age=0,
+    )
+
+
+def workspace_fund_transfer_media_download_all(pk):
+    err, row = _ws_ft_get_transfer_for_media(pk)
+    if err:
+        return err
+    stored_path = (row.attachment or '').strip()
+    if not stored_path:
+        flash('No media files available for download.', 'warning')
+        return redirect(url_for('workspace_fund_transfer_media', pk=row.id))
+
+    dl_name = _ws_ft_attachment_download_name(stored_path, 'Receipt')
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.zip')
+    zip_path = tmp.name
+    tmp.close()
+    added = 0
+    try:
+        with zipfile.ZipFile(zip_path, mode='w', compression=zipfile.ZIP_DEFLATED) as zf:
+            from routes import _maintenance_attachment_local_full_path
+            local_full = _maintenance_attachment_local_full_path(stored_path)
+            if local_full:
+                try:
+                    zf.write(local_full, arcname=dl_name)
+                    added += 1
+                except Exception:
+                    pass
+            if added == 0:
+                try:
+                    blob, _mime = _ws_ft_read_attachment_bytes(stored_path)
+                    if blob:
+                        zf.writestr(dl_name, blob)
+                        added += 1
+                except Exception:
+                    pass
+        if added == 0:
+            try:
+                os.remove(zip_path)
+            except OSError:
+                pass
+            flash('No files could be packed for download.', 'danger')
+            return redirect(url_for('workspace_fund_transfer_media', pk=row.id))
+    except Exception as ex:
+        try:
+            os.remove(zip_path)
+        except OSError:
+            pass
+        current_app.logger.warning('Workspace transfer zip creation failed (%s): %s', row.id, ex)
+        flash('Unable to prepare media ZIP right now.', 'danger')
+        return redirect(url_for('workspace_fund_transfer_media', pk=row.id))
+
+    @after_this_request
+    def _cleanup_ws_transfer_zip(resp):
+        try:
+            os.remove(zip_path)
+        except OSError:
+            pass
+        return resp
+
+    date_part = row.transfer_date.strftime('%Y%m%d') if row.transfer_date else datetime.utcnow().strftime('%Y%m%d')
+    tn = secure_filename(row.transfer_number or f'transfer_{row.id}')
+    archive_name = f'workspace_transfer_{tn}_{date_part}.zip'
+    return send_file(zip_path, as_attachment=True, download_name=archive_name, mimetype='application/zip', max_age=0)
 
 
 def workspace_ledger():
