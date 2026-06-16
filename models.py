@@ -1281,6 +1281,7 @@ class User(db.Model):
     employee_post_id = db.Column(db.Integer, db.ForeignKey('driver_post.id', ondelete='SET NULL'), nullable=True)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     force_password_change = db.Column(db.Boolean, default=False, nullable=False)
+    biometric_token_version = db.Column(db.Integer, default=0, nullable=False)
     created_at = db.Column(db.DateTime, default=pk_now)
 
     role = db.relationship('Role', backref='users', lazy=True)

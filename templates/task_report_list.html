@@ -258,6 +258,37 @@
 {% set fv_photo_label = 'Odoo meter photo' %}
 {% include 'partials/gps_attendance_fullview.html' %}
 
+<style>
+  .task-report-export-progress {
+    position: fixed; inset: 0; z-index: 13000;
+    background: rgba(15, 23, 42, 0.55);
+    display: flex; align-items: center; justify-content: center;
+    padding: 16px;
+  }
+  .task-report-export-progress.d-none { display: none !important; }
+  .task-report-export-progress__card {
+    width: 100%; max-width: 380px; background: #fff; border-radius: 14px;
+    padding: 1rem 1.1rem; box-shadow: 0 12px 40px rgba(15, 23, 42, 0.25);
+  }
+  .task-report-export-progress__title {
+    font-size: 0.9rem; font-weight: 700; color: #0f172a; margin-bottom: 0.65rem;
+  }
+  .task-report-export-progress .progress { height: 26px; border-radius: 8px; overflow: hidden; }
+  .task-report-export-progress__detail {
+    font-size: 0.78rem; color: #64748b; margin-top: 0.5rem; text-align: center;
+  }
+</style>
+
+<div id="taskReportExportProgressOverlay" class="task-report-export-progress d-none" aria-hidden="true" role="alertdialog" aria-busy="true" aria-labelledby="taskReportExportProgressTitle">
+  <div class="task-report-export-progress__card">
+    <div class="task-report-export-progress__title" id="taskReportExportProgressTitle">Preparing download…</div>
+    <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+      <div id="taskReportExportProgressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" style="width:0%">0%</div>
+    </div>
+    <div class="task-report-export-progress__detail" id="taskReportExportProgressDetail">Please wait</div>
+  </div>
+</div>
+
 <script>
 function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page',n);window.location.search=u.toString();}
 (function() {
@@ -446,6 +477,155 @@ document.addEventListener('click', function (e) {
     var printBtn = document.getElementById('btnPrintReport');
     var exportBtn = document.getElementById('btnExportReport');
     if(!printBtn && !exportBtn) return;
+
+    function _isTaskReportNative() {
+        return !!(window.FleetBridge && window.FleetBridge.isNative) ||
+            !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+    }
+
+    function _taskReportFilename(ext) {
+        return 'Daily_Task_Report_{{ from_date.strftime("%d-%m-%Y") }}_to_{{ to_date.strftime("%d-%m-%Y") }}.' + ext;
+    }
+
+    function _toastTaskReport(msg) {
+        if (window.FleetBridge && typeof window.FleetBridge._toast === 'function') {
+            window.FleetBridge._toast(msg);
+        } else if (msg) {
+            alert(msg);
+        }
+    }
+
+    function _showTaskReportProgress(title, detail) {
+        var ov = document.getElementById('taskReportExportProgressOverlay');
+        var bar = document.getElementById('taskReportExportProgressBar');
+        if (!ov || !bar) return;
+        ov.classList.remove('d-none');
+        ov.setAttribute('aria-hidden', 'false');
+        bar.classList.add('progress-bar-striped', 'progress-bar-animated');
+        _updateTaskReportProgress(8, title || 'Loading…', detail || 'Please wait');
+    }
+
+    function _updateTaskReportProgress(pct, title, detail, done) {
+        var ov = document.getElementById('taskReportExportProgressOverlay');
+        var bar = document.getElementById('taskReportExportProgressBar');
+        var titleEl = document.getElementById('taskReportExportProgressTitle');
+        var detailEl = document.getElementById('taskReportExportProgressDetail');
+        if (!ov || !bar) return;
+        var n = Math.max(0, Math.min(100, Math.round(pct || 0)));
+        bar.style.width = n + '%';
+        bar.textContent = n + '%';
+        bar.setAttribute('aria-valuenow', String(n));
+        if (title && titleEl) titleEl.textContent = title;
+        if (detail && detailEl) detailEl.textContent = detail;
+        if (done) {
+            bar.classList.remove('progress-bar-striped', 'progress-bar-animated');
+        }
+    }
+
+    function _hideTaskReportProgress() {
+        var ov = document.getElementById('taskReportExportProgressOverlay');
+        if (!ov) return;
+        ov.classList.add('d-none');
+        ov.setAttribute('aria-hidden', 'true');
+    }
+
+    function _downloadTaskReportFile(blob, filename) {
+        if (_isTaskReportNative() && window.FleetBridge && window.FleetBridge.downloadBlob) {
+            return window.FleetBridge.downloadBlob(blob, filename, {
+                onProgress: function(phase, pct, detail) {
+                    if (phase === 'error') {
+                        _updateTaskReportProgress(0, 'Download failed', detail || 'Please try again', true);
+                        return;
+                    }
+                    if (phase === 'sharing') {
+                        _updateTaskReportProgress(92, 'Opening share…', detail || 'Choose Share or Open');
+                        return;
+                    }
+                    if (phase === 'done') {
+                        _updateTaskReportProgress(100, 'Download complete', detail || 'Share / Open file', true);
+                        setTimeout(_hideTaskReportProgress, 700);
+                        return;
+                    }
+                    _updateTaskReportProgress(Math.max(55, pct || 50), 'Saving file…', detail || 'Writing to device…');
+                }
+            }).catch(function(err) {
+                _updateTaskReportProgress(0, 'Download failed', (err && err.message) ? err.message : 'Please try again', true);
+                _toastTaskReport('Download failed: ' + ((err && err.message) ? err.message : 'Please try again'));
+                setTimeout(_hideTaskReportProgress, 1200);
+            });
+        }
+        _updateTaskReportProgress(100, 'Download started', 'Check your downloads folder', true);
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(function() {
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            _hideTaskReportProgress();
+        }, 700);
+        return Promise.resolve();
+    }
+
+    function _taskReportPdfFromTable(cleanTable, title, onDone) {
+        _updateTaskReportProgress(42, 'Generating PDF…', 'Loading PDF tools…');
+        var wrap = document.createElement('div');
+        wrap.style.cssText = 'position:fixed;left:-9999px;top:0;width:1200px;background:#fff;padding:12px;color:#000;';
+        var heading = document.createElement('h3');
+        heading.textContent = title;
+        heading.style.cssText = 'text-align:center;font-family:Arial,sans-serif;font-size:14px;margin:8px 0 12px;';
+        wrap.appendChild(heading);
+        wrap.appendChild(cleanTable);
+        document.body.appendChild(wrap);
+
+        function cleanup() {
+            if (wrap.parentNode) wrap.parentNode.removeChild(wrap);
+        }
+
+        function finish(ok) {
+            cleanup();
+            if (!ok) {
+                setTimeout(_hideTaskReportProgress, 1200);
+            }
+            if (typeof onDone === 'function') onDone(!!ok);
+        }
+
+        var scr = document.createElement('script');
+        scr.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.2/html2pdf.bundle.min.js';
+        scr.onload = function() {
+            _updateTaskReportProgress(58, 'Generating PDF…', 'Building pages…');
+            html2pdf().set({
+                margin: [6, 4, 6, 4],
+                filename: _taskReportFilename('pdf'),
+                image: { type: 'jpeg', quality: 0.92 },
+                html2canvas: { scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff' },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
+                pagebreak: { mode: ['css', 'legacy'] }
+            }).from(wrap).output('blob').then(function(blob) {
+                _updateTaskReportProgress(72, 'Saving PDF…', 'Writing file to device…');
+                return _downloadTaskReportFile(blob, _taskReportFilename('pdf'));
+            }).then(function() {
+                finish(true);
+            }).catch(function() {
+                _updateTaskReportProgress(0, 'PDF generation failed', 'Please try again', true);
+                _toastTaskReport('PDF generation failed.');
+                finish(false);
+            });
+        };
+        scr.onerror = function() {
+            _updateTaskReportProgress(0, 'Could not load PDF library', 'Check connection and try again', true);
+            _toastTaskReport('Could not load PDF library.');
+            finish(false);
+        };
+        document.head.appendChild(scr);
+    }
+
+    if (_isTaskReportNative() && printBtn) {
+        printBtn.innerHTML = '<i class="bi bi-file-earmark-pdf me-1"></i>Download PDF';
+        printBtn.title = 'Download PDF';
+    }
     
     function _allPagesUrl() {
         var u = new URLSearchParams(window.location.search);
@@ -454,15 +634,26 @@ document.addEventListener('click', function (e) {
         return window.location.pathname + '?' + u.toString();
     }
     
-    function _fetchAllTable(cb) {
+    function _fetchAllTable(cb, onProgress) {
         var localTbl = document.getElementById('taskReportTable');
         var url = _allPagesUrl();
+        if (typeof onProgress === 'function') {
+            onProgress(15, 'Loading report…', 'Fetching all rows…');
+        }
         fetch(url, {credentials:'same-origin'}).then(function(r){ return r.text(); }).then(function(html) {
+            if (typeof onProgress === 'function') {
+                onProgress(32, 'Loading report…', 'Preparing data…');
+            }
             var parser = new DOMParser();
             var doc = parser.parseFromString(html, 'text/html');
             var remoteTbl = doc.getElementById('taskReportTable');
             if(remoteTbl) { cb(remoteTbl); } else { cb(localTbl); }
-        }).catch(function(){ cb(localTbl); });
+        }).catch(function(){
+            if (typeof onProgress === 'function') {
+                onProgress(28, 'Loading report…', 'Using visible rows…');
+            }
+            cb(localTbl);
+        });
     }
     
     function _cleanTaskReportTable(tbl) {
@@ -500,15 +691,32 @@ document.addEventListener('click', function (e) {
             
             var previewCss = '@page{size:A4 landscape;margin:8mm;}body{font-family:Arial,sans-serif;font-size:10px;margin:0;padding:8px 12px;}.toolbar{position:sticky;top:0;z-index:99;background:#1e293b;color:#fff;padding:8px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;border-radius:0 0 6px 6px;box-shadow:0 2px 8px rgba(0,0,0,.2);margin:-8px -12px 12px;}.toolbar h4{margin:0;font-size:14px;font-weight:600;}.toolbar button{padding:5px 16px;border:none;border-radius:4px;font-size:12px;font-weight:600;cursor:pointer;}.btn-p{background:#3b82f6;color:#fff;}.btn-c{background:#64748b;color:#fff;margin-left:6px;}h3{text-align:center;margin:6px 0 10px;font-size:14px;}table{width:100%;border-collapse:collapse;table-layout:auto;}th,td{border:1px solid #555;padding:3px 5px;text-align:left;vertical-align:top;}th{background:#e9ecef;font-size:9px;}.text-end{text-align:right;}.text-center{text-align:center;}@media print{.toolbar{display:none!important;}}';
             var title = 'Vehicles Daily Task Report — {{ from_date|ddmmyyyy }} to {{ to_date|ddmmyyyy }}';
+            var nativePdf = _isTaskReportNative();
+            var progressTitle = nativePdf ? 'Generating PDF…' : 'Preparing preview…';
+
+            _showTaskReportProgress(progressTitle, 'Loading report data…');
             
             _fetchAllTable(function(table){
-                if(!table) { 
+                if(!table) {
+                    _hideTaskReportProgress();
                     printBtn.disabled = false; 
-                    printBtn.innerHTML = '<i class="bi bi-printer me-1"></i>Print / Preview'; 
+                    printBtn.innerHTML = nativePdf
+                        ? '<i class="bi bi-file-earmark-pdf me-1"></i>Download PDF'
+                        : '<i class="bi bi-printer me-1"></i>Print / Preview'; 
                     return; 
                 }
                 
                 var cleanTable = _cleanTaskReportTable(table);
+
+                if (nativePdf) {
+                    _taskReportPdfFromTable(cleanTable, title, function() {
+                        printBtn.disabled = false;
+                        printBtn.innerHTML = '<i class="bi bi-file-earmark-pdf me-1"></i>Download PDF';
+                    });
+                    return;
+                }
+
+                _updateTaskReportProgress(88, 'Opening preview…', 'Launching print window…');
                 
                 var w = window.open('', '_blank');
                 if(w) {
@@ -523,8 +731,12 @@ document.addEventListener('click', function (e) {
                     w.document.write('</body></html>');
                     w.document.close();
                 }
+                _updateTaskReportProgress(100, 'Preview ready', 'Use Print in the preview window', true);
+                setTimeout(_hideTaskReportProgress, 700);
                 printBtn.disabled = false;
                 printBtn.innerHTML = '<i class="bi bi-printer me-1"></i>Print / Preview';
+            }, function(pct, titleText, detail) {
+                _updateTaskReportProgress(pct, titleText, detail);
             });
         });
     }
@@ -533,14 +745,18 @@ document.addEventListener('click', function (e) {
         exportBtn.addEventListener('click', function() {
             exportBtn.disabled = true;
             exportBtn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Loading...';
+
+            _showTaskReportProgress('Exporting CSV…', 'Loading report data…');
             
             _fetchAllTable(function(table){
-                if(!table) { 
+                if(!table) {
+                    _hideTaskReportProgress();
                     exportBtn.disabled = false; 
                     exportBtn.innerHTML = '<i class="bi bi-file-earmark-excel me-1"></i>Export'; 
                     return; 
                 }
                 
+                _updateTaskReportProgress(45, 'Exporting CSV…', 'Building spreadsheet…');
                 var cleanTable = _cleanTaskReportTable(table);
                 
                 var headers = [];
@@ -569,13 +785,13 @@ document.addEventListener('click', function (e) {
                 
                 var csv = '\uFEFF' + csvRows.join('\n');
                 var blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
-                var a = document.createElement('a');
-                a.href = URL.createObjectURL(blob);
-                a.download = 'Daily_Task_Report_{{ from_date.strftime("%d-%m-%Y") }}_to_{{ to_date.strftime("%d-%m-%Y") }}.csv';
-                a.click();
-                
-                exportBtn.disabled = false;
-                exportBtn.innerHTML = '<i class="bi bi-file-earmark-excel me-1"></i>Export';
+                _updateTaskReportProgress(52, 'Saving CSV…', 'Writing file to device…');
+                _downloadTaskReportFile(blob, _taskReportFilename('csv')).finally(function() {
+                    exportBtn.disabled = false;
+                    exportBtn.innerHTML = '<i class="bi bi-file-earmark-excel me-1"></i>Export';
+                });
+            }, function(pct, titleText, detail) {
+                _updateTaskReportProgress(pct, titleText, detail);
             });
         });
     }

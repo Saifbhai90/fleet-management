@@ -1,6 +1,19 @@
 {% extends "base.html" %}
 {% block title %}New Task Entry{% endblock %}
 {% block content %}
+<script>
+(function fleetTaskEntryDisableLoadMore() {
+  function run() {
+    var wrap = document.getElementById('taskEntryLoadMoreWrap');
+    if (wrap) wrap.remove();
+    document.querySelectorAll('#batchTable tbody tr.task-row[data-task-chunk-hidden="1"]').forEach(function(row) {
+      row.setAttribute('data-task-chunk-hidden', '0');
+    });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
+  else run();
+})();
+</script>
 {% set tef = task_entry_filter if task_entry_filter is defined else {} %}
 {% set vehicle_id = vehicle_id if vehicle_id is defined else 0 %}
 {% set filter_vehicles = filter_vehicles if filter_vehicles is defined else [] %}
@@ -217,9 +230,13 @@
       max-width: 100%;
       box-sizing: border-box;
     }
-    /* Last rows clear Capacitor sticky Save (thumb zone) + bottom nav */
+    /* Footer sits directly under totals — no thumb-zone gap inside card-body */
     html.capacitor-native .task-batch-card > .card-body {
-      padding-bottom: max(110px, calc(80px + env(safe-area-inset-bottom, 0px))) !important;
+      padding-bottom: 0 !important;
+    }
+    html.capacitor-native .task-batch-card .card-footer {
+      margin-top: 0 !important;
+      padding-top: 10px !important;
     }
     .task-batch-page.container-fluid {
       max-width: 100vw;
@@ -552,18 +569,27 @@
     }
     .task-batch-table tbody td .form-control-sm {
       min-height: 48px;
-      font-size: 16px; /* iOS zoom */
+      font-size: 16px; /* iOS zoom — same as Driver Registration */
       width: 100% !important;
       max-width: 100% !important;
       margin-left: 0;
       border-radius: 12px;
       border: 1px solid #e2e8f0;
-      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+      box-shadow: none;
       transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    /* Vehicle list editable cells only — not filter card (Driver-form-like first tap) */
+    #batchTable.task-batch-table tbody td.task-entry-tap-cell {
+      -webkit-user-select: auto;
+      user-select: auto;
+    }
+    #batchTable .task-entry-tap-target {
       touch-action: manipulation;
       -webkit-tap-highlight-color: transparent;
-      position: relative;
-      z-index: 1;
+    }
+    #batchTable .task-entry-tap-target:active {
+      transform: none !important;
+      opacity: 1 !important;
     }
     .task-batch-page .task-batch-table tbody td .form-control-sm:focus {
       border-color: #0d9488;
@@ -608,18 +634,6 @@
     }
     .task-batch-table tbody td.odometer-cell .btn-group .btn {
       flex: 0 0 auto;
-      touch-action: manipulation;
-      -webkit-tap-highlight-color: transparent;
-    }
-    .task-batch-page .task-batch-filter-card input,
-    .task-batch-page .task-batch-filter-card select,
-    .task-batch-page .task-batch-filter-card .form-control,
-    .task-batch-page .task-batch-filter-card .btn {
-      touch-action: manipulation;
-      -webkit-tap-highlight-color: transparent;
-    }
-    .task-batch-page .task-batch-table tbody tr.task-row:active {
-      transform: none !important;
     }
     /* Totals strip */
     .task-batch-table tfoot#batchTotals td[colspan] {
@@ -630,8 +644,8 @@
       flex-wrap: wrap;
       gap: 8px;
       justify-content: center;
-      padding: 12px 10px;
-      margin: 0 0 14px;
+      padding: 12px 10px 0;
+      margin: 0;
       background: #f8fafc;
       border-radius: 12px;
       border: 1px solid #e2e8f0;
@@ -663,15 +677,6 @@
       color: #64748b;
       margin-bottom: 4px;
     }
-    .task-entry-load-more-wrap {
-      background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
-      border-top: 1px solid #e2e8f0;
-    }
-    .task-entry-load-more-wrap .btn {
-      border-radius: 12px;
-      min-height: 44px;
-      font-weight: 600;
-    }
   }
 
   @media (min-width: 768px) {
@@ -683,7 +688,17 @@
 
   /* Capacitor scroll → base.html #appNativeShell .main-content only. No per-page scroll hacks. */
   @media (max-width: 767.98px) {
-    #batchTable tbody tr.task-row[data-task-chunk-hidden="1"],
+    #taskEntryLoadMoreWrap,
+    .task-entry-load-more-wrap {
+      display: none !important;
+      visibility: hidden !important;
+      height: 0 !important;
+      overflow: hidden !important;
+      pointer-events: none !important;
+    }
+    #batchTable tbody tr.task-row[data-task-chunk-hidden="1"] {
+      display: block !important;
+    }
     #batchTable tbody tr.task-row[data-task-search-hidden="1"] {
       display: none !important;
     }
@@ -841,8 +856,7 @@
                 {% set kms_diff = none %}
                 {% set pct_diff = none %}
               {% endif %}
-              {% set chunk_hidden = '1' if rows|length > 20 and loop.index > 15 else '0' %}
-              <tr class="task-row{% if s %} table-info{% endif %}" data-vehicle-id="{{ row.vehicle.id }}" data-start="{{ row.start_reading }}" data-tracker="{{ row.tracker_km }}" data-emg="{{ row.emg_tasks }}" data-vehicle="{{ row.vehicle.vehicle_no | e }}" data-district="{{ (row.vehicle.district.name if row.vehicle.district else '') | e }}" data-init-close="{% if row.close_reading is not none %}{{ row.close_reading }}{% endif %}" data-init-tasks="{% if row.tasks_count is not none %}{{ row.tasks_count }}{% endif %}" data-init-odom="{{ row.odometer_photo_path or '' }}" data-task-chunk-hidden="{{ chunk_hidden }}" data-task-search-hidden="0">
+              <tr class="task-row{% if s %} table-info{% endif %}" data-vehicle-id="{{ row.vehicle.id }}" data-start="{{ row.start_reading }}" data-tracker="{{ row.tracker_km }}" data-emg="{{ row.emg_tasks }}" data-vehicle="{{ row.vehicle.vehicle_no | e }}" data-district="{{ (row.vehicle.district.name if row.vehicle.district else '') | e }}" data-init-close="{% if row.close_reading is not none %}{{ row.close_reading }}{% endif %}" data-init-tasks="{% if row.tasks_count is not none %}{{ row.tasks_count }}{% endif %}" data-init-odom="{{ row.odometer_photo_path or '' }}" data-task-search-hidden="0">
                 <td class="ps-4 ps-md-4 task-batch-num-cell">
                 <input type="hidden" name="row_{{ row.vehicle.id }}_edit_mode" id="row_{{ row.vehicle.id }}_edit_mode" value="{{ '0' if s else '1' }}">
                   <span class="task-batch-num-inner"><span class="task-batch-row-num">{{ loop.index }}</span>{% if s %} <i class="bi bi-check-circle-fill text-success" title="Previously saved"></i>{% endif %}</span>
@@ -863,12 +877,12 @@
                 {% else %}
                 <td class="text-end task-batch-start-cell">{{ mobile_vehicle_summary(row) }}<span class="d-md-none task-batch-start-field-title">Start reading</span><span class="start-reading">{{ "%.0f"|format(row.start_reading) }}</span></td>
                 {% endif %}
-                <td class="text-end task-batch-input-priority">
+                <td class="text-end task-batch-input-priority task-entry-tap-cell">
                   <input type="number" step="0.01" min="0" name="vehicle_{{ row.vehicle.id }}_close_reading"
-                         class="form-control form-control-sm text-end close-input task-editable-field" data-row="{{ row.vehicle.id }}" style="min-width:90px;"
+                         class="form-control form-control-sm text-end close-input task-editable-field task-entry-tap-target" data-row="{{ row.vehicle.id }}" style="min-width:90px;"
                          value="{% if row.close_reading is not none %}{{ row.close_reading }}{% endif %}" placeholder="Close" {% if s %}disabled{% endif %}>
                 </td>
-                <td class="text-center align-middle odometer-cell task-batch-input-priority" style="min-width:72px;vertical-align:middle;">
+                <td class="text-center align-middle odometer-cell task-batch-input-priority task-entry-tap-cell" style="min-width:72px;vertical-align:middle;">
                   <input type="hidden" name="vehicle_{{ row.vehicle.id }}_odometer_photo_url" class="odom-url-input" data-row="{{ row.vehicle.id }}" value="{{ row.odometer_photo_path or '' }}">
                   <div class="d-flex flex-column align-items-center gap-1 odom-ctrl-wrap{% if s %} odom-wrap-locked{% endif %}" data-row="{{ row.vehicle.id }}" tabindex="{% if s %}-1{% else %}0{% endif %}" title="{% if s %}Edit row to change photo{% else %}Paste (Ctrl+V) when focused, or click speedometer for file / mobile rear camera{% endif %}">
                     {% if row.odometer_photo_path %}
@@ -880,19 +894,19 @@
                     <span class="odom-thumb-placeholder text-muted small" style="font-size:.65rem;">—</span>
                     {% endif %}
                     <div class="btn-group btn-group-sm" role="group">
-                      <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-1 odom-photo-btn task-editable-field d-inline-flex align-items-center gap-1 {% if row.odometer_photo_path %}border-success{% endif %}" data-row="{{ row.vehicle.id }}" title="Add / change photo" {% if s %}disabled{% endif %}>
+                      <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-1 odom-photo-btn task-editable-field task-entry-tap-target d-inline-flex align-items-center gap-1 {% if row.odometer_photo_path %}border-success{% endif %}" data-row="{{ row.vehicle.id }}" title="Add / change photo" {% if s %}disabled{% endif %}>
                         <img alt="" width="22" height="22" class="odom-inline-thumb rounded border flex-shrink-0 {% if row.odometer_photo_path %}border-success{% else %}d-none{% endif %}" style="object-fit:cover;" {% if row.odometer_photo_path %}src="{{ row.odometer_photo_path }}"{% endif %}>
                         <i class="bi bi-speedometer2 odom-meter-icon flex-shrink-0"></i>
                       </button>
-                      <button type="button" class="btn btn-outline-danger btn-sm py-0 px-1 odom-clear-btn {% if not row.odometer_photo_path %}d-none{% endif %} task-editable-field" data-row="{{ row.vehicle.id }}" title="Remove photo" {% if s %}disabled{% endif %}>×</button>
+                      <button type="button" class="btn btn-outline-danger btn-sm py-0 px-1 odom-clear-btn task-entry-tap-target {% if not row.odometer_photo_path %}d-none{% endif %} task-editable-field" data-row="{{ row.vehicle.id }}" title="Remove photo" {% if s %}disabled{% endif %}>×</button>
                     </div>
                   </div>
                 </td>
                 <td class="text-end kms-driven">{% if kms_driven is not none %}{{ "%.2f"|format(kms_driven) }}{% else %}-{% endif %}</td>
-                <td class="text-center task-batch-input-priority task-batch-metric-cell task-batch-metric-cell--first">
+                <td class="text-center task-batch-input-priority task-batch-metric-cell task-batch-metric-cell--first task-entry-tap-cell">
                   <span class="d-md-none task-batch-metrics-card-head text-uppercase fw-bold">Variance &amp; actions</span>
                   <input type="number" min="0" name="vehicle_{{ row.vehicle.id }}_tasks_count"
-                         class="form-control form-control-sm text-center task-editable-field" data-row="{{ row.vehicle.id }}" style="min-width:60px;"
+                         class="form-control form-control-sm text-center task-editable-field task-entry-tap-target" data-row="{{ row.vehicle.id }}" style="min-width:60px;"
                          value="{% if row.tasks_count is not none %}{{ row.tasks_count }}{% endif %}" placeholder="0" {% if s %}disabled{% endif %}>
                 </td>
                 <td class="text-center task-batch-metric-cell">
@@ -954,19 +968,14 @@
             {% endif %}
           </table>
         </div>
-        <div id="taskEntryLoadMoreWrap" class="{% if rows|length > 20 %}text-center py-3 px-3 task-entry-load-more-wrap{% else %}d-none{% endif %}">
-          <button type="button" class="btn btn-outline-primary px-4" id="taskEntryLoadMoreBtn">
-            <i class="bi bi-chevron-down me-1"></i>Load more vehicles (<span id="taskEntryLoadMoreCount">{% if rows|length > 20 %}{{ rows|length - 15 }}{% else %}0{% endif %}</span> remaining)
-          </button>
-        </div>
       </div>
       <div class="card-footer bg-light d-flex flex-column flex-sm-row justify-content-between align-items-stretch align-items-sm-center gap-2 rounded-bottom">
         <span class="text-muted small order-3 order-sm-1 task-batch-footer-hint"><span class="d-none d-md-inline">Saved rows locked rahengi; <strong>Edit</strong> se change, <strong>Delete</strong> se galat entry hataen (ijazat ke sath). New rows ke liye Close Reading required hai.</span><span class="d-md-none">Saved: <strong>Edit</strong> / <strong>Delete</strong> (agar ijazat ho). Nayi row: <strong>Close Reading</strong> zaroori.</span></span>
         <div class="d-flex flex-column flex-sm-row gap-2 order-1 order-sm-2 align-self-stretch align-self-sm-auto">
-          <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary px-4 py-2 align-self-stretch text-center">Cancel</a>
           <button type="submit" class="btn btn-primary px-4 py-2 align-self-stretch task-batch-save-btn" id="saveBtn">
           <i class="bi bi-save me-1"></i>Save All
         </button>
+          <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary px-4 py-2 align-self-stretch text-center">Cancel</a>
         </div>
       </div>
     </div>
@@ -1304,8 +1313,6 @@ window.TASK_REPORT_NEW_LOCK_VEHICLE = {{ tef.get('lock_vehicle', false)|tojson }
     }, 500);
   })();
 
-  var taskEntryChunkSize = 15;
-  var taskEntryChunkThreshold = 20;
   var taskEntryRowList = [];
   var taskEntrySearchQuery = '';
 
@@ -1314,37 +1321,9 @@ window.TASK_REPORT_NEW_LOCK_VEHICLE = {{ tef.get('lock_vehicle', false)|tojson }
     return window.fleetMultiWordMatch(row.innerText || row.textContent, q);
   }
 
-  function taskEntryUsesChunking() {
-    var isNative = document.documentElement.classList.contains('capacitor-native');
-    var isMobile = window.matchMedia('(max-width: 767.98px)').matches;
-    return isNative || isMobile;
-  }
-
   function taskEntryRowIsVisible(row) {
     if (!row) return false;
-    if (row.dataset.taskSearchHidden === '1') return false;
-    if (taskEntryUsesChunking() && row.dataset.taskChunkHidden === '1') return false;
-    return true;
-  }
-
-  function taskEntryUpdateLoadMoreUi() {
-    var wrap = document.getElementById('taskEntryLoadMoreWrap');
-    var countEl = document.getElementById('taskEntryLoadMoreCount');
-    if (!wrap || !taskEntryRowList.length) return;
-    if (taskEntrySearchQuery.trim()) {
-      wrap.classList.add('d-none');
-      return;
-    }
-    var remaining = 0;
-    taskEntryRowList.forEach(function(row) {
-      if (row.dataset.taskChunkHidden === '1') remaining++;
-    });
-    if (remaining <= 0 || taskEntryRowList.length <= taskEntryChunkThreshold) {
-      wrap.classList.add('d-none');
-      return;
-    }
-    wrap.classList.remove('d-none');
-    if (countEl) countEl.textContent = String(remaining);
+    return row.dataset.taskSearchHidden !== '1';
   }
 
   function taskEntryApplyRowVisibility() {
@@ -1358,30 +1337,11 @@ window.TASK_REPORT_NEW_LOCK_VEHICLE = {{ tef.get('lock_vehicle', false)|tojson }
       var searchHide = searchActive && !taskEntryRowIsSearchMatch(row, q);
       row.dataset.taskSearchHidden = searchHide ? '1' : '0';
     });
-    taskEntryUpdateLoadMoreUi();
   }
 
-  function taskEntryInitMobileChunks() {
+  function taskEntryInitRowList() {
     if (!batchTable) return;
     taskEntryRowList = Array.prototype.slice.call(batchTable.querySelectorAll('tbody tr.task-row'));
-    if (taskEntryUsesChunking() && taskEntryRowList.length > taskEntryChunkThreshold) {
-      var loadBtn = document.getElementById('taskEntryLoadMoreBtn');
-      if (loadBtn && !loadBtn.dataset.bound) {
-        loadBtn.dataset.bound = '1';
-        loadBtn.addEventListener('click', function() {
-          var revealed = 0;
-          taskEntryRowList.forEach(function(row) {
-            if (revealed >= taskEntryChunkSize) return;
-            if (row.dataset.taskChunkHidden === '1') {
-              row.dataset.taskChunkHidden = '0';
-              revealed++;
-            }
-          });
-          taskEntryApplyRowVisibility();
-          updateTotals();
-        });
-      }
-    }
     taskEntryApplyRowVisibility();
   }
 
@@ -1446,27 +1406,15 @@ window.TASK_REPORT_NEW_LOCK_VEHICLE = {{ tef.get('lock_vehicle', false)|tojson }
       });
     }
 
-    taskEntryInitMobileChunks();
+    taskEntryInitRowList();
   }
 
-  (function taskEntryMobileInputFocus() {
-    var page = document.querySelector('.task-batch-page');
-    if (!page) return;
-    var isTouch = window.matchMedia('(max-width: 767.98px)').matches
-      || document.documentElement.classList.contains('capacitor-native');
-    if (!isTouch) return;
-
-    page.querySelectorAll('.odom-ctrl-wrap[tabindex="0"]').forEach(function(w) {
+  (function taskEntryOdomMobileTabindex() {
+    var table = document.getElementById('batchTable');
+    if (!table || !window.matchMedia('(max-width: 767.98px)').matches) return;
+    table.querySelectorAll('.odom-ctrl-wrap[tabindex="0"]').forEach(function(w) {
       w.setAttribute('tabindex', '-1');
     });
-
-    page.addEventListener('touchstart', function(e) {
-      var inp = e.target.closest('input:not([type="hidden"]):not([readonly]):not([disabled]), textarea:not([readonly]):not([disabled])');
-      if (!inp || !page.contains(inp)) return;
-      if (document.activeElement !== inp) {
-        inp.focus({ preventScroll: false });
-      }
-    }, { passive: true, capture: true });
   })();
 
   /* ── Helpers ─────────────────────────────────────────────── */

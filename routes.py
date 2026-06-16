@@ -1771,7 +1771,7 @@ def require_login():
     if endpoint.startswith('static'):
         return
     if endpoint in (
-        'login', 'pwa_manifest', 'service_worker', 'biometric_login', 'app_logout', 'mobile_init', 'app_check_update',
+        'login', 'pwa_manifest', 'service_worker', 'biometric_login', 'app_logout', 'mobile_init', 'session_ping', 'app_check_update',
         'debug_fcm_status', 'health_check', 'report_driver_profile_public',
     ):
         return
@@ -3902,6 +3902,7 @@ def dashboard():
                            monthly_maintenance=monthly_maintenance,
                            open_work_orders=open_work_orders,
                            now_dt=today_dt,
+                           dashboard_time=pk_now().strftime('%H:%M:%S'),
                            from_login=request.args.get('from_login') == '1')
 
 
@@ -4104,6 +4105,50 @@ def reminder_toggle(pk):
 # Account (profile, change password, biometric, session)
 # ────────────────────────────────────────────────
 
+def _ensure_user_biometric_version_column():
+    """SQLite/PostgreSQL-safe: add user.biometric_token_version if missing."""
+    try:
+        from sqlalchemy import inspect, text
+        insp = inspect(db.engine)
+        cols = [c['name'] for c in insp.get_columns('user')]
+        if 'biometric_token_version' not in cols:
+            tbl = '"user"' if db.engine.dialect.name == 'postgresql' else 'user'
+            db.session.execute(text(
+                f'ALTER TABLE {tbl} ADD COLUMN biometric_token_version INTEGER NOT NULL DEFAULT 0'
+            ))
+            db.session.commit()
+    except Exception:
+        db.session.rollback()
+
+
+def _biometric_hmac_token(user):
+    """HMAC token for biometric login; version bumps invalidate old tokens on disable."""
+    import hmac as _hmac, hashlib
+    ver = int(getattr(user, 'biometric_token_version', 0) or 0)
+    return _hmac.new(
+        app.config['SECRET_KEY'].encode('utf-8'),
+        f"{user.username}:biometric-v1:{ver}".encode('utf-8'),
+        hashlib.sha256,
+    ).hexdigest()
+
+
+def _biometric_token_valid(user, token):
+    """Accept current version token and legacy v0 token without version suffix."""
+    import hmac as _hmac, hashlib
+    if not user or not token:
+        return False
+    ver = int(getattr(user, 'biometric_token_version', 0) or 0)
+    candidates = [_biometric_hmac_token(user)]
+    if ver == 0:
+        legacy = _hmac.new(
+            app.config['SECRET_KEY'].encode('utf-8'),
+            f"{user.username}:biometric-v1".encode('utf-8'),
+            hashlib.sha256,
+        ).hexdigest()
+        candidates.append(legacy)
+    return any(_hmac.compare_digest(token, c) for c in candidates)
+
+
 def _user_profile_avatar_path(user):
     """Driver photo_path when login username matches driver CNIC (same variants as login)."""
     from utils import user_profile_avatar_path
@@ -4129,20 +4174,57 @@ def account_profile():
 @app.route('/auth/biometric-token')
 def biometric_token():
     """Return HMAC token for the currently logged-in user (used to enable biometric login)."""
-    import hmac as _hmac, hashlib
+    _ensure_user_biometric_version_column()
     user_id = session.get('user_id')
     if not user_id:
         return jsonify({'ok': False}), 401
     user = User.query.get(user_id)
     if not user or not user.is_active:
         return jsonify({'ok': False}), 401
-    token = _hmac.new(
-        app.config['SECRET_KEY'].encode('utf-8'),
-        f"{user.username}:biometric-v1".encode('utf-8'),
-        hashlib.sha256
-    ).hexdigest()
+    token = _biometric_hmac_token(user)
     display_name = (user.full_name or user.username or '').strip()
     return jsonify({'ok': True, 'token': token, 'username': user.username, 'display_name': display_name})
+
+
+@app.route('/api/biometric/enable', methods=['POST'])
+@csrf.exempt
+def api_biometric_enable():
+    """Issue biometric token after client-side fingerprint verification (logged-in user)."""
+    _ensure_user_biometric_version_column()
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'ok': False, 'error': 'Login required'}), 401
+    user = User.query.get(user_id)
+    if not user or not user.is_active:
+        return jsonify({'ok': False, 'error': 'Unauthorized'}), 401
+    token = _biometric_hmac_token(user)
+    display_name = (user.full_name or user.username or '').strip()
+    return jsonify({
+        'ok': True,
+        'token': token,
+        'username': user.username,
+        'display_name': display_name,
+    })
+
+
+@app.route('/api/biometric/disable', methods=['POST'])
+@csrf.exempt
+def api_biometric_disable():
+    """Revoke biometric tokens server-side (increment version) and clear device association."""
+    _ensure_user_biometric_version_column()
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'ok': False, 'error': 'Login required'}), 401
+    user = User.query.get(user_id)
+    if not user or not user.is_active:
+        return jsonify({'ok': False, 'error': 'Unauthorized'}), 401
+    try:
+        user.biometric_token_version = int(getattr(user, 'biometric_token_version', 0) or 0) + 1
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        return jsonify({'ok': False, 'error': 'Server error'}), 500
+    return jsonify({'ok': True})
 
 
 def _safe_mobile_resume_path(path):
@@ -4173,6 +4255,14 @@ def mobile_init():
     return resp
 
 
+@app.route('/auth/session-ping', methods=['GET'])
+def session_ping():
+    """Prime session cookie for Capacitor WebView before first login POST (CSRF needs session)."""
+    session.setdefault('_fleet_session_ping', 1)
+    session.modified = True
+    return ('', 204)
+
+
 @app.route('/auth/app-logout', methods=['POST'])
 @csrf.exempt
 def app_logout():
@@ -4191,22 +4281,17 @@ def app_logout():
 @csrf.exempt
 def biometric_login():
     """Validate biometric token and create a new session (no password needed)."""
-    import hmac as _hmac, hashlib
+    _ensure_user_biometric_version_column()
     data = request.get_json(silent=True) or {}
     username = (data.get('username') or '').strip()
     token    = (data.get('token') or '').strip()
     if not username or not token:
         return jsonify({'ok': False, 'error': 'Missing fields'}), 400
-    expected = _hmac.new(
-        app.config['SECRET_KEY'].encode('utf-8'),
-        f"{username}:biometric-v1".encode('utf-8'),
-        hashlib.sha256
-    ).hexdigest()
-    if not _hmac.compare_digest(token, expected):
-        return jsonify({'ok': False, 'error': 'Invalid token'}), 401
     user = User.query.filter_by(username=username, is_active=True).first()
     if not user:
         return jsonify({'ok': False, 'error': 'User not found'}), 401
+    if not _biometric_token_valid(user, token):
+        return jsonify({'ok': False, 'error': 'Invalid token'}), 401
     _do_login_session(user, request)
     return jsonify({'ok': True, 'redirect': url_for('dashboard')})
 
@@ -7579,18 +7664,38 @@ def login():
     # Always clear any existing session on GET /login.
     # This ensures that after app-close logout, no stale session skips the biometric screen.
     # Web users who navigate to /login while logged in will also get a clean state.
-    if request.method == 'GET' and session.get('user_id'):
-        try:
-            log_id = session.get('login_log_id')
-            if log_id:
-                LoginLog.query.filter_by(id=log_id).update({'logout_at': pk_now()})
-                db.session.commit()
-        except Exception:
-            db.session.rollback()
-        session.clear()
+    if request.method == 'GET':
+        if session.get('user_id'):
+            try:
+                log_id = session.get('login_log_id')
+                if log_id:
+                    LoginLog.query.filter_by(id=log_id).update({'logout_at': pk_now()})
+                    db.session.commit()
+            except Exception:
+                db.session.rollback()
+            session.clear()
+        # Capacitor WebView may not send session cookie on first POST; prime it on GET.
+        session.setdefault('_fleet_login_ready', 1)
+        session.modified = True
 
     form = LoginForm()
     lockout_remaining_seconds = None
+
+    def _login_wants_json():
+        if request.method != 'POST':
+            return False
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return True
+        if request.args.get('ajax') == '1':
+            return True
+        if request.form.get('_fleet_ajax') == '1':
+            return True
+        accept = (request.headers.get('Accept') or '').lower()
+        return 'application/json' in accept
+
+    def _login_json(**payload):
+        return jsonify(payload)
+
     # Show "no access" message at most once when redirected due to permission failure
     if session.pop('show_no_access', None):
         flash('You do not have access to this page.', 'danger')
@@ -7622,11 +7727,17 @@ def login():
         try:
             lockout_remaining_seconds = _compute_lockout_seconds(username)
             if lockout_remaining_seconds > 0:
-                flash(
+                lock_msg = (
                     f'Account temporarily locked due to {_max_failures} failed attempts. '
-                    f'Try again in {max(1, (lockout_remaining_seconds + 59) // 60)} minute(s).',
-                    'danger'
+                    f'Try again in {max(1, (lockout_remaining_seconds + 59) // 60)} minute(s).'
                 )
+                if _login_wants_json():
+                    return _login_json(
+                        ok=False,
+                        error=lock_msg,
+                        lockout_remaining_seconds=lockout_remaining_seconds,
+                    )
+                flash(lock_msg, 'danger')
                 return render_template(
                     'login.html',
                     form=form,
@@ -7688,10 +7799,23 @@ def login():
             if password == DEFAULT_FIRST_PASSWORD and getattr(user, 'force_password_change', None):
                 if check_password(user, DEFAULT_FIRST_PASSWORD):
                     session['must_set_password_user_id'] = user.id
+                    if _login_wants_json():
+                        return _login_json(
+                            ok=True,
+                            redirect=url_for('set_new_password'),
+                            username=user.username,
+                            display_name=(user.full_name or user.username or '').strip(),
+                        )
                     return redirect(url_for('set_new_password'))
                 # else wrong password
             elif password == DEFAULT_FIRST_PASSWORD and not getattr(user, 'force_password_change', None):
-                flash('Invalid user ID or password. Pehli dafa login ke baad naya password set karein; ab 123 kaam nahi karega.', 'danger')
+                first_pw_msg = (
+                    'Invalid user ID or password. Pehli dafa login ke baad naya password set karein; '
+                    'ab 123 kaam nahi karega.'
+                )
+                if _login_wants_json():
+                    return _login_json(ok=False, error=first_pw_msg)
+                flash(first_pw_msg, 'danger')
                 return redirect(url_for('login'))
             elif check_password(user, password):
                 session['user_id'] = user.id
@@ -7756,8 +7880,14 @@ def login():
                             allowed_shifts.add((drv.shift or '').strip())
                     # Agar kisi bhi cheez ka assignment nahi mila to login block karein
                     if not (allowed_projects or allowed_districts or allowed_vehicles or allowed_shifts):
-                        flash('Aap ke liye koi Project / District / Vehicle / Shift assign nahi hai. Admin se contact karein.', 'danger')
+                        scope_msg = (
+                            'Aap ke liye koi Project / District / Vehicle / Shift assign nahi hai. '
+                            'Admin se contact karein.'
+                        )
                         session.clear()
+                        if _login_wants_json():
+                            return _login_json(ok=False, error=scope_msg)
+                        flash(scope_msg, 'danger')
                         return redirect(url_for('login'))
 
                 session['allowed_projects'] = list(allowed_projects)
@@ -7806,6 +7936,18 @@ def login():
                 # Always land on the dashboard (or role landing) after login. We deliberately do NOT
                 # restore a previous screen such as an unfinished Task Report. Clear any stale resume cookie.
                 resp_target = url_for('dashboard', from_login=1) if target_endpoint == 'dashboard' else url_for(target_endpoint)
+                if _login_wants_json():
+                    payload = {
+                        'ok': True,
+                        'redirect': resp_target,
+                        'username': user.username,
+                        'display_name': (user.full_name or user.username or '').strip(),
+                    }
+                    if request.form.get('_fleet_bio_link') == '1':
+                        _ensure_user_biometric_version_column()
+                        payload['token'] = _biometric_hmac_token(user)
+                    session.modified = True
+                    return _login_json(**payload)
                 resp = make_response(redirect(resp_target))
                 resp.set_cookie('fleet_resume_path', '', max_age=0, path='/')
                 return resp
@@ -7818,11 +7960,17 @@ def login():
             db.session.commit()
             lockout_remaining_seconds = _compute_lockout_seconds(username)
             if lockout_remaining_seconds > 0:
-                flash(
+                lock_msg = (
                     f'Account temporarily locked due to {_max_failures} failed attempts. '
-                    f'Try again in {max(1, (lockout_remaining_seconds + 59) // 60)} minute(s).',
-                    'danger'
+                    f'Try again in {max(1, (lockout_remaining_seconds + 59) // 60)} minute(s).'
                 )
+                if _login_wants_json():
+                    return _login_json(
+                        ok=False,
+                        error=lock_msg,
+                        lockout_remaining_seconds=lockout_remaining_seconds,
+                    )
+                flash(lock_msg, 'danger')
                 return render_template(
                     'login.html',
                     form=form,
@@ -7830,7 +7978,32 @@ def login():
                 )
         except Exception:
             db.session.rollback()
+        if _login_wants_json():
+            return _login_json(
+                ok=False,
+                error='Invalid user ID or password.',
+                lockout_remaining_seconds=lockout_remaining_seconds,
+            )
         flash('Invalid user ID or password.', 'danger')
+    elif request.method == 'POST':
+        raw_user = (request.form.get('username') or '').strip()
+        if raw_user:
+            form.username.data = raw_user
+        if form.errors.get('csrf_token'):
+            if _login_wants_json():
+                return _login_json(ok=False, error='Please tap Sign In again.')
+            flash('Please tap Sign In again.', 'warning')
+            raw_pass = request.form.get('password') or ''
+            if raw_pass:
+                form.password.data = raw_pass
+    if request.method == 'POST' and _login_wants_json() and not form.validate_on_submit():
+        field_errors = []
+        for _field, messages in form.errors.items():
+            field_errors.extend(messages)
+        return _login_json(
+            ok=False,
+            error=field_errors[0] if field_errors else 'Please check your entries and try again.',
+        )
     # Reaching the login screen always discards any pending mobile resume target.
     resp = make_response(render_template('login.html', form=form, lockout_remaining_seconds=lockout_remaining_seconds))
     resp.set_cookie('fleet_resume_path', '', max_age=0, path='/')
@@ -17898,9 +18071,8 @@ def driver_attendance_list():
     )
 
 
-@app.route('/driver-attendance/media-gallery')
-def driver_attendance_media_gallery():
-    """Full filtered attendance set (no pagination). page/per_page in query are ignored."""
+def _attendance_media_gallery_flat_and_items_from_request():
+    """Shared list filters + gallery_shift/gallery_photo for gallery, zip, and share JSON."""
     from auth_utils import get_user_context
 
     uid = session.get('user_id')
@@ -17957,6 +18129,13 @@ def driver_attendance_media_gallery():
         flat = _filter_attendance_rows_by_duty_shift(flat, duty_shift_filter)
 
     media_items = _build_attendance_media_gallery_items(flat, gallery_shift, gallery_photo)
+    return media_items, gallery_shift, gallery_photo
+
+
+@app.route('/driver-attendance/media-gallery')
+def driver_attendance_media_gallery():
+    """Full filtered attendance set (no pagination). page/per_page in query are ignored."""
+    media_items, gallery_shift, gallery_photo = _attendance_media_gallery_flat_and_items_from_request()
     media_items_display = [{k: v for k, v in it.items() if k != 'stored_path'} for it in media_items]
 
     list_q = {}
@@ -17990,6 +18169,31 @@ def driver_attendance_media_gallery():
         back_link_label='Back to Attendance List',
         download_all_url=download_all_url,
         media_empty_hint='Is selection ke liye koi photo nahi mili — filters ya duty shift badal kar dekhein.',
+    )
+
+
+@app.route('/driver-attendance/media-gallery/photo-urls.json')
+def driver_attendance_media_gallery_photo_urls():
+    """Photo URLs for Attendance List share (full filtered set, not paginated)."""
+    media_items, gallery_shift, gallery_photo = _attendance_media_gallery_flat_and_items_from_request()
+    urls = []
+    root = request.url_root.rstrip('/')
+    for it in media_items:
+        u = (it.get('download_url') or it.get('url') or '').strip()
+        if not u:
+            continue
+        if u.startswith('http://') or u.startswith('https://'):
+            urls.append(u)
+        elif u.startswith('/'):
+            urls.append(root + u)
+        else:
+            urls.append(u)
+    return jsonify(
+        ok=True,
+        count=len(urls),
+        urls=urls,
+        gallery_shift=gallery_shift,
+        gallery_photo=gallery_photo,
     )
 
 
@@ -24601,7 +24805,7 @@ def task_report_new():
         _tef.setdefault('lock_district', False)
         _tef.setdefault('lock_project', False)
         _tef.setdefault('lock_vehicle', False)
-        return render_template(
+        resp = make_response(render_template(
             'task_report_new.html',
             rows=rows_list,
             view_date=v_date,
@@ -24620,7 +24824,10 @@ def task_report_new():
             task_entry_date_hint=_hint,
             pending_task_count=len(_filter_pending_task_rows(rows_list)) if rows_list else 0,
             **_nav_back_ctx(url_for('module_hub', hub_slug='task-logbook'), show_without_nav_from=True),
-        )
+        ))
+        resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        resp.headers['Pragma'] = 'no-cache'
+        return resp
 
     if request.method == 'POST' and request.form.get('save_batch'):
         task_date = parse_date(request.form.get('task_date')) or view_date

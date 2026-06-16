@@ -117,15 +117,32 @@
     var el = document.getElementById('printContainer');
     var title = document.title.replace(/[^a-zA-Z0-9_ -]/g, '') || 'Report';
     var fname = title.replace(/\s+/g, '_') + '.pdf';
+    var wideTable = el && el.querySelector && el.querySelector('.att-print-table');
+    var captureWidth = wideTable ? 1180 : null;
+
+    if (typeof window.preparePrintCapture === 'function') {
+      window.preparePrintCapture(el);
+    } else if (captureWidth) {
+      el.style.width = captureWidth + 'px';
+      el.style.maxWidth = captureWidth + 'px';
+      el.style.overflow = 'visible';
+    }
 
     var scr = document.createElement('script');
     scr.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.2/html2pdf.bundle.min.js';
     scr.onload = function() {
+      var canvasOpts = { scale: 2, useCORS: true, letterRendering: true, logging: false, backgroundColor: '#ffffff' };
+      if (captureWidth) {
+        canvasOpts.windowWidth = captureWidth;
+        canvasOpts.width = captureWidth;
+        canvasOpts.scrollX = 0;
+        canvasOpts.scrollY = -window.scrollY;
+      }
       var opts = {
         margin: [6, 4, 6, 4],
         filename: fname,
         image: { type: 'jpeg', quality: 0.92 },
-        html2canvas: { scale: 2, useCORS: true, letterRendering: true, logging: false },
+        html2canvas: canvasOpts,
         jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
         pagebreak: { mode: ['css', 'legacy'] }
       };

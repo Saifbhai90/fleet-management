@@ -94,7 +94,10 @@ else:
     }
 app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50 MB max upload
-app.config['TEMPLATES_AUTO_RELOAD'] = os.environ.get('FLASK_DEBUG', '0') == '1'
+app.config['TEMPLATES_AUTO_RELOAD'] = (
+    os.environ.get('FLASK_DEBUG', '0') == '1'
+    or os.environ.get('TEMPLATES_AUTO_RELOAD', '0') == '1'
+)
 
 # Backup: optional path to save backups; email via env MAIL_*
 app.config['BACKUP_PATH'] = os.environ.get('BACKUP_PATH', '')  # empty = no save-to-path
@@ -221,6 +224,36 @@ def inject_current_permissions():
         can_see_report_centre=can_see_rc,
         can_see_administration_menu=can_see_admin,
     )
+
+
+@app.context_processor
+def inject_fleet_build_context():
+    """Cache-bust + dev banner for Capacitor LAN/USB testing."""
+    import os
+    import time
+    from flask import request
+    host_raw = (request.host or '').lower()
+    host = host_raw.split(':')[0]
+    is_local = host in ('127.0.0.1', 'localhost') or host.startswith('192.168.')
+    fleet_dev = is_local or os.environ.get('FLEET_MOBILE_DEV', '0') == '1'
+    return {
+        'fleet_asset_version': os.environ.get('FLEET_ASSET_VERSION') or str(int(time.time())),
+        'fleet_server_host': host_raw,
+        'fleet_mobile_dev': fleet_dev,
+    }
+
+
+@app.after_request
+def fleet_disable_html_cache(response):
+    """Capacitor WebView must not reuse stale HTML after server-side template changes."""
+    if request.method != 'GET':
+        return response
+    ct = (response.content_type or '').lower()
+    if 'text/html' in ct:
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+    return response
 
 
 @app.context_processor
@@ -490,6 +523,20 @@ if _run_startup_tasks:
         except Exception as e:
             print("DB schema fallback skip:", e)
         print("Database ready.")
+        try:
+            from sqlalchemy import inspect, text
+            insp = inspect(db.engine)
+            cols = [c['name'] for c in insp.get_columns('user')]
+            if 'biometric_token_version' not in cols:
+                tbl = '"user"' if db.engine.dialect.name == 'postgresql' else 'user'
+                db.session.execute(text(
+                    f'ALTER TABLE {tbl} ADD COLUMN biometric_token_version INTEGER NOT NULL DEFAULT 0'
+                ))
+                db.session.commit()
+                print('Added user.biometric_token_version column.')
+        except Exception as e:
+            db.session.rollback()
+            print('Biometric column migrate skip:', e)
         # Create indexes (IF NOT EXISTS = safe for both SQLite and PostgreSQL)
         try:
             with db.engine.connect() as conn:

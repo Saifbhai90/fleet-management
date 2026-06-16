@@ -3,15 +3,18 @@
 {% block title %}Print - Driver Attendance{% endblock %}
 
 {% block extra_head %}
+<script>document.documentElement.classList.add('att-print-doc');</script>
 <style>
-    /* Landscape preview + print — wide attendance table without horizontal scroll */
+    /* Wide landscape table — desktop preview */
     .print-container.att-print-page {
         max-width: none !important;
-        width: calc(100vw - 24px) !important;
+        width: 100% !important;
         margin: 0 auto !important;
         padding: 12px 14px 28px !important;
         box-sizing: border-box;
     }
+    /* Minimum width for 16-column attendance sheet (A4 landscape content area) */
+    :root { --att-print-table-width: 1180px; }
     .att-header {
         background: linear-gradient(135deg, #0d47a1 0%, #1565c0 100%);
         color: #fff; border-radius: 10px; padding: 0.85rem 1.2rem; margin-bottom: 0.75rem;
@@ -37,8 +40,7 @@
         vertical-align: bottom;
         white-space: normal;
         word-wrap: break-word;
-        overflow-wrap: anywhere;
-        hyphens: auto;
+        overflow-wrap: break-word;
     }
     .att-print-table tbody td {
         padding: 0.3rem 0.28rem;
@@ -47,7 +49,7 @@
         vertical-align: top;
         white-space: normal;
         word-wrap: break-word;
-        overflow-wrap: anywhere;
+        overflow-wrap: break-word;
     }
     .att-print-table tbody tr:nth-child(even) { background: #f8fafc; }
     .att-print-table .col-num { width: 2.2%; }
@@ -68,15 +70,66 @@
     .att-print-table .col-corm { width: 9%; }
     .att-print-table .badge { font-size: 0.58rem; padding: 0.15em 0.4em; }
     @page { size: A4 landscape; margin: 5mm; }
+    /* Mobile / app WebView: keep table at landscape width — swipe horizontally in preview */
+    @media (max-width: 992px) {
+        html.att-print-doc #printContainer {
+            max-width: 100% !important;
+            padding: 8px 6px 24px !important;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        html.att-print-doc .print-container.att-print-page {
+            width: var(--att-print-table-width) !important;
+            min-width: var(--att-print-table-width) !important;
+            padding: 10px 12px 20px !important;
+        }
+        html.att-print-doc .att-table-outer {
+            min-width: var(--att-print-table-width);
+            overflow: visible;
+        }
+        html.att-print-doc .att-print-table {
+            width: var(--att-print-table-width) !important;
+            min-width: var(--att-print-table-width) !important;
+            table-layout: fixed;
+        }
+    }
     @media print {
         .att-header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-        .att-table-outer { overflow: visible !important; }
-        .att-print-table { font-size: 7px !important; width: 100% !important; }
+        .att-table-outer { overflow: visible !important; min-width: 0 !important; }
+        .print-container.att-print-page { width: 100% !important; min-width: 0 !important; }
+        .att-print-table { font-size: 7px !important; width: 100% !important; min-width: 0 !important; }
         .att-print-table thead th { font-size: 6.5px !important; padding: 2px 3px !important; }
         .att-print-table tbody td { font-size: 7px !important; padding: 2px 3px !important; }
         .att-print-table .badge { font-size: 6px !important; }
     }
 </style>
+<script>
+window.preparePrintCapture = function(root) {
+  var w = '1180px';
+  var page = (root && root.querySelector) ? root.querySelector('.att-print-page') : null;
+  var outer = (root && root.querySelector) ? root.querySelector('.att-table-outer') : null;
+  var tbl = (root && root.querySelector) ? root.querySelector('.att-print-table') : null;
+  if (root) {
+    root.style.width = w;
+    root.style.maxWidth = w;
+    root.style.overflow = 'visible';
+  }
+  if (page) {
+    page.style.width = w;
+    page.style.minWidth = w;
+    page.style.maxWidth = w;
+  }
+  if (outer) {
+    outer.style.minWidth = w;
+    outer.style.overflow = 'visible';
+  }
+  if (tbl) {
+    tbl.style.width = w;
+    tbl.style.minWidth = w;
+    tbl.style.tableLayout = 'fixed';
+  }
+};
+</script>
 {% endblock %}
 
 {% block content %}

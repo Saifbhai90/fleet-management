@@ -3,6 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" id="metaViewport" content="{% if request.endpoint == 'report_driver_profile_public' %}width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=3, user-scalable=yes, viewport-fit=cover{% else %}width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content{% endif %}">
+    <script>
+    /* Capacitor native: resizes-content shrinks the shell and lifts bottom nav above the keyboard app-wide. */
+    (function fleetCapNativeViewportEarly() {
+        try {
+            var cap = window.Capacitor;
+            if (!cap || !cap.isNativePlatform || !cap.isNativePlatform()) return;
+            document.documentElement.classList.add('capacitor-native');
+            var m = document.getElementById('metaViewport');
+            if (!m) return;
+            var c = m.getAttribute('content') || '';
+            if (c.indexOf('resizes-content') !== -1) {
+                m.setAttribute('content', c.replace('interactive-widget=resizes-content', 'interactive-widget=resizes-visual'));
+            }
+        } catch (e) {}
+    })();
+    </script>
     <meta name="theme-color" content="#0f172a" id="metaThemeColor">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -25,6 +41,11 @@
       try {
         if (!window.Capacitor || Capacitor.getPlatform() === 'web') return;
         if (sessionStorage.getItem('_fleetAppSession')) return;
+        var qs = window.location.search || '';
+        if (qs.indexOf('from_login=1') !== -1) {
+          sessionStorage.setItem('_fleetAppSession', '1');
+          return;
+        }
         sessionStorage.setItem('_fleetAppSession', '1');
         window.location.replace('/mobile-init');
       } catch (e) { /* ignore */ }
@@ -718,6 +739,25 @@
             #guideChatToggle { width: 48px; height: 48px; font-size: 1.25rem; }
         }
 
+        /* Task entry: Load more pagination removed — hide legacy markup if WebView cached old HTML */
+        #taskEntryLoadMoreWrap,
+        .task-entry-load-more-wrap {
+            display: none !important;
+            visibility: hidden !important;
+            height: 0 !important;
+            min-height: 0 !important;
+            overflow: hidden !important;
+            pointer-events: none !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            border: none !important;
+        }
+        @media (max-width: 767.98px) {
+            #batchTable tbody tr.task-row[data-task-chunk-hidden="1"] {
+                display: block !important;
+            }
+        }
+
         /* ─── Fixed Bottom Navigation (Mobile < 768px) ─── */
         .mobile-bottom-nav {
             display: none;
@@ -1025,6 +1065,25 @@
             display: flex !important;
             align-items: stretch !important;
         }
+        /* Keyboard open: hide bottom nav (do not float above keyboard) */
+        html.capacitor-native.fleet-keyboard-open #appNativeShell .mobile-bottom-nav,
+        html.capacitor-native .mobile-bottom-nav.fleet-nav-keyboard-hidden {
+            display: none !important;
+            visibility: hidden !important;
+            height: 0 !important;
+            min-height: 0 !important;
+            overflow: hidden !important;
+            pointer-events: none !important;
+            border: none !important;
+            box-shadow: none !important;
+        }
+        html.capacitor-native.fleet-keyboard-open #appNativeShell .main-content,
+        html.capacitor-native.fleet-keyboard-open .main-content {
+            padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)) !important;
+        }
+        html.capacitor-native.fleet-keyboard-open .mobile-fab-wrap {
+            display: none !important;
+        }
 
         /* ── Fallback: FIXED scroll container for Capacitor before shell JS runs ── */
         .capacitor-native .main-content {
@@ -1176,11 +1235,7 @@
             font-size: 0.88rem !important;
             vertical-align: middle !important;
         }
-        .capacitor-native .table tbody tr:active:not(:focus-within) { background: #eff6ff !important; }
-        .capacitor-native .task-batch-table tbody tr.task-row:active,
-        .capacitor-native .task-batch-table tbody tr.task-row:active:not(:focus-within) {
-            background: #fff !important;
-        }
+        .capacitor-native .table tbody tr:active { background: #eff6ff !important; }
 
         /* ── Page titles ── */
         .capacitor-native h2, .capacitor-native h3,
@@ -1608,8 +1663,15 @@
     <script src="{{ url_for('static', filename='js/legacy_android_gpu.js') }}" defer></script>
     {% block extra_head %}{% endblock %}
 </head>
-<body{% if request.endpoint == 'dashboard' %} class="page-dashboard fm-aurora-theme" data-fleet-page="dashboard"{% elif request.endpoint == 'report_driver_profile_public' %} class="driver-profile-public-view"{% else %} class="fm-aurora-theme"{% endif %}{% if request.endpoint %} data-fleet-endpoint="{{ request.endpoint }}"{% endif %}>
+<body{% if request.endpoint == 'dashboard' %} class="page-dashboard fm-aurora-theme" data-fleet-page="dashboard"{% elif request.endpoint == 'report_driver_profile_public' %} class="driver-profile-public-view"{% else %} class="fm-aurora-theme"{% endif %}{% if request.endpoint %} data-fleet-endpoint="{{ request.endpoint }}"{% endif %}{% if fleet_mobile_dev %} data-fleet-mobile-dev="1"{% endif %}>
 <script>if(localStorage.getItem('fleetDarkMode')==='on'){document.body.classList.remove('fm-aurora-theme');document.body.classList.add('dark-mode');}</script>
+{% if request.host and ('127.0.0.1' in request.host or '192.168.' in request.host or 'localhost' in request.host) %}
+<div id="fleetDevBanner" style="position:fixed;top:0;left:0;right:0;z-index:20000;background:#059669;color:#fff;font-size:11px;font-weight:600;text-align:center;padding:5px 8px;letter-spacing:.02em;">DEV · {{ request.host }} · USB/LAN server</div>
+<style>body[data-fleet-mobile-dev="1"] .main-content, body:has(#fleetDevBanner) .main-content{padding-top:calc(max(env(safe-area-inset-top,0px),14px) + 22px)!important;}</style>
+{% elif fleet_mobile_dev %}
+<div id="fleetDevBanner" style="position:fixed;top:0;left:0;right:0;z-index:20000;background:#059669;color:#fff;font-size:11px;font-weight:600;text-align:center;padding:5px 8px;letter-spacing:.02em;">DEV · {{ fleet_server_host }} · build {{ fleet_asset_version }}</div>
+<style>body[data-fleet-mobile-dev="1"] .main-content{padding-top:calc(max(env(safe-area-inset-top,0px),14px) + 22px)!important;}</style>
+{% endif %}
 <div id="topLoadBar"></div>
 
 <div class="fm-aurora-bg" aria-hidden="true">
@@ -3605,6 +3667,11 @@
         <span>More</span>
     </button>
 </nav>
+<script>
+if (window.lucide && typeof window.lucide.createIcons === 'function') {
+    window.lucide.createIcons();
+}
+</script>
 
 <!-- ── Attend Action Sheet (mini popup above bottom nav) ── -->
 {% if can_see_page('driver_attendance_checkin') or can_see_page('driver_attendance_checkout') %}
@@ -6362,7 +6429,7 @@
                 if (dist >= threshold && !triggered) {
                     triggered = true;
                     if (ptrText) ptrText.textContent = 'Refreshing…';
-                    setTimeout(function() { window.location.reload(); }, 300);
+                    setTimeout(function() { window.fleetHardReload(); }, 300);
                 } else {
                     overlay.classList.remove('ptr-visible', 'ptr-releasing');
                     if (ptrText) ptrText.textContent = 'Pull down to refresh';
@@ -6380,6 +6447,16 @@
         if (_isNative) {
             document.documentElement.classList.add('capacitor-native');
             document.body.classList.add('capacitor-native');
+            var _vpMeta = document.getElementById('metaViewport');
+            if (_vpMeta) {
+                var _vpContent = _vpMeta.getAttribute('content') || '';
+                if (_vpContent.indexOf('resizes-content') !== -1) {
+                    _vpMeta.setAttribute('content', _vpContent.replace(
+                        'interactive-widget=resizes-content',
+                        'interactive-widget=resizes-visual'
+                    ));
+                }
+            }
         }
 
         /* ── Permission Alert (Toast or styled modal) ─────────────────── */
@@ -7005,6 +7082,109 @@
         };
     })();
 
+    /** Scroll focused field into visible area above keyboard (Capacitor / mobile). */
+    window.fleetScrollFieldIntoView = function fleetScrollFieldIntoView(el) {
+        if (!el || typeof el.scrollIntoView !== 'function') return;
+        var run = function() {
+            try {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+            } catch (e) {
+                el.scrollIntoView(true);
+            }
+        };
+        setTimeout(run, 100);
+        setTimeout(run, 350);
+    };
+
+    /** Hide bottom nav app-wide while keyboard is open (Capacitor native). */
+    window.fleetSetupKeyboardBottomNav = function fleetSetupKeyboardBottomNav() {
+        if (!window.FleetBridge || !window.FleetBridge.isNative) return;
+        if (window._fleetKeyboardNavReady) return;
+        window._fleetKeyboardNavReady = true;
+
+        var maxInnerH = window.innerHeight || 0;
+
+        function isFormField(el) {
+            if (!el || el.nodeType !== 1) return false;
+            if (el.closest && el.closest('.mobile-bottom-nav, .more-drawer-panel, .more-drawer-overlay')) return false;
+            var tag = el.tagName;
+            if (tag === 'TEXTAREA') return true;
+            if (tag === 'SELECT') return true;
+            if (tag === 'INPUT') {
+                var t = (el.type || 'text').toLowerCase();
+                return t !== 'checkbox' && t !== 'radio' && t !== 'button' &&
+                    t !== 'submit' && t !== 'reset' && t !== 'file' &&
+                    t !== 'hidden' && t !== 'image';
+            }
+            if (el.isContentEditable) return true;
+            if (el.closest && el.closest('.ts-wrapper')) return true;
+            return false;
+        }
+
+        function keyboardLikelyOpen() {
+            var active = document.activeElement;
+            if (isFormField(active)) return true;
+            var shrink = maxInnerH - (window.innerHeight || 0);
+            if (shrink > 80) return true;
+            var vv = window.visualViewport;
+            if (vv) {
+                var gap = Math.max(0, (window.innerHeight || 0) - vv.height - (vv.offsetTop || 0));
+                if (gap > 60) return true;
+            }
+            return false;
+        }
+
+        function applyNavKeyboardState(open) {
+            document.documentElement.classList.toggle('fleet-keyboard-open', open);
+            document.body.classList.toggle('fleet-keyboard-open', open);
+            var nav = document.getElementById('mobileBottomNav');
+            if (nav) {
+                nav.classList.toggle('fleet-nav-keyboard-hidden', open);
+                if (open) {
+                    nav.style.setProperty('display', 'none', 'important');
+                } else {
+                    nav.style.removeProperty('display');
+                }
+            }
+            document.querySelectorAll('.mobile-fab-wrap').forEach(function(fab) {
+                fab.style.display = open ? 'none' : '';
+            });
+        }
+
+        function syncNavForKeyboard() {
+            var h = window.innerHeight || 0;
+            if (!keyboardLikelyOpen() && h >= maxInnerH - 40) {
+                maxInnerH = Math.max(maxInnerH, h);
+            }
+            applyNavKeyboardState(keyboardLikelyOpen());
+        }
+
+        document.addEventListener('focusin', function(e) {
+            syncNavForKeyboard();
+            if (isFormField(e.target) && window.fleetScrollFieldIntoView) {
+                window.fleetScrollFieldIntoView(e.target);
+            }
+        }, true);
+        document.addEventListener('focusout', function() {
+            setTimeout(syncNavForKeyboard, 200);
+        }, true);
+        window.addEventListener('resize', syncNavForKeyboard, { passive: true });
+        window.addEventListener('orientationchange', function() {
+            maxInnerH = window.innerHeight || maxInnerH;
+            setTimeout(syncNavForKeyboard, 300);
+        }, { passive: true });
+        var vv = window.visualViewport;
+        if (vv) {
+            vv.addEventListener('resize', syncNavForKeyboard, { passive: true });
+            vv.addEventListener('scroll', syncNavForKeyboard, { passive: true });
+        }
+        syncNavForKeyboard();
+    };
+
+    if (window.FleetBridge && window.FleetBridge.isNative) {
+        window.fleetSetupKeyboardBottomNav();
+    }
+
     // ── Native: fix target=_blank, window.open, window.print, download links ──
     if (window.FleetBridge && window.FleetBridge.isNative) {
         document.addEventListener('DOMContentLoaded', function() {
@@ -7248,12 +7428,37 @@
         });
     }
 
-    // ── Service Worker Registration (PWA) ─────────────────────────────────
-    if ('serviceWorker' in navigator) {
+    // ── Service Worker: PWA browser only — never cache Capacitor WebView HTML ──
+    (function fleetServiceWorkerPolicy() {
+        if (!('serviceWorker' in navigator)) return;
+        var isNative = window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform();
+        if (isNative) {
+            navigator.serviceWorker.getRegistrations().then(function(regs) {
+                regs.forEach(function(reg) { reg.unregister(); });
+            }).catch(function() {});
+            if (window.caches && caches.keys) {
+                caches.keys().then(function(keys) {
+                    keys.forEach(function(k) { caches.delete(k); });
+                }).catch(function() {});
+            }
+            return;
+        }
         window.addEventListener('load', function() {
-            navigator.serviceWorker.register('/sw.js?v=4', { scope: '/', updateViaCache: 'none' }).catch(function() {});
+            navigator.serviceWorker.register('/sw.js?v=5', { scope: '/', updateViaCache: 'none' }).catch(function() {});
         });
-    }
+    })();
+
+    window.fleetHardReload = function fleetHardReload() {
+        if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) {
+            try {
+                var u = new URL(window.location.href);
+                u.searchParams.set('_fleet_r', String(Date.now()));
+                window.location.replace(u.toString());
+                return;
+            } catch (e) {}
+        }
+        window.location.reload();
+    };
 
     // ── Mobile Input Enhancements ─────────────────────────────────────────
     (function() {
@@ -8953,6 +9158,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
   if (sessionStorage.getItem(SESSION_KEY)) return;
 
+  var qs = window.location.search || '';
+  if (qs.indexOf('from_login=1') !== -1) {
+    sessionStorage.setItem(SESSION_KEY, '1');
+    return;
+  }
+
   sessionStorage.setItem(SESSION_KEY, '1');
 
   {% if session.get('user_id') %}
@@ -8978,31 +9189,6 @@ document.addEventListener('DOMContentLoaded', function() {
   var displayName = {{ session.get('user', '') | tojson }};
   if (displayName) {
     localStorage.setItem('fleet_saved_name', displayName);
-  }
-
-  /* Fetch biometric token - save username + conditionally save token */
-  var needsTokenFetch = !localStorage.getItem('fleet_saved_username');
-  var bioSetupPending = sessionStorage.getItem('fleet_bio_setup') === '1';
-
-  if (needsTokenFetch || bioSetupPending) {
-    fetch('/auth/biometric-token', {
-      headers: { 'X-Requested-With': 'XMLHttpRequest' }
-    })
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      if (!data.ok) return;
-      /* Always save username */
-      if (data.username) {
-        localStorage.setItem('fleet_saved_username', data.username);
-      }
-      /* If bio setup was pending (fingerprint verified on login screen), save token NOW */
-      if (bioSetupPending && data.token) {
-        localStorage.setItem('fleet_bio_token', data.token);
-        sessionStorage.removeItem('fleet_bio_setup');
-        console.log('[Bio] Biometric token saved after login - biometric login enabled');
-      }
-    })
-    .catch(function() { /* Ignore */ });
   }
 })();
 {% endif %}
@@ -9197,6 +9383,26 @@ window._dtPrintCustomize = function(title, color, icon) {
 })();
 </script>
 <script src="{{ url_for('static', filename='js/session_sounds.js') }}"></script>
+<script src="{{ url_for('static', filename='js/fleet_biometric_toggle.js') }}"></script>
+{% if session.get('user_id') %}
+<script>
+(function() {
+  'use strict';
+  function bootDashboardBio() {
+    if (!window.fleetBiometricToggle) return;
+    if (window.Capacitor && Capacitor.getPlatform() === 'web') return;
+    if (typeof window.fleetBiometricToggle.initDashboardBioSetup === 'function') {
+      window.fleetBiometricToggle.initDashboardBioSetup();
+    }
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bootDashboardBio);
+  } else {
+    bootDashboardBio();
+  }
+})();
+</script>
+{% endif %}
 <script>
 (function() {
   if (window.fleetSessionSounds) {
@@ -9295,6 +9501,20 @@ window.__fleetGpsPendingConfig = {
 {% if can_see_page('notification_list') %}
 <script src="{{ url_for('static', filename='js/fleet_notifications_ui.js') }}?v=2"></script>
 {% endif %}
+
+<script>
+(function fleetTaskEntryDisableLoadMoreGlobal() {
+  function run() {
+    var wrap = document.getElementById('taskEntryLoadMoreWrap');
+    if (wrap) wrap.remove();
+    document.querySelectorAll('#batchTable tbody tr.task-row[data-task-chunk-hidden="1"]').forEach(function(row) {
+      row.setAttribute('data-task-chunk-hidden', '0');
+    });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
+  else run();
+})();
+</script>
 
 </body>
 </html>

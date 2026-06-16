@@ -9,45 +9,60 @@
      Shown when user has previously logged in with biometric enabled
      ═══════════════════════════════════════════════════════════════════ -->
 <div id="hblSavedAccountView" style="display:none;">
-  <div style="text-align:center;margin-bottom:24px;">
-    <div style="font-size:0.82rem;color:#94a3b8;font-weight:500;margin-bottom:6px;">Welcome</div>
-    <div id="hblSavedName" style="font-size:1.35rem;font-weight:800;color:#0f172a;letter-spacing:-0.02em;">Muhammad Saif</div>
+  <div style="text-align:center;margin-bottom:8px;">
+    <div style="font-size:0.82rem;color:#94a3b8;font-weight:500;margin-bottom:6px;">Welcome back</div>
+    <div id="hblSavedName" style="font-size:1.35rem;font-weight:800;color:#0f172a;letter-spacing:-0.02em;">User</div>
   </div>
 
-  <!-- Password field (always visible in HBL style) -->
-  <div class="lp-field" style="margin-bottom:18px;">
-    <input type="password" id="hblSavedPassword" placeholder=" " class="lp-input" style="font-size:16px;">
-    <label for="hblSavedPassword">Password</label>
-    <i class="bi bi-lock field-icon"></i>
-    <i class="bi bi-eye field-icon" id="hblPwdToggle" style="right:12px;left:auto;cursor:pointer;" title="Show/hide"></i>
-  </div>
+  <div id="hblLoginError" style="display:none;font-size:0.85rem;color:#dc2626;text-align:center;margin:8px 0 12px;line-height:1.4;"></div>
 
-  <!-- Biometric Login Toggle (HBL Style) -->
-  <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;margin-bottom:18px;">
-    <div style="display:flex;align-items:center;gap:12px;">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Biometric-first: large thumb (auto-prompt on load) -->
+  <div id="hblBioMode" style="text-align:center;margin:18px 0 22px;">
+    <button type="button" id="hblThumbBtn" class="bio-thumb-pulse" aria-label="Sign in with fingerprint"
+            style="width:88px;height:88px;border-radius:50%;border:2px solid #bfdbfe;background:linear-gradient(135deg,#eff6ff 0%,#dbeafe 100%);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 8px 24px rgba(37,99,235,0.18);">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <path d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 0 0 8 11a4 4 0 1 1 8 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0 0 15.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 0 0 8 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4"/>
       </svg>
-      <span style="font-size:0.92rem;font-weight:600;color:#334155;">Biometric Login</span>
+    </button>
+    <p class="hbl-bio-hint" style="font-size:0.84rem;color:#64748b;margin:12px 0 0;">Tap fingerprint to sign in</p>
+    <div id="hblBioStatus" class="hbl-bio-status" role="status" aria-live="polite">
+      <div class="hbl-bio-status-inner">
+        <span class="hbl-bio-spinner" aria-hidden="true"></span>
+        <span id="hblBioStatusText" class="hbl-bio-status-text">Signing you in…</span>
+      </div>
     </div>
-    <!-- Toggle Switch (HBL Style) -->
-    <label class="hbl-toggle">
-      <input type="checkbox" id="hblBioToggle">
-      <span class="hbl-toggle-slider"></span>
-    </label>
   </div>
 
-  <!-- Login via Other Account -->
-  <div style="text-align:center;margin-bottom:20px;">
+  <!-- Password fallback (after cancel / 3 failures) -->
+  <div id="hblPasswordRow" style="display:none;">
+    <div class="lp-field" style="margin-bottom:14px;">
+      <input type="password" id="hblSavedPassword" placeholder=" " class="lp-input" style="font-size:16px;">
+      <label for="hblSavedPassword">Password</label>
+      <i class="bi bi-lock field-icon"></i>
+      <i class="bi bi-eye field-icon" id="hblPwdToggle" style="right:12px;left:auto;cursor:pointer;" title="Show/hide"></i>
+    </div>
+    <div style="display:flex;gap:10px;align-items:stretch;margin-bottom:14px;">
+      <button type="button" id="hblSavedLoginBtn" class="lp-btn-signin" style="flex:1;margin-bottom:0;">
+        <span class="lp-spinner"></span>
+        <span class="lp-btn-text">Login</span>
+        <i class="bi bi-arrow-right-circle-fill lp-btn-text" style="font-size:1.1rem;"></i>
+      </button>
+      <button type="button" id="hblBioRetryBtn" class="bio-thumb-pulse" aria-label="Retry fingerprint"
+              style="width:52px;flex-shrink:0;border-radius:14px;border:1px solid #bfdbfe;background:#eff6ff;display:flex;align-items:center;justify-content:center;cursor:pointer;">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 0 0 8 11a4 4 0 1 1 8 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0 0 15.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 0 0 8 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <div style="text-align:center;margin-bottom:16px;">
+    <button type="button" id="hblUsePassword" style="background:none;border:none;color:#64748b;font-size:0.85rem;text-decoration:underline;text-underline-offset:3px;cursor:pointer;padding:6px 8px;">Use password instead</button>
+  </div>
+
+  <div style="text-align:center;margin-bottom:8px;">
     <button type="button" id="hblOtherAccount" style="background:none;border:none;color:#64748b;font-size:0.85rem;text-decoration:underline;text-underline-offset:3px;cursor:pointer;padding:8px;">Login Via Other Account</button>
   </div>
-
-  <!-- Login Button -->
-  <button type="button" id="hblSavedLoginBtn" class="lp-btn-signin">
-    <span class="lp-spinner"></span>
-    <span class="lp-btn-text">Login</span>
-    <i class="bi bi-arrow-right-circle-fill lp-btn-text" style="font-size:1.1rem;"></i>
-  </button>
 </div>
 
 <div class="lp-section-title" id="loginTitle" style="display:block;">Welcome back</div>
@@ -90,6 +105,10 @@
 /* Reaching the login screen means a fresh start: discard any pending mobile resume
    target so the app can never auto-open an unfinished Task Report after login. */
 (function() {
+  /* Prime session cookie before first Sign In (fixes silent CSRF fail on Capacitor). */
+  try {
+    fetch('/auth/session-ping', { method: 'GET', credentials: 'same-origin' }).catch(function() {});
+  } catch (e) { /* ignore */ }
   try {
     localStorage.removeItem('fleet_resume_url');
     localStorage.removeItem('fleet_resume_odom_row');
@@ -104,6 +123,12 @@
 
 <form method="POST" novalidate autocomplete="off" id="loginForm">
   {{ form.hidden_tag() }}
+
+  <!-- Saved user (native, no biometric): name instead of User ID field -->
+  <div id="loginSavedNameRow" style="display:none;margin-bottom:16px;">
+    <div style="font-size:0.82rem;color:#94a3b8;font-weight:500;margin-bottom:4px;">Signed in as</div>
+    <div id="loginSavedDisplayName" style="font-size:1.15rem;font-weight:800;color:#0f172a;letter-spacing:-0.02em;">User</div>
+  </div>
 
   <!-- Username Field (hidden when saved account exists) -->
   <div class="lp-field" id="usernameField">
@@ -136,15 +161,42 @@
     {% endfor %}
   </div>
 
-  <!-- Sign In Button -->
-  <button type="submit" class="lp-btn-signin" id="loginSubmitBtn">
+  <!-- Biometric setup (native only — shown when no token; logic in fleet_biometric_toggle.js) -->
+  <div id="loginBioSetupRow" style="display:none;">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;margin-bottom:8px;">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 0 0 8 11a4 4 0 1 1 8 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0 0 15.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 0 0 8 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4"/>
+        </svg>
+        <span style="font-size:0.92rem;font-weight:600;color:#334155;">Biometric Login</span>
+      </div>
+      <label class="hbl-toggle">
+        <input type="checkbox" id="loginBioToggle">
+        <span class="hbl-toggle-slider"></span>
+      </label>
+    </div>
+    <p id="loginBioSetupHint" style="display:none;font-size:0.78rem;color:#64748b;margin:-4px 0 14px 2px;line-height:1.35;">
+      Turn on, then tap Sign In — your fingerprint will be verified here and saved for this account.
+    </p>
+  </div>
+
+  <div id="loginFormError" style="display:none;font-size:0.85rem;color:#dc2626;margin-bottom:12px;line-height:1.4;"></div>
+
+  <!-- Sign In Button + optional fingerprint retry (saved-account password mode uses HBL row) -->
+  <div id="loginSubmitRow" style="display:flex;gap:10px;align-items:stretch;">
+  <button type="submit" class="lp-btn-signin" id="loginSubmitBtn" style="flex:1;margin-bottom:0;">
     <span class="lp-spinner"></span>
     <span class="lp-btn-text">Sign In</span>
     <i class="bi bi-arrow-right-circle-fill lp-btn-text" style="font-size:1.1rem;"></i>
   </button>
+  </div>
 
 
 </form>
+
+<div id="loginOtherAccountRow" style="display:none;text-align:center;margin-top:4px;margin-bottom:8px;">
+  <button type="button" id="loginOtherAccountBtn" style="background:none;border:none;color:#64748b;font-size:0.85rem;text-decoration:underline;text-underline-offset:3px;cursor:pointer;padding:8px;">Login Via Other Account</button>
+</div>
 
 <script>
 /* ── Password show/hide ── */
@@ -172,12 +224,16 @@
   });
 })();
 
-/* ── Submit: spinner + disable ── */
+/* ── Submit: spinner + disable (web / non-AJAX login only) ── */
 (function() {
   var form = document.getElementById('loginForm');
   var btn  = document.getElementById('loginSubmitBtn');
   if (!form || !btn) return;
-  form.addEventListener('submit', function() {
+  form.addEventListener('submit', function(e) {
+    if (window.fleetBiometricToggle && window.fleetBiometricToggle.handlesLoginSubmit &&
+        window.fleetBiometricToggle.handlesLoginSubmit(e)) {
+      return;
+    }
     btn.classList.add('loading');
     btn.disabled = true;
     setTimeout(function() {
@@ -254,334 +310,7 @@
   }, 1000);
 })();
 
-/* ═══════════════════════════════════════════════════════════════════
-   HBL-Style Biometric Login (COMPLETE REBUILD)
-   NATIVE ONLY - Web browsers will never see biometric UI
-   ═══════════════════════════════════════════════════════════════════ */
-(function() {
-  'use strict';
-  
-  /* CRITICAL: Exit immediately if not native (web) platform */
-  if (!window.Capacitor || Capacitor.getPlatform() === 'web') return;
-
-  var SAVED_USER_KEY = 'fleet_saved_username';
-  var SAVED_NAME_KEY = 'fleet_saved_name';
-  var BIO_TOKEN_KEY  = 'fleet_bio_token';
-
-  /* Logout redirect handling: clean URL only.
-     fleet_bio_token is a permanent device credential - NEVER removed on session logout.
-     It is only removed when user explicitly turns OFF the biometric toggle. */
-  var urlParams = new URLSearchParams(window.location.search);
-  if (urlParams.get('clear_bio') === '1') {
-    sessionStorage.clear();
-    if (window.history && window.history.replaceState) {
-      window.history.replaceState({}, document.title, window.location.pathname);
-    }
-  }
-
-  var savedUser = localStorage.getItem(SAVED_USER_KEY);
-  var savedName = localStorage.getItem(SAVED_NAME_KEY);
-  var bioToken  = localStorage.getItem(BIO_TOKEN_KEY);
-
-  var hblView      = document.getElementById('hblSavedAccountView');
-  var hblName      = document.getElementById('hblSavedName');
-  var hblPassword  = document.getElementById('hblSavedPassword');
-  var hblPwdToggle = document.getElementById('hblPwdToggle');
-  var hblBioToggle = document.getElementById('hblBioToggle');
-  var hblOtherBtn  = document.getElementById('hblOtherAccount');
-  var hblLoginBtn  = document.getElementById('hblSavedLoginBtn');
-  var loginForm    = document.getElementById('loginForm');
-  var loginTitle   = document.getElementById('loginTitle');
-  var loginSub     = document.getElementById('loginSubtitle');
-
-  /* Helper: get biometric plugin
-     IMPORTANT: Plugin registers as 'BiometricAuthNative' (not 'BiometricAuth') on the Capacitor bridge.
-     Verified from: @CapacitorPlugin(name = "BiometricAuthNative") in BiometricAuthNative.java
-     The npm export is named BiometricAuth but bridge name is BiometricAuthNative. */
-  function _bp() {
-    var plugins = Capacitor.Plugins || {};
-    return plugins.BiometricAuthNative || plugins.BiometricAuth || null;
-  }
-
-  /* Helper: timeout wrapper */
-  function _timed(p, ms) {
-    return Promise.race([p, new Promise(function(_, rej) {
-      setTimeout(function() { rej({ code: 'timeout' }); }, ms);
-    })]);
-  }
-
-  /* Robust auth caller: tries internalAuthenticate (raw bridge), then authenticate, then verifyIdentity.
-     The @aparajita plugin bridge exposes 'internalAuthenticate' (not 'authenticate') directly.
-     Options: androidTitle, reason, cancelTitle */
-  function runAuth(bp, options) {
-    if (typeof bp.internalAuthenticate === 'function') return bp.internalAuthenticate(options);
-    if (typeof bp.authenticate         === 'function') return bp.authenticate(options);
-    if (typeof bp.verifyIdentity       === 'function') return bp.verifyIdentity(options);
-    return Promise.reject(new Error('No authentication method found on biometric plugin. Available: ' +
-      Object.keys(bp).filter(function(k){ return typeof bp[k]==='function'; }).join(', ')));
-  }
-
-  /* Show HBL saved account view */
-  function showHBLView() {
-    if (hblName) hblName.textContent = savedName || savedUser || 'User';
-    if (hblView) hblView.style.display = 'block';
-    if (loginForm) loginForm.style.display = 'none';
-    if (loginTitle) loginTitle.style.display = 'none';
-    if (loginSub) loginSub.style.display = 'none';
-    
-    /* Set toggle state */
-    if (hblBioToggle) hblBioToggle.checked = !!bioToken;
-  }
-
-  /* Show standard login form */
-  function showStandardForm() {
-    if (hblView) hblView.style.display = 'none';
-    if (loginForm) loginForm.style.display = 'block';
-    if (loginTitle) loginTitle.style.display = 'block';
-    if (loginSub) loginSub.style.display = 'block';
-  }
-
-  /* ── INIT: Show HBL view if saved user exists ── */
-  if (savedUser && savedName) {
-    showHBLView();
-
-    /* Auto-trigger biometric at 500ms if token exists.
-       Toggle is already checked (showHBLView sets it from bioToken),
-       so if token exists, fingerprint prompt fires automatically. */
-    if (bioToken) {
-      setTimeout(function() {
-        var loadedPlugins = Capacitor.Plugins ? Object.keys(Capacitor.Plugins) : [];
-        console.log('[Bio] Capacitor.Plugins:', JSON.stringify(loadedPlugins));
-        console.log('[Bio] BiometricAuthNative available:', !!_bp());
-        triggerBiometric();
-      }, 500);
-    }
-  }
-
-  /* ── Password show/hide toggle ── */
-  if (hblPwdToggle && hblPassword) {
-    hblPwdToggle.addEventListener('click', function() {
-      var show = hblPassword.type === 'password';
-      hblPassword.type = show ? 'text' : 'password';
-      hblPwdToggle.className = show ? 'bi bi-eye-slash field-icon' : 'bi bi-eye field-icon';
-    });
-  }
-
-  /* ── Biometric toggle change ── */
-  if (hblBioToggle) {
-    hblBioToggle.addEventListener('change', function() {
-      if (this.checked) {
-        var currentToken = localStorage.getItem(BIO_TOKEN_KEY);
-        if (currentToken) {
-          /* Has token = trigger biometric LOGIN */
-          triggerBiometric();
-        } else {
-          /* No token = verify fingerprint for ENROLLMENT (token fetched after password login) */
-          _verifyFingerprintForEnrollment();
-        }
-      } else {
-        /* User explicitly turned OFF biometric → remove token from this device */
-        localStorage.removeItem(BIO_TOKEN_KEY);
-        sessionStorage.removeItem('fleet_bio_setup');
-        /* Also clear the 'other account' saved user so standard form shows next time */
-      }
-    });
-  }
-
-  /* ── Fingerprint verification for enrollment (no active session yet) ── */
-  function _verifyFingerprintForEnrollment() {
-    var bp = _bp();
-    if (!bp) {
-      alert('Biometric Error: Plugin not found. Please reinstall or update the app.');
-      if (hblBioToggle) hblBioToggle.checked = false;
-      return;
-    }
-    console.log('[Bio] Verifying fingerprint for enrollment...');
-    runAuth(bp, {
-      androidTitle: 'FleetManager',
-      reason: 'Verify your fingerprint to enable biometric login',
-      cancelTitle: 'Cancel'
-    })
-    .then(function() {
-      console.log('[Bio] Fingerprint verified - pending enrollment after login');
-      /* Mark for token fetch after successful password login */
-      sessionStorage.setItem('fleet_bio_setup', '1');
-      /* Keep toggle ON so user knows it will be enabled */
-    })
-    .catch(function(err) {
-      var code = String(err && (err.code || err.message || ''));
-      console.log('[Bio] Enrollment verify failed:', code);
-      if (hblBioToggle) hblBioToggle.checked = false;
-      sessionStorage.removeItem('fleet_bio_setup');
-      if (code.indexOf('Cancel') === -1 && code.indexOf('cancel') === -1 && code !== '10') {
-        alert('Fingerprint not available: ' + (err.message || code || 'Unknown error') +
-              '\nPlease enroll a fingerprint in Settings > Security.');
-      }
-    });
-  }
-
-  /* ── Login via Other Account ── */
-  if (hblOtherBtn) {
-    hblOtherBtn.addEventListener('click', function() {
-      localStorage.removeItem(SAVED_USER_KEY);
-      localStorage.removeItem(SAVED_NAME_KEY);
-      localStorage.removeItem(BIO_TOKEN_KEY);
-      showStandardForm();
-    });
-  }
-
-  /* ── HBL Login Button ── */
-  if (hblLoginBtn) {
-    hblLoginBtn.addEventListener('click', function() {
-      if (hblBioToggle && hblBioToggle.checked) {
-        /* Toggle ON = biometric login ONLY (fingerprint is the password) */
-        triggerBiometric();
-      } else {
-        /* Toggle OFF = password login */
-        doPasswordLogin();
-      }
-    });
-  }
-
-  /* ── Trigger biometric authentication ── */
-  function triggerBiometric() {
-    var bp = _bp();
-    if (!bp) {
-      if (hblBioToggle) { hblBioToggle.checked = false; hblBioToggle.closest('div') && (hblBioToggle.closest('div').style.display = 'none'); }
-      return;
-    }
-
-    /* Read FRESH from localStorage at call time - closure vars may be stale */
-    var currentUser  = localStorage.getItem(SAVED_USER_KEY);
-    var currentToken = localStorage.getItem(BIO_TOKEN_KEY);
-
-    console.log('[Bio Login] currentUser:', currentUser, '| hasToken:', !!currentToken);
-
-    if (!currentUser || !currentToken) {
-      alert('Biometric login data missing.\nPlease enable biometric login again from Profile.');
-      if (hblBioToggle) hblBioToggle.checked = false;
-      return;
-    }
-
-    if (hblLoginBtn) {
-      hblLoginBtn.classList.add('loading');
-      hblLoginBtn.disabled = true;
-    }
-
-    _timed(runAuth(bp, {
-      androidTitle: 'FleetManager',
-      reason: 'Verify your identity to sign in',
-      cancelTitle: 'Cancel'
-    }), 30000)
-    .then(function() {
-      console.log('[Bio Login] Fingerprint OK — sending to server...');
-      return fetch('/auth/biometric-login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-        body: JSON.stringify({ username: currentUser, token: currentToken })
-      });
-    })
-    .then(function(r) {
-      var ct = r.headers.get('content-type') || '';
-      if (ct.indexOf('application/json') === -1) {
-        /* Server returned HTML (e.g. redirect to login page) instead of JSON.
-           This usually means before_request intercepted the call. */
-        return r.text().then(function(html) {
-          console.error('[Bio Login] Server returned HTML (HTTP ' + r.status + '):', html.substring(0, 200));
-          return { ok: false, error: 'Server config error (HTTP ' + r.status + '): got HTML not JSON. Check server logs.' };
-        });
-      }
-      return r.json();
-    })
-    .then(function(data) {
-      console.log('[Bio Login] Server response:', JSON.stringify(data));
-      if (data.ok) {
-        window.location.href = data.redirect || '/dashboard';
-      } else {
-        if (hblLoginBtn) { hblLoginBtn.classList.remove('loading'); hblLoginBtn.disabled = false; }
-        var errMsg = data.error || 'Unknown server error';
-        /* Only delete token if server says token is explicitly invalid */
-        if (errMsg === 'Invalid token') {
-          localStorage.removeItem(BIO_TOKEN_KEY);
-          if (hblBioToggle) hblBioToggle.checked = false;
-          alert('Biometric token is invalid. Please re-enable biometric from Profile.');
-        } else {
-          /* Other error (user not found, network, etc.) - keep token, show exact error */
-          alert('Biometric login failed: ' + errMsg +
-                '\n\nTry using password instead. (username: ' + currentUser + ')');
-        }
-      }
-    })
-    .catch(function(err) {
-      if (hblLoginBtn) { hblLoginBtn.classList.remove('loading'); hblLoginBtn.disabled = false; }
-      var code = String(err && (err.code || err.message || ''));
-      console.log('[Bio Login] catch error:', code, err);
-      if (code === 'biometricCanceled' || code === '10' || code === 'userCanceled' ||
-          (err && err.message && err.message.indexOf('cancel') !== -1)) {
-        if (hblBioToggle) hblBioToggle.checked = false;
-      } else if (code === 'biometricNotEnrolled' || code === '6') {
-        if (hblBioToggle) hblBioToggle.checked = false;
-        alert('No fingerprint enrolled on this device.');
-      } else if (code === 'timeout') {
-        if (hblBioToggle) hblBioToggle.checked = false;
-        alert('Biometric timed out. Please try again.');
-      } else {
-        /* Network / fetch error - keep toggle ON so user can retry */
-        alert('Connection error: ' + (err && err.message ? err.message : code) +
-              '\nPlease check your connection and try again.');
-      }
-    });
-  }
-
-  /* ── Password login (HBL saved account) ── */
-  function doPasswordLogin() {
-    var pwd = hblPassword ? hblPassword.value.trim() : '';
-    if (!pwd) {
-      if (hblPassword) hblPassword.focus();
-      return;
-    }
-    if (!savedUser) {
-      /* savedUser missing - fall back to standard form */
-      showStandardForm();
-      return;
-    }
-
-    if (hblLoginBtn) {
-      hblLoginBtn.classList.add('loading');
-      hblLoginBtn.disabled = true;
-    }
-
-    /* Fill standard form fields */
-    var usernameInput = document.getElementById('login_username');
-    var passwordInput = document.getElementById('login_password');
-    if (usernameInput) usernameInput.value = savedUser;
-    if (passwordInput) passwordInput.value = pwd;
-
-    /* If biometric toggle is ON (fingerprint was verified), mark for token fetch after login */
-    if (hblBioToggle && hblBioToggle.checked) {
-      sessionStorage.setItem('fleet_bio_setup', '1');
-    }
-
-    /* CRITICAL: Make form visible before submit - hidden form can silently fail */
-    if (loginForm) {
-      loginForm.style.cssText = 'display:block !important; visibility:hidden; position:absolute;';
-    }
-    if (loginForm) loginForm.submit();
-  }
-
-  /* ── Standard form submit: save username for next time ── */
-  if (loginForm) {
-    loginForm.addEventListener('submit', function() {
-      var u = document.getElementById('login_username');
-      if (u && u.value.trim()) {
-        /* Save username for HBL view next time */
-        localStorage.setItem(SAVED_USER_KEY, u.value.trim());
-        /* Name will be set after successful login via biometric setup */
-        sessionStorage.setItem('fleet_bio_setup', '1');
-      }
-    });
-  }
-})();
+/* Biometric login — initialized after fleet_biometric_toggle.js loads (see login_base.html) */
 
 /* ── Logout Sound (manual/auto) ── */
 (function() {

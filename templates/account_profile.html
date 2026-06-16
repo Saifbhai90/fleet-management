@@ -71,7 +71,7 @@
           </a>
 
           <!-- Biometric Login (NATIVE ONLY - Hidden on Web) -->
-          <div id="bioSettingRow" style="display:none;cursor:pointer;" class="d-flex align-items-center gap-3 py-3 px-2 border-bottom" onclick="_enableBiometricNow()">
+          <div id="bioSettingRow" style="display:none;" class="d-flex align-items-center gap-3 py-3 px-2 border-bottom">
             <div style="width:40px;height:40px;background:#f0fdf4;border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 0 0 8 11a4 4 0 1 1 8 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0 0 15.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 0 0 8 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4"/>
@@ -79,9 +79,12 @@
             </div>
             <div class="flex-grow-1">
               <div class="fw-semibold" style="font-size:0.95rem;">Biometric Login</div>
-              <small id="bioStatusText" class="text-muted">Disabled</small>
+              <small id="bioStatusText" class="text-muted">Tap to enable</small>
             </div>
-            <i class="bi bi-chevron-right" style="color:#94a3b8;"></i>
+            <label class="fleet-bio-toggle" style="flex-shrink:0;">
+              <input type="checkbox" id="bioProfileToggle">
+              <span class="fleet-bio-toggle-slider"></span>
+            </label>
           </div>
 
           <a href="{{ url_for('logout') }}"
@@ -107,177 +110,68 @@
 
 <script>
 /* ═══════════════════════════════════════════════════════════════════
-   Biometric Profile Settings (COMPLETE REBUILD)
-   NATIVE ONLY - Enable biometric NOW, not "next login"
+   Biometric Profile Settings — shared fleetBiometricToggle handler
    ═══════════════════════════════════════════════════════════════════ */
 
-/* ── Logout handler (clear ALL storage on manual logout) ── */
 function _fleetLogout(link, e) {
   e.preventDefault();
-  /* Session logout ONLY - do NOT touch fleet_bio_token.
-     The bio token is a permanent device credential (like a saved password).
-     It persists across logouts so biometric auto-login works next open.
-     Token is only removed when user explicitly turns OFF the biometric toggle. */
   sessionStorage.clear();
   window.location.href = link.href;
   return false;
 }
 
-/* Global plugin reference - set once in init, reused in tap handler */
-var _bioPlugin = null;
-
-/* Robust auth caller: tries internalAuthenticate (raw bridge), then authenticate, then verifyIdentity.
-   @aparajita/capacitor-biometric-auth bridge exposes 'internalAuthenticate' NOT 'authenticate'.
-   Options: androidTitle, reason, cancelTitle */
-function _runAuth(bp, options) {
-  if (typeof bp.internalAuthenticate === 'function') return bp.internalAuthenticate(options);
-  if (typeof bp.authenticate         === 'function') return bp.authenticate(options);
-  if (typeof bp.verifyIdentity       === 'function') return bp.verifyIdentity(options);
-  return Promise.reject(new Error('No auth method found. Available: ' +
-    Object.keys(bp).filter(function(k){ return typeof bp[k]==='function'; }).join(', ')));
-}
-
-/* ── Enable biometric NOW (tap row to trigger fingerprint) ── */
-function _enableBiometricNow() {
-  if (!window.Capacitor || Capacitor.getPlatform() === 'web') return;
-
-  var bioToken = localStorage.getItem('fleet_bio_token');
-  var statTxt  = document.getElementById('bioStatusText');
-
-  if (bioToken) {
-    if (confirm('Biometric login is ON. Disable it?')) {
-      localStorage.removeItem('fleet_bio_token');
-      if (statTxt) { statTxt.textContent = 'Tap to enable'; statTxt.style.color = ''; }
-    }
-    return;
-  }
-
-  /* Get plugin - use globally saved reference OR try fresh
-     CRITICAL: Plugin bridge name is 'BiometricAuthNative' NOT 'BiometricAuth'
-     Verified from: @CapacitorPlugin(name = "BiometricAuthNative") in BiometricAuthNative.java */
-  var plugins = Capacitor.Plugins || {};
-  var BiometricAuth = _bioPlugin || plugins.BiometricAuthNative || plugins.BiometricAuth || null;
-  console.log('[Bio Profile] All plugins:', JSON.stringify(Object.keys(plugins)));
-  console.log('[Bio Profile] BiometricAuthNative:', !!plugins.BiometricAuthNative, '| _bioPlugin:', !!_bioPlugin);
-
-  if (!BiometricAuth) {
-    alert('Error: Biometric plugin not found.\n\nLoaded plugins: ' + JSON.stringify(Object.keys(plugins)) +
-          '\n\nPlease close and reopen the app, then try again.');
-    return;
-  }
-
-  if (statTxt) statTxt.textContent = 'Checking hardware...';
-  console.log('[Bio Profile] Step 1: Checking hardware...');
-
-  BiometricAuth.checkBiometry()
-    .then(function(info) {
-      console.log('[Bio Profile] Step 2: Hardware check =', JSON.stringify(info));
-      if (!info || !info.isAvailable) {
-        if (statTxt) { statTxt.textContent = 'Tap to enable'; statTxt.style.color = ''; }
-        alert('Fingerprint not available: ' + ((info && info.reason) || 'No fingerprint enrolled.') +
-              '\n\nGo to Settings \u2192 Security \u2192 Fingerprint and enroll first.');
-        return Promise.reject({ __handled: true });
-      }
-      if (statTxt) statTxt.textContent = 'Place your finger...';
-      console.log('[Bio Profile] Step 3: Prompting fingerprint...');
-      return _runAuth(BiometricAuth, {
-        androidTitle: 'FleetManager',
-        reason: 'Place your finger to enable biometric login',
-        cancelTitle: 'Cancel'
-      });
-    })
-    .then(function() {
-      console.log('[Bio Profile] Step 4: Fetching token from server...');
-      if (statTxt) statTxt.textContent = 'Saving...';
-      return fetch('/auth/biometric-token', {
-        headers: { 'X-Requested-With': 'XMLHttpRequest' }
-      });
-    })
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      if (data.ok && data.token) {
-        localStorage.setItem('fleet_bio_token',      data.token);
-        localStorage.setItem('fleet_saved_username', data.username);
-        localStorage.setItem('fleet_saved_name',     data.display_name || data.username);
-        if (statTxt) {
-          statTxt.textContent = '\u2713 Enabled for ' + (data.display_name || data.username);
-          statTxt.style.color = '#16a34a';
-        }
-        console.log('[Bio Profile] Step 5: Token saved! Biometric ENABLED.');
-        alert('\u2713 Biometric login is now enabled!\n\nNext time you open the app, you can login with your fingerprint.');
-      } else {
-        if (statTxt) { statTxt.textContent = 'Tap to enable'; statTxt.style.color = ''; }
-        alert('Server error saving biometric. Please try again.');
-      }
-    })
-    .catch(function(err) {
-      /* Always reset status text so row never stays stuck on 'Checking hardware...' */
-      if (statTxt) { statTxt.textContent = 'Tap to enable'; statTxt.style.color = ''; }
-      if (err && err.__handled) return;
-      var code = String(err && (err.code || err.message || ''));
-      console.log('[Bio Profile] Error:', code, err);
-      if (code === 'biometricCanceled' || code === '10' || code === 'userCanceled' ||
-          (err && err.message && err.message.indexOf('cancel') !== -1)) {
-        /* User cancelled - no message */
-      } else if (code === 'biometricNotEnrolled' || code === '6' || code === '3') {
-        alert('No fingerprint enrolled.\nGo to Settings \u2192 Security \u2192 Fingerprint.');
-      } else if (code === 'biometricNotAvailable' || code === '5' || code === '1') {
-        alert('Fingerprint sensor not available on this device.');
-      } else {
-        alert('Biometric failed: ' + (err && err.message ? err.message : code || 'Unknown error'));
-      }
-    });
-}
-
-/* ── Init: Show row ONLY on native, hide SILENTLY if plugin missing ── */
 (function() {
   'use strict';
   var row = document.getElementById('bioSettingRow');
-  if (!row) return;
+  var toggle = document.getElementById('bioProfileToggle');
+  var statTxt = document.getElementById('bioStatusText');
+  if (!row || !toggle || !window.fleetBiometricToggle) return;
 
-  /* Use getPlatform() per user instructions */
-  if (!window.Capacitor || Capacitor.getPlatform() === 'web') {
+  if (!window.fleetBiometricToggle.isNative()) {
     row.style.display = 'none';
     return;
   }
 
-  /* Delay 1000ms so Capacitor bridge is fully ready before checking plugin */
   setTimeout(function() {
-    var plugins = Capacitor.Plugins || {};
-    /* CRITICAL: plugin bridge name is 'BiometricAuthNative' not 'BiometricAuth' */
-    var BiometricAuth = plugins.BiometricAuthNative || plugins.BiometricAuth || null;
-    console.log('[Bio Profile Init] Capacitor.Plugins keys:', JSON.stringify(Object.keys(plugins)));
-    console.log('[Bio Profile Init] BiometricAuthNative found:', !!BiometricAuth);
-    if (!BiometricAuth) {
-      /* Plugin not found - hide SILENTLY, no error message */
+    var bp = window.fleetBiometricToggle.getPlugin();
+    if (!bp) {
       row.style.display = 'none';
       return;
     }
-    /* Save globally so _enableBiometricNow can reuse it on tap */
-    _bioPlugin = BiometricAuth;
-
-    BiometricAuth.checkBiometry()
-      .then(function(info) {
-        var statTxt  = document.getElementById('bioStatusText');
-        var bioToken = localStorage.getItem('fleet_bio_token');
-        var savedName = localStorage.getItem('fleet_saved_name');
-
-        if (bioToken && savedName) {
-          row.style.display = 'flex';
-          if (statTxt) statTxt.textContent = 'Enabled for ' + savedName;
-        } else if (info && info.isAvailable) {
-          row.style.display = 'flex';
-          if (statTxt) statTxt.textContent = 'Tap to enable';
-        } else {
-          /* Hardware not available - hide silently */
-          row.style.display = 'none';
-        }
-      })
-      .catch(function() {
-        /* Error - hide silently, no alert */
+    bp.checkBiometry().then(function(info) {
+      var avail = info && (info.isAvailable || info.biometryIsAvailable || info.strongBiometryIsAvailable);
+      if (!avail && !window.fleetBiometricToggle.hasLocalToken()) {
         row.style.display = 'none';
-      });
+        return;
+      }
+      row.style.display = 'flex';
+      window.fleetBiometricToggle.syncProfileRow(toggle, statTxt);
+    }).catch(function() {
+      row.style.display = 'none';
+    });
   }, 800);
+
+  toggle.addEventListener('change', function() {
+    window.fleetBiometricToggle.handleToggleChange(toggle, {
+      statusEl: statTxt,
+      hasSession: true,
+    });
+  });
 })();
 </script>
+<style>
+.fleet-bio-toggle { position: relative; display: inline-block; width: 48px; height: 26px; }
+.fleet-bio-toggle input { opacity: 0; width: 0; height: 0; }
+.fleet-bio-toggle-slider {
+  position: absolute; cursor: pointer; inset: 0;
+  background: #cbd5e1; border-radius: 26px; transition: 0.3s;
+}
+.fleet-bio-toggle-slider:before {
+  position: absolute; content: ""; height: 20px; width: 20px;
+  left: 3px; bottom: 3px; background: white; border-radius: 50%;
+  transition: 0.3s; box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+.fleet-bio-toggle input:checked + .fleet-bio-toggle-slider { background: #10b981; }
+.fleet-bio-toggle input:checked + .fleet-bio-toggle-slider:before { transform: translateX(22px); }
+</style>
 {% endblock %}

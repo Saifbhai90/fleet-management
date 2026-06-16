@@ -2,10 +2,20 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
   <meta name="theme-color" content="#0a1628">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <script>
+  /* Mark WebView process as initialized on login (prevents dashboard → mobile-init redirect loop). */
+  (function() {
+    try {
+      if (window.Capacitor && Capacitor.getPlatform && Capacitor.getPlatform() !== 'web') {
+        sessionStorage.setItem('_fleetAppSession', '1');
+      }
+    } catch (e) { /* ignore */ }
+  })();
+  </script>
   <title>{% block title %}Fleet Manager{% endblock %}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -30,7 +40,7 @@
     }
 
     html, body {
-      height: 100%; margin: 0; padding: 0;
+      min-height: 100dvh; height: 100%; margin: 0; padding: 0;
       font-family: 'Inter', system-ui, -apple-system, sans-serif;
       background: var(--bg-deep);
       overflow-x: hidden;
@@ -77,6 +87,7 @@
       padding: 0 0 32px;
       min-height: 38vh;
       padding-top: env(safe-area-inset-top, 20px);
+      transition: opacity 0.2s ease, max-height 0.25s ease, padding 0.2s ease;
     }
 
     /* ── Desktop: centered card layout ── */
@@ -113,6 +124,12 @@
       margin-bottom: 18px;
       box-shadow: 0 0 0 8px rgba(37,99,235,0.08), 0 8px 32px rgba(0,0,0,0.3);
       animation: logoPulse 3s ease-in-out infinite;
+      transition: all 0.3s ease-in-out;
+    }
+    .lp-logo-ring svg {
+      width: 44px;
+      height: 44px;
+      transition: all 0.3s ease-in-out;
     }
     @keyframes logoPulse {
       0%,100% { box-shadow: 0 0 0 8px rgba(37,99,235,0.08), 0 8px 32px rgba(0,0,0,0.3); }
@@ -121,6 +138,7 @@
     .lp-app-name {
       font-size: 1.6rem; font-weight: 800;
       color: #fff; letter-spacing: -0.03em; margin-bottom: 4px;
+      transition: all 0.3s ease-in-out;
     }
     .lp-app-name span { color: #60a5fa; }
     .lp-tagline {
@@ -128,9 +146,25 @@
       font-weight: 500; letter-spacing: 0.04em;
     }
 
+    .lp-page-wrap {
+      position: relative;
+      z-index: 1;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+    }
+    .lp-center-col {
+      display: flex;
+      flex-direction: column;
+      min-height: 100dvh;
+      width: 100%;
+      flex: 1 0 auto;
+    }
+
     /* ── Bottom Sheet Card ── */
     .lp-sheet {
       position: relative; z-index: 2;
+      flex: 1 0 auto;
       background: var(--card-bg);
       border-radius: 28px 28px 0 0;
       padding: 32px 24px 24px;
@@ -252,6 +286,7 @@
       box-shadow: 0 4px 20px rgba(37,99,235,0.38);
       transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s;
       -webkit-tap-highlight-color: transparent;
+      margin-bottom: env(safe-area-inset-bottom, 12px);
     }
     .lp-btn-signin:active { transform: scale(0.98); box-shadow: 0 2px 10px rgba(37,99,235,0.25); }
     .lp-btn-signin:disabled { opacity: 0.7; pointer-events: none; }
@@ -322,9 +357,163 @@
     }
     .bio-thumb-pulse { animation: bioPulse 2s ease-in-out infinite; }
     .bio-thumb-pulse:disabled { animation: none; opacity: 0.65; }
+    .hbl-bio-status {
+      display: none;
+      margin: 16px auto 0;
+      max-width: 280px;
+      padding: 12px 16px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+      border: 1px solid #bfdbfe;
+      box-shadow: 0 6px 18px rgba(37, 99, 235, 0.12);
+    }
+    .hbl-bio-status.is-active { display: block; }
+    .hbl-bio-status-inner {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+    .hbl-bio-spinner {
+      width: 18px;
+      height: 18px;
+      flex-shrink: 0;
+      border: 2.5px solid rgba(37, 99, 235, 0.25);
+      border-top-color: #2563eb;
+      border-radius: 50%;
+      animation: spin 0.65s linear infinite;
+    }
+    .hbl-bio-status-text {
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: #1d4ed8;
+      line-height: 1.35;
+    }
+    #hblBioMode.is-verifying .hbl-bio-hint { opacity: 0.45; }
+
+    /* ── Mobile: fluid compact login (keyboard-visible shrinks header) ── */
+    @media (max-width: 767.98px) {
+      html, body {
+        min-height: 100dvh;
+        overflow-x: hidden;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+      .lp-page-wrap {
+        display: flex;
+        flex-direction: column;
+        min-height: 100dvh;
+        overflow-y: auto;
+        overflow-x: hidden;
+        -webkit-overflow-scrolling: touch;
+      }
+      .lp-center-col {
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-start;
+        min-height: 100dvh;
+        width: 100%;
+        flex: 1 0 auto;
+      }
+      .login-top-spacer {
+        flex: 1 1 auto;
+        min-height: 0;
+      }
+      .lp-brand,
+      .login-header {
+        flex-shrink: 0;
+        min-height: 28vh;
+      }
+      .lp-sheet,
+      .login-card {
+        flex-shrink: 0;
+      }
+
+      /* Keyboard open: compact header, no bottom spacer gap */
+      body.keyboard-visible .login-top-spacer {
+        display: none;
+      }
+      body.keyboard-visible .login-header,
+      body.keyboard-visible .lp-brand {
+        min-height: 0;
+        max-height: 72px;
+        padding: 6px 0 8px;
+        margin-bottom: 6px;
+        flex-direction: row;
+        justify-content: center;
+        gap: 10px;
+        align-items: center;
+      }
+      body.keyboard-visible .lp-logo-ring {
+        width: 40px;
+        height: 40px;
+        margin-bottom: 0;
+        border-radius: 12px;
+        box-shadow: 0 0 0 4px rgba(37,99,235,0.08), 0 4px 12px rgba(0,0,0,0.2);
+        animation: none;
+      }
+      body.keyboard-visible .lp-logo-ring svg {
+        width: 22px;
+        height: 22px;
+      }
+      body.keyboard-visible .lp-app-name {
+        font-size: 1rem;
+        margin-bottom: 0;
+      }
+      body.keyboard-visible .lp-tagline {
+        display: none;
+      }
+      body.keyboard-visible .lp-sheet-handle {
+        display: none;
+      }
+      body.keyboard-visible .lp-section-title,
+      body.keyboard-visible #loginTitle {
+        font-size: 1.1rem;
+        margin-bottom: 2px;
+      }
+      body.keyboard-visible .lp-section-sub,
+      body.keyboard-visible #loginSubtitle {
+        margin-bottom: 12px;
+      }
+      body.keyboard-visible .lp-sheet,
+      body.keyboard-visible .login-card {
+        padding-top: 8px;
+        padding-bottom: calc(12px + env(safe-area-inset-bottom, 8px));
+      }
+      body.keyboard-visible #hblSavedAccountView > div:first-child {
+        margin-bottom: 10px !important;
+      }
+      body.keyboard-visible #hblSavedAccountView > div:nth-child(3) {
+        margin-bottom: 10px !important;
+        padding: 10px 14px !important;
+      }
+      body.keyboard-visible #hblSavedAccountView > div:nth-child(4) {
+        margin-bottom: 10px !important;
+      }
+      body.keyboard-visible .lp-btn-signin {
+        margin-bottom: env(safe-area-inset-bottom, 8px);
+      }
+
+      @media (max-height: 500px) {
+        .login-header,
+        .lp-brand {
+          min-height: 0;
+          max-height: 60px;
+          padding: 4px 0 6px;
+          margin-bottom: 6px;
+        }
+        .login-top-spacer {
+          display: none;
+        }
+      }
+    }
   </style>
 </head>
 <body>
+{% if request.host and ('127.0.0.1' in request.host or '192.168.' in request.host or 'localhost' in request.host) %}
+<div id="fleetDevBanner" style="position:fixed;top:0;left:0;right:0;z-index:99999;background:#059669;color:#fff;font-size:11px;font-weight:700;text-align:center;padding:6px 8px;">DEV · {{ request.host }} · USB/LAN server</div>
+<style>body{padding-top:28px!important;--fleet-dev-banner-h:28px;}</style>
+{% endif %}
   <!-- Background -->
   <div class="lp-bg">
     <div class="lp-grid"></div>
@@ -352,11 +541,11 @@
   </div>
 
   <!-- Page layout: brand top + sheet bottom -->
-  <div class="lp-page-wrap" style="position:relative;z-index:1;">
-  <div class="lp-center-col" style="display:flex;flex-direction:column;min-height:100vh;width:100%;">
+  <div class="lp-page-wrap" id="lpPageWrap">
+  <div class="lp-center-col" id="lpCenterCol">
 
     <!-- Brand Header -->
-    <div class="lp-brand">
+    <div class="lp-brand login-logo login-header">
       <div class="lp-logo-ring">
         <!-- Fleet SVG icon -->
         <svg width="44" height="44" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -377,8 +566,10 @@
       <div class="lp-tagline">SECURE FLEET CONSOLE</div>
     </div>
 
+    <div class="login-top-spacer" aria-hidden="true"></div>
+
     <!-- Bottom Sheet -->
-    <div class="lp-sheet" style="flex:1 0 auto;">
+    <div class="lp-sheet login-card" id="lpSheet">
       <div class="lp-sheet-handle"></div>
       {% block content %}{% endblock %}
     </div>
@@ -388,6 +579,15 @@
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="{{ url_for('static', filename='js/session_sounds.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/fleet_biometric_toggle.js') }}"></script>
+  <script>
+    (function() {
+      if (!document.getElementById('loginForm')) return;
+      if (window.fleetBiometricToggle && typeof window.fleetBiometricToggle.initLoginPage === 'function') {
+        window.fleetBiometricToggle.initLoginPage();
+      }
+    })();
+  </script>
   <script>
     (function() {
       if (!window.fleetSessionSounds) return;
@@ -408,6 +608,96 @@
           setTimeout(function() { if (t.parentNode) t.remove(); }, 400);
         }, 4000);
       });
+    })();
+  </script>
+  <script>
+    /* Fluid compact login: keyboard-visible shrinks header; scroll snap near keyboard */
+    (function() {
+      if (window.Capacitor && Capacitor.isNativePlatform && Capacitor.isNativePlatform()) {
+        document.documentElement.classList.add('capacitor-native');
+      }
+
+      var KB_CLOSE_PX = 60;
+      var SCROLL_OFFSET_PX = 20;
+      var blurTimer = null;
+
+      function isLoginField(el) {
+        if (!el || !el.matches) return false;
+        if (el.matches('#loginForm input, #hblSavedPassword')) return true;
+        return !!(el.closest && el.closest('#lpSheet') && el.matches('input:not([type="hidden"]), textarea'));
+      }
+
+      function keyboardGap() {
+        var vv = window.visualViewport;
+        if (!vv) return 0;
+        return Math.max(0, window.innerHeight - vv.height - (vv.offsetTop || 0));
+      }
+
+      function scrollTargetForField(el) {
+        var id = el && el.id;
+        if (id === 'login_password' || id === 'hblSavedPassword') {
+          return document.getElementById('loginSubmitBtn') ||
+            document.getElementById('hblSavedLoginBtn') ||
+            el;
+        }
+        return el;
+      }
+
+      function scrollFieldCompact(el) {
+        if (!el) return;
+        var target = scrollTargetForField(el);
+        setTimeout(function() {
+          if (!target || !target.scrollIntoView) return;
+          try {
+            target.scrollIntoView({ behavior: 'smooth', block: 'end', inline: 'nearest' });
+          } catch (e) {
+            target.scrollIntoView(false);
+          }
+          setTimeout(function() {
+            window.scrollBy({ top: -SCROLL_OFFSET_PX, left: 0, behavior: 'smooth' });
+          }, 80);
+        }, 300);
+      }
+
+      window.fleetScrollFieldIntoView = scrollFieldCompact;
+
+      function setKeyboardVisible(open) {
+        document.body.classList.toggle('keyboard-visible', open);
+        document.body.classList.remove('keyboard-open');
+      }
+
+      function syncKeyboardState() {
+        var gap = keyboardGap();
+        var shortViewport = window.innerHeight <= 500;
+        var open = gap > KB_CLOSE_PX || shortViewport;
+
+        setKeyboardVisible(open);
+        if (open && isLoginField(document.activeElement)) {
+          scrollFieldCompact(document.activeElement);
+        }
+      }
+
+      document.addEventListener('focusin', function(e) {
+        if (!isLoginField(e.target)) return;
+        if (blurTimer) {
+          clearTimeout(blurTimer);
+          blurTimer = null;
+        }
+        setKeyboardVisible(true);
+        scrollFieldCompact(e.target);
+      }, true);
+
+      document.addEventListener('focusout', function(e) {
+        if (!isLoginField(e.target)) return;
+        blurTimer = setTimeout(syncKeyboardState, 200);
+      }, true);
+
+      var vv = window.visualViewport;
+      if (vv) {
+        vv.addEventListener('resize', syncKeyboardState);
+        vv.addEventListener('scroll', syncKeyboardState);
+      }
+      window.addEventListener('resize', syncKeyboardState);
     })();
   </script>
 </body>

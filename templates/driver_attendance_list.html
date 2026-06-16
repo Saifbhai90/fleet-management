@@ -32,7 +32,7 @@
         <i class="bi bi-whatsapp me-1"></i>Absent ({{ absent_whatsapp_rows|length }})
       </button>
       {% endif %}
-      <a href="{{ url_for('driver_attendance_export') }}?from_date={{ from_date or view_date.strftime('%d-%m-%Y') }}&to_date={{ to_date or view_date.strftime('%d-%m-%Y') }}{% if project_id %}&project_id={{ project_id }}{% endif %}{% if district_id %}&district_id={{ district_id }}{% endif %}{% if vehicle_id %}&vehicle_id={{ vehicle_id }}{% endif %}{% if shift %}&shift={{ shift|e }}{% endif %}{% if duty_shift_filter %}&duty_shift={{ duty_shift_filter|e }}{% endif %}{% if status_filter_selected %}&status_filter={{ status_filter_selected|join(',')|urlencode }}{% endif %}{% if list_filter %}&list_filter={{ list_filter|e }}{% endif %}{% if search %}&search={{ search|e }}{% endif %}{% if driver_id %}&driver_id={{ driver_id }}{% endif %}" class="btn btn-success btn-sm">
+      <a href="{{ url_for('driver_attendance_export') }}?from_date={{ from_date or view_date.strftime('%d-%m-%Y') }}&to_date={{ to_date or view_date.strftime('%d-%m-%Y') }}{% if project_id %}&project_id={{ project_id }}{% endif %}{% if district_id %}&district_id={{ district_id }}{% endif %}{% if vehicle_id %}&vehicle_id={{ vehicle_id }}{% endif %}{% if shift %}&shift={{ shift|e }}{% endif %}{% if duty_shift_filter %}&duty_shift={{ duty_shift_filter|e }}{% endif %}{% if status_filter_selected %}&status_filter={{ status_filter_selected|join(',')|urlencode }}{% endif %}{% if list_filter %}&list_filter={{ list_filter|e }}{% endif %}{% if search %}&search={{ search|e }}{% endif %}{% if driver_id %}&driver_id={{ driver_id }}{% endif %}" class="btn btn-success btn-sm" id="btnAttListExcelExport">
         <i class="bi bi-file-earmark-excel me-1"></i>Excel
       </a>
       <a href="{{ url_for('driver_attendance_print') }}?from_date={{ from_date or view_date.strftime('%d-%m-%Y') }}&to_date={{ to_date or view_date.strftime('%d-%m-%Y') }}{% if project_id %}&project_id={{ project_id }}{% endif %}{% if district_id %}&district_id={{ district_id }}{% endif %}{% if vehicle_id %}&vehicle_id={{ vehicle_id }}{% endif %}{% if shift %}&shift={{ shift|e }}{% endif %}{% if duty_shift_filter %}&duty_shift={{ duty_shift_filter|e }}{% endif %}{% if status_filter_selected %}&status_filter={{ status_filter_selected|join(',')|urlencode }}{% endif %}{% if list_filter %}&list_filter={{ list_filter|e }}{% endif %}{% if search %}&search={{ search|e }}{% endif %}{% if driver_id %}&driver_id={{ driver_id }}{% endif %}" target="_blank" class="btn btn-outline-primary btn-sm">
@@ -848,11 +848,33 @@ function attendanceAbsolutePhotoUrl(u) {
   }
 }
 
+/** Same-origin fetch URL — proxy external/R2 images through Flask for share blob download. */
+function attendanceShareFetchUrl(u) {
+  var abs = attendanceAbsolutePhotoUrl(u);
+  try {
+    if (new URL(abs).origin !== window.location.origin) {
+      return '/image-proxy?url=' + encodeURIComponent(abs);
+    }
+  } catch (e) { /* use abs */ }
+  return abs;
+}
+
+function attendanceIsNativeApp() {
+  return !!(window.FleetBridge && window.FleetBridge.isNative) ||
+    !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+}
+
+function attendanceHasCapacitorShare() {
+  return !!(window.Capacitor && window.Capacitor.Plugins &&
+    window.Capacitor.Plugins.Share && window.Capacitor.Plugins.Filesystem);
+}
+
 /** Fetch image blob — retries credential modes (Android WebView quirks). */
 function attendanceFetchPhotoBlob(absUrl) {
+  var fetchUrl = attendanceShareFetchUrl(absUrl);
   var attempts;
   try {
-    var cross = new URL(absUrl).origin !== window.location.origin;
+    var cross = new URL(fetchUrl, window.location.origin).origin !== window.location.origin;
     attempts = cross
       ? [{ credentials: 'omit', mode: 'cors' }]
       : [
@@ -865,11 +887,11 @@ function attendanceFetchPhotoBlob(absUrl) {
   }
   function tryFetch(i) {
     if (i >= attempts.length) {
-      return Promise.reject(new Error('fetch failed (' + attempts.length + ' modes) url=' + absUrl.substring(0, 96)));
+      return Promise.reject(new Error('fetch failed (' + attempts.length + ' modes) url=' + String(fetchUrl).substring(0, 96)));
     }
     var init = Object.assign({ cache: 'no-store' }, attempts[i]);
-    return fetch(absUrl, init).then(function(r) {
-      if (!r.ok) throw new Error('HTTP ' + r.status + ' ' + (r.statusText || '') + ' url=' + absUrl.substring(0, 96));
+    return fetch(fetchUrl, init).then(function(r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status + ' ' + (r.statusText || '') + ' url=' + String(fetchUrl).substring(0, 96));
       return r.blob();
     }).catch(function() {
       return tryFetch(i + 1);
@@ -878,37 +900,115 @@ function attendanceFetchPhotoBlob(absUrl) {
   return tryFetch(0);
 }
 
-/** Match FleetBridge.downloadBlob: CACHE → DATA → EXTERNAL/Download for OEM/Android 15 writes. */
+/** Write shareable image — CACHE first (Capacitor Share default), then Downloads fallback. */
 function attendanceNativeWriteShareTemp(Filesystem, fileBaseName, b64) {
-  var tries = [
-    { directory: 'CACHE', path: fileBaseName },
-    { directory: 'DATA', path: fileBaseName },
-    { directory: 'EXTERNAL', path: 'Download/' + fileBaseName }
-  ];
-  function attempt(i) {
-    if (i >= tries.length) {
-      return Promise.reject(new Error('Filesystem.writeFile failed (CACHE, DATA, EXTERNAL/Download)'));
-    }
-    var t = tries[i];
+  return Filesystem.writeFile({
+    path: fileBaseName,
+    data: b64,
+    directory: 'CACHE'
+  }).then(function(result) {
+    return result.uri;
+  }).catch(function() {
     return Filesystem.writeFile({
-      path: t.path,
+      path: 'Download/' + fileBaseName,
       data: b64,
-      directory: t.directory,
+      directory: 'EXTERNAL',
       recursive: true
     }).then(function(result) {
-      if (typeof Filesystem.getUri === 'function') {
-        return Filesystem.getUri({ path: t.path, directory: t.directory }).then(function(u) {
-          return (u && u.uri) ? u.uri : result.uri;
-        }).catch(function() {
-          return result.uri;
-        });
-      }
       return result.uri;
-    }).catch(function() {
-      return attempt(i + 1);
+    });
+  });
+}
+
+function attendanceLoadSharePhotoItems(urls, type, go, gt, prefix) {
+  var items = [];
+  function step(i) {
+    if (i >= urls.length) return Promise.resolve(items);
+    return attendanceFetchPhotoBlob(urls[i]).then(function(blob) {
+      var ct = (blob && blob.type) || '';
+      var mime = (ct.indexOf('image/') === 0) ? ct : 'image/jpeg';
+      items.push({
+        ok: true,
+        blob: blob,
+        file: new File([blob], 'attendance_' + type + '_' + (go + i + 1) + '.jpg', { type: mime })
+      });
+    }).catch(function(err) {
+      console.warn('[Attendance share] load failed', urls[i], err);
+    }).then(function() {
+      var attempted = i + 1;
+      var pct = gt > 0 ? Math.min(75, Math.round(((go + attempted) / gt) * 75)) : 0;
+      attendanceSetShareProgressPct(pct, (prefix || '') + 'Loading photos…', (go + attempted) + ' / ' + gt);
+      return step(i + 1);
     });
   }
-  return attempt(0);
+  return step(0);
+}
+
+function attendanceTryWebShareFiles(files, title) {
+  if (typeof navigator === 'undefined' || !navigator.share) {
+    return Promise.reject(new Error('Web Share unavailable'));
+  }
+  var payload = {
+    files: files,
+    title: title || (files.length === 1 ? 'Attendance photo' : ('Attendance photos (' + files.length + ')'))
+  };
+  if (typeof navigator.canShare === 'function' && !navigator.canShare(payload)) {
+    return Promise.reject(new Error('canShare declined'));
+  }
+  attendanceHideShareProgress();
+  return navigator.share(payload);
+}
+
+function attendanceWriteItemsForCapacitorShare(Filesystem, items, go, gt, prefix) {
+  var ts = Date.now() + '_' + Math.random().toString(36).slice(2, 9);
+  var saveBasePct = gt > 0 ? Math.min(75, Math.round(((go + items.length) / gt) * 75)) : 50;
+  return items.reduce(function(chain, it, idx) {
+    return chain.then(function(uris) {
+      attendanceSetShareProgressPct(
+        Math.min(88, saveBasePct + Math.round(((idx + 1) / items.length) * 13)),
+        (prefix || '') + 'Saving for share…',
+        (idx + 1) + ' / ' + items.length
+      );
+      return attendanceBlobToRawBase64(it.blob).then(function(b64) {
+        var fname = 'att_share_' + ts + '_' + (idx + 1) + '.jpg';
+        return attendanceNativeWriteShareTemp(Filesystem, fname, b64);
+      }).then(function(uri) {
+        uris.push(uri);
+        return uris;
+      });
+    });
+  }, Promise.resolve([]));
+}
+
+function attendanceOpenNativeShareSheet(SharePlugin, uris, title, dialogTitle) {
+  attendanceHideShareProgress();
+  if (!uris.length) {
+    return Promise.reject(new Error('No shareable files'));
+  }
+  if (uris.length === 1) {
+    return SharePlugin.share({
+      title: title || 'Attendance photo',
+      url: uris[0],
+      dialogTitle: dialogTitle || 'Share via WhatsApp'
+    });
+  }
+  return SharePlugin.share({
+    files: uris,
+    title: title || ('Attendance photos (' + uris.length + ')'),
+    dialogTitle: dialogTitle || 'Share via WhatsApp'
+  });
+}
+
+function attendanceBlobToRawBase64(blob) {
+  return new Promise(function(resolve, reject) {
+    var reader = new FileReader();
+    reader.onloadend = function() {
+      var r = reader.result;
+      resolve((typeof r === 'string' && r.indexOf(',') >= 0) ? r.substring(r.indexOf(',') + 1) : r);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
 }
 
 /** @capacitor/share on Android often rejects with "Share canceled" when the user closes the sheet (same idea as Web Share AbortError). */
@@ -923,6 +1023,17 @@ function attendanceIsNativeShareCanceled(err) {
   return false;
 }
 
+function attendancePhotoUrlFromCell(cell) {
+  if (!cell) return null;
+  var btn = cell.querySelector('.att-photo-fullview-btn[data-url]');
+  if (btn) return attendanceAbsolutePhotoUrl(btn.getAttribute('data-url'));
+  var a = cell.querySelector('a[href]');
+  if (a) return attendanceAbsolutePhotoUrl(a.href || a.getAttribute('href'));
+  var img = cell.querySelector('img[src]');
+  if (img) return attendanceAbsolutePhotoUrl(img.src || img.getAttribute('src'));
+  return null;
+}
+
 function collectPhotoUrlsForDuty(type, dutyFilt) {
   var urls = [];
   var rows = document.querySelectorAll('#attendanceTable tbody tr');
@@ -934,15 +1045,37 @@ function collectPhotoUrlsForDuty(type, dutyFilt) {
     var cells = row.querySelectorAll('td');
     if (cells.length < 16) return;
     if (type === 'checkin' || type === 'both') {
-      var ciLink = cells[11].querySelector('a[href]');
-      if (ciLink) urls.push(attendanceAbsolutePhotoUrl(ciLink.href || ciLink.getAttribute('href')));
+      var ciUrl = attendancePhotoUrlFromCell(cells[11]);
+      if (ciUrl) urls.push(ciUrl);
     }
     if (type === 'checkout' || type === 'both') {
-      var coLink = cells[14].querySelector('a[href]');
-      if (coLink) urls.push(attendanceAbsolutePhotoUrl(coLink.href || coLink.getAttribute('href')));
+      var coUrl = attendancePhotoUrlFromCell(cells[14]);
+      if (coUrl) urls.push(coUrl);
     }
   });
   return urls;
+}
+
+function fetchAttendanceSharePhotoUrls(galleryShift, photoKind) {
+  var params = (typeof window.buildAttendanceGalleryParams === 'function')
+    ? window.buildAttendanceGalleryParams()
+    : new URLSearchParams(window.location.search);
+  params.delete('page');
+  params.delete('per_page');
+  params.set('gallery_shift', galleryShift || 'both');
+  params.set('gallery_photo', photoKind || 'both');
+  var url = '/driver-attendance/media-gallery/photo-urls.json?' + params.toString();
+  return fetch(url, { credentials: 'include', cache: 'no-store' })
+    .then(function(r) {
+      if (!r.ok) throw new Error('Server error (' + r.status + ')');
+      return r.json();
+    })
+    .then(function(data) {
+      if (!data || !data.ok || !Array.isArray(data.urls)) {
+        throw new Error((data && data.error) ? data.error : 'Could not load photo list');
+      }
+      return data.urls.map(function(u) { return attendanceAbsolutePhotoUrl(u); });
+    });
 }
 
 function collectPhotoUrls(type) {
@@ -977,7 +1110,24 @@ function attendanceShowShareProgress(total, label) {
   el.classList.remove('d-none');
   el.setAttribute('aria-busy', 'true');
   el.setAttribute('aria-hidden', 'false');
+  var bar = document.getElementById('attendanceShareProgressBar');
+  if (bar) bar.classList.add('progress-bar-striped', 'progress-bar-animated');
   attendanceUpdateShareProgress(0, total, label || 'Preparing photos…');
+}
+
+function attendanceSetShareProgressPct(pct, label, detail, done) {
+  var bar = document.getElementById('attendanceShareProgressBar');
+  var det = document.getElementById('attendanceShareProgressDetail');
+  var lbl = document.getElementById('attendanceShareProgressLabel');
+  var n = Math.max(0, Math.min(100, Math.round(pct || 0)));
+  if (bar) {
+    bar.style.width = n + '%';
+    bar.textContent = n + '%';
+    bar.setAttribute('aria-valuenow', String(n));
+    if (done) bar.classList.remove('progress-bar-striped', 'progress-bar-animated');
+  }
+  if (det && detail != null) det.textContent = detail;
+  if (lbl && label) lbl.textContent = label;
 }
 
 function attendanceUpdateShareProgress(done, total, label) {
@@ -1046,8 +1196,14 @@ function sharePhotosWebBatch(slice, type, ctx) {
   var go = ctx.globalOffset;
   var prefix = ctx.batchLabelPrefix || '';
 
+  if (attendanceHasCapacitorShare()) {
+    sharePhotosNativeBatch(slice, type, ctx);
+    return;
+  }
+
   if (typeof navigator === 'undefined' || !navigator.share) {
-    downloadPhotos(slice, {});
+    attendanceSetShareProgressPct(0, 'Share not supported', 'Use the mobile app to share photos', true);
+    setTimeout(attendanceHideShareProgress, 2000);
     if (ctx.onBatchComplete) ctx.onBatchComplete();
     return;
   }
@@ -1056,32 +1212,38 @@ function sharePhotosWebBatch(slice, type, ctx) {
     return;
   }
 
-  var done = 0;
-  Promise.all(slice.map(function(url, idx) {
-    return attendanceFetchPhotoBlob(attendanceAbsolutePhotoUrl(url)).then(function(blob) {
-      done++;
-      attendanceUpdateShareProgress(go + done, gt, prefix + 'Preparing…');
-      var ct = (blob && blob.type) || '';
-      var mime = (ct.indexOf('image/') === 0) ? ct : 'image/jpeg';
-      return new File([blob], 'attendance_' + type + '_' + (go + idx + 1) + '.jpg', { type: mime });
-    });
-  })).then(function(files) {
+  attendanceLoadSharePhotoItems(slice, type, go, gt, prefix).then(function(items) {
+    if (!items.length) {
+      throw new Error('No photos could be loaded');
+    }
+    var files = items.map(function(it) { return it.file; });
+    attendanceSetShareProgressPct(92, prefix + 'Opening share…', files.length + ' image(s)');
+    attendanceHideShareProgress();
     var data = { files: files, title: files.length === 1 ? 'Attendance photo' : ('Attendance photos (' + files.length + ')') };
+    if (typeof navigator.canShare === 'function' && !navigator.canShare(data)) {
+      throw new Error('canShare declined');
+    }
     return navigator.share(data);
   }).then(function() {
     if (ctx.onBatchComplete) ctx.onBatchComplete();
   }).catch(function(err) {
     if (err && err.name === 'AbortError') {
       attendanceHideShareProgress();
+      if (ctx.onBatchComplete) ctx.onBatchComplete();
       return;
     }
-    downloadPhotos(slice, { afterShareFail: true });
+    var msg = (err && err.message) ? err.message : 'Share failed';
+    attendanceSetShareProgressPct(0, 'Share failed', msg, true);
+    if (window.FleetBridge && window.FleetBridge._toast) {
+      window.FleetBridge._toast('Share failed: ' + msg);
+    }
+    setTimeout(attendanceHideShareProgress, 2500);
     if (ctx.onBatchComplete) ctx.onBatchComplete();
   });
 }
 
 function sharePhotos(urls, type) {
-  var isNative = window.FleetBridge && window.FleetBridge.isNative;
+  var isNative = attendanceIsNativeApp();
   var SAFETY_MAX_URLS = 3000;
   if (!urls || urls.length === 0) return;
   if (urls.length > SAFETY_MAX_URLS) {
@@ -1109,10 +1271,16 @@ function sharePhotos(urls, type) {
   }
 
   function finishAll() {
+    /* Overlay may already be hidden when share sheet opened at 88–92%. */
     attendanceHideShareProgress();
-    if (window.FleetBridge && window.FleetBridge._toast) {
+    if (window.FleetBridge && window.FleetBridge._toast && batchCount > 1) {
       window.FleetBridge._toast('Done. ' + total + ' photo(s) in ' + batchCount + ' share batch(es).');
     }
+  }
+
+  function onShareBatchDone() {
+    /* Wait for user to finish share sheet before closing overlay / next batch. */
+    scheduleNextBatch();
   }
 
   function scheduleNextBatch() {
@@ -1135,11 +1303,11 @@ function sharePhotos(urls, type) {
       globalTotal: total,
       globalOffset: offset,
       batchLabelPrefix: labelPrefix,
-      onBatchComplete: scheduleNextBatch
+      onBatchComplete: onShareBatchDone
     };
 
-    if (isNative) {
-      _nativeSharePhotos(slice, type, ctx);
+    if (isNative || attendanceHasCapacitorShare()) {
+      sharePhotosNativeBatch(slice, type, ctx);
     } else {
       sharePhotosWebBatch(slice, type, ctx);
     }
@@ -1148,146 +1316,62 @@ function sharePhotos(urls, type) {
   runBatch();
 }
 
-function _nativeSharePhotos(urls, type, ctx) {
+/** Native: share multiple images (not ZIP) — Web Share files first, then Capacitor Share.files. */
+function sharePhotosNativeBatch(slice, type, ctx) {
   ctx = ctx || {};
-  var gt = ctx.globalTotal != null ? ctx.globalTotal : urls.length;
+  var gt = ctx.globalTotal != null ? ctx.globalTotal : slice.length;
   var go = ctx.globalOffset || 0;
   var prefix = ctx.batchLabelPrefix || '';
-
-  function bumpProg(localIdx) {
-    attendanceUpdateShareProgress(go + localIdx + 1, gt, prefix + 'Preparing…');
-  }
-
-  function completeBatch() {
-    if (ctx.onBatchComplete) ctx.onBatchComplete();
-  }
-
-  var Filesystem = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem;
   var SharePlugin = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Share;
-  if (!Filesystem || !SharePlugin) {
-    if (window.FleetBridge) window.FleetBridge._toast('Downloading photos instead...');
-    downloadPhotos(urls, {});
-    completeBatch();
+  var Filesystem = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem;
+
+  if (!slice.length) {
+    if (ctx.onBatchComplete) ctx.onBatchComplete();
     return;
   }
 
-  if (window.FleetBridge && !prefix) {
-    window.FleetBridge._toast('Preparing ' + urls.length + ' photo(s)...');
+  if (!SharePlugin || !Filesystem) {
+    sharePhotosWebBatch(slice, type, ctx);
+    return;
   }
 
-  function blobToRawBase64(blob) {
-    return new Promise(function(resolve, reject) {
-      var reader = new FileReader();
-      reader.onloadend = function() {
-        var r = reader.result;
-        var raw = (typeof r === 'string' && r.indexOf(',') >= 0) ? r.substring(r.indexOf(',') + 1) : r;
-        resolve(raw);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
+  attendanceLoadSharePhotoItems(slice, type, go, gt, prefix).then(function(items) {
+    if (!items.length) {
+      throw new Error('No photos could be loaded');
+    }
+    var files = items.map(function(it) { return it.file; });
+    var title = files.length === 1 ? 'Attendance photo' : ('Attendance photos (' + files.length + ')');
+    attendanceSetShareProgressPct(88, prefix + 'Opening share…', files.length + ' image(s)');
+
+    return attendanceTryWebShareFiles(files, title).catch(function(webErr) {
+      console.warn('[Attendance share] Web Share failed, trying Capacitor', webErr);
+      return attendanceWriteItemsForCapacitorShare(Filesystem, items, go, gt, prefix).then(function(uris) {
+        attendanceSetShareProgressPct(92, prefix + 'Opening share…', uris.length + ' image(s)');
+        return attendanceOpenNativeShareSheet(
+          SharePlugin,
+          uris,
+          title,
+          'Share via WhatsApp'
+        );
+      });
     });
-  }
-
-  var ts = Date.now() + '_' + Math.random().toString(36).slice(2, 9);
-  var savedUris = [];
-
-  function shareOrFallback() {
-    if (savedUris.length === 0) {
-      if (window.FleetBridge) window.FleetBridge._toast('No photos could be loaded.');
-      downloadPhotos(urls, {});
-      completeBatch();
+  }).then(function() {
+    if (ctx.onBatchComplete) ctx.onBatchComplete();
+  }).catch(function(err) {
+    if (attendanceIsNativeShareCanceled(err)) {
+      attendanceHideShareProgress();
+      if (ctx.onBatchComplete) ctx.onBatchComplete();
       return;
     }
-
-    var titleOne = 'Attendance Photo';
-    var titleMany = 'Attendance Photos (' + savedUris.length + ')';
-    var dialogTitle = 'Share via';
-    var doShare = function(opts) {
-      return SharePlugin.share(opts).catch(function(err) {
-        console.warn('[Share]', err);
-        return Promise.reject(err);
-      });
-    };
-
-    if (savedUris.length === 1) {
-      var singleCanceled = false;
-      doShare({ title: titleOne, url: savedUris[0], dialogTitle: dialogTitle }).catch(function(err) {
-        if (attendanceIsNativeShareCanceled(err)) {
-          singleCanceled = true;
-          return;
-        }
-        if (window.FleetBridge) window.FleetBridge._toast('Share failed. Saving instead…');
-        downloadPhotos(urls, { afterShareFail: true });
-      }).finally(function() {
-        if (singleCanceled) attendanceHideShareProgress();
-        else completeBatch();
-      });
-      return;
+    console.warn('[Attendance share]', err);
+    var msg = (err && err.message) ? err.message : 'Share failed';
+    attendanceSetShareProgressPct(0, 'Share failed', msg, true);
+    if (window.FleetBridge && window.FleetBridge._toast) {
+      window.FleetBridge._toast('Share failed: ' + msg);
     }
-
-    var multiCanceled = false;
-    var chain = doShare({ files: savedUris, dialogTitle: dialogTitle });
-    chain = chain.catch(function(err) {
-      if (attendanceIsNativeShareCanceled(err)) {
-        multiCanceled = true;
-        return Promise.reject(err);
-      }
-      return doShare({ files: savedUris });
-    });
-    chain = chain.catch(function(err) {
-      if (attendanceIsNativeShareCanceled(err)) {
-        multiCanceled = true;
-        return Promise.reject(err);
-      }
-      return doShare({ files: savedUris, title: titleMany, dialogTitle: dialogTitle });
-    });
-    chain = chain.catch(function(err) {
-      if (attendanceIsNativeShareCanceled(err)) {
-        multiCanceled = true;
-        return Promise.reject(err);
-      }
-      return doShare({ url: savedUris[0], dialogTitle: dialogTitle });
-    });
-    chain = chain.catch(function(err) {
-      if (attendanceIsNativeShareCanceled(err)) {
-        multiCanceled = true;
-        return;
-      }
-      if (window.FleetBridge && window.FleetBridge._toast) {
-        window.FleetBridge._toast('Saving photos instead…');
-      }
-      downloadPhotos(urls, { afterShareFail: true });
-    });
-    chain.finally(function() {
-      if (multiCanceled) attendanceHideShareProgress();
-      else completeBatch();
-    });
-  }
-
-  function saveNext(idx) {
-    if (idx >= urls.length) {
-      shareOrFallback();
-      return;
-    }
-    var fname = 'att_share_' + ts + '_' + (idx + 1) + '.jpg';
-    var absUrl = attendanceAbsolutePhotoUrl(urls[idx]);
-    attendanceFetchPhotoBlob(absUrl)
-      .then(blobToRawBase64)
-      .then(function(b64) {
-        return attendanceNativeWriteShareTemp(Filesystem, fname, b64);
-      })
-      .then(function(uri) {
-        savedUris.push(uri);
-        bumpProg(idx);
-        saveNext(idx + 1);
-      })
-      .catch(function(e) {
-        console.warn('Attendance share: fetch/save failed', e);
-        bumpProg(idx);
-        saveNext(idx + 1);
-      });
-  }
-  saveNext(0);
+    setTimeout(attendanceHideShareProgress, 2500);
+    if (ctx.onBatchComplete) ctx.onBatchComplete();
+  });
 }
 
 var _attImgGalDuty = 'both';
@@ -1330,12 +1414,37 @@ function attImgWizardRunShare(photoKind) {
     if (m1) m1.hide();
   }
   _photoAction = 'share';
-  var urls = collectPhotoUrlsForDuty(kind, _attImgGalDuty);
-  if (urls.length === 0) {
-    alert('No photos found for the selected option.');
-    return;
+  var ov = document.getElementById('attendanceShareProgressOverlay');
+  if (ov) {
+    ov.classList.remove('d-none');
+    ov.setAttribute('aria-busy', 'true');
+    ov.setAttribute('aria-hidden', 'false');
   }
-  sharePhotos(urls, kind);
+  var bar = document.getElementById('attendanceShareProgressBar');
+  if (bar) bar.classList.add('progress-bar-striped', 'progress-bar-animated');
+  attendanceSetShareProgressPct(5, 'Finding photos…', 'Please wait');
+  fetchAttendanceSharePhotoUrls(_attImgGalDuty, kind)
+    .then(function(urls) {
+      if (!urls.length) {
+        var fallback = collectPhotoUrlsForDuty(kind, _attImgGalDuty);
+        urls = fallback;
+      }
+      if (!urls.length) {
+        attendanceHideShareProgress();
+        alert('No photos found for the selected option.');
+        return;
+      }
+      sharePhotos(urls, kind);
+    })
+    .catch(function(err) {
+      var fallback = collectPhotoUrlsForDuty(kind, _attImgGalDuty);
+      if (fallback.length) {
+        sharePhotos(fallback, kind);
+        return;
+      }
+      attendanceHideShareProgress();
+      alert((err && err.message) ? err.message : 'Could not load photos. Please try again.');
+    });
 }
 
 function attImgWizardOpenGallery(photoKind) {
@@ -1387,6 +1496,137 @@ document.addEventListener('click', function(e) {
 });
 </script>
 
+<script>
+(function() {
+  var btn = document.getElementById('btnAttListExcelExport');
+  if (!btn) return;
+
+  function isNative() {
+    return !!(window.FleetBridge && window.FleetBridge.isNative) ||
+      !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+  }
+
+  function parseFilename(cd, fallback) {
+    if (!cd) return fallback;
+    var star = cd.match(/filename\*=UTF-8''([^;\n]+)/i);
+    if (star) {
+      try { return decodeURIComponent(star[1]); } catch (e) {}
+    }
+    var plain = cd.match(/filename[^;=\n]*=\s*["']?([^"';\n]+)/i);
+    if (plain) return plain[1].replace(/["']/g, '');
+    return fallback;
+  }
+
+  function showExcelProgress(title, detail) {
+    var ov = document.getElementById('attListExcelProgressOverlay');
+    var bar = document.getElementById('attListExcelProgressBar');
+    if (!ov || !bar) return;
+    ov.classList.remove('d-none');
+    ov.setAttribute('aria-hidden', 'false');
+    ov.setAttribute('aria-busy', 'true');
+    bar.classList.add('progress-bar-striped', 'progress-bar-animated');
+    updateExcelProgress(8, title || 'Downloading Excel…', detail || 'Please wait');
+  }
+
+  function updateExcelProgress(pct, title, detail, done) {
+    var bar = document.getElementById('attListExcelProgressBar');
+    var titleEl = document.getElementById('attListExcelProgressTitle');
+    var detailEl = document.getElementById('attListExcelProgressDetail');
+    if (!bar) return;
+    var n = Math.max(0, Math.min(100, Math.round(pct || 0)));
+    bar.style.width = n + '%';
+    bar.textContent = n + '%';
+    bar.setAttribute('aria-valuenow', String(n));
+    if (title && titleEl) titleEl.textContent = title;
+    if (detail && detailEl) detailEl.textContent = detail;
+    if (done) bar.classList.remove('progress-bar-striped', 'progress-bar-animated');
+  }
+
+  function hideExcelProgress() {
+    var ov = document.getElementById('attListExcelProgressOverlay');
+    if (!ov) return;
+    ov.classList.add('d-none');
+    ov.setAttribute('aria-hidden', 'true');
+    ov.removeAttribute('aria-busy');
+  }
+
+  function saveExcelBlob(blob, filename) {
+    if (isNative() && window.FleetBridge && window.FleetBridge.downloadBlob) {
+      return window.FleetBridge.downloadBlob(blob, filename, {
+        onProgress: function(phase, pct, detail) {
+          if (phase === 'error') {
+            updateExcelProgress(0, 'Download failed', detail || 'Please try again', true);
+            return;
+          }
+          if (phase === 'sharing') {
+            updateExcelProgress(92, 'Opening share…', detail || 'Choose Share or Open');
+            return;
+          }
+          if (phase === 'done') {
+            updateExcelProgress(100, 'Download complete', detail || 'Share / Open file', true);
+            setTimeout(hideExcelProgress, 700);
+            return;
+          }
+          updateExcelProgress(Math.max(55, pct || 50), 'Saving Excel…', detail || 'Writing to device…');
+        }
+      });
+    }
+    updateExcelProgress(100, 'Download started', 'Check your downloads folder', true);
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function() {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      hideExcelProgress();
+    }, 700);
+    return Promise.resolve();
+  }
+
+  function buildExcelExportUrl() {
+    var params = new URLSearchParams(window.location.search);
+    params.delete('page');
+    params.delete('per_page');
+    var qs = params.toString();
+    return btn.getAttribute('href') || ('{{ url_for("driver_attendance_export") }}' + (qs ? '?' + qs : ''));
+  }
+
+  function exportAttListExcel(e) {
+    if (e) e.preventDefault();
+    var url = buildExcelExportUrl();
+    if (!url) return;
+    showExcelProgress('Downloading Excel…', 'Connecting to server…');
+    fetch(url, { credentials: 'include', cache: 'no-store' })
+      .then(function(r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        updateExcelProgress(35, 'Downloading Excel…', 'Receiving file…');
+        var cd = r.headers.get('Content-Disposition') || '';
+        var fname = parseFilename(cd, 'Attendance_List.xlsx');
+        return r.blob().then(function(blob) { return { blob: blob, fname: fname }; });
+      })
+      .then(function(o) {
+        updateExcelProgress(48, 'Saving Excel…', 'Writing file…');
+        return saveExcelBlob(o.blob, o.fname);
+      })
+      .catch(function(err) {
+        console.error('[Attendance Excel export]', err);
+        updateExcelProgress(0, 'Download failed', (err && err.message) ? err.message : 'Please try again', true);
+        if (window.FleetBridge && window.FleetBridge._toast) {
+          window.FleetBridge._toast('Excel download failed. Please try again.');
+        } else {
+          alert('Excel download nahi ho saki. Dubara try karein.');
+        }
+        setTimeout(hideExcelProgress, 1200);
+      });
+  }
+
+  btn.addEventListener('click', exportAttListExcel);
+})();
+</script>
+
 <style>
   #absentWaPanel.absent-wa-float {
     position: fixed;
@@ -1403,6 +1643,24 @@ document.addEventListener('click', function(e) {
   #absentWaPanel .absent-wa-float-body {
     overflow: auto;
     max-height: calc(85vh - 7rem);
+  }
+  .att-list-excel-progress {
+    position: fixed; inset: 0; z-index: 240000;
+    background: rgba(15, 23, 42, 0.55);
+    display: flex; align-items: center; justify-content: center;
+    padding: 16px;
+  }
+  .att-list-excel-progress.d-none { display: none !important; }
+  .att-list-excel-progress__card {
+    width: 100%; max-width: 380px; background: #fff; border-radius: 14px;
+    padding: 1rem 1.1rem; box-shadow: 0 12px 40px rgba(15, 23, 42, 0.25);
+  }
+  .att-list-excel-progress__title {
+    font-size: 0.9rem; font-weight: 700; color: #0f172a; margin-bottom: 0.65rem;
+  }
+  .att-list-excel-progress .progress { height: 26px; border-radius: 8px; overflow: hidden; }
+  .att-list-excel-progress__detail {
+    font-size: 0.78rem; color: #64748b; margin-top: 0.55rem; text-align: center;
   }
 </style>
 <div id="absentWaPanel" class="absent-wa-float card shadow-lg border-0 d-none" tabindex="-1" aria-labelledby="absentWaPanelTitle" aria-hidden="true" role="dialog">
@@ -1469,6 +1727,16 @@ document.addEventListener('click', function(e) {
       </div>
       <div class="small mt-2 text-center text-muted" id="attendanceShareProgressDetail">0 / 0</div>
     </div>
+  </div>
+</div>
+
+<div id="attListExcelProgressOverlay" class="att-list-excel-progress d-none" aria-hidden="true" role="alertdialog" aria-busy="true" aria-labelledby="attListExcelProgressTitle">
+  <div class="att-list-excel-progress__card">
+    <div class="att-list-excel-progress__title" id="attListExcelProgressTitle">Downloading Excel…</div>
+    <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+      <div id="attListExcelProgressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-success" style="width:0%">0%</div>
+    </div>
+    <div class="att-list-excel-progress__detail" id="attListExcelProgressDetail">Please wait</div>
   </div>
 </div>
 

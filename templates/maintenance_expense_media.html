@@ -76,6 +76,25 @@
     .gv-arrow.right { right:4px; }
     .gv-tool span.lbl { display:none; }
   }
+
+  .media-download-progress {
+    position: fixed; inset: 0; z-index: 13000;
+    background: rgba(15, 23, 42, 0.55);
+    display: flex; align-items: center; justify-content: center;
+    padding: 16px;
+  }
+  .media-download-progress.d-none { display: none !important; }
+  .media-download-progress__card {
+    width: 100%; max-width: 380px; background: #fff; border-radius: 14px;
+    padding: 1rem 1.1rem; box-shadow: 0 12px 40px rgba(15, 23, 42, 0.25);
+  }
+  .media-download-progress__title {
+    font-size: 0.9rem; font-weight: 700; color: #0f172a; margin-bottom: 0.65rem;
+  }
+  .media-download-progress .progress { height: 26px; border-radius: 8px; overflow: hidden; }
+  .media-download-progress__detail {
+    font-size: 0.78rem; color: #64748b; margin-top: 0.5rem; text-align: center;
+  }
 </style>
 
 <div class="container-fluid py-3">
@@ -96,7 +115,7 @@
         <span class="pill"><i class="bi bi-image"></i> Images: {{ image_count }}</span>
         <span class="pill"><i class="bi bi-camera-video"></i> Videos: {{ video_count }}</span>
         {% if show_download_all is not defined or show_download_all %}
-        <a href="{{ download_all_url or url_for('maintenance_expense_media_download_all', pk=rec.id) }}" class="btn btn-sm btn-success ms-auto">
+        <a href="{{ download_all_url or url_for('maintenance_expense_media_download_all', pk=rec.id) }}" id="btnMediaDownloadAll" class="btn btn-sm btn-success ms-auto">
           <i class="bi bi-download me-1"></i>All Media Download
         </a>
         {% endif %}
@@ -131,6 +150,16 @@
         <i class="bi bi-image display-6 d-block mb-2"></i>{% if media_empty_hint is defined and media_empty_hint %}{{ media_empty_hint }}{% else %}No media found for this maintenance entry.{% endif %}
       </div></div>
     {% endif %}
+  </div>
+</div>
+
+<div id="mediaDownloadProgressOverlay" class="media-download-progress d-none" aria-hidden="true" role="alertdialog" aria-busy="true" aria-labelledby="mediaDownloadProgressTitle">
+  <div class="media-download-progress__card">
+    <div class="media-download-progress__title" id="mediaDownloadProgressTitle">Preparing download…</div>
+    <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+      <div id="mediaDownloadProgressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-success" style="width:0%">0%</div>
+    </div>
+    <div class="media-download-progress__detail" id="mediaDownloadProgressDetail">Please wait</div>
   </div>
 </div>
 
@@ -419,6 +448,172 @@
     else if (e.key === '0') { e.preventDefault(); resetZoomState(); applyZoomTransform(); }
     else if (e.key === ' ') { e.preventDefault(); toggleSlideshow(); }
   });
+})();
+</script>
+
+<script>
+(function () {
+  var btn = document.getElementById('btnMediaDownloadAll');
+  if (!btn) return;
+  var downloadUrl = btn.getAttribute('href') || '';
+  if (!downloadUrl) return;
+
+  function _isMediaNative() {
+    return !!(window.FleetBridge && window.FleetBridge.isNative) ||
+      !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+  }
+
+  function _showMediaDownloadProgress(title, detail) {
+    var ov = document.getElementById('mediaDownloadProgressOverlay');
+    var bar = document.getElementById('mediaDownloadProgressBar');
+    if (!ov || !bar) return;
+    ov.classList.remove('d-none');
+    ov.setAttribute('aria-hidden', 'false');
+    bar.classList.add('progress-bar-striped', 'progress-bar-animated');
+    _updateMediaDownloadProgress(8, title || 'Preparing download…', detail || 'Please wait');
+  }
+
+  function _updateMediaDownloadProgress(pct, title, detail, done) {
+    var bar = document.getElementById('mediaDownloadProgressBar');
+    var titleEl = document.getElementById('mediaDownloadProgressTitle');
+    var detailEl = document.getElementById('mediaDownloadProgressDetail');
+    if (!bar) return;
+    var n = Math.max(0, Math.min(100, Math.round(pct || 0)));
+    bar.style.width = n + '%';
+    bar.textContent = n + '%';
+    bar.setAttribute('aria-valuenow', String(n));
+    if (title && titleEl) titleEl.textContent = title;
+    if (detail && detailEl) detailEl.textContent = detail;
+    if (done) bar.classList.remove('progress-bar-striped', 'progress-bar-animated');
+  }
+
+  function _hideMediaDownloadProgress() {
+    var ov = document.getElementById('mediaDownloadProgressOverlay');
+    if (!ov) return;
+    ov.classList.add('d-none');
+    ov.setAttribute('aria-hidden', 'true');
+  }
+
+  function _parseMediaFilename(cd, fallback) {
+    if (!cd) return fallback;
+    var star = cd.match(/filename\*=UTF-8''([^;\n]+)/i);
+    if (star) {
+      try { return decodeURIComponent(star[1]); } catch (e) {}
+    }
+    var plain = cd.match(/filename[^;=\n]*=\s*["']?([^"';\n]+)/i);
+    if (plain) return plain[1].replace(/["']/g, '');
+    return fallback;
+  }
+
+  function _formatBytes(n) {
+    if (!n || n < 1) return '';
+    if (n < 1024) return n + ' B';
+    if (n < 1048576) return (n / 1024).toFixed(1) + ' KB';
+    return (n / 1048576).toFixed(1) + ' MB';
+  }
+
+  function _saveMediaBlob(blob, filename) {
+    if (_isMediaNative() && window.FleetBridge && window.FleetBridge.downloadBlob) {
+      return window.FleetBridge.downloadBlob(blob, filename, {
+        onProgress: function (phase, pct, detail) {
+          if (phase === 'error') {
+            _updateMediaDownloadProgress(0, 'Download failed', detail || 'Please try again', true);
+            return;
+          }
+          if (phase === 'sharing') {
+            _updateMediaDownloadProgress(92, 'Opening share…', detail || 'Choose Share or Open');
+            return;
+          }
+          if (phase === 'done') {
+            _updateMediaDownloadProgress(100, 'Download complete', detail || 'Share / Open file', true);
+            setTimeout(_hideMediaDownloadProgress, 700);
+            return;
+          }
+          _updateMediaDownloadProgress(Math.max(55, pct || 50), 'Saving ZIP…', detail || 'Writing to device…');
+        }
+      }).catch(function (err) {
+        _updateMediaDownloadProgress(0, 'Download failed', (err && err.message) ? err.message : 'Please try again', true);
+        if (window.FleetBridge && window.FleetBridge._toast) {
+          window.FleetBridge._toast('Download failed: ' + ((err && err.message) ? err.message : 'Please try again'));
+        }
+        setTimeout(_hideMediaDownloadProgress, 1200);
+      });
+    }
+    _updateMediaDownloadProgress(100, 'Download started', 'Check your downloads folder', true);
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      _hideMediaDownloadProgress();
+    }, 700);
+    return Promise.resolve();
+  }
+
+  function _fetchMediaZip(url, onProgress) {
+    return new Promise(function (resolve, reject) {
+      var xhr = new XMLHttpRequest();
+      xhr.open('GET', url, true);
+      xhr.responseType = 'blob';
+      xhr.withCredentials = true;
+      xhr.onprogress = function (ev) {
+        if (ev.lengthComputable && ev.total > 0) {
+          var pct = 8 + Math.round((ev.loaded / ev.total) * 47);
+          onProgress(pct, 'Downloading ZIP…', _formatBytes(ev.loaded) + ' / ' + _formatBytes(ev.total));
+        } else {
+          onProgress(22, 'Downloading ZIP…', 'Please wait…');
+        }
+      };
+      xhr.onload = function () {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve({ blob: xhr.response, cd: xhr.getResponseHeader('Content-Disposition') || '' });
+          return;
+        }
+        reject(new Error('Download failed (' + xhr.status + ')'));
+      };
+      xhr.onerror = function () { reject(new Error('Network error')); };
+      xhr.send();
+    });
+  }
+
+  btn.addEventListener('click', function (e) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (btn.disabled) return;
+    btn.disabled = true;
+    var origHtml = btn.innerHTML;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Loading…';
+
+    var defaultName = 'media_gallery.zip';
+    if (/attendance|driver-attendance/i.test(downloadUrl)) defaultName = 'attendance_photos.zip';
+    else if (/maintenance/i.test(downloadUrl)) defaultName = 'maintenance_media.zip';
+
+    _showMediaDownloadProgress('Preparing download…', 'Fetching media files…');
+
+    _fetchMediaZip(downloadUrl, _updateMediaDownloadProgress)
+      .then(function (res) {
+        var fname = _parseMediaFilename(res.cd, defaultName);
+        _updateMediaDownloadProgress(55, 'Saving ZIP…', fname);
+        return _saveMediaBlob(res.blob, fname);
+      })
+      .catch(function (err) {
+        _updateMediaDownloadProgress(0, 'Download failed', (err && err.message) ? err.message : 'Please try again', true);
+        if (window.FleetBridge && window.FleetBridge._toast) {
+          window.FleetBridge._toast('Download failed');
+        } else if (err && err.message) {
+          alert(err.message);
+        }
+        setTimeout(_hideMediaDownloadProgress, 1200);
+      })
+      .finally(function () {
+        btn.disabled = false;
+        btn.innerHTML = origHtml;
+      });
+  }, true);
 })();
 </script>
 {% endblock %}

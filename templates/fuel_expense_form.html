@@ -749,11 +749,11 @@
       {% else %}
       <strong>Last Scan:</strong> <span class="text-muted">Loading...</span>
       {% endif %}
-    </div>
+  </div>
     {% if not rec %}
     <span class="fuel-info-sep">•</span>
     <div id="fuelLastSavedBar" class="fuel-info-saved d-flex flex-wrap align-items-center gap-1 fuel-info-click" role="button" tabindex="0" title="Click for last entry preview">
-      <strong>Last Saved:</strong>
+    <strong>Last Saved:</strong>
       {% if last_rec %}
       <span>Fueling Date: {{ last_rec.fueling_date.strftime('%d-%m-%Y') if last_rec.fueling_date else '—' }}</span>
       <span class="text-muted">|</span>
@@ -761,15 +761,15 @@
       <span class="text-muted">|</span>
       <span>{{ last_rec.vehicle.vehicle_no if last_rec.vehicle else '—' }}</span>
       <span class="text-muted">|</span>
-      <strong>Rs {{ '{:,.0f}'.format(last_rec.amount|float) if last_rec.amount else '—' }}</strong>
-      {% set us = last_rec.upload_status or '' %}
+    <strong>Rs {{ '{:,.0f}'.format(last_rec.amount|float) if last_rec.amount else '—' }}</strong>
+    {% set us = last_rec.upload_status or '' %}
       <span class="badge {% if us == 'success' %}bg-success{% elif us == 'processing' %}bg-warning text-dark{% elif us == 'failed' %}bg-danger{% else %}bg-secondary{% endif %}">{{ (us or 'No Files')|upper }}</span>
       <a href="{{ url_for('fuel_expense_edit', pk=last_rec.id) }}" class="btn btn-outline-primary btn-sm py-0 px-2 ms-1"><i class="bi bi-pencil-square"></i></a>
       {% else %}
       <span class="text-muted">No fuel expense saved yet.</span>
       {% endif %}
-    </div>
-    {% endif %}
+  </div>
+  {% endif %}
   </div>
 
   <form method="POST" action="" id="fuelExpenseForm" data-record-id="{{ rec.id if rec else '' }}" data-no-spinner="1" enctype="multipart/form-data">
@@ -887,35 +887,35 @@
                     <div class="row meter-metrics-row">
                       <div class="col-4">
                         <div class="meter-input-cell">
-                          <label class="form-label">KM</label>
+                    <label class="form-label">KM</label>
                           <div id="kmMetricCard" class="fuel-metric-display is-neutral bg-light" aria-live="polite" aria-disabled="true" tabindex="-1">
                             <span id="kmDisplay">—</span>
-                          </div>
+                  </div>
                         </div>
                       </div>
                       <div class="col-4">
                         <div class="meter-input-cell">
-                          <label class="form-label">Matched</label>
+                    <label class="form-label">Matched</label>
                           <div id="matchedMetricCard" class="fuel-metric-display is-neutral bg-light" aria-live="polite" aria-disabled="true" tabindex="-1">
                             <span id="meterMatched">—</span>
-                          </div>
+                  </div>
                         </div>
                       </div>
                       <div class="col-4">
                         <div class="meter-input-cell">
                           <label class="form-label" for="amountInput">Amount</label>
-                          {{ form.amount(class="form-control", id="amountInput", step="0.01", placeholder="0") }}
+                    {{ form.amount(class="form-control", id="amountInput", step="0.01", placeholder="0") }}
                           <div class="field-extra field-extra--alert"><div id="amountInputError" class="field-error-msg d-none"></div></div>
-                        </div>
+                  </div>
                       </div>
                     </div>
                     <div class="row meter-metrics-row">
                       <div class="col-4">
                         <div class="meter-input-cell">
                           <label class="form-label" for="fuelPrice">Fuel Price</label>
-                          {{ form.fuel_price(class="form-control", id="fuelPrice", step="0.01", placeholder="0") }}
-                        </div>
-                      </div>
+                    {{ form.fuel_price(class="form-control", id="fuelPrice", step="0.01", placeholder="0") }}
+                  </div>
+                  </div>
                       <div class="col-4">
                         <div class="meter-input-cell">
                           <label class="form-label" for="litersInput">Ltr</label>
@@ -925,14 +925,14 @@
                       </div>
                       <div class="col-4">
                         <div class="meter-input-cell">
-                          <label class="form-label">MPG</label>
+                    <label class="form-label">MPG</label>
                           <div id="mpgMetricCard" class="fuel-metric-display is-neutral bg-light" aria-live="polite" aria-disabled="true" tabindex="-1">
                             <span id="mpgDisplay">—</span>
-                          </div>
-                        </div>
-                      </div>
+                  </div>
                     </div>
                   </div>
+                </div>
+              </div>
                   <div class="col-12 field-group">
                     <div id="meterInfoStrip" class="meter-info-strip d-none">
                       <div class="meter-info-strip__head">
@@ -1049,9 +1049,9 @@
                 <div class="insight-title">Last 3 Fuel Prices (Any date - Any Pump)</div>
                 <div id="allPumpHistoryWrap" class="price-history-empty">No data.</div>
               </div>
+              </div>
             </div>
           </div>
-        </div>
         </div>
       </div>
     </div>
@@ -1906,15 +1906,15 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function updateMatchedState() {
-    var curr = parseNum(currentReadingInput.value);
-    if (curr == null || taskStartReading == null || taskCloseReading == null) {
+        var curr = parseNum(currentReadingInput.value);
+        if (curr == null || taskStartReading == null || taskCloseReading == null) {
       setMetricCard(matchedMetricCard, meterMatched, '—', 'is-neutral');
       updateMeterAlertsPanel();
-      return;
-    }
-    var low = Math.min(taskStartReading, taskCloseReading);
-    var high = Math.max(taskStartReading, taskCloseReading);
-    var matched = curr >= low && curr <= high;
+          return;
+        }
+        var low = Math.min(taskStartReading, taskCloseReading);
+        var high = Math.max(taskStartReading, taskCloseReading);
+        var matched = curr >= low && curr <= high;
     setMetricCard(matchedMetricCard, meterMatched, matched ? 'Yes' : 'No', matched ? 'is-ok' : 'is-bad');
     if (matched) closeMeterMatchWarning();
     updateMeterAlertsPanel();
@@ -2650,9 +2650,9 @@ document.addEventListener('DOMContentLoaded', function() {
           showFuelDuplicatePanel();
         } else if (window.confirm((data.summary || 'Duplicate entry') + ' — continue anyway?')) {
           checkTankCapacityThenSubmit(submitter);
-        } else {
+    } else {
           unlockFuelSubmit();
-        }
+    }
       })
       .catch(function() { checkTankCapacityThenSubmit(submitter); });
   }
@@ -3007,8 +3007,8 @@ document.addEventListener('DOMContentLoaded', function() {
     var added = 0;
     Array.prototype.slice.call(fileList || []).forEach(function(f) {
       if (!isValidFuelAttachmentFile(f)) return;
-      dt.items.add(f);
-      added += 1;
+        dt.items.add(f);
+        added += 1;
     });
     if (added > 0) {
       fuelAttachmentFiles.files = dt.files;

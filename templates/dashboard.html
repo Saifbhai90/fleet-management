@@ -174,12 +174,16 @@
 .bc-hero .bc-card-icon { width: 56px; height: 56px; font-size: 1.6rem; border-radius: 16px; }
 .bc-tall .bc-card-icon { width: 52px; height: 52px; font-size: 1.5rem; border-radius: 15px; }
 
-/* ── Stagger entrance animation ── */
-.bc { opacity: 0; transform: translateY(20px); }
-.bc.entered { opacity: 1; transform: translateY(0); }
+/* ── Stagger entrance animation — keep cards visible on first paint ── */
+.bc { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: no-preference) {
+    .bc.bc-animate-in {
+        animation: bentoIn 0.32s cubic-bezier(.34,1.2,.64,1) both;
+    }
+}
 @keyframes bentoIn {
-    from { opacity:0; transform:translateY(22px) scale(0.97); }
-    to   { opacity:1; transform:translateY(0)    scale(1); }
+    from { transform: translateY(10px); }
+    to   { transform: translateY(0); }
 }
 
 /* ── Responsive ── */
@@ -274,14 +278,14 @@ document.addEventListener('DOMContentLoaded', function() {
         {% if from_login %}window.logActivity('Login');{% endif %}
         window.logActivity('Page View: Dashboard');
     }
-    /* Stagger-animate Bento cards */
-    var cards = document.querySelectorAll('.bc');
-    cards.forEach(function(card, i) {
-        setTimeout(function() {
-            card.style.animation = 'bentoIn 0.45s cubic-bezier(.34,1.2,.64,1) both';
-            card.classList.add('entered');
-        }, 60 + i * 55);
-    });
+    /* Stagger-animate Bento cards (visible immediately; motion only if allowed) */
+    if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        var cards = document.querySelectorAll('.bc');
+        cards.forEach(function(card, i) {
+            card.style.animationDelay = (0.03 * i) + 's';
+            card.classList.add('bc-animate-in');
+        });
+    }
     /* Live clock — Asia/Karachi, same server skew as header (see base.html _pktOffset) */
     function updateClock() {
         var el = document.getElementById('dashClock');
@@ -336,43 +340,43 @@ document.addEventListener('DOMContentLoaded', function() {
             <span>{{ now_dt.strftime('%A, %d %B %Y') if now_dt is defined else '' }}</span>
             <span class="mx-1" style="color:#cbd5e1;">|</span>
             <i class="bi bi-clock" style="font-size:0.8rem;"></i>
-            <span id="dashClock" style="font-variant-numeric:tabular-nums;font-weight:600;"></span>
+            <span id="dashClock" style="font-variant-numeric:tabular-nums;font-weight:600;">{{ dashboard_time or '' }}</span>
         </div>
     </div>
     <!-- Quick Actions in header -->
     <div class="quick-actions">
         {% if can_see_page('drivers_add') %}
         <a href="{{ url_for('driver_form') }}" class="qa-btn qa-primary">
-            <i data-lucide="user-plus" style="width:14px;height:14px;"></i> Add Driver
+            <i class="bi bi-person-plus-fill" style="font-size:0.95rem;"></i> Add Driver
         </a>
         {% endif %}
         {% if can_see_page('vehicles_add') %}
         <a href="{{ url_for('vehicle_form') }}" class="qa-btn qa-secondary">
-            <i data-lucide="truck" style="width:14px;height:14px;"></i> Add Vehicle
+            <i class="bi bi-truck" style="font-size:0.95rem;"></i> Add Vehicle
         </a>
         {% endif %}
         {% if can_see_page('fuel_expense_add') %}
         <a href="{{ url_for('fuel_expense_add') }}" class="qa-btn qa-green">
-            <i data-lucide="fuel" style="width:14px;height:14px;"></i> Add Fuel
+            <i class="bi bi-fuel-pump-fill" style="font-size:0.95rem;"></i> Add Fuel
         </a>
         {% endif %}
         {% if can_see_page('maintenance_expense_add') %}
         <a href="{{ url_for('maintenance_expense_form') }}" class="qa-btn qa-amber">
-            <i data-lucide="wrench" style="width:14px;height:14px;"></i> Maintenance
+            <i class="bi bi-wrench-adjustable" style="font-size:0.95rem;"></i> Maintenance
         </a>
         {% endif %}
         {% if can_see_page('driver_attendance_checkin') %}
         <a href="{{ url_for('driver_attendance_checkin') }}" class="qa-btn qa-secondary">
-            <i data-lucide="calendar-check" style="width:14px;height:14px;"></i> Attendance
+            <i class="bi bi-calendar-check" style="font-size:0.95rem;"></i> Attendance
         </a>
         {% endif %}
         {% if can_see_report_centre() %}
         <a href="{{ url_for('reports_index') }}" class="qa-btn qa-secondary">
-            <i data-lucide="bar-chart-2" style="width:14px;height:14px;"></i> Reports
+            <i class="bi bi-bar-chart-fill" style="font-size:0.95rem;"></i> Reports
         </a>
         {% endif %}
         <a href="{{ url_for('dashboard') }}" class="qa-btn qa-secondary" title="Refresh">
-            <i data-lucide="refresh-cw" style="width:14px;height:14px;"></i>
+            <i class="bi bi-arrow-clockwise" style="font-size:0.95rem;"></i>
         </a>
     </div>
 </div>
