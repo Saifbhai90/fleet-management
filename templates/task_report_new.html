@@ -560,6 +560,10 @@
       border: 1px solid #e2e8f0;
       box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
       transition: border-color 0.15s ease, box-shadow 0.15s ease;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      position: relative;
+      z-index: 1;
     }
     .task-batch-page .task-batch-table tbody td .form-control-sm:focus {
       border-color: #0d9488;
@@ -604,6 +608,18 @@
     }
     .task-batch-table tbody td.odometer-cell .btn-group .btn {
       flex: 0 0 auto;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .task-batch-page .task-batch-filter-card input,
+    .task-batch-page .task-batch-filter-card select,
+    .task-batch-page .task-batch-filter-card .form-control,
+    .task-batch-page .task-batch-filter-card .btn {
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .task-batch-page .task-batch-table tbody tr.task-row:active {
+      transform: none !important;
     }
     /* Totals strip */
     .task-batch-table tfoot#batchTotals td[colspan] {
@@ -1432,6 +1448,26 @@ window.TASK_REPORT_NEW_LOCK_VEHICLE = {{ tef.get('lock_vehicle', false)|tojson }
 
     taskEntryInitMobileChunks();
   }
+
+  (function taskEntryMobileInputFocus() {
+    var page = document.querySelector('.task-batch-page');
+    if (!page) return;
+    var isTouch = window.matchMedia('(max-width: 767.98px)').matches
+      || document.documentElement.classList.contains('capacitor-native');
+    if (!isTouch) return;
+
+    page.querySelectorAll('.odom-ctrl-wrap[tabindex="0"]').forEach(function(w) {
+      w.setAttribute('tabindex', '-1');
+    });
+
+    page.addEventListener('touchstart', function(e) {
+      var inp = e.target.closest('input:not([type="hidden"]):not([readonly]):not([disabled]), textarea:not([readonly]):not([disabled])');
+      if (!inp || !page.contains(inp)) return;
+      if (document.activeElement !== inp) {
+        inp.focus({ preventScroll: false });
+      }
+    }, { passive: true, capture: true });
+  })();
 
   /* ── Helpers ─────────────────────────────────────────────── */
   function _he(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }

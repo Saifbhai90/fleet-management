@@ -1176,7 +1176,11 @@
             font-size: 0.88rem !important;
             vertical-align: middle !important;
         }
-        .capacitor-native .table tbody tr:active { background: #eff6ff !important; }
+        .capacitor-native .table tbody tr:active:not(:focus-within) { background: #eff6ff !important; }
+        .capacitor-native .task-batch-table tbody tr.task-row:active,
+        .capacitor-native .task-batch-table tbody tr.task-row:active:not(:focus-within) {
+            background: #fff !important;
+        }
 
         /* ── Page titles ── */
         .capacitor-native h2, .capacitor-native h3,
