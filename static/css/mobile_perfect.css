@@ -548,12 +548,20 @@
     opacity: 0.85 !important;
     transition: transform 0.08s ease, opacity 0.08s ease !important;
   }
-  /* Cards press */
-  .mp-card:active,
-  .card:active {
+  /* Cards press — list cards only (not scroll/data shells) */
+  .mp-card:active {
     transform: scale(0.985) !important;
     box-shadow: 0 1px 6px rgba(0,0,0,0.12) !important;
     transition: transform 0.1s ease, box-shadow 0.1s ease !important;
+  }
+  /* Data entry / filter shells — no squeeze (WebView layout stability) */
+  .card.fm-no-card-press,
+  .card.fm-no-card-press:active,
+  .task-batch-table tbody tr.task-row,
+  .task-batch-table tbody tr.task-row:active {
+    transform: none !important;
+    transition: none !important;
+    opacity: 1 !important;
   }
   /* Mobile nav items */
   .mobile-nav-item:active {

@@ -7193,8 +7193,8 @@
                 }
             });
 
-            // 4. Native tap ripple feedback on cards and buttons
-            document.querySelectorAll('.card, .btn, .mobile-nav-item').forEach(function(el) {
+            // 4. Native tap ripple feedback on buttons and nav (not cards — see mobile_perfect.css)
+            document.querySelectorAll('.btn, .mobile-nav-item').forEach(function(el) {
                 el.addEventListener('touchstart', function() {
                     this.style.transition = 'opacity 0.1s, transform 0.1s';
                     this.style.opacity = '0.82';
