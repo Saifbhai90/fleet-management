@@ -28,54 +28,7 @@
     padding-bottom: max(150px, calc(110px + env(safe-area-inset-bottom, 0px))) !important;
   }
 
-  /* ── Android WebView scroll stabilization (long vehicle lists) ─────────────
-     With many rows, WebView promotes a huge composited layer that blanks mid-drag
-     (content vanishes until touch release). Single-row lists stay small enough to work.
-     Fixes: no page fade on scroll root, opacity 0.999 layer-bust, disable momentum
-     compositing, flatten row shadows, solid sticky bar (no backdrop-filter). */
-  @media (max-width: 767.98px) {
-    html.capacitor-native body[data-fleet-endpoint="task_report_new"] .main-content {
-      animation: none !important;
-      opacity: 0.999 !important;
-      -webkit-overflow-scrolling: auto !important;
-      scroll-behavior: auto !important;
-      transform: none !important;
-      -webkit-transform: none !important;
-      will-change: auto !important;
-      -webkit-backface-visibility: visible !important;
-      backface-visibility: visible !important;
-      filter: none !important;
-      height: auto !important;
-    }
-    html.capacitor-native body[data-fleet-endpoint="task_report_new"] .task-batch-page {
-      min-height: 0 !important;
-      overflow: visible !important;
-    }
-    html.capacitor-native body[data-fleet-endpoint="task_report_new"] .task-batch-filter-card,
-    html.capacitor-native body[data-fleet-endpoint="task_report_new"] .task-batch-card {
-      box-shadow: none !important;
-      border: 1px solid rgba(15, 23, 42, 0.08) !important;
-      filter: none !important;
-    }
-    html.capacitor-native body[data-fleet-endpoint="task_report_new"] .task-batch-table tbody tr.task-row {
-      box-shadow: none !important;
-      border: 1px solid #e2e8f0 !important;
-      transform: none !important;
-      will-change: auto !important;
-    }
-    html.capacitor-native body[data-fleet-endpoint="task_report_new"] .task-batch-table tbody tr.task-row.table-info {
-      box-shadow: none !important;
-      border: 1px solid rgba(14, 165, 233, 0.35) !important;
-    }
-    html.capacitor-native body[data-fleet-endpoint="task_report_new"] .native-submit-sticky {
-      backdrop-filter: none !important;
-      -webkit-backdrop-filter: none !important;
-      background: #f1f5f9 !important;
-    }
-    html.capacitor-native body[data-fleet-endpoint="task_report_new"] .task-batch-table-wrap.table-responsive {
-      -webkit-overflow-scrolling: auto !important;
-    }
-  }
+  /* Capacitor Android scroll/list fixes → see final block at end of this <style> (must load last). */
 
   /* Mobile app: Save footer needs visible overflow for sticky thumb-zone bar (base.html adds .native-submit-sticky) */
   html.capacitor-native .task-batch-card .card-footer.native-submit-sticky {
@@ -691,6 +644,87 @@
     .task-batch-entry-search {
       max-width: 240px;
       width: auto;
+    }
+  }
+
+  /*
+   * Capacitor Android — long vehicle list performance (MUST stay last in this file).
+   * 50–100 rows + shadows/gradients exhaust WebView compositor → blank mid-scroll.
+   * content-visibility: auto skips paint for off-screen rows (virtual-scroll effect).
+   * Do NOT use translateZ(0) here — it creates extra GPU layers.
+   */
+  @media (max-width: 767.98px) {
+    html.capacitor-native body[data-fleet-endpoint="task_report_new"] {
+      animation: none !important;
+      background: #f1f5f9 !important;
+    }
+    html.capacitor-native body[data-fleet-endpoint="task_report_new"] .fm-aurora-bg,
+    html.capacitor-native body[data-fleet-endpoint="task_report_new"] .fm-aurora-orb {
+      display: none !important;
+    }
+    html.capacitor-native body[data-fleet-endpoint="task_report_new"] .main-content {
+      animation: none !important;
+      opacity: 0.999 !important;
+      -webkit-overflow-scrolling: auto !important;
+      scroll-behavior: auto !important;
+      transform: none !important;
+      -webkit-transform: none !important;
+      will-change: auto !important;
+      -webkit-backface-visibility: visible !important;
+      backface-visibility: visible !important;
+      filter: none !important;
+      overflow-x: hidden !important;
+    }
+    html.capacitor-native body[data-fleet-endpoint="task_report_new"] .task-batch-page {
+      min-height: 0 !important;
+      overflow: visible !important;
+      background: #f1f5f9 !important;
+    }
+    html.capacitor-native body[data-fleet-endpoint="task_report_new"] .task-batch-filter-card,
+    html.capacitor-native body[data-fleet-endpoint="task_report_new"] .task-batch-card {
+      box-shadow: none !important;
+      border: 1px solid #dee2e6 !important;
+      filter: none !important;
+    }
+    html.capacitor-native body[data-fleet-endpoint="task_report_new"] .task-batch-filter-card .btn-primary {
+      box-shadow: none !important;
+    }
+    html.capacitor-native body[data-fleet-endpoint="task_report_new"] .task-batch-list-header {
+      background: #0369a1 !important;
+    }
+    html.capacitor-native body[data-fleet-endpoint="task_report_new"] .task-batch-table tbody tr.task-row {
+      content-visibility: auto;
+      contain-intrinsic-size: auto 420px;
+      contain: layout style paint;
+      box-shadow: none !important;
+      border: 1px solid #dee2e6 !important;
+      border-radius: 12px !important;
+      transform: none !important;
+      will-change: auto !important;
+    }
+    html.capacitor-native body[data-fleet-endpoint="task_report_new"] .task-batch-table tbody tr.task-row.table-info {
+      box-shadow: none !important;
+      border: 1px solid #38bdf8 !important;
+    }
+    html.capacitor-native body[data-fleet-endpoint="task_report_new"] .task-batch-table tbody tr.task-row::before {
+      background: #059669 !important;
+      box-shadow: none !important;
+    }
+    html.capacitor-native body[data-fleet-endpoint="task_report_new"] .task-batch-save-btn {
+      box-shadow: none !important;
+    }
+    html.capacitor-native body[data-fleet-endpoint="task_report_new"] .task-batch-save-btn:active {
+      transform: none !important;
+    }
+    html.capacitor-native body[data-fleet-endpoint="task_report_new"] .native-submit-sticky {
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+      background: #f1f5f9 !important;
+    }
+    html.capacitor-native body[data-fleet-endpoint="task_report_new"] .task-batch-card > .card-body,
+    html.capacitor-native body[data-fleet-endpoint="task_report_new"] .task-batch-table-wrap {
+      overflow: visible !important;
+      -webkit-overflow-scrolling: auto !important;
     }
   }
 </style>
