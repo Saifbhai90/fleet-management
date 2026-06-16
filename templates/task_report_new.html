@@ -209,7 +209,6 @@
       min-width: 0 !important;
       width: 100% !important;
       max-width: 100% !important;
-      table-layout: fixed;
     }
     .task-batch-card,
     .task-batch-card .card-body,
@@ -672,6 +671,25 @@
    * those caused vanishing or broken card layout on legacy WebView.
    */
   @media (max-width: 767.98px) {
+    body[data-fleet-endpoint="task_report_new"] #batchTable.task-batch-table,
+    body[data-fleet-endpoint="task_report_new"] #batchTable.task-batch-table > tbody,
+    body[data-fleet-endpoint="task_report_new"] #batchTable.task-batch-table > tfoot {
+      display: block !important;
+      width: 100% !important;
+      border: none !important;
+    }
+    body[data-fleet-endpoint="task_report_new"] .task-batch-table tbody tr.task-row {
+      content-visibility: visible !important;
+      contain: none !important;
+      contain-intrinsic-size: auto !important;
+      transform: none !important;
+      transition: none !important;
+      will-change: auto !important;
+    }
+    body[data-fleet-endpoint="task_report_new"] .task-batch-table tbody tr.task-row > td,
+    body[data-fleet-endpoint="task_report_new"] .task-batch-table tbody tr.task-row > td .form-control-sm {
+      transition: none !important;
+    }
     html.capacitor-native body[data-fleet-endpoint="task_report_new"] .main-content {
       animation: none !important;
       scroll-behavior: auto !important;
@@ -679,6 +697,7 @@
       transform: none !important;
       will-change: auto !important;
       overflow-x: hidden !important;
+      overflow-anchor: none !important;
     }
     html.capacitor-native body[data-fleet-endpoint="task_report_new"] .fm-aurora-orb {
       animation: none !important;
@@ -694,6 +713,17 @@
       -webkit-backdrop-filter: none !important;
       background: rgba(241, 245, 249, 0.98) !important;
     }
+  }
+  /* Chunk/search hiding via data attributes — no inline display toggles (prevents layout jump). */
+  @media (max-width: 767.98px) {
+    body[data-fleet-endpoint="task_report_new"] #batchTable tbody tr.task-row[data-task-chunk-hidden="1"],
+    body[data-fleet-endpoint="task_report_new"] #batchTable tbody tr.task-row[data-task-search-hidden="1"] {
+      display: none !important;
+    }
+  }
+  html.capacitor-native body[data-fleet-endpoint="task_report_new"] #batchTable tbody tr.task-row[data-task-chunk-hidden="1"],
+  html.capacitor-native body[data-fleet-endpoint="task_report_new"] #batchTable tbody tr.task-row[data-task-search-hidden="1"] {
+    display: none !important;
   }
 </style>
 <div class="container-fluid task-batch-page px-2 px-md-3">
@@ -828,7 +858,22 @@
             <tbody>
               {% for row in rows %}
               {% set s = row.saved %}
-              <tr class="task-row{% if s %} table-info{% endif %}" data-vehicle-id="{{ row.vehicle.id }}" data-start="{{ row.start_reading }}" data-tracker="{{ row.tracker_km }}" data-emg="{{ row.emg_tasks }}" data-vehicle="{{ row.vehicle.vehicle_no | e }}" data-district="{{ (row.vehicle.district.name if row.vehicle.district else '') | e }}" data-init-close="{% if row.close_reading is not none %}{{ row.close_reading }}{% endif %}" data-init-tasks="{% if row.tasks_count is not none %}{{ row.tasks_count }}{% endif %}" data-init-odom="{{ row.odometer_photo_path or '' }}">
+              {% set start_r = row.start_reading or 0 %}
+              {% set close_r = row.close_reading %}
+              {% set kms_driven = (close_r - start_r) if close_r is not none else none %}
+              {% set tracker_km = row.tracker_km or 0 %}
+              {% set emg_n = row.emg_tasks or 0 %}
+              {% set tasks_n = row.tasks_count if row.tasks_count is not none else none %}
+              {% set task_diff = (tasks_n - emg_n) if tasks_n is not none else none %}
+              {% if kms_driven is not none %}
+                {% set kms_diff = kms_driven - tracker_km %}
+                {% set pct_diff = ((kms_diff / kms_driven) * 100)|round(1)|string ~ '%' if kms_driven != 0 else 'Driven KM Zero' %}
+              {% else %}
+                {% set kms_diff = none %}
+                {% set pct_diff = none %}
+              {% endif %}
+              {% set chunk_hidden = '1' if rows|length > 20 and loop.index > 15 else '0' %}
+              <tr class="task-row{% if s %} table-info{% endif %}" data-vehicle-id="{{ row.vehicle.id }}" data-start="{{ row.start_reading }}" data-tracker="{{ row.tracker_km }}" data-emg="{{ row.emg_tasks }}" data-vehicle="{{ row.vehicle.vehicle_no | e }}" data-district="{{ (row.vehicle.district.name if row.vehicle.district else '') | e }}" data-init-close="{% if row.close_reading is not none %}{{ row.close_reading }}{% endif %}" data-init-tasks="{% if row.tasks_count is not none %}{{ row.tasks_count }}{% endif %}" data-init-odom="{{ row.odometer_photo_path or '' }}" data-task-chunk-hidden="{{ chunk_hidden }}" data-task-search-hidden="0">
                 <td class="ps-4 ps-md-4 task-batch-num-cell">
                 <input type="hidden" name="row_{{ row.vehicle.id }}_edit_mode" id="row_{{ row.vehicle.id }}_edit_mode" value="{{ '0' if s else '1' }}">
                   <span class="task-batch-num-inner"><span class="task-batch-row-num">{{ loop.index }}</span>{% if s %} <i class="bi bi-check-circle-fill text-success" title="Previously saved"></i>{% endif %}</span>
@@ -874,7 +919,7 @@
                     </div>
                   </div>
                 </td>
-                <td class="text-end kms-driven">-</td>
+                <td class="text-end kms-driven">{% if kms_driven is not none %}{{ "%.2f"|format(kms_driven) }}{% else %}-{% endif %}</td>
                 <td class="text-center task-batch-input-priority task-batch-metric-cell task-batch-metric-cell--first">
                   <span class="d-md-none task-batch-metrics-card-head text-uppercase fw-bold">Variance &amp; actions</span>
                   <input type="number" min="0" name="vehicle_{{ row.vehicle.id }}_tasks_count"
@@ -886,14 +931,14 @@
                     <span class="badge {% if row.emg_tasks %}bg-info text-dark{% else %}bg-secondary{% endif %}" style="cursor:pointer;font-size:.8rem;">{{ row.emg_tasks }}</span>
                   </a>
                 </td>
-                <td class="text-center task-diff task-batch-metric-cell"><span class="task-batch-metric-plain">-</span></td>
+                <td class="text-center task-diff task-batch-metric-cell"><span class="task-batch-metric-plain">{% if task_diff is not none %}{{ task_diff }}{% else %}-{% endif %}</span></td>
                 <td class="text-end task-batch-metric-cell">
                   <a href="#" class="tracker-link text-decoration-none" data-vno="{{ row.vehicle.vehicle_no }}" data-date="{{ view_date.strftime('%d-%m-%Y') }}">
                     <span class="badge bg-dark" style="cursor:pointer;font-size:.8rem;">{{ row.tracker_km }}</span>
                   </a>
                 </td>
-                <td class="text-end kms-diff task-batch-metric-cell"><span class="task-batch-metric-plain">-</span></td>
-                <td class="text-end pct-diff task-batch-metric-cell"><span class="task-batch-metric-plain">-</span></td>
+                <td class="text-end kms-diff task-batch-metric-cell"><span class="task-batch-metric-plain">{% if kms_diff is not none %}{{ "%.2f"|format(kms_diff) }}{% else %}-{% endif %}</span></td>
+                <td class="text-end pct-diff task-batch-metric-cell"><span class="task-batch-metric-plain">{% if pct_diff is not none %}{{ pct_diff }}{% else %}-{% endif %}</span></td>
                 <td class="text-center task-batch-metric-cell task-batch-metric-cell--last">
                   {% if s %}
                     {% if can_edit_saved_task_rows or can_delete_saved_task_rows %}
@@ -940,9 +985,9 @@
             {% endif %}
           </table>
         </div>
-        <div id="taskEntryLoadMoreWrap" class="d-none text-center py-3 px-3 task-entry-load-more-wrap">
+        <div id="taskEntryLoadMoreWrap" class="{% if rows|length > 20 %}text-center py-3 px-3 task-entry-load-more-wrap{% else %}d-none{% endif %}">
           <button type="button" class="btn btn-outline-primary px-4" id="taskEntryLoadMoreBtn">
-            <i class="bi bi-chevron-down me-1"></i>Load more vehicles (<span id="taskEntryLoadMoreCount">0</span> remaining)
+            <i class="bi bi-chevron-down me-1"></i>Load more vehicles (<span id="taskEntryLoadMoreCount">{% if rows|length > 20 %}{{ rows|length - 15 }}{% else %}0{% endif %}</span> remaining)
           </button>
         </div>
       </div>
@@ -1177,7 +1222,7 @@ window.TASK_REPORT_NEW_LOCK_VEHICLE = {{ tef.get('lock_vehicle', false)|tojson }
   function updateTotals() {
     var allRows = batchTable ? batchTable.querySelectorAll('.task-row') : [];
     var rows = [];
-    allRows.forEach(function(r) { if (r.style.display !== 'none') rows.push(r); });
+    allRows.forEach(function(r) { if (taskEntryRowIsVisible(r)) rows.push(r); });
     var tKms = 0, tTasks = 0, tEmg = 0, tTaskDiff = 0, tTracker = 0, tDiff = 0, validKms = 0, hasTaskDiff = false;
     rows.forEach(function(r) {
       var kd = parseFloat(r.querySelector('.kms-driven').textContent);
@@ -1294,6 +1339,19 @@ window.TASK_REPORT_NEW_LOCK_VEHICLE = {{ tef.get('lock_vehicle', false)|tojson }
     return window.fleetMultiWordMatch(row.innerText || row.textContent, q);
   }
 
+  function taskEntryUsesChunking() {
+    var isNative = document.documentElement.classList.contains('capacitor-native');
+    var isMobile = window.matchMedia('(max-width: 767.98px)').matches;
+    return isNative || isMobile;
+  }
+
+  function taskEntryRowIsVisible(row) {
+    if (!row) return false;
+    if (row.dataset.taskSearchHidden === '1') return false;
+    if (taskEntryUsesChunking() && row.dataset.taskChunkHidden === '1') return false;
+    return true;
+  }
+
   function taskEntryUpdateLoadMoreUi() {
     var wrap = document.getElementById('taskEntryLoadMoreWrap');
     var countEl = document.getElementById('taskEntryLoadMoreCount');
@@ -1323,8 +1381,7 @@ window.TASK_REPORT_NEW_LOCK_VEHICLE = {{ tef.get('lock_vehicle', false)|tojson }
       : Array.prototype.slice.call(batchTable.querySelectorAll('.task-row'));
     rows.forEach(function(row) {
       var searchHide = searchActive && !taskEntryRowIsSearchMatch(row, q);
-      var chunkHide = !searchActive && row.dataset.taskChunkHidden === '1';
-      row.style.display = (searchHide || chunkHide) ? 'none' : '';
+      row.dataset.taskSearchHidden = searchHide ? '1' : '0';
     });
     taskEntryUpdateLoadMoreUi();
   }
@@ -1332,15 +1389,7 @@ window.TASK_REPORT_NEW_LOCK_VEHICLE = {{ tef.get('lock_vehicle', false)|tojson }
   function taskEntryInitMobileChunks() {
     if (!batchTable) return;
     taskEntryRowList = Array.prototype.slice.call(batchTable.querySelectorAll('tbody tr.task-row'));
-    taskEntryRowList.forEach(function(row) {
-      if (row.dataset.taskChunkHidden === undefined) row.dataset.taskChunkHidden = '0';
-    });
-    var isNative = document.documentElement.classList.contains('capacitor-native');
-    var isMobile = window.matchMedia('(max-width: 767.98px)').matches;
-    if ((isNative || isMobile) && taskEntryRowList.length > taskEntryChunkThreshold) {
-      taskEntryRowList.forEach(function(row, idx) {
-        row.dataset.taskChunkHidden = idx < taskEntryChunkSize ? '0' : '1';
-      });
+    if (taskEntryUsesChunking() && taskEntryRowList.length > taskEntryChunkThreshold) {
       var loadBtn = document.getElementById('taskEntryLoadMoreBtn');
       if (loadBtn && !loadBtn.dataset.bound) {
         loadBtn.dataset.bound = '1';
@@ -1372,7 +1421,13 @@ window.TASK_REPORT_NEW_LOCK_VEHICLE = {{ tef.get('lock_vehicle', false)|tojson }
       if (row) updateRow(row);
       updateTotals();
     });
-    batchTable.querySelectorAll('.task-row').forEach(updateRow);
+    batchTable.querySelectorAll('.task-row').forEach(function(row) {
+      var closeInp = row.querySelector('.close-input');
+      var hasClose = closeInp && closeInp.value.trim() !== '';
+      var taskInp = row.querySelector('input[name*="_tasks_count"]');
+      var hasTasks = taskInp && taskInp.value.trim() !== '';
+      if (hasClose || hasTasks) updateRow(row);
+    });
     updateTotals();
 
     var _batchSubmitting = false;
