@@ -45,7 +45,7 @@
       <button type="button" id="hblSavedLoginBtn" class="lp-btn-signin" style="flex:1;margin-bottom:0;">
         <span class="lp-spinner"></span>
         <span class="lp-btn-text">Login</span>
-        <i class="bi bi-arrow-right-circle-fill lp-btn-text" style="font-size:1.1rem;"></i>
+        <span class="lp-btn-arrow" aria-hidden="true"><i class="bi bi-arrow-right"></i></span>
       </button>
       <button type="button" id="hblBioRetryBtn" class="bio-thumb-pulse" aria-label="Retry fingerprint"
               style="width:52px;flex-shrink:0;border-radius:14px;border:1px solid #bfdbfe;background:#eff6ff;display:flex;align-items:center;justify-content:center;cursor:pointer;">
@@ -163,19 +163,25 @@
 
   <!-- Biometric setup (native only — shown when no token; logic in fleet_biometric_toggle.js) -->
   <div id="loginBioSetupRow" style="display:none;">
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;margin-bottom:8px;">
-      <div style="display:flex;align-items:center;gap:12px;">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 0 0 8 11a4 4 0 1 1 8 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0 0 15.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 0 0 8 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4"/>
-        </svg>
-        <span style="font-size:0.92rem;font-weight:600;color:#334155;">Biometric Login</span>
+    <div class="lp-bio-container" id="loginBioContainer" role="button" tabindex="0" aria-label="Toggle biometric login">
+      <div class="lp-bio-info">
+        <div class="lp-bio-thumb-wrap" aria-hidden="true">
+          <i class="bi bi-fingerprint"></i>
+        </div>
+        <div class="lp-bio-text">
+          <h4 class="lp-bio-title">Quick-Start Biometric</h4>
+          <p class="lp-bio-status" id="loginBioStatusText">Save 10 seconds. Focus on the user.</p>
+        </div>
       </div>
-      <label class="hbl-toggle">
-        <input type="checkbox" id="loginBioToggle">
-        <span class="hbl-toggle-slider"></span>
-      </label>
+      <div class="lp-bio-toggle-wrap">
+        <label class="lp-bio-switch">
+          <input type="checkbox" id="loginBioToggle">
+          <span class="lp-bio-slider"></span>
+        </label>
+        <span class="lp-bio-tap-hint">tap to enable</span>
+      </div>
     </div>
-    <p id="loginBioSetupHint" style="display:none;font-size:0.78rem;color:#64748b;margin:-4px 0 14px 2px;line-height:1.35;">
+    <p id="loginBioSetupHint" style="display:none;font-size:0.78rem;color:#64748b;margin:10px 2px 14px;line-height:1.35;">
       Turn on, then tap Sign In — your fingerprint will be verified here and saved for this account.
     </p>
   </div>
@@ -187,7 +193,7 @@
   <button type="submit" class="lp-btn-signin" id="loginSubmitBtn" style="flex:1;margin-bottom:0;">
     <span class="lp-spinner"></span>
     <span class="lp-btn-text">Sign In</span>
-    <i class="bi bi-arrow-right-circle-fill lp-btn-text" style="font-size:1.1rem;"></i>
+    <span class="lp-btn-arrow" aria-hidden="true"><i class="bi bi-arrow-right"></i></span>
   </button>
   </div>
 
@@ -324,22 +330,42 @@
 })();
 </script>
 
-<!-- HBL Toggle Switch CSS (NATIVE ONLY) -->
-<style>
-.hbl-toggle { position: relative; display: inline-block; width: 48px; height: 26px; }
-.hbl-toggle input { opacity: 0; width: 0; height: 0; }
-.hbl-toggle-slider {
-  position: absolute; cursor: pointer; inset: 0;
-  background: #cbd5e1; border-radius: 26px;
-  transition: 0.3s;
-}
-.hbl-toggle-slider:before {
-  position: absolute; content: ""; height: 20px; width: 20px;
-  left: 3px; bottom: 3px; background: white;
-  border-radius: 50%; transition: 0.3s;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-}
-.hbl-toggle input:checked + .hbl-toggle-slider { background: #10b981; }
-.hbl-toggle input:checked + .hbl-toggle-slider:before { transform: translateX(22px); }
-</style>
+<script>
+/* Biometric box — visual state only (logic stays in fleet_biometric_toggle.js) */
+(function() {
+  var box = document.getElementById('loginBioContainer');
+  var toggle = document.getElementById('loginBioToggle');
+  var status = document.getElementById('loginBioStatusText');
+  if (!box || !toggle) return;
+
+  function syncLoginBioVisual() {
+    var on = toggle.checked;
+    box.classList.toggle('active', on);
+    if (status) {
+      status.textContent = on
+        ? 'Enabled! Faster sign-in next time.'
+        : 'Save 10 seconds. Focus on the user.';
+    }
+  }
+
+  window.fleetLoginBioVisualSync = syncLoginBioVisual;
+
+  toggle.addEventListener('change', syncLoginBioVisual);
+
+  box.addEventListener('click', function(e) {
+    if (e.target.closest('.lp-bio-switch')) return;
+    toggle.checked = !toggle.checked;
+    toggle.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+
+  box.addEventListener('keydown', function(e) {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    e.preventDefault();
+    toggle.checked = !toggle.checked;
+    toggle.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+
+  syncLoginBioVisual();
+})();
+</script>
 {% endblock %}

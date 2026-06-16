@@ -166,8 +166,8 @@
       position: relative; z-index: 2;
       flex: 1 0 auto;
       background: var(--card-bg);
-      border-radius: 28px 28px 0 0;
-      padding: 32px 24px 24px;
+      border-radius: 40px 40px 0 0;
+      padding: 32px 28px 24px;
       padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
       box-shadow: 0 -8px 48px rgba(0,0,0,0.35);
       animation: sheetUp 0.45s cubic-bezier(0.16,1,0.3,1) both;
@@ -182,11 +182,11 @@
       margin: 0 auto 24px;
     }
     .lp-section-title {
-      font-size: 1.35rem; font-weight: 800;
-      color: var(--text-dark); margin-bottom: 4px; letter-spacing: -0.02em;
+      font-size: 1.625rem; font-weight: 700;
+      color: var(--text-dark); margin-bottom: 6px; letter-spacing: -0.02em;
     }
     .lp-section-sub {
-      font-size: 0.82rem; color: var(--text-muted); margin-bottom: 28px;
+      font-size: 0.875rem; color: #8a99ad; margin-bottom: 24px;
     }
 
     /* ── Floating Label Inputs ── */
@@ -195,20 +195,20 @@
     }
     .lp-field input {
       width: 100%; height: 56px;
-      background: var(--input-bg);
-      border: 1.5px solid var(--border);
-      border-radius: 14px;
-      padding: 20px 48px 6px 16px;
-      font-size: 0.95rem; font-weight: 500;
+      background: #ffffff;
+      border: 1.5px solid #dbe2ef;
+      border-radius: 18px;
+      padding: 20px 50px 6px 20px;
+      font-size: 15px; font-weight: 500;
       color: var(--text-dark);
       outline: none;
-      transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+      transition: border-color 0.25s, box-shadow 0.25s, background 0.25s;
       -webkit-appearance: none; appearance: none;
     }
     .lp-field input:focus {
       border-color: var(--accent);
       background: #fff;
-      box-shadow: 0 0 0 4px rgba(37,99,235,0.1);
+      box-shadow: 0 0 0 4px rgba(37,99,235,0.15);
     }
     .lp-field input.is-invalid {
       border-color: var(--danger);
@@ -218,10 +218,10 @@
       box-shadow: 0 0 0 4px rgba(239,68,68,0.1);
     }
     .lp-field label {
-      position: absolute; left: 16px; top: 50%;
+      position: absolute; left: 20px; top: 50%;
       transform: translateY(-50%);
       font-size: 0.88rem; font-weight: 500;
-      color: var(--text-muted);
+      color: #94a3b8;
       transition: all 0.18s ease;
       pointer-events: none;
     }
@@ -234,8 +234,8 @@
     }
     .lp-field input.is-invalid ~ label { color: var(--danger); }
     .lp-field .field-icon {
-      position: absolute; right: 16px; top: 50%; transform: translateY(-50%);
-      color: var(--text-muted); font-size: 1.05rem; cursor: pointer;
+      position: absolute; right: 20px; top: 50%; transform: translateY(-50%);
+      color: #94a3b8; font-size: 1.1rem; cursor: pointer;
       padding: 4px; line-height: 1;
     }
     .lp-field .invalid-msg {
@@ -277,19 +277,30 @@
 
     /* ── Sign In Button ── */
     .lp-btn-signin {
-      width: 100%; height: 54px;
-      background: linear-gradient(135deg, #2563eb, #1d4ed8);
-      color: #fff; border: none; border-radius: 16px;
-      font-size: 1rem; font-weight: 700; letter-spacing: 0.01em;
+      width: 100%; min-height: 56px;
+      background: #2563eb;
+      color: #fff; border: none; border-radius: 18px;
+      font-size: 1rem; font-weight: 600; letter-spacing: 0.01em;
       cursor: pointer;
       display: flex; align-items: center; justify-content: center; gap: 10px;
-      box-shadow: 0 4px 20px rgba(37,99,235,0.38);
-      transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s;
+      box-shadow: 0 6px 15px rgba(37, 99, 235, 0.25);
+      transition: transform 0.15s, box-shadow 0.25s, background 0.25s, opacity 0.15s;
       -webkit-tap-highlight-color: transparent;
       margin-bottom: env(safe-area-inset-bottom, 12px);
+      padding: 16px 18px;
     }
-    .lp-btn-signin:active { transform: scale(0.98); box-shadow: 0 2px 10px rgba(37,99,235,0.25); }
+    .lp-btn-signin:hover {
+      background: #1d4ed8;
+      box-shadow: 0 8px 25px rgba(37, 99, 235, 0.35);
+    }
+    .lp-btn-signin:active { transform: scale(0.98); box-shadow: 0 4px 12px rgba(37,99,235,0.2); }
     .lp-btn-signin:disabled { opacity: 0.7; pointer-events: none; }
+    .lp-btn-signin .lp-btn-arrow {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 28px; height: 28px; border-radius: 50%;
+      background: rgba(255,255,255,0.18);
+      font-size: 0.95rem;
+    }
     .lp-btn-signin .lp-spinner {
       display: none; width: 18px; height: 18px;
       border: 2.5px solid rgba(255,255,255,0.35);
@@ -297,8 +308,141 @@
       animation: spin 0.65s linear infinite;
     }
     .lp-btn-signin.loading .lp-spinner { display: block; }
-    .lp-btn-signin.loading .lp-btn-text { opacity: 0.7; }
+    .lp-btn-signin.loading .lp-btn-text,
+    .lp-btn-signin.loading .lp-btn-arrow { opacity: 0.85; }
     @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Quick-Start Biometric box ── */
+    .lp-bio-container {
+      display: flex; align-items: center; justify-content: space-between;
+      background: #ffffff;
+      padding: 16px 18px;
+      border-radius: 22px;
+      margin-bottom: 20px;
+      border: 2px solid #e2e8f0;
+      cursor: pointer;
+      position: relative;
+      box-shadow: 0 4px 15px rgba(37, 99, 235, 0.08), inset 0 0 10px rgba(37, 99, 235, 0.03);
+      animation: lpBioGlow 3s infinite alternate;
+      transition: all 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      -webkit-tap-highlight-color: transparent;
+    }
+    .lp-bio-container:hover {
+      transform: translateY(-1px);
+      border-color: #3b82f6;
+      box-shadow: 0 8px 20px rgba(37, 99, 235, 0.15);
+    }
+    .lp-bio-container.active {
+      border-color: #10b981;
+      background: #f0fdf4;
+      animation: none;
+      box-shadow: 0 10px 25px rgba(16, 185, 129, 0.2);
+    }
+    .lp-bio-info {
+      display: flex; align-items: center; gap: 14px;
+      text-align: left; min-width: 0; flex: 1;
+    }
+    .lp-bio-thumb-wrap {
+      position: relative;
+      display: flex; justify-content: center; align-items: center;
+      width: 46px; height: 46px; flex-shrink: 0;
+      background: #f1f5f9; border-radius: 50%;
+      color: #475569; font-size: 1.35rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+      overflow: visible;
+      z-index: 0;
+    }
+    .lp-bio-thumb-wrap > i {
+      position: relative;
+      z-index: 1;
+    }
+    /* Double ripple — same hintPulse idea as mockup; two rings offset for visible concentric blink */
+    .lp-bio-thumb-wrap::before,
+    .lp-bio-thumb-wrap::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      border: 2px solid #3b82f6;
+      opacity: 0;
+      pointer-events: none;
+      animation: lpBioHintPulse 2.2s infinite ease-out;
+    }
+    .lp-bio-thumb-wrap::after { animation-delay: 0s; }
+    .lp-bio-thumb-wrap::before { animation-delay: 1.1s; }
+    .lp-bio-container.active .lp-bio-thumb-wrap {
+      background: #10b981; color: #fff;
+    }
+    .lp-bio-container.active .lp-bio-thumb-wrap::before,
+    .lp-bio-container.active .lp-bio-thumb-wrap::after {
+      border-color: #10b981;
+      animation-name: lpBioSuccessPulse;
+      animation-duration: 1.6s;
+    }
+    .lp-bio-container.active .lp-bio-thumb-wrap::after { animation-delay: 0s; }
+    .lp-bio-container.active .lp-bio-thumb-wrap::before { animation-delay: 0.8s; }
+    .lp-bio-title {
+      font-size: 0.94rem; color: #1e293b; font-weight: 700;
+      margin: 0 0 2px; line-height: 1.25;
+    }
+    .lp-bio-status {
+      font-size: 0.75rem; color: #d97706; font-weight: 500;
+      margin: 0; line-height: 1.35; transition: color 0.3s;
+    }
+    .lp-bio-container.active .lp-bio-status { color: #15803d; }
+    .lp-bio-toggle-wrap {
+      display: flex; flex-direction: column; align-items: center;
+      gap: 4px; flex-shrink: 0; margin-left: 10px;
+    }
+    .lp-bio-switch {
+      position: relative; display: inline-block;
+      width: 58px; height: 32px;
+    }
+    .lp-bio-switch input { opacity: 0; width: 0; height: 0; }
+    .lp-bio-slider {
+      position: absolute; cursor: pointer; inset: 0;
+      background-color: #cbd5e1;
+      transition: 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      border-radius: 34px;
+      box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .lp-bio-slider::after {
+      content: 'GO';
+      position: absolute; right: 8px; top: 50%;
+      transform: translateY(-50%);
+      font-size: 10px; font-weight: 800; color: #64748b;
+      letter-spacing: 0.5px; transition: opacity 0.2s;
+    }
+    .lp-bio-slider::before {
+      position: absolute; content: "";
+      height: 24px; width: 24px; left: 4px; bottom: 4px;
+      background: linear-gradient(185deg, #ffffff, #f1f5f9);
+      transition: 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      border-radius: 50%;
+      box-shadow: 0 3px 6px rgba(0,0,0,0.25);
+      z-index: 2;
+    }
+    .lp-bio-switch input:checked + .lp-bio-slider { background-color: #10b981; }
+    .lp-bio-switch input:checked + .lp-bio-slider::after { opacity: 0; }
+    .lp-bio-switch input:checked + .lp-bio-slider::before { transform: translateX(26px); background: #fff; }
+    .lp-bio-tap-hint {
+      font-size: 9px; color: #94a3b8; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.5px;
+      transition: opacity 0.3s;
+    }
+    .lp-bio-container.active .lp-bio-tap-hint { opacity: 0; }
+    @keyframes lpBioGlow {
+      0% { border-color: #e2e8f0; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.05); }
+      100% { border-color: #93c5fd; box-shadow: 0 4px 18px rgba(37, 99, 235, 0.15); }
+    }
+    @keyframes lpBioHintPulse {
+      0% { transform: scale(1); opacity: 0.55; }
+      100% { transform: scale(1.45); opacity: 0; }
+    }
+    @keyframes lpBioSuccessPulse {
+      0% { transform: scale(1); opacity: 0.65; }
+      100% { transform: scale(1.5); opacity: 0; }
+    }
 
     /* ── Biometric Button ── */
     .lp-bio-divider {
@@ -585,6 +729,9 @@
       if (!document.getElementById('loginForm')) return;
       if (window.fleetBiometricToggle && typeof window.fleetBiometricToggle.initLoginPage === 'function') {
         window.fleetBiometricToggle.initLoginPage();
+      }
+      if (typeof window.fleetLoginBioVisualSync === 'function') {
+        window.fleetLoginBioVisualSync();
       }
     })();
   </script>
