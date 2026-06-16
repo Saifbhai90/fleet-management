@@ -1274,9 +1274,14 @@
         .fab-backdrop.show { display: block; }
         @keyframes backdropFadeIn { from { opacity:0; } to { opacity:1; } }
 
-        /* ── Page Fade-In ── */
-        .main-content { animation: appFadeUp 0.25s ease both; }
-        @keyframes appFadeUp { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+        /* ── Page Fade-In ──
+           IMPORTANT: opacity-only. A previous version animated transform: translateY()
+           with animation-fill-mode: both, which left a permanent transform on
+           .main-content. That turned the scroll container into a stuck GPU layer and
+           caused Android WebView to drop the content while dragging (the form vanished
+           during scroll and reappeared on release). Never re-add transform here. */
+        .main-content { animation: appFadeIn 0.25s ease both; }
+        @keyframes appFadeIn { from { opacity:0; } to { opacity:1; } }
 
         /* ── Top Loading Bar ── */
         #pullRefreshBar { position:fixed; top:0; left:0; right:0; height:3px; background:linear-gradient(90deg,#3b82f6,#8b5cf6,#3b82f6); background-size:200% 100%; z-index:9999; display:none; }
