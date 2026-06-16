@@ -633,20 +633,20 @@
   }
 }
 
-/* ── 13e. SMOOTH MOMENTUM SCROLL (all scrollable containers) ─── */
+/* ── 13e. SMOOTH MOMENTUM SCROLL (modals/dropdowns only — NOT .main-content) ───
+   scroll-behavior:smooth + -webkit-overflow-scrolling:touch on the app scroll root
+   (.main-content) causes Android WebView to blank long composited layers mid-drag. */
 @media (max-width: 767px) {
   .sidebar,
   .modal-body,
   .table-responsive,
   .dropdown-menu,
-  .select2-dropdown,
-  .main-content {
+  .select2-dropdown {
     -webkit-overflow-scrolling: touch;
-    scroll-behavior: smooth;
   }
-  /* Prevent horizontal scroll bleed */
   .main-content {
     overflow-x: hidden;
+    scroll-behavior: auto;
   }
 }
 

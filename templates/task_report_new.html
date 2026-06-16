@@ -28,6 +28,55 @@
     padding-bottom: max(150px, calc(110px + env(safe-area-inset-bottom, 0px))) !important;
   }
 
+  /* ── Android WebView scroll stabilization (long vehicle lists) ─────────────
+     With many rows, WebView promotes a huge composited layer that blanks mid-drag
+     (content vanishes until touch release). Single-row lists stay small enough to work.
+     Fixes: no page fade on scroll root, opacity 0.999 layer-bust, disable momentum
+     compositing, flatten row shadows, solid sticky bar (no backdrop-filter). */
+  @media (max-width: 767.98px) {
+    html.capacitor-native body[data-fleet-endpoint="task_report_new"] .main-content {
+      animation: none !important;
+      opacity: 0.999 !important;
+      -webkit-overflow-scrolling: auto !important;
+      scroll-behavior: auto !important;
+      transform: none !important;
+      -webkit-transform: none !important;
+      will-change: auto !important;
+      -webkit-backface-visibility: visible !important;
+      backface-visibility: visible !important;
+      filter: none !important;
+      height: auto !important;
+    }
+    html.capacitor-native body[data-fleet-endpoint="task_report_new"] .task-batch-page {
+      min-height: 0 !important;
+      overflow: visible !important;
+    }
+    html.capacitor-native body[data-fleet-endpoint="task_report_new"] .task-batch-filter-card,
+    html.capacitor-native body[data-fleet-endpoint="task_report_new"] .task-batch-card {
+      box-shadow: none !important;
+      border: 1px solid rgba(15, 23, 42, 0.08) !important;
+      filter: none !important;
+    }
+    html.capacitor-native body[data-fleet-endpoint="task_report_new"] .task-batch-table tbody tr.task-row {
+      box-shadow: none !important;
+      border: 1px solid #e2e8f0 !important;
+      transform: none !important;
+      will-change: auto !important;
+    }
+    html.capacitor-native body[data-fleet-endpoint="task_report_new"] .task-batch-table tbody tr.task-row.table-info {
+      box-shadow: none !important;
+      border: 1px solid rgba(14, 165, 233, 0.35) !important;
+    }
+    html.capacitor-native body[data-fleet-endpoint="task_report_new"] .native-submit-sticky {
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+      background: #f1f5f9 !important;
+    }
+    html.capacitor-native body[data-fleet-endpoint="task_report_new"] .task-batch-table-wrap.table-responsive {
+      -webkit-overflow-scrolling: auto !important;
+    }
+  }
+
   /* Mobile app: Save footer needs visible overflow for sticky thumb-zone bar (base.html adds .native-submit-sticky) */
   html.capacitor-native .task-batch-card .card-footer.native-submit-sticky {
     flex-wrap: wrap;
@@ -200,7 +249,6 @@
       padding-left: 0 !important;
       padding-right: 0 !important;
       overflow-x: hidden !important;
-      -webkit-overflow-scrolling: touch;
       max-width: 100%;
     }
     .task-batch-table-wrap.table-responsive table.task-batch-table,
