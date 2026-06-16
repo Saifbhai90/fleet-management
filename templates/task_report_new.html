@@ -18,15 +18,12 @@
 </div>
 {%- endmacro %}
 <style>
-  /* Long multi-vehicle lists: one smooth scroll root (Capacitor shell + mobile browser) */
-  body[data-fleet-endpoint="task_report_new"] #appNativeShell .main-content,
-  body[data-fleet-endpoint="task_report_new"] .main-content {
-    overflow-y: auto !important;
-    -webkit-overflow-scrolling: touch !important;
-    overscroll-behavior-y: auto !important;
-    scroll-behavior: smooth;
-    touch-action: pan-y;
-  }
+  /* Scrolling is owned by the base app-shell's single scroll root (.main-content).
+     We intentionally do NOT override overflow / touch-action / scroll-behavior here.
+     A custom nested scroll root (with scroll-behavior:smooth + touch-action:pan-y)
+     made Android WebView drop the content layer mid-gesture — the whole form
+     vanished while dragging and reappeared on touch release. Matching the base
+     model (same as every other page) fixes the glitch and gives smooth momentum. */
   html.capacitor-native body[data-fleet-endpoint="task_report_new"] .main-content {
     padding-bottom: max(150px, calc(110px + env(safe-area-inset-bottom, 0px))) !important;
   }
