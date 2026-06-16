@@ -39,7 +39,7 @@
   @media (max-width: 767.98px) {
     .task-batch-page {
       background: linear-gradient(180deg, #eef2ff 0%, #f8fafc 18%, #f1f5f9 100%);
-      min-height: 100%;
+      min-height: 0;
       padding-bottom: 12px;
     }
     .task-batch-page .task-batch-filter-card {
@@ -666,30 +666,44 @@
   }
 
   /*
-   * Capacitor Android — scroll stability only (MUST stay last). Card Aurora styling stays intact.
-   * Do NOT use content-visibility, contain, translateZ(0), or backface-visibility:hidden here —
-   * those caused vanishing or broken card layout on legacy WebView.
+   * Capacitor Android — scroll stability (MUST stay last).
+   * Use #appNativeShell .main-content — ID beats generic .main-content in base.html.
+   * -webkit-overflow-scrolling: auto stops GPU layer detach (white void while scrolling).
+   * overflow-anchor: none stops browser re-positioning cards on touch.
    */
   @media (max-width: 767.98px) {
+    body[data-fleet-endpoint="task_report_new"] .task-batch-page {
+      overflow-anchor: none !important;
+      touch-action: pan-y;
+    }
     body[data-fleet-endpoint="task_report_new"] #batchTable.task-batch-table,
     body[data-fleet-endpoint="task_report_new"] #batchTable.task-batch-table > tbody,
     body[data-fleet-endpoint="task_report_new"] #batchTable.task-batch-table > tfoot {
       display: block !important;
       width: 100% !important;
       border: none !important;
+      overflow-anchor: none !important;
     }
     body[data-fleet-endpoint="task_report_new"] .task-batch-table tbody tr.task-row {
+      display: block !important;
+      width: 100% !important;
+      overflow-anchor: none !important;
       content-visibility: visible !important;
-      contain: none !important;
+      contain: paint;
       contain-intrinsic-size: auto !important;
+      isolation: isolate;
       transform: none !important;
       transition: none !important;
       will-change: auto !important;
+      touch-action: pan-y;
+      margin-bottom: 12px !important;
     }
     body[data-fleet-endpoint="task_report_new"] .task-batch-table tbody tr.task-row > td,
     body[data-fleet-endpoint="task_report_new"] .task-batch-table tbody tr.task-row > td .form-control-sm {
       transition: none !important;
     }
+    html.capacitor-native body[data-fleet-endpoint="task_report_new"] #appNativeShell .main-content,
+    html.capacitor-native body[data-fleet-endpoint="task_report_new"] #mainContent.main-content,
     html.capacitor-native body[data-fleet-endpoint="task_report_new"] .main-content {
       animation: none !important;
       scroll-behavior: auto !important;
@@ -698,6 +712,7 @@
       will-change: auto !important;
       overflow-x: hidden !important;
       overflow-anchor: none !important;
+      touch-action: pan-y;
     }
     html.capacitor-native body[data-fleet-endpoint="task_report_new"] .fm-aurora-orb {
       animation: none !important;
@@ -708,10 +723,14 @@
       overflow: visible !important;
       min-height: 0 !important;
     }
-    html.capacitor-native body[data-fleet-endpoint="task_report_new"] .native-submit-sticky {
+    /* Sticky Save bar fights scroll compositor on long lists — keep footer in normal flow */
+    html.capacitor-native body[data-fleet-endpoint="task_report_new"] .task-batch-card .card-footer,
+    html.capacitor-native body[data-fleet-endpoint="task_report_new"] .task-batch-card .card-footer.native-submit-sticky {
+      position: static !important;
+      bottom: auto !important;
       backdrop-filter: none !important;
       -webkit-backdrop-filter: none !important;
-      background: rgba(241, 245, 249, 0.98) !important;
+      background: linear-gradient(180deg, #fafbfc 0%, #f1f5f9 100%) !important;
     }
   }
   /* Chunk/search hiding via data attributes — no inline display toggles (prevents layout jump). */
@@ -815,7 +834,7 @@
   </div>
 
   {% if rows %}
-  <form method="POST" id="batchForm">
+  <form method="POST" id="batchForm" data-no-sticky="1">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="save_batch" value="1">
     <input type="hidden" name="task_date" value="{{ view_date.strftime('%d-%m-%Y') }}">
@@ -1077,6 +1096,27 @@
 window.TASK_REPORT_NEW_LOCK_DISTRICT = {{ tef.get('lock_district', false)|tojson }};
 window.TASK_REPORT_NEW_LOCK_PROJECT = {{ tef.get('lock_project', false)|tojson }};
 window.TASK_REPORT_NEW_LOCK_VEHICLE = {{ tef.get('lock_vehicle', false)|tojson }};
+</script>
+<script>
+(function taskEntryScrollStabilize() {
+  if (!document.getElementById('batchForm')) return;
+  if ('scrollRestoration' in history) {
+    history.scrollRestoration = 'manual';
+  }
+  function pinTaskEntryScrollTop() {
+    var mc = document.getElementById('mainContent') || document.querySelector('.main-content');
+    if (!mc) return;
+    if (mc.scrollTop > 0) mc.scrollTop = 0;
+  }
+  pinTaskEntryScrollTop();
+  window.requestAnimationFrame(function() {
+    pinTaskEntryScrollTop();
+    window.requestAnimationFrame(pinTaskEntryScrollTop);
+  });
+  window.addEventListener('pageshow', function() {
+    pinTaskEntryScrollTop();
+  });
+})();
 </script>
 <script>
 (function() {
