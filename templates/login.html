@@ -88,6 +88,9 @@
 
 <form method="POST" novalidate autocomplete="off" id="loginForm">
   {{ form.hidden_tag() }}
+  {% if request.args.get('next') %}
+  <input type="hidden" name="next" value="{{ request.args.get('next')|e }}">
+  {% endif %}
 
   <!-- Username Field (hidden when saved account exists) -->
   <div class="lp-field" id="usernameField">

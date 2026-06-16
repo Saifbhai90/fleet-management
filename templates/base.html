@@ -7841,19 +7841,16 @@
             });
         }
 
-        /* ── Bio/PIN lock on app resume (no auto-logout — fresh-start login handled by startPath) ── */
+        /* ── Bio/PIN lock on app resume (full login only on cold start via /mobile-init) ── */
         var _firstActivation = true;
 
         AppPlugin.addListener('appStateChange', function(state) {
             if (state && !state.isActive) {
-                /* App went to background — nothing to do */
                 return;
             }
 
-            /* App came to foreground */
             if (_firstActivation) { _firstActivation = false; return; }
 
-            /* Show biometric/PIN lock overlay if configured */
             var hasBio = localStorage.getItem(BIO_KEY) === '1' && localStorage.getItem(TOKEN_KEY);
             if (hasBio) {
                 triggerBioLock();
@@ -8912,7 +8909,8 @@ document.addEventListener('DOMContentLoaded', function() {
    App Lifecycle (Capacitor): WebView reload after camera/file picker clears
    sessionStorage but Flask session cookie may still be valid — do NOT force
    /mobile-init logout when the server already rendered a logged-in page.
-   Cold app start still uses startPath=/mobile-init (valid session → dashboard).
+   Cold app start uses startPath=/mobile-init (always → login screen).
+   Recent apps / background resume keeps the session; optional bio/PIN lock only.
    ═══════════════════════════════════════════════════════════════════ */
 (function() {
   'use strict';

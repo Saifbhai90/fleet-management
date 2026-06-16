@@ -4157,26 +4157,23 @@ def _safe_mobile_resume_path(path):
 
 @app.route('/mobile-init')
 def mobile_init():
-    """Capacitor cold start: restore valid server session; clear only when unauthenticated or user inactive."""
-    uid = session.get('user_id')
-    if uid:
-        try:
-            user = User.query.get(uid)
-            if user and user.is_active:
-                session['last_activity'] = pk_now()
-                session['_user_active_ts'] = _time_mod.time()
-                from urllib.parse import unquote
-                nxt = _safe_mobile_resume_path((request.args.get('next') or '').strip())
-                if not nxt:
-                    nxt = _safe_mobile_resume_path(unquote(request.cookies.get('fleet_resume_path', '') or '').strip())
-                if nxt:
-                    resp = make_response(redirect(nxt))
-                    resp.set_cookie('fleet_resume_path', '', max_age=0, path='/')
-                    return resp
-                return redirect(url_for('dashboard'))
-        except Exception:
-            pass
+    """Capacitor cold start: always show login (password/biometric). Never skip to dashboard."""
+    from urllib.parse import unquote
+    try:
+        log_id = session.get('login_log_id')
+        if log_id:
+            LoginLog.query.filter_by(id=log_id).update({'logout_at': pk_now()})
+            db.session.commit()
+    except Exception:
+        db.session.rollback()
     session.clear()
+    nxt = _safe_mobile_resume_path((request.args.get('next') or '').strip())
+    if not nxt:
+        nxt = _safe_mobile_resume_path(unquote(request.cookies.get('fleet_resume_path', '') or '').strip())
+    if nxt:
+        resp = make_response(redirect(url_for('login', next=nxt)))
+        resp.set_cookie('fleet_resume_path', '', max_age=0, path='/')
+        return resp
     return redirect(url_for('login'))
 
 
@@ -7810,6 +7807,9 @@ def login():
                     target_endpoint = 'dashboard'
                 session['play_login_sound'] = 1
                 flash(f'Welcome, {session["user"]}!', 'success')
+                nxt = _safe_mobile_resume_path((request.form.get('next') or request.args.get('next') or '').strip())
+                if nxt:
+                    return redirect(nxt)
                 resp_target = url_for('dashboard', from_login=1) if target_endpoint == 'dashboard' else url_for(target_endpoint)
                 return redirect(resp_target)
         try:

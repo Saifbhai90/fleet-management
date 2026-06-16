@@ -110,8 +110,8 @@ app.config['BACKUP_SCHEDULE_ENABLED'] = _app_schedule in ('1', 'true', 'yes')
 app.config['BACKUP_SCHEDULE_TIME'] = (os.environ.get('BACKUP_SCHEDULE_TIME') or '02:00').strip()
 app.config['BACKUP_EMAIL_TO'] = (os.environ.get('BACKUP_EMAIL_TO') or '').strip()
 
-# Session timeout (web inactivity): 15 minutes. Mobile Capacitor uses /mobile-init on cold start
-# (valid session → dashboard; else login). Camera/file-picker WebView reload keeps Flask session.
+# Session timeout (web inactivity): 15 minutes. Mobile Capacitor cold start uses /mobile-init → login.
+# Recent apps resume keeps session; optional bio/PIN lock in base.html appStateChange.
 app.config['SESSION_TIMEOUT_MINUTES'] = int(os.environ.get('SESSION_TIMEOUT_MINUTES', '15'))
 # Secure by default (HTTPS only). Set SESSION_COOKIE_SECURE=false in .env for local HTTP development only.
 _cookie_secure_env = os.environ.get('SESSION_COOKIE_SECURE', 'true').lower()
