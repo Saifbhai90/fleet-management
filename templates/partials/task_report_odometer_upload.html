@@ -202,7 +202,10 @@
       window.fleetStampAttendancePhoto(dataUrl, null, opts)
         .then(function(res) { return uploadJpeg(rowId, res.dataUrl); })
         .catch(function(err) { alert(err.message || String(err)); })
-        .finally(function() { setOdomBusy(rowId, false); });
+        .finally(function() {
+        setOdomBusy(rowId, false);
+        if (window.fleetClearResumePath) window.fleetClearResumePath();
+      });
     });
   }
 
@@ -247,7 +250,10 @@
         return stampAndUpload(rowId, raw, lat, lng, acc);
       }).catch(function(err) {
         alert((err && err.message) ? err.message : 'Camera failed');
-      }).finally(function() { setOdomBusy(rowId, false); });
+      }).finally(function() {
+        setOdomBusy(rowId, false);
+        if (window.fleetClearResumePath) window.fleetClearResumePath();
+      });
     });
   }
 

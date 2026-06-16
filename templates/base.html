@@ -16,17 +16,15 @@
     <meta name="apple-mobile-web-app-title" content="Fleet Mgr">
 
     {% if session.get('user_id') %}
-    {# Capacitor cold start: WebView may restore last URL (dashboard) with a valid cookie — force /mobile-init unless camera resume. #}
+    {# Capacitor cold start / force-close reopen: a NEW WebView process has empty sessionStorage.
+       If it restores a logged-in URL (dashboard, task report, etc.) with a still-valid cookie,
+       force /mobile-init so the user must log in again and always lands on the dashboard.
+       Same-process navigations keep _fleetAppSession and are left untouched. #}
     <script>
     (function() {
       try {
         if (!window.Capacitor || Capacitor.getPlatform() === 'web') return;
         if (sessionStorage.getItem('_fleetAppSession')) return;
-        var ts = parseInt(localStorage.getItem('fleet_resume_ts') || '0', 10);
-        if (ts && (Date.now() - ts) < (30 * 60 * 1000)) {
-          if (localStorage.getItem('fleet_resume_url')) return;
-          if (/(?:^|;\s*)fleet_resume_path=/.test(document.cookie || '')) return;
-        }
         sessionStorage.setItem('_fleetAppSession', '1');
         window.location.replace('/mobile-init');
       } catch (e) { /* ignore */ }
@@ -8894,62 +8892,28 @@ document.addEventListener('DOMContentLoaded', function() {
     } catch (e) { /* ignore */ }
   };
 
-  function _resumeLandingPaths() {
-    return { '/': 1, '/dashboard': 1, '/mobile-init': 1 };
-  }
-
-  window.fleetHasPendingNativeResume = function() {
-    try {
-      var ts = parseInt(localStorage.getItem(FLEET_RESUME_TS) || '0', 10);
-      if (!ts || (Date.now() - ts) > RESUME_MAX_AGE_MS) return false;
-      if (localStorage.getItem(FLEET_RESUME_KEY)) return true;
-      return /(?:^|;\s*)fleet_resume_path=/.test(document.cookie || '');
-    } catch (e) {
-      return false;
-    }
-  };
+  /* Auto-restore of Task Report after login was a source of bugs (app would reopen an
+     unfinished report instead of the dashboard). Resume redirect is now disabled:
+     after any login the user always lands on the dashboard. The setter/clearer are kept
+     as harmless no-op-ish helpers so existing call sites (camera/file picker) don't error,
+     but nothing reads the marker to perform a redirect anymore. */
+  window.fleetHasPendingNativeResume = function() { return false; };
 
   window.fleetApplyResumeRedirect = function() {
-    try {
-      var url = localStorage.getItem(FLEET_RESUME_KEY);
-      var ts = parseInt(localStorage.getItem(FLEET_RESUME_TS) || '0', 10);
-      if (!url || !ts || (Date.now() - ts) > RESUME_MAX_AGE_MS) {
-        window.fleetClearResumePath();
-        return false;
-      }
-      var current = location.pathname + location.search + location.hash;
-      if (current === url) {
-        window.fleetClearResumePath();
-        return true;
-      }
-      if (!_resumeLandingPaths()[location.pathname]) return false;
-      var odomRow = localStorage.getItem(FLEET_RESUME_ROW);
-      sessionStorage.setItem('task_batch_skip_draft_reset', '1');
-      if (odomRow) sessionStorage.setItem('fleet_resume_odom_row', odomRow);
-      window.fleetClearResumePath();
-      window.location.replace(url);
-      return true;
-    } catch (e) {
-      return false;
-    }
+    try { window.fleetClearResumePath(); } catch (e) { /* ignore */ }
+    return false;
   };
 })();
 
 /* ═══════════════════════════════════════════════════════════════════
-   App Lifecycle (Capacitor): WebView reload after camera/file picker clears
-   sessionStorage but Flask session cookie may still be valid — skip /mobile-init
-   only when a native resume marker exists (fleetSetResumePath).
-   Cold app start uses startPath=/mobile-init; if WebView restores dashboard
-   with a stale cookie, head + this block redirect to /mobile-init → login.
-   Recent apps resume (same process) keeps _fleetAppSession and stays logged in.
+   App Lifecycle (Capacitor): a NEW WebView process has empty sessionStorage.
+   If it restores a logged-in URL with a still-valid cookie (force-close reopen,
+   OS-killed process), force /mobile-init → login → dashboard. Same-process
+   navigations (incl. returning from the camera) keep _fleetAppSession and stay put.
    ═══════════════════════════════════════════════════════════════════ */
 (function() {
   'use strict';
   if (!window.Capacitor || Capacitor.getPlatform() === 'web') return;
-
-  {% if session.get('user_id') %}
-  if (window.fleetApplyResumeRedirect && window.fleetApplyResumeRedirect()) return;
-  {% endif %}
 
   var SESSION_KEY = '_fleetAppSession';
   var currentPath = window.location.pathname;
@@ -8959,28 +8923,12 @@ document.addEventListener('DOMContentLoaded', function() {
   sessionStorage.setItem(SESSION_KEY, '1');
 
   {% if session.get('user_id') %}
-  if (window.fleetHasPendingNativeResume && window.fleetHasPendingNativeResume()) return;
   window.location.replace('/mobile-init');
   return;
   {% endif %}
 
   if (currentPath === '/mobile-init' || currentPath === '/login') return;
   window.location.replace('/mobile-init');
-})();
-
-(function() {
-  'use strict';
-  if (!window.Capacitor || Capacitor.getPlatform() === 'web') return;
-  {% if session.get('user_id') %}
-  var App = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App;
-  if (App && App.addListener) {
-    App.addListener('appStateChange', function(state) {
-      if (state && state.isActive && window.fleetApplyResumeRedirect) {
-        window.fleetApplyResumeRedirect();
-      }
-    });
-  }
-  {% endif %}
 })();
 
 /* ═══════════════════════════════════════════════════════════════════

@@ -86,11 +86,24 @@
 </div>
 {% endif %}
 
+<script>
+/* Reaching the login screen means a fresh start: discard any pending mobile resume
+   target so the app can never auto-open an unfinished Task Report after login. */
+(function() {
+  try {
+    localStorage.removeItem('fleet_resume_url');
+    localStorage.removeItem('fleet_resume_odom_row');
+    localStorage.removeItem('fleet_resume_ts');
+    sessionStorage.removeItem('fleet_resume_odom_row');
+    sessionStorage.removeItem('task_batch_skip_draft_reset');
+    document.cookie = 'fleet_resume_path=; path=/; max-age=0; SameSite=Lax' +
+      (location.protocol === 'https:' ? '; Secure' : '');
+  } catch (e) { /* ignore */ }
+})();
+</script>
+
 <form method="POST" novalidate autocomplete="off" id="loginForm">
   {{ form.hidden_tag() }}
-  {% if request.args.get('next') %}
-  <input type="hidden" name="next" value="{{ request.args.get('next')|e }}">
-  {% endif %}
 
   <!-- Username Field (hidden when saved account exists) -->
   <div class="lp-field" id="usernameField">

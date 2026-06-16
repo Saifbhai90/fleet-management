@@ -4157,8 +4157,9 @@ def _safe_mobile_resume_path(path):
 
 @app.route('/mobile-init')
 def mobile_init():
-    """Capacitor cold start: always show login (password/biometric). Never skip to dashboard."""
-    from urllib.parse import unquote
+    """Capacitor cold start / force-close reopen: always log out and show the login screen.
+    Never restores a previous screen (e.g. an unfinished Task Report) — after login the user
+    always lands on the dashboard. Any stale resume cookie is cleared here."""
     try:
         log_id = session.get('login_log_id')
         if log_id:
@@ -4167,14 +4168,9 @@ def mobile_init():
     except Exception:
         db.session.rollback()
     session.clear()
-    nxt = _safe_mobile_resume_path((request.args.get('next') or '').strip())
-    if not nxt:
-        nxt = _safe_mobile_resume_path(unquote(request.cookies.get('fleet_resume_path', '') or '').strip())
-    if nxt:
-        resp = make_response(redirect(url_for('login', next=nxt)))
-        resp.set_cookie('fleet_resume_path', '', max_age=0, path='/')
-        return resp
-    return redirect(url_for('login'))
+    resp = make_response(redirect(url_for('login')))
+    resp.set_cookie('fleet_resume_path', '', max_age=0, path='/')
+    return resp
 
 
 @app.route('/auth/app-logout', methods=['POST'])
@@ -7807,11 +7803,12 @@ def login():
                     target_endpoint = 'dashboard'
                 session['play_login_sound'] = 1
                 flash(f'Welcome, {session["user"]}!', 'success')
-                nxt = _safe_mobile_resume_path((request.form.get('next') or request.args.get('next') or '').strip())
-                if nxt:
-                    return redirect(nxt)
+                # Always land on the dashboard (or role landing) after login. We deliberately do NOT
+                # restore a previous screen such as an unfinished Task Report. Clear any stale resume cookie.
                 resp_target = url_for('dashboard', from_login=1) if target_endpoint == 'dashboard' else url_for(target_endpoint)
-                return redirect(resp_target)
+                resp = make_response(redirect(resp_target))
+                resp.set_cookie('fleet_resume_path', '', max_age=0, path='/')
+                return resp
         try:
             db.session.add(LoginAttempt(
                 username=username.lower(), ip_address=request.remote_addr,
@@ -7834,7 +7831,10 @@ def login():
         except Exception:
             db.session.rollback()
         flash('Invalid user ID or password.', 'danger')
-    return render_template('login.html', form=form, lockout_remaining_seconds=lockout_remaining_seconds)
+    # Reaching the login screen always discards any pending mobile resume target.
+    resp = make_response(render_template('login.html', form=form, lockout_remaining_seconds=lockout_remaining_seconds))
+    resp.set_cookie('fleet_resume_path', '', max_age=0, path='/')
+    return resp
 
 
 @app.route('/logout')
@@ -7862,6 +7862,8 @@ def logout():
     # Use path='/' to ensure browser properly removes it
     response.delete_cookie(TRUSTED_DEVICE_COOKIE, path='/')
     response.delete_cookie(TRUSTED_DEVICE_COOKIE, path='/', samesite='Lax')
+    # Drop any pending mobile resume target so re-login lands on the dashboard.
+    response.set_cookie('fleet_resume_path', '', max_age=0, path='/')
     return response
 
 @app.route('/api/log-activity', methods=['POST'])
