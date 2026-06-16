@@ -15,6 +15,25 @@
     <meta name="application-name" content="Fleet Mgr">
     <meta name="apple-mobile-web-app-title" content="Fleet Mgr">
 
+    {% if session.get('user_id') %}
+    {# Capacitor cold start: WebView may restore last URL (dashboard) with a valid cookie — force /mobile-init unless camera resume. #}
+    <script>
+    (function() {
+      try {
+        if (!window.Capacitor || Capacitor.getPlatform() === 'web') return;
+        if (sessionStorage.getItem('_fleetAppSession')) return;
+        var ts = parseInt(localStorage.getItem('fleet_resume_ts') || '0', 10);
+        if (ts && (Date.now() - ts) < (30 * 60 * 1000)) {
+          if (localStorage.getItem('fleet_resume_url')) return;
+          if (/(?:^|;\s*)fleet_resume_path=/.test(document.cookie || '')) return;
+        }
+        sessionStorage.setItem('_fleetAppSession', '1');
+        window.location.replace('/mobile-init');
+      } catch (e) { /* ignore */ }
+    })();
+    </script>
+    {% endif %}
+
     <!-- Inter Font (Premium Typography) -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -8879,6 +8898,17 @@ document.addEventListener('DOMContentLoaded', function() {
     return { '/': 1, '/dashboard': 1, '/mobile-init': 1 };
   }
 
+  window.fleetHasPendingNativeResume = function() {
+    try {
+      var ts = parseInt(localStorage.getItem(FLEET_RESUME_TS) || '0', 10);
+      if (!ts || (Date.now() - ts) > RESUME_MAX_AGE_MS) return false;
+      if (localStorage.getItem(FLEET_RESUME_KEY)) return true;
+      return /(?:^|;\s*)fleet_resume_path=/.test(document.cookie || '');
+    } catch (e) {
+      return false;
+    }
+  };
+
   window.fleetApplyResumeRedirect = function() {
     try {
       var url = localStorage.getItem(FLEET_RESUME_KEY);
@@ -8890,7 +8920,7 @@ document.addEventListener('DOMContentLoaded', function() {
       var current = location.pathname + location.search + location.hash;
       if (current === url) {
         window.fleetClearResumePath();
-        return false;
+        return true;
       }
       if (!_resumeLandingPaths()[location.pathname]) return false;
       var odomRow = localStorage.getItem(FLEET_RESUME_ROW);
@@ -8907,10 +8937,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
 /* ═══════════════════════════════════════════════════════════════════
    App Lifecycle (Capacitor): WebView reload after camera/file picker clears
-   sessionStorage but Flask session cookie may still be valid — do NOT force
-   /mobile-init logout when the server already rendered a logged-in page.
-   Cold app start uses startPath=/mobile-init (always → login screen).
-   Recent apps / background resume keeps the session; optional bio/PIN lock only.
+   sessionStorage but Flask session cookie may still be valid — skip /mobile-init
+   only when a native resume marker exists (fleetSetResumePath).
+   Cold app start uses startPath=/mobile-init; if WebView restores dashboard
+   with a stale cookie, head + this block redirect to /mobile-init → login.
+   Recent apps resume (same process) keeps _fleetAppSession and stays logged in.
    ═══════════════════════════════════════════════════════════════════ */
 (function() {
   'use strict';
@@ -8928,7 +8959,8 @@ document.addEventListener('DOMContentLoaded', function() {
   sessionStorage.setItem(SESSION_KEY, '1');
 
   {% if session.get('user_id') %}
-  /* Logged-in page reload (e.g. after native camera) — keep session, stay here. */
+  if (window.fleetHasPendingNativeResume && window.fleetHasPendingNativeResume()) return;
+  window.location.replace('/mobile-init');
   return;
   {% endif %}
 

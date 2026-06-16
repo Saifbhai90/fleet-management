@@ -111,7 +111,8 @@ app.config['BACKUP_SCHEDULE_TIME'] = (os.environ.get('BACKUP_SCHEDULE_TIME') or 
 app.config['BACKUP_EMAIL_TO'] = (os.environ.get('BACKUP_EMAIL_TO') or '').strip()
 
 # Session timeout (web inactivity): 15 minutes. Mobile Capacitor cold start uses /mobile-init → login.
-# Recent apps resume keeps session; optional bio/PIN lock in base.html appStateChange.
+# WebView may restore dashboard with a stale cookie; base.html redirects to /mobile-init on new process.
+# Recent apps resume (same WebView process) keeps session; optional bio/PIN lock in appStateChange.
 app.config['SESSION_TIMEOUT_MINUTES'] = int(os.environ.get('SESSION_TIMEOUT_MINUTES', '15'))
 # Secure by default (HTTPS only). Set SESSION_COOKIE_SECURE=false in .env for local HTTP development only.
 _cookie_secure_env = os.environ.get('SESSION_COOKIE_SECURE', 'true').lower()
