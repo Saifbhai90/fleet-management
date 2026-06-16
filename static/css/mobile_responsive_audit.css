@@ -1,0 +1,139 @@
+/* ================================================================
+   mobile_responsive_audit.css
+   Additive responsive hardening for Fleet Manager.
+   Loaded AFTER mobile_perfect.css so it reinforces, never replaces.
+
+   Goal: close the cross-screen gaps that a per-template system can miss
+   across 300+ pages — long-text overflow, bare wide tables, tiny touch
+   targets, elements wider than the viewport, and keyboard-safe inputs —
+   WITHOUT rewriting individual templates.
+
+   Safety: every rule is scoped to mobile (max-width: 767px) so desktop
+   layout is untouched and the change is trivially reversible.
+   ================================================================ */
+
+@media (max-width: 767px) {
+
+  /* ── 1. TEXT OVERFLOW ─────────────────────────────────────────
+     Long unbroken tokens (CNIC, email, vehicle no, URLs, notes) must
+     wrap instead of widening the layout. */
+  td, th,
+  dd, dt,
+  p, span, a, label, small,
+  .card-title, .card-text,
+  .list-group-item,
+  .badge,
+  .mp-card-val, .mp-card-title,
+  .break-anywhere {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+  /* Respect explicit nowrap helpers (status pills, counts, etc.) */
+  .text-nowrap,
+  .badge.text-nowrap,
+  .mp-card-title-badge,
+  .mp-search-count {
+    overflow-wrap: normal !important;
+    word-break: normal !important;
+    white-space: nowrap !important;
+  }
+
+  /* ── 2. ELEMENT OVERFLOW ──────────────────────────────────────
+     Nothing may extend beyond the viewport width. */
+  img, svg, canvas, video, iframe,
+  pre, code,
+  table, .table,
+  .alert, .card, .modal-content, .toast {
+    max-width: 100% !important;
+  }
+  pre, code {
+    white-space: pre-wrap !important;
+    word-break: break-word;
+  }
+
+  /* ── 3. TABLES ────────────────────────────────────────────────
+     Wide data tables that are NOT converted to mobile cards must
+     scroll inside their own box, never push the page width.
+     Scoped to Bootstrap-styled `.table` to avoid touching layout
+     tables (invoices/print). Hidden tables (card conversion) are
+     left alone via :not(.mp-hide-mobile). */
+  .main-content .table:not(.mp-hide-mobile) {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .table-responsive {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* ── 4. TOUCH TARGETS (≥ 44px) ────────────────────────────────
+     Make tappable controls meet the mobile minimum. Excludes inline
+     table-cell controls which mp cards already size. */
+  .btn, a.btn, button:not(.btn-close),
+  .nav-link, .dropdown-item, .page-link,
+  .mobile-nav-item, .more-drawer-item {
+    min-height: 44px;
+  }
+  /* Square / icon-only controls also need a min width */
+  .btn-icon, .icon-btn,
+  .btn.rounded-circle,
+  .page-link {
+    min-width: 44px;
+  }
+  /* Space out adjacent inline buttons so taps don't collide */
+  .d-flex.gap-1 > .btn + .btn,
+  .btn-group-spaced > .btn + .btn {
+    margin-left: 4px;
+  }
+
+  /* ── 5. KEYBOARD-SAFE INPUTS ──────────────────────────────────
+     When a field is focused and scrolled into view, keep it clear of
+     the sticky top bar and the sticky submit/bottom nav. Pairs with
+     viewport `interactive-widget=resizes-content` (see base.html). */
+  input, select, textarea,
+  .form-control, .form-select, .ts-control {
+    scroll-margin-top: 84px;
+    scroll-margin-bottom: 110px;
+  }
+
+  /* ── 6. REINFORCE: NO PAGE-LEVEL HORIZONTAL SCROLL ────────────*/
+  html, body {
+    overflow-x: hidden;
+    max-width: 100vw;
+  }
+  .main-content,
+  .container, .container-fluid {
+    overflow-x: hidden;
+  }
+
+  /* ── 7. BUTTON ROWS WRAP INSTEAD OF OVERFLOWING ───────────────*/
+  .page-header-gradient .d-flex,
+  .card-header .d-flex,
+  .btn-toolbar {
+    flex-wrap: wrap;
+  }
+
+  /* ── 8. STAT / SUMMARY CARDS: never narrower than content ──────*/
+  .stat-card, .summary-card {
+    min-width: 0;
+  }
+  .stat-card .stat-value,
+  .summary-card .value {
+    overflow-wrap: anywhere;
+  }
+}
+
+/* ── 9. TABLETS / SMALL LANDSCAPE (481–991px) ────────────────────
+   Keep two-up where sensible but still prevent overflow. */
+@media (min-width: 481px) and (max-width: 991px) {
+  img, svg, canvas, video, iframe, table, .table, pre, code {
+    max-width: 100%;
+  }
+  .modal-dialog {
+    max-width: calc(100vw - 32px);
+  }
+}

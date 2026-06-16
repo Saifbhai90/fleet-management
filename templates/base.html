@@ -2,7 +2,7 @@
 <html lang="en" class="{% if request.endpoint == 'report_driver_profile_public' %}driver-profile-public-view{% endif %}">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" id="metaViewport" content="{% if request.endpoint == 'report_driver_profile_public' %}width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=3, user-scalable=yes, viewport-fit=cover{% else %}width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover{% endif %}">
+    <meta name="viewport" id="metaViewport" content="{% if request.endpoint == 'report_driver_profile_public' %}width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=3, user-scalable=yes, viewport-fit=cover{% else %}width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content{% endif %}">
     <meta name="theme-color" content="#0f172a" id="metaThemeColor">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -1575,6 +1575,8 @@
     </style>
     <!-- Mobile-Perfect responsive overrides (zero desktop impact) -->
     <link rel="stylesheet" href="/static/css/mobile_perfect.css">
+    <!-- Responsive hardening: cross-screen overflow / touch / keyboard guards (mobile only) -->
+    <link rel="stylesheet" href="/static/css/mobile_responsive_audit.css">
     <link rel="stylesheet" href="/static/css/fm_aurora_theme.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/fm_hub_pages.css') }}?v=3">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/rc_tile_gradients.css') }}?v=3">
