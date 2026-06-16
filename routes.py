@@ -24601,9 +24601,13 @@ def task_report_new():
         _tef.setdefault('lock_district', False)
         _tef.setdefault('lock_project', False)
         _tef.setdefault('lock_vehicle', False)
+        display_rows, pagination, per_page = _task_report_new_paginate(rows_list, request)
         return render_template(
             'task_report_new.html',
-            rows=rows_list,
+            rows=display_rows,
+            pagination=pagination,
+            per_page=per_page,
+            task_entry_total_rows=len(rows_list),
             view_date=v_date,
             district_id=district_id or 0,
             project_id=project_id or 0,
@@ -24649,6 +24653,7 @@ def task_report_new():
             return _task_report_new_render(rows, view_date)
         q = _task_report_new_vehicle_query(district_id, project_id, vehicle_id)
         vehicles = q.all()
+        vehicles = _task_report_new_filter_vehicles_for_batch(vehicles, request.form)
         missing = []
         to_save = []
         for v in vehicles:
@@ -24674,7 +24679,12 @@ def task_report_new():
             else:
                 to_save.append((v, existing, close_reading, tasks_count, user_start))
         if missing:
-            flash('Sab vehicles ke liye Close Reading zaroori hai. Missing: ' + ', '.join(missing), 'danger')
+            _page_save = bool(_task_report_new_form_vehicle_ids(request.form))
+            flash(
+                ('Is page par sab vehicles ke liye Close Reading zaroori hai. Missing: ' if _page_save else 'Sab vehicles ke liye Close Reading zaroori hai. Missing: ')
+                + ', '.join(missing),
+                'danger',
+            )
             view_date = task_date
             rows = _build_vehicle_rows(vehicles, task_date, request.form)
             return _task_report_new_render(rows, view_date)
@@ -24761,6 +24771,9 @@ def task_report_new():
             }
             if vehicle_id:
                 _redirect_kwargs['vehicle_id'] = vehicle_id
+            _saved_page = request.form.get('task_entry_page', type=int)
+            if _saved_page and _saved_page > 1:
+                _redirect_kwargs['page'] = _saved_page
             return redirect(url_for('task_report_new', **_redirect_kwargs))
         except Exception as e:
             db.session.rollback()
@@ -24990,6 +25003,42 @@ def _build_vehicle_rows(vehicles, task_date, form=None):
             'odometer_photo_path': ((existing.odometer_photo_path or '').strip()) if existing else '',
         })
     return rows
+
+
+TASK_ENTRY_PAGE_SIZE = 20
+
+
+def _task_report_new_resolve_page(req):
+    page = req.args.get('page', type=int)
+    if not page and req.method == 'POST':
+        page = req.form.get('task_entry_page', type=int)
+    return page or 1
+
+
+def _task_report_new_paginate(rows_list, req):
+    per_page = TASK_ENTRY_PAGE_SIZE
+    if len(rows_list) <= per_page:
+        return rows_list, None, per_page
+    pagination = SimplePagination(rows_list, _task_report_new_resolve_page(req), per_page)
+    return pagination.items, pagination, per_page
+
+
+def _task_report_new_form_vehicle_ids(form):
+    ids = []
+    for raw in form.getlist('task_entry_vehicle_ids'):
+        try:
+            ids.append(int(raw))
+        except (TypeError, ValueError):
+            continue
+    return ids
+
+
+def _task_report_new_filter_vehicles_for_batch(vehicles, form):
+    ids = _task_report_new_form_vehicle_ids(form)
+    if ids:
+        id_set = set(ids)
+        return [v for v in vehicles if v.id in id_set]
+    return list(vehicles)
 
 
 def _task_row_is_pending(entry_row):
