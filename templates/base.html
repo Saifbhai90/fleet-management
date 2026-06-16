@@ -7925,6 +7925,13 @@
                 // Skip inline delete/action forms inside table rows (e.g. delete buttons in list views)
                 if (form.closest('tr, td, thead, tbody, table')) return;
                 if (form.style.display === 'inline') return;
+                // Skip filter / search forms: these use GET and the submit button (e.g. "Load Vehicles")
+                // sits inline next to fields. Pinning it to the thumb zone made it float OVER the
+                // adjacent field. The thumb-zone sticky bar is only for primary data-entry (POST) submits.
+                if ((form.getAttribute('method') || 'get').toLowerCase() === 'get') return;
+                // Explicit opt-out for any form that should never get a sticky submit bar.
+                if (form.matches('.no-sticky-submit, [data-no-sticky]') ||
+                    form.closest('.no-sticky-submit, [data-no-sticky]')) return;
                 // Find last .d-grid that contains a submit button
                 var grids = form.querySelectorAll('.d-grid');
                 var target = null;
@@ -7939,6 +7946,10 @@
                     var btns = form.querySelectorAll('button[type="submit"]');
                     if (btns.length) target = btns[btns.length - 1].parentElement;
                 }
+                // Never pin an inline grid column — it would overlap sibling fields in the same row.
+                if (target && target.matches('[class*="col-"]') &&
+                    target.closest('.row') &&
+                    target.closest('.row').querySelectorAll('[class*="col-"]').length > 1) return;
                 if (target) target.classList.add('native-submit-sticky');
             });
         });
