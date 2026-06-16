@@ -42,46 +42,6 @@
       min-height: 0;
       padding-bottom: 12px;
     }
-    /* ── Mobile paginated div list (replaces table on phone — max 20 DOM cards) ── */
-    .task-entry-mobile-list {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-    .tev-card {
-      background: #fff;
-      border-radius: 16px;
-      border: 1px solid #e8ecf0;
-      box-shadow: 0 4px 18px rgba(15, 23, 42, 0.06);
-      overflow: hidden;
-    }
-    .tev-card--saved {
-      box-shadow: 0 4px 18px rgba(14, 165, 233, 0.12);
-      border-color: rgba(14, 165, 233, 0.25);
-    }
-    .tev-card-head {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 12px 14px;
-      background: linear-gradient(135deg, #064e3b 0%, #059669 50%, #10b981 100%);
-      color: #fff;
-    }
-    .tev-card-toggle { color: #fff !important; }
-    .tev-card-title { display: block; font-weight: 700; font-size: 1.05rem; }
-    .tev-card-meta { display: block; font-size: 0.72rem; opacity: 0.9; margin-top: 2px; }
-    .tev-card-chevron { color: rgba(255,255,255,0.85); transition: transform 0.2s ease; }
-    .tev-card-toggle[aria-expanded="true"] + .tev-card-chevron { transform: rotate(180deg); }
-    .tev-card-core { padding: 12px 14px 14px; background: #fafbfc; border-bottom: 1px solid #eef2f7; }
-    .tev-field-label { font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #64748b; margin-bottom: 4px; }
-    .tev-card-core .form-control { min-height: 48px; font-size: 16px; border-radius: 12px; }
-    .tev-mini-metrics { display: flex; gap: 16px; font-size: 0.82rem; color: #475569; }
-    .tev-card-details-inner { padding: 12px 14px 14px; background: #fff; }
-    .tev-metrics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.85rem; }
-    .tev-readonly-line { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; }
-    .task-entry-pagination-bar .btn { min-height: 44px; border-radius: 12px; font-weight: 600; }
-    .task-entry-pagination-bar .page-summary { font-size: 0.85rem; color: #64748b; }
-    .task-row[data-task-search-hidden="1"] { display: none !important; }
     .task-batch-page .task-batch-filter-card {
       border: none !important;
       border-radius: 18px !important;
@@ -773,6 +733,17 @@
       background: linear-gradient(180deg, #fafbfc 0%, #f1f5f9 100%) !important;
     }
   }
+  /* Chunk/search hiding via data attributes — no inline display toggles (prevents layout jump). */
+  @media (max-width: 767.98px) {
+    body[data-fleet-endpoint="task_report_new"] #batchTable tbody tr.task-row[data-task-chunk-hidden="1"],
+    body[data-fleet-endpoint="task_report_new"] #batchTable tbody tr.task-row[data-task-search-hidden="1"] {
+      display: none !important;
+    }
+  }
+  html.capacitor-native body[data-fleet-endpoint="task_report_new"] #batchTable tbody tr.task-row[data-task-chunk-hidden="1"],
+  html.capacitor-native body[data-fleet-endpoint="task_report_new"] #batchTable tbody tr.task-row[data-task-search-hidden="1"] {
+    display: none !important;
+  }
 </style>
 <div class="container-fluid task-batch-page px-2 px-md-3">
   <div class="d-flex justify-content-between align-items-center mb-3 mb-md-4 flex-wrap gap-2 task-batch-page-header">
@@ -870,10 +841,6 @@
     <input type="hidden" name="district_id" value="{{ district_id }}">
     <input type="hidden" name="project_id" value="{{ project_id }}">
     <input type="hidden" name="vehicle_id" value="{{ vehicle_id }}">
-    <input type="hidden" name="task_entry_page" value="{{ pagination.page if pagination else 1 }}">
-    {% for row in rows %}
-    <input type="hidden" name="task_entry_vehicle_ids" value="{{ row.vehicle.id }}">
-    {% endfor %}
 
     {# overflow-hidden removed so Capacitor sticky Save bar (native-submit-sticky) works; rounded clip via card-body only #}
     <div class="card shadow border-0 rounded-3 task-batch-card">
@@ -884,30 +851,7 @@
       </div>
       </div>
       <div class="card-body p-0">
-        {% if pagination %}
-        <div class="task-entry-pagination-bar d-md-none d-flex flex-wrap align-items-center justify-content-between gap-2 px-3 py-2 border-bottom bg-light">
-          <span class="page-summary"><strong>{{ (pagination.page - 1) * per_page + 1 }}</strong>–<strong>{{ (pagination.page - 1) * per_page + rows|length }}</strong> of <strong>{{ pagination.total }}</strong> · Page {{ pagination.page }}/{{ pagination.pages }}</span>
-          <div class="d-flex gap-2 ms-auto">
-            {% if pagination.has_prev %}
-            <a class="btn btn-outline-secondary btn-sm px-3" href="{{ url_for('task_report_new', date=view_date.strftime('%d-%m-%Y'), district_id=district_id or 0, project_id=project_id or 0, vehicle_id=vehicle_id or 0, page=pagination.prev_num) }}"><i class="bi bi-chevron-left"></i> Prev</a>
-            {% else %}
-            <span class="btn btn-outline-secondary btn-sm px-3 disabled"><i class="bi bi-chevron-left"></i> Prev</span>
-            {% endif %}
-            {% if pagination.has_next %}
-            <a class="btn btn-outline-primary btn-sm px-3" href="{{ url_for('task_report_new', date=view_date.strftime('%d-%m-%Y'), district_id=district_id or 0, project_id=project_id or 0, vehicle_id=vehicle_id or 0, page=pagination.next_num) }}">Next <i class="bi bi-chevron-right"></i></a>
-            {% else %}
-            <span class="btn btn-outline-primary btn-sm px-3 disabled">Next <i class="bi bi-chevron-right"></i></span>
-            {% endif %}
-          </div>
-        </div>
-        {% endif %}
-        <div class="d-md-none task-entry-mobile-list px-2 py-2" id="taskEntryMobileList">
-          {% for row in rows %}
-          {% set row_num = (pagination.page - 1) * per_page + loop.index if pagination else loop.index %}
-          {% include 'partials/task_entry_mobile_card.html' %}
-          {% endfor %}
-        </div>
-        <div class="table-responsive task-batch-table-wrap d-none d-md-block">
+        <div class="table-responsive task-batch-table-wrap">
           <table class="table table-hover align-middle mb-0 task-batch-table" id="batchTable" data-mp-skip-cards="1" role="grid">
             <thead class="table-light">
               <tr>
@@ -947,11 +891,11 @@
                 {% set kms_diff = none %}
                 {% set pct_diff = none %}
               {% endif %}
-              {% set row_num = (pagination.page - 1) * per_page + loop.index if pagination else loop.index %}
-              <tr class="task-row{% if s %} table-info{% endif %}" data-vehicle-id="{{ row.vehicle.id }}" data-start="{{ row.start_reading }}" data-tracker="{{ row.tracker_km }}" data-emg="{{ row.emg_tasks }}" data-vehicle="{{ row.vehicle.vehicle_no | e }}" data-district="{{ (row.vehicle.district.name if row.vehicle.district else '') | e }}" data-init-close="{% if row.close_reading is not none %}{{ row.close_reading }}{% endif %}" data-init-tasks="{% if row.tasks_count is not none %}{{ row.tasks_count }}{% endif %}" data-init-odom="{{ row.odometer_photo_path or '' }}" data-task-search-hidden="0">
+              {% set chunk_hidden = '1' if rows|length > 20 and loop.index > 15 else '0' %}
+              <tr class="task-row{% if s %} table-info{% endif %}" data-vehicle-id="{{ row.vehicle.id }}" data-start="{{ row.start_reading }}" data-tracker="{{ row.tracker_km }}" data-emg="{{ row.emg_tasks }}" data-vehicle="{{ row.vehicle.vehicle_no | e }}" data-district="{{ (row.vehicle.district.name if row.vehicle.district else '') | e }}" data-init-close="{% if row.close_reading is not none %}{{ row.close_reading }}{% endif %}" data-init-tasks="{% if row.tasks_count is not none %}{{ row.tasks_count }}{% endif %}" data-init-odom="{{ row.odometer_photo_path or '' }}" data-task-chunk-hidden="{{ chunk_hidden }}" data-task-search-hidden="0">
                 <td class="ps-4 ps-md-4 task-batch-num-cell">
                 <input type="hidden" name="row_{{ row.vehicle.id }}_edit_mode" id="row_{{ row.vehicle.id }}_edit_mode" value="{{ '0' if s else '1' }}">
-                  <span class="task-batch-num-inner"><span class="task-batch-row-num">{{ row_num }}</span>{% if s %} <i class="bi bi-check-circle-fill text-success" title="Previously saved"></i>{% endif %}</span>
+                  <span class="task-batch-num-inner"><span class="task-batch-row-num">{{ loop.index }}</span>{% if s %} <i class="bi bi-check-circle-fill text-success" title="Previously saved"></i>{% endif %}</span>
                 </td>
                 <td class="d-none d-md-table-cell">{{ row.vehicle.district.name if row.vehicle.district else '-' }}</td>
                 <td class="d-none d-md-table-cell">{{ row.vehicle.parking_station.tehsil if row.vehicle.parking_station else '-' }}</td>
@@ -1060,19 +1004,18 @@
             {% endif %}
           </table>
         </div>
-        {% if pagination %}
-        <div class="d-none d-md-block px-3 py-2 border-top bg-light">
-          {% set pagination_items_count = rows|length %}
-          {% include '_pagination.html' %}
+        <div id="taskEntryLoadMoreWrap" class="{% if rows|length > 20 %}text-center py-3 px-3 task-entry-load-more-wrap{% else %}d-none{% endif %}">
+          <button type="button" class="btn btn-outline-primary px-4" id="taskEntryLoadMoreBtn">
+            <i class="bi bi-chevron-down me-1"></i>Load more vehicles (<span id="taskEntryLoadMoreCount">{% if rows|length > 20 %}{{ rows|length - 15 }}{% else %}0{% endif %}</span> remaining)
+          </button>
         </div>
-        {% endif %}
       </div>
       <div class="card-footer bg-light d-flex flex-column flex-sm-row justify-content-between align-items-stretch align-items-sm-center gap-2 rounded-bottom">
-        <span class="text-muted small order-3 order-sm-1 task-batch-footer-hint"><span class="d-none d-md-inline">Saved rows locked rahengi; <strong>Edit</strong> se change, <strong>Delete</strong> se galat entry hataen (ijazat ke sath). New rows ke liye Close Reading required hai.</span><span class="d-md-none">{% if pagination %}Har page alag save hota hai — <strong>Save Page</strong> dabayen, phir Next se agla page.{% else %}Saved: <strong>Edit</strong> / <strong>Delete</strong>. Nayi row: <strong>Close Reading</strong> zaroori.{% endif %}</span></span>
+        <span class="text-muted small order-3 order-sm-1 task-batch-footer-hint"><span class="d-none d-md-inline">Saved rows locked rahengi; <strong>Edit</strong> se change, <strong>Delete</strong> se galat entry hataen (ijazat ke sath). New rows ke liye Close Reading required hai.</span><span class="d-md-none">Saved: <strong>Edit</strong> / <strong>Delete</strong> (agar ijazat ho). Nayi row: <strong>Close Reading</strong> zaroori.</span></span>
         <div class="d-flex flex-column flex-sm-row gap-2 order-1 order-sm-2 align-self-stretch align-self-sm-auto">
           <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary px-4 py-2 align-self-stretch text-center">Cancel</a>
           <button type="submit" class="btn btn-primary px-4 py-2 align-self-stretch task-batch-save-btn" id="saveBtn">
-          <i class="bi bi-save me-1"></i>{% if pagination %}Save Page{% else %}Save All{% endif %}
+          <i class="bi bi-save me-1"></i>Save All
         </button>
         </div>
       </div>
@@ -1285,16 +1228,12 @@ window.TASK_REPORT_NEW_LOCK_VEHICLE = {{ tef.get('lock_vehicle', false)|tojson }
     var tracker = parseFloat(row.dataset.tracker) || 0;
     var emg = parseFloat(row.dataset.emg) || 0;
     var closeInp = row.querySelector('.close-input');
-    var close = 0;
-    if (closeInp) {
-      close = closeInp.value.trim() === '' ? 0 : parseFloat(closeInp.value);
-    }
+    var close = closeInp.value.trim() === '' ? 0 : parseFloat(closeInp.value);
     if (isNaN(close)) close = 0;
     var kmsDriven = close - start;
     var kmsDiff = kmsDriven - tracker;
     var pctDiff = (kmsDriven !== 0) ? ((kmsDiff / kmsDriven) * 100).toFixed(1) + '%' : 'Driven KM Zero';
-    var kmsEl = row.querySelector('.kms-driven');
-    if (kmsEl) kmsEl.textContent = kmsDriven.toFixed(2);
+    row.querySelector('.kms-driven').textContent = kmsDriven.toFixed(2);
 
     var taskInp = row.querySelector('input[name*="_tasks_count"]');
     var tasks = 0;
@@ -1321,8 +1260,7 @@ window.TASK_REPORT_NEW_LOCK_VEHICLE = {{ tef.get('lock_vehicle', false)|tojson }
   }
 
   function updateTotals() {
-    var root = taskEntryBatchRoot();
-    var allRows = root ? root.querySelectorAll('.task-row') : [];
+    var allRows = batchTable ? batchTable.querySelectorAll('.task-row') : [];
     var rows = [];
     allRows.forEach(function(r) { if (taskEntryRowIsVisible(r)) rows.push(r); });
     var tKms = 0, tTasks = 0, tEmg = 0, tTaskDiff = 0, tTracker = 0, tDiff = 0, validKms = 0, hasTaskDiff = false;
@@ -1360,9 +1298,9 @@ window.TASK_REPORT_NEW_LOCK_VEHICLE = {{ tef.get('lock_vehicle', false)|tojson }
   }
 
   function taskEntryRestoreRowsFromServer() {
-    var root = taskEntryBatchRoot();
-    if (!root) return;
-    root.querySelectorAll('.task-row').forEach(function(row) {
+    var batchTable = document.getElementById('batchTable');
+    if (!batchTable) return;
+    batchTable.querySelectorAll('tr.task-row').forEach(function(row) {
       var vid = row.getAttribute('data-vehicle-id');
       if (!vid) return;
       var editMode = document.getElementById('row_' + vid + '_edit_mode');
@@ -1430,47 +1368,10 @@ window.TASK_REPORT_NEW_LOCK_VEHICLE = {{ tef.get('lock_vehicle', false)|tojson }
     }, 500);
   })();
 
-  function taskEntryBatchRoot() {
-    return document.getElementById('taskEntryMobileList') || document.getElementById('batchTable');
-  }
-
-  function taskEntryDisableInactiveBranch() {
-    var mobile = window.matchMedia('(max-width: 767.98px)').matches;
-    var inactive = mobile ? document.getElementById('batchTable') : document.getElementById('taskEntryMobileList');
-    if (!inactive) return;
-    inactive.querySelectorAll('input, select, textarea, button').forEach(function(el) {
-      el.disabled = true;
-      el.removeAttribute('name');
-    });
-  }
-
-  function taskEntryRowIsVisible(row) {
-    if (!row) return false;
-    return row.dataset.taskSearchHidden !== '1';
-  }
-
-  function taskEntryApplyRowVisibility() {
-    var root = taskEntryBatchRoot();
-    if (!root) return;
-    var q = taskEntrySearchQuery.trim();
-    var searchActive = !!q;
-    root.querySelectorAll('.task-row').forEach(function(row) {
-      var searchHide = searchActive && !taskEntryRowIsSearchMatch(row, q);
-      row.dataset.taskSearchHidden = searchHide ? '1' : '0';
-    });
-    updateTotals();
-  }
-
-  function goPage(p) {
-    var u = new URL(window.location.href);
-    u.searchParams.set('page', String(p));
-    window.location.href = u.toString();
-  }
-
-  taskEntryDisableInactiveBranch();
   var batchTable = document.getElementById('batchTable');
-  var taskEntryMobileList = document.getElementById('taskEntryMobileList');
-  var batchRoot = taskEntryBatchRoot();
+  var taskEntryChunkSize = 15;
+  var taskEntryChunkThreshold = 20;
+  var taskEntryRowList = [];
   var taskEntrySearchQuery = '';
 
   function taskEntryRowIsSearchMatch(row, q) {
@@ -1478,18 +1379,89 @@ window.TASK_REPORT_NEW_LOCK_VEHICLE = {{ tef.get('lock_vehicle', false)|tojson }
     return window.fleetMultiWordMatch(row.innerText || row.textContent, q);
   }
 
-  if (batchRoot) {
-    batchRoot.addEventListener('input', function(e) {
-      var row = e.target.closest('.task-row');
+  function taskEntryUsesChunking() {
+    var isNative = document.documentElement.classList.contains('capacitor-native');
+    var isMobile = window.matchMedia('(max-width: 767.98px)').matches;
+    return isNative || isMobile;
+  }
+
+  function taskEntryRowIsVisible(row) {
+    if (!row) return false;
+    if (row.dataset.taskSearchHidden === '1') return false;
+    if (taskEntryUsesChunking() && row.dataset.taskChunkHidden === '1') return false;
+    return true;
+  }
+
+  function taskEntryUpdateLoadMoreUi() {
+    var wrap = document.getElementById('taskEntryLoadMoreWrap');
+    var countEl = document.getElementById('taskEntryLoadMoreCount');
+    if (!wrap || !taskEntryRowList.length) return;
+    if (taskEntrySearchQuery.trim()) {
+      wrap.classList.add('d-none');
+      return;
+    }
+    var remaining = 0;
+    taskEntryRowList.forEach(function(row) {
+      if (row.dataset.taskChunkHidden === '1') remaining++;
+    });
+    if (remaining <= 0 || taskEntryRowList.length <= taskEntryChunkThreshold) {
+      wrap.classList.add('d-none');
+      return;
+    }
+    wrap.classList.remove('d-none');
+    if (countEl) countEl.textContent = String(remaining);
+  }
+
+  function taskEntryApplyRowVisibility() {
+    if (!batchTable) return;
+    var q = taskEntrySearchQuery.trim();
+    var searchActive = !!q;
+    var rows = taskEntryRowList.length
+      ? taskEntryRowList
+      : Array.prototype.slice.call(batchTable.querySelectorAll('.task-row'));
+    rows.forEach(function(row) {
+      var searchHide = searchActive && !taskEntryRowIsSearchMatch(row, q);
+      row.dataset.taskSearchHidden = searchHide ? '1' : '0';
+    });
+    taskEntryUpdateLoadMoreUi();
+  }
+
+  function taskEntryInitMobileChunks() {
+    if (!batchTable) return;
+    taskEntryRowList = Array.prototype.slice.call(batchTable.querySelectorAll('tbody tr.task-row'));
+    if (taskEntryUsesChunking() && taskEntryRowList.length > taskEntryChunkThreshold) {
+      var loadBtn = document.getElementById('taskEntryLoadMoreBtn');
+      if (loadBtn && !loadBtn.dataset.bound) {
+        loadBtn.dataset.bound = '1';
+        loadBtn.addEventListener('click', function() {
+          var revealed = 0;
+          taskEntryRowList.forEach(function(row) {
+            if (revealed >= taskEntryChunkSize) return;
+            if (row.dataset.taskChunkHidden === '1') {
+              row.dataset.taskChunkHidden = '0';
+              revealed++;
+            }
+          });
+          taskEntryApplyRowVisibility();
+          updateTotals();
+        });
+      }
+    }
+    taskEntryApplyRowVisibility();
+  }
+
+  if (batchTable) {
+    batchTable.addEventListener('input', function(e) {
+      var row = e.target.closest('tr.task-row');
       if (row) updateRow(row);
       updateTotals();
     });
-    batchRoot.addEventListener('change', function(e) {
-      var row = e.target.closest('.task-row');
+    batchTable.addEventListener('change', function(e) {
+      var row = e.target.closest('tr.task-row');
       if (row) updateRow(row);
       updateTotals();
     });
-    batchRoot.querySelectorAll('.task-row').forEach(function(row) {
+    batchTable.querySelectorAll('.task-row').forEach(function(row) {
       var closeInp = row.querySelector('.close-input');
       var hasClose = closeInp && closeInp.value.trim() !== '';
       var taskInp = row.querySelector('input[name*="_tasks_count"]');
@@ -1505,20 +1477,21 @@ window.TASK_REPORT_NEW_LOCK_VEHICLE = {{ tef.get('lock_vehicle', false)|tojson }
         return false;
       }
       var empty = [];
-      batchRoot.querySelectorAll('.close-input').forEach(function(inp) {
+      batchTable.querySelectorAll('.close-input').forEach(function(inp) {
         var rowId = inp.getAttribute('data-row');
         var mode = document.getElementById('row_' + rowId + '_edit_mode');
-        if (mode && mode.value === '0') return;
+        if (mode && mode.value === '0') return; // Locked row skip validation.
         if (!inp.value || inp.value.trim() === '') {
-          var tr = inp.closest('.task-row');
+          var tr = inp.closest('tr');
           var dv = tr && tr.getAttribute('data-vehicle');
-          var label = (dv && dv.trim()) || '';
+          var vnoEl = tr && tr.querySelector('.fw-medium');
+          var label = (dv && dv.trim()) || (vnoEl && vnoEl.textContent.trim()) || '';
           if (label) empty.push(label);
         }
       });
       if (empty.length > 0) {
         e.preventDefault();
-        alert('Is page ki tamam rows ke liye Close Reading zaroori hai. Missing: ' + empty.join(', '));
+        alert('Sab vehicles ke liye Close Reading zaroori hai. Missing: ' + empty.join(', '));
         return false;
       }
       _batchSubmitting = true;
@@ -1534,8 +1507,11 @@ window.TASK_REPORT_NEW_LOCK_VEHICLE = {{ tef.get('lock_vehicle', false)|tojson }
       taskEntrySearch.addEventListener('input', function() {
         taskEntrySearchQuery = this.value;
         taskEntryApplyRowVisibility();
+        updateTotals();
       });
     }
+
+    taskEntryInitMobileChunks();
   }
 
   /* ── Helpers ─────────────────────────────────────────────── */
