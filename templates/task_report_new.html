@@ -665,84 +665,54 @@
     }
   }
 
-  /*
-   * Capacitor Android — scroll stability (MUST stay last).
-   * Use #appNativeShell .main-content — ID beats generic .main-content in base.html.
-   * -webkit-overflow-scrolling: auto stops GPU layer detach (white void while scrolling).
-   * overflow-anchor: none stops browser re-positioning cards on touch.
-   */
+  /* Capacitor scroll → base.html #appNativeShell .main-content only. No per-page scroll hacks. */
+
+  /* Mobile Task Entry — lightweight flex list (table hidden on phone via d-none d-md-block) */
   @media (max-width: 767.98px) {
-    body[data-fleet-endpoint="task_report_new"] .task-batch-page {
-      overflow-anchor: none !important;
-      touch-action: pan-y;
+    .task-entry-mobile-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
     }
-    body[data-fleet-endpoint="task_report_new"] #batchTable.task-batch-table,
-    body[data-fleet-endpoint="task_report_new"] #batchTable.task-batch-table > tbody,
-    body[data-fleet-endpoint="task_report_new"] #batchTable.task-batch-table > tfoot {
-      display: block !important;
-      width: 100% !important;
-      border: none !important;
-      overflow-anchor: none !important;
+    .tev-card {
+      min-height: 210px;
+      background: #fff;
+      border-radius: 16px;
+      border: 1px solid #e2e8f0;
+      overflow: hidden;
     }
-    body[data-fleet-endpoint="task_report_new"] .task-batch-table tbody tr.task-row {
-      display: block !important;
-      width: 100% !important;
-      overflow-anchor: none !important;
-      content-visibility: visible !important;
-      contain: paint;
-      contain-intrinsic-size: auto !important;
-      isolation: isolate;
-      transform: none !important;
-      transition: none !important;
-      will-change: auto !important;
-      touch-action: pan-y;
-      margin-bottom: 12px !important;
+    .tev-card--saved { border-color: #7dd3fc; }
+    .tev-card-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 14px;
+      background: linear-gradient(135deg, #064e3b 0%, #059669 100%);
+      color: #fff;
     }
-    body[data-fleet-endpoint="task_report_new"] .task-batch-table tbody tr.task-row > td,
-    body[data-fleet-endpoint="task_report_new"] .task-batch-table tbody tr.task-row > td .form-control-sm {
-      transition: none !important;
+    .tev-card-toggle { color: #fff !important; }
+    .tev-card-title { display: block; font-weight: 700; font-size: 1.05rem; }
+    .tev-card-meta { display: block; font-size: 0.72rem; opacity: 0.9; }
+    .tev-card-chevron { color: rgba(255,255,255,0.85); }
+    .tev-card-core { padding: 12px 14px; background: #f8fafc; }
+    .tev-field-label {
+      font-size: 0.65rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.06em; color: #64748b; margin-bottom: 4px;
     }
-    html.capacitor-native body[data-fleet-endpoint="task_report_new"] #appNativeShell .main-content,
-    html.capacitor-native body[data-fleet-endpoint="task_report_new"] #mainContent.main-content,
-    html.capacitor-native body[data-fleet-endpoint="task_report_new"] .main-content {
-      animation: none !important;
-      scroll-behavior: auto !important;
-      -webkit-overflow-scrolling: auto !important;
-      transform: none !important;
-      will-change: auto !important;
-      overflow-x: hidden !important;
-      overflow-anchor: none !important;
-      touch-action: pan-y;
-    }
-    html.capacitor-native body[data-fleet-endpoint="task_report_new"] .fm-aurora-orb {
-      animation: none !important;
-    }
-    html.capacitor-native body[data-fleet-endpoint="task_report_new"] .task-batch-page,
-    html.capacitor-native body[data-fleet-endpoint="task_report_new"] .task-batch-card > .card-body,
-    html.capacitor-native body[data-fleet-endpoint="task_report_new"] .task-batch-table-wrap {
-      overflow: visible !important;
-      min-height: 0 !important;
-    }
-    /* Sticky Save bar fights scroll compositor on long lists — keep footer in normal flow */
-    html.capacitor-native body[data-fleet-endpoint="task_report_new"] .task-batch-card .card-footer,
-    html.capacitor-native body[data-fleet-endpoint="task_report_new"] .task-batch-card .card-footer.native-submit-sticky {
+    .tev-card-core .form-control { min-height: 48px; font-size: 16px; border-radius: 12px; }
+    .tev-mini-metrics { display: flex; gap: 16px; font-size: 0.82rem; color: #475569; }
+    .tev-card-details-inner { padding: 12px 14px; }
+    .tev-metrics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.85rem; }
+    .tev-readonly-line { display: flex; justify-content: space-between; padding: 6px 0; }
+    .task-row[data-task-search-hidden="1"],
+    .task-row[data-task-chunk-hidden="1"] { display: none !important; }
+    .task-entry-load-more-wrap .btn { min-height: 44px; border-radius: 12px; }
+    html.capacitor-native .task-batch-card .card-footer,
+    html.capacitor-native .task-batch-card .card-footer.native-submit-sticky {
       position: static !important;
-      bottom: auto !important;
       backdrop-filter: none !important;
       -webkit-backdrop-filter: none !important;
-      background: linear-gradient(180deg, #fafbfc 0%, #f1f5f9 100%) !important;
     }
-  }
-  /* Chunk/search hiding via data attributes — no inline display toggles (prevents layout jump). */
-  @media (max-width: 767.98px) {
-    body[data-fleet-endpoint="task_report_new"] #batchTable tbody tr.task-row[data-task-chunk-hidden="1"],
-    body[data-fleet-endpoint="task_report_new"] #batchTable tbody tr.task-row[data-task-search-hidden="1"] {
-      display: none !important;
-    }
-  }
-  html.capacitor-native body[data-fleet-endpoint="task_report_new"] #batchTable tbody tr.task-row[data-task-chunk-hidden="1"],
-  html.capacitor-native body[data-fleet-endpoint="task_report_new"] #batchTable tbody tr.task-row[data-task-search-hidden="1"] {
-    display: none !important;
   }
 </style>
 <div class="container-fluid task-batch-page px-2 px-md-3">
@@ -851,7 +821,13 @@
       </div>
       </div>
       <div class="card-body p-0">
-        <div class="table-responsive task-batch-table-wrap">
+        <div class="d-md-none task-entry-mobile-list px-2 py-2" id="taskEntryMobileList">
+          {% for row in rows %}
+          {% set row_num = loop.index %}
+          {% include 'partials/task_entry_mobile_card.html' %}
+          {% endfor %}
+        </div>
+        <div class="table-responsive task-batch-table-wrap d-none d-md-block">
           <table class="table table-hover align-middle mb-0 task-batch-table" id="batchTable" data-mp-skip-cards="1" role="grid">
             <thead class="table-light">
               <tr>
@@ -1098,27 +1074,6 @@ window.TASK_REPORT_NEW_LOCK_PROJECT = {{ tef.get('lock_project', false)|tojson }
 window.TASK_REPORT_NEW_LOCK_VEHICLE = {{ tef.get('lock_vehicle', false)|tojson }};
 </script>
 <script>
-(function taskEntryScrollStabilize() {
-  if (!document.getElementById('batchForm')) return;
-  if ('scrollRestoration' in history) {
-    history.scrollRestoration = 'manual';
-  }
-  function pinTaskEntryScrollTop() {
-    var mc = document.getElementById('mainContent') || document.querySelector('.main-content');
-    if (!mc) return;
-    if (mc.scrollTop > 0) mc.scrollTop = 0;
-  }
-  pinTaskEntryScrollTop();
-  window.requestAnimationFrame(function() {
-    pinTaskEntryScrollTop();
-    window.requestAnimationFrame(pinTaskEntryScrollTop);
-  });
-  window.addEventListener('pageshow', function() {
-    pinTaskEntryScrollTop();
-  });
-})();
-</script>
-<script>
 (function() {
   var lockDistrict = !!(window.TASK_REPORT_NEW_LOCK_DISTRICT);
   var lockVehicle = !!(window.TASK_REPORT_NEW_LOCK_VEHICLE);
@@ -1244,7 +1199,9 @@ window.TASK_REPORT_NEW_LOCK_VEHICLE = {{ tef.get('lock_vehicle', false)|tojson }
     var td = tasks - emg;
     var taskDiffOut = tdCell && (tdCell.querySelector('.task-batch-metric-plain') || tdCell);
     if (taskDiffOut) taskDiffOut.textContent = td;
-    if (tdCell) tdCell.className = 'text-center task-diff task-batch-metric-cell' + (td !== 0 ? ' text-danger fw-bold' : '');
+    if (tdCell && tdCell.classList.contains('task-batch-metric-cell')) {
+      tdCell.className = 'text-center task-diff task-batch-metric-cell' + (td !== 0 ? ' text-danger fw-bold' : '');
+    }
 
     var kmsTd = row.querySelector('.kms-diff');
     var kmsText = isNaN(kmsDiff) ? '-' : kmsDiff.toFixed(2);
@@ -1255,12 +1212,69 @@ window.TASK_REPORT_NEW_LOCK_VEHICLE = {{ tef.get('lock_vehicle', false)|tojson }
     if (pctOut) pctOut.textContent = pctDiff;
     var pctVal = (typeof pctDiff === 'string' && pctDiff !== '-' && pctDiff !== 'Driven KM Zero') ? parseFloat(pctDiff) : NaN;
     var pctRed = !isNaN(pctVal) && pctVal >= 10;
-    if (pctTd) pctTd.className = 'text-end pct-diff task-batch-metric-cell' + (pctRed ? ' text-danger fw-bold' : (!isNaN(pctVal) && pctVal < 0 ? ' text-warning' : ''));
-    if (kmsTd) kmsTd.className = 'text-end kms-diff task-batch-metric-cell' + (pctRed ? ' text-danger fw-bold' : (!isNaN(kmsDiff) && kmsDiff < 0 ? ' text-warning' : ''));
+    if (pctTd && pctTd.classList.contains('task-batch-metric-cell')) {
+      pctTd.className = 'text-end pct-diff task-batch-metric-cell' + (pctRed ? ' text-danger fw-bold' : (!isNaN(pctVal) && pctVal < 0 ? ' text-warning' : ''));
+    }
+    if (kmsTd && kmsTd.classList.contains('task-batch-metric-cell')) {
+      kmsTd.className = 'text-end kms-diff task-batch-metric-cell' + (pctRed ? ' text-danger fw-bold' : (!isNaN(kmsDiff) && kmsDiff < 0 ? ' text-warning' : ''));
+    }
+  }
+
+  var batchTable = document.getElementById('batchTable');
+  var taskEntryMobileList = document.getElementById('taskEntryMobileList');
+  var taskEntryBatchRoot = document.getElementById('batchForm');
+
+  function taskEntryIsMobileSurface() {
+    return window.matchMedia('(max-width: 767.98px)').matches;
+  }
+
+  function taskEntryRowIsLocked(row) {
+    var vid = row.getAttribute('data-vehicle-id');
+    if (!vid) return false;
+    var editMode = document.getElementById('row_' + vid + '_edit_mode');
+    return !!(editMode && editMode.value === '0');
+  }
+
+  function taskEntrySetFormSurface() {
+    var mobile = taskEntryIsMobileSurface();
+    document.querySelectorAll('#batchTable input, #batchTable select, #batchTable textarea, #batchTable button').forEach(function(el) {
+      if (mobile) {
+        el.disabled = true;
+        return;
+      }
+      if (el.type === 'hidden') {
+        el.disabled = false;
+        return;
+      }
+      el.disabled = taskEntryRowIsLocked(el.closest('.task-row'));
+    });
+    document.querySelectorAll('#taskEntryMobileList input, #taskEntryMobileList select, #taskEntryMobileList textarea, #taskEntryMobileList button').forEach(function(el) {
+      if (!mobile) {
+        el.disabled = true;
+        return;
+      }
+      if (el.type === 'hidden') {
+        el.disabled = false;
+        return;
+      }
+      if (el.classList.contains('tev-card-toggle')) return;
+      el.disabled = taskEntryRowIsLocked(el.closest('.task-row'));
+    });
+  }
+
+  function taskEntryQueryRows() {
+    if (taskEntryRowList.length) return taskEntryRowList;
+    if (taskEntryIsMobileSurface() && taskEntryMobileList) {
+      return Array.prototype.slice.call(taskEntryMobileList.querySelectorAll('.task-row'));
+    }
+    if (batchTable) {
+      return Array.prototype.slice.call(batchTable.querySelectorAll('tbody tr.task-row, .task-row'));
+    }
+    return [];
   }
 
   function updateTotals() {
-    var allRows = batchTable ? batchTable.querySelectorAll('.task-row') : [];
+    var allRows = taskEntryQueryRows();
     var rows = [];
     allRows.forEach(function(r) { if (taskEntryRowIsVisible(r)) rows.push(r); });
     var tKms = 0, tTasks = 0, tEmg = 0, tTaskDiff = 0, tTracker = 0, tDiff = 0, validKms = 0, hasTaskDiff = false;
@@ -1298,13 +1312,11 @@ window.TASK_REPORT_NEW_LOCK_VEHICLE = {{ tef.get('lock_vehicle', false)|tojson }
   }
 
   function taskEntryRestoreRowsFromServer() {
-    var batchTable = document.getElementById('batchTable');
-    if (!batchTable) return;
-    batchTable.querySelectorAll('tr.task-row').forEach(function(row) {
+    taskEntryQueryRows().forEach(function(row) {
       var vid = row.getAttribute('data-vehicle-id');
       if (!vid) return;
       var editMode = document.getElementById('row_' + vid + '_edit_mode');
-      if (row.classList.contains('table-info') && editMode && editMode.value === '0') {
+      if ((row.classList.contains('table-info') || row.classList.contains('tev-card--saved')) && editMode && editMode.value === '0') {
         return;
       }
       var initClose = row.getAttribute('data-init-close') || '';
@@ -1354,6 +1366,7 @@ window.TASK_REPORT_NEW_LOCK_VEHICLE = {{ tef.get('lock_vehicle', false)|tojson }
       btn.innerHTML = '<i class="bi bi-check2-circle me-1"></i>Editing';
       btn.disabled = true;
     }
+    taskEntrySetFormSurface();
   }
 
   (function taskEntryResumeAfterCamera() {
@@ -1368,7 +1381,6 @@ window.TASK_REPORT_NEW_LOCK_VEHICLE = {{ tef.get('lock_vehicle', false)|tojson }
     }, 500);
   })();
 
-  var batchTable = document.getElementById('batchTable');
   var taskEntryChunkSize = 15;
   var taskEntryChunkThreshold = 20;
   var taskEntryRowList = [];
@@ -1413,12 +1425,9 @@ window.TASK_REPORT_NEW_LOCK_VEHICLE = {{ tef.get('lock_vehicle', false)|tojson }
   }
 
   function taskEntryApplyRowVisibility() {
-    if (!batchTable) return;
     var q = taskEntrySearchQuery.trim();
     var searchActive = !!q;
-    var rows = taskEntryRowList.length
-      ? taskEntryRowList
-      : Array.prototype.slice.call(batchTable.querySelectorAll('.task-row'));
+    var rows = taskEntryRowList.length ? taskEntryRowList : taskEntryQueryRows();
     rows.forEach(function(row) {
       var searchHide = searchActive && !taskEntryRowIsSearchMatch(row, q);
       row.dataset.taskSearchHidden = searchHide ? '1' : '0';
@@ -1427,8 +1436,13 @@ window.TASK_REPORT_NEW_LOCK_VEHICLE = {{ tef.get('lock_vehicle', false)|tojson }
   }
 
   function taskEntryInitMobileChunks() {
-    if (!batchTable) return;
-    taskEntryRowList = Array.prototype.slice.call(batchTable.querySelectorAll('tbody tr.task-row'));
+    if (taskEntryIsMobileSurface() && taskEntryMobileList) {
+      taskEntryRowList = Array.prototype.slice.call(taskEntryMobileList.querySelectorAll('.task-row'));
+    } else if (batchTable) {
+      taskEntryRowList = Array.prototype.slice.call(batchTable.querySelectorAll('tbody tr.task-row'));
+    } else {
+      taskEntryRowList = [];
+    }
     if (taskEntryUsesChunking() && taskEntryRowList.length > taskEntryChunkThreshold) {
       var loadBtn = document.getElementById('taskEntryLoadMoreBtn');
       if (loadBtn && !loadBtn.dataset.bound) {
@@ -1450,18 +1464,28 @@ window.TASK_REPORT_NEW_LOCK_VEHICLE = {{ tef.get('lock_vehicle', false)|tojson }
     taskEntryApplyRowVisibility();
   }
 
-  if (batchTable) {
-    batchTable.addEventListener('input', function(e) {
-      var row = e.target.closest('tr.task-row');
+  if (taskEntryBatchRoot) {
+    taskEntrySetFormSurface();
+    window.addEventListener('resize', taskEntrySetFormSurface);
+
+    var mobileListEl = taskEntryMobileList;
+    if (mobileListEl) {
+      ['touchstart', 'touchmove', 'touchend'].forEach(function(evt) {
+        mobileListEl.addEventListener(evt, function() {}, { passive: true });
+      });
+    }
+
+    taskEntryBatchRoot.addEventListener('input', function(e) {
+      var row = e.target.closest('.task-row');
       if (row) updateRow(row);
       updateTotals();
     });
-    batchTable.addEventListener('change', function(e) {
-      var row = e.target.closest('tr.task-row');
+    taskEntryBatchRoot.addEventListener('change', function(e) {
+      var row = e.target.closest('.task-row');
       if (row) updateRow(row);
       updateTotals();
     });
-    batchTable.querySelectorAll('.task-row').forEach(function(row) {
+    taskEntryQueryRows().forEach(function(row) {
       var closeInp = row.querySelector('.close-input');
       var hasClose = closeInp && closeInp.value.trim() !== '';
       var taskInp = row.querySelector('input[name*="_tasks_count"]');
@@ -1477,14 +1501,17 @@ window.TASK_REPORT_NEW_LOCK_VEHICLE = {{ tef.get('lock_vehicle', false)|tojson }
         return false;
       }
       var empty = [];
-      batchTable.querySelectorAll('.close-input').forEach(function(inp) {
+      var activeRoot = taskEntryIsMobileSurface() ? taskEntryMobileList : batchTable;
+      var scope = activeRoot || taskEntryBatchRoot;
+      scope.querySelectorAll('.close-input').forEach(function(inp) {
+        if (inp.disabled) return;
         var rowId = inp.getAttribute('data-row');
         var mode = document.getElementById('row_' + rowId + '_edit_mode');
-        if (mode && mode.value === '0') return; // Locked row skip validation.
+        if (mode && mode.value === '0') return;
         if (!inp.value || inp.value.trim() === '') {
-          var tr = inp.closest('tr');
+          var tr = inp.closest('.task-row');
           var dv = tr && tr.getAttribute('data-vehicle');
-          var vnoEl = tr && tr.querySelector('.fw-medium');
+          var vnoEl = tr && (tr.querySelector('.tev-card-title') || tr.querySelector('.fw-medium'));
           var label = (dv && dv.trim()) || (vnoEl && vnoEl.textContent.trim()) || '';
           if (label) empty.push(label);
         }
@@ -1673,6 +1700,7 @@ window.TASK_REPORT_NEW_LOCK_VEHICLE = {{ tef.get('lock_vehicle', false)|tojson }
     });
   });
   window.updateTotals = updateTotals;
+  window.taskEntrySetFormSurface = taskEntrySetFormSurface;
 })();
 </script>
 {% set fv_prefix = 'taskNewOdomFv' %}
@@ -1754,6 +1782,7 @@ document.addEventListener('click', function(e){
   btn.classList.add('btn-primary');
   btn.innerHTML = '<i class="bi bi-check2-circle me-1"></i>Editing';
   btn.disabled = true;
+  if (typeof taskEntrySetFormSurface === 'function') taskEntrySetFormSurface();
 });
 
 document.addEventListener('click', function(e){

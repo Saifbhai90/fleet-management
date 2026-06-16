@@ -57,7 +57,7 @@
      Scoped to Bootstrap-styled `.table` to avoid touching layout
      tables (invoices/print). Hidden tables (card conversion) are
      left alone via :not(.mp-hide-mobile). */
-  .main-content .table:not(.mp-hide-mobile) {
+  .main-content .table:not(.mp-hide-mobile):not(.task-batch-table) {
     display: block;
     width: 100%;
     max-width: 100%;

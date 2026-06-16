@@ -915,10 +915,6 @@
         html.capacitor-native body {
             overflow: hidden !important;
             height: 100% !important;
-            overflow-anchor: none !important;
-        }
-        html.capacitor-native #appNativeShell {
-            overflow-anchor: none !important;
         }
 
         /* ── Status bar safe area ── */
@@ -996,7 +992,10 @@
             left: 0 !important; right: 0 !important;
             z-index: 51 !important;
         }
-        /* Inside the shell: main-content fills all space and scrolls */
+        /*
+         * Capacitor scroll — single source of truth (do not override per-page).
+         * #appNativeShell = fixed flex shell; .main-content = only vertical scroll root.
+         */
         #appNativeShell .main-content {
             position: static !important;
             top: auto !important; left: auto !important;
@@ -1004,12 +1003,15 @@
             flex: 1 1 auto !important;
             min-height: 0 !important;
             height: auto !important;
-            width: 100% !important;             /* guarantee full width — prevents right-side dead zones */
-            box-sizing: border-box !important;   /* padding doesn't add to width */
+            width: 100% !important;
+            box-sizing: border-box !important;
+            overflow-x: hidden !important;
             overflow-y: auto !important;
             -webkit-overflow-scrolling: touch !important;
             overscroll-behavior-y: contain !important;
             overflow-anchor: none !important;
+            scroll-behavior: auto !important;
+            animation: none !important;
             padding: 16px 14px calc(24px + env(safe-area-inset-bottom, 0px)) !important;
             background: #f1f5f9 !important;
             margin: 0 !important;
@@ -1033,10 +1035,13 @@
             margin: 0 !important;
             padding: 16px 14px 24px !important;
             background: #f1f5f9 !important;
+            overflow-x: hidden !important;
             overflow-y: scroll !important;
             -webkit-overflow-scrolling: touch !important;
             overscroll-behavior-y: contain !important;
             overflow-anchor: none !important;
+            scroll-behavior: auto !important;
+            animation: none !important;
             height: auto !important;
         }
 
