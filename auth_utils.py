@@ -431,6 +431,7 @@ ENDPOINT_PERMISSION_MAP = [
     ('api_oil_expense_product_balance', 'oil_expense'),
     ('api_oil_expense_product_price_history', 'oil_expense'),
     ('api_oil_expense_upload_status', 'oil_expense'),
+    ('api_oil_expense_queue_files', 'oil_expense'),
     ('oil_expense_upload_resume', 'oil_expense'),
     # Maintenance expense helper APIs
     ('api_maintenance_expense_last_reading', 'maintenance_expense'),

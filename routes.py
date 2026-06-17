@@ -31302,6 +31302,7 @@ def oil_expense_form(pk=None):
     if _guard:
         return _guard
     workspace_employee_id = _workspace_employee_id_for_expenses()
+    oil_attachment_max_mb = _expense_attachment_max_bytes() // (1024 * 1024)
     default_district_id = _workspace_employee_default_district_id(workspace_employee_id)
     rec = OilExpense.query.get_or_404(pk) if pk else None
     if rec and workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
@@ -31390,6 +31391,7 @@ def oil_expense_form(pk=None):
                 total_bill_error=total_bill_error,
                 party_error=party_error,
                 hbl_expense_by_value=hbl_expense_by_value,
+                oil_attachment_max_mb=oil_attachment_max_mb,
                 location_cascade=_fuel_expense_location_cascade_dict(),
             )
         expense_date = form.expense_date.data
@@ -31410,6 +31412,7 @@ def oil_expense_form(pk=None):
                 total_bill_error=total_bill_error,
                 party_error=party_error,
                 hbl_expense_by_value=hbl_expense_by_value,
+                oil_attachment_max_mb=oil_attachment_max_mb,
                 location_cascade=_fuel_expense_location_cascade_dict(),
             )
         prev_reading = form.previous_reading.data
@@ -31580,6 +31583,7 @@ def oil_expense_form(pk=None):
                     total_bill_error=total_bill_error,
                     party_error=party_error,
                     hbl_expense_by_value=hbl_expense_by_value,
+                    oil_attachment_max_mb=oil_attachment_max_mb,
                     location_cascade=_fuel_expense_location_cascade_dict(),
                 )
 
@@ -31637,6 +31641,15 @@ def oil_expense_form(pk=None):
             )
             db.session.commit()
 
+            split_upload = request.headers.get('X-Oil-Split-Upload') == '1'
+            if split_upload:
+                return jsonify({
+                    'ok': True,
+                    'id': rec.id,
+                    'edit': bool(pk),
+                    'list_url': url_for('oil_expense_list'),
+                })
+
             files = request.files.getlist('attachments')
             has_new_files = bool(files and any(f and getattr(f, 'filename', None) for f in files))
             if has_new_files:
@@ -31684,6 +31697,7 @@ def oil_expense_form(pk=None):
         total_bill_error=total_bill_error,
         party_error=party_error,
         hbl_expense_by_value=hbl_expense_by_value,
+        oil_attachment_max_mb=oil_attachment_max_mb,
         location_cascade=_fuel_expense_location_cascade_dict(),
     )
 
@@ -31759,6 +31773,36 @@ def api_oil_expense_upload_status(pk):
         'percent': max(0, min(100, pct)),
         'error': (rec.upload_error or ''),
     })
+
+
+@app.route('/api/oil-expense/<int:pk>/queue-files', methods=['POST'])
+def api_oil_expense_queue_files(pk):
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return jsonify({'ok': False, 'error': 'forbidden'}), 403
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    rec = OilExpense.query.get_or_404(pk)
+    if workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
+        return jsonify({'ok': False, 'error': 'forbidden'}), 403
+    files = request.files.getlist('attachments')
+    if not files or not any(f and getattr(f, 'filename', None) for f in files):
+        return jsonify({'ok': False, 'error': 'no_files'}), 400
+    try:
+        start_worker = request.headers.get('X-Oil-Batch-Final') == '1'
+        queued, skipped = _append_expense_upload_manifest(rec, 'oil', files, start_worker=start_worker)
+        return jsonify({
+            'ok': True,
+            'id': rec.id,
+            'queued': queued,
+            'skipped': skipped,
+            'total': int(rec.upload_total or 0),
+            'done': int(rec.upload_done or 0),
+            'status': rec.upload_status or 'processing',
+        })
+    except Exception as ex:
+        db.session.rollback()
+        app.logger.exception('Oil queue-files failed expense=%s', pk)
+        return jsonify({'ok': False, 'error': str(ex)}), 500
 
 
 @app.route('/oil-expense/<int:pk>/upload-resume', methods=['POST'])
