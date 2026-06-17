@@ -366,11 +366,12 @@ if _run_startup_tasks:
             print(f"Second db.create_all() warning: {_e2}")
 
         try:
-            from models import WorkspaceSlipProfile, WorkspaceSlipProfileField
+            from models import WorkspaceSlipProfile, WorkspaceSlipProfileField, ClientDiagnosticLog
             WorkspaceSlipProfile.__table__.create(db.engine, checkfirst=True)
             WorkspaceSlipProfileField.__table__.create(db.engine, checkfirst=True)
+            ClientDiagnosticLog.__table__.create(db.engine, checkfirst=True)
         except Exception as _e:
-            print(f"workspace_slip_profile ensure warning (non-fatal): {_e}")
+            print(f"workspace_slip_profile / client_diagnostic_log ensure warning (non-fatal): {_e}")
 
         # Auto-add missing columns to existing tables
         try:
@@ -454,7 +455,18 @@ if _run_startup_tasks:
             _migrate_upgrade()
             print("Migrations applied (flask db upgrade).")
         except Exception as _e:
+            err = str(_e)
             print(f"Migration upgrade skip: {_e}")
+            # If DB alembic_version references a missing revision, stamp back to last known good head.
+            if "Can't locate revision identified by" in err:
+                try:
+                    from flask_migrate import stamp as _migrate_stamp
+                    _migrate_stamp(revision='u1v2w3x4y5z6')
+                    print("Alembic stamped to u1v2w3x4y5z6 after missing-revision recovery.")
+                    _migrate_upgrade()
+                    print("Migrations applied after recovery stamp.")
+                except Exception as _e2:
+                    print(f"Migration recovery skip (tables may still exist via create_all): {_e2}")
         # Auto-sync R2 CORS for browser direct uploads (non-fatal)
         try:
             _auto_cors = (os.environ.get('R2_AUTO_SYNC_CORS', 'true') or 'true').strip().lower() in ('1', 'true', 'yes')

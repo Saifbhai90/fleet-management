@@ -19,4 +19,7 @@ fi
 if command -v python >/dev/null 2>&1; then
   python -c "import os; u=os.environ.get('DATABASE_URL',''); print('render_migrate: DB scheme =', (u.split(':',1)[0] if u else 'missing'))" || true
 fi
-exec python -m flask db upgrade
+# App startup also runs upgrade; do not fail deploy if alembic revision file mismatch (app.py recovers).
+if ! python -m flask db upgrade; then
+  echo "render_migrate: WARNING — flask db upgrade failed (app boot will retry / create tables)."
+fi
