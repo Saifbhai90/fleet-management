@@ -4,4 +4,9 @@
     <string name="title_activity_main">Fleet Manager</string>
     <string name="package_name">com.fleetmanager.app</string>
     <string name="custom_url_scheme">com.fleetmanager.app</string>
+    <string name="fleet_network_error_title">No Internet Connection</string>
+    <string name="fleet_network_error_message">Please check your mobile data or Wi‑Fi connection.\nThe app will reconnect automatically when network is available.</string>
+    <string name="fleet_network_retry">Retry</string>
+    <string name="fleet_network_auto_retry">Retrying automatically…</string>
+    <string name="fleet_network_connecting">Connecting…</string>
 </resources>

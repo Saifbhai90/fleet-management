@@ -1,6 +1,6 @@
-{
+﻿{
   "name": "fleet-manager",
-  "version": "1.9.9",
+  "version": "1.9.10",
   "description": "Fleet Management Mobile App (Capacitor + WebView)",
   "main": "index.js",
   "scripts": {

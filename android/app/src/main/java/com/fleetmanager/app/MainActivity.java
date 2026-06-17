@@ -4,6 +4,9 @@ import android.Manifest;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
 import android.net.Uri;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
@@ -11,6 +14,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.view.View;
+import android.view.ViewGroup;
 import android.util.Log;
 import android.webkit.ConsoleMessage;
 import android.webkit.WebChromeClient;
@@ -21,6 +25,8 @@ import android.provider.Settings;
 import android.webkit.URLUtil;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
+import android.widget.Button;
+import android.widget.TextView;
 import android.widget.Toast;
 import android.app.DownloadManager;
 import android.content.Context;
@@ -29,6 +35,7 @@ import androidx.annotation.NonNull;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
+import com.getcapacitor.Bridge;
 import com.getcapacitor.BridgeActivity;
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.GoogleApiAvailability;
@@ -40,7 +47,7 @@ import java.util.Locale;
 import java.util.Timer;
 import java.util.TimerTask;
 
-public class MainActivity extends BridgeActivity {
+public class MainActivity extends BridgeActivity implements FleetBridgeWebViewClient.LoadStateCallback {
 
     private static final String PREFS_NAME = "fcm_prefs";
     private static final String KEY_USE_POLLING = "use_polling";
@@ -53,11 +60,42 @@ public class MainActivity extends BridgeActivity {
     private static final long POLLING_ACTIVATION_DEADLINE_MS = 60000;
     private static final int BATTERY_OPT_REQUEST = 9999;
     private static final int NOTIF_PERMISSION_REQUEST = 1001;
+    private static final long SPLASH_MIN_MS = 1200L;
+    private static final long AUTO_RETRY_MS = 5000L;
 
     private volatile boolean tokenResolved = false;
     private Handler mainHandler;
     private Timer deadlineTimer;
     private SharedPreferences prefs;
+
+    private View networkOverlayRoot;
+    private TextView networkAutoRetryText;
+    private Button networkRetryBtn;
+    private boolean networkOverlayVisible = false;
+    private boolean appPageLoaded = false;
+    private boolean minSplashDone = false;
+    private boolean webViewGuardReady = false;
+    private boolean pendingNetworkError = false;
+    private ConnectivityManager.NetworkCallback networkCallback;
+    private final Runnable autoRetryRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (!networkOverlayVisible) {
+                return;
+            }
+            pulseAutoRetryLabel();
+            if (hasNetworkConnectivity()) {
+                retryWebViewLoad();
+            }
+            mainHandler.postDelayed(this, AUTO_RETRY_MS);
+        }
+    };
+    private final Runnable splashMinRunnable = () -> {
+        minSplashDone = true;
+        if (pendingNetworkError || (!appPageLoaded && !hasNetworkConnectivity())) {
+            showNetworkOverlay(false);
+        }
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -67,6 +105,8 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(FleetApkDownloadPlugin.class);
         mainHandler = new Handler(Looper.getMainLooper());
         prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        setupNetworkOverlay();
+        mainHandler.postDelayed(splashMinRunnable, SPLASH_MIN_MS);
 
         if (!initializeFirebase()) return;
 
@@ -82,6 +122,33 @@ public class MainActivity extends BridgeActivity {
         setupDownloadListener();
         getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
         scheduleWebViewTransparent();
+    }
+
+    private void setupNetworkOverlay() {
+        ViewGroup content = findViewById(android.R.id.content);
+        if (content == null) {
+            return;
+        }
+        networkOverlayRoot = getLayoutInflater().inflate(R.layout.overlay_network_error, content, false);
+        content.addView(networkOverlayRoot);
+        networkAutoRetryText = networkOverlayRoot.findViewById(R.id.fleetNetworkAutoRetry);
+        networkRetryBtn = networkOverlayRoot.findViewById(R.id.fleetNetworkRetryBtn);
+        if (networkRetryBtn != null) {
+            networkRetryBtn.setOnClickListener(v -> retryWebViewLoad());
+        }
+    }
+
+    private void setupWebViewNetworkGuard() {
+        if (webViewGuardReady) {
+            return;
+        }
+        Bridge bridge = getBridge();
+        if (bridge == null || bridge.getWebView() == null) {
+            return;
+        }
+        WebView wv = bridge.getWebView();
+        wv.setWebViewClient(new FleetBridgeWebViewClient(bridge, this));
+        webViewGuardReady = true;
     }
 
     /** CameraPreview (toBack) needs a transparent WebView; opaque white blocks the native preview. */
@@ -104,16 +171,162 @@ public class MainActivity extends BridgeActivity {
                 });
                 wv.setBackgroundColor(Color.TRANSPARENT);
                 wv.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+                setupWebViewNetworkGuard();
             } else {
                 mainHandler.postDelayed(this::scheduleWebViewTransparent, 50);
             }
         });
     }
 
+    private boolean hasNetworkConnectivity() {
+        ConnectivityManager cm = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+        if (cm == null) {
+            return false;
+        }
+        Network network = cm.getActiveNetwork();
+        if (network == null) {
+            return false;
+        }
+        NetworkCapabilities caps = cm.getNetworkCapabilities(network);
+        return caps != null && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET);
+    }
+
+    private void showNetworkOverlay(boolean connecting) {
+        pendingNetworkError = true;
+        if (!minSplashDone) {
+            return;
+        }
+        if (networkOverlayRoot == null) {
+            setupNetworkOverlay();
+        }
+        if (networkOverlayRoot == null) {
+            return;
+        }
+        networkOverlayVisible = true;
+        networkOverlayRoot.setVisibility(View.VISIBLE);
+        if (networkAutoRetryText != null) {
+            networkAutoRetryText.setText(connecting
+                    ? getString(R.string.fleet_network_connecting)
+                    : getString(R.string.fleet_network_auto_retry));
+        }
+        if (networkRetryBtn != null) {
+            networkRetryBtn.setEnabled(!connecting);
+        }
+        startAutoRetryLoop();
+    }
+
+    private void hideNetworkOverlay() {
+        pendingNetworkError = false;
+        networkOverlayVisible = false;
+        appPageLoaded = true;
+        stopAutoRetryLoop();
+        if (networkOverlayRoot != null) {
+            networkOverlayRoot.setVisibility(View.GONE);
+        }
+    }
+
+    private void pulseAutoRetryLabel() {
+        if (networkAutoRetryText == null || !networkOverlayVisible) {
+            return;
+        }
+        networkAutoRetryText.setText(getString(R.string.fleet_network_auto_retry));
+    }
+
+    private void startAutoRetryLoop() {
+        mainHandler.removeCallbacks(autoRetryRunnable);
+        mainHandler.postDelayed(autoRetryRunnable, AUTO_RETRY_MS);
+    }
+
+    private void stopAutoRetryLoop() {
+        mainHandler.removeCallbacks(autoRetryRunnable);
+    }
+
+    private void retryWebViewLoad() {
+        Bridge bridge = getBridge();
+        if (bridge == null || bridge.getWebView() == null) {
+            showNetworkOverlay(false);
+            return;
+        }
+        if (!hasNetworkConnectivity()) {
+            showNetworkOverlay(false);
+            Toast.makeText(this, R.string.fleet_network_error_title, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        showNetworkOverlay(true);
+        String appUrl = bridge.getAppUrl();
+        if (appUrl == null || appUrl.isEmpty()) {
+            appUrl = bridge.getServerUrl();
+        }
+        if (appUrl == null || appUrl.isEmpty()) {
+            bridge.getWebView().reload();
+            return;
+        }
+        bridge.getWebView().loadUrl(appUrl);
+    }
+
+    private void registerNetworkCallback() {
+        if (networkCallback != null || Build.VERSION.SDK_INT < Build.VERSION_CODES.N) {
+            return;
+        }
+        ConnectivityManager cm = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+        if (cm == null) {
+            return;
+        }
+        networkCallback = new ConnectivityManager.NetworkCallback() {
+            @Override
+            public void onAvailable(@NonNull Network network) {
+                runOnUiThread(() -> {
+                    if (networkOverlayVisible || pendingNetworkError || !appPageLoaded) {
+                        retryWebViewLoad();
+                    }
+                });
+            }
+        };
+        cm.registerDefaultNetworkCallback(networkCallback);
+    }
+
+    private void unregisterNetworkCallback() {
+        if (networkCallback == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.N) {
+            return;
+        }
+        ConnectivityManager cm = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+        if (cm != null) {
+            try {
+                cm.unregisterNetworkCallback(networkCallback);
+            } catch (Exception ignored) {}
+        }
+        networkCallback = null;
+    }
+
+    @Override
+    public void onMainFrameLoadFailed() {
+        runOnUiThread(() -> showNetworkOverlay(false));
+    }
+
+    @Override
+    public void onMainFrameLoadSucceeded(String url) {
+        runOnUiThread(this::hideNetworkOverlay);
+    }
+
+    @Override
+    public void onStart() {
+        super.onStart();
+        registerNetworkCallback();
+    }
+
+    @Override
+    public void onStop() {
+        unregisterNetworkCallback();
+        super.onStop();
+    }
+
     @Override
     public void onResume() {
         super.onResume();
         scheduleWebViewTransparent();
+        if (networkOverlayVisible || (!appPageLoaded && minSplashDone && !hasNetworkConnectivity())) {
+            showNetworkOverlay(false);
+        }
     }
 
     private void createNotificationChannels() {
@@ -376,6 +589,9 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     public void onDestroy() {
+        stopAutoRetryLoop();
+        mainHandler.removeCallbacks(splashMinRunnable);
+        unregisterNetworkCallback();
         cancelDeadlineTimer();
         super.onDestroy();
     }

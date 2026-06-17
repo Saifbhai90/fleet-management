@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="fleet_slate_900">#0F172A</color>
+    <color name="fleet_slate_800">#1E293B</color>
+    <color name="fleet_slate_700">#334155</color>
+    <color name="fleet_slate_400">#94A3B8</color>
+    <color name="fleet_slate_200">#E2E8F0</color>
+    <color name="fleet_blue_500">#3B82F6</color>
+    <color name="fleet_blue_600">#2563EB</color>
+    <color name="fleet_blue_700">#1D4ED8</color>
+</resources>
