@@ -4278,6 +4278,24 @@ def mobile_init():
     return resp
 
 
+@app.errorhandler(404)
+def fleet_not_found_redirect(e):
+    """Mobile WebView can restore a stale deep link (old route/bookmark) while the session
+    cookie is still valid — Flask then shows a bare 404 before any JS runs. Send HTML
+    navigations back through /mobile-init so the user always gets the login screen."""
+    path = request.path or ''
+    if path.startswith('/api/'):
+        return jsonify({'ok': False, 'error': 'Not found'}), 404
+    if request.method not in ('GET', 'HEAD'):
+        return e
+    if path in ('/mobile-init', '/login', '/health'):
+        return e
+    accept = (request.headers.get('Accept') or '').lower()
+    if accept and 'application/json' in accept and 'text/html' not in accept and '*/*' not in accept:
+        return jsonify({'ok': False, 'error': 'Not found'}), 404
+    return redirect(url_for('mobile_init'))
+
+
 @app.route('/auth/session-ping', methods=['GET'])
 def session_ping():
     """Prime session cookie for Capacitor WebView before first login POST (CSRF needs session)."""
