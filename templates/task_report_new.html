@@ -687,6 +687,9 @@
   }
 
   /* Capacitor scroll → base.html #appNativeShell .main-content only. No per-page scroll hacks. */
+  #batchTable tbody tr.task-row[data-task-search-hidden="1"] {
+    display: none !important;
+  }
   @media (max-width: 767.98px) {
     #taskEntryLoadMoreWrap,
     .task-entry-load-more-wrap {
@@ -698,9 +701,6 @@
     }
     #batchTable tbody tr.task-row[data-task-chunk-hidden="1"] {
       display: block !important;
-    }
-    #batchTable tbody tr.task-row[data-task-search-hidden="1"] {
-      display: none !important;
     }
     html.capacitor-native .task-batch-card .card-footer,
     html.capacitor-native .task-batch-card .card-footer.native-submit-sticky {
@@ -1166,18 +1166,18 @@ window.TASK_REPORT_NEW_LOCK_VEHICLE = {{ tef.get('lock_vehicle', false)|tojson }
     var tracker = parseFloat(row.dataset.tracker) || 0;
     var emg = parseFloat(row.dataset.emg) || 0;
     var closeInp = row.querySelector('.close-input');
-    var close = closeInp.value.trim() === '' ? 0 : parseFloat(closeInp.value);
+    var taskInp = row.querySelector('input[name*="_tasks_count"]');
+    var closeRaw = closeInp ? closeInp.value.trim() : '';
+    var close = closeRaw === '' ? 0 : parseFloat(closeRaw);
     if (isNaN(close)) close = 0;
     var kmsDriven = close - start;
     var kmsDiff = kmsDriven - tracker;
     var pctDiff = (kmsDriven !== 0) ? ((kmsDiff / kmsDriven) * 100).toFixed(1) + '%' : 'Driven KM Zero';
-    row.querySelector('.kms-driven').textContent = kmsDriven.toFixed(2);
+    var kmsDrivenEl = row.querySelector('.kms-driven');
+    if (kmsDrivenEl) kmsDrivenEl.textContent = !isNaN(kmsDriven) ? kmsDriven.toFixed(2) : '-';
 
-    var taskInp = row.querySelector('input[name*="_tasks_count"]');
-    var tasks = 0;
-    if (taskInp) {
-      tasks = taskInp.value.trim() === '' ? 0 : (parseInt(taskInp.value, 10) || 0);
-    }
+    var tasksRaw = taskInp ? taskInp.value.trim() : '';
+    var tasks = tasksRaw === '' ? 0 : (parseInt(tasksRaw, 10) || 0);
     var tdCell = row.querySelector('.task-diff');
     var td = tasks - emg;
     var taskDiffOut = tdCell && (tdCell.querySelector('.task-batch-metric-plain') || tdCell);
@@ -1357,11 +1357,7 @@ window.TASK_REPORT_NEW_LOCK_VEHICLE = {{ tef.get('lock_vehicle', false)|tojson }
       updateTotals();
     });
     batchTable.querySelectorAll('.task-row').forEach(function(row) {
-      var closeInp = row.querySelector('.close-input');
-      var hasClose = closeInp && closeInp.value.trim() !== '';
-      var taskInp = row.querySelector('input[name*="_tasks_count"]');
-      var hasTasks = taskInp && taskInp.value.trim() !== '';
-      if (hasClose || hasTasks) updateRow(row);
+      updateRow(row);
     });
     updateTotals();
 
