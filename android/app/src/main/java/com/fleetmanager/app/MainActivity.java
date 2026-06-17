@@ -11,12 +11,16 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.view.View;
-import android.webkit.WebView;
+import android.util.Log;
+import android.webkit.ConsoleMessage;
+import android.webkit.WebChromeClient;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.PowerManager;
 import android.provider.Settings;
 import android.webkit.URLUtil;
+import android.webkit.WebSettings;
+import android.webkit.WebView;
 import android.widget.Toast;
 import android.app.DownloadManager;
 import android.content.Context;
@@ -58,6 +62,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        getWindow().setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
         registerPlugin(AttendanceFrontCameraPlugin.class);
         registerPlugin(FleetApkDownloadPlugin.class);
         mainHandler = new Handler(Looper.getMainLooper());
@@ -87,6 +92,16 @@ public class MainActivity extends BridgeActivity {
         mainHandler.post(() -> {
             if (getBridge() != null && getBridge().getWebView() != null) {
                 WebView wv = getBridge().getWebView();
+                WebSettings settings = wv.getSettings();
+                settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
+                wv.setWebChromeClient(new WebChromeClient() {
+                    @Override
+                    public boolean onConsoleMessage(ConsoleMessage msg) {
+                        Log.d("FleetWebConsole", msg.message() + " -- line "
+                                + msg.lineNumber() + " of " + msg.sourceId());
+                        return true;
+                    }
+                });
                 wv.setBackgroundColor(Color.TRANSPARENT);
                 wv.setLayerType(View.LAYER_TYPE_HARDWARE, null);
             } else {
@@ -327,7 +342,15 @@ public class MainActivity extends BridgeActivity {
     }
 
     private void setupDownloadListener() {
-        getBridge().getWebView().setDownloadListener(
+        if (mainHandler == null) {
+            mainHandler = new Handler(Looper.getMainLooper());
+        }
+        mainHandler.post(() -> {
+            if (getBridge() == null || getBridge().getWebView() == null) {
+                mainHandler.postDelayed(this::setupDownloadListener, 100);
+                return;
+            }
+            getBridge().getWebView().setDownloadListener(
                 (url, userAgent, contentDisposition, mimetype, contentLength) -> {
                     try {
                         DownloadManager.Request req = new DownloadManager.Request(Uri.parse(url));
@@ -348,6 +371,7 @@ public class MainActivity extends BridgeActivity {
                         Toast.makeText(this, "Download failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
                     }
                 });
+        });
     }
 
     @Override

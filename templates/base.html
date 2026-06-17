@@ -1654,7 +1654,7 @@
     <link rel="stylesheet" href="/static/css/mobile_responsive_audit.css">
     <link rel="stylesheet" href="/static/css/fm_aurora_theme.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/fm_hub_pages.css') }}?v=3">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/rc_tile_gradients.css') }}?v=3">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/rc_tile_gradients.css') }}?v=4">
     <link rel="stylesheet" href="/static/css/mobile_native_sidebar.css">
     <script>
     (function(){var u=navigator.userAgent||'';if(!/Android/i.test(u))return;var legacy=/CPH1909|OPPO\s*A5/i.test(u);if(!legacy){var m=u.match(/Android\s+([\d.]+)/i);if(m){var v=parseInt(m[1],10);if(!isNaN(v)&&v<=9)legacy=true;}}if(legacy)document.documentElement.classList.add('legacy-android-gpu');})();
@@ -2214,7 +2214,7 @@
         {% set driver_status_endpoints = ['driver_job_left_new', 'driver_job_left_list', 'driver_rejoin_new', 'driver_rejoin_list', 'driver_attendance_list', 'driver_attendance_mark', 'driver_attendance_bulk_off', 'driver_attendance_pending', 'driver_attendance_missing_checkout', 'driver_attendance_manual_checkin', 'driver_attendance_manual_checkout', 'driver_attendance_bulk_manual_checkout', 'driver_attendance_checkin', 'driver_attendance_checkout', 'driver_attendance_tra_report', 'penalty_record_list', 'penalty_record_new', 'penalty_record_edit'] %}
         {% set attendance_endpoints = ['driver_attendance_list', 'driver_attendance_mark', 'driver_attendance_bulk_off', 'driver_attendance_pending', 'driver_attendance_missing_checkout', 'driver_attendance_manual_checkin', 'driver_attendance_manual_checkout', 'driver_attendance_bulk_manual_checkout', 'driver_attendance_checkin', 'driver_attendance_checkout', 'driver_attendance_tra_report', 'driver_attendance_report', 'driver_attendance_daily_report', 'leave_request_list', 'leave_request_new', 'leave_request_review'] %}
         {% set workforce_endpoints = ['driver_job_left_new', 'driver_job_left_list', 'driver_rejoin_new', 'driver_rejoin_list', 'penalty_record_list', 'penalty_record_new', 'penalty_record_edit', 'employee_lifecycle_assign', 'employee_lifecycle_deassign', 'employee_lifecycle_left', 'employee_lifecycle_rejoin', 'employee_lifecycle_history', 'employee_profile_report', 'employee_lifecycle_assign_list', 'employee_lifecycle_deassign_list', 'employee_lifecycle_left_list', 'employee_lifecycle_rejoin_list'] %}
-        {% set task_report_endpoints = ['task_report_upload', 'task_report_upload_list', 'task_report_list', 'task_report_new', 'task_report_pending', 'task_report_upload_emergency', 'task_report_upload_mileage', 'task_report_upload_both', 'red_task_list', 'red_task_summary', 'red_task_summary_detail', 'red_task_new', 'red_task_edit', 'without_task_list', 'without_task_new', 'without_task_edit', 'task_report_logbook_cover', 'task_report_logbook_view', 'task_report_logbook_view_all', 'speed_monitoring_report', 'speed_monitoring_report_export', 'speed_monitoring_report_print', 'speed_monitoring_report_preview', 'mileage_report', 'mileage_report_export', 'mileage_report_print', 'mileage_report_preview', 'tracker_difference_report', 'tracker_difference_report_export', 'tracker_difference_report_print', 'tracker_difference_report_preview', 'unauthorized_movement_report', 'unauthorized_movement_report_export', 'unauthorized_movement_report_print', 'unauthorized_movement_report_preview', 'task_start_delay_report', 'task_start_delay_report_export', 'task_start_delay_report_print', 'task_start_delay_report_preview', 'task_turnaround_report', 'task_turnaround_report_export', 'task_turnaround_report_print', 'task_turnaround_report_preview', 'unexecuted_task_report', 'unexecuted_task_report_export', 'unexecuted_task_report_preview'] %}
+        {% set task_report_endpoints = ['task_report_upload', 'task_report_upload_list', 'task_report_list', 'task_report_vehicle_period_detail', 'task_report_new', 'task_report_pending', 'task_report_upload_emergency', 'task_report_upload_mileage', 'task_report_upload_both', 'red_task_list', 'red_task_summary', 'red_task_summary_detail', 'red_task_new', 'red_task_edit', 'without_task_list', 'without_task_new', 'without_task_edit', 'task_report_logbook_cover', 'task_report_logbook_view', 'task_report_logbook_view_all', 'speed_monitoring_report', 'speed_monitoring_report_export', 'speed_monitoring_report_print', 'speed_monitoring_report_preview', 'mileage_report', 'mileage_report_export', 'mileage_report_print', 'mileage_report_preview', 'tracker_difference_report', 'tracker_difference_report_export', 'tracker_difference_report_print', 'tracker_difference_report_preview', 'unauthorized_movement_report', 'unauthorized_movement_report_export', 'unauthorized_movement_report_print', 'unauthorized_movement_report_preview', 'task_start_delay_report', 'task_start_delay_report_export', 'task_start_delay_report_print', 'task_start_delay_report_preview', 'task_turnaround_report', 'task_turnaround_report_export', 'task_turnaround_report_print', 'task_turnaround_report_preview', 'unexecuted_task_report', 'unexecuted_task_report_export', 'unexecuted_task_report_preview'] %}
         {% set reports_endpoints = ['reports_index', 'activity_log_report', 'activity_logs_geo_report', 'report_expiry', 'report_vehicle_summary', 'report_project_summary', 'report_district_summary', 'report_parking_utilization', 'report_vehicle_profile', 'report_driver_profile', 'report_ai', 'active_drivers_report', 'active_drivers_report_export', 'active_drivers_report_print', 'driver_seat_available_report', 'driver_seat_available_export', 'driver_seat_available_print', 'missing_documents_report', 'missing_documents_report_print', 'oil_change_alert_report', 'oil_change_alert_report_export', 'oil_change_alert_report_print', 'maintenance_baseline_alert_report'] %}
         {% set accounts_endpoints = ['accounts_quick_payment', 'payment_vouchers_list', 'payment_voucher_edit', 'payment_voucher_delete', 'accounts_quick_receipt', 'receipt_vouchers_list', 'accounts_bank_entry', 'bank_entries_list', 'accounts_jv', 'journal_vouchers_list', 'accounts_future_entry', 'accounts_balance_sheet', 'accounts_account_ledger', 'chart_of_accounts_list', 'chart_of_accounts_add', 'chart_of_accounts_edit', 'fund_transfer_add', 'fund_transfers_list', 'fund_transfer_edit', 'wallet_dashboard', 'employee_expenses_list', 'employee_expense_add', 'employee_expense_edit'] %}
         {% set _req_from = request.args.get('from', '') %}
@@ -2727,6 +2727,15 @@
         function _restorePageRows(){if(_usingAllRows){tbody.innerHTML=_initialPageHtml;_usingAllRows=false}}
         function _switchToAllRows(){if(!_usingAllRows&&_allRowsHtml){tbody.innerHTML=_allRowsHtml;_usingAllRows=true}}
         function _rowsFromHtml(html){if(!html)return[];var t=document.createElement('tbody');t.innerHTML=html;return Array.from(t.querySelectorAll('tr')).filter(function(r){return r.cells.length>1})}
+        function _fleetFetchPageHtml(url) {
+            return fetch(url, {credentials:'same-origin', redirect:'manual', cache:'no-store'}).then(function(r) {
+                if (!r || r.type === 'opaqueredirect' || r.status === 0 || (r.status >= 300 && r.status < 400) || !r.ok) {
+                    return '';
+                }
+                return r.text();
+            }).catch(function() { return ''; });
+        }
+
         function _ensureAllRowsLoaded(cb){
           if(cb)_allRowsCallbacks.push(cb);
           if(_allRowsLoaded||!_isPaginatedView()){_allRowsLoaded=true;_runAllRowsCallbacks();return}
@@ -2735,22 +2744,25 @@
           try{
             var u=new URL(window.location.href),parts=[];
             u.searchParams.set('page','1');
-            fetch(u.toString(),{credentials:'same-origin'}).then(function(r){return r.text()}).then(function(html){
-              var doc=new DOMParser().parseFromString(html,'text/html');
-              var rt=doc.getElementById(tableId),rb=rt?rt.querySelector('tbody'):null;
-              if(rb) parts.push(rb.innerHTML||'');
-              var pages=_extractPageCount(doc);
-              if(pages<=1) return;
-              var jobs=[];
-              for(var p=2;p<=pages;p++){
-                var up=new URL(u.toString());up.searchParams.set('page',String(p));
-                jobs.push(fetch(up.toString(),{credentials:'same-origin'}).then(function(r){return r.text();}).then(function(h){
-                  var d=new DOMParser().parseFromString(h,'text/html');
-                  var t=d.getElementById(tableId),b=t?t.querySelector('tbody'):null;
-                  if(b) parts.push(b.innerHTML||'');
-                }).catch(function(){}));
+            _fleetFetchPageHtml(u.toString()).then(function(html){
+              if(html){
+                var doc=new DOMParser().parseFromString(html,'text/html');
+                var rt=doc.getElementById(tableId),rb=rt?rt.querySelector('tbody'):null;
+                if(rb) parts.push(rb.innerHTML||'');
+                var pages=_extractPageCount(doc);
+                if(pages<=1) return;
+                var jobs=[];
+                for(var p=2;p<=pages;p++){
+                  var up=new URL(u.toString());up.searchParams.set('page',String(p));
+                  jobs.push(_fleetFetchPageHtml(up.toString()).then(function(h){
+                    if(!h) return;
+                    var d=new DOMParser().parseFromString(h,'text/html');
+                    var t=d.getElementById(tableId),b=t?t.querySelector('tbody'):null;
+                    if(b) parts.push(b.innerHTML||'');
+                  }));
+                }
+                return Promise.all(jobs);
               }
-              return Promise.all(jobs);
             }).catch(function(){}).finally(function(){
               _allRowsHtml=parts.join('');
               _allRowsLoading=false;_allRowsLoaded=true;_runAllRowsCallbacks();
@@ -3391,8 +3403,21 @@
                 cb(localTbl);
                 return;
             }
+            var pager = document.querySelector('.pagination');
+            var multiPage = pager && !pager.querySelector('.page-item.disabled .bi-chevron-right');
+            if (!multiPage) {
+                cb(localTbl);
+                return;
+            }
             var url = _allPagesUrl();
-            fetch(url, {credentials:'same-origin'}).then(function(r){ return r.text(); }).then(function(html) {
+            fetch(url, {credentials:'same-origin', redirect:'manual', cache:'no-store'}).then(function(r) {
+                if (!r || r.type === 'opaqueredirect' || r.status === 0 || (r.status >= 300 && r.status < 400) || !r.ok) {
+                    cb(localTbl);
+                    return;
+                }
+                return r.text();
+            }).then(function(html) {
+                if (!html) return;
                 var parser = new DOMParser();
                 var doc = parser.parseFromString(html, 'text/html');
                 var remoteTbl = doc.getElementById(tableId);

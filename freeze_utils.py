@@ -21,6 +21,7 @@ FREEZE_EXEMPT_ENDPOINTS = {
     'journal_vouchers_list',
     'wallet_dashboard',
     'task_report_list',
+    'task_report_vehicle_period_detail',
     'task_report_logbook_cover',
     'red_task_list',
     'red_task_summary',

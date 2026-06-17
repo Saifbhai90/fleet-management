@@ -1,0 +1,427 @@
+<script>
+(function(){
+    if (document.getElementById("mobileTaskModal")) return;
+    // Create Mobile-Optimized Modal Container
+    var modalHTML = `
+    <div id="mobileTaskModal" class="mobile-task-modal d-none">
+        <div class="mobile-task-backdrop"></div>
+        <div class="mobile-task-sheet">
+            <div class="mobile-task-header">
+                <div class="mobile-task-header-text">
+                    <p class="mobile-task-eyebrow" id="mobileTaskEyebrow">Task Report</p>
+                    <h5 class="mobile-task-title" id="mobileTaskTitle">Task Details</h5>
+                </div>
+                <button type="button" class="mobile-task-close" id="mobileTaskCloseBtn" aria-label="Close">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+            <div class="mobile-task-body" id="mobileTaskBody">
+                <div class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="text-muted mt-2 mb-0">Loading details...</p>
+                </div>
+            </div>
+            <div class="mobile-task-footer">
+                <button type="button" class="mobile-task-close-btn" id="mobileTaskCloseFooterBtn">
+                    <i class="bi bi-x-circle me-2"></i>Close
+                </button>
+            </div>
+        </div>
+    </div>
+    `;
+    
+    // Add styles
+    var styles = `
+    .mobile-task-modal {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+    }
+    .mobile-task-backdrop {
+        position: absolute;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.55);
+        backdrop-filter: blur(6px);
+    }
+    .mobile-task-sheet {
+        position: relative;
+        width: 100%;
+        max-width: 600px;
+        max-height: 88vh;
+        background: #f8fafc;
+        border-radius: 22px 22px 0 0;
+        box-shadow: 0 -8px 32px rgba(15, 23, 42, 0.22);
+        animation: slideUp 0.28s ease-out;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+    @keyframes slideUp {
+        from { transform: translateY(100%); opacity: 0; }
+        to { transform: translateY(0); opacity: 1; }
+    }
+    .mobile-task-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 18px 18px 16px;
+        background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 55%, #0ea5e9 100%);
+        color: #fff;
+    }
+    .mobile-task-header-text { min-width: 0; flex: 1; }
+    .mobile-task-eyebrow {
+        margin: 0 0 4px;
+        font-size: 0.72rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        opacity: 0.82;
+        font-weight: 600;
+    }
+    .mobile-task-title {
+        font-size: 1.05rem;
+        font-weight: 700;
+        margin: 0;
+        color: #fff;
+        line-height: 1.35;
+        word-break: break-word;
+    }
+    .mobile-task-close {
+        width: 38px;
+        height: 38px;
+        border: none;
+        background: rgba(255,255,255,0.18);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.1rem;
+        color: #fff;
+        cursor: pointer;
+        flex-shrink: 0;
+    }
+    .mobile-task-close:active { background: rgba(255,255,255,0.28); }
+    .mobile-task-body {
+        padding: 14px 14px 6px;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+        flex: 1;
+        min-height: 0;
+    }
+    .mobile-task-footer {
+        padding: 12px 14px calc(12px + env(safe-area-inset-bottom, 0px));
+        background: #fff;
+        border-top: 1px solid #e2e8f0;
+        box-shadow: 0 -4px 16px rgba(15, 23, 42, 0.06);
+    }
+    .mobile-task-close-btn {
+        width: 100%;
+        border: none;
+        border-radius: 14px;
+        padding: 14px 18px;
+        font-size: 1rem;
+        font-weight: 700;
+        color: #fff;
+        background: linear-gradient(135deg, #1d4ed8, #2563eb);
+        box-shadow: 0 8px 20px rgba(37, 99, 235, 0.28);
+    }
+    .mobile-task-close-btn:active { transform: scale(0.99); opacity: 0.95; }
+    .mobile-task-summary {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 12px;
+        padding: 10px 12px;
+        border-radius: 14px;
+        background: #eff6ff;
+        border: 1px solid #dbeafe;
+        color: #1e3a8a;
+        font-size: 0.88rem;
+        font-weight: 600;
+    }
+    .mobile-task-card {
+        background: #fff;
+        border-radius: 16px;
+        padding: 14px;
+        margin-bottom: 12px;
+        border: 1px solid #e2e8f0;
+        box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
+        border-left: 4px solid #2563eb;
+    }
+    .mobile-task-card.cat-green { border-left-color: #16a34a; }
+    .mobile-task-card.cat-yellow { border-left-color: #d97706; }
+    .mobile-task-card-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 10px;
+        padding-bottom: 10px;
+        border-bottom: 1px dashed #e2e8f0;
+    }
+    .mobile-task-index {
+        min-width: 28px;
+        height: 28px;
+        border-radius: 999px;
+        background: #dbeafe;
+        color: #1d4ed8;
+        font-size: 0.78rem;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: 2px;
+    }
+    .mobile-task-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+    }
+    .mobile-task-icon.emg { background: #e3f2fd; color: #1565c0; }
+    .mobile-task-icon.tracker { background: #f3e5f5; color: #7b1fa2; }
+    .mobile-task-icon.info { background: #e8f5e9; color: #2e7d32; }
+    .mobile-task-icon.warning { background: #fff3e0; color: #ef6c00; }
+    .mobile-task-card-title {
+        font-size: 1rem;
+        font-weight: 600;
+        color: #333;
+        margin: 0;
+    }
+    .mobile-task-card-subtitle {
+        font-size: 0.85rem;
+        color: #666;
+        margin: 2px 0 0;
+    }
+    .mobile-task-section-title {
+        margin: 8px 0 6px;
+        font-size: 0.74rem;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: #64748b;
+        font-weight: 700;
+    }
+    .mobile-task-info-row {
+        display: grid;
+        grid-template-columns: minmax(92px, 34%) 1fr;
+        gap: 10px;
+        padding: 9px 0;
+        border-bottom: 1px solid #f1f5f9;
+        align-items: start;
+    }
+    .mobile-task-info-row:last-child { border-bottom: none; }
+    .mobile-task-info-label {
+        font-size: 0.82rem;
+        color: #64748b;
+        font-weight: 600;
+    }
+    .mobile-task-info-value {
+        font-size: 0.88rem;
+        color: #0f172a;
+        font-weight: 600;
+        text-align: right;
+        word-break: break-word;
+    }
+    .mobile-task-datetime-box {
+        margin-top: 4px;
+        padding: 10px 12px;
+        border-radius: 12px;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+    }
+    .mobile-task-badge {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
+    .mobile-task-badge.green { background: #e8f5e9; color: #2e7d32; }
+    .mobile-task-badge.warning { background: #fff8e1; color: #f57f17; }
+    .mobile-task-badge.red { background: #ffebee; color: #c62828; }
+    .mobile-task-badge.blue { background: #e3f2fd; color: #1565c0; }
+    .mobile-task-badge.gray { background: #f5f5f5; color: #666; }
+    .mobile-task-empty {
+        text-align: center;
+        padding: 40px 20px;
+    }
+    .mobile-task-empty i {
+        font-size: 3rem;
+        color: #ddd;
+        margin-bottom: 16px;
+    }
+    .mobile-task-empty p {
+        color: #999;
+        font-size: 1rem;
+    }
+    @media (min-width: 601px) {
+        .mobile-task-modal {
+            align-items: center;
+            padding: 20px;
+        }
+        .mobile-task-sheet {
+            border-radius: 20px;
+            max-height: 80vh;
+        }
+    }
+    `;
+    
+    // Inject HTML and Styles
+    var container = document.createElement('div');
+    container.innerHTML = modalHTML;
+    document.body.appendChild(container.firstElementChild);
+    
+    var styleEl = document.createElement('style');
+    styleEl.textContent = styles;
+    document.head.appendChild(styleEl);
+    
+    // Global functions for modal
+    window.openMobileTaskModal = function(title, content, eyebrow) {
+        document.getElementById('mobileTaskTitle').textContent = title;
+        document.getElementById('mobileTaskEyebrow').textContent = eyebrow || 'Task Report';
+        document.getElementById('mobileTaskBody').innerHTML = content;
+        document.getElementById('mobileTaskModal').classList.remove('d-none');
+        document.body.style.overflow = 'hidden';
+    };
+    
+    window.closeMobileTaskModal = function() {
+        document.getElementById('mobileTaskModal').classList.add('d-none');
+        document.body.style.overflow = '';
+    };
+
+    document.getElementById('mobileTaskCloseBtn').addEventListener('click', window.closeMobileTaskModal);
+    document.getElementById('mobileTaskCloseFooterBtn').addEventListener('click', window.closeMobileTaskModal);
+
+    function _mobileHe(s) {
+        var d = document.createElement('div');
+        d.textContent = s == null ? '' : String(s);
+        return d.innerHTML;
+    }
+
+    function _useMobileTaskPanel() {
+        return document.documentElement.classList.contains('capacitor-native')
+            || window.matchMedia('(max-width: 768px)').matches;
+    }
+
+    function _mobileCategoryBadge(cat) {
+        if (cat === 'Green') return 'green';
+        if (cat === 'Yellow') return 'warning';
+        return 'blue';
+    }
+
+    function _renderMobileEmgCards(rows) {
+        if (!rows.length) {
+            return '<div class="mobile-task-empty"><i class="bi bi-inbox"></i><p>No emergency tasks found</p></div>';
+        }
+        var html = '<div class="mobile-task-summary"><span><i class="bi bi-clipboard2-pulse me-1"></i>Emergency Tasks</span><span>' + rows.length + ' total</span></div>';
+        rows.forEach(function(task, index) {
+            var cat = task.category || '';
+            var catClass = cat === 'Green' ? 'cat-green' : (cat === 'Yellow' ? 'cat-yellow' : '');
+            html += '<div class="mobile-task-card ' + catClass + '">'
+                + '<div class="mobile-task-card-header">'
+                + '<div class="mobile-task-icon emg"><i class="bi bi-telephone-fill"></i></div>'
+                + '<div style="min-width:0;flex:1;">'
+                + '<div class="d-flex align-items-center gap-2 flex-wrap"><span class="mobile-task-index">#' + (index + 1) + '</span>'
+                + '<h6 class="mobile-task-card-title mb-0">' + _mobileHe(task.task_id || ('EMG-' + (index + 1))) + '</h6></div>'
+                + '<p class="mobile-task-card-subtitle"><span class="mobile-task-badge ' + _mobileCategoryBadge(cat) + '">' + _mobileHe(cat || 'Emergency') + '</span></p>'
+                + '</div></div>'
+                + '<div class="mobile-task-info-row"><span class="mobile-task-info-label">Phone</span><span class="mobile-task-info-value">' + _mobileHe(task.phone || '-') + '</span></div>'
+                + '<div class="mobile-task-info-row"><span class="mobile-task-info-label">CLI</span><span class="mobile-task-info-value">' + _mobileHe(task.cli || '-') + '</span></div>'
+                + '<div class="mobile-task-info-row"><span class="mobile-task-info-label">Name</span><span class="mobile-task-info-value">' + _mobileHe(task.name || '-') + '</span></div>'
+                + '<div class="mobile-task-info-row"><span class="mobile-task-info-label">Address</span><span class="mobile-task-info-value">' + _mobileHe(task.address || '-') + '</span></div>'
+                + '<div class="mobile-task-info-row"><span class="mobile-task-info-label">Received By</span><span class="mobile-task-info-value">' + _mobileHe(task.received_by || '-') + '</span></div>'
+                + '<div class="mobile-task-info-row"><span class="mobile-task-info-label">Facility</span><span class="mobile-task-info-value">' + _mobileHe(task.facility_name || '-') + '</span></div>'
+                + '<div class="mobile-task-section-title">Date &amp; Time</div>'
+                + '<div class="mobile-task-datetime-box">'
+                + '<div class="mobile-task-info-row"><span class="mobile-task-info-label">Created</span><span class="mobile-task-info-value">' + _mobileHe(task.created_date || '-') + '</span></div>'
+                + '<div class="mobile-task-info-row"><span class="mobile-task-info-label">Completed</span><span class="mobile-task-info-value">' + _mobileHe(task.completed_date_time || '-') + '</span></div>'
+                + '</div>'
+                + '</div>';
+        });
+        return html;
+    }
+
+    function _renderMobileTrackerCards(d, vno, date) {
+        if (!d || !d.id) {
+            return '<div class="mobile-task-empty"><i class="bi bi-inbox"></i><p>No tracker record found for ' + _mobileHe(vno) + ' on ' + _mobileHe(date) + '</p></div>';
+        }
+        var autoVal = Math.max(parseFloat(d.mileage) || 0, parseFloat(d.ptop) || 0);
+        var effective = d.effective_km != null ? d.effective_km : autoVal;
+        return '<div class="mobile-task-card">'
+            + '<div class="mobile-task-card-header">'
+            + '<div class="mobile-task-icon tracker"><i class="bi bi-geo-alt-fill"></i></div>'
+            + '<div><h6 class="mobile-task-card-title">Tracker KM — ' + _mobileHe(effective) + '</h6>'
+            + '<p class="mobile-task-card-subtitle">' + _mobileHe(vno) + ' · ' + _mobileHe(date) + '</p></div>'
+            + '</div>'
+            + '<div class="mobile-task-info-row"><span class="mobile-task-info-label">From</span><span class="mobile-task-info-value">' + _mobileHe((d.date_from || '-') + ' ' + (d.time_from || '')) + '</span></div>'
+            + '<div class="mobile-task-info-row"><span class="mobile-task-info-label">To</span><span class="mobile-task-info-value">' + _mobileHe((d.date_to || '-') + ' ' + (d.time_to || '')) + '</span></div>'
+            + '<div class="mobile-task-info-row"><span class="mobile-task-info-label">Mileage</span><span class="mobile-task-info-value">' + _mobileHe(d.mileage) + ' km</span></div>'
+            + '<div class="mobile-task-info-row"><span class="mobile-task-info-label">P to P</span><span class="mobile-task-info-value">' + _mobileHe(d.ptop) + ' km</span></div>'
+            + '<div class="mobile-task-info-row"><span class="mobile-task-info-label">Selected KM</span><span class="mobile-task-info-value">' + (d.selected_km != null ? _mobileHe(d.selected_km) + ' km' : 'Auto (MAX)') + '</span></div>'
+            + '<div class="mobile-task-info-row"><span class="mobile-task-info-label">Used in Report</span><span class="mobile-task-info-value"><span class="mobile-task-badge green">' + _mobileHe(effective) + ' km</span></span></div>'
+            + '<p class="text-muted mb-0 mt-2" style="font-size:0.82rem;">Auto = MAX(Mileage, P to P) = ' + autoVal.toFixed(2) + ' km</p>'
+            + '</div>';
+    }
+    
+    // EMG Link Handler (mobile / Capacitor only)
+    document.addEventListener('click', function(e) {
+        var emgLink = e.target.closest('.emg-link');
+        if (!emgLink || !_useMobileTaskPanel()) return;
+        e.preventDefault();
+        e.stopPropagation();
+        
+        var vno = emgLink.getAttribute('data-vno') || '';
+        var date = emgLink.getAttribute('data-date') || '';
+        var badge = emgLink.querySelector('.badge');
+        var emgCount = parseInt((badge ? badge.textContent : '0') || '0', 10) || 0;
+        
+        if (emgCount === 0) {
+            window.openMobileTaskModal('No Emergency Tasks', '<div class="mobile-task-empty"><i class="bi bi-inbox"></i><p>No emergency tasks for this vehicle on ' + _mobileHe(date) + '</p></div>', 'EMG Tasks');
+            return;
+        }
+        
+        window.openMobileTaskModal(vno + ' · ' + date, '<div class="text-center py-4"><div class="spinner-border text-primary" role="status"></div><p class="text-muted mt-2">Loading emergency tasks...</p></div>', 'EMG Tasks');
+        
+        fetch('/api/task-report/emg-detail?date=' + encodeURIComponent(date) + '&vehicle_no=' + encodeURIComponent(vno))
+            .then(function(r) { return r.json(); })
+            .then(function(rows) {
+                document.getElementById('mobileTaskBody').innerHTML = _renderMobileEmgCards(Array.isArray(rows) ? rows : []);
+            })
+            .catch(function() {
+                document.getElementById('mobileTaskBody').innerHTML = '<div class="mobile-task-empty"><i class="bi bi-exclamation-circle"></i><p>Failed to load emergency tasks</p></div>';
+            });
+    }, true);
+    
+    // Tracker Link Handler (mobile / Capacitor only)
+    document.addEventListener('click', function(e) {
+        var trackerLink = e.target.closest('.tracker-link');
+        if (!trackerLink || !_useMobileTaskPanel()) return;
+        e.preventDefault();
+        e.stopPropagation();
+        
+        var vno = trackerLink.getAttribute('data-vno') || '';
+        var date = trackerLink.getAttribute('data-date') || '';
+        
+        window.openMobileTaskModal(vno + ' · ' + date, '<div class="text-center py-4"><div class="spinner-border text-primary" role="status"></div><p class="text-muted mt-2">Loading tracker details...</p></div>', 'Tracker KM');
+        
+        fetch('/api/task-report/tracker-detail?date=' + encodeURIComponent(date) + '&vehicle_no=' + encodeURIComponent(vno))
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                document.getElementById('mobileTaskBody').innerHTML = _renderMobileTrackerCards(d, vno, date);
+            })
+            .catch(function() {
+                document.getElementById('mobileTaskBody').innerHTML = '<div class="mobile-task-empty"><i class="bi bi-exclamation-circle"></i><p>Failed to load tracker details</p></div>';
+            });
+    }, true);
+    
+})();
+</script>

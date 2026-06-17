@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Vehicles Daily Task Report</title>
+  <style>
+    @page { size: A4 landscape; margin: 8mm; }
+    body { font-family: Arial, Helvetica, sans-serif; font-size: 10px; margin: 0; padding: 8px 12px; color: #111; }
+    h3 { text-align: center; margin: 6px 0 10px; font-size: 14px; font-weight: 600; }
+    table { width: 100%; border-collapse: collapse; table-layout: auto; }
+    th, td { border: 1px solid #555; padding: 3px 5px; text-align: left; vertical-align: top; }
+    th { background: #e9ecef; font-size: 9px; font-weight: 700; }
+    tfoot td { background: #e9ecef; font-weight: 700; }
+    .text-end { text-align: right; }
+    .text-center { text-align: center; }
+    .ps-3 { padding-left: 12px; }
+  </style>
+</head>
+<body>
+  <h3>Vehicles Daily Task Report — {{ from_date|ddmmyyyy }} to {{ to_date|ddmmyyyy }}</h3>
+  <table>
+    <thead>
+      <tr>
+        <th class="ps-3">#</th>
+        <th>Date</th>
+        <th>District</th>
+        <th>Tehsil</th>
+        <th>Parking</th>
+        <th>V.Type</th>
+        <th>Vehicle No</th>
+        <th class="text-end">Start</th>
+        <th class="text-end">Close</th>
+        <th class="text-end">KMs Driven</th>
+        <th class="text-center">Task's</th>
+        <th class="text-center">EMG</th>
+        <th class="text-center">Task Diff</th>
+        <th class="text-end">Tracker KM</th>
+        <th class="text-end">KMs Diff</th>
+        <th class="text-end">% Diff</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      {% set task_diff = (row.tasks_count|int) - (row.emg_tasks|int) %}
+      <tr>
+        <td class="ps-3">{{ loop.index }}</td>
+        <td>{{ row.task_date|ddmmyyyy }}</td>
+        <td>{{ row.vehicle.district.name if row.vehicle.district else '-' }}</td>
+        <td>{{ row.vehicle.parking_station.tehsil if row.vehicle.parking_station else '-' }}</td>
+        <td>{{ row.vehicle.parking_station.name if row.vehicle.parking_station else '-' }}</td>
+        <td>{{ row.vehicle.vehicle_type or '-' }}</td>
+        <td>{{ row.vehicle.vehicle_no }}</td>
+        <td class="text-end">{{ "%.0f"|format(row.start_reading) }}</td>
+        <td class="text-end">{{ "%.0f"|format(row.close_reading) }}</td>
+        <td class="text-end">{{ row.kms_driven }}</td>
+        <td class="text-center">{{ row.tasks_count }}</td>
+        <td class="text-center">{{ row.emg_tasks }}</td>
+        <td class="text-center">{{ task_diff }}</td>
+        <td class="text-end">{{ row.tracker_km }}</td>
+        <td class="text-end">{{ row.kms_diff }}</td>
+        <td class="text-end">{% if row.pct_diff is not none %}{{ row.pct_diff }}%{% else %}Driven KM Zero{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    {% if rows %}
+    <tfoot>
+      <tr>
+        <td colspan="9" class="ps-3 text-end">Total</td>
+        <td class="text-end">{{ "%.2f"|format(total_kms) }}</td>
+        <td class="text-center">{{ total_tasks }}</td>
+        <td class="text-center">{{ total_emg }}</td>
+        <td class="text-center">{{ total_task_diff }}</td>
+        <td class="text-end">{{ "%.2f"|format(total_tracker) }}</td>
+        <td class="text-end">{{ "%.2f"|format(total_diff) }}</td>
+        <td class="text-end">{% if total_pct is not none %}{{ total_pct }}%{% else %}—{% endif %}</td>
+      </tr>
+    </tfoot>
+    {% endif %}
+  </table>
+</body>
+</html>

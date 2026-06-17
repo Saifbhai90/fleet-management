@@ -472,6 +472,12 @@
 
             {% endif %}
 
+            {% if can_see_page('task_report_vehicle_period_detail') %}
+
+            {{ report_link(url_for('task_report_vehicle_period_detail', nav_from='reports'), 'fa-solid fa-table-list', 'Vehicle Period Task Detail', 'rc-tile--period-detail') }}
+
+            {% endif %}
+
             {% if can_see_page('red_task_list') %}
 
             {{ report_link(url_for('red_task_list', nav_from='reports'), 'fa-solid fa-flag', 'Red Task Justification', 'rc-tile--red-task') }}
@@ -2789,6 +2795,8 @@ html.capacitor-native .rc-web-only { display: none !important; }
 .rc-tile--unauthorized .rc-tile-icon > i { background-image: linear-gradient(135deg, #f87171, #dc2626); }
 
 .rc-tile--daily-task .rc-tile-icon > i,
+
+.rc-tile--period-detail .rc-tile-icon > i,
 
 .rc-tile--new-task .rc-tile-icon > i,
 

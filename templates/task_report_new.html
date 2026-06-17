@@ -988,7 +988,47 @@
 </div>
 
 <!-- EMG Detail Panel (floating popup, no backdrop) -->
-<div id="emgPanel" class="card shadow-lg border-info d-none" style="position:fixed;top:120px;left:50%;transform:translateX(-50%);width:98%;max-width:1550px;z-index:1055;box-shadow:0 8px 32px rgba(0,0,0,.25)!important;">
+<style>
+  .fleet-task-float-panel {
+    position: fixed;
+    top: 80px;
+    left: 320px;
+    right: 24px;
+    width: auto;
+    max-width: none;
+    transform: none !important;
+    z-index: 1060;
+    margin: 0;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25) !important;
+  }
+  body:has(#sidebar.collapsed) .fleet-task-float-panel,
+  body:has(#mainContent.expanded) .fleet-task-float-panel {
+    left: 90px;
+  }
+  .fleet-task-float-panel--narrow {
+    top: 100px;
+    max-width: 800px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  @media (max-width: 991.98px) {
+    .fleet-task-float-panel,
+    .fleet-task-float-panel--narrow {
+      left: 12px;
+      right: 12px;
+      max-width: none;
+      margin-left: 0;
+      margin-right: 0;
+    }
+  }
+  @media (max-width: 768px) {
+    .fleet-task-float-panel,
+    .fleet-task-float-panel--narrow {
+      display: none !important;
+    }
+  }
+</style>
+<div id="emgPanel" class="card shadow-lg border-info d-none fleet-task-float-panel">
   <div class="card-header bg-info bg-opacity-10 d-flex justify-content-between align-items-center py-2">
     <h6 class="mb-0"><i class="bi bi-clipboard2-pulse me-2"></i>EMG Tasks — <span id="emgVehicleNo"></span></h6>
     <button type="button" class="btn-close" id="emgCloseBtn"></button>
@@ -1017,7 +1057,7 @@
 </div>
 
 <!-- Tracker Detail / Edit Panel (floating popup, no backdrop) -->
-<div id="trackerPanel" class="card shadow-lg border-dark d-none" style="position:fixed;top:140px;left:50%;transform:translateX(-50%);width:80%;max-width:800px;z-index:1055;box-shadow:0 8px 32px rgba(0,0,0,.25)!important;">
+<div id="trackerPanel" class="card shadow-lg border-dark d-none fleet-task-float-panel fleet-task-float-panel--narrow">
   <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center py-2">
     <h6 class="mb-0"><i class="bi bi-speedometer2 me-2"></i>Tracker KM — <span id="trackerVehicleNo"></span></h6>
     <button type="button" class="btn-close btn-close-white" id="trackerCloseBtn"></button>
@@ -1427,11 +1467,17 @@ window.TASK_REPORT_NEW_LOCK_VEHICLE = {{ tef.get('lock_vehicle', false)|tojson }
 
   /* ── EMG Detail Panel ──────────────────────────────────── */
   var _emgData = [];
+  function _useMobileTaskPanel() {
+    return document.documentElement.classList.contains('capacitor-native')
+      || window.matchMedia('(max-width: 768px)').matches;
+  }
+
   document.getElementById('emgCloseBtn').addEventListener('click', function() { _hidePanel(emgPanel); });
   document.getElementById('emgCloseBtnFooter').addEventListener('click', function() { _hidePanel(emgPanel); });
 
   document.querySelectorAll('.emg-link').forEach(function(a) {
     a.addEventListener('click', function(e) {
+      if (_useMobileTaskPanel()) return;
       e.preventDefault();
       var vno = this.dataset.vno, dt = this.dataset.date;
       document.getElementById('emgVehicleNo').textContent = vno;
@@ -1484,17 +1530,36 @@ window.TASK_REPORT_NEW_LOCK_VEHICLE = {{ tef.get('lock_vehicle', false)|tojson }
     link.click();
   });
 
-  document.getElementById('emgPrintBtn').addEventListener('click', function() {
-    var tbl = document.getElementById('emgDetailTable');
-    var w = window.open('', '_blank', 'width=900,height=600');
-    w.document.write('<html><head><title>EMG Tasks - ' + document.getElementById('emgVehicleNo').textContent + '</title>');
-    w.document.write('<style>table{width:100%;border-collapse:collapse;font-size:12px;}th,td{border:1px solid #333;padding:4px 6px;text-align:left;}th{background:#e9ecef;}</style>');
-    w.document.write('</head><body>');
-    w.document.write('<h3>EMG Tasks — ' + document.getElementById('emgVehicleNo').textContent + '</h3>');
-    w.document.write(tbl.outerHTML);
+  function _cleanEmgTable(tbl) {
+    var clone = tbl.cloneNode(true);
+    clone.querySelectorAll('.badge').forEach(function(badge) {
+      var td = badge.closest('td');
+      if (td) td.textContent = (badge.textContent || '').trim();
+    });
+    return clone;
+  }
+
+  function _openEmgPrintPreview(title, tbl) {
+    var previewCss = '@page{size:A4 landscape;margin:8mm;}body{font-family:Arial,sans-serif;font-size:10px;margin:0;padding:8px 12px;}.toolbar{position:sticky;top:0;z-index:99;background:#1e293b;color:#fff;padding:8px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;border-radius:0 0 6px 6px;box-shadow:0 2px 8px rgba(0,0,0,.2);margin:-8px -12px 12px;}.toolbar h4{margin:0;font-size:14px;font-weight:600;}.toolbar button{padding:5px 16px;border:none;border-radius:4px;font-size:12px;font-weight:600;cursor:pointer;}.btn-p{background:#3b82f6;color:#fff;}.btn-c{background:#64748b;color:#fff;margin-left:6px;}h3{text-align:center;margin:6px 0 10px;font-size:14px;}table{width:100%;border-collapse:collapse;table-layout:auto;}th,td{border:1px solid #555;padding:3px 5px;text-align:left;vertical-align:top;}th{background:#e9ecef;font-size:9px;}.text-end{text-align:right;}.text-center{text-align:center;}@media print{.toolbar{display:none!important;}}';
+    var cleanTable = _cleanEmgTable(tbl);
+    var w = window.open('', '_blank');
+    if (!w) return;
+    w.document.write('<!DOCTYPE html><html><head><title>' + title + '</title>');
+    w.document.write('<style>' + previewCss + '</style></head><body>');
+    w.document.write('<div class="toolbar"><h4>EMG Tasks</h4><div>');
+    w.document.write('<button class="btn-p" onclick="window.print()">&#128438; Print</button>');
+    w.document.write('<button class="btn-c" onclick="window.close()">&#10005; Close</button>');
+    w.document.write('</div></div>');
+    w.document.write('<h3>' + title + '</h3>');
+    w.document.write(cleanTable.outerHTML);
     w.document.write('</body></html>');
     w.document.close();
-    w.print();
+  }
+
+  document.getElementById('emgPrintBtn').addEventListener('click', function() {
+    if (!_emgData.length) return;
+    var title = 'EMG Tasks — ' + (document.getElementById('emgVehicleNo').textContent || '').trim();
+    _openEmgPrintPreview(title, document.getElementById('emgDetailTable'));
   });
 
   /* ── Tracker Detail / Edit Panel ───────────────────────── */
@@ -1504,6 +1569,7 @@ window.TASK_REPORT_NEW_LOCK_VEHICLE = {{ tef.get('lock_vehicle', false)|tojson }
 
   document.querySelectorAll('.tracker-link').forEach(function(a) {
     a.addEventListener('click', function(e) {
+      if (_useMobileTaskPanel()) return;
       e.preventDefault();
       _trackerLinkEl = this;
       var vno = this.dataset.vno, dt = this.dataset.date;
@@ -1574,6 +1640,7 @@ window.TASK_REPORT_NEW_LOCK_VEHICLE = {{ tef.get('lock_vehicle', false)|tojson }
   window.updateTotals = updateTotals;
 })();
 </script>
+{% include 'partials/task_report_mobile_task_modal.html' %}
 {% set fv_prefix = 'taskNewOdomFv' %}
 {% set fv_preview_img_id = '' %}
 {% set fv_photo_label = 'Odoo meter photo' %}

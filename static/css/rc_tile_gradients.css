@@ -89,6 +89,8 @@
 
 .rc-tile--daily-task .rc-tile-icon > i,
 .hub-page .hub-grid .rc-tile--daily-task .rc-tile-icon > i,
+.rc-tile--period-detail .rc-tile-icon > i,
+.hub-page .hub-grid .rc-tile--period-detail .rc-tile-icon > i,
 .rc-tile--new-task .rc-tile-icon > i,
 .hub-page .hub-grid .rc-tile--new-task .rc-tile-icon > i,
 .rc-tile--logbook .rc-tile-icon > i,

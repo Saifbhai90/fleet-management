@@ -177,7 +177,7 @@ HUBS = {
         'section_perm': 'task_report',
         'extra_endpoints': (
             'task_report_upload', 'task_report_upload_list', 'task_report_new', 'task_report_pending',
-            'task_report_list', 'red_task_list', 'without_task_list', 'task_report_logbook_cover',
+            'task_report_list', 'task_report_vehicle_period_detail', 'red_task_list', 'without_task_list', 'task_report_logbook_cover',
             'speed_monitoring_report', 'mileage_report', 'tracker_difference_report',
             'unauthorized_movement_report', 'task_start_delay_report', 'task_turnaround_report',
             'unexecuted_task_report',
@@ -195,6 +195,7 @@ HUBS = {
                 'title': 'Reports',
                 'items': [
                     _item('task_report_list', 'Daily Task Report', 'fa-solid fa-calendar-day', 'rc-tile--daily-task', 'task_report_list'),
+                    _item('task_report_vehicle_period_detail', 'Vehicle Period Detail', 'fa-solid fa-table-list', 'rc-tile--period-detail', 'task_report_vehicle_period_detail'),
                     _item('task_report_pending', 'Pending Task Report', 'fa-solid fa-hourglass-half', 'rc-tile--pending-task', 'task_report_pending'),
                     _item('red_task_list', 'Red Task Justification', 'fa-solid fa-flag', 'rc-tile--red-task', 'red_task'),
                     _item('without_task_list', 'Movement without Task', 'fa-solid fa-circle-stop', 'rc-tile--no-task', 'without_task'),

@@ -1777,11 +1777,43 @@ def require_login():
         return
     if endpoint == 'set_new_password' and session.get('must_set_password_user_id'):
         return
-    if not session.get('user'):
+    _uid = session.get('user_id')
+    if not _uid:
         api_resp = _api_error({'ok': False, 'error': 'Session expired. Please login again.'}, 401)
         if api_resp:
             return api_resp
-        return redirect(url_for('login'))
+        return redirect(url_for('login', next=_login_next_path()))
+    if not session.get('user'):
+        try:
+            _u = User.query.get(_uid)
+            if _u and _u.is_active:
+                session['user'] = _u.full_name or _u.username
+            else:
+                session.clear()
+                api_resp = _api_error({'ok': False, 'error': 'Session expired. Please login again.'}, 401)
+                if api_resp:
+                    return api_resp
+                return redirect(url_for('login', next=_login_next_path()))
+        except Exception:
+            pass
+    if _uid and not session.get('permissions') and not session.get('is_master'):
+        try:
+            _perm_u = User.query.get(_uid)
+            if _perm_u and _perm_u.is_active:
+                _role = (_perm_u.role.name if _perm_u.role else '').strip()
+                if _role == 'Master':
+                    session['permissions'] = [p.code for p in Permission.query.all()]
+                    session['is_master'] = True
+                else:
+                    _perms = _perm_u.permission_codes()
+                    try:
+                        from permissions_config import expand_login_permissions
+                        _perms = expand_login_permissions(_perms)
+                    except Exception:
+                        pass
+                    session['permissions'] = _perms
+        except Exception:
+            pass
     if getattr(session, 'permanent', False):
         _uid = session.get('user_id')
         if _uid:
@@ -1807,18 +1839,22 @@ def require_login():
     now = pk_now()
     session['last_activity'] = now
     if last and not getattr(session, 'permanent', False):
-        # Ensure both are timezone-aware UTC so subtraction works (avoid naive/aware mix)
-        if getattr(last, 'tzinfo', None) is None:
-            last = last.replace(tzinfo=timezone.utc)
-        else:
-            last = last.astimezone(timezone.utc)
-        if (now - last).total_seconds() > timeout_mins * 60:
-            session.clear()
-            api_resp = _api_error({'ok': False, 'error': 'Session expired. Please login again.'}, 401)
-            if api_resp:
-                return api_resp
-            flash('Session expired. Please login again.', 'info')
-            return redirect(url_for('login'))
+        try:
+            last_cmp = last
+            now_cmp = now
+            if getattr(last_cmp, 'tzinfo', None) is not None:
+                last_cmp = last_cmp.replace(tzinfo=None)
+            if getattr(now_cmp, 'tzinfo', None) is not None:
+                now_cmp = now_cmp.replace(tzinfo=None)
+            if (now_cmp - last_cmp).total_seconds() > timeout_mins * 60:
+                session.clear()
+                api_resp = _api_error({'ok': False, 'error': 'Session expired. Please login again.'}, 401)
+                if api_resp:
+                    return api_resp
+                flash('Session expired. Please login again.', 'info')
+                return redirect(url_for('login', next=_login_next_path()))
+        except (TypeError, ValueError, AttributeError):
+            pass
     # Role-based access: check if user has permission for this endpoint
     # Master ke liye role ki value nahi: sab routes allow, koi permission check nahi
     if session.get('is_master'):
@@ -3208,6 +3244,29 @@ def _load_pdf_writer_reader():
         return PdfReader, PdfWriter
 
 
+def _html_to_pdf_bytes(html_content, landscape=True):
+    """Render HTML to PDF bytes via headless Chromium (Playwright)."""
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page = browser.new_page()
+            page.set_content(html_content or '', wait_until='load')
+            page.emulate_media(media='print')
+            pdf_bytes = page.pdf(
+                format='A4',
+                landscape=bool(landscape),
+                print_background=True,
+                margin={'top': '8mm', 'right': '8mm', 'bottom': '8mm', 'left': '8mm'},
+            )
+            if not pdf_bytes or len(pdf_bytes) < 900:
+                raise ValueError('Generated PDF is empty')
+            return pdf_bytes
+        finally:
+            browser.close()
+
+
 def _target_page_dims(page_size, orientation):
     # PDF points (1 inch = 72 pt)
     sizes = {
@@ -4260,6 +4319,28 @@ def _safe_mobile_resume_path(path):
     return path.split('#')[0] or None
 
 
+def _login_next_path():
+    """Current path+query for ?next= after auth redirect (relative only)."""
+    path = request.path or '/'
+    if request.query_string:
+        path = path + '?' + request.query_string.decode('utf-8', errors='ignore')
+    return path
+
+
+def _safe_login_next(target):
+    if not target or not str(target).startswith('/') or str(target).startswith('//'):
+        return None
+    low = str(target).lower()
+    if low.startswith('/login') or low.startswith('/mobile-init'):
+        return None
+    return str(target).split('#')[0] or None
+
+
+def _is_capacitor_browser():
+    ua = (request.headers.get('User-Agent') or '')
+    return 'Capacitor' in ua
+
+
 @app.route('/mobile-init')
 def mobile_init():
     """Capacitor cold start / force-close reopen: always log out and show the login screen.
@@ -4293,6 +4374,8 @@ def fleet_not_found_redirect(e):
     accept = (request.headers.get('Accept') or '').lower()
     if accept and 'application/json' in accept and 'text/html' not in accept and '*/*' not in accept:
         return jsonify({'ok': False, 'error': 'Not found'}), 404
+    if not _is_capacitor_browser():
+        return e
     return redirect(url_for('mobile_init'))
 
 
@@ -7702,20 +7785,16 @@ def login():
         make_trusted_device_token, verify_trusted_device_token,
         TRUSTED_DEVICE_COOKIE, TRUSTED_DEVICE_DAYS
     )
-    # Always clear any existing session on GET /login.
-    # This ensures that after app-close logout, no stale session skips the biometric screen.
-    # Web users who navigate to /login while logged in will also get a clean state.
+    # GET /login: never wipe an active session (mobile-init clears before redirect here).
+    # Auth redirects use ?next= so a still-valid session returns to the intended page.
     if request.method == 'GET':
-        if session.get('user_id'):
-            try:
-                log_id = session.get('login_log_id')
-                if log_id:
-                    LoginLog.query.filter_by(id=log_id).update({'logout_at': pk_now()})
-                    db.session.commit()
-            except Exception:
-                db.session.rollback()
-            session.clear()
-        # Capacitor WebView may not send session cookie on first POST; prime it on GET.
+        _fetch_mode = (request.headers.get('Sec-Fetch-Mode') or '').lower()
+        _is_fetch_follow = _fetch_mode in ('cors', 'no-cors', 'same-origin')
+        if session.get('user_id') and not _is_fetch_follow:
+            _nxt = _safe_login_next(request.args.get('next') or '')
+            if _nxt:
+                return redirect(_nxt)
+            return redirect(url_for('dashboard'))
         session.setdefault('_fleet_login_ready', 1)
         session.modified = True
 
@@ -24306,40 +24385,59 @@ def task_report_list():
     lap = set(allowed_projects) if allowed_projects else set()
     lav = set(allowed_vehicles) if allowed_vehicles else set()
 
-    def coerce_task_report_scope(did, pid):
+    def coerce_task_report_scope(did, pid, vid=0):
         vd = {c[0] for c in form.district_id.choices}
         vp = {c[0] for c in form.project_id.choices}
-        lk = {'lock_district': False, 'lock_project': False}
+        lk = {'lock_district': False, 'lock_project': False, 'lock_vehicle': False}
         if did and did not in vd:
             did = 0
         if pid and pid not in vp:
             pid = 0
-        if is_master_or_admin:
-            return did, pid, lk
-        if len(lad) == 1:
-            only_d = next(iter(lad))
-            if only_d in vd:
-                did = only_d
-                lk['lock_district'] = True
-        if len(lad) == 1 and len(lap) == 1 and len(lav) == 1:
-            only_p = next(iter(lap))
-            if only_p in vp:
-                pid = only_p
-                lk['lock_project'] = True
-        return did, pid, lk
+        if not is_master_or_admin:
+            if len(lad) == 1:
+                only_d = next(iter(lad))
+                if only_d in vd:
+                    did = only_d
+                    lk['lock_district'] = True
+            if len(lad) == 1 and len(lap) == 1 and len(lav) == 1:
+                only_p = next(iter(lap))
+                if only_p in vp:
+                    pid = only_p
+                    lk['lock_project'] = True
+        vehicle_q = _vehicle_query_task_report_scope(
+            is_master_or_admin, allowed_projects, allowed_districts, allowed_vehicles
+        )
+        if did:
+            vehicle_q = vehicle_q.filter(Vehicle.district_id == did)
+        if pid:
+            vehicle_q = vehicle_q.filter(Vehicle.project_id == pid)
+        form.vehicle_id.choices = [(0, '-- All Vehicles --')] + [
+            (v.id, v.vehicle_no) for v in vehicle_q.order_by(*vehicle_order_by()).all()
+        ]
+        vv = {c[0] for c in form.vehicle_id.choices}
+        if vid and vid not in vv:
+            vid = 0
+        if not is_master_or_admin and len(lav) == 1:
+            only_v = next(iter(lav))
+            if only_v in vv:
+                vid = only_v
+                lk['lock_vehicle'] = True
+        return did, pid, vid, lk
 
     if request.method == 'POST':
         from_date = parse_date(request.form.get('from_date')) or today
         to_date = parse_date(request.form.get('to_date')) or today
         district_id = request.form.get('district_id', type=int) or 0
         project_id = request.form.get('project_id', type=int) or 0
+        vehicle_id = request.form.get('vehicle_id', type=int) or 0
         if from_date and to_date and from_date > to_date:
             from_date, to_date = to_date, from_date
-        district_id, project_id, _ = coerce_task_report_scope(district_id, project_id)
-        return redirect(url_for('task_report_list', from_date=from_date.strftime('%d-%m-%Y') if from_date else '', to_date=to_date.strftime('%d-%m-%Y') if to_date else '', district_id=district_id, project_id=project_id))
+        district_id, project_id, vehicle_id, _ = coerce_task_report_scope(district_id, project_id, vehicle_id)
+        return redirect(url_for('task_report_list', from_date=from_date.strftime('%d-%m-%Y') if from_date else '', to_date=to_date.strftime('%d-%m-%Y') if to_date else '', district_id=district_id, project_id=project_id, vehicle_id=vehicle_id))
 
     district_id = request.args.get('district_id', type=int) or 0
     project_id = request.args.get('project_id', type=int) or 0
+    vehicle_id = request.args.get('vehicle_id', type=int) or 0
     from_str = request.args.get('from_date', '')
     to_str = request.args.get('to_date', '')
     if from_str:
@@ -24348,11 +24446,12 @@ def task_report_list():
         to_date = parse_date(to_str) or to_date
     if from_date and to_date and from_date > to_date:
         from_date, to_date = to_date, from_date
-    district_id, project_id, task_report_filter_lock = coerce_task_report_scope(district_id, project_id)
+    district_id, project_id, vehicle_id, task_report_filter_lock = coerce_task_report_scope(district_id, project_id, vehicle_id)
     form.from_date.data = from_date
     form.to_date.data = to_date
     form.district_id.data = district_id
     form.project_id.data = project_id
+    form.vehicle_id.data = vehicle_id
     query = VehicleDailyTask.query.filter(
         VehicleDailyTask.task_date >= from_date,
         VehicleDailyTask.task_date <= to_date
@@ -24401,6 +24500,8 @@ def task_report_list():
         )
     if project_id:
         query = query.filter(VehicleDailyTask.project_id == project_id)
+    if vehicle_id:
+        query = query.filter(VehicleDailyTask.vehicle_id == vehicle_id)
     tasks = query.order_by(VehicleDailyTask.task_date.desc(), VehicleDailyTask.id).all()
     rows = []
     for t in tasks:
@@ -24470,6 +24571,508 @@ def task_report_list():
                            pagination=pagination, per_page=per_page, search=search,
                            task_report_filter_lock=task_report_filter_lock,
                            **_nav_back_ctx(url_for('module_hub', hub_slug='task-logbook'), show_without_nav_from=True))
+
+
+@app.route('/task-report/export-pdf', methods=['GET'])
+def task_report_list_export_pdf():
+    from auth_utils import get_user_context
+
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles = user_context.get('allowed_vehicles', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+
+    today = pk_date()
+    from_date = parse_date(request.args.get('from_date', '')) or today
+    to_date = parse_date(request.args.get('to_date', '')) or today
+    if from_date and to_date and from_date > to_date:
+        from_date, to_date = to_date, from_date
+    district_id = request.args.get('district_id', type=int) or 0
+    project_id = request.args.get('project_id', type=int) or 0
+    vehicle_id = request.args.get('vehicle_id', type=int) or 0
+    search = (request.args.get('search') or '').strip()
+
+    query = VehicleDailyTask.query.filter(
+        VehicleDailyTask.task_date >= from_date,
+        VehicleDailyTask.task_date <= to_date,
+    )
+    vehicle_joined = False
+
+    def _ensure_vehicle_join():
+        nonlocal query, vehicle_joined
+        if not vehicle_joined:
+            query = query.join(Vehicle, Vehicle.id == VehicleDailyTask.vehicle_id)
+            vehicle_joined = True
+
+    if not is_master_or_admin:
+        ap, ad, av = allowed_projects, allowed_districts, allowed_vehicles
+        if not ap and not ad and not av:
+            return jsonify({'error': 'No access to export this report.'}), 403
+        _ensure_vehicle_join()
+        scope_parts = []
+        if av:
+            scope_parts.append(Vehicle.id.in_(list(av)))
+        if ap:
+            scope_parts.append(
+                or_(
+                    VehicleDailyTask.project_id.in_(list(ap)),
+                    Vehicle.project_id.in_(list(ap)),
+                )
+            )
+        if ad:
+            scope_parts.append(
+                or_(
+                    VehicleDailyTask.district_id.in_(list(ad)),
+                    Vehicle.district_id.in_(list(ad)),
+                )
+            )
+        if scope_parts:
+            query = query.filter(and_(*scope_parts))
+
+    if district_id:
+        _ensure_vehicle_join()
+        query = query.filter(
+            or_(
+                VehicleDailyTask.district_id == district_id,
+                and_(VehicleDailyTask.district_id.is_(None), Vehicle.district_id == district_id),
+            )
+        )
+    if project_id:
+        query = query.filter(VehicleDailyTask.project_id == project_id)
+    if vehicle_id:
+        query = query.filter(VehicleDailyTask.vehicle_id == vehicle_id)
+
+    tasks = query.order_by(VehicleDailyTask.task_date.desc(), VehicleDailyTask.id).all()
+    rows = []
+    for t in tasks:
+        v = t.vehicle
+        task_d = t.task_date
+        prev = VehicleDailyTask.query.filter(
+            VehicleDailyTask.vehicle_id == t.vehicle_id,
+            VehicleDailyTask.task_date < task_d,
+        ).order_by(VehicleDailyTask.task_date.desc()).first()
+        if prev and prev.close_reading is not None:
+            start_reading = float(prev.close_reading)
+        elif t.start_reading is not None:
+            start_reading = float(t.start_reading)
+        else:
+            start_reading = 0
+        close_reading = float(t.close_reading)
+        kms_driven = close_reading - start_reading
+        if kms_driven < 0:
+            kms_driven = 0
+        emg_tasks = EmergencyTaskRecord.query.filter(
+            EmergencyTaskRecord.task_date == task_d,
+            EmergencyTaskRecord.amb_reg_no == v.vehicle_no,
+            EmergencyTaskRecord.category.in_(['Green', 'Yellow']),
+        ).count()
+        _mil_rec = VehicleMileageRecord.query.filter_by(task_date=task_d, reg_no=v.vehicle_no).first()
+        tracker_km = _mil_rec.effective_km() if _mil_rec else 0
+        kms_diff = kms_driven - tracker_km
+        pct_diff = round((kms_diff / kms_driven) * 100, 1) if kms_driven and kms_driven != 0 else None
+        rows.append({
+            'task': t,
+            'vehicle': v,
+            'task_date': task_d,
+            'start_reading': start_reading,
+            'close_reading': close_reading,
+            'kms_driven': round(kms_driven, 2),
+            'tasks_count': t.tasks_count,
+            'emg_tasks': emg_tasks,
+            'tracker_km': round(tracker_km, 2),
+            'kms_diff': round(kms_diff, 2),
+            'pct_diff': pct_diff,
+        })
+
+    if search:
+        tokens = [tok.lower() for tok in search.split() if tok]
+
+        def _match(r):
+            blob = ' '.join([
+                str(r['task_date']),
+                r['vehicle'].vehicle_no,
+                r['vehicle'].district.name if r['vehicle'].district else '',
+                r['vehicle'].parking_station.tehsil if r['vehicle'].parking_station else '',
+                r['vehicle'].parking_station.name if r['vehicle'].parking_station else '',
+                r['vehicle'].vehicle_type or '',
+                str(r['kms_driven']),
+                str(r['tasks_count']),
+                str(r['emg_tasks']),
+            ]).lower()
+            return all(tok in blob for tok in tokens)
+
+        rows = [r for r in rows if _match(r)]
+
+    if not rows:
+        return jsonify({'error': 'Export ke liye koi row nahi mili.'}), 400
+
+    total_kms = sum(r['kms_driven'] for r in rows)
+    total_tracker = sum(r['tracker_km'] for r in rows)
+    total_diff = round(total_kms - total_tracker, 2)
+    total_pct = round((total_diff / total_kms * 100), 1) if total_kms else None
+    total_tasks = sum(r['tasks_count'] for r in rows)
+    total_emg = sum(r['emg_tasks'] for r in rows)
+    total_task_diff = total_tasks - total_emg
+
+    try:
+        html = render_template(
+            'task_report_list_print.html',
+            rows=rows,
+            from_date=from_date,
+            to_date=to_date,
+            total_kms=total_kms,
+            total_tracker=total_tracker,
+            total_diff=total_diff,
+            total_pct=total_pct,
+            total_tasks=total_tasks,
+            total_emg=total_emg,
+            total_task_diff=total_task_diff,
+        )
+        pdf_bytes = _html_to_pdf_bytes(html, landscape=True)
+    except Exception as exc:
+        app.logger.exception('Daily task report PDF export failed')
+        return jsonify({'error': f'PDF generation failed: {exc}'}), 500
+
+    fname = f'Daily_Task_Report_{from_date.strftime("%d-%m-%Y")}_to_{to_date.strftime("%d-%m-%Y")}.pdf'
+    return Response(
+        pdf_bytes,
+        mimetype='application/pdf',
+        headers={'Content-Disposition': f'attachment; filename="{fname}"'},
+    )
+
+
+def _vehicle_period_detail_rows(from_date, to_date, project_id, district_id, vehicle_id,
+                                is_master_or_admin, allowed_projects, allowed_districts, allowed_vehicles):
+    """One summary row per vehicle for the date range (logbook-style) with daily-task column metrics."""
+    if not project_id:
+        return []
+    vq = Vehicle.query.filter(Vehicle.project_id == project_id)
+    if district_id:
+        vq = vq.filter(Vehicle.district_id == district_id)
+    if vehicle_id:
+        vq = vq.filter(Vehicle.id == vehicle_id)
+    if not is_master_or_admin:
+        ap, ad, av = allowed_projects, allowed_districts, allowed_vehicles
+        if not ap and not ad and not av:
+            return []
+        if av:
+            vq = vq.filter(Vehicle.id.in_(list(av)))
+        if ap:
+            vq = vq.filter(Vehicle.project_id.in_(list(ap)))
+        if ad:
+            vq = vq.filter(Vehicle.district_id.in_(list(ad)))
+    rows = []
+    for v in vq.order_by(*vehicle_order_by()).all():
+        tasks = VehicleDailyTask.query.filter(
+            VehicleDailyTask.vehicle_id == v.id,
+            VehicleDailyTask.task_date >= from_date,
+            VehicleDailyTask.task_date <= to_date,
+        ).order_by(VehicleDailyTask.task_date.asc()).all()
+        if not tasks:
+            continue
+        first_d = tasks[0].task_date
+        prev = VehicleDailyTask.query.filter(
+            VehicleDailyTask.vehicle_id == v.id,
+            VehicleDailyTask.task_date < first_d,
+        ).order_by(VehicleDailyTask.task_date.desc()).first()
+        if prev and prev.close_reading is not None:
+            start_reading = float(prev.close_reading)
+        elif tasks[0].start_reading is not None:
+            start_reading = float(tasks[0].start_reading)
+        else:
+            start_reading = 0
+        close_reading = float(tasks[-1].close_reading)
+        kms_driven = close_reading - start_reading
+        if kms_driven < 0:
+            kms_driven = 0
+        tasks_count = sum(int(t.tasks_count or 0) for t in tasks)
+        emg_tasks = 0
+        tracker_km = 0.0
+        odometer_photo_path = ''
+        for t in tasks:
+            task_d = t.task_date
+            emg_tasks += EmergencyTaskRecord.query.filter(
+                EmergencyTaskRecord.task_date == task_d,
+                EmergencyTaskRecord.amb_reg_no == v.vehicle_no,
+                EmergencyTaskRecord.category.in_(['Green', 'Yellow']),
+            ).count()
+            _mil_rec = VehicleMileageRecord.query.filter_by(task_date=task_d, reg_no=v.vehicle_no).first()
+            tracker_km += _mil_rec.effective_km() if _mil_rec else 0
+            ph = (getattr(t, 'odometer_photo_path', None) or '').strip()
+            if ph:
+                odometer_photo_path = ph
+        kms_diff = kms_driven - tracker_km
+        pct_diff = round((kms_diff / kms_driven) * 100, 1) if kms_driven else None
+        rows.append({
+            'vehicle': v,
+            'start_reading': start_reading,
+            'close_reading': close_reading,
+            'kms_driven': round(kms_driven, 2),
+            'tasks_count': tasks_count,
+            'emg_tasks': emg_tasks,
+            'tracker_km': round(tracker_km, 2),
+            'kms_diff': round(kms_diff, 2),
+            'pct_diff': pct_diff,
+            'odometer_photo_path': odometer_photo_path,
+        })
+    return rows
+
+
+def _task_report_vehicle_period_detail_impl(redirect_endpoint, template_name, export_pdf=False):
+    from auth_utils import get_user_context
+
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles = user_context.get('allowed_vehicles', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+
+    form = TaskReportFilterForm()
+    district_q = District.query
+    project_q = Project.query
+    if not is_master_or_admin:
+        ap, ad, av = allowed_projects, allowed_districts, allowed_vehicles
+        if not ap and not ad and not av:
+            district_q = district_q.filter(District.id.in_([-1]))
+            project_q = project_q.filter(Project.id.in_([-1]))
+        else:
+            if ad:
+                district_q = district_q.filter(District.id.in_(list(ad)))
+            elif ap:
+                district_q = (
+                    district_q.join(project_district, project_district.c.district_id == District.id)
+                    .filter(project_district.c.project_id.in_(list(ap)))
+                    .distinct()
+                )
+            elif av:
+                d_ids = [
+                    r[0] for r in db.session.query(Vehicle.district_id)
+                    .filter(Vehicle.id.in_(list(av)), Vehicle.district_id.isnot(None))
+                    .distinct().all()
+                ]
+                district_q = district_q.filter(District.id.in_(d_ids or [-1]))
+            if ap:
+                project_q = project_q.filter(Project.id.in_(list(ap)))
+            if ad:
+                project_q = (
+                    project_q.join(project_district, project_district.c.project_id == Project.id)
+                    .filter(project_district.c.district_id.in_(list(ad)))
+                    .distinct()
+                )
+            if not ap and not ad and av:
+                p_ids = [
+                    r[0] for r in db.session.query(Vehicle.project_id)
+                    .filter(Vehicle.id.in_(list(av)), Vehicle.project_id.isnot(None))
+                    .distinct().all()
+                ]
+                project_q = project_q.filter(Project.id.in_(p_ids or [-1]))
+    form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in district_q.order_by(District.name).all()]
+    form.project_id.choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in project_q.order_by(Project.name).all()]
+
+    today = pk_date()
+    from_date = today
+    to_date = today
+    lad = set(allowed_districts) if allowed_districts else set()
+    lap = set(allowed_projects) if allowed_projects else set()
+    lav = set(allowed_vehicles) if allowed_vehicles else set()
+
+    def coerce_task_report_scope(did, pid, vid=0):
+        vd = {c[0] for c in form.district_id.choices}
+        vp = {c[0] for c in form.project_id.choices}
+        lk = {'lock_district': False, 'lock_project': False, 'lock_vehicle': False}
+        if did and did not in vd:
+            did = 0
+        if pid and pid not in vp:
+            pid = 0
+        if not is_master_or_admin:
+            if len(lad) == 1:
+                only_d = next(iter(lad))
+                if only_d in vd:
+                    did = only_d
+                    lk['lock_district'] = True
+            if len(lad) == 1 and len(lap) == 1 and len(lav) == 1:
+                only_p = next(iter(lap))
+                if only_p in vp:
+                    pid = only_p
+                    lk['lock_project'] = True
+        vehicle_q = _vehicle_query_task_report_scope(
+            is_master_or_admin, allowed_projects, allowed_districts, allowed_vehicles
+        )
+        if did:
+            vehicle_q = vehicle_q.filter(Vehicle.district_id == did)
+        if pid:
+            vehicle_q = vehicle_q.filter(Vehicle.project_id == pid)
+        form.vehicle_id.choices = [(0, '-- All Vehicles --')] + [
+            (v.id, v.vehicle_no) for v in vehicle_q.order_by(*vehicle_order_by()).all()
+        ]
+        vv = {c[0] for c in form.vehicle_id.choices}
+        if vid and vid not in vv:
+            vid = 0
+        if not is_master_or_admin and len(lav) == 1:
+            only_v = next(iter(lav))
+            if only_v in vv:
+                vid = only_v
+                lk['lock_vehicle'] = True
+        return did, pid, vid, lk
+
+    if request.method == 'POST':
+        from_date = parse_date(request.form.get('from_date')) or today
+        to_date = parse_date(request.form.get('to_date')) or today
+        district_id = request.form.get('district_id', type=int) or 0
+        project_id = request.form.get('project_id', type=int) or 0
+        vehicle_id = request.form.get('vehicle_id', type=int) or 0
+        if from_date and to_date and from_date > to_date:
+            from_date, to_date = to_date, from_date
+        district_id, project_id, vehicle_id, _ = coerce_task_report_scope(district_id, project_id, vehicle_id)
+        return redirect(url_for(
+            redirect_endpoint,
+            from_date=from_date.strftime('%d-%m-%Y') if from_date else '',
+            to_date=to_date.strftime('%d-%m-%Y') if to_date else '',
+            district_id=district_id,
+            project_id=project_id,
+            vehicle_id=vehicle_id,
+        ))
+
+    district_id = request.args.get('district_id', type=int) or 0
+    project_id = request.args.get('project_id', type=int) or 0
+    vehicle_id = request.args.get('vehicle_id', type=int) or 0
+    from_str = request.args.get('from_date', '')
+    to_str = request.args.get('to_date', '')
+    if from_str:
+        from_date = parse_date(from_str) or from_date
+    if to_str:
+        to_date = parse_date(to_str) or to_date
+    if from_date and to_date and from_date > to_date:
+        from_date, to_date = to_date, from_date
+    district_id, project_id, vehicle_id, task_report_filter_lock = coerce_task_report_scope(
+        district_id, project_id, vehicle_id
+    )
+    if district_id:
+        projects = Project.query.join(project_district).filter(
+            project_district.c.district_id == district_id
+        ).order_by(Project.name).all()
+        scoped = [(0, '-- All Projects --')] + [(p.id, p.name) for p in projects]
+        if not is_master_or_admin and allowed_projects:
+            scoped = [(0, '-- All Projects --')] + [
+                (p.id, p.name) for p in projects if p.id in allowed_projects
+            ]
+        form.project_id.choices = scoped
+    form.from_date.data = from_date
+    form.to_date.data = to_date
+    form.district_id.data = district_id
+    form.project_id.data = project_id
+    form.vehicle_id.data = vehicle_id
+
+    rows = []
+    if project_id:
+        rows = _vehicle_period_detail_rows(
+            from_date, to_date, project_id, district_id, vehicle_id,
+            is_master_or_admin, allowed_projects, allowed_districts, allowed_vehicles,
+        )
+
+    search = (request.args.get('search') or '').strip()
+    if search:
+        tokens = [t.lower() for t in search.split() if t]
+
+        def _match(r):
+            v = r['vehicle']
+            blob = ' '.join([
+                v.vehicle_no,
+                v.district.name if v.district else '',
+                v.parking_station.tehsil if v.parking_station else '',
+                v.parking_station.name if v.parking_station else '',
+                v.vehicle_type or '',
+                str(r['kms_driven']), str(r['tasks_count']), str(r['emg_tasks']),
+                str(r.get('odometer_photo_path') or ''),
+            ]).lower()
+            return all(tok in blob for tok in tokens)
+
+        rows = [r for r in rows if _match(r)]
+
+    total_kms = sum(r['kms_driven'] for r in rows)
+    total_tracker = sum(r['tracker_km'] for r in rows)
+    total_diff = round(total_kms - total_tracker, 2)
+    total_pct = round((total_diff / total_kms * 100), 1) if total_kms else None
+    total_tasks = sum(r['tasks_count'] for r in rows)
+    total_emg = sum(r['emg_tasks'] for r in rows)
+    total_task_diff = total_tasks - total_emg
+
+    if export_pdf:
+        if not project_id:
+            return jsonify({'error': 'Pehle Project select karein.'}), 400
+        if not rows:
+            return jsonify({'error': 'Export ke liye koi row nahi mili.'}), 400
+        try:
+            html = render_template(
+                'task_report_vehicle_period_detail_print.html',
+                rows=rows,
+                from_date=from_date,
+                to_date=to_date,
+                total_kms=total_kms,
+                total_tracker=total_tracker,
+                total_diff=total_diff,
+                total_pct=total_pct,
+                total_tasks=total_tasks,
+                total_emg=total_emg,
+                total_task_diff=total_task_diff,
+            )
+            pdf_bytes = _html_to_pdf_bytes(html, landscape=True)
+        except Exception as exc:
+            app.logger.exception('Vehicle period task detail PDF export failed')
+            return jsonify({'error': f'PDF generation failed: {exc}'}), 500
+        fname = (
+            f'Daily_Task_Period_Detail_{from_date.strftime("%d-%m-%Y")}_to_'
+            f'{to_date.strftime("%d-%m-%Y")}.pdf'
+        )
+        return Response(
+            pdf_bytes,
+            mimetype='application/pdf',
+            headers={'Content-Disposition': f'attachment; filename="{fname}"'},
+        )
+
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+    pagination = SimplePagination(rows, page, per_page)
+    rows = pagination.items
+    return render_template(
+        template_name,
+        form=form,
+        rows=rows,
+        from_date=from_date,
+        to_date=to_date,
+        total_kms=total_kms,
+        total_tracker=total_tracker,
+        total_diff=total_diff,
+        total_pct=total_pct,
+        total_tasks=total_tasks,
+        total_emg=total_emg,
+        total_task_diff=total_task_diff,
+        pagination=pagination,
+        per_page=per_page,
+        search=search,
+        task_report_filter_lock=task_report_filter_lock,
+        **_nav_back_ctx(url_for('module_hub', hub_slug='task-logbook'), show_without_nav_from=True),
+    )
+
+
+@app.route('/task-report/vehicle-period-detail', methods=['GET', 'POST'])
+def task_report_vehicle_period_detail():
+    return _task_report_vehicle_period_detail_impl(
+        'task_report_vehicle_period_detail',
+        'task_report_vehicle_period_detail.html',
+    )
+
+
+@app.route('/task-report/vehicle-period-detail/export-pdf', methods=['GET'])
+def task_report_vehicle_period_detail_export_pdf():
+    return _task_report_vehicle_period_detail_impl(
+        'task_report_vehicle_period_detail',
+        'task_report_vehicle_period_detail.html',
+        export_pdf=True,
+    )
 
 
 def _logbook_vehicle_aggregate(vehicle_id, from_date, to_date):
@@ -25433,16 +26036,29 @@ def api_task_report_odometer_photo_upload():
 
 @app.route('/api/task-report/emg-detail')
 def api_emg_detail():
-    """Return EMG task rows (Green+Yellow) for a given vehicle + date."""
+    """Return EMG task rows (Green+Yellow) for a given vehicle + date or date range."""
     task_date = parse_date(request.args.get('date'))
+    from_date = parse_date(request.args.get('from_date'))
+    to_date = parse_date(request.args.get('to_date'))
     vehicle_no = (request.args.get('vehicle_no') or '').strip()
-    if not task_date or not vehicle_no:
+    if not vehicle_no:
         return jsonify([])
-    rows = EmergencyTaskRecord.query.filter(
-        EmergencyTaskRecord.task_date == task_date,
+    q = EmergencyTaskRecord.query.filter(
         EmergencyTaskRecord.amb_reg_no == vehicle_no,
         EmergencyTaskRecord.category.in_(['Green', 'Yellow']),
-    ).order_by(EmergencyTaskRecord.id).all()
+    )
+    if task_date:
+        q = q.filter(EmergencyTaskRecord.task_date == task_date)
+    elif from_date and to_date:
+        if from_date > to_date:
+            from_date, to_date = to_date, from_date
+        q = q.filter(
+            EmergencyTaskRecord.task_date >= from_date,
+            EmergencyTaskRecord.task_date <= to_date,
+        )
+    else:
+        return jsonify([])
+    rows = q.order_by(EmergencyTaskRecord.task_date, EmergencyTaskRecord.id).all()
     def _fmt_dt(s):
         if not s:
             return ''
@@ -25455,6 +26071,7 @@ def api_emg_detail():
                 continue
         return s
     return jsonify([{
+        'task_date': r.task_date.strftime('%d-%m-%Y') if r.task_date else '',
         'task_id': r.task_id_ext or '',
         'phone': r.phone or '',
         'cli': r.cli or '',
@@ -25529,10 +26146,65 @@ def api_emg_task_detail():
 
 @app.route('/api/task-report/tracker-detail')
 def api_tracker_detail():
-    """Return mileage record for a given vehicle + date."""
+    """Return mileage record(s) for a given vehicle + date or date range."""
     task_date = parse_date(request.args.get('date'))
+    from_date = parse_date(request.args.get('from_date'))
+    to_date = parse_date(request.args.get('to_date'))
     vehicle_no = (request.args.get('vehicle_no') or '').strip()
-    if not task_date or not vehicle_no:
+    if not vehicle_no:
+        return jsonify({})
+
+    if from_date and to_date and not task_date:
+        if from_date > to_date:
+            from_date, to_date = to_date, from_date
+        recs = VehicleMileageRecord.query.filter(
+            VehicleMileageRecord.reg_no == vehicle_no,
+            VehicleMileageRecord.task_date >= from_date,
+            VehicleMileageRecord.task_date <= to_date,
+        ).order_by(VehicleMileageRecord.task_date).all()
+        if not recs:
+            return jsonify({'range': True, 'rows': []})
+
+        def _fmt_d_range(s):
+            if not s:
+                return ''
+            from datetime import datetime as _dt
+            for fmt in ('%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M', '%d-%m-%Y %H:%M:%S', '%d-%m-%Y %H:%M', '%Y-%m-%d', '%d-%m-%Y', '%d/%m/%Y %H:%M:%S'):
+                try:
+                    return _dt.strptime(s.strip(), fmt).strftime('%d-%m-%Y')
+                except (ValueError, AttributeError):
+                    continue
+            return s
+
+        def _fmt_t_range(s):
+            if not s:
+                return ''
+            from datetime import datetime as _dt
+            for fmt in ('%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M', '%d-%m-%Y %H:%M:%S', '%d-%m-%Y %H:%M', '%H:%M:%S', '%H:%M', '%d/%m/%Y %H:%M:%S'):
+                try:
+                    return _dt.strptime(s.strip(), fmt).strftime('%I:%M %p')
+                except (ValueError, AttributeError):
+                    continue
+            return s
+
+        return jsonify({
+            'range': True,
+            'rows': [{
+                'id': rec.id,
+                'task_date': rec.task_date.strftime('%d-%m-%Y') if rec.task_date else '',
+                'reg_no': rec.reg_no or '',
+                'date_from': _fmt_d_range(rec.date_time_c),
+                'time_from': _fmt_t_range(rec.date_time_c),
+                'date_to': _fmt_d_range(rec.date_time_e),
+                'time_to': _fmt_t_range(rec.date_time_e),
+                'mileage': float(rec.mileage or 0),
+                'ptop': float(rec.ptop or 0),
+                'selected_km': float(rec.selected_km) if rec.selected_km is not None else None,
+                'effective_km': rec.effective_km(),
+            } for rec in recs],
+        })
+
+    if not task_date:
         return jsonify({})
     rec = VehicleMileageRecord.query.filter_by(task_date=task_date, reg_no=vehicle_no).first()
     if not rec:
@@ -36433,8 +37105,17 @@ def report_driver_profile(driver_id):
     profile_url = url_for('report_driver_profile', driver_id=driver_id, _external=True)
     share_tok = make_driver_profile_share_token(app.config['SECRET_KEY'], driver_id)
     public_share_url = url_for('report_driver_profile_public', token=share_tok, _external=True)
-    driver_update_parts = _build_driver_update_whatsapp_parts(ctx['driver'])
-    driver_update_vehicle_choices = _driver_update_vehicle_choices(ctx['driver'])
+    driver_update_parts = None
+    driver_update_vehicle_choices = []
+    try:
+        from permissions_config import can_see_page
+        _perms = session.get('permissions') or []
+        _is_master = session.get('is_master', False)
+        if _is_master or can_see_page(_perms, 'driver_update_text'):
+            driver_update_parts = _build_driver_update_whatsapp_parts(ctx['driver'])
+            driver_update_vehicle_choices = _driver_update_vehicle_choices(ctx['driver'])
+    except Exception:
+        pass
     return render_template(
         'report_driver_profile.html',
         public_view=False,

@@ -1,55 +1,66 @@
-{
-  "appId": "com.fleetmanager.app",
-  "appName": "Fleet Manager",
-  "webDir": "www",
-  "server": {
-    "url": "https://fleet-management-xdvj.onrender.com",
-    "startPath": "/mobile-init",
-    "cleartext": false,
-    "androidScheme": "https"
-  },
-  "android": {
-    "allowMixedContent": false,
-    "captureInput": true,
-    "webContentsDebuggingEnabled": false,
-    "overScrollMode": "never",
-    "backgroundColor": "#00000000",
-    "initialFocus": false,
-    "androidEdgeToEdge": true
-  },
-  "ios": {
-    "contentInset": "always",
-    "scrollEnabled": false,
-    "allowsLinkPreview": false,
-    "allowsBackForwardNavigationGestures": false,
-    "backgroundColor": "#ffffff"
-  },
-  "plugins": {
-    "SplashScreen": {
-      "launchShowDuration": 2000,
-      "backgroundColor": "#0f172a",
-      "androidSplashResourceName": "splash",
-      "showSpinner": false
-    },
-    "StatusBar": {
-      "style": "DARK",
-      "backgroundColor": "#0f172a"
-    },
-    "Geolocation": {
-      "androidPermissions": [
-        "ACCESS_COARSE_LOCATION",
-        "ACCESS_FINE_LOCATION"
-      ]
-    },
-    "Camera": {
-      "iosVersion": "12.0"
-    },
-    "PushNotifications": {
-      "presentationOptions": ["badge", "sound", "alert"]
-    },
-    "BiometricAuth": {
-      "androidBiometricStrength": "weak",
-      "allowDeviceCredential": false
-    }
-  }
+﻿{
+    "appId":  "com.fleetmanager.app",
+    "appName":  "Fleet Manager",
+    "webDir":  "www",
+    "server":  {
+                   "url":  "http://127.0.0.1:5050",
+                   "startPath":  "/mobile-init",
+                   "cleartext":  true,
+                   "androidScheme":  "http",
+                   "allowNavigation":  [
+                                           "127.0.0.1",
+                                           "localhost",
+                                           "192.168.18.36",
+                                           "192.168.18.15"
+                                       ]
+               },
+    "android":  {
+                    "allowMixedContent":  false,
+                    "captureInput":  true,
+                    "webContentsDebuggingEnabled":  false,
+                    "overScrollMode":  "never",
+                    "backgroundColor":  "#0f172a",
+                    "initialFocus":  false,
+                    "androidEdgeToEdge":  true
+                },
+    "ios":  {
+                "contentInset":  "always",
+                "scrollEnabled":  false,
+                "allowsLinkPreview":  false,
+                "allowsBackForwardNavigationGestures":  false,
+                "backgroundColor":  "#ffffff"
+            },
+    "plugins":  {
+                    "SplashScreen":  {
+                                         "launchAutoHide":  false,
+                                         "launchShowDuration":  0,
+                                         "backgroundColor":  "#0f172a",
+                                         "androidSplashResourceName":  "splash",
+                                         "showSpinner":  false
+                                     },
+                    "StatusBar":  {
+                                      "style":  "DARK",
+                                      "backgroundColor":  "#0f172a"
+                                  },
+                    "Geolocation":  {
+                                        "androidPermissions":  [
+                                                                   "ACCESS_COARSE_LOCATION",
+                                                                   "ACCESS_FINE_LOCATION"
+                                                               ]
+                                    },
+                    "Camera":  {
+                                   "iosVersion":  "12.0"
+                               },
+                    "PushNotifications":  {
+                                              "presentationOptions":  [
+                                                                          "badge",
+                                                                          "sound",
+                                                                          "alert"
+                                                                      ]
+                                          },
+                    "BiometricAuth":  {
+                                          "androidBiometricStrength":  "weak",
+                                          "allowDeviceCredential":  false
+                                      }
+                }
 }

@@ -52,6 +52,13 @@ android {
         }
     }
 
+    /* 16 KB page-size devices (Android 15+): compress native libs until AGP 8.5.1+ upgrade. */
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+
     applicationVariants.all { variant ->
         variant.outputs.all { output ->
             def vName = variant.versionName ?: "0.0.0"

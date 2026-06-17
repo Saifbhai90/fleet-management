@@ -682,6 +682,7 @@ class TaskReportFilterForm(FlaskForm):
                         render_kw={"class": "form-control datepicker"})
     district_id = SelectField('District', coerce=int, validators=[Optional()], choices=[(0, '-- All Districts --')], render_kw={'class': 'form-select search-select'})
     project_id = SelectField('Project', coerce=int, validators=[Optional()], choices=[(0, '-- All Projects --')], render_kw={'class': 'form-select search-select'})
+    vehicle_id = SelectField('Vehicle', coerce=int, validators=[Optional()], choices=[(0, '-- All Vehicles --')], render_kw={'class': 'form-select search-select'})
     submit = SubmitField('View Report')
 
 

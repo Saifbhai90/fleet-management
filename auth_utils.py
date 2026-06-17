@@ -192,6 +192,8 @@ ENDPOINT_PERMISSION_MAP = [
     # Daily Task Report
     ('task-report', 'task_report_list'),
     ('task_report_list', 'task_report_list'),
+    ('task-report/vehicle-period-detail', 'task_report_vehicle_period_detail'),
+    ('task_report_vehicle_period_detail', 'task_report_vehicle_period_detail'),
     ('task_report_new', 'task_report_entry'),
     ('task_report_pending', 'task_report_pending'),
     ('task_report_new_delete_row', 'task_report_entry_delete'),
@@ -414,7 +416,7 @@ ENDPOINT_PERMISSION_MAP = [
     # Internal API helpers – tied to their feature permissions
     ('api_check_cnic', 'drivers_list'),
     ('api_check_license', 'drivers_list'),
-    ('api_driver_update_text', 'drivers_list'),
+    ('api_driver_update_text', 'driver_update_text'),
     ('get_left_drivers_by_vehicle', 'driver_rejoin_list'),
     ('check_vehicle_shifts', 'assign_driver_to_vehicle'),
     # Fuel expense helper APIs

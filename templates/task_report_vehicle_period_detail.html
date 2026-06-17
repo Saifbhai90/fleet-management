@@ -1,12 +1,12 @@
 {% extends "base.html" %}
-{% block title %}Vehicles Daily Task Report{% endblock %}
+{% block title %}Vehicle Period Task Detail Report{% endblock %}
 {% block content %}
 <div class="container-fluid">
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
     <div class="d-flex align-items-center gap-2 flex-wrap">
       {% from 'partials/nav_back_button.html' import nav_back_button, nav_from_hidden with context %}
       {{ nav_back_button() }}
-      <h2 class="mb-0"><i class="bi bi-clipboard2-data me-2 text-primary"></i>Vehicles Daily Task Report</h2>
+      <h2 class="mb-0"><i class="bi bi-table me-2 text-primary"></i>Vehicle Period Task Detail Report</h2>
     </div>
     <div class="d-flex align-items-center gap-2">
       <button class="btn btn-outline-secondary btn-sm" id="btnPrintReport" title="Print / Preview"><i class="bi bi-eye me-1"></i>Print / Preview</button>
@@ -16,7 +16,7 @@
 
   <div class="card shadow-sm border-0 rounded-3 mb-4">
     <div class="card-body">
-      <form method="POST" action="{{ url_for('task_report_list') }}" class="row g-3 align-items-end">
+      <form method="POST" action="{{ url_for('task_report_vehicle_period_detail') }}" class="row g-3 align-items-end">
         {{ form.hidden_tag() }}
         {{ nav_from_hidden() }}
         <div class="col-md-2">
@@ -28,7 +28,7 @@
           {{ form.to_date(class="form-control datepicker") }}
         </div>
         <div class="col-md-2">
-          <label class="form-label">District</label>
+          <label class="form-label">District Name</label>
           {% if task_report_filter_lock.lock_district %}
           <input type="hidden" name="district_id" value="{{ form.district_id.data or 0 }}">
           <div class="form-control bg-light text-body-secondary">{% for val, label in form.district_id.choices %}{% if val == form.district_id.data %}{{ label }}{% endif %}{% endfor %}</div>
@@ -41,7 +41,7 @@
           {% endif %}
         </div>
         <div class="col-md-2">
-          <label class="form-label">Project</label>
+          <label class="form-label">Project Name</label>
           {% if task_report_filter_lock.lock_project %}
           <input type="hidden" name="project_id" value="{{ form.project_id.data or 0 }}">
           <div class="form-control bg-light text-body-secondary">{% for val, label in form.project_id.choices %}{% if val == form.project_id.data %}{{ label }}{% endif %}{% endfor %}</div>
@@ -75,6 +75,7 @@
     </div>
   </div>
 
+  {% if form.project_id.data %}
   <div class="card shadow border-0 rounded-3 overflow-hidden">
     <div class="card-header bg-dark text-white py-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
       <span class="fw-semibold">Report from {{ from_date|ddmmyyyy }} to {{ to_date|ddmmyyyy }}</span>
@@ -90,11 +91,11 @@
     </div>
     <div class="card-body p-0">
       <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0" id="taskReportTable">
+        <table class="table table-hover align-middle mb-0" id="vehiclePeriodDetailTable"
+               data-period-from="{{ from_date|ddmmyyyy }}" data-period-to="{{ to_date|ddmmyyyy }}">
           <thead class="table-light" style="font-size:.82rem;">
             <tr>
               <th class="ps-3">#</th>
-              <th style="white-space:nowrap;">Date</th>
               <th>District</th>
               <th>Tehsil</th>
               <th>Parking</th>
@@ -102,7 +103,6 @@
               <th style="white-space:nowrap;">Vehicle No</th>
               <th class="text-end" style="white-space:nowrap;">Start</th>
               <th class="text-end" style="white-space:nowrap;">Close</th>
-              <th class="text-center" style="white-space:nowrap;" title="Optional odometer display photo">Odoo</th>
               <th class="text-end" style="white-space:nowrap;">KMs Driven</th>
               <th class="text-center">Task's</th>
               <th class="text-center" style="white-space:nowrap;">EMG</th>
@@ -117,7 +117,6 @@
             <tr class="data-row {% if row.vehicle.vehicle_type and 'USG' in row.vehicle.vehicle_type %}table-secondary{% endif %}" style="font-size:.82rem;"
                 data-kms="{{ row.kms_driven }}" data-tasks="{{ row.tasks_count }}" data-emg="{{ row.emg_tasks }}" data-tracker="{{ row.tracker_km }}" data-kmsdiff="{{ row.kms_diff }}" data-pct="{% if row.pct_diff is not none %}{{ row.pct_diff }}{% endif %}">
               <td class="ps-3">{{ loop.index }}</td>
-              <td style="white-space:nowrap;">{{ row.task_date|ddmmyyyy }}</td>
               <td>{{ row.vehicle.district.name if row.vehicle.district else '-' }}</td>
               <td>{{ row.vehicle.parking_station.tehsil if row.vehicle.parking_station else '-' }}</td>
               <td>{{ row.vehicle.parking_station.name if row.vehicle.parking_station else '-' }}</td>
@@ -125,32 +124,17 @@
               <td class="fw-medium">{{ row.vehicle.vehicle_no }}</td>
               <td class="text-end">{{ "%.0f"|format(row.start_reading) }}</td>
               <td class="text-end">{{ "%.0f"|format(row.close_reading) }}</td>
-              <td class="text-center">
-                {% if row.odometer_photo_path %}
-                <button type="button" class="att-photo-fullview-btn p-0 border-0 bg-transparent d-inline-block" title="Odoo meter — full view"
-                        data-task-report-odom="1"
-                        data-url="{{ row.odometer_photo_path }}" data-label="Odoo meter photo">
-                  <img src="{{ row.odometer_photo_path }}" alt="" class="rounded border" style="max-height:40px;max-width:56px;object-fit:cover;">
-                </button>
-                {% else %}
-                <button type="button" class="att-photo-fullview-btn p-0 border-0 bg-transparent d-inline-block" title="No odometer photo available"
-                        data-task-report-odom="1"
-                        data-url="/static/images/no-image-placeholder.png" data-label="No odometer photo available">
-                  <span class="badge bg-secondary"><i class="bi bi-image"></i></span>
-                </button>
-                {% endif %}
-              </td>
               <td class="text-end">{{ row.kms_driven }}</td>
               <td class="text-center">{{ row.tasks_count }}</td>
               <td class="text-center">
-                <a href="#" class="emg-link text-decoration-none" data-vno="{{ row.vehicle.vehicle_no }}" data-date="{{ row.task_date.strftime('%d-%m-%Y') }}">
+                <a href="#" class="emg-link text-decoration-none" data-vno="{{ row.vehicle.vehicle_no }}" data-from="{{ from_date|ddmmyyyy }}" data-to="{{ to_date|ddmmyyyy }}">
                   <span class="badge {% if row.emg_tasks %}bg-info text-dark{% else %}bg-secondary{% endif %}" style="cursor:pointer;font-size:.8rem;">{{ row.emg_tasks }}</span>
                 </a>
               </td>
               {% set task_diff = (row.tasks_count|int) - (row.emg_tasks|int) %}
               <td class="text-center {% if task_diff != 0 %}text-danger fw-bold{% endif %}">{{ task_diff }}</td>
               <td class="text-end">
-                <a href="#" class="tracker-link text-decoration-none" data-vno="{{ row.vehicle.vehicle_no }}" data-date="{{ row.task_date.strftime('%d-%m-%Y') }}">
+                <a href="#" class="tracker-link text-decoration-none" data-vno="{{ row.vehicle.vehicle_no }}" data-from="{{ from_date|ddmmyyyy }}" data-to="{{ to_date|ddmmyyyy }}">
                   <span class="badge bg-dark" style="cursor:pointer;font-size:.8rem;">{{ row.tracker_km }}</span>
                 </a>
               </td>
@@ -161,9 +145,9 @@
             </tr>
             {% else %}
             <tr>
-              <td colspan="17" class="text-center py-5 text-muted">
-                <i class="bi bi-clipboard2-data display-6 d-block mb-2"></i>
-                No task entries for this date/filter. {% if can_see_page('task_report_entry') or can_see_page('task_report_add') %}<a href="{{ url_for('task_report_new') }}">Add entry</a>{% else %}Add entry{% endif %} or change filter.
+              <td colspan="15" class="text-center py-5 text-muted">
+                <i class="bi bi-table display-6 d-block mb-2"></i>
+                No task data for this period/filter. Change filter or add task entries.
               </td>
             </tr>
             {% endfor %}
@@ -171,7 +155,7 @@
           {% if rows %}
           <tfoot class="table-light fw-bold" style="font-size:.82rem;">
             <tr>
-              <td colspan="10" class="ps-3 text-end">Total</td>
+              <td colspan="8" class="ps-3 text-end">Total</td>
               <td class="text-end" id="ftKms">{{ "%.2f"|format(total_kms) }}</td>
               <td class="text-center" id="ftTasks">{{ total_tasks }}</td>
               <td class="text-center" id="ftEmg">{{ total_emg }}</td>
@@ -198,8 +182,12 @@
         {% endif %}
       </div>
     </div>
-    </div>
   </div>
+  {% else %}
+  <div class="alert alert-info">
+    <i class="bi bi-info-circle me-2"></i>From Date, To Date, District Name aur Project Name select karke <strong>View Report</strong> par click karein. Har vehicle ke liye selected period ka summary (District se % Diff tak) yahan dikhega. EMG aur Tracker KM par click karke poori period ki detail dekh sakte hain.
+  </div>
+  {% endif %}
 </div>
 
 <!-- EMG Detail Panel (floating popup, no backdrop) -->
@@ -246,7 +234,7 @@
     <table class="table table-sm table-hover align-middle mb-0" id="emgDetailTable">
       <thead class="table-light sticky-top">
         <tr>
-          <th class="ps-3">#</th><th>TaskId</th><th>Phone</th><th>CLI</th><th>Name</th><th>Address</th><th>Vehicle</th>
+          <th class="ps-3">#</th><th>Date</th><th>TaskId</th><th>Phone</th><th>CLI</th><th>Name</th><th>Address</th><th>Vehicle</th>
           <th>ReceivedBy</th><th>Category</th><th>FacilityName</th><th>CreatedDate</th><th>CompletedDateTime</th>
         </tr>
       </thead>
@@ -293,6 +281,19 @@
       </div>
     </div>
     <div id="trackerEmpty" class="text-center py-3 text-muted d-none"><i class="bi bi-inbox me-1"></i>No mileage record for this vehicle/date.</div>
+    <div id="trackerRangeContent" class="d-none">
+      <div class="table-responsive" style="max-height:320px;overflow-y:auto;">
+        <table class="table table-sm table-hover align-middle mb-0">
+          <thead class="table-light sticky-top">
+            <tr>
+              <th class="ps-3">#</th><th>Date</th><th>DateFrom</th><th>TimeFrom</th><th>DateTo</th><th>TimeTo</th>
+              <th class="text-end">Mileage</th><th class="text-end">PtoP</th><th class="text-end">Tracker KM</th>
+            </tr>
+          </thead>
+          <tbody id="trackerRangeBody"></tbody>
+        </table>
+      </div>
+    </div>
   </div>
   <div class="card-footer py-2 d-flex justify-content-end gap-2">
     <button class="btn btn-primary btn-sm d-none" id="trackerSaveBtn" disabled><i class="bi bi-save me-1"></i>Save</button>
@@ -300,10 +301,6 @@
   </div>
 </div>
 
-{% set fv_prefix = 'taskListOdomFv' %}
-{% set fv_preview_img_id = '' %}
-{% set fv_photo_label = 'Odoo meter photo' %}
-{% include 'partials/gps_attendance_fullview.html' %}
 
 <style>
   .task-report-export-progress {
@@ -339,7 +336,31 @@
 <script>
 function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page',n);window.location.search=u.toString();}
 (function() {
-  var table = document.getElementById('taskReportTable');
+  var districtSelect = document.getElementById('taskReportDistrictSelect');
+  var projectSelect = document.getElementById('taskReportProjectSelect');
+  if (districtSelect && projectSelect && !districtSelect.disabled) {
+    districtSelect.addEventListener('change', function() {
+      var did = this.value;
+      projectSelect.innerHTML = '<option value="0">-- All Projects --</option>';
+      if (did && did !== '0') {
+        fetch('/get_projects_by_district/' + did)
+          .then(function(r) { return r.json(); })
+          .then(function(arr) {
+            arr.forEach(function(p) {
+              var o = document.createElement('option');
+              o.value = p.id;
+              o.textContent = p.name;
+              projectSelect.appendChild(o);
+            });
+          });
+      }
+    });
+  }
+})();
+(function() {
+  var table = document.getElementById('vehiclePeriodDetailTable');
+  var _periodFrom = {{ (from_date|ddmmyyyy if form.project_id.data and from_date else '')|tojson }};
+  var _periodTo = {{ (to_date|ddmmyyyy if form.project_id.data and to_date else '')|tojson }};
   /* ── Helpers ─────────────────────────────────────────────── */
   function _he(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
   var emgPanel = document.getElementById('emgPanel');
@@ -359,8 +380,61 @@ function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page
     panel.classList.remove('d-none');
   }
 
+  function _linkPeriod(link) {
+    var tbl = table || document.getElementById('vehiclePeriodDetailTable');
+    var fromDt = ((link && link.getAttribute('data-from')) || '').trim();
+    var toDt = ((link && link.getAttribute('data-to')) || '').trim();
+    if (!fromDt && tbl) fromDt = (tbl.getAttribute('data-period-from') || '').trim();
+    if (!toDt && tbl) toDt = (tbl.getAttribute('data-period-to') || '').trim();
+    if (!fromDt) fromDt = _periodFrom;
+    if (!toDt) toDt = _periodTo;
+    var dt = ((link && link.getAttribute('data-date')) || '').trim();
+    return { fromDt: fromDt, toDt: toDt, dt: dt };
+  }
+
+  function _periodLabel(period) {
+    if (period.fromDt && period.toDt) return period.fromDt + ' to ' + period.toDt;
+    return period.dt || '';
+  }
+
+  function _buildEmgUrl(vno, period) {
+    var url = '/api/task-report/emg-detail?vehicle_no=' + encodeURIComponent(vno);
+    if (period.fromDt && period.toDt) {
+      url += '&from_date=' + encodeURIComponent(period.fromDt) + '&to_date=' + encodeURIComponent(period.toDt);
+    } else if (period.dt) {
+      url += '&date=' + encodeURIComponent(period.dt);
+    }
+    return url;
+  }
+
+  function _buildTrackerUrl(vno, period) {
+    var url = '/api/task-report/tracker-detail?vehicle_no=' + encodeURIComponent(vno);
+    if (period.fromDt && period.toDt) {
+      url += '&from_date=' + encodeURIComponent(period.fromDt) + '&to_date=' + encodeURIComponent(period.toDt);
+    } else if (period.dt) {
+      url += '&date=' + encodeURIComponent(period.dt);
+    }
+    return url;
+  }
+
+  function _fetchJson(url) {
+    return fetch(url, { credentials: 'same-origin', cache: 'no-store' }).then(function(r) {
+      if (!r.ok) {
+        var err = new Error('HTTP ' + r.status);
+        err.status = r.status;
+        throw err;
+      }
+      return r.json();
+    });
+  }
+
   /* ── EMG Detail Panel ──────────────────────────────────── */
   var _emgData = [];
+  var _emgFetchSeq = 0;
+  var _emgCache = {};
+  function _emgCacheKey(vno, period) {
+    return (vno || '') + '|' + (period.fromDt || '') + '|' + (period.toDt || '') + '|' + (period.dt || '');
+  }
   document.getElementById('emgCloseBtn').addEventListener('click', function() { _hidePanel(emgPanel); });
   document.getElementById('emgCloseBtnFooter').addEventListener('click', function() { _hidePanel(emgPanel); });
 
@@ -369,50 +443,92 @@ function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page
       || window.matchMedia('(max-width: 768px)').matches;
   }
 
-  document.querySelectorAll('.emg-link').forEach(function(a) {
-    a.addEventListener('click', function(e) {
+  function _resetEmgEmptyMessage() {
+    document.getElementById('emgEmpty').innerHTML = '<i class="bi bi-inbox me-1"></i>No EMG tasks found.';
+  }
+
+  function _renderEmgRows(rows) {
+    document.getElementById('emgLoading').classList.add('d-none');
+    _emgData = rows;
+    if (!rows.length) {
+      document.getElementById('emgEmpty').classList.remove('d-none');
+      return;
+    }
+    var tb = document.getElementById('emgDetailBody');
+    rows.forEach(function(r, i) {
+      var tr = document.createElement('tr');
+      tr.innerHTML = '<td class="ps-3">' + (i + 1) + '</td>' +
+        '<td>' + _he(r.task_date) + '</td>' +
+        '<td>' + _he(r.task_id) + '</td>' +
+        '<td>' + _he(r.phone) + '</td>' +
+        '<td>' + _he(r.cli) + '</td>' +
+        '<td>' + _he(r.name) + '</td>' +
+        '<td>' + _he(r.address) + '</td>' +
+        '<td>' + _he(r.amb_reg_no) + '</td>' +
+        '<td>' + _he(r.received_by) + '</td>' +
+        '<td><span class="badge ' + (r.category === 'Green' ? 'bg-success' : 'bg-warning text-dark') + '">' + _he(r.category) + '</span></td>' +
+        '<td>' + _he(r.facility_name) + '</td>' +
+        '<td>' + _he(r.created_date) + '</td>' +
+        '<td>' + _he(r.completed_date_time) + '</td>';
+      tb.appendChild(tr);
+    });
+    document.getElementById('emgCount').textContent = 'Total: ' + rows.length + ' tasks';
+  }
+
+  function _loadEmgDetail(link) {
+    var vno = ((link && link.getAttribute('data-vno')) || '').trim();
+    var period = _linkPeriod(link);
+    var label = _periodLabel(period);
+    var cacheKey = _emgCacheKey(vno, period);
+    document.getElementById('emgVehicleNo').textContent = vno + (label ? (' · ' + label) : '');
+    document.getElementById('emgDetailBody').innerHTML = '';
+    document.getElementById('emgLoading').classList.remove('d-none');
+    _resetEmgEmptyMessage();
+    document.getElementById('emgEmpty').classList.add('d-none');
+    document.getElementById('emgCount').textContent = '';
+    _showPanel(emgPanel);
+    if (_emgCache[cacheKey]) {
+      _renderEmgRows(_emgCache[cacheKey].slice());
+      return;
+    }
+    _emgData = [];
+    var seq = ++_emgFetchSeq;
+    _fetchJson(_buildEmgUrl(vno, period))
+      .then(function(rows) {
+        if (seq !== _emgFetchSeq) return;
+        if (!Array.isArray(rows)) {
+          throw new Error('invalid');
+        }
+        _emgCache[cacheKey] = rows.slice();
+        _renderEmgRows(rows);
+      })
+      .catch(function(err) {
+        if (seq !== _emgFetchSeq) return;
+        document.getElementById('emgLoading').classList.add('d-none');
+        var emptyEl = document.getElementById('emgEmpty');
+        if (err && err.status === 401) {
+          emptyEl.innerHTML = '<i class="bi bi-exclamation-circle me-1"></i>Session expired. Please refresh the page or login again.';
+        } else {
+          _resetEmgEmptyMessage();
+        }
+        emptyEl.classList.remove('d-none');
+      });
+  }
+
+  if (table) {
+    table.addEventListener('click', function(e) {
+      var link = e.target.closest('.emg-link');
+      if (!link || !table.contains(link)) return;
       if (_useMobileTaskPanel()) return;
       e.preventDefault();
-      var vno = this.dataset.vno, dt = this.dataset.date;
-      document.getElementById('emgVehicleNo').textContent = vno;
-      document.getElementById('emgDetailBody').innerHTML = '';
-      document.getElementById('emgLoading').classList.remove('d-none');
-      document.getElementById('emgEmpty').classList.add('d-none');
-      document.getElementById('emgCount').textContent = '';
-      _emgData = [];
-      _showPanel(emgPanel);
-      fetch('/api/task-report/emg-detail?date=' + encodeURIComponent(dt) + '&vehicle_no=' + encodeURIComponent(vno))
-        .then(function(r) { return r.json(); })
-        .then(function(rows) {
-          document.getElementById('emgLoading').classList.add('d-none');
-          _emgData = rows;
-          if (!rows.length) { document.getElementById('emgEmpty').classList.remove('d-none'); return; }
-          var tb = document.getElementById('emgDetailBody');
-          rows.forEach(function(r, i) {
-            var tr = document.createElement('tr');
-            tr.innerHTML = '<td class="ps-3">' + (i + 1) + '</td>' +
-              '<td>' + _he(r.task_id) + '</td>' +
-              '<td>' + _he(r.phone) + '</td>' +
-              '<td>' + _he(r.cli) + '</td>' +
-              '<td>' + _he(r.name) + '</td>' +
-              '<td>' + _he(r.address) + '</td>' +
-              '<td>' + _he(r.amb_reg_no) + '</td>' +
-              '<td>' + _he(r.received_by) + '</td>' +
-              '<td><span class="badge ' + (r.category === 'Green' ? 'bg-success' : 'bg-warning text-dark') + '">' + _he(r.category) + '</span></td>' +
-              '<td>' + _he(r.facility_name) + '</td>' +
-              '<td>' + _he(r.created_date) + '</td>' +
-              '<td>' + _he(r.completed_date_time) + '</td>';
-            tb.appendChild(tr);
-          });
-          document.getElementById('emgCount').textContent = 'Total: ' + rows.length + ' tasks';
-        });
+      _loadEmgDetail(link);
     });
-  });
+  }
 
   document.getElementById('emgExportBtn').addEventListener('click', function() {
     if (!_emgData.length) return;
-    var headers = ['TaskId','Phone','CLI','Name','Address','Vehicle','ReceivedBy','Category','FacilityName','CreatedDate','CompletedDateTime'];
-    var keys = ['task_id','phone','cli','name','address','amb_reg_no','received_by','category','facility_name','created_date','completed_date_time'];
+    var headers = ['Date','TaskId','Phone','CLI','Name','Address','Vehicle','ReceivedBy','Category','FacilityName','CreatedDate','CompletedDateTime'];
+    var keys = ['task_date','task_id','phone','cli','name','address','amb_reg_no','received_by','category','facility_name','created_date','completed_date_time'];
     var csv = '\uFEFF' + headers.join(',') + '\n';
     _emgData.forEach(function(r) {
       csv += keys.map(function(k) { return '"' + (r[k] || '').replace(/"/g, '""') + '"'; }).join(',') + '\n';
@@ -458,44 +574,86 @@ function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page
 
   /* ── Tracker Detail / Edit Panel ───────────────────────── */
   var _trackerLinkEl = null;
+  var _trackerFetchSeq = 0;
   document.getElementById('trackerCloseBtn').addEventListener('click', function() { _hidePanel(trackerPanel); });
   document.getElementById('trackerCloseBtnFooter').addEventListener('click', function() { _hidePanel(trackerPanel); });
 
-  document.querySelectorAll('.tracker-link').forEach(function(a) {
-    a.addEventListener('click', function(e) {
+  function _loadTrackerDetail(link) {
+    _trackerLinkEl = link;
+    var vno = ((link && link.getAttribute('data-vno')) || '').trim();
+    var period = _linkPeriod(link);
+    var label = _periodLabel(period);
+    document.getElementById('trackerVehicleNo').textContent = vno + (label ? (' · ' + label) : '');
+    document.getElementById('trackerLoading').classList.remove('d-none');
+    document.getElementById('trackerContent').classList.add('d-none');
+    document.getElementById('trackerRangeContent').classList.add('d-none');
+    document.getElementById('trackerEmpty').classList.add('d-none');
+    document.getElementById('trackerSaveBtn').disabled = true;
+    document.getElementById('trackerRangeBody').innerHTML = '';
+    _showPanel(trackerPanel);
+    var seq = ++_trackerFetchSeq;
+    _fetchJson(_buildTrackerUrl(vno, period))
+      .then(function(d) {
+        if (seq !== _trackerFetchSeq) return;
+        document.getElementById('trackerLoading').classList.add('d-none');
+        if (d && d.range) {
+          if (!d.rows || !d.rows.length) {
+            document.getElementById('trackerEmpty').classList.remove('d-none');
+            return;
+          }
+          document.getElementById('trackerRangeContent').classList.remove('d-none');
+          var tb = document.getElementById('trackerRangeBody');
+          d.rows.forEach(function(row, i) {
+            var tr = document.createElement('tr');
+            tr.innerHTML = '<td class="ps-3">' + (i + 1) + '</td>' +
+              '<td>' + _he(row.task_date) + '</td>' +
+              '<td>' + _he(row.date_from) + '</td>' +
+              '<td>' + _he(row.time_from) + '</td>' +
+              '<td>' + _he(row.date_to) + '</td>' +
+              '<td>' + _he(row.time_to) + '</td>' +
+              '<td class="text-end">' + _he(String(row.mileage)) + '</td>' +
+              '<td class="text-end">' + _he(String(row.ptop)) + '</td>' +
+              '<td class="text-end fw-semibold">' + _he(String(row.effective_km)) + '</td>';
+            tb.appendChild(tr);
+          });
+          return;
+        }
+        if (!d || !d.id) {
+          document.getElementById('trackerEmpty').classList.remove('d-none');
+          return;
+        }
+        document.getElementById('trackerContent').classList.remove('d-none');
+        document.getElementById('trackerRecId').value = d.id;
+        document.getElementById('trId').value = d.id;
+        document.getElementById('trRegNo').value = d.reg_no;
+        document.getElementById('trDateFrom').value = d.date_from;
+        document.getElementById('trTimeFrom').value = d.time_from;
+        document.getElementById('trDateTo').value = d.date_to;
+        document.getElementById('trTimeTo').value = d.time_to;
+        document.getElementById('trMileage').value = d.mileage;
+        document.getElementById('trPtoP').value = d.ptop;
+        var autoVal = Math.max(d.mileage || 0, d.ptop || 0);
+        var selKm = document.getElementById('trSelectedKm');
+        selKm.value = d.selected_km !== null ? d.selected_km : autoVal;
+        document.getElementById('trAutoHint').textContent = 'Auto = MAX(Mileage, PtoP) = ' + autoVal.toFixed(2);
+        document.getElementById('trackerSaveBtn').disabled = false;
+      })
+      .catch(function() {
+        if (seq !== _trackerFetchSeq) return;
+        document.getElementById('trackerLoading').classList.add('d-none');
+        document.getElementById('trackerEmpty').classList.remove('d-none');
+      });
+  }
+
+  if (table) {
+    table.addEventListener('click', function(e) {
+      var link = e.target.closest('.tracker-link');
+      if (!link || !table.contains(link)) return;
       if (_useMobileTaskPanel()) return;
       e.preventDefault();
-      _trackerLinkEl = this;
-      var vno = this.dataset.vno, dt = this.dataset.date;
-      document.getElementById('trackerVehicleNo').textContent = vno;
-      document.getElementById('trackerLoading').classList.remove('d-none');
-      document.getElementById('trackerContent').classList.add('d-none');
-      document.getElementById('trackerEmpty').classList.add('d-none');
-      document.getElementById('trackerSaveBtn').disabled = true;
-      _showPanel(trackerPanel);
-      fetch('/api/task-report/tracker-detail?date=' + encodeURIComponent(dt) + '&vehicle_no=' + encodeURIComponent(vno))
-        .then(function(r) { return r.json(); })
-        .then(function(d) {
-          document.getElementById('trackerLoading').classList.add('d-none');
-          if (!d.id) { document.getElementById('trackerEmpty').classList.remove('d-none'); return; }
-          document.getElementById('trackerContent').classList.remove('d-none');
-          document.getElementById('trackerRecId').value = d.id;
-          document.getElementById('trId').value = d.id;
-          document.getElementById('trRegNo').value = d.reg_no;
-          document.getElementById('trDateFrom').value = d.date_from;
-          document.getElementById('trTimeFrom').value = d.time_from;
-          document.getElementById('trDateTo').value = d.date_to;
-          document.getElementById('trTimeTo').value = d.time_to;
-          document.getElementById('trMileage').value = d.mileage;
-          document.getElementById('trPtoP').value = d.ptop;
-          var autoVal = Math.max(d.mileage || 0, d.ptop || 0);
-          var selKm = document.getElementById('trSelectedKm');
-          selKm.value = d.selected_km !== null ? d.selected_km : autoVal;
-          document.getElementById('trAutoHint').textContent = 'Auto = MAX(Mileage, PtoP) = ' + autoVal.toFixed(2);
-          document.getElementById('trackerSaveBtn').disabled = false;
-        });
+      _loadTrackerDetail(link);
     });
-  });
+  }
 
   document.getElementById('trackerSaveBtn').addEventListener('click', function() {
     var btn = this;
@@ -531,25 +689,20 @@ function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page
   });
 })();
 window._fleetAfterFilter = function(){ if(typeof updateListTotals==='function') updateListTotals(); };
-document.addEventListener('DOMContentLoaded', function(){ if(window.fleetTableEnhance) window.fleetTableEnhance('taskReportTable'); });
-
-document.addEventListener('click', function (e) {
-  var btn = e.target.closest('.att-photo-fullview-btn[data-task-report-odom="1"]');
-  if (!btn) return;
-  e.preventDefault();
-  var url = btn.getAttribute('data-url');
-  var label = btn.getAttribute('data-label') || '';
-  if (url && typeof window.openAttendancePhotoFullView === 'function') {
-    window.openAttendancePhotoFullView(url, label);
-  }
+document.addEventListener('DOMContentLoaded', function() {
+  if (window.fleetTableEnhance) window.fleetTableEnhance('vehiclePeriodDetailTable');
 });
 
-/* ── Print visible table ── */
-// Custom export for Task Report - shows Odoo images in small size
+
+/* ── Print / Export ── */
 (function(){
     var printBtn = document.getElementById('btnPrintReport');
     var exportBtn = document.getElementById('btnExportReport');
     if(!printBtn && !exportBtn) return;
+
+    function _pingSession() {
+        fetch('/auth/session-ping', { credentials: 'same-origin', cache: 'no-store' }).catch(function() {});
+    }
 
     function _isTaskReportNative() {
         return !!(window.FleetBridge && window.FleetBridge.isNative) ||
@@ -557,7 +710,7 @@ document.addEventListener('click', function (e) {
     }
 
     function _taskReportFilename(ext) {
-        return 'Daily_Task_Report_{{ from_date.strftime("%d-%m-%Y") }}_to_{{ to_date.strftime("%d-%m-%Y") }}.' + ext;
+        return 'Daily_Task_Period_Detail_{{ from_date.strftime("%d-%m-%Y") }}_to_{{ to_date.strftime("%d-%m-%Y") }}.' + ext;
     }
 
     function _toastTaskReport(msg) {
@@ -644,7 +797,7 @@ document.addEventListener('click', function (e) {
 
     var _taskReportJspdfSrc = {{ url_for('static', filename='vendor/jspdf.umd.min.js') | tojson }};
     var _taskReportAutotableSrc = {{ url_for('static', filename='vendor/jspdf.plugin.autotable.min.js') | tojson }};
-    var _taskReportServerPdfBase = {{ url_for('task_report_list_export_pdf') | tojson }};
+    var _taskReportServerPdfBase = {{ url_for('task_report_vehicle_period_detail_export_pdf') | tojson }};
 
     function _taskReportServerPdfUrl() {
         var u = new URLSearchParams(window.location.search);
@@ -942,27 +1095,53 @@ document.addEventListener('click', function (e) {
         u.set('page', '1');
         return window.location.pathname + '?' + u.toString();
     }
-    
+
+    function _hasClientSideTableFiltering(tbl) {
+        if (!tbl) return false;
+        if (tbl.querySelector('.ft-filter-btn.active')) return true;
+        return !!tbl.querySelector('tbody tr[style*="display: none"]');
+    }
+
     function _fetchAllTable(cb, onProgress) {
-        var localTbl = document.getElementById('taskReportTable');
+        var localTbl = document.getElementById('vehiclePeriodDetailTable');
+        if (_hasClientSideTableFiltering(localTbl)) {
+            if (typeof onProgress === 'function') {
+                onProgress(32, 'Loading report…', 'Using filtered rows…');
+            }
+            cb(localTbl);
+            return;
+        }
         var url = _allPagesUrl();
         if (typeof onProgress === 'function') {
             onProgress(15, 'Loading report…', 'Fetching all rows…');
         }
-        fetch(url, {credentials:'same-origin'}).then(function(r){ return r.text(); }).then(function(html) {
-            if (typeof onProgress === 'function') {
-                onProgress(32, 'Loading report…', 'Preparing data…');
-            }
-            var parser = new DOMParser();
-            var doc = parser.parseFromString(html, 'text/html');
-            var remoteTbl = doc.getElementById('taskReportTable');
-            if(remoteTbl) { cb(remoteTbl); } else { cb(localTbl); }
-        }).catch(function(){
-            if (typeof onProgress === 'function') {
-                onProgress(28, 'Loading report…', 'Using visible rows…');
-            }
-            cb(localTbl);
-        });
+        fetch(url, { credentials: 'same-origin', redirect: 'manual', cache: 'no-store' })
+            .then(function(r) {
+                if (!r || r.type === 'opaqueredirect' || r.status === 0 || (r.status >= 300 && r.status < 400) || !r.ok) {
+                    if (typeof onProgress === 'function') {
+                        onProgress(28, 'Loading report…', 'Using visible rows…');
+                    }
+                    cb(localTbl);
+                    return null;
+                }
+                return r.text();
+            })
+            .then(function(html) {
+                if (!html) return;
+                if (typeof onProgress === 'function') {
+                    onProgress(32, 'Loading report…', 'Preparing data…');
+                }
+                var parser = new DOMParser();
+                var doc = parser.parseFromString(html, 'text/html');
+                var remoteTbl = doc.getElementById('vehiclePeriodDetailTable');
+                if (remoteTbl) { cb(remoteTbl); } else { cb(localTbl); }
+            })
+            .catch(function() {
+                if (typeof onProgress === 'function') {
+                    onProgress(28, 'Loading report…', 'Using visible rows…');
+                }
+                cb(localTbl);
+            });
     }
     
     function _cleanTaskReportTable(tbl) {
@@ -999,7 +1178,7 @@ document.addEventListener('click', function (e) {
             printBtn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Loading...';
             
             var previewCss = '@page{size:A4 landscape;margin:8mm;}body{font-family:Arial,sans-serif;font-size:10px;margin:0;padding:8px 12px;}.toolbar{position:sticky;top:0;z-index:99;background:#1e293b;color:#fff;padding:8px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;border-radius:0 0 6px 6px;box-shadow:0 2px 8px rgba(0,0,0,.2);margin:-8px -12px 12px;}.toolbar h4{margin:0;font-size:14px;font-weight:600;}.toolbar button{padding:5px 16px;border:none;border-radius:4px;font-size:12px;font-weight:600;cursor:pointer;}.btn-p{background:#3b82f6;color:#fff;}.btn-c{background:#64748b;color:#fff;margin-left:6px;}h3{text-align:center;margin:6px 0 10px;font-size:14px;}table{width:100%;border-collapse:collapse;table-layout:auto;}th,td{border:1px solid #555;padding:3px 5px;text-align:left;vertical-align:top;}th{background:#e9ecef;font-size:9px;}.text-end{text-align:right;}.text-center{text-align:center;}@media print{.toolbar{display:none!important;}}';
-            var title = 'Vehicles Daily Task Report — {{ from_date|ddmmyyyy }} to {{ to_date|ddmmyyyy }}';
+            var title = 'Vehicle Period Task Detail Report — {{ from_date|ddmmyyyy }} to {{ to_date|ddmmyyyy }}';
             var nativePdf = _isTaskReportNative();
             var progressTitle = nativePdf ? 'Generating PDF…' : 'Preparing preview…';
 
@@ -1031,7 +1210,7 @@ document.addEventListener('click', function (e) {
                 if(w) {
                     w.document.write('<!DOCTYPE html><html><head><title>' + title + '</title>');
                     w.document.write('<style>' + previewCss + '</style></head><body>');
-                    w.document.write('<div class="toolbar"><h4>Vehicles Daily Task Report</h4><div>');
+                    w.document.write('<div class="toolbar"><h4>Vehicle Period Task Detail Report</h4><div>');
                     w.document.write('<button class="btn-p" onclick="window.print()">&#128438; Print</button>');
                     w.document.write('<button class="btn-c" onclick="window.close()">&#10005; Close</button>');
                     w.document.write('</div></div>');
@@ -1044,6 +1223,7 @@ document.addEventListener('click', function (e) {
                 setTimeout(_hideTaskReportProgress, 700);
                 printBtn.disabled = false;
                 printBtn.innerHTML = '<i class="bi bi-printer me-1"></i>Print / Preview';
+                _pingSession();
             }, function(pct, titleText, detail) {
                 _updateTaskReportProgress(pct, titleText, detail);
             });
@@ -1457,26 +1637,80 @@ document.addEventListener('click', function (e) {
         return html;
     }
 
+    function _renderMobileTrackerDayCard(row, vno, index) {
+        var autoVal = Math.max(parseFloat(row.mileage) || 0, parseFloat(row.ptop) || 0);
+        var effective = row.effective_km != null ? row.effective_km : autoVal;
+        var dateLabel = row.task_date || '-';
+        return '<div class="mobile-task-card">'
+            + '<div class="mobile-task-card-header">'
+            + '<div class="mobile-task-icon tracker"><i class="bi bi-geo-alt-fill"></i></div>'
+            + '<div style="min-width:0;flex:1;">'
+            + '<div class="d-flex align-items-center gap-2 flex-wrap"><span class="mobile-task-index">#' + (index + 1) + '</span>'
+            + '<h6 class="mobile-task-card-title mb-0">Tracker KM — ' + _mobileHe(effective) + ' km</h6></div>'
+            + '<p class="mobile-task-card-subtitle">' + _mobileHe(vno) + ' · ' + _mobileHe(dateLabel) + '</p>'
+            + '</div></div>'
+            + '<div class="mobile-task-info-row"><span class="mobile-task-info-label">From</span><span class="mobile-task-info-value">' + _mobileHe((row.date_from || '-') + ' ' + (row.time_from || '')) + '</span></div>'
+            + '<div class="mobile-task-info-row"><span class="mobile-task-info-label">To</span><span class="mobile-task-info-value">' + _mobileHe((row.date_to || '-') + ' ' + (row.time_to || '')) + '</span></div>'
+            + '<div class="mobile-task-info-row"><span class="mobile-task-info-label">Mileage</span><span class="mobile-task-info-value">' + _mobileHe(row.mileage) + ' km</span></div>'
+            + '<div class="mobile-task-info-row"><span class="mobile-task-info-label">P to P</span><span class="mobile-task-info-value">' + _mobileHe(row.ptop) + ' km</span></div>'
+            + '<div class="mobile-task-info-row"><span class="mobile-task-info-label">Selected KM</span><span class="mobile-task-info-value">' + (row.selected_km != null ? _mobileHe(row.selected_km) + ' km' : 'Auto (MAX)') + '</span></div>'
+            + '<div class="mobile-task-info-row"><span class="mobile-task-info-label">Used in Report</span><span class="mobile-task-info-value"><span class="mobile-task-badge green">' + _mobileHe(effective) + ' km</span></span></div>'
+            + '<p class="text-muted mb-0 mt-2" style="font-size:0.82rem;">Auto = MAX(Mileage, P to P) = ' + autoVal.toFixed(2) + ' km</p>'
+            + '</div>';
+    }
+
+    function _renderMobileTrackerRangeCards(rows, vno, periodLabel) {
+        if (!rows || !rows.length) {
+            return '<div class="mobile-task-empty"><i class="bi bi-inbox"></i><p>No tracker records for ' + _mobileHe(vno) + (periodLabel ? (' · ' + _mobileHe(periodLabel)) : '') + '</p></div>';
+        }
+        var totalKm = 0;
+        rows.forEach(function(row) {
+            var autoVal = Math.max(parseFloat(row.mileage) || 0, parseFloat(row.ptop) || 0);
+            totalKm += (row.effective_km != null ? parseFloat(row.effective_km) : autoVal) || 0;
+        });
+        var html = '<div class="mobile-task-summary"><span><i class="bi bi-speedometer2 me-1"></i>Tracker KM</span><span>'
+            + rows.length + ' day' + (rows.length === 1 ? '' : 's') + ' · ' + totalKm.toFixed(2) + ' km total</span></div>';
+        rows.forEach(function(row, index) {
+            html += _renderMobileTrackerDayCard(row, vno, index);
+        });
+        return html;
+    }
+
     function _renderMobileTrackerCards(d, vno, date) {
         if (!d || !d.id) {
             return '<div class="mobile-task-empty"><i class="bi bi-inbox"></i><p>No tracker record found for ' + _mobileHe(vno) + ' on ' + _mobileHe(date) + '</p></div>';
         }
-        var autoVal = Math.max(parseFloat(d.mileage) || 0, parseFloat(d.ptop) || 0);
-        var effective = d.effective_km != null ? d.effective_km : autoVal;
-        return '<div class="mobile-task-card">'
-            + '<div class="mobile-task-card-header">'
-            + '<div class="mobile-task-icon tracker"><i class="bi bi-geo-alt-fill"></i></div>'
-            + '<div><h6 class="mobile-task-card-title">Tracker KM — ' + _mobileHe(effective) + '</h6>'
-            + '<p class="mobile-task-card-subtitle">' + _mobileHe(vno) + ' · ' + _mobileHe(date) + '</p></div>'
-            + '</div>'
-            + '<div class="mobile-task-info-row"><span class="mobile-task-info-label">From</span><span class="mobile-task-info-value">' + _mobileHe((d.date_from || '-') + ' ' + (d.time_from || '')) + '</span></div>'
-            + '<div class="mobile-task-info-row"><span class="mobile-task-info-label">To</span><span class="mobile-task-info-value">' + _mobileHe((d.date_to || '-') + ' ' + (d.time_to || '')) + '</span></div>'
-            + '<div class="mobile-task-info-row"><span class="mobile-task-info-label">Mileage</span><span class="mobile-task-info-value">' + _mobileHe(d.mileage) + ' km</span></div>'
-            + '<div class="mobile-task-info-row"><span class="mobile-task-info-label">P to P</span><span class="mobile-task-info-value">' + _mobileHe(d.ptop) + ' km</span></div>'
-            + '<div class="mobile-task-info-row"><span class="mobile-task-info-label">Selected KM</span><span class="mobile-task-info-value">' + (d.selected_km != null ? _mobileHe(d.selected_km) + ' km' : 'Auto (MAX)') + '</span></div>'
-            + '<div class="mobile-task-info-row"><span class="mobile-task-info-label">Used in Report</span><span class="mobile-task-info-value"><span class="mobile-task-badge green">' + _mobileHe(effective) + ' km</span></span></div>'
-            + '<p class="text-muted mb-0 mt-2" style="font-size:0.82rem;">Auto = MAX(Mileage, P to P) = ' + autoVal.toFixed(2) + ' km</p>'
-            + '</div>';
+        return _renderMobileTrackerDayCard(d, vno, 0);
+    }
+    
+    function _mobilePeriodFromLink(link) {
+        var tbl = document.getElementById('vehiclePeriodDetailTable');
+        var fromDt = ((link && link.getAttribute('data-from')) || '').trim();
+        var toDt = ((link && link.getAttribute('data-to')) || '').trim();
+        var date = ((link && link.getAttribute('data-date')) || '').trim();
+        if (!fromDt && tbl) fromDt = (tbl.getAttribute('data-period-from') || '').trim();
+        if (!toDt && tbl) toDt = (tbl.getAttribute('data-period-to') || '').trim();
+        return { fromDt: fromDt, toDt: toDt, date: date };
+    }
+
+    function _mobileBuildEmgUrl(vno, period) {
+        var url = '/api/task-report/emg-detail?vehicle_no=' + encodeURIComponent(vno);
+        if (period.fromDt && period.toDt) {
+            url += '&from_date=' + encodeURIComponent(period.fromDt) + '&to_date=' + encodeURIComponent(period.toDt);
+        } else if (period.date) {
+            url += '&date=' + encodeURIComponent(period.date);
+        }
+        return url;
+    }
+
+    function _mobileBuildTrackerUrl(vno, period) {
+        var url = '/api/task-report/tracker-detail?vehicle_no=' + encodeURIComponent(vno);
+        if (period.fromDt && period.toDt) {
+            url += '&from_date=' + encodeURIComponent(period.fromDt) + '&to_date=' + encodeURIComponent(period.toDt);
+        } else if (period.date) {
+            url += '&date=' + encodeURIComponent(period.date);
+        }
+        return url;
     }
     
     // EMG Link Handler (mobile / Capacitor only)
@@ -1487,21 +1721,26 @@ document.addEventListener('click', function (e) {
         e.stopPropagation();
         
         var vno = emgLink.getAttribute('data-vno') || '';
-        var date = emgLink.getAttribute('data-date') || '';
-        var badge = emgLink.querySelector('.badge');
+        var period = _mobilePeriodFromLink(emgLink);
+        var badge = emgLink.getAttribute('data-vno') ? emgLink.querySelector('.badge') : null;
         var emgCount = parseInt((badge ? badge.textContent : '0') || '0', 10) || 0;
+        var periodLabel = (period.fromDt && period.toDt) ? (period.fromDt + ' to ' + period.toDt) : period.date;
         
         if (emgCount === 0) {
-            window.openMobileTaskModal('No Emergency Tasks', '<div class="mobile-task-empty"><i class="bi bi-inbox"></i><p>No emergency tasks for this vehicle on ' + _mobileHe(date) + '</p></div>', 'EMG Tasks');
+            window.openMobileTaskModal('No Emergency Tasks', '<div class="mobile-task-empty"><i class="bi bi-inbox"></i><p>No emergency tasks for this vehicle' + (periodLabel ? (' · ' + _mobileHe(periodLabel)) : '') + '</p></div>', 'EMG Tasks');
             return;
         }
         
-        window.openMobileTaskModal(vno + ' · ' + date, '<div class="text-center py-4"><div class="spinner-border text-primary" role="status"></div><p class="text-muted mt-2">Loading emergency tasks...</p></div>', 'EMG Tasks');
+        window.openMobileTaskModal(vno + ' · ' + periodLabel, '<div class="text-center py-4"><div class="spinner-border text-primary" role="status"></div><p class="text-muted mt-2">Loading emergency tasks...</p></div>', 'EMG Tasks');
         
-        fetch('/api/task-report/emg-detail?date=' + encodeURIComponent(date) + '&vehicle_no=' + encodeURIComponent(vno))
-            .then(function(r) { return r.json(); })
+        fetch(_mobileBuildEmgUrl(vno, period), { credentials: 'same-origin', cache: 'no-store' })
+            .then(function(r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.json();
+            })
             .then(function(rows) {
-                document.getElementById('mobileTaskBody').innerHTML = _renderMobileEmgCards(Array.isArray(rows) ? rows : []);
+                if (!Array.isArray(rows)) throw new Error('invalid');
+                document.getElementById('mobileTaskBody').innerHTML = _renderMobileEmgCards(rows);
             })
             .catch(function() {
                 document.getElementById('mobileTaskBody').innerHTML = '<div class="mobile-task-empty"><i class="bi bi-exclamation-circle"></i><p>Failed to load emergency tasks</p></div>';
@@ -1516,14 +1755,22 @@ document.addEventListener('click', function (e) {
         e.stopPropagation();
         
         var vno = trackerLink.getAttribute('data-vno') || '';
-        var date = trackerLink.getAttribute('data-date') || '';
+        var period = _mobilePeriodFromLink(trackerLink);
+        var periodLabel = (period.fromDt && period.toDt) ? (period.fromDt + ' to ' + period.toDt) : period.date;
         
-        window.openMobileTaskModal(vno + ' · ' + date, '<div class="text-center py-4"><div class="spinner-border text-primary" role="status"></div><p class="text-muted mt-2">Loading tracker details...</p></div>', 'Tracker KM');
+        window.openMobileTaskModal(vno + ' · ' + periodLabel, '<div class="text-center py-4"><div class="spinner-border text-primary" role="status"></div><p class="text-muted mt-2">Loading tracker details...</p></div>', 'Tracker KM');
         
-        fetch('/api/task-report/tracker-detail?date=' + encodeURIComponent(date) + '&vehicle_no=' + encodeURIComponent(vno))
-            .then(function(r) { return r.json(); })
+        fetch(_mobileBuildTrackerUrl(vno, period), { credentials: 'same-origin', cache: 'no-store' })
+            .then(function(r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.json();
+            })
             .then(function(d) {
-                document.getElementById('mobileTaskBody').innerHTML = _renderMobileTrackerCards(d, vno, date);
+                if (d && d.range) {
+                    document.getElementById('mobileTaskBody').innerHTML = _renderMobileTrackerRangeCards(d.rows || [], vno, periodLabel);
+                    return;
+                }
+                document.getElementById('mobileTaskBody').innerHTML = _renderMobileTrackerCards(d, vno, period.date || periodLabel);
             })
             .catch(function() {
                 document.getElementById('mobileTaskBody').innerHTML = '<div class="mobile-task-empty"><i class="bi bi-exclamation-circle"></i><p>Failed to load tracker details</p></div>';
