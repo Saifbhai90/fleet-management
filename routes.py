@@ -2423,9 +2423,9 @@ def _save_expense_attachment_path(file_storage, file_type, original_fn, r2_folde
 
 def _expense_attachment_max_bytes():
     try:
-        mb = int(os.environ.get('EXPENSE_ATTACHMENT_MAX_MB', '120'))
+        mb = int(os.environ.get('EXPENSE_ATTACHMENT_MAX_MB', '300'))
     except ValueError:
-        mb = 120
+        mb = 300
     return max(1, mb) * 1024 * 1024
 
 
@@ -2727,6 +2727,29 @@ def _process_expense_upload_job(kind, expense_id: int):
 
 def _prepare_maintenance_upload_manifest(files, expense_id):
     return _prepare_expense_upload_manifest(files, 'maintenance', expense_id)
+
+
+def _append_expense_upload_manifest(rec, kind, files, *, start_worker=True):
+    """Queue uploaded files on disk for background R2 upload; append to existing manifest."""
+    manifest, skipped = _prepare_expense_upload_manifest(files, kind, rec.id)
+    if not manifest:
+        return 0, skipped
+    try:
+        existing = json.loads(rec.upload_manifest_json or '[]')
+    except Exception:
+        existing = []
+    combined = existing + manifest
+    rec.upload_total = int(rec.upload_total or 0) + len(manifest)
+    rec.upload_manifest_json = json.dumps(combined)
+    rec.upload_status = 'processing'
+    rec.upload_error = None
+    if not rec.upload_started_at:
+        rec.upload_started_at = pk_now()
+    rec.upload_finished_at = None
+    db.session.commit()
+    if start_worker:
+        _start_expense_upload_worker(kind, rec.id)
+    return len(manifest), skipped
 
 
 def _start_maintenance_upload_worker(expense_id: int):
@@ -32424,6 +32447,36 @@ def api_maintenance_expense_product_price_history():
     return jsonify({'ok': True, 'same_party': same_party, 'other_parties': other_parties, 'suggested_price': suggested_price})
 
 
+@app.route('/api/maintenance-expense/<int:pk>/queue-files', methods=['POST'])
+def api_maintenance_expense_queue_files(pk):
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return jsonify({'ok': False, 'error': 'forbidden'}), 403
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    rec = MaintenanceExpense.query.get_or_404(pk)
+    if workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
+        return jsonify({'ok': False, 'error': 'forbidden'}), 403
+    files = request.files.getlist('attachments')
+    if not files or not any(f and getattr(f, 'filename', None) for f in files):
+        return jsonify({'ok': False, 'error': 'no_files'}), 400
+    try:
+        start_worker = request.headers.get('X-Maint-Batch-Final') == '1'
+        queued, skipped = _append_expense_upload_manifest(rec, 'maintenance', files, start_worker=start_worker)
+        return jsonify({
+            'ok': True,
+            'id': rec.id,
+            'queued': queued,
+            'skipped': skipped,
+            'total': int(rec.upload_total or 0),
+            'done': int(rec.upload_done or 0),
+            'status': rec.upload_status or 'processing',
+        })
+    except Exception as ex:
+        db.session.rollback()
+        app.logger.exception('Maintenance queue-files failed expense=%s', pk)
+        return jsonify({'ok': False, 'error': str(ex)}), 500
+
+
 @app.route('/api/maintenance-expense/upload-status/<int:pk>')
 def api_maintenance_expense_upload_status(pk):
     _guard = _require_workspace_employee_for_expense_management()
@@ -34011,6 +34064,7 @@ def maintenance_expense_form(pk=None):
     workspace_employee_id = _workspace_employee_id_for_expenses()
     # User-requested flow: keep uploads in backend processing (no blocking modal on form submit).
     maintenance_direct_r2 = False
+    maintenance_attachment_max_mb = _expense_attachment_max_bytes() // (1024 * 1024)
     default_district_id = _workspace_employee_default_district_id(workspace_employee_id)
     rec = MaintenanceExpense.query.get_or_404(pk) if pk else None
     if rec and workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
@@ -34058,6 +34112,7 @@ def maintenance_expense_form(pk=None):
             selected_labour_party_id=selected_labour_party_id,
             workspace_parties=workspace_parties,
             maintenance_direct_r2=maintenance_direct_r2,
+            maintenance_attachment_max_mb=maintenance_attachment_max_mb,
             requested_work_order=requested_work_order,
             maintenance_form_focus=maintenance_form_focus,
             location_cascade=_fuel_expense_location_cascade_dict(),
@@ -34450,6 +34505,15 @@ def maintenance_expense_form(pk=None):
                 journal_entry_id=(maintenance_je.id if maintenance_je else None),
             )
             db.session.commit()
+
+            split_upload = request.headers.get('X-Maint-Split-Upload') == '1'
+            if split_upload:
+                return jsonify({
+                    'ok': True,
+                    'id': rec.id,
+                    'edit': bool(pk),
+                    'list_url': url_for('maintenance_expense_list'),
+                })
 
             files = request.files.getlist('attachments')
             has_new_files = bool(files and any(f and getattr(f, 'filename', None) for f in files))

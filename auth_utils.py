@@ -439,6 +439,7 @@ ENDPOINT_PERMISSION_MAP = [
     ('api_maintenance_expense_approval_text', 'maintenance_expense'),
     ('api_maintenance_work_order_approval_text', 'maintenance_expense'),
     ('api_maintenance_expense_upload_status', 'maintenance_expense'),
+    ('api_maintenance_expense_queue_files', 'maintenance_expense'),
     ('maintenance_expense_upload_resume', 'maintenance_expense'),
     # Attendance helper APIs
     ('api_parking_stations_with_coords', 'driver_attendance_checkin'),

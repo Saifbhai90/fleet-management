@@ -139,6 +139,24 @@
   .existing-attachment-card img, .existing-attachment-card video { width: 100%; height: 120px; object-fit: cover; border-radius: 8px; background: #f1f5f9; }
   .existing-attachment-name { margin-top: 6px; font-size: 0.82rem; line-height: 1.2; word-break: break-word; }
   #maintDirectUploadModal .progress { height: 1.35rem; }
+  #maintSubmitOverlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1070;
+    background: rgba(15, 23, 42, 0.72);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+  }
+  #maintSubmitOverlay .maint-submit-panel {
+    width: min(520px, 100%);
+    background: #fff;
+    border-radius: 14px;
+    padding: 1.1rem 1.2rem;
+    box-shadow: 0 18px 48px rgba(15, 23, 42, 0.28);
+  }
+  #maintSubmitOverlay .progress { height: 1.25rem; }
   /* Hide workspace mini navigation for wider insights on this form */
   .ws-global-mini { display: none !important; }
   #mainContent.ws-mini-open { padding-right: 25px !important; }
@@ -450,7 +468,7 @@
       <div class="form-section-header">Photos / Videos</div>
       <div class="form-section-body">
         <input type="file" name="attachments" id="maintAttachmentFiles" multiple accept="image/*,video/*" class="form-control">
-        <small class="text-muted">Multiple images or videos allowed. You can also paste with Ctrl+V. Har file ~120 MB se chhoti rakhein (barri videos compress kar ke lagayen).{% if maintenance_direct_r2 %} <strong>Cloudflare par seedha upload</strong> (server par bojh kam) — R2 bucket par CORS allow karein is site ke domain ke liye.{% endif %}</small>
+        <small class="text-muted">Multiple images or videos allowed. Paste with Ctrl+V. Har file ~{{ maintenance_attachment_max_mb|default(300) }} MB tak. Zyada files hon to system khud batches me upload karega — aapko alag save nahi karna.{% if maintenance_direct_r2 %} <strong>Cloudflare par seedha upload</strong> (server par bojh kam) — R2 bucket par CORS allow karein is site ke domain ke liye.{% endif %}</small>
         <div class="small text-success mt-1" id="maintAttachmentPasteHint"></div>
         {% if maintenance_direct_r2 %}
         <div class="form-check mt-2">
@@ -2078,6 +2096,203 @@ document.addEventListener('DOMContentLoaded', function() {
   var maintenanceExpenseForm = document.getElementById('maintenanceExpenseForm');
   var maintenanceSubmitLocked = false;
   var maintenanceHasDirectUpload = (typeof MAINTENANCE_DIRECT_R2 !== 'undefined' && MAINTENANCE_DIRECT_R2);
+
+  function maintFormatBytes(n) {
+    n = Number(n) || 0;
+    if (n < 1024) return n + ' B';
+    if (n < 1048576) return (n / 1024).toFixed(1) + ' KB';
+    if (n < 1073741824) return (n / 1048576).toFixed(1) + ' MB';
+    return (n / 1073741824).toFixed(2) + ' GB';
+  }
+
+  function maintShowSubmitOverlay(title, detail, pct) {
+    var ov = document.getElementById('maintSubmitOverlay');
+    if (!ov) {
+      ov = document.createElement('div');
+      ov.id = 'maintSubmitOverlay';
+      ov.innerHTML = ''
+        + '<div class="maint-submit-panel">'
+        + '<div class="fw-bold mb-1" id="maintSubmitOverlayTitle"></div>'
+        + '<div class="small text-muted mb-2" id="maintSubmitOverlayDetail"></div>'
+        + '<div class="progress mb-2"><div id="maintSubmitOverlayBar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width:0%">0%</div></div>'
+        + '<div class="small text-secondary" id="maintSubmitOverlayHint">Browser se server par files bhej raha hai. Tab band na karein.</div>'
+        + '</div>';
+      document.body.appendChild(ov);
+    }
+    var t = document.getElementById('maintSubmitOverlayTitle');
+    var d = document.getElementById('maintSubmitOverlayDetail');
+    var bar = document.getElementById('maintSubmitOverlayBar');
+    if (t) t.textContent = title || 'Saving...';
+    if (d) d.textContent = detail || '';
+    var safePct = (pct == null || isNaN(pct)) ? null : Math.max(0, Math.min(100, Math.round(pct)));
+    if (bar) {
+      if (safePct == null) {
+        bar.style.width = '100%';
+        bar.textContent = '...';
+        bar.classList.add('progress-bar-animated');
+      } else {
+        bar.style.width = safePct + '%';
+        bar.textContent = safePct + '%';
+        if (safePct >= 100) bar.classList.remove('progress-bar-animated');
+      }
+    }
+    ov.classList.remove('d-none');
+  }
+
+  function maintHideSubmitOverlay() {
+    var ov = document.getElementById('maintSubmitOverlay');
+    if (ov) ov.classList.add('d-none');
+  }
+
+  function maintUnlockSubmitButtons() {
+    maintenanceSubmitLocked = false;
+    maintenanceExpenseForm.querySelectorAll('button[type="submit"], input[type="submit"]').forEach(function(btn) {
+      btn.disabled = false;
+    });
+    var saveBtn = document.getElementById('maintSaveBtn');
+    if (saveBtn) saveBtn.innerHTML = 'Save';
+  }
+
+  var MAINT_BATCH_FILE_LIMIT = 12;
+  var MAINT_BATCH_BYTE_LIMIT = 120 * 1024 * 1024;
+  var MAINT_AUTO_BATCH_FILE_COUNT = 12;
+  var MAINT_AUTO_BATCH_TOTAL_BYTES = 100 * 1024 * 1024;
+
+  function maintCsrfTok() {
+    var m = document.querySelector('meta[name="csrf-token"]');
+    if (m) return m.getAttribute('content') || '';
+    var inp = maintenanceExpenseForm.querySelector('input[name="csrf_token"]');
+    return inp ? inp.value : '';
+  }
+
+  function maintShouldBatchUpload(fileCount, totalBytes) {
+    return fileCount > MAINT_AUTO_BATCH_FILE_COUNT || totalBytes > MAINT_AUTO_BATCH_TOTAL_BYTES;
+  }
+
+  function maintBuildFileBatches(fileList) {
+    var batches = [];
+    var cur = [];
+    var curBytes = 0;
+    for (var i = 0; i < fileList.length; i++) {
+      var f = fileList[i];
+      var sz = f.size || 0;
+      if (cur.length > 0 && (cur.length >= MAINT_BATCH_FILE_LIMIT || (curBytes + sz > MAINT_BATCH_BYTE_LIMIT))) {
+        batches.push(cur);
+        cur = [];
+        curBytes = 0;
+      }
+      cur.push(f);
+      curBytes += sz;
+    }
+    if (cur.length) batches.push(cur);
+    return batches;
+  }
+
+  function maintSaveFormWithoutFiles() {
+    var fd = new FormData(maintenanceExpenseForm);
+    fd.delete('attachments');
+    return fetch(maintenanceExpenseForm.action || window.location.href, {
+      method: 'POST',
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-Maint-Split-Upload': '1'
+      },
+      body: fd
+    }).then(function(r) {
+      return r.json().then(function(j) {
+        if (!r.ok || !j.ok) throw new Error((j && j.error) ? j.error : ('Save failed HTTP ' + r.status));
+        return j;
+      });
+    });
+  }
+
+  function maintUploadSingleRequest(onProgress) {
+    return new Promise(function(resolve, reject) {
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', maintenanceExpenseForm.action || window.location.href);
+      xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+      xhr.upload.addEventListener('progress', function(ev) {
+        if (onProgress) onProgress(ev);
+      });
+      xhr.onload = function() {
+        if (xhr.status >= 200 && xhr.status < 400) {
+          resolve(xhr.responseURL || maintenanceExpenseForm.action || window.location.href);
+          return;
+        }
+        reject(new Error('Save fail HTTP ' + xhr.status));
+      };
+      xhr.onerror = function() { reject(new Error('Network error')); };
+      xhr.send(new FormData(maintenanceExpenseForm));
+    });
+  }
+
+  function maintUploadFileBatch(expenseId, batchFiles, batchIdx, totalBatches, isFinal, onProgress) {
+    return new Promise(function(resolve, reject) {
+      var fd = new FormData();
+      batchFiles.forEach(function(f) { fd.append('attachments', f, f.name || 'file'); });
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', '/api/maintenance-expense/' + expenseId + '/queue-files');
+      xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+      xhr.setRequestHeader('X-CSRFToken', maintCsrfTok());
+      if (isFinal) xhr.setRequestHeader('X-Maint-Batch-Final', '1');
+      xhr.upload.addEventListener('progress', function(ev) {
+        if (onProgress) onProgress(ev, batchIdx, totalBatches);
+      });
+      xhr.onload = function() {
+        try {
+          var j = JSON.parse(xhr.responseText || '{}');
+          if (xhr.status >= 200 && xhr.status < 400 && j.ok) {
+            resolve(j);
+            return;
+          }
+          reject(new Error((j && j.error) ? j.error : ('Batch HTTP ' + xhr.status)));
+        } catch (err) {
+          reject(err);
+        }
+      };
+      xhr.onerror = function() { reject(new Error('Network error on batch ' + (batchIdx + 1))); };
+      xhr.send(fd);
+    });
+  }
+
+  function maintUploadInBatches(fileList, totalBytes) {
+    var batches = maintBuildFileBatches(fileList);
+    var totalBatches = batches.length;
+    maintShowSubmitOverlay(
+      'Form save ho raha hai',
+      fileList.length + ' file(s), ' + totalBatches + ' batch(es) — please wait',
+      0
+    );
+    return maintSaveFormWithoutFiles().then(function(saved) {
+      var expenseId = saved.id;
+      var listUrl = saved.list_url || '{{ url_for("maintenance_expense_list") }}';
+      var chain = Promise.resolve();
+      batches.forEach(function(batch, idx) {
+        chain = chain.then(function() {
+          maintShowSubmitOverlay(
+            'Batch ' + (idx + 1) + ' / ' + totalBatches + ' upload ho rahi hai',
+            batch.length + ' file(s) — ' + maintFormatBytes(totalBytes) + ' total',
+            Math.round((idx / totalBatches) * 100)
+          );
+          return maintUploadFileBatch(expenseId, batch, idx, totalBatches, idx === totalBatches - 1, function(ev, batchIdx, batchTotal) {
+            if (!ev.lengthComputable || !ev.total) return;
+            var within = (ev.loaded / ev.total) * (100 / batchTotal);
+            var pct = Math.round(((batchIdx / batchTotal) * 100) + within);
+            maintShowSubmitOverlay(
+              'Batch ' + (batchIdx + 1) + ' / ' + batchTotal + ' upload ho rahi hai',
+              maintFormatBytes(ev.loaded) + ' / ' + maintFormatBytes(ev.total),
+              Math.min(99, pct)
+            );
+          });
+        });
+      });
+      return chain.then(function() {
+        maintShowSubmitOverlay('Upload queue me lag gayi', 'Background me Cloudflare par jaa rahi hain — list par status dekhein.', 100);
+        window.setTimeout(function() { window.location.href = listUrl; }, 600);
+      });
+    });
+  }
+
   if (maintenanceExpenseForm) {
     maintenanceExpenseForm.addEventListener('submit', function(e) {
       if (maintenanceSubmitLocked) {
@@ -2092,9 +2307,56 @@ document.addEventListener('DOMContentLoaded', function() {
       if (maintenanceHasDirectUpload) {
         return;
       }
+
+      var fileInput = document.getElementById('maintAttachmentFiles');
+      var fileList = (fileInput && fileInput.files) ? Array.prototype.slice.call(fileInput.files) : [];
+      var fileCount = fileList.length;
+      var totalBytes = 0;
+      fileList.forEach(function(f) { totalBytes += f.size || 0; });
+
       maintenanceSubmitLocked = true;
       maintenanceExpenseForm.querySelectorAll('button[type="submit"], input[type="submit"]').forEach(function(btn) {
         btn.disabled = true;
+      });
+      var saveBtn = document.getElementById('maintSaveBtn');
+      if (saveBtn) {
+        saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>' + (fileCount ? 'Uploading...' : 'Saving...');
+      }
+
+      if (!fileCount) return;
+
+      e.preventDefault();
+
+      if (maintShouldBatchUpload(fileCount, totalBytes)) {
+        maintUploadInBatches(fileList, totalBytes).catch(function(err) {
+          maintHideSubmitOverlay();
+          maintUnlockSubmitButtons();
+          alert((err && err.message) ? err.message : 'Upload fail — dubara try karein.');
+        });
+        return;
+      }
+
+      maintShowSubmitOverlay(
+        'Uploading ' + fileCount + ' file(s) to server',
+        maintFormatBytes(totalBytes) + ' total',
+        0
+      );
+      maintUploadSingleRequest(function(ev) {
+        if (ev.lengthComputable && ev.total > 0) {
+          var pct = Math.round(100 * ev.loaded / ev.total);
+          maintShowSubmitOverlay(
+            'Uploading ' + fileCount + ' file(s) to server',
+            maintFormatBytes(ev.loaded) + ' / ' + maintFormatBytes(ev.total),
+            pct
+          );
+        }
+      }).then(function(targetUrl) {
+        maintShowSubmitOverlay('Server par save ho raha hai', fileCount + ' file(s) queue me', 100);
+        window.location.href = targetUrl;
+      }).catch(function(err) {
+        maintHideSubmitOverlay();
+        maintUnlockSubmitButtons();
+        alert((err && err.message) ? err.message : 'Save fail — dubara try karein.');
       });
     });
   }
