@@ -4035,6 +4035,20 @@ if (window.lucide && typeof window.lucide.createIcons === 'function') {
         });
     })();
 
+    (function() {
+        var s = document.createElement('script');
+        s.src = {{ url_for('static', filename='js/fleet_client_diagnostics.js')|tojson }};
+        s.onload = function() {
+            if (typeof window.fleetInitClientDiagnostics === 'function') {
+                window.fleetInitClientDiagnostics(
+                    {{ url_for('api_client_diagnostics')|tojson }},
+                    {{ csrf_token()|tojson }}
+                );
+            }
+        };
+        document.head.appendChild(s);
+    })();
+
     // Global District datalist for typeahead
     // (Used by inputs with list="districtOptions")
     // Render options once here so all forms can reuse.

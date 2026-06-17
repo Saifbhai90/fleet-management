@@ -1356,6 +1356,30 @@ class ClientActivityLog(db.Model):
         return f'<ClientActivityLog {self.action} at {self.created_at}>'
 
 
+class ClientDiagnosticLog(db.Model):
+    """Per-user/device client and server-side diagnostics (slow pages, errors, failed API)."""
+    __tablename__ = 'client_diagnostic_log'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False, index=True)
+    login_log_id = db.Column(db.Integer, db.ForeignKey('login_log.id', ondelete='SET NULL'), nullable=True, index=True)
+    device_id = db.Column(db.String(80), nullable=True, index=True)
+    user_agent = db.Column(db.String(500), nullable=True)
+    event_type = db.Column(db.String(40), nullable=False, index=True)
+    page_path = db.Column(db.String(500), nullable=True)
+    message = db.Column(db.Text, nullable=True)
+    duration_ms = db.Column(db.Integer, nullable=True)
+    status_code = db.Column(db.Integer, nullable=True)
+    device_model = db.Column(db.String(120), nullable=True)
+    os_version = db.Column(db.String(80), nullable=True)
+    network_type = db.Column(db.String(40), nullable=True)
+    created_at = db.Column(db.DateTime, default=pk_now, nullable=False, index=True)
+
+    user = db.relationship('User', backref='client_diagnostic_logs', lazy=True)
+
+    def __repr__(self):
+        return f'<ClientDiagnosticLog {self.event_type} user={self.user_id} at {self.created_at}>'
+
+
 class AIAssistantQueryLog(db.Model):
     """Audit log for Master Mind AI queries and generated SQL."""
     __tablename__ = 'ai_assistant_query_log'

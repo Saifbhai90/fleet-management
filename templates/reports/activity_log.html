@@ -73,7 +73,7 @@
 </style>
 <div class="container-fluid activity-log-page">
   <h2 class="mb-4"><i class="bi bi-journal-check me-2 text-primary"></i>Activity &amp; Login Log Report</h2>
-  <p class="text-muted">Ek hi report: (1) Login sessions — kaun login hua, kab, device/browser, IP, aur session mein kya-kya kiya. (2) Client activity — device ID, action, aur <strong>latitude/longitude</strong> (jab browser location allow ho) with View on Map.</p>
+  <p class="text-muted">Ek hi report: (1) Login sessions — kaun login hua, kab, device/browser, IP, aur session mein kya-kya kiya. (2) Client activity — device ID, action, aur <strong>latitude/longitude</strong> (jab browser location allow ho) with View on Map. (3) <strong>Device diagnostics</strong> — slow load, JS error, HTTP error (user + phone model).</p>
   <p class="text-muted small mb-0"><i class="bi bi-info-circle me-1"></i>Performance ke liye pehle <strong>Date From</strong> aur <strong>Date To</strong> select karein (zyada se zyada <strong>{{ activity_log_max_days|default(10) }} din</strong>), phir Search — tab hi data load hoga.</p>
 
   {% if report_message %}
@@ -267,6 +267,53 @@
       </div>
       {% else %}
       <p class="p-4 text-muted mb-0">No client activity logs found. Lat/long aur View on Map tab aate hain jab user browser mein <strong>location allow</strong> kare aur app client-side log bheje (e.g. Dashboard open karne par).</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm mt-4">
+    <div class="card-header bg-white py-3">
+      <h5 class="mb-0"><i class="bi bi-exclamation-triangle me-2 text-warning"></i>Device diagnostics — slow load &amp; errors</h5>
+      <p class="text-muted small mb-0 mt-1">Per user / device: slow pages (&gt;8s), JS errors, HTTP 4xx/5xx, offline. Purane phone par slow ho, naye par theek — yahan device model aur OS se compare karein.</p>
+    </div>
+    <div class="card-body p-0">
+      {% if diagnostic_logs %}
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0 align-middle">
+          <thead class="table-light">
+            <tr>
+              <th>Time</th>
+              <th>User</th>
+              <th>Device ID</th>
+              <th>Type</th>
+              <th>Page</th>
+              <th>ms</th>
+              <th>HTTP</th>
+              <th>Phone / OS</th>
+              <th>Network</th>
+              <th>Message</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for d in diagnostic_logs %}
+            <tr>
+              <td><small>{{ d.created_at.strftime('%d-%m-%Y %H:%M:%S') if d.created_at else '-' }}</small></td>
+              <td>{{ d.user.full_name or d.user.username if d.user else d.user_id }}</td>
+              <td><code class="small">{{ d.device_id or '-' }}</code></td>
+              <td><span class="badge {% if d.event_type == 'js_error' %}bg-danger{% elif d.event_type == 'slow_page' or d.event_type == 'slow_server' %}bg-warning text-dark{% else %}bg-secondary{% endif %}">{{ d.event_type }}</span></td>
+              <td><small>{{ d.page_path or '-' }}</small></td>
+              <td>{{ d.duration_ms if d.duration_ms is not none else '-' }}</td>
+              <td>{{ d.status_code if d.status_code is not none else '-' }}</td>
+              <td><small>{{ d.device_model or '-' }}<br>{% if d.os_version %}<span class="text-muted">{{ d.os_version }}</span>{% endif %}</small></td>
+              <td><small>{{ d.network_type or '-' }}</small></td>
+              <td><small class="text-break">{{ (d.message or '-')[:120] }}{% if d.message and d.message|length > 120 %}…{% endif %}</small></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="p-4 text-muted mb-0">Is date range mein koi diagnostic log nahi. Naya system deploy ke baad slow page / JS error yahan dikhenge — pehle sirf server activity log tha.</p>
       {% endif %}
     </div>
   </div>

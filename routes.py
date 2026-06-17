@@ -14,7 +14,7 @@ from models import (
     WorkspaceParty, WorkspaceAccount, WorkspaceJournalEntry, WorkspaceJournalEntryLine, WorkspaceVehicleReadingSetup, WorkspaceVehicleMaintenanceBaseline, WorkspaceExpense, ExpenseDeleteCleanupJob,
     Notification, NotificationRead,
     User, Role, Permission, role_permissions,
-    LoginLog, ActivityLog, ClientActivityLog,
+    LoginLog, ActivityLog, ClientActivityLog, ClientDiagnosticLog,
     Reminder,
     AttendanceTimeControl, AttendanceTimeOverride,
     PhysicalBook, BookAssignment,
@@ -8121,6 +8121,88 @@ def api_log_activity():
     except Exception as e:
         db.session.rollback()
         return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+def _persist_client_diagnostic(
+    event_type,
+    *,
+    page_path=None,
+    message=None,
+    duration_ms=None,
+    status_code=None,
+    device_id=None,
+    device_model=None,
+    os_version=None,
+    network_type=None,
+):
+    """Store one diagnostic row; never raises to caller."""
+    user_id = session.get('user_id')
+    if not user_id:
+        return
+    try:
+        ua = (request.headers.get('User-Agent') or '')[:500] or None
+        row = ClientDiagnosticLog(
+            user_id=user_id,
+            login_log_id=session.get('login_log_id'),
+            device_id=(device_id or '')[:80] or None,
+            user_agent=ua,
+            event_type=(event_type or 'unknown')[:40],
+            page_path=(page_path or request.path or '')[:500] or None,
+            message=(message or '')[:2000] or None,
+            duration_ms=int(duration_ms) if duration_ms is not None else None,
+            status_code=int(status_code) if status_code is not None else None,
+            device_model=(device_model or '')[:120] or None,
+            os_version=(os_version or '')[:80] or None,
+            network_type=(network_type or '')[:40] or None,
+        )
+        db.session.add(row)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+
+
+@app.route('/api/client-diagnostics', methods=['POST'])
+@csrf.exempt
+def api_client_diagnostics():
+    """Batch client-side diagnostics: slow pages, JS errors, offline (per user + device)."""
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'ok': False, 'error': 'Not logged in'}), 401
+    data = request.get_json(silent=True) or {}
+    events = data.get('events') or []
+    if not isinstance(events, list):
+        return jsonify({'ok': False, 'error': 'Invalid payload'}), 400
+    saved = 0
+    ua = (request.headers.get('User-Agent') or '')[:500] or None
+    login_log_id = session.get('login_log_id')
+    for raw in events[:10]:
+        if not isinstance(raw, dict):
+            continue
+        event_type = (raw.get('event_type') or 'client')[:40]
+        try:
+            db.session.add(ClientDiagnosticLog(
+                user_id=user_id,
+                login_log_id=login_log_id,
+                device_id=(raw.get('device_id') or '')[:80] or None,
+                user_agent=ua,
+                event_type=event_type,
+                page_path=(raw.get('page_path') or '')[:500] or None,
+                message=(raw.get('message') or '')[:2000] or None,
+                duration_ms=int(raw['duration_ms']) if raw.get('duration_ms') is not None else None,
+                status_code=int(raw['status_code']) if raw.get('status_code') is not None else None,
+                device_model=(raw.get('device_model') or '')[:120] or None,
+                os_version=(raw.get('os_version') or '')[:80] or None,
+                network_type=(raw.get('network_type') or '')[:40] or None,
+            ))
+            saved += 1
+        except (TypeError, ValueError):
+            continue
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'ok': False, 'error': str(e)[:200]}), 500
+    return jsonify({'ok': True, 'saved': saved})
 
 
 # ────────────────────────────────────────────────
@@ -35586,6 +35668,7 @@ def activity_log_report():
     sessions = []
     activities_by_log = {}
     client_logs = []
+    diagnostic_logs = []
     report_ready = False
     report_message = (
         'Pehle <strong>Date From</strong> aur <strong>Date To</strong> select karein '
@@ -35672,12 +35755,30 @@ def activity_log_report():
                 query_client = query_client.filter(flt)
         client_logs = query_client.limit(1000).all()
 
+        query_diag = (
+            ClientDiagnosticLog.query.join(User)
+            .filter(_activity_log_datetime_in_range(ClientDiagnosticLog.created_at, date_from_dt, date_to_dt))
+            .order_by(ClientDiagnosticLog.created_at.desc())
+        )
+        if user_id_q:
+            query_diag = query_diag.filter(ClientDiagnosticLog.user_id == user_id_q)
+        if device_id_q:
+            flt = _multi_word_filter(device_id_q, ClientDiagnosticLog.device_id)
+            if flt is not None:
+                query_diag = query_diag.filter(flt)
+        if username_q:
+            flt = _multi_word_filter(username_q, User.username, User.full_name)
+            if flt is not None:
+                query_diag = query_diag.filter(flt)
+        diagnostic_logs = query_diag.limit(500).all()
+
     users_for_filter = User.query.order_by(User.username).all()
     return render_template(
         'reports/activity_log.html',
         sessions=sessions,
         activities_by_log=activities_by_log,
         client_logs=client_logs,
+        diagnostic_logs=diagnostic_logs,
         users_for_filter=users_for_filter,
         date_from=date_from_s,
         date_to=date_to_s,
@@ -36683,6 +36784,22 @@ def _sh_after_request(response):
                     'status': int(getattr(response, 'status_code', 0) or 0),
                     'payload_bytes': payload_bytes,
                 })
+                uid = session.get('user_id')
+                if uid and request.endpoint != 'api_client_diagnostics':
+                    status_code = int(getattr(response, 'status_code', 0) or 0)
+                    slow_html = (
+                        request.method == 'GET'
+                        and ms >= 8000
+                        and not request.path.startswith('/api/')
+                    )
+                    if status_code >= 400 or slow_html:
+                        _persist_client_diagnostic(
+                            'http_error' if status_code >= 400 else 'slow_server',
+                            page_path=request.path,
+                            message=f'{request.method} {request.path} → {status_code}',
+                            duration_ms=int(ms),
+                            status_code=status_code,
+                        )
         except Exception:
             pass
     return response

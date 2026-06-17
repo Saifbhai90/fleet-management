@@ -93,6 +93,17 @@
     window.addEventListener('load', tryFinish, { once: true });
     if (document.readyState === 'complete') tryFinish();
     window.setTimeout(finish, 45000);
+    window.setTimeout(function() {
+      if (finished) return;
+      try {
+        if (typeof window.fleetReportClientDiagnostic === 'function') {
+          window.fleetReportClientDiagnostic({
+            event_type: 'boot_timeout',
+            message: 'App open: server connect 45s+ (WiFi slow or Render wake)'
+          });
+        }
+      } catch (e3) { /* ignore */ }
+    }, 45000);
   } catch (e2) { /* ignore */ }
 })();
 </script>
