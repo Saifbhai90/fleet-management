@@ -654,6 +654,7 @@
   </style>
 </head>
 <body>
+{% include 'partials/fleet_boot_overlay.html' %}
 {% if request.host and ('127.0.0.1' in request.host or '192.168.' in request.host or 'localhost' in request.host) %}
 <div id="fleetDevBanner" style="position:fixed;top:0;left:0;right:0;z-index:99999;background:#059669;color:#fff;font-size:11px;font-weight:700;text-align:center;padding:6px 8px;">DEV · {{ request.host }} · USB/LAN server</div>
 <style>body{padding-top:28px!important;--fleet-dev-banner-h:28px;}</style>

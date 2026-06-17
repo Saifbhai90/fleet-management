@@ -1,15 +1,42 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#0f172a">
     <title>Fleet Manager</title>
     <style>
-        body { margin: 0; background: #0f172a; display: flex; align-items: center; justify-content: center; height: 100vh; }
-        p { color: #94a3b8; font-family: sans-serif; }
+        html, body {
+            margin: 0;
+            min-height: 100dvh;
+            background: #0f172a;
+            color: #e2e8f0;
+            font-family: system-ui, -apple-system, sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+        .card { text-align: center; max-width: 280px; }
+        .spinner {
+            width: 44px;
+            height: 44px;
+            margin: 0 auto 18px;
+            border: 3px solid rgba(148, 163, 184, 0.25);
+            border-top-color: #3b82f6;
+            border-radius: 50%;
+            animation: spin 0.85s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        h1 { margin: 0 0 8px; font-size: 1.05rem; font-weight: 700; color: #f8fafc; }
+        p { margin: 0; font-size: 0.88rem; line-height: 1.45; color: #94a3b8; }
     </style>
 </head>
 <body>
-    <p>Loading Fleet Manager...</p>
+    <div class="card">
+        <div class="spinner" aria-hidden="true"></div>
+        <h1>Server connect ho raha hai…</h1>
+        <p>Internet slow ho to thora wait karein</p>
+    </div>
 </body>
 </html>
