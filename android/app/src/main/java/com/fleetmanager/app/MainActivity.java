@@ -75,7 +75,9 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
     private boolean appPageLoaded = false;
     private boolean minSplashDone = false;
     private boolean webViewGuardReady = false;
-    private boolean pendingNetworkError = false;
+    private boolean webViewMainFrameFailed = false;
+    /** null = still probing; TRUE = server reachable; FALSE = confirmed unreachable. */
+    private Boolean serverReachable = null;
     private ConnectivityManager.NetworkCallback networkCallback;
     private final Runnable autoRetryRunnable = new Runnable() {
         @Override
@@ -84,17 +86,13 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
                 return;
             }
             pulseAutoRetryLabel();
-            if (hasNetworkConnectivity()) {
-                retryWebViewLoad();
-            }
+            probeServerAndMaybeReload(false);
             mainHandler.postDelayed(this, AUTO_RETRY_MS);
         }
     };
     private final Runnable splashMinRunnable = () -> {
         minSplashDone = true;
-        if (pendingNetworkError || (!appPageLoaded && !hasNetworkConnectivity())) {
-            showNetworkOverlay(false);
-        }
+        evaluatePostSplashNetworkState();
     };
 
     @Override
@@ -106,6 +104,7 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
         mainHandler = new Handler(Looper.getMainLooper());
         prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         setupNetworkOverlay();
+        runServerProbe();
         mainHandler.postDelayed(splashMinRunnable, SPLASH_MIN_MS);
 
         if (!initializeFirebase()) return;
@@ -191,8 +190,70 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
         return caps != null && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET);
     }
 
+    private String resolveServerBaseUrl() {
+        Bridge bridge = getBridge();
+        if (bridge != null) {
+            String fromBridge = bridge.getServerUrl();
+            if (fromBridge != null && !fromBridge.isEmpty()) {
+                return fromBridge.replaceAll("/+$", "");
+            }
+        }
+        return FleetServerProbe.readServerBaseUrl(this);
+    }
+
+    private void runServerProbe() {
+        if (!minSplashDone) {
+            serverReachable = null;
+        }
+        FleetServerProbe.probeServerAsync(this, resolveServerBaseUrl(), this::onServerProbeResult);
+    }
+
+    private void onServerProbeResult(boolean reachable) {
+        serverReachable = reachable;
+        if (reachable) {
+            webViewMainFrameFailed = false;
+            if (networkOverlayVisible) {
+                hideNetworkOverlay();
+            }
+            if (minSplashDone && needsWebViewReload()) {
+                loadAppUrlInWebView(false);
+            }
+        }
+        evaluatePostSplashNetworkState();
+    }
+
+    private boolean needsWebViewReload() {
+        if (appPageLoaded) {
+            return false;
+        }
+        Bridge bridge = getBridge();
+        if (bridge == null || bridge.getWebView() == null) {
+            return webViewMainFrameFailed;
+        }
+        String current = bridge.getWebView().getUrl();
+        return webViewMainFrameFailed
+                || current == null
+                || "about:blank".equals(current)
+                || current.startsWith("data:");
+    }
+
+    /** After splash: show overlay only when server probe failed (not while page is still loading). */
+    private void evaluatePostSplashNetworkState() {
+        if (!minSplashDone || appPageLoaded) {
+            return;
+        }
+        if (Boolean.TRUE.equals(serverReachable)) {
+            return;
+        }
+        if (Boolean.FALSE.equals(serverReachable) || webViewMainFrameFailed) {
+            showNetworkOverlay(false);
+        }
+    }
+
     private void showNetworkOverlay(boolean connecting) {
-        pendingNetworkError = true;
+        if (!connecting && Boolean.TRUE.equals(serverReachable)) {
+            return;
+        }
         if (!minSplashDone) {
             return;
         }
@@ -216,13 +277,18 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
     }
 
     private void hideNetworkOverlay() {
-        pendingNetworkError = false;
         networkOverlayVisible = false;
-        appPageLoaded = true;
         stopAutoRetryLoop();
         if (networkOverlayRoot != null) {
             networkOverlayRoot.setVisibility(View.GONE);
         }
+    }
+
+    private void markAppPageLoaded() {
+        appPageLoaded = true;
+        webViewMainFrameFailed = false;
+        serverReachable = true;
+        hideNetworkOverlay();
     }
 
     private void pulseAutoRetryLabel() {
@@ -241,18 +307,39 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
         mainHandler.removeCallbacks(autoRetryRunnable);
     }
 
-    private void retryWebViewLoad() {
+    private void probeServerAndMaybeReload(boolean fromManualRetry) {
+        if (!hasNetworkConnectivity()) {
+            serverReachable = false;
+            if (fromManualRetry) {
+                Toast.makeText(this, R.string.fleet_network_error_title, Toast.LENGTH_SHORT).show();
+            }
+            showNetworkOverlay(false);
+            return;
+        }
+        if (fromManualRetry) {
+            showNetworkOverlay(true);
+        }
+        FleetServerProbe.probeServerAsync(this, resolveServerBaseUrl(), reachable -> {
+            serverReachable = reachable;
+            if (reachable) {
+                loadAppUrlInWebView(fromManualRetry);
+            } else if (fromManualRetry || networkOverlayVisible) {
+                showNetworkOverlay(false);
+            }
+        });
+    }
+
+    private void loadAppUrlInWebView(boolean fromManualRetry) {
         Bridge bridge = getBridge();
         if (bridge == null || bridge.getWebView() == null) {
-            showNetworkOverlay(false);
+            if (fromManualRetry) {
+                showNetworkOverlay(false);
+            }
             return;
         }
-        if (!hasNetworkConnectivity()) {
-            showNetworkOverlay(false);
-            Toast.makeText(this, R.string.fleet_network_error_title, Toast.LENGTH_SHORT).show();
-            return;
+        if (fromManualRetry) {
+            showNetworkOverlay(true);
         }
-        showNetworkOverlay(true);
         String appUrl = bridge.getAppUrl();
         if (appUrl == null || appUrl.isEmpty()) {
             appUrl = bridge.getServerUrl();
@@ -261,7 +348,12 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
             bridge.getWebView().reload();
             return;
         }
+        webViewMainFrameFailed = false;
         bridge.getWebView().loadUrl(appUrl);
+    }
+
+    private void retryWebViewLoad() {
+        probeServerAndMaybeReload(true);
     }
 
     private void registerNetworkCallback() {
@@ -276,8 +368,10 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
             @Override
             public void onAvailable(@NonNull Network network) {
                 runOnUiThread(() -> {
-                    if (networkOverlayVisible || pendingNetworkError || !appPageLoaded) {
-                        retryWebViewLoad();
+                    if (networkOverlayVisible) {
+                        probeServerAndMaybeReload(false);
+                    } else if (minSplashDone && !appPageLoaded && !Boolean.TRUE.equals(serverReachable)) {
+                        runServerProbe();
                     }
                 });
             }
@@ -300,12 +394,21 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
 
     @Override
     public void onMainFrameLoadFailed() {
-        runOnUiThread(() -> showNetworkOverlay(false));
+        runOnUiThread(() -> {
+            webViewMainFrameFailed = true;
+            if (Boolean.TRUE.equals(serverReachable)) {
+                loadAppUrlInWebView(false);
+                return;
+            }
+            if (minSplashDone && Boolean.FALSE.equals(serverReachable)) {
+                showNetworkOverlay(false);
+            }
+        });
     }
 
     @Override
     public void onMainFrameLoadSucceeded(String url) {
-        runOnUiThread(this::hideNetworkOverlay);
+        runOnUiThread(this::markAppPageLoaded);
     }
 
     @Override
@@ -324,7 +427,13 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
     public void onResume() {
         super.onResume();
         scheduleWebViewTransparent();
-        if (networkOverlayVisible || (!appPageLoaded && minSplashDone && !hasNetworkConnectivity())) {
+        if (networkOverlayVisible) {
+            return;
+        }
+        if (appPageLoaded || !minSplashDone) {
+            return;
+        }
+        if (Boolean.FALSE.equals(serverReachable)) {
             showNetworkOverlay(false);
         }
     }
