@@ -158,7 +158,7 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
                 WebView wv = getBridge().getWebView();
                 WebSettings settings = wv.getSettings();
                 settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
-                wv.setWebChromeClient(new FleetBridgeWebChromeClient(getBridge()));
+                // Keep Capacitor BridgeWebChromeClient (GPS, camera, file picker). Do not replace it.
                 wv.setBackgroundColor(Color.TRANSPARENT);
                 wv.setLayerType(View.LAYER_TYPE_HARDWARE, null);
                 setupWebViewNetworkGuard();
