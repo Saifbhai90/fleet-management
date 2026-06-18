@@ -3209,8 +3209,12 @@ def workspace_fund_transfers_list():
     if guard:
         return guard
     page = max(request.args.get("page", 1, type=int) or 1, 1)
-    per_page = request.args.get("per_page", 25, type=int) or 25
-    if per_page not in (25, 50, 100, 200):
+    raw_per_page = request.args.get("per_page", 25, type=int) or 25
+    if raw_per_page in (25, 50, 100, 200):
+        per_page = raw_per_page
+    elif raw_per_page >= 99999:
+        per_page = 99999
+    else:
         per_page = 25
     search = (request.args.get("search") or "").strip()
     from_date = parse_date(request.args.get("from_date"))

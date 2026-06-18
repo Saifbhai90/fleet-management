@@ -3395,17 +3395,44 @@
             return !!tbl.querySelector('tbody tr[style*="display: none"]');
         }
 
-        function _fetchAllTable(cb) {
-            var localTbl = document.getElementById(tableId);
-            // If user has applied client-side filters (Excel header filter/search hide rows),
-            // honor current visible rows for print/export instead of reloading full server dataset.
-            if (_hasClientSideTableFiltering(localTbl)) {
-                cb(localTbl);
-                return;
+        function _countFleetTableDataRows(tbl) {
+            if (!tbl) return 0;
+            var n = 0;
+            tbl.querySelectorAll('tbody tr').forEach(function(tr) {
+                if (tr.querySelector('td[colspan]')) return;
+                if (tr.classList.contains('ft-upload-expand-row')) return;
+                if (tr.classList.contains('no-print')) return;
+                n += 1;
+            });
+            return n;
+        }
+
+        function _tableNeedsAllPagesFetch(tbl) {
+            if (!tbl) return false;
+            var attrTotal = tbl.getAttribute('data-fleet-pagination-total');
+            if (attrTotal != null && attrTotal !== '') {
+                var totalFromAttr = parseInt(String(attrTotal).replace(/,/g, ''), 10) || 0;
+                return totalFromAttr > _countFleetTableDataRows(tbl);
+            }
+            var showingEl = document.querySelector('.card-footer small.text-muted');
+            if (showingEl) {
+                var totalMatch = showingEl.textContent.match(/of\s+([\d,]+)/i);
+                var rangeMatch = showingEl.textContent.match(/([\d,]+)\s*[–-]\s*([\d,]+)/);
+                if (totalMatch && rangeMatch) {
+                    var total = parseInt(totalMatch[1].replace(/,/g, ''), 10) || 0;
+                    var lo = parseInt(rangeMatch[1].replace(/,/g, ''), 10) || 0;
+                    var hi = parseInt(rangeMatch[2].replace(/,/g, ''), 10) || 0;
+                    if (total > Math.max(0, hi - lo + 1)) return true;
+                }
             }
             var pager = document.querySelector('.pagination');
-            var multiPage = pager && !pager.querySelector('.page-item.disabled .bi-chevron-right');
-            if (!multiPage) {
+            return !!(pager && pager.querySelectorAll('.page-item').length > 3);
+        }
+
+        function _fetchAllTable(cb) {
+            var localTbl = document.getElementById(tableId);
+            var needsAllPages = _tableNeedsAllPagesFetch(localTbl);
+            if (!needsAllPages) {
                 cb(localTbl);
                 return;
             }
@@ -3429,7 +3456,10 @@
             var clone = tbl.cloneNode(true);
             clone.querySelectorAll('.ft-filter-wrap').forEach(function(el){ el.remove(); });
             clone.querySelectorAll('thead tr.mwo-search-row').forEach(function(el){ el.remove(); });
-            clone.querySelectorAll('tbody tr').forEach(function(r){ if(r.style.display==='none') r.remove(); });
+            clone.querySelectorAll('tbody tr').forEach(function(r){
+                if (r.style.display === 'none') r.remove();
+                else if (r.classList.contains('ft-upload-expand-row') || r.classList.contains('no-print')) r.remove();
+            });
             clone.querySelectorAll('.btn, button, a.btn').forEach(function(el){ el.closest('td') && el.closest('td').remove(); });
             clone.querySelectorAll('th[style], td[style]').forEach(function(el){ el.removeAttribute('style'); });
             clone.querySelectorAll('a').forEach(function(a){
