@@ -36,6 +36,12 @@
     </div>
   </div>
 
+  {% if preselect_driver_id %}
+  <div class="alert alert-info py-2 px-3 mb-3" style="font-size:0.88rem;">
+    <i class="bi bi-pencil-square me-1"></i>Editing driver record — form will load with current saved values. Change fields or upload new photos, then save.
+  </div>
+  {% endif %}
+
   <!-- Tab Navigation -->
   <ul class="nav nav-pills mb-4 tab-portal" id="portalTabs" role="tablist">
     <li class="nav-item" role="presentation">
@@ -101,6 +107,7 @@
                 <form method="POST" action="{{ url_for('driver_update_portal_save', update_type='cnic') }}" enctype="multipart/form-data" id="cnicUpdateForm">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                   <input type="hidden" name="driver_id" id="cnic_driver_id_hidden">
+                  <input type="hidden" name="update_source" value="{{ update_source_value|default('portal') }}">
                   <div class="row g-3 mb-3">
                     <div class="col-md-4">
                       <label class="form-label fw-semibold">CNIC No</label>
@@ -119,13 +126,14 @@
                     <div class="col-md-6">
                       <label class="form-label fw-semibold">New CNIC Front Photo</label>
                       <input type="file" name="cnic_front" class="form-control" accept=".jpg,.jpeg,.png,.gif,.webp">
+                      <div class="form-text">If expiry is updated and photo not re-uploaded, current photo moves to history and profile shows Not Uploaded.</div>
                     </div>
                     <div class="col-md-6">
                       <label class="form-label fw-semibold">New CNIC Back Photo</label>
                       <input type="file" name="cnic_back" class="form-control" accept=".jpg,.jpeg,.png,.gif,.webp">
                     </div>
                   </div>
-                  <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Update CNIC</button>
+                  <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Save CNIC Update</button>
                 </form>
               </div>
             </div>
@@ -193,6 +201,7 @@
                 <form method="POST" action="{{ url_for('driver_update_portal_save', update_type='license') }}" enctype="multipart/form-data" id="licUpdateForm">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                   <input type="hidden" name="driver_id" id="lic_driver_id_hidden">
+                  <input type="hidden" name="update_source" value="{{ update_source_value|default('portal') }}">
                   <div class="row g-3 mb-3">
                     <div class="col-md-4">
                       <label class="form-label fw-semibold">License No</label>
@@ -235,7 +244,10 @@
                       <input type="file" name="verify_license_photo" class="form-control" accept=".jpg,.jpeg,.png,.gif,.webp">
                     </div>
                   </div>
-                  <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Update License</button>
+                  <div class="alert alert-warning py-2 px-3 mb-3" style="font-size:0.82rem;">
+                    <i class="bi bi-info-circle me-1"></i>Editing existing record: dates are pre-filled. If you change dates and do <strong>not</strong> upload new photos, current license images move to history and driver profile will show <strong>Not Uploaded</strong> until new photos are added.
+                  </div>
+                  <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Save License Update</button>
                 </form>
               </div>
             </div>
@@ -302,6 +314,7 @@
                 <form method="POST" action="{{ url_for('driver_update_portal_save', update_type='bank_uniform') }}" enctype="multipart/form-data" id="bankUpdateForm">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                   <input type="hidden" name="driver_id" id="bank_driver_id_hidden">
+                  <input type="hidden" name="update_source" value="{{ update_source_value|default('portal') }}">
                   <div class="row g-3 mb-3">
                     <div class="col-md-4">
                       <label class="form-label fw-semibold">Bank Name</label>
@@ -345,7 +358,7 @@
                       </select>
                     </div>
                   </div>
-                  <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Update Bank & Uniform</button>
+                  <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Save Bank & Uniform Update</button>
                 </form>
               </div>
             </div>
@@ -580,6 +593,17 @@
   setupCascade('cnic');
   setupCascade('lic');
   setupCascade('bank');
+
+  var preselectDriverId = {{ preselect_driver_id or 'null' }};
+  var preselectTab = {{ portal_tab | default('cnic') | tojson }};
+  if (preselectDriverId) {
+    var prefixMap = {cnic: 'cnic', license: 'lic', bank_uniform: 'bank'};
+    var prefix = prefixMap[preselectTab] || 'cnic';
+    if (preselectTab === 'cnic') document.getElementById('cnic-tab')?.click();
+    if (preselectTab === 'license') document.getElementById('license-tab')?.click();
+    if (preselectTab === 'bank_uniform') document.getElementById('bank-tab')?.click();
+    loadDriverData(prefix, preselectDriverId);
+  }
 })();
 </script>
 {% endblock %}

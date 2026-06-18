@@ -71,6 +71,23 @@
     .heading-per-page-select { width: auto; border: 1px solid rgba(255,255,255,0.4); background: rgba(255,255,255,0.15); color: #fff; border-radius: 5px; font-size: 0.78rem; padding: 0.2rem 0.4rem; }
     .heading-per-page-select:focus { background: rgba(255,255,255,0.25); border-color: rgba(255,255,255,0.6); outline: none; }
     .heading-per-page-select option { color: #333; background: #fff; }
+    .event-detail-row { background: #f8fbff !important; }
+    .event-detail-row td { padding: 0 !important; border-top: none !important; }
+    .event-detail-inner { padding: 0.5rem 0.75rem 0.75rem 2.5rem; }
+    .event-detail-table { font-size: 0.78rem; margin: 0; }
+    .event-detail-table th { font-size: 0.7rem; color: #607d8b; font-weight: 600; padding: 0.35rem 0.5rem; background: #eef5fc; }
+    .event-detail-table td { padding: 0.35rem 0.5rem; vertical-align: middle; }
+    .btn-expand { border: 1px solid #90caf9; background: #e3f2fd; color: #1565c0; font-size: 0.72rem; padding: 0.15rem 0.45rem; border-radius: 4px; }
+    .btn-expand:hover { background: #bbdefb; color: #0d47a1; }
+    .summary-text { font-size: 0.76rem; color: #546e7a; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; vertical-align: middle; }
+    .field-count-badge { background: #eceff1; color: #455a64; font-size: 0.68rem; padding: 0.1rem 0.4rem; border-radius: 10px; font-weight: 600; }
+    .driver-name-link { color: #1a237e; text-decoration: none; font-weight: 600; }
+    .driver-name-link:hover { color: #0d47a1; text-decoration: underline; }
+    .action-btn { font-size: 0.72rem; padding: 0.2rem 0.5rem; border-radius: 4px; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 0.2rem; border: 1px solid transparent; cursor: pointer; }
+    .action-btn-edit { background: #e8f5e9; color: #2e7d32; border-color: #a5d6a7; }
+    .action-btn-edit:hover { background: #c8e6c9; color: #1b5e20; }
+    .action-btn-delete { background: #ffebee; color: #c62828; border-color: #ef9a9a; }
+    .action-btn-delete:hover { background: #ffcdd2; color: #b71c1c; }
     @media (max-width: 767px) {
         .filter-bar .row > div { margin-bottom: 0.45rem; }
         .stat-card { padding: 0.7rem 0.8rem; }
@@ -99,25 +116,25 @@
     <div class="row g-3 mb-3">
         <div class="col-6 col-md-3">
             <div class="stat-card stat-total">
-                <div class="stat-count">{{ pagination.total }}</div>
+                <div class="stat-count">{{ stats.total }}</div>
                 <div class="stat-label"><i class="bi bi-clock-history me-1"></i>Total Updates</div>
             </div>
         </div>
         <div class="col-6 col-md-3">
             <div class="stat-card stat-cnic">
-                <div class="stat-count" id="cnt_cnic">-</div>
+                <div class="stat-count">{{ stats.cnic }}</div>
                 <div class="stat-label"><i class="bi bi-person-vcard me-1"></i>CNIC Updates</div>
             </div>
         </div>
         <div class="col-6 col-md-3">
             <div class="stat-card stat-license">
-                <div class="stat-count" id="cnt_license">-</div>
+                <div class="stat-count">{{ stats.license }}</div>
                 <div class="stat-label"><i class="bi bi-card-checklist me-1"></i>License Updates</div>
             </div>
         </div>
         <div class="col-6 col-md-3">
             <div class="stat-card stat-bank">
-                <div class="stat-count" id="cnt_bank">-</div>
+                <div class="stat-count">{{ stats.bank_uniform }}</div>
                 <div class="stat-label"><i class="bi bi-bank me-1"></i>Bank & Uniform</div>
             </div>
         </div>
@@ -173,6 +190,7 @@
     </div>
 
     <!-- Table -->
+    {% from 'partials/driver_doc_event_fields.html' import render_doc_field_rows %}
     <div class="data-table-wrapper">
         <div class="section-heading d-flex justify-content-between align-items-center flex-wrap gap-2">
             <span><i class="bi bi-clock-history me-2"></i>Document Update History</span>
@@ -194,61 +212,91 @@
                 <thead>
                     <tr>
                         <th style="width:4%">Sr</th>
-                        <th style="width:18%">Driver</th>
+                        <th style="width:20%">Driver</th>
                         <th style="width:10%">Type</th>
-                        <th style="width:14%">Field</th>
-                        <th style="width:16%">Old Value</th>
-                        <th style="width:16%">New Value</th>
+                        <th style="width:22%">Summary</th>
+                        <th style="width:8%">Fields</th>
                         <th style="width:10%">Updated By</th>
                         <th style="width:12%">Date & Time</th>
+                        <th style="width:10%">Actions</th>
+                        <th style="width:6%">Details</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for rec in records %}
-                    <tr>
+                    {% for ev in events %}
+                    <tr class="event-main-row" data-batch="{{ ev.batch_id }}">
                         <td class="text-center"><span class="badge-sm badge-primary">{{ (pagination.page - 1) * pagination.per_page + loop.index }}</span></td>
                         <td>
-                            <div class="fw-bold" style="color:#1a237e;font-size:0.84rem;">{{ rec.driver.name if rec.driver else '—' }}</div>
+                            {% if ev.driver %}
+                            <a href="{{ url_for('report_driver_profile', driver_id=ev.driver_id) }}" class="driver-name-link" style="font-size:0.84rem;">{{ ev.driver.name }}</a>
+                            {% else %}
+                            <span class="fw-bold" style="color:#1a237e;font-size:0.84rem;">—</span>
+                            {% endif %}
                             <div style="font-size:0.72rem;color:#78909c;">
-                                {{ rec.driver.driver_id or '' }}
-                                {% if rec.driver and rec.driver.cnic_no %} · {{ rec.driver.cnic_no }}{% endif %}
+                                {{ ev.driver.driver_id or '' if ev.driver else '' }}
+                                {% if ev.driver and ev.driver.cnic_no %} · {{ ev.driver.cnic_no }}{% endif %}
                             </div>
                         </td>
                         <td>
-                            {% if rec.update_type == 'cnic' %}
+                            {% if ev.update_type == 'cnic' %}
                                 <span class="type-badge-cnic"><i class="bi bi-person-vcard me-1"></i>CNIC</span>
-                            {% elif rec.update_type == 'license' %}
+                            {% elif ev.update_type == 'license' %}
                                 <span class="type-badge-license"><i class="bi bi-card-checklist me-1"></i>License</span>
                             {% else %}
                                 <span class="type-badge-bank_uniform"><i class="bi bi-bank me-1"></i>Bank & Uniform</span>
                             {% endif %}
                         </td>
-                        <td><span class="field-tag">{{ rec.field_name | replace('_', ' ') | title }}</span></td>
-                        <td class="val-cell" title="{{ rec.old_value or '-' }}">
-                            {% if rec.old_value and rec.old_value.startswith(('http', 'uploads/')) %}
-                                <a href="{{ rec.old_value | media_url }}" target="_blank" class="text-primary" style="font-size:0.76rem;"><i class="bi bi-image me-1"></i>View</a>
-                            {% else %}
-                                {{ rec.old_value or '—' }}
-                            {% endif %}
-                        </td>
-                        <td class="val-cell" title="{{ rec.new_value or '-' }}">
-                            {% if rec.new_value and rec.new_value.startswith(('http', 'uploads/')) %}
-                                <a href="{{ rec.new_value | media_url }}" target="_blank" class="text-success" style="font-size:0.76rem;"><i class="bi bi-image me-1"></i>View</a>
-                            {% else %}
-                                {{ rec.new_value or '—' }}
-                            {% endif %}
-                        </td>
-                        <td style="font-size:0.78rem;color:#455a64;">{{ rec.updated_by or '—' }}</td>
+                        <td><span class="summary-text" title="{{ ev.summary }}">{{ ev.summary or '—' }}</span></td>
+                        <td class="text-center"><span class="field-count-badge">{{ ev.field_count }}</span></td>
+                        <td style="font-size:0.78rem;color:#455a64;">{{ ev.updated_by or '—' }}</td>
                         <td style="font-size:0.76rem;color:#78909c;">
-                            {% if rec.updated_at %}
-                                {{ rec.updated_at.strftime('%d-%m-%Y') }}<br>
-                                <span style="font-size:0.68rem;">{{ rec.updated_at.strftime('%I:%M %p') }}</span>
+                            {% if ev.updated_at %}
+                                {{ ev.updated_at.strftime('%d-%m-%Y') }}<br>
+                                <span style="font-size:0.68rem;">{{ ev.updated_at.strftime('%I:%M %p') }}</span>
                             {% else %}—{% endif %}
+                        </td>
+                        <td class="text-center">
+                            <div class="d-flex flex-column gap-1 align-items-center">
+                                {% set edit_tab = 'bank' if ev.update_type == 'bank_uniform' else ev.update_type %}
+                                <a href="{{ url_for('driver_update_portal', tab=edit_tab, driver_id=ev.driver_id, from='portal') }}"
+                                   class="action-btn action-btn-edit" title="Edit in portal">
+                                    <i class="bi bi-pencil"></i> Edit
+                                </a>
+                                {% if ev.is_deletable %}
+                                <button type="button" class="action-btn action-btn-delete btn-delete-batch"
+                                        data-batch-id="{{ ev.batch_id }}" title="Delete latest update">
+                                    <i class="bi bi-trash"></i> Delete
+                                </button>
+                                {% endif %}
+                            </div>
+                        </td>
+                        <td class="text-center">
+                            <button type="button" class="btn-expand" data-toggle-batch="{{ ev.batch_id }}" aria-expanded="false">
+                                <i class="bi bi-chevron-down"></i> View
+                            </button>
+                        </td>
+                    </tr>
+                    <tr class="event-detail-row d-none" id="detail-{{ ev.batch_id }}">
+                        <td colspan="9">
+                            <div class="event-detail-inner">
+                                <table class="table table-sm event-detail-table mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th style="width:28%">Field</th>
+                                            <th style="width:36%">Old Value</th>
+                                            <th style="width:36%">New Value</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {{ render_doc_field_rows(ev.fields) }}
+                                    </tbody>
+                                </table>
+                            </div>
                         </td>
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="8" class="text-center py-4 text-muted">
+                        <td colspan="9" class="text-center py-4 text-muted">
                             <i class="bi bi-inbox me-2" style="font-size:1.4rem;"></i>
                             <span style="font-size:0.95rem;">No document updates found. Click <strong>New Update</strong> to start.</span>
                         </td>
@@ -261,8 +309,8 @@
         {% if pagination.pages > 1 %}
         <div class="table-footer d-flex justify-content-between align-items-center flex-wrap gap-2">
             <span>
-                Showing {{ (pagination.page - 1) * pagination.per_page + 1 }}–{{ [pagination.page * pagination.per_page, pagination.total] | min }}
-                of {{ pagination.total }} records
+                Showing {{ (pagination.page - 1) * pagination.per_page + 1 if pagination.total else 0 }}–{{ [pagination.page * pagination.per_page, pagination.total] | min }}
+                of {{ pagination.total }} update{{ 's' if pagination.total != 1 else '' }}
             </span>
             <nav>
                 <ul class="pagination pagination-sm mb-0">
@@ -273,13 +321,13 @@
                         </a>
                     </li>
                     {% endif %}
-                    {% for p in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
-                        {% if p %}
+                    {% for p in pagination.iter_pages %}
+                        {% if p == '…' %}
+                        <li class="page-item disabled"><span class="page-link">…</span></li>
+                        {% else %}
                         <li class="page-item {{ 'active' if p == pagination.page }}">
                             <a class="page-link" href="{{ url_for('driver_doc_updates_list', page=p, per_page=per_page, project_id=project_id, district_id=district_id, update_type=update_type, q=q) }}">{{ p }}</a>
                         </li>
-                        {% else %}
-                        <li class="page-item disabled"><span class="page-link">…</span></li>
                         {% endif %}
                     {% endfor %}
                     {% if pagination.has_next %}
@@ -296,34 +344,69 @@
     </div>
 </div>
 
+{% include 'partials/doc_photo_viewer.html' %}
 {{ nav_from_hidden() }}
 
 <script>
 (function() {
-    // Quick client-side search within visible rows
+    function csrfToken() {
+        var m = document.querySelector('meta[name="csrf-token"]');
+        return m ? m.content : '';
+    }
+
+    document.querySelectorAll('.btn-delete-batch').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var batchId = this.getAttribute('data-batch-id');
+            if (!batchId) return;
+            if (!confirm('Delete this update and restore the driver to previous values?')) return;
+            var body = 'csrf_token=' + encodeURIComponent(csrfToken());
+            fetch('/driver-doc-updates/delete/' + encodeURIComponent(batchId), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRFToken': csrfToken()
+                },
+                body: body
+            })
+            .then(function(r) { return r.json().then(function(d) { return { ok: r.ok, data: d }; }); })
+            .then(function(res) {
+                if (res.data && res.data.ok) {
+                    window.location.reload();
+                } else {
+                    alert((res.data && res.data.message) || 'Delete failed.');
+                }
+            })
+            .catch(function() { alert('Delete failed.'); });
+        });
+    });
+
     var searchInput = document.getElementById('tableRTSearch');
     if (searchInput) {
         searchInput.addEventListener('input', function() {
             var val = this.value.toLowerCase().trim();
-            var rows = document.querySelectorAll('#updatesTable tbody tr');
-            rows.forEach(function(row) {
-                if (!val) { row.style.display = ''; return; }
-                row.style.display = row.textContent.toLowerCase().indexOf(val) > -1 ? '' : 'none';
+            document.querySelectorAll('#updatesTable tbody tr.event-main-row').forEach(function(row) {
+                var batch = row.getAttribute('data-batch');
+                var detail = batch ? document.getElementById('detail-' + batch) : null;
+                var show = !val || row.textContent.toLowerCase().indexOf(val) > -1;
+                row.style.display = show ? '' : 'none';
+                if (detail && !show) detail.classList.add('d-none');
             });
         });
     }
 
-    // Count badges by type from visible page data
-    var cnic = 0, lic = 0, bank = 0;
-    document.querySelectorAll('#updatesTable tbody .type-badge-cnic').forEach(function() { cnic++; });
-    document.querySelectorAll('#updatesTable tbody .type-badge-license').forEach(function() { lic++; });
-    document.querySelectorAll('#updatesTable tbody .type-badge-bank_uniform').forEach(function() { bank++; });
-    var ce = document.getElementById('cnt_cnic');
-    var le = document.getElementById('cnt_license');
-    var be = document.getElementById('cnt_bank');
-    if (ce) ce.textContent = cnic;
-    if (le) le.textContent = lic;
-    if (be) be.textContent = bank;
+    document.querySelectorAll('[data-toggle-batch]').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var batch = this.getAttribute('data-toggle-batch');
+            var detail = document.getElementById('detail-' + batch);
+            if (!detail) return;
+            var open = detail.classList.toggle('d-none') === false;
+            this.setAttribute('aria-expanded', open ? 'true' : 'false');
+            this.innerHTML = open
+                ? '<i class="bi bi-chevron-up"></i> Hide'
+                : '<i class="bi bi-chevron-down"></i> View';
+        });
+    });
 })();
 </script>
 {% endblock %}

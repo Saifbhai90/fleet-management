@@ -1,0 +1,24 @@
+{% macro render_doc_photo_cell(value, label) %}
+{% if value and (value.startswith('http') or value.startswith('uploads/')) %}
+<button type="button" class="doc-hist-photo-btn" onclick="openDocModal('{{ value | media_url }}', '{{ label | e }}')">
+    <img src="{{ value | media_url }}" class="doc-hist-thumb" alt="" loading="lazy">
+    <span>View photo</span>
+</button>
+{% else %}
+{{ value or '—' }}
+{% endif %}
+{% endmacro %}
+
+{% macro render_doc_field_rows(fields) %}
+{% for fld in fields %}
+<tr>
+    <td><span class="field-tag">{{ fld.field_name | replace('_', ' ') | title }}</span></td>
+    <td class="val-cell" title="{{ fld.old_value or '-' }}">
+        {{ render_doc_photo_cell(fld.old_value, (fld.field_name | replace('_', ' ') | title) ~ ' (before)') }}
+    </td>
+    <td class="val-cell" title="{{ fld.new_value or '-' }}">
+        {{ render_doc_photo_cell(fld.new_value, (fld.field_name | replace('_', ' ') | title) ~ ' (after)') }}
+    </td>
+</tr>
+{% endfor %}
+{% endmacro %}

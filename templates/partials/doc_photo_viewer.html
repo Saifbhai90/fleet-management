@@ -1,0 +1,189 @@
+{# Inline lightbox for document photos — include once per page that needs openDocModal() #}
+<style>
+  #docViewer {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 20050;
+    background: rgba(0, 0, 0, 0.92);
+    flex-direction: column;
+  }
+  #docViewer.is-open { display: flex !important; }
+  #docViewer .doc-viewer-toolbar {
+    height: 54px;
+    background: #111;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 14px;
+    border-bottom: 1px solid #333;
+    flex-shrink: 0;
+  }
+  #docViewer .doc-viewer-title {
+    flex: 1;
+    color: #ddd;
+    font-size: 0.875rem;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  #docViewer .doc-viewer-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 8px 14px;
+    border: none;
+    border-radius: 5px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    white-space: nowrap;
+    color: #fff;
+  }
+  #docViewer .doc-viewer-btn:hover { filter: brightness(1.12); color: #fff; }
+  #docViewer .doc-viewer-btn-print { background: #1565c0; }
+  #docViewer .doc-viewer-btn-dl { background: #2e7d32; }
+  #docViewer .doc-viewer-btn-close { background: #b71c1c; }
+  #docViewer .doc-viewer-stage {
+    flex: 1;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 16px;
+    background: #1a1a1a;
+  }
+  #docViewer .doc-viewer-stage img {
+    max-width: min(100%, 1100px);
+    height: auto;
+    border-radius: 6px;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.7);
+  }
+  #docViewer .doc-viewer-stage iframe {
+    width: min(100%, 1100px);
+    height: calc(100vh - 70px);
+    border: none;
+    border-radius: 6px;
+    background: #fff;
+  }
+  .doc-hist-photo-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    border: 1px solid #cfe2ff;
+    background: #f8fbff;
+    border-radius: 6px;
+    padding: 0.2rem 0.45rem 0.2rem 0.2rem;
+    font-size: 0.74rem;
+    color: #1565c0;
+    cursor: pointer;
+    max-width: 100%;
+  }
+  .doc-hist-photo-btn:hover { background: #e3f2fd; color: #0d47a1; }
+  .doc-hist-thumb {
+    width: 36px;
+    height: 36px;
+    object-fit: cover;
+    border-radius: 4px;
+    border: 1px solid #dee2e6;
+    flex-shrink: 0;
+  }
+</style>
+
+<div id="docViewer" role="dialog" aria-modal="true" aria-hidden="true">
+  <div class="doc-viewer-toolbar">
+    <span id="viewerTitle" class="doc-viewer-title"></span>
+    <button type="button" id="viewerPrint" class="doc-viewer-btn doc-viewer-btn-print" onclick="window.print()">&#128438; Print</button>
+    <a id="viewerDl" href="#" download="" class="doc-viewer-btn doc-viewer-btn-dl">&#11015; Download</a>
+    <button type="button" class="doc-viewer-btn doc-viewer-btn-close" onclick="closeDocViewer()">&#10005; Close</button>
+  </div>
+  <div class="doc-viewer-stage" id="viewerStage" onclick="if(event.target===this)closeDocViewer()">
+    <img id="viewerImg" src="" alt="" style="display:none;">
+    <iframe id="viewerFrame" src="" title="" style="display:none;"></iframe>
+  </div>
+</div>
+
+<script>
+(function() {
+  if (window.__docPhotoViewerReady) return;
+  window.__docPhotoViewerReady = true;
+
+  window.closeDocViewer = function() {
+    var viewer = document.getElementById('docViewer');
+    if (!viewer) return;
+    var sv = parseInt(viewer.dataset.scrollY || '0', 10);
+    viewer.classList.remove('is-open');
+    viewer.setAttribute('aria-hidden', 'true');
+    document.getElementById('viewerImg').src = '';
+    document.getElementById('viewerImg').style.display = 'none';
+    var frame = document.getElementById('viewerFrame');
+    frame.src = '';
+    frame.style.display = 'none';
+    document.body.style.position = '';
+    document.body.style.top = '';
+    document.body.style.width = '';
+    document.body.style.overflow = '';
+    document.documentElement.style.overflow = '';
+    window.scrollTo(0, sv);
+  };
+
+  window.openDocModal = function(url, title) {
+    if (!url) return;
+    var isPdf = /\.pdf(\?|$)/i.test(url);
+    var proxyUrl = (url.startsWith('http') && url.indexOf(location.hostname) === -1)
+      ? '/image-proxy?url=' + encodeURIComponent(url)
+      : url;
+    var dlName = (title || 'file').replace(/[^\w\s-]/g, '') + (isPdf ? '.pdf' : '');
+
+    var viewer = document.getElementById('docViewer');
+    if (!viewer) {
+      window.open(proxyUrl, '_blank');
+      return;
+    }
+    if (viewer.parentElement !== document.body) {
+      document.body.appendChild(viewer);
+    }
+
+    document.getElementById('viewerTitle').textContent = title || '';
+    var dlEl = document.getElementById('viewerDl');
+    dlEl.href = proxyUrl;
+    dlEl.setAttribute('download', dlName);
+
+    var img = document.getElementById('viewerImg');
+    var frame = document.getElementById('viewerFrame');
+    if (isPdf) {
+      img.style.display = 'none';
+      img.src = '';
+      frame.style.display = 'block';
+      frame.src = proxyUrl;
+      frame.title = title || 'Document';
+    } else {
+      frame.style.display = 'none';
+      frame.src = '';
+      img.style.display = 'block';
+      img.src = proxyUrl;
+      img.alt = title || '';
+    }
+
+    var sv = window.scrollY || window.pageYOffset || 0;
+    viewer.dataset.scrollY = sv;
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+    document.body.style.position = 'fixed';
+    document.body.style.top = '-' + sv + 'px';
+    document.body.style.width = '100%';
+    viewer.classList.add('is-open');
+    viewer.setAttribute('aria-hidden', 'false');
+  };
+
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+      var viewer = document.getElementById('docViewer');
+      if (viewer && viewer.classList.contains('is-open')) closeDocViewer();
+    }
+  });
+})();
+</script>

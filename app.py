@@ -420,6 +420,8 @@ if _run_startup_tasks:
                 ('vehicle', 'vehicle_family', 'VARCHAR(100)'),
                 ('driver', 'license_valid_from', 'DATE'),
                 ('driver', 'verify_license_photo_path', 'VARCHAR(500)'),
+                ('driver_document_history', 'batch_id', 'VARCHAR(36)'),
+                ('driver_document_history', 'update_source', 'VARCHAR(20)'),
             ]
             for _tbl, _col, _coltype in _col_additions:
                 if _tbl in _inspector.get_table_names():

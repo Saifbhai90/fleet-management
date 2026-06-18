@@ -37116,6 +37116,11 @@ def report_driver_profile(driver_id):
             driver_update_vehicle_choices = _driver_update_vehicle_choices(ctx['driver'])
     except Exception:
         pass
+    doc_history_counts = {'cnic': 0, 'license': 0, 'bank_uniform': 0}
+    if session.get('is_master'):
+        from driver_doc_history_utils import backfill_driver_doc_batch_ids, fetch_driver_doc_history_counts
+        backfill_driver_doc_batch_ids(db.session)
+        doc_history_counts = fetch_driver_doc_history_counts(db.session, driver_id)
     return render_template(
         'report_driver_profile.html',
         public_view=False,
@@ -37126,6 +37131,7 @@ def report_driver_profile(driver_id):
         hide_edit=hide_edit,
         driver_update_parts=driver_update_parts,
         driver_update_vehicle_choices=driver_update_vehicle_choices,
+        doc_history_counts=doc_history_counts,
         **ctx,
     )
 
@@ -38278,7 +38284,13 @@ def tracker_automation_download_zip(job_id):
 def driver_doc_updates_list():
     if not session.get('is_master'):
         abort(403)
-    from models import DriverDocumentHistory
+    from driver_doc_history_utils import (
+        backfill_driver_doc_batch_ids,
+        count_doc_update_stats,
+        paginate_doc_update_events,
+    )
+
+    backfill_driver_doc_batch_ids(db.session)
 
     project_id = request.args.get('project_id', type=int) or 0
     district_id = request.args.get('district_id', type=int) or 0
@@ -38287,28 +38299,22 @@ def driver_doc_updates_list():
     per_page = request.args.get('per_page', 20, type=int)
     page = request.args.get('page', 1, type=int)
 
-    query = DriverDocumentHistory.query.join(Driver, DriverDocumentHistory.driver_id == Driver.id)
-
-    if project_id:
-        query = query.filter(Driver.project_id == project_id)
-    if district_id:
-        query = query.filter(Driver.district_id == district_id)
-    if update_type:
-        query = query.filter(DriverDocumentHistory.update_type == update_type)
-    if q:
-        like = f'%{q}%'
-        query = query.filter(db.or_(
-            Driver.name.ilike(like),
-            Driver.driver_id.ilike(like),
-            Driver.cnic_no.ilike(like),
-            DriverDocumentHistory.field_name.ilike(like),
-            DriverDocumentHistory.updated_by.ilike(like),
-        ))
-
-    query = query.options(db.joinedload(DriverDocumentHistory.driver))
-    pagination = query.order_by(DriverDocumentHistory.updated_at.desc()).paginate(
-        page=page, per_page=per_page, error_out=False)
-    records = pagination.items
+    pagination = paginate_doc_update_events(
+        db.session,
+        page=page,
+        per_page=per_page,
+        project_id=project_id,
+        district_id=district_id,
+        update_type=update_type,
+        q=q,
+    )
+    stats = count_doc_update_stats(
+        db.session,
+        project_id=project_id,
+        district_id=district_id,
+        update_type=update_type,
+        q=q,
+    )
 
     projects_list = Project.query.order_by(Project.name).all()
     project_choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in projects_list]
@@ -38317,8 +38323,9 @@ def driver_doc_updates_list():
 
     return render_template(
         'driver_doc_updates_list.html',
-        records=records,
+        events=pagination['items'],
         pagination=pagination,
+        stats=stats,
         per_page=per_page,
         project_id=project_id,
         district_id=district_id,
@@ -38330,14 +38337,74 @@ def driver_doc_updates_list():
     )
 
 
+@app.route('/driver-doc-updates/delete/<batch_id>', methods=['POST'])
+def driver_doc_update_delete(batch_id):
+    if not session.get('is_master'):
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({'ok': False, 'message': 'Access denied'}), 403
+        abort(403)
+    update_type = (request.form.get('update_type') or '').strip() or None
+    if update_type and update_type not in ('cnic', 'license', 'bank_uniform'):
+        return jsonify({'ok': False, 'message': 'Invalid update type'}), 400
+    from driver_doc_history_utils import delete_doc_update_batch
+    ok, msg = delete_doc_update_batch(db.session, batch_id, update_type=update_type)
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify({'ok': ok, 'message': msg}), (200 if ok else 400)
+    flash(msg, 'success' if ok else 'danger')
+    return redirect(request.referrer or url_for('driver_doc_updates_list'))
+
+
 @app.route('/driver-update-portal')
 def driver_update_portal():
     if not session.get('is_master'):
         abort(403)
     projects = Project.query.order_by(Project.name).all()
     active_tab = request.args.get('tab', 'cnic')
-    return render_template('driver_update_portal.html', projects=projects, active_tab=active_tab,
-                           **_master_nav_back())
+    if active_tab == 'bank':
+        active_tab = 'bank_uniform'
+    preselect_driver_id = request.args.get('driver_id', type=int)
+    from_profile = request.args.get('from') == 'profile'
+    tab_map = {'cnic': 'cnic', 'license': 'license', 'bank_uniform': 'bank'}
+    portal_tab = tab_map.get(active_tab, 'cnic')
+    return render_template(
+        'driver_update_portal.html',
+        projects=projects,
+        active_tab=active_tab if active_tab != 'bank_uniform' else 'bank',
+        portal_tab=portal_tab,
+        preselect_driver_id=preselect_driver_id,
+        from_profile=from_profile,
+        update_source_value='profile' if from_profile else 'portal',
+        **_master_nav_back(),
+    )
+
+
+@app.route('/api/driver-profile/<int:driver_id>/doc-update-history/<update_type>')
+def api_driver_doc_update_history(driver_id, update_type):
+    """JSON — grouped document update history for one driver + type (profile popup)."""
+    if not session.get('is_master'):
+        return jsonify({'error': 'Access denied'}), 403
+    if update_type not in ('cnic', 'license', 'bank_uniform'):
+        return jsonify({'error': 'Invalid update type'}), 400
+    driver = db.session.get(Driver, driver_id)
+    if not driver:
+        return jsonify({'error': 'Driver not found'}), 404
+    from driver_doc_history_utils import fetch_driver_doc_events_json
+    events = fetch_driver_doc_events_json(db.session, driver_id, update_type, limit=50)
+    for ev in events:
+        for fld in ev.get('fields') or []:
+            if fld.get('old_is_media') and fld.get('old_value'):
+                fld['old_media_url'] = media_url_filter(fld['old_value'])
+            if fld.get('new_is_media') and fld.get('new_value'):
+                fld['new_media_url'] = media_url_filter(fld['new_value'])
+    labels = {'cnic': 'CNIC', 'license': 'License', 'bank_uniform': 'Bank & Uniform'}
+    return jsonify({
+        'driver_id': driver_id,
+        'driver_name': driver.name or '',
+        'update_type': update_type,
+        'update_label': labels.get(update_type, update_type),
+        'events': events,
+        'total': len(events),
+    })
 
 
 @app.route('/api/driver-update-portal/driver-info/<int:driver_id>')
@@ -38366,6 +38433,9 @@ def driver_update_portal_info(driver_id):
         'phone1': driver.phone1 or '',
         'driver_district': driver.driver_district or '',
         'vehicle_no': vehicle_no,
+        'project_id': driver.project_id,
+        'district_id': driver.district_id,
+        'vehicle_id': driver.vehicle_id,
         'photo_url': media_url_filter(driver.photo_path) if driver.photo_path else '',
         # CNIC
         'cnic_no': driver.cnic_no or '',
@@ -38402,6 +38472,9 @@ def driver_update_portal_save(update_type):
         abort(403)
 
     from models import DriverDocumentHistory
+    from driver_doc_history_utils import ensure_driver_doc_history_schema
+
+    ensure_driver_doc_history_schema(db.session)
 
     driver_id = request.form.get('driver_id', type=int)
     if not driver_id:
@@ -38414,6 +38487,18 @@ def driver_update_portal_save(update_type):
         return redirect(url_for('driver_update_portal', tab=update_type))
 
     updated_by = session.get('user_id_display') or session.get('user_id') or 'system'
+    batch_id = str(uuid.uuid4())
+    update_source = (request.form.get('update_source') or 'portal').strip()
+    if update_source not in ('profile', 'portal'):
+        update_source = 'portal'
+
+    def _portal_redirect(tab, did=None):
+        kw = {'tab': tab}
+        if did:
+            kw['driver_id'] = did
+        if update_source == 'profile':
+            kw['from'] = 'profile'
+        return redirect(url_for('driver_update_portal', **kw))
 
     # R2 upload helper (same pattern as driver_form)
     from r2_storage import upload_image_file as _r2_img, R2_PUBLIC_URL as _r2_url
@@ -38436,13 +38521,38 @@ def driver_update_portal_save(update_type):
     def _record_change(field_name, old_val, new_val):
         if str(old_val or '') != str(new_val or ''):
             db.session.add(DriverDocumentHistory(
+                batch_id=batch_id,
                 driver_id=driver.id,
                 update_type=update_type,
                 field_name=field_name,
                 old_value=str(old_val or ''),
                 new_value=str(new_val or ''),
                 updated_by=str(updated_by),
+                update_source=update_source,
             ))
+            return True
+        return False
+
+    def _handle_photo_field(field_name, file_key, folder, archive_if_missing):
+        """Upload new photo, or archive current photo to history when doc fields changed but file not re-uploaded."""
+        old = getattr(driver, field_name) or ''
+        uploaded = _upload_img(request.files.get(file_key), folder)
+        if uploaded:
+            if _record_change(field_name, old, uploaded):
+                setattr(driver, field_name, uploaded)
+            return True
+        if archive_if_missing and old:
+            if _record_change(field_name, old, ''):
+                setattr(driver, field_name, None)
+            return True
+        return False
+
+    changes_made = False
+
+    def _track(ok):
+        nonlocal changes_made
+        if ok:
+            changes_made = True
 
     try:
         if update_type == 'cnic':
@@ -38457,25 +38567,25 @@ def driver_update_portal_save(update_type):
                     flash('Invalid CNIC Expiry Date format. Use dd-mm-yyyy.', 'danger')
                     return redirect(url_for('driver_update_portal', tab='cnic'))
 
+            doc_fields_changed = False
             if new_expiry:
-                _record_change('cnic_expiry_date', driver.cnic_expiry_date, new_expiry)
-                driver.cnic_expiry_date = new_expiry
-                # Recalculate status
+                if _record_change('cnic_expiry_date', driver.cnic_expiry_date, new_expiry):
+                    driver.cnic_expiry_date = new_expiry
+                    doc_fields_changed = True
+                    changes_made = True
                 _today = pk_date()
                 new_status = 'Valid' if new_expiry >= _today else 'Expired'
-                _record_change('cnic_status', driver.cnic_status, new_status)
-                driver.cnic_status = new_status
+                if _record_change('cnic_status', driver.cnic_status, new_status):
+                    driver.cnic_status = new_status
+                    doc_fields_changed = True
+                    changes_made = True
 
-            # Upload new CNIC photos
-            front = _upload_img(request.files.get('cnic_front'), 'drivers/cnic')
-            if front:
-                _record_change('cnic_front_path', driver.cnic_front_path, front)
-                driver.cnic_front_path = front
+            _track(_handle_photo_field('cnic_front_path', 'cnic_front', 'drivers/cnic', doc_fields_changed))
+            _track(_handle_photo_field('cnic_back_path', 'cnic_back', 'drivers/cnic', doc_fields_changed))
 
-            back = _upload_img(request.files.get('cnic_back'), 'drivers/cnic')
-            if back:
-                _record_change('cnic_back_path', driver.cnic_back_path, back)
-                driver.cnic_back_path = back
+            if not changes_made:
+                flash('No changes to save.', 'warning')
+                return _portal_redirect('cnic', driver_id)
 
             db.session.commit()
             flash(f"CNIC details for '{driver.name}' updated successfully!", 'success')
@@ -38502,33 +38612,32 @@ def driver_update_portal_save(update_type):
                     flash('Invalid License Valid To date format.', 'danger')
                     return redirect(url_for('driver_update_portal', tab='license'))
 
+            doc_fields_changed = False
             if new_valid_from is not None:
-                _record_change('license_valid_from', driver.license_valid_from, new_valid_from)
-                driver.license_valid_from = new_valid_from
+                if _record_change('license_valid_from', driver.license_valid_from, new_valid_from):
+                    driver.license_valid_from = new_valid_from
+                    doc_fields_changed = True
+                    changes_made = True
 
             if new_valid_to:
-                _record_change('license_expiry_date', driver.license_expiry_date, new_valid_to)
-                driver.license_expiry_date = new_valid_to
+                if _record_change('license_expiry_date', driver.license_expiry_date, new_valid_to):
+                    driver.license_expiry_date = new_valid_to
+                    doc_fields_changed = True
+                    changes_made = True
                 _today = pk_date()
                 new_status = 'Valid' if new_valid_to >= _today else 'Expired'
-                _record_change('license_status', driver.license_status, new_status)
-                driver.license_status = new_status
+                if _record_change('license_status', driver.license_status, new_status):
+                    driver.license_status = new_status
+                    doc_fields_changed = True
+                    changes_made = True
 
-            # Upload photos
-            front = _upload_img(request.files.get('license_front'), 'drivers/license')
-            if front:
-                _record_change('license_front_path', driver.license_front_path, front)
-                driver.license_front_path = front
+            _track(_handle_photo_field('license_front_path', 'license_front', 'drivers/license', doc_fields_changed))
+            _track(_handle_photo_field('license_back_path', 'license_back', 'drivers/license', doc_fields_changed))
+            _track(_handle_photo_field('verify_license_photo_path', 'verify_license_photo', 'drivers/license', doc_fields_changed))
 
-            back = _upload_img(request.files.get('license_back'), 'drivers/license')
-            if back:
-                _record_change('license_back_path', driver.license_back_path, back)
-                driver.license_back_path = back
-
-            verify = _upload_img(request.files.get('verify_license_photo'), 'drivers/license')
-            if verify:
-                _record_change('verify_license_photo_path', driver.verify_license_photo_path, verify)
-                driver.verify_license_photo_path = verify
+            if not changes_made:
+                flash('No changes to save.', 'warning')
+                return _portal_redirect('license', driver_id)
 
             db.session.commit()
             flash(f"License details for '{driver.name}' updated successfully!", 'success')
@@ -38545,8 +38654,13 @@ def driver_update_portal_save(update_type):
             for field_name, new_val in fields.items():
                 old_val = getattr(driver, field_name, '') or ''
                 if new_val != old_val:
-                    _record_change(field_name, old_val, new_val)
-                    setattr(driver, field_name, new_val or None)
+                    if _record_change(field_name, old_val, new_val):
+                        setattr(driver, field_name, new_val or None)
+                        changes_made = True
+
+            if not changes_made:
+                flash('No changes to save.', 'warning')
+                return _portal_redirect('bank', driver_id)
 
             db.session.commit()
             flash(f"Bank & Uniform details for '{driver.name}' updated successfully!", 'success')
@@ -38558,4 +38672,5 @@ def driver_update_portal_save(update_type):
         db.session.rollback()
         flash(f'Error saving update: {str(e)}', 'danger')
 
-    return redirect(url_for('driver_update_portal', tab=update_type))
+    tab_redirect = 'bank' if update_type == 'bank_uniform' else update_type
+    return _portal_redirect(tab_redirect, driver_id)

@@ -266,6 +266,7 @@ class Driver(db.Model):
 class DriverDocumentHistory(db.Model):
     __tablename__ = 'driver_document_history'
     id = db.Column(db.Integer, primary_key=True)
+    batch_id = db.Column(db.String(36), nullable=True, index=True)  # groups one form submit
     driver_id = db.Column(db.Integer, db.ForeignKey('driver.id'), nullable=False, index=True)
     update_type = db.Column(db.String(30), nullable=False)  # 'cnic', 'license', 'bank_uniform'
     field_name = db.Column(db.String(50), nullable=False)   # e.g. 'cnic_expiry_date', 'cnic_front_path'
@@ -273,6 +274,7 @@ class DriverDocumentHistory(db.Model):
     new_value = db.Column(db.Text, nullable=True)
     updated_by = db.Column(db.String(100), nullable=True)
     updated_at = db.Column(db.DateTime, default=pk_now, nullable=False)
+    update_source = db.Column(db.String(20), nullable=True)  # 'profile' | 'portal'
 
     driver = db.relationship('Driver', backref=db.backref('document_history', lazy='dynamic'))
 

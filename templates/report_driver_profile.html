@@ -335,7 +335,30 @@ body.driver-profile-public-view .profile-page { min-height: auto !important; }
     border-radius: 8px; padding: 1rem 1.1rem;
     background: #fafafa;
   }
-  .doc-card-title { font-size: .78rem; font-weight: 700; color: var(--text-mid); margin-bottom: .75rem; }
+  .doc-card-title { font-size: .78rem; font-weight: 700; color: var(--text-mid); margin-bottom: .75rem; display: flex; align-items: center; justify-content: space-between; gap: .5rem; flex-wrap: wrap; }
+  .doc-card-actions { display: flex; gap: .35rem; flex-wrap: wrap; }
+  .doc-hist-btn {
+    border: 1px solid #90caf9; background: #e3f2fd; color: #1565c0;
+    font-size: .66rem; font-weight: 700; padding: .12rem .45rem; border-radius: 5px;
+    cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: .2rem;
+  }
+  .doc-hist-btn:hover { background: #bbdefb; color: #0d47a1; }
+  .doc-edit-btn {
+    border: 1px solid #a5d6a7; background: #e8f5e9; color: #2e7d32;
+    font-size: .66rem; font-weight: 700; padding: .12rem .45rem; border-radius: 5px;
+    text-decoration: none; display: inline-flex; align-items: center; gap: .2rem;
+  }
+  .doc-edit-btn:hover { background: #c8e6c9; color: #1b5e20; }
+  .doc-history-event { border: 1px solid var(--border); border-radius: 8px; margin-bottom: .6rem; overflow: hidden; }
+  .doc-history-event-head { background: #f8fafc; padding: .55rem .75rem; font-size: .76rem; color: var(--text-mid); }
+  .doc-history-event-actions { display: flex; gap: .35rem; margin-top: .35rem; flex-wrap: wrap; }
+  .doc-history-fields { width: 100%; font-size: .74rem; border-collapse: collapse; }
+  .doc-history-fields th { background: #f1f5f9; font-size: .68rem; padding: .35rem .5rem; text-align: left; }
+  .doc-history-fields td { padding: .35rem .5rem; border-top: 1px solid #f1f5f9; vertical-align: top; }
+  #docHistoryModal { z-index: 10620 !important; }
+  #docHistoryModal .modal-dialog { margin: 1.75rem auto; max-height: calc(100vh - 3.5rem); }
+  body.doc-history-modal-open .modal-backdrop { z-index: 10610 !important; }
+  body.doc-history-modal-open { overflow: hidden !important; }
   .doc-dates { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; margin-top: .65rem; }
   .validity-badge {
     display: inline-block; margin-top: .55rem;
@@ -1088,7 +1111,17 @@ body.driver-profile-public-view .profile-page { min-height: auto !important; }
     <div class="doc-grid">
       <!-- CNIC -->
       <div class="doc-card {{ 'doc-expired' if cnic_expired }}">
-        <div class="doc-card-title"><i class="bi bi-person-vcard me-1"></i>CNIC Details</div>
+        <div class="doc-card-title">
+          <span><i class="bi bi-person-vcard me-1"></i>CNIC Details</span>
+          {% if session.get('is_master') and not public_view %}
+          <span class="doc-card-actions">
+            {% if doc_history_counts is defined and doc_history_counts.cnic > 0 %}
+            <button type="button" class="doc-hist-btn" onclick="openDocHistoryModal('cnic')"><i class="bi bi-clock-history"></i> History</button>
+            {% endif %}
+            <a href="{{ url_for('driver_update_portal', tab='cnic', driver_id=driver.id, from='profile') }}" class="doc-edit-btn"><i class="bi bi-pencil"></i> Update</a>
+          </span>
+          {% endif %}
+        </div>
         <div class="info-item mb-2">
           <div class="info-label"><i class="bi bi-hash"></i> Number</div>
           <div class="info-value fw-bold">{{ driver.cnic_no|cnic_fmt if driver.cnic_no else '—' }}</div>
@@ -1115,7 +1148,17 @@ body.driver-profile-public-view .profile-page { min-height: auto !important; }
 
       <!-- License -->
       <div class="doc-card {{ 'doc-expired' if lic_expired }}">
-        <div class="doc-card-title"><i class="bi bi-card-checklist me-1"></i>License Details</div>
+        <div class="doc-card-title">
+          <span><i class="bi bi-card-checklist me-1"></i>License Details</span>
+          {% if session.get('is_master') and not public_view %}
+          <span class="doc-card-actions">
+            {% if doc_history_counts is defined and doc_history_counts.license > 0 %}
+            <button type="button" class="doc-hist-btn" onclick="openDocHistoryModal('license')"><i class="bi bi-clock-history"></i> History</button>
+            {% endif %}
+            <a href="{{ url_for('driver_update_portal', tab='license', driver_id=driver.id, from='profile') }}" class="doc-edit-btn"><i class="bi bi-pencil"></i> Update</a>
+          </span>
+          {% endif %}
+        </div>
         <div class="info-grid info-grid-2col" style="gap:0.5rem 1rem;">
           <div class="info-item">
             <div class="info-label"><i class="bi bi-hash"></i> Number</div>
@@ -1161,6 +1204,14 @@ body.driver-profile-public-view .profile-page { min-height: auto !important; }
     <div class="section-title">
       <span class="section-icon"><i class="bi bi-bank2"></i></span>
       <span>Official Details</span>
+      {% if session.get('is_master') and not public_view %}
+      <span class="doc-card-actions ms-auto">
+        {% if doc_history_counts is defined and doc_history_counts.bank_uniform > 0 %}
+        <button type="button" class="doc-hist-btn" onclick="openDocHistoryModal('bank_uniform')"><i class="bi bi-clock-history"></i> History</button>
+        {% endif %}
+        <a href="{{ url_for('driver_update_portal', tab='bank', driver_id=driver.id, from='profile') }}" class="doc-edit-btn"><i class="bi bi-pencil"></i> Update</a>
+      </span>
+      {% endif %}
     </div>
     <div class="info-grid info-grid-2col">
       <div class="info-item">
@@ -1348,147 +1399,10 @@ body.driver-profile-public-view .profile-page { min-height: auto !important; }
     {% endif %}
   </div>
 
-  <!-- ── Mobile inline viewer (shown inside WebView — no new-tab / browser dialog) ── -->
-  <div id="docViewer"
-       style="display:none;position:fixed;inset:0;z-index:9999;
-              background:#111;flex-direction:column;">
-    <!-- Toolbar -->
-    <div style="height:54px;background:#111;display:flex;align-items:center;
-                gap:8px;padding:0 14px;border-bottom:1px solid #333;flex-shrink:0;">
-      <span id="viewerTitle"
-            style="flex:1;color:#ddd;font-size:.875rem;font-weight:600;
-                   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
-      <a id="viewerDl" href="#" download=""
-         style="display:inline-flex;align-items:center;gap:5px;padding:8px 14px;
-                background:#2e7d32;color:#fff;border-radius:5px;font-size:.8rem;
-                font-weight:600;text-decoration:none;white-space:nowrap;">
-        &#11015; Download</a>
-      <button onclick="closeDocViewer()"
-              style="display:inline-flex;align-items:center;gap:5px;padding:8px 14px;
-                     background:#b71c1c;color:#fff;border:none;border-radius:5px;
-                     font-size:.8rem;font-weight:600;cursor:pointer;white-space:nowrap;">
-        &#10005; Close</button>
-    </div>
-    <!-- Scrollable image/pdf area -->
-    <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;
-                display:flex;justify-content:center;align-items:flex-start;
-                padding:16px;background:#1a1a1a;">
-      <img id="viewerImg" src="" alt=""
-           style="max-width:100%;height:auto;border-radius:6px;
-                  display:block;box-shadow:0 4px 24px rgba(0,0,0,.7);">
-    </div>
-  </div>
+  <!-- ── Mobile inline viewer: shared lightbox partial ── -->
+  {% include 'partials/doc_photo_viewer.html' %}
 
   <script>
-  /* ── Detect mobile / WebView context (Flutter Android WebView) ── */
-  function _isMobileCtx() {
-    var ua = navigator.userAgent || '';
-    /* Android WebView always has "wv" token or "WebView" */
-    if (/wv\b|WebView/i.test(ua)) return true;
-    /* Any Android or iOS device */
-    if (/Android|iPhone|iPad|iPod/i.test(ua)) return true;
-    /* Fallback: touch-only narrow screen */
-    return ('ontouchstart' in window) && window.innerWidth <= 900;
-  }
-
-  /* ── Close mobile inline viewer ── */
-  function closeDocViewer() {
-    var viewer = document.getElementById('docViewer');
-    var sv = parseInt(viewer.dataset.scrollY || '0', 10);
-    viewer.style.display = 'none';
-    document.getElementById('viewerImg').src = '';
-    /* Restore body from position:fixed scroll-lock */
-    document.body.style.position = '';
-    document.body.style.top = '';
-    document.body.style.width = '';
-    document.body.style.overflow = '';
-    document.documentElement.style.overflow = '';
-    window.scrollTo(0, sv);
-  }
-
-  /* ── Image / File viewer ──
-     Mobile  → inline overlay (Download + Close only, no browser intent)
-     Desktop → new tab (Print + Download + Close)                        */
-  function openDocModal(url, title) {
-    var isPdf = /\.pdf(\?|$)/i.test(url) || /application\/pdf/i.test(url);
-    /* Route cross-origin R2 URLs through the Flask proxy */
-    var proxyUrl = (url && url.startsWith('http') && url.indexOf(location.hostname) === -1)
-      ? '/image-proxy?url=' + encodeURIComponent(url)
-      : url;
-    var dlName = (title || 'file').replace(/[^\w\s-]/g, '') + (isPdf ? '.pdf' : '');
-
-    /* ── Mobile / WebView: show inline overlay — no window.open() ── */
-    if (_isMobileCtx()) {
-      document.getElementById('viewerTitle').textContent = title || '';
-      var dlEl = document.getElementById('viewerDl');
-      dlEl.href = proxyUrl;
-      dlEl.setAttribute('download', dlName);
-      document.getElementById('viewerImg').src = proxyUrl;
-      var viewer = document.getElementById('docViewer');
-      /* Move to <body> root so position:fixed escapes any ancestor container
-         (Flutter WebView does not honour fixed inside nested overflow elements) */
-      if (viewer.parentElement !== document.body) {
-        document.body.appendChild(viewer);
-      }
-      /* Lock page scroll behind the overlay */
-      var _sv = window.scrollY || window.pageYOffset || 0;
-      viewer.dataset.scrollY = _sv;
-      document.documentElement.style.overflow = 'hidden';
-      document.body.style.overflow = 'hidden';
-      document.body.style.position = 'fixed';
-      document.body.style.top = '-' + _sv + 'px';
-      document.body.style.width = '100%';
-      viewer.style.display = 'flex';
-      return;
-    }
-
-    /* ── Desktop: open new tab with Print · Download · Close ── */
-    var safeTitle = (title || '').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-    var html = [
-      '<!DOCTYPE html><html lang="en"><head>',
-      '<meta charset="UTF-8">',
-      '<meta name="viewport" content="width=device-width,initial-scale=1">',
-      '<title>' + safeTitle + '</title>',
-      '<style>',
-      '*{box-sizing:border-box;margin:0;padding:0}',
-      'body{background:#1a1a1a;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;min-height:100vh}',
-      '.bar{position:fixed;top:0;left:0;right:0;height:54px;background:#111;',
-        'display:flex;align-items:center;gap:8px;padding:0 14px;z-index:999;',
-        'border-bottom:1px solid #333}',
-      '.bar-title{flex:1;color:#ddd;font-size:.88rem;font-weight:600;',
-        'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-right:6px}',
-      '.btn{display:inline-flex;align-items:center;gap:5px;padding:7px 14px;',
-        'border:none;border-radius:5px;cursor:pointer;font-size:.8rem;font-weight:600;',
-        'text-decoration:none;white-space:nowrap;transition:filter .15s;color:#fff}',
-      '.btn:hover{filter:brightness(1.15)}',
-      '.btn-print{background:#1565c0}',
-      '.btn-dl{background:#2e7d32}',
-      '.btn-close{background:#b71c1c}',
-      '.content{margin-top:54px;display:flex;justify-content:center;',
-        'align-items:flex-start;padding:20px;min-height:calc(100vh - 54px)}',
-      'img{max-width:100%;height:auto;border-radius:6px;box-shadow:0 6px 32px rgba(0,0,0,.7)}',
-      'iframe{width:100%;height:calc(100vh - 54px);border:none;background:#fff}',
-      '@media print{.bar{display:none}.content{margin-top:0;padding:0}',
-        'img{max-width:100%;width:100%;box-shadow:none}iframe{height:100vh}}',
-      '</style></head><body>',
-      '<div class="bar">',
-        '<span class="bar-title">' + safeTitle + '</span>',
-        '<button class="btn btn-print" onclick="window.print()">&#128438; Print</button>',
-        '<a class="btn btn-dl" href="' + proxyUrl + '" download="' + dlName + '">&#11015; Download</a>',
-        '<button class="btn btn-close" onclick="window.close()">&#10005; Close</button>',
-      '</div>',
-      '<div class="content">',
-        isPdf ? '<iframe src="' + proxyUrl + '"></iframe>'
-              : '<img src="' + proxyUrl + '" alt="' + safeTitle + '">',
-      '</div></body></html>'
-    ].join('');
-
-    var win = window.open('', '_blank');
-    if (!win) { window.open(proxyUrl, '_blank'); return; }
-    win.document.write(html);
-    win.document.close();
-  }
-
   /* ── Print: pre-fetch R2 imgs via proxy → blob URLs for reliable print rendering ──
      beforeprint/afterprint work for BOTH the Print button AND native Ctrl+P           */
   var _printBlobMap = {};   /* src → blobUrl */
@@ -2336,6 +2250,139 @@ body.driver-profile-public-view .profile-page { min-height: auto !important; }
   </button>
 
   <script>
+  {% if session.get('is_master') and not public_view %}
+  function _mountDocHistoryModal() {
+    var modalEl = document.getElementById('docHistoryModal');
+    if (modalEl && modalEl.parentElement !== document.body) {
+      document.body.appendChild(modalEl);
+    }
+    return modalEl;
+  }
+
+  function _cleanupDocHistoryModal() {
+    document.body.classList.remove('doc-history-modal-open', 'modal-open');
+    document.body.style.removeProperty('overflow');
+    document.body.style.removeProperty('padding-right');
+    document.querySelectorAll('.modal-backdrop').forEach(function(el) { el.remove(); });
+  }
+
+  var _docHistoryModalInst = null;
+  function _getDocHistoryModal() {
+    var modalEl = _mountDocHistoryModal();
+    if (!modalEl || !window.bootstrap || !window.bootstrap.Modal) return null;
+    if (!_docHistoryModalInst) {
+      _docHistoryModalInst = new window.bootstrap.Modal(modalEl, {
+        backdrop: true,
+        focus: true,
+        keyboard: true
+      });
+      modalEl.addEventListener('shown.bs.modal', function() {
+        document.body.classList.add('doc-history-modal-open');
+      });
+      modalEl.addEventListener('hidden.bs.modal', _cleanupDocHistoryModal);
+    }
+    return _docHistoryModalInst;
+  }
+
+  document.addEventListener('DOMContentLoaded', _mountDocHistoryModal);
+
+  var _docHistoryUpdateType = null;
+
+  function _docHistoryEditUrl(updateType) {
+    var tab = updateType === 'bank_uniform' ? 'bank' : updateType;
+    return '/driver-update-portal?tab=' + encodeURIComponent(tab) + '&driver_id={{ driver.id }}&from=profile';
+  }
+
+  function _csrfToken() {
+    var m = document.querySelector('meta[name="csrf-token"]');
+    return m ? m.content : '';
+  }
+
+  function deleteDocHistoryBatch(batchId, updateType) {
+    if (!confirm('Delete this update and restore previous values on the driver profile?')) return;
+    var body = 'update_type=' + encodeURIComponent(updateType) + '&csrf_token=' + encodeURIComponent(_csrfToken());
+    fetch('/driver-doc-updates/delete/' + encodeURIComponent(batchId), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-CSRFToken': _csrfToken()
+      },
+      body: body
+    })
+    .then(function(r) { return r.json().then(function(d) { return { ok: r.ok, data: d }; }); })
+    .then(function(res) {
+      if (res.data && res.data.ok) {
+        window.location.reload();
+      } else {
+        alert((res.data && res.data.message) || 'Delete failed.');
+      }
+    })
+    .catch(function() { alert('Delete failed.'); });
+  }
+
+  function openDocHistoryModal(updateType) {
+    _docHistoryUpdateType = updateType;
+    var labels = {cnic: 'CNIC', license: 'License', bank_uniform: 'Bank & Uniform'};
+    var title = document.getElementById('docHistoryModalTitle');
+    var body = document.getElementById('docHistoryModalBody');
+    if (title) title.textContent = (labels[updateType] || 'Document') + ' Update History';
+    if (body) body.innerHTML = '<div class="text-center text-muted py-4"><span class="spinner-border spinner-border-sm me-2"></span>Loading…</div>';
+    var modal = _getDocHistoryModal();
+    if (!modal) return;
+    modal.show();
+    fetch('/api/driver-profile/{{ driver.id }}/doc-update-history/' + updateType)
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (!body) return;
+        if (data.error) { body.innerHTML = '<p class="text-danger mb-0">' + data.error + '</p>'; return; }
+        if (!data.events || !data.events.length) {
+          body.innerHTML = '<p class="text-muted mb-0"><i class="bi bi-info-circle me-1"></i>No update history yet.</p>';
+          return;
+        }
+        var html = '';
+        data.events.forEach(function(ev) {
+          html += '<div class="doc-history-event">';
+          html += '<div class="doc-history-event-head"><strong>' + (ev.updated_at || '') + '</strong>';
+          if (ev.updated_by) html += ' · by ' + ev.updated_by;
+          if (ev.update_source_label) {
+            html += ' · <span style="font-size:.7rem;padding:.1rem .35rem;border-radius:4px;background:' +
+              (ev.update_source === 'profile' ? '#e8f5e9;color:#2e7d32' : '#e3f2fd;color:#1565c0') +
+              ';">' + ev.update_source_label + '</span>';
+          }
+          html += ' · ' + ev.field_count + ' field' + (ev.field_count === 1 ? '' : 's');
+          if (ev.summary) html += '<br><span class="text-muted">' + ev.summary + '</span>';
+          html += '<div class="doc-history-event-actions">';
+          html += '<a href="' + _docHistoryEditUrl(updateType) + '" class="doc-edit-btn"><i class="bi bi-pencil"></i> Edit</a>';
+          if (ev.is_deletable && ev.batch_id) {
+            html += '<button type="button" class="doc-hist-btn" style="border-color:#ef9a9a;background:#ffebee;color:#c62828;" onclick="deleteDocHistoryBatch(\'' + ev.batch_id + '\', \'' + updateType + '\')"><i class="bi bi-trash"></i> Delete</button>';
+          }
+          html += '</div>';
+          html += '</div><table class="doc-history-fields"><thead><tr><th>Field</th><th>Old</th><th>New</th></tr></thead><tbody>';
+          (ev.fields || []).forEach(function(f) {
+            html += '<tr><td>' + (f.field_label || f.field_name) + '</td>';
+            html += '<td>' + docHistCell(f.old_value, f.old_is_media, f.old_media_url) + '</td>';
+            html += '<td>' + docHistCell(f.new_value, f.new_is_media, f.new_media_url) + '</td></tr>';
+          });
+          html += '</tbody></table></div>';
+        });
+        body.innerHTML = html;
+      })
+      .catch(function() {
+        if (body) body.innerHTML = '<p class="text-danger mb-0">Failed to load history.</p>';
+      });
+  }
+  function docHistCell(val, isMedia, mediaUrl) {
+    if (!val) return '—';
+    if (isMedia) {
+      var url = (mediaUrl || val).replace(/'/g, "\\'");
+      return '<button type="button" class="doc-hist-photo-btn" onclick="openDocModal(\'' + url + '\', \'Photo\')">' +
+        '<img src="' + url + '" class="doc-hist-thumb" alt="" loading="lazy">' +
+        '<span>View photo</span></button>';
+    }
+    return String(val).replace(/</g, '&lt;');
+  }
+  {% endif %}
   /* ── Copy phone details to clipboard (Name + Label + Number + Vehicle) ── */
   function copyPhoneDetails(label, phone, btn) {
     var lines = [];
@@ -2536,6 +2583,22 @@ body.driver-profile-public-view .profile-page { min-height: auto !important; }
 {% endif %}
 
 </div>
+
+{% if session.get('is_master') and not public_view %}
+<div class="modal fade" id="docHistoryModal" tabindex="-1" aria-labelledby="docHistoryModalLabel" aria-hidden="true" data-bs-backdrop="true" data-bs-keyboard="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h5 class="modal-title" id="docHistoryModalLabel" style="font-size:1rem;"><i class="bi bi-clock-history me-2"></i><span id="docHistoryModalTitle">Update History</span></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body p-3" id="docHistoryModalBody">
+        <div class="text-center text-muted py-4"><span class="spinner-border spinner-border-sm me-2"></span>Loading…</div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
 
 {% if driver_update_parts is defined %}
 <div class="modal fade" id="driverUpdateTextModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="false" data-bs-keyboard="true">
