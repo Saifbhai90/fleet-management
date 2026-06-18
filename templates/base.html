@@ -3469,9 +3469,9 @@
             // Remove Edit/Actions columns and their corresponding cells
             var ths = clone.querySelectorAll('thead th');
             var indicesToRemove = [];
-            ths.forEach(function(th, index){
+            clone.querySelectorAll('thead th').forEach(function(th, index){
                 var t = th.textContent.trim();
-                if (t === 'Edit' || t === 'Actions' || t === 'Action'){
+                if (th.classList.contains('no-export') || t === 'Edit' || t === 'Actions' || t === 'Action'){
                     indicesToRemove.push(index);
                     th.remove();
                 }
@@ -3487,6 +3487,237 @@
                 }
             });
             return clone;
+        }
+
+        function _fleetBaseFilename() {
+            var base = (csvFilename || 'export.csv').replace(/\.(csv|xlsx|pdf)$/i, '');
+            return base || 'export';
+        }
+
+        function _fleetDownloadBlob(blob, filename) {
+            if (window.FleetBridge && typeof window.FleetBridge.downloadBlob === 'function') {
+                return window.FleetBridge.downloadBlob(blob, filename);
+            }
+            var a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(function() {
+                document.body.removeChild(a);
+                URL.revokeObjectURL(a.href);
+            }, 400);
+            return Promise.resolve();
+        }
+
+        function _fleetLoadScript(src) {
+            return new Promise(function(resolve, reject) {
+                var existing = document.querySelector('script[data-fleet-src="' + src + '"]');
+                if (existing) {
+                    if (existing.getAttribute('data-fleet-loaded') === '1') {
+                        resolve();
+                        return;
+                    }
+                    existing.addEventListener('load', function() { resolve(); });
+                    existing.addEventListener('error', function() { reject(new Error('Script load failed')); });
+                    return;
+                }
+                var scr = document.createElement('script');
+                scr.src = src;
+                scr.setAttribute('data-fleet-src', src);
+                scr.onload = function() {
+                    scr.setAttribute('data-fleet-loaded', '1');
+                    resolve();
+                };
+                scr.onerror = function() { reject(new Error('Script load failed')); };
+                document.head.appendChild(scr);
+            });
+        }
+
+        function _fleetTableToCsvBlob(clone) {
+            var headers = [];
+            clone.querySelectorAll('thead th').forEach(function(th) {
+                headers.push('"' + th.textContent.trim().replace(/"/g, '""') + '"');
+            });
+            var csvRows = [headers.join(',')];
+            clone.querySelectorAll('tbody tr').forEach(function(tr) {
+                if (tr.cells.length <= 1) return;
+                var cells = [];
+                tr.querySelectorAll('td').forEach(function(td) {
+                    cells.push('"' + td.textContent.trim().replace(/"/g, '""') + '"');
+                });
+                csvRows.push(cells.join(','));
+            });
+            var foot = clone.querySelector('tfoot tr');
+            if (foot) {
+                var fc = [];
+                foot.querySelectorAll('td').forEach(function(td) {
+                    fc.push('"' + td.textContent.trim().replace(/"/g, '""') + '"');
+                });
+                csvRows.push(fc.join(','));
+            }
+            return new Blob(['\uFEFF' + csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+        }
+
+        function _fleetTableToAoa(clone) {
+            var aoa = [];
+            var headerRow = [];
+            clone.querySelectorAll('thead th').forEach(function(th) {
+                headerRow.push(th.textContent.trim());
+            });
+            if (headerRow.length) aoa.push(headerRow);
+            clone.querySelectorAll('tbody tr').forEach(function(tr) {
+                if (tr.cells.length <= 1) return;
+                var row = [];
+                tr.querySelectorAll('td').forEach(function(td) {
+                    row.push(td.textContent.trim());
+                });
+                if (row.length) aoa.push(row);
+            });
+            var foot = clone.querySelector('tfoot tr');
+            if (foot) {
+                var footRow = [];
+                foot.querySelectorAll('td, th').forEach(function(td) {
+                    footRow.push(td.textContent.trim());
+                });
+                if (footRow.length) aoa.push(footRow);
+            }
+            return aoa;
+        }
+
+        function _fleetExportCsv(clone) {
+            return _fleetDownloadBlob(_fleetTableToCsvBlob(clone), _fleetBaseFilename() + '.csv');
+        }
+
+        function _fleetExportExcel(clone) {
+            var serverUrl = exportBtn && exportBtn.getAttribute('data-export-url');
+            if (serverUrl) {
+                var qs = new URLSearchParams(window.location.search || '');
+                qs.delete('page');
+                qs.delete('per_page');
+                window.location.href = serverUrl + (qs.toString() ? ('?' + qs.toString()) : '');
+                return Promise.resolve();
+            }
+            return _fleetLoadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js').then(function() {
+                if (!window.XLSX) throw new Error('Excel library not available');
+                var ws = window.XLSX.utils.aoa_to_sheet(_fleetTableToAoa(clone));
+                var wb = window.XLSX.utils.book_new();
+                window.XLSX.utils.book_append_sheet(wb, ws, (title || 'Report').substring(0, 31));
+                var out = window.XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+                return _fleetDownloadBlob(new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), _fleetBaseFilename() + '.xlsx');
+            });
+        }
+
+        function _fleetExportPdf(clone) {
+            return _fleetLoadScript('https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.2/html2pdf.bundle.min.js').then(function() {
+                var wrap = document.createElement('div');
+                wrap.style.cssText = 'padding:12px;font-family:Arial,sans-serif;background:#fff;';
+                var h3 = document.createElement('h3');
+                h3.textContent = title || 'Report';
+                h3.style.cssText = 'text-align:center;margin:0 0 12px;font-size:16px;';
+                wrap.appendChild(h3);
+                wrap.appendChild(clone);
+                var pdfName = _fleetBaseFilename() + '.pdf';
+                var h2p = window.html2pdf;
+                if (!h2p) throw new Error('PDF library not available');
+                return h2p().set({
+                    margin: [6, 4, 6, 4],
+                    filename: pdfName,
+                    image: { type: 'jpeg', quality: 0.92 },
+                    html2canvas: { scale: 2, useCORS: true, logging: false },
+                    jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
+                    pagebreak: { mode: ['css', 'legacy'] }
+                }).from(wrap).output('blob').then(function(blob) {
+                    return _fleetDownloadBlob(blob, pdfName);
+                });
+            });
+        }
+
+        var _fleetExportMenuEl = null;
+        function _closeFleetExportMenu() {
+            if (_fleetExportMenuEl) {
+                _fleetExportMenuEl.remove();
+                _fleetExportMenuEl = null;
+            }
+        }
+
+        function _showFleetExportMenu(anchorBtn) {
+            _closeFleetExportMenu();
+            if (!document.getElementById('fleet-export-menu-style')) {
+                var st = document.createElement('style');
+                st.id = 'fleet-export-menu-style';
+                st.textContent =
+                    '.fleet-export-menu{position:fixed;z-index:100060;min-width:168px;background:#fff;border:1px solid #dee2e6;border-radius:8px;box-shadow:0 10px 28px rgba(15,23,42,.18);padding:4px 0;overflow:hidden;}' +
+                    '.fleet-export-menu button{display:flex;align-items:center;gap:8px;width:100%;border:0;background:transparent;padding:8px 14px;font-size:.82rem;color:#1e293b;text-align:left;cursor:pointer;}' +
+                    '.fleet-export-menu button:hover{background:#f1f5f9;}' +
+                    '.fleet-export-menu button .bi{font-size:1rem;width:18px;text-align:center;}';
+                document.head.appendChild(st);
+            }
+            var menu = document.createElement('div');
+            menu.className = 'fleet-export-menu';
+            menu.setAttribute('role', 'menu');
+            [
+                { format: 'excel', icon: 'bi-file-earmark-excel', label: 'Excel', color: '#157347' },
+                { format: 'pdf', icon: 'bi-file-earmark-pdf', label: 'PDF', color: '#dc3545' },
+                { format: 'csv', icon: 'bi-filetype-csv', label: '.csv file', color: '#0d6efd' }
+            ].forEach(function(opt) {
+                var btn = document.createElement('button');
+                btn.type = 'button';
+                btn.setAttribute('data-fleet-export-format', opt.format);
+                btn.innerHTML = '<i class="bi ' + opt.icon + '" style="color:' + opt.color + '"></i><span>' + opt.label + '</span>';
+                btn.addEventListener('click', function(ev) {
+                    ev.preventDefault();
+                    ev.stopPropagation();
+                    _runFleetExport(opt.format);
+                });
+                menu.appendChild(btn);
+            });
+            document.body.appendChild(menu);
+            _fleetExportMenuEl = menu;
+            var rect = anchorBtn.getBoundingClientRect();
+            var left = rect.left;
+            var top = rect.bottom + 4;
+            if (left + menu.offsetWidth > window.innerWidth - 8) left = rect.right - menu.offsetWidth;
+            if (top + menu.offsetHeight > window.innerHeight - 8) top = rect.top - menu.offsetHeight - 4;
+            menu.style.left = Math.max(8, left) + 'px';
+            menu.style.top = Math.max(8, top) + 'px';
+        }
+
+        function _runFleetExport(format) {
+            _closeFleetExportMenu();
+            if (!exportBtn) return;
+            exportBtn.disabled = true;
+            exportBtn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Loading...';
+            _fetchAllTable(function(tbl) {
+                if (!tbl) {
+                    exportBtn.disabled = false;
+                    _restoreExport();
+                    return;
+                }
+                var clone = _cleanTable(tbl);
+                var job;
+                if (format === 'excel') job = _fleetExportExcel(clone);
+                else if (format === 'pdf') job = _fleetExportPdf(clone);
+                else job = _fleetExportCsv(clone);
+                Promise.resolve(job).catch(function(err) {
+                    alert((err && err.message) ? err.message : 'Export failed. Please try again.');
+                }).finally(function() {
+                    exportBtn.disabled = false;
+                    _restoreExport();
+                });
+            });
+        }
+
+        if (!window._fleetExportMenuDocBound) {
+            window._fleetExportMenuDocBound = true;
+            document.addEventListener('click', function(e) {
+                if (!e.target.closest('.fleet-export-menu') && !e.target.closest('#btnExportReport')) {
+                    _closeFleetExportMenu();
+                }
+            });
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') _closeFleetExportMenu();
+            });
         }
 
         var _fleetPreviewCss =
@@ -3589,39 +3820,18 @@
             });
         }
         if (exportBtn) {
-            exportBtn.addEventListener('click', function() {
-                exportBtn.disabled = true; exportBtn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Loading...';
-                _fetchAllTable(function(tbl) {
-                    if (!tbl) { exportBtn.disabled = false; _restoreExport(); return; }
-                    var clone = _cleanTable(tbl);
-                    var headers = [];
-                    clone.querySelectorAll('thead th').forEach(function(th){
-                        headers.push('"' + th.textContent.trim().replace(/"/g,'""') + '"');
-                    });
-                    var csvRows = [headers.join(',')];
-                    clone.querySelectorAll('tbody tr').forEach(function(tr){
-                        if(tr.cells.length <= 1) return;
-                        var cells = [];
-                        tr.querySelectorAll('td').forEach(function(td){
-                            cells.push('"' + td.textContent.trim().replace(/"/g,'""') + '"');
-                        });
-                        csvRows.push(cells.join(','));
-                    });
-                    var foot = clone.querySelector('tfoot tr');
-                    if(foot){
-                        var fc = [];
-                        foot.querySelectorAll('td').forEach(function(td){ fc.push('"' + td.textContent.trim().replace(/"/g,'""') + '"'); });
-                        csvRows.push(fc.join(','));
+            if (exportBtn.dataset.fleetExportMenuBound !== '1') {
+                exportBtn.dataset.fleetExportMenuBound = '1';
+                exportBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (_fleetExportMenuEl) {
+                        _closeFleetExportMenu();
+                        return;
                     }
-                    var csv = '\uFEFF' + csvRows.join('\n');
-                    var blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
-                    var a = document.createElement('a');
-                    a.href = URL.createObjectURL(blob);
-                    a.download = csvFilename;
-                    a.click();
-                    exportBtn.disabled = false; _restoreExport();
+                    _showFleetExportMenu(exportBtn);
                 });
-            });
+            }
         }
     };
     </script>

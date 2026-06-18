@@ -951,22 +951,6 @@ if (window.fleetTableEnhance) window.fleetTableEnhance('maintenanceTable');
 if (window.fleetPrintExport) window.fleetPrintExport('maintenanceTable', 'Maintenance Expense', 'Maintenance_Expense.csv');
 
 (function() {
-  var exportBtn = document.getElementById('btnExportReport');
-  if (!exportBtn) return;
-  exportBtn.addEventListener('click', function(e) {
-    e.preventDefault();
-    e.stopImmediatePropagation();
-    var baseUrl = exportBtn.getAttribute('data-export-url') || '/maintenance-expenses/export';
-    var qs = new URLSearchParams(window.location.search || '');
-    qs.delete('page');
-    qs.delete('per_page');
-    var url = baseUrl + (qs.toString() ? ('?' + qs.toString()) : '');
-    window.location.href = url;
-  }, true);
-})();
-</script>
-<script>
-(function() {
   var panel = document.getElementById('mwoOpenListPanel');
   var toggleBtn = document.getElementById('btnMwoOpenPanelToggle');
   function setMwoOpen(open) {
