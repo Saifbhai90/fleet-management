@@ -16,15 +16,13 @@ import android.os.Environment;
 import android.view.View;
 import android.view.ViewGroup;
 import android.util.Log;
-import android.webkit.ConsoleMessage;
-import android.webkit.WebChromeClient;
+import android.webkit.WebSettings;
+import android.webkit.WebView;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.PowerManager;
 import android.provider.Settings;
 import android.webkit.URLUtil;
-import android.webkit.WebSettings;
-import android.webkit.WebView;
 import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -160,14 +158,7 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
                 WebView wv = getBridge().getWebView();
                 WebSettings settings = wv.getSettings();
                 settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
-                wv.setWebChromeClient(new WebChromeClient() {
-                    @Override
-                    public boolean onConsoleMessage(ConsoleMessage msg) {
-                        Log.d("FleetWebConsole", msg.message() + " -- line "
-                                + msg.lineNumber() + " of " + msg.sourceId());
-                        return true;
-                    }
-                });
+                wv.setWebChromeClient(new FleetBridgeWebChromeClient(getBridge()));
                 wv.setBackgroundColor(Color.TRANSPARENT);
                 wv.setLayerType(View.LAYER_TYPE_HARDWARE, null);
                 setupWebViewNetworkGuard();
