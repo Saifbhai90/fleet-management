@@ -155,6 +155,42 @@
     }
     .ws-slip-field-hint.ok { color: #157347; font-weight: 600; }
     .ws-slip-field-hint.verify { color: #9a6700; font-weight: 700; }
+    .ws-ref-dup-warn {
+      font-size: .72rem; line-height: 1.35; margin-top: .2rem;
+      color: #856404; background: #fff8e6; border: 1px solid #ffeeba;
+      border-radius: 6px; padding: .28rem .5rem;
+    }
+    .ws-ref-dup-backdrop {
+      position: fixed; inset: 0; z-index: 1050;
+      background: rgba(15, 23, 42, 0.32); display: none;
+    }
+    .ws-ref-dup-backdrop.is-open { display: block; }
+    .ws-ref-dup-panel {
+      position: fixed; left: 50%; top: 50%; z-index: 1055;
+      transform: translate(-50%, -50%);
+      width: min(480px, calc(100vw - 24px));
+      border: 1px solid #fed7aa; border-radius: 12px;
+      background: #fff; box-shadow: 0 16px 40px rgba(15, 23, 42, 0.22);
+      display: none;
+    }
+    .ws-ref-dup-panel.is-open { display: block; }
+    .ws-ref-dup-panel__header {
+      display: flex; align-items: flex-start; justify-content: space-between; gap: .75rem;
+      padding: .75rem 1rem; background: linear-gradient(180deg, #fff7ed 0%, #fffbeb 100%);
+      border-bottom: 1px solid #fed7aa; border-radius: 12px 12px 0 0;
+    }
+    .ws-ref-dup-panel__title { font-size: .95rem; font-weight: 700; color: #7c2d12; margin: 0; }
+    .ws-ref-dup-panel__subtitle { font-size: .72rem; color: #9a3412; font-weight: 600; margin-top: .1rem; }
+    .ws-ref-dup-panel__body { padding: .85rem 1rem; font-size: .86rem; color: #475569; line-height: 1.5; }
+    .ws-ref-dup-panel__detail {
+      margin-top: .65rem; padding: .6rem .7rem; border-radius: 6px;
+      border: 1px solid #fecaca; border-left: 4px solid #b91c1c;
+      background: #fef2f2; font-size: .8rem; color: #7f1d1d;
+    }
+    .ws-ref-dup-panel__footer {
+      display: flex; justify-content: flex-end; gap: .5rem;
+      padding: .65rem 1rem 1rem; border-top: 1px solid #f1f3f5;
+    }
     .ws-slip-teach-wrap { max-height: 62vh; overflow: auto; border: 1px solid #dee2e6; border-radius: 10px; background: #f8f9fa; transition: background .2s ease; }
     .ws-slip-teach-stage { position: relative; display: block; width: 100%; line-height: 0; }
     .ws-slip-teach-stage img { display: block; width: 100%; max-width: 100%; height: auto; user-select: none; }
@@ -179,7 +215,7 @@
   </style>
 
   <div class="ws-transfer-form-wrap" id="wsTransferFormWrap" data-slip-template="{{ '1' if not row else '0' }}">
-    <form method="post" enctype="multipart/form-data" id="wsTransferForm" novalidate>
+    <form method="post" enctype="multipart/form-data" id="wsTransferForm" novalidate{% if row %} data-record-id="{{ row.id }}"{% endif %}>
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="row g-3 ws-tf-split" id="wsTfSplit">
         <div class="col-xl-7 ws-tf-leftcol">
@@ -263,6 +299,7 @@
                   <label class="form-label">Reference No</label>
                   <input type="text" id="wsTransferRefInput" name="reference_no" class="form-control" value="{{ row.reference_no if row else '' }}">
                   <div class="ws-slip-hint-slot"><div id="wsSlipHintRef" class="ws-slip-field-hint d-none" aria-live="polite"></div></div>
+                  <div id="wsRefDuplicateWarn" class="ws-ref-dup-warn d-none" role="alert" aria-live="polite"></div>
                 </div>
                 <div class="col-md-9">
                   <label class="form-label">Description</label>
@@ -357,6 +394,22 @@
       </div>
 
     </form>
+  </div>
+</div>
+
+<div id="wsRefDupBackdrop" class="ws-ref-dup-backdrop" aria-hidden="true"></div>
+<div id="wsRefDupPanel" class="ws-ref-dup-panel" role="alertdialog" aria-modal="true" aria-labelledby="wsRefDupPanelLabel" aria-hidden="true">
+  <div class="ws-ref-dup-panel__header">
+    <div>
+      <h6 id="wsRefDupPanelLabel" class="ws-ref-dup-panel__title"><i class="bi bi-exclamation-triangle-fill text-warning me-1"></i>Duplicate Reference</h6>
+      <div class="ws-ref-dup-panel__subtitle">Yeh reference pehle save ho chuki hai</div>
+    </div>
+    <button type="button" class="btn-close btn-close-sm" id="wsRefDupCloseBtn" aria-label="Close"></button>
+  </div>
+  <div class="ws-ref-dup-panel__body" id="wsRefDupPanelBody"></div>
+  <div class="ws-ref-dup-panel__footer">
+    <button type="button" class="btn btn-outline-secondary btn-sm" id="wsRefDupCancelBtn">Cancel</button>
+    <button type="button" class="btn btn-warning btn-sm" id="wsRefDupContinueBtn">Continue Anyway</button>
   </div>
 </div>
 
@@ -467,6 +520,132 @@ document.addEventListener('DOMContentLoaded', function() {
   var pmSelect = document.getElementById('wsPaymentModeSelect');
   var refInput = document.getElementById('wsTransferRefInput');
   var formEl = document.getElementById('wsTransferForm');
+  var refDupWarnEl = document.getElementById('wsRefDuplicateWarn');
+  var refDupPanel = document.getElementById('wsRefDupPanel');
+  var refDupBackdrop = document.getElementById('wsRefDupBackdrop');
+  var refDupPanelBody = document.getElementById('wsRefDupPanelBody');
+  var refDupCancelBtn = document.getElementById('wsRefDupCancelBtn');
+  var refDupContinueBtn = document.getElementById('wsRefDupContinueBtn');
+  var refDupCloseBtn = document.getElementById('wsRefDupCloseBtn');
+  var _refDupCheckSeq = 0;
+  var _refDupPendingSubmitter = null;
+  var _allowNativeTransferSubmit = false;
+
+  function _wsTransferRecordId() {
+    return formEl ? (formEl.getAttribute('data-record-id') || '') : '';
+  }
+
+  function _wsRefDupMessage(refNo, data) {
+    var tn = (data && data.transfer_number) ? data.transfer_number : '';
+    return 'Warning: Ref ' + refNo + ' pehle transfer ' + tn + ' mein use ho chuka — verify karein.';
+  }
+
+  function clearRefDuplicateWarn() {
+    if (!refDupWarnEl) return;
+    refDupWarnEl.className = 'ws-ref-dup-warn d-none';
+    refDupWarnEl.textContent = '';
+  }
+
+  function showRefDuplicateWarn(refNo, data) {
+    if (!refDupWarnEl) return;
+    refDupWarnEl.textContent = _wsRefDupMessage(refNo, data);
+    refDupWarnEl.className = 'ws-ref-dup-warn';
+  }
+
+  function checkReferenceDuplicate(refNo, callback) {
+    if (!refNo || refNo === '—') {
+      clearRefDuplicateWarn();
+      if (callback) callback(null);
+      return;
+    }
+    var seq = ++_refDupCheckSeq;
+    var url = '/api/workspace-transfer-ref-check?reference_no=' + encodeURIComponent(refNo);
+    var recId = _wsTransferRecordId();
+    if (recId) url += '&exclude_id=' + encodeURIComponent(recId);
+    fetch(url)
+      .then(function(r) { return r.json(); })
+      .then(function(j) {
+        if (seq !== _refDupCheckSeq) return;
+        if (j && j.ok && j.exists) {
+          showRefDuplicateWarn(refNo, j);
+        } else {
+          clearRefDuplicateWarn();
+        }
+        if (callback) callback(j);
+      })
+      .catch(function() {
+        if (callback) callback(null);
+      });
+  }
+
+  function isRefDupPanelOpen() {
+    return !!(refDupPanel && refDupPanel.classList.contains('is-open'));
+  }
+
+  function closeRefDupPanel() {
+    if (refDupBackdrop) {
+      refDupBackdrop.classList.remove('is-open');
+      refDupBackdrop.setAttribute('aria-hidden', 'true');
+    }
+    if (refDupPanel) {
+      refDupPanel.classList.remove('is-open');
+      refDupPanel.setAttribute('aria-hidden', 'true');
+    }
+    _refDupPendingSubmitter = null;
+  }
+
+  function showRefDupPanel(refNo, data) {
+    if (!refDupPanel) return;
+    var detail = '<p class="mb-2">' + _wsRefDupMessage(refNo, data) + '</p>';
+    if (data && (data.transfer_date || data.amount)) {
+      detail += '<div class="ws-ref-dup-panel__detail"><strong>' + (data.transfer_number || '') + '</strong>';
+      if (data.transfer_date) detail += '<br>Date: ' + data.transfer_date;
+      if (data.amount) detail += '<br>Amount: ' + data.amount;
+      detail += '</div>';
+    }
+    if (refDupPanelBody) refDupPanelBody.innerHTML = detail;
+    if (refDupBackdrop) {
+      refDupBackdrop.classList.add('is-open');
+      refDupBackdrop.setAttribute('aria-hidden', 'false');
+    }
+    refDupPanel.classList.add('is-open');
+    refDupPanel.setAttribute('aria-hidden', 'false');
+    window.setTimeout(function() {
+      if (refDupContinueBtn && isRefDupPanelOpen()) refDupContinueBtn.focus({ preventScroll: true });
+    }, 30);
+  }
+
+  function continueRefDupPanel() {
+    var submitter = _refDupPendingSubmitter;
+    closeRefDupPanel();
+    if (!formEl) return;
+    _allowNativeTransferSubmit = true;
+    if (typeof formEl.requestSubmit === 'function') {
+      formEl.requestSubmit(submitter || undefined);
+    } else {
+      formEl.submit();
+    }
+  }
+
+  if (refDupCancelBtn) refDupCancelBtn.addEventListener('click', closeRefDupPanel);
+  if (refDupCloseBtn) refDupCloseBtn.addEventListener('click', closeRefDupPanel);
+  if (refDupContinueBtn) refDupContinueBtn.addEventListener('click', continueRefDupPanel);
+  if (refDupBackdrop) refDupBackdrop.addEventListener('click', closeRefDupPanel);
+
+  if (refInput) {
+    var _refDupInputTimer = null;
+    refInput.addEventListener('blur', function() {
+      checkReferenceDuplicate((refInput.value || '').trim());
+    });
+    refInput.addEventListener('input', function() {
+      if (_refDupInputTimer) window.clearTimeout(_refDupInputTimer);
+      _refDupInputTimer = window.setTimeout(function() {
+        checkReferenceDuplicate((refInput.value || '').trim());
+      }, 500);
+    });
+    var _initialRef = (refInput.value || '').trim();
+    if (_initialRef) checkReferenceDuplicate(_initialRef);
+  }
 
   function _wsAccountNameForDesc(accountId, selectEl, stripTypeSuffix) {
     var raw = '';
@@ -921,9 +1100,35 @@ document.addEventListener('DOMContentLoaded', function() {
       el.addEventListener('change', function() { _wsClearFieldInvalid(el); });
     });
     formEl.addEventListener('submit', function(ev) {
+      if (_allowNativeTransferSubmit) {
+        _allowNativeTransferSubmit = false;
+        return;
+      }
       if (_wsValidateTransferForm().length) {
         ev.preventDefault();
+        return;
       }
+      if (isRefDupPanelOpen()) {
+        ev.preventDefault();
+        return;
+      }
+      var refNo = refInput ? (refInput.value || '').trim() : '';
+      if (!refNo) return;
+      ev.preventDefault();
+      var submitter = ev.submitter || null;
+      checkReferenceDuplicate(refNo, function(j) {
+        if (j && j.ok && j.exists) {
+          _refDupPendingSubmitter = submitter;
+          showRefDupPanel(refNo, j);
+        } else {
+          _allowNativeTransferSubmit = true;
+          if (typeof formEl.requestSubmit === 'function') {
+            formEl.requestSubmit(submitter || undefined);
+          } else {
+            formEl.submit();
+          }
+        }
+      });
     });
   }
 
@@ -1199,18 +1404,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 
         return filled;
-      }
-
-      function checkReferenceDuplicate(refNo) {
-        if (!refNo || refNo === '—') return;
-        fetch('/api/workspace-transfer-ref-check?reference_no=' + encodeURIComponent(refNo))
-          .then(function(r) { return r.json(); })
-          .then(function(j) {
-            if (j && j.ok && j.exists) {
-              setStatus('Warning: Ref ' + refNo + ' pehle transfer ' + (j.transfer_number || '') + ' mein use ho chuka — verify karein.', 'warn');
-            }
-          })
-          .catch(function() {});
       }
 
       function loadProfiles() {
@@ -1953,6 +2146,7 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   window._wsAutoFill = _wsAutoFill;
+  window.checkReferenceDuplicate = checkReferenceDuplicate;
 });
 </script>
 {% endblock %}

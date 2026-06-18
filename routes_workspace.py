@@ -4848,14 +4848,20 @@ def workspace_slip_profile_delete_api(pk):
 def workspace_transfer_ref_check_api():
     guard, emp = _workspace_guard("workspace_transfer_add")
     if guard:
+        guard, emp = _workspace_guard("workspace_transfer_edit")
+    if guard:
         return jsonify({'ok': False, 'error': 'Unauthorized'}), 403
     ref = (request.args.get('reference_no') or '').strip()
     if not ref:
         return jsonify({'ok': True, 'exists': False})
-    row = WorkspaceFundTransfer.query.filter_by(
+    exclude_id = request.args.get('exclude_id', type=int)
+    query = WorkspaceFundTransfer.query.filter_by(
         employee_id=emp.id,
         reference_no=ref,
-    ).order_by(WorkspaceFundTransfer.id.desc()).first()
+    )
+    if exclude_id:
+        query = query.filter(WorkspaceFundTransfer.id != exclude_id)
+    row = query.order_by(WorkspaceFundTransfer.id.desc()).first()
     if not row:
         return jsonify({'ok': True, 'exists': False})
     return jsonify({
