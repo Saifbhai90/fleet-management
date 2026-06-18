@@ -315,6 +315,7 @@
             <th>Phone</th>
             <th>CNIC</th>
             <th>CNIC Expiry</th>
+            <th>License No</th>
             <th>License Expiry</th>
           </tr>
         </thead>
@@ -348,6 +349,7 @@
                 {{ d.cnic_expiry_date|ddmmyyyy }}
               {% endif %}
             </td>
+            <td data-label="License No">{{ d.license_no or '-' }}</td>
             <td data-label="License Expiry">
               {% if row.license_expired %}
                 <span class="badge bg-danger">{{ d.license_expiry_date|ddmmyyyy }} (Expired)</span>
@@ -361,6 +363,7 @@
           {% else %}
           <tr class="expiry-no-data-row">
             <td class="py-4">No drivers with expired or expiring documents in this period.</td>
+            <td></td>
             <td></td>
             <td></td>
             <td></td>
