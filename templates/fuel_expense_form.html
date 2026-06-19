@@ -1009,7 +1009,7 @@
             </div>
           </div>
           <div class="action-bar">
-            <a href="{{ back_url if back_url is defined else url_for('fuel_expense_list') }}" class="fuel-action-btn fuel-action-btn--cancel">Cancel</a>
+            <a href="{{ back_url if back_url is defined else url_for('fuel_expense_list') }}" id="fuelCancelBtn" class="fuel-action-btn fuel-action-btn--cancel">Cancel</a>
             {% if not rec %}
             <button type="submit" name="_save_action" value="save_add" id="fuelSaveAddNextBtn" class="fuel-action-btn fuel-action-btn--primary">
               <i class="bi bi-plus-circle"></i>Save &amp; Add Next
@@ -1149,6 +1149,24 @@
   </div>
 </div>
 
+<div id="fuelPriceBenchmarkPanel" class="fuel-info-float-panel fuel-warning-float-panel d-none" aria-hidden="true" role="alert" aria-labelledby="fuelPriceBenchmarkPanelLabel">
+  <div class="fuel-info-float-header fuel-warning-float-panel__header">
+    <div class="fuel-warning-float-panel__title-wrap">
+      <div class="fuel-warning-float-panel__icon" aria-hidden="true"><i class="bi bi-exclamation-triangle-fill"></i></div>
+      <div>
+        <h6 id="fuelPriceBenchmarkPanelLabel">Price Benchmark</h6>
+        <div class="fuel-warning-float-panel__subtitle">Fuel price differs from PSO benchmark</div>
+      </div>
+    </div>
+    <button type="button" class="btn-close btn-close-sm fuel-info-float-close" aria-label="Close"></button>
+  </div>
+  <div class="fuel-info-float-body fuel-warning-float-panel__body" id="fuelPriceBenchmarkBody"></div>
+  <div class="fuel-info-float-footer fuel-warning-float-panel__footer d-flex justify-content-end gap-2">
+    <button type="button" class="btn btn-outline-secondary btn-sm" id="fuelPriceBenchmarkCancelBtn">Cancel</button>
+    <button type="button" class="btn btn-warning btn-sm" id="fuelPriceBenchmarkContinueBtn">Continue Anyway</button>
+  </div>
+</div>
+
 <div id="fuelMeterMatchBackdrop" class="fuel-meter-match-backdrop" aria-hidden="true"></div>
 <div id="fuelMeterMatchPanel" class="fuel-info-float-panel fuel-warning-float-panel d-none" aria-hidden="true" aria-modal="true" role="alertdialog" aria-labelledby="fuelMeterMatchPanelLabel">
   <div class="fuel-info-float-header fuel-warning-float-panel__header">
@@ -1240,6 +1258,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   } catch (eFs) { /* keep defaults */ }
   var _lastSuggestedBenchmark = null;
+  var _lastPsoBenchmark = null;
   if (FUEL_CASCADE && FUEL_CASCADE.vehicles) {
     FUEL_CASCADE.vehicles.forEach(function(v) {
       _vehicleFuelTypeMap[String(v.id)] = v.fuel_type || 'Petrol';
@@ -1292,6 +1311,7 @@ document.addEventListener('DOMContentLoaded', function() {
   var expenseBySelect = document.getElementById('expenseBySelect');
   var expenseByBalanceHint = document.getElementById('expenseByBalanceHint');
   var fuelSaveAddNextBtn = document.getElementById('fuelSaveAddNextBtn');
+  var fuelCancelBtn = document.getElementById('fuelCancelBtn');
   var litersInput = document.getElementById('litersInput');
   var litersInputError = document.getElementById('litersInputError');
   var currentReadingError = document.getElementById('currentReadingError');
@@ -1395,6 +1415,11 @@ document.addEventListener('DOMContentLoaded', function() {
   var fuelKmGapBody = document.getElementById('fuelKmGapBody');
   var fuelKmGapContinueBtn = document.getElementById('fuelKmGapContinueBtn');
   var fuelKmGapCancelBtn = document.getElementById('fuelKmGapCancelBtn');
+  var fuelPriceBenchmarkPanel = document.getElementById('fuelPriceBenchmarkPanel');
+  var fuelPriceBenchmarkBody = document.getElementById('fuelPriceBenchmarkBody');
+  var fuelPriceBenchmarkContinueBtn = document.getElementById('fuelPriceBenchmarkContinueBtn');
+  var fuelPriceBenchmarkCancelBtn = document.getElementById('fuelPriceBenchmarkCancelBtn');
+  var _priceBenchmarkBypass = false;
   var fuelMeterMatchBackdrop = document.getElementById('fuelMeterMatchBackdrop');
   var fuelMeterMatchPanel = document.getElementById('fuelMeterMatchPanel');
   var fuelMeterMatchDetail = document.getElementById('fuelMeterMatchDetail');
@@ -1549,6 +1574,16 @@ document.addEventListener('DOMContentLoaded', function() {
     if (meterAlertsPanel) meterAlertsPanel.classList.toggle('d-none', !any);
   }
 
+  function getActivePriceBenchmark() {
+    if (_lastPsoBenchmark != null && isFinite(_lastPsoBenchmark) && _lastPsoBenchmark > 0) {
+      return _lastPsoBenchmark;
+    }
+    if (_lastSuggestedBenchmark != null && isFinite(_lastSuggestedBenchmark) && _lastSuggestedBenchmark > 0) {
+      return _lastSuggestedBenchmark;
+    }
+    return null;
+  }
+
   function checkFuelPriceTolerance() {
     if (!fuelPriceInput) return;
     var tolerance = parseFloat(FUEL_SETTINGS.price_tolerance_rs);
@@ -1557,8 +1592,8 @@ document.addEventListener('DOMContentLoaded', function() {
       updateMeterAlertsPanel();
       return;
     }
-    var benchmark = _lastSuggestedBenchmark;
-    if (benchmark == null || !isFinite(benchmark) || benchmark <= 0) {
+    var benchmark = getActivePriceBenchmark();
+    if (benchmark == null) {
       fuelPriceInput.classList.remove('field-invalid');
       updateMeterAlertsPanel();
       return;
@@ -1582,8 +1617,8 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!fuelPriceInput) return '';
     var tolerance = parseFloat(FUEL_SETTINGS.price_tolerance_rs);
     if (!isFinite(tolerance) || tolerance <= 0) return '';
-    var benchmark = _lastSuggestedBenchmark;
-    if (benchmark == null || !isFinite(benchmark) || benchmark <= 0) return '';
+    var benchmark = getActivePriceBenchmark();
+    if (benchmark == null) return '';
     var entered = parseNum(fuelPriceInput.value);
     if (entered == null || entered <= 0) return '';
     var diff = Math.abs(entered - benchmark);
@@ -2053,6 +2088,8 @@ document.addEventListener('DOMContentLoaded', function() {
     var dateVal = (fuelingDateInput && fuelingDateInput.value) || '';
     if (!ft || (ft !== 'Diesel' && ft !== 'Super' && ft !== 'Petrol') || !dateVal) {
       psoRateDatePanel.style.display = 'none';
+      _lastPsoBenchmark = null;
+      checkFuelPriceTolerance();
       refreshMeterInfoStrip();
       return;
     }
@@ -2065,6 +2102,8 @@ document.addEventListener('DOMContentLoaded', function() {
         var rateLabel = (ft === 'Diesel') ? 'PSO Diesel Rate' : 'PSO Petrol Rate';
         if (!data || !data.ok) {
           var noDate = data && data.no_record_date ? data.no_record_date : dateVal;
+          _lastPsoBenchmark = null;
+          checkFuelPriceTolerance();
           renderPsoRateTile(
             rateLabel,
             'No Record',
@@ -2075,6 +2114,8 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         var rate = data[key];
         if (rate == null) {
+          _lastPsoBenchmark = null;
+          checkFuelPriceTolerance();
           renderPsoRateTile(
             rateLabel,
             'No Record',
@@ -2082,10 +2123,13 @@ document.addEventListener('DOMContentLoaded', function() {
             true
           );
         } else {
+          var parsedRate = parseFloat(rate);
+          _lastPsoBenchmark = (isFinite(parsedRate) && parsedRate > 0) ? parsedRate : null;
+          checkFuelPriceTolerance();
           var scanAt = data.scanned_at || data.scan_date || '—';
           renderPsoRateTile(
             rateLabel,
-            'Rs ' + parseFloat(rate).toFixed(2) + '<span class="meter-info-tile__unit">/ Ltr</span>',
+            'Rs ' + parsedRate.toFixed(2) + '<span class="meter-info-tile__unit">/ Ltr</span>',
             '<strong>Last Scan:</strong> ' + scanAt,
             false
           );
@@ -2093,6 +2137,8 @@ document.addEventListener('DOMContentLoaded', function() {
       })
       .catch(function() {
         psoRateDatePanel.style.display = 'none';
+        _lastPsoBenchmark = null;
+        checkFuelPriceTolerance();
         refreshMeterInfoStrip();
       });
   }
@@ -2322,7 +2368,7 @@ document.addEventListener('DOMContentLoaded', function() {
     mountFuelFloatPanelToBody(fuelAttachmentWarningPanel);
     fuelAttachmentWarningPanel.classList.remove('d-none');
     fuelAttachmentWarningPanel.setAttribute('aria-hidden', 'false');
-    positionFuelInfoPanel(fuelAttachmentWarningPanel, fuelAttachZone || fuelAttachmentFiles);
+    positionFuelInfoPanel(fuelAttachmentWarningPanel, fuelCancelBtn || fuelAttachZone || fuelAttachmentFiles, { placeAbove: true });
     window.setTimeout(function() {
       focusAttachmentWarningOk();
     }, 30);
@@ -2455,6 +2501,69 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
+  function getPriceBenchmarkPopupText() {
+    return getPriceBenchmarkAlertHtml();
+  }
+
+  function checkPriceBenchmarkThenSubmit(submitter) {
+    if (!ensureFuelAttachmentsBeforeProceed()) return;
+    var msg = getPriceBenchmarkPopupText();
+    if (_priceBenchmarkBypass || !msg) {
+      checkKmGapThenSubmit(submitter);
+      return;
+    }
+    _pendingSubmitBtn = submitter;
+    showFuelPriceBenchmarkPanel(msg);
+  }
+
+  function isFuelPriceBenchmarkPanelOpen() {
+    return !!(fuelPriceBenchmarkPanel && !fuelPriceBenchmarkPanel.classList.contains('d-none'));
+  }
+
+  function focusFuelPriceBenchmarkContinueBtn() {
+    if (!fuelPriceBenchmarkContinueBtn || !isFuelPriceBenchmarkPanelOpen()) return;
+    fuelPriceBenchmarkContinueBtn.focus({ preventScroll: true });
+    requestAnimationFrame(function() {
+      if (isFuelPriceBenchmarkPanelOpen() && document.activeElement !== fuelPriceBenchmarkContinueBtn) {
+        fuelPriceBenchmarkContinueBtn.focus({ preventScroll: true });
+      }
+    });
+  }
+
+  function closeFuelPriceBenchmarkPanel(keepPending) {
+    if (!fuelPriceBenchmarkPanel) return;
+    fuelPriceBenchmarkPanel.classList.add('d-none');
+    fuelPriceBenchmarkPanel.setAttribute('aria-hidden', 'true');
+    if (!keepPending) _pendingSubmitBtn = null;
+  }
+
+  function showFuelPriceBenchmarkPanel(msg) {
+    if (!fuelPriceBenchmarkPanel) return;
+    unlockFuelSubmit();
+    resetFuelPageLoadBar();
+    if (fuelPriceBenchmarkBody) {
+      fuelPriceBenchmarkBody.innerHTML = '<p class="fuel-warning-float-panel__lead mb-0">' + msg + '</p>';
+    }
+    mountFuelFloatPanelToBody(fuelPriceBenchmarkPanel);
+    fuelPriceBenchmarkPanel.classList.remove('d-none');
+    fuelPriceBenchmarkPanel.setAttribute('aria-hidden', 'false');
+    positionFuelInfoPanel(fuelPriceBenchmarkPanel, fuelCancelBtn || fuelPriceInput || fuelSaveAddNextBtn || fuelExpenseForm, { placeAbove: true });
+    window.setTimeout(focusFuelPriceBenchmarkContinueBtn, 30);
+  }
+
+  function dismissFuelPriceBenchmarkPanel() {
+    _priceBenchmarkBypass = false;
+    closeFuelPriceBenchmarkPanel(false);
+    unlockFuelSubmit();
+  }
+
+  function continueFuelPriceBenchmarkPanel() {
+    _priceBenchmarkBypass = true;
+    closeFuelPriceBenchmarkPanel(true);
+    checkKmGapThenSubmit(_pendingSubmitBtn);
+    _priceBenchmarkBypass = false;
+  }
+
   function checkKmGapThenSubmit(submitter) {
     if (!ensureFuelAttachmentsBeforeProceed()) return;
     var gapHtml = getKmGapAlertHtml();
@@ -2497,7 +2606,7 @@ document.addEventListener('DOMContentLoaded', function() {
     mountFuelFloatPanelToBody(fuelKmGapPanel);
     fuelKmGapPanel.classList.remove('d-none');
     fuelKmGapPanel.setAttribute('aria-hidden', 'false');
-    positionFuelInfoPanel(fuelKmGapPanel, currentReadingInput || fuelSaveAddNextBtn || fuelExpenseForm);
+    positionFuelInfoPanel(fuelKmGapPanel, fuelCancelBtn || currentReadingInput || fuelSaveAddNextBtn || fuelExpenseForm, { placeAbove: true });
     window.setTimeout(focusFuelKmGapContinueBtn, 30);
   }
 
@@ -2555,7 +2664,7 @@ document.addEventListener('DOMContentLoaded', function() {
     mountFuelFloatPanelToBody(fuelTankCapacityPanel);
     fuelTankCapacityPanel.classList.remove('d-none');
     fuelTankCapacityPanel.setAttribute('aria-hidden', 'false');
-    positionFuelInfoPanel(fuelTankCapacityPanel, litersInput || amountInput || fuelSaveAddNextBtn || fuelExpenseForm);
+    positionFuelInfoPanel(fuelTankCapacityPanel, fuelCancelBtn || litersInput || amountInput || fuelSaveAddNextBtn || fuelExpenseForm, { placeAbove: true });
     window.setTimeout(focusFuelTankCapacityContinueBtn, 30);
   }
 
@@ -2600,7 +2709,7 @@ document.addEventListener('DOMContentLoaded', function() {
     mountFuelFloatPanelToBody(fuelDuplicatePanel);
     fuelDuplicatePanel.classList.remove('d-none');
     fuelDuplicatePanel.setAttribute('aria-hidden', 'false');
-    positionFuelInfoPanel(fuelDuplicatePanel, fuelSaveAddNextBtn || fuelExpenseForm);
+    positionFuelInfoPanel(fuelDuplicatePanel, fuelCancelBtn || fuelSaveAddNextBtn || fuelExpenseForm, { placeAbove: true });
     window.setTimeout(focusFuelDuplicateContinueBtn, 30);
   }
 
@@ -2853,7 +2962,7 @@ document.addEventListener('DOMContentLoaded', function() {
         resetFuelPageLoadBar();
         return;
       }
-      checkKmGapThenSubmit(submitter);
+      checkPriceBenchmarkThenSubmit(submitter);
     }, true);
   }
 
@@ -3093,9 +3202,10 @@ document.addEventListener('DOMContentLoaded', function() {
     scheduleVehicleLastEntryPanelPosition();
   }
 
-  function positionFuelInfoPanel(panel, anchor) {
+  function positionFuelInfoPanel(panel, anchor, opts) {
     if (!panel || !anchor) return;
     if (panel.dataset.userPositioned === '1') return;
+    opts = opts || {};
     panel.classList.remove('d-none');
     panel.style.visibility = 'hidden';
     panel.style.left = '0';
@@ -3105,9 +3215,18 @@ document.addEventListener('DOMContentLoaded', function() {
     var panelH = panel.offsetHeight || 240;
     var left = Math.min(rect.left, window.innerWidth - panelW - 12);
     left = Math.max(12, left);
-    var top = rect.bottom + 8;
-    if (top + panelH > window.innerHeight - 12) {
-      top = Math.max(12, rect.top - panelH - 8);
+    var top;
+    if (opts.placeAbove) {
+      top = rect.top - panelH - 8;
+      if (top < 12) {
+        top = Math.min(rect.bottom + 8, window.innerHeight - panelH - 12);
+        top = Math.max(12, top);
+      }
+    } else {
+      top = rect.bottom + 8;
+      if (top + panelH > window.innerHeight - 12) {
+        top = Math.max(12, rect.top - panelH - 8);
+      }
     }
     panel.style.left = left + 'px';
     panel.style.top = top + 'px';
@@ -3279,7 +3398,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
-  if (fuelScanDetailPanel || vehicleLastEntryPanel || fuelAttachmentWarningPanel || fuelDuplicatePanel || fuelKmGapPanel || fuelTankCapacityPanel) {
+  if (fuelScanDetailPanel || vehicleLastEntryPanel || fuelAttachmentWarningPanel || fuelDuplicatePanel || fuelKmGapPanel || fuelTankCapacityPanel || fuelPriceBenchmarkPanel) {
     document.querySelectorAll('.fuel-info-float-close').forEach(function(btn) {
       btn.addEventListener('click', function(e) {
         e.stopPropagation();
@@ -3290,6 +3409,7 @@ document.addEventListener('DOMContentLoaded', function() {
         else if (panel === fuelDuplicatePanel) dismissFuelDuplicatePanel();
         else if (panel === fuelKmGapPanel) dismissFuelKmGapPanel();
         else if (panel === fuelTankCapacityPanel) dismissFuelTankCapacityPanel();
+        else if (panel === fuelPriceBenchmarkPanel) dismissFuelPriceBenchmarkPanel();
         else closeFuelInfoPanel(panel, null);
       });
     });
@@ -3305,16 +3425,19 @@ document.addEventListener('DOMContentLoaded', function() {
         positionMeterMatchWarningPanel();
       }
       if (fuelAttachmentWarningPanel && !fuelAttachmentWarningPanel.classList.contains('d-none')) {
-        positionFuelInfoPanel(fuelAttachmentWarningPanel, fuelAttachZone || fuelAttachmentFiles);
+        positionFuelInfoPanel(fuelAttachmentWarningPanel, fuelCancelBtn || fuelAttachZone || fuelAttachmentFiles, { placeAbove: true });
       }
       if (fuelDuplicatePanel && !fuelDuplicatePanel.classList.contains('d-none')) {
-        positionFuelInfoPanel(fuelDuplicatePanel, fuelSaveAddNextBtn || fuelExpenseForm);
+        positionFuelInfoPanel(fuelDuplicatePanel, fuelCancelBtn || fuelSaveAddNextBtn || fuelExpenseForm, { placeAbove: true });
       }
       if (fuelKmGapPanel && !fuelKmGapPanel.classList.contains('d-none')) {
-        positionFuelInfoPanel(fuelKmGapPanel, currentReadingInput || fuelSaveAddNextBtn || fuelExpenseForm);
+        positionFuelInfoPanel(fuelKmGapPanel, fuelCancelBtn || currentReadingInput || fuelSaveAddNextBtn || fuelExpenseForm, { placeAbove: true });
       }
       if (fuelTankCapacityPanel && !fuelTankCapacityPanel.classList.contains('d-none')) {
-        positionFuelInfoPanel(fuelTankCapacityPanel, litersInput || amountInput || fuelSaveAddNextBtn || fuelExpenseForm);
+        positionFuelInfoPanel(fuelTankCapacityPanel, fuelCancelBtn || litersInput || amountInput || fuelSaveAddNextBtn || fuelExpenseForm, { placeAbove: true });
+      }
+      if (fuelPriceBenchmarkPanel && !fuelPriceBenchmarkPanel.classList.contains('d-none')) {
+        positionFuelInfoPanel(fuelPriceBenchmarkPanel, fuelCancelBtn || fuelPriceInput || fuelSaveAddNextBtn || fuelExpenseForm, { placeAbove: true });
       }
     });
   }
@@ -3325,6 +3448,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
   if (fuelKmGapPanel) {
     mountFuelFloatPanelToBody(fuelKmGapPanel);
+  }
+
+  if (fuelPriceBenchmarkPanel) {
+    mountFuelFloatPanelToBody(fuelPriceBenchmarkPanel);
   }
 
   if (fuelDuplicatePanel) {
@@ -3491,6 +3618,18 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   if (fuelKmGapCancelBtn) {
     fuelKmGapCancelBtn.addEventListener('click', dismissFuelKmGapPanel);
+  }
+  if (fuelPriceBenchmarkContinueBtn) {
+    fuelPriceBenchmarkContinueBtn.addEventListener('click', continueFuelPriceBenchmarkPanel);
+    fuelPriceBenchmarkContinueBtn.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        continueFuelPriceBenchmarkPanel();
+      }
+    });
+  }
+  if (fuelPriceBenchmarkCancelBtn) {
+    fuelPriceBenchmarkCancelBtn.addEventListener('click', dismissFuelPriceBenchmarkPanel);
   }
   if (fuelPriceInput) {
     fuelPriceInput.addEventListener('input', function() {
