@@ -14,6 +14,33 @@
   .tsd-ok { color: #0f766e; font-weight: 600; }
   .total-badge { background: #e0e7ff; color: #312e81; padding: .25rem .8rem; border-radius: 20px; font-size: .82rem; font-weight: 700; }
   .tsd-wait-inline { background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 8px; padding: .65rem .8rem; margin-bottom: .9rem; display: none; }
+  .tsd-filter-divider {
+    border-top: 1px solid #e2e8f0;
+    margin: .65rem 0;
+  }
+  .tsd-filter-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: .5rem;
+    margin-top: .65rem;
+  }
+  .tsd-time-input {
+    min-width: 0;
+  }
+  .tsd-filter-muted {
+    font-size: .72rem;
+    color: #64748b;
+    margin-top: .35rem;
+  }
+  .tsd-filter-group.is-disabled {
+    opacity: .5;
+  }
+  .tsd-filter-group.is-disabled .form-control,
+  .tsd-filter-group.is-disabled .form-select {
+    pointer-events: none;
+    background-color: #f1f5f9;
+  }
 </style>
 
 <div class="container-fluid py-3 px-3 px-md-4">
@@ -24,10 +51,10 @@
         <h2><i class="bi bi-alarm me-2"></i>Driver Response Time Report</h2>
         <div class="tsd-subtitle">Task assign ke baad pehli activity jahan distance &gt; 0 (movement) — response delay</div>
       </div>
-      <a href="{{ url_for('task_start_delay_report_export', from_date=from_date|ddmmyyyy, to_date=to_date|ddmmyyyy, district_id=district_id, project_id=project_id, vehicle_id=vehicle_id, check_type=check_type, delay_limit=delay_limit) }}" class="btn btn-success btn-sm" id="taskStartDelayExportBtn" data-export-url="{{ url_for('task_start_delay_report_export', from_date=from_date|ddmmyyyy, to_date=to_date|ddmmyyyy, district_id=district_id, project_id=project_id, vehicle_id=vehicle_id, check_type=check_type, delay_limit=delay_limit) }}">
+      <a href="{{ url_for('task_start_delay_report_export', from_date=from_date|ddmmyyyy, to_date=to_date|ddmmyyyy, district_id=district_id, project_id=project_id, vehicle_id=vehicle_id, check_type=check_type, delay_limit=delay_limit, time_from=start_time, time_to=end_time, filter_group=filter_group) }}" class="btn btn-success btn-sm" id="taskStartDelayExportBtn" data-export-url="{{ url_for('task_start_delay_report_export', from_date=from_date|ddmmyyyy, to_date=to_date|ddmmyyyy, district_id=district_id, project_id=project_id, vehicle_id=vehicle_id, check_type=check_type, delay_limit=delay_limit, time_from=start_time, time_to=end_time, filter_group=filter_group) }}">
         <i class="bi bi-file-earmark-excel me-1"></i>Export
       </a>
-      <button type="button" class="btn btn-warning btn-sm" id="taskStartDelayPreviewBtn" data-preview-url="{{ url_for('task_start_delay_report_preview', from_date=from_date|ddmmyyyy, to_date=to_date|ddmmyyyy, district_id=district_id, project_id=project_id, vehicle_id=vehicle_id, check_type=check_type, delay_limit=delay_limit) }}">
+      <button type="button" class="btn btn-warning btn-sm" id="taskStartDelayPreviewBtn" data-preview-url="{{ url_for('task_start_delay_report_preview', from_date=from_date|ddmmyyyy, to_date=to_date|ddmmyyyy, district_id=district_id, project_id=project_id, vehicle_id=vehicle_id, check_type=check_type, delay_limit=delay_limit, time_from=start_time, time_to=end_time, filter_group=filter_group) }}">
         <i class="bi bi-printer me-1"></i>Print / Preview
       </button>
     </div>
@@ -35,6 +62,7 @@
 
   <div class="tsd-filter">
     <form method="get" action="{{ url_for('task_start_delay_report') }}" id="taskStartDelayFilterForm">
+      <input type="hidden" name="filter_group" id="tsdFilterGroup" value="{{ filter_group or '' }}">
       <div class="row g-2 align-items-end">
         <div class="col-6 col-md-2">
           <label class="form-label mb-1 small fw-semibold">From Date</label>
@@ -68,28 +96,45 @@
             {% endfor %}
           </select>
         </div>
-        <div class="col-6 col-md-1">
+      </div>
+
+      <div class="tsd-filter-divider"></div>
+
+      <div class="row g-2 align-items-end">
+        <div class="col-6 col-md-2 tsd-filter-group" id="tsdDelayGroup">
           <label class="form-label mb-1 small fw-semibold">Check Type</label>
-          <select name="check_type" class="form-select form-select-sm">
+          <select name="check_type" id="tsdCheckType" class="form-select form-select-sm">
             <option value="" {% if not check_type %}selected{% endif %}>--</option>
             <option value="above" {% if check_type == 'above' %}selected{% endif %}>Above</option>
             <option value="below" {% if check_type == 'below' %}selected{% endif %}>Below</option>
           </select>
         </div>
-        <div class="col-6 col-md-1">
-          <label class="form-label mb-1 small fw-semibold" title="Delay in minutes (task assign se vehicle start)">Delay Time</label>
-          <input type="number" step="0.01" min="0" name="delay_limit" class="form-control form-control-sm" placeholder="e.g. 15" value="{{ delay_limit or '' }}">
+        <div class="col-6 col-md-2 tsd-filter-group" id="tsdDelayMinGroup">
+          <label class="form-label mb-1 small fw-semibold">Delay (min)</label>
+          <input type="number" step="0.01" min="0" name="delay_limit" id="tsdDelayLimit" class="form-control form-control-sm" placeholder="Minutes" value="{{ delay_limit or '' }}">
         </div>
-        <div class="col-6 col-md-1">
-          <button class="btn btn-primary btn-sm w-100"><i class="bi bi-funnel-fill"></i></button>
+        <div class="col-6 col-md-2 tsd-filter-group" id="tsdStartTimeGroup">
+          <label class="form-label mb-1 small fw-semibold">Start Time</label>
+          <input type="time" name="time_from" id="tsdStartTime" class="form-control form-control-sm tsd-time-input" value="{{ start_time or '' }}">
+        </div>
+        <div class="col-6 col-md-2 tsd-filter-group" id="tsdEndTimeGroup">
+          <label class="form-label mb-1 small fw-semibold">End Time</label>
+          <input type="time" name="time_to" id="tsdEndTime" class="form-control form-control-sm tsd-time-input" value="{{ end_time or '' }}">
+        </div>
+        <div class="col-12 col-md-4 tsd-filter-actions">
+          <button type="submit" class="btn btn-primary btn-sm px-4" id="tsdApplyBtn"><i class="bi bi-funnel-fill me-1"></i>Apply</button>
         </div>
       </div>
-      <div class="mt-2">
+      <div class="tsd-filter-muted">
+        Check Type + Delay ya Start/End Time — aik waqt par sirf aik group use ho sakti hai.
+      </div>
+
+      <div class="mt-2 d-flex flex-wrap align-items-center gap-2">
         <a href="{{ url_for('task_start_delay_report') }}" class="btn btn-outline-secondary btn-sm">
           <i class="bi bi-x-circle me-1"></i>Clear
         </a>
-        <span class="total-badge ms-2">Rows: {{ total }}</span>
-        <span class="total-badge ms-2">Vehicles: {{ unique_vehicle_count }}</span>
+        <span class="total-badge">Rows: {{ total }}</span>
+        <span class="total-badge">Vehicles: {{ unique_vehicle_count }}</span>
       </div>
     </form>
   </div>
@@ -120,6 +165,7 @@
             <th>Date</th>
             <th>District</th>
             <th>Project</th>
+            <th>Parking</th>
             <th>Vehicle</th>
             <th>Task ID</th>
             <th>Category</th>
@@ -136,6 +182,7 @@
             <td>{{ r.emg.task_date|ddmmyyyy if r.emg and r.emg.task_date else '-' }}</td>
             <td>{{ r.district.name if r.district else '-' }}</td>
             <td>{{ r.project.name if r.project else '-' }}</td>
+            <td>{{ r.vehicle.parking_station.name if r.vehicle and r.vehicle.parking_station else '-' }}</td>
             <td>{{ r.vehicle.vehicle_no if r.vehicle else '-' }}</td>
             <td>
               {% if r.emg and r.emg.task_id_ext and r.task_id != '-' %}
@@ -150,11 +197,23 @@
             <td>{{ r.category }}</td>
             <td>{% if r.assign_dt %}{{ r.assign_dt.strftime('%d-%m-%Y %I:%M %p') }}{% else %}-{% endif %}</td>
             <td>{% if r.close_dt %}{{ r.close_dt.strftime('%d-%m-%Y %I:%M %p') }}{% else %}-{% endif %}</td>
-            <td>{% if r.vehicle_start_dt %}{{ r.vehicle_start_dt.strftime('%d-%m-%Y %I:%M %p') }}{% else %}<span class="text-muted">-</span>{% endif %}</td>
+            <td>
+              {% if r.vehicle_start_dt %}
+                {% if r.vehicle %}
+                <a href="#" class="vstart-link fw-semibold text-primary text-decoration-none"
+                   data-vno="{{ r.vehicle.vehicle_no }}"
+                   data-from="{{ from_date.strftime('%Y-%m-%d') if from_date else '' }}"
+                   data-to="{{ to_date.strftime('%Y-%m-%d') if to_date else '' }}"
+                   data-time-from="{{ start_time or '' }}"
+                   data-time-to="{{ end_time or '' }}"
+                   title="View vehicle start/stop & ignition detail">{{ r.vehicle_start_dt.strftime('%d-%m-%Y %I:%M %p') }}</a>
+                {% else %}{{ r.vehicle_start_dt.strftime('%d-%m-%Y %I:%M %p') }}{% endif %}
+              {% else %}<span class="text-muted">-</span>{% endif %}
+            </td>
             <td class="{% if r.delay_minutes is not none and r.delay_minutes > 0 %}tsd-late{% elif r.delay_minutes is not none %}tsd-ok{% endif %}">{{ r.delay_display }}</td>
           </tr>
           {% else %}
-          <tr><td colspan="11" class="text-center text-muted py-4">No driver response time records found.</td></tr>
+          <tr><td colspan="12" class="text-center text-muted py-4">No driver response time records found.</td></tr>
           {% endfor %}
         </tbody>
       </table>
@@ -209,6 +268,76 @@ document.addEventListener('DOMContentLoaded', function () {
   var waitBtn = document.getElementById('taskStartDelayWaitBtn');
   if (waitBtn && popup) { waitBtn.addEventListener('click', function(){ popup.style.display = 'block'; }); }
 
+  var checkTypeEl = document.getElementById('tsdCheckType');
+  var delayEl = document.getElementById('tsdDelayLimit');
+  var startEl = document.getElementById('tsdStartTime');
+  var endEl = document.getElementById('tsdEndTime');
+  var delayGroup = document.getElementById('tsdDelayGroup');
+  var delayMinGroup = document.getElementById('tsdDelayMinGroup');
+  var startGroup = document.getElementById('tsdStartTimeGroup');
+  var endGroup = document.getElementById('tsdEndTimeGroup');
+  var filterGroupEl = document.getElementById('tsdFilterGroup');
+
+  function tsdDelayActive() {
+    return !!(checkTypeEl && checkTypeEl.value) || !!(delayEl && String(delayEl.value || '').trim());
+  }
+
+  function tsdTimeActive() {
+    return !!(startEl && startEl.value) || !!(endEl && endEl.value);
+  }
+
+  function tsdSetGroupDisabled(group, disabled) {
+    if (group) group.classList.toggle('is-disabled', !!disabled);
+  }
+
+  // Visual lock only (CSS pointer-events). Field names always stay intact so the
+  // active group's values are always submitted to the server.
+  function tsdUpdateUi() {
+    var delayActive = tsdDelayActive();
+    var timeActive = tsdTimeActive();
+    if (filterGroupEl) filterGroupEl.value = timeActive ? 'time' : (delayActive ? 'delay' : '');
+    tsdSetGroupDisabled(delayGroup, timeActive);
+    tsdSetGroupDisabled(delayMinGroup, timeActive);
+    tsdSetGroupDisabled(startGroup, delayActive);
+    tsdSetGroupDisabled(endGroup, delayActive);
+  }
+
+  if (checkTypeEl && delayEl && startEl && endEl) {
+    tsdUpdateUi();
+    checkTypeEl.addEventListener('change', function() {
+      if (checkTypeEl.value) { startEl.value = ''; endEl.value = ''; }
+      tsdUpdateUi();
+    });
+    delayEl.addEventListener('input', function() {
+      if (String(delayEl.value || '').trim()) { startEl.value = ''; endEl.value = ''; }
+      tsdUpdateUi();
+    });
+    startEl.addEventListener('input', function() {
+      if (startEl.value) { checkTypeEl.value = ''; delayEl.value = ''; }
+      tsdUpdateUi();
+    });
+    endEl.addEventListener('input', function() {
+      if (endEl.value) { checkTypeEl.value = ''; delayEl.value = ''; }
+      tsdUpdateUi();
+    });
+    if (f) {
+      f.addEventListener('submit', function() {
+        // Keep only one group's values; names stay intact so params reach the server.
+        if (tsdTimeActive()) {
+          checkTypeEl.value = '';
+          delayEl.value = '';
+          if (filterGroupEl) filterGroupEl.value = 'time';
+        } else if (tsdDelayActive()) {
+          startEl.value = '';
+          endEl.value = '';
+          if (filterGroupEl) filterGroupEl.value = 'delay';
+        } else if (filterGroupEl) {
+          filterGroupEl.value = '';
+        }
+      });
+    }
+  }
+
   var searchBox = document.getElementById('taskStartDelaySearchInput');
   var tbody = document.querySelector('#taskStartDelayTable tbody');
   if (searchBox && tbody) {
@@ -229,6 +358,198 @@ document.addEventListener('DOMContentLoaded', function () {
     searchBox.dispatchEvent(new Event('input'));
   }
 });
+</script>
+
+<!-- Vehicle Start / Activity Detail Panel (floating popup) -->
+<style>
+  .vstart-float-panel {
+    position: fixed !important; top: 50%; left: 50%; transform: translate(-50%, -50%) !important;
+    width: 94%; max-width: 1000px; z-index: 1060; max-height: 86vh;
+    box-shadow: 0 10px 40px rgba(0,0,0,.28) !important;
+    transition: none !important;
+  }
+  .vstart-float-panel:hover {
+    transform: translate(-50%, -50%) !important;
+    transition: none !important;
+  }
+  .vstart-float-panel .vstart-on { color: #15803d; font-weight: 600; }
+  .vstart-float-panel .vstart-off { color: #b91c1c; font-weight: 600; }
+  .vstart-backdrop {
+    position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 1055; display: none;
+  }
+</style>
+<div id="vstartBackdrop" class="vstart-backdrop"></div>
+<div id="vstartPanel" class="card shadow-lg border-primary d-none vstart-float-panel">
+  <div class="card-header bg-primary bg-opacity-10 d-flex justify-content-between align-items-center py-2">
+    <h6 class="mb-0"><i class="bi bi-truck me-2"></i>Vehicle Activity — <span id="vstartVehicleNo"></span>
+      <span class="text-muted small" id="vstartRange"></span></h6>
+    <button type="button" class="btn-close" id="vstartCloseBtn"></button>
+  </div>
+  <div class="card-body p-0" style="max-height:60vh;overflow-y:auto;">
+    <table class="table table-sm table-hover align-middle mb-0" id="vstartTable">
+      <thead class="table-light sticky-top">
+        <tr>
+          <th class="ps-3">#</th><th>Date &amp; Time</th><th>Reason</th>
+          <th class="text-end">Speed (km/h)</th><th class="text-end">Distance (km)</th>
+          <th>Travel Time</th><th>Stop Time</th><th>Location</th>
+        </tr>
+      </thead>
+      <tbody id="vstartBody"></tbody>
+    </table>
+    <div id="vstartLoading" class="text-center py-3 d-none"><span class="spinner-border spinner-border-sm text-primary"></span> Loading...</div>
+    <div id="vstartEmpty" class="text-center py-3 text-muted d-none"><i class="bi bi-inbox me-1"></i>No activity records found.</div>
+  </div>
+  <div class="card-footer py-2 d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <span class="text-muted small" id="vstartSummary"></span>
+    <div class="d-flex gap-2">
+      <button class="btn btn-outline-success btn-sm" id="vstartExportBtn"><i class="bi bi-file-earmark-excel me-1"></i>Export to Excel</button>
+      <button class="btn btn-outline-secondary btn-sm" id="vstartPrintBtn"><i class="bi bi-printer me-1"></i>Print</button>
+      <button class="btn btn-secondary btn-sm" id="vstartCloseBtnFooter">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  function _esc(v) { var d = document.createElement('div'); d.textContent = (v == null ? '' : v); return d.innerHTML; }
+  var panel = document.getElementById('vstartPanel');
+  var backdrop = document.getElementById('vstartBackdrop');
+  var body = document.getElementById('vstartBody');
+  var loading = document.getElementById('vstartLoading');
+  var empty = document.getElementById('vstartEmpty');
+  var table = document.getElementById('vstartTable');
+  var summaryEl = document.getElementById('vstartSummary');
+  var current = { vno: '', from: '', to: '', timeFrom: '', timeTo: '' };
+
+  if (panel && panel.parentNode !== document.body) document.body.appendChild(panel);
+  if (backdrop && backdrop.parentNode !== document.body) document.body.appendChild(backdrop);
+
+  function _hide() {
+    if (panel) panel.classList.add('d-none');
+    if (backdrop) backdrop.style.display = 'none';
+  }
+  function _show() {
+    if (panel) panel.classList.remove('d-none');
+    if (backdrop) backdrop.style.display = 'block';
+  }
+  function _reasonClass(reason) {
+    var r = (reason || '').toLowerCase();
+    if (r.indexOf('on') !== -1 && r.indexOf('ignition') !== -1) return 'vstart-on';
+    if (r.indexOf('off') !== -1 && r.indexOf('ignition') !== -1) return 'vstart-off';
+    if (r.indexOf('mov') !== -1 || r.indexOf('start') !== -1 || r.indexOf('run') !== -1) return 'vstart-on';
+    if (r.indexOf('stop') !== -1 || r.indexOf('park') !== -1 || r.indexOf('idle') !== -1) return 'vstart-off';
+    return '';
+  }
+
+  function _render(data) {
+    body.innerHTML = '';
+    if (!data || !data.rows || !data.rows.length) {
+      table.classList.add('d-none');
+      empty.classList.remove('d-none');
+      summaryEl.textContent = '';
+      return;
+    }
+    data.rows.forEach(function(r, i) {
+      var tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td class="ps-3">' + (i + 1) + '</td>' +
+        '<td>' + _esc(r.record_dt) + '</td>' +
+        '<td class="' + _reasonClass(r.reason) + '">' + _esc(r.reason) + '</td>' +
+        '<td class="text-end">' + _esc(r.speed) + '</td>' +
+        '<td class="text-end">' + _esc(r.distance) + '</td>' +
+        '<td>' + _esc(r.travel_time) + '</td>' +
+        '<td>' + _esc(r.stop_time) + '</td>' +
+        '<td>' + _esc(r.location) + '</td>';
+      body.appendChild(tr);
+    });
+    table.classList.remove('d-none');
+    empty.classList.add('d-none');
+    summaryEl.textContent = 'Records: ' + data.count + '  |  Total KM: ' + data.total_km + '  |  Moving KM: ' + data.moving_km;
+  }
+
+  document.addEventListener('click', function(e) {
+    var link = e.target.closest('.vstart-link');
+    if (!link) return;
+    e.preventDefault();
+    current.vno = link.getAttribute('data-vno') || '';
+    current.from = link.getAttribute('data-from') || '';
+    current.to = link.getAttribute('data-to') || '';
+    current.timeFrom = link.getAttribute('data-time-from') || '';
+    current.timeTo = link.getAttribute('data-time-to') || '';
+
+    document.getElementById('vstartVehicleNo').textContent = current.vno;
+    document.getElementById('vstartRange').textContent = '';
+    loading.classList.remove('d-none');
+    empty.classList.add('d-none');
+    table.classList.add('d-none');
+    summaryEl.textContent = '';
+    _show();
+
+    var params = { vehicle_no: current.vno, from_date: current.from, to_date: current.to };
+    if (current.timeFrom) params.time_from = current.timeFrom;
+    if (current.timeTo) params.time_to = current.timeTo;
+    var qs = new URLSearchParams(params);
+    fetch('/api/driver-response-time/vehicle-activity?' + qs.toString(), { credentials: 'same-origin', cache: 'no-store' })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        loading.classList.add('d-none');
+        if (!data || data.ok === false) { empty.classList.remove('d-none'); return; }
+        var rangeTxt = '(' + data.from_date + ' → ' + data.to_date;
+        if (data.time_from || data.time_to) {
+          rangeTxt += ' | ' + (data.time_from || '00:00') + ' – ' + (data.time_to || '23:59');
+        }
+        rangeTxt += ')';
+        document.getElementById('vstartRange').textContent = rangeTxt;
+        _render(data);
+      })
+      .catch(function() { loading.classList.add('d-none'); empty.classList.remove('d-none'); });
+  });
+
+  var cb = document.getElementById('vstartCloseBtn');
+  var cbf = document.getElementById('vstartCloseBtnFooter');
+  if (cb) cb.addEventListener('click', _hide);
+  if (cbf) cbf.addEventListener('click', _hide);
+  if (backdrop) backdrop.addEventListener('click', _hide);
+  document.addEventListener('keydown', function(e) { if (e.key === 'Escape') _hide(); });
+
+  var exportBtn = document.getElementById('vstartExportBtn');
+  if (exportBtn) exportBtn.addEventListener('click', function() {
+    if (!current.vno) return;
+    var params = { vehicle_no: current.vno, from_date: current.from, to_date: current.to };
+    if (current.timeFrom) params.time_from = current.timeFrom;
+    if (current.timeTo) params.time_to = current.timeTo;
+    var qs = new URLSearchParams(params);
+    window.location.href = '/driver-response-time/vehicle-activity/export?' + qs.toString();
+  });
+
+  var printBtn = document.getElementById('vstartPrintBtn');
+  if (printBtn) printBtn.addEventListener('click', function() {
+    var title = 'Vehicle Activity — ' + current.vno;
+    var rangeTxt = document.getElementById('vstartRange').textContent || '';
+    var rowsHtml = '';
+    var trs = body.querySelectorAll('tr');
+    trs.forEach(function(tr) { rowsHtml += '<tr>' + tr.innerHTML + '</tr>'; });
+    var summaryTxt = summaryEl.textContent || '';
+    var w = window.open('', '_blank');
+    if (!w) return;
+    w.document.write(
+      '<html><head><title>' + title + '</title>' +
+      '<style>body{font-family:Arial,sans-serif;margin:18px;}h3{margin:0 0 4px;}' +
+      '.sub{color:#555;font-size:12px;margin-bottom:10px;}' +
+      'table{width:100%;border-collapse:collapse;font-size:12px;}' +
+      'th,td{border:1px solid #ccc;padding:5px 7px;text-align:left;}' +
+      'th{background:#f1f5f9;}.vstart-on{color:#15803d;font-weight:600;}.vstart-off{color:#b91c1c;font-weight:600;}' +
+      '</style></head><body>' +
+      '<h3>' + title + '</h3><div class="sub">' + rangeTxt + ' &nbsp; ' + summaryTxt + '</div>' +
+      '<table><thead><tr><th>#</th><th>Date &amp; Time</th><th>Reason</th><th>Speed (km/h)</th>' +
+      '<th>Distance (km)</th><th>Travel Time</th><th>Stop Time</th><th>Location</th></tr></thead>' +
+      '<tbody>' + rowsHtml + '</tbody></table></body></html>'
+    );
+    w.document.close();
+    w.focus();
+    setTimeout(function() { w.print(); }, 300);
+  });
+})();
 </script>
 {% include 'includes/emg_task_detail_panel.html' %}
 {% endblock %}
