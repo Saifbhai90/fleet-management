@@ -16159,7 +16159,11 @@ def _task_start_delay_rows(from_date, to_date, project_id=0, district_id=0, vehi
         if v_start_dt is None:
             delay_minutes = None
         else:
-            delay_minutes = (v_start_dt - assign_dt).total_seconds() / 60.0
+            if start_time_limit is not None:
+                expected_dt = datetime.combine(v_start_dt.date(), start_time_limit)
+                delay_minutes = (v_start_dt - expected_dt).total_seconds() / 60.0
+            else:
+                delay_minutes = (v_start_dt - assign_dt).total_seconds() / 60.0
             if delay_minutes < 0:
                 delay_minutes = 0.0
 
@@ -16175,6 +16179,14 @@ def _task_start_delay_rows(from_date, to_date, project_id=0, district_id=0, vehi
             if not _vehicle_start_in_time_window(v_start_dt.time(), start_time_limit, end_time_limit):
                 continue
 
+        if delay_minutes is None:
+            delay_display = '-'
+        elif start_time_limit is not None:
+            formatted = _format_task_delay_display(delay_minutes)
+            delay_display = formatted + ' late' if formatted != '0m' else '0m'
+        else:
+            delay_display = _format_task_delay_display(delay_minutes)
+
         p = v.project
         d = v.district
         out.append({
@@ -16188,7 +16200,7 @@ def _task_start_delay_rows(from_date, to_date, project_id=0, district_id=0, vehi
             'close_dt': close_dt,
             'vehicle_start_dt': v_start_dt,
             'delay_minutes': None if delay_minutes is None else round(float(delay_minutes), 2),
-            'delay_display': _format_task_delay_display(delay_minutes),
+            'delay_display': delay_display,
         })
     return out
 
