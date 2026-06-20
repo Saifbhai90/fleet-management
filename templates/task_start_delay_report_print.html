@@ -22,6 +22,7 @@
   .preview-search-wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; width: 100%; }
   .preview-search { flex: 1 1 220px; min-width: 0; max-width: 100%; border: 1px solid #cbd5e1; border-radius: 8px; padding: 6px 10px; font-size: .85rem; }
   .preview-count { font-size: .78rem; color: #475569; flex: 1 1 160px; min-width: 0; }
+  .tsd-delay-badge { font-size: .72rem; font-weight: 700; padding: .35em .7em; letter-spacing: .3px; }
   @page { size: A4 landscape !important; margin: 6mm !important; }
   @media print {
     .rpt-table-outer { overflow: visible !important; }
@@ -79,7 +80,12 @@
         <td>{% if r.assign_dt %}{{ r.assign_dt.strftime('%d-%m-%Y %I:%M %p') }}{% else %}-{% endif %}</td>
         <td>{% if r.close_dt %}{{ r.close_dt.strftime('%d-%m-%Y %I:%M %p') }}{% else %}-{% endif %}</td>
         <td>{% if r.vehicle_start_dt %}{{ r.vehicle_start_dt.strftime('%d-%m-%Y %I:%M %p') }}{% else %}-{% endif %}</td>
-        <td>{{ r.delay_display }}</td>
+        <td>
+          {% if r.delay_kind == 'late' %}<span class="badge rounded-pill tsd-delay-badge text-bg-danger text-white"><i class="bi bi-clock-history me-1"></i>{{ r.delay_display }}</span>
+          {% elif r.delay_kind == 'early' %}<span class="badge rounded-pill tsd-delay-badge text-bg-warning text-dark"><i class="bi bi-clock me-1"></i>{{ r.delay_display }}</span>
+          {% elif r.delay_kind == 'normal' %}<span class="badge rounded-pill tsd-delay-badge text-bg-success text-white"><i class="bi bi-check-circle me-1"></i>{{ r.delay_display }}</span>
+          {% else %}<span class="badge rounded-pill tsd-delay-badge text-bg-secondary">-</span>{% endif %}
+        </td>
       </tr>
       {% else %}
       <tr><td colspan="12" class="text-center text-muted py-4">No driver response time records found.</td></tr>
