@@ -16033,12 +16033,23 @@ def _task_start_delay_report_filters_from_request(args):
     has_time = bool(start_time_raw) or bool(end_time_raw)
     has_delay = bool(check_type) or bool(delay_limit_raw)
 
+    status = (args.get('status') or '').strip().lower()
+    if status not in ('', '-', 'late_only', 'early_only'):
+        status = '-'
+    if status == '':
+        status = '-'
+
     if filter_group == 'time' or (has_time and filter_group != 'delay'):
         time_mode = True
         delay_mode = False
         apply_delay = None
         check_type = ''
         delay_limit_raw = ''
+        # late_only needs a start reference; early_only needs an end reference
+        if status == 'late_only' and start_time_limit is None:
+            status = '-'
+        if status == 'early_only' and end_time_limit is None:
+            status = '-'
     elif filter_group == 'delay' or has_delay:
         delay_mode = True
         time_mode = False
@@ -16047,10 +16058,12 @@ def _task_start_delay_report_filters_from_request(args):
         end_time_raw = ''
         start_time_limit = None
         end_time_limit = None
+        status = '-'
     else:
         delay_mode = False
         time_mode = False
         apply_delay = None
+        status = '-'
     return {
         'from_date': from_date,
         'to_date': to_date,
@@ -16067,6 +16080,7 @@ def _task_start_delay_report_filters_from_request(args):
         'delay_mode': delay_mode,
         'time_mode': time_mode,
         'filter_group': filter_group,
+        'status': status,
     }
 
 
@@ -16086,7 +16100,7 @@ def _vehicle_start_in_time_window(v_start_clock, start_time_limit, end_time_limi
 def _task_start_delay_rows(from_date, to_date, project_id=0, district_id=0, vehicle_id=0,
                            check_type='', delay_limit=None, start_time_limit=None, end_time_limit=None,
                            allowed_projects=None, allowed_districts=None, allowed_vehicles=None,
-                           is_master_or_admin=True):
+                           is_master_or_admin=True, status='-'):
     allowed_projects = set(allowed_projects or [])
     allowed_districts = set(allowed_districts or [])
     allowed_vehicles = set(allowed_vehicles or [])
@@ -16159,9 +16173,12 @@ def _task_start_delay_rows(from_date, to_date, project_id=0, district_id=0, vehi
         if v_start_dt is None:
             delay_minutes = None
         else:
-            if start_time_limit is not None:
+            if status == 'late_only' and start_time_limit is not None:
                 expected_dt = datetime.combine(v_start_dt.date(), start_time_limit)
                 delay_minutes = (v_start_dt - expected_dt).total_seconds() / 60.0
+            elif status == 'early_only' and end_time_limit is not None:
+                expected_dt = datetime.combine(v_start_dt.date(), end_time_limit)
+                delay_minutes = (expected_dt - v_start_dt).total_seconds() / 60.0
             else:
                 delay_minutes = (v_start_dt - assign_dt).total_seconds() / 60.0
             if delay_minutes < 0:
@@ -16181,11 +16198,18 @@ def _task_start_delay_rows(from_date, to_date, project_id=0, district_id=0, vehi
 
         if delay_minutes is None:
             delay_display = '-'
-        elif start_time_limit is not None:
+            delay_kind = ''
+        elif status == 'late_only':
             formatted = _format_task_delay_display(delay_minutes)
             delay_display = formatted + ' late' if formatted != '0m' else '0m'
+            delay_kind = 'late'
+        elif status == 'early_only':
+            formatted = _format_task_delay_display(delay_minutes)
+            delay_display = formatted + ' early' if formatted != '0m' else '0m'
+            delay_kind = 'early'
         else:
             delay_display = _format_task_delay_display(delay_minutes)
+            delay_kind = 'normal' if delay_minutes == 0 else 'late'
 
         p = v.project
         d = v.district
@@ -16201,6 +16225,8 @@ def _task_start_delay_rows(from_date, to_date, project_id=0, district_id=0, vehi
             'vehicle_start_dt': v_start_dt,
             'delay_minutes': None if delay_minutes is None else round(float(delay_minutes), 2),
             'delay_display': delay_display,
+            'status': status,
+            'delay_kind': delay_kind,
         })
     return out
 
@@ -16248,7 +16274,7 @@ def task_start_delay_report():
         check_type=filters['check_type'], delay_limit=filters['delay_limit'],
         start_time_limit=filters['start_time_limit'], end_time_limit=filters['end_time_limit'],
         allowed_projects=allowed_projects, allowed_districts=allowed_districts, allowed_vehicles=allowed_vehicles,
-        is_master_or_admin=is_master_or_admin,
+        is_master_or_admin=is_master_or_admin, status=filters['status'],
     )
 
     project_q = Project.query.order_by(Project.name)
@@ -16284,7 +16310,7 @@ def task_start_delay_report():
         check_type=filters['check_type'], delay_limit=filters['delay_limit_raw'],
         start_time=_time_input_value(filters['start_time_raw']),
         end_time=_time_input_value(filters['end_time_raw']),
-        delay_mode=filters['delay_mode'], time_mode=filters['time_mode'],
+        delay_mode=filters['delay_mode'], time_mode=filters['time_mode'], status=filters['status'],
         filter_group='time' if filters['time_mode'] else ('delay' if filters['delay_mode'] else ''),
         project_choices=project_choices, district_choices=district_choices, vehicle_choices=vehicle_choices,
         **_nav_back_ctx(url_for('reports_index'), show_without_nav_from=True),
@@ -16308,7 +16334,7 @@ def task_start_delay_report_export():
         check_type=filters['check_type'], delay_limit=filters['delay_limit'],
         start_time_limit=filters['start_time_limit'], end_time_limit=filters['end_time_limit'],
         allowed_projects=allowed_projects, allowed_districts=allowed_districts, allowed_vehicles=allowed_vehicles,
-        is_master_or_admin=is_master_or_admin,
+        is_master_or_admin=is_master_or_admin, status=filters['status'],
     )
     rows = _filter_task_start_delay_rows(rows, request.args.get('table_search'))
     headers = [
@@ -16355,7 +16381,7 @@ def _task_start_delay_report_preview_context():
         check_type=filters['check_type'], delay_limit=filters['delay_limit'],
         start_time_limit=filters['start_time_limit'], end_time_limit=filters['end_time_limit'],
         allowed_projects=allowed_projects, allowed_districts=allowed_districts, allowed_vehicles=allowed_vehicles,
-        is_master_or_admin=is_master_or_admin,
+        is_master_or_admin=is_master_or_admin, status=filters['status'],
     )
     rows = _filter_task_start_delay_rows(rows, request.args.get('table_search'))
     return {
@@ -16369,6 +16395,7 @@ def _task_start_delay_report_preview_context():
         'end_time': _time_input_value(filters['end_time_raw']),
         'delay_mode': filters['delay_mode'],
         'time_mode': filters['time_mode'],
+        'status': filters['status'],
         'filter_group': 'time' if filters['time_mode'] else ('delay' if filters['delay_mode'] else ''),
         'now': datetime.now,
     }

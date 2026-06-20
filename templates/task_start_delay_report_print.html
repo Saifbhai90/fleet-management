@@ -48,6 +48,7 @@
     {% if start_time and end_time %}<span class="total-badge">Start window: {{ start_time }} to {{ end_time }}</span>
     {% elif start_time %}<span class="total-badge">Start from: {{ start_time }}</span>
     {% elif end_time %}<span class="total-badge">Start until: {{ end_time }}</span>{% endif %}
+    {% if status and status != '-' %}<span class="total-badge">Status: {% if status == 'late_only' %}Late{% elif status == 'early_only' %}Early{% else %}{{ status }}{% endif %}</span>{% endif %}
   </div>
 
   <div class="preview-search-wrap no-print">
