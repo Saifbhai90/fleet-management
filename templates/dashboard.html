@@ -633,6 +633,12 @@ function _dbgToast(msg) {
 
     /* ── Card visibility ── */
     function refreshCard() {
+        /* Never show permission card on web browser */
+        if (!window.Capacitor || !window.Capacitor.isNativePlatform || !window.Capacitor.isNativePlatform()) {
+            var card0 = document.getElementById('permDashCard');
+            if (card0) card0.style.setProperty('display', 'none', 'important');
+            return;
+        }
         var locOk   = _permStates.location === 'granted';
         var camOk   = _permStates.camera   === 'granted';
         var notifOk = _permStates.notifications === 'granted';
@@ -878,11 +884,16 @@ function _dbgToast(msg) {
     var _updateApkData = null;
     function checkAppUpdate() {
         if (!window.Capacitor || !window.Capacitor.isNativePlatform || !window.Capacitor.isNativePlatform()) {
-            /* Not native — hide update row, treat as ok */
+            /* Not native — permanently hide card, treat all as ok */
+            var card2 = document.getElementById('permDashCard');
+            if (card2) card2.style.setProperty('display', 'none', 'important');
             var row = document.getElementById('permRowUpdate');
             if (row) row.style.display = 'none';
             _permStates.update = 'granted';
-            refreshCard();
+            _permStates.location = 'granted';
+            _permStates.camera = 'granted';
+            _permStates.notifications = 'granted';
+            showNav();
             return;
         }
         var row = document.getElementById('permRowUpdate');
