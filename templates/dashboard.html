@@ -315,61 +315,226 @@ document.addEventListener('DOMContentLoaded', function() {
 {% set fleet_pct  = ((assigned_vehicles / total_vehicles * 100) | round(1)) if total_vehicles > 0 else 0 %}
 
 <!-- ═══════════════════════════════
-     PERMISSION DASHBOARD CARD
+     PERMISSION DASHBOARD CARD — Premium Glassmorphism UI
      (Only shown in Capacitor native app)
-     Fixed full-screen so it stays above overlay and is always clickable
 ═══════════════════════════════ -->
-<div id="permDashCard" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999;overflow-y:auto;display:none;align-items:flex-start;justify-content:center;padding:max(env(safe-area-inset-top,20px),20px) 16px 24px;background:#0f172a;">
-    <div style="width:100%;max-width:480px;background:linear-gradient(135deg,#0f172a,#1e293b);border-radius:20px;padding:24px 22px;border:2px solid #334155;box-shadow:0 8px 32px rgba(0,0,0,0.4);margin-top:12px;">
-        <div class="d-flex align-items-center gap-3 mb-3">
-            <div style="width:42px;height:42px;border-radius:12px;background:rgba(239,68,68,0.18);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                <i class="bi bi-shield-exclamation" style="font-size:1.3rem;color:#f87171;"></i>
+<style>
+/* ── Ambient orbs ── */
+#permDashCard .porb1{position:fixed;width:260px;height:260px;background:radial-gradient(circle,rgba(99,102,241,0.22) 0%,transparent 70%);top:10%;left:30%;z-index:0;pointer-events:none;animation:pOrbFloat 9s infinite ease-in-out;}
+#permDashCard .porb2{position:fixed;width:300px;height:300px;background:radial-gradient(circle,rgba(249,115,22,0.16) 0%,transparent 70%);bottom:10%;right:20%;z-index:0;pointer-events:none;animation:pOrbFloat 11s infinite ease-in-out reverse;}
+/* ── Glass card ── */
+.perm-glass-card{background:rgba(255,255,255,0.38);backdrop-filter:blur(28px) saturate(180%);-webkit-backdrop-filter:blur(28px) saturate(180%);border:1px solid rgba(255,255,255,0.52);border-radius:26px;padding:18px 16px;box-shadow:0 12px 40px rgba(31,41,55,0.07),inset 0 1px 2px rgba(255,255,255,0.65);display:flex;flex-direction:column;gap:11px;}
+/* ── Update card accent ── */
+.perm-glass-card.update-accent{border:1px solid rgba(249,115,22,0.32);background:linear-gradient(135deg,rgba(255,255,255,0.42) 0%,rgba(254,215,170,0.18) 100%);}
+/* ── Header block ── */
+.pg-header{display:flex;align-items:center;gap:12px;}
+.pg-icon-wrap{width:40px;height:40px;border-radius:14px;background:rgba(255,255,255,0.65);border:1px solid rgba(255,255,255,0.72);display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 4px 12px rgba(16,185,129,0.1);animation:pgIconPulse 2.5s infinite ease-in-out;}
+.pg-icon-wrap.orange{box-shadow:0 4px 12px rgba(249,115,22,0.12);}
+.pg-title{font-size:0.88rem;font-weight:700;color:#1f2937;margin:0;}
+.pg-sub{font-size:0.7rem;color:#6b7280;margin:3px 0 0 0;line-height:1.4;}
+/* ── Permission row ── */
+.pg-row{background:rgba(255,255,255,0.32);border:1px solid rgba(255,255,255,0.45);border-radius:16px;padding:11px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px;transition:all 0.25s ease;}
+.pg-row:hover{background:rgba(255,255,255,0.55);transform:translateY(-1px);}
+.pg-row-left{display:flex;align-items:center;gap:11px;flex:1;min-width:0;}
+.pg-row-icon{width:34px;height:34px;border-radius:11px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:1rem;}
+.pg-row-icon.loc{background:rgba(239,68,68,0.1);}
+.pg-row-icon.cam{background:rgba(59,130,246,0.1);}
+.pg-row-icon.bell{background:rgba(245,158,11,0.1);}
+.pg-lbl{font-size:0.82rem;font-weight:600;color:#374151;}
+.pg-lbl-sub{font-size:0.68rem;color:#9ca3af;margin-top:1px;}
+/* ── Granted pill ── */
+.pg-granted-pill{font-size:0.7rem;font-weight:600;color:#059669;display:flex;align-items:center;gap:4px;background:rgba(209,250,229,0.55);padding:4px 10px;border-radius:20px;border:1px solid rgba(16,185,129,0.22);white-space:nowrap;flex-shrink:0;}
+/* ── Allow button ── */
+.pg-allow-btn{position:relative;background:linear-gradient(135deg,#3b82f6 0%,#1d4ed8 100%);border:1px solid rgba(255,255,255,0.3);color:white;padding:8px 18px;border-radius:12px;font-size:0.72rem;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;box-shadow:0 4px 12px rgba(29,78,216,0.2),inset 0 1px 0 rgba(255,255,255,0.3);overflow:hidden;transition:all 0.3s cubic-bezier(0.175,0.885,0.32,1.275);}
+.pg-allow-btn::before{content:'';position:absolute;top:0;left:-150%;width:40%;height:100%;background:linear-gradient(90deg,rgba(255,255,255,0) 0%,rgba(255,255,255,0.35) 50%,rgba(255,255,255,0) 100%);transform:skewX(-20deg);animation:pgBtnShimmer 3.5s infinite ease-in-out;}
+.pg-allow-btn:hover{transform:translateY(-1.5px) scale(1.04);box-shadow:0 6px 16px rgba(29,78,216,0.35),inset 0 1px 0 rgba(255,255,255,0.4);background:linear-gradient(135deg,#4f46e5 0%,#2563eb 100%);}
+/* ── Map snippet ── */
+.pg-map{height:52px;background:rgba(255,255,255,0.22);border:1px solid rgba(255,255,255,0.4);border-radius:14px;position:relative;overflow:hidden;margin:-2px 0;}
+.pg-map-h{position:absolute;width:100%;height:1px;background:rgba(59,130,246,0.1);top:50%;}
+.pg-map-v{position:absolute;width:1px;height:100%;background:rgba(59,130,246,0.1);left:44%;}
+.pg-map-dot{position:absolute;width:8px;height:8px;background:#3b82f6;border:2px solid white;border-radius:50%;top:42%;left:50%;box-shadow:0 0 10px rgba(59,130,246,0.6);animation:pgRadar 2s infinite ease-in-out;}
+/* ── Version row ── */
+.pg-ver-row{display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,0.42);border:1px solid rgba(255,255,255,0.52);border-radius:14px;padding:11px 18px;}
+.pg-ver-block{display:flex;flex-direction:column;}
+.pg-ver-lbl{font-size:0.62rem;font-weight:700;color:#8b5cf6;text-transform:uppercase;letter-spacing:0.06em;}
+.pg-ver-code{font-size:0.9rem;font-weight:700;color:#16a34a;margin-top:2px;}
+.pg-ver-code.new-glow{color:#d97706;}
+/* ── Progress bar ── */
+.pg-prog-wrap{background:rgba(255,255,255,0.35);border:1px solid rgba(255,255,255,0.45);border-radius:12px;padding:11px 14px;}
+.pg-prog-track{background:rgba(249,115,22,0.12);border-radius:6px;height:7px;overflow:hidden;}
+.pg-prog-fill{background:linear-gradient(90deg,#f97316,#ea580c);height:100%;border-radius:6px;transition:width 0.3s;}
+.pg-prog-txt{font-size:0.66rem;color:#6b7280;margin-top:6px;}
+/* ── CTA Download button ── */
+.pg-cta-btn{position:relative;background:linear-gradient(135deg,#f97316 0%,#d97706 100%);border:1px solid rgba(255,255,255,0.35);color:white;padding:15px;border-radius:18px;font-weight:700;font-size:0.88rem;letter-spacing:0.3px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 10px 25px rgba(249,115,22,0.25),inset 0 1px 1px rgba(255,255,255,0.4);overflow:hidden;transition:all 0.4s cubic-bezier(0.175,0.885,0.32,1.275);width:100%;}
+.pg-cta-btn::before{content:'';position:absolute;top:0;left:-150%;width:50%;height:100%;background:linear-gradient(90deg,rgba(255,255,255,0) 0%,rgba(255,255,255,0.45) 50%,rgba(255,255,255,0) 100%);transform:skewX(-25deg);animation:pgBtnShimmer 3s infinite ease-in-out;}
+.pg-cta-btn:hover{transform:translateY(-2px) scale(1.02);box-shadow:0 14px 32px rgba(249,115,22,0.4),inset 0 1px 2px rgba(255,255,255,0.5);background:linear-gradient(135deg,#ff8025 0%,#ea580c 100%);}
+.pg-cta-btn:active{transform:translateY(1px) scale(0.99);}
+.pg-btn-bounce{animation:pgBounce 1.5s infinite ease-in-out;display:inline-flex;}
+/* ── Location icon animation ── */
+.pg-loc-anim{color:#ef4444;animation:pgPinJump 1.2s infinite ease-in-out;}
+.pg-cam-anim{color:#3b82f6;animation:pgCamShutter 3s infinite linear;}
+.pg-bell-anim{color:#f59e0b;transform-origin:top center;animation:pgBellRing 1.5s infinite ease-in-out;}
+/* ── Keyframes ── */
+@keyframes pOrbFloat{0%,100%{transform:translateY(0) scale(1);}50%{transform:translateY(-18px) scale(1.04);}}
+@keyframes pgIconPulse{0%,100%{transform:scale(1);box-shadow:0 4px 10px rgba(16,185,129,0.1);}50%{transform:scale(1.04);box-shadow:0 4px 18px rgba(16,185,129,0.22);}}
+@keyframes pgRadar{0%{box-shadow:0 0 0 0 rgba(59,130,246,0.5);}70%{box-shadow:0 0 0 10px rgba(59,130,246,0);}100%{box-shadow:0 0 0 0 rgba(59,130,246,0);}}
+@keyframes pgArrow{0%{transform:translateX(-4px);opacity:0.4;}50%{transform:translateX(4px);opacity:1;}100%{transform:translateX(-4px);opacity:0.4;}}
+.pg-ver-arrow{color:#f97316;font-weight:800;animation:pgArrow 1.2s infinite ease-in-out;display:inline-block;}
+@keyframes pgPinJump{0%,100%{transform:translateY(0);}50%{transform:translateY(-4px);}}
+@keyframes pgCamShutter{0%{transform:rotate(0) scale(1);}50%{transform:rotate(180deg) scale(0.92);}100%{transform:rotate(360deg) scale(1);}}
+@keyframes pgBellRing{0%,100%{transform:rotate(0);}20%{transform:rotate(12deg);}40%{transform:rotate(-12deg);}60%{transform:rotate(8deg);}80%{transform:rotate(-8deg);}}
+@keyframes pgGauge{0%,100%{transform:rotate(-25deg);}50%{transform:rotate(10deg);}}
+@keyframes pgSpinOnce{0%{transform:rotate(0);}100%{transform:rotate(360deg);}}
+@keyframes pgBtnShimmer{0%{left:-150%;}50%{left:150%;}100%{left:150%;}}
+@keyframes pgBounce{0%,100%{transform:translateY(0);}50%{transform:translateY(3px);}}
+@keyframes pgIconSpin{0%{transform:rotate(0deg);}100%{transform:rotate(360deg);}}
+/* ── Premium green install button ── */
+.pg-install-btn{background:linear-gradient(135deg,#22c55e 0%,#16a34a 100%) !important;box-shadow:0 10px 25px rgba(22,163,74,0.28),inset 0 1px 1px rgba(255,255,255,0.4) !important;border-radius:18px !important;display:flex !important;align-items:center;justify-content:center;gap:8px;overflow:hidden;position:relative;letter-spacing:0.3px;}
+.pg-install-btn::before{content:'';position:absolute;top:0;left:-150%;width:50%;height:100%;background:linear-gradient(90deg,rgba(255,255,255,0) 0%,rgba(255,255,255,0.38) 50%,rgba(255,255,255,0) 100%);transform:skewX(-25deg);animation:pgBtnShimmer 3s infinite ease-in-out;}
+.pg-install-btn:hover{transform:translateY(-2px) scale(1.02) !important;box-shadow:0 14px 32px rgba(22,163,74,0.4) !important;}
+.pg-install-spin{animation:pgIconSpin 2s infinite linear;display:inline-flex;}
+</style>
+
+<div id="permDashCard" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999;overflow-y:auto;align-items:flex-start;justify-content:center;padding:max(env(safe-area-inset-top,24px),24px) 16px 32px;background:linear-gradient(135deg,#eef2f7 0%,#dbeafe 50%,#e2e8f0 100%);">
+    <!-- Ambient orbs -->
+    <div class="porb1"></div>
+    <div class="porb2"></div>
+
+    <div style="width:100%;max-width:420px;margin-top:8px;display:flex;flex-direction:column;gap:13px;position:relative;z-index:1;">
+
+        <!-- ── Section 1: Permissions ── -->
+        <div class="perm-glass-card">
+            <!-- Header -->
+            <div class="pg-header">
+                <div class="pg-icon-wrap" style="animation:pgIconPulse 2.5s infinite ease-in-out;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                </div>
+                <div>
+                    <div class="pg-title">App Permissions Required</div>
+                    <div class="pg-sub">Grant all permissions to use the app. If an update is available, download &amp; install it to continue.</div>
+                </div>
             </div>
-            <div>
-                <div style="font-size:0.95rem;font-weight:700;color:#f1f5f9;">App Permissions Required</div>
-                <div style="font-size:0.75rem;color:#94a3b8;margin-top:1px;">Allow karne se attendance aur location features kaam karenge</div>
+
+            <div id="permRowsContainer" style="display:flex;flex-direction:column;gap:9px;">
+                <!-- Location -->
+                <div id="permRowLocation" class="pg-row">
+                    <div class="pg-row-left">
+                        <div class="pg-row-icon loc">
+                            <span class="pg-loc-anim">
+                                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                            </span>
+                        </div>
+                        <div>
+                            <div class="pg-lbl">Location</div>
+                            <div id="permStatusLocation" class="pg-lbl-sub">Checking…</div>
+                        </div>
+                    </div>
+                    <button id="permBtnLocation" onclick="handlePermAllow('location')" class="pg-allow-btn" style="display:none;">Allow</button>
+                    <span id="permGrantedLocation" class="pg-granted-pill" style="display:none;">✓ Granted</span>
+                </div>
+
+                <!-- Live map under location -->
+                <div class="pg-map" id="permLiveMapWrap" style="height:90px;border-radius:14px;overflow:hidden;position:relative;">
+                    <div id="permLiveMap" style="width:100%;height:100%;"></div>
+                    <!-- fallback dots shown until map loads -->
+                    <div id="permMapFallback" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;">
+                        <div class="pg-map-h"></div>
+                        <div class="pg-map-v"></div>
+                        <div class="pg-map-dot"></div>
+                    </div>
+                </div>
+
+                <!-- Camera -->
+                <div id="permRowCamera" class="pg-row">
+                    <div class="pg-row-left">
+                        <div class="pg-row-icon cam">
+                            <span class="pg-cam-anim">
+                                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                            </span>
+                        </div>
+                        <div>
+                            <div class="pg-lbl">Camera</div>
+                            <div id="permStatusCamera" class="pg-lbl-sub">Checking…</div>
+                        </div>
+                    </div>
+                    <button id="permBtnCamera" onclick="handlePermAllow('camera')" class="pg-allow-btn" style="display:none;">Allow</button>
+                    <span id="permGrantedCamera" class="pg-granted-pill" style="display:none;">✓ Granted</span>
+                </div>
+
+                <!-- Notifications -->
+                <div id="permRowNotif" class="pg-row">
+                    <div class="pg-row-left">
+                        <div class="pg-row-icon bell">
+                            <span class="pg-bell-anim">
+                                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                            </span>
+                        </div>
+                        <div>
+                            <div class="pg-lbl">Notifications</div>
+                            <div id="permStatusNotifications" class="pg-lbl-sub" style="color:#f87171;">Denied</div>
+                        </div>
+                    </div>
+                    <button id="permBtnNotifications" onclick="handlePermAllow('notifications')" class="pg-allow-btn" style="display:block;">Allow</button>
+                    <span id="permGrantedNotifications" class="pg-granted-pill" style="display:none;">✓ Granted</span>
+                </div>
             </div>
         </div>
-        <div class="d-flex flex-column gap-2" id="permRowsContainer">
-            <!-- Location -->
-            <div id="permRowLocation" class="d-flex align-items-center justify-content-between px-3 py-2" style="background:rgba(255,255,255,0.05);border-radius:12px;border:1px solid rgba(255,255,255,0.08);">
-                <div class="d-flex align-items-center gap-2">
-                    <span style="font-size:1.1rem;">📍</span>
-                    <div>
-                        <div style="font-size:0.82rem;font-weight:600;color:#f1f5f9;">Location</div>
-                        <div id="permStatusLocation" style="font-size:0.7rem;color:#94a3b8;">Checking…</div>
+
+        <!-- ── Section 2: App Update ── -->
+        <div id="permRowUpdate" style="display:none;" class="perm-glass-card update-accent">
+
+            <!-- Top row: icon+title LEFT, gauge RIGHT -->
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+                <div class="pg-header" style="gap:11px;flex:1;min-width:0;">
+                    <div class="pg-icon-wrap orange" style="animation:pgSpinOnce 1.2s ease-out;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ea580c" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                    </div>
+                    <div style="min-width:0;">
+                        <div class="pg-title">App New Update</div>
+                        <div id="permStatusUpdate" class="pg-sub" style="color:#374151!important;">Checking…</div>
                     </div>
                 </div>
-                <button id="permBtnLocation" onclick="handlePermAllow('location')" class="btn btn-sm" style="display:none;background:#3b82f6;color:#fff;border:none;border-radius:8px;font-size:0.75rem;font-weight:600;padding:5px 14px;">Allow</button>
-                <span id="permGrantedLocation" style="display:none;font-size:0.78rem;font-weight:600;color:#34d399;">✓ Granted</span>
+                <!-- Gauge widget -->
+                <div style="width:58px;height:44px;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;flex-shrink:0;">
+                    <div style="position:absolute;width:44px;height:44px;border:3.5px solid rgba(249,115,22,0.15);border-top-color:#f97316;border-right-color:#f97316;border-radius:50%;top:0;animation:pgGauge 3s infinite ease-in-out;"></div>
+                    <span id="permGrantedUpdate" style="display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:0.6rem;font-weight:700;color:#059669;white-space:nowrap;">✓ Latest</span>
+                    <span style="font-size:0.6rem;color:#f97316;font-weight:700;white-space:nowrap;letter-spacing:0.2px;position:relative;z-index:1;">new features</span>
+                </div>
             </div>
-            <!-- Camera -->
-            <div id="permRowCamera" class="d-flex align-items-center justify-content-between px-3 py-2" style="background:rgba(255,255,255,0.05);border-radius:12px;border:1px solid rgba(255,255,255,0.08);">
-                <div class="d-flex align-items-center gap-2">
-                    <span style="font-size:1.1rem;">📷</span>
-                    <div>
-                        <div style="font-size:0.82rem;font-weight:600;color:#f1f5f9;">Camera</div>
-                        <div id="permStatusCamera" style="font-size:0.7rem;color:#94a3b8;">Checking…</div>
-                    </div>
+
+            <!-- Version mapping row -->
+            <div id="updateVersionRow" style="display:none;background:rgba(255,255,255,0.42);border:1px solid rgba(255,255,255,0.52);border-radius:14px;padding:12px 16px;">
+                <!-- Labels row -->
+                <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                    <span class="pg-ver-lbl">Current</span>
+                    <span class="pg-ver-lbl" style="text-align:right;">New</span>
                 </div>
-                <button id="permBtnCamera" onclick="handlePermAllow('camera')" class="btn btn-sm" style="display:none;background:#3b82f6;color:#fff;border:none;border-radius:8px;font-size:0.75rem;font-weight:600;padding:5px 14px;">Allow</button>
-                <span id="permGrantedCamera" style="display:none;font-size:0.78rem;font-weight:600;color:#34d399;">✓ Granted</span>
+                <!-- Version + arrow on same line -->
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                    <span id="updateCurrentVer" class="pg-ver-code" style="font-size:1rem;">—</span>
+                    <span class="pg-ver-arrow" style="flex:1;text-align:center;letter-spacing:-1px;">——→</span>
+                    <span id="updateNewVer" class="pg-ver-code new-glow" style="font-size:1rem;text-align:right;">—</span>
+                </div>
             </div>
-            <!-- Notifications -->
-            <div id="permRowNotif" class="d-flex align-items-center justify-content-between px-3 py-2" style="background:rgba(255,255,255,0.05);border-radius:12px;border:1px solid rgba(255,255,255,0.08);">
-                <div class="d-flex align-items-center gap-2">
-                    <span style="font-size:1.1rem;">🔔</span>
-                    <div>
-                        <div style="font-size:0.82rem;font-weight:600;color:#f1f5f9;">Notifications</div>
-                        <div id="permStatusNotif" style="font-size:0.7rem;color:#94a3b8;">Checking…</div>
+
+            <!-- Progress bar -->
+            <div id="updateProgressWrap" style="display:none;">
+                <div class="pg-prog-wrap">
+                    <div class="pg-prog-track">
+                        <div id="updateProgressBar" class="pg-prog-fill" style="width:0%;"></div>
                     </div>
+                    <div id="updateProgressText" class="pg-prog-txt">Starting download…</div>
                 </div>
-                <button id="permBtnNotif" onclick="handlePermAllow('notifications')" class="btn btn-sm" style="display:none;background:#3b82f6;color:#fff;border:none;border-radius:8px;font-size:0.75rem;font-weight:600;padding:5px 14px;">Allow</button>
-                <span id="permGrantedNotif" style="display:none;font-size:0.78rem;font-weight:600;color:#34d399;">✓ Granted</span>
+            </div>
+
+            <!-- Action area -->
+            <div id="updateActionArea">
+                <button id="permBtnUpdate" onclick="handleUpdateInstall()" class="pg-cta-btn"><span class="pg-btn-bounce"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg></span> Download &amp; Install Now</button>
             </div>
         </div>
-        <div id="permCardNote" style="display:none;margin-top:12px;font-size:0.72rem;color:#64748b;text-align:center;">
-            App use karne ke liye Location aur Camera allow karna zaroori hai.
+
+        <div id="permCardNote" style="display:none !important;font-size:0.68rem;color:#6b7280;text-align:center;padding:0 4px;">
+            App use karne ke liye Location, Camera, Notifications allow karein aur latest version install karein.
         </div>
     </div>
 </div>
@@ -380,212 +545,577 @@ document.addEventListener('DOMContentLoaded', function() {
 </div>
 
 <script>
+/* ── DEBUG TOAST helper ── */
+function _dbgToast(msg) {
+    try {
+        if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Toast) {
+            window.Capacitor.Plugins.Toast.show({ text: '[DBG] ' + msg, duration: 'long', position: 'bottom' });
+        }
+    } catch(e) {}
+}
 (function() {
-    var _permStates = { location: 'unknown', camera: 'unknown', notifications: 'unknown' };
-    var _criticalGranted = false;
+    var _permStates = { location: 'unknown', camera: 'unknown', notifications: 'denied', update: 'checking' };
+
+    /* ── Helpers ── */
+    function cap(perm) { return perm.charAt(0).toUpperCase() + perm.slice(1); }
 
     function setStatus(perm, text, color) {
-        var el = document.getElementById('permStatus' + perm.charAt(0).toUpperCase() + perm.slice(1));
-        if (el) { el.textContent = text; el.style.color = color || '#94a3b8'; }
-    }
-    function showBtn(perm, show) {
-        var cap = perm.charAt(0).toUpperCase() + perm.slice(1);
-        var btn = document.getElementById('permBtn' + cap);
-        var granted = document.getElementById('permGranted' + cap);
-        if (btn) btn.style.display = show ? '' : 'none';
-        if (granted) granted.style.display = show ? 'none' : (_permStates[perm] === 'granted' ? '' : 'none');
+        var el = document.getElementById('permStatus' + cap(perm));
+        if (el) { el.textContent = text; el.style.color = (perm === 'update') ? '#374151' : (color || '#94a3b8'); }
     }
     function showGranted(perm) {
-        var cap = perm.charAt(0).toUpperCase() + perm.slice(1);
-        var btn = document.getElementById('permBtn' + cap);
-        var granted = document.getElementById('permGranted' + cap);
+        var btn = document.getElementById('permBtn' + cap(perm));
+        var ok  = document.getElementById('permGranted' + cap(perm));
         if (btn) btn.style.display = 'none';
-        if (granted) granted.style.display = '';
+        if (ok)  ok.style.display  = '';
+    }
+    function showBtn(perm, label) {
+        var btn = document.getElementById('permBtn' + cap(perm));
+        var ok  = document.getElementById('permGranted' + cap(perm));
+        if (btn) { btn.style.display = ''; btn.textContent = label || 'Allow'; }
+        if (ok)  ok.style.display  = 'none';
+    }
+    function hideBtn(perm) {
+        var btn = document.getElementById('permBtn' + cap(perm));
+        var ok  = document.getElementById('permGranted' + cap(perm));
+        if (btn) btn.style.display = 'none';
+        if (ok)  ok.style.display  = 'none';
     }
 
-    function updateCardVisibility() {
-        var locGranted = _permStates.location === 'granted';
-        var camGranted = _permStates.camera === 'granted';
-        var notifGranted = _permStates.notifications === 'granted';
-        _criticalGranted = locGranted && camGranted;
-
-        var anyNotGranted = !locGranted || !camGranted || !notifGranted;
-
-        /* Permission card: visible jab tak koi bhi permission missing ho */
-        var card = document.getElementById('permDashCard');
-        /* display handled at bottom after z-index set */
-
-        var note = document.getElementById('permCardNote');
-        if (note) note.style.display = anyNotGranted ? '' : 'none';
-
-        /* Lock overlay: visible jab Location ya Camera grant nahi */
-        var overlay = document.getElementById('permBlurOverlay');
-        if (overlay) overlay.style.display = _criticalGranted ? 'none' : '';
-
-        /* Navbar, sidebar, bottom nav, hamburger — hide jab critical permissions missing */
-        var toHide = [
-            document.querySelector('nav.navbar'),
-            document.getElementById('sidebar'),
-            document.getElementById('sidebarOverlay'),
-            document.getElementById('mobileBottomNav'),
-            document.getElementById('mobileMenuBtn')
-        ];
-        toHide.forEach(function(el) {
-            if (!el) return;
-            if (!_criticalGranted) {
-                el.setAttribute('data-perm-hidden', '1');
-                el.style.display = 'none';
-            } else {
-                if (el.getAttribute('data-perm-hidden') === '1') {
-                    el.removeAttribute('data-perm-hidden');
-                    el.style.display = '';
-                }
-            }
-        });
-
-        /* Permission card: fixed full-screen overlay jaisa, z-index sabse upar */
-        if (card) {
-            card.style.position = 'fixed';
-            card.style.zIndex = '9999';
-            card.style.display = anyNotGranted ? 'flex' : 'none';
+    /* ── Open App Settings (Android) ── */
+    function openAppSettings() {
+        /* Primary: native Java bridge injected by MainActivity */
+        if (window._fleetNative && typeof window._fleetNative.openAppSettings === 'function') {
+            window._fleetNative.openAppSettings();
+            return;
+        }
+        /* Fallback: Capacitor App plugin (may not work on all Android) */
+        var Plugins = window.Capacitor && window.Capacitor.Plugins;
+        if (Plugins && Plugins.App && typeof Plugins.App.openUrl === 'function') {
+            Plugins.App.openUrl({ url: 'app-settings:' }).catch(function() {});
         }
     }
 
+    /* ── Nav hide/show ── */
+    function _navElements() {
+        return [
+            document.querySelector('nav.navbar'),
+            document.getElementById('mobileBottomNav'),
+            document.getElementById('mobileMenuBtn'),
+            document.getElementById('sidebar'),
+            document.getElementById('sidebarOverlay'),
+            document.getElementById('mobileFabWrap'),
+            document.getElementById('mobileFabBtn'),
+            document.getElementById('fabBackdrop')
+        ];
+    }
+    function hideNav() {
+        _navElements().forEach(function(el) {
+            if (el) {
+                el.setAttribute('data-perm-hidden', '1');
+                el.style.setProperty('display', 'none', 'important');
+            }
+        });
+    }
+    function showNav() {
+        if (window._installReadyShown) return;
+        _navElements().forEach(function(el) {
+            if (el && el.getAttribute('data-perm-hidden') === '1') {
+                el.removeAttribute('data-perm-hidden');
+                el.style.removeProperty('display');
+            }
+        });
+    }
+    /* Keep nav hidden while install button is visible */
+    setInterval(function() {
+        if (window._installReadyShown) { hideNav(); }
+    }, 300);
+
+    /* ── Card visibility ── */
+    function refreshCard() {
+        var locOk   = _permStates.location === 'granted';
+        var camOk   = _permStates.camera   === 'granted';
+        var notifOk = _permStates.notifications === 'granted';
+        var updateOk  = _permStates.update === 'granted';
+        var criticalOk = locOk && camOk && notifOk && updateOk;
+        var anyPending = !locOk || !camOk || !notifOk || !updateOk;
+
+        var card = document.getElementById('permDashCard');
+        if (card) {
+            card.style.position = 'fixed';
+            card.style.zIndex   = '19990';
+            card.style.display  = anyPending ? 'flex' : 'none';
+        }
+        var note = document.getElementById('permCardNote');
+        if (note) note.style.display = 'none';
+
+        /* Overlay not needed — card itself is full-screen */
+        var overlay = document.getElementById('permBlurOverlay');
+        if (overlay) overlay.style.display = 'none';
+
+        if (window._installReadyShown) { hideNav(); return; }
+        if (criticalOk) { showNav(); } else { hideNav(); }
+    }
+
+    /* ── Live map inside permission card ── */
+    var _permMapInited = false;
+    function _initPermMap() {
+        if (_permMapInited) return;
+        var mapEl = document.getElementById('permLiveMap');
+        var fallback = document.getElementById('permMapFallback');
+        if (!mapEl) return;
+        /* Load Leaflet CSS+JS if not already loaded */
+        function _doMap(lat, lng) {
+            _permMapInited = true;
+            if (fallback) fallback.style.display = 'none';
+            if (!window.L) {
+                var lCss = document.createElement('link');
+                lCss.rel = 'stylesheet';
+                lCss.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+                document.head.appendChild(lCss);
+                var lJs = document.createElement('script');
+                lJs.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+                lJs.onload = function() { _renderMap(lat, lng); };
+                document.head.appendChild(lJs);
+            } else {
+                _renderMap(lat, lng);
+            }
+        }
+        function _renderMap(lat, lng) {
+            mapEl.style.borderRadius = '14px';
+            var map = window.L.map('permLiveMap', { zoomControl:false, attributionControl:false, dragging:false, scrollWheelZoom:false });
+            window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+            map.setView([lat, lng], 15);
+            var icon = window.L.divIcon({ className:'', html:'<div style="width:14px;height:14px;background:#3b82f6;border:3px solid white;border-radius:50%;box-shadow:0 0 12px rgba(59,130,246,0.7);"></div>', iconSize:[14,14], iconAnchor:[7,7] });
+            window.L.marker([lat, lng], { icon:icon }).addTo(map);
+        }
+        /* Try Capacitor Geolocation first */
+        var Geo = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Geolocation;
+        if (Geo) {
+            Geo.getCurrentPosition({ enableHighAccuracy:false, timeout:8000 })
+                .then(function(p) { _doMap(p.coords.latitude, p.coords.longitude); })
+                .catch(function() { if (fallback) fallback.style.display = 'flex'; });
+        } else if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                function(p) { _doMap(p.coords.latitude, p.coords.longitude); },
+                function() { if (fallback) fallback.style.display = 'flex'; },
+                { timeout:8000 }
+            );
+        }
+    }
+
+    /* ── Update one permission's UI ── */
     function updatePermUI(perm, state) {
         _permStates[perm] = state;
-        var cap = perm.charAt(0).toUpperCase() + perm.slice(1);
         if (state === 'granted') {
             setStatus(perm, 'Allowed ✓', '#34d399');
             showGranted(perm);
+            if (perm === 'location') { setTimeout(_initPermMap, 400); }
         } else if (state === 'denied') {
             setStatus(perm, 'Denied — Allow karne ke liye tap karein', '#f87171');
-            showBtn(perm, true);
-            var btn = document.getElementById('permBtn' + cap);
-            if (btn) btn.textContent = 'Allow';
+            showBtn(perm, 'Allow');
         } else if (state === 'permanently_denied') {
             setStatus(perm, 'Settings se on karein', '#fb923c');
-            showBtn(perm, true);
-            var btn2 = document.getElementById('permBtn' + cap);
-            if (btn2) btn2.textContent = 'Open Settings';
+            showBtn(perm, 'Open Settings');
         } else {
             setStatus(perm, 'Checking…', '#94a3b8');
-            showBtn(perm, false);
+            hideBtn(perm);
         }
-        updateCardVisibility();
+        refreshCard();
     }
 
+    /* ── Allow button handler ── */
     window.handlePermAllow = function(perm) {
         if (!window.Capacitor || !window.Capacitor.Plugins) return;
         var Plugins = window.Capacitor.Plugins;
 
+        /* If already permanently denied — go straight to settings */
+        if (_permStates[perm] === 'permanently_denied') {
+            openAppSettings();
+            return;
+        }
+
         if (perm === 'location') {
             var Geo = Plugins.Geolocation;
             if (!Geo) return;
-            Geo.requestPermissions({ permissions: ['location', 'coarseLocation'] }).then(function(res) {
-                var granted = (res.location === 'granted' || res.coarseLocation === 'granted');
-                if (granted) {
-                    updatePermUI('location', 'granted');
-                } else {
-                    /* After requestPermissions still denied = permanently blocked */
-                    Geo.checkPermissions().then(function(s) {
-                        var st = (s.location || s.coarseLocation || 'denied');
-                        updatePermUI('location', st === 'granted' ? 'granted' : 'permanently_denied');
-                        if (st !== 'granted' && Plugins.NativeSettings) {
-                            Plugins.NativeSettings.open({ option: 'application' }).catch(function(){});
-                        }
-                    }).catch(function(){ updatePermUI('location', 'permanently_denied'); });
-                }
-            }).catch(function(){ updatePermUI('location', 'permanently_denied'); });
+            Geo.requestPermissions({ permissions: ['location', 'coarseLocation'] })
+            .then(function(res) {
+                var ok = (res.location === 'granted' || res.coarseLocation === 'granted');
+                if (ok) { updatePermUI('location', 'granted'); return; }
+                /* Still denied after dialog = permanently blocked */
+                updatePermUI('location', 'permanently_denied');
+                openAppSettings();
+            }).catch(function() {
+                updatePermUI('location', 'permanently_denied');
+                openAppSettings();
+            });
 
         } else if (perm === 'camera') {
             var Cam = Plugins.Camera;
             if (!Cam) return;
-            Cam.requestPermissions({ permissions: ['camera'] }).then(function(res) {
-                if (res.camera === 'granted') {
-                    updatePermUI('camera', 'granted');
-                } else {
-                    Cam.checkPermissions().then(function(s) {
-                        var st = (s.camera || 'denied');
-                        updatePermUI('camera', st === 'granted' ? 'granted' : 'permanently_denied');
-                        if (st !== 'granted' && Plugins.NativeSettings) {
-                            Plugins.NativeSettings.open({ option: 'application' }).catch(function(){});
-                        }
-                    }).catch(function(){ updatePermUI('camera', 'permanently_denied'); });
-                }
-            }).catch(function(){ updatePermUI('camera', 'permanently_denied'); });
+            Cam.requestPermissions({ permissions: ['camera'] })
+            .then(function(res) {
+                if (res.camera === 'granted') { updatePermUI('camera', 'granted'); return; }
+                updatePermUI('camera', 'permanently_denied');
+                openAppSettings();
+            }).catch(function() {
+                updatePermUI('camera', 'permanently_denied');
+                openAppSettings();
+            });
 
         } else if (perm === 'notifications') {
-            var Push = Plugins.PushNotifications;
-            if (!Push) return;
-            Push.requestPermissions().then(function(res) {
-                updatePermUI('notifications', res.receive === 'granted' ? 'granted' : 'denied');
-            }).catch(function(){ updatePermUI('notifications', 'denied'); });
+            /* Notifications denied = go directly to Settings (Android doesn't re-prompt once denied) */
+            openAppSettings();
         }
     };
 
+    /* ── Check all permissions ── */
     function checkAllPermissions() {
+        _dbgToast('checkAllPerm START native=' + (!!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())));
         if (!window.Capacitor || !window.Capacitor.isNativePlatform || !window.Capacitor.isNativePlatform()) {
-            /* Not native — hide card and overlay entirely, show all nav */
+            /* Web browser — hide card, show everything */
             var card = document.getElementById('permDashCard');
-            if (card) { card.style.display = 'none'; }
-            var overlay = document.getElementById('permBlurOverlay');
-            if (overlay) overlay.style.display = 'none';
-            /* Make sure nav is visible on web */
-            ['mobileBottomNav','mobileMenuBtn','sidebar','sidebarOverlay'].forEach(function(id) {
-                var el = document.getElementById(id);
-                if (el) {
-                    el.removeAttribute('data-perm-hidden');
-                    el.style.display = '';
-                }
-            });
-            var navbar = document.querySelector('nav.navbar');
-            if (navbar) { navbar.removeAttribute('data-perm-hidden'); navbar.style.display = ''; }
+            if (card) card.style.display = 'none';
+            showNav();
             return;
         }
-        var Plugins = window.Capacitor.Plugins;
-        /* Show card while checking (flex because it's a fixed overlay) */
-        var card = document.getElementById('permDashCard');
-        if (card) { card.style.position = 'fixed'; card.style.zIndex = '9999'; card.style.display = 'flex'; }
 
-        /* Location */
+        /* Native: immediately hide nav and show card */
+        hideNav();
+        var card = document.getElementById('permDashCard');
+        if (card) { card.style.position = 'fixed'; card.style.zIndex = '19990'; card.style.display = 'flex'; }
+
+        var Plugins = window.Capacitor.Plugins;
+        _dbgToast('Plugins OK Push=' + (!!(Plugins && Plugins.PushNotifications)));
+
+        /* Location — with 3s timeout (checkPermissions can hang on some Android) */
+        var locDone = false;
+        var locTimer = setTimeout(function() {
+            if (!locDone) { locDone = true; updatePermUI('location', 'denied'); }
+        }, 3000);
         if (Plugins.Geolocation) {
             Plugins.Geolocation.checkPermissions().then(function(s) {
-                var st = (s.location || s.coarseLocation || 'prompt');
-                updatePermUI('location', st === 'granted' ? 'granted' : (st === 'denied' ? 'denied' : 'denied'));
-            }).catch(function(){ updatePermUI('location', 'denied'); });
+                if (locDone) return;
+                locDone = true; clearTimeout(locTimer);
+                var st = s.location || s.coarseLocation || 'prompt';
+                updatePermUI('location', st === 'granted' ? 'granted' : 'denied');
+            }).catch(function() {
+                if (locDone) return;
+                locDone = true; clearTimeout(locTimer);
+                updatePermUI('location', 'denied');
+            });
         } else {
+            clearTimeout(locTimer); locDone = true;
             updatePermUI('location', 'denied');
         }
 
-        /* Camera */
+        /* Camera — with 3s timeout */
+        var camDone = false;
+        var camTimer = setTimeout(function() {
+            if (!camDone) { camDone = true; updatePermUI('camera', 'denied'); }
+        }, 3000);
         if (Plugins.Camera) {
             Plugins.Camera.checkPermissions().then(function(s) {
-                var st = (s.camera || 'prompt');
+                if (camDone) return;
+                camDone = true; clearTimeout(camTimer);
+                var st = s.camera || 'prompt';
                 updatePermUI('camera', st === 'granted' ? 'granted' : 'denied');
-            }).catch(function(){ updatePermUI('camera', 'denied'); });
+            }).catch(function() {
+                if (camDone) return;
+                camDone = true; clearTimeout(camTimer);
+                updatePermUI('camera', 'denied');
+            });
         } else {
+            clearTimeout(camTimer); camDone = true;
             updatePermUI('camera', 'denied');
         }
 
         /* Notifications */
-        if (Plugins.PushNotifications) {
-            Plugins.PushNotifications.checkPermissions().then(function(s) {
-                updatePermUI('notifications', s.receive === 'granted' ? 'granted' : 'denied');
-            }).catch(function(){ updatePermUI('notifications', 'denied'); });
+        _dbgToast('notif check start, _permStates.notif=' + _permStates.notifications);
+        var _notifFinal = 'denied';
+        try {
+            var _Push = Plugins && Plugins.PushNotifications;
+            _dbgToast('Push=' + (!!_Push) + ' checkPerm=' + (!!(_Push && _Push.checkPermissions)));
+            if (_Push && typeof _Push.checkPermissions === 'function') {
+                /* checkPermissions returns a Promise — we do NOT await it.
+                   Instead use the 2s fallback pattern below. */
+                var _notifDone = false;
+                var _notifFallback = setTimeout(function() {
+                    if (!_notifDone) { _notifDone = true; updatePermUI('notifications', 'denied'); }
+                }, 2000);
+                _Push.checkPermissions().then(function(s) {
+                    if (_notifDone) return;
+                    _notifDone = true;
+                    clearTimeout(_notifFallback);
+                    updatePermUI('notifications', (s && s.receive === 'granted') ? 'granted' : 'denied');
+                }).catch(function() {
+                    if (_notifDone) return;
+                    _notifDone = true;
+                    clearTimeout(_notifFallback);
+                    updatePermUI('notifications', 'denied');
+                });
+                _notifFinal = null; /* async path active — skip sync set below */
+            }
+        } catch(e) { _notifFinal = 'denied'; }
+        /* If no async path started, set synchronously now */
+        if (_notifFinal !== null) { updatePermUI('notifications', _notifFinal); }
+    }
+
+    /* ── Version comparison helper ── */
+    function _verGte(a, b) {
+        /* returns true if version string a >= b  e.g. '1.9.13' >= '1.9.12' */
+        var ap = a.split('.').map(Number);
+        var bp = b.split('.').map(Number);
+        for (var i = 0; i < 3; i++) {
+            if ((ap[i]||0) > (bp[i]||0)) return true;
+            if ((ap[i]||0) < (bp[i]||0)) return false;
+        }
+        return true;
+    }
+
+    /* ── App Update check ── */
+    var _updateApkUrl  = '';
+    var _updateApkData = null;
+    function checkAppUpdate() {
+        if (!window.Capacitor || !window.Capacitor.isNativePlatform || !window.Capacitor.isNativePlatform()) {
+            /* Not native — hide update row, treat as ok */
+            var row = document.getElementById('permRowUpdate');
+            if (row) row.style.display = 'none';
+            _permStates.update = 'granted';
+            refreshCard();
+            return;
+        }
+        var row = document.getElementById('permRowUpdate');
+        if (row) row.style.display = 'flex';
+
+        var Plugins = window.Capacitor && window.Capacitor.Plugins;
+        /* App.getInfo() gives version/build; Device.getInfo() gives appVersion */
+        var AppPlugin = Plugins && Plugins.App;
+        var DevPlugin = Plugins && Plugins.Device;
+
+        function _doCheck(currentVersion) {
+            fetch('/api/app/check-update')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                var latest = data.latest_version || '0.0.0';
+                _updateApkUrl = data.apk_url || '';
+                if (!latest || latest === '0.0.0' || _verGte(currentVersion, latest)) {
+                    /* Up to date — hide update section */
+                    var rowUpd = document.getElementById('permRowUpdate');
+                    if (rowUpd) rowUpd.style.display = 'none';
+                    _permStates.update = 'granted';
+                    refreshCard();
+                } else {
+                    /* Update available */
+                    _updateApkUrl  = data.apk_url || '';
+                    _updateApkData = data;
+                    _permStates.update = 'denied';
+                    /* Show update section */
+                    var rowUpd2 = document.getElementById('permRowUpdate');
+                    if (rowUpd2) rowUpd2.style.display = 'block';
+                    /* Status subtitle */
+                    var statusEl = document.getElementById('permStatusUpdate');
+                    if (statusEl) { statusEl.textContent = 'v' + latest + ' available — update required'; statusEl.style.color = '#374151'; }
+                    /* Version comparison row */
+                    var verRow = document.getElementById('updateVersionRow');
+                    if (verRow) verRow.style.display = 'block';
+                    var curEl = document.getElementById('updateCurrentVer');
+                    var newEl = document.getElementById('updateNewVer');
+                    if (curEl) curEl.textContent = 'v' + currentVersion;
+                    if (newEl) newEl.textContent  = 'v' + latest;
+                    /* Show download button */
+                    var btn = document.getElementById('permBtnUpdate');
+                    if (btn) btn.style.display = 'block';
+                    refreshCard();
+                }
+            })
+            .catch(function() {
+                /* Network error — treat as up to date so user isn't blocked */
+                updatePermUI('update', 'granted');
+            });
+        }
+
+        /* Try App.getInfo() first (most reliable for version) */
+        if (AppPlugin && typeof AppPlugin.getInfo === 'function') {
+            AppPlugin.getInfo().then(function(info) {
+                _doCheck(info.version || info.build || '0.0.0');
+            }).catch(function() {
+                /* Fallback to Device */
+                if (DevPlugin && typeof DevPlugin.getInfo === 'function') {
+                    DevPlugin.getInfo().then(function(d) { _doCheck(d.appVersion || '0.0.0'); }).catch(function() { _doCheck('0.0.0'); });
+                } else { _doCheck('0.0.0'); }
+            });
+        } else if (DevPlugin && typeof DevPlugin.getInfo === 'function') {
+            DevPlugin.getInfo().then(function(d) { _doCheck(d.appVersion || '0.0.0'); }).catch(function() { _doCheck('0.0.0'); });
         } else {
-            updatePermUI('notifications', 'denied');
+            _doCheck('0.0.0');
         }
     }
 
-    /* Run on DOM ready */
+    /* ── Update Install handler — uses existing FleetApkDownload native plugin ── */
+    window.handleUpdateInstall = function() {
+        window._installReadyShown = false;
+        if (!_updateApkUrl || !_updateApkData) return;
+        var data = _updateApkData;
+        var Plugins = window.Capacitor && window.Capacitor.Plugins;
+        var FleetDl = Plugins && Plugins.FleetApkDownload;
+        var Fs = Plugins && Plugins.Filesystem;
+        var fname = data.apk_filename || 'fleet-manager-update.apk';
+
+        /* Helper refs */
+        var btnUpdate  = document.getElementById('permBtnUpdate');
+        var progWrap   = document.getElementById('updateProgressWrap');
+        var progBar    = document.getElementById('updateProgressBar');
+        var progText   = document.getElementById('updateProgressText');
+        var actionArea = document.getElementById('updateActionArea');
+        var statusEl   = document.getElementById('permStatusUpdate');
+
+        /* Check if APK already downloaded — skip re-download */
+        if (Fs && typeof Fs.stat === 'function') {
+            Fs.stat({ path: 'Download/' + fname, directory: 'EXTERNAL' })
+            .then(function(stat) {
+                /* File exists & is >5MB — treat as valid */
+                if (stat && stat.size && stat.size > 5000000) {
+                    return Fs.getUri({ path: 'Download/' + fname, directory: 'EXTERNAL' })
+                    .then(function(r) {
+                        if (statusEl) statusEl.textContent = 'Already downloaded \u2014 tap Install';
+                        if (progWrap) { progWrap.style.display = 'block'; }
+                        if (progBar)  { progBar.style.width = '100%'; }
+                        if (progText) { progText.textContent = 'File already in Downloads folder'; }
+                        if (btnUpdate) btnUpdate.style.display = 'none';
+                        window._onInstallReady(r.uri, false);
+                    });
+                }
+                throw new Error('small');
+            })
+            .catch(function() {
+                /* File missing or too small — do fresh download */
+                window._startApkDownload(data, fname, Plugins, FleetDl, Fs, btnUpdate, progWrap, progBar, progText, actionArea, statusEl);
+            });
+            return;
+        }
+
+        /* No Filesystem plugin — go straight to download */
+        window._startApkDownload(data, fname, Plugins, FleetDl, Fs, btnUpdate, progWrap, progBar, progText, actionArea, statusEl);
+    };
+
+    /* Global — also called from file-exists check path */
+    window._installReadyShown = false;
+    window._onInstallReady = function(fileUri, useNative) {
+        window._installReadyShown = true;
+        var _pb = document.getElementById('updateProgressBar');
+        var _pt = document.getElementById('updateProgressText');
+        var _se = document.getElementById('permStatusUpdate');
+        var _aa = document.getElementById('updateActionArea');
+        var _pw = document.getElementById('updateProgressWrap');
+        if (_pw) _pw.style.display = 'block';
+        if (_pb) _pb.style.width   = '100%';
+        if (_pt) _pt.textContent   = 'Download complete \u2014 tap Install';
+        if (_se) _se.textContent   = 'Ready to install';
+        if (_aa) _aa.innerHTML =
+            '<button onclick="window._doInstallApk(\'' + fileUri.replace(/'/g, "\\'") + '\',' + (useNative ? 'true' : 'false') + ')" ' +
+            'class="pg-cta-btn pg-install-btn">' +
+            '<span class="pg-install-spin"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg></span>' +
+            ' Install Update Now</button>';
+        hideNav();
+    };
+
+    window._startApkDownload = function(data, fname, Plugins, FleetDl, Fs, btnUpdate, progWrap, progBar, progText, actionArea, statusEl) {
+        if (btnUpdate)  btnUpdate.style.display  = 'none';
+        if (progWrap)   progWrap.style.display   = 'block';
+        if (progBar)    progBar.style.width       = '0%';
+        if (progText)   progText.textContent      = 'Downloading\u2026';
+        if (statusEl)   statusEl.textContent      = 'Downloading update\u2026';
+
+        function _onError(msg) {
+            if (progText) progText.textContent = msg || 'Download failed';
+            if (progBar)  progBar.style.background = '#ef4444';
+            if (statusEl) statusEl.textContent = 'Download failed';
+            /* Show retry button */
+            if (actionArea) {
+                actionArea.innerHTML =
+                    '<button onclick="window.handleUpdateInstall()" ' +
+                    'style="flex:1;background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;border:none;border-radius:11px;font-size:0.82rem;font-weight:700;padding:11px 0;cursor:pointer;">' +
+                    '\u21ba Retry Download</button>';
+            }
+        }
+
+        if (FleetDl && typeof FleetDl.download === 'function') {
+            if (progText) progText.textContent = 'Downloading via system\u2026';
+            FleetDl.download({ url: _updateApkUrl, filename: fname })
+                .then(function(res) {
+                    if (!res || !res.uri) throw new Error('incomplete');
+                    window._onInstallReady(res.uri, true);
+                })
+                .catch(function(e) { _onError('Download failed: ' + (e && e.message ? e.message : '')); });
+        } else {
+            /* XHR fallback with real progress */
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', _updateApkUrl, true);
+            xhr.responseType = 'blob';
+            xhr.onprogress = function(e) {
+                if (e.lengthComputable && progBar && progText) {
+                    var pct = Math.round(e.loaded / e.total * 100);
+                    progBar.style.width = pct + '%';
+                    progText.textContent = pct + '% (' + (e.loaded/1048576).toFixed(1) + ' / ' + (e.total/1048576).toFixed(1) + ' MB)';
+                }
+            };
+            xhr.onload = function() {
+                if (xhr.status !== 200) { _onError('HTTP ' + xhr.status); return; }
+                var FsInner = Plugins && Plugins.Filesystem;
+                var Fo = Plugins && Plugins.FileOpener;
+                if (!FsInner || !Fo) { _onError('Plugins not available'); return; }
+                if (progText) progText.textContent = 'Saving file\u2026';
+                var reader = new FileReader();
+                reader.onloadend = function() {
+                    var b64 = reader.result.substring(reader.result.indexOf(',') + 1);
+                    var savePath = 'Download/' + fname;
+                    FsInner.writeFile({ path: savePath, data: b64, directory: 'EXTERNAL', recursive: true })
+                        .then(function() { return FsInner.getUri({ path: savePath, directory: 'EXTERNAL' }); })
+                        .then(function(r) { window._onInstallReady(r.uri, false); })
+                        .catch(function() { _onError('Save failed'); });
+                };
+                reader.readAsDataURL(xhr.response);
+            };
+            xhr.onerror = function() { _onError('Network error'); };
+            xhr.send();
+        }
+    };
+
+    /* Called by generated Install button */
+    window._doInstallApk = function(fileUri, useNative) {
+        var Plugins = window.Capacitor && window.Capacitor.Plugins;
+        var FleetDl = Plugins && Plugins.FleetApkDownload;
+        var Fo = Plugins && Plugins.FileOpener;
+        var p;
+        if (useNative && FleetDl && typeof FleetDl.openInstaller === 'function') {
+            p = FleetDl.openInstaller({ uri: fileUri });
+        } else if (Fo) {
+            p = Fo.open({ filePath: fileUri, contentType: 'application/vnd.android.package-archive' });
+        } else {
+            alert('Installer not available. Downloads folder se manually install karein.');
+            return;
+        }
+        p.catch(function() { alert('Install open nahi hua. Downloads folder se manually install karein.'); });
+    };
+
+    /* Run immediately on DOM ready — no bridge wait needed */
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', checkAllPermissions);
+        document.addEventListener('DOMContentLoaded', function() {
+            checkAllPermissions();
+            checkAppUpdate();
+        });
     } else {
         checkAllPermissions();
+        checkAppUpdate();
     }
-    /* Re-check when user comes back from Settings */
+    /* Re-check when returning from Settings app */
     document.addEventListener('visibilitychange', function() {
-        if (document.visibilityState === 'visible') checkAllPermissions();
+        if (document.visibilityState === 'visible') {
+            checkAllPermissions();
+            if (!window._installReadyShown) { checkAppUpdate(); }
+            else { hideNav(); }
+        }
     });
 })();
 </script>

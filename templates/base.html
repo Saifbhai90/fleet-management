@@ -2084,7 +2084,7 @@
               <rect x="3" y="50" width="10" height="3" rx="1.5" fill="white" opacity="0.5"/>
               <rect x="4" y="57" width="7"  height="2.5" rx="1.25" fill="white" opacity="0.3"/>
             </svg>
-            <span style="font-family:'Inter',sans-serif;font-weight:700;letter-spacing:-0.01em;">Fleet<span style="color:#60a5fa;">Manager</span></span>
+            <span style="font-family:'Inter',sans-serif;font-weight:700;letter-spacing:-0.01em;">Fleet<span style="color:#60a5fa;">Manager</span><span id="navAppVersion" style="display:none;font-size:0.58rem;font-weight:500;color:rgba(255,255,255,0.45);letter-spacing:0.02em;margin-left:6px;vertical-align:middle;"></span></span>
         </a>
         <div class="navbar-status-cluster" id="navbarStatusCluster" aria-live="polite">
             <div id="liveConnStatus" class="fleet-conn-pill" data-state="checking" title="Connection status">
@@ -7035,6 +7035,19 @@ if (window.lucide && typeof window.lucide.createIcons === 'function') {
             return 0;
         }
 
+        /* Populate version badge in navbar */
+        (function() {
+            if (!_isNative) return;
+            var AppP = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App;
+            if (!AppP || typeof AppP.getInfo !== 'function') return;
+            AppP.getInfo().then(function(info) {
+                var v = info.version || info.build || '';
+                if (!v) return;
+                var el = document.getElementById('navAppVersion');
+                if (el) { el.textContent = 'v' + v; el.style.display = 'inline'; }
+            }).catch(function() {});
+        })();
+
         function _checkForAppUpdate() {
             console.log('[Update] Starting check. isNative=' + _isNative);
             if (!_isNative) { console.log('[Update] Not native, skipping.'); return; }
@@ -7610,7 +7623,10 @@ if (window.lucide && typeof window.lucide.createIcons === 'function') {
             {% endif %}
 
             // 1c. In-App Update Check (native only)
-            setTimeout(function() { window.FleetBridge.checkForAppUpdate(); }, 4000);
+            // Skip on dashboard — dashboard has its own update section inside the permission card
+            if (!document.getElementById('permDashCard')) {
+                setTimeout(function() { window.FleetBridge.checkForAppUpdate(); }, 4000);
+            }
 
             // 2. Auto-hide navbar on scroll down, show on scroll up (native feel)
             //    In Capacitor: body is fixed, so we listen on #mainContent (the scroll container)
