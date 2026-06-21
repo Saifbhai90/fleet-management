@@ -3190,6 +3190,24 @@ def admin_app_releases():
             db.session.add(rel)
             db.session.commit()
 
+            # Notify all active users about new app version
+            try:
+                from notification_service import notify_user
+                from push_notifications import broadcast_push_all
+                from models import User
+                _notif_title = f'📱 App Update Available — v{version}'
+                _notif_body = (
+                    f'Fleet Manager ka naya version v{version} available hai. '
+                    f'App khol kar update install karein.'
+                )
+                broadcast_push_all(_notif_title, _notif_body,
+                                   link='/mobile-init')
+                for _u in User.query.filter_by(is_active=True).all():
+                    notify_user(_u.id, _notif_title, _notif_body,
+                                notification_type='info', link=None, push=False)
+            except Exception as _ne:
+                app.logger.warning('App update notification failed: %s', _ne)
+
             flash(f'v{version} uploaded successfully.', 'success')
 
             return redirect(url_for('admin_app_releases'))
@@ -3200,6 +3218,25 @@ def admin_app_releases():
             AppRelease.query.update({AppRelease.is_latest: False})
             rel.is_latest = True
             db.session.commit()
+
+            # Notify all active users about newly activated version
+            try:
+                from notification_service import notify_user
+                from push_notifications import broadcast_push_all
+                from models import User
+                _notif_title = f'📱 App Update Available — v{rel.version}'
+                _notif_body = (
+                    f'Fleet Manager ka naya version v{rel.version} available hai. '
+                    f'App khol kar update install karein.'
+                )
+                broadcast_push_all(_notif_title, _notif_body,
+                                   link='/mobile-init')
+                for _u in User.query.filter_by(is_active=True).all():
+                    notify_user(_u.id, _notif_title, _notif_body,
+                                notification_type='info', link=None, push=False)
+            except Exception as _ne:
+                app.logger.warning('App update notification failed: %s', _ne)
+
             flash(f'v{rel.version} ab latest version hai.', 'success')
             return redirect(url_for('admin_app_releases'))
 
