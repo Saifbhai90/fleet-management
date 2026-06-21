@@ -596,6 +596,8 @@ function _dbgToast(msg) {
         }
     }
 
+    window._installReadyShown = false;
+
     /* ── Nav hide/show ── */
     function _navElements() {
         return [
@@ -652,13 +654,6 @@ function _dbgToast(msg) {
             card.style.zIndex   = '19990';
             card.style.display  = anyPending ? 'flex' : 'none';
         }
-        var note = document.getElementById('permCardNote');
-        if (note) note.style.display = 'none';
-
-        /* Overlay not needed — card itself is full-screen */
-        var overlay = document.getElementById('permBlurOverlay');
-        if (overlay) overlay.style.display = 'none';
-
         if (window._installReadyShown) { hideNav(); return; }
         if (criticalOk) { showNav(); } else { hideNav(); }
     }
@@ -794,7 +789,6 @@ function _dbgToast(msg) {
 
     /* ── Check all permissions ── */
     function checkAllPermissions() {
-        _dbgToast('checkAllPerm START native=' + (!!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())));
         if (!window.Capacitor || !window.Capacitor.isNativePlatform || !window.Capacitor.isNativePlatform()) {
             /* Web browser — hide card, show everything */
             var card = document.getElementById('permDashCard');
@@ -809,7 +803,6 @@ function _dbgToast(msg) {
         if (card) { card.style.position = 'fixed'; card.style.zIndex = '19990'; card.style.display = 'flex'; }
 
         var Plugins = window.Capacitor.Plugins;
-        _dbgToast('Plugins OK Push=' + (!!(Plugins && Plugins.PushNotifications)));
 
         /* Location — with 3s timeout (checkPermissions can hang on some Android) */
         var locDone = false;
@@ -854,38 +847,29 @@ function _dbgToast(msg) {
         }
 
         /* Notifications — same pattern as Camera */
-        var _notifFinal = 'denied';
-        try {
-            var _Push = Plugins && Plugins.PushNotifications;
-            if (_Push && typeof _Push.checkPermissions === 'function') {
-                var _notifDone = false;
-                var _notifFallback = setTimeout(function() {
-                    if (!_notifDone) { _notifDone = true; updatePermUI('notifications', 'denied'); }
-                }, 3000);
-                _Push.checkPermissions().then(function(s) {
-                    if (_notifDone) return;
-                    _notifDone = true;
-                    clearTimeout(_notifFallback);
-                    var st = (s && s.receive) || 'prompt';
-                    if (st === 'granted') {
-                        updatePermUI('notifications', 'granted');
-                    } else if (st === 'denied') {
-                        updatePermUI('notifications', 'permanently_denied');
-                    } else {
-                        /* prompt — not yet asked */
-                        updatePermUI('notifications', 'denied');
-                    }
-                }).catch(function() {
-                    if (_notifDone) return;
-                    _notifDone = true;
-                    clearTimeout(_notifFallback);
-                    updatePermUI('notifications', 'denied');
-                });
-                _notifFinal = null;
-            }
-        } catch(e) { _notifFinal = 'denied'; }
-        /* If no async path started, set synchronously now */
-        if (_notifFinal !== null) { updatePermUI('notifications', _notifFinal); }
+        var _Push = Plugins && Plugins.PushNotifications;
+        if (_Push && typeof _Push.checkPermissions === 'function') {
+            var _notifDone = false;
+            var _notifFallback = setTimeout(function() {
+                if (!_notifDone) { _notifDone = true; updatePermUI('notifications', 'denied'); }
+            }, 3000);
+            _Push.checkPermissions().then(function(s) {
+                if (_notifDone) return;
+                _notifDone = true;
+                clearTimeout(_notifFallback);
+                var st = (s && s.receive) || 'prompt';
+                if (st === 'granted') { updatePermUI('notifications', 'granted'); }
+                else if (st === 'denied') { updatePermUI('notifications', 'permanently_denied'); }
+                else { updatePermUI('notifications', 'denied'); }
+            }).catch(function() {
+                if (_notifDone) return;
+                _notifDone = true;
+                clearTimeout(_notifFallback);
+                updatePermUI('notifications', 'denied');
+            });
+        } else {
+            updatePermUI('notifications', 'denied');
+        }
     }
 
     /* ── Version comparison helper ── */
@@ -949,7 +933,6 @@ function _dbgToast(msg) {
                     refreshCard();
                 } else {
                     /* Update available */
-                    _updateApkUrl  = data.apk_url || '';
                     _updateApkData = data;
                     _permStates.update = 'denied';
                     /* Show update section */
@@ -1042,7 +1025,6 @@ function _dbgToast(msg) {
     };
 
     /* Global — also called from file-exists check path */
-    window._installReadyShown = false;
     window._onInstallReady = function(fileUri, useNative) {
         window._installReadyShown = true;
         var _pb = document.getElementById('updateProgressBar');
