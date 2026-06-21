@@ -628,10 +628,12 @@ function _dbgToast(msg) {
             }
         });
     }
-    /* Keep nav hidden while install button is visible */
-    setInterval(function() {
-        if (window._installReadyShown) { hideNav(); }
-    }, 300);
+    /* Keep nav hidden while install button is visible — event-driven, no polling */
+    var _origShowNav = showNav;
+    showNav = function() {
+        if (window._installReadyShown) return;
+        _origShowNav();
+    };
 
     /* ── Card visibility ── */
     function refreshCard() {
@@ -766,20 +768,17 @@ function _dbgToast(msg) {
 
         } else if (perm === 'notifications') {
             var Push = Plugins.PushNotifications;
-            if (_permStates.notifications === 'permanently_denied') {
-                openAppSettings();
-                return;
-            }
             if (Push && typeof Push.requestPermissions === 'function') {
                 Push.requestPermissions().then(function(res) {
                     if (res.receive === 'granted') {
                         updatePermUI('notifications', 'granted');
                     } else {
-                        /* Android denied after dialog = permanently blocked */
                         updatePermUI('notifications', 'permanently_denied');
+                        openAppSettings();
                     }
                 }).catch(function() {
                     updatePermUI('notifications', 'permanently_denied');
+                    openAppSettings();
                 });
             } else {
                 openAppSettings();
@@ -910,8 +909,10 @@ function _dbgToast(msg) {
         var DevPlugin = Plugins && Plugins.Device;
 
         function _doCheck(currentVersion) {
-            fetch('/api/app/check-update')
-            .then(function(r) { return r.json(); })
+            var _ctrl = window.AbortController ? new AbortController() : null;
+            var _fetchTimer = setTimeout(function() { if (_ctrl) _ctrl.abort(); }, 8000);
+            fetch('/api/app/check-update', _ctrl ? { signal: _ctrl.signal } : {})
+            .then(function(r) { clearTimeout(_fetchTimer); return r.json(); })
             .then(function(data) {
                 var latest = data.latest_version || '0.0.0';
                 _updateApkUrl = data.apk_url || '';

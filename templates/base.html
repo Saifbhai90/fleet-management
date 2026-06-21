@@ -31,27 +31,6 @@
     <meta name="application-name" content="Fleet Mgr">
     <meta name="apple-mobile-web-app-title" content="Fleet Mgr">
 
-    {% if session.get('user_id') %}
-    {# Capacitor cold start / force-close reopen: a NEW WebView process has empty sessionStorage.
-       If it restores a logged-in URL (dashboard, task report, etc.) with a still-valid cookie,
-       force /mobile-init so the user must log in again and always lands on the dashboard.
-       Same-process navigations keep _fleetAppSession and are left untouched. #}
-    <script>
-    (function() {
-      try {
-        if (!window.Capacitor || Capacitor.getPlatform() === 'web') return;
-        if (sessionStorage.getItem('_fleetAppSession')) return;
-        var qs = window.location.search || '';
-        if (qs.indexOf('from_login=1') !== -1) {
-          sessionStorage.setItem('_fleetAppSession', '1');
-          return;
-        }
-        sessionStorage.setItem('_fleetAppSession', '1');
-        window.location.replace('/mobile-init');
-      } catch (e) { /* ignore */ }
-    })();
-    </script>
-    {% endif %}
 
     <!-- Inter Font (Premium Typography) -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
