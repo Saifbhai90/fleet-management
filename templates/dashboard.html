@@ -771,16 +771,20 @@ function _dbgToast(msg) {
 
         } else if (perm === 'notifications') {
             var Push = Plugins.PushNotifications;
+            if (_permStates.notifications === 'permanently_denied') {
+                openAppSettings();
+                return;
+            }
             if (Push && typeof Push.requestPermissions === 'function') {
                 Push.requestPermissions().then(function(res) {
                     if (res.receive === 'granted') {
                         updatePermUI('notifications', 'granted');
                     } else {
+                        /* Android denied after dialog = permanently blocked */
                         updatePermUI('notifications', 'permanently_denied');
-                        openAppSettings();
                     }
                 }).catch(function() {
-                    openAppSettings();
+                    updatePermUI('notifications', 'permanently_denied');
                 });
             } else {
                 openAppSettings();
@@ -849,31 +853,35 @@ function _dbgToast(msg) {
             updatePermUI('camera', 'denied');
         }
 
-        /* Notifications */
-        _dbgToast('notif check start, _permStates.notif=' + _permStates.notifications);
+        /* Notifications — same pattern as Camera */
         var _notifFinal = 'denied';
         try {
             var _Push = Plugins && Plugins.PushNotifications;
-            _dbgToast('Push=' + (!!_Push) + ' checkPerm=' + (!!(_Push && _Push.checkPermissions)));
             if (_Push && typeof _Push.checkPermissions === 'function') {
-                /* checkPermissions returns a Promise — we do NOT await it.
-                   Instead use the 2s fallback pattern below. */
                 var _notifDone = false;
                 var _notifFallback = setTimeout(function() {
                     if (!_notifDone) { _notifDone = true; updatePermUI('notifications', 'denied'); }
-                }, 2000);
+                }, 3000);
                 _Push.checkPermissions().then(function(s) {
                     if (_notifDone) return;
                     _notifDone = true;
                     clearTimeout(_notifFallback);
-                    updatePermUI('notifications', (s && s.receive === 'granted') ? 'granted' : 'denied');
+                    var st = (s && s.receive) || 'prompt';
+                    if (st === 'granted') {
+                        updatePermUI('notifications', 'granted');
+                    } else if (st === 'denied') {
+                        updatePermUI('notifications', 'permanently_denied');
+                    } else {
+                        /* prompt — not yet asked */
+                        updatePermUI('notifications', 'denied');
+                    }
                 }).catch(function() {
                     if (_notifDone) return;
                     _notifDone = true;
                     clearTimeout(_notifFallback);
                     updatePermUI('notifications', 'denied');
                 });
-                _notifFinal = null; /* async path active — skip sync set below */
+                _notifFinal = null;
             }
         } catch(e) { _notifFinal = 'denied'; }
         /* If no async path started, set synchronously now */
@@ -924,9 +932,19 @@ function _dbgToast(msg) {
                 var latest = data.latest_version || '0.0.0';
                 _updateApkUrl = data.apk_url || '';
                 if (!latest || latest === '0.0.0' || _verGte(currentVersion, latest)) {
-                    /* Up to date — hide update section */
+                    /* Up to date — show section with green tick */
                     var rowUpd = document.getElementById('permRowUpdate');
-                    if (rowUpd) rowUpd.style.display = 'none';
+                    if (rowUpd) rowUpd.style.display = 'block';
+                    var statusUpd = document.getElementById('permStatusUpdate');
+                    if (statusUpd) { statusUpd.textContent = 'App is up to date ✔'; statusUpd.style.color = '#16a34a'; }
+                    var verRow = document.getElementById('updateVersionRow');
+                    if (verRow) verRow.style.display = 'none';
+                    var actArea = document.getElementById('updateActionArea');
+                    if (actArea) actArea.style.display = 'none';
+                    var progWrap = document.getElementById('updateProgressWrap');
+                    if (progWrap) progWrap.style.display = 'none';
+                    var grantedBadge = document.getElementById('permGrantedUpdate');
+                    if (grantedBadge) grantedBadge.style.display = 'block';
                     _permStates.update = 'granted';
                     refreshCard();
                 } else {
