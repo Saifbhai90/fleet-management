@@ -724,12 +724,6 @@
   }
 
   function fetchLocation() {
-    if (!navigator.geolocation) {
-      locationStatus.classList.remove('d-none'); locationStatus.classList.add('warning');
-      locationText.textContent = 'Geolocation not supported.';
-      btnRetryLocation.classList.add('d-none');
-      return;
-    }
     if (!parkingLat.value || !parkingLng.value) {
       parkingNotSetMessage.classList.remove('d-none');
       locationStatus.classList.add('d-none');
@@ -742,23 +736,30 @@
     btnRetryLocation.classList.add('d-none');
     distanceMessage.classList.add('d-none');
     timeWindowMessage.classList.add('d-none');
-    navigator.geolocation.getCurrentPosition(
-      function(pos) {
-        locationSpinner.classList.add('d-none');
-        currentPosition = pos;
-        updateDistanceUI();
-      },
-      function(err) {
-        locationSpinner.classList.add('d-none');
-        locationStatus.classList.remove('d-none', 'success', 'neutral');
-        locationStatus.classList.add('warning');
-        locationText.textContent = 'Location nahi mili: ' + (err.code === 3 ? 'Timeout. Retry karein.' : (err.message || 'Permission denied.'));
-        btnRetryLocation.classList.remove('d-none');
-        btnMarkAttendance.disabled = true;
-        timeWindowMessage.classList.add('d-none');
-      },
-      { enableHighAccuracy: true, timeout: LOCATION_TIMEOUT, maximumAge: LOCATION_MAX_AGE }
-    );
+    var gpsPromise = (typeof window.getGPS === 'function')
+      ? window.getGPS()
+      : new Promise(function(resolve, reject) {
+          if (!navigator.geolocation) { reject(new Error('Geolocation not supported')); return; }
+          navigator.geolocation.getCurrentPosition(
+            function(pos) { resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracy: pos.coords.accuracy }); },
+            reject,
+            { enableHighAccuracy: true, timeout: LOCATION_TIMEOUT, maximumAge: LOCATION_MAX_AGE }
+          );
+        });
+    gpsPromise.then(function(coords) {
+      locationSpinner.classList.add('d-none');
+      currentPosition = { coords: { latitude: coords.latitude, longitude: coords.longitude, accuracy: coords.accuracy } };
+      updateDistanceUI();
+    }).catch(function(err) {
+      locationSpinner.classList.add('d-none');
+      if (err && (err.code === 'location_denied')) return;
+      locationStatus.classList.remove('d-none', 'success', 'neutral');
+      locationStatus.classList.add('warning');
+      locationText.textContent = 'Location nahi mili: ' + (err && err.code === 3 ? 'Timeout. Retry karein.' : (err && err.message ? err.message : 'Permission denied.'));
+      btnRetryLocation.classList.remove('d-none');
+      btnMarkAttendance.disabled = true;
+      timeWindowMessage.classList.add('d-none');
+    });
   }
 
   btnRetryLocation.addEventListener('click', fetchLocation);

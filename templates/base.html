@@ -6861,14 +6861,15 @@ if (window.lucide && typeof window.lucide.createIcons === 'function') {
             var Cam = window.Capacitor.Plugins.Camera;
             if (Geo) {
                 jobs.push(Geo.checkPermissions().then(function(s) {
-                    if ((s.location || s.coarseLocation || 'prompt') === 'prompt') {
+                    var state = (s.location || s.coarseLocation || 'prompt');
+                    if (state !== 'granted') {
                         return Geo.requestPermissions({ permissions: ['location', 'coarseLocation'] });
                     }
                 }).catch(function() {}));
             }
             if (Cam) {
                 jobs.push(Cam.checkPermissions().then(function(s) {
-                    if ((s.camera || 'prompt') === 'prompt') {
+                    if ((s.camera || 'prompt') !== 'granted') {
                         return Cam.requestPermissions({ permissions: ['camera'] });
                     }
                 }).catch(function() {}));
