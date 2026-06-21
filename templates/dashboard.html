@@ -314,6 +314,244 @@ document.addEventListener('DOMContentLoaded', function() {
 {% set driver_pct = ((active_drivers / total_drivers * 100) | round(1)) if total_drivers > 0 else 0 %}
 {% set fleet_pct  = ((assigned_vehicles / total_vehicles * 100) | round(1)) if total_vehicles > 0 else 0 %}
 
+<!-- ═══════════════════════════════
+     PERMISSION DASHBOARD CARD
+     (Only shown in Capacitor native app)
+═══════════════════════════════ -->
+<div id="permDashCard" style="display:none;" class="mb-3">
+    <div style="background:linear-gradient(135deg,#0f172a,#1e293b);border-radius:20px;padding:20px 22px;border:2px solid #334155;box-shadow:0 8px 32px rgba(0,0,0,0.2);">
+        <div class="d-flex align-items-center gap-3 mb-3">
+            <div style="width:42px;height:42px;border-radius:12px;background:rgba(239,68,68,0.18);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                <i class="bi bi-shield-exclamation" style="font-size:1.3rem;color:#f87171;"></i>
+            </div>
+            <div>
+                <div style="font-size:0.95rem;font-weight:700;color:#f1f5f9;">App Permissions Required</div>
+                <div style="font-size:0.75rem;color:#94a3b8;margin-top:1px;">Allow karne se attendance aur location features kaam karenge</div>
+            </div>
+        </div>
+        <div class="d-flex flex-column gap-2" id="permRowsContainer">
+            <!-- Location -->
+            <div id="permRowLocation" class="d-flex align-items-center justify-content-between px-3 py-2" style="background:rgba(255,255,255,0.05);border-radius:12px;border:1px solid rgba(255,255,255,0.08);">
+                <div class="d-flex align-items-center gap-2">
+                    <span style="font-size:1.1rem;">📍</span>
+                    <div>
+                        <div style="font-size:0.82rem;font-weight:600;color:#f1f5f9;">Location</div>
+                        <div id="permStatusLocation" style="font-size:0.7rem;color:#94a3b8;">Checking…</div>
+                    </div>
+                </div>
+                <button id="permBtnLocation" onclick="handlePermAllow('location')" class="btn btn-sm" style="display:none;background:#3b82f6;color:#fff;border:none;border-radius:8px;font-size:0.75rem;font-weight:600;padding:5px 14px;">Allow</button>
+                <span id="permGrantedLocation" style="display:none;font-size:0.78rem;font-weight:600;color:#34d399;">✓ Granted</span>
+            </div>
+            <!-- Camera -->
+            <div id="permRowCamera" class="d-flex align-items-center justify-content-between px-3 py-2" style="background:rgba(255,255,255,0.05);border-radius:12px;border:1px solid rgba(255,255,255,0.08);">
+                <div class="d-flex align-items-center gap-2">
+                    <span style="font-size:1.1rem;">📷</span>
+                    <div>
+                        <div style="font-size:0.82rem;font-weight:600;color:#f1f5f9;">Camera</div>
+                        <div id="permStatusCamera" style="font-size:0.7rem;color:#94a3b8;">Checking…</div>
+                    </div>
+                </div>
+                <button id="permBtnCamera" onclick="handlePermAllow('camera')" class="btn btn-sm" style="display:none;background:#3b82f6;color:#fff;border:none;border-radius:8px;font-size:0.75rem;font-weight:600;padding:5px 14px;">Allow</button>
+                <span id="permGrantedCamera" style="display:none;font-size:0.78rem;font-weight:600;color:#34d399;">✓ Granted</span>
+            </div>
+            <!-- Notifications -->
+            <div id="permRowNotif" class="d-flex align-items-center justify-content-between px-3 py-2" style="background:rgba(255,255,255,0.05);border-radius:12px;border:1px solid rgba(255,255,255,0.08);">
+                <div class="d-flex align-items-center gap-2">
+                    <span style="font-size:1.1rem;">🔔</span>
+                    <div>
+                        <div style="font-size:0.82rem;font-weight:600;color:#f1f5f9;">Notifications</div>
+                        <div id="permStatusNotif" style="font-size:0.7rem;color:#94a3b8;">Checking…</div>
+                    </div>
+                </div>
+                <button id="permBtnNotif" onclick="handlePermAllow('notifications')" class="btn btn-sm" style="display:none;background:#3b82f6;color:#fff;border:none;border-radius:8px;font-size:0.75rem;font-weight:600;padding:5px 14px;">Allow</button>
+                <span id="permGrantedNotif" style="display:none;font-size:0.78rem;font-weight:600;color:#34d399;">✓ Granted</span>
+            </div>
+        </div>
+        <div id="permCardNote" style="display:none;margin-top:12px;font-size:0.72rem;color:#64748b;text-align:center;">
+            App use karne ke liye Location aur Camera allow karna zaroori hai.
+        </div>
+    </div>
+</div>
+
+<!-- Blur overlay when critical permissions missing -->
+<div id="permBlurOverlay" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:8888;background:rgba(15,23,42,0.55);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);">
+    <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;color:#fff;padding:0 24px;">
+        <div style="font-size:2rem;margin-bottom:8px;">🔒</div>
+        <div style="font-size:0.95rem;font-weight:700;">Permissions Required</div>
+        <div style="font-size:0.78rem;color:#94a3b8;margin-top:4px;">Upar card mein Location aur Camera allow karein</div>
+    </div>
+</div>
+
+<script>
+(function() {
+    var _permStates = { location: 'unknown', camera: 'unknown', notifications: 'unknown' };
+    var _criticalGranted = false;
+
+    function setStatus(perm, text, color) {
+        var el = document.getElementById('permStatus' + perm.charAt(0).toUpperCase() + perm.slice(1));
+        if (el) { el.textContent = text; el.style.color = color || '#94a3b8'; }
+    }
+    function showBtn(perm, show) {
+        var cap = perm.charAt(0).toUpperCase() + perm.slice(1);
+        var btn = document.getElementById('permBtn' + cap);
+        var granted = document.getElementById('permGranted' + cap);
+        if (btn) btn.style.display = show ? '' : 'none';
+        if (granted) granted.style.display = show ? 'none' : (_permStates[perm] === 'granted' ? '' : 'none');
+    }
+    function showGranted(perm) {
+        var cap = perm.charAt(0).toUpperCase() + perm.slice(1);
+        var btn = document.getElementById('permBtn' + cap);
+        var granted = document.getElementById('permGranted' + cap);
+        if (btn) btn.style.display = 'none';
+        if (granted) granted.style.display = '';
+    }
+
+    function updateCardVisibility() {
+        var locGranted = _permStates.location === 'granted';
+        var camGranted = _permStates.camera === 'granted';
+        var notifGranted = _permStates.notifications === 'granted';
+        _criticalGranted = locGranted && camGranted;
+
+        var anyNotGranted = !locGranted || !camGranted || !notifGranted;
+        var card = document.getElementById('permDashCard');
+        if (card) card.style.display = anyNotGranted ? '' : 'none';
+
+        var overlay = document.getElementById('permBlurOverlay');
+        if (overlay) overlay.style.display = _criticalGranted ? 'none' : '';
+
+        var note = document.getElementById('permCardNote');
+        if (note) note.style.display = anyNotGranted ? '' : 'none';
+    }
+
+    function updatePermUI(perm, state) {
+        _permStates[perm] = state;
+        var cap = perm.charAt(0).toUpperCase() + perm.slice(1);
+        if (state === 'granted') {
+            setStatus(perm, 'Allowed ✓', '#34d399');
+            showGranted(perm);
+        } else if (state === 'denied') {
+            setStatus(perm, 'Denied — Allow karne ke liye tap karein', '#f87171');
+            showBtn(perm, true);
+            var btn = document.getElementById('permBtn' + cap);
+            if (btn) btn.textContent = 'Allow';
+        } else if (state === 'permanently_denied') {
+            setStatus(perm, 'Settings se on karein', '#fb923c');
+            showBtn(perm, true);
+            var btn2 = document.getElementById('permBtn' + cap);
+            if (btn2) btn2.textContent = 'Open Settings';
+        } else {
+            setStatus(perm, 'Checking…', '#94a3b8');
+            showBtn(perm, false);
+        }
+        updateCardVisibility();
+    }
+
+    window.handlePermAllow = function(perm) {
+        if (!window.Capacitor || !window.Capacitor.Plugins) return;
+        var Plugins = window.Capacitor.Plugins;
+
+        if (perm === 'location') {
+            var Geo = Plugins.Geolocation;
+            if (!Geo) return;
+            Geo.requestPermissions({ permissions: ['location', 'coarseLocation'] }).then(function(res) {
+                var granted = (res.location === 'granted' || res.coarseLocation === 'granted');
+                if (granted) {
+                    updatePermUI('location', 'granted');
+                } else {
+                    /* After requestPermissions still denied = permanently blocked */
+                    Geo.checkPermissions().then(function(s) {
+                        var st = (s.location || s.coarseLocation || 'denied');
+                        updatePermUI('location', st === 'granted' ? 'granted' : 'permanently_denied');
+                        if (st !== 'granted' && Plugins.NativeSettings) {
+                            Plugins.NativeSettings.open({ option: 'application' }).catch(function(){});
+                        }
+                    }).catch(function(){ updatePermUI('location', 'permanently_denied'); });
+                }
+            }).catch(function(){ updatePermUI('location', 'permanently_denied'); });
+
+        } else if (perm === 'camera') {
+            var Cam = Plugins.Camera;
+            if (!Cam) return;
+            Cam.requestPermissions({ permissions: ['camera'] }).then(function(res) {
+                if (res.camera === 'granted') {
+                    updatePermUI('camera', 'granted');
+                } else {
+                    Cam.checkPermissions().then(function(s) {
+                        var st = (s.camera || 'denied');
+                        updatePermUI('camera', st === 'granted' ? 'granted' : 'permanently_denied');
+                        if (st !== 'granted' && Plugins.NativeSettings) {
+                            Plugins.NativeSettings.open({ option: 'application' }).catch(function(){});
+                        }
+                    }).catch(function(){ updatePermUI('camera', 'permanently_denied'); });
+                }
+            }).catch(function(){ updatePermUI('camera', 'permanently_denied'); });
+
+        } else if (perm === 'notifications') {
+            var Push = Plugins.PushNotifications;
+            if (!Push) return;
+            Push.requestPermissions().then(function(res) {
+                updatePermUI('notifications', res.receive === 'granted' ? 'granted' : 'denied');
+            }).catch(function(){ updatePermUI('notifications', 'denied'); });
+        }
+    };
+
+    function checkAllPermissions() {
+        if (!window.Capacitor || !window.Capacitor.isNativePlatform || !window.Capacitor.isNativePlatform()) {
+            /* Not native — hide card entirely */
+            var card = document.getElementById('permDashCard');
+            if (card) card.style.display = 'none';
+            var overlay = document.getElementById('permBlurOverlay');
+            if (overlay) overlay.style.display = 'none';
+            return;
+        }
+        var Plugins = window.Capacitor.Plugins;
+        /* Show card while checking */
+        var card = document.getElementById('permDashCard');
+        if (card) card.style.display = '';
+
+        /* Location */
+        if (Plugins.Geolocation) {
+            Plugins.Geolocation.checkPermissions().then(function(s) {
+                var st = (s.location || s.coarseLocation || 'prompt');
+                updatePermUI('location', st === 'granted' ? 'granted' : (st === 'denied' ? 'denied' : 'denied'));
+            }).catch(function(){ updatePermUI('location', 'denied'); });
+        } else {
+            updatePermUI('location', 'denied');
+        }
+
+        /* Camera */
+        if (Plugins.Camera) {
+            Plugins.Camera.checkPermissions().then(function(s) {
+                var st = (s.camera || 'prompt');
+                updatePermUI('camera', st === 'granted' ? 'granted' : 'denied');
+            }).catch(function(){ updatePermUI('camera', 'denied'); });
+        } else {
+            updatePermUI('camera', 'denied');
+        }
+
+        /* Notifications */
+        if (Plugins.PushNotifications) {
+            Plugins.PushNotifications.checkPermissions().then(function(s) {
+                updatePermUI('notifications', s.receive === 'granted' ? 'granted' : 'denied');
+            }).catch(function(){ updatePermUI('notifications', 'denied'); });
+        } else {
+            updatePermUI('notifications', 'denied');
+        }
+    }
+
+    /* Run on DOM ready */
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', checkAllPermissions);
+    } else {
+        checkAllPermissions();
+    }
+    /* Re-check when user comes back from Settings */
+    document.addEventListener('visibilitychange', function() {
+        if (document.visibilityState === 'visible') checkAllPermissions();
+    });
+})();
+</script>
+
 {% if health_alert %}
 <div class="d-flex align-items-start gap-3 mb-3 px-3 py-3"
      style="background:linear-gradient(135deg,#fef2f2,#fee2e2);border:2px solid #fca5a5;border-radius:16px;">
