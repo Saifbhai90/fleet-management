@@ -6766,16 +6766,13 @@ if (window.lucide && typeof window.lucide.createIcons === 'function') {
                         var state = (status.location || status.coarseLocation || 'prompt');
                         if (state === 'granted') {
                             return Geo.getCurrentPosition({ enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
-                        } else if (state === 'denied') {
-                            _showPermissionAlert('Location', 'Location permission was denied. Please go to Settings → Apps → Fleet Manager → Permissions and enable Location to allow check-in.');
-                            throw { code: 'location_denied' };
                         } else {
                             return Geo.requestPermissions({ permissions: ['location', 'coarseLocation'] }).then(function(res) {
                                 var granted = (res.location === 'granted' || res.coarseLocation === 'granted');
                                 if (granted) {
                                     return Geo.getCurrentPosition({ enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
                                 } else {
-                                    _showPermissionAlert('Location', 'GPS permission is required to verify your attendance location. Please grant Location access when prompted.');
+                                    _showPermissionAlert('Location', 'Location permission is required. Please go to Settings → Apps → Fleet Manager → Permissions and enable Location to allow check-in.');
                                     throw { code: 'location_denied' };
                                 }
                             });
@@ -6812,15 +6809,11 @@ if (window.lucide && typeof window.lucide.createIcons === 'function') {
                 if (state === 'granted') {
                     return Cam.getPhoto(opts);
                 }
-                if (state === 'denied') {
-                    _showPermissionAlert('Camera', 'Camera permission was denied. Please go to Settings → Apps → Fleet Manager → Permissions and enable Camera to take attendance selfies.');
-                    throw { code: 'camera_denied' };
-                }
                 return Cam.requestPermissions({ permissions: ['camera'] }).then(function(res) {
                     if (res.camera === 'granted') {
                         return Cam.getPhoto(opts);
                     }
-                    _showPermissionAlert('Camera', 'Camera permission is required to take an attendance selfie. Please grant Camera access when prompted.');
+                    _showPermissionAlert('Camera', 'Camera permission is required to take attendance selfies. Please go to Settings → Apps → Fleet Manager → Permissions and enable Camera.');
                     throw { code: 'camera_denied' };
                 });
             }).then(function(photo) {
