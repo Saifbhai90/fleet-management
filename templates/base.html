@@ -1665,13 +1665,6 @@
 </head>
 <body{% if request.endpoint == 'dashboard' %} class="page-dashboard fm-aurora-theme" data-fleet-page="dashboard"{% elif request.endpoint == 'report_driver_profile_public' %} class="driver-profile-public-view"{% else %} class="fm-aurora-theme"{% endif %}{% if request.endpoint %} data-fleet-endpoint="{{ request.endpoint }}"{% endif %}{% if fleet_mobile_dev %} data-fleet-mobile-dev="1"{% endif %}>
 <script>if(localStorage.getItem('fleetDarkMode')==='on'){document.body.classList.remove('fm-aurora-theme');document.body.classList.add('dark-mode');}</script>
-{% if request.host and ('127.0.0.1' in request.host or '192.168.' in request.host or 'localhost' in request.host) %}
-<div id="fleetDevBanner" style="position:fixed;top:0;left:0;right:0;z-index:20000;background:#059669;color:#fff;font-size:11px;font-weight:600;text-align:center;padding:5px 8px;letter-spacing:.02em;">DEV · {{ request.host }} · USB/LAN server</div>
-<style>body[data-fleet-mobile-dev="1"] .main-content, body:has(#fleetDevBanner) .main-content{padding-top:calc(max(env(safe-area-inset-top,0px),14px) + 22px)!important;}</style>
-{% elif fleet_mobile_dev %}
-<div id="fleetDevBanner" style="position:fixed;top:0;left:0;right:0;z-index:20000;background:#059669;color:#fff;font-size:11px;font-weight:600;text-align:center;padding:5px 8px;letter-spacing:.02em;">DEV · {{ fleet_server_host }} · build {{ fleet_asset_version }}</div>
-<style>body[data-fleet-mobile-dev="1"] .main-content{padding-top:calc(max(env(safe-area-inset-top,0px),14px) + 22px)!important;}</style>
-{% endif %}
 <div id="topLoadBar"></div>
 
 <div class="fm-aurora-bg" aria-hidden="true">
