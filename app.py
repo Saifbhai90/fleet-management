@@ -235,7 +235,7 @@ def inject_fleet_build_context():
     host_raw = (request.host or '').lower()
     host = host_raw.split(':')[0]
     is_local = host in ('127.0.0.1', 'localhost') or host.startswith('192.168.')
-    fleet_dev = is_local or os.environ.get('FLEET_MOBILE_DEV', '0') == '1'
+    fleet_dev = is_local
     return {
         'fleet_asset_version': os.environ.get('FLEET_ASSET_VERSION') or str(int(time.time())),
         'fleet_server_host': host_raw,

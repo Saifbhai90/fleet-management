@@ -770,8 +770,21 @@ function _dbgToast(msg) {
             });
 
         } else if (perm === 'notifications') {
-            /* Notifications denied = go directly to Settings (Android doesn't re-prompt once denied) */
-            openAppSettings();
+            var Push = Plugins.PushNotifications;
+            if (Push && typeof Push.requestPermissions === 'function') {
+                Push.requestPermissions().then(function(res) {
+                    if (res.receive === 'granted') {
+                        updatePermUI('notifications', 'granted');
+                    } else {
+                        updatePermUI('notifications', 'permanently_denied');
+                        openAppSettings();
+                    }
+                }).catch(function() {
+                    openAppSettings();
+                });
+            } else {
+                openAppSettings();
+            }
         }
     };
 
