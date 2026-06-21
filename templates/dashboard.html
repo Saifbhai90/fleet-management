@@ -317,9 +317,10 @@ document.addEventListener('DOMContentLoaded', function() {
 <!-- ═══════════════════════════════
      PERMISSION DASHBOARD CARD
      (Only shown in Capacitor native app)
+     Fixed full-screen so it stays above overlay and is always clickable
 ═══════════════════════════════ -->
-<div id="permDashCard" style="display:none;" class="mb-3">
-    <div style="background:linear-gradient(135deg,#0f172a,#1e293b);border-radius:20px;padding:20px 22px;border:2px solid #334155;box-shadow:0 8px 32px rgba(0,0,0,0.2);">
+<div id="permDashCard" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999;overflow-y:auto;display:none;align-items:flex-start;justify-content:center;padding:max(env(safe-area-inset-top,20px),20px) 16px 24px;background:#0f172a;">
+    <div style="width:100%;max-width:480px;background:linear-gradient(135deg,#0f172a,#1e293b);border-radius:20px;padding:24px 22px;border:2px solid #334155;box-shadow:0 8px 32px rgba(0,0,0,0.4);margin-top:12px;">
         <div class="d-flex align-items-center gap-3 mb-3">
             <div style="width:42px;height:42px;border-radius:12px;background:rgba(239,68,68,0.18);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
                 <i class="bi bi-shield-exclamation" style="font-size:1.3rem;color:#f87171;"></i>
@@ -373,13 +374,9 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
 </div>
 
-<!-- Blur overlay when critical permissions missing -->
-<div id="permBlurOverlay" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:8888;background:rgba(15,23,42,0.55);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);">
-    <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;color:#fff;padding:0 24px;">
-        <div style="font-size:2rem;margin-bottom:8px;">🔒</div>
-        <div style="font-size:0.95rem;font-weight:700;">Permissions Required</div>
-        <div style="font-size:0.78rem;color:#94a3b8;margin-top:4px;">Upar card mein Location aur Camera allow karein</div>
-    </div>
+<!-- Lock overlay: covers ONLY the page content below permission card -->
+<!-- z-index 900 = below navbar(1030) but above page content. Permission card is outside this overlay. -->
+<div id="permBlurOverlay" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:900;background:rgba(15,23,42,0.72);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);pointer-events:all;">
 </div>
 
 <script>
@@ -413,14 +410,45 @@ document.addEventListener('DOMContentLoaded', function() {
         _criticalGranted = locGranted && camGranted;
 
         var anyNotGranted = !locGranted || !camGranted || !notifGranted;
-        var card = document.getElementById('permDashCard');
-        if (card) card.style.display = anyNotGranted ? '' : 'none';
 
-        var overlay = document.getElementById('permBlurOverlay');
-        if (overlay) overlay.style.display = _criticalGranted ? 'none' : '';
+        /* Permission card: visible jab tak koi bhi permission missing ho */
+        var card = document.getElementById('permDashCard');
+        /* display handled at bottom after z-index set */
 
         var note = document.getElementById('permCardNote');
         if (note) note.style.display = anyNotGranted ? '' : 'none';
+
+        /* Lock overlay: visible jab Location ya Camera grant nahi */
+        var overlay = document.getElementById('permBlurOverlay');
+        if (overlay) overlay.style.display = _criticalGranted ? 'none' : '';
+
+        /* Navbar, sidebar, bottom nav, hamburger — hide jab critical permissions missing */
+        var toHide = [
+            document.querySelector('nav.navbar'),
+            document.getElementById('sidebar'),
+            document.getElementById('sidebarOverlay'),
+            document.getElementById('mobileBottomNav'),
+            document.getElementById('mobileMenuBtn')
+        ];
+        toHide.forEach(function(el) {
+            if (!el) return;
+            if (!_criticalGranted) {
+                el.setAttribute('data-perm-hidden', '1');
+                el.style.display = 'none';
+            } else {
+                if (el.getAttribute('data-perm-hidden') === '1') {
+                    el.removeAttribute('data-perm-hidden');
+                    el.style.display = '';
+                }
+            }
+        });
+
+        /* Permission card: fixed full-screen overlay jaisa, z-index sabse upar */
+        if (card) {
+            card.style.position = 'fixed';
+            card.style.zIndex = '9999';
+            card.style.display = anyNotGranted ? 'flex' : 'none';
+        }
     }
 
     function updatePermUI(perm, state) {
@@ -497,17 +525,27 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function checkAllPermissions() {
         if (!window.Capacitor || !window.Capacitor.isNativePlatform || !window.Capacitor.isNativePlatform()) {
-            /* Not native — hide card entirely */
+            /* Not native — hide card and overlay entirely, show all nav */
             var card = document.getElementById('permDashCard');
-            if (card) card.style.display = 'none';
+            if (card) { card.style.display = 'none'; }
             var overlay = document.getElementById('permBlurOverlay');
             if (overlay) overlay.style.display = 'none';
+            /* Make sure nav is visible on web */
+            ['mobileBottomNav','mobileMenuBtn','sidebar','sidebarOverlay'].forEach(function(id) {
+                var el = document.getElementById(id);
+                if (el) {
+                    el.removeAttribute('data-perm-hidden');
+                    el.style.display = '';
+                }
+            });
+            var navbar = document.querySelector('nav.navbar');
+            if (navbar) { navbar.removeAttribute('data-perm-hidden'); navbar.style.display = ''; }
             return;
         }
         var Plugins = window.Capacitor.Plugins;
-        /* Show card while checking */
+        /* Show card while checking (flex because it's a fixed overlay) */
         var card = document.getElementById('permDashCard');
-        if (card) card.style.display = '';
+        if (card) { card.style.position = 'fixed'; card.style.zIndex = '9999'; card.style.display = 'flex'; }
 
         /* Location */
         if (Plugins.Geolocation) {
