@@ -35658,8 +35658,11 @@ def maintenance_expense_form(pk=None):
                     flash('Maintenance save ho gaya lekin files queue me add nahi ho sakin.', 'warning')
             flash('Maintenance expense saved.', 'success')
             return redirect(url_for('maintenance_expense_list'))
-        except Exception:
+        except Exception as _save_exc:
             db.session.rollback()
+            app.logger.exception('Maintenance expense save failed')
+            if request.headers.get('X-Maint-Split-Upload') == '1':
+                return jsonify({'ok': False, 'error': str(_save_exc)}), 500
             raise
     elif request.method == 'POST':
         if form.errors:
