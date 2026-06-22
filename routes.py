@@ -2681,6 +2681,23 @@ def _process_expense_upload_job(kind, expense_id: int):
     if not cfg:
         return
     with app.app_context():
+        # Render PostgreSQL drops idle connections; dispose stale pool before
+        # any DB work in this background thread so psycopg2 gets a fresh socket.
+        try:
+            db.engine.dispose()
+        except Exception:
+            pass
+
+        def _safe_commit():
+            """Commit and release the scoped session so next query gets a fresh connection."""
+            try:
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+                raise
+            finally:
+                db.session.remove()
+
         rec = cfg['record_model'].query.get(expense_id)
         if not rec:
             return
@@ -2693,13 +2710,18 @@ def _process_expense_upload_job(kind, expense_id: int):
             rec.upload_failed = 0
             rec.upload_error = None
             rec.upload_finished_at = pk_now()
-            db.session.commit()
+            _safe_commit()
             return
         rec.upload_status = 'processing'
         rec.upload_started_at = pk_now()
         rec.upload_finished_at = None
         rec.upload_error = None
-        db.session.commit()
+        _safe_commit()
+
+        # Re-fetch after session was released
+        rec = cfg['record_model'].query.get(expense_id)
+        if not rec:
+            return
 
         remaining = []
         errors = []
@@ -2745,8 +2767,19 @@ def _process_expense_upload_job(kind, expense_id: int):
             rec.upload_failed = len(remaining)
             rec.upload_manifest_json = json.dumps(remaining)
             rec.upload_error = '\n'.join(errors[-10:]) if errors else None
-            db.session.commit()
+            try:
+                _safe_commit()
+                # Re-fetch rec after session release so next iteration has live object
+                rec = cfg['record_model'].query.get(expense_id)
+                if not rec:
+                    return
+            except Exception as _commit_ex:
+                app.logger.warning('%s commit failed mid-loop: %s', cfg['log_prefix'], _commit_ex)
+                break
 
+        rec = cfg['record_model'].query.get(expense_id)
+        if not rec:
+            return
         rec.upload_failed = len(remaining)
         rec.upload_manifest_json = json.dumps(remaining)
         rec.upload_error = '\n'.join(errors[-10:]) if errors else None
@@ -2758,7 +2791,7 @@ def _process_expense_upload_job(kind, expense_id: int):
         else:
             rec.upload_status = 'success'
             rec.upload_error = None
-        db.session.commit()
+        _safe_commit()
 
 
 def _prepare_maintenance_upload_manifest(files, expense_id):

@@ -60,6 +60,13 @@ if database_url:
         database_url = 'sqlite:///' + _db_path_abs
 app.config['SQLALCHEMY_DATABASE_URI'] = database_url or 'sqlite:///company_management.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+# Render (and any cloud host) silently drops idle PostgreSQL connections.
+# pool_pre_ping: test every checked-out connection before use; recycle stale ones.
+# pool_recycle: discard connections older than 270 s (below Render's ~300 s idle timeout).
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    'pool_pre_ping': True,
+    'pool_recycle': 270,
+}
 
 # ── DB Path Guarantee (local dev mode) ──────────────────────────────────────
 if os.environ.get('LOCAL_DB_GUARANTEED'):
