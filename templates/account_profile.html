@@ -138,7 +138,12 @@ function _fleetLogout(link, e) {
       row.style.display = 'none';
       return;
     }
-    bp.checkBiometry().then(function(info) {
+    /* Use the compatibility wrapper that handles both aparajita and capgo plugins */
+    var checkFn = window.fleetBiometricToggle._checkBiometry || function(plugin) {
+      if (typeof plugin.checkBiometry === 'function') return plugin.checkBiometry();
+      return Promise.resolve({ isAvailable: false, biometryIsAvailable: false });
+    };
+    checkFn(bp).then(function(info) {
       var avail = info && (info.isAvailable || info.biometryIsAvailable || info.strongBiometryIsAvailable);
       if (!avail && !window.fleetBiometricToggle.hasLocalToken()) {
         row.style.display = 'none';

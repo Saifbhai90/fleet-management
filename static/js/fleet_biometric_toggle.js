@@ -26,7 +26,7 @@
   function getPlugin() {
     if (!global.Capacitor || !global.Capacitor.Plugins) return null;
     var p = global.Capacitor.Plugins;
-    return p.BiometricAuthNative || p.BiometricAuth || null;
+    return p.BiometricAuth || p.BiometricAuthNative || null;
   }
 
   function runAuth(bp, options) {
@@ -34,6 +34,16 @@
     if (typeof bp.authenticate === 'function') return bp.authenticate(options);
     if (typeof bp.verifyIdentity === 'function') return bp.verifyIdentity(options);
     return Promise.reject(new Error('Biometric plugin has no authenticate method'));
+  }
+
+  function checkBiometry(bp) {
+    if (typeof bp.checkBiometry === 'function') return bp.checkBiometry();
+    if (typeof bp.isBiometricEnabled === 'function') {
+      return bp.isBiometricEnabled().then(function(info) {
+        return { isAvailable: !!(info && info.enabled), biometryIsAvailable: !!(info && info.enabled) };
+      });
+    }
+    return Promise.resolve({ isAvailable: false, biometryIsAvailable: false });
   }
 
   function timed(p, ms) {
@@ -868,7 +878,7 @@
       return Promise.reject({ __handled: true });
     }
 
-    return bp.checkBiometry().then(function(info) {
+    return checkBiometry(bp).then(function(info) {
       if (!info || !(info.isAvailable || info.biometryIsAvailable || info.strongBiometryIsAvailable)) {
         throw { __handled: true, message: (info && info.reason) || 'Fingerprint not available' };
       }
@@ -1100,6 +1110,7 @@
     LINK_SUCCESS_MSG: LINK_SUCCESS_MSG,
     isNative: isNative,
     getPlugin: getPlugin,
+    _checkBiometry: checkBiometry,
     hasLocalToken: hasLocalToken,
     isSetupPending: isSetupPending,
     clearSetupPending: clearSetupPending,
