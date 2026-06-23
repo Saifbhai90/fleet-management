@@ -33695,13 +33695,21 @@ def _ensure_maintenance_work_order_schema():
     """Safety net for environments where migration is delayed/missed.
 
     Keeps maintenance pages functional by creating required table/columns if absent.
+
+    NOTE: SQLite does NOT support `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`
+    (raises "near EXISTS: syntax error") nor `SERIAL`. So we use SQLAlchemy's
+    inspector to check existing columns and only add genuinely missing ones,
+    which is valid on both SQLite and PostgreSQL.
     """
     if _maintenance_work_order_schema_ready.get('ok'):
         return
-    stmts = [
-        """
+    is_sqlite = db.engine.dialect.name == 'sqlite'
+    # CREATE TABLE IF NOT EXISTS works on both dialects; SERIAL is PG-only.
+    _pk_def = 'INTEGER PRIMARY KEY AUTOINCREMENT' if is_sqlite else 'SERIAL PRIMARY KEY'
+    create_stmts = [
+        f"""
         CREATE TABLE IF NOT EXISTS maintenance_work_order (
-            id SERIAL PRIMARY KEY,
+            id {_pk_def},
             work_order_no VARCHAR(40),
             district_id INTEGER NULL,
             project_id INTEGER NULL,
@@ -33716,24 +33724,10 @@ def _ensure_maintenance_work_order_schema():
             created_at TIMESTAMP NULL
         )
         """,
-        "ALTER TABLE maintenance_work_order ADD COLUMN IF NOT EXISTS work_order_no VARCHAR(40)",
-        "ALTER TABLE maintenance_work_order ADD COLUMN IF NOT EXISTS district_id INTEGER",
-        "ALTER TABLE maintenance_work_order ADD COLUMN IF NOT EXISTS project_id INTEGER",
-        "ALTER TABLE maintenance_work_order ADD COLUMN IF NOT EXISTS employee_id INTEGER",
-        "ALTER TABLE maintenance_work_order ADD COLUMN IF NOT EXISTS vehicle_id INTEGER",
-        "ALTER TABLE maintenance_work_order ADD COLUMN IF NOT EXISTS opened_on DATE",
-        "ALTER TABLE maintenance_work_order ADD COLUMN IF NOT EXISTS closed_on DATE",
-        "ALTER TABLE maintenance_work_order ADD COLUMN IF NOT EXISTS work_type VARCHAR(120)",
-        "ALTER TABLE maintenance_work_order ADD COLUMN IF NOT EXISTS title VARCHAR(180)",
-        "ALTER TABLE maintenance_work_order ADD COLUMN IF NOT EXISTS status VARCHAR(20)",
-        "ALTER TABLE maintenance_work_order ADD COLUMN IF NOT EXISTS remarks TEXT",
-        "ALTER TABLE maintenance_work_order ADD COLUMN IF NOT EXISTS created_at TIMESTAMP",
-        "ALTER TABLE maintenance_expense ADD COLUMN IF NOT EXISTS work_order_id INTEGER",
-        "CREATE INDEX IF NOT EXISTS ix_maintenance_expense_work_order_id ON maintenance_expense (work_order_id)",
         "CREATE INDEX IF NOT EXISTS ix_maintenance_work_order_work_order_no ON maintenance_work_order (work_order_no)",
-        """
+        f"""
         CREATE TABLE IF NOT EXISTS maintenance_work_order_attachment (
-            id SERIAL PRIMARY KEY,
+            id {_pk_def},
             work_order_id INTEGER NOT NULL,
             file_path VARCHAR(2048) NOT NULL,
             file_type VARCHAR(20),
@@ -33742,18 +33736,45 @@ def _ensure_maintenance_work_order_schema():
         )
         """,
         "CREATE INDEX IF NOT EXISTS ix_mwo_attachment_work_order_id ON maintenance_work_order_attachment (work_order_id)",
-        "ALTER TABLE maintenance_work_order ADD COLUMN IF NOT EXISTS upload_status VARCHAR(20)",
-        "ALTER TABLE maintenance_work_order ADD COLUMN IF NOT EXISTS upload_total INTEGER DEFAULT 0",
-        "ALTER TABLE maintenance_work_order ADD COLUMN IF NOT EXISTS upload_done INTEGER DEFAULT 0",
-        "ALTER TABLE maintenance_work_order ADD COLUMN IF NOT EXISTS upload_failed INTEGER DEFAULT 0",
-        "ALTER TABLE maintenance_work_order ADD COLUMN IF NOT EXISTS upload_error TEXT",
-        "ALTER TABLE maintenance_work_order ADD COLUMN IF NOT EXISTS upload_manifest_json TEXT",
-        "ALTER TABLE maintenance_work_order ADD COLUMN IF NOT EXISTS upload_started_at TIMESTAMP",
-        "ALTER TABLE maintenance_work_order ADD COLUMN IF NOT EXISTS upload_finished_at TIMESTAMP",
+        "CREATE INDEX IF NOT EXISTS ix_maintenance_expense_work_order_id ON maintenance_expense (work_order_id)",
+    ]
+    # Columns that should exist (table, column, SQL type). Added only if missing.
+    required_columns = [
+        ('maintenance_work_order', 'work_order_no', 'VARCHAR(40)'),
+        ('maintenance_work_order', 'district_id', 'INTEGER'),
+        ('maintenance_work_order', 'project_id', 'INTEGER'),
+        ('maintenance_work_order', 'employee_id', 'INTEGER'),
+        ('maintenance_work_order', 'vehicle_id', 'INTEGER'),
+        ('maintenance_work_order', 'opened_on', 'DATE'),
+        ('maintenance_work_order', 'closed_on', 'DATE'),
+        ('maintenance_work_order', 'work_type', 'VARCHAR(120)'),
+        ('maintenance_work_order', 'title', 'VARCHAR(180)'),
+        ('maintenance_work_order', 'status', 'VARCHAR(20)'),
+        ('maintenance_work_order', 'remarks', 'TEXT'),
+        ('maintenance_work_order', 'created_at', 'TIMESTAMP'),
+        ('maintenance_work_order', 'upload_status', 'VARCHAR(20)'),
+        ('maintenance_work_order', 'upload_total', 'INTEGER DEFAULT 0'),
+        ('maintenance_work_order', 'upload_done', 'INTEGER DEFAULT 0'),
+        ('maintenance_work_order', 'upload_failed', 'INTEGER DEFAULT 0'),
+        ('maintenance_work_order', 'upload_error', 'TEXT'),
+        ('maintenance_work_order', 'upload_manifest_json', 'TEXT'),
+        ('maintenance_work_order', 'upload_started_at', 'TIMESTAMP'),
+        ('maintenance_work_order', 'upload_finished_at', 'TIMESTAMP'),
+        ('maintenance_expense', 'work_order_id', 'INTEGER'),
     ]
     try:
-        for stmt in stmts:
+        existing_tables = set(inspect(db.engine).get_table_names())
+        # 1) CREATE TABLE / INDEX statements (idempotent on both dialects)
+        for stmt in create_stmts:
             db.session.execute(text(stmt))
+        db.session.commit()
+        # 2) Add genuinely missing columns only (avoids SQLite IF NOT EXISTS gap)
+        for _tbl, _col, _coltype in required_columns:
+            if _tbl not in existing_tables:
+                continue  # table just created above with all columns
+            _existing_cols = {c['name'] for c in inspect(db.engine).get_columns(_tbl)}
+            if _col not in _existing_cols:
+                db.session.execute(text(f'ALTER TABLE {_tbl} ADD COLUMN {_col} {_coltype}'))
         db.session.commit()
         _maintenance_work_order_schema_ready['ok'] = True
     except Exception:
