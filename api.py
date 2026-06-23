@@ -113,7 +113,7 @@ def _mobile_has_permission(perm_code: str) -> bool:
     uid = payload.get('user_id')
     if not uid:
         return False
-    user = User.query.get(uid)
+    user = db.session.get(User, uid)
     if not user:
         return False
     if user.role and user.role.name == 'Master':
@@ -177,7 +177,7 @@ def mobile_me():
     """Returns the JWT-authenticated driver's profile for the mobile app."""
     from models import User, Driver
     uid = request.jwt_payload.get('user_id')
-    user = User.query.get(uid)
+    user = db.session.get(User, uid)
     if not user:
         return _err('User not found.', 404)
     driver = Driver.query.filter_by(cnic_no=user.username).first()
@@ -267,7 +267,7 @@ def _resolve_driver_for_jwt(body: dict, jwt_payload: dict):
     """
     from models import User, Driver
     uid = jwt_payload.get('user_id')
-    user = User.query.get(uid)
+    user = db.session.get(User, uid)
     if not user:
         return None, _err('Authenticated user not found.', 401)
 
@@ -277,7 +277,7 @@ def _resolve_driver_for_jwt(body: dict, jwt_payload: dict):
     requested_id = body.get('driver_id')
 
     if is_privileged and requested_id:
-        driver = Driver.query.get(requested_id)
+        driver = db.session.get(Driver, requested_id)
     else:
         driver = Driver.query.filter_by(cnic_no=user.username).first()
         if requested_id and driver and driver.id != int(requested_id):
@@ -483,7 +483,7 @@ def mobile_driver_profile():
     import datetime as dt
 
     uid = request.jwt_payload.get('user_id')
-    user = User.query.get(uid)
+    user = db.session.get(User, uid)
     if not user:
         return _err('User not found.', 404)
 
@@ -491,7 +491,7 @@ def mobile_driver_profile():
     is_master = request.jwt_payload.get('is_master', False)
 
     if driver_id_param and is_master:
-        driver = Driver.query.get(driver_id_param)
+        driver = db.session.get(Driver, driver_id_param)
     else:
         driver = Driver.query.filter_by(cnic_no=user.username).first()
 

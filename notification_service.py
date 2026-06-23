@@ -250,7 +250,7 @@ def _vehicle_scope_from_driver(driver, vehicle=None):
 
     v = vehicle
     if not v and driver and getattr(driver, 'vehicle_id', None):
-        v = Vehicle.query.get(driver.vehicle_id)
+        v = db.session.get(Vehicle, driver.vehicle_id)
     if not v:
         return None, None, ''
     v_no = (v.vehicle_no or '').strip()
@@ -400,7 +400,7 @@ def notify_task_report_saved(vehicle, task_date, *, driver=None):
         return
     if not driver:
         if vehicle.driver_id:
-            driver = Driver.query.get(vehicle.driver_id)
+            driver = db.session.get(Driver, vehicle.driver_id)
         else:
             driver = Driver.query.filter_by(
                 vehicle_id=vehicle.id, status='Active'

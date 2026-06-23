@@ -21,6 +21,20 @@ from models import AIAssistantQueryLog, AIConversation, AIConversationMessage
 ai_bp = Blueprint("ai", __name__)
 _AI_SCHEMA_CHECKED = False
 
+
+def _validate_ai_origin():
+    """Validate Origin/Referer on CSRF-exempt AI endpoints to prevent cross-site attacks.
+    Allows same-origin and Capacitor WebView (https://localhost) requests."""
+    origin = (request.headers.get('Origin') or '').rstrip('/')
+    referer = (request.headers.get('Referer') or '').rstrip('/')
+    expected = request.host_url.rstrip('/')
+    allowed_prefixes = [expected, 'https://localhost', 'http://localhost']
+    if origin:
+        return any(origin.startswith(p) for p in allowed_prefixes)
+    if referer:
+        return any(referer.startswith(p) for p in allowed_prefixes)
+    return True
+
 _DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
 _GEMINI_FALLBACK_MODELS = [
     "gemini-2.0-flash",
@@ -528,7 +542,7 @@ def _refresh_conversation_memory(conversation):
 def _build_conversation_context(conversation_id, max_messages=12, max_chars=4500):
     if not conversation_id:
         return ""
-    conv = AIConversation.query.get(conversation_id)
+    conv = db.session.get(AIConversation, conversation_id)
     if not conv:
         return ""
     rows = (
@@ -600,7 +614,6 @@ def _call_gemini(prompt, temperature=0.1):
             raise RuntimeError("Gemini request budget exhausted before API call.")
         url = (
             f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent"
-            f"?key={api_key}"
         )
         payload = {
             "generationConfig": {"temperature": temperature},
@@ -609,6 +622,7 @@ def _call_gemini(prompt, temperature=0.1):
         data = json.dumps(payload).encode("utf-8")
         req = url_request.Request(url, data=data, method="POST")
         req.add_header("Content-Type", "application/json")
+        req.add_header("x-goog-api-key", api_key)
         req_timeout = max(1.0, min(_GEMINI_HTTP_TIMEOUT_SECONDS, remaining))
         with url_request.urlopen(req, timeout=req_timeout) as resp:
             return json.loads(resp.read().decode("utf-8"))
@@ -644,8 +658,9 @@ def _call_gemini(prompt, temperature=0.1):
         remaining = _remaining_seconds()
         if remaining <= 0.2:
             return []
-        list_url = f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}"
+        list_url = "https://generativelanguage.googleapis.com/v1beta/models"
         req = url_request.Request(list_url, method="GET")
+        req.add_header("x-goog-api-key", api_key)
         with url_request.urlopen(req, timeout=max(1.0, min(_GEMINI_HTTP_TIMEOUT_SECONDS, remaining))) as resp:
             body = json.loads(resp.read().decode("utf-8"))
         out = []
@@ -817,6 +832,8 @@ def ai_assistant():
 @ai_bp.route("/api/ai/query", methods=["POST"])
 @csrf.exempt
 def ai_query():
+    if not _validate_ai_origin():
+        return jsonify({"ok": False, "error": "Cross-origin request blocked"}), 403
     ok_schema, schema_err = _ensure_ai_conversation_schema()
     if not ok_schema:
         return jsonify({"ok": False, "error": schema_err}), 500
@@ -1214,6 +1231,8 @@ def ai_conversations():
 @ai_bp.route("/api/ai/conversations/new", methods=["POST"])
 @csrf.exempt
 def ai_conversation_new():
+    if not _validate_ai_origin():
+        return jsonify({"ok": False, "error": "Cross-origin request blocked"}), 403
     ok_schema, schema_err = _ensure_ai_conversation_schema()
     if not ok_schema:
         return jsonify({"ok": False, "error": schema_err}), 500
@@ -1231,6 +1250,8 @@ def ai_conversation_new():
 @ai_bp.route("/api/ai/conversations/<int:conversation_id>", methods=["GET", "PATCH", "DELETE"])
 @csrf.exempt
 def ai_conversation_detail(conversation_id):
+    if not _validate_ai_origin():
+        return jsonify({"ok": False, "error": "Cross-origin request blocked"}), 403
     ok_schema, schema_err = _ensure_ai_conversation_schema()
     if not ok_schema:
         return jsonify({"ok": False, "error": schema_err}), 500

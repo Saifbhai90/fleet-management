@@ -187,7 +187,7 @@ def get_account_balance(account_id, as_of_date=None):
     Returns:
         Decimal: Account balance
     """
-    account = Account.query.get(account_id)
+    account = db.session.get(Account, account_id)
     if not account:
         return Decimal('0')
     
@@ -229,7 +229,7 @@ def get_account_ledger(account_id, from_date=None, to_date=None, category=None):
     Returns:
         dict with account, opening_balance, transactions, closing_balance
     """
-    account = Account.query.get(account_id)
+    account = db.session.get(Account, account_id)
     if not account:
         return None
     
@@ -621,7 +621,7 @@ def ensure_wallet_account(person_type, person_id):
     Supported person_types: 'employee'/'emp', 'driver'/'drv', 'party'/'pty', 'company'/'com', 'acct'.
     """
     if person_type == 'acct':
-        acct = Account.query.get(person_id)
+        acct = db.session.get(Account, person_id)
         if not acct:
             raise ValueError(f"Account {person_id} not found")
         return acct
@@ -630,30 +630,30 @@ def ensure_wallet_account(person_type, person_id):
     ptype = _type_map.get(person_type, person_type)
 
     if ptype == 'employee':
-        person = Employee.query.get(person_id)
+        person = db.session.get(Employee, person_id)
         if not person:
             raise ValueError(f"Employee {person_id} not found")
         if person.wallet_account_id:
-            acct = Account.query.get(person.wallet_account_id)
+            acct = db.session.get(Account, person.wallet_account_id)
             if acct:
                 return acct
     elif ptype == 'driver':
-        person = Driver.query.get(person_id)
+        person = db.session.get(Driver, person_id)
         if not person:
             raise ValueError(f"Driver {person_id} not found")
         if person.wallet_account_id:
-            acct = Account.query.get(person.wallet_account_id)
+            acct = db.session.get(Account, person.wallet_account_id)
             if acct:
                 return acct
     elif ptype == 'party':
-        person = Party.query.get(person_id)
+        person = db.session.get(Party, person_id)
         if not person:
             raise ValueError(f"Party {person_id} not found")
         existing = Account.query.filter_by(entity_type='party', entity_id=person_id).first()
         if existing:
             return existing
     elif ptype == 'company':
-        person = Company.query.get(person_id)
+        person = db.session.get(Company, person_id)
         if not person:
             raise ValueError(f"Company {person_id} not found")
         existing = Account.query.filter_by(entity_type='company', entity_id=person_id).first()
@@ -775,7 +775,7 @@ def workspace_generate_entry_number(prefix, entry_date, employee_id):
 
 
 def ensure_workspace_base_accounts(employee_id):
-    employee = Employee.query.get(employee_id)
+    employee = db.session.get(Employee, employee_id)
     if not employee:
         raise ValueError("Selected employee not found")
 
@@ -900,7 +900,7 @@ def ensure_workspace_counterparty_account(employee_id, *, party_id=None, driver_
         party = WorkspaceParty.query.filter_by(employee_id=employee_id, id=party_id).first()
         if not party:
             # Backward-compatible fallback for old callers that pass master Party id.
-            party = Party.query.get(party_id)
+            party = db.session.get(Party, party_id)
         if not party:
             raise ValueError("Party not found")
         parent = WorkspaceAccount.query.filter_by(employee_id=employee_id, code='1000').first()
@@ -937,7 +937,7 @@ def ensure_workspace_counterparty_account(employee_id, *, party_id=None, driver_
         existing = WorkspaceAccount.query.filter_by(employee_id=employee_id, entity_type='driver', entity_id=driver_id).first()
         if existing:
             return existing
-        driver = Driver.query.get(driver_id)
+        driver = db.session.get(Driver, driver_id)
         if not driver:
             raise ValueError("Driver not found")
         row = WorkspaceAccount(
@@ -1052,7 +1052,7 @@ def workspace_reverse_journal_entry(journal_entry_id):
     WorkspaceFundTransfer.query.filter_by(journal_entry_id=journal_entry_id).update(
         {'journal_entry_id': None}, synchronize_session='fetch'
     )
-    je = WorkspaceJournalEntry.query.get(journal_entry_id)
+    je = db.session.get(WorkspaceJournalEntry, journal_entry_id)
     if je:
         db.session.delete(je)
 
@@ -1074,7 +1074,7 @@ def reverse_company_journal_entry(journal_entry_id):
             delta = credit - debit
         account.current_balance = Decimal(str(account.current_balance or 0)) - delta
         db.session.add(account)
-    je = JournalEntry.query.get(journal_entry_id)
+    je = db.session.get(JournalEntry, journal_entry_id)
     if je:
         db.session.delete(je)
 
@@ -1089,7 +1089,7 @@ def _workspace_account_balance_delta(account, debit, credit):
 
 def workspace_get_account_balance(account_id, as_of_date=None):
     """Account balance as of a date (opening_balance + all posted lines up to as_of_date)."""
-    account = WorkspaceAccount.query.get(account_id)
+    account = db.session.get(WorkspaceAccount, account_id)
     if not account:
         return Decimal('0')
     if as_of_date is None:
@@ -1117,7 +1117,7 @@ def workspace_get_account_ledger(account_id, from_date=None, to_date=None, categ
     Period ledger: opening = balance brought forward (day before from_date);
     then period transactions with running balance. Matches main finance account ledger.
     """
-    account = WorkspaceAccount.query.get(account_id)
+    account = db.session.get(WorkspaceAccount, account_id)
     if not account:
         return None
 
@@ -1392,7 +1392,7 @@ def _company_expense_account_for_category(category_key, fallback_account_id=None
         # Keep employee month-close postings under operational group (5500).
         return _ensure_company_expense_head('5510', 'Employee Expenses', parent_code='5500')
     if fallback_account_id:
-        return Account.query.get(fallback_account_id)
+        return db.session.get(Account, fallback_account_id)
     return _ensure_company_expense_head('5500', 'Operational Expenses')
 
 
@@ -1440,7 +1440,7 @@ def reconcile_workspace_opening_expense_postings(employee_id):
             WorkspaceOpeningExpense.total_expense > 0,
         ).all()
         for row in posted_rows:
-            je = WorkspaceJournalEntry.query.get(row.journal_entry_id)
+            je = db.session.get(WorkspaceJournalEntry, row.journal_entry_id)
             if not je:
                 continue
             has_cash_credit = WorkspaceJournalEntryLine.query.filter_by(
@@ -1461,7 +1461,7 @@ def reconcile_workspace_opening_expense_postings(employee_id):
             WorkspaceFuelOilOpeningExpense.total_amount > 0,
         ).all()
         for row in fuel_oil_rows:
-            je = WorkspaceJournalEntry.query.get(row.journal_entry_id)
+            je = db.session.get(WorkspaceJournalEntry, row.journal_entry_id)
             if not je:
                 continue
             has_cash_credit = WorkspaceJournalEntryLine.query.filter_by(
@@ -1501,7 +1501,7 @@ def _workspace_regular_source_scope(ref_type, ref_id):
     model = model_map.get(ref_type)
     if not model:
         return None, None
-    row = model.query.get(ref_id)
+    row = db.session.get(model, ref_id)
     if not row:
         return None, None
     return getattr(row, 'district_id', None), getattr(row, 'project_id', None)
@@ -1650,12 +1650,12 @@ def workspace_close_month(employee_id, period_start, period_end, company_account
     if total <= Decimal("0"):
         raise ValueError("No unclosed workspace/opening expense found in selected period")
 
-    employee = Employee.query.get(employee_id)
+    employee = db.session.get(Employee, employee_id)
     if not employee:
         raise ValueError("Employee not found")
     if not employee.wallet_account_id:
         raise ValueError("Employee company wallet account is not configured")
-    company_wallet = Account.query.get(employee.wallet_account_id)
+    company_wallet = db.session.get(Account, employee.wallet_account_id)
     expense_head = WorkspaceAccount.query.filter_by(employee_id=employee_id, code='5100').first()
     if not expense_head:
         raise ValueError("Workspace base accounts are missing")
@@ -1756,12 +1756,12 @@ def workspace_close_fuel_oil_month(employee_id, period_start, period_end, compan
     if total <= Decimal("0"):
         raise ValueError("No unclosed fuel/oil opening found in selected period")
 
-    employee = Employee.query.get(employee_id)
+    employee = db.session.get(Employee, employee_id)
     if not employee:
         raise ValueError("Employee not found")
     if not employee.wallet_account_id:
         raise ValueError("Employee company wallet account is not configured")
-    company_wallet = Account.query.get(employee.wallet_account_id)
+    company_wallet = db.session.get(Account, employee.wallet_account_id)
 
     close_row = WorkspaceFuelOilMonthClose(
         employee_id=employee_id,

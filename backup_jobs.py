@@ -50,7 +50,7 @@ def has_worker_claim(app, job_id):
 
         try:
             with app.app_context():
-                return FleetBackupJobLock.query.get(job_id) is not None
+                return db.session.get(FleetBackupJobLock, job_id) is not None
         except Exception:
             return False
     try:
@@ -117,7 +117,7 @@ def _release_claim_pg(app, job_id):
 
     try:
         with app.app_context():
-            row = FleetBackupJobLock.query.get(job_id)
+            row = db.session.get(FleetBackupJobLock, job_id)
             if row:
                 db.session.delete(row)
                 db.session.commit()
@@ -231,7 +231,7 @@ def _write_job_pg(app, job_id, data=None, **kwargs):
     patch.update(kwargs)
     patch['updated'] = time.time()
     with app.app_context():
-        row = FleetBackupJob.query.get(job_id)
+        row = db.session.get(FleetBackupJob, job_id)
         if row is None:
             db.session.add(FleetBackupJob(id=job_id, body=patch, updated_at=pk_now()))
         else:
@@ -256,7 +256,7 @@ def _read_job_pg(app, job_id):
 
     try:
         with app.app_context():
-            row = FleetBackupJob.query.get(job_id)
+            row = db.session.get(FleetBackupJob, job_id)
             if not row or row.body is None:
                 return None
             return dict(row.body)
@@ -291,7 +291,7 @@ def _delete_job_pg(app, job_id):
 
     try:
         with app.app_context():
-            row = FleetBackupJob.query.get(job_id)
+            row = db.session.get(FleetBackupJob, job_id)
             if row:
                 zp = (row.body or {}).get('zip_path')
                 if zp and os.path.isfile(zp):

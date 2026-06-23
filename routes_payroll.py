@@ -75,9 +75,9 @@ def _build_person_choices(exclude_employee_ids=None, exclude_driver_ids=None, in
 def _get_driver_for_attendance(employee_id=None, driver_id=None):
     """Get the Driver record for attendance lookup."""
     if driver_id:
-        return Driver.query.get(driver_id)
+        return db.session.get(Driver, driver_id)
     if employee_id:
-        emp = Employee.query.get(employee_id)
+        emp = db.session.get(Employee, employee_id)
         if emp and emp.cnic_no:
             cnic = emp.cnic_no.strip()
             from sqlalchemy import func
@@ -533,7 +533,7 @@ def payroll_pay(pk):
             payroll.remarks = (payroll.remarks or '') + '\nPayment: ' + form.remarks.data
 
         salary_account = Account.query.filter_by(code='5300').first()
-        source_account = Account.query.get(form.payment_account_id.data)
+        source_account = db.session.get(Account, form.payment_account_id.data)
 
         if salary_account and source_account:
             entry_number = generate_entry_number('JE', form.payment_date.data)
@@ -663,12 +663,12 @@ def payroll_bulk_generate():
                 continue
 
             if emp_id:
-                person = Employee.query.get(emp_id)
+                person = db.session.get(Employee, emp_id)
                 if not person or person.status != 'Active':
                     skipped += 1
                     continue
             elif drv_id:
-                person = Driver.query.get(drv_id)
+                person = db.session.get(Driver, drv_id)
                 if not person or person.status != 'Active':
                     skipped += 1
                     continue
@@ -791,7 +791,7 @@ def payroll_driver_bulk_salary():
             if not did:
                 flash('Please select a Driver.', 'danger')
                 return render_template('payroll/driver_bulk_salary.html', form=form, result=None, **_payroll_nav())
-            d = Driver.query.get(did)
+            d = db.session.get(Driver, did)
             if d:
                 target_drivers = [d]
 

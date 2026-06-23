@@ -129,7 +129,7 @@ def _workspace_driver_vehicle_no(drv):
     if getattr(drv, "vehicle", None) and getattr(drv.vehicle, "vehicle_no", None):
         return drv.vehicle.vehicle_no
     if getattr(drv, "vehicle_id", None):
-        v = Vehicle.query.get(drv.vehicle_id)
+        v = db.session.get(Vehicle, drv.vehicle_id)
         if v and v.vehicle_no:
             return v.vehicle_no
     v = Vehicle.query.filter_by(driver_id=drv.id).order_by(Vehicle.id.desc()).first()
@@ -258,7 +258,7 @@ def _get_workspace_employee():
     emp_id = session.get("workspace_employee_id")
     if not emp_id:
         return None
-    return Employee.query.get(emp_id)
+    return db.session.get(Employee, emp_id)
 
 
 def _can_access_employee(employee_id):
@@ -374,7 +374,7 @@ def _can_manage_slip_profiles():
         return False
     from models import User
     from auth_utils import user_can_access
-    user = User.query.get(user_id)
+    user = db.session.get(User, user_id)
     if not user or not user.role:
         return False
     codes = [p.code for p in (user.role.permissions or [])]
@@ -491,19 +491,19 @@ def _pending_month_close_spells(employee_id):
                 ref_id_int = None
             if ref_id_int:
                 if ref_type == "FuelExpense":
-                    ref_obj = FuelExpense.query.get(ref_id_int)
+                    ref_obj = db.session.get(FuelExpense, ref_id_int)
                     if ref_obj:
                         exp_date = exp_date or ref_obj.fueling_date
                 elif ref_type == "OilExpense":
-                    ref_obj = OilExpense.query.get(ref_id_int)
+                    ref_obj = db.session.get(OilExpense, ref_id_int)
                     if ref_obj:
                         exp_date = exp_date or ref_obj.expense_date
                 elif ref_type == "MaintenanceExpense":
-                    ref_obj = MaintenanceExpense.query.get(ref_id_int)
+                    ref_obj = db.session.get(MaintenanceExpense, ref_id_int)
                     if ref_obj:
                         exp_date = exp_date or ref_obj.expense_date
                 elif ref_type == "EmployeeExpense":
-                    ref_obj = EmployeeExpense.query.get(ref_id_int)
+                    ref_obj = db.session.get(EmployeeExpense, ref_id_int)
                     if ref_obj:
                         exp_date = exp_date or ref_obj.expense_date
                 if ref_obj:
@@ -735,7 +735,7 @@ def workspace_home():
     # last ledger balance + total credit posted under close categories.
     wallet_balance = Decimal("0")
     close_credit_total = Decimal("0")
-    wallet_acct = Account.query.get(emp.wallet_account_id) if emp.wallet_account_id else None
+    wallet_acct = db.session.get(Account, emp.wallet_account_id) if emp.wallet_account_id else None
     if wallet_acct:
         # Use ledger closing balance (last running balance) as source of truth.
         ledger_data = get_account_ledger(wallet_acct.id)
@@ -904,7 +904,7 @@ def workspace_select_employee():
     if auth:
         return auth
     emp_id = request.form.get("employee_id", type=int)
-    emp = Employee.query.get(emp_id) if emp_id else None
+    emp = db.session.get(Employee, emp_id) if emp_id else None
     if not emp:
         flash("Select a valid employee.", "danger")
         return redirect(url_for("workspace_dashboard"))
@@ -3078,8 +3078,8 @@ def workspace_fuel_oil_month_close():
         period_start = parse_date(request.form.get("period_start"))
         period_end = parse_date(request.form.get("period_end"))
         company_account_id = request.form.get("company_account_id", type=int) or None
-        district = District.query.get(request.form.get("district_id", type=int) or 0)
-        project = Project.query.get(request.form.get("project_id", type=int) or 0)
+        district = db.session.get(District, request.form.get("district_id", type=int) or 0)
+        project = db.session.get(Project, request.form.get("project_id", type=int) or 0)
         notes = (request.form.get("notes") or "").strip()
         if not period_start or not period_end:
             flash("Period start and end are required.", "danger")
@@ -3213,7 +3213,7 @@ def workspace_fund_transfers_list():
     if raw_per_page in (25, 50, 100, 200):
         per_page = raw_per_page
     elif raw_per_page >= 99999:
-        per_page = 99999
+        per_page = None  # will be set to query.count() after filters
     else:
         per_page = 25
     search = (request.args.get("search") or "").strip()
@@ -3253,6 +3253,9 @@ def workspace_fund_transfers_list():
         ),
     )
     show_upload_media_columns = query.filter(_wsft_not_ideal).limit(1).first() is not None
+
+    if per_page is None:
+        per_page = max(query.count(), 1)
 
     pagination = query.order_by(
         WorkspaceFundTransfer.transfer_date.desc(),
@@ -3602,7 +3605,7 @@ def workspace_ledger():
         if getattr(drv, 'vehicle', None) and getattr(drv.vehicle, 'vehicle_no', None):
             return drv.vehicle.vehicle_no
         if getattr(drv, 'vehicle_id', None):
-            v = Vehicle.query.get(drv.vehicle_id)
+            v = db.session.get(Vehicle, drv.vehicle_id)
             if v and v.vehicle_no:
                 return v.vehicle_no
         v = Vehicle.query.filter_by(driver_id=drv.id).order_by(Vehicle.id.desc()).first()
@@ -3735,7 +3738,7 @@ def _resolve_transfer_account_name(prefix, transfer):
         return f"{acct.code} - {acct.name}" if acct else "Company Account"
     account_id = getattr(transfer, f"{prefix}_account_id", None)
     if account_id:
-        acct = Account.query.get(account_id)
+        acct = db.session.get(Account, account_id)
         if acct:
             return f"{acct.code} - {acct.name}"
     return "-"
@@ -3808,8 +3811,8 @@ def workspace_month_close():
         project_id = request.form.get("project_id", type=int)
         company_account_id = request.form.get("company_account_id", type=int)
         notes = (request.form.get("notes") or "").strip()
-        district = District.query.get(district_id) if district_id else None
-        project = Project.query.get(project_id) if project_id else None
+        district = db.session.get(District, district_id) if district_id else None
+        project = db.session.get(Project, project_id) if project_id else None
         if not (period_start and period_end and district and project):
             flash("Period, district and project are required.", "danger")
             return render_template(
@@ -5726,14 +5729,14 @@ def workspace_journal_vouchers_export():
         try:
             from_date = datetime.strptime(from_date_str, "%d-%m-%Y").date()
             query = query.filter(WorkspaceJournalEntry.entry_date >= from_date)
-        except:
+        except ValueError:
             pass
 
     if to_date_str:
         try:
             to_date = datetime.strptime(to_date_str, "%d-%m-%Y").date()
             query = query.filter(WorkspaceJournalEntry.entry_date <= to_date)
-        except:
+        except ValueError:
             pass
 
     if search:

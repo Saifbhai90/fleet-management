@@ -127,7 +127,7 @@ def _purge_legacy_mail_provider_keys():
 
     changed = False
     for legacy_key in ('backup_sendgrid_api_key', 'backup_mailtrap_api_token'):
-        row = SystemSetting.query.get(legacy_key)
+        row = db.session.get(SystemSetting, legacy_key)
         if row:
             db.session.delete(row)
             changed = True

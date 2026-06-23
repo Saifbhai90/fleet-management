@@ -2121,12 +2121,12 @@ class SystemSetting(db.Model):
 
     @staticmethod
     def get(key, default=None):
-        row = SystemSetting.query.get(key)
+        row = db.session.get(SystemSetting, key)
         return row.value if row else default
 
     @staticmethod
     def set(key, value):
-        row = SystemSetting.query.get(key)
+        row = db.session.get(SystemSetting, key)
         if row:
             row.value = str(value) if value is not None else None
         else:

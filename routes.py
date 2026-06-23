@@ -484,7 +484,7 @@ def _save_fuel_market_scan(data):
 def _fuel_expense_last_saved_rec(workspace_employee_id, last_id=None):
     """Latest saved fuel expense for the add-form Last Saved strip."""
     if last_id:
-        rec = FuelExpense.query.get(last_id)
+        rec = db.session.get(FuelExpense, last_id)
         if rec and (not workspace_employee_id or not rec.employee_id or rec.employee_id == workspace_employee_id):
             return rec
     q = FuelExpense.query
@@ -502,7 +502,7 @@ def _fuel_expense_last_entry_payload(rec):
     elif rec.fuel_pump:
         pump_name = rec.fuel_pump.name or ''
     elif rec.workspace_pump_id:
-        wp = WorkspaceParty.query.get(rec.workspace_pump_id)
+        wp = db.session.get(WorkspaceParty, rec.workspace_pump_id)
         if wp:
             pump_name = wp.name or ''
     fuel_type = (rec.fuel_type or '').strip()
@@ -1085,7 +1085,7 @@ def _vehicle_for_driver_on_date(driver_id, on_date):
         .first()
     )
     if t and t.new_vehicle_id:
-        return Vehicle.query.get(t.new_vehicle_id)
+        return db.session.get(Vehicle, t.new_vehicle_id)
     first = (
         DriverTransfer.query.filter(
             DriverTransfer.driver_id == driver_id,
@@ -1095,8 +1095,8 @@ def _vehicle_for_driver_on_date(driver_id, on_date):
         .first()
     )
     if first and first.old_vehicle_id:
-        return Vehicle.query.get(first.old_vehicle_id)
-    d = Driver.query.get(driver_id)
+        return db.session.get(Vehicle, first.old_vehicle_id)
+    d = db.session.get(Driver, driver_id)
     return d.vehicle if d else None
 
 
@@ -1772,7 +1772,7 @@ def require_login():
         return
     if endpoint in (
         'login', 'pwa_manifest', 'service_worker', 'biometric_login', 'app_logout', 'mobile_init', 'session_ping', 'app_check_update',
-        'debug_fcm_status', 'health_check', 'report_driver_profile_public',
+        'health_check', 'report_driver_profile_public',
     ):
         return
     if endpoint == 'set_new_password' and session.get('must_set_password_user_id'):
@@ -1785,7 +1785,7 @@ def require_login():
         return redirect(url_for('login', next=_login_next_path()))
     if not session.get('user'):
         try:
-            _u = User.query.get(_uid)
+            _u = db.session.get(User, _uid)
             if _u and _u.is_active:
                 session['user'] = _u.full_name or _u.username
             else:
@@ -1795,10 +1795,10 @@ def require_login():
                     return api_resp
                 return redirect(url_for('login', next=_login_next_path()))
         except Exception:
-            pass
+            app.logger.warning('require_login: failed to refresh session user for uid=%s', _uid, exc_info=True)
     if _uid and not session.get('permissions') and not session.get('is_master'):
         try:
-            _perm_u = User.query.get(_uid)
+            _perm_u = db.session.get(User, _uid)
             if _perm_u and _perm_u.is_active:
                 _role = (_perm_u.role.name if _perm_u.role else '').strip()
                 if _role == 'Master':
@@ -1810,10 +1810,10 @@ def require_login():
                         from permissions_config import expand_login_permissions
                         _perms = expand_login_permissions(_perms)
                     except Exception:
-                        pass
+                        app.logger.warning('require_login: expand_login_permissions failed', exc_info=True)
                     session['permissions'] = _perms
         except Exception:
-            pass
+            app.logger.warning('require_login: failed to refresh permissions for uid=%s', _uid, exc_info=True)
     if getattr(session, 'permanent', False):
         _uid = session.get('user_id')
         if _uid:
@@ -1822,7 +1822,7 @@ def require_login():
             _now_ts = _tm.time()
             if not _cached_ts or (_now_ts - _cached_ts) > 300:
                 try:
-                    _u = User.query.get(_uid)
+                    _u = db.session.get(User, _uid)
                     if not _u or not _u.is_active:
                         session.clear()
                         api_resp = _api_error({'ok': False, 'error': 'Your account has been deactivated. Please contact administrator.'}, 403)
@@ -1832,7 +1832,7 @@ def require_login():
                         return redirect(url_for('login'))
                     session['_user_active_ts'] = _now_ts
                 except Exception:
-                    pass
+                    app.logger.warning('require_login: active-check failed for uid=%s', _uid, exc_info=True)
     # Session timeout (unless "remember me" made session permanent)
     timeout_mins = app.config.get('SESSION_TIMEOUT_MINUTES', 60)
     last = session.get('last_activity')
@@ -2304,14 +2304,29 @@ def uploaded_file(filename):
 def image_proxy():
     """Proxy an external image (R2) through Flask so html2canvas can capture it same-origin."""
     import urllib.request as _urllib_req
+    from urllib.parse import urlparse as _urlparse
+    import ipaddress as _ipaddr
     url = request.args.get('url', '').strip()
     if not url or not (url.startswith('https://') or url.startswith('http://')):
         return '', 400
+    parsed = _urlparse(url)
+    hostname = parsed.hostname or ''
+    if not hostname:
+        return '', 400
+    try:
+        ip = _ipaddr.ip_address(hostname)
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+            return '', 403
+    except ValueError:
+        if hostname in ('localhost', '0.0.0.0', '::1'):
+            return '', 403
     try:
         req_obj = _urllib_req.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
         with _urllib_req.urlopen(req_obj, timeout=10) as resp:
             data = resp.read()
             content_type = resp.headers.get('Content-Type', 'image/jpeg')
+            if not content_type.startswith('image/'):
+                return '', 403
         return data, 200, {
             'Content-Type': content_type,
             'Cache-Control': 'public, max-age=3600',
@@ -2353,6 +2368,8 @@ os.makedirs(_BLOB_DIR, exist_ok=True)
 def upload_blob():
     """Accept a blob file upload, store to temp dir, return a download token.
     Uses filesystem so it works across multiple Gunicorn workers."""
+    if not _validate_csrf_exempt_origin():
+        return jsonify(error='Cross-origin request blocked'), 403
     import uuid as _uuid, json as _json
     f = request.files.get('file')
     if not f:
@@ -2698,7 +2715,7 @@ def _process_expense_upload_job(kind, expense_id: int):
             finally:
                 db.session.remove()
 
-        rec = cfg['record_model'].query.get(expense_id)
+        rec = db.session.get(cfg['record_model'], expense_id)
         if not rec:
             return
         try:
@@ -2719,7 +2736,7 @@ def _process_expense_upload_job(kind, expense_id: int):
         _safe_commit()
 
         # Re-fetch after session was released
-        rec = cfg['record_model'].query.get(expense_id)
+        rec = db.session.get(cfg['record_model'], expense_id)
         if not rec:
             return
 
@@ -2770,14 +2787,14 @@ def _process_expense_upload_job(kind, expense_id: int):
             try:
                 _safe_commit()
                 # Re-fetch rec after session release so next iteration has live object
-                rec = cfg['record_model'].query.get(expense_id)
+                rec = db.session.get(cfg['record_model'], expense_id)
                 if not rec:
                     return
             except Exception as _commit_ex:
                 app.logger.warning('%s commit failed mid-loop: %s', cfg['log_prefix'], _commit_ex)
                 break
 
-        rec = cfg['record_model'].query.get(expense_id)
+        rec = db.session.get(cfg['record_model'], expense_id)
         if not rec:
             return
         rec.upload_failed = len(remaining)
@@ -3417,6 +3434,21 @@ def _require_master_admin():
     return True
 
 
+def _validate_csrf_exempt_origin():
+    """Validate Origin/Referer on CSRF-exempt endpoints to prevent cross-site attacks.
+    Allows same-origin and Capacitor WebView (https://localhost) requests.
+    Returns True if safe, False if cross-origin."""
+    origin = (request.headers.get('Origin') or '').rstrip('/')
+    referer = (request.headers.get('Referer') or '').rstrip('/')
+    expected = request.host_url.rstrip('/')
+    allowed_prefixes = [expected, 'https://localhost', 'http://localhost']
+    if origin:
+        return any(origin.startswith(p) for p in allowed_prefixes)
+    if referer:
+        return any(referer.startswith(p) for p in allowed_prefixes)
+    return True
+
+
 def _fleet_personal_pc_desktop_template_kwargs():
     """Iframe URL for Fleet Personal PC + flag when static export was never built/deployed."""
     external = (os.environ.get('FLEET_PERSONAL_PC_URL') or '').strip()
@@ -3584,6 +3616,8 @@ def _build_personal_tools_quick_print_payload(include_content=False):
 @csrf.exempt
 @app.route('/api/personal-tools/quick-print', methods=['POST'])
 def api_personal_tools_quick_print():
+    if not _validate_csrf_exempt_origin():
+        return jsonify({'error': 'Cross-origin request blocked', 'success': False}), 403
     if not _require_master_admin():
         return jsonify({'error': 'Unauthorized access', 'success': False}), 403
 
@@ -4356,7 +4390,7 @@ def biometric_token():
     user_id = session.get('user_id')
     if not user_id:
         return jsonify({'ok': False}), 401
-    user = User.query.get(user_id)
+    user = db.session.get(User, user_id)
     if not user or not user.is_active:
         return jsonify({'ok': False}), 401
     token = _biometric_hmac_token(user)
@@ -4368,11 +4402,13 @@ def biometric_token():
 @csrf.exempt
 def api_biometric_enable():
     """Issue biometric token after client-side fingerprint verification (logged-in user)."""
+    if not _validate_csrf_exempt_origin():
+        return jsonify({'ok': False, 'error': 'Cross-origin request blocked'}), 403
     _ensure_user_biometric_version_column()
     user_id = session.get('user_id')
     if not user_id:
         return jsonify({'ok': False, 'error': 'Login required'}), 401
-    user = User.query.get(user_id)
+    user = db.session.get(User, user_id)
     if not user or not user.is_active:
         return jsonify({'ok': False, 'error': 'Unauthorized'}), 401
     token = _biometric_hmac_token(user)
@@ -4389,11 +4425,13 @@ def api_biometric_enable():
 @csrf.exempt
 def api_biometric_disable():
     """Revoke biometric tokens server-side (increment version) and clear device association."""
+    if not _validate_csrf_exempt_origin():
+        return jsonify({'ok': False, 'error': 'Cross-origin request blocked'}), 403
     _ensure_user_biometric_version_column()
     user_id = session.get('user_id')
     if not user_id:
         return jsonify({'ok': False, 'error': 'Login required'}), 401
-    user = User.query.get(user_id)
+    user = db.session.get(User, user_id)
     if not user or not user.is_active:
         return jsonify({'ok': False, 'error': 'Unauthorized'}), 401
     try:
@@ -4575,7 +4613,7 @@ def _do_login_session(user, req):
                     allowed_shifts.add((drv.shift or '').strip())
                 # Comprehensive enrichment from assigned vehicle
                 for _vid in list(allowed_vehicles):
-                    _veh = Vehicle.query.get(_vid)
+                    _veh = db.session.get(Vehicle, _vid)
                     if not _veh:
                         continue
                     if _veh.district_id:
@@ -6670,7 +6708,7 @@ def employee_form(id=None):
     if not id and tab > 1:
         return redirect(url_for('employee_form', tab=1))
 
-    emp = Employee.query.get(id) if id else None
+    emp = db.session.get(Employee, id) if id else None
     if id and not emp:
         abort(404)
     title = f"Edit Employee - {emp.name}" if emp else "Add New Employee"
@@ -6872,7 +6910,7 @@ def employee_assignment_form():
     draft_employee_id = session.get('employee_draft_id')
     emp = None
     if draft_employee_id:
-        emp = Employee.query.get(draft_employee_id)
+        emp = db.session.get(Employee, draft_employee_id)
     if not draft and not emp:
         flash('Pehle Add New Employee form par jaa kar details bharo aur "Project & District Assignment" dabayein.', 'warning')
         return redirect(url_for('employee_form'))
@@ -6928,7 +6966,7 @@ def employee_assignment_form():
                 db.session.flush()
                 # Create login user if Active + CNIC
                 if emp.cnic_no and (emp.status or '').strip() == 'Active':
-                    post = EmployeePost.query.get(emp.post_id) if emp.post_id else None
+                    post = db.session.get(EmployeePost, emp.post_id) if emp.post_id else None
                     role_id = post.role_id if post else None
                     _create_user_for_employee_or_driver(emp.cnic_no.strip(), emp.name, emp.post_id, role_id)
             elif not emp:
@@ -6939,8 +6977,8 @@ def employee_assignment_form():
 
             project_ids = [x for x in (form.project_ids.data or []) if x]
             district_ids = [x for x in (form.district_ids.data or []) if x]
-            emp.projects = [Project.query.get(pid) for pid in project_ids if Project.query.get(pid)]
-            emp.districts = [District.query.get(did) for did in district_ids if District.query.get(did)]
+            emp.projects = [db.session.get(Project, pid) for pid in project_ids if db.session.get(Project, pid)]
+            emp.districts = [db.session.get(District, did) for did in district_ids if db.session.get(District, did)]
 
             today = pk_date()
             for pid in project_ids:
@@ -7021,7 +7059,7 @@ def employee_lifecycle_assign():
         sel_date = request.form.get('effective_date', '').strip()
         sel_remarks = request.form.get('remarks', '').strip()
 
-        emp = Employee.query.get(sel_emp_id) if sel_emp_id else None
+        emp = db.session.get(Employee, sel_emp_id) if sel_emp_id else None
         if not emp:
             flash('Employee select karein.', 'danger')
         elif not sel_project_ids or not sel_district_ids:
@@ -7035,11 +7073,11 @@ def employee_lifecycle_assign():
                 new_district_ids = set(sel_district_ids)
 
                 for pid in sel_project_ids:
-                    proj = Project.query.get(pid)
+                    proj = db.session.get(Project, pid)
                     if proj and proj not in emp.projects.all():
                         emp.projects.append(proj)
                 for did in sel_district_ids:
-                    dist = District.query.get(did)
+                    dist = db.session.get(District, did)
                     if dist and dist not in emp.districts.all():
                         emp.districts.append(dist)
 
@@ -7100,7 +7138,7 @@ def employee_lifecycle_deassign():
             sel_reason = request.form.get('reason', '').strip()
             sel_remarks = request.form.get('remarks', '').strip()
 
-            emp = Employee.query.get(sel_emp_id) if sel_emp_id else None
+            emp = db.session.get(Employee, sel_emp_id) if sel_emp_id else None
             if not emp:
                 flash('Employee select karein.', 'danger')
             elif not sel_project_ids and not sel_district_ids:
@@ -7110,14 +7148,14 @@ def employee_lifecycle_deassign():
                     eff_date = parse_date(sel_date) if sel_date else pk_date()
                     removed = 0
                     for pid in sel_project_ids:
-                        proj = Project.query.get(pid)
+                        proj = db.session.get(Project, pid)
                         if proj and proj in emp.projects.all():
                             emp.projects.remove(proj)
                             _log_employee_assignment(emp.id, 'deassign_project', project_id=pid,
                                                      effective_date=eff_date, reason=sel_reason, remarks=sel_remarks)
                             removed += 1
                     for did in sel_district_ids:
-                        dist = District.query.get(did)
+                        dist = db.session.get(District, did)
                         if dist and dist in emp.districts.all():
                             emp.districts.remove(dist)
                             _log_employee_assignment(emp.id, 'deassign_district', district_id=did,
@@ -7132,7 +7170,7 @@ def employee_lifecycle_deassign():
 
     emp_name = ''
     if sel_emp_id:
-        emp = Employee.query.get(sel_emp_id)
+        emp = db.session.get(Employee, sel_emp_id)
         if emp:
             cur_projects = list(emp.projects)
             cur_districts = list(emp.districts)
@@ -7152,7 +7190,7 @@ def employee_lifecycle_left():
     form.employee_id.choices = [(0, '-- Select Employee --')] + [(e.id, f"{e.name} ({e.code})") for e in active_emps]
 
     if form.validate_on_submit():
-        emp = Employee.query.get(form.employee_id.data)
+        emp = db.session.get(Employee, form.employee_id.data)
         if not emp:
             flash('Employee not found.', 'danger')
             return redirect(url_for('employee_lifecycle_left'))
@@ -7197,7 +7235,7 @@ def employee_lifecycle_rejoin():
         sel_date = request.form.get('rejoin_date', '').strip()
         sel_remarks = request.form.get('remarks', '').strip()
 
-        emp = Employee.query.get(sel_emp_id) if sel_emp_id else None
+        emp = db.session.get(Employee, sel_emp_id) if sel_emp_id else None
         if not emp:
             flash('Employee select karein.', 'danger')
         elif not sel_project_ids or not sel_district_ids:
@@ -7206,8 +7244,8 @@ def employee_lifecycle_rejoin():
             try:
                 eff_date = parse_date(sel_date) if sel_date else pk_date()
                 emp.status = 'Active'
-                emp.projects = [Project.query.get(pid) for pid in sel_project_ids if Project.query.get(pid)]
-                emp.districts = [District.query.get(did) for did in sel_district_ids if District.query.get(did)]
+                emp.projects = [db.session.get(Project, pid) for pid in sel_project_ids if db.session.get(Project, pid)]
+                emp.districts = [db.session.get(District, did) for did in sel_district_ids if db.session.get(District, did)]
                 _log_employee_assignment(emp.id, 'rejoin', effective_date=eff_date, remarks=sel_remarks)
                 for pid in sel_project_ids:
                     _log_employee_assignment(emp.id, 'assign_project', project_id=pid, effective_date=eff_date)
@@ -7978,7 +8016,7 @@ def login():
                 if not user.role_id:
                     # 1) Agar user.employee_post_id set hai to uske linked role se bind karein
                     if user.employee_post_id:
-                        emp_post = EmployeePost.query.get(user.employee_post_id)
+                        emp_post = db.session.get(EmployeePost, user.employee_post_id)
                         if emp_post and emp_post.role_id:
                             user.role_id = emp_post.role_id
                             role_fixed = True
@@ -7991,7 +8029,7 @@ def login():
                                 break
                     if emp and emp.post_id:
                         user.employee_post_id = emp.post_id
-                        emp_post = EmployeePost.query.get(emp.post_id)
+                        emp_post = db.session.get(EmployeePost, emp.post_id)
                         if emp_post and emp_post.role_id:
                             user.role_id = emp_post.role_id
                             role_fixed = True
@@ -8340,6 +8378,8 @@ def _persist_client_diagnostic(
 @csrf.exempt
 def api_client_diagnostics():
     """Batch client-side diagnostics: slow pages, JS errors, offline (per user + device)."""
+    if not _validate_csrf_exempt_origin():
+        return jsonify({'ok': False, 'error': 'Cross-origin request blocked'}), 403
     user_id = session.get('user_id')
     if not user_id:
         return jsonify({'ok': False, 'error': 'Not logged in'}), 401
@@ -8479,7 +8519,7 @@ def _current_user_assignable_permission_codes():
     user_id = session.get('user_id')
     if not user_id:
         return set()
-    user = User.query.get(user_id)
+    user = db.session.get(User, user_id)
     if not user or not user.role:
         return set()
     return set(user.permission_codes())
@@ -8621,7 +8661,7 @@ def _create_user_for_employee_or_driver(username_cnic, full_name, employee_post_
             updated = True
         if role_id and existing.role_id != role_id:
             # Safety: yahan Master/Admin auto-assign na karein (wo sirf manual user_form se ho)
-            role = Role.query.get(role_id)
+            role = db.session.get(Role, role_id)
             if role and _role_name(role) not in ('Master', 'Admin'):
                 existing.role_id = role_id
                 updated = True
@@ -8733,7 +8773,7 @@ def users_sync_from_employees_drivers():
             if kind == 'employee':
                 emp = rec
                 cnic = (emp.cnic_no or '').strip()
-                post = EmployeePost.query.get(emp.post_id) if emp.post_id else None
+                post = db.session.get(EmployeePost, emp.post_id) if emp.post_id else None
                 role_id = post.role_id if post else None
                 u = _create_user_for_employee_or_driver(cnic, emp.name, emp.post_id, role_id)
                 if u:
@@ -8773,10 +8813,10 @@ def user_form():
         employee_post_id = form.employee_post_id.data if form.employee_post_id.data else None
         role_id = None
         if employee_post_id:
-            post = EmployeePost.query.get(employee_post_id)
+            post = db.session.get(EmployeePost, employee_post_id)
             if post and post.role_id:
                 role_id = post.role_id
-                role = Role.query.get(role_id)
+                role = db.session.get(Role, role_id)
                 if role and _role_name(role) in ('Master',) and not is_master:
                     flash('Only Master (Developer) can assign Master access.', 'danger')
                     return render_template('user_form.html', form=form, user=None, allowed_roles_master_only=is_master, master_user_form_read_only=master_user_form_read_only, **_administration_nav_back())
@@ -8847,10 +8887,10 @@ def user_edit(pk):
         employee_post_id = form.employee_post_id.data if form.employee_post_id.data else None
         role_id = None
         if employee_post_id:
-            post = EmployeePost.query.get(employee_post_id)
+            post = db.session.get(EmployeePost, employee_post_id)
             if post and post.role_id:
                 role_id = post.role_id
-                role = Role.query.get(role_id)
+                role = db.session.get(Role, role_id)
                 if role and _role_name(role) in ('Master',) and not is_master:
                     flash('Only Master (Developer) can assign Master access.', 'danger')
                     return render_template(
@@ -9645,7 +9685,7 @@ def role_form():
                 master_role_matrix_read_only=master_role_matrix_read_only,
             **_administration_nav_back(),
     )
-        post = EmployeePost.query.get(post_id)
+        post = db.session.get(EmployeePost, post_id)
         if not post:
             flash('Selected post not found.', 'danger')
             return render_template(
@@ -9688,7 +9728,7 @@ def role_form():
         db.session.commit()
         # Agar koi Employee Post select ki gayi thi to usko is naye Role se link karein
         if post_id:
-            emp_post = EmployeePost.query.get(post_id)
+            emp_post = db.session.get(EmployeePost, post_id)
             if emp_post:
                 emp_post.role_id = role.id
                 db.session.commit()
@@ -10587,7 +10627,7 @@ def assign_project_to_company_edit(project_id):
         try:
             new_project_id = int(form.project_id.data)
             if new_project_id != old_project.id:
-                new_project = Project.query.get(new_project_id)
+                new_project = db.session.get(Project, new_project_id)
                 new_project.company_id = form.company_id.data
                 new_project.assign_date = form.assign_date.data
                 new_project.assign_remarks = form.assign_remarks.data
@@ -11108,16 +11148,16 @@ def assign_vehicle_to_district_new():
     if request.method == 'POST':
         p_id = request.form.get('project_id', type=int)
         if p_id:
-            project = Project.query.get(p_id)
+            project = db.session.get(Project, p_id)
             form.district_id.choices = [(0, '-- Select District --')] + ([(d.id, d.name) for d in project.districts] if project else [])
         else:
             form.district_id.choices = [(0, '-- Select District --')]
 
     if form.validate_on_submit():
         try:
-            vehicle = Vehicle.query.get(form.vehicle_id.data)
-            project = Project.query.get(form.project_id.data)
-            district = District.query.get(form.district_id.data)
+            vehicle = db.session.get(Vehicle, form.vehicle_id.data)
+            project = db.session.get(Project, form.project_id.data)
+            district = db.session.get(District, form.district_id.data)
             if not vehicle:
                 flash("Selected vehicle not found.", "danger")
             elif not project:
@@ -11222,7 +11262,7 @@ def assign_vehicle_to_district_edit(vehicle_id):
     
     current_p_id = request.form.get('project_id', type=int) or vehicle.project_id
     if current_p_id:
-        project = Project.query.get(current_p_id)
+        project = db.session.get(Project, current_p_id)
         form.district_id.choices = [(d.id, d.name) for d in project.districts]
     else:
         form.district_id.choices = []
@@ -11239,7 +11279,7 @@ def assign_vehicle_to_district_edit(vehicle_id):
             if vehicle.id != form.vehicle_id.data:
                 vehicle.project_id = None
                 vehicle.district_id = None
-                vehicle = Vehicle.query.get(form.vehicle_id.data)
+                vehicle = db.session.get(Vehicle, form.vehicle_id.data)
             
             vehicle.project_id = form.project_id.data
             vehicle.district_id = form.district_id.data
@@ -11259,7 +11299,7 @@ def assign_vehicle_to_district_edit(vehicle_id):
 
 @app.route('/get_parking_by_project/<int:project_id>')
 def get_parking_by_project(project_id):
-    project = Project.query.get(project_id)
+    project = db.session.get(Project, project_id)
     if not project:
         return jsonify([])
     stations = [{"id": p.id, "name": p.name} for p in project.parking_stations]
@@ -11277,12 +11317,12 @@ def assign_vehicle_to_parking_new():
         d_id = request.form.get('district_id', type=int) or form.district_id.data
         # Repopulate choices so submitted values are preserved when validation fails (form does not reset)
         if p_id:
-            proj = Project.query.get(p_id)
+            proj = db.session.get(Project, p_id)
             form.district_id.choices = [(0, '-- Select District --')] + [(d.id, d.name) for d in (proj.districts.order_by(District.name).all() if proj else [])]
         else:
             form.district_id.choices = [(0, '-- Select District --')]
         if d_id and p_id:
-            dist_obj = District.query.get(d_id)
+            dist_obj = db.session.get(District, d_id)
             vehicles = Vehicle.query.filter(
                 Vehicle.project_id == p_id,
                 Vehicle.district_id == d_id,
@@ -11304,7 +11344,7 @@ def assign_vehicle_to_parking_new():
 
     if form.validate_on_submit():
         try:
-            vehicle = Vehicle.query.get(form.vehicle_id.data)
+            vehicle = db.session.get(Vehicle, form.vehicle_id.data)
             vehicle.parking_station_id = form.parking_station_id.data
             vehicle.parking_assign_date = form.assign_date.data 
             vehicle.parking_remarks = form.remarks.data
@@ -11346,7 +11386,7 @@ def get_vehicles_by_district_no_parking(project_id, district_id):
 
 @app.route('/get_parking_by_district/<int:district_id>')
 def get_parking_by_district(district_id):
-    district = District.query.get(district_id)
+    district = db.session.get(District, district_id)
     if not district:
         return jsonify([])
     stations = ParkingStation.query.filter_by(district=district.name).all()
@@ -11582,13 +11622,13 @@ def assign_vehicle_to_parking_edit(vehicle_id):
     
 
     if p_id:
-        proj = Project.query.get(p_id)
+        proj = db.session.get(Project, p_id)
         form.district_id.choices = [(d.id, d.name) for d in proj.districts.all()]
     else:
         form.district_id.choices = []
 
     if d_id:
-        dist_obj = District.query.get(d_id)
+        dist_obj = db.session.get(District, d_id)
         stations = ParkingStation.query.filter_by(district=dist_obj.name).all()
         form.parking_station_id.choices = [(s.id, s.name) for s in stations]
     else:
@@ -11606,7 +11646,7 @@ def assign_vehicle_to_parking_edit(vehicle_id):
         try:
             new_ps_id = form.parking_station_id.data
             if new_ps_id != vehicle.parking_station_id:
-                parking = ParkingStation.query.get(new_ps_id)
+                parking = db.session.get(ParkingStation, new_ps_id)
                 occupied = Vehicle.query.filter_by(parking_station_id=new_ps_id).count()
                 if occupied >= parking.capacity:
                     flash(f"Error: {parking.name} is full!", "danger")
@@ -11615,7 +11655,7 @@ def assign_vehicle_to_parking_edit(vehicle_id):
             
             if vehicle.id != form.vehicle_id.data:
                 vehicle.parking_station_id = None
-                vehicle = Vehicle.query.get(form.vehicle_id.data)
+                vehicle = db.session.get(Vehicle, form.vehicle_id.data)
 
             vehicle.parking_station_id = new_ps_id
             vehicle.parking_assign_date = form.assign_date.data
@@ -11635,7 +11675,7 @@ def get_driver_details(driver_id):
     d = Driver.query.get_or_404(driver_id)
     district_name = d.district.name if d.district else (d.driver_district or '-')
     photo_url = d.photo_path if d.photo_path else None
-    proj_obj = Project.query.get(d.project_id) if d.project_id else None
+    proj_obj = db.session.get(Project, d.project_id) if d.project_id else None
     project_name = proj_obj.name if proj_obj else '-'
 
     # ── Build Job History ──
@@ -11778,7 +11818,7 @@ def assign_driver_to_vehicle_new():
         selected_district_id = form.district_id.data
 
         if selected_project_id and selected_project_id != 0:
-            project = Project.query.get(selected_project_id)
+            project = db.session.get(Project, selected_project_id)
             if project:
                 form.district_id.choices = [(d.id, d.name) for d in project.districts]
 
@@ -11797,8 +11837,8 @@ def assign_driver_to_vehicle_new():
     ]
 
     if form.validate_on_submit():
-        vehicle = Vehicle.query.get(form.vehicle_id.data)
-        driver = Driver.query.get(form.driver_id.data)
+        vehicle = db.session.get(Vehicle, form.vehicle_id.data)
+        driver = db.session.get(Driver, form.driver_id.data)
 
         if not vehicle or not driver:
             flash("Selected vehicle or driver not found.", "danger")
@@ -11809,7 +11849,7 @@ def assign_driver_to_vehicle_new():
             flash("Pehle es vehicle ko Parking Station assign karo.", "danger")
             if not form.district_id.choices or form.district_id.choices == [(0, '-- Select District --')]:
                 if selected_project_id and selected_project_id != 0:
-                    project = Project.query.get(selected_project_id)
+                    project = db.session.get(Project, selected_project_id)
                     if project:
                         form.district_id.choices = [(d.id, d.name) for d in project.districts]
                 if selected_district_id and selected_district_id != 0:
@@ -11866,7 +11906,7 @@ def assign_driver_to_vehicle_new():
 
 @app.route('/get_vehicle_capacity_info/<int:vehicle_id>')
 def get_vehicle_capacity_info(vehicle_id):
-    vehicle = Vehicle.query.get(vehicle_id)
+    vehicle = db.session.get(Vehicle, vehicle_id)
     if not vehicle:
         return jsonify({"error": "Not found"}), 404
     assigned_drivers = Driver.query.filter_by(vehicle_id=vehicle_id).all()
@@ -11882,12 +11922,12 @@ def get_vehicle_capacity_info(vehicle_id):
 @app.route('/get_vehicle_parking/<int:vehicle_id>')
 def get_vehicle_parking(vehicle_id):
     """Returns parking station info for a vehicle (for Driver-to-Vehicle form)."""
-    vehicle = Vehicle.query.get(vehicle_id)
+    vehicle = db.session.get(Vehicle, vehicle_id)
     if not vehicle:
         return jsonify({"error": "Not found"}), 404
     if not vehicle.parking_station_id:
         return jsonify({"parking_station_id": None, "parking_station_name": None})
-    ps = ParkingStation.query.get(vehicle.parking_station_id)
+    ps = db.session.get(ParkingStation, vehicle.parking_station_id)
     return jsonify({
         "parking_station_id": vehicle.parking_station_id,
         "parking_station_name": ps.name if ps else None
@@ -11896,23 +11936,14 @@ def get_vehicle_parking(vehicle_id):
 @app.route('/assign_driver_to_vehicle')
 def assign_driver_to_vehicle_list():
     from auth_utils import get_user_context
-    import traceback
     
     try:
-        print(f"DEBUG: assign_driver_to_vehicle_list called")
-        print(f"DEBUG: Session user_id: {session.get('user_id')}")
-        print(f"DEBUG: Session permissions: {session.get('permissions')}")
-        
         user_id = session.get('user_id')
         user_context = get_user_context(user_id) if user_id else {}
         allowed_projects = user_context.get('allowed_projects', set())
         allowed_districts = user_context.get('allowed_districts', set())
         allowed_vehicles = user_context.get('allowed_vehicles', set())
         is_master_or_admin = user_context.get('is_master_or_admin', False)
-        
-        print(f"DEBUG: User context retrieved - is_master_or_admin: {is_master_or_admin}")
-        print(f"DEBUG: Allowed projects: {allowed_projects}")
-        print(f"DEBUG: Allowed districts: {allowed_districts}")
         
         search = request.args.get('search', '').strip()
         project_id = request.args.get('project_id', type=int)
@@ -11933,12 +11964,9 @@ def assign_driver_to_vehicle_list():
                     district_id = next(iter(allowed_districts))
                 disable_district = True
         
-        print(f"DEBUG: Calling _assign_driver_to_vehicle_data...")
         assigned_drivers = _assign_driver_to_vehicle_data(search=search, project_id=project_id, district_id=district_id, sort_by=sort_by, sort_order=sort_order)
-        print(f"DEBUG: Retrieved {len(assigned_drivers)} assigned drivers")
     except Exception as e:
-        print(f"ERROR in assign_driver_to_vehicle_list: {str(e)}")
-        print(traceback.format_exc())
+        app.logger.exception('assign_driver_to_vehicle_list error: %s', e)
         flash(f"Error loading page: {str(e)}", "danger")
         return redirect(url_for('dashboard'))
     
@@ -12067,7 +12095,7 @@ def assign_driver_to_vehicle_print():
 @app.route('/assign_driver_to_vehicle/desassign/<int:driver_id>', methods=['POST'])
 def desassign_driver_from_vehicle(driver_id):
     driver = Driver.query.get_or_404(driver_id)
-    vehicle = Vehicle.query.get(driver.vehicle_id) if driver.vehicle_id else None
+    vehicle = db.session.get(Vehicle, driver.vehicle_id) if driver.vehicle_id else None
     vehicle_no = vehicle.vehicle_no if vehicle else "Vehicle"
     
     driver.vehicle_id = None
@@ -12080,7 +12108,7 @@ def desassign_driver_from_vehicle(driver_id):
 @app.route('/assign_driver_to_vehicle/edit/<int:driver_id>', methods=['GET', 'POST'])
 def assign_driver_to_vehicle_edit(driver_id):
     driver = Driver.query.get_or_404(driver_id)
-    current_vehicle = Vehicle.query.get(driver.vehicle_id) if driver.vehicle_id else None
+    current_vehicle = db.session.get(Vehicle, driver.vehicle_id) if driver.vehicle_id else None
 
     form = AssignDriverToVehicleForm()
     form.project_id.choices = [(0, '-- Select Project --')] + [
@@ -12094,7 +12122,7 @@ def assign_driver_to_vehicle_edit(driver_id):
     form.vehicle_id.choices = [(0, '-- Select Vehicle --')]
 
     if pid and pid != 0:
-        proj = Project.query.get(pid)
+        proj = db.session.get(Project, pid)
         if proj:
             form.district_id.choices += [(d.id, d.name) for d in proj.districts]
             if did and did != 0:
@@ -12116,7 +12144,7 @@ def assign_driver_to_vehicle_edit(driver_id):
         form.remarks.data       = driver.assign_remarks or ''
 
     if form.validate_on_submit():
-        vehicle = Vehicle.query.get(form.vehicle_id.data)
+        vehicle = db.session.get(Vehicle, form.vehicle_id.data)
         if not vehicle:
             flash("Vehicle not found", "danger")
             return render_template('assign_driver_to_vehicle_edit.html', form=form, driver=driver,
@@ -12151,7 +12179,7 @@ def assign_driver_to_vehicle_edit(driver_id):
                 driver.assign_date = None
                 driver.assign_remarks = None
 
-                new_driver = Driver.query.get(new_driver_id)
+                new_driver = db.session.get(Driver, new_driver_id)
                 if new_driver:
                     new_driver.vehicle_id = vehicle.id
                     new_driver.shift = form.shift.data
@@ -12523,7 +12551,7 @@ def vehicle_transfer_new():
                 return redirect(url_for('vehicle_transfer_new'))
 
             if new_park_id:
-                parking = ParkingStation.query.get(new_park_id)
+                parking = db.session.get(ParkingStation, new_park_id)
                 occupied = Vehicle.query.filter_by(parking_station_id=new_park_id).count()
                 if occupied >= parking.capacity:
                     flash(f"Transfer Failed! '{parking.name}' is FULL.", "danger")
@@ -12584,13 +12612,13 @@ def vehicle_transfer_edit(id):
     did = form.new_district_id.data if request.method == 'POST' else transfer.new_district_id
     
     if pid and pid != 0:
-        proj = Project.query.get(pid)
+        proj = db.session.get(Project, pid)
         form.new_district_id.choices = [(0, '-- Select District --')] + [(d.id, d.name) for d in proj.districts]
     else:
         form.new_district_id.choices = [(0, '-- Select District --')]
 
     if did and did != 0:
-        dist = District.query.get(did)
+        dist = db.session.get(District, did)
         stations = ParkingStation.query.filter_by(district=dist.name).all()
         form.new_parking_id.choices = [(0, '-- Select Parking --')] + [(s.id, s.name) for s in stations]
     else:
@@ -12607,7 +12635,7 @@ def vehicle_transfer_edit(id):
         new_park_id = form.new_parking_id.data
         
         if new_park_id and new_park_id != transfer.new_parking_id:
-            parking = ParkingStation.query.get(new_park_id)
+            parking = db.session.get(ParkingStation, new_park_id)
             occupied = Vehicle.query.filter(Vehicle.parking_station_id == new_park_id, Vehicle.id != vehicle.id).count()
             if occupied >= parking.capacity:
                 flash(f"Cannot update! '{parking.name}' is FULL.", "danger")
@@ -12747,7 +12775,7 @@ def vehicle_transfers_print():
 
 @app.route('/get_vehicle_current_info/<int:vehicle_id>')
 def get_vehicle_current_info(vehicle_id):
-    v = Vehicle.query.get(vehicle_id)
+    v = db.session.get(Vehicle, vehicle_id)
     if not v:
         return jsonify({"parking_name": "Not Found"})
     if v.parking_station:
@@ -12769,7 +12797,7 @@ def get_assigned_drivers(project_id):
 
 @app.route('/get_driver_current_info/<int:driver_id>')
 def get_driver_current_info(driver_id):
-    d = Driver.query.get(driver_id)
+    d = db.session.get(Driver, driver_id)
     if not d or not d.vehicle:
         return jsonify({"info": "Not Assigned", "shift": None, "vehicle_id": None, "capacity": 1, "partner": None})
     cap = d.vehicle.driver_capacity or 1
@@ -12793,7 +12821,7 @@ def get_driver_current_info(driver_id):
 
 @app.route('/get_available_shifts/<int:vehicle_id>')
 def get_available_shifts(vehicle_id):
-    v = Vehicle.query.get(vehicle_id)
+    v = db.session.get(Vehicle, vehicle_id)
     if not v: return jsonify([])
     
     cap = v.driver_capacity or 1
@@ -13035,7 +13063,7 @@ def driver_transfer_new():
         remarks_val = (request.form.get('remarks') or '').strip()
 
         if driver_id_val and transfer_date_raw:
-            _drv = Driver.query.get(driver_id_val)
+            _drv = db.session.get(Driver, driver_id_val)
             if _drv and _drv.shift:
                 new_shift_val = 'Night' if _drv.shift.strip().lower() == 'morning' else 'Morning'
             else:
@@ -13537,7 +13565,7 @@ def _coerce_salary_slip_chain(district_id, project_id, vehicle_id, selected_driv
     if not project_id:
         return district_id, 0, 0, 0
     if vehicle_id:
-        v = Vehicle.query.get(vehicle_id)
+        v = db.session.get(Vehicle, vehicle_id)
         if (not v
                 or v.district_id != district_id
                 or v.project_id != project_id):
@@ -13545,7 +13573,7 @@ def _coerce_salary_slip_chain(district_id, project_id, vehicle_id, selected_driv
     if not vehicle_id:
         return district_id, project_id, 0, 0
     if selected_driver_id:
-        dr = Driver.query.get(selected_driver_id)
+        dr = db.session.get(Driver, selected_driver_id)
         if (not dr
                 or dr.vehicle_id != vehicle_id
                 or (dr.status or '') != 'Active'
@@ -13599,7 +13627,7 @@ def driver_salary_slip():
         if len(allowed_vehicles) == 1:
             only_v = next(iter(allowed_vehicles))
             if (not vehicle_id) and district_id and project_id:
-                vrow = Vehicle.query.get(only_v)
+                vrow = db.session.get(Vehicle, only_v)
                 if (vrow and vrow.district_id == district_id
                         and (vrow.project_id or 0) == (project_id or 0)):
                     vehicle_id = only_v
@@ -16692,7 +16720,7 @@ def _task_turnaround_rows(from_date, to_date, project_id=0, district_id=0, vehic
     vehicle_by_no = {_norm_vno(v.vehicle_no): v for v in db_vehicles}
 
     if vehicle_id:
-        v = Vehicle.query.get(vehicle_id)
+        v = db.session.get(Vehicle, vehicle_id)
         target_no = (v.vehicle_no if v else None) and _norm_vno(v.vehicle_no)
     else:
         target_no = None
@@ -17711,7 +17739,7 @@ def missing_documents_report_print():
     if project_id:
         project_label = project_map.get(project_id)
     if district_id:
-        dist = District.query.get(district_id)
+        dist = db.session.get(District, district_id)
         district_label = dist.name if dist else None
 
     lbl_map = {k: lbl for k, _, lbl in DOC_FIELDS}
@@ -17783,7 +17811,7 @@ def driver_job_left_new():
         
         # Ab form ko dobara validate karo (choices updated hain)
         if form.validate():
-            driver = Driver.query.get(form.driver_id.data)
+            driver = db.session.get(Driver, form.driver_id.data)
             
             if not driver:
                 flash("Invalid driver selected.", "danger")
@@ -17893,7 +17921,7 @@ def driver_rejoin_new():
     # 3. Validation and Saving
     if form.validate_on_submit():
         try:
-            driver = Driver.query.get(form.driver_id.data)
+            driver = db.session.get(Driver, form.driver_id.data)
             if not driver:
                 flash("Error: Selected driver not found.", "danger")
                 return redirect(url_for('driver_rejoin_new'))
@@ -17925,12 +17953,12 @@ def driver_rejoin_new():
             
         except Exception as e:
             db.session.rollback()
-            print(f"DATABASE ERROR: {str(e)}") # Terminal mein check karein
+            app.logger.exception('Database error in company_form: %s', e)
             flash("Database error occurred.", "danger")
     else:
         # AGAR VALIDATION FAIL HO TO TERMINAL MEIN DEKHO KYUN FAIL HUI
         if request.method == 'POST':
-            print("Form Validation Errors:", form.errors)
+            app.logger.warning('Company form validation errors: %s', form.errors)
             flash("Form validation failed. Check terminal for details.", "warning")
 
     return render_template(
@@ -18470,7 +18498,7 @@ def driver_attendance_list():
         vehicles = vehicles_q.order_by(*vehicle_order_by()).all()
     form.vehicle_id.choices = [(0, '-- All Vehicles --')] + [(v.id, v.vehicle_no) for v in vehicles]
     if vehicle_id and not any(v.id == vehicle_id for v in vehicles):
-        v = Vehicle.query.get(vehicle_id)
+        v = db.session.get(Vehicle, vehicle_id)
         if v:
             form.vehicle_id.choices.append((v.id, v.vehicle_no))
     form.vehicle_id.data = vehicle_id if vehicle_id else 0
@@ -20144,7 +20172,7 @@ def driver_attendance_manual_checkin():
 
     edit_rec = None
     if attendance_id:
-        edit_rec = DriverAttendance.query.get(attendance_id)
+        edit_rec = db.session.get(DriverAttendance, attendance_id)
         if not edit_rec or edit_rec.driver_id != driver_id or edit_rec.attendance_date != view_date:
             flash('Attendance record mismatch.', 'danger')
             return redirect(back_url)
@@ -20224,7 +20252,7 @@ def driver_attendance_manual_checkin():
             except Exception as e:
                 flash(f'Photo save nahi hua (cloud storage): {str(e)}', 'warning')
         if post_aid:
-            rec = DriverAttendance.query.get(post_aid)
+            rec = db.session.get(DriverAttendance, post_aid)
             if not rec or rec.driver_id != driver_id or rec.attendance_date != view_date:
                 flash('Invalid attendance record.', 'danger')
                 return redirect(back_url)
@@ -20352,7 +20380,7 @@ def driver_attendance_manual_checkout():
     if request.method == 'POST':
         post_aid = request.form.get('attendance_id', type=int)
         if post_aid:
-            rec = DriverAttendance.query.get(post_aid)
+            rec = db.session.get(DriverAttendance, post_aid)
             if not rec or rec.driver_id != driver_id or rec.attendance_date != view_date:
                 flash('Invalid attendance record.', 'danger')
                 return redirect(back_url)
@@ -21009,7 +21037,7 @@ def _get_effective_time_window(driver=None, vehicle_id=None, project_id=None):
         if not _project_id:
             _project_id = driver.project_id
     if vehicle_id and not _vehicle:
-        _vehicle = Vehicle.query.get(vehicle_id)
+        _vehicle = db.session.get(Vehicle, vehicle_id)
     if _vehicle:
         if not _project_id:
             _project_id = _vehicle.project_id
@@ -21056,7 +21084,7 @@ def api_attendance_time_window():
     driver_id = request.args.get('driver_id', type=int)
     vehicle_id_param = request.args.get('vehicle_id', type=int)
     project_id_param = request.args.get('project_id', type=int)
-    driver = Driver.query.get(driver_id) if driver_id else None
+    driver = db.session.get(Driver, driver_id) if driver_id else None
     w = _get_effective_time_window(driver=driver, vehicle_id=vehicle_id_param, project_id=project_id_param)
     def t_str(t):
         return t.strftime('%H:%M') if t else None
@@ -21096,7 +21124,7 @@ def _gps_checkin_submit_status(driver_id, vehicle_id=None, project_id=None):
         return {'ok': False, 'can_submit': False, 'state': 'blocked', 'message': 'Invalid driver.'}
     vehicle = None
     if vehicle_id:
-        vehicle = Vehicle.query.get(vehicle_id)
+        vehicle = db.session.get(Vehicle, vehicle_id)
     if not vehicle and driver:
         vehicle = driver.vehicle
     if not driver_id and vehicle_id:
@@ -21222,7 +21250,7 @@ def _gps_checkin_submit_status(driver_id, vehicle_id=None, project_id=None):
 def _gps_checkout_submit_status(driver_id, vehicle_id=None, project_id=None):
     """Whether GPS check-out can be submitted now."""
     today = _attendance_local_date()
-    driver = Driver.query.get(driver_id)
+    driver = db.session.get(Driver, driver_id)
     if not driver:
         return {'ok': False, 'can_submit': False, 'state': 'blocked', 'message': 'Invalid driver.'}
     open_rec = _open_gps_driver_attendance_for_checkout(driver_id, today)
@@ -21299,7 +21327,7 @@ def api_attendance_has_gps_checkin():
     rec = _open_gps_driver_attendance_for_checkout(driver_id, today)
     payload = {'has_gps_checkin': bool(rec)}
     if rec:
-        driver = Driver.query.get(driver_id)
+        driver = db.session.get(Driver, driver_id)
         tw = _get_effective_time_window(
             driver=driver, vehicle_id=vehicle_id_param, project_id=project_id_param,
         )
@@ -21577,7 +21605,7 @@ def api_attendance_gps_checkin_submit():
         db.session.commit()
         try:
             from notification_service import notify_gps_checkin
-            _v = Vehicle.query.get(_ci_vehicle_id) if _ci_vehicle_id else None
+            _v = db.session.get(Vehicle, _ci_vehicle_id) if _ci_vehicle_id else None
             notify_gps_checkin(driver, photo_path, vehicle=_v)
         except Exception:
             pass
@@ -21608,7 +21636,7 @@ def api_attendance_gps_checkout_submit():
             return jsonify({'ok': False, 'message': 'Please select a driver.'}), 400
         if not parking_station_id:
             return jsonify({'ok': False, 'message': 'Please select a parking station.'}), 400
-        driver = Driver.query.get(driver_id)
+        driver = db.session.get(Driver, driver_id)
         if not driver:
             return jsonify({'ok': False, 'message': 'Invalid driver.'}), 404
         today = _attendance_local_date()
@@ -21714,7 +21742,7 @@ def api_attendance_gps_checkout_submit():
         db.session.commit()
         try:
             from notification_service import notify_gps_checkout
-            _v = Vehicle.query.get(_co_vehicle_id) if _co_vehicle_id else None
+            _v = db.session.get(Vehicle, _co_vehicle_id) if _co_vehicle_id else None
             notify_gps_checkout(driver, existing.check_out_photo_path, vehicle=_v)
         except Exception:
             pass
@@ -21882,7 +21910,7 @@ def driver_attendance_checkin():
             db.session.commit()
             try:
                 from notification_service import notify_gps_checkin
-                _v = Vehicle.query.get(_ci_vehicle_id) if _ci_vehicle_id else None
+                _v = db.session.get(Vehicle, _ci_vehicle_id) if _ci_vehicle_id else None
                 notify_gps_checkin(driver, photo_path, vehicle=_v)
             except Exception:
                 pass
@@ -21999,7 +22027,7 @@ def driver_attendance_checkout():
             lng_val = float(lng_s) if lng_s else None
         except ValueError:
             lat_val = lng_val = None
-        driver = Driver.query.get(driver_id)
+        driver = db.session.get(Driver, driver_id)
         if not driver:
             flash('Invalid driver.', 'danger')
             return redirect(url_for('driver_attendance_checkout'))
@@ -22058,7 +22086,7 @@ def driver_attendance_checkout():
             db.session.commit()
             try:
                 from notification_service import notify_gps_checkout
-                _v = Vehicle.query.get(_co_vehicle_id) if _co_vehicle_id else None
+                _v = db.session.get(Vehicle, _co_vehicle_id) if _co_vehicle_id else None
                 notify_gps_checkout(driver, photo_path or existing.check_out_photo_path, vehicle=_v)
             except Exception:
                 pass
@@ -22124,7 +22152,7 @@ def driver_attendance_report():
     )
     single_vehicle = None
     if has_single_scope and scope_vehicles:
-        single_vehicle = Vehicle.query.get(scope_vehicles[0])
+        single_vehicle = db.session.get(Vehicle, scope_vehicles[0])
 
     # Auto-select if only 1 option available
     disable_project = False
@@ -22758,7 +22786,7 @@ def driver_attendance_daily_report():
         scope_vehicles and len(scope_vehicles) == 1 and
         scope_shifts and len(scope_shifts) == 1
     )
-    single_vehicle = Vehicle.query.get(scope_vehicles[0]) if has_single_scope and scope_vehicles else None
+    single_vehicle = db.session.get(Vehicle, scope_vehicles[0]) if has_single_scope and scope_vehicles else None
 
     disable_project = bool(scope_projects and len(scope_projects) == 1)
     disable_district = bool(scope_districts and len(scope_districts) == 1)
@@ -23277,7 +23305,7 @@ def _tra_count_drivers_on_vehicle_day(vehicle_id, on_date, month_start, month_en
     candidate_ids = _tra_vehicle_driver_ids_in_month(vehicle_id, month_start, month_end)
     count = 0
     for pid in candidate_ids:
-        partner = Driver.query.get(pid)
+        partner = db.session.get(Driver, pid)
         if not partner:
             continue
         p_left = _tra_status_rec(pid, 'left')
@@ -23395,7 +23423,7 @@ def _tra_driver_on_duty_in_month(driver_id, start_d, end_d, assign_date):
     ).order_by(DriverStatusChange.change_date.desc()).first()
 
     if left_before_month:
-        driver = Driver.query.get(driver_id)
+        driver = db.session.get(Driver, driver_id)
         if (
             driver
             and driver.vehicle_id
@@ -23992,7 +24020,7 @@ def _tra_vehicle_driver_ids_in_month(vehicle_id, start_d, end_d):
 
     ids = set()
     for pid in candidates:
-        partner = Driver.query.get(pid)
+        partner = db.session.get(Driver, pid)
         if not partner:
             continue
         p_left = _tra_status_rec(pid, 'left')
@@ -24186,7 +24214,7 @@ def driver_attendance_tra_report():
 
     form = DriverAttendanceReportForm()
     has_single_scope = bool(scope_projects and len(scope_projects) == 1 and scope_districts and len(scope_districts) == 1 and scope_vehicles and len(scope_vehicles) == 1 and scope_shifts and len(scope_shifts) == 1)
-    single_vehicle = Vehicle.query.get(scope_vehicles[0]) if has_single_scope and scope_vehicles else None
+    single_vehicle = db.session.get(Vehicle, scope_vehicles[0]) if has_single_scope and scope_vehicles else None
 
     disable_project = bool(scope_projects and len(scope_projects) == 1)
     disable_district = bool(scope_districts and len(scope_districts) == 1)
@@ -24258,10 +24286,10 @@ def driver_attendance_tra_report():
         proj_name = ''
         dist_name = ''
         if project_id:
-            proj_obj = Project.query.get(project_id)
+            proj_obj = db.session.get(Project, project_id)
             proj_name = proj_obj.name if proj_obj else ''
         if district_id:
-            dist_obj = District.query.get(district_id)
+            dist_obj = db.session.get(District, district_id)
             dist_name = dist_obj.name if dist_obj else ''
         month_names = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
         company_name = ''
@@ -25477,8 +25505,8 @@ def task_report_logbook_cover():
         if district_id:
             q = q.filter(Vehicle.district_id == district_id)
         vehicles = q.order_by(*vehicle_order_by()).all()
-        project = Project.query.get(project_id)
-        district = District.query.get(district_id) if district_id else None
+        project = db.session.get(Project, project_id)
+        district = db.session.get(District, district_id) if district_id else None
         for v in vehicles:
             agg = _logbook_vehicle_aggregate(v.id, from_date, to_date)
             district_name = v.district.name if v.district else (district.name if district else '-')
@@ -25573,9 +25601,9 @@ def task_report_logbook_view_all():
     if district_id:
         q = q.filter(Vehicle.district_id == district_id)
     vehicles = q.order_by(*vehicle_order_by()).all()
-    project = Project.query.get(project_id)
+    project = db.session.get(Project, project_id)
     project_name = project.name if project else ''
-    district = District.query.get(district_id) if district_id else None
+    district = db.session.get(District, district_id) if district_id else None
     rows_with_data = []
     for v in vehicles:
         agg = _logbook_vehicle_aggregate(v.id, from_date, to_date)
@@ -25648,7 +25676,7 @@ def _default_task_entry_date_for_project(project_id):
     today = pk_date()
     if not project_id:
         return today
-    project = Project.query.get(project_id)
+    project = db.session.get(Project, project_id)
     if not project or not project.task_entry_yesterday_default_until:
         return today
     if _attendance_local_time() < project.task_entry_yesterday_default_until:
@@ -25695,7 +25723,7 @@ def _task_entry_date_hint_for_project(project, view_date):
 def api_task_entry_default_date():
     project_id = request.args.get('project_id', type=int)
     d = _default_task_entry_date_for_project(project_id)
-    project = Project.query.get(project_id) if project_id else None
+    project = db.session.get(Project, project_id) if project_id else None
     return jsonify({
         'date': d.strftime('%d-%m-%Y'),
         'hint': _task_entry_date_hint_for_project(project, d),
@@ -25854,7 +25882,7 @@ def task_report_new():
         return Project.query.order_by(Project.name).all()
 
     def _task_report_new_render(rows_list, v_date):
-        _tp = Project.query.get(project_id) if project_id else None
+        _tp = db.session.get(Project, project_id) if project_id else None
         _hint = _task_entry_date_hint_for_project(_tp, v_date)
         _tef = dict(task_entry_filter or {})
         _tef.setdefault('lock_district', False)
@@ -25900,7 +25928,7 @@ def task_report_new():
             flash('Project select karna zaroori hai — baghair project ke save nahi ho sakta.', 'danger')
             view_date = task_date
             return _task_report_new_render([], view_date)
-        _save_project = Project.query.get(project_id)
+        _save_project = db.session.get(Project, project_id)
         ok_date, date_msg = _task_entry_date_save_ok(_save_project, task_date)
         if not ok_date:
             flash(date_msg, 'danger')
@@ -26165,7 +26193,7 @@ def task_report_new_delete_row():
     if not task_id:
         return jsonify({'ok': False, 'message': 'Task record ID missing hai.'}), 400
 
-    rec = VehicleDailyTask.query.get(task_id)
+    rec = db.session.get(VehicleDailyTask, task_id)
     if not rec:
         return jsonify({'ok': False, 'message': 'Record nahi mila (pehle se delete ho chuka ho sakta hai).'}), 404
 
@@ -26425,7 +26453,7 @@ def api_emg_task_detail():
 
     rec = None
     if emg_id:
-        rec = EmergencyTaskRecord.query.get(emg_id)
+        rec = db.session.get(EmergencyTaskRecord, emg_id)
     elif task_id and task_date:
         q = EmergencyTaskRecord.query.filter(
             EmergencyTaskRecord.task_id_ext == task_id,
@@ -26580,7 +26608,7 @@ def api_tracker_save():
     new_val = data.get('selected_km')
     if not rec_id:
         return jsonify({'ok': False, 'error': 'Missing record id'}), 400
-    rec = VehicleMileageRecord.query.get(rec_id)
+    rec = db.session.get(VehicleMileageRecord, rec_id)
     if not rec:
         return jsonify({'ok': False, 'error': 'Record not found'}), 404
     try:
@@ -27444,7 +27472,7 @@ def red_task_summary():
                 name_map_all[k] = d
 
         if district_id:
-            sel = District.query.get(district_id)
+            sel = db.session.get(District, district_id)
             name_map = {_norm_district_name_key(sel.name): sel} if sel else {}
             summary_kind = 'single'
             summary_title = 'Direct Emergency (Red) — selected district (sirf jahan Excel naam is district se match ho)'
@@ -27654,7 +27682,7 @@ def red_task_new():
                 break
             edit_mode = request.form.get(f'row_{idx}_edit_mode', '1') == '1'
             veh_id = int(veh_id_raw) if veh_id_raw else None
-            _veh = Vehicle.query.get(veh_id) if veh_id else None
+            _veh = db.session.get(Vehicle, veh_id) if veh_id else None
             row_did = did or (_veh.district_id if _veh else None)
             row_pid = pid or (_veh.project_id if _veh else None)
             driver_id = int(request.form.get(f'row_{idx}_driver_id') or 0) or None
@@ -27668,7 +27696,7 @@ def red_task_new():
                 fine_amt = 0
             driver_name_val = None
             if driver_id:
-                drv = Driver.query.get(driver_id)
+                drv = db.session.get(Driver, driver_id)
                 if drv:
                     driver_name_val = drv.name
             emg_rec_id = request.form.get(f'row_{idx}_emg_id')
@@ -27683,7 +27711,7 @@ def red_task_new():
                 # Extra safety: preserve historical driver if left blank during edit.
                 effective_driver_id = driver_id if driver_id is not None else existing.driver_id
                 if effective_driver_id:
-                    drv_eff = Driver.query.get(effective_driver_id)
+                    drv_eff = db.session.get(Driver, effective_driver_id)
                     driver_name_val = drv_eff.name if drv_eff else existing.driver_name
                 else:
                     driver_name_val = None
@@ -27755,7 +27783,7 @@ def red_task_new():
                 drivers = Driver.query.filter_by(vehicle_id=veh.id, status='Active').all()
             saved = saved_map.get((veh.id if veh else None, e.task_id_ext or ''))
             if saved and saved.driver_id:
-                _saved_drv = Driver.query.get(saved.driver_id)
+                _saved_drv = db.session.get(Driver, saved.driver_id)
                 if _saved_drv and all(d.id != _saved_drv.id for d in drivers):
                     drivers.append(_saved_drv)
             rows.append({
@@ -27947,7 +27975,7 @@ def _unexecuted_task_rows(from_date, to_date, district_id=0, project_id=0, vehic
     allowed_projects = set(allowed_projects or [])
     allowed_districts = set(allowed_districts or [])
     allowed_vehicles = set(allowed_vehicles or [])
-    selected_district = District.query.get(district_id) if district_id else None
+    selected_district = db.session.get(District, district_id) if district_id else None
     selected_district_name = (selected_district.name or '').strip().lower() if selected_district else ''
 
     def _norm_vno(vno):
@@ -27963,7 +27991,7 @@ def _unexecuted_task_rows(from_date, to_date, district_id=0, project_id=0, vehic
     if category in ('Green', 'Yellow'):
         emg_q = emg_q.filter(EmergencyTaskRecord.category == category)
     if vehicle_id:
-        v = Vehicle.query.get(vehicle_id)
+        v = db.session.get(Vehicle, vehicle_id)
         emg_q = emg_q.filter(EmergencyTaskRecord.amb_reg_no == (v.vehicle_no if v else ''))
 
     emg_rows = emg_q.order_by(EmergencyTaskRecord.task_date.desc(), EmergencyTaskRecord.id.desc()).all()
@@ -28051,7 +28079,7 @@ def _unexecuted_task_rows(from_date, to_date, district_id=0, project_id=0, vehic
         saved = saved_map.get(r.id)
         assigned_drivers = Driver.query.filter_by(vehicle_id=(v.id if v else None), status='Active').order_by(Driver.name).all() if v else []
         if saved and saved.driver_id:
-            _saved_drv = Driver.query.get(saved.driver_id)
+            _saved_drv = db.session.get(Driver, saved.driver_id)
             if _saved_drv and all(d.id != _saved_drv.id for d in assigned_drivers):
                 assigned_drivers.append(_saved_drv)
 
@@ -28144,7 +28172,7 @@ def unexecuted_task_report():
             except (ValueError, TypeError):
                 idx += 1
                 continue
-            emg = EmergencyTaskRecord.query.get(emg_id)
+            emg = db.session.get(EmergencyTaskRecord, emg_id)
             if not emg:
                 idx += 1
                 continue
@@ -28450,7 +28478,7 @@ def without_task_new():
             if veh_id_raw is None:
                 break
             veh_id = int(veh_id_raw) if veh_id_raw else None
-            _veh = Vehicle.query.get(veh_id) if veh_id else None
+            _veh = db.session.get(Vehicle, veh_id) if veh_id else None
             row_did = did or (_veh.district_id if _veh else None)
             row_pid = pid or (_veh.project_id if _veh else None)
             try:
@@ -28591,7 +28619,7 @@ def without_task_new():
                 saved = saved_map.get(v.id)
                 # Keep historical integrity: include previously saved driver even if now left/unassigned.
                 if saved and saved.driver_id:
-                    _saved_drv = Driver.query.get(saved.driver_id)
+                    _saved_drv = db.session.get(Driver, saved.driver_id)
                     if _saved_drv and all(d.id != _saved_drv.id for d in assigned_drivers):
                         assigned_drivers.append(_saved_drv)
                 rows.append({
@@ -28612,7 +28640,7 @@ def without_task_new():
                     continue
                 assigned_drivers = Driver.query.filter_by(vehicle_id=v.id, status='Active').order_by(Driver.name).all()
                 if sr.driver_id:
-                    _saved_drv = Driver.query.get(sr.driver_id)
+                    _saved_drv = db.session.get(Driver, sr.driver_id)
                     if _saved_drv and all(d.id != _saved_drv.id for d in assigned_drivers):
                         assigned_drivers.append(_saved_drv)
                 rows.append({
@@ -30088,7 +30116,7 @@ def api_fuel_expense_last_reading():
     current_reading = request.args.get('current_reading', type=float)
     if not vehicle_id:
         return jsonify({'previous_reading': None, 'fuel_type': None})
-    vehicle = Vehicle.query.get(vehicle_id)
+    vehicle = db.session.get(Vehicle, vehicle_id)
     vehicle_fuel_type = (vehicle.fuel_type if vehicle and vehicle.fuel_type else 'Petrol')
     workspace_employee_id = _workspace_employee_id_for_expenses()
     previous_reading = _fuel_expense_previous_reading(
@@ -30224,7 +30252,7 @@ def api_fuel_expense_price_hint():
         if employee_id:
             q = q.filter(FuelExpense.employee_id == employee_id)
         rows = q.order_by(FuelExpense.fueling_date.desc(), FuelExpense.id.desc()).limit(2).all()
-        pump = WorkspaceParty.query.get(fuel_pump_id)
+        pump = db.session.get(WorkspaceParty, fuel_pump_id)
         pump_name = pump.name if pump else ''
         for r in rows:
             current_pump.append({
@@ -30253,7 +30281,7 @@ def api_fuel_expense_price_hint():
             q = q.filter(FuelExpense.employee_id == employee_id)
         last_row = q.order_by(FuelExpense.fueling_date.desc(), FuelExpense.id.desc()).first()
         if last_row:
-            p = WorkspaceParty.query.get(pid)
+            p = db.session.get(WorkspaceParty, pid)
             other_pumps.append({
                 'pump_name': p.name if p else '',
                 'fuel_price': float(last_row.fuel_price),
@@ -30433,7 +30461,7 @@ def api_fuel_expense_km_gap_limit():
     vehicle_id = request.args.get('vehicle_id', type=int)
     vehicle_family = (request.args.get('vehicle_family') or '').strip()
     if vehicle_id and not vehicle_family:
-        vehicle = Vehicle.query.get(vehicle_id)
+        vehicle = db.session.get(Vehicle, vehicle_id)
         if vehicle:
             vehicle_family = vehicle.vehicle_family or ''
             if not district_id:
@@ -31006,7 +31034,7 @@ def _safe_internal_path(return_to, default_path):
 def _workspace_employee_default_district_id(employee_id):
     if not employee_id:
         return None
-    emp = Employee.query.get(employee_id)
+    emp = db.session.get(Employee, employee_id)
     if not emp:
         return None
     try:
@@ -31019,7 +31047,7 @@ def _workspace_employee_default_district_id(employee_id):
 def _workspace_employee_default_project_id(employee_id, preferred_district_id=None):
     if not employee_id:
         return None
-    emp = Employee.query.get(employee_id)
+    emp = db.session.get(Employee, employee_id)
     if not emp:
         return None
     preferred_district_id = int(preferred_district_id) if preferred_district_id else None
@@ -31309,7 +31337,7 @@ def fuel_expense_add():
         form.project_id.data = selected_project_id or 0
         if selected_vehicle_id:
             form.vehicle_id.data = selected_vehicle_id
-            _prev_veh = Vehicle.query.get(selected_vehicle_id)
+            _prev_veh = db.session.get(Vehicle, selected_vehicle_id)
             if _prev_veh and _prev_veh.fuel_type:
                 form.fuel_type.data = _prev_veh.fuel_type
         if selected_payment_type:
@@ -36444,7 +36472,7 @@ def _linked_driver_id_for_current_user():
         uid = session.get('user_id')
         if not uid:
             return None
-        user = User.query.get(uid)
+        user = db.session.get(User, uid)
         if not user:
             return None
         uname = (user.username or '').strip()
@@ -37026,13 +37054,14 @@ def report_ai():
 
 
 def _render_ai_report_table(headers, rows):
+    from markupsafe import escape as _esc
     if not rows:
         return '<p class="text-muted">No data found.</p>'
     keys = list(rows[0].keys()) if rows else []
-    h = '<thead class="table-light"><tr>' + ''.join(f'<th>{x}</th>' for x in headers) + '</tr></thead>'
+    h = '<thead class="table-light"><tr>' + ''.join(f'<th>{_esc(x)}</th>' for x in headers) + '</tr></thead>'
     body = '<tbody>'
     for r in rows:
-        body += '<tr>' + ''.join(f'<td>{r.get(k, "")}</td>' for k in keys) + '</tr>'
+        body += '<tr>' + ''.join(f'<td>{_esc(r.get(k, ""))}</td>' for k in keys) + '</tr>'
     body += '</tbody>'
     return '<table class="table table-bordered table-sm">' + h + body + '</table>'
 
@@ -38512,7 +38541,7 @@ def fix_driver_status():
         if changed:
             updated += 1
     db.session.commit()
-    print(f'Done. {updated} driver(s) updated out of {len(drivers)} total.')
+    app.logger.info('Driver photo path fix: %d/%d updated.', updated, len(drivers))
 
 
 # ══════════════════════════════════════════════════════════════════════════════

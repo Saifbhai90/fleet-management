@@ -3,15 +3,12 @@
     "appName":  "Fleet Manager",
     "webDir":  "www",
     "server":  {
-                   "url":  "http://127.0.0.1:5050",
-                   "startPath":  "/mobile-init",
-                   "cleartext":  true,
-                   "androidScheme":  "http",
+                   "url":  "https://fleet-management-xdvj.onrender.com",
+                   "startPath":  "/mobile-init?v=2",
+                   "cleartext":  false,
+                   "androidScheme":  "https",
                    "allowNavigation":  [
-                                           "127.0.0.1",
-                                           "localhost",
-                                           "192.168.18.36",
-                                           "192.168.18.15"
+                                           "fleet-management-xdvj.onrender.com"
                                        ]
                },
     "android":  {

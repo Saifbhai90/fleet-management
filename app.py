@@ -337,7 +337,7 @@ def inject_sidebar_profile_avatar():
         user_id = session.get('user_id')
         path = None
         if user_id:
-            user = User.query.get(user_id)
+            user = db.session.get(User, user_id)
             if user:
                 path = user_profile_avatar_path(user)
     except Exception:
@@ -352,7 +352,7 @@ def inject_workspace_context():
         from flask import session
         from models import Employee
         emp_id = session.get('workspace_employee_id')
-        emp = Employee.query.get(emp_id) if emp_id else None
+        emp = db.session.get(Employee, emp_id) if emp_id else None
     except Exception:
         emp = None
     return dict(workspace_selected_employee=emp)

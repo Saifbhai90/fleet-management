@@ -7,6 +7,9 @@ google-services.json
 .env
 .env.local
 *.db
+*.db-shm
+*.db-wal
+db/local.db*
 venv/
 .venv/
 env/
@@ -46,6 +49,7 @@ firebase-service-account.json
 *.swp
 .DS_Store
 Thumbs.db
+nul
 
 # Playwright browser binaries (downloaded on Render during build)
 .playwright-browsers/

@@ -789,7 +789,7 @@ def _mark_failed(job_id: int, app, jlog: JobLogger):
     from models import TrackerAutomationJob, db
     from utils import pk_now
     with app.app_context():
-        job = TrackerAutomationJob.query.get(job_id)
+        job = db.session.get(TrackerAutomationJob, job_id)
         if job:
             job.status = 'failed'
             job.finished_at = pk_now()

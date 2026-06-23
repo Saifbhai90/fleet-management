@@ -41,6 +41,7 @@ import com.google.firebase.FirebaseApp;
 import com.google.firebase.installations.FirebaseInstallations;
 import com.google.firebase.messaging.FirebaseMessaging;
 
+import android.webkit.JavascriptInterface;
 import java.util.Locale;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -158,9 +159,14 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
                 WebView wv = getBridge().getWebView();
                 WebSettings settings = wv.getSettings();
                 settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
+                // Clear all cached data so latest template is always fetched from server
+                wv.clearCache(true);
+                wv.clearHistory();
+                android.webkit.CookieManager.getInstance().flush();
                 // Keep Capacitor BridgeWebChromeClient (GPS, camera, file picker). Do not replace it.
                 wv.setBackgroundColor(Color.TRANSPARENT);
                 wv.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+                wv.addJavascriptInterface(new FleetNativeBridge(this), "_fleetNative");
                 setupWebViewNetworkGuard();
             } else {
                 mainHandler.postDelayed(this::scheduleWebViewTransparent, 50);
@@ -653,6 +659,89 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
             stopService(new Intent(this, NotificationPollingService.class));
         } catch (Exception ignored) {}
     }
+
+    /** JS bridge — callable from WebView as window._fleetNative.*() */
+    public class FleetNativeBridge {
+        private final MainActivity activity;
+        FleetNativeBridge(MainActivity a) { this.activity = a; }
+
+        @JavascriptInterface
+        public void openAppSettings() {
+            try {
+                Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                intent.setData(Uri.parse("package:" + activity.getPackageName()));
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                activity.startActivity(intent);
+            } catch (Exception e) {
+                try {
+                    activity.startActivity(new Intent(Settings.ACTION_APPLICATION_SETTINGS)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+                } catch (Exception ignored) {}
+            }
+        }
+
+        /** Sync check — runs on @JavascriptInterface background thread, safe to call */
+        @JavascriptInterface
+        public String getNotificationStatus() {
+            String status = computeNotifStatus();
+            return status;
+        }
+
+        /** Async version: computes status and fires JS callback(status) */
+        @JavascriptInterface
+        public void checkNotificationStatus(final String callbackFn) {
+            final String status = computeNotifStatus();
+            activity.runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    if (activity.getBridge() != null && activity.getBridge().getWebView() != null) {
+                        activity.getBridge().getWebView().evaluateJavascript(
+                            callbackFn + "('" + status + "');", null);
+                    }
+                }
+            });
+        }
+
+        private String computeNotifStatus() {
+            Log.d("FLEET_DEBUG", "computeNotifStatus called, SDK=" + Build.VERSION.SDK_INT);
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    int result = ContextCompat.checkSelfPermission(
+                            activity, Manifest.permission.POST_NOTIFICATIONS);
+                    String st = (result == PackageManager.PERMISSION_GRANTED) ? "granted" : "denied";
+                    Log.d("FLEET_DEBUG", "POST_NOTIFICATIONS status=" + st);
+                    return st;
+                }
+                android.app.NotificationManager nm =
+                        (android.app.NotificationManager) activity.getSystemService(NOTIFICATION_SERVICE);
+                if (nm != null && !nm.areNotificationsEnabled()) {
+                    Log.d("FLEET_DEBUG", "areNotificationsEnabled=false → denied");
+                    return "denied";
+                }
+                Log.d("FLEET_DEBUG", "Notifications=granted (below Android 13)");
+                return "granted";
+            } catch (Exception e) {
+                Log.e("FLEET_DEBUG", "computeNotifStatus exception: " + e.getMessage());
+                return "denied";
+            }
+        }
+
+        /** Request notification permission (Android 13+) */
+        @JavascriptInterface
+        public void requestNotifications() {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                activity.runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        ActivityCompat.requestPermissions(activity,
+                                new String[]{Manifest.permission.POST_NOTIFICATIONS},
+                                NOTIF_PERMISSION_REQUEST);
+                    }
+                });
+            }
+        }
+    }
+
 
     private void setupDownloadListener() {
         if (mainHandler == null) {

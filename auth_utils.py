@@ -4,7 +4,11 @@ User login & role-based access control.
 - Map endpoint -> required permission.
 - Seed default permissions, Admin role, and admin user.
 """
+import logging
+
 from werkzeug.security import generate_password_hash, check_password_hash
+
+logger = logging.getLogger(__name__)
 
 # All permission codes (must match DB after seed)
 PERMISSION_DASHBOARD = 'dashboard'
@@ -776,10 +780,23 @@ def get_user_context(user_id):
     - employee_record: Employee object or None
     - driver_record: Driver object or None
     - latest_transfer: DriverTransfer or None (for drivers)
+
+    Results are cached per-request on Flask's `g` object to avoid redundant DB queries.
     """
-    from models import User, Employee, Driver, DriverTransfer
+    from flask import g
+    cache_attr = f'_user_ctx_{user_id}'
+    cached = getattr(g, cache_attr, None)
+    if cached is not None:
+        return cached
+    ctx = _get_user_context_impl(user_id)
+    setattr(g, cache_attr, ctx)
+    return ctx
+
+
+def _get_user_context_impl(user_id):
+    """Original implementation of get_user_context — do not call directly, use get_user_context."""
+    from models import db, User, Employee, Driver, DriverTransfer
     from sqlalchemy import func
-    import traceback
     
     context = {
         'allowed_projects': set(),
@@ -796,12 +813,10 @@ def get_user_context(user_id):
     }
     
     try:
-        print(f"DEBUG: get_user_context called for user_id={user_id}")
-        user = User.query.get(user_id)
+        user = db.session.get(User, user_id)
         if not user:
-            print(f"DEBUG: User not found for user_id={user_id}")
+            logger.debug("get_user_context: user not found for id=%s", user_id)
             return context
-        print(f"DEBUG: User found: {user.username}, role={user.role.name if user.role else 'None'}")
         
         # Check if Master or Admin (no restrictions)
         role_name = (user.role.name if user.role else '').strip()
@@ -814,12 +829,10 @@ def get_user_context(user_id):
         cnic_variants = [username, username.replace('-', '')]
         
         # Employee assignments (projects/districts)
-        print(f"DEBUG: Checking Employee record for CNIC variants: {cnic_variants}")
         emp = None
         for c in cnic_variants:
             emp = Employee.query.filter(func.lower(Employee.cnic_no) == c.lower()).first()
             if emp:
-                print(f"DEBUG: Employee found: {emp.name} (ID: {emp.id})")
                 break
         
         if emp:
@@ -827,29 +840,17 @@ def get_user_context(user_id):
             context['employee_record'] = emp
             # Employee.projects and .districts are dynamic relationships - need .all()
             try:
-                print(f"DEBUG: Fetching employee projects...")
-                projects_list = emp.projects.all()
-                print(f"DEBUG: Employee has {len(projects_list)} projects")
-                for p in projects_list:
+                for p in emp.projects.all():
                     if p and p.id:
                         context['allowed_projects'].add(p.id)
-                        print(f"DEBUG: Added project {p.id} ({p.name})")
-            except Exception as e:
-                print(f"DEBUG: Error fetching employee projects: {str(e)}")
-                traceback.print_exc()
+            except Exception:
+                logger.exception("get_user_context: error fetching employee projects")
             try:
-                print(f"DEBUG: Fetching employee districts...")
-                districts_list = emp.districts.all()
-                print(f"DEBUG: Employee has {len(districts_list)} districts")
-                for d in districts_list:
+                for d in emp.districts.all():
                     if d and d.id:
                         context['allowed_districts'].add(d.id)
-                        print(f"DEBUG: Added district {d.id} ({d.name})")
-            except Exception as e:
-                print(f"DEBUG: Error fetching employee districts: {str(e)}")
-                traceback.print_exc()
-        else:
-            print(f"DEBUG: No Employee record found")
+            except Exception:
+                logger.exception("get_user_context: error fetching employee districts")
         
         # Driver assignments (CURRENT active assignment from latest transfer or Driver model)
         drv = None
@@ -889,10 +890,7 @@ def get_user_context(user_id):
                 if getattr(drv, 'shift', None) and drv.shift.strip():
                     context['allowed_shifts'].add(drv.shift.strip())
     
-    except Exception as e:
-        # Log the error for debugging
-        import traceback
-        print(f"ERROR in get_user_context for user_id={user_id}: {str(e)}")
-        print(traceback.format_exc())
+    except Exception:
+        logger.exception("get_user_context: error for user_id=%s", user_id)
     
     return context

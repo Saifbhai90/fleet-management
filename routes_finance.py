@@ -335,7 +335,7 @@ def payment_voucher_edit(pk):
             
             # Delete old journal entry and create new one
             if pv.journal_entry_id:
-                old_je = JournalEntry.query.get(pv.journal_entry_id)
+                old_je = db.session.get(JournalEntry, pv.journal_entry_id)
                 if old_je:
                     db.session.delete(old_je)
             
@@ -363,7 +363,7 @@ def payment_voucher_delete(pk):
     try:
         # Delete associated journal entry (will cascade delete lines and update balances)
         if pv.journal_entry_id:
-            je = JournalEntry.query.get(pv.journal_entry_id)
+            je = db.session.get(JournalEntry, pv.journal_entry_id)
             if je:
                 db.session.delete(je)
         
@@ -819,7 +819,7 @@ def employee_expense_form(pk=None):
         form = EmployeeExpenseForm()
     
     # Populate choices
-    workspace_emp = Employee.query.get(workspace_employee_id) if workspace_employee_id else None
+    workspace_emp = db.session.get(Employee, workspace_employee_id) if workspace_employee_id else None
     form.employee_id.choices = [(workspace_employee_id, workspace_emp.name if workspace_emp else 'Selected Employee')] if workspace_employee_id else []
     
     districts = District.query.order_by(District.name).all()
@@ -942,7 +942,7 @@ def employee_expense_form(pk=None):
                     current_app.logger.warning('Employee expense receipt save failed: %s', ex)
                     db.session.rollback()
                     flash('Receipt upload failed — try a smaller file or different format.', 'danger')
-                    exp_for_form = EmployeeExpense.query.get(pk) if pk else None
+                    exp_for_form = db.session.get(EmployeeExpense, pk) if pk else None
                     return render_template(
                         'finance/employee_expense_form.html',
                         form=form,
@@ -953,7 +953,7 @@ def employee_expense_form(pk=None):
 
             # Reverse legacy company journal (if any) + previous workspace journal, then post fresh workspace JE.
             if expense.journal_entry_id:
-                old_je = JournalEntry.query.get(expense.journal_entry_id)
+                old_je = db.session.get(JournalEntry, expense.journal_entry_id)
                 if old_je:
                     db.session.delete(old_je)
                 expense.journal_entry_id = None
@@ -1096,7 +1096,7 @@ def employee_expense_delete(pk):
     try:
         # Delete journal entry
         if expense.journal_entry_id:
-            je = JournalEntry.query.get(expense.journal_entry_id)
+            je = db.session.get(JournalEntry, expense.journal_entry_id)
             if je:
                 db.session.delete(je)
         _reverse_workspace_employee_expense_journals(expense.id, workspace_employee_id)
@@ -1790,11 +1790,11 @@ def _auto_create_coa_account(entity_type, entity_id, entity_name,
         _code_map[new_code] = acct
 
     if entity_type == 'driver':
-        drv = Driver.query.get(entity_id)
+        drv = db.session.get(Driver, entity_id)
         if drv and not drv.wallet_account_id:
             drv.wallet_account_id = acct.id
     elif entity_type == 'employee':
-        emp = Employee.query.get(entity_id)
+        emp = db.session.get(Employee, entity_id)
         if emp and not emp.wallet_account_id:
             emp.wallet_account_id = acct.id
 
@@ -2346,7 +2346,7 @@ def fund_transfer_edit(pk):
         try:
             _reverse_workspace_company_funding_mirror(transfer.id)
             if transfer.journal_entry_id:
-                old_je = JournalEntry.query.get(transfer.journal_entry_id)
+                old_je = db.session.get(JournalEntry, transfer.journal_entry_id)
                 if old_je:
                     for line in old_je.lines:
                         db.session.delete(line)
@@ -2417,7 +2417,7 @@ def fund_transfer_delete(pk):
         _delete_all_ft_attachments(transfer)
         _reverse_workspace_company_funding_mirror(transfer.id)
         if transfer.journal_entry_id:
-            je = JournalEntry.query.get(transfer.journal_entry_id)
+            je = db.session.get(JournalEntry, transfer.journal_entry_id)
             if je:
                 for line in je.lines:
                     db.session.delete(line)
@@ -2975,7 +2975,7 @@ def journal_vouchers_list():
         district_name = e.district.name if e.district else '-'
         project_name = e.project.name if e.project else '-'
         if (district_name == '-' or project_name == '-') and e.reference_type == 'WorkspaceMonthClose' and e.reference_id:
-            row = WorkspaceMonthClose.query.get(e.reference_id)
+            row = db.session.get(WorkspaceMonthClose, e.reference_id)
             if row:
                 district_name = district_name if district_name != '-' else (row.district.name if row.district else '-')
                 project_name = project_name if project_name != '-' else (row.project.name if row.project else '-')
@@ -3016,7 +3016,7 @@ def journal_voucher_detail(pk):
 
     source = {'title': je.reference_type or 'Manual', 'items': []}
     if je.reference_type == 'FundTransfer' and je.reference_id:
-        ft = FundTransfer.query.get(je.reference_id)
+        ft = db.session.get(FundTransfer, je.reference_id)
         if ft:
             source['title'] = 'Fund Transfer'
             source['items'] = [
@@ -3029,7 +3029,7 @@ def journal_voucher_detail(pk):
                 ('Description', ft.description or '-'),
             ]
     elif je.reference_type == 'WorkspaceMonthClose' and je.reference_id:
-        mc = WorkspaceMonthClose.query.get(je.reference_id)
+        mc = db.session.get(WorkspaceMonthClose, je.reference_id)
         if mc:
             source['title'] = 'Workspace Month Close'
             source['items'] = [

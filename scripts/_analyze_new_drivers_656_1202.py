@@ -102,6 +102,6 @@ with app.app_context():
             if vid != v.id or a.driver_id in seen:
                 continue
             seen.add(a.driver_id)
-            d = Driver.query.get(a.driver_id)
+            d = db.session.get(Driver, a.driver_id)
             in_names = d.name in names
             print(f'    {d.name} in_payload={in_names} assign={d.assign_date} current_veh={d.vehicle.vehicle_no if d.vehicle else None}')
