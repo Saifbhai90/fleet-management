@@ -2054,10 +2054,58 @@ document.addEventListener('DOMContentLoaded', function() {
       });
   }
 
+  function fetchWorkOrdersForVehicle() {
+    if (!workOrderSelect) return;
+    var vid = _selVal(vehicleSelect);
+    var currentVal = _selVal(workOrderSelect);
+    if (!vid || vid === '0') {
+      /* No vehicle — reset to single placeholder option */
+      if (workOrderSelect.tomselect) {
+        workOrderSelect.tomselect.clear(true);
+        workOrderSelect.tomselect.clearOptions();
+        workOrderSelect.tomselect.addOption({ value: '0', text: '-- No Work Order --' });
+        workOrderSelect.tomselect.setValue('0', true);
+      } else {
+        workOrderSelect.innerHTML = '<option value="0">-- No Work Order --</option>';
+        workOrderSelect.value = '0';
+      }
+      return;
+    }
+    fetch('/api/maintenance-work-orders/for-vehicle?vehicle_id=' + vid)
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (!d || !d.ok) return;
+        var opts = [{ value: '0', text: '-- No Work Order --' }];
+        (d.work_orders || []).forEach(function(w) {
+          opts.push({ value: String(w.id), text: w.label });
+        });
+        if (workOrderSelect.tomselect) {
+          workOrderSelect.tomselect.clear(true);
+          workOrderSelect.tomselect.clearOptions();
+          opts.forEach(function(o) { workOrderSelect.tomselect.addOption({ value: o.value, text: o.text }); });
+          /* Keep current selection if it still exists in new list */
+          var stillValid = opts.some(function(o) { return o.value === String(currentVal); });
+          workOrderSelect.tomselect.setValue(stillValid ? String(currentVal) : '0', true);
+        } else {
+          workOrderSelect.innerHTML = '';
+          opts.forEach(function(o) {
+            var el = document.createElement('option');
+            el.value = o.value;
+            el.textContent = o.text;
+            workOrderSelect.appendChild(el);
+          });
+          var stillValid = opts.some(function(o) { return o.value === String(currentVal); });
+          workOrderSelect.value = stillValid ? String(currentVal) : '0';
+        }
+      })
+      .catch(function() {});
+  }
+
   if (vehicleSelect) vehicleSelect.addEventListener('change', function() {
     if (_suppressCascadeEvents) return;
     fetchTaskReadingsForMaintenance();
     fetchMaintenanceLiveSummary();
+    fetchWorkOrdersForVehicle();
   });
   if (districtSelect && projectSelect) {
     districtSelect.addEventListener('change', function() {
@@ -2377,19 +2425,23 @@ document.addEventListener('DOMContentLoaded', function() {
     if (did && did !== 0) _selSet(districtSelect, did);
     // Always run full fetch chain — never rely on server-rendered project/vehicle options
     // because _smoothFillSelect destroys TomSelect on each call and options may be stale.
+    function _afterVehicleLoad() {
+      fetchTaskReadingsForMaintenance();
+      fetchWorkOrdersForVehicle();
+    }
     if (did && did !== 0) {
       _loadProjectsForDistrict(did, pid || null, function() {
         var activePid = pid || _selVal(projectSelect);
         if (activePid && activePid !== '0' && activePid !== 0) {
-          _loadVehiclesForProject(activePid, did, vid || null, fetchTaskReadingsForMaintenance);
+          _loadVehiclesForProject(activePid, did, vid || null, _afterVehicleLoad);
         } else {
-          fetchTaskReadingsForMaintenance();
+          _afterVehicleLoad();
         }
       });
     } else if (pid && pid !== 0) {
-      _loadVehiclesForProject(pid, did, vid || null, fetchTaskReadingsForMaintenance);
+      _loadVehiclesForProject(pid, did, vid || null, _afterVehicleLoad);
     } else {
-      fetchTaskReadingsForMaintenance();
+      _afterVehicleLoad();
     }
   }
 
@@ -2400,6 +2452,7 @@ document.addEventListener('DOMContentLoaded', function() {
   var restoredDraft = restoreMaintFormDraft(function() {
     applyMaintQuickCreateFromUrl();
     fetchTaskReadingsForMaintenance();
+    fetchWorkOrdersForVehicle();
     fetchMaintenanceLiveSummary();
     handlePaymentTypeBehavior(false);
     updateLabourSplitHint();

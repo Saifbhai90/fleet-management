@@ -33243,6 +33243,36 @@ def api_maintenance_expense_approval_text(pk):
     })
 
 
+@app.route('/api/maintenance-work-orders/for-vehicle')
+def api_maintenance_work_orders_for_vehicle():
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return jsonify({'ok': False, 'error': 'forbidden'}), 403
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    vehicle_id = request.args.get('vehicle_id', type=int)
+    if not vehicle_id:
+        return jsonify({'ok': True, 'work_orders': []})
+    q = MaintenanceWorkOrder.query.filter(
+        MaintenanceWorkOrder.vehicle_id == vehicle_id,
+        MaintenanceWorkOrder.status != 'closed',
+    )
+    if workspace_employee_id:
+        q = q.filter(
+            db.or_(
+                MaintenanceWorkOrder.employee_id == workspace_employee_id,
+                MaintenanceWorkOrder.employee_id.is_(None),
+            )
+        )
+    rows = q.order_by(MaintenanceWorkOrder.opened_on.desc(), MaintenanceWorkOrder.id.desc()).limit(100).all()
+    return jsonify({
+        'ok': True,
+        'work_orders': [
+            {'id': w.id, 'label': f'{w.work_order_no} | {w.title}'}
+            for w in rows
+        ]
+    })
+
+
 @app.route('/api/maintenance-work-order/approval-text/<int:pk>')
 def api_maintenance_work_order_approval_text(pk):
     _guard = _require_workspace_employee_for_expense_management()
