@@ -4,7 +4,10 @@ Uses Flask test_client with a logged-in session.
 """
 import os, sys, json
 
-os.chdir(r'F:\Laptop new hard drive Disk D\company_management')
+PROJECT_ROOT = r'F:\Laptop new hard drive Disk D\company_management'
+os.chdir(PROJECT_ROOT)
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
 
 # Import the app
 import app as app_module

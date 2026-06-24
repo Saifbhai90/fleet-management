@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" id="metaViewport" content="{% if request.endpoint == 'report_driver_profile_public' %}width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=3, user-scalable=yes, viewport-fit=cover{% else %}width=device-width, initial-scale=1.0, maximum-scale=5.0, minimum-scale=1.0, user-scalable=yes, viewport-fit=cover, interactive-widget=resizes-content{% endif %}">
-<script defer src="{{ url_for('static', filename='js/core/fleet_core.js') }}?v=1"></script>
+<script defer src="{{ url_for('static', filename='js/core/fleet_core.js') }}?v=2"></script>
 
 <script>
 window.FleetConfig = {
@@ -12,7 +12,7 @@ window.FleetConfig = {
   userName: {{ session.get('user', '') | tojson }},
   userId: {{ session.get('user_id') | tojson }},
   allDistricts: {{ all_districts | map(attribute='name') | list | tojson }},
-  workspaceOpen: {{ workspace_open | tojson if workspace_open is defined else 'false' }},
+  workspaceOpen: {{ (workspace_open | tojson) if workspace_open is defined else 'false' }},
   urls: {
     logout: {{ url_for('logout') | tojson }},
     reports_index: {{ url_for('reports_index') | tojson }},
@@ -59,10 +59,7 @@ window.FleetConfig = {
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <!-- Tom Select: keyboard-first searchable dropdowns -->
     <link href="https://cdn.jsdelivr.net/npm/tom-select/dist/css/tom-select.bootstrap5.min.css" rel="stylesheet">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/core/fleet_styles.css') }}?v=1">
-
-
-<link rel="stylesheet" href="{{ url_for('static', filename='css/core/fleet_styles.css') }}?v=1">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/core/fleet_styles.css') }}?v=2">
 
     <!-- Mobile-Perfect responsive overrides (zero desktop impact) -->
     <link rel="stylesheet" href="/static/css/mobile_perfect.css">
@@ -178,12 +175,7 @@ window.FleetConfig = {
     </div>
 </div>
 
-<link rel="stylesheet" href="{{ url_for('static', filename='css/core/fleet_styles.css') }}?v=1">
-
-
 <!-- NAVBAR -->
-<link rel="stylesheet" href="{{ url_for('static', filename='css/core/fleet_styles.css') }}?v=1">
-
 <nav class="navbar navbar-dark bg-dark fixed-top px-3 shadow">
     <div class="d-flex align-items-center min-w-0 flex-grow-1">
         <button class="btn btn-outline-light btn-sm d-lg-none me-2" id="sidebarToggleMobile" type="button" aria-label="Menu">
@@ -466,7 +458,6 @@ window.FleetConfig = {
         </div>
     </div>
     {% endif %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/core/fleet_styles.css') }}?v=1">
 
 {% if workspace_open and request.endpoint != 'workspace_dashboard' %}
     <aside class="ws-global-mini d-none d-lg-block">
@@ -812,13 +803,13 @@ window.FleetConfig = {
      MOBILE PERFECT: Table → Cards + inputmode auto-setter
      Zero desktop impact. Runs on every page automatically.
      ═══════════════════════════════════════════════════════════ -->
-<script defer src="{{ url_for('static', filename='js/core/fleet_mobile.js') }}?v=1"></script>
+<script defer src="{{ url_for('static', filename='js/core/fleet_mobile.js') }}?v=2"></script>
 
 
 <!-- ═══════════════════════════════════════════════════════
      TOP LOADING BAR — fires on every page navigation
 ══════════════════════════════════════════════════════════ -->
-<script defer src="{{ url_for('static', filename='js/core/fleet_ui.js') }}?v=1"></script>
+<script defer src="{{ url_for('static', filename='js/core/fleet_ui.js') }}?v=2"></script>
 
 
 <!-- ═══════════════════════════════════════════════════════
