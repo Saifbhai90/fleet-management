@@ -4492,12 +4492,31 @@
 
         function _checkForAppUpdate() {
             if (!_isNative) { return; }
-            // Auto-update is now handled by Java (FleetAutoUpdateManager) — silent download + non-cancellable install dialog.
-            // No JS banner needed. Java checks /api/app/check-update, downloads via DownloadManager, and shows install dialog.
-            // We still call the Java bridge to trigger an update check in case the app was just opened.
+            // New apps (v2.0.8+): Java handles auto-update via FleetAutoUpdateManager
             if (window._fleetNative && typeof window._fleetNative.checkForUpdate === 'function') {
                 try { window._fleetNative.checkForUpdate(); } catch (e) { console.warn('[Update] Java check failed:', e); }
+                return;
             }
+            // Old apps (v1.9.x): JS fallback — check server for update, show banner with download/install
+            console.log('[Update] Java bridge not found, using JS fallback');
+            fetch('/api/app/check-update', { credentials: 'include' })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (data && data.latest_version && data.apk_url) {
+                        var AppP = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App;
+                        if (AppP && typeof AppP.getInfo === 'function') {
+                            AppP.getInfo().then(function(info) {
+                                var cur = info.version || '0.0.0';
+                                if (_compareVersions(cur, data.latest_version) < 0) {
+                                    _showUpdateBanner(data);
+                                }
+                            }).catch(function() { _showUpdateBanner(data); });
+                        } else {
+                            _showUpdateBanner(data);
+                        }
+                    }
+                })
+                .catch(function(e) { console.warn('[Update] JS fallback check failed:', e); });
         }
 
         function _showUpdateBanner(data) {
