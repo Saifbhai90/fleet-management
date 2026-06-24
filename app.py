@@ -440,6 +440,7 @@ if _run_startup_tasks:
                 ('driver', 'verify_license_photo_path', 'VARCHAR(500)'),
                 ('driver_document_history', 'batch_id', 'VARCHAR(36)'),
                 ('driver_document_history', 'update_source', 'VARCHAR(20)'),
+                ('app_release', 'apk_r2_url', 'VARCHAR(512)'),
             ]
             for _tbl, _col, _coltype in _col_additions:
                 if _tbl in _inspector.get_table_names():

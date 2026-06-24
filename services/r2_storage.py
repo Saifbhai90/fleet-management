@@ -223,6 +223,56 @@ def upload_binary_file(
     raise last_exc or RuntimeError("Unknown error uploading binary file to R2")
 
 
+def upload_apk_file(file_storage, filename: str, max_retries: int = 3) -> Optional[str]:
+    """
+    Upload an APK file to R2 under the 'apps' folder.
+    Returns the public URL of the uploaded APK.
+    """
+    if not file_storage:
+        return None
+    data = file_storage.read()
+    if not data:
+        return None
+    client = _get_s3_client()
+    key = f"apps/{secure_filename(filename)}"
+    last_exc: Exception | None = None
+    for _ in range(max_retries):
+        try:
+            client.put_object(
+                Bucket=R2_BUCKET_NAME,
+                Key=key,
+                Body=data,
+                ContentType="application/vnd.android.package-archive",
+            )
+            return f"{R2_PUBLIC_URL}/{key}"
+        except Exception as e:
+            last_exc = e
+    raise last_exc or RuntimeError("Unknown error uploading APK to R2")
+
+
+def delete_apk_by_url(public_url: str) -> bool:
+    """Delete an APK from R2 given its full public URL."""
+    return delete_file_by_url(public_url)
+
+
+def apk_exists_on_r2(public_url: str) -> bool:
+    """Check if an APK object exists on R2 given its public URL."""
+    if not public_url:
+        return False
+    base = R2_PUBLIC_URL.rstrip("/")
+    if not base or not public_url.startswith(base + "/"):
+        return False
+    key = public_url[len(base) + 1:]
+    if not key:
+        return False
+    try:
+        client = _get_s3_client()
+        client.head_object(Bucket=R2_BUCKET_NAME, Key=key)
+        return True
+    except Exception:
+        return False
+
+
 # Browser direct-upload (presigned PUT) — extension whitelist must match routes._add_expense_attachments_from_request
 _EXPENSE_DIRECT_UPLOAD_EXTS = frozenset({".jpg", ".jpeg", ".png", ".gif", ".webp", ".mp4", ".webm", ".mov"})
 _EXPENSE_DIRECT_UPLOAD_FOLDERS = frozenset({"maintenance_expense", "fuel_expense", "oil_expense"})

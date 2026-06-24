@@ -169,7 +169,9 @@ def app_check_update():
 
     if latest:
         disk_path = os.path.join(app.static_folder, 'apps', latest.apk_filename)
-        if not _is_valid_apk_on_disk(disk_path):
+        disk_ok = _is_valid_apk_on_disk(disk_path)
+        r2_ok = bool(latest.apk_r2_url)
+        if not disk_ok and not r2_ok:
             latest = None
 
     if not latest and static_best:
@@ -206,7 +208,11 @@ def app_check_update():
     apk_path = os.path.join(app.static_folder, 'apps', latest.apk_filename)
     file_size = latest.file_size_bytes or (os.path.getsize(apk_path) if os.path.isfile(apk_path) else 0)
 
-    apk_url = request.url_root.rstrip('/') + url_for('static', filename=f'apps/{latest.apk_filename}')
+    # Prefer R2 URL (persistent across Render deploys); fallback to local static URL
+    if latest.apk_r2_url:
+        apk_url = latest.apk_r2_url
+    else:
+        apk_url = request.url_root.rstrip('/') + url_for('static', filename=f'apps/{latest.apk_filename}')
     return jsonify({
         'latest_version': latest.version,
         'apk_url': apk_url,
@@ -249,18 +255,33 @@ def admin_app_releases():
                 flash(f'Version {version} already uploaded hai. Delete karein pehle ya naya version use karein.', 'warning')
                 return redirect(url_for('admin_app_releases'))
 
+            # Read file data for validation + R2 upload
+            apk_data = apk_file.read()
+            file_size = len(apk_data)
+            if file_size < 500_000 or apk_data[:2] != b'PK':
+                flash('Uploaded file valid APK nahi hai (corrupt ya unsigned). Dubara signed APK upload karein.', 'danger')
+                return redirect(url_for('admin_app_releases'))
+
+            # Upload to R2 (persistent storage — survives Render deploys)
+            r2_url = None
+            try:
+                from services.r2_storage import upload_apk_file, R2_PUBLIC_URL
+                import io as _io
+                from werkzeug.datastructures import FileStorage as _FS
+                # Re-wrap data for R2 upload
+                apk_file.stream = _io.BytesIO(apk_data)
+                r2_url = upload_apk_file(apk_file, fname)
+                app.logger.info('APK uploaded to R2: %s', r2_url)
+            except Exception as r2_err:
+                app.logger.warning('R2 upload failed, falling back to local disk: %s', r2_err)
+                r2_url = None
+
+            # Also save to local disk as fallback (works on local dev)
             apps_dir = os.path.join(app.static_folder, 'apps')
             os.makedirs(apps_dir, exist_ok=True)
             file_path = os.path.join(apps_dir, fname)
-            apk_file.save(file_path)
-            file_size = os.path.getsize(file_path)
-            if not _is_valid_apk_on_disk(file_path):
-                try:
-                    os.remove(file_path)
-                except OSError:
-                    pass
-                flash('Uploaded file valid APK nahi hai (corrupt ya unsigned). Dubara signed APK upload karein.', 'danger')
-                return redirect(url_for('admin_app_releases'))
+            with open(file_path, 'wb') as f:
+                f.write(apk_data)
 
             AppRelease.query.update({AppRelease.is_latest: False})
 
@@ -269,6 +290,7 @@ def admin_app_releases():
             rel = AppRelease(
                 version=version,
                 apk_filename=fname,
+                apk_r2_url=r2_url,
                 force_update=force,
                 is_latest=True,
                 release_notes=notes,
@@ -340,6 +362,14 @@ def admin_app_releases():
         if action == 'delete':
             rel_id = request.form.get('release_id', type=int)
             rel = AppRelease.query.get_or_404(rel_id)
+            # Delete from R2 if exists
+            if rel.apk_r2_url:
+                try:
+                    from services.r2_storage import delete_apk_by_url
+                    delete_apk_by_url(rel.apk_r2_url)
+                except Exception:
+                    pass
+            # Delete from local disk if exists
             file_path = os.path.join(app.static_folder, 'apps', rel.apk_filename)
             if os.path.exists(file_path):
                 os.remove(file_path)

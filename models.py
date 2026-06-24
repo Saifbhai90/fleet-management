@@ -2715,6 +2715,7 @@ class AppRelease(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     version = db.Column(db.String(20), nullable=False, unique=True)
     apk_filename = db.Column(db.String(255), nullable=False)
+    apk_r2_url = db.Column(db.String(512), nullable=True)
     force_update = db.Column(db.Boolean, default=False, nullable=False)
     is_latest = db.Column(db.Boolean, default=False, nullable=False)
     release_notes = db.Column(db.Text, nullable=True)
