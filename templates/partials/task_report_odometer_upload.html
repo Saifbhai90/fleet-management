@@ -20,12 +20,23 @@
   }
 
   function fetchGpsForOdometer(cb) {
-    if (!navigator.geolocation) return cb(null, null, null);
-    navigator.geolocation.getCurrentPosition(
-      function(p) { cb(p.coords.latitude, p.coords.longitude, p.coords.accuracy); },
-      function() { cb(null, null, null); },
-      { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 }
-    );
+    var _isNative = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+    var Geo = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Geolocation;
+    if (_isNative && Geo) {
+      Geo.getCurrentPosition({ enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 })
+        .then(function(p) { cb(p.coords.latitude, p.coords.longitude, p.coords.accuracy); })
+        .catch(function() { cb(null, null, null); });
+      return;
+    }
+    if (!_isNative && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        function(p) { cb(p.coords.latitude, p.coords.longitude, p.coords.accuracy); },
+        function() { cb(null, null, null); },
+        { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 }
+      );
+      return;
+    }
+    cb(null, null, null);
   }
 
   function odometerStampOpts(rowId, lat, lng, accuracyMeters) {

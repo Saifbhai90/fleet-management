@@ -462,6 +462,8 @@ def session_ping():
 @csrf.exempt
 def app_logout():
     """Silent AJAX logout for mobile app auto-logout when app goes to background/closes."""
+    if not _validate_csrf_exempt_origin():
+        return jsonify({'ok': False, 'error': 'Cross-origin request blocked'}), 403
     try:
         log_id = session.get('login_log_id')
         if log_id:
@@ -478,6 +480,8 @@ def app_logout():
 @csrf.exempt
 def biometric_login():
     """Validate biometric token and create a new session (no password needed)."""
+    if not _validate_csrf_exempt_origin():
+        return jsonify({'ok': False, 'error': 'Cross-origin request blocked'}), 403
     _ensure_user_biometric_version_column()
     data = request.get_json(silent=True) or {}
     username = (data.get('username') or '').strip()

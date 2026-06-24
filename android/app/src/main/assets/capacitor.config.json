@@ -5,7 +5,7 @@
 	"server": {
 		"url": "https://fleet-management-xdvj.onrender.com",
 		"startPath": "/mobile-init",
-		"cleartext": true,
+		"cleartext": false,
 		"androidScheme": "https",
 		"allowNavigation": [
 			"fleet-management-xdvj.onrender.com",
@@ -14,7 +14,7 @@
 		]
 	},
 	"android": {
-		"allowMixedContent": false,
+		"allowMixedContent": true,
 		"captureInput": true,
 		"webContentsDebuggingEnabled": false,
 		"overScrollMode": "never",

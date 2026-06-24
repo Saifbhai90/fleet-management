@@ -16,6 +16,9 @@ import android.os.Environment;
 import android.view.View;
 import android.view.ViewGroup;
 import android.util.Log;
+import android.webkit.GeolocationPermissions;
+import android.webkit.PermissionRequest;
+import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.os.Handler;
@@ -59,6 +62,7 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
     private static final long POLLING_ACTIVATION_DEADLINE_MS = 60000;
     private static final int BATTERY_OPT_REQUEST = 9999;
     private static final int NOTIF_PERMISSION_REQUEST = 1001;
+    private static final int LOCATION_PERMISSION_REQUEST = 1002;
     private static final long SPLASH_MIN_MS = 1200L;
     private static final long AUTO_RETRY_MS = 5000L;
 
@@ -66,6 +70,7 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
     private Handler mainHandler;
     private Timer deadlineTimer;
     private SharedPreferences prefs;
+    private FleetAutoUpdateManager autoUpdateManager;
 
     private View networkOverlayRoot;
     private TextView networkAutoRetryText;
@@ -111,6 +116,7 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
         createNotificationChannels();
         checkGooglePlayServices();
         requestNotificationPermission();
+        requestLocationPermission();
         requestBatteryOptimizationExemption();
 
         FirebaseMessaging.getInstance().setAutoInitEnabled(true);
@@ -120,6 +126,13 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
         setupDownloadListener();
         getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
         scheduleWebViewTransparent();
+
+        // Auto-update: initialize manager and check for pending install on app open
+        autoUpdateManager = new FleetAutoUpdateManager(this);
+        // Check pending install after WebView is ready (delayed to not block splash)
+        mainHandler.postDelayed(() -> {
+            if (autoUpdateManager != null) autoUpdateManager.checkPendingInstall();
+        }, 3000);
     }
 
     private void setupNetworkOverlay() {
@@ -159,14 +172,73 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
                 WebView wv = getBridge().getWebView();
                 WebSettings settings = wv.getSettings();
                 settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
+                // Allow geolocation on insecure (HTTP) local origins — needed for LAN dev testing
+                settings.setGeolocationEnabled(true);
                 // Clear all cached data so latest template is always fetched from server
                 wv.clearCache(true);
                 wv.clearHistory();
                 android.webkit.CookieManager.getInstance().flush();
-                // Keep Capacitor BridgeWebChromeClient (GPS, camera, file picker). Do not replace it.
+                // Override WebChromeClient to auto-grant geolocation on insecure origins (HTTP local IP)
+                // while preserving Capacitor's BridgeWebChromeClient behavior for camera, file picker, etc.
+                final WebChromeClient originalChromeClient = wv.getWebChromeClient();
+                wv.setWebChromeClient(new WebChromeClient() {
+                    @Override
+                    public void onGeolocationPermissionsShowPrompt(String origin, GeolocationPermissions.Callback callback) {
+                        // Auto-grant geolocation for any origin (local dev on HTTP needs this)
+                        callback.invoke(origin, true, false);
+                    }
+                    @Override
+                    public void onPermissionRequest(PermissionRequest request) {
+                        // Delegate to original Capacitor client for camera/mic/etc
+                        if (originalChromeClient != null) {
+                            originalChromeClient.onPermissionRequest(request);
+                        } else {
+                            request.grant(request.getResources());
+                        }
+                    }
+                    @Override
+                    public boolean onShowFileChooser(WebView webView, android.webkit.ValueCallback<android.net.Uri[]> filePathCallback, FileChooserParams fileChooserParams) {
+                        if (originalChromeClient != null) {
+                            return originalChromeClient.onShowFileChooser(webView, filePathCallback, fileChooserParams);
+                        }
+                        return false;
+                    }
+                    @Override
+                    public void onConsoleMessage(String message, int lineNumber, String sourceID) {
+                        if (originalChromeClient != null) {
+                            originalChromeClient.onConsoleMessage(message, lineNumber, sourceID);
+                        }
+                    }
+                    @Override
+                    public boolean onConsoleMessage(android.webkit.ConsoleMessage consoleMessage) {
+                        if (originalChromeClient != null) {
+                            return originalChromeClient.onConsoleMessage(consoleMessage);
+                        }
+                        return false;
+                    }
+                    @Override
+                    public void onGeolocationPermissionsHidePrompt() {
+                        if (originalChromeClient != null) {
+                            originalChromeClient.onGeolocationPermissionsHidePrompt();
+                        }
+                    }
+                });
                 wv.setBackgroundColor(Color.TRANSPARENT);
                 wv.setLayerType(View.LAYER_TYPE_HARDWARE, null);
                 wv.addJavascriptInterface(new FleetNativeBridge(this), "_fleetNative");
+                // Set server URL for auto-update from WebView URL
+                if (autoUpdateManager != null && wv.getUrl() != null) {
+                    String wvUrl = wv.getUrl();
+                    if (wvUrl.startsWith("http")) {
+                        // Extract base URL (scheme + host + port)
+                        try {
+                            java.net.URL parsed = new java.net.URL(wvUrl);
+                            String base = parsed.getProtocol() + "://" + parsed.getHost()
+                                    + (parsed.getPort() > 0 ? ":" + parsed.getPort() : "");
+                            autoUpdateManager.setServerBaseUrl(base);
+                        } catch (Exception ignored) {}
+                    }
+                }
                 setupWebViewNetworkGuard();
             } else {
                 mainHandler.postDelayed(this::scheduleWebViewTransparent, 50);
@@ -424,6 +496,12 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
     public void onResume() {
         super.onResume();
         scheduleWebViewTransparent();
+        // Check if APK was downloaded while app was in background
+        if (autoUpdateManager != null) {
+            mainHandler.postDelayed(() -> {
+                if (autoUpdateManager != null) autoUpdateManager.checkPendingInstall();
+            }, 500);
+        }
         if (networkOverlayVisible) {
             return;
         }
@@ -476,6 +554,15 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
                         new String[]{Manifest.permission.POST_NOTIFICATIONS},
                         NOTIF_PERMISSION_REQUEST);
             }
+        }
+    }
+
+    private void requestLocationPermission() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+                != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this,
+                    new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION},
+                    LOCATION_PERMISSION_REQUEST);
         }
     }
 
@@ -674,6 +761,14 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
         private final MainActivity activity;
         FleetNativeBridge(MainActivity a) { this.activity = a; }
 
+        /** Trigger auto-update check from Java side (silent download) */
+        @JavascriptInterface
+        public void checkForUpdate() {
+            if (activity.autoUpdateManager != null) {
+                activity.runOnUiThread(() -> activity.autoUpdateManager.checkForUpdate());
+            }
+        }
+
         @JavascriptInterface
         public void openAppSettings() {
             try {
@@ -795,6 +890,7 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
         }
         unregisterNetworkCallback();
         cancelDeadlineTimer();
+        if (autoUpdateManager != null) autoUpdateManager.onDestroy();
         super.onDestroy();
     }
 }

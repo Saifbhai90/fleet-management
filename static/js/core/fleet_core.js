@@ -1526,6 +1526,20 @@
         }
 
         function startGeolocationOnce() {
+            // On native app with insecure origin (HTTP local IP), use Capacitor Geolocation plugin instead of browser API
+            var _isNativeApp = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+            var _capGeo = _isNativeApp && window.Capacitor.Plugins && window.Capacitor.Plugins.Geolocation;
+            if (_capGeo) {
+                // Native plugin — no secure-origin restriction
+                if (sessionStorage.getItem(GEO_SESSION_KEY)) return;
+                _capGeo.getCurrentPosition({ enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 })
+                    .then(function(p) {
+                        sessionStorage.setItem(GEO_SESSION_KEY, '1');
+                        onPositionUpdate(p);
+                    })
+                    .catch(function() { try { sessionStorage.setItem(GEO_SESSION_KEY, '1'); } catch(e) {} });
+                return;
+            }
             if (!navigator.geolocation) return;
             // Browser location sirf HTTPS ya localhost par allow karta hai. HTTP (e.g. 192.168.x.x) par na popup aata hai na Allow enable hota.
             if (typeof window.isSecureContext !== 'undefined' && !window.isSecureContext) {
@@ -3127,6 +3141,19 @@
                     maxOptions: 300,
                     dropdownParent: 'body',
                     placeholder: placeholder,
+                    onFocus: function() {
+                        // Ghost-focus guard: if returning from camera, forcefully blur
+                        if (window._isReturningFromCamera) {
+                            try { this.blur(); } catch (e) {}
+                            try { this.close(); } catch (e) {}
+                        }
+                    },
+                    onBeforeOpen: function() {
+                        // Silent shield: strictly prevent dropdown from even trying to open
+                        if (window._isShieldActive) {
+                            return false;
+                        }
+                    },
                     render: {
                         /* Triggered by TomSelect when a text search finds nothing */
                         no_results: function(data, escape) {
@@ -4123,14 +4150,15 @@
                     }).then(function(pos) {
                         resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracy: pos.coords.accuracy });
                     }).catch(reject);
-                } else if ('geolocation' in navigator) {
+                } else if (!_isNative && 'geolocation' in navigator) {
+                    // Browser only — never use navigator.geolocation on native app (fails on HTTP origins)
                     navigator.geolocation.getCurrentPosition(
                         function(pos) { resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracy: pos.coords.accuracy }); },
                         reject,
                         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
                     );
                 } else {
-                    reject(new Error('Geolocation not supported'));
+                    reject(new Error('Geolocation not available — native GPS plugin missing'));
                 }
             });
         }
@@ -4378,42 +4406,98 @@
             return 0;
         }
 
-        /* Populate version badge in navbar */
+        /* Populate version badge + update status next to sidebar button (runs on every page) */
         (function() {
             if (!_isNative) return;
             var AppP = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App;
             if (!AppP || typeof AppP.getInfo !== 'function') return;
-            AppP.getInfo().then(function(info) {
-                var v = info.version || info.build || '';
-                if (!v) return;
-                var el = document.getElementById('navAppVersion');
-                if (el) { el.textContent = 'v' + v; el.style.display = 'inline'; }
-            }).catch(function() {});
+
+            function _populateNavbar(version, latestVersion) {
+                console.log('[NavbarVersion] _populateNavbar called: v=' + version + ' latest=' + latestVersion);
+
+                /* Version badge */
+                var curEl = document.getElementById('navCurrentVersion');
+                if (curEl) curEl.textContent = 'v' + version;
+
+                /* Status elements */
+                var statusEl = document.getElementById('navStatusText');
+                var statusDot = document.getElementById('statusDot');
+                var updateLine = document.getElementById('updateLine');
+                var newVerEl = document.getElementById('navNewVersion');
+
+                if (!latestVersion || latestVersion === '0.0.0' || _compareVersions(version, latestVersion) >= 0) {
+                    /* Up to date */
+                    if (statusEl) { statusEl.textContent = 'Latest Version'; statusEl.style.color = '#475569'; }
+                    if (statusDot) {
+                        statusDot.style.background = '#10b981';
+                        statusDot.style.animation = 'none';
+                    }
+                    if (updateLine) updateLine.style.display = 'none';
+                    console.log('[NavbarVersion] Status: LATEST');
+                } else {
+                    /* Update available */
+                    if (statusEl) { statusEl.textContent = 'Downloading Update...'; statusEl.style.color = '#f59e0b'; }
+                    if (statusDot) {
+                        statusDot.style.background = '#f59e0b';
+                        statusDot.style.animation = 'pulse 1.5s infinite';
+                    }
+                    if (updateLine) updateLine.style.display = 'flex';
+                    if (newVerEl) newVerEl.textContent = 'v' + latestVersion;
+                    console.log('[NavbarVersion] Status: DOWNLOADING (v' + latestVersion + ')');
+                }
+
+                /* Old navbar brand badge (if exists on non-dashboard pages) */
+                var vEl = document.getElementById('navAppVersion');
+                if (vEl) { vEl.textContent = 'v' + version; vEl.style.display = 'inline'; }
+
+                /* Old pill if present */
+                var pill = document.getElementById('navUpdateStatusPill');
+                if (pill) {
+                    pill.style.display = 'inline-flex';
+                    var pillIcon = document.getElementById('navUpdateStatusIcon');
+                    var pillTxt = document.getElementById('navUpdateStatusText');
+                    if (!latestVersion || latestVersion === '0.0.0' || _compareVersions(version, latestVersion) >= 0) {
+                        if (pillIcon) pillIcon.className = 'bi bi-check-circle-fill';
+                        if (pillTxt) pillTxt.textContent = 'v' + version + ' — Latest';
+                        pill.style.color = '#22c55e';
+                    } else {
+                        if (pillIcon) pillIcon.className = 'bi bi-arrow-repeat';
+                        if (pillTxt) pillTxt.textContent = 'v' + version + ' → v' + latestVersion;
+                        pill.style.color = '#f97316';
+                    }
+                }
+            }
+
+            function _runVersionCheck() {
+                console.log('[NavbarVersion] Version check started');
+                AppP.getInfo().then(function(info) {
+                    var currentVersion = info.version || info.build || '0.0.0';
+                    if (!currentVersion || currentVersion === '0.0.0') return;
+                    fetch('/api/app/check-update', { credentials: 'include' })
+                        .then(function(r) { return r.json(); })
+                        .then(function(data) {
+                            _populateNavbar(currentVersion, data.latest_version || '0.0.0');
+                        })
+                        .catch(function() {
+                            _populateNavbar(currentVersion, '0.0.0');
+                        });
+                }).catch(function(e) { console.warn('[NavbarVersion] App.getInfo failed:', e); });
+            }
+
+            /* Run immediately + retry after 500ms for late-rendered navbar */
+            _runVersionCheck();
+            setTimeout(_runVersionCheck, 500);
+            setTimeout(_runVersionCheck, 2000);
         })();
 
         function _checkForAppUpdate() {
             if (!_isNative) { return; }
-
-            var AppPlugin = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App;
-            if (!AppPlugin) { console.warn('[Update] App plugin not available.'); return; }
-
-            AppPlugin.getInfo().then(function(info) {
-                var currentVersion = info.version || info.build || '0.0.0';
-
-                fetch('/api/app/check-update', { credentials: 'include' })
-                    .then(function(r) { return r.json(); })
-                    .then(function(data) {
-                        if (!data.latest_version || data.latest_version === '0.0.0') {
-                            return;
-                        }
-                        var cmp = _compareVersions(currentVersion, data.latest_version);
-                        if (cmp >= 0) {
-                            return;
-                        }
-
-                        _showUpdateBanner(data);
-                    }).catch(function(e) { console.warn('[Update] Fetch failed:', e); });
-            }).catch(function(e) { console.warn('[Update] Could not get app info:', e); });
+            // Auto-update is now handled by Java (FleetAutoUpdateManager) — silent download + non-cancellable install dialog.
+            // No JS banner needed. Java checks /api/app/check-update, downloads via DownloadManager, and shows install dialog.
+            // We still call the Java bridge to trigger an update check in case the app was just opened.
+            if (window._fleetNative && typeof window._fleetNative.checkForUpdate === 'function') {
+                try { window._fleetNative.checkForUpdate(); } catch (e) { console.warn('[Update] Java check failed:', e); }
+            }
         }
 
         function _showUpdateBanner(data) {
@@ -4701,6 +4785,11 @@
             checkForAppUpdate: _checkForAppUpdate
         };
     })();
+
+    // Expose getGPS on window for attendance templates that check window.getGPS
+    if (window.FleetBridge && typeof window.FleetBridge.getGPS === 'function') {
+        window.getGPS = window.FleetBridge.getGPS;
+    }
 
     /** Scroll focused field into visible area above keyboard (Capacitor / mobile). */
     window.fleetScrollFieldIntoView = function fleetScrollFieldIntoView(el) {
@@ -5499,6 +5588,74 @@
         resetTimer();
     })();
 
+    // ── 5a2. Post-Camera Dropdown Lock — prevents ghost-focus auto-open ──
+    window._isReturningFromCamera = false;
+    var _cameraLockTimer = null;
+
+    function _fleetTriggerCameraLock() {
+        window._isReturningFromCamera = true;
+        if (_cameraLockTimer) clearTimeout(_cameraLockTimer);
+        _cameraLockTimer = setTimeout(function() {
+            window._isReturningFromCamera = false;
+        }, 2000);
+    }
+
+    function _fleetCloseAllTomSelects() {
+        var active = document.activeElement;
+        if (active && (active.tagName === 'SELECT' || (active.classList && active.classList.contains('ts-control')))) {
+            try { active.blur(); } catch (e) {}
+        }
+        document.querySelectorAll('select.search-select, select.tom-select').forEach(function(sel) {
+            if (sel.tomselect) {
+                try { sel.tomselect.close(); } catch (e) {}
+                try { sel.tomselect.blur && sel.tomselect.blur(); } catch (e) {}
+            }
+        });
+    }
+    window._fleetCloseAllTomSelects = _fleetCloseAllTomSelects;
+
+    // Repeated blur sweep — catches delayed ghost-focus events at 100ms, 500ms, 1000ms
+    function _fleetCameraReturnSweep() {
+        _fleetCloseAllTomSelects();
+        setTimeout(_fleetCloseAllTomSelects, 100);
+        setTimeout(_fleetCloseAllTomSelects, 500);
+        setTimeout(_fleetCloseAllTomSelects, 1000);
+    }
+
+    // Window focus event — fires when WebView regains focus after camera/file picker
+    window.addEventListener('focus', function() {
+        _fleetTriggerCameraLock();
+        _fleetCameraReturnSweep();
+    });
+
+    // visibilitychange — fires when WebView tab becomes visible again
+    document.addEventListener('visibilitychange', function() {
+        if (document.visibilityState === 'visible') {
+            _fleetTriggerCameraLock();
+            _fleetCameraReturnSweep();
+        }
+    });
+
+    // Global Bootstrap modal dismiss listener — silent shield prevents any dropdown flicker
+    window._isShieldActive = false;
+    document.addEventListener('hide.bs.modal', function() {
+        // Activate shield immediately at the START of modal hide animation
+        document.body.classList.add('ts-no-open');
+        window._isShieldActive = true;
+        _fleetTriggerCameraLock();
+        try { document.activeElement && document.activeElement.blur(); } catch (e) {}
+        _fleetCloseAllTomSelects();
+    });
+    document.addEventListener('hidden.bs.modal', function() {
+        // Keep shield active through focus restoration, then remove after 1000ms
+        setTimeout(_fleetCloseAllTomSelects, 50);
+        setTimeout(_fleetCloseAllTomSelects, 300);
+        setTimeout(function() {
+            document.body.classList.remove('ts-no-open');
+            window._isShieldActive = false;
+        }, 1000);
+    });
+
     // ── 5b. MOBILE: Biometric / PIN Lock on App Resume ────────────────────
     (function() {
         if (!window.Capacitor || !window.Capacitor.isNativePlatform()) return;
@@ -5716,6 +5873,10 @@
             if (state && !state.isActive) {
                 return;
             }
+
+            // ── Close all TomSelect dropdowns on app resume (fixes auto-open after camera return) ──
+            _fleetTriggerCameraLock();
+            _fleetCameraReturnSweep();
 
             if (_firstActivation) { _firstActivation = false; return; }
 

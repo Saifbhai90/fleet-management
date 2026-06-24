@@ -480,56 +480,23 @@ document.addEventListener('DOMContentLoaded', function() {
             </div>
         </div>
 
-        <!-- ── Section 2: App Update ── -->
+        <!-- ── Section 2: App Update (status only — download/install handled by Java) ── -->
         <div id="permRowUpdate" style="display:none;" class="perm-glass-card update-accent">
-
-            <!-- Top row: icon+title LEFT, gauge RIGHT -->
             <div style="display:flex;justify-content:space-between;align-items:center;">
                 <div class="pg-header" style="gap:11px;flex:1;min-width:0;">
                     <div class="pg-icon-wrap orange" style="animation:pgSpinOnce 1.2s ease-out;">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ea580c" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
                     </div>
                     <div style="min-width:0;">
-                        <div class="pg-title">App New Update</div>
+                        <div class="pg-title">App Update Status</div>
                         <div id="permStatusUpdate" class="pg-sub" style="color:#374151!important;">Checking…</div>
                     </div>
                 </div>
-                <!-- Gauge widget -->
                 <div style="width:58px;height:44px;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;flex-shrink:0;">
-                    <div style="position:absolute;width:44px;height:44px;border:3.5px solid rgba(249,115,22,0.15);border-top-color:#f97316;border-right-color:#f97316;border-radius:50%;top:0;animation:pgGauge 3s infinite ease-in-out;"></div>
-                    <span id="permGrantedUpdate" style="display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:0.6rem;font-weight:700;color:#059669;white-space:nowrap;">✓ Latest</span>
-                    <span style="font-size:0.6rem;color:#f97316;font-weight:700;white-space:nowrap;letter-spacing:0.2px;position:relative;z-index:1;">new features</span>
+                    <div id="permGrantedUpdate" style="display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:0.6rem;font-weight:700;color:#059669;white-space:nowrap;">✓ Latest</div>
+                    <span id="permDownloadSpinner" style="display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:20px;height:20px;border:2.5px solid rgba(249,115,22,0.2);border-top-color:#f97316;border-radius:50%;animation:pgGauge 1s infinite linear;"></span>
+                    <span style="font-size:0.6rem;color:#f97316;font-weight:700;white-space:nowrap;letter-spacing:0.2px;position:relative;z-index:1;">auto update</span>
                 </div>
-            </div>
-
-            <!-- Version mapping row -->
-            <div id="updateVersionRow" style="display:none;background:rgba(255,255,255,0.42);border:1px solid rgba(255,255,255,0.52);border-radius:14px;padding:12px 16px;">
-                <!-- Labels row -->
-                <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
-                    <span class="pg-ver-lbl">Current</span>
-                    <span class="pg-ver-lbl" style="text-align:right;">New</span>
-                </div>
-                <!-- Version + arrow on same line -->
-                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
-                    <span id="updateCurrentVer" class="pg-ver-code" style="font-size:1rem;">—</span>
-                    <span class="pg-ver-arrow" style="flex:1;text-align:center;letter-spacing:-1px;">——→</span>
-                    <span id="updateNewVer" class="pg-ver-code new-glow" style="font-size:1rem;text-align:right;">—</span>
-                </div>
-            </div>
-
-            <!-- Progress bar -->
-            <div id="updateProgressWrap" style="display:none;">
-                <div class="pg-prog-wrap">
-                    <div class="pg-prog-track">
-                        <div id="updateProgressBar" class="pg-prog-fill" style="width:0%;"></div>
-                    </div>
-                    <div id="updateProgressText" class="pg-prog-txt">Starting download…</div>
-                </div>
-            </div>
-
-            <!-- Action area -->
-            <div id="updateActionArea">
-                <button id="permBtnUpdate" onclick="handleUpdateInstall()" class="pg-cta-btn"><span class="pg-btn-bounce"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg></span> Download &amp; Install Now</button>
             </div>
         </div>
 
@@ -883,7 +850,7 @@ function _dbgToast(msg) {
         return true;
     }
 
-    /* ── App Update check ── */
+    /* ── App Update check (status only — download/install handled by Java) ── */
     var _updateApkUrl  = '';
     var _updateApkData = null;
     function checkAppUpdate() {
@@ -904,11 +871,13 @@ function _dbgToast(msg) {
         if (row) row.style.display = 'flex';
 
         var Plugins = window.Capacitor && window.Capacitor.Plugins;
-        /* App.getInfo() gives version/build; Device.getInfo() gives appVersion */
         var AppPlugin = Plugins && Plugins.App;
         var DevPlugin = Plugins && Plugins.Device;
 
         function _doCheck(currentVersion) {
+            /* Update navbar version badge */
+            _updateNavVersionBadge(currentVersion);
+
             var _ctrl = window.AbortController ? new AbortController() : null;
             var _fetchTimer = setTimeout(function() { if (_ctrl) _ctrl.abort(); }, 8000);
             fetch('/api/app/check-update', _ctrl ? { signal: _ctrl.signal } : {})
@@ -917,47 +886,40 @@ function _dbgToast(msg) {
                 var latest = data.latest_version || '0.0.0';
                 _updateApkUrl = data.apk_url || '';
                 if (!latest || latest === '0.0.0' || _verGte(currentVersion, latest)) {
-                    /* Up to date — show section with green tick */
-                    var rowUpd = document.getElementById('permRowUpdate');
-                    if (rowUpd) rowUpd.style.display = 'block';
+                    /* Up to date */
+                    _updateApkData = null;
+                    _permStates.update = 'granted';
                     var statusUpd = document.getElementById('permStatusUpdate');
-                    if (statusUpd) { statusUpd.textContent = 'App is up to date ✔'; statusUpd.style.color = '#16a34a'; }
-                    var verRow = document.getElementById('updateVersionRow');
-                    if (verRow) verRow.style.display = 'none';
-                    var actArea = document.getElementById('updateActionArea');
-                    if (actArea) actArea.style.display = 'none';
-                    var progWrap = document.getElementById('updateProgressWrap');
-                    if (progWrap) progWrap.style.display = 'none';
+                    if (statusUpd) { statusUpd.textContent = 'v' + currentVersion + ' — up to date'; statusUpd.style.color = '#16a34a'; }
                     var grantedBadge = document.getElementById('permGrantedUpdate');
                     if (grantedBadge) grantedBadge.style.display = 'block';
-                    _permStates.update = 'granted';
+                    var spinner = document.getElementById('permDownloadSpinner');
+                    if (spinner) spinner.style.display = 'none';
+                    _updateNavUpdatePill('latest', 'v' + currentVersion + ' — Latest');
                     refreshCard();
                 } else {
-                    /* Update available */
+                    /* Update available — Java will auto-download. Show status only. */
                     _updateApkData = data;
-                    _permStates.update = 'denied';
-                    /* Show update section */
-                    var rowUpd2 = document.getElementById('permRowUpdate');
-                    if (rowUpd2) rowUpd2.style.display = 'block';
-                    /* Status subtitle */
+                    _permStates.update = 'granted'; /* Don't block user — update is auto */
                     var statusEl = document.getElementById('permStatusUpdate');
-                    if (statusEl) { statusEl.textContent = 'v' + latest + ' available — update required'; statusEl.style.color = '#374151'; }
-                    /* Version comparison row */
-                    var verRow = document.getElementById('updateVersionRow');
-                    if (verRow) verRow.style.display = 'block';
-                    var curEl = document.getElementById('updateCurrentVer');
-                    var newEl = document.getElementById('updateNewVer');
-                    if (curEl) curEl.textContent = 'v' + currentVersion;
-                    if (newEl) newEl.textContent  = 'v' + latest;
-                    /* Show download button */
-                    var btn = document.getElementById('permBtnUpdate');
-                    if (btn) btn.style.display = 'block';
+                    if (statusEl) { statusEl.textContent = 'v' + latest + ' downloading automatically…'; statusEl.style.color = '#374151'; }
+                    var grantedBadge2 = document.getElementById('permGrantedUpdate');
+                    if (grantedBadge2) grantedBadge2.style.display = 'none';
+                    var spinner2 = document.getElementById('permDownloadSpinner');
+                    if (spinner2) spinner2.style.display = 'block';
+                    _updateNavUpdatePill('downloading', 'v' + currentVersion + ' → v' + latest + ' (downloading)');
+                    /* Trigger Java-side silent download */
+                    if (window._fleetNative && typeof window._fleetNative.checkForUpdate === 'function') {
+                        try { window._fleetNative.checkForUpdate(); } catch(e) {}
+                    }
                     refreshCard();
                 }
             })
             .catch(function() {
                 /* Network error — treat as up to date so user isn't blocked */
+                _permStates.update = 'granted';
                 updatePermUI('update', 'granted');
+                _updateNavUpdatePill('latest', 'v' + currentVersion + ' — Latest');
             });
         }
 
@@ -966,7 +928,6 @@ function _dbgToast(msg) {
             AppPlugin.getInfo().then(function(info) {
                 _doCheck(info.version || info.build || '0.0.0');
             }).catch(function() {
-                /* Fallback to Device */
                 if (DevPlugin && typeof DevPlugin.getInfo === 'function') {
                     DevPlugin.getInfo().then(function(d) { _doCheck(d.appVersion || '0.0.0'); }).catch(function() { _doCheck('0.0.0'); });
                 } else { _doCheck('0.0.0'); }
@@ -978,151 +939,33 @@ function _dbgToast(msg) {
         }
     }
 
-    /* ── Update Install handler — uses existing FleetApkDownload native plugin ── */
-    window.handleUpdateInstall = function() {
-        window._installReadyShown = false;
-        if (!_updateApkUrl || !_updateApkData) return;
-        var data = _updateApkData;
-        var Plugins = window.Capacitor && window.Capacitor.Plugins;
-        var FleetDl = Plugins && Plugins.FleetApkDownload;
-        var Fs = Plugins && Plugins.Filesystem;
-        var fname = data.apk_filename || 'fleet-manager-update.apk';
+    /* ── Navbar update status pill + version badge ── */
+    function _updateNavVersionBadge(version) {
+        var el = document.getElementById('navAppVersion');
+        if (el) { el.textContent = 'v' + version; el.style.display = 'inline'; }
+    }
 
-        /* Helper refs */
-        var btnUpdate  = document.getElementById('permBtnUpdate');
-        var progWrap   = document.getElementById('updateProgressWrap');
-        var progBar    = document.getElementById('updateProgressBar');
-        var progText   = document.getElementById('updateProgressText');
-        var actionArea = document.getElementById('updateActionArea');
-        var statusEl   = document.getElementById('permStatusUpdate');
-
-        /* Check if APK already downloaded — skip re-download */
-        if (Fs && typeof Fs.stat === 'function') {
-            Fs.stat({ path: 'Download/' + fname, directory: 'EXTERNAL' })
-            .then(function(stat) {
-                /* File exists & is >5MB — treat as valid */
-                if (stat && stat.size && stat.size > 5000000) {
-                    return Fs.getUri({ path: 'Download/' + fname, directory: 'EXTERNAL' })
-                    .then(function(r) {
-                        if (statusEl) statusEl.textContent = 'Already downloaded \u2014 tap Install';
-                        if (progWrap) { progWrap.style.display = 'block'; }
-                        if (progBar)  { progBar.style.width = '100%'; }
-                        if (progText) { progText.textContent = 'File already in Downloads folder'; }
-                        if (btnUpdate) btnUpdate.style.display = 'none';
-                        window._onInstallReady(r.uri, false);
-                    });
-                }
-                throw new Error('small');
-            })
-            .catch(function() {
-                /* File missing or too small — do fresh download */
-                window._startApkDownload(data, fname, Plugins, FleetDl, Fs, btnUpdate, progWrap, progBar, progText, actionArea, statusEl);
-            });
-            return;
-        }
-
-        /* No Filesystem plugin — go straight to download */
-        window._startApkDownload(data, fname, Plugins, FleetDl, Fs, btnUpdate, progWrap, progBar, progText, actionArea, statusEl);
-    };
-
-    /* Global — also called from file-exists check path */
-    window._onInstallReady = function(fileUri, useNative) {
-        window._installReadyShown = true;
-        var _pb = document.getElementById('updateProgressBar');
-        var _pt = document.getElementById('updateProgressText');
-        var _se = document.getElementById('permStatusUpdate');
-        var _aa = document.getElementById('updateActionArea');
-        var _pw = document.getElementById('updateProgressWrap');
-        if (_pw) _pw.style.display = 'block';
-        if (_pb) _pb.style.width   = '100%';
-        if (_pt) _pt.textContent   = 'Download complete \u2014 tap Install';
-        if (_se) _se.textContent   = 'Ready to install';
-        if (_aa) _aa.innerHTML =
-            '<button onclick="window._doInstallApk(\'' + fileUri.replace(/'/g, "\\'") + '\',' + (useNative ? 'true' : 'false') + ')" ' +
-            'class="pg-cta-btn pg-install-btn">' +
-            '<span class="pg-install-spin"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg></span>' +
-            ' Install Update Now</button>';
-        hideNav();
-    };
-
-    window._startApkDownload = function(data, fname, Plugins, FleetDl, Fs, btnUpdate, progWrap, progBar, progText, actionArea, statusEl) {
-        if (btnUpdate)  btnUpdate.style.display  = 'none';
-        if (progWrap)   progWrap.style.display   = 'block';
-        if (progBar)    progBar.style.width       = '0%';
-        if (progText)   progText.textContent      = 'Downloading\u2026';
-        if (statusEl)   statusEl.textContent      = 'Downloading update\u2026';
-
-        function _onError(msg) {
-            if (progText) progText.textContent = msg || 'Download failed';
-            if (progBar)  progBar.style.background = '#ef4444';
-            if (statusEl) statusEl.textContent = 'Download failed';
-            /* Show retry button */
-            if (actionArea) {
-                actionArea.innerHTML =
-                    '<button onclick="window.handleUpdateInstall()" ' +
-                    'style="flex:1;background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;border:none;border-radius:11px;font-size:0.82rem;font-weight:700;padding:11px 0;cursor:pointer;">' +
-                    '\u21ba Retry Download</button>';
+    function _updateNavUpdatePill(state, text) {
+        var pill = document.getElementById('navUpdateStatusPill');
+        if (!pill) return;
+        pill.style.display = 'inline-flex';
+        pill.setAttribute('data-state', state);
+        var icon = document.getElementById('navUpdateStatusIcon');
+        var txt = document.getElementById('navUpdateStatusText');
+        if (txt) txt.textContent = text;
+        if (icon) {
+            if (state === 'latest') {
+                icon.className = 'bi bi-check-circle-fill';
+                pill.style.color = '#22c55e';
+            } else if (state === 'downloading') {
+                icon.className = 'bi bi-arrow-repeat';
+                pill.style.color = '#f97316';
+            } else if (state === 'ready') {
+                icon.className = 'bi bi-download-circle-fill';
+                pill.style.color = '#3b82f6';
             }
         }
-
-        if (FleetDl && typeof FleetDl.download === 'function') {
-            if (progText) progText.textContent = 'Downloading via system\u2026';
-            FleetDl.download({ url: _updateApkUrl, filename: fname })
-                .then(function(res) {
-                    if (!res || !res.uri) throw new Error('incomplete');
-                    window._onInstallReady(res.uri, true);
-                })
-                .catch(function(e) { _onError('Download failed: ' + (e && e.message ? e.message : '')); });
-        } else {
-            /* XHR fallback with real progress */
-            var xhr = new XMLHttpRequest();
-            xhr.open('GET', _updateApkUrl, true);
-            xhr.responseType = 'blob';
-            xhr.onprogress = function(e) {
-                if (e.lengthComputable && progBar && progText) {
-                    var pct = Math.round(e.loaded / e.total * 100);
-                    progBar.style.width = pct + '%';
-                    progText.textContent = pct + '% (' + (e.loaded/1048576).toFixed(1) + ' / ' + (e.total/1048576).toFixed(1) + ' MB)';
-                }
-            };
-            xhr.onload = function() {
-                if (xhr.status !== 200) { _onError('HTTP ' + xhr.status); return; }
-                var FsInner = Plugins && Plugins.Filesystem;
-                var Fo = Plugins && Plugins.FileOpener;
-                if (!FsInner || !Fo) { _onError('Plugins not available'); return; }
-                if (progText) progText.textContent = 'Saving file\u2026';
-                var reader = new FileReader();
-                reader.onloadend = function() {
-                    var b64 = reader.result.substring(reader.result.indexOf(',') + 1);
-                    var savePath = 'Download/' + fname;
-                    FsInner.writeFile({ path: savePath, data: b64, directory: 'EXTERNAL', recursive: true })
-                        .then(function() { return FsInner.getUri({ path: savePath, directory: 'EXTERNAL' }); })
-                        .then(function(r) { window._onInstallReady(r.uri, false); })
-                        .catch(function() { _onError('Save failed'); });
-                };
-                reader.readAsDataURL(xhr.response);
-            };
-            xhr.onerror = function() { _onError('Network error'); };
-            xhr.send();
-        }
-    };
-
-    /* Called by generated Install button */
-    window._doInstallApk = function(fileUri, useNative) {
-        var Plugins = window.Capacitor && window.Capacitor.Plugins;
-        var FleetDl = Plugins && Plugins.FleetApkDownload;
-        var Fo = Plugins && Plugins.FileOpener;
-        var p;
-        if (useNative && FleetDl && typeof FleetDl.openInstaller === 'function') {
-            p = FleetDl.openInstaller({ uri: fileUri });
-        } else if (Fo) {
-            p = Fo.open({ filePath: fileUri, contentType: 'application/vnd.android.package-archive' });
-        } else {
-            alert('Installer not available. Downloads folder se manually install karein.');
-            return;
-        }
-        p.catch(function() { alert('Install open nahi hua. Downloads folder se manually install karein.'); });
-    };
+    }
 
     /* Run immediately on DOM ready — no bridge wait needed */
     if (document.readyState === 'loading') {
@@ -1138,8 +981,7 @@ function _dbgToast(msg) {
     document.addEventListener('visibilitychange', function() {
         if (document.visibilityState === 'visible') {
             checkAllPermissions();
-            if (!window._installReadyShown) { checkAppUpdate(); }
-            else { hideNav(); }
+            checkAppUpdate();
         }
     });
 })();
@@ -1166,6 +1008,23 @@ function _dbgToast(msg) {
 <div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3 mb-3">
     <div>
         <h2 class="fw-bold mb-0" style="font-size:1.55rem;letter-spacing:-0.02em;color:#0f172a;">Dashboard</h2>
+        <div id="dashAppStatusLine" style="display:none; margin:12px 0; align-items:center; gap:10px; flex-wrap:wrap;">
+           <!-- Version Badge -->
+           <div style="background:#2563eb; color:white; padding:4px 10px; border-radius:50px; font-size:11px; font-weight:800; box-shadow:0 2px 4px rgba(37,99,235,0.2); display:flex; align-items:center; gap:5px;">
+               <i class="bi bi-cpu-fill" style="font-size:12px;"></i>
+               <span id="navCurrentVersion">v0.0.0</span>
+           </div>
+           <!-- Status Indicator -->
+           <div id="statusBadgeWrap" style="display:flex; align-items:center; gap:6px; background:white; padding:3px 10px; border-radius:50px; border:1px solid #e2e8f0;">
+               <div id="statusDot" style="width:8px; height:8px; border-radius:50%; background:#10b981;"></div>
+               <span id="navStatusText" style="font-size:10px; font-weight:700; color:#475569; text-transform:uppercase; letter-spacing:0.5px;">Latest Version</span>
+           </div>
+           <!-- Update Indicator (Hidden by default) -->
+           <div id="updateLine" style="display:none; align-items:center; gap:8px;">
+               <span style="color:#64748b; font-size:14px;">→</span>
+               <span id="navNewVersion" style="background:#f59e0b; color:white; padding:4px 10px; border-radius:50px; font-size:11px; font-weight:800; box-shadow:0 2px 4px rgba(245,158,11,0.2);">v0.0.0</span>
+           </div>
+        </div>
         <div class="d-flex align-items-center gap-2 mt-1" style="font-size:0.82rem;color:#64748b;">
             <i class="bi bi-calendar3" style="font-size:0.8rem;"></i>
             <span>{{ now_dt.strftime('%A, %d %B %Y') if now_dt is defined else '' }}</span>

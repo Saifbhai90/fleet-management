@@ -613,7 +613,7 @@ def report_ai():
                 )
             else:
                 report_title = 'Suggested reports'
-                result_html = (
+                result_html = _ai_sanitize(
                     '<p class="text-muted">Try: "list of drivers", "vehicles", "project summary", "district summary", '
                     '"license expiry", "companies", "parking utilization", "products", "parties", '
                     '"fuel expenses", "maintenance expenses", "penalties", or "attendance summary".</p>'
@@ -621,8 +621,22 @@ def report_ai():
         except Exception as e:
             app.logger.exception(e)
             report_title = 'Error'
-            result_html = f'<p class="text-danger">Report could not be generated. Try another keyword (e.g. drivers, vehicles, projects).</p>'
+            result_html = _ai_sanitize('<p class="text-danger">Report could not be generated. Try another keyword (e.g. drivers, vehicles, projects).</p>')
     return render_template('report_ai.html', result_html=result_html, report_title=report_title)
+
+
+_AI_ALLOWED_TAGS = ['table', 'thead', 'tbody', 'tr', 'td', 'th', 'p', 'b', 'i', 'ul', 'li', 'span']
+_AI_ALLOWED_ATTRS = {'table': ['class'], 'th': ['class'], 'td': ['class'], 'p': ['class'], 'span': ['class']}
+
+
+def _ai_sanitize(html_str):
+    import bleach
+    return bleach.clean(
+        html_str,
+        tags=_AI_ALLOWED_TAGS,
+        attributes=_AI_ALLOWED_ATTRS,
+        strip=True,
+    )
 
 
 def _render_ai_report_table(headers, rows):
@@ -635,7 +649,8 @@ def _render_ai_report_table(headers, rows):
     for r in rows:
         body += '<tr>' + ''.join(f'<td>{_esc(r.get(k, ""))}</td>' for k in keys) + '</tr>'
     body += '</tbody>'
-    return '<table class="table table-bordered table-sm">' + h + body + '</table>'
+    raw = '<table class="table table-bordered table-sm">' + h + body + '</table>'
+    return _ai_sanitize(raw)
 
 
 @app.route('/reports/project-summary')

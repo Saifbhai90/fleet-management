@@ -53,3 +53,22 @@
 -keep class com.google.android.gms.common.GoogleApiAvailability { *; }
 -keep class com.google.android.gms.common.ConnectionResult { *; }
 -keep class com.google.android.gms.tasks.** { *; }
+
+# ── CameraX ───────────────────────────────────────────────────────────────────
+-keep class androidx.camera.** { *; }
+-dontwarn androidx.camera.**
+
+# ── AndroidX ExifInterface ───────────────────────────────────────────────────
+-keep class androidx.exifinterface.** { *; }
+-dontwarn androidx.exifinterface.**
+
+# ── Keep @JavascriptInterface methods (FleetNativeBridge) ─────────────────────
+-keepclassmembers class * {
+    @android.webkit.JavascriptInterface <methods>;
+}
+
+# ── Keep inner classes (FleetNativeBridge is inner class of MainActivity) ─────
+-keep class com.fleetmanager.app.MainActivity$* { *; }
+
+# ── Keep FleetAutoUpdateManager ───────────────────────────────────────────────
+-keep class com.fleetmanager.app.FleetAutoUpdateManager { *; }

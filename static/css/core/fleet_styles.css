@@ -4,6 +4,17 @@
    Fleet Manager — Core Styles (extracted from base.html)
    ═══════════════════════════════════════════════════════════════ */
 
+/* App version status line — hidden on web, shown only on native app */
+html.capacitor-native #dashAppStatusLine {
+    display: flex !important;
+}
+
+/* Pulse animation for update downloading indicator */
+@keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(1.3); }
+}
+
 /* Anti-flicker: hide native selects before Tom Select replaces them */
         select.search-select { display: none; }
         /* Full-width TS wrapper — safety net: always visible & styled */
@@ -2007,3 +2018,11 @@ html.capacitor-native .fm-aurora-orb {
         to   { opacity: 1; transform: translateY(0); }
     }
     tbody.ss-updated tr { animation: ss-fade-in .15s ease forwards; }
+
+    /* ── Silent Shield: prevent TomSelect dropdown flicker on modal close ── */
+    body.ts-no-open .ts-dropdown {
+        display: none !important;
+        visibility: hidden !important;
+        opacity: 0 !important;
+        transition: none !important;
+    }

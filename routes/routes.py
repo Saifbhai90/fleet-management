@@ -2718,11 +2718,6 @@ def _validate_csrf_exempt_origin():
 
 
 
-@csrf.exempt
-
-
-
-
 
 
 

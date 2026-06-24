@@ -179,7 +179,7 @@
 </div>
 
 <!-- Camera modal -->
-<div class="modal fade" id="cameraModal" tabindex="-1" aria-labelledby="cameraModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+<div class="modal fade" id="cameraModal" tabindex="-1" aria-labelledby="cameraModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false" data-bs-focus="false">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content rounded-3">
       <div class="modal-header bg-dark text-white">
@@ -739,12 +739,7 @@
     var gpsPromise = (typeof window.getGPS === 'function')
       ? window.getGPS()
       : new Promise(function(resolve, reject) {
-          if (!navigator.geolocation) { reject(new Error('Geolocation not supported')); return; }
-          navigator.geolocation.getCurrentPosition(
-            function(pos) { resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracy: pos.coords.accuracy }); },
-            reject,
-            { enableHighAccuracy: true, timeout: LOCATION_TIMEOUT, maximumAge: LOCATION_MAX_AGE }
-          );
+          reject(new Error('GPS not available — native plugin required'));
         });
     gpsPromise.then(function(coords) {
       locationSpinner.classList.add('d-none');
@@ -1213,6 +1208,8 @@
       alert('Parking coordinates set nahi. Admin se parking location set karwain.');
       return;
     }
+    // Blur all TomSelects before camera to prevent auto-open on return
+    if (typeof window._fleetCloseAllTomSelects === 'function') window._fleetCloseAllTomSelects();
     openNativeCheckinCamera();
   });
 
@@ -1226,6 +1223,7 @@
 
   if (btnRetakePhoto) {
     btnRetakePhoto.addEventListener('click', function() {
+      this.blur();
       resetCameraModalToLive();
       if (window.FLEET_ATTENDANCE_USE_INAPP_PREVIEW) {
         resumeCheckinCameraPreview();
@@ -1242,6 +1240,7 @@
 
   if (btnConfirmUpload) {
     btnConfirmUpload.addEventListener('click', function() {
+      this.blur();
       var payload = pendingCapturePayload;
       if (!payload || !payload.photo_base64) {
         alert('Pehle photo capture karein.');
