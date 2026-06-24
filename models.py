@@ -2736,6 +2736,21 @@ class AppRelease(db.Model):
         return f'{mb:.1f} MB'
 
 
+class DeviceAppVersion(db.Model):
+    __tablename__ = 'device_app_version'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=True)
+    app_version = db.Column(db.String(20), nullable=False)
+    last_seen = db.Column(db.DateTime, default=pk_now, onupdate=pk_now)
+    created_at = db.Column(db.DateTime, default=pk_now)
+
+    user = db.relationship('User', backref='device_versions', lazy='select')
+
+    def __repr__(self):
+        return f'<DeviceAppVersion user={self.user_id} v={self.app_version}>'
+
+
 # ────────────────────────────────────────────────
 # Bank Account Directory (quick-reference notepad)
 # ────────────────────────────────────────────────

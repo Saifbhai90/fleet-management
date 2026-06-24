@@ -17,6 +17,7 @@ from models import (
     Driver, Vehicle, Project, District, Company, ParkingStation,
     DriverAttendance, VehicleDailyTask, FuelExpense, DriverTransfer,
     MaintenanceExpense, MaintenanceWorkOrder,
+    DeviceAppVersion,
 )
 from forms import (
     NotificationForm, ReminderForm, ChangePasswordForm,
@@ -222,6 +223,60 @@ def app_check_update():
     })
 
 
+@app.route('/api/app/report-version', methods=['POST'])
+@csrf.exempt
+def app_report_version():
+    """Receive device app version from mobile app for admin stats."""
+    try:
+        data = request.get_json(silent=True) or {}
+        version = (data.get('version') or '').strip()
+        if not version:
+            return jsonify({'ok': False}), 400
+        uid = session.get('user_id')
+        if not uid:
+            return jsonify({'ok': False}), 401
+        existing = DeviceAppVersion.query.filter_by(user_id=uid).first()
+        if existing:
+            existing.app_version = version
+            existing.last_seen = pk_now()
+        else:
+            dv = DeviceAppVersion(user_id=uid, app_version=version)
+            db.session.add(dv)
+        db.session.commit()
+        return jsonify({'ok': True})
+    except Exception as e:
+        db.session.rollback()
+        app.logger.warning('report-version failed: %s', e)
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/app/version-users/<version>')
+def app_version_users(version):
+    """Return list of users using a specific app version (for admin popup)."""
+    if not session.get('is_master'):
+        return jsonify({'ok': False, 'error': 'Admin only'}), 403
+    records = DeviceAppVersion.query.filter_by(app_version=version).all()
+    result = []
+    for r in records:
+        user = r.user
+        if not user:
+            continue
+        vehicle_no = ''
+        if hasattr(user, 'driver_profile') and user.driver_profile:
+            drv = user.driver_profile
+            from models import Vehicle
+            v = Vehicle.query.filter_by(current_driver_id=drv.id, status='Active').first()
+            if v:
+                vehicle_no = v.registration_no or ''
+        result.append({
+            'user_id': user.id,
+            'name': user.name or user.username,
+            'username': user.username,
+            'vehicle_no': vehicle_no,
+            'last_seen': r.last_seen.strftime('%d-%b-%Y %I:%M %p') if r.last_seen else '',
+        })
+    return jsonify({'ok': True, 'users': result})
+
 
 @app.route('/admin/app-releases', methods=['GET', 'POST'])
 def admin_app_releases():
@@ -386,7 +441,11 @@ def admin_app_releases():
 
     releases = AppRelease.query.order_by(AppRelease.id.desc()).all()
     latest = AppRelease.query.filter_by(is_latest=True).first()
-    return render_template('admin_app_releases.html', releases=releases, latest=latest)
+    # Build version usage counts: { '2.0.8': 5, '1.9.13': 3, ... }
+    version_counts = {}
+    for row in db.session.query(DeviceAppVersion.app_version, func.count(DeviceAppVersion.id)).group_by(DeviceAppVersion.app_version).all():
+        version_counts[row[0]] = row[1]
+    return render_template('admin_app_releases.html', releases=releases, latest=latest, version_counts=version_counts)
 
 
 

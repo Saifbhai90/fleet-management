@@ -4492,31 +4492,73 @@
 
         function _checkForAppUpdate() {
             if (!_isNative) { return; }
+
+            // Report current version to server (for admin stats)
+            _reportDeviceVersion();
+
             // New apps (v2.0.8+): Java handles auto-update via FleetAutoUpdateManager
             if (window._fleetNative && typeof window._fleetNative.checkForUpdate === 'function') {
                 try { window._fleetNative.checkForUpdate(); } catch (e) { console.warn('[Update] Java check failed:', e); }
                 return;
             }
-            // Old apps (v1.9.x): JS fallback — check server for update, show banner with download/install
+            // Old apps (v1.9.x): JS fallback — check server for update, show persistent banner
             console.log('[Update] Java bridge not found, using JS fallback');
+
+            // Restore banner from localStorage if update is pending (survives page navigation)
+            var savedUpdate = localStorage.getItem('_fleetPendingUpdate');
+            if (savedUpdate) {
+                try {
+                    var savedData = JSON.parse(savedUpdate);
+                    _showUpdateBanner(savedData);
+                } catch (e) { localStorage.removeItem('_fleetPendingUpdate'); }
+            }
+
+            // Always re-check server for latest update info
             fetch('/api/app/check-update', { credentials: 'include' })
                 .then(function(r) { return r.json(); })
                 .then(function(data) {
-                    if (data && data.latest_version && data.apk_url) {
+                    if (data && data.latest_version && data.latest_version !== '0.0.0' && data.apk_url) {
                         var AppP = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App;
                         if (AppP && typeof AppP.getInfo === 'function') {
                             AppP.getInfo().then(function(info) {
                                 var cur = info.version || '0.0.0';
                                 if (_compareVersions(cur, data.latest_version) < 0) {
+                                    // Store in localStorage for persistence across pages
+                                    localStorage.setItem('_fleetPendingUpdate', JSON.stringify(data));
                                     _showUpdateBanner(data);
+                                } else {
+                                    // Up to date — clear any pending update
+                                    localStorage.removeItem('_fleetPendingUpdate');
+                                    var existing = document.getElementById('appUpdateBanner');
+                                    if (existing) existing.remove();
                                 }
-                            }).catch(function() { _showUpdateBanner(data); });
+                            }).catch(function() {
+                                localStorage.setItem('_fleetPendingUpdate', JSON.stringify(data));
+                                _showUpdateBanner(data);
+                            });
                         } else {
+                            localStorage.setItem('_fleetPendingUpdate', JSON.stringify(data));
                             _showUpdateBanner(data);
                         }
                     }
                 })
                 .catch(function(e) { console.warn('[Update] JS fallback check failed:', e); });
+        }
+
+        function _reportDeviceVersion() {
+            try {
+                var AppP = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App;
+                if (!AppP || typeof AppP.getInfo !== 'function') return;
+                AppP.getInfo().then(function(info) {
+                    var version = info.version || '0.0.0';
+                    fetch('/api/app/report-version', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                        body: JSON.stringify({ version: version })
+                    }).catch(function() {});
+                }).catch(function() {});
+            } catch (e) {}
         }
 
         function _showUpdateBanner(data) {
@@ -4537,7 +4579,12 @@
             });
             var dismiss = document.getElementById('appUpdateDismiss');
             if (dismiss) {
-                dismiss.addEventListener('click', function() { banner.remove(); });
+                dismiss.addEventListener('click', function() {
+                    // Only dismiss for 30 seconds, then re-show (non-force updates)
+                    localStorage.removeItem('_fleetPendingUpdate');
+                    banner.remove();
+                    setTimeout(function() { _checkForAppUpdate(); }, 30000);
+                });
             }
         }
 
@@ -5065,11 +5112,8 @@
                 }, 2000);
             }
 
-            // 1c. In-App Update Check (native only)
-            // Skip on dashboard — dashboard has its own update section inside the permission card
-            if (!document.getElementById('permDashCard')) {
-                setTimeout(function() { window.FleetBridge.checkForAppUpdate(); }, 4000);
-            }
+            // 1c. In-App Update Check (native only) — runs on every page for persistent banner
+            setTimeout(function() { window.FleetBridge.checkForAppUpdate(); }, 3000);
 
             // 2. Auto-hide navbar on scroll down, show on scroll up (native feel)
             //    In Capacitor: body is fixed, so we listen on #mainContent (the scroll container)
