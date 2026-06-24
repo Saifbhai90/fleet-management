@@ -4565,6 +4565,46 @@
             var existing = document.getElementById('appUpdateBanner');
             if (existing) existing.remove();
 
+            // Check if APK was already downloaded — show Install directly
+            var downloadedUri = localStorage.getItem('_fleetDownloadedApkUri');
+            var downloadedFname = localStorage.getItem('_fleetDownloadedApkFname');
+            var downloadedVersion = localStorage.getItem('_fleetDownloadedApkVersion');
+
+            if (downloadedUri && downloadedFname && downloadedVersion === data.latest_version) {
+                // APK already downloaded for this version — show Install button
+                var banner2 = document.createElement('div');
+                banner2.id = 'appUpdateBanner';
+                banner2.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:linear-gradient(135deg,#065f46,#10b981);color:#fff;padding:14px 16px;display:flex;align-items:center;gap:12px;font-family:system-ui;font-size:14px;box-shadow:0 4px 20px rgba(0,0,0,0.3);';
+                banner2.innerHTML = '<div style="flex:1"><strong>Update Ready v' + data.latest_version + '!</strong><br><span style="font-size:12px;opacity:0.9">Tap Install to apply the update</span></div>' +
+                    '<button id="apkInstallBtn" style="background:#fff;color:#065f46;border:none;border-radius:8px;padding:10px 22px;font-weight:700;font-size:14px;cursor:pointer">Install</button>' +
+                    (data.force_update ? '' : '<button id="appUpdateDismiss" style="background:transparent;border:none;color:#fff;font-size:20px;cursor:pointer;padding:4px 8px;opacity:0.7">&times;</button>');
+                document.body.appendChild(banner2);
+
+                document.getElementById('apkInstallBtn').addEventListener('click', function() {
+                    _openInstaller(downloadedUri, downloadedFname, banner2);
+                });
+                var dismiss2 = document.getElementById('appUpdateDismiss');
+                if (dismiss2) {
+                    dismiss2.addEventListener('click', function() {
+                        banner2.remove();
+                    });
+                }
+                return;
+            }
+
+            // Check if download is in progress — show downloading state
+            var dlState = localStorage.getItem('_fleetDownloadState');
+            if (dlState) {
+                try {
+                    var state = JSON.parse(dlState);
+                    if (state.version === data.latest_version) {
+                        // Show downloading banner (will restart download but user sees progress)
+                        _downloadAndInstallApk(data, null, true);
+                        return;
+                    }
+                } catch (e) { localStorage.removeItem('_fleetDownloadState'); }
+            }
+
             var banner = document.createElement('div');
             banner.id = 'appUpdateBanner';
             banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:linear-gradient(135deg,#1e40af,#3b82f6);color:#fff;padding:14px 16px;display:flex;align-items:center;gap:12px;font-family:system-ui;font-size:14px;box-shadow:0 4px 20px rgba(0,0,0,0.3);';
@@ -4575,7 +4615,7 @@
             document.body.appendChild(banner);
 
             document.getElementById('appUpdateBtn').addEventListener('click', function() {
-                _downloadAndInstallApk(data, banner);
+                _downloadAndInstallApk(data, banner, false);
             });
             var dismiss = document.getElementById('appUpdateDismiss');
             if (dismiss) {
@@ -4603,12 +4643,29 @@
             });
         }
 
-        function _downloadAndInstallApk(data, banner) {
+        function _downloadAndInstallApk(data, banner, isResuming) {
             var FleetDl = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.FleetApkDownload;
             var fname = data.apk_filename || 'fleet-manager-update.apk';
 
+            // Mark download as in-progress in localStorage
+            localStorage.setItem('_fleetDownloadState', JSON.stringify({
+                version: data.latest_version,
+                fname: fname,
+                startedAt: Date.now()
+            }));
+
+            // Create banner if not provided (e.g. after refresh)
+            if (!banner) {
+                var existing = document.getElementById('appUpdateBanner');
+                if (existing) existing.remove();
+                banner = document.createElement('div');
+                banner.id = 'appUpdateBanner';
+                banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:linear-gradient(135deg,#1e40af,#3b82f6);color:#fff;padding:14px 16px;display:flex;align-items:center;gap:12px;font-family:system-ui;font-size:14px;box-shadow:0 4px 20px rgba(0,0,0,0.3);';
+                document.body.appendChild(banner);
+            }
+
             banner.innerHTML = '<div style="flex:1">' +
-                '<div style="margin-bottom:6px;font-weight:600">Downloading v' + data.latest_version + '...</div>' +
+                '<div style="margin-bottom:6px;font-weight:600">' + (isResuming ? 'Resuming download v' : 'Downloading v') + data.latest_version + '...</div>' +
                 '<div style="background:rgba(255,255,255,0.25);border-radius:6px;height:8px;overflow:hidden">' +
                 '<div id="apkProgressBar" style="background:#fff;height:100%;width:0%;border-radius:6px;transition:width 0.3s"></div></div>' +
                 '<div id="apkProgressText" style="font-size:11px;opacity:0.8;margin-top:4px">Starting download...</div>' +
@@ -4620,10 +4677,16 @@
                 FleetDl.download({ url: data.apk_url, filename: fname })
                     .then(function(res) {
                         if (!res || !res.uri) throw new Error('Download incomplete');
+                        // Save downloaded URI for resume after refresh
+                        localStorage.setItem('_fleetDownloadedApkUri', res.uri);
+                        localStorage.setItem('_fleetDownloadedApkFname', fname);
+                        localStorage.setItem('_fleetDownloadedApkVersion', data.latest_version);
+                        localStorage.removeItem('_fleetDownloadState');
                         _showInstallPrompt(res.uri, fname, banner, true);
                     })
                     .catch(function(err) {
                         console.error('[Update] Native download failed:', err);
+                        localStorage.removeItem('_fleetDownloadState');
                         banner.innerHTML = '<div style="flex:1;color:#fca5a5">Download failed. Check connection or install APK manually from Downloads.</div>';
                         setTimeout(function() { banner.remove(); }, 7000);
                     });
@@ -4648,6 +4711,7 @@
             };
             xhr.onload = function() {
                 if (xhr.status !== 200) {
+                    localStorage.removeItem('_fleetDownloadState');
                     banner.innerHTML = '<div style="flex:1;color:#fca5a5">Download failed (HTTP ' + xhr.status + '). Please try again later.</div>';
                     setTimeout(function() { banner.remove(); }, 5000);
                     return;
@@ -4655,6 +4719,7 @@
                 var blob = xhr.response;
                 var expectedBytes = data.file_size_bytes || 0;
                 if (!_apkLooksValid(blob, expectedBytes)) {
+                    localStorage.removeItem('_fleetDownloadState');
                     banner.innerHTML = '<div style="flex:1;color:#fca5a5">Invalid or incomplete APK download. Admin se sahi file upload karein.</div>';
                     setTimeout(function() { banner.remove(); }, 7000);
                     return;
@@ -4675,14 +4740,21 @@
                         return Filesystem.getUri({ path: savePath, directory: 'EXTERNAL' });
                     });
                 }).then(function(uriResult) {
+                    // Save downloaded URI for resume after refresh
+                    localStorage.setItem('_fleetDownloadedApkUri', uriResult.uri);
+                    localStorage.setItem('_fleetDownloadedApkFname', fname);
+                    localStorage.setItem('_fleetDownloadedApkVersion', data.latest_version);
+                    localStorage.removeItem('_fleetDownloadState');
                     _showInstallPrompt(uriResult.uri, fname, banner, false);
                 }).catch(function(err) {
                     console.error('[Update] Save failed:', err);
+                    localStorage.removeItem('_fleetDownloadState');
                     banner.innerHTML = '<div style="flex:1;color:#fca5a5">Save failed (file too large?). Install manually from PC/USB.</div>';
                     setTimeout(function() { banner.remove(); }, 7000);
                 });
             };
             xhr.onerror = function() {
+                localStorage.removeItem('_fleetDownloadState');
                 banner.innerHTML = '<div style="flex:1;color:#fca5a5">Download failed. Check your connection.</div>';
                 setTimeout(function() { banner.remove(); }, 5000);
             };
@@ -4696,21 +4768,27 @@
             banner.innerHTML = '<div style="flex:1"><strong>Update Ready!</strong><br><span style="font-size:12px;opacity:0.9">Tap Install to apply the update</span></div>' +
                 '<button id="apkInstallBtn" style="background:#fff;color:#065f46;border:none;border-radius:8px;padding:10px 22px;font-weight:700;font-size:14px;cursor:pointer">Install</button>';
             document.getElementById('apkInstallBtn').addEventListener('click', function() {
-                var openP;
-                if (useNativeInstaller && FleetDl && typeof FleetDl.openInstaller === 'function') {
-                    openP = FleetDl.openInstaller({ uri: fileUri });
-                } else if (FileOpener) {
-                    openP = FileOpener.open({ filePath: fileUri, contentType: 'application/vnd.android.package-archive' });
-                } else {
-                    alert('Installer not available. Open Downloads folder and tap ' + fname);
-                    return;
-                }
-                openP.then(function() {})
-                    .catch(function(err) {
-                        console.error('[Update] Install open failed:', err);
-                        alert('Installer open nahi hua. Downloads folder se ' + fname + ' manually install karein.');
-                    });
+                _openInstaller(fileUri, fname, banner, useNativeInstaller);
             });
+        }
+
+        function _openInstaller(fileUri, fname, banner, useNativeInstaller) {
+            var FileOpener = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.FileOpener;
+            var FleetDl = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.FleetApkDownload;
+            var openP;
+            if (useNativeInstaller && FleetDl && typeof FleetDl.openInstaller === 'function') {
+                openP = FleetDl.openInstaller({ uri: fileUri });
+            } else if (FileOpener) {
+                openP = FileOpener.open({ filePath: fileUri, contentType: 'application/vnd.android.package-archive' });
+            } else {
+                alert('Installer not available. Open Downloads folder and tap ' + fname);
+                return;
+            }
+            openP.then(function() {})
+                .catch(function(err) {
+                    console.error('[Update] Install open failed:', err);
+                    alert('Installer open nahi hua. Downloads folder se ' + fname + ' manually install karein.');
+                });
         }
 
         function _toast(msg) {

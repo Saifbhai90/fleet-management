@@ -58,15 +58,15 @@ window.FleetConfig = {
     <link rel="stylesheet" href="{{ url_for('static', filename='vendor/tom-select/tom-select.bootstrap5.min.css') }}?v=1001">
 
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/core/fleet_styles.css') }}?v=8001">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/fm_hub_pages.css') }}?v=8001">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/rc_tile_gradients.css') }}?v=8001">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/core/fleet_styles.css') }}?v=8002">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/fm_hub_pages.css') }}?v=8002">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/rc_tile_gradients.css') }}?v=8002">
 
     <!-- Mobile-specific CSS -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/mobile_perfect.css') }}?v=8001">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/mobile_responsive_audit.css') }}?v=8001">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/fm_aurora_theme.css') }}?v=8001">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/mobile_native_sidebar.css') }}?v=8001">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/mobile_perfect.css') }}?v=8002">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/mobile_responsive_audit.css') }}?v=8002">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/fm_aurora_theme.css') }}?v=8002">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/mobile_native_sidebar.css') }}?v=8002">
 
     <!-- Legacy Android detection (inline — runs ASAP to add HTML class) -->
     <script>
@@ -98,9 +98,9 @@ window.FleetConfig = {
     })();
     </script>
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
-    <script src="{{ url_for('static', filename='js/core/fleet_core.js') }}?v=8001" defer></script>
-    <script src="{{ url_for('static', filename='js/core/fleet_ui.js') }}?v=8001" defer></script>
-    <script src="{{ url_for('static', filename='js/legacy_android_gpu.js') }}?v=8001" defer></script>
+    <script src="{{ url_for('static', filename='js/core/fleet_core.js') }}?v=8002" defer></script>
+    <script src="{{ url_for('static', filename='js/core/fleet_ui.js') }}?v=8002" defer></script>
+    <script src="{{ url_for('static', filename='js/legacy_android_gpu.js') }}?v=8002" defer></script>
     {% block extra_head %}{% endblock %}
 </head>
 <body{% if request.endpoint == 'dashboard' %} class="page-dashboard fm-aurora-theme" data-fleet-page="dashboard"{% elif request.endpoint == 'report_driver_profile_public' %} class="driver-profile-public-view"{% else %} class="fm-aurora-theme"{% endif %}{% if request.endpoint %} data-fleet-endpoint="{{ request.endpoint }}"{% endif %}{% if fleet_mobile_dev %} data-fleet-mobile-dev="1"{% endif %}>
