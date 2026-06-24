@@ -33,6 +33,11 @@ fi
 
 echo "[Fleet PC] Using $(node -v) / $(npm -v)"
 
+if [[ ! -d "${DAEDAL}" ]]; then
+  echo "[Fleet PC] SKIP: daedalOS source not found (${DAEDAL}). Using pre-built static assets."
+  exit 0
+fi
+
 cd "${DAEDAL}"
 export FLEET_OS_BASE_PATH="/static/fleet_personal_pc"
 if [[ -f package-lock.json ]]; then
