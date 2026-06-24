@@ -435,6 +435,15 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
         }
     }
 
+    @Override
+    public void onPause() {
+        super.onPause();
+        stopAutoRetryLoop();
+        if (deadlineTimer != null) {
+            cancelDeadlineTimer();
+        }
+    }
+
     private void createNotificationChannels() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             android.app.NotificationManager mgr =
@@ -694,6 +703,7 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
             activity.runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
+                    if (activity.isFinishing() || activity.isDestroyed()) return;
                     if (activity.getBridge() != null && activity.getBridge().getWebView() != null) {
                         activity.getBridge().getWebView().evaluateJavascript(
                             callbackFn + "('" + status + "');", null);
@@ -729,6 +739,7 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
         /** Request notification permission (Android 13+) */
         @JavascriptInterface
         public void requestNotifications() {
+            if (activity.isFinishing() || activity.isDestroyed()) return;
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 activity.runOnUiThread(new Runnable() {
                     @Override
@@ -779,7 +790,9 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
     @Override
     public void onDestroy() {
         stopAutoRetryLoop();
-        mainHandler.removeCallbacks(splashMinRunnable);
+        if (mainHandler != null) {
+            mainHandler.removeCallbacks(splashMinRunnable);
+        }
         unregisterNetworkCallback();
         cancelDeadlineTimer();
         super.onDestroy();

@@ -1,4 +1,0 @@
-{
-  "ignore": [".cache", ".json"],
-  "index": [".md", ".txt", ".whtml"]
-}

@@ -57,3 +57,7 @@ nul
 # Sync logs
 logs/*.log
 sync_state.json
+
+# C-01: Repo cleanup — untrack daedalOS (1,610 files) and scratch scripts
+daedalOS/
+scripts/_*.py

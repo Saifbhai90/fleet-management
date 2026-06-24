@@ -3213,7 +3213,7 @@ def workspace_fund_transfers_list():
     if raw_per_page in (25, 50, 100, 200):
         per_page = raw_per_page
     elif raw_per_page >= 99999:
-        per_page = None  # will be set to query.count() after filters
+        per_page = 500  # F-02: cap to prevent OOM
     else:
         per_page = 25
     search = (request.args.get("search") or "").strip()
@@ -3253,9 +3253,6 @@ def workspace_fund_transfers_list():
         ),
     )
     show_upload_media_columns = query.filter(_wsft_not_ideal).limit(1).first() is not None
-
-    if per_page is None:
-        per_page = max(query.count(), 1)
 
     pagination = query.order_by(
         WorkspaceFundTransfer.transfer_date.desc(),
@@ -3394,6 +3391,19 @@ def workspace_fund_transfer_form(pk=None):
                 flash(msg, "danger")
             return render_template("workspace/transfer_form.html", **_transfer_form_ctx())
 
+        # D-02: Server-side duplicate reference_no guard
+        ref_no = (request.form.get("reference_no") or "").strip()
+        if ref_no:
+            dup_q = WorkspaceFundTransfer.query.filter_by(
+                employee_id=emp.id,
+                reference_no=ref_no,
+            )
+            if row and row.id:
+                dup_q = dup_q.filter(WorkspaceFundTransfer.id != row.id)
+            if dup_q.first():
+                flash(f"Reference No '{ref_no}' already exists for this employee. Duplicate not allowed.", "danger")
+                return render_template("workspace/transfer_form.html", **_transfer_form_ctx())
+
         attachment_url = _upload_workspace_transfer_attachment(request.files.get("attachment"))
 
         if not row:
@@ -3439,6 +3449,10 @@ def workspace_fund_transfer_delete(pk):
     if guard:
         return guard
     row = WorkspaceFundTransfer.query.filter_by(employee_id=emp.id, id=pk).first_or_404()
+    # D-01: Month-close lock — block deletion if transfer date is in a closed month
+    if _workspace_has_closed_month_for_date(emp.id, row.transfer_date):
+        flash("Cannot delete transfer from a closed month. Reopen month-close batch first.", "danger")
+        return redirect(url_for("workspace_fund_transfers_list"))
     workspace_reverse_journal_entry(row.journal_entry_id)
     _delete_workspace_transfer_attachment(row.attachment)
     db.session.delete(row)

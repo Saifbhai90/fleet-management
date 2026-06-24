@@ -498,6 +498,187 @@ ENDPOINT_PERMISSION_MAP = [
     ('project_transfers_export', 'project_transfers'),
     # Penalty Delete
     ('penalty_record_delete', 'penalty_record_delete'),
+    # ── S-01 Lockdown: previously unprotected endpoints ───────────────────
+    # Transfer list pages (fix hyphen/underscore mismatch)
+    ('project_transfers', 'project_transfers'),
+    ('vehicle_transfers', 'vehicle_transfers'),
+    ('driver_transfers', 'driver_transfers'),
+    # Reports
+    ('mileage_report', 'report_vehicle_summary'),
+    ('speed_monitoring_report', 'report_vehicle_summary'),
+    ('task_start_delay_report', 'task_report_list'),
+    ('task_turnaround_report', 'task_report_list'),
+    ('tracker_difference_report', 'report_vehicle_summary'),
+    ('unauthorized_movement_report', 'report_vehicle_summary'),
+    ('unexecuted_task_report', 'task_report_list'),
+    ('missing_documents_report', 'report_driver_profile'),
+    ('maintenance_baseline_alert_report', 'maintenance_expense'),
+    ('driver_attendance_tra_report', 'driver_attendance_report'),
+    ('driver_response_time_vehicle_activity_export', 'report_driver_profile'),
+    ('driver_seat_available_export', 'driver_seat_available_report'),
+    ('driver_seat_available_print', 'driver_seat_available_report'),
+    # Workspace journal vouchers
+    ('workspace_journal_voucher_add', 'workspace_ledger'),
+    ('workspace_journal_voucher_delete', 'workspace_ledger'),
+    ('workspace_journal_voucher_detail', 'workspace_ledger'),
+    ('workspace_journal_voucher_duplicate', 'workspace_ledger'),
+    ('workspace_journal_voucher_edit', 'workspace_ledger'),
+    ('workspace_journal_vouchers_export', 'workspace_ledger'),
+    ('workspace_journal_vouchers_list', 'workspace_ledger'),
+    ('workspace_jv_backfill_district_project', 'workspace_ledger'),
+    # Workspace opening expenses
+    ('workspace_opening_expense_delete', 'workspace_expense_delete'),
+    ('workspace_opening_expense_edit', 'workspace_expense_edit'),
+    ('workspace_opening_expense_export', 'workspace_expense_list'),
+    ('workspace_opening_expense_import_template', 'workspace_expense_add'),
+    ('workspace_opening_expense_import', 'workspace_expense_add'),
+    ('workspace_opening_expense_new', 'workspace_expense_add'),
+    ('workspace_opening_expense_print', 'workspace_expense_list'),
+    ('workspace_opening_expenses_list', 'workspace_expense_list'),
+    # Workspace fuel/oil openings
+    ('workspace_fuel_oil_opening_delete', 'workspace_expense_delete'),
+    ('workspace_fuel_oil_opening_edit', 'workspace_expense_edit'),
+    ('workspace_fuel_oil_opening_export', 'workspace_expense_list'),
+    ('workspace_fuel_oil_opening_import_template', 'workspace_expense_add'),
+    ('workspace_fuel_oil_opening_import', 'workspace_expense_add'),
+    ('workspace_fuel_oil_opening_new', 'workspace_expense_add'),
+    ('workspace_fuel_oil_opening_print', 'workspace_expense_list'),
+    ('workspace_fuel_oil_openings_list', 'workspace_expense_list'),
+    # Workspace fuel/oil month close
+    ('workspace_fuel_oil_month_close_reverse', 'workspace_month_close'),
+    ('workspace_fuel_oil_month_close_list', 'workspace_month_close'),
+    ('workspace_fuel_oil_month_close', 'workspace_month_close'),
+    # Workspace product export/print
+    ('workspace_product_export', 'workspace_product_list'),
+    ('workspace_product_print', 'workspace_product_list'),
+    # Finance: chart of accounts
+    ('chart_of_accounts_add', 'accounts'),
+    ('chart_of_accounts_edit', 'accounts'),
+    ('chart_of_accounts_list', 'accounts'),
+    ('chart_of_accounts_toggle', 'accounts'),
+    # Finance: journal vouchers
+    ('journal_voucher_detail', 'accounts_jv'),
+    ('journal_vouchers_list', 'accounts_jv'),
+    # Finance: bank directory (S-04)
+    ('bank_directory_add', 'accounts'),
+    ('bank_directory_delete', 'accounts'),
+    ('bank_directory_list', 'accounts'),
+    ('bank_directory_update', 'accounts'),
+    # Finance: fund transfer categories (S-04)
+    ('ft_categories_add', 'accounts'),
+    ('ft_categories_list', 'accounts'),
+    ('ft_description_suggestions', 'accounts'),
+    # Employee lifecycle
+    ('employee_assignment_form', 'employees_edit'),
+    ('employee_document_delete', 'employees_edit'),
+    ('employee_lifecycle_assign_list', 'employees_list'),
+    ('employee_lifecycle_assign', 'employees_edit'),
+    ('employee_lifecycle_deassign_list', 'employees_list'),
+    ('employee_lifecycle_deassign', 'employees_edit'),
+    ('employee_lifecycle_history_export', 'employees_list'),
+    ('employee_lifecycle_history_print', 'employees_list'),
+    ('employee_lifecycle_history', 'employees_list'),
+    ('employee_lifecycle_left_list', 'employees_list'),
+    ('employee_lifecycle_left', 'employees_edit'),
+    ('employee_lifecycle_rejoin_list', 'employees_list'),
+    ('employee_lifecycle_rejoin', 'employees_edit'),
+    ('employee_profile_print', 'employees_list'),
+    ('employee_profile_report', 'employees_list'),
+    # Master data exports/prints
+    ('districts_export', 'districts_list'),
+    ('districts_print', 'districts_list'),
+    ('driver_post_export', 'driver_post_list'),
+    ('driver_post_print', 'driver_post_list'),
+    ('driver_job_left_export', 'driver_job_left_list'),
+    ('driver_job_left_print', 'driver_job_left_list'),
+    ('driver_rejoin_print', 'driver_rejoin_list'),
+    ('product_export', 'product_list'),
+    ('product_print', 'product_list'),
+    ('export_vehicles', 'vehicles_list'),
+    # Vehicle reading setup
+    ('vehicle_reading_setup_export', 'vehicles_list'),
+    ('vehicle_reading_setup_form', 'vehicles_list'),
+    ('vehicle_reading_setup_import_template', 'vehicles_list'),
+    ('vehicle_reading_setup_import', 'vehicles_list'),
+    ('vehicle_reading_setup_list', 'vehicles_list'),
+    ('vehicle_reading_setup_print', 'vehicles_list'),
+    # Maintenance
+    ('maintenance_expense_export', 'maintenance_expense'),
+    ('maintenance_expense_history', 'maintenance_expense'),
+    ('maintenance_job_categories_api', 'maintenance_expense'),
+    ('maintenance_job_category_add_api', 'maintenance_expense'),
+    ('maintenance_job_category_delete_api', 'maintenance_expense'),
+    ('maintenance_job_category_update_api', 'maintenance_expense'),
+    ('maintenance_work_order_close', 'maintenance_expense_edit'),
+    ('maintenance_work_order_upload_resume', 'maintenance_expense'),
+    # Vehicle family options
+    ('vehicle_family_option_add_api', 'vehicles_list'),
+    ('vehicle_family_options_api', 'vehicles_list'),
+    # Leave requests
+    ('leave_request_list', 'driver_attendance_list'),
+    ('leave_request_new', 'driver_attendance_list'),
+    ('leave_request_review', 'driver_attendance_list'),
+    # System health
+    ('system_health_cleanup', 'users_manage'),
+    ('system_health_diagnostics_api', 'users_manage'),
+    ('system_health_api', 'users_manage'),
+    ('system_health', 'users_manage'),
+    # Freeze data settings
+    ('freeze_data_settings', 'form_control'),
+    # Driver document delete
+    ('driver_delete_document', 'drivers_edit'),
+    # Fuel expense backfill
+    ('fuel_expense_backfill_task_readings', 'fuel_expense_edit'),
+    # Feature API helpers — attendance
+    ('api_attendance_gps_checkin_submit', 'driver_attendance_checkin'),
+    ('api_attendance_gps_checkout_submit', 'driver_attendance_checkout'),
+    ('api_attendance_gps_submit_status', 'driver_attendance_checkin'),
+    # Feature API helpers — biometric
+    ('api_biometric_disable', 'users_manage'),
+    ('api_biometric_enable', 'users_manage'),
+    # Feature API helpers — payroll
+    ('api_driver_bulk_preview', 'payroll_generate'),
+    # Feature API helpers — driver
+    ('api_driver_doc_update_history', 'drivers'),
+    # Feature API helpers — task report
+    ('api_emg_detail', 'task_report_entry'),
+    ('api_emg_task_detail', 'task_report_entry'),
+    ('api_tracker_detail', 'task_report_entry'),
+    ('api_tracker_save', 'task_report_entry'),
+    # Feature API helpers — fuel expense
+    ('api_fuel_expense_check_duplicate', 'fuel_expense'),
+    ('api_fuel_expense_detail', 'fuel_expense'),
+    ('api_fuel_expense_km_gap_limit', 'fuel_expense'),
+    ('api_fuel_expense_last_entry', 'fuel_expense'),
+    ('api_fuel_expense_month_mpg', 'fuel_expense'),
+    ('api_fuel_expense_price_history', 'fuel_expense'),
+    # Feature API helpers — fuel market
+    ('api_fuel_market_rate_for_date', 'fuel_expense'),
+    ('api_fuel_market_rates', 'fuel_expense'),
+    ('api_fuel_market_scan_trend', 'fuel_expense'),
+    # Feature API helpers — maintenance
+    ('api_maintenance_expense_invoice_detail', 'maintenance_expense'),
+    ('api_maintenance_expense_live_summary', 'maintenance_expense'),
+    ('api_maintenance_work_orders_for_vehicle', 'maintenance_expense'),
+    ('api_work_order_upload_status', 'maintenance_expense'),
+    # Feature API helpers — oil expense
+    ('api_oil_expense_approval_text', 'oil_expense'),
+    # Feature API helpers — personal tools
+    ('api_personal_tools_quick_print_file', 'users_manage'),
+    ('api_personal_tools_quick_print', 'users_manage'),
+    # Feature API helpers — vehicle
+    ('api_vehicle_book_history', 'book_inventory_list'),
+    ('api_vehicle_reading_setup', 'vehicles_list'),
+    # Feature API helpers — reports
+    ('api_driver_response_time_vehicle_activity', 'report_driver_profile'),
+    # Feature API helpers — employee expense
+    ('employee_expense_description_suggestions', 'employee_expense'),
+    # Feature API helpers — workspace
+    ('workspace_transfer_description_suggestions', 'workspace_transfer_add'),
+    ('workspace_slip_last_profile', 'workspace_transfer_add'),
+    ('workspace_account_balance_api', 'workspace_dashboard'),
+    # Feature API helpers — employee (S-02: IDOR fix in route handler)
+    ('api_employee_assignments', 'employees_list'),
 ]
 
 
@@ -516,6 +697,52 @@ def get_required_permission(endpoint):
             best_perm = perm
             best_key_len = len(key)
     return best_perm
+
+
+# ── S-01: Default-deny allowlist ────────────────────────────────────────
+# Endpoints accessible to any authenticated user (no specific permission needed).
+# Endpoints NOT in this set and NOT in ENDPOINT_PERMISSION_MAP will be denied (403).
+ALLOWED_AUTHED_ENDPOINTS = {
+    'module_hub',
+    'logout',
+    'biometric_token',
+    'account_change_password', 'account_profile',
+    'poll_notifications', 'notification_dismiss',
+    'web_register_fcm_token',
+    'api_client_diagnostics', 'api_log_activity', 'network_probe',
+    'download_blob', 'upload_blob', 'download_vcard',
+    'api_task_entry_default_date',
+    'api_attendance_latest_gps_media',
+    'api_me',
+    'image_proxy', 'r2_proxy',
+    'reminder_add', 'reminder_delete', 'reminder_edit', 'reminder_list', 'reminder_toggle',
+    # Static-like asset serving
+    'fleet_personal_pc_brand_asset', 'fleet_personal_pc_drives_asset',
+    'fleet_personal_pc_program_files_asset', 'fleet_personal_pc_system_asset',
+    'fleet_personal_pc_users_asset',
+}
+
+# Prefixes for endpoints accessible to any authenticated user
+ALLOWED_AUTHED_PREFIXES = (
+    'api.mobile_',          # Mobile API (token auth in handler)
+    'api.register_fcm_',    # FCM token registration
+    'api.unregister_fcm_',  # FCM token unregistration
+    'api_filter_',          # Form filter helpers (api_filter_*)
+    'get_',                 # Form getter helpers (get_districts_by_project, etc.)
+)
+
+
+def is_endpoint_allowed_for_any_authed(endpoint):
+    """True if endpoint is accessible to any authenticated user (no specific permission)."""
+    if not endpoint:
+        return False
+    ep_lower = endpoint.lower()
+    if ep_lower in ALLOWED_AUTHED_ENDPOINTS:
+        return True
+    for prefix in ALLOWED_AUTHED_PREFIXES:
+        if ep_lower.startswith(prefix):
+            return True
+    return False
 
 
 # Section that grants full access to a permission (e.g. master grants companies_list)
@@ -894,3 +1121,16 @@ def _get_user_context_impl(user_id):
         logger.exception("get_user_context: error for user_id=%s", user_id)
     
     return context
+
+
+def check_auth(permission_code=None):
+    """C-02: Centralized auth check — returns redirect response if unauthorized, None if allowed."""
+    from flask import session, redirect, url_for, flash
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    if permission_code:
+        perms = session.get('permissions', [])
+        if not session.get('is_master') and not user_can_access(perms, permission_code):
+            flash('You do not have permission to access this page.', 'danger')
+            return redirect(url_for('dashboard'))
+    return None

@@ -4,17 +4,19 @@
 	"webDir": "www",
 	"server": {
 		"url": "https://fleet-management-xdvj.onrender.com",
-		"startPath": "/mobile-init?v=2",
-		"cleartext": false,
+		"startPath": "/mobile-init",
+		"cleartext": true,
 		"androidScheme": "https",
 		"allowNavigation": [
-			"fleet-management-xdvj.onrender.com"
+			"fleet-management-xdvj.onrender.com",
+			"127.0.0.1",
+			"localhost"
 		]
 	},
 	"android": {
 		"allowMixedContent": false,
 		"captureInput": true,
-		"webContentsDebuggingEnabled": true,
+		"webContentsDebuggingEnabled": false,
 		"overScrollMode": "never",
 		"backgroundColor": "#0f172a",
 		"initialFocus": false,

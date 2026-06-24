@@ -78,7 +78,7 @@ from utils import (
     pk_now, pk_date, pk_time,
     make_driver_profile_share_token, load_driver_profile_share_token,
 )
-from auth_utils import get_required_permission, user_has_permission, user_can_access, check_password
+from auth_utils import get_required_permission, user_has_permission, user_can_access, check_password, is_endpoint_allowed_for_any_authed
 from flask_wtf.csrf import CSRFError
 from werkzeug.exceptions import HTTPException
 from werkzeug.security import generate_password_hash
@@ -1840,6 +1840,7 @@ def require_login():
         elif endpoint == 'product_form':
             required = 'product_edit'
     # Report Centre → Company Profile uses /companies/?mode=report (same route as master list).
+    _explicitly_allowed = False
     if endpoint == 'companies' and request.args.get('mode') == 'report':
         perms_cp = session.get('permissions') or []
         if not user_can_access(perms_cp, 'report_company_profile') and not user_can_access(perms_cp, 'companies_list'):
@@ -1849,6 +1850,14 @@ def require_login():
                 return api_resp
             return redirect(url_for('login'))
         required = None
+        _explicitly_allowed = True
+    # S-01: Default-deny — unknown endpoints without permission mapping are blocked
+    if required is None and not _explicitly_allowed and not is_endpoint_allowed_for_any_authed(endpoint):
+        session['show_no_access'] = True
+        api_resp = _api_error({'ok': False, 'error': 'You do not have permission for this action.'}, 403)
+        if api_resp:
+            return api_resp
+        return redirect(url_for('login'))
     if required:
         perms = session.get('permissions') or []
 
@@ -2783,21 +2792,12 @@ def _time_input_value(raw):
 
 
 def _biometric_token_valid(user, token):
-    """Accept current version token and legacy v0 token without version suffix."""
+    """Validate biometric token — v1 only (v0 legacy sunset)."""
     from routes_misc import _biometric_hmac_token
-    import hmac as _hmac, hashlib
+    import hmac as _hmac
     if not user or not token:
         return False
-    ver = int(getattr(user, 'biometric_token_version', 0) or 0)
-    candidates = [_biometric_hmac_token(user)]
-    if ver == 0:
-        legacy = _hmac.new(
-            app.config['SECRET_KEY'].encode('utf-8'),
-            f"{user.username}:biometric-v1".encode('utf-8'),
-            hashlib.sha256,
-        ).hexdigest()
-        candidates.append(legacy)
-    return any(_hmac.compare_digest(token, c) for c in candidates)
+    return _hmac.compare_digest(token, _biometric_hmac_token(user))
 
 
 

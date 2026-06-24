@@ -841,7 +841,15 @@
     }).then(function(data) {
       if (!data || !data.ok) {
         setSubmitLoading(false);
-        showLoginError((data && data.error) || 'Login failed. Please check your credentials.');
+        /* If lockout is active, render the countdown card */
+        if (data && data.lockout_remaining_seconds && data.lockout_remaining_seconds > 0) {
+          showLoginError('');
+          if (typeof global.fleetStartLockoutCountdown === 'function') {
+            global.fleetStartLockoutCountdown(data.lockout_remaining_seconds);
+          }
+        } else {
+          showLoginError((data && data.error) || 'Login failed. Please check your credentials.');
+        }
         return data;
       }
       if (data.token) {
@@ -1004,7 +1012,15 @@
       .then(function(data) {
         setSavedLoginLoading(false);
         if (!data || !data.ok) {
-          showSavedError((data && data.error) || 'Login failed. Please check your password.');
+          /* If lockout is active, render the countdown card */
+          if (data && data.lockout_remaining_seconds && data.lockout_remaining_seconds > 0) {
+            showSavedError('');
+            if (typeof global.fleetStartLockoutCountdown === 'function') {
+              global.fleetStartLockoutCountdown(data.lockout_remaining_seconds);
+            }
+          } else {
+            showSavedError((data && data.error) || 'Login failed. Please check your password.');
+          }
           return;
         }
         saveUserInfo(data);
@@ -1031,6 +1047,18 @@
         var show = hblPassword.type === 'password';
         hblPassword.type = show ? 'text' : 'password';
         hblPwdToggle.className = show ? 'bi bi-eye-slash field-icon' : 'bi bi-eye field-icon';
+      });
+    }
+
+    /* Prevent Enter key on HBL password from causing phantom submit */
+    if (hblPassword) {
+      hblPassword.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          if (hblPassword.value.trim() && hblLoginBtn) {
+            hblLoginBtn.click();
+          }
+        }
       });
     }
 

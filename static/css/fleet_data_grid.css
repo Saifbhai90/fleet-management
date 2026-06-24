@@ -263,3 +263,10 @@
 .fuel-grid-page .daily-attn-table tfoot td {
   font-size: 11px;
 }
+
+/* GPU optimization: remove translateZ(0) and will-change on Capacitor native */
+html.capacitor-native .fuel-grid-page .fuel-list-card .fuel-grid-scroll-body,
+html.capacitor-native .fuel-grid-page .fuel-list-card .fuel-grid-scroll-body thead th {
+  transform: none !important;
+  will-change: auto !important;
+}

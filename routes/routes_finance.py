@@ -36,16 +36,7 @@ def _finance_nav():
     return hub_nav_back_context('finance')
 # Helper function for authentication and permission checks
 from finance_utils import ensure_workspace_counterparty_account
-def check_auth(permission_code=None):
-    """Check if user is logged in and has permission"""
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-    if permission_code:
-        perms = session.get('permissions', [])
-        if not session.get('is_master') and not can_see_page(perms, permission_code):
-            flash('You do not have permission to access this page.', 'danger')
-            return redirect(url_for('dashboard'))
-    return None
+from auth_utils import check_auth
 
 
 def _require_workspace_employee_for_expenses():
@@ -229,7 +220,7 @@ def payment_vouchers_list():
         return auth_check
     """List all Payment Vouchers"""
     page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 20, type=int)
+    per_page = min(request.args.get('per_page', 20, type=int) or 20, 500)  # F-02: cap at 500
     
     # Filters
     from_date = request.args.get('from_date', '')
@@ -431,7 +422,7 @@ def receipt_vouchers_list():
         return auth_check
     """List all Receipt Vouchers"""
     page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 20, type=int)
+    per_page = min(request.args.get('per_page', 20, type=int) or 20, 500)  # F-02: cap at 500
     
     from_date = request.args.get('from_date', '')
     to_date = request.args.get('to_date', '')
@@ -541,7 +532,7 @@ def bank_entries_list():
         return auth_check
     """List all Bank Entries"""
     page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 20, type=int)
+    per_page = min(request.args.get('per_page', 20, type=int) or 20, 500)  # F-02: cap at 500
     
     from_date = request.args.get('from_date', '')
     to_date = request.args.get('to_date', '')
@@ -989,7 +980,7 @@ def employee_expense_list():
         return auth_check
     """List all Employee Expenses"""
     page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 20, type=int)
+    per_page = min(request.args.get('per_page', 20, type=int) or 20, 500)  # F-02: cap at 500
     
     from_date = request.args.get('from_date', '')
     to_date = request.args.get('to_date', '')
@@ -1501,7 +1492,7 @@ def chart_of_accounts_list():
     auth_check = check_auth('chart_of_accounts')
     if auth_check:
         return auth_check
-    per_page = int(request.args.get('per_page', 50))
+    per_page = min(int(request.args.get('per_page', 50) or 50), 500)  # F-02: cap at 500
     page = int(request.args.get('page', 1))
     search = (request.args.get('search') or '').strip()
 
@@ -2243,6 +2234,21 @@ def fund_transfer_add():
             from_wallet = ensure_wallet_account(from_type, from_id)
             to_wallet = ensure_wallet_account(to_type, to_id)
 
+            # D-02: Server-side duplicate reference_no guard
+            ref_no_val = (form.reference_no.data or '').strip()
+            if ref_no_val:
+                dup = FundTransfer.query.filter_by(reference_no=ref_no_val).first()
+                if dup:
+                    flash(f"Reference No '{ref_no_val}' already exists. Duplicate not allowed.", 'danger')
+                    return render_template(
+                        'finance/fund_transfer_form.html',
+                        form=form,
+                        title='New Fund Transfer',
+                        existing_attachments=[],
+                        last_saved_transfer=last_saved_transfer,
+                    **_finance_nav(),
+        )
+
             transfer = FundTransfer(
                 transfer_number=generate_entry_number('FT', form.transfer_date.data),
                 transfer_date=form.transfer_date.data,
@@ -2369,6 +2375,17 @@ def fund_transfer_edit(pk):
             from_wallet = ensure_wallet_account(from_type, from_id)
             to_wallet = ensure_wallet_account(to_type, to_id)
 
+            # D-02: Server-side duplicate reference_no guard
+            ref_no_val = (form.reference_no.data or '').strip()
+            if ref_no_val:
+                dup_q = FundTransfer.query.filter_by(reference_no=ref_no_val)
+                if transfer and transfer.id:
+                    dup_q = dup_q.filter(FundTransfer.id != transfer.id)
+                if dup_q.first():
+                    flash(f"Reference No '{ref_no_val}' already exists. Duplicate not allowed.", 'danger')
+                    return render_template('finance/fund_transfer_form.html', form=form, title='Edit Fund Transfer',
+                                           existing_attachments=_ft_existing_attachments_for_form(transfer), **_finance_nav())
+
             transfer.transfer_date = form.transfer_date.data
             transfer.from_employee_id = from_id if from_type == 'emp' else None
             transfer.from_driver_id = from_id if from_type == 'drv' else None
@@ -2444,7 +2461,7 @@ def fund_transfers_list():
 
     from_date = None
     to_date = None
-    per_page = int(request.args.get('per_page', 25))
+    per_page = min(int(request.args.get('per_page', 25) or 25), 500)  # F-02: cap at 500
     page = int(request.args.get('page', 1))
 
     try:
@@ -2920,7 +2937,7 @@ def journal_vouchers_list():
 
     from_date = None
     to_date = None
-    per_page = int(request.args.get('per_page', request.form.get('per_page', 20)))
+    per_page = min(int(request.args.get('per_page', request.form.get('per_page', 20)) or 20), 500)  # F-02: cap at 500
     page = int(request.args.get('page', 1))
 
     def _parse_date(val):

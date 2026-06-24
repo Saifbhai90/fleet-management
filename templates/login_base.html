@@ -87,7 +87,7 @@
       padding: 0 0 32px;
       min-height: 38vh;
       padding-top: env(safe-area-inset-top, 20px);
-      transition: opacity 0.2s ease, max-height 0.25s ease, padding 0.2s ease;
+      transition: opacity 0.2s ease, max-height 0.25s ease, min-height 0.25s ease, padding 0.2s ease;
     }
 
     /* ── Desktop: centered card layout ── */
@@ -651,6 +651,40 @@
         }
       }
     }
+
+    /* ── GPU Optimization: Capacitor Native (Android) ──
+       Remove blur, infinite animations, and heavy shadows that cause
+       "Null anb" GPU auxiliary path errors on low-end Android GPUs. */
+    html.capacitor-native .lp-orb {
+      filter: none !important;
+      -webkit-filter: none !important;
+      opacity: 0.12 !important;
+    }
+    html.capacitor-native .lp-grid {
+      animation: none !important;
+    }
+    html.capacitor-native .lp-logo-ring {
+      animation: none !important;
+      box-shadow: 0 0 0 6px rgba(37,99,235,0.08), 0 4px 16px rgba(0,0,0,0.2) !important;
+    }
+    html.capacitor-native .lp-bio-container {
+      animation: none !important;
+      box-shadow: 0 2px 8px rgba(37,99,235,0.06) !important;
+    }
+    html.capacitor-native .lp-bio-thumb-wrap::before,
+    html.capacitor-native .lp-bio-thumb-wrap::after {
+      animation: none !important;
+      display: none !important;
+    }
+    html.capacitor-native .lp-sheet {
+      box-shadow: 0 -4px 20px rgba(0,0,0,0.2) !important;
+    }
+    html.capacitor-native .lp-btn-signin {
+      box-shadow: 0 4px 12px rgba(37,99,235,0.2) !important;
+    }
+    html.capacitor-native .lp-btn-signin:active {
+      box-shadow: 0 2px 6px rgba(37,99,235,0.15) !important;
+    }
   </style>
 </head>
 <body>
@@ -754,7 +788,15 @@
     })();
   </script>
   <script>
-    /* Fluid compact login: keyboard-visible shrinks header; scroll snap near keyboard */
+    /* Fluid compact login: keyboard-visible shrinks header; scroll snap near keyboard
+     *
+     * CRITICAL: Do NOT add 'keyboard-visible' class on focusin.
+     * Adding it synchronously causes a massive CSS layout shift (brand section
+     * shrinks from 38vh → 72px) which makes Android hide the keyboard immediately
+     * (hide(ime(), fromIme=true) in logcat).
+     * Instead, wait for visualViewport.resize to confirm the keyboard is actually
+     * open before applying the compact layout.
+     */
     (function() {
       if (window.Capacitor && Capacitor.isNativePlatform && Capacitor.isNativePlatform()) {
         document.documentElement.classList.add('capacitor-native');
@@ -763,6 +805,8 @@
       var KB_CLOSE_PX = 60;
       var SCROLL_OFFSET_PX = 20;
       var blurTimer = null;
+      var scrollTimer = null;
+      var keyboardVisible = false;
 
       function isLoginField(el) {
         if (!el || !el.matches) return false;
@@ -786,25 +830,33 @@
         return el;
       }
 
+      /* Debounced, instant (non-animated) scroll to avoid layout-shift keyboard hide */
       function scrollFieldCompact(el) {
         if (!el) return;
-        var target = scrollTargetForField(el);
-        setTimeout(function() {
+        if (scrollTimer) clearTimeout(scrollTimer);
+        scrollTimer = setTimeout(function() {
+          scrollTimer = null;
+          var target = scrollTargetForField(el);
           if (!target || !target.scrollIntoView) return;
+          /* Use 'auto' (instant) not 'smooth' — animated scrolling causes
+             Android to think the focused element is moving and hides the keyboard */
           try {
-            target.scrollIntoView({ behavior: 'smooth', block: 'end', inline: 'nearest' });
+            target.scrollIntoView({ behavior: 'auto', block: 'center', inline: 'nearest' });
           } catch (e) {
             target.scrollIntoView(false);
           }
+          /* Small nudge to ensure field is not flush against keyboard edge */
           setTimeout(function() {
-            window.scrollBy({ top: -SCROLL_OFFSET_PX, left: 0, behavior: 'smooth' });
-          }, 80);
-        }, 300);
+            window.scrollBy({ top: -SCROLL_OFFSET_PX, left: 0, behavior: 'auto' });
+          }, 40);
+        }, 120);
       }
 
       window.fleetScrollFieldIntoView = scrollFieldCompact;
 
       function setKeyboardVisible(open) {
+        if (keyboardVisible === open) return;
+        keyboardVisible = open;
         document.body.classList.toggle('keyboard-visible', open);
         document.body.classList.remove('keyboard-open');
       }
@@ -820,21 +872,31 @@
         }
       }
 
+      /* On focusin: cancel any pending blur timer, but do NOT add keyboard-visible
+         or scroll yet. Let the keyboard open naturally first. The visualViewport
+         resize handler will detect the keyboard and apply the compact layout. */
       document.addEventListener('focusin', function(e) {
         if (!isLoginField(e.target)) return;
         if (blurTimer) {
           clearTimeout(blurTimer);
           blurTimer = null;
         }
-        setKeyboardVisible(true);
-        scrollFieldCompact(e.target);
+        /* Only scroll if keyboard is already visible (second tap / re-focus).
+           On first tap, skip — the visualViewport handler will handle it. */
+        if (keyboardVisible) {
+          scrollFieldCompact(e.target);
+        }
       }, true);
 
       document.addEventListener('focusout', function(e) {
         if (!isLoginField(e.target)) return;
-        blurTimer = setTimeout(syncKeyboardState, 200);
+        blurTimer = setTimeout(syncKeyboardState, 250);
       }, true);
 
+      /* visualViewport fires when the keyboard actually opens/closes.
+         This is the reliable signal — use it to apply the compact layout
+         AFTER the keyboard is already visible, preventing the layout-shift
+         that hides the keyboard on first tap. */
       var vv = window.visualViewport;
       if (vv) {
         vv.addEventListener('resize', syncKeyboardState);

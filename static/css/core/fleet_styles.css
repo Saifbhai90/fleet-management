@@ -1927,6 +1927,80 @@ body {
 
     @keyframes ss-spin { to { transform: translateY(-50%) rotate(360deg); } }
 
+/* ═══════════════════════════════════════════════════════════════
+   GPU OPTIMIZATION — Capacitor Native (Android)
+   Eliminates "Null anb" GPU auxiliary path errors by removing
+   backdrop-filter, filter:blur, will-change, and heavy box-shadows
+   on native Android where the GPU can't handle them.
+   ═══════════════════════════════════════════════════════════════ */
+html.capacitor-native body.fm-aurora-theme .fm-aurora-orb {
+    filter: none !important;
+    -webkit-filter: none !important;
+    opacity: 0.15 !important;
+}
+
+html.capacitor-native body.fm-aurora-theme:not(.dark-mode) .navbar,
+html.capacitor-native body.fm-aurora-theme.dark-mode .navbar {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: rgba(255, 255, 255, 0.98) !important;
+}
+
+html.capacitor-native body.fm-aurora-theme:not(.dark-mode) .sidebar,
+html.capacitor-native body.fm-aurora-theme.dark-mode .sidebar {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+
+html.capacitor-native body.fm-aurora-theme:not(.dark-mode) .dashboard-container,
+html.capacitor-native body.fm-aurora-theme:not(.dark-mode) .form-container {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: rgba(255, 255, 255, 0.98) !important;
+}
+
+html.capacitor-native #cmdPalette {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: rgba(0, 0, 0, 0.7) !important;
+}
+
+html.capacitor-native .fuel-grid-sticky-footer,
+html.capacitor-native .fuel-daily-sticky-footer {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    background: rgba(241, 245, 249, 1) !important;
+}
+
+html.capacitor-native .fleet-notif-card__track {
+    will-change: auto !important;
+}
+
+html.capacitor-native .fuel-grid-page .fuel-list-card .fuel-grid-scroll-body {
+    will-change: auto !important;
+}
+
+html.capacitor-native .sidebar {
+    will-change: auto !important;
+}
+
+html.capacitor-native .fm-hub-glass {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: rgba(255, 255, 255, 0.98) !important;
+}
+
+/* Simplify heavy box-shadows on native */
+html.capacitor-native .card,
+html.capacitor-native .stat-card,
+html.capacitor-native .mp-card {
+    box-shadow: 0 1px 4px rgba(15, 23, 42, 0.08) !important;
+}
+
+html.capacitor-native .fm-aurora-orb {
+    box-shadow: none !important;
+}
+
     /* Subtle row fade-in after AJAX swap */
     @keyframes ss-fade-in {
         from { opacity: 0; transform: translateY(3px); }

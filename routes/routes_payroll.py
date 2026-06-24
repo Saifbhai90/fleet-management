@@ -20,15 +20,7 @@ import calendar
 def _payroll_nav():
     from nav_back import hub_nav_back_context
     return hub_nav_back_context('payroll')
-def check_auth(permission_code=None):
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-    if permission_code:
-        perms = session.get('permissions', [])
-        if not session.get('is_master') and not can_see_page(perms, permission_code):
-            flash('You do not have permission to access this page.', 'danger')
-            return redirect(url_for('dashboard'))
-    return None
+from auth_utils import check_auth
 
 
 def _parse_person_id(person_id_str):

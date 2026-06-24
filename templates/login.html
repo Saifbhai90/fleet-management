@@ -235,7 +235,22 @@
   var form = document.getElementById('loginForm');
   var btn  = document.getElementById('loginSubmitBtn');
   if (!form || !btn) return;
+
+  /* Guard flag: only allow submit when the actual button was clicked.
+     Prevents Android keyboard "Go" key and layout-shift phantom submits. */
+  var _submitClicked = false;
+  btn.addEventListener('click', function() { _submitClicked = true; });
+
   form.addEventListener('submit', function(e) {
+    /* If the submit was NOT triggered by a genuine button click, block it.
+       This fixes the Android issue where focusing the password field
+       triggers a phantom form submission. */
+    if (!_submitClicked) {
+      e.preventDefault();
+      return;
+    }
+    _submitClicked = false; /* reset for next time */
+
     if (window.fleetBiometricToggle && window.fleetBiometricToggle.handlesLoginSubmit &&
         window.fleetBiometricToggle.handlesLoginSubmit(e)) {
       return;
@@ -249,18 +264,86 @@
   });
 })();
 
-/* ── Lockout Countdown (5 failed attempts) ── */
+/* ── Password field: prevent Enter from submitting when empty ── */
 (function() {
-  var card = document.getElementById('lockoutCard');
-  if (!card) return;
+  var pwd = document.getElementById('login_password');
+  if (!pwd) return;
+  pwd.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (pwd.value.trim()) {
+        var btn = document.getElementById('loginSubmitBtn');
+        if (btn) btn.click();
+      }
+    }
+  });
+})();
 
+/* ── Lockout Countdown (5 failed attempts) ── */
+/* Exposed as global so AJAX login responses can trigger it dynamically */
+window.fleetStartLockoutCountdown = function(seconds) {
+  if (!seconds || seconds <= 0) return;
+
+  var card = document.getElementById('lockoutCard');
   var countdownEl = document.getElementById('lockoutCountdown');
   var progressRing = document.getElementById('lockoutProgressRing');
   var submitBtn = document.getElementById('loginSubmitBtn');
   var hblBtn = document.getElementById('hblSavedLoginBtn');
-  var initial = parseInt(card.getAttribute('data-seconds') || '0', 10);
-  if (!initial || initial <= 0) return;
 
+  /* If no card exists (AJAX response), create one dynamically */
+  if (!card) {
+    card = document.createElement('div');
+    card.id = 'lockoutCard';
+    card.className = 'mb-3';
+    card.setAttribute('data-seconds', String(seconds));
+    card.style.cssText = 'border:1px solid #fed7aa;background:linear-gradient(135deg,#fff7ed 0%,#ffedd5 45%,#fff 100%);border-radius:14px;padding:14px 14px 12px;box-shadow:0 10px 22px rgba(251,146,60,.16);';
+    card.innerHTML =
+      '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">' +
+        '<div style="display:flex;align-items:center;gap:10px;min-width:0;">' +
+          '<div style="width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#f97316;color:#fff;box-shadow:0 4px 12px rgba(249,115,22,.35);">' +
+            '<i class="bi bi-shield-lock-fill"></i>' +
+          '</div>' +
+          '<div style="min-width:0;">' +
+            '<div style="font-weight:700;color:#9a3412;font-size:.9rem;line-height:1.2;">Account Temporarily Locked</div>' +
+            '<div style="font-size:.74rem;color:#c2410c;">Too many failed attempts. Please wait and try again.</div>' +
+          '</div>' +
+        '</div>' +
+        '<div style="position:relative;width:88px;height:88px;flex-shrink:0;">' +
+          '<svg width="88" height="88" viewBox="0 0 88 88" style="transform:rotate(-90deg);filter:drop-shadow(0 4px 10px rgba(249,115,22,.18));">' +
+            '<circle cx="44" cy="44" r="36" fill="none" stroke="#fed7aa" stroke-width="8"></circle>' +
+            '<circle id="lockoutProgressRing" cx="44" cy="44" r="36" fill="none" stroke="#f97316" stroke-linecap="round" stroke-width="8"></circle>' +
+          '</svg>' +
+          '<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;">' +
+            '<div style="font-size:.64rem;color:#9a3412;line-height:1;"><i class="bi bi-watch"></i></div>' +
+            '<div id="lockoutCountdown" style="margin-top:3px;font-family:ui-monospace,SFMono-Regular,Menaco,Consolas,monospace;font-weight:800;font-size:1.08rem;color:#7c2d12;letter-spacing:.04em;line-height:1;">--:--</div>' +
+            '<div style="font-size:.62rem;color:#9a3412;margin-top:3px;line-height:1;">Remaining</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+
+    /* Insert before the login form or at top of sheet */
+    var form = document.getElementById('loginForm');
+    var hblView = document.getElementById('hblSavedAccountView');
+    if (hblView && hblView.parentNode) {
+      hblView.parentNode.insertBefore(card, hblView);
+    } else if (form && form.parentNode) {
+      form.parentNode.insertBefore(card, form);
+    } else {
+      var sheet = document.getElementById('lpSheet');
+      if (sheet) sheet.insertBefore(card, sheet.firstChild);
+    }
+
+    /* Re-query elements after DOM insertion */
+    countdownEl = document.getElementById('lockoutCountdown');
+    progressRing = document.getElementById('lockoutProgressRing');
+  }
+
+  /* Clear any existing timer */
+  if (window._fleetLockoutTimer) {
+    clearInterval(window._fleetLockoutTimer);
+  }
+
+  var initial = seconds;
   var left = initial;
   var ringRadius = 36;
   var ringCircumference = 2 * Math.PI * ringRadius;
@@ -268,6 +351,7 @@
     progressRing.style.strokeDasharray = String(ringCircumference);
     progressRing.style.strokeDashoffset = '0';
     progressRing.style.transition = 'stroke-dashoffset .9s linear, stroke .25s ease';
+    progressRing.style.stroke = '#f97316';
   }
   if (submitBtn) {
     submitBtn.disabled = true;
@@ -277,6 +361,9 @@
     hblBtn.disabled = true;
     hblBtn.classList.add('loading');
   }
+  /* Reset card styling in case of re-trigger */
+  card.style.borderColor = '#fed7aa';
+  card.style.background = 'linear-gradient(135deg,#fff7ed 0%,#ffedd5 45%,#fff 100%)';
 
   function pad(n) { return n < 10 ? ('0' + n) : String(n); }
   function render() {
@@ -291,10 +378,11 @@
   }
 
   render();
-  var timer = setInterval(function() {
+  window._fleetLockoutTimer = setInterval(function() {
     left -= 1;
     if (left <= 0) {
-      clearInterval(timer);
+      clearInterval(window._fleetLockoutTimer);
+      window._fleetLockoutTimer = null;
       if (countdownEl) countdownEl.textContent = '00:00';
       if (progressRing) {
         progressRing.style.strokeDashoffset = String(ringCircumference);
@@ -314,6 +402,16 @@
     }
     render();
   }, 1000);
+};
+
+/* Auto-start countdown if server-rendered lockout card exists */
+(function() {
+  var card = document.getElementById('lockoutCard');
+  if (!card) return;
+  var initial = parseInt(card.getAttribute('data-seconds') || '0', 10);
+  if (initial && initial > 0) {
+    window.fleetStartLockoutCountdown(initial);
+  }
 })();
 
 /* Biometric login — initialized after fleet_biometric_toggle.js loads (see login_base.html) */

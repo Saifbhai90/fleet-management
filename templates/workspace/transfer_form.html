@@ -34,6 +34,13 @@
     .ws-tf-card .ts-wrapper .ts-control { border-radius: 10px; border-color: #e5e7eb; }
     .ws-tf-card .form-control::placeholder, .ws-tf-card textarea::placeholder { color: #b3bcc5; }
     #wsTransferFormActions { border-top: 1px solid #f1f3f5; padding-top: .85rem; }
+    /* U-01: Mobile sticky actions — keep Save buttons visible above keyboard on 360px */
+    @media (max-width: 1199.98px) {
+      #wsTransferFormActions {
+        position: sticky; bottom: 0; z-index: 10;
+        background: #fff; padding-bottom: .5rem; margin-top: .5rem;
+      }
+    }
     #wsTransferAmountInput { font-weight: 700; font-size: 1.05rem; color:#157347; }
     #wsTransferRefInput {
       font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;

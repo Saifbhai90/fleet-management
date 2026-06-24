@@ -1126,6 +1126,13 @@ def employee_lifecycle_rejoin_list():
 
 @app.route('/api/employee/<int:emp_id>/assignments')
 def api_employee_assignments(emp_id):
+    # S-02: IDOR fix — only master/admin or the employee themselves can access
+    user_id = session.get('user_id')
+    ctx = get_user_context(user_id) if user_id else {}
+    if not ctx.get('is_master_or_admin'):
+        emp_record = ctx.get('employee_record')
+        if not emp_record or emp_record.id != emp_id:
+            return jsonify({'ok': False, 'error': 'Not authorized'}), 403
     emp = Employee.query.get_or_404(emp_id)
     return jsonify({
         'districts': [{'id': d.id, 'name': d.name} for d in emp.districts],

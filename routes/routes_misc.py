@@ -149,9 +149,10 @@ def image_proxy():
     if not url or not (url.startswith('https://') or url.startswith('http://')):
         return '', 400
     parsed = _urlparse(url)
-    hostname = parsed.hostname or ''
+    hostname = (parsed.hostname or '').lower()
     if not hostname:
         return '', 400
+    # SE-05: Block SSRF — reject private/loopback/link-local/reserved IPs
     try:
         ip = _ipaddr.ip_address(hostname)
         if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
@@ -159,6 +160,16 @@ def image_proxy():
     except ValueError:
         if hostname in ('localhost', '0.0.0.0', '::1'):
             return '', 403
+    # SE-05: Host whitelist — only allow R2 hosts and configured public URL
+    from r2_storage import R2_PUBLIC_URL as _r2_pub
+    allow_hosts = set()
+    if _r2_pub:
+        try:
+            allow_hosts.add(_urlparse(_r2_pub).netloc.lower())
+        except Exception:
+            pass
+    if not (hostname.endswith('.r2.dev') or hostname.endswith('.r2.cloudflarestorage.com') or hostname in allow_hosts):
+        return '', 403
     try:
         req_obj = _urllib_req.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
         with _urllib_req.urlopen(req_obj, timeout=10) as resp:

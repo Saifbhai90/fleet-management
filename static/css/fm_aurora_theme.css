@@ -425,3 +425,27 @@ body.dark-mode .sidebar .active-link {
 body.dark-mode .mobile-bottom-nav {
   background: linear-gradient(180deg, #1e293b, #0f172a) !important;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   GPU OPTIMIZATION — Capacitor Native (Android)
+   Disable infinite animations and blur filters that cause "Null anb"
+   GPU auxiliary path errors on low-end Android GPUs.
+   ═══════════════════════════════════════════════════════════════ */
+html.capacitor-native body.fm-aurora-theme {
+    animation: none !important;
+    background: #f8fafc !important;
+}
+
+html.capacitor-native .fm-aurora-orb,
+html.capacitor-native .fm-aurora-bg {
+    animation: none !important;
+    filter: none !important;
+    -webkit-filter: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: #f8fafc !important;
+}
+
+html.capacitor-native .fm-aurora-orb {
+    display: none !important;
+}

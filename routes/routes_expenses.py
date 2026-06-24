@@ -1021,17 +1021,18 @@ def api_fuel_expense_last_entry():
 def api_fuel_expense_detail(pk):
     """Full fuel entry payload for detail popups (Last Saved, etc.)."""
     workspace_employee_id = _workspace_employee_id_for_expenses()
-    rec = FuelExpense.query.options(
+    q = FuelExpense.query.options(
         joinedload(FuelExpense.workspace_pump),
         joinedload(FuelExpense.fuel_pump),
         joinedload(FuelExpense.district),
         joinedload(FuelExpense.project),
         joinedload(FuelExpense.vehicle),
-    ).filter_by(id=pk).first()
+    ).filter_by(id=pk)
+    if workspace_employee_id:
+        q = q.filter_by(employee_id=workspace_employee_id)
+    rec = q.first()
     if not rec:
         return jsonify({'ok': False, 'entry': None}), 404
-    if workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
-        return jsonify({'ok': False, 'entry': None, 'error': 'forbidden'}), 403
     return jsonify({'ok': True, 'entry': _fuel_expense_last_entry_payload(rec)})
 
 
@@ -1399,8 +1400,13 @@ def fuel_expense_list():
         vehicles = veh_q.order_by(*vehicle_order_by()).all()
         form.vehicle_id.choices = [(0, '-- All Vehicles --')] + [(v.id, v.vehicle_no) for v in vehicles]
     page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 50, type=int)
-    per_page = per_page if per_page in (25, 50, 100, 200, 99999) else 50
+    per_page = request.args.get('per_page', 50, type=int) or 50
+    if per_page in (25, 50, 100, 200):
+        pass
+    elif per_page >= 99999:
+        per_page = 500  # F-02: cap to prevent OOM
+    else:
+        per_page = 50
 
     query = FuelExpense.query.filter(
         FuelExpense.fueling_date >= from_d,
@@ -2729,9 +2735,10 @@ def api_fuel_expense_upload_status(pk):
     if _guard:
         return jsonify({'ok': False, 'error': 'forbidden'}), 403
     workspace_employee_id = _workspace_employee_id_for_expenses()
-    rec = FuelExpense.query.get_or_404(pk)
-    if workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
-        return jsonify({'ok': False, 'error': 'forbidden'}), 403
+    q = FuelExpense.query.filter_by(id=pk)
+    if workspace_employee_id:
+        q = q.filter_by(employee_id=workspace_employee_id)
+    rec = q.first_or_404()
     total = int(rec.upload_total or 0)
     done = int(rec.upload_done or 0)
     failed = int(rec.upload_failed or 0)
@@ -3752,9 +3759,10 @@ def api_oil_expense_upload_status(pk):
     if _guard:
         return jsonify({'ok': False, 'error': 'forbidden'}), 403
     workspace_employee_id = _workspace_employee_id_for_expenses()
-    rec = OilExpense.query.get_or_404(pk)
-    if workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
-        return jsonify({'ok': False, 'error': 'forbidden'}), 403
+    q = OilExpense.query.filter_by(id=pk)
+    if workspace_employee_id:
+        q = q.filter_by(employee_id=workspace_employee_id)
+    rec = q.first_or_404()
     total = int(rec.upload_total or 0)
     done = int(rec.upload_done or 0)
     failed = int(rec.upload_failed or 0)
@@ -3942,14 +3950,15 @@ def api_maintenance_expense_invoice_detail(pk):
     if _guard:
         return jsonify({'ok': False, 'error': 'forbidden'}), 403
     workspace_employee_id = _workspace_employee_id_for_expenses()
-    rec = MaintenanceExpense.query.options(
+    q = MaintenanceExpense.query.options(
         joinedload(MaintenanceExpense.district),
         joinedload(MaintenanceExpense.project),
         joinedload(MaintenanceExpense.vehicle),
         joinedload(MaintenanceExpense.workspace_party),
-    ).get_or_404(pk)
-    if workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
-        return jsonify({'ok': False, 'error': 'forbidden'}), 403
+    ).filter_by(id=pk)
+    if workspace_employee_id:
+        q = q.filter_by(employee_id=workspace_employee_id)
+    rec = q.first_or_404()
 
     rows = []
     grand_total = 0.0
@@ -4307,13 +4316,14 @@ def api_oil_expense_approval_text(pk):
     if _guard:
         return jsonify({'ok': False, 'error': 'forbidden'}), 403
     workspace_employee_id = _workspace_employee_id_for_expenses()
-    rec = OilExpense.query.options(
+    q = OilExpense.query.options(
         joinedload(OilExpense.district),
         joinedload(OilExpense.project),
         joinedload(OilExpense.vehicle).joinedload(Vehicle.drivers),
-    ).get_or_404(pk)
-    if workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
-        return jsonify({'ok': False, 'error': 'forbidden'}), 403
+    ).filter_by(id=pk)
+    if workspace_employee_id:
+        q = q.filter_by(employee_id=workspace_employee_id)
+    rec = q.first_or_404()
 
     vehicle = rec.vehicle
     selected_driver_id = request.args.get('driver_id', type=int)
@@ -4554,9 +4564,10 @@ def api_maintenance_expense_upload_status(pk):
     if _guard:
         return jsonify({'ok': False, 'error': 'forbidden'}), 403
     workspace_employee_id = _workspace_employee_id_for_expenses()
-    rec = MaintenanceExpense.query.get_or_404(pk)
-    if workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
-        return jsonify({'ok': False, 'error': 'forbidden'}), 403
+    q = MaintenanceExpense.query.filter_by(id=pk)
+    if workspace_employee_id:
+        q = q.filter_by(employee_id=workspace_employee_id)
+    rec = q.first_or_404()
     total = int(rec.upload_total or 0)
     done = int(rec.upload_done or 0)
     failed = int(rec.upload_failed or 0)
@@ -5078,9 +5089,10 @@ def api_work_order_upload_status(pk):
     if _guard:
         return jsonify({'ok': False, 'error': 'forbidden'}), 403
     workspace_employee_id = _workspace_employee_id_for_expenses()
-    rec = MaintenanceWorkOrder.query.get_or_404(pk)
-    if workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
-        return jsonify({'ok': False, 'error': 'forbidden'}), 403
+    q = MaintenanceWorkOrder.query.filter_by(id=pk)
+    if workspace_employee_id:
+        q = q.filter_by(employee_id=workspace_employee_id)
+    rec = q.first_or_404()
     total = int(rec.upload_total or 0)
     done = int(rec.upload_done or 0)
     failed = int(rec.upload_failed or 0)
@@ -6118,13 +6130,13 @@ def maintenance_baseline_alert_report():
     }
 
     page = request.args.get('page', 1, type=int) or 1
-    # fleetPrintExport fetches with per_page=99999 to get full table for print/CSV; must not clamp to 25
+    # fleetPrintExport fetches with per_page=99999 to get full table for print/CSV; cap to prevent OOM
     _std_pp = (10, 20, 25, 50, 100)
     raw_per_page = request.args.get('per_page', 25, type=int) or 25
     if raw_per_page in _std_pp:
         per_page = raw_per_page
     elif raw_per_page >= 1000:
-        per_page = max(len(rows), 1)
+        per_page = min(len(rows), 500) if rows else 500  # F-02: cap at 500
     else:
         per_page = 25
     pagination = SimplePagination(rows, page, per_page)
