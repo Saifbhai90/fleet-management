@@ -261,16 +261,19 @@ def app_version_users(version):
         user = r.user
         if not user:
             continue
+        # Find vehicle: match Driver.name to User.full_name, then Vehicle.driver_id
         vehicle_no = ''
-        if hasattr(user, 'driver_profile') and user.driver_profile:
-            drv = user.driver_profile
-            from models import Vehicle
-            v = Vehicle.query.filter_by(current_driver_id=drv.id, status='Active').first()
-            if v:
-                vehicle_no = v.registration_no or ''
+        try:
+            drv = Driver.query.filter_by(name=user.full_name, status='Active').first()
+            if drv:
+                v = Vehicle.query.filter_by(driver_id=drv.id).first()
+                if v:
+                    vehicle_no = v.vehicle_no or ''
+        except Exception:
+            pass
         result.append({
             'user_id': user.id,
-            'name': user.name or user.username,
+            'name': user.full_name or user.username,
             'username': user.username,
             'vehicle_no': vehicle_no,
             'last_seen': r.last_seen.strftime('%d-%b-%Y %I:%M %p') if r.last_seen else '',

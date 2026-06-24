@@ -288,8 +288,8 @@ function escapeHtml(str) {
 }
 </script>
 
-<!-- Version Users Modal -->
-<div class="modal fade" id="versionUsersModal" tabindex="-1">
+<!-- Version Users Modal — no backdrop so form stays interactive -->
+<div class="modal fade" id="versionUsersModal" tabindex="-1" data-bs-backdrop="false">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header">
