@@ -27,7 +27,7 @@ from pathlib import Path
 from contextlib import contextmanager
 
 # ─── Setup Paths ────────────────────────────────────────────────────────────
-APP_DIR = Path(__file__).resolve().parent
+APP_DIR = Path(__file__).resolve().parent.parent  # project root (was .parent when at root)
 ENV_FILE = APP_DIR / '.env.local'
 
 # ─── Load .env.local ────────────────────────────────────────────────────────
@@ -60,7 +60,7 @@ LOG_DIR        = os.environ.get('LOG_DIR', 'logs').strip()
 # Resolve paths relative to app dir
 LOCAL_DB_FULL  = APP_DIR / LOCAL_DB_PATH
 LOG_DIR_FULL   = APP_DIR / LOG_DIR
-SYNC_STATE_FILE = APP_DIR / 'sync_state.json'
+SYNC_STATE_FILE = APP_DIR / 'config' / 'sync_state.json'
 
 
 # ─── Sync State (smart cache) ──────────────────────────────────────────────

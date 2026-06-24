@@ -22,6 +22,7 @@ from functools import wraps
 
 from flask import Blueprint, request, jsonify, current_app
 from werkzeug.security import check_password_hash
+from app import db
 
 api_bp = Blueprint('api', __name__, url_prefix='/api/v1')
 
@@ -250,7 +251,7 @@ def _save_base64_photo(b64_string: str, folder: str = 'attendance') -> str:
     except Exception:
         # Fallback: save locally under uploads/
         import uuid, os
-        upload_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads', folder)
+        upload_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'uploads', folder)
         os.makedirs(upload_dir, exist_ok=True)
         fname = uuid.uuid4().hex + '.jpg'
         fpath = os.path.join(upload_dir, fname)

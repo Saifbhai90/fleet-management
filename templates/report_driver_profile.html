@@ -873,7 +873,7 @@ body.driver-profile-public-view .profile-page { min-height: auto !important; }
         <i class="bi bi-pencil me-1"></i>Edit
       </a>
       {% endif %}
-      {% if driver_update_parts is defined %}
+      {% if driver_update_parts is not none %}
       <button type="button" class="btn btn-success btn-action" id="driverUpdateTextBtn" onclick="openDriverUpdateTextModal()">
         <i class="bi bi-whatsapp me-1"></i>Driver Update Text
       </button>
@@ -908,7 +908,7 @@ body.driver-profile-public-view .profile-page { min-height: auto !important; }
           {% if driver.document_path %}
           <a href="{{ driver.document_path | media_url }}" target="_blank" onclick="closeQA();"><i class="bi bi-file-earmark-pdf"></i> Docs</a>
           {% endif %}
-          {% if driver_update_parts is defined %}
+          {% if driver_update_parts is not none %}
           <button type="button" onclick="openDriverUpdateTextModal();closeQA();"><i class="bi bi-whatsapp"></i> Driver Update Text</button>
           {% endif %}
           <button onclick="shareProfile();closeQA();"><i class="bi bi-link-45deg"></i> Share link</button>
@@ -2600,7 +2600,7 @@ body.driver-profile-public-view .profile-page { min-height: auto !important; }
 </div>
 {% endif %}
 
-{% if driver_update_parts is defined %}
+{% if driver_update_parts is not none %}
 <div class="modal fade" id="driverUpdateTextModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="false" data-bs-keyboard="true">
   <div class="modal-dialog modal-lg modal-dialog-scrollable modal-dialog-centered">
     <div class="modal-content">
@@ -2654,7 +2654,7 @@ body.driver-profile-public-view .profile-page { min-height: auto !important; }
 {% endblock %}
 
 {% block extra_js %}
-{% if driver_update_parts is defined %}
+{% if driver_update_parts is not none %}
 <script>
 (function () {
   var driverFields = {{ driver_update_parts.fields|tojson }};

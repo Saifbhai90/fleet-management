@@ -35,6 +35,7 @@ def _finance_nav():
     from nav_back import hub_nav_back_context
     return hub_nav_back_context('finance')
 # Helper function for authentication and permission checks
+from finance_utils import ensure_workspace_counterparty_account
 def check_auth(permission_code=None):
     """Check if user is logged in and has permission"""
     if 'user_id' not in session:

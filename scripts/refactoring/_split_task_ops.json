@@ -1,0 +1,50 @@
+{
+  "output_file": "routes_task_ops.py",
+  "description": "Task Operations: Red Tasks, Without Task, Unexecuted Task, Penalty Records.\n\nExtracted from routes.py to reduce file size.",
+  "route_funcs": [
+    "red_task_list", "red_task_summary", "red_task_summary_detail",
+    "red_task_new", "red_task_edit",
+    "without_task_list", "unexecuted_task_report",
+    "unexecuted_task_report_export", "unexecuted_task_report_preview",
+    "without_task_new", "without_task_edit",
+    "penalty_record_list", "penalty_record_export",
+    "penalty_record_print", "penalty_record_new", "penalty_record_edit"
+  ],
+  "helper_funcs_to_move": [],
+  "top_level_to_move": [],
+  "helper_funcs_to_import": [
+    "_multi_word_filter", "media_url_filter",
+    "_get_user_scope", "require_login",
+    "_nav_back_ctx",
+    "enforce_data_freeze",
+    "_vehicle_query_task_report_scope"
+  ],
+  "imports": [
+    "from flask import (",
+    "    render_template, redirect, url_for, flash, request,",
+    "    session, jsonify, make_response, abort,",
+    "    Response, current_app,",
+    ")",
+    "from app import app, db, csrf",
+    "from models import (",
+    "    Vehicle, Driver, Project, District, Company, ParkingStation,",
+    "    VehicleDailyTask, RedTask, VehicleMoveWithoutTask,",
+    "    UnexecutedTaskRecord, PenaltyRecord, DriverAttendance,",
+    "    SystemSetting, User, ActivityLog,",
+    ")",
+    "from forms import (",
+    "    RedTaskForm, VehicleMoveWithoutTaskForm, PenaltyRecordForm,",
+    ")",
+    "from datetime import datetime, date, timedelta",
+    "from sqlalchemy import func, text, or_, and_",
+    "from auth_utils import user_can_access, get_user_context",
+    "from utils import pk_now, pk_date, parse_date, format_date_ddmmyyyy, generate_csv_response",
+    "from vehicle_sort_utils import vehicle_order_by, sort_vehicles_in_memory",
+    "import re",
+    "import os",
+    "import json",
+    "import csv",
+    "import io",
+    "from io import BytesIO, StringIO"
+  ]
+}

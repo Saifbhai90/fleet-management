@@ -24,7 +24,7 @@ def _init_firebase():
         from firebase_admin import credentials
         import json
 
-        sa_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'firebase-service-account.json')
+        sa_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config', 'firebase-service-account.json')
 
         if os.path.exists(sa_path):
             cred = credentials.Certificate(sa_path)

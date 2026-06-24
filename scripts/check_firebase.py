@@ -10,15 +10,15 @@ from firebase_admin import credentials
 
 def main():
     root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-    candidates = [os.path.join(root, "firebase-service-account.json")]
+    candidates = [os.path.join(root, "config", "firebase-service-account.json")]
     candidates.extend(
-        sorted(glob.glob(os.path.join(root, "New folder", "*firebase-adminsdk*.json")))
+        sorted(glob.glob(os.path.join(root, "config", "android-signing", "*firebase-adminsdk*.json")))
     )
     path = next((p for p in candidates if os.path.isfile(p)), None)
     if not path:
         print("FAIL: no service account JSON found.")
-        print("      Expected: firebase-service-account.json (project root)")
-        print("      or: New folder/*firebase-adminsdk*.json")
+        print("      Expected: config/firebase-service-account.json")
+        print("      or: config/android-signing/*firebase-adminsdk*.json")
         sys.exit(1)
     with open(path, encoding="utf-8") as f:
         d = json.load(f)

@@ -1,0 +1,59 @@
+{
+  "output_file": "routes_employees.py",
+  "description": "Employees: Workforce Lifecycle, Assignments, Import/Export, Profile Reports.\n\nExtracted from routes.py to reduce file size.",
+  "route_funcs": [
+    "employees_list", "employee_form", "employee_profile_print",
+    "employee_document_delete", "employee_assignment_form", "employee_delete",
+    "employee_lifecycle_assign", "employee_lifecycle_deassign",
+    "employee_lifecycle_left", "employee_lifecycle_rejoin",
+    "employee_lifecycle_history", "employee_lifecycle_history_export",
+    "employee_lifecycle_history_print", "employee_profile_report",
+    "employee_lifecycle_assign_list", "employee_lifecycle_deassign_list",
+    "employee_lifecycle_left_list", "employee_lifecycle_rejoin_list",
+    "api_employee_assignments", "employees_export", "employees_import_template",
+    "employees_import", "employees_print"
+  ],
+  "helper_funcs_to_move": [
+    "_employee_lifecycle_list"
+  ],
+  "top_level_to_move": [],
+  "helper_funcs_to_import": [
+    "_multi_word_filter", "media_url_filter",
+    "_sync_user_active_by_cnic", "_sync_user_full_name_by_cnic",
+    "_create_user_for_employee_or_driver",
+    "_get_user_scope", "require_login",
+    "_nav_back_ctx", "_workforce_nav_back",
+    "_log_employee_assignment",
+    "enforce_data_freeze",
+    "_cnic_digits"
+  ],
+  "imports": [
+    "from flask import (",
+    "    render_template, redirect, url_for, flash, request,",
+    "    session, jsonify, make_response, abort,",
+    ")",
+    "from app import app, db, csrf",
+    "from models import (",
+    "    Employee, EmployeeDocument, EmployeePost, EmployeeAssignment,",
+    "    Project, District, Company, Vehicle, Driver,",
+    "    User, Role, SystemSetting, ActivityLog,",
+    "    project_district, employee_project, employee_district,",
+    ")",
+    "from forms import (",
+    "    EmployeeForm, EmployeeAssignmentForm, EmployeeLeftForm,",
+    "    EmployeeImportForm,",
+    ")",
+    "from datetime import datetime, date, timedelta",
+    "from sqlalchemy import func, text, or_, and_",
+    "from werkzeug.utils import secure_filename",
+    "from auth_utils import user_can_access, get_user_context",
+    "from utils import pk_now, pk_date, parse_date, format_date_ddmmyyyy, generate_csv_response",
+    "from vehicle_sort_utils import vehicle_order_by, sort_vehicles_in_memory",
+    "import re",
+    "import os",
+    "import json",
+    "import csv",
+    "import io",
+    "from io import BytesIO, StringIO"
+  ]
+}

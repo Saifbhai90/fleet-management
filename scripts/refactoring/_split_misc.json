@@ -1,0 +1,61 @@
+{
+  "output_file": "routes_misc.py",
+  "description": "Misc: Global Search, Fleet Map, PWA, File Serving, Image Proxy,\nVCard, Blob Upload/Download, Account Profile, Biometric, Mobile Init,\nSession Ping, App Logout, Password Set/Change.\n\nExtracted from routes.py to reduce file size.",
+  "route_funcs": [
+    "api_global_search", "api_fleet_map_pins",
+    "pwa_manifest", "service_worker",
+    "uploaded_file", "image_proxy",
+    "download_vcard", "upload_blob", "download_blob",
+    "account_profile", "biometric_token",
+    "api_biometric_enable", "api_biometric_disable",
+    "mobile_init", "session_ping", "app_logout",
+    "biometric_login", "set_new_password", "account_change_password"
+  ],
+  "helper_funcs_to_move": [
+    "_is_capacitor_browser", "_safe_mobile_resume_path",
+    "_login_next_path", "_safe_login_next",
+    "_do_login_session", "_biometric_hmac_token",
+    "_ensure_user_biometric_version_column",
+    "_user_profile_avatar_path"
+  ],
+  "top_level_to_move": [
+    "_BLOB_DIR"
+  ],
+  "helper_funcs_to_import": [
+    "_multi_word_filter", "media_url_filter",
+    "require_login", "_get_user_scope",
+    "_validate_csrf_exempt_origin",
+    "_persist_client_diagnostic",
+    "_cnic_digits",
+    "DEFAULT_FIRST_PASSWORD"
+  ],
+  "imports": [
+    "from flask import (",
+    "    render_template, redirect, url_for, flash, request,",
+    "    session, jsonify, make_response, abort, send_from_directory,",
+    "    send_file, Response, current_app,",
+    ")",
+    "from app import app, db, csrf",
+    "from models import (",
+    "    User, Role, Permission, Driver, Vehicle,",
+    "    SystemSetting, ActivityLog, LoginLog,",
+    ")",
+    "from forms import (",
+    "    ChangePasswordForm,",
+    ")",
+    "from datetime import datetime, date, timedelta",
+    "from sqlalchemy import func, text, or_, and_",
+    "from werkzeug.utils import secure_filename",
+    "from auth_utils import user_can_access, check_password",
+    "from utils import pk_now, pk_date, parse_date, format_date_ddmmyyyy",
+    "import re",
+    "import os",
+    "import json",
+    "import uuid",
+    "import tempfile",
+    "import hashlib",
+    "import hmac",
+    "import io",
+    "from io import BytesIO, StringIO"
+  ]
+}

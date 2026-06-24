@@ -1,3 +1,17 @@
+import os
+import sys
+
+# ── Project Restructure: add package folders to sys.path ─────────────────────
+# This allows moved files (routes/, services/, database/, config/) to keep using
+# flat imports (e.g. `from models import ...`, `from app import ...`) without
+# changing every import statement in every file.
+_app_dir = os.path.dirname(os.path.abspath(__file__))
+for _sub in ('routes', 'services', 'database', 'config'):
+    _sub_path = os.path.join(_app_dir, _sub)
+    if _sub_path not in sys.path:
+        sys.path.insert(0, _sub_path)
+# ── End path setup ───────────────────────────────────────────────────────────
+
 from flask import Flask
 from models import db
 import models as _all_models  # force full import so db.create_all() sees every table
@@ -5,12 +19,9 @@ from flask_migrate import Migrate
 from flask_wtf.csrf import CSRFProtect
 from dotenv import load_dotenv
 from datetime import timedelta
-import os
-import sys
 from freeze_utils import get_freeze_config
 
 # Load .env from app folder (so it works even when run from another directory)
-_app_dir = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(_app_dir, '.env'))
 
 print("Starting app...")
@@ -668,6 +679,21 @@ if _run_startup_tasks:
 # Import routes after app & db are ready
 from routes import *  # noqa: E402,F401
 import routes_tool_workstation  # noqa: E402,F401 — Tool Workstation (120 utilities)
+import routes_system  # noqa: E402,F401 — System health, tracker automation, driver doc portal
+import routes_reports  # noqa: E402,F401 — Report Centre, summary reports, driver/vehicle profiles
+import routes_transfers  # noqa: E402,F401 — Project, vehicle, driver transfers
+import routes_assignments  # noqa: E402,F401 — Project/Vehicle/Driver assignments
+import routes_expenses  # noqa: E402,F401 — Fuel, Oil, Maintenance expenses + work orders
+import routes_attendance  # noqa: E402,F401 — Driver attendance, GPS check-in/out, TRA report
+import routes_misc  # noqa: E402,F401 — Misc: APIs, PWA, FCM, Account, Biometric, Mobile Init
+import routes_auth  # noqa: E402,F401 — Auth, Users, Roles, Permissions, Form Control
+import routes_dashboard  # noqa: E402,F401 — Dashboard, Notifications, Reminders, App Updates
+import routes_master_data  # noqa: E402,F401 — Master data: Companies, Projects, Vehicles, Drivers, Parking, Districts, Parties, Products
+import routes_employees  # noqa: E402,F401 — Employees: Workforce Lifecycle, Assignments
+import routes_tasks  # noqa: E402,F401 — Task Reports: Core Task Reports, Logbooks
+import routes_task_ops  # noqa: E402,F401 — Task Ops: Red Tasks, Without Task, Penalty Records
+import routes_tracker_reports  # noqa: E402,F401 — Tracker & Operations Reports
+import routes_workforce  # noqa: E402,F401 — Workforce: Job Left, Rejoin, Leave, Driver Posts
 
 # Book management: explicit registration so endpoints always exist (avoids BuildError if routes.py tail not loaded)
 from routes_books import register_book_routes  # noqa: E402

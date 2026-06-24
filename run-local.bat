@@ -131,10 +131,10 @@ for /f "usebackq tokens=1,2 delims==" %%a in (".env.local") do (
 
 if /i "%FULL_RESET_FLAG%"=="true" (
     echo  [MODE] Full Reset -- rebuilding local DB from scratch
-    python sync_master.py --full-reset
+    python services\sync_master.py --full-reset
 ) else (
     echo  [MODE] Smart Sync -- fetching only new/updated records
-    python sync_master.py
+    python services\sync_master.py
 )
 
 if ERRORLEVEL 1 (

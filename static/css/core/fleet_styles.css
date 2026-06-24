@@ -1,0 +1,1912 @@
+
+
+/* ═══════════════════════════════════════════════════════════════
+   Fleet Manager — Core Styles (extracted from base.html)
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Anti-flicker: hide native selects before Tom Select replaces them */
+        select.search-select { display: none; }
+        /* Full-width TS wrapper */
+        .ts-wrapper { width: 100%; }
+        /* Body-level dropdown must sit above cards/tables/modals */
+        body > .ts-dropdown {
+            z-index: 1060 !important;
+            position: fixed !important;
+            margin: 0 !important;
+        }
+        /* Native app: bottom nav z-index 1065 — TS dropdown must clear it */
+        html.capacitor-native body > .ts-dropdown { z-index: 12050 !important; }
+        /* GPS attendance modal must sit above Tom Select body dropdowns */
+        body.fleet-attnd-modal-open > .ts-dropdown {
+            display: none !important;
+            visibility: hidden !important;
+            pointer-events: none !important;
+        }
+        #cameraModal.show {
+            z-index: 12100 !important;
+        }
+        /* GPS attendance: native CameraPreview behind WebView hole (front-only) */
+        html.fleet-attnd-camera-active,
+        html.fleet-attnd-camera-active body {
+            background: #000 !important;
+        }
+        html.fleet-attnd-camera-active.capacitor-native body > *:not(#cameraModal) {
+            display: none !important;
+        }
+        html.fleet-attnd-camera-active.capacitor-native body > .modal-backdrop {
+            display: none !important;
+        }
+        html.fleet-attnd-camera-active.capacitor-native body > .ts-dropdown {
+            display: none !important;
+        }
+        html.fleet-attnd-camera-active #cameraModal {
+            display: block !important;
+            position: fixed !important;
+            inset: 0 !important;
+            z-index: 200000 !important;
+            padding: 0 !important;
+        }
+        html.fleet-attnd-camera-active #cameraModal .modal-dialog {
+            margin: 0.5rem auto !important;
+            max-width: 480px !important;
+            background: transparent !important;
+        }
+        html.fleet-attnd-camera-active #cameraModal .modal-content,
+        html.fleet-attnd-camera-active #cameraModal .modal-body,
+        html.fleet-attnd-camera-active #cameraModal #cameraLiveWrap,
+        html.fleet-attnd-camera-active #cameraModal #cameraPreviewViewport {
+            background: transparent !important;
+        }
+        html.fleet-attnd-camera-active #cameraModal #cameraPreviewViewport {
+            pointer-events: none;
+        }
+        html.fleet-attnd-camera-active .modal-backdrop.show {
+            display: none !important;
+        }
+        .fleet-live-gps-stamp {
+            position: absolute;
+            left: 50%;
+            bottom: 10px;
+            transform: translateX(-50%);
+            z-index: 4;
+            width: calc(100% - 16px);
+            max-width: 420px;
+            padding: 10px 14px;
+            border-radius: 12px;
+            background: rgba(0, 0, 0, 0.55);
+            border: 2px solid rgba(255, 255, 255, 0.72);
+            text-align: left;
+            pointer-events: none;
+        }
+        .fleet-live-gps-stamp .fleet-live-gps-line {
+            color: #fff;
+            font-weight: 700;
+            font-size: 0.78rem;
+            line-height: 1.3;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+        }
+        /* Card-anchored TS (filter forms): above table content */
+        .card-body .ts-dropdown { z-index: 12050 !important; }
+        /* Highlighted (active) option — strong ERP-style blue */
+        .ts-dropdown .active {
+            background-color: #0d6efd !important;
+            color: #fff !important;
+            font-weight: 600;
+        }
+        /* Hover state for options */
+        .ts-dropdown .option:hover {
+            background-color: #e9ecef;
+            color: #212529;
+        }
+        /* ═══════════════════════════════════════════════════════════════════
+           Tom Select — Global Styles
+           Uses body-prefixed selectors (specificity 0,2,1) to beat all
+           local child-template overrides (specificity 0,2,0).
+           ═══════════════════════════════════════════════════════════════════ */
+
+        /* Lock height + padding on ALL single-select wrappers */
+        body .ts-wrapper .ts-control,
+        body .ts-wrapper.single .ts-control {
+            height: 40px !important;
+            min-height: 40px !important;
+            padding: 0 12px !important;
+            display: flex !important;
+            align-items: center !important;
+            overflow: hidden !important;
+            position: relative !important;
+            box-sizing: border-box !important;
+        }
+        /* Multi-select: only lock min-height, allow vertical growth */
+        body .ts-wrapper.multi .ts-control {
+            height: auto !important;
+            min-height: 40px !important;
+            overflow: visible !important;
+        }
+        /* Focused: ONLY a subtle blue glow — no size/border/padding change */
+        body .ts-wrapper.focus .ts-control,
+        body .ts-wrapper.single.focus .ts-control {
+            border-color: #86b7fe !important;
+            box-shadow: 0 0 0 0.2rem rgba(13,110,253,.18) !important;
+            outline: 0;
+        }
+        /* ── Placeholder: always grey, centered, hidden only when item IS selected ── */
+        body .ts-wrapper .ts-control .placeholder {
+            display: block !important;
+            visibility: visible !important;
+            color: #6c757d !important;
+            opacity: 1 !important;
+            position: absolute !important;
+            top: 50% !important;
+            transform: translateY(-50%) !important;
+            pointer-events: none;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 90%;
+        }
+        /* Hide placeholder ONLY when an item is selected */
+        body .ts-wrapper.single.has-items .ts-control .placeholder { display: none !important; }
+        /* ── Selected item: ALWAYS black, always visible ── */
+        body .ts-wrapper .ts-control .item {
+            color: #212529 !important;
+            opacity: 1 !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            visibility: visible !important;
+            height: 100%;
+            max-width: calc(100% - 24px);
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+            border-radius: 3px;
+            transition: background .15s, color .15s;
+        }
+        /* Overwrite-ready state: SAP/Excel-style item highlight on focus */
+        body .ts-wrapper .ts-control.ts-overwrite-ready .item {
+            background: #cfe2ff !important;
+            color: #0a3678 !important;
+            padding: 0 6px !important;
+            border-radius: 4px !important;
+        }
+        /* In overwrite-ready state, show the search input so typed chars go in */
+        body .ts-wrapper.single.has-items .ts-control.ts-overwrite-ready > input {
+            opacity: 1 !important;
+            width: auto !important;
+            position: static !important;
+        }
+        /* When item is selected (normal state), hide the search input visually  */
+        /* but keep it in DOM so keyboard can still trigger open/search          */
+        body .ts-wrapper.single.has-items .ts-control:not(.ts-overwrite-ready) > input {
+            opacity: 0 !important;
+            width: 1px !important;
+            position: absolute !important;
+        }
+        .ts-wrapper.single .ts-control { cursor: pointer; }
+        /* Dropdown item font size */
+        .ts-dropdown .option { font-size: 0.9rem; padding: 6px 12px; }
+        /* Inner input placeholder color */
+        .ts-control input::placeholder { color: #6c757d; opacity: 1; }
+        /* ── Smart "No Results" empty-state message ── */
+        .ts-dropdown .ts-empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 18px 12px;
+            color: #868e96;
+            font-size: 0.82rem;
+            gap: 6px;
+            text-align: center;
+        }
+        .ts-dropdown .ts-empty-state .ts-empty-icon {
+            font-size: 1.25rem;
+            color: #adb5bd;
+            line-height: 1;
+        }
+        .ts-dropdown .ts-empty-state .ts-empty-label {
+            font-weight: 500;
+            color: #6c757d;
+        }
+        .ts-dropdown .ts-empty-state .ts-empty-hint {
+            font-size: 0.75rem;
+            color: #adb5bd;
+            font-style: italic;
+        }
+        /* ── Section-heading: enterprise-grade bar ───────────────────────────── */
+        .section-heading {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.5rem;
+            padding: 0.6rem 1rem !important;
+            /* Prevent any child from overflowing */
+            overflow: hidden;
+        }
+        /* Left title area */
+        .section-heading > span:first-child,
+        .section-heading > .sh-title {
+            font-size: 0.95rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            flex-shrink: 1;
+            min-width: 0;
+        }
+        /* Right controls panel — never overflows the heading */
+        .section-heading .sh-controls,
+        .section-heading > div:last-child {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            flex-shrink: 0;
+            min-width: 0;
+        }
+
+        /* ── Search input inside heading ────────────────────────────────────── */
+        .heading-search-input {
+            background: rgba(255,255,255,0.18) !important;
+            border: 1px solid rgba(255,255,255,0.5) !important;
+            color: #fff !important;
+            border-radius: 20px !important;       /* pill shape — modern look    */
+            width: 175px !important;
+            max-width: 175px !important;
+            min-width: 0 !important;
+            font-size: 0.8rem !important;
+            height: 30px !important;
+            padding: 0 28px 0 10px !important;    /* right: spinner space        */
+            transition: width .2s ease, background .2s ease;
+        }
+        .heading-search-input:focus {
+            background: rgba(255,255,255,0.28) !important;
+            border-color: rgba(255,255,255,0.85) !important;
+            outline: none !important;
+            box-shadow: 0 0 0 2px rgba(255,255,255,0.2) !important;
+            color: #fff !important;
+            width: 210px !important;              /* expands on focus            */
+        }
+        .heading-search-input::placeholder { color: rgba(255,255,255,0.65) !important; font-size: 0.78rem; }
+
+        /* ── Per-page label ─────────────────────────────────────────────────── */
+        .sh-per-page-label {
+            font-size: 0.75rem;
+            font-weight: 500;
+            white-space: nowrap;
+            opacity: 0.85;
+            flex-shrink: 0;
+        }
+
+        /* ── Per-page select ────────────────────────────────────────────────── */
+        .heading-per-page-select {
+            width: 62px !important;
+            min-width: 62px !important;
+            max-width: 62px !important;
+            flex-shrink: 0 !important;
+            background: rgba(255,255,255,0.18) !important;
+            color: #fff !important;
+            border: 1px solid rgba(255,255,255,0.5) !important;
+            border-radius: 6px !important;
+            font-size: 0.8rem !important;
+            font-weight: 600 !important;
+            height: 30px !important;
+            padding: 0 4px 0 6px !important;
+            cursor: pointer;
+        }
+        .heading-per-page-select option { background: #1e3a5f; color: #fff; }
+        .heading-per-page-select:focus   { outline: none !important; box-shadow: none !important; }
+
+        /* ── "Per Page:" label — works for both class and inline-style variants ── */
+        .heading-per-page-label,
+        .section-heading span[style*="font-size"] {
+            font-size: 0.75rem !important;
+            font-weight: 500 !important;
+            white-space: nowrap;
+            flex-shrink: 0;
+            opacity: 0.9;
+        }
+        /* ── Filter/funnel button — stable across ALL states ────────────────
+           Same Bootstrap focus-visible fix as btn-success-compact above. ── */
+        .btn-primary-compact {
+            background-color: #2196f3 !important;
+            color: #fff !important;
+            border: none !important;
+            padding: 0.45rem 1rem !important;
+            min-height: 38px;
+            line-height: 1.5;
+            font-size: 0.875rem;
+            border-radius: 6px;
+            font-weight: 500;
+        }
+        .btn-primary-compact:hover {
+            background-color: #1976d2 !important;
+            color: #fff !important;
+            box-shadow: 0 4px 12px rgba(33,150,243,0.4) !important;
+            transform: translateY(-2px) !important;
+        }
+        .btn-primary-compact:focus,
+        .btn-primary-compact:focus-visible {
+            background-color: #2196f3 !important;
+            color: #fff !important;
+            border: none !important;
+            outline: none !important;
+            box-shadow: 0 0 0 0.25rem rgba(33,150,243,0.35) !important;
+            transform: none !important;
+            padding: 0.45rem 1rem !important;
+        }
+        .btn-primary-compact:active {
+            background-color: #1565c0 !important;
+            color: #fff !important;
+            border: none !important;
+            box-shadow: 0 0 0 0.25rem rgba(33,150,243,0.35) !important;
+            transform: none !important;
+        }
+
+/* ── Section separator ── */
+
+body {
+            background: #f1f5f9;
+            font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+            overflow-x: hidden;
+            -webkit-tap-highlight-color: transparent;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        /* ── Global Smooth Transitions ── */
+        *, *::before, *::after {
+            transition-property: background-color, border-color, box-shadow, opacity, transform;
+            transition-duration: 0.15s;
+            transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        /* Override transitions for elements that need their own timing */
+        .sidebar, .main-content, .fab-speed-dial { transition: none !important; }
+        .sidebar { transition: transform 0.3s ease, width 0.3s ease !important; }
+        .main-content { transition: margin-left 0.3s ease !important; }
+        .fab-speed-dial { transition: opacity 0.2s ease, transform 0.2s ease !important; }
+        /* ── Button Polish ── */
+        .btn {
+            font-family: 'Inter', sans-serif;
+            font-weight: 500;
+            letter-spacing: 0.01em;
+            transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        }
+        .btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important; }
+        .btn:active { transform: translateY(0); }
+        /* Prevent size/colour shift on focus for all standard buttons */
+        .btn:focus, .btn:focus-visible { transform: none; box-shadow: 0 0 0 0.2rem rgba(13,110,253,0.25); }
+        .btn-primary:hover { box-shadow: 0 4px 16px rgba(59,130,246,0.4) !important; }
+        .btn-success:hover { box-shadow: 0 4px 16px rgba(16,185,129,0.4) !important; }
+        .btn-danger:hover  { box-shadow: 0 4px 16px rgba(239,68,68,0.4) !important; }
+        /* ── List-view search/filter button — stable across ALL states ──────
+           Bootstrap 5's .btn:focus-visible applies background-color:var(--bs-btn-hover-bg)
+           which is transparent for non-variant buttons, collapsing the appearance.
+           !important pins the green background in every state. ── */
+        .btn-success-compact {
+            background-color: #4caf50 !important;
+            color: #fff !important;
+            border: none !important;
+            padding: 0.45rem 1rem !important;
+            min-height: 38px;
+            line-height: 1.5;
+            font-size: 0.875rem;
+            border-radius: 6px;
+            font-weight: 500;
+        }
+        .btn-success-compact:hover {
+            background-color: #388e3c !important;
+            color: #fff !important;
+            box-shadow: 0 4px 12px rgba(76,175,80,0.4) !important;
+            transform: translateY(-2px) !important;
+        }
+        .btn-success-compact:focus,
+        .btn-success-compact:focus-visible {
+            background-color: #4caf50 !important;
+            color: #fff !important;
+            border: none !important;
+            outline: none !important;
+            box-shadow: 0 0 0 0.25rem rgba(76,175,80,0.35) !important;
+            transform: none !important;
+            padding: 0.45rem 1rem !important;
+        }
+        .btn-success-compact:active {
+            background-color: #2e7d32 !important;
+            color: #fff !important;
+            border: none !important;
+            box-shadow: 0 0 0 0.25rem rgba(76,175,80,0.35) !important;
+            transform: none !important;
+        }
+        /* ── Card hover lift ── */
+        .card {
+            transition: transform 0.2s ease, box-shadow 0.2s ease !important;
+            border-radius: 14px !important;
+        }
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.10) !important;
+        }
+        /* ── Link transitions ── */
+        a { transition: color 0.15s ease, opacity 0.15s ease !important; }
+        /* ── Form inputs ── */
+        .form-control, .form-select {
+            font-family: 'Inter', sans-serif;
+            transition: border-color 0.18s ease, box-shadow 0.18s ease !important;
+            border-radius: 10px !important;
+        }
+        .form-control:focus, .form-select:focus {
+            box-shadow: 0 0 0 3px rgba(59,130,246,0.18) !important;
+        }
+        /* Navbar */
+        .navbar { height: 60px; z-index: 1050; }
+        /* Sidebar Customization - Desktop */
+        .sidebar {
+            position: fixed;
+            top: 60px;
+            left: 0;
+            height: calc(100vh - 60px);
+            width: 300px;
+            background: linear-gradient(180deg, #1e293b, #0f172a);
+            padding: 15px 0;
+            overflow-y: auto;
+            transition: transform 0.3s ease, width 0.3s;
+            z-index: 1040;
+        }
+        .sidebar.collapsed { width: 70px; }
+        /* Mobile: sidebar hidden by default, overlay when open */
+        @media (max-width: 991.98px) {
+            .sidebar {
+                -webkit-transform: translate3d(-100%, 0, 0);
+                transform: translate3d(-100%, 0, 0);
+                width: min(300px, 85vw);
+                box-shadow: 4px 0 15px rgba(0,0,0,0.2);
+                padding-bottom: env(safe-area-inset-bottom);
+            }
+            .sidebar.mobile-open {
+                -webkit-transform: translate3d(0, 0, 0);
+                transform: translate3d(0, 0, 0);
+            }
+            .sidebar a {
+                min-height: 48px;
+                padding: 14px 20px;
+                display: flex;
+                align-items: center;
+            }
+            /* Sub-menu items: even taller touch target */
+            .sidebar .collapse-item {
+                min-height: 52px !important;
+                padding: 14px 16px 14px 52px !important;
+            }
+            /* Dropdown parent row: add caret arrow area */
+            .sidebar .dropdown-toggle {
+                min-height: 52px !important;
+            }
+            .sidebar-overlay {
+                display: none;
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0,0,0,0.5);
+                -webkit-backdrop-filter: none;
+                backdrop-filter: none;
+                z-index: 1050;
+                transition: opacity 0.25s ease;
+                opacity: 0;
+            }
+            .sidebar-overlay.show { display: block; opacity: 1; }
+            .main-content { margin-left: 0 !important; padding: 15px 12px !important; }
+            .main-content.expanded { margin-left: 0 !important; }
+            .navbar-brand { font-size: 1rem; }
+            .flash-message { left: 12px; right: 12px; min-width: auto; }
+        }
+        .sidebar a {
+            display: flex;
+            align-items: center;
+            padding: 12px 20px;
+            text-decoration: none;
+            color: #cbd5e1;
+            transition: 0.2s;
+            font-size: 0.95rem;
+            border-left: 3px solid transparent;
+        }
+        .sidebar a:hover { background: rgba(255,255,255,0.1); color: white; }
+        .sidebar i { min-width: 30px; font-size: 1.1rem; }
+        .sidebar span { transition: 0.3s; white-space: nowrap; }
+        .sidebar.collapsed span, .sidebar.collapsed .dropdown-toggle::after { display: none; }
+        .active-link {
+            background: rgba(13, 110, 253, 0.2) !important;
+            color: white !important;
+            border-left: 4px solid #0d6efd !important;
+        }
+        /* Submenu Style */
+        .collapse-item-container { background: rgba(0, 0, 0, 0.2); }
+        .sidebar .collapse-item { padding-left: 50px !important; font-size: 0.85rem; }
+        .sidebar .collapse-item i {
+            min-width: 25px;
+            font-size: 1rem;
+            margin-right: 8px;
+            display: inline-block;
+            text-align: center;
+        }
+        /* ── Nested sub-group toggle (2nd-level accordion) ── */
+        .sb-sub-toggle {
+            display: flex; align-items: center; cursor: pointer;
+            padding: 6px 12px 6px 32px; font-size: .78rem; font-weight: 600;
+            text-transform: uppercase; letter-spacing: .4px;
+            color: rgba(255,255,255,.55); transition: color .2s;
+            position: relative; user-select: none;
+        }
+        .sb-sub-toggle:hover { color: rgba(255,255,255,.85); }
+        .sb-sub-toggle::before {
+            content: ''; position: absolute; left: 20px; top: 0; bottom: 0;
+            width: 1px; background: rgba(255,255,255,.12);
+        }
+        .sb-sub-toggle::after {
+            content: '\f285'; font-family: 'bootstrap-icons';
+            font-size: .6rem; margin-left: auto; transition: transform .12s;
+            color: rgba(255,255,255,.35);
+        }
+        .sb-sub-toggle:not(.collapsed)::after { transform: rotate(90deg); }
+        .sb-sub-items { padding-left: 0; position: relative; }
+        .sb-sub-items::before {
+            content: ''; position: absolute; left: 20px; top: 0; bottom: 10px;
+            width: 1px; background: rgba(255,255,255,.08);
+        }
+        .sb-sub-items .collapse-item {
+            padding-left: 42px !important; font-size: .82rem; position: relative;
+        }
+        .sb-sub-items .collapse-item::before {
+            content: ''; position: absolute; left: 20px; top: 50%;
+            width: 12px; height: 1px; background: rgba(255,255,255,.12);
+        }
+        .sidebar.collapsed .sb-sub-toggle,
+        .sidebar.collapsed .sb-sub-items { display: none; }
+        /* Slide-out menu open: undo desktop "collapsed" hiding (labels + nested groups) */
+        @media (max-width: 991.98px) {
+            .sidebar.mobile-open span,
+            .sidebar.mobile-open .dropdown-toggle::after {
+                display: inline-block !important;
+            }
+            .sidebar.mobile-open.collapsed .sb-sub-toggle {
+                display: flex !important;
+            }
+            .sidebar.mobile-open.collapsed .sb-sub-items.collapse.show {
+                display: block !important;
+            }
+        }
+        html.capacitor-native .sidebar.mobile-open span,
+        html.capacitor-native .sidebar.mobile-open .dropdown-toggle::after {
+            display: inline-block !important;
+        }
+        html.capacitor-native .sidebar.mobile-open.collapsed .sb-sub-toggle {
+            display: flex !important;
+        }
+        html.capacitor-native .sidebar.mobile-open.collapsed .sb-sub-items.collapse.show {
+            display: block !important;
+        }
+        /* Main Content */
+        .main-content { margin-left: 300px; margin-top: 60px; padding: 25px; transition: 0.3s; }
+        .main-content.expanded { margin-left: 70px; }
+        .main-content.ws-mini-open { padding-right: 235px; }
+        .ws-global-mini {
+            position: fixed;
+            top: 78px;
+            right: 16px;
+            width: 205px;
+            z-index: 1030;
+        }
+        .ws-global-mini .card { border: 0; box-shadow: 0 0.25rem 0.9rem rgba(16,24,40,.12); }
+        .ws-global-mini a {
+            display: flex; align-items: center; gap: .45rem;
+            padding: .48rem .62rem; border-radius: .55rem;
+            text-decoration: none; color: #344054; font-size: .88rem;
+        }
+        .ws-global-mini a:hover { background: #f3f6ff; color: #1d4ed8; }
+        .ws-global-mini a.active { background: #eaf1ff; color: #1d4ed8; font-weight: 600; }
+        .ws-global-mini .ws-mini-title { font-size: .86rem; font-weight: 700; color: #0f172a; margin-bottom: .45rem; }
+        .ws-global-mini .ws-mini-emp { font-size: .76rem; color: #64748b; margin-bottom: .55rem; }
+        .ws-global-mini .ws-mini-section-title { font-size: .70rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: .03em; margin: .75rem 0 .35rem 0; padding-left: .25rem; border-left: 2px solid #3b82f6; }
+        @media (max-width: 991.98px) {
+            .main-content { margin-left: 0; }
+            .main-content.ws-mini-open { padding-right: 25px; }
+        }
+        /* Flash Messages */
+        .flash-message { position: fixed; top: 75px; right: 20px; z-index: 2000; min-width: 300px; }
+        /* Stat Cards */
+        .stat-card {
+            border: none; border-radius: 15px; min-height: 150px;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            transition: 0.3s ease; color: white; box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        .stat-card:hover { transform: translateY(-8px); box-shadow: 0 15px 30px rgba(0,0,0,0.2); }
+        .bg-gradient-primary { background: linear-gradient(135deg,#0d6efd,#0b5ed7) !important; }
+        .bg-gradient-success { background: linear-gradient(135deg,#198754,#157347) !important; }
+        .bg-gradient-info { background: linear-gradient(135deg,#0dcaf0,#0aa2c0) !important; }
+        .bg-gradient-warning { background: linear-gradient(135deg,#ffc107,#e0a800) !important; color: #000 !important; }
+        .bg-gradient-danger { background: linear-gradient(135deg,#dc3545,#b02a37) !important; }
+        /* Tables: responsive scroll on small screens */
+        .table-responsive { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        .table-responsive table { min-width: 600px; }
+        /* Custom Scrollbar */
+        .sidebar::-webkit-scrollbar { width: 5px; }
+        .sidebar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); }
+
+        /* ─── Mobile: app-like experience ─── */
+        @media (max-width: 991.98px) {
+            body { padding-bottom: env(safe-area-inset-bottom, 0); }
+            .navbar {
+                padding-left: max(12px, env(safe-area-inset-left));
+                padding-right: max(12px, env(safe-area-inset-right));
+                min-height: 56px;
+                height: auto;
+            }
+            .navbar-brand { font-size: 0.95rem; }
+            .navbar .btn, .navbar .btn-link, .navbar .dropdown-toggle {
+                min-height: 44px;
+                min-width: 44px;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                padding: 10px;
+            }
+            .main-content {
+                padding: 12px 10px 24px !important;
+                padding-left: max(10px, env(safe-area-inset-left)) !important;
+                padding-right: max(10px, env(safe-area-inset-right)) !important;
+                padding-bottom: max(24px, env(safe-area-inset-bottom)) !important;
+            }
+            .container { max-width: 100%; padding-left: 8px; padding-right: 8px; }
+            .card { border-radius: 12px; }
+            .btn { min-height: 44px; padding: 0.5rem 1rem; }
+            .form-control, .form-select { min-height: 44px; font-size: 16px; }
+            .table-responsive { -webkit-overflow-scrolling: touch; margin-left: -8px; margin-right: -8px; padding-left: 8px; padding-right: 8px; }
+            .table-responsive table { min-width: 500px; font-size: 0.9rem; }
+            .flash-message { left: 10px; right: 10px; top: 65px; min-width: 0; max-width: 100%; }
+        }
+        @media (max-width: 575.98px) {
+            #liveDateTime { display: none !important; }
+            .navbar-brand span.d-none.d-sm-inline { display: none !important; }
+            .dropdown-menu-end { right: 0; left: auto; }
+        }
+        /* Guide chatbot: smaller on mobile, avoid blocking content */
+        @media (max-width: 576px) {
+            #guideChatbotWrap { padding: 8px !important; bottom: calc(env(safe-area-inset-bottom, 8px) + 64px); right: env(safe-area-inset-right, 8px); }
+            #guideChatPanel { width: calc(100vw - 24px) !important; max-height: 60vh !important; }
+            #guideChatToggle { width: 48px; height: 48px; font-size: 1.25rem; }
+        }
+
+        /* Task entry: Load more pagination removed — hide legacy markup if WebView cached old HTML */
+        #taskEntryLoadMoreWrap,
+        .task-entry-load-more-wrap {
+            display: none !important;
+            visibility: hidden !important;
+            height: 0 !important;
+            min-height: 0 !important;
+            overflow: hidden !important;
+            pointer-events: none !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            border: none !important;
+        }
+        @media (max-width: 767.98px) {
+            #batchTable tbody tr.task-row[data-task-chunk-hidden="1"] {
+                display: block !important;
+            }
+        }
+
+        /* ─── Fixed Bottom Navigation (Mobile < 768px) ─── */
+        .mobile-bottom-nav {
+            display: none;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: calc(60px + env(safe-area-inset-bottom, 0px));
+            background: linear-gradient(180deg, #1e293b, #0f172a);
+            border-top: 1px solid rgba(255,255,255,0.1);
+            z-index: 1045;
+            padding-bottom: env(safe-area-inset-bottom, 0px);
+            box-shadow: 0 -4px 16px rgba(0,0,0,0.25);
+        }
+        .capacitor-native .mobile-bottom-nav { display: flex; align-items: stretch; }
+        /* On native: nav stays on top of drawers/overlays */
+        .capacitor-native .mobile-bottom-nav { z-index: 1065 !important; }
+        .capacitor-native .main-content {
+            padding-bottom: calc(70px + env(safe-area-inset-bottom, 0px)) !important;
+        }
+        .mobile-nav-item {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #94a3b8;
+            text-decoration: none;
+            font-size: 0.62rem;
+            font-weight: 500;
+            gap: 3px;
+            min-height: 44px;
+            border: none;
+            background: none;
+            cursor: pointer;
+            padding: 6px 2px;
+            letter-spacing: 0.02em;
+            transition: color 0.18s, background 0.18s;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .mobile-nav-item i { font-size: 1.25rem; line-height: 1; }
+        .mobile-nav-item svg { width: 22px; height: 22px; }
+        .mobile-nav-item.active { color: #60a5fa; position: relative; }
+        .mobile-nav-item.active::before {
+            content: ''; position: absolute; top: 5px; left: 50%;
+            transform: translateX(-50%) scale(1);
+            width: 48px; height: 30px;
+            background: rgba(96,165,250,0.18);
+            border-radius: 24px; z-index: 0;
+            transition: transform 0.25s cubic-bezier(.34,1.56,.64,1);
+        }
+        .mobile-nav-item > i, .mobile-nav-item > svg, .mobile-nav-item > span { position: relative; z-index: 1; }
+        .mobile-nav-item.active i, .mobile-nav-item.active svg {
+            filter: drop-shadow(0 0 6px rgba(96,165,250,0.9));
+            transform: translateY(-2px);
+            transition: transform 0.2s cubic-bezier(.34,1.56,.64,1);
+        }
+        .mobile-nav-item.active span { font-weight: 700; color: #93c5fd; }
+        .mobile-nav-item:not(.active) i, .mobile-nav-item:not(.active) svg { transition: transform 0.2s; }
+        .mobile-nav-item:active { opacity: 0.6; transition: opacity 0.1s; }
+
+        /* ─── More Bottom Drawer ─── */
+        .more-drawer-overlay {
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,0.55); z-index: 1060;
+            backdrop-filter: none; -webkit-backdrop-filter: none;
+        }
+        .more-drawer-overlay.open { display: block; }
+        .more-drawer-panel {
+            position: fixed; bottom: 0; left: 0; right: 0;
+            background: #1e293b;
+            border-radius: 24px 24px 0 0;
+            z-index: 1061;
+            padding: 8px 16px calc(20px + env(safe-area-inset-bottom, 0px));
+            transform: translateY(100%);
+            transition: transform 0.3s cubic-bezier(.34,1.06,.64,1);
+            /* NO will-change: transform — it causes Android WebView ghost rendering */
+            visibility: hidden;   /* fully invisible + no hit-testing when closed */
+            max-height: 82vh; overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            border-top: 1px solid rgba(255,255,255,0.08);
+        }
+        .more-drawer-panel.open {
+            transform: translateY(0);
+            visibility: visible;
+        }
+        .more-drawer-handle {
+            width: 40px; height: 4px;
+            background: rgba(255,255,255,0.2); border-radius: 2px;
+            margin: 0 auto 16px;
+        }
+        .more-drawer-grid {
+            display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
+        }
+        .more-drawer-item {
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            gap: 6px; padding: 12px 6px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 16px; border: none;
+            color: #cbd5e1; text-decoration: none;
+            font-size: 0.63rem; font-weight: 500;
+            letter-spacing: 0.02em; cursor: pointer;
+            transition: background 0.15s, transform 0.12s, color 0.15s;
+            -webkit-tap-highlight-color: transparent; min-height: 70px;
+        }
+        .more-drawer-item:active, .more-drawer-item:focus { background: rgba(96,165,250,0.18); transform: scale(0.95); color: #93c5fd; outline: none; }
+        .more-drawer-item.active { background: rgba(96,165,250,0.14); color: #60a5fa; }
+        .more-drawer-item.more-logout { color: #f87171; }
+        .more-drawer-item.more-logout .more-icon { background: rgba(248,113,113,0.12); }
+        .more-icon {
+            width: 38px; height: 38px;
+            background: rgba(255,255,255,0.08); border-radius: 12px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.1rem; font-weight: 700; position: relative;
+            font-family: 'Noto Nastaliq Urdu','Segoe UI',sans-serif;
+        }
+        .more-icon svg { width: 20px; height: 20px; }
+        .more-notif-badge {
+            position: absolute; top: -4px; right: -4px;
+            background: #ef4444; color: #fff;
+            border-radius: 10px; font-size: 0.52rem; font-weight: 700;
+            padding: 1px 4px; min-width: 16px; text-align: center; line-height: 1.4;
+        }
+        .more-drawer-user {
+            display: flex; align-items: center; gap: 8px;
+            margin-top: 14px; padding: 10px 12px;
+            background: rgba(255,255,255,0.04); border-radius: 14px;
+            color: rgba(255,255,255,0.45); font-size: 0.73rem;
+        }
+        .more-drawer-user strong { color: rgba(255,255,255,0.65); font-weight: 600; }
+
+        /* ─── Hide mobile-only drawers on desktop (non-mobile screens) ─── */
+        @media (min-width: 992px) {
+            #moreDrawerPanel, #moreDrawerOverlay,
+            #attendSheet, #attendSheetOverlay {
+                display: none !important;
+            }
+        }
+
+        /* ─── Capacitor: nav (z-index:1065) sits above the drawer overlay, drawer at bottom:0 ─── */
+
+        /* ─── overscroll: disable browser native pull-to-refresh everywhere ─── */
+        body { overscroll-behavior-y: none; }
+        /* Dashboard: PTR enabled via JS only (not browser native) */
+        body.page-dashboard { overscroll-behavior-y: contain; }
+        /* Sidebar scrolls independently without triggering page PTR */
+        .sidebar { overscroll-behavior-y: contain; }
+
+        /* ─── Top Page Loading Progress Bar ─── */
+        #topLoadBar {
+            position: fixed;
+            top: 0; left: 0;
+            height: 3px;
+            width: 0%;
+            background: linear-gradient(90deg, #3b82f6, #8b5cf6, #06b6d4);
+            z-index: 99999;
+            opacity: 0;
+            border-radius: 0 2px 2px 0;
+            box-shadow: 0 0 10px rgba(59,130,246,0.7);
+            pointer-events: none;
+        }
+        #topLoadBar.tlb-loading {
+            opacity: 1;
+            transition: width 8s cubic-bezier(0.05, 0.7, 0.1, 1.0);
+            width: 82%;
+        }
+        #topLoadBar.tlb-done {
+            width: 100% !important;
+            opacity: 0;
+            transition: width 0.2s ease, opacity 0.4s ease 0.2s;
+        }
+
+        /* ─── Pull-to-Refresh indicator ─── */
+        #pullRefreshBar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: #3b82f6;
+            transform: scaleX(0);
+            transform-origin: left;
+            transition: transform 0.3s;
+            z-index: 9999;
+        }
+
+        /* ─── Capacitor Native App Overrides ─── */
+        .capacitor-native {
+            --safe-top: env(safe-area-inset-top, 28px);
+            --nav-h: 56px;
+        }
+        /* Prevent the html/body from scrolling — only .main-content (fixed scroll container) should scroll */
+        html.capacitor-native,
+        html.capacitor-native body {
+            overflow: hidden !important;
+            height: 100% !important;
+        }
+
+        /* ── Status bar safe area ── */
+        .capacitor-native .navbar {
+            padding-top: var(--safe-top) !important;
+            height: calc(var(--safe-top) + var(--nav-h)) !important;
+            background: linear-gradient(135deg, #0f172a, #1e293b) !important;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.4) !important;
+            transition: transform 0.3s ease;
+        }
+        .capacitor-native .navbar.nav-hidden {
+            transform: translateY(-100%) !important;
+        }
+
+        /* Hide desktop-only navbar items */
+        .capacitor-native #sidebarToggleMobile,
+        .capacitor-native button.d-none.d-lg-inline-block,
+        .capacitor-native #liveDateTime { display: none !important; }
+
+        /* Compact profile dropdown in navbar */
+        .capacitor-native .navbar .dropdown-toggle span.fw-semibold { display: none !important; }
+        .capacitor-native .navbar .dropdown-toggle small { display: none !important; }
+        .capacitor-native .navbar-brand span { font-size: 1rem !important; }
+
+        /* ── Sidebar: hidden by default, swipe-open via More button ── */
+        .capacitor-native .sidebar {
+            top: 0 !important;
+            height: 100vh !important;
+            max-height: 100vh !important;
+            -webkit-transform: translate3d(-100%, 0, 0);
+            transform: translate3d(-100%, 0, 0);
+            width: min(300px, 88vw) !important;
+            z-index: 9999 !important;
+            background: #fff !important;
+            backdrop-filter: none !important;
+            -webkit-backdrop-filter: none !important;
+            filter: none !important;
+            transition: -webkit-transform 0.25s ease, transform 0.25s ease !important;
+            will-change: transform;
+            -webkit-backface-visibility: hidden;
+            backface-visibility: hidden;
+        }
+        .capacitor-native .sidebar.mobile-open {
+            -webkit-transform: translate3d(0, 0, 0) !important;
+            transform: translate3d(0, 0, 0) !important;
+        }
+        .capacitor-native .sidebar-overlay.show {
+            z-index: 9998 !important;
+            backdrop-filter: none !important;
+            -webkit-backdrop-filter: none !important;
+            filter: none !important;
+            background-color: rgba(0,0,0,0.4) !important;
+        }
+
+        /* ── Native App Shell: single fixed container; nav is a flex child — never scrolls ── */
+        #appNativeShell {
+            position: fixed !important;
+            top: calc(var(--safe-top, 28px) + var(--nav-h, 56px)) !important;
+            left: 0 !important; right: 0 !important; bottom: 0 !important;
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: stretch !important;   /* children always fill full width */
+            overflow: hidden !important;
+            z-index: 1;
+        }
+        /* More drawer: absolute inside shell so it can never float free.           Shell overflow:hidden clips the panel when closed (translateY 100%). */
+        #appNativeShell > .more-drawer-overlay {
+            position: absolute !important;
+            inset: 0 !important;
+            z-index: 50 !important;
+        }
+        #appNativeShell > .more-drawer-panel {
+            position: absolute !important;
+            bottom: 0 !important;
+            left: 0 !important; right: 0 !important;
+            z-index: 51 !important;
+        }
+        /*
+         * Capacitor scroll — single source of truth (do not override per-page).
+         * #appNativeShell = fixed flex shell; .main-content = only vertical scroll root.
+         */
+        #appNativeShell .main-content {
+            position: static !important;
+            top: auto !important; left: auto !important;
+            right: auto !important; bottom: auto !important;
+            flex: 1 1 auto !important;
+            min-height: 0 !important;
+            height: auto !important;
+            width: 100% !important;
+            box-sizing: border-box !important;
+            overflow-x: hidden !important;
+            overflow-y: auto !important;
+            -webkit-overflow-scrolling: touch !important;
+            overscroll-behavior-y: contain !important;
+            overflow-anchor: none !important;
+            scroll-behavior: auto !important;
+            animation: none !important;
+            padding: 16px 14px calc(24px + env(safe-area-inset-bottom, 0px)) !important;
+            background: #f1f5f9 !important;
+            margin: 0 !important;
+        }
+        /* Inside the shell: bottom-nav is locked to the bottom as a flex sibling */
+        #appNativeShell .mobile-bottom-nav {
+            position: static !important;
+            bottom: auto !important;
+            flex: 0 0 auto !important;
+            z-index: auto !important;
+            display: flex !important;
+            align-items: stretch !important;
+        }
+        /* Keyboard open: hide bottom nav (do not float above keyboard) */
+        html.capacitor-native.fleet-keyboard-open #appNativeShell .mobile-bottom-nav,
+        html.capacitor-native .mobile-bottom-nav.fleet-nav-keyboard-hidden {
+            display: none !important;
+            visibility: hidden !important;
+            height: 0 !important;
+            min-height: 0 !important;
+            overflow: hidden !important;
+            pointer-events: none !important;
+            border: none !important;
+            box-shadow: none !important;
+        }
+        html.capacitor-native.fleet-keyboard-open #appNativeShell .main-content,
+        html.capacitor-native.fleet-keyboard-open .main-content {
+            padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)) !important;
+        }
+        html.capacitor-native.fleet-keyboard-open .mobile-fab-wrap {
+            display: none !important;
+        }
+
+        /* ── Fallback: FIXED scroll container for Capacitor before shell JS runs ── */
+        .capacitor-native .main-content {
+            position: fixed !important;
+            top: calc(var(--safe-top) + var(--nav-h)) !important;
+            left: 0 !important; right: 0 !important;
+            bottom: calc(60px + env(safe-area-inset-bottom, 0px)) !important;
+            margin: 0 !important;
+            padding: 16px 14px 24px !important;
+            background: #f1f5f9 !important;
+            overflow-x: hidden !important;
+            overflow-y: scroll !important;
+            -webkit-overflow-scrolling: touch !important;
+            overscroll-behavior-y: contain !important;
+            overflow-anchor: none !important;
+            scroll-behavior: auto !important;
+            animation: none !important;
+            height: auto !important;
+        }
+
+        /*
+         * Public shared driver profile (/p/driver-profile/<token>): single scroll root = document.
+         * - Normal browsers + desktop: wheel scrolls <html>; body overscroll must not block chaining.
+         * - Capacitor: undo fixed shell; do NOT set touch-action (breaks 1-finger pan on iOS when combined with pinch-zoom).
+         */
+        html.driver-profile-public-view {
+            overflow-x: hidden !important;
+            overflow-y: auto !important;
+            height: auto !important;
+            min-height: 100% !important;
+            min-height: -webkit-fill-available !important;
+            -webkit-overflow-scrolling: touch !important;
+        }
+        html.driver-profile-public-view body,
+        body.driver-profile-public-view {
+            overflow-x: hidden !important;
+            overflow-y: auto !important;
+            height: auto !important;
+            min-height: 100% !important;
+            min-height: -webkit-fill-available !important;
+            overscroll-behavior-y: auto !important;
+            -webkit-overflow-scrolling: touch !important;
+        }
+        html.driver-profile-public-view #mainContent,
+        html.driver-profile-public-view .main-content {
+            position: relative !important;
+            top: auto !important;
+            left: auto !important;
+            right: auto !important;
+            bottom: auto !important;
+            flex: none !important;
+            max-height: none !important;
+            min-height: 0 !important;
+            height: auto !important;
+            overflow-x: hidden !important;
+            overflow-y: visible !important;
+            -webkit-overflow-scrolling: touch !important;
+        }
+        html.driver-profile-public-view #appNativeShell {
+            position: static !important;
+            display: block !important;
+            flex: none !important;
+            height: auto !important;
+            min-height: 0 !important;
+            overflow: visible !important;
+            inset: auto !important;
+            top: auto !important;
+            left: auto !important;
+            right: auto !important;
+            bottom: auto !important;
+        }
+        html.driver-profile-public-view #appNativeShell .main-content {
+            padding-bottom: max(16px, env(safe-area-inset-bottom, 0px)) !important;
+        }
+
+        /* ── Cards: native app style ── */
+        .capacitor-native .card {
+            border: none !important;
+            border-radius: 16px !important;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08) !important;
+            margin-bottom: 16px !important;
+        }
+        .capacitor-native .card-header {
+            border-radius: 16px 16px 0 0 !important;
+            font-weight: 600 !important;
+            letter-spacing: 0.01em;
+        }
+        .capacitor-native .card-body { padding: 18px !important; }
+
+        /* ── Stat cards: bigger, full-width on mobile ── */
+        .capacitor-native .stat-card {
+            border-radius: 18px !important;
+            min-height: 110px !important;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.15) !important;
+        }
+        .capacitor-native .stat-card h3,
+        .capacitor-native .stat-card .display-4 { font-size: 2rem !important; }
+
+        /* ── Buttons: large touch targets ── */
+        .capacitor-native .btn {
+            min-height: 48px !important;
+            border-radius: 12px !important;
+            font-weight: 500 !important;
+        }
+        .capacitor-native .btn-sm {
+            min-height: 40px !important;
+            border-radius: 10px !important;
+        }
+
+        /* ── Forms: native input feel ── */
+        .capacitor-native .form-control,
+        .capacitor-native .form-select {
+            min-height: 52px !important;
+            border-radius: 12px !important;
+            font-size: 16px !important;
+            border: 1.5px solid #e2e8f0 !important;
+            background: #fff !important;
+            box-shadow: none !important;
+        }
+        .capacitor-native .form-control:focus,
+        .capacitor-native .form-select:focus {
+            border-color: #3b82f6 !important;
+            box-shadow: 0 0 0 3px rgba(59,130,246,0.15) !important;
+        }
+        .capacitor-native label { font-weight: 600; font-size: 0.85rem; color: #475569; }
+
+        /* ── Tables: card-like rows ── */
+        .capacitor-native .table-responsive {
+            border-radius: 16px !important;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.07) !important;
+            background: #fff;
+            overflow: hidden;
+        }
+        .capacitor-native .table thead th {
+            background: #1e293b !important;
+            color: #e2e8f0 !important;
+            font-size: 0.78rem !important;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 14px 12px !important;
+            border: none !important;
+        }
+        .capacitor-native .table tbody tr {
+            border-bottom: 1px solid #f1f5f9 !important;
+        }
+        .capacitor-native .table tbody tr:last-child { border-bottom: none !important; }
+        .capacitor-native .table tbody td {
+            padding: 14px 12px !important;
+            font-size: 0.88rem !important;
+            vertical-align: middle !important;
+        }
+        .capacitor-native .table tbody tr:active { background: #eff6ff !important; }
+
+        /* ── Page titles ── */
+        .capacitor-native h2, .capacitor-native h3,
+        .capacitor-native .page-title {
+            font-size: 1.3rem !important;
+            font-weight: 700 !important;
+            color: #0f172a !important;
+        }
+
+        /* ── Hide web-only elements ── */
+        .capacitor-native #guideChatbotWrap,
+        .capacitor-native .d-none-native { display: none !important; }
+
+        /* ── Flash messages: full-width on native ── */
+        .capacitor-native .flash-message {
+            left: 12px !important;
+            right: 12px !important;
+            top: calc(var(--safe-top) + var(--nav-h) + 8px) !important;
+            border-radius: 14px !important;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15) !important;
+        }
+
+        /* ── Breadcrumbs: hide on native ── */
+        .capacitor-native nav[aria-label="breadcrumb"] { display: none !important; }
+
+        /* ── Badge pills: bigger ── */
+        .capacitor-native .badge { font-size: 0.8rem !important; padding: 6px 10px !important; border-radius: 8px !important; }
+
+        /* ── Tom Select: native feel ── */
+        .capacitor-native .ts-wrapper .ts-control {
+            min-height: 52px !important;
+            border-radius: 12px !important;
+            border: 1.5px solid #e2e8f0 !important;
+        }
+
+        /* ═══ NATIVE MOBILE: hide top navbar ═══ */
+        .capacitor-native .navbar { display: none !important; }
+        .capacitor-native .main-content { margin-top: 0 !important; padding-top: max(env(safe-area-inset-top, 0px), 14px) !important; }
+
+        /* ── Floating Hamburger (sidebar access on mobile, native app only) ── */
+        .mobile-menu-btn {
+            display: none; position: fixed;
+            top: max(env(safe-area-inset-top, 10px), 10px); left: 14px;
+            width: 42px; height: 42px;
+            background: rgba(15,23,42,0.92);
+            backdrop-filter: none; -webkit-backdrop-filter: none;
+            border: none; border-radius: 12px; color: #e2e8f0;
+            align-items: center; justify-content: center;
+            z-index: 1055; box-shadow: 0 2px 12px rgba(0,0,0,0.3); cursor: pointer;
+        }
+        .capacitor-native .mobile-menu-btn { display: flex; }
+
+        /* ── FAB (Floating Action Button) ── */
+        /* More drawer open: hide dashboard FAB (+) — only while More menu is visible */
+        #mobileFabWrap.fab-hidden-for-more-drawer {
+            display: none !important;
+            visibility: hidden !important;
+            pointer-events: none !important;
+        }
+
+        .mobile-fab-wrap {
+            display: none; position: fixed; right: 18px;
+            bottom: calc(74px + env(safe-area-inset-bottom, 0px)); z-index: 1055;
+            /* CRITICAL: container must not intercept scroll gestures on the right side.
+               The browser cannot find #mainContent as scroll target from here because
+               .mobile-fab-wrap is a sibling of #appNativeShell (not a descendant).     */
+            pointer-events: none;
+        }
+        /* Re-enable pointer events only on the actual interactive children */
+        .mobile-fab { pointer-events: auto; }
+        .fab-speed-dial.open { pointer-events: auto; }
+        .fab-backdrop { pointer-events: none; }
+        .fab-backdrop.show { pointer-events: auto; }
+        .capacitor-native .mobile-fab-wrap { display: block; }
+        .fab-speed-dial {
+            display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px;
+            pointer-events: none; opacity: 0; transform: translateY(14px);
+            transition: opacity 0.2s ease, transform 0.2s ease;
+        }
+        .fab-speed-dial.open { pointer-events: all; opacity: 1; transform: translateY(0); }
+        .fab-dial-item { display: flex; align-items: center; gap: 10px; justify-content: flex-end; }
+        .fab-dial-label { background: #1e293b; color: #fff; font-size: 0.78rem; font-weight: 500; padding: 5px 14px; border-radius: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.3); white-space: nowrap; }
+        .fab-dial-btn { width: 42px; height: 42px; background: #1e293b; color: #e2e8f0; border: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 10px rgba(0,0,0,0.25); text-decoration: none; flex-shrink: 0; transition: background 0.15s; }
+        .fab-dial-btn:hover, .fab-dial-btn:active { background: #3b82f6; color: #fff; }
+        .fab-dial-btn svg { width: 18px; height: 18px; }
+        .mobile-fab {
+            width: 54px; height: 54px;
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8); color: #fff;
+            border: none; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 4px 20px rgba(59,130,246,0.5); cursor: pointer;
+            transition: transform 0.22s cubic-bezier(.34,1.56,.64,1), background 0.2s;
+        }
+        .mobile-fab:active { transform: scale(0.9); }
+        .mobile-fab.open { background: linear-gradient(135deg,#ef4444,#b91c1c); transform: rotate(45deg); box-shadow: 0 4px 20px rgba(239,68,68,0.5); }
+        .mobile-fab svg { width: 26px; height: 26px; }
+
+        /* ── FAB Backdrop ── */
+        .fab-backdrop {
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,0.4);
+            backdrop-filter: none; -webkit-backdrop-filter: none;
+            z-index: 1050;
+            animation: backdropFadeIn 0.2s ease;
+        }
+        .fab-backdrop.show { display: block; }
+        @keyframes backdropFadeIn { from { opacity:0; } to { opacity:1; } }
+
+        /* ── Page Fade-In ──
+           IMPORTANT: opacity-only. A previous version animated transform: translateY()
+           with animation-fill-mode: both, which left a permanent transform on
+           .main-content. That turned the scroll container into a stuck GPU layer and
+           caused Android WebView to drop the content while dragging (the form vanished
+           during scroll and reappeared on release). Never re-add transform here. */
+        .main-content { animation: appFadeIn 0.25s ease both; }
+        @keyframes appFadeIn { from { opacity:0; } to { opacity:1; } }
+
+        /* ── Top Loading Bar ── */
+        #pullRefreshBar { position:fixed; top:0; left:0; right:0; height:3px; background:linear-gradient(90deg,#3b82f6,#8b5cf6,#3b82f6); background-size:200% 100%; z-index:9999; display:none; }
+        #pullRefreshBar.active { display:block; animation:loadBarMove 1.2s linear infinite; }
+
+        /* ── Pull-to-Refresh Overlay ── */
+        #ptrOverlay {
+            position: fixed; top: 0; left: 50%;
+            transform: translateX(-50%) translateY(-72px);
+            z-index: 9998; background: #1e293b; color: #e2e8f0;
+            padding: 9px 22px; border-radius: 0 0 22px 22px;
+            font-size: 0.8rem; font-weight: 600;
+            display: flex; align-items: center; gap: 9px;
+            box-shadow: 0 6px 24px rgba(0,0,0,0.35);
+            transition: transform 0.28s cubic-bezier(.34,1.56,.64,1);
+            letter-spacing: 0.03em; pointer-events: none;
+        }
+        #ptrOverlay.ptr-visible { transform: translateX(-50%) translateY(0); }
+        .ptr-spinner {
+            width: 16px; height: 16px;
+            border: 2px solid rgba(255,255,255,0.25);
+            border-top-color: #60a5fa;
+            border-radius: 50%;
+            animation: ptrSpin 0.7s linear infinite;
+            display: none; flex-shrink: 0;
+        }
+        #ptrOverlay.ptr-releasing .ptr-spinner { display: block; }
+        @keyframes ptrSpin { to { transform: rotate(360deg); } }
+        .ptr-arrow {
+            font-size: 1rem; transition: transform 0.2s ease;
+            display: inline-block;
+        }
+        #ptrOverlay.ptr-releasing .ptr-arrow { transform: rotate(180deg); }
+        @keyframes loadBarMove { 0%{background-position:100% 0} 100%{background-position:-100% 0} }
+
+        /* ── Skeleton Loader ── */
+        .skeleton-card { background:#fff; border-radius:16px; padding:18px; margin-bottom:14px; box-shadow:0 2px 8px rgba(0,0,0,0.06); }
+        .skeleton-line { border-radius:6px; height:14px; margin-bottom:10px; background:linear-gradient(90deg,#e2e8f0 25%,#f8fafc 50%,#e2e8f0 75%); background-size:200% 100%; animation:skelShimmer 1.4s infinite; display:block; }
+        .skeleton-line.h-sm{height:10px;} .skeleton-line.h-lg{height:22px;}
+        .skeleton-line.w-80{width:80%;} .skeleton-line.w-60{width:60%;} .skeleton-line.w-40{width:40%;}
+        @keyframes skelShimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+        /* ── Mobile Data Cards: handled by mobile_perfect.css + JS below ── */
+
+        /* ══════════════════════════════════════════════════════════════
+           NATIVE MOBILE FEATURES
+        ══════════════════════════════════════════════════════════════ */
+
+        /* ── No Internet Connection Banner ── */
+        #no-internet-banner {
+            display: none;
+            position: fixed; top: 60px; left: 0; right: 0;
+            z-index: 1049;
+            background: #1e293b;
+            color: #f8fafc;
+            padding: 9px 16px;
+            font-size: 0.82rem; font-weight: 600;
+            border-bottom: 2px solid #ef4444;
+            align-items: center; justify-content: center; gap: 8px;
+            letter-spacing: 0.01em;
+        }
+        #no-internet-banner.show { display: flex; animation: slideDownBanner 0.3s ease; }
+        @keyframes slideDownBanner {
+            from { transform: translateY(-100%); opacity: 0; }
+            to   { transform: translateY(0); opacity: 1; }
+        }
+        #no-internet-banner .inet-dot {
+            width: 8px; height: 8px; border-radius: 50%;
+            background: #ef4444; flex-shrink: 0;
+            animation: blink 1.1s ease-in-out infinite;
+        }
+        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+        /* ── Form Submit Spinner ── */
+        .btn-spinner {
+            display: none;
+            width: 15px; height: 15px;
+            border: 2.5px solid rgba(255,255,255,0.32);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: btnSpin 0.65s linear infinite;
+            vertical-align: middle; margin-right: 7px; flex-shrink: 0;
+        }
+        .btn-loading .btn-spinner { display: inline-block; }
+        .btn-loading { pointer-events: none !important; opacity: 0.80; }
+        @keyframes btnSpin { to { transform: rotate(360deg); } }
+
+        /* ── Native Sticky Submit (Thumb Zone) — mobile width OR Capacitor app (any width) ── */
+        @media (max-width: 767.98px) {
+            .capacitor-native .main-content {
+                padding-bottom: 130px !important;
+            }
+            .capacitor-native .native-submit-sticky {
+                position: sticky;
+                bottom: 72px;
+                background: rgba(241,245,249,0.97);
+                -webkit-backdrop-filter: blur(8px);
+                backdrop-filter: blur(8px);
+                padding: 10px 4px;
+                margin: 12px -4px -4px;
+                z-index: 100;
+                border-top: 1px solid rgba(0,0,0,0.07);
+            }
+            .capacitor-native .native-submit-sticky .btn {
+                width: 100% !important;
+                min-height: 52px !important;
+                font-size: 1rem !important;
+                font-weight: 700 !important;
+                border-radius: 16px !important;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.15) !important;
+            }
+        }
+        /* Capacitor on wider screens (tablet / landscape): same sticky submit + bottom inset */
+        @media (min-width: 768px) {
+            html.capacitor-native .main-content {
+                padding-bottom: max(130px, calc(72px + env(safe-area-inset-bottom, 0px))) !important;
+            }
+            html.capacitor-native .native-submit-sticky {
+                position: sticky;
+                bottom: 72px;
+                background: rgba(241,245,249,0.97);
+                -webkit-backdrop-filter: blur(8px);
+                backdrop-filter: blur(8px);
+                padding: 10px 4px;
+                margin: 12px -4px -4px;
+                z-index: 100;
+                border-top: 1px solid rgba(0,0,0,0.07);
+            }
+            html.capacitor-native .native-submit-sticky .btn {
+                width: 100% !important;
+                min-height: 52px !important;
+                font-size: 1rem !important;
+                font-weight: 700 !important;
+                border-radius: 16px !important;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.15) !important;
+            }
+        }
+
+    /* ═══════════════════════════════════════════════
+       DARK MODE
+    ═══════════════════════════════════════════════ */
+    body.dark-mode {
+        --dm-bg: #0f172a; --dm-surface: #1e293b; --dm-border: #334155;
+        --dm-text: #e2e8f0; --dm-muted: #94a3b8; --dm-card-bg: #1e293b;
+        background: var(--dm-bg) !important; color: var(--dm-text) !important;
+    }
+    body.dark-mode .main-content { background: var(--dm-bg) !important; }
+    body.dark-mode .sidebar a:hover { background: rgba(255,255,255,0.1) !important; color: white !important; }
+    body.dark-mode .sidebar .active-link {
+        background: rgba(13, 110, 253, 0.2) !important;
+        color: white !important;
+        border-left: 4px solid #0d6efd !important;
+    }
+    body.dark-mode .card,
+    body.dark-mode .table-responsive,
+    body.dark-mode .modal-content,
+    body.dark-mode .form-control,
+    body.dark-mode .form-select { background: var(--dm-surface) !important; border-color: var(--dm-border) !important; color: var(--dm-text) !important; }
+    body.dark-mode .table { color: var(--dm-text) !important; }
+    body.dark-mode .table thead th { background: #0f172a !important; color: var(--dm-muted) !important; border-color: var(--dm-border) !important; }
+    body.dark-mode .table tbody tr:hover td { background: rgba(255,255,255,0.04) !important; }
+    body.dark-mode .table-striped > tbody > tr:nth-of-type(odd) > * { background: rgba(255,255,255,0.03) !important; }
+    body.dark-mode .table td, body.dark-mode .table th { border-color: var(--dm-border) !important; }
+    body.dark-mode .btn-light, body.dark-mode .btn-outline-secondary { background: var(--dm-surface) !important; border-color: var(--dm-border) !important; color: var(--dm-text) !important; }
+    body.dark-mode .dropdown-menu { background: #1e293b !important; border-color: var(--dm-border) !important; }
+    body.dark-mode .dropdown-item { color: var(--dm-text) !important; }
+    body.dark-mode .dropdown-item:hover { background: rgba(255,255,255,0.08) !important; }
+    body.dark-mode .text-muted { color: var(--dm-muted) !important; }
+    body.dark-mode h1,body.dark-mode h2,body.dark-mode h3,body.dark-mode h4,body.dark-mode h5,body.dark-mode h6 { color: var(--dm-text) !important; }
+    body.dark-mode .bc-light { background: var(--dm-surface) !important; border-color: var(--dm-border) !important; color: var(--dm-text) !important; }
+    body.dark-mode .bc-light:hover { background: #273449 !important; }
+    body.dark-mode .alert { background: var(--dm-surface) !important; border-color: var(--dm-border) !important; }
+    body.dark-mode .pagination .page-link { background: var(--dm-surface) !important; border-color: var(--dm-border) !important; color: var(--dm-text) !important; }
+    body.dark-mode .badge.bg-light { background: var(--dm-surface) !important; color: var(--dm-text) !important; }
+    body.dark-mode input::placeholder, body.dark-mode textarea::placeholder { color: var(--dm-muted) !important; }
+
+    /* ═══════════════════════════════════════════════
+       COMMAND PALETTE
+    ═══════════════════════════════════════════════ */
+    #cmdPalette {
+        display: none; position: fixed; inset: 0; z-index: 10500;
+        background: rgba(0,0,0,0.55); backdrop-filter: blur(6px);
+        -webkit-backdrop-filter: blur(6px);
+        align-items: flex-start; justify-content: center;
+        padding-top: clamp(60px, 10vh, 120px);
+    }
+    #cmdPalette.open { display: flex; }
+    #cmdPaletteInner {
+        background: #fff; border-radius: 20px;
+        box-shadow: 0 32px 80px rgba(0,0,0,0.28), 0 0 0 1px rgba(0,0,0,0.06);
+        width: 100%; max-width: 600px; margin: 0 16px;
+        overflow: hidden; transition: transform 0.18s cubic-bezier(.34,1.56,.64,1);
+    }
+    body.dark-mode #cmdPaletteInner { background: #1e293b; color: #e2e8f0; box-shadow: 0 32px 80px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.08); }
+    #cmdInput {
+        width: 100%; border: none; outline: none; padding: 18px 20px 18px 52px;
+        font-size: 1.05rem; font-family: inherit; background: transparent;
+        color: #0f172a; border-bottom: 1px solid #f1f5f9;
+    }
+    body.dark-mode #cmdInput { color: #e2e8f0; border-bottom-color: #334155; }
+    #cmdInput::placeholder { color: #94a3b8; }
+    #cmdInputWrap { position: relative; }
+    #cmdInputWrap .cmd-search-icon { position: absolute; left: 17px; top: 50%; transform: translateY(-50%); color: #94a3b8; }
+    #cmdResults { max-height: 380px; overflow-y: auto; padding: 8px 0; }
+    .cmd-section-header { padding: 8px 20px 4px; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #94a3b8; }
+    .cmd-item {
+        display: flex; align-items: center; gap: 12px;
+        padding: 10px 20px; cursor: pointer;
+        transition: background 0.1s; border: none; background: none; width: 100%; text-align: left;
+        text-decoration: none; color: #0f172a;
+    }
+    body.dark-mode .cmd-item { color: #e2e8f0; }
+    .cmd-item:hover, .cmd-item.active { background: #eff6ff; color: #1d4ed8; }
+    body.dark-mode .cmd-item:hover, body.dark-mode .cmd-item.active { background: rgba(59,130,246,0.15); color: #93c5fd; }
+    .cmd-item-icon { width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .cmd-item-title { font-size: 0.88rem; font-weight: 600; line-height: 1.2; }
+    .cmd-item-sub { font-size: 0.75rem; color: #64748b; line-height: 1.2; }
+    body.dark-mode .cmd-item-sub { color: #94a3b8; }
+    .cmd-empty { padding: 32px 20px; text-align: center; color: #94a3b8; font-size: 0.88rem; }
+    #cmdPaletteFooter { padding: 8px 16px; border-top: 1px solid #f1f5f9; display: flex; gap: 16px; align-items: center; }
+    body.dark-mode #cmdPaletteFooter { border-top-color: #334155; }
+    .cmd-hint { font-size: 0.7rem; color: #94a3b8; display: flex; align-items: center; gap: 5px; }
+    .cmd-hint kbd { background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 4px; padding: 1px 5px; font-size: 0.7rem; font-family: inherit; color: #475569; }
+    body.dark-mode .cmd-hint kbd { background: #0f172a; border-color: #334155; color: #94a3b8; }
+
+    /* Dark mode toggle button */
+    #darkModeToggle { transition: color 0.2s, background 0.2s; }
+
+    /* ═══════════════════════════════════════════════
+       TOP LOADING PROGRESS BAR (page navigation)
+    ═══════════════════════════════════════════════ */
+    #topLoadBar {
+        position: fixed; top: 0; left: 0; height: 3px; width: 0%;
+        background: linear-gradient(90deg, #3b82f6, #06b6d4, #3b82f6);
+        background-size: 200% 100%;
+        z-index: 99999; border-radius: 0 3px 3px 0;
+        transition: width 0.25s ease, opacity 0.4s ease;
+        animation: topBarShimmer 1.2s linear infinite;
+        opacity: 0; pointer-events: none;
+        box-shadow: 0 0 10px rgba(59,130,246,0.6);
+    }
+    #topLoadBar.loading { opacity: 1; }
+    #topLoadBar.done    { width: 100% !important; opacity: 0; transition: width 0.15s ease, opacity 0.5s ease 0.1s; }
+    @keyframes topBarShimmer {
+        0%   { background-position: 200% 0; }
+        100% { background-position: -100% 0; }
+    }
+
+    /* ─── Skeleton shimmer utility ─── */
+    .skel {
+        border-radius: 8px;
+        background: linear-gradient(90deg, #e2e8f0 25%, #f8fafc 50%, #e2e8f0 75%);
+        background-size: 300% 100%;
+        animation: skelShimmer 1.4s infinite;
+        display: block;
+    }
+    body.dark-mode .skel {
+        background: linear-gradient(90deg, #1e293b 25%, #273449 50%, #1e293b 75%);
+        background-size: 300% 100%;
+    }
+    @keyframes skelShimmer {
+        0%   { background-position: 300% 0; }
+        100% { background-position: -100% 0; }
+    }
+    .skel-text  { height: 14px; margin-bottom: 8px; }
+    .skel-title { height: 22px; width: 55%; margin-bottom: 12px; }
+    .skel-chart { border-radius: 14px; }
+
+    /* ═══════════════════════════════════════════════
+       RTL / URDU LAYOUT SUPPORT
+    ═══════════════════════════════════════════════ */
+    html[dir="rtl"] body { direction: rtl; }
+    html[dir="rtl"] .sidebar { left: auto !important; right: 0 !important; }
+    html[dir="rtl"] .sidebar.collapsed { right: -260px !important; left: auto !important; }
+    html[dir="rtl"] .main-content { margin-left: 0 !important; margin-right: 260px !important; }
+    html[dir="rtl"] .main-content.expanded { margin-right: 0 !important; }
+    @media (max-width: 991.98px) {
+        html[dir="rtl"] .sidebar { right: -260px !important; left: auto !important; }
+        html[dir="rtl"] .sidebar.mobile-open { right: 0 !important; transform: none !important; }
+        html[dir="rtl"] .main-content { margin-right: 0 !important; }
+    }
+    html[dir="rtl"] .navbar { direction: rtl; }
+    html[dir="rtl"] .ms-auto { margin-left: 0 !important; margin-right: auto !important; }
+    html[dir="rtl"] .dropdown-menu-end { right: auto !important; left: 0 !important; }
+    html[dir="rtl"] .sidebar a, html[dir="rtl"] .collapse-item {
+        flex-direction: row-reverse;
+        text-align: right;
+    }
+    html[dir="rtl"] .sidebar a i, html[dir="rtl"] .sidebar a svg,
+    html[dir="rtl"] .collapse-item i, html[dir="rtl"] .collapse-item svg {
+        margin-right: 0 !important;
+        margin-left: 10px !important;
+    }
+    html[dir="rtl"] .mobile-bottom-nav { direction: rtl; }
+    html[dir="rtl"] #langBtnLabel { letter-spacing: 0; }
+
+/* ── Section separator ── */
+
+.pin-dot{width:14px;height:14px;border-radius:50%;border:2px solid #334155;background:transparent;transition:background 0.15s,border-color 0.15s;}
+.pin-dot.filled{background:#3b82f6;border-color:#3b82f6;}
+.pin-key{height:68px;background:rgba(255,255,255,0.05);border:1.5px solid rgba(255,255,255,0.08);border-radius:18px;color:#f1f5f9;font-size:1.4rem;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.12s,transform 0.1s;-webkit-tap-highlight-color:transparent;}
+.pin-key:active{background:rgba(59,130,246,0.25);transform:scale(0.95);}
+.pin-key-bio{color:#60a5fa;}
+.pin-key-del{color:#94a3b8;}
+
+/* ── Section separator ── */
+
+.navbar-status-cluster {
+    display: none;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  @media (min-width: 768px) {
+    .navbar-status-cluster { display: flex; }
+  }
+  .fleet-conn-pill,
+  .fleet-net-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 11px;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    line-height: 1;
+    border: 1px solid transparent;
+    white-space: nowrap;
+    transition: background 0.2s, color 0.2s, border-color 0.2s;
+  }
+  .fleet-conn-pill i,
+  .fleet-net-pill i { font-size: 0.9rem; }
+  .fleet-conn-pill[data-state="online"] {
+    background: rgba(16, 185, 129, 0.14);
+    border-color: rgba(16, 185, 129, 0.35);
+    color: #059669;
+  }
+  .fleet-conn-pill[data-state="offline"] {
+    background: rgba(239, 68, 68, 0.12);
+    border-color: rgba(239, 68, 68, 0.35);
+    color: #dc2626;
+  }
+  .fleet-conn-pill[data-state="slow"] {
+    background: rgba(245, 158, 11, 0.14);
+    border-color: rgba(245, 158, 11, 0.4);
+    color: #d97706;
+  }
+  .fleet-conn-pill[data-state="checking"] {
+    background: rgba(148, 163, 184, 0.12);
+    border-color: rgba(148, 163, 184, 0.3);
+    color: #64748b;
+  }
+  .fleet-net-pill {
+    background: rgba(148, 163, 184, 0.1);
+    border-color: rgba(148, 163, 184, 0.28);
+    color: #64748b;
+  }
+  body.dark-mode .fleet-conn-pill[data-state="online"] {
+    background: rgba(16, 185, 129, 0.2);
+    color: #6ee7b7;
+  }
+  body.dark-mode .fleet-conn-pill[data-state="offline"] {
+    background: rgba(239, 68, 68, 0.2);
+    color: #fca5a5;
+  }
+  body.dark-mode .fleet-conn-pill[data-state="slow"] {
+    background: rgba(245, 158, 11, 0.2);
+    color: #fcd34d;
+  }
+  body.dark-mode .fleet-net-pill {
+    background: rgba(51, 65, 85, 0.5);
+    border-color: rgba(71, 85, 105, 0.6);
+    color: #cbd5e1;
+  }
+  /* Navbar upload status pill states */
+  #navUploadStatusPill[data-state="success"] {
+    background: rgba(16, 185, 129, 0.14);
+    border-color: rgba(16, 185, 129, 0.35);
+    color: #059669;
+  }
+  #navUploadStatusPill[data-state="pending"] {
+    background: rgba(245, 158, 11, 0.14);
+    border-color: rgba(245, 158, 11, 0.4);
+    color: #d97706;
+  }
+  #navUploadStatusPill[data-state="retrying"] {
+    background: rgba(59, 130, 246, 0.14);
+    border-color: rgba(59, 130, 246, 0.35);
+    color: #2563eb;
+  }
+  body.dark-mode #navUploadStatusPill[data-state="success"] { background: rgba(16,185,129,0.2); color: #6ee7b7; }
+  body.dark-mode #navUploadStatusPill[data-state="pending"] { background: rgba(245,158,11,0.2); color: #fcd34d; }
+  body.dark-mode #navUploadStatusPill[data-state="retrying"] { background: rgba(59,130,246,0.2); color: #93c5fd; }
+  /* GPS pending upload banner (global) */
+  .fleet-gps-pending-banner {
+    margin: 0 0 16px;
+    padding: 14px 16px;
+    border-radius: 16px;
+    border: 1px solid transparent;
+    box-shadow: 0 4px 24px rgba(15, 23, 42, 0.08);
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    position: relative;
+    overflow: hidden;
+    animation: fleetGpsBannerIn 0.35s ease both;
+  }
+  .fleet-gps-pending-banner::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    opacity: 0.45;
+    pointer-events: none;
+    background: radial-gradient(120% 80% at 0% 0%, rgba(255,255,255,0.9) 0%, transparent 55%);
+  }
+  .fleet-gps-pending--warn {
+    background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 48%, #fde68a 100%);
+    border-color: rgba(245, 158, 11, 0.45);
+    color: #92400e;
+  }
+  .fleet-gps-pending--retry {
+    background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 55%, #bfdbfe 100%);
+    border-color: rgba(59, 130, 246, 0.4);
+    color: #1e40af;
+  }
+  .fleet-gps-pending--success {
+    background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 50%, #a7f3d0 100%);
+    border-color: rgba(16, 185, 129, 0.45);
+    color: #065f46;
+  }
+  .fleet-gps-pending-banner__icon {
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.15rem;
+    position: relative;
+    z-index: 1;
+  }
+  .fleet-gps-pending--warn .fleet-gps-pending-banner__icon {
+    background: rgba(245, 158, 11, 0.2);
+    color: #d97706;
+  }
+  .fleet-gps-pending--retry .fleet-gps-pending-banner__icon {
+    background: rgba(59, 130, 246, 0.18);
+    color: #2563eb;
+  }
+  .fleet-gps-pending--success .fleet-gps-pending-banner__icon {
+    background: rgba(16, 185, 129, 0.2);
+    color: #059669;
+  }
+  .fleet-gps-pending-banner__body {
+    flex: 1;
+    min-width: 0;
+    position: relative;
+    z-index: 1;
+  }
+  .fleet-gps-pending-banner__title {
+    font-weight: 700;
+    font-size: 0.92rem;
+    line-height: 1.3;
+    margin: 0 0 4px;
+  }
+  .fleet-gps-pending-banner__detail {
+    font-size: 0.78rem;
+    line-height: 1.45;
+    margin: 0;
+    opacity: 0.92;
+  }
+  .fleet-gps-pending-banner__detail.d-none {
+    display: none !important;
+  }
+  .fleet-gps-pending-banner__list {
+    font-size: 0.78rem;
+    line-height: 1.5;
+    opacity: 0.95;
+  }
+  .fleet-gps-pending-banner__list li {
+    margin-bottom: 2px;
+  }
+  .fleet-gps-pending-banner__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .fleet-gps-pending-banner__actions a {
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 5px 12px;
+    border-radius: 999px;
+    text-decoration: none;
+    border: 1px solid rgba(15, 23, 42, 0.12);
+    background: rgba(255, 255, 255, 0.65);
+    color: inherit;
+  }
+  .fleet-gps-pending--retry .fleet-gps-pending-banner__icon .spinner-border {
+    width: 1.1rem;
+    height: 1.1rem;
+    border-width: 2px;
+  }
+  body.dark-mode .fleet-gps-pending--warn {
+    background: linear-gradient(135deg, #422006 0%, #78350f 100%);
+    border-color: rgba(251, 191, 36, 0.35);
+    color: #fde68a;
+  }
+  body.dark-mode .fleet-gps-pending--retry {
+    background: linear-gradient(135deg, #1e3a5f 0%, #1e40af 100%);
+    border-color: rgba(96, 165, 250, 0.35);
+    color: #bfdbfe;
+  }
+  body.dark-mode .fleet-gps-pending--success {
+    background: linear-gradient(135deg, #064e3b 0%, #047857 100%);
+    border-color: rgba(52, 211, 153, 0.35);
+    color: #a7f3d0;
+  }
+  body.dark-mode .fleet-gps-pending-banner__actions a {
+    background: rgba(15, 23, 42, 0.35);
+    border-color: rgba(255, 255, 255, 0.12);
+    color: inherit;
+  }
+  @keyframes fleetGpsBannerIn {
+    from { opacity: 0; transform: translateY(-6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  html.capacitor-native .fleet-gps-pending-banner {
+    margin-top: 4px;
+  }
+  /* Notification cards (dashboard + hub) */
+  .fleet-notif-stack { display: flex; flex-direction: column; gap: 10px; }
+  .fleet-notif-stack--dashboard .fleet-notif-card { border-radius: 14px; }
+  .fleet-notif-card {
+    position: relative; border-radius: 16px; overflow: hidden;
+    background: #fff; box-shadow: 0 2px 16px rgba(15, 23, 42, 0.06);
+    border: 1px solid rgba(148, 163, 184, 0.22);
+  }
+  .fleet-notif-card--unread {
+    border-color: rgba(59, 130, 246, 0.4);
+    box-shadow: 0 4px 20px rgba(59, 130, 246, 0.1);
+  }
+  .fleet-notif-card__delete-bg {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: flex-end;
+    padding-right: 18px; gap: 6px;
+    background: linear-gradient(90deg, transparent 0%, #ef4444 40%);
+    color: #fff; font-weight: 600; font-size: 0.8rem; pointer-events: none;
+  }
+  .fleet-notif-card__track { position: relative; z-index: 1; background: inherit; will-change: transform; }
+  .fleet-notif-card__content { padding: 12px 14px; background: linear-gradient(135deg, #fff 0%, #f8fafc 100%); }
+  .fleet-notif-card--unread .fleet-notif-card__content { background: linear-gradient(135deg, #eff6ff 0%, #f8fafc 100%); }
+  .fleet-notif-card__top { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .fleet-notif-card__badge { font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; padding: 2px 7px; border-radius: 999px; }
+  .fleet-notif-card__badge--info { background: #dbeafe; color: #1d4ed8; }
+  .fleet-notif-card__badge--success { background: #d1fae5; color: #047857; }
+  .fleet-notif-card__badge--warning { background: #fef3c7; color: #b45309; }
+  .fleet-notif-card__badge--danger { background: #fee2e2; color: #b91c1c; }
+  .fleet-notif-card__time { font-size: 0.7rem; color: #64748b; }
+  .fleet-notif-card__title { font-size: 0.84rem; font-weight: 700; color: #0f172a; line-height: 1.3; }
+  .fleet-notif-card__message { font-size: 0.76rem; color: #475569; margin-top: 2px; line-height: 1.4; }
+  .fleet-notif-card__footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; }
+  .fleet-notif-card__link { font-size: 0.72rem; font-weight: 600; color: #2563eb; text-decoration: none; padding: 4px 10px; border-radius: 999px; background: rgba(37, 99, 235, 0.08); }
+  .fleet-notif-delete-btn {
+    display: inline-flex; align-items: center; gap: 5px; border: 1px solid rgba(239, 68, 68, 0.3);
+    background: rgba(254, 242, 242, 0.95); color: #dc2626; font-size: 0.72rem; font-weight: 600;
+    padding: 5px 10px; border-radius: 999px; cursor: pointer;
+  }
+  body:not(.fleet-notif-mobile) .fleet-notif-delete-btn .fleet-notif-delete-label { display: inline; }
+  body.fleet-notif-mobile .fleet-notif-delete-btn .fleet-notif-delete-label { display: none; }
+  .fleet-notif-card--removed { opacity: 0; transform: scale(0.97); transition: opacity 0.25s, transform 0.25s; pointer-events: none; }
+  .fleet-notif-toast-host { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 10050; pointer-events: none; }
+  .fleet-notif-toast {
+    background: #0f172a; color: #f8fafc; padding: 10px 18px; border-radius: 12px;
+    font-size: 0.82rem; font-weight: 600; box-shadow: 0 12px 40px rgba(0,0,0,0.25);
+    animation: fleetNotifToastIn 0.28s ease both;
+  }
+  .fleet-notif-toast--out { animation: fleetNotifToastOut 0.28s ease both; }
+  @keyframes fleetNotifToastIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; } }
+  @keyframes fleetNotifToastOut { from { opacity: 1; } to { opacity: 0; transform: translateY(6px); } }
+
+/* ── Section separator ── */
+
+/* ── AJAX Live-Search ─────────────────────────────────────────── */
+
+    /* Tight wrapper injected around the search INPUT only — never touches siblings */
+    .ss-wrap {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        flex-shrink: 0;
+        /* Width comes from the input itself; wrapper just hugs it */
+        width: auto;
+    }
+
+    /* Spinner pinned inside the right edge of the input */
+    .ss-wrap .ss-spinner {
+        position: absolute;
+        right: 8px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 12px;
+        height: 12px;
+        border: 1.5px solid rgba(255,255,255,0.35);
+        border-top-color: #fff;
+        border-radius: 50%;
+        animation: ss-spin .5s linear infinite;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity .15s ease;
+    }
+    .ss-wrap.ss-loading .ss-spinner { opacity: 1; }
+
+    @keyframes ss-spin { to { transform: translateY(-50%) rotate(360deg); } }
+
+    /* Subtle row fade-in after AJAX swap */
+    @keyframes ss-fade-in {
+        from { opacity: 0; transform: translateY(3px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
+    tbody.ss-updated tr { animation: ss-fade-in .15s ease forwards; }

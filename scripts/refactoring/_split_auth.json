@@ -1,0 +1,71 @@
+{
+  "output_file": "routes_auth.py",
+  "description": "Auth, Users, Roles, Permissions, Form Control, Freeze Settings.\n\nExtracted from routes.py to reduce file size.",
+  "route_funcs": [
+    "login", "logout", "api_log_activity", "api_client_diagnostics",
+    "user_list", "user_delete", "users_sync_from_employees_drivers",
+    "user_form", "user_edit", "role_list", "form_control",
+    "form_control_delete_override", "form_control_edit_override",
+    "freeze_data_settings", "role_form", "role_edit", "role_delete"
+  ],
+  "helper_funcs_to_move": [
+    "_current_user_is_master", "_is_admin_role_user", "_master_may_post_user_edit",
+    "_role_perm_debug_enabled", "_log_role_perm_debug", "_reconcile_roles_to_admin_cap",
+    "_clamp_role_to_admin_cap", "_current_user_assignable_permission_codes",
+    "_current_user_effective_permission_codes", "_role_effective_permission_codes",
+    "_user_has_full_scope", "_role_name", "_user_can_edit_user",
+    "_matrix_assignable_permission_ids", "_replace_role_permissions",
+    "_apply_role_permissions_from_form", "_user_effective_active"
+  ],
+  "top_level_to_move": [
+    "DEFAULT_FIRST_PASSWORD"
+  ],
+  "helper_funcs_to_import": [
+    "_get_user_scope", "_sync_user_active_by_cnic", "_sync_user_full_name_by_cnic",
+    "_create_user_for_employee_or_driver", "_persist_client_diagnostic",
+    "_validate_csrf_exempt_origin", "_form_control_tab_allowed",
+    "_any_form_control_tab_allowed", "_resolve_form_control_settings_tab",
+    "_form_control_tab_guard", "_biometric_hmac_token",
+    "_ensure_user_biometric_version_column", "_login_next_path",
+    "_safe_login_next", "_is_capacitor_browser", "_do_login_session",
+    "require_login", "_endpoint_description", "log_activity",
+    "enforce_data_freeze", "_safe_mobile_resume_path",
+    "_user_profile_avatar_path", "media_url_filter"
+  ],
+  "imports": [
+    "from flask import (",
+    "    render_template, redirect, url_for, flash, request,",
+    "    session, jsonify, make_response, abort, current_app, Response,",
+    ")",
+    "from app import app, db, csrf",
+    "from models import (",
+    "    User, Role, Permission, role_permissions, LoginLog, ActivityLog,",
+    "    ClientActivityLog, ClientDiagnosticLog, LoginAttempt,",
+    "    Employee, EmployeePost, Driver, SystemSetting,",
+    "    AttendanceTimeControl, AttendanceTimeOverride, DeviceFCMToken,",
+    "    AppRelease,",
+    ")",
+    "from forms import (",
+    "    LoginForm, UserForm, RoleForm, ChangePasswordForm, SetNewPasswordForm,",
+    "    AttendanceTimeControlForm, AttendanceTimeOverrideForm,",
+    ")",
+    "from datetime import datetime, timedelta",
+    "from sqlalchemy import func, text",
+    "from werkzeug.security import generate_password_hash",
+    "from auth_utils import (",
+    "    get_required_permission, user_has_permission, user_can_access, check_password,",
+    ")",
+    "from utils import pk_now, pk_date",
+    "from permissions_config import (",
+    "    expand_login_permissions, user_has_form_control_tab,",
+    "    user_has_any_form_control_tab, FORM_CONTROL_TAB_KEYS,",
+    ")",
+    "from freeze_utils import (",
+    "    get_freeze_config, save_freeze_config, get_freeze_form_catalog,",
+    "    is_freeze_protected_request, extract_effective_date, evaluate_freeze,",
+    ")",
+    "import re",
+    "import os",
+    "import json"
+  ]
+}
