@@ -1,5 +1,5 @@
-// Fleet Manager Service Worker v5
-const CACHE_NAME = 'fleetmgr-v5';
+// Fleet Manager Service Worker v6
+const CACHE_NAME = 'fleetmgr-v6';
 
 // Static assets to pre-cache on install
 const PRECACHE_URLS = [

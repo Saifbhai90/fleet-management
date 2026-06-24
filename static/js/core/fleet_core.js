@@ -1581,7 +1581,7 @@
             var csrfEl = document.querySelector('meta[name="csrf-token"]');
             var headers = { 'Content-Type': 'application/json' };
             if (csrfEl && csrfEl.getAttribute('content')) headers['X-CSRFToken'] = csrfEl.getAttribute('content');
-            fetch('window.FleetConfig.urls.api_log_activity', {
+            fetch(window.FleetConfig.urls.api_log_activity, {
                 method: 'POST',
                 headers: headers,
                 body: JSON.stringify(payload),
@@ -1776,7 +1776,7 @@
 
     // Live Clock — Pakistan Server Time (PKT)
     var _pktOffset = (function(){
-        var serverISO = "window.FleetConfig.serverPkNow";
+        var serverISO = window.FleetConfig.serverPkNow;
         var serverMs = new Date(serverISO).getTime();
         var browserMs = Date.now();
         return serverMs - browserMs;
@@ -3057,8 +3057,10 @@
     window.initSearchableDropdowns = function(scope) {
         if (typeof TomSelect === 'undefined') return;
         var root = scope || document;
-        root.querySelectorAll('select.search-select').forEach(function(el) {
+        var selector = 'select.search-select, select.tom-select, .tom-select';
+        root.querySelectorAll(selector).forEach(function(el) {
             if (el.tomselect) return;
+            if (el.tagName && el.tagName.toLowerCase() !== 'select') return;
             try {
                 // ── Detect placeholder option ─────────────────────────────────
                 // Treat the first option as a placeholder if its value is '' or
@@ -3306,13 +3308,46 @@
         });
     };
 
-    // Run immediately — content block is above scripts in the rendered HTML
-    window.initSearchableDropdowns();
+    // Safe global helper: page-specific scripts can call this any time.
+    window.FleetInitSelectors = function(scope) {
+        if (typeof TomSelect === 'undefined') {
+            console.warn('[FleetInitSelectors] TomSelect not loaded — dropdowns will fall back to native selects');
+            return;
+        }
+        console.log('[FleetInitSelectors] Triggered', scope ? '(scoped)' : '(global)');
+        window.initSearchableDropdowns(scope);
+    };
+
+    function _fleetBootSelectors() {
+        // Initialize all static selects on the page
+        window.FleetInitSelectors();
+
+        // Re-init for any dynamically added .search-select / .tom-select elements
+        if (typeof MutationObserver !== 'undefined' && document.body) {
+            (new MutationObserver(function(muts) {
+                muts.forEach(function(m) {
+                    m.addedNodes.forEach(function(node) {
+                        if (node.nodeType !== 1) return;
+                        if (node.querySelector && node.querySelector('select.search-select, select.tom-select, .tom-select')) {
+                            window.initSearchableDropdowns(node);
+                        }
+                    });
+                });
+            })).observe(document.body, { childList: true, subtree: true });
+        }
+    }
+
+    if (document.readyState !== 'loading') {
+        _fleetBootSelectors();
+    } else {
+        document.addEventListener('DOMContentLoaded', _fleetBootSelectors);
+    }
 
     /* Keep body-attached Tom Select menus aligned while scroll / layout shifts. */
     (function() {
         var _tsRepositionScheduled = false;
         var _tsLayoutMo = null;
+        var _tsLayoutWatchStarted = false;
 
         window.fleetRepositionOpenTomSelects = function() {
             if (_tsRepositionScheduled) return;
@@ -3320,7 +3355,7 @@
             requestAnimationFrame(function() {
                 _tsRepositionScheduled = false;
                 try {
-                    document.querySelectorAll('select.search-select').forEach(function(sel) {
+                    document.querySelectorAll('select.search-select, select.tom-select, .tom-select').forEach(function(sel) {
                         var t = sel.tomselect;
                         if (t && t.isOpen) window.fleetPositionTomSelectDropdown(t);
                     });
@@ -3329,6 +3364,8 @@
         };
 
         function _startTomSelectLayoutWatch() {
+            if (_tsLayoutWatchStarted) return;
+            _tsLayoutWatchStarted = true;
             if (_tsLayoutMo) return;
             var root = document.getElementById('mainContent') || document.body;
             if (!root || typeof MutationObserver === 'undefined') return;
@@ -3358,7 +3395,7 @@
             requestAnimationFrame(function() {
                 var anyOpen = false;
                 try {
-                    document.querySelectorAll('select.search-select').forEach(function(sel) {
+                    document.querySelectorAll('select.search-select, select.tom-select, .tom-select').forEach(function(sel) {
                         if (sel.tomselect && sel.tomselect.isOpen) anyOpen = true;
                     });
                 } catch (e) {}
@@ -3372,25 +3409,21 @@
             window.visualViewport.addEventListener('resize', window.fleetRepositionOpenTomSelects, { passive: true });
             window.visualViewport.addEventListener('scroll', window.fleetRepositionOpenTomSelects, { passive: true });
         }
-        var mc = document.getElementById('mainContent');
-        if (mc) {
-            mc.addEventListener('scroll', window.fleetRepositionOpenTomSelects, { passive: true });
+
+        function _attachMainContentScroll() {
+            var mc = document.getElementById('mainContent');
+            if (mc) {
+                mc.addEventListener('scroll', window.fleetRepositionOpenTomSelects, { passive: true });
+            }
+        }
+        if (document.readyState !== 'loading') {
+            _attachMainContentScroll();
+        } else {
+            document.addEventListener('DOMContentLoaded', _attachMainContentScroll);
         }
     })();
 
     // onInitialize hook inside TomSelect handles placeholder — no setInterval needed.
-
-    // Re-init for any dynamically added .search-select elements
-    (new MutationObserver(function(muts) {
-        muts.forEach(function(m) {
-            m.addedNodes.forEach(function(node) {
-                if (node.nodeType !== 1) return;
-                if (node.querySelector && node.querySelector('select.search-select')) {
-                    window.initSearchableDropdowns(node);
-                }
-            });
-        });
-    })).observe(document.body, { childList: true, subtree: true });
 
     // Initialize Components
     $(document).ready(function() {
@@ -3580,7 +3613,7 @@
             }
             var nf = (el && el.getAttribute('data-nav-from')) || '';
             if (nf === 'reports') {
-                href = 'window.FleetConfig.urls.reports_index';
+                href = window.FleetConfig.urls.reports_index;
                 if (!window.fleetIsDashboardNavUrl(href)) return href;
             }
             return null;
@@ -3611,7 +3644,7 @@
                 window.location.assign(href);
                 return false;
             }
-            window.location.assign('window.FleetConfig.urls.reports_index');
+            window.location.assign(window.FleetConfig.urls.reports_index);
             return false;
         };
 
@@ -5035,7 +5068,7 @@
             return;
         }
         window.addEventListener('load', function() {
-            navigator.serviceWorker.register('/sw.js?v=5', { scope: '/', updateViaCache: 'none' }).catch(function() {});
+            navigator.serviceWorker.register('/sw.js?v=6', { scope: '/', updateViaCache: 'none' }).catch(function() {});
         });
     })();
 

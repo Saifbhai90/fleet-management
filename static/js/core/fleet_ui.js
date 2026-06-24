@@ -736,14 +736,14 @@ window._dtPrintCustomize = function(title, color, icon) {
     _countdownInterval = setInterval(function() {
       secsLeft--;
       cd.textContent = secsLeft;
-      if (secsLeft <= 0) { clearInterval(_countdownInterval); window.location.href = 'window.FleetConfig.urls.logout?inactivity=1'; }
+      if (secsLeft <= 0) { clearInterval(_countdownInterval); window.location.href = window.FleetConfig.urls.logout + '?inactivity=1'; }
     }, 1000);
   }
 
   setInterval(function() {
     var idle = Date.now() - _lastActivity;
     if (idle >= TIMEOUT_MS) {
-      window.location.href = 'window.FleetConfig.urls.logout?inactivity=1';
+      window.location.href = window.FleetConfig.urls.logout + '?inactivity=1';
     } else if (idle >= WARNING_MS && !_warningShown) {
       _showWarning(Math.round((TIMEOUT_MS - idle) / 1000));
     }
@@ -756,7 +756,7 @@ window._dtPrintCustomize = function(title, color, icon) {
   if (window.fleetSessionSounds) {
     window.fleetSessionSounds.installGlobalFeedbackSounds();
   }
-  var logoutPath = 'window.FleetConfig.urls.logout';
+  var logoutPath = window.FleetConfig.urls.logout;
   document.addEventListener('click', function(e) {
     var link = e.target.closest('a[href]');
     if (!link) return;
