@@ -5204,11 +5204,6 @@
             // 1c. In-App Update Check (native only) — runs on every page for persistent banner
             setTimeout(function() { window.FleetBridge.checkForAppUpdate(); }, 3000);
 
-            // 1d. Report device app version to server (for admin stats) — all users, all devices
-            if (window.FleetConfig && window.FleetConfig.userId) {
-                setTimeout(function() { window.FleetBridge.reportDeviceVersion(); }, 1500);
-            }
-
             // 2. Auto-hide navbar on scroll down, show on scroll up (native feel)
             //    In Capacitor: body is fixed, so we listen on #mainContent (the scroll container)
             var navbar = document.querySelector('.navbar');
@@ -5296,6 +5291,11 @@
             });
 
         });
+    }
+
+    // ── Report device app version to server (for admin stats) — ALL users, ALL devices ──
+    if (window.FleetConfig && window.FleetConfig.userId && window.FleetBridge && typeof window.FleetBridge.reportDeviceVersion === 'function') {
+        setTimeout(function() { window.FleetBridge.reportDeviceVersion(); }, 1500);
     }
 
     // ── Service Worker: PWA browser only — never cache Capacitor WebView HTML ──
