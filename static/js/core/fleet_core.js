@@ -4548,16 +4548,26 @@
         function _reportDeviceVersion() {
             try {
                 var AppP = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App;
-                if (!AppP || typeof AppP.getInfo !== 'function') return;
-                AppP.getInfo().then(function(info) {
-                    var version = info.version || '0.0.0';
+                if (AppP && typeof AppP.getInfo === 'function') {
+                    // Mobile app — report actual app version
+                    AppP.getInfo().then(function(info) {
+                        var version = info.version || '0.0.0';
+                        fetch('/api/app/report-version', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            credentials: 'include',
+                            body: JSON.stringify({ version: version, platform: 'mobile' })
+                        }).catch(function() {});
+                    }).catch(function() {});
+                } else {
+                    // Desktop/web — report as 'web' so admin can see online web users
                     fetch('/api/app/report-version', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         credentials: 'include',
-                        body: JSON.stringify({ version: version })
+                        body: JSON.stringify({ version: 'web', platform: 'web' })
                     }).catch(function() {});
-                }).catch(function() {});
+                }
             } catch (e) {}
         }
 
@@ -4926,7 +4936,8 @@
             requestPushPermission: requestPushPermission, initPermissions: initPermissions,
             showPermissionAlert: _showPermissionAlert,
             downloadBlob: downloadBlob, openBlobUrl: openBlobUrl, _toast: _toast,
-            checkForAppUpdate: _checkForAppUpdate
+            checkForAppUpdate: _checkForAppUpdate,
+            reportDeviceVersion: _reportDeviceVersion
         };
     })();
 
@@ -5192,6 +5203,11 @@
 
             // 1c. In-App Update Check (native only) — runs on every page for persistent banner
             setTimeout(function() { window.FleetBridge.checkForAppUpdate(); }, 3000);
+
+            // 1d. Report device app version to server (for admin stats) — all users, all devices
+            if (window.FleetConfig && window.FleetConfig.userId) {
+                setTimeout(function() { window.FleetBridge.reportDeviceVersion(); }, 1500);
+            }
 
             // 2. Auto-hide navbar on scroll down, show on scroll up (native feel)
             //    In Capacitor: body is fixed, so we listen on #mainContent (the scroll container)
