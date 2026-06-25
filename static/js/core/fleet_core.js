@@ -4545,30 +4545,71 @@
                 .catch(function(e) { console.warn('[Update] JS fallback check failed:', e); });
         }
 
+        function _sendVersionToServer(version, platform) {
+            // Centralised POST — always fires (with error logging, never silent swallow).
+            fetch('/api/app/report-version', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ version: version, platform: platform })
+            }).catch(function(err) {
+                console.warn('[reportVersion] POST failed:', err);
+            });
+        }
+
         function _reportDeviceVersion() {
             try {
-                var AppP = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App;
-                if (AppP && typeof AppP.getInfo === 'function') {
-                    // Mobile app — report actual app version
-                    AppP.getInfo().then(function(info) {
-                        var version = info.version || '0.0.0';
-                        fetch('/api/app/report-version', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            credentials: 'include',
-                            body: JSON.stringify({ version: version, platform: 'mobile' })
-                        }).catch(function() {});
-                    }).catch(function() {});
-                } else {
-                    // Desktop/web — report as 'web' so admin can see online web users
-                    fetch('/api/app/report-version', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        credentials: 'include',
-                        body: JSON.stringify({ version: 'web', platform: 'web' })
-                    }).catch(function() {});
+                // 1. Prefer Java native bridge — 100% reliable (reads PackageManager directly,
+                //    not via Capacitor proxy which can race/fail during early bridge init).
+                if (window._fleetNative && typeof window._fleetNative.getAppVersion === 'function') {
+                    var v = null;
+                    try { v = window._fleetNative.getAppVersion(); } catch (e) { v = null; }
+                    if (v) { _sendVersionToServer(v, 'mobile'); return; }
                 }
-            } catch (e) {}
+
+                var AppP = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App;
+
+                // 2. Native app but Capacitor App plugin missing entirely → still report (don't lose the user).
+                if (_isNative && (!AppP || typeof AppP.getInfo !== 'function')) {
+                    console.warn('[reportVersion] native app, App plugin unavailable — reporting fallback');
+                    _sendVersionToServer('mobile-unknown', 'mobile');
+                    return;
+                }
+
+                // 3. Desktop/web — report as 'web' so admin can see online web users
+                if (!_isNative) {
+                    _sendVersionToServer('web', 'web');
+                    return;
+                }
+
+                // 4. Native app + Capacitor App plugin — try getInfo() with retries (bridge may not be ready).
+                var attempts = 0;
+                function tryGetInfo() {
+                    attempts++;
+                    AppP.getInfo().then(function(info) {
+                        var version = (info && info.version) || '0.0.0';
+                        if (!version || version === '0.0.0') {
+                            if (attempts < 3) { setTimeout(tryGetInfo, 1500); return; }
+                            console.warn('[reportVersion] getInfo returned empty — reporting fallback');
+                            _sendVersionToServer('mobile-unknown', 'mobile');
+                            return;
+                        }
+                        _sendVersionToServer(version, 'mobile');
+                    }).catch(function(err) {
+                        if (attempts < 3) {
+                            console.warn('[reportVersion] getInfo attempt ' + attempts + ' failed, retrying:', err);
+                            setTimeout(tryGetInfo, 1500);
+                        } else {
+                            console.warn('[reportVersion] getInfo failed after retries — reporting fallback:', err);
+                            _sendVersionToServer('mobile-unknown', 'mobile');
+                        }
+                    });
+                }
+                tryGetInfo();
+            } catch (e) {
+                console.warn('[reportVersion] outer error:', e);
+                _sendVersionToServer('mobile-unknown', 'mobile');
+            }
         }
 
         function _showUpdateBanner(data) {

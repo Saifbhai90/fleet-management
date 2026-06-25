@@ -769,6 +769,19 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
             }
         }
 
+        /** Return current app version name (e.g. "2.0.8") — 100% reliable, reads PackageManager directly.
+         *  Used by JS reportDeviceVersion() for admin version stats. Sync call (safe on JS thread). */
+        @JavascriptInterface
+        public String getAppVersion() {
+            try {
+                return activity.getPackageManager()
+                        .getPackageInfo(activity.getPackageName(), 0).versionName;
+            } catch (Exception e) {
+                Log.w("FleetNativeBridge", "getAppVersion failed: " + e.getMessage());
+                return "";
+            }
+        }
+
         @JavascriptInterface
         public void openAppSettings() {
             try {
