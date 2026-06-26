@@ -5821,17 +5821,22 @@
     }
 
     // Window focus event — fires when WebView regains focus after camera/file picker
+    // Only on native mobile (Capacitor) — desktop Alt+Tab should NOT blur focused fields
     window.addEventListener('focus', function() {
+        if (!window.Capacitor || !window.Capacitor.isNativePlatform) return;
+        if (!window.Capacitor.isNativePlatform()) return;
         _fleetTriggerCameraLock();
         _fleetCameraReturnSweep();
     });
 
     // visibilitychange — fires when WebView tab becomes visible again
+    // Only on native mobile (Capacitor) — desktop Alt+Tab should NOT blur focused fields
     document.addEventListener('visibilitychange', function() {
-        if (document.visibilityState === 'visible') {
-            _fleetTriggerCameraLock();
-            _fleetCameraReturnSweep();
-        }
+        if (document.visibilityState !== 'visible') return;
+        if (!window.Capacitor || !window.Capacitor.isNativePlatform) return;
+        if (!window.Capacitor.isNativePlatform()) return;
+        _fleetTriggerCameraLock();
+        _fleetCameraReturnSweep();
     });
 
     // Global Bootstrap modal dismiss listener — silent shield prevents any dropdown flicker
