@@ -633,7 +633,8 @@ def driver_attendance_media_item_download(rec_id, kind):
     rec = DriverAttendance.query.options(
         joinedload(DriverAttendance.driver).joinedload(Driver.vehicle),
     ).get(rec_id)
-    _is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest' or 'fetch' in (request.headers.get('Sec-Fetch-Mode') or '') or request.accept_mimetypes.accept_json
+    _is_ajax = (request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+        or (request.headers.get('Sec-Fetch-Mode') or '').lower() in ('same-origin', 'cors', 'no-cors'))
     if not rec or not rec.driver or not _driver_attendance_record_allowed_for_user(rec, uc):
         if _is_ajax:
             return jsonify(ok=False, error='Access denied'), 403

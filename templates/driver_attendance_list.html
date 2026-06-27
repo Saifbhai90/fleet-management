@@ -1070,6 +1070,7 @@ function fetchAttendanceSharePhotoUrls(galleryShift, photoKind) {
     : new URLSearchParams(window.location.search);
   params.delete('page');
   params.delete('per_page');
+  params.delete('duty_shift');
   params.set('gallery_shift', galleryShift || 'both');
   params.set('gallery_photo', photoKind || 'both');
   var url = '/driver-attendance/media-gallery/photo-urls.json?' + params.toString();
@@ -1445,7 +1446,9 @@ function attImgWizardRunShare(photoKind) {
       }
       if (!urls.length) {
         attendanceHideShareProgress();
-        alert('No photos found for the selected option.');
+        var msg0 = 'No photos found for the selected option.';
+        if (window.FleetBridge && window.FleetBridge._toast) window.FleetBridge._toast(msg0);
+        alert(msg0);
         return;
       }
       sharePhotos(urls, kind);
