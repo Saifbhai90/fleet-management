@@ -633,13 +633,18 @@ def driver_attendance_media_item_download(rec_id, kind):
     rec = DriverAttendance.query.options(
         joinedload(DriverAttendance.driver).joinedload(Driver.vehicle),
     ).get(rec_id)
+    _is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest' or 'fetch' in (request.headers.get('Sec-Fetch-Mode') or '') or request.accept_mimetypes.accept_json
     if not rec or not rec.driver or not _driver_attendance_record_allowed_for_user(rec, uc):
+        if _is_ajax:
+            return jsonify(ok=False, error='Access denied'), 403
         flash('Access denied ya record nahi mila.', 'danger')
         return redirect(url_for('driver_attendance_list'))
 
     path = (rec.check_in_photo_path if kind == 'checkin' else rec.check_out_photo_path) or ''
     path = path.strip()
     if not path:
+        if _is_ajax:
+            return jsonify(ok=False, error='Photo not found'), 404
         flash('Photo maujood nahi.', 'warning')
         return redirect(url_for('driver_attendance_list'))
 
@@ -655,9 +660,13 @@ def driver_attendance_media_item_download(rec_id, kind):
         blob, mime = _maintenance_attachment_read_bytes(path)
     except Exception as ex:
         app.logger.warning('Attendance media download failed (%s): %s', rec_id, ex)
+        if _is_ajax:
+            return jsonify(ok=False, error='Download failed'), 500
         flash('Download fail.', 'danger')
         return redirect(url_for('driver_attendance_list'))
     if not blob:
+        if _is_ajax:
+            return jsonify(ok=False, error='Empty file'), 404
         flash('Empty file.', 'warning')
         return redirect(url_for('driver_attendance_list'))
     return send_file(

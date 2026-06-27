@@ -892,6 +892,10 @@ function attendanceFetchPhotoBlob(absUrl) {
     var init = Object.assign({ cache: 'no-store' }, attempts[i]);
     return fetch(fetchUrl, init).then(function(r) {
       if (!r.ok) throw new Error('HTTP ' + r.status + ' ' + (r.statusText || '') + ' url=' + String(fetchUrl).substring(0, 96));
+      var ct = (r.headers.get('Content-Type') || '').toLowerCase();
+      if (ct && ct.indexOf('image/') !== 0 && ct.indexOf('application/octet') !== 0 && ct.indexOf('binary/') !== 0) {
+        throw new Error('Not an image (Content-Type: ' + ct + ') url=' + String(fetchUrl).substring(0, 96));
+      }
       return r.blob();
     }).catch(function() {
       return tryFetch(i + 1);
@@ -926,6 +930,10 @@ function attendanceLoadSharePhotoItems(urls, type, go, gt, prefix) {
     if (i >= urls.length) return Promise.resolve(items);
     return attendanceFetchPhotoBlob(urls[i]).then(function(blob) {
       var ct = (blob && blob.type) || '';
+      if (ct && ct.indexOf('image/') !== 0 && ct.indexOf('application/octet') !== 0) {
+        console.warn('[Attendance share] skipping non-image blob', ct, urls[i]);
+        return;
+      }
       var mime = (ct.indexOf('image/') === 0) ? ct : 'image/jpeg';
       items.push({
         ok: true,
@@ -1339,6 +1347,7 @@ function sharePhotosNativeBatch(slice, type, ctx) {
   }
 
   attendanceLoadSharePhotoItems(slice, type, go, gt, prefix).then(function(items) {
+    console.log('[Attendance share native] loaded', items.length, '/', slice.length, 'photo items');
     if (!items.length) {
       throw new Error('No photos could be loaded');
     }
@@ -1428,8 +1437,10 @@ function attImgWizardRunShare(photoKind) {
   attendanceSetShareProgressPct(5, 'Finding photos…', 'Please wait');
   fetchAttendanceSharePhotoUrls(_attImgGalDuty, kind)
     .then(function(urls) {
+      console.log('[Attendance share] API returned', urls.length, 'urls');
       if (!urls.length) {
         var fallback = collectPhotoUrlsForDuty(kind, _attImgGalDuty);
+        console.log('[Attendance share] DOM fallback collected', fallback.length, 'urls');
         urls = fallback;
       }
       if (!urls.length) {
@@ -1440,7 +1451,9 @@ function attImgWizardRunShare(photoKind) {
       sharePhotos(urls, kind);
     })
     .catch(function(err) {
+      console.error('[Attendance share] API fetch failed, trying DOM fallback:', err);
       var fallback = collectPhotoUrlsForDuty(kind, _attImgGalDuty);
+      console.log('[Attendance share] DOM fallback collected', fallback.length, 'urls');
       if (fallback.length) {
         sharePhotos(fallback, kind);
         return;
