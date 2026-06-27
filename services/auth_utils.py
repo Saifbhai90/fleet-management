@@ -160,6 +160,7 @@ ENDPOINT_PERMISSION_MAP = [
     ('driver_attendance_media_gallery', 'driver_attendance_list'),
     ('driver_attendance_media_gallery_zip', 'driver_attendance_list'),
     ('driver_attendance_media_item_download', 'driver_attendance_list'),
+    ('driver_attendance_media_gallery_photo_urls', 'driver_attendance_list'),
     ('driver_attendance_mark', 'driver_attendance_mark'),
     ('driver_attendance_bulk_off', 'driver_attendance_bulk_off'),
     ('driver_attendance_pending', 'driver_attendance_pending'),

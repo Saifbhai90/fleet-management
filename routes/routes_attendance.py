@@ -417,6 +417,12 @@ def _attendance_media_gallery_flat_and_items_from_request():
     )
     if duty_shift_filter:
         flat = _filter_attendance_rows_by_duty_shift(flat, duty_shift_filter)
+    list_filter = (request.args.get('list_filter') or '').strip().lower()
+    if list_filter == 'missing_co':
+        flat = [r for r in flat if r.get('rec') and r['rec'].check_in and not r['rec'].check_out]
+    status_filter_selected = _parse_attendance_status_filter_request()
+    if status_filter_selected:
+        flat = _filter_attendance_rows_by_status(flat, status_filter_selected)
 
     media_items = _build_attendance_media_gallery_items(flat, gallery_shift, gallery_photo)
     return media_items, gallery_shift, gallery_photo

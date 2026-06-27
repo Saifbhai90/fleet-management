@@ -1067,7 +1067,10 @@ function fetchAttendanceSharePhotoUrls(galleryShift, photoKind) {
   var url = '/driver-attendance/media-gallery/photo-urls.json?' + params.toString();
   return fetch(url, { credentials: 'include', cache: 'no-store' })
     .then(function(r) {
-      if (!r.ok) throw new Error('Server error (' + r.status + ')');
+      if (!r.ok) {
+        console.error('[Attendance share] photo-urls fetch failed:', r.status, r.statusText, url);
+        throw new Error('Server error (' + r.status + ')');
+      }
       return r.json();
     })
     .then(function(data) {
