@@ -694,7 +694,11 @@
 <script>
 document.addEventListener('DOMContentLoaded', function(){
   if (window.fleetTableEnhance) window.fleetTableEnhance('fuelExpenseTable');
-  if (window.fleetPrintExport) window.fleetPrintExport('fuelExpenseTable', 'Fuel Expense', 'Fuel_Expense.csv');
+  if (window.fleetPrintExport) window.fleetPrintExport('fuelExpenseTable', 'Fuel Expense', 'Fuel_Expense.csv', {
+    columnOrder: ['#', 'District', 'Fuel Type', 'Vehicle', 'KM Out (Task)', 'KM In (Task)', 'Payment', 'Fueling Date', 'Card Swipe', 'Slip No', 'Prev Reading', 'Curr Reading', 'Matched', 'KM', 'Fuel Price', 'Liters', 'MPG', 'Amount'],
+    numberColumns: ['KM Out (Task)', 'KM In (Task)', 'Slip No', 'Prev Reading', 'Curr Reading', 'KM', 'Fuel Price', 'Liters', 'MPG', 'Amount'],
+    dateColumns: ['Fueling Date', 'Card Swipe']
+  });
   if (window.initFuelSearchTooltips) window.initFuelSearchTooltips();
 });
 </script>

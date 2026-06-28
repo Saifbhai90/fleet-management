@@ -1011,7 +1011,7 @@
     };
 
     // ── Print & Export (all pages) ──
-    window.fleetPrintExport = function(tableId, title, csvFilename) {
+    window.fleetPrintExport = function(tableId, title, csvFilename, excelConfig) {
         var printBtn = document.getElementById('btnPrintReport');
         var exportBtn = document.getElementById('btnExportReport');
         if (!printBtn && !exportBtn) return;
@@ -1230,6 +1230,96 @@
             return _fleetDownloadBlob(_fleetTableToCsvBlob(clone), _fleetBaseFilename() + '.csv');
         }
 
+        function _tryParseNumber(str) {
+            if (str === null || str === undefined) return null;
+            str = String(str).trim();
+            if (str === '' || str === '-') return null;
+            str = str.replace(/,/g, '');
+            var n = parseFloat(str);
+            if (!isNaN(n) && isFinite(n)) return n;
+            return null;
+        }
+
+        function _parseDateToObj(str) {
+            if (!str) return null;
+            str = String(str).trim();
+            if (!str || str === '-') return null;
+            var m = str.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+            if (m) return new Date(parseInt(m[3], 10), parseInt(m[2], 10) - 1, parseInt(m[1], 10));
+            return null;
+        }
+
+        function _fleetTableToAoaExcel(clone, config) {
+            var aoa = _fleetTableToAoa(clone);
+            if (!config || !aoa || aoa.length < 2) return aoa;
+            var headers = aoa[0];
+            var footerRow = null;
+            var dataRows = [];
+            for (var i = 1; i < aoa.length; i++) {
+                if (i === aoa.length - 1 && aoa[i].length < headers.length) footerRow = aoa[i];
+                else dataRows.push(aoa[i]);
+            }
+            var newIndices = [];
+            if (config.columnOrder && config.columnOrder.length) {
+                config.columnOrder.forEach(function(colName) {
+                    var idx = headers.indexOf(colName);
+                    if (idx >= 0) newIndices.push(idx);
+                });
+                headers.forEach(function(_, idx) {
+                    if (newIndices.indexOf(idx) < 0) newIndices.push(idx);
+                });
+            } else {
+                newIndices = headers.map(function(_, i) { return i; });
+            }
+            var numberColNewIdx = [];
+            var dateColNewIdx = [];
+            if (config.numberColumns) {
+                config.numberColumns.forEach(function(colName) {
+                    var origIdx = headers.indexOf(colName);
+                    if (origIdx >= 0) { var ni = newIndices.indexOf(origIdx); if (ni >= 0) numberColNewIdx.push(ni); }
+                });
+            }
+            if (config.dateColumns) {
+                config.dateColumns.forEach(function(colName) {
+                    var origIdx = headers.indexOf(colName);
+                    if (origIdx >= 0) { var ni = newIndices.indexOf(origIdx); if (ni >= 0) dateColNewIdx.push(ni); }
+                });
+            }
+            var newHeaders = newIndices.map(function(idx) { return headers[idx]; });
+            var newAoa = [newHeaders];
+            dataRows.forEach(function(row) {
+                var newRow = newIndices.map(function(idx) { return row[idx] !== undefined ? row[idx] : ''; });
+                numberColNewIdx.forEach(function(ci) {
+                    var num = _tryParseNumber(newRow[ci]);
+                    if (num !== null) newRow[ci] = num;
+                });
+                dateColNewIdx.forEach(function(ci) {
+                    var dt = _parseDateToObj(newRow[ci]);
+                    if (dt) newRow[ci] = dt;
+                });
+                newAoa.push(newRow);
+            });
+            if (footerRow) newAoa.push(footerRow);
+            return newAoa;
+        }
+
+        function _setExcelDateFormats(ws, aoa, dateColumnNames) {
+            if (!ws || !aoa || !aoa.length || !window.XLSX) return;
+            var headers = aoa[0];
+            var dateColIndices = [];
+            dateColumnNames.forEach(function(colName) {
+                var idx = headers.indexOf(colName);
+                if (idx >= 0) dateColIndices.push(idx);
+            });
+            for (var r = 1; r < aoa.length; r++) {
+                dateColIndices.forEach(function(ci) {
+                    var addr = window.XLSX.utils.encode_cell({ r: r, c: ci });
+                    var cell = ws[addr];
+                    if (cell && cell.v != null) cell.z = 'dd-mmm-yy';
+                });
+            }
+        }
+
         function _fleetExportExcel(clone) {
             var serverUrl = exportBtn && exportBtn.getAttribute('data-export-url');
             if (serverUrl) {
@@ -1241,7 +1331,9 @@
             }
             return _fleetLoadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js').then(function() {
                 if (!window.XLSX) throw new Error('Excel library not available');
-                var ws = window.XLSX.utils.aoa_to_sheet(_fleetTableToAoa(clone));
+                var aoa = excelConfig ? _fleetTableToAoaExcel(clone, excelConfig) : _fleetTableToAoa(clone);
+                var ws = window.XLSX.utils.aoa_to_sheet(aoa, { cellDates: true });
+                if (excelConfig && excelConfig.dateColumns) _setExcelDateFormats(ws, aoa, excelConfig.dateColumns);
                 var wb = window.XLSX.utils.book_new();
                 window.XLSX.utils.book_append_sheet(wb, ws, (title || 'Report').substring(0, 31));
                 var out = window.XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
