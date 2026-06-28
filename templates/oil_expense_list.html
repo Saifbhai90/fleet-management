@@ -795,7 +795,9 @@ document.addEventListener('DOMContentLoaded', function() {
 })();
 </script>
 <script>
-if (window.fleetTableEnhance) window.fleetTableEnhance('oilExpenseTable');
-if (window.fleetPrintExport) window.fleetPrintExport('oilExpenseTable', 'Oil Expense', 'Oil_Expense.csv');
+document.addEventListener('DOMContentLoaded', function(){
+  if (window.fleetTableEnhance) window.fleetTableEnhance('oilExpenseTable');
+  if (window.fleetPrintExport) window.fleetPrintExport('oilExpenseTable', 'Oil Expense', 'Oil_Expense.csv');
+});
 </script>
 {% endblock %}

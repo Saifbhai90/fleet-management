@@ -192,8 +192,10 @@ function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page
   }
   
 })();
-document.addEventListener('DOMContentLoaded', function(){ if(window.fleetTableEnhance) window.fleetTableEnhance('redTaskTable'); });
-window.fleetPrintExport && window.fleetPrintExport('redTaskTable','Red Task Report — {{ from_date|ddmmyyyy }} to {{ to_date|ddmmyyyy }}','Red_Task_Report_{{ from_date.strftime("%d-%m-%Y") }}_to_{{ to_date.strftime("%d-%m-%Y") }}.csv');
+document.addEventListener('DOMContentLoaded', function(){
+  if(window.fleetTableEnhance) window.fleetTableEnhance('redTaskTable');
+  if(window.fleetPrintExport) window.fleetPrintExport('redTaskTable','Red Task Report — {{ from_date|ddmmyyyy }} to {{ to_date|ddmmyyyy }}','Red_Task_Report_{{ from_date.strftime("%d-%m-%Y") }}_to_{{ to_date.strftime("%d-%m-%Y") }}.csv');
+});
 
 function _esc(v){var d=document.createElement('div');d.textContent=v||'';return d.innerHTML;}
 function _setDetailRows(data){

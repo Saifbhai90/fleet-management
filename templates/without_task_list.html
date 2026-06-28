@@ -164,7 +164,9 @@ function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page
   }
   
 })();
-document.addEventListener('DOMContentLoaded', function(){ if(window.fleetTableEnhance) window.fleetTableEnhance('withoutTaskTable'); });
-window.fleetPrintExport && window.fleetPrintExport('withoutTaskTable','Vehicle Move Without Task — {{ from_date|ddmmyyyy }} to {{ to_date|ddmmyyyy }}','Vehicle_Move_Without_Task_{{ from_date.strftime("%d-%m-%Y") }}_to_{{ to_date.strftime("%d-%m-%Y") }}.csv');
+document.addEventListener('DOMContentLoaded', function(){
+  if(window.fleetTableEnhance) window.fleetTableEnhance('withoutTaskTable');
+  if(window.fleetPrintExport) window.fleetPrintExport('withoutTaskTable','Vehicle Move Without Task — {{ from_date|ddmmyyyy }} to {{ to_date|ddmmyyyy }}','Vehicle_Move_Without_Task_{{ from_date.strftime("%d-%m-%Y") }}_to_{{ to_date.strftime("%d-%m-%Y") }}.csv');
+});
 </script>
 {% endblock %}

@@ -660,8 +660,10 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 <script>
-if (window.fleetTableEnhance) window.fleetTableEnhance('mwoTable');
-if (window.fleetPrintExport) window.fleetPrintExport('mwoTable', 'Maintenance Work Orders', 'Maintenance_Work_Orders.csv');
+document.addEventListener('DOMContentLoaded', function(){
+  if (window.fleetTableEnhance) window.fleetTableEnhance('mwoTable');
+  if (window.fleetPrintExport) window.fleetPrintExport('mwoTable', 'Maintenance Work Orders', 'Maintenance_Work_Orders.csv');
+});
 (function() {
   var exportBtn = document.getElementById('btnExportReport');
   if (!exportBtn) return;

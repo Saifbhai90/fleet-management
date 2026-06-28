@@ -376,7 +376,9 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 <script>
-if (window.fleetTableEnhance) window.fleetTableEnhance('maintenanceHistoryTable');
-if (window.fleetPrintExport) window.fleetPrintExport('maintenanceHistoryTable', 'Maintenance History Report', 'Maintenance_History_Report.csv');
+document.addEventListener('DOMContentLoaded', function(){
+  if (window.fleetTableEnhance) window.fleetTableEnhance('maintenanceHistoryTable');
+  if (window.fleetPrintExport) window.fleetPrintExport('maintenanceHistoryTable', 'Maintenance History Report', 'Maintenance_History_Report.csv');
+});
 </script>
 {% endblock %}
