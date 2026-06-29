@@ -3299,6 +3299,225 @@ def oil_expense_list():
     )
 
 
+@app.route('/oil-expenses/export')
+def oil_expense_export():
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return _guard
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    from auth_utils import get_user_context
+
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles = user_context.get('allowed_vehicles', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+
+    today = pk_date()
+    from_date = request.args.get('from_date', '').strip()
+    to_date = request.args.get('to_date', '').strip()
+    district_id = request.args.get('district_id', type=int) or 0
+    project_id = request.args.get('project_id', type=int) or 0
+    vehicle_id = request.args.get('vehicle_id', type=int) or 0
+
+    from_d = parse_date(from_date) if from_date else today
+    to_d = parse_date(to_date) if to_date else today
+    if not from_d:
+        from_d = today
+    if not to_d:
+        to_d = today
+    if from_d > to_d:
+        from_d, to_d = to_d, from_d
+
+    query = OilExpense.query.filter(
+        OilExpense.expense_date >= from_d,
+        OilExpense.expense_date <= to_d
+    )
+    if workspace_employee_id:
+        query = query.filter(
+            db.or_(
+                OilExpense.employee_id == workspace_employee_id,
+                OilExpense.employee_id.is_(None),
+            )
+        )
+    if not is_master_or_admin:
+        if allowed_projects:
+            query = query.filter(OilExpense.project_id.in_(list(allowed_projects)))
+        if allowed_districts:
+            query = query.filter(OilExpense.district_id.in_(list(allowed_districts)))
+        if allowed_vehicles:
+            query = query.filter(OilExpense.vehicle_id.in_(list(allowed_vehicles)))
+    if district_id:
+        query = query.filter(OilExpense.district_id == district_id)
+    if project_id:
+        query = query.filter(OilExpense.project_id == project_id)
+    if vehicle_id:
+        query = query.filter(OilExpense.vehicle_id == vehicle_id)
+
+    rows = query.order_by(
+        OilExpense.expense_date.asc(),
+        db.case((OilExpense.current_reading.is_(None), 1), else_=0).asc(),
+        OilExpense.current_reading.asc(),
+        OilExpense.id.asc(),
+    ).all()
+
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from flask import Response
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Oil Expense"
+
+    headers = [
+        '#', 'District', 'Project', 'Vehicle', 'Date',
+        'Prev Reading', 'Curr Reading', 'KM',
+        'Item', 'Payment Type',
+        'Purchase Qty', 'Used Qty', 'Balance Qty',
+        'Price', 'Item Amount', 'Total Bill Amount',
+        'Remarks',
+    ]
+    ws.append(headers)
+
+    thin_border = Border(
+        left=Side(style='thin'),
+        right=Side(style='thin'),
+        top=Side(style='thin'),
+        bottom=Side(style='thin'),
+    )
+    header_font = Font(bold=True)
+    header_fill = PatternFill(start_color="E8EAF6", end_color="E8EAF6", fill_type="solid")
+    for col in range(1, len(headers) + 1):
+        cell = ws.cell(row=1, column=col)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal='center')
+        cell.border = thin_border
+
+    # Columns that show real numbers (no forced decimals): Prev Reading, Curr Reading, KM
+    general_number_col_indices = {6, 7, 8}
+    # Columns with 2-decimal format: Purchase Qty, Used Qty, Balance Qty, Price, Item Amount, Total Bill Amount
+    decimal_col_indices = {11, 12, 13, 14, 15, 16}
+    date_col_indices = {5}
+
+    grand_purchase_qty = 0.0
+    grand_used_qty = 0.0
+    grand_item_amount = 0.0
+    grand_total_bill = 0.0
+
+    sr = 0
+    for r in rows:
+        sr += 1
+        total_amount = sum(float(it.amount or 0) for it in r.items)
+        total_bill = float(r.total_bill_amount) if r.total_bill_amount is not None else total_amount
+        grand_total_bill += total_bill
+
+        items_list = list(r.items)
+        if not items_list:
+            ws.append([
+                sr,
+                r.district.name if r.district else '-',
+                r.project.name if r.project else '-',
+                r.vehicle.vehicle_no if r.vehicle else '-',
+                r.expense_date,
+                float(r.previous_reading) if r.previous_reading is not None else None,
+                float(r.current_reading) if r.current_reading is not None else None,
+                float(r.km) if r.km is not None else None,
+                '-', '',
+                None, None, None,
+                None, None, total_bill,
+                r.remarks or '',
+            ])
+        else:
+            for it in items_list:
+                purchase_qty = float(it.purchase_qty or 0)
+                used_qty = float(it.used_qty or 0)
+                item_amount = float(it.amount or 0)
+                grand_purchase_qty += purchase_qty
+                grand_used_qty += used_qty
+                grand_item_amount += item_amount
+                ws.append([
+                    sr,
+                    r.district.name if r.district else '-',
+                    r.project.name if r.project else '-',
+                    r.vehicle.vehicle_no if r.vehicle else '-',
+                    r.expense_date,
+                    float(r.previous_reading) if r.previous_reading is not None else None,
+                    float(r.current_reading) if r.current_reading is not None else None,
+                    float(r.km) if r.km is not None else None,
+                    it.product.name if it.product else '-',
+                    it.payment_type or '',
+                    purchase_qty,
+                    used_qty,
+                    round(purchase_qty - used_qty, 2),
+                    float(it.price or 0),
+                    item_amount,
+                    total_bill,
+                    r.remarks or '',
+                ])
+
+    # Total row
+    total_row_idx = ws.max_row + 1
+    ws.append([
+        '', '', '', '', 'Total',
+        '', '', '',
+        '', '',
+        round(grand_purchase_qty, 2),
+        round(grand_used_qty, 2),
+        round(grand_purchase_qty - grand_used_qty, 2),
+        '',
+        round(grand_item_amount, 2),
+        round(grand_total_bill, 2),
+        '',
+    ])
+    total_font = Font(bold=True)
+    total_fill = PatternFill(start_color="FFF9C4", end_color="FFF9C4", fill_type="solid")
+    for col in range(1, len(headers) + 1):
+        cell = ws.cell(row=total_row_idx, column=col)
+        cell.font = total_font
+        cell.fill = total_fill
+        cell.border = thin_border
+
+    # Apply borders and number formats to all data rows
+    for row_idx in range(2, ws.max_row + 1):
+        for col_idx in range(1, len(headers) + 1):
+            cell = ws.cell(row=row_idx, column=col_idx)
+            cell.border = thin_border
+        for col_idx in general_number_col_indices:
+            cell = ws.cell(row=row_idx, column=col_idx)
+            if cell.value is not None:
+                cell.number_format = 'General'
+        for col_idx in decimal_col_indices:
+            cell = ws.cell(row=row_idx, column=col_idx)
+            if cell.value is not None:
+                cell.number_format = '#,##0.00'
+        for col_idx in date_col_indices:
+            cell = ws.cell(row=row_idx, column=col_idx)
+            if cell.value is not None:
+                cell.number_format = 'dd-mmm-yy'
+
+    for col_idx, header in enumerate(headers, start=1):
+        col_letter = ws.cell(row=1, column=col_idx).column_letter
+        max_len = max(len(str(header)), 10)
+        ws.column_dimensions[col_letter].width = max_len + 2
+
+    ws.freeze_panes = 'A2'
+
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    return Response(
+        output.getvalue(),
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f"attachment; filename=oil_expense_{pk_now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+            "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        },
+    )
+
+
 @app.route('/oil-expense/add', methods=['GET', 'POST'])
 @app.route('/oil-expense/edit/<int:pk>', methods=['GET', 'POST'])
 def oil_expense_form(pk=None):

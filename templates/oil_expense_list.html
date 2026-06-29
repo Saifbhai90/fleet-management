@@ -14,7 +14,7 @@
     <h5 class="mb-0"><i class="bi bi-droplet me-2"></i>Oil Expense</h5>
     <div class="d-flex gap-2">
       <button class="btn btn-outline-light btn-sm" id="btnPrintReport"><i class="bi bi-eye me-1"></i>Print / Preview</button>
-      <button class="btn btn-outline-light btn-sm" id="btnExportReport"><i class="bi bi-file-earmark-excel me-1"></i>Export</button>
+      <button class="btn btn-outline-light btn-sm" id="btnExportReport" data-export-url="{{ url_for('oil_expense_export') }}"><i class="bi bi-file-earmark-excel me-1"></i>Export</button>
       <a href="{{ url_for('oil_expense_form') }}" class="btn btn-light btn-sm" style="color:#4338ca;">
         <i class="bi bi-plus-circle me-1"></i>Add Oil Expense
       </a>

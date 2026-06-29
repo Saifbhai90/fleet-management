@@ -1419,6 +1419,14 @@
         function _runFleetExport(format) {
             _closeFleetExportMenu();
             if (!exportBtn) return;
+            var serverUrl = exportBtn.getAttribute('data-export-url');
+            if (format === 'excel' && serverUrl) {
+                exportBtn.disabled = true;
+                exportBtn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Loading...';
+                _fleetExportExcel(null);
+                setTimeout(function() { exportBtn.disabled = false; _restoreExport(); }, 1500);
+                return;
+            }
             exportBtn.disabled = true;
             exportBtn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Loading...';
             _fetchAllTable(function(tbl) {

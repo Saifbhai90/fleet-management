@@ -98,9 +98,9 @@ window.FleetConfig = {
     })();
     </script>
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
-    <script src="{{ url_for('static', filename='js/core/fleet_core.js') }}?v=8006" defer></script>
-    <script src="{{ url_for('static', filename='js/core/fleet_ui.js') }}?v=8006" defer></script>
-    <script src="{{ url_for('static', filename='js/legacy_android_gpu.js') }}?v=8006" defer></script>
+    <script src="{{ url_for('static', filename='js/core/fleet_core.js') }}?v=8007" defer></script>
+    <script src="{{ url_for('static', filename='js/core/fleet_ui.js') }}?v=8007" defer></script>
+    <script src="{{ url_for('static', filename='js/legacy_android_gpu.js') }}?v=8007" defer></script>
     {% block extra_head %}{% endblock %}
 </head>
 <body{% if request.endpoint == 'dashboard' %} class="page-dashboard fm-aurora-theme" data-fleet-page="dashboard"{% elif request.endpoint == 'report_driver_profile_public' %} class="driver-profile-public-view"{% else %} class="fm-aurora-theme"{% endif %}{% if request.endpoint %} data-fleet-endpoint="{{ request.endpoint }}"{% endif %}{% if fleet_mobile_dev %} data-fleet-mobile-dev="1"{% endif %}>
