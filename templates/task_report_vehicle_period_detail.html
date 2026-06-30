@@ -401,14 +401,21 @@ function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page
     return period.dt || '';
   }
 
-  function _buildEmgUrl(vno, period) {
-    var url = '/api/task-report/emg-detail?vehicle_no=' + encodeURIComponent(vno);
-    if (period.fromDt && period.toDt) {
-      url += '&from_date=' + encodeURIComponent(period.fromDt) + '&to_date=' + encodeURIComponent(period.toDt);
-    } else if (period.dt) {
-      url += '&date=' + encodeURIComponent(period.dt);
+  function _buildEmgUrl(vno, period, vehicleNos) {
+    var url = '/api/task-report/emg-detail?';
+    var params = [];
+    if (vno) {
+      params.push('vehicle_no=' + encodeURIComponent(vno));
+    } else if (vehicleNos) {
+      params.push('vehicle_nos=' + encodeURIComponent(vehicleNos));
     }
-    return url;
+    if (period.fromDt && period.toDt) {
+      params.push('from_date=' + encodeURIComponent(period.fromDt));
+      params.push('to_date=' + encodeURIComponent(period.toDt));
+    } else if (period.dt) {
+      params.push('date=' + encodeURIComponent(period.dt));
+    }
+    return url + params.join('&');
   }
 
   function _buildTrackerUrl(vno, period) {
@@ -484,7 +491,16 @@ function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page
     var period = _linkPeriod(link);
     var label = _periodLabel(period);
     var displayVno = vno || 'All Vehicles';
-    var cacheKey = _emgCacheKey(vno, period);
+    var vehicleNos = '';
+    if (!vno && table) {
+      var vnos = [];
+      table.querySelectorAll('tbody tr.data-row .emg-link').forEach(function(el) {
+        var vn = (el.getAttribute('data-vno') || '').trim();
+        if (vn && vnos.indexOf(vn) < 0) vnos.push(vn);
+      });
+      vehicleNos = vnos.join(',');
+    }
+    var cacheKey = _emgCacheKey(vno || vehicleNos, period);
     document.getElementById('emgVehicleNo').textContent = displayVno + (label ? (' · ' + label) : '');
     document.getElementById('emgDetailBody').innerHTML = '';
     document.getElementById('emgLoading').classList.remove('d-none');
@@ -498,7 +514,7 @@ function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page
     }
     _emgData = [];
     var seq = ++_emgFetchSeq;
-    _fetchJson(_buildEmgUrl(vno, period))
+    _fetchJson(_buildEmgUrl(vno, period, vehicleNos))
       .then(function(rows) {
         if (seq !== _emgFetchSeq) return;
         if (!Array.isArray(rows)) {
@@ -1698,14 +1714,21 @@ document.addEventListener('DOMContentLoaded', function() {
         return { fromDt: fromDt, toDt: toDt, date: date };
     }
 
-    function _mobileBuildEmgUrl(vno, period) {
-        var url = '/api/task-report/emg-detail?vehicle_no=' + encodeURIComponent(vno);
-        if (period.fromDt && period.toDt) {
-            url += '&from_date=' + encodeURIComponent(period.fromDt) + '&to_date=' + encodeURIComponent(period.toDt);
-        } else if (period.date) {
-            url += '&date=' + encodeURIComponent(period.date);
+    function _mobileBuildEmgUrl(vno, period, vehicleNos) {
+        var url = '/api/task-report/emg-detail?';
+        var params = [];
+        if (vno) {
+            params.push('vehicle_no=' + encodeURIComponent(vno));
+        } else if (vehicleNos) {
+            params.push('vehicle_nos=' + encodeURIComponent(vehicleNos));
         }
-        return url;
+        if (period.fromDt && period.toDt) {
+            params.push('from_date=' + encodeURIComponent(period.fromDt));
+            params.push('to_date=' + encodeURIComponent(period.toDt));
+        } else if (period.date) {
+            params.push('date=' + encodeURIComponent(period.date));
+        }
+        return url + params.join('&');
     }
 
     function _mobileBuildTrackerUrl(vno, period) {
@@ -1731,6 +1754,18 @@ document.addEventListener('DOMContentLoaded', function() {
         var emgCount = parseInt((badge ? badge.textContent : '0') || '0', 10) || 0;
         var periodLabel = (period.fromDt && period.toDt) ? (period.fromDt + ' to ' + period.toDt) : period.date;
         var displayVno = vno || 'All Vehicles';
+        var vehicleNos = '';
+        if (!vno) {
+            var tbl = document.getElementById('vehiclePeriodDetailTable');
+            if (tbl) {
+                var vnos = [];
+                tbl.querySelectorAll('tbody tr.data-row .emg-link').forEach(function(el) {
+                    var vn = (el.getAttribute('data-vno') || '').trim();
+                    if (vn && vnos.indexOf(vn) < 0) vnos.push(vn);
+                });
+                vehicleNos = vnos.join(',');
+            }
+        }
         
         if (emgCount === 0) {
             window.openMobileTaskModal('No Emergency Tasks', '<div class="mobile-task-empty"><i class="bi bi-inbox"></i><p>No emergency tasks' + (periodLabel ? (' · ' + _mobileHe(periodLabel)) : '') + '</p></div>', 'EMG Tasks');
@@ -1739,7 +1774,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         window.openMobileTaskModal(displayVno + ' · ' + periodLabel, '<div class="text-center py-4"><div class="spinner-border text-primary" role="status"></div><p class="text-muted mt-2">Loading emergency tasks...</p></div>', 'EMG Tasks');
         
-        fetch(_mobileBuildEmgUrl(vno, period), { credentials: 'same-origin', cache: 'no-store' })
+        fetch(_mobileBuildEmgUrl(vno, period, vehicleNos), { credentials: 'same-origin', cache: 'no-store' })
             .then(function(r) {
                 if (!r.ok) throw new Error('HTTP ' + r.status);
                 return r.json();

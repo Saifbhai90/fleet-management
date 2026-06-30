@@ -1211,11 +1211,16 @@ def api_emg_detail():
     from_date = parse_date(request.args.get('from_date'))
     to_date = parse_date(request.args.get('to_date'))
     vehicle_no = (request.args.get('vehicle_no') or '').strip()
+    vehicle_nos_raw = (request.args.get('vehicle_nos') or '').strip()
     q = EmergencyTaskRecord.query.filter(
         EmergencyTaskRecord.category.in_(['Green', 'Yellow']),
     )
     if vehicle_no:
         q = q.filter(EmergencyTaskRecord.amb_reg_no == vehicle_no)
+    elif vehicle_nos_raw:
+        vehicle_nos = [v.strip() for v in vehicle_nos_raw.split(',') if v.strip()]
+        if vehicle_nos:
+            q = q.filter(EmergencyTaskRecord.amb_reg_no.in_(vehicle_nos))
     if task_date:
         q = q.filter(EmergencyTaskRecord.task_date == task_date)
     elif from_date and to_date:
