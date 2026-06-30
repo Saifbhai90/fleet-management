@@ -158,7 +158,11 @@
               <td colspan="8" class="ps-3 text-end">Total</td>
               <td class="text-end" id="ftKms">{{ "%.2f"|format(total_kms) }}</td>
               <td class="text-center" id="ftTasks">{{ total_tasks }}</td>
-              <td class="text-center" id="ftEmg">{{ total_emg }}</td>
+              <td class="text-center">
+                <a href="#" class="emg-link text-decoration-none" data-vno="" data-from="{{ from_date|ddmmyyyy }}" data-to="{{ to_date|ddmmyyyy }}">
+                  <span class="badge {% if total_emg %}bg-info text-dark{% else %}bg-secondary{% endif %}" style="cursor:pointer;font-size:.8rem;" id="ftEmg">{{ total_emg }}</span>
+                </a>
+              </td>
               <td class="text-center" id="ftTaskDiff">{{ total_task_diff }}</td>
               <td class="text-end" id="ftTracker">{{ "%.2f"|format(total_tracker) }}</td>
               <td class="text-end" id="ftDiff">{{ "%.2f"|format(total_diff) }}</td>
@@ -479,8 +483,9 @@ function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page
     var vno = ((link && link.getAttribute('data-vno')) || '').trim();
     var period = _linkPeriod(link);
     var label = _periodLabel(period);
+    var displayVno = vno || 'All Vehicles';
     var cacheKey = _emgCacheKey(vno, period);
-    document.getElementById('emgVehicleNo').textContent = vno + (label ? (' · ' + label) : '');
+    document.getElementById('emgVehicleNo').textContent = displayVno + (label ? (' · ' + label) : '');
     document.getElementById('emgDetailBody').innerHTML = '';
     document.getElementById('emgLoading').classList.remove('d-none');
     _resetEmgEmptyMessage();
@@ -1722,16 +1727,17 @@ document.addEventListener('DOMContentLoaded', function() {
         
         var vno = emgLink.getAttribute('data-vno') || '';
         var period = _mobilePeriodFromLink(emgLink);
-        var badge = emgLink.getAttribute('data-vno') ? emgLink.querySelector('.badge') : null;
+        var badge = emgLink.querySelector('.badge');
         var emgCount = parseInt((badge ? badge.textContent : '0') || '0', 10) || 0;
         var periodLabel = (period.fromDt && period.toDt) ? (period.fromDt + ' to ' + period.toDt) : period.date;
+        var displayVno = vno || 'All Vehicles';
         
         if (emgCount === 0) {
-            window.openMobileTaskModal('No Emergency Tasks', '<div class="mobile-task-empty"><i class="bi bi-inbox"></i><p>No emergency tasks for this vehicle' + (periodLabel ? (' · ' + _mobileHe(periodLabel)) : '') + '</p></div>', 'EMG Tasks');
+            window.openMobileTaskModal('No Emergency Tasks', '<div class="mobile-task-empty"><i class="bi bi-inbox"></i><p>No emergency tasks' + (periodLabel ? (' · ' + _mobileHe(periodLabel)) : '') + '</p></div>', 'EMG Tasks');
             return;
         }
         
-        window.openMobileTaskModal(vno + ' · ' + periodLabel, '<div class="text-center py-4"><div class="spinner-border text-primary" role="status"></div><p class="text-muted mt-2">Loading emergency tasks...</p></div>', 'EMG Tasks');
+        window.openMobileTaskModal(displayVno + ' · ' + periodLabel, '<div class="text-center py-4"><div class="spinner-border text-primary" role="status"></div><p class="text-muted mt-2">Loading emergency tasks...</p></div>', 'EMG Tasks');
         
         fetch(_mobileBuildEmgUrl(vno, period), { credentials: 'same-origin', cache: 'no-store' })
             .then(function(r) {
