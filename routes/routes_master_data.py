@@ -213,7 +213,11 @@ def api_filter_districts_by_project():
     is_master_or_admin = user_context.get('is_master_or_admin', False)
     project_id = request.args.get('project_id', type=int) or 0
     if not project_id:
-        return jsonify([])
+        q = District.query
+        if not is_master_or_admin and allowed_districts:
+            q = q.filter(District.id.in_(list(allowed_districts)))
+        districts = q.order_by(District.name).all()
+        return jsonify([{'id': d.id, 'name': d.name} for d in districts])
     q = District.query.join(project_district).filter(project_district.c.project_id == project_id)
     if not is_master_or_admin and allowed_districts:
         q = q.filter(District.id.in_(list(allowed_districts)))
