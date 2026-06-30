@@ -1107,6 +1107,15 @@
                 var td = a.closest('td');
                 if (td) td.textContent = (a.textContent || '').trim() || '-';
             });
+            clone.querySelectorAll('input, select, textarea').forEach(function(el){
+                var span = document.createElement('span');
+                if (el.tagName === 'SELECT') {
+                    span.textContent = (el.options[el.selectedIndex] && el.options[el.selectedIndex].textContent || '').trim() || '-';
+                } else {
+                    span.textContent = (el.value || '').trim() || '-';
+                }
+                el.replaceWith(span);
+            });
             // Remove Edit/Actions columns and their corresponding cells
             var ths = clone.querySelectorAll('thead th');
             var indicesToRemove = [];
