@@ -8510,6 +8510,7 @@ def _task_report_vehicle_period_detail_impl(redirect_endpoint, template_name, ex
 
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
+    all_vehicle_nos = ','.join(sorted(set(r['vehicle'].vehicle_no for r in rows if r['vehicle'].vehicle_no)))
     pagination = SimplePagination(rows, page, per_page)
     rows = pagination.items
     return render_template(
@@ -8528,6 +8529,7 @@ def _task_report_vehicle_period_detail_impl(redirect_endpoint, template_name, ex
         pagination=pagination,
         per_page=per_page,
         search=search,
+        all_vehicle_nos=all_vehicle_nos,
         task_report_filter_lock=task_report_filter_lock,
         **_nav_back_ctx(url_for('module_hub', hub_slug='task-logbook'), show_without_nav_from=True),
     )

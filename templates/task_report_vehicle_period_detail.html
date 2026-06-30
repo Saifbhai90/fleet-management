@@ -159,7 +159,7 @@
               <td class="text-end" id="ftKms">{{ "%.2f"|format(total_kms) }}</td>
               <td class="text-center" id="ftTasks">{{ total_tasks }}</td>
               <td class="text-center">
-                <a href="#" class="emg-link text-decoration-none" data-vno="" data-from="{{ from_date|ddmmyyyy }}" data-to="{{ to_date|ddmmyyyy }}">
+                <a href="#" class="emg-link text-decoration-none" data-vno="" data-vehicle-nos="{{ all_vehicle_nos }}" data-from="{{ from_date|ddmmyyyy }}" data-to="{{ to_date|ddmmyyyy }}">
                   <span class="badge {% if total_emg %}bg-info text-dark{% else %}bg-secondary{% endif %}" style="cursor:pointer;font-size:.8rem;" id="ftEmg">{{ total_emg }}</span>
                 </a>
               </td>
@@ -491,8 +491,8 @@ function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page
     var period = _linkPeriod(link);
     var label = _periodLabel(period);
     var displayVno = vno || 'All Vehicles';
-    var vehicleNos = '';
-    if (!vno && table) {
+    var vehicleNos = ((link && link.getAttribute('data-vehicle-nos')) || '').trim();
+    if (!vno && !vehicleNos && table) {
       var vnos = [];
       table.querySelectorAll('tbody tr.data-row .emg-link').forEach(function(el) {
         var vn = (el.getAttribute('data-vno') || '').trim();
@@ -1754,8 +1754,8 @@ document.addEventListener('DOMContentLoaded', function() {
         var emgCount = parseInt((badge ? badge.textContent : '0') || '0', 10) || 0;
         var periodLabel = (period.fromDt && period.toDt) ? (period.fromDt + ' to ' + period.toDt) : period.date;
         var displayVno = vno || 'All Vehicles';
-        var vehicleNos = '';
-        if (!vno) {
+        var vehicleNos = (emgLink.getAttribute('data-vehicle-nos') || '').trim();
+        if (!vno && !vehicleNos) {
             var tbl = document.getElementById('vehiclePeriodDetailTable');
             if (tbl) {
                 var vnos = [];
