@@ -742,7 +742,7 @@ from routes_workspace import (
     workspace_fund_transfers_list, workspace_fund_transfer_form, workspace_fund_transfer_delete,
     workspace_fund_transfer_view, workspace_fund_transfer_media,
     workspace_fund_transfer_media_download, workspace_fund_transfer_media_download_all,
-    workspace_ledger, workspace_ledger_transfer_detail, workspace_ledger_journal_detail, workspace_balance_sheet, workspace_month_close, workspace_month_close_list, workspace_month_close_reverse, workspace_reports, workspace_mpg_report, workspace_dashboard_financial_report,
+    workspace_ledger, workspace_ledger_transfer_detail, workspace_ledger_journal_detail, workspace_balance_sheet, workspace_month_close, workspace_month_close_list, workspace_month_close_reverse, workspace_reports, workspace_mpg_report, workspace_mpg_report_export_pdf, workspace_mpg_report_export_excel, workspace_dashboard_financial_report,
     workspace_journal_voucher_add, workspace_journal_vouchers_list, workspace_journal_voucher_detail, workspace_jv_backfill_district_project,
     workspace_journal_voucher_edit, workspace_journal_voucher_delete, workspace_journal_voucher_duplicate, workspace_journal_vouchers_export,
     workspace_transfer_description_suggestions_api,
@@ -916,6 +916,8 @@ app.add_url_rule('/workspace/month-close/list', 'workspace_month_close_list', wo
 app.add_url_rule('/workspace/month-close/<int:pk>/reverse', 'workspace_month_close_reverse', workspace_month_close_reverse, methods=['POST'])
 app.add_url_rule('/workspace/reports', 'workspace_reports', workspace_reports)
 app.add_url_rule('/workspace/reports/mpg', 'workspace_mpg_report', workspace_mpg_report, methods=['GET', 'POST'])
+app.add_url_rule('/workspace/reports/mpg/export-pdf', 'workspace_mpg_report_export_pdf', workspace_mpg_report_export_pdf)
+app.add_url_rule('/workspace/reports/mpg/export-excel', 'workspace_mpg_report_export_excel', workspace_mpg_report_export_excel)
 app.add_url_rule('/workspace/dashboard-report/<string:kind>', 'workspace_dashboard_financial_report', workspace_dashboard_financial_report)
 
 # ── Payroll Module ──────────────────────────────────────────────────────────

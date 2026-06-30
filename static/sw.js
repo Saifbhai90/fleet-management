@@ -1,5 +1,5 @@
-// Fleet Manager Service Worker v6
-const CACHE_NAME = 'fleetmgr-v6';
+// Fleet Manager Service Worker v7
+const CACHE_NAME = 'fleetmgr-v7';
 
 // Static assets to pre-cache on install
 const PRECACHE_URLS = [
@@ -101,12 +101,12 @@ self.addEventListener('fetch', function(event) {
         return;
     }
 
-    // Cache static assets from our own origin.
+    // Static assets from our own origin: stale-while-revalidate.
+    // Serve from cache immediately, but always fetch the updated version in the background.
     if (url.pathname.startsWith('/static/')) {
         event.respondWith(
             caches.match(request).then(function(cached) {
-                if (cached) return cached;
-                return fetch(request).then(function(response) {
+                var fetchPromise = fetch(request).then(function(response) {
                     if (response && response.ok) {
                         var clone = response.clone();
                         caches.open(CACHE_NAME).then(function(cache) {
@@ -115,8 +115,9 @@ self.addEventListener('fetch', function(event) {
                     }
                     return response;
                 }).catch(function() {
-                    return new Response('', { status: 503, statusText: 'Offline' });
+                    return cached || new Response('', { status: 503, statusText: 'Offline' });
                 });
+                return cached || fetchPromise;
             })
         );
         return;

@@ -6,44 +6,95 @@
   <style>
     .mpg-hero {
       border: 0;
-      border-radius: 16px;
-      background: linear-gradient(135deg, #0f172a 0%, #1d4ed8 100%);
-      color: #fff;
+      border-radius: 14px;
+      overflow: hidden;
+      position: relative;
     }
-    .mpg-hero .muted-light { color: rgba(255, 255, 255, .84); }
+    .mpg-hero::after {
+      content: '';
+      position: absolute;
+      top: -60px; right: -40px;
+      width: 260px; height: 260px;
+      background: radial-gradient(circle, rgba(96,165,250,.15) 0%, transparent 70%);
+      border-radius: 50%;
+      pointer-events: none;
+    }
+    .mpg-stat {
+      background: rgba(241,245,249,.7);
+      border: 1px solid rgba(203,213,225,.5);
+      border-radius: 10px;
+      padding: .55rem .85rem;
+      min-width: 118px;
+    }
+    .mpg-stat .stat-label { font-size: .68rem; text-transform: uppercase; letter-spacing: .04em; color: #64748b; }
+    .mpg-stat .stat-value { font-size: 1.15rem; font-weight: 700; line-height: 1.2; color: #1e293b; }
+    .mpg-table thead th {
+      background: #f1f5f9;
+      font-size: .72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .02em;
+      color: #475569;
+      white-space: nowrap;
+      border-bottom: 2px solid #cbd5e1;
+      vertical-align: middle;
+    }
+    .mpg-table tbody tr:hover { background: #f0f7ff; }
+    .mpg-table tbody td { font-size: .8rem; vertical-align: middle; }
+    .mpg-val-pos { color: #15803d; font-weight: 600; }
+    .mpg-val-neg { color: #dc2626; font-weight: 600; }
+    .mpg-val-warn { color: #d97706; font-weight: 600; }
+    .mpg-balance-pos { color: #15803d; font-weight: 700; }
+    .mpg-balance-neg { color: #dc2626; font-weight: 700; }
+    .mpg-vehicle-cell .vno { font-weight: 700; font-size: .85rem; color: #1e293b; }
+    .mpg-vehicle-cell .vno-sub { font-size: .68rem; color: #64748b; margin-top: 1px; }
   </style>
 
   <div class="card mpg-hero shadow-sm mb-3">
-    <div class="card-body p-4">
-      <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
+    <div class="card-body p-4 position-relative">
+      <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
         <div>
-          <span class="badge text-bg-light mb-2"><i class="bi bi-speedometer2 me-1"></i>Workspace MPG Analytics</span>
-          <h3 class="mb-1">MPG Report</h3>
-          <div class="muted-light">Fuel efficiency, deduction aur next fueling forecast (vehicle wise).</div>
-          <div class="muted-light small mt-1">Employee: <strong>{{ employee.name }}</strong></div>
+          <span class="badge bg-primary-subtle text-primary mb-2"><i class="bi bi-speedometer2 me-1"></i>Workspace MPG Analytics</span>
+          <h3 class="mb-1 fw-bold text-dark">MPG Report</h3>
+          <div class="text-muted">Fuel efficiency, deduction aur next fueling forecast (vehicle wise).</div>
+          <div class="text-muted small mt-1">Employee: <strong class="text-body">{{ employee.name }}</strong></div>
         </div>
-        <div class="d-flex gap-2">
-          <button class="btn btn-light btn-sm" id="btnPrintReport"><i class="bi bi-eye me-1"></i>Print / Preview</button>
-          <button class="btn btn-outline-light btn-sm" id="btnExportReport"><i class="bi bi-file-earmark-excel me-1"></i>Export</button>
-          <a href="{{ url_for('workspace_reports') }}" class="btn btn-outline-light btn-sm"><i class="bi bi-arrow-left me-1"></i>Reports</a>
+        <div class="d-flex gap-2 flex-wrap">
+          <button class="btn btn-primary btn-sm" id="btnPrintReport"><i class="bi bi-eye me-1"></i>Print / Preview</button>
+          <button class="btn btn-outline-primary btn-sm" id="btnExportReport"><i class="bi bi-file-earmark-excel me-1"></i>Export</button>
+          <a href="{{ url_for('workspace_reports') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Reports</a>
+        </div>
+      </div>
+      <div class="d-flex flex-wrap gap-2 position-relative">
+        <div class="mpg-stat">
+          <div class="stat-label"><i class="bi bi-truck me-1"></i>Vehicles</div>
+          <div class="stat-value">{{ rows|length }}</div>
+        </div>
+        <div class="mpg-stat">
+          <div class="stat-label"><i class="bi bi-fuel-pump me-1"></i>Total LTR</div>
+          <div class="stat-value">{{ "{:,.0f}".format(rows|sum(attribute='total_ltr') or 0) }}</div>
+        </div>
+        <div class="mpg-stat">
+          <div class="stat-label"><i class="bi bi-cash-coin me-1"></i>Total Amount</div>
+          <div class="stat-value">{{ "{:,.0f}".format(rows|sum(attribute='amount') or 0) }}</div>
         </div>
       </div>
     </div>
   </div>
 
   <div class="card border-0 shadow-sm mb-3">
-    <div class="card-body">
+    <div class="card-body py-3">
       <form method="get" class="row g-2 align-items-end">
         <div class="col-md-2">
-          <label class="form-label small fw-semibold">From Date</label>
+          <label class="form-label small fw-semibold text-secondary"><i class="bi bi-calendar3 me-1"></i>From Date</label>
           <input type="text" class="form-control form-control-sm datepicker" name="from_date" placeholder="dd-mm-yyyy" value="{{ from_date.strftime('%d-%m-%Y') if from_date else '' }}">
         </div>
         <div class="col-md-2">
-          <label class="form-label small fw-semibold">To Date</label>
+          <label class="form-label small fw-semibold text-secondary"><i class="bi bi-calendar3 me-1"></i>To Date</label>
           <input type="text" class="form-control form-control-sm datepicker" name="to_date" placeholder="dd-mm-yyyy" value="{{ to_date.strftime('%d-%m-%Y') if to_date else '' }}">
         </div>
         <div class="col-md-2">
-          <label class="form-label small fw-semibold">District</label>
+          <label class="form-label small fw-semibold text-secondary"><i class="bi bi-geo-alt me-1"></i>District</label>
           <select class="form-select search-select" id="mpgDistrictFilter" name="district_id">
             <option value="0">-- All Districts --</option>
             {% for d in districts %}
@@ -52,7 +103,7 @@
           </select>
         </div>
         <div class="col-md-2">
-          <label class="form-label small fw-semibold">Project</label>
+          <label class="form-label small fw-semibold text-secondary"><i class="bi bi-folder2 me-1"></i>Project</label>
           <select class="form-select search-select" id="mpgProjectFilter" name="project_id">
             <option value="0">-- All Projects --</option>
             {% for p in projects %}
@@ -61,7 +112,7 @@
           </select>
         </div>
         <div class="col-md-2">
-          <label class="form-label small fw-semibold">Vehicle No.</label>
+          <label class="form-label small fw-semibold text-secondary"><i class="bi bi-truck me-1"></i>Vehicle No.</label>
           <select class="form-select search-select" id="mpgVehicleFilter" name="vehicle_id">
             <option value="0">-- All Vehicles --</option>
             {% for v in vehicles %}
@@ -70,8 +121,8 @@
           </select>
         </div>
         <div class="col-md-2 d-flex gap-2">
-          <button class="btn btn-primary flex-fill"><i class="bi bi-funnel me-1"></i>Apply Filter</button>
-          <a href="{{ url_for('workspace_mpg_report') }}" class="btn btn-outline-secondary"><i class="bi bi-x-lg"></i></a>
+          <button class="btn btn-primary flex-fill"><i class="bi bi-funnel me-1"></i>Apply</button>
+          <a href="{{ url_for('workspace_mpg_report') }}" class="btn btn-outline-secondary" title="Reset"><i class="bi bi-x-lg"></i></a>
         </div>
       </form>
     </div>
@@ -86,16 +137,21 @@
     <input type="hidden" name="vehicle_id" value="{{ vehicle_id or '' }}">
 
     <div class="card border-0 shadow-sm">
-      <div class="card-header bg-light d-flex justify-content-between align-items-center">
-        <strong>Vehicle MPG Detail</strong>
+      <div class="card-header bg-white border-bottom py-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <div class="d-flex align-items-center gap-3">
+          <strong class="text-primary"><i class="bi bi-table me-1"></i>Vehicle MPG Detail</strong>
+          <span class="badge bg-light text-secondary border">{{ rows|length }} vehicle(s)</span>
+        </div>
         <div class="d-flex align-items-center gap-2">
-          <span class="small text-muted">{{ rows|length }} vehicle(s)</span>
-          <input type="text" class="form-control form-control-sm" id="mpgTableSearch" placeholder="Search all columns (multi word)..." style="width: 260px;" autocomplete="off">
+          <div class="input-group input-group-sm" style="width: 260px;">
+            <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
+            <input type="text" class="form-control border-start-0" id="mpgTableSearch" placeholder="Search all columns..." autocomplete="off">
+          </div>
           <button type="submit" class="btn btn-success btn-sm"><i class="bi bi-save me-1"></i>Save Inputs</button>
         </div>
       </div>
       <div class="table-responsive">
-        <table class="table table-sm table-bordered align-middle mb-0" id="workspaceMpgReportTable">
+        <table class="table table-sm table-bordered table-hover align-middle mb-0 mpg-table" id="workspaceMpgReportTable">
           <thead class="table-light">
             <tr>
               <th>Sr.No.</th>
@@ -132,24 +188,24 @@
               data-tank-capacity="{{ r.tank_capacity if r.tank_capacity is not none else '' }}"
               data-avg-fuel-price="{{ r.avg_fuel_price if r.avg_fuel_price is not none else '' }}"
             >
-              <td>{{ r.sr_no }}</td>
-              <td>
-                <div class="fw-semibold">{{ r.vehicle.vehicle_no }}</div>
-                <div class="small text-muted">Target MPG: {{ "{:,.2f}".format(r.target_mpg or 0) }} | Tank: {{ "{:,.2f}".format(r.tank_capacity or 0) }} L</div>
+              <td class="text-center text-muted">{{ r.sr_no }}</td>
+              <td class="mpg-vehicle-cell">
+                <div class="vno">{{ r.vehicle.vehicle_no }}</div>
+                <div class="vno-sub">T:{{ "{:,.1f}".format(r.target_mpg or 0) }} MPG | Tk:{{ "{:,.0f}".format(r.tank_capacity or 0) }}L</div>
               </td>
               <td>{{ r.entry_date|ddmmyyyy if r.entry_date else '-' }}</td>
               <td>{{ r.slip_no or '-' }}</td>
-              <td class="text-end">{{ "{:,.2f}".format(r.previous_reading) if r.previous_reading is not none else '-' }}</td>
-              <td class="text-end">{{ "{:,.2f}".format(r.current_reading) if r.current_reading is not none else '-' }}</td>
-              <td class="text-end">{{ "{:,.2f}".format(r.km) if r.km is not none else '-' }}</td>
+              <td class="text-end text-muted">{{ "{:,.2f}".format(r.previous_reading) if r.previous_reading is not none else '-' }}</td>
+              <td class="text-end text-muted">{{ "{:,.2f}".format(r.current_reading) if r.current_reading is not none else '-' }}</td>
+              <td class="text-end fw-semibold">{{ "{:,.2f}".format(r.km) if r.km is not none else '-' }}</td>
               <td class="text-end">{{ "{:,.2f}".format(r.avg_fuel_price) if r.avg_fuel_price is not none else '-' }}</td>
               <td class="text-end">{{ "{:,.2f}".format(r.total_ltr) if r.total_ltr is not none else '-' }}</td>
-              <td class="text-end">{{ "{:,.2f}".format(r.mpg) if r.mpg is not none else '-' }}</td>
+              <td class="text-end fw-semibold {% if r.mpg and r.target_mpg and r.mpg >= r.target_mpg %}mpg-val-pos{% elif r.mpg and r.target_mpg and r.mpg < r.target_mpg %}mpg-val-neg{% endif %}">{{ "{:,.2f}".format(r.mpg) if r.mpg is not none else '-' }}</td>
               <td class="text-end">{{ "{:,.2f}".format(r.amount) if r.amount is not none else '-' }}</td>
-              <td class="text-end">{{ "{:,.2f}".format(r.fuel_deduction) if r.fuel_deduction is not none else '-' }}</td>
-              <td class="text-end">{{ "{:,.2f}".format(r.short_kms) if r.short_kms is not none else '-' }}</td>
+              <td class="text-end {% if r.fuel_deduction and r.fuel_deduction > 0 %}mpg-val-neg{% endif %}">{{ "{:,.2f}".format(r.fuel_deduction) if r.fuel_deduction is not none else '-' }}</td>
+              <td class="text-end {% if r.short_kms and r.short_kms > 0 %}mpg-val-warn{% endif %}">{{ "{:,.2f}".format(r.short_kms) if r.short_kms is not none else '-' }}</td>
               <td class="text-end">{{ "{:,.2f}".format(r.with_full_tank_next_fueling) if r.with_full_tank_next_fueling is not none else '-' }}</td>
-              <td class="text-end current-date-reading-cell">{{ "{:,.2f}".format(r.current_date_reading) if r.current_date_reading is not none else '-' }}</td>
+              <td class="text-end current-date-reading-cell text-muted">{{ "{:,.2f}".format(r.current_date_reading) if r.current_date_reading is not none else '-' }}</td>
               <td class="text-end current-odoo-meter-cell" style="min-width: 170px;">
                 <input
                   type="text"
@@ -176,7 +232,8 @@
             </tr>
             {% else %}
             <tr>
-              <td colspan="22" class="text-center text-muted py-4">
+              <td colspan="22" class="text-center text-muted py-5">
+                <i class="bi bi-inbox d-block mb-2" style="font-size: 2.5rem; opacity: .5;"></i>
                 No fuel entries found for the selected date range.
               </td>
             </tr>
@@ -252,6 +309,11 @@ document.addEventListener('DOMContentLoaded', function(){
   }
 
   if(window.fleetPrintExport){
+    var mpgExportBtn = document.getElementById('btnExportReport');
+    if(mpgExportBtn){
+      mpgExportBtn.setAttribute('data-pdf-url', {{ url_for('workspace_mpg_report_export_pdf') | tojson }} + window.location.search);
+      mpgExportBtn.setAttribute('data-export-url', {{ url_for('workspace_mpg_report_export_excel') | tojson }} + window.location.search);
+    }
     window.fleetPrintExport('workspaceMpgReportTable', {{ print_report_title|tojson }}, 'Workspace_MPG_Report.csv', {
       columnOrder: ['Sr.No.', 'Vehicle No.', 'Entry Date', 'SLIP NO.', 'Previous Reading', 'Current Reading', 'KM', 'Avg. Fuel Price', 'Total LTR', 'MPG', 'Amount', 'FUEL DEDUCTION', 'Short Km\'s', 'With Full Tank Next Fueling Reading', 'Current Date Reading', 'Current Odoo Meter Reading', 'R. KM\'s from Fueling', 'In Tank Current Ltr', 'Fueling LTR With Target MPG', 'Fueling Amount', 'Today Fuel', 'Balance Amount'],
       numberColumns: ['Previous Reading', 'Current Reading', 'KM', 'Avg. Fuel Price', 'Total LTR', 'MPG', 'Amount', 'FUEL DEDUCTION', 'Short Km\'s', 'With Full Tank Next Fueling Reading', 'Current Date Reading', 'Current Odoo Meter Reading', 'R. KM\'s from Fueling', 'In Tank Current Ltr', 'Fueling LTR With Target MPG', 'Fueling Amount', 'Today Fuel', 'Balance Amount'],
@@ -291,7 +353,13 @@ document.addEventListener('DOMContentLoaded', function(){
     if(inTankCell) inTankCell.textContent = formatOrDash(inTankCurrentLtr);
     if(fuelingLtrCell) fuelingLtrCell.textContent = formatOrDash(fuelingLtrWithTarget);
     if(fuelingAmountCell) fuelingAmountCell.textContent = formatOrDash(fuelingAmount);
-    if(balanceAmountCell) balanceAmountCell.textContent = formatOrDash(balanceAmount);
+    if(balanceAmountCell){
+      balanceAmountCell.textContent = formatOrDash(balanceAmount);
+      balanceAmountCell.classList.remove('mpg-balance-pos', 'mpg-balance-neg');
+      if(balanceAmount != null && Number.isFinite(balanceAmount)){
+        balanceAmountCell.classList.add(balanceAmount >= 0 ? 'mpg-balance-pos' : 'mpg-balance-neg');
+      }
+    }
   }
 
   const mpgRows = Array.from(document.querySelectorAll('#workspaceMpgReportTable tbody tr.mpg-data-row'));

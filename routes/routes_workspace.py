@@ -4373,6 +4373,665 @@ def workspace_mpg_report():
     )
 
 
+def workspace_mpg_report_export_pdf():
+    guard, emp = _workspace_guard("workspace_reports")
+    if guard:
+        return guard
+
+    today = pk_date()
+    from_date = parse_date(request.values.get("from_date")) or today
+    to_date = parse_date(request.values.get("to_date")) or today
+    district_id = request.values.get("district_id", type=int) or 0
+    project_id = request.values.get("project_id", type=int) or 0
+    selected_vehicle_id = request.values.get("vehicle_id", type=int) or 0
+    if from_date > to_date:
+        from_date, to_date = to_date, from_date
+
+    def _to_dec(value, fallback=Decimal("0")):
+        if value is None or value == "":
+            return fallback
+        try:
+            return Decimal(str(value))
+        except Exception:
+            return fallback
+
+    fuel_q = FuelExpense.query.filter(
+        FuelExpense.employee_id == emp.id,
+        FuelExpense.fueling_date >= from_date,
+        FuelExpense.fueling_date <= to_date,
+    )
+    if district_id:
+        fuel_q = fuel_q.filter(FuelExpense.district_id == district_id)
+    if project_id:
+        fuel_q = fuel_q.filter(FuelExpense.project_id == project_id)
+    if selected_vehicle_id:
+        fuel_q = fuel_q.filter(FuelExpense.vehicle_id == selected_vehicle_id)
+
+    fuel_rows = (
+        fuel_q
+        .order_by(
+            FuelExpense.vehicle_id.asc(),
+            FuelExpense.fueling_date.asc(),
+            db.case((FuelExpense.current_reading.is_(None), 1), else_=0).asc(),
+            FuelExpense.current_reading.asc(),
+            FuelExpense.id.asc(),
+        )
+        .all()
+    )
+
+    entries_by_vehicle = {}
+    for row in fuel_rows:
+        entries_by_vehicle.setdefault(int(row.vehicle_id), []).append(row)
+
+    vehicle_ids = sorted(entries_by_vehicle.keys())
+    vehicles_by_id = {}
+    if vehicle_ids:
+        for vehicle in Vehicle.query.filter(Vehicle.id.in_(vehicle_ids)).all():
+            vehicles_by_id[int(vehicle.id)] = vehicle
+
+    task_close_reading_map = {}
+    if vehicle_ids:
+        task_rows = (
+            VehicleDailyTask.query
+            .filter(
+                VehicleDailyTask.vehicle_id.in_(vehicle_ids),
+                VehicleDailyTask.task_date <= to_date,
+                VehicleDailyTask.close_reading.isnot(None),
+            )
+            .order_by(
+                VehicleDailyTask.vehicle_id.asc(),
+                VehicleDailyTask.task_date.desc(),
+                VehicleDailyTask.id.desc(),
+            )
+            .all()
+        )
+        for task in task_rows:
+            v_id = int(task.vehicle_id)
+            if v_id in task_close_reading_map:
+                continue
+            task_close_reading_map[v_id] = _to_dec(task.close_reading, None)
+
+    saved_inputs = {}
+    if vehicle_ids:
+        for rec in WorkspaceMpgReportInput.query.filter(
+            WorkspaceMpgReportInput.employee_id == emp.id,
+            WorkspaceMpgReportInput.from_date == from_date,
+            WorkspaceMpgReportInput.to_date == to_date,
+            WorkspaceMpgReportInput.vehicle_id.in_(vehicle_ids),
+        ).all():
+            saved_inputs[int(rec.vehicle_id)] = rec
+
+    report_rows = []
+    for idx, row_vehicle_id in enumerate(vehicle_ids, start=1):
+        vehicle = vehicles_by_id.get(row_vehicle_id)
+        if not vehicle:
+            continue
+        rows = entries_by_vehicle.get(row_vehicle_id) or []
+        if not rows:
+            continue
+
+        latest_entry = rows[-1]
+        same_start_date_rows = [r for r in rows if r.fueling_date == from_date]
+        same_end_date_rows = [r for r in rows if r.fueling_date == to_date]
+        first_row_for_prev = same_start_date_rows[0] if same_start_date_rows else rows[0]
+        last_row_for_current = same_end_date_rows[-1] if same_end_date_rows else rows[-1]
+
+        previous_reading = _to_dec(first_row_for_prev.previous_reading, None)
+        if previous_reading is None:
+            start_prev_values = [_to_dec(r.previous_reading, None) for r in same_start_date_rows]
+            start_prev_values = [v for v in start_prev_values if v is not None]
+            if start_prev_values:
+                previous_reading = min(start_prev_values)
+            else:
+                all_prev_values = [_to_dec(r.previous_reading, None) for r in rows]
+                all_prev_values = [v for v in all_prev_values if v is not None]
+                if all_prev_values:
+                    previous_reading = min(all_prev_values)
+        current_reading = _to_dec(last_row_for_current.current_reading, None)
+        km = (current_reading - previous_reading) if (previous_reading is not None and current_reading is not None) else None
+
+        total_ltr = sum((_to_dec(r.liters, Decimal("0")) for r in rows), Decimal("0"))
+        total_amount = sum((_to_dec(r.amount, Decimal("0")) for r in rows), Decimal("0"))
+        avg_fuel_price = (total_amount / total_ltr) if total_ltr > 0 else None
+        mpg = (km / total_ltr) if (km is not None and total_ltr > 0) else None
+
+        target_mpg = _to_dec(vehicle.target_mpg, Decimal("0"))
+        tank_capacity = _to_dec(vehicle.fuel_tank_capacity, Decimal("0"))
+
+        fuel_deduction = None
+        short_kms = None
+        with_full_tank_next_fueling = None
+        if target_mpg > 0 and km is not None and avg_fuel_price is not None:
+            fuel_deduction = (total_ltr - (km / target_mpg)) * avg_fuel_price
+        if target_mpg > 0 and km is not None:
+            short_kms = (total_ltr * target_mpg) - km
+        if target_mpg > 0 and current_reading is not None and short_kms is not None:
+            with_full_tank_next_fueling = current_reading + short_kms + (tank_capacity * target_mpg)
+
+        current_date_reading = task_close_reading_map.get(row_vehicle_id)
+        saved = saved_inputs.get(row_vehicle_id)
+        current_odoo_meter_reading = _to_dec(saved.current_odoo_meter_reading, None) if saved else None
+        today_fuel = _to_dec(saved.today_fuel, None) if saved else None
+        meter_base = current_odoo_meter_reading if current_odoo_meter_reading is not None else current_date_reading
+
+        remaining_kms_from_fueling = (
+            with_full_tank_next_fueling - meter_base
+            if (with_full_tank_next_fueling is not None and meter_base is not None)
+            else None
+        )
+        in_tank_current_ltr = (
+            remaining_kms_from_fueling / target_mpg
+            if (remaining_kms_from_fueling is not None and target_mpg > 0)
+            else None
+        )
+        fueling_ltr_with_target = (
+            tank_capacity - in_tank_current_ltr
+            if (in_tank_current_ltr is not None and tank_capacity is not None)
+            else None
+        )
+        fueling_amount = (
+            fueling_ltr_with_target * avg_fuel_price
+            if (fueling_ltr_with_target is not None and avg_fuel_price is not None)
+            else None
+        )
+        balance_amount = (
+            fueling_amount - today_fuel
+            if (fueling_amount is not None and today_fuel is not None)
+            else fueling_amount
+        )
+
+        report_rows.append({
+            "sr_no": idx,
+            "vehicle": vehicle,
+            "entry_date": latest_entry.fueling_date,
+            "slip_no": latest_entry.slip_no,
+            "previous_reading": previous_reading,
+            "current_reading": current_reading,
+            "km": km,
+            "avg_fuel_price": avg_fuel_price,
+            "total_ltr": total_ltr,
+            "mpg": mpg,
+            "amount": total_amount,
+            "fuel_deduction": fuel_deduction,
+            "short_kms": short_kms,
+            "with_full_tank_next_fueling": with_full_tank_next_fueling,
+            "current_date_reading": current_date_reading,
+            "current_odoo_meter_reading": current_odoo_meter_reading,
+            "remaining_kms_from_fueling": remaining_kms_from_fueling,
+            "in_tank_current_ltr": in_tank_current_ltr,
+            "fueling_ltr_with_target": fueling_ltr_with_target,
+            "fueling_amount": fueling_amount,
+            "today_fuel": today_fuel,
+            "balance_amount": balance_amount,
+            "target_mpg": target_mpg,
+            "tank_capacity": tank_capacity,
+        })
+
+    if not report_rows:
+        return jsonify({"error": "Export ke liye koi row nahi mili."}), 400
+
+    district_obj = District.query.get(district_id) if district_id else None
+    project_obj = Project.query.get(project_id) if project_id else None
+    selected_district_name = district_obj.name if district_obj else "All Districts"
+    selected_project_name = project_obj.name if project_obj else "All Projects"
+    print_report_title = (
+        f"{selected_district_name} ({selected_project_name}) "
+        f"Fuel MPG SUMMARY(Date: {from_date.strftime('%d-%m-%Y')} To {to_date.strftime('%d-%m-%Y')})"
+    )
+
+    try:
+        html = render_template(
+            "workspace/mpg_report_print.html",
+            employee=emp,
+            from_date=from_date,
+            to_date=to_date,
+            rows=report_rows,
+            print_report_title=print_report_title,
+        )
+        from routes import _html_to_pdf_bytes
+        pdf_bytes = _html_to_pdf_bytes(html, landscape=True)
+    except Exception as exc:
+        current_app.logger.exception("MPG report PDF export failed")
+        return jsonify({"error": f"PDF generation failed: {exc}"}), 500
+
+    fname = f"MPG_Report_{from_date.strftime('%d-%m-%Y')}_to_{to_date.strftime('%d-%m-%Y')}.pdf"
+    from flask import Response
+    return Response(
+        pdf_bytes,
+        mimetype="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
+
+
+def workspace_mpg_report_export_excel():
+    guard, emp = _workspace_guard("workspace_reports")
+    if guard:
+        return guard
+
+    today = pk_date()
+    from_date = parse_date(request.values.get("from_date")) or today
+    to_date = parse_date(request.values.get("to_date")) or today
+    district_id = request.values.get("district_id", type=int) or 0
+    project_id = request.values.get("project_id", type=int) or 0
+    selected_vehicle_id = request.values.get("vehicle_id", type=int) or 0
+    if from_date > to_date:
+        from_date, to_date = to_date, from_date
+
+    def _to_dec(value, fallback=Decimal("0")):
+        if value is None or value == "":
+            return fallback
+        try:
+            return Decimal(str(value))
+        except Exception:
+            return fallback
+
+    fuel_q = FuelExpense.query.filter(
+        FuelExpense.employee_id == emp.id,
+        FuelExpense.fueling_date >= from_date,
+        FuelExpense.fueling_date <= to_date,
+    )
+    if district_id:
+        fuel_q = fuel_q.filter(FuelExpense.district_id == district_id)
+    if project_id:
+        fuel_q = fuel_q.filter(FuelExpense.project_id == project_id)
+    if selected_vehicle_id:
+        fuel_q = fuel_q.filter(FuelExpense.vehicle_id == selected_vehicle_id)
+
+    fuel_rows = (
+        fuel_q
+        .order_by(
+            FuelExpense.vehicle_id.asc(),
+            FuelExpense.fueling_date.asc(),
+            db.case((FuelExpense.current_reading.is_(None), 1), else_=0).asc(),
+            FuelExpense.current_reading.asc(),
+            FuelExpense.id.asc(),
+        )
+        .all()
+    )
+
+    entries_by_vehicle = {}
+    for row in fuel_rows:
+        entries_by_vehicle.setdefault(int(row.vehicle_id), []).append(row)
+
+    vehicle_ids = sorted(entries_by_vehicle.keys())
+    vehicles_by_id = {}
+    if vehicle_ids:
+        for vehicle in Vehicle.query.filter(Vehicle.id.in_(vehicle_ids)).all():
+            vehicles_by_id[int(vehicle.id)] = vehicle
+
+    task_close_reading_map = {}
+    if vehicle_ids:
+        task_rows = (
+            VehicleDailyTask.query
+            .filter(
+                VehicleDailyTask.vehicle_id.in_(vehicle_ids),
+                VehicleDailyTask.task_date <= to_date,
+                VehicleDailyTask.close_reading.isnot(None),
+            )
+            .order_by(
+                VehicleDailyTask.vehicle_id.asc(),
+                VehicleDailyTask.task_date.desc(),
+                VehicleDailyTask.id.desc(),
+            )
+            .all()
+        )
+        for task in task_rows:
+            v_id = int(task.vehicle_id)
+            if v_id in task_close_reading_map:
+                continue
+            task_close_reading_map[v_id] = _to_dec(task.close_reading, None)
+
+    saved_inputs = {}
+    if vehicle_ids:
+        for rec in WorkspaceMpgReportInput.query.filter(
+            WorkspaceMpgReportInput.employee_id == emp.id,
+            WorkspaceMpgReportInput.from_date == from_date,
+            WorkspaceMpgReportInput.to_date == to_date,
+            WorkspaceMpgReportInput.vehicle_id.in_(vehicle_ids),
+        ).all():
+            saved_inputs[int(rec.vehicle_id)] = rec
+
+    report_rows = []
+    for idx, row_vehicle_id in enumerate(vehicle_ids, start=1):
+        vehicle = vehicles_by_id.get(row_vehicle_id)
+        if not vehicle:
+            continue
+        rows = entries_by_vehicle.get(row_vehicle_id) or []
+        if not rows:
+            continue
+
+        latest_entry = rows[-1]
+        same_start_date_rows = [r for r in rows if r.fueling_date == from_date]
+        same_end_date_rows = [r for r in rows if r.fueling_date == to_date]
+        first_row_for_prev = same_start_date_rows[0] if same_start_date_rows else rows[0]
+        last_row_for_current = same_end_date_rows[-1] if same_end_date_rows else rows[-1]
+
+        previous_reading = _to_dec(first_row_for_prev.previous_reading, None)
+        if previous_reading is None:
+            start_prev_values = [_to_dec(r.previous_reading, None) for r in same_start_date_rows]
+            start_prev_values = [v for v in start_prev_values if v is not None]
+            if start_prev_values:
+                previous_reading = min(start_prev_values)
+            else:
+                all_prev_values = [_to_dec(r.previous_reading, None) for r in rows]
+                all_prev_values = [v for v in all_prev_values if v is not None]
+                if all_prev_values:
+                    previous_reading = min(all_prev_values)
+        current_reading = _to_dec(last_row_for_current.current_reading, None)
+        km = (current_reading - previous_reading) if (previous_reading is not None and current_reading is not None) else None
+
+        total_ltr = sum((_to_dec(r.liters, Decimal("0")) for r in rows), Decimal("0"))
+        total_amount = sum((_to_dec(r.amount, Decimal("0")) for r in rows), Decimal("0"))
+        avg_fuel_price = (total_amount / total_ltr) if total_ltr > 0 else None
+        mpg = (km / total_ltr) if (km is not None and total_ltr > 0) else None
+
+        target_mpg = _to_dec(vehicle.target_mpg, Decimal("0"))
+        tank_capacity = _to_dec(vehicle.fuel_tank_capacity, Decimal("0"))
+
+        fuel_deduction = None
+        short_kms = None
+        with_full_tank_next_fueling = None
+        if target_mpg > 0 and km is not None and avg_fuel_price is not None:
+            fuel_deduction = (total_ltr - (km / target_mpg)) * avg_fuel_price
+        if target_mpg > 0 and km is not None:
+            short_kms = (total_ltr * target_mpg) - km
+        if target_mpg > 0 and current_reading is not None and short_kms is not None:
+            with_full_tank_next_fueling = current_reading + short_kms + (tank_capacity * target_mpg)
+
+        current_date_reading = task_close_reading_map.get(row_vehicle_id)
+        saved = saved_inputs.get(row_vehicle_id)
+        current_odoo_meter_reading = _to_dec(saved.current_odoo_meter_reading, None) if saved else None
+        today_fuel = _to_dec(saved.today_fuel, None) if saved else None
+        meter_base = current_odoo_meter_reading if current_odoo_meter_reading is not None else current_date_reading
+
+        remaining_kms_from_fueling = (
+            with_full_tank_next_fueling - meter_base
+            if (with_full_tank_next_fueling is not None and meter_base is not None)
+            else None
+        )
+        in_tank_current_ltr = (
+            remaining_kms_from_fueling / target_mpg
+            if (remaining_kms_from_fueling is not None and target_mpg > 0)
+            else None
+        )
+        fueling_ltr_with_target = (
+            tank_capacity - in_tank_current_ltr
+            if (in_tank_current_ltr is not None and tank_capacity is not None)
+            else None
+        )
+        fueling_amount = (
+            fueling_ltr_with_target * avg_fuel_price
+            if (fueling_ltr_with_target is not None and avg_fuel_price is not None)
+            else None
+        )
+        balance_amount = (
+            fueling_amount - today_fuel
+            if (fueling_amount is not None and today_fuel is not None)
+            else fueling_amount
+        )
+
+        report_rows.append({
+            "sr_no": idx,
+            "vehicle": vehicle,
+            "entry_date": latest_entry.fueling_date,
+            "slip_no": latest_entry.slip_no,
+            "previous_reading": previous_reading,
+            "current_reading": current_reading,
+            "km": km,
+            "avg_fuel_price": avg_fuel_price,
+            "total_ltr": total_ltr,
+            "mpg": mpg,
+            "amount": total_amount,
+            "fuel_deduction": fuel_deduction,
+            "short_kms": short_kms,
+            "with_full_tank_next_fueling": with_full_tank_next_fueling,
+            "current_date_reading": current_date_reading,
+            "current_odoo_meter_reading": current_odoo_meter_reading,
+            "remaining_kms_from_fueling": remaining_kms_from_fueling,
+            "in_tank_current_ltr": in_tank_current_ltr,
+            "fueling_ltr_with_target": fueling_ltr_with_target,
+            "fueling_amount": fueling_amount,
+            "today_fuel": today_fuel,
+            "balance_amount": balance_amount,
+            "target_mpg": target_mpg,
+            "tank_capacity": tank_capacity,
+        })
+
+    if not report_rows:
+        return jsonify({"error": "Export ke liye koi row nahi mili."}), 400
+
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+    import io
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "MPG Report"
+
+    headers = [
+        "Sr.No.", "Vehicle No.", "Target MPG", "Tank Capacity (L)",
+        "Entry Date", "SLIP NO.", "Previous Reading", "Current Reading",
+        "KM", "Avg. Fuel Price", "Total LTR", "MPG", "Amount",
+        "FUEL DEDUCTION", "Short Km's", "With Full Tank Next Fueling Reading",
+        "Current Date Reading", "Current Odoo Meter Reading",
+        "R. KM's from Fueling", "In Tank Current Ltr",
+        "Fueling LTR With Target MPG", "Fueling Amount", "Today Fuel", "Balance Amount",
+    ]
+
+    thin_border = Border(
+        left=Side(style='thin'),
+        right=Side(style='thin'),
+        top=Side(style='thin'),
+        bottom=Side(style='thin'),
+    )
+    header_fill = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')
+    header_font = Font(bold=True, color='FFFFFF', size=10, name='Arial')
+    header_align = Alignment(horizontal='left', vertical='center', wrap_text=True)
+    cell_font = Font(size=9, name='Arial')
+    num_align = Alignment(horizontal='right', vertical='center')
+    center_align = Alignment(horizontal='center', vertical='center')
+    pos_font = Font(size=10, name='Arial', color='15803D', bold=True)
+    neg_font = Font(size=10, name='Arial', color='DC2626', bold=True)
+    warn_font = Font(size=10, name='Arial', color='D97706', bold=True)
+
+    for col_idx, h in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col_idx, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = header_align
+        cell.border = thin_border
+
+    num_cols = {
+        "Previous Reading", "Current Reading", "KM", "Avg. Fuel Price",
+        "Total LTR", "MPG", "Amount", "FUEL DEDUCTION", "Short Km's",
+        "With Full Tank Next Fueling Reading", "Current Date Reading",
+        "Current Odoo Meter Reading", "R. KM's from Fueling",
+        "In Tank Current Ltr", "Fueling LTR With Target MPG",
+        "Fueling Amount", "Today Fuel", "Balance Amount",
+        "Target MPG", "Tank Capacity (L)",
+    }
+    # Columns that should show integer when decimal part is 0, else 2 decimals
+    real_num_cols = {
+        "Previous Reading", "Current Reading", "KM",
+        "With Full Tank Next Fueling Reading", "Current Date Reading",
+        "Current Odoo Meter Reading",
+    }
+    num_fmt = '#,##0.00'
+    int_fmt = '#,##0'
+
+    def _val(v):
+        if v is None:
+            return ''
+        return float(v)
+
+    def _slip_no(s):
+        if not s:
+            return ''
+        s = str(s).strip()
+        try:
+            return int(s)
+        except (ValueError, TypeError):
+            try:
+                return float(s)
+            except (ValueError, TypeError):
+                return s
+
+    for r_idx, r in enumerate(report_rows, 2):
+        values = [
+            r["sr_no"],
+            r["vehicle"].vehicle_no,
+            _val(r["target_mpg"]) if r["target_mpg"] else '',
+            _val(r["tank_capacity"]) if r["tank_capacity"] else '',
+            r["entry_date"] if r["entry_date"] else '',
+            _slip_no(r["slip_no"]),
+            _val(r["previous_reading"]),
+            _val(r["current_reading"]),
+            _val(r["km"]),
+            _val(r["avg_fuel_price"]),
+            _val(r["total_ltr"]),
+            _val(r["mpg"]),
+            _val(r["amount"]),
+            _val(r["fuel_deduction"]),
+            _val(r["short_kms"]),
+            _val(r["with_full_tank_next_fueling"]),
+            _val(r["current_date_reading"]),
+            _val(r["current_odoo_meter_reading"]),
+            _val(r["remaining_kms_from_fueling"]),
+            _val(r["in_tank_current_ltr"]),
+            _val(r["fueling_ltr_with_target"]),
+            _val(r["fueling_amount"]),
+            _val(r["today_fuel"]),
+            _val(r["balance_amount"]),
+        ]
+        for c_idx, val in enumerate(values, 1):
+            cell = ws.cell(row=r_idx, column=c_idx, value=val)
+            cell.font = cell_font
+            cell.border = thin_border
+            h = headers[c_idx - 1]
+            if h in num_cols:
+                cell.alignment = num_align
+                if val != '' and isinstance(val, (int, float)):
+                    if h in real_num_cols:
+                        cell.number_format = int_fmt if float(val).is_integer() else num_fmt
+                    else:
+                        cell.number_format = num_fmt
+            elif h == "Sr.No.":
+                cell.alignment = center_align
+            elif h == "Entry Date":
+                cell.alignment = center_align
+                if val != '' and hasattr(val, 'strftime'):
+                    cell.number_format = 'dd-mm-yy'
+            else:
+                cell.alignment = Alignment(horizontal='left', vertical='center')
+
+            if h == "MPG" and val != '':
+                if r["target_mpg"] and r["mpg"] and r["mpg"] >= float(r["target_mpg"]):
+                    cell.font = pos_font
+                elif r["target_mpg"] and r["mpg"] and r["mpg"] < float(r["target_mpg"]):
+                    cell.font = neg_font
+            elif h == "FUEL DEDUCTION" and val != '' and val > 0:
+                cell.font = neg_font
+            elif h == "Short Km's" and val != '' and val > 0:
+                cell.font = warn_font
+            elif h == "Balance Amount" and val != '':
+                if val > 0:
+                    cell.font = pos_font
+                elif val < 0:
+                    cell.font = neg_font
+
+    # ── Total Row ──
+    total_row_idx = len(report_rows) + 2
+    total_fill = PatternFill(start_color='D9E1F2', end_color='D9E1F2', fill_type='solid')
+    total_font = Font(size=9, name='Arial', bold=True)
+    total_num_font = Font(size=9, name='Arial', bold=True)
+    total_label_align = Alignment(horizontal='right', vertical='center')
+
+    sum_cols = {
+        "KM", "Total LTR", "Amount", "FUEL DEDUCTION",
+        "Fueling Amount", "Today Fuel", "Balance Amount",
+    }
+
+    totals = {}
+    for r in report_rows:
+        for key in ["km", "total_ltr", "amount", "fuel_deduction",
+                     "fueling_amount", "today_fuel", "balance_amount"]:
+            v = r.get(key)
+            if v is not None:
+                totals[key] = totals.get(key, 0) + float(v)
+
+    total_values = [
+        '', 'Total', '', '',
+        '', '',
+        _val(r.get("previous_reading")) if False else '',
+        '',
+        totals.get("km", ''),
+        '', totals.get("total_ltr", ''), '', totals.get("amount", ''),
+        totals.get("fuel_deduction", ''), '', '',
+        '', '',
+        '', '',
+        '', totals.get("fueling_amount", ''),
+        totals.get("today_fuel", ''), totals.get("balance_amount", ''),
+    ]
+
+    for c_idx, val in enumerate(total_values, 1):
+        cell = ws.cell(row=total_row_idx, column=c_idx, value=val if val != '' else None)
+        cell.font = total_font
+        cell.fill = total_fill
+        cell.border = thin_border
+        h = headers[c_idx - 1]
+        if h in sum_cols and val != '':
+            cell.alignment = num_align
+            cell.number_format = num_fmt
+        elif h in num_cols and val != '':
+            cell.alignment = num_align
+            cell.number_format = num_fmt
+        elif c_idx == 2:
+            cell.alignment = total_label_align
+        else:
+            cell.alignment = Alignment(horizontal='left', vertical='center')
+
+    for col_idx in range(1, len(headers) + 1):
+        header_len = len(headers[col_idx - 1])
+        data_max_len = 0
+        for row_idx in range(2, total_row_idx + 1):
+            val = ws.cell(row=row_idx, column=col_idx).value
+            if val is not None and val != '':
+                if hasattr(val, 'strftime'):
+                    s = val.strftime('%d-%m-%y')
+                elif isinstance(val, float):
+                    s = '{:,.2f}'.format(val)
+                else:
+                    s = str(val)
+                data_max_len = max(data_max_len, len(s))
+        col_width = max(data_max_len + 2, min(header_len + 1, 14))
+        ws.column_dimensions[get_column_letter(col_idx)].width = min(col_width, 20)
+
+    ws.freeze_panes = 'A2'
+    ws.auto_filter.ref = f"A1:{get_column_letter(len(headers))}{len(report_rows) + 1}"
+
+    district_obj = District.query.get(district_id) if district_id else None
+    project_obj = Project.query.get(project_id) if project_id else None
+    selected_district_name = district_obj.name if district_obj else "All Districts"
+    selected_project_name = project_obj.name if project_obj else "All Projects"
+    print_report_title = (
+        f"{selected_district_name} ({selected_project_name}) "
+        f"Fuel MPG SUMMARY(Date: {from_date.strftime('%d-%m-%Y')} To {to_date.strftime('%d-%m-%Y')})"
+    )
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+
+    fname = f"MPG_Report_{from_date.strftime('%d-%m-%Y')}_to_{to_date.strftime('%d-%m-%Y')}.xlsx"
+    from flask import Response
+    return Response(
+        buf.read(),
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
+
+
 def workspace_dashboard_financial_report(kind):
     guard, emp = _workspace_guard("workspace_dashboard")
     if guard:

@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>MPG Report — {{ from_date|ddmmyyyy }} to {{ to_date|ddmmyyyy }}</title>
+  <style>
+    @page { size: A4 landscape; margin: 5mm; }
+    body { font-family: Arial, Helvetica, sans-serif; font-size: 7px; margin: 0; padding: 2px; color: #111; }
+    h3 { text-align: center; margin: 2px 0 4px; font-size: 11px; font-weight: 600; }
+    .sub { text-align: center; font-size: 8px; color: #444; margin-bottom: 4px; }
+    table { width: 100%; border-collapse: collapse; table-layout: auto; }
+    th, td { border: 1px solid #555; padding: 1px 2px; text-align: left; vertical-align: top; }
+    th { white-space: normal; word-wrap: break-word; overflow-wrap: break-word; line-height: 1.1; background: #e9ecef; font-size: 6px; font-weight: 700; }
+    td { font-size: 6.5px; white-space: nowrap; }
+    .text-end { text-align: right; }
+    .text-center { text-align: center; }
+    .text-muted { color: #64748b; }
+    .pos { color: #15803d; font-weight: 600; }
+    .neg { color: #dc2626; font-weight: 600; }
+    .warn { color: #d97706; font-weight: 600; }
+    tfoot td { font-weight: bold; background: #f8f9fa; }
+  </style>
+</head>
+<body>
+  <h3>{{ print_report_title }}</h3>
+  <div class="sub">Employee: {{ employee.name }} | Vehicles: {{ rows|length }} | Total LTR: {{ "{:,.0f}".format(rows|sum(attribute='total_ltr') or 0) }} | Total Amount: {{ "{:,.0f}".format(rows|sum(attribute='amount') or 0) }}</div>
+  <table>
+    <thead>
+      <tr>
+        <th>Sr.No.</th>
+        <th>Vehicle No.</th>
+        <th>Entry Date</th>
+        <th>SLIP NO.</th>
+        <th class="text-end">Previous Reading</th>
+        <th class="text-end">Current Reading</th>
+        <th class="text-end">KM</th>
+        <th class="text-end">Avg. Fuel Price</th>
+        <th class="text-end">Total LTR</th>
+        <th class="text-end">MPG</th>
+        <th class="text-end">Amount</th>
+        <th class="text-end">FUEL DEDUCTION</th>
+        <th class="text-end">Short Km's</th>
+        <th class="text-end">With Full Tank Next Fueling Reading</th>
+        <th class="text-end">Current Date Reading</th>
+        <th class="text-end">Current Odoo Meter Reading</th>
+        <th class="text-end">R. KM's from Fueling</th>
+        <th class="text-end">In Tank Current Ltr</th>
+        <th class="text-end">Fueling LTR With Target MPG</th>
+        <th class="text-end">Fueling Amount</th>
+        <th class="text-end">Today Fuel</th>
+        <th class="text-end">Balance Amount</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td class="text-center">{{ r.sr_no }}</td>
+        <td>
+          {{ r.vehicle.vehicle_no }}<br>
+          <span style="font-size:5px;color:#64748b;">T:{{ "{:,.1f}".format(r.target_mpg or 0) }} | Tk:{{ "{:,.0f}".format(r.tank_capacity or 0) }}L</span>
+        </td>
+        <td>{{ r.entry_date|ddmmyyyy if r.entry_date else '-' }}</td>
+        <td>{{ r.slip_no or '-' }}</td>
+        <td class="text-end">{{ "{:,.2f}".format(r.previous_reading) if r.previous_reading is not none else '-' }}</td>
+        <td class="text-end">{{ "{:,.2f}".format(r.current_reading) if r.current_reading is not none else '-' }}</td>
+        <td class="text-end">{{ "{:,.2f}".format(r.km) if r.km is not none else '-' }}</td>
+        <td class="text-end">{{ "{:,.2f}".format(r.avg_fuel_price) if r.avg_fuel_price is not none else '-' }}</td>
+        <td class="text-end">{{ "{:,.2f}".format(r.total_ltr) if r.total_ltr is not none else '-' }}</td>
+        <td class="text-end {% if r.mpg and r.target_mpg and r.mpg >= r.target_mpg %}pos{% elif r.mpg and r.target_mpg and r.mpg < r.target_mpg %}neg{% endif %}">{{ "{:,.2f}".format(r.mpg) if r.mpg is not none else '-' }}</td>
+        <td class="text-end">{{ "{:,.2f}".format(r.amount) if r.amount is not none else '-' }}</td>
+        <td class="text-end {% if r.fuel_deduction and r.fuel_deduction > 0 %}neg{% endif %}">{{ "{:,.2f}".format(r.fuel_deduction) if r.fuel_deduction is not none else '-' }}</td>
+        <td class="text-end {% if r.short_kms and r.short_kms > 0 %}warn{% endif %}">{{ "{:,.2f}".format(r.short_kms) if r.short_kms is not none else '-' }}</td>
+        <td class="text-end">{{ "{:,.2f}".format(r.with_full_tank_next_fueling) if r.with_full_tank_next_fueling is not none else '-' }}</td>
+        <td class="text-end">{{ "{:,.2f}".format(r.current_date_reading) if r.current_date_reading is not none else '-' }}</td>
+        <td class="text-end">{{ "{:,.2f}".format(r.current_odoo_meter_reading) if r.current_odoo_meter_reading is not none else '-' }}</td>
+        <td class="text-end">{{ "{:,.2f}".format(r.remaining_kms_from_fueling) if r.remaining_kms_from_fueling is not none else '-' }}</td>
+        <td class="text-end">{{ "{:,.2f}".format(r.in_tank_current_ltr) if r.in_tank_current_ltr is not none else '-' }}</td>
+        <td class="text-end">{{ "{:,.2f}".format(r.fueling_ltr_with_target) if r.fueling_ltr_with_target is not none else '-' }}</td>
+        <td class="text-end">{{ "{:,.2f}".format(r.fueling_amount) if r.fueling_amount is not none else '-' }}</td>
+        <td class="text-end">{{ "{:,.2f}".format(r.today_fuel) if r.today_fuel is not none else '-' }}</td>
+        <td class="text-end {% if r.balance_amount and r.balance_amount > 0 %}pos{% elif r.balance_amount and r.balance_amount < 0 %}neg{% endif %}">{{ "{:,.2f}".format(r.balance_amount) if r.balance_amount is not none else '-' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</body>
+</html>

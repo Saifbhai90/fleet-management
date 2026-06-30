@@ -1351,23 +1351,80 @@
         }
 
         function _fleetExportPdf(clone) {
+            var serverPdfUrl = exportBtn && exportBtn.getAttribute('data-pdf-url');
+            if (serverPdfUrl) {
+                var qs = new URLSearchParams(window.location.search || '');
+                qs.delete('page');
+                qs.delete('per_page');
+                var fullUrl = serverPdfUrl.split('?')[0] + (qs.toString() ? ('?' + qs.toString()) : '');
+                var ov = document.createElement('div');
+                ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;';
+                var box = document.createElement('div');
+                box.style.cssText = 'background:#fff;border-radius:10px;padding:24px 32px;min-width:300px;text-align:center;box-shadow:0 8px 30px rgba(0,0,0,.25);';
+                var sp = document.createElement('div');
+                sp.style.cssText = 'width:42px;height:42px;border:4px solid #e2e8f0;border-top-color:#3b82f6;border-radius:50%;margin:0 auto 14px;animation:spin 1s linear infinite;';
+                var spinKey = document.createElement('style');
+                spinKey.textContent = '@keyframes spin{to{transform:rotate(360deg)}}';
+                document.head.appendChild(spinKey);
+                var lbl = document.createElement('div');
+                lbl.style.cssText = 'font-family:Arial,sans-serif;font-size:14px;font-weight:600;color:#1e293b;';
+                lbl.textContent = 'Generating PDF…';
+                var sub = document.createElement('div');
+                sub.style.cssText = 'font-family:Arial,sans-serif;font-size:12px;color:#64748b;margin-top:6px;';
+                sub.textContent = 'Please wait, your PDF is being prepared.';
+                box.appendChild(sp);
+                box.appendChild(lbl);
+                box.appendChild(sub);
+                ov.appendChild(box);
+                document.body.appendChild(ov);
+                return fetch(fullUrl, { credentials: 'include', cache: 'no-store' })
+                    .then(function(r) {
+                        if (!r.ok) {
+                            return r.json().catch(function() { return {}; }).then(function(j) {
+                                throw new Error((j && j.error) ? j.error : ('HTTP ' + r.status));
+                            });
+                        }
+                        return r.blob();
+                    })
+                    .then(function(blob) {
+                        if (!blob || blob.size < 900) throw new Error('PDF file is empty');
+                        var url = URL.createObjectURL(blob);
+                        var a = document.createElement('a');
+                        a.href = url;
+                        a.download = _fleetBaseFilename() + '.pdf';
+                        document.body.appendChild(a);
+                        a.click();
+                        setTimeout(function() {
+                            document.body.removeChild(a);
+                            URL.revokeObjectURL(url);
+                            ov.remove();
+                        }, 800);
+                    })
+                    .catch(function(err) {
+                        ov.remove();
+                        alert('PDF export failed: ' + ((err && err.message) ? err.message : 'Please try again'));
+                    });
+            }
             return _fleetLoadScript('https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.2/html2pdf.bundle.min.js').then(function() {
                 var wrap = document.createElement('div');
-                wrap.style.cssText = 'padding:12px;font-family:Arial,sans-serif;background:#fff;';
+                wrap.style.cssText = 'font-family:Arial,sans-serif;background:#fff;width:287mm;';
                 var h3 = document.createElement('h3');
                 h3.textContent = title || 'Report';
-                h3.style.cssText = 'text-align:center;margin:0 0 12px;font-size:16px;';
+                h3.style.cssText = 'text-align:center;margin:0 0 8px;font-size:14px;';
                 wrap.appendChild(h3);
+                var pdfStyle = document.createElement('style');
+                pdfStyle.textContent = _fleetPreviewCss;
+                wrap.appendChild(pdfStyle);
                 wrap.appendChild(clone);
                 var pdfName = _fleetBaseFilename() + '.pdf';
                 var h2p = window.html2pdf;
                 if (!h2p) throw new Error('PDF library not available');
                 return h2p().set({
-                    margin: [6, 4, 6, 4],
+                    margin: [5, 5, 5, 5],
                     filename: pdfName,
-                    image: { type: 'jpeg', quality: 0.92 },
-                    html2canvas: { scale: 2, useCORS: true, logging: false },
-                    jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
+                    image: { type: 'jpeg', quality: 0.98 },
+                    html2canvas: { scale: 2, useCORS: true, logging: false, windowWidth: 1100 },
+                    jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape', compress: true },
                     pagebreak: { mode: ['css', 'legacy'] }
                 }).from(wrap).output('blob').then(function(blob) {
                     return _fleetDownloadBlob(blob, pdfName);
@@ -1471,27 +1528,22 @@
         }
 
         var _fleetPreviewCss =
-            '@page{size:A4 landscape;margin:8mm;}' +
-            'body{font-family:Arial,sans-serif;font-size:10px;margin:0;padding:8px 12px;}' +
-            '.toolbar{position:sticky;top:0;z-index:99;background:#1e293b;color:#fff;padding:8px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;border-radius:0 0 6px 6px;box-shadow:0 2px 8px rgba(0,0,0,.2);margin:-8px -12px 12px;}' +
+            '@page{size:A4 landscape;margin:5mm;}' +
+            'body{font-family:Arial,sans-serif;font-size:7px;margin:0;padding:2px;}' +
+            '.toolbar{position:sticky;top:0;z-index:99;background:#1e293b;color:#fff;padding:8px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;border-radius:0 0 6px 6px;box-shadow:0 2px 8px rgba(0,0,0,.2);margin:-2px -2px 8px;}' +
             '.toolbar h4{margin:0;font-size:14px;font-weight:600;}' +
             '.toolbar button{padding:5px 16px;border:none;border-radius:4px;font-size:12px;font-weight:600;cursor:pointer;}' +
             '.btn-p{background:#3b82f6;color:#fff;}.btn-p:hover{background:#2563eb;}' +
             '.btn-c{background:#64748b;color:#fff;margin-left:6px;}.btn-c:hover{background:#475569;}' +
-            'h3{text-align:center;margin:6px 0 10px;font-size:14px;}' +
+            'h3{text-align:center;margin:2px 0 4px;font-size:11px;}' +
             'table{width:100%;border-collapse:collapse;table-layout:auto;}' +
-            'th,td{border:1px solid #555;padding:3px 5px;text-align:left;vertical-align:top;}' +
-            'th:not(.rpt-wrap-cell):not(.rpt-head-wrap),td:not(.rpt-wrap-cell){white-space:nowrap;}' +
-            'th.rpt-compact,td.rpt-compact{width:1%;white-space:nowrap;}' +
-            'th.rpt-head-wrap{white-space:normal!important;width:1%;max-width:6.5em;line-height:1.2;font-size:8px;text-align:center;vertical-align:middle;}' +
-            'td.rpt-head-wrap{text-align:center;white-space:nowrap;width:1%;}' +
-            'th.rpt-num-cell,td.rpt-num-cell{text-align:right;white-space:nowrap;width:1%;}' +
-            'th.rpt-wrap-cell,td.rpt-wrap-cell{white-space:normal!important;word-wrap:break-word;overflow-wrap:break-word;hyphens:auto;width:auto;}' +
-            'th{background:#e9ecef;font-size:9px;}' +
+            'th,td{border:1px solid #555;padding:1px 2px;text-align:left;vertical-align:top;}' +
+            'th{white-space:normal;word-wrap:break-word;overflow-wrap:break-word;line-height:1.1;background:#e9ecef;font-size:6px;font-weight:700;}' +
+            'td{font-size:6.5px;white-space:nowrap;}' +
             'tfoot td{font-weight:bold;background:#f8f9fa;}' +
             '.text-end{text-align:right;}.text-center{text-align:center;}' +
             '.text-danger{color:#dc3545;}.fw-bold{font-weight:700;}.fw-medium{font-weight:500;}' +
-            '@media print{.toolbar{display:none!important;}}';
+            '@media print{.toolbar{display:none!important;}body{padding:0;}}';
 
         function _removeFleetPrintPreviewOverlay() {
             var ex = document.getElementById('_fleetPrintPreviewRoot');
@@ -5464,7 +5516,7 @@
             return;
         }
         window.addEventListener('load', function() {
-            navigator.serviceWorker.register('/sw.js?v=6', { scope: '/', updateViaCache: 'none' }).catch(function() {});
+            navigator.serviceWorker.register('/sw.js?v=7', { scope: '/', updateViaCache: 'none' }).catch(function() {});
         });
     })();
 
