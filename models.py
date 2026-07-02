@@ -2557,6 +2557,7 @@ class WorkspaceSlipProfile(db.Model):
     employee_id = db.Column(db.Integer, db.ForeignKey('employee.id', ondelete='SET NULL'), nullable=True, index=True)
     name = db.Column(db.String(120), nullable=False)
     fingerprint_keywords = db.Column(db.Text, nullable=True)
+    date_format = db.Column(db.String(10), nullable=True)
     is_active = db.Column(db.Boolean, nullable=False, default=True)
     created_at = db.Column(db.DateTime, default=pk_now)
     updated_at = db.Column(db.DateTime, default=pk_now, onupdate=pk_now)

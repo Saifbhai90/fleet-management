@@ -99,9 +99,9 @@
     });
   }
 
-  function previewRegions(img, regionPayload) {
+  function previewRegions(img, regionPayload, opts) {
     var regions = regionPayload || {};
-    return Ws.Extract.previewRegions(img, regions);
+    return Ws.Extract.previewRegions(img, regions, opts || {});
   }
 
   function buildFingerprintFromImage(img) {

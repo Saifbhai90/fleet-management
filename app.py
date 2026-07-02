@@ -441,6 +441,7 @@ if _run_startup_tasks:
                 ('driver_document_history', 'batch_id', 'VARCHAR(36)'),
                 ('driver_document_history', 'update_source', 'VARCHAR(20)'),
                 ('app_release', 'apk_r2_url', 'VARCHAR(512)'),
+                ('workspace_slip_profile', 'date_format', 'VARCHAR(10)'),
             ]
             # Ensure device_app_version table exists
             if 'device_app_version' not in _inspector.get_table_names():

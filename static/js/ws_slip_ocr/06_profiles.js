@@ -125,7 +125,7 @@
     return Ws.Parser.slipTextHasMyAbl(blob);
   };
 
-  Profiles.normalizeFieldValue = function normalizeFieldValue(fieldKey, val) {
+  Profiles.normalizeFieldValue = function normalizeFieldValue(fieldKey, val, opts) {
     var v = String(val || '').trim();
     if (!v) return '';
     if (fieldKey === 'amount') {
@@ -134,7 +134,7 @@
       return num % 1 === 0 ? String(Math.round(num)) : num.toFixed(2);
     }
     if (fieldKey === 'reference_no') return v.replace(/\s/g, '').toUpperCase();
-    if (fieldKey === 'date') return Ws.Parser.huntDate(v) || v;
+    if (fieldKey === 'date') return Ws.Parser.huntDate(v, opts) || v;
     return v;
   };
 

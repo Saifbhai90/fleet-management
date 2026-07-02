@@ -131,7 +131,9 @@
     return candidates[0].val;
   };
 
-  Parser.huntDate = function huntDate(text) {
+  Parser.huntDate = function huntDate(text, opts) {
+    opts = opts || {};
+    var forcedFormat = (opts.dateFormat || '').toUpperCase();
     var raw = String(text || '');
     var t = Parser.fixOcrTextForDate(raw);
     var patterns = [
@@ -144,9 +146,9 @@
       { re: /\b(\d{1,2})[\/\-.](Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[\/\-.](\d{4})\b/gi, kind: 'dmy4', bonus: 16 },
       { re: /\b(\d{1,2})[\/\-.](Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[\/\-.](\d{2})\b/gi, kind: 'dmy2', bonus: 14 },
       { re: /\b(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{4})\b/gi, kind: 'dmy4', bonus: 12 },
-      /* DD/MM/YYYY — numeric */
-      { re: /\b(\d{1,2})\/(\d{1,2})\/(\d{4})\b/g, kind: 'dmy', bonus: 10 },
-      { re: /\b(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})\b/g, kind: 'dmy', bonus: 8 },
+      /* DD/MM/YYYY or MM/DD/YYYY — numeric (kind resolved below via forcedFormat) */
+      { re: /\b(\d{1,2})\/(\d{1,2})\/(\d{4})\b/g, kind: 'numeric', bonus: 10 },
+      { re: /\b(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})\b/g, kind: 'numeric', bonus: 8 },
     ];
     var best = null;
     var bestScore = -1;
@@ -164,10 +166,17 @@
           mo = monthFromName(m[2]);
           y = parseInt(m[3], 10);
           if (pat.kind === 'dmy2' && y < 100) y += 2000;
-        } else if (pat.kind === 'dmy') {
-          d = parseInt(m[1], 10);
-          mo = parseInt(m[2], 10);
+        } else if (pat.kind === 'numeric') {
+          var n1 = parseInt(m[1], 10);
+          var n2 = parseInt(m[2], 10);
           y = parseInt(m[3], 10);
+          if (forcedFormat === 'MDY') {
+            mo = n1; d = n2;
+          } else if (forcedFormat === 'YMD') {
+            mo = n1; d = n2;
+          } else {
+            d = n1; mo = n2;
+          }
         } else {
           y = parseInt(String(m[1]).replace(/O/g, '0'), 10);
           mo = parseInt(String(m[2]).replace(/O/g, '0'), 10);
@@ -234,16 +243,16 @@
     return null;
   };
 
-  Parser.huntAll = function huntAll(text) {
+  Parser.huntAll = function huntAll(text, opts) {
     return {
-      date: Parser.huntDate(text),
+      date: Parser.huntDate(text, opts),
       amount: Parser.huntAmount(text),
       reference_no: Parser.huntReference(text),
     };
   };
 
-  Parser.huntField = function huntField(fieldKey, text) {
-    if (fieldKey === 'date') return Parser.huntDate(text);
+  Parser.huntField = function huntField(fieldKey, text, opts) {
+    if (fieldKey === 'date') return Parser.huntDate(text, opts);
     if (fieldKey === 'amount') return Parser.huntAmount(text, { strict: false });
     if (fieldKey === 'reference_no') return Parser.huntReference(text);
     return null;

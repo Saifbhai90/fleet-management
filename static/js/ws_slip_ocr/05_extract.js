@@ -22,11 +22,12 @@
     return Ws.expandRegionPadding(region, Ws.ZONE_PAD_PCT);
   }
 
-  function parseZoneOcr(fieldKey, raw, conf) {
+  function parseZoneOcr(fieldKey, raw, conf, profile) {
     var text = (raw && raw.data && raw.data.text) ? raw.data.text : '';
     var ocrConf = (raw && raw.data && typeof raw.data.confidence === 'number')
       ? raw.data.confidence / 100 : 0.55;
-    var parsed = Ws.Parser.huntField(fieldKey, text);
+    var dateOpts = profile && profile.date_format ? { dateFormat: profile.date_format } : {};
+    var parsed = Ws.Parser.huntField(fieldKey, text, dateOpts);
     if (!parsed) return Ws.fieldResult(null, 0, 'zone-empty');
     return Ws.fieldResult(parsed, Math.min(0.98, Math.max(conf || 0, ocrConf)), 'zone');
   }
@@ -41,12 +42,15 @@
     if (!canvas) return Promise.resolve(Ws.fieldResult(null, 0, 'crop-fail'));
     return Ws.recognizeCanvas(canvas, fieldKey, { psm: '7', noWhitelist: true }, slot)
       .then(function (raw) {
-        return parseZoneOcr(fieldKey, raw, 0.72);
+        return parseZoneOcr(fieldKey, raw, 0.72, profile);
       });
   };
 
   Extract.extractZonesParallel = function extractZonesParallel(img, profile, opts) {
     opts = opts || {};
+    if (profile && profile.date_format && !opts.dateFormat) {
+      opts.dateFormat = profile.date_format;
+    }
     img = Ws.prepareSlipImage(img);
     var regions = Ws.Profiles.profileRegionMap(profile);
     var keys = Ws.FIELD_KEYS;
@@ -82,7 +86,8 @@
     return Ws.prewarmWorker().then(function () {
       return Ws.ocrUniversalScan(Ws.makeUniversalScanCanvas(img));
     }).then(function (fullText) {
-      var hunted = Ws.Parser.huntAll(fullText);
+      var dateOpts = opts && opts.dateFormat ? { dateFormat: opts.dateFormat } : {};
+      var hunted = Ws.Parser.huntAll(fullText, dateOpts);
       var out = {};
       Ws.FIELD_KEYS.forEach(function (k) {
         var zone = fieldMeta[k];
@@ -162,21 +167,24 @@
     });
   };
 
-  Extract.previewRegions = function previewRegions(img, regionsByKey, profile) {
+  Extract.previewRegions = function previewRegions(img, regionsByKey, opts) {
+    opts = opts || {};
+    var profile = opts.profile || null;
+    var syntheticProfile = profile || (opts.dateFormat ? { date_format: opts.dateFormat } : null);
     img = Ws.prepareSlipImage(img);
     return Ws.prewarmInstantWorkers().then(function () {
       return Promise.all(Ws.FIELD_KEYS.map(function (key, slot) {
         var region = regionsByKey && regionsByKey[key];
         if (!region) return Promise.resolve({ key: key, result: Ws.fieldResult(null, 0, 'none') });
-        return Extract.readZoneField(img, region, key, slot, profile).then(function (result) {
+        return Extract.readZoneField(img, region, key, slot, syntheticProfile).then(function (result) {
           return { key: key, result: result };
         });
       }));
     }).then(function (rows) {
       var fieldMeta = {};
       rows.forEach(function (row) { fieldMeta[row.key] = row.result; });
-      return Extract.applyUniversalFallback(img, fieldMeta, {}).then(function (merged) {
-        return Extract.flattenResults(merged, null);
+      return Extract.applyUniversalFallback(img, fieldMeta, opts).then(function (merged) {
+        return Extract.flattenResults(merged, profile);
       });
     });
   };

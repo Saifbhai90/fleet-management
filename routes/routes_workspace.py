@@ -5357,6 +5357,7 @@ def _serialize_workspace_slip_profile(profile):
         'id': profile.id,
         'name': profile.name or '',
         'fingerprint_keywords': keywords,
+        'date_format': profile.date_format or '',
         'fields': fields,
     }
 
@@ -5409,11 +5410,14 @@ def workspace_slip_profiles_api():
         return jsonify({'ok': False, 'error': field_err}), 400
 
     clean_keywords = _clean_slip_fingerprint_keywords(data.get('fingerprint_keywords') or [])
+    raw_date_format = (data.get('date_format') or '').strip().upper()
+    clean_date_format = raw_date_format if raw_date_format in ('MDY', 'DMY', 'YMD') else None
 
     profile = WorkspaceSlipProfile(
         employee_id=None,
         name=name[:120],
         fingerprint_keywords=json.dumps(clean_keywords, ensure_ascii=False),
+        date_format=clean_date_format,
         is_active=True,
     )
     db.session.add(profile)
@@ -5442,8 +5446,12 @@ def workspace_slip_profile_update_api(pk):
     field_map, field_err = _coerce_slip_profile_field_map(data.get('fields') or [], required_all=False)
     if field_err:
         return jsonify({'ok': False, 'error': field_err}), 400
-    if not field_map and not data.get('fingerprint_keywords'):
+    if not field_map and not data.get('fingerprint_keywords') and 'date_format' not in data:
         return jsonify({'ok': False, 'error': 'Nothing to update.'}), 400
+
+    if 'date_format' in data:
+        raw_df = (data.get('date_format') or '').strip().upper()
+        profile.date_format = raw_df if raw_df in ('MDY', 'DMY', 'YMD') else None
 
     if data.get('fingerprint_keywords') is not None:
         new_kw = _clean_slip_fingerprint_keywords(data.get('fingerprint_keywords') or [])

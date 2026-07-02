@@ -451,10 +451,19 @@
           <div class="col-lg-4">
             <label class="form-label fw-semibold small">Design name</label>
             <input type="text" id="wsSlipDesignName" class="form-control form-control-sm mb-3" placeholder="e.g. JazzCash Send Money">
-            <div class="d-flex flex-wrap gap-2 mb-3">
+            <div class="d-flex flex-wrap gap-2 mb-2">
               <button type="button" class="btn btn-sm btn-outline-primary ws-slip-field-btn" data-field="date">1. Date</button>
               <button type="button" class="btn btn-sm btn-outline-success ws-slip-field-btn" data-field="amount">2. Amount</button>
               <button type="button" class="btn btn-sm btn-outline-warning ws-slip-field-btn" data-field="reference_no">3. Reference</button>
+            </div>
+            <div class="mb-3">
+              <label class="form-label small fw-semibold mb-1">Date Format <span class="text-muted fw-normal">(slip mein likhi date ka order)</span></label>
+              <select id="wsSlipDateFormat" class="form-select form-select-sm">
+                <option value="">Auto-detect (DD/MM/YYYY default)</option>
+                <option value="DMY">DD/MM/YYYY — e.g. 01-07-2026 (Pakistan/UK)</option>
+                <option value="MDY">MM/DD/YYYY — e.g. 7/1/2026 (HBL Digital / US style)</option>
+                <option value="YMD">YYYY/MM/DD — e.g. 2026-07-01 (ISO / myABL)</option>
+              </select>
             </div>
             <div class="card border-0 bg-light">
               <div class="card-body py-2 small">
@@ -1162,6 +1171,7 @@ document.addEventListener('DOMContentLoaded', function() {
       var teachCanvas = document.getElementById('wsSlipTeachCanvas');
       var teachWrap = document.getElementById('wsSlipTeachWrap');
       var designNameInput = document.getElementById('wsSlipDesignName');
+      var dateFormatSelect = document.getElementById('wsSlipDateFormat');
       var profileListEl = document.getElementById('wsSlipProfileList');
       var activeField = 'date';
       var regions = {};
@@ -1620,6 +1630,16 @@ document.addEventListener('DOMContentLoaded', function() {
             designNameInput.value = '';
           }
         }
+        if (dateFormatSelect) {
+          dateFormatSelect.value = '';
+          if (!dateFormatSelect._fmtListenerAdded) {
+            dateFormatSelect._fmtListenerAdded = true;
+            dateFormatSelect.addEventListener('change', function() {
+              if (!teachImageObj || !Object.keys(regions).length) return;
+              runPreviewFromRegions().catch(function() {});
+            });
+          }
+        }
         setActiveField('date');
         var reader = new FileReader();
         reader.onload = function(ev) {
@@ -1751,7 +1771,9 @@ document.addEventListener('DOMContentLoaded', function() {
               regions: regionPayload,
             });
           }
-          return WST.previewRegions(img, regionPayload);
+          var previewOpts = {};
+          if (dateFormatSelect && dateFormatSelect.value) previewOpts.dateFormat = dateFormatSelect.value;
+          return WST.previewRegions(img, regionPayload, previewOpts);
         }).then(function(data) {
           if (seq !== previewRunSeq || !data) return data;
           previewCache.date = data.date;
@@ -2066,6 +2088,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 var payload = {
                   name: name,
                   fingerprint_keywords: teachFingerprint,
+                  date_format: dateFormatSelect ? (dateFormatSelect.value || '') : '',
                   fields: ['date', 'amount', 'reference_no'].map(function(k) {
                     var r = regions[k];
                     var meta = previewData.fieldMeta && previewData.fieldMeta[k];
