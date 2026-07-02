@@ -34,25 +34,54 @@
 
   Extract.readZoneField = function readZoneField(img, region, fieldKey, slot, profile) {
     if (!region) return Promise.resolve(Ws.fieldResult(null, 0, 'none'));
-    img = Ws.prepareSlipImage(img);
-    var cropRegion = paddedZoneRegion(region);
-    var mode = zonePreprocessMode(img, cropRegion, fieldKey, profile);
-    var scale = img._slipDigital ? 2 : 2.4;
-    var canvas = Ws.makeRegionCanvas(img, cropRegion, scale, mode, { zonePadAlreadyApplied: true });
-    if (!canvas) return Promise.resolve(Ws.fieldResult(null, 0, 'crop-fail'));
-    return Ws.recognizeCanvas(canvas, fieldKey, { psm: '7', noWhitelist: true }, slot)
-      .then(function (raw) {
-        return parseZoneOcr(fieldKey, raw, 0.72, profile);
-      });
+    return Ws.normalizeSlipImageAsync(img).then(function (normImg) {
+      img = normImg;
+      var cropRegion = paddedZoneRegion(region);
+      var mode = zonePreprocessMode(img, cropRegion, fieldKey, profile);
+      var scale = img._slipDigital ? 2 : 2.4;
+      var canvas = Ws.makeRegionCanvas(img, cropRegion, scale, mode, { zonePadAlreadyApplied: true });
+      if (!canvas) return Ws.fieldResult(null, 0, 'crop-fail');
+      return Ws.recognizeCanvas(canvas, fieldKey, { psm: '7', noWhitelist: true }, slot)
+        .then(function (raw) {
+          var result = parseZoneOcr(fieldKey, raw, 0.72, profile);
+          // Retry with OpenCV-enhanced preprocessing when zone OCR is weak.
+          if ((!result.value || (result.confidence || 0) < Ws.FALLBACK_CONFIDENCE) &&
+              Ws.makeRegionCanvasAsync) {
+            return retryZoneWithCV(img, cropRegion, fieldKey, slot, profile)
+              .then(function (cvResult) {
+                if (cvResult && cvResult.value && (cvResult.confidence || 0) >= (result.confidence || 0)) {
+                  return cvResult;
+                }
+                return result;
+              });
+          }
+          return result;
+        });
+    });
   };
+
+  /** Second-pass zone OCR using OpenCV.js photo enhancement (best-effort). */
+  function retryZoneWithCV(img, cropRegion, fieldKey, slot, profile) {
+    return Ws.makeRegionCanvasAsync(img, cropRegion, 2.4, 'cv-photo', { zonePadAlreadyApplied: true })
+      .then(function (canvas) {
+        if (!canvas) return Ws.fieldResult(null, 0, 'cv-skip');
+        return Ws.recognizeCanvas(canvas, fieldKey, { psm: '7', noWhitelist: true }, slot);
+      })
+      .then(function (raw) {
+        if (!raw) return Ws.fieldResult(null, 0, 'cv-skip');
+        return parseZoneOcr(fieldKey, raw, 0.74, profile);
+      })
+      .catch(function () { return Ws.fieldResult(null, 0, 'cv-error'); });
+  }
 
   Extract.extractZonesParallel = function extractZonesParallel(img, profile, opts) {
     opts = opts || {};
     if (profile && profile.date_format && !opts.dateFormat) {
       opts.dateFormat = profile.date_format;
     }
-    img = Ws.prepareSlipImage(img);
-    var regions = Ws.Profiles.profileRegionMap(profile);
+    return Ws.normalizeSlipImageAsync(img).then(function (normImg) {
+      img = normImg;
+      var regions = Ws.Profiles.profileRegionMap(profile);
     var keys = Ws.FIELD_KEYS;
     Ws.ocrLog('zones parallel', { profile: profile.name, digital: !!img._slipDigital });
     return Ws.prewarmInstantWorkers().then(function () {
@@ -70,6 +99,7 @@
       return Extract.applyUniversalFallback(img, fieldMeta, opts).then(function (merged) {
         return Extract.flattenResults(merged, profile);
       });
+    });
     });
   };
 
@@ -103,6 +133,34 @@
       });
       out._ocrText = fullText;
       return out;
+    }).then(function (merged) {
+      /* Final tier: in-house server OCR (PaddleOCR/EasyOCR) for fields
+         still below threshold after universal scan. Best-effort; if the
+         server has no backend it returns null and the browser result stands. */
+      var stillLow = Ws.FIELD_KEYS.some(function (k) {
+        var r = merged[k];
+        return !r || !r.value || (r.confidence || 0) < Ws.FALLBACK_CONFIDENCE;
+      });
+      if (!stillLow || !Ws.serverOcrFallback) return merged;
+      Ws.ocrLog('server OCR fallback tier');
+      var so = opts && opts.dateFormat ? { dateFormat: opts.dateFormat } : {};
+      return Ws.serverOcrFallback(img, so).then(function (srv) {
+        if (!srv || !srv.fieldMeta) return merged;
+        Ws.FIELD_KEYS.forEach(function (k) {
+          var cur = merged[k];
+          var sres = srv.fieldMeta[k];
+          if ((!cur || !cur.value || (cur.confidence || 0) < Ws.FALLBACK_CONFIDENCE) &&
+              sres && sres.value) {
+            merged[k] = sres;
+            if (typeof opts.onProgress === 'function') {
+              opts.onProgress({ key: k, value: sres.value, result: sres, profileName: opts.profileName });
+            }
+          }
+        });
+        merged._serverEngine = srv.serverEngine;
+        if (srv.ocrText && !merged._ocrText) merged._ocrText = srv.ocrText;
+        return merged;
+      });
     });
   };
 

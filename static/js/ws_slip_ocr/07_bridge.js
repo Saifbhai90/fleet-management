@@ -18,12 +18,19 @@
     var t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : 0;
 
     function finish(data, label) {
-      if (data && t0) {
-        Ws.ocrLog(label || 'extract done', {
-          ms: Math.round(performance.now() - t0),
-          profile: data.profileName,
-          quality: Ws.Extract.extractionQuality(data),
-        });
+      if (data) {
+        // Run the local NLP correction layer before handing results back.
+        if (Ws.Corrector && Ws.Corrector.correct) {
+          data = Ws.Corrector.correct(data);
+        }
+        if (t0) {
+          Ws.ocrLog(label || 'extract done', {
+            ms: Math.round(performance.now() - t0),
+            profile: data.profileName,
+            quality: Ws.Extract.extractionQuality(data),
+            corrected: data.corrected || [],
+          });
+        }
       }
       return data;
     }
@@ -613,6 +620,86 @@
     createAutoFill: AutoFill.create,
     applyOcrExtractedIds: Ws.OCR_FIELD_IDS,
     detectProviderFromText: Ws.detectProviderFromText,
+    /* Active learning — capture OCR prediction + user correction. */
+    captureOcrSample: captureOcrSample,
+    recordCorrection: recordCorrection,
+    /* Server fallback — in-house PaddleOCR/EasyOCR when browser is unsure.
+       Lazy getters because 09_server_fallback.js loads AFTER this bridge. */
+    get serverOcrFallback() { return Ws.serverOcrFallback; },
+    get serverOcrEnabled() { return Ws.serverOcrEnabled; },
   };
+
+  /* ----------------------------------------------------------------
+   * Active-learning capture helpers.
+   *
+   * captureOcrSample(file, extractData) — fire-and-forget POST of the slip
+   *   image + what the OCR engine produced. Returns a Promise<{sample_id}>.
+   * recordCorrection(sampleId, values)  — PATCH the final user-corrected
+   *   values once the form is submitted / fields are confirmed.
+   * Both no-op gracefully if the endpoints are absent or blocked.
+   * ---------------------------------------------------------------- */
+  var _sampleEndpoint = '/api/workspace-slip-ocr-sample';
+  var _csrfToken = null;
+
+  function getCsrfToken() {
+    if (_csrfToken) return _csrfToken;
+    var meta = document.querySelector('meta[name="csrf-token"]');
+    if (meta) { _csrfToken = meta.getAttribute('content'); return _csrfToken; }
+    var cookie = (document.cookie || '').match(/(?:^|;\s*)csrf_token=([^;]+)/);
+    if (cookie) { _csrfToken = decodeURIComponent(cookie[1]); }
+    return _csrfToken;
+  }
+
+  function captureOcrSample(file, extractData) {
+    if (!file || !extractData) return Promise.resolve(null);
+    try {
+      var fd = new FormData();
+      fd.append('image', file);
+      fd.append('engine', (extractData.fieldMeta && extractData.fieldMeta.date &&
+        extractData.fieldMeta.date.source) || 'tesseract');
+      var fm = extractData.fieldMeta || {};
+      fd.append('confidence', String(avgConfidence(extractData)));
+      fd.append('provider', extractData.provider || '');
+      fd.append('profile_id', extractData.profileId || '');
+      fd.append('date', (extractData.date || ''));
+      fd.append('amount', (extractData.amount || ''));
+      fd.append('reference', (extractData.reference_no || ''));
+      var headers = {};
+      var token = getCsrfToken();
+      if (token) headers['X-CSRFToken'] = token;
+      return fetch(_sampleEndpoint, { method: 'POST', body: fd, headers: headers, credentials: 'same-origin' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (j) { return (j && j.ok) ? j.sample_id : null; })
+        .catch(function () { return null; });
+    } catch (e) {
+      return Promise.resolve(null);
+    }
+  }
+
+  function recordCorrection(sampleId, values) {
+    if (!sampleId || !values) return Promise.resolve(null);
+    try {
+      var token = getCsrfToken();
+      var headers = { 'Content-Type': 'application/json' };
+      if (token) headers['X-CSRFToken'] = token;
+      return fetch(_sampleEndpoint + '/' + sampleId, {
+        method: 'PATCH',
+        body: JSON.stringify(values),
+        headers: headers,
+        credentials: 'same-origin',
+      }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; });
+    } catch (e) {
+      return Promise.resolve(null);
+    }
+  }
+
+  function avgConfidence(data) {
+    var sum = 0, n = 0;
+    Ws.FIELD_KEYS.forEach(function (k) {
+      var m = data && data.fieldMeta && data.fieldMeta[k];
+      if (m && typeof m.confidence === 'number') { sum += m.confidence; n++; }
+    });
+    return n ? sum / n : 0;
+  }
 
 })(window);

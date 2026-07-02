@@ -2591,6 +2591,31 @@ class WorkspaceSlipProfileField(db.Model):
     ocr_recipe_json = db.Column(db.Text, nullable=True)
 
 
+class SlipOcrSample(db.Model):
+    """Active-learning sample: slip image + OCR prediction + user correction.
+    Fuel for future fine-tuning and per-provider accuracy metrics."""
+    __tablename__ = 'slip_ocr_sample'
+
+    id = db.Column(db.Integer, primary_key=True)
+    profile_id = db.Column(db.Integer, db.ForeignKey('workspace_slip_profile.id', ondelete='SET NULL'), nullable=True, index=True)
+    employee_id = db.Column(db.Integer, db.ForeignKey('employee.id', ondelete='SET NULL'), nullable=True, index=True)
+    provider = db.Column(db.String(40), nullable=True)
+    image_path = db.Column(db.String(500), nullable=True)
+    image_hash = db.Column(db.String(64), nullable=True, index=True)
+    ocr_engine = db.Column(db.String(30), nullable=True)
+    ocr_confidence = db.Column(db.Float, nullable=True)
+    ocr_date = db.Column(db.String(40), nullable=True)
+    ocr_amount = db.Column(db.String(40), nullable=True)
+    ocr_reference = db.Column(db.String(100), nullable=True)
+    corrected_date = db.Column(db.String(40), nullable=True)
+    corrected_amount = db.Column(db.String(40), nullable=True)
+    corrected_reference = db.Column(db.String(100), nullable=True)
+    needs_correction = db.Column(db.Boolean, nullable=False, default=False)
+    corrected = db.Column(db.Boolean, nullable=False, default=False)
+    created_at = db.Column(db.DateTime, default=pk_now)
+    corrected_at = db.Column(db.DateTime, nullable=True)
+
+
 class WorkspaceMonthClose(db.Model):
     __tablename__ = 'workspace_month_close'
     __table_args__ = (

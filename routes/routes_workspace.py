@@ -23,6 +23,7 @@ from models import (
     WorkspaceParty, WorkspaceProduct, WorkspaceAccount,
     WorkspaceExpense, WorkspaceOpeningExpense, WorkspaceFuelOilOpeningExpense, WorkspaceFundTransfer, WorkspaceJournalEntry, WorkspaceJournalEntryLine, WorkspaceMonthClose, WorkspaceFuelOilMonthClose,
     WorkspaceSlipProfile, WorkspaceSlipProfileField,
+    SlipOcrSample,
     WorkspaceMpgReportInput,
     FuelExpense, OilExpense, MaintenanceExpense, EmployeeExpense,
 )
@@ -5531,6 +5532,188 @@ def workspace_slip_profile_delete_api(pk):
         db.session.rollback()
         return jsonify({'ok': False, 'error': str(exc)}), 500
     return jsonify({'ok': True})
+
+
+def _hash_image_bytes(raw):
+    import hashlib
+    return hashlib.sha256(raw).hexdigest() if raw else None
+
+
+def _store_slip_sample_image(file_storage):
+    """Persist a slip image to R2 (or fall back to None). Returns (path, hash)."""
+    if not file_storage or not getattr(file_storage, "filename", None):
+        return None, None
+    try:
+        raw = file_storage.read()
+        file_storage.seek(0)
+    except Exception:
+        raw = None
+    path = _upload_workspace_transfer_attachment(file_storage)
+    return path, _hash_image_bytes(raw)
+
+
+def workspace_slip_ocr_sample_api():
+    """Active-learning: browser posts slip image + OCR prediction right after
+    extraction. Corrected values are PATCHed later via the sample-update route."""
+    guard, emp = _workspace_guard("workspace_transfer_add")
+    if guard:
+        return jsonify({'ok': False, 'error': 'Unauthorized'}), 403
+
+    upload = request.files.get('image') if request.files else None
+    data = None
+    if request.form:
+        data = request.form
+    elif request.is_json:
+        data = request.get_json(silent=True) or {}
+    data = data or {}
+
+    provider = (str(data.get('provider') or '').strip().lower()[:40] or None)
+    profile_id = data.get('profile_id')
+    try:
+        profile_id = int(profile_id) if profile_id else None
+    except (TypeError, ValueError):
+        profile_id = None
+
+    image_path, image_hash = (None, None)
+    if upload:
+        image_path, image_hash = _store_slip_sample_image(upload)
+
+    def _clean_str(v, n):
+        v = str(v or '').strip()
+        return v[:n] if v else None
+
+    sample = SlipOcrSample(
+        profile_id=profile_id,
+        employee_id=emp.id if emp else None,
+        provider=provider,
+        image_path=image_path,
+        image_hash=image_hash,
+        ocr_engine=_clean_str(data.get('engine'), 30),
+        ocr_confidence=float(data['confidence']) if _is_num(data.get('confidence')) else None,
+        ocr_date=_clean_str(data.get('date'), 40),
+        ocr_amount=_clean_str(data.get('amount'), 40),
+        ocr_reference=_clean_str(data.get('reference'), 100),
+        needs_correction=False,
+    )
+    db.session.add(sample)
+    try:
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({'ok': False, 'error': str(exc)}), 500
+    return jsonify({'ok': True, 'sample_id': sample.id})
+
+
+def _is_num(v):
+    try:
+        float(v)
+        return True
+    except (TypeError, ValueError):
+        return False
+
+
+def workspace_slip_ocr_sample_update_api(sample_id):
+    """Record user's corrected values against an earlier OCR sample."""
+    guard, emp = _workspace_guard("workspace_transfer_add")
+    if guard:
+        return jsonify({'ok': False, 'error': 'Unauthorized'}), 403
+    sample = db.session.get(SlipOcrSample, sample_id)
+    if not sample:
+        return jsonify({'ok': False, 'error': 'Not found'}), 404
+
+    data = request.get_json(silent=True) or {}
+
+    def _clean(v, n):
+        v = str(v or '').strip()
+        return v[:n] if v else None
+
+    corrected = False
+    if 'date' in data:
+        sample.corrected_date = _clean(data.get('date'), 40)
+    if 'amount' in data:
+        sample.corrected_amount = _clean(data.get('amount'), 40)
+    if 'reference' in data:
+        sample.corrected_reference = _clean(data.get('reference'), 100)
+
+    sample.needs_correction = any([
+        (sample.ocr_date or '') != (sample.corrected_date or ''),
+        (sample.ocr_amount or '') != (sample.corrected_amount or ''),
+        (sample.ocr_reference or '') != (sample.corrected_reference or ''),
+    ])
+    sample.corrected = True
+    sample.corrected_at = datetime.utcnow()
+    try:
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({'ok': False, 'error': str(exc)}), 500
+    return jsonify({'ok': True, 'needs_correction': sample.needs_correction})
+
+
+def workspace_slip_ocr_stats_api():
+    """Per-provider accuracy metrics for the active-learning dashboard."""
+    guard, emp = _workspace_guard("workspace_transfer_add")
+    if guard:
+        return jsonify({'ok': False, 'error': 'Unauthorized'}), 403
+    rows = SlipOcrSample.query.filter(SlipOcrSample.corrected.is_(True)).all()
+    by_provider = {}
+    total_correct = 0
+    total = 0
+    for s in rows:
+        key = s.provider or 'unknown'
+        bucket = by_provider.setdefault(key, {'total': 0, 'correct': 0, 'accuracy': 0.0})
+        bucket['total'] += 1
+        total += 1
+        amt_ok = (s.ocr_amount or '') == (s.corrected_amount or '')
+        date_ok = (s.ocr_date or '') == (s.corrected_date or '')
+        ref_ok = (s.ocr_reference or '') == (s.corrected_reference or '')
+        if amt_ok and date_ok and ref_ok:
+            bucket['correct'] += 1
+            total_correct += 1
+    for bucket in by_provider.values():
+        bucket['accuracy'] = round(bucket['correct'] / bucket['total'], 3) if bucket['total'] else 0.0
+    return jsonify({
+        'ok': True,
+        'total_samples': total,
+        'overall_accuracy': round(total_correct / total, 3) if total else 0.0,
+        'by_provider': by_provider,
+    })
+
+
+def workspace_slip_server_ocr_api():
+    """Server-side OCR fallback (PaddleOCR/EasyOCR/Tesseract).
+    Called by the browser when Tesseract.js confidence is too low.
+    100% in-house — no data leaves the server."""
+    guard, emp = _workspace_guard("workspace_transfer_add")
+    if guard:
+        return jsonify({'ok': False, 'error': 'Unauthorized'}), 403
+
+    try:
+        from services.slip_ocr_server import ocr_slip_image, is_available
+    except Exception as exc:
+        return jsonify({'ok': False, 'error': 'server OCR module unavailable', 'available': False}), 200
+
+    if not is_available():
+        return jsonify({
+            'ok': False, 'available': False, 'engine': 'none',
+            'error': 'No server OCR backend installed. Install paddleocr/easyocr to enable.',
+        }), 200
+
+    upload = request.files.get('image') if request.files else None
+    if not upload or not getattr(upload, 'filename', None):
+        return jsonify({'ok': False, 'error': 'image file required'}), 400
+
+    try:
+        raw = upload.read()
+    except Exception as exc:
+        return jsonify({'ok': False, 'error': str(exc)}), 400
+    if not raw or len(raw) > 8 * 1024 * 1024:
+        return jsonify({'ok': False, 'error': 'empty or too-large image (max 8MB)'}), 400
+
+    date_format = (request.form.get('date_format') or '').strip().upper()
+    result = ocr_slip_image(raw, date_format)
+    result.setdefault('ok', False)
+    return jsonify(result), 200
 
 
 def workspace_transfer_ref_check_api():

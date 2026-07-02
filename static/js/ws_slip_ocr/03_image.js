@@ -50,8 +50,71 @@
     var id = ctx.getImageData(0, 0, canvas.width, canvas.height);
     if (mode === 'grayscale') applyGrayscalePixels(id.data);
     else if (mode === 'colored-ink') applyColoredInkPixels(id.data);
+    else if (mode === 'binary-otsu') applyOtsuPixels(id.data);
+    else if (mode === 'sharpen') applySharpenPixels(ctx, canvas);
     ctx.putImageData(id, 0, 0);
   };
+
+  /**
+   * Pure-JS Otsu threshold (no OpenCV needed). Picks an optimal global
+   * threshold from the luminance histogram and binarises text→black.
+   */
+  function applyOtsuPixels(d) {
+    var n = d.length / 4;
+    var hist = new Array(256).fill(0);
+    var g = new Array(n);
+    for (var i = 0, p = 0; i < d.length; i += 4, p++) {
+      var lum = (0.299 * d[i]) + (0.587 * d[i + 1]) + (0.114 * d[i + 2]);
+      var bin = lum | 0;
+      g[p] = bin;
+      hist[bin]++;
+    }
+    var sum = 0;
+    for (var t = 0; t < 256; t++) sum += t * hist[t];
+    var sumB = 0, wB = 0, maxVar = -1, thresh = 127;
+    for (var t2 = 0; t2 < 256; t2++) {
+      wB += hist[t2];
+      if (wB === 0) continue;
+      var wF = n - wB;
+      if (wF === 0) break;
+      sumB += t2 * hist[t2];
+      var mB = sumB / wB;
+      var mF = (sum - sumB) / wF;
+      var between = wB * wF * (mB - mF) * (mB - mF);
+      if (between > maxVar) { maxVar = between; thresh = t2; }
+    }
+    for (var i2 = 0, p2 = 0; i2 < d.length; i2 += 4, p2++) {
+      var v = g[p2] <= thresh ? 0 : 255;
+      d[i2] = d[i2 + 1] = d[i2 + 2] = v;
+    }
+  }
+
+  /** Simple convolution sharpen (unsharp mask) — strengthens faint text edges. */
+  function applySharpenPixels(ctx, canvas) {
+    var w = canvas.width, h = canvas.height;
+    var src = ctx.getImageData(0, 0, w, h);
+    var out = ctx.createImageData(w, h);
+    var sd = src.data, od = out.data;
+    var kernel = [0, -1, 0, -1, 5, -1, 0, -1, 0];
+    for (var y = 0; y < h; y++) {
+      for (var x = 0; x < w; x++) {
+        for (var ch = 0; ch < 3; ch++) {
+          var acc = 0, ki = 0;
+          for (var ky = -1; ky <= 1; ky++) {
+            for (var kx = -1; kx <= 1; kx++) {
+              var sx = Math.min(w - 1, Math.max(0, x + kx));
+              var sy = Math.min(h - 1, Math.max(0, y + ky));
+              var idx = (sy * w + sx) * 4 + ch;
+              acc += sd[idx] * kernel[ki++];
+            }
+          }
+          od[(y * w + x) * 4 + ch] = acc < 0 ? 0 : acc > 255 ? 255 : acc;
+        }
+        od[(y * w + x) * 4 + 3] = 255;
+      }
+    }
+    sd.set(od);
+  }
 
   function sampleSlipImageStats(img) {
     var size = Ws.imagePixelSize(img);
@@ -232,6 +295,32 @@
     return Ws.prepareSlipImage(img);
   };
 
+  /**
+   * Async full-image normalisation with optional OpenCV.js deskew.
+   * Digital screenshots skip CV entirely (fast path preserved).
+   * Photo captures get deskewed once at the top so every downstream
+   * zone crop / universal scan benefits. Idempotent (cached on _slipDeskewed).
+   */
+  Ws.normalizeSlipImageAsync = function normalizeSlipImageAsync(img) {
+    img = Ws.prepareSlipImage(img);
+    if (!img) return Promise.resolve(img);
+    if (img._slipDeskewed) return Promise.resolve(img);
+    img._slipDeskewed = true;  // mark regardless of outcome to avoid repeat
+    // Only photo captures (not digital) and only when CV is enabled.
+    if (img._slipDigital) return Promise.resolve(img);
+    if (!Ws.CV || !Ws.CV.isEnabled()) return Promise.resolve(img);
+    var target = Ws.slipDrawTarget(img);
+    if (!target || target.tagName !== 'CANVAS') return Promise.resolve(img);
+    Ws.ocrLog('cv deskew full image');
+    return Ws.CV.deskew(target).then(function (deskewed) {
+      if (deskewed && deskewed !== target) {
+        // Replace the wrapped canvas so downstream crops use the levelled image.
+        img._slipCanvas = deskewed;
+      }
+      return img;
+    }).catch(function () { return img; });
+  };
+
   Ws.makeRegionCanvas = function makeRegionCanvas(img, region, scale, mode, opts) {
     opts = opts || {};
     scale = scale || 2;
@@ -249,6 +338,29 @@
     ctx.drawImage(Ws.slipDrawTarget(img), px.x, px.y, px.w, px.h, 0, 0, c.width, c.height);
     Ws.enhanceCanvas(ctx, c, mode || 'grayscale');
     return c;
+  };
+
+  /**
+   * Async region canvas builder with optional OpenCV.js photo enhancement.
+   * Used by the retry-with-alt-preprocess fallback in 05_extract.js.
+   * Falls back to the synchronous makeRegionCanvas if CV is unavailable.
+   */
+  Ws.makeRegionCanvasAsync = function makeRegionCanvasAsync(img, region, scale, mode, opts) {
+    opts = opts || {};
+    var canvas = Ws.makeRegionCanvas(img, region, scale, mode, opts);
+    if (!canvas) return Promise.resolve(null);
+    var useCV = mode === 'cv-photo' || mode === 'cv-threshold' || opts.useCV === true;
+    if (!useCV || !Ws.CV || !Ws.CV.isEnabled()) {
+      return Promise.resolve(canvas);
+    }
+    // Digital slips are already clean — skip heavy CV.
+    if (img && img._slipDigital) return Promise.resolve(canvas);
+    var cvMode = mode === 'cv-threshold' ? 'threshold' : 'photo';
+    Ws.ocrLog('cv enhance region', { mode: cvMode });
+    if (cvMode === 'threshold') {
+      return Ws.CV.adaptiveThresholdCanvas(canvas).then(function () { return canvas; });
+    }
+    return Ws.CV.enhancePhotoRegion(canvas).then(function () { return canvas; });
   };
 
   Ws.makeUniversalScanCanvas = function makeUniversalScanCanvas(img) {

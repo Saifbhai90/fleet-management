@@ -45,8 +45,9 @@
     return fixOcrDigits(String(text || ''));
   };
 
-  /** Plain digits or comma-grouped thousands; optional .XX decimal (not a thousands dot). */
-  var AMOUNT_NUM = '(\\d{1,3}(?:,\\d{3})+|\\d+)(?:\\.\\d{2})?';
+  /** Plain digits or comma-grouped thousands (Western 150,000 OR Indic lakh 1,50,000);
+   *  optional .XX decimal (not a thousands dot). */
+  var AMOUNT_NUM = '(\\d{1,3}(?:,\\d{2,3})+|\\d+)(?:\\.\\d{2})?';
 
   function fixMonthToken(tok) {
     var t = String(tok || '').toUpperCase().replace(/[^A-Z0-9]/g, '');

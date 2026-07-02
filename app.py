@@ -384,10 +384,11 @@ if _run_startup_tasks:
             print(f"Second db.create_all() warning: {_e2}")
 
         try:
-            from models import WorkspaceSlipProfile, WorkspaceSlipProfileField, ClientDiagnosticLog
+            from models import WorkspaceSlipProfile, WorkspaceSlipProfileField, ClientDiagnosticLog, SlipOcrSample
             WorkspaceSlipProfile.__table__.create(db.engine, checkfirst=True)
             WorkspaceSlipProfileField.__table__.create(db.engine, checkfirst=True)
             ClientDiagnosticLog.__table__.create(db.engine, checkfirst=True)
+            SlipOcrSample.__table__.create(db.engine, checkfirst=True)
         except Exception as _e:
             print(f"workspace_slip_profile / client_diagnostic_log ensure warning (non-fatal): {_e}")
 
@@ -751,6 +752,10 @@ from routes_workspace import (
     workspace_slip_profile_delete_api,
     workspace_slip_profile_update_api,
     workspace_slip_last_profile_api,
+    workspace_slip_ocr_sample_api,
+    workspace_slip_ocr_sample_update_api,
+    workspace_slip_ocr_stats_api,
+    workspace_slip_server_ocr_api,
     workspace_transfer_ref_check_api,
     workspace_account_balance_api,
 )  # noqa: E402
@@ -906,6 +911,10 @@ app.add_url_rule('/api/workspace-slip-profiles', 'workspace_slip_profiles', work
 app.add_url_rule('/api/workspace-slip-profiles/<int:pk>', 'workspace_slip_profile_delete', workspace_slip_profile_delete_api, methods=['DELETE'])
 app.add_url_rule('/api/workspace-slip-profiles/<int:pk>', 'workspace_slip_profile_update', workspace_slip_profile_update_api, methods=['PATCH'])
 app.add_url_rule('/api/workspace-slip-last-profile', 'workspace_slip_last_profile', workspace_slip_last_profile_api, methods=['GET', 'POST'])
+app.add_url_rule('/api/workspace-slip-ocr-sample', 'workspace_slip_ocr_sample', workspace_slip_ocr_sample_api, methods=['POST'])
+app.add_url_rule('/api/workspace-slip-ocr-sample/<int:sample_id>', 'workspace_slip_ocr_sample_update', workspace_slip_ocr_sample_update_api, methods=['PATCH'])
+app.add_url_rule('/api/workspace-slip-ocr-stats', 'workspace_slip_ocr_stats', workspace_slip_ocr_stats_api, methods=['GET'])
+app.add_url_rule('/api/workspace-slip-server-ocr', 'workspace_slip_server_ocr', workspace_slip_server_ocr_api, methods=['POST'])
 app.add_url_rule('/api/workspace-transfer-ref-check', 'workspace_transfer_ref_check', workspace_transfer_ref_check_api, methods=['GET'])
 app.add_url_rule('/api/workspace-account-balance', 'workspace_account_balance_api', workspace_account_balance_api, methods=['GET'])
 app.add_url_rule('/workspace/ledger', 'workspace_ledger', workspace_ledger)
