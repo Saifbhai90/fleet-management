@@ -125,6 +125,17 @@
               <th class="text-center">Total Marked</th>
               <th class="text-center">Days in Month</th>
             </tr>
+            <tr id="reportTableFilterRow" class="table-secondary">
+              <th class="ps-2 py-1"></th>
+              <th class="py-1"><input type="text" class="form-control form-control-sm rpt-col-filter" data-col="1" placeholder="Project…"></th>
+              <th class="py-1"><input type="text" class="form-control form-control-sm rpt-col-filter" data-col="2" placeholder="District…"></th>
+              <th class="py-1"><input type="text" class="form-control form-control-sm rpt-col-filter" data-col="3" placeholder="Vehicle…"></th>
+              <th class="py-1"><input type="text" class="form-control form-control-sm rpt-col-filter" data-col="4" placeholder="Driver…"></th>
+              <th class="py-1"><input type="text" class="form-control form-control-sm rpt-col-filter" data-col="5" placeholder="Shift…"></th>
+              <th class="py-1" colspan="9">
+                <input type="text" id="reportTableHeaderSearch" class="form-control form-control-sm" placeholder="Search all columns…">
+              </th>
+            </tr>
           </thead>
           <tbody>
             {% for row in report %}
@@ -160,13 +171,10 @@
         </table>
       </div>
     </div>
-    <div class="card-footer bg-light text-muted small d-flex justify-content-between align-items-center flex-wrap gap-2">
-      <span>
-        Active drivers (vehicle assigned): <strong>{{ report|length }}</strong>.
-        <span class="ms-1">Present (sessions) sirf tab count hoti hai jab check-in aur check-out dono maujood hon.</span>
-        <span class="ms-1"><strong>Present days</strong> un din ki ginti hai jis din kam az kam ek session Present tha.</span>
-      </span>
-      <input type="text" id="reportTableSearch" class="form-control form-control-sm" style="max-width: 220px;" placeholder="Search in report...">
+    <div class="card-footer bg-light text-muted small">
+      Active drivers (vehicle assigned): <strong>{{ report|length }}</strong>.
+      <span class="ms-1">Present (sessions) sirf tab count hoti hai jab check-in aur check-out dono maujood hon.</span>
+      <span class="ms-1"><strong>Present days</strong> un din ki ginti hai jis din kam az kam ek session Present tha.</span>
     </div>
   </div>
   {% else %}
@@ -315,15 +323,33 @@
   {% endif %}
 })();
 
-var reportSearch = document.getElementById('reportTableSearch');
-if (reportSearch) {
-  reportSearch.addEventListener('keyup', function() {
-    var q = this.value.trim();
-    document.querySelectorAll('#reportTable tbody tr').forEach(function(row) {
-      row.style.display = (!q || window.fleetMultiWordMatch(row.innerText || row.textContent, q)) ? '' : 'none';
+(function() {
+  function applyReportFilters() {
+    var globalQ = (document.getElementById('reportTableHeaderSearch') || {}).value || '';
+    var colFilters = [];
+    document.querySelectorAll('.rpt-col-filter').forEach(function(inp) {
+      colFilters.push({ col: parseInt(inp.getAttribute('data-col'), 10), q: inp.value.trim().toLowerCase() });
     });
+    document.querySelectorAll('#reportTable tbody tr').forEach(function(row) {
+      var cells = row.querySelectorAll('td');
+      var visible = true;
+      colFilters.forEach(function(f) {
+        if (!f.q) return;
+        var cell = cells[f.col];
+        if (cell && cell.textContent.toLowerCase().indexOf(f.q) === -1) visible = false;
+      });
+      if (visible && globalQ) {
+        visible = window.fleetMultiWordMatch ? window.fleetMultiWordMatch(row.innerText || row.textContent, globalQ) : (row.textContent.toLowerCase().indexOf(globalQ.toLowerCase()) !== -1);
+      }
+      row.style.display = visible ? '' : 'none';
+    });
+  }
+  document.querySelectorAll('.rpt-col-filter').forEach(function(inp) {
+    inp.addEventListener('input', applyReportFilters);
   });
-}
+  var globalSearch = document.getElementById('reportTableHeaderSearch');
+  if (globalSearch) globalSearch.addEventListener('input', applyReportFilters);
+})();
 
 // DataTables Excel / Print for monthly summary
 $(document).ready(function () {
