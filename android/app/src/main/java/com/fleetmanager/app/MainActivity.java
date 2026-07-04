@@ -63,10 +63,14 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
     private static final int BATTERY_OPT_REQUEST = 9999;
     private static final int NOTIF_PERMISSION_REQUEST = 1001;
     private static final int LOCATION_PERMISSION_REQUEST = 1002;
-    private static final long SPLASH_MIN_MS = 1200L;
+    /** Splash shows for at least this long for branding, then hides once the app page loads. */
+    private static final long SPLASH_MIN_MS = 800L;
+    /** Hard safety cap: splash is always hidden by this point even if the page never loads. */
+    private static final long SPLASH_MAX_MS = 10000L;
     private static final long AUTO_RETRY_MS = 5000L;
 
     private volatile boolean tokenResolved = false;
+    private volatile boolean splashHidden = false;
     private Handler mainHandler;
     private Timer deadlineTimer;
     private SharedPreferences prefs;
@@ -110,6 +114,9 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
         setupNetworkOverlay();
         runServerProbe();
         mainHandler.postDelayed(splashMinRunnable, SPLASH_MIN_MS);
+        // Hard safety cap: ensure splash is ALWAYS hidden, even if the page load stalls
+        // or never fires onPageFinished. Prevents the "stuck splash / black screen" case.
+        mainHandler.postDelayed(this::hideSplash, SPLASH_MAX_MS);
 
         if (!initializeFirebase()) return;
 
@@ -133,6 +140,11 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
         mainHandler.postDelayed(() -> {
             if (autoUpdateManager != null) autoUpdateManager.checkPendingInstall();
         }, 3000);
+
+        // App window background = branding color (#0f172a) so the user never sees a raw
+        // BLACK screen while the WebView is loading or on slow networks. Previously the window
+        // was transparent, which let a default black surface show through before content painted.
+        getWindow().getDecorView().setBackgroundColor(Color.parseColor("#0f172a"));
     }
 
     private void setupNetworkOverlay() {
@@ -162,7 +174,10 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
         webViewGuardReady = true;
     }
 
-    /** CameraPreview (toBack) needs a transparent WebView; opaque white blocks the native preview. */
+    /** Configure the WebView once it is ready. Opaque background + HTTP cache enabled
+     *  so the server's Brotli + Cache-Control headers actually speed up repeat loads.
+     *  (Camera capture is a separate native Activity, so the WebView no longer needs to be
+     *  transparent — fixing the black-screen-on-slow-network issue.) */
     private void scheduleWebViewTransparent() {
         if (mainHandler == null) {
             mainHandler = new Handler(Looper.getMainLooper());
@@ -171,13 +186,13 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
             if (getBridge() != null && getBridge().getWebView() != null) {
                 WebView wv = getBridge().getWebView();
                 WebSettings settings = wv.getSettings();
-                settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
+                // Enable standard HTTP caching so static assets cached by the server's
+                // Cache-Control headers are reused on repeat opens (big speedup on slow networks).
+                // HTML stays fresh via the server's no-store header, so templates are never stale.
+                settings.setCacheMode(WebSettings.LOAD_DEFAULT);
+                settings.setDomStorageEnabled(true);
                 // Allow geolocation on insecure (HTTP) local origins — needed for LAN dev testing
                 settings.setGeolocationEnabled(true);
-                // Clear all cached data so latest template is always fetched from server
-                wv.clearCache(true);
-                wv.clearHistory();
-                android.webkit.CookieManager.getInstance().flush();
                 // Override WebChromeClient to auto-grant geolocation on insecure origins (HTTP local IP)
                 // while preserving Capacitor's BridgeWebChromeClient behavior for camera, file picker, etc.
                 final WebChromeClient originalChromeClient = wv.getWebChromeClient();
@@ -223,7 +238,9 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
                         }
                     }
                 });
-                wv.setBackgroundColor(Color.TRANSPARENT);
+                // Opaque branding background — eliminates the black screen seen while the
+                // first page is loading over a slow connection. Color matches the splash/app theme.
+                wv.setBackgroundColor(Color.parseColor("#0f172a"));
                 wv.setLayerType(View.LAYER_TYPE_HARDWARE, null);
                 wv.addJavascriptInterface(new FleetNativeBridge(this), "_fleetNative");
                 // Set server URL for auto-update from WebView URL
@@ -271,6 +288,13 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
     }
 
     private void runServerProbe() {
+        // Fast path: if the device has no network connectivity at all, show the offline
+        // overlay immediately instead of waiting for the 1.1s server probe to time out.
+        if (minSplashDone && !hasNetworkConnectivity()) {
+            serverReachable = false;
+            evaluatePostSplashNetworkState();
+            return;
+        }
         if (!minSplashDone) {
             serverReachable = null;
         }
@@ -358,6 +382,26 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
         webViewMainFrameFailed = false;
         serverReachable = true;
         hideNetworkOverlay();
+        // Page rendered → dismiss splash now (clean transition, no black gap).
+        hideSplash();
+    }
+
+    /** Programmatically hide the Capacitor splash screen (idempotent + thread-safe).
+     *  Called on page load OR the SPLASH_MAX_MS safety cap, whichever comes first. */
+    private void hideSplash() {
+        if (splashHidden) return;
+        if (getBridge() == null) return;
+        splashHidden = true;
+        try {
+            com.getcapacitor.PluginHandle handle = getBridge().getPlugin("SplashScreen");
+            if (handle != null && handle.getInstance() != null) {
+                // Use reflection to call hide() so we don't hard-depend on the plugin's package path
+                java.lang.reflect.Method m = handle.getInstance().getClass().getMethod("hide");
+                m.invoke(handle.getInstance());
+            }
+        } catch (Throwable ignored) {
+            // Best-effort; the launch-showDuration safety cap also covers this.
+        }
     }
 
     private void pulseAutoRetryLabel() {
@@ -505,10 +549,16 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
         if (networkOverlayVisible) {
             return;
         }
-        if (appPageLoaded || !minSplashDone) {
+        // If the page already loaded there's nothing startup-related to resolve.
+        if (appPageLoaded) {
             return;
         }
-        if (Boolean.FALSE.equals(serverReachable)) {
+        // Splash hasn't elapsed yet — keep showing branding, evaluate later.
+        if (!minSplashDone) {
+            return;
+        }
+        // Splash done but app not yet loaded: immediately reflect offline state if so.
+        if (!hasNetworkConnectivity() || Boolean.FALSE.equals(serverReachable)) {
             showNetworkOverlay(false);
         }
     }
