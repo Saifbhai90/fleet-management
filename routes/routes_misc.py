@@ -135,7 +135,12 @@ def uploaded_file(filename):
     path = os.path.abspath(os.path.join(base, filename))
     if not path.startswith(base) or not os.path.isfile(path):
         return '', 404
-    return send_from_directory(base, filename)
+    resp = send_from_directory(base, filename)
+    # Cache uploaded media (driver/attendance photos) for 24h in the browser/WebView.
+    # Photos rarely change once saved; this avoids re-downloading on every page load,
+    # a big win on slow mobile networks. Safe for web too (re-fetch after 24h).
+    resp.headers['Cache-Control'] = 'public, max-age=86400'
+    return resp
 
 
 

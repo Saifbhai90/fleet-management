@@ -42,3 +42,5 @@ pytesseract==0.3.13
 cryptography==44.0.3
 psutil==6.1.1
 bleach==6.2.0
+Flask-Compress==1.15.0
+brotli==1.2.0

@@ -92,6 +92,15 @@ def _unread_notifications_for_user(user_id, limit=20):
     return unread_inbox_for_user(user_id, user_perms, is_master)[:limit]
 
 
+# ── Dashboard HTML cache (short-TTL, per-user, in-process) ───────────────────
+# Stores the fully rendered dashboard HTML for up to 60s per user/role, keyed by
+# user_id + is_master + permission-set hash + from_login flag. Avoids re-running
+# ~15-20 dashboard DB queries on rapid refreshes / mobile re-opens.
+# Bypassed for first-after-login loads (from_login=1) so login scripts/sounds fire.
+_dashboard_cache = {}  # {cache_key: {'ts': float, 'html': str}}
+_DASHBOARD_CACHE_TTL = 60  # seconds
+
+
 
 import base64
 @app.route('/api/v1/me')
@@ -889,9 +898,28 @@ def poll_notifications():
 @app.route('/dashboard')
 def dashboard():
     from auth_utils import get_user_context
-    
+
     # Get user data context for scoping
     user_id = session.get('user_id')
+
+    # ── Short-TTL dashboard cache: skip re-querying on rapid refresh / mobile reopen ──
+    # Keyed by user + role + permissions so different users never share a cache entry.
+    # from_login=1 bypasses cache (so the post-login scripts/sounds always run).
+    _from_login = request.args.get('from_login') == '1'
+    if user_id and not _from_login:
+        import time as _time
+        import hashlib as _hashlib
+        _perms_key = ','.join(sorted(set(session.get('permissions') or [])))
+        _perm_hash = _hashlib.md5(_perms_key.encode('utf-8')).hexdigest()[:10]
+        _ckey = f"u{user_id}_m{int(bool(session.get('is_master')))}_p{_perm_hash}"
+        _entry = _dashboard_cache.get(_ckey)
+        if _entry and (_time.time() - _entry['ts'] < _DASHBOARD_CACHE_TTL):
+            from flask import make_response as _mr
+            _r = _mr(_entry['html'])
+            # Mark that this was served from cache (useful for diagnostics).
+            _r.headers['X-Dashboard-Cache'] = 'HIT'
+            return _r
+
     user_context = get_user_context(user_id) if user_id else {}
     allowed_projects = user_context.get('allowed_projects', set())
     allowed_districts = user_context.get('allowed_districts', set())
@@ -1047,10 +1075,15 @@ def dashboard():
     vehicle_util_data = [0, 0, 0]
     if _can('dashboard_card_utilization'):
         try:
-            v_active = _scope_vehicle_q(Vehicle.query.filter(Vehicle.driver_id.isnot(None))).count()
-            v_deployed = _scope_vehicle_q(Vehicle.query.filter(Vehicle.project_id.isnot(None), Vehicle.driver_id.is_(None))).count()
-            v_idle = _scope_vehicle_q(Vehicle.query.filter(Vehicle.project_id.is_(None), Vehicle.driver_id.is_(None))).count()
-            vehicle_util_data = [v_active, v_deployed, v_idle]
+            # Single-query aggregation (was 3 separate COUNT queries).
+            _util = _scope_vehicle_q(
+                db.session.query(
+                    func.sum(db.case((Vehicle.driver_id.isnot(None), 1), else_=0)).label('active'),
+                    func.sum(db.case(((Vehicle.project_id.isnot(None)) & (Vehicle.driver_id.is_(None)), 1), else_=0)).label('deployed'),
+                    func.sum(db.case(((Vehicle.project_id.is_(None)) & (Vehicle.driver_id.is_(None)), 1), else_=0)).label('idle'),
+                )
+            ).one()
+            vehicle_util_data = [int(_util.active or 0), int(_util.deployed or 0), int(_util.idle or 0)]
         except Exception:
             vehicle_util_data = [0, 0, 0]
 
@@ -1134,14 +1167,27 @@ def dashboard():
     if _can('dashboard_card_doc_health'):
         try:
             from datetime import timedelta as _td
+            from sqlalchemy import or_, and_
             _cutoff15 = today_dt + _td(days=15)
-            _exp_q = _scope_driver_q(Driver.query.filter(Driver.status == 'Active'))
-            for _drv in _exp_q.all():
-                _lic, _cn = _drv.license_expiry_date, _drv.cnic_expiry_date
-                if (_lic and today_dt <= _lic <= _cutoff15) or (_cn and today_dt <= _cn <= _cutoff15):
-                    expiry_soon += 1
-                elif (_lic and _lic < today_dt) or (_cn and _cn < today_dt):
-                    expiry_already += 1
+            # DB-level counts (was N+1: loaded every active driver into Python).
+            # "expiring soon" = any doc in [today, today+15]; "already expired" = any doc before today.
+            _exp_q = _scope_driver_q(db.session.query(Driver).filter(Driver.status == 'Active'))
+            expiry_soon = _exp_q.filter(
+                or_(
+                    and_(Driver.license_expiry_date.isnot(None),
+                         Driver.license_expiry_date >= today_dt,
+                         Driver.license_expiry_date <= _cutoff15),
+                    and_(Driver.cnic_expiry_date.isnot(None),
+                         Driver.cnic_expiry_date >= today_dt,
+                         Driver.cnic_expiry_date <= _cutoff15),
+                )
+            ).count()
+            expiry_already = _exp_q.filter(
+                or_(
+                    and_(Driver.license_expiry_date.isnot(None), Driver.license_expiry_date < today_dt),
+                    and_(Driver.cnic_expiry_date.isnot(None), Driver.cnic_expiry_date < today_dt),
+                )
+            ).count()
         except Exception:
             expiry_soon, expiry_already = 0, 0
 
@@ -1159,7 +1205,7 @@ def dashboard():
     if session.get('is_master') and _health_cache.get('data') and _health_cache['data'].get('any_critical'):
         health_alert = _health_cache['data']
 
-    return render_template('dashboard.html',
+    _dash_html = render_template('dashboard.html',
                            total_companies=total_companies,
                            total_projects=total_projects,
                            total_vehicles=total_vehicles,
@@ -1188,6 +1234,21 @@ def dashboard():
                            now_dt=today_dt,
                            dashboard_time=pk_now().strftime('%H:%M:%S'),
                            from_login=request.args.get('from_login') == '1')
+
+    # Store in short-TTL cache (skipped for first-after-login loads).
+    if user_id and not _from_login:
+        import time as _time
+        try:
+            _dashboard_cache[_ckey] = {'ts': _time.time(), 'html': _dash_html}
+            # Bound the cache size: drop oldest entries beyond 200.
+            if len(_dashboard_cache) > 200:
+                _oldest = sorted(_dashboard_cache.items(), key=lambda kv: kv[1]['ts'])
+                for k, _v in _oldest[:50]:
+                    _dashboard_cache.pop(k, None)
+        except Exception:
+            pass
+
+    return _dash_html
 
 
 

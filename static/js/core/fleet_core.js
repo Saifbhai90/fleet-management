@@ -5516,7 +5516,7 @@
             return;
         }
         window.addEventListener('load', function() {
-            navigator.serviceWorker.register('/sw.js?v=7', { scope: '/', updateViaCache: 'none' }).catch(function() {});
+            navigator.serviceWorker.register('/sw.js?v=8', { scope: '/', updateViaCache: 'none' }).catch(function() {});
         });
     })();
 

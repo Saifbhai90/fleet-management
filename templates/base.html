@@ -76,6 +76,9 @@ window.FleetConfig = {
 
     <!-- ═══════════════════════════════════════════════════════════
          CORE LIBRARIES (jQuery, Bootstrap JS, etc.)
+         jQuery + Bootstrap stay render-blocking (not deferred) because many page
+         templates have inline scripts that use `$` at parse time. lucide is the
+         only safe one to defer (purely cosmetic icons, no parse-time callers).
          ═══════════════════════════════════════════════════════════ -->
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"
             integrity="sha384-1H217gwSVyLSIfaLxHbE7dRb3v4mYCKbpQvzx0cegeju1MVsGrX5xXxAvs/HgeFs"
@@ -97,7 +100,7 @@ window.FleetConfig = {
         });
     })();
     </script>
-    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
     <script src="{{ url_for('static', filename='js/core/fleet_core.js') }}?v=8008" defer></script>
     <script src="{{ url_for('static', filename='js/core/fleet_ui.js') }}?v=8008" defer></script>
     <script src="{{ url_for('static', filename='js/legacy_android_gpu.js') }}?v=8008" defer></script>

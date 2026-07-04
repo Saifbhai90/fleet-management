@@ -112,6 +112,18 @@ else:
     }
 app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50 MB max upload
+
+# ── Brotli/Gzip compression for faster mobile + web payloads ─────────────────
+# Compresses HTML/CSS/JS/JSON/SVG responses. Brotli preferred (smaller than gzip),
+# gzip fallback for older clients. Big win on slow 2G/3G mobile networks.
+app.config['COMPRESS_MIMETYPES'] = [
+    'text/html', 'text/css', 'text/xml', 'text/javascript',
+    'application/json', 'application/javascript', 'application/xml',
+    'image/svg+xml', 'application/xhtml+xml',
+]
+app.config['COMPRESS_LEVEL'] = 6
+app.config['COMPRESS_ALGORITHM'] = ['br', 'gzip']
+app.config['COMPRESS_MIN_SIZE'] = 512  # skip tiny responses
 app.config['TEMPLATES_AUTO_RELOAD'] = (
     os.environ.get('FLASK_DEBUG', '0') == '1'
     or os.environ.get('TEMPLATES_AUTO_RELOAD', '0') == '1'
@@ -272,6 +284,36 @@ def fleet_disable_html_cache(response):
         response.headers['Pragma'] = 'no-cache'
         response.headers['Expires'] = '0'
     return response
+
+
+@app.after_request
+def fleet_static_asset_cache(response):
+    """Long-cache versioned static assets (CSS/JS/fonts) to speed up repeat loads.
+    Only applies to /static/ paths that carry a ?v= cache-buster query, so a bumped
+    version instantly invalidates. Never caches HTML, API responses, or uploads
+    (uploads get their own 24h header in routes_misc). Safe for both web + mobile."""
+    if request.method != 'GET':
+        return response
+    path = request.path or ''
+    ct = (response.content_type or '').lower()
+    # Skip HTML (handled above) and API/JSON responses (must stay fresh).
+    if 'text/html' in ct or path.startswith('/api/'):
+        return response
+    # Only long-cache requests that explicitly carry a cache-buster (?v=...).
+    # Override any default short/no-cache directive Flask may have attached.
+    if path.startswith('/static/') and request.args.get('v'):
+        response.headers['Cache-Control'] = 'public, max-age=31536000, immutable'
+    return response
+
+
+# Initialize Brotli/Gzip compression (config set above near MAX_CONTENT_LENGTH).
+# Must be created after app + config so it picks up COMPRESS_* settings.
+try:
+    from flask_compress import Compress
+    Compress(app)
+except Exception:
+    # Compression is a perf optimization only — app must still boot without it.
+    pass
 
 
 @app.context_processor
