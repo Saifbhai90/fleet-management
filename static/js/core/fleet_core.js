@@ -4657,48 +4657,12 @@
             // Report current version to server (for admin stats)
             _reportDeviceVersion();
 
-            // JS-based update check — manual download & install from update banner
-            console.log('[Update] Using JS-based update check');
-
-            // Restore banner from localStorage if update is pending (survives page navigation)
-            var savedUpdate = localStorage.getItem('_fleetPendingUpdate');
-            if (savedUpdate) {
-                try {
-                    var savedData = JSON.parse(savedUpdate);
-                    _showUpdateBanner(savedData);
-                } catch (e) { localStorage.removeItem('_fleetPendingUpdate'); }
-            }
-
-            // Always re-check server for latest update info
-            fetch('/api/app/check-update', { credentials: 'include' })
-                .then(function(r) { return r.json(); })
-                .then(function(data) {
-                    if (data && data.latest_version && data.latest_version !== '0.0.0' && data.apk_url) {
-                        var AppP = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App;
-                        if (AppP && typeof AppP.getInfo === 'function') {
-                            AppP.getInfo().then(function(info) {
-                                var cur = info.version || '0.0.0';
-                                if (_compareVersions(cur, data.latest_version) < 0) {
-                                    // Store in localStorage for persistence across pages
-                                    localStorage.setItem('_fleetPendingUpdate', JSON.stringify(data));
-                                    _showUpdateBanner(data);
-                                } else {
-                                    // Up to date — clear any pending update
-                                    localStorage.removeItem('_fleetPendingUpdate');
-                                    var existing = document.getElementById('appUpdateBanner');
-                                    if (existing) existing.remove();
-                                }
-                            }).catch(function() {
-                                localStorage.setItem('_fleetPendingUpdate', JSON.stringify(data));
-                                _showUpdateBanner(data);
-                            });
-                        } else {
-                            localStorage.setItem('_fleetPendingUpdate', JSON.stringify(data));
-                            _showUpdateBanner(data);
-                        }
-                    }
-                })
-                .catch(function(e) { console.warn('[Update] JS fallback check failed:', e); });
+            // No top banner — update handled entirely by Permission card (dashboard)
+            // Just clear any stale localStorage keys so old banners don't re-appear
+            localStorage.removeItem('_fleetPendingUpdate');
+            localStorage.removeItem('_fleetDownloadState');
+            var existingBanner = document.getElementById('appUpdateBanner');
+            if (existingBanner) existingBanner.remove();
         }
 
         function _sendVersionToServer(version, platform) {

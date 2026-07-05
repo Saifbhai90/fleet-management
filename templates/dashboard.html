@@ -912,20 +912,38 @@ function _dbgToast(msg) {
                     _updateNavUpdatePill('latest', 'v' + currentVersion + ' — Latest');
                     refreshCard();
                 } else {
-                    /* Update available — show Download & Install button (JS-based manual) */
+                    /* Update available */
                     _updateApkData = data;
                     _permStates.update = 'granted';
-                    var statusEl = document.getElementById('permStatusUpdate');
-                    if (statusEl) { statusEl.textContent = 'v' + latest + ' available — tap Download & Install'; statusEl.style.color = '#f97316'; }
                     var grantedBadge2 = document.getElementById('permGrantedUpdate');
                     if (grantedBadge2) grantedBadge2.style.display = 'none';
                     var spinner2 = document.getElementById('permDownloadSpinner');
                     if (spinner2) spinner2.style.display = 'none';
-                    var installWrap = document.getElementById('permInstallBtnWrap');
-                    if (installWrap) installWrap.style.display = 'block';
                     var dlProg = document.getElementById('permDownloadProgress');
                     if (dlProg) dlProg.style.display = 'none';
-                    _updateNavUpdatePill('available', 'v' + currentVersion + ' → v' + latest);
+
+                    /* Check if APK already downloaded (by this system or previous session) */
+                    var cachedUri     = localStorage.getItem('_fleetDownloadedApkUri');
+                    var cachedVersion = localStorage.getItem('_fleetDownloadedApkVersion');
+                    var alreadyDone   = (cachedUri && cachedVersion === latest);
+
+                    var statusEl = document.getElementById('permStatusUpdate');
+                    var installWrap = document.getElementById('permInstallBtnWrap');
+                    var installBtn  = document.getElementById('permInstallBtn');
+
+                    if (alreadyDone) {
+                        /* APK ready — just show Install */
+                        if (statusEl) { statusEl.textContent = 'v' + latest + ' ready — tap Install'; statusEl.style.color = '#16a34a'; }
+                        if (installBtn) { installBtn.innerHTML = '<span class="pg-install-spin"><i class="bi bi-box-arrow-in-down-right"></i></span> Install Now'; installBtn.dataset.mode = 'install'; }
+                        if (installWrap) installWrap.style.display = 'block';
+                        _updateNavUpdatePill('ready', 'v' + latest + ' — Ready to Install');
+                    } else {
+                        /* Need to download first */
+                        if (statusEl) { statusEl.textContent = 'v' + latest + ' available — tap Download & Install'; statusEl.style.color = '#f97316'; }
+                        if (installBtn) { installBtn.innerHTML = '<span class="pg-install-spin"><i class="bi bi-arrow-down-circle"></i></span> Download & Install'; installBtn.dataset.mode = 'download'; }
+                        if (installWrap) installWrap.style.display = 'block';
+                        _updateNavUpdatePill('available', 'v' + currentVersion + ' \u2192 v' + latest);
+                    }
                     refreshCard();
                 }
             })
@@ -959,10 +977,41 @@ function _dbgToast(msg) {
         if (installBtn) {
             installBtn.addEventListener('click', function() {
                 if (!_updateApkData || !_updateApkData.apk_url) return;
-                _doDashboardDownload(_updateApkData);
+                if (installBtn.dataset.mode === 'install') {
+                    /* APK already downloaded — open installer directly */
+                    var cachedUri   = localStorage.getItem('_fleetDownloadedApkUri');
+                    var cachedFname = localStorage.getItem('_fleetDownloadedApkFname');
+                    if (cachedUri) {
+                        _openCachedApk(cachedUri, cachedFname || 'fleet-manager-update.apk');
+                    }
+                } else {
+                    _doDashboardDownload(_updateApkData);
+                }
             });
         }
     });
+
+    function _openCachedApk(uri, fname) {
+        var status = document.getElementById('permStatusUpdate');
+        var FileOpener = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.FileOpener;
+        if (!FileOpener) {
+            if (status) { status.textContent = 'FileOpener plugin not available.'; status.style.color = '#dc2626'; }
+            return;
+        }
+        if (status) { status.textContent = 'Opening installer...'; status.style.color = '#374151'; }
+        FileOpener.open({
+            filePath: uri,
+            contentType: 'application/vnd.android.package-archive'
+        }).catch(function(err) {
+            /* Cached file may be gone — fall back to re-download */
+            localStorage.removeItem('_fleetDownloadedApkUri');
+            localStorage.removeItem('_fleetDownloadedApkFname');
+            localStorage.removeItem('_fleetDownloadedApkVersion');
+            if (status) { status.textContent = 'Cached file missing — tap Download & Install to re-download.'; status.style.color = '#f97316'; }
+            var btn = document.getElementById('permInstallBtn');
+            if (btn) { btn.innerHTML = '<span class="pg-install-spin"><i class="bi bi-arrow-down-circle"></i></span> Download & Install'; btn.dataset.mode = 'download'; }
+        });
+    }
 
     function _doDashboardDownload(data) {
         var btn = document.getElementById('permInstallBtn');
@@ -1018,6 +1067,10 @@ function _dbgToast(msg) {
                     directory: 'CACHE',
                     recursive: true
                 }).then(function(res) {
+                    /* Save URI so next session shows Install instead of Download */
+                    localStorage.setItem('_fleetDownloadedApkUri', res.uri);
+                    localStorage.setItem('_fleetDownloadedApkFname', fname);
+                    localStorage.setItem('_fleetDownloadedApkVersion', data.latest_version || '');
                     if (pct) pct.textContent = 'Opening installer...';
                     FileOpener.open({
                         filePath: res.uri,
