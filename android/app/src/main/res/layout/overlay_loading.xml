@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Fleet Manager — Branded Loading Overlay
+  Shown while the WebView fetches the remote app on startup.
+  Modern CRM/ERP pattern: logo + animated dots + cycling status text.
+  Prevents the "hang" feel on slow networks — user always sees live progress.
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/fleetLoadingRoot"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/fleet_slate_900"
+    android:clickable="true"
+    android:focusable="true"
+    android:visibility="gone">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:paddingStart="40dp"
+        android:paddingEnd="40dp">
+
+        <!-- Brand Logo -->
+        <ImageView
+            android:id="@+id/fleetLoadingLogo"
+            android:layout_width="96dp"
+            android:layout_height="96dp"
+            android:layout_marginBottom="20dp"
+            android:contentDescription="@string/app_name"
+            android:scaleType="fitCenter"
+            android:src="@drawable/splash" />
+
+        <!-- App Name -->
+        <TextView
+            android:id="@+id/fleetLoadingAppName"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="48dp"
+            android:fontFamily="sans-serif-medium"
+            android:letterSpacing="0.04"
+            android:text="Fleet Manager"
+            android:textColor="@color/fleet_slate_200"
+            android:textSize="22sp" />
+
+        <!-- Animated Progress Dots -->
+        <LinearLayout
+            android:id="@+id/fleetLoadingDots"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="24dp"
+            android:gravity="center"
+            android:orientation="horizontal">
+
+            <ImageView
+                android:id="@+id/fleetDot1"
+                android:layout_width="14dp"
+                android:layout_height="14dp"
+                android:layout_marginEnd="10dp"
+                android:alpha="0.3"
+                android:src="@drawable/fleet_loading_dot" />
+
+            <ImageView
+                android:id="@+id/fleetDot2"
+                android:layout_width="14dp"
+                android:layout_height="14dp"
+                android:layout_marginEnd="10dp"
+                android:alpha="0.3"
+                android:src="@drawable/fleet_loading_dot" />
+
+            <ImageView
+                android:id="@+id/fleetDot3"
+                android:layout_width="14dp"
+                android:layout_height="14dp"
+                android:alpha="0.3"
+                android:src="@drawable/fleet_loading_dot" />
+        </LinearLayout>
+
+        <!-- Status Text (cycles: Connecting... / Loading app... / Almost there...) -->
+        <TextView
+            android:id="@+id/fleetLoadingStatus"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="sans-serif"
+            android:letterSpacing="0.02"
+            android:text="Loading..."
+            android:textColor="@color/fleet_slate_400"
+            android:textSize="14sp" />
+
+    </LinearLayout>
+</FrameLayout>

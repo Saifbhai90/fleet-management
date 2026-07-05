@@ -84,6 +84,40 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
     private boolean minSplashDone = false;
     private boolean webViewGuardReady = false;
     private boolean webViewMainFrameFailed = false;
+
+    // ── Branded Loading Overlay (modern CRM-style startup screen) ────────────────
+    private View loadingOverlayRoot;
+    private TextView loadingStatusText;
+    private android.widget.ImageView[] loadingDots = new android.widget.ImageView[3];
+    private int loadingDotIndex = 0;
+    private int loadingStatusIndex = 0;
+    private boolean loadingOverlayVisible = false;
+    private final Runnable loadingDotRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (!loadingOverlayVisible) return;
+            // Pulse each dot: the "active" one bright, others dim.
+            for (int i = 0; i < 3; i++) {
+                if (loadingDots[i] != null) {
+                    loadingDots[i].setAlpha(i == loadingDotIndex ? 1.0f : 0.3f);
+                }
+            }
+            loadingDotIndex = (loadingDotIndex + 1) % 3;
+            // Cycle the status text every 2 dot rotations (~1.4s).
+            if (loadingDotIndex == 0) {
+                loadingStatusIndex = (loadingStatusIndex + 1) % FLEET_LOADING_STATUSES.length;
+                if (loadingStatusText != null) {
+                    loadingStatusText.setText(FLEET_LOADING_STATUSES[loadingStatusIndex]);
+                }
+            }
+            mainHandler.postDelayed(this, 350);
+        }
+    };
+    private static final String[] FLEET_LOADING_STATUSES = {
+        "Connecting to server...",
+        "Loading application...",
+        "Almost there..."
+    };
     /** null = still probing; TRUE = server reachable; FALSE = confirmed unreachable. */
     private Boolean serverReachable = null;
     private ConnectivityManager.NetworkCallback networkCallback;
@@ -112,6 +146,7 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
         mainHandler = new Handler(Looper.getMainLooper());
         prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         setupNetworkOverlay();
+        setupLoadingOverlay();
         runServerProbe();
         mainHandler.postDelayed(splashMinRunnable, SPLASH_MIN_MS);
         // Hard safety cap: ensure splash is ALWAYS hidden, even if the page load stalls
@@ -159,6 +194,39 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
         if (networkRetryBtn != null) {
             networkRetryBtn.setOnClickListener(v -> retryWebViewLoad());
         }
+    }
+
+    /** Inflate the branded loading overlay on top of the WebView (but below network overlay).
+     *  Shown right after the native splash hides, dismissed once the app page finishes loading.
+     *  This is the "modern CRM/ERP" pattern: user always sees live progress, never a black screen. */
+    private void setupLoadingOverlay() {
+        ViewGroup content = findViewById(android.R.id.content);
+        if (content == null) return;
+        loadingOverlayRoot = getLayoutInflater().inflate(R.layout.overlay_loading, content, false);
+        content.addView(loadingOverlayRoot);
+        loadingStatusText = loadingOverlayRoot.findViewById(R.id.fleetLoadingStatus);
+        loadingDots[0] = loadingOverlayRoot.findViewById(R.id.fleetDot1);
+        loadingDots[1] = loadingOverlayRoot.findViewById(R.id.fleetDot2);
+        loadingDots[2] = loadingOverlayRoot.findViewById(R.id.fleetDot3);
+    }
+
+    private void showLoadingOverlay() {
+        if (loadingOverlayRoot == null) return;
+        if (loadingOverlayVisible) return;
+        loadingOverlayVisible = true;
+        loadingOverlayRoot.setVisibility(View.VISIBLE);
+        loadingDotIndex = 0;
+        loadingStatusIndex = 0;
+        if (loadingStatusText != null) loadingStatusText.setText(FLEET_LOADING_STATUSES[0]);
+        mainHandler.removeCallbacks(loadingDotRunnable);
+        mainHandler.post(loadingDotRunnable);
+    }
+
+    private void hideLoadingOverlay() {
+        if (!loadingOverlayVisible) return;
+        loadingOverlayVisible = false;
+        mainHandler.removeCallbacks(loadingDotRunnable);
+        if (loadingOverlayRoot != null) loadingOverlayRoot.setVisibility(View.GONE);
     }
 
     private void setupWebViewNetworkGuard() {
@@ -350,6 +418,8 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
         if (!minSplashDone) {
             return;
         }
+        // Loading overlay is superseded by the explicit error/offline screen.
+        hideLoadingOverlay();
         if (networkOverlayRoot == null) {
             setupNetworkOverlay();
         }
@@ -382,12 +452,15 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
         webViewMainFrameFailed = false;
         serverReachable = true;
         hideNetworkOverlay();
-        // Page rendered → dismiss splash now (clean transition, no black gap).
+        // App page fully rendered → hide the loading overlay (clean reveal of the real app).
         hideSplash();
+        hideLoadingOverlay();
     }
 
     /** Programmatically hide the Capacitor splash screen (idempotent + thread-safe).
-     *  Called on page load OR the SPLASH_MAX_MS safety cap, whichever comes first. */
+     *  Called on page load OR the SPLASH_MAX_MS safety cap, whichever comes first.
+     *  Once the native splash is gone we immediately show the branded loading overlay so
+     *  the user never sees a black screen while the WebView keeps fetching. */
     private void hideSplash() {
         if (splashHidden) return;
         if (getBridge() == null) return;
@@ -401,6 +474,11 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
             }
         } catch (Throwable ignored) {
             // Best-effort; the launch-showDuration safety cap also covers this.
+        }
+        // Splash just hid → show branded loading overlay until the app page finishes.
+        // Only when the app is NOT yet loaded; otherwise markAppPageLoaded already handled it.
+        if (!appPageLoaded) {
+            showLoadingOverlay();
         }
     }
 
@@ -950,6 +1028,7 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
         stopAutoRetryLoop();
         if (mainHandler != null) {
             mainHandler.removeCallbacks(splashMinRunnable);
+            mainHandler.removeCallbacks(loadingDotRunnable);
         }
         unregisterNetworkCallback();
         cancelDeadlineTimer();

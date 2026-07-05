@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A single pulsing dot used by the loading indicator. Animated via alpha in Java. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <solid android:color="@color/fleet_blue_500" />
+    <size android:width="10dp" android:height="10dp" />
+</shape>

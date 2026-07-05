@@ -35,7 +35,9 @@
                                          "launchShowDuration":  0,
                                          "backgroundColor":  "#0f172a",
                                          "androidSplashResourceName":  "splash",
-                                         "showSpinner":  false
+                                         "showSpinner":  true,
+                                         "androidSpinnerStyle":  "large",
+                                         "spinnerColor":  "#94a3b8"
                                      },
                     "StatusBar":  {
                                       "style":  "DARK",
