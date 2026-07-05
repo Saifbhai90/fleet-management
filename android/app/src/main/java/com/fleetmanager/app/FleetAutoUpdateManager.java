@@ -9,6 +9,8 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.content.pm.PackageInfo;
+import android.content.pm.Signature;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Build;
@@ -312,6 +314,17 @@ public class FleetAutoUpdateManager {
             String apkPath = apkFile.getAbsolutePath();
             Log.d(TAG, "Download complete: " + apkPath);
 
+            // Verify APK signature before proceeding to install
+            if (!verifyApkSignature(apkPath)) {
+                Log.e(TAG, "APK signature verification FAILED — deleting downloaded file, aborting update");
+                apkFile.delete();
+                prefs.edit()
+                        .putBoolean(KEY_IS_DOWNLOADING, false)
+                        .remove(KEY_DOWNLOAD_ID)
+                        .apply();
+                return;
+            }
+
             prefs.edit()
                     .putBoolean(KEY_IS_DOWNLOADING, false)
                     .putString(KEY_PENDING_APK_PATH, apkPath)
@@ -360,7 +373,16 @@ public class FleetAutoUpdateManager {
             return;
         }
 
-        // APK exists — show install dialog
+        // Verify signature even for pending installs (file could have been replaced)
+        if (!verifyApkSignature(apkPath)) {
+            Log.e(TAG, "Pending APK signature verification FAILED — deleting and clearing state");
+            apkFile.delete();
+            prefs.edit().remove(KEY_PENDING_APK_PATH).remove(KEY_PENDING_VERSION).apply();
+            checkForUpdate();
+            return;
+        }
+
+        // APK exists and signature verified — show install dialog
         mainHandler.post(this::showInstallDialog);
     }
 
@@ -454,5 +476,46 @@ public class FleetAutoUpdateManager {
             installDialog.dismiss();
         }
         executor.shutdown();
+    }
+
+    /**
+     * Verify that the downloaded APK's signing certificate matches the currently
+     * installed app's signing certificate. Prevents installation of tampered or
+     * re-signed APKs that could have been intercepted (MITM) or replaced.
+     *
+     * @param apkPath absolute path to the downloaded APK file
+     * @return true if signatures match, false otherwise
+     */
+    private boolean verifyApkSignature(String apkPath) {
+        try {
+            PackageManager pm = context.getPackageManager();
+
+            // Get currently installed app's signature
+            PackageInfo currentPkg = pm.getPackageInfo(context.getPackageName(), PackageManager.GET_SIGNATURES);
+            if (currentPkg.signatures == null || currentPkg.signatures.length == 0) {
+                Log.e(TAG, "Cannot read current app signature");
+                return false;
+            }
+            String currentSig = currentPkg.signatures[0].toCharsString();
+
+            // Get downloaded APK's signature
+            PackageInfo apkPkg = pm.getPackageArchiveInfo(apkPath, PackageManager.GET_SIGNATURES);
+            if (apkPkg == null || apkPkg.signatures == null || apkPkg.signatures.length == 0) {
+                Log.e(TAG, "Cannot read downloaded APK signature — file may be corrupt or not a valid APK");
+                return false;
+            }
+            String apkSig = apkPkg.signatures[0].toCharsString();
+
+            if (!currentSig.equals(apkSig)) {
+                Log.e(TAG, "APK signature mismatch! Downloaded APK signing certificate does not match installed app. Possible tampering or MITM attack.");
+                return false;
+            }
+
+            Log.d(TAG, "APK signature verified — signing certificate matches installed app");
+            return true;
+        } catch (Exception e) {
+            Log.e(TAG, "Signature verification error: " + e.getMessage());
+            return false;
+        }
     }
 }

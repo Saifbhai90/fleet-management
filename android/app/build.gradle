@@ -48,7 +48,7 @@ android {
             if (keystorePropertiesFile.exists()) {
                 signingConfig signingConfigs.release
             } else {
-                signingConfig signingConfigs.debug
+                throw new org.gradle.api.GradleException("keystore.properties not found — release build requires signing config. Aborting to prevent debug-signed release APK.")
             }
         }
     }

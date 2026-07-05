@@ -84,6 +84,8 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
     private boolean minSplashDone = false;
     private boolean webViewGuardReady = false;
     private boolean webViewMainFrameFailed = false;
+    private int webViewReloadAttempts = 0;
+    private static final int MAX_RELOAD_ATTEMPTS = 3;
 
     // ── Branded Loading Overlay (modern CRM-style startup screen) ────────────────
     private View loadingOverlayRoot;
@@ -159,18 +161,30 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
         // or never fires onPageFinished. Prevents the "stuck splash / black screen" case.
         mainHandler.postDelayed(this::hideSplash, SPLASH_MAX_MS);
 
-        if (!initializeFirebase()) return;
+        // Firebase init on background thread — don't block app startup.
+        // If Firebase fails, polling fallback starts immediately. WebView loads regardless.
+        new Thread(() -> {
+            boolean firebaseOk = initializeFirebase();
+            if (firebaseOk) {
+                runOnUiThread(() -> {
+                    checkGooglePlayServices();
+                    FirebaseMessaging.getInstance().setAutoInitEnabled(true);
+                    startTokenAcquisition();
+                    schedulePollingActivation();
+                });
+            } else {
+                Log.w("FleetFirebase", "Firebase init failed — starting polling fallback");
+                prefs.edit().putBoolean(KEY_USE_POLLING, true).apply();
+                runOnUiThread(this::startPollingService);
+            }
+        }, "FirebaseInit").start();
 
+        // These don't depend on Firebase — continue immediately on main thread
         createNotificationChannels();
-        checkGooglePlayServices();
         requestNotificationPermission();
         requestLocationPermission();
         requestBatteryOptimizationExemption();
 
-        FirebaseMessaging.getInstance().setAutoInitEnabled(true);
-        startTokenAcquisition();
-
-        schedulePollingActivation();
         setupDownloadListener();
         getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
         scheduleWebViewTransparent();
@@ -619,6 +633,12 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
         runOnUiThread(() -> {
             webViewMainFrameFailed = true;
             if (Boolean.TRUE.equals(serverReachable)) {
+                webViewReloadAttempts++;
+                if (webViewReloadAttempts > MAX_RELOAD_ATTEMPTS) {
+                    Log.w("FleetMain", "Max reload attempts (" + MAX_RELOAD_ATTEMPTS + ") reached — showing network overlay");
+                    showNetworkOverlay(false);
+                    return;
+                }
                 loadAppUrlInWebView(false);
                 return;
             }
@@ -630,6 +650,7 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
 
     @Override
     public void onMainFrameLoadSucceeded(String url) {
+        webViewReloadAttempts = 0;
         runOnUiThread(this::markAppPageLoaded);
     }
 
