@@ -498,6 +498,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     <span style="font-size:0.6rem;color:#f97316;font-weight:700;white-space:nowrap;letter-spacing:0.2px;position:relative;z-index:1;">auto update</span>
                 </div>
             </div>
+            <!-- Install button — shown when Java reports APK is ready -->
+            <div id="permInstallBtnWrap" style="display:none;">
+                <button id="permInstallBtn" type="button" class="pg-install-btn pg-cta-btn" style="width:100%;padding:14px;border-radius:16px;font-size:0.88rem;font-weight:700;">
+                    <span class="pg-install-spin"><i class="bi bi-arrow-down-circle"></i></span>
+                    Install Now
+                </button>
+            </div>
         </div>
 
         <div id="permCardNote" style="display:none !important;font-size:0.68rem;color:#6b7280;text-align:center;padding:0 4px;">
@@ -907,10 +914,33 @@ function _dbgToast(msg) {
                     if (grantedBadge2) grantedBadge2.style.display = 'none';
                     var spinner2 = document.getElementById('permDownloadSpinner');
                     if (spinner2) spinner2.style.display = 'block';
+                    var installWrap = document.getElementById('permInstallBtnWrap');
+                    if (installWrap) installWrap.style.display = 'none';
                     _updateNavUpdatePill('downloading', 'v' + currentVersion + ' → v' + latest + ' (downloading)');
                     /* Trigger Java-side silent download */
                     if (window._fleetNative && typeof window._fleetNative.checkForUpdate === 'function') {
                         try { window._fleetNative.checkForUpdate(); } catch(e) {}
+                    }
+                    /* Poll for install readiness every 5s — if Java says APK is ready, show Install button */
+                    if (window._fleetNative && typeof window._fleetNative.hasPendingInstall === 'function') {
+                        var _pollCount = 0;
+                        var _pollInstall = setInterval(function() {
+                            _pollCount++;
+                            if (_pollCount > 24) { clearInterval(_pollInstall); return; } /* Stop after 2 min */
+                            try {
+                                if (window._fleetNative.hasPendingInstall() === '1') {
+                                    clearInterval(_pollInstall);
+                                    var st = document.getElementById('permStatusUpdate');
+                                    if (st) { st.textContent = 'v' + latest + ' ready — tap Install Now'; st.style.color = '#16a34a'; }
+                                    var sp = document.getElementById('permDownloadSpinner');
+                                    if (sp) sp.style.display = 'none';
+                                    var iw = document.getElementById('permInstallBtnWrap');
+                                    if (iw) iw.style.display = 'block';
+                                    _updateNavUpdatePill('ready', 'v' + latest + ' — Ready to Install');
+                                    refreshCard();
+                                }
+                            } catch(e) {}
+                        }, 5000);
                     }
                     refreshCard();
                 }
@@ -938,6 +968,31 @@ function _dbgToast(msg) {
             _doCheck('0.0.0');
         }
     }
+
+    /* ── Install Now button handler — calls Java to show native install dialog ── */
+    document.addEventListener('DOMContentLoaded', function() {
+        var installBtn = document.getElementById('permInstallBtn');
+        if (installBtn) {
+            installBtn.addEventListener('click', function() {
+                if (window._fleetNative && typeof window._fleetNative.showInstallDialog === 'function') {
+                    try { window._fleetNative.showInstallDialog(); } catch(e) { console.warn('[Update] showInstallDialog failed:', e); }
+                }
+            });
+        }
+        /* Also check on page load if APK is already pending (e.g. download finished on previous page) */
+        if (window._fleetNative && typeof window._fleetNative.hasPendingInstall === 'function') {
+            try {
+                if (window._fleetNative.hasPendingInstall() === '1') {
+                    var st = document.getElementById('permStatusUpdate');
+                    if (st) { st.textContent = 'Update ready — tap Install Now'; st.style.color = '#16a34a'; }
+                    var sp = document.getElementById('permDownloadSpinner');
+                    if (sp) sp.style.display = 'none';
+                    var iw = document.getElementById('permInstallBtnWrap');
+                    if (iw) iw.style.display = 'block';
+                }
+            } catch(e) {}
+        }
+    });
 
     /* ── Navbar update status pill + version badge ── */
     function _updateNavVersionBadge(version) {

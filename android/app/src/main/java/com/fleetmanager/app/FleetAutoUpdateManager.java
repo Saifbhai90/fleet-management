@@ -402,6 +402,15 @@ public class FleetAutoUpdateManager {
             return; // Already showing
         }
 
+        // Don't attempt dialog if Activity is not in foreground — onResume will re-trigger
+        if (context instanceof android.app.Activity) {
+            android.app.Activity act = (android.app.Activity) context;
+            if (act.isFinishing() || act.isDestroyed()) {
+                Log.d(TAG, "Activity finishing/destroyed — deferring install dialog to next resume");
+                return;
+            }
+        }
+
         String version = prefs.getString(KEY_PENDING_VERSION, "new version");
 
         AlertDialog.Builder builder = new AlertDialog.Builder(context);
@@ -423,9 +432,9 @@ public class FleetAutoUpdateManager {
         // Prevent dialog from being dismissed by outside touch
         installDialog.setCanceledOnTouchOutside(false);
 
-        try {
-            installDialog.getWindow().setType(WindowManager.LayoutParams.TYPE_APPLICATION_ATTACHED_DIALOG);
-        } catch (Exception ignored) {}
+        // NOTE: Do NOT set TYPE_APPLICATION_ATTACHED_DIALOG — it silently fails on many
+        // Android versions when triggered from a BroadcastReceiver.  A standard AlertDialog
+        // created with an Activity context already uses the activity's window token.
 
         try {
             installDialog.show();
@@ -467,6 +476,14 @@ public class FleetAutoUpdateManager {
                 Log.e(TAG, "Fallback installer also failed: " + e2.getMessage());
             }
         }
+    }
+
+    /** Check if a pending APK install exists (APK downloaded, waiting for install) */
+    public boolean hasPendingInstall() {
+        String apkPath = prefs.getString(KEY_PENDING_APK_PATH, null);
+        if (apkPath == null || apkPath.isEmpty()) return false;
+        File apkFile = new File(apkPath);
+        return apkFile.exists();
     }
 
     /** Clean up — call from Activity.onDestroy */

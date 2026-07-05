@@ -949,6 +949,27 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
             }
         }
 
+        /** Show install dialog if APK is already downloaded — callable from JS dashboard */
+        @JavascriptInterface
+        public void showInstallDialog() {
+            if (activity.autoUpdateManager != null) {
+                activity.runOnUiThread(() -> {
+                    if (!activity.isFinishing() && !activity.isDestroyed()) {
+                        activity.autoUpdateManager.showInstallDialog();
+                    }
+                });
+            }
+        }
+
+        /** Check if a pending APK install exists — returns "1" or "0" */
+        @JavascriptInterface
+        public String hasPendingInstall() {
+            if (activity.autoUpdateManager != null) {
+                return activity.autoUpdateManager.hasPendingInstall() ? "1" : "0";
+            }
+            return "0";
+        }
+
         /** Return current app version name (e.g. "2.0.8") — 100% reliable, reads PackageManager directly.
          *  Used by JS reportDeviceVersion() for admin version stats. Sync call (safe on JS thread). */
         @JavascriptInterface
