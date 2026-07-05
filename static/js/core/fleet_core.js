@@ -4657,12 +4657,43 @@
             // Report current version to server (for admin stats)
             _reportDeviceVersion();
 
-            // No top banner — update handled entirely by Permission card (dashboard)
-            // Just clear any stale localStorage keys so old banners don't re-appear
-            localStorage.removeItem('_fleetPendingUpdate');
-            localStorage.removeItem('_fleetDownloadState');
-            var existingBanner = document.getElementById('appUpdateBanner');
-            if (existingBanner) existingBanner.remove();
+            // Restore banner from localStorage if update is pending (survives page navigation)
+            var savedUpdate = localStorage.getItem('_fleetPendingUpdate');
+            if (savedUpdate) {
+                try {
+                    var savedData = JSON.parse(savedUpdate);
+                    _showUpdateBanner(savedData);
+                } catch (e) { localStorage.removeItem('_fleetPendingUpdate'); }
+            }
+
+            // Always re-check server for latest update info
+            fetch('/api/app/check-update', { credentials: 'include' })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (data && data.latest_version && data.latest_version !== '0.0.0' && data.apk_url) {
+                        var AppP = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App;
+                        if (AppP && typeof AppP.getInfo === 'function') {
+                            AppP.getInfo().then(function(info) {
+                                var cur = info.version || '0.0.0';
+                                if (_compareVersions(cur, data.latest_version) < 0) {
+                                    localStorage.setItem('_fleetPendingUpdate', JSON.stringify(data));
+                                    _showUpdateBanner(data);
+                                } else {
+                                    localStorage.removeItem('_fleetPendingUpdate');
+                                    var existing = document.getElementById('appUpdateBanner');
+                                    if (existing) existing.remove();
+                                }
+                            }).catch(function() {
+                                localStorage.setItem('_fleetPendingUpdate', JSON.stringify(data));
+                                _showUpdateBanner(data);
+                            });
+                        } else {
+                            localStorage.setItem('_fleetPendingUpdate', JSON.stringify(data));
+                            _showUpdateBanner(data);
+                        }
+                    }
+                })
+                .catch(function(e) { console.warn('[Update] check failed:', e); });
         }
 
         function _sendVersionToServer(version, platform) {
@@ -4736,65 +4767,54 @@
             var existing = document.getElementById('appUpdateBanner');
             if (existing) existing.remove();
 
-            // Check if APK was already downloaded — show Install directly
-            var downloadedUri = localStorage.getItem('_fleetDownloadedApkUri');
-            var downloadedFname = localStorage.getItem('_fleetDownloadedApkFname');
-            var downloadedVersion = localStorage.getItem('_fleetDownloadedApkVersion');
-
-            if (downloadedUri && downloadedFname && downloadedVersion === data.latest_version) {
-                // APK already downloaded for this version — show Install button
-                var banner2 = document.createElement('div');
-                banner2.id = 'appUpdateBanner';
-                banner2.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:linear-gradient(135deg,#065f46,#10b981);color:#fff;padding:14px 16px;display:flex;align-items:center;gap:12px;font-family:system-ui;font-size:14px;box-shadow:0 4px 20px rgba(0,0,0,0.3);';
-                banner2.innerHTML = '<div style="flex:1"><strong>Update Ready v' + data.latest_version + '!</strong><br><span style="font-size:12px;opacity:0.9">Tap Install to apply the update</span></div>' +
-                    '<button id="apkInstallBtn" style="background:#fff;color:#065f46;border:none;border-radius:8px;padding:10px 22px;font-weight:700;font-size:14px;cursor:pointer">Install</button>' +
-                    (data.force_update ? '' : '<button id="appUpdateDismiss" style="background:transparent;border:none;color:#fff;font-size:20px;cursor:pointer;padding:4px 8px;opacity:0.7">&times;</button>');
-                document.body.appendChild(banner2);
-
-                document.getElementById('apkInstallBtn').addEventListener('click', function() {
-                    _openInstaller(downloadedUri, downloadedFname, banner2);
-                });
-                var dismiss2 = document.getElementById('appUpdateDismiss');
-                if (dismiss2) {
-                    dismiss2.addEventListener('click', function() {
-                        banner2.remove();
-                    });
-                }
-                return;
-            }
-
-            // Check if download is in progress — show downloading state
-            var dlState = localStorage.getItem('_fleetDownloadState');
-            if (dlState) {
-                try {
-                    var state = JSON.parse(dlState);
-                    if (state.version === data.latest_version) {
-                        // Show downloading banner (will restart download but user sees progress)
-                        _downloadAndInstallApk(data, null, true);
-                        return;
-                    }
-                } catch (e) { localStorage.removeItem('_fleetDownloadState'); }
-            }
+            var cachedUri     = localStorage.getItem('_fleetDownloadedApkUri');
+            var cachedVersion = localStorage.getItem('_fleetDownloadedApkVersion');
+            var cachedFname   = localStorage.getItem('_fleetDownloadedApkFname');
+            var alreadyDone   = (cachedUri && cachedVersion === data.latest_version);
 
             var banner = document.createElement('div');
             banner.id = 'appUpdateBanner';
-            banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:linear-gradient(135deg,#1e40af,#3b82f6);color:#fff;padding:14px 16px;display:flex;align-items:center;gap:12px;font-family:system-ui;font-size:14px;box-shadow:0 4px 20px rgba(0,0,0,0.3);';
-            banner.innerHTML = '<div style="flex:1"><strong>New Update v' + data.latest_version + '</strong><br><span style="font-size:12px;opacity:0.85">Tap Update to download and install</span></div>' +
-                '<button id="appUpdateBtn" style="background:#fff;color:#1e40af;border:none;border-radius:8px;padding:8px 18px;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap">Update</button>' +
-                (data.force_update ? '' : '<button id="appUpdateDismiss" style="background:transparent;border:none;color:#fff;font-size:20px;cursor:pointer;padding:4px 8px;opacity:0.7">&times;</button>');
 
-            document.body.appendChild(banner);
+            if (alreadyDone) {
+                /* APK ready — show Install only */
+                banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:linear-gradient(135deg,#065f46,#10b981);color:#fff;padding:14px 16px;display:flex;align-items:center;gap:12px;font-family:system-ui;font-size:14px;box-shadow:0 4px 20px rgba(0,0,0,0.3);';
+                banner.innerHTML = '<div style="flex:1"><strong>Update Ready v' + data.latest_version + '!</strong><br><span style="font-size:12px;opacity:0.9">Tap Install to apply the update</span></div>' +
+                    '<button id="apkInstallBtn" style="background:#fff;color:#065f46;border:none;border-radius:8px;padding:10px 22px;font-weight:700;font-size:14px;cursor:pointer">Install</button>' +
+                    (data.force_update ? '' : '<button id="appUpdateDismiss" style="background:transparent;border:none;color:#fff;font-size:20px;cursor:pointer;padding:4px 8px;opacity:0.7">&times;</button>');
+                document.body.appendChild(banner);
 
-            document.getElementById('appUpdateBtn').addEventListener('click', function() {
-                _downloadAndInstallApk(data, banner, false);
-            });
+                document.getElementById('apkInstallBtn').addEventListener('click', function() {
+                    var FileOpener = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.FileOpener;
+                    if (!FileOpener) return;
+                    FileOpener.open({ filePath: cachedUri, contentType: 'application/vnd.android.package-archive' })
+                        .catch(function() {
+                            /* Cached file gone — clear and show download banner */
+                            localStorage.removeItem('_fleetDownloadedApkUri');
+                            localStorage.removeItem('_fleetDownloadedApkFname');
+                            localStorage.removeItem('_fleetDownloadedApkVersion');
+                            _showUpdateBanner(data);
+                        });
+                });
+            } else {
+                /* Need to download */
+                banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:linear-gradient(135deg,#1e40af,#3b82f6);color:#fff;padding:14px 16px;display:flex;align-items:center;gap:12px;font-family:system-ui;font-size:14px;box-shadow:0 4px 20px rgba(0,0,0,0.3);';
+                banner.innerHTML = '<div style="flex:1"><strong>New Update v' + data.latest_version + '</strong><br><span style="font-size:12px;opacity:0.85">Tap to download and install</span></div>' +
+                    '<button id="appUpdateBtn" style="background:#fff;color:#1e40af;border:none;border-radius:8px;padding:8px 18px;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap">Download & Install</button>' +
+                    (data.force_update ? '' : '<button id="appUpdateDismiss" style="background:transparent;border:none;color:#fff;font-size:20px;cursor:pointer;padding:4px 8px;opacity:0.7">&times;</button>');
+                document.body.appendChild(banner);
+
+                document.getElementById('appUpdateBtn').addEventListener('click', function() {
+                    _downloadAndInstallApk(data, banner, false);
+                });
+            }
+
             var dismiss = document.getElementById('appUpdateDismiss');
             if (dismiss) {
                 dismiss.addEventListener('click', function() {
-                    // Only dismiss for 30 seconds, then re-show (non-force updates)
-                    localStorage.removeItem('_fleetPendingUpdate');
                     banner.remove();
-                    setTimeout(function() { _checkForAppUpdate(); }, 30000);
+                    if (!data.force_update) {
+                        setTimeout(function() { _checkForAppUpdate(); }, 30000);
+                    }
                 });
             }
         }
