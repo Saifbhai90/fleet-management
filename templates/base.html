@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" class="{% if request.endpoint == 'report_driver_profile_public' %}driver-profile-public-view{% endif %}">
+<html lang="en" class="{% if request.endpoint == 'report_driver_profile_public' %}driver-profile-public-view{% endif %}{% if is_native_app %} capacitor-native{% endif %}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" id="metaViewport" content="{% if request.endpoint == 'report_driver_profile_public' %}width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=3, user-scalable=yes, viewport-fit=cover{% else %}width=device-width, initial-scale=1.0, maximum-scale=5.0, minimum-scale=1.0, user-scalable=yes, viewport-fit=cover, interactive-widget=resizes-content{% endif %}">
@@ -71,6 +71,14 @@ window.FleetConfig = {
     <!-- Legacy Android detection (inline — runs ASAP to add HTML class) -->
     <script>
     (function(){var u=navigator.userAgent||'';if(!/Android/i.test(u))return;var legacy=/CPH1909|OPPO\s*A5/i.test(u);if(!legacy){var m=u.match(/Android\s+([\d.]+)/i);if(m){var v=parseInt(m[1],10);if(!isNaN(v)&&v<=9)legacy=true;}}if(legacy)document.documentElement.classList.add('legacy-android-gpu');})();
+    </script>
+
+    <!-- Capacitor native detection (inline — runs ASAP, BEFORE first paint, so the
+         mobile layout applies immediately: no desktop-view flash on app startup).
+         Server-side is_native_app (cookie/UA) already covers most cases; this is the
+         zero-latency fallback for the very first request before the cookie exists. -->
+    <script>
+    (function(){try{if(window.Capacitor&&window.Capacitor.isNativePlatform&&window.Capacitor.isNativePlatform()){document.documentElement.classList.add('capacitor-native');}}catch(e){}})();
     </script>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/legacy_android_gpu.css') }}?v=1001">
 

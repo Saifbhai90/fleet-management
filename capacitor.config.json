@@ -15,6 +15,7 @@
                },
     "android":  {
                     "allowMixedContent":  false,
+                    "appendUserAgent":  "FleetCapacitor",
                     "captureInput":  true,
                     "webContentsDebuggingEnabled":  false,
                     "overScrollMode":  "never",

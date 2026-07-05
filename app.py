@@ -334,6 +334,23 @@ def inject_server_time():
 
 
 @app.context_processor
+def inject_native_app_flag():
+    """True when the request comes from the Capacitor mobile app.
+    Detected via the fleet_native_app cookie (set by /mobile-init on cold start)
+    or the appended Capacitor User-Agent. Used to add the capacitor-native class
+    server-side so the mobile layout applies on the very first paint (no desktop flash)."""
+    from flask import request
+    try:
+        is_native = (
+            request.cookies.get('fleet_native_app') == '1'
+            or 'Capacitor' in (request.headers.get('User-Agent') or '')
+        )
+    except Exception:
+        is_native = False
+    return dict(is_native_app=is_native)
+
+
+@app.context_processor
 def inject_freeze_data_status():
     """Provide current freeze status to shared layouts/forms."""
     try:
