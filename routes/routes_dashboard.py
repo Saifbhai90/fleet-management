@@ -208,6 +208,20 @@ def app_check_update():
             'file_size_bytes': 0,
         })
 
+    # Block old Java auto-downloader (FleetAutoUpdateManager) — it sends no X-Fleet-Client header.
+    # New JS-based clients (dashboard banner + permission card) send X-Fleet-Client: js-dashboard.
+    # Old APKs will get empty apk_url and silently skip the download.
+    is_js_client = request.headers.get('X-Fleet-Client', '') == 'js-dashboard'
+    if not is_js_client:
+        return jsonify({
+            'latest_version': latest.version,
+            'apk_url': '',
+            'apk_filename': '',
+            'force_update': False,
+            'file_size_bytes': 0,
+            'disable_auto_update': True,
+        })
+
     if static_best and _parse_apk_version(latest.apk_filename):
         db_ver = _parse_apk_version(latest.apk_filename)[0]
         if static_best['version'] and _parse_apk_version(static_best['apk_filename'])[0] > db_ver:

@@ -894,7 +894,7 @@ function _dbgToast(msg) {
 
             var _ctrl = window.AbortController ? new AbortController() : null;
             var _fetchTimer = setTimeout(function() { if (_ctrl) _ctrl.abort(); }, 8000);
-            fetch('/api/app/check-update', _ctrl ? { signal: _ctrl.signal } : {})
+            fetch('/api/app/check-update', _ctrl ? { signal: _ctrl.signal, headers: { 'X-Fleet-Client': 'js-dashboard' } } : { headers: { 'X-Fleet-Client': 'js-dashboard' } })
             .then(function(r) { clearTimeout(_fetchTimer); return r.json(); })
             .then(function(data) {
                 var latest = data.latest_version || '0.0.0';

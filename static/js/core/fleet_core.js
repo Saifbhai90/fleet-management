@@ -4667,7 +4667,7 @@
             }
 
             // Always re-check server for latest update info
-            fetch('/api/app/check-update', { credentials: 'include' })
+            fetch('/api/app/check-update', { credentials: 'include', headers: { 'X-Fleet-Client': 'js-dashboard' } })
                 .then(function(r) { return r.json(); })
                 .then(function(data) {
                     if (data && data.latest_version && data.latest_version !== '0.0.0' && data.apk_url) {
