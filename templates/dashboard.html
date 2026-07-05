@@ -495,15 +495,22 @@ document.addEventListener('DOMContentLoaded', function() {
                 <div style="width:58px;height:44px;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;flex-shrink:0;">
                     <div id="permGrantedUpdate" style="display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:0.6rem;font-weight:700;color:#059669;white-space:nowrap;">✓ Latest</div>
                     <span id="permDownloadSpinner" style="display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:20px;height:20px;border:2.5px solid rgba(249,115,22,0.2);border-top-color:#f97316;border-radius:50%;animation:pgGauge 1s infinite linear;"></span>
-                    <span style="font-size:0.6rem;color:#f97316;font-weight:700;white-space:nowrap;letter-spacing:0.2px;position:relative;z-index:1;">auto update</span>
+                    <span style="font-size:0.6rem;color:#f97316;font-weight:700;white-space:nowrap;letter-spacing:0.2px;position:relative;z-index:1;">update</span>
                 </div>
             </div>
-            <!-- Install button — shown when Java reports APK is ready -->
+            <!-- Download & Install button — JS-based manual download -->
             <div id="permInstallBtnWrap" style="display:none;">
                 <button id="permInstallBtn" type="button" class="pg-install-btn pg-cta-btn" style="width:100%;padding:14px;border-radius:16px;font-size:0.88rem;font-weight:700;">
                     <span class="pg-install-spin"><i class="bi bi-arrow-down-circle"></i></span>
-                    Install Now
+                    Download & Install
                 </button>
+            </div>
+            <!-- Progress bar for download -->
+            <div id="permDownloadProgress" style="display:none;">
+                <div style="background:rgba(249,115,22,0.15);border-radius:8px;height:10px;overflow:hidden;margin-top:8px;">
+                    <div id="permDownloadBar" style="background:#f97316;height:100%;width:0%;border-radius:8px;transition:width 0.3s;"></div>
+                </div>
+                <div id="permDownloadPct" style="font-size:0.7rem;color:#6b7280;margin-top:4px;text-align:center;">0%</div>
             </div>
         </div>
 
@@ -905,43 +912,20 @@ function _dbgToast(msg) {
                     _updateNavUpdatePill('latest', 'v' + currentVersion + ' — Latest');
                     refreshCard();
                 } else {
-                    /* Update available — Java will auto-download. Show status only. */
+                    /* Update available — show Download & Install button (JS-based manual) */
                     _updateApkData = data;
-                    _permStates.update = 'granted'; /* Don't block user — update is auto */
+                    _permStates.update = 'granted';
                     var statusEl = document.getElementById('permStatusUpdate');
-                    if (statusEl) { statusEl.textContent = 'v' + latest + ' downloading automatically…'; statusEl.style.color = '#374151'; }
+                    if (statusEl) { statusEl.textContent = 'v' + latest + ' available — tap Download & Install'; statusEl.style.color = '#f97316'; }
                     var grantedBadge2 = document.getElementById('permGrantedUpdate');
                     if (grantedBadge2) grantedBadge2.style.display = 'none';
                     var spinner2 = document.getElementById('permDownloadSpinner');
-                    if (spinner2) spinner2.style.display = 'block';
+                    if (spinner2) spinner2.style.display = 'none';
                     var installWrap = document.getElementById('permInstallBtnWrap');
-                    if (installWrap) installWrap.style.display = 'none';
-                    _updateNavUpdatePill('downloading', 'v' + currentVersion + ' → v' + latest + ' (downloading)');
-                    /* Trigger Java-side silent download */
-                    if (window._fleetNative && typeof window._fleetNative.checkForUpdate === 'function') {
-                        try { window._fleetNative.checkForUpdate(); } catch(e) {}
-                    }
-                    /* Poll for install readiness every 5s — if Java says APK is ready, show Install button */
-                    if (window._fleetNative && typeof window._fleetNative.hasPendingInstall === 'function') {
-                        var _pollCount = 0;
-                        var _pollInstall = setInterval(function() {
-                            _pollCount++;
-                            if (_pollCount > 24) { clearInterval(_pollInstall); return; } /* Stop after 2 min */
-                            try {
-                                if (window._fleetNative.hasPendingInstall() === '1') {
-                                    clearInterval(_pollInstall);
-                                    var st = document.getElementById('permStatusUpdate');
-                                    if (st) { st.textContent = 'v' + latest + ' ready — tap Install Now'; st.style.color = '#16a34a'; }
-                                    var sp = document.getElementById('permDownloadSpinner');
-                                    if (sp) sp.style.display = 'none';
-                                    var iw = document.getElementById('permInstallBtnWrap');
-                                    if (iw) iw.style.display = 'block';
-                                    _updateNavUpdatePill('ready', 'v' + latest + ' — Ready to Install');
-                                    refreshCard();
-                                }
-                            } catch(e) {}
-                        }, 5000);
-                    }
+                    if (installWrap) installWrap.style.display = 'block';
+                    var dlProg = document.getElementById('permDownloadProgress');
+                    if (dlProg) dlProg.style.display = 'none';
+                    _updateNavUpdatePill('available', 'v' + currentVersion + ' → v' + latest);
                     refreshCard();
                 }
             })
@@ -969,30 +953,95 @@ function _dbgToast(msg) {
         }
     }
 
-    /* ── Install Now button handler — calls Java to show native install dialog ── */
+    /* ── Download & Install button handler — JS-based manual download ── */
     document.addEventListener('DOMContentLoaded', function() {
         var installBtn = document.getElementById('permInstallBtn');
         if (installBtn) {
             installBtn.addEventListener('click', function() {
-                if (window._fleetNative && typeof window._fleetNative.showInstallDialog === 'function') {
-                    try { window._fleetNative.showInstallDialog(); } catch(e) { console.warn('[Update] showInstallDialog failed:', e); }
-                }
+                if (!_updateApkData || !_updateApkData.apk_url) return;
+                _doDashboardDownload(_updateApkData);
             });
         }
-        /* Also check on page load if APK is already pending (e.g. download finished on previous page) */
-        if (window._fleetNative && typeof window._fleetNative.hasPendingInstall === 'function') {
-            try {
-                if (window._fleetNative.hasPendingInstall() === '1') {
-                    var st = document.getElementById('permStatusUpdate');
-                    if (st) { st.textContent = 'Update ready — tap Install Now'; st.style.color = '#16a34a'; }
-                    var sp = document.getElementById('permDownloadSpinner');
-                    if (sp) sp.style.display = 'none';
-                    var iw = document.getElementById('permInstallBtnWrap');
-                    if (iw) iw.style.display = 'block';
-                }
-            } catch(e) {}
-        }
     });
+
+    function _doDashboardDownload(data) {
+        var btn = document.getElementById('permInstallBtn');
+        var progWrap = document.getElementById('permDownloadProgress');
+        var bar = document.getElementById('permDownloadBar');
+        var pct = document.getElementById('permDownloadPct');
+        var status = document.getElementById('permStatusUpdate');
+        if (btn) btn.style.display = 'none';
+        if (progWrap) progWrap.style.display = 'block';
+        if (status) { status.textContent = 'Downloading v' + (data.latest_version || '') + '...'; status.style.color = '#374151'; }
+
+        var Filesystem = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem;
+        var FileOpener = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.FileOpener;
+        if (!Filesystem || !FileOpener) {
+            if (status) { status.textContent = 'Update plugins not available. Use browser to download.'; status.style.color = '#dc2626'; }
+            if (btn) btn.style.display = 'block';
+            if (progWrap) progWrap.style.display = 'none';
+            return;
+        }
+
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', data.apk_url, true);
+        xhr.responseType = 'blob';
+        xhr.onprogress = function(e) {
+            if (e.lengthComputable) {
+                var p = Math.round((e.loaded / e.total) * 100);
+                if (bar) bar.style.width = p + '%';
+                if (pct) pct.textContent = p + '% (' + (e.loaded / 1048576).toFixed(1) + ' MB / ' + (e.total / 1048576).toFixed(1) + ' MB)';
+            }
+        };
+        xhr.onload = function() {
+            if (xhr.status !== 200) {
+                if (status) { status.textContent = 'Download failed (HTTP ' + xhr.status + ')'; status.style.color = '#dc2626'; }
+                if (btn) btn.style.display = 'block';
+                if (progWrap) progWrap.style.display = 'none';
+                return;
+            }
+            var blob = xhr.response;
+            if (!blob || blob.size < 500000) {
+                if (status) { status.textContent = 'Invalid APK file.'; status.style.color = '#dc2626'; }
+                if (btn) btn.style.display = 'block';
+                if (progWrap) progWrap.style.display = 'none';
+                return;
+            }
+            if (pct) pct.textContent = 'Saving file...';
+            var reader = new FileReader();
+            reader.onload = function() {
+                var base64 = reader.result.split(',')[1];
+                var fname = data.apk_filename || 'fleet-manager-update.apk';
+                Filesystem.writeFile({
+                    path: fname,
+                    data: base64,
+                    directory: 'CACHE',
+                    recursive: true
+                }).then(function(res) {
+                    if (pct) pct.textContent = 'Opening installer...';
+                    FileOpener.open({
+                        filePath: res.uri,
+                        contentType: 'application/vnd.android.package-archive'
+                    }).catch(function(err) {
+                        if (status) { status.textContent = 'Install failed: ' + (err.message || 'unknown'); status.style.color = '#dc2626'; }
+                        if (btn) btn.style.display = 'block';
+                        if (progWrap) progWrap.style.display = 'none';
+                    });
+                }).catch(function(err) {
+                    if (status) { status.textContent = 'Save failed: ' + (err.message || 'unknown'); status.style.color = '#dc2626'; }
+                    if (btn) btn.style.display = 'block';
+                    if (progWrap) progWrap.style.display = 'none';
+                });
+            };
+            reader.readAsDataURL(blob);
+        };
+        xhr.onerror = function() {
+            if (status) { status.textContent = 'Download failed. Check connection.'; status.style.color = '#dc2626'; }
+            if (btn) btn.style.display = 'block';
+            if (progWrap) progWrap.style.display = 'none';
+        };
+        xhr.send();
+    }
 
     /* ── Navbar update status pill + version badge ── */
     function _updateNavVersionBadge(version) {

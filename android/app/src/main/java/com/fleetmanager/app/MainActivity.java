@@ -74,7 +74,6 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
     private Handler mainHandler;
     private Timer deadlineTimer;
     private SharedPreferences prefs;
-    private FleetAutoUpdateManager autoUpdateManager;
 
     private View networkOverlayRoot;
     private TextView networkAutoRetryText;
@@ -188,13 +187,6 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
         setupDownloadListener();
         getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
         scheduleWebViewTransparent();
-
-        // Auto-update: initialize manager and check for pending install on app open
-        autoUpdateManager = new FleetAutoUpdateManager(this);
-        // Check pending install after WebView is ready (delayed to not block splash)
-        mainHandler.postDelayed(() -> {
-            if (autoUpdateManager != null) autoUpdateManager.checkPendingInstall();
-        }, 3000);
 
         // App window background = branding color (#0f172a) so the user never sees a raw
         // BLACK screen while the WebView is loading or on slow networks. Previously the window
@@ -331,19 +323,6 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
                 wv.setBackgroundColor(Color.parseColor("#0f172a"));
                 wv.setLayerType(View.LAYER_TYPE_HARDWARE, null);
                 wv.addJavascriptInterface(new FleetNativeBridge(this), "_fleetNative");
-                // Set server URL for auto-update from WebView URL
-                if (autoUpdateManager != null && wv.getUrl() != null) {
-                    String wvUrl = wv.getUrl();
-                    if (wvUrl.startsWith("http")) {
-                        // Extract base URL (scheme + host + port)
-                        try {
-                            java.net.URL parsed = new java.net.URL(wvUrl);
-                            String base = parsed.getProtocol() + "://" + parsed.getHost()
-                                    + (parsed.getPort() > 0 ? ":" + parsed.getPort() : "");
-                            autoUpdateManager.setServerBaseUrl(base);
-                        } catch (Exception ignored) {}
-                    }
-                }
                 setupWebViewNetworkGuard();
             } else {
                 mainHandler.postDelayed(this::scheduleWebViewTransparent, 50);
@@ -670,12 +649,6 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
     public void onResume() {
         super.onResume();
         scheduleWebViewTransparent();
-        // Check if APK was downloaded while app was in background
-        if (autoUpdateManager != null) {
-            mainHandler.postDelayed(() -> {
-                if (autoUpdateManager != null) autoUpdateManager.checkPendingInstall();
-            }, 500);
-        }
         if (networkOverlayVisible) {
             return;
         }
@@ -941,35 +914,6 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
         private final MainActivity activity;
         FleetNativeBridge(MainActivity a) { this.activity = a; }
 
-        /** Trigger auto-update check from Java side (silent download) */
-        @JavascriptInterface
-        public void checkForUpdate() {
-            if (activity.autoUpdateManager != null) {
-                activity.runOnUiThread(() -> activity.autoUpdateManager.checkForUpdate());
-            }
-        }
-
-        /** Show install dialog if APK is already downloaded — callable from JS dashboard */
-        @JavascriptInterface
-        public void showInstallDialog() {
-            if (activity.autoUpdateManager != null) {
-                activity.runOnUiThread(() -> {
-                    if (!activity.isFinishing() && !activity.isDestroyed()) {
-                        activity.autoUpdateManager.showInstallDialog();
-                    }
-                });
-            }
-        }
-
-        /** Check if a pending APK install exists — returns "1" or "0" */
-        @JavascriptInterface
-        public String hasPendingInstall() {
-            if (activity.autoUpdateManager != null) {
-                return activity.autoUpdateManager.hasPendingInstall() ? "1" : "0";
-            }
-            return "0";
-        }
-
         /** Return current app version name (e.g. "2.0.8") — 100% reliable, reads PackageManager directly.
          *  Used by JS reportDeviceVersion() for admin version stats. Sync call (safe on JS thread). */
         @JavascriptInterface
@@ -1105,7 +1049,6 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
         }
         unregisterNetworkCallback();
         cancelDeadlineTimer();
-        if (autoUpdateManager != null) autoUpdateManager.onDestroy();
         super.onDestroy();
     }
 }

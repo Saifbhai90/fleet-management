@@ -4657,13 +4657,8 @@
             // Report current version to server (for admin stats)
             _reportDeviceVersion();
 
-            // New apps (v2.0.8+): Java handles auto-update via FleetAutoUpdateManager
-            if (window._fleetNative && typeof window._fleetNative.checkForUpdate === 'function') {
-                try { window._fleetNative.checkForUpdate(); } catch (e) { console.warn('[Update] Java check failed:', e); }
-                return;
-            }
-            // Old apps (v1.9.x): JS fallback — check server for update, show persistent banner
-            console.log('[Update] Java bridge not found, using JS fallback');
+            // JS-based update check — manual download & install from update banner
+            console.log('[Update] Using JS-based update check');
 
             // Restore banner from localStorage if update is pending (survives page navigation)
             var savedUpdate = localStorage.getItem('_fleetPendingUpdate');
