@@ -401,8 +401,10 @@
 
   sessionStorage.setItem(SESSION_KEY, '1');
 
-  if (window.FleetConfig.userId) { window.location.replace('/mobile-init');
-  return; }
+  if (window.FleetConfig.userId) {
+    window.location.replace('/mobile-init');
+    return;
+  }
 
   if (currentPath === '/mobile-init' || currentPath === '/login') return;
   window.location.replace('/mobile-init');

@@ -94,7 +94,15 @@ def login():
     if request.method == 'GET':
         _fetch_mode = (request.headers.get('Sec-Fetch-Mode') or '').lower()
         _is_fetch_follow = _fetch_mode in ('cors', 'no-cors', 'same-origin')
-        if session.get('user_id') and not _is_fetch_follow:
+        # If user was redirected here due to permission denial (show_no_access),
+        # clear the session and show the login page with the error message.
+        # This prevents the infinite redirect loop between /login and /dashboard.
+        if session.get('show_no_access'):
+            session.pop('show_no_access', None)
+            session.clear()
+            flash('You do not have access to the dashboard. Please contact admin.', 'danger')
+            # Fall through to render the login page
+        elif session.get('user_id') and not _is_fetch_follow:
             _nxt = _safe_login_next(request.args.get('next') or '')
             if _nxt:
                 return redirect(_nxt)
@@ -354,7 +362,17 @@ def login():
                 elif 'driver_attendance_report' in codes:
                     target_endpoint = 'driver_attendance_report'
                 else:
-                    target_endpoint = 'dashboard'
+                    # User has no dashboard access and no attendance permissions.
+                    # Block login instead of falling back to dashboard (which causes redirect loop).
+                    no_access_msg = (
+                        'Aap ko Dashboard ya kisi bhi module ki access nahi hai. '
+                        'Admin se apni permissions check karwayein.'
+                    )
+                    session.clear()
+                    if _login_wants_json():
+                        return _login_json(ok=False, error=no_access_msg)
+                    flash(no_access_msg, 'danger')
+                    return redirect(url_for('login'))
                 session['play_login_sound'] = 1
                 flash(f'Welcome, {session["user"]}!', 'success')
                 # Always land on the dashboard (or role landing) after login. We deliberately do NOT

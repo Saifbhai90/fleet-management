@@ -30,7 +30,7 @@ public class NotificationPollingService extends Service {
     private static final String KEY_USE_POLLING = "use_polling";
     private static final String KEY_SEEN_IDS = "polling_seen_notification_ids";
 
-    private static final String SERVER_BASE = "https://fleet-management-xdvj.onrender.com";
+    private static String SERVER_BASE = null;
     private static final long POLL_INTERVAL_MS = 2 * 60 * 1000;
     private static final long RETRY_AFTER_ERROR_MS = 5 * 60 * 1000;
     private static final String SYNC_CHANNEL_ID = "sync_service";
@@ -47,6 +47,31 @@ public class NotificationPollingService extends Service {
         super.onCreate();
         prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         seenIds = new HashSet<>(prefs.getStringSet(KEY_SEEN_IDS, new HashSet<>()));
+        if (SERVER_BASE == null) {
+            SERVER_BASE = readServerBaseUrl();
+        }
+    }
+
+    private String readServerBaseUrl() {
+        try {
+            java.io.InputStream is = getAssets().open("capacitor.config.json");
+            BufferedReader reader = new BufferedReader(new InputStreamReader(is));
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) sb.append(line);
+            reader.close();
+            JSONObject config = new JSONObject(sb.toString());
+            JSONObject server = config.optJSONObject("server");
+            if (server != null) {
+                String url = server.optString("url", null);
+                if (url != null && !url.isEmpty()) {
+                    return url.endsWith("/") ? url.substring(0, url.length() - 1) : url;
+                }
+            }
+        } catch (Exception e) {
+            Log.w("NotifPolling", "Could not read capacitor.config.json: " + e.getMessage());
+        }
+        return "https://fleet-management-xdvj.onrender.com";
     }
 
     @Override
@@ -189,7 +214,7 @@ public class NotificationPollingService extends Service {
         PendingIntent pi = PendingIntent.getActivity(this, id, intent,
                 PendingIntent.FLAG_ONE_SHOT | PendingIntent.FLAG_IMMUTABLE);
         NotificationCompat.Builder b = new NotificationCompat.Builder(this, NOTIF_CHANNEL_ID)
-                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setSmallIcon(R.mipmap.ic_launcher)
                 .setContentTitle(title)
                 .setContentText(body)
                 .setAutoCancel(true)
