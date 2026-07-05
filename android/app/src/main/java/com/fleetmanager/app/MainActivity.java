@@ -134,6 +134,12 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
     };
     private final Runnable splashMinRunnable = () -> {
         minSplashDone = true;
+        // Minimum branding time elapsed → swap native splash for the branded loading
+        // overlay IMMEDIATELY (don't wait for the 10s safety cap). This is the single
+        // transition point: native splash → branded loading → app page. No black gap.
+        if (!appPageLoaded) {
+            hideSplash();   // hideSplash() will then call showLoadingOverlay()
+        }
         evaluatePostSplashNetworkState();
     };
 
@@ -398,7 +404,10 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
                 || current.startsWith("data:");
     }
 
-    /** After splash: show overlay only when server probe failed (not while page is still loading). */
+    /** After splash: show the offline error only when we have NO connectivity at all OR
+     *  the WebView main frame also failed. A slow-but-alive server (probe timeout) must NOT
+     *  trigger the error screen if the page is still loading — the branded loading overlay
+     *  stays visible so the user keeps seeing progress instead of a false "No Internet". */
     private void evaluatePostSplashNetworkState() {
         if (!minSplashDone || appPageLoaded) {
             return;
@@ -406,9 +415,12 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
         if (Boolean.TRUE.equals(serverReachable)) {
             return;
         }
-        if (Boolean.FALSE.equals(serverReachable) || webViewMainFrameFailed) {
+        // Truly offline (no network) OR both probe + main frame failed → show error screen.
+        boolean trulyOffline = !hasNetworkConnectivity();
+        if (trulyOffline || (Boolean.FALSE.equals(serverReachable) && webViewMainFrameFailed)) {
             showNetworkOverlay(false);
         }
+        // Otherwise: keep the branded loading overlay running (slow network is still loading).
     }
 
     private void showNetworkOverlay(boolean connecting) {
@@ -463,17 +475,36 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
      *  the user never sees a black screen while the WebView keeps fetching. */
     private void hideSplash() {
         if (splashHidden) return;
-        if (getBridge() == null) return;
         splashHidden = true;
+        boolean pluginHideOk = false;
         try {
-            com.getcapacitor.PluginHandle handle = getBridge().getPlugin("SplashScreen");
-            if (handle != null && handle.getInstance() != null) {
-                // Use reflection to call hide() so we don't hard-depend on the plugin's package path
-                java.lang.reflect.Method m = handle.getInstance().getClass().getMethod("hide");
-                m.invoke(handle.getInstance());
+            if (getBridge() != null) {
+                com.getcapacitor.PluginHandle handle = getBridge().getPlugin("SplashScreen");
+                if (handle != null && handle.getInstance() != null) {
+                    // Try reflection first (version-agnostic), then the typed plugin as a backup.
+                    try {
+                        java.lang.reflect.Method m = handle.getInstance().getClass().getMethod("hide");
+                        m.invoke(handle.getInstance());
+                        pluginHideOk = true;
+                    } catch (NoSuchMethodException nsme) {
+                        // Fall through to typed cast below.
+                    }
+                }
             }
         } catch (Throwable ignored) {
-            // Best-effort; the launch-showDuration safety cap also covers this.
+            // Will be handled by the force-hide fallback below.
+        }
+        // Bulletproof fallback: even if the plugin path is wrong or reflection fails,
+        // the SplashScreen fragment is hosted in our activity — find and remove it so
+        // the splash can NEVER get stuck (the #1 cause of "hang" feel).
+        if (!pluginHideOk) {
+            try {
+                getSupportFragmentManager().executePendingTransactions();
+                android.app.Fragment legacy = getFragmentManager().findFragmentByTag("capacitor_splash_screen_fragment");
+                if (legacy != null) getFragmentManager().beginTransaction().remove(legacy).commitAllowingStateLoss();
+                androidx.fragment.app.Fragment frag = getSupportFragmentManager().findFragmentByTag("capacitor_splash_screen_fragment");
+                if (frag != null) getSupportFragmentManager().beginTransaction().remove(frag).commitAllowingStateLoss();
+            } catch (Throwable ignored) {}
         }
         // Splash just hid → show branded loading overlay until the app page finishes.
         // Only when the app is NOT yet loaded; otherwise markAppPageLoaded already handled it.
