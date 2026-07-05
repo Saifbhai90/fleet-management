@@ -1167,7 +1167,6 @@ def dashboard():
     if _can('dashboard_card_doc_health'):
         try:
             from datetime import timedelta as _td
-            from sqlalchemy import or_, and_
             _cutoff15 = today_dt + _td(days=15)
             # DB-level counts (was N+1: loaded every active driver into Python).
             # "expiring soon" = any doc in [today, today+15]; "already expired" = any doc before today.
