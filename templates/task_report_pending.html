@@ -2,10 +2,16 @@
 {% block title %}Pending Task Report{% endblock %}
 {% block content %}
 <div class="container-fluid px-2 px-md-3">
-  <div class="d-flex align-items-center mb-3 flex-wrap gap-2">
-    {% from 'partials/nav_back_button.html' import nav_back_button with context %}
-    {{ nav_back_button() }}
-    <h2 class="mb-0"><i class="bi bi-hourglass-split me-2 text-warning"></i>Pending Task Report</h2>
+  <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+      {% from 'partials/nav_back_button.html' import nav_back_button with context %}
+      {{ nav_back_button() }}
+      <h2 class="mb-0"><i class="bi bi-hourglass-split me-2 text-warning"></i>Pending Task Report</h2>
+    </div>
+    <div class="d-flex gap-2">
+      <button class="btn btn-outline-secondary btn-sm" id="btnPrintReport"><i class="bi bi-eye me-1"></i>Print / Preview</button>
+      <button class="btn btn-outline-success btn-sm" id="btnExportReport"><i class="bi bi-file-earmark-excel me-1"></i>Export</button>
+    </div>
   </div>
 
   <div class="alert alert-light border small py-2 mb-3">
@@ -63,7 +69,7 @@
   </div>
   <div class="card shadow border-0 rounded-3">
     <div class="table-responsive">
-      <table class="table table-sm table-hover align-middle mb-0">
+      <table class="table table-sm table-hover align-middle mb-0" id="pendingTaskTable">
         <thead class="table-light">
           <tr>
             <th>#</th>
@@ -139,5 +145,15 @@
     });
   }
 })();
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  if (window.fleetTableEnhance) window.fleetTableEnhance('pendingTaskTable');
+  if (window.fleetPrintExport) window.fleetPrintExport(
+    'pendingTaskTable',
+    'Pending Task Report — {{ view_date.strftime("%d-%m-%Y") }}',
+    'Pending_Task_Report_{{ view_date.strftime("%d-%m-%Y") }}.csv'
+  );
+});
 </script>
 {% endblock %}
