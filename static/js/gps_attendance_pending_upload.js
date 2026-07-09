@@ -312,14 +312,8 @@
     el.classList.remove('d-none');
 
     if (state === 'success') {
-      el.classList.add('fleet-gps-pending--success');
-      if (titleEl) titleEl.textContent = 'All records uploaded successfully';
-      if (detailEl) {
-        detailEl.textContent = '';
-        detailEl.innerHTML = '';
-        detailEl.classList.add('d-none');
-      }
-      if (actionEl) actionEl.classList.add('d-none');
+      /* Navbar pill already shows 'All uploaded' — hide the main banner */
+      el.classList.add('d-none');
       return;
     }
 
