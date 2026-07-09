@@ -42,6 +42,8 @@
   .umr-dt-date { display: inline; font-size: .68rem; color: #64748b; font-weight: 600; }
   .umr-dt-time { display: inline; font-size: .71rem; color: #0f172a; font-weight: 700; margin-left: .28rem; }
   .umr-task-id-chip { display: inline-block; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .68rem; font-weight: 700; color: #334155; background: #f1f5f9; border: 1px solid #e2e8f0; padding: .06rem .32rem; border-radius: 4px; letter-spacing: .02em; line-height: 1.2; }
+  a.umr-task-id-chip { color: #1d4ed8; background: #eff6ff; border-color: #bfdbfe; cursor: pointer; text-decoration: none; }
+  a.umr-task-id-chip:hover { background: #dbeafe; border-color: #93c5fd; text-decoration: underline; }
   .umr-task-id-empty { color: #cbd5e1; font-weight: 600; font-size: .72rem; }
   .umr-km-cell { text-align: right; font-weight: 800; font-variant-numeric: tabular-nums; color: #0f172a; white-space: nowrap; min-width: 48px; font-size: .74rem; }
   .umr-segments-table tfoot td { background: #f8fafc; border-top: 1px solid #e2e8f0 !important; font-size: .68rem; font-weight: 800; color: #334155; padding: .28rem .45rem; line-height: 1.2; white-space: nowrap; }
@@ -1000,18 +1002,24 @@ document.addEventListener('DOMContentLoaded', function () {
       renderHistoryMeta(data, focus || '');
       renderMovementBreakdown(data.totals || {});
 
+      var _vno = (historyState && historyState.vehicle_no) || '';
+      function taskIdLink(taskId) {
+        var id = String(taskId || '').trim();
+        if (!id || id === '-') return '<span class="umr-task-id-empty">-</span>';
+        return '<a href="#" class="red-taskid-link umr-task-id-chip" data-task-id="' + esc(id) + '" data-task-date="" data-vno="' + esc(_vno) + '">' + esc(id) + '</a>';
+      }
       fillRows(tasksBody, data.tasks || [], function (t) {
-        return '<tr><td>' + esc(t.task_id || '-') + '</td><td>' + esc(t.assign || '-') + '</td><td>' + esc(t.close || '-') + '</td><td>' + esc(t.running_km) + '</td></tr>';
+        return '<tr><td>' + taskIdLink(t.task_id) + '</td><td>' + esc(t.assign || '-') + '</td><td>' + esc(t.close || '-') + '</td><td>' + esc(t.running_km) + '</td></tr>';
       }, 4);
       fillRows(returnBody, data.return_windows || [], function (r) {
-        return '<tr><td>' + esc(r.task_id || '-') + '</td><td>' + esc(r.start || '-') + '</td><td>' + esc(r.end || '-') + '</td><td>' + esc(r.km) + '</td><td>' + esc(reasonText(r.reason)) + '</td></tr>';
+        return '<tr><td>' + taskIdLink(r.task_id) + '</td><td>' + esc(r.start || '-') + '</td><td>' + esc(r.end || '-') + '</td><td>' + esc(r.km) + '</td><td>' + esc(reasonText(r.reason)) + '</td></tr>';
       }, 5);
       fillRows(segBody, data.segments || [], function (s) {
         var label = s.label || 'without_task';
         var km = parseFloat(s.km) || 0;
         return '<tr class="' + segRowClass(label) + '" data-seg-label="' + esc(label) + '" data-seg-km="' + esc(km) + '">'
           + '<td>' + segBadge(label) + '</td>'
-          + '<td>' + formatTaskIdCell(s.task_id) + '</td>'
+          + '<td>' + taskIdLink(s.task_id) + '</td>'
           + '<td>' + formatDateTimeCell(s.start) + '</td>'
           + '<td>' + formatDateTimeCell(s.end) + '</td>'
           + '<td class="umr-km-cell">' + esc(fmtKm(km)) + '</td>'
@@ -1051,4 +1059,6 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 });
 </script>
+
+{% include 'includes/emg_task_detail_panel.html' %}
 {% endblock %}
