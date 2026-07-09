@@ -685,10 +685,12 @@
       if (!autoVal && arr.length > 0) autoVal = String(arr[0].id);
       var isAutoLocked = districtSelect.disabled && projectSelect.disabled && vehicleSelect.disabled;
       syncTS(driverSelect, opts, isAutoLocked);
-      if (autoVal && driverSelect.tomselect) driverSelect.tomselect.setValue(autoVal, true);
+      if (autoVal && driverSelect.tomselect) {
+        driverSelect.tomselect.setValue(autoVal, true);
+        onDriverChange();
+      }
       return refreshAttendanceGate();
     }).then(function() {
-      if ((driverSelect.tomselect ? driverSelect.tomselect.getValue() : driverSelect.value) && parkingLat.value && parkingLng.value) fetchLocation();
       refreshCheckinMediaPanel();
     }).catch(function() {
       refreshCheckinMediaPanel();
