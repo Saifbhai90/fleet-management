@@ -1,5 +1,5 @@
 {# Shared: Task ID click → Emergency Task detail (same API as Red Task Report list). #}
-<div id="redTaskDetailPanel" class="card shadow-lg border-danger d-none" style="position:fixed;top:120px;left:50%;transform:translateX(-50%);width:92%;max-width:900px;z-index:1060;box-shadow:0 8px 32px rgba(0,0,0,.25)!important;">
+<div id="redTaskDetailPanel" class="card shadow-lg border-danger d-none" style="position:fixed;top:120px;left:50%;transform:translateX(-50%);width:92%;max-width:900px;z-index:9999;box-shadow:0 8px 32px rgba(0,0,0,.25)!important;">
   <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center py-2">
     <h6 class="mb-0"><i class="bi bi-clipboard2-data me-2"></i>Task Detail — <span id="redTaskDetailTitle"></span></h6>
     <button type="button" class="btn-close btn-close-white" id="redTaskDetailCloseBtn"></button>
@@ -60,12 +60,16 @@
     var table = document.getElementById('redTaskDetailTable');
     if (!panel || !loading || !empty || !table) return;
 
+    /* Move to document.body to escape Bootstrap modal stacking context */
+    if (panel.parentNode !== document.body) {
+      document.body.appendChild(panel);
+    }
+
     document.getElementById('redTaskDetailTitle').textContent = taskId || 'Task';
     loading.classList.remove('d-none');
     empty.classList.add('d-none');
     table.classList.add('d-none');
     panel.classList.remove('d-none');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
 
     var qs = new URLSearchParams({ task_id: taskId, task_date: taskDate, vehicle_no: vno });
     fetch('/api/task-report/emg-task-detail?' + qs.toString())

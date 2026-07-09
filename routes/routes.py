@@ -4500,6 +4500,7 @@ def _build_unauthorized_movement_timeline(vehicle, from_date, to_date):
             continue
         tasks.append({
             'task_id': emg.task_id_ext or '',
+            'category': emg.category or '',
             'assign_dt': assign_dt,
             'close_dt': close_dt,
             'running_km': 0.0,
@@ -4575,6 +4576,7 @@ def _build_unauthorized_movement_timeline(vehicle, from_date, to_date):
                 'start': close_dt,
                 'end': stop_dt,
                 'task_id': t.get('task_id') or '',
+                'category': t.get('category') or '',
                 'km': round(ret_km, 2),
                 'reason': stop_reason,
             })
@@ -4585,16 +4587,19 @@ def _build_unauthorized_movement_timeline(vehicle, from_date, to_date):
     for adt, dist_val, _act in acts:
         label = 'without_task'
         task_id = ''
+        category = ''
         for t in tasks:
             if t['assign_dt'] <= adt <= t['close_dt']:
                 label = 'task_running'
                 task_id = t.get('task_id') or ''
+                category = t.get('category') or ''
                 break
         if label != 'task_running':
             for w in return_windows:
                 if w['start'] < adt < w['end']:
                     label = 'return_to_parking'
                     task_id = w.get('task_id') or ''
+                    category = w.get('category') or ''
                     break
 
         if label == 'task_running':
@@ -4604,7 +4609,7 @@ def _build_unauthorized_movement_timeline(vehicle, from_date, to_date):
         else:
             totals['without_task_km'] += dist_val
 
-        timeline_points.append({'dt': adt, 'km': dist_val, 'label': label, 'task_id': task_id})
+        timeline_points.append({'dt': adt, 'km': dist_val, 'label': label, 'task_id': task_id, 'category': category})
 
     # Merge into readable time segments.
     segments = []
@@ -4619,6 +4624,7 @@ def _build_unauthorized_movement_timeline(vehicle, from_date, to_date):
             current = {
                 'label': p['label'],
                 'task_id': p.get('task_id') or '',
+                'category': p.get('category') or '',
                 'start': p['dt'],
                 'end': p['dt'],
                 'km': p['km'],
@@ -4631,6 +4637,7 @@ def _build_unauthorized_movement_timeline(vehicle, from_date, to_date):
         'segments': [{
             'label': s['label'],
             'task_id': s['task_id'],
+            'category': s.get('category') or '',
             'start': s['start'].strftime(fmt) if s.get('start') else '-',
             'end': s['end'].strftime(fmt) if s.get('end') else '-',
             'km': round(float(s.get('km') or 0.0), 2),
@@ -4642,12 +4649,14 @@ def _build_unauthorized_movement_timeline(vehicle, from_date, to_date):
         },
         'tasks': [{
             'task_id': t.get('task_id') or '-',
+            'category': t.get('category') or '-',
             'assign': t['assign_dt'].strftime(fmt),
             'close': t['close_dt'].strftime(fmt),
             'running_km': round(float(t.get('running_km') or 0.0), 2),
         } for t in tasks],
         'return_windows': [{
             'task_id': w.get('task_id') or '-',
+            'category': w.get('category') or '',
             'start': w['start'].strftime(fmt),
             'end': w['end'].strftime(fmt),
             'km': round(float(w.get('km') or 0.0), 2),

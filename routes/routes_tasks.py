@@ -1272,11 +1272,10 @@ def api_emg_task_detail():
     rec = None
     if emg_id:
         rec = db.session.get(EmergencyTaskRecord, emg_id)
-    elif task_id and task_date:
-        q = EmergencyTaskRecord.query.filter(
-            EmergencyTaskRecord.task_id_ext == task_id,
-            EmergencyTaskRecord.task_date == task_date,
-        )
+    elif task_id:
+        q = EmergencyTaskRecord.query.filter(EmergencyTaskRecord.task_id_ext == task_id)
+        if task_date:
+            q = q.filter(EmergencyTaskRecord.task_date == task_date)
         if vehicle_no:
             q = q.filter(EmergencyTaskRecord.amb_reg_no == vehicle_no)
         rec = q.order_by(EmergencyTaskRecord.id.desc()).first()
