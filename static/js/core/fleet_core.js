@@ -1101,7 +1101,15 @@
                 if (r.style.display === 'none') r.remove();
                 else if (r.classList.contains('ft-upload-expand-row') || r.classList.contains('no-print')) r.remove();
             });
-            clone.querySelectorAll('.btn, button, a.btn').forEach(function(el){ el.closest('td') && el.closest('td').remove(); });
+            clone.querySelectorAll('.btn, button, a.btn').forEach(function(el){
+                var td = el.closest('td');
+                if (!td) return;
+                if (el.hasAttribute('data-task-report-odom')) {
+                    td.innerHTML = '';
+                } else {
+                    td.remove();
+                }
+            });
             clone.querySelectorAll('th[style], td[style]').forEach(function(el){ el.removeAttribute('style'); });
             clone.querySelectorAll('a').forEach(function(a){
                 var td = a.closest('td');

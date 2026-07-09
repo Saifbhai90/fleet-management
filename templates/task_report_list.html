@@ -971,18 +971,23 @@ document.addEventListener('click', function (e) {
         clone.querySelectorAll('thead tr.mwo-search-row').forEach(function(el){ el.remove(); });
         clone.querySelectorAll('tbody tr').forEach(function(r){ if(r.style.display==='none') r.remove(); });
         clone.querySelectorAll('.btn, button, a.btn').forEach(function(el){ 
-            var img = el.querySelector('img');
-            var badge = el.querySelector('.badge');
-            if(img) {
-                // Real image - make very small
-                img.style.maxHeight = '16px';
-                img.style.maxWidth = '16px';
-            } else if(badge) {
-                // No image placeholder - keep but make small
-                badge.style.fontSize = '10px';
-                badge.style.padding = '2px 4px';
+            var td = el.closest('td');
+            if (!td) return;
+            if (el.hasAttribute('data-task-report-odom')) {
+                var img = el.querySelector('img');
+                if (img) {
+                    td.innerHTML = '';
+                    img.style.maxHeight = '20px';
+                    img.style.maxWidth = '28px';
+                    img.style.objectFit = 'cover';
+                    img.style.display = 'block';
+                    img.style.margin = '0 auto';
+                    td.appendChild(img);
+                } else {
+                    td.innerHTML = '';
+                }
             } else {
-                el.closest('td') && el.closest('td').remove(); 
+                td.remove();
             }
         });
         clone.querySelectorAll('th[style], td[style]').forEach(function(el){ el.removeAttribute('style'); });
