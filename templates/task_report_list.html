@@ -1050,60 +1050,6 @@ document.addEventListener('click', function (e) {
         });
     }
     
-    if(exportBtn) {
-        exportBtn.addEventListener('click', function() {
-            exportBtn.disabled = true;
-            exportBtn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Loading...';
-
-            _showTaskReportProgress('Exporting CSV…', 'Loading report data…');
-            
-            _fetchAllTable(function(table){
-                if(!table) {
-                    _hideTaskReportProgress();
-                    exportBtn.disabled = false; 
-                    exportBtn.innerHTML = '<i class="bi bi-file-earmark-excel me-1"></i>Export'; 
-                    return; 
-                }
-                
-                _updateTaskReportProgress(45, 'Exporting CSV…', 'Building spreadsheet…');
-                var cleanTable = _cleanTaskReportTable(table);
-                
-                var headers = [];
-                cleanTable.querySelectorAll('thead th').forEach(function(th){
-                    headers.push('"' + th.textContent.trim().replace(/"/g,'""') + '"');
-                });
-                
-                var csvRows = [headers.join(',')];
-                cleanTable.querySelectorAll('tbody tr').forEach(function(tr){
-                    if(tr.cells.length <= 1) return;
-                    var cells = [];
-                    tr.querySelectorAll('td').forEach(function(td){
-                        cells.push('"' + td.textContent.trim().replace(/"/g,'""') + '"');
-                    });
-                    csvRows.push(cells.join(','));
-                });
-                
-                var foot = cleanTable.querySelector('tfoot tr');
-                if(foot){
-                    var fc = [];
-                    foot.querySelectorAll('td').forEach(function(td){ 
-                        fc.push('"' + td.textContent.trim().replace(/"/g,'""') + '"'); 
-                    });
-                    csvRows.push(fc.join(','));
-                }
-                
-                var csv = '\uFEFF' + csvRows.join('\n');
-                var blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
-                _updateTaskReportProgress(52, 'Saving CSV…', 'Writing file to device…');
-                _downloadTaskReportFile(blob, _taskReportFilename('csv')).finally(function() {
-                    exportBtn.disabled = false;
-                    exportBtn.innerHTML = '<i class="bi bi-file-earmark-excel me-1"></i>Export';
-                });
-            }, function(pct, titleText, detail) {
-                _updateTaskReportProgress(pct, titleText, detail);
-            });
-        });
-    }
 })();
 
 /* ── Mobile-friendly EMG & Tracker Detail Panels ── */
@@ -1533,18 +1479,28 @@ document.addEventListener('click', function (e) {
 })();
 </script>
 <script>
-document.addEventListener('DOMContentLoaded', function(){
-  if (window.fleetPrintExport) window.fleetPrintExport(
-    'taskReportTable',
-    'Vehicles Daily Task Report',
-    'Daily_Task_Report.csv',
-    {
-      columnOrder: ['#','Date','District','Tehsil','Parking','V.Type','Vehicle No','Start','Close','KMs Driven',"Task's",'EMG','Task Diff','Tracker KM','KMs Diff','% Diff'],
-      numberColumns: ['Start','Close','KMs Driven',"Task's",'EMG','Task Diff','Tracker KM','KMs Diff'],
-      dateColumns: ['Date']
-    }
-  );
-});
+(function() {
+  function _initTaskReportExport() {
+    if (!window.fleetPrintExport) return;
+    var exportBtn = document.getElementById('btnExportReport');
+    if (!exportBtn || exportBtn.dataset.fleetExportMenuBound === '1') return;
+    window.fleetPrintExport(
+      'taskReportTable',
+      'Vehicles Daily Task Report',
+      'Daily_Task_Report.csv',
+      {
+        columnOrder: ['#','Date','District','Tehsil','Parking','V.Type','Vehicle No','Start','Close','KMs Driven',"Task's",'EMG','Task Diff','Tracker KM','KMs Diff','% Diff'],
+        numberColumns: ['Start','Close','KMs Driven',"Task's",'EMG','Task Diff','Tracker KM','KMs Diff'],
+        dateColumns: ['Date']
+      }
+    );
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _initTaskReportExport);
+  } else {
+    _initTaskReportExport();
+  }
+})();
 </script>
 
 {% endblock %}
