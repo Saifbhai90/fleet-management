@@ -1532,5 +1532,19 @@ document.addEventListener('click', function (e) {
     
 })();
 </script>
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  if (window.fleetPrintExport) window.fleetPrintExport(
+    'taskReportTable',
+    'Vehicles Daily Task Report',
+    'Daily_Task_Report.csv',
+    {
+      columnOrder: ['#','Date','District','Tehsil','Parking','V.Type','Vehicle No','Start','Close','KMs Driven',"Task's",'EMG','Task Diff','Tracker KM','KMs Diff','% Diff'],
+      numberColumns: ['Start','Close','KMs Driven',"Task's",'EMG','Task Diff','Tracker KM','KMs Diff'],
+      dateColumns: ['Date']
+    }
+  );
+});
+</script>
 
 {% endblock %}
