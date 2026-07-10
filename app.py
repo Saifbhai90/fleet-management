@@ -108,7 +108,13 @@ else:
         'pool_size': 10,
         'max_overflow': 20,
         'pool_pre_ping': True,
-        'pool_recycle': 300,
+        'pool_recycle': 120,
+        'connect_args': {
+            'keepalives': 1,
+            'keepalives_idle': 30,
+            'keepalives_interval': 10,
+            'keepalives_count': 5,
+        },
     }
 app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50 MB max upload
