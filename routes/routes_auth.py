@@ -1298,6 +1298,11 @@ def form_control():
         att_s.checkout_reminder_minutes = int(request.form.get('checkout_reminder_minutes', 30) or 30)
         att_s.notify_on_attendance_mark = bool(request.form.get('notify_on_mark'))
         db.session.commit()
+        try:
+            from routes_attendance import _invalidate_attendance_settings_cache
+            _invalidate_attendance_settings_cache()
+        except Exception:
+            pass
         flash('Geofence & Notification settings saved.', 'success')
         return redirect(url_for('form_control'))
 

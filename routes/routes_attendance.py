@@ -110,10 +110,33 @@ from routes import (
 import re
 import uuid
 import zipfile
+import time as _time_module
 from sqlalchemy.orm import joinedload
 from models import MaintenanceExpense
 from utils import format_time_ampm, generate_excel_template
 from models import project_district
+
+# ── AttendanceSettings in-memory cache (5-min TTL) ──────────────────
+_att_settings_cache = None
+_att_settings_cache_ts = 0.0
+_ATT_SETTINGS_CACHE_TTL = 300.0  # seconds
+
+def _get_cached_attendance_settings():
+    """Return AttendanceSettings singleton from cache or DB. 5-minute TTL."""
+    global _att_settings_cache, _att_settings_cache_ts
+    now = _time_module.time()
+    if _att_settings_cache is not None and (now - _att_settings_cache_ts) < _ATT_SETTINGS_CACHE_TTL:
+        return _att_settings_cache
+    from models import AttendanceSettings as _AS
+    _att_settings_cache = _AS.query.first()
+    _att_settings_cache_ts = now
+    return _att_settings_cache
+
+def _invalidate_attendance_settings_cache():
+    """Call when AttendanceSettings is updated via admin form."""
+    global _att_settings_cache, _att_settings_cache_ts
+    _att_settings_cache = None
+    _att_settings_cache_ts = 0.0
 @app.route('/driver-attendance/')
 def driver_attendance_list():
     from auth_utils import get_user_context
@@ -3160,6 +3183,120 @@ def api_attendance_latest_gps_media():
     })
 
 
+@app.route('/api/attendance/gps-preflight')
+def api_attendance_gps_preflight():
+    """Combined pre-flight: submit_status + time_window + latest_media in one call.
+    Reduces 3 network requests to 1 on driver selection."""
+    driver_id = request.args.get('driver_id', type=int)
+    kind = (request.args.get('kind') or 'checkin').strip().lower()
+    if kind not in ('checkin', 'checkout'):
+        kind = 'checkin'
+    vehicle_id = request.args.get('vehicle_id', type=int)
+    project_id = request.args.get('project_id', type=int)
+
+    # --- submit_status ---
+    if kind == 'checkout':
+        submit_status = _gps_checkout_submit_status(driver_id, vehicle_id, project_id)
+    else:
+        submit_status = _gps_checkin_submit_status(driver_id, vehicle_id, project_id)
+    submit_status['kind'] = kind
+
+    # --- time_window ---
+    driver = db.session.get(Driver, driver_id) if driver_id else None
+    w = _get_effective_time_window(driver=driver, vehicle_id=vehicle_id, project_id=project_id)
+    def t_str(t):
+        return t.strftime('%H:%M') if t else None
+    mco_s = w.get('morning_checkout_start')
+    mco_e = w.get('morning_checkout_end')
+    nco_s = w.get('night_checkout_start')
+    nco_e = w.get('night_checkout_end')
+    if not mco_s and not mco_e:
+        mco_s = w.get('night_start')
+        mco_e = w.get('night_end')
+    if not nco_s and not nco_e:
+        nco_s = w.get('morning_start')
+        nco_e = w.get('morning_end')
+    time_window = {
+        'morning_start': t_str(w['morning_start']),
+        'morning_end': t_str(w['morning_end']),
+        'night_start': t_str(w['night_start']),
+        'night_end': t_str(w['night_end']),
+        'morning_checkout_start': t_str(mco_s),
+        'morning_checkout_end': t_str(mco_e),
+        'night_checkout_start': t_str(nco_s),
+        'night_checkout_end': t_str(nco_e),
+        'source': w.get('source', ''),
+        'allow_morning_driver_night_gps_checkin': _attendance_allow_morning_driver_night_gps_checkin(),
+        'allow_night_driver_morning_gps_checkin': _attendance_allow_night_driver_morning_gps_checkin(),
+        'capacity_one_checkin_mode': _attendance_capacity_one_checkin_mode(),
+        'auto_gps_checkout_on_window_end': _attendance_auto_gps_checkout_on_window_end_enabled(),
+    }
+
+    # --- latest_media ---
+    media_payload = None
+    if driver_id:
+        use_date = _attendance_local_date()
+        rec = (
+            DriverAttendance.query
+            .filter(
+                DriverAttendance.driver_id == driver_id,
+                DriverAttendance.attendance_date == use_date,
+            )
+            .order_by(DriverAttendance.attendance_segment.desc(), DriverAttendance.id.desc())
+            .first()
+        )
+        if rec:
+            media = _attendance_media_payload(rec, kind)
+            if kind == 'checkout' and not rec.check_in:
+                pending_text = 'Check IN pending'
+            elif kind == 'checkout' and rec.check_in and not rec.check_out:
+                pending_text = 'Check-out pending'
+            elif kind == 'checkin' and not rec.check_in:
+                pending_text = 'Check IN pending'
+            else:
+                pending_text = None if media.get('has_media') else ('Check IN pending' if kind == 'checkin' else 'Check-out pending')
+            media_payload = {
+                'ok': True,
+                'has_record': True,
+                'attendance_date': use_date.strftime('%d-%m-%Y'),
+                'kind': kind,
+                'check_in_time': rec.check_in.strftime('%H:%M') if rec.check_in else None,
+                'check_out_time': rec.check_out.strftime('%H:%M') if rec.check_out else None,
+                'status': rec.status or '',
+                'pending_text': pending_text,
+                'media': media,
+            }
+        else:
+            media_payload = {
+                'ok': True,
+                'has_record': False,
+                'pending_text': 'Check IN pending' if kind == 'checkin' else 'Check-out pending',
+                'attendance_date': use_date.strftime('%d-%m-%Y'),
+                'kind': kind,
+            }
+
+    # --- checkout-specific: has_gps_checkin + checkout window bounds ---
+    checkout_info = None
+    if kind == 'checkout' and driver_id:
+        today = _attendance_local_date()
+        open_rec = _open_gps_driver_attendance_for_checkout(driver_id, today)
+        checkout_info = {'has_gps_checkin': bool(open_rec)}
+        if open_rec:
+            co_s, co_e, cross = _gps_checkout_window_bounds(driver, w, open_rec.check_in)
+            checkout_info['effective_checkout_start'] = t_str(co_s)
+            checkout_info['effective_checkout_end'] = t_str(co_e)
+            checkout_info['checkout_cross_shift'] = cross
+            checkout_info['check_in_time'] = open_rec.check_in.strftime('%H:%M') if open_rec.check_in else None
+
+    return jsonify({
+        'ok': True,
+        'submit_status': submit_status,
+        'time_window': time_window,
+        'latest_media': media_payload,
+        'checkout_info': checkout_info,
+    })
+
+
 def _decode_attendance_photo_b64(photo_b64):
     """Decode a data-URL or raw base64 string into image bytes. Returns None if invalid."""
     import base64
@@ -3216,8 +3353,7 @@ def _geofence_check(lat_val, lng_val, parking_station_id):
     if not ps or ps.latitude is None or ps.longitude is None:
         return True, None, None
     dist = _geofence_distance_m(float(lat_val), float(lng_val), float(ps.latitude), float(ps.longitude))
-    from models import AttendanceSettings
-    _att_s = AttendanceSettings.query.first()
+    _att_s = _get_cached_attendance_settings()
     radius = _att_s.geofence_radius_meters if _att_s and _att_s.geofence_radius_meters else 150
     geofence_enabled = _att_s.geofence_enabled if _att_s else True
     if geofence_enabled and dist > radius:

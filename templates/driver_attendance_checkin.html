@@ -19,6 +19,7 @@
   .gps-attendance-page .status-box.warning { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; }
   .gps-attendance-page .status-box.info { background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; }
   .gps-attendance-page .status-box.neutral { background: #f8fafc; border: 1px solid #e2e8f0; color: #475569; }
+  .gps-attendance-page .status-box.danger { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
   .gps-attendance-page .btn-mark { font-size: 1rem; padding: 0.6rem 1.5rem; border-radius: 10px; font-weight: 600; box-shadow: 0 2px 8px rgba(22, 163, 74, 0.35); }
   .gps-attendance-page .btn-mark:disabled { box-shadow: none; }
   .gps-attendance-page .step-num { width: 22px; height: 22px; border-radius: 50%; background: linear-gradient(135deg, #0d6efd, #0a58ca); color: white; font-size: 0.7rem; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; margin-right: 6px; }
@@ -170,6 +171,9 @@
           <div id="checkinUploadStatus" class="status-box neutral mb-2">
             Upload status: Waiting for driver selection.
           </div>
+          <div id="uploadProgressBarWrap" class="progress mb-2 d-none" style="height: 22px;">
+            <div id="uploadProgressBar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%;">0%</div>
+          </div>
           <div id="checkinUploadMeta" class="upload-meta mb-2"></div>
           <button type="button" id="btnRetryPendingCheckin" class="btn btn-outline-primary btn-sm d-none">
             <i class="bi bi-arrow-clockwise me-1"></i>Retry Upload (Current Date)
@@ -314,6 +318,8 @@
   var checkinUploadMeta = document.getElementById('checkinUploadMeta');
   var btnRetryPendingCheckin = document.getElementById('btnRetryPendingCheckin');
   var checkinPreviewTapHint = document.getElementById('checkinPreviewTapHint');
+  var uploadProgressBarWrap = document.getElementById('uploadProgressBarWrap');
+  var uploadProgressBar = document.getElementById('uploadProgressBar');
   var checkinMediaSection = document.getElementById('checkinMediaSection');
   var checkinMediaSectionRule = document.getElementById('checkinMediaSectionRule');
 
@@ -355,6 +361,13 @@
     return res.status === 0;
   }
 
+  var _submitStatusDebounceTimer = null;
+  function fetchGpsSubmitStatusDebounced() {
+    if (_submitStatusDebounceTimer) clearTimeout(_submitStatusDebounceTimer);
+    _submitStatusDebounceTimer = setTimeout(fetchGpsSubmitStatus, 300);
+    return Promise.resolve();
+  }
+
   function fetchGpsSubmitStatus() {
     var driverId = selectedDriverId();
     var vId = vehicleSelect.tomselect ? vehicleSelect.tomselect.getValue() : vehicleSelect.value;
@@ -381,6 +394,63 @@
         gpsSubmitStatus = { can_submit: false, state: 'checking', message: '' };
         applyGpsSubmitStatusUI();
       });
+  }
+
+  function fetchPreflight() {
+    var driverId = selectedDriverId();
+    if (!driverId) {
+      gpsSubmitStatus = { can_submit: false, state: 'idle', message: '' };
+      applyGpsSubmitStatusUI();
+      return Promise.resolve();
+    }
+    var vId = vehicleSelect.tomselect ? vehicleSelect.tomselect.getValue() : vehicleSelect.value;
+    var pId = projectSelect.tomselect ? projectSelect.tomselect.getValue() : projectSelect.value;
+    var params = ['kind=checkin', 'driver_id=' + encodeURIComponent(driverId)];
+    if (vId) params.push('vehicle_id=' + encodeURIComponent(vId));
+    if (pId) params.push('project_id=' + encodeURIComponent(pId));
+    gpsSubmitStatus = { can_submit: false, state: 'checking', message: '' };
+    btnMarkAttendance.disabled = true;
+    return fetch('{{ url_for("api_attendance_gps_preflight") }}?' + params.join('&'))
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (!data || !data.ok) throw new Error('preflight');
+        if (data.submit_status) {
+          gpsSubmitStatus = data.submit_status;
+          if (gpsSubmitStatus.state === 'complete' && driverId) clearPendingCheckin(String(driverId));
+          applyGpsSubmitStatusUI();
+        }
+        if (data.time_window) {
+          timeWindow = data.time_window;
+        }
+        if (data.latest_media) {
+          _applyPreflightMedia(data.latest_media);
+        }
+        updateDistanceUI();
+      })
+      .catch(function() {
+        gpsSubmitStatus = { can_submit: false, state: 'checking', message: '' };
+        applyGpsSubmitStatusUI();
+      });
+  }
+
+  function _applyPreflightMedia(data) {
+    var driverId = selectedDriverId();
+    if (!driverId) return;
+    var pending = loadPendingCheckin(driverId);
+    if (pending && pending.photo_base64) return;
+    if (!data || !data.ok || !data.has_record || !data.media || !data.media.has_media) {
+      if (data && data.pending_text) setMediaFallback(data.pending_text);
+      else setMediaFallback('Check IN pending');
+      setUploadStatus('Upload status: No uploaded check-in image for current date.', 'neutral');
+      checkinUploadMeta.textContent = 'Media: Not available | Date: ' + (data && data.attendance_date || currentDateDmy());
+      return;
+    }
+    checkinPreviewImage.src = data.media.media_url || '';
+    checkinPreviewImage.classList.remove('d-none');
+    checkinPreviewFallback.classList.add('d-none');
+    if (checkinPreviewTapHint) checkinPreviewTapHint.classList.remove('d-none');
+    setUploadStatus('Upload status: Uploaded successfully.', 'success');
+    checkinUploadMeta.textContent = 'Media: Server uploaded | Check-in Time: ' + (data.check_in_time || '-') + ' | Date: ' + (data.attendance_date || currentDateDmy());
   }
 
   function refreshAttendanceGate() {
@@ -420,8 +490,8 @@
   }
 
   function jpegDataUrlMaxSide(canvas, maxSide, quality) {
-    maxSide = maxSide || 1280;
-    quality = (quality === undefined || quality === null) ? 0.72 : quality;
+    maxSide = maxSide || 960;
+    quality = (quality === undefined || quality === null) ? 0.65 : quality;
     var w = canvas.width;
     var h = canvas.height;
     if (!w || !h) return canvas.toDataURL('image/jpeg', quality);
@@ -559,6 +629,8 @@
     if (!GEOFENCE_ENABLED || dist <= RADIUS_METERS) locationStatus.classList.remove('neutral'), locationStatus.classList.add('success');
     if (GEOFENCE_ENABLED && dist > RADIUS_METERS) {
       btnMarkAttendance.disabled = true;
+      locationStatus.classList.remove('success', 'neutral', 'danger');
+      locationStatus.classList.add('warning');
       distanceMessage.classList.remove('d-none');
       timeWindowMessage.classList.add('d-none');
       return;
@@ -716,7 +788,7 @@
         driverSelect.tomselect.setValue(autoVal, true);
         onDriverChange();
       }
-      return refreshAttendanceGate();
+      return Promise.resolve();
     }).then(function() {
       refreshCheckinMediaPanel();
     }).catch(function() {
@@ -745,10 +817,8 @@
   }
 
   function onDriverChange() {
-    fetchTimeWindow();
-    refreshAttendanceGate().then(function() {
-      if (selectedDriverId() && parkingLat.value && parkingLng.value) fetchLocation();
-      refreshCheckinMediaPanel();
+    fetchPreflight().then(function() {
+      if (selectedDriverId() && parkingLat.value && parkingLng.value && !currentPosition) fetchLocation();
     });
   }
 
@@ -762,6 +832,7 @@
     parkingNotSetMessage.classList.add('d-none');
     locationSpinner.classList.remove('d-none');
     locationStatus.classList.add('d-none');
+    locationStatus.classList.remove('success', 'warning', 'neutral');
     btnRetryLocation.classList.add('d-none');
     distanceMessage.classList.add('d-none');
     timeWindowMessage.classList.add('d-none');
@@ -777,10 +848,11 @@
     }).catch(function(err) {
       locationSpinner.classList.add('d-none');
       if (err && (err.code === 'location_denied')) return;
-      locationStatus.classList.remove('d-none', 'success', 'neutral');
-      locationStatus.classList.add('warning');
+      locationStatus.classList.remove('d-none', 'success', 'neutral', 'warning');
+      locationStatus.classList.add('danger');
       locationText.textContent = 'Location nahi mili: ' + (err && err.code === 3 ? 'Timeout. Retry karein.' : (err && err.message ? err.message : 'Permission denied.'));
       btnRetryLocation.classList.remove('d-none');
+      btnRetryLocation.classList.add('btn-danger');
       btnMarkAttendance.disabled = true;
       timeWindowMessage.classList.add('d-none');
     });
@@ -788,6 +860,9 @@
 
   btnRetryLocation.addEventListener('click', fetchLocation);
   fetchTimeWindow();
+  if (parkingLat.value && parkingLng.value) {
+    fetchLocation();
+  }
 
   function selectedDriverId() {
     var raw = driverSelect.tomselect ? driverSelect.tomselect.getValue() : driverSelect.value;
@@ -946,34 +1021,40 @@
   }
 
   function postCheckinPayload(payload) {
-    var ctrl = new AbortController();
-    var timeoutId = setTimeout(function() { ctrl.abort(); }, 30000);
-    return fetch('{{ url_for("api_attendance_gps_checkin_submit") }}', {
-      method: 'POST',
-      headers: gpsJsonPostHeaders(),
-      body: JSON.stringify(payload),
-      signal: ctrl.signal,
-    }).then(function(r) {
-      return r.text().then(function(text) {
-        var body = {};
-        if (text) {
-          try {
-            body = JSON.parse(text);
-          } catch (e) {
-            body = { message: 'Server jawab parse nahi ho saka (HTTP ' + r.status + ').' };
-          }
-        } else if (!r.ok) {
-          body = { message: 'Server error (HTTP ' + r.status + ').' };
-        }
-        return { ok: r.ok, body: body };
-      });
-    }).catch(function(err) {
-      if (err && err.name === 'AbortError') {
-        return { ok: false, status: 0, body: { message: 'Upload timeout — network bohot slow hai. Retry karein.' } };
+    return new Promise(function(resolve, reject) {
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', '{{ url_for("api_attendance_gps_checkin_submit") }}');
+      var hdrs = gpsJsonPostHeaders();
+      for (var k in hdrs) { xhr.setRequestHeader(k, hdrs[k]); }
+      xhr.timeout = 30000;
+      if (uploadProgressBarWrap && uploadProgressBar) {
+        uploadProgressBarWrap.classList.remove('d-none');
+        uploadProgressBar.style.width = '0%';
+        uploadProgressBar.textContent = '0%';
       }
-      throw err;
-    }).finally(function() {
-      clearTimeout(timeoutId);
+      xhr.upload.addEventListener('progress', function(e) {
+        if (e.lengthComputable && uploadProgressBar) {
+          var pct = Math.round((e.loaded / e.total) * 100);
+          uploadProgressBar.style.width = pct + '%';
+          uploadProgressBar.textContent = pct + '%';
+        }
+      });
+      xhr.onload = function() {
+        if (uploadProgressBarWrap) uploadProgressBarWrap.classList.add('d-none');
+        var body = {};
+        try { body = JSON.parse(xhr.responseText || '{}'); }
+        catch (e) { body = { message: 'Server jawab parse nahi ho saka (HTTP ' + xhr.status + ').' }; }
+        resolve({ ok: xhr.status >= 200 && xhr.status < 300, body: body });
+      };
+      xhr.onerror = function() {
+        if (uploadProgressBarWrap) uploadProgressBarWrap.classList.add('d-none');
+        resolve({ ok: false, status: 0, body: { message: 'Network error. Retry karein.' } });
+      };
+      xhr.ontimeout = function() {
+        if (uploadProgressBarWrap) uploadProgressBarWrap.classList.add('d-none');
+        resolve({ ok: false, status: 0, body: { message: 'Upload timeout — network bohot slow hai. Retry karein.' } });
+      };
+      xhr.send(JSON.stringify(payload));
     });
   }
 
@@ -1333,7 +1414,7 @@
 
   document.addEventListener('fleet-gps-pending-changed', function() {
     refreshCheckinMediaPanel();
-    fetchGpsSubmitStatus();
+    fetchGpsSubmitStatusDebounced();
   });
   refreshCheckinMediaPanel();
 })();

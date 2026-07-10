@@ -175,32 +175,42 @@
     else if (kind === 'checkout') url = c.checkoutUrl;
     else if (kind === 'odometer') url = c.odometerUploadUrl;
     if (!url) return Promise.reject(new Error('missing_url'));
-    var ctrl = new AbortController();
-    var timeoutId = setTimeout(function() { ctrl.abort(); }, 30000);
-    return fetch(url, {
-      method: 'POST',
-      headers: gpsJsonPostHeaders(),
-      body: JSON.stringify(payload),
-      signal: ctrl.signal,
-    }).then(function (r) {
-      return r.text().then(function (text) {
-        var body = {};
-        if (text) {
-          try {
-            body = JSON.parse(text);
-          } catch (e) {
-            body = { message: 'Server response could not be parsed (HTTP ' + r.status + ').' };
-          }
-        }
-        return { ok: r.ok, status: r.status, body: body };
-      });
-    }).catch(function (err) {
-      if (err && err.name === 'AbortError') {
-        return { ok: false, status: 0, body: { message: 'Upload timeout — network slow.' } };
+    return new Promise(function(resolve, reject) {
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', url);
+      var hdrs = gpsJsonPostHeaders();
+      for (var k in hdrs) { xhr.setRequestHeader(k, hdrs[k]); }
+      xhr.timeout = 30000;
+      var barWrap = document.getElementById('uploadProgressBarWrap');
+      var bar = document.getElementById('uploadProgressBar');
+      if (barWrap && bar) {
+        barWrap.classList.remove('d-none');
+        bar.style.width = '0%';
+        bar.textContent = '0%';
       }
-      throw err;
-    }).finally(function () {
-      clearTimeout(timeoutId);
+      xhr.upload.addEventListener('progress', function(e) {
+        if (e.lengthComputable && bar) {
+          var pct = Math.round((e.loaded / e.total) * 100);
+          bar.style.width = pct + '%';
+          bar.textContent = pct + '%';
+        }
+      });
+      xhr.onload = function() {
+        if (barWrap) barWrap.classList.add('d-none');
+        var body = {};
+        try { body = JSON.parse(xhr.responseText || '{}'); }
+        catch (e) { body = { message: 'Server response could not be parsed (HTTP ' + xhr.status + ').' }; }
+        resolve({ ok: xhr.status >= 200 && xhr.status < 300, status: xhr.status, body: body });
+      };
+      xhr.onerror = function() {
+        if (barWrap) barWrap.classList.add('d-none');
+        resolve({ ok: false, status: 0, body: { message: 'Network error. Retry karein.' } });
+      };
+      xhr.ontimeout = function() {
+        if (barWrap) barWrap.classList.add('d-none');
+        resolve({ ok: false, status: 0, body: { message: 'Upload timeout — network slow.' } });
+      };
+      xhr.send(JSON.stringify(payload));
     });
   }
 
