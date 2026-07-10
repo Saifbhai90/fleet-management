@@ -1366,9 +1366,8 @@
         alert('Pehle photo capture karein.');
         return;
       }
-      btnConfirmUpload.disabled = true;
-      btnConfirmUpload.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Saving...';
-      document.getElementById('savingOverlay').style.display = 'flex';
+      closeCheckinPreviewModal();
+      setUploadStatus('Check-in upload ho rahi hai…', 'neutral');
       postCheckinPayload(payload).then(function(res) {
         if (res.ok && res.body && res.body.ok) {
           clearPendingCheckin(String(payload.driver_id));
@@ -1379,7 +1378,7 @@
           var errMsg = gpsApiJsonMessage(res.body) || 'Server rejected upload.';
           if (gpsAttendanceKeepPendingOnFailure(res)) {
             savePendingCheckin(String(payload.driver_id), payload);
-            setUploadStatus('Upload pending: ' + errMsg + ' Use Retry or wait for auto-retry.', 'warning');
+            setUploadStatus('Upload pending: ' + errMsg + ' Auto-retry active.', 'warning');
             btnRetryPendingCheckin.classList.remove('d-none');
           } else {
             clearPendingCheckin(String(payload.driver_id));
@@ -1392,13 +1391,8 @@
       }).catch(function() {
         savePendingCheckin(String(payload.driver_id), payload);
         refreshCheckinMediaPanel();
-        setUploadStatus('Upload pending: Network issue. Auto-retry will continue.', 'warning');
+        setUploadStatus('Upload pending: Network issue. Auto-retry active.', 'warning');
         btnRetryPendingCheckin.classList.remove('d-none');
-      }).finally(function() {
-        document.getElementById('savingOverlay').style.display = 'none';
-        btnConfirmUpload.disabled = false;
-        btnConfirmUpload.innerHTML = '<i class="bi bi-check2-circle me-2"></i>Check-in save karein';
-        closeCheckinPreviewModal();
       });
     });
   }
