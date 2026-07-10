@@ -539,6 +539,9 @@ document.addEventListener('DOMContentLoaded', function() {
     if (t) t.focus();
   }
 
+  /* Default no-op; overridden by slip template IIFE when active */
+  var recordSlipCorrectionBeforeSubmit = function() {};
+
   var fromSelect = document.getElementById('wsFromAccountSelect');
   var toSelect = document.getElementById('wsToAccountSelect');
   var pmSelect = document.getElementById('wsPaymentModeSelect');
@@ -1268,7 +1271,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
       /* Active-learning: fire corrected final values to the sample endpoint
          right before native form submit (best-effort, non-blocking). */
-      function recordSlipCorrectionBeforeSubmit() {
+      recordSlipCorrectionBeforeSubmit = function() {
         if (!slipSession || !slipSession.sampleId) return;
         if (!WST.recordCorrection) return;
         var vals = {
