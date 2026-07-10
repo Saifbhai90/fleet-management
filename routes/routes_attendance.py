@@ -3568,6 +3568,30 @@ def driver_attendance_checkin():
     auto_shift = scope_shifts_list[0] if len(scope_shifts_list) == 1 else None
 
     today = _attendance_local_date()
+    pre_drivers = []
+    auto_driver_id = None
+    pre_drivers_duty_off = {}
+    if auto_vehicle_id and auto_shift:
+        _pdq = Driver.query.filter(
+            Driver.vehicle_id == auto_vehicle_id,
+            Driver.shift == auto_shift,
+            Driver.status == 'Active',
+        )
+        if scope_projects:
+            _pdq = _pdq.filter(Driver.project_id.in_(scope_projects))
+        pre_drivers = _pdq.order_by(Driver.name).all()
+        if pre_drivers:
+            for v in _scope_vehs:
+                if v.id == auto_vehicle_id and v.driver_id:
+                    for d in pre_drivers:
+                        if d.id == v.driver_id:
+                            auto_driver_id = d.id
+                            break
+                    break
+            if not auto_driver_id:
+                auto_driver_id = pre_drivers[0].id
+            pre_drivers_duty_off = {d.id: _driver_marked_duty_off_no_checkin(d.id, today) for d in pre_drivers}
+
     if request.method == 'POST':
         driver_id = request.form.get('driver_id', type=int)
         parking_station_id = request.form.get('parking_station_id', type=int)
@@ -3692,6 +3716,8 @@ def driver_attendance_checkin():
         all_vehicles_by_project=all_vehicles_by_project,
         geofence_radius=_geofence_radius,
         geofence_enabled=_geofence_enabled,
+        pre_drivers=pre_drivers, auto_driver_id=auto_driver_id,
+        pre_drivers_duty_off=pre_drivers_duty_off,
         **_nav_back_ctx(url_for('driver_attendance_list'), show_without_nav_from=True),
     )
 
@@ -3758,6 +3784,28 @@ def driver_attendance_checkout():
     auto_shift = scope_shifts_list[0] if len(scope_shifts_list) == 1 else None
 
     today = _attendance_local_date()
+    pre_drivers = []
+    auto_driver_id = None
+    if auto_vehicle_id and auto_shift:
+        _pdq = Driver.query.filter(
+            Driver.vehicle_id == auto_vehicle_id,
+            Driver.shift == auto_shift,
+            Driver.status == 'Active',
+        )
+        if scope_projects:
+            _pdq = _pdq.filter(Driver.project_id.in_(scope_projects))
+        pre_drivers = _pdq.order_by(Driver.name).all()
+        if pre_drivers:
+            for v in _scope_vehs:
+                if v.id == auto_vehicle_id and v.driver_id:
+                    for d in pre_drivers:
+                        if d.id == v.driver_id:
+                            auto_driver_id = d.id
+                            break
+                    break
+            if not auto_driver_id:
+                auto_driver_id = pre_drivers[0].id
+
     if request.method == 'POST':
         driver_id = request.form.get('driver_id', type=int)
         parking_station_id = request.form.get('parking_station_id', type=int)
@@ -3868,6 +3916,7 @@ def driver_attendance_checkout():
         all_vehicles_by_project=all_vehicles_by_project,
         geofence_radius=_geofence_radius,
         geofence_enabled=_geofence_enabled,
+        pre_drivers=pre_drivers, auto_driver_id=auto_driver_id,
         **_nav_back_ctx(url_for('driver_attendance_list'), show_without_nav_from=True),
     )
 

@@ -122,8 +122,11 @@
             </div>
             <div class="col-md-6 field-row">
               <label class="form-label"><span class="step-num">6</span>Driver</label>
-              <select id="driverSelect" class="form-select form-select-sm search-select" disabled required data-placeholder="Search driver...">
+              <select id="driverSelect" class="form-select form-select-sm search-select" {% if not auto_driver_id %}disabled{% endif %} required data-placeholder="Search driver...">
                 <option value="">-- Select Driver --</option>
+                {% for d in pre_drivers %}
+                <option value="{{ d.id }}" {% if d.id == auto_driver_id %}selected{% endif %}>{{ d.name }} ({{ d.driver_id or '' }})</option>
+                {% endfor %}
               </select>
             </div>
           </div>
@@ -317,6 +320,7 @@
   var vehiclesData = {{ pre_vehicles_data | tojson }};
   var allVehiclesByProject = {{ all_vehicles_by_project | tojson }};
   var serverAutoShift = {{ auto_shift | tojson }};
+  var serverAutoDriverId = {{ auto_driver_id | tojson }};
   var timeWindow = {};
   var hasGpsCheckin = false;
   var effectiveCheckoutStart = null;
@@ -647,6 +651,7 @@
   attachDistrictProjectHandlers();
 
   function onProjectChange() {
+    serverAutoDriverId = null;
     var id = projectSelect.tomselect ? projectSelect.tomselect.getValue() : projectSelect.value;
     parkingDisplay.value = ''; parkingId.value = ''; parkingLat.value = ''; parkingLng.value = '';
     parkingCoords = null; vehiclesData = []; parkingNotSetMessage.classList.add('d-none');
@@ -670,7 +675,7 @@
     }
   }
 
-  vehicleSelect.addEventListener('change', function() { onVehicleChange(); });
+  vehicleSelect.addEventListener('change', function() { serverAutoDriverId = null; onVehicleChange(); });
 
   function onVehicleChange() {
     var val = vehicleSelect.tomselect ? vehicleSelect.tomselect.getValue() : vehicleSelect.value;
@@ -694,7 +699,7 @@
     loadDrivers();
   }
 
-  shiftSelect.addEventListener('change', function() { onShiftChange(); });
+  shiftSelect.addEventListener('change', function() { serverAutoDriverId = null; onShiftChange(); });
 
   function onShiftChange() {
     loadDrivers();
@@ -709,6 +714,22 @@
       var attempt = retryCount || 0;
       if (attempt < 20) { setTimeout(function() { loadDrivers(attempt + 1); }, 50); return; }
       resetField(driverSelect, [], true);
+      refreshCheckoutMediaPanel();
+      return;
+    }
+    // Server-side pre-populated drivers — no API call needed
+    if (serverAutoDriverId) {
+      if (!driverSelect.tomselect) {
+        var attempt = retryCount || 0;
+        if (attempt < 20) { setTimeout(function() { loadDrivers(attempt + 1); }, 50); return; }
+      }
+      var isAutoLocked = districtSelect.disabled && projectSelect.disabled && vehicleSelect.disabled;
+      if (driverSelect.tomselect) {
+        driverSelect.tomselect.enable();
+        driverSelect.tomselect.setValue(String(serverAutoDriverId), true);
+        onDriverChange();
+      }
+      if (isAutoLocked && driverSelect.tomselect) driverSelect.tomselect.disable();
       refreshCheckoutMediaPanel();
       return;
     }
