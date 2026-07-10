@@ -701,11 +701,13 @@
     if (currentPosition && parkingCoords) updateDistanceUI();
   }
 
-  function loadDrivers() {
+  function loadDrivers(retryCount) {
     var projectId = projectSelect.tomselect ? projectSelect.tomselect.getValue() : projectSelect.value;
     var vehicleId = vehicleSelect.tomselect ? vehicleSelect.tomselect.getValue() : vehicleSelect.value;
     var shift = shiftSelect.tomselect ? shiftSelect.tomselect.getValue() : shiftSelect.value;
     if (!projectId || !vehicleId || !shift) {
+      var attempt = retryCount || 0;
+      if (attempt < 20) { setTimeout(function() { loadDrivers(attempt + 1); }, 50); return; }
       resetField(driverSelect, [], true);
       refreshCheckoutMediaPanel();
       return;
