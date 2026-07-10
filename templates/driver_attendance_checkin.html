@@ -249,13 +249,24 @@
   <input type="hidden" name="project_id" id="formProjectId">
 </form>
 
-<div id="savingOverlay" class="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center" style="z-index: 9999; background: rgba(0,0,0,0.45); display: none !important;">
-  <div class="bg-white rounded-4 shadow-lg px-4 py-4 text-center" style="min-width: 260px; max-width: 88vw;">
-    <p id="savingOverlayStatus" class="fw-semibold mb-3" style="font-size:1rem;">Check-in upload ho rahi hai…</p>
-    <div class="progress mb-2" style="height: 18px; border-radius: 9px;">
-      <div id="savingOverlayBar" class="progress-bar progress-bar-striped progress-bar-animated bg-success" role="progressbar" style="width: 0%; border-radius: 9px; transition: width 0.2s;">0%</div>
-    </div>
-    <small id="savingOverlayHint" class="text-muted">Please wait…</small>
+<style>
+#savingOverlay { display: none; }
+#savingOverlay.ov-active { display: flex !important; }
+#savingOverlayCard { background: #fff; border-radius: 20px; padding: 28px 32px 24px; min-width: 280px; max-width: 90vw; box-shadow: 0 8px 40px rgba(0,0,0,0.22); text-align: center; }
+#savingOverlayIcon { font-size: 2.2rem; margin-bottom: 10px; line-height: 1; }
+#savingOverlayStatus { font-size: 1.05rem; font-weight: 600; color: #1a1a2e; margin-bottom: 16px; }
+#savingOverlayTrack { background: #e9ecef; border-radius: 99px; height: 10px; overflow: hidden; margin-bottom: 8px; }
+#savingOverlayFill { height: 100%; border-radius: 99px; background: linear-gradient(90deg,#28a745,#20c997); width: 0%; transition: width 0.35s ease; }
+#savingOverlayPct { font-size: 0.82rem; color: #6c757d; font-weight: 500; }
+#savingOverlayHint { font-size: 0.78rem; color: #adb5bd; margin-top: 4px; display: block; }
+</style>
+<div id="savingOverlay" class="position-fixed top-0 start-0 w-100 h-100 align-items-center justify-content-center" style="z-index: 9999; background: rgba(10,10,30,0.52); backdrop-filter: blur(3px);">
+  <div id="savingOverlayCard">
+    <div id="savingOverlayIcon">⚡</div>
+    <div id="savingOverlayStatus">Check-in upload ho rahi hai…</div>
+    <div id="savingOverlayTrack"><div id="savingOverlayFill"></div></div>
+    <div id="savingOverlayPct">0%</div>
+    <span id="savingOverlayHint">Please wait…</span>
   </div>
 </div>
 
@@ -1361,37 +1372,52 @@
       }
       closeCheckinPreviewModal();
       var _ovEl = document.getElementById('savingOverlay');
-      var _ovBar = document.getElementById('savingOverlayBar');
+      var _ovFill = document.getElementById('savingOverlayFill');
+      var _ovPct = document.getElementById('savingOverlayPct');
       var _ovStatus = document.getElementById('savingOverlayStatus');
       var _ovHint = document.getElementById('savingOverlayHint');
+      var _ovIcon = document.getElementById('savingOverlayIcon');
+      var _animPct = 0; var _animTarget = 0; var _animTimer = null;
+      function _animStep() {
+        if (_animPct < _animTarget) { _animPct = Math.min(_animPct + 1, _animTarget); _setFill(_animPct); }
+        if (_animPct < 100) _animTimer = setTimeout(_animStep, 18);
+      }
+      function _setFill(p) {
+        if (_ovFill) _ovFill.style.width = p + '%';
+        if (_ovPct) _ovPct.textContent = p + '%';
+      }
       function _showOverlay(pct, statusText, hint) {
-        if (_ovEl) { _ovEl.style.removeProperty('display'); _ovEl.style.display = 'flex'; }
-        if (_ovBar) { _ovBar.style.width = pct + '%'; _ovBar.textContent = pct + '%'; }
+        if (_ovEl) { _ovEl.classList.add('ov-active'); }
+        _animTarget = Math.min(pct, 90);
+        if (!_animTimer) _animStep();
         if (_ovStatus) _ovStatus.textContent = statusText || '';
         if (_ovHint) _ovHint.textContent = hint || '';
       }
-      function _hideOverlay(successText) {
-        if (_ovBar) { _ovBar.style.width = '100%'; _ovBar.textContent = '100%'; }
-        if (_ovStatus && successText) _ovStatus.textContent = successText;
-        if (_ovBar && successText) {
-          _ovBar.classList.remove('progress-bar-striped', 'progress-bar-animated', 'bg-success');
-          _ovBar.classList.add('bg-success');
+      function _hideOverlay(success) {
+        if (_animTimer) { clearTimeout(_animTimer); _animTimer = null; }
+        _animPct = 100; _setFill(100);
+        if (success) {
+          if (_ovStatus) _ovStatus.textContent = 'Check-in ho gayi! ✔';
+          if (_ovIcon) _ovIcon.textContent = '✅';
+          if (_ovFill) _ovFill.style.background = 'linear-gradient(90deg,#28a745,#20c997)';
+          if (_ovHint) _ovHint.textContent = '';
         }
-        setTimeout(function() { if (_ovEl) _ovEl.style.display = 'none'; }, successText ? 900 : 0);
+        setTimeout(function() { if (_ovEl) _ovEl.classList.remove('ov-active'); _setFill(0); _animPct = 0; _animTarget = 0; }, success ? 1200 : 0);
       }
       _showOverlay(0, 'Check-in upload ho rahi hai…', 'Please wait…');
       postCheckinPayload(payload, function(pct) {
-        _showOverlay(pct, 'Check-in upload ho rahi hai…', pct + '% complete…');
+        _animTarget = Math.min(pct, 90);
+        if (!_animTimer) _animStep();
       }).then(function(res) {
         if (res.ok && res.body && res.body.ok) {
           clearPendingCheckin(String(payload.driver_id));
           fetchGpsSubmitStatus();
           refreshCheckinMediaPanel();
-          _hideOverlay('Check-in successful — attendance lag gayi!');
+          _hideOverlay(true);
           setUploadStatus('Check-in successful — attendance lag gayi.', 'success');
         } else {
           var errMsg = gpsApiJsonMessage(res.body) || 'Server rejected upload.';
-          _hideOverlay(null);
+          _hideOverlay(false);
           if (gpsAttendanceKeepPendingOnFailure(res)) {
             savePendingCheckin(String(payload.driver_id), payload);
             setUploadStatus('Upload pending: ' + errMsg + ' Auto-retry active.', 'warning');
@@ -1405,7 +1431,7 @@
           }
         }
       }).catch(function() {
-        _hideOverlay(null);
+        _hideOverlay(false);
         savePendingCheckin(String(payload.driver_id), payload);
         refreshCheckinMediaPanel();
         setUploadStatus('Upload pending: Network issue. Auto-retry active.', 'warning');
