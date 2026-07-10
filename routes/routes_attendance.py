@@ -121,14 +121,22 @@ _att_settings_cache = None
 _att_settings_cache_ts = 0.0
 _ATT_SETTINGS_CACHE_TTL = 300.0  # seconds
 
+class _AttSettingsSnapshot:
+    """Plain-object snapshot of AttendanceSettings — not bound to any DB session."""
+    __slots__ = ('geofence_radius_meters', 'geofence_enabled')
+    def __init__(self, obj):
+        self.geofence_radius_meters = obj.geofence_radius_meters if obj else None
+        self.geofence_enabled = obj.geofence_enabled if obj else True
+
 def _get_cached_attendance_settings():
-    """Return AttendanceSettings singleton from cache or DB. 5-minute TTL."""
+    """Return AttendanceSettings snapshot from cache or DB. 5-minute TTL."""
     global _att_settings_cache, _att_settings_cache_ts
     now = _time_module.time()
     if _att_settings_cache is not None and (now - _att_settings_cache_ts) < _ATT_SETTINGS_CACHE_TTL:
         return _att_settings_cache
     from models import AttendanceSettings as _AS
-    _att_settings_cache = _AS.query.first()
+    obj = _AS.query.first()
+    _att_settings_cache = _AttSettingsSnapshot(obj) if obj else None
     _att_settings_cache_ts = now
     return _att_settings_cache
 
