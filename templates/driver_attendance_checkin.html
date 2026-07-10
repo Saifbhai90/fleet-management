@@ -249,10 +249,13 @@
   <input type="hidden" name="project_id" id="formProjectId">
 </form>
 
-<div id="savingOverlay" class="position-fixed top-0 start-0 w-100 h-100 align-items-center justify-content-center" style="z-index: 9999; background: rgba(255,255,255,0.9); display: none;">
-  <div class="text-center">
-    <div class="spinner-border text-success mb-2" role="status" style="width: 3rem; height: 3rem;"></div>
-    <p class="mb-0 fw-semibold text-dark">Saving attendance...</p>
+<div id="savingOverlay" class="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center" style="z-index: 9999; background: rgba(0,0,0,0.45); display: none !important;">
+  <div class="bg-white rounded-4 shadow-lg px-4 py-4 text-center" style="min-width: 260px; max-width: 88vw;">
+    <p id="savingOverlayStatus" class="fw-semibold mb-3" style="font-size:1rem;">Check-in upload ho rahi hai…</p>
+    <div class="progress mb-2" style="height: 18px; border-radius: 9px;">
+      <div id="savingOverlayBar" class="progress-bar progress-bar-striped progress-bar-animated bg-success" role="progressbar" style="width: 0%; border-radius: 9px; transition: width 0.2s;">0%</div>
+    </div>
+    <small id="savingOverlayHint" class="text-muted">Please wait…</small>
   </div>
 </div>
 
@@ -1020,38 +1023,28 @@
       });
   }
 
-  function postCheckinPayload(payload) {
-    return new Promise(function(resolve, reject) {
+  function postCheckinPayload(payload, onProgress) {
+    return new Promise(function(resolve) {
       var xhr = new XMLHttpRequest();
       xhr.open('POST', '{{ url_for("api_attendance_gps_checkin_submit") }}');
       var hdrs = gpsJsonPostHeaders();
       for (var k in hdrs) { xhr.setRequestHeader(k, hdrs[k]); }
       xhr.timeout = 30000;
-      if (uploadProgressBarWrap && uploadProgressBar) {
-        uploadProgressBarWrap.classList.remove('d-none');
-        uploadProgressBar.style.width = '0%';
-        uploadProgressBar.textContent = '0%';
-      }
       xhr.upload.addEventListener('progress', function(e) {
-        if (e.lengthComputable && uploadProgressBar) {
-          var pct = Math.round((e.loaded / e.total) * 100);
-          uploadProgressBar.style.width = pct + '%';
-          uploadProgressBar.textContent = pct + '%';
+        if (e.lengthComputable && typeof onProgress === 'function') {
+          onProgress(Math.round((e.loaded / e.total) * 100));
         }
       });
       xhr.onload = function() {
-        if (uploadProgressBarWrap) uploadProgressBarWrap.classList.add('d-none');
         var body = {};
         try { body = JSON.parse(xhr.responseText || '{}'); }
         catch (e) { body = { message: 'Server jawab parse nahi ho saka (HTTP ' + xhr.status + ').' }; }
         resolve({ ok: xhr.status >= 200 && xhr.status < 300, body: body });
       };
       xhr.onerror = function() {
-        if (uploadProgressBarWrap) uploadProgressBarWrap.classList.add('d-none');
         resolve({ ok: false, status: 0, body: { message: 'Network error. Retry karein.' } });
       };
       xhr.ontimeout = function() {
-        if (uploadProgressBarWrap) uploadProgressBarWrap.classList.add('d-none');
         resolve({ ok: false, status: 0, body: { message: 'Upload timeout — network bohot slow hai. Retry karein.' } });
       };
       xhr.send(JSON.stringify(payload));
@@ -1367,15 +1360,38 @@
         return;
       }
       closeCheckinPreviewModal();
-      setUploadStatus('Check-in upload ho rahi hai…', 'neutral');
-      postCheckinPayload(payload).then(function(res) {
+      var _ovEl = document.getElementById('savingOverlay');
+      var _ovBar = document.getElementById('savingOverlayBar');
+      var _ovStatus = document.getElementById('savingOverlayStatus');
+      var _ovHint = document.getElementById('savingOverlayHint');
+      function _showOverlay(pct, statusText, hint) {
+        if (_ovEl) { _ovEl.style.removeProperty('display'); _ovEl.style.display = 'flex'; }
+        if (_ovBar) { _ovBar.style.width = pct + '%'; _ovBar.textContent = pct + '%'; }
+        if (_ovStatus) _ovStatus.textContent = statusText || '';
+        if (_ovHint) _ovHint.textContent = hint || '';
+      }
+      function _hideOverlay(successText) {
+        if (_ovBar) { _ovBar.style.width = '100%'; _ovBar.textContent = '100%'; }
+        if (_ovStatus && successText) _ovStatus.textContent = successText;
+        if (_ovBar && successText) {
+          _ovBar.classList.remove('progress-bar-striped', 'progress-bar-animated', 'bg-success');
+          _ovBar.classList.add('bg-success');
+        }
+        setTimeout(function() { if (_ovEl) _ovEl.style.display = 'none'; }, successText ? 900 : 0);
+      }
+      _showOverlay(0, 'Check-in upload ho rahi hai…', 'Please wait…');
+      postCheckinPayload(payload, function(pct) {
+        _showOverlay(pct, 'Check-in upload ho rahi hai…', pct + '% complete…');
+      }).then(function(res) {
         if (res.ok && res.body && res.body.ok) {
           clearPendingCheckin(String(payload.driver_id));
           fetchGpsSubmitStatus();
           refreshCheckinMediaPanel();
+          _hideOverlay('Check-in successful — attendance lag gayi!');
           setUploadStatus('Check-in successful — attendance lag gayi.', 'success');
         } else {
           var errMsg = gpsApiJsonMessage(res.body) || 'Server rejected upload.';
+          _hideOverlay(null);
           if (gpsAttendanceKeepPendingOnFailure(res)) {
             savePendingCheckin(String(payload.driver_id), payload);
             setUploadStatus('Upload pending: ' + errMsg + ' Auto-retry active.', 'warning');
@@ -1389,6 +1405,7 @@
           }
         }
       }).catch(function() {
+        _hideOverlay(null);
         savePendingCheckin(String(payload.driver_id), payload);
         refreshCheckinMediaPanel();
         setUploadStatus('Upload pending: Network issue. Auto-retry active.', 'warning');
