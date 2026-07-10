@@ -348,7 +348,7 @@
     if (res.status === 400 || res.status === 404) {
       if (msg.indexOf('maximum') >= 0 || msg.indexOf('pehle') >= 0 || msg.indexOf('ho chuka') >= 0
           || msg.indexOf('allowed') >= 0 || msg.indexOf('duty off') >= 0 || msg.indexOf('pending') >= 0
-          || msg.indexOf('check-out') >= 0) {
+          || msg.indexOf('check-out') >= 0 || msg.indexOf('geofence') >= 0 || msg.indexOf('coordinates missing') >= 0) {
         return false;
       }
     }
@@ -728,7 +728,7 @@
 
   function fetchTimeWindow() {
     var params = [];
-    var dId = driverSelect.value || '';
+    var dId = selectedDriverId();
     var vId = vehicleSelect.tomselect ? vehicleSelect.tomselect.getValue() : vehicleSelect.value;
     var pId = projectSelect.tomselect ? projectSelect.tomselect.getValue() : projectSelect.value;
     if (dId) params.push('driver_id=' + dId);
@@ -747,7 +747,7 @@
   function onDriverChange() {
     fetchTimeWindow();
     refreshAttendanceGate().then(function() {
-      if (driverSelect.value && parkingLat.value && parkingLng.value) fetchLocation();
+      if (selectedDriverId() && parkingLat.value && parkingLng.value) fetchLocation();
       refreshCheckinMediaPanel();
     });
   }
@@ -946,10 +946,13 @@
   }
 
   function postCheckinPayload(payload) {
+    var ctrl = new AbortController();
+    var timeoutId = setTimeout(function() { ctrl.abort(); }, 30000);
     return fetch('{{ url_for("api_attendance_gps_checkin_submit") }}', {
       method: 'POST',
       headers: gpsJsonPostHeaders(),
       body: JSON.stringify(payload),
+      signal: ctrl.signal,
     }).then(function(r) {
       return r.text().then(function(text) {
         var body = {};
@@ -964,6 +967,13 @@
         }
         return { ok: r.ok, body: body };
       });
+    }).catch(function(err) {
+      if (err && err.name === 'AbortError') {
+        return { ok: false, status: 0, body: { message: 'Upload timeout — network bohot slow hai. Retry karein.' } };
+      }
+      throw err;
+    }).finally(function() {
+      clearTimeout(timeoutId);
     });
   }
 
@@ -1168,7 +1178,7 @@
     if (!cameraModalInstance) {
       cameraModalInstance = new bootstrap.Modal(cameraModal);
     }
-    formDriverId.value = driverSelect.value;
+    formDriverId.value = selectedDriverId();
     formParkingId.value = parkingId.value;
     formLat.value = currentPosition.coords.latitude;
     formLng.value = currentPosition.coords.longitude;
@@ -1232,7 +1242,7 @@
       return;
     }
     if (!currentPosition || !parkingCoords) return;
-    if (!driverSelect.value) { alert('Please select a driver.'); return; }
+    if (!selectedDriverId()) { alert('Please select a driver.'); return; }
     if (!parkingId.value || !parkingLat.value || !parkingLng.value) {
       alert('Parking coordinates set nahi. Admin se parking location set karwain.');
       return;

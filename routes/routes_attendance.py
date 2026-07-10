@@ -3197,6 +3197,34 @@ def _upload_attendance_image_bytes_with_fallback(data, folder='attendance'):
         return None
 
 
+def _geofence_distance_m(lat1, lon1, lat2, lon2):
+    """Haversine distance in meters between two lat/lng points."""
+    from math import radians, sin, cos, asin, sqrt
+    R = 6371000.0
+    phi1, phi2 = radians(lat1), radians(lat2)
+    dphi = radians(lat2 - lat1)
+    dlam = radians(lon2 - lon1)
+    a = sin(dphi / 2) ** 2 + cos(phi1) * cos(phi2) * sin(dlam / 2) ** 2
+    return R * 2 * asin(sqrt(a))
+
+
+def _geofence_check(lat_val, lng_val, parking_station_id):
+    """Returns (ok, message, distance_m). Enforces geofence radius from AttendanceSettings."""
+    if lat_val is None or lng_val is None:
+        return False, 'GPS location required hai — coordinates missing.', None
+    ps = db.session.get(ParkingStation, parking_station_id)
+    if not ps or ps.latitude is None or ps.longitude is None:
+        return True, None, None
+    dist = _geofence_distance_m(float(lat_val), float(lng_val), float(ps.latitude), float(ps.longitude))
+    from models import AttendanceSettings
+    _att_s = AttendanceSettings.query.first()
+    radius = _att_s.geofence_radius_meters if _att_s and _att_s.geofence_radius_meters else 150
+    geofence_enabled = _att_s.geofence_enabled if _att_s else True
+    if geofence_enabled and dist > radius:
+        return False, f'Geofence fail: {int(dist)}m door hain (limit {radius}m). Parking ke paas aayein.', int(dist)
+    return True, None, int(dist)
+
+
 def _upload_attendance_photo_from_form_or_b64(photo_file, photo_b64, *, required=True):
     """Resolve a werkzeug FileStorage and/or base64 payload to a stored path URL."""
     data = None
@@ -3231,6 +3259,13 @@ def api_attendance_gps_checkin_submit():
         if not driver:
             return jsonify({'ok': False, 'message': 'Invalid driver.'}), 404
         today = _attendance_local_date()
+
+        # --- Geofence + GPS coordinate validation ---
+        if lat_val is None or lng_val is None:
+            return jsonify({'ok': False, 'message': 'GPS location required hai — coordinates missing.'}), 400
+        geo_ok, geo_msg, _ = _geofence_check(lat_val, lng_val, parking_station_id)
+        if not geo_ok:
+            return jsonify({'ok': False, 'message': geo_msg}), 400
 
         # --- Delayed-sync: honour capture_date from payload (offline retry support) ---
         # JS sends capture_date (dd-mm-yyyy) = date when photo was actually taken.
@@ -3387,6 +3422,16 @@ def api_attendance_gps_checkout_submit():
         if not driver:
             return jsonify({'ok': False, 'message': 'Invalid driver.'}), 404
         today = _attendance_local_date()
+
+        # --- Geofence + GPS coordinate validation ---
+        if lat_val is None or lng_val is None:
+            return jsonify({'ok': False, 'message': 'GPS location required hai — coordinates missing.'}), 400
+        geo_ok, geo_msg, _ = _geofence_check(lat_val, lng_val, parking_station_id)
+        if not geo_ok:
+            return jsonify({'ok': False, 'message': geo_msg}), 400
+
+        if _driver_marked_duty_off_no_checkin(driver_id, today):
+            return jsonify({'ok': False, 'message': 'Driver duty off hai; GPS/Camera check-out allowed nahi.'}), 400
 
         # --- Delayed-sync: honour capture_date from payload (offline retry support) ---
         _raw_capture_date = (body.get('capture_date') or '').strip()
@@ -3612,6 +3657,13 @@ def driver_attendance_checkin():
         if not driver:
             flash('Invalid driver.', 'danger')
             return redirect(url_for('driver_attendance_checkin'))
+        if lat_val is None or lng_val is None:
+            flash('GPS location required hai — coordinates missing.', 'danger')
+            return redirect(url_for('driver_attendance_checkin'))
+        geo_ok, geo_msg, _ = _geofence_check(lat_val, lng_val, parking_station_id)
+        if not geo_ok:
+            flash(geo_msg, 'danger')
+            return redirect(url_for('driver_attendance_checkin'))
         if _driver_marked_duty_off_no_checkin(driver_id, today):
             flash(
                 'Aaj ki date par is driver ki duty Off mark hai — GPS/Camera se attendance nahi lag sakti.',
@@ -3619,10 +3671,6 @@ def driver_attendance_checkin():
             )
             return redirect(url_for('driver_attendance_checkin'))
         cap = _vehicle_capacity_value(driver.vehicle)
-        blocked_vehicle_first = _vehicle_pending_checkout_block_message(driver_id, driver.vehicle)
-        if blocked_vehicle_first:
-            flash(blocked_vehicle_first, 'warning')
-            return redirect(url_for('driver_attendance_checkin'))
         if _driver_has_open_segment(driver_id, today):
             flash(
                 'Pehle Mark Attendance check-out complete karein — check-out pending session hai.',
@@ -3656,7 +3704,7 @@ def driver_attendance_checkin():
             photo_path = _upload_attendance_photo_from_form_or_b64(
                 photo if (photo and photo.filename) else None,
                 b64 or None,
-                required=False,
+                required=True,
             )
         except Exception:
             flash('Image upload failed. Please check your internet and try taking attendance again.', 'danger')
@@ -3826,6 +3874,13 @@ def driver_attendance_checkout():
         if not driver:
             flash('Invalid driver.', 'danger')
             return redirect(url_for('driver_attendance_checkout'))
+        if lat_val is None or lng_val is None:
+            flash('GPS location required hai — coordinates missing.', 'danger')
+            return redirect(url_for('driver_attendance_checkout'))
+        geo_ok, geo_msg, _ = _geofence_check(lat_val, lng_val, parking_station_id)
+        if not geo_ok:
+            flash(geo_msg, 'danger')
+            return redirect(url_for('driver_attendance_checkout'))
         existing = _open_gps_driver_attendance_for_checkout(driver_id, today)
         if not existing:
             flash(
@@ -3854,29 +3909,25 @@ def driver_attendance_checkout():
             photo_path = _upload_attendance_photo_from_form_or_b64(
                 photo if (photo and photo.filename) else None,
                 b64 or None,
-                required=False,
+                required=True,
             )
         except Exception:
             flash('Image upload failed. Please check your internet and try taking attendance again.', 'danger')
             return redirect(url_for('driver_attendance_checkout'))
-        if existing:
-            check_out_time = now.time()
-            is_overnight = (existing.attendance_date != today)
-            if not is_overnight and existing.check_in is not None and check_out_time <= existing.check_in:
-                flash('Check-out ka time check-in time se pehle ya barabar nahi ho sakta. Pehle check-in time check karein.', 'danger')
-                return redirect(url_for('driver_attendance_checkout'))
-            existing.check_out = check_out_time
-            existing.check_out_date = today
-            existing.check_out_latitude = lat_val
-            existing.check_out_longitude = lng_val
-            if photo_path:
-                existing.check_out_photo_path = photo_path
-            existing.updated_at = now
-            if not existing.remarks or 'GPS' not in (existing.remarks or ''):
-                existing.remarks = (existing.remarks or '').rstrip() + (' | Check-out GPS+Cam' if photo_path else ' | Check-out GPS')
-        else:
-            flash('Is driver ki aaj ki Check-in attendance maujood nahi. Pehle Check-in karein.', 'danger')
+        check_out_time = now.time()
+        is_overnight = (existing.attendance_date != today)
+        if not is_overnight and existing.check_in is not None and check_out_time <= existing.check_in:
+            flash('Check-out ka time check-in time se pehle ya barabar nahi ho sakta. Pehle check-in time check karein.', 'danger')
             return redirect(url_for('driver_attendance_checkout'))
+        existing.check_out = check_out_time
+        existing.check_out_date = today
+        existing.check_out_latitude = lat_val
+        existing.check_out_longitude = lng_val
+        if photo_path:
+            existing.check_out_photo_path = photo_path
+        existing.updated_at = now
+        if not existing.remarks or 'GPS' not in (existing.remarks or ''):
+            existing.remarks = (existing.remarks or '').rstrip() + (' | Check-out GPS+Cam' if photo_path else ' | Check-out GPS')
         try:
             db.session.commit()
             try:

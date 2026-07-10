@@ -1582,9 +1582,11 @@ def _gps_marked_attendance_row(rec):
     if not rec:
         return False
     rem = (rec.remarks or '') or ''
-    has_photo = bool((rec.check_in_photo_path or '').strip())
+    has_gps_coords = bool(
+        (rec.check_in_latitude is not None and rec.check_in_longitude is not None)
+    )
     has_remarks = 'GPS' in rem or 'Ye GPS' in rem or 'Camera' in rem or 'GPS+Cam' in rem
-    return bool(has_photo or has_remarks)
+    return bool(has_gps_coords and has_remarks)
 
 
 def _open_gps_driver_attendance_session(driver_id, today):
@@ -1605,24 +1607,25 @@ def _open_gps_driver_attendance_session(driver_id, today):
 
 
 def _open_gps_driver_attendance_for_checkout(driver_id, today):
-    """Today's open GPS-marked session, or overnight open session from yesterday."""
+    """Today's open GPS-marked session, or open session from up to 7 days back."""
     rec = _open_gps_driver_attendance_session(driver_id, today)
     if rec:
         return rec
-    yesterday = today - timedelta(days=1)
-    rows = (
-        DriverAttendance.query.filter(
-            DriverAttendance.driver_id == driver_id,
-            DriverAttendance.attendance_date == yesterday,
-            DriverAttendance.check_in.isnot(None),
-            DriverAttendance.check_out.is_(None),
+    for days_back in range(1, 8):
+        past_date = today - timedelta(days=days_back)
+        rows = (
+            DriverAttendance.query.filter(
+                DriverAttendance.driver_id == driver_id,
+                DriverAttendance.attendance_date == past_date,
+                DriverAttendance.check_in.isnot(None),
+                DriverAttendance.check_out.is_(None),
+            )
+            .order_by(DriverAttendance.attendance_segment.desc())
+            .all()
         )
-        .order_by(DriverAttendance.attendance_segment.desc())
-        .all()
-    )
-    for r in rows:
-        if _gps_marked_attendance_row(r):
-            return r
+        for r in rows:
+            if _gps_marked_attendance_row(r):
+                return r
     return None
 
 

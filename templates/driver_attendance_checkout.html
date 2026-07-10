@@ -327,7 +327,7 @@
   var effectiveCheckoutEnd = null;
   var checkoutCrossShift = false;
   var PENDING_PREFIX = 'gps-attendance:checkout:';
-  var gpsSubmitStatus = { can_submit: true, state: 'allowed', message: '' };
+  var gpsSubmitStatus = { can_submit: false, state: 'checking', message: '' };
   var attendanceActionMessage = document.getElementById('attendanceActionMessage');
 
   function gpsApiJsonMessage(body) {
@@ -341,7 +341,8 @@
     var msg = (gpsApiJsonMessage(res.body) || '').toLowerCase();
     if (res.status === 400 || res.status === 404) {
       if (msg.indexOf('maximum') >= 0 || msg.indexOf('pehle') >= 0 || msg.indexOf('ho chuka') >= 0
-          || msg.indexOf('allowed') >= 0 || msg.indexOf('nahi mila') >= 0 || msg.indexOf('check-in') >= 0) {
+          || msg.indexOf('allowed') >= 0 || msg.indexOf('nahi mila') >= 0 || msg.indexOf('check-in') >= 0
+          || msg.indexOf('geofence') >= 0 || msg.indexOf('coordinates missing') >= 0 || msg.indexOf('duty off') >= 0) {
         return false;
       }
     }
@@ -349,7 +350,7 @@
   }
 
   function fetchGpsSubmitStatus() {
-    var driverId = driverSelect.value;
+    var driverId = selectedDriverId();
     if (!driverId) {
       gpsSubmitStatus = { can_submit: false, state: 'idle', message: '' };
       applyGpsSubmitStatusUI();
@@ -363,14 +364,14 @@
     return fetch('{{ url_for("api_attendance_gps_submit_status") }}?' + params.join('&'))
       .then(function(r) { return r.json(); })
       .then(function(data) {
-        gpsSubmitStatus = data || { can_submit: true, state: 'allowed', message: '' };
+        gpsSubmitStatus = data || { can_submit: false, state: 'blocked', message: '' };
         if (gpsSubmitStatus.state === 'checkout_pending') hasGpsCheckin = true;
         if (gpsSubmitStatus.state === 'complete' || gpsSubmitStatus.state === 'no_checkin') hasGpsCheckin = false;
         if (gpsSubmitStatus.state === 'complete' && driverId) clearPendingCheckout(String(driverId));
         applyGpsSubmitStatusUI();
       })
       .catch(function() {
-        gpsSubmitStatus = { can_submit: true, state: 'allowed', message: '' };
+        gpsSubmitStatus = { can_submit: false, state: 'checking', message: '' };
         applyGpsSubmitStatusUI();
       });
   }
@@ -461,29 +462,6 @@
     return h * 60 + m;
   }
 
-  function isInTimeWindow(shift, win) {
-    var shiftLower = (shift || '').toLowerCase();
-    var start = null, end = null;
-    if (shiftLower === 'morning') {
-      start = win.morning_start ? minutesFromMidnight(win.morning_start) : null;
-      end = win.morning_end ? minutesFromMidnight(win.morning_end) : null;
-    } else if (shiftLower === 'night') {
-      start = win.night_start ? minutesFromMidnight(win.night_start) : null;
-      end = win.night_end ? minutesFromMidnight(win.night_end) : null;
-    }
-    if (start === null && end === null) return { inWindow: true, label: '' };
-    var now = new Date(Date.now() + (typeof _pktOffset!=='undefined'?_pktOffset:0));
-    var current = (typeof pktMinutesFromMidnight === 'function')
-      ? pktMinutesFromMidnight(now)
-      : (now.getHours() * 60 + now.getMinutes());
-    var inWindow = false;
-    var label = (shiftLower === 'morning') ? ('Morning: ' + (win.morning_start || '') + ' – ' + (win.morning_end || '')) : ('Night: ' + (win.night_start || '') + ' – ' + (win.night_end || ''));
-    if (start !== null && end !== null) {
-      inWindow = (end >= start) ? (current >= start && current <= end) : (current >= start || current <= end);
-    } else { inWindow = true; }
-    return { inWindow: inWindow, label: label };
-  }
-
   function isInCheckoutTimeWindow(shift, win) {
     var shiftLower = (shift || '').toLowerCase();
     var startKey, endKey, label;
@@ -559,7 +537,7 @@
     }
     distanceMessage.classList.add('d-none');
     /* Warning only when aaj na check-in na check-out (server: no_checkin). Hide if check-out already done (complete). */
-    if (driverSelect.value && gpsSubmitStatus.state === 'no_checkin') {
+    if (selectedDriverId() && gpsSubmitStatus.state === 'no_checkin') {
       btnMarkCheckout.disabled = true;
       noCheckinMessage.classList.remove('d-none');
       timeWindowMessage.classList.add('d-none');
@@ -586,7 +564,7 @@
   }
 
   function fetchHasGpsCheckin() {
-    var driverId = driverSelect.value;
+    var driverId = selectedDriverId();
     if (!driverId) {
       hasGpsCheckin = false;
       effectiveCheckoutStart = null;
@@ -763,7 +741,7 @@
 
   function fetchTimeWindow() {
     var params = [];
-    var dId = driverSelect.value || '';
+    var dId = selectedDriverId();
     var vId = vehicleSelect.tomselect ? vehicleSelect.tomselect.getValue() : vehicleSelect.value;
     var pId = projectSelect.tomselect ? projectSelect.tomselect.getValue() : projectSelect.value;
     if (dId) params.push('driver_id=' + dId);
@@ -782,7 +760,7 @@
   function onDriverChange() {
     hasGpsCheckin = false;
     fetchTimeWindow();
-    if (driverSelect.value && parkingLat.value && parkingLng.value) {
+    if (selectedDriverId() && parkingLat.value && parkingLng.value) {
       fetchHasGpsCheckin();
       fetchLocation();
     } else {
@@ -973,10 +951,13 @@
   }
 
   function postCheckoutPayload(payload) {
+    var ctrl = new AbortController();
+    var timeoutId = setTimeout(function() { ctrl.abort(); }, 30000);
     return fetch('{{ url_for("api_attendance_gps_checkout_submit") }}', {
       method: 'POST',
       headers: gpsJsonPostHeaders(),
       body: JSON.stringify(payload),
+      signal: ctrl.signal,
     }).then(function(r) {
       return r.text().then(function(text) {
         var body = {};
@@ -991,6 +972,13 @@
         }
         return { ok: r.ok, body: body };
       });
+    }).catch(function(err) {
+      if (err && err.name === 'AbortError') {
+        return { ok: false, status: 0, body: { message: 'Upload timeout — network bohot slow hai. Retry karein.' } };
+      }
+      throw err;
+    }).finally(function() {
+      clearTimeout(timeoutId);
     });
   }
 
@@ -1194,7 +1182,7 @@
     if (!cameraModalInstance) {
       cameraModalInstance = new bootstrap.Modal(cameraModal);
     }
-    formDriverId.value = driverSelect.value;
+    formDriverId.value = selectedDriverId();
     formParkingId.value = parkingId.value;
     formLat.value = currentPosition.coords.latitude;
     formLng.value = currentPosition.coords.longitude;
@@ -1254,7 +1242,7 @@
       return;
     }
     if (!currentPosition || !parkingCoords) return;
-    if (!driverSelect.value) { alert('Please select a driver.'); return; }
+    if (!selectedDriverId()) { alert('Please select a driver.'); return; }
     if (!parkingId.value || !parkingLat.value || !parkingLng.value) {
       alert('Parking coordinates set nahi. Admin se parking location set karwain.');
       return;

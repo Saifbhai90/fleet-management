@@ -154,7 +154,7 @@
     if (res.status >= 500) return true;
     var msg = (gpsApiJsonMessage(res.body) || '').toLowerCase();
     if (res.status === 400 || res.status === 404) {
-      var block = ['maximum', 'pehle', 'ho chuka', 'allowed', 'duty off', 'pending'];
+      var block = ['maximum', 'pehle', 'ho chuka', 'allowed', 'duty off', 'pending', 'geofence', 'coordinates missing'];
       if (kind === 'checkin') block.push('check-out');
       else if (kind === 'checkout') {
         block.push('check-in', 'nahi mila');
@@ -175,10 +175,13 @@
     else if (kind === 'checkout') url = c.checkoutUrl;
     else if (kind === 'odometer') url = c.odometerUploadUrl;
     if (!url) return Promise.reject(new Error('missing_url'));
+    var ctrl = new AbortController();
+    var timeoutId = setTimeout(function() { ctrl.abort(); }, 30000);
     return fetch(url, {
       method: 'POST',
       headers: gpsJsonPostHeaders(),
       body: JSON.stringify(payload),
+      signal: ctrl.signal,
     }).then(function (r) {
       return r.text().then(function (text) {
         var body = {};
@@ -191,6 +194,13 @@
         }
         return { ok: r.ok, status: r.status, body: body };
       });
+    }).catch(function (err) {
+      if (err && err.name === 'AbortError') {
+        return { ok: false, status: 0, body: { message: 'Upload timeout — network slow.' } };
+      }
+      throw err;
+    }).finally(function () {
+      clearTimeout(timeoutId);
     });
   }
 
