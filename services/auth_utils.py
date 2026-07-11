@@ -716,6 +716,8 @@ ALLOWED_AUTHED_ENDPOINTS = {
     'download_blob', 'upload_blob', 'download_vcard',
     'api_task_entry_default_date',
     'api_attendance_latest_gps_media',
+    'api_attendance_gps_preflight',
+    'api_attendance_gps_submit_status',
     'api_me',
     'image_proxy', 'r2_proxy',
     'reminder_add', 'reminder_delete', 'reminder_edit', 'reminder_list', 'reminder_toggle',
