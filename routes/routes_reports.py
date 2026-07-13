@@ -1492,7 +1492,11 @@ def report_uniform_sizes():
         drivers_q = drivers_q.filter(getattr(Driver, size_type) == size_filter)
     if missing_only:
         drivers_q = drivers_q.filter(
-            or_(Driver.shirt_size.is_(None), Driver.trouser_size.is_(None), Driver.jacket_size.is_(None))
+            or_(
+                or_(Driver.shirt_size.is_(None), Driver.shirt_size == ''),
+                or_(Driver.trouser_size.is_(None), Driver.trouser_size == ''),
+                or_(Driver.jacket_size.is_(None), Driver.jacket_size == ''),
+            )
         )
 
     # Sort options
@@ -1503,9 +1507,9 @@ def report_uniform_sizes():
     elif sort_by == 'missing':
         from sqlalchemy import case
         drivers_q = drivers_q.order_by(
-            case((Driver.shirt_size.is_(None), 0), else_=1),
-            case((Driver.trouser_size.is_(None), 0), else_=1),
-            case((Driver.jacket_size.is_(None), 0), else_=1),
+            case((or_(Driver.shirt_size.is_(None), Driver.shirt_size == ''), 0), else_=1),
+            case((or_(Driver.trouser_size.is_(None), Driver.trouser_size == ''), 0), else_=1),
+            case((or_(Driver.jacket_size.is_(None), Driver.jacket_size == ''), 0), else_=1),
             Driver.name,
         )
     else:
@@ -1571,6 +1575,53 @@ def report_uniform_sizes():
         pagination=pagination, per_page=per_page,
         **_nav_back_ctx(url_for('reports_index'), show_without_nav_from=True),
     )
+
+
+@app.route('/reports/uniform-sizes/update-size', methods=['POST'])
+def report_uniform_sizes_update_size():
+    """Inline update of a single uniform size field with history tracking."""
+    if not session.get('is_master'):
+        return jsonify({'ok': False, 'msg': 'Access denied'}), 403
+
+    import uuid
+    from models import DriverDocumentHistory
+    from driver_doc_history_utils import ensure_driver_doc_history_schema
+
+    driver_id = request.form.get('driver_id', type=int)
+    field_name = (request.form.get('field') or '').strip()
+    new_value = (request.form.get('value') or '').strip()
+
+    if not driver_id or field_name not in ('shirt_size', 'trouser_size', 'jacket_size'):
+        return jsonify({'ok': False, 'msg': 'Invalid request'}), 400
+
+    driver = db.session.get(Driver, driver_id)
+    if not driver:
+        return jsonify({'ok': False, 'msg': 'Driver not found'}), 404
+
+    old_value = getattr(driver, field_name, '') or ''
+
+    if str(old_value) == str(new_value):
+        return jsonify({'ok': True, 'msg': 'No change', 'value': new_value})
+
+    ensure_driver_doc_history_schema(db.session)
+
+    updated_by = session.get('user_id_display') or session.get('user_id') or 'system'
+    batch_id = str(uuid.uuid4())
+
+    db.session.add(DriverDocumentHistory(
+        batch_id=batch_id,
+        driver_id=driver.id,
+        update_type='bank_uniform',
+        field_name=field_name,
+        old_value=str(old_value),
+        new_value=str(new_value),
+        updated_by=str(updated_by),
+        update_source='uniform_report',
+    ))
+    setattr(driver, field_name, new_value or None)
+    db.session.commit()
+
+    return jsonify({'ok': True, 'msg': 'Updated', 'value': new_value})
 
 
 @app.route('/reports/uniform-sizes/export')

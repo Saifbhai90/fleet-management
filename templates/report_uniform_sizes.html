@@ -238,25 +238,25 @@
                 <span class="fw-semibold small">{{ d.name }}</span>
                 {% endif %}
               </td>
-              <td class="text-center">
+              <td class="text-center uniform-size-cell" data-driver-id="{{ d.id }}" data-field="shirt_size" data-value="{{ d.shirt_size or '' }}">
                 {% if d.shirt_size %}
-                <span class="badge bg-primary rounded-pill">{{ d.shirt_size }}</span>
+                <span class="badge bg-primary rounded-pill uniform-size-badge">{{ d.shirt_size }}</span>
                 {% else %}
-                <span class="text-muted">—</span>
+                <span class="text-muted uniform-size-badge">—</span>
                 {% endif %}
               </td>
-              <td class="text-center">
+              <td class="text-center uniform-size-cell" data-driver-id="{{ d.id }}" data-field="trouser_size" data-value="{{ d.trouser_size or '' }}">
                 {% if d.trouser_size %}
-                <span class="badge bg-info text-dark rounded-pill">{{ d.trouser_size }}</span>
+                <span class="badge bg-info text-dark rounded-pill uniform-size-badge">{{ d.trouser_size }}</span>
                 {% else %}
-                <span class="text-muted">—</span>
+                <span class="text-muted uniform-size-badge">—</span>
                 {% endif %}
               </td>
-              <td class="text-center">
+              <td class="text-center uniform-size-cell" data-driver-id="{{ d.id }}" data-field="jacket_size" data-value="{{ d.jacket_size or '' }}">
                 {% if d.jacket_size %}
-                <span class="badge bg-success rounded-pill">{{ d.jacket_size }}</span>
+                <span class="badge bg-success rounded-pill uniform-size-badge">{{ d.jacket_size }}</span>
                 {% else %}
-                <span class="text-muted">—</span>
+                <span class="text-muted uniform-size-badge">—</span>
                 {% endif %}
               </td>
             </tr>
@@ -281,6 +281,16 @@
 
 </div>
 
+<style>
+.uniform-size-cell { cursor: pointer; transition: background-color .15s; }
+.uniform-size-cell:hover { background-color: rgba(13,110,253,.08); }
+.uniform-size-select { font-size: .75rem; padding: 2px 6px; max-width: 80px; margin: 0 auto; }
+.uniform-size-saved { animation: uniformFlash .6s ease; }
+@keyframes uniformFlash {
+  0% { background-color: rgba(25,135,84,.3); }
+  100% { background-color: transparent; }
+}
+</style>
 <script>
 function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page',n);window.location.search=u.toString();}
 (function(){
@@ -288,18 +298,108 @@ function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page
     var table = document.getElementById('uniformSizesTable');
     if (!table) return;
     var searchInput = document.getElementById('uniformTableSearch');
-    if (!searchInput) return;
-    searchInput.addEventListener('input', function(){
-      var query = searchInput.value.toLowerCase().trim();
-      var terms = query ? query.split(/\s+/) : [];
-      var rows = table.querySelectorAll('tbody tr');
-      rows.forEach(function(row){
-        if (!terms.length) { row.style.display = ''; return; }
-        var rowText = row.textContent.toLowerCase();
-        var show = terms.every(function(term){ return rowText.indexOf(term) !== -1; });
-        row.style.display = show ? '' : 'none';
+    if (searchInput) {
+      searchInput.addEventListener('input', function(){
+        var query = searchInput.value.toLowerCase().trim();
+        var terms = query ? query.split(/\s+/) : [];
+        var rows = table.querySelectorAll('tbody tr');
+        rows.forEach(function(row){
+          if (!terms.length) { row.style.display = ''; return; }
+          var rowText = row.textContent.toLowerCase();
+          var show = terms.every(function(term){ return rowText.indexOf(term) !== -1; });
+          row.style.display = show ? '' : 'none';
+        });
+      });
+    }
+
+    // Inline size editing (master only)
+    {% if session.get('is_master') %}
+    var SHIRT_SIZES = {{ shirt_sizes | tojson }};
+    var TROUSER_SIZES = {{ trouser_sizes | tojson }};
+    var JACKET_SIZES = {{ jacket_sizes | tojson }};
+    var SIZE_MAP = { shirt_size: SHIRT_SIZES, trouser_size: TROUSER_SIZES, jacket_size: JACKET_SIZES };
+    var COLOR_MAP = { shirt_size: 'bg-primary', trouser_size: 'bg-info text-dark', jacket_size: 'bg-success' };
+    var updateUrl = '{{ url_for("report_uniform_sizes_update_size") }}';
+    var csrfToken = '{{ csrf_token() if csrf_token is defined else "" }}';
+
+    function buildSelect(field, currentVal) {
+      var sizes = SIZE_MAP[field] || [];
+      var sel = document.createElement('select');
+      sel.className = 'form-select form-select-sm uniform-size-select';
+      var optEmpty = document.createElement('option');
+      optEmpty.value = '';
+      optEmpty.textContent = '—';
+      sel.appendChild(optEmpty);
+      sizes.forEach(function(s) {
+        var opt = document.createElement('option');
+        opt.value = s;
+        opt.textContent = s;
+        if (s === currentVal) opt.selected = true;
+        sel.appendChild(opt);
+      });
+      // If currentVal is not in predefined list, add it
+      if (currentVal && sizes.indexOf(currentVal) === -1) {
+        var opt = document.createElement('option');
+        opt.value = currentVal;
+        opt.textContent = currentVal + ' (custom)';
+        opt.selected = true;
+        sel.appendChild(opt);
+      }
+      return sel;
+    }
+
+    function renderBadge(cell, value) {
+      var field = cell.getAttribute('data-field');
+      var colorClass = COLOR_MAP[field] || 'bg-secondary';
+      cell.innerHTML = value
+        ? '<span class="badge ' + colorClass + ' rounded-pill uniform-size-badge">' + value + '</span>'
+        : '<span class="text-muted uniform-size-badge">—</span>';
+      cell.setAttribute('data-value', value || '');
+    }
+
+    function saveSize(cell, value) {
+      var driverId = cell.getAttribute('data-driver-id');
+      var field = cell.getAttribute('data-field');
+      var fd = new FormData();
+      fd.append('driver_id', driverId);
+      fd.append('field', field);
+      fd.append('value', value);
+      if (csrfToken) fd.append('csrf_token', csrfToken);
+      fetch(updateUrl, { method: 'POST', body: fd, headers: {'X-Requested-With':'XMLHttpRequest'} })
+        .then(function(r){ return r.json(); })
+        .then(function(data){
+          renderBadge(cell, data.value || value);
+          cell.classList.add('uniform-size-saved');
+          setTimeout(function(){ cell.classList.remove('uniform-size-saved'); }, 600);
+        })
+        .catch(function(){ renderBadge(cell, cell.getAttribute('data-value')); });
+    }
+
+    table.querySelectorAll('.uniform-size-cell').forEach(function(cell) {
+      cell.addEventListener('click', function(e) {
+        if (cell.querySelector('select')) return;
+        var currentVal = cell.getAttribute('data-value') || '';
+        var field = cell.getAttribute('data-field');
+        var sel = buildSelect(field, currentVal);
+        cell.innerHTML = '';
+        cell.appendChild(sel);
+        sel.focus();
+        var committed = false;
+        function commit() {
+          if (committed) return;
+          committed = true;
+          var newVal = sel.value;
+          if (newVal !== currentVal) {
+            saveSize(cell, newVal);
+          } else {
+            renderBadge(cell, currentVal);
+          }
+        }
+        sel.addEventListener('blur', commit);
+        sel.addEventListener('change', commit);
       });
     });
+    {% endif %}
   });
 })();
 document.addEventListener('DOMContentLoaded', function(){
