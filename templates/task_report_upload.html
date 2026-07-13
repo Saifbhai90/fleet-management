@@ -606,8 +606,13 @@ function ddmmyyyy(isoStr) {
     var o=document.getElementById('dateLoadingOverlay');
     if(o){ o.classList.add('d-none'); o.style.display='none'; }
   }
+  window._hideDateLoadingOverlay = hideDateLoadingOverlay;
+
+  var _loadToken=0, _inflightDate=null, _pendingDone=[];
+  window._summaryDate = null;
 
   function loadSummary(dateIso, opts) {
+    opts = opts || {};
     var card=document.getElementById('dateSummaryCard');
     var loading=document.getElementById('summaryLoading');
     var tbody=document.getElementById('summaryTableBody');
@@ -615,11 +620,19 @@ function ddmmyyyy(isoStr) {
     var statusEl=document.getElementById('summaryStatusBadge');
     var logLink=document.getElementById('summaryLogLink');
     var dateSpinner=document.getElementById('dateLoadingSpinner');
-    if(!card||!dateIso) return;
+    if(!card||!dateIso){ if(opts.onDone) opts.onDone(); return; }
 
-    // Show date loading overlay only on date selection (not post-upload refresh)
-    var showOverlay = !opts || !opts.silent;
-    if(showOverlay) showDateLoadingOverlay();
+    // Dedupe: same date already loading (fp onChange + native change double-fire)
+    if(_inflightDate===dateIso){
+      if(opts.onDone) _pendingDone.push(opts.onDone);
+      return;
+    }
+    _inflightDate=dateIso;
+    var myToken=++_loadToken;
+    if(opts.onDone) _pendingDone.push(opts.onDone);
+
+    // Show date loading overlay only on user date selection (not silent refresh)
+    if(!opts.silent) showDateLoadingOverlay();
     // Show inline spinner next to date label
     if(dateSpinner) dateSpinner.style.display='inline-block';
     // Show card immediately with skeleton rows
@@ -646,12 +659,20 @@ function ddmmyyyy(isoStr) {
         .catch(function(){ results[api.key]={data:null,api:api}; })
         .finally(function(){
           done++;
-          if(done===apis.length) renderSummary(results,loading,tbody,statusEl,dateSpinner);
+          if(done===apis.length){
+            // Only apply if not superseded by a newer load (different date picked mid-flight)
+            if(myToken===_loadToken){
+              renderSummary(results,loading,tbody,statusEl,dateSpinner,dateIso);
+              _inflightDate=null;
+              var cbs=_pendingDone.splice(0);
+              cbs.forEach(function(cb){ try{cb();}catch(e){} });
+            }
+          }
         });
     });
   }
 
-  function renderSummary(results, loading, tbody, statusEl, dateSpinner) {
+  function renderSummary(results, loading, tbody, statusEl, dateSpinner, dateIso) {
     hideDateLoadingOverlay();
     loading.style.display='none';
     if(dateSpinner) dateSpinner.style.display='none';
@@ -667,6 +688,7 @@ function ddmmyyyy(isoStr) {
       var key = i===0?'emg' : i===1?'mil' : 'act';
       window._summaryPresent[key] = !!r.present;
     });
+    window._summaryDate = dateIso;
     // Store summary text for modal (only types being re-uploaded)
     var parts=[];
     rows.forEach(function(r){ if(r.present&&r.label) parts.push(r.label+': '+r.count+' records'); });
@@ -729,14 +751,18 @@ function ddmmyyyy(isoStr) {
       var fp = dateInp._flatpickr;
       if(fp){
         fp.set('maxDate', today);
+        // Calendar picks / quick-date buttons / missing-date clicks (setDate with trigger)
         fp.config.onChange.push(function(){ onDateChange(); });
       } else {
         dateInp.setAttribute('max', yyyy+'-'+mm+'-'+dd);
       }
+      // Typed dates dispatch a native change event (fleet_core blur handler).
+      // Registered always — loadSummary dedupes if fp onChange also fired.
+      dateInp.addEventListener('change', onDateChange);
+      // If date already filled (server re-render after validation error), load silently
+      var d0=isoDate(dateInp.value);
+      if(d0) loadSummary(d0, {silent:true});
     }, 300);
-    var d=isoDate(dateInp.value);
-    if(d) loadSummary(d);
-    dateInp.addEventListener('change', onDateChange);
   });
 })();
 
@@ -903,46 +929,65 @@ function ddmmyyyy(isoStr) {
     var miFiles = miInput  && miInput.files.length ? Array.from(miInput.files) : [];
     var actFiles= actInput && actInput.files.length? Array.from(actInput.files): [];
 
-    // Validate
+    // Validate date
+    var dateVal=(document.getElementById('taskDateInput')||{}).value||'';
+    var dateIso=isoDate(dateVal);
+    var vm=document.getElementById('fileValidationMsg');
+    if(!dateIso){
+      if(vm){vm.textContent='Pehle Report Date select karein.';vm.style.display='';}
+      return;
+    }
+    // Validate files
     var ok = window._validateAllFiles ? window._validateAllFiles() : true;
     if(!emFile && !miFiles.length && !actFiles.length){
-      var vm=document.getElementById('fileValidationMsg');
       if(vm){vm.textContent='Kam az kam ek file select karein.';vm.style.display='';}
       return;
     }
-    var vm2=document.getElementById('fileValidationMsg'); if(vm2) vm2.style.display='none';
+    if(vm) vm.style.display='none';
     if(!ok) return;
 
-    // Re-upload confirmation — only if a type being uploaded already has data for this date
-    var sp = window._summaryPresent || {};
-    var hasEmg = !!emFile && sp.emg;
-    var hasMil = miFiles.length > 0 && sp.mil;
-    var hasAct = actFiles.length > 0 && sp.act;
-    if(hasEmg || hasMil || hasAct){
-      hideOverlay();
-      hideDateLoadingOverlay();
-      var conflictParts=[];
-      if(hasEmg) conflictParts.push('Emergency Tasks');
-      if(hasMil) conflictParts.push('Vehicle Mileage');
-      if(hasAct) conflictParts.push('Tracker Activity');
-      var modalSummary=document.getElementById('reuploadModalSummary');
-      if(modalSummary) modalSummary.textContent = conflictParts.join(' + ') + ' — already uploaded for this date.';
-      var panel=document.getElementById('reuploadPanel');
-      panel.classList.remove('d-none');
-      var confirmBtn=document.getElementById('reuploadConfirmBtn');
-      var newBtn=confirmBtn.cloneNode(true);
-      confirmBtn.parentNode.replaceChild(newBtn,confirmBtn);
-      newBtn.addEventListener('click',function(){
-        panel.classList.add('d-none');
-        disableBtn();
-        runUpload();
-      });
-      return;
+    function proceedWithConflictCheck(){
+      // Re-upload confirmation — only if a type being uploaded already has data for this date
+      var sp = window._summaryPresent || {};
+      var hasEmg = !!emFile && sp.emg;
+      var hasMil = miFiles.length > 0 && sp.mil;
+      var hasAct = actFiles.length > 0 && sp.act;
+      if(hasEmg || hasMil || hasAct){
+        enableBtn();
+        hideOverlay();
+        if(window._hideDateLoadingOverlay) window._hideDateLoadingOverlay();
+        var conflictParts=[];
+        if(hasEmg) conflictParts.push('Emergency Tasks');
+        if(hasMil) conflictParts.push('Vehicle Mileage');
+        if(hasAct) conflictParts.push('Tracker Activity');
+        var modalSummary=document.getElementById('reuploadModalSummary');
+        if(modalSummary) modalSummary.textContent = conflictParts.join(' + ') + ' — already uploaded for this date.';
+        var panel=document.getElementById('reuploadPanel');
+        panel.classList.remove('d-none');
+        var confirmBtn=document.getElementById('reuploadConfirmBtn');
+        var newBtn=confirmBtn.cloneNode(true);
+        confirmBtn.parentNode.replaceChild(newBtn,confirmBtn);
+        newBtn.addEventListener('click',function(){
+          panel.classList.add('d-none');
+          disableBtn();
+          runUpload();
+        });
+        return;
+      }
+      // No existing data — proceed directly
+      disableBtn();
+      runUpload();
     }
 
-    // No existing data — proceed directly
-    disableBtn();
-    runUpload();
+    // If summary is stale or missing for this date, refresh it first (silent) then check
+    if(window._summaryDate !== dateIso || !window._summaryPresent){
+      var b=document.getElementById('uploadBtn');
+      if(b){ b.disabled=true; b.innerHTML='<span class="spinner-border spinner-border-sm me-1"></span>Checking…'; }
+      if(window._loadSummary) window._loadSummary(dateIso, {silent:true, onDone: function(){ enableBtn(); proceedWithConflictCheck(); }});
+      else { enableBtn(); proceedWithConflictCheck(); }
+      return;
+    }
+    proceedWithConflictCheck();
   });
 
   // Re-upload panel cancel handlers
