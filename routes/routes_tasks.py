@@ -1521,6 +1521,29 @@ def task_report_upload_core():
 
 
 
+@app.route('/task-report/upload/mileage-one', methods=['POST'])
+def task_report_upload_mileage_one():
+    """Import a single Mileage workbook per request (multi-step upload, mirrors activity-one)."""
+    task_date = _json_task_date()
+    if not task_date:
+        return jsonify({'ok': False, 'error': 'Invalid or missing report date.'}), 400
+    clear_mileage = request.form.get('clear_mileage') in ('1', 'true', 'on', 'yes')
+    fm = request.files.get('file_mileage')
+    if not fm or not getattr(fm, 'filename', '').strip():
+        return jsonify({'ok': False, 'error': 'No mileage file.'}), 400
+    try:
+        rows_added = _parse_mileage_excel(fm, task_date, clear=clear_mileage)
+        db.session.commit()
+        return jsonify({'ok': True, 'rows': rows_added, 'filename': fm.filename, 'task_date': task_date.strftime('%d-%m-%Y')})
+    except ValueError as ex:
+        db.session.rollback()
+        return jsonify({'ok': False, 'error': str(ex)}), 400
+    except Exception:
+        db.session.rollback()
+        app.logger.exception('task_report_upload_mileage_one')
+        return jsonify({'ok': False, 'error': 'Vehicle Mileage processing failed.'}), 500
+
+
 @app.route('/task-report/upload/activity-one', methods=['POST'])
 def task_report_upload_activity_one():
     """Import a single Tracker Activity workbook per request (multi-step upload)."""

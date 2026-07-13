@@ -730,7 +730,7 @@ class TaskReportUploadBothForm(FlaskForm):
                           render_kw={"class": "form-control datepicker"})
     file_emergency = FileField('EmergencyTaskReport Excel', validators=[Optional(),
         FileAllowed(['xlsx', 'xls'], 'Only Excel allowed')])
-    file_mileage = FileField('Vehicle Mileage Report Excel', validators=[Optional(),
+    file_mileage = MultipleFileField('Vehicle Mileage Report Excel (Multiple)', validators=[Optional(),
         FileAllowed(['xlsx', 'xls'], 'Only Excel allowed')])
     file_activity_reports = MultipleFileField('Tracker Activity Report Excel (Multiple)', validators=[Optional(),
         FileAllowed(['xlsx', 'xls'], 'Only Excel allowed')])

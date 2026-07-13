@@ -192,9 +192,15 @@ ENDPOINT_PERMISSION_MAP = [
     ('driver_update_portal_save', 'drivers'),
     # Task & Logbook
     ('task_report_upload_list', 'task_report_upload_list'),
+    ('task_report_activity_detail_api', 'task_report_upload_list'),
+    ('task_report_emergency_detail_api', 'task_report_upload_list'),
+    ('task_report_mileage_detail_api', 'task_report_upload_list'),
     ('task_report_upload', 'task_report_upload'),
     ('task_report_upload_emergency', 'task_report_upload'),
     ('task_report_upload_mileage', 'task_report_upload'),
+    ('task_report_upload_mileage_one', 'task_report_upload'),
+    ('task_report_upload_core', 'task_report_upload'),
+    ('task_report_upload_activity_one', 'task_report_upload'),
     # Daily Task Report
     ('task-report', 'task_report_list'),
     ('task_report_list', 'task_report_list'),

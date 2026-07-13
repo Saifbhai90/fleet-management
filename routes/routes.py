@@ -9057,7 +9057,7 @@ def _parse_emergency_excel(f, task_date):
     return count
 
 
-def _parse_mileage_excel(f, task_date):
+def _parse_mileage_excel(f, task_date, clear=True):
     """Parse Vehicle Mileage Report (XLSX with headers at row 10)."""
     import io, openpyxl
     raw = f.read()
@@ -9102,7 +9102,8 @@ def _parse_mileage_excel(f, task_date):
     if ptop_col is None:
         ptop_col = 7
 
-    VehicleMileageRecord.query.filter_by(task_date=task_date).delete()
+    if clear:
+        VehicleMileageRecord.query.filter_by(task_date=task_date).delete()
 
     count = 0
     today = pk_date()

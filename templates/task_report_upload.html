@@ -15,9 +15,10 @@
 
   <div class="card shadow border-0 rounded-3">
     <div class="card-body">
-      <p class="text-muted small">Report date select karein, phir required Excel files choose karein. Har field optional hai, lekin kam az kam ek file zaroor select karein. Same date par re-upload karne par purana data replace ho jata hai. Multiple Tracker Activity files ko timeout se bachne ke liye upload har file alag-alag server request par hota hai.</p>
+      <p class="text-muted small">Report date select karein, phir required Excel files choose karein. Har field optional hai, lekin kam az kam ek file zaroor select karein. Same date par re-upload karne par purana data replace ho jata hai. Multiple Mileage aur Activity files ko timeout se bachne ke liye har file alag server request par upload hoti hai.</p>
       <form method="POST" enctype="multipart/form-data" id="taskReportUploadForm"
             data-core-url="{{ url_for('task_report_upload_core') }}"
+            data-mileage-url="{{ url_for('task_report_upload_mileage_one') }}"
             data-activity-url="{{ url_for('task_report_upload_activity_one') }}"
             data-redirect-base="{{ url_for('module_hub', hub_slug='task-logbook') }}">
         {{ form.hidden_tag() }}
@@ -35,9 +36,9 @@
             <small class="text-muted">EMG,Tasks (admin) column ke liye</small>
           </div>
           <div class="col-md-6">
-            <label class="form-label">2. Vehicle Mileage Report Excel</label>
-            {{ form.file_mileage(class="form-control") }}
-            <small class="text-muted">Tracker Driven KMs (admin) ke liye</small>
+            <label class="form-label">2. Vehicle Mileage Report Excel <span class="badge bg-secondary ms-1" style="font-size:.7rem;">Multiple OK</span></label>
+            {{ form.file_mileage(class="form-control", multiple=true) }}
+            <small class="text-muted">Ek ya multiple files — single all-vehicles file ya per-vehicle alag files dono OK.</small>
           </div>
           <div class="col-md-12">
             <label class="form-label">3. Tracker Activity Report Excel (Multiple Vehicle Files)</label>
@@ -108,28 +109,31 @@
 
   form.addEventListener('submit', function(ev) {
     var actInput = form.querySelector('[name="file_activity_reports"]');
-    var actFiles = actInput && actInput.files ? actInput.files : null;
-    if (!actFiles || actFiles.length === 0) {
+    var actFiles = actInput && actInput.files ? Array.from(actInput.files) : [];
+    var miInput = form.querySelector('[name="file_mileage"]');
+    var miFiles = miInput && miInput.files ? Array.from(miInput.files) : [];
+    var emInput = form.querySelector('[name="file_emergency"]');
+    var emFile = emInput && emInput.files && emInput.files[0];
+
+    // If only emergency file (no multi-file), let form submit normally
+    if (actFiles.length === 0 && miFiles.length <= 1) {
       showOverlaySpinner('Excel parse ho rahi hai…');
       return;
     }
 
     ev.preventDefault();
-    showOverlaySpinner('Tracker Activity files upload ho rahi hain…');
+    showOverlaySpinner('Files upload ho rahi hain…');
 
     var csrfInput = form.querySelector('[name="csrf_token"]');
     var csrfVal = csrfInput ? csrfInput.value : '';
     var taskDateInput = form.querySelector('[name="task_date"]');
     var taskDate = taskDateInput ? taskDateInput.value : '';
-    var emInput = form.querySelector('[name="file_emergency"]');
-    var miInput = form.querySelector('[name="file_mileage"]');
-    var emFile = emInput && emInput.files && emInput.files[0];
-    var miFile = miInput && miInput.files && miInput.files[0];
     var coreUrl = form.getAttribute('data-core-url');
+    var mileageUrl = form.getAttribute('data-mileage-url');
     var activityUrl = form.getAttribute('data-activity-url');
     var redirectBase = form.getAttribute('data-redirect-base');
 
-    var stepsTotal = actFiles.length + (emFile || miFile ? 1 : 0);
+    var stepsTotal = actFiles.length + miFiles.length + (emFile ? 1 : 0);
     var stepDone = 0;
 
     function setProgress(message) {
@@ -145,22 +149,42 @@
 
     var chain = Promise.resolve();
 
-    if (emFile || miFile) {
+    // Step 1: Emergency only (via core endpoint, no mileage here since mileage is now per-file)
+    if (emFile) {
       chain = chain.then(function() {
         var fd = new FormData();
         fd.append('csrf_token', csrfVal);
         fd.append('task_date', taskDate);
-        if (emFile) fd.append('file_emergency', emFile);
-        if (miFile) fd.append('file_mileage', miFile);
+        fd.append('file_emergency', emFile);
         return fetch(coreUrl, { method: 'POST', body: fd, credentials: 'same-origin' }).then(function(r) {
           return r.json().then(function(j) {
-            if (!r.ok || !j.ok) throw new Error(j.error || 'Emergency/Mileage upload failed.');
-            setProgress('Emergency/Mileage ho gayi. Activity files…');
+            if (!r.ok || !j.ok) throw new Error(j.error || 'Emergency upload failed.');
+            setProgress('Emergency upload ho gayi.');
           });
         });
       });
     }
 
+    // Step 2: Mileage files one by one
+    for (var mi = 0; mi < miFiles.length; mi++) {
+      (function(index, file) {
+        chain = chain.then(function() {
+          var fd = new FormData();
+          fd.append('csrf_token', csrfVal);
+          fd.append('task_date', taskDate);
+          fd.append('clear_mileage', index === 0 ? '1' : '0');  // Only first file clears
+          fd.append('file_mileage', file, file.name);
+          return fetch(mileageUrl, { method: 'POST', body: fd, credentials: 'same-origin' }).then(function(r) {
+            return r.json().then(function(j) {
+              if (!r.ok || !j.ok) throw new Error(j.error || ('Mileage failed: ' + file.name));
+              setProgress('Mileage ' + (index + 1) + '/' + miFiles.length + ': ' + file.name);
+            });
+          });
+        });
+      })(mi, miFiles[mi]);
+    }
+
+    // Step 3: Activity files one by one
     for (var i = 0; i < actFiles.length; i++) {
       (function(index, file) {
         chain = chain.then(function() {
@@ -171,8 +195,8 @@
           fd.append('file_activity', file, file.name);
           return fetch(activityUrl, { method: 'POST', body: fd, credentials: 'same-origin' }).then(function(r) {
             return r.json().then(function(j) {
-              if (!r.ok || !j.ok) throw new Error(j.error || ('Failed: ' + file.name));
-              setProgress('Activity file ' + (index + 1) + ' / ' + actFiles.length + ': ' + file.name);
+              if (!r.ok || !j.ok) throw new Error(j.error || ('Activity failed: ' + file.name));
+              setProgress('Activity ' + (index + 1) + '/' + actFiles.length + ': ' + file.name);
             });
           });
         });
