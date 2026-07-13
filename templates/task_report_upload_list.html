@@ -1,6 +1,26 @@
 {% extends "base.html" %}
 {% block title %}Workbook Upload Log{% endblock %}
 {% block content %}
+<style>
+#activityModal, #emergencyModal, #mileageModal { z-index: 1080 !important; }
+#activityModal .modal-dialog, #emergencyModal .modal-dialog, #mileageModal .modal-dialog { margin-top: 70px !important; }
+.modal-backdrop { z-index: 1075 !important; }
+/* Mobile: full screen modals on small screens */
+@media (max-width: 575.98px) {
+  #activityModal .modal-dialog, #emergencyModal .modal-dialog, #mileageModal .modal-dialog {
+    margin: 0 !important; width: 100% !important; max-width: 100% !important; height: 100% !important;
+  }
+  #activityModal .modal-content, #emergencyModal .modal-content, #mileageModal .modal-content {
+    height: 100% !important; border-radius: 0 !important;
+  }
+  .modal-header .input-group { width: 140px !important; }
+  .modal-header .modal-title { font-size: .9rem !important; }
+}
+/* Search clear button */
+.search-wrap { position: relative; }
+.search-wrap .search-clear { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); cursor: pointer; color: #6c757d; font-size: .75rem; display: none; z-index: 5; }
+.search-wrap input:not(:placeholder-shown) ~ .search-clear { display: block; }
+</style>
 <div class="container-fluid">
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
     <div class="d-flex align-items-center gap-2 flex-wrap">
@@ -8,26 +28,32 @@
       {{ nav_back_button() }}
       <h2 class="mb-0"><i class="bi bi-journal-bookmark me-2 text-primary"></i>Workbook Upload Log</h2>
     </div>
+    <div class="d-flex align-items-center gap-2">
+      <button class="btn btn-outline-secondary btn-sm" id="btnPrintReport" title="Print / Preview"><i class="bi bi-eye me-1"></i>Print / Preview</button>
+      <button class="btn btn-outline-success btn-sm" id="btnExportReport" title="Export to Excel"><i class="bi bi-file-earmark-excel me-1"></i>Export</button>
+    </div>
   </div>
 
   <div class="card shadow-sm border-0 rounded-3 mb-3">
     <div class="card-body">
       <p class="text-muted small mb-3">Yeh list database mein save imported rows se banai jaati hai (EmergencyTaskReport, Vehicle Mileage, Tracker Activity). Har workbook ka asal Excel file server par store nahi hota — filename sirf activity import ke liye maujood hai.</p>
-      <form method="get" action="{{ url_for('task_report_upload_list') }}" class="row g-3 align-items-end">
+      <form method="get" action="{{ url_for('task_report_upload_list') }}" class="row g-3 align-items-end" id="uploadLogFilterForm">
         {% from 'partials/nav_back_button.html' import nav_from_hidden %}
         {{ nav_from_hidden() }}
-        <div class="col-md-2">
+        <div class="col-6 col-md-2">
           <label class="form-label">From Date</label>
-          {{ form.from_date(class="form-control datepicker") }}
+          {{ form.from_date(class="form-control datepicker", id="filterFromDate") }}
         </div>
-        <div class="col-md-2">
+        <div class="col-6 col-md-2">
           <label class="form-label">To Date</label>
-          {{ form.to_date(class="form-control datepicker") }}
+          {{ form.to_date(class="form-control datepicker", id="filterToDate") }}
         </div>
-        <div class="col-md-2">
-          <button type="submit" class="btn btn-primary w-100">
-            <i class="bi bi-search me-1"></i>View
-          </button>
+        <div class="col-12 col-md-4 d-flex flex-wrap gap-2 align-items-end">
+          <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-search me-1"></i>View</button>
+          <button type="button" class="btn btn-outline-secondary btn-sm" onclick="_setDateRange(0,0)" title="Today">Today</button>
+          <button type="button" class="btn btn-outline-secondary btn-sm" onclick="_setDateRange(6,0)" title="Last 7 days">7 Days</button>
+          <button type="button" class="btn btn-outline-secondary btn-sm" onclick="_setDateRange(29,0)" title="Last 30 days">30 Days</button>
+          <button type="button" class="btn btn-outline-secondary btn-sm" onclick="_setThisMonth()" title="This Month">This Month</button>
         </div>
       </form>
     </div>
@@ -36,16 +62,24 @@
   <div class="card shadow border-0 rounded-3 overflow-hidden mb-4">
     <div class="card-header bg-dark text-white py-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
       <span class="fw-semibold">Summary by report date — {{ from_date|ddmmyyyy }} to {{ to_date|ddmmyyyy }}</span>
-      <select class="form-select form-select-sm bg-dark text-white border-secondary" style="width:70px;" onchange="(function(v){var u=new URLSearchParams(window.location.search);u.set('per_page',v);u.set('page',1);window.location.search=u.toString();})(this.value)">
+      <div class="d-flex align-items-center gap-2 flex-wrap">
+        <div class="input-group input-group-sm search-wrap" style="width:220px;">
+          <span class="input-group-text bg-dark text-white border-secondary"><i class="bi bi-search"></i></span>
+          <input type="text" class="form-control bg-dark text-white border-secondary" placeholder="Realtime search…" data-realtime-table="uploadLogTable" id="uploadLogSearch">
+          <span class="search-clear" style="right:36px;color:#adb5bd;" onclick="document.getElementById('uploadLogSearch').value='';document.getElementById('uploadLogSearch').dispatchEvent(new Event('input'));"><i class="bi bi-x-circle-fill"></i></span>
+        </div>
+        <a href="{{ url_for('task_report_upload_list', from_date=from_date.strftime('%d-%m-%Y'), to_date=to_date.strftime('%d-%m-%Y'), refresh='1') }}" class="btn btn-outline-light btn-sm" title="Refresh / Clear cache"><i class="bi bi-arrow-clockwise"></i></a>
+        <select class="form-select form-select-sm bg-dark text-white border-secondary" style="width:70px;" onchange="(function(v){var u=new URLSearchParams(window.location.search);u.set('per_page',v);u.set('page',1);window.location.search=u.toString();})(this.value)">
         <option value="10" {% if per_page == 10 %}selected{% endif %}>10</option>
         <option value="25" {% if per_page == 25 %}selected{% endif %}>25</option>
         <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
         <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
       </select>
+      </div>
     </div>
     <div class="card-body p-0">
       <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0" style="font-size:.88rem;">
+        <table class="table table-hover align-middle mb-0" style="font-size:.88rem;" id="uploadLogTable" data-fleet-pagination-total="{{ pagination.total if pagination else 0 }}">
           <thead class="table-light">
             <tr>
               <th class="ps-3">#</th>
@@ -57,6 +91,7 @@
               <th class="text-end">Activity files</th>
               <th class="text-end">Activity rows</th>
               <th>Last activity import</th>
+              <th class="text-center no-print">Status</th>
             </tr>
           </thead>
           <tbody>
@@ -64,17 +99,18 @@
             <tr>
               <td class="ps-3">{{ loop.index + (pagination.page - 1) * per_page }}</td>
               <td class="fw-medium text-nowrap">{{ row.task_date|ddmmyyyy }}</td>
-              <td class="text-end">{{ row.emergency_count }}</td>
+              <td class="text-end">{% if row.emergency_count > 0 %}<a href="javascript:void(0)" onclick="showEmergencyDetail('{{ row.task_date.strftime('%Y-%m-%d') }}')" class="text-decoration-underline fw-semibold" style="cursor:pointer">{{ row.emergency_count }}</a>{% else %}0{% endif %}</td>
               <td class="text-muted small text-nowrap">{% if row.emergency_last %}{{ row.emergency_last.strftime('%d-%m-%Y %H:%M') }}{% else %}—{% endif %}</td>
-              <td class="text-end">{{ row.mileage_count }}</td>
+              <td class="text-end">{% if row.mileage_count > 0 %}<a href="javascript:void(0)" onclick="showMileageDetail('{{ row.task_date.strftime('%Y-%m-%d') }}')" class="text-decoration-underline fw-semibold" style="cursor:pointer">{{ row.mileage_count }}</a>{% else %}0{% endif %}</td>
               <td class="text-muted small text-nowrap">{% if row.mileage_last %}{{ row.mileage_last.strftime('%d-%m-%Y %H:%M') }}{% else %}—{% endif %}</td>
-              <td class="text-end">{{ row.activity_files }}</td>
+              <td class="text-end">{% if row.activity_files > 0 %}<a href="javascript:void(0)" onclick="showActivityDetail('{{ row.task_date.strftime('%Y-%m-%d') }}')" class="text-decoration-underline fw-semibold" style="cursor:pointer">{{ row.activity_files }}</a>{% else %}0{% endif %}</td>
               <td class="text-end">{{ row.activity_rows }}</td>
               <td class="text-muted small text-nowrap">{% if row.activity_last %}{{ row.activity_last.strftime('%d-%m-%Y %H:%M') }}{% else %}—{% endif %}</td>
+              <td class="text-center no-print">{% if row.status == 'complete' %}<span class="badge bg-success-subtle text-success border border-success-subtle">Complete</span>{% elif row.status == 'partial' %}<span class="badge bg-warning-subtle text-warning border border-warning-subtle">Partial</span>{% else %}<span class="badge bg-danger-subtle text-danger border border-danger-subtle">Empty</span>{% endif %}</td>
             </tr>
             {% else %}
             <tr>
-              <td colspan="9" class="text-center py-5 text-muted">Is date range mein koi imported workbook data nahi mila.</td>
+              <td colspan="10" class="text-center py-5 text-muted no-print">Is date range mein koi imported workbook data nahi mila.</td>
             </tr>
             {% endfor %}
           </tbody>
@@ -82,9 +118,10 @@
       </div>
     </div>
     <div class="card-footer bg-white border-top pt-2 pb-3 px-3">
-      <div class="d-flex justify-content-between align-items-center">
+      <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
         <small class="text-muted">
           Showing {% if pagination %}{{ (pagination.page - 1) * per_page + 1 if summary_rows|length > 0 else 0 }} to {{ (pagination.page - 1) * per_page + summary_rows|length }} of {{ pagination.total }}{% endif %} dates
+          {% if summary_rows %}&nbsp;&bull;&nbsp;EMG: <strong>{{ summary_rows|sum(attribute='emergency_count') }}</strong> &nbsp;Mileage: <strong>{{ summary_rows|sum(attribute='mileage_count') }}</strong> &nbsp;Activity rows: <strong>{{ summary_rows|sum(attribute='activity_rows') }}</strong>{% endif %}
         </small>
         {% if pagination and pagination.pages > 1 %}
         <nav><ul class="pagination pagination-sm mb-0">
@@ -97,47 +134,161 @@
     </div>
   </div>
 
-  <div class="card shadow border-0 rounded-3 overflow-hidden">
-    <div class="card-header bg-secondary text-white py-3">
-      <span class="fw-semibold">Tracker activity — document detail (filename + row count)</span>
-    </div>
-    <div class="card-body p-0">
-      {% if activity_truncated %}
-      <div class="alert alert-warning m-3 mb-0 small">
-        Sirf pehle <strong>{{ activity_cap }}</strong> file groups dikha rahe hain (kul <strong>{{ activity_file_total }}</strong>). Range choti karein ya zarurat ho to export alag se banaya ja sakta hai.
+</div>
+
+<!-- Activity Detail Modal -->
+<div class="modal fade" id="activityModal" tabindex="-1" aria-labelledby="activityModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header bg-dark text-white">
+        <h5 class="modal-title" id="activityModalLabel"><i class="bi bi-file-earmark-spreadsheet me-2"></i>Activity Detail</h5>
+        <div class="input-group input-group-sm mx-2 search-wrap" style="width:190px;">
+          <span class="input-group-text bg-secondary border-secondary text-white"><i class="bi bi-search"></i></span>
+          <input type="text" class="form-control bg-secondary border-secondary text-white" placeholder="Search…" id="activityModalSearch">
+          <span class="search-clear" style="color:#adb5bd;right:6px;" onclick="_clearModalSearch('activityModalSearch','activityModalBody')"><i class="bi bi-x-circle-fill"></i></span>
+        </div>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
-      {% endif %}
-      <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0" style="font-size:.88rem;">
-          <thead class="table-light">
-            <tr>
-              <th class="ps-3">#</th>
-              <th>Report date</th>
-              <th>Source file (Excel)</th>
-              <th class="text-end">Rows imported</th>
-              <th>Last row saved at</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for row in activity_detail %}
-            <tr>
-              <td class="ps-3">{{ loop.index }}</td>
-              <td class="text-nowrap">{{ row.task_date|ddmmyyyy }}</td>
-              <td class="text-break" style="max-width:420px;">{{ row.filename }}</td>
-              <td class="text-end">{{ row.rows }}</td>
-              <td class="text-muted small text-nowrap">{% if row.last_at %}{{ row.last_at.strftime('%d-%m-%Y %H:%M') }}{% else %}—{% endif %}</td>
-            </tr>
-            {% else %}
-            <tr>
-              <td colspan="5" class="text-center py-4 text-muted">Koi activity workbook import record nahi.</td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+      <div class="modal-body">
+        <div id="activityModalLoading" class="text-center py-4">
+          <div class="spinner-border text-primary" role="status"></div>
+          <p class="text-muted mt-2 mb-0 small">Loading activity detail…</p>
+        </div>
+        <div id="activityModalContent" style="display:none;">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="text-muted small" id="activityModalDate"></span>
+            <span class="badge bg-primary" id="activityModalSummary"></span>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0" style="font-size:.85rem;">
+              <thead class="table-light">
+                <tr>
+                  <th class="ps-3">#</th>
+                  <th>Source file (Excel)</th>
+                  <th class="text-end">Rows imported</th>
+                  <th>Last row saved at</th>
+                </tr>
+              </thead>
+              <tbody id="activityModalBody"></tbody>
+            </table>
+          </div>
+        </div>
+        <div id="activityModalError" class="alert alert-danger m-3" style="display:none;"></div>
+      </div>
+      <div class="modal-footer bg-light">
+        <span class="text-muted small me-auto" id="activityModalFooterCount"></span>
+        <button class="btn btn-outline-success btn-sm" id="activityExportBtn"><i class="bi bi-file-earmark-excel me-1"></i>Export to Excel</button>
+        <button class="btn btn-outline-secondary btn-sm" id="activityPrintBtn"><i class="bi bi-printer me-1"></i>Print</button>
+        <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
       </div>
     </div>
   </div>
 </div>
+
+<!-- Emergency Detail Modal -->
+<div class="modal fade" id="emergencyModal" tabindex="-1" aria-labelledby="emergencyModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header bg-danger text-white">
+        <h5 class="modal-title" id="emergencyModalLabel"><i class="bi bi-truck me-2"></i>Emergency Task Detail</h5>
+        <div class="input-group input-group-sm mx-2 search-wrap" style="width:190px;">
+          <span class="input-group-text border-0 text-white" style="background:rgba(255,255,255,.15);"><i class="bi bi-search"></i></span>
+          <input type="text" class="form-control border-0 text-white" style="background:rgba(255,255,255,.15);" placeholder="Search…" id="emergencyModalSearch">
+          <span class="search-clear" style="color:rgba(255,255,255,.7);right:6px;" onclick="_clearModalSearch('emergencyModalSearch','emergencyModalBody')"><i class="bi bi-x-circle-fill"></i></span>
+        </div>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div id="emergencyModalLoading" class="text-center py-4">
+          <div class="spinner-border text-danger" role="status"></div>
+          <p class="text-muted mt-2 mb-0 small">Loading emergency detail…</p>
+        </div>
+        <div id="emergencyModalContent" style="display:none;">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="text-muted small" id="emergencyModalDate"></span>
+            <span class="badge bg-danger" id="emergencyModalSummary"></span>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0" style="font-size:.85rem;">
+              <thead class="table-light">
+                <tr>
+                  <th class="ps-3">#</th>
+                  <th>Amb Reg No</th>
+                  <th>Patient Name</th>
+                  <th>Phone</th>
+                  <th>District</th>
+                  <th>Status</th>
+                  <th>Category</th>
+                  <th>Imported At</th>
+                </tr>
+              </thead>
+              <tbody id="emergencyModalBody"></tbody>
+            </table>
+          </div>
+        </div>
+        <div id="emergencyModalError" class="alert alert-danger m-3" style="display:none;"></div>
+      </div>
+      <div class="modal-footer bg-light">
+        <span class="text-muted small me-auto" id="emergencyModalFooterCount"></span>
+        <button class="btn btn-outline-success btn-sm" id="emergencyExportBtn"><i class="bi bi-file-earmark-excel me-1"></i>Export to Excel</button>
+        <button class="btn btn-outline-secondary btn-sm" id="emergencyPrintBtn"><i class="bi bi-printer me-1"></i>Print</button>
+        <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Mileage Detail Modal -->
+<div class="modal fade" id="mileageModal" tabindex="-1" aria-labelledby="mileageModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header bg-info text-white">
+        <h5 class="modal-title" id="mileageModalLabel"><i class="bi bi-speedometer2 me-2"></i>Mileage Detail</h5>
+        <div class="input-group input-group-sm mx-2 search-wrap" style="width:190px;">
+          <span class="input-group-text border-0 text-white" style="background:rgba(255,255,255,.15);"><i class="bi bi-search"></i></span>
+          <input type="text" class="form-control border-0 text-white" style="background:rgba(255,255,255,.15);" placeholder="Search…" id="mileageModalSearch">
+          <span class="search-clear" style="color:rgba(255,255,255,.7);right:6px;" onclick="_clearModalSearch('mileageModalSearch','mileageModalBody')"><i class="bi bi-x-circle-fill"></i></span>
+        </div>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div id="mileageModalLoading" class="text-center py-4">
+          <div class="spinner-border text-info" role="status"></div>
+          <p class="text-muted mt-2 mb-0 small">Loading mileage detail…</p>
+        </div>
+        <div id="mileageModalContent" style="display:none;">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="text-muted small" id="mileageModalDate"></span>
+            <span class="badge bg-info" id="mileageModalSummary"></span>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0" style="font-size:.85rem;">
+              <thead class="table-light">
+                <tr>
+                  <th class="ps-3">#</th>
+                  <th>Vehicle Reg No</th>
+                  <th class="text-end">Mileage (KM)</th>
+                  <th class="text-end">PtoP (KM)</th>
+                  <th class="text-end">Effective KM</th>
+                  <th>Imported At</th>
+                </tr>
+              </thead>
+              <tbody id="mileageModalBody"></tbody>
+            </table>
+          </div>
+        </div>
+        <div id="mileageModalError" class="alert alert-danger m-3" style="display:none;"></div>
+      </div>
+      <div class="modal-footer bg-light">
+        <span class="text-muted small me-auto" id="mileageModalFooterCount"></span>
+        <button class="btn btn-outline-success btn-sm" id="mileageExportBtn"><i class="bi bi-file-earmark-excel me-1"></i>Export to Excel</button>
+        <button class="btn btn-outline-secondary btn-sm" id="mileagePrintBtn"><i class="bi bi-printer me-1"></i>Print</button>
+        <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 function goPage(p) {
   var u = new URLSearchParams(window.location.search);
@@ -145,6 +296,268 @@ function goPage(p) {
   if (!u.get('from_date')) u.set('from_date', '{{ from_date.strftime("%d-%m-%Y") }}');
   if (!u.get('to_date')) u.set('to_date', '{{ to_date.strftime("%d-%m-%Y") }}');
   window.location.search = u.toString();
+}
+
+function _fmt2(n){return String(n).padStart(2,'0');}
+function _fmtDDMMYYYY(d){return _fmt2(d.getDate())+'-'+_fmt2(d.getMonth()+1)+'-'+d.getFullYear();}
+function _setDateRange(daysBack, daysForward) {
+  var t = new Date();
+  var from = new Date(t); from.setDate(t.getDate() - daysBack);
+  var to = new Date(t); to.setDate(t.getDate() + daysForward);
+  var fi = document.getElementById('filterFromDate');
+  var ti = document.getElementById('filterToDate');
+  if (fi) { fi.value = _fmtDDMMYYYY(from); if (fi._flatpickr) fi._flatpickr.setDate(from); }
+  if (ti) { ti.value = _fmtDDMMYYYY(to);   if (ti._flatpickr) ti._flatpickr.setDate(to);   }
+  document.getElementById('uploadLogFilterForm').submit();
+}
+function _setThisMonth() {
+  var t = new Date();
+  var from = new Date(t.getFullYear(), t.getMonth(), 1);
+  var to   = new Date(t.getFullYear(), t.getMonth()+1, 0);
+  var fi = document.getElementById('filterFromDate');
+  var ti = document.getElementById('filterToDate');
+  if (fi) { fi.value = _fmtDDMMYYYY(from); if (fi._flatpickr) fi._flatpickr.setDate(from); }
+  if (ti) { ti.value = _fmtDDMMYYYY(to);   if (ti._flatpickr) ti._flatpickr.setDate(to);   }
+  document.getElementById('uploadLogFilterForm').submit();
+}
+function _clearModalSearch(inputId, tbodyId) {
+  var inp = document.getElementById(inputId);
+  if (inp) { inp.value = ''; inp.dispatchEvent(new Event('input')); }
+}
+function _restoreBodyScroll() {
+  document.querySelectorAll('.modal-backdrop').forEach(function(el) { el.remove(); });
+  document.body.classList.remove('modal-open');
+  document.body.style.removeProperty('overflow');
+  document.body.style.removeProperty('padding-right');
+}
+
+function _openModal(modalId) {
+  var modalEl = document.getElementById(modalId);
+  var inst = bootstrap.Modal.getInstance(modalEl);
+  if (inst) { inst.dispose(); }
+  var m = new bootstrap.Modal(modalEl);
+  m.show();
+  return m;
+}
+
+var _detailData = {};  // store fetched data per modal for export/print
+
+function _showDetail(modalId, dateStr, fetchUrl, renderFn) {
+  _openModal(modalId);
+  var loadingId = modalId.replace('Modal', 'ModalLoading');
+  var contentId = modalId.replace('Modal', 'ModalContent');
+  var errorId = modalId.replace('Modal', 'ModalError');
+  document.getElementById(loadingId).style.display = '';
+  document.getElementById(contentId).style.display = 'none';
+  document.getElementById(errorId).style.display = 'none';
+
+  fetch(fetchUrl, {headers: {'X-Requested-With': 'XMLHttpRequest'}})
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.error) throw new Error(data.error);
+      document.getElementById(loadingId).style.display = 'none';
+      document.getElementById(contentId).style.display = '';
+      _detailData[modalId] = {dateStr: dateStr, data: data};
+      renderFn(dateStr, data);
+    })
+    .catch(function(err) {
+      document.getElementById(loadingId).style.display = 'none';
+      var errDiv = document.getElementById(errorId);
+      errDiv.textContent = 'Error: ' + err.message;
+      errDiv.style.display = '';
+    });
+}
+
+function _exportModalCsv(modalId, headers, keys, filenamePrefix) {
+  var stored = _detailData[modalId];
+  if (!stored) return;
+  var rows = stored.data.files || stored.data.records || [];
+  if (!rows.length) return;
+  var csv = '\uFEFF' + headers.join(',') + '\n';
+  rows.forEach(function(r) {
+    csv += keys.map(function(k) { return '"' + (String(r[k] || '').replace(/"/g, '""')) + '"'; }).join(',') + '\n';
+  });
+  var blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'});
+  var link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = filenamePrefix + '_' + stored.dateStr + '.csv';
+  link.click();
+}
+
+function _printModal(modalId, title, tbodyId) {
+  var tbody = document.getElementById(tbodyId);
+  if (!tbody) return;
+  var tbl = tbody.closest('table');
+  if (!tbl) return;
+  var previewCss = '@page{size:A4 landscape;margin:8mm;}body{font-family:Arial,sans-serif;font-size:10px;margin:0;padding:8px 12px;}.toolbar{position:sticky;top:0;z-index:99;background:#1e293b;color:#fff;padding:8px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;border-radius:0 0 6px 6px;box-shadow:0 2px 8px rgba(0,0,0,.2);margin:-8px -12px 12px;}.toolbar h4{margin:0;font-size:14px;font-weight:600;}.toolbar button{padding:5px 16px;border:none;border-radius:4px;font-size:12px;font-weight:600;cursor:pointer;}.btn-p{background:#3b82f6;color:#fff;}.btn-c{background:#64748b;color:#fff;margin-left:6px;}h3{text-align:center;margin:6px 0 10px;font-size:14px;}table{width:100%;border-collapse:collapse;table-layout:auto;}th,td{border:1px solid #555;padding:3px 5px;text-align:left;vertical-align:top;}th{background:#e9ecef;font-size:9px;}.text-end{text-align:right;}.text-center{text-align:center;}@media print{.toolbar{display:none!important;}}';
+  var clone = tbl.cloneNode(true);
+  clone.querySelectorAll('.badge').forEach(function(badge) {
+    var td = badge.closest('td');
+    if (td) td.textContent = (badge.textContent || '').trim();
+  });
+  clone.removeAttribute('id');
+  var w = window.open('', '_blank');
+  if (!w) return;
+  w.document.write('<!DOCTYPE html><html><head><title>' + title + '</title>');
+  w.document.write('<style>' + previewCss + '</style></head><body>');
+  w.document.write('<div class="toolbar"><h4>' + title + '</h4><div>');
+  w.document.write('<button class="btn-p" onclick="window.print()">&#128438; Print</button>');
+  w.document.write('<button class="btn-c" onclick="window.close()">&#10005; Close</button>');
+  w.document.write('</div></div>');
+  w.document.write(clone.outerHTML);
+  w.document.write('</body></html>');
+  w.document.close();
+}
+
+function showActivityDetail(dateStr) {
+  var url = '{{ url_for("task_report_activity_detail_api", date_str="PLACEHOLDER") }}'.replace('PLACEHOLDER', dateStr);
+  _showDetail('activityModal', dateStr, url, function(dateStr, data) {
+    document.getElementById('activityModalDate').textContent = 'Report date: ' + dateStr.split('-').reverse().join('-');
+    document.getElementById('activityModalSummary').textContent = data.total_files + ' files / ' + data.total_rows + ' rows';
+    document.getElementById('activityModalFooterCount').textContent = data.total_files + ' files / ' + data.total_rows + ' rows';
+    var tbody = document.getElementById('activityModalBody');
+    tbody.innerHTML = '';
+    data.files.forEach(function(f, i) {
+      var tr = document.createElement('tr');
+      tr.innerHTML = '<td class="ps-3">' + (i+1) + '</td>'
+        + '<td class="text-break" style="max-width:420px;">' + escapeHtml(f.filename) + '</td>'
+        + '<td class="text-end">' + f.rows + '</td>'
+        + '<td class="text-muted small text-nowrap">' + (f.last_at || '—') + '</td>';
+      tbody.appendChild(tr);
+    });
+    if (data.files.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4" class="text-center py-3 text-muted">Koi activity file record nahi.</td></tr>';
+    }
+  });
+}
+
+function showEmergencyDetail(dateStr) {
+  var url = '{{ url_for("task_report_emergency_detail_api", date_str="PLACEHOLDER") }}'.replace('PLACEHOLDER', dateStr);
+  _showDetail('emergencyModal', dateStr, url, function(dateStr, data) {
+    document.getElementById('emergencyModalDate').textContent = 'Report date: ' + dateStr.split('-').reverse().join('-');
+    document.getElementById('emergencyModalSummary').textContent = data.total + ' records';
+    document.getElementById('emergencyModalFooterCount').textContent = data.total + ' records';
+    var tbody = document.getElementById('emergencyModalBody');
+    tbody.innerHTML = '';
+    data.records.forEach(function(r, i) {
+      var tr = document.createElement('tr');
+      tr.innerHTML = '<td class="ps-3">' + (i+1) + '</td>'
+        + '<td class="text-nowrap">' + escapeHtml(r.amb_reg_no) + '</td>'
+        + '<td>' + escapeHtml(r.name) + '</td>'
+        + '<td class="text-nowrap">' + escapeHtml(r.phone) + '</td>'
+        + '<td>' + escapeHtml(r.district) + '</td>'
+        + '<td><span class="badge bg-secondary">' + escapeHtml(r.status) + '</span></td>'
+        + '<td class="text-nowrap">' + escapeHtml(r.category) + '</td>'
+        + '<td class="text-muted small text-nowrap">' + (r.imported_at || '—') + '</td>';
+      tbody.appendChild(tr);
+    });
+    if (data.records.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="8" class="text-center py-3 text-muted">Koi emergency record nahi.</td></tr>';
+    }
+  });
+}
+
+function showMileageDetail(dateStr) {
+  var url = '{{ url_for("task_report_mileage_detail_api", date_str="PLACEHOLDER") }}'.replace('PLACEHOLDER', dateStr);
+  _showDetail('mileageModal', dateStr, url, function(dateStr, data) {
+    document.getElementById('mileageModalDate').textContent = 'Report date: ' + dateStr.split('-').reverse().join('-');
+    document.getElementById('mileageModalSummary').textContent = data.total + ' records';
+    document.getElementById('mileageModalFooterCount').textContent = data.total + ' records';
+    var tbody = document.getElementById('mileageModalBody');
+    tbody.innerHTML = '';
+    data.records.forEach(function(r, i) {
+      var tr = document.createElement('tr');
+      tr.innerHTML = '<td class="ps-3">' + (i+1) + '</td>'
+        + '<td class="text-nowrap fw-medium">' + escapeHtml(r.reg_no) + '</td>'
+        + '<td class="text-end">' + r.mileage.toFixed(2) + '</td>'
+        + '<td class="text-end">' + r.ptop.toFixed(2) + '</td>'
+        + '<td class="text-end fw-semibold">' + r.effective_km.toFixed(2) + '</td>'
+        + '<td class="text-muted small text-nowrap">' + (r.imported_at || '—') + '</td>';
+      tbody.appendChild(tr);
+    });
+    if (data.records.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" class="text-center py-3 text-muted">Koi mileage record nahi.</td></tr>';
+    }
+  });
+}
+
+['activityModal', 'emergencyModal', 'mileageModal'].forEach(function(id) {
+  var el = document.getElementById(id);
+  el.addEventListener('shown.bs.modal', _restoreBodyScroll);
+  el.addEventListener('hidden.bs.modal', function() {
+    _restoreBodyScroll();
+    // Clear search on close
+    var prefix = id.replace('Modal','');
+    var inp = document.getElementById(prefix + 'ModalSearch');
+    if (inp) { inp.value = ''; inp.dispatchEvent(new Event('input')); }
+  });
+});
+
+document.getElementById('activityExportBtn').addEventListener('click', function() {
+  _exportModalCsv('activityModal', ['Source File','Rows Imported','Last Row Saved At'], ['filename','rows','last_at'], 'Activity_Detail');
+});
+document.getElementById('activityPrintBtn').addEventListener('click', function() {
+  var s = _detailData['activityModal'];
+  if (!s) return;
+  _printModal('activityModal', 'Activity Detail — ' + s.dateStr.split('-').reverse().join('-'), 'activityModalBody');
+});
+
+document.getElementById('emergencyExportBtn').addEventListener('click', function() {
+  _exportModalCsv('emergencyModal', ['Amb Reg No','Patient Name','Phone','District','Status','Category','Imported At'], ['amb_reg_no','name','phone','district','status','category','imported_at'], 'Emergency_Detail');
+});
+document.getElementById('emergencyPrintBtn').addEventListener('click', function() {
+  var s = _detailData['emergencyModal'];
+  if (!s) return;
+  _printModal('emergencyModal', 'Emergency Task Detail — ' + s.dateStr.split('-').reverse().join('-'), 'emergencyModalBody');
+});
+
+document.getElementById('mileageExportBtn').addEventListener('click', function() {
+  _exportModalCsv('mileageModal', ['Vehicle Reg No','Mileage (KM)','PtoP (KM)','Effective KM','Imported At'], ['reg_no','mileage','ptop','effective_km','imported_at'], 'Mileage_Detail');
+});
+document.getElementById('mileagePrintBtn').addEventListener('click', function() {
+  var s = _detailData['mileageModal'];
+  if (!s) return;
+  _printModal('mileageModal', 'Mileage Detail — ' + s.dateStr.split('-').reverse().join('-'), 'mileageModalBody');
+});
+
+document.addEventListener('DOMContentLoaded', function(){
+  if(window.fleetTableEnhance) window.fleetTableEnhance('uploadLogTable');
+  if(window.fleetPrintExport) window.fleetPrintExport('uploadLogTable','Workbook Upload Log — {{ from_date|ddmmyyyy }} to {{ to_date|ddmmyyyy }}','Workbook_Upload_Log_{{ from_date.strftime("%d-%m-%Y") }}_to_{{ to_date.strftime("%d-%m-%Y") }}.csv');
+
+  // Modal realtime search with empty-state
+  ['activity','emergency','mileage'].forEach(function(prefix) {
+    var input = document.getElementById(prefix + 'ModalSearch');
+    if (!input) return;
+    input.addEventListener('input', function() {
+      var q = (input.value || '').trim();
+      var tbody = document.getElementById(prefix + 'ModalBody');
+      if (!tbody) return;
+      var visCount = 0;
+      tbody.querySelectorAll('tr').forEach(function(tr) {
+        if (tr.id === prefix + 'ModalNoResult') { tr.remove(); return; }
+        if (tr.querySelector('td[colspan]')) return;
+        var show = window.fleetMultiWordMatch ? window.fleetMultiWordMatch(tr.textContent, q) : true;
+        tr.style.display = show ? '' : 'none';
+        if (show) visCount++;
+      });
+      var noRow = document.getElementById(prefix + 'ModalNoResult');
+      if (noRow) noRow.remove();
+      if (q && visCount === 0) {
+        var cols = tbody.closest('table').querySelectorAll('thead th').length || 4;
+        var nr = document.createElement('tr');
+        nr.id = prefix + 'ModalNoResult';
+        nr.innerHTML = '<td colspan="' + cols + '" class="text-center py-3 text-muted"><i class="bi bi-search me-1"></i>"' + q + '" se koi nataija nahi mila.</td>';
+        tbody.appendChild(nr);
+      }
+    });
+    input.addEventListener('keydown', function(e) { if (e.key === 'Enter') e.preventDefault(); });
+  });
+});
+
+function escapeHtml(s) {
+  var d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
 }
 </script>
 {% endblock %}

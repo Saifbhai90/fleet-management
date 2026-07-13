@@ -28,10 +28,15 @@ from utils import pk_now, pk_date, parse_date, format_date_ddmmyyyy
 from vehicle_sort_utils import vehicle_order_by, sort_vehicles_in_memory
 import re
 import os
-import json
 import csv
 import io
+import json
+import time as _time
 from io import BytesIO, StringIO
+
+# Simple in-memory cache for upload log page (5-min TTL)
+_upload_log_cache = {'key': None, 'data': None, 'ts': 0}
+_UPLOAD_LOG_CACHE_TTL = 300  # 5 minutes
 
 # Import shared helpers from routes.py
 from routes import (
@@ -1614,7 +1619,7 @@ def task_report_upload():
 def task_report_upload_list():
     """Read-only log: workbook import stats from Emergency / Mileage / Activity tables (no separate upload log table)."""
     today = pk_date()
-    default_from = today - timedelta(days=90)
+    default_from = today - timedelta(days=3)
     from_date = parse_date(request.args.get('from_date')) or default_from
     to_date = parse_date(request.args.get('to_date')) or today
     if from_date > to_date:
@@ -1626,103 +1631,256 @@ def task_report_upload_list():
     form.district_id.choices = [(0, '--')]
     form.project_id.choices = [(0, '--')]
 
-    emg_stats = {
-        row[0]: {'count': int(row[1]), 'last_at': row[2]}
-        for row in db.session.query(
-            EmergencyTaskRecord.task_date,
-            func.count(EmergencyTaskRecord.id),
-            func.max(EmergencyTaskRecord.created_at),
-        ).filter(
-            EmergencyTaskRecord.task_date >= from_date,
-            EmergencyTaskRecord.task_date <= to_date,
-        ).group_by(EmergencyTaskRecord.task_date).all()
-    }
+    page = request.args.get('page', 1, type=int) or 1
+    per_page = request.args.get('per_page', 25, type=int) or 25
+    force_refresh = request.args.get('refresh') == '1'
 
-    mil_stats = {
-        row[0]: {'count': int(row[1]), 'last_at': row[2]}
-        for row in db.session.query(
-            VehicleMileageRecord.task_date,
-            func.count(VehicleMileageRecord.id),
-            func.max(VehicleMileageRecord.created_at),
-        ).filter(
-            VehicleMileageRecord.task_date >= from_date,
-            VehicleMileageRecord.task_date <= to_date,
-        ).group_by(VehicleMileageRecord.task_date).all()
-    }
+    # --- Check cache (5-min TTL, keyed by date range + page + per_page) ---
+    cache_key = f'{from_date}|{to_date}|{page}|{per_page}'
+    now_ts = _time.time()
+    if (not force_refresh
+            and _upload_log_cache['key'] == cache_key
+            and _upload_log_cache['data']
+            and (now_ts - _upload_log_cache['ts']) < _UPLOAD_LOG_CACHE_TTL):
+        cached = _upload_log_cache['data']
+        return render_template(
+            'task_report_upload_list.html',
+            form=form,
+            summary_rows=cached['summary_rows'],
+            from_date=from_date,
+            to_date=to_date,
+            pagination=cached['pagination'],
+            per_page=per_page,
+            **_nav_back_ctx(url_for('module_hub', hub_slug='task-logbook'), show_without_nav_from=True),
+        )
 
-    activity_cap = 1200
-    act_q = (
-        db.session.query(
+    # --- Collect distinct dates from all 3 tables (small set with 3-day default) ---
+    emg_dates = db.session.query(EmergencyTaskRecord.task_date).filter(
+        EmergencyTaskRecord.task_date >= from_date,
+        EmergencyTaskRecord.task_date <= to_date,
+    ).distinct().all()
+
+    mil_dates = db.session.query(VehicleMileageRecord.task_date).filter(
+        VehicleMileageRecord.task_date >= from_date,
+        VehicleMileageRecord.task_date <= to_date,
+    ).distinct().all()
+
+    act_dates = db.session.query(VehicleActivityRecord.task_date).filter(
+        VehicleActivityRecord.task_date >= from_date,
+        VehicleActivityRecord.task_date <= to_date,
+    ).distinct().all()
+
+    all_dates = sorted({r[0] for r in emg_dates} | {r[0] for r in mil_dates} | {r[0] for r in act_dates}, reverse=True)
+    total_dates = len(all_dates)
+    page_start = (page - 1) * per_page
+    page_date_list = all_dates[page_start:page_start + per_page]
+
+    # --- Fetch stats only for the current page's dates (not all dates) ---
+    if page_date_list:
+        emg_stats = {
+            row[0]: {'count': int(row[1]), 'last_at': row[2]}
+            for row in db.session.query(
+                EmergencyTaskRecord.task_date,
+                func.count(EmergencyTaskRecord.id),
+                func.max(EmergencyTaskRecord.created_at),
+            ).filter(
+                EmergencyTaskRecord.task_date.in_(page_date_list),
+            ).group_by(EmergencyTaskRecord.task_date).all()
+        }
+
+        mil_stats = {
+            row[0]: {'count': int(row[1]), 'last_at': row[2]}
+            for row in db.session.query(
+                VehicleMileageRecord.task_date,
+                func.count(VehicleMileageRecord.id),
+                func.max(VehicleMileageRecord.created_at),
+            ).filter(
+                VehicleMileageRecord.task_date.in_(page_date_list),
+            ).group_by(VehicleMileageRecord.task_date).all()
+        }
+
+        act_rows = db.session.query(
             VehicleActivityRecord.task_date,
             VehicleActivityRecord.source_file,
             func.count(VehicleActivityRecord.id),
             func.max(VehicleActivityRecord.created_at),
-        )
-        .filter(
-            VehicleActivityRecord.task_date >= from_date,
-            VehicleActivityRecord.task_date <= to_date,
-        )
-        .group_by(VehicleActivityRecord.task_date, VehicleActivityRecord.source_file)
-        .order_by(VehicleActivityRecord.task_date.desc(), VehicleActivityRecord.source_file.asc())
-    )
-    act_rows_all = act_q.all()
+        ).filter(
+            VehicleActivityRecord.task_date.in_(page_date_list),
+        ).group_by(
+            VehicleActivityRecord.task_date, VehicleActivityRecord.source_file
+        ).order_by(
+            VehicleActivityRecord.task_date.desc(), VehicleActivityRecord.source_file.asc()
+        ).all()
 
-    act_by_date = {}
-    for row in act_rows_all:
-        td = row[0]
-        fn = row[1] or '(unknown file)'
-        cnt = int(row[2])
-        la = row[3]
-        act_by_date.setdefault(td, {'files': 0, 'rows': 0, 'last_at': None})
-        act_by_date[td]['files'] += 1
-        act_by_date[td]['rows'] += cnt
-        if la and (act_by_date[td]['last_at'] is None or la > act_by_date[td]['last_at']):
-            act_by_date[td]['last_at'] = la
+        act_by_date = {}
+        for row in act_rows:
+            td = row[0]
+            cnt = int(row[2])
+            la = row[3]
+            act_by_date.setdefault(td, {'files': 0, 'rows': 0, 'last_at': None})
+            act_by_date[td]['files'] += 1
+            act_by_date[td]['rows'] += cnt
+            if la and (act_by_date[td]['last_at'] is None or la > act_by_date[td]['last_at']):
+                act_by_date[td]['last_at'] = la
 
-    act_detail = []
-    for row in act_rows_all[:activity_cap]:
-        act_detail.append({
-            'task_date': row[0],
-            'filename': row[1] or '(unknown file)',
-            'rows': int(row[2]),
-            'last_at': row[3],
-        })
-    activity_truncated = len(act_rows_all) > activity_cap
+        summary_rows = []
+        for td in page_date_list:
+            em = emg_stats.get(td, {})
+            mi = mil_stats.get(td, {})
+            ac = act_by_date.get(td, {})
+            emg_count = em.get('count', 0)
+            mil_count = mi.get('count', 0)
+            act_files = ac.get('files', 0)
+            # Status badge: Complete = all 3 present, Partial = some, Empty = none
+            present_count = (1 if emg_count > 0 else 0) + (1 if mil_count > 0 else 0) + (1 if act_files > 0 else 0)
+            if present_count == 3:
+                status = 'complete'
+            elif present_count == 0:
+                status = 'empty'
+            else:
+                status = 'partial'
+            summary_rows.append({
+                'task_date': td,
+                'emergency_count': emg_count,
+                'emergency_last': em.get('last_at'),
+                'mileage_count': mil_count,
+                'mileage_last': mi.get('last_at'),
+                'activity_files': act_files,
+                'activity_rows': ac.get('rows', 0),
+                'activity_last': ac.get('last_at'),
+                'status': status,
+            })
+    else:
+        summary_rows = []
 
-    all_dates = sorted(set(emg_stats.keys()) | set(mil_stats.keys()) | set(act_by_date.keys()), reverse=True)
-    summary_rows = []
-    for td in all_dates:
-        em = emg_stats.get(td, {})
-        mi = mil_stats.get(td, {})
-        ac = act_by_date.get(td, {})
-        summary_rows.append({
-            'task_date': td,
-            'emergency_count': em.get('count', 0),
-            'emergency_last': em.get('last_at'),
-            'mileage_count': mi.get('count', 0),
-            'mileage_last': mi.get('last_at'),
-            'activity_files': ac.get('files', 0),
-            'activity_rows': ac.get('rows', 0),
-            'activity_last': ac.get('last_at'),
-        })
+    pagination = SimplePagination([None] * total_dates, page, per_page)
+    pagination.items = summary_rows
 
-    page = request.args.get('page', 1, type=int) or 1
-    per_page = request.args.get('per_page', 25, type=int) or 25
-    pagination = SimplePagination(summary_rows, page, per_page)
+    # --- Cache the result ---
+    _upload_log_cache['key'] = cache_key
+    _upload_log_cache['data'] = {'summary_rows': summary_rows, 'pagination': pagination}
+    _upload_log_cache['ts'] = now_ts
 
     return render_template(
         'task_report_upload_list.html',
         form=form,
-        summary_rows=pagination.items,
-        activity_detail=act_detail,
-        activity_truncated=activity_truncated,
-        activity_cap=activity_cap,
-        activity_file_total=len(act_rows_all),
+        summary_rows=summary_rows,
         from_date=from_date,
         to_date=to_date,
         pagination=pagination,
         per_page=per_page,
         **_nav_back_ctx(url_for('module_hub', hub_slug='task-logbook'), show_without_nav_from=True),
     )
+
+
+@app.route('/task-report/upload/activity-detail/<date_str>')
+def task_report_activity_detail_api(date_str):
+    """AJAX endpoint: return activity file detail for a single date as JSON."""
+    try:
+        target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify({'error': 'Invalid date format'}), 400
+
+    rows = db.session.query(
+        VehicleActivityRecord.source_file,
+        func.count(VehicleActivityRecord.id),
+        func.max(VehicleActivityRecord.created_at),
+    ).filter(
+        VehicleActivityRecord.task_date == target_date,
+    ).group_by(
+        VehicleActivityRecord.source_file
+    ).order_by(
+        VehicleActivityRecord.source_file.asc()
+    ).all()
+
+    return jsonify({
+        'date': date_str,
+        'files': [
+            {
+                'filename': row[0] or '(unknown file)',
+                'rows': int(row[1]),
+                'last_at': row[2].strftime('%d-%m-%Y %H:%M') if row[2] else None,
+            }
+            for row in rows
+        ],
+        'total_files': len(rows),
+        'total_rows': sum(int(r[1]) for r in rows),
+    })
+
+
+@app.route('/task-report/upload/emergency-detail/<date_str>')
+def task_report_emergency_detail_api(date_str):
+    """AJAX endpoint: return emergency task detail for a single date as JSON."""
+    try:
+        target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify({'error': 'Invalid date format'}), 400
+
+    rows = db.session.query(
+        EmergencyTaskRecord.amb_reg_no,
+        EmergencyTaskRecord.name,
+        EmergencyTaskRecord.phone,
+        EmergencyTaskRecord.district_name,
+        EmergencyTaskRecord.status,
+        EmergencyTaskRecord.category,
+        EmergencyTaskRecord.created_at,
+    ).filter(
+        EmergencyTaskRecord.task_date == target_date,
+    ).order_by(
+        EmergencyTaskRecord.created_at.desc()
+    ).limit(500).all()
+
+    return jsonify({
+        'date': date_str,
+        'records': [
+            {
+                'amb_reg_no': r[0] or '—',
+                'name': r[1] or '—',
+                'phone': r[2] or '—',
+                'district': r[3] or '—',
+                'status': r[4] or '—',
+                'category': r[5] or '—',
+                'imported_at': r[6].strftime('%d-%m-%Y %H:%M') if r[6] else None,
+            }
+            for r in rows
+        ],
+        'total': len(rows),
+    })
+
+
+@app.route('/task-report/upload/mileage-detail/<date_str>')
+def task_report_mileage_detail_api(date_str):
+    """AJAX endpoint: return mileage detail for a single date as JSON."""
+    try:
+        target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify({'error': 'Invalid date format'}), 400
+
+    rows = db.session.query(
+        VehicleMileageRecord.reg_no,
+        VehicleMileageRecord.mileage,
+        VehicleMileageRecord.ptop,
+        VehicleMileageRecord.selected_km,
+        VehicleMileageRecord.created_at,
+    ).filter(
+        VehicleMileageRecord.task_date == target_date,
+    ).order_by(
+        VehicleMileageRecord.reg_no.asc()
+    ).limit(500).all()
+
+    return jsonify({
+        'date': date_str,
+        'records': [
+            {
+                'reg_no': r[0] or '—',
+                'mileage': float(r[1]) if r[1] else 0,
+                'ptop': float(r[2]) if r[2] else 0,
+                'effective_km': float(r[3]) if r[3] is not None else float(max(r[1] or 0, r[2] or 0)),
+                'imported_at': r[4].strftime('%d-%m-%Y %H:%M') if r[4] else None,
+            }
+            for r in rows
+        ],
+        'total': len(rows),
+    })
 
 
