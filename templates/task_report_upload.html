@@ -13,6 +13,20 @@
     {% endif %}
   </div>
 
+  <!-- Duplicate Date Warning -->
+  <div id="duplicateDateAlert" class="alert alert-warning d-flex align-items-center gap-2 mb-3" style="display:none;">
+    <i class="bi bi-exclamation-triangle-fill fs-5"></i>
+    <div><strong>Duplicate Upload Warning:</strong> Is date ka data already uploaded hai. Re-upload karne se <strong>purana data replace</strong> ho jayega.</div>
+  </div>
+
+  <!-- Upload Result Toast -->
+  <div id="uploadResultToast" class="toast align-items-center text-white bg-success border-0" role="alert" style="position:fixed;top:80px;right:20px;z-index:3000;min-width:320px;display:none;">
+    <div class="d-flex">
+      <div class="toast-body" id="uploadResultToastBody"></div>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto" onclick="document.getElementById('uploadResultToast').style.display='none'"></button>
+    </div>
+  </div>
+
   <div class="card shadow border-0 rounded-3">
     <div class="card-body">
       <p class="text-muted small">Report date select karein, phir required Excel files choose karein. Har field optional hai, lekin kam az kam ek file zaroor select karein. Same date par re-upload karne par purana data replace ho jata hai. Multiple Mileage aur Activity files ko timeout se bachne ke liye har file alag server request par upload hoti hai.</p>
@@ -27,28 +41,32 @@
         <div class="row g-3">
           <div class="col-md-12">
             <label class="form-label">Report Date <span class="text-danger">*</span></label>
-            {{ form.task_date(class="form-control datepicker") }}
+            {{ form.task_date(class="form-control datepicker", id="taskDateInput") }}
             {% for e in form.task_date.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
           </div>
           <div class="col-md-6">
             <label class="form-label">1. EmergencyTaskReport Excel</label>
-            {{ form.file_emergency(class="form-control") }}
+            {{ form.file_emergency(class="form-control", id="fileEmergency") }}
+            <div id="fileEmergencyWarn" class="text-warning small mt-1" style="display:none;"></div>
             <small class="text-muted">EMG,Tasks (admin) column ke liye</small>
           </div>
           <div class="col-md-6">
             <label class="form-label">2. Vehicle Mileage Report Excel <span class="badge bg-secondary ms-1" style="font-size:.7rem;">Multiple OK</span></label>
-            {{ form.file_mileage(class="form-control", multiple=true) }}
+            {{ form.file_mileage(class="form-control", multiple=true, id="fileMileage") }}
+            <div id="fileMileageWarn" class="text-warning small mt-1" style="display:none;"></div>
             <small class="text-muted">Ek ya multiple files — single all-vehicles file ya per-vehicle alag files dono OK.</small>
           </div>
           <div class="col-md-12">
             <label class="form-label">3. Tracker Activity Report Excel (Multiple Vehicle Files)</label>
-            {{ form.file_activity_reports(class="form-control", multiple=true) }}
+            {{ form.file_activity_reports(class="form-control", multiple=true, id="fileActivity") }}
+            <div id="fileActivityWarn" class="text-warning small mt-1" style="display:none;"></div>
             <small class="text-muted">Ek dafa me multiple vehicle activity files select karein. Same date upload hone par purani activity replace ho jati hai.</small>
           </div>
           <div class="col-12">
             <button type="submit" class="btn btn-primary" id="uploadBtn">
               <i class="bi bi-upload me-1"></i>Upload
             </button>
+            <span id="fileValidationMsg" class="text-danger small ms-3" style="display:none;"></span>
           </div>
         </div>
       </form>
@@ -86,16 +104,20 @@
 
 </div>
 
-<div id="uploadOverlay" class="d-none" style="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:2000;display:flex;align-items:center;justify-content:center;">
-  <div class="card shadow-lg border-0" style="width:400px;max-width:90%;">
-    <div class="card-body text-center py-5">
-      <div class="spinner-border text-primary mb-3" style="width:3rem;height:3rem;" role="status"></div>
-      <h5 class="mb-2">Uploading & Processing...</h5>
-      <p class="text-muted small mb-3" id="uploadStatusLine">Excel files parse ho rahi hain. Please wait.</p>
-      <div class="progress" style="height:6px;">
+<div id="uploadOverlay" class="d-none" style="position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:2000;display:flex;align-items:center;justify-content:center;">
+  <div class="card shadow-lg border-0" style="width:460px;max-width:95%;">
+    <div class="card-body py-4 px-4">
+      <div class="text-center mb-3">
+        <div class="spinner-border text-primary mb-2" style="width:2.5rem;height:2.5rem;" role="status"></div>
+        <h6 class="mb-1">Uploading & Processing...</h6>
+        <p class="text-muted small mb-0" id="uploadStatusLine">Excel files parse ho rahi hain. Please wait.</p>
+      </div>
+      <div class="progress mb-2" style="height:6px;">
         <div id="uploadProgress" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" style="width:5%;"></div>
       </div>
-      <small class="text-muted mt-2 d-block" id="uploadPct">5%</small>
+      <small class="text-muted d-block text-center mb-3" id="uploadPct">5%</small>
+      <!-- Per-file progress list -->
+      <div id="fileProgressList" style="max-height:180px;overflow-y:auto;font-size:.8rem;"></div>
     </div>
   </div>
 </div>
@@ -202,15 +224,42 @@
   }
 
   window._loadSummary = loadSummary;
+  window._summaryPresentCount = 0;
+
+  var _origRender = renderSummary;
+  renderSummary = function(results, loading, tbody, statusEl) {
+    _origRender(results, loading, tbody, statusEl);
+    var pc = 0;
+    ['emg','mil','act'].forEach(function(k) {
+      var r = results[k]; if (!r) return;
+      var d = r.data; if (!d || d.error) return;
+      var c = k === 'act' ? (d.total_rows || 0) : (d.total || 0);
+      if (c > 0) pc++;
+    });
+    window._summaryPresentCount = pc;
+    var dupAlert = document.getElementById('duplicateDateAlert');
+    if (dupAlert) dupAlert.style.display = pc > 0 ? '' : 'none';
+  };
 
   document.addEventListener('DOMContentLoaded', function() {
-    var dateInp = document.querySelector('[name="task_date"]');
+    var dateInp = document.getElementById('taskDateInput');
     if (!dateInp) return;
+    // Disable future dates via flatpickr or native max attr
+    var today = new Date();
+    var dd = String(today.getDate()).padStart(2,'0');
+    var mm = String(today.getMonth()+1).padStart(2,'0');
+    var yyyy = today.getFullYear();
+    if (dateInp._flatpickr) {
+      dateInp._flatpickr.set('maxDate', today);
+    } else {
+      dateInp.setAttribute('max', yyyy + '-' + mm + '-' + dd);
+    }
     var d = getSelectedDate();
     if (d) loadSummary(d);
     dateInp.addEventListener('change', function() {
       var d2 = getSelectedDate();
       if (d2) loadSummary(d2);
+      else { var a = document.getElementById('duplicateDateAlert'); if (a) a.style.display = 'none'; }
     });
   });
 })();
@@ -220,146 +269,197 @@
   var form = document.getElementById('taskReportUploadForm');
   if (!form) return;
 
-  function showOverlaySpinner(message) {
-    var overlay = document.getElementById('uploadOverlay');
-    overlay.classList.remove('d-none');
-    overlay.style.display = 'flex';
-    var bar = document.getElementById('uploadProgress');
-    var pctEl = document.getElementById('uploadPct');
-    var statusEl = document.getElementById('uploadStatusLine');
-    if (statusEl && message) statusEl.textContent = message;
-    var w = 5;
-    bar.style.width = w + '%';
-    pctEl.textContent = w + '%';
+  // ---- File validation ----
+  var MAX_MB = 10;
+  function validateFiles(files, warnElId) {
+    var warnEl = document.getElementById(warnElId);
+    var errMsgs = [], warnMsgs = [];
+    Array.from(files).forEach(function(f) {
+      var ext = f.name.split('.').pop().toLowerCase();
+      if (ext !== 'xlsx' && ext !== 'xls') errMsgs.push(f.name + ': sirf .xlsx/.xls allowed');
+      else if (f.size > MAX_MB * 1024 * 1024) warnMsgs.push(f.name + ' (' + (f.size/1024/1024).toFixed(1) + ' MB) — large file, time lagega');
+    });
+    var allMsgs = errMsgs.map(function(m){ return '❌ '+m; }).concat(warnMsgs.map(function(m){ return '⚠️ '+m; }));
+    if (warnEl) { warnEl.innerHTML = allMsgs.join('<br>'); warnEl.style.display = allMsgs.length ? '' : 'none'; }
+    return errMsgs.length === 0;
+  }
+
+  ['fileEmergency','fileMileage','fileActivity'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    var warnMap = { fileEmergency:'fileEmergencyWarn', fileMileage:'fileMileageWarn', fileActivity:'fileActivityWarn' };
+    el.addEventListener('change', function() { validateFiles(el.files, warnMap[id]); });
+  });
+
+  // ---- Per-file progress list ----
+  var _fs = {};
+  function initFileList(steps) {
+    _fs = {};
+    steps.forEach(function(s) { _fs[s.id] = {label: s.label, status:'pending', msg:''}; });
+    _renderFL();
+  }
+  function setFS(id, status, msg) {
+    if (_fs[id]) { _fs[id].status = status; _fs[id].msg = msg||''; }
+    _renderFL();
+  }
+  function _renderFL() {
+    var el = document.getElementById('fileProgressList');
+    if (!el) return;
+    var ic = {pending:'⏳', uploading:'🔄', done:'✅', error:'❌'};
+    el.innerHTML = Object.keys(_fs).map(function(id) {
+      var s = _fs[id];
+      return '<div class="d-flex align-items-center gap-2 py-1 border-bottom">'
+        +'<span>'+ic[s.status]+'</span>'
+        +'<span class="text-truncate flex-grow-1" style="font-size:.78rem;">'+s.label+'</span>'
+        +(s.msg?'<span class="text-muted" style="font-size:.7rem;white-space:nowrap;">'+s.msg+'</span>':'')
+        +'</div>';
+    }).join('');
+  }
+
+  // ---- Overlay helpers ----
+  function showOverlay(msg) {
+    var o = document.getElementById('uploadOverlay');
+    o.classList.remove('d-none'); o.style.display = 'flex';
+    var sl = document.getElementById('uploadStatusLine');
+    if (sl && msg) sl.textContent = msg;
+    var bar = document.getElementById('uploadProgress'), pct = document.getElementById('uploadPct');
+    var w = 5; bar.style.width = '5%'; pct.textContent = '5%';
     var target = 90;
     var iv = setInterval(function() {
-      var step = Math.max(0.3, (target - w) * 0.04);
-      w = Math.min(w + step, target);
-      bar.style.width = w.toFixed(0) + '%';
-      pctEl.textContent = w.toFixed(0) + '%';
+      var step = Math.max(0.3, (target-w)*0.04);
+      w = Math.min(w+step, target);
+      bar.style.width = w.toFixed(0)+'%'; pct.textContent = w.toFixed(0)+'%';
     }, 300);
-    setTimeout(function() { target = 95; }, 8000);
-    window._uploadInterval = iv;
+    setTimeout(function(){ target=95; }, 8000);
+    window._uploadIv = iv;
+  }
+  function hideOverlay() {
+    if (window._uploadIv) { clearInterval(window._uploadIv); window._uploadIv=null; }
+    var o = document.getElementById('uploadOverlay');
+    o.classList.add('d-none'); o.style.display='none';
+  }
+  function setPct(p, msg) {
+    document.getElementById('uploadProgress').style.width = p+'%';
+    document.getElementById('uploadPct').textContent = p+'%';
+    var sl = document.getElementById('uploadStatusLine');
+    if (sl && msg) sl.textContent = msg;
   }
 
-  function hideOverlaySpinner() {
-    if (window._uploadInterval) {
-      clearInterval(window._uploadInterval);
-      window._uploadInterval = null;
-    }
-    var overlay = document.getElementById('uploadOverlay');
-    overlay.classList.add('d-none');
-    overlay.style.display = 'none';
+  // ---- Result toast ----
+  function showToast(html) {
+    var t = document.getElementById('uploadResultToast'), b = document.getElementById('uploadResultToastBody');
+    if (!t||!b) return;
+    b.innerHTML = html; t.style.display = '';
+    setTimeout(function(){ t.style.display='none'; }, 9000);
   }
 
+  // ---- Submit ----
   form.addEventListener('submit', function(ev) {
-    var actInput = form.querySelector('[name="file_activity_reports"]');
-    var actFiles = actInput && actInput.files ? Array.from(actInput.files) : [];
-    var miInput = form.querySelector('[name="file_mileage"]');
-    var miFiles = miInput && miInput.files ? Array.from(miInput.files) : [];
-    var emInput = form.querySelector('[name="file_emergency"]');
-    var emFile = emInput && emInput.files && emInput.files[0];
+    var emInput = document.getElementById('fileEmergency');
+    var miInput = document.getElementById('fileMileage');
+    var actInput = document.getElementById('fileActivity');
+    var emFile  = emInput  && emInput.files[0]  ? emInput.files[0]  : null;
+    var miFiles = miInput  && miInput.files.length  ? Array.from(miInput.files)  : [];
+    var actFiles= actInput && actInput.files.length ? Array.from(actInput.files) : [];
 
-    // If only emergency file (no multi-file), let form submit normally
+    // Validate
+    var ok = true;
+    if (emFile)       ok = validateFiles([emFile], 'fileEmergencyWarn') && ok;
+    if (miFiles.length)  ok = validateFiles(miFiles,  'fileMileageWarn')  && ok;
+    if (actFiles.length) ok = validateFiles(actFiles, 'fileActivityWarn') && ok;
+    if (!emFile && !miFiles.length && !actFiles.length) {
+      var vm = document.getElementById('fileValidationMsg');
+      if (vm) { vm.textContent = 'Kam az kam ek file select karein.'; vm.style.display=''; }
+      ev.preventDefault(); return;
+    }
+    var vm2 = document.getElementById('fileValidationMsg');
+    if (vm2) vm2.style.display = 'none';
+    if (!ok) { ev.preventDefault(); return; }
+
+    // Single-file path — let normal POST handle it
     if (actFiles.length === 0 && miFiles.length <= 1) {
-      showOverlaySpinner('Excel parse ho rahi hai…');
-      return;
+      showOverlay('Excel parse ho rahi hai…'); return;
     }
 
     ev.preventDefault();
-    showOverlaySpinner('Files upload ho rahi hain…');
 
-    var csrfInput = form.querySelector('[name="csrf_token"]');
-    var csrfVal = csrfInput ? csrfInput.value : '';
-    var taskDateInput = form.querySelector('[name="task_date"]');
-    var taskDate = taskDateInput ? taskDateInput.value : '';
+    // Build steps
+    var steps = [];
+    if (emFile) steps.push({id:'emg', label:'Emergency: '+emFile.name, type:'emg'});
+    miFiles.forEach(function(f,i){ steps.push({id:'mil'+i, label:'Mileage '+(i+1)+'/'+miFiles.length+': '+f.name, type:'mil', idx:i, file:f}); });
+    actFiles.forEach(function(f,i){ steps.push({id:'act'+i, label:'Activity '+(i+1)+'/'+actFiles.length+': '+f.name, type:'act', idx:i, file:f}); });
+
+    initFileList(steps);
+    showOverlay('Upload shuru ho rahi hai…');
+
+    var csrf    = (form.querySelector('[name="csrf_token"]')||{}).value||'';
+    var taskDate= (document.getElementById('taskDateInput')||{}).value||'';
     var coreUrl = form.getAttribute('data-core-url');
-    var mileageUrl = form.getAttribute('data-mileage-url');
-    var activityUrl = form.getAttribute('data-activity-url');
-    var redirectBase = form.getAttribute('data-redirect-base');
-
-    var stepsTotal = actFiles.length + miFiles.length + (emFile ? 1 : 0);
-    var stepDone = 0;
-
-    function setProgress(message) {
-      var bar = document.getElementById('uploadProgress');
-      var pctEl = document.getElementById('uploadPct');
-      var statusEl = document.getElementById('uploadStatusLine');
-      stepDone++;
-      var p = 5 + Math.min(92, (89 * stepDone / Math.max(stepsTotal, 1)));
-      bar.style.width = p + '%';
-      pctEl.textContent = Math.round(p) + '%';
-      if (statusEl && message) statusEl.textContent = message;
-    }
+    var milUrl  = form.getAttribute('data-mileage-url');
+    var actUrl  = form.getAttribute('data-activity-url');
+    var redirUrl= form.getAttribute('data-redirect-base');
+    var total   = steps.length, done = 0;
+    var errors  = [], res = {emg:0, mil:0, act:0, actF:0};
 
     var chain = Promise.resolve();
-
-    // Step 1: Emergency only (via core endpoint, no mileage here since mileage is now per-file)
-    if (emFile) {
+    steps.forEach(function(step) {
       chain = chain.then(function() {
+        setFS(step.id, 'uploading', '');
         var fd = new FormData();
-        fd.append('csrf_token', csrfVal);
+        fd.append('csrf_token', csrf);
         fd.append('task_date', taskDate);
-        fd.append('file_emergency', emFile);
-        return fetch(coreUrl, { method: 'POST', body: fd, credentials: 'same-origin' }).then(function(r) {
-          return r.json().then(function(j) {
-            if (!r.ok || !j.ok) throw new Error(j.error || 'Emergency upload failed.');
-            setProgress('Emergency upload ho gayi.');
-          });
+        var url, p;
+        if (step.type==='emg') {
+          fd.append('file_emergency', emFile);
+          p = fetch(coreUrl,{method:'POST',body:fd,credentials:'same-origin'}).then(function(r){return r.json().then(function(j){
+            if(!r.ok||!j.ok) throw new Error(j.error||'Emergency failed');
+            res.emg = j.emergency_count||0;
+          });});
+        } else if (step.type==='mil') {
+          fd.append('clear_mileage', step.idx===0?'1':'0');
+          fd.append('file_mileage', step.file, step.file.name);
+          p = fetch(milUrl,{method:'POST',body:fd,credentials:'same-origin'}).then(function(r){return r.json().then(function(j){
+            if(!r.ok||!j.ok) throw new Error(j.error||'Mileage failed');
+            res.mil += j.rows||0;
+          });});
+        } else {
+          fd.append('clear_activity', step.idx===0?'1':'0');
+          fd.append('file_activity', step.file, step.file.name);
+          p = fetch(actUrl,{method:'POST',body:fd,credentials:'same-origin'}).then(function(r){return r.json().then(function(j){
+            if(!r.ok||!j.ok) throw new Error(j.error||'Activity failed');
+            res.act += j.rows||0; res.actF++;
+          });});
+        }
+        return p.then(function(){
+          done++;
+          setFS(step.id,'done','');
+          setPct(Math.round(5+90*done/total), step.label+' ✓');
+        }).catch(function(err){
+          done++;
+          var msg = err&&err.message?err.message:String(err);
+          errors.push(step.label+': '+msg);
+          setFS(step.id,'error',msg);
+          setPct(Math.round(5+90*done/total),'Error skipped');
+          // Continue — no rethrow
         });
       });
-    }
+    });
 
-    // Step 2: Mileage files one by one
-    for (var mi = 0; mi < miFiles.length; mi++) {
-      (function(index, file) {
-        chain = chain.then(function() {
-          var fd = new FormData();
-          fd.append('csrf_token', csrfVal);
-          fd.append('task_date', taskDate);
-          fd.append('clear_mileage', index === 0 ? '1' : '0');  // Only first file clears
-          fd.append('file_mileage', file, file.name);
-          return fetch(mileageUrl, { method: 'POST', body: fd, credentials: 'same-origin' }).then(function(r) {
-            return r.json().then(function(j) {
-              if (!r.ok || !j.ok) throw new Error(j.error || ('Mileage failed: ' + file.name));
-              setProgress('Mileage ' + (index + 1) + '/' + miFiles.length + ': ' + file.name);
-            });
-          });
-        });
-      })(mi, miFiles[mi]);
-    }
-
-    // Step 3: Activity files one by one
-    for (var i = 0; i < actFiles.length; i++) {
-      (function(index, file) {
-        chain = chain.then(function() {
-          var fd = new FormData();
-          fd.append('csrf_token', csrfVal);
-          fd.append('task_date', taskDate);
-          fd.append('clear_activity', index === 0 ? '1' : '0');
-          fd.append('file_activity', file, file.name);
-          return fetch(activityUrl, { method: 'POST', body: fd, credentials: 'same-origin' }).then(function(r) {
-            return r.json().then(function(j) {
-              if (!r.ok || !j.ok) throw new Error(j.error || ('Activity failed: ' + file.name));
-              setProgress('Activity ' + (index + 1) + '/' + actFiles.length + ': ' + file.name);
-            });
-          });
-        });
-      })(i, actFiles[i]);
-    }
-
-    chain.then(function() {
-      var bar = document.getElementById('uploadProgress');
-      var pctEl = document.getElementById('uploadPct');
-      bar.style.width = '100%';
-      pctEl.textContent = '100%';
-      hideOverlaySpinner();
-      // Reload summary for the uploaded date before redirecting
-      if (window._loadSummary) window._loadSummary(taskDate.split('-').reverse().join('-').replace(/(\d{2})-(\d{2})-(\d{4})/, '$3-$2-$1'));
-      window.location.href = redirectBase;
-    }).catch(function(err) {
-      hideOverlaySpinner();
-      alert(err && err.message ? err.message : String(err));
+    chain.then(function(){
+      setPct(100,'Complete!');
+      setTimeout(function(){
+        hideOverlay();
+        var parts=[];
+        if(res.emg)  parts.push('🚨 EMG: '+res.emg+' records');
+        if(res.mil)  parts.push('📊 Mileage: '+res.mil+' records');
+        if(res.act)  parts.push('📄 Activity: '+res.act+' rows ('+res.actF+' files)');
+        var html='<i class="bi bi-check-circle-fill me-2"></i><strong>Upload Complete!</strong><br>'
+          +'<small>'+(parts.join(' &bull; ')||'No new data')+'</small>';
+        if(errors.length) html+='<br><small class="text-warning">⚠️ '+errors.length+' error(s) — check log</small>';
+        showToast(html);
+        if(window._loadSummary){ var p=taskDate.split('-'); if(p.length===3) window._loadSummary(p[2]+'-'+p[1]+'-'+p[0]); }
+        setTimeout(function(){ window.location.href=redirUrl; }, 2800);
+      }, 400);
     });
   });
 })();
