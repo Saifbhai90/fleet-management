@@ -1,83 +1,180 @@
 {% extends "base.html" %}
 {% block title %}Upload Workbooks (Admin){% endblock %}
 {% block content %}
+<style>
+.drop-zone{border:2px dashed #adb5bd;border-radius:.5rem;padding:1rem;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;background:#fafafa;}
+.drop-zone.drag-over{border-color:#0d6efd;background:#e8f0fe;}
+.drop-zone input[type=file]{display:none;}
+.drop-zone .dz-icon{font-size:2rem;color:#adb5bd;display:block;margin-bottom:.3rem;}
+.drop-zone.has-files{border-color:#198754;background:#f0fff4;}
+.drop-zone.has-files .dz-icon{color:#198754;}
+.section-card .card-header{cursor:pointer;user-select:none;}
+.badge-file-count{font-size:.7rem;}
+</style>
+
 <div class="container-fluid">
-  <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
     <div class="d-flex align-items-center gap-2 flex-wrap">
       {% from 'partials/nav_back_button.html' import nav_back_button with context %}
       {{ nav_back_button() }}
       <h2 class="mb-0"><i class="bi bi-file-earmark-excel me-2 text-primary"></i>Upload Workbooks (Admin)</h2>
     </div>
-    {% if nav_from %}
-    <a href="{{ url_for('task_report_upload_list', nav_from=nav_from) }}" class="btn btn-outline-primary btn-sm"><i class="bi bi-journal-bookmark me-1"></i>Upload log</a>
-    {% endif %}
+    <a href="{{ url_for('task_report_upload_list') }}" id="uploadLogBtn" class="btn btn-outline-primary btn-sm"><i class="bi bi-journal-bookmark me-1"></i>Upload Log</a>
+  </div>
+
+  <!-- Missing Dates Alert -->
+  <div id="missingDatesAlert" class="alert alert-danger border-0 py-2 px-3 mb-3" style="display:none;">
+    <div class="d-flex align-items-start gap-2">
+      <i class="bi bi-calendar-x-fill mt-1 flex-shrink-0"></i>
+      <div>
+        <strong class="d-block mb-1">Incomplete / Missing Uploads (last 14 days):</strong>
+        <div id="missingDatesList" class="d-flex flex-wrap gap-1"></div>
+      </div>
+    </div>
   </div>
 
   <!-- Duplicate Date Warning -->
   <div id="duplicateDateAlert" class="alert alert-warning d-flex align-items-center gap-2 mb-3" style="display:none;">
-    <i class="bi bi-exclamation-triangle-fill fs-5"></i>
+    <i class="bi bi-exclamation-triangle-fill fs-5 flex-shrink-0"></i>
     <div><strong>Duplicate Upload Warning:</strong> Is date ka data already uploaded hai. Re-upload karne se <strong>purana data replace</strong> ho jayega.</div>
   </div>
 
   <!-- Upload Result Toast -->
-  <div id="uploadResultToast" class="toast align-items-center text-white bg-success border-0" role="alert" style="position:fixed;top:80px;right:20px;z-index:3000;min-width:320px;display:none;">
+  <div id="uploadResultToast" class="toast align-items-center text-white bg-success border-0 shadow-lg" role="alert" style="position:fixed;top:80px;right:20px;z-index:3000;min-width:340px;display:none;">
     <div class="d-flex">
       <div class="toast-body" id="uploadResultToastBody"></div>
       <button type="button" class="btn-close btn-close-white me-2 m-auto" onclick="document.getElementById('uploadResultToast').style.display='none'"></button>
     </div>
   </div>
 
-  <div class="card shadow border-0 rounded-3">
-    <div class="card-body">
-      <p class="text-muted small">Report date select karein, phir required Excel files choose karein. Har field optional hai, lekin kam az kam ek file zaroor select karein. Same date par re-upload karne par purana data replace ho jata hai. Multiple Mileage aur Activity files ko timeout se bachne ke liye har file alag server request par upload hoti hai.</p>
+  <!-- Re-upload Confirmation Modal -->
+  <div class="modal fade" id="reuploadModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content border-0 shadow">
+        <div class="modal-header bg-warning text-dark border-0">
+          <h6 class="modal-title"><i class="bi bi-exclamation-triangle-fill me-2"></i>Re-upload Confirmation</h6>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p class="mb-1">Is date ka data <strong>already uploaded</strong> hai:</p>
+          <div id="reuploadModalSummary" class="text-muted small mb-3"></div>
+          <p class="mb-0 text-danger fw-semibold">Re-upload karne se <u>purana data permanently delete</u> ho jayega aur naya data insert hoga. Sure hain?</p>
+        </div>
+        <div class="modal-footer border-0">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+          <button type="button" class="btn btn-danger btn-sm" id="reuploadConfirmBtn"><i class="bi bi-upload me-1"></i>Haan, Re-upload Karein</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Upload Card -->
+  <div class="card shadow border-0 rounded-3 mb-3">
+    <div class="card-body pb-2">
       <form method="POST" enctype="multipart/form-data" id="taskReportUploadForm"
             data-core-url="{{ url_for('task_report_upload_core') }}"
             data-mileage-url="{{ url_for('task_report_upload_mileage_one') }}"
             data-activity-url="{{ url_for('task_report_upload_activity_one') }}"
+            data-missing-url="{{ url_for('task_report_upload_missing_dates') }}"
+            data-log-url="{{ url_for('task_report_upload_list') }}"
             data-redirect-base="{{ url_for('module_hub', hub_slug='task-logbook') }}">
         {{ form.hidden_tag() }}
         {% from 'partials/nav_back_button.html' import nav_from_hidden %}
         {{ nav_from_hidden() }}
-        <div class="row g-3">
-          <div class="col-md-12">
-            <label class="form-label">Report Date <span class="text-danger">*</span></label>
+
+        <!-- Date row -->
+        <div class="row g-3 mb-3">
+          <div class="col-md-4 col-sm-6">
+            <label class="form-label fw-semibold">Report Date <span class="text-danger">*</span></label>
             {{ form.task_date(class="form-control datepicker", id="taskDateInput") }}
             {% for e in form.task_date.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
           </div>
-          <div class="col-md-6">
-            <label class="form-label">1. EmergencyTaskReport Excel</label>
-            {{ form.file_emergency(class="form-control", id="fileEmergency") }}
-            <div id="fileEmergencyWarn" class="text-warning small mt-1" style="display:none;"></div>
-            <small class="text-muted">EMG,Tasks (admin) column ke liye</small>
+        </div>
+
+        <!-- Section 1: Emergency -->
+        <div class="card section-card border mb-2 rounded-2">
+          <div class="card-header bg-light d-flex justify-content-between align-items-center py-2" data-bs-toggle="collapse" data-bs-target="#secEmergency">
+            <span class="fw-semibold small"><i class="bi bi-truck text-danger me-2"></i>1. EmergencyTaskReport Excel</span>
+            <div class="d-flex align-items-center gap-2">
+              <span id="badgeEmg" class="badge bg-secondary badge-file-count" style="display:none;"></span>
+              <i class="bi bi-chevron-down small text-muted"></i>
+            </div>
           </div>
-          <div class="col-md-6">
-            <label class="form-label">2. Vehicle Mileage Report Excel <span class="badge bg-secondary ms-1" style="font-size:.7rem;">Multiple OK</span></label>
-            {{ form.file_mileage(class="form-control", multiple=true, id="fileMileage") }}
-            <div id="fileMileageWarn" class="text-warning small mt-1" style="display:none;"></div>
-            <small class="text-muted">Ek ya multiple files — single all-vehicles file ya per-vehicle alag files dono OK.</small>
+          <div class="collapse show" id="secEmergency">
+            <div class="card-body py-2">
+              <div class="drop-zone" id="dzEmergency">
+                <i class="bi bi-file-earmark-excel dz-icon"></i>
+                <span class="small text-muted" id="dzEmgLabel">Click to select or drag & drop Excel file</span>
+                {{ form.file_emergency(class="", id="fileEmergency", accept=".xlsx,.xls") }}
+              </div>
+              <div id="fileEmergencyWarn" class="small mt-1" style="display:none;"></div>
+              <small class="text-muted d-block mt-1">EMG, Tasks (admin) column ke liye</small>
+            </div>
           </div>
-          <div class="col-md-12">
-            <label class="form-label">3. Tracker Activity Report Excel (Multiple Vehicle Files)</label>
-            {{ form.file_activity_reports(class="form-control", multiple=true, id="fileActivity") }}
-            <div id="fileActivityWarn" class="text-warning small mt-1" style="display:none;"></div>
-            <small class="text-muted">Ek dafa me multiple vehicle activity files select karein. Same date upload hone par purani activity replace ho jati hai.</small>
+        </div>
+
+        <!-- Section 2: Mileage -->
+        <div class="card section-card border mb-2 rounded-2">
+          <div class="card-header bg-light d-flex justify-content-between align-items-center py-2" data-bs-toggle="collapse" data-bs-target="#secMileage">
+            <span class="fw-semibold small"><i class="bi bi-speedometer2 text-info me-2"></i>2. Vehicle Mileage Report Excel <span class="badge bg-secondary ms-1" style="font-size:.65rem;">Multiple OK</span></span>
+            <div class="d-flex align-items-center gap-2">
+              <span id="badgeMil" class="badge bg-secondary badge-file-count" style="display:none;"></span>
+              <i class="bi bi-chevron-down small text-muted"></i>
+            </div>
           </div>
-          <div class="col-12">
-            <button type="submit" class="btn btn-primary" id="uploadBtn">
-              <i class="bi bi-upload me-1"></i>Upload
-            </button>
-            <span id="fileValidationMsg" class="text-danger small ms-3" style="display:none;"></span>
+          <div class="collapse show" id="secMileage">
+            <div class="card-body py-2">
+              <div class="drop-zone" id="dzMileage">
+                <i class="bi bi-file-earmark-excel dz-icon"></i>
+                <span class="small text-muted" id="dzMilLabel">Click to select or drag & drop — multiple files OK</span>
+                {{ form.file_mileage(class="", multiple=true, id="fileMileage", accept=".xlsx,.xls") }}
+              </div>
+              <div id="fileMileageWarn" class="small mt-1" style="display:none;"></div>
+              <small class="text-muted d-block mt-1">Single all-vehicles file ya per-vehicle alag files — dono OK.</small>
+            </div>
           </div>
+        </div>
+
+        <!-- Section 3: Activity -->
+        <div class="card section-card border mb-3 rounded-2">
+          <div class="card-header bg-light d-flex justify-content-between align-items-center py-2" data-bs-toggle="collapse" data-bs-target="#secActivity">
+            <span class="fw-semibold small"><i class="bi bi-file-earmark-spreadsheet text-primary me-2"></i>3. Tracker Activity Report Excel <span class="badge bg-secondary ms-1" style="font-size:.65rem;">Multiple OK</span></span>
+            <div class="d-flex align-items-center gap-2">
+              <span id="badgeAct" class="badge bg-secondary badge-file-count" style="display:none;"></span>
+              <i class="bi bi-chevron-down small text-muted"></i>
+            </div>
+          </div>
+          <div class="collapse show" id="secActivity">
+            <div class="card-body py-2">
+              <div class="drop-zone" id="dzActivity">
+                <i class="bi bi-files dz-icon"></i>
+                <span class="small text-muted" id="dzActLabel">Click to select or drag & drop multiple files</span>
+                {{ form.file_activity_reports(class="", multiple=true, id="fileActivity", accept=".xlsx,.xls") }}
+              </div>
+              <div id="fileActivityWarn" class="small mt-1" style="display:none;"></div>
+              <small class="text-muted d-block mt-1">Multiple vehicle activity files ek saath. Same date upload hone par purani activity replace hoti hai.</small>
+            </div>
+          </div>
+        </div>
+
+        <div class="d-flex align-items-center gap-3 flex-wrap mb-2">
+          <button type="submit" class="btn btn-primary" id="uploadBtn">
+            <i class="bi bi-upload me-1"></i>Upload
+          </button>
+          <span id="fileValidationMsg" class="text-danger small" style="display:none;"></span>
         </div>
       </form>
     </div>
   </div>
 
   <!-- Date Summary Card -->
-  <div class="card shadow-sm border-0 rounded-3 mt-3" id="dateSummaryCard" style="display:none;">
-    <div class="card-header bg-dark text-white py-2 d-flex justify-content-between align-items-center">
+  <div class="card shadow-sm border-0 rounded-3 mb-3" id="dateSummaryCard" style="display:none;">
+    <div class="card-header bg-dark text-white py-2 d-flex justify-content-between align-items-center flex-wrap gap-2">
       <span class="fw-semibold small"><i class="bi bi-journal-bookmark me-2"></i>Uploaded Data for <span id="summaryDateLabel"></span></span>
-      <span id="summaryStatusBadge"></span>
+      <div class="d-flex align-items-center gap-2">
+        <span id="summaryStatusBadge"></span>
+        <a id="summaryLogLink" href="#" class="btn btn-outline-light btn-sm py-0 px-2" style="font-size:.75rem;" target="_blank"><i class="bi bi-box-arrow-up-right me-1"></i>Full Log</a>
+      </div>
     </div>
     <div class="card-body p-0">
       <div id="summaryLoading" class="text-center py-3" style="display:none;">
@@ -104,6 +201,7 @@
 
 </div>
 
+<!-- Upload Overlay -->
 <div id="uploadOverlay" class="d-none" style="position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:2000;display:flex;align-items:center;justify-content:center;">
   <div class="card shadow-lg border-0" style="width:460px;max-width:95%;">
     <div class="card-body py-4 px-4">
@@ -116,198 +214,268 @@
         <div id="uploadProgress" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" style="width:5%;"></div>
       </div>
       <small class="text-muted d-block text-center mb-3" id="uploadPct">5%</small>
-      <!-- Per-file progress list -->
-      <div id="fileProgressList" style="max-height:180px;overflow-y:auto;font-size:.8rem;"></div>
+      <div id="fileProgressList" style="max-height:200px;overflow-y:auto;font-size:.8rem;"></div>
     </div>
   </div>
 </div>
 
 <script>
-// ---- Date Summary Logic ----
-(function() {
-  var summaryApiBase = '{{ url_for("task_report_upload_list") }}';
-  var emgDetailBase  = '{{ url_for("task_report_emergency_detail_api", date_str="PLACEHOLDER") }}';
-  var milDetailBase  = '{{ url_for("task_report_mileage_detail_api", date_str="PLACEHOLDER") }}';
-  var actDetailBase  = '{{ url_for("task_report_activity_detail_api", date_str="PLACEHOLDER") }}';
+// ======== SHARED UTILITIES ========
+function isoDate(ddmmyyyy) {
+  var p = (ddmmyyyy||'').split('-');
+  return p.length===3 ? p[2]+'-'+p[1]+'-'+p[0] : null;
+}
+function ddmmyyyy(isoStr) {
+  var p = (isoStr||'').split('-');
+  return p.length===3 ? p[2]+'-'+p[1]+'-'+p[0] : isoStr;
+}
 
-  function isoDate(ddmmyyyy) {
-    var p = (ddmmyyyy || '').split('-');
-    if (p.length !== 3) return null;
-    return p[2] + '-' + p[1] + '-' + p[0];
+// ======== DRAG & DROP + FILE COUNT BADGES ========
+(function(){
+  var zones = [
+    {dzId:'dzEmergency',  inputId:'fileEmergency', labelId:'dzEmgLabel', badgeId:'badgeEmg', multi:false, warnId:'fileEmergencyWarn'},
+    {dzId:'dzMileage',    inputId:'fileMileage',   labelId:'dzMilLabel', badgeId:'badgeMil', multi:true,  warnId:'fileMileageWarn'},
+    {dzId:'dzActivity',   inputId:'fileActivity',  labelId:'dzActLabel', badgeId:'badgeAct', multi:true,  warnId:'fileActivityWarn'},
+  ];
+
+  var MAX_MB = 10;
+  function validateAndWarn(files, warnId) {
+    var warnEl = document.getElementById(warnId);
+    var errs=[], warns=[];
+    Array.from(files).forEach(function(f){
+      var ext = f.name.split('.').pop().toLowerCase();
+      if(ext!=='xlsx'&&ext!=='xls') errs.push('❌ '+f.name+': sirf .xlsx/.xls allowed');
+      else if(f.size > MAX_MB*1024*1024) warns.push('⚠️ '+f.name+' ('+(f.size/1024/1024).toFixed(1)+' MB) — large, time lagega');
+    });
+    var all = errs.concat(warns);
+    if(warnEl){ warnEl.innerHTML=all.join('<br>'); warnEl.style.display=all.length?'':'none'; }
+    return errs.length===0;
   }
+
+  function updateZone(z) {
+    var dz = document.getElementById(z.dzId);
+    var inp = document.getElementById(z.inputId);
+    var lbl = document.getElementById(z.labelId);
+    var badge = document.getElementById(z.badgeId);
+    if(!dz||!inp) return;
+    var files = inp.files;
+    if(files && files.length>0){
+      dz.classList.add('has-files');
+      if(lbl) lbl.textContent = files.length===1 ? files[0].name : files.length+' files selected';
+      if(badge){ badge.textContent=files.length+' file'+(files.length>1?'s':''); badge.style.display=''; badge.className='badge bg-success badge-file-count'; }
+      validateAndWarn(files, z.warnId);
+    } else {
+      dz.classList.remove('has-files');
+      if(lbl) lbl.textContent = z.multi ? 'Click to select or drag & drop — multiple files OK' : 'Click to select or drag & drop Excel file';
+      if(badge){ badge.style.display='none'; }
+      var warnEl=document.getElementById(z.warnId); if(warnEl) warnEl.style.display='none';
+    }
+  }
+
+  zones.forEach(function(z){
+    var dz = document.getElementById(z.dzId);
+    var inp = document.getElementById(z.inputId);
+    if(!dz||!inp) return;
+
+    dz.addEventListener('click', function(e){ if(e.target!==inp) inp.click(); });
+    inp.addEventListener('change', function(){ updateZone(z); });
+
+    dz.addEventListener('dragover', function(e){ e.preventDefault(); dz.classList.add('drag-over'); });
+    dz.addEventListener('dragleave', function(){ dz.classList.remove('drag-over'); });
+    dz.addEventListener('drop', function(e){
+      e.preventDefault(); dz.classList.remove('drag-over');
+      var dt = e.dataTransfer;
+      if(!dt||!dt.files.length) return;
+      try {
+        var container = new DataTransfer();
+        var accepted = Array.from(dt.files).filter(function(f){
+          var ext=f.name.split('.').pop().toLowerCase(); return ext==='xlsx'||ext==='xls';
+        });
+        if(!z.multi) accepted = accepted.slice(0,1);
+        accepted.forEach(function(f){ container.items.add(f); });
+        inp.files = container.files;
+      } catch(err){ inp.files = dt.files; }
+      updateZone(z);
+    });
+  });
+
+  window._validateAllFiles = function(){
+    var ok=true;
+    zones.forEach(function(z){
+      var inp=document.getElementById(z.inputId);
+      if(inp&&inp.files.length) ok=validateAndWarn(inp.files,z.warnId)&&ok;
+    });
+    return ok;
+  };
+})();
+
+// ======== MISSING DATES ========
+(function(){
+  var form = document.getElementById('taskReportUploadForm');
+  var missingUrl = form ? form.getAttribute('data-missing-url') : null;
+  if(!missingUrl) return;
+
+  fetch(missingUrl+'?days=14')
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      var dates = data.dates||[];
+      if(!dates.length) return;
+      var alert = document.getElementById('missingDatesAlert');
+      var list  = document.getElementById('missingDatesList');
+      if(!alert||!list) return;
+      list.innerHTML = dates.map(function(d){
+        var cls = d.status==='missing' ? 'bg-danger' : 'bg-warning text-dark';
+        var missing = [];
+        if(!d.has_emg) missing.push('EMG');
+        if(!d.has_mil) missing.push('Mil');
+        if(!d.has_act) missing.push('Act');
+        var tip = d.status==='partial' ? ' (missing: '+missing.join(',')+')' : '';
+        return '<button type="button" class="badge '+cls+' border-0 text-decoration-none" style="cursor:pointer;" '
+          +'onclick="window._setDate(\''+d.date_display+'\')" title="Click to select this date'+tip+'">'
+          +d.day_name+' '+d.date_display+(d.status==='partial'?' ⚠️':'')+
+          '</button>';
+      }).join('');
+      alert.style.display='';
+    })
+    .catch(function(){});
+
+  window._setDate = function(ddmm){
+    var inp = document.getElementById('taskDateInput');
+    if(!inp) return;
+    inp.value = ddmm;
+    inp.dispatchEvent(new Event('change'));
+    inp.scrollIntoView({behavior:'smooth', block:'center'});
+  };
+})();
+
+// ======== DATE SUMMARY + DUPLICATE WARNING ========
+(function() {
+  var emgDetailBase = '{{ url_for("task_report_emergency_detail_api", date_str="PLACEHOLDER") }}';
+  var milDetailBase = '{{ url_for("task_report_mileage_detail_api", date_str="PLACEHOLDER") }}';
+  var actDetailBase = '{{ url_for("task_report_activity_detail_api", date_str="PLACEHOLDER") }}';
+  var logBase       = '{{ url_for("task_report_upload_list") }}';
 
   function statusBadge(present, total) {
-    if (present === 0) return '<span class="badge bg-danger-subtle text-danger border border-danger-subtle">Empty</span>';
-    if (present === total) return '<span class="badge bg-success-subtle text-success border border-success-subtle">Complete</span>';
+    if(present===0) return '<span class="badge bg-danger-subtle text-danger border border-danger-subtle">Empty</span>';
+    if(present===total) return '<span class="badge bg-success-subtle text-success border border-success-subtle">Complete</span>';
     return '<span class="badge bg-warning-subtle text-warning border border-warning-subtle">Partial</span>';
   }
-
-  function fmtCount(n) { return n > 0 ? '<strong>' + n + '</strong>' : '<span class="text-muted">0</span>'; }
+  function fmtCount(n){ return n>0?'<strong>'+n+'</strong>':'<span class="text-muted">0</span>'; }
 
   function loadSummary(dateIso) {
-    var card = document.getElementById('dateSummaryCard');
-    var loading = document.getElementById('summaryLoading');
-    var tbody = document.getElementById('summaryTableBody');
-    var label = document.getElementById('summaryDateLabel');
-    var statusEl = document.getElementById('summaryStatusBadge');
-    if (!card || !dateIso) return;
+    var card=document.getElementById('dateSummaryCard');
+    var loading=document.getElementById('summaryLoading');
+    var tbody=document.getElementById('summaryTableBody');
+    var label=document.getElementById('summaryDateLabel');
+    var statusEl=document.getElementById('summaryStatusBadge');
+    var logLink=document.getElementById('summaryLogLink');
+    if(!card||!dateIso) return;
 
-    card.style.display = '';
-    loading.style.display = '';
-    tbody.innerHTML = '';
-    label.textContent = dateIso.split('-').reverse().join('-');
-    statusEl.innerHTML = '';
+    card.style.display='';
+    loading.style.display='';
+    tbody.innerHTML='';
+    label.textContent = ddmmyyyy(dateIso);
+    statusEl.innerHTML='';
+    // Update "Full Log" link with pre-filled date filter
+    if(logLink) logLink.href = logBase + '?from_date=' + ddmmyyyy(dateIso) + '&to_date=' + ddmmyyyy(dateIso);
 
-    var results = {};
-    var done = 0;
-    var apis = [
-      { key: 'emg', url: emgDetailBase.replace('PLACEHOLDER', dateIso), label: 'Emergency Tasks', icon: 'bi-truck', color: 'danger' },
-      { key: 'mil', url: milDetailBase.replace('PLACEHOLDER', dateIso), label: 'Vehicle Mileage', icon: 'bi-speedometer2', color: 'info' },
-      { key: 'act', url: actDetailBase.replace('PLACEHOLDER', dateIso), label: 'Tracker Activity', icon: 'bi-file-earmark-spreadsheet', color: 'primary' },
+    var results={}, done=0;
+    var apis=[
+      {key:'emg', url:emgDetailBase.replace('PLACEHOLDER',dateIso), label:'Emergency Tasks', icon:'bi-truck', color:'danger'},
+      {key:'mil', url:milDetailBase.replace('PLACEHOLDER',dateIso), label:'Vehicle Mileage', icon:'bi-speedometer2', color:'info'},
+      {key:'act', url:actDetailBase.replace('PLACEHOLDER',dateIso), label:'Tracker Activity', icon:'bi-file-earmark-spreadsheet', color:'primary'},
     ];
-
-    apis.forEach(function(api) {
-      fetch(api.url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-          results[api.key] = { data: data, api: api };
-        })
-        .catch(function() {
-          results[api.key] = { data: null, api: api };
-        })
-        .finally(function() {
+    apis.forEach(function(api){
+      fetch(api.url,{headers:{'X-Requested-With':'XMLHttpRequest'}})
+        .then(function(r){return r.json();})
+        .then(function(data){ results[api.key]={data:data,api:api}; })
+        .catch(function(){ results[api.key]={data:null,api:api}; })
+        .finally(function(){
           done++;
-          if (done === apis.length) renderSummary(results, loading, tbody, statusEl);
+          if(done===apis.length) renderSummary(results,loading,tbody,statusEl);
         });
     });
   }
 
   function renderSummary(results, loading, tbody, statusEl) {
-    loading.style.display = 'none';
-    var presentCount = 0;
-    var rows = [
-      buildRow(results.emg),
-      buildRow(results.mil),
-      buildRow(results.act),
-    ];
-    rows.forEach(function(r) { if (r.present) presentCount++; });
-    tbody.innerHTML = rows.map(function(r) { return r.html; }).join('');
-    statusEl.innerHTML = statusBadge(presentCount, 3);
+    loading.style.display='none';
+    var pc=0;
+    var rows=[buildRow(results.emg),buildRow(results.mil),buildRow(results.act)];
+    rows.forEach(function(r){ if(r.present) pc++; });
+    tbody.innerHTML = rows.map(function(r){return r.html;}).join('');
+    statusEl.innerHTML = statusBadge(pc,3);
+    // Duplicate date warning
+    window._summaryPresentCount = pc;
+    var dupAlert=document.getElementById('duplicateDateAlert');
+    if(dupAlert) dupAlert.style.display = pc>0?'':'none';
+    // Store summary text for modal
+    var parts=[];
+    rows.forEach(function(r){ if(r.present&&r.label) parts.push(r.label+': '+r.count+' records'); });
+    window._summaryText = parts.join(' | ') || 'Data present';
   }
 
   function buildRow(result) {
-    var api = result.api;
-    var data = result.data;
-    var present = false;
-    var count = 0, lastAt = '—';
-    if (data && !data.error) {
-      if (api.key === 'emg') { count = data.total || 0; lastAt = (data.records && data.records[0] && data.records[0].imported_at) || '—'; }
-      else if (api.key === 'mil') { count = data.total || 0; lastAt = (data.records && data.records[0] && data.records[0].imported_at) || '—'; }
-      else if (api.key === 'act') { count = data.total_rows || 0; lastAt = (data.files && data.files[0] && data.files[0].last_at) || '—'; }
-      if (count > 0) present = true;
+    if(!result) return {html:'',present:false,label:'',count:0};
+    var api=result.api, data=result.data;
+    var present=false, count=0, lastAt='—';
+    if(data&&!data.error){
+      if(api.key==='emg'){ count=data.total||0; lastAt=(data.records&&data.records[0]&&data.records[0].imported_at)||'—'; }
+      else if(api.key==='mil'){ count=data.total||0; lastAt=(data.records&&data.records[0]&&data.records[0].imported_at)||'—'; }
+      else if(api.key==='act'){ count=data.total_rows||0; lastAt=(data.files&&data.files[0]&&data.files[0].last_at)||'—'; }
+      if(count>0) present=true;
     }
-    var statusHtml = present
-      ? '<span class="badge bg-success-subtle text-success border border-success-subtle">Uploaded</span>'
-      : '<span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">No Data</span>';
-    var html = '<tr>'
-      + '<td class="ps-3"><i class="bi ' + api.icon + ' me-2 text-' + api.color + '"></i>' + api.label + '</td>'
-      + '<td class="text-end">' + fmtCount(count) + '</td>'
-      + '<td class="text-muted small text-nowrap">' + lastAt + '</td>'
-      + '<td class="text-end pe-3">' + statusHtml + '</td>'
-      + '</tr>';
-    return { html: html, present: present };
-  }
-
-  function getSelectedDate() {
-    var inp = document.querySelector('[name="task_date"]');
-    return inp ? isoDate(inp.value) : null;
+    var statusHtml=present
+      ?'<span class="badge bg-success-subtle text-success border border-success-subtle">Uploaded</span>'
+      :'<span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">No Data</span>';
+    var html='<tr>'
+      +'<td class="ps-3"><i class="bi '+api.icon+' me-2 text-'+api.color+'"></i>'+api.label+'</td>'
+      +'<td class="text-end">'+fmtCount(count)+'</td>'
+      +'<td class="text-muted small text-nowrap">'+lastAt+'</td>'
+      +'<td class="text-end pe-3">'+statusHtml+'</td>'
+      +'</tr>';
+    return {html:html, present:present, label:api.label, count:count};
   }
 
   window._loadSummary = loadSummary;
   window._summaryPresentCount = 0;
-
-  var _origRender = renderSummary;
-  renderSummary = function(results, loading, tbody, statusEl) {
-    _origRender(results, loading, tbody, statusEl);
-    var pc = 0;
-    ['emg','mil','act'].forEach(function(k) {
-      var r = results[k]; if (!r) return;
-      var d = r.data; if (!d || d.error) return;
-      var c = k === 'act' ? (d.total_rows || 0) : (d.total || 0);
-      if (c > 0) pc++;
-    });
-    window._summaryPresentCount = pc;
-    var dupAlert = document.getElementById('duplicateDateAlert');
-    if (dupAlert) dupAlert.style.display = pc > 0 ? '' : 'none';
-  };
+  window._summaryText = '';
 
   document.addEventListener('DOMContentLoaded', function() {
-    var dateInp = document.getElementById('taskDateInput');
-    if (!dateInp) return;
-    // Disable future dates via flatpickr or native max attr
-    var today = new Date();
-    var dd = String(today.getDate()).padStart(2,'0');
-    var mm = String(today.getMonth()+1).padStart(2,'0');
-    var yyyy = today.getFullYear();
-    if (dateInp._flatpickr) {
-      dateInp._flatpickr.set('maxDate', today);
-    } else {
-      dateInp.setAttribute('max', yyyy + '-' + mm + '-' + dd);
-    }
-    var d = getSelectedDate();
-    if (d) loadSummary(d);
-    dateInp.addEventListener('change', function() {
-      var d2 = getSelectedDate();
-      if (d2) loadSummary(d2);
-      else { var a = document.getElementById('duplicateDateAlert'); if (a) a.style.display = 'none'; }
+    var dateInp=document.getElementById('taskDateInput');
+    if(!dateInp) return;
+    // Disable future dates
+    var today=new Date();
+    var dd=String(today.getDate()).padStart(2,'0');
+    var mm=String(today.getMonth()+1).padStart(2,'0');
+    var yyyy=today.getFullYear();
+    setTimeout(function(){
+      if(dateInp._flatpickr) dateInp._flatpickr.set('maxDate', today);
+      else dateInp.setAttribute('max', yyyy+'-'+mm+'-'+dd);
+    }, 300);
+    var d=isoDate(dateInp.value);
+    if(d) loadSummary(d);
+    dateInp.addEventListener('change', function(){
+      var d2=isoDate(dateInp.value);
+      if(d2) loadSummary(d2);
+      else{ var a=document.getElementById('duplicateDateAlert'); if(a) a.style.display='none'; }
     });
   });
 })();
-// ---- End Date Summary ----
 
+// ======== UPLOAD ENGINE ========
 (function(){
   var form = document.getElementById('taskReportUploadForm');
   if (!form) return;
 
-  // ---- File validation ----
-  var MAX_MB = 10;
-  function validateFiles(files, warnElId) {
-    var warnEl = document.getElementById(warnElId);
-    var errMsgs = [], warnMsgs = [];
-    Array.from(files).forEach(function(f) {
-      var ext = f.name.split('.').pop().toLowerCase();
-      if (ext !== 'xlsx' && ext !== 'xls') errMsgs.push(f.name + ': sirf .xlsx/.xls allowed');
-      else if (f.size > MAX_MB * 1024 * 1024) warnMsgs.push(f.name + ' (' + (f.size/1024/1024).toFixed(1) + ' MB) — large file, time lagega');
-    });
-    var allMsgs = errMsgs.map(function(m){ return '❌ '+m; }).concat(warnMsgs.map(function(m){ return '⚠️ '+m; }));
-    if (warnEl) { warnEl.innerHTML = allMsgs.join('<br>'); warnEl.style.display = allMsgs.length ? '' : 'none'; }
-    return errMsgs.length === 0;
-  }
-
-  ['fileEmergency','fileMileage','fileActivity'].forEach(function(id) {
-    var el = document.getElementById(id);
-    if (!el) return;
-    var warnMap = { fileEmergency:'fileEmergencyWarn', fileMileage:'fileMileageWarn', fileActivity:'fileActivityWarn' };
-    el.addEventListener('change', function() { validateFiles(el.files, warnMap[id]); });
-  });
-
   // ---- Per-file progress list ----
-  var _fs = {};
-  function initFileList(steps) {
-    _fs = {};
-    steps.forEach(function(s) { _fs[s.id] = {label: s.label, status:'pending', msg:''}; });
-    _renderFL();
-  }
-  function setFS(id, status, msg) {
-    if (_fs[id]) { _fs[id].status = status; _fs[id].msg = msg||''; }
-    _renderFL();
-  }
-  function _renderFL() {
-    var el = document.getElementById('fileProgressList');
-    if (!el) return;
-    var ic = {pending:'⏳', uploading:'🔄', done:'✅', error:'❌'};
-    el.innerHTML = Object.keys(_fs).map(function(id) {
-      var s = _fs[id];
+  var _fs={};
+  function initFL(steps){ _fs={}; steps.forEach(function(s){_fs[s.id]={label:s.label,status:'pending',msg:'';};}); renderFL(); }
+  function setFS(id,status,msg){ if(_fs[id]){_fs[id].status=status;_fs[id].msg=msg||'';} renderFL(); }
+  function renderFL(){
+    var el=document.getElementById('fileProgressList'); if(!el) return;
+    var ic={pending:'⏳',uploading:'🔄',done:'✅',error:'❌'};
+    el.innerHTML=Object.keys(_fs).map(function(id){
+      var s=_fs[id];
       return '<div class="d-flex align-items-center gap-2 py-1 border-bottom">'
         +'<span>'+ic[s.status]+'</span>'
         +'<span class="text-truncate flex-grow-1" style="font-size:.78rem;">'+s.label+'</span>'
@@ -316,81 +484,48 @@
     }).join('');
   }
 
-  // ---- Overlay helpers ----
-  function showOverlay(msg) {
-    var o = document.getElementById('uploadOverlay');
-    o.classList.remove('d-none'); o.style.display = 'flex';
-    var sl = document.getElementById('uploadStatusLine');
-    if (sl && msg) sl.textContent = msg;
-    var bar = document.getElementById('uploadProgress'), pct = document.getElementById('uploadPct');
-    var w = 5; bar.style.width = '5%'; pct.textContent = '5%';
-    var target = 90;
-    var iv = setInterval(function() {
-      var step = Math.max(0.3, (target-w)*0.04);
-      w = Math.min(w+step, target);
-      bar.style.width = w.toFixed(0)+'%'; pct.textContent = w.toFixed(0)+'%';
-    }, 300);
-    setTimeout(function(){ target=95; }, 8000);
-    window._uploadIv = iv;
+  // ---- Overlay ----
+  function showOverlay(msg){
+    var o=document.getElementById('uploadOverlay');
+    o.classList.remove('d-none'); o.style.display='flex';
+    var sl=document.getElementById('uploadStatusLine'); if(sl&&msg) sl.textContent=msg;
+    var bar=document.getElementById('uploadProgress'),pct=document.getElementById('uploadPct');
+    var w=5; bar.style.width='5%'; pct.textContent='5%';
+    var target=90;
+    var iv=setInterval(function(){ var step=Math.max(0.3,(target-w)*0.04); w=Math.min(w+step,target); bar.style.width=w.toFixed(0)+'%'; pct.textContent=w.toFixed(0)+'%'; },300);
+    setTimeout(function(){target=95;},8000);
+    window._uploadIv=iv;
   }
-  function hideOverlay() {
-    if (window._uploadIv) { clearInterval(window._uploadIv); window._uploadIv=null; }
-    var o = document.getElementById('uploadOverlay');
-    o.classList.add('d-none'); o.style.display='none';
+  function hideOverlay(){
+    if(window._uploadIv){clearInterval(window._uploadIv);window._uploadIv=null;}
+    var o=document.getElementById('uploadOverlay'); o.classList.add('d-none'); o.style.display='none';
   }
-  function setPct(p, msg) {
-    document.getElementById('uploadProgress').style.width = p+'%';
-    document.getElementById('uploadPct').textContent = p+'%';
-    var sl = document.getElementById('uploadStatusLine');
-    if (sl && msg) sl.textContent = msg;
+  function setPct(p,msg){
+    document.getElementById('uploadProgress').style.width=p+'%';
+    document.getElementById('uploadPct').textContent=p+'%';
+    var sl=document.getElementById('uploadStatusLine'); if(sl&&msg) sl.textContent=msg;
   }
 
-  // ---- Result toast ----
-  function showToast(html) {
-    var t = document.getElementById('uploadResultToast'), b = document.getElementById('uploadResultToastBody');
-    if (!t||!b) return;
-    b.innerHTML = html; t.style.display = '';
-    setTimeout(function(){ t.style.display='none'; }, 9000);
+  // ---- Toast ----
+  function showToast(html){
+    var t=document.getElementById('uploadResultToast'),b=document.getElementById('uploadResultToastBody');
+    if(!t||!b) return;
+    b.innerHTML=html; t.style.display='';
+    setTimeout(function(){t.style.display='none';},9000);
   }
 
-  // ---- Submit ----
-  form.addEventListener('submit', function(ev) {
-    var emInput = document.getElementById('fileEmergency');
-    var miInput = document.getElementById('fileMileage');
-    var actInput = document.getElementById('fileActivity');
+  // ---- Button disable ----
+  function disableBtn(){ var b=document.getElementById('uploadBtn'); if(b){b.disabled=true; b.innerHTML='<span class="spinner-border spinner-border-sm me-1"></span>Uploading…';} }
+  function enableBtn(){ var b=document.getElementById('uploadBtn'); if(b){b.disabled=false; b.innerHTML='<i class="bi bi-upload me-1"></i>Upload';} }
+
+  // ---- Core upload runner ----
+  function runUpload(){
+    var emInput=document.getElementById('fileEmergency');
+    var miInput=document.getElementById('fileMileage');
+    var actInput=document.getElementById('fileActivity');
     var emFile  = emInput  && emInput.files[0]  ? emInput.files[0]  : null;
-    var miFiles = miInput  && miInput.files.length  ? Array.from(miInput.files)  : [];
-    var actFiles= actInput && actInput.files.length ? Array.from(actInput.files) : [];
-
-    // Validate
-    var ok = true;
-    if (emFile)       ok = validateFiles([emFile], 'fileEmergencyWarn') && ok;
-    if (miFiles.length)  ok = validateFiles(miFiles,  'fileMileageWarn')  && ok;
-    if (actFiles.length) ok = validateFiles(actFiles, 'fileActivityWarn') && ok;
-    if (!emFile && !miFiles.length && !actFiles.length) {
-      var vm = document.getElementById('fileValidationMsg');
-      if (vm) { vm.textContent = 'Kam az kam ek file select karein.'; vm.style.display=''; }
-      ev.preventDefault(); return;
-    }
-    var vm2 = document.getElementById('fileValidationMsg');
-    if (vm2) vm2.style.display = 'none';
-    if (!ok) { ev.preventDefault(); return; }
-
-    // Single-file path — let normal POST handle it
-    if (actFiles.length === 0 && miFiles.length <= 1) {
-      showOverlay('Excel parse ho rahi hai…'); return;
-    }
-
-    ev.preventDefault();
-
-    // Build steps
-    var steps = [];
-    if (emFile) steps.push({id:'emg', label:'Emergency: '+emFile.name, type:'emg'});
-    miFiles.forEach(function(f,i){ steps.push({id:'mil'+i, label:'Mileage '+(i+1)+'/'+miFiles.length+': '+f.name, type:'mil', idx:i, file:f}); });
-    actFiles.forEach(function(f,i){ steps.push({id:'act'+i, label:'Activity '+(i+1)+'/'+actFiles.length+': '+f.name, type:'act', idx:i, file:f}); });
-
-    initFileList(steps);
-    showOverlay('Upload shuru ho rahi hai…');
+    var miFiles = miInput  && miInput.files.length ? Array.from(miInput.files) : [];
+    var actFiles= actInput && actInput.files.length? Array.from(actInput.files): [];
 
     var csrf    = (form.querySelector('[name="csrf_token"]')||{}).value||'';
     var taskDate= (document.getElementById('taskDateInput')||{}).value||'';
@@ -398,49 +533,62 @@
     var milUrl  = form.getAttribute('data-mileage-url');
     var actUrl  = form.getAttribute('data-activity-url');
     var redirUrl= form.getAttribute('data-redirect-base');
-    var total   = steps.length, done = 0;
-    var errors  = [], res = {emg:0, mil:0, act:0, actF:0};
+    var logUrl  = form.getAttribute('data-log-url');
 
-    var chain = Promise.resolve();
-    steps.forEach(function(step) {
-      chain = chain.then(function() {
-        setFS(step.id, 'uploading', '');
-        var fd = new FormData();
-        fd.append('csrf_token', csrf);
-        fd.append('task_date', taskDate);
-        var url, p;
-        if (step.type==='emg') {
-          fd.append('file_emergency', emFile);
-          p = fetch(coreUrl,{method:'POST',body:fd,credentials:'same-origin'}).then(function(r){return r.json().then(function(j){
+    // Single-file path — normal POST
+    if(actFiles.length===0 && miFiles.length<=1){
+      showOverlay('Excel parse ho rahi hai…'); return;
+    }
+
+    var steps=[];
+    if(emFile) steps.push({id:'emg',label:'Emergency: '+emFile.name,type:'emg'});
+    miFiles.forEach(function(f,i){ steps.push({id:'mil'+i,label:'Mileage '+(i+1)+'/'+miFiles.length+': '+f.name,type:'mil',idx:i,file:f}); });
+    actFiles.forEach(function(f,i){ steps.push({id:'act'+i,label:'Activity '+(i+1)+'/'+actFiles.length+': '+f.name,type:'act',idx:i,file:f}); });
+
+    initFL(steps);
+    showOverlay('Upload shuru ho rahi hai…');
+
+    var total=steps.length, done=0;
+    var errors=[], res={emg:0,mil:0,act:0,actF:0};
+    var chain=Promise.resolve();
+
+    steps.forEach(function(step){
+      chain=chain.then(function(){
+        setFS(step.id,'uploading','');
+        var fd=new FormData();
+        fd.append('csrf_token',csrf);
+        fd.append('task_date',taskDate);
+        var p;
+        if(step.type==='emg'){
+          fd.append('file_emergency',emFile);
+          p=fetch(coreUrl,{method:'POST',body:fd,credentials:'same-origin'}).then(function(r){return r.json().then(function(j){
             if(!r.ok||!j.ok) throw new Error(j.error||'Emergency failed');
-            res.emg = j.emergency_count||0;
+            res.emg=j.emergency_count||0;
           });});
-        } else if (step.type==='mil') {
-          fd.append('clear_mileage', step.idx===0?'1':'0');
-          fd.append('file_mileage', step.file, step.file.name);
-          p = fetch(milUrl,{method:'POST',body:fd,credentials:'same-origin'}).then(function(r){return r.json().then(function(j){
+        } else if(step.type==='mil'){
+          fd.append('clear_mileage',step.idx===0?'1':'0');
+          fd.append('file_mileage',step.file,step.file.name);
+          p=fetch(milUrl,{method:'POST',body:fd,credentials:'same-origin'}).then(function(r){return r.json().then(function(j){
             if(!r.ok||!j.ok) throw new Error(j.error||'Mileage failed');
-            res.mil += j.rows||0;
+            res.mil+=j.rows||0;
           });});
         } else {
-          fd.append('clear_activity', step.idx===0?'1':'0');
-          fd.append('file_activity', step.file, step.file.name);
-          p = fetch(actUrl,{method:'POST',body:fd,credentials:'same-origin'}).then(function(r){return r.json().then(function(j){
+          fd.append('clear_activity',step.idx===0?'1':'0');
+          fd.append('file_activity',step.file,step.file.name);
+          p=fetch(actUrl,{method:'POST',body:fd,credentials:'same-origin'}).then(function(r){return r.json().then(function(j){
             if(!r.ok||!j.ok) throw new Error(j.error||'Activity failed');
-            res.act += j.rows||0; res.actF++;
+            res.act+=j.rows||0; res.actF++;
           });});
         }
         return p.then(function(){
-          done++;
-          setFS(step.id,'done','');
-          setPct(Math.round(5+90*done/total), step.label+' ✓');
+          done++; setFS(step.id,'done','');
+          setPct(Math.round(5+90*done/total),step.label+' ✓');
         }).catch(function(err){
           done++;
-          var msg = err&&err.message?err.message:String(err);
+          var msg=err&&err.message?err.message:String(err);
           errors.push(step.label+': '+msg);
           setFS(step.id,'error',msg);
-          setPct(Math.round(5+90*done/total),'Error skipped');
-          // Continue — no rethrow
+          setPct(Math.round(5+90*done/total),'Error — continuing…');
         });
       });
     });
@@ -448,19 +596,75 @@
     chain.then(function(){
       setPct(100,'Complete!');
       setTimeout(function(){
-        hideOverlay();
+        hideOverlay(); enableBtn();
         var parts=[];
-        if(res.emg)  parts.push('🚨 EMG: '+res.emg+' records');
-        if(res.mil)  parts.push('📊 Mileage: '+res.mil+' records');
-        if(res.act)  parts.push('📄 Activity: '+res.act+' rows ('+res.actF+' files)');
+        if(res.emg) parts.push('🚨 EMG: '+res.emg+' records');
+        if(res.mil) parts.push('📊 Mileage: '+res.mil+' records');
+        if(res.act) parts.push('📄 Activity: '+res.act+' rows ('+res.actF+' files)');
+        var taskDateIso = (function(d){ var p=d.split('-'); return p.length===3?p[2]+'-'+p[1]+'-'+p[0]:d; })(taskDate);
+        var logLink = logUrl+'?from_date='+taskDate+'&to_date='+taskDate;
         var html='<i class="bi bi-check-circle-fill me-2"></i><strong>Upload Complete!</strong><br>'
-          +'<small>'+(parts.join(' &bull; ')||'No new data')+'</small>';
+          +'<small>'+(parts.join(' &bull; ')||'No new data')+'</small>'
+          +'<br><a href="'+logLink+'" class="text-white text-decoration-underline small" target="_blank">View Upload Log →</a>';
         if(errors.length) html+='<br><small class="text-warning">⚠️ '+errors.length+' error(s) — check log</small>';
         showToast(html);
-        if(window._loadSummary){ var p=taskDate.split('-'); if(p.length===3) window._loadSummary(p[2]+'-'+p[1]+'-'+p[0]); }
-        setTimeout(function(){ window.location.href=redirUrl; }, 2800);
-      }, 400);
+        if(window._loadSummary) window._loadSummary(taskDateIso);
+        setTimeout(function(){ window.location.href=redirUrl; },2800);
+      },400);
     });
+  }
+
+  // ---- Form submit ----
+  form.addEventListener('submit', function(ev){
+    var emInput=document.getElementById('fileEmergency');
+    var miInput=document.getElementById('fileMileage');
+    var actInput=document.getElementById('fileActivity');
+    var emFile  = emInput  && emInput.files[0]  ? emInput.files[0]  : null;
+    var miFiles = miInput  && miInput.files.length ? Array.from(miInput.files) : [];
+    var actFiles= actInput && actInput.files.length? Array.from(actInput.files): [];
+
+    // Validate
+    var ok = window._validateAllFiles ? window._validateAllFiles() : true;
+    if(!emFile && !miFiles.length && !actFiles.length){
+      var vm=document.getElementById('fileValidationMsg');
+      if(vm){vm.textContent='Kam az kam ek file select karein.';vm.style.display='';}
+      ev.preventDefault(); return;
+    }
+    var vm2=document.getElementById('fileValidationMsg'); if(vm2) vm2.style.display='none';
+    if(!ok){ ev.preventDefault(); return; }
+
+    // Re-upload confirmation if data exists
+    if(window._summaryPresentCount > 0){
+      ev.preventDefault();
+      // Show modal
+      var modalSummary=document.getElementById('reuploadModalSummary');
+      if(modalSummary) modalSummary.textContent = window._summaryText || 'Data already exists for this date.';
+      var modal = new bootstrap.Modal(document.getElementById('reuploadModal'));
+      modal.show();
+      // Wire confirm button (remove old listener first)
+      var confirmBtn=document.getElementById('reuploadConfirmBtn');
+      var newBtn=confirmBtn.cloneNode(true);
+      confirmBtn.parentNode.replaceChild(newBtn,confirmBtn);
+      newBtn.addEventListener('click',function(){
+        modal.hide();
+        disableBtn();
+        runUpload();
+      });
+      return;
+    }
+
+    // No existing data — proceed directly
+    ev.preventDefault();
+    disableBtn();
+    runUpload();
+  });
+
+  // Ctrl+Enter shortcut
+  document.addEventListener('keydown', function(e){
+    if((e.ctrlKey||e.metaKey) && e.key==='Enter'){
+      var btn=document.getElementById('uploadBtn');
+      if(btn&&!btn.disabled) btn.click();
+    }
   });
 })();
 </script>

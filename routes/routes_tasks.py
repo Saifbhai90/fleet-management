@@ -1907,3 +1907,40 @@ def task_report_mileage_detail_api(date_str):
     })
 
 
+@app.route('/task-report/upload/missing-dates')
+def task_report_upload_missing_dates():
+    """AJAX: return last N days (excl. today) that have no Emergency AND no Mileage AND no Activity data."""
+    days_back = min(int(request.args.get('days', 14)), 60)
+    today = pk_date()
+    dates_to_check = [today - timedelta(days=i) for i in range(1, days_back + 1)]
+
+    emg_dates  = {r[0] for r in db.session.query(EmergencyTaskRecord.task_date).filter(
+        EmergencyTaskRecord.task_date.in_(dates_to_check)).distinct().all()}
+    mil_dates  = {r[0] for r in db.session.query(VehicleMileageRecord.task_date).filter(
+        VehicleMileageRecord.task_date.in_(dates_to_check)).distinct().all()}
+    act_dates  = {r[0] for r in db.session.query(VehicleActivityRecord.task_date).filter(
+        VehicleActivityRecord.task_date.in_(dates_to_check)).distinct().all()}
+
+    result = []
+    for d in dates_to_check:
+        has_emg = d in emg_dates
+        has_mil = d in mil_dates
+        has_act = d in act_dates
+        if not has_emg and not has_mil and not has_act:
+            status = 'missing'
+        elif has_emg and has_mil and has_act:
+            continue  # complete — skip
+        else:
+            status = 'partial'
+        result.append({
+            'date_iso': d.strftime('%Y-%m-%d'),
+            'date_display': d.strftime('%d-%m-%Y'),
+            'day_name': d.strftime('%a'),
+            'status': status,
+            'has_emg': has_emg,
+            'has_mil': has_mil,
+            'has_act': has_act,
+        })
+    return jsonify({'dates': result})
+
+

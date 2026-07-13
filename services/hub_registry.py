@@ -176,7 +176,7 @@ HUBS = {
         'header_icon': 'bi-clipboard2-data',
         'section_perm': 'task_report',
         'extra_endpoints': (
-            'task_report_upload', 'task_report_upload_list', 'task_report_upload_core', 'task_report_upload_mileage_one', 'task_report_upload_activity_one', 'task_report_activity_detail_api', 'task_report_emergency_detail_api', 'task_report_mileage_detail_api', 'task_report_new', 'task_report_pending',
+            'task_report_upload', 'task_report_upload_list', 'task_report_upload_core', 'task_report_upload_mileage_one', 'task_report_upload_activity_one', 'task_report_upload_missing_dates', 'task_report_activity_detail_api', 'task_report_emergency_detail_api', 'task_report_mileage_detail_api', 'task_report_new', 'task_report_pending',
             'task_report_list', 'task_report_vehicle_period_detail', 'red_task_list', 'without_task_list', 'task_report_logbook_cover',
             'speed_monitoring_report', 'mileage_report', 'tracker_difference_report',
             'unauthorized_movement_report', 'task_start_delay_report', 'task_turnaround_report',

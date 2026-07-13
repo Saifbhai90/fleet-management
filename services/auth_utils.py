@@ -201,6 +201,7 @@ ENDPOINT_PERMISSION_MAP = [
     ('task_report_upload_mileage_one', 'task_report_upload'),
     ('task_report_upload_core', 'task_report_upload'),
     ('task_report_upload_activity_one', 'task_report_upload'),
+    ('task_report_upload_missing_dates', 'task_report_upload'),
     # Daily Task Report
     ('task-report', 'task_report_list'),
     ('task_report_list', 'task_report_list'),
