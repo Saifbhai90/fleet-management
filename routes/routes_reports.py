@@ -10,7 +10,7 @@ from datetime import datetime, date, timedelta
 
 from flask import (
     render_template, redirect, url_for, flash, request,
-    session, abort, jsonify, make_response,
+    session, abort, jsonify, make_response, Response,
 )
 from sqlalchemy import func, or_, and_
 
@@ -22,7 +22,7 @@ from models import (
     PhysicalBook, BookAssignment,
     FuelExpense, MaintenanceExpense, PenaltyRecord, DriverAttendance,
     Party, Product,
-    project_district,
+    project_district, vehicle_district,
 )
 from vehicle_sort_utils import vehicle_order_by
 from utils import (
@@ -35,6 +35,8 @@ from routes import (
     _multi_word_filter,
     _build_driver_update_whatsapp_parts,
     _oil_change_alert_rows,
+    SimplePagination,
+    _nav_back_ctx,
 )
 
 # ────────────────────────────────────────────────
@@ -1432,10 +1434,15 @@ def report_uniform_sizes():
 
     project_id  = request.args.get('project_id', type=int) or 0
     district_id = request.args.get('district_id', type=int) or 0
+    vehicle_id  = request.args.get('vehicle_id', type=int) or 0
     size_filter = request.args.get('size_filter', '').strip()
     size_type   = request.args.get('size_type', '').strip()
     status      = request.args.get('status', 'Active').strip()
     q           = (request.args.get('q') or '').strip()
+    missing_only = request.args.get('missing_only') == '1'
+    sort_by     = request.args.get('sort_by', 'name').strip()
+    page        = request.args.get('page', 1, type=int) or 1
+    per_page    = request.args.get('per_page', 25, type=int) or 25
 
     proj_q = Project.query.order_by(Project.name)
     if not is_master_or_admin and allowed_projects:
@@ -1449,7 +1456,22 @@ def report_uniform_sizes():
         dist_q = dist_q.join(project_district).filter(project_district.c.project_id == project_id)
     district_choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in dist_q.all()]
 
-    drivers_q = Driver.query.filter(Driver.status == status)
+    # Vehicle choices — filtered by project/district if selected
+    veh_q = Vehicle.query.order_by(Vehicle.vehicle_no)
+    if project_id:
+        veh_q = veh_q.filter(Vehicle.project_id == project_id)
+    if district_id:
+        veh_q = veh_q.join(vehicle_district).filter(vehicle_district.c.district_id == district_id)
+    vehicle_choices = [(0, '-- All Vehicles --')] + [(v.id, v.vehicle_no) for v in veh_q.all()]
+
+    # Status filter — 'Inactive' maps to DB status 'Left' (left = inactive)
+    drivers_q = Driver.query
+    if status.lower() == 'all':
+        pass  # no status filter
+    elif status.lower() == 'inactive':
+        drivers_q = drivers_q.filter(func.lower(Driver.status).in_(['left', 'inactive']))
+    else:
+        drivers_q = drivers_q.filter(func.lower(Driver.status) == 'active')
     if not is_master_or_admin and allowed_projects:
         drivers_q = drivers_q.filter(Driver.project_id.in_(list(allowed_projects)))
     if not is_master_or_admin and allowed_districts:
@@ -1458,6 +1480,8 @@ def report_uniform_sizes():
         drivers_q = drivers_q.filter(Driver.project_id == project_id)
     if district_id:
         drivers_q = drivers_q.filter(Driver.district_id == district_id)
+    if vehicle_id:
+        drivers_q = drivers_q.filter(Driver.vehicle_id == vehicle_id)
     if q:
         like = f'%{q}%'
         drivers_q = drivers_q.filter(or_(
@@ -1466,8 +1490,27 @@ def report_uniform_sizes():
         ))
     if size_filter and size_type in ('shirt_size', 'trouser_size', 'jacket_size'):
         drivers_q = drivers_q.filter(getattr(Driver, size_type) == size_filter)
+    if missing_only:
+        drivers_q = drivers_q.filter(
+            or_(Driver.shirt_size.is_(None), Driver.trouser_size.is_(None), Driver.jacket_size.is_(None))
+        )
 
-    drivers_q = drivers_q.order_by(Driver.name)
+    # Sort options
+    if sort_by == 'driver_id':
+        drivers_q = drivers_q.order_by(Driver.driver_id)
+    elif sort_by == 'district':
+        drivers_q = drivers_q.outerjoin(District, Driver.district_id == District.id).order_by(District.name, Driver.name)
+    elif sort_by == 'missing':
+        from sqlalchemy import case
+        drivers_q = drivers_q.order_by(
+            case((Driver.shirt_size.is_(None), 0), else_=1),
+            case((Driver.trouser_size.is_(None), 0), else_=1),
+            case((Driver.jacket_size.is_(None), 0), else_=1),
+            Driver.name,
+        )
+    else:
+        drivers_q = drivers_q.order_by(Driver.name)
+
     drivers = drivers_q.all()
 
     # Build project name lookup
@@ -1480,13 +1523,23 @@ def report_uniform_sizes():
     trouser_counts = {}
     jacket_counts = {}
     missing_count = 0
+    missing_shirt_count = 0
+    missing_trouser_count = 0
+    missing_jacket_count = 0
+
     for d in drivers:
         if d.shirt_size:
             shirt_counts[d.shirt_size] = shirt_counts.get(d.shirt_size, 0) + 1
+        else:
+            missing_shirt_count += 1
         if d.trouser_size:
             trouser_counts[d.trouser_size] = trouser_counts.get(d.trouser_size, 0) + 1
+        else:
+            missing_trouser_count += 1
         if d.jacket_size:
             jacket_counts[d.jacket_size] = jacket_counts.get(d.jacket_size, 0) + 1
+        else:
+            missing_jacket_count += 1
         if not d.shirt_size and not d.trouser_size and not d.jacket_size:
             missing_count += 1
 
@@ -1494,19 +1547,29 @@ def report_uniform_sizes():
     trouser_sizes = ['26','28','30','32','34','36','38','40','42','44']
     jacket_sizes = ['2XS','XS','S','M','L','XL','XXL','3XL','4XL']
 
+    # Pagination
+    pagination = SimplePagination(drivers, page, per_page)
+    paged_drivers = pagination.items
+
     return render_template(
         'report_uniform_sizes.html',
-        drivers=drivers,
+        drivers=paged_drivers,
         project_names=project_names,
-        project_id=project_id, district_id=district_id,
+        project_id=project_id, district_id=district_id, vehicle_id=vehicle_id,
         size_filter=size_filter, size_type=size_type,
-        status=status, q=q,
+        status=status, q=q, missing_only=missing_only, sort_by=sort_by,
         project_choices=project_choices,
         district_choices=district_choices,
+        vehicle_choices=vehicle_choices,
         total=len(drivers),
         shirt_counts=shirt_counts, trouser_counts=trouser_counts, jacket_counts=jacket_counts,
         missing_count=missing_count,
+        missing_shirt_count=missing_shirt_count,
+        missing_trouser_count=missing_trouser_count,
+        missing_jacket_count=missing_jacket_count,
         shirt_sizes=shirt_sizes, trouser_sizes=trouser_sizes, jacket_sizes=jacket_sizes,
+        pagination=pagination, per_page=per_page,
+        **_nav_back_ctx(url_for('reports_index'), show_without_nav_from=True),
     )
 
 
@@ -1522,12 +1585,15 @@ def report_uniform_sizes_export():
 
     project_id  = request.args.get('project_id', type=int) or 0
     district_id = request.args.get('district_id', type=int) or 0
+    vehicle_id  = request.args.get('vehicle_id', type=int) or 0
     size_filter = request.args.get('size_filter', '').strip()
     size_type   = request.args.get('size_type', '').strip()
     status      = request.args.get('status', 'Active').strip()
     q           = (request.args.get('q') or '').strip()
+    missing_only = request.args.get('missing_only') == '1'
+    sort_by     = request.args.get('sort_by', 'name').strip()
 
-    drivers_q = Driver.query.filter(Driver.status == status)
+    drivers_q = Driver.query.filter(func.lower(Driver.status) == status.lower())
     if not is_master_or_admin and allowed_projects:
         drivers_q = drivers_q.filter(Driver.project_id.in_(list(allowed_projects)))
     if not is_master_or_admin and allowed_districts:
@@ -1536,6 +1602,8 @@ def report_uniform_sizes_export():
         drivers_q = drivers_q.filter(Driver.project_id == project_id)
     if district_id:
         drivers_q = drivers_q.filter(Driver.district_id == district_id)
+    if vehicle_id:
+        drivers_q = drivers_q.filter(Driver.vehicle_id == vehicle_id)
     if q:
         like = f'%{q}%'
         drivers_q = drivers_q.filter(or_(
@@ -1544,25 +1612,168 @@ def report_uniform_sizes_export():
         ))
     if size_filter and size_type in ('shirt_size', 'trouser_size', 'jacket_size'):
         drivers_q = drivers_q.filter(getattr(Driver, size_type) == size_filter)
+    if missing_only:
+        drivers_q = drivers_q.filter(
+            or_(Driver.shirt_size.is_(None), Driver.trouser_size.is_(None), Driver.jacket_size.is_(None))
+        )
 
-    drivers = drivers_q.order_by(Driver.name).all()
+    if sort_by == 'driver_id':
+        drivers_q = drivers_q.order_by(Driver.driver_id)
+    elif sort_by == 'district':
+        drivers_q = drivers_q.outerjoin(District, Driver.district_id == District.id).order_by(District.name, Driver.name)
+    elif sort_by == 'missing':
+        from sqlalchemy import case
+        drivers_q = drivers_q.order_by(
+            case((Driver.shirt_size.is_(None), 0), else_=1),
+            case((Driver.trouser_size.is_(None), 0), else_=1),
+            case((Driver.jacket_size.is_(None), 0), else_=1),
+            Driver.name,
+        )
+    else:
+        drivers_q = drivers_q.order_by(Driver.name)
+
+    drivers = drivers_q.all()
 
     project_names = {}
     for p in Project.query.all():
         project_names[p.id] = p.name
 
-    headers = ['Driver ID', 'Name', 'Phone', 'Project', 'District', 'Vehicle', 'Shirt Size', 'Trouser Size', 'Jacket Size', 'Status']
+    headers = ['Sr', 'District', 'Project', 'Vehicle', 'Driver ID', 'Name', 'Shirt Size', 'Trouser Size', 'Jacket Size']
     rows = []
-    for d in drivers:
+    for idx, d in enumerate(drivers, 1):
         proj_name = project_names.get(d.project_id, '')
         dist_name = d.district.name if d.district else (d.driver_district or '')
         veh_no = d.vehicle.vehicle_no if d.vehicle else ''
         rows.append([
-            d.driver_id or '', d.name or '', d.phone1 or '',
-            proj_name, dist_name, veh_no,
+            idx, dist_name, proj_name, veh_no,
+            d.driver_id or '', d.name or '',
             d.shirt_size or '', d.trouser_size or '', d.jacket_size or '',
-            d.status or '',
         ])
 
     return generate_csv_response(headers, rows, filename='uniform_sizes_report.csv')
+
+
+@app.route('/reports/uniform-sizes/export-pdf', methods=['GET'])
+def report_uniform_sizes_export_pdf():
+    from auth_utils import get_user_context
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects  = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+
+    project_id  = request.args.get('project_id', type=int) or 0
+    district_id = request.args.get('district_id', type=int) or 0
+    vehicle_id  = request.args.get('vehicle_id', type=int) or 0
+    size_filter = request.args.get('size_filter', '').strip()
+    size_type   = request.args.get('size_type', '').strip()
+    status      = request.args.get('status', 'Active').strip()
+    q           = (request.args.get('q') or '').strip()
+    missing_only = request.args.get('missing_only') == '1'
+    sort_by     = request.args.get('sort_by', 'name').strip()
+
+    drivers_q = Driver.query.filter(func.lower(Driver.status) == status.lower())
+    if not is_master_or_admin and allowed_projects:
+        drivers_q = drivers_q.filter(Driver.project_id.in_(list(allowed_projects)))
+    if not is_master_or_admin and allowed_districts:
+        drivers_q = drivers_q.filter(Driver.district_id.in_(list(allowed_districts)))
+    if project_id:
+        drivers_q = drivers_q.filter(Driver.project_id == project_id)
+    if district_id:
+        drivers_q = drivers_q.filter(Driver.district_id == district_id)
+    if vehicle_id:
+        drivers_q = drivers_q.filter(Driver.vehicle_id == vehicle_id)
+    if q:
+        like = f'%{q}%'
+        drivers_q = drivers_q.filter(or_(
+            Driver.name.ilike(like), Driver.driver_id.ilike(like),
+            Driver.phone1.ilike(like), Driver.cnic_no.ilike(like),
+        ))
+    if size_filter and size_type in ('shirt_size', 'trouser_size', 'jacket_size'):
+        drivers_q = drivers_q.filter(getattr(Driver, size_type) == size_filter)
+    if missing_only:
+        drivers_q = drivers_q.filter(
+            or_(Driver.shirt_size.is_(None), Driver.trouser_size.is_(None), Driver.jacket_size.is_(None))
+        )
+
+    if sort_by == 'driver_id':
+        drivers_q = drivers_q.order_by(Driver.driver_id)
+    elif sort_by == 'district':
+        drivers_q = drivers_q.outerjoin(District, Driver.district_id == District.id).order_by(District.name, Driver.name)
+    elif sort_by == 'missing':
+        from sqlalchemy import case
+        drivers_q = drivers_q.order_by(
+            case((Driver.shirt_size.is_(None), 0), else_=1),
+            case((Driver.trouser_size.is_(None), 0), else_=1),
+            case((Driver.jacket_size.is_(None), 0), else_=1),
+            Driver.name,
+        )
+    else:
+        drivers_q = drivers_q.order_by(Driver.name)
+
+    drivers = drivers_q.all()
+    project_names = {p.id: p.name for p in Project.query.all()}
+
+    shirt_counts = {}
+    trouser_counts = {}
+    jacket_counts = {}
+    missing_count = 0
+    missing_shirt_count = 0
+    missing_trouser_count = 0
+    missing_jacket_count = 0
+
+    for d in drivers:
+        if d.shirt_size:
+            shirt_counts[d.shirt_size] = shirt_counts.get(d.shirt_size, 0) + 1
+        else:
+            missing_shirt_count += 1
+        if d.trouser_size:
+            trouser_counts[d.trouser_size] = trouser_counts.get(d.trouser_size, 0) + 1
+        else:
+            missing_trouser_count += 1
+        if d.jacket_size:
+            jacket_counts[d.jacket_size] = jacket_counts.get(d.jacket_size, 0) + 1
+        else:
+            missing_jacket_count += 1
+        if not d.shirt_size and not d.trouser_size and not d.jacket_size:
+            missing_count += 1
+
+    shirt_sizes = ['2XS','XS','S','M','L','XL','XXL','3XL','4XL']
+    trouser_sizes = ['26','28','30','32','34','36','38','40','42','44']
+    jacket_sizes = ['2XS','XS','S','M','L','XL','XXL','3XL','4XL']
+    all_sizes = []
+    for s in shirt_sizes + trouser_sizes + jacket_sizes:
+        if s not in all_sizes: all_sizes.append(s)
+    for s in list(shirt_counts.keys()) + list(trouser_counts.keys()) + list(jacket_counts.keys()):
+        if s not in all_sizes: all_sizes.append(s)
+
+    now = pk_now()
+    generated_at = now.strftime('%d %b %Y %I:%M %p')
+
+    try:
+        from routes import _html_to_pdf_bytes
+        html = render_template(
+            'report_uniform_sizes_print.html',
+            drivers=drivers,
+            project_names=project_names,
+            total=len(drivers),
+            shirt_counts=shirt_counts, trouser_counts=trouser_counts, jacket_counts=jacket_counts,
+            missing_count=missing_count,
+            missing_shirt_count=missing_shirt_count,
+            missing_trouser_count=missing_trouser_count,
+            missing_jacket_count=missing_jacket_count,
+            all_sizes=all_sizes,
+            generated_at=generated_at,
+        )
+        pdf_bytes = _html_to_pdf_bytes(html, landscape=True)
+    except Exception as exc:
+        app.logger.exception('Uniform sizes report PDF export failed')
+        return jsonify({'error': f'PDF generation failed: {exc}'}), 500
+
+    fname = f'Uniform_Sizes_Report_{now.strftime("%d-%m-%Y")}.pdf'
+    return Response(
+        pdf_bytes,
+        mimetype='application/pdf',
+        headers={'Content-Disposition': f'attachment; filename="{fname}"'},
+    )
 # ════════════════════════════════════════════════════════════════════════════════

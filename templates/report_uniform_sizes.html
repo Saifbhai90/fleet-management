@@ -8,60 +8,35 @@
       {{ nav_back_button() }}
       <h2 class="mb-0"><i class="bi bi-person-vest me-2 text-primary"></i>Uniform Sizes Report</h2>
     </div>
-    <a href="{{ url_for('report_uniform_sizes_export', project_id=project_id, district_id=district_id, size_filter=size_filter, size_type=size_type, status=status, q=q) }}"
-       class="btn btn-outline-success btn-sm">
-      <i class="bi bi-file-earmark-spreadsheet me-1"></i>Export CSV
-    </a>
+    <div class="d-flex align-items-center gap-2">
+      <button class="btn btn-outline-secondary btn-sm" id="btnPrintReport" title="Print / Preview"><i class="bi bi-eye me-1"></i>Print / Preview</button>
+      <button type="button" class="btn btn-outline-success btn-sm" id="btnExportReport" title="Export">
+        <i class="bi bi-file-earmark-spreadsheet me-1"></i>Export
+      </button>
+    </div>
   </div>
 
-  <!-- Filters -->
-  <div class="card border-0 shadow-sm rounded-3 mb-3">
-    <div class="card-body py-3">
-      <form method="GET" action="{{ url_for('report_uniform_sizes') }}" class="row g-2 align-items-end">
-        <div class="col-md-2">
-          <label class="form-label small fw-semibold">Project</label>
-          <select name="project_id" class="form-select form-select-sm">
-            {% for v, label in project_choices %}
-            <option value="{{ v }}" {% if project_id == v %}selected{% endif %}>{{ label }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-md-2">
-          <label class="form-label small fw-semibold">District</label>
-          <select name="district_id" class="form-select form-select-sm">
-            {% for v, label in district_choices %}
-            <option value="{{ v }}" {% if district_id == v %}selected{% endif %}>{{ label }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-md-2">
-          <label class="form-label small fw-semibold">Size Type</label>
-          <select name="size_type" class="form-select form-select-sm">
-            <option value="">-- All --</option>
-            <option value="shirt_size" {% if size_type == 'shirt_size' %}selected{% endif %}>Shirt</option>
-            <option value="trouser_size" {% if size_type == 'trouser_size' %}selected{% endif %}>Trouser</option>
-            <option value="jacket_size" {% if size_type == 'jacket_size' %}selected{% endif %}>Jacket</option>
-          </select>
-        </div>
-        <div class="col-md-2">
-          <label class="form-label small fw-semibold">Specific Size</label>
-          <input type="text" name="size_filter" class="form-control form-control-sm" placeholder="e.g. L, 32, XL" value="{{ size_filter }}">
-        </div>
-        <div class="col-md-2">
-          <label class="form-label small fw-semibold">Status</label>
-          <select name="status" class="form-select form-select-sm">
-            <option value="Active" {% if status == 'Active' %}selected{% endif %}>Active</option>
-            <option value="Left" {% if status == 'Left' %}selected{% endif %}>Left</option>
-          </select>
-        </div>
-        <div class="col-md-1">
-          <label class="form-label small fw-semibold">Search</label>
-          <input type="text" name="q" class="form-control form-control-sm" placeholder="Name, ID, Phone" value="{{ q }}">
-        </div>
-        <div class="col-md-1 d-grid">
-          <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-funnel me-1"></i>Filter</button>
-        </div>
-      </form>
+  <!-- Top Summary Strip -->
+  <div class="card border-0 shadow-sm rounded-3 mb-3 bg-light">
+    <div class="card-body py-2">
+      <div class="d-flex flex-wrap gap-3 align-items-center small">
+        <span class="fw-semibold"><i class="bi bi-people-fill me-1 text-primary"></i>Total: {{ total }}</span>
+        <span class="fw-semibold"><i class="bi bi-person-fill me-1 text-primary"></i>Shirt: {{ shirt_counts.values() | sum }}</span>
+        <span class="fw-semibold"><i class="bi bi-person-fill me-1 text-info"></i>Trouser: {{ trouser_counts.values() | sum }}</span>
+        <span class="fw-semibold"><i class="bi bi-person-fill me-1 text-success"></i>Jacket: {{ jacket_counts.values() | sum }}</span>
+        {% if missing_shirt_count > 0 %}
+        <span class="fw-semibold text-danger"><i class="bi bi-exclamation-triangle me-1"></i>Missing Shirt: {{ missing_shirt_count }}</span>
+        {% endif %}
+        {% if missing_trouser_count > 0 %}
+        <span class="fw-semibold text-danger"><i class="bi bi-exclamation-triangle me-1"></i>Missing Trouser: {{ missing_trouser_count }}</span>
+        {% endif %}
+        {% if missing_jacket_count > 0 %}
+        <span class="fw-semibold text-danger"><i class="bi bi-exclamation-triangle me-1"></i>Missing Jacket: {{ missing_jacket_count }}</span>
+        {% endif %}
+        {% if missing_count > 0 %}
+        <span class="fw-semibold text-danger"><i class="bi bi-exclamation-triangle-fill me-1"></i>No Sizes At All: {{ missing_count }}</span>
+        {% endif %}
+      </div>
     </div>
   </div>
 
@@ -147,41 +122,114 @@
     </div>
   </div>
 
-  <!-- Missing Uniform Alert -->
-  {% if missing_count > 0 %}
-  <div class="alert alert-warning py-2 mb-3">
-    <i class="bi bi-exclamation-triangle me-1"></i>
-    <strong>{{ missing_count }}</strong> driver(s) have no uniform sizes recorded at all.
+  <!-- Filters -->
+  <div class="card border-0 shadow-sm rounded-3 mb-3">
+    <div class="card-body py-3">
+      <form method="GET" action="{{ url_for('report_uniform_sizes') }}" class="row g-2 align-items-end">
+        <div class="col-md-2">
+          <label class="form-label small fw-semibold">Project</label>
+          <select name="project_id" class="form-select form-select-sm search-select">
+            {% for v, label in project_choices %}
+            <option value="{{ v }}" {% if project_id == v %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small fw-semibold">District</label>
+          <select name="district_id" class="form-select form-select-sm search-select">
+            {% for v, label in district_choices %}
+            <option value="{{ v }}" {% if district_id == v %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small fw-semibold">Vehicle</label>
+          <select name="vehicle_id" class="form-select form-select-sm search-select">
+            {% for v, label in vehicle_choices %}
+            <option value="{{ v }}" {% if vehicle_id == v %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small fw-semibold">Size Type</label>
+          <select name="size_type" class="form-select form-select-sm search-select">
+            <option value="">-- All --</option>
+            <option value="shirt_size" {% if size_type == 'shirt_size' %}selected{% endif %}>Shirt</option>
+            <option value="trouser_size" {% if size_type == 'trouser_size' %}selected{% endif %}>Trouser</option>
+            <option value="jacket_size" {% if size_type == 'jacket_size' %}selected{% endif %}>Jacket</option>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small fw-semibold">Specific Size</label>
+          <input type="text" name="size_filter" class="form-control form-control-sm" placeholder="e.g. L, 32, XL" value="{{ size_filter }}">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small fw-semibold">Status</label>
+          <select name="status" class="form-select form-select-sm search-select">
+            <option value="Active" {% if status == 'Active' %}selected{% endif %}>Active</option>
+            <option value="Inactive" {% if status == 'Inactive' %}selected{% endif %}>Inactive</option>
+            <option value="All" {% if status == 'All' %}selected{% endif %}>All</option>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small fw-semibold">Sort By</label>
+          <select name="sort_by" class="form-select form-select-sm search-select">
+            <option value="name" {% if sort_by == 'name' %}selected{% endif %}>Name</option>
+            <option value="driver_id" {% if sort_by == 'driver_id' %}selected{% endif %}>Driver ID</option>
+            <option value="district" {% if sort_by == 'district' %}selected{% endif %}>District</option>
+            <option value="missing" {% if sort_by == 'missing' %}selected{% endif %}>Missing Sizes First</option>
+          </select>
+        </div>
+        <div class="col-md-1">
+          <label class="form-label small fw-semibold">Search</label>
+          <input type="text" name="q" class="form-control form-control-sm" placeholder="Name, ID" value="{{ q }}">
+        </div>
+        <div class="col-md-1 d-grid">
+          <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-funnel me-1"></i>Filter</button>
+        </div>
+        <div class="col-12">
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="missing_only" value="1" id="chkMissing" {% if missing_only %}checked{% endif %}>
+            <label class="form-check-label small" for="chkMissing">Show only drivers with missing sizes</label>
+          </div>
+        </div>
+      </form>
+    </div>
   </div>
-  {% endif %}
 
   <!-- Drivers Table -->
   <div class="card border-0 shadow-sm rounded-3">
     <div class="card-header bg-light d-flex justify-content-between align-items-center py-2">
       <span class="fw-semibold small"><i class="bi bi-list-ul me-1"></i>Drivers ({{ total }})</span>
+      <div class="input-group input-group-sm" style="max-width:280px">
+        <span class="input-group-text bg-white border-end-0"><i class="bi bi-search"></i></span>
+        <input type="text" id="uniformTableSearch" class="form-control border-start-0" placeholder="Search all columns...">
+      </div>
     </div>
     <div class="card-body p-0">
       {% if drivers %}
       <div class="table-responsive">
-        <table class="table table-hover table-sm mb-0 align-middle">
+        <table class="table table-hover table-sm mb-0 align-middle" id="uniformSizesTable">
           <thead class="table-light">
             <tr>
-              <th>#</th>
+              <th>Sr</th>
+              <th>District</th>
+              <th>Project</th>
+              <th>Vehicle</th>
               <th>Driver ID</th>
               <th>Name</th>
-              <th>Phone</th>
-              <th>Project</th>
-              <th>District</th>
-              <th>Vehicle</th>
-              <th class="text-center"><i class="bi bi-person-fill text-primary" title="Shirt"></i></th>
-              <th class="text-center"><i class="bi bi-person-fill text-info" title="Trouser"></i></th>
-              <th class="text-center"><i class="bi bi-person-fill text-success" title="Jacket"></i></th>
+              <th class="text-center"><i class="bi bi-person-fill text-primary" title="Shirt"></i> Shirt</th>
+              <th class="text-center"><i class="bi bi-person-fill text-info" title="Trouser"></i> Trouser</th>
+              <th class="text-center"><i class="bi bi-person-fill text-success" title="Jacket"></i> Jacket</th>
             </tr>
           </thead>
           <tbody>
             {% for d in drivers %}
             <tr>
-              <td class="text-muted small">{{ loop.index }}</td>
+              <td class="text-muted small">{{ (pagination.page - 1) * per_page + loop.index }}</td>
+              <td><span class="small">{{ d.district.name if d.district else (d.driver_district or '—') }}</span></td>
+              <td><span class="small">{{ project_names.get(d.project_id, '—') }}</span></td>
+              <td><span class="small">{{ d.vehicle.vehicle_no if d.vehicle else '—' }}</span></td>
               <td><span class="small">{{ d.driver_id or '—' }}</span></td>
               <td>
                 {% if session.get('is_master') %}
@@ -190,10 +238,6 @@
                 <span class="fw-semibold small">{{ d.name }}</span>
                 {% endif %}
               </td>
-              <td><span class="small">{{ d.phone1 or '—' }}</span></td>
-              <td><span class="small">{{ project_names.get(d.project_id, '—') }}</span></td>
-              <td><span class="small">{{ d.district.name if d.district else (d.driver_district or '—') }}</span></td>
-              <td><span class="small">{{ d.vehicle.vehicle_no if d.vehicle else '—' }}</span></td>
               <td class="text-center">
                 {% if d.shirt_size %}
                 <span class="badge bg-primary rounded-pill">{{ d.shirt_size }}</span>
@@ -227,7 +271,87 @@
       </div>
       {% endif %}
     </div>
+    {% if drivers %}
+    <div class="card-footer bg-light py-2">
+      {% set pagination_items_count = drivers|length %}
+      {% include "_pagination.html" %}
+    </div>
+    {% endif %}
   </div>
 
 </div>
+
+<script>
+function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page',n);window.location.search=u.toString();}
+(function(){
+  document.addEventListener('DOMContentLoaded', function(){
+    var table = document.getElementById('uniformSizesTable');
+    if (!table) return;
+    var searchInput = document.getElementById('uniformTableSearch');
+    if (!searchInput) return;
+    searchInput.addEventListener('input', function(){
+      var query = searchInput.value.toLowerCase().trim();
+      var terms = query ? query.split(/\s+/) : [];
+      var rows = table.querySelectorAll('tbody tr');
+      rows.forEach(function(row){
+        if (!terms.length) { row.style.display = ''; return; }
+        var rowText = row.textContent.toLowerCase();
+        var show = terms.every(function(term){ return rowText.indexOf(term) !== -1; });
+        row.style.display = show ? '' : 'none';
+      });
+    });
+  });
+})();
+document.addEventListener('DOMContentLoaded', function(){
+  if (window.fleetPrintExport) {
+    var shirtCounts = {{ shirt_counts | tojson }};
+    var trouserCounts = {{ trouser_counts | tojson }};
+    var jacketCounts = {{ jacket_counts | tojson }};
+    var shirtOrder = {{ shirt_sizes | tojson }};
+    var trouserOrder = {{ trouser_sizes | tojson }};
+    var jacketOrder = {{ jacket_sizes | tojson }};
+    var totalDrivers = {{ total }};
+
+    var allSizes = [];
+    shirtOrder.forEach(function(s) { if (allSizes.indexOf(s) === -1) allSizes.push(s); });
+    trouserOrder.forEach(function(s) { if (allSizes.indexOf(s) === -1) allSizes.push(s); });
+    jacketOrder.forEach(function(s) { if (allSizes.indexOf(s) === -1) allSizes.push(s); });
+    Object.keys(shirtCounts).forEach(function(s) { if (allSizes.indexOf(s) === -1) allSizes.push(s); });
+    Object.keys(trouserCounts).forEach(function(s) { if (allSizes.indexOf(s) === -1) allSizes.push(s); });
+    Object.keys(jacketCounts).forEach(function(s) { if (allSizes.indexOf(s) === -1) allSizes.push(s); });
+
+    var shirtTotal = 0, trouserTotal = 0, jacketTotal = 0;
+    Object.keys(shirtCounts).forEach(function(s) { shirtTotal += shirtCounts[s]; });
+    Object.keys(trouserCounts).forEach(function(s) { trouserTotal += trouserCounts[s]; });
+    Object.keys(jacketCounts).forEach(function(s) { jacketTotal += jacketCounts[s]; });
+
+    var summaryRows = [];
+    summaryRows.push(['Summary']);
+    summaryRows.push(['Size', 'Shirt', 'Trouser', 'Jacket']);
+    allSizes.forEach(function(sz) {
+      var sc = shirtCounts[sz] || 0;
+      var tc = trouserCounts[sz] || 0;
+      var jc = jacketCounts[sz] || 0;
+      if (sc || tc || jc) {
+        summaryRows.push([sz, sc || '\u2014', tc || '\u2014', jc || '\u2014']);
+      }
+    });
+    summaryRows.push(['Total', shirtTotal, trouserTotal, jacketTotal]);
+    summaryRows.push(['Missing', totalDrivers - shirtTotal, totalDrivers - trouserTotal, totalDrivers - jacketTotal]);
+
+    var now = new Date();
+    var dateStr = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) + ' ' +
+                  now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+    var generatedLabel = 'Generated: ' + dateStr;
+
+    window.fleetPrintExport('uniformSizesTable', 'Uniform Sizes Report', 'Uniform_Sizes_Report.csv', {
+      reportTitle: 'Uniform Sizes Report',
+      generatedLabel: generatedLabel,
+      summaryRows: summaryRows,
+      centerColumns: ['Sr', 'Driver ID', 'Shirt', 'Trouser', 'Jacket'],
+      highlightEmptyColumns: ['Shirt', 'Trouser', 'Jacket']
+    });
+  }
+});
+</script>
 {% endblock %}

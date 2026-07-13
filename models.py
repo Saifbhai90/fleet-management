@@ -574,7 +574,7 @@ class VehicleDailyTask(db.Model):
 class EmergencyTaskRecord(db.Model):
     __tablename__ = 'emergency_task_record'
     id = db.Column(db.Integer, primary_key=True)
-    task_date = db.Column(db.Date, nullable=False)
+    task_date = db.Column(db.Date, nullable=False, index=True)
     upload_date = db.Column(db.Date, nullable=False)
     created_at = db.Column(db.DateTime, default=pk_now)
 
@@ -643,7 +643,7 @@ class EmergencyTaskRecord(db.Model):
 class VehicleMileageRecord(db.Model):
     __tablename__ = 'vehicle_mileage_record'
     id = db.Column(db.Integer, primary_key=True)
-    task_date = db.Column(db.Date, nullable=False)
+    task_date = db.Column(db.Date, nullable=False, index=True)
     upload_date = db.Column(db.Date, nullable=False)
     created_at = db.Column(db.DateTime, default=pk_now)
 

@@ -672,6 +672,10 @@ if _run_startup_tasks:
                     "CREATE INDEX IF NOT EXISTS ix_emergency_task_record_amb_reg_no ON emergency_task_record (amb_reg_no)",
                     "CREATE INDEX IF NOT EXISTS ix_vehicle_mileage_record_task_date ON vehicle_mileage_record (task_date)",
                     "CREATE INDEX IF NOT EXISTS ix_vehicle_mileage_record_reg_no ON vehicle_mileage_record (reg_no)",
+                    "CREATE INDEX IF NOT EXISTS ix_emergency_task_record_task_date_created_at ON emergency_task_record (task_date, created_at)",
+                    "CREATE INDEX IF NOT EXISTS ix_vehicle_mileage_record_task_date_created_at ON vehicle_mileage_record (task_date, created_at)",
+                    "CREATE INDEX IF NOT EXISTS ix_vehicle_activity_record_task_date_source_file ON vehicle_activity_record (task_date, source_file)",
+                    "CREATE INDEX IF NOT EXISTS ix_vehicle_activity_record_task_date_created_at ON vehicle_activity_record (task_date, created_at)",
                     "CREATE INDEX IF NOT EXISTS ix_notification_created_at ON notification (created_at)",
                 ]
                 for idx_sql in indexes:

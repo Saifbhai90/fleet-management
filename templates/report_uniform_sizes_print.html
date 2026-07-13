@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Uniform Sizes Report</title>
+  <style>
+    @page { size: A4 landscape; margin: 8mm; }
+    body { font-family: Arial, Helvetica, sans-serif; font-size: 10px; margin: 0; padding: 8px 12px; color: #111; }
+    h3 { text-align: center; margin: 6px 0 4px; font-size: 14px; font-weight: 600; }
+    .sub { text-align: center; font-size: 9px; color: #666; margin-bottom: 10px; }
+    table { width: 100%; border-collapse: collapse; table-layout: auto; }
+    th, td { border: 1px solid #555; padding: 3px 5px; text-align: left; vertical-align: top; }
+    th { background: #1E3A5F; color: #fff; font-size: 9px; font-weight: 700; }
+    .text-center { text-align: center; }
+    .text-muted { color: #999; }
+    .missing { background: #FDECEA; color: #C0392B; text-align: center; }
+    .badge { display: inline-block; padding: 1px 6px; border-radius: 8px; font-size: 9px; font-weight: 600; }
+    .badge-primary { background: #0d6efd; color: #fff; }
+    .badge-info { background: #0dcaf0; color: #000; }
+    .badge-success { background: #198754; color: #fff; }
+    .summary-table { width: 60%; margin: 10px auto; }
+    .summary-table th { background: #2563EB; }
+    .summary-table .total-row td { background: #B8D4F0; font-weight: 700; }
+    .section-title { font-size: 11px; font-weight: 700; margin: 12px 0 4px; color: #1E3A5F; }
+    .two-col { display: flex; gap: 20px; }
+    .two-col > div { flex: 1; }
+  </style>
+</head>
+<body>
+  <h3>Uniform Sizes Report</h3>
+  <div class="sub">Generated: {{ generated_at }}</div>
+
+  <div class="section-title">Drivers ({{ total }})</div>
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>District</th>
+        <th>Project</th>
+        <th>Vehicle</th>
+        <th>Driver ID</th>
+        <th>Name</th>
+        <th class="text-center">Shirt</th>
+        <th class="text-center">Trouser</th>
+        <th class="text-center">Jacket</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for d in drivers %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td>{{ d.district.name if d.district else (d.driver_district or '-') }}</td>
+        <td>{{ project_names.get(d.project_id, '-') }}</td>
+        <td>{{ d.vehicle.vehicle_no if d.vehicle else '-' }}</td>
+        <td>{{ d.driver_id or '-' }}</td>
+        <td>{{ d.name }}</td>
+        <td class="text-center">{% if d.shirt_size %}<span class="badge badge-primary">{{ d.shirt_size }}</span>{% else %}<span class="missing">—</span>{% endif %}</td>
+        <td class="text-center">{% if d.trouser_size %}<span class="badge badge-info">{{ d.trouser_size }}</span>{% else %}<span class="missing">—</span>{% endif %}</td>
+        <td class="text-center">{% if d.jacket_size %}<span class="badge badge-success">{{ d.jacket_size }}</span>{% else %}<span class="missing">—</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="section-title">Summary</div>
+  <table class="summary-table">
+    <thead>
+      <tr>
+        <th>Size</th>
+        <th class="text-center">Shirt</th>
+        <th class="text-center">Trouser</th>
+        <th class="text-center">Jacket</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for sz in all_sizes %}
+      {% set sc = shirt_counts.get(sz, 0) %}
+      {% set tc = trouser_counts.get(sz, 0) %}
+      {% set jc = jacket_counts.get(sz, 0) %}
+      {% if sc or tc or jc %}
+      <tr>
+        <td>{{ sz }}</td>
+        <td class="text-center">{{ sc or '—' }}</td>
+        <td class="text-center">{{ tc or '—' }}</td>
+        <td class="text-center">{{ jc or '—' }}</td>
+      </tr>
+      {% endif %}
+      {% endfor %}
+      <tr class="total-row">
+        <td>Total</td>
+        <td class="text-center">{{ shirt_counts.values() | sum }}</td>
+        <td class="text-center">{{ trouser_counts.values() | sum }}</td>
+        <td class="text-center">{{ jacket_counts.values() | sum }}</td>
+      </tr>
+      <tr class="total-row">
+        <td>Missing</td>
+        <td class="text-center">{{ missing_shirt_count }}</td>
+        <td class="text-center">{{ missing_trouser_count }}</td>
+        <td class="text-center">{{ missing_jacket_count }}</td>
+      </tr>
+    </tbody>
+  </table>
+
+</body>
+</html>

@@ -1,6 +1,24 @@
 /* Shared Report Centre / Module Hub icon gradients (keep in sync with reports_index tiles) */
 .rc-page [class*="rc-tile--"] .rc-tile-icon { background: transparent !important; border: none !important; }
 
+/* Custom inline SVG icons in tiles */
+.rc-tile-icon .rc-custom-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.rc-tile-icon .rc-custom-icon svg {
+  width: 2.2rem;
+  height: 2.2rem;
+  filter: drop-shadow(0 4px 8px rgba(15, 23, 42, 0.12));
+}
+@media (max-width: 480px) {
+  .rc-tile-icon .rc-custom-icon svg {
+    width: 1.85rem;
+    height: 1.85rem;
+  }
+}
+
 .rc-tile--vehicle-summary .rc-tile-icon > i,
 .hub-page .hub-grid .rc-tile--vehicle-summary .rc-tile-icon > i,
 .rc-tile--vehicle-profile .rc-tile-icon > i,

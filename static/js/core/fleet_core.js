@@ -1343,11 +1343,85 @@
             }
         }
 
-        function _applyExcelStyles(ws, aoa) {
+        function _applyExcelMetaStyles(ws, aoa, metaRows, totalCols) {
+            if (!ws || !window.XLSX) return;
+            var border = {
+                top:    { style: 'thin', color: { rgb: 'B0B8C1' } },
+                bottom: { style: 'thin', color: { rgb: 'B0B8C1' } },
+                left:   { style: 'thin', color: { rgb: 'B0B8C1' } },
+                right:  { style: 'thin', color: { rgb: 'B0B8C1' } }
+            };
+            ws['!merges'] = ws['!merges'] || [];
+            if (metaRows > 0 && totalCols > 1) {
+                ws['!merges'].push({ s: { r: 0, c: 0 }, e: { r: 0, c: totalCols - 1 } });
+            }
+            if (metaRows > 1 && totalCols > 1) {
+                ws['!merges'].push({ s: { r: 1, c: 0 }, e: { r: 1, c: totalCols - 1 } });
+            }
+            for (var r = 0; r < metaRows; r++) {
+                var isTitle = (r === 0);
+                var isSubtitle = (r === 1);
+                for (var c = 0; c < totalCols; c++) {
+                    var addr = window.XLSX.utils.encode_cell({ r: r, c: c });
+                    if (!ws[addr]) ws[addr] = { v: '', t: 's' };
+                    var cell = ws[addr];
+                    if (isTitle) {
+                        cell.s = {
+                            font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 16, name: 'Calibri' },
+                            fill: { patternType: 'solid', fgColor: { rgb: '1E3A5F' } },
+                            alignment: { horizontal: 'center', vertical: 'center' },
+                            border: border
+                        };
+                    } else if (isSubtitle) {
+                        cell.s = {
+                            font: { italic: true, color: { rgb: '64748B' }, sz: 9, name: 'Calibri' },
+                            fill: { patternType: 'solid', fgColor: { rgb: 'F1F5F9' } },
+                            alignment: { horizontal: 'right', vertical: 'center' },
+                            border: border
+                        };
+                    } else {
+                        cell.s = {
+                            font: { bold: (c === 0), color: { rgb: '1E3A5F' }, sz: 10, name: 'Calibri' },
+                            fill: { patternType: 'solid', fgColor: { rgb: 'F1F5F9' } },
+                            alignment: { horizontal: (c === 0) ? 'left' : 'center', vertical: 'center' },
+                            border: border
+                        };
+                    }
+                }
+            }
+        }
+
+        function _applyExcelStyles(ws, aoa, hasFooterReal, headerOffset, summaryRowCount, excelCfg) {
             if (!ws || !aoa || !aoa.length || !window.XLSX) return;
+            var headerOffset = headerOffset || 0;
+            var summaryRowCount = summaryRowCount || 0;
+            var excelCfg = excelCfg || {};
             var totalRows = aoa.length;
-            var totalCols = aoa[0] ? aoa[0].length : 0;
-            var hasFooter = totalRows > 2;
+            var totalCols = aoa[headerOffset] ? aoa[headerOffset].length : (aoa[0] ? aoa[0].length : 0);
+            var hasFooter = (typeof hasFooterReal !== 'undefined') ? !!hasFooterReal : (totalRows > 2);
+            var summaryStart = totalRows - summaryRowCount;
+
+            // Build column alignment and highlight maps from config
+            var headersForCols = aoa[headerOffset] || [];
+            var centerColIdx = [];
+            var highlightEmptyColIdx = [];
+            if (excelCfg.centerColumns && excelCfg.centerColumns.length) {
+                excelCfg.centerColumns.forEach(function(colName) {
+                    var idx = headersForCols.indexOf(colName);
+                    if (idx >= 0) centerColIdx.push(idx);
+                });
+            }
+            if (excelCfg.highlightEmptyColumns && excelCfg.highlightEmptyColumns.length) {
+                excelCfg.highlightEmptyColumns.forEach(function(colName) {
+                    var idx = headersForCols.indexOf(colName);
+                    if (idx >= 0) highlightEmptyColIdx.push(idx);
+                });
+            }
+            function _colAlign(ci, isNum) {
+                if (centerColIdx.indexOf(ci) >= 0) return 'center';
+                if (isNum) return 'right';
+                return 'left';
+            }
 
             var border = {
                 top:    { style: 'thin', color: { rgb: 'B0B8C1' } },
@@ -1362,10 +1436,11 @@
                 right:  { style: 'thin',   color: { rgb: 'B0B8C1' } }
             };
 
-            for (var r = 0; r < totalRows; r++) {
-                var isHeader = (r === 0);
-                var isFooter = hasFooter && (r === totalRows - 1);
-                var isEven   = !isHeader && !isFooter && (r % 2 === 0);
+            for (var r = headerOffset; r < totalRows; r++) {
+                var isHeader = (r === headerOffset);
+                var isSummary = summaryRowCount > 0 && r >= summaryStart;
+                var isFooter = !isSummary && hasFooter && (r === totalRows - 1);
+                var isEven   = !isHeader && !isFooter && !isSummary && ((r - headerOffset) % 2 === 0);
 
                 for (var c = 0; c < totalCols; c++) {
                     var addr = window.XLSX.utils.encode_cell({ r: r, c: c });
@@ -1382,6 +1457,39 @@
                             alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
                             border:    border
                         };
+                    } else if (isSummary) {
+                        var sumRelRow = r - summaryStart;
+                        var isMatrixHeaderRow = (aoa[summaryStart + 1] && aoa[summaryStart + 1][0] === 'Size');
+                        var isMatrixHeader = (sumRelRow === 1 && isMatrixHeaderRow && !isEmpty);
+                        var isSummaryHeading = (sumRelRow === 0 && !isEmpty);
+                        if (isEmpty) {
+                            cell.s = {
+                                font:   { sz: 9, name: 'Calibri' },
+                                fill:   { patternType: 'solid', fgColor: { rgb: 'D6E4F0' } },
+                                border: borderFooterTop
+                            };
+                        } else if (isSummaryHeading) {
+                            cell.s = {
+                                font:      { bold: true, color: { rgb: 'FFFFFF' }, sz: 11, name: 'Calibri' },
+                                fill:      { patternType: 'solid', fgColor: { rgb: '1E3A5F' } },
+                                alignment: { horizontal: 'left', vertical: 'center' },
+                                border:    borderFooterTop
+                            };
+                        } else if (isMatrixHeader) {
+                            cell.s = {
+                                font:      { bold: true, color: { rgb: 'FFFFFF' }, sz: 10, name: 'Calibri' },
+                                fill:      { patternType: 'solid', fgColor: { rgb: '2563EB' } },
+                                alignment: { horizontal: 'center', vertical: 'center' },
+                                border:    borderFooterTop
+                            };
+                        } else {
+                            cell.s = {
+                                font:      { bold: (c === 0), color: { rgb: '1E3A5F' }, sz: 10, name: 'Calibri' },
+                                fill:      { patternType: 'solid', fgColor: { rgb: 'D6E4F0' } },
+                                alignment: { horizontal: (c === 0) ? 'left' : 'center', vertical: 'center' },
+                                border:    borderFooterTop
+                            };
+                        }
                     } else if (isFooter) {
                         if (isEmpty) {
                             cell.s = {
@@ -1401,14 +1509,14 @@
                         cell.s = {
                             font:      { sz: 9, name: 'Calibri', color: { rgb: '1A1A2E' } },
                             fill:      { patternType: 'solid', fgColor: { rgb: 'EBF3FB' } },
-                            alignment: { horizontal: isNum ? 'right' : 'left', vertical: 'center' },
+                            alignment: { horizontal: _colAlign(c, isNum), vertical: 'center' },
                             border:    border
                         };
                     } else {
                         cell.s = {
                             font:      { sz: 9, name: 'Calibri', color: { rgb: '1A1A2E' } },
                             fill:      { patternType: 'solid', fgColor: { rgb: 'FFFFFF' } },
-                            alignment: { horizontal: isNum ? 'right' : 'left', vertical: 'center' },
+                            alignment: { horizontal: _colAlign(c, isNum), vertical: 'center' },
                             border:    border
                         };
                     }
@@ -1416,12 +1524,13 @@
             }
 
             // Diff column coloring — KMs Diff & % Diff
-            var headers0 = aoa[0] || [];
+            var headers0 = aoa[headerOffset] || [];
             var kmsDiffIdx  = headers0.indexOf('KMs Diff');
             var pctDiffIdx  = headers0.indexOf('% Diff');
             var kmsDrivenIdx = headers0.indexOf('KMs Driven');
             if (kmsDiffIdx >= 0 || pctDiffIdx >= 0) {
-                for (var dr = 1; dr < totalRows - (hasFooter ? 1 : 0); dr++) {
+                var skipEndRows = (hasFooter ? 1 : 0) + summaryRowCount;
+                for (var dr = headerOffset + 1; dr < totalRows - skipEndRows; dr++) {
                     var pctRaw  = pctDiffIdx  >= 0 ? aoa[dr][pctDiffIdx]  : null;
                     var kmsRaw  = kmsDiffIdx  >= 0 ? aoa[dr][kmsDiffIdx]  : null;
                     var pctNum  = typeof pctRaw  === 'number' ? pctRaw  : _tryParseNumber(String(pctRaw  || '').replace('%',''));
@@ -1435,7 +1544,7 @@
                             if (ci2 < 0) return;
                             var a2 = window.XLSX.utils.encode_cell({ r: dr, c: ci2 });
                             if (!ws[a2]) ws[a2] = { v: '', t: 's' };
-                            var isEvenRow = (dr % 2 === 0);
+                            var isEvenRow = ((dr - headerOffset) % 2 === 0);
                             ws[a2].s = {
                                 font:      { bold: isRed, sz: 9, name: 'Calibri', color: { rgb: diffFontColor } },
                                 fill:      { patternType: 'solid', fgColor: { rgb: diffFill || (isEvenRow ? 'EBF3FB' : 'FFFFFF') } },
@@ -1449,7 +1558,8 @@
 
             // Auto column widths — header + first 100 data rows, tight fit
             var colWidths = [];
-            var scanRows = Math.min(totalRows, 101);
+            var scanStart = headerOffset;
+            var scanEnd = Math.min(totalRows, scanStart + 101);
             for (var ci = 0; ci < totalCols; ci++) {
                 var hdrName = headers0[ci] || '';
                 var isDateCol = (hdrName === 'Date' || hdrName === 'Fueling Date' || hdrName === 'Card Swipe');
@@ -1458,7 +1568,7 @@
                     continue;
                 }
                 var maxLen = 4;
-                for (var ri = 0; ri < scanRows; ri++) {
+                for (var ri = scanStart; ri < scanEnd; ri++) {
                     var v = aoa[ri] ? aoa[ri][ci] : null;
                     var l = v != null ? String(v).length : 0;
                     if (l > maxLen) maxLen = l;
@@ -1468,10 +1578,38 @@
             ws['!cols'] = colWidths;
 
             // Row heights
-            var rowHeights = [{ hpt: 24 }];
-            for (var ri2 = 1; ri2 < totalRows - 1; ri2++) rowHeights.push({ hpt: 15 });
+            var rowHeights = [];
+            for (var ri2 = 0; ri2 < headerOffset; ri2++) rowHeights.push({ hpt: (ri2 === 0 ? 30 : 16) });
+            rowHeights.push({ hpt: 24 });
+            var dataEndRow = totalRows - (hasFooter ? 1 : 0) - summaryRowCount;
+            for (var ri3 = headerOffset + 1; ri3 < dataEndRow; ri3++) rowHeights.push({ hpt: 15 });
+            if (summaryRowCount > 0) {
+                for (var ri4 = dataEndRow; ri4 < totalRows - (hasFooter ? 1 : 0); ri4++) rowHeights.push({ hpt: 18 });
+            }
             if (hasFooter) rowHeights.push({ hpt: 18 });
             ws['!rows'] = rowHeights;
+
+            // Conditional formatting: highlight empty cells in specified columns (e.g., missing sizes)
+            if (highlightEmptyColIdx.length) {
+                var skipEndRows = (hasFooter ? 1 : 0) + summaryRowCount;
+                var dataEnd = totalRows - skipEndRows;
+                for (var dr2 = headerOffset + 1; dr2 < dataEnd; dr2++) {
+                    highlightEmptyColIdx.forEach(function(ci3) {
+                        var val = aoa[dr2] ? aoa[dr2][ci3] : null;
+                        if (val === '' || val === null || val === undefined) {
+                            var a3 = window.XLSX.utils.encode_cell({ r: dr2, c: ci3 });
+                            if (!ws[a3]) ws[a3] = { v: '', t: 's' };
+                            var isEvenRow2 = ((dr2 - headerOffset) % 2 === 0);
+                            ws[a3].s = {
+                                font:      { sz: 9, name: 'Calibri', color: { rgb: 'C0392B' } },
+                                fill:      { patternType: 'solid', fgColor: { rgb: 'FDECEA' } },
+                                alignment: { horizontal: 'center', vertical: 'center' },
+                                border:    border
+                            };
+                        }
+                    });
+                }
+            }
         }
 
         function _fleetExportExcel(clone) {
@@ -1486,11 +1624,106 @@
             return _fleetLoadScript('https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js').then(function() {
                 if (!window.XLSX) throw new Error('Excel library not available');
                 var aoa = excelConfig ? _fleetTableToAoaExcel(clone, excelConfig) : _fleetTableToAoa(clone);
+                var metaRows = [];
+                if (excelConfig && excelConfig.reportTitle) metaRows.push([excelConfig.reportTitle]);
+                if (excelConfig && excelConfig.generatedLabel) metaRows.push([excelConfig.generatedLabel]);
+                var headerOffset = metaRows.length;
+                if (headerOffset) aoa = metaRows.concat(aoa);
                 var ws = window.XLSX.utils.aoa_to_sheet(aoa, { cellDates: true });
+                var totalCols = aoa[headerOffset] ? aoa[headerOffset].length : (aoa[0] ? aoa[0].length : 0);
+                if (headerOffset) _applyExcelMetaStyles(ws, aoa, headerOffset, totalCols);
                 if (excelConfig && excelConfig.dateColumns) _setExcelDateFormats(ws, aoa, excelConfig.dateColumns);
-                _applyExcelStyles(ws, aoa);
+                var hasFooterReal = !!(clone && clone.querySelector('tfoot tr'));
+                _applyExcelStyles(ws, aoa, hasFooterReal, headerOffset, 0, excelConfig);
+                // Auto-filter on header row
+                if (totalCols > 0) {
+                    ws['!autofilter'] = { ref: window.XLSX.utils.encode_range({ s: { r: headerOffset, c: 0 }, e: { r: headerOffset, c: totalCols - 1 } }) };
+                }
+                // Freeze panes — freeze rows above and including header
+                if (headerOffset > 0 || totalCols > 0) {
+                    ws['!freeze'] = { xSplit: 0, ySplit: headerOffset + 1, topLeftCell: window.XLSX.utils.encode_cell({ r: headerOffset + 1, c: 0 }), activePane: 'bottomLeft', state: 'frozen' };
+                }
                 var wb = window.XLSX.utils.book_new();
                 window.XLSX.utils.book_append_sheet(wb, ws, (title || 'Report').substring(0, 31));
+                // Summary on separate sheet
+                if (excelConfig && excelConfig.summaryRows && excelConfig.summaryRows.length) {
+                    var sumAoa = excelConfig.summaryRows.slice();
+                    var sumWs = window.XLSX.utils.aoa_to_sheet(sumAoa, { cellDates: true });
+                    var sumCols = 0;
+                    sumAoa.forEach(function(rw) { if (rw.length > sumCols) sumCols = rw.length; });
+                    _applyExcelStyles(sumWs, sumAoa, false, 0, 0, {});
+                    // Style the summary heading row (row 0) and matrix header (row 2)
+                    var sBorder = {
+                        top:    { style: 'thin', color: { rgb: 'B0B8C1' } },
+                        bottom: { style: 'thin', color: { rgb: 'B0B8C1' } },
+                        left:   { style: 'thin', color: { rgb: 'B0B8C1' } },
+                        right:  { style: 'thin', color: { rgb: 'B0B8C1' } }
+                    };
+                    for (var sr = 0; sr < sumAoa.length; sr++) {
+                        for (var sc = 0; sc < sumCols; sc++) {
+                            var sAddr = window.XLSX.utils.encode_cell({ r: sr, c: sc });
+                            if (!sumWs[sAddr]) sumWs[sAddr] = { v: '', t: 's' };
+                            var sCell = sumWs[sAddr];
+                            var sVal = sumAoa[sr] ? sumAoa[sr][sc] : '';
+                            var sEmpty = (sVal === '' || sVal === null || sVal === undefined);
+                            if (sr === 0 && !sEmpty) {
+                                // Summary heading
+                                sCell.s = {
+                                    font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 14, name: 'Calibri' },
+                                    fill: { patternType: 'solid', fgColor: { rgb: '1E3A5F' } },
+                                    alignment: { horizontal: 'center', vertical: 'center' },
+                                    border: sBorder
+                                };
+                            } else if (sr === 1 && !sEmpty) {
+                                // Matrix header row
+                                sCell.s = {
+                                    font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 10, name: 'Calibri' },
+                                    fill: { patternType: 'solid', fgColor: { rgb: '2563EB' } },
+                                    alignment: { horizontal: 'center', vertical: 'center' },
+                                    border: sBorder
+                                };
+                            } else if (!sEmpty) {
+                                var isTotalRow = (sVal === 'Total' || sVal === 'Missing');
+                                sCell.s = {
+                                    font: { bold: (sc === 0 || isTotalRow), color: { rgb: '1E3A5F' }, sz: 10, name: 'Calibri' },
+                                    fill: { patternType: 'solid', fgColor: { rgb: isTotalRow ? 'B8D4F0' : 'D6E4F0' } },
+                                    alignment: { horizontal: (sc === 0) ? 'left' : 'center', vertical: 'center' },
+                                    border: sBorder
+                                };
+                            } else {
+                                sCell.s = {
+                                    font: { sz: 9, name: 'Calibri' },
+                                    fill: { patternType: 'solid', fgColor: { rgb: 'D6E4F0' } },
+                                    border: sBorder
+                                };
+                            }
+                        }
+                    }
+                    // Merge heading row across all columns
+                    if (sumCols > 1) {
+                        sumWs['!merges'] = sumWs['!merges'] || [];
+                        sumWs['!merges'].push({ s: { r: 0, c: 0 }, e: { r: 0, c: sumCols - 1 } });
+                    }
+                    // Column widths for summary sheet
+                    var sumColWidths = [];
+                    for (var sci = 0; sci < sumCols; sci++) {
+                        var sumMaxLen = 6;
+                        for (var sri = 0; sri < sumAoa.length; sri++) {
+                            var sv = sumAoa[sri] ? sumAoa[sri][sci] : null;
+                            var sl = sv != null ? String(sv).length : 0;
+                            if (sl > sumMaxLen) sumMaxLen = sl;
+                        }
+                        sumColWidths.push({ wch: Math.min(sumMaxLen + 2, 20) });
+                    }
+                    sumWs['!cols'] = sumColWidths;
+                    // Row heights for summary sheet
+                    var sumRowHeights = [];
+                    for (var sri2 = 0; sri2 < sumAoa.length; sri2++) {
+                        sumRowHeights.push({ hpt: (sri2 === 0 ? 28 : (sri2 === 1 ? 22 : 18)) });
+                    }
+                    sumWs['!rows'] = sumRowHeights;
+                    window.XLSX.utils.book_append_sheet(wb, sumWs, 'Summary');
+                }
                 var out = window.XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
                 return _fleetDownloadBlob(new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), _fleetBaseFilename() + '.xlsx');
             });
