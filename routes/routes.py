@@ -8109,11 +8109,15 @@ def _tra_compute_segment_metrics(driver, segment, start_d, end_d, ndays, cache=N
     if left_rec and left_rec.change_date and start_d <= left_rec.change_date <= end_d:
         left_date = left_rec.change_date
 
-    working_days = active_days
+    same_day_join_left = (
+        driver.assign_date and left_date and driver.assign_date == left_date
+    )
+
+    working_days = 0 if same_day_join_left else active_days
     solo_days = 0
     capacity = vehicle.driver_capacity if vehicle else 1
 
-    if capacity >= 2 and vehicle_id and active_days > 0:
+    if not same_day_join_left and capacity >= 2 and vehicle_id and active_days > 0:
         if cache:
             solo_days = cache.segment_solo_days(vehicle_id, seg_s, seg_e)
         else:
