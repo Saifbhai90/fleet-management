@@ -346,6 +346,7 @@ PERMISSION_TREE = {
         ('unexecuted_task_report', 'Unexecuted Task Report'),
         ('missing_documents_report', 'Missing Documents Report'),
         ('report_uniform_sizes', 'Uniform Sizes Report'),
+        ('uniform_size_edit', 'Uniform Sizes – Inline Edit'),
     ],
     PERMISSION_BACKUP: [
         ('backup', 'Backup'),
@@ -1015,7 +1016,10 @@ SECTION_PAGE_GROUPS = {
         ('Task Turnaround Report', [('task_turnaround_report', 'Task Turnaround Report')]),
         ('Unexecuted Task Report', [('unexecuted_task_report', 'Unexecuted Task Report')]),
         ('Missing Documents Report', [('missing_documents_report', 'Missing Documents Report')]),
-        ('Uniform Sizes Report', [('report_uniform_sizes', 'Uniform Sizes Report')]),
+        ('Uniform Sizes Report', [
+            ('report_uniform_sizes', 'Uniform Sizes Report'),
+            ('uniform_size_edit', 'Uniform Sizes – Inline Edit'),
+        ]),
         ('Activity Log', [('activity_log_report', 'Activity Log')]),
         ('Activity Logs Geo', [('activity_logs_geo_report', 'Activity Logs Geo')]),
     ],
@@ -1263,6 +1267,7 @@ PAGE_VISIBLE = {
     'unexecuted_task_report': ['reports', 'unexecuted_task_report'],
     'missing_documents_report': ['reports', 'missing_documents_report'],
     'report_uniform_sizes': ['reports', 'report_uniform_sizes'],
+    'uniform_size_edit': ['reports', 'report_uniform_sizes', 'uniform_size_edit'],
     # Report Centre uses endpoint-style keys for list routes — align with real permission codes
     'fuel_expense_list': ['expenses', 'fuel_expense'],
     'oil_expense_list': ['expenses', 'oil_expense'],

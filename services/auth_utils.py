@@ -371,6 +371,8 @@ ENDPOINT_PERMISSION_MAP = [
     ('oil_change_alert_report', 'oil_change_alert_report'),
     ('activity_log_report', 'activity_log_report'),
     ('activity_logs_geo_report', 'activity_logs_geo_report'),
+    ('report_uniform_sizes', 'report_uniform_sizes'),
+    ('report_uniform_sizes_update_size', 'uniform_size_edit'),
     # Payroll Module
     ('payroll_salary_config_list', 'payroll_config_list'),
     ('payroll_salary_config_form', 'payroll_config_add'),

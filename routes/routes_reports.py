@@ -1581,7 +1581,12 @@ def report_uniform_sizes():
 def report_uniform_sizes_update_size():
     """Inline update of a single uniform size field with history tracking."""
     if not session.get('is_master'):
-        return jsonify({'ok': False, 'msg': 'Access denied'}), 403
+        from auth_utils import get_user_context
+        user_id = session.get('user_id')
+        ctx = get_user_context(user_id) if user_id else {}
+        codes = ctx.get('permission_codes', set())
+        if 'uniform_size_edit' not in codes:
+            return jsonify({'ok': False, 'msg': 'Access denied'}), 403
 
     import uuid
     from models import DriverDocumentHistory

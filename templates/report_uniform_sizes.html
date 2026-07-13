@@ -312,8 +312,9 @@ function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page
       });
     }
 
-    // Inline size editing (master only)
-    {% if session.get('is_master') %}
+    // Inline size editing (master or uniform_size_edit permission)
+    {% set can_edit_uniform = session.get('is_master') or 'uniform_size_edit' in (current_permissions or []) %}
+    {% if can_edit_uniform %}
     var SHIRT_SIZES = {{ shirt_sizes | tojson }};
     var TROUSER_SIZES = {{ trouser_sizes | tojson }};
     var JACKET_SIZES = {{ jacket_sizes | tojson }};
