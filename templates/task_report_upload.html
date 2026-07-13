@@ -2,14 +2,66 @@
 {% block title %}Upload Workbooks (Admin){% endblock %}
 {% block content %}
 <style>
-.drop-zone{border:2px dashed #adb5bd;border-radius:.5rem;padding:1rem;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;background:#fafafa;}
+.drop-zone{border:2px dashed #adb5bd;border-radius:.4rem;padding:.4rem .75rem;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;background:#fafafa;display:flex;align-items:center;gap:.6rem;}
 .drop-zone.drag-over{border-color:#0d6efd;background:#e8f0fe;}
 .drop-zone input[type=file]{display:none;}
-.drop-zone .dz-icon{font-size:2rem;color:#adb5bd;display:block;margin-bottom:.3rem;}
+.drop-zone .dz-icon{font-size:1.2rem;color:#adb5bd;flex-shrink:0;}
 .drop-zone.has-files{border-color:#198754;background:#f0fff4;}
 .drop-zone.has-files .dz-icon{color:#198754;}
+.section-card{overflow:hidden;}
 .section-card .card-header{cursor:pointer;user-select:none;}
 .badge-file-count{font-size:.7rem;}
+.date-loading-inline{display:inline-block;width:14px;height:14px;border:2px solid #dee2e6;border-top-color:#0d6efd;border-radius:50%;animation:spin .6s linear infinite;vertical-align:middle;margin-left:6px;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.skel-row td{padding:.45rem .75rem;}
+.skel-bar{display:inline-block;height:14px;border-radius:4px;background:linear-gradient(90deg,#eee 25%,#f5f5f5 37%,#eee 63%);background-size:200% 100%;animation:skel 1.4s ease infinite;width:100%;}
+@keyframes skel{0%{background-position:200% 0;}100%{background-position:-200% 0;}}
+.missing-dates-card{max-height:280px;overflow-y:auto;}
+.missing-dates-card .badge{font-size:.72rem;padding:.3em .5em;}
+
+/* Color-coded left borders */
+#secEmergency{border-left:3px solid #dc3545!important;}
+#secMileage{border-left:3px solid #0dcaf0!important;}
+#secActivity{border-left:3px solid #0d6efd!important;}
+.section-card.emg-card{border-left:3px solid #dc3545;}
+.section-card.mil-card{border-left:3px solid #0dcaf0;}
+.section-card.act-card{border-left:3px solid #0d6efd;}
+
+/* Step indicator */
+.step-indicator{display:flex;align-items:center;gap:0;margin-bottom:.75rem;flex-wrap:wrap;}
+.step-item{display:flex;align-items:center;gap:.35rem;cursor:pointer;padding:.25rem .5rem;border-radius:.3rem;transition:background .2s;}
+.step-item:hover{background:#f8f9fa;}
+.step-item.active{background:#e7f1ff;}
+.step-num{width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;flex-shrink:0;}
+.step-num.pending{background:#dee2e6;color:#6c757d;}
+.step-num.active{background:#0d6efd;color:#fff;}
+.step-num.done{background:#198754;color:#fff;}
+.step-label{font-size:.78rem;color:#495057;white-space:nowrap;}
+.step-divider{width:20px;height:2px;background:#dee2e6;margin:0 .15rem;}
+
+/* Quick date buttons */
+.quick-date-btn{font-size:.72rem;padding:.15rem .5rem;border-radius:1rem;border:1px solid #dee2e6;background:#fff;color:#495057;cursor:pointer;transition:all .15s;}
+.quick-date-btn:hover{border-color:#0d6efd;color:#0d6efd;background:#e8f0fe;}
+
+/* File chips */
+.file-chips{display:flex;flex-wrap:wrap;gap:.3rem;margin-top:.4rem;}
+.file-chip{display:inline-flex;align-items:center;gap:.3rem;padding:.15rem .5rem;border-radius:1rem;font-size:.7rem;background:#e8f5e9;color:#198754;border:1px solid #c3e6cb;}
+.file-chip .chip-remove{cursor:pointer;font-weight:bold;opacity:.6;}
+.file-chip .chip-remove:hover{opacity:1;color:#dc3545;}
+
+/* Sticky upload bar */
+.sticky-upload-bar{position:sticky;bottom:0;z-index:100;background:rgba(255,255,255,.95);backdrop-filter:blur(6px);border-top:1px solid #e9ecef;padding:.5rem .75rem;margin:.5rem -.75rem -.5rem;border-radius:0 0 .3rem .3rem;}
+
+/* Empty state */
+.empty-state{text-align:center;padding:1.5rem .5rem;}
+.empty-state i{font-size:2rem;color:#dee2e6;margin-bottom:.5rem;display:block;}
+.empty-state p{font-size:.8rem;color:#adb5bd;margin:0;}
+
+/* Full card drop highlight */
+.section-card.drag-over-card{box-shadow:0 0 0 2px #0d6efd inset;background:#f0f6ff;}
+
+/* Keyboard hint */
+.kbd{display:inline-block;padding:.1rem .35rem;font-size:.65rem;font-family:monospace;background:#f1f3f5;border:1px solid #dee2e6;border-radius:.2rem;color:#6c757d;}
 </style>
 
 <div class="container-fluid">
@@ -22,19 +74,8 @@
     <a href="{{ url_for('task_report_upload_list') }}" id="uploadLogBtn" class="btn btn-outline-primary btn-sm"><i class="bi bi-journal-bookmark me-1"></i>Upload Log</a>
   </div>
 
-  <!-- Missing Dates Alert -->
-  <div id="missingDatesAlert" class="alert alert-danger border-0 py-2 px-3 mb-3" style="display:none;">
-    <div class="d-flex align-items-start gap-2">
-      <i class="bi bi-calendar-x-fill mt-1 flex-shrink-0"></i>
-      <div>
-        <strong class="d-block mb-1">Incomplete / Missing Uploads (last 14 days):</strong>
-        <div id="missingDatesList" class="d-flex flex-wrap gap-1"></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Duplicate Date Warning -->
-  <div id="duplicateDateAlert" class="alert alert-warning d-flex align-items-center gap-2 mb-3" style="display:none;">
+  <!-- Duplicate Date Warning (full width) -->
+  <div id="duplicateDateAlert" class="alert alert-warning d-flex align-items-center gap-2 mb-3" style="display:none!important;">
     <i class="bi bi-exclamation-triangle-fill fs-5 flex-shrink-0"></i>
     <div><strong>Duplicate Upload Warning:</strong> Is date ka data already uploaded hai. Re-upload karne se <strong>purana data replace</strong> ho jayega.</div>
   </div>
@@ -68,6 +109,10 @@
     </div>
   </div>
 
+  <!-- Two-column layout: left = upload form, right sidebar = missing dates -->
+  <div class="row g-3">
+    <!-- Left Column: Upload Form + Summary -->
+    <div class="col-lg-9 col-md-8">
   <!-- Main Upload Card -->
   <div class="card shadow border-0 rounded-3 mb-3">
     <div class="card-body pb-2">
@@ -83,16 +128,41 @@
         {{ nav_from_hidden() }}
 
         <!-- Date row -->
-        <div class="row g-3 mb-3">
+        <div class="row g-3 mb-2">
           <div class="col-md-4 col-sm-6">
-            <label class="form-label fw-semibold">Report Date <span class="text-danger">*</span></label>
+            <label class="form-label fw-semibold">Report Date <span class="text-danger">*</span> <span id="dateLoadingSpinner" class="date-loading-inline" style="display:none;"></span></label>
             {{ form.task_date(class="form-control datepicker", id="taskDateInput") }}
             {% for e in form.task_date.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+            <!-- Quick date buttons -->
+            <div class="d-flex gap-1 mt-1 flex-wrap">
+              <button type="button" class="quick-date-btn" onclick="window._quickDate(0)">Today</button>
+              <button type="button" class="quick-date-btn" onclick="window._quickDate(1)">Yesterday</button>
+              <button type="button" class="quick-date-btn" onclick="window._quickDate(2)">2 days ago</button>
+              <button type="button" class="quick-date-btn" onclick="window._quickDate(3)">3 days ago</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step Indicator -->
+        <div class="step-indicator">
+          <div class="step-item" data-step="1" onclick="window._goToStep(1)">
+            <span class="step-num pending" id="stepNum1">1</span>
+            <span class="step-label">Emergency</span>
+          </div>
+          <div class="step-divider"></div>
+          <div class="step-item" data-step="2" onclick="window._goToStep(2)">
+            <span class="step-num pending" id="stepNum2">2</span>
+            <span class="step-label">Mileage</span>
+          </div>
+          <div class="step-divider"></div>
+          <div class="step-item" data-step="3" onclick="window._goToStep(3)">
+            <span class="step-num pending" id="stepNum3">3</span>
+            <span class="step-label">Activity</span>
           </div>
         </div>
 
         <!-- Section 1: Emergency -->
-        <div class="card section-card border mb-2 rounded-2">
+        <div class="card section-card emg-card border mb-2 rounded-2" id="cardEmergency">
           <div class="card-header bg-light d-flex justify-content-between align-items-center py-2" data-bs-toggle="collapse" data-bs-target="#secEmergency">
             <span class="fw-semibold small"><i class="bi bi-truck text-danger me-2"></i>1. EmergencyTaskReport Excel</span>
             <div class="d-flex align-items-center gap-2">
@@ -102,19 +172,20 @@
           </div>
           <div class="collapse show" id="secEmergency">
             <div class="card-body py-2">
-              <div class="drop-zone" id="dzEmergency">
+              <div class="drop-zone" id="dzEmergency" tabindex="0">
                 <i class="bi bi-file-earmark-excel dz-icon"></i>
-                <span class="small text-muted" id="dzEmgLabel">Click to select or drag & drop Excel file</span>
+                <span class="small text-muted flex-grow-1 text-start" id="dzEmgLabel">Click or drag &amp; drop / paste Excel file</span>
                 {{ form.file_emergency(class="", id="fileEmergency", accept=".xlsx,.xls") }}
               </div>
               <div id="fileEmergencyWarn" class="small mt-1" style="display:none;"></div>
+              <div id="chipsEmergency" class="file-chips" style="display:none;"></div>
               <small class="text-muted d-block mt-1">EMG, Tasks (admin) column ke liye</small>
             </div>
           </div>
         </div>
 
         <!-- Section 2: Mileage -->
-        <div class="card section-card border mb-2 rounded-2">
+        <div class="card section-card mil-card border mb-2 rounded-2" id="cardMileage">
           <div class="card-header bg-light d-flex justify-content-between align-items-center py-2" data-bs-toggle="collapse" data-bs-target="#secMileage">
             <span class="fw-semibold small"><i class="bi bi-speedometer2 text-info me-2"></i>2. Vehicle Mileage Report Excel <span class="badge bg-secondary ms-1" style="font-size:.65rem;">Multiple OK</span></span>
             <div class="d-flex align-items-center gap-2">
@@ -124,19 +195,20 @@
           </div>
           <div class="collapse show" id="secMileage">
             <div class="card-body py-2">
-              <div class="drop-zone" id="dzMileage">
+              <div class="drop-zone" id="dzMileage" tabindex="0">
                 <i class="bi bi-file-earmark-excel dz-icon"></i>
-                <span class="small text-muted" id="dzMilLabel">Click to select or drag & drop — multiple files OK</span>
+                <span class="small text-muted flex-grow-1 text-start" id="dzMilLabel">Click or drag &amp; drop / paste — multiple files OK</span>
                 {{ form.file_mileage(class="", multiple=true, id="fileMileage", accept=".xlsx,.xls") }}
               </div>
               <div id="fileMileageWarn" class="small mt-1" style="display:none;"></div>
+              <div id="chipsMileage" class="file-chips" style="display:none;"></div>
               <small class="text-muted d-block mt-1">Single all-vehicles file ya per-vehicle alag files — dono OK.</small>
             </div>
           </div>
         </div>
 
         <!-- Section 3: Activity -->
-        <div class="card section-card border mb-3 rounded-2">
+        <div class="card section-card act-card border mb-2 rounded-2" id="cardActivity">
           <div class="card-header bg-light d-flex justify-content-between align-items-center py-2" data-bs-toggle="collapse" data-bs-target="#secActivity">
             <span class="fw-semibold small"><i class="bi bi-file-earmark-spreadsheet text-primary me-2"></i>3. Tracker Activity Report Excel <span class="badge bg-secondary ms-1" style="font-size:.65rem;">Multiple OK</span></span>
             <div class="d-flex align-items-center gap-2">
@@ -146,58 +218,72 @@
           </div>
           <div class="collapse show" id="secActivity">
             <div class="card-body py-2">
-              <div class="drop-zone" id="dzActivity">
+              <div class="drop-zone" id="dzActivity" tabindex="0">
                 <i class="bi bi-files dz-icon"></i>
-                <span class="small text-muted" id="dzActLabel">Click to select or drag & drop multiple files</span>
+                <span class="small text-muted flex-grow-1 text-start" id="dzActLabel">Click or drag &amp; drop / paste multiple files</span>
                 {{ form.file_activity_reports(class="", multiple=true, id="fileActivity", accept=".xlsx,.xls") }}
               </div>
               <div id="fileActivityWarn" class="small mt-1" style="display:none;"></div>
+              <div id="chipsActivity" class="file-chips" style="display:none;"></div>
               <small class="text-muted d-block mt-1">Multiple vehicle activity files ek saath. Same date upload hone par purani activity replace hoti hai.</small>
             </div>
           </div>
         </div>
 
-        <div class="d-flex align-items-center gap-3 flex-wrap mb-2">
-          <button type="submit" class="btn btn-primary" id="uploadBtn">
-            <i class="bi bi-upload me-1"></i>Upload
-          </button>
-          <span id="fileValidationMsg" class="text-danger small" style="display:none;"></span>
+        <!-- Sticky Upload Bar -->
+        <div class="sticky-upload-bar d-flex align-items-center justify-content-between gap-2 flex-wrap">
+          <div class="d-flex align-items-center gap-2">
+            <button type="submit" class="btn btn-primary" id="uploadBtn">
+              <i class="bi bi-upload me-1"></i>Upload
+            </button>
+            <span id="stickyFileCount" class="text-muted small" style="display:none;"></span>
+            <span id="fileValidationMsg" class="text-danger small" style="display:none;"></span>
+          </div>
+          <span class="text-muted small d-none d-sm-inline"><span class="kbd">Ctrl</span> + <span class="kbd">Enter</span> to upload</span>
         </div>
       </form>
     </div>
   </div>
 
-  <!-- Date Summary Card -->
-  <div class="card shadow-sm border-0 rounded-3 mb-3" id="dateSummaryCard" style="display:none;">
-    <div class="card-header bg-dark text-white py-2 d-flex justify-content-between align-items-center flex-wrap gap-2">
-      <span class="fw-semibold small"><i class="bi bi-journal-bookmark me-2"></i>Uploaded Data for <span id="summaryDateLabel"></span></span>
-      <div class="d-flex align-items-center gap-2">
-        <span id="summaryStatusBadge"></span>
-        <a id="summaryLogLink" href="#" class="btn btn-outline-light btn-sm py-0 px-2" style="font-size:.75rem;" target="_blank"><i class="bi bi-box-arrow-up-right me-1"></i>Full Log</a>
+    </div><!-- /col-lg-9 -->
+
+    <!-- Right Sidebar: Missing Dates + Summary -->
+    <div class="col-lg-3 col-md-4">
+      <div class="card shadow-sm border-0 rounded-3 mb-3 missing-dates-card" id="missingDatesCard" style="display:none;">
+        <div class="card-header bg-danger text-white py-2 d-flex align-items-center gap-2">
+          <i class="bi bi-calendar-x-fill flex-shrink-0"></i>
+          <span class="fw-semibold small">Missing / Incomplete Uploads</span>
+        </div>
+        <div class="card-body p-2">
+          <div class="text-muted small mb-2">Last 14 days — click a date to select:</div>
+          <div id="missingDatesList" class="d-flex flex-wrap gap-1"></div>
+        </div>
+      </div>
+
+      <!-- Date Summary Card (below missing dates) -->
+      <div class="card shadow-sm border-0 rounded-3 mb-3" id="dateSummaryCard" style="display:none;">
+        <div class="card-header bg-dark text-white py-2 d-flex justify-content-between align-items-center flex-wrap gap-2">
+          <span class="fw-semibold small"><i class="bi bi-journal-bookmark me-2"></i>Uploaded Data for <span id="summaryDateLabel"></span></span>
+          <div class="d-flex align-items-center gap-2">
+            <span id="summaryStatusBadge"></span>
+            <a id="summaryLogLink" href="#" class="btn btn-outline-light btn-sm py-0 px-2" style="font-size:.75rem;" target="_blank"><i class="bi bi-box-arrow-up-right me-1"></i>Full Log</a>
+          </div>
+        </div>
+        <div class="card-body p-2">
+          <div id="summaryLoading" class="text-center py-3" style="display:none;">
+            <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
+            <span class="text-muted small ms-2">Loading…</span>
+          </div>
+          <div id="summaryTableBody">
+            <div class="empty-state">
+              <i class="bi bi-calendar2-week"></i>
+              <p>Select a date to see uploaded data summary</p>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
-    <div class="card-body p-0">
-      <div id="summaryLoading" class="text-center py-3" style="display:none;">
-        <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
-        <span class="text-muted small ms-2">Loading…</span>
-      </div>
-      <div class="table-responsive">
-        <table class="table table-sm table-hover align-middle mb-0" style="font-size:.85rem;">
-          <thead class="table-light">
-            <tr>
-              <th class="ps-3">Data Type</th>
-              <th class="text-end">Records</th>
-              <th>Last Imported</th>
-              <th class="text-end pe-3">Status</th>
-            </tr>
-          </thead>
-          <tbody id="summaryTableBody">
-            <tr><td colspan="4" class="text-center py-3 text-muted small">Date select karein summary dekhne ke liye.</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
+  </div><!-- /row -->
 
 </div>
 
@@ -233,9 +319,9 @@ function ddmmyyyy(isoStr) {
 // ======== DRAG & DROP + FILE COUNT BADGES ========
 (function(){
   var zones = [
-    {dzId:'dzEmergency',  inputId:'fileEmergency', labelId:'dzEmgLabel', badgeId:'badgeEmg', multi:false, warnId:'fileEmergencyWarn'},
-    {dzId:'dzMileage',    inputId:'fileMileage',   labelId:'dzMilLabel', badgeId:'badgeMil', multi:true,  warnId:'fileMileageWarn'},
-    {dzId:'dzActivity',   inputId:'fileActivity',  labelId:'dzActLabel', badgeId:'badgeAct', multi:true,  warnId:'fileActivityWarn'},
+    {dzId:'dzEmergency',  inputId:'fileEmergency', labelId:'dzEmgLabel', badgeId:'badgeEmg', multi:false, warnId:'fileEmergencyWarn', chipsId:'chipsEmergency', cardId:'cardEmergency', stepNum:'stepNum1'},
+    {dzId:'dzMileage',    inputId:'fileMileage',   labelId:'dzMilLabel', badgeId:'badgeMil', multi:true,  warnId:'fileMileageWarn', chipsId:'chipsMileage', cardId:'cardMileage', stepNum:'stepNum2'},
+    {dzId:'dzActivity',   inputId:'fileActivity',  labelId:'dzActLabel', badgeId:'badgeAct', multi:true,  warnId:'fileActivityWarn', chipsId:'chipsActivity', cardId:'cardActivity', stepNum:'stepNum3'},
   ];
 
   var MAX_MB = 10;
@@ -252,6 +338,50 @@ function ddmmyyyy(isoStr) {
     return errs.length===0;
   }
 
+  function renderChips(z, files) {
+    var container = document.getElementById(z.chipsId);
+    if(!container) return;
+    if(!files || !files.length) { container.style.display='none'; container.innerHTML=''; return; }
+    container.style.display='flex';
+    container.innerHTML = Array.from(files).map(function(f, i){
+      return '<span class="file-chip"><i class="bi bi-file-earmark-excel"></i>'
+        +'<span class="text-truncate" style="max-width:120px;">'+f.name+'</span>'
+        +'<span class="chip-remove" onclick="window._removeFile(\''+z.inputId+'\','+i+'\',\''+z.chipsId+'\')">&times;</span>'
+        +'</span>';
+    }).join('');
+  }
+
+  window._removeFile = function(inputId, idx, chipsId) {
+    var inp = document.getElementById(inputId);
+    if(!inp || !inp.files) return;
+    var container = new DataTransfer();
+    var files = Array.from(inp.files);
+    files.splice(idx, 1);
+    files.forEach(function(f){ container.items.add(f); });
+    inp.files = container.files;
+    var z = zones.find(function(z){ return z.inputId===inputId; });
+    if(z) updateZone(z);
+  };
+
+  function updateStickyBar() {
+    var total=0;
+    zones.forEach(function(z){
+      var inp=document.getElementById(z.inputId);
+      if(inp&&inp.files.length) total+=inp.files.length;
+    });
+    var el=document.getElementById('stickyFileCount');
+    if(el){
+      if(total>0){ el.textContent=total+' file'+(total>1?'s':'')+' selected'; el.style.display=''; }
+      else { el.style.display='none'; }
+    }
+  }
+
+  function updateStepIndicator(z, hasFiles) {
+    var sn = document.getElementById(z.stepNum);
+    if(!sn) return;
+    sn.className = 'step-num ' + (hasFiles ? 'done' : 'pending');
+  }
+
   function updateZone(z) {
     var dz = document.getElementById(z.dzId);
     var inp = document.getElementById(z.inputId);
@@ -264,12 +394,17 @@ function ddmmyyyy(isoStr) {
       if(lbl) lbl.textContent = files.length===1 ? files[0].name : files.length+' files selected';
       if(badge){ badge.textContent=files.length+' file'+(files.length>1?'s':''); badge.style.display=''; badge.className='badge bg-success badge-file-count'; }
       validateAndWarn(files, z.warnId);
+      renderChips(z, files);
+      updateStepIndicator(z, true);
     } else {
       dz.classList.remove('has-files');
-      if(lbl) lbl.textContent = z.multi ? 'Click to select or drag & drop — multiple files OK' : 'Click to select or drag & drop Excel file';
+      if(lbl) lbl.textContent = z.multi ? 'Click or drag & drop / paste — multiple files OK' : 'Click or drag & drop / paste Excel file';
       if(badge){ badge.style.display='none'; }
       var warnEl=document.getElementById(z.warnId); if(warnEl) warnEl.style.display='none';
+      renderChips(z, null);
+      updateStepIndicator(z, false);
     }
+    updateStickyBar();
   }
 
   zones.forEach(function(z){
@@ -280,10 +415,12 @@ function ddmmyyyy(isoStr) {
     dz.addEventListener('click', function(e){ if(e.target!==inp) inp.click(); });
     inp.addEventListener('change', function(){ updateZone(z); });
 
-    dz.addEventListener('dragover', function(e){ e.preventDefault(); dz.classList.add('drag-over'); });
-    dz.addEventListener('dragleave', function(){ dz.classList.remove('drag-over'); });
+    // Drag over
+    dz.addEventListener('dragover', function(e){ e.preventDefault(); e.stopPropagation(); dz.classList.add('drag-over'); });
+    dz.addEventListener('dragleave', function(e){ if(e.target===dz) dz.classList.remove('drag-over'); });
+    // Drop files
     dz.addEventListener('drop', function(e){
-      e.preventDefault(); dz.classList.remove('drag-over');
+      e.preventDefault(); e.stopPropagation(); dz.classList.remove('drag-over');
       var dt = e.dataTransfer;
       if(!dt||!dt.files.length) return;
       try {
@@ -297,7 +434,101 @@ function ddmmyyyy(isoStr) {
       } catch(err){ inp.files = dt.files; }
       updateZone(z);
     });
+    // Paste files (Ctrl+V when zone is focused)
+    dz.addEventListener('paste', function(e){
+      e.preventDefault(); e.stopPropagation();
+      var items = e.clipboardData && e.clipboardData.items;
+      if(!items) return;
+      var files = [];
+      for(var i=0; i<items.length; i++){
+        if(items[i].kind==='file') { var f=items[i].getAsFile(); if(f) files.push(f); }
+      }
+      if(!files.length) return;
+      try {
+        var container = new DataTransfer();
+        var accepted = files.filter(function(f){
+          var ext=f.name.split('.').pop().toLowerCase(); return ext==='xlsx'||ext==='xls';
+        });
+        if(!z.multi) accepted = accepted.slice(0,1);
+        if(!accepted.length) return;
+        accepted.forEach(function(f){ container.items.add(f); });
+        inp.files = container.files;
+      } catch(err){ return; }
+      updateZone(z);
+    });
+    // Keyboard: Enter/Space triggers file dialog
+    dz.addEventListener('keydown', function(e){
+      if(e.key==='Enter'||e.key===' '){ e.preventDefault(); inp.click(); }
+    });
+
+    // Full-card drop zone — file dropped anywhere on the section card
+    var card = document.getElementById(z.cardId);
+    if(card){
+      card.addEventListener('dragover', function(e){ e.preventDefault(); e.stopPropagation(); card.classList.add('drag-over-card'); });
+      card.addEventListener('dragleave', function(e){ if(e.target===card) card.classList.remove('drag-over-card'); });
+      card.addEventListener('drop', function(e){
+        e.preventDefault(); e.stopPropagation(); card.classList.remove('drag-over-card');
+        // Only handle if the drop wasn't already handled by the inner drop-zone
+        var dt = e.dataTransfer;
+        if(!dt||!dt.files.length) return;
+        try {
+          var container = new DataTransfer();
+          var accepted = Array.from(dt.files).filter(function(f){
+            var ext=f.name.split('.').pop().toLowerCase(); return ext==='xlsx'||ext==='xls';
+          });
+          if(!z.multi) accepted = accepted.slice(0,1);
+          if(!accepted.length) return;
+          // For multi, merge with existing files
+          if(z.multi && inp.files.length){
+            Array.from(inp.files).forEach(function(f){ container.items.add(f); });
+          }
+          accepted.forEach(function(f){ container.items.add(f); });
+          inp.files = container.files;
+        } catch(err){ inp.files = dt.files; }
+        updateZone(z);
+      });
+    }
   });
+
+  // Step navigation — scroll to section and highlight
+  window._goToStep = function(step) {
+    var target;
+    if(step===1) target=document.getElementById('cardEmergency');
+    else if(step===2) target=document.getElementById('cardMileage');
+    else if(step===3) target=document.getElementById('cardActivity');
+    if(target){
+      target.scrollIntoView({behavior:'smooth', block:'center'});
+      // Brief highlight
+      target.style.transition='box-shadow .3s';
+      target.style.boxShadow='0 0 0 3px #0d6efd';
+      setTimeout(function(){ target.style.boxShadow=''; }, 800);
+      // Ensure section is expanded
+      var collapseId = step===1?'secEmergency':step===2?'secMileage':'secActivity';
+      var col = document.getElementById(collapseId);
+      if(col && !col.classList.contains('show')){
+        var c = bootstrap.Collapse.getOrCreateInstance(col);
+        c.show();
+      }
+    }
+  };
+
+  // Quick date buttons
+  window._quickDate = function(daysAgo) {
+    var d = new Date();
+    d.setDate(d.getDate() - daysAgo);
+    var dd = String(d.getDate()).padStart(2,'0');
+    var mm = String(d.getMonth()+1).padStart(2,'0');
+    var yyyy = d.getFullYear();
+    var ddmm = dd+'-'+mm+'-'+yyyy;
+    var inp = document.getElementById('taskDateInput');
+    if(!inp) return;
+    if(inp._flatpickr){
+      inp._flatpickr.setDate(ddmm, true);
+    } else {
+      inp.value = ddmm;
+      inp.dispatchEvent(new Event('change'));
+    }
+  };
 
   window._validateAllFiles = function(){
     var ok=true;
@@ -320,7 +551,7 @@ function ddmmyyyy(isoStr) {
     .then(function(data){
       var dates = data.dates||[];
       if(!dates.length) return;
-      var alert = document.getElementById('missingDatesAlert');
+      var alert = document.getElementById('missingDatesCard');
       var list  = document.getElementById('missingDatesList');
       if(!alert||!list) return;
       list.innerHTML = dates.map(function(d){
@@ -337,13 +568,17 @@ function ddmmyyyy(isoStr) {
       }).join('');
       alert.style.display='';
     })
-    .catch(function(){});
+    .catch(function(err){ if(window.console) console.warn('Missing dates fetch failed:', err); });
 
   window._setDate = function(ddmm){
     var inp = document.getElementById('taskDateInput');
     if(!inp) return;
-    inp.value = ddmm;
-    inp.dispatchEvent(new Event('change'));
+    if(inp._flatpickr){
+      inp._flatpickr.setDate(ddmm, true);
+    } else {
+      inp.value = ddmm;
+      inp.dispatchEvent(new Event('change'));
+    }
     inp.scrollIntoView({behavior:'smooth', block:'center'});
   };
 })();
@@ -369,13 +604,19 @@ function ddmmyyyy(isoStr) {
     var label=document.getElementById('summaryDateLabel');
     var statusEl=document.getElementById('summaryStatusBadge');
     var logLink=document.getElementById('summaryLogLink');
+    var dateSpinner=document.getElementById('dateLoadingSpinner');
     if(!card||!dateIso) return;
 
+    // Show inline spinner next to date label
+    if(dateSpinner) dateSpinner.style.display='inline-block';
+    // Show card immediately with skeleton rows
     card.style.display='';
-    loading.style.display='';
-    tbody.innerHTML='';
+    loading.style.display='none';
     label.textContent = ddmmyyyy(dateIso);
-    statusEl.innerHTML='';
+    statusEl.innerHTML='<span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle"><span class="spinner-border spinner-border-sm me-1" style="width:.7rem;height:.7rem;"></span>Loading…</span>';
+    // Skeleton cards
+    var skelCard='<div class="summary-item rounded-2 p-2 mb-2 skel-row"><div class="d-flex align-items-center gap-2"><span class="skel-bar" style="width:18px;height:18px;border-radius:4px;"></span><span class="skel-bar flex-grow-1" style="width:80px;"></span><span class="skel-bar" style="width:30px;"></span></div><div class="mt-1"><span class="skel-bar" style="width:70px;"></span></div></div>';
+    tbody.innerHTML = skelCard+skelCard+skelCard;
     // Update "Full Log" link with pre-filled date filter
     if(logLink) logLink.href = logBase + '?from_date=' + ddmmyyyy(dateIso) + '&to_date=' + ddmmyyyy(dateIso);
 
@@ -392,13 +633,14 @@ function ddmmyyyy(isoStr) {
         .catch(function(){ results[api.key]={data:null,api:api}; })
         .finally(function(){
           done++;
-          if(done===apis.length) renderSummary(results,loading,tbody,statusEl);
+          if(done===apis.length) renderSummary(results,loading,tbody,statusEl,dateSpinner);
         });
     });
   }
 
-  function renderSummary(results, loading, tbody, statusEl) {
+  function renderSummary(results, loading, tbody, statusEl, dateSpinner) {
     loading.style.display='none';
+    if(dateSpinner) dateSpinner.style.display='none';
     var pc=0;
     var rows=[buildRow(results.emg),buildRow(results.mil),buildRow(results.act)];
     rows.forEach(function(r){ if(r.present) pc++; });
@@ -407,7 +649,7 @@ function ddmmyyyy(isoStr) {
     // Duplicate date warning
     window._summaryPresentCount = pc;
     var dupAlert=document.getElementById('duplicateDateAlert');
-    if(dupAlert) dupAlert.style.display = pc>0?'':'none';
+    if(dupAlert) dupAlert.style.cssText = pc>0 ? 'display:flex!important;' : 'display:none!important;';
     // Store summary text for modal
     var parts=[];
     rows.forEach(function(r){ if(r.present&&r.label) parts.push(r.label+': '+r.count+' records'); });
@@ -427,12 +669,19 @@ function ddmmyyyy(isoStr) {
     var statusHtml=present
       ?'<span class="badge bg-success-subtle text-success border border-success-subtle">Uploaded</span>'
       :'<span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">No Data</span>';
-    var html='<tr>'
-      +'<td class="ps-3"><i class="bi '+api.icon+' me-2 text-'+api.color+'"></i>'+api.label+'</td>'
-      +'<td class="text-end">'+fmtCount(count)+'</td>'
-      +'<td class="text-muted small text-nowrap">'+lastAt+'</td>'
-      +'<td class="text-end pe-3">'+statusHtml+'</td>'
-      +'</tr>';
+    var html='<div class="summary-item rounded-2 p-2 mb-2" style="border:1px solid #e9ecef;'+(present?'':'opacity:.6;')+'">'
+      +'<div class="d-flex align-items-center justify-content-between gap-2">'
+      +'<div class="d-flex align-items-center gap-2">'
+      +'<span class="rounded-circle d-inline-flex align-items-center justify-content-center" style="width:28px;height:28px;background:var(--bs-'+api.color+'-bg-subtle,#f8f9fa);"><i class="bi '+api.icon+' text-'+api.color+'" style="font-size:.9rem;"></i></span>'
+      +'<span class="fw-semibold small">'+api.label+'</span>'
+      +'</div>'
+      +statusHtml
+      +'</div>'
+      +'<div class="d-flex justify-content-between align-items-center mt-1 ps-1">'
+      +'<span class="text-muted" style="font-size:.7rem;"><i class="bi bi-clock me-1"></i>'+lastAt+'</span>'
+      +'<span class="fw-bold '+(count>0?'text-'+api.color:'text-muted')+'" style="font-size:.85rem;">'+count+' records</span>'
+      +'</div>'
+      +'</div>';
     return {html:html, present:present, label:api.label, count:count};
   }
 
@@ -448,17 +697,31 @@ function ddmmyyyy(isoStr) {
     var dd=String(today.getDate()).padStart(2,'0');
     var mm=String(today.getMonth()+1).padStart(2,'0');
     var yyyy=today.getFullYear();
+    function onDateChange(){
+      setTimeout(function(){
+        var d2=isoDate(dateInp.value);
+        if(d2){
+          loadSummary(d2);
+        } else {
+          var ds=document.getElementById('dateLoadingSpinner'); if(ds) ds.style.display='none';
+          var a=document.getElementById('duplicateDateAlert');
+          if(a) a.style.cssText='display:none!important;';
+          var sc=document.getElementById('dateSummaryCard'); if(sc) sc.style.display='none';
+        }
+      }, 30);
+    }
     setTimeout(function(){
-      if(dateInp._flatpickr) dateInp._flatpickr.set('maxDate', today);
-      else dateInp.setAttribute('max', yyyy+'-'+mm+'-'+dd);
+      var fp = dateInp._flatpickr;
+      if(fp){
+        fp.set('maxDate', today);
+        fp.config.onChange.push(function(){ onDateChange(); });
+      } else {
+        dateInp.setAttribute('max', yyyy+'-'+mm+'-'+dd);
+      }
     }, 300);
     var d=isoDate(dateInp.value);
     if(d) loadSummary(d);
-    dateInp.addEventListener('change', function(){
-      var d2=isoDate(dateInp.value);
-      if(d2) loadSummary(d2);
-      else{ var a=document.getElementById('duplicateDateAlert'); if(a) a.style.display='none'; }
-    });
+    dateInp.addEventListener('change', onDateChange);
   });
 })();
 
@@ -469,17 +732,18 @@ function ddmmyyyy(isoStr) {
 
   // ---- Per-file progress list ----
   var _fs={};
-  function initFL(steps){ _fs={}; steps.forEach(function(s){_fs[s.id]={label:s.label,status:'pending',msg:'';};}); renderFL(); }
+  function initFL(steps){ _fs={}; steps.forEach(function(s){_fs[s.id]={label:s.label,status:'pending',msg:''};}); renderFL(); }
   function setFS(id,status,msg){ if(_fs[id]){_fs[id].status=status;_fs[id].msg=msg||'';} renderFL(); }
   function renderFL(){
     var el=document.getElementById('fileProgressList'); if(!el) return;
-    var ic={pending:'⏳',uploading:'🔄',done:'✅',error:'❌'};
+    var ic={pending:'<i class="bi bi-circle text-muted"></i>',uploading:'<div class="spinner-border spinner-border-sm text-primary" style="width:.85rem;height:.85rem;"></div>',done:'<i class="bi bi-check-circle-fill text-success"></i>',error:'<i class="bi bi-x-circle-fill text-danger"></i>'};
     el.innerHTML=Object.keys(_fs).map(function(id){
       var s=_fs[id];
+      var msgHtml = s.msg ? '<span class="text-danger ms-1" style="font-size:.7rem;">'+s.msg+'</span>' : '';
       return '<div class="d-flex align-items-center gap-2 py-1 border-bottom">'
-        +'<span>'+ic[s.status]+'</span>'
+        +'<span style="width:16px;text-align:center;">'+ic[s.status]+'</span>'
         +'<span class="text-truncate flex-grow-1" style="font-size:.78rem;">'+s.label+'</span>'
-        +(s.msg?'<span class="text-muted" style="font-size:.7rem;white-space:nowrap;">'+s.msg+'</span>':'')
+        +msgHtml
         +'</div>';
     }).join('');
   }
@@ -511,7 +775,7 @@ function ddmmyyyy(isoStr) {
     var t=document.getElementById('uploadResultToast'),b=document.getElementById('uploadResultToastBody');
     if(!t||!b) return;
     b.innerHTML=html; t.style.display='';
-    setTimeout(function(){t.style.display='none';},9000);
+    setTimeout(function(){t.style.display='none';},12000);
   }
 
   // ---- Button disable ----
@@ -535,15 +799,12 @@ function ddmmyyyy(isoStr) {
     var redirUrl= form.getAttribute('data-redirect-base');
     var logUrl  = form.getAttribute('data-log-url');
 
-    // Single-file path — normal POST
-    if(actFiles.length===0 && miFiles.length<=1){
-      showOverlay('Excel parse ho rahi hai…'); return;
-    }
-
     var steps=[];
     if(emFile) steps.push({id:'emg',label:'Emergency: '+emFile.name,type:'emg'});
     miFiles.forEach(function(f,i){ steps.push({id:'mil'+i,label:'Mileage '+(i+1)+'/'+miFiles.length+': '+f.name,type:'mil',idx:i,file:f}); });
     actFiles.forEach(function(f,i){ steps.push({id:'act'+i,label:'Activity '+(i+1)+'/'+actFiles.length+': '+f.name,type:'act',idx:i,file:f}); });
+
+    if(!steps.length){ enableBtn(); return; }
 
     initFL(steps);
     showOverlay('Upload shuru ho rahi hai…');
@@ -601,7 +862,7 @@ function ddmmyyyy(isoStr) {
         if(res.emg) parts.push('🚨 EMG: '+res.emg+' records');
         if(res.mil) parts.push('📊 Mileage: '+res.mil+' records');
         if(res.act) parts.push('📄 Activity: '+res.act+' rows ('+res.actF+' files)');
-        var taskDateIso = (function(d){ var p=d.split('-'); return p.length===3?p[2]+'-'+p[1]+'-'+p[0]:d; })(taskDate);
+        var taskDateIso = isoDate(taskDate) || taskDate;
         var logLink = logUrl+'?from_date='+taskDate+'&to_date='+taskDate;
         var html='<i class="bi bi-check-circle-fill me-2"></i><strong>Upload Complete!</strong><br>'
           +'<small>'+(parts.join(' &bull; ')||'No new data')+'</small>'
@@ -616,6 +877,7 @@ function ddmmyyyy(isoStr) {
 
   // ---- Form submit ----
   form.addEventListener('submit', function(ev){
+    ev.preventDefault();
     var emInput=document.getElementById('fileEmergency');
     var miInput=document.getElementById('fileMileage');
     var actInput=document.getElementById('fileActivity');
@@ -628,20 +890,17 @@ function ddmmyyyy(isoStr) {
     if(!emFile && !miFiles.length && !actFiles.length){
       var vm=document.getElementById('fileValidationMsg');
       if(vm){vm.textContent='Kam az kam ek file select karein.';vm.style.display='';}
-      ev.preventDefault(); return;
+      return;
     }
     var vm2=document.getElementById('fileValidationMsg'); if(vm2) vm2.style.display='none';
-    if(!ok){ ev.preventDefault(); return; }
+    if(!ok) return;
 
     // Re-upload confirmation if data exists
     if(window._summaryPresentCount > 0){
-      ev.preventDefault();
-      // Show modal
       var modalSummary=document.getElementById('reuploadModalSummary');
       if(modalSummary) modalSummary.textContent = window._summaryText || 'Data already exists for this date.';
       var modal = new bootstrap.Modal(document.getElementById('reuploadModal'));
       modal.show();
-      // Wire confirm button (remove old listener first)
       var confirmBtn=document.getElementById('reuploadConfirmBtn');
       var newBtn=confirmBtn.cloneNode(true);
       confirmBtn.parentNode.replaceChild(newBtn,confirmBtn);
@@ -654,7 +913,6 @@ function ddmmyyyy(isoStr) {
     }
 
     // No existing data — proceed directly
-    ev.preventDefault();
     disableBtn();
     runUpload();
   });
