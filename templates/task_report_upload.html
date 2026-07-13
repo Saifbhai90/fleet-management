@@ -47,13 +47,43 @@
           </div>
           <div class="col-12">
             <button type="submit" class="btn btn-primary" id="uploadBtn">
-              <i class="bi bi-upload me-1"></i>Upload Both
+              <i class="bi bi-upload me-1"></i>Upload
             </button>
           </div>
         </div>
       </form>
     </div>
   </div>
+
+  <!-- Date Summary Card -->
+  <div class="card shadow-sm border-0 rounded-3 mt-3" id="dateSummaryCard" style="display:none;">
+    <div class="card-header bg-dark text-white py-2 d-flex justify-content-between align-items-center">
+      <span class="fw-semibold small"><i class="bi bi-journal-bookmark me-2"></i>Uploaded Data for <span id="summaryDateLabel"></span></span>
+      <span id="summaryStatusBadge"></span>
+    </div>
+    <div class="card-body p-0">
+      <div id="summaryLoading" class="text-center py-3" style="display:none;">
+        <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
+        <span class="text-muted small ms-2">Loading…</span>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm table-hover align-middle mb-0" style="font-size:.85rem;">
+          <thead class="table-light">
+            <tr>
+              <th class="ps-3">Data Type</th>
+              <th class="text-end">Records</th>
+              <th>Last Imported</th>
+              <th class="text-end pe-3">Status</th>
+            </tr>
+          </thead>
+          <tbody id="summaryTableBody">
+            <tr><td colspan="4" class="text-center py-3 text-muted small">Date select karein summary dekhne ke liye.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <div id="uploadOverlay" class="d-none" style="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:2000;display:flex;align-items:center;justify-content:center;">
@@ -71,6 +101,121 @@
 </div>
 
 <script>
+// ---- Date Summary Logic ----
+(function() {
+  var summaryApiBase = '{{ url_for("task_report_upload_list") }}';
+  var emgDetailBase  = '{{ url_for("task_report_emergency_detail_api", date_str="PLACEHOLDER") }}';
+  var milDetailBase  = '{{ url_for("task_report_mileage_detail_api", date_str="PLACEHOLDER") }}';
+  var actDetailBase  = '{{ url_for("task_report_activity_detail_api", date_str="PLACEHOLDER") }}';
+
+  function isoDate(ddmmyyyy) {
+    var p = (ddmmyyyy || '').split('-');
+    if (p.length !== 3) return null;
+    return p[2] + '-' + p[1] + '-' + p[0];
+  }
+
+  function statusBadge(present, total) {
+    if (present === 0) return '<span class="badge bg-danger-subtle text-danger border border-danger-subtle">Empty</span>';
+    if (present === total) return '<span class="badge bg-success-subtle text-success border border-success-subtle">Complete</span>';
+    return '<span class="badge bg-warning-subtle text-warning border border-warning-subtle">Partial</span>';
+  }
+
+  function fmtCount(n) { return n > 0 ? '<strong>' + n + '</strong>' : '<span class="text-muted">0</span>'; }
+
+  function loadSummary(dateIso) {
+    var card = document.getElementById('dateSummaryCard');
+    var loading = document.getElementById('summaryLoading');
+    var tbody = document.getElementById('summaryTableBody');
+    var label = document.getElementById('summaryDateLabel');
+    var statusEl = document.getElementById('summaryStatusBadge');
+    if (!card || !dateIso) return;
+
+    card.style.display = '';
+    loading.style.display = '';
+    tbody.innerHTML = '';
+    label.textContent = dateIso.split('-').reverse().join('-');
+    statusEl.innerHTML = '';
+
+    var results = {};
+    var done = 0;
+    var apis = [
+      { key: 'emg', url: emgDetailBase.replace('PLACEHOLDER', dateIso), label: 'Emergency Tasks', icon: 'bi-truck', color: 'danger' },
+      { key: 'mil', url: milDetailBase.replace('PLACEHOLDER', dateIso), label: 'Vehicle Mileage', icon: 'bi-speedometer2', color: 'info' },
+      { key: 'act', url: actDetailBase.replace('PLACEHOLDER', dateIso), label: 'Tracker Activity', icon: 'bi-file-earmark-spreadsheet', color: 'primary' },
+    ];
+
+    apis.forEach(function(api) {
+      fetch(api.url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          results[api.key] = { data: data, api: api };
+        })
+        .catch(function() {
+          results[api.key] = { data: null, api: api };
+        })
+        .finally(function() {
+          done++;
+          if (done === apis.length) renderSummary(results, loading, tbody, statusEl);
+        });
+    });
+  }
+
+  function renderSummary(results, loading, tbody, statusEl) {
+    loading.style.display = 'none';
+    var presentCount = 0;
+    var rows = [
+      buildRow(results.emg),
+      buildRow(results.mil),
+      buildRow(results.act),
+    ];
+    rows.forEach(function(r) { if (r.present) presentCount++; });
+    tbody.innerHTML = rows.map(function(r) { return r.html; }).join('');
+    statusEl.innerHTML = statusBadge(presentCount, 3);
+  }
+
+  function buildRow(result) {
+    var api = result.api;
+    var data = result.data;
+    var present = false;
+    var count = 0, lastAt = '—';
+    if (data && !data.error) {
+      if (api.key === 'emg') { count = data.total || 0; lastAt = (data.records && data.records[0] && data.records[0].imported_at) || '—'; }
+      else if (api.key === 'mil') { count = data.total || 0; lastAt = (data.records && data.records[0] && data.records[0].imported_at) || '—'; }
+      else if (api.key === 'act') { count = data.total_rows || 0; lastAt = (data.files && data.files[0] && data.files[0].last_at) || '—'; }
+      if (count > 0) present = true;
+    }
+    var statusHtml = present
+      ? '<span class="badge bg-success-subtle text-success border border-success-subtle">Uploaded</span>'
+      : '<span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">No Data</span>';
+    var html = '<tr>'
+      + '<td class="ps-3"><i class="bi ' + api.icon + ' me-2 text-' + api.color + '"></i>' + api.label + '</td>'
+      + '<td class="text-end">' + fmtCount(count) + '</td>'
+      + '<td class="text-muted small text-nowrap">' + lastAt + '</td>'
+      + '<td class="text-end pe-3">' + statusHtml + '</td>'
+      + '</tr>';
+    return { html: html, present: present };
+  }
+
+  function getSelectedDate() {
+    var inp = document.querySelector('[name="task_date"]');
+    return inp ? isoDate(inp.value) : null;
+  }
+
+  window._loadSummary = loadSummary;
+
+  document.addEventListener('DOMContentLoaded', function() {
+    var dateInp = document.querySelector('[name="task_date"]');
+    if (!dateInp) return;
+    var d = getSelectedDate();
+    if (d) loadSummary(d);
+    dateInp.addEventListener('change', function() {
+      var d2 = getSelectedDate();
+      if (d2) loadSummary(d2);
+    });
+  });
+})();
+// ---- End Date Summary ----
+
 (function(){
   var form = document.getElementById('taskReportUploadForm');
   if (!form) return;
@@ -209,6 +354,8 @@
       bar.style.width = '100%';
       pctEl.textContent = '100%';
       hideOverlaySpinner();
+      // Reload summary for the uploaded date before redirecting
+      if (window._loadSummary) window._loadSummary(taskDate.split('-').reverse().join('-').replace(/(\d{2})-(\d{2})-(\d{4})/, '$3-$2-$1'));
       window.location.href = redirectBase;
     }).catch(function(err) {
       hideOverlaySpinner();
