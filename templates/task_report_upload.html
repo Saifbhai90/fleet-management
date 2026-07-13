@@ -74,38 +74,11 @@
     <a href="{{ url_for('task_report_upload_list') }}" id="uploadLogBtn" class="btn btn-outline-primary btn-sm"><i class="bi bi-journal-bookmark me-1"></i>Upload Log</a>
   </div>
 
-  <!-- Duplicate Date Warning (full width) -->
-  <div id="duplicateDateAlert" class="alert alert-warning d-flex align-items-center gap-2 mb-3" style="display:none!important;">
-    <i class="bi bi-exclamation-triangle-fill fs-5 flex-shrink-0"></i>
-    <div><strong>Duplicate Upload Warning:</strong> Is date ka data already uploaded hai. Re-upload karne se <strong>purana data replace</strong> ho jayega.</div>
-  </div>
-
   <!-- Upload Result Toast -->
   <div id="uploadResultToast" class="toast align-items-center text-white bg-success border-0 shadow-lg" role="alert" style="position:fixed;top:80px;right:20px;z-index:3000;min-width:340px;display:none;">
     <div class="d-flex">
       <div class="toast-body" id="uploadResultToastBody"></div>
       <button type="button" class="btn-close btn-close-white me-2 m-auto" onclick="document.getElementById('uploadResultToast').style.display='none'"></button>
-    </div>
-  </div>
-
-  <!-- Re-upload Confirmation Modal -->
-  <div class="modal fade" id="reuploadModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
-      <div class="modal-content border-0 shadow">
-        <div class="modal-header bg-warning text-dark border-0">
-          <h6 class="modal-title"><i class="bi bi-exclamation-triangle-fill me-2"></i>Re-upload Confirmation</h6>
-          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-        </div>
-        <div class="modal-body">
-          <p class="mb-1">Is date ka data <strong>already uploaded</strong> hai:</p>
-          <div id="reuploadModalSummary" class="text-muted small mb-3"></div>
-          <p class="mb-0 text-danger fw-semibold">Re-upload karne se <u>purana data permanently delete</u> ho jayega aur naya data insert hoga. Sure hain?</p>
-        </div>
-        <div class="modal-footer border-0">
-          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
-          <button type="button" class="btn btn-danger btn-sm" id="reuploadConfirmBtn"><i class="bi bi-upload me-1"></i>Haan, Re-upload Karein</button>
-        </div>
-      </div>
     </div>
   </div>
 
@@ -285,6 +258,34 @@
     </div>
   </div><!-- /row -->
 
+</div>
+
+<!-- Re-upload Confirmation Floating Panel (no Bootstrap modal = no backdrop = no lock) -->
+<div id="reuploadPanel" class="card shadow-lg border-warning d-none" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:2100;width:480px;max-width:95%;">
+  <div class="card-header bg-warning bg-opacity-10 d-flex justify-content-between align-items-center py-2">
+    <h6 class="mb-0"><i class="bi bi-exclamation-triangle-fill me-2"></i>Re-upload Confirmation</h6>
+    <button type="button" class="btn-close" id="reuploadCancelBtn"></button>
+  </div>
+  <div class="card-body">
+    <p class="mb-1">Is date ka data <strong>already uploaded</strong> hai:</p>
+    <div id="reuploadModalSummary" class="text-muted small mb-3"></div>
+    <p class="mb-0 text-danger fw-semibold">Re-upload karne se <u>purana data permanently delete</u> ho jayega aur naya data insert hoga. Sure hain?</p>
+  </div>
+  <div class="card-footer py-2 d-flex justify-content-end gap-2">
+    <button type="button" class="btn btn-secondary btn-sm" id="reuploadCancelBtnFooter">Cancel</button>
+    <button type="button" class="btn btn-danger btn-sm" id="reuploadConfirmBtn"><i class="bi bi-upload me-1"></i>Haan, Re-upload Karein</button>
+  </div>
+</div>
+
+<!-- Date Loading Overlay (only for date selection) -->
+<div id="dateLoadingOverlay" class="d-none" style="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:2050;display:flex;align-items:center;justify-content:center;">
+  <div class="card shadow-lg border-0" style="width:320px;max-width:90%;">
+    <div class="card-body py-4 px-4 text-center">
+      <div class="spinner-border text-primary mb-2" style="width:2.5rem;height:2.5rem;" role="status"></div>
+      <h6 class="mb-1">Preparing...</h6>
+      <p class="text-muted small mb-0">Date ka data check ho raha hai.</p>
+    </div>
+  </div>
 </div>
 
 <!-- Upload Overlay -->
@@ -597,7 +598,16 @@ function ddmmyyyy(isoStr) {
   }
   function fmtCount(n){ return n>0?'<strong>'+n+'</strong>':'<span class="text-muted">0</span>'; }
 
-  function loadSummary(dateIso) {
+  function showDateLoadingOverlay(){
+    var o=document.getElementById('dateLoadingOverlay');
+    if(o){ o.classList.remove('d-none'); o.style.display='flex'; }
+  }
+  function hideDateLoadingOverlay(){
+    var o=document.getElementById('dateLoadingOverlay');
+    if(o){ o.classList.add('d-none'); o.style.display='none'; }
+  }
+
+  function loadSummary(dateIso, opts) {
     var card=document.getElementById('dateSummaryCard');
     var loading=document.getElementById('summaryLoading');
     var tbody=document.getElementById('summaryTableBody');
@@ -607,6 +617,9 @@ function ddmmyyyy(isoStr) {
     var dateSpinner=document.getElementById('dateLoadingSpinner');
     if(!card||!dateIso) return;
 
+    // Show date loading overlay only on date selection (not post-upload refresh)
+    var showOverlay = !opts || !opts.silent;
+    if(showOverlay) showDateLoadingOverlay();
     // Show inline spinner next to date label
     if(dateSpinner) dateSpinner.style.display='inline-block';
     // Show card immediately with skeleton rows
@@ -639,6 +652,7 @@ function ddmmyyyy(isoStr) {
   }
 
   function renderSummary(results, loading, tbody, statusEl, dateSpinner) {
+    hideDateLoadingOverlay();
     loading.style.display='none';
     if(dateSpinner) dateSpinner.style.display='none';
     var pc=0;
@@ -646,11 +660,14 @@ function ddmmyyyy(isoStr) {
     rows.forEach(function(r){ if(r.present) pc++; });
     tbody.innerHTML = rows.map(function(r){return r.html;}).join('');
     statusEl.innerHTML = statusBadge(pc,3);
-    // Duplicate date warning
+    // Track per-type presence for targeted re-upload popup
     window._summaryPresentCount = pc;
-    var dupAlert=document.getElementById('duplicateDateAlert');
-    if(dupAlert) dupAlert.style.cssText = pc>0 ? 'display:flex!important;' : 'display:none!important;';
-    // Store summary text for modal
+    window._summaryPresent = {emg: false, mil: false, act: false};
+    rows.forEach(function(r,i){
+      var key = i===0?'emg' : i===1?'mil' : 'act';
+      window._summaryPresent[key] = !!r.present;
+    });
+    // Store summary text for modal (only types being re-uploaded)
     var parts=[];
     rows.forEach(function(r){ if(r.present&&r.label) parts.push(r.label+': '+r.count+' records'); });
     window._summaryText = parts.join(' | ') || 'Data present';
@@ -704,8 +721,6 @@ function ddmmyyyy(isoStr) {
           loadSummary(d2);
         } else {
           var ds=document.getElementById('dateLoadingSpinner'); if(ds) ds.style.display='none';
-          var a=document.getElementById('duplicateDateAlert');
-          if(a) a.style.cssText='display:none!important;';
           var sc=document.getElementById('dateSummaryCard'); if(sc) sc.style.display='none';
         }
       }, 30);
@@ -869,7 +884,7 @@ function ddmmyyyy(isoStr) {
           +'<br><a href="'+logLink+'" class="text-white text-decoration-underline small" target="_blank">View Upload Log →</a>';
         if(errors.length) html+='<br><small class="text-warning">⚠️ '+errors.length+' error(s) — check log</small>';
         showToast(html);
-        if(window._loadSummary) window._loadSummary(taskDateIso);
+        if(window._loadSummary) window._loadSummary(taskDateIso, {silent:true});
         setTimeout(function(){ window.location.href=redirUrl; },2800);
       },400);
     });
@@ -878,6 +893,9 @@ function ddmmyyyy(isoStr) {
   // ---- Form submit ----
   form.addEventListener('submit', function(ev){
     ev.preventDefault();
+    // Clean up topLoadBar if fleet_core.js already started it
+    var tlb=document.getElementById('topLoadBar');
+    if(tlb){ tlb.classList.remove('tlb-loading','tlb-done','loading','done','active'); tlb.style.width='0%'; tlb.style.opacity='0'; }
     var emInput=document.getElementById('fileEmergency');
     var miInput=document.getElementById('fileMileage');
     var actInput=document.getElementById('fileActivity');
@@ -895,17 +913,27 @@ function ddmmyyyy(isoStr) {
     var vm2=document.getElementById('fileValidationMsg'); if(vm2) vm2.style.display='none';
     if(!ok) return;
 
-    // Re-upload confirmation if data exists
-    if(window._summaryPresentCount > 0){
+    // Re-upload confirmation — only if a type being uploaded already has data for this date
+    var sp = window._summaryPresent || {};
+    var hasEmg = !!emFile && sp.emg;
+    var hasMil = miFiles.length > 0 && sp.mil;
+    var hasAct = actFiles.length > 0 && sp.act;
+    if(hasEmg || hasMil || hasAct){
+      hideOverlay();
+      hideDateLoadingOverlay();
+      var conflictParts=[];
+      if(hasEmg) conflictParts.push('Emergency Tasks');
+      if(hasMil) conflictParts.push('Vehicle Mileage');
+      if(hasAct) conflictParts.push('Tracker Activity');
       var modalSummary=document.getElementById('reuploadModalSummary');
-      if(modalSummary) modalSummary.textContent = window._summaryText || 'Data already exists for this date.';
-      var modal = new bootstrap.Modal(document.getElementById('reuploadModal'));
-      modal.show();
+      if(modalSummary) modalSummary.textContent = conflictParts.join(' + ') + ' — already uploaded for this date.';
+      var panel=document.getElementById('reuploadPanel');
+      panel.classList.remove('d-none');
       var confirmBtn=document.getElementById('reuploadConfirmBtn');
       var newBtn=confirmBtn.cloneNode(true);
       confirmBtn.parentNode.replaceChild(newBtn,confirmBtn);
       newBtn.addEventListener('click',function(){
-        modal.hide();
+        panel.classList.add('d-none');
         disableBtn();
         runUpload();
       });
@@ -915,6 +943,16 @@ function ddmmyyyy(isoStr) {
     // No existing data — proceed directly
     disableBtn();
     runUpload();
+  });
+
+  // Re-upload panel cancel handlers
+  function hideReuploadPanel(){ var p=document.getElementById('reuploadPanel'); if(p) p.classList.add('d-none'); }
+  var reuploadCancelBtn=document.getElementById('reuploadCancelBtn');
+  if(reuploadCancelBtn) reuploadCancelBtn.addEventListener('click', hideReuploadPanel);
+  var reuploadCancelFooter=document.getElementById('reuploadCancelBtnFooter');
+  if(reuploadCancelFooter) reuploadCancelFooter.addEventListener('click', hideReuploadPanel);
+  document.addEventListener('keydown', function(e){
+    if(e.key==='Escape'){ hideReuploadPanel(); }
   });
 
   // Ctrl+Enter shortcut
