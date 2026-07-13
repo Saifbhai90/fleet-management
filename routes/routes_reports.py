@@ -186,7 +186,7 @@ def _report_centre_visibility(linked_driver_id=None):
     hr_driver = (
         (bool(linked_id) and c('report_driver_profile'))
         or c('active_drivers_report') or c('driver_seat_available_report') or c('missing_documents_report')
-        or c('penalty_record_list') or c('driver_salary_slip')
+        or c('penalty_record_list') or c('driver_salary_slip') or c('report_uniform_sizes')
     )
     hr_att = c('driver_attendance_report') or c('driver_attendance_tra_report') or c('report_expiry')
     hr_workforce = c('driver_job_left_list') or c('driver_rejoin_list')
@@ -1416,4 +1416,153 @@ def report_parking_utilization():
         disable_project=disable_project,
         disable_district=disable_district,
     )
+# ════════════════════════════════════════════════════════════════════════════════
+
+# ────────────────────────────────────────────────
+# UNIFORM SIZES REPORT
+# ────────────────────────────────────────────────
+@app.route('/reports/uniform-sizes')
+def report_uniform_sizes():
+    from auth_utils import get_user_context
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects  = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+
+    project_id  = request.args.get('project_id', type=int) or 0
+    district_id = request.args.get('district_id', type=int) or 0
+    size_filter = request.args.get('size_filter', '').strip()
+    size_type   = request.args.get('size_type', '').strip()
+    status      = request.args.get('status', 'Active').strip()
+    q           = (request.args.get('q') or '').strip()
+
+    proj_q = Project.query.order_by(Project.name)
+    if not is_master_or_admin and allowed_projects:
+        proj_q = proj_q.filter(Project.id.in_(list(allowed_projects)))
+    project_choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in proj_q.all()]
+
+    dist_q = District.query.order_by(District.name)
+    if not is_master_or_admin and allowed_districts:
+        dist_q = dist_q.filter(District.id.in_(list(allowed_districts)))
+    if project_id:
+        dist_q = dist_q.join(project_district).filter(project_district.c.project_id == project_id)
+    district_choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in dist_q.all()]
+
+    drivers_q = Driver.query.filter(Driver.status == status)
+    if not is_master_or_admin and allowed_projects:
+        drivers_q = drivers_q.filter(Driver.project_id.in_(list(allowed_projects)))
+    if not is_master_or_admin and allowed_districts:
+        drivers_q = drivers_q.filter(Driver.district_id.in_(list(allowed_districts)))
+    if project_id:
+        drivers_q = drivers_q.filter(Driver.project_id == project_id)
+    if district_id:
+        drivers_q = drivers_q.filter(Driver.district_id == district_id)
+    if q:
+        like = f'%{q}%'
+        drivers_q = drivers_q.filter(or_(
+            Driver.name.ilike(like), Driver.driver_id.ilike(like),
+            Driver.phone1.ilike(like), Driver.cnic_no.ilike(like),
+        ))
+    if size_filter and size_type in ('shirt_size', 'trouser_size', 'jacket_size'):
+        drivers_q = drivers_q.filter(getattr(Driver, size_type) == size_filter)
+
+    drivers_q = drivers_q.order_by(Driver.name)
+    drivers = drivers_q.all()
+
+    # Build project name lookup
+    project_names = {}
+    for p in Project.query.all():
+        project_names[p.id] = p.name
+
+    # Summary counts per size
+    shirt_counts  = {}
+    trouser_counts = {}
+    jacket_counts = {}
+    missing_count = 0
+    for d in drivers:
+        if d.shirt_size:
+            shirt_counts[d.shirt_size] = shirt_counts.get(d.shirt_size, 0) + 1
+        if d.trouser_size:
+            trouser_counts[d.trouser_size] = trouser_counts.get(d.trouser_size, 0) + 1
+        if d.jacket_size:
+            jacket_counts[d.jacket_size] = jacket_counts.get(d.jacket_size, 0) + 1
+        if not d.shirt_size and not d.trouser_size and not d.jacket_size:
+            missing_count += 1
+
+    shirt_sizes  = ['2XS','XS','S','M','L','XL','XXL','3XL','4XL']
+    trouser_sizes = ['26','28','30','32','34','36','38','40','42','44']
+    jacket_sizes = ['2XS','XS','S','M','L','XL','XXL','3XL','4XL']
+
+    return render_template(
+        'report_uniform_sizes.html',
+        drivers=drivers,
+        project_names=project_names,
+        project_id=project_id, district_id=district_id,
+        size_filter=size_filter, size_type=size_type,
+        status=status, q=q,
+        project_choices=project_choices,
+        district_choices=district_choices,
+        total=len(drivers),
+        shirt_counts=shirt_counts, trouser_counts=trouser_counts, jacket_counts=jacket_counts,
+        missing_count=missing_count,
+        shirt_sizes=shirt_sizes, trouser_sizes=trouser_sizes, jacket_sizes=jacket_sizes,
+    )
+
+
+@app.route('/reports/uniform-sizes/export')
+def report_uniform_sizes_export():
+    from auth_utils import get_user_context
+    from utils import generate_csv_response
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects  = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+
+    project_id  = request.args.get('project_id', type=int) or 0
+    district_id = request.args.get('district_id', type=int) or 0
+    size_filter = request.args.get('size_filter', '').strip()
+    size_type   = request.args.get('size_type', '').strip()
+    status      = request.args.get('status', 'Active').strip()
+    q           = (request.args.get('q') or '').strip()
+
+    drivers_q = Driver.query.filter(Driver.status == status)
+    if not is_master_or_admin and allowed_projects:
+        drivers_q = drivers_q.filter(Driver.project_id.in_(list(allowed_projects)))
+    if not is_master_or_admin and allowed_districts:
+        drivers_q = drivers_q.filter(Driver.district_id.in_(list(allowed_districts)))
+    if project_id:
+        drivers_q = drivers_q.filter(Driver.project_id == project_id)
+    if district_id:
+        drivers_q = drivers_q.filter(Driver.district_id == district_id)
+    if q:
+        like = f'%{q}%'
+        drivers_q = drivers_q.filter(or_(
+            Driver.name.ilike(like), Driver.driver_id.ilike(like),
+            Driver.phone1.ilike(like), Driver.cnic_no.ilike(like),
+        ))
+    if size_filter and size_type in ('shirt_size', 'trouser_size', 'jacket_size'):
+        drivers_q = drivers_q.filter(getattr(Driver, size_type) == size_filter)
+
+    drivers = drivers_q.order_by(Driver.name).all()
+
+    project_names = {}
+    for p in Project.query.all():
+        project_names[p.id] = p.name
+
+    headers = ['Driver ID', 'Name', 'Phone', 'Project', 'District', 'Vehicle', 'Shirt Size', 'Trouser Size', 'Jacket Size', 'Status']
+    rows = []
+    for d in drivers:
+        proj_name = project_names.get(d.project_id, '')
+        dist_name = d.district.name if d.district else (d.driver_district or '')
+        veh_no = d.vehicle.vehicle_no if d.vehicle else ''
+        rows.append([
+            d.driver_id or '', d.name or '', d.phone1 or '',
+            proj_name, dist_name, veh_no,
+            d.shirt_size or '', d.trouser_size or '', d.jacket_size or '',
+            d.status or '',
+        ])
+
+    return generate_csv_response(headers, rows, filename='uniform_sizes_report.csv')
 # ════════════════════════════════════════════════════════════════════════════════

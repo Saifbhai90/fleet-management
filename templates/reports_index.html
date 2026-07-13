@@ -628,6 +628,12 @@
 
             {% endif %}
 
+            {% if can_see_page('report_uniform_sizes') %}
+
+            {{ report_link(url_for('report_uniform_sizes', nav_from='reports'), 'fa-solid fa-shirt', 'Uniform Sizes Report', 'rc-tile--uniform-sizes', 'Shirt, trouser, and jacket sizes for all drivers') }}
+
+            {% endif %}
+
           </div>
 
         </div>
