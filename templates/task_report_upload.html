@@ -19,7 +19,7 @@
       <form method="POST" enctype="multipart/form-data" id="taskReportUploadForm"
             data-core-url="{{ url_for('task_report_upload_core') }}"
             data-activity-url="{{ url_for('task_report_upload_activity_one') }}"
-            data-redirect-base="{{ url_for('task_report_list') }}">
+            data-redirect-base="{{ url_for('module_hub', hub_slug='task-logbook') }}">
         {{ form.hidden_tag() }}
         {% from 'partials/nav_back_button.html' import nav_from_hidden %}
         {{ nav_from_hidden() }}
@@ -185,7 +185,7 @@
       bar.style.width = '100%';
       pctEl.textContent = '100%';
       hideOverlaySpinner();
-      window.location.href = redirectBase + '?date=' + encodeURIComponent(taskDate);
+      window.location.href = redirectBase;
     }).catch(function(err) {
       hideOverlaySpinner();
       alert(err && err.message ? err.message : String(err));

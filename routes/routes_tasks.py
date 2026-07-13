@@ -1458,7 +1458,7 @@ def task_report_upload_emergency():
             c = _parse_emergency_excel(f, task_date)
             db.session.commit()
             flash(f'EmergencyTaskReport uploaded: {c} record(s).', 'success')
-            return redirect(url_for('task_report_list', date=task_date.strftime('%d-%m-%Y')))
+            return redirect(url_for('module_hub', hub_slug='task-logbook'))
         except Exception as e:
             db.session.rollback()
             app.logger.exception("EmergencyTaskReport upload failed for date=%s", task_date)
@@ -1481,7 +1481,7 @@ def task_report_upload_mileage():
             c = _parse_mileage_excel(f, task_date)
             db.session.commit()
             flash(f'Vehicle Mileage report uploaded: {c} record(s).', 'success')
-            return redirect(url_for('task_report_list', date=task_date.strftime('%d-%m-%Y')))
+            return redirect(url_for('module_hub', hub_slug='task-logbook'))
         except Exception as e:
             db.session.rollback()
             app.logger.exception("Vehicle Mileage upload failed for date=%s", task_date)
@@ -1599,7 +1599,7 @@ def task_report_upload():
             if c3_files:
                 msg.append(f'Activity report: {c3_rows} record(s) from {c3_files} file(s)')
             flash('Uploaded. ' + '; '.join(msg) if msg else 'No data imported.', 'success')
-            return redirect(url_for('task_report_list', date=task_date.strftime('%d-%m-%Y')))
+            return redirect(url_for('module_hub', hub_slug='task-logbook'))
         except Exception as e:
             db.session.rollback()
             app.logger.exception(
