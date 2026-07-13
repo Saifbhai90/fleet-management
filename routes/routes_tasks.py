@@ -1839,6 +1839,10 @@ def task_report_emergency_detail_api(date_str):
     except ValueError:
         return jsonify({'error': 'Invalid date format'}), 400
 
+    total_count = db.session.query(func.count(EmergencyTaskRecord.id)).filter(
+        EmergencyTaskRecord.task_date == target_date,
+    ).scalar() or 0
+
     rows = db.session.query(
         EmergencyTaskRecord.amb_reg_no,
         EmergencyTaskRecord.name,
@@ -1867,7 +1871,7 @@ def task_report_emergency_detail_api(date_str):
             }
             for r in rows
         ],
-        'total': len(rows),
+        'total': int(total_count),
     })
 
 
@@ -1878,6 +1882,10 @@ def task_report_mileage_detail_api(date_str):
         target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
     except ValueError:
         return jsonify({'error': 'Invalid date format'}), 400
+
+    total_count = db.session.query(func.count(VehicleMileageRecord.id)).filter(
+        VehicleMileageRecord.task_date == target_date,
+    ).scalar() or 0
 
     rows = db.session.query(
         VehicleMileageRecord.reg_no,
@@ -1903,7 +1911,41 @@ def task_report_mileage_detail_api(date_str):
             }
             for r in rows
         ],
-        'total': len(rows),
+        'total': int(total_count),
+    })
+
+
+@app.route('/task-report/upload/date-summary/<date_str>')
+def task_report_upload_date_summary_api(date_str):
+    """AJAX: lightweight per-type count + last-import timestamp for one date.
+    Used by the Upload Workbooks page (only needs counts, not row data).
+    No cache: re-upload popup decision depends on fresh counts."""
+    try:
+        target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify({'error': 'Invalid date format'}), 400
+
+    emg_count, emg_last = db.session.query(
+        func.count(EmergencyTaskRecord.id), func.max(EmergencyTaskRecord.created_at),
+    ).filter(EmergencyTaskRecord.task_date == target_date).first()
+
+    mil_count, mil_last = db.session.query(
+        func.count(VehicleMileageRecord.id), func.max(VehicleMileageRecord.created_at),
+    ).filter(VehicleMileageRecord.task_date == target_date).first()
+
+    act_count, act_last, act_files = db.session.query(
+        func.count(VehicleActivityRecord.id), func.max(VehicleActivityRecord.created_at),
+        func.count(func.distinct(VehicleActivityRecord.source_file)),
+    ).filter(VehicleActivityRecord.task_date == target_date).first()
+
+    def _fmt(dt):
+        return dt.strftime('%d-%m-%Y %H:%M') if dt else None
+
+    return jsonify({
+        'date': date_str,
+        'emg': {'count': int(emg_count or 0), 'last_at': _fmt(emg_last)},
+        'mil': {'count': int(mil_count or 0), 'last_at': _fmt(mil_last)},
+        'act': {'count': int(act_count or 0), 'last_at': _fmt(act_last), 'files': int(act_files or 0)},
     })
 
 

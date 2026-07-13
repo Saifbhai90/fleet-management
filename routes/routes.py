@@ -8938,9 +8938,11 @@ def _get_table_string_limits(table_name, model_cls=None):
     return limits
 
 
-def _validate_string_lengths(table_name, model_cls, values, row_no, report_label):
-    """Fail fast with clear row/column details before DB flush."""
-    limits = _get_table_string_limits(table_name, model_cls=model_cls)
+def _validate_string_lengths(table_name, model_cls, values, row_no, report_label, limits=None):
+    """Fail fast with clear row/column details before DB flush.
+    Pass preloaded `limits` (from _get_table_string_limits) when calling per-row in a loop."""
+    if limits is None:
+        limits = _get_table_string_limits(table_name, model_cls=model_cls)
     if not limits:
         return
 
@@ -9003,6 +9005,25 @@ def _normalize_vehicle_no(raw):
     return _VEHICLE_SUFFIX_RE.sub('', s).strip()
 
 
+def _enforce_upload_size(f, label, max_mb=15):
+    """Server-side file size cap. Client warns at 10MB; hard server limit here."""
+    if not f:
+        return
+    try:
+        pos = f.stream.tell() if hasattr(f, 'stream') else f.tell()
+        stream = f.stream if hasattr(f, 'stream') else f
+        stream.seek(0, 2)
+        size = stream.tell()
+        stream.seek(pos if pos else 0)
+    except Exception:
+        return
+    if size > max_mb * 1024 * 1024:
+        raise ValueError(
+            f"{label} '{getattr(f, 'filename', '?')}' is {size / (1024*1024):.1f} MB — "
+            f"maximum allowed is {max_mb} MB. Please split or re-export the file."
+        )
+
+
 def _read_rows_auto(file_obj):
     """Read rows from uploaded file; auto-detect XLSX vs TSV/CSV."""
     import io, openpyxl
@@ -9024,6 +9045,7 @@ def _read_rows_auto(file_obj):
 
 def _parse_emergency_excel(f, task_date):
     """Parse EmergencyTaskReport (XLSX or TSV) and store all columns."""
+    _enforce_upload_size(f, 'EmergencyTaskReport')
     rows = _read_rows_auto(f)
     if not rows:
         return 0
@@ -9039,8 +9061,9 @@ def _parse_emergency_excel(f, task_date):
 
     EmergencyTaskRecord.query.filter_by(task_date=task_date).delete()
 
-    count = 0
+    limits = _get_table_string_limits('emergency_task_record', model_cls=EmergencyTaskRecord)
     today = pk_date()
+    mappings = []
     for row_no, row in enumerate(rows[1:], start=2):
         vals = {}
         for idx, field in col_map.items():
@@ -9050,22 +9073,19 @@ def _parse_emergency_excel(f, task_date):
             continue
         if vals.get('amb_reg_no'):
             vals['amb_reg_no'] = _normalize_vehicle_no(vals['amb_reg_no'])
-        _validate_string_lengths('emergency_task_record', EmergencyTaskRecord, vals, row_no, 'EmergencyTaskReport')
-        rec = EmergencyTaskRecord(task_date=task_date, upload_date=today, **vals)
-        db.session.add(rec)
-        count += 1
-    return count
+        _validate_string_lengths('emergency_task_record', EmergencyTaskRecord, vals, row_no, 'EmergencyTaskReport', limits=limits)
+        vals['task_date'] = task_date
+        vals['upload_date'] = today
+        mappings.append(vals)
+    if mappings:
+        db.session.bulk_insert_mappings(EmergencyTaskRecord, mappings)
+    return len(mappings)
 
 
 def _parse_mileage_excel(f, task_date, clear=True):
-    """Parse Vehicle Mileage Report (XLSX with headers at row 10)."""
-    import io, openpyxl
-    raw = f.read()
-    f.seek(0)
-    wb = openpyxl.load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
-    ws = wb.active
-    all_rows = [list(r) for r in ws.iter_rows(min_row=1, values_only=True)]
-    wb.close()
+    """Parse Vehicle Mileage Report (XLSX/CSV/TSV; headers auto-detected, typically row 10)."""
+    _enforce_upload_size(f, 'Vehicle Mileage report')
+    all_rows = _read_rows_auto(f)
     if not all_rows:
         return 0
 
@@ -9105,8 +9125,9 @@ def _parse_mileage_excel(f, task_date, clear=True):
     if clear:
         VehicleMileageRecord.query.filter_by(task_date=task_date).delete()
 
-    count = 0
+    limits = _get_table_string_limits('vehicle_mileage_record', model_cls=VehicleMileageRecord)
     today = pk_date()
+    mappings = []
     for excel_row_no, row in enumerate(all_rows[header_row_idx + 1:], start=header_row_idx + 2):
         if not row or (reg_col < len(row) and row[reg_col] is None):
             continue
@@ -9137,18 +9158,16 @@ def _parse_mileage_excel(f, task_date, clear=True):
             'date_time_e': dt_e,
             'date_time_f': dt_f,
         }
-        _validate_string_lengths('vehicle_mileage_record', VehicleMileageRecord, vals, excel_row_no, 'Vehicle Mileage report')
+        _validate_string_lengths('vehicle_mileage_record', VehicleMileageRecord, vals, excel_row_no, 'Vehicle Mileage report', limits=limits)
 
-        rec = VehicleMileageRecord(
-            task_date=task_date,
-            upload_date=today,
-            **vals,
-            mileage=_safe_float(row[mil_col]) if mil_col < len(row) else 0,
-            ptop=_safe_float(row[ptop_col]) if ptop_col < len(row) else 0,
-        )
-        db.session.add(rec)
-        count += 1
-    return count
+        vals['task_date'] = task_date
+        vals['upload_date'] = today
+        vals['mileage'] = _safe_float(row[mil_col]) if mil_col < len(row) else 0
+        vals['ptop'] = _safe_float(row[ptop_col]) if ptop_col < len(row) else 0
+        mappings.append(vals)
+    if mappings:
+        db.session.bulk_insert_mappings(VehicleMileageRecord, mappings)
+    return len(mappings)
 
 
 def _extract_activity_vehicle_no(ws):
@@ -9196,6 +9215,8 @@ def _parse_activity_report_single_file(f, task_date, upload_date, seen_rows):
         return 0, False
     if raw[:4] != b'PK\x03\x04':
         raise ValueError(f"Tracker Activity Report '{f.filename}' must be .xlsx format.")
+    if len(raw) > 15 * 1024 * 1024:
+        raise ValueError(f"Tracker Activity Report '{f.filename}' is {len(raw)/(1024*1024):.1f} MB — maximum allowed is 15 MB.")
 
     wb = openpyxl.load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
     ws = wb.active
@@ -9218,6 +9239,8 @@ def _parse_activity_report_single_file(f, task_date, upload_date, seen_rows):
             raise ValueError(f"Invalid heading row in file '{f.filename}'. Expected activity columns at row 10.")
 
     count_rows = 0
+    limits = _get_table_string_limits('vehicle_activity_record', model_cls=VehicleActivityRecord)
+    mappings = []
     for excel_row_no, row in enumerate(all_rows[header_row_idx + 1:], start=header_row_idx + 2):
         cells = list(row[:11]) + [None] * max(0, 11 - len(row))
         group_name = _activity_cell_safe_str(cells[0])
@@ -9257,15 +9280,15 @@ def _parse_activity_report_single_file(f, task_date, upload_date, seen_rows):
             'longitude': longitude,
             'source_file': f.filename,
         }
-        _validate_string_lengths('vehicle_activity_record', VehicleActivityRecord, vals, excel_row_no, 'Tracker Activity Report')
+        _validate_string_lengths('vehicle_activity_record', VehicleActivityRecord, vals, excel_row_no, 'Tracker Activity Report', limits=limits)
 
-        db.session.add(VehicleActivityRecord(
-            task_date=task_date,
-            upload_date=upload_date,
-            **vals,
-        ))
+        vals['task_date'] = task_date
+        vals['upload_date'] = upload_date
+        mappings.append(vals)
         count_rows += 1
 
+    if mappings:
+        db.session.bulk_insert_mappings(VehicleActivityRecord, mappings)
     return count_rows, True
 
 

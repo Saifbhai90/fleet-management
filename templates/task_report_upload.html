@@ -75,7 +75,7 @@
   </div>
 
   <!-- Upload Result Toast -->
-  <div id="uploadResultToast" class="toast align-items-center text-white bg-success border-0 shadow-lg" role="alert" style="position:fixed;top:80px;right:20px;z-index:3000;min-width:340px;display:none;">
+  <div id="uploadResultToast" class="toast align-items-center text-white bg-success border-0 shadow-lg" role="alert" style="position:fixed;top:80px;right:20px;z-index:3000;min-width:min(340px,90vw);max-width:92vw;display:none;">
     <div class="d-flex">
       <div class="toast-body" id="uploadResultToastBody"></div>
       <button type="button" class="btn-close btn-close-white me-2 m-auto" onclick="document.getElementById('uploadResultToast').style.display='none'"></button>
@@ -274,17 +274,6 @@
   <div class="card-footer py-2 d-flex justify-content-end gap-2">
     <button type="button" class="btn btn-secondary btn-sm" id="reuploadCancelBtnFooter">Cancel</button>
     <button type="button" class="btn btn-danger btn-sm" id="reuploadConfirmBtn"><i class="bi bi-upload me-1"></i>Haan, Re-upload Karein</button>
-  </div>
-</div>
-
-<!-- Date Loading Overlay (only for date selection) -->
-<div id="dateLoadingOverlay" class="d-none" style="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:2050;display:flex;align-items:center;justify-content:center;">
-  <div class="card shadow-lg border-0" style="width:320px;max-width:90%;">
-    <div class="card-body py-4 px-4 text-center">
-      <div class="spinner-border text-primary mb-2" style="width:2.5rem;height:2.5rem;" role="status"></div>
-      <h6 class="mb-1">Preparing...</h6>
-      <p class="text-muted small mb-0">Date ka data check ho raha hai.</p>
-    </div>
   </div>
 </div>
 
@@ -586,9 +575,7 @@ function ddmmyyyy(isoStr) {
 
 // ======== DATE SUMMARY + DUPLICATE WARNING ========
 (function() {
-  var emgDetailBase = '{{ url_for("task_report_emergency_detail_api", date_str="PLACEHOLDER") }}';
-  var milDetailBase = '{{ url_for("task_report_mileage_detail_api", date_str="PLACEHOLDER") }}';
-  var actDetailBase = '{{ url_for("task_report_activity_detail_api", date_str="PLACEHOLDER") }}';
+  var sumDetailBase = '{{ url_for("task_report_upload_date_summary_api", date_str="PLACEHOLDER") }}';
   var logBase       = '{{ url_for("task_report_upload_list") }}';
 
   function statusBadge(present, total) {
@@ -598,17 +585,7 @@ function ddmmyyyy(isoStr) {
   }
   function fmtCount(n){ return n>0?'<strong>'+n+'</strong>':'<span class="text-muted">0</span>'; }
 
-  function showDateLoadingOverlay(){
-    var o=document.getElementById('dateLoadingOverlay');
-    if(o){ o.classList.remove('d-none'); o.style.display='flex'; }
-  }
-  function hideDateLoadingOverlay(){
-    var o=document.getElementById('dateLoadingOverlay');
-    if(o){ o.classList.add('d-none'); o.style.display='none'; }
-  }
-  window._hideDateLoadingOverlay = hideDateLoadingOverlay;
-
-  var _loadToken=0, _inflightDate=null, _pendingDone=[];
+  var _loadToken=0, _inflightDate=null, _pendingDone=[], _sumCache={};
   window._summaryDate = null;
 
   function loadSummary(dateIso, opts) {
@@ -631,49 +608,58 @@ function ddmmyyyy(isoStr) {
     var myToken=++_loadToken;
     if(opts.onDone) _pendingDone.push(opts.onDone);
 
-    // Show date loading overlay only on user date selection (not silent refresh)
-    if(!opts.silent) showDateLoadingOverlay();
-    // Show inline spinner next to date label
-    if(dateSpinner) dateSpinner.style.display='inline-block';
-    // Show card immediately with skeleton rows
     card.style.display='';
     loading.style.display='none';
     label.textContent = ddmmyyyy(dateIso);
-    statusEl.innerHTML='<span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle"><span class="spinner-border spinner-border-sm me-1" style="width:.7rem;height:.7rem;"></span>Loading…</span>';
-    // Skeleton cards
-    var skelCard='<div class="summary-item rounded-2 p-2 mb-2 skel-row"><div class="d-flex align-items-center gap-2"><span class="skel-bar" style="width:18px;height:18px;border-radius:4px;"></span><span class="skel-bar flex-grow-1" style="width:80px;"></span><span class="skel-bar" style="width:30px;"></span></div><div class="mt-1"><span class="skel-bar" style="width:70px;"></span></div></div>';
-    tbody.innerHTML = skelCard+skelCard+skelCard;
     // Update "Full Log" link with pre-filled date filter
     if(logLink) logLink.href = logBase + '?from_date=' + ddmmyyyy(dateIso) + '&to_date=' + ddmmyyyy(dateIso);
 
-    var results={}, done=0;
-    var apis=[
-      {key:'emg', url:emgDetailBase.replace('PLACEHOLDER',dateIso), label:'Emergency Tasks', icon:'bi-truck', color:'danger'},
-      {key:'mil', url:milDetailBase.replace('PLACEHOLDER',dateIso), label:'Vehicle Mileage', icon:'bi-speedometer2', color:'info'},
-      {key:'act', url:actDetailBase.replace('PLACEHOLDER',dateIso), label:'Tracker Activity', icon:'bi-file-earmark-spreadsheet', color:'primary'},
-    ];
-    apis.forEach(function(api){
-      fetch(api.url,{headers:{'X-Requested-With':'XMLHttpRequest'}})
-        .then(function(r){return r.json();})
-        .then(function(data){ results[api.key]={data:data,api:api}; })
-        .catch(function(){ results[api.key]={data:null,api:api}; })
-        .finally(function(){
-          done++;
-          if(done===apis.length){
-            // Only apply if not superseded by a newer load (different date picked mid-flight)
-            if(myToken===_loadToken){
-              renderSummary(results,loading,tbody,statusEl,dateSpinner,dateIso);
-              _inflightDate=null;
-              var cbs=_pendingDone.splice(0);
-              cbs.forEach(function(cb){ try{cb();}catch(e){} });
-            }
-          }
-        });
-    });
+    var cached=_sumCache[dateIso];
+    if(cached){
+      // Instant render from session cache; fresh data revalidates silently below
+      renderSummary(cached, loading, tbody, statusEl, dateSpinner, dateIso);
+    } else {
+      if(dateSpinner) dateSpinner.style.display='inline-block';
+      statusEl.innerHTML='<span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle"><span class="spinner-border spinner-border-sm me-1" style="width:.7rem;height:.7rem;"></span>Loading…</span>';
+      var skelCard='<div class="summary-item rounded-2 p-2 mb-2 skel-row"><div class="d-flex align-items-center gap-2"><span class="skel-bar" style="width:18px;height:18px;border-radius:4px;"></span><span class="skel-bar flex-grow-1" style="width:80px;"></span><span class="skel-bar" style="width:30px;"></span></div><div class="mt-1"><span class="skel-bar" style="width:70px;"></span></div></div>';
+      tbody.innerHTML = skelCard+skelCard+skelCard;
+    }
+
+    var results={}, fetchOk=false;
+    var apis={
+      emg:{key:'emg', label:'Emergency Tasks', icon:'bi-truck', color:'danger'},
+      mil:{key:'mil', label:'Vehicle Mileage', icon:'bi-speedometer2', color:'info'},
+      act:{key:'act', label:'Tracker Activity', icon:'bi-file-earmark-spreadsheet', color:'primary'},
+    };
+    // Single lightweight request: counts + last timestamps only (no row data)
+    fetch(sumDetailBase.replace('PLACEHOLDER',dateIso),{headers:{'X-Requested-With':'XMLHttpRequest'}})
+      .then(function(r){ return r.json(); })
+      .then(function(j){
+        if(j && !j.error){
+          fetchOk=true;
+          results.emg={data:{total:(j.emg&&j.emg.count)||0, records:[{imported_at:(j.emg&&j.emg.last_at)||null}]}, api:apis.emg};
+          results.mil={data:{total:(j.mil&&j.mil.count)||0, records:[{imported_at:(j.mil&&j.mil.last_at)||null}]}, api:apis.mil};
+          results.act={data:{total_rows:(j.act&&j.act.count)||0, files:[{last_at:(j.act&&j.act.last_at)||null}]}, api:apis.act};
+        } else {
+          results.emg={data:null,api:apis.emg}; results.mil={data:null,api:apis.mil}; results.act={data:null,api:apis.act};
+        }
+      })
+      .catch(function(){
+        results.emg={data:null,api:apis.emg}; results.mil={data:null,api:apis.mil}; results.act={data:null,api:apis.act};
+      })
+      .finally(function(){
+        // Only apply if not superseded by a newer load (different date picked mid-flight)
+        if(myToken===_loadToken){
+          if(fetchOk) _sumCache[dateIso]=results;
+          renderSummary(results,loading,tbody,statusEl,dateSpinner,dateIso);
+          _inflightDate=null;
+          var cbs=_pendingDone.splice(0);
+          cbs.forEach(function(cb){ try{cb();}catch(e){} });
+        }
+      });
   }
 
   function renderSummary(results, loading, tbody, statusEl, dateSpinner, dateIso) {
-    hideDateLoadingOverlay();
     loading.style.display='none';
     if(dateSpinner) dateSpinner.style.display='none';
     var pc=0;
@@ -740,6 +726,7 @@ function ddmmyyyy(isoStr) {
       setTimeout(function(){
         var d2=isoDate(dateInp.value);
         if(d2){
+          if(d2===window._summaryDate) return; // already rendered for this date (blur/close re-fires)
           loadSummary(d2);
         } else {
           var ds=document.getElementById('dateLoadingSpinner'); if(ds) ds.style.display='none';
@@ -795,11 +782,7 @@ function ddmmyyyy(isoStr) {
     o.classList.remove('d-none'); o.style.display='flex';
     var sl=document.getElementById('uploadStatusLine'); if(sl&&msg) sl.textContent=msg;
     var bar=document.getElementById('uploadProgress'),pct=document.getElementById('uploadPct');
-    var w=5; bar.style.width='5%'; pct.textContent='5%';
-    var target=90;
-    var iv=setInterval(function(){ var step=Math.max(0.3,(target-w)*0.04); w=Math.min(w+step,target); bar.style.width=w.toFixed(0)+'%'; pct.textContent=w.toFixed(0)+'%'; },300);
-    setTimeout(function(){target=95;},8000);
-    window._uploadIv=iv;
+    bar.style.width='2%'; pct.textContent='2%';
   }
   function hideOverlay(){
     if(window._uploadIv){clearInterval(window._uploadIv);window._uploadIv=null;}
@@ -823,6 +806,40 @@ function ddmmyyyy(isoStr) {
   function disableBtn(){ var b=document.getElementById('uploadBtn'); if(b){b.disabled=true; b.innerHTML='<span class="spinner-border spinner-border-sm me-1"></span>Uploading…';} }
   function enableBtn(){ var b=document.getElementById('uploadBtn'); if(b){b.disabled=false; b.innerHTML='<i class="bi bi-upload me-1"></i>Upload';} }
 
+  // ---- XHR upload with real progress ----
+  function xhrUpload(url, fd, onProg){
+    return new Promise(function(resolve, reject){
+      var xhr=new XMLHttpRequest();
+      xhr.open('POST', url);
+      xhr.responseType='json';
+      if(xhr.upload) xhr.upload.onprogress=function(e){
+        if(e.lengthComputable && onProg) onProg(Math.min(e.loaded/e.total, 1));
+      };
+      xhr.onload=function(){
+        var j=xhr.response;
+        if(typeof j==='string'){ try{ j=JSON.parse(j); }catch(_){ j=null; } }
+        if(xhr.status>=200 && xhr.status<300 && j && j.ok) resolve(j);
+        else reject(new Error((j && j.error) || ('Server error (HTTP '+xhr.status+')')));
+      };
+      xhr.onerror=function(){ reject(new Error('Network error')); };
+      xhr.ontimeout=function(){ reject(new Error('Request timeout')); };
+      xhr.send(fd);
+    });
+  }
+
+  // ---- Promise pool (limited parallelism) ----
+  function runPool(items, worker, concurrency){
+    var idx=0;
+    function lane(){
+      if(idx>=items.length) return Promise.resolve();
+      var item=items[idx++];
+      return worker(item).then(lane, lane);
+    }
+    var lanes=[];
+    for(var k=0;k<Math.min(concurrency, items.length);k++) lanes.push(lane());
+    return Promise.all(lanes);
+  }
+
   // ---- Core upload runner ----
   function runUpload(){
     var emInput=document.getElementById('fileEmergency');
@@ -841,7 +858,7 @@ function ddmmyyyy(isoStr) {
     var logUrl  = form.getAttribute('data-log-url');
 
     var steps=[];
-    if(emFile) steps.push({id:'emg',label:'Emergency: '+emFile.name,type:'emg'});
+    if(emFile) steps.push({id:'emg',label:'Emergency: '+emFile.name,type:'emg',file:emFile});
     miFiles.forEach(function(f,i){ steps.push({id:'mil'+i,label:'Mileage '+(i+1)+'/'+miFiles.length+': '+f.name,type:'mil',idx:i,file:f}); });
     actFiles.forEach(function(f,i){ steps.push({id:'act'+i,label:'Activity '+(i+1)+'/'+actFiles.length+': '+f.name,type:'act',idx:i,file:f}); });
 
@@ -852,50 +869,54 @@ function ddmmyyyy(isoStr) {
 
     var total=steps.length, done=0;
     var errors=[], res={emg:0,mil:0,act:0,actF:0};
-    var chain=Promise.resolve();
 
-    steps.forEach(function(step){
-      chain=chain.then(function(){
-        setFS(step.id,'uploading','');
-        var fd=new FormData();
-        fd.append('csrf_token',csrf);
-        fd.append('task_date',taskDate);
-        var p;
-        if(step.type==='emg'){
-          fd.append('file_emergency',emFile);
-          p=fetch(coreUrl,{method:'POST',body:fd,credentials:'same-origin'}).then(function(r){return r.json().then(function(j){
-            if(!r.ok||!j.ok) throw new Error(j.error||'Emergency failed');
-            res.emg=j.emergency_count||0;
-          });});
-        } else if(step.type==='mil'){
-          fd.append('clear_mileage',step.idx===0?'1':'0');
-          fd.append('file_mileage',step.file,step.file.name);
-          p=fetch(milUrl,{method:'POST',body:fd,credentials:'same-origin'}).then(function(r){return r.json().then(function(j){
-            if(!r.ok||!j.ok) throw new Error(j.error||'Mileage failed');
-            res.mil+=j.rows||0;
-          });});
-        } else {
-          fd.append('clear_activity',step.idx===0?'1':'0');
-          fd.append('file_activity',step.file,step.file.name);
-          p=fetch(actUrl,{method:'POST',body:fd,credentials:'same-origin'}).then(function(r){return r.json().then(function(j){
-            if(!r.ok||!j.ok) throw new Error(j.error||'Activity failed');
-            res.act+=j.rows||0; res.actF++;
-          });});
-        }
-        return p.then(function(){
-          done++; setFS(step.id,'done','');
-          setPct(Math.round(5+90*done/total),step.label+' ✓');
-        }).catch(function(err){
-          done++;
-          var msg=err&&err.message?err.message:String(err);
-          errors.push(step.label+': '+msg);
-          setFS(step.id,'error',msg);
-          setPct(Math.round(5+90*done/total),'Error — continuing…');
-        });
+    // Real progress: bytes-weighted. Upload = 0→90% of a step, server processing = last 10%.
+    var totalBytes=steps.reduce(function(s,st){return s+(st.file?st.file.size:0);},0)||1;
+    var frac={};
+    steps.forEach(function(st){ frac[st.id]=0; });
+    function refreshPct(){
+      var sum=0;
+      steps.forEach(function(st){ sum+=frac[st.id]*((st.file?st.file.size:0)/totalBytes); });
+      var p=Math.min(99, Math.round(2+97*sum));
+      document.getElementById('uploadProgress').style.width=p+'%';
+      document.getElementById('uploadPct').textContent=p+'%';
+    }
+    function statusLine(){
+      var sl=document.getElementById('uploadStatusLine');
+      if(sl) sl.textContent=done+'/'+total+' file(s) complete…';
+    }
+
+    function uploadStep(step){
+      setFS(step.id,'uploading','');
+      var fd=new FormData();
+      fd.append('csrf_token',csrf);
+      fd.append('task_date',taskDate);
+      var url;
+      if(step.type==='emg'){ fd.append('file_emergency',step.file); url=coreUrl; }
+      else if(step.type==='mil'){ fd.append('clear_mileage',step.idx===0?'1':'0'); fd.append('file_mileage',step.file,step.file.name); url=milUrl; }
+      else { fd.append('clear_activity',step.idx===0?'1':'0'); fd.append('file_activity',step.file,step.file.name); url=actUrl; }
+      return xhrUpload(url, fd, function(upFrac){
+        frac[step.id]=upFrac*0.9; refreshPct();
+      }).then(function(j){
+        if(step.type==='emg') res.emg=j.emergency_count||0;
+        else if(step.type==='mil') res.mil+=j.rows||0;
+        else { res.act+=j.rows||0; res.actF++; }
+        frac[step.id]=1; done++; setFS(step.id,'done',''); refreshPct(); statusLine();
+      }).catch(function(err){
+        var msg=err&&err.message?err.message:String(err);
+        errors.push(step.label+': '+msg);
+        frac[step.id]=1; done++; setFS(step.id,'error',msg); refreshPct(); statusLine();
       });
-    });
+    }
 
-    chain.then(function(){
+    // Phase 1: clear-flag carriers (first file of each type) — parallel, different tables.
+    // Phase 2: remaining files — pool of 3. Ensures no clear wipes a parallel insert.
+    var phase1=steps.filter(function(s){ return s.type==='emg' || s.idx===0; });
+    var phase2=steps.filter(function(s){ return s.type!=='emg' && s.idx>0; });
+
+    Promise.all(phase1.map(uploadStep)).then(function(){
+      return runPool(phase2, uploadStep, 3);
+    }).then(function(){
       setPct(100,'Complete!');
       setTimeout(function(){
         hideOverlay(); enableBtn();
@@ -955,7 +976,6 @@ function ddmmyyyy(isoStr) {
       if(hasEmg || hasMil || hasAct){
         enableBtn();
         hideOverlay();
-        if(window._hideDateLoadingOverlay) window._hideDateLoadingOverlay();
         var conflictParts=[];
         if(hasEmg) conflictParts.push('Emergency Tasks');
         if(hasMil) conflictParts.push('Vehicle Mileage');
