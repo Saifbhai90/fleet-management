@@ -5734,12 +5734,12 @@ class _TraMonthCache:
             ):
                 return True
             if left_rec.change_date < self.start_d:
+                events = self.status_events_by_driver.get(driver.id, [])
                 rejoined = any(
-                    sc.change_date
+                    sc.action_type == 'rejoin'
+                    and sc.change_date
                     and sc.change_date > left_rec.change_date
-                    and sc.change_date <= self.end_d
-                    for sc in [self.rejoin_in_month.get(driver.id)]
-                    if sc
+                    for sc in events
                 )
                 if not rejoined:
                     return False
