@@ -166,7 +166,7 @@ def _report_centre_visibility(linked_driver_id=None):
 
     fleet_vehicle = (
         c('report_vehicle_summary') or c('vehicles_list') or c('report_vehicle_profile')
-        or c('report_parking_utilization')
+        or c('report_parking_utilization') or c('report_engine_chassis')
     )
     fleet_project = c('report_project_summary') or c('report_district_summary') or c('report_company_profile')
     fleet_expense = (
@@ -1831,5 +1831,104 @@ def report_uniform_sizes_export_pdf():
         pdf_bytes,
         mimetype='application/pdf',
         headers={'Content-Disposition': f'attachment; filename="{fname}"'},
+    )
+# ════════════════════════════════════════════════════════════════════════════════
+@app.route('/reports/engine-chassis')
+def report_engine_chassis():
+    from auth_utils import get_user_context
+
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles = user_context.get('allowed_vehicles', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+
+    project_id = request.args.get('project_id', type=int) or 0
+    district_id = request.args.get('district_id', type=int) or 0
+    vehicle_id = request.args.get('vehicle_id', type=int) or 0
+    vehicle_family = (request.args.get('vehicle_family') or '').strip()
+
+    # Auto-select if only 1 option available
+    disable_project = False
+    disable_district = False
+    if not is_master_or_admin:
+        if len(allowed_projects) == 1:
+            if not project_id:
+                project_id = next(iter(allowed_projects))
+            disable_project = True
+        if len(allowed_districts) == 1:
+            if not district_id:
+                district_id = next(iter(allowed_districts))
+            disable_district = True
+
+    # Base query
+    query = Vehicle.query
+
+    # Apply user data scope
+    if not is_master_or_admin:
+        if allowed_projects:
+            query = query.filter(Vehicle.project_id.in_(list(allowed_projects)))
+        if allowed_districts:
+            query = query.filter(Vehicle.district_id.in_(list(allowed_districts)))
+        if allowed_vehicles:
+            query = query.filter(Vehicle.id.in_(list(allowed_vehicles)))
+
+    if project_id:
+        query = query.filter(Vehicle.project_id == project_id)
+    if district_id:
+        query = query.filter(Vehicle.district_id == district_id)
+    if vehicle_id:
+        query = query.filter(Vehicle.id == vehicle_id)
+    if vehicle_family:
+        query = query.filter(Vehicle.vehicle_family == vehicle_family)
+
+    vehicles = query.order_by(*vehicle_order_by()).all()
+
+    # Dropdown choices (scoped + cascaded)
+    pq = Project.query
+    if not is_master_or_admin and allowed_projects:
+        pq = pq.filter(Project.id.in_(list(allowed_projects)))
+    project_choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in pq.order_by(Project.name).all()]
+
+    dq = District.query
+    if project_id:
+        dq = dq.join(project_district).filter(project_district.c.project_id == project_id)
+    if not is_master_or_admin and allowed_districts:
+        dq = dq.filter(District.id.in_(list(allowed_districts)))
+    district_choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in dq.order_by(District.name).all()]
+
+    vcq = Vehicle.query
+    if project_id:
+        vcq = vcq.filter(Vehicle.project_id == project_id)
+    elif not is_master_or_admin and allowed_projects:
+        vcq = vcq.filter(Vehicle.project_id.in_(list(allowed_projects)))
+    if district_id:
+        vcq = vcq.filter(Vehicle.district_id == district_id)
+    elif not is_master_or_admin and allowed_districts:
+        vcq = vcq.filter(Vehicle.district_id.in_(list(allowed_districts)))
+    if not is_master_or_admin and allowed_vehicles:
+        vcq = vcq.filter(Vehicle.id.in_(list(allowed_vehicles)))
+    vehicle_choices = [(0, '-- All Vehicles --')] + [(v.id, v.vehicle_no) for v in vcq.order_by(*vehicle_order_by()).all()]
+
+    # Vehicle family choices
+    family_q = Vehicle.query.with_entities(Vehicle.vehicle_family).filter(Vehicle.vehicle_family.isnot(None)).distinct()
+    if not is_master_or_admin and allowed_vehicles:
+        family_q = family_q.filter(Vehicle.id.in_(list(allowed_vehicles)))
+    vehicle_family_choices = [('', '-- All Families --')] + [(f[0], f[0]) for f in family_q.order_by(Vehicle.vehicle_family).all() if f[0]]
+
+    return render_template(
+        'report_engine_chassis.html',
+        vehicles=vehicles,
+        project_id=project_id,
+        district_id=district_id,
+        vehicle_id=vehicle_id,
+        vehicle_family=vehicle_family,
+        project_choices=project_choices,
+        district_choices=district_choices,
+        vehicle_choices=vehicle_choices,
+        vehicle_family_choices=vehicle_family_choices,
+        disable_project=disable_project,
+        disable_district=disable_district,
     )
 # ════════════════════════════════════════════════════════════════════════════════

@@ -325,6 +325,7 @@ PERMISSION_TREE = {
         ('report_company_profile', 'Company Profile (Report)'),
         ('report_parking_utilization', 'Parking Utilization'),
         ('report_vehicle_profile', 'Vehicle Profile'),
+        ('report_engine_chassis', 'Engine & Chassis Number'),
         ('report_driver_profile', 'Driver Profile'),
         ('driver_update_text', 'Driver Profile – Driver Update Text'),
         ('report_ai', 'Create Report with AI'),
@@ -996,6 +997,7 @@ SECTION_PAGE_GROUPS = {
         ('Company Profile', [('report_company_profile', 'Company Profile (Report)')]),
         ('Parking Utilization', [('report_parking_utilization', 'Parking Utilization')]),
         ('Vehicle Profile', [('report_vehicle_profile', 'Vehicle Profile')]),
+        ('Engine & Chassis Number', [('report_engine_chassis', 'Engine & Chassis Number')]),
         ('Driver Profile', [
             ('report_driver_profile', 'Driver Profile'),
             ('driver_update_text', 'Driver Update Text'),
@@ -1252,6 +1254,7 @@ PAGE_VISIBLE = {
     'activity_log_report': ['reports', 'activity_log_report'],
     'activity_logs_geo_report': ['reports', 'activity_logs_geo_report'],
     'report_vehicle_profile': ['reports', 'report_vehicle_profile'],
+    'report_engine_chassis': ['reports', 'report_engine_chassis'],
     'report_driver_profile': ['reports', 'report_driver_profile'],
     'driver_update_text': ['reports', 'driver_update_text'],
     'active_drivers_report': ['reports', 'active_drivers_report'],

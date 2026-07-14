@@ -340,6 +340,7 @@ ENDPOINT_PERMISSION_MAP = [
     ('report_district_summary', 'report_district_summary'),
     ('report_parking_utilization', 'report_parking_utilization'),
     ('report_vehicle_profile', 'report_vehicle_profile'),
+    ('report_engine_chassis', 'report_engine_chassis'),
     ('report_driver_profile', 'report_driver_profile'),
     ('report_driver_profile_public', None),
     ('report_expiry', 'report_expiry'),

@@ -1,0 +1,453 @@
+{% extends "base.html" %}
+{% block title %}Engine & Chassis Number Report{% endblock %}
+{% block head %}
+<style>
+/* ── WhatsApp-style copyable cells ── */
+.ec-copy-cell {
+  cursor: pointer;
+  position: relative;
+  transition: background 0.15s ease;
+  border-radius: 6px;
+  padding: 2px 8px !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  user-select: none;
+}
+.ec-copy-cell:hover {
+  background: #e7f3ff !important;
+}
+.ec-copy-cell:active {
+  background: #d0e8ff !important;
+  transform: scale(0.97);
+}
+.ec-copy-cell .ec-copy-icon {
+  font-size: 0.65rem;
+  color: #94a3b8;
+  opacity: 0;
+  transition: opacity 0.15s ease, color 0.15s ease;
+  flex-shrink: 0;
+}
+.ec-copy-cell:hover .ec-copy-icon {
+  opacity: 1;
+  color: #3b82f6;
+}
+.ec-copy-cell.ec-copied {
+  background: #dcfce7 !important;
+}
+.ec-copy-cell.ec-copied .ec-copy-icon {
+  opacity: 1;
+  color: #16a34a;
+}
+
+/* ── WhatsApp-style toast ── */
+.ec-toast {
+  position: fixed;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%) translateY(80px);
+  background: #075e54;
+  color: #fff;
+  padding: 10px 22px 10px 18px;
+  border-radius: 50px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  font-family: 'Segoe UI', Arial, sans-serif;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.25), 0 2px 8px rgba(0,0,0,0.12);
+  z-index: 100070;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  opacity: 0;
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.25s ease;
+  pointer-events: none;
+  white-space: nowrap;
+  max-width: 90vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ec-toast.ec-show {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+}
+.ec-toast .ec-toast-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #25d366;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  flex-shrink: 0;
+}
+.ec-toast .ec-toast-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Row copy hint badge ── */
+.ec-row-hint {
+  font-size: 0.65rem;
+  color: #94a3b8;
+  font-weight: 400;
+  margin-left: 4px;
+  white-space: nowrap;
+}
+.ec-row-hint i {
+  color: #25d366;
+}
+</style>
+{% endblock %}
+{% block content %}
+<div class="container-fluid">
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+      {% from 'partials/nav_back_button.html' import nav_back_button, nav_from_hidden with context %}
+      {{ nav_back_button() }}
+      <h2 class="mb-0"><i class="bi bi-upc-scan me-2 text-primary"></i>Engine &amp; Chassis Number Report</h2>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+      <button class="btn btn-outline-secondary btn-sm" id="btnPrintReport" title="Print / Preview"><i class="bi bi-eye me-1"></i>Print / Preview</button>
+      <button class="btn btn-outline-success btn-sm" id="btnExportReport" title="Export to Excel"><i class="bi bi-file-earmark-excel me-1"></i>Export</button>
+    </div>
+  </div>
+
+  <div class="card shadow-sm border-0 rounded-3 mb-4">
+    <div class="card-body">
+      <form method="get" action="{{ url_for('report_engine_chassis') }}" class="row g-3 align-items-end">
+        {{ nav_from_hidden() }}
+        <div class="col-md-2">
+          <label class="form-label">Project</label>
+          {% if disable_project %}<input type="hidden" name="project_id" value="{{ project_id }}">{% endif %}
+          <select name="project_id" id="ecProjectSelect" class="form-select form-select-sm search-select" data-placeholder="Search project..." {% if disable_project %}disabled{% endif %}>
+            {% for val, label in project_choices %}
+              <option value="{{ val }}" {% if project_id == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">District</label>
+          {% if disable_district %}<input type="hidden" name="district_id" value="{{ district_id }}">{% endif %}
+          <select name="district_id" id="ecDistrictSelect" class="form-select form-select-sm search-select" data-placeholder="Search district..." {% if disable_district %}disabled{% endif %}>
+            {% for val, label in district_choices %}
+              <option value="{{ val }}" {% if district_id == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">Vehicle</label>
+          <select name="vehicle_id" id="ecVehicleSelect" class="form-select form-select-sm search-select" data-placeholder="Search vehicle...">
+            {% for val, label in vehicle_choices %}
+              <option value="{{ val }}" {% if vehicle_id == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">Vehicle Family</label>
+          <select name="vehicle_family" id="ecFamilySelect" class="form-select form-select-sm search-select" data-placeholder="Search family...">
+            {% for val, label in vehicle_family_choices %}
+              <option value="{{ val }}" {% if vehicle_family == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <button type="submit" class="btn btn-primary btn-sm w-100">
+            <i class="bi bi-search me-1"></i>Show
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card shadow border-0 rounded-3 overflow-hidden">
+    <div class="card-header bg-dark text-white py-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
+      <span class="fw-semibold">Engine &amp; Chassis Number Report</span>
+      <span class="ec-row-hint d-none d-md-inline"><i class="bi bi-info-circle"></i> Click Engine/Chassis No to copy full row</span>
+      <div class="d-flex align-items-center gap-2">
+        <select class="form-select form-select-sm bg-dark text-white border-secondary" style="width:70px;" id="ecPageLen">
+          <option value="10">10</option>
+          <option value="25">25</option>
+          <option value="50" selected>50</option>
+          <option value="100">100</option>
+          <option value="-1">All</option>
+        </select>
+        <input type="text" id="ecSearchInput" class="form-control form-control-sm bg-dark text-white border-secondary" placeholder="Search table..." style="max-width:200px;" autocomplete="off">
+      </div>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0" id="ecTable">
+          <thead class="table-light" style="font-size:.82rem;">
+            <tr>
+              <th class="ps-3" style="width:50px;">#</th>
+              <th>District</th>
+              <th>Project</th>
+              <th style="white-space:nowrap;">Vehicle No</th>
+              <th>Vehicle Family</th>
+              <th>Model</th>
+              <th style="white-space:nowrap;">Engine No</th>
+              <th style="white-space:nowrap;">Chassis No</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for v in vehicles %}
+            <tr style="font-size:.82rem;">
+              <td class="ps-3">{{ loop.index }}</td>
+              <td>{{ v.district.name if v.district else '-' }}</td>
+              <td>{{ v.project.name if v.project else '-' }}</td>
+              <td class="fw-medium">{{ v.vehicle_no }}</td>
+              <td>{{ v.vehicle_family or '-' }}</td>
+              <td>{{ v.model }}</td>
+              <td>
+                {% if v.engine_no %}
+                  <span class="ec-copy-cell text-body" data-copy-row
+                        data-sr="{{ loop.index }}"
+                        data-district="{{ v.district.name if v.district else '-' }}"
+                        data-project="{{ v.project.name if v.project else '-' }}"
+                        data-vehicle="{{ v.vehicle_no }}"
+                        data-family="{{ v.vehicle_family or '-' }}"
+                        data-model="{{ v.model }}"
+                        data-engine="{{ v.engine_no }}"
+                        data-chassis="{{ v.chassis_no or '-' }}">
+                    {{ v.engine_no }}
+                    <i class="bi bi-clipboard ec-copy-icon"></i>
+                  </span>
+                {% else %}
+                  <span class="badge bg-danger-subtle text-danger border border-danger-subtle">Missing</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if v.chassis_no %}
+                  <span class="ec-copy-cell text-body" data-copy-row
+                        data-sr="{{ loop.index }}"
+                        data-district="{{ v.district.name if v.district else '-' }}"
+                        data-project="{{ v.project.name if v.project else '-' }}"
+                        data-vehicle="{{ v.vehicle_no }}"
+                        data-family="{{ v.vehicle_family or '-' }}"
+                        data-model="{{ v.model }}"
+                        data-engine="{{ v.engine_no or '-' }}"
+                        data-chassis="{{ v.chassis_no }}">
+                    {{ v.chassis_no }}
+                    <i class="bi bi-clipboard ec-copy-icon"></i>
+                  </span>
+                {% else %}
+                  <span class="badge bg-danger-subtle text-danger border border-danger-subtle">Missing</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="8" class="text-center py-5 text-muted">
+                <i class="bi bi-upc-scan display-6 d-block mb-2"></i>
+                No vehicles found for the selected filters.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ── WhatsApp-style row copy to clipboard ── */
+(function() {
+  var toastTimer = null;
+  var toastEl = null;
+
+  function _ensureToast() {
+    if (toastEl) return toastEl;
+    toastEl = document.createElement('div');
+    toastEl.className = 'ec-toast';
+    toastEl.innerHTML = '<span class="ec-toast-icon"><i class="bi bi-check2"></i></span><span class="ec-toast-text"></span>';
+    document.body.appendChild(toastEl);
+    return toastEl;
+  }
+
+  function _showToast(msg) {
+    var t = _ensureToast();
+    t.querySelector('.ec-toast-text').textContent = msg;
+    t.classList.add('ec-show');
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(function() { t.classList.remove('ec-show'); }, 2200);
+  }
+
+  function _copyToClipboard(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text);
+    }
+    return new Promise(function(resolve, reject) {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.cssText = 'position:fixed;opacity:0;pointer-events:none;';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); resolve(); } catch(e) { reject(e); }
+      document.body.removeChild(ta);
+    });
+  }
+
+  function _buildRowText(el) {
+    var sr       = el.getAttribute('data-sr') || '';
+    var district = el.getAttribute('data-district') || '-';
+    var project  = el.getAttribute('data-project') || '-';
+    var vehicle  = el.getAttribute('data-vehicle') || '';
+    var family   = el.getAttribute('data-family') || '-';
+    var model    = el.getAttribute('data-model') || '';
+    var engine   = el.getAttribute('data-engine') || '-';
+    var chassis  = el.getAttribute('data-chassis') || '-';
+
+    return '#' + sr + '  ' +
+           'District: ' + district + '  |  ' +
+           'Project: ' + project + '  |  ' +
+           'Vehicle No: ' + vehicle + '  |  ' +
+           'Family: ' + family + '  |  ' +
+           'Model: ' + model + '  |  ' +
+           'Engine No: ' + engine + '  |  ' +
+           'Chassis No: ' + chassis;
+  }
+
+  function _handleCopyClick(e) {
+    var cell = e.currentTarget;
+    var text = _buildRowText(cell);
+    _copyToClipboard(text).then(function() {
+      cell.classList.add('ec-copied');
+      var icon = cell.querySelector('.ec-copy-icon');
+      if (icon) { icon.classList.remove('bi-clipboard'); icon.classList.add('bi-check2'); }
+      _showToast('Row copied to clipboard');
+      setTimeout(function() {
+        cell.classList.remove('ec-copied');
+        if (icon) { icon.classList.remove('bi-check2'); icon.classList.add('bi-clipboard'); }
+      }, 1500);
+    }).catch(function() {
+      _showToast('Copy failed — please try again');
+    });
+  }
+
+  function _bindCopyCells() {
+    document.querySelectorAll('[data-copy-row]').forEach(function(el) {
+      if (el.dataset.ecCopyBound === '1') return;
+      el.dataset.ecCopyBound = '1';
+      el.addEventListener('click', _handleCopyClick);
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _bindCopyCells);
+  } else {
+    _bindCopyCells();
+  }
+
+  /* Re-bind after DataTables redraw (pagination/search) */
+  if (window.jQuery) {
+    jQuery(document).on('draw.dt', '#ecTable', function() { _bindCopyCells(); });
+  }
+})();
+</script>
+
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+
+<script>
+  $(document).ready(function () {
+    if (window.innerWidth < 768) return;
+    var table = $('#ecTable').DataTable({
+      pageLength: 50,
+      searching: true,
+      order: [[1, 'asc']],
+      dom: 'rt<"d-flex justify-content-between align-items-center p-2"ip>',
+      buttons: []
+    });
+
+    (function() {
+        var searchVal = '';
+        $.fn.dataTable.ext.search.push(function(settings, data) {
+            if (settings.nTable.id !== 'ecTable') return true;
+            if (!searchVal) return true;
+            var words = searchVal.toLowerCase().split(/\s+/).filter(Boolean);
+            var rowText = data.join(' ').toLowerCase();
+            for (var i = 0; i < words.length; i++) {
+                if (rowText.indexOf(words[i]) === -1) return false;
+            }
+            return true;
+        });
+        $('#ecSearchInput').on('keyup input', function () {
+            searchVal = this.value.trim();
+            table.draw();
+        });
+    })();
+    $('#ecPageLen').on('change', function () { table.page.len(parseInt(this.value)).draw(); });
+  });
+</script>
+
+<script>
+(function() {
+  function _initEcExport() {
+    if (!window.fleetPrintExport) return;
+    var exportBtn = document.getElementById('btnExportReport');
+    if (!exportBtn || exportBtn.dataset.fleetExportMenuBound === '1') return;
+    window.fleetPrintExport(
+      'ecTable',
+      'Engine & Chassis Number Report',
+      'Engine_Chassis_Report.csv',
+      {
+        columnOrder: ['#', 'District', 'Project', 'Vehicle No', 'Vehicle Family', 'Model', 'Engine No', 'Chassis No']
+      }
+    );
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _initEcExport);
+  } else {
+    _initEcExport();
+  }
+})();
+</script>
+
+<script>
+(function() {
+  var projSel = document.getElementById('ecProjectSelect');
+  var distSel = document.getElementById('ecDistrictSelect');
+  var vehSel  = document.getElementById('ecVehicleSelect');
+  if (!projSel || !distSel) return;
+
+  function rebuildSelect(sel, items, valueKey, labelKey, allLabel) {
+    if (sel.tomselect) { sel.tomselect.destroy(); }
+    sel.innerHTML = '<option value="0">' + allLabel + '</option>';
+    (items || []).forEach(function(item) {
+      var opt = document.createElement('option');
+      opt.value = item[valueKey];
+      opt.textContent = item[labelKey];
+      sel.appendChild(opt);
+    });
+    initSearchableDropdowns(sel.parentNode);
+  }
+
+  function loadVehicles(pid, did) {
+    if (!vehSel) return;
+    fetch('/api/filter/all-vehicles-by-project-district?project_id=' + (pid || '0') + '&district_id=' + (did || '0'))
+      .then(function(r) { return r.json(); })
+      .then(function(data) { rebuildSelect(vehSel, data, 'id', 'vehicle_no', '-- All Vehicles --'); })
+      .catch(function() {});
+  }
+
+  function loadDistricts(pid) {
+    if (!pid || pid === '0') {
+      rebuildSelect(distSel, [], 'id', 'name', '-- All Districts --');
+      loadVehicles('0', '0');
+      return;
+    }
+    fetch('/api/filter/districts-by-project?project_id=' + pid)
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        rebuildSelect(distSel, data, 'id', 'name', '-- All Districts --');
+        loadVehicles(pid, '0');
+      }).catch(function() {});
+  }
+
+  projSel.addEventListener('change', function() { loadDistricts(this.value); });
+  distSel.addEventListener('change', function() { loadVehicles(projSel ? projSel.value : '0', this.value); });
+})();
+</script>
+{% endblock %}

@@ -340,6 +340,12 @@
 
             {% endif %}
 
+            {% if can_see_page('report_engine_chassis') %}
+
+            {{ report_link(url_for('report_engine_chassis', nav_from='reports'), 'fa-solid fa-barcode', 'Engine & Chassis Number Report', 'rc-tile--engine-chassis', 'Vehicle engine and chassis number listing') }}
+
+            {% endif %}
+
             {% if can_see_page('report_parking_utilization') %}
 
             {{ report_link(url_for('report_parking_utilization', nav_from='reports'), 'fa-solid fa-square-parking', 'Parking Utilization', 'rc-tile--parking') }}
@@ -2728,6 +2734,8 @@ html.capacitor-native .rc-web-only { display: none !important; }
 .rc-tile--vehicle-summary .rc-tile-icon > i,
 
 .rc-tile--vehicle-profile .rc-tile-icon > i,
+
+.rc-tile--engine-chassis .rc-tile-icon > i,
 
 .rc-tile--parking .rc-tile-icon > i,
 
