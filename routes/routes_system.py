@@ -1022,6 +1022,7 @@ def driver_update_portal_info(driver_id):
         'verify_license_url': media_url_filter(driver.verify_license_photo_path) if driver.verify_license_photo_path else '',
         # Bank & Uniform
         'bank_name': driver.bank_name or '',
+        'branch_code': driver.branch_code or '',
         'account_no': driver.account_no or '',
         'account_title': driver.account_title or '',
         'shirt_size': driver.shirt_size or '',
@@ -1210,6 +1211,7 @@ def driver_update_portal_save(update_type):
         elif update_type == 'bank_uniform':
             fields = {
                 'bank_name': request.form.get('bank_name', '').strip(),
+                'branch_code': request.form.get('branch_code', '').strip(),
                 'account_no': request.form.get('account_no', '').strip(),
                 'account_title': request.form.get('account_title', '').strip(),
                 'shirt_size': request.form.get('shirt_size', '').strip(),

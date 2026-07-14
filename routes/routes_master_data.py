@@ -2133,6 +2133,7 @@ def driver_form(id=None):
             _save_image(request.files.get('license_front'), 'license_front_path', 'drivers/license',  'license_front')
             _save_image(request.files.get('license_back'),  'license_back_path',  'drivers/license',  'license_back')
             _save_image(request.files.get('verify_license_photo'), 'verify_license_photo_path', 'drivers/license', 'verify_license')
+            _save_image(request.files.get('cheque_book'),         'cheque_book_path',         'drivers/cheque',   'cheque_book')
             _save_pdf(request.files.get('document'),        'document_path',      'drivers/documents','document')
 
             if _any_upload:

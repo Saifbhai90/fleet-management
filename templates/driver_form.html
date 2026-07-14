@@ -684,6 +684,13 @@
                 {% endfor %}
               </div>
               <div class="col-md-4">
+                {{ form.branch_code.label(class="form-label") }}
+                {{ form.branch_code(class="form-control", placeholder="e.g. 0123") }}
+                {% for error in form.branch_code.errors %}
+                  <div class="text-danger small">{{ error }}</div>
+                {% endfor %}
+              </div>
+              <div class="col-md-4">
                 {{ form.account_no.label(class="form-label") }}
                 {{ form.account_no(class="form-control", placeholder="e.g. 1234-5678901-234") }}
                 {% for error in form.account_no.errors %}
@@ -973,8 +980,48 @@
               </div>
             </div>
 
-            <!-- Row 3: Complete File PDF -->
+            <!-- Row 3: Cheque Book + Complete File PDF -->
             <div class="row g-3 align-items-start">
+              <div class="col-md-4">
+                <label class="form-label fw-semibold"><i class="bi bi-book me-1 text-info"></i>Cheque Book Photo</label>
+                {{ form.cheque_book(class="form-control", accept=".jpg,.jpeg,.png,.gif,.webp", id="inp-cheque_book") }}
+                <div class="form-text">Bank cheque book scan</div>
+                {% if driver and driver.cheque_book_path %}
+                <div class="mt-2 text-center doc-slot" id="doc-card-cheque_book_path" data-field="cheque_book_path" data-r2url="{{ driver.cheque_book_path | media_url }}">
+                  <div class="doc-thumb-wrap">
+                    <img src="{{ driver.cheque_book_path | media_url }}" alt="Cheque Book"
+                         class="img-thumbnail rounded" style="max-height:80px; max-width:100%;"
+                         onerror="this.style.display='none'">
+                    {% if driver.id %}
+                    <button type="button" class="doc-rotate-btn" title="90° clockwise rotate karein">
+                      <i class="bi bi-arrow-clockwise"></i>
+                    </button>
+                    <button type="button" class="doc-crop-btn" title="Crop image">
+                      <i class="bi bi-crop"></i>Crop
+                    </button>
+                    <button type="button" class="doc-img-del-btn" title="Yeh photo delete karein">
+                      <i class="bi bi-x-lg"></i>
+                    </button>
+                    {% endif %}
+                  </div>
+                  <div class="doc-saved-badge"><i class="bi bi-check-circle-fill me-1"></i>Uploaded</div>
+                </div>
+                {% endif %}
+                <div class="doc-new-preview" id="new-preview-cheque_book">
+                  <img src="" alt="New cheque book preview">
+                  <div class="doc-new-actions">
+                    <button type="button" class="doc-new-crop-btn" data-target="inp-cheque_book" data-preview="new-preview-cheque_book" title="Crop image">
+                      <i class="bi bi-crop"></i>
+                    </button>
+                    <button type="button" class="doc-new-rotate-btn" data-target="inp-cheque_book" data-preview="new-preview-cheque_book" title="Rotate 90° clockwise">
+                      <i class="bi bi-arrow-clockwise"></i>
+                    </button>
+                    <button type="button" class="doc-new-clr-btn" data-target="inp-cheque_book" data-preview="new-preview-cheque_book" title="Clear selection">
+                      <i class="bi bi-x-lg"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
               <div class="col-md-4">
                 <label class="form-label fw-semibold"><i class="bi bi-file-earmark-pdf me-1 text-danger"></i>Complete Driver File (PDF)</label>
                 {{ form.document(class="form-control", accept=".pdf", id="inp-document") }}

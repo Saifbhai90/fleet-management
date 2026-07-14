@@ -504,6 +504,8 @@ if _run_startup_tasks:
                 ('vehicle', 'vehicle_family', 'VARCHAR(100)'),
                 ('driver', 'license_valid_from', 'DATE'),
                 ('driver', 'verify_license_photo_path', 'VARCHAR(500)'),
+                ('driver', 'branch_code', 'VARCHAR(50)'),
+                ('driver', 'cheque_book_path', 'VARCHAR(500)'),
                 ('driver_document_history', 'batch_id', 'VARCHAR(36)'),
                 ('driver_document_history', 'update_source', 'VARCHAR(20)'),
                 ('app_release', 'apk_r2_url', 'VARCHAR(512)'),

@@ -195,6 +195,7 @@ class DriverForm(FlaskForm):
     
     # Bank & Uniform
     bank_name = StringField('Bank Name')
+    branch_code = StringField('Branch Code')
     account_no = StringField('Account No')
     account_title = StringField('Account Title')
     shirt_size = SelectField('Shirt Size', choices=[
@@ -221,6 +222,8 @@ class DriverForm(FlaskForm):
     license_back = FileField('License Back Photo', validators=[Optional(),
         FileAllowed(['jpg', 'jpeg', 'png', 'gif', 'webp'], 'Only image files allowed')])
     verify_license_photo = FileField('Verify License Photo', validators=[Optional(),
+        FileAllowed(['jpg', 'jpeg', 'png', 'gif', 'webp'], 'Only image files allowed')])
+    cheque_book = FileField('Cheque Book Photo', validators=[Optional(),
         FileAllowed(['jpg', 'jpeg', 'png', 'gif', 'webp'], 'Only image files allowed')])
     document = FileField('Complete Driver File (PDF)', validators=[Optional(),
         FileAllowed(['pdf'], 'Only PDF allowed')])

@@ -1219,8 +1219,12 @@ body.driver-profile-public-view .profile-page { min-height: auto !important; }
         <div class="info-value">{{ driver.bank_name or '—' }}</div>
       </div>
       <div class="info-item">
+        <div class="info-label"><i class="bi bi-hash"></i> Branch Code</div>
+        <div class="info-value">{{ driver.branch_code or '—' }}</div>
+      </div>
+      <div class="info-item">
         <div class="info-label"><i class="bi bi-credit-card-2-front"></i> Account No</div>
-        <div class="info-value">{{ driver.account_no or '—' }}{% if driver.account_no %}<button class="copy-btn" title="Copy Bank Details" onclick="copyBankDetails(this)"><i class="bi bi-clipboard"></i></button><a href="whatsapp://send?text={{ ('Bank: ' ~ (driver.bank_name or '') ~ '\nTitle: ' ~ (driver.account_title or '') ~ '\nA/C: ' ~ (driver.account_no or ''))|urlencode }}" class="wa-share-btn" title="Share via WhatsApp"><i class="bi bi-send"></i></a>{% endif %}</div>
+        <div class="info-value">{{ driver.account_no or '—' }}{% if driver.account_no %}<button class="copy-btn" title="Copy Bank Details" onclick="copyBankDetails(this)"><i class="bi bi-clipboard"></i></button><a href="whatsapp://send?text={{ ('Bank: ' ~ (driver.bank_name or '') ~ '\nBranch: ' ~ (driver.branch_code or '') ~ '\nTitle: ' ~ (driver.account_title or '') ~ '\nA/C: ' ~ (driver.account_no or ''))|urlencode }}" class="wa-share-btn" title="Share via WhatsApp"><i class="bi bi-send"></i></a>{% endif %}</div>
       </div>
       <div class="info-item" style="grid-column:1/-1;">
         <div class="info-label"><i class="bi bi-person-lines-fill"></i> Account Title</div>
@@ -1252,7 +1256,7 @@ body.driver-profile-public-view .profile-page { min-height: auto !important; }
   </div>
 
   <!-- Photos & Documents -->
-  {% set _has_any_doc = driver.photo_path or driver.cnic_front_path or driver.cnic_back_path or driver.license_front_path or driver.license_back_path or driver.verify_license_photo_path or driver.document_path %}
+  {% set _has_any_doc = driver.photo_path or driver.cnic_front_path or driver.cnic_back_path or driver.license_front_path or driver.license_back_path or driver.verify_license_photo_path or driver.cheque_book_path or driver.document_path %}
   {% set dc_pct = ((doc_uploaded / doc_total) * 100)|int if doc_total else 0 %}
   {% set dc_level = 'dc-complete' if doc_uploaded == doc_total else ('dc-partial' if doc_uploaded >= 3 else 'dc-low') %}
   <div class="section-card" id="photos-docs-section">
@@ -1375,8 +1379,23 @@ body.driver-profile-public-view .profile-page { min-height: auto !important; }
         </div>
       </div><!-- /photo-row 2 -->
 
-      <!-- Row 3: Complete Driver File -->
+      <!-- Row 3: Cheque Book + Complete Driver File -->
       <div class="photo-row">
+        <!-- Cheque Book -->
+        <div class="doc-photo-item">
+          <div class="doc-photo-label"><i class="bi bi-book me-1"></i>Cheque Book</div>
+          {% if driver.cheque_book_path %}
+          <div class="doc-photo-thumb-wrap" data-doc-url="{{ driver.cheque_book_path | media_url }}" data-doc-name="Cheque_Book" onclick="openDocModal('{{ driver.cheque_book_path | media_url }}','Cheque Book')">
+            <img src="{{ driver.cheque_book_path | media_url }}" alt="Cheque Book"
+                 onerror="this.parentElement.parentElement.querySelector('.doc-photo-label').insertAdjacentHTML('afterend','<div class=\'doc-photo-missing\'><i class=\'bi bi-exclamation-triangle\'></i><span>Load Error</span></div>');this.parentElement.remove();">
+            <button class="doc-dl-btn" onclick="event.stopPropagation();dlDoc(this)" title="Download"><i class="bi bi-download"></i></button>
+            <div class="zoom-overlay"><i class="bi bi-zoom-in"></i></div>
+          </div>
+          {% else %}
+          <div class="doc-photo-missing"><i class="bi bi-cloud-arrow-up"></i><span>❌ Not Uploaded</span></div>
+          {% endif %}
+        </div>
+
         <!-- Complete Driver File (PDF) -->
         <div class="doc-photo-item">
           <div class="doc-photo-label"><i class="bi bi-file-earmark-pdf me-1"></i>Complete Driver File</div>
@@ -2404,7 +2423,7 @@ body.driver-profile-public-view .profile-page { min-height: auto !important; }
 
   /* ── Copy bank details (Bank Name + Account Title + Account No) ── */
   function copyBankDetails(btn) {
-    var details = 'Bank: {{ driver.bank_name or "" }}\nTitle: {{ driver.account_title or "" }}\nA/C: {{ driver.account_no or "" }}';
+    var details = 'Bank: {{ driver.bank_name or "" }}\nBranch: {{ driver.branch_code or "" }}\nTitle: {{ driver.account_title or "" }}\nA/C: {{ driver.account_no or "" }}';
     navigator.clipboard.writeText(details).then(function() {
       btn.classList.add('copied');
       btn.innerHTML = '<i class="bi bi-check"></i>';
@@ -2750,6 +2769,7 @@ body.driver-profile-public-view .profile-page { min-height: auto !important; }
       '🏦 *BANK DETAIL*',
       WA_SEP,
       bulletLine('Bank Name', f.bank_name),
+      bulletLine('Branch Code', f.branch_code),
       bulletLine('Account No', f.account_no),
       bulletLine('Account Title', f.account_title),
       '',

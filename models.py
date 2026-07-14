@@ -223,6 +223,7 @@ class Driver(db.Model):
     
     # Bank & Sizes
     bank_name = db.Column(db.String(100))
+    branch_code = db.Column(db.String(50))
     account_no = db.Column(db.String(50))
     account_title = db.Column(db.String(100))
     shirt_size = db.Column(db.String(10))
@@ -244,6 +245,7 @@ class Driver(db.Model):
     license_front_path = db.Column(db.String(500), nullable=True)
     license_back_path = db.Column(db.String(500), nullable=True)
     verify_license_photo_path = db.Column(db.String(500), nullable=True)
+    cheque_book_path = db.Column(db.String(500), nullable=True)
     document_path = db.Column(db.String(500), nullable=True)
 
     # Links

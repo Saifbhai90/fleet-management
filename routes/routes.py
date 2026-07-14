@@ -2896,6 +2896,7 @@ def _driver_update_field_data(driver):
         'address': _safe(address),
         'phone': _safe(phone),
         'bank_name': _safe(driver.bank_name),
+        'branch_code': _safe(driver.branch_code),
         'account_no': _safe(driver.account_no),
         'account_title': _safe(driver.account_title),
         'remarks': _safe(driver.remarks),
@@ -2937,6 +2938,7 @@ def _format_driver_update_whatsapp_body(fields):
         '🏦 *BANK DETAIL*',
         sep,
         _bullet('Bank Name', f['bank_name']),
+        _bullet('Branch Code', f['branch_code']),
         _bullet('Account No', f['account_no']),
         _bullet('Account Title', f['account_title']),
         '',
@@ -3605,6 +3607,7 @@ def _driver_to_salary_slip_payload(driver):
         'assign_date': dstr(driver.assign_date),
         'license_no': (driver.license_no or '').strip(),
         'bank_name': (driver.bank_name or '').strip(),
+        'branch_code': (driver.branch_code or '').strip(),
         'account_no': (driver.account_no or '').strip(),
         'account_title': (driver.account_title or '').strip(),
         'district': dist.name if dist else '',
@@ -11615,7 +11618,7 @@ def _driver_profile_view_core(driver_id):
         driver_age = _today.year - driver.dob.year - ((_today.month, _today.day) < (driver.dob.month, driver.dob.day))
     doc_fields = [driver.photo_path, driver.cnic_front_path, driver.cnic_back_path,
                   driver.license_front_path, driver.license_back_path,
-                  driver.verify_license_photo_path, driver.document_path]
+                  driver.verify_license_photo_path, driver.cheque_book_path, driver.document_path]
     doc_uploaded = sum(1 for d in doc_fields if d)
     doc_total = len(doc_fields)
     jh_counts = {'assignment': 0, 'transfer': 0, 'shift_change': 0, 'left': 0, 'rejoin': 0}

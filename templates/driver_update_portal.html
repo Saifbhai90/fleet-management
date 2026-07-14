@@ -321,15 +321,19 @@
                       <input type="text" name="bank_name" id="bank_name_input" class="form-control" placeholder="e.g. HBL">
                     </div>
                     <div class="col-md-4">
+                      <label class="form-label fw-semibold">Branch Code</label>
+                      <input type="text" name="branch_code" id="bank_branch_code_input" class="form-control" placeholder="e.g. 0123">
+                    </div>
+                    <div class="col-md-4">
                       <label class="form-label fw-semibold">Account No</label>
                       <input type="text" name="account_no" id="bank_account_no_input" class="form-control" placeholder="Account number">
                     </div>
+                  </div>
+                  <div class="row g-3 mb-3">
                     <div class="col-md-4">
                       <label class="form-label fw-semibold">Account Title</label>
                       <input type="text" name="account_title" id="bank_account_title_input" class="form-control" placeholder="Account holder name">
                     </div>
-                  </div>
-                  <div class="row g-3 mb-3">
                     <div class="col-md-4">
                       <label class="form-label fw-semibold">Shirt Size</label>
                       <select name="shirt_size" id="bank_shirt_size" class="form-select">
@@ -569,6 +573,7 @@
       }
       else if (prefix === 'bank') {
         document.getElementById('bank_name_input').value = d.bank_name || '';
+        document.getElementById('bank_branch_code_input').value = d.branch_code || '';
         document.getElementById('bank_account_no_input').value = d.account_no || '';
         document.getElementById('bank_account_title_input').value = d.account_title || '';
         setSelectVal('bank_shirt_size', d.shirt_size);
