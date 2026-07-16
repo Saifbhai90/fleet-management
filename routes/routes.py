@@ -11454,7 +11454,7 @@ def _report_centre_visibility(linked_driver_id=None):
 
     fleet_vehicle = (
         c('report_vehicle_summary') or c('vehicles_list') or c('report_vehicle_profile')
-        or c('report_parking_utilization') or c('report_bank_account')
+        or c('report_parking_utilization')
     )
     fleet_project = c('report_project_summary') or c('report_district_summary') or c('report_company_profile')
     fleet_expense = (
@@ -11476,7 +11476,7 @@ def _report_centre_visibility(linked_driver_id=None):
     hr_driver = (
         (bool(linked_id) and c('report_driver_profile'))
         or c('active_drivers_report') or c('driver_seat_available_report') or c('missing_documents_report')
-        or c('penalty_record_list') or c('driver_salary_slip')
+        or c('report_bank_account') or c('penalty_record_list') or c('driver_salary_slip')
     )
     hr_att = c('driver_attendance_report') or c('driver_attendance_tra_report') or c('report_expiry')
     hr_workforce = c('driver_job_left_list') or c('driver_rejoin_list')
