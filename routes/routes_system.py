@@ -1020,6 +1020,7 @@ def driver_update_portal_info(driver_id):
         'license_front_url': media_url_filter(driver.license_front_path) if driver.license_front_path else '',
         'license_back_url': media_url_filter(driver.license_back_path) if driver.license_back_path else '',
         'verify_license_url': media_url_filter(driver.verify_license_photo_path) if driver.verify_license_photo_path else '',
+        'cheque_book_url': media_url_filter(driver.cheque_book_path) if driver.cheque_book_path else '',
         # Bank & Uniform
         'bank_name': driver.bank_name or '',
         'branch_code': driver.branch_code or '',
@@ -1224,6 +1225,8 @@ def driver_update_portal_save(update_type):
                     if _record_change(field_name, old_val, new_val):
                         setattr(driver, field_name, new_val or None)
                         changes_made = True
+
+            _track(_handle_photo_field('cheque_book_path', 'cheque_book', 'drivers/cheque', False))
 
             if not changes_made:
                 flash('No changes to save.', 'warning')

@@ -362,6 +362,13 @@
                       </select>
                     </div>
                   </div>
+                  <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                      <label class="form-label fw-semibold"><i class="bi bi-book me-1 text-info"></i>New Cheque Book Photo</label>
+                      <input type="file" name="cheque_book" class="form-control" accept=".jpg,.jpeg,.png,.gif,.webp">
+                      <div class="form-text">Upload new cheque book scan (optional)</div>
+                    </div>
+                  </div>
                   <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Save Bank & Uniform Update</button>
                 </form>
               </div>
@@ -378,6 +385,7 @@
                   <img id="bank_driver_photo" src="" alt="Driver Photo" class="rounded-circle border" style="width:80px;height:80px;object-fit:cover;display:none;">
                 </div>
                 <div class="driver-info-card" id="bank_info_card"></div>
+                <div class="mt-3" id="bank_current_docs"></div>
               </div>
             </div>
           </div>
@@ -579,6 +587,12 @@
         setSelectVal('bank_shirt_size', d.shirt_size);
         setSelectVal('bank_trouser_size', d.trouser_size);
         setSelectVal('bank_jacket_size', d.jacket_size);
+
+        var bankDocsDiv = document.getElementById('bank_current_docs');
+        var bankDocsHtml = '<h6 class="fw-bold small text-muted mb-2">Current Documents</h6><div class="d-flex gap-2 flex-wrap">';
+        if (d.cheque_book_url) bankDocsHtml += '<a href="' + d.cheque_book_url + '" target="_blank"><img src="' + d.cheque_book_url + '" class="doc-thumb" title="Cheque Book"></a>';
+        bankDocsHtml += '</div>';
+        if (bankDocsDiv) bankDocsDiv.innerHTML = bankDocsHtml;
 
         document.getElementById('bank_form_area').style.display = 'block';
       }
