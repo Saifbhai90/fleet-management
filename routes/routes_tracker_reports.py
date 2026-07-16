@@ -1947,6 +1947,7 @@ def missing_documents_report():
         ('license_front', 'license_front_path',   'License Front'),
         ('license_back',  'license_back_path',    'License Back'),
         ('verify_license','verify_license_photo_path', 'Verify License'),
+        ('cheque_book',   'cheque_book_path',     'Cheque Book'),
         ('driver_file',   'document_path',        'Complete Driver File'),
     ]
     all_doc_keys = [k for k, _, _ in DOC_FIELDS]
@@ -2089,6 +2090,7 @@ def missing_documents_report_print():
         ('license_front', 'license_front_path',   'License Front'),
         ('license_back',  'license_back_path',    'License Back'),
         ('verify_license','verify_license_photo_path', 'Verify License'),
+        ('cheque_book',   'cheque_book_path',     'Cheque Book'),
         ('driver_file',   'document_path',        'Complete Driver File'),
     ]
     all_doc_keys = [k for k, _, _ in DOC_FIELDS]
@@ -2187,6 +2189,135 @@ def missing_documents_report_print():
         district_label=district_label,
         doc_filter_labels=doc_filter_labels,
         now=_dt.now().strftime('%d %b %Y, %I:%M %p'),
+    )
+
+
+# ════════════════════════════════════════════════════════════════════════════════
+# Driver Bank Account Report
+# ════════════════════════════════════════════════════════════════════════════════
+
+@app.route('/reports/bank-account')
+def report_bank_account():
+    from auth_utils import get_user_context
+
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+    allowed_projects  = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles  = user_context.get('allowed_vehicles', set())
+    allowed_shifts    = user_context.get('allowed_shifts', set())
+
+    project_id  = request.args.get('project_id', type=int) or 0
+    district_id = request.args.get('district_id', type=int) or 0
+    driver_status = (request.args.get('driver_status') or 'active').strip()
+    bank_name_filter = (request.args.get('bank_name') or '').strip()
+
+    MISSING_FIELDS = [
+        ('missing_bank_name',      'bank_name',      'Bank Name'),
+        ('missing_branch_code',    'branch_code',    'Branch Code'),
+        ('missing_account_no',     'account_no',     'Account No'),
+        ('missing_account_title',  'account_title',  'Account Title'),
+    ]
+    all_missing_keys = [k for k, _, _ in MISSING_FIELDS]
+    missing_filters = request.args.getlist('missing_filter')
+    is_first_load = 'missing_filter' not in request.args and 'project_id' not in request.args
+    if is_first_load:
+        missing_filters = []
+
+    # Auto-select if only 1 option available
+    disable_project = False
+    disable_district = False
+    if not is_master_or_admin:
+        if len(allowed_projects) == 1:
+            if not project_id:
+                project_id = next(iter(allowed_projects))
+            disable_project = True
+        if len(allowed_districts) == 1:
+            if not district_id:
+                district_id = next(iter(allowed_districts))
+            disable_district = True
+
+    query = Driver.query
+
+    if driver_status == 'active':
+        query = query.filter(Driver.status != 'Left')
+    elif driver_status == 'left':
+        query = query.filter(Driver.status == 'Left')
+
+    if not is_master_or_admin:
+        if allowed_vehicles:
+            query = query.filter(Driver.vehicle_id.in_(list(allowed_vehicles)))
+        elif allowed_projects or allowed_districts:
+            if allowed_projects:
+                query = query.filter(Driver.project_id.in_(list(allowed_projects)))
+            if allowed_districts:
+                query = query.filter(Driver.district_id.in_(list(allowed_districts)))
+        if allowed_shifts:
+            query = query.filter(Driver.shift.in_(list(allowed_shifts)))
+
+    if project_id:
+        query = query.filter(Driver.project_id == project_id)
+    if district_id:
+        query = query.filter(Driver.district_id == district_id)
+
+    if bank_name_filter:
+        query = query.filter(Driver.bank_name.ilike('%' + bank_name_filter + '%'))
+
+    if missing_filters:
+        field_map = {k: v for k, v, _ in MISSING_FIELDS}
+        conditions = []
+        for mf in missing_filters:
+            col_name = field_map.get(mf)
+            if col_name:
+                col = getattr(Driver, col_name)
+                conditions.append(or_(col.is_(None), col == ''))
+        if conditions:
+            query = query.filter(or_(*conditions))
+
+    all_drivers = query.options(
+        db.joinedload(Driver.vehicle),
+        db.joinedload(Driver.district),
+        db.joinedload(Driver.project),
+    ).order_by(Driver.name).all()
+
+    # Dropdown choices
+    pq = Project.query
+    if not is_master_or_admin and allowed_projects:
+        pq = pq.filter(Project.id.in_(list(allowed_projects)))
+    project_choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in pq.order_by(Project.name).all()]
+
+    dq = District.query
+    if project_id:
+        from models import project_district
+        dq = dq.join(project_district).filter(project_district.c.project_id == project_id)
+    if not is_master_or_admin and allowed_districts:
+        dq = dq.filter(District.id.in_(list(allowed_districts)))
+    district_choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in dq.order_by(District.name).all()]
+
+    rows = []
+    for d in all_drivers:
+        rows.append({
+            'driver': d,
+            'district_name': d.district.name if d.district else '-',
+            'project_name': d.project.name if d.project else '-',
+            'vehicle_no': d.vehicle.vehicle_no if d.vehicle else '-',
+            'status': d.status or 'Active',
+        })
+
+    return render_template(
+        'report_bank_account.html',
+        rows=rows, total=len(rows),
+        project_id=project_id, district_id=district_id,
+        driver_status=driver_status,
+        bank_name_filter=bank_name_filter,
+        missing_filters=missing_filters,
+        project_choices=project_choices,
+        district_choices=district_choices,
+        missing_fields=MISSING_FIELDS,
+        disable_project=disable_project,
+        disable_district=disable_district,
+        is_master_or_admin=is_master_or_admin,
     )
 
 

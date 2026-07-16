@@ -11371,6 +11371,7 @@ def _report_centre_badge_counts(can_page, is_master):
                     Driver.license_front_path.is_(None), Driver.license_front_path == '',
                     Driver.license_back_path.is_(None), Driver.license_back_path == '',
                     Driver.verify_license_photo_path.is_(None), Driver.verify_license_photo_path == '',
+                    Driver.cheque_book_path.is_(None), Driver.cheque_book_path == '',
                     Driver.document_path.is_(None), Driver.document_path == '',
                 )
             )
@@ -11453,7 +11454,7 @@ def _report_centre_visibility(linked_driver_id=None):
 
     fleet_vehicle = (
         c('report_vehicle_summary') or c('vehicles_list') or c('report_vehicle_profile')
-        or c('report_parking_utilization')
+        or c('report_parking_utilization') or c('report_bank_account')
     )
     fleet_project = c('report_project_summary') or c('report_district_summary') or c('report_company_profile')
     fleet_expense = (

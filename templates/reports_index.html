@@ -346,6 +346,12 @@
 
             {% endif %}
 
+            {% if can_see_page('report_bank_account') %}
+
+            {{ report_link(url_for('report_bank_account', nav_from='reports'), 'fa-solid fa-building-columns', 'Bank Account Details Report', 'rc-tile--bank-account', 'Driver bank account, branch code and account details') }}
+
+            {% endif %}
+
             {% if can_see_page('report_parking_utilization') %}
 
             {{ report_link(url_for('report_parking_utilization', nav_from='reports'), 'fa-solid fa-square-parking', 'Parking Utilization', 'rc-tile--parking') }}
@@ -2736,6 +2742,8 @@ html.capacitor-native .rc-web-only { display: none !important; }
 .rc-tile--vehicle-profile .rc-tile-icon > i,
 
 .rc-tile--engine-chassis .rc-tile-icon > i,
+
+.rc-tile--bank-account .rc-tile-icon > i,
 
 .rc-tile--parking .rc-tile-icon > i,
 

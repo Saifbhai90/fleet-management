@@ -1,0 +1,460 @@
+{% extends "base.html" %}
+{% block title %}Bank Account Details Report{% endblock %}
+{% block head %}
+<style>
+.ba-copy-cell {
+  cursor: pointer;
+  position: relative;
+  transition: background 0.15s ease;
+  border-radius: 6px;
+  padding: 2px 8px !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  user-select: none;
+}
+.ba-copy-cell:hover { background: #e7f3ff !important; }
+.ba-copy-cell:active { background: #d0e8ff !important; transform: scale(0.97); }
+.ba-copy-cell .ba-copy-icon {
+  font-size: 0.65rem;
+  color: #94a3b8;
+  opacity: 0;
+  transition: opacity 0.15s ease, color 0.15s ease;
+  flex-shrink: 0;
+}
+.ba-copy-cell:hover .ba-copy-icon { opacity: 1; color: #3b82f6; }
+.ba-copy-cell.ba-copied { background: #dcfce7 !important; }
+.ba-copy-cell.ba-copied .ba-copy-icon { opacity: 1; color: #16a34a; }
+
+.ba-toast {
+  position: fixed;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%) translateY(80px);
+  background: #075e54;
+  color: #fff;
+  padding: 10px 22px 10px 18px;
+  border-radius: 50px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  font-family: 'Segoe UI', Arial, sans-serif;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.25), 0 2px 8px rgba(0,0,0,0.12);
+  z-index: 100070;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  opacity: 0;
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.25s ease;
+  pointer-events: none;
+  white-space: nowrap;
+  max-width: 90vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ba-toast.ba-show { transform: translateX(-50%) translateY(0); opacity: 1; }
+.ba-toast .ba-toast-icon {
+  width: 22px; height: 22px; border-radius: 50%;
+  background: #25d366; display: flex; align-items: center; justify-content: center;
+  font-size: 0.7rem; flex-shrink: 0;
+}
+.ba-toast .ba-toast-text { overflow: hidden; text-overflow: ellipsis; }
+
+.ba-row-hint { font-size: 0.65rem; color: #94a3b8; font-weight: 400; margin-left: 4px; white-space: nowrap; }
+.ba-row-hint i { color: #25d366; }
+
+.status-badge { font-size: 0.7rem; padding: 2px 8px; border-radius: 50px; font-weight: 600; }
+.status-active { background: #dcfce7; color: #16a34a; }
+.status-left { background: #fee2e2; color: #dc2626; }
+
+.missing-field { color: #dc2626; font-weight: 600; }
+.field-present { color: #374151; }
+
+.doc-check-group { display: flex; flex-wrap: wrap; gap: 0.35rem 0.6rem; padding-top: 0.2rem; }
+.doc-check { display: flex; align-items: center; gap: 0.3rem; cursor: pointer; user-select: none; }
+.doc-check input[type="checkbox"] {
+    width: 15px; height: 15px; accent-color: #1e40af; cursor: pointer;
+    border: 1.5px solid #1e40af; border-radius: 3px; flex-shrink: 0;
+}
+.doc-check label { font-size: 0.8rem; font-weight: 600; color: #37474f; cursor: pointer; margin: 0; white-space: nowrap; }
+.doc-check input[type="checkbox"]:checked + label { color: #1e40af; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="container-fluid">
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+      {% from 'partials/nav_back_button.html' import nav_back_button, nav_from_hidden with context %}
+      {{ nav_back_button() }}
+      <h2 class="mb-0"><i class="bi bi-bank2 me-2 text-primary"></i>Bank Account Details Report</h2>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+      <button class="btn btn-outline-secondary btn-sm" id="btnPrintReport" title="Print / Preview"><i class="bi bi-eye me-1"></i>Print / Preview</button>
+      <button class="btn btn-outline-success btn-sm" id="btnExportReport" title="Export to Excel"><i class="bi bi-file-earmark-excel me-1"></i>Export</button>
+    </div>
+  </div>
+
+  <div class="card shadow-sm border-0 rounded-3 mb-4">
+    <div class="card-body">
+      <form method="get" action="{{ url_for('report_bank_account') }}" class="row g-3 align-items-end">
+        {{ nav_from_hidden() }}
+        <div class="col-md-2">
+          <label class="form-label">Project</label>
+          {% if disable_project %}<input type="hidden" name="project_id" value="{{ project_id }}">{% endif %}
+          <select name="project_id" id="baProjectSelect" class="form-select form-select-sm search-select" data-placeholder="Search project..." {% if disable_project %}disabled{% endif %}>
+            {% for val, label in project_choices %}
+              <option value="{{ val }}" {% if project_id == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">District</label>
+          {% if disable_district %}<input type="hidden" name="district_id" value="{{ district_id }}">{% endif %}
+          <select name="district_id" id="baDistrictSelect" class="form-select form-select-sm search-select" data-placeholder="Search district..." {% if disable_district %}disabled{% endif %}>
+            {% for val, label in district_choices %}
+              <option value="{{ val }}" {% if district_id == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">Driver Status</label>
+          <select name="driver_status" class="form-select form-select-sm">
+            <option value="active" {% if driver_status == 'active' %}selected{% endif %}>Active</option>
+            <option value="left" {% if driver_status == 'left' %}selected{% endif %}>Left</option>
+            <option value="all" {% if driver_status == 'all' %}selected{% endif %}>All</option>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">Bank Name</label>
+          <input type="text" name="bank_name" value="{{ bank_name_filter }}" class="form-control form-control-sm" placeholder="e.g. HBL">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label" style="font-size:.78rem;font-weight:600;color:#455a64;">Missing Bank Details</label>
+          <div class="doc-check-group">
+            {% for key, attr, label in missing_fields %}
+            <span class="doc-check">
+              <input type="checkbox" name="missing_filter" value="{{ key }}" id="chk_{{ key }}"
+                     {% if key in missing_filters %}checked{% endif %}>
+              <label for="chk_{{ key }}">{{ label }}</label>
+            </span>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="col-md-2">
+          <button type="submit" class="btn btn-primary btn-sm w-100">
+            <i class="bi bi-search me-1"></i>Show
+          </button>
+        </div>
+      </form>
+      {% if project_id or district_id or driver_status != 'active' or bank_name_filter or missing_filters %}
+      <div class="mt-2">
+        <a href="{{ url_for('report_bank_account') }}" class="btn btn-outline-secondary btn-sm">
+          <i class="bi bi-x-circle me-1"></i>Clear Filters
+        </a>
+        <span class="ms-2 badge bg-primary">{{ total }} driver{{ 's' if total != 1 else '' }} found</span>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card shadow border-0 rounded-3 overflow-hidden">
+    <div class="card-header bg-dark text-white py-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
+      <span class="fw-semibold">Bank Account Details Report</span>
+      <span class="ba-row-hint d-none d-md-inline"><i class="bi bi-info-circle"></i> Click Account No to copy full row</span>
+      <div class="d-flex align-items-center gap-2">
+        <select class="form-select form-select-sm bg-dark text-white border-secondary" style="width:70px;" id="baPageLen">
+          <option value="10">10</option>
+          <option value="25">25</option>
+          <option value="50" selected>50</option>
+          <option value="100">100</option>
+          <option value="-1">All</option>
+        </select>
+        <input type="text" id="baSearchInput" class="form-control form-control-sm bg-dark text-white border-secondary" placeholder="Search table..." style="max-width:200px;" autocomplete="off">
+      </div>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0" id="baTable">
+          <thead class="table-light" style="font-size:.82rem;">
+            <tr>
+              <th class="ps-3" style="width:50px;">#</th>
+              <th>District</th>
+              <th>Project</th>
+              <th style="white-space:nowrap;">Vehicle No</th>
+              <th>Driver Name</th>
+              <th>Father Name</th>
+              <th>Bank Name</th>
+              <th>Branch Code</th>
+              <th style="white-space:nowrap;">Account No</th>
+              <th>Account Title</th>
+              <th class="text-center">Status</th>
+              <th class="text-center">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in rows %}
+            {% set d = row.driver %}
+            <tr style="font-size:.82rem;">
+              <td class="ps-3">{{ loop.index }}</td>
+              <td>{{ row.district_name }}</td>
+              <td>{{ row.project_name }}</td>
+              <td class="fw-medium">{{ row.vehicle_no }}</td>
+              <td>{{ d.name or '-' }}</td>
+              <td>{{ d.father_name or '-' }}</td>
+              <td>
+                {% if d.bank_name %}
+                  <span class="field-present">{{ d.bank_name }}</span>
+                {% else %}
+                  <span class="missing-field">—</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if d.branch_code %}
+                  <span class="field-present">{{ d.branch_code }}</span>
+                {% else %}
+                  <span class="missing-field">—</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if d.account_no %}
+                  <span class="ba-copy-cell text-body" data-copy-row
+                        data-sr="{{ loop.index }}"
+                        data-district="{{ row.district_name }}"
+                        data-project="{{ row.project_name }}"
+                        data-vehicle="{{ row.vehicle_no }}"
+                        data-driver="{{ d.name or '-' }}"
+                        data-father="{{ d.father_name or '-' }}"
+                        data-bank="{{ d.bank_name or '-' }}"
+                        data-branch="{{ d.branch_code or '-' }}"
+                        data-account="{{ d.account_no }}"
+                        data-title="{{ d.account_title or '-' }}"
+                        data-status="{{ row.status }}">
+                    {{ d.account_no }}
+                    <i class="bi bi-clipboard ba-copy-icon"></i>
+                  </span>
+                {% else %}
+                  <span class="missing-field">—</span>
+                {% endif %}
+              </td>
+              <td>{{ d.account_title or '—' }}</td>
+              <td class="text-center">
+                {% if row.status == 'Left' %}
+                  <span class="status-badge status-left">Left</span>
+                {% else %}
+                  <span class="status-badge status-active">Active</span>
+                {% endif %}
+              </td>
+              <td class="text-center">
+                <a href="{{ url_for('report_driver_profile', driver_id=d.id) }}?ref=/reports/bank-account"
+                   class="btn btn-outline-primary btn-sm py-0 px-2" title="View Driver Profile">
+                  <i class="bi bi-person-lines-fill"></i>
+                </a>
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="12" class="text-center py-5 text-muted">
+                <i class="bi bi-bank2 display-6 d-block mb-2"></i>
+                No drivers found for the selected filters.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ── WhatsApp-style row copy to clipboard ── */
+(function() {
+  var toastTimer = null;
+  var toastEl = null;
+
+  function _ensureToast() {
+    if (toastEl) return toastEl;
+    toastEl = document.createElement('div');
+    toastEl.className = 'ba-toast';
+    toastEl.innerHTML = '<span class="ba-toast-icon"><i class="bi bi-check2"></i></span><span class="ba-toast-text"></span>';
+    document.body.appendChild(toastEl);
+    return toastEl;
+  }
+
+  function _showToast(msg) {
+    var t = _ensureToast();
+    t.querySelector('.ba-toast-text').textContent = msg;
+    t.classList.add('ba-show');
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(function() { t.classList.remove('ba-show'); }, 2200);
+  }
+
+  function _copyToClipboard(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text);
+    }
+    return new Promise(function(resolve, reject) {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.cssText = 'position:fixed;opacity:0;pointer-events:none;';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); resolve(); } catch(e) { reject(e); }
+      document.body.removeChild(ta);
+    });
+  }
+
+  function _buildRowText(el) {
+    var sr       = el.getAttribute('data-sr') || '';
+    var district = el.getAttribute('data-district') || '-';
+    var project  = el.getAttribute('data-project') || '-';
+    var vehicle  = el.getAttribute('data-vehicle') || '';
+    var driver   = el.getAttribute('data-driver') || '-';
+    var father   = el.getAttribute('data-father') || '-';
+    var bank     = el.getAttribute('data-bank') || '-';
+    var branch   = el.getAttribute('data-branch') || '-';
+    var account  = el.getAttribute('data-account') || '-';
+    var title    = el.getAttribute('data-title') || '-';
+    var status   = el.getAttribute('data-status') || '-';
+
+    return '#' + sr + '  ' +
+           'District: ' + district + '  |  ' +
+           'Project: ' + project + '  |  ' +
+           'Vehicle: ' + vehicle + '  |  ' +
+           'Driver: ' + driver + '  |  ' +
+           'Father: ' + father + '  |  ' +
+           'Bank: ' + bank + '  |  ' +
+           'Branch: ' + branch + '  |  ' +
+           'A/C: ' + account + '  |  ' +
+           'Title: ' + title + '  |  ' +
+           'Status: ' + status;
+  }
+
+  function _handleCopyClick(e) {
+    var cell = e.currentTarget;
+    var text = _buildRowText(cell);
+    _copyToClipboard(text).then(function() {
+      cell.classList.add('ba-copied');
+      var icon = cell.querySelector('.ba-copy-icon');
+      if (icon) { icon.classList.remove('bi-clipboard'); icon.classList.add('bi-check2'); }
+      _showToast('Row copied to clipboard');
+      setTimeout(function() {
+        cell.classList.remove('ba-copied');
+        if (icon) { icon.classList.remove('bi-check2'); icon.classList.add('bi-clipboard'); }
+      }, 1500);
+    }).catch(function() {
+      _showToast('Copy failed — please try again');
+    });
+  }
+
+  function _bindCopyCells() {
+    document.querySelectorAll('[data-copy-row]').forEach(function(el) {
+      if (el.dataset.baCopyBound === '1') return;
+      el.dataset.baCopyBound = '1';
+      el.addEventListener('click', _handleCopyClick);
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _bindCopyCells);
+  } else {
+    _bindCopyCells();
+  }
+
+  if (window.jQuery) {
+    jQuery(document).on('draw.dt', '#baTable', function() { _bindCopyCells(); });
+  }
+})();
+</script>
+
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+
+<script>
+  $(document).ready(function () {
+    if (window.innerWidth < 768) return;
+    var table = $('#baTable').DataTable({
+      pageLength: 50,
+      searching: true,
+      order: [[1, 'asc']],
+      dom: 'rt<"d-flex justify-content-between align-items-center p-2"ip>',
+      buttons: []
+    });
+
+    (function() {
+        var searchVal = '';
+        $.fn.dataTable.ext.search.push(function(settings, data) {
+            if (settings.nTable.id !== 'baTable') return true;
+            if (!searchVal) return true;
+            var words = searchVal.toLowerCase().split(/\s+/).filter(Boolean);
+            var rowText = data.join(' ').toLowerCase();
+            for (var i = 0; i < words.length; i++) {
+                if (rowText.indexOf(words[i]) === -1) return false;
+            }
+            return true;
+        });
+        $('#baSearchInput').on('keyup input', function () {
+            searchVal = this.value.trim();
+            table.draw();
+        });
+    })();
+    $('#baPageLen').on('change', function () { table.page.len(parseInt(this.value)).draw(); });
+  });
+</script>
+
+<script>
+(function() {
+  function _initBaExport() {
+    if (!window.fleetPrintExport) return;
+    var exportBtn = document.getElementById('btnExportReport');
+    if (!exportBtn || exportBtn.dataset.fleetExportMenuBound === '1') return;
+    window.fleetPrintExport(
+      'baTable',
+      'Bank Account Details Report',
+      'Bank_Account_Details_Report.csv',
+      {
+        columnOrder: ['#', 'District', 'Project', 'Vehicle No', 'Driver Name', 'Father Name', 'Bank Name', 'Branch Code', 'Account No', 'Account Title', 'Status', 'Action']
+      }
+    );
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _initBaExport);
+  } else {
+    _initBaExport();
+  }
+})();
+</script>
+
+<script>
+(function() {
+  var projSel = document.getElementById('baProjectSelect');
+  var distSel = document.getElementById('baDistrictSelect');
+  if (!projSel || !distSel) return;
+
+  function rebuildSelect(sel, items, valueKey, labelKey, allLabel) {
+    if (sel.tomselect) { sel.tomselect.destroy(); }
+    sel.innerHTML = '<option value="0">' + allLabel + '</option>';
+    (items || []).forEach(function(item) {
+      var opt = document.createElement('option');
+      opt.value = item[valueKey];
+      opt.textContent = item[labelKey];
+      sel.appendChild(opt);
+    });
+    initSearchableDropdowns(sel.parentNode);
+  }
+
+  function loadDistricts(pid) {
+    if (!pid || pid === '0') {
+      rebuildSelect(distSel, [], 'id', 'name', '-- All Districts --');
+      return;
+    }
+    fetch('/api/filter/districts-by-project?project_id=' + pid)
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        rebuildSelect(distSel, data, 'id', 'name', '-- All Districts --');
+      }).catch(function() {});
+  }
+
+  projSel.addEventListener('change', function() { loadDistricts(this.value); });
+})();
+</script>
+{% endblock %}
