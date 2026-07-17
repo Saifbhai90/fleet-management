@@ -309,6 +309,43 @@ HUBS = {
             },
         ],
     },
+    'fleet-tracking': {
+        'title': 'Fleet Tracking',
+        'header_icon': 'bi-broadcast',
+        'section_perm': None,
+        'extra_endpoints': (
+            'tracking_dashboard', 'tracking_vehicle_detail',
+            'tracking_history', 'tracking_trips', 'tracking_fleet_report',
+            'tracking_trends', 'tracking_alerts', 'tracking_settings',
+            'tracking_settings_account_new', 'tracking_settings_account_edit',
+            'tracking_settings_account_delete', 'tracking_settings_account_test',
+            'tracking_settings_account_sync', 'tracking_settings_link_vehicle',
+            'tracking_settings_start_polling',
+            'api_tracking_positions', 'api_tracking_refresh',
+            'api_tracking_history', 'api_tracking_vehicles',
+            'api_tracking_internal_vehicles',
+            'tracking_trips_export_csv',
+        ),
+        'sections': [
+            {
+                'title': 'Live Tracking',
+                'items': [
+                    _item('tracking_dashboard', 'Live Map', 'fa-solid fa-map-location-dot', 'rc-tile--tracker'),
+                    _item('tracking_history', 'Route History', 'fa-solid fa-clock-rotate-left', 'rc-tile--tracker'),
+                    _item('tracking_trips', 'Trips Report', 'fa-solid fa-table-list', 'rc-tile--tracker'),
+                ],
+            },
+            {
+                'title': 'Reports & Analytics',
+                'items': [
+                    _item('tracking_fleet_report', 'Fleet Report', 'fa-solid fa-chart-column', 'rc-tile--tracker'),
+                    _item('tracking_trends', 'Trends', 'fa-solid fa-chart-line', 'rc-tile--tracker'),
+                    _item('tracking_alerts', 'Alerts', 'fa-solid fa-bell', 'rc-tile--tracker'),
+                    _item('tracking_settings', 'Tracking Settings', 'fa-solid fa-gear', 'rc-tile--tracker'),
+                ],
+            },
+        ],
+    },
     'administration': {
         'title': 'Administration',
         'header_icon': 'bi-shield-lock',

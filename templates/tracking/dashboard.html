@@ -1,0 +1,438 @@
+{% extends 'base.html' %}
+{% block title %}Live Tracking Dashboard — Fleet Manager{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+  /* ── Full-height dark tracking layout ── */
+  .tracking-wrap {
+    display: flex; flex-direction: column; height: calc(100vh - 60px);
+    margin: -15px -12px 0 -12px; overflow: hidden;
+  }
+  .tracking-topbar {
+    height: 50px; background: linear-gradient(90deg,#0b3d91,#1a5fb4);
+    display: flex; align-items: center; padding: 0 16px; gap: 10px;
+    box-shadow: 0 2px 8px rgba(0,0,0,.4); z-index: 5; flex-shrink: 0;
+  }
+  .tb-title { font-size: 16px; font-weight: 700; color: #fff; white-space: nowrap; }
+  .tb-spacer { flex: 1; }
+  .tb-stats { display: flex; gap: 8px; }
+  .tb-stat { background: rgba(255,255,255,.12); border-radius: 8px; padding: 3px 10px; text-align: center; min-width: 60px; }
+  .tb-stat .num { font-size: 16px; font-weight: 800; line-height: 1.1; color: #fff; }
+  .tb-stat .lbl { font-size: 9px; color: #cfe4ff; text-transform: uppercase; }
+  .tb-stat.moving .num { color: #4ade80; }
+  .tb-stat.stopped .num { color: #f87171; }
+  .tb-stat.idle .num { color: #fbbf24; }
+  .tb-stat.total .num { color: #60a5fa; }
+  .tb-updated { font-size: 11px; color: #9ec5ff; white-space: nowrap; }
+  .tb-btn { background: rgba(255,255,255,.15); border: 1px solid rgba(255,255,255,.2); color: #fff; border-radius: 6px; padding: 4px 10px; font-size: 12px; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; }
+  .tb-btn:hover { background: rgba(255,255,255,.25); color: #fff; }
+  .tb-select { background: rgba(255,255,255,.15); border: 1px solid rgba(255,255,255,.2); color: #fff; border-radius: 6px; padding: 4px 8px; font-size: 12px; outline: none; }
+  .tb-select option { background: #1a2632; color: #fff; }
+
+  .tracking-body { display: flex; flex: 1; overflow: hidden; }
+
+  /* ── Sidebar ── */
+  .tracking-sidebar { width: 320px; background: #1a2632; border-right: 1px solid #2a3a4a; display: flex; flex-direction: column; flex-shrink: 0; }
+  .ts-search { padding: 10px; border-bottom: 1px solid #2a3a4a; }
+  .ts-search input { width: 100%; padding: 8px 12px; border-radius: 6px; border: 1px solid #2a3a4a; background: #0f1923; color: #e0e0e0; font-size: 13px; outline: none; }
+  .ts-search input:focus { border-color: #1a5fb4; }
+  .ts-filters { display: flex; gap: 4px; margin-top: 8px; }
+  .ts-filters button { flex: 1; padding: 4px 6px; border-radius: 5px; border: 1px solid #2a3a4a; background: #0f1923; color: #94a3b8; font-size: 11px; cursor: pointer; transition: all .15s; }
+  .ts-filters button.active { background: #1a5fb4; color: #fff; border-color: #1a5fb4; }
+  .ts-list { flex: 1; overflow-y: auto; }
+  .ts-list::-webkit-scrollbar { width: 6px; }
+  .ts-list::-webkit-scrollbar-thumb { background: #2a3a4a; border-radius: 3px; }
+
+  .vrow { padding: 8px 12px; border-bottom: 1px solid #2a3a4a; cursor: pointer; display: flex; align-items: center; gap: 10px; transition: background .15s; }
+  .vrow:hover { background: #243441; }
+  .vrow.active { background: #1a3a5a; border-left: 3px solid #1a5fb4; }
+  .vdot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .vdot.Moving { background: #4ade80; box-shadow: 0 0 6px #4ade80; }
+  .vdot.Stopped { background: #f87171; }
+  .vdot.Idle, .vdot.unknown { background: #fbbf24; }
+  .vinfo { flex: 1; min-width: 0; }
+  .vreg { font-size: 13px; font-weight: 600; color: #e0e0e0; }
+  .vsub { font-size: 11px; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .vspd { font-size: 12px; font-weight: 700; color: #60a5fa; text-align: right; }
+  .vspd small { font-size: 9px; color: #64748b; font-weight: 400; }
+
+  /* ── Map ── */
+  .tracking-map-wrap { flex: 1; position: relative; height: 100%; background: #0a1018; }
+  #trackingMap { width: 100%; height: 100%; }
+
+  /* ── Legend ── */
+  .map-legend { position: absolute; bottom: 20px; right: 10px; z-index: 999; background: rgba(15,25,35,.92); padding: 10px 14px; border-radius: 8px; border: 1px solid #2a3a4a; font-size: 12px; line-height: 1.8; color: #e0e0e0; }
+  .map-legend .row { display: flex; align-items: center; gap: 8px; }
+  .map-legend .dot { width: 10px; height: 10px; border-radius: 50%; }
+
+  /* ── Popup dark theme ── */
+  .leaflet-popup-content-wrapper { background: #1a2632; color: #e0e0e0; border: 1px solid #2a3a4a; border-radius: 10px; }
+  .leaflet-popup-tip { background: #1a2632; }
+  .leaflet-popup-content { font-size: 13px; line-height: 1.5; margin: 12px 16px; }
+  .pop-title { font-weight: 700; font-size: 15px; margin-bottom: 6px; color: #fff; }
+  .pop-row { font-size: 12px; margin: 3px 0; color: #cbd5e1; }
+  .pop-row b { color: #94a3b8; font-weight: 400; }
+  .pop-link { display: inline-block; margin-top: 8px; padding: 4px 14px; border-radius: 6px; background: #1a5fb4; color: #fff; text-decoration: none; font-size: 12px; }
+  .pop-link:hover { background: #2563eb; color: #fff; }
+
+  /* ── Refresh indicator ── */
+  .refresh-indicator { position: absolute; top: 10px; right: 10px; z-index: 1000; background: rgba(15,25,35,.92); color: #60a5fa; padding: 6px 12px; border-radius: 8px; font-size: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); border: 1px solid #2a3a4a; }
+  .refresh-indicator .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid #2a3a4a; border-top-color: #60a5fa; border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Error banner ── */
+  .tracking-error { margin: 8px 12px; padding: 8px 14px; border-radius: 8px; background: rgba(248,113,113,.15); border: 1px solid rgba(248,113,113,.3); color: #fca5a5; font-size: 13px; }
+
+  /* ── Mobile responsive ── */
+  @media (max-width: 767px) {
+    .tracking-sidebar { width: 100%; max-height: 240px; }
+    .tracking-body { flex-direction: column; }
+    .tracking-map-wrap { flex: 1; min-height: 300px; }
+    .tb-title { font-size: 14px; }
+    .tb-stat { min-width: 50px; padding: 2px 6px; }
+    .tb-stat .num { font-size: 14px; }
+    .tb-btn span { display: none; }
+  }
+
+  /* ── Pulse animation for moving vehicles ── */
+  @keyframes pulse {
+    0% { transform: translate(-50%,-50%) scale(1); opacity: 0.6; }
+    100% { transform: translate(-50%,-50%) scale(2.5); opacity: 0; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="tracking-wrap">
+  <!-- Top Bar -->
+  <div class="tracking-topbar">
+    <div class="tb-title"><i class="bi bi-broadcast"></i> Fleet Dashboard</div>
+    {% if accounts %}
+    <select id="accountSelect" class="tb-select">
+      {% for a in accounts %}
+      <option value="{{ a.id }}" {% if a.id == current_account_id %}selected{% endif %}>{{ a.label }} ({{ a.vehicle_count }})</option>
+      {% endfor %}
+    </select>
+    {% endif %}
+    <div class="tb-spacer"></div>
+    <div class="tb-stats">
+      <div class="tb-stat total"><div class="num" id="statTotal">{{ stats.total }}</div><div class="lbl">Total</div></div>
+      <div class="tb-stat moving"><div class="num" id="statMoving">{{ stats.moving }}</div><div class="lbl">Moving</div></div>
+      <div class="tb-stat stopped"><div class="num" id="statStopped">{{ stats.stopped }}</div><div class="lbl">Stopped</div></div>
+      <div class="tb-stat idle"><div class="num" id="statIdle">{{ stats.idle }}</div><div class="lbl">Idle</div></div>
+    </div>
+    <div class="tb-updated" id="tbUpdated">--</div>
+    <button id="forceRefreshBtn" class="tb-btn"><i class="bi bi-arrow-clockwise"></i><span>Refresh</span></button>
+    {% if can_see_page('tracking_history') %}
+    <a href="{{ url_for('tracking_history') }}" class="tb-btn"><i class="bi bi-clock-history"></i><span>History</span></a>
+    {% endif %}
+    {% if can_see_page('tracking_settings') %}
+    <a href="{{ url_for('tracking_settings') }}" class="tb-btn"><i class="bi bi-gear"></i><span>Settings</span></a>
+    {% endif %}
+  </div>
+
+  {% if error %}
+  <div class="tracking-error">
+    <i class="bi bi-exclamation-triangle"></i> {{ error }}
+    {% if can_see_page('tracking_settings') %}
+    &mdash; <a href="{{ url_for('tracking_settings') }}" style="color:#fca5a5;text-decoration:underline;">Configure account</a>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <!-- Body: Sidebar + Map -->
+  <div class="tracking-body">
+    <!-- Sidebar -->
+    <div class="tracking-sidebar">
+      <div class="ts-search">
+        <input type="text" id="vehicleSearch" placeholder="Search vehicle (e.g. GBC or LEG)..." />
+        <div class="ts-filters">
+          <button class="active" data-filter="all">All</button>
+          <button data-filter="Moving">Moving</button>
+          <button data-filter="Stopped">Stopped</button>
+          <button data-filter="Idle">Idle</button>
+        </div>
+      </div>
+      <div class="ts-list" id="vehicleList">
+        {% for v in vehicles %}
+        <div class="vrow" data-regno="{{ v.RegNo }}" data-status="{{ v.VehicleStatus }}" data-lat="{{ v.LAT }}" data-lon="{{ v.LON }}">
+          <div class="vdot {{ v.VehicleStatus }}"></div>
+          <div class="vinfo">
+            <div class="vreg">{{ v.RegNo }}</div>
+            <div class="vsub">{{ v.LandMark[:40] if v.LandMark else '' }}</div>
+          </div>
+          <div class="vspd">{{ v.Speed|round(0) }}<br><small>km/h</small></div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Map -->
+    <div class="tracking-map-wrap">
+      <div id="trackingMap"></div>
+      <div class="refresh-indicator" id="refreshIndicator" style="display:none;">
+        <span class="spinner"></span> Updating...
+      </div>
+      <div class="map-legend">
+        <div class="row"><span class="dot" style="background:#4ade80"></span> Moving (with pulse ring)</div>
+        <div class="row"><span class="dot" style="background:#f87171"></span> Stopped (ign off)</div>
+        <div class="row"><span class="dot" style="background:#fbbf24"></span> Idle / No GPS</div>
+        <div style="margin-top:6px;font-size:10px;color:#94a3b8;">Switch map style &raquo; top-right</div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+(function() {
+  var map = L.map('trackingMap', { zoomControl: true, preferCanvas: true, zoomAnimation: true, fadeAnimation: true }).setView([30.15, 71.0], 8);
+
+  // ── Modern Map Layers (like inDrive/Uber style) ──
+  // CARTO Voyager — looks like Google Maps, clean & modern
+  var voyagerLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+    maxZoom: 20, attribution: '&copy; OSM &copy; CARTO', subdomains: 'abcd'
+  }).addTo(map);
+
+  // CARTO Dark Matter — dark mode like Uber night mode
+  var darkLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    maxZoom: 20, attribution: '&copy; OSM &copy; CARTO', subdomains: 'abcd'
+  });
+
+  // Esri Satellite — high-res satellite imagery
+  var satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    maxZoom: 19, attribution: '&copy; Esri'
+  });
+
+  // Esri Street — clean street map
+  var esriStreetLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+    maxZoom: 19, attribution: '&copy; Esri'
+  });
+
+  // Google Maps style (via OSM tiles that look similar)
+  var googleStyleLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19, attribution: '&copy; OpenStreetMap'
+  });
+
+  L.control.layers({
+    "Voyager (Modern)": voyagerLayer,
+    "Dark Mode": darkLayer,
+    "Satellite": satelliteLayer,
+    "Esri Street": esriStreetLayer,
+    "OSM Standard": googleStyleLayer
+  }, null, { position: 'topright', collapsed: true }).addTo(map);
+
+  var markers = {};
+  var currentFilter = 'all';
+  var positions = [];
+
+  // ── Vehicle Icons (car/truck like ride-hailing apps) ──
+  function colorFor(status) {
+    if (status === 'Moving') return '#4ade80';
+    if (status === 'Stopped') return '#f87171';
+    return '#fbbf24';
+  }
+
+  // Car icon SVG (top-down view like Uber/inDrive)
+  function carIcon(color, deg, isMoving) {
+    var rotate = deg || 0;
+    var pulseRing = isMoving ? '<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:36px;height:36px;border-radius:50%;border:2px solid ' + color + ';opacity:0.4;animation:pulse 1.5s ease-out infinite"></div>' : '';
+    return L.divIcon({
+      className: '',
+      html: '<div style="position:relative;width:36px;height:36px;">' + pulseRing +
+            '<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(' + rotate + 'deg);">' +
+            '<svg width="32" height="32" viewBox="0 0 32 32">' +
+            '<circle cx="16" cy="16" r="15" fill="' + color + '" stroke="#fff" stroke-width="2" opacity="0.95"/>' +
+            '<path d="M16 5 L21 12 L21 22 L19 26 L13 26 L11 22 L11 12 Z" fill="#fff" stroke="' + color + '" stroke-width="0.5"/>' +
+            '<rect x="13" y="13" width="6" height="7" rx="1.5" fill="' + color + '" opacity="0.7"/>' +
+            '<circle cx="14" cy="24" r="1.5" fill="#333"/>' +
+            '<circle cx="18" cy="24" r="1.5" fill="#333"/>' +
+            '</svg></div></div>',
+      iconSize: [36, 36], iconAnchor: [18, 18]
+    });
+  }
+
+  // Truck icon for larger vehicles
+  function truckIcon(color, deg) {
+    var rotate = deg || 0;
+    return L.divIcon({
+      className: '',
+      html: '<div style="transform:rotate(' + rotate + 'deg)"><svg width="36" height="36" viewBox="0 0 36 36">' +
+            '<circle cx="18" cy="18" r="17" fill="' + color + '" stroke="#fff" stroke-width="2" opacity="0.95"/>' +
+            '<rect x="10" y="8" width="12" height="14" rx="2" fill="#fff"/>' +
+            '<rect x="22" y="11" width="6" height="11" rx="1" fill="#fff" opacity="0.8"/>' +
+            '<rect x="12" y="10" width="8" height="5" rx="1" fill="' + color + '" opacity="0.6"/>' +
+            '<circle cx="13" cy="26" r="2" fill="#333"/>' +
+            '<circle cx="23" cy="26" r="2" fill="#333"/>' +
+            '</svg></div>',
+      iconSize: [36, 36], iconAnchor: [18, 18]
+    });
+  }
+
+  function popupHtml(v) {
+    var cls = v.VehicleStatus || 'Idle';
+    var color = colorFor(cls);
+    var lm = (v.LandMark || '').replace(/^0\|\|/, '');
+    var spd = parseFloat(v.Speed || 0).toFixed(0);
+    return '<div class="pop-title">' + v.RegNo + '</div>' +
+      '<div class="pop-row"><b>Status:</b> <span style="color:' + color + '">' + cls.toUpperCase() + '</span></div>' +
+      '<div class="pop-row"><b>Speed:</b> ' + spd + ' km/h</div>' +
+      '<div class="pop-row"><b>Ignition:</b> ' + (v.IgnitionStatus || 'N/A') + '</div>' +
+      '<div class="pop-row"><b>Landmark:</b> ' + (lm || 'n/a') + '</div>' +
+      '<div class="pop-row"><b>Time:</b> ' + (v.RDT || 'N/A') + '</div>' +
+      '<div class="pop-row"><b>Mileage:</b> ' + (v.TotalMileage || 0).toFixed(0) + ' km</div>' +
+      '<div class="pop-row"><b>Trips:</b> ' + (v.TotalTrips || 0) + '</div>' +
+      '<div class="pop-row"><b>Coords:</b> ' + v.LAT + ', ' + v.LON + '</div>' +
+      '<a href="/tracking/vehicle/' + encodeURIComponent(v.RegNo) + '" class="pop-link">View Details</a>';
+  }
+
+  function sidebarRow(v) {
+    var cls = v.VehicleStatus || 'Idle';
+    var spd = parseFloat(v.Speed || 0).toFixed(0);
+    var lm = (v.LandMark || '').replace(/^0\|\|/, '').split(',')[0];
+    var time = v.RDT ? v.RDT.substr(11, 5) : '--';
+    return '<div class="vrow" data-regno="' + v.RegNo + '" data-status="' + cls + '" data-lat="' + v.LAT + '" data-lon="' + v.LON + '">' +
+      '<div class="vdot ' + cls + '"></div>' +
+      '<div class="vinfo"><div class="vreg">' + v.RegNo + '</div>' +
+      '<div class="vsub">' + (lm || '-') + ' &middot; ' + time + '</div></div>' +
+      '<div class="vspd">' + spd + '<br><small>km/h</small></div></div>';
+  }
+
+  // ── Render ──
+  function renderVehicles(vehicles) {
+    positions = vehicles || [];
+    var q = document.getElementById('vehicleSearch').value.toUpperCase();
+    var list = document.getElementById('vehicleList');
+
+    // counts
+    var mv = 0, st = 0, id = 0;
+    positions.forEach(function(v) {
+      if (v.VehicleStatus === 'Moving') mv++; else if (v.VehicleStatus === 'Stopped') st++; else id++;
+    });
+    document.getElementById('statTotal').textContent = positions.length;
+    document.getElementById('statMoving').textContent = mv;
+    document.getElementById('statStopped').textContent = st;
+    document.getElementById('statIdle').textContent = id;
+
+    // sidebar (filtered by search only, filter buttons handle visibility)
+    var filtered = positions.filter(function(v) { return !q || (v.RegNo || '').toUpperCase().indexOf(q) >= 0; });
+    list.innerHTML = filtered.map(sidebarRow).join('');
+
+    // markers — car icons like ride-hailing apps
+    positions.forEach(function(v) {
+      if (!v.LAT || !v.LON) return;
+      var lat = parseFloat(v.LAT), lon = parseFloat(v.LON);
+      if (isNaN(lat) || isNaN(lon)) return;
+
+      var cls = v.VehicleStatus || 'Idle';
+      var color = colorFor(cls);
+      var moving = cls === 'Moving';
+      var deg = parseFloat(v.Direction) || 0;
+      var icon = carIcon(color, deg, moving);
+
+      if (markers[v.RegNo]) {
+        markers[v.RegNo].setLatLng([lat, lon]).setIcon(icon);
+        markers[v.RegNo].setPopupContent(popupHtml(v));
+      } else {
+        var m = L.marker([lat, lon], { icon: icon }).addTo(map);
+        m.bindPopup(popupHtml(v), { maxWidth: 300 });
+        m.on('click', function() { selectVehicle(v.RegNo, false); });
+        markers[v.RegNo] = m;
+      }
+    });
+
+    // remove stale markers
+    Object.keys(markers).forEach(function(reg) {
+      if (!positions.find(function(v) { return v.RegNo === reg; })) {
+        map.removeLayer(markers[reg]);
+        delete markers[reg];
+      }
+    });
+
+    // bind sidebar clicks
+    document.querySelectorAll('.vrow').forEach(function(row) {
+      row.addEventListener('click', function() {
+        selectVehicle(row.dataset.regno, true);
+      });
+    });
+
+    applyFilter();
+    var now = new Date();
+    document.getElementById('tbUpdated').textContent = '\u21BB ' + now.toLocaleTimeString();
+  }
+
+  function selectVehicle(reg, pan) {
+    document.querySelectorAll('.vrow').forEach(function(r) {
+      r.classList.toggle('active', r.dataset.regno === reg);
+    });
+    var v = positions.find(function(x) { return x.RegNo === reg; });
+    var m = markers[reg];
+    if (v && m) {
+      if (pan) map.setView([parseFloat(v.LAT), parseFloat(v.LON)], 14, { animate: true });
+      m.openPopup();
+    }
+  }
+
+  function applyFilter() {
+    var search = document.getElementById('vehicleSearch').value.toLowerCase();
+    document.querySelectorAll('.vrow').forEach(function(r) {
+      var matchFilter = currentFilter === 'all' || r.dataset.status === currentFilter;
+      var matchSearch = !search || r.dataset.regno.toLowerCase().indexOf(search) >= 0;
+      r.style.display = (matchFilter && matchSearch) ? '' : 'none';
+    });
+  }
+
+  // ── Events ──
+  document.getElementById('vehicleSearch').addEventListener('input', applyFilter);
+
+  document.querySelectorAll('.ts-filters button').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('.ts-filters button').forEach(function(b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      currentFilter = btn.dataset.filter;
+      applyFilter();
+    });
+  });
+
+  var accountSelect = document.getElementById('accountSelect');
+  if (accountSelect) {
+    accountSelect.addEventListener('change', function() {
+      var url = new URL(window.location.href);
+      url.searchParams.set('account_id', this.value);
+      window.location.href = url.toString();
+    });
+  }
+
+  document.getElementById('forceRefreshBtn').addEventListener('click', function() {
+    refreshPositions(true);
+  });
+
+  // ── Auto refresh ──
+  var REFRESH_MS = 30000;
+  setInterval(function() { refreshPositions(false); }, REFRESH_MS);
+
+  function refreshPositions(force) {
+    var indicator = document.getElementById('refreshIndicator');
+    indicator.style.display = 'block';
+    var url = force ? '/api/tracking/refresh' : '/api/tracking/positions';
+    var opts = { method: force ? 'POST' : 'GET', headers: { 'X-CSRFToken': window.FleetConfig.csrfToken } };
+    if (force) opts.headers['Content-Type'] = 'application/json';
+    fetch(url, opts).then(function(r) { return r.json(); }).then(function(data) {
+      if (data.vehicles) renderVehicles(data.vehicles);
+      indicator.style.display = 'none';
+    }).catch(function() { indicator.style.display = 'none'; });
+  }
+
+  // ── Initial load ──
+  var initialVehicles = {{ vehicles | tojson }};
+  if (initialVehicles && initialVehicles.length) {
+    renderVehicles(initialVehicles);
+    var bounds = L.latLngBounds(initialVehicles.filter(function(v) { return v.LAT && v.LON; }).map(function(v) { return [parseFloat(v.LAT), parseFloat(v.LON)]; }));
+    if (bounds.isValid()) map.fitBounds(bounds, { padding: [40, 40] });
+  }
+})();
+</script>
+{% endblock %}

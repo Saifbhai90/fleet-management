@@ -1,0 +1,178 @@
+{% extends 'base.html' %}
+{% block title %}{{ regno }} — Vehicle Tracking Detail{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+<style>
+  #detailMap { height: 350px; border-radius: 12px; border: 1px solid var(--bs-border-color, #dee2e6); }
+  .info-card { border-radius: 10px; }
+  .info-card .info-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; color: #6c757d; }
+  .info-card .info-value { font-size: 1.1rem; font-weight: 700; }
+  .status-moving { background: #d1e7dd; color: #0f5132; }
+  .status-stopped { background: #f8d7da; color: #842029; }
+  .status-idle, .status-unknown { background: #fff3cd; color: #664d03; }
+  .dark-mode #detailMap { border-color: #333; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <div>
+      <h4 class="mb-0 fw-bold"><i class="bi bi-truck"></i> {{ regno }}</h4>
+      <small class="text-muted">{{ vehicle.GroupName }} — {{ vehicle.MakeAndModel }}</small>
+    </div>
+    <a href="{{ url_for('tracking_dashboard') }}" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-arrow-left"></i> Back to Map
+    </a>
+  </div>
+
+  <div class="row g-3">
+    <!-- Left: Map + Status -->
+    <div class="col-lg-8">
+      <div id="detailMap"></div>
+
+      <div class="row g-2 mt-2">
+        <div class="col-6 col-md-3">
+          <div class="card info-card p-3 text-center">
+            <div class="info-label">Speed</div>
+            <div class="info-value text-primary">{{ "%.1f"|format(vehicle.Speed) }} <small>km/h</small></div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="card info-card p-3 text-center">
+            <div class="info-label">Max Speed</div>
+            <div class="info-value text-warning">{{ "%.1f"|format(vehicle.MaxSpeed) }} <small>km/h</small></div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="card info-card p-3 text-center">
+            <div class="info-label">Total Mileage</div>
+            <div class="info-value text-info">{{ "%.1f"|format(vehicle.TotalMileage) }} <small>km</small></div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="card info-card p-3 text-center">
+            <div class="info-label">Total Trips</div>
+            <div class="info-value text-success">{{ vehicle.TotalTrips }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: Details -->
+    <div class="col-lg-4">
+      <div class="card mb-3">
+        <div class="card-header"><i class="bi bi-info-circle"></i> Vehicle Status</div>
+        <div class="card-body">
+          <table class="table table-sm mb-0">
+            <tr><td class="text-muted">Status</td><td><span class="badge status-{{ vehicle.VehicleStatus|lower }}">{{ vehicle.VehicleStatus }}</span></td></tr>
+            <tr><td class="text-muted">Ignition</td><td>{{ vehicle.IgnitionStatus }}</td></tr>
+            <tr><td class="text-muted">Current</td><td>{{ vehicle.CurrentStatus }}</td></tr>
+            <tr><td class="text-muted">Reason</td><td>{{ vehicle.Reason }}</td></tr>
+            <tr><td class="text-muted">Direction</td><td>{{ "%.0f"|format(vehicle.Direction) }}&deg;</td></tr>
+            <tr><td class="text-muted">Last GPS</td><td>{{ vehicle.RDT }}</td></tr>
+          </table>
+        </div>
+      </div>
+
+      <div class="card mb-3">
+        <div class="card-header"><i class="bi bi-geo-alt"></i> Location</div>
+        <div class="card-body">
+          <p class="mb-1"><strong>Landmark:</strong> {{ vehicle.LandMark }}</p>
+          <p class="mb-0 text-muted small">LAT: {{ vehicle.LAT }}, LON: {{ vehicle.LON }}</p>
+        </div>
+      </div>
+
+      {% if mapping and mapping.vehicle %}
+      <div class="card mb-3">
+        <div class="card-header"><i class="bi bi-link-45deg"></i> Linked Vehicle</div>
+        <div class="card-body">
+          <p class="mb-0">Internal Vehicle: <strong>{{ mapping.vehicle.vehicle_no }}</strong> ({{ mapping.vehicle.model }})</p>
+        </div>
+      </div>
+      {% endif %}
+
+      <div class="d-grid gap-2">
+        {% if can_see_page('tracking_history') %}
+        <a href="{{ url_for('tracking_history', regno=regno) }}" class="btn btn-outline-primary">
+          <i class="bi bi-clock-history"></i> View History / Playback
+        </a>
+        {% endif %}
+        {% if can_see_page('tracking_reports') %}
+        <a href="{{ url_for('tracking_trips', regno=regno) }}" class="btn btn-outline-primary">
+          <i class="bi bi-table"></i> View Trips
+        </a>
+        <a href="{{ url_for('tracking_trends', regno=regno) }}" class="btn btn-outline-primary">
+          <i class="bi bi-graph-up"></i> View Trends
+        </a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Today's Trips -->
+  <div class="row mt-3">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-header"><i class="bi bi-journal-text"></i> Today's Trips ({{ today_trips|length }})</div>
+        {% if today_trips %}
+        <div class="table-responsive">
+          <table class="table table-sm table-hover mb-0">
+            <thead><tr>
+              <th>#</th><th>Start Time</th><th>Start Location</th><th>End Time</th><th>End Location</th>
+              <th>Distance</th><th>Max Speed</th><th>Status</th>
+            </tr></thead>
+            <tbody>
+              {% for t in today_trips %}
+              <tr>
+                <td>{{ loop.index }}</td>
+                <td>{{ t.IGON_RDT[-8:] if t.IGON_RDT else '' }}</td>
+                <td class="small">{{ t.IGON_LandMark[:30] }}</td>
+                <td>{{ t.IGOFF_RDT[-8:] if t.IGOFF_RDT else '' }}</td>
+                <td class="small">{{ t.IGOFF_LandMark[:30] }}</td>
+                <td>{{ "%.1f"|format(t.Mileage) }} km</td>
+                <td>{{ "%.0f"|format(t.MaxSpeed) }}</td>
+                <td><span class="badge bg-secondary">{{ t.TripStatus }}</span></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="card-body text-muted text-center">No trips recorded today.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+(function() {
+  var lat = {{ vehicle.LAT or 0 }};
+  var lon = {{ vehicle.LON or 0 }};
+  var hasGps = lat !== 0 || lon !== 0;
+  if (!hasGps) { lat = 30.15; lon = 71.0; }
+  var map = L.map('detailMap').setView([lat, lon], hasGps ? 15 : 8);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19, attribution: '&copy; OpenStreetMap'
+  }).addTo(map);
+
+  var status = '{{ vehicle.VehicleStatus }}';
+  var color = status === 'Moving' ? '#198754' : status === 'Stopped' ? '#dc3545' : '#ffc107';
+  var marker = L.marker([lat, lon], {
+    icon: L.divIcon({
+      html: '<div style="width:16px;height:16px;border-radius:50%;background:' + color +
+            ';border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.4);"></div>',
+      className: 'vehicle-detail-marker', iconSize: [22, 22], iconAnchor: [11, 11]
+    })
+  }).addTo(map);
+
+  marker.bindPopup('<strong>{{ regno }}</strong><br>{{ vehicle.LandMark }}<br>Speed: {{ "%.1f"|format(vehicle.Speed) }} km/h').openPopup();
+})();
+</script>
+{% endblock %}

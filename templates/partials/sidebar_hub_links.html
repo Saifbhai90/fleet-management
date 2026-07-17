@@ -58,3 +58,9 @@
             <i class="bi bi-book"></i><span>Book Management</span>
         </a>
         {% endif %}
+
+        {% if can_see_section('tracking') %}
+        <a href="{{ url_for('tracking_dashboard') }}" class="{% if hub_nav_active('fleet-tracking') %}active-link{% endif %}">
+            <i class="bi bi-broadcast"></i><span>Fleet Tracking</span>
+        </a>
+        {% endif %}

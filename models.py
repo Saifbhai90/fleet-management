@@ -2890,3 +2890,74 @@ class TrackerAutomationJob(db.Model):
 
     def __repr__(self):
         return f'<TrackerAutomationJob {self.id} {self.status}>'
+
+
+# ────────────────────────────────────────────────
+# PortalXS Fleet Tracking Integration
+# ────────────────────────────────────────────────
+class PortalXSAccount(db.Model):
+    """PortalXS SOAP API credentials (supports multiple accounts/companies)."""
+    __tablename__ = 'portalxs_account'
+    id = db.Column(db.Integer, primary_key=True)
+    label = db.Column(db.String(100), nullable=False, default='Default')
+    username = db.Column(db.String(200), nullable=False)
+    password_enc = db.Column(db.Text, nullable=True)  # Fernet-encrypted
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    last_connected = db.Column(db.DateTime, nullable=True)
+    last_error = db.Column(db.Text, nullable=True)
+    vehicle_count = db.Column(db.Integer, default=0)
+    created_at = db.Column(db.DateTime, default=pk_now)
+    updated_at = db.Column(db.DateTime, default=pk_now, onupdate=pk_now)
+
+    def __repr__(self):
+        return f'<PortalXSAccount {self.label} ({self.username})>'
+
+
+class PortalXSVehicleMapping(db.Model):
+    """Maps PortalXS RegNo to internal Vehicle record."""
+    __tablename__ = 'portalxs_vehicle_mapping'
+    id = db.Column(db.Integer, primary_key=True)
+    account_id = db.Column(db.Integer, db.ForeignKey('portalxs_account.id'), nullable=False, index=True)
+    vehicle_id = db.Column(db.Integer, db.ForeignKey('vehicle.id'), nullable=True, index=True)
+    portalxs_regno = db.Column(db.String(50), nullable=False, index=True)
+    group_name = db.Column(db.String(100), nullable=True)
+    make_model = db.Column(db.String(100), nullable=True)
+    last_lat = db.Column(db.Numeric(10, 6), nullable=True)
+    last_lon = db.Column(db.Numeric(10, 6), nullable=True)
+    last_speed = db.Column(db.Numeric(10, 2), nullable=True)
+    last_status = db.Column(db.String(20), nullable=True)  # Moving/Stopped/Idle
+    last_rdt = db.Column(db.DateTime, nullable=True)  # last GPS fix time
+    last_ignition = db.Column(db.String(200), nullable=True)
+    last_landmark = db.Column(db.Text, nullable=True)
+    last_total_mileage = db.Column(db.Numeric(10, 2), nullable=True)
+    last_total_trips = db.Column(db.Integer, nullable=True)
+    last_max_speed = db.Column(db.Numeric(10, 2), nullable=True)
+    updated_at = db.Column(db.DateTime, default=pk_now, onupdate=pk_now)
+    created_at = db.Column(db.DateTime, default=pk_now)
+
+    account = db.relationship('PortalXSAccount', backref='vehicle_mappings')
+    vehicle = db.relationship('Vehicle', backref='portalxs_mapping', uselist=False)
+
+    __table_args__ = (db.UniqueConstraint('account_id', 'portalxs_regno', name='uq_portalxs_account_regno'),)
+
+    def __repr__(self):
+        return f'<PortalXSVehicleMapping {self.portalxs_regno}>'
+
+
+class PortalXSAlertCache(db.Model):
+    """Cached alerts from PortalXS (refreshed periodically)."""
+    __tablename__ = 'portalxs_alert_cache'
+    id = db.Column(db.Integer, primary_key=True)
+    account_id = db.Column(db.Integer, db.ForeignKey('portalxs_account.id'), nullable=False, index=True)
+    regno = db.Column(db.String(50), nullable=True, index=True)
+    alert_type = db.Column(db.String(100), nullable=True)
+    alert_msg = db.Column(db.Text, nullable=True)
+    alert_time = db.Column(db.DateTime, nullable=True, index=True)
+    severity = db.Column(db.String(20), nullable=True)
+    raw_json = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=pk_now, index=True)
+
+    account = db.relationship('PortalXSAccount', backref='alerts')
+
+    def __repr__(self):
+        return f'<PortalXSAlertCache {self.regno} {self.alert_type}>'

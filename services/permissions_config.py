@@ -7,6 +7,7 @@ from auth_utils import (
     PERMISSION_DRIVER_STATUS, PERMISSION_ATTENDANCE, PERMISSION_TASK_REPORT,
     PERMISSION_EXPENSES, PERMISSION_ACCOUNTS, PERMISSION_WORKSPACE, PERMISSION_PAYROLL, PERMISSION_BOOKS,
     PERMISSION_REPORTS, PERMISSION_BACKUP, PERMISSION_USERS_MANAGE, PERMISSION_DASHBOARD,
+    PERMISSION_TRACKING,
 )
 
 # Setting (Form Control) — one permission per tab; backup is a separate section (not freeze).
@@ -376,6 +377,14 @@ PERMISSION_TREE = {
         ('notification_add', 'Notifications – Create'),
         ('whats_new', "What's New"),
     ],
+    PERMISSION_TRACKING: [
+        ('tracking', 'Fleet Tracking (full)'),
+        ('tracking_view', 'Dashboard & Live Map – View'),
+        ('tracking_history', 'History Playback'),
+        ('tracking_reports', 'Trips, Fleet Report & Trends'),
+        ('tracking_alerts', 'Alerts'),
+        ('tracking_settings', 'Settings (Accounts, Linking, Polling)'),
+    ],
 }
 
 SECTION_LABELS = {
@@ -394,6 +403,7 @@ SECTION_LABELS = {
     PERMISSION_REPORTS: 'Reports & Analytics',
     PERMISSION_BACKUP: 'Backup',
     PERMISSION_USERS_MANAGE: 'Administration',
+    PERMISSION_TRACKING: 'Fleet Tracking',
 }
 
 # Section "full" permission code -> SECTION_PAGE_GROUPS key (for login expansion)
@@ -413,6 +423,7 @@ SECTION_FULL_TO_GROUP = {
     'reports': PERMISSION_REPORTS,
     'backup': PERMISSION_BACKUP,
     'users_manage': PERMISSION_USERS_MANAGE,
+    'tracking': PERMISSION_TRACKING,
 }
 
 
@@ -638,6 +649,11 @@ PERMISSION_DEPENDENCIES = {
     'dashboard_card_finance':     [],
     'dashboard_card_doc_health':  [],
     'penalty_record_delete': ['penalty_record'],
+    # Fleet Tracking: granular permissions require dashboard view access
+    'tracking_history': ['tracking_view'],
+    'tracking_reports': ['tracking_view'],
+    'tracking_alerts': ['tracking_view'],
+    'tracking_settings': ['tracking_view'],
 }
 
 # Section -> list of (page_label, list of (code, display_name)) for hierarchical UI (Section → Page → Buttons)
@@ -1061,6 +1077,14 @@ SECTION_PAGE_GROUPS = {
         ]),
         ("What's New", [('whats_new', "What's New")]),
     ],
+    PERMISSION_TRACKING: [
+        ('Fleet Tracking (full)', [('tracking', 'Fleet Tracking (full)')]),
+        ('Dashboard & Live Map', [('tracking_view', 'Dashboard & Live Map – View')]),
+        ('History', [('tracking_history', 'History Playback')]),
+        ('Reports', [('tracking_reports', 'Trips, Fleet Report & Trends')]),
+        ('Alerts', [('tracking_alerts', 'Alerts')]),
+        ('Settings', [('tracking_settings', 'Settings (Accounts, Linking, Polling)')]),
+    ],
 }
 
 # All permission codes under Reports & Analytics (for Report Centre nav: show hub if user has any).
@@ -1331,6 +1355,13 @@ PAGE_VISIBLE = {
     'dashboard_card_utilization': ['dashboard', 'dashboard_card_utilization'],
     'dashboard_card_finance':     ['dashboard', 'dashboard_card_finance'],
     'dashboard_card_doc_health':  ['dashboard', 'dashboard_card_doc_health'],
+    # Fleet Tracking
+    'tracking': ['tracking', 'tracking_view', 'tracking_history', 'tracking_reports', 'tracking_alerts', 'tracking_settings'],
+    'tracking_view': ['tracking', 'tracking_view'],
+    'tracking_history': ['tracking', 'tracking_history'],
+    'tracking_reports': ['tracking', 'tracking_reports'],
+    'tracking_alerts': ['tracking', 'tracking_alerts'],
+    'tracking_settings': ['tracking', 'tracking_settings'],
 }
 
 

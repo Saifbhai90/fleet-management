@@ -1,0 +1,311 @@
+{% extends 'base.html' %}
+{% block title %}Tracking Settings — Fleet Manager{% endblock %}
+
+{% block extra_head %}
+<style>
+  .modal { z-index: 1070 !important; }
+  .modal-backdrop { z-index: 1060 !important; }
+  .modal-dialog { z-index: 1075 !important; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3" style="max-width: 1000px;">
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <h4 class="mb-0 fw-bold"><i class="bi bi-gear"></i> PortalXS Tracking Settings</h4>
+    <a href="{{ url_for('tracking_dashboard') }}" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-arrow-left"></i> Back to Map
+    </a>
+  </div>
+
+  <!-- Account Management -->
+  <div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <span><i class="bi bi-person-badge"></i> PortalXS Accounts</span>
+      <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#addAccountModal">
+        <i class="bi bi-plus-lg"></i> Add Account
+      </button>
+    </div>
+    {% if accounts %}
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0">
+        <thead><tr>
+          <th>Label</th><th>Username</th><th>Vehicles</th><th>Last Connected</th>
+          <th>Status</th><th>Actions</th>
+        </tr></thead>
+        <tbody>
+          {% for a in accounts %}
+          <tr>
+            <td class="fw-semibold">{{ a.label }}</td>
+            <td>{{ a.username }}</td>
+            <td>{{ a.vehicle_count }}</td>
+            <td class="small text-muted">{{ a.last_connected.strftime('%Y-%m-%d %H:%M') if a.last_connected else 'Never' }}</td>
+            <td>
+              {% if a.is_active %}<span class="badge bg-success">Active</span>
+              {% else %}<span class="badge bg-secondary">Inactive</span>{% endif %}
+            </td>
+            <td>
+              <div class="btn-group btn-group-sm">
+                <button class="btn btn-outline-info btn-test-account" data-acct-id="{{ a.id }}">Test</button>
+                <button class="btn btn-outline-primary btn-sync-account" data-acct-id="{{ a.id }}">Sync</button>
+                <button class="btn btn-outline-warning" data-bs-toggle="modal" data-bs-target="#editAccountModal"
+                        data-acct-id="{{ a.id }}" data-label="{{ a.label }}" data-username="{{ a.username }}"
+                        data-active="{{ a.is_active }}">Edit</button>
+                <form method="post" action="{{ url_for('tracking_settings_account_delete', acct_id=a.id) }}" class="d-inline"
+                      onsubmit="return confirm('Delete this account and all vehicle mappings?')">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button class="btn btn-outline-danger btn-sm">Delete</button>
+                </form>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="card-body text-muted text-center py-4">
+      <i class="bi bi-exclamation-circle" style="font-size: 2rem;"></i>
+      <p class="mt-2">No PortalXS accounts configured. Click "Add Account" to get started.</p>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Vehicle Linking -->
+  {% if accounts %}
+  <div class="card mb-3">
+    <div class="card-header"><i class="bi bi-link-45deg"></i> Vehicle Linking (PortalXS RegNo → Internal Vehicle)</div>
+    <div class="card-body">
+      <p class="text-muted small">Link PortalXS registration numbers to your internal vehicle records for cross-referencing.</p>
+      <div class="mb-3">
+        <label class="form-label small fw-semibold">Select Account</label>
+        <select id="linkAccountSelect" class="form-select form-select-sm" style="width: auto;">
+          {% for a in accounts %}
+          <option value="{{ a.id }}">{{ a.label }} ({{ a.username }})</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div id="linkVehiclesContainer">
+        <p class="text-muted small">Select an account to load vehicles...</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Background Polling -->
+  <div class="card mb-3">
+    <div class="card-header"><i class="bi bi-arrow-repeat"></i> Background Polling</div>
+    <div class="card-body">
+      <p class="text-muted small">Start a background thread to auto-refresh vehicle positions every 30 seconds.</p>
+      <form method="post" action="{{ url_for('tracking_settings_start_polling') }}" class="d-inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-play"></i> Start Polling</button>
+      </form>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Default credentials hint -->
+  <div class="card border-info">
+    <div class="card-body">
+      <h6 class="text-info"><i class="bi bi-info-circle"></i> Default Credentials (Pre-configured)</h6>
+      <p class="small text-muted mb-1">Username: <code>ccrmuzaffergarh</code></p>
+      <p class="small text-muted mb-1">Password: <code>Muzaffergarh123</code></p>
+      <p class="small text-muted mb-0">48 vehicles (IRMNCH account, South Punjab region)</p>
+    </div>
+  </div>
+</div>
+
+<!-- Add Account Modal -->
+<div class="modal fade" id="addAccountModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="post" action="{{ url_for('tracking_settings_account_new') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="modal-header">
+          <h5 class="modal-title">Add PortalXS Account</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Label</label>
+            <input type="text" name="label" class="form-control" placeholder="e.g. IRMNCH Muzaffargarh" value="IRMNCH">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Username</label>
+            <input type="text" name="username" class="form-control" placeholder="PortalXS username" value="ccrmuzaffergarh" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Password</label>
+            <input type="password" name="password" class="form-control" placeholder="PortalXS password" value="Muzaffergarh123" required>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Create Account</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Account Modal -->
+<div class="modal fade" id="editAccountModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="post" id="editAccountForm">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="modal-header">
+          <h5 class="modal-title">Edit Account</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Label</label>
+            <input type="text" name="label" class="form-control" id="editLabel">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Username</label>
+            <input type="text" name="username" class="form-control" id="editUsername" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">New Password (leave blank to keep current)</label>
+            <input type="password" name="password" class="form-control" placeholder="Only enter if changing">
+          </div>
+          <div class="form-check">
+            <input type="checkbox" name="is_active" class="form-check-input" id="editActive">
+            <label class="form-check-label" for="editActive">Active</label>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Update Account</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Move modals to <body> to escape .main-content stacking context
+document.addEventListener('DOMContentLoaded', function() {
+  ['addAccountModal', 'editAccountModal'].forEach(function(id) {
+    var modal = document.getElementById(id);
+    if (modal) document.body.appendChild(modal);
+  });
+});
+
+// Edit modal data population
+document.getElementById('editAccountModal').addEventListener('show.bs.modal', function(event) {
+  var btn = event.relatedTarget;
+  document.getElementById('editLabel').value = btn.dataset.label || '';
+  document.getElementById('editUsername').value = btn.dataset.username || '';
+  document.getElementById('editActive').checked = btn.dataset.active === 'True';
+  document.getElementById('editAccountForm').action = '/tracking/settings/account/' + btn.dataset.acctId + '/edit';
+});
+
+// Test connection
+document.querySelectorAll('.btn-test-account').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    var acctId = this.dataset.acctId;
+    this.disabled = true;
+    this.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+    var csrfToken = window.FleetConfig.csrfToken;
+    fetch('/tracking/settings/account/' + acctId + '/test', {
+      method: 'POST', headers: { 'X-CSRFToken': csrfToken, 'Content-Type': 'application/json' }
+    }).then(function(r) { return r.json(); }).then(function(data) {
+      if (data.success) {
+        alert('Connection successful! ' + data.vehicle_count + ' vehicles found.');
+      } else {
+        alert('Connection failed: ' + (data.error || 'Unknown error'));
+      }
+      btn.disabled = false;
+      btn.innerHTML = 'Test';
+    }).catch(function() {
+      alert('Request failed.');
+      btn.disabled = false;
+      btn.innerHTML = 'Test';
+    });
+  });
+});
+
+// Sync vehicles
+document.querySelectorAll('.btn-sync-account').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    var acctId = this.dataset.acctId;
+    this.disabled = true;
+    this.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+    var csrfToken = window.FleetConfig.csrfToken;
+    fetch('/tracking/settings/account/' + acctId + '/sync', {
+      method: 'POST', headers: { 'X-CSRFToken': csrfToken, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: ''
+    }).then(function(r) { return r.text(); }).then(function() {
+      window.location.reload();
+    }).catch(function() {
+      window.location.reload();
+    });
+  });
+});
+
+// Vehicle linking
+document.getElementById('linkAccountSelect').addEventListener('change', function() {
+  var acctId = this.value;
+  var container = document.getElementById('linkVehiclesContainer');
+  container.innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm"></div> Loading vehicles...</div>';
+  fetch('/api/tracking/vehicles/' + acctId).then(function(r) { return r.json(); }).then(function(vehicles) {
+    if (!vehicles.length) {
+      container.innerHTML = '<p class="text-muted small">No vehicles found. Click "Sync" on the account first.</p>';
+      return;
+    }
+    var html = '<div class="table-responsive"><table class="table table-sm"><thead><tr><th>PortalXS RegNo</th><th>Group</th><th>Internal Vehicle</th><th></th></tr></thead><tbody>';
+    vehicles.forEach(function(v) {
+      html += '<tr><td class="fw-semibold">' + v.portalxs_regno + '</td><td>' + (v.group_name || '') + '</td>' +
+        '<td><select class="form-select form-select-sm vehicle-link-select" data-mapping-id="' + v.id + '">' +
+        '<option value="">-- Not Linked --</option>' +
+        (v.vehicle_no ? '<option value="' + (v.vehicle_id || '') + '" selected>' + v.vehicle_no + '</option>' : '') +
+        '</select></td><td><button class="btn btn-sm btn-outline-primary btn-link-vehicle" data-mapping-id="' + v.id + '">Link</button></td></tr>';
+    });
+    html += '</tbody></table></div>';
+    container.innerHTML = html;
+
+    // Enable select2-like search for internal vehicles
+    container.querySelectorAll('.vehicle-link-select').forEach(function(sel) {
+      sel.addEventListener('focus', function() {
+        if (this.options.length > 2) return;
+        var self = this;
+        fetch('/api/tracking/internal-vehicles').then(function(r) { return r.json(); }).then(function(vehicles) {
+          vehicles.forEach(function(v) {
+            var opt = document.createElement('option');
+            opt.value = v.id; opt.textContent = v.vehicle_no + ' (' + v.model + ')';
+            self.appendChild(opt);
+          });
+        });
+      });
+    });
+
+    // Link buttons
+    container.querySelectorAll('.btn-link-vehicle').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var mappingId = this.dataset.mappingId;
+        var select = container.querySelector('[data-mapping-id="' + mappingId + '"]');
+        var vehicleId = select.value;
+        var csrfToken = window.FleetConfig.csrfToken;
+        var formData = new FormData();
+        formData.append('csrf_token', csrfToken);
+        formData.append('mapping_id', mappingId);
+        formData.append('vehicle_id', vehicleId);
+        fetch('/tracking/settings/link-vehicle', { method: 'POST', body: formData })
+          .then(function() { window.location.reload(); });
+      });
+    });
+  });
+});
+
+// Auto-load first account's vehicles
+var firstAccount = document.getElementById('linkAccountSelect');
+if (firstAccount && firstAccount.options.length) {
+  firstAccount.dispatchEvent(new Event('change'));
+}
+</script>
+{% endblock %}

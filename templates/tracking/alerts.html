@@ -1,0 +1,71 @@
+{% extends 'base.html' %}
+{% block title %}Alerts — Fleet Tracking{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <h4 class="mb-0 fw-bold"><i class="bi bi-bell"></i> Fleet Alerts</h4>
+    <div class="d-flex gap-2">
+      <button id="refreshAlertsBtn" class="btn btn-sm btn-primary"><i class="bi bi-arrow-clockwise"></i> Refresh</button>
+      <a href="{{ url_for('tracking_dashboard') }}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-arrow-left"></i> Back to Map
+      </a>
+    </div>
+  </div>
+
+  {% if error %}
+  <div class="alert alert-warning">{{ error }}</div>
+  {% endif %}
+
+  <div class="card">
+    <div class="card-header">
+      <i class="bi bi-list-ul"></i> Recent Alerts ({{ alerts|length }})
+    </div>
+    {% if alerts %}
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0">
+        <thead><tr>
+          <th>Vehicle</th><th>Type</th><th>Message</th><th>Time</th><th>Severity</th>
+        </tr></thead>
+        <tbody id="alertsBody">
+          {% for a in alerts %}
+          <tr>
+            <td class="fw-semibold">{{ a.regno }}</td>
+            <td><span class="badge bg-info">{{ a.alert_type or 'Unknown' }}</span></td>
+            <td class="small">{{ a.alert_msg }}</td>
+            <td class="small text-muted">{{ a.alert_time }}</td>
+            <td>
+              {% if a.severity and a.severity|lower == 'high' %}
+              <span class="badge bg-danger">High</span>
+              {% elif a.severity and a.severity|lower == 'medium' %}
+              <span class="badge bg-warning">Medium</span>
+              {% else %}
+              <span class="badge bg-secondary">{{ a.severity or 'Low' }}</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="card-body text-muted text-center py-4">
+      <i class="bi bi-bell-slash" style="font-size: 2rem;"></i>
+      <p class="mt-2">No alerts found.</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('refreshAlertsBtn').addEventListener('click', function() {
+  this.disabled = true;
+  this.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Refreshing...';
+  fetch('/api/tracking/refresh', { method: 'POST', headers: { 'X-CSRFToken': window.FleetConfig.csrfToken, 'Content-Type': 'application/json' } })
+    .then(function() { window.location.reload(); })
+    .catch(function() { window.location.reload(); });
+});
+</script>
+{% endblock %}

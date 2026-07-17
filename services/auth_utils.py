@@ -26,6 +26,7 @@ PERMISSION_PAYROLL = 'payroll'
 PERMISSION_BOOKS = 'books'
 PERMISSION_BACKUP = 'backup'
 PERMISSION_USERS_MANAGE = 'users_manage'
+PERMISSION_TRACKING = 'tracking'
 
 ALL_PERMISSION_CODES = [
     (PERMISSION_DASHBOARD, 'Dashboard', 'General'),
@@ -44,6 +45,12 @@ ALL_PERMISSION_CODES = [
     (PERMISSION_BACKUP, 'Backup', 'General'),
     (PERMISSION_USERS_MANAGE, 'User & Role Management', 'Admin'),
     ('role_delete', 'Roles – Delete', 'Admin'),
+    (PERMISSION_TRACKING, 'Fleet Tracking (PortalXS)', 'Tracking'),
+    ('tracking_view', 'Tracking – Dashboard & Live Map', 'Tracking'),
+    ('tracking_history', 'Tracking – History Playback', 'Tracking'),
+    ('tracking_reports', 'Tracking – Trips, Fleet Report & Trends', 'Tracking'),
+    ('tracking_alerts', 'Tracking – Alerts', 'Tracking'),
+    ('tracking_settings', 'Tracking – Settings', 'Tracking'),
 ]
 
 # Endpoint -> required permission code (granular where defined)
@@ -693,6 +700,19 @@ ENDPOINT_PERMISSION_MAP = [
     ('workspace_account_balance_api', 'workspace_dashboard'),
     # Feature API helpers — employee (S-02: IDOR fix in route handler)
     ('api_employee_assignments', 'employees_list'),
+    # Fleet Tracking (PortalXS) — granular permissions
+    ('tracking_dashboard', 'tracking_view'),
+    ('tracking_vehicle_detail', 'tracking_view'),
+    ('api_tracking_positions', 'tracking_view'),
+    ('api_tracking_refresh', 'tracking_view'),
+    ('tracking_history', 'tracking_history'),          # also covers api_tracking_history
+    ('tracking_trips', 'tracking_reports'),            # also covers tracking_trips_export_csv
+    ('tracking_fleet_report', 'tracking_reports'),
+    ('tracking_trends', 'tracking_reports'),
+    ('tracking_alerts', 'tracking_alerts'),
+    ('tracking_settings', 'tracking_settings'),        # covers all settings sub-routes
+    ('api_tracking_vehicles', 'tracking_settings'),
+    ('api_tracking_internal_vehicles', 'tracking_settings'),
 ]
 
 

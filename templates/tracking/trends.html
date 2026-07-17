@@ -1,0 +1,108 @@
+{% extends 'base.html' %}
+{% block title %}Trends — Fleet Tracking{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <h4 class="mb-0 fw-bold"><i class="bi bi-graph-up"></i> Trends Analysis</h4>
+    <a href="{{ url_for('tracking_dashboard') }}" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-arrow-left"></i> Back to Map
+    </a>
+  </div>
+
+  <form method="get" class="card mb-3">
+    <div class="card-body d-flex flex-wrap gap-3 align-items-end">
+      <div>
+        <label class="form-label small fw-semibold">Vehicle</label>
+        <select name="regno" class="form-select form-select-sm" required>
+          {% for v in vehicles_list %}
+          <option value="{{ v.portalxs_regno }}" {% if v.portalxs_regno == selected_regno %}selected{% endif %}>
+            {{ v.portalxs_regno }}{% if v.vehicle_no %} ({{ v.vehicle_no }}){% endif %}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="form-label small fw-semibold">From</label>
+        <input type="text" name="from_date" class="form-control form-control-sm datepicker" value="{{ from_date }}" required>
+      </div>
+      <div>
+        <label class="form-label small fw-semibold">To</label>
+        <input type="text" name="to_date" class="form-control form-control-sm datepicker" value="{{ to_date }}" required>
+      </div>
+      <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-search"></i> Fetch</button>
+    </div>
+  </form>
+
+  {% if error %}
+  <div class="alert alert-danger">{{ error }}</div>
+  {% endif %}
+
+  {% if trends %}
+  <div class="row g-3">
+    <div class="col-lg-6">
+      <div class="card p-3">
+        <canvas id="mileageChart" height="200"></canvas>
+      </div>
+    </div>
+    <div class="col-lg-6">
+      <div class="card p-3">
+        <canvas id="alertsChart" height="200"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mt-3">
+    <div class="card-header">Daily Breakdown</div>
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0">
+        <thead><tr><th>Date</th><th>Mileage (km)</th><th>Travel Time (h)</th><th>Alerts</th></tr></thead>
+        <tbody>
+          {% for t in trends %}
+          <tr>
+            <td>{{ t.RDT[:10] }}</td>
+            <td>{{ "%.1f"|format(t.Mileage) }}</td>
+            <td>{{ "%.1f"|format(t.TravelTimeH) }}</td>
+            <td>{{ t.Alerts }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% elif selected_regno %}
+  <div class="alert alert-info">No trend data for the selected period.</div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script>
+flatpickr('.datepicker', { dateFormat: 'Y-m-d', maxDate: new Date() });
+
+var trends = {{ trends | tojson }};
+if (trends && trends.length) {
+  var labels = trends.map(function(t) { return (t.RDT || '').slice(0, 10); });
+  var mileages = trends.map(function(t) { return t.Mileage; });
+  var alerts = trends.map(function(t) { return t.Alerts; });
+
+  new Chart(document.getElementById('mileageChart'), {
+    type: 'line',
+    data: { labels: labels, datasets: [{ label: 'Mileage (km)', data: mileages, borderColor: '#0d6efd', backgroundColor: 'rgba(13,110,253,0.1)', fill: true, tension: 0.3 }] },
+    options: { responsive: true, plugins: { title: { display: true, text: 'Daily Mileage' } } }
+  });
+
+  new Chart(document.getElementById('alertsChart'), {
+    type: 'bar',
+    data: { labels: labels, datasets: [{ label: 'Alerts', data: alerts, backgroundColor: 'rgba(220,53,69,0.7)' }] },
+    options: { responsive: true, plugins: { title: { display: true, text: 'Daily Alerts' } } }
+  });
+}
+</script>
+{% endblock %}

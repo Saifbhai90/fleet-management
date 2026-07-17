@@ -1,0 +1,207 @@
+{% extends 'base.html' %}
+{% block title %}History Playback — Fleet Tracking{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<style>
+  #historyMap { height: 450px; border-radius: 12px; border: 1px solid var(--bs-border-color, #dee2e6); }
+  .playback-controls { background: rgba(255,255,255,0.95); padding: 10px 16px; border-radius: 0 0 12px 12px; }
+  .speed-color-0 { color: #dc3545; }
+  .speed-color-low { color: #ffc107; }
+  .speed-color-high { color: #198754; }
+  .timeline-slider { width: 100%; }
+  .dark-mode #historyMap { border-color: #333; }
+  .dark-mode .playback-controls { background: rgba(33,37,41,0.95); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <h4 class="mb-0 fw-bold"><i class="bi bi-clock-history"></i> Route History & Playback</h4>
+    <a href="{{ url_for('tracking_dashboard') }}" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-arrow-left"></i> Back to Map
+    </a>
+  </div>
+
+  <!-- Filter Bar -->
+  <form method="get" class="card mb-3">
+    <div class="card-body d-flex flex-wrap gap-3 align-items-end">
+      <div>
+        <label class="form-label small fw-semibold">Vehicle</label>
+        <select name="regno" class="form-select form-select-sm" required>
+          <option value="">-- Select Vehicle --</option>
+          {% for v in vehicles_list %}
+          <option value="{{ v.portalxs_regno }}" {% if v.portalxs_regno == selected_regno %}selected{% endif %}>
+            {{ v.portalxs_regno }}{% if v.vehicle_no %} ({{ v.vehicle_no }}){% endif %}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="form-label small fw-semibold">From Date</label>
+        <input type="text" name="from_date" class="form-control form-control-sm datepicker" value="{{ from_date }}" required>
+      </div>
+      <div>
+        <label class="form-label small fw-semibold">To Date</label>
+        <input type="text" name="to_date" class="form-control form-control-sm datepicker" value="{{ to_date }}" required>
+      </div>
+      <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-search"></i> Fetch History</button>
+      {% if history_points %}
+      <button type="button" id="exportCsvBtn" class="btn btn-sm btn-outline-success">
+        <i class="bi bi-filetype-csv"></i> Export CSV
+      </button>
+      {% endif %}
+    </div>
+  </form>
+
+  {% if error %}
+  <div class="alert alert-danger">{{ error }}</div>
+  {% endif %}
+
+  {% if history_points %}
+  <div class="mb-2">
+    <span class="badge bg-primary">{{ history_points|length }} GPS points</span>
+    <span class="text-muted small">Click on the route to see details. Use controls below for playback.</span>
+  </div>
+  {% endif %}
+
+  <div class="position-relative">
+    <div id="historyMap"></div>
+  </div>
+
+  {% if history_points %}
+  <!-- Playback Controls -->
+  <div class="playback-controls d-flex align-items-center gap-3 flex-wrap">
+    <button id="playBtn" class="btn btn-sm btn-primary"><i class="bi bi-play-fill"></i> Play</button>
+    <button id="pauseBtn" class="btn btn-sm btn-secondary" disabled><i class="bi bi-pause-fill"></i> Pause</button>
+    <div class="d-flex align-items-center gap-2">
+      <label class="small fw-semibold mb-0">Speed:</label>
+      <select id="playbackSpeed" class="form-select form-select-sm" style="width: auto;">
+        <option value="1">1x</option>
+        <option value="2">2x</option>
+        <option value="5" selected>5x</option>
+        <option value="10">10x</option>
+        <option value="20">20x</option>
+        <option value="50">50x</option>
+      </select>
+    </div>
+    <div class="flex-grow-1 d-flex align-items-center gap-2" style="min-width: 200px;">
+      <span class="small text-muted" id="currentTime">00:00:00</span>
+      <input type="range" id="timelineSlider" class="form-range timeline-slider" min="0" max="{{ history_points|length - 1 }}" value="0">
+      <span class="small text-muted" id="totalTime">{{ history_points[-1].RecordDateTime[-8:] if history_points else '' }}</span>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script>
+(function() {
+  flatpickr('.datepicker', { dateFormat: 'Y-m-d', maxDate: new Date() });
+
+  var points = {{ history_points | tojson }};
+  if (!points || !points.length) return;
+
+  var map = L.map('historyMap').setView([points[0].LAT, points[0].LON], 13);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19, attribution: '&copy; OpenStreetMap'
+  }).addTo(map);
+
+  // Color-coded polyline segments by speed
+  var latlngs = points.map(function(p) { return [p.LAT, p.LON]; });
+  var speeds = points.map(function(p) { return p.Speed; });
+
+  // Draw colored segments
+  for (var i = 0; i < latlngs.length - 1; i++) {
+    var s = speeds[i];
+    var color = s === 0 ? '#dc3545' : s < 30 ? '#ffc107' : '#198754';
+    L.polyline([latlngs[i], latlngs[i+1]], { color: color, weight: 4, opacity: 0.7 }).addTo(map);
+  }
+
+  // Start/End markers
+  var startIcon = L.divIcon({ html: '<div style="width:14px;height:14px;border-radius:50%;background:#0d6efd;border:2px solid #fff;"></div>', className: '', iconSize: [18,18], iconAnchor: [9,9] });
+  var endIcon = L.divIcon({ html: '<div style="width:14px;height:14px;border-radius:50%;background:#dc3545;border:2px solid #fff;"></div>', className: '', iconSize: [18,18], iconAnchor: [9,9] });
+  L.marker(latlngs[0], { icon: startIcon }).bindPopup('Start: ' + points[0].RecordDateTime).addTo(map);
+  L.marker(latlngs[latlngs.length - 1], { icon: endIcon }).bindPopup('End: ' + points[points.length-1].RecordDateTime).addTo(map);
+
+  // Fit bounds
+  var bounds = L.latLngBounds(latlngs);
+  map.fitBounds(bounds, { padding: [50, 50] });
+
+  // Playback marker
+  var playMarker = L.marker(latlngs[0], {
+    icon: L.divIcon({ html: '<div style="width:16px;height:16px;border-radius:50%;background:#0d6efd;border:3px solid #fff;box-shadow:0 0 10px rgba(13,110,253,0.6);"></div>', className: '', iconSize: [22,22], iconAnchor: [11,11] })
+  }).addTo(map);
+
+  var currentIndex = 0;
+  var playing = false;
+  var playInterval = null;
+  var slider = document.getElementById('timelineSlider');
+  var currentTimeEl = document.getElementById('currentTime');
+  var playBtn = document.getElementById('playBtn');
+  var pauseBtn = document.getElementById('pauseBtn');
+
+  function updatePoint(idx) {
+    if (idx < 0 || idx >= points.length) return;
+    currentIndex = idx;
+    var p = points[idx];
+    playMarker.setLatLng([p.LAT, p.LON]);
+    slider.value = idx;
+    currentTimeEl.textContent = (p.RecordDateTime || '').slice(-8);
+    var popupContent = '<strong>Point ' + (idx + 1) + '/' + points.length + '</strong><br>' +
+      'Time: ' + p.RecordDateTime + '<br>Speed: ' + p.Speed.toFixed(1) + ' km/h<br>' +
+      'Location: ' + (p.LandMark || 'N/A');
+    playMarker.bindPopup(popupContent).openPopup();
+  }
+
+  slider.addEventListener('input', function() { updatePoint(parseInt(this.value)); });
+
+  playBtn.addEventListener('click', function() {
+    playing = true;
+    playBtn.disabled = true;
+    pauseBtn.disabled = false;
+    var speed = parseInt(document.getElementById('playbackSpeed').value);
+
+    function step() {
+      if (!playing) return;
+      if (currentIndex >= points.length - 1) {
+        playing = false;
+        playBtn.disabled = false;
+        pauseBtn.disabled = true;
+        return;
+      }
+      updatePoint(currentIndex + 1);
+      var delay = Math.max(50, 500 / speed);
+      playInterval = setTimeout(step, delay);
+    }
+    step();
+  });
+
+  pauseBtn.addEventListener('click', function() {
+    playing = false;
+    playBtn.disabled = false;
+    pauseBtn.disabled = true;
+    if (playInterval) clearTimeout(playInterval);
+  });
+
+  // CSV Export
+  document.getElementById('exportCsvBtn').addEventListener('click', function() {
+    var csv = 'DateTime,LAT,LON,Speed,Reason,LandMark,Direction\n';
+    points.forEach(function(p) {
+      csv += [p.RecordDateTime, p.LAT, p.LON, p.Speed, p.Reason, '"' + (p.LandMark || '').replace(/"/g, '""') + '"', p.Direction].join(',') + '\n';
+    });
+    var blob = new Blob([csv], { type: 'text/csv' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'history_' + '{{ selected_regno }}' + '.csv';
+    a.click();
+  });
+})();
+</script>
+{% endblock %}
