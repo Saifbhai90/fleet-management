@@ -109,8 +109,8 @@
   if (!points || !points.length) return;
 
   var map = L.map('historyMap').setView([points[0].LAT, points[0].LON], 13);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19, attribution: '&copy; OpenStreetMap'
+  L.tileLayer('https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+    maxZoom: 20, attribution: '&copy; Google', subdomains: ['mt0','mt1','mt2','mt3']
   }).addTo(map);
 
   // Color-coded polyline segments by speed

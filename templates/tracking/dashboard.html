@@ -192,10 +192,15 @@
   var map = L.map('trackingMap', { zoomControl: true, preferCanvas: true, zoomAnimation: true, fadeAnimation: true }).setView([30.15, 71.0], 8);
 
   // ── Modern Map Layers (like inDrive/Uber style) ──
-  // CARTO Voyager — looks like Google Maps, clean & modern
+  // Google Streets — default, familiar Google Maps look
+  var googleStreetsLayer = L.tileLayer('https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+    maxZoom: 20, attribution: '&copy; Google', subdomains: ['mt0','mt1','mt2','mt3']
+  }).addTo(map);
+
+  // CARTO Voyager — clean & modern alternative
   var voyagerLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
     maxZoom: 20, attribution: '&copy; OSM &copy; CARTO', subdomains: 'abcd'
-  }).addTo(map);
+  });
 
   // CARTO Dark Matter — dark mode like Uber night mode
   var darkLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
@@ -212,17 +217,18 @@
     maxZoom: 19, attribution: '&copy; Esri'
   });
 
-  // Google Maps style (via OSM tiles that look similar)
-  var googleStyleLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  // OSM Standard — open street map
+  var osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19, attribution: '&copy; OpenStreetMap'
   });
 
   L.control.layers({
+    "Google Streets": googleStreetsLayer,
     "Voyager (Modern)": voyagerLayer,
     "Dark Mode": darkLayer,
     "Satellite": satelliteLayer,
     "Esri Street": esriStreetLayer,
-    "OSM Standard": googleStyleLayer
+    "OSM Standard": osmLayer
   }, null, { position: 'topright', collapsed: true }).addTo(map);
 
   var markers = {};

@@ -158,8 +158,8 @@
   var hasGps = lat !== 0 || lon !== 0;
   if (!hasGps) { lat = 30.15; lon = 71.0; }
   var map = L.map('detailMap').setView([lat, lon], hasGps ? 15 : 8);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19, attribution: '&copy; OpenStreetMap'
+  L.tileLayer('https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+    maxZoom: 20, attribution: '&copy; Google', subdomains: ['mt0','mt1','mt2','mt3']
   }).addTo(map);
 
   var status = '{{ vehicle.VehicleStatus }}';
