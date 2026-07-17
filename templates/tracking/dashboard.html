@@ -17,7 +17,9 @@
   .tb-title { font-size: 16px; font-weight: 700; color: #fff; white-space: nowrap; }
   .tb-spacer { flex: 1; }
   .tb-stats { display: flex; gap: 8px; }
-  .tb-stat { background: rgba(255,255,255,.12); border-radius: 8px; padding: 3px 10px; text-align: center; min-width: 60px; }
+  .tb-stat { background: rgba(255,255,255,.12); border-radius: 8px; padding: 3px 10px; text-align: center; min-width: 60px; cursor: pointer; transition: background .15s, transform .1s; }
+  .tb-stat:hover { background: rgba(255,255,255,.22); transform: scale(1.05); }
+  .tb-stat.active-filter { background: rgba(255,255,255,.3); box-shadow: 0 0 0 2px rgba(96,165,250,.6); }
   .tb-stat .num { font-size: 16px; font-weight: 800; line-height: 1.1; color: #fff; }
   .tb-stat .lbl { font-size: 9px; color: #cfe4ff; text-transform: uppercase; }
   .tb-stat.moving .num { color: #4ade80; }
@@ -117,10 +119,10 @@
     {% endif %}
     <div class="tb-spacer"></div>
     <div class="tb-stats">
-      <div class="tb-stat total"><div class="num" id="statTotal">{{ stats.total }}</div><div class="lbl">Total</div></div>
-      <div class="tb-stat moving"><div class="num" id="statMoving">{{ stats.moving }}</div><div class="lbl">Moving</div></div>
-      <div class="tb-stat stopped"><div class="num" id="statStopped">{{ stats.stopped }}</div><div class="lbl">Stopped</div></div>
-      <div class="tb-stat idle"><div class="num" id="statIdle">{{ stats.idle }}</div><div class="lbl">Idle</div></div>
+      <div class="tb-stat total" data-stat-filter="all"><div class="num" id="statTotal">{{ stats.total }}</div><div class="lbl">Total</div></div>
+      <div class="tb-stat moving" data-stat-filter="Moving"><div class="num" id="statMoving">{{ stats.moving }}</div><div class="lbl">Moving</div></div>
+      <div class="tb-stat stopped" data-stat-filter="Stopped"><div class="num" id="statStopped">{{ stats.stopped }}</div><div class="lbl">Stopped</div></div>
+      <div class="tb-stat idle" data-stat-filter="Idle"><div class="num" id="statIdle">{{ stats.idle }}</div><div class="lbl">Idle</div></div>
     </div>
     <div class="tb-updated" id="tbUpdated">--</div>
     <button id="forceRefreshBtn" class="tb-btn"><i class="bi bi-arrow-clockwise"></i><span>Refresh</span></button>
@@ -389,6 +391,31 @@
       var matchSearch = !search || r.dataset.regno.toLowerCase().indexOf(search) >= 0;
       r.style.display = (matchFilter && matchSearch) ? '' : 'none';
     });
+    // filter map markers too
+    Object.keys(markers).forEach(function(reg) {
+      var v = positions.find(function(x) { return x.RegNo === reg; });
+      if (!v) return;
+      var matchFilter = currentFilter === 'all' || v.VehicleStatus === currentFilter;
+      var matchSearch = !search || (v.RegNo || '').toLowerCase().indexOf(search) >= 0;
+      if (matchFilter && matchSearch) {
+        if (!map.hasLayer(markers[reg])) markers[reg].addTo(map);
+      } else {
+        if (map.hasLayer(markers[reg])) map.removeLayer(markers[reg]);
+      }
+    });
+  }
+
+  function setFilter(filter) {
+    currentFilter = filter;
+    // sync sidebar filter buttons
+    document.querySelectorAll('.ts-filters button').forEach(function(b) {
+      b.classList.toggle('active', b.dataset.filter === filter);
+    });
+    // sync stat badge highlight
+    document.querySelectorAll('.tb-stat').forEach(function(s) {
+      s.classList.toggle('active-filter', s.dataset.statFilter === filter);
+    });
+    applyFilter();
   }
 
   // ── Events ──
@@ -396,10 +423,13 @@
 
   document.querySelectorAll('.ts-filters button').forEach(function(btn) {
     btn.addEventListener('click', function() {
-      document.querySelectorAll('.ts-filters button').forEach(function(b) { b.classList.remove('active'); });
-      btn.classList.add('active');
-      currentFilter = btn.dataset.filter;
-      applyFilter();
+      setFilter(btn.dataset.filter);
+    });
+  });
+
+  document.querySelectorAll('.tb-stat').forEach(function(stat) {
+    stat.addEventListener('click', function() {
+      setFilter(stat.dataset.statFilter);
     });
   });
 
