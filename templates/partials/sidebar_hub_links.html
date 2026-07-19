@@ -60,7 +60,7 @@
         {% endif %}
 
         {% if can_see_section('tracking') %}
-        <a href="{{ url_for('tracking_dashboard') }}" class="{% if hub_nav_active('fleet-tracking') %}active-link{% endif %}">
+        <a href="{{ url_for('module_hub', hub_slug='fleet-tracking') }}" class="{% if hub_nav_active('fleet-tracking') %}active-link{% endif %}">
             <i class="bi bi-broadcast"></i><span>Fleet Tracking</span>
         </a>
         {% endif %}

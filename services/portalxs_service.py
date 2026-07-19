@@ -500,6 +500,7 @@ def get_all_vehicles_for_account(account_id: int) -> list[dict]:
             'portalxs_regno': m.portalxs_regno,
             'vehicle_id': m.vehicle_id,
             'vehicle_no': m.vehicle.vehicle_no if m.vehicle else None,
+            'vehicle_model': m.vehicle.model if m.vehicle else None,
             'group_name': m.group_name or '',
             'make_model': m.make_model or '',
             'last_lat': float(m.last_lat) if m.last_lat else None,
@@ -525,6 +526,66 @@ def link_vehicle(mapping_id: int, vehicle_id: int):
         raise ValueError("Mapping not found")
     m.vehicle_id = vehicle_id if vehicle_id else None
     db.session.commit()
+
+
+def auto_link_vehicles(account_id: int) -> dict:
+    """Auto-link PortalXS vehicles to internal Vehicle records by matching RegNo → vehicle_no.
+    Uses normalized comparison (case-insensitive, stripped suffixes like COW/USG/RAS etc.).
+    Only links mappings that are currently unlinked (vehicle_id is None).
+    Returns {'linked': count, 'already_linked': count, 'unmatched': count, 'unmatched_list': [regno, ...]}.
+    """
+    import re
+    from models import PortalXSVehicleMapping, Vehicle
+    from app import db
+
+    _SUFFIX_RE = re.compile(r'[\s\-]+(COW|USG\+P|USG|RAS|MNHC|EMS|NHP)\s*$', re.IGNORECASE)
+
+    def _norm(s):
+        if not s:
+            return ''
+        s = str(s).strip().upper()
+        s = _SUFFIX_RE.sub('', s)       # strip suffix FIRST (needs space/hyphen before it)
+        s = s.replace(' ', '')          # then remove remaining spaces
+        return s
+
+    mappings = PortalXSVehicleMapping.query.filter_by(account_id=account_id).all()
+    if not mappings:
+        return {'linked': 0, 'already_linked': 0, 'unmatched': 0, 'unmatched_list': []}
+
+    # Build lookup: normalized vehicle_no -> Vehicle.id
+    vehicles = Vehicle.query.all()
+    norm_to_vid = {}
+    for v in vehicles:
+        key = _norm(v.vehicle_no)
+        if key:
+            norm_to_vid[key] = v.id
+
+    linked = 0
+    already = 0
+    unmatched = 0
+    unmatched_list = []
+
+    for m in mappings:
+        if m.vehicle_id:
+            already += 1
+            continue
+        key = _norm(m.portalxs_regno)
+        if key and key in norm_to_vid:
+            m.vehicle_id = norm_to_vid[key]
+            linked += 1
+        else:
+            unmatched += 1
+            unmatched_list.append(m.portalxs_regno)
+
+    if linked:
+        db.session.commit()
+
+    return {
+        'linked': linked,
+        'already_linked': already,
+        'unmatched': unmatched,
+        'unmatched_list': unmatched_list,
+    }
 
 
 def get_summary_stats(account_id: int) -> dict:

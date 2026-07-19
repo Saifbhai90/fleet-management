@@ -20,7 +20,7 @@ from services.portalxs_service import (
     fetch_fleet_report, fetch_trends, fetch_mileage,
     fetch_alerts, fetch_geofences,
     get_cached_positions, get_summary_stats,
-    get_all_vehicles_for_account, link_vehicle,
+    get_all_vehicles_for_account, link_vehicle, auto_link_vehicles,
     create_account, update_account, delete_account,
     test_connection, encrypt_password, decrypt_password,
     start_polling,
@@ -541,6 +541,27 @@ def tracking_settings_link_vehicle():
     try:
         link_vehicle(mapping_id, vehicle_id)
         flash("Vehicle link updated.", "success")
+    except Exception as e:
+        flash(f"Error: {e}", "danger")
+    return redirect(url_for('tracking_settings'))
+
+
+@app.route('/tracking/settings/auto-link', methods=['POST'])
+def tracking_settings_auto_link():
+    """Auto-link all unlinked PortalXS vehicles to internal Vehicle records by RegNo match."""
+    acct_id = request.form.get('account_id', type=int)
+    if not acct_id:
+        flash("Account ID required.", "danger")
+        return redirect(url_for('tracking_settings'))
+    try:
+        result = auto_link_vehicles(acct_id)
+        msg = (f"Auto-link complete: {result['linked']} linked, "
+               f"{result['already_linked']} already linked, "
+               f"{result['unmatched']} unmatched.")
+        flash(msg, "success")
+        if result['unmatched_list']:
+            flash("Unmatched: " + ", ".join(result['unmatched_list'][:20]) +
+                  ("..." if len(result['unmatched_list']) > 20 else ""), "info")
     except Exception as e:
         flash(f"Error: {e}", "danger")
     return redirect(url_for('tracking_settings'))

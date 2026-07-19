@@ -29,6 +29,7 @@ _HUB_SLUG_LABELS: dict[str, str] = {
     'books':            'Books Hub',
     'notifications':    'Notifications Hub',
     'administration':   'Administration Hub',
+    'fleet-tracking':   'Fleet Tracking Hub',
 }
 
 
@@ -103,13 +104,20 @@ def _reports_index_url():
 def back_url_for_request(endpoint=None, nav_from=None, default_url=None):
     """
     Resolve Back target — mirrors sidebar logic:
-    1) nav_from=reports → Report Centre
-    2) nav_from=hub:<slug> → that hub
-    3) current endpoint's owning hub (hub_slug_for_endpoint) — same as sidebar active-link
+    1) current endpoint's owning hub (hub_slug_for_endpoint) — same as sidebar active-link
+    2) nav_from=reports → Report Centre
+    3) nav_from=hub:<slug> → that hub
     4) route default_url / Report Centre fallback
     """
     ep = endpoint or (request.endpoint if request else None)
     nf = (nav_from if nav_from is not None else get_nav_from() or '').strip()
+
+    # Check endpoint's owning hub FIRST — ensures pages always go back to their hub
+    # even if a stale nav_from=reports is in the session from a different module
+    from hub_registry import hub_url_for_endpoint
+    u = hub_url_for_endpoint(ep)
+    if u and not _is_dashboard_url(u):
+        return u
 
     if nf == REPORTS_NAV_FROM:
         u = _reports_index_url()
@@ -121,11 +129,6 @@ def back_url_for_request(endpoint=None, nav_from=None, default_url=None):
         u = hub_url_for_slug(nf[4:].strip())
         if u:
             return u
-
-    from hub_registry import hub_url_for_endpoint
-    u = hub_url_for_endpoint(ep)
-    if u and not _is_dashboard_url(u):
-        return u
 
     if default_url and not _is_dashboard_url(default_url):
         return default_url

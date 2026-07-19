@@ -313,6 +313,7 @@ HUBS = {
         'title': 'Fleet Tracking',
         'header_icon': 'bi-broadcast',
         'section_perm': None,
+        'access': 'tracking',
         'extra_endpoints': (
             'tracking_dashboard', 'tracking_vehicle_detail',
             'tracking_history', 'tracking_trips', 'tracking_fleet_report',
@@ -320,7 +321,7 @@ HUBS = {
             'tracking_settings_account_new', 'tracking_settings_account_edit',
             'tracking_settings_account_delete', 'tracking_settings_account_test',
             'tracking_settings_account_sync', 'tracking_settings_link_vehicle',
-            'tracking_settings_start_polling',
+            'tracking_settings_auto_link', 'tracking_settings_start_polling',
             'api_tracking_positions', 'api_tracking_refresh',
             'api_tracking_history', 'api_tracking_vehicles',
             'api_tracking_internal_vehicles',
@@ -330,18 +331,23 @@ HUBS = {
             {
                 'title': 'Live Tracking',
                 'items': [
-                    _item('tracking_dashboard', 'Live Map', 'fa-solid fa-map-location-dot', 'rc-tile--tracker'),
-                    _item('tracking_history', 'Route History', 'fa-solid fa-clock-rotate-left', 'rc-tile--tracker'),
-                    _item('tracking_trips', 'Trips Report', 'fa-solid fa-table-list', 'rc-tile--tracker'),
+                    _item('tracking_dashboard', 'Live Map & Dashboard', 'fa-solid fa-map-location-dot', 'rc-tile--tracker', 'tracking_view'),
+                    _item('tracking_history', 'Route History & Playback', 'fa-solid fa-clock-rotate-left', 'rc-tile--tracker', 'tracking_history'),
+                    _item('tracking_trips', 'Trips Report', 'fa-solid fa-table-list', 'rc-tile--tracker', 'tracking_reports'),
                 ],
             },
             {
                 'title': 'Reports & Analytics',
                 'items': [
-                    _item('tracking_fleet_report', 'Fleet Report', 'fa-solid fa-chart-column', 'rc-tile--tracker'),
-                    _item('tracking_trends', 'Trends', 'fa-solid fa-chart-line', 'rc-tile--tracker'),
-                    _item('tracking_alerts', 'Alerts', 'fa-solid fa-bell', 'rc-tile--tracker'),
-                    _item('tracking_settings', 'Tracking Settings', 'fa-solid fa-gear', 'rc-tile--tracker'),
+                    _item('tracking_fleet_report', 'Fleet Report & Ranking', 'fa-solid fa-chart-column', 'rc-tile--tracker', 'tracking_reports'),
+                    _item('tracking_trends', 'Trends Analysis', 'fa-solid fa-chart-line', 'rc-tile--tracker', 'tracking_reports'),
+                    _item('tracking_alerts', 'Alerts', 'fa-solid fa-bell', 'rc-tile--tracker', 'tracking_alerts'),
+                ],
+            },
+            {
+                'title': 'Configuration',
+                'items': [
+                    _item('tracking_settings', 'Tracking Settings', 'fa-solid fa-gear', 'rc-tile--tracker', 'tracking_settings'),
                 ],
             },
         ],
@@ -386,6 +392,8 @@ def _hub_access(hub, can_see_section_fn, can_see_page_fn, can_see_admin_fn, is_m
         return can_see_page_fn('notification_list')
     if access == 'administration':
         return can_see_admin_fn()
+    if access == 'tracking':
+        return can_see_section_fn('tracking')
     perm = hub.get('section_perm')
     if perm:
         return can_see_section_fn(perm)

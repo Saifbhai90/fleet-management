@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% from 'partials/nav_back_button.html' import nav_back_button %}
 {% block title %}Tracking Settings — Fleet Manager{% endblock %}
 
 {% block extra_head %}
@@ -13,104 +14,144 @@
 <div class="container-fluid py-3" style="max-width: 1000px;">
   <div class="d-flex align-items-center justify-content-between mb-3">
     <h4 class="mb-0 fw-bold"><i class="bi bi-gear"></i> PortalXS Tracking Settings</h4>
-    <a href="{{ url_for('tracking_dashboard') }}" class="btn btn-sm btn-outline-secondary">
-      <i class="bi bi-arrow-left"></i> Back to Map
-    </a>
+    {{ nav_back_button() }}
   </div>
 
-  <!-- Account Management -->
-  <div class="card mb-3">
-    <div class="card-header d-flex justify-content-between align-items-center">
-      <span><i class="bi bi-person-badge"></i> PortalXS Accounts</span>
-      <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#addAccountModal">
-        <i class="bi bi-plus-lg"></i> Add Account
+  <!-- Nav Tabs -->
+  <ul class="nav nav-tabs mb-3" role="tablist">
+    <li class="nav-item" role="presentation">
+      <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-accounts" type="button" role="tab">
+        <i class="bi bi-person-badge"></i> PortalXS Accounts
       </button>
-    </div>
-    {% if accounts %}
-    <div class="table-responsive">
-      <table class="table table-sm table-hover mb-0">
-        <thead><tr>
-          <th>Label</th><th>Username</th><th>Vehicles</th><th>Last Connected</th>
-          <th>Status</th><th>Actions</th>
-        </tr></thead>
-        <tbody>
-          {% for a in accounts %}
-          <tr>
-            <td class="fw-semibold">{{ a.label }}</td>
-            <td>{{ a.username }}</td>
-            <td>{{ a.vehicle_count }}</td>
-            <td class="small text-muted">{{ a.last_connected.strftime('%Y-%m-%d %H:%M') if a.last_connected else 'Never' }}</td>
-            <td>
-              {% if a.is_active %}<span class="badge bg-success">Active</span>
-              {% else %}<span class="badge bg-secondary">Inactive</span>{% endif %}
-            </td>
-            <td>
-              <div class="btn-group btn-group-sm">
-                <button class="btn btn-outline-info btn-test-account" data-acct-id="{{ a.id }}">Test</button>
-                <button class="btn btn-outline-primary btn-sync-account" data-acct-id="{{ a.id }}">Sync</button>
-                <button class="btn btn-outline-warning" data-bs-toggle="modal" data-bs-target="#editAccountModal"
-                        data-acct-id="{{ a.id }}" data-label="{{ a.label }}" data-username="{{ a.username }}"
-                        data-active="{{ a.is_active }}">Edit</button>
-                <form method="post" action="{{ url_for('tracking_settings_account_delete', acct_id=a.id) }}" class="d-inline"
-                      onsubmit="return confirm('Delete this account and all vehicle mappings?')">
-                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                  <button class="btn btn-outline-danger btn-sm">Delete</button>
-                </form>
-              </div>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-    {% else %}
-    <div class="card-body text-muted text-center py-4">
-      <i class="bi bi-exclamation-circle" style="font-size: 2rem;"></i>
-      <p class="mt-2">No PortalXS accounts configured. Click "Add Account" to get started.</p>
-    </div>
-    {% endif %}
-  </div>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-linking" type="button" role="tab">
+        <i class="bi bi-link-45deg"></i> Vehicle Linking
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-polling" type="button" role="tab">
+        <i class="bi bi-arrow-repeat"></i> Background Polling
+      </button>
+    </li>
+  </ul>
 
-  <!-- Vehicle Linking -->
-  {% if accounts %}
-  <div class="card mb-3">
-    <div class="card-header"><i class="bi bi-link-45deg"></i> Vehicle Linking (PortalXS RegNo → Internal Vehicle)</div>
-    <div class="card-body">
-      <p class="text-muted small">Link PortalXS registration numbers to your internal vehicle records for cross-referencing.</p>
-      <div class="mb-3">
-        <label class="form-label small fw-semibold">Select Account</label>
-        <select id="linkAccountSelect" class="form-select form-select-sm" style="width: auto;">
-          {% for a in accounts %}
-          <option value="{{ a.id }}">{{ a.label }} ({{ a.username }})</option>
-          {% endfor %}
-        </select>
+  <div class="tab-content">
+    <!-- Tab: Accounts -->
+    <div class="tab-pane fade show active" id="tab-accounts" role="tabpanel">
+      <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <span><i class="bi bi-person-badge"></i> PortalXS Accounts</span>
+          <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#addAccountModal">
+            <i class="bi bi-plus-lg"></i> Add Account
+          </button>
+        </div>
+        {% if accounts %}
+        <div class="table-responsive">
+          <table class="table table-sm table-hover mb-0">
+            <thead><tr>
+              <th>Label</th><th>Username</th><th>Vehicles</th><th>Last Connected</th>
+              <th>Status</th><th>Actions</th>
+            </tr></thead>
+            <tbody>
+              {% for a in accounts %}
+              <tr>
+                <td class="fw-semibold">{{ a.label }}</td>
+                <td>{{ a.username }}</td>
+                <td>{{ a.vehicle_count }}</td>
+                <td class="small text-muted">{{ a.last_connected.strftime('%Y-%m-%d %H:%M') if a.last_connected else 'Never' }}</td>
+                <td>
+                  {% if a.is_active %}<span class="badge bg-success">Active</span>
+                  {% else %}<span class="badge bg-secondary">Inactive</span>{% endif %}
+                </td>
+                <td>
+                  <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-info btn-test-account" data-acct-id="{{ a.id }}">Test</button>
+                    <button class="btn btn-outline-primary btn-sync-account" data-acct-id="{{ a.id }}">Sync</button>
+                    <button class="btn btn-outline-warning" data-bs-toggle="modal" data-bs-target="#editAccountModal"
+                            data-acct-id="{{ a.id }}" data-label="{{ a.label }}" data-username="{{ a.username }}"
+                            data-active="{{ a.is_active }}">Edit</button>
+                    <form method="post" action="{{ url_for('tracking_settings_account_delete', acct_id=a.id) }}" class="d-inline"
+                          onsubmit="return confirm('Delete this account and all vehicle mappings?')">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                      <button class="btn btn-outline-danger btn-sm">Delete</button>
+                    </form>
+                  </div>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="card-body text-muted text-center py-4">
+          <i class="bi bi-exclamation-circle" style="font-size: 2rem;"></i>
+          <p class="mt-2">No PortalXS accounts configured. Click "Add Account" to get started.</p>
+        </div>
+        {% endif %}
       </div>
-      <div id="linkVehiclesContainer">
-        <p class="text-muted small">Select an account to load vehicles...</p>
+    </div>
+
+    <!-- Tab: Vehicle Linking -->
+    <div class="tab-pane fade" id="tab-linking" role="tabpanel">
+      {% if accounts %}
+      <div class="card">
+        <div class="card-header"><i class="bi bi-link-45deg"></i> Vehicle Linking (PortalXS RegNo → Internal Vehicle)</div>
+        <div class="card-body">
+          <p class="text-muted small">Link PortalXS registration numbers to your internal vehicle records for cross-referencing.</p>
+          <div class="mb-3 d-flex align-items-end gap-2">
+            <div>
+              <label class="form-label small fw-semibold">Select Account</label>
+              <select id="linkAccountSelect" class="form-select form-select-sm" style="width: auto;">
+                {% for a in accounts %}
+                <option value="{{ a.id }}">{{ a.label }} ({{ a.username }})</option>
+                {% endfor %}
+              </select>
+            </div>
+            <form method="post" action="{{ url_for('tracking_settings_auto_link') }}" class="d-inline" id="autoLinkForm">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="account_id" id="autoLinkAccountId" value="{{ accounts[0].id if accounts else '' }}">
+              <button type="submit" class="btn btn-sm btn-success" id="autoLinkBtn">
+                <i class="bi bi-magic"></i> Auto-Link All
+              </button>
+            </form>
+          </div>
+          <div id="linkVehiclesContainer">
+            <p class="text-muted small">Select an account to load vehicles...</p>
+          </div>
+        </div>
       </div>
+      {% else %}
+      <div class="card">
+        <div class="card-body text-muted text-center py-4">
+          <i class="bi bi-info-circle" style="font-size: 2rem;"></i>
+          <p class="mt-2">Add a PortalXS account first to enable vehicle linking.</p>
+        </div>
+      </div>
+      {% endif %}
     </div>
-  </div>
 
-  <!-- Background Polling -->
-  <div class="card mb-3">
-    <div class="card-header"><i class="bi bi-arrow-repeat"></i> Background Polling</div>
-    <div class="card-body">
-      <p class="text-muted small">Start a background thread to auto-refresh vehicle positions every 30 seconds.</p>
-      <form method="post" action="{{ url_for('tracking_settings_start_polling') }}" class="d-inline">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-play"></i> Start Polling</button>
-      </form>
-    </div>
-  </div>
-  {% endif %}
-
-  <!-- Default credentials hint -->
-  <div class="card border-info">
-    <div class="card-body">
-      <h6 class="text-info"><i class="bi bi-info-circle"></i> Default Credentials (Pre-configured)</h6>
-      <p class="small text-muted mb-1">Username: <code>ccrmuzaffergarh</code></p>
-      <p class="small text-muted mb-1">Password: <code>Muzaffergarh123</code></p>
-      <p class="small text-muted mb-0">48 vehicles (IRMNCH account, South Punjab region)</p>
+    <!-- Tab: Background Polling -->
+    <div class="tab-pane fade" id="tab-polling" role="tabpanel">
+      {% if accounts %}
+      <div class="card">
+        <div class="card-header"><i class="bi bi-arrow-repeat"></i> Background Polling</div>
+        <div class="card-body">
+          <p class="text-muted small">Start a background thread to auto-refresh vehicle positions every 30 seconds.</p>
+          <form method="post" action="{{ url_for('tracking_settings_start_polling') }}" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-play"></i> Start Polling</button>
+          </form>
+        </div>
+      </div>
+      {% else %}
+      <div class="card">
+        <div class="card-body text-muted text-center py-4">
+          <i class="bi bi-info-circle" style="font-size: 2rem;"></i>
+          <p class="mt-2">Add a PortalXS account first to enable background polling.</p>
+        </div>
+      </div>
+      {% endif %}
     </div>
   </div>
 </div>
@@ -251,6 +292,8 @@ document.querySelectorAll('.btn-sync-account').forEach(function(btn) {
 // Vehicle linking
 document.getElementById('linkAccountSelect').addEventListener('change', function() {
   var acctId = this.value;
+  var autoLinkInput = document.getElementById('autoLinkAccountId');
+  if (autoLinkInput) autoLinkInput.value = acctId;
   var container = document.getElementById('linkVehiclesContainer');
   container.innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm"></div> Loading vehicles...</div>';
   fetch('/api/tracking/vehicles/' + acctId).then(function(r) { return r.json(); }).then(function(vehicles) {
@@ -260,10 +303,11 @@ document.getElementById('linkAccountSelect').addEventListener('change', function
     }
     var html = '<div class="table-responsive"><table class="table table-sm"><thead><tr><th>PortalXS RegNo</th><th>Group</th><th>Internal Vehicle</th><th></th></tr></thead><tbody>';
     vehicles.forEach(function(v) {
+      var linkedLabel = v.vehicle_no ? (v.vehicle_no + (v.vehicle_model ? ' (' + v.vehicle_model + ')' : '')) : '';
       html += '<tr><td class="fw-semibold">' + v.portalxs_regno + '</td><td>' + (v.group_name || '') + '</td>' +
         '<td><select class="form-select form-select-sm vehicle-link-select" data-mapping-id="' + v.id + '">' +
         '<option value="">-- Not Linked --</option>' +
-        (v.vehicle_no ? '<option value="' + (v.vehicle_id || '') + '" selected>' + v.vehicle_no + '</option>' : '') +
+        (v.vehicle_no ? '<option value="' + (v.vehicle_id || '') + '" selected>' + linkedLabel + '</option>' : '') +
         '</select></td><td><button class="btn btn-sm btn-outline-primary btn-link-vehicle" data-mapping-id="' + v.id + '">Link</button></td></tr>';
     });
     html += '</tbody></table></div>';
@@ -302,10 +346,19 @@ document.getElementById('linkAccountSelect').addEventListener('change', function
   });
 });
 
-// Auto-load first account's vehicles
-var firstAccount = document.getElementById('linkAccountSelect');
-if (firstAccount && firstAccount.options.length) {
-  firstAccount.dispatchEvent(new Event('change'));
+// Auto-load first account's vehicles when linking tab is opened
+var linkingTabShown = false;
+var linkingTabBtn = document.querySelector('[data-bs-target="#tab-linking"]');
+if (linkingTabBtn) {
+  linkingTabBtn.addEventListener('shown.bs.tab', function() {
+    if (!linkingTabShown) {
+      linkingTabShown = true;
+      var firstAccount = document.getElementById('linkAccountSelect');
+      if (firstAccount && firstAccount.options.length) {
+        firstAccount.dispatchEvent(new Event('change'));
+      }
+    }
+  });
 }
 </script>
 {% endblock %}

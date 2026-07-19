@@ -46,6 +46,15 @@
   .ts-list::-webkit-scrollbar { width: 6px; }
   .ts-list::-webkit-scrollbar-thumb { background: #2a3a4a; border-radius: 3px; }
 
+  /* ── Group headers (collapsible) ── */
+  .vg-header { display: flex; align-items: center; gap: 6px; padding: 8px 12px; background: #0f1923; border-bottom: 1px solid #2a3a4a; cursor: pointer; user-select: none; font-size: 12px; font-weight: 700; color: #cfe4ff; text-transform: uppercase; letter-spacing: .5px; }
+  .vg-header:hover { background: #142030; }
+  .vg-header .vg-chevron { transition: transform .2s; font-size: 10px; color: #64748b; }
+  .vg-header.collapsed .vg-chevron { transform: rotate(-90deg); }
+  .vg-header .vg-count { margin-left: auto; font-size: 10px; color: #64748b; font-weight: 400; }
+  .vg-body { overflow: hidden; }
+  .vg-body.collapsed { display: none; }
+
   .vrow { padding: 8px 12px; border-bottom: 1px solid #2a3a4a; cursor: pointer; display: flex; align-items: center; gap: 10px; transition: background .15s; }
   .vrow:hover { background: #243441; }
   .vrow.active { background: #1a3a5a; border-left: 3px solid #1a5fb4; }
@@ -75,8 +84,15 @@
   .pop-title { font-weight: 700; font-size: 15px; margin-bottom: 6px; color: #fff; }
   .pop-row { font-size: 12px; margin: 3px 0; color: #cbd5e1; }
   .pop-row b { color: #94a3b8; font-weight: 400; }
-  .pop-link { display: inline-block; margin-top: 8px; padding: 4px 14px; border-radius: 6px; background: #1a5fb4; color: #fff; text-decoration: none; font-size: 12px; }
-  .pop-link:hover { background: #2563eb; color: #fff; }
+  .pop-link { display: inline-block; margin-top: 8px; padding: 6px 16px; border-radius: 6px; background: #1a5fb4; color: #fff !important; text-decoration: none; font-size: 12px; font-weight: 600; text-align: center; }
+  .pop-link:hover { background: #2563eb; color: #fff !important; }
+
+  /* ── Vehicle label on marker ── */
+  .vmarker-label { position: absolute; top: -20px; left: 50%; transform: translateX(-50%); white-space: nowrap; background: rgba(15,25,35,.85); color: #fff; font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 4px; border: 1px solid #2a3a4a; pointer-events: none; }
+
+  /* ── Show labels checkbox ── */
+  .tb-check { display: flex; align-items: center; gap: 4px; color: #94a3b8; font-size: 12px; cursor: pointer; user-select: none; }
+  .tb-check input { cursor: pointer; }
 
   /* ── Refresh indicator ── */
   .refresh-indicator { position: absolute; top: 10px; right: 10px; z-index: 1000; background: rgba(15,25,35,.92); color: #60a5fa; padding: 6px 12px; border-radius: 8px; font-size: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); border: 1px solid #2a3a4a; }
@@ -109,6 +125,7 @@
 <div class="tracking-wrap">
   <!-- Top Bar -->
   <div class="tracking-topbar">
+    <a href="{{ url_for('module_hub', hub_slug='fleet-tracking') }}" class="tb-btn"><i class="bi bi-grid"></i><span>Hub</span></a>
     <div class="tb-title"><i class="bi bi-broadcast"></i> Fleet Dashboard</div>
     {% if accounts %}
     <select id="accountSelect" class="tb-select">
@@ -125,13 +142,8 @@
       <div class="tb-stat idle" data-stat-filter="Idle"><div class="num" id="statIdle">{{ stats.idle }}</div><div class="lbl">Idle</div></div>
     </div>
     <div class="tb-updated" id="tbUpdated">--</div>
+    <label class="tb-check"><input type="checkbox" id="showLabelsChk"> Show Labels</label>
     <button id="forceRefreshBtn" class="tb-btn"><i class="bi bi-arrow-clockwise"></i><span>Refresh</span></button>
-    {% if can_see_page('tracking_history') %}
-    <a href="{{ url_for('tracking_history') }}" class="tb-btn"><i class="bi bi-clock-history"></i><span>History</span></a>
-    {% endif %}
-    {% if can_see_page('tracking_settings') %}
-    <a href="{{ url_for('tracking_settings') }}" class="tb-btn"><i class="bi bi-gear"></i><span>Settings</span></a>
-    {% endif %}
   </div>
 
   {% if error %}
@@ -157,14 +169,24 @@
         </div>
       </div>
       <div class="ts-list" id="vehicleList">
-        {% for v in vehicles %}
-        <div class="vrow" data-regno="{{ v.RegNo }}" data-status="{{ v.VehicleStatus }}" data-lat="{{ v.LAT }}" data-lon="{{ v.LON }}">
-          <div class="vdot {{ v.VehicleStatus }}"></div>
-          <div class="vinfo">
-            <div class="vreg">{{ v.RegNo }}</div>
-            <div class="vsub">{{ v.LandMark[:40] if v.LandMark else '' }}</div>
+        {% set grouped = vehicles | groupby('GroupName') | sort %}
+        {% for g, gv in grouped %}
+        <div class="vg-header" data-group="{{ g or 'Unassigned' }}">
+          <i class="bi bi-chevron-down vg-chevron"></i>
+          <span>{{ g or 'Unassigned' }}</span>
+          <span class="vg-count">{{ gv|length }}</span>
+        </div>
+        <div class="vg-body" data-group-body="{{ g or 'Unassigned' }}">
+          {% for v in gv %}
+          <div class="vrow" data-regno="{{ v.RegNo }}" data-status="{{ v.VehicleStatus }}" data-lat="{{ v.LAT }}" data-lon="{{ v.LON }}">
+            <div class="vdot {{ v.VehicleStatus }}"></div>
+            <div class="vinfo">
+              <div class="vreg">{{ v.RegNo }}</div>
+              <div class="vsub">{{ v.LandMark[:40] if v.LandMark else '' }}</div>
+            </div>
+            <div class="vspd">{{ v.Speed|round(0) }}<br><small>km/h</small></div>
           </div>
-          <div class="vspd">{{ v.Speed|round(0) }}<br><small>km/h</small></div>
+          {% endfor %}
         </div>
         {% endfor %}
       </div>
@@ -245,12 +267,15 @@
   }
 
   // Car icon SVG (top-down view like Uber/inDrive)
-  function carIcon(color, deg, isMoving) {
+  var showLabels = false;
+
+  function carIcon(color, deg, isMoving, regNo) {
     var rotate = deg || 0;
     var pulseRing = isMoving ? '<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:36px;height:36px;border-radius:50%;border:2px solid ' + color + ';opacity:0.4;animation:pulse 1.5s ease-out infinite"></div>' : '';
+    var label = (showLabels && regNo) ? '<div class="vmarker-label">' + regNo + '</div>' : '';
     return L.divIcon({
       className: '',
-      html: '<div style="position:relative;width:36px;height:36px;">' + pulseRing +
+      html: '<div style="position:relative;width:36px;height:36px;">' + label + pulseRing +
             '<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(' + rotate + 'deg);">' +
             '<svg width="32" height="32" viewBox="0 0 32 32">' +
             '<circle cx="16" cy="16" r="15" fill="' + color + '" stroke="#fff" stroke-width="2" opacity="0.95"/>' +
@@ -312,7 +337,6 @@
   // ── Render ──
   function renderVehicles(vehicles) {
     positions = vehicles || [];
-    var q = document.getElementById('vehicleSearch').value.toUpperCase();
     var list = document.getElementById('vehicleList');
 
     // counts
@@ -325,9 +349,28 @@
     document.getElementById('statStopped').textContent = st;
     document.getElementById('statIdle').textContent = id;
 
-    // sidebar (filtered by search only, filter buttons handle visibility)
-    var filtered = positions.filter(function(v) { return !q || (v.RegNo || '').toUpperCase().indexOf(q) >= 0; });
-    list.innerHTML = filtered.map(sidebarRow).join('');
+    // group vehicles by GroupName
+    var groups = {};
+    var groupOrder = [];
+    positions.forEach(function(v) {
+      var g = v.GroupName || 'Unassigned';
+      if (!groups[g]) { groups[g] = []; groupOrder.push(g); }
+      groups[g].push(v);
+    });
+
+    // render grouped sidebar
+    var html = '';
+    groupOrder.forEach(function(g) {
+      var gv = groups[g];
+      html += '<div class="vg-header" data-group="' + g.replace(/"/g, '&quot;') + '">' +
+        '<i class="bi bi-chevron-down vg-chevron"></i>' +
+        '<span>' + g + '</span>' +
+        '<span class="vg-count">' + gv.length + '</span></div>';
+      html += '<div class="vg-body" data-group-body="' + g.replace(/"/g, '&quot;') + '">';
+      gv.forEach(function(v) { html += sidebarRow(v); });
+      html += '</div>';
+    });
+    list.innerHTML = html;
 
     // markers — car icons like ride-hailing apps
     positions.forEach(function(v) {
@@ -339,7 +382,7 @@
       var color = colorFor(cls);
       var moving = cls === 'Moving';
       var deg = parseFloat(v.Direction) || 0;
-      var icon = carIcon(color, deg, moving);
+      var icon = carIcon(color, deg, moving, v.RegNo);
 
       if (markers[v.RegNo]) {
         markers[v.RegNo].setLatLng([lat, lon]).setIcon(icon);
@@ -358,6 +401,17 @@
         map.removeLayer(markers[reg]);
         delete markers[reg];
       }
+    });
+
+    // bind group header collapse/expand
+    document.querySelectorAll('.vg-header').forEach(function(hdr) {
+      hdr.addEventListener('click', function() {
+        var body = list.querySelector('[data-group-body="' + hdr.dataset.group + '"]');
+        if (body) {
+          hdr.classList.toggle('collapsed');
+          body.classList.toggle('collapsed');
+        }
+      });
     });
 
     // bind sidebar clicks
@@ -386,11 +440,39 @@
 
   function applyFilter() {
     var search = document.getElementById('vehicleSearch').value.toLowerCase();
+    var hasSearch = search.length > 0;
+
+    // track which groups have visible rows
+    var visibleGroups = {};
+
     document.querySelectorAll('.vrow').forEach(function(r) {
       var matchFilter = currentFilter === 'all' || r.dataset.status === currentFilter;
       var matchSearch = !search || r.dataset.regno.toLowerCase().indexOf(search) >= 0;
-      r.style.display = (matchFilter && matchSearch) ? '' : 'none';
+      var show = (matchFilter && matchSearch);
+      r.style.display = show ? '' : 'none';
+      if (show) {
+        var body = r.closest('.vg-body');
+        if (body) visibleGroups[body.dataset.groupBody] = true;
+      }
     });
+
+    // auto-expand groups with matching rows when searching; restore user state otherwise
+    document.querySelectorAll('.vg-header').forEach(function(hdr) {
+      var body = document.querySelector('[data-group-body="' + hdr.dataset.group + '"]');
+      if (!body) return;
+      if (hasSearch) {
+        // when searching: expand groups that have matches, collapse those without
+        if (visibleGroups[hdr.dataset.group]) {
+          hdr.classList.remove('collapsed');
+          body.classList.remove('collapsed');
+        } else {
+          hdr.classList.add('collapsed');
+          body.classList.add('collapsed');
+        }
+      }
+      // when not searching: leave user's collapse state as-is
+    });
+
     // filter map markers too
     Object.keys(markers).forEach(function(reg) {
       var v = positions.find(function(x) { return x.RegNo === reg; });
@@ -430,6 +512,31 @@
   document.querySelectorAll('.tb-stat').forEach(function(stat) {
     stat.addEventListener('click', function() {
       setFilter(stat.dataset.statFilter);
+    });
+  });
+
+  // bind group header collapse/expand for server-rendered content
+  document.querySelectorAll('.vg-header').forEach(function(hdr) {
+    hdr.addEventListener('click', function() {
+      var body = document.querySelector('[data-group-body="' + hdr.dataset.group + '"]');
+      if (body) {
+        hdr.classList.toggle('collapsed');
+        body.classList.toggle('collapsed');
+      }
+    });
+  });
+
+  // Show/hide vehicle labels on map markers
+  document.getElementById('showLabelsChk').addEventListener('change', function() {
+    showLabels = this.checked;
+    // re-render markers with/without labels
+    positions.forEach(function(v) {
+      if (!markers[v.RegNo]) return;
+      var cls = v.VehicleStatus || 'Idle';
+      var color = colorFor(cls);
+      var moving = cls === 'Moving';
+      var deg = parseFloat(v.Direction) || 0;
+      markers[v.RegNo].setIcon(carIcon(color, deg, moving, v.RegNo));
     });
   });
 

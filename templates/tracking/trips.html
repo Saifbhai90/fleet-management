@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% from 'partials/nav_back_button.html' import nav_back_button %}
 {% block title %}Trips Report — Fleet Tracking{% endblock %}
 
 {% block extra_head %}
@@ -9,9 +10,7 @@
 <div class="container-fluid py-3">
   <div class="d-flex align-items-center justify-content-between mb-3">
     <h4 class="mb-0 fw-bold"><i class="bi bi-table"></i> Trips Report</h4>
-    <a href="{{ url_for('tracking_dashboard') }}" class="btn btn-sm btn-outline-secondary">
-      <i class="bi bi-arrow-left"></i> Back to Map
-    </a>
+    {{ nav_back_button() }}
   </div>
 
   <form method="get" class="card mb-3">

@@ -4367,6 +4367,10 @@
                 href = window.FleetConfig.urls.reports_index;
                 if (!window.fleetIsDashboardNavUrl(href)) return href;
             }
+            if (nf && nf.indexOf('hub:') === 0) {
+                href = '/hub/' + nf.substring(4);
+                if (!window.fleetIsDashboardNavUrl(href)) return href;
+            }
             return null;
         };
 
