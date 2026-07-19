@@ -27,9 +27,13 @@ def _fernet(app=None):
     import hashlib, base64
     if app is None:
         from flask import current_app as _app
-        secret = _app.config.get('SECRET_KEY', 'fallback-secret-key')
+        secret = _app.config.get('SECRET_KEY')
     else:
-        secret = app.config.get('SECRET_KEY', 'fallback-secret-key')
+        secret = app.config.get('SECRET_KEY')
+    if not secret:
+        # app.py enforces SECRET_KEY at boot — this is a hard failure, never silently
+        # fall back to a known key (would make all encrypted passwords crackable).
+        raise RuntimeError("SECRET_KEY is not configured; cannot encrypt/decrypt PortalXS passwords")
     key = base64.urlsafe_b64encode(hashlib.sha256(secret.encode()).digest())
     return Fernet(key)
 
@@ -152,6 +156,20 @@ def normalize_fleet_report(r: dict) -> dict:
     }
 
 
+def normalize_mileage_report(m: dict) -> dict:
+    """Normalize a mileage report row from PortalXS API.
+    Expected fields: ID, DateFrom, TimeFrom, DateTo, TimeTo, Mileage, PToP, Distance."""
+    return {
+        'ID': m.get('ID', m.get('id', '')),
+        'DateFrom': m.get('DateFrom', m.get('datefrom', '')),
+        'TimeFrom': m.get('TimeFrom', m.get('timefrom', '')),
+        'DateTo': m.get('DateTo', m.get('dateto', '')),
+        'TimeTo': m.get('TimeTo', m.get('timeto', '')),
+        'Mileage': _to_float(m.get('Mileage', m.get('Distance', 0))),
+        'PToP': _to_float(m.get('PToP', m.get('PTOP', 0))),
+    }
+
+
 def normalize_trend(t: dict) -> dict:
     return {
         'RDT': t.get('RDT', ''),
@@ -211,7 +229,7 @@ def _get_client(account_id: int) -> 'PortalXSClient':
         raise ValueError(f"PortalXSAccount {account_id} not found")
 
     password = decrypt_password(acct.password_enc)
-    client = PortalXSClient(acct.username, password)
+    client = PortalXSClient(acct.username, password, session_key=f"acct{account_id}")
     client.connect()
     acct.last_connected = datetime.now()
     acct.last_error = None
@@ -248,22 +266,25 @@ def fetch_live_positions(account_id: int, force: bool = False) -> list[dict]:
         vehicles = [normalize_vehicle(v) for v in raw_vehicles]
         _set_cached_positions(account_id, vehicles)
 
-        # Update DB mappings
+        # Update DB mappings — preload all mappings in ONE query (not N queries)
         acct = db.session.get(PortalXSAccount, account_id)
         if acct:
             acct.vehicle_count = len(vehicles)
             acct.last_error = None
 
+        existing = {
+            m.portalxs_regno: m
+            for m in PortalXSVehicleMapping.query.filter_by(account_id=account_id).all()
+        }
         for v in vehicles:
-            mapping = PortalXSVehicleMapping.query.filter_by(
-                account_id=account_id, portalxs_regno=v['RegNo']
-            ).first()
+            mapping = existing.get(v['RegNo'])
             if not mapping:
                 mapping = PortalXSVehicleMapping(
                     account_id=account_id,
                     portalxs_regno=v['RegNo'],
                 )
                 db.session.add(mapping)
+                existing[v['RegNo']] = mapping
 
             mapping.group_name = v.get('GroupName', '')
             mapping.make_model = v.get('MakeAndModel', '')
@@ -325,6 +346,67 @@ def fetch_fleet_report(account_id: int, regno: str, from_dt: str, to_dt: str) ->
     return [normalize_fleet_report(r) for r in raw]
 
 
+# ── Fleet report: parallel bulk fetch + short TTL cache ──────────────────────
+
+_fleet_report_cache: dict[tuple, tuple[float, list]] = {}
+_fleet_report_cache_lock = threading.Lock()
+FLEET_REPORT_CACHE_TTL = 300  # 5 minutes
+FLEET_REPORT_MAX_WORKERS = 8
+
+
+def fetch_fleet_report_bulk(account_id: int, regnos: list[str], from_dt: str, to_dt: str) -> tuple[list[dict], Optional[str]]:
+    """Fetch fleet reports for many vehicles in PARALLEL with a 5-min cache.
+    Returns (reports, error). Partial results are returned even if some vehicles fail.
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    cache_key = (account_id, tuple(sorted(regnos)), from_dt, to_dt)
+    now = time.time()
+    with _fleet_report_cache_lock:
+        hit = _fleet_report_cache.get(cache_key)
+        if hit and (now - hit[0]) < FLEET_REPORT_CACHE_TTL:
+            return hit[1], None
+
+    # Ensure the client is connected ONCE before parallel calls
+    # (avoids N threads racing to login simultaneously)
+    _get_client(account_id)
+
+    reports: list[dict] = []
+    errors: list[str] = []
+
+    def _one(regno):
+        client = _get_client(account_id)
+        raw = client.get_fleet_report(regno, from_dt, to_dt)
+        if not isinstance(raw, list):
+            return []
+        return [normalize_fleet_report(r) for r in raw]
+
+    with ThreadPoolExecutor(max_workers=FLEET_REPORT_MAX_WORKERS) as pool:
+        futures = {pool.submit(_one, r): r for r in regnos}
+        for fut in as_completed(futures):
+            regno = futures[fut]
+            try:
+                for item in fut.result():
+                    item['_regno'] = regno
+                    reports.append(item)
+            except Exception as e:
+                errors.append(f"{regno}: {str(e)[:120]}")
+
+    error = None
+    if errors:
+        error = f"{len(errors)} vehicle(s) failed — " + "; ".join(errors[:3])
+
+    # Cache only fully/partially successful results (something to show)
+    if reports:
+        with _fleet_report_cache_lock:
+            _fleet_report_cache[cache_key] = (now, reports)
+            # Evict stale entries to keep memory bounded
+            for k in [k for k, (ts, _) in _fleet_report_cache.items() if (now - ts) > FLEET_REPORT_CACHE_TTL * 2]:
+                _fleet_report_cache.pop(k, None)
+
+    return reports, error
+
+
 def fetch_trends(account_id: int, regno: str, from_dt: str, to_dt: str) -> list[dict]:
     """Fetch daily trends for a vehicle."""
     client = _get_client(account_id)
@@ -345,8 +427,94 @@ def fetch_mileage(account_id: int, regno: str, from_dt: str, to_dt: str) -> dict
     return {}
 
 
+# ── Mileage report: parallel bulk fetch + short TTL cache ─────────────────────
+
+_mileage_report_cache: dict[tuple, tuple[float, list]] = {}
+_mileage_report_cache_lock = threading.Lock()
+MILEAGE_REPORT_CACHE_TTL = 300  # 5 minutes
+
+
+def _split_dt(rdt: str) -> tuple[str, str]:
+    """Split a datetime string like '2024-07-19 14:30:00' into (date, time)."""
+    if not rdt:
+        return '', ''
+    s = rdt.strip().replace('T', ' ')
+    parts = s.split(' ', 1)
+    if len(parts) == 2:
+        return parts[0], parts[1]
+    return s, ''
+
+
+def fetch_mileage_report_bulk(account_id: int, regnos: list[str], from_dt: str, to_dt: str) -> tuple[list[dict], Optional[str]]:
+    """Fetch mileage report for many vehicles in PARALLEL using trips API
+    (which supports historical dates). Maps trip data to mileage report columns.
+    Returns (rows, error). Each row gets _regno appended."""
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    cache_key = (account_id, tuple(sorted(regnos)), from_dt, to_dt)
+    now = time.time()
+    with _mileage_report_cache_lock:
+        hit = _mileage_report_cache.get(cache_key)
+        if hit and (now - hit[0]) < MILEAGE_REPORT_CACHE_TTL:
+            return hit[1], None
+
+    _get_client(account_id)  # connect once before parallel calls
+
+    rows: list[dict] = []
+    errors: list[str] = []
+    seq = 0
+
+    def _one(regno):
+        client = _get_client(account_id)
+        raw = client.get_trips(regno, from_dt, to_dt)
+        if not isinstance(raw, list):
+            return []
+        return [normalize_trip(t) for t in raw]
+
+    with ThreadPoolExecutor(max_workers=FLEET_REPORT_MAX_WORKERS) as pool:
+        futures = {pool.submit(_one, r): r for r in regnos}
+        for fut in as_completed(futures):
+            regno = futures[fut]
+            try:
+                for item in fut.result():
+                    seq += 1
+                    date_from, time_from = _split_dt(item.get('IGON_RDT', ''))
+                    date_to, time_to = _split_dt(item.get('IGOFF_RDT', ''))
+                    rows.append({
+                        'ID': seq,
+                        '_regno': regno,
+                        'DateFrom': date_from,
+                        'TimeFrom': time_from,
+                        'DateTo': date_to,
+                        'TimeTo': time_to,
+                        'Mileage': item.get('Mileage', 0),
+                        'PToP': item.get('Mileage', 0),
+                    })
+            except Exception as e:
+                errors.append(f"{regno}: {str(e)[:120]}")
+
+    # Sort by DateFrom descending (most recent first)
+    rows.sort(key=lambda x: (x.get('DateFrom', ''), x.get('TimeFrom', '')), reverse=True)
+
+    error = None
+    if errors:
+        error = f"{len(errors)} vehicle(s) failed — " + "; ".join(errors[:3])
+
+    if rows:
+        with _mileage_report_cache_lock:
+            _mileage_report_cache[cache_key] = (now, rows)
+            for k in [k for k, (ts, _) in _mileage_report_cache.items() if (now - ts) > MILEAGE_REPORT_CACHE_TTL * 2]:
+                _mileage_report_cache.pop(k, None)
+
+    return rows, error
+
+
+ALERT_CACHE_MAX_ROWS = 500  # per account
+
+
 def fetch_alerts(account_id: int) -> list[dict]:
-    """Fetch and cache alerts."""
+    """Fetch alerts; insert only NEW ones into cache (no delete-all churn).
+    Alert history is preserved up to ALERT_CACHE_MAX_ROWS per account."""
     from models import PortalXSAlertCache
     from app import db
 
@@ -355,9 +523,16 @@ def fetch_alerts(account_id: int) -> list[dict]:
     if not isinstance(raw, list):
         raw = []
 
-    # Clear old alerts for this account and insert fresh
-    PortalXSAlertCache.query.filter_by(account_id=account_id).delete()
+    # Existing alert keys (regno + type + time) to dedupe against
+    existing_keys = {
+        (c.regno or '', c.alert_type or '', c.alert_time.isoformat() if c.alert_time else '')
+        for c in PortalXSAlertCache.query.filter_by(account_id=account_id)
+        .with_entities(PortalXSAlertCache.regno, PortalXSAlertCache.alert_type, PortalXSAlertCache.alert_time)
+        .all()
+    }
+
     alerts = []
+    inserted = 0
     for a in raw:
         if not isinstance(a, dict):
             continue
@@ -367,16 +542,20 @@ def fetch_alerts(account_id: int) -> list[dict]:
         alert_time_str = a.get('RDT', a.get('AlertTime', a.get('DateTime', '')))
         alert_time = _parse_rdt(alert_time_str) if alert_time_str else None
 
-        cache = PortalXSAlertCache(
-            account_id=account_id,
-            regno=regno,
-            alert_type=alert_type,
-            alert_msg=alert_msg,
-            alert_time=alert_time,
-            severity=a.get('Severity', ''),
-            raw_json=json.dumps(a, ensure_ascii=False),
-        )
-        db.session.add(cache)
+        key = (regno or '', alert_type or '', alert_time.isoformat() if alert_time else '')
+        if key not in existing_keys:
+            db.session.add(PortalXSAlertCache(
+                account_id=account_id,
+                regno=regno,
+                alert_type=alert_type,
+                alert_msg=alert_msg,
+                alert_time=alert_time,
+                severity=a.get('Severity', ''),
+                raw_json=json.dumps(a, ensure_ascii=False),
+            ))
+            existing_keys.add(key)
+            inserted += 1
+
         alerts.append({
             'regno': regno,
             'alert_type': alert_type,
@@ -384,7 +563,21 @@ def fetch_alerts(account_id: int) -> list[dict]:
             'alert_time': alert_time_str,
             'severity': a.get('Severity', ''),
         })
-    db.session.commit()
+
+    if inserted:
+        db.session.commit()
+        # Trim oldest rows beyond cap
+        ids_to_keep = [r.id for r in PortalXSAlertCache.query.filter_by(account_id=account_id)
+                       .order_by(PortalXSAlertCache.created_at.desc())
+                       .with_entities(PortalXSAlertCache.id)
+                       .limit(ALERT_CACHE_MAX_ROWS).all()]
+        if ids_to_keep:
+            deleted = PortalXSAlertCache.query.filter(
+                PortalXSAlertCache.account_id == account_id,
+                ~PortalXSAlertCache.id.in_(ids_to_keep)
+            ).delete(synchronize_session=False)
+            if deleted:
+                db.session.commit()
     return alerts
 
 
@@ -429,6 +622,11 @@ def start_polling(app):
 
 def stop_polling():
     _poll_thread_stop.set()
+
+
+def is_polling() -> bool:
+    """True if the background polling thread is currently running."""
+    return bool(_poll_thread and _poll_thread.is_alive() and not _poll_thread_stop.is_set())
 
 
 # ── Account management ───────────────────────────────────────────────────────

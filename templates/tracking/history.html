@@ -156,8 +156,9 @@
     var popupContent = '<strong>Point ' + (idx + 1) + '/' + points.length + '</strong><br>' +
       'Time: ' + p.RecordDateTime + '<br>Speed: ' + p.Speed.toFixed(1) + ' km/h<br>' +
       'Location: ' + (p.LandMark || 'N/A');
-    playMarker.bindPopup(popupContent).openPopup();
+    playMarker.setPopupContent(popupContent);
   }
+  playMarker.bindPopup('', { autoPan: false });
 
   slider.addEventListener('input', function() { updatePoint(parseInt(this.value)); });
 

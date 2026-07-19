@@ -10,7 +10,7 @@
 {% block content %}
 <div class="container-fluid py-3">
   <div class="d-flex align-items-center justify-content-between mb-3">
-    <h4 class="mb-0 fw-bold"><i class="bi bi-bar-chart"></i> Fleet Report & Driver Ranking</h4>
+    <h4 class="mb-0 fw-bold"><i class="bi bi-bar-chart"></i> Fleet Report & Vehicle Ranking</h4>
     {{ nav_back_button() }}
   </div>
 
@@ -25,6 +25,12 @@
         <input type="text" name="to_date" class="form-control form-control-sm datepicker" value="{{ to_date }}" required>
       </div>
       <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-search"></i> Generate</button>
+      {% if reports %}
+      <a href="{{ url_for('tracking_fleet_report_export_csv', from_date=from_date, to_date=to_date, account_id=current_account_id) }}"
+         class="btn btn-sm btn-outline-success">
+        <i class="bi bi-filetype-csv"></i> Export CSV
+      </a>
+      {% endif %}
     </div>
   </form>
 
@@ -47,7 +53,7 @@
   </div>
 
   <div class="card">
-    <div class="card-header"><i class="bi bi-trophy"></i> Driver Ranking by Vehicle Score</div>
+    <div class="card-header"><i class="bi bi-trophy"></i> Vehicle Ranking by Score</div>
     <div class="table-responsive">
       <table class="table table-sm table-hover mb-0">
         <thead><tr>

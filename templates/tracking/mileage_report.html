@@ -1,0 +1,99 @@
+{% extends 'base.html' %}
+{% from 'partials/nav_back_button.html' import nav_back_button %}
+{% block title %}Vehicle Mileage Report — Fleet Tracking{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <h4 class="mb-0 fw-bold"><i class="bi bi-speedometer2"></i> Vehicle Mileage Report</h4>
+    {{ nav_back_button() }}
+  </div>
+
+  <form method="get" class="card mb-3">
+    <div class="card-body d-flex flex-wrap gap-3 align-items-end">
+      <div>
+        <label class="form-label small fw-semibold">From</label>
+        <input type="text" name="from_date" class="form-control form-control-sm datepicker" value="{{ from_date }}" required>
+      </div>
+      <div>
+        <label class="form-label small fw-semibold">To</label>
+        <input type="text" name="to_date" class="form-control form-control-sm datepicker" value="{{ to_date }}" required>
+      </div>
+      <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-search"></i> Generate</button>
+      {% if rows %}
+      <a href="{{ url_for('tracking_mileage_report_export_csv', from_date=from_date, to_date=to_date, account_id=current_account_id) }}"
+         class="btn btn-sm btn-outline-success">
+        <i class="bi bi-filetype-csv"></i> Export CSV
+      </a>
+      {% endif %}
+    </div>
+  </form>
+
+  {% if error %}
+  <div class="alert alert-danger">{{ error }}</div>
+  {% endif %}
+
+  {% if rows %}
+  <div class="card">
+    <div class="card-header d-flex align-items-center justify-content-between">
+      <span><i class="bi bi-table"></i> Mileage Data ({{ rows|length }} rows)</span>
+      <input type="text" id="mileageSearch" class="form-control form-control-sm" placeholder="Search..." style="max-width: 200px;">
+    </div>
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0" id="mileageTable">
+        <thead><tr>
+          <th>ID</th><th>Reg No</th><th>Date From</th><th>Time From</th>
+          <th>Date To</th><th>Time To</th><th>Mileage</th><th>PtoP</th>
+        </tr></thead>
+        <tbody>
+          {% for r in rows %}
+          <tr>
+            <td>{{ r.ID }}</td>
+            <td class="fw-semibold">{{ r.vehicle_no or r._regno }}</td>
+            <td>{{ r.DateFrom }}</td>
+            <td>{{ r.TimeFrom }}</td>
+            <td>{{ r.DateTo }}</td>
+            <td>{{ r.TimeTo }}</td>
+            <td>{{ "%.1f"|format(r.Mileage) }}</td>
+            <td>{{ "%.1f"|format(r.PToP) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% elif current_account_id %}
+  <div class="alert alert-info">No mileage data. Select a date range and generate.</div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script>
+flatpickr('.datepicker', { dateFormat: 'Y-m-d', maxDate: new Date() });
+
+(function() {
+  var input = document.getElementById('mileageSearch');
+  if (!input) return;
+  var table = document.getElementById('mileageTable');
+  var tbody = table.querySelector('tbody');
+  var rows = tbody.querySelectorAll('tr');
+  var timer;
+  input.addEventListener('input', function() {
+    clearTimeout(timer);
+    timer = setTimeout(function() {
+      var q = input.value.toLowerCase();
+      rows.forEach(function(row) {
+        var text = row.textContent.toLowerCase();
+        row.style.display = text.includes(q) ? '' : 'none';
+      });
+    }, 250);
+  });
+})();
+</script>
+{% endblock %}

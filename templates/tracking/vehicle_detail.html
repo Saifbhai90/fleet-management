@@ -115,7 +115,12 @@
   <div class="row mt-3">
     <div class="col-12">
       <div class="card">
-        <div class="card-header"><i class="bi bi-journal-text"></i> Today's Trips ({{ today_trips|length }})</div>
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <span><i class="bi bi-journal-text"></i> Today's Trips ({{ today_trips|length }})</span>
+          {% if today_mileage and today_mileage.get('Distance') %}
+          <span class="badge bg-primary">Today's Distance: {{ today_mileage.get('Distance') }} km</span>
+          {% endif %}
+        </div>
         {% if today_trips %}
         <div class="table-responsive">
           <table class="table table-sm table-hover mb-0">
@@ -152,6 +157,7 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 (function() {
+  var regno = {{ regno | tojson }};
   var lat = {{ vehicle.LAT or 0 }};
   var lon = {{ vehicle.LON or 0 }};
   var hasGps = lat !== 0 || lon !== 0;
@@ -161,17 +167,48 @@
     maxZoom: 20, attribution: '&copy; Google', subdomains: ['mt0','mt1','mt2','mt3']
   }).addTo(map);
 
-  var status = '{{ vehicle.VehicleStatus }}';
-  var color = status === 'Moving' ? '#198754' : status === 'Stopped' ? '#dc3545' : '#ffc107';
-  var marker = L.marker([lat, lon], {
-    icon: L.divIcon({
+  function colorFor(status) {
+    return status === 'Moving' ? '#198754' : status === 'Stopped' ? '#dc3545' : '#ffc107';
+  }
+
+  function markerIcon(color) {
+    return L.divIcon({
       html: '<div style="width:16px;height:16px;border-radius:50%;background:' + color +
             ';border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.4);"></div>',
       className: 'vehicle-detail-marker', iconSize: [22, 22], iconAnchor: [11, 11]
-    })
-  }).addTo(map);
+    });
+  }
 
-  marker.bindPopup('<strong>{{ regno }}</strong><br>{{ vehicle.LandMark }}<br>Speed: {{ "%.1f"|format(vehicle.Speed) }} km/h').openPopup();
+  function esc(s) {
+    var d = document.createElement('div');
+    d.textContent = s == null ? '' : String(s);
+    return d.innerHTML;
+  }
+
+  function popupContent(reg, landmark, speed) {
+    return '<strong>' + esc(reg) + '</strong><br>' + esc(landmark) + '<br>Speed: ' +
+           (parseFloat(speed) || 0).toFixed(1) + ' km/h';
+  }
+
+  var status = {{ vehicle.VehicleStatus | tojson }};
+  var marker = L.marker([lat, lon], { icon: markerIcon(colorFor(status)) }).addTo(map);
+  marker.bindPopup(popupContent(regno, {{ vehicle.LandMark | tojson }}, {{ vehicle.Speed | tojson }})).openPopup();
+
+  // ── Live position refresh every 30s (pauses on hidden tab) ──
+  setInterval(function() {
+    if (document.hidden) return;
+    fetch('/api/tracking/positions').then(function(r) { return r.json(); }).then(function(data) {
+      if (!data.vehicles) return;
+      var v = data.vehicles.find(function(x) { return x.RegNo === regno; });
+      if (!v || !v.LAT || !v.LON) return;
+      var nlat = parseFloat(v.LAT), nlon = parseFloat(v.LON);
+      if (isNaN(nlat) || isNaN(nlon)) return;
+      marker.setLatLng([nlat, nlon]);
+      marker.setIcon(markerIcon(colorFor(v.VehicleStatus)));
+      marker.setPopupContent(popupContent(v.RegNo, v.LandMark, v.Speed));
+      map.panTo([nlat, nlon]);
+    }).catch(function() {});
+  }, 30000);
 })();
 </script>
 {% endblock %}

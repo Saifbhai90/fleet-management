@@ -17,13 +17,14 @@ from models import (
 )
 from services.portalxs_service import (
     fetch_live_positions, fetch_history, fetch_trips,
-    fetch_fleet_report, fetch_trends, fetch_mileage,
+    fetch_fleet_report, fetch_fleet_report_bulk, fetch_trends, fetch_mileage,
+    fetch_mileage_report_bulk,
     fetch_alerts, fetch_geofences,
     get_cached_positions, get_summary_stats,
     get_all_vehicles_for_account, link_vehicle, auto_link_vehicles,
     create_account, update_account, delete_account,
     test_connection, encrypt_password, decrypt_password,
-    start_polling,
+    start_polling, stop_polling, is_polling,
 )
 from utils import pk_now, pk_date
 from datetime import datetime, timedelta
@@ -72,6 +73,29 @@ def _get_account_id() -> int:
 
 def _get_all_accounts():
     return PortalXSAccount.query.order_by(PortalXSAccount.label).all()
+
+
+# ── Auto-start polling on first tracking request (survives server restarts) ───
+
+_polling_autostart_done = False
+
+
+@app.before_request
+def _tracking_polling_autostart():
+    """Lazy-start the background polling thread the first time any tracking
+    page/API is hit after a server (re)start — no manual button needed."""
+    global _polling_autostart_done
+    if _polling_autostart_done:
+        return
+    ep = request.endpoint or ''
+    if not (ep.startswith('tracking_') or ep.startswith('api_tracking_')):
+        return
+    try:
+        if PortalXSAccount.query.filter_by(is_active=True).first():
+            _polling_autostart_done = True
+            start_polling(app)
+    except Exception:
+        pass
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -342,21 +366,18 @@ def tracking_fleet_report():
 
     reports = []
     error = None
-    if acct_id:
+    if acct_id and vehicles_list:
         fdt, tdt = _soap_dates(from_date, to_date)
-        # Fetch report for each vehicle
-        for v in vehicles_list:
-            try:
-                r = fetch_fleet_report(acct_id, v['portalxs_regno'], fdt, tdt)
-                if r:
-                    for item in r:
-                        item['vehicle_no'] = v.get('vehicle_no') or v['portalxs_regno']
-                        reports.append(item)
-            except Exception as e:
-                error = str(e)[:300]
-                break
+        regno_to_name = {v['portalxs_regno']: (v.get('vehicle_no') or v['portalxs_regno'])
+                         for v in vehicles_list}
+        # Parallel fetch (8 workers) + 5-min cache — was sequential O(N) before
+        reports, error = fetch_fleet_report_bulk(
+            acct_id, list(regno_to_name.keys()), fdt, tdt)
+        for item in reports:
+            item['vehicle_no'] = regno_to_name.get(item.get('_regno', item.get('RegNo', '')),
+                                                   item.get('RegNo', ''))
 
-    # Sort by score descending (driver ranking)
+    # Sort by score descending (vehicle ranking)
     reports.sort(key=lambda x: x.get('VehicleScore', 0), reverse=True)
 
     return render_template(
@@ -370,6 +391,127 @@ def tracking_fleet_report():
         current_account_id=acct_id,
         **_nav_back_ctx(url_for('tracking_dashboard')),
     )
+
+
+@app.route('/tracking/fleet-report/export/csv')
+def tracking_fleet_report_export_csv():
+    """Export fleet report as CSV (uses same 5-min cache as the page)."""
+    acct_id = _get_account_id()
+    from_date = _sanitize_date(request.args.get('from_date', ''))
+    to_date = _sanitize_date(request.args.get('to_date', ''))
+    if not acct_id:
+        return Response('No account configured', status=400)
+
+    vehicles_list = get_all_vehicles_for_account(acct_id)
+    if not vehicles_list:
+        return Response('No vehicles', status=400)
+
+    fdt, tdt = _soap_dates(from_date, to_date)
+    regno_to_name = {v['portalxs_regno']: (v.get('vehicle_no') or v['portalxs_regno'])
+                     for v in vehicles_list}
+    reports, error = fetch_fleet_report_bulk(acct_id, list(regno_to_name.keys()), fdt, tdt)
+    if error and not reports:
+        return Response(f'Error: {error}', status=500)
+    reports.sort(key=lambda x: x.get('VehicleScore', 0), reverse=True)
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['Rank', 'Vehicle', 'Score', 'Fuel (ltr)', 'Trips',
+                     'Duration (h)', 'Distance (km)', 'Alerts'])
+    for i, r in enumerate(reports, 1):
+        writer.writerow([
+            i,
+            regno_to_name.get(r.get('_regno', ''), r.get('RegNo', '')),
+            r.get('VehicleScore', 0),
+            r.get('FuelConsumption', 0),
+            r.get('Trips', 0),
+            round((r.get('Duration', 0) or 0) / 3600, 1),
+            r.get('Distance', 0),
+            r.get('Alerts', 0),
+        ])
+
+    resp = make_response(output.getvalue())
+    resp.headers['Content-Type'] = 'text/csv'
+    resp.headers['Content-Disposition'] = f'attachment; filename=fleet_report_{from_date}_{to_date}.csv'
+    return resp
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# VEHICLE MILEAGE REPORT
+# ════════════════════════════════════════════════════════════════════════════
+
+@app.route('/tracking/mileage-report')
+def tracking_mileage_report():
+    acct_id = _get_account_id()
+    accounts = _get_all_accounts()
+    vehicles_list = get_all_vehicles_for_account(acct_id) if acct_id else []
+
+    from_date = _sanitize_date(request.args.get('from_date', ''))
+    to_date = _sanitize_date(request.args.get('to_date', ''))
+
+    rows = []
+    error = None
+    if acct_id and vehicles_list:
+        fdt, tdt = _soap_dates(from_date, to_date)
+        regno_to_name = {v['portalxs_regno']: (v.get('vehicle_no') or v['portalxs_regno'])
+                         for v in vehicles_list}
+        rows, error = fetch_mileage_report_bulk(
+            acct_id, list(regno_to_name.keys()), fdt, tdt)
+        for item in rows:
+            item['vehicle_no'] = regno_to_name.get(item.get('_regno', ''), item.get('_regno', ''))
+
+    return render_template(
+        'tracking/mileage_report.html',
+        vehicles_list=vehicles_list,
+        from_date=from_date,
+        to_date=to_date,
+        rows=rows,
+        error=error,
+        accounts=accounts,
+        current_account_id=acct_id,
+        **_nav_back_ctx(url_for('tracking_dashboard')),
+    )
+
+
+@app.route('/tracking/mileage-report/export/csv')
+def tracking_mileage_report_export_csv():
+    """Export vehicle mileage report as CSV."""
+    acct_id = _get_account_id()
+    from_date = _sanitize_date(request.args.get('from_date', ''))
+    to_date = _sanitize_date(request.args.get('to_date', ''))
+    if not acct_id:
+        return Response('No account configured', status=400)
+
+    vehicles_list = get_all_vehicles_for_account(acct_id)
+    if not vehicles_list:
+        return Response('No vehicles', status=400)
+
+    fdt, tdt = _soap_dates(from_date, to_date)
+    regno_to_name = {v['portalxs_regno']: (v.get('vehicle_no') or v['portalxs_regno'])
+                     for v in vehicles_list}
+    rows, error = fetch_mileage_report_bulk(acct_id, list(regno_to_name.keys()), fdt, tdt)
+    if error and not rows:
+        return Response(f'Error: {error}', status=500)
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['ID', 'Reg No', 'Date From', 'Time From', 'Date To', 'Time To', 'Mileage', 'PtoP'])
+    for r in rows:
+        writer.writerow([
+            r.get('ID', ''),
+            regno_to_name.get(r.get('_regno', ''), r.get('_regno', '')),
+            r.get('DateFrom', ''),
+            r.get('TimeFrom', ''),
+            r.get('DateTo', ''),
+            r.get('TimeTo', ''),
+            r.get('Mileage', 0),
+            r.get('PToP', 0),
+        ])
+
+    resp = make_response(output.getvalue())
+    resp.headers['Content-Type'] = 'text/csv'
+    resp.headers['Content-Disposition'] = f'attachment; filename=mileage_report_{from_date}_{to_date}.csv'
+    return resp
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -457,6 +599,7 @@ def tracking_settings():
     return render_template(
         'tracking/settings.html',
         accounts=accounts,
+        polling_active=is_polling(),
         **_nav_back_ctx(url_for('tracking_dashboard')),
     )
 
@@ -574,6 +717,17 @@ def tracking_settings_start_polling():
         from flask import current_app
         start_polling(current_app._get_current_object())
         flash("Background polling started.", "success")
+    except Exception as e:
+        flash(f"Error: {e}", "danger")
+    return redirect(url_for('tracking_settings'))
+
+
+@app.route('/tracking/settings/stop-polling', methods=['POST'])
+def tracking_settings_stop_polling():
+    """Stop background polling thread."""
+    try:
+        stop_polling()
+        flash("Background polling stopped.", "success")
     except Exception as e:
         flash(f"Error: {e}", "danger")
     return redirect(url_for('tracking_settings'))

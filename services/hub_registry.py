@@ -322,10 +322,14 @@ HUBS = {
             'tracking_settings_account_delete', 'tracking_settings_account_test',
             'tracking_settings_account_sync', 'tracking_settings_link_vehicle',
             'tracking_settings_auto_link', 'tracking_settings_start_polling',
+            'tracking_settings_stop_polling',
             'api_tracking_positions', 'api_tracking_refresh',
             'api_tracking_history', 'api_tracking_vehicles',
             'api_tracking_internal_vehicles',
             'tracking_trips_export_csv',
+            'tracking_fleet_report_export_csv',
+            'tracking_mileage_report',
+            'tracking_mileage_report_export_csv',
         ),
         'sections': [
             {
@@ -340,6 +344,7 @@ HUBS = {
                 'title': 'Reports & Analytics',
                 'items': [
                     _item('tracking_fleet_report', 'Fleet Report & Ranking', 'fa-solid fa-chart-column', 'rc-tile--tracker', 'tracking_reports'),
+                    _item('tracking_mileage_report', 'Vehicle Mileage Report', 'fa-solid fa-speedometer2', 'rc-tile--tracker', 'tracking_reports'),
                     _item('tracking_trends', 'Trends Analysis', 'fa-solid fa-chart-line', 'rc-tile--tracker', 'tracking_reports'),
                     _item('tracking_alerts', 'Alerts', 'fa-solid fa-bell', 'rc-tile--tracker', 'tracking_alerts'),
                 ],

@@ -27,6 +27,7 @@ import hashlib
 import json
 import os
 import re
+import time
 import uuid
 from datetime import datetime
 
@@ -45,7 +46,17 @@ APP_NAME    = "TWPX"
 
 # Session file in a writable temp directory (works on Render + local)
 _SESSION_DIR = os.environ.get('PORTALXS_SESSION_DIR', os.path.join(os.path.dirname(__file__), '..'))
-SESSION_FILE = os.path.join(_SESSION_DIR, "portalxs_session.json")
+
+# Transport retry: attempts + backoff seconds (only for connection/timeout errors)
+_RETRY_ATTEMPTS = 3
+_RETRY_BACKOFF = (1, 2, 4)
+
+
+def _session_file_for(session_key) -> str:
+    """Account-specific session file so multiple accounts never collide."""
+    key = str(session_key) if session_key else 'default'
+    safe = re.sub(r'[^A-Za-z0-9_-]', '_', key)
+    return os.path.join(_SESSION_DIR, f"portalxs_session_{safe}.json")
 
 _SK = hashlib.md5(SERVER_KEY.encode()).digest()       # 16 bytes
 _AK = hashlib.md5(APP_KEY.encode()).digest()           # 16 bytes
@@ -97,7 +108,7 @@ def decrypt_tree(obj):
 #  CLIENT
 # ============================================================
 class PortalXSClient:
-    def __init__(self, username=None, password=None, device_id=None):
+    def __init__(self, username=None, password=None, device_id=None, session_key=None):
         self.username = username
         self.password = password
         self.device_id = device_id or str(uuid.uuid4().int)[:15]
@@ -106,10 +117,12 @@ class PortalXSClient:
         self.unique_id = None
         self.login_id = None
         self.profile = None
+        # Session persisted per account (session_key) — prevents multi-account collision
+        self.session_file = _session_file_for(session_key or username)
 
     # ---------------- persistence ----------------
     def save_session(self):
-        with open(SESSION_FILE, "w") as f:
+        with open(self.session_file, "w") as f:
             json.dump({
                 "device_id": self.device_id,
                 "unique_id": self.unique_id,
@@ -118,13 +131,31 @@ class PortalXSClient:
             }, f, indent=2)
 
     def load_session(self):
-        if not os.path.exists(SESSION_FILE):
+        if not os.path.exists(self.session_file):
             return False
-        d = json.load(open(SESSION_FILE))
+        try:
+            with open(self.session_file) as f:
+                d = json.load(f)
+        except (ValueError, OSError):
+            return False
         self.device_id = d.get("device_id", self.device_id)
         self.unique_id = d.get("unique_id")
         self.login_id = d.get("login_id")
         return bool(self.unique_id)
+
+    # ---------------- transport with retry ----------------
+    def _post_with_retry(self, data, headers):
+        """POST with retry + exponential backoff on transport errors only
+        (connection/timeout). SOAP faults are NOT retried."""
+        last_exc = None
+        for attempt in range(_RETRY_ATTEMPTS):
+            try:
+                return self.session.post(SOAP_URL, data=data, headers=headers, timeout=30)
+            except (requests.ConnectionError, requests.Timeout) as e:
+                last_exc = e
+                if attempt < _RETRY_ATTEMPTS - 1:
+                    time.sleep(_RETRY_BACKOFF[min(attempt, len(_RETRY_BACKOFF) - 1)])
+        raise last_exc
 
     # ---------------- SOAP core ----------------
     def _soap(self, method, params_plain):
@@ -133,9 +164,9 @@ class PortalXSClient:
 <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
   <soap:Body><{method} xmlns="{SOAP_NS}">{body}</{method}></soap:Body>
 </soap:Envelope>"""
-        r = self.session.post(SOAP_URL, data=env.encode(),
+        r = self._post_with_retry(env.encode(),
             headers={"Content-Type": "text/xml; charset=utf-8",
-                     "SOAPAction": f"{SOAP_NS}{method}"}, timeout=30)
+                     "SOAPAction": f"{SOAP_NS}{method}"})
         m = re.search(rf"<{method}Result>(.*?)</{method}Result>", r.text, re.DOTALL)
         if not m:
             raise RuntimeError(f"No result for {method}: {r.text[:300]}")
@@ -229,9 +260,9 @@ class PortalXSClient:
 <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
   <soap:Body><{method} xmlns="{SOAP_NS}">{body}</{method}></soap:Body>
 </soap:Envelope>"""
-        r = self.session.post(SOAP_URL, data=envelope.encode(),
+        r = self._post_with_retry(envelope.encode(),
             headers={"Content-Type": "text/xml; charset=utf-8",
-                     "SOAPAction": f"{SOAP_NS}{method}"}, timeout=30)
+                     "SOAPAction": f"{SOAP_NS}{method}"})
         m = re.search(rf"<{method}Result>(.*?)</{method}Result>", r.text, re.DOTALL)
         if not m:
             fm = re.search(r"<faultstring>(.*?)</faultstring>", r.text, re.DOTALL)

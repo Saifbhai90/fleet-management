@@ -58,6 +58,9 @@ nul
 logs/*.log
 sync_state.json
 
+# PortalXS session tokens (contain login_id/device_id — never commit)
+portalxs_session*.json
+
 # C-01: Repo cleanup — untrack daedalOS (1,610 files) and scratch scripts
 daedalOS/
 scripts/_*.py

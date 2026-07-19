@@ -49,12 +49,10 @@ python app.py
 ### 3. Configure PortalXS Account
 - Go to **Settings → Fleet Tracking** (or `/tracking/settings`)
 - Click **Add Account**
-- Pre-filled with default credentials:
-  - Username: `ccrmuzaffergarh`
-  - Password: `Muzaffergarh123`
+- Enter your PortalXS username and password (provided by Tracking World)
 - Click **Create Account**
 - Click **Test** to verify connection
-- Click **Sync** to pull all 48 vehicles
+- Click **Sync** to pull all vehicles
 
 ### 4. Use the Dashboard
 - Go to **Fleet Tracking** in the sidebar (or `/tracking`)

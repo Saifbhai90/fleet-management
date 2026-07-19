@@ -135,13 +135,26 @@
     <div class="tab-pane fade" id="tab-polling" role="tabpanel">
       {% if accounts %}
       <div class="card">
-        <div class="card-header"><i class="bi bi-arrow-repeat"></i> Background Polling</div>
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <span><i class="bi bi-arrow-repeat"></i> Background Polling</span>
+          {% if polling_active %}
+          <span class="badge bg-success"><i class="bi bi-circle-fill me-1" style="font-size:8px;"></i> Running</span>
+          {% else %}
+          <span class="badge bg-secondary">Stopped</span>
+          {% endif %}
+        </div>
         <div class="card-body">
-          <p class="text-muted small">Start a background thread to auto-refresh vehicle positions every 30 seconds.</p>
-          <form method="post" action="{{ url_for('tracking_settings_start_polling') }}" class="d-inline">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-play"></i> Start Polling</button>
-          </form>
+          <p class="text-muted small">Positions auto-refresh every 30 seconds. Polling starts automatically when any tracking page is opened — use these buttons only for manual control.</p>
+          <div class="d-flex gap-2">
+            <form method="post" action="{{ url_for('tracking_settings_start_polling') }}" class="d-inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-sm btn-primary" {% if polling_active %}disabled{% endif %}><i class="bi bi-play"></i> Start Polling</button>
+            </form>
+            <form method="post" action="{{ url_for('tracking_settings_stop_polling') }}" class="d-inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-sm btn-outline-danger" {% if not polling_active %}disabled{% endif %}><i class="bi bi-stop"></i> Stop Polling</button>
+            </form>
+          </div>
         </div>
       </div>
       {% else %}
@@ -169,15 +182,15 @@
         <div class="modal-body">
           <div class="mb-3">
             <label class="form-label">Label</label>
-            <input type="text" name="label" class="form-control" placeholder="e.g. IRMNCH Muzaffargarh" value="IRMNCH">
+            <input type="text" name="label" class="form-control" placeholder="e.g. Main Fleet Account">
           </div>
           <div class="mb-3">
             <label class="form-label">Username</label>
-            <input type="text" name="username" class="form-control" placeholder="PortalXS username" value="ccrmuzaffergarh" required>
+            <input type="text" name="username" class="form-control" placeholder="PortalXS username" autocomplete="off" required>
           </div>
           <div class="mb-3">
             <label class="form-label">Password</label>
-            <input type="password" name="password" class="form-control" placeholder="PortalXS password" value="Muzaffergarh123" required>
+            <input type="password" name="password" class="form-control" placeholder="PortalXS password" autocomplete="new-password" required>
           </div>
         </div>
         <div class="modal-footer">
@@ -313,13 +326,27 @@ document.getElementById('linkAccountSelect').addEventListener('change', function
     html += '</tbody></table></div>';
     container.innerHTML = html;
 
-    // Enable select2-like search for internal vehicles
+    // Internal vehicles loaded ONCE and shared across all selects (was N fetches)
+    var internalVehiclesPromise = null;
+    function loadInternalVehicles() {
+      if (!internalVehiclesPromise) {
+        internalVehiclesPromise = fetch('/api/tracking/internal-vehicles')
+          .then(function(r) { return r.json(); })
+          .catch(function() { internalVehiclesPromise = null; return []; });
+      }
+      return internalVehiclesPromise;
+    }
+
     container.querySelectorAll('.vehicle-link-select').forEach(function(sel) {
       sel.addEventListener('focus', function() {
-        if (this.options.length > 2) return;
+        if (this.dataset.loaded) return;
         var self = this;
-        fetch('/api/tracking/internal-vehicles').then(function(r) { return r.json(); }).then(function(vehicles) {
+        self.dataset.loaded = '1';
+        loadInternalVehicles().then(function(vehicles) {
+          var existing = {};
+          for (var i = 0; i < self.options.length; i++) existing[self.options[i].value] = true;
           vehicles.forEach(function(v) {
+            if (existing[String(v.id)]) return;
             var opt = document.createElement('option');
             opt.value = v.id; opt.textContent = v.vehicle_no + ' (' + v.model + ')';
             self.appendChild(opt);

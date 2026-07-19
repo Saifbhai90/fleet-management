@@ -256,6 +256,7 @@
   }, null, { position: 'topright', collapsed: true }).addTo(map);
 
   var markers = {};
+  var markerState = {};   // RegNo -> {lat, lon, icon} for change-detection
   var currentFilter = 'all';
   var positions = [];
 
@@ -284,23 +285,6 @@
             '<circle cx="14" cy="24" r="1.5" fill="#333"/>' +
             '<circle cx="18" cy="24" r="1.5" fill="#333"/>' +
             '</svg></div></div>',
-      iconSize: [36, 36], iconAnchor: [18, 18]
-    });
-  }
-
-  // Truck icon for larger vehicles
-  function truckIcon(color, deg) {
-    var rotate = deg || 0;
-    return L.divIcon({
-      className: '',
-      html: '<div style="transform:rotate(' + rotate + 'deg)"><svg width="36" height="36" viewBox="0 0 36 36">' +
-            '<circle cx="18" cy="18" r="17" fill="' + color + '" stroke="#fff" stroke-width="2" opacity="0.95"/>' +
-            '<rect x="10" y="8" width="12" height="14" rx="2" fill="#fff"/>' +
-            '<rect x="22" y="11" width="6" height="11" rx="1" fill="#fff" opacity="0.8"/>' +
-            '<rect x="12" y="10" width="8" height="5" rx="1" fill="' + color + '" opacity="0.6"/>' +
-            '<circle cx="13" cy="26" r="2" fill="#333"/>' +
-            '<circle cx="23" cy="26" r="2" fill="#333"/>' +
-            '</svg></div>',
       iconSize: [36, 36], iconAnchor: [18, 18]
     });
   }
@@ -372,7 +356,7 @@
     });
     list.innerHTML = html;
 
-    // markers — car icons like ride-hailing apps
+    // markers — car icons; change-detection avoids wasteful setIcon/setLatLng calls
     positions.forEach(function(v) {
       if (!v.LAT || !v.LON) return;
       var lat = parseFloat(v.LAT), lon = parseFloat(v.LON);
@@ -382,17 +366,21 @@
       var color = colorFor(cls);
       var moving = cls === 'Moving';
       var deg = parseFloat(v.Direction) || 0;
-      var icon = carIcon(color, deg, moving, v.RegNo);
+      var iconState = color + '|' + Math.round(deg) + '|' + moving + '|' + (showLabels ? v.RegNo : '');
 
-      if (markers[v.RegNo]) {
-        markers[v.RegNo].setLatLng([lat, lon]).setIcon(icon);
-        markers[v.RegNo].setPopupContent(popupHtml(v));
+      var m = markers[v.RegNo];
+      if (m) {
+        var prev = markerState[v.RegNo] || {};
+        if (prev.lat !== lat || prev.lon !== lon) m.setLatLng([lat, lon]);
+        if (prev.icon !== iconState) m.setIcon(carIcon(color, deg, moving, v.RegNo));
+        m.setPopupContent(popupHtml(v));
       } else {
-        var m = L.marker([lat, lon], { icon: icon }).addTo(map);
+        m = L.marker([lat, lon], { icon: carIcon(color, deg, moving, v.RegNo) }).addTo(map);
         m.bindPopup(popupHtml(v), { maxWidth: 300 });
         m.on('click', function() { selectVehicle(v.RegNo, false); });
         markers[v.RegNo] = m;
       }
+      markerState[v.RegNo] = { lat: lat, lon: lon, icon: iconState };
     });
 
     // remove stale markers
@@ -400,6 +388,7 @@
       if (!positions.find(function(v) { return v.RegNo === reg; })) {
         map.removeLayer(markers[reg]);
         delete markers[reg];
+        delete markerState[reg];
       }
     });
 
@@ -501,7 +490,11 @@
   }
 
   // ── Events ──
-  document.getElementById('vehicleSearch').addEventListener('input', applyFilter);
+  var searchDebounce = null;
+  document.getElementById('vehicleSearch').addEventListener('input', function() {
+    clearTimeout(searchDebounce);
+    searchDebounce = setTimeout(applyFilter, 250);
+  });
 
   document.querySelectorAll('.ts-filters button').forEach(function(btn) {
     btn.addEventListener('click', function() {
@@ -537,6 +530,9 @@
       var moving = cls === 'Moving';
       var deg = parseFloat(v.Direction) || 0;
       markers[v.RegNo].setIcon(carIcon(color, deg, moving, v.RegNo));
+      if (markerState[v.RegNo]) {
+        markerState[v.RegNo].icon = color + '|' + Math.round(deg) + '|' + moving + '|' + (showLabels ? v.RegNo : '');
+      }
     });
   });
 
@@ -553,20 +549,39 @@
     refreshPositions(true);
   });
 
-  // ── Auto refresh ──
+  // ── Auto refresh (pauses when tab is hidden — saves battery/bandwidth) ──
   var REFRESH_MS = 30000;
-  setInterval(function() { refreshPositions(false); }, REFRESH_MS);
+  var lastRefreshAt = Date.now();
+  setInterval(function() {
+    if (document.hidden) return;
+    refreshPositions(false);
+  }, REFRESH_MS);
+
+  // Refresh immediately when returning to a stale tab
+  document.addEventListener('visibilitychange', function() {
+    if (!document.hidden && (Date.now() - lastRefreshAt) > REFRESH_MS) {
+      refreshPositions(false);
+    }
+  });
 
   function refreshPositions(force) {
     var indicator = document.getElementById('refreshIndicator');
     indicator.style.display = 'block';
+    lastRefreshAt = Date.now();
     var url = force ? '/api/tracking/refresh' : '/api/tracking/positions';
     var opts = { method: force ? 'POST' : 'GET', headers: { 'X-CSRFToken': window.FleetConfig.csrfToken } };
     if (force) opts.headers['Content-Type'] = 'application/json';
     fetch(url, opts).then(function(r) { return r.json(); }).then(function(data) {
-      if (data.vehicles) renderVehicles(data.vehicles);
+      if (data.vehicles && data.vehicles.length) {
+        renderVehicles(data.vehicles);
+      } else if (data.error) {
+        document.getElementById('tbUpdated').textContent = '\u26A0 ' + String(data.error).slice(0, 60);
+      }
       indicator.style.display = 'none';
-    }).catch(function() { indicator.style.display = 'none'; });
+    }).catch(function() {
+      indicator.style.display = 'none';
+      document.getElementById('tbUpdated').textContent = '\u26A0 refresh failed';
+    });
   }
 
   // ── Initial load ──

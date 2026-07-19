@@ -17,8 +17,12 @@
   {% endif %}
 
   <div class="card">
-    <div class="card-header">
-      <i class="bi bi-list-ul"></i> Recent Alerts ({{ alerts|length }})
+    <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <span><i class="bi bi-list-ul"></i> Recent Alerts ({{ alerts|length }})</span>
+      {% if alerts %}
+      <input type="text" id="alertFilter" class="form-control form-control-sm" style="max-width: 250px;"
+             placeholder="Filter by vehicle / type / message...">
+      {% endif %}
     </div>
     {% if alerts %}
     <div class="table-responsive">
@@ -62,9 +66,22 @@
 document.getElementById('refreshAlertsBtn').addEventListener('click', function() {
   this.disabled = true;
   this.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Refreshing...';
-  fetch('/api/tracking/refresh', { method: 'POST', headers: { 'X-CSRFToken': window.FleetConfig.csrfToken, 'Content-Type': 'application/json' } })
-    .then(function() { window.location.reload(); })
-    .catch(function() { window.location.reload(); });
+  window.location.reload();
 });
+
+// Client-side alert filter (vehicle / type / message / severity)
+var alertFilter = document.getElementById('alertFilter');
+if (alertFilter) {
+  var filterDebounce = null;
+  alertFilter.addEventListener('input', function() {
+    clearTimeout(filterDebounce);
+    var q = this.value.toLowerCase();
+    filterDebounce = setTimeout(function() {
+      document.querySelectorAll('#alertsBody tr').forEach(function(tr) {
+        tr.style.display = !q || tr.textContent.toLowerCase().indexOf(q) >= 0 ? '' : 'none';
+      });
+    }, 200);
+  });
+}
 </script>
 {% endblock %}
