@@ -1,0 +1,379 @@
+{% extends 'base.html' %}
+{% from 'partials/nav_back_button.html' import nav_back_button %}
+
+{% block title %}Emergency Tasks — Fleet Manager{% endblock %}
+
+{% block extra_head %}
+<style>
+  .uf-filter-bar {
+    background: #fff; padding: 16px 24px; border-radius: 12px;
+    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+    border: 1px solid #e9ecef; margin-bottom: 24px;
+    display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end;
+  }
+  .uf-filter-group label { font-size: 12px; color: #64748b; font-weight: 600; margin-bottom: 4px; display: block; text-transform: uppercase; }
+  .uf-filter-group input, .uf-filter-group select { border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px 12px; font-size: 14px; min-width: 150px; }
+  .uf-filter-group input:focus, .uf-filter-group select:focus { outline: none; border-color: #7C3AED; box-shadow: 0 0 0 2px rgba(124,58,237,0.2); }
+  
+  .uf-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+  .uf-header h4 { font-weight: 700; color: #1e293b; margin: 0; display: flex; align-items: center; gap: 10px; }
+  .uf-header h4 i { color: #EF4444; } /* Red for emergency */
+  
+  .uf-btn { background: linear-gradient(135deg,#7C3AED,#5B21B6); color: #fff; border: none; padding: 9px 16px; border-radius: 8px; font-weight: 600; font-size: 14px; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+  .uf-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(124,58,237,0.3); color: #fff; }
+  .uf-btn-outline { background: transparent; color: #7C3AED; border: 1px solid #7C3AED; }
+  .uf-btn-outline:hover { background: #7C3AED; color: #fff; }
+  
+  .uf-table-card { background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid #e9ecef; }
+  .uf-table thead th { background: #f8fafc; border-bottom: 2px solid #e2e8f0; color: #64748b; font-weight: 600; text-transform: uppercase; font-size: 11px; padding: 14px 16px; }
+  .uf-table tbody td { padding: 12px 16px; vertical-align: middle; border-bottom: 1px solid #f1f5f9; color: #475569; }
+  .uf-table tbody tr:hover { background: #f8fafc; cursor: pointer; }
+  
+  .uf-badge { padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; text-transform: capitalize; }
+  .badge-complete { background: #D1FAE5; color: #065F46; }
+  .badge-pending { background: #FEF3C7; color: #92400E; }
+  .badge-cancelled { background: #FEE2E2; color: #991B1B; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+  
+  <div class="uf-header">
+    <div>
+      <h4><i class="bi bi-triangle-exclamation-fill"></i> Emergency Tasks</h4>
+      <small class="text-muted">Manage and track all active emergencies</small>
+    </div>
+    <div class="d-flex gap-2 align-items-center">
+      {{ nav_back_button() }}
+      <a href="{{ url_for('ufone_export_tasks', from_date=from_date, to_date=to_date, district=district) }}" class="uf-btn uf-btn-outline">
+        <i class="bi bi-download"></i> Export CSV
+      </a>
+    </div>
+  </div>
+
+  <!-- Modern Filter Bar -->
+  <form method="get" class="uf-filter-bar">
+    <div class="uf-filter-group">
+      <label>From Date</label>
+      <input type="date" name="from_date" value="{{ from_date }}">
+    </div>
+    <div class="uf-filter-group">
+      <label>To Date</label>
+      <input type="date" name="to_date" value="{{ to_date }}">
+    </div>
+    <div class="uf-filter-group">
+      <label>District Code</label>
+      <input type="text" name="district" value="{{ district }}" placeholder="e.g. 111">
+    </div>
+    <button type="submit" class="uf-btn"><i class="bi bi-search"></i> Filter</button>
+  </form>
+
+  {% if error %}
+  <div class="alert alert-danger" style="border-radius: 8px; background: #fef2f2; border: none; color: #b91c1c;">{{ error }}</div>
+  {% endif %}
+
+  <!-- Table Card -->
+  <div class="uf-table-card">
+    <div class="table-responsive">
+      <table class="table table-hover uf-table mb-0 align-middle">
+        <thead>
+          <tr>
+            <th>Task ID</th>
+            <th>Patient Name</th>
+            <th>Contact</th>
+            <th>Ambulance</th>
+            <th>Location</th>
+            <th>Status</th>
+            <th>Request From</th>
+            <th style="text-align: right;">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for t in tasks %}
+          <tr>
+            <td><small class="text-muted fw-bold">PHF-{{ t.TaskId or t.task_id or t.id }}</small></td>
+            <td class="fw-bold text-dark">{{ t.Name or t.name or t.patient_name or '-' }}</td>
+            <td>{{ t.Phone or t.phone or '-' }}</td>
+            <td><span class="badge bg-light text-dark border">{{ t.Ambulance or t.ambulance or '-' }}</span></td>
+            <td><small>{{ t.District or t.district_name or t.district or '-' }}</small></td>
+            <td>
+              {% set status_text = (t.Status or t.status or '')|lower %}
+              {# Incomplete BEFORE Complete — 'complete' is a substring of 'incomplete' #}
+              {% if 'incomplete' in status_text or status_text == '1' or 'in-process' in status_text %}
+              <span class="uf-badge badge-pending">In-Process</span>
+              {% elif 'complete' in status_text %}
+              <span class="uf-badge badge-complete">Complete</span>
+              {% elif 'cancel' in status_text %}
+              <span class="uf-badge badge-cancelled">Cancelled</span>
+              {% else %}
+              <span class="uf-badge badge-pending">{{ t.Status or t.status or 'Pending' }}</span>
+              {% endif %}
+            </td>
+            <td><small class="text-muted">{{ t.RequestFrom or t.request_from or '-' }}</small></td>
+            <td style="text-align: right;">
+              <button class="btn btn-sm btn-outline-primary view-task-btn" data-id="{{ t.TaskId or t.task_id or t.id }}">
+                <i class="bi bi-eye"></i> View
+              </button>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="8" class="text-center text-muted py-5">
+              <i class="bi bi-inbox-fill d-block mb-2" style="font-size: 24px;"></i>
+              No tasks found for the selected criteria.
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Task Detail Modal -->
+<div class="modal fade" id="taskModal" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable modal-dialog-centered">
+    <div class="modal-content" style="border-radius: 14px; border: none; max-height: 94vh;">
+      <div class="modal-header py-3" style="background: #16a34a; border-radius: 14px 14px 0 0; border-bottom: none;">
+        <h5 class="modal-title text-white fw-bold mb-0"><i class="bi bi-info-circle me-1"></i> Task Detail</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="taskModalBody" style="padding: 20px;">
+        <div class="text-center py-5">
+          <div class="spinner-border text-primary" role="status"></div>
+          <p class="mt-2 text-muted">Loading details...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  /* Wide dialog — spread fields horizontally so vertical scroll na ho */
+  #taskModal .modal-dialog { max-width: min(1440px, 97vw); }
+  #taskModal .modal-body { font-size: 13.5px; }
+  #taskModal h6 {
+    font-size: 14px; font-weight: 700; margin: 8px 0 2px;
+    color: #16a34a !important;
+  }
+  #taskModal hr { margin: 2px 0 6px; opacity: .25; }
+  /* Portal-style inline row: label left (fixed), value right */
+  #taskModal .uf-frow {
+    display: flex; align-items: baseline; gap: 8px;
+    padding: 2px 0; min-width: 0;
+  }
+  #taskModal .uf-frow label {
+    flex: 0 0 118px; text-align: right; margin: 0;
+    font-size: 12px; color: #64748b; font-weight: 600;
+  }
+  #taskModal .field-value {
+    color: #0f172a; font-weight: 600; font-size: 13.5px;
+    line-height: 1.35; word-break: break-word; min-width: 0;
+  }
+  #taskModal .field-value.empty { color: #cbd5e1; font-weight: 400; }
+  /* 3 fields per row on desktop */
+  #taskModal .uf-fgrid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 0 18px;
+  }
+  #taskModal .uf-fgrid.uf-general { grid-template-columns: repeat(4, 1fr); }
+  #taskModal table { font-size: 12.5px; margin-bottom: 0; }
+  #taskModal table th {
+    background: #f1f5f9; font-size: 11.5px; font-weight: 700;
+    color: #475569; letter-spacing: .3px;
+  }
+  #taskModal table th, #taskModal table td { padding: 5px 8px; vertical-align: middle; }
+  #taskModal table td { color: #1e293b; }
+  @media (max-width: 1100px) {
+    #taskModal .uf-fgrid, #taskModal .uf-fgrid.uf-general { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 700px) {
+    #taskModal .uf-fgrid, #taskModal .uf-fgrid.uf-general { grid-template-columns: 1fr; }
+    #taskModal .uf-frow label { flex-basis: 105px; font-size: 11px; }
+    #taskModal .modal-dialog { max-width: 98vw; margin: 6px; }
+    #taskModal .modal-body { padding: 12px; }
+  }
+</style>
+
+<script>
+// Modal ko body par move karo — transformed/blurred parent ke andar
+// Bootstrap modal backdrop ke neeche phans jata hai (grey/locked dikhta hai)
+const taskModalEl = document.getElementById('taskModal');
+document.body.appendChild(taskModalEl);
+
+// Ufone getTaskDetail ke ASLI 76-field response se verify shuda key mapping.
+const TASK_FIELDS = {
+  general: [
+    ['Task Id', ['_task_id','id','TaskId','task_id']],
+    ['Request From', ['RequestFrom','request_from']],
+    ['Date', ['_date','CD','CreatedDate']],
+    ['Received By', ['ReceivedBy','received_by']],
+  ],
+  patient: [
+    ['Phone', ['phone','Phone']],
+    ['CLI', ['phone2','CLI','Cli']],
+    ['Name', ['name','Name','patient_name']],
+    ['Husband Name', ['husband','HusbandName','husband_name']],
+    ['EDD', ['DateDelivery','EDD','edd']],
+    ['Address', ['address','Address']],
+    ['House Color', ['HouseColor','house_color']],
+    ['Door Color', ['DoorColor','door_color']],
+    ['Nearest Landmark', ['NearestLandmark','nearest_landmark']],
+    ['Location', ['location','Location']],
+    ['Clinical Details', ['ClinicalDetails','clinical_details']],
+    ['Union Council', ['uc_name','uc']],
+    ['Tehsil', ['tehsil_name','tehsil']],
+    ['District', ['district_name','district']],
+  ],
+  facility: [
+    ['Code', ['facility_code','FacilityCode']],
+    ['Name', ['facility_name','FacilityName']],
+    ['Incharge Name', ['InchargeName','incharge_name']],
+    ['Incharge Phone', ['InchargePhone','incharge_phone']],
+  ],
+  ambulance: [
+    ['Ambulance', ['Ambulance','amReg_No','ambulance']],
+    ['Driver(8:00AM to 8:00PM)', ['_driver_day','Driver_Name','driver_name']],
+    ['Driver(8:00PM to 8:00AM)', ['_driver_night','Driver_Name2']],
+    ['Mobile', ['MobNo','Mobile','mobile']],
+  ],
+};
+
+// Junk values jo Ufone khaali fields ke liye bhejta hai
+const EMPTY_VALUES = new Set(['', '0', 'None', 'null', '01 Jan 1900']);
+
+function _pick(detail, keys) {
+  for (const k of keys) {
+    const v = detail[k];
+    if (v === null || v === undefined) continue;
+    const s = String(v).trim();
+    if (!EMPTY_VALUES.has(s)) return s;
+  }
+  return '';
+}
+
+// Portal format: "PHF-" + numeric id (hardcoded in Dashboard.aspx JS)
+function formatTaskId(raw) {
+  const s = String(raw == null ? '' : raw).trim();
+  if (!s) return '';
+  if (/^PHF-/i.test(s)) return s.toUpperCase().replace(/^phf-/i, 'PHF-');
+  const n = s.replace(/\D/g, '');
+  return n ? ('PHF-' + n) : s;
+}
+
+function numericTaskId(raw) {
+  const s = String(raw == null ? '' : raw).trim();
+  const n = s.replace(/^PHF-/i, '').replace(/\D/g, '');
+  return n || s;
+}
+
+// Combined/computed fields (Date+Time, Driver Name (Cell), PHF-TaskId)
+function prepDetail(d) {
+  const cd = _pick(d, ['CD','CreatedDate']);
+  const ct = _pick(d, ['CD_time','CreatedTime']);
+  d._date = [cd, ct].filter(Boolean).join(' ');
+  const dn = _pick(d, ['Driver_Name']), dc = _pick(d, ['Driver_Cell']);
+  d._driver_day = dn ? (dc ? `${dn} (${dc})` : dn) : '';
+  const dn2 = _pick(d, ['Driver_Name2']), dc2 = _pick(d, ['Driver_Cell2']);
+  d._driver_night = dn2 ? (dc2 ? `${dn2} (${dc2})` : dn2) : '';
+  d._task_id = formatTaskId(_pick(d, ['id','TaskId','task_id']));
+  return d;
+}
+
+function _field(label, keys, d) {
+  const v = _pick(d, keys);
+  return `<div class="uf-frow"><label>${label}:</label><div class="field-value${v ? '' : ' empty'}">${v || '—'}</div></div>`;
+}
+
+function _section(title, icon, fields, d) {
+  let html = `<h6><i class="bi ${icon} me-1"></i> ${title}</h6><hr>`;
+  html += '<div class="uf-fgrid">';
+  for (const [label, keys] of fields) {
+    html += _field(label, keys, d);
+  }
+  html += '</div>';
+  return html;
+}
+
+function renderTaskDetail(data, liveUpdating) {
+  const body = document.getElementById('taskModalBody');
+  if (!data.detail || Object.keys(data.detail).length === 0) {
+    body.innerHTML = '<p class="text-muted text-center py-4">No data found.</p>';
+    return;
+  }
+  const d = prepDetail(data.detail);
+  let html = '';
+  if (liveUpdating) {
+    html += '<div class="alert alert-light py-1 small mb-2"><span class="spinner-border spinner-border-sm me-2"></span>Cached data shown — fetching live update...</div>';
+  } else if (data.from_cache) {
+    html += '<div class="alert alert-warning py-1 small mb-2"><i class="bi bi-clock-history"></i> Cached data (Ufone live server not responding)</div>';
+  }
+
+  // General — single inline row (no heading needed)
+  html += '<div class="uf-fgrid uf-general mb-1">';
+  for (const [label, keys] of TASK_FIELDS.general) {
+    html += _field(label, keys, d);
+  }
+  html += '</div>';
+
+  html += _section('Patient Info', 'bi-person-vcard', TASK_FIELDS.patient, d);
+  html += _section('Facility Detail', 'bi-hospital', TASK_FIELDS.facility, d);
+  html += _section('Ambulance / Driver', 'bi-truck', TASK_FIELDS.ambulance, d);
+
+  if (data.comments && data.comments.length > 0) {
+    html += '<h6><i class="bi bi-chat-left-text me-1"></i> Task Comments</h6><hr>';
+    html += '<div class="table-responsive"><table class="table table-sm table-bordered align-middle">';
+    html += '<thead class="table-light"><tr><th>Comment Type</th><th>Comments</th><th>Date/Time</th><th>Created By</th></tr></thead><tbody>';
+    data.comments.forEach(c => {
+      const ct = c.CommentType || c.comment_type || c.Comment_Type || '-';
+      const cm = c.Comments || c.comments || '-';
+      const dt = c.CD || c.CreatedDate || c.Date || c.date_time || '-';
+      const cb = c.CBName || c.CreatedBy || c.created_by || '-';
+      html += `<tr><td>${ct}</td><td>${cm}</td><td>${dt}</td><td>${cb}</td></tr>`;
+    });
+    html += '</tbody></table></div>';
+  }
+  body.innerHTML = html;
+}
+
+let taskModalToken = 0;
+document.querySelectorAll('.view-task-btn').forEach(btn => {
+  btn.addEventListener('click', async function() {
+    const id = numericTaskId(this.dataset.id);
+    const token = ++taskModalToken;
+    const modal = bootstrap.Modal.getOrCreateInstance(taskModalEl);
+    document.getElementById('taskModalBody').innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary"></div><p class="mt-2 text-muted">Loading...</p></div>';
+    modal.show();
+
+    // Stage 1: cache — instant paint
+    let hadCache = false;
+    try {
+      const res = await fetch('/ufone/task/' + id);
+      const data = await res.json();
+      if (token !== taskModalToken) return;
+      if (data.detail && Object.keys(data.detail).length) {
+        hadCache = data.from_cache === true;
+        renderTaskDetail(data, hadCache);
+        if (!hadCache) return; // already live
+      }
+    } catch(e) { /* fall through to live */ }
+
+    // Stage 2: live upgrade in background (quick timeout server-side)
+    try {
+      const res = await fetch('/ufone/task/' + id + '?live=1');
+      const data = await res.json();
+      if (token !== taskModalToken) return;
+      if (data.detail && Object.keys(data.detail).length) {
+        renderTaskDetail(data, false);
+      } else if (!hadCache) {
+        document.getElementById('taskModalBody').innerHTML = '<p class="text-danger text-center py-4">Ufone server not responding. Try again later.</p>';
+      }
+    } catch(e) {
+      if (token === taskModalToken && !hadCache) {
+        document.getElementById('taskModalBody').innerHTML = '<p class="text-danger text-center py-4">Error fetching details.</p>';
+      }
+    }
+  });
+});
+</script>
+{% endblock %}

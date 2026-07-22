@@ -638,8 +638,111 @@ class EmergencyTaskRecord(db.Model):
     distance_in_km = db.Column(db.String(30))        # BD: distanceInKM
     nearrest_health_facility = db.Column(db.String(200))  # BE: nearrestHealthFacility
 
+    # DB-first sync columns (Phase 1). source='api'|'excel'|'both' — informational
+    # only after Option B (one row per task). account_id set by API sync.
+    account_id = db.Column(db.Integer, nullable=True, index=True)
+    source = db.Column(db.String(16), nullable=False, default='excel', index=True)
+    synced_at = db.Column(db.DateTime, nullable=True)
+    excel_uploaded_at = db.Column(db.DateTime, nullable=True)
+
+    __table_args__ = (
+        db.Index('ix_emg_task_id_date', 'task_id_ext', 'task_date'),
+    )
+
     def __repr__(self):
         return f'<EmergencyTaskRecord {self.amb_reg_no} {self.task_date}>'
+
+
+class UfoneTaskDetailCache(db.Model):
+    """Cached full task detail + comments from Ufone (per task, per account)."""
+    __tablename__ = 'ufone_task_detail_cache'
+    id = db.Column(db.Integer, primary_key=True)
+    account_id = db.Column(db.Integer, db.ForeignKey('ufone_account.id'), nullable=False, index=True)
+    task_id = db.Column(db.String(50), nullable=False, index=True)
+    detail_json = db.Column(db.Text, nullable=True)
+    comments_json = db.Column(db.Text, nullable=True)
+    task_status = db.Column(db.String(50), nullable=True)
+    synced_at = db.Column(db.DateTime, default=pk_now, onupdate=pk_now)
+    created_at = db.Column(db.DateTime, default=pk_now)
+
+    account = db.relationship('UfoneAccount', backref='task_details')
+
+    __table_args__ = (
+        db.UniqueConstraint('account_id', 'task_id', name='uq_ufone_task_detail_acct_task'),
+    )
+
+    def __repr__(self):
+        return f'<UfoneTaskDetailCache {self.account_id}:{self.task_id}>'
+
+
+class UfoneDistrictCache(db.Model):
+    """Master district list from Ufone (code -> name), refreshed weekly."""
+    __tablename__ = 'ufone_district_cache'
+    code = db.Column(db.String(50), primary_key=True)
+    name = db.Column(db.String(200), nullable=True)
+    synced_at = db.Column(db.DateTime, default=pk_now, onupdate=pk_now)
+
+    def __repr__(self):
+        return f'<UfoneDistrictCache {self.code} {self.name}>'
+
+
+class UfoneTehsilCache(db.Model):
+    """Tehsils per district from Ufone, refreshed weekly."""
+    __tablename__ = 'ufone_tehsil_cache'
+    id = db.Column(db.Integer, primary_key=True)
+    district_code = db.Column(db.String(50), nullable=False, index=True)
+    tehsil_code = db.Column(db.String(50), nullable=False, index=True)
+    tehsil_name = db.Column(db.String(200), nullable=True)
+    synced_at = db.Column(db.DateTime, default=pk_now, onupdate=pk_now)
+
+    __table_args__ = (
+        db.UniqueConstraint('district_code', 'tehsil_code',
+                            name='uq_ufone_tehsil_district_tehsil'),
+    )
+
+    def __repr__(self):
+        return f'<UfoneTehsilCache {self.district_code}:{self.tehsil_code}>'
+
+
+class UfoneUCCache(db.Model):
+    """Union Councils per tehsil from Ufone, refreshed weekly."""
+    __tablename__ = 'ufone_uc_cache'
+    id = db.Column(db.Integer, primary_key=True)
+    tehsil_code = db.Column(db.String(50), nullable=False, index=True)
+    uc_code = db.Column(db.String(50), nullable=False, index=True)
+    uc_name = db.Column(db.String(200), nullable=True)
+    synced_at = db.Column(db.DateTime, default=pk_now, onupdate=pk_now)
+
+    __table_args__ = (
+        db.UniqueConstraint('tehsil_code', 'uc_code',
+                            name='uq_ufone_uc_tehsil_uc'),
+    )
+
+    def __repr__(self):
+        return f'<UfoneUCCache {self.tehsil_code}:{self.uc_code}>'
+
+
+class UfoneReportCache(db.Model):
+    """Generic persisted response cache for Ufone report endpoints
+    (patients, distance, daily/monthly task counts). Keyed by
+    (account_id, report_key, params_hash) with a TTL enforced in service layer."""
+    __tablename__ = 'ufone_report_cache'
+    id = db.Column(db.Integer, primary_key=True)
+    account_id = db.Column(db.Integer, db.ForeignKey('ufone_account.id'), nullable=False, index=True)
+    report_key = db.Column(db.String(64), nullable=False, index=True)
+    params_hash = db.Column(db.String(64), nullable=False, default='')
+    response_json = db.Column(db.Text, nullable=True)
+    synced_at = db.Column(db.DateTime, default=pk_now, onupdate=pk_now)
+
+    account = db.relationship('UfoneAccount', backref='report_caches')
+
+    __table_args__ = (
+        db.UniqueConstraint('account_id', 'report_key', 'params_hash',
+                            name='uq_ufone_report_key'),
+    )
+
+    def __repr__(self):
+        return f'<UfoneReportCache {self.account_id}:{self.report_key}:{self.params_hash}>'
 
 
 class VehicleMileageRecord(db.Model):
@@ -2961,3 +3064,114 @@ class PortalXSAlertCache(db.Model):
 
     def __repr__(self):
         return f'<PortalXSAlertCache {self.regno} {self.alert_type}>'
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# UFONE BPOCOPS MODELS
+# Mirror the PortalXS pattern: account (Fernet-encrypted creds) + cache tables.
+# ════════════════════════════════════════════════════════════════════════════
+
+class UfoneAccount(db.Model):
+    """Ufone BPOCOPS account credentials (Fernet-encrypted password)."""
+    __tablename__ = 'ufone_account'
+    id = db.Column(db.Integer, primary_key=True)
+    label = db.Column(db.String(100), default='Default')
+    username = db.Column(db.String(200), nullable=False)
+    password_enc = db.Column(db.Text, nullable=False)  # Fernet ciphertext
+    role = db.Column(db.String(20), default='Operator')  # Operator / Admin
+    is_active = db.Column(db.Boolean, default=True)
+    last_connected = db.Column(db.DateTime, nullable=True)
+    last_error = db.Column(db.Text, nullable=True)
+    vehicle_count = db.Column(db.Integer, default=0)
+    created_at = db.Column(db.DateTime, default=pk_now)
+    updated_at = db.Column(db.DateTime, default=pk_now, onupdate=pk_now)
+
+    def __repr__(self):
+        return f'<UfoneAccount {self.label} ({self.username})>'
+
+
+class UfoneVehicleCache(db.Model):
+    """Cached live positions of Ufone ambulances."""
+    __tablename__ = 'ufone_vehicle_cache'
+    id = db.Column(db.Integer, primary_key=True)
+    account_id = db.Column(db.Integer, db.ForeignKey('ufone_account.id'), nullable=False, index=True)
+    reg_no = db.Column(db.String(50), nullable=True, index=True)
+    u_track_no = db.Column(db.String(50), nullable=True)  # Tracking World ref
+    tracking_world_regno = db.Column(db.String(50), nullable=True)
+    chassis = db.Column(db.String(100), nullable=True)
+    make_model = db.Column(db.String(100), nullable=True)
+    last_lat = db.Column(db.Numeric(10, 6), nullable=True)
+    last_lon = db.Column(db.Numeric(10, 6), nullable=True)
+    last_location = db.Column(db.String(255), nullable=True)
+    district = db.Column(db.String(100), nullable=True)
+    status = db.Column(db.String(20), nullable=True)  # 1=Active, 2=Inactive
+    driver_name = db.Column(db.String(200), nullable=True)
+    driver_cell = db.Column(db.String(20), nullable=True)
+    facility_name = db.Column(db.String(255), nullable=True)
+    last_rdt = db.Column(db.DateTime, nullable=True)
+    last_distance = db.Column(db.Numeric(10, 2), nullable=True)
+    updated_at = db.Column(db.DateTime, default=pk_now, onupdate=pk_now)
+    created_at = db.Column(db.DateTime, default=pk_now)
+
+    account = db.relationship('UfoneAccount', backref='vehicles')
+
+    __table_args__ = (
+        db.UniqueConstraint('account_id', 'reg_no', name='uq_ufone_account_regno'),
+    )
+
+    def __repr__(self):
+        return f'<UfoneVehicleCache {self.reg_no}>'
+
+
+class UfoneTaskCache(db.Model):
+    """Cached emergency tasks from Ufone dashboard."""
+    __tablename__ = 'ufone_task_cache'
+    id = db.Column(db.Integer, primary_key=True)
+    account_id = db.Column(db.Integer, db.ForeignKey('ufone_account.id'), nullable=False, index=True)
+    task_id = db.Column(db.String(50), nullable=True, index=True)
+    patient_name = db.Column(db.String(200), nullable=True)
+    phone = db.Column(db.String(20), nullable=True)
+    address = db.Column(db.Text, nullable=True)
+    ambulance_reg = db.Column(db.String(50), nullable=True)
+    status = db.Column(db.String(50), nullable=True)
+    district = db.Column(db.String(100), nullable=True)
+    tehsil = db.Column(db.String(100), nullable=True)
+    facility = db.Column(db.String(255), nullable=True)
+    request_from = db.Column(db.String(50), nullable=True)  # LHW / LHV / USSD
+    created_date = db.Column(db.DateTime, nullable=True, index=True)
+    distance = db.Column(db.Numeric(10, 2), nullable=True)
+    is_transfer = db.Column(db.Boolean, default=False)
+    raw_json = db.Column(db.Text, nullable=True)
+    updated_at = db.Column(db.DateTime, default=pk_now, onupdate=pk_now)
+    created_at = db.Column(db.DateTime, default=pk_now, index=True)
+
+    account = db.relationship('UfoneAccount', backref='tasks')
+
+    def __repr__(self):
+        return f'<UfoneTaskCache {self.task_id}>'
+
+
+class UfoneMaintenanceCache(db.Model):
+    """Ambulances currently under maintenance."""
+    __tablename__ = 'ufone_maintenance_cache'
+    id = db.Column(db.Integer, primary_key=True)
+    account_id = db.Column(db.Integer, db.ForeignKey('ufone_account.id'), nullable=False, index=True)
+    reg_no = db.Column(db.String(50), nullable=True, index=True)
+    district = db.Column(db.String(100), nullable=True)
+    maintain_type = db.Column(db.String(50), nullable=True)  # Engine/Body/etc
+    cat_name = db.Column(db.String(100), nullable=True)
+    sub_cat_name = db.Column(db.String(100), nullable=True)
+    due_date = db.Column(db.DateTime, nullable=True)
+    send_date = db.Column(db.DateTime, nullable=True)
+    return_date = db.Column(db.DateTime, nullable=True)
+    comments = db.Column(db.Text, nullable=True)
+    days_offline = db.Column(db.Integer, default=0)
+    created_by = db.Column(db.String(100), nullable=True)
+    created_date = db.Column(db.DateTime, nullable=True)
+    updated_at = db.Column(db.DateTime, default=pk_now, onupdate=pk_now)
+    created_at = db.Column(db.DateTime, default=pk_now)
+
+    account = db.relationship('UfoneAccount', backref='maintenance')
+
+    def __repr__(self):
+        return f'<UfoneMaintenanceCache {self.reg_no}>'

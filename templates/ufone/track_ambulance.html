@@ -1,0 +1,181 @@
+{% extends 'base.html' %}
+{% from 'partials/nav_back_button.html' import nav_back_button %}
+
+{% block title %}Track Ambulance — Fleet Manager{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+  .uf-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px; }
+  .uf-header h4 { font-weight: 700; color: #1e293b; margin: 0; display: flex; align-items: center; gap: 10px; }
+  .uf-header h4 i { color: #7C3AED; }
+  
+  .uf-btn { background: linear-gradient(135deg,#7C3AED,#5B21B6); color: #fff; border: none; padding: 8px 16px; border-radius: 8px; font-weight: 600; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; }
+  
+  .uf-filter-bar {
+    background: #fff; padding: 16px 20px; border-radius: 12px;
+    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+    border: 1px solid #e9ecef; margin-bottom: 16px;
+    display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-end;
+  }
+  .uf-filter-group label { font-size: 11px; color: #64748b; font-weight: 600; margin-bottom: 4px; display: block; text-transform: uppercase; }
+  .uf-filter-group select {
+    border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px 12px;
+    font-size: 14px; min-width: 160px; background: #fff;
+  }
+  .uf-filter-group select:focus { outline: none; border-color: #7C3AED; box-shadow: 0 0 0 2px rgba(124,58,237,0.2); }
+  
+  #trackMap {
+    height: calc(100vh - 300px); min-height: 400px;
+    border-radius: 14px; border: 2px solid #e2e8f0;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.06); z-index: 1;
+  }
+  .uf-loading { text-align: center; padding: 40px; color: #64748b; }
+  .uf-info-card {
+    background: #fff; padding: 12px; border-radius: 8px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1); font-family: sans-serif; min-width: 200px;
+  }
+  .uf-info-card strong { font-size: 14px; color: #1e293b; }
+  .uf-info-card small { color: #64748b; display: block; margin-top: 4px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+  <div class="uf-header">
+    <div>
+      <h4><i class="bi bi-broadcast-pin"></i> Track Ambulance</h4>
+      <small class="text-muted">Find nearest vehicles by location</small>
+    </div>
+    {{ nav_back_button() }}
+  </div>
+
+  <div class="uf-filter-bar">
+    <div class="uf-filter-group">
+      <label>District</label>
+      <select id="fDistrict" onchange="loadTehsils()">
+        <option value="">All Districts</option>
+        {% for d in districts %}
+        <option value="{{ d.code }}">{{ d.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="uf-filter-group">
+      <label>Tehsil</label>
+      <select id="fTehsil" onchange="loadUCs()">
+        <option value="">All Tehsils</option>
+      </select>
+    </div>
+    <div class="uf-filter-group">
+      <label>Union Council</label>
+      <select id="fUC">
+        <option value="">All UCs</option>
+      </select>
+    </div>
+    <button class="uf-btn" onclick="findAmbulances()">
+      <i class="bi bi-search"></i> Search Ambulances
+    </button>
+  </div>
+
+  <div id="trackMap"></div>
+  <div id="loadingMsg" class="uf-loading" style="display: none;">
+    <div class="spinner-border text-primary" role="status"></div>
+    <p class="mt-2">Fetching live data...</p>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+let map, markerLayer;
+
+function initMap() {
+  map = L.map('trackMap', { zoomControl: true }).setView([31.5, 74.3], 7);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19, attribution: '&copy; OpenStreetMap'
+  }).addTo(map);
+  markerLayer = L.layerGroup().addTo(map);
+}
+
+async function loadTehsils() {
+  const dc = document.getElementById('fDistrict').value;
+  const tehsilSel = document.getElementById('fTehsil');
+  tehsilSel.innerHTML = '<option value="">All Tehsils</option>';
+  document.getElementById('fUC').innerHTML = '<option value="">All UCs</option>';
+  if (!dc) return;
+  
+  try {
+    const res = await fetch(`/api/ufone/tehsils/${dc}`);
+    const data = await res.json();
+    if (data.tehsils) {
+      data.tehsils.forEach(t => {
+        tehsilSel.innerHTML += `<option value="${t.tehsil_code}">${t.tehsil_name}</option>`;
+      });
+    }
+  } catch(e) { console.error(e); }
+}
+
+async function loadUCs() {
+  const tc = document.getElementById('fTehsil').value;
+  const ucSel = document.getElementById('fUC');
+  ucSel.innerHTML = '<option value="">All UCs</option>';
+  if (!tc) return;
+  
+  try {
+    const res = await fetch(`/api/ufone/ucs/${tc}`);
+    const data = await res.json();
+    if (data.ucs) {
+      data.ucs.forEach(u => {
+        ucSel.innerHTML += `<option value="${u.uc_code || u.id}">${u.uc_name || u.name}</option>`;
+      });
+    }
+  } catch(e) { console.error(e); }
+}
+
+async function findAmbulances() {
+  document.getElementById('loadingMsg').style.display = 'block';
+  markerLayer.clearLayers();
+  
+  try {
+    // Get live data and filter client-side for fast response
+    const res = await fetch('/api/ufone/vehicles');
+    const data = await res.json();
+    const bounds = [];
+    
+    if (data.vehicles) {
+      data.vehicles.forEach(v => {
+        if (!v.latitude || !v.longitude) return;
+        const lat = parseFloat(v.latitude);
+        const lon = parseFloat(v.longitude);
+        if (isNaN(lat) || isNaN(lon) || (lat === 0 && lon === 0)) return;
+        
+        const color = v.status == 1 ? '#10B981' : '#EF4444';
+        const icon = L.divIcon({
+          html: `<div style="width:16px;height:16px;border-radius:50%;background:${color};border:2px solid #fff;box-shadow:0 2px 4px rgba(0,0,0,0.3);"></div>`,
+          className: '', iconSize: [16, 16], iconAnchor: [8, 8]
+        });
+        
+        const marker = L.marker([lat, lon], { icon: icon });
+        marker.bindPopup(`
+          <div class="uf-info-card">
+            <strong>${v.reg_no}</strong>
+            <small>${v.location || ''}</small>
+            <small>Status: ${v.status == 1 ? 'Active' : 'Inactive'}</small>
+          </div>
+        `);
+        markerLayer.addLayer(marker);
+        bounds.push([lat, lon]);
+      });
+      
+      if (bounds.length > 0) {
+        map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
+      } else {
+        alert('No ambulances with valid GPS found.');
+      }
+    }
+  } catch(e) { console.error(e); alert('Error fetching data.'); }
+  document.getElementById('loadingMsg').style.display = 'none';
+}
+
+initMap();
+</script>
+{% endblock %}

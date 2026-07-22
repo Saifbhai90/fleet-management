@@ -187,8 +187,9 @@ def _set_sqlite_pragma(dbapi_conn, connection_record):
         cursor.close()
 
 # Jinja filters: date dd-mm-yyyy, CNIC, phone
-from utils import format_date_ddmmyyyy, format_cnic, format_phone, format_time_ampm, format_reading
+from utils import format_date_ddmmyyyy, format_cnic, format_phone, format_time_ampm, format_reading, format_ufone_date_short
 app.jinja_env.filters['ddmmyyyy'] = format_date_ddmmyyyy
+app.jinja_env.filters['ufdate'] = format_ufone_date_short
 app.jinja_env.filters['reading'] = format_reading
 app.jinja_env.filters['timeampm'] = format_time_ampm
 app.jinja_env.filters['cnic_fmt'] = format_cnic
@@ -434,7 +435,10 @@ def inject_workspace_context():
     return dict(workspace_selected_employee=emp)
 
 # Create all tables if not exist (backward compatibility; new changes use migrations)
-_run_startup_tasks = (not app.debug) or (os.environ.get('WERKZEUG_RUN_MAIN') == 'true')
+# Always run: local/prod entrypoints use use_reloader=False with debug=True, so the
+# old "(not debug) or WERKZEUG_RUN_MAIN" check skipped migrations entirely and left
+# emergency_task_record without account_id/synced_at (blank dashboard cards).
+_run_startup_tasks = True
 if _run_startup_tasks:
     with app.app_context():
         print("Creating tables if needed...")
@@ -456,6 +460,24 @@ if _run_startup_tasks:
             SlipOcrSample.__table__.create(db.engine, checkfirst=True)
         except Exception as _e:
             print(f"workspace_slip_profile / client_diagnostic_log ensure warning (non-fatal): {_e}")
+
+        # Ufone BPOCOPS tables (force-create to skip migration wait)
+        try:
+            from models import (UfoneAccount, UfoneVehicleCache, UfoneTaskCache,
+                                UfoneMaintenanceCache, UfoneTaskDetailCache,
+                                UfoneDistrictCache, UfoneTehsilCache, UfoneUCCache,
+                                UfoneReportCache)
+            UfoneAccount.__table__.create(db.engine, checkfirst=True)
+            UfoneVehicleCache.__table__.create(db.engine, checkfirst=True)
+            UfoneTaskCache.__table__.create(db.engine, checkfirst=True)
+            UfoneMaintenanceCache.__table__.create(db.engine, checkfirst=True)
+            UfoneTaskDetailCache.__table__.create(db.engine, checkfirst=True)
+            UfoneDistrictCache.__table__.create(db.engine, checkfirst=True)
+            UfoneTehsilCache.__table__.create(db.engine, checkfirst=True)
+            UfoneUCCache.__table__.create(db.engine, checkfirst=True)
+            UfoneReportCache.__table__.create(db.engine, checkfirst=True)
+        except Exception as _e:
+            print(f"ufone tables ensure warning (non-fatal): {_e}")
 
         # Auto-add missing columns to existing tables
         try:
@@ -510,18 +532,29 @@ if _run_startup_tasks:
                 ('driver_document_history', 'update_source', 'VARCHAR(20)'),
                 ('app_release', 'apk_r2_url', 'VARCHAR(512)'),
                 ('workspace_slip_profile', 'date_format', 'VARCHAR(10)'),
+                # Ufone DB-first Phase 1: EmergencyTaskRecord sync columns
+                # TIMESTAMP works on Postgres; SQLite accepts it as affinity too.
+                ('emergency_task_record', 'account_id', 'INTEGER'),
+                ('emergency_task_record', 'source', "VARCHAR(16) DEFAULT 'excel'"),
+                ('emergency_task_record', 'synced_at', 'TIMESTAMP'),
+                ('emergency_task_record', 'excel_uploaded_at', 'TIMESTAMP'),
             ]
             # Ensure device_app_version table exists
             if 'device_app_version' not in _inspector.get_table_names():
                 db.create_all()
                 print("Created device_app_version table")
             for _tbl, _col, _coltype in _col_additions:
-                if _tbl in _inspector.get_table_names():
+                try:
+                    if _tbl not in _inspector.get_table_names():
+                        continue
                     _existing = [c['name'] for c in _inspector.get_columns(_tbl)]
                     if _col not in _existing:
                         db.session.execute(_sa_text(f'ALTER TABLE {_tbl} ADD COLUMN {_col} {_coltype}'))
                         db.session.commit()
                         print(f"Added column {_tbl}.{_col}")
+                except Exception as _col_err:
+                    db.session.rollback()
+                    print(f"Column add skip {_tbl}.{_col}: {_col_err}")
         except Exception as _e:
             print(f"Column migration warning (non-fatal): {_e}")
 
@@ -675,6 +708,8 @@ if _run_startup_tasks:
                     "CREATE INDEX IF NOT EXISTS ix_vehicle_mileage_record_task_date ON vehicle_mileage_record (task_date)",
                     "CREATE INDEX IF NOT EXISTS ix_vehicle_mileage_record_reg_no ON vehicle_mileage_record (reg_no)",
                     "CREATE INDEX IF NOT EXISTS ix_emergency_task_record_task_date_created_at ON emergency_task_record (task_date, created_at)",
+                    "CREATE INDEX IF NOT EXISTS ix_emergency_task_record_acct_task_date ON emergency_task_record (account_id, task_id_ext, task_date)",
+                    "CREATE INDEX IF NOT EXISTS ix_emergency_task_record_source ON emergency_task_record (source)",
                     "CREATE INDEX IF NOT EXISTS ix_vehicle_mileage_record_task_date_created_at ON vehicle_mileage_record (task_date, created_at)",
                     "CREATE INDEX IF NOT EXISTS ix_vehicle_activity_record_task_date_source_file ON vehicle_activity_record (task_date, source_file)",
                     "CREATE INDEX IF NOT EXISTS ix_vehicle_activity_record_task_date_created_at ON vehicle_activity_record (task_date, created_at)",
@@ -689,6 +724,13 @@ if _run_startup_tasks:
                 print("Sorting indexes created/verified.")
         except Exception as e:
             print("Index creation skip:", e)
+        # Option B: merge duplicate emergency tasks + partial unique index
+        try:
+            from emg_tasks import ensure_emergency_unique_index
+            ensure_emergency_unique_index()
+            print("Emergency task dedupe/unique index OK.")
+        except Exception as e:
+            print(f"Emergency task dedupe skip: {e}")
         # Seed default permissions, Admin role, and admin user (if none exist)
         try:
             from auth_utils import seed_auth_tables
@@ -773,6 +815,7 @@ import routes_task_ops  # noqa: E402,F401 — Task Ops: Red Tasks, Without Task,
 import routes_tracker_reports  # noqa: E402,F401 — Tracker & Operations Reports
 import routes_workforce  # noqa: E402,F401 — Workforce: Job Left, Rejoin, Leave, Driver Posts
 import routes_tracking  # noqa: E402,F401 — PortalXS Fleet Tracking Portal
+import routes_ufone  # noqa: E402,F401 — Ufone BPOCOPS Ambulance Portal
 
 # Book management: explicit registration so endpoints always exist (avoids BuildError if routes.py tail not loaded)
 from routes_books import register_book_routes  # noqa: E402

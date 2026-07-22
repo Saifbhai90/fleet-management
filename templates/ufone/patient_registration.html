@@ -1,0 +1,88 @@
+{% extends 'base.html' %}
+{% from 'partials/nav_back_button.html' import nav_back_button %}
+
+{% block title %}Patient Registration — Fleet Manager{% endblock %}
+
+{% block extra_head %}
+<style>
+  .uf-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 10px; }
+  .uf-header h4 { font-weight: 800; color: #1e293b; margin: 0; display: flex; align-items: center; gap: 10px; }
+  .uf-header h4 i { color: #7C3AED; }
+  
+  .uf-card {
+    background: #fff; border-radius: 12px; padding: 30px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.04); border: 1px solid #e9ecef;
+    max-width: 800px; margin: 0 auto;
+  }
+  
+  .uf-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .uf-form-group label { font-size: 13px; color: #64748b; font-weight: 600; margin-bottom: 6px; display: block; }
+  .uf-form-group input, .uf-form-group select {
+    border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; font-size: 14px; width: 100%;
+    transition: all 0.2s;
+  }
+  .uf-form-group input:focus, .uf-form-group select:focus { outline: none; border-color: #7C3AED; box-shadow: 0 0 0 3px rgba(124,58,237,0.15); }
+  
+  .uf-btn { background: linear-gradient(135deg,#7C3AED,#5B21B6); color: #fff; border: none; padding: 10px 24px; border-radius: 8px; font-weight: 600; font-size: 15px; display: inline-flex; align-items: center; gap: 8px; }
+  
+  .uf-notice {
+    background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af;
+    padding: 16px; border-radius: 10px; margin-top: 24px; font-size: 14px;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+  <div class="uf-header">
+    <div>
+      <h4><i class="bi bi-person-plus-fill"></i> Patient Registration</h4>
+      <small class="text-muted">Add a new patient record</small>
+    </div>
+    {{ nav_back_button() }}
+  </div>
+
+  <div class="uf-card">
+    <form method="post" action="">
+      <div class="uf-form-grid">
+        <div class="uf-form-group">
+          <label>Patient Name</label>
+          <input type="text" name="name" required>
+        </div>
+        <div class="uf-form-group">
+          <label>Husband/Father Name</label>
+          <input type="text" name="husband">
+        </div>
+        <div class="uf-form-group">
+          <label>Phone Number</label>
+          <input type="text" name="phone" required>
+        </div>
+        <div class="uf-form-group">
+          <label>CNIC</label>
+          <input type="text" name="cnic">
+        </div>
+        <div class="uf-form-group" style="grid-column: span 2;">
+          <label>Address</label>
+          <input type="text" name="address">
+        </div>
+        <div class="uf-form-group">
+          <label>District</label>
+          <input type="text" name="district">
+        </div>
+        <div class="uf-form-group">
+          <label>Assigned Ambulance</label>
+          <input type="text" name="ambulance">
+        </div>
+      </div>
+      
+      <div class="mt-4 text-center">
+        <button type="submit" class="uf-btn"><i class="bi bi-check-lg"></i> Register Patient</button>
+      </div>
+    </form>
+    
+    <div class="uf-notice">
+      <i class="bi bi-info-circle"></i> <b>Note:</b> Writing patient records may require specific Admin privileges on the Ufone server. If access is denied, use the Ufone web portal directly.
+    </div>
+  </div>
+</div>
+{% endblock %}

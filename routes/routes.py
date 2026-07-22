@@ -79,6 +79,7 @@ from utils import (
     make_driver_profile_share_token, load_driver_profile_share_token,
 )
 from auth_utils import get_required_permission, user_has_permission, user_can_access, check_password, is_endpoint_allowed_for_any_authed
+from emg_tasks import upsert_emergency_from_excel
 from flask_wtf.csrf import CSRFError
 from werkzeug.exceptions import HTTPException
 from werkzeug.security import generate_password_hash
@@ -9066,11 +9067,12 @@ def _parse_emergency_excel(f, task_date):
     if not col_map:
         raise ValueError("No recognised column headers found in EmergencyTaskReport file.")
 
-    EmergencyTaskRecord.query.filter_by(task_date=task_date).delete()
-
+    # Option B: upsert each row by (task_id_ext, task_date) — no delete+insert,
+    # no duplicate rows when the same task also exists from API sync.
     limits = _get_table_string_limits('emergency_task_record', model_cls=EmergencyTaskRecord)
     today = pk_date()
-    mappings = []
+    uploaded_ids = set()
+    count = 0
     for row_no, row in enumerate(rows[1:], start=2):
         vals = {}
         for idx, field in col_map.items():
@@ -9081,12 +9083,32 @@ def _parse_emergency_excel(f, task_date):
         if vals.get('amb_reg_no'):
             vals['amb_reg_no'] = _normalize_vehicle_no(vals['amb_reg_no'])
         _validate_string_lengths('emergency_task_record', EmergencyTaskRecord, vals, row_no, 'EmergencyTaskReport', limits=limits)
-        vals['task_date'] = task_date
-        vals['upload_date'] = today
-        mappings.append(vals)
-    if mappings:
-        db.session.bulk_insert_mappings(EmergencyTaskRecord, mappings)
-    return len(mappings)
+        upsert_emergency_from_excel(vals, task_date, upload_date=today)
+        tid = (vals.get('task_id_ext') or '').strip()
+        if tid:
+            uploaded_ids.add(tid)
+        count += 1
+
+    # Remove rows for this date that were Excel-only and no longer in the file
+    # (never touched by API — no synced_at).
+    if uploaded_ids:
+        stale = EmergencyTaskRecord.query.filter(
+            EmergencyTaskRecord.task_date == task_date,
+            EmergencyTaskRecord.synced_at.is_(None),
+            EmergencyTaskRecord.task_id_ext.isnot(None),
+            EmergencyTaskRecord.task_id_ext != '',
+            ~EmergencyTaskRecord.task_id_ext.in_(uploaded_ids),
+        ).all()
+        for r in stale:
+            db.session.delete(r)
+    elif count:
+        # Full replace for date when file has no task ids (legacy): drop excel-only rows
+        EmergencyTaskRecord.query.filter(
+            EmergencyTaskRecord.task_date == task_date,
+            EmergencyTaskRecord.synced_at.is_(None),
+        ).delete(synchronize_session=False)
+
+    return count
 
 
 def _parse_mileage_excel(f, task_date, clear=True):

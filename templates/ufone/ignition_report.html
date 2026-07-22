@@ -1,0 +1,72 @@
+{% extends 'base.html' %}
+{% from 'partials/nav_back_button.html' import nav_back_button %}
+
+{% block title %}Ignition Report — Fleet Manager{% endblock %}
+
+{% block extra_head %}
+<style>
+  .uf-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
+  .uf-header h4 { font-weight: 800; color: #1e293b; margin: 0; display: flex; align-items: center; gap: 10px; }
+  .uf-header h4 i { color: #7C3AED; }
+  .uf-btn { background: linear-gradient(135deg,#7C3AED,#5B21B6); color: #fff; border: none; padding: 8px 16px; border-radius: 8px; font-weight: 600; font-size: 13px; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+  .uf-btn:hover { color: #fff; opacity: 0.9; }
+  .uf-filter-bar { background: #fff; padding: 16px 24px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid #e9ecef; margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; }
+  .uf-filter-group label { font-size: 11px; color: #64748b; font-weight: 600; margin-bottom: 4px; display: block; text-transform: uppercase; }
+  .uf-filter-group input, .uf-filter-group select { border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px 12px; font-size: 14px; background: #fff; }
+  .uf-filter-group input:focus { outline: none; border-color: #7C3AED; box-shadow: 0 0 0 2px rgba(124,58,237,0.2); }
+  .uf-card { background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid #e9ecef; }
+  .uf-table thead th { background: #f8fafc; border-bottom: 2px solid #e2e8f0; color: #64748b; font-weight: 600; text-transform: uppercase; font-size: 11px; padding: 14px 16px; }
+  .uf-table tbody td { padding: 12px 16px; vertical-align: middle; border-bottom: 1px solid #f1f5f9; color: #475569; }
+  .uf-table tbody tr:hover { background: #f8fafc; }
+  .uf-badge { padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+  .badge-on { background: #D1FAE5; color: #065F46; }
+  .badge-off { background: #FEE2E2; color: #991B1B; }
+  .uf-empty { text-align: center; padding: 60px 20px; color: #94a3b8; }
+  .uf-empty i { font-size: 48px; display: block; margin-bottom: 12px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+  <div class="uf-header">
+    <div>
+      <h4><i class="bi bi-key-fill"></i> Ignition Report</h4>
+      <small class="text-muted">Vehicle ignition on/off history</small>
+    </div>
+    {{ nav_back_button() }}
+  </div>
+
+  <form method="get" class="uf-filter-bar">
+    <div class="uf-filter-group">
+      <label>From Date</label>
+      <input type="date" name="from_date" value="{{ from_date|default('') }}">
+    </div>
+    <div class="uf-filter-group">
+      <label>To Date</label>
+      <input type="date" name="to_date" value="{{ to_date|default('') }}">
+    </div>
+    <div class="uf-filter-group">
+      <label>Vehicle Reg</label>
+      <input type="text" name="regno" placeholder="e.g. GBC-22-042">
+    </div>
+    <button type="submit" class="uf-btn"><i class="bi bi-search"></i> Generate</button>
+  </form>
+
+  <div class="uf-card">
+    <div class="table-responsive">
+      <table class="table uf-table mb-0">
+        <thead>
+          <tr><th>Vehicle</th><th>Event</th><th>Date & Time</th><th>Location</th><th>Duration</th></tr>
+        </thead>
+        <tbody>
+          <tr><td colspan="5" class="uf-empty">
+            <i class="bi bi-key"></i>
+            <h6>No Data Available</h6>
+            <p>Select date range and vehicle to view ignition events.</p>
+          </td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -179,7 +179,7 @@ echo.
 start "" cmd /c "timeout /t 3 /nobreak >nul && start http://127.0.0.1:%LOCAL_PORT%"
 
 :: Start Flask (fresh process ensures no stale DB connections)
-python -c "from app import app; app.run(debug=True, port=%LOCAL_PORT%, use_reloader=False)"
+python -c "from app import app; app.run(debug=True, host='127.0.0.1', port=%LOCAL_PORT%, use_reloader=False, threaded=True)"
 
 echo.
 echo  Server stopped.

@@ -66,6 +66,41 @@ def format_date_ddmmyyyy(d: Optional[date]) -> str:
     return d.strftime('%d-%m-%Y')
 
 
+def format_ufone_date_short(s: Any) -> str:
+    """Ufone task date -> dd-mm-yy. Accepts ISO, MM/DD/YYYY (Ufone default),
+    'DD Mon YYYY HH:MM:SS', dd-mm-yyyy, etc. Mirrors the JS formatTaskDate() so
+    server-rendered rows always show the date (no reliance on JS timing)."""
+    if not s:
+        return ''
+    s = str(s).strip()
+    if not s or s.startswith('01 Jan 1900') or s.startswith('1900') or s.startswith('01/01/1900'):
+        return ''
+    # ISO: 2026-07-22 or 2026-07-22T00:55:10
+    m = re.match(r'^(\d{4})-(\d{1,2})-(\d{1,2})', s)
+    if m:
+        return f"{int(m.group(3)):02d}-{int(m.group(2)):02d}-{m.group(1)[-2:]}"
+    # MM/DD/YYYY (Ufone default — slash = US format) — also MM/DD/YYYY HH:MM
+    m = re.match(r'^(\d{1,2})/(\d{1,2})/(\d{2,4})', s)
+    if m:
+        yy = m.group(3)[-2:] if len(m.group(3)) == 4 else m.group(3).zfill(2)
+        return f"{int(m.group(2)):02d}-{int(m.group(1)):02d}-{yy}"
+    # '22 Jul 2026 00:55:10' or '22-Jul-2026'
+    m = re.match(r'^(\d{1,2})[\s-]([A-Za-z]{3,})[\s-](\d{2,4})', s)
+    if m:
+        months = {'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
+                  'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12}
+        mon = months.get(m.group(2).lower())
+        if mon:
+            yy = m.group(3)[-2:] if len(m.group(3)) == 4 else m.group(3).zfill(2)
+            return f"{int(m.group(1)):02d}-{mon:02d}-{yy}"
+    # dd-mm-yyyy or dd-mm-yy (dash = day-first)
+    m = re.match(r'^(\d{1,2})-(\d{1,2})-(\d{2,4})', s)
+    if m:
+        yy = m.group(3)[-2:] if len(m.group(3)) == 4 else m.group(3).zfill(2)
+        return f"{int(m.group(1)):02d}-{int(m.group(2)):02d}-{yy}"
+    return s
+
+
 def parse_date(s: Optional[str]) -> Optional[date]:
     """Parse date string. Accepts dd-mm-yyyy or yyyy-mm-dd."""
     if not s or not str(s).strip():

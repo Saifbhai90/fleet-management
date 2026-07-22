@@ -7,7 +7,7 @@ from auth_utils import (
     PERMISSION_DRIVER_STATUS, PERMISSION_ATTENDANCE, PERMISSION_TASK_REPORT,
     PERMISSION_EXPENSES, PERMISSION_ACCOUNTS, PERMISSION_WORKSPACE, PERMISSION_PAYROLL, PERMISSION_BOOKS,
     PERMISSION_REPORTS, PERMISSION_BACKUP, PERMISSION_USERS_MANAGE, PERMISSION_DASHBOARD,
-    PERMISSION_TRACKING,
+    PERMISSION_TRACKING, PERMISSION_UFONE,
 )
 
 # Setting (Form Control) — one permission per tab; backup is a separate section (not freeze).
@@ -385,6 +385,15 @@ PERMISSION_TREE = {
         ('tracking_alerts', 'Alerts'),
         ('tracking_settings', 'Settings (Accounts, Linking, Polling)'),
     ],
+    PERMISSION_UFONE: [
+        ('ufone', 'Ufone BPOCOPS (full)'),
+        ('ufone_view', 'Dashboard, Live Map & Vehicles – View'),
+        ('ufone_history', 'Vehicle History'),
+        ('ufone_reports', 'Reports (Tasks, Patients, Distance, Ignition, Maintenance)'),
+        ('ufone_actions', 'Task Actions (Comment, Feedback, Complete)'),
+        ('ufone_admin', 'Admin (Patient Registration, Ambulance Management)'),
+        ('ufone_settings', 'Settings (Accounts, Polling)'),
+    ],
 }
 
 SECTION_LABELS = {
@@ -404,6 +413,7 @@ SECTION_LABELS = {
     PERMISSION_BACKUP: 'Backup',
     PERMISSION_USERS_MANAGE: 'Administration',
     PERMISSION_TRACKING: 'Fleet Tracking',
+    PERMISSION_UFONE: 'Ufone BPOCOPS',
 }
 
 # Section "full" permission code -> SECTION_PAGE_GROUPS key (for login expansion)

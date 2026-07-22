@@ -27,6 +27,7 @@ PERMISSION_BOOKS = 'books'
 PERMISSION_BACKUP = 'backup'
 PERMISSION_USERS_MANAGE = 'users_manage'
 PERMISSION_TRACKING = 'tracking'
+PERMISSION_UFONE = 'ufone'
 
 ALL_PERMISSION_CODES = [
     (PERMISSION_DASHBOARD, 'Dashboard', 'General'),
@@ -51,6 +52,13 @@ ALL_PERMISSION_CODES = [
     ('tracking_reports', 'Tracking – Trips, Fleet Report & Trends', 'Tracking'),
     ('tracking_alerts', 'Tracking – Alerts', 'Tracking'),
     ('tracking_settings', 'Tracking – Settings', 'Tracking'),
+    (PERMISSION_UFONE, 'Ufone BPOCOPS (full)', 'Ufone'),
+    ('ufone_view', 'Ufone – Dashboard, Live Map & Vehicles', 'Ufone'),
+    ('ufone_history', 'Ufone – Vehicle History', 'Ufone'),
+    ('ufone_reports', 'Ufone – Reports (Tasks, Patients, Distance, etc.)', 'Ufone'),
+    ('ufone_actions', 'Ufone – Task Actions (Comment/Feedback/Complete)', 'Ufone'),
+    ('ufone_admin', 'Ufone – Admin (Patient Reg, Ambulance Mgmt)', 'Ufone'),
+    ('ufone_settings', 'Ufone – Settings (Accounts, Polling)', 'Ufone'),
 ]
 
 # Endpoint -> required permission code (granular where defined)
@@ -713,6 +721,25 @@ ENDPOINT_PERMISSION_MAP = [
     ('tracking_settings', 'tracking_settings'),        # covers all settings sub-routes
     ('api_tracking_vehicles', 'tracking_settings'),
     ('api_tracking_internal_vehicles', 'tracking_settings'),
+
+    # ── Ufone BPOCOPS — granular permissions ──────────────────────────────
+    ('ufone_dashboard',           'ufone_view'),
+    ('ufone_map',                 'ufone_view'),
+    ('ufone_vehicles',            'ufone_view'),
+    ('ufone_vehicle_detail',      'ufone_view'),
+    ('ufone_track',               'ufone_view'),
+    ('ufone_task_detail',         'ufone_view'),
+    ('api_ufone',                 'ufone_view'),
+    ('ufone_history',             'ufone_history'),
+    ('ufone_ignition',            'ufone_reports'),
+    ('ufone_distance',            'ufone_reports'),
+    ('ufone_maintenance',         'ufone_reports'),
+    ('ufone_emergency_tasks',     'ufone_reports'),
+    ('ufone_patient_reports',     'ufone_reports'),
+    ('ufone_task_counts',         'ufone_reports'),
+    ('ufone_task_action',         'ufone_actions'),     # comment/feedback/complete
+    ('ufone_admin',               'ufone_admin'),       # patient reg / amb mgmt
+    ('ufone_settings',            'ufone_settings'),    # covers all settings sub-routes
 ]
 
 

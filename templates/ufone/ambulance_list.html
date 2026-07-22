@@ -1,0 +1,123 @@
+{% extends 'base.html' %}
+{% from 'partials/nav_back_button.html' import nav_back_button %}
+
+{% block title %}Ambulance List — Fleet Manager{% endblock %}
+
+{% block extra_head %}
+<style>
+  .uf-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
+  .uf-header h4 { font-weight: 700; color: #1e293b; margin: 0; display: flex; align-items: center; gap: 10px; }
+  .uf-header h4 i { color: #7C3AED; }
+  
+  .uf-btn { background: linear-gradient(135deg,#7C3AED,#5B21B6); color: #fff; border: none; padding: 8px 16px; border-radius: 8px; font-weight: 600; font-size: 13px; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+  .uf-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(124,58,237,0.3); color: #fff; }
+  .uf-btn-outline { background: #fff; color: #7C3AED; border: 1px solid #7C3AED; }
+  .uf-btn-outline:hover { background: #7C3AED; color: #fff; }
+  
+  .uf-card { background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid #e9ecef; }
+  .uf-table thead th { background: #f8fafc; border-bottom: 2px solid #e2e8f0; color: #64748b; font-weight: 600; text-transform: uppercase; font-size: 11px; padding: 14px 16px; }
+  .uf-table tbody td { padding: 12px 16px; vertical-align: middle; border-bottom: 1px solid #f1f5f9; color: #475569; }
+  .uf-table tbody tr:hover { background: #f8fafc; cursor: pointer; }
+  
+  .uf-search-bar { background: #fff; padding: 16px 20px; border-radius: 12px; margin-bottom: 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.03); border: 1px solid #e9ecef; }
+  .uf-search { border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px 14px; font-size: 14px; width: 100%; }
+  .uf-search:focus { outline: none; border-color: #7C3AED; box-shadow: 0 0 0 2px rgba(124,58,237,0.2); }
+  
+  .uf-badge { padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+  .badge-active { background: #D1FAE5; color: #065F46; }
+  .badge-inactive { background: #FEE2E2; color: #991B1B; }
+  
+  .uf-gps-icon { font-size: 16px; }
+  .text-success { color: #10B981 !important; }
+  .text-muted-2 { color: #94a3b8 !important; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+  <div class="uf-header">
+    <div>
+      <h4><i class="bi bi-truck-front-fill"></i> Ambulance List</h4>
+      <small class="text-muted">Total: {{ stats.total|default(0) }} | Active: {{ stats.active|default(0) }} | Inactive: {{ stats.inactive|default(0) }}</small>
+    </div>
+    <div class="d-flex gap-2">
+      {{ nav_back_button() }}
+      <a href="{{ url_for('ufone_map') }}" class="uf-btn uf-btn-outline"><i class="bi bi-geo-alt"></i> Map View</a>
+      <a href="{{ url_for('ufone_export_vehicles') }}" class="uf-btn"><i class="bi bi-download"></i> Export CSV</a>
+    </div>
+  </div>
+
+  <div class="uf-search-bar">
+    <input type="text" id="tableSearch" class="uf-search" placeholder="🔍 Search by Reg No, Driver, or Location..." oninput="filterTable()">
+  </div>
+
+  <div class="uf-card">
+    <div class="table-responsive">
+      <table class="table table-hover uf-table mb-0 align-middle" id="vehicleTable">
+        <thead>
+          <tr>
+            <th>Reg No</th>
+            <th>Tracking ID</th>
+            <th>District</th>
+            <th>Driver</th>
+            <th>Status</th>
+            <th>GPS</th>
+            <th style="text-align: right;">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for v in vehicles %}
+          <tr onclick="window.location.href='/ufone/vehicle/{{ v.reg_no }}'" style="cursor: pointer;">
+            <td class="fw-bold text-dark">{{ v.reg_no }}</td>
+            <td><small class="text-muted">{{ v.u_track_no or '-' }}</small></td>
+            <td>{{ v.district or '-' }}</td>
+            <td><small>{{ v.driver_name or '-' }}<br><span class="text-muted-2">{{ v.driver_cell or '' }}</span></small></td>
+            <td>
+              {% if v.status == 1 %}
+              <span class="uf-badge badge-active">Active</span>
+              {% else %}
+              <span class="uf-badge badge-inactive">Inactive</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if v.has_gps %}
+              <i class="bi bi-geo-alt-fill uf-gps-icon text-success" title="Has GPS"></i>
+              {% else %}
+              <i class="bi bi-geo-slash uf-gps-icon text-muted-2" title="No GPS"></i>
+              {% endif %}
+            </td>
+            <td style="text-align: right;">
+              <a href="/ufone/vehicle/{{ v.reg_no }}" class="btn btn-sm btn-outline-secondary" onclick="event.stopPropagation()">
+                <i class="bi bi-eye"></i> View
+              </a>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="7" class="text-center text-muted py-5">
+              <i class="bi bi-truck d-block mb-2" style="font-size: 24px;"></i>
+              No ambulances found.
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+function filterTable() {
+  const input = document.getElementById('tableSearch');
+  const filter = input.value.toLowerCase();
+  const table = document.getElementById('vehicleTable');
+  const trs = table.querySelectorAll('tbody tr');
+  
+  trs.forEach(tr => {
+    if (tr.querySelector('td[colspan]')) return; // skip no-results row
+    const text = tr.textContent.toLowerCase();
+    tr.style.display = text.includes(filter) ? '' : 'none';
+  });
+}
+</script>
+{% endblock %}

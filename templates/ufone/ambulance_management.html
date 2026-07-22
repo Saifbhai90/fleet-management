@@ -1,0 +1,82 @@
+{% extends 'base.html' %}
+{% from 'partials/nav_back_button.html' import nav_back_button %}
+
+{% block title %}Ambulance Management — Fleet Manager{% endblock %}
+
+{% block extra_head %}
+<style>
+  .uf-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 10px; }
+  .uf-header h4 { font-weight: 800; color: #1e293b; margin: 0; display: flex; align-items: center; gap: 10px; }
+  .uf-header h4 i { color: #7C3AED; }
+  
+  .uf-btn { background: linear-gradient(135deg,#7C3AED,#5B21B6); color: #fff; border: none; padding: 8px 16px; border-radius: 8px; font-weight: 600; font-size: 14px; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; }
+  
+  .uf-card {
+    background: #fff; border-radius: 12px; padding: 30px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.04); border: 1px solid #e9ecef;
+    margin-bottom: 24px;
+  }
+  
+  .uf-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .uf-form-group label { font-size: 13px; color: #64748b; font-weight: 600; margin-bottom: 6px; display: block; }
+  .uf-form-group input, .uf-form-group select {
+    border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; font-size: 14px; width: 100%;
+  }
+  .uf-form-group input:focus { outline: none; border-color: #7C3AED; box-shadow: 0 0 0 3px rgba(124,58,237,0.15); }
+  
+  .uf-table thead th { background: #f8fafc; border-bottom: 2px solid #e2e8f0; color: #64748b; font-weight: 600; text-transform: uppercase; font-size: 11px; padding: 14px 16px; }
+  .uf-table tbody td { padding: 12px 16px; vertical-align: middle; border-bottom: 1px solid #f1f5f9; color: #475569; }
+  
+  .uf-notice {
+    background: #fff7ed; border: 1px solid #fed7aa; color: #c2410c;
+    padding: 16px; border-radius: 10px; font-size: 14px;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+  <div class="uf-header">
+    <div>
+      <h4><i class="bi bi-truck-front-fill"></i> Ambulance Management</h4>
+      <small class="text-muted">Add or edit vehicle details</small>
+    </div>
+    {{ nav_back_button() }}
+  </div>
+
+  <div class="row">
+    <div class="col-lg-5">
+      <div class="uf-card">
+        <h6 class="fw-bold mb-3">Add New Ambulance</h6>
+        <form method="post" action="">
+          <div class="uf-form-grid" style="grid-template-columns: 1fr;">
+            <div class="uf-form-group"><label>Registration No</label><input type="text" name="reg_no" required></div>
+            <div class="uf-form-group"><label>Chassis No</label><input type="text" name="chassis"></div>
+            <div class="uf-form-group"><label>Make/Model</label><input type="text" name="make_model"></div>
+            <div class="uf-form-group"><label>District</label><input type="text" name="district"></div>
+          </div>
+          <button type="submit" class="uf-btn mt-3 w-100"><i class="bi bi-plus-lg"></i> Add Vehicle</button>
+        </form>
+      </div>
+    </div>
+    
+    <div class="col-lg-7">
+      <div class="uf-notice mb-4">
+        <i class="bi bi-shield-lock"></i> <b>Admin Privileges Required:</b> Writing vehicle data to Ufone requires an Admin account. Operator accounts can view data but cannot create new records.
+      </div>
+      <div class="uf-card p-0 overflow-hidden">
+        <div class="table-responsive">
+          <table class="table uf-table mb-0">
+            <thead>
+              <tr><th>Reg No</th><th>Model</th><th>District</th><th>Action</th></tr>
+            </thead>
+            <tbody>
+              <tr><td colspan="4" class="text-center text-muted py-4">Data loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

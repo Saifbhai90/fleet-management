@@ -1,0 +1,662 @@
+/* Ufone BPOCOPS Portal - Premium Modern Theme */
+/* Glassmorphism, gradients, dark mode, animations */
+
+:root {
+  /* Ufone Brand Colors */
+  --ufone-primary: #8b5cf6;
+  --ufone-primary-dark: #7c3aed;
+  --ufone-primary-light: #a78bfa;
+  --ufone-secondary: #06b6d4;
+  --ufone-secondary-dark: #0891b2;
+  --ufone-accent: #10b981;
+  --ufone-danger: #ef4444;
+  --ufone-warning: #f59e0b;
+  --ufone-info: #3b82f6;
+  
+  /* Status Colors */
+  --status-moving: #10b981;
+  --status-stopped: #ef4444;
+  --status-idle: #f59e0b;
+  --status-offline: #6b7280;
+  
+  /* Glassmorphism */
+  --glass-bg: rgba(255, 255, 255, 0.85);
+  --glass-border: rgba(255, 255, 255, 0.3);
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  
+  /* Gradients */
+  --gradient-purple: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%);
+  --gradient-teal: linear-gradient(135deg, #06b6d4 0%, #22d3ee 100%);
+  --gradient-green: linear-gradient(135deg, #10b981 0%, #34d399 100%);
+  --gradient-red: linear-gradient(135deg, #ef4444 0%, #f87171 100%);
+  --gradient-blue: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);
+  --gradient-orange: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);
+  
+  /* Typography */
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-size-base: 14px;
+  --font-size-sm: 12px;
+  --font-size-lg: 16px;
+  --font-size-xl: 18px;
+  --font-size-2xl: 24px;
+  
+  /* Spacing */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  
+  /* Border Radius */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+  --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.15);
+}
+
+/* Dark Mode */
+[data-theme="dark"] {
+  --glass-bg: rgba(30, 41, 59, 0.9);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+/* Base Styles */
+body {
+  font-family: var(--font-family);
+  font-size: var(--font-size-base);
+  line-height: 1.6;
+  color: #1f2937;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+}
+
+[data-theme="dark"] body {
+  color: #f3f4f6;
+  background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);
+}
+
+/* Glass Card */
+.glass-card {
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--glass-shadow);
+  padding: var(--spacing-lg);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.glass-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-xl);
+}
+
+/* Gradient Stat Tiles */
+.stat-tile {
+  background: var(--gradient-purple);
+  color: white;
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-lg);
+  box-shadow: var(--shadow-lg);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-tile::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  right: -50%;
+  width: 100%;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  transform: scale(0);
+  transition: transform 0.5s ease;
+}
+
+.stat-tile:hover::before {
+  transform: scale(2);
+}
+
+.stat-tile:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-xl);
+}
+
+.stat-tile.teal {
+  background: var(--gradient-teal);
+}
+
+.stat-tile.green {
+  background: var(--gradient-green);
+}
+
+.stat-tile.red {
+  background: var(--gradient-red);
+}
+
+.stat-tile.blue {
+  background: var(--gradient-blue);
+}
+
+.stat-tile.orange {
+  background: var(--gradient-orange);
+}
+
+/* Animated Counter */
+.animated-counter {
+  font-size: var(--font-size-2xl);
+  font-weight: 700;
+  line-height: 1;
+  margin-bottom: var(--spacing-xs);
+}
+
+/* Status Pills */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--spacing-xs) var(--spacing-md);
+  border-radius: 9999px;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.status-pill.moving {
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--status-moving);
+  border: 1px solid var(--status-moving);
+  animation: pulse 2s infinite;
+}
+
+.status-pill.stopped {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--status-stopped);
+  border: 1px solid var(--status-stopped);
+}
+
+.status-pill.idle {
+  background: rgba(245, 158, 11, 0.1);
+  color: var(--status-idle);
+  border: 1px solid var(--status-idle);
+}
+
+.status-pill.offline {
+  background: rgba(107, 114, 128, 0.1);
+  color: var(--status-offline);
+  border: 1px solid var(--status-offline);
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+/* Table Styles */
+.ufone-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--glass-bg);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
+}
+
+.ufone-table thead {
+  background: var(--gradient-purple);
+  color: white;
+}
+
+.ufone-table th {
+  padding: var(--spacing-md);
+  text-align: left;
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: var(--font-size-sm);
+  letter-spacing: 0.05em;
+}
+
+.ufone-table tbody tr {
+  border-bottom: 1px solid var(--glass-border);
+  transition: background 0.2s ease;
+}
+
+.ufone-table tbody tr:hover {
+  background: rgba(139, 92, 246, 0.05);
+  transform: scale(1.01);
+}
+
+.ufone-table td {
+  padding: var(--spacing-md);
+}
+
+/* Action Buttons */
+.btn-ufone {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-sm) var(--spacing-lg);
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  font-size: var(--font-size-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border: none;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background: var(--gradient-purple);
+  color: white;
+  box-shadow: var(--shadow-md);
+}
+
+.btn-ufone:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+  background: var(--gradient-purple);
+}
+
+.btn-ufone:active {
+  transform: translateY(0);
+}
+
+.btn-ufone.teal {
+  background: var(--gradient-teal);
+}
+
+.btn-ufone.green {
+  background: var(--gradient-green);
+}
+
+.btn-ufone.red {
+  background: var(--gradient-red);
+}
+
+.btn-ufone.blue {
+  background: var(--gradient-blue);
+}
+
+.btn-ufone.orange {
+  background: var(--gradient-orange);
+}
+
+/* Loading Skeleton */
+.skeleton {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: var(--radius-sm);
+}
+
+[data-theme="dark"] .skeleton {
+  background: linear-gradient(90deg, #374151 25%, #4b5563 50%, #374151 75%);
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* Sidebar */
+.ufone-sidebar {
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  border-right: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-lg);
+  height: 100vh;
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 280px;
+  padding: var(--spacing-lg);
+  z-index: 1000;
+  transition: transform 0.3s ease;
+}
+
+.ufone-sidebar.collapsed {
+  transform: translateX(-280px);
+}
+
+.ufone-sidebar-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-xl);
+  padding-bottom: var(--spacing-lg);
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.ufone-sidebar-logo {
+  width: 40px;
+  height: 40px;
+  background: var(--gradient-purple);
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 700;
+  font-size: var(--font-size-lg);
+}
+
+.ufone-sidebar-title {
+  font-size: var(--font-size-lg);
+  font-weight: 700;
+  color: var(--ufone-primary);
+}
+
+.ufone-sidebar-menu {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.ufone-sidebar-menu-item {
+  margin-bottom: var(--spacing-xs);
+}
+
+.ufone-sidebar-menu-link {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--radius-md);
+  color: #4b5563;
+  text-decoration: none;
+  transition: all 0.2s ease;
+  font-weight: 500;
+}
+
+[data-theme="dark"] .ufone-sidebar-menu-link {
+  color: #d1d5db;
+}
+
+.ufone-sidebar-menu-link:hover,
+.ufone-sidebar-menu-link.active {
+  background: rgba(139, 92, 246, 0.1);
+  color: var(--ufone-primary);
+}
+
+.ufone-sidebar-menu-link.active {
+  background: var(--gradient-purple);
+  color: white;
+}
+
+/* Top Bar */
+.ufone-topbar {
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-md);
+  padding: var(--spacing-md) var(--spacing-lg);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: fixed;
+  top: 0;
+  left: 280px;
+  right: 0;
+  z-index: 999;
+  transition: left 0.3s ease;
+}
+
+.ufone-sidebar.collapsed + .ufone-topbar {
+  left: 0;
+}
+
+/* Dark Mode Toggle */
+.dark-mode-toggle {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-sm) var(--spacing-md);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.dark-mode-toggle:hover {
+  background: rgba(139, 92, 246, 0.1);
+}
+
+/* Refresh Indicator */
+.refresh-indicator {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-size: var(--font-size-sm);
+  color: #6b7280;
+}
+
+[data-theme="dark"] .refresh-indicator {
+  color: #9ca3af;
+}
+
+.refresh-indicator.active {
+  color: var(--ufone-primary);
+}
+
+.refresh-indicator .spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--glass-border);
+  border-top-color: var(--ufone-primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Main Content */
+.ufone-main {
+  margin-left: 280px;
+  margin-top: 70px;
+  padding: var(--spacing-lg);
+  transition: margin-left 0.3s ease;
+}
+
+.ufone-sidebar.collapsed + .ufone-topbar + .ufone-main {
+  margin-left: 0;
+}
+
+/* KPI Grid */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--spacing-lg);
+  margin-bottom: var(--spacing-xl);
+}
+
+/* Form Inputs */
+.ufone-input {
+  width: 100%;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  background: var(--glass-bg);
+  color: inherit;
+  font-family: inherit;
+  font-size: var(--font-size-base);
+  transition: all 0.2s ease;
+}
+
+.ufone-input:focus {
+  outline: none;
+  border-color: var(--ufone-primary);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+}
+
+/* Toast Messages */
+.ufone-toast {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md) var(--spacing-lg);
+  box-shadow: var(--shadow-xl);
+  z-index: 2000;
+  animation: slideIn 0.3s ease;
+  max-width: 400px;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.ufone-toast.success {
+  border-left: 4px solid var(--ufone-accent);
+}
+
+.ufone-toast.error {
+  border-left: 4px solid var(--ufone-danger);
+}
+
+.ufone-toast.warning {
+  border-left: 4px solid var(--ufone-warning);
+}
+
+.ufone-toast.info {
+  border-left: 4px solid var(--ufone-info);
+}
+
+/* Modal */
+.ufone-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1500;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.ufone-modal-content {
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-xl);
+  max-width: 600px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow-xl);
+  animation: scaleIn 0.3s ease;
+}
+
+@keyframes scaleIn {
+  from {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .ufone-sidebar {
+    transform: translateX(-280px);
+  }
+  
+  .ufone-sidebar.mobile-open {
+    transform: translateX(0);
+  }
+  
+  .ufone-topbar {
+    left: 0;
+  }
+  
+  .ufone-main {
+    margin-left: 0;
+  }
+  
+  .kpi-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .kpi-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Utility Classes */
+.text-center { text-align: center; }
+.text-right { text-align: right; }
+.text-left { text-align: left; }
+.mb-1 { margin-bottom: var(--spacing-sm); }
+.mb-2 { margin-bottom: var(--spacing-md); }
+.mb-3 { margin-bottom: var(--spacing-lg); }
+.mt-1 { margin-top: var(--spacing-sm); }
+.mt-2 { margin-top: var(--spacing-md); }
+.mt-3 { margin-top: var(--spacing-lg); }
+.p-1 { padding: var(--spacing-sm); }
+.p-2 { padding: var(--spacing-md); }
+.p-3 { padding: var(--spacing-lg); }
+.flex { display: flex; }
+.flex-col { flex-direction: column; }
+.items-center { align-items: center; }
+.justify-center { justify-content: center; }
+.justify-between { justify-content: space-between; }
+.gap-1 { gap: var(--spacing-sm); }
+.gap-2 { gap: var(--spacing-md); }
+.gap-3 { gap: var(--spacing-lg); }
+.w-full { width: 100%; }
+.h-full { height: 100%; }
+.hidden { display: none; }
+.block { display: block; }
+.inline-block { display: inline-block; }

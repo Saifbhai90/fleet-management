@@ -357,6 +357,78 @@ HUBS = {
             },
         ],
     },
+    'ufone': {
+        'title': 'Ufone BPOCOPS',
+        'header_icon': 'bi-truck-front',
+        'section_perm': None,
+        'access': 'ufone',
+        'extra_endpoints': (
+            'ufone_dashboard', 'ufone_map', 'ufone_vehicles', 'ufone_vehicle_detail',
+            'ufone_track', 'ufone_history', 'ufone_ignition', 'ufone_distance',
+            'ufone_maintenance', 'ufone_emergency_tasks', 'ufone_patient_reports',
+            'ufone_patient_reports_ussd', 'ufone_task_counts', 'ufone_task_detail',
+            'ufone_admin_patients', 'ufone_admin_ambulances', 'ufone_admin_assignments',
+            'ufone_settings', 'ufone_settings_account_new',
+            'ufone_settings_account_edit', 'ufone_settings_account_delete',
+            'ufone_settings_account_test', 'ufone_settings_start_polling',
+            'ufone_settings_stop_polling',
+            'ufone_export',
+            'api_ufone_positions', 'api_ufone_refresh', 'api_ufone_vehicles',
+            'api_ufone_districts', 'api_ufone_tehsils', 'api_ufone_ucs',
+            'api_ufone_task_detail', 'api_ufone_task_comments',
+            'api_ufone_task_comment_save', 'api_ufone_task_feedback_save',
+            'api_ufone_task_complete', 'api_ufone_tasks_dashboard',
+            'api_ufone_reports_emergency', 'api_ufone_reports_distance',
+            'api_ufone_reports_ignition', 'api_ufone_reports_maintenance',
+            'api_ufone_reports_patients', 'api_ufone_reports_patients_ussd',
+            'api_ufone_reports_task_counts_daily',
+            'api_ufone_reports_task_counts_monthly',
+            'api_ufone_dashboard_count', 'api_ufone_counts_ras_cow',
+            'api_ufone_dashboard_counts', 'api_ufone_tasks_filtered',
+        ),
+        'sections': [
+            {
+                'title': 'Live Operations',
+                'items': [
+                    _item('ufone_dashboard', 'Dashboard & KPIs', 'fa-solid fa-gauge-high', 'rc-tile--tracker', 'ufone_view'),
+                    _item('ufone_map', 'Live Ambulance Map', 'fa-solid fa-map-location-dot', 'rc-tile--tracker', 'ufone_view'),
+                    _item('ufone_vehicles', 'Ambulance List', 'fa-solid fa-truck-medical', 'rc-tile--tracker', 'ufone_view'),
+                    _item('ufone_track', 'Track Ambulance', 'fa-solid fa-location-crosshairs', 'rc-tile--tracker', 'ufone_view'),
+                ],
+            },
+            {
+                'title': 'Task Management',
+                'items': [
+                    _item('ufone_emergency_tasks', 'Emergency Tasks', 'fa-solid fa-triangle-exclamation', 'rc-tile--red-task', 'ufone_reports'),
+                    _item('ufone_task_counts', 'Task Counts (Daily/Monthly)', 'fa-solid fa-chart-column', 'rc-tile--chart-accounts', 'ufone_reports'),
+                ],
+            },
+            {
+                'title': 'Reports',
+                'items': [
+                    _item('ufone_history', 'Vehicle History', 'fa-solid fa-clock-rotate-left', 'rc-tile--tracker', 'ufone_history'),
+                    _item('ufone_ignition', 'Ignition Report', 'fa-solid fa-key', 'rc-tile--tracker', 'ufone_reports'),
+                    _item('ufone_distance', 'Distance Report', 'fa-solid fa-route', 'rc-tile--tracker', 'ufone_reports'),
+                    _item('ufone_maintenance', 'Maintenance', 'fa-solid fa-screwdriver-wrench', 'rc-tile--hub-admin', 'ufone_reports'),
+                    _item('ufone_patient_reports', 'Patients Report', 'fa-solid fa-user-injured', 'rc-tile--chart-accounts', 'ufone_reports'),
+                ],
+            },
+            {
+                'title': 'Admin (Restricted)',
+                'items': [
+                    _item('ufone_admin_patients', 'Patient Registration', 'fa-solid fa-user-plus', 'rc-tile--hub-admin', 'ufone_admin'),
+                    _item('ufone_admin_ambulances', 'Ambulance Management', 'fa-solid fa-truck', 'rc-tile--hub-admin', 'ufone_admin'),
+                    _item('ufone_admin_assignments', 'Ambulance Assignment', 'fa-solid fa-people-arrows', 'rc-tile--hub-admin', 'ufone_admin'),
+                ],
+            },
+            {
+                'title': 'Configuration',
+                'items': [
+                    _item('ufone_settings', 'Ufone Settings', 'fa-solid fa-gear', 'rc-tile--hub-admin', 'ufone_settings'),
+                ],
+            },
+        ],
+    },
     'administration': {
         'title': 'Administration',
         'header_icon': 'bi-shield-lock',
@@ -399,6 +471,8 @@ def _hub_access(hub, can_see_section_fn, can_see_page_fn, can_see_admin_fn, is_m
         return can_see_admin_fn()
     if access == 'tracking':
         return can_see_section_fn('tracking')
+    if access == 'ufone':
+        return can_see_section_fn('ufone')
     perm = hub.get('section_perm')
     if perm:
         return can_see_section_fn(perm)

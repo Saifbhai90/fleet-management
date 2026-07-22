@@ -1,0 +1,69 @@
+{% extends 'base.html' %}
+{% from 'partials/nav_back_button.html' import nav_back_button %}
+
+{% block title %}Add Ufone Account — Fleet Manager{% endblock %}
+
+{% block extra_head %}
+<style>
+  .uf-card {
+    background: #ffffff; border-radius: 16px; padding: 30px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.04); border: 1px solid #e9ecef;
+    max-width: 600px; margin: 0 auto;
+  }
+  .uf-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px solid #f1f5f9;
+  }
+  .uf-header h4 { font-weight: 700; margin: 0; display: flex; align-items: center; gap: 10px; color: #1e293b; }
+  .uf-header h4 i { color: #7C3AED; }
+  .uf-btn { background: linear-gradient(135deg,#7C3AED,#5B21B6); color: #fff; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; transition: all 0.2s; }
+  .uf-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(124,58,237,0.3); color: #fff; }
+  .form-control:focus, .form-select:focus {
+    border-color: #7C3AED;
+    box-shadow: 0 0 0 0.2rem rgba(124, 58, 237, 0.15);
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+  <div class="uf-card">
+    <div class="uf-header">
+      <h4><i class="bi bi-person-plus-fill"></i> Add Ufone Account</h4>
+      {{ nav_back_button() }}
+    </div>
+
+    <form method="post" action="{{ url_for('ufone_settings_account_new') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      
+      <div class="mb-3">
+        <label class="form-label fw-bold text-secondary">Account Label</label>
+        <input type="text" class="form-control form-control-lg" name="label" placeholder="e.g., IRMNCH Faisalabad" required>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label fw-bold text-secondary">Username</label>
+        <input type="text" class="form-control form-control-lg" name="username" placeholder="e.g., Faisalabad" required>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label fw-bold text-secondary">Password</label>
+        <input type="password" class="form-control form-control-lg" name="password" placeholder="******" required>
+      </div>
+
+      <div class="mb-4">
+        <label class="form-label fw-bold text-secondary">Role</label>
+        <select class="form-select form-select-lg" name="role">
+          <option value="Operator">Operator</option>
+          <option value="Admin">Admin</option>
+        </select>
+      </div>
+
+      <div class="d-grid gap-2">
+        <button type="submit" class="uf-btn btn-lg"><i class="bi bi-check-lg"></i> Save Account</button>
+        <a href="{{ url_for('ufone_settings') }}" class="btn btn-light btn-lg text-secondary">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

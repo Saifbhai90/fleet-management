@@ -1,0 +1,69 @@
+{% extends 'base.html' %}
+{% from 'partials/nav_back_button.html' import nav_back_button %}
+
+{% block title %}Maintenance — Fleet Manager{% endblock %}
+
+{% block extra_head %}
+<style>
+  .uf-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 10px; }
+  .uf-header h4 { font-weight: 800; color: #1e293b; margin: 0; display: flex; align-items: center; gap: 10px; }
+  .uf-header h4 i { color: #EF4444; } /* Red for maintenance */
+  
+  .uf-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
+  .uf-maint-card {
+    background: #fff; border-radius: 12px; padding: 20px;
+    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid #e9ecef;
+    border-left: 4px solid #EF4444;
+  }
+  .uf-maint-title { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .uf-maint-title h5 { font-size: 18px; font-weight: 700; color: #1e293b; margin: 0; }
+  .uf-badge-offline { background: #FEE2E2; color: #991B1B; font-size: 11px; padding: 4px 8px; border-radius: 12px; font-weight: 600; }
+  
+  .uf-maint-info { font-size: 13px; color: #475569; line-height: 1.8; }
+  .uf-maint-info b { color: #1e293b; }
+  
+  .uf-empty { grid-column: 1 / -1; text-align: center; padding: 80px 20px; background: #fff; border-radius: 16px; border: 1px solid #e9ecef; }
+  .uf-empty i { font-size: 56px; color: #D1FAE5; display: block; margin-bottom: 12px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+  <div class="uf-header">
+    <div>
+      <h4><i class="bi bi-tools"></i> Ambulances Under Maintenance</h4>
+      <small class="text-muted">Vehicles currently off-road</small>
+    </div>
+    {{ nav_back_button() }}
+  </div>
+
+  <div class="uf-grid">
+    {% for r in records %}
+    <div class="uf-maint-card">
+      <div class="uf-maint-title">
+        <h5>{{ r.Reg_no or r.reg_no or '?' }}</h5>
+        <span class="uf-badge-offline">Offline</span>
+      </div>
+      <div class="uf-maint-info">
+        <i class="bi bi-geo-alt text-muted"></i> <b>District:</b> {{ r.District or r.district or '-' }}<br>
+        <i class="bi bi-gear text-muted"></i> <b>Type:</b> {{ r.Maintain_Type or r.maintain_type or '-' }}<br>
+        <i class="bi bi-tag text-muted"></i> <b>Category:</b> {{ r.Cat_Name or r.cat_name or '-' }}<br>
+        <i class="bi bi-calendar-plus text-muted"></i> <b>Sent:</b> <small>{{ r.Send_Date or r.send_date or '-' }}</small><br>
+        <i class="bi bi-calendar-check text-muted"></i> <b>Expected Return:</b> <small>{{ r.Return_Date or r.return_date or '-' }}</small><br>
+      </div>
+      {% if r.Comments or r.comments %}
+      <div class="alert alert-light mt-3 mb-0" style="font-size: 12px; padding: 8px 12px;">
+        <i class="bi bi-chat-left-text"></i> {{ r.Comments or r.comments }}
+      </div>
+      {% endif %}
+    </div>
+    {% else %}
+    <div class="uf-empty">
+      <i class="bi bi-check-circle-fill text-success"></i>
+      <h5 class="text-success">All Good!</h5>
+      <p class="text-muted">No ambulances are currently under maintenance.</p>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

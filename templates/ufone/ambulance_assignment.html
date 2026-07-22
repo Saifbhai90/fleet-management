@@ -1,0 +1,127 @@
+{% extends 'base.html' %}
+{% from 'partials/nav_back_button.html' import nav_back_button %}
+
+{% block title %}Ambulance Assignment — Fleet Manager{% endblock %}
+
+{% block extra_head %}
+<style>
+  .uf-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 10px; }
+  .uf-header h4 { font-weight: 800; color: #1e293b; margin: 0; display: flex; align-items: center; gap: 10px; }
+  .uf-header h4 i { color: #7C3AED; }
+  
+  .uf-card {
+    background: #fff; border-radius: 12px; padding: 30px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.04); border: 1px solid #e9ecef;
+    max-width: 700px; margin: 0 auto;
+  }
+  
+  .uf-form-group label { font-size: 13px; color: #64748b; font-weight: 600; margin-bottom: 6px; display: block; }
+  .uf-form-group select {
+    border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; font-size: 14px; width: 100%;
+    background: #fff; appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%2364748b' viewBox='0 0 16 16'%3E%3Cpath d='M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 1rem center; background-size: 16px 12px;
+  }
+  .uf-form-group select:focus { outline: none; border-color: #7C3AED; box-shadow: 0 0 0 3px rgba(124,58,237,0.15); }
+  
+  .uf-btn { background: linear-gradient(135deg,#7C3AED,#5B21B6); color: #fff; border: none; padding: 10px 24px; border-radius: 8px; font-weight: 600; font-size: 15px; width: 100%; margin-top: 20px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+  
+  .uf-info-card { background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 8px; padding: 16px; margin-top: 24px; color: #065f46; font-size: 13px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+  <div class="uf-header">
+    <div>
+      <h4><i class="bi bi-people-fill"></i> Ambulance Assignment</h4>
+      <small class="text-muted">Assign driver and region</small>
+    </div>
+    {{ nav_back_button() }}
+  </div>
+
+  <div class="uf-card">
+    <form method="post" action="">
+      <div class="mb-3">
+        <div class="uf-form-group">
+          <label>Select District</label>
+          <select id="fDistrict" onchange="loadTehsils()">
+            <option value="">Select District</option>
+            {% for d in districts %}
+            <option value="{{ d.code }}">{{ d.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      
+      <div class="mb-3">
+        <div class="uf-form-group">
+          <label>Select Tehsil</label>
+          <select id="fTehsil" onchange="loadUCs()">
+            <option value="">Select Tehsil</option>
+          </select>
+        </div>
+      </div>
+      
+      <div class="mb-3">
+        <div class="uf-form-group">
+          <label>Select Union Council</label>
+          <select id="fUC">
+            <option value="">Select UC</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="mb-3">
+        <div class="uf-form-group">
+          <label>Assign Ambulance Reg No</label>
+          <input type="text" class="form-control" name="reg_no" placeholder="e.g. GBC-22-042">
+        </div>
+      </div>
+      
+      <button type="submit" class="uf-btn"><i class="bi bi-check-lg"></i> Assign Ambulance</button>
+    </form>
+    
+    <div class="uf-info-card">
+      <i class="bi bi-info-circle"></i> Assignments update immediately on the Ufone server (requires Admin role).
+    </div>
+  </div>
+</div>
+
+<script>
+async function loadTehsils() {
+  const dc = document.getElementById('fDistrict').value;
+  const tehsilSel = document.getElementById('fTehsil');
+  tehsilSel.innerHTML = '<option value="">Select Tehsil</option>';
+  document.getElementById('fUC').innerHTML = '<option value="">Select UC</option>';
+  if (!dc) return;
+  
+  try {
+    const res = await fetch(`/api/ufone/tehsils/${dc}`);
+    const data = await res.json();
+    if (data.tehsils) {
+      data.tehsils.forEach(t => {
+        tehsilSel.innerHTML += `<option value="${t.tehsil_code}">${t.tehsil_name}</option>`;
+      });
+    }
+  } catch(e) { console.error(e); }
+}
+
+async function loadUCs() {
+  const tc = document.getElementById('fTehsil').value;
+  const ucSel = document.getElementById('fUC');
+  ucSel.innerHTML = '<option value="">Select UC</option>';
+  if (!tc) return;
+  
+  try {
+    const res = await fetch(`/api/ufone/ucs/${tc}`);
+    const data = await res.json();
+    if (data.ucs) {
+      data.ucs.forEach(u => {
+        ucSel.innerHTML += `<option value="${u.uc_code || u.id}">${u.uc_name || u.name}</option>`;
+      });
+    }
+  } catch(e) { console.error(e); }
+}
+</script>
+{% endblock %}

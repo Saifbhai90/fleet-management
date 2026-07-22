@@ -412,6 +412,12 @@ window.FleetConfig = {
 
         {% include 'partials/sidebar_hub_links.html' %}
 
+        {% if can_see_section('ufone') %}
+        <a href="{{ url_for('module_hub', hub_slug='ufone') }}" class="{% if hub_nav_active('ufone') %}active-link{% endif %}">
+            <i class="bi bi-truck-front text-primary"></i><span>Ufone BPOCOPS</span>
+        </a>
+        {% endif %}
+
         <!-- Reports & Analytics: hub if user has Report Centre, Reports (full), or any granular report permission -->
         {% if can_see_report_centre() %}
         <div>

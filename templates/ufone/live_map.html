@@ -1,0 +1,182 @@
+{% extends 'base.html' %}
+{% from 'partials/nav_back_button.html' import nav_back_button %}
+
+{% block title %}Live Ambulance Map — Fleet Manager{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+  .uf-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px; }
+  .uf-header h4 { font-weight: 700; color: #1e293b; margin: 0; display: flex; align-items: center; gap: 10px; }
+  .uf-header h4 i { color: #7C3AED; }
+  
+  .uf-btn { background: linear-gradient(135deg,#7C3AED,#5B21B6); color: #fff; border: none; padding: 8px 16px; border-radius: 8px; font-weight: 600; font-size: 13px; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+  .uf-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(124,58,237,0.3); color: #fff; }
+  
+  .uf-search {
+    border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px 14px; font-size: 14px;
+    width: 200px; transition: all 0.2s;
+  }
+  .uf-search:focus { outline: none; border-color: #7C3AED; box-shadow: 0 0 0 2px rgba(124,58,237,0.2); }
+  
+  .uf-stats-bar { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+  .uf-stat-pill {
+    background: #fff; padding: 10px 18px; border-radius: 10px;
+    border: 1px solid #e2e8f0; display: flex; align-items: center; gap: 10px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.03);
+  }
+  .uf-stat-pill .num { font-size: 20px; font-weight: 800; color: #1e293b; }
+  .uf-stat-pill .lbl { font-size: 11px; text-transform: uppercase; color: #64748b; font-weight: 600; }
+  .uf-stat-pill .dot { width: 10px; height: 10px; border-radius: 50%; }
+  
+  #ufoneMap {
+    height: calc(100vh - 280px); min-height: 400px;
+    border-radius: 14px; border: 2px solid #e2e8f0;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.06); z-index: 1;
+  }
+  .uf-refresh-badge {
+    background: #f0fdf4; color: #166534; padding: 6px 12px; border-radius: 8px;
+    font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 6px;
+    border: 1px solid #bbf7d0;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+  <div class="uf-header">
+    <div>
+      <h4><i class="bi bi-geo-alt-fill"></i> Live Ambulance Map</h4>
+      <small class="text-muted">Real-time vehicle tracking</small>
+    </div>
+    <div class="d-flex gap-2 align-items-center">
+      {{ nav_back_button() }}
+      <input type="text" id="searchInput" class="uf-search" placeholder="Search Reg No..." oninput="filterMarkers()">
+      <span class="uf-refresh-badge">
+        <span class="spinner-border spinner-border-sm" id="spinLoader" style="display:none;width:12px;height:12px;"></span>
+        <span id="refreshText">Live</span>
+      </span>
+      <button class="uf-btn" onclick="forceRefresh()"><i class="bi bi-arrow-clockwise"></i> Refresh</button>
+    </div>
+  </div>
+
+  <div class="uf-stats-bar">
+    <div class="uf-stat-pill"><div class="dot" style="background:#3B82F6"></div><div><div class="num" id="statTotal">{{ stats.total|default(0) }}</div><div class="lbl">Total</div></div></div>
+    <div class="uf-stat-pill"><div class="dot" style="background:#10B981"></div><div><div class="num" id="statActive">{{ stats.active|default(0) }}</div><div class="lbl">Active</div></div></div>
+    <div class="uf-stat-pill"><div class="dot" style="background:#EF4444"></div><div><div class="num" id="statInactive">{{ stats.inactive|default(0) }}</div><div class="lbl">Inactive</div></div></div>
+    <div class="uf-stat-pill"><div class="dot" style="background:#8B5CF6"></div><div><div class="num" id="statGps">{{ stats.with_gps|default(0) }}</div><div class="lbl">With GPS</div></div></div>
+  </div>
+
+  <div id="ufoneMap"></div>
+</div>
+
+{% if error %}<div class="alert alert-warning mt-2" style="border-radius:10px;">{{ error }}</div>{% endif %}
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const rawData = {{ vehicles | tojson }};
+let map, markerLayer, allMarkers = [];
+
+function initMap() {
+  map = L.map('ufoneMap', { zoomControl: true }).setView([31.5, 74.3], 7);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19, attribution: '&copy; OpenStreetMap'
+  }).addTo(map);
+  markerLayer = L.layerGroup().addTo(map);
+  renderMarkers(rawData);
+}
+
+function getIcon(status) {
+  const color = status == 1 ? '#10B981' : '#EF4444';
+  return L.divIcon({
+    html: `<div style="width:18px;height:18px;border-radius:50%;background:${color};border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.3);"></div>`,
+    className: '', iconSize: [18, 18], iconAnchor: [9, 9]
+  });
+}
+
+function renderMarkers(data) {
+  markerLayer.clearLayers();
+  allMarkers = [];
+  const bounds = [];
+  
+  data.forEach(v => {
+    if (!v.latitude || !v.longitude) return;
+    const lat = parseFloat(v.latitude);
+    const lon = parseFloat(v.longitude);
+    if (isNaN(lat) || isNaN(lon) || (lat === 0 && lon === 0)) return;
+    
+    const marker = L.marker([lat, lon], { icon: getIcon(v.status) });
+    marker.bindPopup(`
+      <div style="font-family:sans-serif;min-width:180px;">
+        <strong style="font-size:15px;color:#1e293b;">${v.reg_no || '?'}</strong><br>
+        <small style="color:#64748b;">${v.location || ''}</small>
+        <hr style="margin:6px 0;border-color:#e2e8f0;">
+        <div style="font-size:12px;line-height:1.6;">
+          <b>Status:</b> ${v.status == 1 ? '<span style="color:#10B981">Active</span>' : '<span style="color:#EF4444">Inactive</span>'}<br>
+          <b>Driver:</b> ${v.driver_name || '-'}<br>
+          <b>Phone:</b> ${v.driver_cell || '-'}<br>
+          <b>UTrack:</b> ${v.u_track_no || '-'}
+        </div>
+        <a href="/ufone/vehicle/${encodeURIComponent(v.reg_no)}" style="display:block;margin-top:8px;text-align:center;background:#7C3AED;color:#fff;padding:6px;border-radius:6px;text-decoration:none;font-size:12px;font-weight:600;">View Details</a>
+      </div>
+    `);
+    markerLayer.addLayer(marker);
+    allMarkers.push({ marker: marker, regNo: (v.reg_no || '').toLowerCase() });
+    bounds.push([lat, lon]);
+  });
+  
+  if (bounds.length > 0) {
+    map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
+  }
+}
+
+function filterMarkers() {
+  const query = document.getElementById('searchInput').value.toLowerCase();
+  allMarkers.forEach(m => {
+    if (!query || m.regNo.includes(query)) {
+      if (!map.hasLayer(m.marker)) markerLayer.addLayer(m.marker);
+    } else {
+      if (map.hasLayer(m.marker)) markerLayer.removeLayer(m.marker);
+    }
+  });
+}
+
+async function forceRefresh() {
+  document.getElementById('spinLoader').style.display = 'inline-block';
+  document.getElementById('refreshText').textContent = 'Syncing...';
+  try {
+    const res = await fetch('/api/ufone/refresh', { method: 'POST' });
+    const data = await res.json();
+    if (data.vehicles) {
+      renderMarkers(data.vehicles);
+      document.getElementById('statTotal').textContent = data.stats.total || 0;
+      document.getElementById('statActive').textContent = data.stats.active || 0;
+      document.getElementById('statInactive').textContent = data.stats.inactive || 0;
+      document.getElementById('statGps').textContent = data.stats.with_gps || 0;
+      document.getElementById('refreshText').textContent = 'Updated';
+    }
+  } catch(e) { console.error(e); document.getElementById('refreshText').textContent = 'Error'; }
+  setTimeout(() => {
+    document.getElementById('spinLoader').style.display = 'none';
+    document.getElementById('refreshText').textContent = 'Live';
+  }, 2000);
+}
+
+// Auto refresh every 30s
+setInterval(async () => {
+  try {
+    const res = await fetch('/api/ufone/positions');
+    const data = await res.json();
+    if (data.vehicles) renderMarkers(data.vehicles);
+    if (data.stats) {
+      document.getElementById('statTotal').textContent = data.stats.total || 0;
+      document.getElementById('statActive').textContent = data.stats.active || 0;
+      document.getElementById('statInactive').textContent = data.stats.inactive || 0;
+      document.getElementById('statGps').textContent = data.stats.with_gps || 0;
+    }
+  } catch(e) {}
+}, 30000);
+
+initMap();
+</script>
+{% endblock %}
