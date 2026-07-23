@@ -741,7 +741,11 @@ async function openTaskDetail(id) {
 }
 
 // ─── Filter Section ─────────────────────────────────────────────
-const todayStr = new Date().toISOString().slice(0, 10);
+const todayStr = (() => {
+  // Pakistan calendar date (UTC+5) — toISOString() is UTC and shows previous day at night/early morning PKT
+  const d = new Date(Date.now() + 5 * 60 * 60 * 1000);
+  return d.toISOString().slice(0, 10);
+})();
 document.getElementById('fFrom').value = todayStr;
 document.getElementById('fTo').value = todayStr;
 

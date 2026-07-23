@@ -1033,20 +1033,22 @@ def fetch_dashboard_counts(account_id: int, force: bool = False,
       • Total Task Count → sum of the above
       • synced_at → latest sync timestamp (for freshness label)
 
-    The 3-min poll loop keeps emergency_task_record warm for today, so this
-    function always returns instantly. force is accepted for API compat but
-    no longer triggers a live call — use sync_emergency_report_to_db() to
-    force a refresh.
+    Bridge / empty EMG fallback: derive In-Process + synced_at from
+    ufone_task_cache / ufone_vehicle_cache (PK VPS writes those).
     """
     from datetime import date as _date
-    from models import EmergencyTaskRecord
-    from app import db
+    from models import EmergencyTaskRecord, UfoneTaskCache, UfoneVehicleCache
     now = time.time()
     total_amb = _vehicle_cache_count(account_id)
 
     try:
         today = _date.today()
-        # Count by category for today's API-synced rows
+        # Prefer PK calendar day when utils available (Render often runs UTC).
+        try:
+            from utils import pk_date
+            today = pk_date()
+        except Exception:
+            pass
         rows = (EmergencyTaskRecord.query
                 .filter(EmergencyTaskRecord.task_date == today)
                 .all())
@@ -1068,6 +1070,37 @@ def fetch_dashboard_counts(account_id: int, force: bool = False,
                 in_process += 1
             if r.synced_at and (latest_sync is None or r.synced_at > latest_sync):
                 latest_sync = r.synced_at
+
+        task_total = green + yellow + red + orange + in_process
+
+        # Fallback when EMG report not yet synced (common in PK VPS bridge mode)
+        if task_total == 0:
+            trows = UfoneTaskCache.query.filter_by(account_id=account_id).all()
+            for r in trows:
+                st = (r.status or '').strip().lower()
+                if ('incomplete' in st or st == '1'
+                        or 'in-process' in st or 'in process' in st):
+                    in_process += 1
+                elif 'cancel' in st:
+                    pass
+                elif 'complete' in st:
+                    # keep completed out of colored buckets unless category known
+                    pass
+            task_total = in_process
+
+        if latest_sync is None:
+            latest_v = (UfoneVehicleCache.query.filter_by(account_id=account_id)
+                        .order_by(UfoneVehicleCache.updated_at.desc()).first())
+            latest_t = (UfoneTaskCache.query.filter_by(account_id=account_id)
+                        .order_by(UfoneTaskCache.updated_at.desc()).first())
+            candidates = []
+            if latest_v and latest_v.updated_at:
+                candidates.append(latest_v.updated_at)
+            if latest_t and latest_t.updated_at:
+                candidates.append(latest_t.updated_at)
+            if candidates:
+                latest_sync = max(candidates)
+
         data = {
             'total_ambulances': total_amb,
             'task_green': green,
@@ -1075,7 +1108,7 @@ def fetch_dashboard_counts(account_id: int, force: bool = False,
             'task_red': red,
             'task_orange': orange,
             'task_in_process': in_process,
-            'task_total': green + yellow + red + orange + in_process,
+            'task_total': task_total,
             'synced_at': latest_sync.isoformat() if latest_sync else None,
             'fetched_at': now,
         }

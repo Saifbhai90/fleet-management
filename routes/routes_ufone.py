@@ -139,20 +139,18 @@ def ufone_dashboard():
                     "Click Refresh in a few seconds, or open Settings → Start Polling."
                 )
 
-            # Fire-and-forget warm so next load / Refresh has fresh data.
-            # NOTE: ambulance force-fetch removed — the 10-min poll loop keeps
-            # ufone_vehicle_cache warm; page open must NOT trigger a 1394-row
-            # Ufone call. We only warm the light today-only task dashboard and
-            # sync today's EMG report to DB (so cards/filters have fresh rows).
-            def _warm(aid=acct_id):
-                try:
-                    with app.app_context():
-                        fetch_task_dashboard(aid, force=True, persist=True, for_poll=True)
-                        _sync_emergency_report_live(aid)
-                except Exception as we:
-                    logger.warning(f"ufone warm failed: {we}")
+            # Fire-and-forget warm — skip when PK VPS bridge owns Ufone HTTP.
+            from services.ufone_service import bridge_only_mode
+            if not bridge_only_mode():
+                def _warm(aid=acct_id):
+                    try:
+                        with app.app_context():
+                            fetch_task_dashboard(aid, force=True, persist=True, for_poll=True)
+                            _sync_emergency_report_live(aid)
+                    except Exception as we:
+                        logger.warning(f"ufone warm failed: {we}")
 
-            threading.Thread(target=_warm, daemon=True, name='ufone-warm').start()
+                threading.Thread(target=_warm, daemon=True, name='ufone-warm').start()
         except Exception as e:
             error = str(e)[:300]
     else:
@@ -192,6 +190,17 @@ def api_ufone_refresh():
     if not acct_id:
         return jsonify({'error': 'No account'}), 400
     try:
+        from services.ufone_service import bridge_only_mode
+        if bridge_only_mode():
+            # PK VPS owns live Ufone — Refresh only reloads DB/memory snapshot.
+            vehicles, tasks, stats = load_dashboard_snapshot(acct_id)
+            return jsonify({
+                'vehicles': vehicles,
+                'tasks': tasks,
+                'stats': stats,
+                'bridge_only': True,
+                'refreshed_at': pk_now().isoformat(),
+            })
         # Live pull — intentional (user clicked Refresh).
         # Use poll session so Task Detail (UI session) is not blocked.
         vehicles = fetch_live_positions(acct_id, force=True, persist=True, for_poll=True)
