@@ -463,14 +463,8 @@ def upsert_emergency(conn, account_id: int, items: list, today: date) -> tuple[i
     return len(rows), events[:40]
 
 
-def upsert_task_details(conn, account_id: int, client, emg_items: list,
-                        limit: int = 15) -> int:
-    """Fetch getTaskDetail for open tasks and write ufone_task_detail_cache.
-
-    Caps per cycle so portal load stays small. Only incomplete/in-process.
-    """
-    if not emg_items:
-        return 0
+def _open_task_ids_from_emg(emg_items: list) -> list:
+    """Numeric TaskIds for incomplete/in-process rows only (deduped)."""
     open_ids = []
     seen = set()
     for raw in emg_items:
@@ -484,18 +478,79 @@ def upsert_task_details(conn, account_id: int, client, emg_items: list,
             continue
         if 'cancel' in st:
             continue
-        # prefer numeric id for getTaskDetail
         bare = tid.upper().replace('PHF-', '').strip()
         if not bare.isdigit():
             continue
         seen.add(tid)
         open_ids.append(bare)
-        if len(open_ids) >= limit:
-            break
+    # Stable old → new among equals (TaskId ascending)
+    open_ids.sort(key=lambda x: int(x))
+    return open_ids
+
+
+def _pick_stale_detail_batch(conn, account_id: int, open_ids: list,
+                             limit: int) -> list:
+    """Prefer never-synced, then oldest synced_at, then older TaskId.
+
+    Industry-style cache backfill: fill gaps first, then refresh stalest.
+    """
+    if not open_ids or limit <= 0:
+        return []
+    synced = {}  # task_id -> synced_at (or None)
+    with conn.cursor() as cur:
+        for i in range(0, len(open_ids), 500):
+            chunk = open_ids[i:i + 500]
+            cur.execute(
+                """
+                SELECT task_id, synced_at
+                FROM ufone_task_detail_cache
+                WHERE account_id=%s AND task_id = ANY(%s)
+                """,
+                (account_id, chunk),
+            )
+            for tid, ts in cur.fetchall():
+                synced[str(tid)] = ts
+
+    def sort_key(tid: str):
+        ts = synced.get(tid)
+        # missing first (0), then by synced_at ascending, then TaskId asc
+        if ts is None and tid not in synced:
+            return (0, datetime.min, int(tid))
+        if ts is None:
+            return (0, datetime.min, int(tid))
+        return (1, ts, int(tid))
+
+    ranked = sorted(open_ids, key=sort_key)
+    return ranked[:limit]
+
+
+def upsert_task_details(conn, account_id: int, client, emg_items: list,
+                        limit: int = 15) -> int:
+    """Fetch getTaskDetail for open tasks (stale-first batch) → Render DB.
+
+    Each EMG cycle takes up to `limit` open tasks:
+      1) never cached
+      2) oldest synced_at
+      3) older TaskId (old → new)
+    So 70 open rotate fairly without hammering the portal.
+    """
+    if not emg_items:
+        return 0
+    limit = max(1, int(limit or 15))
+    open_ids = _open_task_ids_from_emg(emg_items)
+    if not open_ids:
+        return 0
+    batch = _pick_stale_detail_batch(conn, account_id, open_ids, limit)
+    if not batch:
+        return 0
+    logger.info(
+        'task detail batch %s/%s open (stale-first): %s',
+        len(batch), len(open_ids), ','.join(batch[:5]) + ('…' if len(batch) > 5 else ''),
+    )
 
     n = 0
     with conn.cursor() as cur:
-        for bare in open_ids:
+        for bare in batch:
             try:
                 detail = client.get_task_detail(bare, quick=True) or {}
                 if not isinstance(detail, dict) or not detail:
@@ -698,7 +753,9 @@ def run_once() -> dict:
             logger.warning('emg pg upsert failed (non-fatal): %s', e)
         if emg:
             try:
-                ndet = upsert_task_details(conn, account_id, client, emg, limit=15)
+                detail_batch = max(1, _int_env('BRIDGE_DETAIL_BATCH', 15))
+                ndet = upsert_task_details(
+                    conn, account_id, client, emg, limit=detail_batch)
             except Exception as e:
                 conn.rollback()
                 logger.warning('task detail sync failed (non-fatal): %s', e)
