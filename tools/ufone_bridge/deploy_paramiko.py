@@ -74,7 +74,7 @@ def upload(client: paramiko.SSHClient, local: Path, remote: str) -> None:
     sftp = client.open_sftp()
     try:
         sftp.put(str(local), remote)
-        print(f'↑ {local.name} → {remote}')
+        print(f'uploaded {local.name} -> {remote}')
     finally:
         sftp.close()
 

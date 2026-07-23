@@ -57,8 +57,17 @@ def _int_env(name: str, default: int) -> int:
 def push_ingest(payload: dict) -> dict:
     base = _env('RENDER_INGEST_URL').rstrip('/')
     token = _env('UFONE_BRIDGE_TOKEN')
+    if not token:
+        secret = _env('SECRET_KEY')
+        if secret:
+            import hashlib
+            import hmac as _hmac
+            token = _hmac.new(
+                secret.encode('utf-8'), b'ufone-bridge-v1', hashlib.sha256
+            ).hexdigest()
     if not base or not token:
-        raise RuntimeError('RENDER_INGEST_URL and UFONE_BRIDGE_TOKEN required')
+        raise RuntimeError(
+            'RENDER_INGEST_URL and UFONE_BRIDGE_TOKEN (or SECRET_KEY) required')
     url = base if base.endswith('/ingest') else f'{base}/api/ufone/bridge/ingest'
     headers = {
         'Content-Type': 'application/json',

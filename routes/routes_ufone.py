@@ -32,6 +32,7 @@ from services.ufone_service import (
 from utils import pk_now, pk_date
 from datetime import datetime, timedelta
 import csv
+import hashlib
 import hmac
 import io
 import json
@@ -1137,8 +1138,19 @@ def ufone_settings_stop_polling():
 # PK VPS bridge ingest (token auth — no session cookie)
 # ════════════════════════════════════════════════════════════════════════════
 
+def _bridge_expected_token() -> str:
+    """Prefer UFONE_BRIDGE_TOKEN; else derive from SECRET_KEY (same on Render + VPS)."""
+    explicit = (os.environ.get('UFONE_BRIDGE_TOKEN') or '').strip()
+    if explicit:
+        return explicit
+    secret = (os.environ.get('SECRET_KEY') or '').strip()
+    if not secret:
+        return ''
+    return hmac.new(secret.encode('utf-8'), b'ufone-bridge-v1', hashlib.sha256).hexdigest()
+
+
 def _bridge_token_ok() -> bool:
-    expected = (os.environ.get('UFONE_BRIDGE_TOKEN') or '').strip()
+    expected = _bridge_expected_token()
     if not expected:
         return False
     got = (request.headers.get('X-Ufone-Bridge-Token') or '').strip()
@@ -1153,7 +1165,7 @@ def _bridge_token_ok() -> bool:
 @csrf.exempt
 def api_ufone_bridge_ingest():
     """Receive Ufone cache payloads from the Pakistan VPS bridge worker."""
-    if not (os.environ.get('UFONE_BRIDGE_TOKEN') or '').strip():
+    if not _bridge_expected_token():
         return jsonify({'ok': False, 'error': 'bridge token not configured'}), 503
     if not _bridge_token_ok():
         return jsonify({'ok': False, 'error': 'unauthorized'}), 401
