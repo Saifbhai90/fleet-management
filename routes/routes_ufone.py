@@ -1042,9 +1042,11 @@ def ufone_settings():
         polling = is_polling()
     except Exception:
         pass
+    from services.ufone_service import bridge_only_mode
     return render_template(
         'ufone/settings.html', accounts=accounts,
         polling_active=polling,
+        bridge_only=bridge_only_mode(),
     )
 
 
@@ -1101,9 +1103,32 @@ def ufone_settings_account_test(acct_id):
     acct = UfoneAccount.query.get(acct_id)
     if not acct:
         return jsonify({'success': False, 'error': 'Account not found'}), 404
+
+    from services.ufone_service import bridge_only_mode
+    if bridge_only_mode():
+        # Render must NOT call bpocops (TLS cut). Report PK VPS / DB health instead.
+        from models import UfoneVehicleCache
+        n = UfoneVehicleCache.query.filter_by(account_id=acct_id).count()
+        latest = (UfoneVehicleCache.query.filter_by(account_id=acct_id)
+                  .order_by(UfoneVehicleCache.updated_at.desc()).first())
+        when = latest.updated_at.strftime('%Y-%m-%d %H:%M') if latest and latest.updated_at else 'never'
+        ok = n > 0
+        msg = (
+            f"Bridge mode ON (PK VPS syncs Ufone). "
+            f"Render does not login to bpocops. "
+            f"Cache: {n} vehicles, last update {when}."
+        )
+        try:
+            acct.last_error = None if ok else 'Bridge cache empty — check VPS ufone-bridge service'
+            if ok:
+                acct.last_connected = pk_now()
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+        return jsonify({'success': ok, 'message': msg, 'bridge_only': True})
+
     password = decrypt_password(acct.password_enc)
     ok, msg = test_connection(acct.username, password)
-    # Update last_error
     try:
         acct.last_error = None if ok else msg
         if ok:
@@ -1117,6 +1142,14 @@ def ufone_settings_account_test(acct_id):
 @app.route('/ufone/settings/start-polling', methods=['POST'])
 def ufone_settings_start_polling():
     try:
+        from services.ufone_service import bridge_only_mode
+        if bridge_only_mode():
+            flash(
+                "UFONE_BRIDGE_ONLY=1 — Render polling band rakha. "
+                "Live sync PK VPS (ufone-bridge) se hoti hai.",
+                "info",
+            )
+            return redirect(url_for('ufone_settings'))
         start_polling(app)
         flash("Background polling shuru ho gayi.", "success")
     except Exception as e:
