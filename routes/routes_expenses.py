@@ -4634,6 +4634,110 @@ def api_maintenance_work_order_approval_text(pk):
     })
 
 
+def _oil_whatsapp_qty_label(qty_val):
+    try:
+        qv = Decimal(str(qty_val))
+    except Exception:
+        qv = Decimal('0')
+    qv = qv.quantize(Decimal('0.01'))
+    s = format(qv, 'f')
+    if '.' in s:
+        s = s.rstrip('0').rstrip('.')
+    return s or '0'
+
+
+def _oil_whatsapp_num(val):
+    """Format number with thousands separators for WhatsApp (e.g. 5248 → 5,248)."""
+    if val is None or val == '' or val == '-':
+        return '-'
+    try:
+        n = float(val)
+    except (TypeError, ValueError):
+        return str(val)
+    if abs(n - round(n)) < 1e-9:
+        return f"{int(round(n)):,}"
+    return f"{n:,.2f}".rstrip('0').rstrip('.')
+
+
+def _oil_whatsapp_plain(val):
+    """Format number without thousands separators (e.g. 5248 → 5248)."""
+    if val is None or val == '' or val == '-':
+        return '-'
+    try:
+        n = float(val)
+    except (TypeError, ValueError):
+        return str(val)
+    if abs(n - round(n)) < 1e-9:
+        return str(int(round(n)))
+    return f"{n:.2f}".rstrip('0').rstrip('.')
+
+
+def _build_oil_change_whatsapp_text(
+    *,
+    vehicle_label,
+    oil_date_txt,
+    driver_name,
+    location,
+    payment_mode,
+    prev_reading,
+    curr_reading,
+    km_txt,
+    detail_items,
+    total_amount,
+):
+    """Modern WhatsApp copy for oil change (expense + work order).
+
+    detail_items: list of dicts with keys name, qty, price, amount
+    """
+    sep = '━━━━━━━━━━━━━━━━'
+    prev_fmt = _oil_whatsapp_plain(prev_reading) if prev_reading not in (None, '-', '') else '-'
+    curr_fmt = _oil_whatsapp_plain(curr_reading) if curr_reading not in (None, '-', '') else '-'
+    km_fmt = _oil_whatsapp_num(km_txt) if km_txt not in (None, '-', '') else '-'
+    total_fmt = _oil_whatsapp_num(total_amount)
+
+    lines = [
+        '*🔧 OIL CHANGE DONE*',
+        '',
+        f'🚑 *Vehicle:* {vehicle_label or "-"}',
+        f'📅 *Date:* {oil_date_txt or "-"}',
+        f'👤 *Driver:* {driver_name or "-"}',
+        f'📍 *Location:* {location or "-"}',
+        f'💳 *Payment Mode:* {payment_mode or "-"}',
+        sep,
+        '📊 *ODOMETER*',
+        f'• Last Reading: *{prev_fmt}*',
+        f'• Current Reading: *{curr_fmt}* (*{km_fmt} KM*)',
+        sep,
+        '🛠 *Details*',
+    ]
+    if detail_items:
+        for it in detail_items:
+            name = (it.get('name') or 'Item').strip() or 'Item'
+            qty_lbl = _oil_whatsapp_qty_label(it.get('qty') or 0)
+            price_val = it.get('price')
+            amount_val = it.get('amount')
+            if price_val is None and amount_val is not None:
+                try:
+                    q = float(it.get('qty') or 0)
+                    price_val = (float(amount_val) / q) if q else amount_val
+                except (TypeError, ValueError, ZeroDivisionError):
+                    price_val = amount_val
+            if price_val is None:
+                price_val = 0
+            if amount_val is None:
+                try:
+                    amount_val = float(it.get('qty') or 0) * float(price_val)
+                except (TypeError, ValueError):
+                    amount_val = price_val
+            price_plain = _oil_whatsapp_plain(price_val)
+            amount_fmt = _oil_whatsapp_num(amount_val)
+            lines.append(f'• {name} --{qty_lbl}×{price_plain}={amount_fmt}')
+    else:
+        lines.append('• —')
+    lines.append(f'💰 *Total Amount:* *Rs. {total_fmt}*')
+    return '\n'.join(lines)
+
+
 @app.route('/api/oil-expense/approval-text/<int:pk>')
 def api_oil_expense_approval_text(pk):
     _guard = _require_workspace_employee_for_expense_management()
@@ -4693,18 +4797,7 @@ def api_oil_expense_approval_text(pk):
     curr_reading = f"{float(rec.current_reading):.0f}" if rec.current_reading is not None else '-'
     km_txt = f"{float(rec.km):.0f}" if rec.km is not None else '-'
 
-    def _approval_qty_label(qty_val):
-        try:
-            qv = Decimal(str(qty_val))
-        except Exception:
-            qv = Decimal('0')
-        qv = qv.quantize(Decimal('0.01'))
-        s = format(qv, 'f')
-        if '.' in s:
-            s = s.rstrip('0').rstrip('.')
-        return s or '0'
-
-    detail_lines = []
+    detail_items = []
     total_amount = 0.0
     for it in rec.items.order_by(OilExpenseItem.sort_order.asc(), OilExpenseItem.id.asc()).all():
         p_name = (it.product.name if it.product else f'Product #{it.product_id}')
@@ -4712,27 +4805,24 @@ def api_oil_expense_approval_text(pk):
         price = float(it.price or 0)
         amount = float(it.amount or (qty * price))
         total_amount += amount
-        detail_lines.append(f"{len(detail_lines) + 1}- {p_name} {_approval_qty_label(qty)}x{price:.0f}={amount:.0f}")
-    if not detail_lines:
-        detail_lines = ['-']
+        detail_items.append({'name': p_name, 'qty': qty, 'price': price, 'amount': amount})
 
-    lines = [
-        "Oil Change Done",
-        vehicle_label,
-        f"Oil Change Date: {oil_date_txt}",
-        f"last Oil change Reading: {prev_reading}",
-        f"Current Oil Change Reading: {curr_reading} ({km_txt} km)",
-        f"Driver: {driver_name}",
-        f"Location: {location}",
-        "Detail:",
-        f"Payment Mode: {payment_mode}",
-    ]
-    lines.extend(detail_lines)
-    lines.append(f"Total: {total_amount:.0f}")
+    approval_text = _build_oil_change_whatsapp_text(
+        vehicle_label=vehicle_label,
+        oil_date_txt=oil_date_txt,
+        driver_name=driver_name,
+        location=location,
+        payment_mode=payment_mode,
+        prev_reading=prev_reading,
+        curr_reading=curr_reading,
+        km_txt=km_txt,
+        detail_items=detail_items,
+        total_amount=total_amount,
+    )
 
     return jsonify({
         'ok': True,
-        'approval_text': '\n'.join(lines),
+        'approval_text': approval_text,
         'vehicle_no': vehicle_no,
         'vehicle_label': vehicle_label,
         'date': oil_date_txt,
@@ -4828,18 +4918,7 @@ def api_oil_work_order_approval_text(pk):
     if payment_mode not in allowed_payment_modes:
         payment_mode = 'Cash'
 
-    def _approval_qty_label(qty_val):
-        try:
-            qv = Decimal(str(qty_val))
-        except Exception:
-            qv = Decimal('0')
-        qv = qv.quantize(Decimal('0.01'))
-        s = format(qv, 'f')
-        if '.' in s:
-            s = s.rstrip('0').rstrip('.')
-        return s or '0'
-
-    detail_lines = []
+    detail_items = []
     total_amount = 0.0
     for ex in expenses:
         for it in ex.items.order_by(OilExpenseItem.sort_order.asc(), OilExpenseItem.id.asc()).all():
@@ -4848,29 +4927,24 @@ def api_oil_work_order_approval_text(pk):
             price = float(it.price or 0)
             amount = float(it.amount or (qty * price))
             total_amount += amount
-            detail_lines.append(
-                f"{len(detail_lines) + 1}- {p_name} {_approval_qty_label(qty)}x{price:.0f}={amount:.0f}"
-            )
-    if not detail_lines:
-        detail_lines = ['-']
+            detail_items.append({'name': p_name, 'qty': qty, 'price': price, 'amount': amount})
 
-    lines = [
-        "Oil Change Done",
-        vehicle_label,
-        f"Oil Change Date: {oil_date_txt}",
-        f"last Oil change Reading: {prev_reading}",
-        f"Current Oil Change Reading: {curr_reading} ({km_txt} km)",
-        f"Driver: {driver_name}",
-        f"Location: {location}",
-        "Detail:",
-        f"Payment Mode: {payment_mode}",
-    ]
-    lines.extend(detail_lines)
-    lines.append(f"Total: {total_amount:.0f}")
+    approval_text = _build_oil_change_whatsapp_text(
+        vehicle_label=vehicle_label,
+        oil_date_txt=oil_date_txt,
+        driver_name=driver_name,
+        location=location,
+        payment_mode=payment_mode,
+        prev_reading=prev_reading,
+        curr_reading=curr_reading,
+        km_txt=km_txt,
+        detail_items=detail_items,
+        total_amount=total_amount,
+    )
 
     return jsonify({
         'ok': True,
-        'approval_text': '\n'.join(lines),
+        'approval_text': approval_text,
         'work_order_no': wo.work_order_no or '-',
         'vehicle_no': vehicle_no,
         'vehicle_label': vehicle_label,
