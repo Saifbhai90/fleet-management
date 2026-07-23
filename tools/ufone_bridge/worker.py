@@ -54,7 +54,7 @@ def _int_env(name: str, default: int) -> int:
         return default
 
 
-def push_ingest(payload: dict) -> dict:
+def push_ingest(payload: dict, retries: int = 3) -> dict:
     base = _env('RENDER_INGEST_URL').rstrip('/')
     token = _env('UFONE_BRIDGE_TOKEN')
     if not token:
@@ -74,10 +74,85 @@ def push_ingest(payload: dict) -> dict:
         'X-Ufone-Bridge-Token': token,
         'User-Agent': 'ufone-bridge/1.0',
     }
-    r = requests.post(url, headers=headers, json=payload, timeout=120)
-    if r.status_code >= 400:
-        raise RuntimeError(f'ingest HTTP {r.status_code}: {r.text[:400]}')
-    return r.json() if r.content else {'ok': True}
+    last_err = None
+    for attempt in range(1, retries + 1):
+        try:
+            r = requests.post(url, headers=headers, json=payload, timeout=180)
+            if r.status_code >= 500 and attempt < retries:
+                time.sleep(3 * attempt)
+                continue
+            if r.status_code >= 400:
+                raise RuntimeError(f'ingest HTTP {r.status_code}: {r.text[:400]}')
+            return r.json() if r.content else {'ok': True}
+        except (requests.RequestException, RuntimeError) as e:
+            last_err = e
+            if attempt < retries:
+                time.sleep(3 * attempt)
+                continue
+            raise
+    raise RuntimeError(str(last_err))
+
+
+def _chunks(items: list, size: int):
+    for i in range(0, len(items), size):
+        yield items[i:i + size]
+
+
+def _to_float(val, default=0.0):
+    try:
+        if val is None or val == '':
+            return default
+        return float(val)
+    except (TypeError, ValueError):
+        return default
+
+
+def normalize_ambulance(raw: dict) -> dict:
+    lat = _to_float(raw.get('Latitude'))
+    lon = _to_float(raw.get('Logitude'))  # Ufone typo
+    return {
+        'id': raw.get('Id'),
+        'reg_no': raw.get('Reg_No'),
+        'u_track_no': raw.get('UTrackNo'),
+        'tracking_world_regno': raw.get('registrationNo_trackingWorld'),
+        'chassis': raw.get('Chassis'),
+        'make_model': raw.get('MakeModel'),
+        'latitude': lat,
+        'longitude': lon,
+        'location': raw.get('Location'),
+        'district': (raw.get('district_name') or raw.get('DistrictName')
+                     or raw.get('District') or raw.get('Location') or ''),
+        'status': raw.get('Status'),
+        'driver_name': raw.get('Driver_Name'),
+        'driver_cell': raw.get('Driver_Cell'),
+        'facility_name': raw.get('facility_name'),
+        'distance': _to_float(raw.get('Distance'), None),
+        'has_gps': lat != 0 and lon != 0,
+    }
+
+
+def normalize_task(raw: dict) -> dict:
+    return {
+        'id': raw.get('id'),
+        'task_id': raw.get('TaskId') or raw.get('id'),
+        'patient_name': raw.get('name') or raw.get('Name'),
+        'phone': raw.get('phone') or raw.get('Phone'),
+        'address': raw.get('address') or raw.get('Address'),
+        'ambulance': raw.get('Ambulance') or raw.get('ambRegNo'),
+        'status': raw.get('Status'),
+        'district': (raw.get('district_name') or raw.get('DistrictName')
+                     or raw.get('District')),
+        'tehsil': (raw.get('tehsil_name') or raw.get('TehsilName')
+                   or raw.get('Tehsil')),
+        'facility_name': raw.get('facility_name') or raw.get('FacilityName'),
+        'request_from': raw.get('RequestFrom'),
+        'is_transfer': raw.get('isTransfer') or raw.get('isTransfer2'),
+        'created_date': raw.get('CD') or raw.get('CreatedDate'),
+        'distance': _to_float(raw.get('Distance') or raw.get('distanceInKM'), None),
+        'driver_name': raw.get('Driver_Name'),
+        'driver_cell': raw.get('Driver_Cell'),
+        'category': raw.get('Category'),
+    }
 
 
 def run_once() -> dict:
@@ -95,35 +170,64 @@ def run_once() -> dict:
     client.connect(reuse_session=True)
 
     today = date.today().strftime('%Y-%m-%d')
-    vehicles_raw = client.get_ambulance_list() or []
-    tasks_raw = client.get_task_dashboard(
-        start_date=today, end_date=today, visit_page=False) or []
+    vehicles = [normalize_ambulance(r) for r in (client.get_ambulance_list() or [])
+                if isinstance(r, dict) and r.get('Reg_No')]
+    tasks = [normalize_task(r) for r in (client.get_task_dashboard(
+        start_date=today, end_date=today, visit_page=False) or [])
+        if isinstance(r, dict)]
     emergency_raw = []
     try:
-        emergency_raw = client.get_emergency_tasks(
-            start_date=today, end_date=today, district='', visit_page=False) or []
+        emergency_raw = [r for r in (client.get_emergency_tasks(
+            start_date=today, end_date=today, district='', visit_page=False) or [])
+            if isinstance(r, dict)]
     except Exception as e:
         logger.warning('emergency report fetch failed (continuing): %s', e)
 
-    payload = {
-        'account_id': account_id,
-        'task_date': today,
-        'vehicles_raw': [r for r in vehicles_raw if isinstance(r, dict)],
-        'tasks_raw': [r for r in tasks_raw if isinstance(r, dict)],
-        'emergency_report': [r for r in emergency_raw if isinstance(r, dict)],
-        'source': 'pk-vps-bridge',
-        'vps_host': _env('HOSTNAME') or os.uname().nodename if hasattr(os, 'uname') else '',
-    }
-    result = push_ingest(payload)
+    host = _env('HOSTNAME') or (os.uname().nodename if hasattr(os, 'uname') else '')
+    batch = _int_env('BRIDGE_VEHICLE_BATCH', 25)
+    totals = {'vehicles': 0, 'tasks': 0, 'emergency_report': 0}
+
+    for part in _chunks(vehicles, batch):
+        res = push_ingest({
+            'account_id': account_id,
+            'task_date': today,
+            'vehicles': part,
+            'source': 'pk-vps-bridge',
+            'vps_host': host,
+        })
+        totals['vehicles'] += (res.get('result') or {}).get('vehicles', len(part))
+        time.sleep(0.8)
+
+    if tasks:
+        res = push_ingest({
+            'account_id': account_id,
+            'task_date': today,
+            'tasks': tasks,
+            'source': 'pk-vps-bridge',
+            'vps_host': host,
+        })
+        totals['tasks'] = (res.get('result') or {}).get('tasks', len(tasks))
+
+    for part in _chunks(emergency_raw, 25):
+        res = push_ingest({
+            'account_id': account_id,
+            'task_date': today,
+            'emergency_report': part,
+            'source': 'pk-vps-bridge',
+            'vps_host': host,
+        })
+        totals['emergency_report'] += (res.get('result') or {}).get(
+            'emergency_report', len(part))
+        time.sleep(0.8)
+
     logger.info(
-        'ingest ok account=%s vehicles=%s tasks=%s emg=%s → %s',
+        'ingest ok account=%s vehicles=%s/%s tasks=%s/%s emg=%s/%s',
         account_id,
-        len(payload['vehicles_raw']),
-        len(payload['tasks_raw']),
-        len(payload['emergency_report']),
-        json.dumps(result.get('result') or result)[:300],
+        totals['vehicles'], len(vehicles),
+        totals['tasks'], len(tasks),
+        totals['emergency_report'], len(emergency_raw),
     )
-    return result
+    return {'ok': True, 'result': totals}
 
 
 def main() -> int:
