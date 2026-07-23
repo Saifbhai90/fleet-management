@@ -13,7 +13,7 @@ import os
 import re
 import sys
 import time
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import psycopg2
@@ -90,6 +90,11 @@ def _load_dotenv(path: Path) -> None:
         key, val = key.strip(), val.strip().strip('"').strip("'")
         if key and key not in os.environ:
             os.environ[key] = val
+
+
+def _pk_today() -> date:
+    """Pakistan calendar date (UTC+5). VPS/Render 'today' is often UTC."""
+    return (datetime.utcnow() + timedelta(hours=5)).date()
 
 
 def _env(name: str, default: str = '') -> str:
@@ -437,8 +442,10 @@ def run_once() -> dict:
     client = UfoneClient(username, password, session_key=f'bridge_{account_id}')
     logger.info('connecting to Ufone…')
     client.connect(reuse_session=True)
-    today_d = date.today()
+    today_d = _pk_today()
     today = today_d.strftime('%Y-%m-%d')
+    logger.info('using PK calendar date %s (VPS UTC date would be %s)',
+                today, date.today().isoformat())
 
     logger.info('fetching vehicles…')
     vehicles = [normalize_ambulance(r) for r in (client.get_ambulance_list() or [])

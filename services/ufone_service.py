@@ -1157,18 +1157,31 @@ def fetch_dashboard_counts(account_id: int, force: bool = False,
                     pass
             task_total = in_process
 
-        if latest_sync is None:
-            latest_v = (UfoneVehicleCache.query.filter_by(account_id=account_id)
-                        .order_by(UfoneVehicleCache.updated_at.desc()).first())
-            latest_t = (UfoneTaskCache.query.filter_by(account_id=account_id)
-                        .order_by(UfoneTaskCache.updated_at.desc()).first())
-            candidates = []
-            if latest_v and latest_v.updated_at:
-                candidates.append(latest_v.updated_at)
-            if latest_t and latest_t.updated_at:
-                candidates.append(latest_t.updated_at)
-            if candidates:
-                latest_sync = max(candidates)
+        # Always consider vehicle/task cache freshness (VPS writes those every cycle).
+        # EMG-only synced_at goes stale when bridge dated rows with UTC "yesterday".
+        candidates = []
+        if latest_sync:
+            candidates.append(latest_sync)
+        latest_v = (UfoneVehicleCache.query.filter_by(account_id=account_id)
+                    .order_by(UfoneVehicleCache.updated_at.desc()).first())
+        latest_t = (UfoneTaskCache.query.filter_by(account_id=account_id)
+                    .order_by(UfoneTaskCache.updated_at.desc()).first())
+        if latest_v and latest_v.updated_at:
+            candidates.append(latest_v.updated_at)
+        if latest_t and latest_t.updated_at:
+            candidates.append(latest_t.updated_at)
+        # Also any EMG row synced recently (any task_date) — bridge may use UTC day.
+        try:
+            any_emg = (EmergencyTaskRecord.query
+                       .filter(EmergencyTaskRecord.synced_at.isnot(None))
+                       .order_by(EmergencyTaskRecord.synced_at.desc())
+                       .first())
+            if any_emg and any_emg.synced_at:
+                candidates.append(any_emg.synced_at)
+        except Exception:
+            pass
+        if candidates:
+            latest_sync = max(candidates)
 
         data = {
             'total_ambulances': total_amb,
