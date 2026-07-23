@@ -1245,6 +1245,33 @@ def api_ufone_bridge_ingest():
         return jsonify({'ok': False, 'error': str(e)[:300]}), 500
 
 
+@app.route('/api/ufone/bridge/notify', methods=['POST'])
+@csrf.exempt
+def api_ufone_bridge_notify():
+    """Tiny task generate/close events from PK VPS (no bulk payload — avoids OOM)."""
+    if not _bridge_expected_token():
+        return jsonify({'ok': False, 'error': 'bridge token not configured'}), 503
+    if not _bridge_token_ok():
+        return jsonify({'ok': False, 'error': 'unauthorized'}), 401
+
+    payload = request.get_json(silent=True) or {}
+    events = payload.get('events') or []
+    if not isinstance(events, list):
+        return jsonify({'ok': False, 'error': 'events must be a list'}), 400
+    # Hard cap — never accept bulk report-sized bodies again
+    events = [e for e in events if isinstance(e, dict)][:40]
+    if not events:
+        return jsonify({'ok': True, 'sent': 0})
+
+    try:
+        from services.ufone_service import _send_task_event_notifications
+        _send_task_event_notifications(events)
+        return jsonify({'ok': True, 'sent': len(events)})
+    except Exception as e:
+        logger.exception('bridge notify failed')
+        return jsonify({'ok': False, 'error': str(e)[:300]}), 500
+
+
 @app.route('/api/ufone/bridge/health', methods=['GET'])
 @csrf.exempt
 def api_ufone_bridge_health():

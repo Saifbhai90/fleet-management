@@ -1711,7 +1711,11 @@ def sync_emergency_report_to_db(account_id: int, items: list,
             ).all()
         }
         had_prior = bool(existing)
-        today = _date.today()
+        try:
+            from utils import pk_date
+            today = pk_date()
+        except Exception:
+            today = _date.today()
         events = []
         now_dt = datetime.now()
         default_d = None
@@ -1721,7 +1725,7 @@ def sync_emergency_report_to_db(account_id: int, items: list,
             else:
                 default_d = _parse_date_only(str(default_task_date))
         if default_d is None:
-            default_d = now_dt.date()
+            default_d = today
         upserted = 0
         for raw in items:
             if not isinstance(raw, dict):

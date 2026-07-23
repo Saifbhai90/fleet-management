@@ -339,10 +339,19 @@ def map_emg_row(raw: dict, account_id: int, today: date) -> dict | None:
     return fields
 
 
-def upsert_emergency(conn, account_id: int, items: list, today: date) -> int:
-    """Bulk-write emergency report rows to Postgres (no Render HTTP)."""
+def _status_is_complete(status) -> bool:
+    s = (status or '').strip().lower()
+    return ('complete' in s) and ('incomplete' not in s)
+
+
+def upsert_emergency(conn, account_id: int, items: list, today: date) -> tuple[int, list]:
+    """Bulk-write emergency report rows to Postgres (no Render HTTP).
+
+    Returns (upsert_count, notify_events) where notify_events are tiny
+    generate/close payloads for Render's /api/ufone/bridge/notify.
+    """
     if not items:
-        return 0
+        return 0, []
     update_cols = [
         'request_from', 'phone', 'cli', 'name', 'husband', 'address', 'location',
         'house_color', 'door_color', 'nearest_landmark', 'edd', 'clinical_details',
@@ -363,7 +372,7 @@ def upsert_emergency(conn, account_id: int, items: list, today: date) -> int:
         if row:
             rows.append(row)
     if not rows:
-        return 0
+        return 0, []
 
     # Prefer latest duplicate TaskId in the payload
     by_tid = {}
@@ -372,32 +381,57 @@ def upsert_emergency(conn, account_id: int, items: list, today: date) -> int:
     rows = list(by_tid.values())
     tids = [r['task_id_ext'] for r in rows]
 
+    events = []
     with conn.cursor() as cur:
+        cur.execute("SET statement_timeout = '180s'")
+        # Any prior rows? (skip notify flood on empty DB first fill)
         cur.execute(
-            "SET statement_timeout = '180s'"
+            "SELECT 1 FROM emergency_task_record "
+            "WHERE task_id_ext IS NOT NULL AND task_id_ext <> '' LIMIT 1"
         )
-        # One lookup for all ids
-        existing = {}
+        had_prior = cur.fetchone() is not None
+
+        existing = {}  # tid -> (id, status)
         for i in range(0, len(tids), 500):
             chunk = tids[i:i + 500]
             cur.execute(
                 """
-                SELECT DISTINCT ON (task_id_ext) id, task_id_ext
+                SELECT DISTINCT ON (task_id_ext) id, task_id_ext, status
                 FROM emergency_task_record
                 WHERE task_id_ext = ANY(%s)
                 ORDER BY task_id_ext, task_date DESC NULLS LAST, id DESC
                 """,
                 (chunk,),
             )
-            for rid, tid in cur.fetchall():
-                existing[tid] = rid
+            for rid, tid, st in cur.fetchall():
+                existing[tid] = (rid, st)
 
         to_update = []
         to_insert = []
         for row in rows:
-            rid = existing.get(row['task_id_ext'])
-            if rid:
-                to_update.append([row.get(c) for c in update_cols] + [rid])
+            tid = row['task_id_ext']
+            prior = existing.get(tid)
+            new_status = row.get('status') or ''
+            if had_prior and row.get('task_date') == today:
+                payload = {
+                    'task_id': tid,
+                    'amb_reg_no': row.get('amb_reg_no'),
+                    'patient_name': row.get('name'),
+                    'phone': row.get('phone'),
+                    'cli': row.get('cli'),
+                    'pickup': row.get('address') or '',
+                    'destination': row.get('facility_name') or '',
+                    'category': row.get('category') or '',
+                    'completed_date_time': row.get('completed_date_time') or '',
+                }
+                if prior is None:
+                    events.append({**payload, 'event': 'generate'})
+                elif (not _status_is_complete(prior[1])
+                      and _status_is_complete(new_status)):
+                    events.append({**payload, 'event': 'close'})
+
+            if prior:
+                to_update.append([row.get(c) for c in update_cols] + [prior[0]])
             else:
                 to_insert.append(
                     [row['task_id_ext']] + [row.get(c) for c in update_cols]
@@ -414,7 +448,6 @@ def upsert_emergency(conn, account_id: int, items: list, today: date) -> int:
         if to_insert:
             cols = ['task_id_ext'] + update_cols + ['synced_at', 'created_at']
             col_sql = ', '.join(cols)
-            # execute_values injects VALUES lists; append NOW() via SQL template
             template = '(' + ','.join(['%s'] * (len(cols) - 2)) + ', NOW(), NOW())'
             psycopg2.extras.execute_values(
                 cur,
@@ -424,8 +457,41 @@ def upsert_emergency(conn, account_id: int, items: list, today: date) -> int:
                 page_size=100,
             )
     conn.commit()
-    logger.info('emg upserted update=%s insert=%s', len(to_update), len(to_insert))
-    return len(rows)
+    logger.info('emg upserted update=%s insert=%s notify_events=%s',
+                len(to_update), len(to_insert), len(events))
+    return len(rows), events[:40]
+
+
+def push_notify_events(events: list) -> int:
+    """POST tiny generate/close events to Render (never bulk EMG)."""
+    if not events:
+        return 0
+    token = _env('UFONE_BRIDGE_TOKEN')
+    base = (_env('RENDER_BASE_URL') or _env('RENDER_INGEST_URL') or '').rstrip('/')
+    if not token or not base:
+        logger.warning('notify skipped — set RENDER_BASE_URL + UFONE_BRIDGE_TOKEN')
+        return 0
+    if base.endswith('/ingest'):
+        base = base[: -len('/ingest')]
+    if base.endswith('/api/ufone/bridge'):
+        url = f'{base}/notify'
+    else:
+        url = f'{base}/api/ufone/bridge/notify'
+    try:
+        import requests
+        r = requests.post(
+            url,
+            headers={'X-Ufone-Bridge-Token': token, 'User-Agent': 'ufone-bridge-pg/1.0'},
+            json={'events': events},
+            timeout=30,
+        )
+        if r.status_code >= 400:
+            logger.warning('notify HTTP %s: %s', r.status_code, (r.text or '')[:200])
+            return 0
+        return int((r.json() or {}).get('sent') or len(events))
+    except Exception as e:
+        logger.warning('notify failed: %s', e)
+        return 0
 
 
 def run_once() -> dict:
@@ -496,17 +562,22 @@ def run_once() -> dict:
         nv = upsert_vehicles(conn, account_id, vehicles)
         nt = upsert_tasks(conn, account_id, tasks)
         ne = 0
+        notify_events = []
         try:
-            ne = upsert_emergency(conn, account_id, emg, today_d)
+            ne, notify_events = upsert_emergency(conn, account_id, emg, today_d)
         except Exception as e:
             conn.rollback()
             logger.warning('emg pg upsert failed (non-fatal): %s', e)
     finally:
         conn.close()
 
-    logger.info('pg ingest ok districts=%s vehicles=%s tasks=%s emg_pg=%s',
-                nd, nv, nt, ne)
-    return {'districts': nd, 'vehicles': nv, 'tasks': nt, 'emergency_report': ne}
+    nn = push_notify_events(notify_events)
+    logger.info('pg ingest ok districts=%s vehicles=%s tasks=%s emg_pg=%s notify=%s',
+                nd, nv, nt, ne, nn)
+    return {
+        'districts': nd, 'vehicles': nv, 'tasks': nt,
+        'emergency_report': ne, 'notify': nn,
+    }
 
 
 def main() -> int:

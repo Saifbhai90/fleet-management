@@ -1737,7 +1737,7 @@ def require_login():
         'login', 'pwa_manifest', 'service_worker', 'biometric_login', 'app_logout', 'mobile_init', 'session_ping', 'app_check_update',
         'health_check', 'report_driver_profile_public',
         # PK VPS Ufone bridge (token auth — no session cookie)
-        'api_ufone_bridge_ingest', 'api_ufone_bridge_health',
+        'api_ufone_bridge_ingest', 'api_ufone_bridge_health', 'api_ufone_bridge_notify',
     ):
         return
     if endpoint == 'set_new_password' and session.get('must_set_password_user_id'):
