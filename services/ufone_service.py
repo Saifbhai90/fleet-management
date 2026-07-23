@@ -1887,6 +1887,155 @@ def invalidate_task_detail_cache(account_id: int, task_id):
         logger.warning(f"invalidate_task_detail_cache failed (non-fatal): {e}")
 
 
+def _task_id_lookup_keys(task_id) -> list:
+    """Numeric / PHF- prefixed variants for DB lookups."""
+    s = str(task_id or '').strip()
+    if not s:
+        return []
+    keys = [s]
+    bare = s.upper().replace('PHF-', '').strip()
+    if bare and bare != s:
+        keys.append(bare)
+        keys.append(f'PHF-{bare}')
+    if not s.upper().startswith('PHF-') and s.isdigit():
+        keys.append(f'PHF-{s}')
+    # unique preserve order
+    out = []
+    seen = set()
+    for k in keys:
+        if k not in seen:
+            seen.add(k)
+            out.append(k)
+    return out
+
+
+def build_task_detail_from_db(account_id: int, task_id) -> dict:
+    """Compose Task Detail popup fields from EMG + vehicle cache (no Ufone HTTP).
+
+    Used in UFONE_BRIDGE_ONLY when Render cannot reach bpocops.
+    """
+    from models import EmergencyTaskRecord, UfoneTaskCache, UfoneVehicleCache
+
+    keys = _task_id_lookup_keys(task_id)
+    if not keys:
+        return {}
+
+    detail = {}
+
+    # 1) Emergency report row (richest structured fields)
+    try:
+        emg = (EmergencyTaskRecord.query
+               .filter(EmergencyTaskRecord.task_id_ext.in_(keys))
+               .order_by(EmergencyTaskRecord.task_date.desc(),
+                         EmergencyTaskRecord.id.desc())
+               .first())
+    except Exception:
+        emg = None
+    if emg:
+        detail.update({
+            'id': emg.task_id_ext,
+            'TaskId': emg.task_id_ext,
+            'RequestFrom': emg.request_from,
+            'ReceivedBy': emg.received_by,
+            'phone': emg.phone,
+            'Phone': emg.phone,
+            'CLI': emg.cli,
+            'name': emg.name,
+            'Name': emg.name,
+            'husband': emg.husband,
+            'address': emg.address,
+            'Address': emg.address,
+            'location': emg.location,
+            'Location': emg.location,
+            'HouseColor': emg.house_color,
+            'DoorColor': emg.door_color,
+            'NearestLandmark': emg.nearest_landmark,
+            'EDD': emg.edd,
+            'ClinicalDetails': emg.clinical_details,
+            'district_name': emg.district_name,
+            'tehsil_name': emg.tehsil_name,
+            'uc_name': emg.uc_name,
+            'Ambulance': emg.amb_reg_no,
+            'ambRegNo': emg.amb_reg_no,
+            'Status': emg.status,
+            'facility_code': emg.facility_code,
+            'FacilityCode': emg.facility_code,
+            'facility_name': emg.facility_name,
+            'FacilityName': emg.facility_name,
+            'facilityType': emg.facility_type,
+            'CD': emg.excel_created_date,
+            'CreatedDate': emg.excel_created_date,
+            'CreatedTime': emg.created_time,
+            'Category': emg.category,
+            'ClosingRemarks': emg.closing_remarks,
+            'CallerName': emg.caller_name,
+            'RequestFor': emg.request_for,
+            'distanceInKM': emg.distance_in_km,
+        })
+
+    # 2) Task list cache / raw_json fill gaps
+    try:
+        trow = (UfoneTaskCache.query
+                .filter(UfoneTaskCache.account_id == account_id,
+                        UfoneTaskCache.task_id.in_(keys))
+                .order_by(UfoneTaskCache.updated_at.desc())
+                .first())
+    except Exception:
+        trow = None
+    if trow:
+        if trow.raw_json:
+            try:
+                raw = json.loads(trow.raw_json)
+                if isinstance(raw, dict):
+                    for k, v in raw.items():
+                        if v is not None and v != '' and not detail.get(k):
+                            detail[k] = v
+            except Exception:
+                pass
+        fills = {
+            'id': trow.task_id,
+            'TaskId': trow.task_id,
+            'name': trow.patient_name,
+            'phone': trow.phone,
+            'address': trow.address,
+            'Ambulance': trow.ambulance_reg,
+            'Status': trow.status,
+            'district_name': trow.district,
+            'tehsil_name': trow.tehsil,
+            'facility_name': trow.facility,
+            'RequestFrom': trow.request_from,
+        }
+        for k, v in fills.items():
+            if v is not None and v != '' and not detail.get(k):
+                detail[k] = v
+
+    # 3) Driver from vehicle cache by ambulance reg
+    amb = (detail.get('Ambulance') or detail.get('ambRegNo')
+           or detail.get('amReg_No') or '')
+    amb = str(amb).strip()
+    if amb:
+        try:
+            vrow = (UfoneVehicleCache.query
+                    .filter_by(account_id=account_id, reg_no=amb)
+                    .first())
+            if not vrow:
+                # case-insensitive fallback
+                vrow = (UfoneVehicleCache.query
+                        .filter(UfoneVehicleCache.account_id == account_id,
+                                UfoneVehicleCache.reg_no.ilike(amb))
+                        .first())
+            if vrow:
+                if vrow.driver_name and not detail.get('Driver_Name'):
+                    detail['Driver_Name'] = vrow.driver_name
+                if vrow.driver_cell and not detail.get('Driver_Cell'):
+                    detail['Driver_Cell'] = vrow.driver_cell
+                    detail['MobNo'] = detail.get('MobNo') or vrow.driver_cell
+        except Exception:
+            pass
+
+    return detail
+
+
 # ── Background polling thread ────────────────────────────────────────────────
 
 _poll_thread: Optional[threading.Thread] = None

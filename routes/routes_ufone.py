@@ -28,6 +28,7 @@ from services.ufone_service import (
     encrypt_password, decrypt_password,
     create_account, update_account, delete_account,
     test_connection, start_polling, stop_polling, is_polling,
+    bridge_only_mode, build_task_detail_from_db,
 )
 from utils import pk_now, pk_date
 from datetime import datetime, timedelta
@@ -477,30 +478,60 @@ def ufone_task_detail(task_id):
     """Task detail for the popup — DB cache-first (Phase 1).
 
     Default: read ufone_task_detail_cache (full 76-field detail + comments).
-    Falls back to UfoneTaskCache.raw_json (list-level snapshot) if no full cache.
-    ?live=1: quick live fetch (12s timeout) + upsert into detail cache.
-    Never hangs the modal — always returns something, with from_cache flag.
+    Falls back to EMG/vehicle DB compose, then UfoneTaskCache snapshot.
+    ?live=1: live Ufone fetch — skipped when UFONE_BRIDGE_ONLY (PK VPS owns HTTP).
     """
     acct_id = _get_account_id()
     if not acct_id:
         return jsonify({'error': 'No account'}), 400
 
     want_live = request.args.get('live') == '1'
+    bridge = bridge_only_mode()
 
-    # 1. Full detail+comments from DB cache (instant)
-    if not want_live:
-        detail, comments, synced_at = get_task_detail_cached(acct_id, task_id)
+    def _pack(detail, comments, *, from_cache=False, warning=None):
+        payload = {
+            'detail': detail or {},
+            'comments': comments or [],
+            'from_cache': from_cache,
+            'bridge_only': bridge,
+        }
+        if warning:
+            payload['warning'] = warning
+        return jsonify(payload)
+
+    # 1. Full detail+comments from DB cache
+    detail, comments, _synced = get_task_detail_cached(acct_id, task_id)
+    if detail and not want_live:
+        return _pack(detail, comments, from_cache=True)
+
+    # 2. Compose from EMG + vehicle (+ list cache) — works offline / bridge
+    composed = build_task_detail_from_db(acct_id, task_id)
+    if composed and not want_live:
+        # Prefer richer detail cache if present
         if detail:
-            return jsonify({'detail': detail, 'comments': comments or [],
-                            'from_cache': True})
-        # Fall back to list-level snapshot
-        snap = _cached_task_detail(acct_id, task_id)
-        if snap:
-            return jsonify({'detail': snap, 'comments': [], 'from_cache': True})
+            merged = dict(composed)
+            merged.update({k: v for k, v in detail.items() if v not in (None, '')})
+            return _pack(merged, comments, from_cache=True)
+        return _pack(composed, comments or [], from_cache=True)
 
-    # 2. Live fetch + cache
-    detail = {}
-    comments = []
+    snap = _cached_task_detail(acct_id, task_id)
+    if snap and not want_live:
+        if composed:
+            merged = dict(snap)
+            merged.update({k: v for k, v in composed.items() if v not in (None, '')})
+            return _pack(merged, [], from_cache=True)
+        return _pack(snap, [], from_cache=True)
+
+    # 3. Live Ufone — not available from Render in bridge mode
+    if bridge:
+        best = detail or composed or snap or {}
+        if best:
+            return _pack(best, comments or [], from_cache=True)
+        return jsonify({
+            'error': 'Task detail not in bridge cache yet — wait for next VPS sync',
+            'detail': {}, 'comments': [], 'bridge_only': True,
+        }), 404
+
     live_error = None
     try:
         client = _client_for(acct_id)
@@ -511,25 +542,17 @@ def ufone_task_detail(task_id):
             live_error = str(ce)[:200]
     except Exception as e:
         live_error = str(e)[:200]
+        detail = {}
+        comments = []
 
     if detail:
-        # Persist full detail + comments to DB for future instant reads
         save_task_detail_cache(acct_id, task_id, detail, comments)
-        payload = {'detail': detail, 'comments': comments}
-        if live_error:
-            payload['warning'] = live_error
-        return jsonify(payload)
+        return _pack(detail, comments, warning=live_error)
 
-    # 3. Live failed — serve whatever cache we have
-    detail, comments, _ = get_task_detail_cached(acct_id, task_id)
-    if detail:
-        return jsonify({'detail': detail, 'comments': comments or [],
-                        'from_cache': True,
-                        'warning': live_error or 'Live fetch unavailable'})
-    snap = _cached_task_detail(acct_id, task_id)
-    if snap:
-        return jsonify({'detail': snap, 'comments': [], 'from_cache': True,
-                        'warning': live_error or 'Live fetch unavailable'})
+    best = get_task_detail_cached(acct_id, task_id)[0] or composed or snap or {}
+    if best:
+        return _pack(best, comments or [], from_cache=True,
+                     warning=live_error or 'Live fetch unavailable')
 
     return jsonify({'error': live_error or 'Task not found',
                     'detail': {}, 'comments': []}), 502

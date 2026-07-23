@@ -664,6 +664,8 @@ function renderTaskDetail(data, liveUpdating) {
   let html = '';
   if (liveUpdating) {
     html += '<div class="alert alert-light py-1 small mb-2"><span class="spinner-border spinner-border-sm me-2"></span>Cached data shown — fetching live update...</div>';
+  } else if (data.bridge_only) {
+    html += '<div class="alert alert-light py-1 small mb-2 text-muted"><i class="bi bi-cloud-check"></i> PK VPS bridge data</div>';
   } else if (data.from_cache) {
     html += '<div class="alert alert-warning py-1 small mb-2"><i class="bi bi-clock-history"></i> Cached data (Ufone live server not responding)</div>';
   }
@@ -710,20 +712,27 @@ async function openTaskDetail(id) {
     document.getElementById('taskModalBody').innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary"></div><p class="mt-2 text-muted">Loading...</p></div>';
     modal.show();
 
-    // Stage 1: cache — instant paint
+    // Stage 1: cache / bridge DB — instant paint
     let hadCache = false;
+    let bridgeOnly = false;
     try {
       const res = await fetch('/ufone/task/' + id);
       const data = await res.json();
       if (token !== taskModalToken) return;
+      bridgeOnly = !!data.bridge_only;
       if (data.detail && Object.keys(data.detail).length) {
         hadCache = data.from_cache === true;
+        // Bridge mode: DB is source of truth — do not hit Render→Ufone live
+        if (bridgeOnly) {
+          renderTaskDetail(data, false);
+          return;
+        }
         renderTaskDetail(data, hadCache);
         if (!hadCache) return; // already live
       }
     } catch(e) { /* fall through to live */ }
 
-    // Stage 2: live upgrade in background (quick timeout server-side)
+    // Stage 2: live upgrade (skipped when bridge-only already returned)
     try {
       const res = await fetch('/ufone/task/' + id + '?live=1');
       const data = await res.json();

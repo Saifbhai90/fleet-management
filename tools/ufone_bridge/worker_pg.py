@@ -463,6 +463,86 @@ def upsert_emergency(conn, account_id: int, items: list, today: date) -> tuple[i
     return len(rows), events[:40]
 
 
+def upsert_task_details(conn, account_id: int, client, emg_items: list,
+                        limit: int = 15) -> int:
+    """Fetch getTaskDetail for open tasks and write ufone_task_detail_cache.
+
+    Caps per cycle so portal load stays small. Only incomplete/in-process.
+    """
+    if not emg_items:
+        return 0
+    open_ids = []
+    seen = set()
+    for raw in emg_items:
+        if not isinstance(raw, dict):
+            continue
+        tid = str(raw.get('TaskId') or raw.get('id') or '').strip()
+        if not tid or tid in seen:
+            continue
+        st = str(raw.get('Status') or '').lower()
+        if 'complete' in st and 'incomplete' not in st:
+            continue
+        if 'cancel' in st:
+            continue
+        # prefer numeric id for getTaskDetail
+        bare = tid.upper().replace('PHF-', '').strip()
+        if not bare.isdigit():
+            continue
+        seen.add(tid)
+        open_ids.append(bare)
+        if len(open_ids) >= limit:
+            break
+
+    n = 0
+    with conn.cursor() as cur:
+        for bare in open_ids:
+            try:
+                detail = client.get_task_detail(bare, quick=True) or {}
+                if not isinstance(detail, dict) or not detail:
+                    continue
+                comments = []
+                try:
+                    comments = client.get_task_comments(bare, quick=True) or []
+                except Exception:
+                    comments = []
+                status = str(detail.get('Status') or '')
+                detail_json = json.dumps(detail, default=str)
+                comments_json = json.dumps(comments, default=str)
+                cur.execute(
+                    """
+                    SELECT id FROM ufone_task_detail_cache
+                    WHERE account_id=%s AND task_id=%s
+                    """,
+                    (account_id, bare),
+                )
+                found = cur.fetchone()
+                if found:
+                    cur.execute(
+                        """
+                        UPDATE ufone_task_detail_cache SET
+                          detail_json=%s, comments_json=%s, task_status=%s,
+                          synced_at=NOW()
+                        WHERE id=%s
+                        """,
+                        (detail_json, comments_json, status, found[0]),
+                    )
+                else:
+                    cur.execute(
+                        """
+                        INSERT INTO ufone_task_detail_cache (
+                          account_id, task_id, detail_json, comments_json,
+                          task_status, synced_at, created_at
+                        ) VALUES (%s,%s,%s,%s,%s,NOW(),NOW())
+                        """,
+                        (account_id, bare, detail_json, comments_json, status),
+                    )
+                n += 1
+            except Exception as e:
+                logger.warning('task detail %s failed: %s', bare, e)
+    conn.commit()
+    return n
+
+
 def push_notify_events(events: list) -> int:
     """POST tiny generate/close events to Render (never bulk EMG)."""
     if not events:
@@ -610,20 +690,29 @@ def run_once() -> dict:
         nt = upsert_tasks(conn, account_id, tasks)
         ne = 0
         notify_events = []
+        ndet = 0
         try:
             ne, notify_events = upsert_emergency(conn, account_id, emg, today_d)
         except Exception as e:
             conn.rollback()
             logger.warning('emg pg upsert failed (non-fatal): %s', e)
+        if emg:
+            try:
+                ndet = upsert_task_details(conn, account_id, client, emg, limit=15)
+            except Exception as e:
+                conn.rollback()
+                logger.warning('task detail sync failed (non-fatal): %s', e)
     finally:
         conn.close()
 
     nn = push_notify_events(notify_events)
-    logger.info('pg ingest ok districts=%s vehicles=%s tasks=%s emg_pg=%s notify=%s',
-                nd, nv, nt, ne, nn)
+    logger.info(
+        'pg ingest ok districts=%s vehicles=%s tasks=%s emg_pg=%s details=%s notify=%s',
+        nd, nv, nt, ne, ndet, nn,
+    )
     return {
         'districts': nd, 'vehicles': nv, 'tasks': nt,
-        'emergency_report': ne, 'notify': nn,
+        'emergency_report': ne, 'task_details': ndet, 'notify': nn,
     }
 
 
