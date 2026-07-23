@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import threading
 import time
@@ -1307,6 +1308,73 @@ def _persist_tasks(account_id: int, tasks: list):
         logger.warning(f"_persist_tasks failed (non-fatal): {e}")
 
 
+def ingest_bridge_payload(account_id: int, payload: dict) -> dict:
+    """Accept PK-VPS bridge payload and upsert Ufone caches (+ optional EMG).
+
+    Payload keys (all optional except needing at least one data section):
+      vehicles / vehicles_raw — normalized or raw ambulance list
+      tasks / tasks_raw — normalized or raw task dashboard rows
+      emergency_report — raw getAmbulanceTaskReport rows
+      maintenance / maintenance_raw — optional
+      task_date — YYYY-MM-DD for emergency sync default
+    """
+    if not account_id:
+        raise ValueError('account_id required')
+    result = {
+        'account_id': account_id,
+        'vehicles': 0,
+        'tasks': 0,
+        'emergency_report': 0,
+        'maintenance': 0,
+    }
+
+    vehicles = payload.get('vehicles')
+    if vehicles is None and payload.get('vehicles_raw') is not None:
+        vehicles = [normalize_ambulance(r) for r in (payload.get('vehicles_raw') or [])
+                    if isinstance(r, dict)]
+    if vehicles:
+        _persist_vehicles(account_id, vehicles)
+        with _live_cache_lock:
+            _live_cache[account_id] = (time.time(), list(vehicles))
+        result['vehicles'] = len(vehicles)
+
+    tasks = payload.get('tasks')
+    if tasks is None and payload.get('tasks_raw') is not None:
+        tasks = [normalize_task(r) for r in (payload.get('tasks_raw') or [])
+                 if isinstance(r, dict)]
+    if tasks:
+        _persist_tasks(account_id, tasks)
+        with _task_cache_lock:
+            _task_cache[account_id] = (time.time(), list(tasks))
+        result['tasks'] = len(tasks)
+
+    emg = payload.get('emergency_report')
+    if emg:
+        raw = [r for r in emg if isinstance(r, dict)]
+        result['emergency_report'] = sync_emergency_report_to_db(
+            account_id, raw, default_task_date=payload.get('task_date'))
+
+    maintenance = payload.get('maintenance')
+    if maintenance is None and payload.get('maintenance_raw') is not None:
+        maintenance = [normalize_maintenance(r)
+                       for r in (payload.get('maintenance_raw') or [])
+                       if isinstance(r, dict)]
+    if maintenance:
+        try:
+            _persist_maintenance(account_id, maintenance)
+            result['maintenance'] = len(maintenance)
+        except Exception as e:
+            logger.warning(f"ingest maintenance failed: {e}")
+
+    return result
+
+
+def bridge_only_mode() -> bool:
+    """When true, Render must not call bpocops directly (PK VPS bridge does)."""
+    return (os.environ.get('UFONE_BRIDGE_ONLY') or '').strip().lower() in (
+        '1', 'true', 'yes', 'on')
+
+
 # ── DB-first: Emergency Task Report sync ─────────────────────────────────────
 
 # Driver push notifications on task generate / close. Detection happens during
@@ -1789,6 +1857,10 @@ def _poll_loop(app):
 
 def start_polling(app):
     global _poll_thread
+    if bridge_only_mode():
+        logger.info(
+            "Ufone polling skipped (UFONE_BRIDGE_ONLY=1) — PK VPS bridge owns sync")
+        return
     if _poll_thread and _poll_thread.is_alive():
         return
     _poll_thread_stop.clear()

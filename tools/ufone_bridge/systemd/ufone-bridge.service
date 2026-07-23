@@ -1,0 +1,18 @@
+[Unit]
+Description=Ufone BPOCOPS PK VPS bridge worker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/ufone-bridge
+EnvironmentFile=/opt/ufone-bridge/.env
+ExecStart=/opt/ufone-bridge/venv/bin/python /opt/ufone-bridge/worker.py
+Restart=always
+RestartSec=15
+# Soft limit — worker itself backsoff on Ufone timeouts
+TimeoutStartSec=30
+
+[Install]
+WantedBy=multi-user.target

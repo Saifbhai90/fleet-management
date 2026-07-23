@@ -61,6 +61,13 @@ sync_state.json
 # PortalXS session tokens (contain login_id/device_id — never commit)
 portalxs_session*.json
 
+# Ufone BPOCOPS session / bridge secrets
+ufone_session*.json
+tools/ufone_bridge/.env
+tools/ufone_bridge/.vps_password
+tools/ufone_bridge/deploy_key
+tools/ufone_bridge/sessions/
+
 # C-01: Repo cleanup — untrack daedalOS (1,610 files) and scratch scripts
 daedalOS/
 scripts/_*.py

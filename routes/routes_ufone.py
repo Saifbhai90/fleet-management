@@ -32,9 +32,11 @@ from services.ufone_service import (
 from utils import pk_now, pk_date
 from datetime import datetime, timedelta
 import csv
+import hmac
 import io
 import json
 import logging
+import os
 import re
 import threading
 
@@ -1129,3 +1131,76 @@ def ufone_settings_stop_polling():
     except Exception as e:
         flash(f"Error: {e}", "danger")
     return redirect(url_for('ufone_settings'))
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# PK VPS bridge ingest (token auth — no session cookie)
+# ════════════════════════════════════════════════════════════════════════════
+
+def _bridge_token_ok() -> bool:
+    expected = (os.environ.get('UFONE_BRIDGE_TOKEN') or '').strip()
+    if not expected:
+        return False
+    got = (request.headers.get('X-Ufone-Bridge-Token') or '').strip()
+    if not got:
+        auth = (request.headers.get('Authorization') or '').strip()
+        if auth.lower().startswith('bearer '):
+            got = auth[7:].strip()
+    return bool(got) and hmac.compare_digest(got, expected)
+
+
+@app.route('/api/ufone/bridge/ingest', methods=['POST'])
+@csrf.exempt
+def api_ufone_bridge_ingest():
+    """Receive Ufone cache payloads from the Pakistan VPS bridge worker."""
+    if not (os.environ.get('UFONE_BRIDGE_TOKEN') or '').strip():
+        return jsonify({'ok': False, 'error': 'bridge token not configured'}), 503
+    if not _bridge_token_ok():
+        return jsonify({'ok': False, 'error': 'unauthorized'}), 401
+
+    payload = request.get_json(silent=True) or {}
+    account_id = payload.get('account_id') or request.args.get('account_id', type=int)
+    try:
+        account_id = int(account_id)
+    except (TypeError, ValueError):
+        account_id = 0
+    if not account_id:
+        return jsonify({'ok': False, 'error': 'account_id required'}), 400
+
+    acct = UfoneAccount.query.get(account_id)
+    if not acct or not acct.is_active:
+        return jsonify({'ok': False, 'error': 'account not found or inactive'}), 404
+
+    try:
+        from services.ufone_service import ingest_bridge_payload
+        result = ingest_bridge_payload(account_id, payload)
+        try:
+            acct.last_connected = pk_now()
+            acct.last_error = None
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+        return jsonify({'ok': True, 'result': result})
+    except Exception as e:
+        logger.exception('bridge ingest failed')
+        try:
+            acct.last_error = str(e)[:500]
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+        return jsonify({'ok': False, 'error': str(e)[:300]}), 500
+
+
+@app.route('/api/ufone/bridge/health', methods=['GET'])
+@csrf.exempt
+def api_ufone_bridge_health():
+    """Lightweight health check for the VPS worker (token required)."""
+    if not _bridge_token_ok():
+        return jsonify({'ok': False, 'error': 'unauthorized'}), 401
+    from services.ufone_service import bridge_only_mode, is_polling
+    return jsonify({
+        'ok': True,
+        'bridge_only': bridge_only_mode(),
+        'polling': is_polling(),
+        'time': pk_now().isoformat(),
+    })
