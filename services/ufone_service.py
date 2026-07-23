@@ -1235,13 +1235,17 @@ def get_summary_stats(account_id: int, vehicles: list = None) -> dict:
 # ── DB persistence helpers ───────────────────────────────────────────────────
 
 def _persist_vehicles(account_id: int, vehicles: list):
-    """Upsert UfoneVehicleCache rows (best-effort). Bulk-load existing rows once."""
+    """Upsert UfoneVehicleCache rows (best-effort). Load only touched regs."""
     from models import UfoneVehicleCache
     from app import db
     try:
+        regs = [v.get('reg_no') for v in vehicles if v.get('reg_no')]
+        if not regs:
+            return
         existing = {
             r.reg_no: r
-            for r in UfoneVehicleCache.query.filter_by(account_id=account_id).all()
+            for r in UfoneVehicleCache.query.filter_by(account_id=account_id)
+            .filter(UfoneVehicleCache.reg_no.in_(regs)).all()
         }
         for v in vehicles:
             reg = v.get('reg_no')
@@ -1272,13 +1276,18 @@ def _persist_vehicles(account_id: int, vehicles: list):
 
 
 def _persist_tasks(account_id: int, tasks: list):
-    """Upsert UfoneTaskCache rows (best-effort). Bulk-load existing once."""
+    """Upsert UfoneTaskCache rows (best-effort). Load only touched task ids."""
     from models import UfoneTaskCache
     from app import db
     try:
+        tids = [str(t.get('task_id') or t.get('id') or '') for t in tasks]
+        tids = [t for t in tids if t]
+        if not tids:
+            return
         existing = {
             r.task_id: r
-            for r in UfoneTaskCache.query.filter_by(account_id=account_id).all()
+            for r in UfoneTaskCache.query.filter_by(account_id=account_id)
+            .filter(UfoneTaskCache.task_id.in_(tids)).all()
         }
         for t in tasks:
             tid = str(t.get('task_id') or t.get('id') or '')
