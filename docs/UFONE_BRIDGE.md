@@ -21,6 +21,12 @@ Render sets `UFONE_BRIDGE_ONLY=1` so the in-app poller does not call Ufone
 | `UFONE_BRIDGE_TOKEN` | shared secret (same as VPS `/opt/ufone-bridge/.env`) |
 | `UFONE_BRIDGE_ONLY` | `1` |
 
+If `UFONE_BRIDGE_TOKEN` is empty, the app derives a token from `SECRET_KEY`
+(`HMAC-SHA256(SECRET_KEY, "ufone-bridge-v1")`). Prefer an explicit shared token.
+
+Current VPS worker expects the token stored in `tools/ufone_bridge/.bridge_token`
+(local) / `/opt/ufone-bridge/.env` (server). Paste that same value into Render.
+
 ## VPS deploy
 
 1. WebSouls → product 42557 → **SSH Keys** → paste `tools/ufone_bridge/deploy_key.pub`

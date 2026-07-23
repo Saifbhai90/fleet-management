@@ -1,5 +1,5 @@
-[Unit]
-Description=Ufone BPOCOPS PK VPS bridge worker
+﻿[Unit]
+Description=Ufone BPOCOPS PK VPS bridge worker (Postgres direct)
 After=network-online.target
 Wants=network-online.target
 
@@ -8,10 +8,9 @@ Type=simple
 User=root
 WorkingDirectory=/opt/ufone-bridge
 EnvironmentFile=/opt/ufone-bridge/.env
-ExecStart=/opt/ufone-bridge/venv/bin/python /opt/ufone-bridge/worker.py
+ExecStart=/opt/ufone-bridge/venv/bin/python /opt/ufone-bridge/worker_pg.py
 Restart=always
 RestartSec=15
-# Soft limit — worker itself backsoff on Ufone timeouts
 TimeoutStartSec=30
 
 [Install]
