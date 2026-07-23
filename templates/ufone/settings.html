@@ -96,12 +96,40 @@
     <div class="col-lg-4">
       <div class="ufone-card">
         <div class="ufone-header">
+          <h4><i class="bi bi-hdd-network"></i> Sync Mode</h4>
+        </div>
+        {% if bridge_only %}
+        <p class="mb-2"><span class="ufone-badge badge-active">PK VPS Bridge</span></p>
+        <p class="text-muted small mb-0">
+          Live Ufone data Pakistan VPS se aati hai.
+          Render <code>bpocops.ufone.com</code> ko direct call nahi karta —
+          is liye SSL cut / Test login error nahi aana chahiye.
+        </p>
+        {% else %}
+        <p class="mb-2"><span class="ufone-badge badge-inactive">Direct Render</span></p>
+        <p class="text-muted small mb-0">
+          Render khud Ufone login karta hai. Foreign IP pe SSL fail ho sakta hai.
+          Set <code>UFONE_BRIDGE_ONLY=1</code> for VPS bridge mode.
+        </p>
+        {% endif %}
+      </div>
+
+      <div class="ufone-card">
+        <div class="ufone-header">
           <h4><i class="bi bi-arrow-repeat"></i> Background Polling</h4>
         </div>
-        <p class="text-muted small mb-2">Automatically fetches live ambulance positions and tasks in the background every 30 seconds.</p>
+        <p class="text-muted small mb-2">
+          {% if bridge_only %}
+          Render pe polling band (bridge mode). Sync VPS <code>ufone-bridge</code> service karti hai.
+          {% else %}
+          Automatically fetches live ambulance positions and tasks in the background every 30 seconds.
+          {% endif %}
+        </p>
         <div class="d-flex align-items-center mb-3">
           <span class="me-2 fw-bold">Status:</span>
-          {% if polling_active %}
+          {% if bridge_only %}
+          <span class="ufone-badge badge-active">VPS handles sync</span>
+          {% elif polling_active %}
           <span class="ufone-badge badge-active"><span class="spinner-grow spinner-grow-sm" style="width:0.5rem;height:0.5rem;"></span> Running</span>
           {% else %}
           <span class="ufone-badge badge-inactive">Stopped</span>
@@ -110,11 +138,11 @@
         <div class="d-flex gap-2">
           <form method="post" action="{{ url_for('ufone_settings_start_polling') }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="ufone-btn" {% if polling_active %}disabled{% endif %}><i class="bi bi-play-fill"></i> Start</button>
+            <button type="submit" class="ufone-btn" {% if polling_active or bridge_only %}disabled{% endif %}><i class="bi bi-play-fill"></i> Start</button>
           </form>
           <form method="post" action="{{ url_for('ufone_settings_stop_polling') }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="ufone-btn ufone-btn-outline" {% if not polling_active %}disabled{% endif %}><i class="bi bi-stop-fill"></i> Stop</button>
+            <button type="submit" class="ufone-btn ufone-btn-outline" {% if not polling_active or bridge_only %}disabled{% endif %}><i class="bi bi-stop-fill"></i> Stop</button>
           </form>
         </div>
       </div>
