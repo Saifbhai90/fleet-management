@@ -1157,20 +1157,16 @@ def fetch_dashboard_counts(account_id: int, force: bool = False,
                     pass
             task_total = in_process
 
-        # Always consider vehicle/task cache freshness (VPS writes those every cycle).
-        # EMG-only synced_at goes stale when bridge dated rows with UTC "yesterday".
+        # Last Synced = task/EMG freshness only.
+        # Do NOT use vehicle updated_at — getAmbulanceList runs once at 11 PM
+        # and its stamp (often mixed TZ) falsely wins max() over live EMG sync.
         candidates = []
         if latest_sync:
             candidates.append(latest_sync)
-        latest_v = (UfoneVehicleCache.query.filter_by(account_id=account_id)
-                    .order_by(UfoneVehicleCache.updated_at.desc()).first())
         latest_t = (UfoneTaskCache.query.filter_by(account_id=account_id)
                     .order_by(UfoneTaskCache.updated_at.desc()).first())
-        if latest_v and latest_v.updated_at:
-            candidates.append(latest_v.updated_at)
         if latest_t and latest_t.updated_at:
             candidates.append(latest_t.updated_at)
-        # Also any EMG row synced recently (any task_date) — bridge may use UTC day.
         try:
             any_emg = (EmergencyTaskRecord.query
                        .filter(EmergencyTaskRecord.synced_at.isnot(None))
@@ -1185,12 +1181,20 @@ def fetch_dashboard_counts(account_id: int, force: bool = False,
 
         synced_iso = None
         if latest_sync:
-            # Naive DB timestamps are UTC from VPS NOW(); mark Z so the
-            # browser converts to PKT instead of treating them as local.
-            if getattr(latest_sync, 'tzinfo', None) is None:
-                synced_iso = latest_sync.isoformat() + 'Z'
-            else:
-                synced_iso = latest_sync.isoformat()
+            # Bridge now writes with SET TIME ZONE Asia/Karachi (naive = PKT).
+            # Older UTC-naive rows: if "as PKT" is >1h in the future, treat as UTC.
+            from datetime import timezone, timedelta as _td
+            pk_now_naive = datetime.utcnow() + _td(hours=5)
+            dt = latest_sync.replace(tzinfo=None) if getattr(latest_sync, 'tzinfo', None) else latest_sync
+            as_pk = dt
+            if as_pk > pk_now_naive + _td(hours=1):
+                as_pk = dt + _td(hours=5)
+            elif as_pk < pk_now_naive - _td(hours=2):
+                # Likely UTC from VPS before TZ fix (e.g. 22:03 UTC → 03:03 PKT)
+                converted = dt + _td(hours=5)
+                if converted <= pk_now_naive + _td(minutes=30):
+                    as_pk = converted
+            synced_iso = as_pk.replace(microsecond=0).isoformat() + '+05:00'
 
         data = {
             'total_ambulances': total_amb,

@@ -168,8 +168,9 @@ def db_connect():
 
 
 def _pg_session(conn) -> None:
-    """Keep bridge writes from hanging the VPS worker forever."""
+    """Keep bridge writes from hanging; store wall-clock as Pakistan time."""
     with conn.cursor() as cur:
+        cur.execute("SET TIME ZONE 'Asia/Karachi'")
         cur.execute("SET statement_timeout = '120s'")
         cur.execute("SET lock_timeout = '30s'")
     conn.commit()
@@ -494,6 +495,44 @@ def push_notify_events(events: list) -> int:
         return 0
 
 
+def _pk_now() -> datetime:
+    """Naive Pakistan local datetime (UTC+5)."""
+    return datetime.utcnow() + timedelta(hours=5)
+
+
+def _ambulance_stamp_path() -> Path:
+    return Path(_env('UFONE_SESSION_DIR', str(ROOT / 'sessions'))) / 'last_ambulance_sync_date.txt'
+
+
+def should_fetch_ambulances() -> bool:
+    """getAmbulanceList only once per PK day at/after 23:00 (11:00 PM).
+
+    BRIDGE_FORCE_AMBULANCES=1 → fetch this cycle (ops override).
+    """
+    if (_env('BRIDGE_FORCE_AMBULANCES') or '').lower() in ('1', 'true', 'yes', 'on'):
+        return True
+    now = _pk_now()
+    if now.hour != 23:
+        return False
+    stamp = _ambulance_stamp_path()
+    today = now.date().isoformat()
+    try:
+        if stamp.is_file() and stamp.read_text(encoding='utf-8').strip() == today:
+            return False
+    except Exception:
+        pass
+    return True
+
+
+def mark_ambulances_fetched() -> None:
+    stamp = _ambulance_stamp_path()
+    try:
+        stamp.parent.mkdir(parents=True, exist_ok=True)
+        stamp.write_text(_pk_now().date().isoformat(), encoding='utf-8')
+    except Exception as e:
+        logger.warning('could not write ambulance stamp: %s', e)
+
+
 def run_once() -> dict:
     username = _env('UFONE_USERNAME')
     password = _env('UFONE_PASSWORD')
@@ -513,10 +552,18 @@ def run_once() -> dict:
     logger.info('using PK calendar date %s (VPS UTC date would be %s)',
                 today, date.today().isoformat())
 
-    logger.info('fetching vehicles…')
-    vehicles = [normalize_ambulance(r) for r in (client.get_ambulance_list() or [])
-                if isinstance(r, dict) and r.get('Reg_No')]
-    logger.info('vehicles=%s; fetching tasks…', len(vehicles))
+    vehicles = []
+    if should_fetch_ambulances():
+        logger.info('fetching vehicles (daily 11:00 PM PKT window)…')
+        vehicles = [normalize_ambulance(r) for r in (client.get_ambulance_list() or [])
+                    if isinstance(r, dict) and r.get('Reg_No')]
+        logger.info('vehicles=%s', len(vehicles))
+        if vehicles:
+            mark_ambulances_fetched()
+    else:
+        logger.info('skipping getAmbulanceList (only once daily at 11:00 PM PKT)')
+
+    logger.info('fetching tasks…')
     tasks = [normalize_task(r) for r in (client.get_task_dashboard(
         start_date=today, end_date=today, visit_page=False) or [])
         if isinstance(r, dict)]
@@ -559,7 +606,7 @@ def run_once() -> dict:
     try:
         _pg_session(conn)
         nd = upsert_districts(conn, districts)
-        nv = upsert_vehicles(conn, account_id, vehicles)
+        nv = upsert_vehicles(conn, account_id, vehicles) if vehicles else 0
         nt = upsert_tasks(conn, account_id, tasks)
         ne = 0
         notify_events = []
