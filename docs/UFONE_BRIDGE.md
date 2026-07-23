@@ -3,16 +3,14 @@
 ## Architecture
 
 Pakistan VPS `185.228.92.23` (WebSouls PK VPS-1, Ubuntu 22.04) runs
-`tools/ufone_bridge/worker.py` as systemd unit `ufone-bridge`.
+`tools/ufone_bridge/worker_pg.py` as systemd unit `ufone-bridge`.
 
-It logs into `bpocops.ufone.com` from a PK IP and POSTs raw payloads to:
+It logs into `bpocops.ufone.com` from a PK IP and **writes Ufone vehicle/task
+caches directly to Render Postgres** (`DATABASE_URL`). Optional small HTTP
+batches can push emergency report rows via `/api/ufone/bridge/ingest`.
 
-`POST https://fleet-management-xdvj.onrender.com/api/ufone/bridge/ingest`
-
-Header: `X-Ufone-Bridge-Token: <UFONE_BRIDGE_TOKEN>`
-
-Render sets `UFONE_BRIDGE_ONLY=1` so the in-app poller does not call Ufone
-(TLS is cut from Render outbound IPs).
+Fleet UI on Render reads DB-first caches (`UFONE_BRIDGE_ONLY=1` disables
+direct bpocops polling from Render).
 
 ## Render env
 
