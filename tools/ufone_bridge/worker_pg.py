@@ -1,10 +1,16 @@
 #!/usr/bin/env python3
-"""Ufone bridge worker that writes directly to Render Postgres (no HTTP ingest)."""
+"""Ufone bridge worker that writes directly to Render Postgres (no HTTP ingest).
+
+IMPORTANT: Never POST large payloads to Render's web service — that OOMs the
+free dyno and causes periodic 502s (~every BRIDGE_INTERVAL_SEC). All writes
+go straight to DATABASE_URL from this VPS.
+"""
 from __future__ import annotations
 
 import json
 import logging
 import os
+import re
 import sys
 import time
 from datetime import date, datetime
@@ -12,9 +18,57 @@ from pathlib import Path
 
 import psycopg2
 import psycopg2.extras
-import requests
 
 from ufone_api_client import UfoneClient
+
+# getAmbulanceTaskReport API keys → emergency_task_record columns (subset used
+# for dashboard filters / KPI cards). Keep in sync with services/emg_tasks.py.
+REPORT_API_TO_EMG = {
+    'TaskId': 'task_id_ext',
+    'RequestFrom': 'request_from',
+    'Phone': 'phone',
+    'CLI': 'cli',
+    'Name': 'name',
+    'Husband': 'husband',
+    'Address': 'address',
+    'Location': 'location',
+    'HouseColor': 'house_color',
+    'DoorColor': 'door_color',
+    'NearestLandmark': 'nearest_landmark',
+    'EDD': 'edd',
+    'ClinicalDetails': 'clinical_details',
+    'DistrictName': 'district_name',
+    'TehsilName': 'tehsil_name',
+    'UCname': 'uc_name',
+    'ambRegNo': 'amb_reg_no',
+    'Status': 'status',
+    'ReceivedBy': 'received_by',
+    'Category': 'category',
+    'SubCategory': 'sub_category',
+    'FacilityName': 'facility_name',
+    'FacilityCode': 'facility_code',
+    'facilityType': 'facility_type',
+    'ChangeFacilityComments': 'change_facility_comments',
+    'CreatedDate': 'excel_created_date',
+    'CompletedDateTime': 'completed_date_time',
+    'CreatedBy': 'created_by',
+    'CreatedDate1': 'created_date1',
+    'CreatedTime': 'created_time',
+    'ClosingRemarks': 'closing_remarks',
+    'TaskClosedBy': 'task_closed_by',
+    'PatientCNIC': 'patient_cnic',
+    'PatientAdmissionNo': 'patient_admission_no',
+    'RequestFor': 'request_for',
+    'Closed_By': 'closed_by',
+    'CallerName': 'caller_name',
+    'taskStartLat': 'task_start_lat',
+    'taskStartLon': 'task_start_lon',
+    'taskEndLat': 'task_end_lat',
+    'taskEndLon': 'task_end_lon',
+    'rasCow': 'ras_cow',
+    'distanceInKM': 'distance_in_km',
+    'nearrestHealthFacility': 'nearrest_health_facility',
+}
 
 logging.basicConfig(
     level=logging.INFO,
@@ -225,30 +279,107 @@ def upsert_tasks(conn, account_id: int, tasks: list) -> int:
     return n
 
 
-def push_emg_http(account_id: int, items: list, today: str) -> int:
-    """Optional small HTTP batches for emergency report (best-effort)."""
-    token = _env('UFONE_BRIDGE_TOKEN')
-    base = _env('RENDER_INGEST_URL').rstrip('/')
-    if not token or not base or not items:
-        return 0
-    url = base if base.endswith('/ingest') else f'{base}/api/ufone/bridge/ingest'
-    total = 0
-    for i in range(0, len(items), 10):
-        part = items[i:i + 10]
+def _coerce_str(val):
+    if val is None:
+        return None
+    if isinstance(val, float) and val != val:  # NaN
+        return None
+    if isinstance(val, (int, float)):
+        return str(val)
+    s = str(val).strip()
+    return s if s else None
+
+
+def _parse_task_date(raw: dict, fallback: date) -> date:
+    s = _coerce_str(raw.get('CreatedDate') or raw.get('CreatedDate1') or '')
+    if not s:
+        return fallback
+    s0 = s.split()[0][:10]
+    for fmt in ('%Y-%m-%d', '%m/%d/%Y', '%d/%m/%Y'):
         try:
-            r = requests.post(
-                url,
-                headers={'X-Ufone-Bridge-Token': token, 'User-Agent': 'ufone-bridge-pg/1.0'},
-                json={'account_id': account_id, 'task_date': today, 'emergency_report': part},
-                timeout=90,
+            return datetime.strptime(s0, fmt).date()
+        except ValueError:
+            continue
+    m = re.match(r'^(\d{1,2})/(\d{1,2})/(\d{4})', s)
+    if m:
+        try:
+            return date(int(m.group(3)), int(m.group(1)), int(m.group(2)))
+        except ValueError:
+            pass
+    return fallback
+
+
+def map_emg_row(raw: dict, account_id: int, today: date) -> dict | None:
+    tid = _coerce_str(raw.get('TaskId') or raw.get('id'))
+    if not tid:
+        return None
+    fields = {}
+    for api_key, db_col in REPORT_API_TO_EMG.items():
+        val = _coerce_str(raw.get(api_key))
+        if val is not None:
+            fields[db_col] = val
+    fields['task_id_ext'] = tid
+    fields['task_date'] = _parse_task_date(raw, today)
+    fields['upload_date'] = today
+    fields['account_id'] = account_id
+    fields['source'] = 'api'
+    return fields
+
+
+def upsert_emergency(conn, account_id: int, items: list, today: date) -> int:
+    """Write emergency report rows straight to Postgres (no Render HTTP)."""
+    if not items:
+        return 0
+    n = 0
+    update_cols = [
+        'request_from', 'phone', 'cli', 'name', 'husband', 'address', 'location',
+        'house_color', 'door_color', 'nearest_landmark', 'edd', 'clinical_details',
+        'district_name', 'tehsil_name', 'uc_name', 'amb_reg_no', 'status',
+        'received_by', 'category', 'sub_category', 'facility_name', 'facility_code',
+        'facility_type', 'change_facility_comments', 'excel_created_date',
+        'completed_date_time', 'created_by', 'created_date1', 'created_time',
+        'closing_remarks', 'task_closed_by', 'patient_cnic', 'patient_admission_no',
+        'request_for', 'closed_by', 'caller_name', 'task_start_lat', 'task_start_lon',
+        'task_end_lat', 'task_end_lon', 'ras_cow', 'distance_in_km',
+        'nearrest_health_facility', 'task_date', 'upload_date', 'account_id', 'source',
+    ]
+    with conn.cursor() as cur:
+        for raw in items:
+            if not isinstance(raw, dict):
+                continue
+            row = map_emg_row(raw, account_id, today)
+            if not row:
+                continue
+            tid = row['task_id_ext']
+            cur.execute(
+                """
+                SELECT id FROM emergency_task_record
+                WHERE task_id_ext=%s
+                ORDER BY task_date DESC NULLS LAST, id DESC
+                LIMIT 1
+                """,
+                (tid,),
             )
-            if r.status_code < 400:
-                total += (r.json().get('result') or {}).get('emergency_report', len(part))
-            time.sleep(1.0)
-        except Exception as e:
-            logger.warning('emg http batch failed: %s', e)
-            break
-    return total
+            found = cur.fetchone()
+            if found:
+                sets = ', '.join(f'{c}=%s' for c in update_cols)
+                vals = [row.get(c) for c in update_cols] + [found[0]]
+                cur.execute(
+                    f"UPDATE emergency_task_record SET {sets}, synced_at=NOW() WHERE id=%s",
+                    vals,
+                )
+            else:
+                cols = ['task_id_ext'] + update_cols + ['synced_at', 'created_at']
+                placeholders = ', '.join(['%s'] * (len(cols) - 2) + ['NOW()', 'NOW()'])
+                col_sql = ', '.join(cols)
+                vals = [row.get('task_id_ext')] + [row.get(c) for c in update_cols]
+                cur.execute(
+                    f"INSERT INTO emergency_task_record ({col_sql}) VALUES ({placeholders})",
+                    vals,
+                )
+            n += 1
+    conn.commit()
+    return n
 
 
 def run_once() -> dict:
@@ -264,7 +395,8 @@ def run_once() -> dict:
 
     client = UfoneClient(username, password, session_key=f'bridge_{account_id}')
     client.connect(reuse_session=True)
-    today = date.today().strftime('%Y-%m-%d')
+    today_d = date.today()
+    today = today_d.strftime('%Y-%m-%d')
 
     vehicles = [normalize_ambulance(r) for r in (client.get_ambulance_list() or [])
                 if isinstance(r, dict) and r.get('Reg_No')]
@@ -296,11 +428,11 @@ def run_once() -> dict:
         nd = upsert_districts(conn, districts)
         nv = upsert_vehicles(conn, account_id, vehicles)
         nt = upsert_tasks(conn, account_id, tasks)
+        ne = upsert_emergency(conn, account_id, emg, today_d)
     finally:
         conn.close()
 
-    ne = push_emg_http(account_id, emg, today)
-    logger.info('pg ingest ok districts=%s vehicles=%s tasks=%s emg_http=%s',
+    logger.info('pg ingest ok districts=%s vehicles=%s tasks=%s emg_pg=%s',
                 nd, nv, nt, ne)
     return {'districts': nd, 'vehicles': nv, 'tasks': nt, 'emergency_report': ne}
 
