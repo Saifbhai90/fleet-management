@@ -139,6 +139,15 @@ def normalize_ambulance(raw: dict) -> dict:
     }
 
 
+def _to_int(val, default=None):
+    try:
+        if val is None or val == '':
+            return default
+        return int(float(val))
+    except (TypeError, ValueError):
+        return default
+
+
 def normalize_task(raw: dict) -> dict:
     return {
         'task_id': str(raw.get('TaskId') or raw.get('id') or ''),
@@ -154,8 +163,69 @@ def normalize_task(raw: dict) -> dict:
         'request_from': raw.get('RequestFrom'),
         'distance': _to_float(raw.get('Distance') or raw.get('distanceInKM')),
         'is_transfer': bool(raw.get('isTransfer') or raw.get('isTransfer2')),
+        # Ufone dashboard age (minutes since create) — used for overdue notify
+        'minutes_created': _to_int(raw.get('MinutsCreated') or raw.get('MinutesCreated')),
+        'cli': raw.get('CLI') or raw.get('cli') or '',
+        'category': raw.get('Category') or raw.get('category') or '',
         'raw_json': json.dumps(raw, default=str),
     }
+
+
+def _notify_payload_from_task(t: dict) -> dict:
+    return {
+        'task_id': t.get('task_id'),
+        'amb_reg_no': t.get('ambulance_reg'),
+        'patient_name': t.get('patient_name'),
+        'phone': t.get('phone'),
+        'cli': t.get('cli') or '',
+        'pickup': t.get('address') or '',
+        'destination': t.get('facility') or '',
+        'category': t.get('category') or '',
+        'completed_date_time': '',
+        'minutes_open': t.get('minutes_created'),
+    }
+
+
+def ensure_task_event_notify_table(conn) -> None:
+    """Dedupe table for one-shot events (e.g. overdue_close)."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS ufone_task_event_notify (
+              id SERIAL PRIMARY KEY,
+              account_id INTEGER NOT NULL,
+              task_id VARCHAR(50) NOT NULL,
+              event_type VARCHAR(30) NOT NULL,
+              sent_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+              UNIQUE (account_id, task_id, event_type)
+            )
+            """
+        )
+    conn.commit()
+
+
+def _mark_event_notify_sent(conn, account_id: int, task_id: str, event_type: str) -> bool:
+    """Return True if this is the first send (row inserted), False if already sent."""
+    if not task_id:
+        return False
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO ufone_task_event_notify (account_id, task_id, event_type)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (account_id, task_id, event_type) DO NOTHING
+            RETURNING id
+            """,
+            (account_id, str(task_id), event_type),
+        )
+        row = cur.fetchone()
+    conn.commit()
+    return row is not None
+
+
+def _status_is_complete(status) -> bool:
+    s = (status or '').strip().lower()
+    return ('complete' in s) and ('incomplete' not in s)
 
 
 def db_connect():
@@ -236,12 +306,22 @@ def upsert_vehicles(conn, account_id: int, vehicles: list) -> int:
     return len(rows)
 
 
-def upsert_tasks(conn, account_id: int, tasks: list) -> int:
+def upsert_tasks(conn, account_id: int, tasks: list) -> tuple[int, list]:
+    """Upsert dashboard tasks. Returns (count, generate_notify_events).
+
+    Generate fires when a task_id is first seen in ufone_task_cache (every ~3 min
+    scan). Skips flood when cache was empty (first fill).
+    """
     if not tasks:
-        return 0
-    # task_id unique per account may not have unique constraint; emulate upsert
+        return 0, []
+    events = []
     n = 0
     with conn.cursor() as cur:
+        cur.execute(
+            "SELECT 1 FROM ufone_task_cache WHERE account_id=%s LIMIT 1",
+            (account_id,),
+        )
+        had_prior = cur.fetchone() is not None
         for t in tasks:
             tid = t.get('task_id')
             if not tid:
@@ -288,9 +368,101 @@ def upsert_tasks(conn, account_id: int, tasks: list) -> int:
                         t.get('is_transfer'), t.get('raw_json'),
                     ),
                 )
+                if had_prior and not _status_is_complete(t.get('status')):
+                    events.append({**_notify_payload_from_task(t), 'event': 'generate'})
             n += 1
     conn.commit()
-    return n
+    return n, events
+
+
+def _norm_reg_key(val: str) -> str:
+    return re.sub(r'[^A-Za-z0-9]', '', (val or '').upper())
+
+
+def _load_vehicle_project_reminder_map(conn) -> dict:
+    """Map normalized vehicle_no → ufone_close_reminder_minutes (0 = off).
+
+    Also indexes exact and base-token keys for Ufone tags like 'GBF-25-425 COW'.
+    """
+    # Ensure column exists on older DBs (Render may not have run migration yet)
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            ALTER TABLE project
+            ADD COLUMN IF NOT EXISTS ufone_close_reminder_minutes INTEGER DEFAULT 0
+            """
+        )
+    conn.commit()
+
+    mapping = {}
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT v.vehicle_no, COALESCE(p.ufone_close_reminder_minutes, 0) AS mins
+            FROM vehicle v
+            LEFT JOIN project p ON p.id = v.project_id
+            WHERE v.vehicle_no IS NOT NULL AND TRIM(v.vehicle_no) <> ''
+            """
+        )
+        for vehicle_no, mins in cur.fetchall():
+            vn = (vehicle_no or '').strip()
+            if not vn:
+                continue
+            try:
+                mins_i = int(mins or 0)
+            except (TypeError, ValueError):
+                mins_i = 0
+            mapping[vn] = mins_i
+            mapping[_norm_reg_key(vn)] = mins_i
+            base = vn.split()[0].strip()
+            if base and base != vn:
+                mapping[base] = mins_i
+                mapping[_norm_reg_key(base)] = mins_i
+    return mapping
+
+
+def _reminder_minutes_for_amb(amb_reg_no, reminder_map: dict) -> int:
+    """Resolve project reminder minutes for an ambulance reg; 0 = off / unknown."""
+    if not amb_reg_no or not reminder_map:
+        return 0
+    reg = str(amb_reg_no).strip()
+    if not reg:
+        return 0
+    base = reg.split()[0].strip() if ' ' in reg else reg
+    for key in (reg, base, _norm_reg_key(reg), _norm_reg_key(base)):
+        if key in reminder_map:
+            return int(reminder_map[key] or 0)
+    return 0
+
+
+def collect_overdue_close_events(conn, account_id: int, tasks: list) -> list:
+    """Open dashboard tasks past per-project threshold → one-shot overdue_close.
+
+    Threshold comes from Project.ufone_close_reminder_minutes via Vehicle.project_id.
+    0 / missing project / unmatched vehicle = skip (no reminder).
+    """
+    if not tasks:
+        return []
+    ensure_task_event_notify_table(conn)
+    reminder_map = _load_vehicle_project_reminder_map(conn)
+    events = []
+    for t in tasks:
+        tid = t.get('task_id')
+        if not tid or _status_is_complete(t.get('status')):
+            continue
+        mins = t.get('minutes_created')
+        if mins is None:
+            continue
+        threshold = _reminder_minutes_for_amb(t.get('ambulance_reg'), reminder_map)
+        if threshold <= 0 or mins < threshold:
+            continue
+        if not _mark_event_notify_sent(conn, account_id, tid, 'overdue_close'):
+            continue
+        payload = _notify_payload_from_task(t)
+        payload['minutes_open'] = mins
+        payload['event'] = 'overdue_close'
+        events.append(payload)
+    return events
 
 
 def _coerce_str(val):
@@ -340,16 +512,13 @@ def map_emg_row(raw: dict, account_id: int, today: date) -> dict | None:
     return fields
 
 
-def _status_is_complete(status) -> bool:
-    s = (status or '').strip().lower()
-    return ('complete' in s) and ('incomplete' not in s)
-
-
 def upsert_emergency(conn, account_id: int, items: list, today: date) -> tuple[int, list]:
     """Bulk-write emergency report rows to Postgres (no Render HTTP).
 
-    Returns (upsert_count, notify_events) where notify_events are tiny
-    generate/close payloads for Render's /api/ufone/bridge/notify.
+    Returns (upsert_count, notify_events).
+    - close: status transition to complete (primary close source)
+    - generate: FALLBACK only when task was never in ufone_task_cache
+      (dashboard is primary generate source every ~3 min)
     """
     if not items:
         return 0, []
@@ -407,6 +576,20 @@ def upsert_emergency(conn, account_id: int, items: list, today: date) -> tuple[i
             for rid, tid, st in cur.fetchall():
                 existing[tid] = (rid, st)
 
+        # task_ids already known to dashboard cache → skip EMG generate
+        cached_tids = set()
+        for i in range(0, len(tids), 500):
+            chunk = tids[i:i + 500]
+            cur.execute(
+                """
+                SELECT task_id FROM ufone_task_cache
+                WHERE account_id=%s AND task_id = ANY(%s)
+                """,
+                (account_id, chunk),
+            )
+            for (tid,) in cur.fetchall():
+                cached_tids.add(tid)
+
         to_update = []
         to_insert = []
         for row in rows:
@@ -426,7 +609,9 @@ def upsert_emergency(conn, account_id: int, items: list, today: date) -> tuple[i
                     'completed_date_time': row.get('completed_date_time') or '',
                 }
                 if prior is None:
-                    events.append({**payload, 'event': 'generate'})
+                    # Fallback generate: dashboard never saw this task
+                    if tid not in cached_tids and not _status_is_complete(new_status):
+                        events.append({**payload, 'event': 'generate'})
                 elif (not _status_is_complete(prior[1])
                       and _status_is_complete(new_status)):
                     events.append({**payload, 'event': 'close'})
@@ -738,16 +923,24 @@ def run_once() -> dict:
 
     logger.info('writing to Postgres…')
     conn = db_connect()
+    notify_events = []
     try:
         _pg_session(conn)
         nd = upsert_districts(conn, districts)
         nv = upsert_vehicles(conn, account_id, vehicles) if vehicles else 0
-        nt = upsert_tasks(conn, account_id, tasks)
+        nt, dash_events = upsert_tasks(conn, account_id, tasks)
+        notify_events.extend(dash_events)
+        try:
+            overdue_events = collect_overdue_close_events(conn, account_id, tasks)
+            notify_events.extend(overdue_events)
+        except Exception as e:
+            conn.rollback()
+            logger.warning('overdue notify collect failed (non-fatal): %s', e)
         ne = 0
-        notify_events = []
         ndet = 0
         try:
-            ne, notify_events = upsert_emergency(conn, account_id, emg, today_d)
+            ne, emg_events = upsert_emergency(conn, account_id, emg, today_d)
+            notify_events.extend(emg_events)
         except Exception as e:
             conn.rollback()
             logger.warning('emg pg upsert failed (non-fatal): %s', e)
@@ -762,9 +955,12 @@ def run_once() -> dict:
     finally:
         conn.close()
 
+    # Cap batch size for Render notify endpoint
+    notify_events = notify_events[:80]
     nn = push_notify_events(notify_events)
     logger.info(
-        'pg ingest ok districts=%s vehicles=%s tasks=%s emg_pg=%s details=%s notify=%s',
+        'pg ingest ok districts=%s vehicles=%s tasks=%s emg_pg=%s details=%s notify=%s '
+        '(gen/overdue/close mix)',
         nd, nv, nt, ne, ndet, nn,
     )
     return {

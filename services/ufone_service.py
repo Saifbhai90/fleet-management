@@ -1624,13 +1624,26 @@ def _clean_notify_text(val) -> str:
     return s
 
 
+def _format_open_duration(minutes) -> str:
+    """Human duration for overdue notify, e.g. 90 → '01 h 30 m'."""
+    try:
+        m = int(minutes)
+    except (TypeError, ValueError):
+        m = 90
+    if m < 0:
+        m = 0
+    h, rem = divmod(m, 60)
+    return f'{h:02d} h {rem:02d} m'
+
+
 def _build_task_notify_message(ev: dict) -> str:
-    """Driver push body — generate (full) vs close (short)."""
+    """Driver push body — generate / close / overdue_close."""
     tid = _display_task_id(ev.get('task_id'))
     phone = _clean_notify_text(ev.get('phone')) or '—'
     name = _clean_notify_text(ev.get('patient_name') or ev.get('name')) or '—'
+    event = ev.get('event')
 
-    if ev.get('event') == 'close':
+    if event == 'close':
         category = _clean_notify_text(ev.get('category')) or '—'
         completed = _clean_notify_text(ev.get('completed_date_time')) or '—'
         return (
@@ -1641,6 +1654,17 @@ def _build_task_notify_message(ev: dict) -> str:
     cli = _clean_notify_text(ev.get('cli')) or '—'
     pickup = _clean_notify_text(ev.get('pickup')) or '—'
     dest = _clean_notify_text(ev.get('destination')) or '—'
+    amb = _clean_notify_text(ev.get('amb_reg_no') or ev.get('ambulance')) or '—'
+
+    if event == 'overdue_close':
+        dur = _format_open_duration(ev.get('minutes_open') or 90)
+        return (
+            f'{dur} ho gaye hain. Task close karwa dein. '
+            f'Task ID: {tid}, Phone no: {phone}, Name: {name}, '
+            f'Ambulance: {amb}, Pickup: {pickup}, Destination: {dest}'
+        )
+
+    # generate (default)
     return (
         f'Task ID: {tid}, Phone no: {phone} CLI: {cli}, '
         f'Name: {name}, Pickup: {pickup}, Destination: {dest}'
@@ -1648,8 +1672,8 @@ def _build_task_notify_message(ev: dict) -> str:
 
 
 def _send_task_event_notifications(events: list):
-    """events: list of dicts with task fields + event ∈ {'generate','close'}.
-    Best-effort — never raises."""
+    """events: list of dicts with task fields + event ∈
+    {'generate','close','overdue_close'}. Best-effort — never raises."""
     if not events:
         return
     try:
@@ -1664,16 +1688,22 @@ def _send_task_event_notifications(events: list):
             return
     for ev in events:
         try:
+            event = ev.get('event')
+            if event not in ('generate', 'close', 'overdue_close'):
+                continue
             _veh, drivers = _match_vehicle_drivers(ev.get('amb_reg_no'))
             if not drivers:
                 continue
             msg = _build_task_notify_message(ev)
-            if ev['event'] == 'generate':
+            if event == 'generate':
                 title = 'Nayi Task Assign'
                 ntype = 'info'
-            else:  # close
+            elif event == 'close':
                 title = 'Task Complete'
                 ntype = 'success'
+            else:
+                title = 'Task close karwa dein'
+                ntype = 'warning'
             for drv in drivers:
                 uid = get_user_id_for_driver(drv)
                 if not uid:
@@ -1746,7 +1776,7 @@ def sync_emergency_report_to_db(account_id: int, items: list,
     Accepts raw getAmbulanceTaskReport dicts (57 fields). Keyed by
     (task_id_ext, task_date). Returns count upserted.
     """
-    from models import EmergencyTaskRecord
+    from models import EmergencyTaskRecord, UfoneTaskCache
     from app import db
     from datetime import date as _date
     from emg_tasks import (
@@ -1808,7 +1838,16 @@ def sync_emergency_report_to_db(account_id: int, items: list,
                     'completed_date_time': fields.get('completed_date_time') or '',
                 }
                 if is_new:
-                    events.append({**notify_payload, 'event': 'generate'})
+                    # Generate primary path is dashboard cache (VPS). EMG only
+                    # as fallback when task never appeared in ufone_task_cache.
+                    in_dash = (
+                        UfoneTaskCache.query.filter_by(
+                            account_id=account_id, task_id=str(tid)
+                        ).first()
+                        is not None
+                    )
+                    if not in_dash and not _status_is_complete(new_status):
+                        events.append({**notify_payload, 'event': 'generate'})
                 elif prior and (not _status_is_complete(prior.status)
                                 and _status_is_complete(new_status)):
                     events.append({**notify_payload, 'event': 'close'})

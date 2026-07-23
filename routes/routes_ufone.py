@@ -1282,7 +1282,7 @@ def api_ufone_bridge_notify():
     if not isinstance(events, list):
         return jsonify({'ok': False, 'error': 'events must be a list'}), 400
     # Hard cap — never accept bulk report-sized bodies again
-    events = [e for e in events if isinstance(e, dict)][:40]
+    events = [e for e in events if isinstance(e, dict)][:80]
     if not events:
         return jsonify({'ok': True, 'sent': 0})
 

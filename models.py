@@ -67,6 +67,8 @@ class Project(db.Model):
     company_id = db.Column(db.Integer, db.ForeignKey('company.id'), nullable=True)
     # New Task Entry: before this clock time (PKT), default/suggested date = yesterday (24h projects).
     task_entry_yesterday_default_until = db.Column(db.Time, nullable=True)
+    # Ufone open-task close reminder: 0/None = off; e.g. 90 = 1h30m, 300 = 5h.
+    ufone_close_reminder_minutes = db.Column(db.Integer, nullable=True, default=0)
     created_at = db.Column(db.DateTime, default=pk_now)
 
     # Relationships

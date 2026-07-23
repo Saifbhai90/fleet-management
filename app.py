@@ -562,6 +562,7 @@ if _run_startup_tasks:
                 ('oil_work_order', 'upload_manifest_json', 'TEXT'),
                 ('oil_work_order', 'upload_started_at', 'TIMESTAMP'),
                 ('oil_work_order', 'upload_finished_at', 'TIMESTAMP'),
+                ('project', 'ufone_close_reminder_minutes', 'INTEGER DEFAULT 0'),
             ]
             # Ensure device_app_version table exists
             if 'device_app_version' not in _inspector.get_table_names():

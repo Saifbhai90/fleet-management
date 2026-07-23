@@ -80,9 +80,30 @@ from sqlalchemy import delete
 from sqlalchemy import insert
 from sqlalchemy.orm import joinedload
 from sqlalchemy import select
+from sqlalchemy import inspect as sa_inspect
 from models import District, Project, Vehicle
 from vehicle_sort_utils import vehicle_order_by
 from utils import parse_date
+
+
+def _ensure_project_ufone_close_reminder_column():
+    """Add project.ufone_close_reminder_minutes if missing (pre-migration DBs)."""
+    try:
+        insp = sa_inspect(db.engine)
+        if 'project' not in insp.get_table_names():
+            return
+        cols = [c['name'] for c in insp.get_columns('project')]
+        if 'ufone_close_reminder_minutes' in cols:
+            return
+        db.session.execute(
+            text(
+                'ALTER TABLE project ADD COLUMN ufone_close_reminder_minutes '
+                'INTEGER DEFAULT 0'
+            )
+        )
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     from auth_utils import (
@@ -1061,6 +1082,7 @@ def role_list():
 @app.route('/control', methods=['GET', 'POST'])
 def form_control():
     """Attendance time windows: Global + hierarchical overrides (Project / District / Vehicle)."""
+    _ensure_project_ufone_close_reminder_column()
     global_form = AttendanceTimeControlForm()
     override_form = AttendanceTimeOverrideForm()
 
@@ -1139,7 +1161,8 @@ def form_control():
         flash('You do not have permission to access Settings.', 'danger')
         return redirect(url_for('user_list'))
     fc_tab_allowed = {k: _form_control_tab_allowed(k) for k in (
-        'attendance', 'freeze', 'oil_limits', 'daily_task_entry', 'vehicle_sort', 'accounting_maintenance', 'fuel_expense',
+        'attendance', 'freeze', 'oil_limits', 'daily_task_entry', 'vehicle_sort',
+        'accounting_maintenance', 'fuel_expense', 'ufone_reminders',
     )}
     vehicle_sort_project_id = request.args.get('project_id', type=int) or (
         projects[0].id if projects else None
@@ -1342,6 +1365,36 @@ def form_control():
         db.session.commit()
         flash('New Task Entry settings saved.', 'success')
         return redirect(url_for('form_control', settings_tab='daily_task_entry'))
+
+    if action == 'save_ufone_reminders':
+        denied = _form_control_tab_guard('ufone_reminders')
+        if denied:
+            return denied
+        _ensure_project_ufone_close_reminder_column()
+        invalid = []
+        for p in Project.query.all():
+            raw = (request.form.get(f'ufone_close_reminder_minutes_{p.id}') or '').strip()
+            if not raw:
+                p.ufone_close_reminder_minutes = 0
+                continue
+            try:
+                mins = int(float(raw))
+                if mins < 0:
+                    invalid.append(p.name)
+                    continue
+                p.ufone_close_reminder_minutes = mins
+            except (TypeError, ValueError):
+                invalid.append(p.name)
+        if invalid:
+            flash(
+                'Invalid minutes for: ' + ', '.join(invalid[:8])
+                + ('…' if len(invalid) > 8 else ''),
+                'warning',
+            )
+            return redirect(url_for('form_control', settings_tab='ufone_reminders'))
+        db.session.commit()
+        flash('Ufone Task Reminder settings saved.', 'success')
+        return redirect(url_for('form_control', settings_tab='ufone_reminders'))
 
     if action == 'save_vehicle_sort_order':
         denied = _form_control_tab_guard('vehicle_sort')

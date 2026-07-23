@@ -20,6 +20,7 @@ FORM_CONTROL_TAB_KEYS = (
     'vehicle_sort',
     'accounting_maintenance',
     'fuel_expense',
+    'ufone_reminders',
 )
 FORM_CONTROL_TAB_CODES = {
     'attendance': 'form_control_attendance',
@@ -29,6 +30,7 @@ FORM_CONTROL_TAB_CODES = {
     'vehicle_sort': 'form_control_vehicle_sort',
     'accounting_maintenance': 'form_control_accounting_maintenance',
     'fuel_expense': 'form_control_fuel_expense',
+    'ufone_reminders': 'form_control_ufone_reminders',
 }
 FORM_CONTROL_ALL_TAB_CODES = tuple(FORM_CONTROL_TAB_CODES.values())
 
@@ -373,6 +375,7 @@ PERMISSION_TREE = {
         ('form_control_vehicle_sort', 'Setting – Vehicle Sort Order'),
         ('form_control_accounting_maintenance', 'Setting – Accounting Maintenance'),
         ('form_control_fuel_expense', 'Setting – Fuel Expense Rules'),
+        ('form_control_ufone_reminders', 'Setting – Ufone Task Reminders'),
         ('notification_list', 'Notifications – List / View'),
         ('notification_add', 'Notifications – Create'),
         ('whats_new', "What's New"),
@@ -1081,6 +1084,7 @@ SECTION_PAGE_GROUPS = {
         ('Vehicle Sort Order', [('form_control_vehicle_sort', 'Vehicle Sort Order')]),
         ('Accounting Maintenance', [('form_control_accounting_maintenance', 'Accounting Maintenance')]),
         ('Fuel Expense Rules', [('form_control_fuel_expense', 'Fuel Expense Rules')]),
+        ('Ufone Task Reminders', [('form_control_ufone_reminders', 'Ufone Task Reminders')]),
         ('Notifications', [
             ('notification_list', 'List / View'),
             ('notification_add', 'Create'),
