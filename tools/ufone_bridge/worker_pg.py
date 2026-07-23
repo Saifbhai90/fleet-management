@@ -335,10 +335,9 @@ def map_emg_row(raw: dict, account_id: int, today: date) -> dict | None:
 
 
 def upsert_emergency(conn, account_id: int, items: list, today: date) -> int:
-    """Write emergency report rows straight to Postgres (no Render HTTP)."""
+    """Bulk-write emergency report rows to Postgres (no Render HTTP)."""
     if not items:
         return 0
-    n = 0
     update_cols = [
         'request_from', 'phone', 'cli', 'name', 'husband', 'address', 'location',
         'house_color', 'door_color', 'nearest_landmark', 'edd', 'clinical_details',
@@ -351,43 +350,77 @@ def upsert_emergency(conn, account_id: int, items: list, today: date) -> int:
         'task_end_lat', 'task_end_lon', 'ras_cow', 'distance_in_km',
         'nearrest_health_facility', 'task_date', 'upload_date', 'account_id', 'source',
     ]
+    rows = []
+    for raw in items:
+        if not isinstance(raw, dict):
+            continue
+        row = map_emg_row(raw, account_id, today)
+        if row:
+            rows.append(row)
+    if not rows:
+        return 0
+
+    # Prefer latest duplicate TaskId in the payload
+    by_tid = {}
+    for row in rows:
+        by_tid[row['task_id_ext']] = row
+    rows = list(by_tid.values())
+    tids = [r['task_id_ext'] for r in rows]
+
     with conn.cursor() as cur:
-        for raw in items:
-            if not isinstance(raw, dict):
-                continue
-            row = map_emg_row(raw, account_id, today)
-            if not row:
-                continue
-            tid = row['task_id_ext']
+        cur.execute(
+            "SET statement_timeout = '180s'"
+        )
+        # One lookup for all ids
+        existing = {}
+        for i in range(0, len(tids), 500):
+            chunk = tids[i:i + 500]
             cur.execute(
                 """
-                SELECT id FROM emergency_task_record
-                WHERE task_id_ext=%s
-                ORDER BY task_date DESC NULLS LAST, id DESC
-                LIMIT 1
+                SELECT DISTINCT ON (task_id_ext) id, task_id_ext
+                FROM emergency_task_record
+                WHERE task_id_ext = ANY(%s)
+                ORDER BY task_id_ext, task_date DESC NULLS LAST, id DESC
                 """,
-                (tid,),
+                (chunk,),
             )
-            found = cur.fetchone()
-            if found:
-                sets = ', '.join(f'{c}=%s' for c in update_cols)
-                vals = [row.get(c) for c in update_cols] + [found[0]]
-                cur.execute(
-                    f"UPDATE emergency_task_record SET {sets}, synced_at=NOW() WHERE id=%s",
-                    vals,
-                )
+            for rid, tid in cur.fetchall():
+                existing[tid] = rid
+
+        to_update = []
+        to_insert = []
+        for row in rows:
+            rid = existing.get(row['task_id_ext'])
+            if rid:
+                to_update.append([row.get(c) for c in update_cols] + [rid])
             else:
-                cols = ['task_id_ext'] + update_cols + ['synced_at', 'created_at']
-                placeholders = ', '.join(['%s'] * (len(cols) - 2) + ['NOW()', 'NOW()'])
-                col_sql = ', '.join(cols)
-                vals = [row.get('task_id_ext')] + [row.get(c) for c in update_cols]
-                cur.execute(
-                    f"INSERT INTO emergency_task_record ({col_sql}) VALUES ({placeholders})",
-                    vals,
+                to_insert.append(
+                    [row['task_id_ext']] + [row.get(c) for c in update_cols]
                 )
-            n += 1
+
+        if to_update:
+            sets = ', '.join(f'{c}=%s' for c in update_cols)
+            psycopg2.extras.execute_batch(
+                cur,
+                f"UPDATE emergency_task_record SET {sets}, synced_at=NOW() WHERE id=%s",
+                to_update,
+                page_size=100,
+            )
+        if to_insert:
+            cols = ['task_id_ext'] + update_cols + ['synced_at', 'created_at']
+            col_sql = ', '.join(cols)
+            # execute_values injects VALUES lists; append NOW() via SQL template
+            template = '(' + ','.join(['%s'] * (len(cols) - 2)) + ', NOW(), NOW())'
+            psycopg2.extras.execute_values(
+                cur,
+                f"INSERT INTO emergency_task_record ({col_sql}) VALUES %s",
+                to_insert,
+                template=template,
+                page_size=100,
+            )
     conn.commit()
-    return n
+    logger.info('emg upserted update=%s insert=%s', len(to_update), len(to_insert))
+    return len(rows)
 
 
 def run_once() -> dict:
@@ -429,20 +462,24 @@ def run_once() -> dict:
         logger.warning('districts fetch failed: %s', e)
     logger.info('districts=%s; fetching emergency report…', len(districts))
     emg = []
-    try:
-        emg_raw = client._call(
-            "ReportEmergencyTask.aspx", "getAmbulanceTaskReport",
-            {
-                "startDate": client._to_ufone_date(today),
-                "endDate": client._to_ufone_date(today),
-                "District": "", "Tehsil": "", "UnionCouncil": "", "TaskId": "",
-            },
-            visit_page=False, timeout=60, retries=1,
-        ) or []
-        emg = [r for r in emg_raw if isinstance(r, dict)]
-        logger.info('emergency rows=%s', len(emg))
-    except Exception as e:
-        logger.warning('emg fetch failed: %s', e)
+    skip_emg = (_env('BRIDGE_SKIP_EMG') or '0').lower() in ('1', 'true', 'yes')
+    if skip_emg:
+        logger.info('skipping emergency report this cycle')
+    else:
+        try:
+            emg_raw = client._call(
+                "ReportEmergencyTask.aspx", "getAmbulanceTaskReport",
+                {
+                    "startDate": client._to_ufone_date(today),
+                    "endDate": client._to_ufone_date(today),
+                    "District": "", "Tehsil": "", "UnionCouncil": "", "TaskId": "",
+                },
+                visit_page=False, timeout=60, retries=1,
+            ) or []
+            emg = [r for r in emg_raw if isinstance(r, dict)]
+            logger.info('emergency rows=%s', len(emg))
+        except Exception as e:
+            logger.warning('emg fetch failed: %s', e)
 
     logger.info('writing to Postgres…')
     conn = db_connect()
@@ -479,8 +516,13 @@ def main() -> int:
         logger.error('another bridge worker holds the lock — exiting')
         return 1
     failures = 0
+    cycle = 0
+    emg_every = max(1, _int_env('BRIDGE_EMG_EVERY_N', 2))  # EMG every Nth cycle
     while True:
         try:
+            cycle += 1
+            # Patch run_once via env flag for this cycle
+            os.environ['BRIDGE_SKIP_EMG'] = '0' if (cycle % emg_every == 1) else '1'
             run_once()
             failures = 0
         except Exception as e:
