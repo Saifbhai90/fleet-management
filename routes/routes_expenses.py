@@ -5622,23 +5622,39 @@ def _ensure_oil_work_order_schema():
         ('oil_expense', 'work_order_id', 'INTEGER'),
     ]
     try:
-        existing_tables = set(inspect(db.engine).get_table_names())
         for stmt in create_table_stmts:
-            db.session.execute(text(stmt))
-        db.session.commit()
-        # Refresh after CREATE TABLE so newly created tables skip ALTER below.
+            try:
+                db.session.execute(text(stmt))
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
         existing_tables = set(inspect(db.engine).get_table_names())
+        # Add columns one-by-one so a single failure cannot skip oil_expense.work_order_id.
         for _tbl, _col, _coltype in required_columns:
             if _tbl not in existing_tables:
                 continue
-            _existing_cols = {c['name'] for c in inspect(db.engine).get_columns(_tbl)}
-            if _col not in _existing_cols:
-                db.session.execute(text(f'ALTER TABLE {_tbl} ADD COLUMN {_col} {_coltype}'))
-        db.session.commit()
+            try:
+                _existing_cols = {c['name'] for c in inspect(db.engine).get_columns(_tbl)}
+                if _col not in _existing_cols:
+                    db.session.execute(text(f'ALTER TABLE {_tbl} ADD COLUMN {_col} {_coltype}'))
+                    db.session.commit()
+            except Exception:
+                db.session.rollback()
+                app.logger.exception('Oil WO schema: failed adding %s.%s', _tbl, _col)
         for stmt in index_stmts:
-            db.session.execute(text(stmt))
-        db.session.commit()
-        _oil_work_order_schema_ready['ok'] = True
+            try:
+                db.session.execute(text(stmt))
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+        # Ready only when the critical FK column exists (detail/list queries need it).
+        oil_cols = (
+            {c['name'] for c in inspect(db.engine).get_columns('oil_expense')}
+            if 'oil_expense' in existing_tables else set()
+        )
+        _oil_work_order_schema_ready['ok'] = 'work_order_id' in oil_cols
+        if not _oil_work_order_schema_ready['ok']:
+            app.logger.error('Oil WO schema: oil_expense.work_order_id still missing')
     except Exception:
         db.session.rollback()
         app.logger.exception('Oil work-order schema safety sync failed')

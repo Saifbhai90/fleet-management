@@ -479,6 +479,19 @@ if _run_startup_tasks:
         except Exception as _e:
             print(f"ufone tables ensure warning (non-fatal): {_e}")
 
+        # Oil / Maintenance work-order tables (create_all may race; force-create)
+        try:
+            from models import (
+                OilWorkOrder, OilWorkOrderAttachment,
+                MaintenanceWorkOrder, MaintenanceWorkOrderAttachment,
+            )
+            OilWorkOrder.__table__.create(db.engine, checkfirst=True)
+            OilWorkOrderAttachment.__table__.create(db.engine, checkfirst=True)
+            MaintenanceWorkOrder.__table__.create(db.engine, checkfirst=True)
+            MaintenanceWorkOrderAttachment.__table__.create(db.engine, checkfirst=True)
+        except Exception as _e:
+            print(f"work-order tables ensure warning (non-fatal): {_e}")
+
         # Auto-add missing columns to existing tables
         try:
             from sqlalchemy import inspect as _sa_inspect, text as _sa_text
@@ -538,6 +551,9 @@ if _run_startup_tasks:
                 ('emergency_task_record', 'source', "VARCHAR(16) DEFAULT 'excel'"),
                 ('emergency_task_record', 'synced_at', 'TIMESTAMP'),
                 ('emergency_task_record', 'excel_uploaded_at', 'TIMESTAMP'),
+                # Oil Work Orders: link multiple oil bills to one WO
+                ('oil_expense', 'work_order_id', 'INTEGER'),
+                ('maintenance_expense', 'work_order_id', 'INTEGER'),
             ]
             # Ensure device_app_version table exists
             if 'device_app_version' not in _inspector.get_table_names():
