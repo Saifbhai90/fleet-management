@@ -19,6 +19,15 @@
     font-size: .9375rem;
     padding: .5rem 1rem !important;
   }
+  .owo-job-media-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
+  .owo-job-media-card { border: 1px solid #e2e8f0; border-radius: 10px; padding: 8px; background: #fff; }
+  .owo-job-media-card img, .owo-job-media-card video {
+    width: 100%; height: 120px; object-fit: cover; border-radius: 8px; background: #f1f5f9; display: block;
+  }
+  .owo-job-media-fallback {
+    height: 120px; display: flex; align-items: center; justify-content: center;
+    background: #f1f5f9; border-radius: 8px;
+  }
 </style>
 <div class="container-fluid py-2 px-0 owo-page">
   <div class="owo-hero d-flex flex-wrap justify-content-between align-items-center gap-2">
@@ -44,11 +53,68 @@
       <div class="col-md-2"><span class="text-muted">District</span><div class="fw-semibold">{{ rec.district.name if rec.district else '—' }}</div></div>
       <div class="col-md-2"><span class="text-muted">Project</span><div class="fw-semibold">{{ rec.project.name if rec.project else '—' }}</div></div>
       <div class="col-md-2"><span class="text-muted">Vehicle</span><div class="fw-semibold">{{ rec.vehicle.vehicle_no if rec.vehicle else '—' }}</div></div>
-      <div class="col-md-2"><span class="text-muted">Total / Media</span><div class="fw-semibold">{{ "%.2f"|format(total_bill or 0) }} / {{ total_media or 0 }}</div></div>
+      <div class="col-md-2"><span class="text-muted">Total / Media</span><div class="fw-semibold">{{ "%.2f"|format(total_bill or 0) }} / {{ (total_media or 0) + (wo_media or 0) }}</div></div>
     </div>
     {% if rec.work_type %}<div class="mt-2"><span class="text-muted">Work type:</span> {{ rec.work_type }}</div>{% endif %}
     {% if rec.remarks %}<div class="mt-1"><span class="text-muted">Remarks:</span> {{ rec.remarks }}</div>{% endif %}
+    <div class="mt-2 small text-muted">Job WO media: <strong>{{ wo_media or 0 }}</strong> · Bill media: <strong>{{ total_media or 0 }}</strong></div>
   </div>
+
+  {% if rec.upload_status == 'processing' %}
+  <div id="owoDetailUploadBar" class="alert alert-info d-flex align-items-center gap-2 mb-2 py-2 px-3">
+    <span class="spinner-border spinner-border-sm flex-shrink-0"></span>
+    <span class="small" style="font-size:.875rem">Upload <strong id="owoDetailUploadPct">{{ ((rec.upload_done or 0) / (rec.upload_total or 1) * 100)|int }}%</strong> <span id="owoDetailUploadCount">({{ rec.upload_done or 0 }}/{{ rec.upload_total or 0 }})</span></span>
+  </div>
+  <script>
+  (function() {
+    var pk = {{ rec.id }};
+    function poll() {
+      fetch('/api/oil-work-order/upload-status/' + pk)
+        .then(function(r){return r.json();})
+        .then(function(d){
+          if (!d.ok) return;
+          var pctEl = document.getElementById('owoDetailUploadPct');
+          var cntEl = document.getElementById('owoDetailUploadCount');
+          var barEl = document.getElementById('owoDetailUploadBar');
+          if (pctEl) pctEl.textContent = (d.pct || d.percent) + '%';
+          if (cntEl) cntEl.textContent = '(' + d.done + '/' + d.total + ')';
+          if (d.status === 'processing') { setTimeout(poll, 2500); }
+          else if (barEl) { barEl.innerHTML = '<span class="text-success fw-semibold small">Upload complete — reload for media.</span>'; }
+        })
+        .catch(function(){setTimeout(poll,5000);});
+    }
+    setTimeout(poll, 2500);
+  })();
+  </script>
+  {% elif rec.upload_status in ('error', 'partial') %}
+  <div class="alert alert-warning mb-2 py-2 small">Kuch files upload nahi ho sakein — edit se dobara try karein.</div>
+  {% endif %}
+
+  {% if rec.attachments.count() %}
+  <div class="card border shadow-sm mb-2">
+    <div class="card-header fw-semibold small bg-light">
+      <i class="bi bi-camera-video me-1"></i>Job Photos / Videos
+      <span class="text-muted fw-normal">({{ wo_media or rec.attachments.count() }})</span>
+    </div>
+    <div class="card-body">
+      <div class="owo-job-media-grid">
+        {% for att in rec.attachments %}
+          {% set att_url = att.file_path|media_url %}
+          <a href="{{ att_url }}" target="_blank" class="owo-job-media-card text-decoration-none text-body">
+            {% if att.file_type == 'image' %}
+              <img src="{{ att_url }}" alt="{{ att.original_name or 'Attachment' }}" loading="lazy">
+            {% elif att.file_type == 'video' %}
+              <video src="{{ att_url }}" controls preload="metadata"></video>
+            {% else %}
+              <div class="owo-job-media-fallback"><i class="bi bi-paperclip me-1"></i>Open</div>
+            {% endif %}
+            <div class="small text-muted mt-1" style="word-break:break-word">{{ att.original_name or att.file_path }}</div>
+          </a>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
 
   <div class="card owo-linked border shadow-sm mt-2" id="linked-bills">
     <div class="card-header fw-semibold owo-linked__head border-0 rounded-0 d-flex justify-content-between align-items-center">

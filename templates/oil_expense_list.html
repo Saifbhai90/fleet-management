@@ -90,6 +90,10 @@
           </select>
         </div>
         <div class="col-md-2">
+          <label class="form-label small">Work Order #</label>
+          <input type="text" name="work_order_no" class="form-control form-control-sm" value="{{ work_order_no or '' }}" placeholder="OWO-....">
+        </div>
+        <div class="col-md-2">
           <button type="submit" class="btn btn-primary btn-sm w-100">
             <i class="bi bi-funnel me-1"></i>Apply Filter
           </button>
@@ -101,7 +105,7 @@
   <div class="card oil-list-card overflow-hidden">
     <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
       <span class="fw-semibold">Oil Expense {% if from_date %}from {{ from_date|ddmmyyyy }} to {{ to_date|ddmmyyyy }}{% else %}(Apply filter to view){% endif %}</span>
-      <input type="text" id="oilExpenseSearch" class="form-control form-control-sm bg-white text-dark" placeholder="Search vehicle, district, project, items..." style="max-width: 280px;" autocomplete="off">
+      <input type="text" id="oilExpenseSearch" class="form-control form-control-sm bg-white text-dark" placeholder="Search vehicle, work order, district, project, items..." style="max-width: 280px;" autocomplete="off">
     </div>
     <div class="card-body p-0">
       {% set umc = show_upload_media_columns|default(true) %}
@@ -113,6 +117,7 @@
               <th>District</th>
               <th>Project</th>
               <th>Vehicle</th>
+              <th>Work Order</th>
               <th>Date</th>
               <th>Prev / Curr / KM</th>
               <th>Items</th>
@@ -135,6 +140,13 @@
               <td>{{ r.district.name if r.district else '-' }}</td>
               <td>{{ r.project.name if r.project else '-' }}</td>
               <td class="fw-medium">{{ r.vehicle.vehicle_no if r.vehicle else '-' }}</td>
+              <td>
+                {% if r.work_order %}
+                  <a href="{{ url_for('oil_work_order_detail', pk=r.work_order.id) }}" class="text-decoration-none fw-semibold" style="color:#5b21b6;">{{ r.work_order.work_order_no }}</a>
+                {% else %}
+                  -
+                {% endif %}
+              </td>
               <td>{{ r.expense_date|ddmmyyyy }}</td>
               <td>{{ r.previous_reading|round(2) if r.previous_reading is not none else '-' }} / {{ r.current_reading|round(2) if r.current_reading is not none else '-' }} / {{ r.km|round(2) if r.km is not none else '-' }}</td>
               <td>
@@ -219,7 +231,7 @@
               </td>
             </tr>
             <tr class="oil-upload-expand-row d-none" data-record-id="{{ r.id }}">
-              <td colspan="{% if umc %}14{% else %}12{% endif %}" class="p-0 bg-body-secondary border-0">
+              <td colspan="{% if umc %}15{% else %}13{% endif %}" class="p-0 bg-body-secondary border-0">
                 <div class="px-3 py-2 m-2 ms-3 small shadow-sm bg-white border-start border-4 border-primary rounded-1">
                   <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
                     <span class="fw-semibold text-body"><i class="bi bi-cloud-upload me-1"></i>Upload status</span>
@@ -239,7 +251,7 @@
             </tr>
             {% else %}
             <tr id="oilExpenseNoDataRow">
-              <td colspan="{% if umc %}14{% else %}12{% endif %}" class="text-center py-5 text-muted">
+              <td colspan="{% if umc %}15{% else %}13{% endif %}" class="text-center py-5 text-muted">
                 <i class="bi bi-droplet display-6 d-block mb-2"></i>
                 No oil expense entries. <a href="{{ url_for('oil_expense_form') }}">Add Oil Expense</a>
               </td>
@@ -248,7 +260,7 @@
           </tbody>
           <tfoot>
             <tr class="table-warning fw-semibold">
-              <td colspan="7" class="text-end">Subtotal (Current Page)</td>
+              <td colspan="8" class="text-end">Subtotal (Current Page)</td>
               <td class="text-end">{{ "%.2f"|format(page_subtotal_purchase or 0) }}</td>
               <td class="text-end">{{ "%.2f"|format(page_subtotal_used or 0) }}</td>
               <td class="text-end">{{ "%.2f"|format(page_subtotal_balance or 0) }}</td>
@@ -256,7 +268,7 @@
               <td colspan="{% if umc %}3{% else %}1{% endif %}"></td>
             </tr>
             <tr class="table-info fw-bold">
-              <td colspan="7" class="text-end">Total (All Filtered Records)</td>
+              <td colspan="8" class="text-end">Total (All Filtered Records)</td>
               <td class="text-end">{{ "%.2f"|format(totals.purchase_qty or 0) }}</td>
               <td class="text-end">{{ "%.2f"|format(totals.used_qty or 0) }}</td>
               <td class="text-end">{{ "%.2f"|format(totals.balance_qty or 0) }}</td>

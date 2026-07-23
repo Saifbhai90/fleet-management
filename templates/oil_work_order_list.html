@@ -155,12 +155,24 @@
             <td class="text-end">{{ row.bill_count }}</td>
             <td class="text-end">{{ "%.2f"|format(row.total_amount or 0) }}</td>
             <td class="text-end pe-3 text-nowrap">
-              <a href="{{ url_for('oil_work_order_detail', pk=row.rec.id) }}{% if request.query_string %}?{{ request.query_string.decode() }}{% endif %}" class="btn btn-outline-secondary btn-sm" title="Detail">
-                <i class="bi bi-eye"></i>
-              </a>
+              <div class="expense-view-wrap d-inline-block align-top">
+                <button type="button" class="btn btn-outline-success btn-sm expense-view-eye" title="Invoice / Media" aria-expanded="false" aria-haspopup="true">
+                  <i class="bi bi-eye"></i>
+                </button>
+                <div class="expense-view-popover d-none border rounded-2 bg-white shadow p-2" style="min-width: 7.25rem;">
+                  <a class="btn btn-primary btn-sm w-100 mb-1 py-1" href="{{ url_for('oil_work_order_invoices', pk=row.rec.id) }}{% if request.query_string %}?{{ request.query_string.decode() }}{% endif %}">Invoice</a>
+                  <a class="btn btn-outline-success btn-sm w-100 py-1" href="{{ url_for('oil_work_order_unified_media', pk=row.rec.id) }}?return_to={{ request.full_path|url_quote }}">Media</a>
+                </div>
+              </div>
               <a href="{{ url_for('oil_work_order_form', pk=row.rec.id) }}{% if request.query_string %}?{{ request.query_string.decode() }}{% endif %}" class="btn btn-link btn-sm p-1" title="Edit">
                 <i class="bi bi-pencil"></i>
               </a>
+              <button type="button"
+                      class="btn btn-outline-success btn-sm js-owo-approval"
+                      title="Generate WhatsApp Oil Change Text"
+                      data-wo-id="{{ row.rec.id }}">
+                <i class="bi bi-whatsapp"></i>
+              </button>
               {% if wo_st == 'closed' %}
               <span class="d-inline-block btn btn-link btn-sm p-1 text-secondary" style="opacity:.45;cursor:not-allowed" title="Work order band — naya bill add nahi ho sakta">
                 <i class="bi bi-receipt"></i>
@@ -193,6 +205,52 @@
       </table>
     </div>
   </div>
+  </div>
+</div>
+
+<div class="modal fade" id="owoApprovalModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="owoApprovalModalTitle"><i class="bi bi-whatsapp me-1 text-success"></i>Oil Change WhatsApp Text</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="small text-muted mb-2">Driver, payment mode aur location select karein; text auto update ho jayega. Format Oil Expense list jaisa hai.</div>
+        <div class="row g-2 mb-2 align-items-end">
+          <div class="col-12 col-md-4">
+            <label class="form-label small mb-1" for="owoApprovalDriverSelect">Driver</label>
+            <select id="owoApprovalDriverSelect" class="form-select form-select-sm">
+              <option value="">-</option>
+            </select>
+          </div>
+          <div class="col-12 col-md-4">
+            <label class="form-label small mb-1" for="owoApprovalPaymentModeSelect">Payment Mode</label>
+            <select id="owoApprovalPaymentModeSelect" class="form-select form-select-sm">
+              <option value="Cash" selected>Cash</option>
+              <option value="Credit">Credit</option>
+              <option value="Card">Card</option>
+              <option value="In Hand Stock">In Hand Stock</option>
+            </select>
+          </div>
+          <div class="col-12 col-md-4">
+            <label class="form-label small mb-1" for="owoApprovalLocationInput">Location</label>
+            <input type="text" id="owoApprovalLocationInput" class="form-control form-control-sm" list="owoApprovalLocationList" placeholder="Enter location" autocomplete="off">
+            <datalist id="owoApprovalLocationList"></datalist>
+          </div>
+        </div>
+        <textarea id="owoApprovalText" class="form-control" rows="15" readonly placeholder="Oil change text loading..."></textarea>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-outline-primary btn-sm" id="owoApprovalCopyBtn">
+          <i class="bi bi-clipboard me-1"></i>Copy Text
+        </button>
+        <button type="button" class="btn btn-success btn-sm" id="owoApprovalWhatsappBtn">
+          <i class="bi bi-whatsapp me-1"></i>Open WhatsApp
+        </button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -354,5 +412,272 @@ document.addEventListener('DOMContentLoaded', function(){
     window.location.href = baseUrl + (qs.toString() ? ('?' + qs.toString()) : '');
   }, true);
 })();
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  function closeAll() {
+    document.querySelectorAll('.expense-view-popover').forEach(function(p) {
+      p.classList.add('d-none');
+      p.classList.remove('position-fixed');
+      p.style.left = '';
+      p.style.top = '';
+      p.style.zIndex = '';
+      if (p._expenseViewWrap && p.parentNode === document.body) {
+        p._expenseViewWrap.appendChild(p);
+      }
+      p._expenseViewWrap = null;
+    });
+    document.querySelectorAll('.expense-view-eye').forEach(function(b) { b.setAttribute('aria-expanded', 'false'); });
+  }
+  function positionPop(eye, pop) {
+    if (!eye || !pop) return;
+    var r = eye.getBoundingClientRect();
+    var pr = pop.getBoundingClientRect();
+    var w = Math.max(pr.width, pop.offsetWidth, 1);
+    var h = Math.max(pr.height, pop.offsetHeight, 1);
+    var sb = document.querySelector('.sidebar');
+    var minLeft = 8;
+    if (sb) {
+      var sr = sb.getBoundingClientRect();
+      if (sr.width > 0) minLeft = Math.max(minLeft, sr.right + 4);
+    }
+    var left = r.left;
+    if (left < minLeft) left = minLeft;
+    if (left + w > window.innerWidth - 8) left = window.innerWidth - w - 8;
+    if (left < minLeft) left = minLeft;
+    var top = r.bottom + 6;
+    if (top + h > window.innerHeight - 8) top = r.top - h - 6;
+    if (top < 8) top = 8;
+    pop.style.left = left + 'px';
+    pop.style.top = top + 'px';
+  }
+  document.querySelectorAll('.expense-view-eye').forEach(function(eye) {
+    eye.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      var wrap = eye.closest('.expense-view-wrap');
+      var pop = (wrap && (wrap._expenseViewPop || (wrap._expenseViewPop = wrap.querySelector('.expense-view-popover')))) || null;
+      if (!pop) return;
+      var wasOpen = !pop.classList.contains('d-none');
+      closeAll();
+      if (wasOpen) return;
+      document.body.appendChild(pop);
+      pop._expenseViewWrap = wrap;
+      pop.classList.remove('d-none');
+      pop.classList.add('position-fixed');
+      pop.style.zIndex = '10050';
+      requestAnimationFrame(function() {
+        requestAnimationFrame(function() { positionPop(eye, pop); });
+      });
+      eye.setAttribute('aria-expanded', 'true');
+    });
+  });
+  document.querySelectorAll('.expense-view-popover a[href]').forEach(function(a) {
+    a.addEventListener('click', function() { closeAll(); });
+  });
+  document.addEventListener('click', function(e) {
+    if (e.target && e.target.closest && (e.target.closest('.expense-view-wrap') || e.target.closest('.expense-view-popover'))) return;
+    closeAll();
+  });
+  document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeAll(); });
+  window.addEventListener('scroll', function() { closeAll(); }, true);
+  window.addEventListener('resize', function() { closeAll(); });
+});
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  var owoApprovalModalEl = document.getElementById('owoApprovalModal');
+  var owoApprovalTextEl = document.getElementById('owoApprovalText');
+  var owoApprovalCopyBtn = document.getElementById('owoApprovalCopyBtn');
+  var owoApprovalWhatsappBtn = document.getElementById('owoApprovalWhatsappBtn');
+  var owoApprovalDriverSelect = document.getElementById('owoApprovalDriverSelect');
+  var owoApprovalPaymentModeSelect = document.getElementById('owoApprovalPaymentModeSelect');
+  var owoApprovalLocationInput = document.getElementById('owoApprovalLocationInput');
+  var owoApprovalLocationList = document.getElementById('owoApprovalLocationList');
+  var owoApprovalModal = (window.bootstrap && owoApprovalModalEl) ? new window.bootstrap.Modal(owoApprovalModalEl, { backdrop: false, focus: false, keyboard: true }) : null;
+  var owoApprovalContextId = '';
+  var owoApprovalBusy = false;
+  var workspaceEmployeeId = "{{ workspace_employee_id or 0 }}";
+  var owoSavedLocationsKey = 'owoApprovalLocations:' + workspaceEmployeeId;
+
+  function owoRestoreBodyScroll() {
+    document.body.classList.remove('modal-open');
+    document.body.style.removeProperty('overflow');
+    document.body.style.removeProperty('padding-right');
+  }
+  if (owoApprovalModalEl) {
+    owoApprovalModalEl.addEventListener('shown.bs.modal', owoRestoreBodyScroll);
+    owoApprovalModalEl.addEventListener('hidden.bs.modal', owoRestoreBodyScroll);
+  }
+  function owoGetSavedLocations() {
+    try {
+      var raw = localStorage.getItem(owoSavedLocationsKey);
+      var arr = raw ? JSON.parse(raw) : [];
+      return Array.isArray(arr) ? arr.filter(function(x){ return typeof x === 'string' && x.trim(); }) : [];
+    } catch (e) { return []; }
+  }
+  function owoSetSavedLocations(list) {
+    try { localStorage.setItem(owoSavedLocationsKey, JSON.stringify(list.slice(0, 15))); } catch (e) {}
+  }
+  function owoRememberLocation(value) {
+    var v = (value || '').trim();
+    if (!v) return;
+    var list = owoGetSavedLocations().filter(function(x){ return x.toLowerCase() !== v.toLowerCase(); });
+    list.unshift(v);
+    owoSetSavedLocations(list);
+    owoRenderSavedLocations();
+  }
+  function owoRenderSavedLocations() {
+    if (!owoApprovalLocationList) return;
+    owoApprovalLocationList.innerHTML = '';
+    owoGetSavedLocations().forEach(function(loc) {
+      var o = document.createElement('option');
+      o.value = loc;
+      owoApprovalLocationList.appendChild(o);
+    });
+  }
+  function owoSetText(text) {
+    if (owoApprovalTextEl) owoApprovalTextEl.value = text || '';
+  }
+  function owoCurrentDriverId() { return owoApprovalDriverSelect ? (owoApprovalDriverSelect.value || '') : ''; }
+  function owoCurrentPaymentMode() { return owoApprovalPaymentModeSelect ? (owoApprovalPaymentModeSelect.value || 'Cash') : 'Cash'; }
+  function owoCurrentLocation() { return owoApprovalLocationInput ? (owoApprovalLocationInput.value || '').trim() : ''; }
+  function owoBuildUrl() {
+    if (!owoApprovalContextId) return '';
+    var qs = new URLSearchParams();
+    var did = owoCurrentDriverId();
+    var mode = owoCurrentPaymentMode();
+    var loc = owoCurrentLocation();
+    if (did) qs.set('driver_id', did);
+    if (mode) qs.set('payment_mode', mode);
+    if (loc) qs.set('location', loc);
+    return '/api/oil-work-order/approval-text/' + encodeURIComponent(owoApprovalContextId) + (qs.toString() ? ('?' + qs.toString()) : '');
+  }
+  function owoRenderDrivers(options, selectedId) {
+    if (!owoApprovalDriverSelect) return;
+    owoApprovalDriverSelect.innerHTML = '';
+    var opts = Array.isArray(options) ? options : [];
+    if (!opts.length) {
+      var emptyOpt = document.createElement('option');
+      emptyOpt.value = '';
+      emptyOpt.textContent = '-';
+      owoApprovalDriverSelect.appendChild(emptyOpt);
+      owoApprovalDriverSelect.disabled = true;
+      return;
+    }
+    opts.forEach(function(d) {
+      var o = document.createElement('option');
+      o.value = String(d.id || '');
+      o.textContent = d.name || '-';
+      if (String(d.id || '') === String(selectedId || '')) o.selected = true;
+      owoApprovalDriverSelect.appendChild(o);
+    });
+    owoApprovalDriverSelect.disabled = opts.length <= 1;
+  }
+  function owoRenderPaymentModes(options, selectedValue) {
+    if (!owoApprovalPaymentModeSelect) return;
+    var opts = (Array.isArray(options) && options.length) ? options : ['Cash', 'Credit', 'Card', 'In Hand Stock'];
+    owoApprovalPaymentModeSelect.innerHTML = '';
+    opts.forEach(function(v) {
+      var o = document.createElement('option');
+      o.value = v;
+      o.textContent = v;
+      if (String(v) === String(selectedValue || '')) o.selected = true;
+      owoApprovalPaymentModeSelect.appendChild(o);
+    });
+  }
+  function owoLoadApproval() {
+    var url = owoBuildUrl();
+    if (!url || owoApprovalBusy) return;
+    owoApprovalBusy = true;
+    owoSetText('Oil change text loading...');
+    fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin' })
+      .then(function(r) {
+        if (!r.ok) {
+          return r.text().then(function(t) {
+            var msg = 'HTTP ' + r.status;
+            try {
+              var j = JSON.parse(t);
+              if (j && (j.error || j.message)) msg = j.error || j.message;
+            } catch (e) {
+              if (r.status === 404) msg = 'Approval API not found — server restart / deploy required.';
+            }
+            throw new Error(msg);
+          });
+        }
+        return r.json();
+      })
+      .then(function(j) {
+        if (!j || !j.ok) throw new Error((j && (j.error || j.message)) || 'Unable to generate text');
+        owoSetText(j.approval_text || '');
+        owoRenderDrivers(j.driver_options || [], j.selected_driver_id || '');
+        owoRenderPaymentModes(j.payment_modes || ['Cash', 'Credit', 'Card', 'In Hand Stock'], j.payment_mode || owoCurrentPaymentMode() || 'Cash');
+        if (owoApprovalLocationInput) {
+          var locVal = (owoApprovalLocationInput.value || '').trim();
+          if (!locVal) owoApprovalLocationInput.value = j.location_used || j.location_default || '';
+        }
+        if (owoApprovalDriverSelect) owoApprovalDriverSelect.disabled = !(j.driver_options && j.driver_options.length > 1);
+        if (owoApprovalPaymentModeSelect) owoApprovalPaymentModeSelect.disabled = false;
+        if (owoApprovalLocationInput) owoApprovalLocationInput.disabled = false;
+      })
+      .catch(function(err) {
+        owoSetText('Unable to generate oil change text.\n' + ((err && err.message) ? err.message : 'Unknown error'));
+      })
+      .finally(function() { owoApprovalBusy = false; });
+  }
+
+  owoRenderSavedLocations();
+  owoRenderPaymentModes(['Cash', 'Credit', 'Card', 'In Hand Stock'], 'Cash');
+  document.querySelectorAll('.js-owo-approval').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      owoApprovalContextId = btn.getAttribute('data-wo-id') || '';
+      if (!owoApprovalContextId) return;
+      if (owoApprovalDriverSelect) {
+        owoApprovalDriverSelect.innerHTML = '<option value="">Loading...</option>';
+        owoApprovalDriverSelect.disabled = true;
+      }
+      owoRenderPaymentModes(['Cash', 'Credit', 'Card', 'In Hand Stock'], 'Cash');
+      if (owoApprovalPaymentModeSelect) owoApprovalPaymentModeSelect.disabled = false;
+      if (owoApprovalLocationInput) {
+        owoApprovalLocationInput.value = '';
+        owoApprovalLocationInput.disabled = false;
+      }
+      owoSetText('Oil change text loading...');
+      if (owoApprovalModal) owoApprovalModal.show();
+      owoRestoreBodyScroll();
+      owoLoadApproval();
+    });
+  });
+  if (owoApprovalDriverSelect) owoApprovalDriverSelect.addEventListener('change', function(){ owoLoadApproval(); });
+  if (owoApprovalPaymentModeSelect) owoApprovalPaymentModeSelect.addEventListener('change', function(){ owoLoadApproval(); });
+  if (owoApprovalLocationInput) {
+    owoApprovalLocationInput.addEventListener('change', function(){ owoLoadApproval(); });
+    owoApprovalLocationInput.addEventListener('blur', function(){ owoLoadApproval(); });
+  }
+  if (owoApprovalCopyBtn) {
+    owoApprovalCopyBtn.addEventListener('click', function() {
+      var txt = owoApprovalTextEl && owoApprovalTextEl.value ? owoApprovalTextEl.value : '';
+      if (!txt) return;
+      owoRememberLocation(owoCurrentLocation());
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(txt).then(function() {
+          owoApprovalCopyBtn.innerHTML = '<i class="bi bi-check2 me-1"></i>Copied';
+          setTimeout(function(){ owoApprovalCopyBtn.innerHTML = '<i class="bi bi-clipboard me-1"></i>Copy Text'; }, 1200);
+        });
+      } else if (owoApprovalTextEl) {
+        owoApprovalTextEl.select();
+        document.execCommand('copy');
+      }
+    });
+  }
+  if (owoApprovalWhatsappBtn) {
+    owoApprovalWhatsappBtn.addEventListener('click', function() {
+      var txt = owoApprovalTextEl && owoApprovalTextEl.value ? owoApprovalTextEl.value.trim() : '';
+      if (!txt) return;
+      owoRememberLocation(owoCurrentLocation());
+      window.open('https://wa.me/?text=' + encodeURIComponent(txt), '_blank');
+    });
+  }
+});
 </script>
 {% endblock %}

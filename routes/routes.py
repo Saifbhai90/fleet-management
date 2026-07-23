@@ -9,6 +9,7 @@ from models import (
     LeaveRequest,
     VehicleDailyTask, EmergencyTaskRecord, VehicleMileageRecord, VehicleActivityRecord, RedTask, VehicleMoveWithoutTask, PenaltyRecord, UnexecutedTaskRecord,
     Party, Product, FuelExpense, FuelExpenseAttachment, ProductBalance, OilExpense, OilExpenseItem, OilExpenseAttachment,
+    OilWorkOrder, OilWorkOrderAttachment,
     MaintenanceWorkOrder, MaintenanceWorkOrderAttachment, MaintenanceExpense, MaintenanceExpenseItem, MaintenanceExpenseAttachment,
     WorkspaceProduct,
     WorkspaceParty, WorkspaceAccount, WorkspaceJournalEntry, WorkspaceJournalEntryLine, WorkspaceVehicleReadingSetup, WorkspaceVehicleMaintenanceBaseline, WorkspaceExpense, ExpenseDeleteCleanupJob,
@@ -2269,6 +2270,13 @@ def _expense_upload_kind_config(kind):
             'folder': 'maintenance_work_order',
             'log_prefix': 'WorkOrder',
         },
+        'oil_work_order': {
+            'record_model': OilWorkOrder,
+            'attachment_model': OilWorkOrderAttachment,
+            'fk_field': 'work_order_id',
+            'folder': 'oil_work_order',
+            'log_prefix': 'OilWorkOrder',
+        },
     }
     return mapping.get(kind)
 
@@ -2449,6 +2457,14 @@ def _prepare_work_order_upload_manifest(files, work_order_id):
 
 def _start_work_order_upload_worker(work_order_id: int):
     return _start_expense_upload_worker('work_order', work_order_id)
+
+
+def _prepare_oil_work_order_upload_manifest(files, work_order_id):
+    return _prepare_expense_upload_manifest(files, 'oil_work_order', work_order_id)
+
+
+def _start_oil_work_order_upload_worker(work_order_id: int):
+    return _start_expense_upload_worker('oil_work_order', work_order_id)
 
 
 def _prepare_fuel_upload_manifest(files, expense_id):

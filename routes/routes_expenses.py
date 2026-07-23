@@ -63,12 +63,14 @@ from routes import (
     _prepare_fuel_upload_manifest,
     _prepare_maintenance_upload_manifest,
     _prepare_oil_upload_manifest,
+    _prepare_oil_work_order_upload_manifest,
     _prepare_work_order_upload_manifest,
     _read_fuel_market_scan,
     _start_expense_delete_cleanup_worker,
     _start_fuel_upload_worker,
     _start_maintenance_upload_worker,
     _start_oil_upload_worker,
+    _start_oil_work_order_upload_worker,
     _start_work_order_upload_worker,
     media_url_filter,
 )
@@ -3232,6 +3234,11 @@ def oil_expense_list():
         query = query.filter(OilExpense.project_id == project_id)
     if vehicle_id:
         query = query.filter(OilExpense.vehicle_id == vehicle_id)
+    if work_order_no:
+        query = query.join(
+            OilWorkOrder,
+            OilWorkOrder.id == OilExpense.work_order_id,
+        ).filter(OilWorkOrder.work_order_no.ilike(f"%{work_order_no}%"))
     rows = query.order_by(
         OilExpense.expense_date.asc(),
         db.case((OilExpense.current_reading.is_(None), 1), else_=0).asc(),
@@ -3313,6 +3320,7 @@ def oil_expense_list():
         page_subtotal_amount=page_subtotal_amount,
         show_upload_media_columns=show_upload_media_columns,
         open_work_orders=open_work_orders,
+        work_order_no=work_order_no,
         location_cascade=_fuel_expense_location_cascade_dict(),
         workspace_employee_id=workspace_employee_id,
     )
@@ -3339,6 +3347,7 @@ def oil_expense_export():
     district_id = request.args.get('district_id', type=int) or 0
     project_id = request.args.get('project_id', type=int) or 0
     vehicle_id = request.args.get('vehicle_id', type=int) or 0
+    work_order_no = (request.args.get('work_order_no') or '').strip()
 
     from_d = parse_date(from_date) if from_date else today
     to_d = parse_date(to_date) if to_date else today
@@ -3373,6 +3382,11 @@ def oil_expense_export():
         query = query.filter(OilExpense.project_id == project_id)
     if vehicle_id:
         query = query.filter(OilExpense.vehicle_id == vehicle_id)
+    if work_order_no:
+        query = query.join(
+            OilWorkOrder,
+            OilWorkOrder.id == OilExpense.work_order_id,
+        ).filter(OilWorkOrder.work_order_no.ilike(f"%{work_order_no}%"))
 
     rows = query.order_by(
         OilExpense.expense_date.asc(),
@@ -3390,7 +3404,7 @@ def oil_expense_export():
     ws.title = "Oil Expense"
 
     headers = [
-        '#', 'District', 'Project', 'Vehicle', 'Date',
+        '#', 'District', 'Project', 'Vehicle', 'Work Order', 'Date',
         'Prev Reading', 'Curr Reading', 'KM',
         'Item', 'Payment Type',
         'Purchase Qty', 'Used Qty', 'Balance Qty',
@@ -3415,10 +3429,10 @@ def oil_expense_export():
         cell.border = thin_border
 
     # Columns that show real numbers (no forced decimals): Prev Reading, Curr Reading, KM
-    general_number_col_indices = {6, 7, 8}
+    general_number_col_indices = {7, 8, 9}
     # Columns with 2-decimal format: Purchase Qty, Used Qty, Balance Qty, Price, Item Amount, Total Bill Amount
-    decimal_col_indices = {11, 12, 13, 14, 15, 16}
-    date_col_indices = {5}
+    decimal_col_indices = {12, 13, 14, 15, 16, 17}
+    date_col_indices = {6}
 
     grand_purchase_qty = 0.0
     grand_used_qty = 0.0
@@ -3431,6 +3445,7 @@ def oil_expense_export():
         total_amount = sum(float(it.amount or 0) for it in r.items)
         total_bill = float(r.total_bill_amount) if r.total_bill_amount is not None else total_amount
         grand_total_bill += total_bill
+        wo_no = r.work_order.work_order_no if r.work_order else '-'
 
         items_list = list(r.items)
         if not items_list:
@@ -3439,6 +3454,7 @@ def oil_expense_export():
                 r.district.name if r.district else '-',
                 r.project.name if r.project else '-',
                 r.vehicle.vehicle_no if r.vehicle else '-',
+                wo_no,
                 r.expense_date,
                 float(r.previous_reading) if r.previous_reading is not None else None,
                 float(r.current_reading) if r.current_reading is not None else None,
@@ -3461,6 +3477,7 @@ def oil_expense_export():
                     r.district.name if r.district else '-',
                     r.project.name if r.project else '-',
                     r.vehicle.vehicle_no if r.vehicle else '-',
+                    wo_no,
                     r.expense_date,
                     float(r.previous_reading) if r.previous_reading is not None else None,
                     float(r.current_reading) if r.current_reading is not None else None,
@@ -3479,7 +3496,7 @@ def oil_expense_export():
     # Total row
     total_row_idx = ws.max_row + 1
     ws.append([
-        '', '', '', '', 'Total',
+        '', '', '', '', '', 'Total',
         '', '', '',
         '', '',
         round(grand_purchase_qty, 2),
@@ -4728,6 +4745,145 @@ def api_oil_expense_approval_text(pk):
     })
 
 
+@app.route('/api/oil-work-order/approval-text/<int:pk>')
+def api_oil_work_order_approval_text(pk):
+    """WhatsApp text for an oil work order — same format as oil expense approval."""
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return jsonify({'ok': False, 'error': 'forbidden'}), 403
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    wo = OilWorkOrder.query.options(
+        joinedload(OilWorkOrder.district),
+        joinedload(OilWorkOrder.project),
+        joinedload(OilWorkOrder.vehicle).joinedload(Vehicle.drivers),
+    ).get_or_404(pk)
+    if workspace_employee_id and wo.employee_id and wo.employee_id != workspace_employee_id:
+        return jsonify({'ok': False, 'error': 'forbidden'}), 403
+
+    expenses = wo.expenses.order_by(OilExpense.expense_date.asc(), OilExpense.id.asc()).all()
+    vehicle = wo.vehicle
+    selected_driver_id = request.args.get('driver_id', type=int)
+    driver_name = '-'
+    driver_options = []
+    if vehicle:
+        active_drivers = [d for d in (vehicle.drivers or []) if (d.status or '').lower() == 'active']
+        fallback_drivers = active_drivers or list(vehicle.drivers or [])
+        fallback_drivers.sort(key=lambda d: ((d.name or '').lower(), d.id or 0))
+        selected_driver = None
+        if selected_driver_id:
+            selected_driver = next((d for d in fallback_drivers if d.id == selected_driver_id), None)
+        if not selected_driver and fallback_drivers:
+            selected_driver = fallback_drivers[0]
+        if selected_driver:
+            driver_name = selected_driver.name or '-'
+            selected_driver_id = selected_driver.id
+        driver_options = [
+            {
+                'id': d.id,
+                'name': d.name or f'Driver #{d.id}',
+                'status': (d.status or '').lower(),
+            }
+            for d in fallback_drivers
+        ]
+
+    district_name = wo.district.name if wo.district else '-'
+    project_name = wo.project.name if wo.project else '-'
+    custom_location = (request.args.get('location') or '').strip()
+    location_default = district_name if district_name and district_name != '-' else ''
+    location = custom_location or location_default or '-'
+    vehicle_no = vehicle.vehicle_no if vehicle else '-'
+    vehicle_label = f"{vehicle_no} ({project_name})" if project_name and project_name != '-' else vehicle_no
+
+    first_ex = expenses[0] if expenses else None
+    last_ex = expenses[-1] if expenses else None
+    oil_date = first_ex.expense_date if first_ex and first_ex.expense_date else wo.opened_on
+    oil_date_txt = oil_date.strftime('%d-%m-%Y') if oil_date else '-'
+    prev_reading = (
+        f"{float(first_ex.previous_reading):.0f}"
+        if first_ex and first_ex.previous_reading is not None
+        else '-'
+    )
+    curr_reading = (
+        f"{float(last_ex.current_reading):.0f}"
+        if last_ex and last_ex.current_reading is not None
+        else '-'
+    )
+    km_val = None
+    if first_ex and first_ex.previous_reading is not None and last_ex and last_ex.current_reading is not None:
+        try:
+            km_val = float(last_ex.current_reading) - float(first_ex.previous_reading)
+        except (TypeError, ValueError):
+            km_val = None
+    if km_val is None and last_ex and last_ex.km is not None:
+        try:
+            km_val = float(last_ex.km)
+        except (TypeError, ValueError):
+            km_val = None
+    km_txt = f"{km_val:.0f}" if km_val is not None else '-'
+
+    payment_mode_raw = (request.args.get('payment_mode') or '').strip()
+    default_payment = (first_ex.payment_type if first_ex and first_ex.payment_type else None) or 'Cash'
+    payment_mode = payment_mode_raw or default_payment
+    allowed_payment_modes = ['Cash', 'Credit', 'Card', 'In Hand Stock']
+    if payment_mode not in allowed_payment_modes:
+        payment_mode = 'Cash'
+
+    def _approval_qty_label(qty_val):
+        try:
+            qv = Decimal(str(qty_val))
+        except Exception:
+            qv = Decimal('0')
+        qv = qv.quantize(Decimal('0.01'))
+        s = format(qv, 'f')
+        if '.' in s:
+            s = s.rstrip('0').rstrip('.')
+        return s or '0'
+
+    detail_lines = []
+    total_amount = 0.0
+    for ex in expenses:
+        for it in ex.items.order_by(OilExpenseItem.sort_order.asc(), OilExpenseItem.id.asc()).all():
+            p_name = (it.product.name if it.product else f'Product #{it.product_id}')
+            qty = float(it.purchase_qty if it.purchase_qty is not None else (it.qty or 0))
+            price = float(it.price or 0)
+            amount = float(it.amount or (qty * price))
+            total_amount += amount
+            detail_lines.append(
+                f"{len(detail_lines) + 1}- {p_name} {_approval_qty_label(qty)}x{price:.0f}={amount:.0f}"
+            )
+    if not detail_lines:
+        detail_lines = ['-']
+
+    lines = [
+        "Oil Change Done",
+        vehicle_label,
+        f"Oil Change Date: {oil_date_txt}",
+        f"last Oil change Reading: {prev_reading}",
+        f"Current Oil Change Reading: {curr_reading} ({km_txt} km)",
+        f"Driver: {driver_name}",
+        f"Location: {location}",
+        "Detail:",
+        f"Payment Mode: {payment_mode}",
+    ]
+    lines.extend(detail_lines)
+    lines.append(f"Total: {total_amount:.0f}")
+
+    return jsonify({
+        'ok': True,
+        'approval_text': '\n'.join(lines),
+        'work_order_no': wo.work_order_no or '-',
+        'vehicle_no': vehicle_no,
+        'vehicle_label': vehicle_label,
+        'date': oil_date_txt,
+        'driver_options': driver_options,
+        'selected_driver_id': selected_driver_id,
+        'location_default': location_default,
+        'location_used': location,
+        'payment_mode': payment_mode,
+        'payment_modes': allowed_payment_modes,
+    })
+
+
 def _maintenance_expense_previous_reading(vehicle_id, expense_date=None, exclude_id=None, workspace_employee_id=None, current_reading=None):
     if not vehicle_id:
         return None
@@ -5619,6 +5775,14 @@ def _ensure_oil_work_order_schema():
         ('oil_work_order', 'status', 'VARCHAR(20)'),
         ('oil_work_order', 'remarks', 'TEXT'),
         ('oil_work_order', 'created_at', 'TIMESTAMP'),
+        ('oil_work_order', 'upload_status', 'VARCHAR(20)'),
+        ('oil_work_order', 'upload_total', 'INTEGER DEFAULT 0'),
+        ('oil_work_order', 'upload_done', 'INTEGER DEFAULT 0'),
+        ('oil_work_order', 'upload_failed', 'INTEGER DEFAULT 0'),
+        ('oil_work_order', 'upload_error', 'TEXT'),
+        ('oil_work_order', 'upload_manifest_json', 'TEXT'),
+        ('oil_work_order', 'upload_started_at', 'TIMESTAMP'),
+        ('oil_work_order', 'upload_finished_at', 'TIMESTAMP'),
         ('oil_expense', 'work_order_id', 'INTEGER'),
     ]
     try:
@@ -5720,7 +5884,7 @@ def oil_work_order_list():
     for wo in work_orders:
         expenses = wo.expenses.order_by(OilExpense.expense_date.asc(), OilExpense.id.asc()).all()
         total_amount = sum(float(e.total_bill_amount or 0) for e in expenses)
-        media_count = sum(e.attachments.count() for e in expenses)
+        media_count = sum(e.attachments.count() for e in expenses) + wo.attachments.count()
         rows.append({
             'rec': wo,
             'bill_count': len(expenses),
@@ -5927,7 +6091,38 @@ def oil_work_order_form(pk=None):
                 )
                 db.session.add(rec)
             db.session.commit()
-            flash('Oil work order saved.', 'success')
+            files = request.files.getlist('attachments')
+            has_new_files = bool(files and any(f and getattr(f, 'filename', None) for f in files))
+            if has_new_files:
+                try:
+                    manifest, skipped_att = _prepare_oil_work_order_upload_manifest(files, rec.id)
+                    rec.upload_total = len(manifest)
+                    rec.upload_done = 0
+                    rec.upload_failed = 0
+                    rec.upload_error = None
+                    rec.upload_finished_at = None
+                    if manifest:
+                        rec.upload_status = 'processing'
+                        rec.upload_started_at = pk_now()
+                        rec.upload_manifest_json = json.dumps(manifest)
+                    else:
+                        rec.upload_status = 'success'
+                        rec.upload_started_at = None
+                        rec.upload_manifest_json = None
+                        rec.upload_finished_at = pk_now()
+                    db.session.commit()
+                    if manifest:
+                        _start_oil_work_order_upload_worker(rec.id)
+                        flash(f'Work order saved. Upload background me start ho gaya ({len(manifest)} file).', 'success')
+                    else:
+                        flash('Oil work order saved.', 'success')
+                    if skipped_att:
+                        flash('Kuch files queue me nahi gayin: ' + '; '.join(skipped_att), 'warning')
+                except Exception as ex:
+                    app.logger.exception('Oil WO upload prep failed: %s', ex)
+                    flash('Work order saved lekin files upload nahi ho sakein. Try again.', 'warning')
+            else:
+                flash('Oil work order saved.', 'success')
             return redirect(url_for('oil_work_order_detail', pk=rec.id))
 
     return render_template(
@@ -5995,6 +6190,7 @@ def oil_work_order_detail(pk):
     expenses = rec.expenses.order_by(OilExpense.expense_date.asc(), OilExpense.id.asc()).all()
     total_bill = sum(float(x.total_bill_amount or 0) for x in expenses)
     total_media = sum(x.attachments.count() for x in expenses)
+    wo_media = rec.attachments.count()
     from urllib.parse import urlencode
     owo_preserve_qs = urlencode(request.args) if request.args else None
     return render_template(
@@ -6003,6 +6199,7 @@ def oil_work_order_detail(pk):
         expenses=expenses,
         total_bill=total_bill,
         total_media=total_media,
+        wo_media=wo_media,
         owo_preserve_qs=owo_preserve_qs,
     )
 
@@ -6022,6 +6219,7 @@ def oil_work_order_invoices(pk):
     expenses = rec.expenses.order_by(OilExpense.expense_date.asc(), OilExpense.id.asc()).all()
     total_bill = sum(float(x.total_bill_amount or 0) for x in expenses)
     total_media = sum(x.attachments.count() for x in expenses)
+    wo_media = rec.attachments.count()
     from urllib.parse import urlencode
     owo_preserve_qs = urlencode(request.args) if request.args else None
     return render_template(
@@ -6030,9 +6228,198 @@ def oil_work_order_invoices(pk):
         expenses=expenses,
         total_bill=total_bill,
         total_media=total_media,
+        wo_media=wo_media,
         owo_preserve_qs=owo_preserve_qs,
         this_page_path=request.full_path,
     )
+
+
+@app.route('/api/oil-work-order/upload-status/<int:pk>')
+def api_oil_work_order_upload_status(pk):
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return jsonify({'ok': False, 'error': 'forbidden'}), 403
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    q = OilWorkOrder.query.filter_by(id=pk)
+    if workspace_employee_id:
+        q = q.filter_by(employee_id=workspace_employee_id)
+    rec = q.first_or_404()
+    total = int(rec.upload_total or 0)
+    done = int(rec.upload_done or 0)
+    failed = int(rec.upload_failed or 0)
+    status = (rec.upload_status or ('success' if total == 0 else 'processing')).strip().lower()
+    pct = int(round((done / total) * 100)) if total > 0 else 100
+    pct = max(0, min(100, pct))
+    return jsonify({
+        'ok': True,
+        'id': rec.id,
+        'status': status,
+        'total': total,
+        'done': done,
+        'failed': failed,
+        'percent': pct,
+        'pct': pct,
+        'error': (rec.upload_error or ''),
+    })
+
+
+@app.route('/oil-work-order/<int:pk>/upload-resume', methods=['POST'])
+def oil_work_order_upload_resume(pk):
+    _ensure_oil_work_order_schema()
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return jsonify({'ok': False, 'error': 'forbidden'}), 403
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    rec = OilWorkOrder.query.get_or_404(pk)
+    if workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
+        return jsonify({'ok': False, 'error': 'forbidden'}), 403
+    try:
+        manifest = json.loads(rec.upload_manifest_json or '[]')
+    except Exception:
+        manifest = []
+    if not manifest:
+        return jsonify({'ok': False, 'error': 'nothing_to_resume'}), 400
+    rec.upload_status = 'processing'
+    rec.upload_error = None
+    rec.upload_started_at = pk_now()
+    rec.upload_finished_at = None
+    db.session.commit()
+    started = _start_oil_work_order_upload_worker(rec.id)
+    return jsonify({'ok': True, 'started': bool(started)})
+
+
+def _owo_unified_gallery_build_items(wo):
+    def _human_size(n):
+        if n is None:
+            return ''
+        size = float(n)
+        units = ['B', 'KB', 'MB', 'GB', 'TB']
+        idx = 0
+        while size >= 1024 and idx < len(units) - 1:
+            size /= 1024.0
+            idx += 1
+        if idx == 0:
+            return f"{int(size)} {units[idx]}"
+        return f"{size:.1f} {units[idx]}"
+
+    def _local_sz(stored_path):
+        full = _maintenance_attachment_local_full_path(stored_path or '')
+        if not full:
+            return None
+        try:
+            return os.path.getsize(full)
+        except OSError:
+            return None
+
+    media_items = []
+    expenses = wo.expenses.order_by(OilExpense.expense_date.asc(), OilExpense.id.asc()).all()
+    for exp in expenses:
+        for att in exp.attachments.order_by(OilExpenseAttachment.created_at.asc(), OilExpenseAttachment.id.asc()).all():
+            url = media_url_filter(att.file_path or '')
+            if not url:
+                continue
+            ftype = (att.file_type or '').strip().lower()
+            if ftype not in ('image', 'video'):
+                path = (att.file_path or '').lower()
+                if any(path.endswith(x) for x in ('.mp4', '.webm', '.mov')):
+                    ftype = 'video'
+                else:
+                    ftype = 'image'
+            size_bytes = _local_sz(att.file_path or '')
+            created_at = att.created_at
+            media_items.append({
+                'url': url,
+                'type': ftype,
+                'name': f"Bill OIL-{exp.id} — {att.original_name or os.path.basename(att.file_path or '') or 'Attachment'}",
+                'created_at': created_at.strftime('%d-%m-%Y %I:%M %p') if created_at else '',
+                'created_at_iso': created_at.isoformat() if created_at else '',
+                'size_bytes': size_bytes,
+                'size_label': _human_size(size_bytes),
+                'download_url': url_for('oil_expense_media_download', pk=exp.id, att_id=att.id),
+                'is_local_file': bool(_maintenance_attachment_local_full_path(att.file_path or '')),
+            })
+    wo_start = len(media_items)
+    for att in wo.attachments.order_by(OilWorkOrderAttachment.created_at.asc(), OilWorkOrderAttachment.id.asc()).all():
+        url = media_url_filter(att.file_path or '')
+        if not url:
+            continue
+        ftype = (att.file_type or '').strip().lower()
+        if ftype not in ('image', 'video'):
+            path = (att.file_path or '').lower()
+            if any(path.endswith(x) for x in ('.mp4', '.webm', '.mov')):
+                ftype = 'video'
+            else:
+                ftype = 'image'
+        size_bytes = _local_sz(att.file_path or '')
+        created_at = att.created_at
+        media_items.append({
+            'url': url,
+            'type': ftype,
+            'name': f"WO {wo.work_order_no or ''} — {att.original_name or os.path.basename(att.file_path or '') or 'Attachment'}",
+            'created_at': created_at.strftime('%d-%m-%Y %I:%M %p') if created_at else '',
+            'created_at_iso': created_at.isoformat() if created_at else '',
+            'size_bytes': size_bytes,
+            'size_label': _human_size(size_bytes),
+            'download_url': url_for('oil_work_order_media_download', pk=wo.id, att_id=att.id),
+            'is_local_file': bool(_maintenance_attachment_local_full_path(att.file_path or '')),
+        })
+    return media_items, wo_start
+
+
+@app.route('/oil-work-order/<int:pk>/all-media')
+def oil_work_order_unified_media(pk):
+    _ensure_oil_work_order_schema()
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return _guard
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    wo = OilWorkOrder.query.get_or_404(pk)
+    if workspace_employee_id and wo.employee_id and wo.employee_id != workspace_employee_id:
+        flash('This work order does not belong to selected workspace employee.', 'danger')
+        return redirect(url_for('oil_work_order_list'))
+    default_back = url_for('oil_work_order_detail', pk=pk)
+    back_url = _safe_internal_path(request.args.get('return_to'), default_back)
+    media_items, wo_start_index = _owo_unified_gallery_build_items(wo)
+    return render_template(
+        'maintenance_work_order_unified_media.html',
+        rec=wo,
+        media_items=media_items,
+        back_url=back_url,
+        wo_start_index=wo_start_index,
+        media_title='Oil work order — all media (bills + job photos)',
+        media_date_label=(wo.opened_on.strftime('%d-%m-%Y') if wo.opened_on else '-'),
+    )
+
+
+@app.route('/oil-work-order/<int:pk>/media/download/<int:att_id>')
+def oil_work_order_media_download(pk, att_id):
+    _ensure_oil_work_order_schema()
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return _guard
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    wo = OilWorkOrder.query.get_or_404(pk)
+    if workspace_employee_id and wo.employee_id and wo.employee_id != workspace_employee_id:
+        flash('This work order does not belong to selected workspace employee.', 'danger')
+        return redirect(url_for('oil_work_order_list'))
+    att = OilWorkOrderAttachment.query.filter_by(id=att_id, work_order_id=wo.id).first()
+    if not att:
+        flash('Attachment not found.', 'warning')
+        return redirect(url_for('oil_work_order_unified_media', pk=pk))
+    dl_name = _maintenance_attachment_download_name(att)
+    local_full = _maintenance_attachment_local_full_path(att.file_path or '')
+    if local_full:
+        return send_file(local_full, as_attachment=True, download_name=dl_name, conditional=True, max_age=0)
+    try:
+        blob, mime = _maintenance_attachment_read_bytes(att.file_path or '')
+    except Exception as ex:
+        app.logger.exception('Oil WO media download failed: %s', ex)
+        flash('File download nahi ho saka.', 'danger')
+        return redirect(url_for('oil_work_order_unified_media', pk=pk))
+    if not blob:
+        flash('File not found.', 'warning')
+        return redirect(url_for('oil_work_order_unified_media', pk=pk))
+    return send_file(BytesIO(blob), as_attachment=True, download_name=dl_name, mimetype=mime or 'application/octet-stream')
 
 
 @app.route('/maintenance-work-order/<int:pk>/media/download/<int:att_id>')

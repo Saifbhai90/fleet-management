@@ -554,6 +554,14 @@ if _run_startup_tasks:
                 # Oil Work Orders: link multiple oil bills to one WO
                 ('oil_expense', 'work_order_id', 'INTEGER'),
                 ('maintenance_expense', 'work_order_id', 'INTEGER'),
+                ('oil_work_order', 'upload_status', 'VARCHAR(20)'),
+                ('oil_work_order', 'upload_total', 'INTEGER DEFAULT 0'),
+                ('oil_work_order', 'upload_done', 'INTEGER DEFAULT 0'),
+                ('oil_work_order', 'upload_failed', 'INTEGER DEFAULT 0'),
+                ('oil_work_order', 'upload_error', 'TEXT'),
+                ('oil_work_order', 'upload_manifest_json', 'TEXT'),
+                ('oil_work_order', 'upload_started_at', 'TIMESTAMP'),
+                ('oil_work_order', 'upload_finished_at', 'TIMESTAMP'),
             ]
             # Ensure device_app_version table exists
             if 'device_app_version' not in _inspector.get_table_names():

@@ -13,7 +13,7 @@
   <div class="card">
     <div class="card-body">
       <script type="application/json" id="locationCascadeData">{{ location_cascade|tojson }}</script>
-      <form method="POST" action="">
+      <form method="POST" action="" enctype="multipart/form-data">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="row g-3">
           <div class="col-md-3">
@@ -79,6 +79,46 @@
             <textarea name="remarks" class="form-control" rows="2">{{ request.form.get('remarks') or (rec.remarks if rec else '') }}</textarea>
           </div>
         </div>
+        <div class="mt-3">
+          <label class="form-label fw-semibold">Job Photos / Videos <small class="text-muted fw-normal">(mixed work photos, before/after, etc.)</small></label>
+          <input type="file" name="attachments" id="owoAttachmentFiles" multiple accept="image/*,video/*" class="form-control">
+          <small class="text-muted">Multiple files allowed. You can also paste with <kbd>Ctrl+V</kbd>. Upload background me hogi — form save hone ke baad redirect ho jaayega, files apne aap upload hoti rahein gi.</small>
+          <div class="small text-success mt-1" id="owoAttachmentPasteHint"></div>
+          {% if rec and rec.upload_status and rec.upload_status not in ('success', None) %}
+          <div id="owoUploadStatusBar" class="mt-2 p-2 rounded border bg-light">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+              <span class="small fw-semibold">Upload Status</span>
+              <span id="owoUploadStatusBadge" class="badge bg-secondary">{{ rec.upload_status }}</span>
+            </div>
+            <div class="progress" style="height:1.2rem">
+              <div id="owoUploadProgBar" class="progress-bar progress-bar-striped progress-bar-animated" style="width:{{ ((rec.upload_done or 0) / (rec.upload_total or 1) * 100)|int }}%">
+                <span class="small">{{ rec.upload_done or 0 }}/{{ rec.upload_total or 0 }}</span>
+              </div>
+            </div>
+            {% if rec.upload_error %}<div class="small text-danger mt-1">{{ rec.upload_error[-200:] }}</div>{% endif %}
+          </div>
+          {% endif %}
+        </div>
+        {% if rec and rec.attachments.count() %}
+        <div class="mt-3">
+          <strong class="small">Existing Job Photos/Videos:</strong>
+          <div class="existing-attachments-grid mt-2">
+            {% for att in rec.attachments %}
+              {% set att_url = att.file_path|media_url %}
+              <a href="{{ att_url }}" target="_blank" class="existing-attachment-card text-decoration-none text-body">
+                {% if att.file_type == 'image' %}
+                  <img src="{{ att_url }}" alt="{{ att.original_name or 'Attachment' }}" loading="lazy" style="width:100%;height:120px;object-fit:cover;border-radius:8px;background:#f1f5f9">
+                {% elif att.file_type == 'video' %}
+                  <video src="{{ att_url }}" controls preload="metadata" style="width:100%;height:120px;object-fit:cover;border-radius:8px;background:#f1f5f9"></video>
+                {% else %}
+                  <div class="d-flex align-items-center justify-content-center" style="height:120px;background:#f1f5f9;border-radius:8px;"><i class="bi bi-paperclip me-2"></i>Open</div>
+                {% endif %}
+                <div class="mt-1 small text-muted" style="word-break:break-word">{{ att.original_name or att.file_path }}</div>
+              </a>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
         <div class="mt-3 d-flex justify-content-end gap-2">
           <a href="{{ url_for('oil_work_order_list') }}" class="btn btn-outline-secondary">Cancel</a>
           <button type="submit" class="btn btn-primary" id="owoSaveBtn" style="background:#5b21b6;border-color:#5b21b6;">Save Work Order</button>
@@ -87,9 +127,60 @@
     </div>
   </div>
 </div>
+<style>
+.existing-attachments-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
+.existing-attachment-card { border: 1px solid #e2e8f0; border-radius: 10px; padding: 8px; background: #fff; }
+</style>
+{% if rec and rec.upload_status == 'processing' %}
+<script>
+(function() {
+  var pk = {{ rec.id }};
+  var bar = document.getElementById('owoUploadProgBar');
+  var badge = document.getElementById('owoUploadStatusBadge');
+  function poll() {
+    fetch('/api/oil-work-order/upload-status/' + pk)
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (!d.ok) return;
+        if (bar) { bar.style.width = (d.pct || d.percent) + '%'; bar.textContent = d.done + '/' + d.total; }
+        if (badge) { badge.textContent = d.status; badge.className = 'badge ' + (d.status === 'success' ? 'bg-success' : d.status === 'error' ? 'bg-danger' : 'bg-warning text-dark'); }
+        if (d.status === 'processing') { setTimeout(poll, 2500); }
+      })
+      .catch(function() { setTimeout(poll, 5000); });
+  }
+  setTimeout(poll, 2500);
+})();
+</script>
+{% endif %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+  var owoFiles = document.getElementById('owoAttachmentFiles');
+  var owoPasteHint = document.getElementById('owoAttachmentPasteHint');
   var owoSaveBtn = document.getElementById('owoSaveBtn');
+  function updateOwoFileHint() {
+    if (!owoPasteHint || !owoFiles) return;
+    var n = owoFiles.files ? owoFiles.files.length : 0;
+    owoPasteHint.textContent = n ? n + ' file(s) ready — upload background me hogi.' : '';
+  }
+  if (owoFiles) {
+    owoFiles.addEventListener('change', updateOwoFileHint);
+    document.addEventListener('paste', function(e) {
+      var clipItems = (e.clipboardData || (e.originalEvent && e.originalEvent.clipboardData) || {items:[]}).items;
+      var added = 0;
+      var dt = new DataTransfer();
+      if (owoFiles.files) Array.from(owoFiles.files).forEach(function(f) { dt.items.add(f); });
+      for (var i = 0; i < clipItems.length; i++) {
+        if (clipItems[i].kind === 'file' && (clipItems[i].type.startsWith('image/') || clipItems[i].type.startsWith('video/'))) {
+          dt.items.add(clipItems[i].getAsFile());
+          added++;
+        }
+      }
+      if (added > 0) {
+        owoFiles.files = dt.files;
+        updateOwoFileHint();
+      }
+    });
+  }
   var owoForm = document.querySelector('form');
   var owoSubmitLocked = false;
   if (owoForm && owoSaveBtn) {
