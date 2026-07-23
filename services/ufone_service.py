@@ -1526,27 +1526,75 @@ def _status_is_complete(status) -> bool:
     return ('complete' in s) and ('incomplete' not in s)
 
 
-def _match_vehicle_driver(amb_reg_no):
-    """Resolve a Ufone ambulance reg-no to our (Vehicle, Driver). Returns
-    (vehicle, driver) or (None, None). Tries exact then normalized match."""
-    from models import Vehicle, Driver
+def _normalize_reg_key(val) -> str:
+    return str(val or '').upper().replace(' ', '').replace('-', '')
+
+
+def _resolve_fleet_vehicle(amb_reg_no):
+    """Match Ufone amb_reg_no to Master Data Vehicle (exact / base token / normalized)."""
+    from models import Vehicle
     if not amb_reg_no:
-        return None, None
+        return None
     reg = str(amb_reg_no).strip()
     if not reg:
-        return None, None
+        return None
     veh = Vehicle.query.filter_by(vehicle_no=reg).first()
+    if veh:
+        return veh
+    # Ufone sometimes appends tags e.g. "GBF-25-425 COW"
+    base = reg.split()[0].strip() if ' ' in reg else reg
+    if base != reg:
+        veh = Vehicle.query.filter_by(vehicle_no=base).first()
+        if veh:
+            return veh
+    candidates = {_normalize_reg_key(reg), _normalize_reg_key(base)}
+    candidates.discard('')
+    for v in Vehicle.query.all():
+        vn = _normalize_reg_key(v.vehicle_no)
+        if vn and vn in candidates:
+            return v
+    return None
+
+
+def _drivers_for_vehicle(veh):
+    """Active drivers assigned to vehicle.
+
+    Master Data stores assignment on Driver.vehicle_id (not Vehicle.driver_id).
+    Vehicle.driver_id is legacy/unused in current data — keep as fallback only.
+    """
+    from models import Driver
     if not veh:
-        norm = reg.upper().replace(' ', '').replace('-', '')
-        for v in Vehicle.query.all():
-            vn = str(v.vehicle_no or '').upper().replace(' ', '').replace('-', '')
-            if vn and vn == norm:
-                veh = v
-                break
-    if not veh or not veh.driver_id:
-        return veh, None
-    drv = db_get_driver(veh.driver_id)
-    return veh, drv
+        return []
+    drivers = []
+    seen = set()
+    if getattr(veh, 'driver_id', None):
+        drv = db_get_driver(veh.driver_id)
+        if drv and drv.id not in seen:
+            drivers.append(drv)
+            seen.add(drv.id)
+    q = Driver.query.filter(Driver.vehicle_id == veh.id)
+    for drv in q.all():
+        status = (drv.status or 'Active').strip().lower()
+        if status and status != 'active':
+            continue
+        if drv.id in seen:
+            continue
+        drivers.append(drv)
+        seen.add(drv.id)
+    return drivers
+
+
+def _match_vehicle_driver(amb_reg_no):
+    """Resolve Ufone amb_reg_no to (Vehicle, first Driver) or (None, None)."""
+    veh = _resolve_fleet_vehicle(amb_reg_no)
+    drivers = _drivers_for_vehicle(veh)
+    return veh, (drivers[0] if drivers else None)
+
+
+def _match_vehicle_drivers(amb_reg_no):
+    """Resolve Ufone amb_reg_no to (Vehicle, [Driver, ...])."""
+    veh = _resolve_fleet_vehicle(amb_reg_no)
+    return veh, _drivers_for_vehicle(veh)
 
 
 def db_get_driver(driver_pk):
@@ -1616,11 +1664,8 @@ def _send_task_event_notifications(events: list):
             return
     for ev in events:
         try:
-            _veh, drv = _match_vehicle_driver(ev.get('amb_reg_no'))
-            if not drv:
-                continue
-            uid = get_user_id_for_driver(drv)
-            if not uid:
+            _veh, drivers = _match_vehicle_drivers(ev.get('amb_reg_no'))
+            if not drivers:
                 continue
             msg = _build_task_notify_message(ev)
             if ev['event'] == 'generate':
@@ -1629,7 +1674,11 @@ def _send_task_event_notifications(events: list):
             else:  # close
                 title = 'Task Complete'
                 ntype = 'success'
-            notify_user(uid, title, msg, notification_type=ntype)
+            for drv in drivers:
+                uid = get_user_id_for_driver(drv)
+                if not uid:
+                    continue
+                notify_user(uid, title, msg, notification_type=ntype)
         except Exception as e:
             logger.warning(f"task-event notify failed for {ev}: {e}")
 

@@ -347,7 +347,7 @@ document.querySelectorAll('.view-task-btn').forEach(btn => {
     document.getElementById('taskModalBody').innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary"></div><p class="mt-2 text-muted">Loading...</p></div>';
     modal.show();
 
-    // Stage 1: cache — instant paint
+    // Stage 1: cache / bridge DB — instant paint
     let hadCache = false;
     try {
       const res = await fetch('/ufone/task/' + id);
@@ -355,6 +355,10 @@ document.querySelectorAll('.view-task-btn').forEach(btn => {
       if (token !== taskModalToken) return;
       if (data.detail && Object.keys(data.detail).length) {
         hadCache = data.from_cache === true;
+        if (data.bridge_only) {
+          renderTaskDetail(data, false);
+          return;
+        }
         renderTaskDetail(data, hadCache);
         if (!hadCache) return; // already live
       }
