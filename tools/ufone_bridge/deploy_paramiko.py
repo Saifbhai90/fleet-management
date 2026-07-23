@@ -21,12 +21,15 @@ PASS_FILE = ROOT / '.vps_password'
 def connect() -> paramiko.SSHClient:
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    kwargs = {}
-    if KEY.is_file():
-        kwargs['key_filename'] = str(KEY)
+    password = None
     if PASS_FILE.is_file():
-        kwargs['password'] = PASS_FILE.read_text(encoding='utf-8').strip()
-    if 'key_filename' not in kwargs and 'password' not in kwargs:
+        password = PASS_FILE.read_text(encoding='utf-8').strip() or None
+    attempts = []
+    if password:
+        attempts.append({'password': password})
+    if KEY.is_file():
+        attempts.append({'key_filename': str(KEY)})
+    if not attempts:
         raise SystemExit(
             f'No SSH auth.\n'
             f'  A) Put root password in {PASS_FILE}\n'
@@ -34,15 +37,22 @@ def connect() -> paramiko.SSHClient:
             f'     {PUB.read_text(encoding="utf-8").strip()}'
         )
     last_err = None
-    for attempt in range(3):
-        try:
-            client.connect(HOST, username=USER, timeout=20, allow_agent=False,
-                           look_for_keys=False, **kwargs)
-            return client
-        except Exception as e:
-            last_err = e
-            time.sleep(2)
-    raise SystemExit(f'SSH connect failed: {last_err}')
+    for kwargs in attempts:
+        for _attempt in range(2):
+            try:
+                client.connect(
+                    HOST, username=USER, timeout=20,
+                    allow_agent=False, look_for_keys=False, **kwargs)
+                return client
+            except Exception as e:
+                last_err = e
+                time.sleep(1)
+    raise SystemExit(
+        f'SSH connect failed: {last_err}\n'
+        f'Install pubkey in WebSouls SSH Keys:\n'
+        f'{PUB.read_text(encoding="utf-8").strip()}\n'
+        f'Or write root password to {PASS_FILE}'
+    )
 
 
 def run(client: paramiko.SSHClient, cmd: str, check: bool = True) -> str:
