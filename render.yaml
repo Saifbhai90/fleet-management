@@ -43,4 +43,9 @@ services:
         value: activity_log,client_activity_log,login_log,login_attempt
       - key: BACKUP_COMPACT
         value: "true"
+      # Ufone PK VPS bridge — set UFONE_BRIDGE_TOKEN in Dashboard (secret)
+      - key: UFONE_BRIDGE_ONLY
+        value: "1"
+      - key: UFONE_BRIDGE_TOKEN
+        sync: false
 
