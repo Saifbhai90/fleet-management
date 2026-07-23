@@ -20,7 +20,7 @@ import os
 import re
 import threading
 import time
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Optional
 
@@ -155,7 +155,7 @@ def normalize_maintenance(raw: dict) -> dict:
     send = _parse_date_only(raw.get('Send_Date'))
     ret = _parse_date_only(raw.get('Return_Date'))
     if send and not ret:
-        days = (datetime.now() - send).days
+        days = (date.today() - send).days
     elif send and ret:
         days = (ret - send).days
     return {
@@ -176,11 +176,20 @@ def normalize_maintenance(raw: dict) -> dict:
 
 
 def _parse_date_only(s):
+    """Parse a calendar date string → datetime.date (never datetime).
+
+    Returning datetime here caused: can't compare datetime.datetime to
+    datetime.date in fetch_tasks_report / DB date filters.
+    """
     if not s:
         return None
+    if isinstance(s, datetime):
+        return s.date()
+    if isinstance(s, date):
+        return s
     for fmt in ('%m/%d/%Y', '%Y-%m-%d', '%d/%m/%Y'):
         try:
-            return datetime.strptime(s.split()[0][:10], fmt)
+            return datetime.strptime(str(s).split()[0][:10], fmt).date()
         except ValueError:
             continue
     return None
@@ -239,8 +248,11 @@ def _parse_ufone_datetime(s):
                             int(m.group(4) or 0), int(m.group(5) or 0), int(m.group(6) or 0))
         except ValueError:
             pass
-    # Fallback: date only
-    return _parse_date_only(s)
+    # Fallback: date only → midnight datetime
+    d = _parse_date_only(s)
+    if d:
+        return datetime(d.year, d.month, d.day)
+    return None
 
 
 # ── Client pool + cache ──────────────────────────────────────────────────────
@@ -505,9 +517,29 @@ def fetch_tasks_report(account_id: int, start_date: str, end_date: str,
     from datetime import date as _date
 
     today = _date.today()
+    try:
+        from utils import pk_date
+        today = pk_date()
+    except Exception:
+        pass
     sd = _parse_date_only(start_date) if start_date else today
     ed = _parse_date_only(end_date) if end_date else today
+    if sd is None:
+        sd = today
+    if ed is None:
+        ed = today
     range_includes_today = sd <= today <= ed
+
+    def _from_db():
+        rows = _emg_db_rows_for_range(start_date, end_date)
+        if not rows:
+            return []
+        items = [_emg_row_to_task(r) for r in rows]
+        items = sorted(
+            items,
+            key=lambda t: (_task_status_rank(t), str(t.get('created_date') or '')),
+        )
+        return _filter_by_district(items, district, account_id)
 
     # 1. Try DB first
     if not force:
@@ -517,15 +549,19 @@ def fetch_tasks_report(account_id: int, start_date: str, end_date: str,
             if range_includes_today:
                 latest = _emg_latest_sync()
                 fresh = bool(latest and (datetime.now() - latest).total_seconds() < 180)
-            if fresh:
-                items = [_emg_row_to_task(r) for r in rows]
-                items = sorted(
-                    items,
-                    key=lambda t: (_task_status_rank(t), str(t.get('created_date') or '')),
-                )
-                return _filter_by_district(items, district, account_id)
+            # PK VPS owns live Ufone — serve DB even if "stale"
+            if fresh or bridge_only_mode():
+                return _from_db()
 
-    # 2. Stale/missing/force → live all-district fetch on poll session
+    # 2. Stale/missing/force → live all-district fetch (skip in bridge mode)
+    if bridge_only_mode():
+        items = _from_db()
+        if items:
+            return items
+        raise RuntimeError(
+            'No emergency task rows in DB yet — wait for PK VPS bridge sync.'
+        )
+
     try:
         client = _get_client(account_id, purpose="poll")
         raw = client.get_emergency_tasks(
@@ -542,14 +578,9 @@ def fetch_tasks_report(account_id: int, start_date: str, end_date: str,
         return _filter_by_district(items, district, account_id)
     except Exception as e:
         logger.warning(f"fetch_tasks_report live failed (serving DB if any): {e}")
-        rows = _emg_db_rows_for_range(start_date, end_date)
-        if rows:
-            items = [_emg_row_to_task(r) for r in rows]
-            items = sorted(
-                items,
-                key=lambda t: (_task_status_rank(t), str(t.get('created_date') or '')),
-            )
-            return _filter_by_district(items, district, account_id)
+        items = _from_db()
+        if items:
+            return items
         raise
 
 
@@ -582,12 +613,39 @@ def _filter_by_district(items: list, district: str, account_id: int) -> list:
     return out
 
 
+def _districts_from_vehicle_cache(account_id: int) -> list:
+    """Fallback district options from vehicle/task cache names (bridge mode)."""
+    from models import UfoneTaskCache, UfoneVehicleCache
+    names = set()
+    try:
+        for (d,) in (UfoneVehicleCache.query
+                     .with_entities(UfoneVehicleCache.district)
+                     .filter_by(account_id=account_id)
+                     .distinct()):
+            if d and str(d).strip():
+                names.add(str(d).strip())
+    except Exception:
+        pass
+    try:
+        for (d,) in (UfoneTaskCache.query
+                     .with_entities(UfoneTaskCache.district)
+                     .filter_by(account_id=account_id)
+                     .distinct()):
+            if d and str(d).strip():
+                names.add(str(d).strip())
+    except Exception:
+        pass
+    items = [{'code': n, 'name': n} for n in names]
+    items.sort(key=lambda x: x['name'].lower())
+    return items
+
+
 def get_districts_cached(account_id: int) -> list:
     """Master district list [{code, name}] — DB-first (Phase 1).
 
     Reads ufone_district_cache. If DB empty or oldest synced_at > 7 days,
-    does ONE live fetch + upsert. Keeps a 1h in-memory layer on top for speed.
-    Never calls Ufone on a warm DB.
+    does ONE live fetch + upsert (skipped in UFONE_BRIDGE_ONLY). Keeps a 1h
+    in-memory layer. Bridge fallback: distinct names from vehicle/task cache.
     """
     global _districts_cache
     now = time.time()
@@ -606,7 +664,8 @@ def get_districts_cached(account_id: int) -> list:
                 if r.synced_at and (oldest is None or r.synced_at < oldest):
                     oldest = r.synced_at
             stale = bool(oldest and (datetime.now() - oldest).days >= 7)
-            if not stale:
+            # In bridge mode never force a live refresh — serve whatever we have
+            if not stale or bridge_only_mode():
                 items = [{'code': r.code, 'name': r.name or ''} for r in rows]
                 items.sort(key=lambda x: x['name'])
                 with _districts_cache_lock:
@@ -615,7 +674,14 @@ def get_districts_cached(account_id: int) -> list:
     except Exception as e:
         logger.warning(f"get_districts_cached DB read failed: {e}")
 
-    # 2. Live fetch + upsert to DB
+    # 2. Live fetch + upsert (Render cannot reach Ufone in bridge mode)
+    if bridge_only_mode():
+        items = _districts_from_vehicle_cache(account_id)
+        if items:
+            with _districts_cache_lock:
+                _districts_cache = (now, items)
+        return items
+
     try:
         client = _get_client(account_id, purpose="ui")
         raw = client.get_districts() or []
@@ -651,6 +717,9 @@ def get_districts_cached(account_id: int) -> list:
         return items
     except Exception as e:
         logger.warning(f"get_districts failed: {e}")
+        fallback = _districts_from_vehicle_cache(account_id)
+        if fallback:
+            return fallback
         with _districts_cache_lock:
             return _districts_cache[1]
 

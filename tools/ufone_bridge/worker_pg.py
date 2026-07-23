@@ -108,6 +108,23 @@ def db_connect():
     return psycopg2.connect(url, connect_timeout=30)
 
 
+def upsert_districts(conn, districts: list) -> int:
+    if not districts:
+        return 0
+    sql = """
+    INSERT INTO ufone_district_cache (code, name, synced_at)
+    VALUES (%(code)s, %(name)s, NOW())
+    ON CONFLICT (code) DO UPDATE SET
+      name = EXCLUDED.name,
+      synced_at = EXCLUDED.synced_at
+    """
+    with conn.cursor() as cur:
+        for d in districts:
+            cur.execute(sql, d)
+    conn.commit()
+    return len(districts)
+
+
 def upsert_vehicles(conn, account_id: int, vehicles: list) -> int:
     if not vehicles:
         return 0
@@ -254,6 +271,18 @@ def run_once() -> dict:
     tasks = [normalize_task(r) for r in (client.get_task_dashboard(
         start_date=today, end_date=today, visit_page=False) or [])
         if isinstance(r, dict)]
+    districts = []
+    try:
+        for d in (client.get_districts() or []):
+            if not isinstance(d, dict):
+                continue
+            code = d.get('district_code') or d.get('DistrictCode') or d.get('code')
+            name = (d.get('district_name') or d.get('DistrictName')
+                    or d.get('name') or d.get('District'))
+            if code is not None and name:
+                districts.append({'code': str(code), 'name': str(name).strip()})
+    except Exception as e:
+        logger.warning('districts fetch failed: %s', e)
     emg = []
     try:
         emg = [r for r in (client.get_emergency_tasks(
@@ -264,14 +293,16 @@ def run_once() -> dict:
 
     conn = db_connect()
     try:
+        nd = upsert_districts(conn, districts)
         nv = upsert_vehicles(conn, account_id, vehicles)
         nt = upsert_tasks(conn, account_id, tasks)
     finally:
         conn.close()
 
     ne = push_emg_http(account_id, emg, today)
-    logger.info('pg ingest ok vehicles=%s tasks=%s emg_http=%s', nv, nt, ne)
-    return {'vehicles': nv, 'tasks': nt, 'emergency_report': ne}
+    logger.info('pg ingest ok districts=%s vehicles=%s tasks=%s emg_http=%s',
+                nd, nv, nt, ne)
+    return {'districts': nd, 'vehicles': nv, 'tasks': nt, 'emergency_report': ne}
 
 
 def main() -> int:
