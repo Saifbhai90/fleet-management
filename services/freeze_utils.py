@@ -138,6 +138,8 @@ FREEZE_FORM_CATALOG = [
     ('Expenses - Oil Add', 'oil_expense_form:add'),
     ('Expenses - Oil Edit', 'oil_expense_form:edit'),
     ('Expenses - Oil Delete', 'oil_expense_delete'),
+    ('Expenses - Oil Work Order Add', 'oil_work_order_form:add'),
+    ('Expenses - Oil Work Order Edit', 'oil_work_order_form:edit'),
     ('Expenses - Maintenance Add', 'maintenance_expense_form:add'),
     ('Expenses - Maintenance Edit', 'maintenance_expense_form:edit'),
     ('Expenses - Maintenance Delete', 'maintenance_expense_delete'),
@@ -168,6 +170,9 @@ FREEZE_ENDPOINT_ALIASES = {
     'oil_expense_new': 'oil_expense_form:add',
     'oil_expense_edit': 'oil_expense_form:edit',
     'oil_expense_form': ('oil_expense_form:add', 'oil_expense_form:edit'),
+    'oil_work_order_new': 'oil_work_order_form:add',
+    'oil_work_order_edit': 'oil_work_order_form:edit',
+    'oil_work_order_form': ('oil_work_order_form:add', 'oil_work_order_form:edit'),
     'maintenance_expense_new': 'maintenance_expense_form:add',
     'maintenance_expense_edit': 'maintenance_expense_form:edit',
     'maintenance_expense_form': ('maintenance_expense_form:add', 'maintenance_expense_form:edit'),
@@ -265,6 +270,9 @@ def get_freeze_request_codes(req: Request, endpoint: str) -> list:
     if endpoint == 'oil_expense_form':
         op = 'edit' if view_args.get('pk') else 'add'
         codes.append(f'oil_expense_form:{op}')
+    elif endpoint == 'oil_work_order_form':
+        op = 'edit' if view_args.get('pk') else 'add'
+        codes.append(f'oil_work_order_form:{op}')
     elif endpoint == 'maintenance_expense_form':
         op = 'edit' if view_args.get('pk') else 'add'
         codes.append(f'maintenance_expense_form:{op}')

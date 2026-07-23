@@ -258,6 +258,12 @@ ENDPOINT_PERMISSION_MAP = [
     ('oil_expense_media_download', 'oil_expense'),
     ('oil_expense_media_download_all', 'oil_expense'),
     ('oil_expense_delete', 'oil_expense_delete'),
+    ('oil_work_order_list', 'oil_expense'),
+    ('oil_work_order_export', 'oil_expense'),
+    ('oil_work_order_form', 'oil_expense_add'),
+    ('oil_work_order_detail', 'oil_expense'),
+    ('oil_work_order_invoices', 'oil_expense'),
+    ('oil_work_order_delete', 'oil_expense_delete'),
     # Maintenance
     ('maintenance_expense_list', 'maintenance_expense'),
     ('maintenance_expense_form', 'maintenance_expense_add'),
@@ -640,6 +646,7 @@ ENDPOINT_PERMISSION_MAP = [
     ('maintenance_job_category_update_api', 'maintenance_expense'),
     ('maintenance_work_order_close', 'maintenance_expense_edit'),
     ('maintenance_work_order_upload_resume', 'maintenance_expense'),
+    ('oil_work_order_close', 'oil_expense_edit'),
     # Vehicle family options
     ('vehicle_family_option_add_api', 'vehicles_list'),
     ('vehicle_family_options_api', 'vehicles_list'),
@@ -692,6 +699,7 @@ ENDPOINT_PERMISSION_MAP = [
     ('api_work_order_upload_status', 'maintenance_expense'),
     # Feature API helpers — oil expense
     ('api_oil_expense_approval_text', 'oil_expense'),
+    ('api_oil_work_orders_for_vehicle', 'oil_expense'),
     # Feature API helpers — personal tools
     ('api_personal_tools_quick_print_file', 'users_manage'),
     ('api_personal_tools_quick_print', 'users_manage'),

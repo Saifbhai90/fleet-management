@@ -186,6 +186,13 @@
                 <small class="text-muted">Oil items aur balance tracking.</small>
               </a>
             </div>
+            <div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6">
+              <a href="{{ url_for('oil_work_order_list') }}" class="ws-module-card p-3">
+                <div class="ws-module-icon bg-info-subtle text-info mb-2"><i class="bi bi-clipboard2-check"></i></div>
+                <div class="fw-semibold">Oil Work Orders</div>
+                <small class="text-muted">One oil job with multiple bills and total cost tracking.</small>
+              </a>
+            </div>
             {% endif %}
             {% if can_see_page('maintenance_expense') %}
             <div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6">

@@ -96,6 +96,16 @@
             {{ form.vehicle_id(class="form-select search-select", id="vehicleSelect") }}
           </div>
           <div class="col-md-3 field-group">
+            <label class="form-label d-flex justify-content-between align-items-center">
+              <span>Work Order <small class="text-muted fw-normal">(optional)</small></span>
+              <span class="d-flex gap-2">
+                <a href="{{ url_for('oil_work_order_list') }}" class="small text-decoration-none">View All</a>
+                <a href="{{ url_for('oil_work_order_form') }}" class="small text-decoration-none text-success">+ New</a>
+              </span>
+            </label>
+            {{ form.work_order_id(class="form-select search-select", id="workOrderSelect") }}
+          </div>
+          <div class="col-md-3 field-group">
             <label class="form-label">Oil Change Date <span class="text-danger">*</span></label>
             {{ form.expense_date(class="form-control datepicker", id="expenseDate") }}
           </div>
@@ -1227,7 +1237,61 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   if (vehicleSelect) {
-    vehicleSelect.addEventListener('change', fetchOilLastReading);
+    vehicleSelect.addEventListener('change', function() {
+      fetchOilLastReading();
+      fetchOilWorkOrdersForVehicle();
+    });
+  }
+
+  function _tsValOil(sel) {
+    if (!sel) return '';
+    if (sel.tomselect) return sel.tomselect.getValue() || '';
+    return sel.value || '';
+  }
+  function fetchOilWorkOrdersForVehicle() {
+    var workOrderSelect = document.getElementById('workOrderSelect');
+    if (!workOrderSelect) return;
+    var vid = _tsValOil(vehicleSelect);
+    var currentVal = _tsValOil(workOrderSelect);
+    if (!vid || vid === '0') {
+      if (workOrderSelect.tomselect) {
+        workOrderSelect.tomselect.clear(true);
+        workOrderSelect.tomselect.clearOptions();
+        workOrderSelect.tomselect.addOption({ value: '0', text: '-- No Work Order --' });
+        workOrderSelect.tomselect.setValue('0', true);
+      } else {
+        workOrderSelect.innerHTML = '<option value="0">-- No Work Order --</option>';
+        workOrderSelect.value = '0';
+      }
+      return;
+    }
+    fetch('/api/oil-work-orders/for-vehicle?vehicle_id=' + encodeURIComponent(vid))
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (!d || !d.ok) return;
+        var opts = [{ value: '0', text: '-- No Work Order --' }];
+        (d.work_orders || []).forEach(function(w) {
+          opts.push({ value: String(w.id), text: w.label });
+        });
+        if (workOrderSelect.tomselect) {
+          workOrderSelect.tomselect.clear(true);
+          workOrderSelect.tomselect.clearOptions();
+          opts.forEach(function(o) { workOrderSelect.tomselect.addOption({ value: o.value, text: o.text }); });
+          var stillValid = opts.some(function(o) { return o.value === String(currentVal); });
+          workOrderSelect.tomselect.setValue(stillValid ? String(currentVal) : '0', true);
+        } else {
+          workOrderSelect.innerHTML = '';
+          opts.forEach(function(o) {
+            var el = document.createElement('option');
+            el.value = o.value;
+            el.textContent = o.text;
+            workOrderSelect.appendChild(el);
+          });
+          var stillValid = opts.some(function(o) { return o.value === String(currentVal); });
+          workOrderSelect.value = stillValid ? String(currentVal) : '0';
+        }
+      })
+      .catch(function() {});
   }
   if (currentReading) {
     currentReading.addEventListener('change', fetchOilLastReading);

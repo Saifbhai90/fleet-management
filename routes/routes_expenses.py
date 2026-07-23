@@ -27,6 +27,7 @@ from app import app, db
 from models import (
     Company, Project, Vehicle, Driver, ParkingStation, District,
     FuelExpense, FuelExpenseAttachment,
+    OilWorkOrder, OilWorkOrderAttachment,
     OilExpense, OilExpenseItem, OilExpenseAttachment,
     MaintenanceWorkOrder, MaintenanceWorkOrderAttachment,
     MaintenanceExpense, MaintenanceExpenseItem, MaintenanceExpenseAttachment,
@@ -3152,6 +3153,7 @@ def _workspace_products_for_expense_form(employee_id, form_token):
 
 @app.route('/oil-expenses')
 def oil_expense_list():
+    _ensure_oil_work_order_schema()
     _guard = _require_workspace_employee_for_expense_management()
     if _guard:
         return _guard
@@ -3279,6 +3281,22 @@ def oil_expense_list():
     page_subtotal_balance = sum(item['total_balance_qty'] for item in rows_with_totals)
     page_subtotal_amount = sum(item['total_amount'] for item in rows_with_totals)
     cleanup_status = _latest_expense_cleanup_status('oil', workspace_employee_id)
+    wo_q = OilWorkOrder.query.filter(OilWorkOrder.status != 'closed')
+    if workspace_employee_id:
+        wo_q = wo_q.filter(
+            db.or_(
+                OilWorkOrder.employee_id == workspace_employee_id,
+                OilWorkOrder.employee_id.is_(None),
+            )
+        )
+    if not is_master_or_admin:
+        if allowed_projects:
+            wo_q = wo_q.filter(OilWorkOrder.project_id.in_(list(allowed_projects)))
+        if allowed_districts:
+            wo_q = wo_q.filter(OilWorkOrder.district_id.in_(list(allowed_districts)))
+        if allowed_vehicles:
+            wo_q = wo_q.filter(OilWorkOrder.vehicle_id.in_(list(allowed_vehicles)))
+    open_work_orders = wo_q.order_by(OilWorkOrder.opened_on.desc(), OilWorkOrder.id.desc()).limit(200).all()
     return render_template(
         'oil_expense_list.html',
         form=form,
@@ -3294,6 +3312,7 @@ def oil_expense_list():
         page_subtotal_balance=page_subtotal_balance,
         page_subtotal_amount=page_subtotal_amount,
         show_upload_media_columns=show_upload_media_columns,
+        open_work_orders=open_work_orders,
         location_cascade=_fuel_expense_location_cascade_dict(),
         workspace_employee_id=workspace_employee_id,
     )
@@ -3521,6 +3540,7 @@ def oil_expense_export():
 @app.route('/oil-expense/add', methods=['GET', 'POST'])
 @app.route('/oil-expense/edit/<int:pk>', methods=['GET', 'POST'])
 def oil_expense_form(pk=None):
+    _ensure_oil_work_order_schema()
     _guard = _require_workspace_employee_for_expense_management()
     if _guard:
         return _guard
@@ -3531,6 +3551,15 @@ def oil_expense_form(pk=None):
     if rec and workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
         flash('This expense does not belong to selected workspace employee.', 'danger')
         return redirect(url_for('oil_expense_list'))
+    requested_work_order_id = request.args.get('work_order_id', type=int) or 0
+    requested_work_order = None
+    if requested_work_order_id and not rec and request.method == 'GET':
+        requested_work_order = OilWorkOrder.query.filter_by(id=requested_work_order_id).first()
+        if not requested_work_order:
+            requested_work_order_id = 0
+        elif workspace_employee_id and requested_work_order.employee_id and requested_work_order.employee_id != workspace_employee_id:
+            requested_work_order_id = 0
+            requested_work_order = None
     form = OilExpenseForm(obj=rec)
     total_bill_error = ''
     party_error = ''
@@ -3556,6 +3585,9 @@ def oil_expense_form(pk=None):
     elif rec:
         selected_district_id = rec.district_id or None
         selected_project_id = rec.project_id or None
+    elif requested_work_order:
+        selected_district_id = requested_work_order.district_id or None
+        selected_project_id = requested_work_order.project_id or None
     else:
         selected_district_id = default_district_id or None
     if selected_district_id == 0:
@@ -3576,6 +3608,62 @@ def oil_expense_form(pk=None):
     else:
         form.vehicle_id.choices = [(0, '-- Select Vehicle --')]
 
+    selected_vehicle_id = None
+    if request.method == 'POST':
+        selected_vehicle_id = form.vehicle_id.data or None
+    elif rec:
+        selected_vehicle_id = rec.vehicle_id or None
+    elif requested_work_order:
+        selected_vehicle_id = requested_work_order.vehicle_id or None
+    work_order_q = OilWorkOrder.query
+    if workspace_employee_id:
+        work_order_q = work_order_q.filter(
+            db.or_(
+                OilWorkOrder.employee_id == workspace_employee_id,
+                OilWorkOrder.employee_id.is_(None),
+            )
+        )
+    if selected_vehicle_id:
+        work_order_q = work_order_q.filter(OilWorkOrder.vehicle_id == selected_vehicle_id)
+    work_order_q = work_order_q.filter(OilWorkOrder.status != 'closed')
+    work_orders = work_order_q.order_by(OilWorkOrder.opened_on.desc(), OilWorkOrder.id.desc()).limit(250).all()
+    form.work_order_id.choices = [(0, '-- No Work Order --')] + [
+        (w.id, f'{w.work_order_no} | {w.title}')
+        for w in work_orders
+    ]
+    # Keep currently linked WO visible even if closed (edit path)
+    current_wo_id = None
+    if request.method == 'POST':
+        current_wo_id = form.work_order_id.data or None
+    elif rec and rec.work_order_id:
+        current_wo_id = rec.work_order_id
+    elif requested_work_order:
+        current_wo_id = requested_work_order.id
+    if current_wo_id and current_wo_id != 0 and not any(c[0] == current_wo_id for c in form.work_order_id.choices):
+        linked_wo = OilWorkOrder.query.get(current_wo_id)
+        if linked_wo:
+            form.work_order_id.choices.append(
+                (linked_wo.id, f'{linked_wo.work_order_no} | {linked_wo.title} (closed)' if (linked_wo.status or '') == 'closed' else f'{linked_wo.work_order_no} | {linked_wo.title}')
+            )
+
+    def _render_oil_form():
+        return render_template(
+            'oil_expense_form.html',
+            form=form,
+            rec=rec,
+            title='Edit Oil Expense' if rec else 'Add Oil Expense',
+            products_for_oil=products_for_oil,
+            workspace_parties=workspace_parties,
+            selected_party_id=selected_party_id,
+            entered_total_bill=entered_total_bill,
+            total_bill_error=total_bill_error,
+            party_error=party_error,
+            hbl_expense_by_value=hbl_expense_by_value,
+            oil_attachment_max_mb=oil_attachment_max_mb,
+            requested_work_order=requested_work_order,
+            location_cascade=_fuel_expense_location_cascade_dict(),
+        )
+
     if request.method == 'GET' and rec:
         if rec.district_id:
             form.district_id.data = rec.district_id
@@ -3583,6 +3671,8 @@ def oil_expense_form(pk=None):
             form.project_id.data = rec.project_id
         if rec.vehicle_id:
             form.vehicle_id.data = rec.vehicle_id
+        if rec.work_order_id:
+            form.work_order_id.data = rec.work_order_id
         form.expense_by.data = _workspace_expense_by_for_reference(workspace_employee_id, 'OilExpense', rec.id)
         form.payment_type.data = rec.payment_type or ''
         if rec.total_bill_amount is not None:
@@ -3592,52 +3682,45 @@ def oil_expense_form(pk=None):
         if getattr(rec, 'total_bill_amount', None) is not None:
             entered_total_bill = f"{float(rec.total_bill_amount):.2f}"
     elif request.method == 'GET':
-        if default_district_id:
-            form.district_id.data = default_district_id
+        if requested_work_order:
+            form.district_id.data = requested_work_order.district_id or 0
+            form.project_id.data = requested_work_order.project_id or 0
+            form.vehicle_id.data = requested_work_order.vehicle_id
+            form.work_order_id.data = requested_work_order.id
+            form.expense_date.data = requested_work_order.opened_on or pk_date()
+        else:
+            if default_district_id:
+                form.district_id.data = default_district_id
+            if not form.expense_date.data:
+                form.expense_date.data = pk_date()
         form.payment_type.data = ''
-        if not form.expense_date.data:
-            form.expense_date.data = pk_date()
 
     if form.validate_on_submit():
         vehicle_id = form.vehicle_id.data
         if not vehicle_id:
             flash('Select vehicle.', 'danger')
-            return render_template(
-                'oil_expense_form.html',
-                form=form,
-                rec=rec,
-                title='Edit Oil Expense' if rec else 'Add Oil Expense',
-                products_for_oil=products_for_oil,
-                workspace_parties=workspace_parties,
-                selected_party_id=selected_party_id,
-                entered_total_bill=entered_total_bill,
-                total_bill_error=total_bill_error,
-                party_error=party_error,
-                hbl_expense_by_value=hbl_expense_by_value,
-                oil_attachment_max_mb=oil_attachment_max_mb,
-                location_cascade=_fuel_expense_location_cascade_dict(),
-            )
+            return _render_oil_form()
         expense_date = form.expense_date.data
         payment_type = (form.payment_type.data or '').strip() or None
         if payment_type not in ('Cash', 'Credit'):
             payment_type = None
         if not payment_type:
             flash('Payment Type required hai.', 'danger')
-            return render_template(
-                'oil_expense_form.html',
-                form=form,
-                rec=rec,
-                title='Edit Oil Expense' if rec else 'Add Oil Expense',
-                products_for_oil=products_for_oil,
-                workspace_parties=workspace_parties,
-                selected_party_id=selected_party_id,
-                entered_total_bill=entered_total_bill,
-                total_bill_error=total_bill_error,
-                party_error=party_error,
-                hbl_expense_by_value=hbl_expense_by_value,
-                oil_attachment_max_mb=oil_attachment_max_mb,
-                location_cascade=_fuel_expense_location_cascade_dict(),
-            )
+            return _render_oil_form()
+        work_order_id = form.work_order_id.data or None
+        if work_order_id == 0:
+            work_order_id = None
+        if work_order_id:
+            work_order_obj = OilWorkOrder.query.filter_by(id=work_order_id).first()
+            if not work_order_obj:
+                flash('Selected work order not found.', 'danger')
+                return _render_oil_form()
+            if workspace_employee_id and work_order_obj.employee_id and work_order_obj.employee_id != workspace_employee_id:
+                flash('Selected work order is not allowed for current workspace employee.', 'danger')
+                return _render_oil_form()
+            if int(work_order_obj.vehicle_id or 0) != int(vehicle_id):
+                flash('Selected work order vehicle does not match expense vehicle.', 'danger')
+                return _render_oil_form()
         prev_reading = form.previous_reading.data
         curr_reading = form.current_reading.data
         if prev_reading is None:
@@ -3747,6 +3830,7 @@ def oil_expense_form(pk=None):
                     previous_reading=prev_reading,
                     current_reading=curr_reading,
                     km=km,
+                    work_order_id=work_order_id,
                     remarks=remarks
                 )
                 db.session.add(rec)
@@ -3763,6 +3847,7 @@ def oil_expense_form(pk=None):
                 rec.previous_reading = prev_reading
                 rec.current_reading = curr_reading
                 rec.km = km
+                rec.work_order_id = work_order_id
                 rec.remarks = remarks
             _resequence_vehicle_oil_expenses(vehicle_id, workspace_employee_id)
 
@@ -3794,21 +3879,7 @@ def oil_expense_form(pk=None):
                     flash(total_bill_error, 'danger')
                 if party_error:
                     flash(party_error, 'danger')
-                return render_template(
-                    'oil_expense_form.html',
-                    form=form,
-                    rec=rec if rec and rec.id else None,
-                    title='Edit Oil Expense' if rec else 'Add Oil Expense',
-                    products_for_oil=products_for_oil,
-                    workspace_parties=workspace_parties,
-                    selected_party_id=selected_party_id,
-                    entered_total_bill=entered_total_bill,
-                    total_bill_error=total_bill_error,
-                    party_error=party_error,
-                    hbl_expense_by_value=hbl_expense_by_value,
-                    oil_attachment_max_mb=oil_attachment_max_mb,
-                    location_cascade=_fuel_expense_location_cascade_dict(),
-                )
+                return _render_oil_form()
 
             rec.workspace_party_id = selected_party_id_int
             rec.total_bill_amount = total_bill_amount
@@ -3908,21 +3979,7 @@ def oil_expense_form(pk=None):
         except Exception:
             db.session.rollback()
             raise
-    return render_template(
-        'oil_expense_form.html',
-        form=form,
-        rec=rec,
-        title='Edit Oil Expense' if rec else 'Add Oil Expense',
-        products_for_oil=products_for_oil,
-        workspace_parties=workspace_parties,
-        selected_party_id=selected_party_id,
-        entered_total_bill=entered_total_bill,
-        total_bill_error=total_bill_error,
-        party_error=party_error,
-        hbl_expense_by_value=hbl_expense_by_value,
-        oil_attachment_max_mb=oil_attachment_max_mb,
-        location_cascade=_fuel_expense_location_cascade_dict(),
-    )
+    return _render_oil_form()
 
 
 @app.route('/oil-expense/<int:pk>/view')
@@ -4397,6 +4454,37 @@ def api_maintenance_work_orders_for_vehicle():
     })
 
 
+@app.route('/api/oil-work-orders/for-vehicle')
+def api_oil_work_orders_for_vehicle():
+    _ensure_oil_work_order_schema()
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return jsonify({'ok': False, 'error': 'forbidden'}), 403
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    vehicle_id = request.args.get('vehicle_id', type=int)
+    if not vehicle_id:
+        return jsonify({'ok': True, 'work_orders': []})
+    q = OilWorkOrder.query.filter(
+        OilWorkOrder.vehicle_id == vehicle_id,
+        OilWorkOrder.status != 'closed',
+    )
+    if workspace_employee_id:
+        q = q.filter(
+            db.or_(
+                OilWorkOrder.employee_id == workspace_employee_id,
+                OilWorkOrder.employee_id.is_(None),
+            )
+        )
+    rows = q.order_by(OilWorkOrder.opened_on.desc(), OilWorkOrder.id.desc()).limit(100).all()
+    return jsonify({
+        'ok': True,
+        'work_orders': [
+            {'id': w.id, 'label': f'{w.work_order_no} | {w.title}'}
+            for w in rows
+        ]
+    })
+
+
 @app.route('/api/maintenance-work-order/approval-text/<int:pk>')
 def api_maintenance_work_order_approval_text(pk):
     _guard = _require_workspace_employee_for_expense_management()
@@ -4862,7 +4950,7 @@ def _ensure_maintenance_work_order_schema():
     is_sqlite = db.engine.dialect.name == 'sqlite'
     # CREATE TABLE IF NOT EXISTS works on both dialects; SERIAL is PG-only.
     _pk_def = 'INTEGER PRIMARY KEY AUTOINCREMENT' if is_sqlite else 'SERIAL PRIMARY KEY'
-    create_stmts = [
+    create_table_stmts = [
         f"""
         CREATE TABLE IF NOT EXISTS maintenance_work_order (
             id {_pk_def},
@@ -4880,7 +4968,6 @@ def _ensure_maintenance_work_order_schema():
             created_at TIMESTAMP NULL
         )
         """,
-        "CREATE INDEX IF NOT EXISTS ix_maintenance_work_order_work_order_no ON maintenance_work_order (work_order_no)",
         f"""
         CREATE TABLE IF NOT EXISTS maintenance_work_order_attachment (
             id {_pk_def},
@@ -4891,6 +4978,9 @@ def _ensure_maintenance_work_order_schema():
             created_at TIMESTAMP
         )
         """,
+    ]
+    index_stmts = [
+        "CREATE INDEX IF NOT EXISTS ix_maintenance_work_order_work_order_no ON maintenance_work_order (work_order_no)",
         "CREATE INDEX IF NOT EXISTS ix_mwo_attachment_work_order_id ON maintenance_work_order_attachment (work_order_id)",
         "CREATE INDEX IF NOT EXISTS ix_maintenance_expense_work_order_id ON maintenance_expense (work_order_id)",
     ]
@@ -4919,18 +5009,22 @@ def _ensure_maintenance_work_order_schema():
         ('maintenance_expense', 'work_order_id', 'INTEGER'),
     ]
     try:
-        existing_tables = set(inspect(db.engine).get_table_names())
-        # 1) CREATE TABLE / INDEX statements (idempotent on both dialects)
-        for stmt in create_stmts:
+        # 1) CREATE TABLE first
+        for stmt in create_table_stmts:
             db.session.execute(text(stmt))
         db.session.commit()
-        # 2) Add genuinely missing columns only (avoids SQLite IF NOT EXISTS gap)
+        existing_tables = set(inspect(db.engine).get_table_names())
+        # 2) Add genuinely missing columns (before indexes that need them)
         for _tbl, _col, _coltype in required_columns:
             if _tbl not in existing_tables:
-                continue  # table just created above with all columns
+                continue
             _existing_cols = {c['name'] for c in inspect(db.engine).get_columns(_tbl)}
             if _col not in _existing_cols:
                 db.session.execute(text(f'ALTER TABLE {_tbl} ADD COLUMN {_col} {_coltype}'))
+        db.session.commit()
+        # 3) Indexes after columns exist
+        for stmt in index_stmts:
+            db.session.execute(text(stmt))
         db.session.commit()
         _maintenance_work_order_schema_ready['ok'] = True
     except Exception:
@@ -5445,6 +5539,483 @@ def maintenance_work_order_invoices_export(pk):
         data_rows,
         required_columns=[],
         filename=f'wo_{wo.work_order_no or pk}_bills_{pk_now().strftime("%Y%m%d_%H%M%S")}.xlsx',
+    )
+
+
+def _next_oil_work_order_no(opened_on=None):
+    dt = opened_on or pk_date()
+    yymm = dt.strftime('%y%m')
+    prefix = f"OWO-{yymm}-"
+    latest = OilWorkOrder.query.filter(
+        OilWorkOrder.work_order_no.like(f"{prefix}%")
+    ).order_by(OilWorkOrder.id.desc()).first()
+    serial = 1
+    if latest and latest.work_order_no:
+        try:
+            serial = int(str(latest.work_order_no).split('-')[-1]) + 1
+        except Exception:
+            serial = 1
+    return f"{prefix}{serial:04d}"
+
+
+_oil_work_order_schema_ready = {'ok': False}
+
+
+def _ensure_oil_work_order_schema():
+    """Safety net for oil work-order tables/columns (SQLite-safe, no ADD COLUMN IF NOT EXISTS).
+
+    Order matters: create tables → ADD missing columns → then create indexes that
+    reference those columns (e.g. oil_expense.work_order_id). Creating the index
+    before ALTER TABLE fails on SQLite and previously aborted the whole ensure.
+    """
+    if _oil_work_order_schema_ready.get('ok'):
+        return
+    is_sqlite = db.engine.dialect.name == 'sqlite'
+    _pk_def = 'INTEGER PRIMARY KEY AUTOINCREMENT' if is_sqlite else 'SERIAL PRIMARY KEY'
+    create_table_stmts = [
+        f"""
+        CREATE TABLE IF NOT EXISTS oil_work_order (
+            id {_pk_def},
+            work_order_no VARCHAR(40),
+            district_id INTEGER NULL,
+            project_id INTEGER NULL,
+            employee_id INTEGER NULL,
+            vehicle_id INTEGER NULL,
+            opened_on DATE NULL,
+            closed_on DATE NULL,
+            work_type VARCHAR(120) NULL,
+            title VARCHAR(180) NULL,
+            status VARCHAR(20) NULL DEFAULT 'open',
+            remarks TEXT NULL,
+            created_at TIMESTAMP NULL
+        )
+        """,
+        f"""
+        CREATE TABLE IF NOT EXISTS oil_work_order_attachment (
+            id {_pk_def},
+            work_order_id INTEGER NOT NULL,
+            file_path VARCHAR(2048) NOT NULL,
+            file_type VARCHAR(20),
+            original_name VARCHAR(255),
+            created_at TIMESTAMP
+        )
+        """,
+    ]
+    index_stmts = [
+        "CREATE INDEX IF NOT EXISTS ix_oil_work_order_work_order_no ON oil_work_order (work_order_no)",
+        "CREATE INDEX IF NOT EXISTS ix_owo_attachment_work_order_id ON oil_work_order_attachment (work_order_id)",
+        "CREATE INDEX IF NOT EXISTS ix_oil_expense_work_order_id ON oil_expense (work_order_id)",
+    ]
+    required_columns = [
+        ('oil_work_order', 'work_order_no', 'VARCHAR(40)'),
+        ('oil_work_order', 'district_id', 'INTEGER'),
+        ('oil_work_order', 'project_id', 'INTEGER'),
+        ('oil_work_order', 'employee_id', 'INTEGER'),
+        ('oil_work_order', 'vehicle_id', 'INTEGER'),
+        ('oil_work_order', 'opened_on', 'DATE'),
+        ('oil_work_order', 'closed_on', 'DATE'),
+        ('oil_work_order', 'work_type', 'VARCHAR(120)'),
+        ('oil_work_order', 'title', 'VARCHAR(180)'),
+        ('oil_work_order', 'status', 'VARCHAR(20)'),
+        ('oil_work_order', 'remarks', 'TEXT'),
+        ('oil_work_order', 'created_at', 'TIMESTAMP'),
+        ('oil_expense', 'work_order_id', 'INTEGER'),
+    ]
+    try:
+        existing_tables = set(inspect(db.engine).get_table_names())
+        for stmt in create_table_stmts:
+            db.session.execute(text(stmt))
+        db.session.commit()
+        # Refresh after CREATE TABLE so newly created tables skip ALTER below.
+        existing_tables = set(inspect(db.engine).get_table_names())
+        for _tbl, _col, _coltype in required_columns:
+            if _tbl not in existing_tables:
+                continue
+            _existing_cols = {c['name'] for c in inspect(db.engine).get_columns(_tbl)}
+            if _col not in _existing_cols:
+                db.session.execute(text(f'ALTER TABLE {_tbl} ADD COLUMN {_col} {_coltype}'))
+        db.session.commit()
+        for stmt in index_stmts:
+            db.session.execute(text(stmt))
+        db.session.commit()
+        _oil_work_order_schema_ready['ok'] = True
+    except Exception:
+        db.session.rollback()
+        app.logger.exception('Oil work-order schema safety sync failed')
+
+
+@app.route('/oil-work-orders')
+def oil_work_order_list():
+    _ensure_oil_work_order_schema()
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return _guard
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    from auth_utils import get_user_context
+
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles = user_context.get('allowed_vehicles', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+
+    today = pk_date()
+    from_d = parse_date(request.args.get('from_date', '').strip()) or today
+    to_d = parse_date(request.args.get('to_date', '').strip()) or today
+    if from_d > to_d:
+        from_d, to_d = to_d, from_d
+    status = (request.args.get('status') or '').strip().lower()
+    district_id = request.args.get('district_id', type=int) or 0
+    project_id = request.args.get('project_id', type=int) or 0
+    vehicle_id = request.args.get('vehicle_id', type=int) or 0
+
+    query = OilWorkOrder.query.filter(
+        OilWorkOrder.opened_on >= from_d,
+        OilWorkOrder.opened_on <= to_d,
+    )
+    if workspace_employee_id:
+        query = query.filter(
+            db.or_(
+                OilWorkOrder.employee_id == workspace_employee_id,
+                OilWorkOrder.employee_id.is_(None),
+            )
+        )
+    if not is_master_or_admin:
+        if allowed_projects:
+            query = query.filter(OilWorkOrder.project_id.in_(list(allowed_projects)))
+        if allowed_districts:
+            query = query.filter(OilWorkOrder.district_id.in_(list(allowed_districts)))
+        if allowed_vehicles:
+            query = query.filter(OilWorkOrder.vehicle_id.in_(list(allowed_vehicles)))
+    if status in ('open', 'in_progress', 'closed'):
+        query = query.filter(OilWorkOrder.status == status)
+    if district_id:
+        query = query.filter(OilWorkOrder.district_id == district_id)
+    if project_id:
+        query = query.filter(OilWorkOrder.project_id == project_id)
+    if vehicle_id:
+        query = query.filter(OilWorkOrder.vehicle_id == vehicle_id)
+
+    work_orders = query.order_by(
+        OilWorkOrder.opened_on.desc(), OilWorkOrder.id.desc()
+    ).all()
+    rows = []
+    for wo in work_orders:
+        expenses = wo.expenses.order_by(OilExpense.expense_date.asc(), OilExpense.id.asc()).all()
+        total_amount = sum(float(e.total_bill_amount or 0) for e in expenses)
+        media_count = sum(e.attachments.count() for e in expenses)
+        rows.append({
+            'rec': wo,
+            'bill_count': len(expenses),
+            'total_amount': total_amount,
+            'media_count': media_count,
+        })
+
+    district_q = District.query
+    if not is_master_or_admin and allowed_districts:
+        district_q = district_q.filter(District.id.in_(list(allowed_districts)))
+    project_q = Project.query
+    if not is_master_or_admin and allowed_projects:
+        project_q = project_q.filter(Project.id.in_(list(allowed_projects)))
+    vehicle_q = Vehicle.query
+    if not is_master_or_admin and allowed_vehicles:
+        vehicle_q = vehicle_q.filter(Vehicle.id.in_(list(allowed_vehicles)))
+    d_list = district_q.order_by(District.name).all()
+    p_list = project_q.order_by(Project.name).all()
+    v_list = vehicle_q.order_by(*vehicle_order_by()).all()
+    district_choices = [(0, '-- Select District --')] + [(d.id, d.name) for d in d_list]
+    project_choices = [(0, '-- Select Project --')] + [(p.id, p.name) for p in p_list]
+    vehicle_choices = [(0, '-- All Vehicles --')] + [(v.id, v.vehicle_no) for v in v_list]
+    return render_template(
+        'oil_work_order_list.html',
+        rows=rows,
+        from_date=from_d,
+        to_date=to_d,
+        selected_status=status,
+        selected_district_id=district_id,
+        selected_project_id=project_id,
+        selected_vehicle_id=vehicle_id,
+        district_choices=district_choices,
+        project_choices=project_choices,
+        vehicle_choices=vehicle_choices,
+        location_cascade=_fuel_expense_location_cascade_dict(),
+        workspace_employee_id=workspace_employee_id,
+    )
+
+
+@app.route('/oil-work-orders/export')
+def oil_work_order_export():
+    _ensure_oil_work_order_schema()
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return _guard
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    from auth_utils import get_user_context
+
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles = user_context.get('allowed_vehicles', set())
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+
+    today = pk_date()
+    from_d = parse_date(request.args.get('from_date', '').strip()) or today
+    to_d = parse_date(request.args.get('to_date', '').strip()) or today
+    if from_d > to_d:
+        from_d, to_d = to_d, from_d
+    status = (request.args.get('status') or '').strip().lower()
+    district_id = request.args.get('district_id', type=int) or 0
+    project_id = request.args.get('project_id', type=int) or 0
+    vehicle_id = request.args.get('vehicle_id', type=int) or 0
+
+    query = OilWorkOrder.query.filter(
+        OilWorkOrder.opened_on >= from_d,
+        OilWorkOrder.opened_on <= to_d,
+    )
+    if workspace_employee_id:
+        query = query.filter(
+            db.or_(
+                OilWorkOrder.employee_id == workspace_employee_id,
+                OilWorkOrder.employee_id.is_(None),
+            )
+        )
+    if not is_master_or_admin:
+        if allowed_projects:
+            query = query.filter(OilWorkOrder.project_id.in_(list(allowed_projects)))
+        if allowed_districts:
+            query = query.filter(OilWorkOrder.district_id.in_(list(allowed_districts)))
+        if allowed_vehicles:
+            query = query.filter(OilWorkOrder.vehicle_id.in_(list(allowed_vehicles)))
+    if status in ('open', 'in_progress', 'closed'):
+        query = query.filter(OilWorkOrder.status == status)
+    if district_id:
+        query = query.filter(OilWorkOrder.district_id == district_id)
+    if project_id:
+        query = query.filter(OilWorkOrder.project_id == project_id)
+    if vehicle_id:
+        query = query.filter(OilWorkOrder.vehicle_id == vehicle_id)
+
+    work_orders = query.order_by(OilWorkOrder.opened_on.desc(), OilWorkOrder.id.desc()).all()
+
+    status_label = {'open': 'Open', 'in_progress': 'In Progress', 'closed': 'Closed'}
+    headers = [
+        'Sr', 'Work Order', 'Open Date', 'District', 'Project', 'Vehicle', 'Title', 'Status',
+        'Bills', 'Total Cost',
+    ]
+    data_rows = []
+    for i, wo in enumerate(work_orders, 1):
+        expenses = wo.expenses.order_by(OilExpense.expense_date.asc(), OilExpense.id.asc()).all()
+        total_amount = sum(float(e.total_bill_amount or 0) for e in expenses)
+        st = (wo.status or '').lower()
+        data_rows.append([
+            i,
+            wo.work_order_no or '',
+            wo.opened_on.strftime('%d-%m-%Y') if wo.opened_on else '',
+            wo.district.name if wo.district else '-',
+            wo.project.name if wo.project else '-',
+            wo.vehicle.vehicle_no if wo.vehicle else '-',
+            (wo.title or '').replace('\n', ' ').strip(),
+            status_label.get(st, st or '-'),
+            len(expenses),
+            round(total_amount, 2),
+        ])
+
+    return generate_excel_template(
+        headers,
+        data_rows,
+        required_columns=[],
+        filename=f'oil_work_orders_{pk_now().strftime("%Y%m%d_%H%M%S")}.xlsx',
+    )
+
+
+@app.route('/oil-work-order/add', methods=['GET', 'POST'])
+@app.route('/oil-work-order/edit/<int:pk>', methods=['GET', 'POST'])
+def oil_work_order_form(pk=None):
+    _ensure_oil_work_order_schema()
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return _guard
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    rec = OilWorkOrder.query.get_or_404(pk) if pk else None
+    if rec and workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
+        flash('This work order does not belong to selected workspace employee.', 'danger')
+        return redirect(url_for('oil_work_order_list'))
+
+    default_district_id = _workspace_employee_default_district_id(workspace_employee_id)
+    default_project_id = _workspace_employee_default_project_id(workspace_employee_id, default_district_id)
+
+    districts = District.query.order_by(District.name.asc()).all()
+    if request.method == 'POST':
+        district_id = request.form.get('district_id', type=int)
+        project_id = request.form.get('project_id', type=int)
+        vehicle_id = request.form.get('vehicle_id', type=int)
+    elif rec:
+        district_id = rec.district_id
+        project_id = rec.project_id
+        vehicle_id = rec.vehicle_id
+    else:
+        district_id = default_district_id
+        project_id = default_project_id
+        vehicle_id = None
+
+    project_q = Project.query
+    if district_id:
+        project_q = project_q.join(project_district).filter(project_district.c.district_id == district_id)
+    projects = project_q.order_by(Project.name.asc()).all()
+    vehicle_q = Vehicle.query
+    if project_id:
+        vehicle_q = vehicle_q.filter(Vehicle.project_id == project_id)
+    if district_id:
+        vehicle_q = vehicle_q.filter(Vehicle.district_id == district_id)
+    vehicles = vehicle_q.order_by(*vehicle_order_by()).all()
+
+    if request.method == 'POST':
+        opened_on = parse_date((request.form.get('opened_on') or '').strip()) or pk_date()
+        closed_on = parse_date((request.form.get('closed_on') or '').strip())
+        status = (request.form.get('status') or 'open').strip().lower()
+        if status not in ('open', 'in_progress', 'closed'):
+            status = 'open'
+        title = (request.form.get('title') or '').strip()
+        work_type = (request.form.get('work_type') or '').strip() or None
+        remarks = (request.form.get('remarks') or '').strip() or None
+        if not vehicle_id:
+            flash('Vehicle select karna zaroori hai.', 'danger')
+        elif not title:
+            flash('Work title required hai.', 'danger')
+        else:
+            if rec:
+                rec.district_id = district_id or None
+                rec.project_id = project_id or None
+                rec.vehicle_id = vehicle_id
+                rec.opened_on = opened_on
+                rec.closed_on = closed_on
+                rec.status = status
+                rec.title = title
+                rec.work_type = work_type
+                rec.remarks = remarks
+            else:
+                rec = OilWorkOrder(
+                    work_order_no=_next_oil_work_order_no(opened_on),
+                    district_id=district_id or None,
+                    project_id=project_id or None,
+                    employee_id=workspace_employee_id,
+                    vehicle_id=vehicle_id,
+                    opened_on=opened_on,
+                    closed_on=closed_on,
+                    status=status,
+                    title=title,
+                    work_type=work_type,
+                    remarks=remarks,
+                )
+                db.session.add(rec)
+            db.session.commit()
+            flash('Oil work order saved.', 'success')
+            return redirect(url_for('oil_work_order_detail', pk=rec.id))
+
+    return render_template(
+        'oil_work_order_form.html',
+        rec=rec,
+        districts=districts,
+        projects=projects,
+        vehicles=vehicles,
+        selected_district_id=(district_id or 0),
+        selected_project_id=(project_id or 0),
+        selected_vehicle_id=(vehicle_id or 0),
+        location_cascade=_fuel_expense_location_cascade_dict(),
+    )
+
+
+@app.route('/oil-work-order/delete/<int:pk>', methods=['POST'])
+def oil_work_order_delete(pk):
+    _ensure_oil_work_order_schema()
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return _guard
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    rec = OilWorkOrder.query.get_or_404(pk)
+    if workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
+        flash('This work order does not belong to selected workspace employee.', 'danger')
+        return redirect(request.referrer or url_for('oil_work_order_list'))
+    if rec.expenses.count() > 0:
+        flash('Work order delete nahi ho sakta: is par pehle se oil bill(s) / invoice link hain. Pehle bills alag karein ya delete karein.', 'danger')
+        return redirect(request.referrer or url_for('oil_work_order_list'))
+    db.session.delete(rec)
+    db.session.commit()
+    flash('Work order delete ho gaya.', 'success')
+    return redirect(request.referrer or url_for('oil_work_order_list'))
+
+
+@app.route('/oil-work-order/<int:pk>/close', methods=['POST'])
+def oil_work_order_close(pk):
+    _ensure_oil_work_order_schema()
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return jsonify({'ok': False, 'error': 'Not authorized'}), 403
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    rec = OilWorkOrder.query.get_or_404(pk)
+    if workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
+        return jsonify({'ok': False, 'error': 'Not allowed'}), 403
+    close_date_str = (request.json or {}).get('close_date') or ''
+    close_date = parse_date(close_date_str) if close_date_str else pk_date()
+    rec.status = 'closed'
+    rec.closed_on = close_date
+    db.session.commit()
+    return jsonify({'ok': True, 'work_order_no': rec.work_order_no, 'closed_on': format_date_ddmmyyyy(close_date)})
+
+
+@app.route('/oil-work-order/<int:pk>')
+def oil_work_order_detail(pk):
+    _ensure_oil_work_order_schema()
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return _guard
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    rec = OilWorkOrder.query.get_or_404(pk)
+    if workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
+        flash('This work order does not belong to selected workspace employee.', 'danger')
+        return redirect(url_for('oil_work_order_list'))
+    expenses = rec.expenses.order_by(OilExpense.expense_date.asc(), OilExpense.id.asc()).all()
+    total_bill = sum(float(x.total_bill_amount or 0) for x in expenses)
+    total_media = sum(x.attachments.count() for x in expenses)
+    from urllib.parse import urlencode
+    owo_preserve_qs = urlencode(request.args) if request.args else None
+    return render_template(
+        'oil_work_order_detail.html',
+        rec=rec,
+        expenses=expenses,
+        total_bill=total_bill,
+        total_media=total_media,
+        owo_preserve_qs=owo_preserve_qs,
+    )
+
+
+@app.route('/oil-work-order/<int:pk>/invoices')
+def oil_work_order_invoices(pk):
+    """Consolidated WO + all linked oil bills (invoice bodies) on one page."""
+    _ensure_oil_work_order_schema()
+    _guard = _require_workspace_employee_for_expense_management()
+    if _guard:
+        return _guard
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    rec = OilWorkOrder.query.get_or_404(pk)
+    if workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
+        flash('This work order does not belong to selected workspace employee.', 'danger')
+        return redirect(url_for('oil_work_order_list'))
+    expenses = rec.expenses.order_by(OilExpense.expense_date.asc(), OilExpense.id.asc()).all()
+    total_bill = sum(float(x.total_bill_amount or 0) for x in expenses)
+    total_media = sum(x.attachments.count() for x in expenses)
+    from urllib.parse import urlencode
+    owo_preserve_qs = urlencode(request.args) if request.args else None
+    return render_template(
+        'oil_work_order_invoices.html',
+        rec=rec,
+        expenses=expenses,
+        total_bill=total_bill,
+        total_media=total_media,
+        owo_preserve_qs=owo_preserve_qs,
+        this_page_path=request.full_path,
     )
 
 
