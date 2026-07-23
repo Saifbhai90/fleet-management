@@ -1183,6 +1183,15 @@ def fetch_dashboard_counts(account_id: int, force: bool = False,
         if candidates:
             latest_sync = max(candidates)
 
+        synced_iso = None
+        if latest_sync:
+            # Naive DB timestamps are UTC from VPS NOW(); mark Z so the
+            # browser converts to PKT instead of treating them as local.
+            if getattr(latest_sync, 'tzinfo', None) is None:
+                synced_iso = latest_sync.isoformat() + 'Z'
+            else:
+                synced_iso = latest_sync.isoformat()
+
         data = {
             'total_ambulances': total_amb,
             'task_green': green,
@@ -1191,7 +1200,7 @@ def fetch_dashboard_counts(account_id: int, force: bool = False,
             'task_orange': orange,
             'task_in_process': in_process,
             'task_total': task_total,
-            'synced_at': latest_sync.isoformat() if latest_sync else None,
+            'synced_at': synced_iso,
             'fetched_at': now,
         }
         with _dash_counts_lock:
