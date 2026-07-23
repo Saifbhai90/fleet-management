@@ -162,6 +162,14 @@ def db_connect():
     return psycopg2.connect(url, connect_timeout=30)
 
 
+def _pg_session(conn) -> None:
+    """Keep bridge writes from hanging the VPS worker forever."""
+    with conn.cursor() as cur:
+        cur.execute("SET statement_timeout = '120s'")
+        cur.execute("SET lock_timeout = '30s'")
+    conn.commit()
+
+
 def upsert_districts(conn, districts: list) -> int:
     if not districts:
         return 0
@@ -394,15 +402,19 @@ def run_once() -> dict:
     os.environ['UFONE_SESSION_DIR'] = session_dir
 
     client = UfoneClient(username, password, session_key=f'bridge_{account_id}')
+    logger.info('connecting to Ufone…')
     client.connect(reuse_session=True)
     today_d = date.today()
     today = today_d.strftime('%Y-%m-%d')
 
+    logger.info('fetching vehicles…')
     vehicles = [normalize_ambulance(r) for r in (client.get_ambulance_list() or [])
                 if isinstance(r, dict) and r.get('Reg_No')]
+    logger.info('vehicles=%s; fetching tasks…', len(vehicles))
     tasks = [normalize_task(r) for r in (client.get_task_dashboard(
         start_date=today, end_date=today, visit_page=False) or [])
         if isinstance(r, dict)]
+    logger.info('tasks=%s; fetching districts…', len(tasks))
     districts = []
     try:
         for d in (client.get_districts() or []):
@@ -415,20 +427,36 @@ def run_once() -> dict:
                 districts.append({'code': str(code), 'name': str(name).strip()})
     except Exception as e:
         logger.warning('districts fetch failed: %s', e)
+    logger.info('districts=%s; fetching emergency report…', len(districts))
     emg = []
     try:
-        emg = [r for r in (client.get_emergency_tasks(
-            start_date=today, end_date=today, district='', visit_page=False) or [])
-            if isinstance(r, dict)]
+        emg_raw = client._call(
+            "ReportEmergencyTask.aspx", "getAmbulanceTaskReport",
+            {
+                "startDate": client._to_ufone_date(today),
+                "endDate": client._to_ufone_date(today),
+                "District": "", "Tehsil": "", "UnionCouncil": "", "TaskId": "",
+            },
+            visit_page=False, timeout=60, retries=1,
+        ) or []
+        emg = [r for r in emg_raw if isinstance(r, dict)]
+        logger.info('emergency rows=%s', len(emg))
     except Exception as e:
         logger.warning('emg fetch failed: %s', e)
 
+    logger.info('writing to Postgres…')
     conn = db_connect()
     try:
+        _pg_session(conn)
         nd = upsert_districts(conn, districts)
         nv = upsert_vehicles(conn, account_id, vehicles)
         nt = upsert_tasks(conn, account_id, tasks)
-        ne = upsert_emergency(conn, account_id, emg, today_d)
+        ne = 0
+        try:
+            ne = upsert_emergency(conn, account_id, emg, today_d)
+        except Exception as e:
+            conn.rollback()
+            logger.warning('emg pg upsert failed (non-fatal): %s', e)
     finally:
         conn.close()
 
@@ -441,6 +469,15 @@ def main() -> int:
     _load_dotenv(ROOT / '.env')
     once = '--once' in sys.argv
     interval = _int_env('BRIDGE_INTERVAL_SEC', 180)
+    # Single-instance lock — overlapping syncs hang on Ufone session + PG.
+    lock_path = Path(_env('BRIDGE_LOCK_FILE', '/tmp/ufone-bridge.lock'))
+    lock_fh = open(lock_path, 'w')
+    try:
+        import fcntl
+        fcntl.flock(lock_fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except Exception:
+        logger.error('another bridge worker holds the lock — exiting')
+        return 1
     failures = 0
     while True:
         try:
