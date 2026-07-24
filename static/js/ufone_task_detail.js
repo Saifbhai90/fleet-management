@@ -16,7 +16,7 @@
       ['Received By', ['ReceivedBy', 'received_by']],
       ['Status', ['Status', 'status']],
       ['Closed By', ['ClosedByName', 'TaskClosedBy', 'task_closed_by', 'Closed_By']],
-      ['END Date/Time', ['EndTime', 'EndDate', 'CompletedDateTime', 'CompletedDate', 'completed_date']],
+      ['END Date/Time', ['_end_datetime', 'CompletedDateTime', 'EndDate', 'EndTime', 'CompletedDate', 'completed_date']],
       ['Closing Remarks', ['ClosingRemarks', 'closing_remarks']],
     ],
     patient: [
@@ -54,7 +54,7 @@
       ['Task Create Date/Time', ['_date', 'CD', 'CreatedDate']],
       ['Created Time', ['CD_time', 'CreatedTime']],
       ['Closed By', ['ClosedByName']],
-      ['END Date/Time', ['EndTime', 'EndDate', 'CompletedDateTime']],
+      ['END Date/Time', ['_end_datetime', 'CompletedDateTime', 'EndDate', 'EndTime']],
       ['End Date', ['EndDate']],
       ['Closing Remarks', ['ClosingRemarks']],
     ],
@@ -170,6 +170,15 @@
     const cd = _pick(d, ['CD', 'CreatedDate']);
     const ct = _pick(d, ['CD_time', 'CreatedTime']);
     d._date = [cd, ct].filter(Boolean).join(' ');
+    // END Date/Time: prefer full CompletedDateTime; else EndDate + EndTime
+    const endFull = _pick(d, ['CompletedDateTime', 'CompletedDate', 'completed_date']);
+    const endDate = _pick(d, ['EndDate']);
+    const endTime = _pick(d, ['EndTime']);
+    if (endFull) {
+      d._end_datetime = endFull;
+    } else {
+      d._end_datetime = [endDate, endTime].filter(Boolean).join(' ');
+    }
     const dn = _pick(d, ['Driver_Name']);
     const dc = _pick(d, ['Driver_Cell']);
     d._driver_day = dn ? (dc ? `${dn} (${dc})` : dn) : '';
