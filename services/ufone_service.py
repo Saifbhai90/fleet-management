@@ -136,15 +136,21 @@ def normalize_task(raw: dict) -> dict:
         'uc': raw.get('uc_name') or raw.get('UCname') or raw.get('UnionCouncil'),
         'facility_code': raw.get('facility_code') or raw.get('FacilityCode'),
         'facility_name': raw.get('facility_name') or raw.get('FacilityName'),
+        'facility_type': (raw.get('facilityType') or raw.get('facility_type')
+                          or raw.get('FacilityType')),
+        'facilityType': (raw.get('facilityType') or raw.get('facility_type')
+                         or raw.get('FacilityType')),
         'amb_id': raw.get('ambId'),
         'request_from': raw.get('RequestFrom'),
         'is_transfer': raw.get('isTransfer') or raw.get('isTransfer2'),
         'created_date': raw.get('CD') or raw.get('CreatedDate'),
+        'created_time': raw.get('CD_time') or raw.get('CreatedTime'),
         'distance': _to_float(raw.get('Distance') or raw.get('distanceInKM'), None),
         'driver_name': raw.get('Driver_Name'),
         'driver_cell': raw.get('Driver_Cell'),
         'location': raw.get('location') or raw.get('Location'),
-        'category': raw.get('Category'),
+        'category': raw.get('Category') or raw.get('category'),
+        'Category': raw.get('Category') or raw.get('category'),
         'request_for': raw.get('RequestFor'),
     }
 
@@ -1276,6 +1282,62 @@ def load_vehicles_from_db(account_id: int) -> list:
     return items
 
 
+def _enrich_tasks_from_emg(items: list) -> list:
+    """Fill category / facilityType / address from EmergencyTaskRecord when missing."""
+    from models import EmergencyTaskRecord
+
+    if not items:
+        return items
+
+    keys = set()
+    for t in items:
+        for raw in (t.get('task_id'), t.get('id')):
+            s = str(raw or '').strip()
+            if not s:
+                continue
+            keys.add(s)
+            bare = s.upper().replace('PHF-', '').strip()
+            if bare:
+                keys.add(bare)
+                keys.add(f'PHF-{bare}')
+    if not keys:
+        return items
+
+    try:
+        rows = (EmergencyTaskRecord.query
+                .filter(EmergencyTaskRecord.task_id_ext.in_(list(keys)))
+                .order_by(EmergencyTaskRecord.task_date.desc(),
+                          EmergencyTaskRecord.id.desc())
+                .all())
+    except Exception:
+        return items
+
+    by_bare = {}
+    for r in rows:
+        bare = str(r.task_id_ext or '').upper().replace('PHF-', '').strip()
+        if bare and bare not in by_bare:
+            by_bare[bare] = r
+
+    for t in items:
+        bare = str(t.get('task_id') or t.get('id') or '').upper().replace('PHF-', '').strip()
+        r = by_bare.get(bare)
+        if not r:
+            continue
+        if not (t.get('category') or '').strip() and r.category:
+            t['category'] = r.category
+        ft = r.facility_type
+        if not (t.get('facility_type') or t.get('facilityType') or '').strip() and ft:
+            t['facility_type'] = ft
+            t['facilityType'] = ft
+        if not (t.get('facility_name') or '').strip() and r.facility_name:
+            t['facility_name'] = r.facility_name
+        if not (t.get('address') or '').strip() and r.address:
+            t['address'] = r.address
+        if not (t.get('created_time') or '').strip() and r.created_time:
+            t['created_time'] = r.created_time
+    return items
+
+
 def load_tasks_from_db(account_id: int, limit: int = 50) -> list:
     """Read last-known tasks from UfoneTaskCache (instant, no Ufone HTTP)."""
     from models import UfoneTaskCache
@@ -1290,12 +1352,20 @@ def load_tasks_from_db(account_id: int, limit: int = 50) -> list:
         # created_date: prefer the parsed DB column; fall back to raw_json
         # (older rows may have NULL created_date before the backfill fix).
         cd = r.created_date.isoformat() if r.created_date else None
-        if not cd and r.raw_json:
+        ct = None
+        facility_type = None
+        category = None
+        if r.raw_json:
             try:
                 rj = json.loads(r.raw_json)
-                cd = rj.get('created_date') or rj.get('CD') or rj.get('CreatedDate')
+                if not cd:
+                    cd = rj.get('created_date') or rj.get('CD') or rj.get('CreatedDate')
+                ct = rj.get('created_time') or rj.get('CD_time') or rj.get('CreatedTime')
+                facility_type = (rj.get('facilityType') or rj.get('facility_type')
+                                 or rj.get('FacilityType'))
+                category = rj.get('Category') or rj.get('category')
             except Exception:
-                cd = None
+                pass
         items.append({
             'id': r.task_id,
             'task_id': r.task_id,
@@ -1310,15 +1380,20 @@ def load_tasks_from_db(account_id: int, limit: int = 50) -> list:
             'uc': None,
             'facility_code': None,
             'facility_name': r.facility,
+            'facility_type': facility_type,
+            'facilityType': facility_type,
             'amb_id': None,
             'request_from': r.request_from,
             'is_transfer': r.is_transfer,
             'created_date': cd,
+            'created_time': ct,
             'distance': float(r.distance) if r.distance is not None else None,
             'driver_name': None,
             'driver_cell': None,
             'location': None,
+            'category': category,
         })
+    items = _enrich_tasks_from_emg(items)
     items = sorted(
         items,
         key=lambda t: (_task_status_rank(t), -(int(t.get('task_id') or 0) if str(t.get('task_id') or '').isdigit() else 0)),
@@ -1339,6 +1414,8 @@ def load_dashboard_snapshot(account_id: int) -> tuple:
     tasks = get_cached_tasks(account_id)
     if not tasks:
         tasks = load_tasks_from_db(account_id)
+    else:
+        tasks = _enrich_tasks_from_emg(list(tasks))
     stats = get_summary_stats(account_id, vehicles=vehicles)
     return vehicles, tasks, stats
 
@@ -1857,15 +1934,19 @@ def _emg_row_to_task(row) -> dict:
         'uc': row.uc_name,
         'facility_code': row.facility_code,
         'facility_name': row.facility_name,
+        'facility_type': row.facility_type,
+        'facilityType': row.facility_type,
         'amb_id': None,
         'request_from': row.request_from,
         'is_transfer': None,
         'created_date': cd,
+        'created_time': row.created_time,
         'distance': _to_float(row.distance_in_km, None) if row.distance_in_km else None,
         'driver_name': None,
         'driver_cell': None,
         'location': row.location,
         'category': row.category,
+        'Category': row.category,
         'request_for': row.request_for,
     }
 

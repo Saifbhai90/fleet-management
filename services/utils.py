@@ -101,6 +101,31 @@ def format_ufone_date_short(s: Any) -> str:
     return s
 
 
+def format_ufone_datetime_short(s: Any, time_part: Any = None) -> str:
+    """Date + time for dashboard table: dd-mm-yy HH:MM[:SS] when time exists."""
+    date_part = format_ufone_date_short(s)
+    if not date_part:
+        return ''
+    raw = str(s or '').strip()
+    tm = None
+    if time_part not in (None, ''):
+        tm = str(time_part).strip()
+    if not tm:
+        m = re.search(r'(\d{1,2}:\d{2}(?::\d{2})?)', raw)
+        if m:
+            tm = m.group(1)
+        else:
+            # ISO T separator
+            m = re.search(r'T(\d{2}:\d{2}(?::\d{2})?)', raw)
+            if m:
+                tm = m.group(1)
+    if tm:
+        # Drop trailing .fff if any
+        tm = tm.split('.')[0]
+        return f'{date_part} {tm}'
+    return date_part
+
+
 def parse_date(s: Optional[str]) -> Optional[date]:
     """Parse date string. Accepts dd-mm-yyyy or yyyy-mm-dd."""
     if not s or not str(s).strip():

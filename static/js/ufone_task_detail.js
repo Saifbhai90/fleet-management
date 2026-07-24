@@ -317,6 +317,12 @@
 
   async function openTaskDetail(id, mode) {
     if (!cfg) return;
+    id = numericTaskId(id);
+    if (!id) {
+      document.getElementById('taskModalBody').innerHTML =
+        '<p class="text-danger text-center">Invalid task id.</p>';
+      return;
+    }
     const token = ++taskModalToken;
     lastMode = mode === 'full' ? 'full' : 'short';
     const modal = bootstrap.Modal.getOrCreateInstance(cfg.taskModalEl);
@@ -327,10 +333,14 @@
     // Always load/store full detail+comments once — Short/Full is display-only
     let hadCache = false;
     let needVps = true;
+    let stage1Error = '';
     try {
       const res = await fetch('/ufone/task/' + id);
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (token !== taskModalToken) return;
+      if (!res.ok) {
+        stage1Error = data.error || ('HTTP ' + res.status);
+      }
       needVps = data.needs_vps_refresh !== false;
       if (data.detail && Object.keys(data.detail).length) {
         hadCache = true;
@@ -341,13 +351,15 @@
 
     try {
       const res = await fetch('/api/ufone/task/' + id + '/vps-refresh');
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (token !== taskModalToken) return;
       if (data.detail && Object.keys(data.detail).length) {
         renderTaskDetail(data, false, lastMode);
       } else if (!hadCache) {
+        const why = data.error || data.warning || stage1Error || 'DB/VPS mein detail abhi nahi mili';
         document.getElementById('taskModalBody').innerHTML =
-          '<p class="text-danger text-center">Task detail not available yet. Try again.</p>';
+          `<p class="text-danger text-center">Task detail not available yet. Try again.</p>` +
+          `<p class="text-muted text-center small">${why}</p>`;
       }
     } catch (e) {
       if (token === taskModalToken && !hadCache) {
@@ -375,7 +387,7 @@
       if (viewBtn) {
         ev.preventDefault();
         // Open Short by default; Full toggle is inside the detail modal
-        openTaskDetail(viewBtn.dataset.id, 'short');
+        openTaskDetail(numericTaskId(viewBtn.dataset.id), 'short');
       }
     });
   }

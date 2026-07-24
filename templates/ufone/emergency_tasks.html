@@ -112,7 +112,7 @@
             </td>
             <td><small class="text-muted">{{ t.RequestFrom or t.request_from or '-' }}</small></td>
             <td style="text-align: right;">
-              <button class="btn btn-sm btn-outline-primary view-task-btn" data-id="{{ t.TaskId or t.task_id or t.id }}">
+              <button class="btn btn-sm btn-outline-primary view-task-btn" data-id="{{ (t.TaskId or t.task_id or t.id or '')|string|replace('PHF-','')|replace('phf-','') }}">
                 <i class="bi bi-eye"></i> View
               </button>
             </td>

@@ -36,6 +36,13 @@
   .uf-kpi.k-green  { background: linear-gradient(135deg,#3bbf6e,#2a9d55); }
   .uf-kpi.k-teal  { background: linear-gradient(135deg,#14b8a6,#0d9488); }
   .uf-kpi.k-yellow { background: linear-gradient(135deg,#eab308,#ca8a04); color: #1e293b; }
+  .uf-kpi.uf-kpi-click {
+    cursor: pointer; transition: transform .15s ease, box-shadow .15s ease, outline .15s ease;
+  }
+  .uf-kpi.uf-kpi-click:hover { transform: translateY(-2px); box-shadow: 0 8px 18px -6px rgba(0,0,0,0.35); }
+  .uf-kpi.uf-kpi-click.uf-kpi-active {
+    outline: 3px solid rgba(255,255,255,.85); outline-offset: 2px;
+  }
   @media (max-width: 1399px) { .uf-kpi-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
   @media (max-width: 991px)  { .uf-kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
   @media (max-width: 575px)  { .uf-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
@@ -223,6 +230,12 @@
     </div>
     <div class="d-flex gap-2 align-items-center">
       {{ nav_back_button() }}
+      <button type="button" class="uf-btn uf-btn-outline btn-sm" id="btnPrintReport" title="Print / Preview task list">
+        <i class="bi bi-eye"></i> Print / Preview
+      </button>
+      <button type="button" class="uf-btn uf-btn-outline btn-sm" id="btnExportReport" title="Export task list">
+        <i class="bi bi-file-earmark-excel"></i> Export
+      </button>
       <button class="uf-btn" id="forceRefreshBtn"><i class="bi bi-arrow-clockwise"></i> Refresh</button>
     </div>
   </div>
@@ -237,6 +250,11 @@
       <div class="col-6 col-md-2">
         <label class="uf-flabel"><i class="bi bi-calendar3"></i> To Date</label>
         <input type="date" class="form-control" id="fTo">
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="uf-flabel"><i class="bi bi-hash"></i> Task ID</label>
+        <input type="text" class="form-control form-control-sm" id="fTaskId"
+               placeholder="e.g. 12345" inputmode="numeric" autocomplete="off">
       </div>
       <div class="col-6 col-md-2">
         <label class="uf-flabel"><i class="bi bi-geo-alt"></i> District</label>
@@ -259,59 +277,59 @@
           <option value="cancelled">Cancelled</option>
         </select>
       </div>
-      <div class="col-6 col-md-2 d-flex gap-2">
-        <button class="uf-btn btn-sm flex-fill" id="fApply"><i class="bi bi-funnel-fill"></i> Apply</button>
+      <div class="col-12 d-flex gap-2 mt-1">
+        <button class="uf-btn btn-sm" id="fApply" style="min-width:110px;"><i class="bi bi-funnel-fill"></i> Apply</button>
         <button class="uf-btn uf-btn-outline btn-sm" id="fReset" title="Reset filters"><i class="bi bi-arrow-counterclockwise"></i></button>
       </div>
     </div>
     <div id="fSummary" class="small mt-2" style="display:none;"></div>
   </div>
 
-  <!-- KPI cards — fast sources (DB cache + Emergency Task Report Category) -->
+  <!-- KPI cards — task cards clickable; Total Ambulances not filter-linked -->
   <div class="uf-kpi-grid" id="ufKpiGrid">
-    <div class="uf-kpi k-blue">
+    <div class="uf-kpi k-blue" id="kpiAmb" title="Fleet ambulances (not changed by task filters)">
       <i class="bi bi-truck-front-fill uf-kpi-ic"></i>
       <div class="uf-kpi-body">
         <div class="uf-kpi-num" id="cAmb">—</div>
         <div class="uf-kpi-lbl">Total Ambulances</div>
       </div>
     </div>
-    <div class="uf-kpi k-teal">
+    <div class="uf-kpi k-teal uf-kpi-click" data-task-filter="all" title="Show all tasks in current list">
       <i class="bi bi-clipboard-data uf-kpi-ic"></i>
       <div class="uf-kpi-body">
         <div class="uf-kpi-num" id="cTotal">—</div>
         <div class="uf-kpi-lbl">Total Task Count</div>
       </div>
     </div>
-    <div class="uf-kpi k-green">
+    <div class="uf-kpi k-green uf-kpi-click" data-task-filter="green" title="Filter Green tasks">
       <i class="bi bi-check2-circle uf-kpi-ic"></i>
       <div class="uf-kpi-body">
         <div class="uf-kpi-num" id="cGreen">—</div>
         <div class="uf-kpi-lbl">Green Tasks</div>
       </div>
     </div>
-    <div class="uf-kpi k-yellow">
+    <div class="uf-kpi k-yellow uf-kpi-click" data-task-filter="yellow" title="Filter Yellow tasks">
       <i class="bi bi-exclamation-triangle-fill uf-kpi-ic"></i>
       <div class="uf-kpi-body">
         <div class="uf-kpi-num" id="cYellow">—</div>
         <div class="uf-kpi-lbl">Yellow Tasks</div>
       </div>
     </div>
-    <div class="uf-kpi" style="background: linear-gradient(135deg,#e0483a,#b8332a);">
+    <div class="uf-kpi uf-kpi-click" style="background: linear-gradient(135deg,#e0483a,#b8332a);" data-task-filter="red" title="Filter Red tasks">
       <i class="bi bi-x-circle-fill uf-kpi-ic"></i>
       <div class="uf-kpi-body">
         <div class="uf-kpi-num" id="cRed">—</div>
         <div class="uf-kpi-lbl">Red Tasks</div>
       </div>
     </div>
-    <div class="uf-kpi k-orange">
+    <div class="uf-kpi k-orange uf-kpi-click" data-task-filter="orange" title="Filter Orange tasks">
       <i class="bi bi-flag-fill uf-kpi-ic"></i>
       <div class="uf-kpi-body">
         <div class="uf-kpi-num" id="cOrange">—</div>
         <div class="uf-kpi-lbl">Orange Tasks</div>
       </div>
     </div>
-    <div class="uf-kpi" style="background: linear-gradient(135deg,#2f7fe0,#1c5fb8);">
+    <div class="uf-kpi uf-kpi-click" style="background: linear-gradient(135deg,#2f7fe0,#1c5fb8);" data-task-filter="in_process" title="Filter In-Process tasks">
       <i class="bi bi-arrow-repeat uf-kpi-ic"></i>
       <div class="uf-kpi-body">
         <div class="uf-kpi-num" id="cInProc">—</div>
@@ -337,24 +355,31 @@
         </div>
         <script type="application/json" id="taskListSeed">{{ tasks|tojson }}</script>
         <div class="table-responsive" id="taskTableWrap">
-          <table class="table table-hover uf-table mb-0">
+          <table class="table table-hover uf-table mb-0" id="ufoneDashboardTaskTable">
             <thead>
               <tr>
                 <th>Task ID</th>
-                <th>Date</th>
+                <th>Date/Time</th>
                 <th>Patient</th>
+                <th>Address</th>
+                <th>Facility</th>
+                <th>Facility Type</th>
                 <th>Ambulance</th>
                 <th>District</th>
                 <th>Status</th>
-                <th>Action</th>
+                <th>Category</th>
+                <th class="no-print">Action</th>
               </tr>
             </thead>
             <tbody id="taskTableBody">
               {% for t in tasks[:6] %}
               <tr>
                 <td><span class="badge bg-primary-subtle text-primary fw-bold">PHF-{{ t.task_id or t.id }}</span></td>
-                <td><small class="uf-task-date">{{ (t.created_date or '')|ufdate or '-' }}</small></td>
+                <td><small class="uf-task-date">{{ (t.created_date or '')|ufdatetime(t.created_time) or '-' }}</small></td>
                 <td class="fw-bold text-dark">{{ t.patient_name or '-' }}</td>
+                <td><small>{{ t.address or '-' }}</small></td>
+                <td><small>{{ t.facility_name or '-' }}</small></td>
+                <td><small>{{ t.facility_type or t.facilityType or '-' }}</small></td>
                 <td><span class="badge bg-light text-dark border">{{ t.ambulance or '-' }}</span></td>
                 <td><small>{{ t.district or '-' }}</small></td>
                 <td>
@@ -368,15 +393,16 @@
                   <span class="uf-badge badge-inactive">{{ t.status or 'Pending' }}</span>
                   {% endif %}
                 </td>
-                <td>
-                  <button class="btn btn-sm btn-outline-secondary task-detail-btn" data-id="{{ t.task_id or t.id }}">
+                <td><small>{{ t.category or t.Category or '-' }}</small></td>
+                <td class="no-print">
+                  <button class="btn btn-sm btn-outline-secondary task-detail-btn" data-id="{{ (t.task_id or t.id or '')|string|replace('PHF-','')|replace('phf-','') }}">
                     <i class="bi bi-eye"></i>
                   </button>
                 </td>
               </tr>
               {% else %}
               <tr>
-                <td colspan="7" class="text-center text-muted py-4">
+                <td colspan="11" class="text-center text-muted py-4">
                   <i class="bi bi-inbox-fill d-block mb-2" style="font-size:24px;"></i>
                   No tasks right now.
                 </td>
@@ -685,47 +711,70 @@ function esc(s) {
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-function formatTaskDate(v) {
+function formatTaskDate(v, timePart) {
   if (v == null || v === '') return '-';
   const s = String(v).trim();
   if (!s || s.startsWith('01 Jan 1900') || s.startsWith('1900') || s.startsWith('01/01/1900')) return '-';
 
+  let datePart = '';
+  let timeStr = (timePart != null && String(timePart).trim()) ? String(timePart).trim().split('.')[0] : '';
+
   // ISO: 2026-07-22T00:55:10 or 2026-07-22
-  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (m) return `${m[3]}-${m[2]}-${m[1].slice(-2)}`;
+  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s](\d{2}:\d{2}(?::\d{2})?))?/);
+  if (m) {
+    datePart = `${m[3]}-${m[2]}-${m[1].slice(-2)}`;
+    if (!timeStr && m[4]) timeStr = m[4];
+  }
 
   // MM/DD/YYYY or MM/DD/YYYY HH:MM
-  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
-  if (m) {
-    const yy = m[3].length === 4 ? m[3].slice(-2) : m[3].padStart(2, '0');
-    return `${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}-${yy}`;
+  if (!datePart) {
+    m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})(?:\s+(\d{1,2}:\d{2}(?::\d{2})?))?/);
+    if (m) {
+      const yy = m[3].length === 4 ? m[3].slice(-2) : m[3].padStart(2, '0');
+      datePart = `${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}-${yy}`;
+      if (!timeStr && m[4]) timeStr = m[4];
+    }
   }
 
   // "22 Jul 2026 00:55:10"
-  m = s.match(/^(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})/);
-  if (m) {
-    const months = {jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'};
-    const mm = months[m[2].toLowerCase()];
-    if (mm) return `${m[1].padStart(2,'0')}-${mm}-${m[3].slice(-2)}`;
+  if (!datePart) {
+    m = s.match(/^(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})(?:\s+(\d{1,2}:\d{2}(?::\d{2})?))?/);
+    if (m) {
+      const months = {jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'};
+      const mm = months[m[2].toLowerCase()];
+      if (mm) {
+        datePart = `${m[1].padStart(2,'0')}-${mm}-${m[3].slice(-2)}`;
+        if (!timeStr && m[4]) timeStr = m[4];
+      }
+    }
   }
 
   // Already dd-mm-yy / dd-mm-yyyy
-  m = s.match(/^(\d{1,2})-(\d{1,2})-(\d{2,4})/);
-  if (m) {
-    const yy = m[3].length === 4 ? m[3].slice(-2) : m[3].padStart(2, '0');
-    return `${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')}-${yy}`;
+  if (!datePart) {
+    m = s.match(/^(\d{1,2})-(\d{1,2})-(\d{2,4})(?:\s+(\d{1,2}:\d{2}(?::\d{2})?))?/);
+    if (m) {
+      const yy = m[3].length === 4 ? m[3].slice(-2) : m[3].padStart(2, '0');
+      datePart = `${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')}-${yy}`;
+      if (!timeStr && m[4]) timeStr = m[4];
+    }
   }
-  return s;
+
+  if (!datePart) datePart = s;
+  if (!timeStr) {
+    const tm = s.match(/(\d{1,2}:\d{2}(?::\d{2})?)/);
+    if (tm) timeStr = tm[1];
+  }
+  return timeStr ? `${datePart} ${timeStr}` : datePart;
 }
 
-// Server-rendered Task List rows — date already formatted server-side via |ufdate
-// (kept for any dynamically inserted rows that carry data-date)
+// Server-rendered Task List rows — date already formatted server-side via |ufdatetime
 document.querySelectorAll('.uf-task-date[data-date]').forEach(el => {
-  el.textContent = formatTaskDate(el.getAttribute('data-date'));
+  el.textContent = formatTaskDate(el.getAttribute('data-date'), el.getAttribute('data-time'));
 });
 
 let taskListData = [];
 let taskListFilteredMode = false;
+let activeTaskCatFilter = 'all';
 
 try {
   const seedEl = document.getElementById('taskListSeed');
@@ -734,13 +783,76 @@ try {
   }
 } catch (e) { taskListData = []; }
 
+function taskCategoryBucket(t) {
+  const cat = String(t.category || t.Category || '').trim().toLowerCase();
+  const st = String(t.status || '').trim().toLowerCase();
+  if (cat === 'green') return 'green';
+  if (cat === 'yellow') return 'yellow';
+  if (cat === 'red') return 'red';
+  if (cat === 'orange') return 'orange';
+  if (st.includes('incomplete') || st === '1' || st.includes('in-process') || st.includes('in process') || st.includes('pending')) {
+    return 'in_process';
+  }
+  return '';
+}
+
+function computeCategoryCounts(tasks) {
+  const out = {
+    task_total: 0, task_green: 0, task_yellow: 0,
+    task_red: 0, task_orange: 0, task_in_process: 0,
+  };
+  (tasks || []).forEach(t => {
+    const b = taskCategoryBucket(t);
+    if (b === 'green') out.task_green++;
+    else if (b === 'yellow') out.task_yellow++;
+    else if (b === 'red') out.task_red++;
+    else if (b === 'orange') out.task_orange++;
+    else if (b === 'in_process') out.task_in_process++;
+  });
+  out.task_total = out.task_green + out.task_yellow + out.task_red
+    + out.task_orange + out.task_in_process;
+  return out;
+}
+
+function updateTaskKpiCards(counts) {
+  if (!counts) return;
+  setNum('cTotal', counts.task_total);
+  setNum('cGreen', counts.task_green);
+  setNum('cYellow', counts.task_yellow);
+  setNum('cRed', counts.task_red);
+  setNum('cOrange', counts.task_orange);
+  setNum('cInProc', counts.task_in_process);
+}
+
+function setActiveKpiCard(filter) {
+  document.querySelectorAll('.uf-kpi-click').forEach(el => {
+    el.classList.toggle('uf-kpi-active', el.getAttribute('data-task-filter') === filter);
+  });
+}
+
+function taskListHasCategoryData() {
+  return (taskListData || []).some(t => {
+    const cat = String(t.category || t.Category || '').trim();
+    return !!cat;
+  });
+}
+
+function facilityTypeOf(t) {
+  return t.facility_type || t.facilityType || '';
+}
+
+function categoryOf(t) {
+  return t.category || t.Category || '';
+}
+
 function taskSearchHaystack(t) {
   return [
     formatTaskId(t.task_id || t.id),
     t.task_id, t.id,
-    formatTaskDate(t.created_date || t.CreatedDate || t.CD),
-    t.created_date, t.patient_name, t.phone,
-    t.ambulance, t.district, t.status, t.tehsil, t.facility_name,
+    formatTaskDate(t.created_date || t.CreatedDate || t.CD, t.created_time || t.CreatedTime || t.CD_time),
+    t.created_date, t.created_time, t.patient_name, t.phone, t.address,
+    t.ambulance, t.district, t.status, t.tehsil,
+    t.facility_name, facilityTypeOf(t), categoryOf(t),
   ].map(v => (v == null ? '' : String(v))).join(' ').toLowerCase();
 }
 
@@ -749,39 +861,104 @@ function applyTaskListSearch() {
   const q = (input ? input.value : '').trim().toLowerCase();
   const words = q.split(/\s+/).filter(Boolean);
   let rows = taskListData.slice();
+  if (activeTaskCatFilter && activeTaskCatFilter !== 'all') {
+    rows = rows.filter(t => taskCategoryBucket(t) === activeTaskCatFilter);
+  }
   if (words.length) {
     rows = rows.filter(t => {
       const hay = taskSearchHaystack(t);
       return words.every(w => hay.includes(w));
     });
-  } else if (!taskListFilteredMode) {
+  } else if (!taskListFilteredMode && activeTaskCatFilter === 'all') {
     rows = rows.slice(0, 6);
   }
-  renderTaskRows(rows, words.length
-    ? 'No tasks match your search.'
-    : (taskListFilteredMode ? 'No tasks match the selected filters.' : 'No tasks right now.'));
+  let emptyMsg = 'No tasks right now.';
+  if (words.length) emptyMsg = 'No tasks match your search.';
+  else if (activeTaskCatFilter && activeTaskCatFilter !== 'all') emptyMsg = 'No tasks match this category filter.';
+  else if (taskListFilteredMode) emptyMsg = 'No tasks match the selected filters.';
+  renderTaskRows(rows, emptyMsg);
 }
 
 function renderTaskRows(tasks, emptyMsg) {
   const tbody = document.getElementById('taskTableBody');
   const msg = emptyMsg || 'No tasks match the selected filters.';
   if (!tasks.length) {
-    tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted py-4"><i class="bi bi-inbox-fill d-block mb-2" style="font-size:24px;"></i>${esc(msg)}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="11" class="text-center text-muted py-4"><i class="bi bi-inbox-fill d-block mb-2" style="font-size:24px;"></i>${esc(msg)}</td></tr>`;
     return;
   }
   tbody.innerHTML = tasks.map(t => `
     <tr>
       <td><span class="badge bg-primary-subtle text-primary fw-bold">${esc(formatTaskId(t.task_id || t.id))}</span></td>
-      <td><small>${esc(formatTaskDate(t.created_date || t.CreatedDate || t.CD))}</small></td>
+      <td><small>${esc(formatTaskDate(t.created_date || t.CreatedDate || t.CD, t.created_time || t.CreatedTime || t.CD_time))}</small></td>
       <td class="fw-bold text-dark">${esc(t.patient_name) || '-'}</td>
+      <td><small>${esc(t.address) || '-'}</small></td>
+      <td><small>${esc(t.facility_name) || '-'}</small></td>
+      <td><small>${esc(facilityTypeOf(t)) || '-'}</small></td>
       <td><span class="badge bg-light text-dark border">${esc(t.ambulance) || '-'}</span></td>
       <td><small>${esc(t.district) || '-'}</small></td>
       <td>${statusBadge(t.status)}</td>
-      <td><button class="btn btn-sm btn-outline-secondary task-detail-btn" data-id="${esc(t.task_id || t.id)}"><i class="bi bi-eye"></i></button></td>
+      <td><small>${esc(categoryOf(t)) || '-'}</small></td>
+      <td class="no-print"><button class="btn btn-sm btn-outline-secondary task-detail-btn" data-id="${esc((window.UfoneTaskDetail && UfoneTaskDetail.numericTaskId) ? UfoneTaskDetail.numericTaskId(t.task_id || t.id) : String(t.task_id || t.id || '').replace(/^PHF-/i,'').replace(/\D/g,''))}"><i class="bi bi-eye"></i></button></td>
     </tr>`).join('');
 }
 
 document.getElementById('taskListSearch').addEventListener('input', applyTaskListSearch);
+
+async function loadTasksForCategoryCards() {
+  const tbody = document.getElementById('taskTableBody');
+  tbody.innerHTML = '<tr><td colspan="11" class="text-center py-4"><div class="spinner-border spinner-border-sm text-primary"></div><span class="ms-2 text-muted small">Loading category report…</span></td></tr>';
+  const params = new URLSearchParams({
+    from_date: document.getElementById('fFrom').value,
+    to_date: document.getElementById('fTo').value,
+    task_id: (document.getElementById('fTaskId') && document.getElementById('fTaskId').value || '').trim(),
+    district: (fDistrictEl && fDistrictEl.value) || '',
+    vehicle: (fVehicleEl && fVehicleEl.value || '').trim(),
+    status: document.getElementById('fStatus').value || '',
+  });
+  const res = await fetch('/api/ufone/tasks/filtered?' + params.toString());
+  const data = await res.json();
+  if (data.error && !(data.tasks || []).length) {
+    throw new Error(data.error);
+  }
+  taskListData = data.tasks || [];
+  taskListFilteredMode = true;
+  document.getElementById('taskTableWrap').classList.add('filtered');
+  document.getElementById('taskSectionTitle').innerHTML = '<i class="bi bi-funnel-fill text-primary"></i> Task List';
+  const catCounts = data.category_counts || computeCategoryCounts(taskListData);
+  updateTaskKpiCards(catCounts);
+  // Total Ambulances unchanged
+  if (data.counts) {
+    const sum = document.getElementById('fSummary');
+    if (sum) {
+      const distName = (typeof selectedDistrictName === 'function' && selectedDistrictName()) || 'All Districts';
+      sum.style.display = '';
+      sum.innerHTML = `<i class="bi bi-check-circle text-success"></i> <b>${data.counts.total}</b> tasks (${data.from_date} → ${data.to_date}, ${esc(distName)}) — Incomplete: <b>${data.counts.incomplete}</b>, Completed: <b>${data.counts.completed}</b>, Cancelled: <b>${data.counts.cancelled || 0}</b>`;
+    }
+  }
+}
+
+document.querySelectorAll('.uf-kpi-click').forEach(card => {
+  card.addEventListener('click', async function() {
+    const f = this.getAttribute('data-task-filter') || 'all';
+    activeTaskCatFilter = f;
+    setActiveKpiCard(f);
+    try {
+      // KPI cards use EMG categories — load date-range report if list has no Category yet
+      const needReport = f !== 'all' && !taskListHasCategoryData();
+      if (needReport || (f !== 'all' && !taskListFilteredMode && !taskListHasCategoryData())) {
+        await loadTasksForCategoryCards();
+      } else if (!taskListFilteredMode && f !== 'all') {
+        document.getElementById('taskTableWrap').classList.add('filtered');
+      }
+    } catch (e) {
+      console.error(e);
+      document.getElementById('taskTableBody').innerHTML =
+        `<tr><td colspan="11" class="text-center text-danger py-4">Category report load failed. Apply filter try karein.</td></tr>`;
+      return;
+    }
+    applyTaskListSearch();
+  });
+});
 
 let filterBusy = false;
 document.getElementById('fApply').addEventListener('click', async function() {
@@ -790,11 +967,12 @@ document.getElementById('fApply').addEventListener('click', async function() {
   const btn = this;
   btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Loading...';
   const tbody = document.getElementById('taskTableBody');
-  tbody.innerHTML = '<tr><td colspan="7" class="text-center py-5"><div class="spinner-border text-primary"></div><p class="mt-2 text-muted small mb-0">Fetching all-district report from Ufone... (30-40 sec lag sakte hain)</p></td></tr>';
+  tbody.innerHTML = '<tr><td colspan="11" class="text-center py-5"><div class="spinner-border text-primary"></div><p class="mt-2 text-muted small mb-0">Fetching all-district report from Ufone... (30-40 sec lag sakte hain)</p></td></tr>';
 
   const params = new URLSearchParams({
     from_date: document.getElementById('fFrom').value,
     to_date: document.getElementById('fTo').value,
+    task_id: (document.getElementById('fTaskId').value || '').trim(),
     district: fDistrictEl.value || '',
     vehicle: (fVehicleEl.value || '').trim(),
     status: document.getElementById('fStatus').value || '',
@@ -805,12 +983,19 @@ document.getElementById('fApply').addEventListener('click', async function() {
     if (data.error && !(data.tasks || []).length) {
       taskListData = [];
       taskListFilteredMode = true;
-      tbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger py-4">Ufone report failed: ${esc(data.error)}<br><small class="text-muted">Dobara Apply karein — Ufone server slow hai.</small></td></tr>`;
+      activeTaskCatFilter = 'all';
+      setActiveKpiCard('all');
+      tbody.innerHTML = `<tr><td colspan="11" class="text-center text-danger py-4">Ufone report failed: ${esc(data.error)}<br><small class="text-muted">Dobara Apply karein — Ufone server slow hai.</small></td></tr>`;
     } else {
       taskListData = data.tasks || [];
       taskListFilteredMode = true;
+      activeTaskCatFilter = 'all';
+      setActiveKpiCard('all');
       document.getElementById('taskTableWrap').classList.add('filtered');
       document.getElementById('taskSectionTitle').innerHTML = '<i class="bi bi-funnel-fill text-primary"></i> Task List';
+      // Update task KPI cards from filtered result; Total Ambulances unchanged
+      const catCounts = data.category_counts || computeCategoryCounts(taskListData);
+      updateTaskKpiCards(catCounts);
       applyTaskListSearch();
       if (data.counts) {
         const sum = document.getElementById('fSummary');
@@ -820,7 +1005,7 @@ document.getElementById('fApply').addEventListener('click', async function() {
       }
     }
   } catch(e) {
-    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-danger py-4">Error loading filtered data. Dobara try karein.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="11" class="text-center text-danger py-4">Error loading filtered data. Dobara try karein.</td></tr>';
   }
   btn.innerHTML = '<i class="bi bi-funnel-fill"></i> Apply';
   filterBusy = false;
@@ -829,6 +1014,58 @@ document.getElementById('fApply').addEventListener('click', async function() {
 document.getElementById('fReset').addEventListener('click', function() {
   window.location.reload();
 });
+
+// Print/Export — Fuel Expense jaisa (fleetPrintExport)
+// fleet_core.js is deferred: bind only after DOMContentLoaded so fleetPrintExport exists.
+function expandTaskRowsForPrintExport() {
+  // Default view sirf 6 rows dikhati hai — print/export se pehle full filtered set paint
+  const input = document.getElementById('taskListSearch');
+  const q = (input ? input.value : '').trim().toLowerCase();
+  const words = q.split(/\s+/).filter(Boolean);
+  let rows = (taskListData || []).slice();
+  if (activeTaskCatFilter && activeTaskCatFilter !== 'all') {
+    rows = rows.filter(t => taskCategoryBucket(t) === activeTaskCatFilter);
+  }
+  if (words.length) {
+    rows = rows.filter(t => {
+      const hay = taskSearchHaystack(t);
+      return words.every(w => hay.includes(w));
+    });
+  }
+  renderTaskRows(rows, words.length
+    ? 'No tasks match your search.'
+    : (activeTaskCatFilter !== 'all'
+      ? 'No tasks match this category filter.'
+      : (taskListFilteredMode ? 'No tasks match the selected filters.' : 'No tasks right now.')));
+}
+
+function initUfonePrintExport() {
+  ['btnPrintReport', 'btnExportReport'].forEach(function(id) {
+    const btn = document.getElementById(id);
+    if (!btn || btn._ufonePrintBound) return;
+    btn._ufonePrintBound = true;
+    btn.addEventListener('click', function() {
+      expandTaskRowsForPrintExport();
+    }, true);
+  });
+
+  if (window.fleetPrintExport && !window._ufoneFleetPrintBound) {
+    window._ufoneFleetPrintBound = true;
+    window.fleetPrintExport('ufoneDashboardTaskTable', 'Ufone Dashboard Tasks', 'Ufone_Dashboard_Tasks.csv', {
+      columnOrder: [
+        'Task ID', 'Date/Time', 'Patient', 'Address', 'Facility', 'Facility Type',
+        'Ambulance', 'District', 'Status', 'Category'
+      ],
+      dateColumns: ['Date/Time']
+    });
+  }
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initUfonePrintExport);
+} else {
+  initUfonePrintExport();
+}
 
 // Set initial sync time
 document.getElementById('syncTime').textContent = 'Loaded at ' + new Date().toLocaleTimeString();

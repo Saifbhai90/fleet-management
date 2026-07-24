@@ -800,8 +800,9 @@ def api_ufone_tasks_dashboard():
 def api_ufone_tasks_filtered():
     """Dashboard filter section: all-district task report with local filters.
 
-    Params: from_date, to_date (YYYY-MM-DD), district (Ufone code),
-    vehicle (reg-no substring), status (incomplete/completed/cancelled).
+    Params: from_date, to_date (YYYY-MM-DD), task_id (PHF- optional),
+    district (Ufone code), vehicle (reg-no substring),
+    status (incomplete/completed/cancelled).
     DB-first (Phase 1): reads emergency_task_record (source='api'). Only
     syncs from Ufone when today's rows are stale (>3 min) or missing — the
     3-min poll loop keeps them warm, so filter Apply is normally instant
@@ -814,6 +815,7 @@ def api_ufone_tasks_filtered():
     today = pk_date().strftime('%Y-%m-%d')
     from_date = _sanitize_date(request.args.get('from_date'), today)
     to_date = _sanitize_date(request.args.get('to_date'), today)
+    task_id_q = (request.args.get('task_id') or '').strip()
     district = (request.args.get('district') or '').strip()
     vehicle = (request.args.get('vehicle') or '').strip().lower()
     status = (request.args.get('status') or '').strip().lower()
@@ -832,6 +834,20 @@ def api_ufone_tasks_filtered():
                    'Cards cached data se chal rahe hain. '
                    'Dobara Apply karein — ya thodi der baad try karein.')
         return jsonify({'error': msg, 'tasks': []}), 502
+
+    def _norm_task_id(v):
+        s = str(v or '').strip().upper()
+        if s.startswith('PHF-'):
+            s = s[4:]
+        return ''.join(ch for ch in s if ch.isalnum())
+
+    if task_id_q:
+        needle = _norm_task_id(task_id_q)
+        if needle:
+            tasks = [
+                t for t in tasks
+                if needle in _norm_task_id(t.get('task_id') or t.get('id'))
+            ]
 
     if vehicle:
         tasks = [t for t in tasks
@@ -865,7 +881,33 @@ def api_ufone_tasks_filtered():
         if 'cancel' in str(t.get('status') or '').lower()
     )
 
+    # Category buckets for KPI cards (after district/vehicle/status filters)
+    green = yellow = red = orange = in_process = 0
+    for t in tasks:
+        cat = str(t.get('category') or '').strip().lower()
+        st = str(t.get('status') or '').strip().lower()
+        if cat == 'green':
+            green += 1
+        elif cat == 'yellow':
+            yellow += 1
+        elif cat == 'red':
+            red += 1
+        elif cat == 'orange':
+            orange += 1
+        elif ('incomplete' in st or st == '1'
+              or 'in-process' in st or 'in process' in st):
+            in_process += 1
+    category_counts = {
+        'task_total': green + yellow + red + orange + in_process,
+        'task_green': green,
+        'task_yellow': yellow,
+        'task_red': red,
+        'task_orange': orange,
+        'task_in_process': in_process,
+    }
+
     # Card stats: filtered tasks ki unique ambulances × local vehicle cache
+    # (returned for reference — dashboard Total Ambulances KPI is NOT overwritten)
     fleet = get_cached_positions(acct_id) or load_vehicles_from_db(acct_id) or []
     by_reg = {
         str(v.get('reg_no') or '').strip().lower(): v
@@ -909,6 +951,7 @@ def api_ufone_tasks_filtered():
             'completed': completed,
             'cancelled': cancelled,
         },
+        'category_counts': category_counts,
         'vehicle_stats': vehicle_stats,
         'from_date': from_date, 'to_date': to_date,
         'district': district,
