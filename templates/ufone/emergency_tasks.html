@@ -304,7 +304,9 @@ function renderTaskDetail(data, liveUpdating) {
   const d = prepDetail(data.detail);
   let html = '';
   if (liveUpdating) {
-    html += '<div class="alert alert-light py-1 small mb-2"><span class="spinner-border spinner-border-sm me-2"></span>Cached data shown — fetching live update...</div>';
+    html += '<div class="alert alert-light py-1 small mb-2"><span class="spinner-border spinner-border-sm me-2"></span>DB data shown — PK VPS se comments / full detail update ho raha hai...</div>';
+  } else if (data.vps_refreshed) {
+    html += '<div class="alert alert-light py-1 small mb-2 text-muted"><i class="bi bi-cloud-check"></i> Live from PK VPS (saved to DB)</div>';
   } else if (data.bridge_only) {
     html += '<div class="alert alert-light py-1 small mb-2 text-muted"><i class="bi bi-cloud-check"></i> PK VPS bridge data</div>';
   } else if (data.from_cache) {
@@ -347,32 +349,28 @@ document.querySelectorAll('.view-task-btn').forEach(btn => {
     document.getElementById('taskModalBody').innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary"></div><p class="mt-2 text-muted">Loading...</p></div>';
     modal.show();
 
-    // Stage 1: cache / bridge DB — instant paint
+    // Stage 1: local DB — instant paint
     let hadCache = false;
     try {
       const res = await fetch('/ufone/task/' + id);
       const data = await res.json();
       if (token !== taskModalToken) return;
       if (data.detail && Object.keys(data.detail).length) {
-        hadCache = data.from_cache === true;
-        if (data.bridge_only) {
-          renderTaskDetail(data, false);
-          return;
-        }
-        renderTaskDetail(data, hadCache);
-        if (!hadCache) return; // already live
+        hadCache = true;
+        // Show DB now; VPS refresh upgrades comments/detail in background
+        renderTaskDetail(data, true);
       }
-    } catch(e) { /* fall through to live */ }
+    } catch(e) { /* fall through */ }
 
-    // Stage 2: live upgrade in background (quick timeout server-side)
+    // Stage 2: backend asks PK VPS for full detail + comments → DB + UI
     try {
-      const res = await fetch('/ufone/task/' + id + '?live=1');
+      const res = await fetch('/api/ufone/task/' + id + '/vps-refresh');
       const data = await res.json();
       if (token !== taskModalToken) return;
       if (data.detail && Object.keys(data.detail).length) {
         renderTaskDetail(data, false);
       } else if (!hadCache) {
-        document.getElementById('taskModalBody').innerHTML = '<p class="text-danger text-center py-4">Ufone server not responding. Try again later.</p>';
+        document.getElementById('taskModalBody').innerHTML = '<p class="text-danger text-center py-4">Task detail not available yet. Try again.</p>';
       }
     } catch(e) {
       if (token === taskModalToken && !hadCache) {

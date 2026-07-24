@@ -733,18 +733,30 @@ def upsert_task_details(conn, account_id: int, client, emg_items: list,
         len(batch), len(open_ids), ','.join(batch[:5]) + ('…' if len(batch) > 5 else ''),
     )
 
+    # Avoid racing on-demand detail HTTP with the same Ufone session.
+    try:
+        from detail_ops import UFONE_IO_LOCK
+    except Exception:
+        UFONE_IO_LOCK = None  # type: ignore
+
     n = 0
     with conn.cursor() as cur:
         for bare in batch:
             try:
-                detail = client.get_task_detail(bare, quick=True) or {}
-                if not isinstance(detail, dict) or not detail:
-                    continue
-                comments = []
+                if UFONE_IO_LOCK is not None:
+                    UFONE_IO_LOCK.acquire()
                 try:
-                    comments = client.get_task_comments(bare, quick=True) or []
-                except Exception:
+                    detail = client.get_task_detail(bare, quick=True) or {}
+                    if not isinstance(detail, dict) or not detail:
+                        continue
                     comments = []
+                    try:
+                        comments = client.get_task_comments(bare, quick=True) or []
+                    except Exception:
+                        comments = []
+                finally:
+                    if UFONE_IO_LOCK is not None:
+                        UFONE_IO_LOCK.release()
                 status = str(detail.get('Status') or '')
                 detail_json = json.dumps(detail, default=str)
                 comments_json = json.dumps(comments, default=str)
@@ -973,6 +985,13 @@ def main() -> int:
     _load_dotenv(ROOT / '.env')
     once = '--once' in sys.argv
     interval = _int_env('BRIDGE_INTERVAL_SEC', 180)
+    # On-demand Task Detail HTTP (Render → VPS) — same process as sync worker.
+    if not once:
+        try:
+            from detail_ops import start_detail_http_server
+            start_detail_http_server(background=True)
+        except Exception as e:
+            logger.warning('detail HTTP server failed to start: %s', e)
     # Single-instance lock — overlapping syncs hang on Ufone session + PG.
     lock_path = Path(_env('BRIDGE_LOCK_FILE', '/tmp/ufone-bridge.lock'))
     lock_fh = open(lock_path, 'w')

@@ -558,6 +558,103 @@ def ufone_task_detail(task_id):
                     'detail': {}, 'comments': []}), 502
 
 
+def _vps_detail_base_url() -> str:
+    return (
+        os.environ.get('UFONE_VPS_DETAIL_URL')
+        or os.environ.get('UFONE_BRIDGE_DETAIL_URL')
+        or 'http://185.228.92.23:8787'
+    ).strip().rstrip('/')
+
+
+def _request_vps_task_detail(account_id: int, task_id: int) -> dict:
+    """Ask PK VPS to fetch getTaskDetail+comments and write Postgres."""
+    import requests
+    token = _bridge_expected_token()
+    if not token:
+        return {'ok': False, 'error': 'bridge token not configured'}
+    url = f'{_vps_detail_base_url()}/task-detail'
+    try:
+        r = requests.post(
+            url,
+            headers={
+                'X-Ufone-Bridge-Token': token,
+                'User-Agent': 'fleet-manager-render/1.0',
+                'Content-Type': 'application/json',
+            },
+            json={'task_id': str(task_id), 'account_id': int(account_id)},
+            timeout=22,
+        )
+        try:
+            data = r.json() if r.content else {}
+        except Exception:
+            data = {}
+        if not isinstance(data, dict):
+            data = {}
+        if r.status_code >= 400 and not data.get('error'):
+            data['ok'] = False
+            data['error'] = f'VPS HTTP {r.status_code}: {(r.text or "")[:160]}'
+        return data
+    except Exception as e:
+        return {'ok': False, 'error': f'VPS unreachable: {e}'[:200]}
+
+
+@app.route('/api/ufone/task/<int:task_id>/vps-refresh')
+def api_ufone_task_vps_refresh(task_id):
+    """Backend: ask VPS for live detail+comments, update DB, return payload.
+
+    UI shows local DB first, then calls this to auto-upgrade comments/detail.
+    """
+    acct_id = _get_account_id()
+    if not acct_id:
+        return jsonify({'error': 'No account', 'detail': {}, 'comments': []}), 400
+
+    vps = _request_vps_task_detail(acct_id, task_id)
+    detail = vps.get('detail') if isinstance(vps.get('detail'), dict) else None
+    comments = vps.get('comments') if isinstance(vps.get('comments'), list) else None
+
+    # Prefer DB read after VPS write (source of truth)
+    db_detail, db_comments, _synced = get_task_detail_cached(acct_id, task_id)
+    if db_detail:
+        detail = db_detail
+        comments = db_comments if db_comments is not None else (comments or [])
+    elif detail:
+        # VPS returned body but DB read missed — persist on Render too
+        try:
+            save_task_detail_cache(acct_id, task_id, detail, comments or [])
+        except Exception:
+            pass
+
+    if detail:
+        return jsonify({
+            'detail': detail,
+            'comments': comments or [],
+            'from_cache': False,
+            'bridge_only': bridge_only_mode(),
+            'vps_refreshed': bool(vps.get('ok')),
+            'warning': None if vps.get('ok') else (vps.get('error') or 'VPS refresh incomplete'),
+        })
+
+    # Fallback: whatever we already have locally
+    composed = build_task_detail_from_db(acct_id, task_id) or {}
+    snap = _cached_task_detail(acct_id, task_id) or {}
+    best = db_detail or composed or snap
+    if best:
+        return jsonify({
+            'detail': best,
+            'comments': db_comments or [],
+            'from_cache': True,
+            'bridge_only': bridge_only_mode(),
+            'vps_refreshed': False,
+            'warning': vps.get('error') or 'VPS refresh failed — showing DB data',
+        })
+    return jsonify({
+        'error': vps.get('error') or 'Task detail unavailable',
+        'detail': {},
+        'comments': [],
+        'vps_refreshed': False,
+    }), 502
+
+
 @app.route('/api/ufone/task/<int:task_id>/comments')
 def api_ufone_task_comments(task_id):
     """Comments — DB cache-first (5 min for open tasks, forever for closed).

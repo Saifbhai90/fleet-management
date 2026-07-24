@@ -376,6 +376,7 @@ HUBS = {
             'api_ufone_positions', 'api_ufone_refresh', 'api_ufone_vehicles',
             'api_ufone_districts', 'api_ufone_tehsils', 'api_ufone_ucs',
             'api_ufone_task_detail', 'api_ufone_task_comments',
+            'api_ufone_task_vps_refresh',
             'api_ufone_task_comment_save', 'api_ufone_task_feedback_save',
             'api_ufone_task_complete', 'api_ufone_tasks_dashboard',
             'api_ufone_reports_emergency', 'api_ufone_reports_distance',
