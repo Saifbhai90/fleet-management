@@ -912,15 +912,51 @@ def _persist_maintenance(account_id: int, items: list):
         logger.warning(f"_persist_maintenance failed (non-fatal): {e}")
 
 
+def _maintenance_items_from_db(account_id: int) -> list:
+    """Load UfoneMaintenanceCache → normalize_maintenance()-shaped dicts."""
+    from models import UfoneMaintenanceCache
+    rows = UfoneMaintenanceCache.query.filter_by(account_id=account_id).all()
+
+    def _fmt(d):
+        if not d:
+            return None
+        if hasattr(d, 'strftime'):
+            return d.strftime('%Y-%m-%d')
+        return str(d)
+
+    return [{
+        'id': None,
+        'reg_no': r.reg_no,
+        'district': r.district,
+        'maintain_type': r.maintain_type,
+        'cat_name': r.cat_name,
+        'sub_cat_name': r.sub_cat_name,
+        'due_date': _fmt(r.due_date),
+        'send_date': _fmt(r.send_date),
+        'return_date': _fmt(r.return_date),
+        'comments': r.comments,
+        'days_offline': r.days_offline or 0,
+        'created_by': r.created_by,
+        'created_date': _fmt(r.created_date),
+    } for r in rows]
+
+
 def fetch_maintenance(account_id: int, force: bool = False,
                        for_poll: bool = False) -> list:
-    """Ambulances under maintenance — DB-first (Phase 2).
+    """Ambulances under maintenance — DB-first (bridge: PK VPS writes cache).
 
-    Reads UfoneMaintenanceCache. If fresh (<30 min) returns instantly. On
-    stale/missing/force, live fetches on poll session + persists. Returns the
-    normalize_maintenance() dict shape so routes/templates work unchanged.
+    Bridge mode always reads DB (small table) so VPS sync shows up immediately.
+    Non-bridge: memory TTL 30 min, then live Ufone + persist.
     """
     now = time.time()
+
+    # Bridge mode: Render never calls bpocops — serve DB (VPS syncs it)
+    if bridge_only_mode():
+        items = _maintenance_items_from_db(account_id)
+        with _maintenance_cache_lock:
+            _maintenance_cache[account_id] = (now, items)
+        return items
+
     if not force:
         with _maintenance_cache_lock:
             cached = _maintenance_cache.get(account_id)
@@ -945,33 +981,14 @@ def fetch_maintenance(account_id: int, force: bool = False,
         else:
             logger.warning(f"fetch_maintenance({account_id}) failed: {e}")
         _reset_client(account_id, purpose=purpose)
-        # Serve from DB cache
-        try:
-            from models import UfoneMaintenanceCache
-            rows = UfoneMaintenanceCache.query.filter_by(
-                account_id=account_id).all()
-            items = [{
-                'id': None,
-                'reg_no': r.reg_no,
-                'district': r.district,
-                'maintain_type': r.maintain_type,
-                'cat_name': r.cat_name,
-                'sub_cat_name': r.sub_cat_name,
-                'due_date': r.due_date.strftime('%Y-%m-%d') if r.due_date else None,
-                'send_date': r.send_date.strftime('%Y-%m-%d') if r.send_date else None,
-                'return_date': r.return_date.strftime('%Y-%m-%d') if r.return_date else None,
-                'comments': r.comments,
-                'days_offline': r.days_offline or 0,
-                'created_by': r.created_by,
-                'created_date': r.created_date.strftime('%Y-%m-%d') if r.created_date else None,
-            } for r in rows]
+        items = _maintenance_items_from_db(account_id)
+        if items:
             with _maintenance_cache_lock:
                 _maintenance_cache[account_id] = (now, items)
             return items
-        except Exception:
-            with _maintenance_cache_lock:
-                cached = _maintenance_cache.get(account_id)
-                return cached[1] if cached else []
+        with _maintenance_cache_lock:
+            cached = _maintenance_cache.get(account_id)
+            return cached[1] if cached else []
 
 
 # ── Generic persisted report cache (Phase 2) ─────────────────────────────────

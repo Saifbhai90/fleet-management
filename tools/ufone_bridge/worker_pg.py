@@ -306,6 +306,142 @@ def upsert_vehicles(conn, account_id: int, vehicles: list) -> int:
     return len(rows)
 
 
+def _parse_maint_date(val):
+    """Parse Ufone maintenance date string → date or None."""
+    s = _coerce_str(val)
+    if not s:
+        return None
+    s0 = s.split()[0][:10]
+    for fmt in ('%Y-%m-%d', '%m/%d/%Y', '%d/%m/%Y', '%d-%m-%Y'):
+        try:
+            return datetime.strptime(s0, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def map_maintenance_row(raw: dict) -> dict | None:
+    """Map getAmbulanceUnderMaintenance row → ufone_maintenance_cache fields."""
+    if not isinstance(raw, dict):
+        return None
+    reg = _coerce_str(
+        raw.get('Reg_no') or raw.get('Reg_No') or raw.get('reg_no')
+        or raw.get('Ambulance') or raw.get('ambRegNo')
+    )
+    if not reg:
+        return None
+    send = _parse_maint_date(raw.get('Send_Date') or raw.get('SendDate'))
+    ret = _parse_maint_date(raw.get('Return_Date') or raw.get('ReturnDate'))
+    days = 0
+    try:
+        today = _pk_today()
+        if send and not ret:
+            days = max(0, (today - send).days)
+        elif send and ret:
+            days = max(0, (ret - send).days)
+    except Exception:
+        days = 0
+    return {
+        'reg_no': reg,
+        'district': _coerce_str(raw.get('District') or raw.get('district')),
+        'maintain_type': _coerce_str(
+            raw.get('Maintain_Type') or raw.get('MaintainType') or raw.get('maintain_type')
+        ),
+        'cat_name': _coerce_str(raw.get('Cat_Name') or raw.get('CatName')),
+        'sub_cat_name': _coerce_str(raw.get('Sub_Cat_Name') or raw.get('SubCatName')),
+        'due_date': _parse_maint_date(raw.get('Due_Date') or raw.get('DueDate')),
+        'send_date': send,
+        'return_date': ret,
+        'comments': _coerce_str(raw.get('Comments') or raw.get('comments')),
+        'days_offline': days,
+        'created_by': _coerce_str(raw.get('CreatedBy') or raw.get('Created_By')),
+        'created_date': _parse_maint_date(
+            raw.get('Created_Date') or raw.get('CreatedDate')
+        ),
+    }
+
+
+def upsert_maintenance(conn, account_id: int, items: list) -> int:
+    """Replace ufone_maintenance_cache for account with current under-maintenance list."""
+    rows = []
+    for raw in items or []:
+        mapped = map_maintenance_row(raw) if isinstance(raw, dict) else None
+        # Also accept already-normalized dicts with reg_no
+        if mapped is None and isinstance(raw, dict) and raw.get('reg_no'):
+            mapped = {
+                'reg_no': _coerce_str(raw.get('reg_no')),
+                'district': _coerce_str(raw.get('district')),
+                'maintain_type': _coerce_str(raw.get('maintain_type')),
+                'cat_name': _coerce_str(raw.get('cat_name')),
+                'sub_cat_name': _coerce_str(raw.get('sub_cat_name')),
+                'due_date': _parse_maint_date(raw.get('due_date')),
+                'send_date': _parse_maint_date(raw.get('send_date')),
+                'return_date': _parse_maint_date(raw.get('return_date')),
+                'comments': _coerce_str(raw.get('comments')),
+                'days_offline': int(raw.get('days_offline') or 0),
+                'created_by': _coerce_str(raw.get('created_by')),
+                'created_date': _parse_maint_date(raw.get('created_date')),
+            }
+        if mapped and mapped.get('reg_no'):
+            rows.append(mapped)
+
+    # Dedupe by reg_no (last wins)
+    by_reg = {r['reg_no']: r for r in rows}
+    rows = list(by_reg.values())
+    seen = {r['reg_no'] for r in rows}
+
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT id, reg_no FROM ufone_maintenance_cache WHERE account_id=%s",
+            (account_id,),
+        )
+        existing = {reg: rid for rid, reg in cur.fetchall() if reg}
+
+        for r in rows:
+            reg = r['reg_no']
+            vals = (
+                r.get('district'), r.get('maintain_type'), r.get('cat_name'),
+                r.get('sub_cat_name'), r.get('due_date'), r.get('send_date'),
+                r.get('return_date'), r.get('comments'), r.get('days_offline') or 0,
+                r.get('created_by'), r.get('created_date'),
+            )
+            if reg in existing:
+                cur.execute(
+                    """
+                    UPDATE ufone_maintenance_cache SET
+                      district=%s, maintain_type=%s, cat_name=%s, sub_cat_name=%s,
+                      due_date=%s, send_date=%s, return_date=%s, comments=%s,
+                      days_offline=%s, created_by=%s, created_date=%s,
+                      updated_at=NOW()
+                    WHERE id=%s
+                    """,
+                    vals + (existing[reg],),
+                )
+            else:
+                cur.execute(
+                    """
+                    INSERT INTO ufone_maintenance_cache (
+                      account_id, reg_no, district, maintain_type, cat_name,
+                      sub_cat_name, due_date, send_date, return_date, comments,
+                      days_offline, created_by, created_date, updated_at, created_at
+                    ) VALUES (
+                      %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW(),NOW()
+                    )
+                    """,
+                    (account_id, reg) + vals,
+                )
+
+        # Drop regs no longer under maintenance
+        for reg, rid in existing.items():
+            if reg not in seen:
+                cur.execute("DELETE FROM ufone_maintenance_cache WHERE id=%s", (rid,))
+
+    conn.commit()
+    logger.info('maintenance upserted=%s (removed stale=%s)',
+                len(rows), sum(1 for r in existing if r not in seen))
+    return len(rows)
+
+
 def upsert_tasks(conn, account_id: int, tasks: list) -> tuple[int, list]:
     """Upsert dashboard tasks. Returns (count, generate_notify_events).
 
@@ -935,9 +1071,20 @@ def run_once() -> dict:
         except Exception as e:
             logger.warning('emg fetch failed: %s', e)
 
+    maintenance_raw = []
+    try:
+        logger.info('fetching ambulances under maintenance…')
+        maintenance_raw = [
+            r for r in (client.get_maintenance() or []) if isinstance(r, dict)
+        ]
+        logger.info('maintenance rows=%s', len(maintenance_raw))
+    except Exception as e:
+        logger.warning('maintenance fetch failed: %s', e)
+
     logger.info('writing to Postgres…')
     conn = db_connect()
     notify_events = []
+    nm = 0
     try:
         _pg_session(conn)
         nd = upsert_districts(conn, districts)
@@ -958,6 +1105,12 @@ def run_once() -> dict:
         except Exception as e:
             conn.rollback()
             logger.warning('emg pg upsert failed (non-fatal): %s', e)
+        try:
+            # Always sync (including empty list) so cleared portal list removes DB rows
+            nm = upsert_maintenance(conn, account_id, maintenance_raw)
+        except Exception as e:
+            conn.rollback()
+            logger.warning('maintenance pg upsert failed (non-fatal): %s', e)
         if emg:
             try:
                 detail_batch = max(1, _int_env('BRIDGE_DETAIL_BATCH', 15))
@@ -973,13 +1126,14 @@ def run_once() -> dict:
     notify_events = notify_events[:80]
     nn = push_notify_events(notify_events)
     logger.info(
-        'pg ingest ok districts=%s vehicles=%s tasks=%s emg_pg=%s details=%s notify=%s '
+        'pg ingest ok districts=%s vehicles=%s tasks=%s emg_pg=%s maint=%s details=%s notify=%s '
         '(gen/overdue/close mix)',
-        nd, nv, nt, ne, ndet, nn,
+        nd, nv, nt, ne, nm, ndet, nn,
     )
     return {
         'districts': nd, 'vehicles': nv, 'tasks': nt,
-        'emergency_report': ne, 'task_details': ndet, 'notify': nn,
+        'emergency_report': ne, 'maintenance': nm,
+        'task_details': ndet, 'notify': nn,
     }
 
 
