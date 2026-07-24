@@ -237,6 +237,61 @@ def merge_emergency_records(rows: list):
     return keeper
 
 
+def backfill_excel_uploaded_at_legacy() -> int:
+    """Stamp excel_uploaded_at on pre-tracker Excel rows so Upload Workbooks counts work.
+
+    excel_uploaded_at was added 2026-07-22. Older Excel uploads have NULL stamp, so
+    Upload Workbooks showed Emergency Tasks = 0 even though rows exist (Daily Report
+    still counted them). Backfill all NULL stamps for task_date before that day.
+    """
+    from models import EmergencyTaskRecord
+    from app import db
+    from datetime import date as _date
+    from sqlalchemy import or_, text
+
+    # Column introduced in commit 063bd61c (2026-07-22)
+    cutoff = _date(2026, 7, 22)
+    try:
+        # Fast path: one UPDATE for all legacy NULL stamps before the feature date
+        dialect = db.engine.dialect.name
+        if dialect == 'sqlite':
+            sql = text(
+                "UPDATE emergency_task_record "
+                "SET excel_uploaded_at = COALESCE(created_at, CURRENT_TIMESTAMP) "
+                "WHERE excel_uploaded_at IS NULL AND task_date < :cutoff"
+            )
+        else:
+            sql = text(
+                "UPDATE emergency_task_record "
+                "SET excel_uploaded_at = COALESCE(created_at, NOW()) "
+                "WHERE excel_uploaded_at IS NULL AND task_date < :cutoff"
+            )
+        result = db.session.execute(sql, {'cutoff': cutoff})
+        n = int(result.rowcount or 0)
+
+        # Also stamp any remaining excel/both rows (any date) still missing the stamp
+        legacy = EmergencyTaskRecord.query.filter(
+            EmergencyTaskRecord.excel_uploaded_at.is_(None),
+            or_(
+                EmergencyTaskRecord.source.in_([SOURCE_EXCEL, SOURCE_BOTH]),
+                EmergencyTaskRecord.source.is_(None),
+                EmergencyTaskRecord.source == '',
+            ),
+        ).all()
+        for r in legacy:
+            r.excel_uploaded_at = r.created_at or datetime.now()
+            n += 1
+
+        db.session.commit()
+        if n:
+            logger.info(f"backfill_excel_uploaded_at_legacy: stamped {n} row(s)")
+        return n
+    except Exception as e:
+        db.session.rollback()
+        logger.warning(f"backfill_excel_uploaded_at_legacy failed (non-fatal): {e}")
+        return 0
+
+
 def dedupe_emergency_task_records() -> int:
     """One-time: merge duplicate (task_id_ext, task_date) rows. Returns merged count."""
     from models import EmergencyTaskRecord
@@ -258,9 +313,6 @@ def dedupe_emergency_task_records() -> int:
             .having(func.count(EmergencyTaskRecord.id) > 1)
             .all()
         )
-        if not dup_groups:
-            return 0
-
         merged = 0
         for tid, tdate, _cnt in dup_groups:
             rows = EmergencyTaskRecord.query.filter_by(
@@ -270,16 +322,8 @@ def dedupe_emergency_task_records() -> int:
             merge_emergency_records(rows)
             merged += len(rows) - 1
 
-        # Backfill excel_uploaded_at for legacy excel-only rows
-        legacy = EmergencyTaskRecord.query.filter(
-            EmergencyTaskRecord.excel_uploaded_at.is_(None),
-            EmergencyTaskRecord.source.in_([SOURCE_EXCEL, SOURCE_BOTH]),
-        ).all()
-        for r in legacy:
-            r.excel_uploaded_at = r.created_at or datetime.now()
-
-        db.session.commit()
         if merged:
+            db.session.commit()
             logger.info(f"dedupe_emergency_task_records: merged {merged} duplicate row(s)")
         return merged
     except Exception as e:
@@ -295,6 +339,7 @@ def ensure_emergency_unique_index():
 
     try:
         dedupe_emergency_task_records()
+        backfill_excel_uploaded_at_legacy()
         insp = inspect(db.engine)
         if 'emergency_task_record' not in insp.get_table_names():
             return
