@@ -1526,6 +1526,107 @@ def _status_is_complete(status) -> bool:
     return ('complete' in s) and ('incomplete' not in s)
 
 
+def _status_is_closed(status) -> bool:
+    """Complete or Cancelled — no further live detail refresh after one post-close sync."""
+    s = (status or '').strip().lower()
+    if not s or 'incomplete' in s:
+        return False
+    return ('complete' in s) or ('cancel' in s)
+
+
+def resolve_task_live_status(account_id: int, task_id) -> str:
+    """Best-effort current Status from list cache → EMG → detail cache."""
+    from models import EmergencyTaskRecord, UfoneTaskCache, UfoneTaskDetailCache
+
+    keys = _task_id_lookup_keys(task_id)
+    if not keys:
+        return ''
+
+    try:
+        trow = (UfoneTaskCache.query
+                .filter(UfoneTaskCache.account_id == account_id,
+                        UfoneTaskCache.task_id.in_(keys))
+                .order_by(UfoneTaskCache.updated_at.desc())
+                .first())
+        if trow and (trow.status or '').strip():
+            return str(trow.status).strip()
+    except Exception:
+        pass
+
+    try:
+        emg = (EmergencyTaskRecord.query
+               .filter(EmergencyTaskRecord.task_id_ext.in_(keys))
+               .order_by(EmergencyTaskRecord.task_date.desc(),
+                         EmergencyTaskRecord.id.desc())
+               .first())
+        if emg and (emg.status or '').strip():
+            return str(emg.status).strip()
+    except Exception:
+        pass
+
+    try:
+        drow = (UfoneTaskDetailCache.query
+                .filter(UfoneTaskDetailCache.account_id == account_id,
+                        UfoneTaskDetailCache.task_id.in_([str(k) for k in keys]))
+                .order_by(UfoneTaskDetailCache.synced_at.desc())
+                .first())
+        if drow and (drow.task_status or '').strip():
+            return str(drow.task_status).strip()
+        if drow and drow.detail_json:
+            detail = json.loads(drow.detail_json)
+            if isinstance(detail, dict) and (detail.get('Status') or '').strip():
+                return str(detail.get('Status')).strip()
+    except Exception:
+        pass
+
+    return ''
+
+
+def needs_vps_task_detail_refresh(account_id: int, task_id) -> bool:
+    """Open/unknown → always VPS. Closed → VPS only until first post-close sync."""
+    from models import UfoneTaskDetailCache
+
+    live = resolve_task_live_status(account_id, task_id)
+    if not _status_is_closed(live):
+        return True
+
+    keys = [str(k) for k in _task_id_lookup_keys(task_id)]
+    try:
+        row = (UfoneTaskDetailCache.query
+               .filter(UfoneTaskDetailCache.account_id == account_id,
+                       UfoneTaskDetailCache.task_id.in_(keys))
+               .order_by(UfoneTaskDetailCache.synced_at.desc())
+               .first())
+    except Exception:
+        row = None
+
+    # Already fetched+saved while closed → subsequent opens use DB only
+    if row and row.detail_json and _status_is_closed(row.task_status):
+        return False
+    return True
+
+
+def mark_detail_cache_status(account_id: int, task_id, status: str):
+    """Force task_status on detail cache (e.g. after post-close VPS sync)."""
+    from models import UfoneTaskDetailCache
+    from app import db
+    if not status:
+        return
+    keys = [str(k) for k in _task_id_lookup_keys(task_id)]
+    try:
+        rows = (UfoneTaskDetailCache.query
+                .filter(UfoneTaskDetailCache.account_id == account_id,
+                        UfoneTaskDetailCache.task_id.in_(keys))
+                .all())
+        for row in rows:
+            row.task_status = status
+        if rows:
+            db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        logger.warning(f"mark_detail_cache_status failed (non-fatal): {e}")
+
+
 def _normalize_reg_key(val) -> str:
     return str(val or '').upper().replace(' ', '').replace('-', '')
 
@@ -2056,6 +2157,9 @@ def build_task_detail_from_db(account_id: int, task_id) -> dict:
             'CreatedTime': emg.created_time,
             'Category': emg.category,
             'ClosingRemarks': emg.closing_remarks,
+            'TaskClosedBy': emg.task_closed_by,
+            'cliClosing': emg.cli_closing,
+            'CompletedDateTime': emg.completed_date_time,
             'CallerName': emg.caller_name,
             'RequestFor': emg.request_for,
             'distanceInKM': emg.distance_in_km,

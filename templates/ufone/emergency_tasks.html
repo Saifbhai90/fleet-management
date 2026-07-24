@@ -305,6 +305,8 @@ function renderTaskDetail(data, liveUpdating) {
   let html = '';
   if (liveUpdating) {
     html += '<div class="alert alert-light py-1 small mb-2"><span class="spinner-border spinner-border-sm me-2"></span>DB data shown — PK VPS se comments / full detail update ho raha hai...</div>';
+  } else if (data.vps_skipped) {
+    html += '<div class="alert alert-light py-1 small mb-2 text-muted"><i class="bi bi-database-check"></i> Closed task — DB cache (VPS skip)</div>';
   } else if (data.vps_refreshed) {
     html += '<div class="alert alert-light py-1 small mb-2 text-muted"><i class="bi bi-cloud-check"></i> Live from PK VPS (saved to DB)</div>';
   } else if (data.bridge_only) {
@@ -324,17 +326,29 @@ function renderTaskDetail(data, liveUpdating) {
   html += _section('Facility Detail', 'bi-hospital', TASK_FIELDS.facility, d);
   html += _section('Ambulance / Driver', 'bi-truck', TASK_FIELDS.ambulance, d);
 
-  if (data.comments && data.comments.length > 0) {
+  // Task Comments — API list as-is; ClosingRemarks always last row (EMG DB)
+  const comments = (data.comments && data.comments.length) ? data.comments : [];
+  const closeRemarks = _pick(d, ['ClosingRemarks', 'closing_remarks']);
+  const closedBy = _pick(d, ['TaskClosedBy', 'task_closed_by', 'Closed_By']);
+  const cliClosing = _pick(d, ['cliClosing', 'cli_closing']);
+  const hasClose = !!(closeRemarks || closedBy || cliClosing);
+  if (comments.length || hasClose) {
     html += '<h6><i class="bi bi-chat-left-text me-1"></i> Task Comments</h6><hr>';
     html += '<div class="table-responsive"><table class="table table-sm table-bordered align-middle">';
     html += '<thead class="table-light"><tr><th>Comment Type</th><th>Comments</th><th>Date/Time</th><th>Created By</th></tr></thead><tbody>';
-    data.comments.forEach(c => {
+    comments.forEach(c => {
       const ct = c.CommentType || c.comment_type || c.Comment_Type || '-';
       const cm = c.Comments || c.comments || '-';
       const dt = c.CD || c.CreatedDate || c.Date || c.date_time || '-';
       const cb = c.CBName || c.CreatedBy || c.created_by || '-';
       html += `<tr><td>${ct}</td><td>${cm}</td><td>${dt}</td><td>${cb}</td></tr>`;
     });
+    if (hasClose) {
+      let cm = closeRemarks || '-';
+      if (cliClosing) cm = closeRemarks ? `${closeRemarks} (CLI: ${cliClosing})` : `CLI: ${cliClosing}`;
+      const dt = _pick(d, ['CompletedDateTime', 'CompletedDate', 'completed_date']) || '-';
+      html += `<tr><td>Closing Remarks</td><td>${cm}</td><td>${dt}</td><td>${closedBy || '-'}</td></tr>`;
+    }
     html += '</tbody></table></div>';
   }
   body.innerHTML = html;
@@ -351,18 +365,20 @@ document.querySelectorAll('.view-task-btn').forEach(btn => {
 
     // Stage 1: local DB — instant paint
     let hadCache = false;
+    let needVps = true;
     try {
       const res = await fetch('/ufone/task/' + id);
       const data = await res.json();
       if (token !== taskModalToken) return;
+      needVps = data.needs_vps_refresh !== false;
       if (data.detail && Object.keys(data.detail).length) {
         hadCache = true;
-        // Show DB now; VPS refresh upgrades comments/detail in background
-        renderTaskDetail(data, true);
+        renderTaskDetail(data, needVps);
+        if (!needVps) return;
       }
     } catch(e) { /* fall through */ }
 
-    // Stage 2: backend asks PK VPS for full detail + comments → DB + UI
+    // Stage 2: open tasks always; closed only first time after close
     try {
       const res = await fetch('/api/ufone/task/' + id + '/vps-refresh');
       const data = await res.json();
