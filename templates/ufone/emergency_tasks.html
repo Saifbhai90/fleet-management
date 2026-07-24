@@ -149,6 +149,26 @@
   </div>
 </div>
 
+<div class="modal fade" id="taskViewChoiceModal" tabindex="-1">
+  <div class="modal-dialog modal-sm modal-dialog-centered">
+    <div class="modal-content" style="border-radius: 12px; border: none;">
+      <div class="modal-header py-2 border-0">
+        <h6 class="modal-title fw-bold mb-0">Open Task Detail</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body d-grid gap-2 pt-0">
+        <button type="button" class="btn btn-outline-success" id="btnTaskDetailShort">
+          <i class="bi bi-list-ul me-1"></i> Short Details
+        </button>
+        <button type="button" class="btn btn-success" id="btnTaskDetailFull">
+          <i class="bi bi-card-checklist me-1"></i> Full Details
+        </button>
+        <p class="small text-muted mb-0">Full detail always saved to DB once — Short/Full is display only.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
 <style>
   /* Wide dialog — spread fields horizontally so vertical scroll na ho */
   #taskModal .modal-dialog { max-width: min(1440px, 97vw); }
@@ -184,6 +204,9 @@
   }
   #taskModal table th, #taskModal table td { padding: 5px 8px; vertical-align: middle; }
   #taskModal table td { color: #1e293b; }
+  #taskModal .uf-td-mode.active {
+    background: #16a34a; color: #fff; border-color: #16a34a;
+  }
   @media (max-width: 1100px) {
     #taskModal .uf-fgrid, #taskModal .uf-fgrid.uf-general { grid-template-columns: repeat(2, 1fr); }
   }
@@ -195,205 +218,12 @@
   }
 </style>
 
+<script src="{{ url_for('static', filename='js/ufone_task_detail.js') }}"></script>
 <script>
-// Modal ko body par move karo — transformed/blurred parent ke andar
-// Bootstrap modal backdrop ke neeche phans jata hai (grey/locked dikhta hai)
-const taskModalEl = document.getElementById('taskModal');
-document.body.appendChild(taskModalEl);
-
-// Ufone getTaskDetail ke ASLI 76-field response se verify shuda key mapping.
-const TASK_FIELDS = {
-  general: [
-    ['Task Id', ['_task_id','id','TaskId','task_id']],
-    ['Request From', ['RequestFrom','request_from']],
-    ['Date', ['_date','CD','CreatedDate']],
-    ['Received By', ['ReceivedBy','received_by']],
-  ],
-  patient: [
-    ['Phone', ['phone','Phone']],
-    ['CLI', ['phone2','CLI','Cli']],
-    ['Name', ['name','Name','patient_name']],
-    ['Husband Name', ['husband','HusbandName','husband_name']],
-    ['EDD', ['DateDelivery','EDD','edd']],
-    ['Address', ['address','Address']],
-    ['House Color', ['HouseColor','house_color']],
-    ['Door Color', ['DoorColor','door_color']],
-    ['Nearest Landmark', ['NearestLandmark','nearest_landmark']],
-    ['Location', ['location','Location']],
-    ['Clinical Details', ['ClinicalDetails','clinical_details']],
-    ['Union Council', ['uc_name','uc']],
-    ['Tehsil', ['tehsil_name','tehsil']],
-    ['District', ['district_name','district']],
-  ],
-  facility: [
-    ['Code', ['facility_code','FacilityCode']],
-    ['Name', ['facility_name','FacilityName']],
-    ['Incharge Name', ['InchargeName','incharge_name']],
-    ['Incharge Phone', ['InchargePhone','incharge_phone']],
-  ],
-  ambulance: [
-    ['Ambulance', ['Ambulance','amReg_No','ambulance']],
-    ['Driver(8:00AM to 8:00PM)', ['_driver_day','Driver_Name','driver_name']],
-    ['Driver(8:00PM to 8:00AM)', ['_driver_night','Driver_Name2']],
-    ['Mobile', ['MobNo','Mobile','mobile']],
-  ],
-};
-
-// Junk values jo Ufone khaali fields ke liye bhejta hai
-const EMPTY_VALUES = new Set(['', '0', 'None', 'null', '01 Jan 1900']);
-
-function _pick(detail, keys) {
-  for (const k of keys) {
-    const v = detail[k];
-    if (v === null || v === undefined) continue;
-    const s = String(v).trim();
-    if (!EMPTY_VALUES.has(s)) return s;
-  }
-  return '';
-}
-
-// Portal format: "PHF-" + numeric id (hardcoded in Dashboard.aspx JS)
-function formatTaskId(raw) {
-  const s = String(raw == null ? '' : raw).trim();
-  if (!s) return '';
-  if (/^PHF-/i.test(s)) return s.toUpperCase().replace(/^phf-/i, 'PHF-');
-  const n = s.replace(/\D/g, '');
-  return n ? ('PHF-' + n) : s;
-}
-
-function numericTaskId(raw) {
-  const s = String(raw == null ? '' : raw).trim();
-  const n = s.replace(/^PHF-/i, '').replace(/\D/g, '');
-  return n || s;
-}
-
-// Combined/computed fields (Date+Time, Driver Name (Cell), PHF-TaskId)
-function prepDetail(d) {
-  const cd = _pick(d, ['CD','CreatedDate']);
-  const ct = _pick(d, ['CD_time','CreatedTime']);
-  d._date = [cd, ct].filter(Boolean).join(' ');
-  const dn = _pick(d, ['Driver_Name']), dc = _pick(d, ['Driver_Cell']);
-  d._driver_day = dn ? (dc ? `${dn} (${dc})` : dn) : '';
-  const dn2 = _pick(d, ['Driver_Name2']), dc2 = _pick(d, ['Driver_Cell2']);
-  d._driver_night = dn2 ? (dc2 ? `${dn2} (${dc2})` : dn2) : '';
-  d._task_id = formatTaskId(_pick(d, ['id','TaskId','task_id']));
-  return d;
-}
-
-function _field(label, keys, d) {
-  const v = _pick(d, keys);
-  return `<div class="uf-frow"><label>${label}:</label><div class="field-value${v ? '' : ' empty'}">${v || '—'}</div></div>`;
-}
-
-function _section(title, icon, fields, d) {
-  let html = `<h6><i class="bi ${icon} me-1"></i> ${title}</h6><hr>`;
-  html += '<div class="uf-fgrid">';
-  for (const [label, keys] of fields) {
-    html += _field(label, keys, d);
-  }
-  html += '</div>';
-  return html;
-}
-
-function renderTaskDetail(data, liveUpdating) {
-  const body = document.getElementById('taskModalBody');
-  if (!data.detail || Object.keys(data.detail).length === 0) {
-    body.innerHTML = '<p class="text-muted text-center py-4">No data found.</p>';
-    return;
-  }
-  const d = prepDetail(data.detail);
-  let html = '';
-  if (liveUpdating) {
-    html += '<div class="alert alert-light py-1 small mb-2"><span class="spinner-border spinner-border-sm me-2"></span>DB data shown — PK VPS se comments / full detail update ho raha hai...</div>';
-  } else if (data.vps_skipped) {
-    html += '<div class="alert alert-light py-1 small mb-2 text-muted"><i class="bi bi-database-check"></i> Closed task — DB cache (VPS skip)</div>';
-  } else if (data.vps_refreshed) {
-    html += '<div class="alert alert-light py-1 small mb-2 text-muted"><i class="bi bi-cloud-check"></i> Live from PK VPS (saved to DB)</div>';
-  } else if (data.bridge_only) {
-    html += '<div class="alert alert-light py-1 small mb-2 text-muted"><i class="bi bi-cloud-check"></i> PK VPS bridge data</div>';
-  } else if (data.from_cache) {
-    html += '<div class="alert alert-warning py-1 small mb-2"><i class="bi bi-clock-history"></i> Cached data (Ufone live server not responding)</div>';
-  }
-
-  // General — single inline row (no heading needed)
-  html += '<div class="uf-fgrid uf-general mb-1">';
-  for (const [label, keys] of TASK_FIELDS.general) {
-    html += _field(label, keys, d);
-  }
-  html += '</div>';
-
-  html += _section('Patient Info', 'bi-person-vcard', TASK_FIELDS.patient, d);
-  html += _section('Facility Detail', 'bi-hospital', TASK_FIELDS.facility, d);
-  html += _section('Ambulance / Driver', 'bi-truck', TASK_FIELDS.ambulance, d);
-
-  // Task Comments — API list as-is; ClosingRemarks always last row (EMG DB)
-  const comments = (data.comments && data.comments.length) ? data.comments : [];
-  const closeRemarks = _pick(d, ['ClosingRemarks', 'closing_remarks']);
-  const closedBy = _pick(d, ['TaskClosedBy', 'task_closed_by', 'Closed_By']);
-  const cliClosing = _pick(d, ['cliClosing', 'cli_closing']);
-  const hasClose = !!(closeRemarks || closedBy || cliClosing);
-  if (comments.length || hasClose) {
-    html += '<h6><i class="bi bi-chat-left-text me-1"></i> Task Comments</h6><hr>';
-    html += '<div class="table-responsive"><table class="table table-sm table-bordered align-middle">';
-    html += '<thead class="table-light"><tr><th>Comment Type</th><th>Comments</th><th>Date/Time</th><th>Created By</th></tr></thead><tbody>';
-    comments.forEach(c => {
-      const ct = c.CommentType || c.comment_type || c.Comment_Type || '-';
-      const cm = c.Comments || c.comments || '-';
-      const dt = c.CD || c.CreatedDate || c.Date || c.date_time || '-';
-      const cb = c.CBName || c.CreatedBy || c.created_by || '-';
-      html += `<tr><td>${ct}</td><td>${cm}</td><td>${dt}</td><td>${cb}</td></tr>`;
-    });
-    if (hasClose) {
-      let cm = closeRemarks || '-';
-      if (cliClosing) cm = closeRemarks ? `${closeRemarks} (CLI: ${cliClosing})` : `CLI: ${cliClosing}`;
-      const dt = _pick(d, ['CompletedDateTime', 'CompletedDate', 'completed_date']) || '-';
-      html += `<tr><td>Closing Remarks</td><td>${cm}</td><td>${dt}</td><td>${closedBy || '-'}</td></tr>`;
-    }
-    html += '</tbody></table></div>';
-  }
-  body.innerHTML = html;
-}
-
-let taskModalToken = 0;
-document.querySelectorAll('.view-task-btn').forEach(btn => {
-  btn.addEventListener('click', async function() {
-    const id = numericTaskId(this.dataset.id);
-    const token = ++taskModalToken;
-    const modal = bootstrap.Modal.getOrCreateInstance(taskModalEl);
-    document.getElementById('taskModalBody').innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary"></div><p class="mt-2 text-muted">Loading...</p></div>';
-    modal.show();
-
-    // Stage 1: local DB — instant paint
-    let hadCache = false;
-    let needVps = true;
-    try {
-      const res = await fetch('/ufone/task/' + id);
-      const data = await res.json();
-      if (token !== taskModalToken) return;
-      needVps = data.needs_vps_refresh !== false;
-      if (data.detail && Object.keys(data.detail).length) {
-        hadCache = true;
-        renderTaskDetail(data, needVps);
-        if (!needVps) return;
-      }
-    } catch(e) { /* fall through */ }
-
-    // Stage 2: open tasks always; closed only first time after close
-    try {
-      const res = await fetch('/api/ufone/task/' + id + '/vps-refresh');
-      const data = await res.json();
-      if (token !== taskModalToken) return;
-      if (data.detail && Object.keys(data.detail).length) {
-        renderTaskDetail(data, false);
-      } else if (!hadCache) {
-        document.getElementById('taskModalBody').innerHTML = '<p class="text-danger text-center py-4">Task detail not available yet. Try again.</p>';
-      }
-    } catch(e) {
-      if (token === taskModalToken && !hadCache) {
-        document.getElementById('taskModalBody').innerHTML = '<p class="text-danger text-center py-4">Error fetching details.</p>';
-      }
-    }
-  });
+UfoneTaskDetail.init({
+  taskModalEl: document.getElementById('taskModal'),
+  choiceModalEl: document.getElementById('taskViewChoiceModal'),
+  viewBtnSelector: '.view-task-btn',
 });
 </script>
 {% endblock %}

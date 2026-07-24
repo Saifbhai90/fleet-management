@@ -490,18 +490,6 @@ def ufone_task_detail(task_id):
     want_live = request.args.get('live') == '1'
     bridge = bridge_only_mode()
 
-    def _overlay_emg_close(base, composed):
-        """Keep getTaskDetail fields, but always fill close fields from EMG DB."""
-        if not composed:
-            return base or {}
-        out = dict(base or {})
-        for k in ('ClosingRemarks', 'TaskClosedBy', 'cliClosing',
-                  'CompletedDateTime', 'CompletedDate'):
-            v = composed.get(k)
-            if v not in (None, '') and out.get(k) in (None, ''):
-                out[k] = v
-        return out
-
     def _pack(detail, comments, *, from_cache=False, warning=None):
         payload = {
             'detail': detail or {},
@@ -514,13 +502,13 @@ def ufone_task_detail(task_id):
             payload['warning'] = warning
         return jsonify(payload)
 
-    # Always have EMG compose available for ClosingRemarks overlay
+    # Fallback compose (EMG/list) when getTaskDetail cache missing
     composed = build_task_detail_from_db(acct_id, task_id)
 
-    # 1. Full detail+comments from DB cache (+ EMG close fields)
+    # 1. Full detail+comments from getTaskDetail cache (close fields included)
     detail, comments, _synced = get_task_detail_cached(acct_id, task_id)
     if detail and not want_live:
-        return _pack(_overlay_emg_close(detail, composed), comments, from_cache=True)
+        return _pack(detail, comments, from_cache=True)
 
     # 2. Compose from EMG + vehicle (+ list cache) — works offline / bridge
     if composed and not want_live:
@@ -528,7 +516,7 @@ def ufone_task_detail(task_id):
         if detail:
             merged = dict(composed)
             merged.update({k: v for k, v in detail.items() if v not in (None, '')})
-            return _pack(_overlay_emg_close(merged, composed), comments, from_cache=True)
+            return _pack(merged, comments, from_cache=True)
         return _pack(composed, comments or [], from_cache=True)
 
     snap = _cached_task_detail(acct_id, task_id)
@@ -629,23 +617,12 @@ def api_ufone_task_vps_refresh(task_id):
 
     composed = build_task_detail_from_db(acct_id, task_id) or {}
 
-    def _overlay_emg_close(base):
-        if not composed:
-            return base or {}
-        out = dict(base or {})
-        for k in ('ClosingRemarks', 'TaskClosedBy', 'cliClosing',
-                  'CompletedDateTime', 'CompletedDate'):
-            v = composed.get(k)
-            if v not in (None, '') and out.get(k) in (None, ''):
-                out[k] = v
-        return out
-
     want_vps = needs_vps_task_detail_refresh(acct_id, task_id)
     if not want_vps:
         db_detail, db_comments, _synced = get_task_detail_cached(acct_id, task_id)
         best = db_detail or composed or _cached_task_detail(acct_id, task_id) or {}
         return jsonify({
-            'detail': _overlay_emg_close(best),
+            'detail': best,
             'comments': db_comments or [],
             'from_cache': True,
             'bridge_only': bridge_only_mode(),
@@ -681,7 +658,7 @@ def api_ufone_task_vps_refresh(task_id):
 
     if detail:
         return jsonify({
-            'detail': _overlay_emg_close(detail),
+            'detail': detail,
             'comments': comments or [],
             'from_cache': False,
             'bridge_only': bridge_only_mode(),
@@ -696,7 +673,7 @@ def api_ufone_task_vps_refresh(task_id):
     best = db_detail or composed or snap
     if best:
         return jsonify({
-            'detail': _overlay_emg_close(best),
+            'detail': best,
             'comments': db_comments or [],
             'from_cache': True,
             'bridge_only': bridge_only_mode(),
