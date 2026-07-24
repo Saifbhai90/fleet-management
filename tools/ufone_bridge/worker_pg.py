@@ -317,7 +317,24 @@ def _parse_maint_date(val):
             return datetime.strptime(s0, fmt).date()
         except ValueError:
             continue
+    # Portal: "Jun 20 2026 10:06AM"
+    spaced = re.sub(r'(?i)(\d)(AM|PM)\b', r'\1 \2', s)
+    for fmt in ('%b %d %Y %I:%M %p', '%b %d %Y',
+                '%B %d %Y %I:%M %p', '%B %d %Y'):
+        try:
+            return datetime.strptime(spaced, fmt).date()
+        except ValueError:
+            continue
     return None
+
+
+def _to_int_or_none(val):
+    if val is None or str(val).strip() == '':
+        return None
+    try:
+        return int(val)
+    except (TypeError, ValueError):
+        return None
 
 
 def map_maintenance_row(raw: dict) -> dict | None:
@@ -330,58 +347,139 @@ def map_maintenance_row(raw: dict) -> dict | None:
     )
     if not reg:
         return None
-    send = _parse_maint_date(raw.get('Send_Date') or raw.get('SendDate'))
-    ret = _parse_maint_date(raw.get('Return_Date') or raw.get('ReturnDate'))
-    days = 0
-    try:
-        today = _pk_today()
-        if send and not ret:
-            days = max(0, (today - send).days)
-        elif send and ret:
-            days = max(0, (ret - send).days)
-    except Exception:
+    send = _parse_maint_date(raw.get('Send_Date') or raw.get('SendDate')
+                             or raw.get('send_date'))
+    ret = _parse_maint_date(raw.get('Return_Date') or raw.get('ReturnDate')
+                            or raw.get('return_date'))
+    days = _to_int_or_none(raw.get('Days') if raw.get('Days') is not None
+                           else raw.get('days'))
+    if days is None:
         days = 0
+        try:
+            today = _pk_today()
+            if send and not ret:
+                days = max(0, (today - send).days)
+            elif send and ret:
+                days = max(0, (ret - send).days)
+        except Exception:
+            days = 0
+    ext_id = _to_int_or_none(raw.get('id') or raw.get('Id') or raw.get('ext_id'))
+    created_raw = (
+        raw.get('Created_Date') or raw.get('CreatedDate')
+        or raw.get('created_date') or raw.get('created_date_text')
+    )
     return {
+        'ext_id': ext_id,
         'reg_no': reg,
         'district': _coerce_str(raw.get('District') or raw.get('district')),
         'maintain_type': _coerce_str(
-            raw.get('Maintain_Type') or raw.get('MaintainType') or raw.get('maintain_type')
+            raw.get('Maintain_Type') or raw.get('MaintainType')
+            or raw.get('maintain_type')
         ),
-        'cat_name': _coerce_str(raw.get('Cat_Name') or raw.get('CatName')),
-        'sub_cat_name': _coerce_str(raw.get('Sub_Cat_Name') or raw.get('SubCatName')),
-        'due_date': _parse_maint_date(raw.get('Due_Date') or raw.get('DueDate')),
+        'cat_name': _coerce_str(
+            raw.get('Cat_Name') or raw.get('CatName') or raw.get('cat_name')),
+        'sub_cat_name': _coerce_str(
+            raw.get('Sub_Cat_Name') or raw.get('SubCatName')
+            or raw.get('sub_cat_name')),
+        'due_date': _parse_maint_date(
+            raw.get('Due_Date') or raw.get('DueDate') or raw.get('due_date')),
         'send_date': send,
         'return_date': ret,
         'comments': _coerce_str(raw.get('Comments') or raw.get('comments')),
         'days_offline': days,
-        'created_by': _coerce_str(raw.get('CreatedBy') or raw.get('Created_By')),
-        'created_date': _parse_maint_date(
-            raw.get('Created_Date') or raw.get('CreatedDate')
-        ),
+        'hours': _to_int_or_none(
+            raw.get('Hours') if raw.get('Hours') is not None else raw.get('hours')),
+        'minute': _to_int_or_none(
+            raw.get('Minute') if raw.get('Minute') is not None
+            else raw.get('minute')),
+        'created_by': _coerce_str(
+            raw.get('CreatedBy') or raw.get('Created_By') or raw.get('created_by')),
+        'created_date': _parse_maint_date(created_raw),
+        'created_date_text': _coerce_str(created_raw) or None,
+        'modified_by': _coerce_str(
+            raw.get('ModifiedBy') or raw.get('modified_by')),
+        'modified_date': _coerce_str(
+            raw.get('Modified_Date') or raw.get('modified_date')) or None,
+        'start_date': _coerce_str(
+            raw.get('startDate') or raw.get('start_date')) or None,
+        'start_time': _coerce_str(
+            raw.get('startTime') or raw.get('start_time')) or None,
+        'end_date': _coerce_str(
+            raw.get('endDate') or raw.get('end_date')) or None,
+        'end_time': _coerce_str(
+            raw.get('endTime') or raw.get('end_time')) or None,
     }
 
 
+def ensure_maintenance_columns(conn) -> None:
+    """Add full portal columns to open-cache + ensure history table."""
+    alters = [
+        "ALTER TABLE ufone_maintenance_cache ADD COLUMN IF NOT EXISTS ext_id INTEGER",
+        "ALTER TABLE ufone_maintenance_cache ADD COLUMN IF NOT EXISTS hours INTEGER",
+        "ALTER TABLE ufone_maintenance_cache ADD COLUMN IF NOT EXISTS minute INTEGER",
+        "ALTER TABLE ufone_maintenance_cache ADD COLUMN IF NOT EXISTS created_date_text VARCHAR(80)",
+        "ALTER TABLE ufone_maintenance_cache ADD COLUMN IF NOT EXISTS modified_by VARCHAR(100)",
+        "ALTER TABLE ufone_maintenance_cache ADD COLUMN IF NOT EXISTS modified_date VARCHAR(80)",
+        "ALTER TABLE ufone_maintenance_cache ADD COLUMN IF NOT EXISTS start_date VARCHAR(30)",
+        "ALTER TABLE ufone_maintenance_cache ADD COLUMN IF NOT EXISTS start_time VARCHAR(30)",
+        "ALTER TABLE ufone_maintenance_cache ADD COLUMN IF NOT EXISTS end_date VARCHAR(30)",
+        "ALTER TABLE ufone_maintenance_cache ADD COLUMN IF NOT EXISTS end_time VARCHAR(30)",
+    ]
+    with conn.cursor() as cur:
+        for sql in alters:
+            try:
+                cur.execute(sql)
+            except Exception as e:
+                logger.warning('maint column ensure failed: %s (%s)', sql, e)
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS ufone_maintenance_history (
+              id SERIAL PRIMARY KEY,
+              account_id INTEGER NOT NULL,
+              ext_id INTEGER NOT NULL,
+              reg_no VARCHAR(50),
+              district VARCHAR(100),
+              maintain_type VARCHAR(50),
+              cat_name VARCHAR(100),
+              sub_cat_name VARCHAR(100),
+              due_date DATE,
+              send_date DATE,
+              return_date DATE,
+              comments TEXT,
+              days_offline INTEGER DEFAULT 0,
+              hours INTEGER,
+              minute INTEGER,
+              created_by VARCHAR(100),
+              created_date DATE,
+              modified_by VARCHAR(100),
+              modified_date VARCHAR(50),
+              start_date VARCHAR(30),
+              start_time VARCHAR(30),
+              end_date VARCHAR(30),
+              end_time VARCHAR(30),
+              is_open BOOLEAN DEFAULT TRUE,
+              first_seen_at TIMESTAMPTZ DEFAULT NOW(),
+              last_seen_at TIMESTAMPTZ DEFAULT NOW(),
+              closed_at TIMESTAMPTZ,
+              created_at TIMESTAMPTZ DEFAULT NOW(),
+              updated_at TIMESTAMPTZ DEFAULT NOW(),
+              UNIQUE (account_id, ext_id)
+            )
+            """
+        )
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS ix_ufone_maint_hist_open "
+            "ON ufone_maintenance_history (account_id, is_open)"
+        )
+    conn.commit()
+
+
 def upsert_maintenance(conn, account_id: int, items: list) -> int:
-    """Upsert under-maintenance rows; scoped stale-delete for district logins."""
+    """Upsert under-maintenance rows; full-snapshot replace when multi-district."""
+    ensure_maintenance_columns(conn)
     rows = []
     for raw in items or []:
         mapped = map_maintenance_row(raw) if isinstance(raw, dict) else None
-        # Also accept already-normalized dicts with reg_no
-        if mapped is None and isinstance(raw, dict) and raw.get('reg_no'):
-            mapped = {
-                'reg_no': _coerce_str(raw.get('reg_no')),
-                'district': _coerce_str(raw.get('district')),
-                'maintain_type': _coerce_str(raw.get('maintain_type')),
-                'cat_name': _coerce_str(raw.get('cat_name')),
-                'sub_cat_name': _coerce_str(raw.get('sub_cat_name')),
-                'due_date': _parse_maint_date(raw.get('due_date')),
-                'send_date': _parse_maint_date(raw.get('send_date')),
-                'return_date': _parse_maint_date(raw.get('return_date')),
-                'comments': _coerce_str(raw.get('comments')),
-                'days_offline': int(raw.get('days_offline') or 0),
-                'created_by': _coerce_str(raw.get('created_by')),
-                'created_date': _parse_maint_date(raw.get('created_date')),
-            }
         if mapped and mapped.get('reg_no'):
             rows.append(mapped)
 
@@ -415,19 +513,25 @@ def upsert_maintenance(conn, account_id: int, items: list) -> int:
         for r in rows:
             reg = r['reg_no']
             vals = (
-                r.get('district'), r.get('maintain_type'), r.get('cat_name'),
-                r.get('sub_cat_name'), r.get('due_date'), r.get('send_date'),
-                r.get('return_date'), r.get('comments'), r.get('days_offline') or 0,
+                r.get('ext_id'), r.get('district'), r.get('maintain_type'),
+                r.get('cat_name'), r.get('sub_cat_name'), r.get('due_date'),
+                r.get('send_date'), r.get('return_date'), r.get('comments'),
+                r.get('days_offline') or 0, r.get('hours'), r.get('minute'),
                 r.get('created_by'), r.get('created_date'),
+                r.get('created_date_text'), r.get('modified_by'),
+                r.get('modified_date'), r.get('start_date'), r.get('start_time'),
+                r.get('end_date'), r.get('end_time'),
             )
             if reg in existing:
                 cur.execute(
                     """
                     UPDATE ufone_maintenance_cache SET
-                      district=%s, maintain_type=%s, cat_name=%s, sub_cat_name=%s,
-                      due_date=%s, send_date=%s, return_date=%s, comments=%s,
-                      days_offline=%s, created_by=%s, created_date=%s,
-                      updated_at=NOW()
+                      ext_id=%s, district=%s, maintain_type=%s, cat_name=%s,
+                      sub_cat_name=%s, due_date=%s, send_date=%s, return_date=%s,
+                      comments=%s, days_offline=%s, hours=%s, minute=%s,
+                      created_by=%s, created_date=%s, created_date_text=%s,
+                      modified_by=%s, modified_date=%s, start_date=%s,
+                      start_time=%s, end_date=%s, end_time=%s, updated_at=NOW()
                     WHERE id=%s
                     """,
                     vals + (existing[reg],),
@@ -436,11 +540,15 @@ def upsert_maintenance(conn, account_id: int, items: list) -> int:
                 cur.execute(
                     """
                     INSERT INTO ufone_maintenance_cache (
-                      account_id, reg_no, district, maintain_type, cat_name,
-                      sub_cat_name, due_date, send_date, return_date, comments,
-                      days_offline, created_by, created_date, updated_at, created_at
+                      account_id, reg_no, ext_id, district, maintain_type,
+                      cat_name, sub_cat_name, due_date, send_date, return_date,
+                      comments, days_offline, hours, minute, created_by,
+                      created_date, created_date_text, modified_by, modified_date,
+                      start_date, start_time, end_date, end_time,
+                      updated_at, created_at
                     ) VALUES (
-                      %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW(),NOW()
+                      %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
+                      %s,%s,%s,%s,NOW(),NOW()
                     )
                     """,
                     (account_id, reg) + vals,
@@ -460,9 +568,172 @@ def upsert_maintenance(conn, account_id: int, items: list) -> int:
                 removed += 1
 
     conn.commit()
-    logger.info('maintenance upserted=%s (removed stale=%s, scoped=%s)',
-                len(rows), removed, scoped)
+    logger.info(
+        'maintenance upserted=%s districts=%s (removed stale=%s, scoped=%s)',
+        len(rows), len(touched_districts), removed, scoped)
+    # Keep multi-district closed History archive in sync
+    try:
+        archive_maintenance_snapshot(
+            conn, account_id, rows, statewide=len(touched_districts) >= 2)
+    except Exception as e:
+        logger.warning('maintenance archive failed (non-fatal): %s', e)
     return len(rows)
+
+
+def archive_maintenance_snapshot(conn, account_id: int, rows: list,
+                                 statewide: bool = False) -> int:
+    """Upsert open tickets into history; mark missing as closed when statewide."""
+    ensure_maintenance_columns(conn)
+    if not rows:
+        return 0
+    seen_ext = set()
+    touched = {
+        (r.get('district') or '').strip().casefold()
+        for r in rows if (r.get('district') or '').strip()
+    }
+    n = 0
+    with conn.cursor() as cur:
+        for r in rows:
+            ext_id = r.get('ext_id')
+            if ext_id is None:
+                continue
+            seen_ext.add(int(ext_id))
+            cur.execute(
+                """
+                INSERT INTO ufone_maintenance_history (
+                  account_id, ext_id, reg_no, district, maintain_type, cat_name,
+                  sub_cat_name, due_date, send_date, return_date, comments,
+                  days_offline, hours, minute, created_by, created_date,
+                  modified_by, modified_date, start_date, start_time,
+                  end_date, end_time, is_open, first_seen_at, last_seen_at,
+                  closed_at, created_at, updated_at
+                ) VALUES (
+                  %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
+                  %s,%s,TRUE,NOW(),NOW(),NULL,NOW(),NOW()
+                )
+                ON CONFLICT (account_id, ext_id) DO UPDATE SET
+                  reg_no=EXCLUDED.reg_no, district=EXCLUDED.district,
+                  maintain_type=EXCLUDED.maintain_type, cat_name=EXCLUDED.cat_name,
+                  sub_cat_name=EXCLUDED.sub_cat_name, due_date=EXCLUDED.due_date,
+                  send_date=EXCLUDED.send_date, return_date=EXCLUDED.return_date,
+                  comments=EXCLUDED.comments, days_offline=EXCLUDED.days_offline,
+                  hours=EXCLUDED.hours, minute=EXCLUDED.minute,
+                  created_by=EXCLUDED.created_by, created_date=EXCLUDED.created_date,
+                  modified_by=EXCLUDED.modified_by,
+                  modified_date=EXCLUDED.modified_date,
+                  start_date=EXCLUDED.start_date, start_time=EXCLUDED.start_time,
+                  end_date=EXCLUDED.end_date, end_time=EXCLUDED.end_time,
+                  is_open=TRUE, last_seen_at=NOW(), closed_at=NULL,
+                  updated_at=NOW()
+                """,
+                (
+                    account_id, int(ext_id), r.get('reg_no'), r.get('district'),
+                    r.get('maintain_type'), r.get('cat_name'), r.get('sub_cat_name'),
+                    r.get('due_date'), r.get('send_date'), r.get('return_date'),
+                    r.get('comments'), r.get('days_offline') or 0,
+                    r.get('hours'), r.get('minute'), r.get('created_by'),
+                    r.get('created_date'), r.get('modified_by'),
+                    r.get('modified_date'), r.get('start_date'),
+                    r.get('start_time'), r.get('end_date'), r.get('end_time'),
+                ),
+            )
+            n += 1
+
+        # Mark tickets that left the open list as closed
+        cur.execute(
+            "SELECT id, ext_id, district FROM ufone_maintenance_history "
+            "WHERE account_id=%s AND is_open=TRUE",
+            (account_id,),
+        )
+        closed = 0
+        for hid, ext_id, dist in cur.fetchall():
+            if ext_id in seen_ext:
+                continue
+            if not statewide:
+                row_dist = (dist or '').strip().casefold()
+                if row_dist and row_dist not in touched:
+                    continue
+            cur.execute(
+                """
+                UPDATE ufone_maintenance_history
+                SET is_open=FALSE, closed_at=NOW(), updated_at=NOW()
+                WHERE id=%s
+                """,
+                (hid,),
+            )
+            closed += 1
+    conn.commit()
+    logger.info('maintenance archive upserted=%s closed=%s statewide=%s',
+                n, closed, statewide)
+    return n
+
+
+def upsert_login_maintenance_history(conn, account_id: int, items: list) -> int:
+    """Merge login-scoped closed history API rows into archive (is_open=False)."""
+    ensure_maintenance_columns(conn)
+    n = 0
+    with conn.cursor() as cur:
+        for raw in items or []:
+            if not isinstance(raw, dict):
+                continue
+            mapped = map_maintenance_row(raw)
+            if not mapped or mapped.get('ext_id') is None:
+                continue
+            ext_id = int(mapped['ext_id'])
+            # Skip if still open in live cache
+            cur.execute(
+                "SELECT 1 FROM ufone_maintenance_cache "
+                "WHERE account_id=%s AND (ext_id=%s OR UPPER(reg_no)=UPPER(%s)) "
+                "LIMIT 1",
+                (account_id, ext_id, mapped.get('reg_no') or ''),
+            )
+            if cur.fetchone():
+                continue
+            cur.execute(
+                """
+                INSERT INTO ufone_maintenance_history (
+                  account_id, ext_id, reg_no, district, maintain_type, cat_name,
+                  sub_cat_name, due_date, send_date, return_date, comments,
+                  days_offline, hours, minute, created_by, created_date,
+                  modified_by, modified_date, start_date, start_time,
+                  end_date, end_time, is_open, first_seen_at, last_seen_at,
+                  closed_at, created_at, updated_at
+                ) VALUES (
+                  %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
+                  %s,%s,FALSE,NOW(),NOW(),NOW(),NOW(),NOW()
+                )
+                ON CONFLICT (account_id, ext_id) DO UPDATE SET
+                  reg_no=EXCLUDED.reg_no, district=EXCLUDED.district,
+                  maintain_type=EXCLUDED.maintain_type, cat_name=EXCLUDED.cat_name,
+                  sub_cat_name=EXCLUDED.sub_cat_name, due_date=EXCLUDED.due_date,
+                  send_date=EXCLUDED.send_date, return_date=EXCLUDED.return_date,
+                  comments=EXCLUDED.comments, days_offline=EXCLUDED.days_offline,
+                  hours=EXCLUDED.hours, minute=EXCLUDED.minute,
+                  created_by=EXCLUDED.created_by, created_date=EXCLUDED.created_date,
+                  modified_by=EXCLUDED.modified_by,
+                  modified_date=EXCLUDED.modified_date,
+                  start_date=EXCLUDED.start_date, start_time=EXCLUDED.start_time,
+                  end_date=EXCLUDED.end_date, end_time=EXCLUDED.end_time,
+                  updated_at=NOW()
+                WHERE ufone_maintenance_history.is_open = FALSE
+                """,
+                (
+                    account_id, ext_id, mapped.get('reg_no'), mapped.get('district'),
+                    mapped.get('maintain_type'), mapped.get('cat_name'),
+                    mapped.get('sub_cat_name'), mapped.get('due_date'),
+                    mapped.get('send_date'), mapped.get('return_date'),
+                    mapped.get('comments'), mapped.get('days_offline') or 0,
+                    mapped.get('hours'), mapped.get('minute'),
+                    mapped.get('created_by'), mapped.get('created_date'),
+                    mapped.get('modified_by'), mapped.get('modified_date'),
+                    mapped.get('start_date'), mapped.get('start_time'),
+                    mapped.get('end_date'), mapped.get('end_time'),
+                ),
+            )
+            n += 1
+    conn.commit()
+    logger.info('login maintenance history merged=%s', n)
+    return n
 
 
 def upsert_tasks(conn, account_id: int, tasks: list) -> tuple[int, list]:
@@ -997,6 +1268,14 @@ def _ambulance_stamp_path() -> Path:
     return Path(_env('UFONE_SESSION_DIR', str(ROOT / 'sessions'))) / 'last_ambulance_sync_date.txt'
 
 
+def _districts_stamp_path() -> Path:
+    return Path(_env('UFONE_SESSION_DIR', str(ROOT / 'sessions'))) / 'last_districts_sync_at.txt'
+
+
+def _maintenance_stamp_path() -> Path:
+    return Path(_env('UFONE_SESSION_DIR', str(ROOT / 'sessions'))) / 'last_maintenance_sync_at.txt'
+
+
 def should_fetch_ambulances() -> bool:
     """getAmbulanceList only once per PK day at/after 23:00 (11:00 PM).
 
@@ -1024,6 +1303,48 @@ def mark_ambulances_fetched() -> None:
         stamp.write_text(_pk_now().date().isoformat(), encoding='utf-8')
     except Exception as e:
         logger.warning('could not write ambulance stamp: %s', e)
+
+
+def _stamp_age_seconds(path: Path):
+    try:
+        if not path.is_file():
+            return None
+        text = path.read_text(encoding='utf-8').strip()
+        if not text:
+            return None
+        try:
+            return max(0.0, time.time() - float(text))
+        except ValueError:
+            dt = datetime.fromisoformat(text)
+            return max(0.0, (_pk_now() - dt).total_seconds())
+    except Exception:
+        return None
+
+
+def _write_stamp_now(path: Path) -> None:
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(str(time.time()), encoding='utf-8')
+    except Exception as e:
+        logger.warning('could not write stamp %s: %s', path, e)
+
+
+def should_fetch_districts() -> bool:
+    """Districts master list — once per 24h."""
+    if (_env('BRIDGE_FORCE_DISTRICTS') or '').lower() in ('1', 'true', 'yes', 'on'):
+        return True
+    interval = _int_env('BRIDGE_DISTRICTS_INTERVAL_SEC', 86400)
+    age = _stamp_age_seconds(_districts_stamp_path())
+    return age is None or age >= interval
+
+
+def should_fetch_maintenance() -> bool:
+    """Open under-maintenance — every 10 min."""
+    if (_env('BRIDGE_FORCE_MAINTENANCE') or '').lower() in ('1', 'true', 'yes', 'on'):
+        return True
+    interval = _int_env('BRIDGE_MAINT_INTERVAL_SEC', 600)
+    age = _stamp_age_seconds(_maintenance_stamp_path())
+    return age is None or age >= interval
 
 
 def run_once() -> dict:
@@ -1060,20 +1381,30 @@ def run_once() -> dict:
     tasks = [normalize_task(r) for r in (client.get_task_dashboard(
         start_date=today, end_date=today, visit_page=False) or [])
         if isinstance(r, dict)]
-    logger.info('tasks=%s; fetching districts…', len(tasks))
+    logger.info('tasks=%s', len(tasks))
+
     districts = []
-    try:
-        for d in (client.get_districts() or []):
-            if not isinstance(d, dict):
-                continue
-            code = d.get('district_code') or d.get('DistrictCode') or d.get('code')
-            name = (d.get('district_name') or d.get('DistrictName')
-                    or d.get('name') or d.get('District'))
-            if code is not None and name:
-                districts.append({'code': str(code), 'name': str(name).strip()})
-    except Exception as e:
-        logger.warning('districts fetch failed: %s', e)
-    logger.info('districts=%s; fetching emergency report…', len(districts))
+    if should_fetch_districts():
+        logger.info('fetching districts (24h cadence)…')
+        try:
+            raw_dist = client.get_districts_anonymous() or client.get_districts() or []
+            for d in raw_dist:
+                if not isinstance(d, dict):
+                    continue
+                code = d.get('district_code') or d.get('DistrictCode') or d.get('code')
+                name = (d.get('district_name') or d.get('DistrictName')
+                        or d.get('name') or d.get('District'))
+                if code is not None and name:
+                    districts.append({'code': str(code), 'name': str(name).strip()})
+            if districts:
+                _write_stamp_now(_districts_stamp_path())
+            logger.info('districts=%s', len(districts))
+        except Exception as e:
+            logger.warning('districts fetch failed: %s', e)
+    else:
+        logger.info('skipping getDistrict (next fetch after 24h)')
+
+    logger.info('fetching emergency report…')
     emg = []
     skip_emg = (_env('BRIDGE_SKIP_EMG') or '0').lower() in ('1', 'true', 'yes')
     if skip_emg:
@@ -1095,22 +1426,48 @@ def run_once() -> dict:
             logger.warning('emg fetch failed: %s', e)
 
     maintenance_raw = []
-    try:
-        logger.info('fetching ambulances under maintenance…')
-        maintenance_raw = [
-            r for r in (client.get_maintenance() or []) if isinstance(r, dict)
-        ]
-        logger.info('maintenance rows=%s', len(maintenance_raw))
-    except Exception as e:
-        logger.warning('maintenance fetch failed: %s', e)
+    hist_raw = []
+    did_fetch_maint = False
+    if should_fetch_maintenance():
+        did_fetch_maint = True
+        try:
+            # Anonymous statewide — logged-in Faisalabad session is 1 district only
+            logger.info('fetching open maintenance (anonymous statewide, 10m)…')
+            maintenance_raw = [
+                r for r in (client.get_maintenance() or []) if isinstance(r, dict)
+            ]
+            dists = sorted({
+                (r.get('District') or r.get('district') or '').strip()
+                for r in maintenance_raw
+                if (r.get('District') or r.get('district'))
+            })
+            logger.info('maintenance rows=%s districts=%s',
+                        len(maintenance_raw), len(dists))
+            _write_stamp_now(_maintenance_stamp_path())
+        except Exception as e:
+            logger.warning('maintenance fetch failed: %s', e)
+            did_fetch_maint = False
+        try:
+            hist_from = (today_d - timedelta(days=90)).strftime('%Y-%m-%d')
+            hist_raw = [
+                r for r in (
+                    client.get_maintenance_history(hist_from, today, "") or []
+                ) if isinstance(r, dict)
+            ]
+            logger.info('login maintenance history rows=%s', len(hist_raw))
+        except Exception as e:
+            logger.warning('login maintenance history failed: %s', e)
+    else:
+        logger.info('skipping open maintenance (next fetch after 10 min)')
 
     logger.info('writing to Postgres…')
     conn = db_connect()
     notify_events = []
     nm = 0
+    nh = 0
     try:
         _pg_session(conn)
-        nd = upsert_districts(conn, districts)
+        nd = upsert_districts(conn, districts) if districts else 0
         nv = upsert_vehicles(conn, account_id, vehicles) if vehicles else 0
         nt, dash_events = upsert_tasks(conn, account_id, tasks)
         notify_events.extend(dash_events)
@@ -1129,8 +1486,11 @@ def run_once() -> dict:
             conn.rollback()
             logger.warning('emg pg upsert failed (non-fatal): %s', e)
         try:
-            # Always sync (including empty list) so cleared portal list removes DB rows
-            nm = upsert_maintenance(conn, account_id, maintenance_raw)
+            if did_fetch_maint:
+                # Empty list still syncs so cleared portal list removes DB rows
+                nm = upsert_maintenance(conn, account_id, maintenance_raw)
+            if hist_raw:
+                nh = upsert_login_maintenance_history(conn, account_id, hist_raw)
         except Exception as e:
             conn.rollback()
             logger.warning('maintenance pg upsert failed (non-fatal): %s', e)
@@ -1149,13 +1509,15 @@ def run_once() -> dict:
     notify_events = notify_events[:80]
     nn = push_notify_events(notify_events)
     logger.info(
-        'pg ingest ok districts=%s vehicles=%s tasks=%s emg_pg=%s maint=%s details=%s notify=%s '
+        'pg ingest ok districts=%s vehicles=%s tasks=%s emg_pg=%s maint=%s '
+        'hist=%s details=%s notify=%s '
         '(gen/overdue/close mix)',
-        nd, nv, nt, ne, nm, ndet, nn,
+        nd, nv, nt, ne, nm, nh, ndet, nn,
     )
     return {
         'districts': nd, 'vehicles': nv, 'tasks': nt,
         'emergency_report': ne, 'maintenance': nm,
+        'maintenance_history': nh,
         'task_details': ndet, 'notify': nn,
     }
 

@@ -208,9 +208,20 @@ def _parse_date_only(s):
         return s.date()
     if isinstance(s, date):
         return s
+    text = str(s).strip()
+    if not text:
+        return None
     for fmt in ('%m/%d/%Y', '%Y-%m-%d', '%d/%m/%Y'):
         try:
-            return datetime.strptime(str(s).split()[0][:10], fmt).date()
+            return datetime.strptime(text.split()[0][:10], fmt).date()
+        except ValueError:
+            continue
+    # Portal style: "Jun 20 2026 10:06AM" / "Jun 20 2026 10:06 AM"
+    spaced = re.sub(r'(?i)(\d)(AM|PM)\b', r'\1 \2', text)
+    for fmt in ('%b %d %Y %I:%M %p', '%b %d %Y',
+                '%B %d %Y %I:%M %p', '%B %d %Y'):
+        try:
+            return datetime.strptime(spaced, fmt).date()
         except ValueError:
             continue
     return None
@@ -511,7 +522,7 @@ def fetch_today_tasks_all_districts(account_id: int, force: bool = False,
 
 _districts_cache: tuple[float, list] = (0.0, [])
 _districts_cache_lock = threading.Lock()
-_DISTRICTS_TTL = 3600
+_DISTRICTS_TTL = 86400  # 24h — districts master list changes rarely
 
 
 def _norm_district(s: str) -> str:
@@ -882,7 +893,7 @@ def get_ucs_cached(account_id: int, tehsil_code: str) -> list:
 
 _maintenance_cache: dict[int, tuple[float, list]] = {}
 _maintenance_cache_lock = threading.Lock()
-_MAINTENANCE_CACHE_TTL = 1800  # 30 min — maintenance changes slowly
+_MAINTENANCE_CACHE_TTL = 600  # 10 min — open under-maintenance list
 
 
 def _persist_maintenance(account_id: int, items: list):
@@ -925,9 +936,30 @@ def _persist_maintenance(account_id: int, items: list):
             row.send_date = _parse_date_only(m.get('send_date'))
             row.return_date = _parse_date_only(m.get('return_date'))
             row.comments = m.get('comments')
-            row.days_offline = m.get('days_offline') or 0
+            row.days_offline = m.get('days_offline') or m.get('days') or 0
+            try:
+                row.hours = int(m['hours']) if m.get('hours') is not None else None
+            except (TypeError, ValueError):
+                row.hours = None
+            try:
+                row.minute = int(m['minute']) if m.get('minute') is not None else None
+            except (TypeError, ValueError):
+                row.minute = None
+            try:
+                if m.get('id') is not None:
+                    row.ext_id = int(m.get('id'))
+            except (TypeError, ValueError):
+                pass
             row.created_by = m.get('created_by')
             row.created_date = _parse_date_only(m.get('created_date'))
+            raw_cd = m.get('created_date')
+            row.created_date_text = str(raw_cd).strip() if raw_cd else None
+            row.modified_by = m.get('modified_by')
+            row.modified_date = m.get('modified_date')
+            row.start_date = m.get('start_date')
+            row.start_time = m.get('start_time')
+            row.end_date = m.get('end_date')
+            row.end_time = m.get('end_time')
         if not seen_regs:
             db.session.commit()
             return
@@ -1089,21 +1121,37 @@ def _maintenance_items_from_db(account_id: int) -> list:
             return d.strftime('%Y-%m-%d')
         return str(d)
 
-    return [{
-        'id': None,
-        'reg_no': r.reg_no,
-        'district': r.district,
-        'maintain_type': r.maintain_type,
-        'cat_name': r.cat_name,
-        'sub_cat_name': r.sub_cat_name,
-        'due_date': _fmt(r.due_date),
-        'send_date': _fmt(r.send_date),
-        'return_date': _fmt(r.return_date),
-        'comments': r.comments,
-        'days_offline': r.days_offline or 0,
-        'created_by': r.created_by,
-        'created_date': _fmt(r.created_date),
-    } for r in rows]
+    items = []
+    for r in rows:
+        days = r.days_offline or 0
+        items.append({
+            'id': r.ext_id,
+            'reg_no': r.reg_no,
+            'district': r.district,
+            'maintain_type': r.maintain_type,
+            'cat_name': r.cat_name,
+            'sub_cat_name': r.sub_cat_name,
+            'due_date': _fmt(r.due_date),
+            'send_date': _fmt(r.send_date),
+            'return_date': _fmt(r.return_date),
+            'comments': r.comments,
+            'days_offline': days,
+            'days': days,
+            'hours': r.hours,
+            'minute': r.minute,
+            'created_by': r.created_by,
+            'created_date': (
+                getattr(r, 'created_date_text', None)
+                or _fmt(r.created_date)
+            ),
+            'modified_by': getattr(r, 'modified_by', None),
+            'modified_date': getattr(r, 'modified_date', None),
+            'start_date': getattr(r, 'start_date', None),
+            'start_time': getattr(r, 'start_time', None),
+            'end_date': getattr(r, 'end_date', None),
+            'end_time': getattr(r, 'end_time', None),
+        })
+    return items
 
 
 def fetch_maintenance(account_id: int, force: bool = False,
@@ -1227,9 +1275,15 @@ def fetch_maintenance_history(account_id: int, from_date: str = "",
     open_ids = set()
     open_regs = set()
     try:
-        open_raw = UfoneClient("anon", "anon").get_maintenance() or []
-        open_items = [normalize_maintenance(r) for r in open_raw
-                      if isinstance(r, dict)]
+        if bridge_only_mode():
+            # Render cannot reach bpocops — open set from VPS-synced cache
+            open_items = _maintenance_items_from_db(account_id)
+        else:
+            open_raw = UfoneClient("anon", "anon").get_maintenance() or []
+            open_items = [normalize_maintenance(r) for r in open_raw
+                          if isinstance(r, dict)]
+            # Snapshot archive so future closes become multi-district history
+            _persist_maintenance(account_id, open_items)
         for r in open_items:
             if r.get('id') is not None:
                 try:
@@ -1239,8 +1293,6 @@ def fetch_maintenance_history(account_id: int, from_date: str = "",
             reg = (r.get('reg_no') or '').strip().upper()
             if reg:
                 open_regs.add(reg)
-        # Snapshot archive so future closes become multi-district history
-        _persist_maintenance(account_id, open_items)
     except Exception as e:
         logger.warning("fetch_maintenance_history open refresh failed: %s", e)
 
@@ -1264,33 +1316,35 @@ def fetch_maintenance_history(account_id: int, from_date: str = "",
         logger.warning("archive history read failed: %s", e)
 
     # B) Login history API (closed jobs for account district) — still exclude open
-    try:
-        username, password = _ufone_env_credentials()
-        if username and password:
-            client = UfoneClient(
-                username, password, session_key=f"maint_hist_{account_id}")
-            client.connect(reuse_session=True)
-        else:
-            client = _get_client(account_id, purpose="ui")
-        hist_raw = client.get_maintenance_history(
-            from_date, to_date, "") or []
-        for r in hist_raw:
-            if not isinstance(r, dict):
-                continue
-            item = normalize_maintenance(r)
-            mid = item.get('id')
-            try:
-                mid_i = int(mid) if mid is not None else None
-            except (TypeError, ValueError):
-                mid_i = None
-            reg = (item.get('reg_no') or '').strip().upper()
-            if mid_i in open_ids or (reg and reg in open_regs):
-                continue
-            key = _maintenance_row_key(item)
-            if key and key not in by_key:
-                by_key[key] = item
-    except Exception as e:
-        logger.info("login history merge skipped: %s", e)
+    # Skip on Render bridge — VPS owns Ufone; Render has no portal session.
+    if not bridge_only_mode():
+        try:
+            username, password = _ufone_env_credentials()
+            if username and password:
+                client = UfoneClient(
+                    username, password, session_key=f"maint_hist_{account_id}")
+                client.connect(reuse_session=True)
+            else:
+                client = _get_client(account_id, purpose="ui")
+            hist_raw = client.get_maintenance_history(
+                from_date, to_date, "") or []
+            for r in hist_raw:
+                if not isinstance(r, dict):
+                    continue
+                item = normalize_maintenance(r)
+                mid = item.get('id')
+                try:
+                    mid_i = int(mid) if mid is not None else None
+                except (TypeError, ValueError):
+                    mid_i = None
+                reg = (item.get('reg_no') or '').strip().upper()
+                if mid_i in open_ids or (reg and reg in open_regs):
+                    continue
+                key = _maintenance_row_key(item)
+                if key and key not in by_key:
+                    by_key[key] = item
+        except Exception as e:
+            logger.info("login history merge skipped: %s", e)
 
     items = [
         r for r in by_key.values()
@@ -2769,7 +2823,7 @@ _POLL_INTERVAL = 60  # seconds between task polls (light today-only call)
 _POLL_MAX_BACKOFF = 300  # cap at 5 min when Ufone keeps timing out
 _POLL_AMBULANCE_INTERVAL = 600  # 10 min between heavy getAmbulanceList (1394 rows)
 _POLL_EMG_SYNC_INTERVAL = 180  # 3 min between heavy getAmbulanceTaskReport syncs
-_POLL_MAINTENANCE_INTERVAL = 1800  # 30 min between maintenance syncs
+_POLL_MAINTENANCE_INTERVAL = 600  # 10 min between open-maintenance syncs
 
 # Idle-aware polling: when nobody is actively viewing the Ufone hub, stretch
 # the heavy intervals to cut load on the Ufone portal. Freshness is preserved

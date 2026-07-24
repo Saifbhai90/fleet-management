@@ -566,6 +566,17 @@ if _run_startup_tasks:
                 ('oil_work_order', 'upload_started_at', 'TIMESTAMP'),
                 ('oil_work_order', 'upload_finished_at', 'TIMESTAMP'),
                 ('project', 'ufone_close_reminder_minutes', 'INTEGER DEFAULT 0'),
+                # Ufone open-maintenance full portal columns (VPS bridge writes these)
+                ('ufone_maintenance_cache', 'ext_id', 'INTEGER'),
+                ('ufone_maintenance_cache', 'hours', 'INTEGER'),
+                ('ufone_maintenance_cache', 'minute', 'INTEGER'),
+                ('ufone_maintenance_cache', 'created_date_text', 'VARCHAR(80)'),
+                ('ufone_maintenance_cache', 'modified_by', 'VARCHAR(100)'),
+                ('ufone_maintenance_cache', 'modified_date', 'VARCHAR(80)'),
+                ('ufone_maintenance_cache', 'start_date', 'VARCHAR(30)'),
+                ('ufone_maintenance_cache', 'start_time', 'VARCHAR(30)'),
+                ('ufone_maintenance_cache', 'end_date', 'VARCHAR(30)'),
+                ('ufone_maintenance_cache', 'end_time', 'VARCHAR(30)'),
             ]
             # Ensure device_app_version table exists
             if 'device_app_version' not in _inspector.get_table_names():

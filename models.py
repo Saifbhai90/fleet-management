@@ -3210,6 +3210,7 @@ class UfoneMaintenanceCache(db.Model):
     __tablename__ = 'ufone_maintenance_cache'
     id = db.Column(db.Integer, primary_key=True)
     account_id = db.Column(db.Integer, db.ForeignKey('ufone_account.id'), nullable=False, index=True)
+    ext_id = db.Column(db.Integer, nullable=True, index=True)  # Ufone ticket id
     reg_no = db.Column(db.String(50), nullable=True, index=True)
     district = db.Column(db.String(100), nullable=True)
     maintain_type = db.Column(db.String(50), nullable=True)  # Engine/Body/etc
@@ -3220,8 +3221,17 @@ class UfoneMaintenanceCache(db.Model):
     return_date = db.Column(db.DateTime, nullable=True)
     comments = db.Column(db.Text, nullable=True)
     days_offline = db.Column(db.Integer, default=0)
+    hours = db.Column(db.Integer, nullable=True)
+    minute = db.Column(db.Integer, nullable=True)
     created_by = db.Column(db.String(100), nullable=True)
     created_date = db.Column(db.DateTime, nullable=True)
+    created_date_text = db.Column(db.String(80), nullable=True)  # raw portal text
+    modified_by = db.Column(db.String(100), nullable=True)
+    modified_date = db.Column(db.String(80), nullable=True)
+    start_date = db.Column(db.String(30), nullable=True)
+    start_time = db.Column(db.String(30), nullable=True)
+    end_date = db.Column(db.String(30), nullable=True)
+    end_time = db.Column(db.String(30), nullable=True)
     updated_at = db.Column(db.DateTime, default=pk_now, onupdate=pk_now)
     created_at = db.Column(db.DateTime, default=pk_now)
 
