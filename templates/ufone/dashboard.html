@@ -408,27 +408,6 @@
   </div>
 </div>
 
-<!-- Short vs Full choice — same VPS/DB payload either way -->
-<div class="modal fade" id="taskViewChoiceModal" tabindex="-1">
-  <div class="modal-dialog modal-sm modal-dialog-centered">
-    <div class="modal-content" style="border-radius: 12px; border: none;">
-      <div class="modal-header py-2 border-0">
-        <h6 class="modal-title fw-bold mb-0">Open Task Detail</h6>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body d-grid gap-2 pt-0">
-        <button type="button" class="btn btn-outline-success" id="btnTaskDetailShort">
-          <i class="bi bi-list-ul me-1"></i> Short Details
-        </button>
-        <button type="button" class="btn btn-success" id="btnTaskDetailFull">
-          <i class="bi bi-card-checklist me-1"></i> Full Details
-        </button>
-        <p class="small text-muted mb-0">Full detail always saved to DB once — Short/Full is display only.</p>
-      </div>
-    </div>
-  </div>
-</div>
-
 <style>
   /* Wide dialog — spread fields horizontally so vertical scroll na ho */
   #taskModal .modal-dialog { max-width: min(1440px, 97vw); }
@@ -582,7 +561,6 @@ loadDashboardCounts(false);
 <script>
 UfoneTaskDetail.init({
   taskModalEl: document.getElementById('taskModal'),
-  choiceModalEl: document.getElementById('taskViewChoiceModal'),
   viewBtnSelector: '.task-detail-btn',
 });
 const formatTaskId = UfoneTaskDetail.formatTaskId;

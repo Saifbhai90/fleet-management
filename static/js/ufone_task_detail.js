@@ -8,55 +8,37 @@
 
   const EMPTY_VALUES = new Set(['', '0', 'None', 'null', '01 Jan 1900']);
 
-  // Current pre-push popup fields (= Short Details)
+  // Short Details — compact portal-style subset
   const SHORT_FIELDS = {
     general: [
       ['Task Id', ['_task_id', 'id', 'TaskId', 'task_id']],
-      ['Request From', ['RequestFrom', 'request_from']],
-      ['Date', ['_date', 'CD', 'CreatedDate']],
+      ['Task Create Date/Time', ['_date', 'CD', 'CreatedDate']],
       ['Received By', ['ReceivedBy', 'received_by']],
       ['Status', ['Status', 'status']],
-      ['Request For', ['RequestFor', 'request_for']],
       ['Closed By', ['ClosedByName', 'TaskClosedBy', 'task_closed_by', 'Closed_By']],
-      ['End Time', ['EndTime', 'EndDate', 'CompletedDateTime', 'CompletedDate', 'completed_date']],
+      ['END Date/Time', ['EndTime', 'EndDate', 'CompletedDateTime', 'CompletedDate', 'completed_date']],
       ['Closing Remarks', ['ClosingRemarks', 'closing_remarks']],
     ],
     patient: [
       ['Phone', ['phone', 'Phone']],
       ['CLI', ['phone2', 'CLI', 'Cli']],
       ['Name', ['name', 'Name', 'patient_name']],
-      ['Husband Name', ['husband', 'HusbandName', 'husband_name']],
       ['EDD', ['DateDelivery', 'EDD', 'edd']],
-      ['Pregnancy Month', ['PregnancyMonth', 'pregnancy_month']],
-      ['Age of Child', ['AgeofChild', 'age_of_child']],
       ['Address', ['address', 'Address']],
-      ['House Color', ['HouseColor', 'house_color']],
-      ['Door Color', ['DoorColor', 'door_color']],
-      ['Nearest Landmark', ['NearestLandmark', 'nearest_landmark']],
       ['Location', ['location', 'Location']],
       ['Clinical Details', ['ClinicalDetails', 'clinical_details']],
-      ['Union Council', ['UnionCouncil', 'uc_name', 'uc']],
-      ['Tehsil', ['Tehsil', 'tehsil_name', 'tehsil']],
-      ['District', ['District', 'district_name', 'district']],
     ],
     facility: [
       ['Code', ['facility_code', 'FacilityCode']],
       ['Name', ['facility_name', 'FacilityName']],
       ['Incharge Name', ['InchargeName', 'incharge_name']],
       ['Incharge Phone', ['InchargePhone', 'incharge_phone']],
-      ['Change Facility Comments', ['ChangeFacilityComments', 'change_facility_comments']],
     ],
     ambulance: [
       ['Ambulance', ['Ambulance', 'amReg_No', 'ambulance']],
       ['Driver(8:00AM to 8:00PM)', ['_driver_day', 'Driver_Name', 'driver_name']],
       ['Driver(8:00PM to 8:00AM)', ['_driver_night', 'Driver_Name2']],
       ['Mobile', ['MobNo', 'Mobile', 'mobile']],
-      ['Distance', ['Distance', 'distanceInKM', 'distance_in_km']],
-      ['Task Start Lat', ['taskStartLat', 'task_start_lat']],
-      ['Task Start Lon', ['taskStartLon', 'task_start_lon']],
-      ['Task End Lat', ['taskEndLat', 'task_end_lat']],
-      ['Task End Lon', ['taskEndLon', 'task_end_lon']],
-      ['Tracking Company', ['TrackingCompany', 'tracking_company']],
     ],
   };
 
@@ -69,10 +51,10 @@
       ['Received By', ['ReceivedBy']],
       ['Status', ['Status']],
       ['In Process', ['inProcess']],
-      ['Date', ['_date', 'CD', 'CreatedDate']],
+      ['Task Create Date/Time', ['_date', 'CD', 'CreatedDate']],
       ['Created Time', ['CD_time', 'CreatedTime']],
       ['Closed By', ['ClosedByName']],
-      ['End Time', ['EndTime']],
+      ['END Date/Time', ['EndTime', 'EndDate', 'CompletedDateTime']],
       ['End Date', ['EndDate']],
       ['Closing Remarks', ['ClosingRemarks']],
     ],
@@ -158,7 +140,6 @@
   let taskModalToken = 0;
   let lastPayload = null;
   let lastMode = 'short';
-  let pendingTaskId = null;
   let cfg = null;
 
   function _pick(detail, keys) {
@@ -376,22 +357,10 @@
     }
   }
 
-  function showChoice(taskId) {
-    pendingTaskId = numericTaskId(taskId);
-    if (!cfg || !cfg.choiceModalEl) {
-      openTaskDetail(pendingTaskId, 'short');
-      return;
-    }
-    bootstrap.Modal.getOrCreateInstance(cfg.choiceModalEl).show();
-  }
-
   function initUfoneTaskDetail(options) {
     cfg = options || {};
     if (cfg.taskModalEl && cfg.taskModalEl.parentElement !== document.body) {
       document.body.appendChild(cfg.taskModalEl);
-    }
-    if (cfg.choiceModalEl && cfg.choiceModalEl.parentElement !== document.body) {
-      document.body.appendChild(cfg.choiceModalEl);
     }
 
     document.addEventListener('click', function (ev) {
@@ -405,32 +374,10 @@
       const viewBtn = ev.target.closest(cfg.viewBtnSelector || '.task-detail-btn');
       if (viewBtn) {
         ev.preventDefault();
-        showChoice(viewBtn.dataset.id);
+        // Open Short by default; Full toggle is inside the detail modal
+        openTaskDetail(viewBtn.dataset.id, 'short');
       }
     });
-
-    const shortBtn = document.getElementById('btnTaskDetailShort');
-    const fullBtn = document.getElementById('btnTaskDetailFull');
-    if (shortBtn) {
-      shortBtn.addEventListener('click', function () {
-        const id = pendingTaskId;
-        const choice = cfg.choiceModalEl
-          ? bootstrap.Modal.getOrCreateInstance(cfg.choiceModalEl)
-          : null;
-        if (choice) choice.hide();
-        if (id) openTaskDetail(id, 'short');
-      });
-    }
-    if (fullBtn) {
-      fullBtn.addEventListener('click', function () {
-        const id = pendingTaskId;
-        const choice = cfg.choiceModalEl
-          ? bootstrap.Modal.getOrCreateInstance(cfg.choiceModalEl)
-          : null;
-        if (choice) choice.hide();
-        if (id) openTaskDetail(id, 'full');
-      });
-    }
   }
 
   global.UfoneTaskDetail = {
