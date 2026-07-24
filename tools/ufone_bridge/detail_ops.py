@@ -163,6 +163,74 @@ def fetch_and_store_one_task_detail(account_id: int, task_id) -> dict:
     }
 
 
+def fetch_and_store_emg_day(account_id: int, day: str) -> dict:
+    """Fetch getAmbulanceTaskReport for ONE calendar day and upsert Postgres.
+
+    From must equal To (caller-enforced). skip_notify so historical import
+    does not flood drivers with generate/close events.
+    """
+    from datetime import date as _date
+
+    day = (day or '').strip()
+    if not _is_ymd(day):
+        return {'ok': False, 'error': 'invalid date (YYYY-MM-DD)', 'date': day}
+    try:
+        day_d = _date.fromisoformat(day)
+    except ValueError:
+        return {'ok': False, 'error': 'invalid date', 'date': day}
+
+    with UFONE_IO_LOCK:
+        client = _get_client()
+        try:
+            raw = client._call(
+                'ReportEmergencyTask.aspx', 'getAmbulanceTaskReport',
+                {
+                    'startDate': client._to_ufone_date(day),
+                    'endDate': client._to_ufone_date(day),
+                    'District': '', 'Tehsil': '', 'UnionCouncil': '', 'TaskId': '',
+                },
+                visit_page=False, timeout=90, retries=1,
+            )
+        except Exception as e:
+            logger.warning('emg-day %s fetch failed: %s', day, e)
+            return {'ok': False, 'error': f'Ufone fetch failed: {e}'[:200], 'date': day}
+
+    items = [r for r in (raw or []) if isinstance(r, dict)]
+    if not items:
+        return {'ok': True, 'count': 0, 'date': day, 'warning': 'Ufone returned 0 rows'}
+
+    # Lazy import — worker_pg imports detail_ops at runtime (avoid cycle)
+    from worker_pg import upsert_emergency
+
+    conn = _db_connect()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SET statement_timeout = '180s'")
+        count, _events = upsert_emergency(
+            conn, account_id, items, day_d, skip_notify=True,
+        )
+        conn.commit()
+    except Exception as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        logger.exception('emg-day upsert failed')
+        return {'ok': False, 'error': f'DB upsert failed: {e}'[:200], 'date': day}
+    finally:
+        conn.close()
+
+    return {'ok': True, 'count': int(count or 0), 'date': day}
+
+
+def _is_ymd(s: str) -> bool:
+    if not s or len(s) != 10:
+        return False
+    if s[4] != '-' or s[7] != '-':
+        return False
+    return s[:4].isdigit() and s[5:7].isdigit() and s[8:10].isdigit()
+
+
 class _DetailHandler(BaseHTTPRequestHandler):
     server_version = 'UfoneDetailServer/1.0'
 
@@ -193,9 +261,15 @@ class _DetailHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = urlparse(self.path).path
-        if path not in ('/task-detail', '/api/task-detail'):
-            self._send(404, {'ok': False, 'error': 'not found'})
+        if path in ('/task-detail', '/api/task-detail'):
+            self._handle_task_detail()
             return
+        if path in ('/emg-day', '/api/emg-day'):
+            self._handle_emg_day()
+            return
+        self._send(404, {'ok': False, 'error': 'not found'})
+
+    def _handle_task_detail(self):
         if not self._token_ok():
             self._send(401, {'ok': False, 'error': 'unauthorized'})
             return
@@ -214,6 +288,37 @@ class _DetailHandler(BaseHTTPRequestHandler):
             self._send(code, result)
         except Exception as e:
             logger.exception('task-detail failed')
+            self._send(500, {'ok': False, 'error': str(e)[:300]})
+
+    def _handle_emg_day(self):
+        if not self._token_ok():
+            self._send(401, {'ok': False, 'error': 'unauthorized'})
+            return
+        length = int(self.headers.get('Content-Length') or 0)
+        raw = self.rfile.read(length) if length > 0 else b'{}'
+        try:
+            data = json.loads(raw.decode('utf-8') or '{}')
+        except Exception:
+            self._send(400, {'ok': False, 'error': 'invalid json'})
+            return
+        from_date = (data.get('from_date') or data.get('date') or '').strip()
+        to_date = (data.get('to_date') or data.get('date') or from_date or '').strip()
+        if not from_date or not to_date:
+            self._send(400, {'ok': False, 'error': 'from_date and to_date required'})
+            return
+        if from_date != to_date:
+            self._send(400, {
+                'ok': False,
+                'error': 'From Date and To Date must be the same day (1 day only)',
+            })
+            return
+        account_id = int(data.get('account_id') or _int_env('UFONE_ACCOUNT_ID', 1))
+        try:
+            result = fetch_and_store_emg_day(account_id, from_date)
+            code = 200 if result.get('ok') else 502
+            self._send(code, result)
+        except Exception as e:
+            logger.exception('emg-day failed')
             self._send(500, {'ok': False, 'error': str(e)[:300]})
 
 

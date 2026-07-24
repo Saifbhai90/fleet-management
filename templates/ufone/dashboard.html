@@ -285,6 +285,31 @@
     <div id="fSummary" class="small mt-2" style="display:none;"></div>
   </div>
 
+  <!-- Old Record Fetch — 1 day only via VPS (From must equal To) -->
+  <div class="uf-card uf-filterbar mb-3" id="oldRecordCard">
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+      <i class="bi bi-cloud-download text-primary"></i>
+      <strong style="font-size:.92rem;">Fetch Old Records</strong>
+      <span class="text-muted small">From = To required (1 day only — Ufone load protect)</span>
+    </div>
+    <div class="row g-2 align-items-end">
+      <div class="col-6 col-md-2">
+        <label class="uf-flabel"><i class="bi bi-calendar3"></i> From Date</label>
+        <input type="date" class="form-control" id="oldFrom">
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="uf-flabel"><i class="bi bi-calendar3"></i> To Date</label>
+        <input type="date" class="form-control" id="oldTo">
+      </div>
+      <div class="col-12 col-md-4 d-flex gap-2">
+        <button type="button" class="uf-btn btn-sm" id="oldFetchBtn" style="min-width:140px;">
+          <i class="bi bi-cloud-arrow-down"></i> Fetch from VPS
+        </button>
+      </div>
+    </div>
+    <div id="oldFetchMsg" class="small mt-2" style="display:none;"></div>
+  </div>
+
   <!-- KPI cards — task cards clickable; Total Ambulances not filter-linked -->
   <div class="uf-kpi-grid" id="ufKpiGrid">
     <div class="uf-kpi k-blue" id="kpiAmb" title="Fleet ambulances (not changed by task filters)">
@@ -1014,6 +1039,91 @@ document.getElementById('fApply').addEventListener('click', async function() {
 document.getElementById('fReset').addEventListener('click', function() {
   window.location.reload();
 });
+
+// ─── Fetch Old Records (1 day only, From === To) ─────────────────
+(function initOldRecordFetch() {
+  const oldFrom = document.getElementById('oldFrom');
+  const oldTo = document.getElementById('oldTo');
+  const oldBtn = document.getElementById('oldFetchBtn');
+  const oldMsg = document.getElementById('oldFetchMsg');
+  if (!oldFrom || !oldTo || !oldBtn) return;
+
+  // Default: yesterday (today already syncs via VPS poll)
+  const y = new Date(Date.now() + 5 * 60 * 60 * 1000 - 24 * 60 * 60 * 1000);
+  const yStr = y.toISOString().slice(0, 10);
+  oldFrom.value = yStr;
+  oldTo.value = yStr;
+
+  function syncPair(src, dst) {
+    if (src.value) dst.value = src.value;
+  }
+  oldFrom.addEventListener('change', function() { syncPair(oldFrom, oldTo); });
+  oldTo.addEventListener('change', function() { syncPair(oldTo, oldFrom); });
+
+  function showOldMsg(html, ok) {
+    oldMsg.style.display = '';
+    oldMsg.className = 'small mt-2 ' + (ok ? 'text-success' : 'text-danger');
+    oldMsg.innerHTML = html;
+  }
+
+  let oldBusy = false;
+  oldBtn.addEventListener('click', async function() {
+    if (oldBusy) return;
+    const from = (oldFrom.value || '').trim();
+    const to = (oldTo.value || '').trim();
+    if (!from || !to) {
+      showOldMsg('<i class="bi bi-exclamation-circle"></i> From Date aur To Date dono required hain.', false);
+      return;
+    }
+    if (from !== to) {
+      showOldMsg('<i class="bi bi-exclamation-circle"></i> From Date aur To Date <b>same</b> honi chahiye (sirf 1 din). Year-range fetch band hai.', false);
+      return;
+    }
+    oldBusy = true;
+    oldBtn.disabled = true;
+    oldBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Fetching…';
+    showOldMsg('<i class="bi bi-hourglass-split"></i> VPS se Ufone report la raha hai — 30–90 sec lag sakte hain…', true);
+    try {
+      const res = await fetch('/api/ufone/tasks/fetch-old-day', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ from_date: from, to_date: to }),
+      });
+      const data = await res.json().catch(function() { return {}; });
+      if (!res.ok || !data.ok) {
+        showOldMsg('<i class="bi bi-x-circle"></i> ' + esc(data.error || ('HTTP ' + res.status)), false);
+      } else {
+        const n = data.count || 0;
+        const warn = data.warning ? ' — ' + esc(data.warning) : '';
+        showOldMsg(
+          '<i class="bi bi-check-circle"></i> <b>' + n + '</b> tasks saved for <b>' + esc(data.date || from) + '</b>' +
+          (data.via ? ' <span class="text-muted">(' + esc(data.via) + ')</span>' : '') + warn +
+          '. Filter Apply se list refresh ho rahi hai…',
+          true
+        );
+        // Fill main filter dates and Apply so list shows the fetched day
+        const fFrom = document.getElementById('fFrom');
+        const fTo = document.getElementById('fTo');
+        if (fFrom) {
+          fFrom.value = from;
+          if (fFrom._flatpickr) fFrom._flatpickr.setDate(from, true);
+        }
+        if (fTo) {
+          fTo.value = to;
+          if (fTo._flatpickr) fTo._flatpickr.setDate(to, true);
+        }
+        const applyBtn = document.getElementById('fApply');
+        if (applyBtn) applyBtn.click();
+      }
+    } catch (e) {
+      showOldMsg('<i class="bi bi-x-circle"></i> Network error: ' + esc(String(e && e.message || e)), false);
+    }
+    oldBtn.disabled = false;
+    oldBtn.innerHTML = '<i class="bi bi-cloud-arrow-down"></i> Fetch from VPS';
+    oldBusy = false;
+  });
+})();
 
 // Print/Export — Fuel Expense jaisa (fleetPrintExport)
 // fleet_core.js is deferred: bind only after DOMContentLoaded so fleetPrintExport exists.

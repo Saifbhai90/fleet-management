@@ -958,6 +958,108 @@ def api_ufone_tasks_filtered():
     })
 
 
+def _request_vps_emg_day(account_id: int, day: str) -> dict:
+    """Ask PK VPS to fetch one-day Emergency Task Report and upsert Postgres."""
+    import requests
+    token = _bridge_expected_token()
+    if not token:
+        return {'ok': False, 'error': 'bridge token not configured'}
+    url = f'{_vps_detail_base_url()}/emg-day'
+    try:
+        r = requests.post(
+            url,
+            headers={
+                'X-Ufone-Bridge-Token': token,
+                'User-Agent': 'fleet-manager-render/1.0',
+                'Content-Type': 'application/json',
+            },
+            json={
+                'from_date': day,
+                'to_date': day,
+                'account_id': int(account_id),
+            },
+            timeout=95,
+        )
+        try:
+            data = r.json() if r.content else {}
+        except Exception:
+            data = {}
+        if not isinstance(data, dict):
+            data = {}
+        if r.status_code >= 400 and not data.get('error'):
+            data['ok'] = False
+            data['error'] = f'VPS HTTP {r.status_code}: {(r.text or "")[:160]}'
+        return data
+    except Exception as e:
+        return {'ok': False, 'error': f'VPS unreachable: {e}'[:200]}
+
+
+@app.route('/api/ufone/tasks/fetch-old-day', methods=['POST'])
+@csrf.exempt
+def api_ufone_fetch_old_day():
+    """On-demand historical EMG fetch — ONE day only (From must equal To).
+
+    Bridge mode: Render → PK VPS /emg-day → Ufone getAmbulanceTaskReport → DB.
+    Local mode: force live fetch via fetch_tasks_report.
+    """
+    acct_id = _get_account_id()
+    if not acct_id:
+        return jsonify({'ok': False, 'error': 'No account'}), 400
+
+    data = request.get_json(silent=True) or {}
+    raw_from = (data.get('from_date') or request.form.get('from_date') or '').strip()
+    raw_to = (data.get('to_date') or request.form.get('to_date') or '').strip()
+    if not raw_from or not raw_to:
+        return jsonify({
+            'ok': False,
+            'error': 'From Date and To Date required',
+        }), 400
+    if not re.match(r'^\d{4}-\d{2}-\d{2}$', raw_from) or not re.match(r'^\d{4}-\d{2}-\d{2}$', raw_to):
+        return jsonify({'ok': False, 'error': 'Dates must be YYYY-MM-DD'}), 400
+    try:
+        datetime.strptime(raw_from, '%Y-%m-%d')
+        datetime.strptime(raw_to, '%Y-%m-%d')
+    except ValueError:
+        return jsonify({'ok': False, 'error': 'Invalid calendar date'}), 400
+    if raw_from != raw_to:
+        return jsonify({
+            'ok': False,
+            'error': 'From Date and To Date must be the same day (1 day only). '
+                     'Year-range fetch is blocked to protect Ufone portal load.',
+        }), 400
+
+    day = raw_from
+    try:
+        if bridge_only_mode():
+            vps = _request_vps_emg_day(acct_id, day)
+            if not vps.get('ok'):
+                return jsonify({
+                    'ok': False,
+                    'error': vps.get('error') or 'VPS fetch failed',
+                    'date': day,
+                }), 502
+            return jsonify({
+                'ok': True,
+                'date': day,
+                'count': int(vps.get('count') or 0),
+                'warning': vps.get('warning'),
+                'via': 'vps',
+            })
+
+        tasks = fetch_tasks_report(
+            acct_id, start_date=day, end_date=day, district='', force=True,
+        )
+        return jsonify({
+            'ok': True,
+            'date': day,
+            'count': len(tasks or []),
+            'via': 'live',
+        })
+    except Exception as e:
+        logger.warning('fetch-old-day failed: %s', e)
+        return jsonify({'ok': False, 'error': str(e)[:200], 'date': day}), 502
+
+
 @app.route('/ufone/tasks/counts')
 def ufone_task_counts():
     acct_id = _get_account_id()

@@ -512,13 +512,15 @@ def map_emg_row(raw: dict, account_id: int, today: date) -> dict | None:
     return fields
 
 
-def upsert_emergency(conn, account_id: int, items: list, today: date) -> tuple[int, list]:
+def upsert_emergency(conn, account_id: int, items: list, today: date,
+                     *, skip_notify: bool = False) -> tuple[int, list]:
     """Bulk-write emergency report rows to Postgres (no Render HTTP).
 
     Returns (upsert_count, notify_events).
     - close: status transition to complete (primary close source)
     - generate: FALLBACK only when task was never in ufone_task_cache
       (dashboard is primary generate source every ~3 min)
+    - skip_notify=True: used for historical one-day fetch (no driver floods)
     """
     if not items:
         return 0, []
@@ -596,7 +598,7 @@ def upsert_emergency(conn, account_id: int, items: list, today: date) -> tuple[i
             tid = row['task_id_ext']
             prior = existing.get(tid)
             new_status = row.get('status') or ''
-            if had_prior and row.get('task_date') == today:
+            if (not skip_notify) and had_prior and row.get('task_date') == today:
                 payload = {
                     'task_id': tid,
                     'amb_reg_no': row.get('amb_reg_no'),
