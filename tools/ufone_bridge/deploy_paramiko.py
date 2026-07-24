@@ -112,8 +112,8 @@ def main() -> int:
 
         run(client, f'mkdir -p {REMOTE}/systemd {REMOTE}/sessions')
         files = [
-            'worker.py', 'ufone_api_client.py', 'requirements.txt',
-            'bootstrap.sh', '.env.example', 'README.md',
+            'worker.py', 'worker_pg.py', 'detail_ops.py', 'ufone_api_client.py',
+            'requirements.txt', 'bootstrap.sh', '.env.example', 'README.md',
         ]
         for name in files:
             upload(client, ROOT / name, f'{REMOTE}/{name}')
