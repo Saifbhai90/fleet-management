@@ -367,9 +367,16 @@ class UfoneClient:
         })
 
     def get_maintenance(self) -> list:
-        """Ambulances currently under maintenance."""
+        """Ambulances currently under maintenance.
+
+        Portal WebMethod requires startDate/endDate keys (empty = current open).
+        Calling without params returns HTTP 500.
+        """
         return self._call("AmbulanceUnderMaintenance.aspx",
-                          "getAmbulanceUnderMaintenance")
+                          "getAmbulanceUnderMaintenance", {
+            "startDate": "",
+            "endDate": "",
+        })
 
     def get_maintenance_history(self, start_date: str = "", end_date: str = "",
                                 district: str = "") -> list:
