@@ -365,7 +365,7 @@ HUBS = {
         'extra_endpoints': (
             'ufone_dashboard', 'ufone_map', 'ufone_vehicles', 'ufone_vehicle_detail',
             'ufone_track', 'ufone_history', 'ufone_ignition', 'ufone_distance',
-            'ufone_maintenance', 'ufone_emergency_tasks', 'ufone_patient_reports',
+            'ufone_maintenance', 'ufone_maintenance_history', 'ufone_emergency_tasks', 'ufone_patient_reports',
             'ufone_patient_reports_ussd', 'ufone_task_counts', 'ufone_task_detail',
             'ufone_admin_patients', 'ufone_admin_ambulances', 'ufone_admin_assignments',
             'ufone_settings', 'ufone_settings_account_new',
@@ -411,6 +411,7 @@ HUBS = {
                     _item('ufone_ignition', 'Ignition Report', 'fa-solid fa-key', 'rc-tile--tracker', 'ufone_reports'),
                     _item('ufone_distance', 'Distance Report', 'fa-solid fa-route', 'rc-tile--tracker', 'ufone_reports'),
                     _item('ufone_maintenance', 'Maintenance', 'fa-solid fa-screwdriver-wrench', 'rc-tile--hub-admin', 'ufone_reports'),
+                    _item('ufone_maintenance_history', 'Maintenance History', 'fa-solid fa-clock-rotate-left', 'rc-tile--hub-admin', 'ufone_reports'),
                     _item('ufone_patient_reports', 'Patients Report', 'fa-solid fa-user-injured', 'rc-tile--chart-accounts', 'ufone_reports'),
                 ],
             },

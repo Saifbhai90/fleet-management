@@ -362,7 +362,7 @@ def map_maintenance_row(raw: dict) -> dict | None:
 
 
 def upsert_maintenance(conn, account_id: int, items: list) -> int:
-    """Replace ufone_maintenance_cache for account with current under-maintenance list."""
+    """Upsert under-maintenance rows; scoped stale-delete for district logins."""
     rows = []
     for raw in items or []:
         mapped = map_maintenance_row(raw) if isinstance(raw, dict) else None
@@ -390,12 +390,27 @@ def upsert_maintenance(conn, account_id: int, items: list) -> int:
     rows = list(by_reg.values())
     seen = {r['reg_no'] for r in rows}
 
+    touched_districts = {
+        (r.get('district') or '').strip().casefold()
+        for r in rows if (r.get('district') or '').strip()
+    }
+    # District login (1 district) → only purge that district.
+    # Multi-district payload → full snapshot. Empty payload → no deletes.
+    scoped = bool(rows) and len(touched_districts) <= 1
+
     with conn.cursor() as cur:
         cur.execute(
-            "SELECT id, reg_no FROM ufone_maintenance_cache WHERE account_id=%s",
+            "SELECT id, reg_no, district FROM ufone_maintenance_cache "
+            "WHERE account_id=%s",
             (account_id,),
         )
-        existing = {reg: rid for rid, reg in cur.fetchall() if reg}
+        existing = {}
+        existing_dist = {}
+        for rid, reg, dist in cur.fetchall():
+            if not reg:
+                continue
+            existing[reg] = rid
+            existing_dist[reg] = (dist or '').strip().casefold()
 
         for r in rows:
             reg = r['reg_no']
@@ -431,14 +446,22 @@ def upsert_maintenance(conn, account_id: int, items: list) -> int:
                     (account_id, reg) + vals,
                 )
 
-        # Drop regs no longer under maintenance
-        for reg, rid in existing.items():
-            if reg not in seen:
-                cur.execute("DELETE FROM ufone_maintenance_cache WHERE id=%s", (rid,))
+        removed = 0
+        if rows:
+            for reg, rid in existing.items():
+                if reg in seen:
+                    continue
+                if scoped:
+                    row_dist = existing_dist.get(reg) or ''
+                    if row_dist and row_dist not in touched_districts:
+                        continue
+                cur.execute(
+                    "DELETE FROM ufone_maintenance_cache WHERE id=%s", (rid,))
+                removed += 1
 
     conn.commit()
-    logger.info('maintenance upserted=%s (removed stale=%s)',
-                len(rows), sum(1 for r in existing if r not in seen))
+    logger.info('maintenance upserted=%s (removed stale=%s, scoped=%s)',
+                len(rows), removed, scoped)
     return len(rows)
 
 

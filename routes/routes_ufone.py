@@ -24,6 +24,7 @@ from services.ufone_service import (
     get_task_detail_cached, save_task_detail_cache,
     invalidate_task_detail_cache, _sync_emergency_report_live,
     get_tehsils_cached, get_ucs_cached, fetch_maintenance,
+    fetch_maintenance_log, fetch_maintenance_history,
     fetch_report_cached, note_ui_activity,
     encrypt_password, decrypt_password,
     create_account, update_account, delete_account,
@@ -1158,6 +1159,78 @@ def ufone_maintenance():
     return render_template(
         'ufone/maintenance.html', records=records, error=error,
         accounts=accounts, current_account_id=acct_id,
+    )
+
+
+@app.route('/api/ufone/maintenance/log')
+def api_ufone_maintenance_log():
+    """Update Log popup data — same as portal getAmbulanceUnderMaintenance2."""
+    acct_id = _get_account_id()
+    if not acct_id:
+        return jsonify({'error': 'No account', 'records': []}), 400
+    mid = request.args.get('id') or ''
+    reg_no = (request.args.get('reg_no') or '').strip()
+    start_date = (request.args.get('start_date') or '').strip()
+    try:
+        mid_int = int(mid) if str(mid).strip().isdigit() else None
+    except (TypeError, ValueError):
+        mid_int = None
+    try:
+        records = fetch_maintenance_log(
+            maint_id=mid_int, reg_no=reg_no, start_date=start_date)
+        return jsonify({'records': records, 'count': len(records)})
+    except Exception as e:
+        logger.warning('maintenance log failed: %s', e)
+        return jsonify({'error': str(e)[:200], 'records': []}), 502
+
+
+@app.route('/ufone/maintenance-history')
+def ufone_maintenance_history():
+    """Maintenance History — statewide (anonymous) + district filter."""
+    acct_id = _get_account_id()
+    accounts = _get_all_accounts()
+    from_date = _sanitize_date(
+        request.args.get('from_date'),
+        (pk_date() - timedelta(days=30)).strftime('%Y-%m-%d'))
+    to_date = _sanitize_date(
+        request.args.get('to_date'), pk_date().strftime('%Y-%m-%d'))
+    district = (request.args.get('district') or '').strip()
+    records = []
+    error = None
+    force = request.args.get('force') == '1'
+    districts = []
+    if acct_id:
+        try:
+            districts = get_districts_cached(acct_id) or []
+        except Exception:
+            districts = []
+        if not districts:
+            try:
+                from services.ufone_api_client import UfoneClient
+                raw = UfoneClient("anon", "anon").get_districts_anonymous() or []
+                districts = []
+                for d in raw:
+                    if not isinstance(d, dict):
+                        continue
+                    code = d.get('district_code') or d.get('code')
+                    name = (d.get('district_name') or d.get('name') or '').strip()
+                    if code is not None and name:
+                        districts.append({'code': str(code), 'name': name})
+                districts.sort(key=lambda x: x['name'])
+            except Exception:
+                pass
+        try:
+            records = fetch_maintenance_history(
+                acct_id, from_date=from_date, to_date=to_date,
+                district=district, force=force)
+        except Exception as e:
+            error = str(e)[:300]
+    return render_template(
+        'ufone/maintenance_history.html',
+        records=records, error=error,
+        accounts=accounts, current_account_id=acct_id,
+        from_date=from_date, to_date=to_date, district=district,
+        districts=districts,
     )
 
 

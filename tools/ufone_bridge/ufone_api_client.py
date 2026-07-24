@@ -252,6 +252,11 @@ class UfoneClient:
     def get_districts(self) -> list:
         return self._call("AmbulanceAssignment.aspx", "getDistrict")
 
+    def get_districts_anonymous(self) -> list:
+        """District master list without login (same WebMethod as portal)."""
+        return self._call_anonymous(
+            "AmbulanceAssignment.aspx", "getDistrict", {}) or []
+
     def get_tehsils(self, district_code: str) -> list:
         return self._call("AmbulanceAssignment.aspx", "getTehsil",
                           {"districtCode": str(district_code)})
@@ -366,17 +371,75 @@ class UfoneClient:
             "District": district, "Amnbulance": ambulance,
         })
 
+    def _call_anonymous(self, page: str, method: str,
+                        params: Optional[dict] = None,
+                        timeout: Optional[float] = None,
+                        retries: Optional[int] = None) -> Any:
+        """POST a WebMethod with a fresh session (no login cookies).
+
+        Some BPOCOPS methods (notably under-maintenance) are district-scoped
+        when called with a logged-in district account, but return the full
+        statewide list when called without auth cookies.
+        """
+        req_timeout = timeout or _REQUEST_TIMEOUT
+        attempts = retries if retries is not None else _RETRY_ATTEMPTS
+        url = f"{BASE_URL}/{page}/{method}"
+        body = self._build_body(params)
+        headers = {
+            "Content-Type": "application/json; charset=utf-8",
+            "X-Requested-With": "XMLHttpRequest",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+            "Referer": f"{BASE_URL}/{page}",
+        }
+        last_err = None
+        for attempt in range(attempts):
+            try:
+                with requests.Session() as anon:
+                    r = anon.post(url, data=body.encode("utf-8"),
+                                  headers=headers, timeout=req_timeout)
+                if r.status_code == 200:
+                    try:
+                        data = r.json()
+                        return data.get("d", data)
+                    except ValueError:
+                        return r.text
+                last_err = f"HTTP {r.status_code}: {r.text[:150]}"
+            except (requests.ConnectionError, requests.Timeout) as e:
+                last_err = str(e)
+                if attempt < attempts - 1:
+                    time.sleep(_RETRY_BACKOFF[min(attempt, len(_RETRY_BACKOFF) - 1)])
+        raise RuntimeError(f"{page}/{method} (anonymous) failed: {last_err}")
+
     def get_maintenance(self) -> list:
-        """Ambulances currently under maintenance.
+        """Ambulances currently under maintenance (all districts).
 
         Portal WebMethod requires startDate/endDate keys (empty = current open).
         Calling without params returns HTTP 500.
+
+        Important: a Faisalabad (district) login session returns only that
+        district. Anonymous call returns the full statewide open list.
         """
-        return self._call("AmbulanceUnderMaintenance.aspx",
-                          "getAmbulanceUnderMaintenance", {
-            "startDate": "",
-            "endDate": "",
-        })
+        return self._call_anonymous(
+            "AmbulanceUnderMaintenance.aspx",
+            "getAmbulanceUnderMaintenance",
+            {"startDate": "", "endDate": ""},
+        )
+
+    def get_maintenance_log(self, maint_id, start_date: str = "") -> list:
+        """Update Log rows for one open-maintenance record (portal View popup).
+
+        Portal JS: {'startDate': $('#startDate').val(), 'id': id}
+        Empty list = no updates yet ("No record found").
+        Works anonymously with the same params.
+        """
+        return self._call_anonymous(
+            "AmbulanceUnderMaintenance.aspx",
+            "getAmbulanceUnderMaintenance2",
+            {
+                "startDate": self._to_ufone_date(start_date) if start_date else "",
+                "id": str(maint_id),
+            },
+        )
 
     def get_maintenance_history(self, start_date: str = "", end_date: str = "",
                                 district: str = "") -> list:

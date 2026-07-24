@@ -164,20 +164,35 @@ def normalize_maintenance(raw: dict) -> dict:
         days = (date.today() - send).days
     elif send and ret:
         days = (ret - send).days
+    api_days = raw.get('Days')
+    if api_days is not None and str(api_days).strip() != '':
+        try:
+            days = int(api_days)
+        except (TypeError, ValueError):
+            pass
     return {
-        'id': raw.get('Id'),
-        'reg_no': raw.get('Reg_no'),
-        'district': raw.get('District'),
-        'maintain_type': raw.get('Maintain_Type'),
-        'cat_name': raw.get('Cat_Name'),
-        'sub_cat_name': raw.get('Sub_Cat_Name'),
-        'due_date': raw.get('Due_Date'),
-        'send_date': raw.get('Send_Date'),
-        'return_date': raw.get('Return_Date'),
-        'comments': raw.get('Comments'),
+        'id': raw.get('id') or raw.get('Id'),
+        'reg_no': raw.get('Reg_no') or raw.get('reg_no'),
+        'district': raw.get('District') or raw.get('district'),
+        'maintain_type': raw.get('Maintain_Type') or raw.get('maintain_type'),
+        'cat_name': raw.get('Cat_Name') or raw.get('cat_name'),
+        'sub_cat_name': raw.get('Sub_Cat_Name') or raw.get('sub_cat_name'),
+        'due_date': raw.get('Due_Date') or raw.get('due_date'),
+        'send_date': raw.get('Send_Date') or raw.get('send_date'),
+        'return_date': raw.get('Return_Date') or raw.get('return_date'),
+        'comments': raw.get('Comments') or raw.get('comments'),
         'days_offline': max(0, days),
-        'created_by': raw.get('CreatedBy'),
-        'created_date': raw.get('Created_Date'),
+        'days': raw.get('Days') if raw.get('Days') is not None else max(0, days),
+        'hours': raw.get('Hours') if raw.get('Hours') is not None else raw.get('hours'),
+        'minute': raw.get('Minute') if raw.get('Minute') is not None else raw.get('minute'),
+        'created_by': raw.get('CreatedBy') or raw.get('created_by'),
+        'created_date': raw.get('Created_Date') or raw.get('created_date'),
+        'modified_by': raw.get('ModifiedBy') or raw.get('modified_by'),
+        'modified_date': raw.get('Modified_Date') or raw.get('modified_date'),
+        'start_date': raw.get('startDate') or raw.get('start_date'),
+        'start_time': raw.get('startTime') or raw.get('start_time'),
+        'end_date': raw.get('endDate') or raw.get('end_date'),
+        'end_time': raw.get('endTime') or raw.get('end_time'),
     }
 
 
@@ -871,7 +886,14 @@ _MAINTENANCE_CACHE_TTL = 1800  # 30 min — maintenance changes slowly
 
 
 def _persist_maintenance(account_id: int, items: list):
-    """Upsert UfoneMaintenanceCache rows (best-effort)."""
+    """Upsert UfoneMaintenanceCache rows (best-effort).
+
+    District-scoped Ufone logins (e.g. username=Faisalabad) only return that
+    district's open jobs. Deleting *all* missing regs would wipe other
+    districts from cache on Refresh — so stale removal is limited to
+    districts present in this payload. Empty payload never wipes.
+    Multi-district payloads are treated as a full snapshot.
+    """
     from models import UfoneMaintenanceCache
     from app import db
     try:
@@ -881,11 +903,15 @@ def _persist_maintenance(account_id: int, items: list):
                 account_id=account_id).all()
         }
         seen_regs = set()
+        touched_districts = set()
         for m in items:
             reg = m.get('reg_no')
             if not reg:
                 continue
             seen_regs.add(reg)
+            dist = (m.get('district') or '').strip()
+            if dist:
+                touched_districts.add(dist.casefold())
             row = existing.get(reg)
             if not row:
                 row = UfoneMaintenanceCache(account_id=account_id, reg_no=reg)
@@ -902,14 +928,153 @@ def _persist_maintenance(account_id: int, items: list):
             row.days_offline = m.get('days_offline') or 0
             row.created_by = m.get('created_by')
             row.created_date = _parse_date_only(m.get('created_date'))
-        # Remove rows for regs no longer under maintenance
+        if not seen_regs:
+            db.session.commit()
+            return
+        # 1 district → scoped purge; 2+ → full snapshot for this account view
+        scoped = len(touched_districts) <= 1
         for reg, row in existing.items():
-            if reg not in seen_regs:
-                db.session.delete(row)
+            if reg in seen_regs:
+                continue
+            if scoped:
+                row_dist = (row.district or '').strip().casefold()
+                if row_dist and row_dist not in touched_districts:
+                    continue
+            db.session.delete(row)
         db.session.commit()
     except Exception as e:
         db.session.rollback()
         logger.warning(f"_persist_maintenance failed (non-fatal): {e}")
+
+    # Archive snapshot for multi-district History (closed tickets over time)
+    try:
+        _archive_maintenance_snapshot(
+            account_id, items,
+            statewide=len({
+                (m.get('district') or '').strip().casefold()
+                for m in items if (m.get('district') or '').strip()
+            }) >= 2)
+    except Exception as e:
+        logger.warning(f"_archive_maintenance_snapshot failed (non-fatal): {e}")
+
+
+def _archive_maintenance_snapshot(account_id: int, items: list,
+                                  statewide: bool = False):
+    """Upsert open tickets into ufone_maintenance_history; mark missing closed.
+
+    statewide=True (anonymous all-district fetch): any previously-open archive
+    row not in this snapshot is marked is_open=False (left maintenance).
+    Single-district snapshots only close rows within touched districts.
+    """
+    from models import UfoneMaintenanceHistory
+    from app import db
+    from utils import pk_now
+
+    if not items:
+        return
+
+    now = pk_now()
+    existing = {
+        r.ext_id: r
+        for r in UfoneMaintenanceHistory.query.filter_by(
+            account_id=account_id).all()
+        if r.ext_id is not None
+    }
+    seen_ext = set()
+    touched_districts = set()
+
+    for m in items:
+        try:
+            ext_id = int(m.get('id')) if m.get('id') is not None else None
+        except (TypeError, ValueError):
+            ext_id = None
+        if ext_id is None:
+            continue
+        seen_ext.add(ext_id)
+        dist = (m.get('district') or '').strip()
+        if dist:
+            touched_districts.add(dist.casefold())
+        row = existing.get(ext_id)
+        if not row:
+            row = UfoneMaintenanceHistory(
+                account_id=account_id, ext_id=ext_id, first_seen_at=now)
+            db.session.add(row)
+            existing[ext_id] = row
+        row.reg_no = m.get('reg_no')
+        row.district = m.get('district')
+        row.maintain_type = m.get('maintain_type')
+        row.cat_name = m.get('cat_name')
+        row.sub_cat_name = m.get('sub_cat_name')
+        row.due_date = _parse_date_only(m.get('due_date'))
+        row.send_date = _parse_date_only(m.get('send_date'))
+        row.return_date = _parse_date_only(m.get('return_date'))
+        row.comments = m.get('comments')
+        row.days_offline = m.get('days_offline') or m.get('days') or 0
+        try:
+            row.hours = int(m['hours']) if m.get('hours') is not None else None
+        except (TypeError, ValueError):
+            row.hours = None
+        try:
+            row.minute = int(m['minute']) if m.get('minute') is not None else None
+        except (TypeError, ValueError):
+            row.minute = None
+        row.created_by = m.get('created_by')
+        row.created_date = _parse_date_only(m.get('created_date'))
+        row.modified_by = m.get('modified_by')
+        row.modified_date = m.get('modified_date')
+        row.start_date = m.get('start_date')
+        row.start_time = m.get('start_time')
+        row.end_date = m.get('end_date')
+        row.end_time = m.get('end_time')
+        row.is_open = True
+        row.last_seen_at = now
+        row.closed_at = None
+
+    for ext_id, row in existing.items():
+        if ext_id in seen_ext or not row.is_open:
+            continue
+        if not statewide:
+            row_dist = (row.district or '').strip().casefold()
+            if row_dist and row_dist not in touched_districts:
+                continue
+        row.is_open = False
+        row.closed_at = now
+
+    db.session.commit()
+
+
+def _history_row_to_item(r) -> dict:
+    def _fmt(d):
+        if not d:
+            return None
+        if hasattr(d, 'strftime'):
+            return d.strftime('%Y-%m-%d')
+        return str(d)
+
+    return {
+        'id': r.ext_id,
+        'reg_no': r.reg_no,
+        'district': r.district,
+        'maintain_type': r.maintain_type,
+        'cat_name': r.cat_name,
+        'sub_cat_name': r.sub_cat_name,
+        'due_date': _fmt(r.due_date),
+        'send_date': _fmt(r.send_date),
+        'return_date': _fmt(r.return_date),
+        'comments': r.comments,
+        'days_offline': r.days_offline or 0,
+        'days': r.days_offline or 0,
+        'hours': r.hours,
+        'minute': r.minute,
+        'created_by': r.created_by,
+        'created_date': _fmt(r.created_date),
+        'modified_by': r.modified_by,
+        'modified_date': r.modified_date,
+        'start_date': r.start_date,
+        'start_time': r.start_time,
+        'end_date': r.end_date,
+        'end_time': r.end_time,
+    }
 
 
 def _maintenance_items_from_db(account_id: int) -> list:
@@ -963,10 +1128,10 @@ def fetch_maintenance(account_id: int, force: bool = False,
             if cached and (now - cached[0]) < _MAINTENANCE_CACHE_TTL:
                 return cached[1]
 
-    purpose = "poll" if for_poll else "ui"
     try:
-        client = _get_client(account_id, purpose=purpose)
-        raw = client.get_maintenance() or []
+        # Statewide open list: anonymous WebMethod (district login scopes to 1 district)
+        from services.ufone_api_client import UfoneClient
+        raw = UfoneClient("anon", "anon").get_maintenance() or []
         items = [normalize_maintenance(r) for r in raw if isinstance(r, dict)]
         with _maintenance_cache_lock:
             _maintenance_cache[account_id] = (now, items)
@@ -980,7 +1145,6 @@ def fetch_maintenance(account_id: int, force: bool = False,
                 f"(serving cached) — {msg[:120]}")
         else:
             logger.warning(f"fetch_maintenance({account_id}) failed: {e}")
-        _reset_client(account_id, purpose=purpose)
         items = _maintenance_items_from_db(account_id)
         if items:
             with _maintenance_cache_lock:
@@ -989,6 +1153,276 @@ def fetch_maintenance(account_id: int, force: bool = False,
         with _maintenance_cache_lock:
             cached = _maintenance_cache.get(account_id)
             return cached[1] if cached else []
+
+
+def fetch_maintenance_log(maint_id=None, reg_no: str = "",
+                          start_date: str = "") -> list:
+    """Portal Update Log (getAmbulanceUnderMaintenance2) for one record.
+
+    Resolves maint_id from live open list when only reg_no is given.
+    Returns normalize_maintenance()-shaped dicts (may be empty).
+    """
+    from services.ufone_api_client import UfoneClient
+
+    client = UfoneClient("anon", "anon")
+    mid = maint_id
+    start = (start_date or "").strip()
+
+    if not mid and reg_no:
+        reg_key = str(reg_no).strip().upper()
+        for raw in (client.get_maintenance() or []):
+            if not isinstance(raw, dict):
+                continue
+            rreg = str(raw.get("Reg_no") or raw.get("reg_no") or "").strip().upper()
+            if rreg == reg_key:
+                mid = raw.get("id") or raw.get("Id")
+                if not start:
+                    start = raw.get("startDate") or raw.get("Send_Date") or ""
+                break
+
+    if not mid:
+        return []
+
+    raw_rows = client.get_maintenance_log(mid, start_date=start) or []
+    return [normalize_maintenance(r) for r in raw_rows if isinstance(r, dict)]
+
+
+def fetch_maintenance_history(account_id: int, from_date: str = "",
+                              to_date: str = "", district: str = "",
+                              force: bool = False) -> list:
+    """CLOSED maintenance only — never currently Under Maintenance rows.
+
+    Ufone portal only has:
+      • getAmbulanceUnderMaintenance — open list (anonymous = ALL districts)
+      • getMaintenanceHistory — closed history (login = account district only)
+
+    There is no anonymous statewide closed-history API. We:
+      1) Refresh open list + archive snapshot (marks tickets that left open)
+      2) Load closed rows from our archive (multi-district over time)
+      3) Merge login history API closed rows (usually one district)
+      4) Exclude anything still in the live open list
+      5) Filter by district + date overlap
+    """
+    from services.ufone_api_client import UfoneClient
+    from models import UfoneMaintenanceHistory
+
+    params = {
+        'from_date': from_date or '',
+        'to_date': to_date or '',
+        'district': district or '',
+        'mode': 'closed_only_v1',
+    }
+    if not force:
+        cached = get_cached_report(
+            account_id, 'maintenance_history', params, max_age_seconds=600)
+        if cached:
+            return [normalize_maintenance(r) for r in cached
+                    if isinstance(r, dict)]
+
+    from_d = _parse_date_only(from_date)
+    to_d = _parse_date_only(to_date)
+    code_to_name = _district_code_name_map(account_id)
+
+    # Live open set (exclude these from History)
+    open_ids = set()
+    open_regs = set()
+    try:
+        open_raw = UfoneClient("anon", "anon").get_maintenance() or []
+        open_items = [normalize_maintenance(r) for r in open_raw
+                      if isinstance(r, dict)]
+        for r in open_items:
+            if r.get('id') is not None:
+                try:
+                    open_ids.add(int(r['id']))
+                except (TypeError, ValueError):
+                    pass
+            reg = (r.get('reg_no') or '').strip().upper()
+            if reg:
+                open_regs.add(reg)
+        # Snapshot archive so future closes become multi-district history
+        _persist_maintenance(account_id, open_items)
+    except Exception as e:
+        logger.warning("fetch_maintenance_history open refresh failed: %s", e)
+
+    by_key = {}
+
+    # A) Closed rows from our multi-district archive
+    try:
+        q = UfoneMaintenanceHistory.query.filter_by(
+            account_id=account_id, is_open=False)
+        for row in q.all():
+            if row.ext_id in open_ids:
+                continue
+            reg = (row.reg_no or '').strip().upper()
+            if reg and reg in open_regs:
+                continue
+            item = _history_row_to_item(row)
+            key = _maintenance_row_key(item)
+            if key:
+                by_key[key] = item
+    except Exception as e:
+        logger.warning("archive history read failed: %s", e)
+
+    # B) Login history API (closed jobs for account district) — still exclude open
+    try:
+        username, password = _ufone_env_credentials()
+        if username and password:
+            client = UfoneClient(
+                username, password, session_key=f"maint_hist_{account_id}")
+            client.connect(reuse_session=True)
+        else:
+            client = _get_client(account_id, purpose="ui")
+        hist_raw = client.get_maintenance_history(
+            from_date, to_date, "") or []
+        for r in hist_raw:
+            if not isinstance(r, dict):
+                continue
+            item = normalize_maintenance(r)
+            mid = item.get('id')
+            try:
+                mid_i = int(mid) if mid is not None else None
+            except (TypeError, ValueError):
+                mid_i = None
+            reg = (item.get('reg_no') or '').strip().upper()
+            if mid_i in open_ids or (reg and reg in open_regs):
+                continue
+            key = _maintenance_row_key(item)
+            if key and key not in by_key:
+                by_key[key] = item
+    except Exception as e:
+        logger.info("login history merge skipped: %s", e)
+
+    items = [
+        r for r in by_key.values()
+        if _maintenance_district_match(r, district, code_to_name)
+        and _maintenance_date_overlaps(r, from_d, to_d)
+    ]
+    items.sort(key=lambda r: (
+        str(r.get('district') or ''),
+        str(r.get('send_date') or r.get('start_date') or ''),
+        str(r.get('reg_no') or ''),
+    ))
+
+    if items:
+        save_cached_report(
+            account_id, 'maintenance_history', items, params)
+    return items
+
+
+def _maintenance_row_key(item: dict) -> str:
+    mid = item.get('id')
+    if mid is not None and str(mid).strip() != '':
+        return f"id:{mid}"
+    reg = (item.get('reg_no') or '').strip().upper()
+    send = (item.get('send_date') or item.get('start_date') or '').strip()
+    if reg:
+        return f"reg:{reg}|{send}"
+    return ''
+
+
+def _district_code_name_map(account_id: int) -> dict:
+    """code -> district name (and name -> name) for filter matching."""
+    out = {}
+    try:
+        for d in (get_districts_cached(account_id) or []):
+            code = str(d.get('code') or '').strip()
+            name = str(d.get('name') or '').strip()
+            if code and name:
+                out[code] = name
+                out[code.casefold()] = name
+            if name:
+                out[name] = name
+                out[name.casefold()] = name
+    except Exception:
+        pass
+    if len(out) < 10:
+        try:
+            from services.ufone_api_client import UfoneClient
+            raw = UfoneClient("anon", "anon").get_districts_anonymous() or []
+            for d in raw:
+                if not isinstance(d, dict):
+                    continue
+                code = str(
+                    d.get('district_code') or d.get('code') or '').strip()
+                name = str(
+                    d.get('district_name') or d.get('name') or '').strip()
+                if code and name:
+                    out[code] = name
+                    out[code.casefold()] = name
+                if name:
+                    out[name] = name
+                    out[name.casefold()] = name
+        except Exception as e:
+            logger.debug("anonymous districts failed: %s", e)
+    return out
+
+
+def _maintenance_district_match(item: dict, district_sel: str,
+                                code_to_name: dict) -> bool:
+    if not (district_sel or '').strip():
+        return True
+    sel = district_sel.strip()
+    want_names = {sel.casefold()}
+    mapped = code_to_name.get(sel) or code_to_name.get(sel.casefold())
+    if mapped:
+        want_names.add(str(mapped).casefold())
+    got = (item.get('district') or '').strip().casefold()
+    if not got:
+        return False
+    if got in want_names:
+        return True
+    # soft match: "R.Y.Khan" vs "R Y Khan" / "Rahim Yar Khan"
+    got_norm = re.sub(r'[^a-z0-9]+', '', got)
+    for w in want_names:
+        if re.sub(r'[^a-z0-9]+', '', w) == got_norm:
+            return True
+    return False
+
+
+def _maintenance_date_overlaps(item: dict, from_d, to_d) -> bool:
+    """True if maintenance window overlaps [from_d, to_d] (inclusive)."""
+    if not from_d and not to_d:
+        return True
+    send = _parse_date_only(
+        item.get('send_date') or item.get('start_date')
+        or item.get('created_date'))
+    ret = _parse_date_only(
+        item.get('return_date') or item.get('end_date'))
+    start = send
+    end = ret or date.today()
+    if not start:
+        return True
+    range_from = from_d or date.min
+    range_to = to_d or date.max
+    return start <= range_to and end >= range_from
+
+
+def _ufone_env_credentials() -> tuple:
+    """UFONE_USERNAME/PASSWORD from process env or tools/ufone_bridge/.env."""
+    username = (os.environ.get('UFONE_USERNAME') or '').strip()
+    password = (os.environ.get('UFONE_PASSWORD') or '').strip()
+    if username and password:
+        return username, password
+    try:
+        from pathlib import Path
+        env_path = (Path(__file__).resolve().parents[1]
+                    / 'tools' / 'ufone_bridge' / '.env')
+        if env_path.is_file():
+            for line in env_path.read_text(
+                    encoding='utf-8', errors='ignore').splitlines():
+                line = line.strip()
+                if not line or line.startswith('#') or '=' not in line:
+                    continue
+                key, val = line.split('=', 1)
+                key = key.strip()
+                val = val.strip().strip('"').strip("'")
+                if key == 'UFONE_USERNAME' and not username:
+                    username = val
+                elif key == 'UFONE_PASSWORD' and not password:
+                    password = val
+    except Exception as e:
+        logger.debug("_ufone_env_credentials .env read failed: %s", e)
+    return username, password
 
 
 # ── Generic persisted report cache (Phase 2) ─────────────────────────────────

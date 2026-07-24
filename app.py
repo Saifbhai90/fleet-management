@@ -465,13 +465,15 @@ if _run_startup_tasks:
         # Ufone BPOCOPS tables (force-create to skip migration wait)
         try:
             from models import (UfoneAccount, UfoneVehicleCache, UfoneTaskCache,
-                                UfoneMaintenanceCache, UfoneTaskDetailCache,
+                                UfoneMaintenanceCache, UfoneMaintenanceHistory,
+                                UfoneTaskDetailCache,
                                 UfoneDistrictCache, UfoneTehsilCache, UfoneUCCache,
                                 UfoneReportCache)
             UfoneAccount.__table__.create(db.engine, checkfirst=True)
             UfoneVehicleCache.__table__.create(db.engine, checkfirst=True)
             UfoneTaskCache.__table__.create(db.engine, checkfirst=True)
             UfoneMaintenanceCache.__table__.create(db.engine, checkfirst=True)
+            UfoneMaintenanceHistory.__table__.create(db.engine, checkfirst=True)
             UfoneTaskDetailCache.__table__.create(db.engine, checkfirst=True)
             UfoneDistrictCache.__table__.create(db.engine, checkfirst=True)
             UfoneTehsilCache.__table__.create(db.engine, checkfirst=True)

@@ -1,0 +1,331 @@
+{% extends 'base.html' %}
+{% from 'partials/nav_back_button.html' import nav_back_button %}
+
+{% block title %}Maintenance History — Fleet Manager{% endblock %}
+
+{% block extra_head %}
+<style>
+  .uf-hist-page { --uf-accent: #7c3aed; --uf-accent-soft: #f5f3ff; --uf-ink: #0f172a; --uf-muted: #64748b; --uf-line: #e2e8f0; --uf-surface: #ffffff; }
+  .uf-hist-page .uf-header {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    gap: 12px; flex-wrap: wrap; margin-bottom: 18px;
+  }
+  .uf-hist-page .uf-header h4 {
+    font-weight: 800; color: var(--uf-ink); margin: 0;
+    display: flex; align-items: center; gap: 10px; font-size: 1.25rem;
+  }
+  .uf-hist-page .uf-header h4 i { color: var(--uf-accent); }
+  .uf-hist-page .uf-sub { color: var(--uf-muted); font-size: .85rem; margin-top: 4px; }
+
+  .uf-btn {
+    background: linear-gradient(135deg, #7C3AED, #5B21B6); color: #fff; border: none;
+    padding: 8px 14px; border-radius: 8px; font-weight: 600; font-size: 13px;
+    text-decoration: none; display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+  }
+  .uf-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(124,58,237,.28); color: #fff; }
+  .uf-btn-outline {
+    background: transparent; color: #7C3AED; border: 1px solid #7C3AED;
+  }
+  .uf-btn-outline:hover { background: #7C3AED; color: #fff; }
+  .uf-btn-soft {
+    background: var(--uf-accent-soft); color: #6d28d9; border: 1px solid #ddd6fe;
+  }
+  .uf-btn-soft:hover { background: #ede9fe; color: #5b21b6; }
+
+  .uf-filter-bar {
+    background: #fff; padding: 14px 18px; border-radius: 12px;
+    border: 1px solid var(--uf-line); margin-bottom: 14px;
+    display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end;
+    box-shadow: 0 4px 12px rgba(15, 23, 42, .03);
+  }
+  .uf-filter-group label {
+    font-size: 11px; color: var(--uf-muted); font-weight: 700;
+    margin-bottom: 4px; display: block; text-transform: uppercase; letter-spacing: .04em;
+  }
+  .uf-filter-group input, .uf-filter-group select {
+    border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px 12px; font-size: 13px;
+    min-width: 150px; background: #fff;
+  }
+  .uf-filter-group input:focus, .uf-filter-group select:focus {
+    outline: none; border-color: #a78bfa; box-shadow: 0 0 0 3px rgba(124,58,237,.12);
+  }
+
+  .uf-toolbar {
+    display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+    justify-content: space-between; margin-bottom: 12px;
+  }
+  .uf-search {
+    border: 1px solid var(--uf-line); border-radius: 8px; padding: 8px 12px 8px 34px;
+    font-size: 13px; min-width: 220px; background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' fill='%2494a3b8' viewBox='0 0 16 16'%3E%3Cpath d='M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85zm-5.242.656a5 5 0 1 1 0-10 5 5 0 0 1 0 10z'/%3E%3C/svg%3E") 12px center no-repeat;
+  }
+  .uf-search:focus { outline: none; border-color: #a78bfa; box-shadow: 0 0 0 3px rgba(124,58,237,.12); }
+  .uf-count {
+    font-size: 12px; color: var(--uf-muted); background: #f8fafc; border: 1px solid var(--uf-line);
+    border-radius: 999px; padding: 5px 10px; font-weight: 600;
+  }
+
+  .uf-table-card {
+    background: var(--uf-surface); border-radius: 14px; border: 1px solid var(--uf-line);
+    box-shadow: 0 8px 24px rgba(15, 23, 42, .04); overflow: hidden;
+  }
+  .uf-table-wrap { overflow-x: auto; max-height: min(70vh, 720px); }
+  .uf-maint-table {
+    width: 100%; border-collapse: separate; border-spacing: 0;
+    font-size: 12.5px; color: #334155; margin: 0;
+  }
+  .uf-maint-table thead th {
+    position: sticky; top: 0; z-index: 2;
+    background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+    color: #475569; font-weight: 700; text-transform: uppercase; letter-spacing: .03em;
+    font-size: 10.5px; padding: 12px 10px; border-bottom: 1px solid var(--uf-line);
+    white-space: nowrap; text-align: left;
+  }
+  .uf-maint-table tbody td {
+    padding: 11px 10px; border-bottom: 1px solid #f1f5f9; vertical-align: middle;
+    white-space: nowrap; background: #fff;
+  }
+  .uf-maint-table tbody tr:nth-child(even) td { background: #fcfcfd; }
+  .uf-maint-table tbody tr:hover td { background: #f8fafc; }
+  .uf-maint-table tbody tr.is-hidden { display: none; }
+
+  .uf-reg { font-weight: 800; color: var(--uf-ink); letter-spacing: .01em; }
+  .uf-chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 8px; border-radius: 999px; font-size: 11px; font-weight: 700;
+    border: 1px solid transparent;
+  }
+  .uf-chip-engine { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
+  .uf-chip-denting { background: #fff7ed; color: #c2410c; border-color: #fed7aa; }
+  .uf-chip-body { background: #f5f3ff; color: #6d28d9; border-color: #ddd6fe; }
+  .uf-chip-default { background: #f1f5f9; color: #475569; border-color: #e2e8f0; }
+  .uf-chip-cat { background: #fef2f2; color: #b91c1c; border-color: #fecaca; }
+  .uf-days {
+    display: inline-flex; min-width: 34px; justify-content: center;
+    background: #0f172a; color: #fff; border-radius: 7px; padding: 3px 7px;
+    font-weight: 700; font-size: 11px;
+  }
+  .uf-comment { max-width: 220px; white-space: normal; line-height: 1.35; color: #64748b; }
+  .uf-empty { text-align: center; padding: 72px 20px; color: var(--uf-muted); }
+  .uf-empty i { font-size: 48px; color: #c4b5fd; display: block; margin-bottom: 10px; }
+  .uf-empty h5 { color: #5b21b6; font-weight: 800; margin-bottom: 6px; }
+  .uf-footer {
+    display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;
+    padding: 10px 14px; border-top: 1px solid var(--uf-line); background: #f8fafc;
+    font-size: 12px; color: var(--uf-muted);
+  }
+  .uf-note {
+    font-size: 12px; color: #64748b; background: #f8fafc; border: 1px solid var(--uf-line);
+    border-radius: 8px; padding: 8px 12px; margin-bottom: 12px;
+  }
+  @media (max-width: 768px) {
+    .uf-search { min-width: 100%; width: 100%; }
+    .uf-filter-group input, .uf-filter-group select { min-width: 100%; width: 100%; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4 uf-hist-page">
+  <div class="uf-header">
+    <div>
+      <h4><i class="bi bi-clock-history"></i> Maintenance History</h4>
+      <div class="uf-sub">Past / closed maintenance records from Ufone (date range)</div>
+    </div>
+    <div class="d-flex gap-2 align-items-center flex-wrap">
+      {{ nav_back_button() }}
+      <a href="{{ url_for('ufone_maintenance') }}" class="uf-btn uf-btn-outline">
+        <i class="bi bi-tools"></i> Under Maintenance
+      </a>
+      <a href="{{ url_for('ufone_maintenance_history', from_date=from_date, to_date=to_date, district=district, force=1) }}" class="uf-btn uf-btn-soft">
+        <i class="bi bi-arrow-clockwise"></i> Refresh
+      </a>
+      <button type="button" class="uf-btn uf-btn-outline" id="btnExportReport">
+        <i class="bi bi-file-earmark-excel"></i> Export
+      </button>
+      <button type="button" class="uf-btn" id="btnPrintReport">
+        <i class="bi bi-printer"></i> Print
+      </button>
+    </div>
+  </div>
+
+  {% if error %}
+  <div class="alert alert-danger mb-3" style="border-radius:10px;">{{ error }}</div>
+  {% endif %}
+
+  <div class="uf-note">
+    <strong>Closed jobs only</strong> — ambulances that are still
+    <em>Under Maintenance</em> are hidden here.
+    Ufone has no public all-district history API (portal history is login-district locked).
+    We merge closed tickets from the history API where available, and archive
+    statewide open snapshots so other districts appear here after they leave maintenance.
+  </div>
+
+  <form method="get" class="uf-filter-bar">
+    <div class="uf-filter-group">
+      <label>From Date</label>
+      <input type="date" name="from_date" value="{{ from_date }}">
+    </div>
+    <div class="uf-filter-group">
+      <label>To Date</label>
+      <input type="date" name="to_date" value="{{ to_date }}">
+    </div>
+    <div class="uf-filter-group">
+      <label>District</label>
+      <select name="district">
+        <option value="">All Districts</option>
+        {% for d in districts %}
+          {% set name = d.name or d.district_name or '' %}
+          {% set code = d.code or d.district_code or '' %}
+          <option value="{{ name }}" {% if district == name or district|string == code|string %}selected{% endif %}>{{ name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button type="submit" class="uf-btn"><i class="bi bi-search"></i> Apply</button>
+  </form>
+
+  <div class="uf-toolbar">
+    <span class="uf-count" id="histCount">{{ records|length }} record{{ 's' if records|length != 1 else '' }}</span>
+    <input type="search" class="uf-search" id="histSearch" placeholder="Search reg no, type, comments…" autocomplete="off">
+  </div>
+
+  <div class="uf-table-card">
+    {% if records %}
+    <div class="uf-table-wrap">
+      <table class="uf-maint-table" id="ufoneMaintHistoryTable">
+        <thead>
+          <tr>
+            <th>Sr#</th>
+            <th>Reg No</th>
+            <th>District</th>
+            <th>Maintain Type</th>
+            <th>Category</th>
+            <th>Sub Category</th>
+            <th>Due Date</th>
+            <th>Send Date</th>
+            <th>Return Date</th>
+            <th>Comments</th>
+            <th>Created By</th>
+            <th>Created Date</th>
+            <th>Modified By</th>
+            <th>Modified Date</th>
+            <th>Start Date</th>
+            <th>Start Time</th>
+            <th>End Date</th>
+            <th>End Time</th>
+            <th>Days</th>
+            <th>Hours</th>
+            <th>Minute</th>
+          </tr>
+        </thead>
+        <tbody id="histBody">
+          {% for r in records %}
+          {% set reg = r.reg_no or r.Reg_no or '—' %}
+          {% set mtype = r.maintain_type or r.Maintain_Type or '' %}
+          {% set mtype_l = (mtype or '')|lower %}
+          {% set ns = namespace(chip='uf-chip-default') %}
+          {% if 'engine' in mtype_l %}{% set ns.chip = 'uf-chip-engine' %}
+          {% elif 'dent' in mtype_l %}{% set ns.chip = 'uf-chip-denting' %}
+          {% elif 'body' in mtype_l %}{% set ns.chip = 'uf-chip-body' %}
+          {% endif %}
+          {% set days = r.days if r.days is defined and r.days is not none else (r.Days if r.Days is defined else (r.days_offline or 0)) %}
+          {% set hours = r.hours if r.hours is defined and r.hours is not none else (r.Hours if r.Hours is defined else '—') %}
+          {% set mins = r.minute if r.minute is defined and r.minute is not none else (r.Minute if r.Minute is defined else '—') %}
+          {% set cat = r.cat_name or r.Cat_Name %}
+          <tr data-search="{{ (reg ~ ' ' ~ (r.district or r.District or '') ~ ' ' ~ mtype ~ ' ' ~ (cat or '') ~ ' ' ~ (r.sub_cat_name or '') ~ ' ' ~ (r.comments or ''))|lower }}">
+            <td class="text-muted">{{ loop.index }}</td>
+            <td><span class="uf-reg">{{ reg }}</span></td>
+            <td>{{ r.district or r.District or '—' }}</td>
+            <td>{% if mtype %}<span class="uf-chip {{ ns.chip }}">{{ mtype }}</span>{% else %}—{% endif %}</td>
+            <td>{% if cat %}<span class="uf-chip uf-chip-cat">{{ cat }}</span>{% else %}—{% endif %}</td>
+            <td>{{ r.sub_cat_name or r.Sub_Cat_Name or '—' }}</td>
+            <td>{{ r.due_date or r.Due_Date or '—' }}</td>
+            <td>{{ r.send_date or r.Send_Date or '—' }}</td>
+            <td>{{ r.return_date or r.Return_Date or '—' }}</td>
+            <td><div class="uf-comment">{{ r.comments or r.Comments or '—' }}</div></td>
+            <td>{{ r.created_by or r.CreatedBy or '—' }}</td>
+            <td>{{ r.created_date or r.Created_Date or '—' }}</td>
+            <td>{{ r.modified_by or r.ModifiedBy or '—' }}</td>
+            <td>{{ r.modified_date or r.Modified_Date or '—' }}</td>
+            <td>{{ r.start_date or r.startDate or '—' }}</td>
+            <td>{{ r.start_time or r.startTime or '—' }}</td>
+            <td>{{ r.end_date or r.endDate or '—' }}</td>
+            <td>{{ r.end_time or r.endTime or '—' }}</td>
+            <td><span class="uf-days">{{ days }}</span></td>
+            <td>{{ hours }}</td>
+            <td>{{ mins }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="uf-footer">
+      <span id="histShowing">Showing {{ records|length }} of {{ records|length }}</span>
+      <span>{{ from_date }} → {{ to_date }}</span>
+    </div>
+    {% else %}
+    <div class="uf-empty">
+      <i class="bi bi-inbox"></i>
+      <h5>No History Found</h5>
+      <p class="mb-0">Select a date range and Apply — or try Refresh for a live fetch.</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+  var input = document.getElementById('histSearch');
+  var body = document.getElementById('histBody');
+  var countEl = document.getElementById('histCount');
+  var showingEl = document.getElementById('histShowing');
+  if (input && body) {
+    input.addEventListener('input', function() {
+      var q = (input.value || '').trim().toLowerCase();
+      var rows = body.querySelectorAll('tr');
+      var visible = 0;
+      rows.forEach(function(tr) {
+        var hay = tr.getAttribute('data-search') || '';
+        var ok = !q || hay.indexOf(q) !== -1;
+        tr.classList.toggle('is-hidden', !ok);
+        if (ok) {
+          visible += 1;
+          var sr = tr.querySelector('td');
+          if (sr) sr.textContent = String(visible);
+        }
+      });
+      if (countEl) countEl.textContent = visible + ' record' + (visible === 1 ? '' : 's');
+      if (showingEl) showingEl.textContent = 'Showing ' + visible + ' of ' + rows.length;
+    });
+  }
+
+  function bootPrintExport() {
+    if (!window.fleetPrintExport) return;
+    window.fleetPrintExport(
+      'ufoneMaintHistoryTable',
+      'Maintenance History',
+      'Maintenance_History.csv',
+      {
+        columnOrder: [
+          'Sr#', 'Reg No', 'District', 'Maintain Type', 'Category', 'Sub Category',
+          'Due Date', 'Send Date', 'Return Date', 'Comments', 'Created By',
+          'Created Date', 'Modified By', 'Modified Date',
+          'Start Date', 'Start Time', 'End Date', 'End Time',
+          'Days', 'Hours', 'Minute'
+        ],
+        dateColumns: [
+          'Due Date', 'Send Date', 'Return Date', 'Created Date',
+          'Modified Date', 'Start Date', 'End Date'
+        ]
+      }
+    );
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bootPrintExport);
+  } else {
+    bootPrintExport();
+  }
+})();
+</script>
+{% endblock %}

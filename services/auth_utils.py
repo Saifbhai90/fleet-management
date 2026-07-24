@@ -747,6 +747,7 @@ ENDPOINT_PERMISSION_MAP = [
     ('ufone_ignition',            'ufone_reports'),
     ('ufone_distance',            'ufone_reports'),
     ('ufone_maintenance',         'ufone_reports'),
+    ('ufone_maintenance_history', 'ufone_reports'),
     ('ufone_emergency_tasks',     'ufone_reports'),
     ('ufone_patient_reports',     'ufone_reports'),
     ('ufone_task_counts',         'ufone_reports'),

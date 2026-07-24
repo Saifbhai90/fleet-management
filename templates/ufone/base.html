@@ -118,6 +118,7 @@
     <a href="{{ url_for('ufone_ignition') }}" class="{% if request.endpoint == 'ufone_ignition' %}active{% endif %}"><i class="bi bi-key"></i> Ignition Report</a>
     <a href="{{ url_for('ufone_distance') }}" class="{% if request.endpoint == 'ufone_distance' %}active{% endif %}"><i class="bi bi-rulers"></i> Distance Report</a>
     <a href="{{ url_for('ufone_maintenance') }}" class="{% if request.endpoint == 'ufone_maintenance' %}active{% endif %}"><i class="bi bi-tools"></i> Maintenance</a>
+    <a href="{{ url_for('ufone_maintenance_history') }}" class="{% if request.endpoint == 'ufone_maintenance_history' %}active{% endif %}"><i class="bi bi-clock-history"></i> Maint. History</a>
     <a href="{{ url_for('ufone_patient_reports') }}" class="{% if request.endpoint in ['ufone_patient_reports','ufone_patient_reports_ussd'] %}active{% endif %}"><i class="bi bi-person-lines-fill"></i> Patients</a>
 
     <div class="sidebar-section">Admin</div>

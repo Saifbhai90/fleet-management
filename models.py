@@ -3229,3 +3229,49 @@ class UfoneMaintenanceCache(db.Model):
 
     def __repr__(self):
         return f'<UfoneMaintenanceCache {self.reg_no}>'
+
+
+class UfoneMaintenanceHistory(db.Model):
+    """Archived maintenance tickets (open + closed) for multi-district history.
+
+    Populated from statewide anonymous under-maintenance snapshots. When a
+    ticket leaves the open list it stays here with is_open=False so History
+    can show closed jobs across districts (Ufone's history API is login-scoped).
+    """
+    __tablename__ = 'ufone_maintenance_history'
+    __table_args__ = (
+        db.UniqueConstraint('account_id', 'ext_id', name='uq_ufone_maint_hist_ext'),
+    )
+    id = db.Column(db.Integer, primary_key=True)
+    account_id = db.Column(db.Integer, db.ForeignKey('ufone_account.id'),
+                           nullable=False, index=True)
+    ext_id = db.Column(db.Integer, nullable=False, index=True)
+    reg_no = db.Column(db.String(50), nullable=True, index=True)
+    district = db.Column(db.String(100), nullable=True, index=True)
+    maintain_type = db.Column(db.String(50), nullable=True)
+    cat_name = db.Column(db.String(100), nullable=True)
+    sub_cat_name = db.Column(db.String(100), nullable=True)
+    due_date = db.Column(db.Date, nullable=True)
+    send_date = db.Column(db.Date, nullable=True)
+    return_date = db.Column(db.Date, nullable=True)
+    comments = db.Column(db.Text, nullable=True)
+    days_offline = db.Column(db.Integer, default=0)
+    hours = db.Column(db.Integer, nullable=True)
+    minute = db.Column(db.Integer, nullable=True)
+    created_by = db.Column(db.String(100), nullable=True)
+    created_date = db.Column(db.Date, nullable=True)
+    modified_by = db.Column(db.String(100), nullable=True)
+    modified_date = db.Column(db.String(50), nullable=True)
+    start_date = db.Column(db.String(30), nullable=True)
+    start_time = db.Column(db.String(30), nullable=True)
+    end_date = db.Column(db.String(30), nullable=True)
+    end_time = db.Column(db.String(30), nullable=True)
+    is_open = db.Column(db.Boolean, default=True, index=True)
+    first_seen_at = db.Column(db.DateTime, default=pk_now)
+    last_seen_at = db.Column(db.DateTime, default=pk_now, onupdate=pk_now)
+    closed_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=pk_now)
+    updated_at = db.Column(db.DateTime, default=pk_now, onupdate=pk_now)
+
+    def __repr__(self):
+        return f'<UfoneMaintenanceHistory {self.reg_no} open={self.is_open}>'

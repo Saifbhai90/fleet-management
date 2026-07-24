@@ -1,69 +1,470 @@
 {% extends 'base.html' %}
 {% from 'partials/nav_back_button.html' import nav_back_button %}
 
-{% block title %}Maintenance — Fleet Manager{% endblock %}
+{% block title %}Ambulance Under Maintenance — Fleet Manager{% endblock %}
 
 {% block extra_head %}
 <style>
-  .uf-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 10px; }
-  .uf-header h4 { font-weight: 800; color: #1e293b; margin: 0; display: flex; align-items: center; gap: 10px; }
-  .uf-header h4 i { color: #EF4444; } /* Red for maintenance */
-  
-  .uf-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
-  .uf-maint-card {
-    background: #fff; border-radius: 12px; padding: 20px;
-    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid #e9ecef;
-    border-left: 4px solid #EF4444;
+  .uf-maint-page { --uf-accent: #dc2626; --uf-accent-soft: #fef2f2; --uf-ink: #0f172a; --uf-muted: #64748b; --uf-line: #e2e8f0; --uf-surface: #ffffff; }
+  .uf-maint-page .uf-header {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    gap: 12px; flex-wrap: wrap; margin-bottom: 18px;
   }
-  .uf-maint-title { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-  .uf-maint-title h5 { font-size: 18px; font-weight: 700; color: #1e293b; margin: 0; }
-  .uf-badge-offline { background: #FEE2E2; color: #991B1B; font-size: 11px; padding: 4px 8px; border-radius: 12px; font-weight: 600; }
-  
-  .uf-maint-info { font-size: 13px; color: #475569; line-height: 1.8; }
-  .uf-maint-info b { color: #1e293b; }
-  
-  .uf-empty { grid-column: 1 / -1; text-align: center; padding: 80px 20px; background: #fff; border-radius: 16px; border: 1px solid #e9ecef; }
-  .uf-empty i { font-size: 56px; color: #D1FAE5; display: block; margin-bottom: 12px; }
+  .uf-maint-page .uf-header h4 {
+    font-weight: 800; color: var(--uf-ink); margin: 0;
+    display: flex; align-items: center; gap: 10px; font-size: 1.25rem;
+  }
+  .uf-maint-page .uf-header h4 i { color: var(--uf-accent); }
+  .uf-maint-page .uf-sub { color: var(--uf-muted); font-size: .85rem; margin-top: 4px; }
+
+  .uf-btn {
+    background: linear-gradient(135deg, #7C3AED, #5B21B6); color: #fff; border: none;
+    padding: 8px 14px; border-radius: 8px; font-weight: 600; font-size: 13px;
+    text-decoration: none; display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+  }
+  .uf-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(124,58,237,.28); color: #fff; }
+  .uf-btn-outline {
+    background: transparent; color: #7C3AED; border: 1px solid #7C3AED;
+  }
+  .uf-btn-outline:hover { background: #7C3AED; color: #fff; }
+  .uf-btn-soft {
+    background: var(--uf-accent-soft); color: var(--uf-accent); border: 1px solid #fecaca;
+  }
+  .uf-btn-soft:hover { background: #fee2e2; color: #b91c1c; }
+
+  .uf-toolbar {
+    display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+    justify-content: space-between; margin-bottom: 12px;
+  }
+  .uf-toolbar-left, .uf-toolbar-right { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .uf-search {
+    border: 1px solid var(--uf-line); border-radius: 8px; padding: 8px 12px 8px 34px;
+    font-size: 13px; min-width: 220px; background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' fill='%2494a3b8' viewBox='0 0 16 16'%3E%3Cpath d='M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85zm-5.242.656a5 5 0 1 1 0-10 5 5 0 0 1 0 10z'/%3E%3C/svg%3E") 12px center no-repeat;
+  }
+  .uf-search:focus { outline: none; border-color: #a78bfa; box-shadow: 0 0 0 3px rgba(124,58,237,.12); }
+  .uf-count {
+    font-size: 12px; color: var(--uf-muted); background: #f8fafc; border: 1px solid var(--uf-line);
+    border-radius: 999px; padding: 5px 10px; font-weight: 600;
+  }
+
+  .uf-table-card {
+    background: var(--uf-surface); border-radius: 14px; border: 1px solid var(--uf-line);
+    box-shadow: 0 8px 24px rgba(15, 23, 42, .04); overflow: hidden;
+  }
+  .uf-table-wrap { overflow-x: auto; max-height: min(70vh, 720px); }
+  .uf-maint-table {
+    width: 100%; border-collapse: separate; border-spacing: 0;
+    font-size: 12.5px; color: #334155; margin: 0;
+  }
+  .uf-maint-table thead th {
+    position: sticky; top: 0; z-index: 2;
+    background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+    color: #475569; font-weight: 700; text-transform: uppercase; letter-spacing: .03em;
+    font-size: 10.5px; padding: 12px 10px; border-bottom: 1px solid var(--uf-line);
+    white-space: nowrap; text-align: left;
+  }
+  .uf-maint-table tbody td {
+    padding: 11px 10px; border-bottom: 1px solid #f1f5f9; vertical-align: middle;
+    white-space: nowrap; background: #fff;
+  }
+  .uf-maint-table tbody tr:nth-child(even) td { background: #fcfcfd; }
+  .uf-maint-table tbody tr:hover td { background: #f8fafc; }
+  .uf-maint-table tbody tr.is-hidden { display: none; }
+
+  .uf-reg {
+    font-weight: 800; color: var(--uf-ink); letter-spacing: .01em;
+  }
+  .uf-chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 8px; border-radius: 999px; font-size: 11px; font-weight: 700;
+    border: 1px solid transparent;
+  }
+  .uf-chip-engine { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
+  .uf-chip-denting { background: #fff7ed; color: #c2410c; border-color: #fed7aa; }
+  .uf-chip-body { background: #f5f3ff; color: #6d28d9; border-color: #ddd6fe; }
+  .uf-chip-default { background: #f1f5f9; color: #475569; border-color: #e2e8f0; }
+  .uf-chip-cat { background: var(--uf-accent-soft); color: #b91c1c; border-color: #fecaca; }
+  .uf-days {
+    display: inline-flex; min-width: 34px; justify-content: center;
+    background: #0f172a; color: #fff; border-radius: 7px; padding: 3px 7px;
+    font-weight: 700; font-size: 11px;
+  }
+  .uf-comment {
+    max-width: 220px; white-space: normal; line-height: 1.35; color: #64748b;
+  }
+  .uf-empty {
+    text-align: center; padding: 72px 20px; color: var(--uf-muted);
+  }
+  .uf-empty i { font-size: 48px; color: #86efac; display: block; margin-bottom: 10px; }
+  .uf-empty h5 { color: #15803d; font-weight: 800; margin-bottom: 6px; }
+
+  .uf-footer {
+    display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;
+    padding: 10px 14px; border-top: 1px solid var(--uf-line); background: #f8fafc;
+    font-size: 12px; color: var(--uf-muted);
+  }
+
+  .uf-log-btn {
+    background: transparent; border: none; color: #2563eb; font-weight: 700;
+    font-size: 12.5px; padding: 0; cursor: pointer; text-decoration: underline;
+  }
+  .uf-log-btn:hover { color: #1d4ed8; }
+  .uf-log-btn:disabled { color: #94a3b8; cursor: wait; text-decoration: none; }
+
+  .uf-log-modal-backdrop {
+    display: none; position: fixed; inset: 0; z-index: 1080;
+    background: rgba(15, 23, 42, .45); align-items: center; justify-content: center;
+    padding: 16px;
+  }
+  .uf-log-modal-backdrop.is-open { display: flex; }
+  .uf-log-modal {
+    background: #fff; border-radius: 10px; width: min(1100px, 96vw);
+    max-height: min(80vh, 720px); display: flex; flex-direction: column;
+    box-shadow: 0 20px 50px rgba(15, 23, 42, .25); overflow: hidden;
+  }
+  .uf-log-modal-head {
+    background: #16a34a; color: #fff; padding: 12px 16px;
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  }
+  .uf-log-modal-head h5 { margin: 0; font-weight: 700; font-size: 1rem; }
+  .uf-log-modal-close {
+    background: transparent; border: none; color: #fff; font-size: 22px;
+    line-height: 1; cursor: pointer; padding: 0 4px;
+  }
+  .uf-log-modal-body { overflow: auto; padding: 0; flex: 1; }
+  .uf-log-modal-foot {
+    padding: 10px 14px; border-top: 1px solid var(--uf-line);
+    display: flex; justify-content: flex-end; background: #f8fafc;
+  }
+  .uf-log-empty {
+    text-align: center; padding: 36px 16px; color: #64748b; font-weight: 600;
+  }
+
+  @media (max-width: 768px) {
+    .uf-search { min-width: 100%; width: 100%; }
+    .uf-toolbar-right { width: 100%; }
+  }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid py-4">
+<div class="container-fluid py-4 uf-maint-page">
   <div class="uf-header">
     <div>
-      <h4><i class="bi bi-tools"></i> Ambulances Under Maintenance</h4>
-      <small class="text-muted">Vehicles currently off-road</small>
+      <h4><i class="bi bi-tools"></i> Ambulance Under Maintenance</h4>
+      <div class="uf-sub">Currently off-road ambulances — live from Ufone via VPS sync</div>
     </div>
-    {{ nav_back_button() }}
+    <div class="d-flex gap-2 align-items-center flex-wrap">
+      {{ nav_back_button() }}
+      <a href="{{ url_for('ufone_maintenance_history') }}" class="uf-btn uf-btn-outline">
+        <i class="bi bi-clock-history"></i> History
+      </a>
+      <a href="{{ url_for('ufone_maintenance', force=1) }}" class="uf-btn uf-btn-soft">
+        <i class="bi bi-arrow-clockwise"></i> Refresh
+      </a>
+      <button type="button" class="uf-btn uf-btn-outline" id="btnExportReport">
+        <i class="bi bi-file-earmark-excel"></i> Export
+      </button>
+      <button type="button" class="uf-btn" id="btnPrintReport">
+        <i class="bi bi-printer"></i> Print
+      </button>
+    </div>
   </div>
 
-  <div class="uf-grid">
-    {% for r in records %}
-    <div class="uf-maint-card">
-      <div class="uf-maint-title">
-        <h5>{{ r.Reg_no or r.reg_no or '?' }}</h5>
-        <span class="uf-badge-offline">Offline</span>
-      </div>
-      <div class="uf-maint-info">
-        <i class="bi bi-geo-alt text-muted"></i> <b>District:</b> {{ r.District or r.district or '-' }}<br>
-        <i class="bi bi-gear text-muted"></i> <b>Type:</b> {{ r.Maintain_Type or r.maintain_type or '-' }}<br>
-        <i class="bi bi-tag text-muted"></i> <b>Category:</b> {{ r.Cat_Name or r.cat_name or '-' }}<br>
-        <i class="bi bi-calendar-plus text-muted"></i> <b>Sent:</b> <small>{{ r.Send_Date or r.send_date or '-' }}</small><br>
-        <i class="bi bi-calendar-check text-muted"></i> <b>Expected Return:</b> <small>{{ r.Return_Date or r.return_date or '-' }}</small><br>
-      </div>
-      {% if r.Comments or r.comments %}
-      <div class="alert alert-light mt-3 mb-0" style="font-size: 12px; padding: 8px 12px;">
-        <i class="bi bi-chat-left-text"></i> {{ r.Comments or r.comments }}
-      </div>
-      {% endif %}
+  {% if error %}
+  <div class="alert alert-danger mb-3" style="border-radius:10px;">{{ error }}</div>
+  {% endif %}
+
+  <div class="uf-toolbar">
+    <div class="uf-toolbar-left">
+      <span class="uf-count" id="maintCount">{{ records|length }} vehicle{{ 's' if records|length != 1 else '' }}</span>
+    </div>
+    <div class="uf-toolbar-right">
+      <input type="search" class="uf-search" id="maintSearch" placeholder="Search reg no, district, type…" autocomplete="off">
+    </div>
+  </div>
+
+  <div class="uf-table-card">
+    {% if records %}
+    <div class="uf-table-wrap">
+      <table class="uf-maint-table" id="ufoneMaintenanceTable">
+        <thead>
+          <tr>
+            <th>Sr#</th>
+            <th>Reg No</th>
+            <th>District</th>
+            <th>Maintain Type</th>
+            <th>Category</th>
+            <th>Sub Category</th>
+            <th>Due Date</th>
+            <th>Send Date</th>
+            <th>Return Date</th>
+            <th>Comments</th>
+            <th>Created By</th>
+            <th>Created Date</th>
+            <th>Modified By</th>
+            <th>Modified Date</th>
+            <th>Start Date</th>
+            <th>Start Time</th>
+            <th>End Date</th>
+            <th>End Time</th>
+            <th>Days</th>
+            <th>Hours</th>
+            <th>Minute</th>
+            <th>Update Log</th>
+          </tr>
+        </thead>
+        <tbody id="maintBody">
+          {% for r in records %}
+          {% set reg = r.Reg_no or r.reg_no or '—' %}
+          {% set mid = r.id or r.Id or '' %}
+          {% set mtype = r.Maintain_Type or r.maintain_type or '' %}
+          {% set mtype_l = (mtype or '')|lower %}
+          {% set ns = namespace(chip='uf-chip-default') %}
+          {% if 'engine' in mtype_l %}{% set ns.chip = 'uf-chip-engine' %}
+          {% elif 'dent' in mtype_l %}{% set ns.chip = 'uf-chip-denting' %}
+          {% elif 'body' in mtype_l %}{% set ns.chip = 'uf-chip-body' %}
+          {% endif %}
+          {% set days = r.Days if r.Days is defined and r.Days is not none else (r.days if r.days is defined and r.days is not none else (r.days_offline or 0)) %}
+          {% set hours = r.Hours if r.Hours is defined and r.Hours is not none else (r.hours if r.hours is defined and r.hours is not none else '—') %}
+          {% set mins = r.Minute if r.Minute is defined and r.Minute is not none else (r.minute if r.minute is defined and r.minute is not none else '—') %}
+          {% set cat = r.Cat_Name or r.cat_name %}
+          {% set start_d = r.startDate or r.start_date or r.Send_Date or r.send_date or '' %}
+          <tr data-search="{{ (reg ~ ' ' ~ (r.District or r.district or '') ~ ' ' ~ mtype ~ ' ' ~ (cat or '') ~ ' ' ~ (r.Sub_Cat_Name or r.sub_cat_name or '') ~ ' ' ~ (r.Comments or r.comments or '') ~ ' ' ~ (r.ModifiedBy or r.modified_by or ''))|lower }}">
+            <td class="text-muted">{{ loop.index }}</td>
+            <td><span class="uf-reg">{{ reg }}</span></td>
+            <td>{{ r.District or r.district or '—' }}</td>
+            <td>
+              {% if mtype %}
+              <span class="uf-chip {{ ns.chip }}">{{ mtype }}</span>
+              {% else %}—{% endif %}
+            </td>
+            <td>
+              {% if cat %}<span class="uf-chip uf-chip-cat">{{ cat }}</span>{% else %}—{% endif %}
+            </td>
+            <td>{{ r.Sub_Cat_Name or r.sub_cat_name or '—' }}</td>
+            <td>{{ r.Due_Date or r.due_date or '—' }}</td>
+            <td>{{ r.Send_Date or r.send_date or '—' }}</td>
+            <td>{{ r.Return_Date or r.return_date or '—' }}</td>
+            <td><div class="uf-comment">{{ r.Comments or r.comments or '—' }}</div></td>
+            <td>{{ r.CreatedBy or r.created_by or '—' }}</td>
+            <td>{{ r.Created_Date or r.created_date or '—' }}</td>
+            <td>{{ r.ModifiedBy or r.modified_by or '—' }}</td>
+            <td>{{ r.Modified_Date or r.modified_date or '—' }}</td>
+            <td>{{ r.startDate or r.start_date or '—' }}</td>
+            <td>{{ r.startTime or r.start_time or '—' }}</td>
+            <td>{{ r.endDate or r.end_date or '—' }}</td>
+            <td>{{ r.endTime or r.end_time or '—' }}</td>
+            <td><span class="uf-days">{{ days }}</span></td>
+            <td>{{ hours }}</td>
+            <td>{{ mins }}</td>
+            <td>
+              <button type="button" class="uf-log-btn js-maint-log"
+                      data-id="{{ mid }}"
+                      data-reg="{{ reg }}"
+                      data-start="{{ start_d }}">View</button>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="uf-footer">
+      <span id="maintShowing">Showing {{ records|length }} of {{ records|length }}</span>
+      <span>Scroll horizontally for more columns</span>
     </div>
     {% else %}
     <div class="uf-empty">
-      <i class="bi bi-check-circle-fill text-success"></i>
-      <h5 class="text-success">All Good!</h5>
-      <p class="text-muted">No ambulances are currently under maintenance.</p>
+      <i class="bi bi-check-circle-fill"></i>
+      <h5>All Good!</h5>
+      <p class="mb-0">No ambulances are currently under maintenance.</p>
     </div>
-    {% endfor %}
+    {% endif %}
   </div>
 </div>
+
+<div class="uf-log-modal-backdrop" id="maintLogModal" aria-hidden="true">
+  <div class="uf-log-modal" role="dialog" aria-modal="true" aria-labelledby="maintLogTitle">
+    <div class="uf-log-modal-head">
+      <h5 id="maintLogTitle">Maintenance Log</h5>
+      <button type="button" class="uf-log-modal-close" id="maintLogClose" aria-label="Close">&times;</button>
+    </div>
+    <div class="uf-log-modal-body" id="maintLogBody">
+      <div class="uf-log-empty">Loading…</div>
+    </div>
+    <div class="uf-log-modal-foot">
+      <button type="button" class="uf-btn uf-btn-outline" id="maintLogCloseBtn">Close</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+  var input = document.getElementById('maintSearch');
+  var body = document.getElementById('maintBody');
+  var countEl = document.getElementById('maintCount');
+  var showingEl = document.getElementById('maintShowing');
+  if (input && body) {
+    input.addEventListener('input', function() {
+      var q = (input.value || '').trim().toLowerCase();
+      var rows = body.querySelectorAll('tr');
+      var visible = 0;
+      rows.forEach(function(tr) {
+        var hay = tr.getAttribute('data-search') || '';
+        var ok = !q || hay.indexOf(q) !== -1;
+        tr.classList.toggle('is-hidden', !ok);
+        if (ok) {
+          visible += 1;
+          var sr = tr.querySelector('td');
+          if (sr) sr.textContent = String(visible);
+        }
+      });
+      if (countEl) countEl.textContent = visible + ' vehicle' + (visible === 1 ? '' : 's');
+      if (showingEl) showingEl.textContent = 'Showing ' + visible + ' of ' + rows.length;
+    });
+  }
+
+  function bootPrintExport() {
+    if (!window.fleetPrintExport) return;
+    window.fleetPrintExport(
+      'ufoneMaintenanceTable',
+      'Ambulance Under Maintenance',
+      'Ambulance_Under_Maintenance.csv',
+      {
+        columnOrder: [
+          'Sr#', 'Reg No', 'District', 'Maintain Type', 'Category', 'Sub Category',
+          'Due Date', 'Send Date', 'Return Date', 'Comments', 'Created By',
+          'Created Date', 'Modified By', 'Modified Date',
+          'Start Date', 'Start Time', 'End Date', 'End Time',
+          'Days', 'Hours', 'Minute', 'Update Log'
+        ],
+        dateColumns: [
+          'Due Date', 'Send Date', 'Return Date', 'Created Date',
+          'Modified Date', 'Start Date', 'End Date'
+        ]
+      }
+    );
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bootPrintExport);
+  } else {
+    bootPrintExport();
+  }
+
+  var modal = document.getElementById('maintLogModal');
+  var modalBody = document.getElementById('maintLogBody');
+  var modalTitle = document.getElementById('maintLogTitle');
+
+  function closeLogModal() {
+    if (!modal) return;
+    modal.classList.remove('is-open');
+    modal.setAttribute('aria-hidden', 'true');
+  }
+  function openLogModal() {
+    if (!modal) return;
+    modal.classList.add('is-open');
+    modal.setAttribute('aria-hidden', 'false');
+  }
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  function cell(row, keys, fallback) {
+    for (var i = 0; i < keys.length; i++) {
+      var v = row[keys[i]];
+      if (v !== undefined && v !== null && String(v) !== '') return v;
+    }
+    return fallback == null ? '—' : fallback;
+  }
+  function renderLogRows(rows, reg) {
+    if (modalTitle) {
+      modalTitle.textContent = reg ? ('Maintenance Log — ' + reg) : 'Maintenance Log';
+    }
+    if (!rows || !rows.length) {
+      modalBody.innerHTML = '<div class="uf-log-empty">No record found</div>';
+      return;
+    }
+    var html = '<div class="uf-table-wrap" style="max-height:none"><table class="uf-maint-table"><thead><tr>' +
+      '<th>Sr#</th><th>Reg No</th><th>District</th><th>Maintain Type</th><th>Category</th>' +
+      '<th>Sub Category</th><th>Due Date</th><th>Send Date</th><th>Return Date</th><th>Comments</th>' +
+      '<th>Created By</th><th>Created Date</th><th>Modified By</th><th>Modified Date</th>' +
+      '<th>Start Date</th><th>Start Time</th><th>End Date</th><th>End Time</th>' +
+      '<th>Days</th><th>Hours</th><th>Minute</th>' +
+      '</tr></thead><tbody>';
+    rows.forEach(function(r, idx) {
+      html += '<tr>' +
+        '<td>' + (idx + 1) + '</td>' +
+        '<td><span class="uf-reg">' + esc(cell(r, ['reg_no', 'Reg_no'])) + '</span></td>' +
+        '<td>' + esc(cell(r, ['district', 'District'])) + '</td>' +
+        '<td>' + esc(cell(r, ['maintain_type', 'Maintain_Type'])) + '</td>' +
+        '<td>' + esc(cell(r, ['cat_name', 'Cat_Name'])) + '</td>' +
+        '<td>' + esc(cell(r, ['sub_cat_name', 'Sub_Cat_Name'])) + '</td>' +
+        '<td>' + esc(cell(r, ['due_date', 'Due_Date'])) + '</td>' +
+        '<td>' + esc(cell(r, ['send_date', 'Send_Date'])) + '</td>' +
+        '<td>' + esc(cell(r, ['return_date', 'Return_Date'])) + '</td>' +
+        '<td><div class="uf-comment">' + esc(cell(r, ['comments', 'Comments'])) + '</div></td>' +
+        '<td>' + esc(cell(r, ['created_by', 'CreatedBy'])) + '</td>' +
+        '<td>' + esc(cell(r, ['created_date', 'Created_Date'])) + '</td>' +
+        '<td>' + esc(cell(r, ['modified_by', 'ModifiedBy'])) + '</td>' +
+        '<td>' + esc(cell(r, ['modified_date', 'Modified_Date'])) + '</td>' +
+        '<td>' + esc(cell(r, ['start_date', 'startDate'])) + '</td>' +
+        '<td>' + esc(cell(r, ['start_time', 'startTime'])) + '</td>' +
+        '<td>' + esc(cell(r, ['end_date', 'endDate'])) + '</td>' +
+        '<td>' + esc(cell(r, ['end_time', 'endTime'])) + '</td>' +
+        '<td>' + esc(cell(r, ['days', 'Days', 'days_offline'], '0')) + '</td>' +
+        '<td>' + esc(cell(r, ['hours', 'Hours'])) + '</td>' +
+        '<td>' + esc(cell(r, ['minute', 'Minute'])) + '</td>' +
+        '</tr>';
+    });
+    html += '</tbody></table></div>';
+    modalBody.innerHTML = html;
+  }
+
+  document.querySelectorAll('.js-maint-log').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var id = btn.getAttribute('data-id') || '';
+      var reg = btn.getAttribute('data-reg') || '';
+      var start = btn.getAttribute('data-start') || '';
+      if (!id && (!reg || reg === '—')) return;
+      btn.disabled = true;
+      openLogModal();
+      modalBody.innerHTML = '<div class="uf-log-empty">Loading…</div>';
+      if (modalTitle) modalTitle.textContent = reg ? ('Maintenance Log — ' + reg) : 'Maintenance Log';
+      var qs = new URLSearchParams();
+      if (id) qs.set('id', id);
+      if (reg && reg !== '—') qs.set('reg_no', reg);
+      if (start) qs.set('start_date', start);
+      fetch('/api/ufone/maintenance/log?' + qs.toString(), { credentials: 'same-origin' })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data.error && !(data.records && data.records.length)) {
+            modalBody.innerHTML = '<div class="uf-log-empty">' + esc(data.error) + '</div>';
+            return;
+          }
+          renderLogRows(data.records || [], reg);
+        })
+        .catch(function(err) {
+          modalBody.innerHTML = '<div class="uf-log-empty">Failed to load log</div>';
+        })
+        .finally(function() { btn.disabled = false; });
+    });
+  });
+
+  var closeBtn = document.getElementById('maintLogClose');
+  var closeBtn2 = document.getElementById('maintLogCloseBtn');
+  if (closeBtn) closeBtn.addEventListener('click', closeLogModal);
+  if (closeBtn2) closeBtn2.addEventListener('click', closeLogModal);
+  if (modal) {
+    modal.addEventListener('click', function(e) {
+      if (e.target === modal) closeLogModal();
+    });
+  }
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeLogModal();
+  });
+})();
+</script>
 {% endblock %}
