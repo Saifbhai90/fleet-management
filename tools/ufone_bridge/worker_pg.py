@@ -223,6 +223,179 @@ def _mark_event_notify_sent(conn, account_id: int, task_id: str, event_type: str
     return row is not None
 
 
+def _bare_task_id(tid) -> str:
+    """Normalize PHF-7571234 / 7571234 → 7571234."""
+    s = str(tid or '').strip()
+    if s.upper().startswith('PHF-'):
+        return s[4:].strip() or s
+    return s
+
+
+def _event_generate_already_marked(conn, account_id: int, task_id: str) -> bool:
+    bare = _bare_task_id(task_id)
+    if not bare:
+        return False
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT 1 FROM ufone_task_event_notify
+            WHERE account_id = %s AND event_type = 'generate'
+              AND task_id IN (%s, %s, %s)
+            LIMIT 1
+            """,
+            (account_id, bare, f'PHF-{bare}', str(task_id)),
+        )
+        return cur.fetchone() is not None
+
+
+def _nayi_task_notif_exists(conn, bare_tid: str, since_date: date) -> bool:
+    """True if in-app generate notify already logged for this task id."""
+    if not bare_tid:
+        return False
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT 1 FROM notification
+            WHERE title IN ('New Task Generate', 'Nayi Task Assign')
+              AND created_at >= %s
+              AND message ILIKE %s
+            LIMIT 1
+            """,
+            (since_date, f'%{bare_tid}%'),
+        )
+        return cur.fetchone() is not None
+
+
+def _fleet_reg_keys(conn) -> set:
+    """Normalized keys for all Master Data vehicles (48 fleet)."""
+    keys = set()
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT vehicle_no FROM vehicle
+            WHERE vehicle_no IS NOT NULL AND TRIM(vehicle_no) <> ''
+            """
+        )
+        for (vn,) in cur.fetchall():
+            vn = (vn or '').strip()
+            if not vn:
+                continue
+            keys.add(_norm_reg_key(vn))
+            base = _strip_reg_tag(vn)
+            if base:
+                keys.add(_norm_reg_key(base))
+    keys.discard('')
+    return keys
+
+
+def _amb_matches_fleet(amb_reg_no, fleet_keys: set) -> bool:
+    if not amb_reg_no or not fleet_keys:
+        return False
+    reg = str(amb_reg_no).strip()
+    if not reg:
+        return False
+    return (
+        _norm_reg_key(reg) in fleet_keys
+        or _norm_reg_key(_strip_reg_tag(reg)) in fleet_keys
+    )
+
+
+def collect_fleet_generate_safety_net(
+    conn, account_id: int, today: date
+) -> list:
+    """Retry generate ONLY for recent fleet misses — not a delayed first send.
+
+    Primary notify still fires on first dash/EMG insert (~3 min).
+    This only re-sends if that attempt failed, and only within
+    BRIDGE_GENERATE_RETRY_MINUTES (default 45) of emg created_at —
+    so a 07:00 task is NOT notified at 10:00.
+    """
+    ensure_task_event_notify_table(conn)
+    fleet_keys = _fleet_reg_keys(conn)
+    if not fleet_keys:
+        return []
+
+    retry_mins = max(5, _int_env('BRIDGE_GENERATE_RETRY_MINUTES', 45))
+    cutoff = _pk_now() - timedelta(minutes=retry_mins)
+
+    events = []
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT DISTINCT ON (task_id_ext)
+              task_id_ext, amb_reg_no, name, phone, cli, address,
+              facility_name, category, completed_date_time, status, created_at
+            FROM emergency_task_record
+            WHERE account_id = %s
+              AND task_date = %s
+              AND task_id_ext IS NOT NULL AND task_id_ext <> ''
+              AND amb_reg_no IS NOT NULL AND TRIM(amb_reg_no) <> ''
+              AND created_at >= %s
+            ORDER BY task_id_ext, id DESC
+            """,
+            (account_id, today, cutoff),
+        )
+        rows = cur.fetchall()
+
+    healed = 0
+    for (
+        tid_ext, amb, name, phone, cli, addr, fac, cat, completed, status,
+        _created_at,
+    ) in rows:
+        if _status_is_complete(status):
+            continue
+        if not _amb_matches_fleet(amb, fleet_keys):
+            continue
+        bare = _bare_task_id(tid_ext)
+        if not bare:
+            continue
+        if _event_generate_already_marked(conn, account_id, bare):
+            continue
+        # Already delivered → heal mark only (never duplicate)
+        if _nayi_task_notif_exists(conn, bare, today):
+            _mark_event_notify_sent(conn, account_id, bare, 'generate')
+            healed += 1
+            continue
+        events.append({
+            'event': 'generate',
+            'task_id': bare,
+            'amb_reg_no': amb,
+            'patient_name': name,
+            'phone': phone,
+            'cli': cli or '',
+            'pickup': addr or '',
+            'destination': fac or '',
+            'category': cat or '',
+            'completed_date_time': completed or '',
+        })
+
+    if healed:
+        logger.info('fleet generate safety-net healed marks=%s', healed)
+    if events:
+        logger.info(
+            'fleet generate safety-net retry=%s (within %sm, fleet only)',
+            len(events), retry_mins,
+        )
+    return events
+
+
+def _dedupe_notify_events(events: list) -> list:
+    """Keep one event per (bare_task_id, event_type); prefer earlier entries."""
+    seen = set()
+    out = []
+    for ev in events:
+        if not isinstance(ev, dict):
+            continue
+        key = (_bare_task_id(ev.get('task_id')), ev.get('event'))
+        if not key[0] or key[1] is None:
+            continue
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(ev)
+    return out
+
+
 def _status_is_complete(status) -> bool:
     s = (status or '').strip().lower()
     return ('complete' in s) and ('incomplete' not in s)
@@ -1245,8 +1418,36 @@ def upsert_task_details(conn, account_id: int, client, emg_items: list,
     return n
 
 
-def push_notify_events(events: list) -> int:
-    """POST tiny generate/close events to Render (never bulk EMG)."""
+_NOTIFY_CHUNK = 80
+_NOTIFY_EVENT_PRIORITY = {
+    'generate': 0,
+    'close': 1,
+    'overdue_close': 2,
+}
+
+
+def _sort_notify_events(events: list) -> list:
+    """Prefer generate so new-task alerts are not starved by close/overdue flood."""
+    return sorted(
+        events,
+        key=lambda ev: (
+            _NOTIFY_EVENT_PRIORITY.get((ev or {}).get('event'), 9),
+            str((ev or {}).get('task_id') or ''),
+        ),
+    )
+
+
+def push_notify_events(
+    events: list,
+    *,
+    conn=None,
+    account_id: int | None = None,
+) -> int:
+    """POST tiny generate/close events to Render in chunks (never drop / never bulk EMG).
+
+    After each successful chunk, mark generate events so the fleet safety-net
+    does not resend. Failed chunks stay unmarked → retried next cycle.
+    """
     if not events:
         return 0
     token = _env('UFONE_BRIDGE_TOKEN')
@@ -1260,21 +1461,56 @@ def push_notify_events(events: list) -> int:
         url = f'{base}/notify'
     else:
         url = f'{base}/api/ufone/bridge/notify'
+
+    ordered = _sort_notify_events(_dedupe_notify_events(events))
+    sent_total = 0
     try:
         import requests
-        r = requests.post(
-            url,
-            headers={'X-Ufone-Bridge-Token': token, 'User-Agent': 'ufone-bridge-pg/1.0'},
-            json={'events': events},
-            timeout=30,
-        )
-        if r.status_code >= 400:
-            logger.warning('notify HTTP %s: %s', r.status_code, (r.text or '')[:200])
-            return 0
-        return int((r.json() or {}).get('sent') or len(events))
+        for i in range(0, len(ordered), _NOTIFY_CHUNK):
+            chunk = ordered[i:i + _NOTIFY_CHUNK]
+            r = requests.post(
+                url,
+                headers={
+                    'X-Ufone-Bridge-Token': token,
+                    'User-Agent': 'ufone-bridge-pg/1.0',
+                },
+                json={'events': chunk},
+                timeout=60,
+            )
+            if r.status_code >= 400:
+                logger.warning(
+                    'notify HTTP %s chunk %s-%s: %s',
+                    r.status_code, i, i + len(chunk), (r.text or '')[:200],
+                )
+                break
+            sent_total += int((r.json() or {}).get('sent') or len(chunk))
+            # Mark generate only when in-app notif exists (blocks duplicates +
+            # allows retry if Render accepted HTTP but matched no driver).
+            if conn is not None and account_id is not None:
+                try:
+                    from datetime import date as _date
+                    today = _pk_now().date()
+                except Exception:
+                    today = datetime.utcnow().date()
+                for ev in chunk:
+                    if ev.get('event') != 'generate':
+                        continue
+                    bare = _bare_task_id(ev.get('task_id'))
+                    if _nayi_task_notif_exists(conn, bare, today):
+                        _mark_event_notify_sent(
+                            conn, account_id, bare, 'generate',
+                        )
+        if len(ordered) > _NOTIFY_CHUNK:
+            logger.info(
+                'notify sent in %s chunk(s), events=%s sent=%s',
+                (len(ordered) + _NOTIFY_CHUNK - 1) // _NOTIFY_CHUNK,
+                len(ordered),
+                sent_total,
+            )
+        return sent_total
     except Exception as e:
         logger.warning('notify failed: %s', e)
-        return 0
+        return sent_total
 
 
 def _pk_now() -> datetime:
@@ -1483,6 +1719,12 @@ def run_once() -> dict:
     notify_events = []
     nm = 0
     nh = 0
+    ne = 0
+    ndet = 0
+    nd = 0
+    nv = 0
+    nt = 0
+    nn = 0
     try:
         _pg_session(conn)
         nd = upsert_districts(conn, districts) if districts else 0
@@ -1495,8 +1737,6 @@ def run_once() -> dict:
         except Exception as e:
             conn.rollback()
             logger.warning('overdue notify collect failed (non-fatal): %s', e)
-        ne = 0
-        ndet = 0
         try:
             ne, emg_events = upsert_emergency(conn, account_id, emg, today_d)
             notify_events.extend(emg_events)
@@ -1520,12 +1760,21 @@ def run_once() -> dict:
             except Exception as e:
                 conn.rollback()
                 logger.warning('task detail sync failed (non-fatal): %s', e)
+        # Fleet guarantee: retry any Master Data vehicle task still missing generate
+        try:
+            safety = collect_fleet_generate_safety_net(conn, account_id, today_d)
+            notify_events.extend(safety)
+        except Exception as e:
+            conn.rollback()
+            logger.warning('fleet generate safety-net failed (non-fatal): %s', e)
+
+        # Chunked POST to Render (generate prioritized; mark only after success)
+        nn = push_notify_events(
+            notify_events, conn=conn, account_id=account_id,
+        )
     finally:
         conn.close()
 
-    # Cap batch size for Render notify endpoint
-    notify_events = notify_events[:80]
-    nn = push_notify_events(notify_events)
     logger.info(
         'pg ingest ok districts=%s vehicles=%s tasks=%s emg_pg=%s maint=%s '
         'hist=%s details=%s notify=%s '

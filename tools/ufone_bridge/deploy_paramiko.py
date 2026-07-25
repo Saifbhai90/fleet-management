@@ -61,10 +61,11 @@ def run(client: paramiko.SSHClient, cmd: str, check: bool = True) -> str:
     out = stdout.read().decode('utf-8', errors='replace')
     err = stderr.read().decode('utf-8', errors='replace')
     code = stdout.channel.recv_exit_status()
+    # Windows cp1252 consoles choke on systemd bullets etc.
     if out.strip():
-        print(out.rstrip())
+        print(out.rstrip().encode('ascii', 'replace').decode('ascii'))
     if err.strip():
-        print(err.rstrip(), file=sys.stderr)
+        print(err.rstrip().encode('ascii', 'replace').decode('ascii'), file=sys.stderr)
     if check and code != 0:
         raise SystemExit(f'Command failed ({code}): {cmd}')
     return out

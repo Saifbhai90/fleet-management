@@ -2365,13 +2365,22 @@ def _send_task_event_notifications(events: list):
     try:
         from services.notification_service import notify_user
         from services.push_notifications import get_user_id_for_driver
+        from models import Notification
+        from utils import pk_date
     except Exception:
         try:
             from notification_service import notify_user
             from push_notifications import get_user_id_for_driver
+            from models import Notification
+            from utils import pk_date
         except Exception as ie:
             logger.warning(f"task-event notify imports failed: {ie}")
             return
+    try:
+        today = pk_date()
+    except Exception:
+        today = datetime.now().date()
+
     for ev in events:
         try:
             event = ev.get('event')
@@ -2382,7 +2391,7 @@ def _send_task_event_notifications(events: list):
                 continue
             msg = _build_task_notify_message(ev)
             if event == 'generate':
-                title = 'Nayi Task Assign'
+                title = 'New Task Generate'
                 ntype = 'info'
             elif event == 'close':
                 title = 'Task Complete'
@@ -2390,10 +2399,29 @@ def _send_task_event_notifications(events: list):
             else:
                 title = 'Task close karwa dein'
                 ntype = 'warning'
+            bare_tid = _display_task_id(ev.get('task_id'))
             for drv in drivers:
                 uid = get_user_id_for_driver(drv)
                 if not uid:
                     continue
+                # Hard duplicate guard: one generate per user+task per day
+                if event == 'generate' and bare_tid:
+                    exists = (
+                        Notification.query.filter(
+                            Notification.target_user_id == int(uid),
+                            Notification.title.in_([
+                                'New Task Generate',
+                                'Nayi Task Assign',  # legacy title
+                            ]),
+                            Notification.created_at >= datetime.combine(
+                                today, datetime.min.time()
+                            ),
+                            Notification.message.ilike(f'%{bare_tid}%'),
+                        ).first()
+                        is not None
+                    )
+                    if exists:
+                        continue
                 notify_user(uid, title, msg, notification_type=ntype)
         except Exception as e:
             logger.warning(f"task-event notify failed for {ev}: {e}")
