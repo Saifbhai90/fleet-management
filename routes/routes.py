@@ -78,6 +78,7 @@ from utils import (
     format_time_ampm,
     pk_now, pk_date, pk_time,
     make_driver_profile_share_token, load_driver_profile_share_token,
+    emg_amb_reg_matches_vehicle,
 )
 from auth_utils import get_required_permission, user_has_permission, user_can_access, check_password, is_endpoint_allowed_for_any_authed
 from emg_tasks import upsert_emergency_from_excel
@@ -8740,8 +8741,12 @@ def _build_vehicle_rows(vehicles, task_date, form=None):
         start_reading = float(prev.close_reading) if has_prev else 0
         emg_tasks = EmergencyTaskRecord.query.filter(
             EmergencyTaskRecord.task_date == task_date,
-            EmergencyTaskRecord.amb_reg_no == v.vehicle_no,
-            EmergencyTaskRecord.category.in_(['Green', 'Yellow']),
+            emg_amb_reg_matches_vehicle(v.vehicle_no),
+            or_(
+                EmergencyTaskRecord.category.in_(['Green', 'Yellow']),
+                EmergencyTaskRecord.category.is_(None),
+                EmergencyTaskRecord.category == '',
+            ),
         ).count()
         _mil_rec = VehicleMileageRecord.query.filter_by(task_date=task_date, reg_no=v.vehicle_no).first()
         tracker_km = _mil_rec.effective_km() if _mil_rec else 0

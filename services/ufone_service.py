@@ -2210,12 +2210,15 @@ def mark_detail_cache_status(account_id: int, task_id, status: str):
 
 
 def _normalize_reg_key(val) -> str:
-    return str(val or '').upper().replace(' ', '').replace('-', '')
+    from utils import normalize_vehicle_reg_key
+    return normalize_vehicle_reg_key(val)
 
 
 def _resolve_fleet_vehicle(amb_reg_no):
-    """Match Ufone amb_reg_no to Master Data Vehicle (exact / base token / normalized)."""
+    """Match Ufone amb_reg_no to Master Data Vehicle (exact / tagged / normalized)."""
     from models import Vehicle
+    from utils import strip_ufone_reg_tag, normalize_vehicle_reg_key
+
     if not amb_reg_no:
         return None
     reg = str(amb_reg_no).strip()
@@ -2224,17 +2227,17 @@ def _resolve_fleet_vehicle(amb_reg_no):
     veh = Vehicle.query.filter_by(vehicle_no=reg).first()
     if veh:
         return veh
-    # Ufone sometimes appends tags e.g. "GBF-25-425 COW"
-    base = reg.split()[0].strip() if ' ' in reg else reg
-    if base != reg:
+    # "GBF-25-425 COW" / "GBD-24-395-COW"
+    base = strip_ufone_reg_tag(reg)
+    if base and base != reg:
         veh = Vehicle.query.filter_by(vehicle_no=base).first()
         if veh:
             return veh
-    candidates = {_normalize_reg_key(reg), _normalize_reg_key(base)}
-    candidates.discard('')
+    key = normalize_vehicle_reg_key(reg)
+    if not key:
+        return None
     for v in Vehicle.query.all():
-        vn = _normalize_reg_key(v.vehicle_no)
-        if vn and vn in candidates:
+        if normalize_vehicle_reg_key(v.vehicle_no) == key:
             return v
     return None
 

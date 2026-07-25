@@ -805,8 +805,26 @@ def upsert_tasks(conn, account_id: int, tasks: list) -> tuple[int, list]:
     return n, events
 
 
+_UFONE_REG_TAG_RE = re.compile(
+    r'[\s\-]+(COW|USG\+P|USG|RAS|MNHC|EMS|NHP)\s*$',
+    re.IGNORECASE,
+)
+
+
 def _norm_reg_key(val: str) -> str:
-    return re.sub(r'[^A-Za-z0-9]', '', (val or '').upper())
+    s = (val or '').strip()
+    s = _UFONE_REG_TAG_RE.sub('', s).strip()
+    if ' ' in s:
+        s = s.split()[0].strip()
+    return re.sub(r'[^A-Za-z0-9]', '', s.upper())
+
+
+def _strip_reg_tag(val: str) -> str:
+    s = (val or '').strip()
+    s = _UFONE_REG_TAG_RE.sub('', s).strip()
+    if ' ' in s:
+        s = s.split()[0].strip()
+    return s
 
 
 def _load_vehicle_project_reminder_map(conn) -> dict:
@@ -844,7 +862,7 @@ def _load_vehicle_project_reminder_map(conn) -> dict:
                 mins_i = 0
             mapping[vn] = mins_i
             mapping[_norm_reg_key(vn)] = mins_i
-            base = vn.split()[0].strip()
+            base = _strip_reg_tag(vn)
             if base and base != vn:
                 mapping[base] = mins_i
                 mapping[_norm_reg_key(base)] = mins_i
@@ -858,7 +876,7 @@ def _reminder_minutes_for_amb(amb_reg_no, reminder_map: dict) -> int:
     reg = str(amb_reg_no).strip()
     if not reg:
         return 0
-    base = reg.split()[0].strip() if ' ' in reg else reg
+    base = _strip_reg_tag(reg)
     for key in (reg, base, _norm_reg_key(reg), _norm_reg_key(base)):
         if key in reminder_map:
             return int(reminder_map[key] or 0)

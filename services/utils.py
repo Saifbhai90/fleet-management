@@ -354,3 +354,48 @@ def user_profile_avatar_path(user) -> Optional[str]:
         if drv and getattr(drv, 'photo_path', None):
             return drv.photo_path
     return None
+
+
+# Ufone / PortalXS append operational tags to RegNo, e.g.
+# "GBF-25-579 COW", "GBD-24-395-COW", "GBF-25-061 USG"
+_UFONE_REG_TAG_RE = re.compile(
+    r'[\s\-]+(COW|USG\+P|USG|RAS|MNHC|EMS|NHP)\s*$',
+    re.IGNORECASE,
+)
+
+
+def strip_ufone_reg_tag(reg: Optional[str]) -> str:
+    """Strip trailing COW/USG/RAS tags (space or hyphen) from a vehicle reg."""
+    s = (reg or '').strip()
+    if not s:
+        return ''
+    s = _UFONE_REG_TAG_RE.sub('', s).strip()
+    if ' ' in s:
+        s = s.split()[0].strip()
+    return s
+
+
+def normalize_vehicle_reg_key(reg: Optional[str]) -> str:
+    """Alphanumeric key after stripping Ufone tags (for matching)."""
+    return re.sub(r'[^A-Za-z0-9]', '', strip_ufone_reg_tag(reg).upper())
+
+
+def emg_amb_reg_matches_vehicle(vehicle_no: Optional[str]):
+    """SQLAlchemy OR filter: EmergencyTaskRecord.amb_reg_no ↔ fleet vehicle_no.
+
+    Matches exact, base (no tag), and tagged variants:
+    GBF-25-579 / GBF-25-579 COW / GBD-24-395-COW.
+    """
+    from models import EmergencyTaskRecord
+    from sqlalchemy import or_
+
+    raw = (vehicle_no or '').strip()
+    if not raw:
+        return EmergencyTaskRecord.id < 0
+    base = strip_ufone_reg_tag(raw) or raw
+    return or_(
+        EmergencyTaskRecord.amb_reg_no == raw,
+        EmergencyTaskRecord.amb_reg_no == base,
+        EmergencyTaskRecord.amb_reg_no.ilike(base + ' %'),
+        EmergencyTaskRecord.amb_reg_no.ilike(base + '-%'),
+    )

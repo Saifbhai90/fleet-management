@@ -24,7 +24,7 @@ from datetime import datetime, date, timedelta
 from sqlalchemy import func, text, or_, and_, false
 from werkzeug.utils import secure_filename
 from auth_utils import user_can_access, get_user_context
-from utils import pk_now, pk_date, parse_date, format_date_ddmmyyyy
+from utils import pk_now, pk_date, parse_date, format_date_ddmmyyyy, emg_amb_reg_matches_vehicle
 from vehicle_sort_utils import vehicle_order_by, sort_vehicles_in_memory
 import re
 import os
@@ -277,8 +277,12 @@ def task_report_list():
             kms_driven = 0
         emg_tasks = EmergencyTaskRecord.query.filter(
             EmergencyTaskRecord.task_date == task_d,
-            EmergencyTaskRecord.amb_reg_no == v.vehicle_no,
-            EmergencyTaskRecord.category.in_(['Green', 'Yellow']),
+            emg_amb_reg_matches_vehicle(v.vehicle_no),
+            or_(
+                EmergencyTaskRecord.category.in_(['Green', 'Yellow']),
+                EmergencyTaskRecord.category.is_(None),
+                EmergencyTaskRecord.category == '',
+            ),
         ).count()
         _mil_rec = VehicleMileageRecord.query.filter_by(task_date=task_d, reg_no=v.vehicle_no).first()
         tracker_km = _mil_rec.effective_km() if _mil_rec else 0
@@ -420,8 +424,12 @@ def task_report_list_export_pdf():
             kms_driven = 0
         emg_tasks = EmergencyTaskRecord.query.filter(
             EmergencyTaskRecord.task_date == task_d,
-            EmergencyTaskRecord.amb_reg_no == v.vehicle_no,
-            EmergencyTaskRecord.category.in_(['Green', 'Yellow']),
+            emg_amb_reg_matches_vehicle(v.vehicle_no),
+            or_(
+                EmergencyTaskRecord.category.in_(['Green', 'Yellow']),
+                EmergencyTaskRecord.category.is_(None),
+                EmergencyTaskRecord.category == '',
+            ),
         ).count()
         _mil_rec = VehicleMileageRecord.query.filter_by(task_date=task_d, reg_no=v.vehicle_no).first()
         tracker_km = _mil_rec.effective_km() if _mil_rec else 0
@@ -1211,21 +1219,31 @@ def api_task_report_odometer_photo_upload():
 
 @app.route('/api/task-report/emg-detail')
 def api_emg_detail():
-    """Return EMG task rows (Green+Yellow) for a given vehicle + date or date range."""
+    """Return EMG task rows for a given vehicle + date or date range.
+
+    Includes Green/Yellow (Excel completed) and open VPS rows with empty
+    category. Vehicle match ignores Ufone COW/USG tags.
+    """
     task_date = parse_date(request.args.get('date'))
     from_date = parse_date(request.args.get('from_date'))
     to_date = parse_date(request.args.get('to_date'))
     vehicle_no = (request.args.get('vehicle_no') or '').strip()
     vehicle_nos_raw = (request.args.get('vehicle_nos') or '').strip()
     q = EmergencyTaskRecord.query.filter(
-        EmergencyTaskRecord.category.in_(['Green', 'Yellow']),
+        or_(
+            EmergencyTaskRecord.category.in_(['Green', 'Yellow']),
+            EmergencyTaskRecord.category.is_(None),
+            EmergencyTaskRecord.category == '',
+        ),
     )
     if vehicle_no:
-        q = q.filter(EmergencyTaskRecord.amb_reg_no == vehicle_no)
+        q = q.filter(emg_amb_reg_matches_vehicle(vehicle_no))
     elif vehicle_nos_raw:
         vehicle_nos = [v.strip() for v in vehicle_nos_raw.split(',') if v.strip()]
         if vehicle_nos:
-            q = q.filter(EmergencyTaskRecord.amb_reg_no.in_(vehicle_nos))
+            q = q.filter(or_(*[
+                emg_amb_reg_matches_vehicle(v) for v in vehicle_nos
+            ]))
     if task_date:
         q = q.filter(EmergencyTaskRecord.task_date == task_date)
     elif from_date and to_date:
@@ -1258,7 +1276,7 @@ def api_emg_detail():
         'address': r.address or '',
         'amb_reg_no': r.amb_reg_no or '',
         'received_by': r.received_by or '',
-        'category': r.category or '',
+        'category': r.category or (r.status or ''),
         'facility_name': r.facility_name or '',
         'created_date': _fmt_dt(r.excel_created_date),
         'completed_date_time': _fmt_dt(r.completed_date_time),
@@ -1282,7 +1300,7 @@ def api_emg_task_detail():
         if task_date:
             q = q.filter(EmergencyTaskRecord.task_date == task_date)
         if vehicle_no:
-            q = q.filter(EmergencyTaskRecord.amb_reg_no == vehicle_no)
+            q = q.filter(emg_amb_reg_matches_vehicle(vehicle_no))
         rec = q.order_by(EmergencyTaskRecord.id.desc()).first()
     else:
         return jsonify({'ok': False, 'message': 'Missing emg_id or task reference'}), 400
