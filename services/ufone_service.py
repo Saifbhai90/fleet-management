@@ -2322,27 +2322,127 @@ def _format_open_duration(minutes) -> str:
     return f'{h:02d} h {rem:02d} m'
 
 
+def _format_notify_datetime(val) -> str:
+    """Format create/complete timestamps for push bodies (e.g. 28 Jul 2026 15:01:26)."""
+    cleaned = _clean_notify_text(val)
+    if not cleaned:
+        return ''
+    if cleaned.startswith('1900') or cleaned.startswith('01/01/1900'):
+        return ''
+    dt = _parse_ufone_datetime(cleaned)
+    if dt:
+        return dt.strftime('%d %b %Y %H:%M:%S')
+    return cleaned
+
+
+def _resolve_task_create_datetime(ev: dict, fields: dict = None, prior=None) -> str:
+    """Best-effort create datetime for notifications.
+
+    Close/report payloads sometimes omit CreatedDate; fall back to prior DB
+    row / CreatedDate1 / CreatedTime when available.
+    """
+    sources = []
+    if ev:
+        sources.extend([
+            ev.get('task_create_date_time'),
+            ev.get('excel_created_date'),
+            ev.get('created_date_time'),
+            ev.get('created_date'),
+            ev.get('created_date1'),
+            ev.get('CD'),
+            ev.get('CreatedDate'),
+            ev.get('created_time'),
+        ])
+    if fields:
+        sources.extend([
+            fields.get('excel_created_date'),
+            fields.get('created_date1'),
+            fields.get('created_time'),
+        ])
+    if prior is not None:
+        if isinstance(prior, dict):
+            sources.extend([
+                prior.get('excel_created_date'),
+                prior.get('created_date1'),
+                prior.get('created_time'),
+            ])
+        else:
+            sources.extend([
+                getattr(prior, 'excel_created_date', None),
+                getattr(prior, 'created_date1', None),
+                getattr(prior, 'created_time', None),
+            ])
+
+    for src in sources:
+        formatted = _format_notify_datetime(src)
+        if formatted:
+            return formatted
+
+    # Date-only + separate time fields
+    date_part = None
+    time_part = None
+    for src in sources:
+        cleaned = _clean_notify_text(src)
+        if not cleaned or cleaned.startswith('1900') or cleaned.startswith('01/01/1900'):
+            continue
+        if date_part is None and re.search(r'\d{4}|\d{1,2}[/-]\d{1,2}', cleaned):
+            date_part = cleaned
+        if time_part is None and re.match(r'^\d{1,2}:\d{2}', cleaned):
+            time_part = cleaned
+    if date_part and time_part:
+        return _format_notify_datetime(f'{date_part} {time_part}') or f'{date_part} {time_part}'
+    if date_part:
+        return _format_notify_datetime(date_part) or date_part
+
+    # Last resort: look up stored emergency row by task id
+    tid = str((ev or {}).get('task_id') or '').strip()
+    if tid:
+        try:
+            from models import EmergencyTaskRecord
+            keys = [tid]
+            bare = _display_task_id(tid)
+            if bare and bare != tid:
+                keys.append(bare)
+                keys.append(f'PHF-{bare}')
+            row = (
+                EmergencyTaskRecord.query
+                .filter(EmergencyTaskRecord.task_id_ext.in_(keys))
+                .order_by(
+                    EmergencyTaskRecord.task_date.desc(),
+                    EmergencyTaskRecord.id.desc(),
+                )
+                .first()
+            )
+            if row:
+                for src in (row.excel_created_date, row.created_date1, row.created_time):
+                    formatted = _format_notify_datetime(src)
+                    if formatted:
+                        return formatted
+        except Exception:
+            pass
+
+    return ''
+
+
 def _build_task_notify_message(ev: dict) -> str:
     """Driver push body — generate / close / overdue_close."""
     tid = _display_task_id(ev.get('task_id'))
     phone = _clean_notify_text(ev.get('phone')) or '—'
     name = _clean_notify_text(ev.get('patient_name') or ev.get('name')) or '—'
     event = ev.get('event')
+    created = _resolve_task_create_datetime(ev) or '—'
 
     if event == 'close':
-        created = _clean_notify_text(
-            ev.get('task_create_date_time')
-            or ev.get('excel_created_date')
-            or ev.get('created_date_time')
-        ) or '—'
         pickup = _clean_notify_text(ev.get('pickup')) or '—'
         dest = _clean_notify_text(ev.get('destination')) or '—'
         category = _clean_notify_text(ev.get('category')) or '—'
-        completed = _clean_notify_text(ev.get('completed_date_time')) or '—'
+        completed = _format_notify_datetime(ev.get('completed_date_time')) or (
+            _clean_notify_text(ev.get('completed_date_time')) or '—'
+        )
         return (
-            f'Task Create Date/Time: {created}, Task ID: {tid}, '
+            f'CreateDateTime: {created}, Task ID: {tid}, '
             f'Phone no: {phone}, Name: {name}, Pickup: {pickup}, '
-            f'Destination: {dest}, Task Category: {category}, '
+            f'Destination: {dest}, Close Category: {category}, '
             f'CompletedDateTime: {completed}'
         )
 
@@ -2350,11 +2450,6 @@ def _build_task_notify_message(ev: dict) -> str:
     pickup = _clean_notify_text(ev.get('pickup')) or '—'
     dest = _clean_notify_text(ev.get('destination')) or '—'
     amb = _clean_notify_text(ev.get('amb_reg_no') or ev.get('ambulance')) or '—'
-    created = _clean_notify_text(
-        ev.get('task_create_date_time')
-        or ev.get('excel_created_date')
-        or ev.get('created_date_time')
-    ) or '—'
 
     if event == 'overdue_close':
         dur = _format_open_duration(ev.get('minutes_open') or 90)
@@ -2366,7 +2461,7 @@ def _build_task_notify_message(ev: dict) -> str:
 
     # generate (default)
     return (
-        f'Task Create Date/Time: {created}, Task ID: {tid}, '
+        f'CreateDateTime: {created}, Task ID: {tid}, '
         f'Phone no: {phone} CLI: {cli}, Name: {name}, '
         f'Pickup: {pickup}, Destination: {dest}'
     )
@@ -2559,6 +2654,7 @@ def sync_emergency_report_to_db(account_id: int, items: list,
             prior = existing.get(tid)
             is_new = prior is None
             if _NOTIFY_TASK_EVENTS and had_prior and tdate == today:
+                created_dt = _resolve_task_create_datetime({}, fields=fields, prior=prior)
                 notify_payload = {
                     'task_id': tid,
                     'amb_reg_no': fields.get('amb_reg_no'),
@@ -2569,7 +2665,8 @@ def sync_emergency_report_to_db(account_id: int, items: list,
                     'destination': fields.get('facility_name') or '',
                     'category': fields.get('category') or '',
                     'completed_date_time': fields.get('completed_date_time') or '',
-                    'task_create_date_time': fields.get('excel_created_date') or '',
+                    'task_create_date_time': created_dt,
+                    'excel_created_date': created_dt,
                 }
                 if is_new:
                     # Generate primary path is dashboard cache (VPS). EMG only

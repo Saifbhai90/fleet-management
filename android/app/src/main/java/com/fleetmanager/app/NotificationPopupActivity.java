@@ -248,14 +248,16 @@ public class NotificationPopupActivity extends AppCompatActivity {
     }
 
     private static final String[][] FIELD_SPECS = {
-            {"Task Create Date/Time", "Create Date/Time", "#ede9fe", "📅"},
+            {"CreateDateTime", "CreateDateTime", "#ede9fe", "📅"},
+            {"Task Create Date/Time", "CreateDateTime", "#ede9fe", "📅"},
             {"Task ID", "Task ID", "#fef3c7", "🏷️"},
             {"Phone no", "Phone No", "#fce7f3", "📞"},
             {"Name", "Name", "#ede9fe", "👤"},
             {"Ambulance", "Ambulance", "#dcfce7", "🚑"},
             {"Pickup", "Pickup", "#fee2e2", "📍"},
             {"Destination", "Destination", "#e2e8f0", "🏁"},
-            {"Task Category", "Category", "#e0e7ff", "📁"},
+            {"Close Category", "Close Category", "#e0e7ff", "📁"},
+            {"Task Category", "Close Category", "#e0e7ff", "📁"},
             {"CompletedDateTime", "Completed", "#dbeafe", "✅"},
     };
 

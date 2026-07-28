@@ -167,11 +167,29 @@ def normalize_task(raw: dict) -> dict:
         'minutes_created': _to_int(raw.get('MinutsCreated') or raw.get('MinutesCreated')),
         'cli': raw.get('CLI') or raw.get('cli') or '',
         'category': raw.get('Category') or raw.get('category') or '',
+        'created_date_time': (
+            raw.get('CD') or raw.get('CreatedDate') or raw.get('CreatedDate1')
+            or raw.get('created_date') or raw.get('Created_Date') or ''
+        ),
         'raw_json': json.dumps(raw, default=str),
     }
 
 
 def _notify_payload_from_task(t: dict) -> dict:
+    created = (
+        t.get('created_date_time')
+        or ''
+    )
+    if not created:
+        # Approximate from dashboard age when CreatedDate missing
+        mins = t.get('minutes_created')
+        try:
+            if mins is not None:
+                created = (
+                    datetime.now() - timedelta(minutes=int(mins))
+                ).strftime('%d %b %Y %H:%M:%S')
+        except (TypeError, ValueError):
+            created = ''
     return {
         'task_id': t.get('task_id'),
         'amb_reg_no': t.get('ambulance_reg'),
@@ -182,7 +200,7 @@ def _notify_payload_from_task(t: dict) -> dict:
         'destination': t.get('facility') or '',
         'category': t.get('category') or '',
         'completed_date_time': '',
-        'task_create_date_time': t.get('created_date_time') or '',
+        'task_create_date_time': created,
         'minutes_open': t.get('minutes_created'),
     }
 
@@ -1185,20 +1203,22 @@ def upsert_emergency(conn, account_id: int, items: list, today: date,
         )
         had_prior = cur.fetchone() is not None
 
-        existing = {}  # tid -> (id, status)
+        existing = {}  # tid -> (id, status, excel_created_date, created_date1, created_time)
         for i in range(0, len(tids), 500):
             chunk = tids[i:i + 500]
             cur.execute(
                 """
-                SELECT DISTINCT ON (task_id_ext) id, task_id_ext, status
+                SELECT DISTINCT ON (task_id_ext)
+                       id, task_id_ext, status,
+                       excel_created_date, created_date1, created_time
                 FROM emergency_task_record
                 WHERE task_id_ext = ANY(%s)
                 ORDER BY task_id_ext, task_date DESC NULLS LAST, id DESC
                 """,
                 (chunk,),
             )
-            for rid, tid, st in cur.fetchall():
-                existing[tid] = (rid, st)
+            for rid, tid, st, ecd, cd1, ct in cur.fetchall():
+                existing[tid] = (rid, st, ecd, cd1, ct)
 
         # task_ids already known to dashboard cache → skip EMG generate
         cached_tids = set()
@@ -1221,6 +1241,15 @@ def upsert_emergency(conn, account_id: int, items: list, today: date,
             prior = existing.get(tid)
             new_status = row.get('status') or ''
             if (not skip_notify) and had_prior and row.get('task_date') == today:
+                created_dt = (
+                    row.get('excel_created_date')
+                    or row.get('created_date1')
+                    or row.get('created_time')
+                    or (prior[2] if prior else None)
+                    or (prior[3] if prior else None)
+                    or (prior[4] if prior else None)
+                    or ''
+                )
                 payload = {
                     'task_id': tid,
                     'amb_reg_no': row.get('amb_reg_no'),
@@ -1231,7 +1260,7 @@ def upsert_emergency(conn, account_id: int, items: list, today: date,
                     'destination': row.get('facility_name') or '',
                     'category': row.get('category') or '',
                     'completed_date_time': row.get('completed_date_time') or '',
-                    'task_create_date_time': row.get('excel_created_date') or '',
+                    'task_create_date_time': created_dt,
                 }
                 if prior is None:
                     # Fallback generate: dashboard never saw this task
