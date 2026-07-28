@@ -209,9 +209,9 @@ public class NotificationPollingService extends Service {
             ch.enableVibration(true);
             mgr.createNotificationChannel(ch);
         }
-        Intent intent = new Intent(this, MainActivity.class);
-        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-        if (link != null) intent.putExtra("notification_link", link);
+        Intent intent = (link != null && !link.trim().isEmpty())
+                ? NotificationPopupActivity.createIntent(this, link)
+                : new Intent(this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         PendingIntent pi = PendingIntent.getActivity(this, id, intent,
                 PendingIntent.FLAG_ONE_SHOT | PendingIntent.FLAG_IMMUTABLE);
         NotificationCompat.Builder b = new NotificationCompat.Builder(this, NOTIF_CHANNEL_ID)
