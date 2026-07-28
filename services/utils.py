@@ -306,7 +306,10 @@ def generate_excel_template(
 _SALT_DRIVER_PROFILE = "driver-profile-share-v1"
 _MAX_AGE_DRIVER_PROFILE = 86400  # 24 hours
 _SALT_NOTIFICATION_POPUP = "notification-popup-v1"
-_MAX_AGE_NOTIFICATION_POPUP = 900  # 15 minutes
+# Read-only Android notification popup token. Keep it time-limited, but long
+# enough that a user can open a notification later in the day without hitting
+# an "expired" popup after normal delivery/open delays.
+_MAX_AGE_NOTIFICATION_POPUP = 86400  # 24 hours
 
 
 def make_driver_profile_share_token(secret_key: str, driver_id: int) -> str:

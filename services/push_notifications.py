@@ -117,17 +117,16 @@ def send_push(user_id, title, body, data=None, link=None):
 
     for tok in tokens:
         try:
+            # Data-only FCM is required for Android custom tap handling.
+            # If we send a top-level notification payload, Android may let the
+            # system build the tray notification itself when the app is in the
+            # background/killed state, which bypasses our native pending intent
+            # and reopens the default launcher/login flow instead of popup mode.
             message = messaging.Message(
-                notification=messaging.Notification(title=title, body=body),
                 data=payload_data,
                 token=tok.fcm_token,
                 android=messaging.AndroidConfig(
                     priority='high',
-                    notification=messaging.AndroidNotification(
-                        sound='default',
-                        channel_id='fleet_attendance',
-                        proxy='deny',
-                    ),
                 ),
             )
             messaging.send(message)
@@ -227,17 +226,13 @@ def broadcast_push_all(title, body, data=None, link=None):
 
     for tok in tokens:
         try:
+            # Keep Android pushes data-only so FleetFirebaseMessagingService
+            # always creates the notification with our popup pending intent.
             message = messaging.Message(
-                notification=messaging.Notification(title=title, body=body),
                 data=payload_data,
                 token=tok.fcm_token,
                 android=messaging.AndroidConfig(
                     priority='high',
-                    notification=messaging.AndroidNotification(
-                        sound='default',
-                        channel_id='fleet_attendance',
-                        proxy='deny',
-                    ),
                 ),
             )
             messaging.send(message)
