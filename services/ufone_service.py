@@ -2440,9 +2440,9 @@ def _build_task_notify_message(ev: dict) -> str:
             _clean_notify_text(ev.get('completed_date_time')) or '—'
         )
         return (
-            f'CreateDateTime: {created}, Task ID: {tid}, '
+            f'Task Create Date/Time: {created}, Task ID: {tid}, '
             f'Phone no: {phone}, Name: {name}, Pickup: {pickup}, '
-            f'Destination: {dest}, Close Category: {category}, '
+            f'Destination: {dest}, Task Category: {category}, '
             f'CompletedDateTime: {completed}'
         )
 
@@ -2461,7 +2461,7 @@ def _build_task_notify_message(ev: dict) -> str:
 
     # generate (default)
     return (
-        f'CreateDateTime: {created}, Task ID: {tid}, '
+        f'Task Create Date/Time: {created}, Task ID: {tid}, '
         f'Phone no: {phone} CLI: {cli}, Name: {name}, '
         f'Pickup: {pickup}, Destination: {dest}'
     )
