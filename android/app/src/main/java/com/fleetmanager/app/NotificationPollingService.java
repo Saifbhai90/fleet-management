@@ -20,6 +20,7 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.Timer;
@@ -37,6 +38,12 @@ public class NotificationPollingService extends Service {
     private static final String SYNC_CHANNEL_ID = "sync_service";
     private static final String NOTIF_CHANNEL_ID = "fleet_attendance";
     private static final int FOREGROUND_ID = 9001;
+
+    private static final Set<String> TASK_POPUP_TITLES = new HashSet<>(Arrays.asList(
+            "New Task Generate",
+            "Task Complete",
+            "Task close karwa dein"
+    ));
 
     private Timer pollTimer;
     private SharedPreferences prefs;
@@ -172,6 +179,7 @@ public class NotificationPollingService extends Service {
                         n.optString("title", "Fleet Manager"),
                         n.optString("message", n.optString("body", "")),
                         n.optString("link", null),
+                        n.optString("created_at", ""),
                         Integer.parseInt(id));
                 newCount++;
             }
@@ -200,7 +208,7 @@ public class NotificationPollingService extends Service {
         catch (Exception e) { return null; }
     }
 
-    private void showNotification(String title, String body, String link, int id) {
+    private void showNotification(String title, String body, String link, String createdAt, int id) {
         NotificationManager mgr = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
         if (mgr == null) return;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -209,8 +217,11 @@ public class NotificationPollingService extends Service {
             ch.enableVibration(true);
             mgr.createNotificationChannel(ch);
         }
+        boolean saveEnabled = title != null && TASK_POPUP_TITLES.contains(title);
+        String popupSource = saveEnabled ? "ufone_task_event" : "generic";
         Intent intent = (link != null && !link.trim().isEmpty())
-                ? NotificationPopupActivity.createIntent(this, link)
+                ? NotificationPopupActivity.createIntent(
+                        this, link, title, body, saveEnabled, popupSource, createdAt != null ? createdAt : "")
                 : new Intent(this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         PendingIntent pi = PendingIntent.getActivity(this, id, intent,
                 PendingIntent.FLAG_ONE_SHOT | PendingIntent.FLAG_IMMUTABLE);

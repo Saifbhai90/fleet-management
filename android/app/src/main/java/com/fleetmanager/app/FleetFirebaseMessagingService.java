@@ -61,10 +61,10 @@ public class FleetFirebaseMessagingService extends FirebaseMessagingService {
             link = message.getData().get("link");
         }
 
-        showNotification(title, body, link);
+        showNotification(title, body, link, message.getData());
     }
 
-    private void showNotification(String title, String body, String link) {
+    private void showNotification(String title, String body, String link, java.util.Map<String, String> data) {
         NotificationManager manager =
                 (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
         if (manager == null) return;
@@ -77,8 +77,15 @@ public class FleetFirebaseMessagingService extends FirebaseMessagingService {
             manager.createNotificationChannel(channel);
         }
 
+        boolean saveEnabled = data != null && "1".equals(data.get("save_enabled"));
+        String popupSource = data != null && data.get("popup_source") != null
+                ? data.get("popup_source") : "generic";
+        String createdAt = data != null && data.get("created_at") != null
+                ? data.get("created_at") : "";
+
         Intent intent = (link != null && !link.trim().isEmpty())
-                ? NotificationPopupActivity.createIntent(this, link)
+                ? NotificationPopupActivity.createIntent(
+                        this, link, title, body, saveEnabled, popupSource, createdAt)
                 : new Intent(this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
 
         PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, intent,

@@ -102,6 +102,7 @@ def send_push(user_id, title, body, data=None, link=None):
     payload_data['popup_mode'] = '1'
     payload_data['title'] = title or ''
     payload_data['body'] = body or ''
+    payload_data['created_at'] = datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')
     if title in _TASK_POPUP_TITLES:
         payload_data['save_enabled'] = '1'
         payload_data['popup_source'] = 'ufone_task_event'
@@ -211,6 +212,7 @@ def broadcast_push_all(title, body, data=None, link=None):
     payload_data['popup_mode'] = '1'
     payload_data['title'] = title or ''
     payload_data['body'] = body or ''
+    payload_data['created_at'] = datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')
     if title in _TASK_POPUP_TITLES:
         payload_data['save_enabled'] = '1'
         payload_data['popup_source'] = 'ufone_task_event'

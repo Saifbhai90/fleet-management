@@ -94,7 +94,7 @@ public final class FleetServerProbe {
         }
     }
 
-    private static boolean hasDeviceInternet(Context context) {
+    public static boolean hasDeviceInternet(Context context) {
         android.net.ConnectivityManager cm =
                 (android.net.ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
         if (cm == null) {

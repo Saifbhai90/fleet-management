@@ -18,8 +18,11 @@ import android.text.TextUtils;
 import android.view.ViewGroup;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
+import android.webkit.WebResourceError;
+import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
+import android.webkit.WebViewClient;
 
 import androidx.appcompat.app.AppCompatActivity;
 
@@ -29,15 +32,39 @@ import java.io.OutputStream;
 
 public class NotificationPopupActivity extends AppCompatActivity {
     public static final String EXTRA_NOTIFICATION_LINK = "notification_link";
+    public static final String EXTRA_NOTIFICATION_TITLE = "notification_title";
+    public static final String EXTRA_NOTIFICATION_BODY = "notification_body";
+    public static final String EXTRA_SAVE_ENABLED = "notification_save_enabled";
+    public static final String EXTRA_POPUP_SOURCE = "notification_popup_source";
+    public static final String EXTRA_CREATED_AT = "notification_created_at";
+
+    private static final String OFFLINE_POPUP_ASSET = "file:///android_asset/notification_popup.html";
 
     private WebView webView;
 
     public static Intent createIntent(Context context, String link) {
+        return createIntent(context, link, "", "", false, "generic", "");
+    }
+
+    public static Intent createIntent(
+            Context context,
+            String link,
+            String title,
+            String body,
+            boolean saveEnabled,
+            String popupSource,
+            String createdAt
+    ) {
         Intent intent = new Intent(context, NotificationPopupActivity.class);
         intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         if (link != null && !link.trim().isEmpty()) {
             intent.putExtra(EXTRA_NOTIFICATION_LINK, link.trim());
         }
+        intent.putExtra(EXTRA_NOTIFICATION_TITLE, title != null ? title : "");
+        intent.putExtra(EXTRA_NOTIFICATION_BODY, body != null ? body : "");
+        intent.putExtra(EXTRA_SAVE_ENABLED, saveEnabled);
+        intent.putExtra(EXTRA_POPUP_SOURCE, popupSource != null && !popupSource.isEmpty() ? popupSource : "generic");
+        intent.putExtra(EXTRA_CREATED_AT, createdAt != null ? createdAt : "");
         return intent;
     }
 
@@ -78,6 +105,25 @@ public class NotificationPopupActivity extends AppCompatActivity {
         super.onDestroy();
     }
 
+    private String resolvePopupLink(String link) {
+        String target = link.trim();
+        if (target.startsWith("/")) {
+            String base = FleetServerProbe.readServerBaseUrl(this);
+            if (base != null && !base.isEmpty()) {
+                target = base.replaceAll("/+$", "") + target;
+            }
+        }
+        return target;
+    }
+
+    private void loadOfflinePopup() {
+        if (webView == null) {
+            return;
+        }
+        webView.setWebViewClient(new WebViewClient());
+        webView.loadUrl(OFFLINE_POPUP_ASSET);
+    }
+
     private void loadPopupUrl(Intent intent) {
         if (webView == null || intent == null) {
             return;
@@ -87,17 +133,82 @@ public class NotificationPopupActivity extends AppCompatActivity {
             finish();
             return;
         }
-        String target = link.trim();
-        if (target.startsWith("/")) {
-            target = FleetServerProbe.readServerBaseUrl(this).replaceAll("/+$", "") + target;
+
+        if (!FleetServerProbe.hasDeviceInternet(this)) {
+            loadOfflinePopup();
+            return;
         }
-        webView.loadUrl(target);
+
+        final String serverUrl = resolvePopupLink(link);
+        webView.setWebViewClient(new WebViewClient() {
+            private boolean usedFallback = false;
+
+            @Override
+            public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+                if (usedFallback || request == null || !request.isForMainFrame()) {
+                    return;
+                }
+                usedFallback = true;
+                loadOfflinePopup();
+            }
+
+            @Override
+            @SuppressWarnings("deprecation")
+            public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
+                if (usedFallback) {
+                    return;
+                }
+                usedFallback = true;
+                loadOfflinePopup();
+            }
+        });
+        webView.loadUrl(serverUrl);
+    }
+
+    private String extractTokenFromLink(String link) {
+        if (link == null || link.isEmpty()) {
+            return "";
+        }
+        int idx = link.indexOf("t=");
+        if (idx < 0) {
+            return "";
+        }
+        String tokenPart = link.substring(idx + 2);
+        int amp = tokenPart.indexOf('&');
+        if (amp >= 0) {
+            tokenPart = tokenPart.substring(0, amp);
+        }
+        return tokenPart.trim();
     }
 
     public class PopupNativeBridge {
         @JavascriptInterface
         public void closeNotificationPopup() {
             runOnUiThread(NotificationPopupActivity.this::finishAndRemoveTask);
+        }
+
+        @JavascriptInterface
+        public String getNotificationPayload() {
+            Intent intent = getIntent();
+            if (intent == null) {
+                return "{}";
+            }
+            try {
+                JSONObject obj = new JSONObject();
+                String link = intent.getStringExtra(EXTRA_NOTIFICATION_LINK);
+                obj.put("link", link != null ? link : "");
+                obj.put("title", intent.getStringExtra(EXTRA_NOTIFICATION_TITLE));
+                obj.put("message", intent.getStringExtra(EXTRA_NOTIFICATION_BODY));
+                obj.put("save_enabled", intent.getBooleanExtra(EXTRA_SAVE_ENABLED, false));
+                obj.put("source", intent.getStringExtra(EXTRA_POPUP_SOURCE));
+                obj.put("created_at", intent.getStringExtra(EXTRA_CREATED_AT));
+                obj.put("token", extractTokenFromLink(link));
+                String base = FleetServerProbe.readServerBaseUrl(NotificationPopupActivity.this);
+                obj.put("server_base", base != null ? base : "");
+                return obj.toString();
+            } catch (Exception e) {
+                return "{}";
+            }
         }
 
         @JavascriptInterface
