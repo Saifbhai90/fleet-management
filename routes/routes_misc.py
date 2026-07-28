@@ -23,7 +23,10 @@ from datetime import datetime, date, timedelta
 from sqlalchemy import func, text, or_, and_
 from werkzeug.utils import secure_filename
 from auth_utils import user_can_access, check_password
-from utils import pk_now, pk_date, parse_date, format_date_ddmmyyyy
+from utils import (
+    pk_now, pk_date, parse_date, format_date_ddmmyyyy,
+    load_notification_popup_token,
+)
 import re
 import os
 import json
@@ -456,6 +459,27 @@ def mobile_init():
     resp.set_cookie('fleet_native_app', '1', max_age=31536000, path='/',
                     secure=True, httponly=False, samesite='Lax')
     return resp
+
+
+@app.route('/api/public/notification-popup', methods=['GET'])
+def api_public_notification_popup():
+    """Read-only, signed notification popup payload for Android notification taps."""
+    token = (request.args.get('t') or '').strip()
+    if not token:
+        return jsonify({'ok': False, 'error': 'Missing token'}), 400
+    data = load_notification_popup_token(current_app.config.get('SECRET_KEY') or '', token)
+    if not data:
+        return jsonify({'ok': False, 'error': 'Invalid or expired token'}), 410
+    return jsonify({'ok': True, 'notification': data})
+
+
+@app.route('/notification-popup')
+def notification_popup():
+    """Fullscreen public popup page used only for Android notification taps."""
+    token = (request.args.get('t') or '').strip()
+    if not token:
+        abort(404)
+    return render_template('notification_popup_public.html', popup_token=token)
 
 
 

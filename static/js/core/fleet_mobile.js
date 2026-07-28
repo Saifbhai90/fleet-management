@@ -406,7 +406,7 @@
     return;
   }
 
-  if (currentPath === '/mobile-init' || currentPath === '/login') return;
+  if (currentPath === '/mobile-init' || currentPath === '/login' || currentPath === '/notification-popup') return;
   window.location.replace('/mobile-init');
 })();
 

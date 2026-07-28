@@ -5,11 +5,44 @@ Sends notifications to user devices via Firebase Admin SDK.
 
 import os
 import logging
+from datetime import datetime
 
 _firebase_app = None
 _initialized = False
 
 logger = logging.getLogger(__name__)
+
+_TASK_POPUP_TITLES = {
+    'New Task Generate',
+    'Task Complete',
+    'Task close karwa dein',
+}
+
+
+def _build_popup_link(title, body, *, notification_type='info', original_link=None):
+    """Create a signed short-lived popup link for Android notification taps."""
+    try:
+        from flask import current_app
+        from utils import make_notification_popup_token
+    except Exception:
+        return None
+    try:
+        token = make_notification_popup_token(
+            current_app.config['SECRET_KEY'],
+            {
+                'title': title,
+                'message': body,
+                'type': notification_type or 'info',
+                'source': 'ufone_task_event' if title in _TASK_POPUP_TITLES else 'generic',
+                'save_enabled': title in _TASK_POPUP_TITLES,
+                'created_at': datetime.utcnow().isoformat(),
+                'original_link': original_link or '',
+            },
+        )
+        return f'/notification-popup?t={token}'
+    except Exception as exc:
+        logger.warning('popup link build failed: %s', exc)
+        return None
 
 
 def _init_firebase():
@@ -64,9 +97,20 @@ def send_push(user_id, title, body, data=None, link=None):
         return 0
 
     payload_data = dict(data or {})
-    if link:
-        payload_data['click_action'] = link
-        payload_data['link'] = link
+    popup_link = _build_popup_link(title, body, original_link=link)
+    click_link = popup_link or link
+    payload_data['popup_mode'] = '1'
+    payload_data['title'] = title or ''
+    payload_data['body'] = body or ''
+    if title in _TASK_POPUP_TITLES:
+        payload_data['save_enabled'] = '1'
+        payload_data['popup_source'] = 'ufone_task_event'
+    else:
+        payload_data['save_enabled'] = '0'
+        payload_data['popup_source'] = 'generic'
+    if click_link:
+        payload_data['click_action'] = click_link
+        payload_data['link'] = click_link
 
     success_count = 0
     stale_ids = []
@@ -163,9 +207,20 @@ def broadcast_push_all(title, body, data=None, link=None):
         return 0
 
     payload_data = dict(data or {})
-    if link:
-        payload_data['click_action'] = link
-        payload_data['link'] = link
+    popup_link = _build_popup_link(title, body, original_link=link)
+    click_link = popup_link or link
+    payload_data['popup_mode'] = '1'
+    payload_data['title'] = title or ''
+    payload_data['body'] = body or ''
+    if title in _TASK_POPUP_TITLES:
+        payload_data['save_enabled'] = '1'
+        payload_data['popup_source'] = 'ufone_task_event'
+    else:
+        payload_data['save_enabled'] = '0'
+        payload_data['popup_source'] = 'generic'
+    if click_link:
+        payload_data['click_action'] = click_link
+        payload_data['link'] = click_link
 
     success_count = 0
     stale_ids = []

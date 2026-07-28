@@ -182,6 +182,7 @@ def _notify_payload_from_task(t: dict) -> dict:
         'destination': t.get('facility') or '',
         'category': t.get('category') or '',
         'completed_date_time': '',
+        'task_create_date_time': t.get('created_date_time') or '',
         'minutes_open': t.get('minutes_created'),
     }
 
@@ -1230,6 +1231,7 @@ def upsert_emergency(conn, account_id: int, items: list, today: date,
                     'destination': row.get('facility_name') or '',
                     'category': row.get('category') or '',
                     'completed_date_time': row.get('completed_date_time') or '',
+                    'task_create_date_time': row.get('excel_created_date') or '',
                 }
                 if prior is None:
                     # Fallback generate: dashboard never saw this task

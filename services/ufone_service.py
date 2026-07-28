@@ -2330,17 +2330,31 @@ def _build_task_notify_message(ev: dict) -> str:
     event = ev.get('event')
 
     if event == 'close':
+        created = _clean_notify_text(
+            ev.get('task_create_date_time')
+            or ev.get('excel_created_date')
+            or ev.get('created_date_time')
+        ) or '—'
+        pickup = _clean_notify_text(ev.get('pickup')) or '—'
+        dest = _clean_notify_text(ev.get('destination')) or '—'
         category = _clean_notify_text(ev.get('category')) or '—'
         completed = _clean_notify_text(ev.get('completed_date_time')) or '—'
         return (
-            f'Task ID: {tid}, Phone no: {phone}, Name: {name}, '
-            f'Task Category: {category}, CompletedDateTime: {completed}'
+            f'Task Create Date/Time: {created}, Task ID: {tid}, '
+            f'Phone no: {phone}, Name: {name}, Pickup: {pickup}, '
+            f'Destination: {dest}, Task Category: {category}, '
+            f'CompletedDateTime: {completed}'
         )
 
     cli = _clean_notify_text(ev.get('cli')) or '—'
     pickup = _clean_notify_text(ev.get('pickup')) or '—'
     dest = _clean_notify_text(ev.get('destination')) or '—'
     amb = _clean_notify_text(ev.get('amb_reg_no') or ev.get('ambulance')) or '—'
+    created = _clean_notify_text(
+        ev.get('task_create_date_time')
+        or ev.get('excel_created_date')
+        or ev.get('created_date_time')
+    ) or '—'
 
     if event == 'overdue_close':
         dur = _format_open_duration(ev.get('minutes_open') or 90)
@@ -2352,8 +2366,9 @@ def _build_task_notify_message(ev: dict) -> str:
 
     # generate (default)
     return (
-        f'Task ID: {tid}, Phone no: {phone} CLI: {cli}, '
-        f'Name: {name}, Pickup: {pickup}, Destination: {dest}'
+        f'Task Create Date/Time: {created}, Task ID: {tid}, '
+        f'Phone no: {phone} CLI: {cli}, Name: {name}, '
+        f'Pickup: {pickup}, Destination: {dest}'
     )
 
 
@@ -2554,6 +2569,7 @@ def sync_emergency_report_to_db(account_id: int, items: list,
                     'destination': fields.get('facility_name') or '',
                     'category': fields.get('category') or '',
                     'completed_date_time': fields.get('completed_date_time') or '',
+                    'task_create_date_time': fields.get('excel_created_date') or '',
                 }
                 if is_new:
                     # Generate primary path is dashboard cache (VPS). EMG only

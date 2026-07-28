@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en" class="capacitor-native">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Notification</title>
+  <style>
+    :root {
+      --bg: #07111f;
+      --card: rgba(15, 23, 42, 0.92);
+      --line: rgba(148, 163, 184, 0.18);
+      --text: #e5eefb;
+      --muted: #9fb0c9;
+      --accent: #38bdf8;
+      --danger: #ef4444;
+      --btn: #13243c;
+      --btn2: linear-gradient(135deg, #0ea5e9, #2563eb);
+      --shadow: 0 24px 80px rgba(2, 6, 23, 0.55);
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background:
+        radial-gradient(circle at top, rgba(14,165,233,.20), transparent 36%),
+        linear-gradient(180deg, #07111f, #0b1730 42%, #07111f);
+      color: var(--text);
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    }
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 16px calc(24px + env(safe-area-inset-bottom));
+    }
+    .shell {
+      width: min(100%, 520px);
+    }
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 28px;
+      background: var(--card);
+      backdrop-filter: blur(16px);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .hero {
+      padding: 24px 24px 18px;
+      border-bottom: 1px solid var(--line);
+      background: linear-gradient(180deg, rgba(56,189,248,.14), rgba(15,23,42,0));
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      color: #cfe8ff;
+      background: rgba(30, 41, 59, 0.85);
+      border: 1px solid rgba(125, 211, 252, .16);
+      letter-spacing: .02em;
+    }
+    .title {
+      margin: 16px 0 10px;
+      font-size: 26px;
+      line-height: 1.15;
+      font-weight: 800;
+    }
+    .meta {
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .content {
+      padding: 22px 24px;
+    }
+    .message {
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      line-height: 1.6;
+      font-size: 15px;
+      color: #e8f0fd;
+    }
+    .footer {
+      display: flex;
+      gap: 12px;
+      padding: 20px 24px 24px;
+      border-top: 1px solid var(--line);
+    }
+    .btn {
+      appearance: none;
+      border: 0;
+      border-radius: 16px;
+      padding: 15px 18px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      flex: 1;
+    }
+    .btn-cancel {
+      color: #f8fafc;
+      background: var(--btn);
+      border: 1px solid rgba(148,163,184,.18);
+    }
+    .btn-save {
+      color: white;
+      background: var(--btn2);
+      box-shadow: 0 14px 30px rgba(37,99,235,.35);
+    }
+    .btn-save[disabled] {
+      cursor: not-allowed;
+      opacity: .45;
+      box-shadow: none;
+      background: #23334a;
+    }
+    .status {
+      margin-top: 14px;
+      font-size: 13px;
+      color: var(--muted);
+      min-height: 18px;
+    }
+    .loading, .error {
+      padding: 28px 24px;
+      text-align: center;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="card" id="popupCard">
+      <div class="loading" id="loadingState">Loading notification...</div>
+      <div id="popupBody" hidden>
+        <div class="hero">
+          <div class="badge" id="popupBadge">Notification</div>
+          <div class="title" id="popupTitle"></div>
+          <div class="meta" id="popupMeta"></div>
+        </div>
+        <div class="content">
+          <p class="message" id="popupMessage"></p>
+          <div class="status" id="popupStatus"></div>
+        </div>
+        <div class="footer">
+          <button class="btn btn-cancel" id="cancelBtn" type="button">Cancel</button>
+          <button class="btn btn-save" id="saveBtn" type="button" disabled>Save</button>
+        </div>
+      </div>
+      <div class="error" id="errorState" hidden>
+        <div>Notification unavailable or expired.</div>
+        <div style="margin-top:16px;">
+          <button class="btn btn-cancel" id="errorCloseBtn" type="button">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+    (function() {
+      var token = {{ popup_token|tojson }};
+      var apiUrl = '/api/public/notification-popup?t=' + encodeURIComponent(token);
+      var loading = document.getElementById('loadingState');
+      var popupBody = document.getElementById('popupBody');
+      var errorState = document.getElementById('errorState');
+      var badge = document.getElementById('popupBadge');
+      var title = document.getElementById('popupTitle');
+      var meta = document.getElementById('popupMeta');
+      var message = document.getElementById('popupMessage');
+      var status = document.getElementById('popupStatus');
+      var saveBtn = document.getElementById('saveBtn');
+      var cancelBtn = document.getElementById('cancelBtn');
+      var errorCloseBtn = document.getElementById('errorCloseBtn');
+      var currentData = null;
+
+      function closeApp() {
+        try {
+          if (window._fleetNative && typeof window._fleetNative.closeNotificationPopup === 'function') {
+            window._fleetNative.closeNotificationPopup();
+            return;
+          }
+        } catch (e) {}
+        try { window.close(); } catch (e) {}
+      }
+
+      function saveCard() {
+        if (!currentData || !currentData.save_enabled) return;
+        status.textContent = 'Saving...';
+        try {
+          if (window._fleetNative && typeof window._fleetNative.saveNotificationCard === 'function') {
+            var result = window._fleetNative.saveNotificationCard(JSON.stringify(currentData));
+            status.textContent = result || 'Saved to gallery.';
+            return;
+          }
+          status.textContent = 'Save is only available in the Android app.';
+        } catch (e) {
+          status.textContent = 'Save failed. Please try again.';
+        }
+      }
+
+      cancelBtn.addEventListener('click', closeApp);
+      errorCloseBtn.addEventListener('click', closeApp);
+      saveBtn.addEventListener('click', saveCard);
+
+      fetch(apiUrl, { credentials: 'omit' })
+        .then(function(r) { return r.json().then(function(j) { return { ok: r.ok, data: j }; }); })
+        .then(function(res) {
+          if (!res.ok || !res.data || !res.data.ok || !res.data.notification) {
+            throw new Error('invalid');
+          }
+          currentData = res.data.notification;
+          loading.hidden = true;
+          popupBody.hidden = false;
+          badge.textContent = currentData.source === 'ufone_task_event' ? 'Task Notification' : 'Notification';
+          title.textContent = currentData.title || 'Notification';
+          meta.textContent = currentData.created_at ? ('Received: ' + currentData.created_at) : 'Fleet Manager';
+          message.textContent = currentData.message || '';
+          saveBtn.disabled = !currentData.save_enabled;
+          status.textContent = currentData.save_enabled ? 'Save will export this popup card to your gallery.' : 'Save is disabled for this notification type.';
+        })
+        .catch(function() {
+          loading.hidden = true;
+          errorState.hidden = false;
+        });
+    })();
+  </script>
+</body>
+</html>

@@ -544,20 +544,34 @@ def mobile_notifications():
     from app import db
 
     from notification_service import notification_visible_to_user
+    from utils import make_notification_popup_token
 
     uid = request.jwt_payload.get('user_id')
     read_ids = {r.notification_id for r in NotificationRead.query.filter_by(user_id=uid).all()}
     notifications = Notification.query.order_by(Notification.created_at.desc()).limit(100).all()
     out = []
+    task_titles = {'New Task Generate', 'Task Complete', 'Task close karwa dein'}
     for n in notifications:
         if not notification_visible_to_user(n, uid, None, False):
             continue
+        popup_token = make_notification_popup_token(
+            current_app.config.get('SECRET_KEY') or '',
+            {
+                'title': n.title,
+                'message': n.message,
+                'type': n.notification_type,
+                'source': 'ufone_task_event' if n.title in task_titles else 'generic',
+                'save_enabled': n.title in task_titles,
+                'created_at': n.created_at.isoformat() if n.created_at else '',
+                'original_link': n.link or '',
+            },
+        )
         out.append({
             'id': n.id,
             'title': n.title,
             'message': n.message,
             'type': n.notification_type,
-            'link': n.link,
+            'link': f'/notification-popup?t={popup_token}',
             'is_read': n.id in read_ids,
             'created_at': n.created_at.isoformat() if n.created_at else None,
         })

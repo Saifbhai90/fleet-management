@@ -305,6 +305,8 @@ def generate_excel_template(
 # ---------- Public share links (e.g. Driver Profile, 24h) ----------
 _SALT_DRIVER_PROFILE = "driver-profile-share-v1"
 _MAX_AGE_DRIVER_PROFILE = 86400  # 24 hours
+_SALT_NOTIFICATION_POPUP = "notification-popup-v1"
+_MAX_AGE_NOTIFICATION_POPUP = 900  # 15 minutes
 
 
 def make_driver_profile_share_token(secret_key: str, driver_id: int) -> str:
@@ -326,6 +328,45 @@ def load_driver_profile_share_token(secret_key: str, token: str) -> Optional[int
         data = s.loads(token, max_age=_MAX_AGE_DRIVER_PROFILE)
         d = data.get("d")
         return int(d) if d is not None else None
+    except (BadSignature, SignatureExpired, TypeError, ValueError, Exception):
+        return None
+
+
+def make_notification_popup_token(secret_key: str, payload: dict) -> str:
+    """Signed token for a short-lived public notification popup."""
+    from itsdangerous import URLSafeTimedSerializer
+
+    data = {
+        "title": str(payload.get("title") or "").strip()[:200],
+        "message": str(payload.get("message") or "").strip()[:4000],
+        "type": str(payload.get("type") or "info").strip()[:50],
+        "source": str(payload.get("source") or "generic").strip()[:80],
+        "save_enabled": bool(payload.get("save_enabled")),
+        "created_at": str(payload.get("created_at") or "").strip()[:80],
+        "original_link": str(payload.get("original_link") or "").strip()[:500],
+    }
+    s = URLSafeTimedSerializer(secret_key, salt=_SALT_NOTIFICATION_POPUP)
+    return s.dumps(data)
+
+
+def load_notification_popup_token(secret_key: str, token: str) -> Optional[dict]:
+    """Return signed popup payload if valid and recent, else None."""
+    from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
+
+    s = URLSafeTimedSerializer(secret_key, salt=_SALT_NOTIFICATION_POPUP)
+    try:
+        data = s.loads(token, max_age=_MAX_AGE_NOTIFICATION_POPUP)
+        if not isinstance(data, dict):
+            return None
+        return {
+            "title": str(data.get("title") or "").strip()[:200],
+            "message": str(data.get("message") or "").strip()[:4000],
+            "type": str(data.get("type") or "info").strip()[:50],
+            "source": str(data.get("source") or "generic").strip()[:80],
+            "save_enabled": bool(data.get("save_enabled")),
+            "created_at": str(data.get("created_at") or "").strip()[:80],
+            "original_link": str(data.get("original_link") or "").strip()[:500],
+        }
     except (BadSignature, SignatureExpired, TypeError, ValueError, Exception):
         return None
 
