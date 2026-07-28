@@ -479,7 +479,12 @@ def notification_popup():
     token = (request.args.get('t') or '').strip()
     if not token:
         abort(404)
-    return render_template('notification_popup_public.html', popup_token=token)
+    notification = load_notification_popup_token(current_app.config.get('SECRET_KEY') or '', token)
+    return render_template(
+        'notification_popup_public.html',
+        popup_token=token,
+        initial_notification=notification,
+    )
 
 
 

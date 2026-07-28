@@ -166,6 +166,28 @@
       font-size: 18px;
       cursor: pointer;
     }
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: calc(24px + env(safe-area-inset-bottom));
+      transform: translateX(-50%) translateY(16px);
+      min-width: 220px;
+      max-width: calc(100% - 32px);
+      padding: 12px 16px;
+      border-radius: 14px;
+      background: rgba(15, 23, 42, 0.96);
+      border: 1px solid rgba(56, 189, 248, 0.24);
+      color: #dbeafe;
+      text-align: center;
+      font-size: 14px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .18s ease, transform .18s ease;
+    }
+    .toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
   </style>
 </head>
 <body>
@@ -199,9 +221,11 @@
       </div>
     </div>
   </div>
+  <div class="toast" id="saveToast" hidden></div>
   <script>
     (function() {
       var token = {{ popup_token|tojson }};
+      var initialNotification = {{ initial_notification|tojson }};
       var apiUrl = '/api/public/notification-popup?t=' + encodeURIComponent(token);
       var overlay = document.getElementById('overlay');
       var loading = document.getElementById('loadingState');
@@ -217,7 +241,37 @@
       var errorCloseBtn = document.getElementById('errorCloseBtn');
       var topCloseBtn = document.getElementById('topCloseBtn');
       var popupCard = document.getElementById('popupCard');
+      var saveToast = document.getElementById('saveToast');
       var currentData = null;
+      var toastTimer = null;
+
+      function showToast(text) {
+        if (!text) return;
+        if (toastTimer) window.clearTimeout(toastTimer);
+        saveToast.textContent = text;
+        saveToast.hidden = false;
+        requestAnimationFrame(function() {
+          saveToast.classList.add('show');
+        });
+        toastTimer = window.setTimeout(function() {
+          saveToast.classList.remove('show');
+          window.setTimeout(function() {
+            saveToast.hidden = true;
+          }, 220);
+        }, 1800);
+      }
+
+      function renderNotification(data) {
+        currentData = data;
+        loading.hidden = true;
+        popupBody.hidden = false;
+        badge.textContent = currentData.source === 'ufone_task_event' ? 'Task Notification' : 'Notification';
+        title.textContent = currentData.title || 'Notification';
+        meta.textContent = currentData.created_at ? ('Received: ' + currentData.created_at) : 'Fleet Manager';
+        message.textContent = currentData.message || '';
+        saveBtn.disabled = !currentData.save_enabled;
+        status.textContent = currentData.save_enabled ? 'Save will export this popup card to your gallery.' : 'Save is disabled for this notification type.';
+      }
 
       function closeApp() {
         try {
@@ -235,7 +289,9 @@
         try {
           if (window._fleetNative && typeof window._fleetNative.saveNotificationCard === 'function') {
             var result = window._fleetNative.saveNotificationCard(JSON.stringify(currentData));
-            status.textContent = result || 'Saved to gallery.';
+            var messageText = result || 'Saved to gallery.';
+            status.textContent = messageText;
+            showToast(messageText);
             return;
           }
           status.textContent = 'Save is only available in the Android app.';
@@ -255,21 +311,18 @@
         e.stopPropagation();
       });
 
+      if (initialNotification) {
+        renderNotification(initialNotification);
+        return;
+      }
+
       fetch(apiUrl, { credentials: 'omit' })
         .then(function(r) { return r.json().then(function(j) { return { ok: r.ok, data: j }; }); })
         .then(function(res) {
           if (!res.ok || !res.data || !res.data.ok || !res.data.notification) {
             throw new Error('invalid');
           }
-          currentData = res.data.notification;
-          loading.hidden = true;
-          popupBody.hidden = false;
-          badge.textContent = currentData.source === 'ufone_task_event' ? 'Task Notification' : 'Notification';
-          title.textContent = currentData.title || 'Notification';
-          meta.textContent = currentData.created_at ? ('Received: ' + currentData.created_at) : 'Fleet Manager';
-          message.textContent = currentData.message || '';
-          saveBtn.disabled = !currentData.save_enabled;
-          status.textContent = currentData.save_enabled ? 'Save will export this popup card to your gallery.' : 'Save is disabled for this notification type.';
+          renderNotification(res.data.notification);
         })
         .catch(function() {
           loading.hidden = true;
