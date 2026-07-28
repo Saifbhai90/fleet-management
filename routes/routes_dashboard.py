@@ -49,6 +49,7 @@ from routes import (
     _multi_word_filter,
     media_url_filter,
     _require_master_admin,
+    _administration_nav_back,
     _validate_csrf_exempt_origin,
     _load_pdf_writer_reader,
     _html_to_pdf_bytes,
@@ -473,6 +474,201 @@ def admin_app_releases():
         version_counts[row[0]] = row[1]
     return render_template('admin_app_releases.html', releases=releases, latest=latest, version_counts=version_counts)
 
+
+
+def _build_master_notification_test_presets():
+    """Production-style notification samples for the master test lab."""
+    from services.ufone_service import _build_task_notify_message
+
+    now = pk_now()
+    task_id = f'TEST-{now.strftime("%H%M%S")}'
+    created_at = now.strftime('%Y-%m-%d %H:%M')
+    completed_at = (now + timedelta(minutes=18)).strftime('%Y-%m-%d %H:%M')
+    task_date = pk_date().strftime('%d-%m-%Y')
+    time_label = now.strftime('%I:%M %p')
+    vehicle_no = 'AMB-TEST-01'
+    driver_name = 'Master Test Driver'
+
+    task_common = {
+        'task_id': task_id,
+        'phone': '03001234567',
+        'cli': '03007654321',
+        'patient_name': 'Master Test Notification',
+        'pickup': 'Blue Area',
+        'destination': 'PIMS Hospital',
+        'task_create_date_time': created_at,
+        'amb_reg_no': vehicle_no,
+        'category': 'Emergency',
+        'completed_date_time': completed_at,
+    }
+
+    return [
+        {
+            'slug': 'task_generate',
+            'label': 'Task Generate',
+            'title': 'New Task Generate',
+            'body': _build_task_notify_message({**task_common, 'event': 'generate'}),
+            'notification_type': 'info',
+            'link': '/mobile-init',
+            'description': 'Ufone new task generation popup with Save enabled.',
+        },
+        {
+            'slug': 'task_complete',
+            'label': 'Task Complete',
+            'title': 'Task Complete',
+            'body': _build_task_notify_message({**task_common, 'event': 'close'}),
+            'notification_type': 'success',
+            'link': '/mobile-init',
+            'description': 'Ufone task close popup with Save enabled.',
+        },
+        {
+            'slug': 'task_close_reminder',
+            'label': 'Task Close Reminder',
+            'title': 'Task close karwa dein',
+            'body': _build_task_notify_message({**task_common, 'event': 'overdue_close', 'minutes_open': 150}),
+            'notification_type': 'warning',
+            'link': '/mobile-init',
+            'description': 'Ufone overdue-close reminder popup with Save enabled.',
+        },
+        {
+            'slug': 'attendance_marked',
+            'label': 'Attendance Marked',
+            'title': 'Attendance Marked',
+            'body': (
+                f'{driver_name}, aap ki attendance check-in mark ho chuki hai. '
+                f'Photo upload ho chuki hai ({time_label}).'
+            ),
+            'notification_type': 'success',
+            'link': '/driver-attendance/checkin',
+            'description': 'GPS + Camera check-in success notification.',
+        },
+        {
+            'slug': 'checkout_complete',
+            'label': 'Check-out Complete',
+            'title': 'Check-out Complete',
+            'body': (
+                f'{driver_name}, aap ka check-out upload ho gaya hai aur duty successfully end ho gayi hai. '
+                f'({time_label})'
+            ),
+            'notification_type': 'success',
+            'link': '/driver-attendance/checkout',
+            'description': 'GPS + Camera check-out success notification.',
+        },
+        {
+            'slug': 'checkin_reminder',
+            'label': 'Check-in Reminder',
+            'title': 'Check-in reminder',
+            'body': (
+                f'{driver_name}, aaj {vehicle_no} par GPS + Camera check-in pending hai. '
+                f'Mark At Attendance se check-in karein.'
+            ),
+            'notification_type': 'warning',
+            'link': '/driver-attendance/checkin',
+            'description': 'Attendance pending reminder.',
+        },
+        {
+            'slug': 'checkout_reminder',
+            'label': 'Check-out Reminder',
+            'title': 'Check-out reminder',
+            'body': (
+                f'{driver_name}, aap ka check-out abhi pending hai. '
+                f'Mark Check-out se selfie + GPS check-out complete karein.'
+            ),
+            'notification_type': 'warning',
+            'link': '/driver-attendance/checkout',
+            'description': 'Attendance check-out pending reminder.',
+        },
+        {
+            'slug': 'vehicle_checkout_update',
+            'label': 'Vehicle Check-out Update',
+            'title': 'Vehicle check-out update',
+            'body': (
+                f'{vehicle_no}: {driver_name} ne check-out complete kar liya. '
+                f'Aap apni attendance / shift status check karein.'
+            ),
+            'notification_type': 'info',
+            'link': '/driver-attendance/checkout',
+            'description': 'Peer vehicle check-out information message.',
+        },
+        {
+            'slug': 'task_report_saved',
+            'label': 'Task Report Saved',
+            'title': 'Task Report Saved',
+            'body': f'Aap ki vehicle {vehicle_no} ki task report {task_date} par save ho gayi hai.',
+            'notification_type': 'success',
+            'link': '/task-report/new',
+            'description': 'Daily task report save confirmation.',
+        },
+        {
+            'slug': 'personal_reminder',
+            'label': 'Personal Reminder',
+            'title': 'Reminder',
+            'body': 'Aap ka personal reminder due hai. App khol kar details check karein.',
+            'notification_type': 'info',
+            'link': '/reminders',
+            'description': 'Generic reminder-style test notification.',
+        },
+    ]
+
+
+@app.route('/admin/notification-test-lab', methods=['GET', 'POST'])
+def admin_notification_test_lab():
+    """Master-only one-click notification sender for popup verification."""
+    if not _require_master_admin():
+        return redirect(url_for('dashboard'))
+
+    target_user = db.session.get(User, session.get('user_id'))
+    if not target_user:
+        flash('Master user session missing. Dobara login karein.', 'danger')
+        return redirect(url_for('dashboard'))
+
+    presets = _build_master_notification_test_presets()
+    preset_map = {p['slug']: p for p in presets}
+
+    if request.method == 'POST':
+        from services.notification_service import notify_user
+
+        action = (request.form.get('action') or 'send_one').strip().lower()
+        if action == 'send_all':
+            sent = 0
+            for preset in presets:
+                notify_user(
+                    target_user.id,
+                    preset['title'],
+                    preset['body'],
+                    link=preset.get('link'),
+                    notification_type=preset.get('notification_type') or 'info',
+                    push=True,
+                )
+                sent += 1
+            flash(f'{sent} test notifications master ko bhej di gayi hain.', 'success')
+            return redirect(url_for('admin_notification_test_lab'))
+
+        preset_key = (request.form.get('preset') or '').strip()
+        preset = preset_map.get(preset_key)
+        if not preset:
+            flash('Selected notification preset nahi mila.', 'danger')
+            return redirect(url_for('admin_notification_test_lab'))
+
+        notify_user(
+            target_user.id,
+            preset['title'],
+            preset['body'],
+            link=preset.get('link'),
+            notification_type=preset.get('notification_type') or 'info',
+            push=True,
+        )
+        flash(f'"{preset["label"]}" test notification master ko bhej di gayi hai.', 'success')
+        return redirect(url_for('admin_notification_test_lab'))
+
+    active_tokens = DeviceFCMToken.query.filter_by(user_id=target_user.id, is_active=True).count()
+    return render_template(
+        'admin_notification_test_lab.html',
+        presets=presets,
+        target_user=target_user,
+        active_tokens=active_tokens,
+        **_administration_nav_back(),
+    )
 
 
 def _target_page_dims(page_size, orientation):
