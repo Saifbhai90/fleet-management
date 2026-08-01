@@ -218,26 +218,69 @@
     );
   }
 
+  const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  /* Comment types that mark forward progress get the green dot in the mobile
+     timeline; everything else stays blue. */
+  const COMMENT_DONE_RE = /assign|complete|close|arriv|reach|deliver|handover|drop|confirm/i;
+
+  function _escHtml(v) {
+    return String(v == null ? '' : v)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  /* Timestamps arrive in whatever shape Ufone sent. Normalise the two common
+     ones to "01 Aug 2026, 22:13:14"; anything else is shown as-is. */
+  function _commentWhen(raw) {
+    const s = String(raw == null ? '' : raw).trim();
+    if (!s) return '-';
+    let m = s.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{1,2}:\d{2}(?::\d{2})?)/);
+    if (m) return `${m[3]} ${MONTH_ABBR[+m[2] - 1]} ${m[1]}, ${m[4]}`;
+    m = s.match(/^(\d{1,2}\s+[A-Za-z]{3}\s+\d{4})\s+(\d{1,2}:\d{2}(?::\d{2})?)/);
+    if (m) return `${m[1]}, ${m[2]}`;
+    return s;
+  }
+
   function _commentsHtml(data) {
     const comments = (data.comments && data.comments.length) ? data.comments : [];
+    const heading = '<h6><i class="bi bi-chat-left-text me-1"></i> Task Comments</h6><hr>';
     if (!comments.length) {
-      return '<h6><i class="bi bi-chat-left-text me-1"></i> Task Comments</h6><hr>' +
-        '<p class="text-muted small mb-0">No comments.</p>';
+      return heading + '<p class="text-muted small mb-0">No comments.</p>';
     }
-    let html = '<h6><i class="bi bi-chat-left-text me-1"></i> Task Comments</h6><hr>';
-    // data-mp-skip-cards: keep the real table inside the modal — fleet_mobile.js
-    // would otherwise replace it with card markup and hide it.
-    // data-label on each cell drives the stacked mobile layout (see #taskModal CSS).
-    html += '<div class="table-responsive"><table class="table table-sm table-bordered align-middle uf-comments-table" data-mp-skip-cards="1">';
+
+    const rows = comments.map((c) => ({
+      type: _escHtml(c.CommentType || c.comment_type || c.Comment_Type || '-'),
+      text: _escHtml(c.Comments || c.comments || '-'),
+      when: _escHtml(_commentWhen(c.CD || c.CreatedDate || c.Date || c.date_time)),
+      who: _escHtml(c.CBName || c.CreatedBy || c.created_by || '-'),
+      done: COMMENT_DONE_RE.test(c.CommentType || c.comment_type || c.Comment_Type || ''),
+    }));
+
+    let html = heading;
+
+    // Desktop: table. data-mp-skip-cards keeps fleet_mobile.js from replacing
+    // it with card markup and hiding it.
+    html += '<div class="table-responsive uf-comments-table-wrap">';
+    html += '<table class="table table-sm table-bordered align-middle uf-comments-table" data-mp-skip-cards="1">';
     html += '<thead class="table-light"><tr><th>Comment Type</th><th>Comments</th><th>Date/Time</th><th>Created By</th></tr></thead><tbody>';
-    comments.forEach((c) => {
-      const ct = c.CommentType || c.comment_type || c.Comment_Type || '-';
-      const cm = c.Comments || c.comments || '-';
-      const dt = c.CD || c.CreatedDate || c.Date || c.date_time || '-';
-      const cb = c.CBName || c.CreatedBy || c.created_by || '-';
-      html += `<tr><td data-label="Comment Type">${ct}</td><td data-label="Comments">${cm}</td><td data-label="Date/Time">${dt}</td><td data-label="Created By">${cb}</td></tr>`;
+    rows.forEach((r) => {
+      html += `<tr><td>${r.type}</td><td>${r.text}</td><td>${r.when}</td><td>${r.who}</td></tr>`;
     });
     html += '</tbody></table></div>';
+
+    // Phones: four columns never fit, so the same rows render as a timeline.
+    html += '<div class="uf-ct-timeline">';
+    rows.forEach((r) => {
+      html += `<div class="uf-ct-item${r.done ? ' is-done' : ''}"><div class="uf-ct-box">` +
+        `<div class="uf-ct-meta">` +
+        `<div class="uf-ct-author"><span>${r.who}</span><span class="uf-ct-tag">${r.type}</span></div>` +
+        `<span class="uf-ct-time">${r.when}</span>` +
+        `</div><div class="uf-ct-text">${r.text}</div></div></div>`;
+    });
+    html += '</div>';
+
     return html;
   }
 
