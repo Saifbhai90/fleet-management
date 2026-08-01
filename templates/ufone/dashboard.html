@@ -105,9 +105,21 @@
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
     border: 1px solid #e9ecef; margin-bottom: 24px;
   }
-  .uf-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+  .uf-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
   .uf-header h4 { font-weight: 700; color: #1e293b; margin: 0; display: flex; align-items: center; gap: 10px; }
   .uf-header h4 i { color: #7C3AED; }
+  .uf-header-actions {
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: flex-end;
+    max-width: 100%;
+  }
+  @media (max-width: 700px) {
+    .uf-header { flex-direction: column; align-items: stretch; }
+    .uf-header-actions { justify-content: flex-start; width: 100%; }
+    .uf-header-actions .uf-btn {
+      flex: 1 1 calc(50% - 8px); justify-content: center; min-width: 0;
+      padding: 8px 10px; font-size: 12px;
+    }
+  }
   
   .uf-btn { background: linear-gradient(135deg,#7C3AED,#5B21B6); color: #fff; border: none; padding: 8px 16px; border-radius: 8px; font-weight: 600; font-size: 13px; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
   .uf-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(124,58,237,0.3); color: #fff; }
@@ -237,7 +249,7 @@
       <h4><i class="bi bi-speedometer2"></i> Ufone Dashboard</h4>
       <small class="text-muted" id="syncTime">Live Overview</small>
     </div>
-    <div class="d-flex gap-2 align-items-center">
+    <div class="uf-header-actions">
       {{ nav_back_button() }}
       <button type="button" class="uf-btn uf-btn-outline btn-sm" id="btnPrintReport" title="Print / Preview task list">
         <i class="bi bi-eye"></i> Print / Preview
@@ -245,7 +257,9 @@
       <button type="button" class="uf-btn uf-btn-outline btn-sm" id="btnExportReport" title="Export task list">
         <i class="bi bi-file-earmark-excel"></i> Export
       </button>
-      <button class="uf-btn" id="forceRefreshBtn"><i class="bi bi-arrow-clockwise"></i> Refresh</button>
+      <button type="button" class="uf-btn btn-sm" id="forceRefreshBtn">
+        <i class="bi bi-arrow-clockwise"></i> Refresh
+      </button>
     </div>
   </div>
 
@@ -861,6 +875,7 @@ let taskListData = [];
 let taskListFilteredMode = false;
 let activeTaskCatFilter = 'all';
 let dayReportReady = false;
+let tasksLoadGen = 0;
 
 try {
   const seedEl = document.getElementById('taskListSeed');
@@ -1075,23 +1090,32 @@ function renderTaskRows(tasks, emptyMsg) {
 
 document.getElementById('taskListSearch').addEventListener('input', applyTaskListSearch);
 
-async function loadTasksForCategoryCards() {
+async function loadTasksForCategoryCards(opts) {
+  const silent = !!(opts && opts.silent);
+  const gen = ++tasksLoadGen;
   const tbody = document.getElementById('taskTableBody');
-  tbody.innerHTML = '<tr><td colspan="11" class="text-center py-4"><div class="spinner-border spinner-border-sm text-primary"></div><span class="ms-2 text-muted small">Loading category report…</span></td></tr>';
+  if (!silent && tbody) {
+    tbody.innerHTML = '<tr><td colspan="11" class="text-center py-4"><div class="spinner-border spinner-border-sm text-primary"></div><span class="ms-2 text-muted small">Loading category report…</span></td></tr>';
+  }
   const params = currentFilterParams();
-  const res = await fetch('/api/ufone/tasks/filtered?' + params.toString());
+  const res = await fetch('/api/ufone/tasks/filtered?' + params.toString(), {
+    credentials: 'same-origin',
+    cache: 'no-store',
+  });
   const data = await res.json();
+  if (gen !== tasksLoadGen) return data; // superseded by Apply / newer load
   if (data.error && !(data.tasks || []).length) {
     throw new Error(data.error);
   }
   taskListData = data.tasks || [];
   taskListFilteredMode = true;
   dayReportReady = true;
-  document.getElementById('taskTableWrap').classList.add('filtered');
-  document.getElementById('taskSectionTitle').innerHTML = '<i class="bi bi-funnel-fill text-primary"></i> Task List';
+  const wrap = document.getElementById('taskTableWrap');
+  if (wrap) wrap.classList.add('filtered');
+  const title = document.getElementById('taskSectionTitle');
+  if (title) title.innerHTML = '<i class="bi bi-funnel-fill text-primary"></i> Task List';
   const catCounts = data.category_counts || computeCategoryCounts(taskListData);
   updateTaskKpiCards(catCounts);
-  // Total Ambulances unchanged
   if (data.counts) {
     const sum = document.getElementById('fSummary');
     if (sum) {
@@ -1100,6 +1124,9 @@ async function loadTasksForCategoryCards() {
       sum.innerHTML = `<i class="bi bi-check-circle text-success"></i> <b>${data.counts.total}</b> tasks (${data.from_date} → ${data.to_date}, ${esc(distName)}) — Incomplete: <b>${data.counts.incomplete}</b>, Completed: <b>${data.counts.completed}</b>, Cancelled: <b>${data.counts.cancelled || 0}</b>`;
     }
   }
+  // Always paint rows here so callers cannot leave the spinner stuck
+  applyTaskListSearch();
+  return data;
 }
 
 let kpiClickBusy = false;
@@ -1111,14 +1138,16 @@ async function onKpiCardActivate(card) {
   setActiveKpiCard(f);
   kpiClickBusy = true;
   try {
-    // Color / in-process cards need the day EMG report (seed has mostly open tasks).
     const needsDayReport = f !== 'all' && (!dayReportReady || !taskListHasCategoryData());
     if (needsDayReport) {
-      await loadTasksForCategoryCards();
-    } else if (!taskListFilteredMode && f !== 'all') {
-      document.getElementById('taskTableWrap').classList.add('filtered');
+      await loadTasksForCategoryCards({ silent: false });
+    } else {
+      if (!taskListFilteredMode && f !== 'all') {
+        const wrap = document.getElementById('taskTableWrap');
+        if (wrap) wrap.classList.add('filtered');
+      }
+      applyTaskListSearch();
     }
-    applyTaskListSearch();
   } catch (e) {
     console.error(e);
     document.getElementById('taskTableBody').innerHTML =
@@ -1147,15 +1176,20 @@ let filterBusy = false;
 async function runFilterApply() {
   if (filterBusy) return;
   filterBusy = true;
+  const gen = ++tasksLoadGen; // cancel in-flight bootstrap / card loads
   const btn = document.getElementById('fApply');
   if (btn) btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Loading...';
   const tbody = document.getElementById('taskTableBody');
-  tbody.innerHTML = '<tr><td colspan="11" class="text-center py-5"><div class="spinner-border text-primary"></div><p class="mt-2 text-muted small mb-0">Fetching all-district report...</p></td></tr>';
+  tbody.innerHTML = '<tr><td colspan="11" class="text-center py-5"><div class="spinner-border text-primary"></div><p class="mt-2 text-muted small mb-0">Fetching filtered tasks…</p></td></tr>';
 
   const params = currentFilterParams();
   try {
-    const res = await fetch('/api/ufone/tasks/filtered?' + params.toString());
+    const res = await fetch('/api/ufone/tasks/filtered?' + params.toString(), {
+      credentials: 'same-origin',
+      cache: 'no-store',
+    });
     const data = await res.json();
+    if (gen !== tasksLoadGen) return;
     if (data.error && !(data.tasks || []).length) {
       taskListData = [];
       taskListFilteredMode = true;
@@ -1182,14 +1216,18 @@ async function runFilterApply() {
       }
     }
   } catch(e) {
-    tbody.innerHTML = '<tr><td colspan="11" class="text-center text-danger py-4">Error loading filtered data. Dobara try karein.</td></tr>';
+    if (gen === tasksLoadGen) {
+      tbody.innerHTML = '<tr><td colspan="11" class="text-center text-danger py-4">Error loading filtered data. Dobara try karein.</td></tr>';
+    }
+  } finally {
+    if (btn) btn.innerHTML = '<i class="bi bi-funnel-fill"></i> Apply';
+    filterBusy = false;
   }
-  if (btn) btn.innerHTML = '<i class="bi bi-funnel-fill"></i> Apply';
-  filterBusy = false;
 }
 
 document.getElementById('fApply').addEventListener('click', function(e) {
   e.preventDefault();
+  e.stopPropagation();
   runFilterApply();
 });
 
@@ -1340,13 +1378,16 @@ setActiveKpiCard('in_process');
 ensureFilterDates();
 applyTaskListSearch();
 
-// Warm day EMG report so color cards filter immediately (web + mobile)
+// Warm day EMG report so color cards filter immediately (web + mobile).
+// silent:true — do not replace Task List with a spinner (avoids Apply race on WebView).
 (async function bootstrapDayReport() {
   try {
-    await loadTasksForCategoryCards();
-    activeTaskCatFilter = 'in_process';
-    setActiveKpiCard('in_process');
-    applyTaskListSearch();
+    await loadTasksForCategoryCards({ silent: true });
+    if (activeTaskCatFilter !== 'in_process') {
+      activeTaskCatFilter = 'in_process';
+      setActiveKpiCard('in_process');
+      applyTaskListSearch();
+    }
   } catch (e) {
     console.warn('day report bootstrap skipped', e);
     activeTaskCatFilter = 'in_process';
