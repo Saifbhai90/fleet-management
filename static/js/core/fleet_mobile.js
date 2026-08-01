@@ -199,6 +199,11 @@
             // Build card list
             var cardList = document.createElement('div');
             cardList.className = 'mp-card-list';
+            /* Pages with their own search box opt out, otherwise the auto
+               search bar duplicates it and resets on every card rebuild. */
+            if (tbl.getAttribute('data-mp-skip-search') === '1') {
+                cardList.dataset.mpSearchDone = '1';
+            }
 
             var rows = tbl.querySelectorAll('tbody tr');
             if (rows.length === 0) {
@@ -232,6 +237,10 @@
             wrapper.parentNode.insertBefore(cardList, wrapper.nextSibling);
             wrapper.classList.add('mp-hide-mobile');
 
+            // Remember what we generated so fleetRebuildMobileCards() can undo it
+            tbl._mpCardList = cardList;
+            tbl._mpWrapper = wrapper;
+
             // Hide .table-footer sibling (record count bar)
             var sib = wrapper.nextSibling;
             // skip the cardList we just inserted
@@ -245,6 +254,35 @@
             }
         });
     }
+
+    /* ── Rebuild cards for a table whose tbody was replaced by JS ──────────
+       Pages that re-render rows client-side (filters, search, live refresh)
+       must call this, otherwise mobile keeps showing the card snapshot taken
+       at page load while the real — now hidden — table holds the new rows. */
+    window.fleetRebuildMobileCards = function(target) {
+        var tbl = (typeof target === 'string') ? document.querySelector(target) : target;
+        if (!tbl || tbl.dataset.mpBuilt === 'skip-cards') return;
+
+        var oldList = tbl._mpCardList;
+        if (oldList) {
+            var searchWrap = oldList.previousElementSibling;
+            if (searchWrap && searchWrap.classList.contains('mp-search-wrap')) {
+                searchWrap.parentNode.removeChild(searchWrap);
+            }
+            var footer = oldList.nextElementSibling;
+            if (footer && footer.classList.contains('mp-table-footer-mobile')) {
+                footer.parentNode.removeChild(footer);
+            }
+            if (oldList.parentNode) oldList.parentNode.removeChild(oldList);
+        }
+        if (tbl._mpWrapper) tbl._mpWrapper.classList.remove('mp-hide-mobile');
+        tbl._mpCardList = null;
+        tbl._mpWrapper = null;
+        delete tbl.dataset.mpBuilt;
+
+        buildAllCards();
+        addCardSearch();
+    };
 
     /* ── Multi-word AND match: every word must appear somewhere in text ── */
     function multiWordMatch(text, query) {

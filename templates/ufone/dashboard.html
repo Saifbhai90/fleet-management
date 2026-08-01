@@ -412,7 +412,7 @@
         </div>
         <script type="application/json" id="taskListSeed">{{ tasks|tojson }}</script>
         <div class="table-responsive" id="taskTableWrap">
-          <table class="table table-hover uf-table mb-0" id="ufoneDashboardTaskTable">
+          <table class="table table-hover uf-table mb-0" id="ufoneDashboardTaskTable" data-mp-skip-search="1">
             <thead>
               <tr>
                 <th>Task ID</th>
@@ -1098,11 +1098,26 @@ function taskTotalTimeHtml(t) {
   return `<span class="uf-total-time ${cls}">Total Time: ${esc(label)}</span>`;
 }
 
+/* Mobile shows a card list built from the table rows; the real table is hidden.
+   That snapshot is taken once at page load, so every re-render must ask
+   fleet_mobile.js to rebuild it or mobile keeps showing the old rows. */
+let mobileCardsRebuildTimer = null;
+function refreshMobileTaskCards() {
+  if (typeof window.fleetRebuildMobileCards !== 'function') return;
+  clearTimeout(mobileCardsRebuildTimer);
+  mobileCardsRebuildTimer = setTimeout(function() {
+    try {
+      window.fleetRebuildMobileCards('#ufoneDashboardTaskTable');
+    } catch (e) { console.warn('mobile card rebuild failed', e); }
+  }, 60);
+}
+
 function renderTaskRows(tasks, emptyMsg) {
   const tbody = document.getElementById('taskTableBody');
   const msg = emptyMsg || 'No tasks match the selected filters.';
   if (!tasks.length) {
     tbody.innerHTML = `<tr><td colspan="11" class="text-center text-muted py-4"><i class="bi bi-inbox-fill d-block mb-2" style="font-size:24px;"></i>${esc(msg)}</td></tr>`;
+    refreshMobileTaskCards();
     return;
   }
   tbody.innerHTML = tasks.map(t => `
@@ -1119,6 +1134,7 @@ function renderTaskRows(tasks, emptyMsg) {
       <td><small>${esc(categoryOf(t)) || '-'}</small>${taskTotalTimeHtml(t)}</td>
       <td class="no-print"><button class="btn btn-sm btn-outline-secondary task-detail-btn" data-id="${esc((window.UfoneTaskDetail && UfoneTaskDetail.numericTaskId) ? UfoneTaskDetail.numericTaskId(t.task_id || t.id) : String(t.task_id || t.id || '').replace(/^PHF-/i,'').replace(/\D/g,''))}"><i class="bi bi-eye"></i></button></td>
     </tr>`).join('');
+  refreshMobileTaskCards();
 }
 
 document.getElementById('taskListSearch').addEventListener('input', applyTaskListSearch);
