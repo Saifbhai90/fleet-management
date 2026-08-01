@@ -1,5 +1,11 @@
-# Render Blueprint — one-click infra that matches this repo (see RENDER_SCALING_GUIDE.md).
-# After push: Dashboard → New → Blueprint → connect repo → apply. Set any extra secrets (R2, Firebase, mail) in the Web Service → Environment.
+# Render Blueprint — production + isolated demo environment.
+# After push: Dashboard → Blueprint → sync. Demo is a separate web service + Postgres.
+#
+# PRODUCTION: fleet-manager + company-management-db (real data, Ufone bridge ON)
+# DEMO:       fleet-manager-demo + fleet-demo-db (sample data, bridge OFF)
+#
+# Demo login (after seed): username `demo` / password `Demo@2026`
+# See docs/DEMO_ENVIRONMENT.md
 #
 # ═══════════════════════════════════════════════════════════════════════
 # INFRA CONTEXT (for future AI sessions / devs):
@@ -14,6 +20,10 @@ databases:
   - name: company-management-db
     databaseName: company_management
     user: company_app
+    plan: starter
+  - name: fleet-demo-db
+    databaseName: fleet_demo
+    user: fleet_demo_app
     plan: starter
 services:
   - type: web
@@ -37,6 +47,8 @@ services:
         value: app:app
       - key: SESSION_COOKIE_SECURE
         value: "true"
+      - key: DEMO_MODE
+        value: "0"
       - key: BACKUP_INCLUDE_UPLOADS
         value: "false"
       - key: BACKUP_EXCLUDE_TABLES
@@ -49,3 +61,36 @@ services:
       - key: UFONE_BRIDGE_TOKEN
         sync: false
 
+  - type: web
+    name: fleet-manager-demo
+    runtime: python
+    plan: starter
+    buildCommand: pip install -r requirements.txt && python -m playwright install --with-deps chromium
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --timeout 600 --workers 1 --worker-class gthread --threads 4
+    preDeployCommand: sh scripts/render_migrate.sh
+    # First successful deploy only — also re-runs idempotently on boot when DEMO_MODE=1
+    initialDeployHook: sh scripts/seed_demo.sh
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: fleet-demo-db
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: FLASK_APP
+        value: app:app
+      - key: SESSION_COOKIE_SECURE
+        value: "true"
+      - key: DEMO_MODE
+        value: "1"
+      - key: BACKUP_INCLUDE_UPLOADS
+        value: "false"
+      - key: BACKUP_EXCLUDE_TABLES
+        value: activity_log,client_activity_log,login_log,login_attempt
+      - key: BACKUP_COMPACT
+        value: "true"
+      # Keep bridge-only UI paths stable, but never accept VPS ingest (no token + DEMO_MODE block)
+      - key: UFONE_BRIDGE_ONLY
+        value: "1"
+      # Intentionally unset — do not paste production UFONE_BRIDGE_TOKEN here

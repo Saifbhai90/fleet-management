@@ -1567,6 +1567,14 @@ def _bridge_expected_token() -> str:
 
 
 def _bridge_token_ok() -> bool:
+    # Demo environment must never accept live VPS ingest into sample DB.
+    try:
+        from services.demo_env import is_demo_mode
+        if is_demo_mode():
+            return False
+    except Exception:
+        if (os.environ.get('DEMO_MODE') or '').strip().lower() in ('1', 'true', 'yes', 'on'):
+            return False
     expected = _bridge_expected_token()
     if not expected:
         return False

@@ -266,7 +266,7 @@ def inject_current_permissions():
 
 @app.context_processor
 def inject_fleet_build_context():
-    """Cache-bust + dev banner for Capacitor LAN/USB testing."""
+    """Cache-bust + dev banner for Capacitor LAN/USB testing + demo mode flag."""
     import os
     import time
     from flask import request
@@ -274,10 +274,19 @@ def inject_fleet_build_context():
     host = host_raw.split(':')[0]
     is_local = host in ('127.0.0.1', 'localhost') or host.startswith('192.168.')
     fleet_dev = is_local
+    demo_mode = False
+    try:
+        from services.demo_env import is_demo_mode
+        demo_mode = is_demo_mode()
+    except Exception:
+        demo_mode = (os.environ.get('DEMO_MODE') or '').strip().lower() in (
+            '1', 'true', 'yes', 'on',
+        )
     return {
         'fleet_asset_version': os.environ.get('FLEET_ASSET_VERSION') or str(int(time.time())),
         'fleet_server_host': host_raw,
         'fleet_mobile_dev': fleet_dev,
+        'demo_mode': demo_mode,
     }
 
 
@@ -793,6 +802,15 @@ if _run_startup_tasks:
                 print("Chart of Accounts: already up to date.")
         except Exception as e:
             print(f"CoA seed skip or error: {e}")
+
+        # Demo environment sample master data (DEMO_MODE=1 only; idempotent)
+        try:
+            from services.demo_env import is_demo_mode, seed_demo_data
+            if is_demo_mode():
+                _demo = seed_demo_data(app)
+                print(f"Demo seed: {_demo}")
+        except Exception as e:
+            print(f"Demo seed skip or error: {e}")
 
         # Backfill EmployeeAssignment for employees with existing M2M assignments but no history
         try:
