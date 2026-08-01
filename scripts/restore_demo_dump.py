@@ -10,7 +10,6 @@ is not on PATH.
 """
 from __future__ import annotations
 
-import io
 import os
 import shutil
 import stat
@@ -122,6 +121,22 @@ def _already_populated(database_url: str) -> bool:
         return False
 
 
+def _wipe_public_schema(database_url: str) -> None:
+    """Drop all demo objects so restore cannot collide with sample-seed rows."""
+    import psycopg2
+
+    print("Wiping demo public schema (DROP SCHEMA public CASCADE)...")
+    conn = psycopg2.connect(database_url, connect_timeout=60)
+    conn.autocommit = True
+    cur = conn.cursor()
+    cur.execute("DROP SCHEMA IF EXISTS public CASCADE")
+    cur.execute("CREATE SCHEMA public")
+    cur.execute("GRANT ALL ON SCHEMA public TO CURRENT_USER")
+    cur.execute("GRANT ALL ON SCHEMA public TO PUBLIC")
+    conn.close()
+    print("Schema wipe done")
+
+
 def _ensure_demo_login(database_url: str) -> None:
     import psycopg2
     from werkzeug.security import generate_password_hash
@@ -130,6 +145,24 @@ def _ensure_demo_login(database_url: str) -> None:
     conn = psycopg2.connect(database_url, connect_timeout=30)
     conn.autocommit = True
     cur = conn.cursor()
+    # Prod dump may leave force_password_change NULL; relax + backfill
+    try:
+        cur.execute(
+            'ALTER TABLE "user" ALTER COLUMN force_password_change DROP NOT NULL'
+        )
+    except Exception:
+        pass
+    try:
+        cur.execute(
+            """
+            UPDATE "user"
+            SET force_password_change = false
+            WHERE force_password_change IS NULL
+            """
+        )
+    except Exception as exc:
+        print("force_password_change backfill:", exc)
+
     cur.execute("SELECT id FROM role WHERE name='Master' LIMIT 1")
     row = cur.fetchone()
     if not row:
@@ -191,13 +224,14 @@ def main() -> int:
             print("Dump too small")
             return 4
 
+        # Avoid duplicate-key / FK chaos from leftover sample seed or half-restores
+        _wipe_public_schema(database_url)
+
         pg_restore = _ensure_pg_restore(work)
         print("Using", pg_restore)
         cmd = [
             str(pg_restore),
             "--verbose",
-            "--clean",
-            "--if-exists",
             "--no-owner",
             "--no-acl",
             f"--dbname={database_url}",
