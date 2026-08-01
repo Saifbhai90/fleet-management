@@ -189,8 +189,44 @@
     return d;
   }
 
+  // Status → modern colored pill: Complete=green, Incomplete/In-Process=yellow,
+  // Cancelled=red. Other fields render as plain text.
+  function _statusPillHtml(v) {
+    const s = String(v || '').toLowerCase();
+    let cls = 'st-open', icon = 'bi-arrow-repeat', text = v;
+    if (s.includes('cancel')) {
+      cls = 'st-cancel'; icon = 'bi-x-circle-fill';
+    } else if (s.includes('complete') && !s.includes('incomplete')) {
+      cls = 'st-done'; icon = 'bi-check-circle-fill'; text = 'Complete';
+    } else if (s.includes('incomplete') || s === '1' || s.includes('in-process') || s.includes('in process')) {
+      cls = 'st-open'; icon = 'bi-arrow-repeat'; text = 'In-Process';
+    } else if (!s) {
+      return '—';
+    }
+    return `<span class="uf-td-status ${cls}"><i class="bi ${icon}"></i> ${_escHtml(text)}</span>`;
+  }
+
+  let _statusCssInjected = false;
+  function _ensureStatusCss() {
+    if (_statusCssInjected) return;
+    _statusCssInjected = true;
+    const st = document.createElement('style');
+    st.textContent =
+      '.uf-td-status{display:inline-flex;align-items:center;gap:5px;padding:3px 12px;' +
+      'border-radius:20px;font-weight:700;font-size:.82rem;letter-spacing:.2px;' +
+      'box-shadow:0 1px 3px rgba(0,0,0,.12);}' +
+      '.uf-td-status.st-done{background:linear-gradient(135deg,#22a35a,#178a49);color:#fff;}' +
+      '.uf-td-status.st-open{background:linear-gradient(135deg,#f5b301,#dd9a00);color:#3a2c00;}' +
+      '.uf-td-status.st-cancel{background:linear-gradient(135deg,#e0483a,#b8332a);color:#fff;}';
+    document.head.appendChild(st);
+  }
+
   function _field(label, keys, d) {
     const v = _pick(d, keys);
+    if (label === 'Status') {
+      _ensureStatusCss();
+      return `<div class="uf-frow"><label>${label}:</label><div class="field-value${v ? '' : ' empty'}">${_statusPillHtml(v)}</div></div>`;
+    }
     return `<div class="uf-frow"><label>${label}:</label><div class="field-value${v ? '' : ' empty'}">${v || '—'}</div></div>`;
   }
 

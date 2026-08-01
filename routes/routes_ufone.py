@@ -127,32 +127,32 @@ def _client_for(account_id):
 def ufone_dashboard():
     acct_id = _get_account_id()
     accounts = _get_all_accounts()
+    # Slim first paint: do NOT load the full vehicle list into HTML (hundreds of
+    # <option>s + TomSelect init). Vehicles fill after paint via /api/ufone/positions.
     vehicles = []
     tasks = []
     stats = {'total': 0, 'active': 0, 'inactive': 0, 'with_gps': 0, 'without_gps': 0}
+    counts = {}
     error = None
 
     if acct_id:
         try:
-            # INSTANT path only — memory/DB cache. Never call Ufone HTTP here
-            # (that was freezing the page + silencing CMD access logs).
-            vehicles, tasks, stats = load_dashboard_snapshot(acct_id)
-            # Prefer today's open EMG rows for Task List seed (small JSON).
-            # Full-day Green/Yellow/… loads only on Apply / color-card click.
+            # Today's open EMG rows only — small seed for Task List.
+            tasks = load_today_in_process_tasks(acct_id) or []
+            # SQL aggregates for KPI cards — painted in HTML, no waiting on JS fetch.
             try:
-                open_tasks = load_today_in_process_tasks(acct_id)
-                if open_tasks:
-                    tasks = open_tasks
-            except Exception as se:
-                logger.warning(f"today in-process seed failed: {se}")
-            if not vehicles and not tasks:
+                counts = fetch_dashboard_counts(acct_id) or {}
+                stats['total'] = int(counts.get('total_ambulances') or 0)
+            except Exception as ce:
+                logger.warning(f"dashboard counts seed failed: {ce}")
+                counts = {}
+            if not tasks and not counts:
                 error = (
                     "Cache empty — live sync running in background. "
                     "Click Refresh in a few seconds, or open Settings → Start Polling."
                 )
 
             # Fire-and-forget warm — skip when PK VPS bridge owns Ufone HTTP.
-            from services.ufone_service import bridge_only_mode
             if not bridge_only_mode():
                 def _warm(aid=acct_id):
                     try:
@@ -183,7 +183,7 @@ def ufone_dashboard():
 
     return render_template(
         'ufone/dashboard.html',
-        vehicles=vehicles, tasks=tasks, stats=stats, counts=[],
+        vehicles=vehicles, tasks=tasks, stats=stats, counts=counts,
         incomplete_count=incomplete_count,
         districts=districts,
         accounts=accounts, current_account_id=acct_id, error=error,

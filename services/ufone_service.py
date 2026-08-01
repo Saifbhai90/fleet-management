@@ -567,8 +567,10 @@ def fetch_tasks_report(account_id: int, start_date: str, end_date: str,
         ed = today
     range_includes_today = sd <= today <= ed
 
-    def _from_db():
-        rows = _emg_db_rows_for_range(start_date, end_date)
+    def _from_db(prefetched=None):
+        # prefetched: reuse rows already loaded by the caller — the range query
+        # is the slowest part of filter Apply, never run it twice.
+        rows = prefetched if prefetched is not None else _emg_db_rows_for_range(start_date, end_date)
         if not rows:
             return []
         items = [_emg_row_to_task(r) for r in rows]
@@ -588,7 +590,7 @@ def fetch_tasks_report(account_id: int, start_date: str, end_date: str,
                 fresh = bool(latest and (datetime.now() - latest).total_seconds() < 180)
             # PK VPS owns live Ufone — serve DB even if "stale"
             if fresh or bridge_only_mode():
-                return _from_db()
+                return _from_db(prefetched=rows)
 
     # 2. Stale/missing/force → live all-district fetch (skip in bridge mode)
     if bridge_only_mode():

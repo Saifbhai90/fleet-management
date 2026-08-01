@@ -347,49 +347,49 @@
     <div class="uf-kpi k-blue" id="kpiAmb" title="Fleet ambulances (not changed by task filters)">
       <i class="bi bi-truck-front-fill uf-kpi-ic"></i>
       <div class="uf-kpi-body">
-        <div class="uf-kpi-num" id="cAmb">—</div>
+        <div class="uf-kpi-num" id="cAmb">{{ counts.total_ambulances if counts else '—' }}</div>
         <div class="uf-kpi-lbl">Total Ambulances</div>
       </div>
     </div>
     <div class="uf-kpi k-teal uf-kpi-click" data-task-filter="all" title="Show all tasks in current list">
       <i class="bi bi-clipboard-data uf-kpi-ic"></i>
       <div class="uf-kpi-body">
-        <div class="uf-kpi-num" id="cTotal">—</div>
+        <div class="uf-kpi-num" id="cTotal">{{ counts.task_total if counts else '—' }}</div>
         <div class="uf-kpi-lbl">Total Task Count</div>
       </div>
     </div>
     <div class="uf-kpi k-green uf-kpi-click" data-task-filter="green" title="Filter Green tasks">
       <i class="bi bi-check2-circle uf-kpi-ic"></i>
       <div class="uf-kpi-body">
-        <div class="uf-kpi-num" id="cGreen">—</div>
+        <div class="uf-kpi-num" id="cGreen">{{ counts.task_green if counts else '—' }}</div>
         <div class="uf-kpi-lbl">Green Tasks</div>
       </div>
     </div>
     <div class="uf-kpi k-yellow uf-kpi-click" data-task-filter="yellow" title="Filter Yellow tasks">
       <i class="bi bi-exclamation-triangle-fill uf-kpi-ic"></i>
       <div class="uf-kpi-body">
-        <div class="uf-kpi-num" id="cYellow">—</div>
+        <div class="uf-kpi-num" id="cYellow">{{ counts.task_yellow if counts else '—' }}</div>
         <div class="uf-kpi-lbl">Yellow Tasks</div>
       </div>
     </div>
     <div class="uf-kpi uf-kpi-click" style="background: linear-gradient(135deg,#e0483a,#b8332a);" data-task-filter="red" title="Filter Red tasks">
       <i class="bi bi-x-circle-fill uf-kpi-ic"></i>
       <div class="uf-kpi-body">
-        <div class="uf-kpi-num" id="cRed">—</div>
+        <div class="uf-kpi-num" id="cRed">{{ counts.task_red if counts else '—' }}</div>
         <div class="uf-kpi-lbl">Red Tasks</div>
       </div>
     </div>
     <div class="uf-kpi k-orange uf-kpi-click" data-task-filter="orange" title="Filter Orange tasks">
       <i class="bi bi-flag-fill uf-kpi-ic"></i>
       <div class="uf-kpi-body">
-        <div class="uf-kpi-num" id="cOrange">—</div>
+        <div class="uf-kpi-num" id="cOrange">{{ counts.task_orange if counts else '—' }}</div>
         <div class="uf-kpi-lbl">Orange Tasks</div>
       </div>
     </div>
     <div class="uf-kpi uf-kpi-click" style="background: linear-gradient(135deg,#2f7fe0,#1c5fb8);" data-task-filter="in_process" title="Filter In-Process tasks">
       <i class="bi bi-arrow-repeat uf-kpi-ic"></i>
       <div class="uf-kpi-body">
-        <div class="uf-kpi-num" id="cInProc">—</div>
+        <div class="uf-kpi-num" id="cInProc">{{ counts.task_in_process if counts else '—' }}</div>
         <div class="uf-kpi-lbl">In-Process Tasks</div>
       </div>
     </div>
@@ -594,11 +594,13 @@ function setCountsLoading(on) {
     grid.appendChild(badge);
   }
 }
-async function loadDashboardCounts(force) {
+async function loadDashboardCounts(force, silent) {
   if (countsLoading) return;
   countsLoading = true;
-  setCountsLoading(true);
-  showCountsStatus('Loading counts from Ufone…', 'loading');
+  if (!silent) {
+    setCountsLoading(true);
+    showCountsStatus('Loading counts from Ufone…', 'loading');
+  }
   const t0 = performance.now();
   try {
     const res = await fetch('/api/ufone/dashboard/counts' + (force ? '?force=1' : ''));
@@ -628,19 +630,21 @@ async function loadDashboardCounts(force) {
           st.textContent = 'Last Synced: —';
         }
       }
-      const secs = ((performance.now() - t0) / 1000).toFixed(1);
-      showCountsStatus(`Counts loaded in ${secs}s`, 'ok');
-      setTimeout(() => showCountsStatus('', ''), 2500);
+      if (!silent) {
+        const secs = ((performance.now() - t0) / 1000).toFixed(1);
+        showCountsStatus(`Counts loaded in ${secs}s`, 'ok');
+        setTimeout(() => showCountsStatus('', ''), 2500);
+      }
     } else if (data.error) {
-      showCountsStatus('Ufone counts load failed: ' + data.error, 'error');
+      if (!silent) showCountsStatus('Ufone counts load failed: ' + data.error, 'error');
     } else {
-      showCountsStatus('No counts returned by Ufone.', 'error');
+      if (!silent) showCountsStatus('No counts returned by Ufone.', 'error');
     }
   } catch (e) {
     console.error('counts load failed', e);
-    showCountsStatus('Counts load failed — network/server error.', 'error');
+    if (!silent) showCountsStatus('Counts load failed — network/server error.', 'error');
   } finally {
-    setCountsLoading(false);
+    if (!silent) setCountsLoading(false);
     countsLoading = false;
   }
 }
@@ -654,10 +658,21 @@ document.getElementById('forceRefreshBtn').addEventListener('click', async funct
   this.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Refresh';
 });
 
-// Lazy-load counts on page open (getDashboadCount is slow — don't block render)
-loadDashboardCounts(false);
+// KPI numbers are painted server-side (SSR SQL aggregates) — no fetch needed
+// on open. Empty SSR (cache warming) → one normal fetch as fallback.
+// A silent 3-min background refresh keeps numbers matching the VPS sync loop.
+window.__ssrCounts = {{ counts | tojson }};
+if (window.__ssrCounts && Object.keys(window.__ssrCounts).length) {
+  const st = document.getElementById('syncTime');
+  if (st && window.__ssrCounts.synced_at) {
+    st.textContent = 'Last Synced: ' + new Date(window.__ssrCounts.synced_at).toLocaleString();
+  }
+} else {
+  loadDashboardCounts(false);
+}
+setInterval(() => loadDashboardCounts(false, true), 180000);
 </script>
-<script src="{{ url_for('static', filename='js/ufone_task_detail.js') }}?v=1004"></script>
+<script src="{{ url_for('static', filename='js/ufone_task_detail.js') }}?v=1005"></script>
 <script>
 UfoneTaskDetail.init({
   taskModalEl: document.getElementById('taskModal'),
@@ -1493,7 +1508,12 @@ ensureFilterDates();
 applyTaskListSearch();
 dayReportReady = false;  // color cards trigger one filtered fetch when first needed
 
-// Set initial sync time
-document.getElementById('syncTime').textContent = 'Loaded at ' + new Date().toLocaleTimeString();
+// Initial sync time — prefer real DB sync timestamp from SSR counts
+if (window.__ssrCounts && window.__ssrCounts.synced_at) {
+  document.getElementById('syncTime').textContent =
+    'Last Synced: ' + new Date(window.__ssrCounts.synced_at).toLocaleString();
+} else {
+  document.getElementById('syncTime').textContent = 'Loaded at ' + new Date().toLocaleTimeString();
+}
 </script>
 {% endblock %}
