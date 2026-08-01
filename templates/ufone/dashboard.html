@@ -564,14 +564,21 @@ async function loadDashboardCounts(force) {
     const res = await fetch('/api/ufone/dashboard/counts' + (force ? '?force=1' : ''));
     const data = await res.json();
     const c = data.counts || {};
+    // If a filter has been Applied, the task KPI cards show filtered counts.
+    // Don't let this background unfiltered dashboard fetch overwrite them.
+    // Only force=true (Refresh button) should overwrite. Check AFTER fetch
+    // resolves so the flag (defined in a later <script>) is available.
+    const preserveTaskCards = !force && (typeof taskListFilteredMode !== 'undefined' && taskListFilteredMode);
     if (Object.keys(c).length) {
       setNum('cAmb', c.total_ambulances);
-      setNum('cTotal', c.task_total);
-      setNum('cGreen', c.task_green);
-      setNum('cYellow', c.task_yellow);
-      setNum('cRed', c.task_red);
-      setNum('cOrange', c.task_orange);
-      setNum('cInProc', c.task_in_process);
+      if (!preserveTaskCards) {
+        setNum('cTotal', c.task_total);
+        setNum('cGreen', c.task_green);
+        setNum('cYellow', c.task_yellow);
+        setNum('cRed', c.task_red);
+        setNum('cOrange', c.task_orange);
+        setNum('cInProc', c.task_in_process);
+      }
       const st = document.getElementById('syncTime');
       if (st) {
         if (c.synced_at) {
