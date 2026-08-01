@@ -152,6 +152,11 @@ def normalize_task(raw: dict) -> dict:
         'category': raw.get('Category') or raw.get('category'),
         'Category': raw.get('Category') or raw.get('category'),
         'request_for': raw.get('RequestFor'),
+        'completed_date_time': (
+            raw.get('CompletedDateTime') or raw.get('completed_date_time')
+            or raw.get('EndTime') or raw.get('end_time')
+            or raw.get('CloseTime') or raw.get('close_time')
+        ),
     }
 
 
@@ -1840,6 +1845,8 @@ def _enrich_tasks_from_emg(items: list) -> list:
             t['address'] = r.address
         if not (t.get('created_time') or '').strip() and r.created_time:
             t['created_time'] = r.created_time
+        if not (t.get('completed_date_time') or '').strip() and r.completed_date_time:
+            t['completed_date_time'] = r.completed_date_time
     return items
 
 
@@ -1860,6 +1867,7 @@ def load_tasks_from_db(account_id: int, limit: int = 50) -> list:
         ct = None
         facility_type = None
         category = None
+        completed_dt = None
         if r.raw_json:
             try:
                 rj = json.loads(r.raw_json)
@@ -1869,6 +1877,10 @@ def load_tasks_from_db(account_id: int, limit: int = 50) -> list:
                 facility_type = (rj.get('facilityType') or rj.get('facility_type')
                                  or rj.get('FacilityType'))
                 category = rj.get('Category') or rj.get('category')
+                completed_dt = (
+                    rj.get('completed_date_time') or rj.get('CompletedDateTime')
+                    or rj.get('EndTime') or rj.get('close_time')
+                )
             except Exception:
                 pass
         items.append({
@@ -1897,6 +1909,7 @@ def load_tasks_from_db(account_id: int, limit: int = 50) -> list:
             'driver_cell': None,
             'location': None,
             'category': category,
+            'completed_date_time': completed_dt,
         })
     items = _enrich_tasks_from_emg(items)
     items = sorted(
@@ -2594,6 +2607,7 @@ def _emg_row_to_task(row) -> dict:
         'category': row.category,
         'Category': row.category,
         'request_for': row.request_for,
+        'completed_date_time': row.completed_date_time,
     }
 
 

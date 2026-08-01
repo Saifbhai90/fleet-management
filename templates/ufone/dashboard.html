@@ -38,6 +38,9 @@
   .uf-kpi.k-yellow { background: linear-gradient(135deg,#eab308,#ca8a04); color: #1e293b; }
   .uf-kpi.uf-kpi-click {
     cursor: pointer; transition: transform .15s ease, box-shadow .15s ease, outline .15s ease;
+    -webkit-tap-highlight-color: rgba(255,255,255,.25);
+    touch-action: manipulation;
+    user-select: none;
   }
   .uf-kpi.uf-kpi-click:hover { transform: translateY(-2px); box-shadow: 0 8px 18px -6px rgba(0,0,0,0.35); }
   .uf-kpi.uf-kpi-click.uf-kpi-active {
@@ -197,7 +200,13 @@
     border-color: #7C3AED; background: #fff; outline: none;
     box-shadow: 0 0 0 3px rgba(124, 58, 237, .12);
   }
-  #fApply { border-radius: 8px; padding: 8px 14px; }
+  .uf-total-time {
+    display: block; margin-top: 3px; font-size: 11px; font-weight: 700;
+    color: #475569; white-space: nowrap;
+  }
+  .uf-total-time.is-open { color: #1d4ed8; }
+  .uf-total-time.is-closed { color: #047857; }
+  #fApply, #fReset { touch-action: manipulation; }
   #fReset { border-radius: 8px; padding: 8px 10px; }
   #fSummary {
     background: #F5F3FF; border: 1px solid #E9D5FF; border-radius: 8px;
@@ -260,12 +269,21 @@
         <label class="uf-flabel"><i class="bi bi-geo-alt"></i> District</label>
         <select id="fDistrict" class="form-select form-select-sm search-select">
           <option value="">All Districts</option>
+          {% for d in districts or [] %}
+          <option value="{{ d.code }}">{{ d.name }}</option>
+          {% endfor %}
         </select>
       </div>
       <div class="col-6 col-md-2">
         <label class="uf-flabel"><i class="bi bi-truck"></i> Vehicle No</label>
         <select id="fVehicle" class="form-select form-select-sm search-select">
           <option value="">All Vehicles</option>
+          {% for v in vehicles or [] %}
+            {% set reg = (v.reg_no or '')|string %}
+            {% if reg %}
+            <option value="{{ reg }}">{% if v.district %}{{ reg }}  ·  {{ v.district }}{% else %}{{ reg }}{% endif %}</option>
+            {% endif %}
+          {% endfor %}
         </select>
       </div>
       <div class="col-6 col-md-2">
@@ -278,8 +296,8 @@
         </select>
       </div>
       <div class="col-12 d-flex gap-2 mt-1">
-        <button class="uf-btn btn-sm" id="fApply" style="min-width:110px;"><i class="bi bi-funnel-fill"></i> Apply</button>
-        <button class="uf-btn uf-btn-outline btn-sm" id="fReset" title="Reset filters"><i class="bi bi-arrow-counterclockwise"></i></button>
+        <button type="button" class="uf-btn btn-sm" id="fApply" style="min-width:110px;"><i class="bi bi-funnel-fill"></i> Apply</button>
+        <button type="button" class="uf-btn uf-btn-outline btn-sm" id="fReset" title="Reset filters"><i class="bi bi-arrow-counterclockwise"></i></button>
       </div>
     </div>
     <div id="fSummary" class="small mt-2" style="display:none;"></div>
@@ -392,47 +410,17 @@
                 <th>Ambulance</th>
                 <th>District</th>
                 <th>Status</th>
-                <th>Category</th>
+                <th>Category / Total Time</th>
                 <th class="no-print">Action</th>
               </tr>
             </thead>
             <tbody id="taskTableBody">
-              {% for t in tasks[:6] %}
-              <tr>
-                <td><span class="badge bg-primary-subtle text-primary fw-bold">PHF-{{ t.task_id or t.id }}</span></td>
-                <td><small class="uf-task-date">{{ (t.created_date or '')|ufdatetime(t.created_time) or '-' }}</small></td>
-                <td class="fw-bold text-dark">{{ t.patient_name or '-' }}</td>
-                <td><small>{{ t.address or '-' }}</small></td>
-                <td><small>{{ t.facility_name or '-' }}</small></td>
-                <td><small>{{ t.facility_type or t.facilityType or '-' }}</small></td>
-                <td><span class="badge bg-light text-dark border">{{ t.ambulance or '-' }}</span></td>
-                <td><small>{{ t.district or '-' }}</small></td>
-                <td>
-                  {% set status_text = (t.status or '')|lower %}
-                  {# Incomplete BEFORE Complete — 'complete' is a substring of 'incomplete' #}
-                  {% if 'incomplete' in status_text or status_text == '1' or 'in-process' in status_text or 'in process' in status_text %}
-                  <span class="uf-badge badge-warning">In-Process</span>
-                  {% elif 'complete' in status_text %}
-                  <span class="uf-badge badge-active">Complete</span>
-                  {% else %}
-                  <span class="uf-badge badge-inactive">{{ t.status or 'Pending' }}</span>
-                  {% endif %}
-                </td>
-                <td><small>{{ t.category or t.Category or '-' }}</small></td>
-                <td class="no-print">
-                  <button class="btn btn-sm btn-outline-secondary task-detail-btn" data-id="{{ (t.task_id or t.id or '')|string|replace('PHF-','')|replace('phf-','') }}">
-                    <i class="bi bi-eye"></i>
-                  </button>
-                </td>
-              </tr>
-              {% else %}
               <tr>
                 <td colspan="11" class="text-center text-muted py-4">
-                  <i class="bi bi-inbox-fill d-block mb-2" style="font-size:24px;"></i>
-                  No tasks right now.
+                  <div class="spinner-border spinner-border-sm text-primary me-2"></div>
+                  Loading in-process tasks…
                 </td>
               </tr>
-              {% endfor %}
             </tbody>
           </table>
         </div>
@@ -631,8 +619,16 @@ if (typeof flatpickr !== 'undefined') {
     dateFormat: 'Y-m-d', altInput: true, altFormat: 'd M Y',
     defaultDate: todayStr, disableMobile: true,
   };
-  flatpickr('#fFrom', fpOpts);
-  flatpickr('#fTo', fpOpts);
+  const fpFrom = flatpickr('#fFrom', fpOpts);
+  const fpTo = flatpickr('#fTo', fpOpts);
+  try {
+    const fromEl = document.getElementById('fFrom');
+    const toEl = document.getElementById('fTo');
+    if (fromEl && !fromEl.value) fromEl.value = todayStr;
+    if (toEl && !toEl.value) toEl.value = todayStr;
+    if (fpFrom) fpFrom.setDate(todayStr, true);
+    if (fpTo) fpTo.setDate(todayStr, true);
+  } catch (e) { /* ignore */ }
 }
 
 // ── Searchable dropdowns — Fuel Expense list wala GLOBAL system ──────────────
@@ -652,7 +648,70 @@ function whenSearchReady(cb) {
 
 function selectedDistrictName() {
   const opt = fDistrictEl.options[fDistrictEl.selectedIndex];
-  return (opt && fDistrictEl.value) ? (opt.textContent || '').trim() : '';
+  const val = selectValue(fDistrictEl);
+  if (!val) return '';
+  if (opt && String(opt.value) === String(val)) return (opt.textContent || '').trim();
+  for (let i = 0; i < fDistrictEl.options.length; i++) {
+    if (String(fDistrictEl.options[i].value) === String(val)) {
+      return (fDistrictEl.options[i].textContent || '').trim();
+    }
+  }
+  return '';
+}
+
+function selectValue(el) {
+  if (!el) return '';
+  try {
+    if (el.tomselect && typeof el.tomselect.getValue === 'function') {
+      const v = el.tomselect.getValue();
+      return Array.isArray(v) ? String(v[0] || '') : String(v || '');
+    }
+  } catch (e) { /* ignore */ }
+  return String(el.value || '');
+}
+
+function dateInputValue(id) {
+  const el = document.getElementById(id);
+  if (!el) return '';
+  try {
+    if (el._flatpickr && el._flatpickr.selectedDates && el._flatpickr.selectedDates[0]) {
+      const d = el._flatpickr.selectedDates[0];
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return y + '-' + m + '-' + day;
+    }
+  } catch (e) { /* ignore */ }
+  return String(el.value || '').trim();
+}
+
+function ensureFilterDates() {
+  const todayStr = (function() {
+    const d = new Date(Date.now() + 5 * 60 * 60 * 1000);
+    return d.toISOString().slice(0, 10);
+  })();
+  ['fFrom', 'fTo'].forEach(function(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (!String(el.value || '').trim()) el.value = todayStr;
+    try {
+      if (el._flatpickr && !(el._flatpickr.selectedDates || []).length) {
+        el._flatpickr.setDate(el.value || todayStr, true);
+      }
+    } catch (e) { /* ignore */ }
+  });
+}
+
+function currentFilterParams() {
+  ensureFilterDates();
+  return new URLSearchParams({
+    from_date: dateInputValue('fFrom'),
+    to_date: dateInputValue('fTo'),
+    task_id: (document.getElementById('fTaskId') && document.getElementById('fTaskId').value || '').trim(),
+    district: selectValue(fDistrictEl),
+    vehicle: (selectValue(fVehicleEl) || '').trim(),
+    status: selectValue(document.getElementById('fStatus')),
+  });
 }
 
 // Native <select> ke options set karo, phir TomSelect (re)build karo
@@ -674,19 +733,20 @@ function setSelectOptions(el, options, placeholderText, keepValue) {
   whenSearchReady(function() { window.initSearchableDropdowns(el.parentNode); });
 }
 
-// District list — lazy load (non-blocking; cached 1h server-side)
-(async function loadDistricts() {
+// District / vehicle lists — already SSR'd; refresh in background without blanking UI
+(async function refreshDistricts() {
   try {
     const res = await fetch('/api/ufone/districts');
     const data = await res.json();
+    const list = data.districts || [];
+    if (!list.length) return;
     setSelectOptions(fDistrictEl,
-      (data.districts || []).map(d => ({ value: d.code, text: d.name })),
+      list.map(d => ({ value: d.code, text: d.name })),
       'All Districts', true);
   } catch(e) { console.error('districts load failed', e); }
 })();
 
-// Vehicle list — poori list (District se cascade/filter nahi)
-(async function loadVehicles() {
+(async function refreshVehicles() {
   try {
     const res = await fetch('/api/ufone/positions');
     const data = await res.json();
@@ -711,7 +771,7 @@ function setSelectOptions(el, options, placeholderText, keepValue) {
     });
     options.sort((a, b) =>
       a.value.localeCompare(b.value, undefined, { numeric: true }));
-    setSelectOptions(fVehicleEl, options, 'All Vehicles', true);
+    if (options.length) setSelectOptions(fVehicleEl, options, 'All Vehicles', true);
   } catch(e) { console.error('vehicles load failed', e); }
 })();
 
@@ -800,6 +860,7 @@ document.querySelectorAll('.uf-task-date[data-date]').forEach(el => {
 let taskListData = [];
 let taskListFilteredMode = false;
 let activeTaskCatFilter = 'all';
+let dayReportReady = false;
 
 try {
   const seedEl = document.getElementById('taskListSeed');
@@ -894,14 +955,99 @@ function applyTaskListSearch() {
       const hay = taskSearchHaystack(t);
       return words.every(w => hay.includes(w));
     });
-  } else if (!taskListFilteredMode && activeTaskCatFilter === 'all') {
-    rows = rows.slice(0, 6);
   }
   let emptyMsg = 'No tasks right now.';
   if (words.length) emptyMsg = 'No tasks match your search.';
   else if (activeTaskCatFilter && activeTaskCatFilter !== 'all') emptyMsg = 'No tasks match this category filter.';
   else if (taskListFilteredMode) emptyMsg = 'No tasks match the selected filters.';
   renderTaskRows(rows, emptyMsg);
+}
+
+function parseFlexibleDateTime(datePart, timePart) {
+  const rawDate = (datePart == null ? '' : String(datePart)).trim();
+  const rawTime = (timePart == null ? '' : String(timePart)).trim().split('.')[0];
+  if (!rawDate) return null;
+  let y, mo, d, hh = 0, mm = 0, ss = 0;
+
+  let m = rawDate.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s](\d{2}):(\d{2})(?::(\d{2}))?)?/);
+  if (m) {
+    y = +m[1]; mo = +m[2]; d = +m[3];
+    if (m[4] != null) { hh = +m[4]; mm = +m[5]; ss = +(m[6] || 0); }
+  }
+  if (!y) {
+    m = rawDate.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+    if (m) {
+      mo = +m[1]; d = +m[2]; y = +m[3]; if (y < 100) y += 2000;
+      if (m[4] != null) { hh = +m[4]; mm = +m[5]; ss = +(m[6] || 0); }
+    }
+  }
+  if (!y) {
+    m = rawDate.match(/^(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+    if (m) {
+      const months = {jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
+      mo = months[m[2].toLowerCase()]; d = +m[1]; y = +m[3];
+      if (m[4] != null) { hh = +m[4]; mm = +m[5]; ss = +(m[6] || 0); }
+    }
+  }
+  if (!y) {
+    m = rawDate.match(/^(\d{1,2})-(\d{1,2})-(\d{2,4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+    if (m) {
+      d = +m[1]; mo = +m[2]; y = +m[3]; if (y < 100) y += 2000;
+      if (m[4] != null) { hh = +m[4]; mm = +m[5]; ss = +(m[6] || 0); }
+    }
+  }
+  if (!y || !mo || !d) return null;
+  if (rawTime && !(String(datePart).match(/\d{1,2}:\d{2}/))) {
+    const tm = rawTime.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+    if (tm) { hh = +tm[1]; mm = +tm[2]; ss = +(tm[3] || 0); }
+  }
+  const dt = new Date(y, mo - 1, d, hh, mm, ss);
+  return isNaN(dt.getTime()) ? null : dt;
+}
+
+function taskStartDate(t) {
+  return parseFlexibleDateTime(
+    t.created_date || t.CreatedDate || t.CD || t.excel_created_date,
+    t.created_time || t.CreatedTime || t.CD_time
+  );
+}
+
+function taskCloseDate(t) {
+  const closeRaw = t.completed_date_time || t.CompletedDateTime || t.close_time
+    || t.EndTime || t.end_time || t.closed_at || '';
+  if (!closeRaw) return null;
+  return parseFlexibleDateTime(closeRaw, '');
+}
+
+function formatTotalDuration(ms) {
+  if (ms == null || !isFinite(ms) || ms < 0) return '—';
+  const totalMin = Math.floor(ms / 60000);
+  const days = Math.floor(totalMin / 1440);
+  const hours = Math.floor((totalMin % 1440) / 60);
+  const mins = totalMin % 60;
+  if (days > 0) return days + 'd ' + hours + 'h ' + mins + 'm';
+  if (hours > 0) return hours + 'h ' + mins + 'm';
+  return mins + 'm';
+}
+
+function isTaskClosedStatus(status) {
+  const st = String(status || '').toLowerCase();
+  if (!st) return false;
+  if (st.includes('incomplete') || st === '1' || st.includes('in-process') || st.includes('in process') || st.includes('pending')) {
+    return false;
+  }
+  return st.includes('complete') || st.includes('cancel');
+}
+
+function taskTotalTimeHtml(t) {
+  const start = taskStartDate(t);
+  if (!start) return '';
+  const closed = isTaskClosedStatus(t.status);
+  let end = closed ? taskCloseDate(t) : new Date();
+  if (closed && !end) return '';
+  const label = formatTotalDuration(end.getTime() - start.getTime());
+  const cls = closed ? 'is-closed' : 'is-open';
+  return `<span class="uf-total-time ${cls}">Total Time: ${esc(label)}</span>`;
 }
 
 function renderTaskRows(tasks, emptyMsg) {
@@ -922,7 +1068,7 @@ function renderTaskRows(tasks, emptyMsg) {
       <td><span class="badge bg-light text-dark border">${esc(t.ambulance) || '-'}</span></td>
       <td><small>${esc(t.district) || '-'}</small></td>
       <td>${statusBadge(t.status)}</td>
-      <td><small>${esc(categoryOf(t)) || '-'}</small></td>
+      <td><small>${esc(categoryOf(t)) || '-'}</small>${taskTotalTimeHtml(t)}</td>
       <td class="no-print"><button class="btn btn-sm btn-outline-secondary task-detail-btn" data-id="${esc((window.UfoneTaskDetail && UfoneTaskDetail.numericTaskId) ? UfoneTaskDetail.numericTaskId(t.task_id || t.id) : String(t.task_id || t.id || '').replace(/^PHF-/i,'').replace(/\D/g,''))}"><i class="bi bi-eye"></i></button></td>
     </tr>`).join('');
 }
@@ -932,14 +1078,7 @@ document.getElementById('taskListSearch').addEventListener('input', applyTaskLis
 async function loadTasksForCategoryCards() {
   const tbody = document.getElementById('taskTableBody');
   tbody.innerHTML = '<tr><td colspan="11" class="text-center py-4"><div class="spinner-border spinner-border-sm text-primary"></div><span class="ms-2 text-muted small">Loading category report…</span></td></tr>';
-  const params = new URLSearchParams({
-    from_date: document.getElementById('fFrom').value,
-    to_date: document.getElementById('fTo').value,
-    task_id: (document.getElementById('fTaskId') && document.getElementById('fTaskId').value || '').trim(),
-    district: (fDistrictEl && fDistrictEl.value) || '',
-    vehicle: (fVehicleEl && fVehicleEl.value || '').trim(),
-    status: document.getElementById('fStatus').value || '',
-  });
+  const params = currentFilterParams();
   const res = await fetch('/api/ufone/tasks/filtered?' + params.toString());
   const data = await res.json();
   if (data.error && !(data.tasks || []).length) {
@@ -947,6 +1086,7 @@ async function loadTasksForCategoryCards() {
   }
   taskListData = data.tasks || [];
   taskListFilteredMode = true;
+  dayReportReady = true;
   document.getElementById('taskTableWrap').classList.add('filtered');
   document.getElementById('taskSectionTitle').innerHTML = '<i class="bi bi-funnel-fill text-primary"></i> Task List';
   const catCounts = data.category_counts || computeCategoryCounts(taskListData);
@@ -962,63 +1102,75 @@ async function loadTasksForCategoryCards() {
   }
 }
 
-document.querySelectorAll('.uf-kpi-click').forEach(card => {
-  card.addEventListener('click', async function() {
-    const f = this.getAttribute('data-task-filter') || 'all';
-    activeTaskCatFilter = f;
-    setActiveKpiCard(f);
-    try {
-      // KPI cards use EMG categories — load date-range report if list has no Category yet
-      const needReport = f !== 'all' && !taskListHasCategoryData();
-      if (needReport || (f !== 'all' && !taskListFilteredMode && !taskListHasCategoryData())) {
-        await loadTasksForCategoryCards();
-      } else if (!taskListFilteredMode && f !== 'all') {
-        document.getElementById('taskTableWrap').classList.add('filtered');
-      }
-    } catch (e) {
-      console.error(e);
-      document.getElementById('taskTableBody').innerHTML =
-        `<tr><td colspan="11" class="text-center text-danger py-4">Category report load failed. Apply filter try karein.</td></tr>`;
-      return;
+let kpiClickBusy = false;
+
+async function onKpiCardActivate(card) {
+  if (!card || kpiClickBusy) return;
+  const f = card.getAttribute('data-task-filter') || 'all';
+  activeTaskCatFilter = f;
+  setActiveKpiCard(f);
+  kpiClickBusy = true;
+  try {
+    // Color / in-process cards need the day EMG report (seed has mostly open tasks).
+    const needsDayReport = f !== 'all' && (!dayReportReady || !taskListHasCategoryData());
+    if (needsDayReport) {
+      await loadTasksForCategoryCards();
+    } else if (!taskListFilteredMode && f !== 'all') {
+      document.getElementById('taskTableWrap').classList.add('filtered');
     }
     applyTaskListSearch();
+  } catch (e) {
+    console.error(e);
+    document.getElementById('taskTableBody').innerHTML =
+      `<tr><td colspan="11" class="text-center text-danger py-4">Category report load failed. Apply filter try karein.</td></tr>`;
+  } finally {
+    kpiClickBusy = false;
+  }
+}
+
+document.querySelectorAll('.uf-kpi-click').forEach(card => {
+  card.setAttribute('role', 'button');
+  card.setAttribute('tabindex', '0');
+  card.addEventListener('click', function(e) {
+    e.preventDefault();
+    onKpiCardActivate(this);
+  });
+  card.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onKpiCardActivate(this);
+    }
   });
 });
 
 let filterBusy = false;
-document.getElementById('fApply').addEventListener('click', async function() {
+async function runFilterApply() {
   if (filterBusy) return;
   filterBusy = true;
-  const btn = this;
-  btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Loading...';
+  const btn = document.getElementById('fApply');
+  if (btn) btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Loading...';
   const tbody = document.getElementById('taskTableBody');
-  tbody.innerHTML = '<tr><td colspan="11" class="text-center py-5"><div class="spinner-border text-primary"></div><p class="mt-2 text-muted small mb-0">Fetching all-district report from Ufone... (30-40 sec lag sakte hain)</p></td></tr>';
+  tbody.innerHTML = '<tr><td colspan="11" class="text-center py-5"><div class="spinner-border text-primary"></div><p class="mt-2 text-muted small mb-0">Fetching all-district report...</p></td></tr>';
 
-  const params = new URLSearchParams({
-    from_date: document.getElementById('fFrom').value,
-    to_date: document.getElementById('fTo').value,
-    task_id: (document.getElementById('fTaskId').value || '').trim(),
-    district: fDistrictEl.value || '',
-    vehicle: (fVehicleEl.value || '').trim(),
-    status: document.getElementById('fStatus').value || '',
-  });
+  const params = currentFilterParams();
   try {
     const res = await fetch('/api/ufone/tasks/filtered?' + params.toString());
     const data = await res.json();
     if (data.error && !(data.tasks || []).length) {
       taskListData = [];
       taskListFilteredMode = true;
+      dayReportReady = false;
       activeTaskCatFilter = 'all';
       setActiveKpiCard('all');
       tbody.innerHTML = `<tr><td colspan="11" class="text-center text-danger py-4">Ufone report failed: ${esc(data.error)}<br><small class="text-muted">Dobara Apply karein — Ufone server slow hai.</small></td></tr>`;
     } else {
       taskListData = data.tasks || [];
       taskListFilteredMode = true;
+      dayReportReady = true;
       activeTaskCatFilter = 'all';
       setActiveKpiCard('all');
       document.getElementById('taskTableWrap').classList.add('filtered');
       document.getElementById('taskSectionTitle').innerHTML = '<i class="bi bi-funnel-fill text-primary"></i> Task List';
-      // Update task KPI cards from filtered result; Total Ambulances unchanged
       const catCounts = data.category_counts || computeCategoryCounts(taskListData);
       updateTaskKpiCards(catCounts);
       applyTaskListSearch();
@@ -1032,8 +1184,13 @@ document.getElementById('fApply').addEventListener('click', async function() {
   } catch(e) {
     tbody.innerHTML = '<tr><td colspan="11" class="text-center text-danger py-4">Error loading filtered data. Dobara try karein.</td></tr>';
   }
-  btn.innerHTML = '<i class="bi bi-funnel-fill"></i> Apply';
+  if (btn) btn.innerHTML = '<i class="bi bi-funnel-fill"></i> Apply';
   filterBusy = false;
+}
+
+document.getElementById('fApply').addEventListener('click', function(e) {
+  e.preventDefault();
+  runFilterApply();
 });
 
 document.getElementById('fReset').addEventListener('click', function() {
@@ -1164,7 +1321,7 @@ function initUfonePrintExport() {
     window.fleetPrintExport('ufoneDashboardTaskTable', 'Ufone Dashboard Tasks', 'Ufone_Dashboard_Tasks.csv', {
       columnOrder: [
         'Task ID', 'Date/Time', 'Patient', 'Address', 'Facility', 'Facility Type',
-        'Ambulance', 'District', 'Status', 'Category'
+        'Ambulance', 'District', 'Status', 'Category / Total Time'
       ],
       dateColumns: ['Date/Time']
     });
@@ -1176,6 +1333,27 @@ if (document.readyState === 'loading') {
 } else {
   initUfonePrintExport();
 }
+
+// Default view: ALL in-process tasks (no 6-row preview)
+activeTaskCatFilter = 'in_process';
+setActiveKpiCard('in_process');
+ensureFilterDates();
+applyTaskListSearch();
+
+// Warm day EMG report so color cards filter immediately (web + mobile)
+(async function bootstrapDayReport() {
+  try {
+    await loadTasksForCategoryCards();
+    activeTaskCatFilter = 'in_process';
+    setActiveKpiCard('in_process');
+    applyTaskListSearch();
+  } catch (e) {
+    console.warn('day report bootstrap skipped', e);
+    activeTaskCatFilter = 'in_process';
+    setActiveKpiCard('in_process');
+    applyTaskListSearch();
+  }
+})();
 
 // Set initial sync time
 document.getElementById('syncTime').textContent = 'Loaded at ' + new Date().toLocaleTimeString();

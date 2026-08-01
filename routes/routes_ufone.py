@@ -166,10 +166,18 @@ def ufone_dashboard():
         if 'incomplete' in st or st == '1' or 'in-process' in st or 'in process' in st:
             incomplete_count += 1
 
+    districts = []
+    if acct_id:
+        try:
+            districts = get_districts_cached(acct_id) or []
+        except Exception:
+            districts = []
+
     return render_template(
         'ufone/dashboard.html',
         vehicles=vehicles, tasks=tasks, stats=stats, counts=[],
         incomplete_count=incomplete_count,
+        districts=districts,
         accounts=accounts, current_account_id=acct_id, error=error,
     )
 
