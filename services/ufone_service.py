@@ -1610,72 +1610,72 @@ def _maintenance_cache_count(account_id: int) -> int:
 
 def fetch_dashboard_counts(account_id: int, force: bool = False,
                             purpose: str = "ui") -> dict:
-    """Dashboard card counts — DB-first (Phase 1). All instant, NO Ufone HTTP.
+    """Dashboard card counts — DB SQL aggregates (instant, NO Ufone HTTP).
 
-      • Total Ambulances → ufone_vehicle_cache (DB COUNT, instant)
+      • Total Ambulances → ufone_vehicle_cache COUNT
       • Task Green/Yellow/Red/Orange/In-Process → emergency_task_record
-        (source='api', today) Category/Status columns — SQL, instant
-      • Total Task Count → sum of the above
-      • synced_at → latest sync timestamp (for freshness label)
-
-    Bridge / empty EMG fallback: derive In-Process + synced_at from
-    ufone_task_cache / ufone_vehicle_cache (PK VPS writes those).
+        SUM(CASE…) for today — never loads full rows into Python
+      • Fallback: ufone_task_cache open COUNT when EMG empty
     """
     from datetime import date as _date
-    from models import EmergencyTaskRecord, UfoneTaskCache, UfoneVehicleCache
+    from sqlalchemy import and_, case, func, or_
+    from models import EmergencyTaskRecord, UfoneTaskCache
+    from app import db
+
     now = time.time()
     total_amb = _vehicle_cache_count(account_id)
 
     try:
         today = _date.today()
-        # Prefer PK calendar day when utils available (Render often runs UTC).
         try:
             from utils import pk_date
             today = pk_date()
         except Exception:
             pass
-        rows = (EmergencyTaskRecord.query
-                .filter(EmergencyTaskRecord.task_date == today)
-                .all())
-        green = yellow = red = orange = in_process = 0
-        latest_sync = None
-        for r in rows:
-            cat = (r.category or '').strip().lower()
-            st = (r.status or '').strip().lower()
-            if cat == 'green':
-                green += 1
-            elif cat == 'yellow':
-                yellow += 1
-            elif cat == 'red':
-                red += 1
-            elif cat == 'orange':
-                orange += 1
-            elif ('incomplete' in st or st == '1'
-                  or 'in-process' in st or 'in process' in st):
-                in_process += 1
-            if r.synced_at and (latest_sync is None or r.synced_at > latest_sync):
-                latest_sync = r.synced_at
 
+        cat = func.lower(func.coalesce(EmergencyTaskRecord.category, ''))
+        st = func.lower(func.coalesce(EmergencyTaskRecord.status, ''))
+        is_colored = cat.in_(('green', 'yellow', 'red', 'orange'))
+        is_open = or_(
+            st.like('%incomplete%'),
+            st == '1',
+            st.like('%in-process%'),
+            st.like('%in process%'),
+        )
+
+        green, yellow, red, orange, in_process, latest_sync = db.session.query(
+            func.coalesce(func.sum(case((cat == 'green', 1), else_=0)), 0),
+            func.coalesce(func.sum(case((cat == 'yellow', 1), else_=0)), 0),
+            func.coalesce(func.sum(case((cat == 'red', 1), else_=0)), 0),
+            func.coalesce(func.sum(case((cat == 'orange', 1), else_=0)), 0),
+            func.coalesce(func.sum(case((and_(~is_colored, is_open), 1), else_=0)), 0),
+            func.max(EmergencyTaskRecord.synced_at),
+        ).filter(EmergencyTaskRecord.task_date == today).one()
+
+        green = int(green or 0)
+        yellow = int(yellow or 0)
+        red = int(red or 0)
+        orange = int(orange or 0)
+        in_process = int(in_process or 0)
         task_total = green + yellow + red + orange + in_process
 
         # Fallback when EMG report not yet synced (common in PK VPS bridge mode)
         if task_total == 0:
-            trows = UfoneTaskCache.query.filter_by(account_id=account_id).all()
-            for r in trows:
-                st = (r.status or '').strip().lower()
-                if ('incomplete' in st or st == '1'
-                        or 'in-process' in st or 'in process' in st):
-                    in_process += 1
-                elif 'cancel' in st:
-                    pass
-                elif 'complete' in st:
-                    # keep completed out of colored buckets unless category known
-                    pass
+            stc = func.lower(func.coalesce(UfoneTaskCache.status, ''))
+            in_process = int(
+                db.session.query(func.count(UfoneTaskCache.id))
+                .filter(UfoneTaskCache.account_id == account_id)
+                .filter(or_(
+                    stc.like('%incomplete%'),
+                    stc == '1',
+                    stc.like('%in-process%'),
+                    stc.like('%in process%'),
+                ))
+                .scalar() or 0
+            )
             task_total = in_process
 
         # Last Synced = task/EMG freshness only.
-        # Do NOT use vehicle updated_at — getAmbulanceList runs once at 11 PM
-        # and its stamp (often mixed TZ) falsely wins max() over live EMG sync.
         candidates = []
         if latest_sync:
             candidates.append(latest_sync)
@@ -1684,12 +1684,9 @@ def fetch_dashboard_counts(account_id: int, force: bool = False,
         if latest_t and latest_t.updated_at:
             candidates.append(latest_t.updated_at)
         try:
-            any_emg = (EmergencyTaskRecord.query
-                       .filter(EmergencyTaskRecord.synced_at.isnot(None))
-                       .order_by(EmergencyTaskRecord.synced_at.desc())
-                       .first())
-            if any_emg and any_emg.synced_at:
-                candidates.append(any_emg.synced_at)
+            any_emg_sync = db.session.query(func.max(EmergencyTaskRecord.synced_at)).scalar()
+            if any_emg_sync:
+                candidates.append(any_emg_sync)
         except Exception:
             pass
         if candidates:
@@ -1699,14 +1696,13 @@ def fetch_dashboard_counts(account_id: int, force: bool = False,
         if latest_sync:
             # Bridge now writes with SET TIME ZONE Asia/Karachi (naive = PKT).
             # Older UTC-naive rows: if "as PKT" is >1h in the future, treat as UTC.
-            from datetime import timezone, timedelta as _td
+            from datetime import timedelta as _td
             pk_now_naive = datetime.utcnow() + _td(hours=5)
             dt = latest_sync.replace(tzinfo=None) if getattr(latest_sync, 'tzinfo', None) else latest_sync
             as_pk = dt
             if as_pk > pk_now_naive + _td(hours=1):
                 as_pk = dt + _td(hours=5)
             elif as_pk < pk_now_naive - _td(hours=2):
-                # Likely UTC from VPS before TZ fix (e.g. 22:03 UTC → 03:03 PKT)
                 converted = dt + _td(hours=5)
                 if converted <= pk_now_naive + _td(minutes=30):
                     as_pk = converted
@@ -1740,6 +1736,41 @@ def fetch_dashboard_counts(account_id: int, force: bool = False,
             'task_orange': 0, 'task_in_process': 0, 'task_total': 0,
             'synced_at': None, 'fetched_at': now,
         }
+
+
+def load_today_in_process_tasks(account_id: int = None, limit: int = 400) -> list:
+    """Today's Incomplete/In-Process EMG rows for fast dashboard SSR seed.
+
+    Small payload — never ships the full-day completed Green/Yellow/… set.
+    account_id is accepted for API symmetry; EMG counts use task_date only
+    (same as fetch_dashboard_counts).
+    """
+    from datetime import date as _date
+    from sqlalchemy import or_
+    from models import EmergencyTaskRecord
+
+    today = _date.today()
+    try:
+        from utils import pk_date
+        today = pk_date()
+    except Exception:
+        pass
+
+    q = (
+        EmergencyTaskRecord.query
+        .filter(EmergencyTaskRecord.task_date == today)
+        .filter(or_(
+            EmergencyTaskRecord.status.ilike('%incomplete%'),
+            EmergencyTaskRecord.status == '1',
+            EmergencyTaskRecord.status.ilike('%in-process%'),
+            EmergencyTaskRecord.status.ilike('%in process%'),
+        ))
+        .order_by(EmergencyTaskRecord.id.desc())
+    )
+    if limit:
+        q = q.limit(int(limit))
+    rows = q.all()
+    return [_emg_row_to_task(r) for r in rows]
 
 
 def get_cached_positions(account_id: int) -> list:

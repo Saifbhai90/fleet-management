@@ -1237,11 +1237,14 @@ async function onKpiCardActivate(card) {
   kpiClickBusy = true;
   if (kpiClickTimer) { clearTimeout(kpiClickTimer); kpiClickTimer = null; }
   try {
-    const needsDayReport = f !== 'all' && (!dayReportReady || !taskListHasCategoryData());
+    // Open seed = today's in-process only. Any other card (all/green/…) needs
+    // one full filtered fetch; in_process can stay on the light seed.
+    const needsDayReport = f !== 'in_process'
+      && (!dayReportReady || !taskListHasCategoryData());
     if (needsDayReport) {
       await loadTasksForCategoryCards({ silent: false });
     } else {
-      if (!taskListFilteredMode && f !== 'all') {
+      if (!taskListFilteredMode && f !== 'all' && f !== 'in_process') {
         const wrap = document.getElementById('taskTableWrap');
         if (wrap) wrap.classList.add('filtered');
       }
@@ -1481,44 +1484,14 @@ if (document.readyState === 'loading') {
   initUfonePrintExport();
 }
 
-// Default view: ALL in-process tasks (no 6-row preview)
+// Default view: ALL in-process tasks from SSR seed (small payload).
+// Full-day Green/Yellow/Red/Orange rows load only on Apply or color-card click —
+// that kept first paint waiting on a multi-thousand-row JSON download.
 activeTaskCatFilter = 'in_process';
 setActiveKpiCard('in_process');
 ensureFilterDates();
 applyTaskListSearch();
-
-// Fallback: if bootstrap fetch hangs (mobile network), paint seed data after 8s
-// so the SSR spinner "Loading in-process tasks…" never stays forever.
-// Guard: only run if bootstrap hasn't succeeded yet AND user hasn't Applied.
-setTimeout(function() {
-  if (!dayReportReady && !taskListFilteredMode) {
-    activeTaskCatFilter = 'in_process';
-    setActiveKpiCard('in_process');
-    applyTaskListSearch();
-  }
-}, 8000);
-
-// Warm day EMG report so color cards filter immediately (web + mobile).
-// silent:true — do not replace Task List with a spinner (avoids Apply race on WebView).
-// IMPORTANT: do NOT reset activeTaskCatFilter after the await. If Apply or a card
-// click superseded this bootstrap (incremented tasksLoadGen), the await still
-// resolves and resetting here would clobber the user's filter selection —
-// cards would show Apply's counts but Task List would re-filter to in_process.
-(async function bootstrapDayReport() {
-  try {
-    await loadTasksForCategoryCards({ silent: true });
-    // No post-await reset — loadTasksForCategoryCards already painted if not superseded.
-    // If superseded, Apply/card-click owns the UI now.
-  } catch (e) {
-    console.warn('day report bootstrap skipped', e);
-    // Only paint fallback if no filter has been applied yet
-    if (!taskListFilteredMode) {
-      activeTaskCatFilter = 'in_process';
-      setActiveKpiCard('in_process');
-      applyTaskListSearch();
-    }
-  }
-})();
+dayReportReady = false;  // color cards trigger one filtered fetch when first needed
 
 // Set initial sync time
 document.getElementById('syncTime').textContent = 'Loaded at ' + new Date().toLocaleTimeString();

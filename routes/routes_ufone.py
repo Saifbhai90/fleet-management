@@ -20,7 +20,7 @@ from services.ufone_service import (
     fetch_live_positions, fetch_task_dashboard,
     fetch_tasks_report, get_districts_cached, fetch_dashboard_counts,
     get_cached_positions, get_summary_stats, load_dashboard_snapshot,
-    load_vehicles_from_db,
+    load_vehicles_from_db, load_today_in_process_tasks,
     get_task_detail_cached, save_task_detail_cache,
     invalidate_task_detail_cache, _sync_emergency_report_live,
     get_tehsils_cached, get_ucs_cached, fetch_maintenance,
@@ -137,6 +137,14 @@ def ufone_dashboard():
             # INSTANT path only — memory/DB cache. Never call Ufone HTTP here
             # (that was freezing the page + silencing CMD access logs).
             vehicles, tasks, stats = load_dashboard_snapshot(acct_id)
+            # Prefer today's open EMG rows for Task List seed (small JSON).
+            # Full-day Green/Yellow/… loads only on Apply / color-card click.
+            try:
+                open_tasks = load_today_in_process_tasks(acct_id)
+                if open_tasks:
+                    tasks = open_tasks
+            except Exception as se:
+                logger.warning(f"today in-process seed failed: {se}")
             if not vehicles and not tasks:
                 error = (
                     "Cache empty — live sync running in background. "
