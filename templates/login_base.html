@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" class="{% if is_native_app %}capacitor-native{% endif %}">
+<html lang="en" class="{% if is_native_app %}capacitor-native{% endif %}{% if demo_mode %} demo-login-page{% endif %}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
@@ -185,14 +185,30 @@
       font-size: 1.625rem; font-weight: 700;
       color: var(--text-dark); margin-bottom: 6px; letter-spacing: -0.02em;
     }
-    /* ── Demo walkthrough panel ── */
+    /* ── Demo notes (outside login sheet) ── */
+    .demo-notes-section {
+      position: relative;
+      z-index: 2;
+      margin: 0 16px 28px;
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    .lp-center-col.demo-wide .lp-sheet {
+      flex: 0 0 auto;
+    }
+    .lp-center-col.demo-wide {
+      min-height: auto;
+    }
+    .lp-center-col.demo-wide .lp-page-wrap,
+    .demo-wide-wrap {
+      min-height: auto;
+    }
     .demo-panel {
-      margin: 0 0 20px;
-      border: 1px solid #fdba74;
-      background: linear-gradient(165deg, #fff7ed 0%, #ffedd5 42%, #ffffff 100%);
-      border-radius: 16px;
-      padding: 14px;
-      box-shadow: 0 10px 28px rgba(234, 88, 12, 0.12);
+      margin: 0;
+      border: 1px solid rgba(253, 186, 116, 0.55);
+      background: linear-gradient(165deg, #fff7ed 0%, #ffedd5 38%, #ffffff 100%);
+      border-radius: 20px;
+      padding: 16px;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
     }
     .demo-panel-head {
       display: flex; align-items: center; justify-content: space-between; gap: 10px;
@@ -203,7 +219,10 @@
       display: inline-block; padding: 2px 8px; border-radius: 999px;
       background: #ea580c; color: #fff7ed; font-size: 11px; font-weight: 800; letter-spacing: .04em;
     }
-    .demo-panel-title { font-weight: 800; color: #9a3412; font-size: .92rem; }
+    .demo-panel-title { font-weight: 800; color: #9a3412; font-size: .95rem; }
+    .demo-panel-kicker {
+      font-size: .74rem; color: #c2410c; margin: -4px 0 12px; line-height: 1.4; font-weight: 600;
+    }
     .demo-fill-btn {
       flex-shrink: 0; border: 1px solid #fb923c; background: #fff; color: #c2410c;
       font-size: .72rem; font-weight: 700; border-radius: 999px; padding: 6px 11px; cursor: pointer;
@@ -285,7 +304,14 @@
     }
     .demo-same-text { font-size: .74rem; color: #166534; line-height: 1.45; margin: 0; }
     @media (min-width: 768px) {
-      .lp-center-col.demo-wide { max-width: 520px; }
+      .lp-center-col.demo-wide { max-width: 560px; }
+      .demo-notes-section { margin: 18px 0 40px; }
+      .lp-page-wrap:has(.demo-wide) {
+        align-items: flex-start;
+        padding-top: 28px;
+        padding-bottom: 28px;
+        min-height: auto;
+      }
     }
     @media (max-width: 420px) {
       .demo-diff-flow { grid-template-columns: 1fr; gap: 4px; }
@@ -857,11 +883,13 @@
 
     <div class="login-top-spacer" aria-hidden="true"></div>
 
-    <!-- Bottom Sheet -->
+    <!-- Bottom Sheet (login form only) -->
     <div class="lp-sheet login-card" id="lpSheet">
       <div class="lp-sheet-handle"></div>
       {% block content %}{% endblock %}
     </div>
+
+    {% block demo_notes %}{% endblock %}
 
   </div>
   </div>
