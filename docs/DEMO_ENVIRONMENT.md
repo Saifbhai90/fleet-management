@@ -16,13 +16,23 @@ Production service `fleet-manager` stays on `company-management-db` with `DEMO_M
 
 ## Activate on Render
 
-1. Push this repo (Blueprint already updated in `render.yaml`).
-2. Render Dashboard → **Blueprint** → sync / apply so new DB + web service are created.
-3. Wait for first demo deploy (migrate + `initialDeployHook` seed).
-4. Open the demo service URL (e.g. `https://fleet-manager-demo.onrender.com`).
-5. Login: **`demo` / `Demo@2026`** (full Admin permissions on demo only).
+### If `fleet-manager-demo` already exists (created via API/dashboard)
 
-Optional: also `master` / `master` and `admin` / `admin` after auth seed (password change forced off on demo).
+1. Open [fleet-manager-demo Settings](https://dashboard.render.com/web/srv-d9mpqdp42hec73e8hui0/settings).
+2. Set **Build Command** to exactly:
+   ```text
+   pip install -r requirements.txt
+   ```
+   (Do **not** use `playwright install --with-deps` — it fails on Render without root/`su`.)
+3. Environment → add `DATABASE_URL` = **Internal Database URL** from [fleet-demo-db](https://dashboard.render.com/d/dpg-d9mporh42hec73e8ee30-a) → Connect.
+4. Ensure `DEMO_MODE=1` and a unique `SECRET_KEY` (not production’s).
+5. Manual Deploy → Clear build cache & deploy.
+6. Open https://fleet-manager-demo.onrender.com — orange **DEMO** banner.
+7. Login: **`demo` / `Demo@2026`**.
+
+### Blueprint sync (optional / future)
+
+Push this repo, then Blueprint Sync if you manage infra via `render.yaml`. Demo build command in yaml is already `pip install -r requirements.txt` only.
 
 ## What auto-updates
 
