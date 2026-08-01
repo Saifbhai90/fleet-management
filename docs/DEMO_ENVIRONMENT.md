@@ -1,73 +1,55 @@
 # Demo Environment
 
-Isolated Fleet Manager for client walkthroughs. **Production data is never touched.**
+Isolated Fleet Manager for client walkthroughs. Edits on Demo do **not** change Production.
 
-## What was added
+## Resources
 
-| Resource | Name |
-|----------|------|
-| Demo web | `fleet-manager-demo` |
-| Demo Postgres | `fleet-demo-db` |
+| Resource | Name / URL |
+|----------|------------|
+| Demo web | [fleet-demo](https://fleet-demo.onrender.com) (`srv-d9mptl142hec73e8oub0`) |
+| Demo Postgres | `fleet-demo-db` (`dpg-d9mporh42hec73e8ee30-a`) |
 | Flag | `DEMO_MODE=1` on demo only |
 | Ufone bridge ingest | **Blocked** on demo |
-| Sample login | `demo` / `Demo@2026` |
+| Login (Master) | **`demo` / `Demo#2026`** |
 
-Production service `fleet-manager` stays on `company-management-db` with `DEMO_MODE=0`.
+## Clone production data → demo DB
 
-## Activate on Render
+Prod is ~1.5 GB. Demo disk must be large enough (5 GB+).
 
-### If `fleet-manager-demo` already exists (created via API/dashboard)
+1. Open [fleet-demo-db → Connect](https://dashboard.render.com/d/dpg-d9mporh42hec73e8ee30-a) and copy **External Database URL**.
+2. Install PostgreSQL client tools (`pg_dump` / `pg_restore`) if missing.
+3. From repo root:
 
-1. Open [fleet-manager-demo Settings](https://dashboard.render.com/web/srv-d9mpqdp42hec73e8hui0/settings).
-2. Set **Build Command** to exactly:
-   ```text
-   pip install -r requirements.txt
-   ```
-   (Do **not** use `playwright install --with-deps` — it fails on Render without root/`su`.)
-3. Environment → add `DATABASE_URL` = **Internal Database URL** from [fleet-demo-db](https://dashboard.render.com/d/dpg-d9mporh42hec73e8ee30-a) → Connect.
-4. Ensure `DEMO_MODE=1` and a unique `SECRET_KEY` (not production’s).
-5. Manual Deploy → Clear build cache & deploy.
-6. Open https://fleet-manager-demo.onrender.com — orange **DEMO** banner.
-7. Login: **`demo` / `Demo@2026`**.
+```powershell
+$env:DEMO_DATABASE_URL = "postgresql://...External URL from Connect..."
+powershell -File scripts/clone_prod_to_demo.ps1
+```
 
-### Blueprint sync (optional / future)
+4. On [fleet-demo → Environment](https://dashboard.render.com/web/srv-d9mptl142hec73e8oub0/env): set `DATABASE_URL` to the **Internal** Database URL (same password as External; internal hostname).
+5. Ensure `DEMO_MODE=1`, then **Manual Deploy**.
+6. Login: **`demo` / `Demo#2026`** (Master).
 
-Push this repo, then Blueprint Sync if you manage infra via `render.yaml`. Demo build command in yaml is already `pip install -r requirements.txt` only.
+The clone script dumps prod, restores into demo (`--clean`), then ensures the Master login above. Production is only read (dump), never written.
 
-## What auto-updates
+## Empty demo (sample data only)
 
-- Same Git `main` push → **both** Prod and Demo rebuild.
-- New forms / filters / code → appear on Demo after deploy.
-- New tables/columns → created on **Demo DB schema** via migrate/boot (empty tables).
+If demo DB has no companies, boot with `DEMO_MODE=1` seeds a small sample fleet plus the same Master login.
 
-## What does NOT sync
-
-- Production rows (vehicles, drivers, money, Ufone live cache).
-- Secrets (R2, Firebase, mail) — set separately on demo if needed; prefer **not** sharing prod R2 write credentials.
-- VPS Ufone bridge — leave pointed at **production** only.
-
-## Manual re-seed
-
-On the demo service shell / one-off job:
+If companies already exist (including after a prod clone), seed **skips** sample rows and only resets `demo` → Master / `Demo#2026`.
 
 ```bash
 DEMO_MODE=1 python -c "from services.demo_env import seed_demo_data; print(seed_demo_data())"
 ```
 
-Idempotent: if `Demo Fleet Co` already exists, only ensures demo user / Admin full perms.
+## What auto-updates
 
-## Mobile
-
-Current APK points at production URL. For mobile demo later:
-
-- Build a Demo APK with Capacitor `server.url` = demo site, **or**
-- Add an in-app Prod/Demo switch.
-
-Web demo is enough for Phase 1.
+- Same Git `main` push → Prod and Demo rebuild (if both auto-deploy).
+- Code/forms → Demo after deploy.
+- Production **rows** do not auto-sync; re-run the clone script when you want a fresh copy.
 
 ## Safety checklist
 
 - [ ] Demo URL shows orange **DEMO** banner
-- [ ] Editing a vehicle on demo does not change production
-- [ ] VPS bridge still posts only to production ingest URL
-- [ ] Demo env has **no** `UFONE_BRIDGE_TOKEN` matching production
+- [ ] Editing on demo does not change production
+- [ ] VPS bridge still posts only to production
+- [ ] Demo has **no** production `UFONE_BRIDGE_TOKEN`

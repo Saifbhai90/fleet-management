@@ -68,6 +68,10 @@ tools/ufone_bridge/.vps_password
 tools/ufone_bridge/deploy_key
 tools/ufone_bridge/sessions/
 
+# Local DB dump scratch (prod→demo clone)
+tmp/
+*.dump
+
 # C-01: Repo cleanup — untrack daedalOS (1,610 files) and scratch scripts
 daedalOS/
 scripts/_*.py

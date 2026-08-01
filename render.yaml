@@ -4,7 +4,7 @@
 # PRODUCTION: fleet-manager + company-management-db (real data, Ufone bridge ON)
 # DEMO:       fleet-manager-demo + fleet-demo-db (sample data, bridge OFF)
 #
-# Demo login (after seed): username `demo` / password `Demo@2026`
+# Demo login (after seed / clone): Master `demo` / `Demo#2026`
 # See docs/DEMO_ENVIRONMENT.md
 #
 # ═══════════════════════════════════════════════════════════════════════

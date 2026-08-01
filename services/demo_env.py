@@ -12,8 +12,9 @@ logger = logging.getLogger(__name__)
 
 DEMO_COMPANY_NAME = 'Demo Fleet Co'
 DEMO_PROJECT_NAME = 'Demo EMS Project'
+# Master-level walkthrough login (session is_master=True)
 DEMO_USERNAME = 'demo'
-DEMO_PASSWORD = 'Demo@2026'
+DEMO_PASSWORD = 'Demo#2026'
 
 
 def is_demo_mode() -> bool:
@@ -23,9 +24,11 @@ def is_demo_mode() -> bool:
 
 
 def seed_demo_data(app=None) -> dict:
-    """Idempotent sample data for demo environments.
+    """Idempotent demo helpers for DEMO_MODE=1.
 
-    Safe to call on every boot when DEMO_MODE=1. Skips when demo company already exists.
+    - If DB already has company rows (e.g. cloned from production): only ensure
+      Master login ``demo`` / ``Demo#2026``.
+    - If DB is empty: seed small sample fleet + that same Master login.
     """
     if not is_demo_mode():
         return {'ok': False, 'skipped': True, 'reason': 'DEMO_MODE off'}
@@ -43,14 +46,15 @@ def seed_demo_data(app=None) -> dict:
         'vehicles': 0,
         'drivers': 0,
         'user': False,
-        'admin_full_access': False,
+        'skipped_sample': False,
     }
 
     def _run():
         nonlocal created
-        company = Company.query.filter_by(name=DEMO_COMPANY_NAME).first()
-        if company:
-            _ensure_demo_user(_gph, created)
+        existing = Company.query.first()
+        if existing:
+            created['skipped_sample'] = True
+            _ensure_demo_master(_gph, created)
             db.session.commit()
             return
 
@@ -194,22 +198,13 @@ def seed_demo_data(app=None) -> dict:
             veh.driver_id = drv.id
             created['drivers'] += 1
 
-        _ensure_demo_user(_gph, created)
+        _ensure_demo_master(_gph, created)
         db.session.commit()
 
-    def _ensure_demo_user(gph, created_map):
-        admin_role = Role.query.filter_by(name='Admin').first()
+    def _ensure_demo_master(gph, created_map):
         master_role = Role.query.filter_by(name='Master').first()
-        # Free-roam demo: Admin gets all permissions on demo env
-        if admin_role and master_role:
-            master_codes = {p.id for p in master_role.permissions}
-            admin_codes = {p.id for p in admin_role.permissions}
-            if master_codes and admin_codes != master_codes:
-                admin_role.permissions = list(master_role.permissions)
-                created_map['admin_full_access'] = True
-
-        role = admin_role or master_role
-        if not role:
+        if not master_role:
+            logger.warning('Demo seed: Master role missing — cannot create demo login')
             return
 
         user = User.query.filter_by(username=DEMO_USERNAME).first()
@@ -217,23 +212,20 @@ def seed_demo_data(app=None) -> dict:
             user = User(
                 username=DEMO_USERNAME,
                 password_hash=gph(DEMO_PASSWORD),
-                full_name='Demo Client',
-                role_id=role.id,
+                full_name='Demo Master (Developer)',
+                role_id=master_role.id,
                 is_active=True,
                 force_password_change=False,
             )
             db.session.add(user)
             created_map['user'] = True
         else:
-            user.role_id = role.id
+            user.role_id = master_role.id
+            user.password_hash = gph(DEMO_PASSWORD)
+            user.full_name = user.full_name or 'Demo Master (Developer)'
             user.is_active = True
             user.force_password_change = False
-
-        # Soften first-login friction for seeded master/admin on demo only
-        for uname in ('master', 'admin', DEMO_USERNAME):
-            u = User.query.filter_by(username=uname).first()
-            if u and u.force_password_change:
-                u.force_password_change = False
+            created_map['user'] = True
 
     try:
         if app is not None:
@@ -242,7 +234,13 @@ def seed_demo_data(app=None) -> dict:
         else:
             _run()
         logger.info('Demo seed complete: %s', created)
-        return {'ok': True, 'created': created, 'login': DEMO_USERNAME}
+        return {
+            'ok': True,
+            'created': created,
+            'login': DEMO_USERNAME,
+            'password': DEMO_PASSWORD,
+            'role': 'Master',
+        }
     except Exception as exc:
         try:
             from models import db
