@@ -65,7 +65,7 @@ services:
     name: fleet-manager-demo
     runtime: python
     plan: starter
-    buildCommand: pip install -r requirements.txt && python -m playwright install --with-deps chromium
+    buildCommand: pip install -r requirements.txt
     startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --timeout 600 --workers 1 --worker-class gthread --threads 4
     preDeployCommand: sh scripts/render_migrate.sh
     # First successful deploy only — also re-runs idempotently on boot when DEMO_MODE=1
