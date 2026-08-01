@@ -225,14 +225,17 @@
         '<p class="text-muted small mb-0">No comments.</p>';
     }
     let html = '<h6><i class="bi bi-chat-left-text me-1"></i> Task Comments</h6><hr>';
-    html += '<div class="table-responsive"><table class="table table-sm table-bordered align-middle">';
+    // data-mp-skip-cards: keep the real table inside the modal — fleet_mobile.js
+    // would otherwise replace it with card markup and hide it.
+    // data-label on each cell drives the stacked mobile layout (see #taskModal CSS).
+    html += '<div class="table-responsive"><table class="table table-sm table-bordered align-middle uf-comments-table" data-mp-skip-cards="1">';
     html += '<thead class="table-light"><tr><th>Comment Type</th><th>Comments</th><th>Date/Time</th><th>Created By</th></tr></thead><tbody>';
     comments.forEach((c) => {
       const ct = c.CommentType || c.comment_type || c.Comment_Type || '-';
       const cm = c.Comments || c.comments || '-';
       const dt = c.CD || c.CreatedDate || c.Date || c.date_time || '-';
       const cb = c.CBName || c.CreatedBy || c.created_by || '-';
-      html += `<tr><td>${ct}</td><td>${cm}</td><td>${dt}</td><td>${cb}</td></tr>`;
+      html += `<tr><td data-label="Comment Type">${ct}</td><td data-label="Comments">${cm}</td><td data-label="Date/Time">${dt}</td><td data-label="Created By">${cb}</td></tr>`;
     });
     html += '</tbody></table></div>';
     return html;

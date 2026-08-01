@@ -161,19 +161,28 @@
         return 'mp-theme-blue';
     }
 
-    /* ── Main converter ── */
-    function buildAllCards() {
-        // Broad selector: any table inside a table-responsive OR explicit compact-table
-        var tables = Array.from(document.querySelectorAll(
-            '.data-table-wrapper table, .table-responsive table, table.compact-table'
-        ));
-        // Deduplicate (a table may match multiple selectors)
-        var seen = new Set();
-        tables = tables.filter(function(t) {
-            if (seen.has(t)) return false;
-            seen.add(t);
-            return true;
-        });
+    /* ── Main converter ──
+       Pass a single table to convert only that one. Converting everything is
+       for page load; a later rebuild must stay scoped, otherwise it also eats
+       tables injected after load (e.g. the Task Comments table inside the
+       Ufone task detail modal) and hides them behind card markup. */
+    function buildAllCards(onlyTable) {
+        var tables;
+        if (onlyTable) {
+            tables = [onlyTable];
+        } else {
+            // Broad selector: any table inside a table-responsive OR explicit compact-table
+            tables = Array.from(document.querySelectorAll(
+                '.data-table-wrapper table, .table-responsive table, table.compact-table'
+            ));
+            // Deduplicate (a table may match multiple selectors)
+            var seen = new Set();
+            tables = tables.filter(function(t) {
+                if (seen.has(t)) return false;
+                seen.add(t);
+                return true;
+            });
+        }
 
         tables.forEach(function(tbl) {
             if (tbl.dataset.mpBuilt) return;
@@ -280,7 +289,7 @@
         tbl._mpWrapper = null;
         delete tbl.dataset.mpBuilt;
 
-        buildAllCards();
+        buildAllCards(tbl);
         addCardSearch();
     };
 

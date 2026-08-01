@@ -507,6 +507,28 @@
     #taskModal .uf-frow label { flex-basis: 105px; font-size: 11px; }
     #taskModal .modal-dialog { max-width: 98vw; margin: 6px; }
     #taskModal .modal-body { padding: 12px; }
+    /* Task Comments: 4 columns don't fit a phone — stack each comment into a
+       labelled block instead of a side-scrolling table. */
+    #taskModal .uf-comments-table,
+    #taskModal .uf-comments-table tbody,
+    #taskModal .uf-comments-table tr,
+    #taskModal .uf-comments-table td { display: block; width: 100%; }
+    #taskModal .uf-comments-table thead { display: none; }
+    #taskModal .uf-comments-table tr {
+      border: 1px solid #e2e8f0; border-radius: 10px;
+      margin-bottom: 10px; background: #fff;
+    }
+    #taskModal .uf-comments-table td {
+      border: none; border-bottom: 1px solid #f1f5f9;
+      padding: 6px 10px; word-break: break-word;
+    }
+    #taskModal .uf-comments-table tr td:last-child { border-bottom: none; }
+    #taskModal .uf-comments-table td::before {
+      content: attr(data-label);
+      display: block; margin-bottom: 2px;
+      font-size: 10.5px; font-weight: 700; letter-spacing: .3px;
+      text-transform: uppercase; color: #64748b;
+    }
   }
 </style>
 
@@ -617,7 +639,7 @@ document.getElementById('forceRefreshBtn').addEventListener('click', async funct
 // Lazy-load counts on page open (getDashboadCount is slow — don't block render)
 loadDashboardCounts(false);
 </script>
-<script src="{{ url_for('static', filename='js/ufone_task_detail.js') }}"></script>
+<script src="{{ url_for('static', filename='js/ufone_task_detail.js') }}?v=1003"></script>
 <script>
 UfoneTaskDetail.init({
   taskModalEl: document.getElementById('taskModal'),
