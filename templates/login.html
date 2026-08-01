@@ -65,8 +65,162 @@
   </div>
 </div>
 
-<div class="lp-section-title" id="loginTitle" style="display:block;">Welcome back</div>
-<div class="lp-section-sub" id="loginSubtitle" style="display:block;">Sign in to your Fleet Manager account</div>
+<div class="lp-section-title" id="loginTitle" style="display:block;">{% if demo_mode %}Demo Login{% else %}Welcome back{% endif %}</div>
+<div class="lp-section-sub" id="loginSubtitle" style="display:block;">{% if demo_mode %}Read the notes below, then sign in with the demo Master account{% else %}Sign in to your Fleet Manager account{% endif %}</div>
+
+{% if demo_mode %}
+<div id="demoLoginHint" class="demo-panel">
+  <div class="demo-panel-head">
+    <div class="demo-panel-head-left">
+      <span class="demo-badge">DEMO</span>
+      <span class="demo-panel-title">Complete walkthrough notes</span>
+    </div>
+    <button type="button" id="demoFillCredsBtn" class="demo-fill-btn">Fill form</button>
+  </div>
+
+  <div class="demo-cred-grid">
+    <div class="demo-cred-row">
+      <span class="demo-cred-label">Username</span>
+      <code class="demo-cred-value">{{ demo_username }}</code>
+    </div>
+    <div class="demo-cred-row">
+      <span class="demo-cred-label">Password</span>
+      <code class="demo-cred-value">{{ demo_password }}</code>
+    </div>
+  </div>
+
+  <ul class="demo-notes">
+    <li><strong>Role:</strong> Master — full menu access for client demos (same power level as a production Master).</li>
+    <li><strong>What this site is:</strong> a safe practice copy of Fleet Manager. You can click, edit, and explore freely.</li>
+    <li><strong>Production safety:</strong> anything you change here stays on Demo only. Real company / production data is never updated from this login.</li>
+    <li><strong>Data inside Demo:</strong> a copied snapshot of production records (vehicles, drivers, tasks, fuel, etc.). It is for showing the system, not for day-to-day live operations.</li>
+    <li><strong>Orange DEMO banner:</strong> after login you will still see it on every page — that means you are not on the live system.</li>
+    <li><strong>How to confirm you are on Demo:</strong> URL is <strong>fleet-demo.onrender.com</strong>, banner says DEMO, and this login box is visible before sign-in.</li>
+  </ul>
+
+  <div class="demo-diff-title">Production → Demo difference (simple view)</div>
+  <div class="demo-diff-list" aria-label="Production versus Demo differences">
+
+    <div class="demo-diff-card">
+      <div class="demo-diff-topic"><i class="bi bi-database"></i> Your changes</div>
+      <div class="demo-diff-flow">
+        <div class="demo-side demo-side--prod">
+          <div class="demo-side-label"><i class="bi bi-check-circle-fill"></i> Production</div>
+          <div class="demo-side-text">Edits are real and affect live work</div>
+        </div>
+        <div class="demo-arrow" aria-hidden="true"><i class="bi bi-arrow-right"></i></div>
+        <div class="demo-side demo-side--demo">
+          <div class="demo-side-label"><i class="bi bi-shield-check"></i> Demo</div>
+          <div class="demo-side-text">Edits are practice only — production stays safe</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="demo-diff-card">
+      <div class="demo-diff-topic"><i class="bi bi-person-badge"></i> Login account</div>
+      <div class="demo-diff-flow">
+        <div class="demo-side demo-side--prod">
+          <div class="demo-side-label"><i class="bi bi-check-circle-fill"></i> Production</div>
+          <div class="demo-side-text">Staff use their real User ID / CNIC and password</div>
+        </div>
+        <div class="demo-arrow" aria-hidden="true"><i class="bi bi-arrow-right"></i></div>
+        <div class="demo-side demo-side--demo">
+          <div class="demo-side-label"><i class="bi bi-key-fill"></i> Demo</div>
+          <div class="demo-side-text">Use <strong>{{ demo_username }}</strong> / <strong>{{ demo_password }}</strong> (Master)</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="demo-diff-card">
+      <div class="demo-diff-topic"><i class="bi bi-broadcast"></i> Live Ufone / VPS sync</div>
+      <div class="demo-diff-flow">
+        <div class="demo-side demo-side--prod">
+          <div class="demo-side-label"><i class="bi bi-check-circle-fill"></i> Production</div>
+          <div class="demo-side-text">Live bridge keeps GPS / task caches updating from the VPS</div>
+        </div>
+        <div class="demo-arrow" aria-hidden="true"><i class="bi bi-arrow-right"></i></div>
+        <div class="demo-side demo-side--demo">
+          <div class="demo-side-label"><i class="bi bi-slash-circle"></i> Demo</div>
+          <div class="demo-side-text">Live bridge is <strong>blocked</strong> — no new VPS data is written here</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="demo-diff-card">
+      <div class="demo-diff-topic"><i class="bi bi-clock-history"></i> How fresh is the data?</div>
+      <div class="demo-diff-flow">
+        <div class="demo-side demo-side--prod">
+          <div class="demo-side-label"><i class="bi bi-check-circle-fill"></i> Production</div>
+          <div class="demo-side-text">Always current with daily operations</div>
+        </div>
+        <div class="demo-arrow" aria-hidden="true"><i class="bi bi-arrow-right"></i></div>
+        <div class="demo-side demo-side--demo">
+          <div class="demo-side-label"><i class="bi bi-camera"></i> Demo</div>
+          <div class="demo-side-text">Snapshot copy — stays until admin refreshes the demo database</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="demo-diff-card">
+      <div class="demo-diff-topic"><i class="bi bi-phone"></i> Mobile / push alerts</div>
+      <div class="demo-diff-flow">
+        <div class="demo-side demo-side--prod">
+          <div class="demo-side-label"><i class="bi bi-check-circle-fill"></i> Production</div>
+          <div class="demo-side-text">Real staff phones can receive live alerts</div>
+        </div>
+        <div class="demo-arrow" aria-hidden="true"><i class="bi bi-arrow-right"></i></div>
+        <div class="demo-side demo-side--demo">
+          <div class="demo-side-label"><i class="bi bi-exclamation-triangle"></i> Demo</div>
+          <div class="demo-side-text">Do not expect real field phones to get live demo pushes</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="demo-diff-card">
+      <div class="demo-diff-topic"><i class="bi bi-link-45deg"></i> Website address</div>
+      <div class="demo-diff-flow">
+        <div class="demo-side demo-side--prod">
+          <div class="demo-side-label"><i class="bi bi-check-circle-fill"></i> Production</div>
+          <div class="demo-side-text">Main Fleet Manager live URL</div>
+        </div>
+        <div class="demo-arrow" aria-hidden="true"><i class="bi bi-arrow-right"></i></div>
+        <div class="demo-side demo-side--demo">
+          <div class="demo-side-label"><i class="bi bi-globe2"></i> Demo</div>
+          <div class="demo-side-text">Only <strong>fleet-demo.onrender.com</strong></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="demo-same">
+    <div class="demo-same-title"><i class="bi bi-check2-all"></i> Same on both (so the demo still feels real)</div>
+    <p class="demo-same-text">
+      Screens, menus, vehicles, drivers, attendance, fuel, tasks, maintenance, and reports work the same way.
+      Use Demo to walk through the product. Use Production only for real company work.
+    </p>
+  </div>
+</div>
+<script>
+(function() {
+  var btn = document.getElementById('demoFillCredsBtn');
+  if (!btn) return;
+  btn.addEventListener('click', function() {
+    var u = document.getElementById('login_username');
+    var p = document.getElementById('login_password');
+    if (u) {
+      u.value = {{ demo_username|tojson }};
+      u.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    if (p) {
+      p.value = {{ demo_password|tojson }};
+      p.dispatchEvent(new Event('input', { bubbles: true }));
+      try { p.focus(); } catch (e) {}
+    }
+  });
+})();
+</script>
+{% endif %}
 
 {% if lockout_remaining_seconds and lockout_remaining_seconds > 0 %}
 <div id="lockoutCard"

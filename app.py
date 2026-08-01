@@ -275,18 +275,28 @@ def inject_fleet_build_context():
     is_local = host in ('127.0.0.1', 'localhost') or host.startswith('192.168.')
     fleet_dev = is_local
     demo_mode = False
+    demo_username = ''
+    demo_password = ''
     try:
-        from services.demo_env import is_demo_mode
+        from services.demo_env import DEMO_PASSWORD, DEMO_USERNAME, is_demo_mode
         demo_mode = is_demo_mode()
+        if demo_mode:
+            demo_username = DEMO_USERNAME
+            demo_password = DEMO_PASSWORD
     except Exception:
         demo_mode = (os.environ.get('DEMO_MODE') or '').strip().lower() in (
             '1', 'true', 'yes', 'on',
         )
+        if demo_mode:
+            demo_username = 'demo'
+            demo_password = 'Demo#2026'
     return {
         'fleet_asset_version': os.environ.get('FLEET_ASSET_VERSION') or str(int(time.time())),
         'fleet_server_host': host_raw,
         'fleet_mobile_dev': fleet_dev,
         'demo_mode': demo_mode,
+        'demo_username': demo_username,
+        'demo_password': demo_password,
     }
 
 

@@ -185,6 +185,113 @@
       font-size: 1.625rem; font-weight: 700;
       color: var(--text-dark); margin-bottom: 6px; letter-spacing: -0.02em;
     }
+    /* ── Demo walkthrough panel ── */
+    .demo-panel {
+      margin: 0 0 20px;
+      border: 1px solid #fdba74;
+      background: linear-gradient(165deg, #fff7ed 0%, #ffedd5 42%, #ffffff 100%);
+      border-radius: 16px;
+      padding: 14px;
+      box-shadow: 0 10px 28px rgba(234, 88, 12, 0.12);
+    }
+    .demo-panel-head {
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      margin-bottom: 12px;
+    }
+    .demo-panel-head-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .demo-badge {
+      display: inline-block; padding: 2px 8px; border-radius: 999px;
+      background: #ea580c; color: #fff7ed; font-size: 11px; font-weight: 800; letter-spacing: .04em;
+    }
+    .demo-panel-title { font-weight: 800; color: #9a3412; font-size: .92rem; }
+    .demo-fill-btn {
+      flex-shrink: 0; border: 1px solid #fb923c; background: #fff; color: #c2410c;
+      font-size: .72rem; font-weight: 700; border-radius: 999px; padding: 6px 11px; cursor: pointer;
+    }
+    .demo-fill-btn:hover { background: #fff7ed; }
+    .demo-cred-grid { display: grid; gap: 8px; margin-bottom: 12px; }
+    .demo-cred-row {
+      display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+      background: rgba(255,255,255,.78); border: 1px solid #fed7aa; border-radius: 10px; padding: 9px 11px;
+    }
+    .demo-cred-label {
+      font-size: .7rem; font-weight: 700; color: #9a3412; text-transform: uppercase; letter-spacing: .04em;
+    }
+    .demo-cred-value {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: .95rem; font-weight: 800; color: #7c2d12; letter-spacing: .02em;
+    }
+    .demo-notes {
+      margin: 0 0 14px; padding: 0 0 0 18px; color: #9a3412; font-size: .78rem; line-height: 1.55;
+    }
+    .demo-notes li { margin-bottom: 5px; }
+    .demo-notes li:last-child { margin-bottom: 0; }
+    .demo-diff-title {
+      font-size: .78rem; font-weight: 800; color: #9a3412; letter-spacing: .02em;
+      text-transform: uppercase; margin: 0 0 10px;
+    }
+    .demo-diff-list { display: grid; gap: 10px; }
+    .demo-diff-card {
+      background: #fff; border: 1px solid #fed7aa; border-radius: 12px; padding: 10px 10px 9px;
+      box-shadow: 0 4px 12px rgba(154, 52, 18, 0.05);
+    }
+    .demo-diff-topic {
+      font-size: .72rem; font-weight: 800; color: #7c2d12; margin-bottom: 8px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .demo-diff-topic i { color: #ea580c; font-size: .85rem; }
+    .demo-diff-flow {
+      display: grid; grid-template-columns: 1fr auto 1fr; gap: 6px; align-items: stretch;
+    }
+    .demo-side {
+      border-radius: 10px; padding: 8px 8px 7px; min-width: 0;
+    }
+    .demo-side--prod {
+      background: linear-gradient(180deg, #ecfdf5 0%, #f0fdf4 100%);
+      border: 1px solid #bbf7d0;
+    }
+    .demo-side--demo {
+      background: linear-gradient(180deg, #fff7ed 0%, #ffedd5 100%);
+      border: 1px solid #fdba74;
+    }
+    .demo-side-label {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: .62rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+    .demo-side--prod .demo-side-label { color: #166534; }
+    .demo-side--demo .demo-side-label { color: #9a3412; }
+    .demo-side-text {
+      font-size: .72rem; line-height: 1.35; color: #334155; font-weight: 600;
+    }
+    .demo-arrow {
+      display: flex; align-items: center; justify-content: center;
+      color: #ea580c; font-size: 1.05rem; padding-top: 2px;
+    }
+    .demo-arrow i {
+      animation: demoArrowPulse 1.6s ease-in-out infinite;
+    }
+    @keyframes demoArrowPulse {
+      0%, 100% { transform: translateX(0); opacity: .75; }
+      50% { transform: translateX(3px); opacity: 1; }
+    }
+    .demo-same {
+      margin-top: 12px; border: 1px dashed #86efac; background: #f0fdf4;
+      border-radius: 12px; padding: 10px 11px;
+    }
+    .demo-same-title {
+      font-size: .72rem; font-weight: 800; color: #166534; margin-bottom: 4px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .demo-same-text { font-size: .74rem; color: #166534; line-height: 1.45; margin: 0; }
+    @media (min-width: 768px) {
+      .lp-center-col.demo-wide { max-width: 520px; }
+    }
+    @media (max-width: 420px) {
+      .demo-diff-flow { grid-template-columns: 1fr; gap: 4px; }
+      .demo-arrow { transform: rotate(90deg); padding: 2px 0; }
+    }
+
     .lp-section-sub {
       font-size: 0.875rem; color: #8a99ad; margin-bottom: 24px;
     }
@@ -688,12 +795,6 @@
   </style>
 </head>
 <body>
-  {% if demo_mode %}
-  <div role="status" style="position:fixed;top:0;left:0;right:0;z-index:9999;display:flex;align-items:center;justify-content:center;gap:10px;padding:8px 14px;background:#c2410c;color:#fff7ed;font-size:13px;font-weight:700;text-align:center;">
-    <span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(0,0,0,.18);font-size:11px;">DEMO</span>
-    <span>Demo environment — not production data</span>
-  </div>
-  {% endif %}
   <!-- Background -->
   <div class="lp-bg">
     <div class="lp-grid"></div>
@@ -701,6 +802,14 @@
     <div class="lp-orb lp-orb2"></div>
     <div class="lp-orb lp-orb3"></div>
   </div>
+
+  {% if demo_mode %}
+  <div role="status" aria-live="polite"
+       style="position:relative;z-index:5;display:flex;align-items:center;justify-content:center;gap:10px;padding:8px 14px;padding-top:calc(8px + env(safe-area-inset-top, 0px));background:#ea580c;color:#fff7ed;font-size:13px;font-weight:700;letter-spacing:.01em;text-align:center;">
+    <span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(0,0,0,.18);font-size:11px;">DEMO</span>
+    <span>Demo environment — changes here do not affect production.</span>
+  </div>
+  {% endif %}
 
   <!-- Flash Toast Messages -->
   <div class="lp-toast-wrap" id="lpToastWrap">
@@ -722,7 +831,7 @@
 
   <!-- Page layout: brand top + sheet bottom -->
   <div class="lp-page-wrap" id="lpPageWrap">
-  <div class="lp-center-col" id="lpCenterCol">
+  <div class="lp-center-col{% if demo_mode %} demo-wide{% endif %}" id="lpCenterCol">
 
     <!-- Brand Header -->
     <div class="lp-brand login-logo login-header">
