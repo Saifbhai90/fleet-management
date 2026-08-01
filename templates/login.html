@@ -65,8 +65,21 @@
   </div>
 </div>
 
-<div class="lp-section-title" id="loginTitle" style="display:block;">{% if demo_mode %}Demo Login{% else %}Welcome back{% endif %}</div>
-<div class="lp-section-sub" id="loginSubtitle" style="display:block;">{% if demo_mode %}Sign in with the demo Master account{% else %}Sign in to your Fleet Manager account{% endif %}</div>
+{% if demo_mode %}
+<div class="demo-login-head">
+  <div style="min-width:0;">
+    <div class="lp-section-title" id="loginTitle" style="display:block;">Demo Login</div>
+    <div class="lp-section-sub" id="loginSubtitle" style="display:block;">Sign in with the demo Master account</div>
+  </div>
+  <button type="button" id="demoNotesOpenBtn" class="demo-notes-trigger" aria-haspopup="dialog" aria-controls="demoNotesModal">
+    <i class="bi bi-info-circle-fill" aria-hidden="true"></i>
+    <span>Notes</span>
+  </button>
+</div>
+{% else %}
+<div class="lp-section-title" id="loginTitle" style="display:block;">Welcome back</div>
+<div class="lp-section-sub" id="loginSubtitle" style="display:block;">Sign in to your Fleet Manager account</div>
+{% endif %}
 
 {% if lockout_remaining_seconds and lockout_remaining_seconds > 0 %}
 <div id="lockoutCard"
@@ -160,6 +173,13 @@
     <div class="invalid-msg">{{ error }}</div>
     {% endfor %}
   </div>
+
+  {% if demo_mode %}
+  <div class="demo-fill-inline">
+    <span>Auto-fill credentials:</span>
+    <button type="button" id="demoFillCredsInlineBtn">Fill form</button>
+  </div>
+  {% endif %}
 
   <!-- Biometric setup (native only — shown when no token; logic in fleet_biometric_toggle.js) -->
   <div id="loginBioSetupRow" style="display:none;">
@@ -470,16 +490,17 @@ window.fleetStartLockoutCountdown = function(seconds) {
 
 {% block demo_notes %}
 {% if demo_mode %}
-<section class="demo-notes-section" aria-label="Demo walkthrough notes">
-  <div id="demoLoginHint" class="demo-panel">
-    <div class="demo-panel-head">
-      <div class="demo-panel-head-left">
+<div id="demoNotesModal" class="demo-modal" role="dialog" aria-modal="true" aria-labelledby="demoNotesModalTitle" hidden>
+  <div class="demo-modal-card" role="document">
+    <div class="demo-modal-head">
+      <div class="demo-modal-head-left">
         <span class="demo-badge">DEMO</span>
-        <span class="demo-panel-title">Walkthrough notes</span>
+        <h3 class="demo-modal-title" id="demoNotesModalTitle">Walkthrough Notes</h3>
       </div>
-      <button type="button" id="demoFillCredsBtn" class="demo-fill-btn">Fill login form</button>
+      <button type="button" class="demo-modal-close" id="demoNotesCloseBtn" aria-label="Close notes">
+        <i class="bi bi-x-lg" aria-hidden="true"></i>
+      </button>
     </div>
-    <p class="demo-panel-kicker">This section is separate from the login form above. Read here, then sign in up top.</p>
 
     <div class="demo-cred-grid">
       <div class="demo-cred-row">
@@ -498,12 +519,11 @@ window.fleetStartLockoutCountdown = function(seconds) {
       <li><strong>Production safety:</strong> anything you change here stays on Demo only. Real company / production data is never updated from this login.</li>
       <li><strong>Data inside Demo:</strong> a copied snapshot of production records (vehicles, drivers, tasks, fuel, etc.). It is for showing the system, not for day-to-day live operations.</li>
       <li><strong>Orange DEMO banner:</strong> after login you will still see it on every page — that means you are not on the live system.</li>
-      <li><strong>How to confirm you are on Demo:</strong> URL is <strong>fleet-demo.onrender.com</strong>, banner says DEMO, and this notes section is visible before sign-in.</li>
+      <li><strong>How to confirm you are on Demo:</strong> URL is <strong>fleet-demo.onrender.com</strong> and the orange DEMO banner is visible.</li>
     </ul>
 
-    <div class="demo-diff-title">Production → Demo difference (simple view)</div>
+    <div class="demo-diff-title">Production → Demo difference</div>
     <div class="demo-diff-list" aria-label="Production versus Demo differences">
-
       <div class="demo-diff-card">
         <div class="demo-diff-topic"><i class="bi bi-database"></i> Your changes</div>
         <div class="demo-diff-flow">
@@ -518,7 +538,6 @@ window.fleetStartLockoutCountdown = function(seconds) {
           </div>
         </div>
       </div>
-
       <div class="demo-diff-card">
         <div class="demo-diff-topic"><i class="bi bi-person-badge"></i> Login account</div>
         <div class="demo-diff-flow">
@@ -533,7 +552,6 @@ window.fleetStartLockoutCountdown = function(seconds) {
           </div>
         </div>
       </div>
-
       <div class="demo-diff-card">
         <div class="demo-diff-topic"><i class="bi bi-broadcast"></i> Live Ufone / VPS sync</div>
         <div class="demo-diff-flow">
@@ -548,7 +566,6 @@ window.fleetStartLockoutCountdown = function(seconds) {
           </div>
         </div>
       </div>
-
       <div class="demo-diff-card">
         <div class="demo-diff-topic"><i class="bi bi-clock-history"></i> How fresh is the data?</div>
         <div class="demo-diff-flow">
@@ -563,7 +580,6 @@ window.fleetStartLockoutCountdown = function(seconds) {
           </div>
         </div>
       </div>
-
       <div class="demo-diff-card">
         <div class="demo-diff-topic"><i class="bi bi-phone"></i> Mobile / push alerts</div>
         <div class="demo-diff-flow">
@@ -578,7 +594,6 @@ window.fleetStartLockoutCountdown = function(seconds) {
           </div>
         </div>
       </div>
-
       <div class="demo-diff-card">
         <div class="demo-diff-topic"><i class="bi bi-link-45deg"></i> Website address</div>
         <div class="demo-diff-flow">
@@ -593,38 +608,78 @@ window.fleetStartLockoutCountdown = function(seconds) {
           </div>
         </div>
       </div>
-
     </div>
 
     <div class="demo-same">
-      <div class="demo-same-title"><i class="bi bi-check2-all"></i> Same on both (so the demo still feels real)</div>
+      <div class="demo-same-title"><i class="bi bi-check2-all"></i> Same on both</div>
       <p class="demo-same-text">
         Screens, menus, vehicles, drivers, attendance, fuel, tasks, maintenance, and reports work the same way.
         Use Demo to walk through the product. Use Production only for real company work.
       </p>
     </div>
+
+    <div class="demo-modal-actions">
+      <button type="button" class="demo-modal-primary" id="demoGotItFillBtn">Got it &amp; Fill Credentials</button>
+      <button type="button" class="demo-modal-secondary" id="demoNotesCloseBtn2">Close</button>
+    </div>
   </div>
-</section>
+</div>
 <script>
 (function() {
-  var btn = document.getElementById('demoFillCredsBtn');
-  if (!btn) return;
-  btn.addEventListener('click', function() {
+  var modal = document.getElementById('demoNotesModal');
+  var openBtn = document.getElementById('demoNotesOpenBtn');
+  var closeBtn = document.getElementById('demoNotesCloseBtn');
+  var closeBtn2 = document.getElementById('demoNotesCloseBtn2');
+  var fillInline = document.getElementById('demoFillCredsInlineBtn');
+  var gotIt = document.getElementById('demoGotItFillBtn');
+  var user = {{ demo_username|tojson }};
+  var pass = {{ demo_password|tojson }};
+  if (!modal) return;
+
+  function fillCreds() {
     var u = document.getElementById('login_username');
     var p = document.getElementById('login_password');
     if (u) {
-      u.value = {{ demo_username|tojson }};
+      u.value = user;
       u.dispatchEvent(new Event('input', { bubbles: true }));
     }
     if (p) {
-      p.value = {{ demo_password|tojson }};
+      p.value = pass;
       p.dispatchEvent(new Event('input', { bubbles: true }));
       try { p.focus(); } catch (e) {}
     }
-    try {
-      var sheet = document.getElementById('lpSheet');
-      if (sheet) sheet.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    } catch (e) {}
+  }
+
+  function openModal() {
+    modal.hidden = false;
+    modal.classList.add('is-open');
+    document.body.style.overflow = 'hidden';
+    try { (closeBtn || gotIt).focus(); } catch (e) {}
+  }
+
+  function closeModal() {
+    modal.classList.remove('is-open');
+    modal.hidden = true;
+    document.body.style.overflow = '';
+    try { if (openBtn) openBtn.focus(); } catch (e) {}
+  }
+
+  if (openBtn) openBtn.addEventListener('click', openModal);
+  if (closeBtn) closeBtn.addEventListener('click', closeModal);
+  if (closeBtn2) closeBtn2.addEventListener('click', closeModal);
+  if (fillInline) fillInline.addEventListener('click', fillCreds);
+  if (gotIt) {
+    gotIt.addEventListener('click', function() {
+      fillCreds();
+      closeModal();
+    });
+  }
+
+  modal.addEventListener('click', function(e) {
+    if (e.target === modal) closeModal();
+  });
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && modal.classList.contains('is-open')) closeModal();
   });
 })();
 </script>
