@@ -1426,8 +1426,9 @@ applyTaskListSearch();
 
 // Fallback: if bootstrap fetch hangs (mobile network), paint seed data after 8s
 // so the SSR spinner "Loading in-process tasks…" never stays forever.
+// Guard: only run if bootstrap hasn't succeeded yet AND user hasn't Applied.
 setTimeout(function() {
-  if (!dayReportReady) {
+  if (!dayReportReady && !taskListFilteredMode) {
     activeTaskCatFilter = 'in_process';
     setActiveKpiCard('in_process');
     applyTaskListSearch();
@@ -1436,19 +1437,23 @@ setTimeout(function() {
 
 // Warm day EMG report so color cards filter immediately (web + mobile).
 // silent:true — do not replace Task List with a spinner (avoids Apply race on WebView).
+// IMPORTANT: do NOT reset activeTaskCatFilter after the await. If Apply or a card
+// click superseded this bootstrap (incremented tasksLoadGen), the await still
+// resolves and resetting here would clobber the user's filter selection —
+// cards would show Apply's counts but Task List would re-filter to in_process.
 (async function bootstrapDayReport() {
   try {
     await loadTasksForCategoryCards({ silent: true });
-    if (activeTaskCatFilter !== 'in_process') {
+    // No post-await reset — loadTasksForCategoryCards already painted if not superseded.
+    // If superseded, Apply/card-click owns the UI now.
+  } catch (e) {
+    console.warn('day report bootstrap skipped', e);
+    // Only paint fallback if no filter has been applied yet
+    if (!taskListFilteredMode) {
       activeTaskCatFilter = 'in_process';
       setActiveKpiCard('in_process');
       applyTaskListSearch();
     }
-  } catch (e) {
-    console.warn('day report bootstrap skipped', e);
-    activeTaskCatFilter = 'in_process';
-    setActiveKpiCard('in_process');
-    applyTaskListSearch();
   }
 })();
 
