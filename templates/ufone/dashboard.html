@@ -730,7 +730,29 @@ function currentFilterParams() {
 
 // Native <select> ke options set karo, phir TomSelect (re)build karo
 function setSelectOptions(el, options, placeholderText, keepValue) {
-  const prev = keepValue ? el.value : '';
+  const prev = keepValue ? selectValue(el) : '';
+  // Skip rebuild if the new option set matches what's already in the DOM.
+  // Destroying + re-creating TomSelect on every refresh breaks mobile WebViews
+  // (clicks stop registering, getValue() returns empty).
+  const currentCount = el.options.length;
+  const newCount = (options || []).length + 1; // +1 for placeholder
+  if (currentCount === newCount) {
+    let same = true;
+    for (let i = 0; i < (options || []).length; i++) {
+      const o = el.options[i + 1];
+      if (!o || String(o.value) !== String(options[i].value) || (o.textContent || '') !== options[i].text) {
+        same = false; break;
+      }
+    }
+    if (same) {
+      if (prev && el.tomselect && typeof el.tomselect.setValue === 'function') {
+        try { el.tomselect.setValue(prev, false); } catch (e) { /* ignore */ }
+      } else if (prev) {
+        el.value = prev;
+      }
+      return;
+    }
+  }
   if (el.tomselect) { try { el.tomselect.destroy(); } catch(e) {} }
   el.innerHTML = '';
   const ph = document.createElement('option');
@@ -747,9 +769,12 @@ function setSelectOptions(el, options, placeholderText, keepValue) {
   whenSearchReady(function() { window.initSearchableDropdowns(el.parentNode); });
 }
 
-// District / vehicle lists — already SSR'd; refresh in background without blanking UI
+// District / vehicle lists — SSR already filled them. Only refresh if SSR was
+// empty OR the fetched list is larger (new data). Never destroy TomSelect
+// unnecessarily (mobile WebView breaks on destroy/re-create races).
 (async function refreshDistricts() {
   try {
+    if ((fDistrictEl.options || []).length > 1) return; // SSR has data
     const res = await fetch('/api/ufone/districts');
     const data = await res.json();
     const list = data.districts || [];
@@ -762,6 +787,7 @@ function setSelectOptions(el, options, placeholderText, keepValue) {
 
 (async function refreshVehicles() {
   try {
+    if ((fVehicleEl.options || []).length > 1) return; // SSR has data
     const res = await fetch('/api/ufone/positions');
     const data = await res.json();
     const seen = new Set();
@@ -1130,13 +1156,23 @@ async function loadTasksForCategoryCards(opts) {
 }
 
 let kpiClickBusy = false;
+let kpiClickTimer = null;
 
 async function onKpiCardActivate(card) {
-  if (!card || kpiClickBusy) return;
+  if (!card) return;
+  // Auto-reset stuck guard after 12s (mobile WebView fetches can silently hang)
+  if (kpiClickBusy) {
+    if (kpiClickTimer) return;
+    kpiClickTimer = setTimeout(function() {
+      kpiClickBusy = false; kpiClickTimer = null;
+    }, 12000);
+    return;
+  }
   const f = card.getAttribute('data-task-filter') || 'all';
   activeTaskCatFilter = f;
   setActiveKpiCard(f);
   kpiClickBusy = true;
+  if (kpiClickTimer) { clearTimeout(kpiClickTimer); kpiClickTimer = null; }
   try {
     const needsDayReport = f !== 'all' && (!dayReportReady || !taskListHasCategoryData());
     if (needsDayReport) {
@@ -1154,6 +1190,7 @@ async function onKpiCardActivate(card) {
       `<tr><td colspan="11" class="text-center text-danger py-4">Category report load failed. Apply filter try karein.</td></tr>`;
   } finally {
     kpiClickBusy = false;
+    if (kpiClickTimer) { clearTimeout(kpiClickTimer); kpiClickTimer = null; }
   }
 }
 
@@ -1173,9 +1210,17 @@ document.querySelectorAll('.uf-kpi-click').forEach(card => {
 });
 
 let filterBusy = false;
+let filterBusyTimer = null;
 async function runFilterApply() {
-  if (filterBusy) return;
+  if (filterBusy) {
+    // Auto-reset stuck guard after 15s (mobile fetches can silently hang)
+    if (!filterBusyTimer) {
+      filterBusyTimer = setTimeout(function() { filterBusy = false; filterBusyTimer = null; }, 15000);
+    }
+    return;
+  }
   filterBusy = true;
+  if (filterBusyTimer) { clearTimeout(filterBusyTimer); filterBusyTimer = null; }
   const gen = ++tasksLoadGen; // cancel in-flight bootstrap / card loads
   const btn = document.getElementById('fApply');
   if (btn) btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Loading...';
@@ -1222,6 +1267,7 @@ async function runFilterApply() {
   } finally {
     if (btn) btn.innerHTML = '<i class="bi bi-funnel-fill"></i> Apply';
     filterBusy = false;
+    if (filterBusyTimer) { clearTimeout(filterBusyTimer); filterBusyTimer = null; }
   }
 }
 
@@ -1377,6 +1423,16 @@ activeTaskCatFilter = 'in_process';
 setActiveKpiCard('in_process');
 ensureFilterDates();
 applyTaskListSearch();
+
+// Fallback: if bootstrap fetch hangs (mobile network), paint seed data after 8s
+// so the SSR spinner "Loading in-process tasks…" never stays forever.
+setTimeout(function() {
+  if (!dayReportReady) {
+    activeTaskCatFilter = 'in_process';
+    setActiveKpiCard('in_process');
+    applyTaskListSearch();
+  }
+}, 8000);
 
 // Warm day EMG report so color cards filter immediately (web + mobile).
 // silent:true — do not replace Task List with a spinner (avoids Apply race on WebView).
