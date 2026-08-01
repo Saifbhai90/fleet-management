@@ -420,6 +420,76 @@ def _status_is_complete(status) -> bool:
     return ('complete' in s) and ('incomplete' not in s)
 
 
+def _status_is_open(status) -> bool:
+    """In-process / incomplete — keeps a prior calendar day on the EMG fetch list."""
+    s = (status or '').strip().lower()
+    if not s or 'cancel' in s:
+        return False
+    if _status_is_complete(s):
+        return False
+    return (
+        'incomplete' in s or s == '1' or 'pending' in s
+        or 'in-process' in s or 'in process' in s
+    )
+
+
+def emg_lookback_days() -> int:
+    """Max prior-day window for open-task EMG catch-up (hard-capped at 7)."""
+    return max(1, min(_int_env('BRIDGE_EMG_LOOKBACK_DAYS', 7), 7))
+
+
+def previous_open_emg_dates(conn, account_id: int, today_d: date,
+                            lookback_days: int = 7) -> list:
+    """Prior calendar dates (not today) that still have in-process EMG rows.
+
+    Only these dates are fetched from Ufone in addition to today. If a prior
+    date has zero open tasks, it is NOT requested from the portal — lowest load.
+    """
+    lookback_days = max(1, min(int(lookback_days or 7), 7))
+    oldest = today_d - timedelta(days=lookback_days - 1)
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT DISTINCT task_date::date AS d
+            FROM emergency_task_record
+            WHERE account_id = %s
+              AND task_date IS NOT NULL
+              AND task_date::date >= %s
+              AND task_date::date < %s
+              AND status IS NOT NULL
+              AND (
+                lower(status) LIKE '%%incomplete%%'
+                OR lower(status) IN ('1', 'pending')
+                OR lower(status) LIKE '%%in-process%%'
+                OR lower(status) LIKE '%%in process%%'
+              )
+              AND NOT (
+                lower(status) LIKE '%%complete%%'
+                AND lower(status) NOT LIKE '%%incomplete%%'
+              )
+              AND lower(status) NOT LIKE '%%cancel%%'
+            ORDER BY 1 ASC
+            """,
+            (account_id, oldest, today_d),
+        )
+        return [r[0] for r in cur.fetchall() if r[0]]
+
+
+def fetch_emg_report_day(client: UfoneClient, day: date) -> list:
+    """One calendar day from getAmbulanceTaskReport (all districts)."""
+    day_s = day.strftime('%Y-%m-%d')
+    emg_raw = client._call(
+        'ReportEmergencyTask.aspx', 'getAmbulanceTaskReport',
+        {
+            'startDate': client._to_ufone_date(day_s),
+            'endDate': client._to_ufone_date(day_s),
+            'District': '', 'Tehsil': '', 'UnionCouncil': '', 'TaskId': '',
+        },
+        visit_page=False, timeout=60, retries=1,
+    ) or []
+    return [r for r in emg_raw if isinstance(r, dict)]
+
+
 def db_connect():
     url = _env('DATABASE_URL')
     if not url:
@@ -1691,24 +1761,58 @@ def run_once() -> dict:
 
     logger.info('fetching emergency report…')
     emg = []
+    emg_by_day = []  # [(date, rows)] — upsert each day with its own default_task_date
     skip_emg = (_env('BRIDGE_SKIP_EMG') or '0').lower() in ('1', 'true', 'yes')
     if skip_emg:
         logger.info('skipping emergency report this cycle')
     else:
+        lookback = emg_lookback_days()
+        # 1) Always today — primary live feed
         try:
-            emg_raw = client._call(
-                "ReportEmergencyTask.aspx", "getAmbulanceTaskReport",
-                {
-                    "startDate": client._to_ufone_date(today),
-                    "endDate": client._to_ufone_date(today),
-                    "District": "", "Tehsil": "", "UnionCouncil": "", "TaskId": "",
-                },
-                visit_page=False, timeout=60, retries=1,
-            ) or []
-            emg = [r for r in emg_raw if isinstance(r, dict)]
-            logger.info('emergency rows=%s', len(emg))
+            today_rows = fetch_emg_report_day(client, today_d)
+            emg.extend(today_rows)
+            emg_by_day.append((today_d, today_rows))
+            logger.info('emergency rows today(%s)=%s', today, len(today_rows))
         except Exception as e:
-            logger.warning('emg fetch failed: %s', e)
+            logger.warning('emg fetch failed for today %s: %s', today, e)
+
+        # 2) Previous dates ONLY if DB still has in-process tasks on that date.
+        #    No open tasks on a prior date ⇒ no Ufone call for that date (low load).
+        prev_dates = []
+        try:
+            qconn = db_connect()
+            try:
+                _pg_session(qconn)
+                prev_dates = previous_open_emg_dates(
+                    qconn, account_id, today_d, lookback)
+            finally:
+                qconn.close()
+        except Exception as e:
+            logger.warning('open-date lookup failed (today-only EMG): %s', e)
+
+        if prev_dates:
+            logger.info(
+                'prior open EMG dates within %sd — fetching: %s',
+                lookback, ','.join(d.isoformat() for d in prev_dates),
+            )
+            for prior in prev_dates:
+                try:
+                    prior_rows = fetch_emg_report_day(client, prior)
+                    emg.extend(prior_rows)
+                    emg_by_day.append((prior, prior_rows))
+                    logger.info(
+                        'emergency rows prior(%s)=%s',
+                        prior.isoformat(), len(prior_rows),
+                    )
+                except Exception as e:
+                    logger.warning(
+                        'emg fetch failed for prior %s: %s', prior, e)
+        else:
+            logger.info(
+                'no prior-day in-process tasks within %sd — '
+                'skip prior EMG fetch (Ufone not called for past dates)',
+                lookback,
+            )
 
     maintenance_raw = []
     hist_raw = []
@@ -1769,8 +1873,12 @@ def run_once() -> dict:
             conn.rollback()
             logger.warning('overdue notify collect failed (non-fatal): %s', e)
         try:
-            ne, emg_events = upsert_emergency(conn, account_id, emg, today_d)
-            notify_events.extend(emg_events)
+            ne = 0
+            for day_d, day_rows in emg_by_day:
+                n, emg_events = upsert_emergency(
+                    conn, account_id, day_rows, day_d)
+                ne += n
+                notify_events.extend(emg_events)
         except Exception as e:
             conn.rollback()
             logger.warning('emg pg upsert failed (non-fatal): %s', e)
