@@ -2556,19 +2556,21 @@ def _send_task_event_notifications(events: list):
                 title = 'Task close karwa dein'
                 ntype = 'warning'
             bare_tid = _display_task_id(ev.get('task_id'))
+            # Bridge retries failed events until delivery is verified, so every
+            # event type needs a per-user+task+day duplicate guard.
+            if event == 'generate':
+                guard_titles = ['New Task Generate', 'Nayi Task Assign']
+            else:
+                guard_titles = [title]
             for drv in drivers:
                 uid = get_user_id_for_driver(drv)
                 if not uid:
                     continue
-                # Hard duplicate guard: one generate per user+task per day
-                if event == 'generate' and bare_tid:
+                if bare_tid:
                     exists = (
                         Notification.query.filter(
                             Notification.target_user_id == int(uid),
-                            Notification.title.in_([
-                                'New Task Generate',
-                                'Nayi Task Assign',  # legacy title
-                            ]),
+                            Notification.title.in_(guard_titles),
                             Notification.created_at >= datetime.combine(
                                 today, datetime.min.time()
                             ),

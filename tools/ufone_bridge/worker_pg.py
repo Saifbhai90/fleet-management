@@ -250,7 +250,16 @@ def _bare_task_id(tid) -> str:
     return s
 
 
-def _event_generate_already_marked(conn, account_id: int, task_id: str) -> bool:
+# In-app notification titles per event type (used for deliver-verified marking)
+_EVENT_NOTIF_TITLES = {
+    'generate': ('New Task Generate', 'Nayi Task Assign'),
+    'close': ('Task Complete',),
+    'overdue_close': ('Task close karwa dein',),
+}
+
+
+def _event_already_marked(conn, account_id: int, task_id: str,
+                          event_type: str) -> bool:
     bare = _bare_task_id(task_id)
     if not bare:
         return False
@@ -258,31 +267,42 @@ def _event_generate_already_marked(conn, account_id: int, task_id: str) -> bool:
         cur.execute(
             """
             SELECT 1 FROM ufone_task_event_notify
-            WHERE account_id = %s AND event_type = 'generate'
+            WHERE account_id = %s AND event_type = %s
               AND task_id IN (%s, %s, %s)
             LIMIT 1
             """,
-            (account_id, bare, f'PHF-{bare}', str(task_id)),
+            (account_id, event_type, bare, f'PHF-{bare}', str(task_id)),
+        )
+        return cur.fetchone() is not None
+
+
+def _event_generate_already_marked(conn, account_id: int, task_id: str) -> bool:
+    return _event_already_marked(conn, account_id, task_id, 'generate')
+
+
+def _task_notif_exists(conn, bare_tid: str, since_date: date,
+                       titles: tuple) -> bool:
+    """True if an in-app notification of any given title exists for this task id."""
+    if not bare_tid or not titles:
+        return False
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT 1 FROM notification
+            WHERE title = ANY(%s)
+              AND created_at >= %s
+              AND message ILIKE %s
+            LIMIT 1
+            """,
+            (list(titles), since_date, f'%{bare_tid}%'),
         )
         return cur.fetchone() is not None
 
 
 def _nayi_task_notif_exists(conn, bare_tid: str, since_date: date) -> bool:
     """True if in-app generate notify already logged for this task id."""
-    if not bare_tid:
-        return False
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT 1 FROM notification
-            WHERE title IN ('New Task Generate', 'Nayi Task Assign')
-              AND created_at >= %s
-              AND message ILIKE %s
-            LIMIT 1
-            """,
-            (since_date, f'%{bare_tid}%'),
-        )
-        return cur.fetchone() is not None
+    return _task_notif_exists(
+        conn, bare_tid, since_date, _EVENT_NOTIF_TITLES['generate'])
 
 
 def _fleet_reg_keys(conn) -> set:
@@ -393,6 +413,111 @@ def collect_fleet_generate_safety_net(
     if events:
         logger.info(
             'fleet generate safety-net retry=%s (within %sm, fleet only)',
+            len(events), retry_mins,
+        )
+    return events
+
+
+def _parse_completed_dt(val) -> datetime | None:
+    """Parse Ufone completed_date_time text like '03 Aug 2026 16:03:46'."""
+    if not val:
+        return None
+    s = re.sub(r'\s+', ' ', str(val).strip())
+    for fmt in ('%d %b %Y %H:%M:%S', '%d %B %Y %H:%M:%S',
+                '%Y-%m-%d %H:%M:%S', '%d-%m-%Y %H:%M:%S'):
+        try:
+            return datetime.strptime(s, fmt)
+        except ValueError:
+            continue
+    return None
+
+
+def collect_fleet_close_safety_net(
+    conn, account_id: int, today: date
+) -> list:
+    """Retry 'Task Complete' for fleet tasks closed recently but never notified.
+
+    Close events fire on the incomplete→complete EMG edge; if that push/fanout
+    fails once, the edge never re-appears. This scans today's completed fleet
+    rows closed within BRIDGE_CLOSE_RETRY_MINUTES (default 45) and re-emits any
+    that have neither a 'close' mark nor a 'Task Complete' notification row.
+    """
+    ensure_task_event_notify_table(conn)
+    fleet_keys = _fleet_reg_keys(conn)
+    if not fleet_keys:
+        return []
+
+    retry_mins = max(5, _int_env('BRIDGE_CLOSE_RETRY_MINUTES', 45))
+    now = _pk_now()
+    # completed_date_time is display text — cheap prefilter on today's prefix
+    day_prefix = now.strftime('%d %b %Y') + ' %'
+
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT DISTINCT ON (task_id_ext)
+              task_id_ext, amb_reg_no, name, phone, cli, address,
+              facility_name, category, completed_date_time, excel_created_date,
+              status
+            FROM emergency_task_record
+            WHERE account_id = %s
+              AND task_date = %s
+              AND task_id_ext IS NOT NULL AND task_id_ext <> ''
+              AND amb_reg_no IS NOT NULL AND TRIM(amb_reg_no) <> ''
+              AND completed_date_time LIKE %s
+              AND lower(COALESCE(status, '')) LIKE '%%complete%%'
+              AND lower(COALESCE(status, '')) NOT LIKE '%%incomplete%%'
+            ORDER BY task_id_ext, id DESC
+            """,
+            (account_id, today, day_prefix),
+        )
+        rows = cur.fetchall()
+
+    events = []
+    healed = 0
+    for (
+        tid_ext, amb, name, phone, cli, addr, fac, cat, completed,
+        created_dt, _status,
+    ) in rows:
+        if not _amb_matches_fleet(amb, fleet_keys):
+            continue
+        closed_at = _parse_completed_dt(completed)
+        if closed_at is None:
+            continue
+        age_min = (now - closed_at).total_seconds() / 60.0
+        # Skip too-recent closes (primary EMG edge may still deliver this
+        # cycle) and anything older than the retry window.
+        if age_min < 4 or age_min > retry_mins:
+            continue
+        bare = _bare_task_id(tid_ext)
+        if not bare:
+            continue
+        if _event_already_marked(conn, account_id, bare, 'close'):
+            continue
+        if _task_notif_exists(conn, bare, today,
+                              _EVENT_NOTIF_TITLES['close']):
+            _mark_event_notify_sent(conn, account_id, bare, 'close')
+            healed += 1
+            continue
+        events.append({
+            'event': 'close',
+            'task_id': bare,
+            'amb_reg_no': amb,
+            'patient_name': name,
+            'phone': phone,
+            'cli': cli or '',
+            'pickup': addr or '',
+            'destination': fac or '',
+            'category': cat or '',
+            'completed_date_time': completed or '',
+            'task_create_date_time': created_dt or '',
+        })
+
+    if healed:
+        logger.info('fleet close safety-net healed marks=%s', healed)
+    if events:
+        logger.info(
+            'fleet close safety-net retry=%s (within %sm, fleet only)',
             len(events), retry_mins,
         )
     return events
@@ -1166,7 +1291,15 @@ def collect_overdue_close_events(conn, account_id: int, tasks: list) -> list:
         threshold = _reminder_minutes_for_amb(t.get('ambulance_reg'), reminder_map)
         if threshold <= 0 or mins < threshold:
             continue
-        if not _mark_event_notify_sent(conn, account_id, tid, 'overdue_close'):
+        # Mark AFTER delivery (in push_notify_events), not before send —
+        # otherwise one failed POST/fanout permanently silences the reminder.
+        if _event_already_marked(conn, account_id, tid, 'overdue_close'):
+            continue
+        bare = _bare_task_id(tid)
+        if _task_notif_exists(conn, bare, _pk_now().date(),
+                              _EVENT_NOTIF_TITLES['overdue_close']):
+            # Delivered on an earlier cycle but mark was lost — heal it.
+            _mark_event_notify_sent(conn, account_id, tid, 'overdue_close')
             continue
         payload = _notify_payload_from_task(t)
         payload['minutes_open'] = mins
@@ -1264,6 +1397,10 @@ def upsert_emergency(conn, account_id: int, items: list, today: date,
     tids = [r['task_id_ext'] for r in rows]
 
     events = []
+    # Close notifications only matter for Master Data (fleet) vehicles — only
+    # their drivers have app logins. Filtering here keeps a mass-close Ufone
+    # window (hundreds of closes in one report) from flooding the notify POST.
+    fleet_keys = _fleet_reg_keys(conn)
     with conn.cursor() as cur:
         cur.execute("SET statement_timeout = '180s'")
         # Any prior rows? (skip notify flood on empty DB first fill)
@@ -1338,7 +1475,10 @@ def upsert_emergency(conn, account_id: int, items: list, today: date,
                         events.append({**payload, 'event': 'generate'})
                 elif (not _status_is_complete(prior[1])
                       and _status_is_complete(new_status)):
-                    events.append({**payload, 'event': 'close'})
+                    # Fleet-only: non-fleet ambulances never match a driver on
+                    # Render, so pushing them only wastes the notify budget.
+                    if _amb_matches_fleet(row.get('amb_reg_no'), fleet_keys):
+                        events.append({**payload, 'event': 'close'})
 
             if prior:
                 to_update.append([row.get(c) for c in update_cols] + [prior[0]])
@@ -1369,7 +1509,9 @@ def upsert_emergency(conn, account_id: int, items: list, today: date,
     conn.commit()
     logger.info('emg upserted update=%s insert=%s notify_events=%s',
                 len(to_update), len(to_insert), len(events))
-    return len(rows), events[:40]
+    # No cap: a mass-close window (hundreds of tasks closed between two EMG
+    # scans) must not silently drop events — push_notify_events chunks them.
+    return len(rows), events
 
 
 def _open_task_ids_from_emg(emg_items: list) -> list:
@@ -1585,21 +1727,23 @@ def push_notify_events(
                 )
                 break
             sent_total += int((r.json() or {}).get('sent') or len(chunk))
-            # Mark generate only when in-app notif exists (blocks duplicates +
-            # allows retry if Render accepted HTTP but matched no driver).
+            # Mark an event ONLY when its in-app notification actually exists
+            # (deliver-verified). Failed fanout stays unmarked → retried by the
+            # generate/close safety-nets and the overdue collector next cycle.
             if conn is not None and account_id is not None:
                 try:
-                    from datetime import date as _date
                     today = _pk_now().date()
                 except Exception:
                     today = datetime.utcnow().date()
                 for ev in chunk:
-                    if ev.get('event') != 'generate':
+                    etype = ev.get('event')
+                    titles = _EVENT_NOTIF_TITLES.get(etype)
+                    if not titles:
                         continue
                     bare = _bare_task_id(ev.get('task_id'))
-                    if _nayi_task_notif_exists(conn, bare, today):
+                    if _task_notif_exists(conn, bare, today, titles):
                         _mark_event_notify_sent(
-                            conn, account_id, bare, 'generate',
+                            conn, account_id, bare, etype,
                         )
         if len(ordered) > _NOTIFY_CHUNK:
             logger.info(
@@ -1906,6 +2050,14 @@ def run_once() -> dict:
         except Exception as e:
             conn.rollback()
             logger.warning('fleet generate safety-net failed (non-fatal): %s', e)
+        # Fleet guarantee: retry any recently-closed fleet task still missing
+        # its 'Task Complete' notification (dropped edge / failed push).
+        try:
+            close_safety = collect_fleet_close_safety_net(conn, account_id, today_d)
+            notify_events.extend(close_safety)
+        except Exception as e:
+            conn.rollback()
+            logger.warning('fleet close safety-net failed (non-fatal): %s', e)
 
         # Chunked POST to Render (generate prioritized; mark only after success)
         nn = push_notify_events(
