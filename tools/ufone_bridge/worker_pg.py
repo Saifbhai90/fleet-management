@@ -871,9 +871,24 @@ def open_nonfleet_task_ids(conn, account_id: int, today: date) -> list:
     return out
 
 
+_last_nonfleet_detail = 0.0
+
+
 def upsert_nonfleet_task_details(conn, account_id: int, client, today: date,
                                  limit: int = 15) -> int:
-    """15-task stale-first getTaskDetail for non-fleet open tasks (every cycle)."""
+    """15-task stale-first getTaskDetail for non-fleet open tasks.
+
+    Runs every BRIDGE_NONFLEET_DETAIL_SEC (default 360 = 6 min) — non-fleet
+    drivers get no notifications, their detail cache is popup-only, so a slow
+    rotation is enough and keeps portal load down.
+    """
+    global _last_nonfleet_detail
+    every = max(60, _int_env('BRIDGE_NONFLEET_DETAIL_SEC', 360))
+    now_mono = time.monotonic()
+    if _last_nonfleet_detail and (now_mono - _last_nonfleet_detail) < every:
+        return 0
+    _last_nonfleet_detail = now_mono
+
     open_ids = open_nonfleet_task_ids(conn, account_id, today)
     if not open_ids:
         return 0
