@@ -2519,15 +2519,17 @@ def main() -> int:
     # Loop default 60s so fleet getTaskDetail can run every minute.
     # Dashboard / EMG gated by EVERY_N to keep their own cadence.
     emg_every = max(1, _int_env('BRIDGE_EMG_EVERY_N', 6))
-    dash_every = max(1, _int_env('BRIDGE_DASHBOARD_EVERY_N', 3))
+    dash_every = max(1, _int_env('BRIDGE_DASHBOARD_EVERY_N', 1))
     while True:
         try:
             cycle += 1
+            # (cycle-1) % n == 0 → runs on cycles 1, 1+n, 1+2n…
+            # NOTE: `cycle % n == 1` breaks at n=1 (x % 1 is always 0).
             os.environ['BRIDGE_SKIP_EMG'] = (
-                '0' if (cycle % emg_every == 1) else '1'
+                '0' if ((cycle - 1) % emg_every == 0) else '1'
             )
             os.environ['BRIDGE_SKIP_DASHBOARD'] = (
-                '0' if (cycle % dash_every == 1) else '1'
+                '0' if ((cycle - 1) % dash_every == 0) else '1'
             )
             run_once()
             failures = 0
