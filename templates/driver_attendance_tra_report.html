@@ -411,7 +411,13 @@
   var year = {{ (form.year.data or 0)|tojson }};
   var fname = 'TRA_Attendance_Sheet_' + month + '_' + year + '.csv';
 
-  if (window.fleetPrintExport) {
+  // fleet_core.js is deferred in <head> — page inline scripts run first, so
+  // fleetPrintExport is not defined yet. Bind after DOMContentLoaded (when
+  // deferred scripts have already executed).
+  function bindTraPrintExport() {
+    if (window._traFleetPrintBound) return true;
+    if (!window.fleetPrintExport) return false;
+    window._traFleetPrintBound = true;
     window.fleetPrintExport(
       'traReportTable',
       reportTitle,
@@ -421,6 +427,22 @@
         generatedLabel: 'Generated: ' + new Date().toLocaleString()
       }
     );
+    return true;
+  }
+
+  if (!bindTraPrintExport()) {
+    function tryBindLater() {
+      if (bindTraPrintExport()) return;
+      var n = 0;
+      var t = setInterval(function() {
+        if (bindTraPrintExport() || ++n > 40) clearInterval(t);
+      }, 50);
+    }
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', tryBindLater);
+    } else {
+      tryBindLater();
+    }
   }
 })();
 </script>
