@@ -205,6 +205,187 @@ def _notify_payload_from_task(t: dict) -> dict:
     }
 
 
+def _detail_create_datetime(detail: dict) -> str:
+    """Same join as Task Detail UI: CD + CD_time (or CreatedDate + CreatedTime)."""
+    if not isinstance(detail, dict):
+        return ''
+    cd = str(detail.get('CD') or detail.get('CreatedDate') or '').strip()
+    ct = str(detail.get('CD_time') or detail.get('CreatedTime') or '').strip()
+    if cd and ct:
+        return f'{cd} {ct}'.strip()
+    return (cd or ct or '').strip()
+
+
+def _detail_cli(detail: dict) -> str:
+    """Task Detail UI maps CLI → phone2 (primary), then CLI/Cli."""
+    if not isinstance(detail, dict):
+        return ''
+    for k in ('phone2', 'CLI', 'Cli', 'cli'):
+        v = detail.get(k)
+        if v is not None and str(v).strip() and str(v).strip() not in ('0', '—', '-'):
+            return str(v).strip()
+    return ''
+
+
+def _detail_completed_datetime(detail: dict) -> str:
+    if not isinstance(detail, dict):
+        return ''
+    end_d = str(detail.get('EndDate') or '').strip()
+    end_t = str(detail.get('EndTime') or '').strip()
+    joined = f'{end_d} {end_t}'.strip()
+    if joined:
+        return joined
+    for k in ('CompletedDateTime', 'CompletedDate', 'completed_date'):
+        v = str(detail.get(k) or '').strip()
+        if v:
+            return v
+    return ''
+
+
+def _datetime_missing_time(val) -> bool:
+    """True when empty or date-only / midnight (dashboard CD date w/o clock)."""
+    s = str(val or '').strip()
+    if not s:
+        return True
+    m = re.search(r'(\d{1,2}):(\d{2})(?::(\d{2}))?', s)
+    if not m:
+        return True
+    h, mi, se = int(m.group(1)), int(m.group(2)), int(m.group(3) or 0)
+    # Dashboard CD is date-only → formatted as 00:00:00 — treat as missing time
+    return h == 0 and mi == 0 and se == 0
+
+
+def _save_task_detail_row(conn, account_id: int, bare: str, detail: dict,
+                          comments: list | None = None) -> None:
+    """Upsert ufone_task_detail_cache from a getTaskDetail payload."""
+    if not bare or not isinstance(detail, dict) or not detail:
+        return
+    status = str(detail.get('Status') or '')
+    detail_json = json.dumps(detail, default=str)
+    comments_json = json.dumps(comments if comments is not None else [], default=str)
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id FROM ufone_task_detail_cache
+            WHERE account_id=%s AND task_id=%s
+            """,
+            (account_id, bare),
+        )
+        found = cur.fetchone()
+        if found:
+            cur.execute(
+                """
+                UPDATE ufone_task_detail_cache SET
+                  detail_json=%s, comments_json=%s, task_status=%s,
+                  synced_at=NOW()
+                WHERE id=%s
+                """,
+                (detail_json, comments_json, status, found[0]),
+            )
+        else:
+            cur.execute(
+                """
+                INSERT INTO ufone_task_detail_cache (
+                  account_id, task_id, detail_json, comments_json,
+                  task_status, synced_at, created_at
+                ) VALUES (%s,%s,%s,%s,%s,NOW(),NOW())
+                """,
+                (account_id, bare, detail_json, comments_json, status),
+            )
+    conn.commit()
+
+
+def apply_detail_to_notify_event(ev: dict, detail: dict) -> dict:
+    """Fill generate/close notify fields the same way Task Detail popup does."""
+    if not isinstance(ev, dict) or not isinstance(detail, dict) or not detail:
+        return ev
+    created = _detail_create_datetime(detail)
+    if created:
+        ev['task_create_date_time'] = created
+    cli = _detail_cli(detail)
+    if cli:
+        ev['cli'] = cli
+    phone = detail.get('phone') or detail.get('phone2')
+    if phone and not ev.get('phone'):
+        ev['phone'] = phone
+    name = detail.get('name')
+    if name and not ev.get('patient_name'):
+        ev['patient_name'] = name
+    addr = detail.get('address')
+    if addr:
+        ev['pickup'] = addr
+    fac = detail.get('facility_name')
+    if fac and str(fac) not in ('0', ''):
+        ev['destination'] = fac
+    amb = detail.get('amReg_No') or detail.get('Ambulance')
+    if amb and not ev.get('amb_reg_no'):
+        ev['amb_reg_no'] = amb
+    completed = _detail_completed_datetime(detail)
+    if completed and ev.get('event') == 'close':
+        ev['completed_date_time'] = completed
+    return ev
+
+
+def enrich_generate_events_from_detail(client, events: list, conn=None,
+                                       account_id: int | None = None) -> list:
+    """getTaskDetail for each generate event so create time + CLI match Task Detail.
+
+    Dashboard list has date-only CD and no CLI — that is why generates had
+    00:00:00 and CLI —. One quick getTaskDetail per new task fixes both.
+    """
+    if not events or client is None:
+        return events
+    try:
+        from detail_ops import UFONE_IO_LOCK
+    except Exception:
+        UFONE_IO_LOCK = None  # type: ignore
+
+    out = []
+    for ev in events:
+        if not isinstance(ev, dict) or ev.get('event') != 'generate':
+            out.append(ev)
+            continue
+        bare = _bare_task_id(ev.get('task_id'))
+        if not bare:
+            out.append(ev)
+            continue
+        need_time = _datetime_missing_time(ev.get('task_create_date_time'))
+        need_cli = not str(ev.get('cli') or '').strip()
+        if not need_time and not need_cli:
+            out.append(ev)
+            continue
+        try:
+            if UFONE_IO_LOCK is not None:
+                UFONE_IO_LOCK.acquire()
+            try:
+                detail = client.get_task_detail(bare, quick=True) or {}
+            finally:
+                if UFONE_IO_LOCK is not None:
+                    UFONE_IO_LOCK.release()
+            if isinstance(detail, dict) and detail:
+                apply_detail_to_notify_event(ev, detail)
+                if conn is not None and account_id is not None:
+                    try:
+                        _save_task_detail_row(conn, account_id, bare, detail)
+                    except Exception as ce:
+                        conn.rollback()
+                        logger.warning('detail cache on generate %s: %s', bare, ce)
+        except Exception as e:
+            logger.warning('generate detail enrich %s failed: %s', bare, e)
+        # Still date-only → approximate from minutes_open if we have it
+        if _datetime_missing_time(ev.get('task_create_date_time')):
+            mins = ev.get('minutes_open')
+            try:
+                if mins is not None:
+                    ev['task_create_date_time'] = (
+                        _pk_now() - timedelta(minutes=int(mins))
+                    ).strftime('%d %b %Y %H:%M:%S')
+            except (TypeError, ValueError):
+                pass
+        out.append(ev)
+    return out
+
+
 def ensure_task_event_notify_table(conn) -> None:
     """Dedupe table for one-shot events (e.g. overdue_close)."""
     with conn.cursor() as cur:
@@ -521,6 +702,193 @@ def collect_fleet_close_safety_net(
             len(events), retry_mins,
         )
     return events
+
+
+_last_fast_close_scan = 0.0
+
+
+def fleet_fast_close_scan(conn, account_id: int, client, today: date) -> list:
+    """getTaskDetail poll for open Master-Data (fleet) tasks — close + enrich.
+
+    Runs every BRIDGE_FAST_CLOSE_SEC (default 60). Non-fleet open tasks stay on
+    the normal 15/batch detail rotation. Load: one tiny lookup per open fleet
+    task (typically 5–15).
+    """
+    global _last_fast_close_scan
+    every = max(30, _int_env('BRIDGE_FAST_CLOSE_SEC', 60))
+    now_mono = time.monotonic()
+    if _last_fast_close_scan and (now_mono - _last_fast_close_scan) < every:
+        return []
+    _last_fast_close_scan = now_mono
+
+    fleet_keys = _fleet_reg_keys(conn)
+    if not fleet_keys:
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT DISTINCT ON (task_id_ext)
+              task_id_ext, amb_reg_no, name, phone, cli, address,
+              facility_name, category, excel_created_date, status
+            FROM emergency_task_record
+            WHERE account_id = %s AND task_date = %s
+              AND task_id_ext IS NOT NULL AND task_id_ext <> ''
+              AND amb_reg_no IS NOT NULL AND TRIM(amb_reg_no) <> ''
+            ORDER BY task_id_ext, id DESC
+            """,
+            (account_id, today),
+        )
+        rows = cur.fetchall()
+
+    open_fleet = [
+        r for r in rows
+        if not _status_is_complete(r[9]) and _amb_matches_fleet(r[1], fleet_keys)
+    ]
+    cap = max(1, _int_env('BRIDGE_FAST_CLOSE_CAP', 25))
+    open_fleet = open_fleet[:cap]
+    if not open_fleet:
+        return []
+
+    try:
+        from detail_ops import UFONE_IO_LOCK
+    except Exception:
+        UFONE_IO_LOCK = None  # type: ignore
+
+    events = []
+    closed = 0
+    for (tid_ext, amb, name, phone, cli, addr, fac, cat,
+         created_dt, _st) in open_fleet:
+        bare = _bare_task_id(tid_ext)
+        if not bare:
+            continue
+        try:
+            if UFONE_IO_LOCK is not None:
+                UFONE_IO_LOCK.acquire()
+            try:
+                detail = client.get_task_detail(bare, quick=True) or {}
+            finally:
+                if UFONE_IO_LOCK is not None:
+                    UFONE_IO_LOCK.release()
+        except Exception as e:
+            logger.warning('fleet detail %s failed: %s', bare, e)
+            continue
+        if not isinstance(detail, dict) or not detail:
+            continue
+        try:
+            _save_task_detail_row(conn, account_id, bare, detail)
+        except Exception as e:
+            conn.rollback()
+            logger.warning('fleet detail cache %s: %s', bare, e)
+
+        created_full = _detail_create_datetime(detail) or created_dt or ''
+        cli_full = _detail_cli(detail) or cli or ''
+        name_d = (str(detail.get('name') or '').strip() or name)
+        phone_d = (str(detail.get('phone') or '').strip() or phone)
+        addr_d = (str(detail.get('address') or '').strip() or addr)
+        fac_d = str(detail.get('facility_name') or '').strip()
+        if not fac_d or fac_d == '0':
+            fac_d = fac or ''
+        amb_d = (str(detail.get('amReg_No') or detail.get('Ambulance') or '').strip()
+                 or amb)
+        status = str(detail.get('Status') or '').strip()
+
+        if not _status_is_complete(status):
+            continue
+
+        completed = _detail_completed_datetime(detail)
+        if not completed:
+            completed = _pk_now().strftime('%d %b %Y %H:%M:%S')
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE emergency_task_record
+                    SET status=%s, completed_date_time=%s,
+                        excel_created_date=COALESCE(NULLIF(%s,''), excel_created_date),
+                        cli=COALESCE(NULLIF(%s,''), cli)
+                    WHERE account_id=%s AND task_date=%s AND task_id_ext=%s
+                    """,
+                    (status, completed, created_full, cli_full,
+                     account_id, today, tid_ext),
+                )
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            logger.warning('fleet close row update %s failed: %s', bare, e)
+        closed += 1
+        if _event_already_marked(conn, account_id, bare, 'close'):
+            continue
+        if _task_notif_exists(conn, bare, today, _EVENT_NOTIF_TITLES['close']):
+            _mark_event_notify_sent(conn, account_id, bare, 'close')
+            continue
+        events.append({
+            'event': 'close',
+            'task_id': bare,
+            'amb_reg_no': amb_d,
+            'patient_name': name_d,
+            'phone': phone_d,
+            'cli': cli_full,
+            'pickup': addr_d,
+            'destination': fac_d,
+            'category': cat or '',
+            'completed_date_time': completed,
+            'task_create_date_time': created_full,
+        })
+
+    if closed or events:
+        logger.info(
+            'fleet detail scan: checked=%s closed=%s close_notify=%s',
+            len(open_fleet), closed, len(events),
+        )
+    return events
+
+
+def open_nonfleet_task_ids(conn, account_id: int, today: date) -> list:
+    """Bare task ids still incomplete today, excluding Master Data vehicles."""
+    fleet_keys = _fleet_reg_keys(conn)
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT DISTINCT ON (task_id_ext)
+              task_id_ext, amb_reg_no, status
+            FROM emergency_task_record
+            WHERE account_id = %s AND task_date = %s
+              AND task_id_ext IS NOT NULL AND task_id_ext <> ''
+            ORDER BY task_id_ext, id DESC
+            """,
+            (account_id, today),
+        )
+        rows = cur.fetchall()
+    out = []
+    for tid_ext, amb, status in rows:
+        if _status_is_complete(status):
+            continue
+        if fleet_keys and _amb_matches_fleet(amb, fleet_keys):
+            continue
+        bare = _bare_task_id(tid_ext)
+        if bare:
+            out.append(bare)
+    return out
+
+
+def upsert_nonfleet_task_details(conn, account_id: int, client, today: date,
+                                 limit: int = 15) -> int:
+    """15-task stale-first getTaskDetail for non-fleet open tasks (every cycle)."""
+    open_ids = open_nonfleet_task_ids(conn, account_id, today)
+    if not open_ids:
+        return 0
+    # Prefer EMG open set when provided path used emg-based picker via open_ids only
+    batch = _pick_stale_detail_batch(conn, account_id, open_ids, limit)
+    if not batch:
+        return 0
+    logger.info(
+        'non-fleet task detail batch %s/%s open (stale-first): %s',
+        len(batch), len(open_ids),
+        ','.join(batch[:5]) + ('…' if len(batch) > 5 else ''),
+    )
+    fake_emg = [{'TaskId': t, 'id': t, 'Status': 'Incomplete'} for t in batch]
+    # Reuse emg-path writer but with pre-picked ids only
+    return upsert_task_details(conn, account_id, client, fake_emg, limit=limit)
 
 
 def _dedupe_notify_events(events: list) -> list:
@@ -1877,10 +2245,15 @@ def run_once() -> dict:
         logger.info('skipping getAmbulanceList (only once daily at 11:00 PM PKT)')
 
     logger.info('fetching tasks…')
-    tasks = [normalize_task(r) for r in (client.get_task_dashboard(
-        start_date=today, end_date=today, visit_page=False) or [])
-        if isinstance(r, dict)]
-    logger.info('tasks=%s', len(tasks))
+    skip_dash = (_env('BRIDGE_SKIP_DASHBOARD') or '0').lower() in ('1', 'true', 'yes')
+    if skip_dash:
+        tasks = []
+        logger.info('skipping task dashboard this cycle')
+    else:
+        tasks = [normalize_task(r) for r in (client.get_task_dashboard(
+            start_date=today, end_date=today, visit_page=False) or [])
+            if isinstance(r, dict)]
+        logger.info('tasks=%s', len(tasks))
 
     districts = []
     if should_fetch_districts():
@@ -2035,14 +2408,22 @@ def run_once() -> dict:
         except Exception as e:
             conn.rollback()
             logger.warning('maintenance pg upsert failed (non-fatal): %s', e)
-        if emg:
-            try:
-                detail_batch = max(1, _int_env('BRIDGE_DETAIL_BATCH', 15))
-                ndet = upsert_task_details(
-                    conn, account_id, client, emg, limit=detail_batch)
-            except Exception as e:
-                conn.rollback()
-                logger.warning('task detail sync failed (non-fatal): %s', e)
+        # Non-fleet open tasks: 15/batch every cycle.
+        # Master-Data fleet is covered by fleet_fast_close_scan (1 min).
+        try:
+            detail_batch = max(1, _int_env('BRIDGE_DETAIL_BATCH', 15))
+            ndet = upsert_nonfleet_task_details(
+                conn, account_id, client, today_d, limit=detail_batch)
+        except Exception as e:
+            conn.rollback()
+            logger.warning('non-fleet detail batch failed (non-fatal): %s', e)
+        # Master Data vehicles: getTaskDetail every ~1 min for fast close
+        try:
+            fast_close = fleet_fast_close_scan(conn, account_id, client, today_d)
+            notify_events.extend(fast_close)
+        except Exception as e:
+            conn.rollback()
+            logger.warning('fleet fast-close scan failed (non-fatal): %s', e)
         # Fleet guarantee: retry any Master Data vehicle task still missing generate
         try:
             safety = collect_fleet_generate_safety_net(conn, account_id, today_d)
@@ -2058,6 +2439,14 @@ def run_once() -> dict:
         except Exception as e:
             conn.rollback()
             logger.warning('fleet close safety-net failed (non-fatal): %s', e)
+
+        # Generate body needs Task Detail create time + CLI (dashboard lacks both)
+        try:
+            notify_events = enrich_generate_events_from_detail(
+                client, notify_events, conn=conn, account_id=account_id,
+            )
+        except Exception as e:
+            logger.warning('generate detail enrich failed (non-fatal): %s', e)
 
         # Chunked POST to Render (generate prioritized; mark only after success)
         nn = push_notify_events(
@@ -2102,12 +2491,19 @@ def main() -> int:
         return 1
     failures = 0
     cycle = 0
-    emg_every = max(1, _int_env('BRIDGE_EMG_EVERY_N', 2))  # EMG every Nth cycle
+    # Loop default 60s so fleet getTaskDetail can run every minute.
+    # Dashboard / EMG gated by EVERY_N to keep their own cadence.
+    emg_every = max(1, _int_env('BRIDGE_EMG_EVERY_N', 6))
+    dash_every = max(1, _int_env('BRIDGE_DASHBOARD_EVERY_N', 3))
     while True:
         try:
             cycle += 1
-            # Patch run_once via env flag for this cycle
-            os.environ['BRIDGE_SKIP_EMG'] = '0' if (cycle % emg_every == 1) else '1'
+            os.environ['BRIDGE_SKIP_EMG'] = (
+                '0' if (cycle % emg_every == 1) else '1'
+            )
+            os.environ['BRIDGE_SKIP_DASHBOARD'] = (
+                '0' if (cycle % dash_every == 1) else '1'
+            )
             run_once()
             failures = 0
         except Exception as e:

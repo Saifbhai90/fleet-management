@@ -2481,14 +2481,13 @@ def _build_task_notify_message(ev: dict) -> str:
     if event == 'close':
         pickup = _clean_notify_text(ev.get('pickup')) or '—'
         dest = _clean_notify_text(ev.get('destination')) or '—'
-        category = _clean_notify_text(ev.get('category')) or '—'
         completed = _format_notify_datetime(ev.get('completed_date_time')) or (
             _clean_notify_text(ev.get('completed_date_time')) or '—'
         )
         return (
             f'Task Create Date/Time: {created}, Task ID: {tid}, '
             f'Phone no: {phone}, Name: {name}, Pickup: {pickup}, '
-            f'Destination: {dest}, Task Category: {category}, '
+            f'Destination: {dest}, '
             f'CompletedDateTime: {completed}'
         )
 
