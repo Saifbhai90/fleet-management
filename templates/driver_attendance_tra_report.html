@@ -23,7 +23,16 @@
       {{ nav_back_button() }}
       <h2 class="mb-0"><i class="bi bi-clipboard-data me-2" style="color:#1d4ed8;"></i>TRA Attendance Sheet</h2>
     </div>
-    <div id="traReportExportButtons" class="d-flex gap-2"></div>
+    {% if report %}
+    <div class="d-flex gap-2 no-print">
+      <button type="button" class="btn btn-outline-secondary btn-sm" id="btnPrintReport" title="Print / Preview">
+        <i class="bi bi-eye me-1"></i>Print / Preview
+      </button>
+      <button type="button" class="btn btn-outline-success btn-sm" id="btnExportReport" title="Export to Excel">
+        <i class="bi bi-file-earmark-excel me-1"></i>Export
+      </button>
+    </div>
+    {% endif %}
   </div>
 
   <div class="card shadow-sm border-0 rounded-3 mb-4 no-print">
@@ -199,16 +208,6 @@
   </div>
   {% endif %}
 </div>
-<link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
-<link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.bootstrap5.min.css">
-<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
-<script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
-<script src="https://cdn.datatables.net/buttons/2.4.1/js/dataTables.buttons.min.js"></script>
-<script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.bootstrap5.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-<script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.html5.min.js"></script>
-<script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.print.min.js"></script>
-
 <script>
 (function() {
   var projectSelect = document.getElementById('traProjectSelect');
@@ -291,16 +290,16 @@
       }).catch(function() { if (typeof onDone === 'function') onDone(); });
   }
 
-  projectSelect.addEventListener('change', function() { loadDistricts(this.value); });
-  districtSelect.addEventListener('change', function() { loadVehicles(); refreshDriverDropdown(); });
+  if (projectSelect) projectSelect.addEventListener('change', function() { loadDistricts(this.value); });
+  if (districtSelect) districtSelect.addEventListener('change', function() { loadVehicles(); refreshDriverDropdown(); });
   if (vehicleSelect) vehicleSelect.addEventListener('change', function() { refreshDriverDropdown(); });
   if (shiftSelect) shiftSelect.addEventListener('change', function() { refreshDriverDropdown(); });
 
   if (hasSingle) {
-    if (scope.projects.length === 1) { projectSelect.value = String(scope.projects[0]); projectSelect.disabled = true; }
-    if (scope.districts.length === 1) { districtSelect.value = String(scope.districts[0]); districtSelect.disabled = true; }
-    if (scope.vehicles.length === 1) { vehicleSelect.value = String(scope.vehicles[0]); vehicleSelect.disabled = true; }
-    if (scope.shifts.length === 1) { shiftSelect.value = String(scope.shifts[0]); shiftSelect.disabled = true; }
+    if (scope.projects.length === 1 && projectSelect) { projectSelect.value = String(scope.projects[0]); projectSelect.disabled = true; }
+    if (scope.districts.length === 1 && districtSelect) { districtSelect.value = String(scope.districts[0]); districtSelect.disabled = true; }
+    if (scope.vehicles.length === 1 && vehicleSelect) { vehicleSelect.value = String(scope.vehicles[0]); vehicleSelect.disabled = true; }
+    if (scope.shifts.length === 1 && shiftSelect) { shiftSelect.value = String(scope.shifts[0]); shiftSelect.disabled = true; }
   }
 
   {% if request.method == 'GET' and not report %}
@@ -327,7 +326,7 @@
   }
 
   function paginate() {
-    var perPage = parseInt(perPageEl.value) || 20;
+    var perPage = parseInt(perPageEl.value, 10) || 20;
     var vis = getVisibleRows();
     var total = vis.length;
     allRows.forEach(function(r) { r.style.display = 'none'; });
@@ -356,11 +355,22 @@
     navEl.innerHTML = html;
   }
 
+  /** Unhide every search-matching row so Print/Export captures full list (not only current page). */
+  function exposeAllForPrintExport() {
+    allRows.forEach(function(r) {
+      r.style.display = (r.dataset.searchHidden === '1') ? 'none' : '';
+    });
+  }
+
+  function restorePaginationSoon() {
+    setTimeout(function() { paginate(); }, 800);
+  }
+
   navEl.addEventListener('click', function(e) {
     var a = e.target.closest('a[data-p]');
     if (!a) return;
     e.preventDefault();
-    var p = parseInt(a.dataset.p);
+    var p = parseInt(a.dataset.p, 10);
     if (p >= 1) { curPage = p; paginate(); }
   });
 
@@ -378,54 +388,40 @@
   }
 
   paginate();
-})();
 
-$(document).ready(function () {
-  var $t = $('#traReportTable');
-  if (!$t.length) return;
-  var dt = $t.DataTable({
-    paging: false,
-    searching: false,
-    ordering: true,
-    info: false,
-    dom: 'rt',
-    buttons: [
+  // Capture-phase: show full filtered set before fleetPrintExport clones the table
+  var printBtn = document.getElementById('btnPrintReport');
+  if (printBtn) {
+    printBtn.addEventListener('click', function() {
+      exposeAllForPrintExport();
+      restorePaginationSoon();
+    }, true);
+  }
+  // Export menu options (Excel/PDF/CSV) — unhide full set right before clone
+  document.addEventListener('click', function(e) {
+    var t = e.target && e.target.closest ? e.target.closest('[data-fleet-export-format]') : null;
+    if (!t) return;
+    if (!document.getElementById('traReportTable')) return;
+    exposeAllForPrintExport();
+    restorePaginationSoon();
+  }, true);
+
+  var reportTitle = {{ (report_title or 'TRA Attendance Sheet')|tojson }};
+  var month = {{ (form.month.data or 0)|tojson }};
+  var year = {{ (form.year.data or 0)|tojson }};
+  var fname = 'TRA_Attendance_Sheet_' + month + '_' + year + '.csv';
+
+  if (window.fleetPrintExport) {
+    window.fleetPrintExport(
+      'traReportTable',
+      reportTitle,
+      fname,
       {
-        extend: 'excelHtml5',
-        text: '<i class="bi bi-file-earmark-excel me-1"></i> Excel',
-        className: 'btn btn-success btn-sm',
-        title: '{{ report_title|e }}'
-      },
-      {
-        extend: 'print',
-        text: '<i class="bi bi-printer me-1"></i> Print / Preview',
-        className: 'btn btn-secondary btn-sm',
-        autoPrint: false,
-        customize: function(win) {
-          var doc = win.document;
-          var body = doc.body;
-          body.style.fontSize = '8px';
-          body.style.fontFamily = 'Arial, sans-serif';
-          body.style.margin = '10px';
-          var header = doc.createElement('div');
-          header.style.cssText = 'text-align:center;margin-bottom:10px;border-bottom:2px solid #1d4ed8;padding-bottom:8px;';
-          header.innerHTML = '<h3 style="color:#1d4ed8;margin:0 0 4px;font-size:14px;">TRA Attendance Sheet</h3><p style="margin:0;color:#555;font-size:10px;">{{ report_title|e }}</p>';
-          body.insertBefore(header, body.firstChild);
-          var tables = doc.querySelectorAll('table');
-          tables.forEach(function(tbl) {
-            tbl.style.fontSize = '7.5px';
-            tbl.style.width = '100%';
-            tbl.style.borderCollapse = 'collapse';
-            var ths = tbl.querySelectorAll('th');
-            ths.forEach(function(th) { th.style.cssText = 'background:#1d4ed8;color:#fff;padding:3px 2px;font-size:7px;text-align:center;border:1px solid #ccc;'; });
-            var tds = tbl.querySelectorAll('td');
-            tds.forEach(function(td) { td.style.cssText = 'padding:2px 2px;border:1px solid #ddd;font-size:7.5px;'; });
-          });
-        }
+        reportTitle: reportTitle,
+        generatedLabel: 'Generated: ' + new Date().toLocaleString()
       }
-    ]
-  });
-  dt.buttons().container().appendTo('#traReportExportButtons');
-});
+    );
+  }
+})();
 </script>
 {% endblock %}

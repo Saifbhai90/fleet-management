@@ -2161,16 +2161,22 @@
                         return;
                     }
                     try {
-                        w.document.write('<!DOCTYPE html><html><head><title>' + title + '</title>');
+                        // Escape title for HTML injection into document.write — bare titles with
+                        // quotes/angles have caused Chromium about:blank RESULT_CODE_KILLED_BAD_MESSAGE.
+                        var safeTitle = String(title || 'Report')
+                            .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                            .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                        w.document.open();
+                        w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + safeTitle + '</title>');
                         w.document.write('<style>' + _fleetPreviewCss + '</style></head><body>');
                         var now2 = new Date();
                         var ds2 = now2.getDate()+'-'+(now2.getMonth()+1)+'-'+now2.getFullYear();
                         var ts2 = now2.getHours().toString().padStart(2,'0')+':'+now2.getMinutes().toString().padStart(2,'0');
-                        w.document.write('<div class="toolbar"><div class="toolbar-left"><p class="toolbar-title">' + title + '</p><span class="toolbar-sub">Fleet Management System &mdash; Print Preview</span></div><div class="toolbar-right"><button class="btn-p" onclick="window.print()">&#128438; Print</button><button class="btn-c" onclick="window.close()">&#10005; Close</button></div></div>');
-                        w.document.write('<div class="rpt-meta"><span><b>Report:</b>&nbsp;' + title + '</span><span><b>Date:</b>&nbsp;' + ds2 + '</span><span><b>Generated:</b>&nbsp;' + ts2 + '</span></div>');
+                        w.document.write('<div class="toolbar"><div class="toolbar-left"><p class="toolbar-title">' + safeTitle + '</p><span class="toolbar-sub">Fleet Management System &mdash; Print Preview</span></div><div class="toolbar-right"><button class="btn-p" onclick="window.print()">Print</button><button class="btn-c" onclick="window.close()">Close</button></div></div>');
+                        w.document.write('<div class="rpt-meta"><span><b>Report:</b>&nbsp;' + safeTitle + '</span><span><b>Date:</b>&nbsp;' + ds2 + '</span><span><b>Generated:</b>&nbsp;' + ts2 + '</span></div>');
                         w.document.write('<div class="rpt-wrap">');
                         w.document.write(clone.outerHTML);
-                        w.document.write('</div><div class="rpt-page-footer"><span>Fleet Management System</span><span>' + title + ' &mdash; ' + ds2 + '</span></div>');
+                        w.document.write('</div><div class="rpt-page-footer"><span>Fleet Management System</span><span>' + safeTitle + ' &mdash; ' + ds2 + '</span></div>');
                         w.document.write('</body></html>');
                         w.document.close();
                         w.focus();
