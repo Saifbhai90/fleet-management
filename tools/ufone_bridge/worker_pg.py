@@ -296,7 +296,9 @@ def _save_task_detail_row(conn, account_id: int, bare: str, detail: dict,
 
 
 def apply_detail_to_notify_event(ev: dict, detail: dict) -> dict:
-    """Fill generate/close notify fields the same way Task Detail popup does."""
+    """Build notify fields from getTaskDetail — detail is the PRIMARY source
+    (same as Task Detail popup / close scan); prior event values are only
+    fallbacks for fields the detail payload does not carry."""
     if not isinstance(ev, dict) or not isinstance(detail, dict) or not detail:
         return ev
     created = _detail_create_datetime(detail)
@@ -305,20 +307,20 @@ def apply_detail_to_notify_event(ev: dict, detail: dict) -> dict:
     cli = _detail_cli(detail)
     if cli:
         ev['cli'] = cli
-    phone = detail.get('phone') or detail.get('phone2')
-    if phone and not ev.get('phone'):
+    phone = str(detail.get('phone') or '').strip()
+    if phone and phone not in ('0', 'None'):
         ev['phone'] = phone
-    name = detail.get('name')
-    if name and not ev.get('patient_name'):
+    name = str(detail.get('name') or '').strip()
+    if name:
         ev['patient_name'] = name
-    addr = detail.get('address')
+    addr = str(detail.get('address') or '').strip()
     if addr:
         ev['pickup'] = addr
-    fac = detail.get('facility_name')
-    if fac and str(fac) not in ('0', ''):
+    fac = str(detail.get('facility_name') or '').strip()
+    if fac and fac != '0':
         ev['destination'] = fac
-    amb = detail.get('amReg_No') or detail.get('Ambulance')
-    if amb and not ev.get('amb_reg_no'):
+    amb = str(detail.get('amReg_No') or detail.get('Ambulance') or '').strip()
+    if amb:
         ev['amb_reg_no'] = amb
     completed = _detail_completed_datetime(detail)
     if completed and ev.get('event') == 'close':
@@ -328,10 +330,12 @@ def apply_detail_to_notify_event(ev: dict, detail: dict) -> dict:
 
 def enrich_generate_events_from_detail(client, events: list, conn=None,
                                        account_id: int | None = None) -> list:
-    """getTaskDetail for each generate event so create time + CLI match Task Detail.
+    """Build every fleet generate notification body from getTaskDetail.
 
-    Dashboard list has date-only CD and no CLI — that is why generates had
-    00:00:00 and CLI —. One quick getTaskDetail per new task fixes both.
+    Dashboard only triggers the event (task id first seen) — the message data
+    (create date+time, CLI, name, phone, pickup, destination) comes from
+    getTaskDetail, exactly like the close notification path. Non-fleet events
+    are skipped: they never match a driver on Render, so no wasted calls.
     """
     if not events or client is None:
         return events
@@ -339,6 +343,13 @@ def enrich_generate_events_from_detail(client, events: list, conn=None,
         from detail_ops import UFONE_IO_LOCK
     except Exception:
         UFONE_IO_LOCK = None  # type: ignore
+
+    fleet_keys = set()
+    if conn is not None:
+        try:
+            fleet_keys = _fleet_reg_keys(conn)
+        except Exception:
+            fleet_keys = set()
 
     out = []
     for ev in events:
@@ -349,9 +360,8 @@ def enrich_generate_events_from_detail(client, events: list, conn=None,
         if not bare:
             out.append(ev)
             continue
-        need_time = _datetime_missing_time(ev.get('task_create_date_time'))
-        need_cli = not str(ev.get('cli') or '').strip()
-        if not need_time and not need_cli:
+        # Only fleet ambulances produce driver notifications
+        if fleet_keys and not _amb_matches_fleet(ev.get('amb_reg_no'), fleet_keys):
             out.append(ev)
             continue
         try:
