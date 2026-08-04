@@ -742,6 +742,7 @@ ENDPOINT_PERMISSION_MAP = [
     ('ufone_vehicle_detail',      'ufone_view'),
     ('ufone_track',               'ufone_view'),
     ('ufone_task_detail',         'ufone_view'),
+    ('ufone_export',              'ufone_view'),
     ('api_ufone',                 'ufone_view'),
     ('ufone_history',             'ufone_history'),
     ('ufone_ignition',            'ufone_reports'),
@@ -750,9 +751,16 @@ ENDPOINT_PERMISSION_MAP = [
     ('ufone_maintenance_history', 'ufone_reports'),
     ('ufone_emergency_tasks',     'ufone_reports'),
     ('ufone_patient_reports',     'ufone_reports'),
+    ('ufone_patient_reports_ussd','ufone_reports'),
     ('ufone_task_counts',         'ufone_reports'),
     ('ufone_task_action',         'ufone_actions'),     # comment/feedback/complete
+    ('api_ufone_task_comment',    'ufone_actions'),
+    ('api_ufone_task_feedback',   'ufone_actions'),
+    ('api_ufone_task_complete',   'ufone_actions'),
     ('ufone_admin',               'ufone_admin'),       # patient reg / amb mgmt
+    ('ufone_admin_patients',      'ufone_admin'),
+    ('ufone_admin_ambulances',    'ufone_admin'),
+    ('ufone_admin_assignments',   'ufone_admin'),
     ('ufone_settings',            'ufone_settings'),    # covers all settings sub-routes
 ]
 

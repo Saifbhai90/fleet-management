@@ -437,6 +437,7 @@ SECTION_FULL_TO_GROUP = {
     'backup': PERMISSION_BACKUP,
     'users_manage': PERMISSION_USERS_MANAGE,
     'tracking': PERMISSION_TRACKING,
+    'ufone': PERMISSION_UFONE,
 }
 
 
@@ -667,6 +668,12 @@ PERMISSION_DEPENDENCIES = {
     'tracking_reports': ['tracking_view'],
     'tracking_alerts': ['tracking_view'],
     'tracking_settings': ['tracking_view'],
+    # Ufone BPOCOPS: reports/admin/settings assume view-level access
+    'ufone_history': ['ufone_view'],
+    'ufone_reports': ['ufone_view'],
+    'ufone_actions': ['ufone_view'],
+    'ufone_admin': ['ufone_view'],
+    'ufone_settings': ['ufone_view'],
 }
 
 # Section -> list of (page_label, list of (code, display_name)) for hierarchical UI (Section → Page → Buttons)
@@ -1099,6 +1106,27 @@ SECTION_PAGE_GROUPS = {
         ('Alerts', [('tracking_alerts', 'Alerts')]),
         ('Settings', [('tracking_settings', 'Settings (Accounts, Linking, Polling)')]),
     ],
+    PERMISSION_UFONE: [
+        ('Ufone BPOCOPS (full)', [('ufone', 'Ufone BPOCOPS (full)')]),
+        ('Live Operations', [
+            ('ufone_view', 'Dashboard, Live Map & Vehicles – View'),
+        ]),
+        ('Vehicle History', [
+            ('ufone_history', 'Vehicle History'),
+        ]),
+        ('Reports', [
+            ('ufone_reports', 'Reports (Tasks, Patients, Distance, Ignition, Maintenance)'),
+        ]),
+        ('Task Actions', [
+            ('ufone_actions', 'Task Actions (Comment, Feedback, Complete)'),
+        ]),
+        ('Admin (Restricted)', [
+            ('ufone_admin', 'Admin (Patient Registration, Ambulance Management)'),
+        ]),
+        ('Configuration', [
+            ('ufone_settings', 'Settings (Accounts, Polling)'),
+        ]),
+    ],
 }
 
 # All permission codes under Reports & Analytics (for Report Centre nav: show hub if user has any).
@@ -1376,6 +1404,17 @@ PAGE_VISIBLE = {
     'tracking_reports': ['tracking', 'tracking_reports'],
     'tracking_alerts': ['tracking', 'tracking_alerts'],
     'tracking_settings': ['tracking', 'tracking_settings'],
+    # Ufone BPOCOPS
+    'ufone': [
+        'ufone', 'ufone_view', 'ufone_history', 'ufone_reports',
+        'ufone_actions', 'ufone_admin', 'ufone_settings',
+    ],
+    'ufone_view': ['ufone', 'ufone_view'],
+    'ufone_history': ['ufone', 'ufone_history'],
+    'ufone_reports': ['ufone', 'ufone_reports'],
+    'ufone_actions': ['ufone', 'ufone_actions'],
+    'ufone_admin': ['ufone', 'ufone_admin'],
+    'ufone_settings': ['ufone', 'ufone_settings'],
 }
 
 
