@@ -108,8 +108,39 @@ window.FleetConfig = {
         });
     })();
     </script>
+    {# Instant GPS proxy: body inline scripts run before deferred fleet_core.
+       Attendance pages used to reject before window.getGPS was assigned. #}
+    <script>
+    (function () {
+        if (typeof window.getGPS === 'function') return;
+        window.getGPS = function fleetGetGPSProxy() {
+            if (window.FleetBridge && typeof window.FleetBridge.getGPS === 'function') {
+                return window.FleetBridge.getGPS();
+            }
+            return new Promise(function (resolve, reject) {
+                var n = 0;
+                var timer = setInterval(function () {
+                    n += 1;
+                    if (window.FleetBridge && typeof window.FleetBridge.getGPS === 'function') {
+                        clearInterval(timer);
+                        try {
+                            window.FleetBridge.getGPS().then(resolve, reject);
+                        } catch (e) {
+                            reject(e);
+                        }
+                        return;
+                    }
+                    if (n >= 80) {
+                        clearInterval(timer);
+                        reject(new Error('GPS load ho raha hai. Retry dabayein ya page refresh karein.'));
+                    }
+                }, 100);
+            });
+        };
+    })();
+    </script>
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
-    <script src="{{ url_for('static', filename='js/core/fleet_core.js') }}?v=8010" defer></script>
+    <script src="{{ url_for('static', filename='js/core/fleet_core.js') }}?v=8011" defer></script>
     <script src="{{ url_for('static', filename='js/core/fleet_ui.js') }}?v=8009" defer></script>
     <script src="{{ url_for('static', filename='js/legacy_android_gpu.js') }}?v=8009" defer></script>
     {% block extra_head %}{% endblock %}

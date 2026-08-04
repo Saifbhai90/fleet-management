@@ -381,6 +381,7 @@
     if (!driverId) {
       gpsSubmitStatus = { can_submit: false, state: 'idle', message: '' };
       applyGpsSubmitStatusUI();
+      updateDistanceUI();
       return Promise.resolve();
     }
     var params = ['driver_id=' + encodeURIComponent(driverId), 'kind=checkout'];
@@ -388,6 +389,8 @@
     var pId = projectSelect.tomselect ? projectSelect.tomselect.getValue() : projectSelect.value;
     if (vId) params.push('vehicle_id=' + encodeURIComponent(vId));
     if (pId) params.push('project_id=' + encodeURIComponent(pId));
+    gpsSubmitStatus = { can_submit: false, state: 'checking', message: '' };
+    btnMarkCheckout.disabled = true;
     return fetch('{{ url_for("api_attendance_gps_submit_status") }}?' + params.join('&'))
       .then(function(r) { return r.json(); })
       .then(function(data) {
@@ -396,10 +399,13 @@
         if (gpsSubmitStatus.state === 'complete' || gpsSubmitStatus.state === 'no_checkin') hasGpsCheckin = false;
         if (gpsSubmitStatus.state === 'complete' && driverId) clearPendingCheckout(String(driverId));
         applyGpsSubmitStatusUI();
+        // Location OK pe button enable/disable yahan re-check — pehle status ke baad disabled reh jata tha
+        updateDistanceUI();
       })
       .catch(function() {
-        gpsSubmitStatus = { can_submit: false, state: 'checking', message: '' };
+        gpsSubmitStatus = { can_submit: false, state: 'blocked', message: 'Status check fail. Retry location ya page refresh.' };
         applyGpsSubmitStatusUI();
+        updateDistanceUI();
       });
   }
 
@@ -443,8 +449,9 @@
         updateDistanceUI();
       })
       .catch(function() {
-        gpsSubmitStatus = { can_submit: false, state: 'checking', message: '' };
+        gpsSubmitStatus = { can_submit: false, state: 'blocked', message: 'Status check fail. Retry location ya page refresh.' };
         applyGpsSubmitStatusUI();
+        updateDistanceUI();
       });
   }
 
@@ -616,9 +623,11 @@
       return;
     }
     var dist = haversineDistance(currentPosition.coords.latitude, currentPosition.coords.longitude, parkingCoords.lat, parkingCoords.lng);
-    locationStatus.classList.remove('d-none', 'warning');
+    var acc = currentPosition.coords.accuracy;
+    var accPart = (acc != null && !isNaN(acc)) ? (' · Accuracy ±' + Math.round(acc) + ' m') : '';
+    locationStatus.classList.remove('d-none', 'warning', 'danger');
     locationStatus.classList.add('neutral');
-    locationText.textContent = 'Distance: ' + Math.round(dist) + ' m' + (!GEOFENCE_ENABLED || dist <= RADIUS_METERS ? ' ✓ Within range' : '');
+    locationText.textContent = 'Distance: ' + Math.round(dist) + ' m' + (!GEOFENCE_ENABLED || dist <= RADIUS_METERS ? ' ✓ Within range' : '') + accPart;
     if (!GEOFENCE_ENABLED || dist <= RADIUS_METERS) locationStatus.classList.remove('neutral'), locationStatus.classList.add('success');
     if (GEOFENCE_ENABLED && dist > RADIUS_METERS) {
       btnMarkCheckout.disabled = true;
@@ -638,8 +647,7 @@
       return;
     }
     noCheckinMessage.classList.add('d-none');
-    var opt = driverSelect.options[driverSelect.selectedIndex];
-    var shift = (opt && opt.dataset.shift) ? opt.dataset.shift : shiftSelect.value;
+    var shift = selectedShift();
     var timeCheck = isInEffectiveCheckoutWindow();
     if (!timeCheck) timeCheck = isInCheckoutTimeWindow(shift, timeWindow);
     if (!timeCheck.inWindow) {
@@ -649,12 +657,32 @@
       return;
     }
     timeWindowMessage.classList.add('d-none');
+    if (gpsSubmitStatus.state === 'checking') {
+      btnMarkCheckout.disabled = true;
+      return;
+    }
     if (!gpsSubmitStatus.can_submit) {
       btnMarkCheckout.disabled = true;
       applyGpsSubmitStatusUI();
       return;
     }
     btnMarkCheckout.disabled = false;
+  }
+
+  function selectedShift() {
+    var shiftVal = shiftSelect.tomselect ? shiftSelect.tomselect.getValue() : shiftSelect.value;
+    if (shiftVal) return String(shiftVal);
+    try {
+      var raw = driverSelect.tomselect ? driverSelect.tomselect.getValue() : driverSelect.value;
+      if (raw && driverSelect.options) {
+        for (var i = 0; i < driverSelect.options.length; i++) {
+          if (String(driverSelect.options[i].value) === String(raw) && driverSelect.options[i].dataset && driverSelect.options[i].dataset.shift) {
+            return driverSelect.options[i].dataset.shift;
+          }
+        }
+      }
+    } catch (e) {}
+    return shiftVal || '';
   }
 
   function fetchHasGpsCheckin() {
@@ -863,27 +891,30 @@
       parkingNotSetMessage.classList.remove('d-none');
       locationStatus.classList.add('d-none');
       locationText.textContent = '';
-      return;
+      return Promise.resolve(null);
     }
     parkingNotSetMessage.classList.add('d-none');
     locationSpinner.classList.remove('d-none');
     locationStatus.classList.add('d-none');
-    locationStatus.classList.remove('success', 'warning', 'neutral');
+    locationStatus.classList.remove('success', 'warning', 'neutral', 'danger');
     btnRetryLocation.classList.add('d-none');
     distanceMessage.classList.add('d-none');
     timeWindowMessage.classList.add('d-none');
+    btnMarkCheckout.disabled = true;
     var gpsPromise = (typeof window.getGPS === 'function')
       ? window.getGPS()
       : new Promise(function(resolve, reject) {
-          reject(new Error('GPS not available — native plugin required'));
+          reject(new Error('GPS load ho raha hai. Retry dabayein.'));
         });
-    gpsPromise.then(function(coords) {
+    return gpsPromise.then(function(coords) {
       locationSpinner.classList.add('d-none');
       currentPosition = { coords: { latitude: coords.latitude, longitude: coords.longitude, accuracy: coords.accuracy } };
       updateDistanceUI();
+      return currentPosition;
     }).catch(function(err) {
       locationSpinner.classList.add('d-none');
-      if (err && (err.code === 'location_denied')) return;
+      currentPosition = null;
+      if (err && (err.code === 'location_denied')) return null;
       locationStatus.classList.remove('d-none', 'success', 'neutral', 'warning');
       locationStatus.classList.add('danger');
       locationText.textContent = 'Location nahi mili: ' + (err && err.code === 3 ? 'Timeout. Retry karein.' : (err && err.message ? err.message : 'Permission denied.'));
@@ -892,6 +923,7 @@
       btnMarkCheckout.disabled = true;
       timeWindowMessage.classList.add('d-none');
       if (noCheckinMessage) noCheckinMessage.classList.add('d-none');
+      return null;
     });
   }
 
@@ -1331,15 +1363,30 @@
       alert(gpsSubmitStatus.message || 'Aaj check-out allowed nahi. Neeche status dekhein.');
       return;
     }
-    if (!currentPosition || !parkingCoords) return;
     if (!selectedDriverId()) { alert('Please select a driver.'); return; }
     if (!parkingId.value || !parkingLat.value || !parkingLng.value) {
       alert('Parking coordinates set nahi. Admin se parking location set karwain.');
       return;
     }
-    // Blur all TomSelects before camera to prevent auto-open on return
-    if (typeof window._fleetCloseAllTomSelects === 'function') window._fleetCloseAllTomSelects();
-    openNativeCheckoutCamera();
+    btnMarkCheckout.disabled = true;
+    fetchLocation().then(function(pos) {
+      if (!pos || !parkingCoords) {
+        alert('Location nahi mili. Retry karein.');
+        updateDistanceUI();
+        return;
+      }
+      if (GEOFENCE_ENABLED) {
+        var dist = haversineDistance(pos.coords.latitude, pos.coords.longitude, parkingCoords.lat, parkingCoords.lng);
+        if (dist > RADIUS_METERS) {
+          alert('Aap parking se ' + Math.round(dist) + ' m door hain (limit ' + RADIUS_METERS + ' m). Parking par jakar phir try karein.');
+          updateDistanceUI();
+          return;
+        }
+      }
+      if (typeof window._fleetCloseAllTomSelects === 'function') window._fleetCloseAllTomSelects();
+      openNativeCheckoutCamera();
+      updateDistanceUI();
+    });
   });
 
   cameraModal.addEventListener('hidden.bs.modal', function() {

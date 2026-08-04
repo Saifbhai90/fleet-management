@@ -3622,6 +3622,33 @@ def api_attendance_gps_checkout_submit():
             existing.check_out_photo_path = photo_path
             existing.check_out_latitude = existing.check_out_latitude or lat_val
             existing.check_out_longitude = existing.check_out_longitude or lng_val
+            # Offline retry often uploads photo after session was never closed locally.
+            # Without check_out time the driver still shows "open check-in".
+            if existing.check_out is None:
+                co_t = None
+                _raw_cap_at = (body.get('captured_at') or body.get('check_out_time') or '').strip()
+                if _raw_cap_at:
+                    try:
+                        from datetime import datetime as _dt_cap
+                        for _fmt in ('%H:%M:%S', '%H:%M', '%I:%M %p', '%I:%M:%S %p'):
+                            try:
+                                co_t = _dt_cap.strptime(_raw_cap_at, _fmt).time()
+                                break
+                            except ValueError:
+                                continue
+                    except Exception:
+                        co_t = None
+                if co_t is None:
+                    co_t = _attendance_local_time()
+                if existing.check_in is not None and lookup_date == existing.attendance_date and co_t <= existing.check_in:
+                    # Overnight / bad local clock — use server now for same-day rule
+                    co_t = _attendance_local_time()
+                    if existing.check_in is not None and co_t <= existing.check_in:
+                        from datetime import datetime as _dt_bump, timedelta as _td_bump
+                        _bump = (_dt_bump.combine(lookup_date, existing.check_in) + _td_bump(minutes=1)).time()
+                        co_t = _bump
+                existing.check_out = co_t
+                existing.check_out_date = lookup_date
             existing.updated_at = pk_now()
             _sync_note = f' | Checkout photo delayed-sync {today.strftime("%d-%m-%Y")}'
             if _sync_note not in (existing.remarks or ''):

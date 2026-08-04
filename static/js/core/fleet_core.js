@@ -5695,7 +5695,7 @@
         };
     })();
 
-    // Expose getGPS on window for attendance templates that check window.getGPS
+    // Expose getGPS on window (overwrites base.html proxy once bridge is ready)
     if (window.FleetBridge && typeof window.FleetBridge.getGPS === 'function') {
         window.getGPS = window.FleetBridge.getGPS;
     }
