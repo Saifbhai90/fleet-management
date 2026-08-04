@@ -22,7 +22,7 @@ from forms import (
 from datetime import datetime, date, timedelta
 from sqlalchemy import func, text, or_, and_
 from auth_utils import user_can_access, get_user_context
-from utils import pk_now, pk_date, parse_date, format_date_ddmmyyyy, generate_csv_response
+from utils import pk_now, pk_date, parse_date, format_date_ddmmyyyy, generate_csv_response, emg_amb_reg_matches_vehicle
 from vehicle_sort_utils import vehicle_order_by, sort_vehicles_in_memory
 import re
 import os
@@ -988,6 +988,10 @@ def without_task_new():
             except (ValueError, TypeError):
                 logbook_task = 0
             try:
+                emg_task = int(request.form.get(f'row_{idx}_emg_task') or 0)
+            except (ValueError, TypeError):
+                emg_task = 0
+            try:
                 t_km = float(request.form.get(f'row_{idx}_t_km') or 0)
             except (ValueError, TypeError):
                 t_km = 0
@@ -1015,7 +1019,7 @@ def without_task_new():
                 existing.km_out = km_out
                 existing.d_km = d_km
                 existing.logbook_task = logbook_task
-                existing.emg_task = 0
+                existing.emg_task = emg_task
                 existing.t_km = t_km
                 existing.remarks = remarks
                 existing.fine = str(fine_amt) if fine_amt > 0 else 'No'
@@ -1026,7 +1030,7 @@ def without_task_new():
                 rec = VehicleMoveWithoutTask(
                     move_date=move_date, district_id=row_did, project_id=row_pid, vehicle_id=veh_id,
                     km_in=km_in, km_out=km_out, d_km=d_km,
-                    logbook_task=logbook_task, emg_task=0, t_km=t_km,
+                    logbook_task=logbook_task, emg_task=emg_task, t_km=t_km,
                     remarks=remarks, fine=str(fine_amt) if fine_amt > 0 else 'No',
                     fine_amount=fine_amt, driver_id=driver_id,
                 )
@@ -1100,10 +1104,12 @@ def without_task_new():
             kms_driven = close_reading - start_reading
             if kms_driven < 0:
                 kms_driven = 0
+            # Ufone often stores "LEG-18-1154 COW" / "GBD-24-395-COW" while Master
+            # Data is plain "LEG-18-1154". Exact-match made emg_count always 0 for
+            # tagged ambulances, so real Green tasks still appeared as "without task".
             emg_count = EmergencyTaskRecord.query.filter(
                 EmergencyTaskRecord.task_date == view_date,
-                EmergencyTaskRecord.amb_reg_no == v.vehicle_no,
-                EmergencyTaskRecord.category.in_(['Green', 'Yellow']),
+                emg_amb_reg_matches_vehicle(v.vehicle_no),
             ).count()
             if kms_driven > 0 and emg_count == 0:
                 _mil_rec = VehicleMileageRecord.query.filter_by(task_date=view_date, reg_no=v.vehicle_no).first()
@@ -1121,6 +1127,7 @@ def without_task_new():
                     'close_reading': close_reading,
                     'kms_driven': round(kms_driven, 2),
                     'logbook_task': t.tasks_count or 0,
+                    'emg_task': emg_count,
                     'tracker_km': round(tracker_km, 2),
                     'drivers': assigned_drivers,
                     'saved': saved,
@@ -1142,6 +1149,7 @@ def without_task_new():
                     'close_reading': float(sr.km_out or 0),
                     'kms_driven': float(sr.d_km or 0),
                     'logbook_task': sr.logbook_task or 0,
+                    'emg_task': int(sr.emg_task or 0),
                     'tracker_km': float(sr.t_km or 0),
                     'drivers': assigned_drivers,
                     'saved': sr,

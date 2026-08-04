@@ -96,7 +96,14 @@
                 <input type="hidden" name="row_{{ loop.index0 }}_logbook_task" value="{{ row.logbook_task }}">
                 {{ row.logbook_task }}
               </td>
-              <td class="text-center"><span class="badge bg-secondary">0</span></td>
+              <td class="text-center">
+                <input type="hidden" name="row_{{ loop.index0 }}_emg_task" value="{{ row.emg_task|default(0) }}">
+                {% if row.emg_task %}
+                  <span class="badge bg-success">{{ row.emg_task }}</span>
+                {% else %}
+                  <span class="badge bg-secondary">0</span>
+                {% endif %}
+              </td>
               <td class="text-end">
                 <input type="hidden" name="row_{{ loop.index0 }}_t_km" value="{{ row.tracker_km }}">
                 {{ row.tracker_km }}
