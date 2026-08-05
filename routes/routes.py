@@ -5051,9 +5051,9 @@ def _first_activity_after_task_assign(sorted_acts, assign_dt, close_dt):
 
 def _first_activity_after_start_time(sorted_acts, day_date, start_time_limit):
     """
-    Late mode Vehicle Start: selected Start Time ke baad (usi din) pehli
-    movement (distance > 0). Task Create / Close se independent.
-    Agar gaari pehle se chal rahi ho, pehli activity >= start_time count hoti hai.
+    Late mode Vehicle Start: selected Start Time ke *baad* (strictly after) usi din
+    pehli movement (distance > 0). Exact Start Time pe start = on-time, Late list se bahar.
+    Task Create / Close se independent.
     """
     if not day_date or start_time_limit is None:
         return None, None
@@ -5063,7 +5063,8 @@ def _first_activity_after_start_time(sorted_acts, day_date, start_time_limit):
             continue
         if adt.date() > day_date:
             break
-        if adt < from_dt:
+        # Strictly after Start Time (08:00:00 pe move Late nahi)
+        if adt <= from_dt:
             continue
         try:
             d_km = float(rec.distance or 0)
