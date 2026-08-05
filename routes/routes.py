@@ -5277,7 +5277,13 @@ def _task_start_delay_rows(from_date, to_date, project_id=0, district_id=0, vehi
             if check_type == 'below' and (delay_minutes is None or not (delay_minutes < delay_limit)):
                 continue
 
-        if start_time_limit is not None or end_time_limit is not None:
+        # Late: only starts strictly after selected Start Time (no 0m / exact 08:00 rows)
+        if status == 'late_only' and start_time_limit is not None:
+            if v_start_dt is None or delay_minutes is None or delay_minutes <= 0:
+                continue
+            if end_time_limit is not None and v_start_dt.time() > end_time_limit:
+                continue
+        elif start_time_limit is not None or end_time_limit is not None:
             if v_start_dt is None:
                 continue
             if not _vehicle_start_in_time_window(v_start_dt.time(), start_time_limit, end_time_limit):

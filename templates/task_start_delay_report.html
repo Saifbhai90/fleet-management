@@ -51,7 +51,7 @@
       <div class="me-auto">
         <h2><i class="bi bi-alarm me-2"></i>Driver Response Time Report</h2>
         {% if status == 'late_only' %}
-        <div class="tsd-subtitle">Late mode: selected Start Time ke baad us din pehli movement (distance &gt; 0) = Vehicle Start. Delay = Start Time se kitni der baad. Task Create is se alag.</div>
+        <div class="tsd-subtitle">Late mode: selected Start Time ke baad (not equal) us din pehli movement = Vehicle Start. Sirf late vehicles (e.g. 08:01+); 0m / exact Start Time rows hide. Task Create alag.</div>
         {% elif status == 'early_only' %}
         <div class="tsd-subtitle">Early mode: End Time se pehle vehicle start — kitni der early (task window pe movement).</div>
         {% else %}
