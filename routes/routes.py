@@ -5032,12 +5032,39 @@ def _first_activity_after_task_assign(sorted_acts, assign_dt, close_dt):
     """
     Pehli activity jahan assign/close ke darmiyan ho, assign ke baat ya usi time,
     aur jis line ka distance > 0 ho (movement) — yahi 'Vehicle Start' time.
+    (Default / Early modes — task window.)
     """
     for adt, rec in sorted_acts:
         if adt < assign_dt:
             continue
         if adt > close_dt:
             break
+        try:
+            d_km = float(rec.distance or 0)
+        except (TypeError, ValueError):
+            d_km = 0.0
+        if d_km <= 0:
+            continue
+        return adt, rec
+    return None, None
+
+
+def _first_activity_after_start_time(sorted_acts, day_date, start_time_limit):
+    """
+    Late mode Vehicle Start: selected Start Time ke baad (usi din) pehli
+    movement (distance > 0). Task Create / Close se independent.
+    Agar gaari pehle se chal rahi ho, pehli activity >= start_time count hoti hai.
+    """
+    if not day_date or start_time_limit is None:
+        return None, None
+    from_dt = datetime.combine(day_date, start_time_limit)
+    for adt, rec in sorted_acts:
+        if adt.date() < day_date:
+            continue
+        if adt.date() > day_date:
+            break
+        if adt < from_dt:
+            continue
         try:
             d_km = float(rec.distance or 0)
         except (TypeError, ValueError):
@@ -5214,10 +5241,21 @@ def _task_start_delay_rows(from_date, to_date, project_id=0, district_id=0, vehi
         kn = (emg.amb_reg_no or '').strip().upper()
         assign_dt = _parse_emg_datetime(emg.excel_created_date)
         close_dt = _parse_emg_datetime(emg.completed_date_time)
-        if not assign_dt or not close_dt or close_dt < assign_dt:
-            continue
-        sorted_acts = act_index.get(kn) or []
-        v_start_dt, _v_act = _first_activity_after_task_assign(sorted_acts, assign_dt, close_dt)
+        # Late mode: Vehicle Start / delay only need task date + activity (not assign→move lag).
+        if status == 'late_only' and start_time_limit is not None:
+            if not emg.task_date:
+                continue
+            # Keep create/close for display when present; do not require them for start.
+            sorted_acts = act_index.get(kn) or []
+            v_start_dt, _v_act = _first_activity_after_start_time(
+                sorted_acts, emg.task_date, start_time_limit
+            )
+        else:
+            if not assign_dt or not close_dt or close_dt < assign_dt:
+                continue
+            sorted_acts = act_index.get(kn) or []
+            v_start_dt, _v_act = _first_activity_after_task_assign(sorted_acts, assign_dt, close_dt)
+
         if v_start_dt is None:
             delay_minutes = None
         else:
