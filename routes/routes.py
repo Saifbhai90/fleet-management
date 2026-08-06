@@ -1582,6 +1582,7 @@ def _next_attendance_segment(driver_id, attendance_date):
 
 
 def _gps_marked_attendance_row(rec):
+    """True if check-in was GPS+Camera style (coords + GPS/Camera remarks)."""
     if not rec:
         return False
     rem = (rec.remarks or '') or ''
@@ -1593,42 +1594,48 @@ def _gps_marked_attendance_row(rec):
 
 
 def _open_gps_driver_attendance_session(driver_id, today):
-    rows = (
+    """
+    Open session (check-in hai, check-out nahi) — GPS+Camera ya manual check-in dono.
+    GPS Check-out / dual check-in block isi pe dependent hain.
+    """
+    if not driver_id or not today:
+        return None
+    return (
         DriverAttendance.query.filter(
             DriverAttendance.driver_id == driver_id,
             DriverAttendance.attendance_date == today,
             DriverAttendance.check_in.isnot(None),
             DriverAttendance.check_out.is_(None),
         )
-        .order_by(DriverAttendance.attendance_segment.desc())
-        .all()
+        .order_by(DriverAttendance.attendance_segment.desc(), DriverAttendance.id.desc())
+        .first()
     )
-    for rec in rows:
-        if _gps_marked_attendance_row(rec):
-            return rec
-    return None
 
 
 def _open_gps_driver_attendance_for_checkout(driver_id, today):
-    """Today's open GPS-marked session, or open session from up to 7 days back."""
+    """
+    Today's open session (GPS or manual), or open session from up to 7 days back.
+    Used by Mark Check-out (GPS+Camera) and Auto GPS Check-out window logic.
+    """
     rec = _open_gps_driver_attendance_session(driver_id, today)
     if rec:
         return rec
+    if not driver_id or not today:
+        return None
     for days_back in range(1, 8):
         past_date = today - timedelta(days=days_back)
-        rows = (
+        rec = (
             DriverAttendance.query.filter(
                 DriverAttendance.driver_id == driver_id,
                 DriverAttendance.attendance_date == past_date,
                 DriverAttendance.check_in.isnot(None),
                 DriverAttendance.check_out.is_(None),
             )
-            .order_by(DriverAttendance.attendance_segment.desc())
-            .all()
+            .order_by(DriverAttendance.attendance_segment.desc(), DriverAttendance.id.desc())
+            .first()
         )
-        for r in rows:
-            if _gps_marked_attendance_row(r):
-                return r
+        if rec:
+            return rec
     return None
 
 
@@ -6380,7 +6387,7 @@ def _gps_checkin_submit_status(driver_id, vehicle_id=None, project_id=None):
     cap = _vehicle_capacity_value(vehicle)
 
     open_rec_self = _open_gps_driver_attendance_session(driver_id, today)
-    if open_rec_self and _gps_marked_attendance_row(open_rec_self):
+    if open_rec_self:
         ci_t = open_rec_self.check_in.strftime('%H:%M') if open_rec_self.check_in else None
         dt_s, ci_s = _attendance_checkin_stamp(open_rec_self)
         if not _alternate_checkin_window_active(tw, open_rec_self.check_in, now_time):
@@ -6503,7 +6510,7 @@ def _gps_checkout_submit_status(driver_id, vehicle_id=None, project_id=None):
         .order_by(DriverAttendance.attendance_segment.desc(), DriverAttendance.id.desc())
         .first()
     )
-    if done and _gps_marked_attendance_row(done):
+    if done:
         co_t = done.check_out.strftime('%H:%M') if done.check_out else None
         return {
             'ok': True,
@@ -6521,10 +6528,8 @@ def _gps_checkout_submit_status(driver_id, vehicle_id=None, project_id=None):
         'ok': True,
         'can_submit': False,
         'state': 'no_checkin',
-        'message': 'Pehle Mark Attendance se check-in karein, phir check-out karein.',
+        'message': 'Pehle check-in karein (GPS+Camera ya Manual), phir check-out karein.',
     }
-
-
 
 
 def _attendance_media_payload(rec, kind):

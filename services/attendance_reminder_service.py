@@ -108,8 +108,7 @@ def _run_auto_gps_checkout(now_dt, helpers):
         driver = rec.driver
         if not driver:
             continue
-        if not helpers['gps_marked'](rec):
-            continue
+        # Manual + GPS open sessions — same window-end auto pattern
         tw = helpers['time_window'](driver=driver)
         co_s, co_e, _cross = helpers['checkout_bounds'](driver, tw, rec.check_in)
         if not co_e:
@@ -141,23 +140,21 @@ def _run_auto_gps_checkout(now_dt, helpers):
 
 
 def _vehicle_has_gps_checkin_today(vehicle_id, today, helpers):
+    """Any check-in today on vehicle (manual ya GPS) — suppresses check-in reminders."""
     if not vehicle_id:
         return False
     from models import Driver, DriverAttendance
 
-    rows = (
+    return (
         DriverAttendance.query.join(Driver, Driver.id == DriverAttendance.driver_id)
         .filter(
             Driver.vehicle_id == vehicle_id,
             DriverAttendance.attendance_date == today,
             DriverAttendance.check_in.isnot(None),
         )
-        .all()
+        .first()
+        is not None
     )
-    for rec in rows:
-        if helpers['gps_marked'](rec):
-            return True
-    return False
 
 
 def _drivers_on_vehicle(vehicle_id):

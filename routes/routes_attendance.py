@@ -2929,7 +2929,8 @@ def _gps_checkin_submit_status(driver_id, vehicle_id=None, project_id=None):
     cap = _vehicle_capacity_value(vehicle)
 
     open_rec_self = _open_gps_driver_attendance_session(driver_id, today)
-    if open_rec_self and _gps_marked_attendance_row(open_rec_self):
+    # Manual or GPS open session — naya GPS check-in block; out GPS+Camera / Auto se
+    if open_rec_self:
         ci_t = open_rec_self.check_in.strftime('%H:%M') if open_rec_self.check_in else None
         dt_s, ci_s = _attendance_checkin_stamp(open_rec_self)
         if not _alternate_checkin_window_active(tw, open_rec_self.check_in, now_time):
@@ -3026,7 +3027,7 @@ def _gps_checkin_submit_status(driver_id, vehicle_id=None, project_id=None):
 
 
 def _gps_checkout_submit_status(driver_id, vehicle_id=None, project_id=None):
-    """Whether GPS check-out can be submitted now."""
+    """Whether GPS check-out can be submitted (open manual ya GPS check-in session)."""
     today = _attendance_local_date()
     driver = db.session.get(Driver, driver_id)
     if not driver:
@@ -3052,7 +3053,7 @@ def _gps_checkout_submit_status(driver_id, vehicle_id=None, project_id=None):
         .order_by(DriverAttendance.attendance_segment.desc(), DriverAttendance.id.desc())
         .first()
     )
-    if done and _gps_marked_attendance_row(done):
+    if done:
         co_t = done.check_out.strftime('%H:%M') if done.check_out else None
         return {
             'ok': True,
@@ -3070,7 +3071,7 @@ def _gps_checkout_submit_status(driver_id, vehicle_id=None, project_id=None):
         'ok': True,
         'can_submit': False,
         'state': 'no_checkin',
-        'message': 'Pehle Mark Attendance se check-in karein, phir check-out karein.',
+        'message': 'Pehle check-in karein (GPS+Camera ya Manual), phir check-out karein.',
     }
 
 
@@ -3095,7 +3096,7 @@ def api_attendance_gps_submit_status():
 
 @app.route('/api/attendance-has-gps-checkin')
 def api_attendance_has_gps_checkin():
-    """Check if driver has GPS+Camera check-in for today (for Check-out form: button enable only if true)."""
+    """Open check-in for GPS Check-out (manual ya GPS+Camera). Name legacy; value = open session."""
     driver_id = request.args.get('driver_id', type=int)
     vehicle_id_param = request.args.get('vehicle_id', type=int)
     project_id_param = request.args.get('project_id', type=int)
@@ -3674,7 +3675,10 @@ def api_attendance_gps_checkout_submit():
 
         # --- Normal (same-day) path ---
         if not existing:
-            return jsonify({'ok': False, 'message': 'Current date ke liye GPS check-in nahi mila.'}), 400
+            return jsonify({
+                'ok': False,
+                'message': 'Open check-in nahi mila (GPS+Camera ya Manual). Pehle check-in karein.',
+            }), 400
         now = pk_now()
         now_time = _attendance_local_time()
         _co_vehicle_id = int(body.get('vehicle_id') or 0) or None
@@ -4055,7 +4059,7 @@ def driver_attendance_checkout():
         existing = _open_gps_driver_attendance_for_checkout(driver_id, today)
         if not existing:
             flash(
-                'Mark At Attendance (GPS + Camera) se khula check-in session nahi mila — pehle check-in karein.',
+                'Khula check-in session nahi mila (GPS+Camera ya Manual) — pehle check-in karein.',
                 'danger',
             )
             return redirect(url_for('driver_attendance_checkout'))
