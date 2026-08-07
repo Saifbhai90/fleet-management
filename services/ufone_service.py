@@ -3273,53 +3273,128 @@ def update_account(account_id: int, label: str = None, username: str = None,
 
 
 def delete_account(account_id: int):
-    """Delete an account and all cascade-dependent cache rows.
+    """Delete an account without blocking the HTTP request on large caches.
 
-    UI delete was failing when child tables (task_detail_cache, maint history,
-    report_cache, etc.) still referenced the account.
+    Child cache rows (task detail, tasks, …) can be tens of thousands; deleting
+    them in the request causes Render 502. We deactivate immediately, then purge
+    dependents + the account row in a background job.
     """
-    from models import (
-        UfoneAccount, UfoneVehicleCache, UfoneTaskCache,
-        UfoneMaintenanceCache, UfoneMaintenanceHistory,
-        UfoneTaskDetailCache, UfoneReportCache,
-    )
+    from models import UfoneAccount
     from app import db
-    from sqlalchemy import text
+    import threading
+    from flask import current_app
 
-    # Order: children first (FK → ufone_account.id)
-    child_models = (
-        UfoneTaskDetailCache,
-        UfoneReportCache,
-        UfoneVehicleCache,
-        UfoneTaskCache,
-        UfoneMaintenanceCache,
-        UfoneMaintenanceHistory,
-    )
-    for model in child_models:
-        model.query.filter_by(account_id=account_id).delete(
-            synchronize_session=False,
-        )
+    acct = UfoneAccount.query.get(account_id)
+    if not acct:
+        raise RuntimeError(f"Account {account_id} not found")
 
-    # Tables created by bridge without a model class (no FK on some DBs, but
-    # clean orphans when present).
-    for raw_sql in (
-        "DELETE FROM ufone_task_event_notify WHERE account_id = :aid",
-        # EMG history is soft-linked (nullable account_id, no FK). Keep rows but
-        # clear the account id so no dangling reference logic.
-        "UPDATE emergency_task_record SET account_id = NULL WHERE account_id = :aid",
-    ):
-        try:
-            db.session.execute(text(raw_sql), {"aid": account_id})
-        except Exception as e:
-            logger.debug("delete_account cleanup skip: %s — %s", raw_sql[:40], e)
-
-    UfoneAccount.query.filter_by(id=account_id).delete(synchronize_session=False)
+    # Stop bridge/login use right away.
+    acct.is_active = False
+    if not (acct.label or '').startswith('[deleting]'):
+        acct.label = f"[deleting] {acct.label or acct.username}"
     db.session.commit()
     _reset_client(account_id)
     with _live_cache_lock:
         _live_cache.pop(account_id, None)
     with _task_cache_lock:
         _task_cache.pop(account_id, None)
+
+    app_obj = current_app._get_current_object()
+
+    def _bg():
+        try:
+            with app_obj.app_context():
+                _purge_ufone_account_hard(account_id)
+        except Exception as e:
+            logger.exception(
+                "ufone account %s background purge failed: %s", account_id, e,
+            )
+
+    threading.Thread(
+        target=_bg, daemon=True, name=f'ufone-del-{account_id}',
+    ).start()
+
+
+def _purge_ufone_account_hard(account_id: int) -> None:
+    """Delete FK children in batches, then the account row. Safe to re-run.
+
+    emergency_task_record has no FK — left as-is (history preserved).
+    """
+    from app import db
+    from sqlalchemy import text
+
+    # Batch size keeps each statement under Render request/proxy time if needed.
+    batch = 2000
+    tables_batched = (
+        'ufone_task_detail_cache',
+        'ufone_task_cache',
+        'ufone_task_event_notify',
+        'ufone_vehicle_cache',
+        'ufone_maintenance_history',
+    )
+    tables_once = (
+        'ufone_report_cache',
+        'ufone_maintenance_cache',
+    )
+
+    with db.engine.begin() as conn:
+        try:
+            conn.execute(text("SET LOCAL statement_timeout = '0'"))
+        except Exception:
+            pass
+
+        for table in tables_batched:
+            total = 0
+            while True:
+                try:
+                    res = conn.execute(
+                        text(
+                            f"DELETE FROM {table} WHERE ctid IN ("
+                            f"  SELECT ctid FROM {table}"
+                            f"  WHERE account_id = :aid"
+                            f"  LIMIT :lim"
+                            f")"
+                        ),
+                        {"aid": account_id, "lim": batch},
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "ufone purge %s account_id=%s: %s", table, account_id, e,
+                    )
+                    break
+                n = res.rowcount or 0
+                total += n
+                if n < batch:
+                    break
+            if total:
+                logger.info(
+                    "ufone purge %s account_id=%s rows=%s",
+                    table, account_id, total,
+                )
+
+        for table in tables_once:
+            try:
+                res = conn.execute(
+                    text(f"DELETE FROM {table} WHERE account_id = :aid"),
+                    {"aid": account_id},
+                )
+                if res.rowcount:
+                    logger.info(
+                        "ufone purge %s account_id=%s rows=%s",
+                        table, account_id, res.rowcount,
+                    )
+            except Exception as e:
+                logger.warning(
+                    "ufone purge %s account_id=%s: %s", table, account_id, e,
+                )
+
+        conn.execute(
+            text("DELETE FROM ufone_account WHERE id = :aid"),
+            {"aid": account_id},
+        )
+        logger.info("ufone account %s hard-deleted", account_id)
+
+    _reset_client(account_id)
 
 
 def test_connection(username: str, password: str, app=None) -> tuple[bool, str]:

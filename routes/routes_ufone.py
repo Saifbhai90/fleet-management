@@ -1492,7 +1492,11 @@ def ufone_settings_account_edit(acct_id):
 def ufone_settings_account_delete(acct_id):
     try:
         delete_account(acct_id)
-        flash(f"Account {acct_id} delete ho gaya.", "success")
+        flash(
+            f"Account {acct_id} delete shuru — cache cleanup background me "
+            f"(1–2 min). Page refresh karein jab list se hat jaye.",
+            "success",
+        )
     except Exception as e:
         flash(f"Error: {e}", "danger")
     return redirect(url_for('ufone_settings'))
