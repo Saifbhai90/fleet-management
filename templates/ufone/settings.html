@@ -71,9 +71,22 @@
                   <button class="btn btn-sm btn-outline-secondary test-acct-btn" data-id="{{ a.id }}">
                     <i class="bi bi-wifi"></i> Test
                   </button>
-                  <form method="post" action="{{ url_for('ufone_settings_account_delete', acct_id=a.id) }}" class="d-inline" onsubmit="return confirm('Are you sure you want to delete this account?');">
+                  <form method="post" action="{{ url_for('ufone_settings_account_toggle', acct_id=a.id) }}" class="d-inline">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <button type="submit" class="btn btn-sm btn-outline-danger">
+                    {% if a.is_active %}
+                    <button type="submit" class="btn btn-sm btn-outline-warning" title="Stop bridge login; keep history">
+                      <i class="bi bi-pause-circle"></i> Deactivate
+                    </button>
+                    {% else %}
+                    <button type="submit" class="btn btn-sm btn-outline-success" title="Allow bridge login again">
+                      <i class="bi bi-play-circle"></i> Activate
+                    </button>
+                    {% endif %}
+                  </form>
+                  <form method="post" action="{{ url_for('ufone_settings_account_delete', acct_id=a.id) }}" class="d-inline"
+                        onsubmit="return confirm('PERMANENT delete: account + portal caches only.\n\nEmergency task history is NOT deleted.\n\nPrefer Deactivate unless you are sure.\n\nContinue?');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Permanent — prefer Deactivate">
                       <i class="bi bi-trash"></i>
                     </button>
                   </form>
@@ -153,8 +166,9 @@
         </div>
         <ul class="text-muted small mb-0 ps-3">
           <li class="mb-1">Passwords are encrypted (Fernet) in the database.</li>
-          <li class="mb-1">The system bypasses Ufone's Google reCAPTCHA server-side.</li>
-          <li class="mb-1">Session is reused to avoid unnecessary login history.</li>
+          <li class="mb-1"><strong>Prefer Deactivate</strong> over Delete — stops VPS login, keeps all history.</li>
+          <li class="mb-1">Hard Delete only removes the account row + small caches (safe). It does not wipe EMG task history.</li>
+          <li class="mb-1">Session cookies are reused; full portal login only when session expires.</li>
           <li>Tracking World API integration is safe and doesn't affect Ufone.</li>
         </ul>
       </div>
