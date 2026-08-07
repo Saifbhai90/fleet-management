@@ -27,7 +27,7 @@ from services.ufone_service import (
     fetch_maintenance_log, fetch_maintenance_history,
     fetch_report_cached, note_ui_activity,
     encrypt_password, decrypt_password,
-    create_account, update_account, delete_account,
+    create_account, update_account, delete_account, deactivate_account,
     test_connection, start_polling, stop_polling, is_polling,
     bridge_only_mode, build_task_detail_from_db,
     needs_vps_task_detail_refresh, resolve_task_live_status,
@@ -1488,13 +1488,37 @@ def ufone_settings_account_edit(acct_id):
     return redirect(url_for('ufone_settings'))
 
 
+@app.route('/ufone/settings/account/<int:acct_id>/toggle', methods=['POST'])
+def ufone_settings_account_toggle(acct_id):
+    """Prefer soft deactivate over hard delete — keeps history, stops bridge login."""
+    acct = UfoneAccount.query.get(acct_id)
+    if not acct:
+        flash("Account not found.", "danger")
+        return redirect(url_for('ufone_settings'))
+    new_active = not bool(acct.is_active)
+    try:
+        deactivate_account(acct_id, active=new_active)
+        if new_active:
+            flash(f"Account '{acct.label}' activated — VPS will use it next cycle.", "success")
+        else:
+            flash(
+                f"Account '{acct.label}' deactivated — credentials stay, history kept, "
+                f"VPS will not login with it.",
+                "success",
+            )
+    except Exception as e:
+        flash(f"Error: {e}", "danger")
+    return redirect(url_for('ufone_settings'))
+
+
 @app.route('/ufone/settings/account/<int:acct_id>/delete', methods=['POST'])
 def ufone_settings_account_delete(acct_id):
+    """Hard delete only if explicitly confirmed. Prefer toggle (deactivate)."""
     try:
         delete_account(acct_id)
         flash(
-            f"Account {acct_id} delete shuru — cache cleanup background me "
-            f"(1–2 min). Page refresh karein jab list se hat jaye.",
+            f"Account {acct_id} permanently removed (caches cleared; "
+            f"task history rows kept).",
             "success",
         )
     except Exception as e:
