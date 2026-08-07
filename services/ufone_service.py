@@ -3273,16 +3273,49 @@ def update_account(account_id: int, label: str = None, username: str = None,
 
 
 def delete_account(account_id: int):
-    from models import (UfoneAccount, UfoneVehicleCache,
-                        UfoneTaskCache, UfoneMaintenanceCache)
+    """Delete an account and all cascade-dependent cache rows.
+
+    UI delete was failing when child tables (task_detail_cache, maint history,
+    report_cache, etc.) still referenced the account.
+    """
+    from models import (
+        UfoneAccount, UfoneVehicleCache, UfoneTaskCache,
+        UfoneMaintenanceCache, UfoneMaintenanceHistory,
+        UfoneTaskDetailCache, UfoneReportCache,
+    )
     from app import db
-    UfoneVehicleCache.query.filter_by(account_id=account_id).delete()
-    UfoneTaskCache.query.filter_by(account_id=account_id).delete()
-    UfoneMaintenanceCache.query.filter_by(account_id=account_id).delete()
-    UfoneAccount.query.filter_by(id=account_id).delete()
+    from sqlalchemy import text
+
+    # Order: children first (FK → ufone_account.id)
+    child_models = (
+        UfoneTaskDetailCache,
+        UfoneReportCache,
+        UfoneVehicleCache,
+        UfoneTaskCache,
+        UfoneMaintenanceCache,
+        UfoneMaintenanceHistory,
+    )
+    for model in child_models:
+        model.query.filter_by(account_id=account_id).delete(
+            synchronize_session=False,
+        )
+
+    # Tables created by bridge without a model class (no FK on some DBs, but
+    # clean orphans when present).
+    for raw_sql in (
+        "DELETE FROM ufone_task_event_notify WHERE account_id = :aid",
+        # EMG history is soft-linked (nullable account_id, no FK). Keep rows but
+        # clear the account id so no dangling reference logic.
+        "UPDATE emergency_task_record SET account_id = NULL WHERE account_id = :aid",
+    ):
+        try:
+            db.session.execute(text(raw_sql), {"aid": account_id})
+        except Exception as e:
+            logger.debug("delete_account cleanup skip: %s — %s", raw_sql[:40], e)
+
+    UfoneAccount.query.filter_by(id=account_id).delete(synchronize_session=False)
     db.session.commit()
     _reset_client(account_id)
-    # purge caches
     with _live_cache_lock:
         _live_cache.pop(account_id, None)
     with _task_cache_lock:
