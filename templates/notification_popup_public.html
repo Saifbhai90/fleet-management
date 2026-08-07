@@ -257,17 +257,48 @@
 
       function formatReceived(raw) {
         if (!raw) return 'Fleet Manager';
-        var d = new Date(raw);
+        var s = String(raw).trim();
+        // Explicit UTC wall clock (legacy push payload) → show as PKT (+5)
+        var utcMark = s.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{1,2}:\d{2})(?::\d{2})?(?:\.\d+)?(?:\s*UTC)?$/i);
+        if (utcMark && /utc/i.test(s)) {
+          try {
+            var dUtc = new Date(utcMark[1] + 'T' + utcMark[2] + ':00Z');
+            if (!isNaN(dUtc.getTime())) {
+              return 'Received: ' + dUtc.toLocaleString('en-PK', {
+                timeZone: 'Asia/Karachi',
+                year: 'numeric', month: 'short', day: 'numeric',
+                hour: '2-digit', minute: '2-digit', hour12: true
+              }) + ' PKT';
+            }
+          } catch (e1) {}
+        }
+        // Prefer raw PKT stamp "YYYY-MM-DD HH:MM" without re-parsing as UTC
+        var pkt = s.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{1,2}:\d{2})/);
+        if (pkt && !/Z$|UTC|[\+\-]\d{2}:?\d{2}$/i.test(s)) {
+          try {
+            var dLocal = new Date(pkt[1] + 'T' + pkt[2] + ':00+05:00');
+            if (!isNaN(dLocal.getTime())) {
+              return 'Received: ' + dLocal.toLocaleString('en-PK', {
+                timeZone: 'Asia/Karachi',
+                year: 'numeric', month: 'short', day: 'numeric',
+                hour: '2-digit', minute: '2-digit', hour12: true
+              }) + ' PKT';
+            }
+          } catch (e2) {}
+          return 'Received: ' + pkt[1] + ' ' + pkt[2] + ' PKT';
+        }
+        var d = new Date(s);
         if (isNaN(d.getTime())) {
-          return 'Received: ' + String(raw).replace('T', ' ').replace(/\.\d+/, '');
+          return 'Received: ' + s.replace('T', ' ').replace(/\.\d+/, '');
         }
         try {
-          return 'Received: ' + d.toLocaleString(undefined, {
+          return 'Received: ' + d.toLocaleString('en-PK', {
+            timeZone: 'Asia/Karachi',
             year: 'numeric', month: 'short', day: 'numeric',
-            hour: '2-digit', minute: '2-digit'
-          });
+            hour: '2-digit', minute: '2-digit', hour12: true
+          }) + ' PKT';
         } catch (e) {
-          return 'Received: ' + raw;
+          return 'Received: ' + s;
         }
       }
 

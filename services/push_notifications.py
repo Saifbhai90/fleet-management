@@ -19,6 +19,21 @@ _TASK_POPUP_TITLES = {
 }
 
 
+def _notify_created_at_pkt() -> str:
+    """Wall-clock Pakistan time for popup 'Received' (matches Task CreateDateTime TZ).
+
+    Historical bug: UTC wall clock was shown without conversion, so Received
+    looked ~5h earlier than Ufone CreateDateTime (PKT) — even when the push
+    actually went out after task create.
+    """
+    try:
+        from utils import pk_now
+        return pk_now().strftime('%Y-%m-%d %H:%M')
+    except Exception:
+        from datetime import timedelta
+        return (datetime.utcnow() + timedelta(hours=5)).strftime('%Y-%m-%d %H:%M')
+
+
 def _build_popup_link(title, body, *, notification_type='info', original_link=None):
     """Create a signed short-lived popup link for Android notification taps."""
     try:
@@ -35,7 +50,7 @@ def _build_popup_link(title, body, *, notification_type='info', original_link=No
                 'type': notification_type or 'info',
                 'source': 'ufone_task_event' if title in _TASK_POPUP_TITLES else 'generic',
                 'save_enabled': title in _TASK_POPUP_TITLES,
-                'created_at': datetime.utcnow().isoformat(),
+                'created_at': _notify_created_at_pkt(),
                 'original_link': original_link or '',
             },
         )
@@ -102,7 +117,7 @@ def send_push(user_id, title, body, data=None, link=None):
     payload_data['popup_mode'] = '1'
     payload_data['title'] = title or ''
     payload_data['body'] = body or ''
-    payload_data['created_at'] = datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')
+    payload_data['created_at'] = _notify_created_at_pkt()
     if title in _TASK_POPUP_TITLES:
         payload_data['save_enabled'] = '1'
         payload_data['popup_source'] = 'ufone_task_event'
@@ -212,7 +227,7 @@ def broadcast_push_all(title, body, data=None, link=None):
     payload_data['popup_mode'] = '1'
     payload_data['title'] = title or ''
     payload_data['body'] = body or ''
-    payload_data['created_at'] = datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')
+    payload_data['created_at'] = _notify_created_at_pkt()
     if title in _TASK_POPUP_TITLES:
         payload_data['save_enabled'] = '1'
         payload_data['popup_source'] = 'ufone_task_event'
