@@ -26,18 +26,61 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-# ── Password encryption (reuse Fernet pattern from tracker_automation) ─────
+# ── Password encryption ──────────────────────────────────────────────────────
+# Bridge (VPS) and Flask share encrypted passwords via Fernet.
+# Prefer UFONE_CRYPTO_KEY / UFONE_BRIDGE_TOKEN so VPS does not need Flask SECRET_KEY.
+# Decrypt tries each material so older SECRET_KEY ciphertexts still open until rewrap.
+
+def _password_materials(app=None) -> list:
+    """Ordered key materials for Ufone account Fernet (first = preferred encrypt)."""
+    import hashlib
+    import hmac
+
+    mats = []
+    for env_name in ('UFONE_CRYPTO_KEY', 'UFONE_BRIDGE_TOKEN'):
+        v = (os.environ.get(env_name) or '').strip()
+        if v and v not in mats:
+            mats.append(v)
+
+    secret = ''
+    if app is not None:
+        secret = (app.config.get('SECRET_KEY') or '').strip()
+    if not secret:
+        try:
+            from flask import current_app as _app
+            secret = (_app.config.get('SECRET_KEY') or '').strip()
+        except Exception:
+            secret = (os.environ.get('SECRET_KEY') or '').strip()
+    if not secret:
+        secret = (os.environ.get('SECRET_KEY') or '').strip()
+
+    if secret:
+        derived = hmac.new(
+            secret.encode('utf-8'), b'ufone-bridge-v1', hashlib.sha256,
+        ).hexdigest()
+        if derived and derived not in mats:
+            mats.append(derived)
+        if secret not in mats:
+            mats.append(secret)
+    return mats
+
+
+def _fernet_from_material(material: str):
+    from cryptography.fernet import Fernet
+    import hashlib
+    import base64
+    key = base64.urlsafe_b64encode(hashlib.sha256(material.encode()).digest())
+    return Fernet(key)
+
 
 def _fernet(app=None):
-    from cryptography.fernet import Fernet
-    import hashlib, base64
-    if app is None:
-        from flask import current_app as _app
-        secret = _app.config.get('SECRET_KEY', 'fallback-secret-key')
-    else:
-        secret = app.config.get('SECRET_KEY', 'fallback-secret-key')
-    key = base64.urlsafe_b64encode(hashlib.sha256(secret.encode()).digest())
-    return Fernet(key)
+    mats = _password_materials(app)
+    if not mats:
+        raise RuntimeError(
+            'No key for Ufone password crypto '
+            '(set UFONE_BRIDGE_TOKEN or SECRET_KEY)'
+        )
+    return _fernet_from_material(mats[0])
 
 
 def encrypt_password(plain: str, app=None) -> str:
@@ -45,10 +88,59 @@ def encrypt_password(plain: str, app=None) -> str:
 
 
 def decrypt_password(enc: str, app=None) -> str:
-    try:
-        return _fernet(app).decrypt(enc.encode()).decode()
-    except Exception:
+    if not enc:
         return ''
+    for material in _password_materials(app):
+        try:
+            return _fernet_from_material(material).decrypt(enc.encode()).decode()
+        except Exception:
+            continue
+    return ''
+
+
+def rewrap_ufone_account_passwords(app=None) -> int:
+    """Re-encrypt any decryptable UI passwords with the preferred shared material.
+
+    Call on Render startup so VPS can decrypt via UFONE_BRIDGE_TOKEN without
+    needing Flask SECRET_KEY.
+    Returns number of rows rewritten.
+    """
+    from models import UfoneAccount
+    from app import db
+
+    mats = _password_materials(app)
+    if not mats:
+        logger.warning('ufone password rewrap skipped — no key material')
+        return 0
+    prefer = mats[0]
+    prefer_f = _fernet_from_material(prefer)
+    n = 0
+    for acct in UfoneAccount.query.all():
+        plain = decrypt_password(acct.password_enc, app=app)
+        if not plain:
+            logger.warning(
+                'ufone_account id=%s username=%s password not decryptable '
+                '(re-save password in Ufone Accounts UI)',
+                acct.id, acct.username,
+            )
+            continue
+        already = False
+        try:
+            prefer_f.decrypt((acct.password_enc or '').encode())
+            already = True
+        except Exception:
+            already = False
+        if already:
+            continue
+        acct.password_enc = prefer_f.encrypt(plain.encode()).decode()
+        n += 1
+    if n:
+        db.session.commit()
+        logger.info(
+            'ufone_account passwords rewrapped=%s (preferred material set)',
+            n,
+        )
+    return n
 
 
 # ── Data normalisation ───────────────────────────────────────────────────────

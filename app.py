@@ -1164,6 +1164,13 @@ if _run_startup_tasks:
             start_fuel_market_scan_scheduler(app)
         except Exception as e:
             app.logger.warning('Fuel market scan scheduler failed to start: %s', e)
+        try:
+            from services.ufone_service import rewrap_ufone_account_passwords
+            n = rewrap_ufone_account_passwords(app)
+            if n:
+                app.logger.info('Ufone account passwords rewrapped for bridge: %s', n)
+        except Exception as e:
+            app.logger.warning('Ufone password rewrap failed (non-fatal): %s', e)
 
 
 if __name__ == '__main__':

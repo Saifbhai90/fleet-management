@@ -2239,19 +2239,17 @@ def should_fetch_maintenance() -> bool:
     return age is None or age >= interval
 
 
-def run_once() -> dict:
-    username = _env('UFONE_USERNAME')
-    password = _env('UFONE_PASSWORD')
-    account_id = _int_env('UFONE_ACCOUNT_ID', 1)
-    if not username or not password:
-        raise RuntimeError('UFONE_USERNAME/PASSWORD required')
-
+def run_once_for_account(account_id: int, username: str, password: str) -> dict:
+    """One Ufone portal login + sync cycle for a single Fleet UI account."""
     session_dir = _env('UFONE_SESSION_DIR', str(ROOT / 'sessions'))
     Path(session_dir).mkdir(parents=True, exist_ok=True)
     os.environ['UFONE_SESSION_DIR'] = session_dir
 
     client = UfoneClient(username, password, session_key=f'bridge_{account_id}')
-    logger.info('connecting to Ufone…')
+    logger.info(
+        'connecting to Ufone account_id=%s username=%s…',
+        account_id, username,
+    )
     client.connect(reuse_session=True)
     today_d = _pk_today()
     today = today_d.strftime('%Y-%m-%d')
@@ -2481,17 +2479,53 @@ def run_once() -> dict:
         conn.close()
 
     logger.info(
-        'pg ingest ok districts=%s vehicles=%s tasks=%s emg_pg=%s maint=%s '
-        'hist=%s details=%s notify=%s '
+        'pg ingest ok account_id=%s districts=%s vehicles=%s tasks=%s '
+        'emg_pg=%s maint=%s hist=%s details=%s notify=%s '
         '(gen/overdue/close mix)',
-        nd, nv, nt, ne, nm, nh, ndet, nn,
+        account_id, nd, nv, nt, ne, nm, nh, ndet, nn,
     )
     return {
+        'account_id': account_id,
         'districts': nd, 'vehicles': nv, 'tasks': nt,
         'emergency_report': ne, 'maintenance': nm,
         'maintenance_history': nh,
         'task_details': ndet, 'notify': nn,
     }
+
+
+def run_once() -> dict:
+    """Sync using credentials from Fleet UI (ufone_account), else VPS env."""
+    from ufone_creds import resolve_ufone_logins
+
+    logins = resolve_ufone_logins()
+    if not logins:
+        raise RuntimeError('No Ufone login resolved')
+
+    totals = {
+        'districts': 0, 'vehicles': 0, 'tasks': 0,
+        'emergency_report': 0, 'maintenance': 0,
+        'maintenance_history': 0,
+        'task_details': 0, 'notify': 0,
+        'accounts': 0,
+    }
+    errors = []
+    for account_id, username, password in logins:
+        try:
+            part = run_once_for_account(account_id, username, password)
+            for k in totals:
+                if k == 'accounts':
+                    continue
+                totals[k] += int(part.get(k) or 0)
+            totals['accounts'] += 1
+        except Exception as e:
+            logger.error(
+                'sync failed for account_id=%s username=%s: %s',
+                account_id, username, e,
+            )
+            errors.append((account_id, e))
+    if totals['accounts'] == 0 and errors:
+        raise errors[0][1]
+    return totals
 
 
 def main() -> int:

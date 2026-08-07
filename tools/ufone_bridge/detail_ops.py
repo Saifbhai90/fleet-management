@@ -24,7 +24,9 @@ logger = logging.getLogger('ufone-bridge.detail')
 UFONE_IO_LOCK = threading.Lock()
 
 _ROOT = Path(__file__).resolve().parent
-_client = None
+# account_id -> UfoneClient (session per UI account)
+_clients: dict = {}
+_client_meta: dict = {}  # account_id -> (username,)
 _client_lock = threading.Lock()
 
 
@@ -66,26 +68,32 @@ def _db_connect():
     return conn
 
 
-def _get_client():
-    """Reuse one UfoneClient (session) for on-demand fetches."""
-    global _client
+def _get_client(account_id: Optional[int] = None):
+    """Reuse UfoneClient for on-demand fetches (login from UI/DB)."""
     from ufone_api_client import UfoneClient
+    from ufone_creds import resolve_ufone_login, resolve_ufone_login_for_account
+
     with _client_lock:
-        if _client is not None:
-            return _client
-        username = _env('UFONE_USERNAME')
-        password = _env('UFONE_PASSWORD')
-        account_id = _int_env('UFONE_ACCOUNT_ID', 1)
-        if not username or not password:
-            raise RuntimeError('UFONE_USERNAME/PASSWORD required')
+        if account_id and int(account_id) > 0:
+            aid, username, password = resolve_ufone_login_for_account(int(account_id))
+        else:
+            aid, username, password = resolve_ufone_login()
+
+        meta = (username,)
+        existing = _clients.get(aid)
+        if existing is not None and _client_meta.get(aid) == meta:
+            return existing
+
         session_dir = _env('UFONE_SESSION_DIR', str(_ROOT / 'sessions'))
         Path(session_dir).mkdir(parents=True, exist_ok=True)
         os.environ['UFONE_SESSION_DIR'] = session_dir
-        _client = UfoneClient(
-            username, password, session_key=f'bridge_ondemand_{account_id}'
+        client = UfoneClient(
+            username, password, session_key=f'bridge_ondemand_{aid}'
         )
-        _client.connect(reuse_session=True)
-        return _client
+        client.connect(reuse_session=True)
+        _clients[aid] = client
+        _client_meta[aid] = meta
+        return client
 
 
 def fetch_and_store_one_task_detail(account_id: int, task_id) -> dict:
@@ -100,7 +108,7 @@ def fetch_and_store_one_task_detail(account_id: int, task_id) -> dict:
         return {'ok': False, 'error': 'invalid task_id', 'task_id': str(task_id)}
 
     with UFONE_IO_LOCK:
-        client = _get_client()
+        client = _get_client(account_id)
         try:
             detail = client.get_task_detail(bare, quick=True) or {}
         except Exception as e:
@@ -180,7 +188,7 @@ def fetch_and_store_emg_day(account_id: int, day: str) -> dict:
         return {'ok': False, 'error': 'invalid date', 'date': day}
 
     with UFONE_IO_LOCK:
-        client = _get_client()
+        client = _get_client(account_id)
         try:
             raw = client._call(
                 'ReportEmergencyTask.aspx', 'getAmbulanceTaskReport',

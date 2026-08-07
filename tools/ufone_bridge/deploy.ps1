@@ -80,7 +80,10 @@ Write-Host "Uploading bridge package..."
 Invoke-Remote "mkdir -p $RemoteDir/systemd $RemoteDir/sessions"
 $files = @(
     'worker.py',
+    'worker_pg.py',
+    'detail_ops.py',
     'ufone_api_client.py',
+    'ufone_creds.py',
     'requirements.txt',
     'bootstrap.sh',
     '.env.example',

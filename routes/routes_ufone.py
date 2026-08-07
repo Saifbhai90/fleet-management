@@ -1684,3 +1684,22 @@ def api_ufone_bridge_health():
         'polling': is_polling(),
         'time': pk_now().isoformat(),
     })
+
+
+@app.route('/api/ufone/bridge/rewrap-passwords', methods=['POST'])
+@csrf.exempt
+def api_ufone_bridge_rewrap_passwords():
+    """Re-encrypt UI account passwords under shared UFONE_BRIDGE_TOKEN.
+
+    VPS (or ops) calls this after deploy so bridge can decrypt without
+    Flask SECRET_KEY. Token auth only.
+    """
+    if not _bridge_token_ok():
+        return jsonify({'ok': False, 'error': 'unauthorized'}), 401
+    try:
+        from services.ufone_service import rewrap_ufone_account_passwords
+        n = rewrap_ufone_account_passwords(app)
+        return jsonify({'ok': True, 'rewrapped': n})
+    except Exception as e:
+        logger.exception('bridge rewrap failed')
+        return jsonify({'ok': False, 'error': str(e)[:300]}), 500

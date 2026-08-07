@@ -114,6 +114,7 @@ def main() -> int:
         run(client, f'mkdir -p {REMOTE}/systemd {REMOTE}/sessions')
         files = [
             'worker.py', 'worker_pg.py', 'detail_ops.py', 'ufone_api_client.py',
+            'ufone_creds.py',
             'requirements.txt', 'bootstrap.sh', '.env.example', 'README.md',
         ]
         for name in files:

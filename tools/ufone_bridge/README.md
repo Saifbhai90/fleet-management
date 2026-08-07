@@ -11,6 +11,13 @@
 #
 #    .\tools\ufone_bridge\deploy.ps1
 #
+# ## Login (Fleet UI only)
+#
+# Bridge loads username/password from `ufone_account` (Ufone → Accounts).
+# Never uses UFONE_USERNAME / UFONE_PASSWORD from .env.
+# VPS needs `DATABASE_URL` + `UFONE_BRIDGE_TOKEN` (same as Render).
+# Render boot rewraps stored passwords under the bridge token so VPS can decrypt.
+#
 # ## Render env (required)
 #
 # - `UFONE_BRIDGE_TOKEN` — shared secret (same as VPS `.env`)
