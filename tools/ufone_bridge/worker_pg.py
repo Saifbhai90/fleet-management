@@ -1117,13 +1117,42 @@ def _to_int_or_none(val):
         return None
 
 
+_MAINT_VARCHAR_LIMITS = {
+    'reg_no': 50,
+    'district': 100,
+    'maintain_type': 50,
+    'cat_name': 100,
+    'sub_cat_name': 255,
+    'created_by': 100,
+    'created_date_text': 80,
+    'modified_by': 100,
+    'modified_date': 80,
+    'start_date': 30,
+    'start_time': 30,
+    'end_date': 30,
+    'end_time': 30,
+}
+
+
+def _coerce_str_limited(val, field: str):
+    """Coerce to str and clamp to ufone_maintenance_cache column width."""
+    s = _coerce_str(val)
+    if s is None:
+        return None
+    lim = _MAINT_VARCHAR_LIMITS.get(field)
+    if lim and len(s) > lim:
+        return s[:lim]
+    return s
+
+
 def map_maintenance_row(raw: dict) -> dict | None:
     """Map getAmbulanceUnderMaintenance row → ufone_maintenance_cache fields."""
     if not isinstance(raw, dict):
         return None
-    reg = _coerce_str(
+    reg = _coerce_str_limited(
         raw.get('Reg_no') or raw.get('Reg_No') or raw.get('reg_no')
-        or raw.get('Ambulance') or raw.get('ambRegNo')
+        or raw.get('Ambulance') or raw.get('ambRegNo'),
+        'reg_no',
     )
     if not reg:
         return None
@@ -1151,16 +1180,22 @@ def map_maintenance_row(raw: dict) -> dict | None:
     return {
         'ext_id': ext_id,
         'reg_no': reg,
-        'district': _coerce_str(raw.get('District') or raw.get('district')),
-        'maintain_type': _coerce_str(
+        'district': _coerce_str_limited(
+            raw.get('District') or raw.get('district'), 'district'),
+        'maintain_type': _coerce_str_limited(
             raw.get('Maintain_Type') or raw.get('MaintainType')
-            or raw.get('maintain_type')
+            or raw.get('maintain_type'),
+            'maintain_type',
         ),
-        'cat_name': _coerce_str(
-            raw.get('Cat_Name') or raw.get('CatName') or raw.get('cat_name')),
-        'sub_cat_name': _coerce_str(
+        'cat_name': _coerce_str_limited(
+            raw.get('Cat_Name') or raw.get('CatName') or raw.get('cat_name'),
+            'cat_name',
+        ),
+        'sub_cat_name': _coerce_str_limited(
             raw.get('Sub_Cat_Name') or raw.get('SubCatName')
-            or raw.get('sub_cat_name')),
+            or raw.get('sub_cat_name'),
+            'sub_cat_name',
+        ),
         'due_date': _parse_maint_date(
             raw.get('Due_Date') or raw.get('DueDate') or raw.get('due_date')),
         'send_date': send,
@@ -1172,22 +1207,26 @@ def map_maintenance_row(raw: dict) -> dict | None:
         'minute': _to_int_or_none(
             raw.get('Minute') if raw.get('Minute') is not None
             else raw.get('minute')),
-        'created_by': _coerce_str(
-            raw.get('CreatedBy') or raw.get('Created_By') or raw.get('created_by')),
+        'created_by': _coerce_str_limited(
+            raw.get('CreatedBy') or raw.get('Created_By') or raw.get('created_by'),
+            'created_by',
+        ),
         'created_date': _parse_maint_date(created_raw),
-        'created_date_text': _coerce_str(created_raw) or None,
-        'modified_by': _coerce_str(
-            raw.get('ModifiedBy') or raw.get('modified_by')),
-        'modified_date': _coerce_str(
-            raw.get('Modified_Date') or raw.get('modified_date')) or None,
-        'start_date': _coerce_str(
-            raw.get('startDate') or raw.get('start_date')) or None,
-        'start_time': _coerce_str(
-            raw.get('startTime') or raw.get('start_time')) or None,
-        'end_date': _coerce_str(
-            raw.get('endDate') or raw.get('end_date')) or None,
-        'end_time': _coerce_str(
-            raw.get('endTime') or raw.get('end_time')) or None,
+        'created_date_text': _coerce_str_limited(created_raw, 'created_date_text'),
+        'modified_by': _coerce_str_limited(
+            raw.get('ModifiedBy') or raw.get('modified_by'), 'modified_by'),
+        'modified_date': _coerce_str_limited(
+            raw.get('Modified_Date') or raw.get('modified_date'),
+            'modified_date',
+        ),
+        'start_date': _coerce_str_limited(
+            raw.get('startDate') or raw.get('start_date'), 'start_date'),
+        'start_time': _coerce_str_limited(
+            raw.get('startTime') or raw.get('start_time'), 'start_time'),
+        'end_date': _coerce_str_limited(
+            raw.get('endDate') or raw.get('end_date'), 'end_date'),
+        'end_time': _coerce_str_limited(
+            raw.get('endTime') or raw.get('end_time'), 'end_time'),
     }
 
 
@@ -1205,12 +1244,23 @@ def ensure_maintenance_columns(conn) -> None:
         "ALTER TABLE ufone_maintenance_cache ADD COLUMN IF NOT EXISTS end_date VARCHAR(30)",
         "ALTER TABLE ufone_maintenance_cache ADD COLUMN IF NOT EXISTS end_time VARCHAR(30)",
     ]
+    widen = [
+        "ALTER TABLE ufone_maintenance_cache "
+        "ALTER COLUMN sub_cat_name TYPE VARCHAR(255)",
+        "ALTER TABLE ufone_maintenance_history "
+        "ALTER COLUMN sub_cat_name TYPE VARCHAR(255)",
+    ]
     with conn.cursor() as cur:
         for sql in alters:
             try:
                 cur.execute(sql)
             except Exception as e:
                 logger.warning('maint column ensure failed: %s (%s)', sql, e)
+        for sql in widen:
+            try:
+                cur.execute(sql)
+            except Exception as e:
+                logger.warning('maint column widen failed: %s (%s)', sql, e)
         cur.execute(
             """
             CREATE TABLE IF NOT EXISTS ufone_maintenance_history (
@@ -1221,7 +1271,7 @@ def ensure_maintenance_columns(conn) -> None:
               district VARCHAR(100),
               maintain_type VARCHAR(50),
               cat_name VARCHAR(100),
-              sub_cat_name VARCHAR(100),
+              sub_cat_name VARCHAR(255),
               due_date DATE,
               send_date DATE,
               return_date DATE,

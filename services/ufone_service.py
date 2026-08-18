@@ -267,7 +267,7 @@ def normalize_maintenance(raw: dict) -> dict:
             days = int(api_days)
         except (TypeError, ValueError):
             pass
-    return {
+    return _clamp_maintenance_fields({
         'id': raw.get('id') or raw.get('Id'),
         'reg_no': raw.get('Reg_no') or raw.get('reg_no'),
         'district': raw.get('District') or raw.get('district'),
@@ -290,7 +290,7 @@ def normalize_maintenance(raw: dict) -> dict:
         'start_time': raw.get('startTime') or raw.get('start_time'),
         'end_date': raw.get('endDate') or raw.get('end_date'),
         'end_time': raw.get('endTime') or raw.get('end_time'),
-    }
+    })
 
 
 def _parse_date_only(s):
@@ -993,6 +993,35 @@ def get_ucs_cached(account_id: int, tehsil_code: str) -> list:
 _maintenance_cache: dict[int, tuple[float, list]] = {}
 _maintenance_cache_lock = threading.Lock()
 _MAINTENANCE_CACHE_TTL = 600  # 10 min — open under-maintenance list
+_MAINT_STR_LIMITS = {
+    'reg_no': 50,
+    'district': 100,
+    'maintain_type': 50,
+    'cat_name': 100,
+    'sub_cat_name': 255,
+    'created_by': 100,
+    'modified_by': 100,
+    'modified_date': 80,
+    'start_date': 30,
+    'start_time': 30,
+    'end_date': 30,
+    'end_time': 30,
+}
+
+
+def _clamp_maintenance_fields(item: dict) -> dict:
+    """Clamp string fields to UfoneMaintenanceCache column widths."""
+    out = dict(item)
+    for key, lim in _MAINT_STR_LIMITS.items():
+        val = out.get(key)
+        if val is not None and isinstance(val, str) and len(val) > lim:
+            out[key] = val[:lim]
+    raw_cd = out.get('created_date')
+    if raw_cd is not None:
+        cd_text = str(raw_cd).strip()
+        if len(cd_text) > 80:
+            out['created_date'] = cd_text[:80]
+    return out
 
 
 def _persist_maintenance(account_id: int, items: list):
@@ -1015,6 +1044,7 @@ def _persist_maintenance(account_id: int, items: list):
         seen_regs = set()
         touched_districts = set()
         for m in items:
+            m = _clamp_maintenance_fields(m)
             reg = m.get('reg_no')
             if not reg:
                 continue
@@ -1053,6 +1083,8 @@ def _persist_maintenance(account_id: int, items: list):
             row.created_date = _parse_date_only(m.get('created_date'))
             raw_cd = m.get('created_date')
             row.created_date_text = str(raw_cd).strip() if raw_cd else None
+            if row.created_date_text and len(row.created_date_text) > 80:
+                row.created_date_text = row.created_date_text[:80]
             row.modified_by = m.get('modified_by')
             row.modified_date = m.get('modified_date')
             row.start_date = m.get('start_date')

@@ -3215,7 +3215,7 @@ class UfoneMaintenanceCache(db.Model):
     district = db.Column(db.String(100), nullable=True)
     maintain_type = db.Column(db.String(50), nullable=True)  # Engine/Body/etc
     cat_name = db.Column(db.String(100), nullable=True)
-    sub_cat_name = db.Column(db.String(100), nullable=True)
+    sub_cat_name = db.Column(db.String(255), nullable=True)
     due_date = db.Column(db.DateTime, nullable=True)
     send_date = db.Column(db.DateTime, nullable=True)
     return_date = db.Column(db.DateTime, nullable=True)
@@ -3260,7 +3260,7 @@ class UfoneMaintenanceHistory(db.Model):
     district = db.Column(db.String(100), nullable=True, index=True)
     maintain_type = db.Column(db.String(50), nullable=True)
     cat_name = db.Column(db.String(100), nullable=True)
-    sub_cat_name = db.Column(db.String(100), nullable=True)
+    sub_cat_name = db.Column(db.String(255), nullable=True)
     due_date = db.Column(db.Date, nullable=True)
     send_date = db.Column(db.Date, nullable=True)
     return_date = db.Column(db.Date, nullable=True)
