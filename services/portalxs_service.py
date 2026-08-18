@@ -435,20 +435,8 @@ _mileage_report_cache_lock = threading.Lock()
 MILEAGE_REPORT_CACHE_TTL = 300  # 5 minutes
 
 
-def _split_dt(rdt: str) -> tuple[str, str]:
-    """Split a datetime string like '2024-07-19 14:30:00' into (date, time)."""
-    if not rdt:
-        return '', ''
-    s = rdt.strip().replace('T', ' ')
-    parts = s.split(' ', 1)
-    if len(parts) == 2:
-        return parts[0], parts[1]
-    return s, ''
-
-
 def fetch_mileage_report_bulk(account_id: int, regnos: list[str], from_dt: str, to_dt: str) -> tuple[list[dict], Optional[str]]:
-    """Fetch mileage report for many vehicles in PARALLEL using trips API
-    (which supports historical dates). Maps trip data to mileage report columns.
+    """Fetch mileage report for many vehicles in PARALLEL via ConnectApp_GetMileageReport.
     Returns (rows, error). Each row gets _regno appended."""
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -467,10 +455,12 @@ def fetch_mileage_report_bulk(account_id: int, regnos: list[str], from_dt: str, 
 
     def _one(regno):
         client = _get_client(account_id)
-        raw = client.get_trips(regno, from_dt, to_dt)
+        raw = client.get_mileage(regno, from_dt, to_dt)
+        if isinstance(raw, dict):
+            raw = [raw]
         if not isinstance(raw, list):
             return []
-        return [normalize_trip(t) for t in raw]
+        return [normalize_mileage_report(m) for m in raw if isinstance(m, dict)]
 
     with ThreadPoolExecutor(max_workers=FLEET_REPORT_MAX_WORKERS) as pool:
         futures = {pool.submit(_one, r): r for r in regnos}
@@ -479,18 +469,11 @@ def fetch_mileage_report_bulk(account_id: int, regnos: list[str], from_dt: str, 
             try:
                 for item in fut.result():
                     seq += 1
-                    date_from, time_from = _split_dt(item.get('IGON_RDT', ''))
-                    date_to, time_to = _split_dt(item.get('IGOFF_RDT', ''))
-                    rows.append({
-                        'ID': seq,
-                        '_regno': regno,
-                        'DateFrom': date_from,
-                        'TimeFrom': time_from,
-                        'DateTo': date_to,
-                        'TimeTo': time_to,
-                        'Mileage': item.get('Mileage', 0),
-                        'PToP': item.get('Mileage', 0),
-                    })
+                    row = dict(item)
+                    if not row.get('ID'):
+                        row['ID'] = seq
+                    row['_regno'] = regno
+                    rows.append(row)
             except Exception as e:
                 errors.append(f"{regno}: {str(e)[:120]}")
 
