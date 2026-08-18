@@ -96,6 +96,19 @@ def _get_client(account_id: Optional[int] = None):
         return client
 
 
+def fetch_maintenance_log_anon(maint_id, start_date: str = '') -> list:
+    """Portal Update Log — anonymous statewide (PK VPS only)."""
+    from ufone_api_client import UfoneClient
+
+    mid = maint_id
+    if mid is None or str(mid).strip() == '':
+        return []
+    with UFONE_IO_LOCK:
+        client = UfoneClient('anon', 'anon')
+        rows = client.get_maintenance_log(mid, start_date=start_date or '') or []
+    return rows if isinstance(rows, list) else []
+
+
 def fetch_and_store_one_task_detail(account_id: int, task_id) -> dict:
     """Fetch detail+comments from Ufone, upsert Postgres, return payload.
 
@@ -275,6 +288,9 @@ class _DetailHandler(BaseHTTPRequestHandler):
         if path in ('/emg-day', '/api/emg-day'):
             self._handle_emg_day()
             return
+        if path in ('/maintenance-log', '/api/maintenance-log'):
+            self._handle_maintenance_log()
+            return
         self._send(404, {'ok': False, 'error': 'not found'})
 
     def _handle_task_detail(self):
@@ -328,6 +344,29 @@ class _DetailHandler(BaseHTTPRequestHandler):
         except Exception as e:
             logger.exception('emg-day failed')
             self._send(500, {'ok': False, 'error': str(e)[:300]})
+
+    def _handle_maintenance_log(self):
+        if not self._token_ok():
+            self._send(401, {'ok': False, 'error': 'unauthorized', 'records': []})
+            return
+        length = int(self.headers.get('Content-Length') or 0)
+        raw = self.rfile.read(length) if length > 0 else b'{}'
+        try:
+            data = json.loads(raw.decode('utf-8') or '{}')
+        except Exception:
+            self._send(400, {'ok': False, 'error': 'invalid json', 'records': []})
+            return
+        maint_id = data.get('id') or data.get('maint_id')
+        start_date = (data.get('start_date') or '').strip()
+        if maint_id is None or str(maint_id).strip() == '':
+            self._send(400, {'ok': False, 'error': 'id required', 'records': []})
+            return
+        try:
+            rows = fetch_maintenance_log_anon(maint_id, start_date)
+            self._send(200, {'ok': True, 'records': rows, 'count': len(rows)})
+        except Exception as e:
+            logger.warning('maintenance-log failed: %s', e)
+            self._send(502, {'ok': False, 'error': str(e)[:200], 'records': []})
 
 
 def start_detail_http_server(background: bool = True) -> Optional[ThreadingHTTPServer]:

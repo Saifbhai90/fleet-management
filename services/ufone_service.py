@@ -1335,35 +1335,115 @@ def fetch_maintenance(account_id: int, force: bool = False,
 
 
 def fetch_maintenance_log(maint_id=None, reg_no: str = "",
-                          start_date: str = "") -> list:
+                          start_date: str = "", account_id: int | None = None) -> list:
     """Portal Update Log (getAmbulanceUnderMaintenance2) for one record.
 
-    Resolves maint_id from live open list when only reg_no is given.
-    Returns normalize_maintenance()-shaped dicts (may be empty).
+    Resolves maint_id from DB cache (bridge) or live open list when only reg_no
+    is given. Returns normalize_maintenance()-shaped dicts (may be empty).
     """
-    from services.ufone_api_client import UfoneClient
-
-    client = UfoneClient("anon", "anon")
     mid = maint_id
     start = (start_date or "").strip()
 
     if not mid and reg_no:
         reg_key = str(reg_no).strip().upper()
-        for raw in (client.get_maintenance() or []):
-            if not isinstance(raw, dict):
-                continue
-            rreg = str(raw.get("Reg_no") or raw.get("reg_no") or "").strip().upper()
-            if rreg == reg_key:
-                mid = raw.get("id") or raw.get("Id")
+        if bridge_only_mode() or account_id:
+            from app import db
+            from models import UfoneMaintenanceCache
+            q = UfoneMaintenanceCache.query
+            if account_id:
+                q = q.filter_by(account_id=account_id)
+            row = q.filter(
+                db.func.upper(UfoneMaintenanceCache.reg_no) == reg_key
+            ).first()
+            if row:
+                mid = row.ext_id
                 if not start:
-                    start = raw.get("startDate") or raw.get("Send_Date") or ""
-                break
+                    start = (row.start_date or '').strip()
+                    if not start and row.send_date:
+                        start = row.send_date.strftime('%Y-%m-%d')
+        if not mid and not bridge_only_mode():
+            from services.ufone_api_client import UfoneClient
+            client = UfoneClient("anon", "anon")
+            for raw in (client.get_maintenance() or []):
+                if not isinstance(raw, dict):
+                    continue
+                rreg = str(raw.get("Reg_no") or raw.get("reg_no") or "").strip().upper()
+                if rreg == reg_key:
+                    mid = raw.get("id") or raw.get("Id")
+                    if not start:
+                        start = raw.get("startDate") or raw.get("Send_Date") or ""
+                    break
 
     if not mid:
         return []
 
-    raw_rows = client.get_maintenance_log(mid, start_date=start) or []
+    if bridge_only_mode():
+        raw_rows = _request_vps_maintenance_log(mid, start)
+    else:
+        from services.ufone_api_client import UfoneClient
+        client = UfoneClient("anon", "anon")
+        raw_rows = client.get_maintenance_log(mid, start_date=start) or []
+
     return [normalize_maintenance(r) for r in raw_rows if isinstance(r, dict)]
+
+
+def _vps_bridge_base_url() -> str:
+    return (
+        os.environ.get('UFONE_VPS_DETAIL_URL')
+        or os.environ.get('UFONE_BRIDGE_DETAIL_URL')
+        or 'http://185.228.92.23:8787'
+    ).strip().rstrip('/')
+
+
+def _bridge_token() -> str:
+    return (os.environ.get('UFONE_BRIDGE_TOKEN') or '').strip()
+
+
+def _request_vps_maintenance_log(maint_id, start_date: str = '') -> list:
+    """Ask PK VPS for getAmbulanceUnderMaintenance2 (Render cannot reach Ufone)."""
+    import requests
+
+    token = _bridge_token()
+    if not token:
+        raise RuntimeError('UFONE_BRIDGE_TOKEN not configured')
+    url = f'{_vps_bridge_base_url()}/maintenance-log'
+    try:
+        r = requests.post(
+            url,
+            headers={
+                'X-Ufone-Bridge-Token': token,
+                'User-Agent': 'fleet-manager-render/1.0',
+                'Content-Type': 'application/json',
+            },
+            json={'id': maint_id, 'start_date': start_date or ''},
+            timeout=25,
+        )
+        try:
+            data = r.json() if r.content else {}
+        except Exception:
+            data = {}
+        if not isinstance(data, dict):
+            data = {}
+        if r.status_code >= 400:
+            err = data.get('error') or f'VPS HTTP {r.status_code}'
+            if 'ConnectTimeout' in err or 'Max retries' in err or 'ConnectionError' in err:
+                err = (
+                    'Ufone server se connect nahi ho pa raha (PK VPS). '
+                    'Thodi der baad dubara try karein.'
+                )
+            raise RuntimeError(str(err)[:200])
+        rows = data.get('records') or []
+        return rows if isinstance(rows, list) else []
+    except RuntimeError:
+        raise
+    except Exception as e:
+        msg = str(e)[:200]
+        if 'ConnectTimeout' in msg or 'Max retries' in msg or 'ConnectionError' in msg:
+            msg = (
+                'Ufone server se connect nahi ho pa raha (PK VPS). '
+                'Thodi der baad dubara try karein.'
+            )
+        raise RuntimeError(msg) from e
 
 
 def fetch_maintenance_history(account_id: int, from_date: str = "",

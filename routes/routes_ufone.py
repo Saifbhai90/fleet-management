@@ -1193,7 +1193,8 @@ def api_ufone_maintenance_log():
         mid_int = None
     try:
         records = fetch_maintenance_log(
-            maint_id=mid_int, reg_no=reg_no, start_date=start_date)
+            maint_id=mid_int, reg_no=reg_no, start_date=start_date,
+            account_id=acct_id)
         return jsonify({'records': records, 'count': len(records)})
     except Exception as e:
         logger.warning('maintenance log failed: %s', e)
