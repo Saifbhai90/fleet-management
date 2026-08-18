@@ -305,13 +305,14 @@ def fetch_live_positions(account_id: int, force: bool = False) -> list[dict]:
     except Exception as e:
         logger.error(f"PortalXS fetch_live_positions error: {e}")
         _reset_client(account_id)
+        db.session.rollback()
         try:
             acct = db.session.get(PortalXSAccount, account_id)
             if acct:
                 acct.last_error = str(e)[:500]
                 db.session.commit()
         except Exception:
-            pass
+            db.session.rollback()
         # Return stale cache if available
         cached = get_cached_positions(account_id)
         if cached:
@@ -594,6 +595,7 @@ def fetch_geofences(account_id: int) -> list[dict]:
 def _poll_loop(app):
     """Background thread: poll all active accounts every 30 seconds."""
     with app.app_context():
+        from app import db
         from models import PortalXSAccount
         while not _poll_thread_stop.is_set():
             try:
@@ -603,8 +605,10 @@ def _poll_loop(app):
                         fetch_live_positions(acct.id, force=True)
                         logger.info(f"[PortalXS] Polled account {acct.id} ({acct.label})")
                     except Exception as e:
+                        db.session.rollback()
                         logger.error(f"[PortalXS] Poll error for account {acct.id}: {e}")
             except Exception as e:
+                db.session.rollback()
                 logger.error(f"[PortalXS] Poll loop error: {e}")
             _poll_thread_stop.wait(30)
 

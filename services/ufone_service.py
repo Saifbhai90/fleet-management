@@ -3306,6 +3306,11 @@ def _poll_loop(app):
                     cycle_ok = True
                 except Exception as e:
                     logger.error(f"ufone poll account {acct.id}: {e}")
+                    try:
+                        from app import db
+                        db.session.rollback()
+                    except Exception:
+                        pass
             # Exponential backoff jab Ufone timeout de raha ho
             if cycle_ok:
                 consecutive_failures = 0
