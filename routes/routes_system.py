@@ -332,7 +332,16 @@ def _build_health_data():
             req = urllib.request.Request(
                 f'https://api.render.com/v1/services/{service_id}', headers=hdr)
             with urllib.request.urlopen(req, timeout=8) as r:
-                result['service'] = json.loads(r.read())
+                svc = json.loads(r.read())
+                if isinstance(svc, dict) and 'service' in svc and 'id' not in svc:
+                    svc = svc.get('service') or svc
+                if isinstance(svc, dict) and not svc.get('status'):
+                    suspended = str(svc.get('suspended') or '').lower()
+                    if suspended == 'not_suspended':
+                        svc['status'] = 'running'
+                    elif suspended:
+                        svc['status'] = suspended
+                result['service'] = svc
             req2 = urllib.request.Request(
                 f'https://api.render.com/v1/services/{service_id}/deploys?limit=5', headers=hdr)
             with urllib.request.urlopen(req2, timeout=8) as r2:
@@ -462,7 +471,7 @@ def _build_health_data():
             """)
             rows = db.session.execute(tbl_q).fetchall()
             result['db_table_stats'] = [
-                {'name': r.name, 'rows': r.row_count,
+                {'name': r.name, 'rows': int(r.row_count or 0),
                  'size_mb': round(r.size_bytes / (1024 * 1024), 2)}
                 for r in rows
             ]
@@ -538,8 +547,14 @@ def _build_health_data():
         result['last_backup_size'] = None
 
     # Percentages & Critical Flags
-    result['db_pct']       = round(result['db_size_mb'] / result['db_size_limit_mb'] * 100, 1) if result['db_size_mb'] is not None else None
-    result['r2_pct']       = round(result['r2_size_mb'] / result['r2_size_limit_mb'] * 100, 1) if result['r2_size_mb'] is not None else None
+    if result['db_size_mb'] is not None and result['db_size_limit_mb']:
+        result['db_pct'] = round(result['db_size_mb'] / result['db_size_limit_mb'] * 100, 1)
+    else:
+        result['db_pct'] = None
+    if result['r2_size_mb'] is not None and result['r2_size_limit_mb']:
+        result['r2_pct'] = round(result['r2_size_mb'] / result['r2_size_limit_mb'] * 100, 1)
+    else:
+        result['r2_pct'] = None
     result['db_critical']  = bool(result['db_pct'] is not None and result['db_pct'] >= 80)
     result['r2_critical']  = bool(result['r2_pct'] is not None and result['r2_pct'] >= 80)
     result['any_critical'] = result['db_critical'] or result['r2_critical']
@@ -584,7 +599,24 @@ def system_health():
     if not session.get('is_master'):
         abort(403)
     force = request.args.get('refresh') == '1'
-    data  = _fetch_system_health(force=force)
+    try:
+        data = _fetch_system_health(force=force)
+    except Exception:
+        app.logger.exception('system_health data build failed')
+        data = {
+            'service': None, 'last_deploy': None, 'recent_deploys': [],
+            'db_size_mb': None, 'db_size_limit_mb': int(os.environ.get('DB_SIZE_LIMIT_MB', '1024')),
+            'r2_size_mb': None, 'r2_total_objects': 0,
+            'r2_size_limit_mb': int(os.environ.get('R2_SIZE_LIMIT_GB', '10')) * 1024,
+            'active_sessions': None, 'api_avg_ms': None, 'api_p95_ms': None, 'api_sample_count': 0,
+            'checks': {}, 'errors': ['Failed to load health metrics — see server logs.'],
+            'fetched_at': pk_now().strftime('%d-%m-%Y %H:%M UTC'),
+            'ram_mb': None, 'ram_limit_mb': int(os.environ.get('RAM_LIMIT_MB', '512')),
+            'ram_pct': None, 'upload_size_mb': None, 'upload_file_count': 0,
+            'db_table_stats': [], 'fcm_total': 0, 'fcm_active': 0, 'fcm_inactive': 0,
+            'db_pct': None, 'r2_pct': None, 'db_critical': False, 'r2_critical': False,
+            'any_critical': False, 'diagnostics': {},
+        }
     env_vars_set = {k: bool(os.environ.get(k, '').strip()) for k in [
         'RENDER_API_KEY', 'RENDER_SERVICE_ID',
         'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'R2_ENDPOINT_URL', 'R2_BUCKET_NAME',

@@ -281,11 +281,11 @@
         <div class="sh-card {% if data.db_critical %}sh-card-danger{% elif data.db_pct and data.db_pct >= 60 %}sh-card-warning{% elif data.db_size_mb is not none %}sh-card-success{% else %}sh-card-neutral{% endif %}">
             <div class="lbl"><i class="bi bi-database me-1"></i>Database</div>
             {% if data.db_size_mb is not none %}
-                <div class="val-md mt-1 {% if data.db_critical %}text-danger{% elif data.db_pct >= 60 %}text-warning{% endif %}" id="kpi-db-val">
+                <div class="val-md mt-1 {% if data.db_critical %}text-danger{% elif (data.db_pct or 0) >= 60 %}text-warning{% endif %}" id="kpi-db-val">
                     {{ data.db_size_mb }}<small style="font-size:0.85rem;font-weight:500;"> MB</small>
                 </div>
                 <div class="sub" id="kpi-db-sub">{{ data.db_pct }}% of {{ data.db_size_limit_mb }} MB</div>
-                <div class="pt"><div class="pf {% if data.db_critical %}pf-bad{% elif data.db_pct >= 60 %}pf-warn{% else %}pf-ok{% endif %}" style="width:{{ [data.db_pct, 100] | min }}%;" id="kpi-db-bar"></div></div>
+                <div class="pt"><div class="pf {% if data.db_critical %}pf-bad{% elif (data.db_pct or 0) >= 60 %}pf-warn{% else %}pf-ok{% endif %}" style="width:{{ [data.db_pct or 0, 100] | min }}%;" id="kpi-db-bar"></div></div>
             {% else %}
                 <div class="sub mt-2">Unavailable</div>
             {% endif %}
@@ -305,7 +305,7 @@
                     {% endif %}
                 </div>
                 <div class="sub" id="kpi-r2-sub">{{ data.r2_pct }}% · {{ data.r2_total_objects }} files</div>
-                <div class="pt"><div class="pf {% if data.r2_critical %}pf-bad{% elif data.r2_pct >= 60 %}pf-warn{% else %}pf-ok{% endif %}" style="width:{{ [data.r2_pct, 100] | min }}%;" id="kpi-r2-bar"></div></div>
+                <div class="pt"><div class="pf {% if data.r2_critical %}pf-bad{% elif (data.r2_pct or 0) >= 60 %}pf-warn{% else %}pf-ok{% endif %}" style="width:{{ [data.r2_pct or 0, 100] | min }}%;" id="kpi-r2-bar"></div></div>
             {% else %}
                 <div class="sub mt-2">Unavailable</div>
             {% endif %}
@@ -414,7 +414,7 @@
                 {% for t in data.db_table_stats %}
                 <div class="tbl-stat-row">
                     <span style="font-weight:600;color:#334155;font-family:monospace;">{{ t.name }}</span>
-                    <span style="color:#64748b;">{{ "{:,}".format(t.rows) }} rows</span>
+                    <span style="color:#64748b;">{{ "{:,}".format(t.rows or 0) }} rows</span>
                     <span style="color:#0f172a;font-weight:700;">{{ t.size_mb }} MB</span>
                 </div>
                 {% endfor %}

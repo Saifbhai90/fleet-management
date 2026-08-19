@@ -19,7 +19,7 @@ from flask import (
     session, send_file, send_from_directory, jsonify,
     after_this_request, make_response,
 )
-from sqlalchemy import func, text, or_, cast
+from sqlalchemy import func, text, or_, cast, inspect
 from sqlalchemy import String as SAString
 from werkzeug.utils import secure_filename
 
@@ -273,7 +273,6 @@ def _baseline_status(baseline, latest_reading=None):
     }
 
 
-import inspect
 import json
 import mimetypes
 import re

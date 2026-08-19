@@ -20,7 +20,7 @@ from forms import (
     EmployeeImportForm,
 )
 from datetime import datetime, date, timedelta
-from sqlalchemy import func, text, or_, and_
+from sqlalchemy import func, text, or_, and_, inspect
 from werkzeug.utils import secure_filename
 from auth_utils import user_can_access, get_user_context
 from utils import pk_now, pk_date, parse_date, format_date_ddmmyyyy, generate_csv_response
@@ -49,7 +49,6 @@ from routes import (
     _master_nav_back,
 )
 
-import inspect
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import joinedload
 import xlsxwriter

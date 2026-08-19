@@ -27,7 +27,7 @@ from forms import (
     VehicleImportForm, DriverImportForm, ParkingImportForm,
 )
 from datetime import datetime, date, timedelta
-from sqlalchemy import func, text, or_, and_
+from sqlalchemy import func, text, or_, and_, inspect
 from werkzeug.utils import secure_filename
 from auth_utils import user_can_access, check_password
 from utils import (
@@ -92,7 +92,6 @@ from routes import (
     _workspace_employee_id_for_expenses,
 )
 
-import inspect
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload
 from forms import ProductImportForm

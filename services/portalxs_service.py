@@ -303,7 +303,11 @@ def fetch_live_positions(account_id: int, force: bool = False) -> list[dict]:
         return vehicles
 
     except Exception as e:
-        logger.error(f"PortalXS fetch_live_positions error: {e}")
+        err_text = str(e)
+        if '503' in err_text or 'service is unavailable' in err_text.lower():
+            logger.warning(f"PortalXS fetch_live_positions unavailable: {err_text[:200]}")
+        else:
+            logger.error(f"PortalXS fetch_live_positions error: {e}")
         _reset_client(account_id)
         db.session.rollback()
         try:
