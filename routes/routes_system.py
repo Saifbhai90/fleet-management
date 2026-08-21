@@ -272,6 +272,93 @@ def _build_route_diagnostics(window_minutes=15):
 # HEALTH DATA BUILDER — fetch live infrastructure metrics
 # ════════════════════════════════════════════════════════════════════════════════
 
+def _system_health_fallback_data(error_msg=None):
+    """Safe defaults when health metrics cannot be loaded."""
+    import platform
+    import flask as _flask_mod
+
+    _db_limit = int(os.environ.get('DB_SIZE_LIMIT_MB', '1024'))
+    _r2_limit = int(os.environ.get('R2_SIZE_LIMIT_GB', '10')) * 1024
+    errors = []
+    if error_msg:
+        errors.append(error_msg)
+    return {
+        'service': None,
+        'last_deploy': None,
+        'recent_deploys': [],
+        'db_size_mb': None,
+        'db_size_limit_mb': _db_limit,
+        'r2_size_mb': None,
+        'r2_total_objects': 0,
+        'r2_size_limit_mb': _r2_limit,
+        'active_sessions': None,
+        'api_avg_ms': None,
+        'api_p95_ms': None,
+        'api_sample_count': 0,
+        'last_backup_ts': _last_backup_ts.get('ts'),
+        'checks': {},
+        'errors': errors,
+        'fetched_at': pk_now().strftime('%d-%m-%Y %H:%M UTC'),
+        'ram_mb': None,
+        'ram_limit_mb': int(os.environ.get('RAM_LIMIT_MB', '512')),
+        'ram_pct': None,
+        'upload_size_mb': None,
+        'upload_file_count': 0,
+        'db_table_stats': [],
+        'fcm_total': 0,
+        'fcm_active': 0,
+        'fcm_inactive': 0,
+        'sys_python': platform.python_version(),
+        'sys_flask': _flask_mod.__version__,
+        'sys_os': f'{platform.system()} {platform.release()}',
+        'sys_timezone': app.config.get('APP_TIMEZONE', 'UTC'),
+        'sys_server_time': pk_now().strftime('%d-%m-%Y %H:%M:%S'),
+        'sys_uptime_sec': int(_sh_time.time() - _app_start_time),
+        'latency_history': list(_latency_history),
+        'session_history': list(_session_history),
+        'backup_schedule_enabled': app.config.get('BACKUP_SCHEDULE_ENABLED', False),
+        'backup_schedule_time': app.config.get('BACKUP_SCHEDULE_TIME', '02:00'),
+        'backup_email_to': app.config.get('BACKUP_EMAIL_TO', ''),
+        'failed_logins_24h': 0,
+        'success_logins_24h': 0,
+        'top_fail_ips': [],
+        'active_user_list': [],
+        'row_count_activity': 0,
+        'row_count_login': 0,
+        'row_count_notifications': 0,
+        'row_count_login_attempts': 0,
+        'last_backup_ts_persistent': None,
+        'last_backup_result': 'unknown',
+        'last_backup_size': None,
+        'db_pct': None,
+        'r2_pct': None,
+        'db_critical': False,
+        'r2_critical': False,
+        'any_critical': False,
+        'diagnostics': {},
+    }
+
+
+def _collect_r2_storage_stats(max_seconds=3, max_pages=3):
+    """Bounded R2 scan — full bucket walks can exceed Render request timeout."""
+    from r2_storage import _get_s3_client, R2_BUCKET_NAME
+
+    client = _get_s3_client()
+    paginator = client.get_paginator('list_objects_v2')
+    total_bytes = 0
+    total_objs = 0
+    truncated = False
+    deadline = _sh_time.time() + max(1, int(max_seconds))
+    for page_no, page in enumerate(paginator.paginate(Bucket=R2_BUCKET_NAME)):
+        if page_no >= max_pages or _sh_time.time() >= deadline:
+            truncated = True
+            break
+        for obj in page.get('Contents', []) or []:
+            total_bytes += int(obj.get('Size', 0) or 0)
+            total_objs += 1
+    return round(total_bytes / (1024 * 1024), 1), total_objs, truncated
+
+
 def _build_health_data():
     """Fetch live infrastructure metrics from Render API, PostgreSQL, R2, and internal sources."""
     import json
@@ -331,7 +418,7 @@ def _build_health_data():
             hdr = {'Authorization': f'Bearer {render_key}', 'Accept': 'application/json'}
             req = urllib.request.Request(
                 f'https://api.render.com/v1/services/{service_id}', headers=hdr)
-            with urllib.request.urlopen(req, timeout=8) as r:
+            with urllib.request.urlopen(req, timeout=4) as r:
                 svc = json.loads(r.read())
                 if isinstance(svc, dict) and 'service' in svc and 'id' not in svc:
                     svc = svc.get('service') or svc
@@ -344,7 +431,7 @@ def _build_health_data():
                 result['service'] = svc
             req2 = urllib.request.Request(
                 f'https://api.render.com/v1/services/{service_id}/deploys?limit=5', headers=hdr)
-            with urllib.request.urlopen(req2, timeout=8) as r2:
+            with urllib.request.urlopen(req2, timeout=4) as r2:
                 deploys = json.loads(r2.read())
                 parsed = [d.get('deploy', d) for d in deploys] if deploys else []
                 result['recent_deploys'] = parsed
@@ -379,20 +466,18 @@ def _build_health_data():
         result['checks']['db_size'] = {'status': 'error', 'msg': msg}
         result['errors'].append(f'DB size: {msg}')
 
-    # 3. Cloudflare R2 Bucket
+    # 3. Cloudflare R2 Bucket (bounded — avoid multi-minute full-bucket scans)
     try:
-        from r2_storage import _get_s3_client, R2_BUCKET_NAME
-        client = _get_s3_client()
-        paginator = client.get_paginator('list_objects_v2')
-        total_bytes, total_objs = 0, 0
-        for page in paginator.paginate(Bucket=R2_BUCKET_NAME):
-            for obj in page.get('Contents', []):
-                total_bytes += obj.get('Size', 0)
-                total_objs += 1
-        result['r2_size_mb']       = round(total_bytes / (1024 * 1024), 1)
+        max_seconds = int(os.environ.get('HEALTH_R2_SCAN_SECONDS', '3'))
+        max_pages = int(os.environ.get('HEALTH_R2_MAX_PAGES', '3'))
+        total_mb, total_objs, truncated = _collect_r2_storage_stats(
+            max_seconds=max_seconds, max_pages=max_pages)
+        result['r2_size_mb'] = total_mb
         result['r2_total_objects'] = total_objs
-        result['checks']['r2_storage'] = {
-            'status': 'ok', 'msg': f'{result["r2_size_mb"]} MB, {total_objs} objects'}
+        msg = f'{total_mb} MB, {total_objs} objects'
+        if truncated:
+            msg += f' (sampled <= {max_pages} pages / {max_seconds}s)'
+        result['checks']['r2_storage'] = {'status': 'ok', 'msg': msg}
     except Exception as e:
         msg = str(e)[:120]
         result['checks']['r2_storage'] = {'status': 'error', 'msg': msg}
@@ -599,30 +684,32 @@ def system_health():
     if not session.get('is_master'):
         abort(403)
     force = request.args.get('refresh') == '1'
-    try:
-        data = _fetch_system_health(force=force)
-    except Exception:
-        app.logger.exception('system_health data build failed')
-        data = {
-            'service': None, 'last_deploy': None, 'recent_deploys': [],
-            'db_size_mb': None, 'db_size_limit_mb': int(os.environ.get('DB_SIZE_LIMIT_MB', '1024')),
-            'r2_size_mb': None, 'r2_total_objects': 0,
-            'r2_size_limit_mb': int(os.environ.get('R2_SIZE_LIMIT_GB', '10')) * 1024,
-            'active_sessions': None, 'api_avg_ms': None, 'api_p95_ms': None, 'api_sample_count': 0,
-            'checks': {}, 'errors': ['Failed to load health metrics — see server logs.'],
-            'fetched_at': pk_now().strftime('%d-%m-%Y %H:%M UTC'),
-            'ram_mb': None, 'ram_limit_mb': int(os.environ.get('RAM_LIMIT_MB', '512')),
-            'ram_pct': None, 'upload_size_mb': None, 'upload_file_count': 0,
-            'db_table_stats': [], 'fcm_total': 0, 'fcm_active': 0, 'fcm_inactive': 0,
-            'db_pct': None, 'r2_pct': None, 'db_critical': False, 'r2_critical': False,
-            'any_critical': False, 'diagnostics': {},
-        }
     env_vars_set = {k: bool(os.environ.get(k, '').strip()) for k in [
         'RENDER_API_KEY', 'RENDER_SERVICE_ID',
         'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'R2_ENDPOINT_URL', 'R2_BUCKET_NAME',
         'DATABASE_URL', 'SECRET_KEY',
     ]}
-    return render_template('system_health.html', data=data, env_vars_set=env_vars_set, **_administration_nav_back())
+    try:
+        data = _fetch_system_health(force=force)
+        return render_template(
+            'system_health.html',
+            data=data,
+            env_vars_set=env_vars_set,
+            **_administration_nav_back(),
+        )
+    except Exception:
+        app.logger.exception('system_health page failed')
+        data = _system_health_fallback_data('System health page failed to load — showing safe defaults.')
+        try:
+            return render_template(
+                'system_health.html',
+                data=data,
+                env_vars_set=env_vars_set,
+                **_administration_nav_back(),
+            )
+        except Exception:
+            app.logger.exception('system_health fallback render failed')
+            abort(500)
 
 
 @app.route('/admin/system-health/api')

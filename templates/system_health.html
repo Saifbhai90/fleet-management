@@ -241,7 +241,7 @@
                 </div>
                 <div class="sub mt-1" style="font-size:0.68rem;">
                     <strong style="color:#334155;">{{ svc.name }}</strong><br>
-                    {% if svc.serviceDetails %}{{ svc.serviceDetails.plan | title }}{% endif %}
+                    {% if svc.serviceDetails %}{{ (svc.serviceDetails.plan or svc.serviceDetails.buildPlan or '') | title }}{% endif %}
                 </div>
             {% else %}
                 <div class="sub mt-2" style="color:#f97316;font-size:0.68rem;">API key not set</div>
@@ -1013,8 +1013,8 @@
         .catch(function(e) { alert('Request failed: ' + e); });
     };
 
-    _drawSparkline('spark-latency', {{ data.latency_history | tojson }}, '#10b981');
-    _drawSparkline('spark-sessions', {{ data.session_history | tojson }}, '#8b5cf6');
+    _drawSparkline('spark-latency', {{ (data.latency_history or []) | tojson }}, '#10b981');
+    _drawSparkline('spark-sessions', {{ (data.session_history or []) | tojson }}, '#8b5cf6');
 
     _startTimer();
     setInterval(_updateAgoLabel, 5000);
