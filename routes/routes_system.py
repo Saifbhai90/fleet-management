@@ -272,12 +272,81 @@ def _build_route_diagnostics(window_minutes=15):
 # HEALTH DATA BUILDER — fetch live infrastructure metrics
 # ════════════════════════════════════════════════════════════════════════════════
 
+_db_limit_cache = {'mb': None, 'ts': 0, 'plan': None, 'disk_gb': None}
+_DB_LIMIT_CACHE_TTL = 3600
+
+
+def _postgres_id_from_env():
+    """Resolve Render Postgres id from env or DATABASE_URL hostname."""
+    import re
+
+    pid = os.environ.get('RENDER_POSTGRES_ID', '').strip()
+    if pid:
+        return pid
+    db_uri = (
+        os.environ.get('DATABASE_URL', '').strip()
+        or app.config.get('SQLALCHEMY_DATABASE_URI', '')
+    )
+    match = re.search(r'@(dpg-[a-z0-9-]+)', db_uri)
+    return match.group(1) if match else ''
+
+
+def _resolve_db_size_limit_mb():
+    """Return (limit_mb, plan_label, disk_gb) aligned with Render Postgres subscription."""
+    explicit_mb = os.environ.get('DB_SIZE_LIMIT_MB', '').strip()
+    if explicit_mb:
+        return int(explicit_mb), None, None
+
+    explicit_gb = os.environ.get('DB_SIZE_LIMIT_GB', '').strip()
+    if explicit_gb:
+        disk_gb = float(explicit_gb)
+        return int(disk_gb * 1024), None, disk_gb
+
+    now = _sh_time.time()
+    if (
+        _db_limit_cache['mb']
+        and _db_limit_cache['ts']
+        and (now - _db_limit_cache['ts']) < _DB_LIMIT_CACHE_TTL
+    ):
+        return _db_limit_cache['mb'], _db_limit_cache.get('plan'), _db_limit_cache.get('disk_gb')
+
+    render_key = os.environ.get('RENDER_API_KEY', '').strip()
+    postgres_id = _postgres_id_from_env()
+    if render_key and postgres_id:
+        try:
+            import json
+            import urllib.request
+
+            hdr = {'Authorization': f'Bearer {render_key}', 'Accept': 'application/json'}
+            req = urllib.request.Request(
+                f'https://api.render.com/v1/postgres/{postgres_id}', headers=hdr)
+            with urllib.request.urlopen(req, timeout=4) as resp:
+                payload = json.loads(resp.read())
+                pg = payload.get('postgres', payload) if isinstance(payload, dict) else {}
+                disk_gb = int(pg.get('diskSizeGB') or 0)
+                plan = (pg.get('plan') or '').strip() or None
+                if disk_gb > 0:
+                    limit_mb = disk_gb * 1024
+                    _db_limit_cache['mb'] = limit_mb
+                    _db_limit_cache['ts'] = now
+                    _db_limit_cache['plan'] = plan
+                    _db_limit_cache['disk_gb'] = disk_gb
+                    return limit_mb, plan, disk_gb
+        except Exception:
+            pass
+
+    db_uri = app.config.get('SQLALCHEMY_DATABASE_URI', '')
+    if 'postgresql' in db_uri:
+        return 1024, None, None
+    return 512, None, None
+
+
 def _system_health_fallback_data(error_msg=None):
     """Safe defaults when health metrics cannot be loaded."""
     import platform
     import flask as _flask_mod
 
-    _db_limit = int(os.environ.get('DB_SIZE_LIMIT_MB', '1024'))
+    _db_limit, _db_plan, _db_disk_gb = _resolve_db_size_limit_mb()
     _r2_limit = int(os.environ.get('R2_SIZE_LIMIT_GB', '10')) * 1024
     errors = []
     if error_msg:
@@ -288,6 +357,8 @@ def _system_health_fallback_data(error_msg=None):
         'recent_deploys': [],
         'db_size_mb': None,
         'db_size_limit_mb': _db_limit,
+        'db_postgres_plan': _db_plan,
+        'db_disk_size_gb': _db_disk_gb,
         'r2_size_mb': None,
         'r2_total_objects': 0,
         'r2_size_limit_mb': _r2_limit,
@@ -366,7 +437,7 @@ def _build_health_data():
     import platform
     import flask as _flask_mod
 
-    _db_limit = int(os.environ.get('DB_SIZE_LIMIT_MB', '1024'))
+    _db_limit, _db_plan, _db_disk_gb = _resolve_db_size_limit_mb()
     _r2_limit = int(os.environ.get('R2_SIZE_LIMIT_GB', '10')) * 1024
 
     result = {
@@ -375,6 +446,8 @@ def _build_health_data():
         'recent_deploys':   [],
         'db_size_mb':       None,
         'db_size_limit_mb': _db_limit,
+        'db_postgres_plan': _db_plan,
+        'db_disk_size_gb':  _db_disk_gb,
         'r2_size_mb':       None,
         'r2_total_objects': 0,
         'r2_size_limit_mb': _r2_limit,

@@ -284,7 +284,7 @@
                 <div class="val-md mt-1 {% if data.db_critical %}text-danger{% elif (data.db_pct or 0) >= 60 %}text-warning{% endif %}" id="kpi-db-val">
                     {{ data.db_size_mb }}<small style="font-size:0.85rem;font-weight:500;"> MB</small>
                 </div>
-                <div class="sub" id="kpi-db-sub">{{ data.db_pct }}% of {{ data.db_size_limit_mb }} MB</div>
+                <div class="sub" id="kpi-db-sub">{{ data.db_pct }}% of {% if data.db_disk_size_gb %}{{ data.db_disk_size_gb }} GB{% elif data.db_size_limit_mb >= 1024 %}{{ (data.db_size_limit_mb / 1024) | round(1) }} GB{% else %}{{ data.db_size_limit_mb }} MB{% endif %}{% if data.db_postgres_plan %} · {{ data.db_postgres_plan }}{% endif %}</div>
                 <div class="pt"><div class="pf {% if data.db_critical %}pf-bad{% elif (data.db_pct or 0) >= 60 %}pf-warn{% else %}pf-ok{% endif %}" style="width:{{ [data.db_pct or 0, 100] | min }}%;" id="kpi-db-bar"></div></div>
             {% else %}
                 <div class="sub mt-2">Unavailable</div>
@@ -529,7 +529,7 @@
             <hr class="my-2">
             <div class="lbl mb-1">Configured Limits</div>
             <div style="font-size:0.72rem;color:#64748b;line-height:1.7;">
-                DB: <strong class="text-dark">{{ data.db_size_limit_mb }} MB</strong>
+                DB: <strong class="text-dark">{% if data.db_disk_size_gb %}{{ data.db_disk_size_gb }} GB{% elif data.db_size_limit_mb >= 1024 %}{{ (data.db_size_limit_mb / 1024) | round(0) | int }} GB{% else %}{{ data.db_size_limit_mb }} MB{% endif %}</strong>{% if data.db_postgres_plan %} <span style="color:#94a3b8;">({{ data.db_postgres_plan }})</span>{% endif %}
                 <span style="color:#cbd5e1;">·</span>
                 RAM: <strong class="text-dark">{{ data.ram_limit_mb }} MB</strong>
                 <span style="color:#cbd5e1;">·</span>
