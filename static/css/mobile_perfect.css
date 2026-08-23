@@ -558,7 +558,9 @@
   .card.fm-no-card-press,
   .card.fm-no-card-press:active,
   .task-batch-table tbody tr.task-row,
-  .task-batch-table tbody tr.task-row:active {
+  .task-batch-table tbody tr.task-row:active,
+  .mpg-mobile-table tbody tr.mpg-data-row,
+  .mpg-mobile-table tbody tr.mpg-data-row:active {
     transform: none !important;
     transition: none !important;
     opacity: 1 !important;
