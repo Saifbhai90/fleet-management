@@ -342,9 +342,9 @@ ENDPOINT_PERMISSION_MAP = [
     ('workspace_ledger_transfer_detail', 'workspace_ledger'),
     ('workspace_ledger_journal_detail', 'workspace_ledger'),
     ('workspace_balance_sheet', 'workspace_reports'),
-    ('workspace_mpg_report', 'workspace_reports'),
-    ('workspace_mpg_report_export_pdf', 'workspace_reports'),
-    ('workspace_mpg_report_export_excel', 'workspace_reports'),
+    ('workspace_mpg_report', 'workspace_mpg_report'),
+    ('workspace_mpg_report_export_pdf', 'workspace_mpg_report'),
+    ('workspace_mpg_report_export_excel', 'workspace_mpg_report'),
     ('workspace_dashboard_financial_report', 'workspace_dashboard'),
     ('workspace_month_close', 'workspace_month_close'),
     ('workspace_reports', 'workspace_reports'),
@@ -1030,6 +1030,24 @@ def seed_auth_tables(app):
                     codes = {p.code for p in role.permissions}
                     if 'task_report_entry_edit' in codes and 'task_report_entry_delete' not in codes:
                         role.permissions.append(del_perm)
+                        changed = True
+                if changed:
+                    db.session.commit()
+        except Exception:
+            db.session.rollback()
+
+        # MPG Report: grant workspace_mpg_report to roles that already had workspace_reports.
+        try:
+            mpg_perm = Permission.query.filter_by(code='workspace_mpg_report').first()
+            reports_perm = Permission.query.filter_by(code='workspace_reports').first()
+            if mpg_perm and reports_perm:
+                changed = False
+                for role in Role.query.all():
+                    if role.name == 'Master':
+                        continue
+                    codes = {p.code for p in role.permissions}
+                    if 'workspace_reports' in codes and 'workspace_mpg_report' not in codes:
+                        role.permissions.append(mpg_perm)
                         changed = True
                 if changed:
                     db.session.commit()

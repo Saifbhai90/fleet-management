@@ -4232,7 +4232,7 @@ def _workspace_mpg_fuel_query(emp_id, from_date, to_date, district_id, project_i
 
 
 def workspace_mpg_report():
-    guard, emp = _workspace_guard("workspace_reports")
+    guard, emp = _workspace_guard("workspace_mpg_report")
     if guard:
         return guard
 
@@ -4507,7 +4507,7 @@ def workspace_mpg_report():
 
 
 def workspace_mpg_report_export_pdf():
-    guard, emp = _workspace_guard("workspace_reports")
+    guard, emp = _workspace_guard("workspace_mpg_report")
     if guard:
         return guard
 
@@ -4732,7 +4732,7 @@ def workspace_mpg_report_export_pdf():
 
 
 def workspace_mpg_report_export_excel():
-    guard, emp = _workspace_guard("workspace_reports")
+    guard, emp = _workspace_guard("workspace_mpg_report")
     if guard:
         return guard
 
