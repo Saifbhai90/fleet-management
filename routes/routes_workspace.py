@@ -4206,12 +4206,54 @@ def _workspace_mpg_scoped_dropdowns(district_id, project_id, scope):
     return districts, projects, vehicles
 
 
+def _workspace_mpg_auth_guard():
+    return check_auth("workspace_mpg_report")
+
+
+def _workspace_mpg_session_employee():
+    emp_id = session.get("workspace_employee_id")
+    return db.session.get(Employee, emp_id) if emp_id else None
+
+
+def _workspace_mpg_input_employee_id(session_emp_id, user_id, vehicle_fuel_rows=None):
+    """Scope key for saved MPG inputs (session employee, linked employee, or fuel ledger owner)."""
+    if session_emp_id:
+        return session_emp_id
+    if user_id:
+        ctx = get_user_context(user_id)
+        emp = ctx.get("employee_record")
+        if emp:
+            return emp.id
+    for row in vehicle_fuel_rows or []:
+        if row.employee_id:
+            return int(row.employee_id)
+    return None
+
+
+def _workspace_mpg_saved_inputs_map(input_emp_id, user_id, from_date, to_date, vehicle_ids):
+    if not vehicle_ids:
+        return {}
+    q = WorkspaceMpgReportInput.query.filter(
+        WorkspaceMpgReportInput.from_date == from_date,
+        WorkspaceMpgReportInput.to_date == to_date,
+        WorkspaceMpgReportInput.vehicle_id.in_(vehicle_ids),
+    )
+    if input_emp_id:
+        q = q.filter(WorkspaceMpgReportInput.employee_id == input_emp_id)
+    elif user_id:
+        q = q.filter(WorkspaceMpgReportInput.created_by_user_id == user_id)
+    else:
+        return {}
+    return {int(rec.vehicle_id): rec for rec in q.all()}
+
+
 def _workspace_mpg_fuel_query(emp_id, from_date, to_date, district_id, project_id, vehicle_id, scope):
     fuel_q = FuelExpense.query.filter(
-        FuelExpense.employee_id == emp_id,
         FuelExpense.fueling_date >= from_date,
         FuelExpense.fueling_date <= to_date,
     )
+    if emp_id:
+        fuel_q = fuel_q.filter(FuelExpense.employee_id == emp_id)
     if not scope["is_master_or_admin"]:
         allowed_projects = scope["allowed_projects"]
         allowed_districts = scope["allowed_districts"]
@@ -4232,9 +4274,14 @@ def _workspace_mpg_fuel_query(emp_id, from_date, to_date, district_id, project_i
 
 
 def workspace_mpg_report():
-    guard, emp = _workspace_guard("workspace_mpg_report")
+    guard = _workspace_mpg_auth_guard()
     if guard:
         return guard
+
+    emp = _workspace_mpg_session_employee()
+    session_emp_id = emp.id if emp else None
+    user_id = session.get("user_id")
+    input_emp_id = _workspace_mpg_input_employee_id(session_emp_id, user_id)
 
     scope = _workspace_mpg_user_scope()
     filters = _workspace_mpg_resolve_filters(request.values, scope)
@@ -4266,7 +4313,7 @@ def workspace_mpg_report():
             return None, True
 
     fuel_q = _workspace_mpg_fuel_query(
-        emp.id, from_date, to_date, district_id, project_id, selected_vehicle_id, scope
+        session_emp_id, from_date, to_date, district_id, project_id, selected_vehicle_id, scope
     )
 
     # Keep MPG row sequencing aligned with Fuel Expense resequence logic:
@@ -4315,18 +4362,13 @@ def workspace_mpg_report():
                 continue
             task_close_reading_map[v_id] = _to_dec(task.close_reading, None)
 
-    saved_inputs = {}
-    if vehicle_ids:
-        for rec in WorkspaceMpgReportInput.query.filter(
-            WorkspaceMpgReportInput.employee_id == emp.id,
-            WorkspaceMpgReportInput.from_date == from_date,
-            WorkspaceMpgReportInput.to_date == to_date,
-            WorkspaceMpgReportInput.vehicle_id.in_(vehicle_ids),
-        ).all():
-            saved_inputs[int(rec.vehicle_id)] = rec
+    saved_inputs = _workspace_mpg_saved_inputs_map(
+        input_emp_id, user_id, from_date, to_date, vehicle_ids
+    )
 
     if request.method == "POST":
         has_invalid = False
+        save_skipped = False
         for loop_vehicle_id in vehicle_ids:
             current_meter, current_meter_invalid = _parse_decimal_input(request.form.get(f"current_odoo_meter_{loop_vehicle_id}"))
             today_fuel, today_fuel_invalid = _parse_decimal_input(request.form.get(f"today_fuel_{loop_vehicle_id}"))
@@ -4340,13 +4382,22 @@ def workspace_mpg_report():
                     db.session.delete(existing)
                 continue
 
+            save_emp_id = _workspace_mpg_input_employee_id(
+                session_emp_id,
+                user_id,
+                entries_by_vehicle.get(loop_vehicle_id),
+            )
+            if not save_emp_id:
+                save_skipped = True
+                continue
+
             if not existing:
                 existing = WorkspaceMpgReportInput(
-                    employee_id=emp.id,
+                    employee_id=save_emp_id,
                     vehicle_id=loop_vehicle_id,
                     from_date=from_date,
                     to_date=to_date,
-                    created_by_user_id=session.get("user_id"),
+                    created_by_user_id=user_id,
                 )
                 db.session.add(existing)
                 saved_inputs[loop_vehicle_id] = existing
@@ -4359,7 +4410,10 @@ def workspace_mpg_report():
             flash("Some numeric inputs are invalid. Please enter valid numbers only.", "danger")
         else:
             db.session.commit()
-            flash("MPG report inputs saved successfully.", "success")
+            if save_skipped:
+                flash("Some inputs could not be saved (no employee scope for fuel data).", "warning")
+            else:
+                flash("MPG report inputs saved successfully.", "success")
         return redirect(url_for(
             "workspace_mpg_report",
             from_date=from_date.isoformat(),
@@ -4507,9 +4561,14 @@ def workspace_mpg_report():
 
 
 def workspace_mpg_report_export_pdf():
-    guard, emp = _workspace_guard("workspace_mpg_report")
+    guard = _workspace_mpg_auth_guard()
     if guard:
         return guard
+
+    emp = _workspace_mpg_session_employee()
+    session_emp_id = emp.id if emp else None
+    user_id = session.get("user_id")
+    input_emp_id = _workspace_mpg_input_employee_id(session_emp_id, user_id)
 
     scope = _workspace_mpg_user_scope()
     filters = _workspace_mpg_resolve_filters(request.values, scope)
@@ -4532,7 +4591,7 @@ def workspace_mpg_report_export_pdf():
             return fallback
 
     fuel_q = _workspace_mpg_fuel_query(
-        emp.id, from_date, to_date, district_id, project_id, selected_vehicle_id, scope
+        session_emp_id, from_date, to_date, district_id, project_id, selected_vehicle_id, scope
     )
 
     fuel_rows = (
@@ -4579,15 +4638,9 @@ def workspace_mpg_report_export_pdf():
                 continue
             task_close_reading_map[v_id] = _to_dec(task.close_reading, None)
 
-    saved_inputs = {}
-    if vehicle_ids:
-        for rec in WorkspaceMpgReportInput.query.filter(
-            WorkspaceMpgReportInput.employee_id == emp.id,
-            WorkspaceMpgReportInput.from_date == from_date,
-            WorkspaceMpgReportInput.to_date == to_date,
-            WorkspaceMpgReportInput.vehicle_id.in_(vehicle_ids),
-        ).all():
-            saved_inputs[int(rec.vehicle_id)] = rec
+    saved_inputs = _workspace_mpg_saved_inputs_map(
+        input_emp_id, user_id, from_date, to_date, vehicle_ids
+    )
 
     report_rows = []
     for idx, row_vehicle_id in enumerate(vehicle_ids, start=1):
@@ -4732,9 +4785,14 @@ def workspace_mpg_report_export_pdf():
 
 
 def workspace_mpg_report_export_excel():
-    guard, emp = _workspace_guard("workspace_mpg_report")
+    guard = _workspace_mpg_auth_guard()
     if guard:
         return guard
+
+    emp = _workspace_mpg_session_employee()
+    session_emp_id = emp.id if emp else None
+    user_id = session.get("user_id")
+    input_emp_id = _workspace_mpg_input_employee_id(session_emp_id, user_id)
 
     scope = _workspace_mpg_user_scope()
     filters = _workspace_mpg_resolve_filters(request.values, scope)
@@ -4757,7 +4815,7 @@ def workspace_mpg_report_export_excel():
             return fallback
 
     fuel_q = _workspace_mpg_fuel_query(
-        emp.id, from_date, to_date, district_id, project_id, selected_vehicle_id, scope
+        session_emp_id, from_date, to_date, district_id, project_id, selected_vehicle_id, scope
     )
 
     fuel_rows = (
@@ -4804,15 +4862,9 @@ def workspace_mpg_report_export_excel():
                 continue
             task_close_reading_map[v_id] = _to_dec(task.close_reading, None)
 
-    saved_inputs = {}
-    if vehicle_ids:
-        for rec in WorkspaceMpgReportInput.query.filter(
-            WorkspaceMpgReportInput.employee_id == emp.id,
-            WorkspaceMpgReportInput.from_date == from_date,
-            WorkspaceMpgReportInput.to_date == to_date,
-            WorkspaceMpgReportInput.vehicle_id.in_(vehicle_ids),
-        ).all():
-            saved_inputs[int(rec.vehicle_id)] = rec
+    saved_inputs = _workspace_mpg_saved_inputs_map(
+        input_emp_id, user_id, from_date, to_date, vehicle_ids
+    )
 
     report_rows = []
     for idx, row_vehicle_id in enumerate(vehicle_ids, start=1):
