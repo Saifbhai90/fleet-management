@@ -2791,6 +2791,9 @@ def api_oil_expense_last_reading():
     expense_date = parse_date(request.args.get('expense_date', ''))
     exclude_id = request.args.get('exclude_id', type=int)
     current_reading = request.args.get('current_reading', type=float)
+    work_order_id = request.args.get('work_order_id', type=int)
+    if work_order_id == 0:
+        work_order_id = None
     if not vehicle_id:
         return jsonify({})
     workspace_employee_id = _workspace_employee_id_for_expenses()
@@ -2800,19 +2803,49 @@ def api_oil_expense_last_reading():
         exclude_id=exclude_id,
         workspace_employee_id=workspace_employee_id,
         current_reading=current_reading,
+        work_order_id=work_order_id,
     )
     if previous_reading is None:
         return jsonify({})
     return jsonify({'previous_reading': previous_reading})
 
 
-def _oil_expense_previous_reading(vehicle_id, expense_date=None, exclude_id=None, workspace_employee_id=None, current_reading=None):
+def _oil_expense_previous_reading(
+    vehicle_id,
+    expense_date=None,
+    exclude_id=None,
+    workspace_employee_id=None,
+    current_reading=None,
+    work_order_id=None,
+):
     if not vehicle_id:
         return None
+    if work_order_id:
+        sibling_q = OilExpense.query.filter(
+            OilExpense.work_order_id == work_order_id,
+            OilExpense.vehicle_id == vehicle_id,
+            OilExpense.previous_reading.isnot(None),
+        )
+        if exclude_id:
+            sibling_q = sibling_q.filter(OilExpense.id != exclude_id)
+        anchor = sibling_q.order_by(OilExpense.id.asc()).first()
+        if anchor and anchor.previous_reading is not None:
+            prev = float(anchor.previous_reading)
+            curr = float(anchor.current_reading) if anchor.current_reading is not None else None
+            if curr is None or prev < curr:
+                return prev
+
     q = OilExpense.query.filter(OilExpense.vehicle_id == vehicle_id)
+    if work_order_id:
+        q = q.filter(
+            db.or_(
+                OilExpense.work_order_id.is_(None),
+                OilExpense.work_order_id != work_order_id,
+            )
+        )
     if exclude_id:
         q = q.filter(OilExpense.id != exclude_id)
-    if expense_date and current_reading is not None:
+    if not work_order_id and expense_date and current_reading is not None:
         try:
             curr_val = float(current_reading)
         except (TypeError, ValueError):
@@ -2858,8 +2891,47 @@ def _resequence_vehicle_oil_expenses(vehicle_id, workspace_employee_id=None):
         OilExpense.id.asc(),
     ).all()
     previous_current = None
-    for idx, row in enumerate(rows):
-        if idx == 0:
+    idx = 0
+    while idx < len(rows):
+        row = rows[idx]
+        wo_id = row.work_order_id
+        if wo_id:
+            wo_rows = []
+            while idx < len(rows) and rows[idx].work_order_id == wo_id:
+                wo_rows.append(rows[idx])
+                idx += 1
+            shared_prev = _oil_expense_previous_reading(
+                vehicle_id=vehicle_id,
+                expense_date=wo_rows[0].expense_date,
+                exclude_id=None,
+                workspace_employee_id=workspace_employee_id or wo_rows[0].employee_id,
+                work_order_id=wo_id,
+            )
+            if shared_prev is None:
+                shared_prev = _fallback_vehicle_previous_reading(
+                    workspace_employee_id or wo_rows[0].employee_id, vehicle_id, 'oil'
+                )
+            wo_last_curr = None
+            for wr in wo_rows:
+                wr.previous_reading = shared_prev
+                prev_val = float(shared_prev) if shared_prev is not None else None
+                curr_val = float(wr.current_reading) if wr.current_reading is not None else None
+                wr.km = (curr_val - prev_val) if (prev_val is not None and curr_val is not None) else None
+                if curr_val is not None:
+                    wo_last_curr = curr_val
+            if wo_last_curr is not None:
+                previous_current = wo_last_curr
+            continue
+
+        if previous_current is None:
+            if row.previous_reading is None:
+                row.previous_reading = _oil_expense_previous_reading(
+                    vehicle_id=vehicle_id,
+                    expense_date=row.expense_date,
+                    exclude_id=row.id,
+                    workspace_employee_id=workspace_employee_id or row.employee_id,
+                    work_order_id=None,
+                )
             if row.previous_reading is None:
                 row.previous_reading = _fallback_vehicle_previous_reading(
                     workspace_employee_id or row.employee_id, vehicle_id, 'oil'
@@ -2871,6 +2943,7 @@ def _resequence_vehicle_oil_expenses(vehicle_id, workspace_employee_id=None):
         curr_val = float(row.current_reading) if row.current_reading is not None else None
         row.km = (curr_val - prev_val) if (prev_val is not None and curr_val is not None) else None
         previous_current = curr_val
+        idx += 1
 
 
 @app.route('/api/oil-expense/products-for-oil')
@@ -3746,6 +3819,7 @@ def oil_expense_form(pk=None):
                 exclude_id=(rec.id if rec else None),
                 workspace_employee_id=workspace_employee_id,
                 current_reading=curr_reading,
+                work_order_id=work_order_id,
             )
         km = None
         if prev_reading is not None and curr_reading is not None:
