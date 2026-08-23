@@ -26,6 +26,7 @@ from models import (
     SlipOcrSample,
     WorkspaceMpgReportInput,
     FuelExpense, OilExpense, MaintenanceExpense, EmployeeExpense,
+    project_district,
 )
 from routes_finance import check_auth, _ft_media_items_from_path
 from auth_utils import get_user_context
@@ -47,6 +48,7 @@ from finance_utils import (
     workspace_close_fuel_oil_month,
 )
 from utils import pk_date, parse_date, generate_excel_template
+from vehicle_sort_utils import vehicle_order_by
 
 
 def _upload_workspace_transfer_attachment(file_storage):
@@ -4094,17 +4096,155 @@ def workspace_reports():
     )
 
 
+def _workspace_mpg_user_scope():
+    user_id = session.get("user_id")
+    user_context = get_user_context(user_id) if user_id else {}
+    return {
+        "allowed_projects": user_context.get("allowed_projects", set()),
+        "allowed_districts": user_context.get("allowed_districts", set()),
+        "allowed_vehicles": user_context.get("allowed_vehicles", set()),
+        "is_master_or_admin": user_context.get("is_master_or_admin", False),
+    }
+
+
+def _workspace_mpg_resolve_filters(values, scope):
+    district_id = values.get("district_id", type=int) or 0
+    project_id = values.get("project_id", type=int) or 0
+    vehicle_id = values.get("vehicle_id", type=int) or 0
+
+    allowed_projects = scope["allowed_projects"]
+    allowed_districts = scope["allowed_districts"]
+    allowed_vehicles = scope["allowed_vehicles"]
+    is_master_or_admin = scope["is_master_or_admin"]
+
+    disable_district = False
+    disable_project = False
+    disable_vehicle = False
+
+    if not is_master_or_admin:
+        if len(allowed_districts) == 1:
+            if not district_id:
+                district_id = next(iter(allowed_districts))
+            disable_district = True
+        if len(allowed_projects) == 1:
+            only_p = next(iter(allowed_projects))
+            linked = True
+            if district_id:
+                linked = bool(
+                    db.session.query(project_district.c.project_id)
+                    .filter(
+                        project_district.c.district_id == district_id,
+                        project_district.c.project_id == only_p,
+                    )
+                    .first()
+                )
+            if linked:
+                if not project_id:
+                    project_id = only_p
+                disable_project = True
+        if len(allowed_vehicles) == 1:
+            only_v = next(iter(allowed_vehicles))
+            if not vehicle_id:
+                if district_id and project_id:
+                    vrow = db.session.get(Vehicle, only_v)
+                    if (
+                        vrow
+                        and vrow.district_id == district_id
+                        and (vrow.project_id or 0) == (project_id or 0)
+                    ):
+                        vehicle_id = only_v
+                else:
+                    vehicle_id = only_v
+            if vehicle_id == only_v:
+                disable_vehicle = True
+
+        if allowed_districts and district_id and district_id not in allowed_districts:
+            district_id = 0
+        if allowed_projects and project_id and project_id not in allowed_projects:
+            project_id = 0
+        if allowed_vehicles and vehicle_id and vehicle_id not in allowed_vehicles:
+            vehicle_id = 0
+
+    return {
+        "district_id": district_id,
+        "project_id": project_id,
+        "vehicle_id": vehicle_id,
+        "disable_district": disable_district,
+        "disable_project": disable_project,
+        "disable_vehicle": disable_vehicle,
+    }
+
+
+def _workspace_mpg_scoped_dropdowns(district_id, project_id, scope):
+    allowed_projects = scope["allowed_projects"]
+    allowed_districts = scope["allowed_districts"]
+    allowed_vehicles = scope["allowed_vehicles"]
+    is_master_or_admin = scope["is_master_or_admin"]
+
+    district_q = District.query.order_by(District.name.asc())
+    if not is_master_or_admin and allowed_districts:
+        district_q = district_q.filter(District.id.in_(list(allowed_districts)))
+    districts = district_q.all()
+
+    project_q = Project.query.order_by(Project.name.asc())
+    if not is_master_or_admin and allowed_projects:
+        project_q = project_q.filter(Project.id.in_(list(allowed_projects)))
+    if district_id:
+        project_q = project_q.join(
+            project_district, Project.id == project_district.c.project_id
+        ).filter(project_district.c.district_id == district_id)
+    projects = project_q.all()
+
+    veh_q = Vehicle.query
+    if district_id:
+        veh_q = veh_q.filter(Vehicle.district_id == district_id)
+    if project_id:
+        veh_q = veh_q.filter(Vehicle.project_id == project_id)
+    if not is_master_or_admin and allowed_vehicles:
+        veh_q = veh_q.filter(Vehicle.id.in_(list(allowed_vehicles)))
+    vehicles = veh_q.order_by(*vehicle_order_by()).all()
+    return districts, projects, vehicles
+
+
+def _workspace_mpg_fuel_query(emp_id, from_date, to_date, district_id, project_id, vehicle_id, scope):
+    fuel_q = FuelExpense.query.filter(
+        FuelExpense.employee_id == emp_id,
+        FuelExpense.fueling_date >= from_date,
+        FuelExpense.fueling_date <= to_date,
+    )
+    if not scope["is_master_or_admin"]:
+        allowed_projects = scope["allowed_projects"]
+        allowed_districts = scope["allowed_districts"]
+        allowed_vehicles = scope["allowed_vehicles"]
+        if allowed_projects:
+            fuel_q = fuel_q.filter(FuelExpense.project_id.in_(list(allowed_projects)))
+        if allowed_districts:
+            fuel_q = fuel_q.filter(FuelExpense.district_id.in_(list(allowed_districts)))
+        if allowed_vehicles:
+            fuel_q = fuel_q.filter(FuelExpense.vehicle_id.in_(list(allowed_vehicles)))
+    if district_id:
+        fuel_q = fuel_q.filter(FuelExpense.district_id == district_id)
+    if project_id:
+        fuel_q = fuel_q.filter(FuelExpense.project_id == project_id)
+    if vehicle_id:
+        fuel_q = fuel_q.filter(FuelExpense.vehicle_id == vehicle_id)
+    return fuel_q
+
+
 def workspace_mpg_report():
     guard, emp = _workspace_guard("workspace_reports")
     if guard:
         return guard
 
+    scope = _workspace_mpg_user_scope()
+    filters = _workspace_mpg_resolve_filters(request.values, scope)
+    district_id = filters["district_id"]
+    project_id = filters["project_id"]
+    selected_vehicle_id = filters["vehicle_id"]
+
     today = pk_date()
     from_date = parse_date(request.values.get("from_date")) or today
     to_date = parse_date(request.values.get("to_date")) or today
-    district_id = request.values.get("district_id", type=int) or 0
-    project_id = request.values.get("project_id", type=int) or 0
-    selected_vehicle_id = request.values.get("vehicle_id", type=int) or 0
     if from_date > to_date:
         from_date, to_date = to_date, from_date
 
@@ -4125,17 +4265,9 @@ def workspace_mpg_report():
         except (InvalidOperation, ValueError):
             return None, True
 
-    fuel_q = FuelExpense.query.filter(
-        FuelExpense.employee_id == emp.id,
-        FuelExpense.fueling_date >= from_date,
-        FuelExpense.fueling_date <= to_date,
+    fuel_q = _workspace_mpg_fuel_query(
+        emp.id, from_date, to_date, district_id, project_id, selected_vehicle_id, scope
     )
-    if district_id:
-        fuel_q = fuel_q.filter(FuelExpense.district_id == district_id)
-    if project_id:
-        fuel_q = fuel_q.filter(FuelExpense.project_id == project_id)
-    if selected_vehicle_id:
-        fuel_q = fuel_q.filter(FuelExpense.vehicle_id == selected_vehicle_id)
 
     # Keep MPG row sequencing aligned with Fuel Expense resequence logic:
     # date asc, then non-null current_reading first, then current_reading asc.
@@ -4345,10 +4477,7 @@ def workspace_mpg_report():
             "tank_capacity": tank_capacity,
         })
 
-    districts = District.query.order_by(District.name.asc()).all()
-    projects = Project.query.order_by(Project.name.asc()).all()
-    from vehicle_sort_utils import vehicle_order_by
-    vehicles = Vehicle.query.order_by(*vehicle_order_by()).all()
+    districts, projects, vehicles = _workspace_mpg_scoped_dropdowns(district_id, project_id, scope)
     district_obj = next((d for d in districts if int(d.id) == int(district_id)), None) if district_id else None
     project_obj = next((p for p in projects if int(p.id) == int(project_id)), None) if project_id else None
     selected_district_name = district_obj.name if district_obj else "All Districts"
@@ -4371,6 +4500,9 @@ def workspace_mpg_report():
         vehicles=vehicles,
         rows=report_rows,
         print_report_title=print_report_title,
+        disable_district=filters["disable_district"],
+        disable_project=filters["disable_project"],
+        disable_vehicle=filters["disable_vehicle"],
     )
 
 
@@ -4379,12 +4511,15 @@ def workspace_mpg_report_export_pdf():
     if guard:
         return guard
 
+    scope = _workspace_mpg_user_scope()
+    filters = _workspace_mpg_resolve_filters(request.values, scope)
+    district_id = filters["district_id"]
+    project_id = filters["project_id"]
+    selected_vehicle_id = filters["vehicle_id"]
+
     today = pk_date()
     from_date = parse_date(request.values.get("from_date")) or today
     to_date = parse_date(request.values.get("to_date")) or today
-    district_id = request.values.get("district_id", type=int) or 0
-    project_id = request.values.get("project_id", type=int) or 0
-    selected_vehicle_id = request.values.get("vehicle_id", type=int) or 0
     if from_date > to_date:
         from_date, to_date = to_date, from_date
 
@@ -4396,17 +4531,9 @@ def workspace_mpg_report_export_pdf():
         except Exception:
             return fallback
 
-    fuel_q = FuelExpense.query.filter(
-        FuelExpense.employee_id == emp.id,
-        FuelExpense.fueling_date >= from_date,
-        FuelExpense.fueling_date <= to_date,
+    fuel_q = _workspace_mpg_fuel_query(
+        emp.id, from_date, to_date, district_id, project_id, selected_vehicle_id, scope
     )
-    if district_id:
-        fuel_q = fuel_q.filter(FuelExpense.district_id == district_id)
-    if project_id:
-        fuel_q = fuel_q.filter(FuelExpense.project_id == project_id)
-    if selected_vehicle_id:
-        fuel_q = fuel_q.filter(FuelExpense.vehicle_id == selected_vehicle_id)
 
     fuel_rows = (
         fuel_q
@@ -4609,12 +4736,15 @@ def workspace_mpg_report_export_excel():
     if guard:
         return guard
 
+    scope = _workspace_mpg_user_scope()
+    filters = _workspace_mpg_resolve_filters(request.values, scope)
+    district_id = filters["district_id"]
+    project_id = filters["project_id"]
+    selected_vehicle_id = filters["vehicle_id"]
+
     today = pk_date()
     from_date = parse_date(request.values.get("from_date")) or today
     to_date = parse_date(request.values.get("to_date")) or today
-    district_id = request.values.get("district_id", type=int) or 0
-    project_id = request.values.get("project_id", type=int) or 0
-    selected_vehicle_id = request.values.get("vehicle_id", type=int) or 0
     if from_date > to_date:
         from_date, to_date = to_date, from_date
 
@@ -4626,17 +4756,9 @@ def workspace_mpg_report_export_excel():
         except Exception:
             return fallback
 
-    fuel_q = FuelExpense.query.filter(
-        FuelExpense.employee_id == emp.id,
-        FuelExpense.fueling_date >= from_date,
-        FuelExpense.fueling_date <= to_date,
+    fuel_q = _workspace_mpg_fuel_query(
+        emp.id, from_date, to_date, district_id, project_id, selected_vehicle_id, scope
     )
-    if district_id:
-        fuel_q = fuel_q.filter(FuelExpense.district_id == district_id)
-    if project_id:
-        fuel_q = fuel_q.filter(FuelExpense.project_id == project_id)
-    if selected_vehicle_id:
-        fuel_q = fuel_q.filter(FuelExpense.vehicle_id == selected_vehicle_id)
 
     fuel_rows = (
         fuel_q

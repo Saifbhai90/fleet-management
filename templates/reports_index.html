@@ -432,6 +432,12 @@
 
             {% endif %}
 
+            {% if can_see_page('workspace_mpg_report') %}
+
+            {{ report_link(url_for('workspace_mpg_report', nav_from='reports'), 'fa-solid fa-gauge-high', 'MPG Report', 'rc-tile--mpg', 'Vehicle wise fuel efficiency, deduction aur tank forecast') }}
+
+            {% endif %}
+
             {% if can_see_page('maintenance_expense_list') %}
 
             {{ report_link(url_for('maintenance_baseline_alert_report', nav_from='reports'), 'fa-solid fa-chart-line', 'Maintenance Baseline Alert Report', 'rc-tile--baseline-alert', 'Product + Job Category tracking with due status') }}
@@ -2794,6 +2800,8 @@ html.capacitor-native .rc-web-only { display: none !important; }
 .rc-tile--ai .rc-tile-icon > i { background-image: linear-gradient(135deg, #a78bfa, #7c3aed); }
 
 .rc-tile--fuel .rc-tile-icon > i,
+
+.rc-tile--mpg .rc-tile-icon > i,
 
 .rc-tile--expiry .rc-tile-icon > i,
 

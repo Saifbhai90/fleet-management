@@ -1307,6 +1307,7 @@ PAGE_VISIBLE = {
     'workspace_ledger': ['workspace', 'workspace_ledger'],
     'workspace_month_close': ['workspace', 'workspace_month_close'],
     'workspace_reports': ['workspace', 'workspace_reports'],
+    'workspace_mpg_report': ['workspace', 'workspace_reports'],
     # Reports
     'reports_index': ['reports', 'reports_index'],
     'report_company_profile': ['reports', 'report_company_profile'],

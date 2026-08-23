@@ -172,7 +172,7 @@ def _report_centre_visibility(linked_driver_id=None):
     fleet_project = c('report_project_summary') or c('report_district_summary') or c('report_company_profile')
     fleet_expense = (
         c('fuel_expense_list') or c('oil_expense_list') or c('maintenance_expense_list')
-        or c('oil_change_alert_report')
+        or c('oil_change_alert_report') or c('workspace_mpg_report')
     )
     show_fleet = bool(fleet_vehicle or fleet_project or fleet_expense)
 

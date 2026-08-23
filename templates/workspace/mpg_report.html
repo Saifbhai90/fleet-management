@@ -214,30 +214,39 @@
         </div>
         <div class="col-md-2">
           <label class="form-label small fw-semibold text-secondary"><i class="bi bi-geo-alt me-1"></i>District</label>
-          <select class="form-select search-select" id="mpgDistrictFilter" name="district_id">
+          <select class="form-select search-select" id="mpgDistrictFilter" name="district_id" {% if disable_district %}disabled{% endif %}>
             <option value="0">-- All Districts --</option>
             {% for d in districts %}
             <option value="{{ d.id }}" {% if district_id == d.id %}selected{% endif %}>{{ d.name }}</option>
             {% endfor %}
           </select>
+          {% if disable_district %}
+          <input type="hidden" name="district_id" value="{{ district_id }}">
+          {% endif %}
         </div>
         <div class="col-md-2">
           <label class="form-label small fw-semibold text-secondary"><i class="bi bi-folder2 me-1"></i>Project</label>
-          <select class="form-select search-select" id="mpgProjectFilter" name="project_id">
+          <select class="form-select search-select" id="mpgProjectFilter" name="project_id" {% if disable_project %}disabled{% endif %}>
             <option value="0">-- All Projects --</option>
             {% for p in projects %}
             <option value="{{ p.id }}" {% if project_id == p.id %}selected{% endif %}>{{ p.name }}</option>
             {% endfor %}
           </select>
+          {% if disable_project %}
+          <input type="hidden" name="project_id" value="{{ project_id }}">
+          {% endif %}
         </div>
         <div class="col-md-2">
           <label class="form-label small fw-semibold text-secondary"><i class="bi bi-truck me-1"></i>Vehicle No.</label>
-          <select class="form-select search-select" id="mpgVehicleFilter" name="vehicle_id">
+          <select class="form-select search-select" id="mpgVehicleFilter" name="vehicle_id" {% if disable_vehicle %}disabled{% endif %}>
             <option value="0">-- All Vehicles --</option>
             {% for v in vehicles %}
             <option value="{{ v.id }}" {% if vehicle_id == v.id %}selected{% endif %}>{{ v.vehicle_no }}</option>
             {% endfor %}
           </select>
+          {% if disable_vehicle %}
+          <input type="hidden" name="vehicle_id" value="{{ vehicle_id }}">
+          {% endif %}
         </div>
         <div class="col-md-2 d-flex gap-2">
           <button class="btn btn-primary flex-fill"><i class="bi bi-funnel me-1"></i>Apply</button>
@@ -519,6 +528,11 @@ document.addEventListener('DOMContentLoaded', function(){
   const districtSelect = document.getElementById('mpgDistrictFilter');
   const projectSelect = document.getElementById('mpgProjectFilter');
   const vehicleSelect = document.getElementById('mpgVehicleFilter');
+  const mpgFiltersLocked = {
+    district: {{ disable_district|default(false)|tojson }},
+    project: {{ disable_project|default(false)|tojson }},
+    vehicle: {{ disable_vehicle|default(false)|tojson }}
+  };
   const initialProjectOptions = projectSelect ? projectSelect.innerHTML : '';
   const initialVehicleOptions = vehicleSelect ? vehicleSelect.innerHTML : '';
 
@@ -543,7 +557,7 @@ document.addEventListener('DOMContentLoaded', function(){
     });
   }
 
-  if(districtSelect && projectSelect){
+  if(districtSelect && projectSelect && !mpgFiltersLocked.district){
     districtSelect.addEventListener('change', function(){
       const did = districtSelect.value || '0';
 
@@ -574,7 +588,7 @@ document.addEventListener('DOMContentLoaded', function(){
     });
   }
 
-  if(projectSelect && vehicleSelect){
+  if(projectSelect && vehicleSelect && !mpgFiltersLocked.project){
     projectSelect.addEventListener('change', function(){
       const pid = projectSelect.value || '0';
       const did = districtSelect ? (districtSelect.value || '0') : '0';
@@ -605,9 +619,9 @@ document.addEventListener('DOMContentLoaded', function(){
     });
   }
 
-  if(districtSelect && districtSelect.value && districtSelect.value !== '0'){
+  if(!mpgFiltersLocked.district && districtSelect && districtSelect.value && districtSelect.value !== '0'){
     districtSelect.dispatchEvent(new Event('change'));
-  } else if(projectSelect && projectSelect.value && projectSelect.value !== '0'){
+  } else if(!mpgFiltersLocked.project && projectSelect && projectSelect.value && projectSelect.value !== '0'){
     projectSelect.dispatchEvent(new Event('change'));
   }
 });
