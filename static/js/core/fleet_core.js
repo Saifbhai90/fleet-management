@@ -3514,6 +3514,126 @@
         return msg.indexOf('cancel') >= 0 || msg.indexOf('no image') >= 0 || msg.indexOf('no file') >= 0 || msg.indexOf('user denied') >= 0;
     };
 
+    /** Mobile app: ask Live Camera vs Gallery before attaching receipt/media. Web falls back to file input. */
+    window.fleetOpenNativeMediaPicker = function(opts) {
+        opts = opts || {};
+        var isNative = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+        if (!isNative) {
+            if (opts.fileInput) opts.fileInput.click();
+            else if (typeof opts.onFallback === 'function') opts.onFallback();
+            return;
+        }
+
+        var overlayId = 'fleetNativeMediaPickerOverlay';
+
+        function closeOverlay() {
+            var ov = document.getElementById(overlayId);
+            if (ov) ov.remove();
+        }
+
+        function deliverFile(file) {
+            closeOverlay();
+            if (file && typeof opts.onFile === 'function') opts.onFile(file);
+        }
+
+        function base64ToFile(b64, mime, name) {
+            var raw = b64.indexOf(',') >= 0 ? b64.split(',')[1] : b64;
+            var bin = atob(raw);
+            var len = bin.length;
+            var u8 = new Uint8Array(len);
+            for (var i = 0; i < len; i++) u8[i] = bin.charCodeAt(i);
+            var ext = (mime || 'image/jpeg') === 'image/png' ? '.png' : '.jpg';
+            return new File([u8], name || ('receipt_' + Date.now() + ext), { type: mime || 'image/jpeg' });
+        }
+
+        function openCamera() {
+            closeOverlay();
+            var Cam = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Camera;
+            if (!Cam || typeof Cam.getPhoto !== 'function') {
+                openGallery();
+                return;
+            }
+            var direction = (opts.cameraDirection || 'REAR').toUpperCase() === 'FRONT' ? 'FRONT' : 'REAR';
+            var quality = opts.quality != null ? opts.quality : 85;
+            var capturePhoto = function() {
+                return Cam.getPhoto({
+                    quality: quality,
+                    allowEditing: false,
+                    resultType: 'base64',
+                    source: 'CAMERA',
+                    direction: direction,
+                    saveToGallery: false
+                });
+            };
+            var permP = Cam.checkPermissions ? Cam.checkPermissions() : Promise.resolve({ camera: 'granted' });
+            permP.then(function(status) {
+                var state = (status && status.camera) || 'prompt';
+                if (state === 'granted') return capturePhoto();
+                if (Cam.requestPermissions) {
+                    return Cam.requestPermissions({ permissions: ['camera'] }).then(function(res) {
+                        if (res && res.camera === 'granted') return capturePhoto();
+                        throw { code: 'camera_denied', message: 'Camera permission denied' };
+                    });
+                }
+                return capturePhoto();
+            }).then(function(photo) {
+                if (!photo || !photo.base64String) throw new Error('No photo captured');
+                var fmt = String(photo.format || 'jpeg').toLowerCase();
+                var mime = fmt === 'png' ? 'image/png' : 'image/jpeg';
+                deliverFile(base64ToFile(photo.base64String, mime));
+            }).catch(function(err) {
+                if (window.fleetIsCameraCancelled && window.fleetIsCameraCancelled(err)) return;
+                alert((err && err.message) ? err.message : 'Camera failed');
+            });
+        }
+
+        function openGallery() {
+            closeOverlay();
+            var accept = opts.accept || 'image/*,video/*,.pdf';
+            var input = document.createElement('input');
+            input.type = 'file';
+            input.accept = accept;
+            input.style.display = 'none';
+            document.body.appendChild(input);
+            input.addEventListener('change', function() {
+                var file = input.files && input.files[0];
+                if (input.parentNode) input.parentNode.removeChild(input);
+                if (file) deliverFile(file);
+                else if (typeof opts.onCancel === 'function') opts.onCancel();
+            });
+            input.click();
+        }
+
+        closeOverlay();
+        var title = opts.title || 'Attachment';
+        var overlay = document.createElement('div');
+        overlay.id = overlayId;
+        overlay.setAttribute('role', 'dialog');
+        overlay.setAttribute('aria-modal', 'true');
+        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:10050;display:flex;align-items:flex-end;justify-content:center;padding:0 0 env(safe-area-inset-bottom,0);';
+        overlay.innerHTML =
+            '<div style="background:#fff;border-radius:16px 16px 0 0;width:100%;max-width:480px;padding:18px 16px 20px;box-shadow:0 -8px 32px rgba(0,0,0,.18);font-family:system-ui,sans-serif;">' +
+            '<div style="font-size:1rem;font-weight:700;color:#1e293b;margin-bottom:4px;text-align:center;">' + title + '</div>' +
+            '<div style="font-size:0.82rem;color:#64748b;margin-bottom:16px;text-align:center;">Live camera se photo lein ya gallery se image/file choose karein</div>' +
+            '<button type="button" data-act="camera" style="width:100%;padding:14px;margin-bottom:10px;border:none;border-radius:10px;background:#0f172a;color:#fff;font-size:0.95rem;font-weight:600;cursor:pointer;"><i class="bi bi-camera me-2"></i>Live Camera</button>' +
+            '<button type="button" data-act="gallery" style="width:100%;padding:14px;margin-bottom:10px;border:1px solid #cbd5e1;border-radius:10px;background:#f8fafc;color:#1e293b;font-size:0.95rem;font-weight:600;cursor:pointer;"><i class="bi bi-images me-2"></i>Gallery</button>' +
+            '<button type="button" data-act="cancel" style="width:100%;padding:12px;border:none;background:transparent;color:#64748b;font-size:0.9rem;cursor:pointer;">Cancel</button>' +
+            '</div>';
+        document.body.appendChild(overlay);
+        overlay.addEventListener('click', function(e) {
+            if (e.target === overlay) {
+                closeOverlay();
+                if (typeof opts.onCancel === 'function') opts.onCancel();
+            }
+        });
+        overlay.querySelector('[data-act="camera"]').addEventListener('click', openCamera);
+        overlay.querySelector('[data-act="gallery"]').addEventListener('click', openGallery);
+        overlay.querySelector('[data-act="cancel"]').addEventListener('click', function() {
+            closeOverlay();
+            if (typeof opts.onCancel === 'function') opts.onCancel();
+        });
+    };
+
     // Live connection status + network speed (left of navbar, after logo)
     (function() {
         var _netTimer = null;

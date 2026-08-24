@@ -11,6 +11,8 @@
         .ee-attach-zone { border: 2px dashed #ced4da; border-radius: 8px; padding: .75rem; text-align: center; cursor: pointer; transition: all .15s; }
         .ee-attach-zone:hover, .ee-attach-zone.drag-over { border-color: #f0ad00; background: #fff9e8; }
         .ee-attach-preview img, .ee-attach-preview video { max-height: 130px; max-width: 100%; border-radius: 6px; object-fit: contain; }
+        html.capacitor-native .ee-attach-hint-web { display: none !important; }
+        html:not(.capacitor-native) .ee-attach-hint-native { display: none !important; }
     </style>
 
     <div class="section-heading bg-warning">
@@ -75,7 +77,8 @@
                                 <video id="eeAttachPreviewVideo" controls style="display:none;"></video>
                             </div>
                         </div>
-                        <small class="text-muted d-block mt-1">Ctrl+V paste works for image/video. PDF preview is not shown.</small>
+                        <small class="text-muted d-block mt-1 ee-attach-hint-web">Ctrl+V paste works for image/video. PDF preview is not shown.</small>
+                        <small class="text-muted d-block mt-1 ee-attach-hint-native">Mobile app: Live Camera ya Gallery choose karein. PDF preview is not shown.</small>
                         {% if expense and expense.receipt_path %}
                         <div class="mt-2">
                             <small class="text-muted">Current file:</small>
@@ -184,8 +187,31 @@ document.addEventListener('DOMContentLoaded', function(){
         showAttachPreview(file);
     }
 
+    function openReceiptPicker() {
+        if (typeof window.fleetOpenNativeMediaPicker === 'function') {
+            window.fleetOpenNativeMediaPicker({
+                title: 'Receipt / Bill',
+                accept: receiptInput.getAttribute('accept') || '.pdf,image/*,video/*',
+                cameraDirection: 'REAR',
+                fileInput: receiptInput,
+                onFile: assignFileToInput
+            });
+            return;
+        }
+        receiptInput.click();
+    }
+
     if (attachZone && receiptInput) {
-        attachZone.addEventListener('click', function(){ receiptInput.click(); });
+        attachZone.addEventListener('click', function(e) {
+            e.preventDefault();
+            openReceiptPicker();
+        });
+        attachZone.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                openReceiptPicker();
+            }
+        });
         receiptInput.addEventListener('change', function(){
             if (this.files && this.files[0]) showAttachPreview(this.files[0]);
             else resetPreview();
