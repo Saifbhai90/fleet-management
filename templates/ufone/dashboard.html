@@ -18,7 +18,7 @@
   .uf-stat-value { font-size: 24px; font-weight: 800; color: #1e293b; line-height: 1; margin-bottom: 6px; }
   .uf-stat-label { font-size: 12px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; }
   .uf-stat-icon { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px; margin-bottom: 12px; }
-
+  
   /* ── Portal-style KPI cards (compact — 7 in one row on desktop) ────── */
   .uf-kpi-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
   .uf-kpi {
@@ -269,16 +269,16 @@
       <div class="col-6 col-md-2">
         <label class="uf-flabel"><i class="bi bi-calendar3"></i> From Date</label>
         <input type="date" class="form-control" id="fFrom">
-      </div>
+    </div>
       <div class="col-6 col-md-2">
         <label class="uf-flabel"><i class="bi bi-calendar3"></i> To Date</label>
         <input type="date" class="form-control" id="fTo">
-      </div>
+    </div>
       <div class="col-6 col-md-2">
         <label class="uf-flabel"><i class="bi bi-hash"></i> Task ID</label>
         <input type="text" class="form-control form-control-sm" id="fTaskId"
                placeholder="e.g. 12345" inputmode="numeric" autocomplete="off">
-      </div>
+    </div>
       <div class="col-6 col-md-2">
         <label class="uf-flabel"><i class="bi bi-geo-alt"></i> District</label>
         <select id="fDistrict" class="form-select form-select-sm search-select">
@@ -287,7 +287,7 @@
           <option value="{{ d.code }}">{{ d.name }}</option>
           {% endfor %}
         </select>
-      </div>
+    </div>
       <div class="col-6 col-md-2">
         <label class="uf-flabel"><i class="bi bi-truck"></i> Vehicle No</label>
         <select id="fVehicle" class="form-select form-select-sm search-select">
@@ -299,7 +299,7 @@
             {% endif %}
           {% endfor %}
         </select>
-      </div>
+    </div>
       <div class="col-6 col-md-2">
         <label class="uf-flabel"><i class="bi bi-flag"></i> Task Status</label>
         <select id="fStatus" class="form-select form-select-sm search-select">
@@ -406,7 +406,7 @@
               <i class="bi bi-search"></i>
               <input type="search" id="taskListSearch" class="form-control form-control-sm uf-task-search"
                      placeholder="Search tasks..." autocomplete="off">
-            </div>
+        </div>
             <a href="{{ url_for('ufone_emergency_tasks') }}" class="uf-btn uf-btn-outline btn-sm text-nowrap">View All <i class="bi bi-arrow-right"></i></a>
           </div>
         </div>
@@ -838,7 +838,7 @@ function setSelectOptions(el, options, placeholderText, keepValue) {
   try {
     if ((fDistrictEl.options || []).length > 1) return; // SSR has data
     const res = await fetch('/api/ufone/districts');
-    const data = await res.json();
+      const data = await res.json();
     const list = data.districts || [];
     if (!list.length) return;
     setSelectOptions(fDistrictEl,
@@ -1258,7 +1258,7 @@ async function onKpiCardActivate(card) {
       && (!dayReportReady || !taskListHasCategoryData());
     if (needsDayReport) {
       await loadTasksForCategoryCards({ silent: false });
-    } else {
+      } else {
       if (!taskListFilteredMode && f !== 'all' && f !== 'in_process') {
         const wrap = document.getElementById('taskTableWrap');
         if (wrap) wrap.classList.add('filtered');
@@ -1340,8 +1340,8 @@ async function runFilterApply() {
         sum.style.display = '';
         sum.innerHTML = `<i class="bi bi-check-circle text-success"></i> <b>${data.counts.total}</b> tasks (${data.from_date} → ${data.to_date}, ${esc(distName)}) — Incomplete: <b>${data.counts.incomplete}</b>, Completed: <b>${data.counts.completed}</b>, Cancelled: <b>${data.counts.cancelled || 0}</b>`;
       }
-    }
-  } catch(e) {
+      }
+    } catch(e) {
     if (gen === tasksLoadGen) {
       tbody.innerHTML = '<tr><td colspan="11" class="text-center text-danger py-4">Error loading filtered data. Dobara try karein.</td></tr>';
     }
@@ -1513,7 +1513,7 @@ if (window.__ssrCounts && window.__ssrCounts.synced_at) {
   document.getElementById('syncTime').textContent =
     'Last Synced: ' + new Date(window.__ssrCounts.synced_at).toLocaleString();
 } else {
-  document.getElementById('syncTime').textContent = 'Loaded at ' + new Date().toLocaleTimeString();
+document.getElementById('syncTime').textContent = 'Loaded at ' + new Date().toLocaleTimeString();
 }
 </script>
 {% endblock %}

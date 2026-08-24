@@ -23,7 +23,7 @@
   .tb-stat .num { font-size: 16px; font-weight: 800; line-height: 1.1; color: #fff; }
   .tb-stat .lbl { font-size: 9px; color: #cfe4ff; text-transform: uppercase; }
   .tb-stat.moving .num { color: #22c55e; }
-  .tb-stat.stopped .num { color: #ef4444; }
+  .tb-stat.stopped .num { color: #cbd5e1; }
   .tb-stat.idle .num { color: #f59e0b; }
   .tb-stat.total .num { color: #60a5fa; }
   .tb-updated { font-size: 11px; color: #9ec5ff; white-space: nowrap; }
@@ -52,6 +52,14 @@
   .vg-header .vg-chevron { transition: transform .2s; font-size: 10px; color: #64748b; }
   .vg-header.collapsed .vg-chevron { transform: rotate(-90deg); }
   .vg-header .vg-count { margin-left: auto; font-size: 10px; color: #64748b; font-weight: 400; }
+  .vg-header.active-group-filter { background: #1a3a5a; box-shadow: inset 3px 0 0 #60a5fa; }
+  .vg-header.active-group-filter .vg-count { color: #93c5fd; font-weight: 600; }
+  .ts-group-filter { margin-top: 8px; }
+  .ts-group-filter select {
+    width: 100%; padding: 7px 10px; border-radius: 6px; border: 1px solid #2a3a4a;
+    background: #0f1923; color: #e0e0e0; font-size: 12px; outline: none;
+  }
+  .ts-group-filter select:focus { border-color: #1a5fb4; }
   .vg-body { overflow: hidden; }
   .vg-body.collapsed { display: none; }
 
@@ -60,7 +68,7 @@
   .vrow.active { background: #1a3a5a; border-left: 3px solid #1a5fb4; }
   .vdot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
   .vdot.Moving { background: #22c55e; box-shadow: 0 0 8px rgba(34,197,94,.55); }
-  .vdot.Stopped { background: #ef4444; }
+  .vdot.Stopped { background: #111827; box-shadow: 0 0 0 1px rgba(255,255,255,.35); }
   .vdot.Idle, .vdot.unknown { background: #f59e0b; }
   .vinfo { flex: 1; min-width: 0; }
   .vreg { font-size: 13px; font-weight: 600; color: #e0e0e0; }
@@ -86,9 +94,33 @@
   .pop-row b { color: #94a3b8; font-weight: 400; }
   .pop-link { display: inline-block; margin-top: 8px; padding: 6px 16px; border-radius: 6px; background: #1a5fb4; color: #fff !important; text-decoration: none; font-size: 12px; font-weight: 600; text-align: center; }
   .pop-link:hover { background: #2563eb; color: #fff !important; }
+  .pop-task-block { margin-top: 10px; padding-top: 10px; border-top: 1px solid #2a3a4a; }
+  .pop-ufone-badge {
+    display: inline-block; background: #ef4444; color: #fff;
+    font-size: 10px; font-weight: 700; padding: 3px 10px; border-radius: 999px;
+    text-transform: uppercase; letter-spacing: .04em;
+  }
+  .pop-task-link {
+    display: block; margin-top: 8px; padding: 7px 12px; border-radius: 6px;
+    background: linear-gradient(135deg,#7C3AED,#5B21B6); color: #fff !important;
+    text-decoration: none; font-size: 12px; font-weight: 600; text-align: center;
+  }
+  .pop-task-link:hover { filter: brightness(1.08); color: #fff !important; }
+  .pop-no-task { margin-top: 8px; font-size: 11px; color: #64748b; }
+  .vrow.has-ufone-task { box-shadow: inset 3px 0 0 #ef4444; }
+  .v-task-tag {
+    display: inline-block; margin-left: 5px; padding: 1px 5px; border-radius: 4px;
+    background: #ef4444; color: #fff; font-size: 9px; font-weight: 800; vertical-align: middle;
+    letter-spacing: .04em;
+  }
 
   /* ── Vehicle marker — modern fleet tracking UI ── */
-  .fleet-vmarker.leaflet-div-icon { background: transparent !important; border: none !important; }
+  .fleet-vmarker.leaflet-div-icon {
+    background: transparent !important;
+    border: none !important;
+    overflow: visible !important;
+  }
+  .leaflet-div-icon { overflow: visible !important; }
   .vmarker-wrap {
     position: relative;
     display: flex;
@@ -96,6 +128,7 @@
     align-items: center;
     justify-content: flex-end;
     pointer-events: none;
+    overflow: visible;
   }
   .vmarker-label {
     position: relative;
@@ -113,11 +146,12 @@
   }
   .vmarker-car-slot {
     position: relative;
-    width: 36px;
-    height: 36px;
+    width: 52px;
+    height: 52px;
     display: flex;
     align-items: center;
     justify-content: center;
+    overflow: visible;
   }
   .vmarker-car {
     transform-origin: 50% 50%;
@@ -125,19 +159,25 @@
     position: relative;
     z-index: 2;
   }
-  .vmarker-car.is-moving::before {
-    content: '';
+  .vmarker-task-pulse {
     position: absolute;
     top: 50%;
     left: 50%;
-    width: 32px;
-    height: 32px;
-    margin: -16px 0 0 -16px;
+    width: 44px;
+    height: 44px;
+    margin: -22px 0 0 -22px;
     border-radius: 50%;
-    border: 2px solid var(--v-glow, #22c55e);
-    opacity: .55;
-    animation: vmarker-pulse 2s ease-out infinite;
-    z-index: 0;
+    border: 3px solid #ef4444;
+    background: transparent;
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.65);
+    animation: vmarker-task-pulse 1.6s ease-out infinite;
+    z-index: 1;
+    pointer-events: none;
+  }
+  @keyframes vmarker-task-pulse {
+    0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.75); transform: scale(0.92); opacity: 1; }
+    70% { box-shadow: 0 0 0 16px rgba(239, 68, 68, 0); transform: scale(1.15); opacity: 0.35; }
+    100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); transform: scale(1.2); opacity: 0; }
   }
   @keyframes vmarker-pulse {
     0% { transform: scale(.85); opacity: .55; }
@@ -210,6 +250,15 @@
     <div class="tracking-sidebar">
       <div class="ts-search">
         <input type="text" id="vehicleSearch" placeholder="Search vehicle (e.g. GBC or LEG)..." />
+        <div class="ts-group-filter">
+          <select id="groupFilter" aria-label="Filter by group">
+            <option value="all">All Groups</option>
+            {% set grouped_init = vehicles | groupby('GroupName') | sort %}
+            {% for g, gv in grouped_init %}
+            <option value="{{ g or 'Unassigned' }}">{{ g or 'Unassigned' }} ({{ gv|length }})</option>
+            {% endfor %}
+          </select>
+        </div>
         <div class="ts-filters">
           <button class="active" data-filter="all">All</button>
           <button data-filter="Moving">Moving</button>
@@ -227,7 +276,7 @@
         </div>
         <div class="vg-body" data-group-body="{{ g or 'Unassigned' }}">
           {% for v in gv %}
-          <div class="vrow" data-regno="{{ v.RegNo }}" data-status="{{ v.VehicleStatus }}" data-lat="{{ v.LAT }}" data-lon="{{ v.LON }}">
+          <div class="vrow" data-regno="{{ v.RegNo }}" data-status="{{ v.VehicleStatus }}" data-group="{{ g or 'Unassigned' }}" data-lat="{{ v.LAT }}" data-lon="{{ v.LON }}">
             <div class="vdot {{ v.VehicleStatus }}"></div>
             <div class="vinfo">
               <div class="vreg">{{ v.RegNo }}</div>
@@ -249,7 +298,8 @@
       </div>
       <div class="map-legend">
         <div class="row"><span class="dot" style="background:#22c55e"></span> Moving</div>
-        <div class="row"><span class="dot" style="background:#ef4444"></span> Stopped (ign off)</div>
+        <div class="row"><span class="dot" style="background:#111827;box-shadow:0 0 0 1px rgba(255,255,255,.35)"></span> Stopped (ign off)</div>
+        <div class="row"><span class="dot" style="background:#ef4444;box-shadow:0 0 0 2px rgba(239,68,68,.45);animation:vmarker-pulse 2s ease-out infinite"></span> Active Ufone Task</div>
         <div class="row"><span class="dot" style="background:#f59e0b"></span> Idle / No GPS</div>
         <div style="margin-top:6px;font-size:10px;color:#94a3b8;">Nav arrow · rotates with heading</div>
         <div style="margin-top:4px;font-size:10px;color:#94a3b8;">Switch map style &raquo; top-right</div>
@@ -257,6 +307,34 @@
     </div>
   </div>
 </div>
+
+<!-- Ufone Task Detail Modal (shared with Ufone dashboard) -->
+<div class="modal fade" id="taskModal" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable modal-dialog-centered">
+    <div class="modal-content" style="border-radius:14px;border:none;max-height:94vh;background:#fff;">
+      <div class="modal-header py-3" style="background:#16a34a;border-radius:14px 14px 0 0;border-bottom:none;">
+        <h5 class="modal-title text-white fw-bold mb-0"><i class="bi bi-info-circle me-1"></i> Ufone Task Detail</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="taskModalBody" style="padding:20px;">
+        <div class="text-center py-5">
+          <div class="spinner-border text-primary" role="status"></div>
+          <p class="mt-2 text-muted">Loading details...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<style>
+  #taskModal .modal-dialog { max-width: min(1440px, 97vw); }
+  #taskModal .uf-fgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px 16px; }
+  #taskModal .uf-fgrid.uf-general { grid-template-columns: repeat(4, 1fr); }
+  #taskModal .uf-frow { display: flex; gap: 8px; font-size: 13px; margin-bottom: 4px; }
+  #taskModal .uf-frow label { flex: 0 0 38%; color: #64748b; font-weight: 600; margin: 0; }
+  @media (max-width: 768px) {
+    #taskModal .uf-fgrid, #taskModal .uf-fgrid.uf-general { grid-template-columns: 1fr; }
+  }
+</style>
 {% endblock %}
 
 {% block extra_js %}
@@ -308,12 +386,42 @@
   var markers = {};
   var markerState = {};   // RegNo -> {lat, lon, icon} for change-detection
   var currentFilter = 'all';
+  var currentGroupFilter = 'all';
   var positions = [];
+  var ufoneTasksByReg = {{ ufone_tasks_by_reg | tojson }};
+
+  function fetchUfoneTaskMap() {
+    return fetch('/api/tracking/ufone-active-tasks?_=' + Date.now(), { credentials: 'same-origin' })
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (d && d.tasks_by_reg && typeof d.tasks_by_reg === 'object') {
+          ufoneTasksByReg = d.tasks_by_reg;
+        }
+      })
+      .catch(function() { /* keep SSR seed */ });
+  }
+
+  function renderAfterTaskSync(vehicles) {
+    var list = vehicles || positions || [];
+    if (list.length) renderVehicles(list);
+  }
+
+  function normalizeRegKey(reg) {
+    if (!reg) return '';
+    var s = String(reg).trim().toUpperCase();
+    s = s.replace(/[\s\-]+(COW|USG\+P|USG|RAS|MNHC|EMS|NHP)\s*$/i, '');
+    if (s.indexOf(' ') >= 0) s = s.split(/\s+/)[0];
+    return s.replace(/[^A-Z0-9]/g, '');
+  }
+
+  function activeUfoneTask(regNo) {
+    return ufoneTasksByReg[normalizeRegKey(regNo)] || null;
+  }
 
   // ── Vehicle Icons — modern navigation arrow markers ──
   function colorFor(status) {
     if (status === 'Moving') return '#22c55e';
-    if (status === 'Stopped') return '#ef4444';
+    if (status === 'Stopped') return '#111827';
     return '#f59e0b';
   }
 
@@ -353,23 +461,37 @@
       '</g></svg>';
   }
 
-  function carIcon(color, deg, isMoving, regNo) {
+  function carIcon(color, deg, hasUfoneTask, regNo) {
     var rotate = deg || 0;
     var uid = markerUid(regNo, color);
     var label = (showLabels && regNo)
       ? '<div class="vmarker-label" style="color:' + color + ';">' + regNo + '</div>'
       : '';
-    var movingCls = isMoving ? ' is-moving' : '';
+    var pulseHtml = hasUfoneTask ? '<div class="vmarker-task-pulse" aria-hidden="true"></div>' : '';
     return L.divIcon({
-      className: 'fleet-vmarker',
+      className: 'fleet-vmarker' + (hasUfoneTask ? ' has-ufone-task' : ''),
       html: '<div class="vmarker-wrap">' + label +
             '<div class="vmarker-car-slot">' +
-            '<div class="vmarker-car' + movingCls + '" style="transform:rotate(' + rotate + 'deg);--v-glow:' + color + ';">' +
+            pulseHtml +
+            '<div class="vmarker-car" style="transform:rotate(' + rotate + 'deg);">' +
             navArrowSvg(color, uid) +
             '</div></div></div>',
-      iconSize: [80, 62],
-      iconAnchor: [40, 48]
+      iconSize: [96, 72],
+      iconAnchor: [48, 54]
     });
+  }
+
+  function popupTaskBlock(regNo) {
+    var task = activeUfoneTask(regNo);
+    if (!task) {
+      return '<div class="pop-task-block pop-no-task">No active Ufone task on this vehicle</div>';
+    }
+    var label = task.task_id_display || ('PHF-' + task.task_id);
+    var sub = task.patient_name ? (' — ' + task.patient_name) : '';
+    return '<div class="pop-task-block">' +
+      '<span class="pop-ufone-badge"><i class="bi bi-exclamation-circle"></i> Active Ufone Task</span>' +
+      '<a href="#" class="pop-task-link task-detail-btn" data-id="' + task.task_id + '">' +
+      'View ' + label + sub + '</a></div>';
   }
 
   function popupHtml(v) {
@@ -386,6 +508,7 @@
       '<div class="pop-row"><b>Mileage:</b> ' + (v.TotalMileage || 0).toFixed(0) + ' km</div>' +
       '<div class="pop-row"><b>Trips:</b> ' + (v.TotalTrips || 0) + '</div>' +
       '<div class="pop-row"><b>Coords:</b> ' + v.LAT + ', ' + v.LON + '</div>' +
+      popupTaskBlock(v.RegNo) +
       '<a href="/tracking/vehicle/' + encodeURIComponent(v.RegNo) + '" class="pop-link">View Details</a>';
   }
 
@@ -394,27 +517,76 @@
     var spd = parseFloat(v.Speed || 0).toFixed(0);
     var lm = (v.LandMark || '').replace(/^0\|\|/, '').split(',')[0];
     var time = v.RDT ? v.RDT.substr(11, 5) : '--';
-    return '<div class="vrow" data-regno="' + v.RegNo + '" data-status="' + cls + '" data-lat="' + v.LAT + '" data-lon="' + v.LON + '">' +
+    var taskCls = activeUfoneTask(v.RegNo) ? ' has-ufone-task' : '';
+    var taskTag = activeUfoneTask(v.RegNo) ? ' <span class="v-task-tag">TASK</span>' : '';
+    return '<div class="vrow' + taskCls + '" data-regno="' + v.RegNo + '" data-status="' + cls + '" data-group="' + (v.GroupName || 'Unassigned').replace(/"/g, '&quot;') + '" data-lat="' + v.LAT + '" data-lon="' + v.LON + '">' +
       '<div class="vdot ' + cls + '"></div>' +
-      '<div class="vinfo"><div class="vreg">' + v.RegNo + '</div>' +
+      '<div class="vinfo"><div class="vreg">' + v.RegNo + taskTag + '</div>' +
       '<div class="vsub">' + (lm || '-') + ' &middot; ' + time + '</div></div>' +
       '<div class="vspd">' + spd + '<br><small>km/h</small></div></div>';
+  }
+
+  function bindGroupHeaders(scope) {
+    var root = scope || document;
+    root.querySelectorAll('.vg-header').forEach(function(hdr) {
+      hdr.addEventListener('click', function() {
+        var list = document.getElementById('vehicleList');
+        var body = list.querySelector('[data-group-body="' + hdr.dataset.group + '"]');
+        if (body) {
+          hdr.classList.toggle('collapsed');
+          body.classList.toggle('collapsed');
+        }
+      });
+    });
+  }
+
+  function syncGroupFilterOptions(groupOrder, groups) {
+    var sel = document.getElementById('groupFilter');
+    if (!sel) return;
+    var prev = currentGroupFilter;
+    var html = '<option value="all">All Groups (' + positions.length + ')</option>';
+    groupOrder.forEach(function(g) {
+      var count = (groups[g] || []).length;
+      html += '<option value="' + g.replace(/"/g, '&quot;') + '">' + g + ' (' + count + ')</option>';
+    });
+    sel.innerHTML = html;
+    if (prev !== 'all' && groupOrder.indexOf(prev) >= 0) {
+      sel.value = prev;
+    } else {
+      currentGroupFilter = 'all';
+      sel.value = 'all';
+    }
+  }
+
+  function syncGroupHeaderState() {
+    document.querySelectorAll('.vg-header').forEach(function(hdr) {
+      hdr.classList.toggle('active-group-filter', currentGroupFilter !== 'all' && hdr.dataset.group === currentGroupFilter);
+    });
+  }
+
+  function updateStatCounts() {
+    var search = document.getElementById('vehicleSearch').value.toLowerCase();
+    var mv = 0, st = 0, id = 0, total = 0;
+    positions.forEach(function(v) {
+      var grp = v.GroupName || 'Unassigned';
+      var matchGroup = currentGroupFilter === 'all' || grp === currentGroupFilter;
+      var matchSearch = !search || (v.RegNo || '').toLowerCase().indexOf(search) >= 0;
+      if (!matchGroup || !matchSearch) return;
+      total++;
+      if (v.VehicleStatus === 'Moving') mv++;
+      else if (v.VehicleStatus === 'Stopped') st++;
+      else id++;
+    });
+    document.getElementById('statTotal').textContent = total;
+    document.getElementById('statMoving').textContent = mv;
+    document.getElementById('statStopped').textContent = st;
+    document.getElementById('statIdle').textContent = id;
   }
 
   // ── Render ──
   function renderVehicles(vehicles) {
     positions = vehicles || [];
     var list = document.getElementById('vehicleList');
-
-    // counts
-    var mv = 0, st = 0, id = 0;
-    positions.forEach(function(v) {
-      if (v.VehicleStatus === 'Moving') mv++; else if (v.VehicleStatus === 'Stopped') st++; else id++;
-    });
-    document.getElementById('statTotal').textContent = positions.length;
-    document.getElementById('statMoving').textContent = mv;
-    document.getElementById('statStopped').textContent = st;
-    document.getElementById('statIdle').textContent = id;
 
     // group vehicles by GroupName
     var groups = {};
@@ -424,6 +596,8 @@
       if (!groups[g]) { groups[g] = []; groupOrder.push(g); }
       groups[g].push(v);
     });
+
+    syncGroupFilterOptions(groupOrder, groups);
 
     // render grouped sidebar
     var html = '';
@@ -447,18 +621,18 @@
 
       var cls = v.VehicleStatus || 'Idle';
       var color = colorFor(cls);
-      var moving = cls === 'Moving';
+      var hasTask = !!activeUfoneTask(v.RegNo);
       var deg = parseFloat(v.Direction) || 0;
-      var iconState = color + '|' + Math.round(deg) + '|' + moving + '|' + (showLabels ? v.RegNo : '');
+      var iconState = color + '|' + Math.round(deg) + '|' + hasTask + '|' + (showLabels ? v.RegNo : '');
 
       var m = markers[v.RegNo];
       if (m) {
         var prev = markerState[v.RegNo] || {};
         if (prev.lat !== lat || prev.lon !== lon) m.setLatLng([lat, lon]);
-        if (prev.icon !== iconState) m.setIcon(carIcon(color, deg, moving, v.RegNo));
+        if (prev.icon !== iconState) m.setIcon(carIcon(color, deg, hasTask, v.RegNo));
         m.setPopupContent(popupHtml(v));
       } else {
-        m = L.marker([lat, lon], { icon: carIcon(color, deg, moving, v.RegNo) }).addTo(map);
+        m = L.marker([lat, lon], { icon: carIcon(color, deg, hasTask, v.RegNo) }).addTo(map);
         m.bindPopup(popupHtml(v), { maxWidth: 300 });
         m.on('click', function() { selectVehicle(v.RegNo, false); });
         markers[v.RegNo] = m;
@@ -475,16 +649,7 @@
       }
     });
 
-    // bind group header collapse/expand
-    document.querySelectorAll('.vg-header').forEach(function(hdr) {
-      hdr.addEventListener('click', function() {
-        var body = list.querySelector('[data-group-body="' + hdr.dataset.group + '"]');
-        if (body) {
-          hdr.classList.toggle('collapsed');
-          body.classList.toggle('collapsed');
-        }
-      });
-    });
+    bindGroupHeaders(list);
 
     // bind sidebar clicks
     document.querySelectorAll('.vrow').forEach(function(row) {
@@ -519,8 +684,9 @@
 
     document.querySelectorAll('.vrow').forEach(function(r) {
       var matchFilter = currentFilter === 'all' || r.dataset.status === currentFilter;
+      var matchGroup = currentGroupFilter === 'all' || r.dataset.group === currentGroupFilter;
       var matchSearch = !search || r.dataset.regno.toLowerCase().indexOf(search) >= 0;
-      var show = (matchFilter && matchSearch);
+      var show = (matchFilter && matchGroup && matchSearch);
       r.style.display = show ? '' : 'none';
       if (show) {
         var body = r.closest('.vg-body');
@@ -528,12 +694,15 @@
       }
     });
 
-    // auto-expand groups with matching rows when searching; restore user state otherwise
+    // show/hide whole group sections when group filter is active
     document.querySelectorAll('.vg-header').forEach(function(hdr) {
       var body = document.querySelector('[data-group-body="' + hdr.dataset.group + '"]');
       if (!body) return;
+      var groupMatches = currentGroupFilter === 'all' || hdr.dataset.group === currentGroupFilter;
+      hdr.style.display = groupMatches ? '' : 'none';
+      body.style.display = groupMatches ? '' : 'none';
+      if (!groupMatches) return;
       if (hasSearch) {
-        // when searching: expand groups that have matches, collapse those without
         if (visibleGroups[hdr.dataset.group]) {
           hdr.classList.remove('collapsed');
           body.classList.remove('collapsed');
@@ -541,22 +710,44 @@
           hdr.classList.add('collapsed');
           body.classList.add('collapsed');
         }
+      } else if (currentGroupFilter !== 'all' && hdr.dataset.group === currentGroupFilter) {
+        hdr.classList.remove('collapsed');
+        body.classList.remove('collapsed');
       }
-      // when not searching: leave user's collapse state as-is
     });
+
+    syncGroupHeaderState();
 
     // filter map markers too
     Object.keys(markers).forEach(function(reg) {
       var v = positions.find(function(x) { return x.RegNo === reg; });
       if (!v) return;
+      var grp = v.GroupName || 'Unassigned';
       var matchFilter = currentFilter === 'all' || v.VehicleStatus === currentFilter;
+      var matchGroup = currentGroupFilter === 'all' || grp === currentGroupFilter;
       var matchSearch = !search || (v.RegNo || '').toLowerCase().indexOf(search) >= 0;
-      if (matchFilter && matchSearch) {
+      if (matchFilter && matchGroup && matchSearch) {
         if (!map.hasLayer(markers[reg])) markers[reg].addTo(map);
       } else {
         if (map.hasLayer(markers[reg])) map.removeLayer(markers[reg]);
       }
     });
+
+    updateStatCounts();
+  }
+
+  function fitMapToVisibleMarkers() {
+    var latlngs = [];
+    Object.keys(markers).forEach(function(reg) {
+      if (!map.hasLayer(markers[reg])) return;
+      var ll = markers[reg].getLatLng();
+      latlngs.push([ll.lat, ll.lng]);
+    });
+    if (latlngs.length === 1) {
+      map.setView(latlngs[0], 13, { animate: true });
+    } else if (latlngs.length > 1) {
+      map.fitBounds(L.latLngBounds(latlngs), { padding: [40, 40], animate: true });
+    }
   }
 
   function setFilter(filter) {
@@ -591,16 +782,13 @@
     });
   });
 
-  // bind group header collapse/expand for server-rendered content
-  document.querySelectorAll('.vg-header').forEach(function(hdr) {
-    hdr.addEventListener('click', function() {
-      var body = document.querySelector('[data-group-body="' + hdr.dataset.group + '"]');
-      if (body) {
-        hdr.classList.toggle('collapsed');
-        body.classList.toggle('collapsed');
-      }
-    });
+  document.getElementById('groupFilter').addEventListener('change', function() {
+    currentGroupFilter = this.value || 'all';
+    applyFilter();
+    fitMapToVisibleMarkers();
   });
+
+  bindGroupHeaders();
 
   // Show/hide vehicle labels on map markers
   document.getElementById('showLabelsChk').addEventListener('change', function() {
@@ -610,11 +798,11 @@
       if (!markers[v.RegNo]) return;
       var cls = v.VehicleStatus || 'Idle';
       var color = colorFor(cls);
-      var moving = cls === 'Moving';
+      var hasTask = !!activeUfoneTask(v.RegNo);
       var deg = parseFloat(v.Direction) || 0;
-      markers[v.RegNo].setIcon(carIcon(color, deg, moving, v.RegNo));
+      markers[v.RegNo].setIcon(carIcon(color, deg, hasTask, v.RegNo));
       if (markerState[v.RegNo]) {
-        markerState[v.RegNo].icon = color + '|' + Math.round(deg) + '|' + moving + '|' + (showLabels ? v.RegNo : '');
+        markerState[v.RegNo].icon = color + '|' + Math.round(deg) + '|' + hasTask + '|' + (showLabels ? v.RegNo : '');
       }
     });
   });
@@ -634,11 +822,16 @@
 
   // ── Auto refresh (pauses when tab is hidden — saves battery/bandwidth) ──
   var REFRESH_MS = 30000;
+  var UFONE_TASK_MS = 60000;
   var lastRefreshAt = Date.now();
   setInterval(function() {
     if (document.hidden) return;
     refreshPositions(false);
   }, REFRESH_MS);
+  setInterval(function() {
+    if (document.hidden) return;
+    fetchUfoneTaskMap().then(function() { renderAfterTaskSync(); });
+  }, UFONE_TASK_MS);
 
   // Refresh immediately when returning to a stale tab
   document.addEventListener('visibilitychange', function() {
@@ -655,8 +848,13 @@
     var opts = { method: force ? 'POST' : 'GET', headers: { 'X-CSRFToken': window.FleetConfig.csrfToken } };
     if (force) opts.headers['Content-Type'] = 'application/json';
     fetch(url, opts).then(function(r) { return r.json(); }).then(function(data) {
+      if (data.ufone_tasks_by_reg && typeof data.ufone_tasks_by_reg === 'object') {
+        ufoneTasksByReg = data.ufone_tasks_by_reg;
+      }
       if (data.vehicles && data.vehicles.length) {
         renderVehicles(data.vehicles);
+      } else if (Object.keys(ufoneTasksByReg).length && positions.length) {
+        renderVehicles(positions);
       } else if (data.error) {
         document.getElementById('tbUpdated').textContent = '\u26A0 ' + String(data.error).slice(0, 60);
       }
@@ -669,11 +867,31 @@
 
   // ── Initial load ──
   var initialVehicles = {{ vehicles | tojson }};
-  if (initialVehicles && initialVehicles.length) {
-    renderVehicles(initialVehicles);
-    var bounds = L.latLngBounds(initialVehicles.filter(function(v) { return v.LAT && v.LON; }).map(function(v) { return [parseFloat(v.LAT), parseFloat(v.LON)]; }));
-    if (bounds.isValid()) map.fitBounds(bounds, { padding: [40, 40] });
-  }
+  fetchUfoneTaskMap().finally(function() {
+    if (initialVehicles && initialVehicles.length) {
+      renderVehicles(initialVehicles);
+      var boundsVehicles = initialVehicles.filter(function(v) {
+        if (!v.LAT || !v.LON) return false;
+        return true;
+      });
+      if (boundsVehicles.length) {
+        var bounds = L.latLngBounds(boundsVehicles.map(function(v) { return [parseFloat(v.LAT), parseFloat(v.LON)]; }));
+        if (bounds.isValid()) map.fitBounds(bounds, { padding: [40, 40] });
+      }
+    } else {
+      updateStatCounts();
+      syncGroupHeaderState();
+    }
+  });
 })();
+</script>
+<script src="{{ url_for('static', filename='js/ufone_task_detail.js') }}?v=1005"></script>
+<script>
+if (window.UfoneTaskDetail) {
+  UfoneTaskDetail.init({
+    taskModalEl: document.getElementById('taskModal'),
+    viewBtnSelector: '.task-detail-btn',
+  });
+}
 </script>
 {% endblock %}

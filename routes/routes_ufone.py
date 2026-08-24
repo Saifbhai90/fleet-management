@@ -19,6 +19,7 @@ from models import (
 from services.ufone_service import (
     fetch_live_positions, fetch_task_dashboard,
     fetch_tasks_report, get_districts_cached, fetch_dashboard_counts,
+    fetch_ambulance_near,
     get_cached_positions, get_summary_stats, load_dashboard_snapshot,
     load_vehicles_from_db, load_today_in_process_tasks,
     get_task_detail_cached, save_task_detail_cache,
@@ -336,13 +337,48 @@ def api_ufone_vehicles():
     acct_id = _get_account_id()
     if not acct_id:
         return jsonify({'error': 'No account', 'vehicles': []})
+    district = (request.args.get('district') or '').strip()
+    tehsil = (request.args.get('tehsil') or '').strip()
+    uc = (request.args.get('uc') or '').strip()
     try:
-        # Cache/DB only — never block on Ufone HTTP. The poll loop + page-open
-        # warm keep this fresh.
-        vehicles, _tasks, _stats = load_dashboard_snapshot(acct_id)
-        return jsonify({'vehicles': vehicles, 'account_id': acct_id})
+        if district:
+            vehicles = fetch_ambulance_near(acct_id, district, tehsil, uc)
+        else:
+            # Cache/DB only — never block on Ufone HTTP. The poll loop + page-open
+            # warm keep this fresh.
+            vehicles, _tasks, _stats = load_dashboard_snapshot(acct_id)
+        return jsonify({
+            'vehicles': vehicles,
+            'count': len(vehicles),
+            'account_id': acct_id,
+            'filters': {'district': district, 'tehsil': tehsil, 'uc': uc},
+        })
     except Exception as e:
         return jsonify({'error': str(e)[:200], 'vehicles': []})
+
+
+@app.route('/api/ufone/track/near')
+def api_ufone_track_near():
+    """Filtered live ambulances for Track Ambulance map (district required)."""
+    acct_id = _get_account_id()
+    if not acct_id:
+        return jsonify({'error': 'No Ufone account configured', 'vehicles': []}), 400
+    district = (request.args.get('district') or '').strip()
+    tehsil = (request.args.get('tehsil') or '').strip()
+    uc = (request.args.get('uc') or '').strip()
+    if not district:
+        return jsonify({'error': 'District is required', 'vehicles': []}), 400
+    try:
+        vehicles = fetch_ambulance_near(acct_id, district, tehsil, uc)
+        return jsonify({
+            'vehicles': vehicles,
+            'count': len(vehicles),
+            'filters': {'district': district, 'tehsil': tehsil, 'uc': uc},
+            'account_id': acct_id,
+        })
+    except Exception as e:
+        logger.exception('api_ufone_track_near failed')
+        return jsonify({'error': str(e)[:200], 'vehicles': []}), 500
 
 
 @app.route('/ufone/vehicle/<regno>')

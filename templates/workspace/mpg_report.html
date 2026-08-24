@@ -55,397 +55,469 @@
     .mpg-vehicle-cell .vno { font-weight: 700; font-size: .85rem; color: #1e293b; }
     .mpg-vehicle-cell .vno-sub { font-size: .68rem; color: #64748b; margin-top: 1px; }
 
-    /* Mobile: modern card layout (HTML mockup style) — web table unchanged above 767px */
-    @media (max-width: 767px) {
-      .mpg-report-page {
-        max-width: 100vw;
-        overflow-x: hidden;
-        padding: 12px max(12px, env(safe-area-inset-left, 0px)) 24px max(12px, env(safe-area-inset-right, 0px));
-        background: #f1f3f6;
-      }
-      .mpg-report-page .container-fluid {
-        padding-left: 0;
-        padding-right: 0;
-      }
+    /* Mobile-only helpers — hidden on desktop web table */
+    .mpg-m-filter-head,
+    .mpg-m-save-bar,
+    .mpg-preview-banner { display: none; }
+    .mpg-m-input-wrap { display: block; }
+    .mpg-m-input-wrap .mpg-m-input-icon { display: none; }
+    .mpg-m-edit-label { display: none; }
 
-      /* Hero / summary card */
-      .mpg-report-page .mpg-hero {
-        border-radius: 12px;
-        border: 1px solid rgba(0,0,0,.05);
-        box-shadow: 0 2px 5px rgba(0,0,0,.03);
-        margin-bottom: 15px;
-      }
-      .mpg-report-page .mpg-hero .card-body {
-        padding: 15px !important;
-      }
-      .mpg-report-page .mpg-hero .d-flex.flex-wrap.justify-content-between {
-        flex-direction: column;
-        align-items: stretch !important;
-        gap: 12px !important;
-        margin-bottom: 12px !important;
-      }
-      .mpg-report-page .mpg-hero .badge.bg-primary-subtle {
-        font-size: 11px;
-        text-transform: uppercase;
-        letter-spacing: .04em;
-        padding: 4px 8px;
-        margin-bottom: 4px !important;
-      }
-      .mpg-report-page .mpg-hero h3 {
-        font-size: 18px;
-        margin-bottom: 0 !important;
-        text-transform: uppercase;
-        letter-spacing: .02em;
-      }
-      .mpg-report-page .mpg-hero .text-muted:not(.small) {
-        display: none;
-      }
-      .mpg-report-page .mpg-hero .text-muted.small {
-        font-size: 12px;
-        margin-top: 6px !important;
-      }
-      .mpg-report-page .mpg-hero .d-flex.gap-2.flex-wrap:not(.position-relative) {
-        order: -1;
-        margin-bottom: 0;
-      }
-      .mpg-report-page .mpg-hero .d-flex.gap-2.flex-wrap:not(.position-relative) .btn {
-        flex: 1;
-        font-size: 13px;
-        padding: 8px 12px;
-        border-radius: 8px;
-        border-width: 1.5px;
-      }
-      .mpg-report-page .mpg-hero .d-flex.flex-wrap.gap-2.position-relative {
-        display: grid !important;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 10px;
-        width: 100%;
-      }
-      .mpg-report-page .mpg-stat {
-        min-width: 0;
-        text-align: center;
-        padding: 10px 6px;
-        border-radius: 8px;
-        background: #fff;
-        border: 1px solid #eee;
-      }
-      .mpg-report-page .mpg-stat .stat-label {
-        font-size: 10px;
-        letter-spacing: .5px;
-      }
-      .mpg-report-page .mpg-stat .stat-value {
-        font-size: 17px;
-      }
-      .mpg-report-page .mpg-stat .stat-label i {
-        display: none;
-      }
-
-      /* Filters card */
-      .mpg-report-page .card.border-0.shadow-sm.mb-3:not(.mpg-data-card) {
-        border-radius: 12px !important;
-        border: 1px solid rgba(0,0,0,.05) !important;
-        box-shadow: 0 2px 5px rgba(0,0,0,.03) !important;
-        margin-bottom: 15px !important;
-      }
-      .mpg-report-page .card.border-0.shadow-sm.mb-3:not(.mpg-data-card) .card-body {
-        padding: 15px !important;
-      }
-      .mpg-report-page form.row.g-2 {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 12px;
-        margin: 0;
-      }
-      .mpg-report-page form.row.g-2::before {
-        content: 'Report Filters';
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        width: 100%;
-        font-size: 15px;
-        font-weight: 600;
-        color: #333;
-        margin-bottom: 2px;
-      }
-      .mpg-report-page form.row.g-2 .col-md-2 {
-        flex: 1 1 100%;
-        max-width: 100%;
-        padding: 0;
-      }
-      .mpg-report-page form.row.g-2 .col-md-2:nth-child(1),
-      .mpg-report-page form.row.g-2 .col-md-2:nth-child(2) {
-        flex: 1 1 calc(50% - 6px);
-        max-width: calc(50% - 6px);
-      }
-      .mpg-report-page form.row.g-2 .form-label {
-        font-size: 11px;
-        text-transform: uppercase;
-        color: #777;
-        margin-bottom: 4px;
-      }
-      .mpg-report-page form.row.g-2 .form-control,
-      .mpg-report-page form.row.g-2 .form-select {
-        border-radius: 8px;
-        padding: 10px 12px;
-        font-size: 14px;
-        min-height: 42px;
-      }
-      .mpg-report-page form.row.g-2 .col-md-2.d-flex {
-        flex: 1 1 100%;
-        max-width: 100%;
-        gap: 10px;
-      }
-      .mpg-report-page form.row.g-2 .col-md-2.d-flex .btn-primary {
-        flex: 1;
-        border-radius: 8px;
-        padding: 11px;
-        font-weight: 600;
-      }
-      .mpg-report-page form.row.g-2 .col-md-2.d-flex .btn-outline-secondary {
-        width: 42px;
-        flex: 0 0 42px;
-        border-radius: 8px;
-        padding: 11px;
-      }
-
-      /* Data card header */
-      .mpg-report-page .mpg-data-card {
-        border-radius: 12px !important;
-        border: 0 !important;
-        box-shadow: none !important;
-        background: transparent !important;
-      }
-      .mpg-report-page .mpg-data-card > .card-header {
-        background: transparent !important;
-        border: 0 !important;
-        padding: 0 0 12px !important;
-      }
-      .mpg-report-page .mpg-data-card-header {
-        flex-direction: row !important;
-        align-items: center !important;
-        flex-wrap: wrap !important;
-        gap: 8px !important;
-      }
-      .mpg-report-page .mpg-data-card-header strong {
-        font-size: 15px;
-        color: #333 !important;
-      }
-      .mpg-report-page .mpg-data-card-header .badge {
-        background: #eee !important;
-        color: #555 !important;
-        border: 0 !important;
-        font-size: 12px;
-        border-radius: 6px;
-        font-weight: 500;
-      }
-      .mpg-report-page .mpg-data-card-header .input-group {
-        order: 3;
-        width: 100% !important;
-        max-width: 100% !important;
-      }
-      .mpg-report-page .mpg-data-card-header .btn-success {
-        order: 2;
-        margin-left: auto;
-        border-radius: 8px;
-        font-size: 12px;
-        padding: 7px 12px;
-      }
-      .mpg-report-page .mpg-data-card > .mpg-table-wrap {
-        overflow: visible !important;
-        max-height: none !important;
-        margin: 0 !important;
-      }
-
-      /* Vehicle cards — 2-column detail grid */
-      #workspaceMpgReportTable.mpg-mobile-table {
-        min-width: 0 !important;
-        width: 100% !important;
-        max-width: 100% !important;
-        display: block !important;
-        border: 0 !important;
-        background: transparent !important;
-      }
-      #workspaceMpgReportTable.mpg-mobile-table > thead {
-        display: none !important;
-      }
-      #workspaceMpgReportTable.mpg-mobile-table > tbody {
-        display: block !important;
-        width: 100% !important;
-      }
-      #workspaceMpgReportTable.mpg-mobile-table tbody tr.mpg-data-row {
-        display: grid !important;
-        grid-template-columns: 1fr 1fr;
-        margin: 0 0 15px;
-        padding: 0;
-        border-radius: 12px;
-        box-shadow: 0 4px 10px rgba(0,0,0,.06);
-        border: 0;
-        overflow: hidden;
-        background: #fff;
-      }
-      #workspaceMpgReportTable.mpg-mobile-table tbody tr.mpg-data-row::before {
-        content: attr(data-vehicle);
-        grid-column: 1 / -1;
-        display: flex;
-        align-items: center;
-        min-height: 44px;
-        padding: 10px 15px;
-        background: #007bff;
-        color: #fff;
-        font-weight: 600;
-        font-size: 14px;
-        letter-spacing: 0.01em;
-      }
-      #workspaceMpgReportTable.mpg-mobile-table tbody tr.mpg-data-row > td {
-        display: flex !important;
-        flex-direction: column !important;
-        align-items: stretch !important;
-        gap: 2px;
-        width: auto !important;
-        max-width: none !important;
-        padding: 12px 15px !important;
-        border: 0 !important;
-        border-bottom: 1px solid #f1f1f1 !important;
-        text-align: left !important;
-        background: #fff;
-      }
-      #workspaceMpgReportTable.mpg-mobile-table tbody tr.mpg-data-row > td.mpg-mobile-hide {
-        display: none !important;
-      }
-      #workspaceMpgReportTable.mpg-mobile-table tbody tr.mpg-data-row > td.mpg-m-full {
-        grid-column: 1 / -1;
-      }
-      #workspaceMpgReportTable.mpg-mobile-table tbody tr.mpg-data-row > td.mpg-m-finance {
-        background: #fcfcfd;
-        border-left: 1px solid #f1f1f1 !important;
-        border-right: 1px solid #f1f1f1 !important;
-      }
-      #workspaceMpgReportTable.mpg-mobile-table tbody tr.mpg-data-row > td.mpg-m-finance:first-of-type {
-        border-top: 1px solid #f1f1f1 !important;
-      }
-      #workspaceMpgReportTable.mpg-mobile-table tbody tr.mpg-data-row > td.mpg-m-finance.mpg-m-full {
-        border-bottom: 1px solid #f1f1f1 !important;
-      }
-      #workspaceMpgReportTable.mpg-mobile-table tbody td[data-label]::before {
-        content: attr(data-label);
-        font-weight: 600;
-        font-size: 11px;
-        text-transform: uppercase;
-        letter-spacing: .3px;
-        color: #777;
-        line-height: 1.3;
-        display: block;
-        padding: 0;
-        margin-bottom: 2px;
-        border: 0;
-        background: transparent;
-        border-radius: 0;
-        align-self: stretch;
-      }
-      #workspaceMpgReportTable.mpg-mobile-table tbody td .mpg-val-desktop {
-        display: none !important;
-      }
-      #workspaceMpgReportTable.mpg-mobile-table tbody td .mpg-val-mobile {
-        display: inline-block;
-      }
-      #workspaceMpgReportTable.mpg-mobile-table tbody td.mpg-status-cell {
-        flex-direction: row !important;
-        align-items: center !important;
-        justify-content: space-between !important;
-        flex-wrap: wrap;
-        gap: 6px;
-      }
-      #workspaceMpgReportTable.mpg-mobile-table tbody td.mpg-status-cell::before {
-        margin-bottom: 0;
-      }
-      #workspaceMpgReportTable.mpg-mobile-table .mpg-val-mobile {
-        font-size: 12px;
-        font-weight: 700;
-        padding: 3px 8px;
-        border-radius: 6px;
-        color: #fff;
-        white-space: nowrap;
-      }
-      #workspaceMpgReportTable.mpg-mobile-table .mpg-val-mobile.mpg-tier-low {
-        background: #dc2626;
-      }
-      #workspaceMpgReportTable.mpg-mobile-table .mpg-val-mobile.mpg-tier-mid {
-        background: #d97706;
-      }
-      #workspaceMpgReportTable.mpg-mobile-table .mpg-val-mobile.mpg-tier-high {
-        background: #28a745;
-      }
-      #workspaceMpgReportTable.mpg-mobile-table .mpg-val-mobile.mpg-tier-neutral {
-        background: #64748b;
-      }
-      #workspaceMpgReportTable.mpg-mobile-table tbody td.mpg-input-cell {
-        background: #fff;
-        border: 1px solid #e0e0e0 !important;
-        border-radius: 8px;
-        margin: 0 12px 12px;
-        padding: 12px !important;
-        grid-column: 1 / -1;
-        flex-direction: row !important;
-        align-items: center !important;
-        gap: 10px;
-      }
-      #workspaceMpgReportTable.mpg-mobile-table tbody td.mpg-input-cell[data-label]::before {
-        background: transparent;
-        border: 0;
-        color: #007bff;
-        font-size: 11px;
-        flex: 1;
-        margin-bottom: 0;
-      }
-      #workspaceMpgReportTable.mpg-mobile-table tbody td.mpg-input-cell .form-control-sm {
-        margin-left: auto;
-        width: 110px !important;
-        min-height: 38px !important;
-        font-size: 14px !important;
-        border-radius: 6px !important;
-        text-align: right;
-        flex-shrink: 0;
-      }
-      #workspaceMpgReportTable.mpg-mobile-table tbody td.mpg-input-cell.mpg-m-today {
-        background: #f1f3f6;
-      }
-      #workspaceMpgReportTable.mpg-mobile-table tbody td > * {
-        width: auto;
-        max-width: 100%;
-        min-width: 0 !important;
-        font-size: 14px;
-        font-weight: 600;
-        color: #333;
-      }
-      #workspaceMpgReportTable.mpg-mobile-table tbody td.text-end {
-        text-align: left !important;
-      }
-      #workspaceMpgReportTable.mpg-mobile-table tbody td .mpg-val-neg,
-      #workspaceMpgReportTable.mpg-mobile-table tbody td .mpg-val-warn {
-        color: inherit;
-      }
-      #workspaceMpgReportTable.mpg-mobile-table tbody td.balance-amount-cell .mpg-val-desktop {
-        display: inline !important;
-      }
-      #workspaceMpgReportTable.mpg-mobile-table tbody td.balance-amount-cell .mpg-balance-pos {
-        color: #15803d !important;
-      }
-      #workspaceMpgReportTable.mpg-mobile-table tbody td.balance-amount-cell .mpg-balance-neg {
-        color: #dc2626 !important;
-      }
+    /* ── Mobile layout (real phone + ?mobile_preview=1 on desktop) ── */
+    body.mpg-preview-body {
+      background: linear-gradient(160deg, #dbeafe 0%, #e2e8f0 45%, #f1f5f9 100%) !important;
     }
+    .mpg-preview-banner {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 2000;
+      background: linear-gradient(90deg, #1d4ed8, #2563eb);
+      color: #fff;
+      text-align: center;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 8px 12px;
+      box-shadow: 0 2px 12px rgba(29,78,216,.35);
+    }
+    .mpg-preview-banner code {
+      background: rgba(255,255,255,.18);
+      padding: 1px 6px;
+      border-radius: 4px;
+      color: #fff;
+    }
+    body.mpg-preview-body .mpg-preview-banner { display: block; }
+    body.mpg-preview-body { padding-top: 38px; }
+
+    .mpg-report-page.is-mobile-layout {
+      max-width: 100vw;
+      overflow-x: hidden;
+      padding: 14px max(14px, env(safe-area-inset-left, 0px)) 88px max(14px, env(safe-area-inset-right, 0px));
+      background: linear-gradient(180deg, #eef2ff 0%, #f8fafc 120px, #f1f5f9 100%);
+      -webkit-font-smoothing: antialiased;
+    }
+    .mpg-report-page.is-mobile-layout.mpg-mobile-preview {
+      max-width: 390px;
+      min-height: calc(100vh - 52px);
+      margin: 12px auto 24px;
+      border-radius: 22px;
+      border: 1px solid rgba(148,163,184,.35);
+      box-shadow: 0 24px 60px rgba(15,23,42,.14), 0 0 0 1px rgba(255,255,255,.6) inset;
+      overflow: hidden;
+    }
+
+    /* Hero */
+    .mpg-report-page.is-mobile-layout .mpg-hero {
+      border: 0;
+      border-radius: 16px;
+      background: linear-gradient(135deg, #1e40af 0%, #2563eb 52%, #3b82f6 100%);
+      box-shadow: 0 10px 28px rgba(37,99,235,.28);
+      margin-bottom: 14px;
+      color: #fff;
+    }
+    .mpg-report-page.is-mobile-layout .mpg-hero::after { display: none; }
+    .mpg-report-page.is-mobile-layout .mpg-hero .card-body { padding: 16px !important; }
+    .mpg-report-page.is-mobile-layout .mpg-hero .d-flex.flex-wrap.justify-content-between {
+      flex-direction: column;
+      align-items: stretch !important;
+      gap: 10px !important;
+      margin-bottom: 14px !important;
+    }
+    .mpg-report-page.is-mobile-layout .mpg-hero .badge.bg-primary-subtle {
+      background: rgba(255,255,255,.16) !important;
+      color: #dbeafe !important;
+      font-size: 10px;
+      letter-spacing: .08em;
+      border: 1px solid rgba(255,255,255,.2);
+    }
+    .mpg-report-page.is-mobile-layout .mpg-hero h3 {
+      font-size: 20px;
+      color: #fff !important;
+      letter-spacing: .04em;
+    }
+    .mpg-report-page.is-mobile-layout .mpg-hero .text-muted:not(.small) { display: none; }
+    .mpg-report-page.is-mobile-layout .mpg-hero .text-muted.small {
+      color: rgba(255,255,255,.82) !important;
+      font-size: 12px;
+    }
+    .mpg-report-page.is-mobile-layout .mpg-hero .text-muted.small strong { color: #fff !important; }
+    .mpg-report-page.is-mobile-layout .mpg-hero .d-flex.gap-2.flex-wrap:not(.position-relative) {
+      order: -1;
+    }
+    .mpg-report-page.is-mobile-layout .mpg-hero .d-flex.gap-2.flex-wrap:not(.position-relative) .btn {
+      flex: 1;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 9px 10px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,.28);
+      background: rgba(255,255,255,.12);
+      color: #fff;
+    }
+    .mpg-report-page.is-mobile-layout .mpg-hero .d-flex.gap-2.flex-wrap:not(.position-relative) .btn-primary {
+      background: rgba(255,255,255,.95);
+      color: #1d4ed8;
+      border-color: transparent;
+    }
+    .mpg-report-page.is-mobile-layout .mpg-hero .d-flex.flex-wrap.gap-2.position-relative {
+      display: grid !important;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+    .mpg-report-page.is-mobile-layout .mpg-stat {
+      min-width: 0;
+      text-align: center;
+      padding: 10px 6px;
+      border-radius: 12px;
+      background: rgba(255,255,255,.14);
+      border: 1px solid rgba(255,255,255,.18);
+      backdrop-filter: blur(6px);
+    }
+    .mpg-report-page.is-mobile-layout .mpg-stat .stat-label {
+      font-size: 9px;
+      color: rgba(255,255,255,.78);
+      letter-spacing: .06em;
+    }
+    .mpg-report-page.is-mobile-layout .mpg-stat .stat-value {
+      font-size: 16px;
+      color: #fff;
+    }
+    .mpg-report-page.is-mobile-layout .mpg-stat .stat-label i { display: none; }
+
+    /* Filters */
+    .mpg-report-page.is-mobile-layout .mpg-filters-card {
+      border: 0 !important;
+      border-radius: 16px !important;
+      box-shadow: 0 8px 24px rgba(15,23,42,.06) !important;
+      margin-bottom: 14px !important;
+      overflow: hidden;
+    }
+    .mpg-report-page.is-mobile-layout .mpg-filters-body { padding: 16px !important; }
+    .mpg-report-page.is-mobile-layout .mpg-m-filter-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 15px;
+      font-weight: 700;
+      color: #0f172a;
+      margin-bottom: 14px;
+    }
+    .mpg-report-page.is-mobile-layout .mpg-m-filter-head i {
+      width: 32px;
+      height: 32px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 10px;
+      background: #eff6ff;
+      color: #2563eb;
+      font-size: 15px;
+    }
+    .mpg-report-page.is-mobile-layout .mpg-filters-form {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin: 0;
+    }
+    .mpg-report-page.is-mobile-layout .mpg-filters-form .mpg-m-field {
+      flex: 1 1 100%;
+      max-width: 100%;
+      padding: 0;
+    }
+    .mpg-report-page.is-mobile-layout .mpg-filters-form .mpg-m-field--date {
+      flex: 1 1 calc(50% - 6px);
+      max-width: calc(50% - 6px);
+    }
+    .mpg-report-page.is-mobile-layout .mpg-filters-form .form-label {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: #64748b;
+      margin-bottom: 6px;
+    }
+    .mpg-report-page.is-mobile-layout .mpg-m-input-wrap {
+      position: relative;
+      display: block;
+    }
+    .mpg-report-page.is-mobile-layout .mpg-m-input-icon {
+      display: block;
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #94a3b8;
+      font-size: 14px;
+      pointer-events: none;
+      z-index: 2;
+    }
+    .mpg-report-page.is-mobile-layout .mpg-m-input,
+    .mpg-report-page.is-mobile-layout .mpg-m-input-wrap .form-control,
+    .mpg-report-page.is-mobile-layout .mpg-m-input-wrap .form-select,
+    .mpg-report-page.is-mobile-layout .mpg-m-input-wrap .ts-wrapper .ts-control {
+      width: 100%;
+      min-height: 46px !important;
+      padding: 11px 12px 11px 38px !important;
+      border-radius: 12px !important;
+      border: 1.5px solid #e2e8f0 !important;
+      background: #f8fafc !important;
+      font-size: 14px !important;
+      color: #0f172a !important;
+      box-shadow: inset 0 1px 2px rgba(15,23,42,.04);
+      transition: border-color .15s, box-shadow .15s, background .15s;
+    }
+    .mpg-report-page.is-mobile-layout .mpg-m-input-wrap .ts-wrapper {
+      width: 100%;
+    }
+    .mpg-report-page.is-mobile-layout .mpg-m-input:focus,
+    .mpg-report-page.is-mobile-layout .mpg-m-input-wrap .form-control:focus,
+    .mpg-report-page.is-mobile-layout .mpg-m-input-wrap .ts-wrapper.focus .ts-control {
+      border-color: #3b82f6 !important;
+      background: #fff !important;
+      box-shadow: 0 0 0 3px rgba(59,130,246,.16) !important;
+      outline: none;
+    }
+    .mpg-report-page.is-mobile-layout .mpg-m-actions {
+      flex: 1 1 100%;
+      max-width: 100%;
+      gap: 10px;
+      margin-top: 4px;
+    }
+    .mpg-report-page.is-mobile-layout .mpg-m-apply {
+      flex: 1;
+      border: 0;
+      border-radius: 12px;
+      padding: 12px;
+      font-weight: 700;
+      font-size: 14px;
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      box-shadow: 0 6px 16px rgba(37,99,235,.28);
+    }
+    .mpg-report-page.is-mobile-layout .mpg-m-clear {
+      width: 46px;
+      flex: 0 0 46px;
+      border-radius: 12px;
+      border: 1.5px solid #e2e8f0;
+      background: #fff;
+      color: #64748b;
+    }
+
+    /* Data section */
+    .mpg-report-page.is-mobile-layout .mpg-data-card {
+      border: 0 !important;
+      box-shadow: none !important;
+      background: transparent !important;
+    }
+    .mpg-report-page.is-mobile-layout .mpg-data-card > .card-header {
+      background: transparent !important;
+      border: 0 !important;
+      padding: 0 0 12px !important;
+    }
+    .mpg-report-page.is-mobile-layout .mpg-data-card-header {
+      flex-direction: column !important;
+      align-items: stretch !important;
+      gap: 10px !important;
+    }
+    .mpg-report-page.is-mobile-layout .mpg-data-card-header strong {
+      font-size: 15px;
+      color: #0f172a !important;
+    }
+    .mpg-report-page.is-mobile-layout .mpg-data-card-header .badge {
+      background: #e2e8f0 !important;
+      color: #475569 !important;
+      border: 0 !important;
+      font-weight: 600;
+      border-radius: 999px;
+      padding: 4px 10px;
+    }
+    .mpg-report-page.is-mobile-layout .mpg-data-card-header .input-group {
+      width: 100% !important;
+      max-width: 100% !important;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1.5px solid #e2e8f0;
+      box-shadow: inset 0 1px 2px rgba(15,23,42,.04);
+    }
+    .mpg-report-page.is-mobile-layout .mpg-data-card-header .input-group-text,
+    .mpg-report-page.is-mobile-layout .mpg-data-card-header .form-control {
+      border: 0 !important;
+      min-height: 44px;
+      background: #f8fafc !important;
+    }
+    .mpg-report-page.is-mobile-layout .mpg-data-card-header .btn-success {
+      display: none;
+    }
+    .mpg-report-page.is-mobile-layout .mpg-m-save-bar {
+      display: block;
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 1040;
+      padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px));
+      background: rgba(255,255,255,.92);
+      backdrop-filter: blur(10px);
+      border-top: 1px solid #e2e8f0;
+      box-shadow: 0 -8px 24px rgba(15,23,42,.08);
+    }
+    .mpg-report-page.is-mobile-layout.mpg-mobile-preview .mpg-m-save-bar {
+      left: 50%;
+      transform: translateX(-50%);
+      max-width: 390px;
+      border-radius: 0 0 22px 22px;
+    }
+    .mpg-report-page.is-mobile-layout .mpg-m-save-btn {
+      min-height: 48px;
+      border-radius: 12px;
+      font-weight: 700;
+      font-size: 15px;
+      border: 0;
+      background: linear-gradient(135deg, #16a34a, #15803d);
+      box-shadow: 0 6px 16px rgba(22,163,74,.28);
+    }
+    .mpg-report-page.is-mobile-layout .mpg-table-wrap {
+      overflow: visible !important;
+      max-height: none !important;
+    }
+
+    /* Vehicle cards */
+    .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table {
+      min-width: 0 !important;
+      width: 100% !important;
+      display: block !important;
+      border: 0 !important;
+      background: transparent !important;
+    }
+    .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table > thead { display: none !important; }
+    .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table > tbody { display: block !important; width: 100% !important; }
+    .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody tr.mpg-data-row {
+      display: grid !important;
+      grid-template-columns: 1fr 1fr;
+      margin: 0 0 14px;
+      border-radius: 16px;
+      overflow: hidden;
+      background: #fff;
+      border: 1px solid rgba(226,232,240,.9);
+      box-shadow: 0 8px 22px rgba(15,23,42,.07);
+    }
+    .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody tr.mpg-data-row.mpg-row-hidden {
+      display: none !important;
+    }
+    .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody tr.mpg-no-match {
+      display: block !important;
+      margin: 0;
+      border: 0;
+      box-shadow: none;
+      background: transparent;
+    }
+    .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody tr.mpg-data-row::before {
+      content: attr(data-vehicle);
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 46px;
+      padding: 12px 16px;
+      background: linear-gradient(135deg, #1e40af, #2563eb);
+      color: #fff;
+      font-weight: 700;
+      font-size: 14px;
+    }
+    .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody tr.mpg-data-row > td {
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 3px;
+      padding: 11px 14px !important;
+      border: 0 !important;
+      border-bottom: 1px solid #f1f5f9 !important;
+      background: #fff;
+      text-align: left !important;
+    }
+    .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody tr.mpg-data-row > td.mpg-mobile-hide { display: none !important; }
+    .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody tr.mpg-data-row > td.mpg-m-full { grid-column: 1 / -1; }
+    .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody tr.mpg-data-row > td.mpg-m-finance {
+      background: linear-gradient(180deg, #f8fafc, #fff);
+    }
+    .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody td[data-label]:not(.mpg-m-editable)::before {
+      content: attr(data-label);
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      color: #94a3b8;
+    }
+    .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody td .mpg-val-desktop { display: none !important; }
+    .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody td .mpg-val-mobile { display: inline-block; }
+    .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody td.mpg-status-cell {
+      flex-direction: row !important;
+      align-items: center !important;
+      justify-content: space-between !important;
+    }
+    .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table .mpg-val-mobile {
+      font-size: 11px;
+      font-weight: 800;
+      padding: 4px 9px;
+      border-radius: 999px;
+      color: #fff;
+    }
+    .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table .mpg-val-mobile.mpg-tier-low { background: #dc2626; }
+    .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table .mpg-val-mobile.mpg-tier-mid { background: #d97706; }
+    .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table .mpg-val-mobile.mpg-tier-high { background: #16a34a; }
+    .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table .mpg-val-mobile.mpg-tier-neutral { background: #64748b; }
+
+    /* Modern editable inputs */
+    .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody td.mpg-m-editable {
+      grid-column: 1 / -1;
+      margin: 0;
+      padding: 0 !important;
+      border: 0 !important;
+      background: transparent !important;
+    }
+    .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody td.mpg-m-editable::before { display: none !important; }
+    .mpg-report-page.is-mobile-layout .mpg-m-edit-label {
+      display: block;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: #2563eb;
+      padding: 12px 14px 0;
+    }
+    .mpg-report-page.is-mobile-layout .mpg-m-edit-input {
+      display: block;
+      width: calc(100% - 28px) !important;
+      margin: 8px 14px 14px !important;
+      min-height: 48px !important;
+      padding: 12px 14px !important;
+      border-radius: 12px !important;
+      border: 1.5px solid #bfdbfe !important;
+      background: linear-gradient(180deg, #fff, #f8fbff) !important;
+      font-size: 16px !important;
+      font-weight: 700 !important;
+      text-align: right !important;
+      color: #0f172a !important;
+      box-shadow: inset 0 1px 2px rgba(15,23,42,.04);
+    }
+    .mpg-report-page.is-mobile-layout .mpg-m-edit-input:focus {
+      border-color: #2563eb !important;
+      box-shadow: 0 0 0 3px rgba(37,99,235,.15) !important;
+      outline: none;
+    }
+    .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody td.mpg-m-today .mpg-m-edit-input {
+      border-color: #cbd5e1 !important;
+      background: #f8fafc !important;
+    }
+    .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody td > *:not(.mpg-val-desktop):not(.mpg-val-mobile):not(.mpg-m-edit-label):not(.mpg-m-edit-input) {
+      font-size: 14px;
+      font-weight: 700;
+      color: #0f172a;
+    }
+    .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody td.balance-amount-cell .mpg-balance-pos { color: #15803d !important; }
+    .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody td.balance-amount-cell .mpg-balance-neg { color: #dc2626 !important; }
 
     /* Desktop: hide mobile-only MPG pill */
     .mpg-val-mobile { display: none; }
-
-    /* Legacy mobile block replaced above — remove duplicate rules below */
-    @media (max-width: 767px) {
-      .mpg-report-page .mpg-data-card > .card-body,
-      .mpg-report-page .mpg-table-wrap.table-responsive {
-        overflow-x: hidden !important;
-        max-width: 100%;
-      }
-    }
   </style>
 
   <div class="card mpg-hero shadow-sm mb-3">
@@ -486,56 +558,75 @@
     </div>
   </div>
 
-  <div class="card border-0 shadow-sm mb-3">
-    <div class="card-body py-3">
-      <form method="get" class="row g-2 align-items-end">
-        <div class="col-md-2">
+  <div class="card border-0 shadow-sm mb-3 mpg-filters-card">
+    <div class="card-body py-3 mpg-filters-body">
+      <div class="mpg-m-filter-head">
+        <i class="bi bi-sliders"></i>
+        <span>Report Filters</span>
+      </div>
+      <form method="get" class="row g-2 align-items-end mpg-filters-form">
+        <div class="col-md-2 mpg-m-field mpg-m-field--date">
           <label class="form-label small fw-semibold text-secondary"><i class="bi bi-calendar3 me-1"></i>From Date</label>
-          <input type="text" class="form-control form-control-sm datepicker" name="from_date" placeholder="dd-mm-yyyy" value="{{ from_date.strftime('%d-%m-%Y') if from_date else '' }}">
+          <div class="mpg-m-input-wrap">
+            <i class="bi bi-calendar-event mpg-m-input-icon"></i>
+            <input type="text" class="form-control form-control-sm datepicker mpg-m-input" name="from_date" placeholder="dd-mm-yyyy" value="{{ from_date.strftime('%d-%m-%Y') if from_date else '' }}">
+          </div>
         </div>
-        <div class="col-md-2">
+        <div class="col-md-2 mpg-m-field mpg-m-field--date">
           <label class="form-label small fw-semibold text-secondary"><i class="bi bi-calendar3 me-1"></i>To Date</label>
-          <input type="text" class="form-control form-control-sm datepicker" name="to_date" placeholder="dd-mm-yyyy" value="{{ to_date.strftime('%d-%m-%Y') if to_date else '' }}">
+          <div class="mpg-m-input-wrap">
+            <i class="bi bi-calendar-check mpg-m-input-icon"></i>
+            <input type="text" class="form-control form-control-sm datepicker mpg-m-input" name="to_date" placeholder="dd-mm-yyyy" value="{{ to_date.strftime('%d-%m-%Y') if to_date else '' }}">
+          </div>
         </div>
-        <div class="col-md-2">
+        <div class="col-md-2 mpg-m-field">
           <label class="form-label small fw-semibold text-secondary"><i class="bi bi-geo-alt me-1"></i>District</label>
-          <select class="form-select search-select" id="mpgDistrictFilter" name="district_id" {% if disable_district %}disabled{% endif %}>
+          <div class="mpg-m-input-wrap">
+            <i class="bi bi-geo-alt mpg-m-input-icon"></i>
+            <select class="form-select search-select mpg-m-input" id="mpgDistrictFilter" name="district_id" {% if disable_district %}disabled{% endif %}>
             <option value="0">-- All Districts --</option>
             {% for d in districts %}
             <option value="{{ d.id }}" {% if district_id == d.id %}selected{% endif %}>{{ d.name }}</option>
             {% endfor %}
           </select>
+          </div>
           {% if disable_district %}
           <input type="hidden" name="district_id" value="{{ district_id }}">
           {% endif %}
         </div>
-        <div class="col-md-2">
+        <div class="col-md-2 mpg-m-field">
           <label class="form-label small fw-semibold text-secondary"><i class="bi bi-folder2 me-1"></i>Project</label>
-          <select class="form-select search-select" id="mpgProjectFilter" name="project_id" {% if disable_project %}disabled{% endif %}>
+          <div class="mpg-m-input-wrap">
+            <i class="bi bi-folder2-open mpg-m-input-icon"></i>
+            <select class="form-select search-select mpg-m-input" id="mpgProjectFilter" name="project_id" {% if disable_project %}disabled{% endif %}>
             <option value="0">-- All Projects --</option>
             {% for p in projects %}
             <option value="{{ p.id }}" {% if project_id == p.id %}selected{% endif %}>{{ p.name }}</option>
             {% endfor %}
           </select>
+          </div>
           {% if disable_project %}
           <input type="hidden" name="project_id" value="{{ project_id }}">
           {% endif %}
         </div>
-        <div class="col-md-2">
+        <div class="col-md-2 mpg-m-field">
           <label class="form-label small fw-semibold text-secondary"><i class="bi bi-truck me-1"></i>Vehicle No.</label>
-          <select class="form-select search-select" id="mpgVehicleFilter" name="vehicle_id" {% if disable_vehicle %}disabled{% endif %}>
+          <div class="mpg-m-input-wrap">
+            <i class="bi bi-truck mpg-m-input-icon"></i>
+            <select class="form-select search-select mpg-m-input" id="mpgVehicleFilter" name="vehicle_id" {% if disable_vehicle %}disabled{% endif %}>
             <option value="0">-- All Vehicles --</option>
             {% for v in vehicles %}
             <option value="{{ v.id }}" {% if vehicle_id == v.id %}selected{% endif %}>{{ v.vehicle_no }}</option>
             {% endfor %}
           </select>
+          </div>
           {% if disable_vehicle %}
           <input type="hidden" name="vehicle_id" value="{{ vehicle_id }}">
           {% endif %}
         </div>
-        <div class="col-md-2 d-flex gap-2">
-          <button class="btn btn-primary flex-fill"><i class="bi bi-funnel me-1"></i>Apply</button>
-          <a href="{{ url_for('workspace_mpg_report') }}" class="btn btn-outline-secondary" title="Reset"><i class="bi bi-x-lg"></i></a>
+        <div class="col-md-2 d-flex gap-2 mpg-m-actions">
+          <button type="submit" class="btn btn-primary flex-fill mpg-m-apply"><i class="bi bi-funnel me-1"></i>Apply Filters</button>
+          <a href="{{ url_for('workspace_mpg_report') }}" class="btn btn-outline-secondary mpg-m-clear" title="Reset"><i class="bi bi-x-lg"></i></a>
         </div>
       </form>
     </div>
@@ -632,26 +723,32 @@
               <td class="text-end mpg-m-col mpg-m-finance mpg-m-full {% if r.short_kms and r.short_kms > 0 %}mpg-val-warn{% endif %}">{{ "{:,.2f}".format(r.short_kms) if r.short_kms is not none else '-' }}</td>
               <td class="text-end mpg-m-full">{{ "{:,.2f}".format(r.with_full_tank_next_fueling) if r.with_full_tank_next_fueling is not none else '-' }}</td>
               <td class="text-end mpg-m-col current-date-reading-cell text-muted">{{ "{:,.2f}".format(r.current_date_reading) if r.current_date_reading is not none else '-' }}</td>
-              <td class="text-end current-odoo-meter-cell mpg-input-cell mpg-m-full" style="min-width: 170px;">
+              <td class="text-end current-odoo-meter-cell mpg-input-cell mpg-m-full mpg-m-editable" style="min-width: 170px;">
+                <div class="mpg-m-edit-label" data-label="Odoo Meter Reading">Odoo Meter Reading</div>
                 <input
                   type="text"
-                  class="form-control form-control-sm text-end current-odoo-input"
+                  inputmode="decimal"
+                  class="form-control form-control-sm text-end current-odoo-input mpg-m-edit-input"
                   name="current_odoo_meter_{{ r.vehicle.id }}"
                   value="{{ "{:,.2f}".format(r.current_odoo_meter_reading) if r.current_odoo_meter_reading is not none else '' }}"
-                  placeholder="Meter reading"
+                  placeholder="Enter reading"
+                  aria-label="Current Odoo Meter Reading"
                 >
               </td>
               <td class="text-end mpg-m-col remaining-kms-cell">{{ "{:,.2f}".format(r.remaining_kms_from_fueling) if r.remaining_kms_from_fueling is not none else '-' }}</td>
               <td class="text-end mpg-m-col in-tank-current-ltr-cell">{{ "{:,.2f}".format(r.in_tank_current_ltr) if r.in_tank_current_ltr is not none else '-' }}</td>
               <td class="text-end mpg-m-col fueling-ltr-with-target-cell">{{ "{:,.2f}".format(r.fueling_ltr_with_target) if r.fueling_ltr_with_target is not none else '-' }}</td>
               <td class="text-end mpg-m-col fueling-amount-cell">{{ "{:,.2f}".format(r.fueling_amount) if r.fueling_amount is not none else '-' }}</td>
-              <td class="text-end mpg-input-cell mpg-m-full mpg-m-today" style="min-width: 150px;">
+              <td class="text-end mpg-input-cell mpg-m-full mpg-m-today mpg-m-editable" style="min-width: 150px;">
+                <div class="mpg-m-edit-label" data-label="Today Fuel Amount">Today Fuel Amount</div>
                 <input
                   type="text"
-                  class="form-control form-control-sm text-end today-fuel-input"
+                  inputmode="decimal"
+                  class="form-control form-control-sm text-end today-fuel-input mpg-m-edit-input"
                   name="today_fuel_{{ r.vehicle.id }}"
                   value="{{ "{:,.2f}".format(r.today_fuel) if r.today_fuel is not none else '' }}"
-                  placeholder="Today fuel amount"
+                  placeholder="Enter amount"
+                  aria-label="Today Fuel Amount"
                 >
               </td>
               <td class="text-end fw-semibold mpg-m-col balance-amount-cell">{{ "{:,.2f}".format(r.balance_amount) if r.balance_amount is not none else '-' }}</td>
@@ -668,16 +765,46 @@
         </table>
       </div>
     </div>
+    <div class="mpg-m-save-bar">
+      <button type="submit" class="btn btn-success w-100 mpg-m-save-btn" id="mpgMobileSaveBtn">
+        <i class="bi bi-check2-circle me-1"></i> Save Inputs
+      </button>
+    </div>
   </form>
+</div>
+
+<div class="mpg-preview-banner" id="mpgPreviewBanner" hidden>
+  <i class="bi bi-phone me-1"></i> Mobile preview mode — remove <code>?mobile_preview=1</code> for normal desktop view
 </div>
 
 <script>
 document.addEventListener('DOMContentLoaded', function(){
+  var mpgPage = document.querySelector('.mpg-report-page');
+  var previewBanner = document.getElementById('mpgPreviewBanner');
+
+  function syncMobileLayout(){
+    if(!mpgPage) return;
+    var preview = new URLSearchParams(window.location.search).has('mobile_preview');
+    var mobile = window.matchMedia('(max-width: 767px)').matches;
+    var useMobile = mobile || preview;
+    mpgPage.classList.toggle('is-mobile-layout', useMobile);
+    mpgPage.classList.toggle('mpg-mobile-preview', preview && !mobile);
+    document.body.classList.toggle('mpg-preview-body', preview && !mobile);
+    if(previewBanner){
+      previewBanner.hidden = !(preview && !mobile);
+    }
+  }
+  syncMobileLayout();
+  window.addEventListener('resize', syncMobileLayout);
+
   if(window.fleetTableEnhance){
     window.fleetTableEnhance('workspaceMpgReportTable');
   }
 
   const table = document.getElementById('workspaceMpgReportTable');
+  const isMobileLayout = function(){
+    return mpgPage && mpgPage.classList.contains('is-mobile-layout');
+  };
 
   function initMpgMobileRowLabels(){
     if(!table || !table.tBodies[0]){
@@ -724,23 +851,37 @@ document.addEventListener('DOMContentLoaded', function(){
       dataRows.forEach(function(row){
         const haystack = (row.innerText || '').toLowerCase().replace(/\s+/g, ' ');
         const isMatch = terms.every(function(term){ return haystack.indexOf(term) !== -1; });
-        row.style.display = isMatch ? '' : 'none';
+        if(isMobileLayout()){
+          row.classList.toggle('mpg-row-hidden', !isMatch);
+        } else {
+          row.style.display = isMatch ? '' : 'none';
+        }
         if(isMatch){
           visibleCount += 1;
         }
       });
 
       if(emptyServerRow){
-        emptyServerRow.style.display = terms.length ? 'none' : '';
+        if(isMobileLayout()){
+          emptyServerRow.classList.toggle('mpg-row-hidden', terms.length > 0);
+        } else {
+          emptyServerRow.style.display = terms.length ? 'none' : '';
+        }
       }
 
       if(!noMatchRow){
         noMatchRow = document.createElement('tr');
-        noMatchRow.innerHTML = '<td colspan="22" class="text-center text-muted py-3">No matching rows found.</td>';
+        noMatchRow.className = 'mpg-no-match';
+        noMatchRow.innerHTML = '<td colspan="22" class="text-center text-muted py-4"><i class="bi bi-search d-block mb-2" style="font-size:1.5rem;opacity:.45"></i>No matching rows found.</td>';
         noMatchRow.style.display = 'none';
         tbody.appendChild(noMatchRow);
       }
-      noMatchRow.style.display = (dataRows.length > 0 && visibleCount === 0) ? '' : 'none';
+      if(isMobileLayout()){
+        noMatchRow.classList.toggle('mpg-row-hidden', !(dataRows.length > 0 && visibleCount === 0));
+        noMatchRow.style.display = '';
+      } else {
+        noMatchRow.style.display = (dataRows.length > 0 && visibleCount === 0) ? '' : 'none';
+      }
     };
 
     searchInput.addEventListener('input', applySearch);

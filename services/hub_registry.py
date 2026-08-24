@@ -7,13 +7,27 @@ from __future__ import annotations
 from flask import url_for
 
 
-def _item(route, label, icon, tile, perm=None, master_only=False, **kwargs):
+def _item(route, label, icon, tile, perm=None, master_only=False, icon_html=None, **kwargs):
     d = {'route': route, 'label': label, 'icon': icon, 'tile': tile, 'kwargs': kwargs}
     if perm is not None:
         d['perm'] = perm
     if master_only:
         d['master_only'] = True
+    if icon_html:
+        d['icon_html'] = icon_html
     return d
+
+
+_MILEAGE_HUB_ICON_SVG = (
+    '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">'
+    '<defs><linearGradient id="hubMileageGrad" x1="0%" y1="0%" x2="100%" y2="100%">'
+    '<stop offset="0%" stop-color="#38bdf8"/><stop offset="100%" stop-color="#0284c7"/>'
+    '</linearGradient></defs>'
+    '<path fill="url(#hubMileageGrad)" d="M12 2a10 10 0 1 0 10 10A10.01 10.01 0 0 0 12 2Zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8Z"/>'
+    '<path fill="url(#hubMileageGrad)" d="M12 6v6l4 2.5-.9 1.5L11 13.2V6h1Z"/>'
+    '<circle fill="url(#hubMileageGrad)" cx="12" cy="12" r="1.6"/>'
+    '</svg>'
+)
 
 
 HUBS = {
@@ -344,7 +358,14 @@ HUBS = {
                 'title': 'Reports & Analytics',
                 'items': [
                     _item('tracking_fleet_report', 'Fleet Report & Ranking', 'fa-solid fa-chart-column', 'rc-tile--tracker', 'tracking_reports'),
-                    _item('tracking_mileage_report', 'Vehicle Mileage Report', 'fa-solid fa-speedometer2', 'rc-tile--tracker', 'tracking_reports'),
+                    _item(
+                        'tracking_mileage_report',
+                        'Vehicle Mileage Report',
+                        'fa-solid fa-road',
+                        'rc-tile--mileage',
+                        'tracking_reports',
+                        icon_html=_MILEAGE_HUB_ICON_SVG,
+                    ),
                     _item('tracking_trends', 'Trends Analysis', 'fa-solid fa-chart-line', 'rc-tile--tracker', 'tracking_reports'),
                     _item('tracking_alerts', 'Alerts', 'fa-solid fa-bell', 'rc-tile--tracker', 'tracking_alerts'),
                 ],
@@ -514,6 +535,7 @@ def build_hub_sections(slug, can_see_page_fn, is_master=False):
                 'label': it['label'],
                 'icon': it['icon'],
                 'tile': it['tile'],
+                'icon_html': it.get('icon_html'),
             })
         if items:
             out_sections.append({'title': sec['title'], 'links': items})

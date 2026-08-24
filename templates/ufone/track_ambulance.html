@@ -9,13 +9,14 @@
   .uf-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px; }
   .uf-header h4 { font-weight: 700; color: #1e293b; margin: 0; display: flex; align-items: center; gap: 10px; }
   .uf-header h4 i { color: #7C3AED; }
-  
-  .uf-btn { background: linear-gradient(135deg,#7C3AED,#5B21B6); color: #fff; border: none; padding: 8px 16px; border-radius: 8px; font-weight: 600; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; }
-  
+
+  .uf-btn { background: linear-gradient(135deg,#7C3AED,#5B21B6); color: #fff; border: none; padding: 8px 16px; border-radius: 8px; font-weight: 600; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+  .uf-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
   .uf-filter-bar {
     background: #fff; padding: 16px 20px; border-radius: 12px;
     box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
-    border: 1px solid #e9ecef; margin-bottom: 16px;
+    border: 1px solid #e9ecef; margin-bottom: 12px;
     display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-end;
   }
   .uf-filter-group label { font-size: 11px; color: #64748b; font-weight: 600; margin-bottom: 4px; display: block; text-transform: uppercase; }
@@ -24,9 +25,20 @@
     font-size: 14px; min-width: 160px; background: #fff;
   }
   .uf-filter-group select:focus { outline: none; border-color: #7C3AED; box-shadow: 0 0 0 2px rgba(124,58,237,0.2); }
-  
+  .uf-filter-group select:disabled { background: #f8fafc; color: #94a3b8; }
+
+  .uf-filter-hint {
+    font-size: 12px; color: #64748b; margin: 0 0 12px;
+    padding: 8px 12px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;
+  }
+  .uf-filter-hint.error { color: #b91c1c; background: #fef2f2; border-color: #fecaca; }
+  .uf-result-bar {
+    font-size: 13px; color: #334155; margin-bottom: 12px; min-height: 20px;
+  }
+  .uf-result-bar strong { color: #7C3AED; }
+
   #trackMap {
-    height: calc(100vh - 300px); min-height: 400px;
+    height: calc(100vh - 340px); min-height: 400px;
     border-radius: 14px; border: 2px solid #e2e8f0;
     box-shadow: 0 4px 20px rgba(0,0,0,0.06); z-index: 1;
   }
@@ -45,37 +57,50 @@
   <div class="uf-header">
     <div>
       <h4><i class="bi bi-broadcast-pin"></i> Track Ambulance</h4>
-      <small class="text-muted">Find nearest vehicles by location</small>
+      <small class="text-muted">Find nearest vehicles by district, tehsil &amp; union council</small>
     </div>
     {{ nav_back_button() }}
   </div>
 
+  {% if not districts %}
+  <div class="uf-filter-hint error">
+    <i class="bi bi-exclamation-triangle"></i>
+    District list is empty — configure an active Ufone account in Settings first.
+  </div>
+  {% else %}
+  <div class="uf-filter-hint">
+    Select a <strong>District</strong> (required), optionally narrow by Tehsil / UC, then click Search.
+  </div>
+  {% endif %}
+
   <div class="uf-filter-bar">
     <div class="uf-filter-group">
-      <label>District</label>
-      <select id="fDistrict" onchange="loadTehsils()">
-        <option value="">All Districts</option>
+      <label for="fDistrict">District</label>
+      <select id="fDistrict" {% if not districts %}disabled{% endif %}>
+        <option value="">Select District</option>
         {% for d in districts %}
         <option value="{{ d.code }}">{{ d.name }}</option>
         {% endfor %}
       </select>
     </div>
     <div class="uf-filter-group">
-      <label>Tehsil</label>
-      <select id="fTehsil" onchange="loadUCs()">
+      <label for="fTehsil">Tehsil</label>
+      <select id="fTehsil" disabled>
         <option value="">All Tehsils</option>
       </select>
     </div>
     <div class="uf-filter-group">
-      <label>Union Council</label>
-      <select id="fUC">
+      <label for="fUC">Union Council</label>
+      <select id="fUC" disabled>
         <option value="">All UCs</option>
       </select>
     </div>
-    <button class="uf-btn" onclick="findAmbulances()">
+    <button type="button" class="uf-btn" id="searchBtn" {% if not districts %}disabled{% endif %}>
       <i class="bi bi-search"></i> Search Ambulances
     </button>
   </div>
+
+  <div class="uf-result-bar" id="resultBar" aria-live="polite"></div>
 
   <div id="trackMap"></div>
   <div id="loadingMsg" class="uf-loading" style="display: none;">
@@ -96,85 +121,188 @@ function initMap() {
   markerLayer = L.layerGroup().addTo(map);
 }
 
+function setResult(text, isError) {
+  const bar = document.getElementById('resultBar');
+  bar.innerHTML = text || '';
+  bar.style.color = isError ? '#b91c1c' : '#334155';
+}
+
+function resetCascade(from) {
+  const tehsilSel = document.getElementById('fTehsil');
+  const ucSel = document.getElementById('fUC');
+  if (from === 'district') {
+    tehsilSel.innerHTML = '<option value="">All Tehsils</option>';
+    tehsilSel.disabled = true;
+    ucSel.innerHTML = '<option value="">All UCs</option>';
+    ucSel.disabled = true;
+  } else if (from === 'tehsil') {
+    ucSel.innerHTML = '<option value="">All UCs</option>';
+    ucSel.disabled = true;
+  }
+}
+
 async function loadTehsils() {
   const dc = document.getElementById('fDistrict').value;
-  const tehsilSel = document.getElementById('fTehsil');
-  tehsilSel.innerHTML = '<option value="">All Tehsils</option>';
-  document.getElementById('fUC').innerHTML = '<option value="">All UCs</option>';
+  resetCascade('district');
   if (!dc) return;
-  
+
+  const tehsilSel = document.getElementById('fTehsil');
+  tehsilSel.disabled = true;
   try {
-    const res = await fetch(`/api/ufone/tehsils/${dc}`);
+    const res = await fetch(`/api/ufone/tehsils/${encodeURIComponent(dc)}`);
     const data = await res.json();
-    if (data.tehsils) {
-      data.tehsils.forEach(t => {
-        tehsilSel.innerHTML += `<option value="${t.tehsil_code}">${t.tehsil_name}</option>`;
-      });
-    }
-  } catch(e) { console.error(e); }
+    if (!res.ok) throw new Error(data.error || 'Failed to load tehsils');
+    const list = data.tehsils || [];
+    list.forEach(t => {
+      const opt = document.createElement('option');
+      opt.value = t.tehsil_code;
+      opt.textContent = t.tehsil_name || t.tehsil_code;
+      tehsilSel.appendChild(opt);
+    });
+    tehsilSel.disabled = list.length === 0;
+    if (!list.length) setResult('No tehsils found for this district.', true);
+  } catch (e) {
+    console.error(e);
+    setResult('Could not load tehsils. Try again or search with district only.', true);
+  }
 }
 
 async function loadUCs() {
   const tc = document.getElementById('fTehsil').value;
-  const ucSel = document.getElementById('fUC');
-  ucSel.innerHTML = '<option value="">All UCs</option>';
+  resetCascade('tehsil');
   if (!tc) return;
-  
+
+  const ucSel = document.getElementById('fUC');
+  ucSel.disabled = true;
   try {
-    const res = await fetch(`/api/ufone/ucs/${tc}`);
+    const res = await fetch(`/api/ufone/ucs/${encodeURIComponent(tc)}`);
     const data = await res.json();
-    if (data.ucs) {
-      data.ucs.forEach(u => {
-        ucSel.innerHTML += `<option value="${u.uc_code || u.id}">${u.uc_name || u.name}</option>`;
-      });
-    }
-  } catch(e) { console.error(e); }
+    if (!res.ok) throw new Error(data.error || 'Failed to load UCs');
+    const list = data.ucs || [];
+    list.forEach(u => {
+      const opt = document.createElement('option');
+      opt.value = u.uc_code || u.id;
+      opt.textContent = u.uc_name || u.name || opt.value;
+      ucSel.appendChild(opt);
+    });
+    ucSel.disabled = list.length === 0;
+  } catch (e) {
+    console.error(e);
+    setResult('Could not load union councils. Try search with tehsil only.', true);
+  }
+}
+
+function districtLabel() {
+  const sel = document.getElementById('fDistrict');
+  return sel.selectedOptions[0] ? sel.selectedOptions[0].textContent.trim() : '';
+}
+
+function filterByDistrictName(vehicles, districtName) {
+  if (!districtName) return vehicles;
+  const want = districtName.toLowerCase();
+  return vehicles.filter(v => {
+    const got = (v.district || v.location || '').toLowerCase();
+    return got.includes(want) || want.includes(got);
+  });
+}
+
+async function readJsonResponse(res) {
+  const ct = (res.headers.get('content-type') || '').toLowerCase();
+  if (ct.includes('application/json')) {
+    return res.json();
+  }
+  const text = await res.text();
+  throw new Error(
+    res.ok
+      ? 'Unexpected server response'
+      : (text || `Request failed (${res.status})`).replace(/<[^>]+>/g, ' ').trim().slice(0, 200)
+  );
+}
+
+async function fetchFilteredVehicles(district, tehsil, uc) {
+  const params = new URLSearchParams({ district });
+  if (tehsil) params.set('tehsil', tehsil);
+  if (uc) params.set('uc', uc);
+
+  const res = await fetch(`/api/ufone/vehicles?${params.toString()}`);
+  const data = await readJsonResponse(res);
+  if (!res.ok) throw new Error(data.error || `Search failed (${res.status})`);
+
+  let vehicles = data.vehicles || [];
+  // Old servers ignore district param — filter client-side on the returned list.
+  if (!data.filters || !data.filters.district) {
+    vehicles = filterByDistrictName(vehicles, districtLabel());
+  }
+  return vehicles;
+}
+
+function addMarker(v, bounds) {
+  const lat = parseFloat(v.latitude);
+  const lon = parseFloat(v.longitude);
+  if (isNaN(lat) || isNaN(lon) || (lat === 0 && lon === 0)) return;
+
+  const color = v.status == 1 ? '#10B981' : '#EF4444';
+  const icon = L.divIcon({
+    html: `<div style="width:16px;height:16px;border-radius:50%;background:${color};border:2px solid #fff;box-shadow:0 2px 4px rgba(0,0,0,0.3);"></div>`,
+    className: '', iconSize: [16, 16], iconAnchor: [8, 8]
+  });
+
+  const marker = L.marker([lat, lon], { icon });
+  const dist = v.distance != null && v.distance !== '' ? `<small>Distance: ${v.distance} km</small>` : '';
+  marker.bindPopup(`
+    <div class="uf-info-card">
+      <strong>${v.reg_no || 'Unknown'}</strong>
+      <small>${v.location || v.district || ''}</small>
+      <small>Status: ${v.status == 1 ? 'Active' : 'Inactive'}</small>
+      ${dist}
+    </div>
+  `);
+  markerLayer.addLayer(marker);
+  bounds.push([lat, lon]);
 }
 
 async function findAmbulances() {
-  document.getElementById('loadingMsg').style.display = 'block';
+  const district = document.getElementById('fDistrict').value;
+  const tehsil = document.getElementById('fTehsil').value;
+  const uc = document.getElementById('fUC').value;
+
+  if (!district) {
+    setResult('Please select a district first.', true);
+    document.getElementById('fDistrict').focus();
+    return;
+  }
+
+  const btn = document.getElementById('searchBtn');
+  const loading = document.getElementById('loadingMsg');
+  btn.disabled = true;
+  loading.style.display = 'block';
   markerLayer.clearLayers();
-  
+  setResult('Searching...', false);
+
   try {
-    // Get live data and filter client-side for fast response
-    const res = await fetch('/api/ufone/vehicles');
-    const data = await res.json();
+    const vehicles = await fetchFilteredVehicles(district, tehsil, uc);
     const bounds = [];
-    
-    if (data.vehicles) {
-      data.vehicles.forEach(v => {
-        if (!v.latitude || !v.longitude) return;
-        const lat = parseFloat(v.latitude);
-        const lon = parseFloat(v.longitude);
-        if (isNaN(lat) || isNaN(lon) || (lat === 0 && lon === 0)) return;
-        
-        const color = v.status == 1 ? '#10B981' : '#EF4444';
-        const icon = L.divIcon({
-          html: `<div style="width:16px;height:16px;border-radius:50%;background:${color};border:2px solid #fff;box-shadow:0 2px 4px rgba(0,0,0,0.3);"></div>`,
-          className: '', iconSize: [16, 16], iconAnchor: [8, 8]
-        });
-        
-        const marker = L.marker([lat, lon], { icon: icon });
-        marker.bindPopup(`
-          <div class="uf-info-card">
-            <strong>${v.reg_no}</strong>
-            <small>${v.location || ''}</small>
-            <small>Status: ${v.status == 1 ? 'Active' : 'Inactive'}</small>
-          </div>
-        `);
-        markerLayer.addLayer(marker);
-        bounds.push([lat, lon]);
-      });
-      
-      if (bounds.length > 0) {
-        map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
-      } else {
-        alert('No ambulances with valid GPS found.');
-      }
+    vehicles.forEach(v => addMarker(v, bounds));
+
+    const count = bounds.length;
+    if (count > 0) {
+      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
+      setResult(`Found <strong>${count}</strong> ambulance${count === 1 ? '' : 's'} for selected filters.`, false);
+    } else {
+      setResult('No ambulances with valid GPS found for these filters.', true);
     }
-  } catch(e) { console.error(e); alert('Error fetching data.'); }
-  document.getElementById('loadingMsg').style.display = 'none';
+  } catch (e) {
+    console.error(e);
+    setResult(e.message || 'Error fetching data.', true);
+  }
+
+  loading.style.display = 'none';
+  btn.disabled = false;
 }
+
+document.getElementById('fDistrict').addEventListener('change', loadTehsils);
+document.getElementById('fTehsil').addEventListener('change', loadUCs);
+document.getElementById('searchBtn').addEventListener('click', findAmbulances);
 
 initMap();
 </script>

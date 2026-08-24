@@ -34,6 +34,19 @@ import json
 
 from routes import _nav_back_ctx
 
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+def _ufone_tasks_for_tracking() -> dict:
+    try:
+        from services.ufone_service import build_active_ufone_tasks_by_reg
+        return build_active_ufone_tasks_by_reg()
+    except Exception as e:
+        logger.warning('ufone tasks for tracking map failed: %s', e)
+        return {}
+
 
 # ── Helper: get active account (first active, or by query param) ─────────────
 
@@ -126,8 +139,15 @@ def tracking_dashboard():
         accounts=accounts,
         current_account_id=acct_id,
         error=error,
+        ufone_tasks_by_reg=_ufone_tasks_for_tracking(),
         **_nav_back_ctx(url_for('tracking_dashboard')),
     )
+
+
+@app.route('/api/tracking/ufone-active-tasks')
+def api_tracking_ufone_active_tasks():
+    """Today's open Ufone tasks keyed by normalized vehicle reg (Fleet map pulse)."""
+    return jsonify({'tasks_by_reg': _ufone_tasks_for_tracking()})
 
 
 @app.route('/api/tracking/positions')
@@ -139,7 +159,12 @@ def api_tracking_positions():
     try:
         vehicles = fetch_live_positions(acct_id, force=False)
         stats = get_summary_stats(acct_id)
-        return jsonify({'vehicles': vehicles, 'stats': stats, 'account_id': acct_id})
+        return jsonify({
+            'vehicles': vehicles,
+            'stats': stats,
+            'account_id': acct_id,
+            'ufone_tasks_by_reg': _ufone_tasks_for_tracking(),
+        })
     except Exception as e:
         return jsonify({'error': str(e)[:300], 'vehicles': [], 'stats': {}}), 200
 
@@ -153,7 +178,12 @@ def api_tracking_refresh():
     try:
         vehicles = fetch_live_positions(acct_id, force=True)
         stats = get_summary_stats(acct_id)
-        return jsonify({'vehicles': vehicles, 'stats': stats, 'refreshed_at': pk_now().isoformat()})
+        return jsonify({
+            'vehicles': vehicles,
+            'stats': stats,
+            'refreshed_at': pk_now().isoformat(),
+            'ufone_tasks_by_reg': _ufone_tasks_for_tracking(),
+        })
     except Exception as e:
         return jsonify({'error': str(e)[:300]}), 500
 

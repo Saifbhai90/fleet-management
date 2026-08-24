@@ -725,6 +725,7 @@ ENDPOINT_PERMISSION_MAP = [
     ('tracking_dashboard', 'tracking_view'),
     ('tracking_vehicle_detail', 'tracking_view'),
     ('api_tracking_positions', 'tracking_view'),
+    ('api_tracking_ufone_active_tasks', 'tracking_view'),
     ('api_tracking_refresh', 'tracking_view'),
     ('tracking_history', 'tracking_history'),          # also covers api_tracking_history
     ('tracking_trips', 'tracking_reports'),            # also covers tracking_trips_export_csv

@@ -488,6 +488,57 @@ def fetch_live_positions(account_id: int, force: bool = False,
             return cached[1] if cached else []
 
 
+def fetch_ambulance_near(account_id: int, district: str, tehsil: str = '',
+                         union_council: str = '') -> list:
+    """Live ambulances near a district/tehsil/UC (TrackingAmbulance API).
+
+    Ufone requires a non-empty district code. Falls back to cached vehicles
+    filtered by district name when live API is unavailable (bridge mode).
+    """
+    district = (district or '').strip()
+    if not district:
+        return []
+    tehsil = (tehsil or '').strip()
+    union_council = (union_council or '').strip()
+
+    if not bridge_only_mode():
+        try:
+            client = _get_client(account_id, purpose="ui")
+            raw = client.get_ambulance_near(
+                district=district,
+                tehsil=tehsil,
+                union_council=union_council,
+            )
+            return [normalize_ambulance(r) for r in (raw or [])]
+        except Exception as e:
+            msg = str(e)
+            if 'ConnectTimeout' in msg or 'ConnectionError' in msg or 'Max retries' in msg:
+                logger.warning(
+                    f"fetch_ambulance_near({account_id}, {district}): Ufone unreachable "
+                    f"— using cached fallback — {msg[:120]}")
+            else:
+                logger.warning(f"fetch_ambulance_near({account_id}, {district}) failed: {e}")
+            _reset_client(account_id, purpose="ui")
+
+    code_map = _district_code_name_map(account_id)
+    vehicles, _, _ = load_dashboard_snapshot(account_id)
+    out = []
+    for v in vehicles:
+        if not _maintenance_district_match(v, district, code_map):
+            continue
+        lat = v.get('latitude')
+        lon = v.get('longitude')
+        if lat in (None, '', 0) or lon in (None, '', 0):
+            continue
+        try:
+            if float(lat) == 0 and float(lon) == 0:
+                continue
+        except (TypeError, ValueError):
+            continue
+        out.append(v)
+    return out
+
+
 def fetch_task_dashboard(account_id: int, force: bool = False,
                          persist: bool = True, for_poll: bool = False) -> list:
     """Fetch active/Incomplete tasks (cached for 60s). Fast path for dashboard."""
@@ -1977,6 +2028,65 @@ def load_today_in_process_tasks(account_id: int = None, limit: int = 400) -> lis
         q = q.limit(int(limit))
     rows = q.all()
     return [_emg_row_to_task(r) for r in rows]
+
+
+def build_active_ufone_tasks_by_reg() -> dict:
+    """Map normalized vehicle reg → today's open Ufone/EMG task (Fleet Tracking).
+
+    Primary: EmergencyTaskRecord Incomplete/In-Process rows.
+    Fallback: ufone_task_cache open rows (same day) not already in map.
+    """
+    from services.utils import normalize_vehicle_reg_key
+
+    def _add(out: dict, amb: str, tid_raw: str, patient: str, status: str,
+             district: str = '', address: str = '') -> None:
+        key = normalize_vehicle_reg_key(amb)
+        if not key or key in out:
+            return
+        tid_num = re.sub(r'\D', '', str(tid_raw or '').replace('PHF-', '').replace('phf-', ''))
+        if not tid_num:
+            return
+        out[key] = {
+            'task_id': tid_num,
+            'task_id_display': f'PHF-{tid_num}',
+            'patient_name': (patient or '').strip(),
+            'status': (status or '').strip(),
+            'district': (district or '').strip(),
+            'address': (address or '').strip()[:160],
+        }
+
+    out = {}
+    for t in load_today_in_process_tasks():
+        _add(out, t.get('ambulance') or '', t.get('task_id') or t.get('id'),
+             t.get('patient_name'), t.get('status'), t.get('district'), t.get('address'))
+
+    try:
+        from datetime import datetime as _dt
+        from sqlalchemy import or_
+        from models import UfoneTaskCache
+        from utils import pk_date
+
+        today = pk_date()
+        start = _dt.combine(today, _dt.min.time())
+        rows = (
+            UfoneTaskCache.query
+            .filter(or_(
+                UfoneTaskCache.created_date >= start,
+                UfoneTaskCache.updated_at >= start,
+            ))
+            .order_by(UfoneTaskCache.updated_at.desc())
+            .limit(500)
+            .all()
+        )
+        for row in rows:
+            if _status_is_closed(row.status):
+                continue
+            _add(out, row.ambulance_reg or '', row.task_id, row.patient_name,
+                 row.status, row.district, row.address or '')
+    except Exception as e:
+        logger.warning('build_active_ufone_tasks_by_reg cache fallback failed: %s', e)
+
+    return out
 
 
 def get_cached_positions(account_id: int) -> list:

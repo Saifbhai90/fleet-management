@@ -32,7 +32,13 @@
         {% for item in section.links %}
         <a href="{{ item.href }}" class="report-link rc-tile rc-report-card {{ item.tile }}" role="listitem">
           <div class="rc-card-top">
-            <span class="rc-tile-icon" aria-hidden="true"><i class="{{ item.icon }}"></i></span>
+            <span class="rc-tile-icon" aria-hidden="true">
+              {% if item.icon_html %}
+              <span class="rc-custom-icon" aria-hidden="true">{{ item.icon_html|safe }}</span>
+              {% else %}
+              <i class="{{ item.icon }}" aria-hidden="true"></i>
+              {% endif %}
+            </span>
           </div>
           <span class="rc-tile-label">{{ item.label }}</span>
         </a>
