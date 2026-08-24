@@ -87,8 +87,38 @@
   .pop-link { display: inline-block; margin-top: 8px; padding: 6px 16px; border-radius: 6px; background: #1a5fb4; color: #fff !important; text-decoration: none; font-size: 12px; font-weight: 600; text-align: center; }
   .pop-link:hover { background: #2563eb; color: #fff !important; }
 
-  /* ── Vehicle label on marker ── */
-  .vmarker-label { position: absolute; top: -20px; left: 50%; transform: translateX(-50%); white-space: nowrap; background: rgba(15,25,35,.85); color: #fff; font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 4px; border: 1px solid #2a3a4a; pointer-events: none; }
+  /* ── Vehicle marker (top-down car + label like GPS tracker apps) ── */
+  .fleet-vmarker.leaflet-div-icon { background: transparent !important; border: none !important; }
+  .vmarker-wrap {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    pointer-events: none;
+  }
+  .vmarker-label {
+    position: relative;
+    top: auto;
+    left: auto;
+    transform: none;
+    white-space: nowrap;
+    background: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 5px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.28);
+    border: none;
+    letter-spacing: .02em;
+    line-height: 1.25;
+    margin-bottom: 2px;
+  }
+  .vmarker-car {
+    transform-origin: 50% 50%;
+    line-height: 0;
+    filter: drop-shadow(0 2px 3px rgba(0,0,0,.35));
+  }
 
   /* ── Show labels checkbox ── */
   .tb-check { display: flex; align-items: center; gap: 4px; color: #94a3b8; font-size: 12px; cursor: pointer; user-select: none; }
@@ -113,11 +143,6 @@
     .tb-btn span { display: none; }
   }
 
-  /* ── Pulse animation for moving vehicles ── */
-  @keyframes pulse {
-    0% { transform: translate(-50%,-50%) scale(1); opacity: 0.6; }
-    100% { transform: translate(-50%,-50%) scale(2.5); opacity: 0; }
-  }
 </style>
 {% endblock %}
 
@@ -142,7 +167,7 @@
       <div class="tb-stat idle" data-stat-filter="Idle"><div class="num" id="statIdle">{{ stats.idle }}</div><div class="lbl">Idle</div></div>
     </div>
     <div class="tb-updated" id="tbUpdated">--</div>
-    <label class="tb-check"><input type="checkbox" id="showLabelsChk"> Show Labels</label>
+    <label class="tb-check"><input type="checkbox" id="showLabelsChk" checked> Show Labels</label>
     <button id="forceRefreshBtn" class="tb-btn"><i class="bi bi-arrow-clockwise"></i><span>Refresh</span></button>
   </div>
 
@@ -199,7 +224,7 @@
         <span class="spinner"></span> Updating...
       </div>
       <div class="map-legend">
-        <div class="row"><span class="dot" style="background:#4ade80"></span> Moving (with pulse ring)</div>
+        <div class="row"><span class="dot" style="background:#4ade80"></span> Moving</div>
         <div class="row"><span class="dot" style="background:#f87171"></span> Stopped (ign off)</div>
         <div class="row"><span class="dot" style="background:#fbbf24"></span> Idle / No GPS</div>
         <div style="margin-top:6px;font-size:10px;color:#94a3b8;">Switch map style &raquo; top-right</div>
@@ -267,25 +292,34 @@
     return '#fbbf24';
   }
 
-  // Car icon SVG (top-down view like Uber/inDrive)
-  var showLabels = false;
+  // Top-down car marker (rotated by heading, label above like GPS tracker apps)
+  var showLabels = true;
+
+  function carBodySvg(color) {
+    return '<svg width="34" height="46" viewBox="0 0 40 56" aria-hidden="true">' +
+      '<path d="M20 3 C13 3 9 8 9 14 L7 24 L7 40 L9 50 C9 54 13 56 20 56 C27 56 31 54 31 50 L33 40 L33 24 L31 14 C31 8 27 3 20 3 Z" fill="' + color + '" stroke="#1e293b" stroke-width="1.1"/>' +
+      '<path d="M13 15 L27 15 L26 24 L14 24 Z" fill="#1e293b" opacity="0.78"/>' +
+      '<path d="M14 29 L26 29 L27 38 L13 38 Z" fill="#1e293b" opacity="0.62"/>' +
+      '<ellipse cx="12" cy="10" rx="2.4" ry="1.7" fill="#fef9c3"/>' +
+      '<ellipse cx="28" cy="10" rx="2.4" ry="1.7" fill="#fef9c3"/>' +
+      '<rect x="11" y="42" width="4" height="6" rx="1" fill="#0f172a" opacity="0.45"/>' +
+      '<rect x="25" y="42" width="4" height="6" rx="1" fill="#0f172a" opacity="0.45"/>' +
+      '</svg>';
+  }
 
   function carIcon(color, deg, isMoving, regNo) {
     var rotate = deg || 0;
-    var pulseRing = isMoving ? '<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:36px;height:36px;border-radius:50%;border:2px solid ' + color + ';opacity:0.4;animation:pulse 1.5s ease-out infinite"></div>' : '';
-    var label = (showLabels && regNo) ? '<div class="vmarker-label">' + regNo + '</div>' : '';
+    var label = (showLabels && regNo)
+      ? '<div class="vmarker-label" style="color:' + color + ';">' + regNo + '</div>'
+      : '';
     return L.divIcon({
-      className: '',
-      html: '<div style="position:relative;width:36px;height:36px;">' + label + pulseRing +
-            '<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(' + rotate + 'deg);">' +
-            '<svg width="32" height="32" viewBox="0 0 32 32">' +
-            '<circle cx="16" cy="16" r="15" fill="' + color + '" stroke="#fff" stroke-width="2" opacity="0.95"/>' +
-            '<path d="M16 5 L21 12 L21 22 L19 26 L13 26 L11 22 L11 12 Z" fill="#fff" stroke="' + color + '" stroke-width="0.5"/>' +
-            '<rect x="13" y="13" width="6" height="7" rx="1.5" fill="' + color + '" opacity="0.7"/>' +
-            '<circle cx="14" cy="24" r="1.5" fill="#333"/>' +
-            '<circle cx="18" cy="24" r="1.5" fill="#333"/>' +
-            '</svg></div></div>',
-      iconSize: [36, 36], iconAnchor: [18, 18]
+      className: 'fleet-vmarker',
+      html: '<div class="vmarker-wrap">' + label +
+            '<div class="vmarker-car" style="transform:rotate(' + rotate + 'deg);">' +
+            carBodySvg(color) +
+            '</div></div>',
+      iconSize: [88, 68],
+      iconAnchor: [44, 58]
     });
   }
 
