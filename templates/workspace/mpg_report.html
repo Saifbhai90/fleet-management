@@ -55,31 +55,215 @@
     .mpg-vehicle-cell .vno { font-weight: 700; font-size: .85rem; color: #1e293b; }
     .mpg-vehicle-cell .vno-sub { font-size: .68rem; color: #64748b; margin-top: 1px; }
 
-    /* Mobile: keep one DOM tree (skip fleet_mobile card clones) — card-style rows + live calc */
+    /* Mobile: modern card layout (HTML mockup style) — web table unchanged above 767px */
     @media (max-width: 767px) {
       .mpg-report-page {
         max-width: 100vw;
         overflow-x: hidden;
-        padding-left: max(12px, env(safe-area-inset-left, 0px));
-        padding-right: max(12px, env(safe-area-inset-right, 0px));
+        padding: 12px max(12px, env(safe-area-inset-left, 0px)) 24px max(12px, env(safe-area-inset-right, 0px));
+        background: #f1f3f6;
       }
-      .mpg-report-page .mpg-data-card > .card-body,
-      .mpg-report-page .mpg-table-wrap {
+      .mpg-report-page .container-fluid {
+        padding-left: 0;
+        padding-right: 0;
+      }
+
+      /* Hero / summary card */
+      .mpg-report-page .mpg-hero {
+        border-radius: 12px;
+        border: 1px solid rgba(0,0,0,.05);
+        box-shadow: 0 2px 5px rgba(0,0,0,.03);
+        margin-bottom: 15px;
+      }
+      .mpg-report-page .mpg-hero .card-body {
+        padding: 15px !important;
+      }
+      .mpg-report-page .mpg-hero .d-flex.flex-wrap.justify-content-between {
+        flex-direction: column;
+        align-items: stretch !important;
+        gap: 12px !important;
+        margin-bottom: 12px !important;
+      }
+      .mpg-report-page .mpg-hero .badge.bg-primary-subtle {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+        padding: 4px 8px;
+        margin-bottom: 4px !important;
+      }
+      .mpg-report-page .mpg-hero h3 {
+        font-size: 18px;
+        margin-bottom: 0 !important;
+        text-transform: uppercase;
+        letter-spacing: .02em;
+      }
+      .mpg-report-page .mpg-hero .text-muted:not(.small) {
+        display: none;
+      }
+      .mpg-report-page .mpg-hero .text-muted.small {
+        font-size: 12px;
+        margin-top: 6px !important;
+      }
+      .mpg-report-page .mpg-hero .d-flex.gap-2.flex-wrap:not(.position-relative) {
+        order: -1;
+        margin-bottom: 0;
+      }
+      .mpg-report-page .mpg-hero .d-flex.gap-2.flex-wrap:not(.position-relative) .btn {
+        flex: 1;
+        font-size: 13px;
+        padding: 8px 12px;
+        border-radius: 8px;
+        border-width: 1.5px;
+      }
+      .mpg-report-page .mpg-hero .d-flex.flex-wrap.gap-2.position-relative {
+        display: grid !important;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+        width: 100%;
+      }
+      .mpg-report-page .mpg-stat {
+        min-width: 0;
+        text-align: center;
+        padding: 10px 6px;
+        border-radius: 8px;
+        background: #fff;
+        border: 1px solid #eee;
+      }
+      .mpg-report-page .mpg-stat .stat-label {
+        font-size: 10px;
+        letter-spacing: .5px;
+      }
+      .mpg-report-page .mpg-stat .stat-value {
+        font-size: 17px;
+      }
+      .mpg-report-page .mpg-stat .stat-label i {
+        display: none;
+      }
+
+      /* Filters card */
+      .mpg-report-page .card.border-0.shadow-sm.mb-3:not(.mpg-data-card) {
+        border-radius: 12px !important;
+        border: 1px solid rgba(0,0,0,.05) !important;
+        box-shadow: 0 2px 5px rgba(0,0,0,.03) !important;
+        margin-bottom: 15px !important;
+      }
+      .mpg-report-page .card.border-0.shadow-sm.mb-3:not(.mpg-data-card) .card-body {
+        padding: 15px !important;
+      }
+      .mpg-report-page form.row.g-2 {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin: 0;
+      }
+      .mpg-report-page form.row.g-2::before {
+        content: 'Report Filters';
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        font-size: 15px;
+        font-weight: 600;
+        color: #333;
+        margin-bottom: 2px;
+      }
+      .mpg-report-page form.row.g-2 .col-md-2 {
+        flex: 1 1 100%;
+        max-width: 100%;
+        padding: 0;
+      }
+      .mpg-report-page form.row.g-2 .col-md-2:nth-child(1),
+      .mpg-report-page form.row.g-2 .col-md-2:nth-child(2) {
+        flex: 1 1 calc(50% - 6px);
+        max-width: calc(50% - 6px);
+      }
+      .mpg-report-page form.row.g-2 .form-label {
+        font-size: 11px;
+        text-transform: uppercase;
+        color: #777;
+        margin-bottom: 4px;
+      }
+      .mpg-report-page form.row.g-2 .form-control,
+      .mpg-report-page form.row.g-2 .form-select {
+        border-radius: 8px;
+        padding: 10px 12px;
+        font-size: 14px;
+        min-height: 42px;
+      }
+      .mpg-report-page form.row.g-2 .col-md-2.d-flex {
+        flex: 1 1 100%;
+        max-width: 100%;
+        gap: 10px;
+      }
+      .mpg-report-page form.row.g-2 .col-md-2.d-flex .btn-primary {
+        flex: 1;
+        border-radius: 8px;
+        padding: 11px;
+        font-weight: 600;
+      }
+      .mpg-report-page form.row.g-2 .col-md-2.d-flex .btn-outline-secondary {
+        width: 42px;
+        flex: 0 0 42px;
+        border-radius: 8px;
+        padding: 11px;
+      }
+
+      /* Data card header */
+      .mpg-report-page .mpg-data-card {
+        border-radius: 12px !important;
+        border: 0 !important;
+        box-shadow: none !important;
+        background: transparent !important;
+      }
+      .mpg-report-page .mpg-data-card > .card-header {
+        background: transparent !important;
+        border: 0 !important;
+        padding: 0 0 12px !important;
+      }
+      .mpg-report-page .mpg-data-card-header {
+        flex-direction: row !important;
+        align-items: center !important;
+        flex-wrap: wrap !important;
+        gap: 8px !important;
+      }
+      .mpg-report-page .mpg-data-card-header strong {
+        font-size: 15px;
+        color: #333 !important;
+      }
+      .mpg-report-page .mpg-data-card-header .badge {
+        background: #eee !important;
+        color: #555 !important;
+        border: 0 !important;
+        font-size: 12px;
+        border-radius: 6px;
+        font-weight: 500;
+      }
+      .mpg-report-page .mpg-data-card-header .input-group {
+        order: 3;
+        width: 100% !important;
+        max-width: 100% !important;
+      }
+      .mpg-report-page .mpg-data-card-header .btn-success {
+        order: 2;
+        margin-left: auto;
+        border-radius: 8px;
+        font-size: 12px;
+        padding: 7px 12px;
+      }
+      .mpg-report-page .mpg-data-card > .mpg-table-wrap {
         overflow: visible !important;
         max-height: none !important;
+        margin: 0 !important;
       }
-      .mpg-report-page .mpg-table-wrap.table-responsive {
-        margin-left: 0 !important;
-        margin-right: 0 !important;
-        overflow-x: hidden !important;
-        max-width: 100%;
-      }
+
+      /* Vehicle cards — 2-column detail grid */
       #workspaceMpgReportTable.mpg-mobile-table {
         min-width: 0 !important;
         width: 100% !important;
         max-width: 100% !important;
         display: block !important;
         border: 0 !important;
+        background: transparent !important;
       }
       #workspaceMpgReportTable.mpg-mobile-table > thead {
         display: none !important;
@@ -89,88 +273,177 @@
         width: 100% !important;
       }
       #workspaceMpgReportTable.mpg-mobile-table tbody tr.mpg-data-row {
-        display: block;
-        margin: 0 0 16px;
+        display: grid !important;
+        grid-template-columns: 1fr 1fr;
+        margin: 0 0 15px;
         padding: 0;
-        border-radius: 18px;
-        box-shadow: 0 6px 28px rgba(15, 23, 42, 0.07), 0 0 0 1px rgba(15, 23, 42, 0.05);
-        border: 1px solid #e8ecf0;
+        border-radius: 12px;
+        box-shadow: 0 4px 10px rgba(0,0,0,.06);
+        border: 0;
         overflow: hidden;
         background: #fff;
       }
       #workspaceMpgReportTable.mpg-mobile-table tbody tr.mpg-data-row::before {
         content: attr(data-vehicle);
+        grid-column: 1 / -1;
         display: flex;
         align-items: center;
-        min-height: 52px;
-        padding: 14px 16px;
-        background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 55%, #3b82f6 100%);
+        min-height: 44px;
+        padding: 10px 15px;
+        background: #007bff;
         color: #fff;
-        font-weight: 700;
-        font-size: 1.05rem;
-        letter-spacing: 0.02em;
+        font-weight: 600;
+        font-size: 14px;
+        letter-spacing: 0.01em;
       }
       #workspaceMpgReportTable.mpg-mobile-table tbody tr.mpg-data-row > td {
         display: flex !important;
         flex-direction: column !important;
         align-items: stretch !important;
-        gap: 6px;
-        width: 100% !important;
-        max-width: 100% !important;
-        padding: 10px 16px 12px !important;
+        gap: 2px;
+        width: auto !important;
+        max-width: none !important;
+        padding: 12px 15px !important;
         border: 0 !important;
-        border-bottom: 1px solid #eef2f7 !important;
+        border-bottom: 1px solid #f1f1f1 !important;
         text-align: left !important;
-      }
-      #workspaceMpgReportTable.mpg-mobile-table tbody tr.mpg-data-row > td:last-child {
-        border-bottom: none !important;
+        background: #fff;
       }
       #workspaceMpgReportTable.mpg-mobile-table tbody tr.mpg-data-row > td.mpg-mobile-hide {
         display: none !important;
       }
+      #workspaceMpgReportTable.mpg-mobile-table tbody tr.mpg-data-row > td.mpg-m-full {
+        grid-column: 1 / -1;
+      }
+      #workspaceMpgReportTable.mpg-mobile-table tbody tr.mpg-data-row > td.mpg-m-finance {
+        background: #fcfcfd;
+        border-left: 1px solid #f1f1f1 !important;
+        border-right: 1px solid #f1f1f1 !important;
+      }
+      #workspaceMpgReportTable.mpg-mobile-table tbody tr.mpg-data-row > td.mpg-m-finance:first-of-type {
+        border-top: 1px solid #f1f1f1 !important;
+      }
+      #workspaceMpgReportTable.mpg-mobile-table tbody tr.mpg-data-row > td.mpg-m-finance.mpg-m-full {
+        border-bottom: 1px solid #f1f1f1 !important;
+      }
       #workspaceMpgReportTable.mpg-mobile-table tbody td[data-label]::before {
         content: attr(data-label);
-        font-weight: 700;
-        font-size: 0.62rem;
+        font-weight: 600;
+        font-size: 11px;
         text-transform: uppercase;
-        letter-spacing: 0.08em;
-        color: #475569;
-        line-height: 1.35;
+        letter-spacing: .3px;
+        color: #777;
+        line-height: 1.3;
+        display: block;
+        padding: 0;
+        margin-bottom: 2px;
+        border: 0;
+        background: transparent;
+        border-radius: 0;
+        align-self: stretch;
+      }
+      #workspaceMpgReportTable.mpg-mobile-table tbody td .mpg-val-desktop {
+        display: none !important;
+      }
+      #workspaceMpgReportTable.mpg-mobile-table tbody td .mpg-val-mobile {
         display: inline-block;
-        padding: 5px 10px;
-        border-radius: 8px;
-        background: #eef2f7;
-        border: 1px solid #e2e8f0;
-        align-self: flex-start;
+      }
+      #workspaceMpgReportTable.mpg-mobile-table tbody td.mpg-status-cell {
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      #workspaceMpgReportTable.mpg-mobile-table tbody td.mpg-status-cell::before {
+        margin-bottom: 0;
+      }
+      #workspaceMpgReportTable.mpg-mobile-table .mpg-val-mobile {
+        font-size: 12px;
+        font-weight: 700;
+        padding: 3px 8px;
+        border-radius: 6px;
+        color: #fff;
+        white-space: nowrap;
+      }
+      #workspaceMpgReportTable.mpg-mobile-table .mpg-val-mobile.mpg-tier-low {
+        background: #dc2626;
+      }
+      #workspaceMpgReportTable.mpg-mobile-table .mpg-val-mobile.mpg-tier-mid {
+        background: #d97706;
+      }
+      #workspaceMpgReportTable.mpg-mobile-table .mpg-val-mobile.mpg-tier-high {
+        background: #28a745;
+      }
+      #workspaceMpgReportTable.mpg-mobile-table .mpg-val-mobile.mpg-tier-neutral {
+        background: #64748b;
       }
       #workspaceMpgReportTable.mpg-mobile-table tbody td.mpg-input-cell {
-        background: #f0f7ff;
+        background: #fff;
+        border: 1px solid #e0e0e0 !important;
+        border-radius: 8px;
+        margin: 0 12px 12px;
+        padding: 12px !important;
+        grid-column: 1 / -1;
+        flex-direction: row !important;
+        align-items: center !important;
+        gap: 10px;
       }
       #workspaceMpgReportTable.mpg-mobile-table tbody td.mpg-input-cell[data-label]::before {
-        background: #dbeafe;
-        border-color: #bfdbfe;
-        color: #1e40af;
+        background: transparent;
+        border: 0;
+        color: #007bff;
+        font-size: 11px;
+        flex: 1;
+        margin-bottom: 0;
+      }
+      #workspaceMpgReportTable.mpg-mobile-table tbody td.mpg-input-cell .form-control-sm {
+        margin-left: auto;
+        width: 110px !important;
+        min-height: 38px !important;
+        font-size: 14px !important;
+        border-radius: 6px !important;
+        text-align: right;
+        flex-shrink: 0;
+      }
+      #workspaceMpgReportTable.mpg-mobile-table tbody td.mpg-input-cell.mpg-m-today {
+        background: #f1f3f6;
       }
       #workspaceMpgReportTable.mpg-mobile-table tbody td > * {
-        width: 100%;
+        width: auto;
         max-width: 100%;
         min-width: 0 !important;
-      }
-      #workspaceMpgReportTable.mpg-mobile-table tbody td .form-control-sm {
-        min-height: 48px;
-        font-size: 16px;
-        border-radius: 12px;
+        font-size: 14px;
+        font-weight: 600;
+        color: #333;
       }
       #workspaceMpgReportTable.mpg-mobile-table tbody td.text-end {
         text-align: left !important;
       }
-      .mpg-report-page .mpg-data-card-header {
-        flex-direction: column;
-        align-items: stretch !important;
+      #workspaceMpgReportTable.mpg-mobile-table tbody td .mpg-val-neg,
+      #workspaceMpgReportTable.mpg-mobile-table tbody td .mpg-val-warn {
+        color: inherit;
       }
-      .mpg-report-page .mpg-data-card-header .input-group {
-        width: 100% !important;
-        max-width: 100% !important;
+      #workspaceMpgReportTable.mpg-mobile-table tbody td.balance-amount-cell .mpg-val-desktop {
+        display: inline !important;
+      }
+      #workspaceMpgReportTable.mpg-mobile-table tbody td.balance-amount-cell .mpg-balance-pos {
+        color: #15803d !important;
+      }
+      #workspaceMpgReportTable.mpg-mobile-table tbody td.balance-amount-cell .mpg-balance-neg {
+        color: #dc2626 !important;
+      }
+    }
+
+    /* Desktop: hide mobile-only MPG pill */
+    .mpg-val-mobile { display: none; }
+
+    /* Legacy mobile block replaced above — remove duplicate rules below */
+    @media (max-width: 767px) {
+      .mpg-report-page .mpg-data-card > .card-body,
+      .mpg-report-page .mpg-table-wrap.table-responsive {
+        overflow-x: hidden !important;
+        max-width: 100%;
       }
     }
   </style>
@@ -320,6 +593,16 @@
           </thead>
           <tbody>
             {% for r in rows %}
+            {% set mpg_tier = 'neutral' %}
+            {% if r.mpg is not none and r.target_mpg is not none %}
+              {% if r.mpg < r.target_mpg %}
+                {% set mpg_tier = 'low' %}
+              {% elif r.mpg <= r.target_mpg + 3 %}
+                {% set mpg_tier = 'mid' %}
+              {% else %}
+                {% set mpg_tier = 'high' %}
+              {% endif %}
+            {% endif %}
             <tr
               class="mpg-data-row"
               data-with-full="{{ r.with_full_tank_next_fueling if r.with_full_tank_next_fueling is not none else '' }}"
@@ -333,20 +616,23 @@
                 <div class="vno">{{ r.vehicle.vehicle_no }}</div>
                 <div class="vno-sub">T:{{ "{:,.1f}".format(r.target_mpg or 0) }} MPG | Tk:{{ "{:,.0f}".format(r.tank_capacity or 0) }}L</div>
               </td>
-              <td>{{ r.entry_date|ddmmyyyy if r.entry_date else '-' }}</td>
-              <td>{{ r.slip_no or '-' }}</td>
-              <td class="text-end text-muted">{{ "{:,.2f}".format(r.previous_reading) if r.previous_reading is not none else '-' }}</td>
-              <td class="text-end text-muted">{{ "{:,.2f}".format(r.current_reading) if r.current_reading is not none else '-' }}</td>
-              <td class="text-end fw-semibold">{{ "{:,.2f}".format(r.km) if r.km is not none else '-' }}</td>
-              <td class="text-end">{{ "{:,.2f}".format(r.avg_fuel_price) if r.avg_fuel_price is not none else '-' }}</td>
-              <td class="text-end">{{ "{:,.2f}".format(r.total_ltr) if r.total_ltr is not none else '-' }}</td>
-              <td class="text-end fw-semibold {% if r.mpg and r.target_mpg and r.mpg >= r.target_mpg %}mpg-val-pos{% elif r.mpg and r.target_mpg and r.mpg < r.target_mpg %}mpg-val-neg{% endif %}">{{ "{:,.2f}".format(r.mpg) if r.mpg is not none else '-' }}</td>
-              <td class="text-end">{{ "{:,.2f}".format(r.amount) if r.amount is not none else '-' }}</td>
-              <td class="text-end {% if r.fuel_deduction and r.fuel_deduction > 0 %}mpg-val-neg{% endif %}">{{ "{:,.2f}".format(r.fuel_deduction) if r.fuel_deduction is not none else '-' }}</td>
-              <td class="text-end {% if r.short_kms and r.short_kms > 0 %}mpg-val-warn{% endif %}">{{ "{:,.2f}".format(r.short_kms) if r.short_kms is not none else '-' }}</td>
-              <td class="text-end">{{ "{:,.2f}".format(r.with_full_tank_next_fueling) if r.with_full_tank_next_fueling is not none else '-' }}</td>
-              <td class="text-end current-date-reading-cell text-muted">{{ "{:,.2f}".format(r.current_date_reading) if r.current_date_reading is not none else '-' }}</td>
-              <td class="text-end current-odoo-meter-cell mpg-input-cell" style="min-width: 170px;">
+              <td class="mpg-m-col">{{ r.entry_date|ddmmyyyy if r.entry_date else '-' }}</td>
+              <td class="mpg-m-col">{{ r.slip_no or '-' }}</td>
+              <td class="text-end text-muted mpg-m-col">{{ "{:,.2f}".format(r.previous_reading) if r.previous_reading is not none else '-' }}</td>
+              <td class="text-end text-muted mpg-m-col">{{ "{:,.2f}".format(r.current_reading) if r.current_reading is not none else '-' }}</td>
+              <td class="text-end fw-semibold mpg-m-col">{{ "{:,.2f}".format(r.km) if r.km is not none else '-' }}</td>
+              <td class="text-end mpg-m-col">{{ "{:,.2f}".format(r.avg_fuel_price) if r.avg_fuel_price is not none else '-' }}</td>
+              <td class="text-end mpg-m-col">{{ "{:,.2f}".format(r.total_ltr) if r.total_ltr is not none else '-' }}</td>
+              <td class="text-end fw-semibold mpg-m-col mpg-status-cell {% if r.mpg and r.target_mpg and r.mpg >= r.target_mpg %}mpg-val-pos{% elif r.mpg and r.target_mpg and r.mpg < r.target_mpg %}mpg-val-neg{% endif %}">
+                <span class="mpg-val-desktop">{{ "{:,.2f}".format(r.mpg) if r.mpg is not none else '-' }}</span>
+                <span class="mpg-val-mobile mpg-tier-{{ mpg_tier }}">{{ "{:,.2f}".format(r.mpg) if r.mpg is not none else '-' }} Actual</span>
+              </td>
+              <td class="text-end mpg-m-col mpg-m-finance">{{ "{:,.2f}".format(r.amount) if r.amount is not none else '-' }}</td>
+              <td class="text-end mpg-m-col mpg-m-finance {% if r.fuel_deduction and r.fuel_deduction > 0 %}mpg-val-neg{% endif %}">{{ "{:,.2f}".format(r.fuel_deduction) if r.fuel_deduction is not none else '-' }}</td>
+              <td class="text-end mpg-m-col mpg-m-finance mpg-m-full {% if r.short_kms and r.short_kms > 0 %}mpg-val-warn{% endif %}">{{ "{:,.2f}".format(r.short_kms) if r.short_kms is not none else '-' }}</td>
+              <td class="text-end mpg-m-full">{{ "{:,.2f}".format(r.with_full_tank_next_fueling) if r.with_full_tank_next_fueling is not none else '-' }}</td>
+              <td class="text-end mpg-m-col current-date-reading-cell text-muted">{{ "{:,.2f}".format(r.current_date_reading) if r.current_date_reading is not none else '-' }}</td>
+              <td class="text-end current-odoo-meter-cell mpg-input-cell mpg-m-full" style="min-width: 170px;">
                 <input
                   type="text"
                   class="form-control form-control-sm text-end current-odoo-input"
@@ -355,11 +641,11 @@
                   placeholder="Meter reading"
                 >
               </td>
-              <td class="text-end remaining-kms-cell">{{ "{:,.2f}".format(r.remaining_kms_from_fueling) if r.remaining_kms_from_fueling is not none else '-' }}</td>
-              <td class="text-end in-tank-current-ltr-cell">{{ "{:,.2f}".format(r.in_tank_current_ltr) if r.in_tank_current_ltr is not none else '-' }}</td>
-              <td class="text-end fueling-ltr-with-target-cell">{{ "{:,.2f}".format(r.fueling_ltr_with_target) if r.fueling_ltr_with_target is not none else '-' }}</td>
-              <td class="text-end fueling-amount-cell">{{ "{:,.2f}".format(r.fueling_amount) if r.fueling_amount is not none else '-' }}</td>
-              <td class="text-end mpg-input-cell" style="min-width: 150px;">
+              <td class="text-end mpg-m-col remaining-kms-cell">{{ "{:,.2f}".format(r.remaining_kms_from_fueling) if r.remaining_kms_from_fueling is not none else '-' }}</td>
+              <td class="text-end mpg-m-col in-tank-current-ltr-cell">{{ "{:,.2f}".format(r.in_tank_current_ltr) if r.in_tank_current_ltr is not none else '-' }}</td>
+              <td class="text-end mpg-m-col fueling-ltr-with-target-cell">{{ "{:,.2f}".format(r.fueling_ltr_with_target) if r.fueling_ltr_with_target is not none else '-' }}</td>
+              <td class="text-end mpg-m-col fueling-amount-cell">{{ "{:,.2f}".format(r.fueling_amount) if r.fueling_amount is not none else '-' }}</td>
+              <td class="text-end mpg-input-cell mpg-m-full mpg-m-today" style="min-width: 150px;">
                 <input
                   type="text"
                   class="form-control form-control-sm text-end today-fuel-input"
@@ -368,7 +654,7 @@
                   placeholder="Today fuel amount"
                 >
               </td>
-              <td class="text-end fw-semibold balance-amount-cell">{{ "{:,.2f}".format(r.balance_amount) if r.balance_amount is not none else '-' }}</td>
+              <td class="text-end fw-semibold mpg-m-col balance-amount-cell">{{ "{:,.2f}".format(r.balance_amount) if r.balance_amount is not none else '-' }}</td>
             </tr>
             {% else %}
             <tr>
@@ -402,10 +688,16 @@ document.addEventListener('DOMContentLoaded', function(){
     });
     table.querySelectorAll('tbody tr.mpg-data-row').forEach(function(row){
       const vehicleCell = row.querySelector('.mpg-vehicle-cell .vno');
-      const vehicleSub = row.querySelector('.mpg-vehicle-cell .vno-sub');
       const vehicleTitle = vehicleCell ? vehicleCell.textContent.trim() : '';
-      const vehicleMeta = vehicleSub ? vehicleSub.textContent.trim() : '';
-      row.setAttribute('data-vehicle', vehicleMeta ? (vehicleTitle + ' · ' + vehicleMeta) : (vehicleTitle || 'Vehicle'));
+      const tankCap = row.dataset.tankCapacity;
+      let headerTitle = vehicleTitle || 'Vehicle';
+      if(tankCap && String(tankCap).trim()){
+        const tankNum = Math.round(Number(String(tankCap).replace(/,/g, '')));
+        if(Number.isFinite(tankNum) && tankNum > 0){
+          headerTitle += ' | TK:' + tankNum + 'L';
+        }
+      }
+      row.setAttribute('data-vehicle', headerTitle);
       Array.from(row.children).forEach(function(td, index){
         if(headers[index]){
           td.setAttribute('data-label', headers[index]);
