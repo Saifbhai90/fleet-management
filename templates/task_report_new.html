@@ -869,7 +869,27 @@
     }
     .task-batch-page .task-batch-table tbody td.task-batch-close-cell .close-input {
       background: #fff !important;
-      border-color: #cddcf0 !important;
+      border: 1.5px solid #2563eb !important;
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16);
+    }
+    .task-batch-page .task-batch-table tbody td.task-batch-close-cell .close-input:focus {
+      border-color: #1d4ed8 !important;
+      box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.28);
+    }
+    .task-batch-page .task-batch-table tbody td.task-batch-close-cell .close-input.is-missing {
+      border-color: #dc2626 !important;
+      box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.22);
+    }
+    .task-batch-page .task-batch-table tbody td.task-batch-metric-cell--first > .form-control {
+      border: 1.5px solid #64748b !important;
+      box-shadow: 0 0 0 3px rgba(100, 116, 139, 0.12);
+    }
+    .task-batch-page .task-batch-table tbody td.task-batch-metric-cell--first > .form-control:focus {
+      border-color: #0f172a !important;
+      box-shadow: 0 0 0 4px rgba(15, 23, 42, 0.14);
+    }
+    .task-batch-page .odometer-cell .odom-photo-btn {
+      box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.08);
     }
 
     /* Variance & Tasks — plain rows, section label only */
@@ -1105,8 +1125,12 @@
       box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.2);
     }
     .task-batch-page .task-batch-table tbody td .close-input:focus {
-      border-color: #059669;
-      box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.22);
+      border-color: #1d4ed8 !important;
+      box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.28);
+    }
+    .task-batch-page .task-batch-table tbody td .close-input.is-missing:focus {
+      border-color: #dc2626 !important;
+      box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.22);
     }
     .task-batch-table tbody td input.form-control,
     .task-batch-table tbody td .start-input,
@@ -1984,6 +2008,9 @@ window.TASK_REPORT_NEW_LOCK_VEHICLE = {{ tef.get('lock_vehicle', false)|tojson }
 
   if (batchTable) {
     batchTable.addEventListener('input', function(e) {
+      if (e.target && e.target.classList && e.target.classList.contains('close-input')) {
+        e.target.classList.remove('is-missing');
+      }
       var row = e.target.closest('tr.task-row');
       if (row) updateRow(row);
       updateTotals();
@@ -2019,7 +2046,27 @@ window.TASK_REPORT_NEW_LOCK_VEHICLE = {{ tef.get('lock_vehicle', false)|tojson }
       });
       if (empty.length > 0) {
         e.preventDefault();
-        alert('Sab vehicles ke liye Close Reading zaroori hai. Missing: ' + empty.join(', '));
+        var firstMissing = null;
+        batchTable.querySelectorAll('.close-input').forEach(function(inp) {
+          var rowId = inp.getAttribute('data-row');
+          var mode = document.getElementById('row_' + rowId + '_edit_mode');
+          if (mode && mode.value === '0') return;
+          var missing = !inp.value || inp.value.trim() === '';
+          inp.classList.toggle('is-missing', missing);
+          if (missing && !firstMissing) firstMissing = inp;
+        });
+        if (firstMissing) {
+          try { firstMissing.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (err) {}
+          try { firstMissing.focus(); } catch (err2) {}
+        }
+        var msg = empty.length === 1
+          ? 'Is vehicle ki Close Reading khali hai. Pehle closing KM enter karein, phir Save All dabaen.'
+          : (empty.length + ' vehicles ki Close Reading khali hai. Pehle closing KM enter karein, phir Save All dabaen.');
+        if (typeof window.taskEntryNotice === 'function') {
+          window.taskEntryNotice('Close Reading zaroori hai', msg);
+        } else {
+          alert(msg);
+        }
         return false;
       }
       _batchSubmitting = true;

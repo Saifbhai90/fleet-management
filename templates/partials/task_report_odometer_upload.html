@@ -1,10 +1,101 @@
 {# Odoo / odometer photo — same 1080×1440 frame + GPS stamp as check-in/check-out (fleetStampAttendancePhoto). #}
-<input type="file" id="odomGlobalFileInput" class="d-none" accept="image/jpeg,image/png,image/webp,.jpg,.png,.webp" capture="environment" aria-hidden="true">
+<input type="file" id="odomGlobalFileInput" class="d-none" accept="image/jpeg,image/png,image/webp,.jpg,.png,.webp" aria-hidden="true">
+<style>
+  .te-notice-root { position: fixed; inset: 0; z-index: 1080; display: flex; align-items: flex-end; justify-content: center; padding: 16px 16px max(16px, env(safe-area-inset-bottom, 0px)); }
+  .te-notice-root.is-center { align-items: center; }
+  .te-notice-root[hidden] { display: none !important; }
+  .te-notice-scrim { position: absolute; inset: 0; background: rgba(15, 23, 42, 0.45); }
+  .te-notice-card { position: relative; width: min(420px, 100%); background: #fff; border-radius: 18px; padding: 18px 16px 14px; box-shadow: 0 18px 50px rgba(15, 23, 42, 0.22); }
+  .te-notice-kicker { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #64748b; margin-bottom: 6px; }
+  .te-notice-title { font-size: 1.05rem; font-weight: 800; color: #0f172a; margin: 0 0 6px; }
+  .te-notice-body { font-size: 0.9rem; color: #475569; margin: 0 0 14px; line-height: 1.45; }
+  .te-notice-actions { display: flex; flex-direction: column; gap: 8px; }
+  .te-notice-btn { border: 0; border-radius: 12px; padding: 12px 14px; font-weight: 700; font-size: 0.95rem; }
+  .te-notice-btn--primary { background: #0d6efd; color: #fff; }
+  .te-notice-btn--ghost { background: #f1f5f9; color: #334155; }
+  .te-notice-btn--camera { background: #0f172a; color: #fff; }
+  .te-notice-btn--gallery { background: #e8f1ff; color: #0d47a1; }
+</style>
 <script>
 (function() {
   var UP = {{ url_for('api_task_report_odometer_photo_upload') | tojson }};
   var fileInp = document.getElementById('odomGlobalFileInput');
   if (!fileInp) return;
+
+  function isUserCancel(err) {
+    var m = String((err && (err.message || err.errorMessage || err.error)) || err || '').toLowerCase();
+    return m.indexOf('cancel') !== -1 || m.indexOf('dismiss') !== -1;
+  }
+
+  function ensureNoticeRoot() {
+    var el = document.getElementById('taskEntryNoticeRoot');
+    if (el) return el;
+    el = document.createElement('div');
+    el.id = 'taskEntryNoticeRoot';
+    el.className = 'te-notice-root';
+    el.hidden = true;
+    el.innerHTML = '<div class="te-notice-scrim" data-notice-dismiss="1"></div><div class="te-notice-card" role="dialog" aria-modal="true"><div class="te-notice-kicker"></div><h3 class="te-notice-title"></h3><p class="te-notice-body"></p><div class="te-notice-actions"></div></div>';
+    document.body.appendChild(el);
+    el.addEventListener('click', function(ev) {
+      if (ev.target.getAttribute('data-notice-dismiss') === '1') hideNotice();
+    });
+    return el;
+  }
+
+  var _noticeResolve = null;
+  function hideNotice(result) {
+    var el = document.getElementById('taskEntryNoticeRoot');
+    if (el) el.hidden = true;
+    var fn = _noticeResolve;
+    _noticeResolve = null;
+    if (fn) fn(result == null ? null : result);
+  }
+
+  function showNotice(opts) {
+    opts = opts || {};
+    return new Promise(function(resolve) {
+      var el = ensureNoticeRoot();
+      _noticeResolve = resolve;
+      el.classList.toggle('is-center', !!opts.center);
+      el.querySelector('.te-notice-kicker').textContent = opts.kicker || '';
+      el.querySelector('.te-notice-title').textContent = opts.title || '';
+      el.querySelector('.te-notice-body').textContent = opts.body || '';
+      var actions = el.querySelector('.te-notice-actions');
+      actions.innerHTML = '';
+      (opts.buttons || [{ id: 'ok', label: 'Theek hai', kind: 'primary' }]).forEach(function(btn) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'te-notice-btn te-notice-btn--' + (btn.kind || 'ghost');
+        b.textContent = btn.label;
+        b.addEventListener('click', function() { hideNotice(btn.id); });
+        actions.appendChild(b);
+      });
+      el.hidden = false;
+    });
+  }
+
+  window.taskEntryNotice = function(title, body) {
+    return showNotice({
+      center: true,
+      kicker: 'New Task Entry',
+      title: title,
+      body: body,
+      buttons: [{ id: 'ok', label: 'Theek hai', kind: 'primary' }]
+    });
+  };
+
+  function pickPhotoSource() {
+    return showNotice({
+      kicker: 'Odoo meter photo',
+      title: 'Photo kaise lagani hai?',
+      body: 'Live camera se abhi click karein, ya gallery se pehle se li hui picture chunein.',
+      buttons: [
+        { id: 'camera', label: 'Live Camera', kind: 'camera' },
+        { id: 'gallery', label: 'Gallery', kind: 'gallery' },
+        { id: 'cancel', label: 'Cancel', kind: 'ghost' }
+      ]
+    });
+  }
 
   function csrfHeaders() {
     var f = document.getElementById('batchForm');
@@ -207,12 +298,15 @@
       if (fromRear) opts.rearCamera = true;
       if (typeof window.fleetStampAttendancePhoto !== 'function') {
         setOdomBusy(rowId, false);
-        alert('Photo stamp not loaded — refresh the page.');
+        window.taskEntryNotice('Photo lag nahi saki', 'Page refresh karke dubara Attach dabaen.');
         return;
       }
       window.fleetStampAttendancePhoto(dataUrl, null, opts)
         .then(function(res) { return uploadJpeg(rowId, res.dataUrl); })
-        .catch(function(err) { alert(err.message || String(err)); })
+        .catch(function(err) {
+          if (isUserCancel(err)) return;
+          window.taskEntryNotice('Photo upload nahi hui', err.message || String(err));
+        })
         .finally(function() {
         setOdomBusy(rowId, false);
         if (window.fleetClearResumePath) window.fleetClearResumePath();
@@ -222,10 +316,12 @@
 
   var pendingRowId = null;
 
-  function openFilePickerForRow(rowId) {
+  function openFilePickerForRow(rowId, fromCamera) {
     if (window.fleetSetResumePath) window.fleetSetResumePath({ odomRow: rowId });
     pendingRowId = rowId;
     fileInp.value = '';
+    if (fromCamera) fileInp.setAttribute('capture', 'environment');
+    else fileInp.removeAttribute('capture');
     fileInp.click();
   }
 
@@ -240,11 +336,11 @@
     reader.readAsDataURL(fileInp.files[0]);
   });
 
-  function nativeRearCamera(rowId) {
+  function nativeGetPhoto(rowId, source) {
     if (window.fleetSetResumePath) window.fleetSetResumePath({ odomRow: rowId });
     var Cam = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Camera;
     if (!Cam || !Cam.getPhoto) {
-      openFilePickerForRow(rowId);
+      openFilePickerForRow(rowId, source === 'CAMERA');
       return;
     }
     setOdomBusy(rowId, true);
@@ -253,19 +349,27 @@
         quality: 90,
         allowEditing: false,
         resultType: 'base64',
-        source: 'CAMERA',
+        source: source,
         direction: 'REAR',
         saveToGallery: false
       }).then(function(photo) {
         var raw = 'data:image/jpeg;base64,' + (photo.base64String || '');
         return stampAndUpload(rowId, raw, lat, lng, acc);
       }).catch(function(err) {
-        alert((err && err.message) ? err.message : 'Camera failed');
+        if (isUserCancel(err)) {
+          window.taskEntryNotice('Photo nahi lagi', 'Camera ya gallery band kar di — koi masla nahi. Attach dubara daba kar live camera ya gallery se laga sakte ho.');
+          return;
+        }
+        window.taskEntryNotice('Camera open nahi hua', (err && err.message) ? err.message : 'Dubara try karein.');
       }).finally(function() {
         setOdomBusy(rowId, false);
         if (window.fleetClearResumePath) window.fleetClearResumePath();
       });
     });
+  }
+
+  function nativeRearCamera(rowId) {
+    nativeGetPhoto(rowId, 'CAMERA');
   }
 
   document.addEventListener('click', function(e) {
@@ -283,8 +387,11 @@
     var rowId = btn.getAttribute('data-row');
     if (!rowId || !rowEditUnlocked(rowId)) return;
     var isNative = !!(window.FleetBridge && window.FleetBridge.isNative);
-    if (isNative) nativeRearCamera(rowId);
-    else openFilePickerForRow(rowId);
+    pickPhotoSource().then(function(choice) {
+      if (!choice || choice === 'cancel') return;
+      if (isNative) nativeGetPhoto(rowId, choice === 'gallery' ? 'PHOTOS' : 'CAMERA');
+      else openFilePickerForRow(rowId, choice === 'camera');
+    });
   });
 
   var batchForm = document.getElementById('batchForm');

@@ -1,11 +1,14 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="container-fluid py-3 mpg-report-page">
-  {% if workspace_selected_employee %}
+  {# Report Center MPG must not jump into Employee Workspace dashboard. #}
+  {% set from_report_center = (nav_from or '') == 'reports' %}
+  {% if workspace_selected_employee and not from_report_center %}
   {% include "workspace/_nav.html" %}
   {% else %}
   <div class="mb-3">
-    {% include "partials/nav_back_button.html" %}
+    {% from 'partials/nav_back_button.html' import nav_back_button with context %}
+    {{ nav_back_button() }}
   </div>
   {% endif %}
 
@@ -738,7 +741,9 @@
         <div class="mpg-hero-actions d-flex gap-2 flex-wrap">
           <button type="button" class="btn btn-primary btn-sm mpg-hero-btn mpg-hero-btn--print" id="btnPrintReport"><i class="bi bi-eye me-1"></i><span>Print / Preview</span></button>
           <button type="button" class="btn btn-outline-primary btn-sm mpg-hero-btn mpg-hero-btn--export" id="btnExportReport"><i class="bi bi-file-earmark-excel me-1"></i><span>Export</span></button>
-          {% if workspace_selected_employee %}
+          {% if from_report_center %}
+          <a href="{{ nav_back_url_auto or url_for('reports_index') }}" class="btn btn-outline-secondary btn-sm mpg-hero-btn mpg-hero-btn--back"><i class="bi bi-arrow-left me-1"></i><span>{{ nav_back_label_auto or 'Report Center' }}</span></a>
+          {% elif workspace_selected_employee %}
           <a href="{{ url_for('workspace_reports') }}" class="btn btn-outline-secondary btn-sm mpg-hero-btn mpg-hero-btn--back"><i class="bi bi-arrow-left me-1"></i><span>Reports</span></a>
           {% elif nav_back_url_auto %}
           <a href="{{ nav_back_url_auto }}" class="btn btn-outline-secondary btn-sm mpg-hero-btn mpg-hero-btn--back"><i class="bi bi-arrow-left me-1"></i><span>{{ nav_back_label_auto or 'Back' }}</span></a>
