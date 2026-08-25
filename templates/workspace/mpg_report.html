@@ -399,9 +399,18 @@
       width: 100% !important;
       max-width: 100% !important;
       border-radius: 12px;
-      overflow: hidden;
+      overflow: visible;
       border: 1.5px solid #e2e8f0;
       box-shadow: inset 0 1px 2px rgba(15,23,42,.04);
+    }
+    .mpg-report-page.is-mobile-layout .mpg-table-search-wrap #mpgTableSearch {
+      border-radius: 0 12px 12px 0 !important;
+    }
+    .mpg-report-page.is-mobile-layout .mpg-table-search-wrap .input-group-text {
+      border-radius: 12px 0 0 12px !important;
+    }
+    .mpg-report-page.is-mobile-layout .mpg-table-search-wrap[hidden] {
+      display: none !important;
     }
     .mpg-report-page.is-mobile-layout .mpg-data-card-header .input-group-text,
     .mpg-report-page.is-mobile-layout .mpg-data-card-header .form-control {
@@ -594,6 +603,20 @@
       padding-top: 14px !important;
       padding-bottom: 16px !important;
     }
+    .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody td.balance-amount-cell.mpg-balance-neg,
+    .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody tr.mpg-balance-neg-row > td.balance-amount-cell {
+      background: linear-gradient(180deg, #fef2f2, #fee2e2) !important;
+      border-top: 2px solid #ef4444 !important;
+      box-shadow: inset 0 -3px 0 #ef4444;
+    }
+    .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody td.balance-amount-cell.mpg-balance-neg::before,
+    .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody tr.mpg-balance-neg-row > td.balance-amount-cell::before {
+      color: #dc2626 !important;
+    }
+    .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody td.balance-amount-cell.mpg-balance-pos {
+      background: linear-gradient(180deg, #f0fdf4, #fff) !important;
+      border-top: 1px solid #bbf7d0 !important;
+    }
     .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody td.balance-amount-cell::before {
       color: #475569 !important;
       font-size: 11px !important;
@@ -601,6 +624,82 @@
     .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody td.balance-amount-cell > * {
       font-size: 18px !important;
       font-weight: 800 !important;
+    }
+
+    /* Search clear button */
+    .mpg-table-search-wrap { position: relative; }
+    .mpg-search-clear {
+      display: none;
+      position: absolute;
+      right: 8px;
+      top: 50%;
+      transform: translateY(-50%);
+      z-index: 5;
+      width: 28px;
+      height: 28px;
+      border: 0;
+      border-radius: 999px;
+      background: #e2e8f0;
+      color: #475569;
+      font-size: 14px;
+      line-height: 1;
+      padding: 0;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    .mpg-table-search-wrap.has-value .mpg-search-clear { display: inline-flex; }
+    .mpg-table-search-wrap.has-value #mpgTableSearch { padding-right: 38px !important; }
+    .mpg-report-page.is-mobile-layout .mpg-search-clear {
+      right: 10px;
+      background: #cbd5e1;
+      color: #0f172a;
+    }
+
+    /* Last saved + odoo warn */
+    .mpg-last-saved {
+      display: none;
+      font-size: 12px;
+      color: #64748b;
+      font-weight: 600;
+    }
+    .mpg-last-saved.is-visible { display: inline-flex; align-items: center; gap: 6px; }
+    .mpg-last-saved i { color: #16a34a; }
+    .mpg-report-page.is-mobile-layout .mpg-last-saved {
+      width: 100%;
+      justify-content: center;
+      margin-top: 2px;
+      font-size: 11px;
+    }
+    .mpg-report-page.is-mobile-layout .mpg-m-save-bar .mpg-last-saved {
+      display: none;
+      margin: 0 0 6px;
+    }
+    .mpg-report-page.is-mobile-layout .mpg-m-save-bar .mpg-last-saved.is-visible {
+      display: inline-flex;
+    }
+    .mpg-odoo-warn {
+      display: none;
+      margin: 0 14px 12px;
+      padding: 8px 10px;
+      border-radius: 10px;
+      background: #fff7ed;
+      border: 1px solid #fed7aa;
+      color: #c2410c;
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1.35;
+    }
+    .mpg-odoo-warn.is-visible { display: block; }
+    .mpg-report-page.is-mobile-layout .mpg-m-edit-input.is-warn {
+      border-color: #f97316 !important;
+      background: #fff7ed !important;
+      box-shadow: 0 0 0 2px rgba(249,115,22,.15) !important;
+    }
+    /* Desktop odoo warn sits under input in cell */
+    td.mpg-m-editable .mpg-odoo-warn {
+      margin: 6px 0 0;
+      text-align: left;
     }
 
     /* Hide app bottom nav on MPG Report (Save bar conflict) */
@@ -751,12 +850,14 @@
           <strong class="text-primary"><i class="bi bi-table me-1"></i>Vehicle MPG Detail</strong>
           <span class="badge bg-light text-secondary border">{{ rows|length }} vehicle(s)</span>
         </div>
-        <div class="d-flex align-items-center gap-2">
-          <div class="input-group input-group-sm" style="width: 260px;">
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+          <div class="input-group input-group-sm mpg-table-search-wrap" id="mpgTableSearchWrap"{% if rows|length <= 1 %} hidden{% endif %} style="width: 260px;">
             <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
-            <input type="text" class="form-control border-start-0" id="mpgTableSearch" placeholder="Search all columns..." autocomplete="off">
+            <input type="text" class="form-control border-start-0" id="mpgTableSearch" placeholder="Search vehicle / slip / values..." autocomplete="off" inputmode="search">
+            <button type="button" class="mpg-search-clear" id="mpgSearchClear" title="Clear search" aria-label="Clear search"><i class="bi bi-x-lg"></i></button>
           </div>
-          <button type="submit" class="btn btn-success btn-sm"><i class="bi bi-save me-1"></i>Save Inputs</button>
+          <button type="submit" class="btn btn-success btn-sm" id="mpgDesktopSaveBtn"><i class="bi bi-save me-1"></i>Save Inputs</button>
+          <span class="mpg-last-saved" id="mpgLastSaved" aria-live="polite"></span>
         </div>
       </div>
       <div class="table-responsive mpg-table-wrap">
@@ -800,9 +901,11 @@
               {% endif %}
             {% endif %}
             <tr
-              class="mpg-data-row"
+              class="mpg-data-row{% if r.balance_amount is not none and r.balance_amount < 0 %} mpg-balance-neg-row{% endif %}"
               data-with-full="{{ r.with_full_tank_next_fueling if r.with_full_tank_next_fueling is not none else '' }}"
               data-current-date="{{ r.current_date_reading if r.current_date_reading is not none else '' }}"
+              data-previous-reading="{{ r.previous_reading if r.previous_reading is not none else '' }}"
+              data-current-reading="{{ r.current_reading if r.current_reading is not none else '' }}"
               data-target-mpg="{{ r.target_mpg if r.target_mpg is not none else '' }}"
               data-tank-capacity="{{ r.tank_capacity if r.tank_capacity is not none else '' }}"
               data-avg-fuel-price="{{ r.avg_fuel_price if r.avg_fuel_price is not none else '' }}"
@@ -839,6 +942,7 @@
                   placeholder="Enter reading"
                   aria-label="Current Odoo Meter Reading"
                 >
+                <div class="mpg-odoo-warn" role="status"></div>
               </td>
               <td class="text-end mpg-m-col remaining-kms-cell">{{ "{:,.2f}".format(r.remaining_kms_from_fueling) if r.remaining_kms_from_fueling is not none else '-' }}</td>
               <td class="text-end mpg-m-col in-tank-current-ltr-cell">{{ "{:,.2f}".format(r.in_tank_current_ltr) if r.in_tank_current_ltr is not none else '-' }}</td>
@@ -856,7 +960,7 @@
                   aria-label="Today Fuel Amount"
                 >
               </td>
-              <td class="text-end fw-semibold mpg-m-col mpg-m-full balance-amount-cell">{{ "{:,.2f}".format(r.balance_amount) if r.balance_amount is not none else '-' }}</td>
+              <td class="text-end fw-semibold mpg-m-col mpg-m-full balance-amount-cell{% if r.balance_amount is not none and r.balance_amount < 0 %} mpg-balance-neg{% elif r.balance_amount is not none %} mpg-balance-pos{% endif %}">{{ "{:,.2f}".format(r.balance_amount) if r.balance_amount is not none else '-' }}</td>
             </tr>
             {% else %}
             <tr>
@@ -871,6 +975,7 @@
       </div>
     </div>
     <div class="mpg-m-save-bar">
+      <span class="mpg-last-saved" id="mpgLastSavedMobile" aria-live="polite"></span>
       <button type="submit" class="btn btn-success w-100 mpg-m-save-btn" id="mpgMobileSaveBtn">
         <i class="bi bi-check2-circle me-1"></i> Save Inputs
       </button>
@@ -928,7 +1033,17 @@ document.addEventListener('DOMContentLoaded', function(){
       const vehicleCell = row.querySelector('.mpg-vehicle-cell .vno');
       const vehicleTitle = vehicleCell ? vehicleCell.textContent.trim() : '';
       const tankCap = row.dataset.tankCapacity;
+      const targetMpg = row.dataset.targetMpg;
       let headerTitle = vehicleTitle || 'Vehicle';
+      if(targetMpg && String(targetMpg).trim()){
+        const tNum = Number(String(targetMpg).replace(/,/g, ''));
+        if(Number.isFinite(tNum) && tNum > 0){
+          const tLabel = Math.abs(tNum - Math.round(tNum)) < 0.05
+            ? String(Math.round(tNum))
+            : tNum.toFixed(1);
+          headerTitle += ' | T:' + tLabel;
+        }
+      }
       if(tankCap && String(tankCap).trim()){
         const tankNum = Math.round(Number(String(tankCap).replace(/,/g, '')));
         if(Number.isFinite(tankNum) && tankNum > 0){
@@ -945,13 +1060,44 @@ document.addEventListener('DOMContentLoaded', function(){
   }
   initMpgMobileRowLabels();
   const searchInput = document.getElementById('mpgTableSearch');
+  const searchWrap = document.getElementById('mpgTableSearchWrap');
   if(table && searchInput){
     const tbody = table.tBodies[0];
     const dataRows = Array.from(tbody.querySelectorAll('tr.mpg-data-row'));
     const emptyServerRow = dataRows.length === 0 ? tbody.querySelector('tr') : null;
     let noMatchRow = null;
 
+    if(searchWrap){
+      searchWrap.hidden = dataRows.length <= 1;
+    }
+
+    function rowSearchHaystack(row){
+      /* textContent includes display:none cells (vehicle no) — innerText does not. */
+      var parts = [
+        row.getAttribute('data-vehicle') || '',
+        row.dataset.targetMpg || '',
+        row.dataset.tankCapacity || '',
+        row.textContent || ''
+      ];
+      return parts.join(' ').toLowerCase().replace(/\s+/g, ' ').trim();
+    }
+
     const applySearch = function(){
+      if(searchWrap){
+        searchWrap.classList.toggle('has-value', !!(searchInput.value || '').trim());
+      }
+      if(dataRows.length <= 1){
+        dataRows.forEach(function(row){
+          row.classList.remove('mpg-row-hidden');
+          row.style.display = '';
+        });
+        if(noMatchRow){
+          noMatchRow.classList.add('mpg-row-hidden');
+          noMatchRow.style.display = 'none';
+        }
+        return;
+      }
+
       const terms = (searchInput.value || '')
         .toLowerCase()
         .split(/\s+/)
@@ -960,11 +1106,13 @@ document.addEventListener('DOMContentLoaded', function(){
 
       let visibleCount = 0;
       dataRows.forEach(function(row){
-        const haystack = (row.innerText || '').toLowerCase().replace(/\s+/g, ' ');
-        const isMatch = terms.every(function(term){ return haystack.indexOf(term) !== -1; });
+        const haystack = rowSearchHaystack(row);
+        const isMatch = !terms.length || terms.every(function(term){ return haystack.indexOf(term) !== -1; });
         if(isMobileLayout()){
           row.classList.toggle('mpg-row-hidden', !isMatch);
+          row.style.display = '';
         } else {
+          row.classList.remove('mpg-row-hidden');
           row.style.display = isMatch ? '' : 'none';
         }
         if(isMatch){
@@ -991,11 +1139,22 @@ document.addEventListener('DOMContentLoaded', function(){
         noMatchRow.classList.toggle('mpg-row-hidden', !(dataRows.length > 0 && visibleCount === 0));
         noMatchRow.style.display = '';
       } else {
+        noMatchRow.classList.remove('mpg-row-hidden');
         noMatchRow.style.display = (dataRows.length > 0 && visibleCount === 0) ? '' : 'none';
       }
     };
 
     searchInput.addEventListener('input', applySearch);
+    searchInput.addEventListener('search', applySearch);
+    var searchClearBtn = document.getElementById('mpgSearchClear');
+    if(searchClearBtn){
+      searchClearBtn.addEventListener('click', function(){
+        searchInput.value = '';
+        applySearch();
+        searchInput.focus();
+      });
+    }
+    applySearch();
   }
 
   function parseNumber(value){
@@ -1025,6 +1184,34 @@ document.addEventListener('DOMContentLoaded', function(){
       numberColumns: ['Previous Reading', 'Current Reading', 'KM', 'Avg. Fuel Price', 'Total LTR', 'MPG', 'Amount', 'FUEL DEDUCTION', 'Short Km\'s', 'With Full Tank Next Fueling Reading', 'Current Date Reading', 'Current Odoo Meter Reading', 'R. KM\'s from Fueling', 'In Tank Current Ltr', 'Fueling LTR With Target MPG', 'Fueling Amount', 'Today Fuel', 'Balance Amount'],
       dateColumns: ['Entry Date']
     });
+  }
+
+  function validateOdooInput(row){
+    const currentOdooInput = row.querySelector('.current-odoo-input');
+    const warnEl = row.querySelector('.mpg-odoo-warn');
+    if(!currentOdooInput){
+      return true;
+    }
+    const value = parseNumber(currentOdooInput.value);
+    const previousReading = parseNumber(row.dataset.previousReading);
+    const currentReading = parseNumber(row.dataset.currentReading);
+    const currentDateReading = parseNumber(row.dataset.currentDate);
+    let msg = '';
+    if(value != null){
+      if(previousReading != null && value < previousReading){
+        msg = 'Reading is below Previous Reading (' + formatOrDash(previousReading) + '). Please verify.';
+      } else if(currentReading != null && value < currentReading){
+        msg = 'Reading is below Current Slip Reading (' + formatOrDash(currentReading) + '). Please verify.';
+      } else if(currentDateReading != null && value < currentDateReading){
+        msg = 'Reading is below Current Date Reading (' + formatOrDash(currentDateReading) + '). Please verify.';
+      }
+    }
+    currentOdooInput.classList.toggle('is-warn', !!msg);
+    if(warnEl){
+      warnEl.textContent = msg;
+      warnEl.classList.toggle('is-visible', !!msg);
+    }
+    return !msg;
   }
 
   function recalculateMpgRow(row){
@@ -1062,10 +1249,17 @@ document.addEventListener('DOMContentLoaded', function(){
     if(balanceAmountCell){
       balanceAmountCell.textContent = formatOrDash(balanceAmount);
       balanceAmountCell.classList.remove('mpg-balance-pos', 'mpg-balance-neg');
+      row.classList.remove('mpg-balance-neg-row');
       if(balanceAmount != null && Number.isFinite(balanceAmount)){
-        balanceAmountCell.classList.add(balanceAmount >= 0 ? 'mpg-balance-pos' : 'mpg-balance-neg');
+        if(balanceAmount < 0){
+          balanceAmountCell.classList.add('mpg-balance-neg');
+          row.classList.add('mpg-balance-neg-row');
+        } else {
+          balanceAmountCell.classList.add('mpg-balance-pos');
+        }
       }
     }
+    validateOdooInput(row);
   }
 
   const mpgRows = Array.from(document.querySelectorAll('#workspaceMpgReportTable tbody tr.mpg-data-row'));
@@ -1074,12 +1268,94 @@ document.addEventListener('DOMContentLoaded', function(){
     const todayFuelInput = row.querySelector('.today-fuel-input');
     if(currentOdooInput){
       currentOdooInput.addEventListener('input', function(){ recalculateMpgRow(row); });
+      currentOdooInput.addEventListener('blur', function(){ validateOdooInput(row); });
     }
     if(todayFuelInput){
       todayFuelInput.addEventListener('input', function(){ recalculateMpgRow(row); });
     }
     recalculateMpgRow(row);
   });
+
+  /* Last saved indicator (local + optional server timestamp) */
+  (function initMpgLastSaved(){
+    var headerEl = document.getElementById('mpgLastSaved');
+    var mobileEl = document.getElementById('mpgLastSavedMobile');
+    var storageKey = 'mpg_last_saved_' + (window.location.pathname || '') + (window.location.search || '');
+    var serverIso = {{ (last_saved_at.isoformat() if last_saved_at else none) | tojson }};
+    var savedAtMs = null;
+
+    function readStored(){
+      try {
+        var raw = localStorage.getItem(storageKey);
+        if(raw){
+          var n = Number(raw);
+          if(Number.isFinite(n) && n > 0) return n;
+        }
+      } catch(e) {}
+      return null;
+    }
+    function writeStored(ms){
+      try { localStorage.setItem(storageKey, String(ms)); } catch(e) {}
+    }
+    function formatRelative(ms){
+      var diff = Math.max(0, Date.now() - ms);
+      var sec = Math.floor(diff / 1000);
+      if(sec < 20) return 'just now';
+      if(sec < 60) return sec + 's ago';
+      var min = Math.floor(sec / 60);
+      if(min < 60) return min + ' min ago';
+      var hr = Math.floor(min / 60);
+      if(hr < 24) return hr + 'h ago';
+      var d = new Date(ms);
+      return d.toLocaleString(undefined, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+    }
+    function render(){
+      var label = savedAtMs ? ('Saved ' + formatRelative(savedAtMs)) : '';
+      [headerEl, mobileEl].forEach(function(el){
+        if(!el) return;
+        if(!label){
+          el.classList.remove('is-visible');
+          el.innerHTML = '';
+          return;
+        }
+        el.classList.add('is-visible');
+        el.innerHTML = '<i class="bi bi-check-circle-fill"></i><span class="mpg-last-saved-text">' + label + '</span>';
+      });
+    }
+
+    savedAtMs = readStored();
+    if(serverIso){
+      var serverMs = Date.parse(serverIso);
+      if(Number.isFinite(serverMs) && (!savedAtMs || serverMs > savedAtMs)){
+        savedAtMs = serverMs;
+        writeStored(serverMs);
+      }
+    }
+    /* After successful save flash, stamp now */
+    var flashOk = document.querySelector('.alert-success');
+    if(flashOk && /MPG report inputs saved/i.test(flashOk.textContent || '')){
+      savedAtMs = Date.now();
+      writeStored(savedAtMs);
+    }
+    render();
+    setInterval(render, 30000);
+
+    var postForm = mpgPage ? mpgPage.querySelector('form[method="post"]') : null;
+    if(postForm){
+      postForm.addEventListener('submit', function(ev){
+        var hasWarn = mpgRows.some(function(row){
+          return !!(row.querySelector('.current-odoo-input.is-warn'));
+        });
+        if(hasWarn && !window.confirm('Some Odoo meter readings look lower than expected. Save anyway?')){
+          ev.preventDefault();
+          return;
+        }
+        savedAtMs = Date.now();
+        writeStored(savedAtMs);
+        render();
+      });
+    }
+  })();
 
   const districtSelect = document.getElementById('mpgDistrictFilter');
   const projectSelect = document.getElementById('mpgProjectFilter');

@@ -4541,6 +4541,12 @@ def workspace_mpg_report():
         f"Fuel MPG SUMMARY(Date: {from_date.strftime('%d-%m-%Y')} To {to_date.strftime('%d-%m-%Y')})"
     )
 
+    last_saved_at = None
+    for _rec in (saved_inputs or {}).values():
+        _ts = getattr(_rec, "updated_at", None) or getattr(_rec, "created_at", None)
+        if _ts and (last_saved_at is None or _ts > last_saved_at):
+            last_saved_at = _ts
+
     return render_template(
         "workspace/mpg_report.html",
         employee=emp,
@@ -4554,6 +4560,7 @@ def workspace_mpg_report():
         vehicles=vehicles,
         rows=report_rows,
         print_report_title=print_report_title,
+        last_saved_at=last_saved_at,
         disable_district=filters["disable_district"],
         disable_project=filters["disable_project"],
         disable_vehicle=filters["disable_vehicle"],
