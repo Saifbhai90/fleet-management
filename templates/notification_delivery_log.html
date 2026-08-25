@@ -1,0 +1,236 @@
+{% extends "base.html" %}
+{% block title %}Notification Logs{% endblock %}
+
+{% block content %}
+<style>
+  .ndl-page .filter-card {
+    border-radius: 12px;
+    border: 1px solid rgba(0,0,0,0.06);
+    box-shadow: 0 2px 14px rgba(0,0,0,0.06);
+    overflow: visible;
+  }
+  .ndl-page .filter-card .card-header {
+    background: linear-gradient(135deg, #f8fafc 0%, #eef2ff 100%);
+    border-bottom: 1px solid #e2e8f0;
+    font-weight: 600;
+    color: #334155;
+    padding: 0.65rem 1rem;
+  }
+  .ndl-page .filter-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #475569;
+    margin-bottom: 0.35rem;
+  }
+  .ndl-page .date-input-wrap { position: relative; }
+  .ndl-page .date-input-wrap .form-control {
+    padding-left: 2.35rem;
+    min-height: 40px;
+    border-radius: 8px;
+    border-color: #dbeafe;
+    background: #fff;
+  }
+  .ndl-page .date-input-wrap .date-icon {
+    position: absolute;
+    left: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #6366f1;
+    pointer-events: none;
+    z-index: 2;
+  }
+  .ndl-page .filter-card .form-control,
+  .ndl-page .filter-card .form-select {
+    min-height: 40px;
+    border-radius: 8px;
+    border-color: #e2e8f0;
+  }
+  .ndl-page .btn-search-report {
+    min-height: 40px;
+    border-radius: 8px;
+    font-weight: 600;
+  }
+  .ndl-kpi {
+    border-radius: 10px;
+    border: 1px solid #e2e8f0;
+    background: #fff;
+    padding: 0.85rem 1rem;
+    height: 100%;
+  }
+  .ndl-kpi .ndl-kpi-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: #64748b;
+  }
+  .ndl-kpi .ndl-kpi-value {
+    font-size: 1.45rem;
+    font-weight: 700;
+    color: #0f172a;
+    line-height: 1.2;
+  }
+  .ndl-status-sent { background: #dcfce7; color: #166534; }
+  .ndl-status-failed { background: #fee2e2; color: #991b1b; }
+  .ndl-status-skipped { background: #fef3c7; color: #92400e; }
+</style>
+<div class="container-fluid ndl-page">
+  <h2 class="mb-2"><i class="bi bi-clipboard-check me-2 text-primary"></i>Notification Logs</h2>
+  <p class="text-muted mb-1">FCM delivery audit — kis user ko kab push gaya, fail kyun hua, aur inbox se open hua ya nahi.</p>
+  <p class="text-muted small mb-0"><i class="bi bi-info-circle me-1"></i>Pehle <strong>Date From</strong> / <strong>Date To</strong> (max <strong>{{ ndl_max_days|default(31) }} din</strong>), phir Search — tabhi data load hoga. <em>sent</em> = Firebase ne message accept kiya (device tray guarantee nahi).</p>
+
+  {% if report_message %}
+  <div class="alert alert-{{ report_message_level|default('info') }} border-0 shadow-sm mt-3 mb-0" role="status">
+    {{ report_message|safe }}
+  </div>
+  {% endif %}
+
+  <div class="card shadow-sm border-0 filter-card mb-4 mt-3">
+    <div class="card-header">
+      <i class="bi bi-funnel me-2"></i>Filters
+    </div>
+    <div class="card-body">
+      <form method="get" action="{{ url_for('notification_delivery_log') }}" class="row g-3 align-items-end">
+        <div class="col-md-2">
+          <label class="filter-label">Date From <span class="text-danger">*</span></label>
+          <div class="date-input-wrap">
+            <i class="bi bi-calendar3 date-icon"></i>
+            <input type="text" name="date_from" class="form-control datepicker" placeholder="dd-mm-yyyy" value="{{ date_from or '' }}" autocomplete="off" required>
+          </div>
+        </div>
+        <div class="col-md-2">
+          <label class="filter-label">Date To <span class="text-danger">*</span></label>
+          <div class="date-input-wrap">
+            <i class="bi bi-calendar3 date-icon"></i>
+            <input type="text" name="date_to" class="form-control datepicker" placeholder="dd-mm-yyyy" value="{{ date_to or '' }}" autocomplete="off" required>
+          </div>
+        </div>
+        <div class="col-md-2">
+          <label class="filter-label">User</label>
+          <select name="user_id" class="form-select search-select" data-placeholder="Search user...">
+            <option value="">-- All --</option>
+            {% for u in users_for_filter %}
+              <option value="{{ u.id }}" {% if user_id_q == u.id %}selected{% endif %}>{{ u.id }} — {{ u.username }}{% if u.full_name %} ({{ u.full_name }}){% endif %}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="filter-label">Status</label>
+          <select name="status" class="form-select">
+            <option value="">-- All --</option>
+            {% for s in statuses %}
+              <option value="{{ s }}" {% if status_q == s %}selected{% endif %}>{{ s }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="filter-label">Error code</label>
+          <select name="error_code" class="form-select">
+            <option value="">-- All --</option>
+            {% for c in error_codes %}
+              <option value="{{ c }}" {% if error_code_q == c %}selected{% endif %}>{{ c }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="filter-label">Title contains</label>
+          <input type="text" name="title" class="form-control" placeholder="e.g. Check-in" value="{{ title_q or '' }}">
+        </div>
+        <div class="col-md-3">
+          <label class="filter-label">Driver / Vehicle</label>
+          <input type="text" name="driver_vehicle" class="form-control" placeholder="Driver name or vehicle no" value="{{ driver_vehicle_q or '' }}">
+        </div>
+        <div class="col-md-2">
+          <button type="submit" class="btn btn-primary w-100 btn-search-report">
+            <i class="bi bi-search me-1"></i>Search
+          </button>
+        </div>
+        {% if report_ready %}
+        <div class="col-md-2">
+          <a class="btn btn-outline-success w-100 btn-search-report"
+             href="{{ url_for('notification_delivery_log_export', date_from=date_from, date_to=date_to, user_id=user_id_q or '', status=status_q or '', error_code=error_code_q or '', title=title_q or '', driver_vehicle=driver_vehicle_q or '') }}">
+            <i class="bi bi-filetype-csv me-1"></i>CSV
+          </a>
+        </div>
+        {% endif %}
+      </form>
+    </div>
+  </div>
+
+  {% if report_ready %}
+  {% if kpis %}
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-2"><div class="ndl-kpi"><div class="ndl-kpi-label">Total</div><div class="ndl-kpi-value">{{ kpis.total }}</div></div></div>
+    <div class="col-6 col-md-2"><div class="ndl-kpi"><div class="ndl-kpi-label">Sent</div><div class="ndl-kpi-value text-success">{{ kpis.sent }}</div></div></div>
+    <div class="col-6 col-md-2"><div class="ndl-kpi"><div class="ndl-kpi-label">Failed</div><div class="ndl-kpi-value text-danger">{{ kpis.failed }}</div></div></div>
+    <div class="col-6 col-md-2"><div class="ndl-kpi"><div class="ndl-kpi-label">Skipped</div><div class="ndl-kpi-value text-warning">{{ kpis.skipped }}</div></div></div>
+    <div class="col-6 col-md-2"><div class="ndl-kpi"><div class="ndl-kpi-label">Opened in app</div><div class="ndl-kpi-value text-primary">{{ kpis.opened }}</div></div></div>
+    <div class="col-6 col-md-2"><div class="ndl-kpi"><div class="ndl-kpi-label">Unique users</div><div class="ndl-kpi-value">{{ kpis.unique_users }}</div></div></div>
+  </div>
+  {% endif %}
+
+  <div class="card shadow border-0 rounded-3 overflow-hidden mb-4">
+    <div class="card-header bg-primary text-white py-3">
+      <span class="fw-semibold">Delivery attempts ({{ date_from }} — {{ date_to }}, max 2000)</span>
+    </div>
+    <div class="card-body p-0">
+      {% if rows %}
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th class="ps-3">Time</th>
+              <th>User</th>
+              <th>Title</th>
+              <th>Status</th>
+              <th>Error</th>
+              <th>Remarks</th>
+              <th>Device</th>
+              <th>Opened</th>
+              <th>Notif</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in rows %}
+            <tr>
+              <td class="ps-3 text-nowrap"><small>{{ r.created_at.strftime('%Y-%m-%d %H:%M:%S') if r.created_at else '-' }}</small></td>
+              <td>
+                <code>{{ r.user_id }}</code>
+                {% if r.user %}
+                  <div class="small">{{ r.user.username }}{% if r.user.full_name %} <span class="text-muted">({{ r.user.full_name }})</span>{% endif %}</div>
+                {% endif %}
+              </td>
+              <td><span title="{{ r.body_preview or '' }}">{{ r.title or '-' }}</span></td>
+              <td>
+                <span class="badge rounded-pill ndl-status-{{ r.status }}">{{ r.status }}</span>
+              </td>
+              <td><small>{{ r.error_code or '—' }}</small></td>
+              <td><small title="{{ r.remarks or '' }}">{{ (r.remarks or '—')[:80] }}{% if (r.remarks or '')|length > 80 %}…{% endif %}</small></td>
+              <td><code class="small">{{ (r.device_unique_id or '—')[:24] }}{% if (r.device_unique_id or '')|length > 24 %}…{% endif %}</code></td>
+              <td>
+                {% if r.opened_at %}
+                  <small class="text-success">{{ r.opened_at.strftime('%Y-%m-%d %H:%M') }}</small>
+                {% else %}
+                  <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if r.notification_id %}
+                  <a href="{{ url_for('notification_list') }}#n-{{ r.notification_id }}" class="small">#{{ r.notification_id }}</a>
+                {% else %}
+                  <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="p-4 text-muted mb-0">Is range / filters mein koi delivery attempt nahi mili.</p>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

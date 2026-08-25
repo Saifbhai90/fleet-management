@@ -1377,6 +1377,39 @@ class NotificationRead(db.Model):
     read_at = db.Column(db.DateTime, default=pk_now, nullable=False)
 
 
+class NotificationDeliveryLog(db.Model):
+    """Server-side FCM delivery audit: sent / failed / skipped per push attempt."""
+    __tablename__ = 'notification_delivery_log'
+    __table_args__ = (
+        db.Index('ix_ndl_user_created', 'user_id', 'created_at'),
+        db.Index('ix_ndl_status_created', 'status', 'created_at'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    created_at = db.Column(db.DateTime, default=pk_now, nullable=False, index=True)
+    notification_id = db.Column(
+        db.Integer, db.ForeignKey('notification.id', ondelete='SET NULL'), nullable=True, index=True
+    )
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False, index=True)
+    device_fcm_token_id = db.Column(db.Integer, nullable=True)
+    device_unique_id = db.Column(db.String(255), nullable=True)
+    fcm_token_prefix = db.Column(db.String(32), nullable=True)
+    title = db.Column(db.String(200), nullable=True)
+    body_preview = db.Column(db.String(200), nullable=True)
+    channel = db.Column(db.String(20), nullable=False, default='fcm')  # fcm | none
+    status = db.Column(db.String(20), nullable=False)  # sent | failed | skipped
+    error_code = db.Column(db.String(40), nullable=True)
+    remarks = db.Column(db.String(500), nullable=True)
+    fcm_message_id = db.Column(db.String(200), nullable=True)
+    opened_at = db.Column(db.DateTime, nullable=True)
+
+    user = db.relationship('User', foreign_keys=[user_id], lazy=True)
+    notification = db.relationship('Notification', foreign_keys=[notification_id], lazy=True)
+
+    def __repr__(self):
+        return f'<NotificationDeliveryLog {self.id} {self.status} user={self.user_id}>'
+
+
 class Reminder(db.Model):
     """Personal reminder for a user (only that user sees it)."""
     __tablename__ = 'reminder'

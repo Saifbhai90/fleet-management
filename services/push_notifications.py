@@ -18,6 +18,9 @@ _TASK_POPUP_TITLES = {
     'Task close karwa dein',
 }
 
+_BODY_PREVIEW_LEN = 200
+_TOKEN_PREFIX_LEN = 16
+
 
 def _notify_created_at_pkt() -> str:
     """Wall-clock Pakistan time for popup 'Received' (matches Task CreateDateTime TZ).
@@ -91,26 +94,75 @@ def _init_firebase():
         return None
 
 
-def send_push(user_id, title, body, data=None, link=None):
-    """
-    Send push notification to all active devices of a user.
-    Bank-app style: works even if the user has no active web/app session,
-    because tokens persist across logout. A token is only deactivated when
-    a different user logs into the same physical device, or when FCM reports
-    the token as unregistered/invalid.
-    Returns number of successfully sent messages.
-    """
-    app = _init_firebase()
-    if not app:
-        return 0
+def _token_prefix(fcm_token):
+    if not fcm_token:
+        return None
+    s = str(fcm_token)
+    return s[:_TOKEN_PREFIX_LEN] if len(s) > _TOKEN_PREFIX_LEN else s
 
-    from firebase_admin import messaging
-    from models import DeviceFCMToken
 
-    tokens = DeviceFCMToken.query.filter_by(user_id=user_id, is_active=True).all()
-    if not tokens:
-        return 0
+def _body_preview(body):
+    if body is None:
+        return None
+    s = str(body)
+    return s[:_BODY_PREVIEW_LEN] if len(s) > _BODY_PREVIEW_LEN else s
 
+
+def _log_delivery(
+    *,
+    user_id,
+    notification_id=None,
+    device_token=None,
+    title=None,
+    body=None,
+    channel='fcm',
+    status='skipped',
+    error_code=None,
+    remarks=None,
+    fcm_message_id=None,
+):
+    """Persist one delivery attempt. Never raises — must not break push."""
+    if not user_id:
+        return
+    try:
+        from models import db, NotificationDeliveryLog
+        from utils import pk_now
+
+        tok_id = None
+        device_uid = None
+        prefix = None
+        if device_token is not None:
+            tok_id = getattr(device_token, 'id', None)
+            device_uid = getattr(device_token, 'device_unique_id', None)
+            prefix = _token_prefix(getattr(device_token, 'fcm_token', None))
+
+        row = NotificationDeliveryLog(
+            created_at=pk_now(),
+            notification_id=int(notification_id) if notification_id else None,
+            user_id=int(user_id),
+            device_fcm_token_id=tok_id,
+            device_unique_id=device_uid,
+            fcm_token_prefix=prefix,
+            title=(str(title)[:200] if title else None),
+            body_preview=_body_preview(body),
+            channel=channel or 'none',
+            status=status,
+            error_code=error_code,
+            remarks=(str(remarks)[:500] if remarks else None),
+            fcm_message_id=(str(fcm_message_id)[:200] if fcm_message_id else None),
+        )
+        db.session.add(row)
+        db.session.commit()
+    except Exception as exc:
+        logger.warning('notification_delivery_log write failed: %s', exc)
+        try:
+            from models import db
+            db.session.rollback()
+        except Exception:
+            pass
+
+
+def _build_payload_data(title, body, data=None, link=None):
     payload_data = dict(data or {})
     popup_link = _build_popup_link(title, body, original_link=link)
     click_link = popup_link or link
@@ -127,6 +179,13 @@ def send_push(user_id, title, body, data=None, link=None):
     if click_link:
         payload_data['click_action'] = click_link
         payload_data['link'] = click_link
+    return payload_data
+
+
+def _send_to_tokens(tokens, title, body, payload_data, *, notification_id=None):
+    """Send to a list of DeviceFCMToken rows; log each outcome. Returns success count."""
+    from firebase_admin import messaging
+    from models import DeviceFCMToken
 
     success_count = 0
     stale_ids = []
@@ -145,14 +204,58 @@ def send_push(user_id, title, body, data=None, link=None):
                     priority='high',
                 ),
             )
-            messaging.send(message)
+            msg_id = messaging.send(message)
             success_count += 1
+            _log_delivery(
+                user_id=tok.user_id,
+                notification_id=notification_id,
+                device_token=tok,
+                title=title,
+                body=body,
+                channel='fcm',
+                status='sent',
+                remarks='Delivered to FCM',
+                fcm_message_id=msg_id,
+            )
         except messaging.UnregisteredError:
             stale_ids.append(tok.id)
+            _log_delivery(
+                user_id=tok.user_id,
+                notification_id=notification_id,
+                device_token=tok,
+                title=title,
+                body=body,
+                channel='fcm',
+                status='failed',
+                error_code='UNREGISTERED',
+                remarks='Token invalid; deactivated',
+            )
         except messaging.SenderIdMismatchError:
             stale_ids.append(tok.id)
+            _log_delivery(
+                user_id=tok.user_id,
+                notification_id=notification_id,
+                device_token=tok,
+                title=title,
+                body=body,
+                channel='fcm',
+                status='failed',
+                error_code='SENDER_MISMATCH',
+                remarks='FCM sender ID mismatch; deactivated',
+            )
         except Exception as e:
             logger.warning("FCM send failed for token %s: %s", tok.id, e)
+            _log_delivery(
+                user_id=tok.user_id,
+                notification_id=notification_id,
+                device_token=tok,
+                title=title,
+                body=body,
+                channel='fcm',
+                status='failed',
+                error_code='FCM_ERROR',
+                remarks=str(e)[:500],
+            )
 
     if stale_ids:
         try:
@@ -167,20 +270,66 @@ def send_push(user_id, title, body, data=None, link=None):
     return success_count
 
 
-def send_push_to_multiple(user_ids, title, body, data=None, link=None):
+def send_push(user_id, title, body, data=None, link=None, notification_id=None):
+    """
+    Send push notification to all active devices of a user.
+    Bank-app style: works even if the user has no active web/app session,
+    because tokens persist across logout. A token is only deactivated when
+    a different user logs into the same physical device, or when FCM reports
+    the token as unregistered/invalid.
+    Returns number of successfully sent messages.
+    """
+    if not user_id:
+        return 0
+
+    app = _init_firebase()
+    if not app:
+        _log_delivery(
+            user_id=user_id,
+            notification_id=notification_id,
+            title=title,
+            body=body,
+            channel='none',
+            status='skipped',
+            error_code='NO_FIREBASE',
+            remarks='Firebase not configured',
+        )
+        return 0
+
+    from models import DeviceFCMToken
+
+    tokens = DeviceFCMToken.query.filter_by(user_id=user_id, is_active=True).all()
+    if not tokens:
+        _log_delivery(
+            user_id=user_id,
+            notification_id=notification_id,
+            title=title,
+            body=body,
+            channel='none',
+            status='skipped',
+            error_code='NO_TOKEN',
+            remarks='No active FCM token for user',
+        )
+        return 0
+
+    payload_data = _build_payload_data(title, body, data=data, link=link)
+    return _send_to_tokens(tokens, title, body, payload_data, notification_id=notification_id)
+
+
+def send_push_to_multiple(user_ids, title, body, data=None, link=None, notification_id=None):
     """Send the same notification to multiple users. Returns total successes."""
     total = 0
     for uid in user_ids:
-        total += send_push(uid, title, body, data=data, link=link)
+        total += send_push(uid, title, body, data=data, link=link, notification_id=notification_id)
     return total
 
 
-def send_push_to_permitted(required_perms, title, body, data=None, link=None):
+def send_push_to_permitted(required_perms, title, body, data=None, link=None, notification_id=None):
     """Send push only to users whose role has ANY of the required permission codes.
     required_perms: list of permission code strings (e.g. ['report_expiry', 'reports']).
     Falls back to broadcast_push_all if required_perms is empty/None."""
     if not required_perms:
-        return broadcast_push_all(title, body, data=data, link=link)
+        return broadcast_push_all(title, body, data=data, link=link, notification_id=notification_id)
 
     app = _init_firebase()
     if not app:
@@ -205,72 +354,23 @@ def send_push_to_permitted(required_perms, title, body, data=None, link=None):
     if not user_ids:
         return 0
 
-    return send_push_to_multiple(user_ids, title, body, data=data, link=link)
+    return send_push_to_multiple(user_ids, title, body, data=data, link=link, notification_id=notification_id)
 
 
-def broadcast_push_all(title, body, data=None, link=None):
+def broadcast_push_all(title, body, data=None, link=None, notification_id=None):
     """Broadcast push notification to ALL users with active tokens."""
     app_inst = _init_firebase()
     if not app_inst:
         return 0
 
-    from firebase_admin import messaging
-    from models import DeviceFCMToken, db
+    from models import DeviceFCMToken
 
     tokens = DeviceFCMToken.query.filter_by(is_active=True).all()
     if not tokens:
         return 0
 
-    payload_data = dict(data or {})
-    popup_link = _build_popup_link(title, body, original_link=link)
-    click_link = popup_link or link
-    payload_data['popup_mode'] = '1'
-    payload_data['title'] = title or ''
-    payload_data['body'] = body or ''
-    payload_data['created_at'] = _notify_created_at_pkt()
-    if title in _TASK_POPUP_TITLES:
-        payload_data['save_enabled'] = '1'
-        payload_data['popup_source'] = 'ufone_task_event'
-    else:
-        payload_data['save_enabled'] = '0'
-        payload_data['popup_source'] = 'generic'
-    if click_link:
-        payload_data['click_action'] = click_link
-        payload_data['link'] = click_link
-
-    success_count = 0
-    stale_ids = []
-
-    for tok in tokens:
-        try:
-            # Keep Android pushes data-only so FleetFirebaseMessagingService
-            # always creates the notification with our popup pending intent.
-            message = messaging.Message(
-                data=payload_data,
-                token=tok.fcm_token,
-                android=messaging.AndroidConfig(
-                    priority='high',
-                ),
-            )
-            messaging.send(message)
-            success_count += 1
-        except messaging.UnregisteredError:
-            stale_ids.append(tok.id)
-        except messaging.SenderIdMismatchError:
-            stale_ids.append(tok.id)
-        except Exception as e:
-            logger.warning("FCM broadcast failed for token %s: %s", tok.id, e)
-
-    if stale_ids:
-        try:
-            DeviceFCMToken.query.filter(DeviceFCMToken.id.in_(stale_ids)).update(
-                {DeviceFCMToken.is_active: False}, synchronize_session=False
-            )
-            db.session.commit()
-        except Exception:
-            pass
-
-    return success_count
+    payload_data = _build_payload_data(title, body, data=data, link=link)
+    return _send_to_tokens(tokens, title, body, payload_data, notification_id=notification_id)
 
 
 def get_user_id_for_driver(driver):
@@ -282,9 +382,9 @@ def get_user_id_for_driver(driver):
     return user.id if user else None
 
 
-def notify_driver(driver, title, body, data=None, link=None):
+def notify_driver(driver, title, body, data=None, link=None, notification_id=None):
     """Send push notification to a driver's linked user account."""
     uid = get_user_id_for_driver(driver)
     if uid:
-        return send_push(uid, title, body, data=data, link=link)
+        return send_push(uid, title, body, data=data, link=link, notification_id=notification_id)
     return 0

@@ -11,7 +11,7 @@ from flask import (
 )
 from app import app, db, csrf
 from models import (
-    User, Role, Permission, Notification, NotificationRead,
+    User, Role, Permission, Notification, NotificationRead, NotificationDeliveryLog,
     Reminder, AppRelease, DeviceFCMToken, SystemSetting,
     LoginLog, ActivityLog, ClientActivityLog, ClientDiagnosticLog,
     Driver, Vehicle, Project, District, Company, ParkingStation,
@@ -1285,6 +1285,14 @@ def notification_read(pk):
             db.session.add(nr)
         else:
             nr.read_at = pk_now()
+        try:
+            NotificationDeliveryLog.query.filter(
+                NotificationDeliveryLog.notification_id == pk,
+                NotificationDeliveryLog.user_id == user_id,
+                NotificationDeliveryLog.opened_at.is_(None),
+            ).update({NotificationDeliveryLog.opened_at: pk_now()}, synchronize_session=False)
+        except Exception:
+            pass
         db.session.commit()
         _invalidate_notif_cache([user_id])
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -1447,6 +1455,243 @@ def reminder_toggle(pk):
         return jsonify({'ok': True, 'is_completed': r.is_completed})
     return redirect(url_for('reminder_list'))
 
+
+_NDL_MAX_DAYS = 31
+_NDL_ERROR_CODES = (
+    'NO_TOKEN', 'NO_FIREBASE', 'UNREGISTERED', 'SENDER_MISMATCH', 'FCM_ERROR', 'NO_USER',
+)
+_NDL_STATUSES = ('sent', 'failed', 'skipped')
+
+
+def _ndl_datetime_in_range(column, date_from, date_to):
+    return and_(func.date(column) >= date_from, func.date(column) <= date_to)
+
+
+def _ndl_parse_filters():
+    """Parse query args for delivery-log report. Returns dict with report_ready flag."""
+    date_from_s = request.args.get('date_from', '').strip()
+    date_to_s = request.args.get('date_to', '').strip()
+    user_id_q = request.args.get('user_id', type=int)
+    status_q = (request.args.get('status') or '').strip().lower()
+    error_code_q = (request.args.get('error_code') or '').strip().upper()
+    title_q = (request.args.get('title') or '').strip()
+    driver_vehicle_q = (request.args.get('driver_vehicle') or '').strip()
+
+    report_ready = False
+    report_message = (
+        'Pehle <strong>Date From</strong> aur <strong>Date To</strong> select karein '
+        f'(zyada se zyada {_NDL_MAX_DAYS} din), phir <strong>Search</strong> dabayein. '
+        'Report tabhi load hogi.'
+    )
+    report_message_level = 'info'
+    date_from_dt = None
+    date_to_dt = None
+
+    if date_from_s or date_to_s:
+        if not date_from_s or not date_to_s:
+            report_message = (
+                f'Dono dates zaroori hain — Date From aur Date To (maximum {_NDL_MAX_DAYS} din).'
+            )
+            report_message_level = 'warning'
+        else:
+            date_from_parsed = parse_date(date_from_s)
+            date_to_parsed = parse_date(date_to_s)
+            if not date_from_parsed or not date_to_parsed:
+                report_message = 'Dates sahi format mein hon (dd-mm-yyyy).'
+                report_message_level = 'warning'
+            else:
+                date_from_s = date_from_parsed.strftime('%d-%m-%Y')
+                date_to_s = date_to_parsed.strftime('%d-%m-%Y')
+                date_from_dt = date_from_parsed
+                date_to_dt = date_to_parsed
+                if date_to_dt < date_from_dt:
+                    report_message = 'Date To, Date From se pehle nahi ho sakti.'
+                    report_message_level = 'warning'
+                else:
+                    span_days = (date_to_dt - date_from_dt).days + 1
+                    if span_days > _NDL_MAX_DAYS:
+                        report_message = (
+                            f'Sirf {_NDL_MAX_DAYS} din ya us se kam ki range select karein '
+                            f'(aap ne {span_days} din select kiye).'
+                        )
+                        report_message_level = 'warning'
+                    else:
+                        report_ready = True
+                        report_message = None
+
+    if status_q and status_q not in _NDL_STATUSES:
+        status_q = ''
+    if error_code_q and error_code_q not in _NDL_ERROR_CODES:
+        error_code_q = ''
+
+    return {
+        'date_from_s': date_from_s,
+        'date_to_s': date_to_s,
+        'date_from_dt': date_from_dt,
+        'date_to_dt': date_to_dt,
+        'user_id_q': user_id_q,
+        'status_q': status_q,
+        'error_code_q': error_code_q,
+        'title_q': title_q,
+        'driver_vehicle_q': driver_vehicle_q,
+        'report_ready': report_ready,
+        'report_message': report_message,
+        'report_message_level': report_message_level,
+    }
+
+
+def _ndl_apply_filters(query, f):
+    """Apply shared filters to NotificationDeliveryLog query (already joined to User)."""
+    if f['date_from_dt'] and f['date_to_dt']:
+        query = query.filter(
+            _ndl_datetime_in_range(
+                NotificationDeliveryLog.created_at, f['date_from_dt'], f['date_to_dt']
+            )
+        )
+    if f['user_id_q']:
+        query = query.filter(NotificationDeliveryLog.user_id == f['user_id_q'])
+    if f['status_q']:
+        query = query.filter(NotificationDeliveryLog.status == f['status_q'])
+    if f['error_code_q']:
+        query = query.filter(NotificationDeliveryLog.error_code == f['error_code_q'])
+    if f['title_q']:
+        like = f"%{f['title_q']}%"
+        query = query.filter(NotificationDeliveryLog.title.ilike(like))
+    if f['driver_vehicle_q']:
+        like = f"%{f['driver_vehicle_q']}%"
+        driver_user_ids = (
+            db.session.query(User.id)
+            .join(Driver, Driver.cnic_no == User.username)
+            .outerjoin(Vehicle, Vehicle.id == Driver.vehicle_id)
+            .filter(
+                or_(
+                    Driver.name.ilike(like),
+                    Vehicle.vehicle_no.ilike(like),
+                    User.full_name.ilike(like),
+                    User.username.ilike(like),
+                )
+            )
+        )
+        query = query.filter(NotificationDeliveryLog.user_id.in_(driver_user_ids))
+    return query
+
+
+def _ndl_kpis(rows):
+    total = len(rows)
+    sent = sum(1 for r in rows if r.status == 'sent')
+    failed = sum(1 for r in rows if r.status == 'failed')
+    skipped = sum(1 for r in rows if r.status == 'skipped')
+    opened = sum(1 for r in rows if r.opened_at)
+    unique_users = len({r.user_id for r in rows})
+    return {
+        'total': total,
+        'sent': sent,
+        'failed': failed,
+        'skipped': skipped,
+        'opened': opened,
+        'unique_users': unique_users,
+    }
+
+
+@app.route('/notifications/delivery-log')
+def notification_delivery_log():
+    """Enterprise delivery audit: FCM sent / failed / skipped + opened-in-app."""
+    if not session.get('user_id'):
+        return redirect(url_for('login'))
+    if not session.get('is_master') and not user_can_access(
+        session.get('permissions') or [], 'notification_delivery_log'
+    ):
+        flash('You do not have permission to view Notification Logs.', 'danger')
+        return redirect(url_for('module_hub', hub_slug='notifications'))
+
+    f = _ndl_parse_filters()
+    rows = []
+    kpis = None
+    if f['report_ready']:
+        query = (
+            NotificationDeliveryLog.query
+            .outerjoin(User, User.id == NotificationDeliveryLog.user_id)
+            .order_by(NotificationDeliveryLog.created_at.desc())
+        )
+        query = _ndl_apply_filters(query, f)
+        rows = query.limit(2000).all()
+        kpis = _ndl_kpis(rows)
+
+    users_for_filter = (
+        User.query.filter_by(is_active=True)
+        .order_by(User.username.asc())
+        .limit(2000)
+        .all()
+    )
+    return render_template(
+        'notification_delivery_log.html',
+        rows=rows,
+        kpis=kpis,
+        date_from=f['date_from_s'],
+        date_to=f['date_to_s'],
+        user_id_q=f['user_id_q'],
+        status_q=f['status_q'],
+        error_code_q=f['error_code_q'],
+        title_q=f['title_q'],
+        driver_vehicle_q=f['driver_vehicle_q'],
+        report_ready=f['report_ready'],
+        report_message=f['report_message'],
+        report_message_level=f['report_message_level'],
+        users_for_filter=users_for_filter,
+        error_codes=_NDL_ERROR_CODES,
+        statuses=_NDL_STATUSES,
+        ndl_max_days=_NDL_MAX_DAYS,
+        **_notifications_nav_back(),
+    )
+
+
+@app.route('/notifications/delivery-log/export')
+def notification_delivery_log_export():
+    if not session.get('user_id'):
+        return redirect(url_for('login'))
+    if not session.get('is_master') and not user_can_access(
+        session.get('permissions') or [], 'notification_delivery_log'
+    ):
+        flash('You do not have permission to export Notification Logs.', 'danger')
+        return redirect(url_for('module_hub', hub_slug='notifications'))
+
+    f = _ndl_parse_filters()
+    if not f['report_ready']:
+        flash(f['report_message'] or 'Select a valid date range first.', 'warning')
+        return redirect(url_for('notification_delivery_log', **{k: v for k, v in request.args.items() if v}))
+
+    query = (
+        NotificationDeliveryLog.query
+        .outerjoin(User, User.id == NotificationDeliveryLog.user_id)
+        .order_by(NotificationDeliveryLog.created_at.desc())
+    )
+    query = _ndl_apply_filters(query, f)
+    rows = query.limit(5000).all()
+
+    from utils import generate_csv_response
+    headers = [
+        'Time', 'User ID', 'Username', 'Full Name', 'Title', 'Status', 'Error Code',
+        'Remarks', 'Device', 'Token Prefix', 'Opened At', 'Notification ID', 'FCM Message ID',
+    ]
+    csv_rows = []
+    for r in rows:
+        u = r.user
+        csv_rows.append([
+            r.created_at.strftime('%Y-%m-%d %H:%M:%S') if r.created_at else '',
+            r.user_id,
+            (u.username if u else ''),
+            (u.full_name if u else ''),
+            r.title or '',
+            r.status or '',
+            r.error_code or '',
+            r.remarks or '',
+            r.device_unique_id or '',
+            r.fcm_token_prefix or '',
+            r.opened_at.strftime('%Y-%m-%d %H:%M:%S') if r.opened_at else '',
+            r.notification_id or '',
+            r.fcm_message_id or '',
+        ])
+    return generate_csv_response(headers, csv_rows, filename='notification_delivery_log.csv')
 
 
 def fleet_not_found_redirect(e):

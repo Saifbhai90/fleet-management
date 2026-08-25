@@ -378,6 +378,7 @@ PERMISSION_TREE = {
         ('form_control_ufone_reminders', 'Setting – Ufone Task Reminders'),
         ('notification_list', 'Notifications – List / View'),
         ('notification_add', 'Notifications – Create'),
+        ('notification_delivery_log', 'Notifications – Delivery Logs / Report'),
         ('whats_new', "What's New"),
     ],
     PERMISSION_TRACKING: [
@@ -642,6 +643,7 @@ PERMISSION_DEPENDENCIES = {
     'role_edit': ['role_list'],
     'role_delete': ['role_list'],
     'notification_add': ['notification_list'],
+    'notification_delivery_log': ['notification_list'],
     # Security lockdown additions
     'system_backup': ['backup'],
     'view_documents': [],
@@ -1097,6 +1099,7 @@ SECTION_PAGE_GROUPS = {
         ('Notifications', [
             ('notification_list', 'List / View'),
             ('notification_add', 'Create'),
+            ('notification_delivery_log', 'Delivery Logs / Report'),
         ]),
         ("What's New", [('whats_new', "What's New")]),
     ],
@@ -1380,6 +1383,7 @@ PAGE_VISIBLE = {
     'tool_workstation_api_tools': ['users_manage'],
     'notification_list': ['notification_list'],
     'notification_add': ['notification_add'],
+    'notification_delivery_log': ['notification_delivery_log'],
     'whats_new': ['whats_new'],
     # Dashboard section-level guards
     # view_fleet_map: ONLY the specific permission (or 'dashboard' full which expands to it via expand_login_permissions)

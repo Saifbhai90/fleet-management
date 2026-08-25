@@ -441,6 +441,8 @@ ENDPOINT_PERMISSION_MAP = [
     ('form_control_edit_override', 'form_control_attendance'),
     ('notification_list', 'notification_list'),
     ('notification_add', 'notification_add'),
+    ('notification_delivery_log', 'notification_delivery_log'),
+    ('notification_delivery_log_export', 'notification_delivery_log'),
     ('notification_mark_read', 'notification_list'),
     # Master data – Print / Export (dedicated permission codes)
     ('companies_print', 'companies_list'),

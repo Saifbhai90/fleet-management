@@ -311,6 +311,7 @@ HUBS = {
         'access': 'notifications',
         'extra_endpoints': (
             'notification_list', 'notification_add', 'reminder_list', 'reminder_add', 'reminder_edit',
+            'notification_delivery_log', 'notification_delivery_log_export',
         ),
         'sections': [
             {
@@ -319,6 +320,18 @@ HUBS = {
                     _item('notification_list', 'All Notifications', 'fa-solid fa-bell', 'rc-tile--hub-notify', 'notification_list'),
                     _item('notification_add', 'Create Notification', 'fa-solid fa-circle-plus', 'rc-tile--new-task', 'notification_add'),
                     _item('reminder_list', 'My Reminders', 'fa-solid fa-calendar-check', 'rc-tile--monthly-att'),
+                ],
+            },
+            {
+                'title': 'Reports & Analytics',
+                'items': [
+                    _item(
+                        'notification_delivery_log',
+                        'Notification Logs',
+                        'fa-solid fa-clipboard-list',
+                        'rc-tile--hub-notify',
+                        'notification_delivery_log',
+                    ),
                 ],
             },
         ],

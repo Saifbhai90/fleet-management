@@ -289,7 +289,7 @@ def notify_user(user_id, title, message, *, link=None, link_text=None, notificat
     if push:
         try:
             from push_notifications import send_push
-            send_push(int(user_id), title, message or '', link=link)
+            send_push(int(user_id), title, message or '', link=link, notification_id=n.id)
         except Exception as exc:
             logger.warning('FCM push failed user %s: %s', user_id, exc)
     _invalidate_notif_cache([user_id])
