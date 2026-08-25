@@ -94,7 +94,7 @@
       max-width: 100vw;
       overflow-x: hidden;
       padding: 14px max(14px, env(safe-area-inset-left, 0px)) 88px max(14px, env(safe-area-inset-right, 0px));
-      background: linear-gradient(180deg, #eef2ff 0%, #f8fafc 120px, #f1f5f9 100%);
+      background: #ffffff;
       -webkit-font-smoothing: antialiased;
     }
     .mpg-report-page.is-mobile-layout.mpg-mobile-preview {
@@ -147,18 +147,34 @@
     }
     .mpg-report-page.is-mobile-layout .mpg-hero .d-flex.gap-2.flex-wrap:not(.position-relative) .btn {
       flex: 1;
-      font-size: 12px;
+      font-size: 13px;
       font-weight: 600;
-      padding: 9px 10px;
+      padding: 10px 12px;
       border-radius: 10px;
-      border: 1px solid rgba(255,255,255,.28);
-      background: rgba(255,255,255,.12);
+      border: 1px solid rgba(255,255,255,.45);
+      background: rgba(15,23,42,.28);
       color: #fff;
+      backdrop-filter: blur(4px);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
     }
     .mpg-report-page.is-mobile-layout .mpg-hero .d-flex.gap-2.flex-wrap:not(.position-relative) .btn-primary {
-      background: rgba(255,255,255,.95);
+      background: #fff;
       color: #1d4ed8;
       border-color: transparent;
+      box-shadow: 0 4px 12px rgba(0,0,0,.14);
+    }
+    .mpg-report-page.is-mobile-layout .mpg-hero .d-flex.gap-2.flex-wrap:not(.position-relative) .btn-outline-primary {
+      background: rgba(15,23,42,.32);
+      color: #fff;
+      border-color: rgba(255,255,255,.55);
+    }
+    .mpg-report-page.is-mobile-layout .mpg-hero .d-flex.gap-2.flex-wrap:not(.position-relative) .btn-outline-secondary {
+      background: rgba(255,255,255,.14);
+      color: #fff;
+      border-color: rgba(255,255,255,.4);
     }
     .mpg-report-page.is-mobile-layout .mpg-hero .d-flex.flex-wrap.gap-2.position-relative {
       display: grid !important;
@@ -191,7 +207,7 @@
       border-radius: 16px !important;
       box-shadow: 0 8px 24px rgba(15,23,42,.06) !important;
       margin-bottom: 14px !important;
-      overflow: hidden;
+      overflow: visible;
     }
     .mpg-report-page.is-mobile-layout .mpg-filters-body { padding: 16px !important; }
     .mpg-report-page.is-mobile-layout .mpg-m-filter-head {
@@ -501,7 +517,7 @@
     }
     .mpg-report-page.is-mobile-layout .mpg-m-edit-input:focus {
       border-color: #2563eb !important;
-      box-shadow: 0 0 0 3px rgba(37,99,235,.15) !important;
+      box-shadow: 0 0 0 2px rgba(37,99,235,.12) !important;
       outline: none;
     }
     .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody td.mpg-m-today .mpg-m-edit-input {
@@ -515,6 +531,29 @@
     }
     .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody td.balance-amount-cell .mpg-balance-pos { color: #15803d !important; }
     .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody td.balance-amount-cell .mpg-balance-neg { color: #dc2626 !important; }
+
+    /* Full-width summary rows (Current Date Reading + Balance Amount) */
+    .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody td.current-date-reading-cell {
+      background: #f8fafc !important;
+      border-bottom: 1px solid #e2e8f0 !important;
+    }
+    .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody td.current-date-reading-cell::before {
+      color: #2563eb !important;
+    }
+    .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody td.balance-amount-cell {
+      background: linear-gradient(180deg, #f8fafc, #fff) !important;
+      border-top: 1px solid #e2e8f0 !important;
+      padding-top: 14px !important;
+      padding-bottom: 16px !important;
+    }
+    .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody td.balance-amount-cell::before {
+      color: #475569 !important;
+      font-size: 11px !important;
+    }
+    .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody td.balance-amount-cell > * {
+      font-size: 18px !important;
+      font-weight: 800 !important;
+    }
 
     /* Desktop: hide mobile-only MPG pill */
     .mpg-val-mobile { display: none; }
@@ -722,7 +761,7 @@
               <td class="text-end mpg-m-col mpg-m-finance {% if r.fuel_deduction and r.fuel_deduction > 0 %}mpg-val-neg{% endif %}">{{ "{:,.2f}".format(r.fuel_deduction) if r.fuel_deduction is not none else '-' }}</td>
               <td class="text-end mpg-m-col mpg-m-finance mpg-m-full {% if r.short_kms and r.short_kms > 0 %}mpg-val-warn{% endif %}">{{ "{:,.2f}".format(r.short_kms) if r.short_kms is not none else '-' }}</td>
               <td class="text-end mpg-m-full">{{ "{:,.2f}".format(r.with_full_tank_next_fueling) if r.with_full_tank_next_fueling is not none else '-' }}</td>
-              <td class="text-end mpg-m-col current-date-reading-cell text-muted">{{ "{:,.2f}".format(r.current_date_reading) if r.current_date_reading is not none else '-' }}</td>
+              <td class="text-end mpg-m-col mpg-m-full current-date-reading-cell text-muted">{{ "{:,.2f}".format(r.current_date_reading) if r.current_date_reading is not none else '-' }}</td>
               <td class="text-end current-odoo-meter-cell mpg-input-cell mpg-m-full mpg-m-editable" style="min-width: 170px;">
                 <div class="mpg-m-edit-label" data-label="Odoo Meter Reading">Odoo Meter Reading</div>
                 <input
@@ -751,7 +790,7 @@
                   aria-label="Today Fuel Amount"
                 >
               </td>
-              <td class="text-end fw-semibold mpg-m-col balance-amount-cell">{{ "{:,.2f}".format(r.balance_amount) if r.balance_amount is not none else '-' }}</td>
+              <td class="text-end fw-semibold mpg-m-col mpg-m-full balance-amount-cell">{{ "{:,.2f}".format(r.balance_amount) if r.balance_amount is not none else '-' }}</td>
             </tr>
             {% else %}
             <tr>
