@@ -4290,7 +4290,8 @@ def workspace_mpg_report():
     selected_vehicle_id = filters["vehicle_id"]
 
     today = pk_date()
-    from_date = parse_date(request.values.get("from_date")) or today
+    month_start = today.replace(day=1)
+    from_date = parse_date(request.values.get("from_date")) or month_start
     to_date = parse_date(request.values.get("to_date")) or today
     if from_date > to_date:
         from_date, to_date = to_date, from_date
@@ -4552,6 +4553,7 @@ def workspace_mpg_report():
         employee=emp,
         from_date=from_date,
         to_date=to_date,
+        today=today,
         district_id=district_id,
         project_id=project_id,
         vehicle_id=selected_vehicle_id,
@@ -4584,7 +4586,8 @@ def workspace_mpg_report_export_pdf():
     selected_vehicle_id = filters["vehicle_id"]
 
     today = pk_date()
-    from_date = parse_date(request.values.get("from_date")) or today
+    month_start = today.replace(day=1)
+    from_date = parse_date(request.values.get("from_date")) or month_start
     to_date = parse_date(request.values.get("to_date")) or today
     if from_date > to_date:
         from_date, to_date = to_date, from_date
@@ -4808,7 +4811,8 @@ def workspace_mpg_report_export_excel():
     selected_vehicle_id = filters["vehicle_id"]
 
     today = pk_date()
-    from_date = parse_date(request.values.get("from_date")) or today
+    month_start = today.replace(day=1)
+    from_date = parse_date(request.values.get("from_date")) or month_start
     to_date = parse_date(request.values.get("to_date")) or today
     if from_date > to_date:
         from_date, to_date = to_date, from_date

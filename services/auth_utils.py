@@ -1055,6 +1055,30 @@ def seed_auth_tables(app):
         except Exception:
             db.session.rollback()
 
+        # MPG is a Report Centre report — do not keep Employee Workspace (full) on roles
+        # that only received `workspace` because older dependency expansion forced it with MPG.
+        try:
+            from permissions_config import PERMISSION_TREE, PERMISSION_WORKSPACE
+            ws_full = Permission.query.filter_by(code='workspace').first()
+            if ws_full:
+                workspace_tree = {code for code, _ in PERMISSION_TREE.get(PERMISSION_WORKSPACE, [])}
+                real_ws = workspace_tree - {'workspace', 'workspace_mpg_report'}
+                changed = False
+                for role in Role.query.all():
+                    if role.name == 'Master':
+                        continue
+                    codes = {p.code for p in role.permissions}
+                    if 'workspace' not in codes or 'workspace_mpg_report' not in codes:
+                        continue
+                    if codes & real_ws:
+                        continue
+                    role.permissions = [p for p in role.permissions if p.code != 'workspace']
+                    changed = True
+                if changed:
+                    db.session.commit()
+        except Exception:
+            db.session.rollback()
+
 
 def check_password(user, password):
     """Return True if password matches user's password_hash."""

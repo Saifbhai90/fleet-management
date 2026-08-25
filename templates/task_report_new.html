@@ -859,7 +859,11 @@
       font-weight: 600;
     }
 
-    /* Close Reading is the one required field — give it quiet emphasis */
+    /* Editable fields: soft pulsing ring so Close / Attach / Task's stand out */
+    @keyframes task-batch-ring-pulse {
+      0%, 100% { box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18); }
+      50% { box-shadow: 0 0 0 6px rgba(37, 99, 235, 0.08); }
+    }
     .task-batch-page .task-batch-table tbody tr.task-row > td.task-batch-close-cell {
       background: #f8fbff !important;
     }
@@ -871,25 +875,36 @@
       background: #fff !important;
       border: 1.5px solid #2563eb !important;
       box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16);
+      animation: task-batch-ring-pulse 1.8s ease-in-out infinite;
     }
     .task-batch-page .task-batch-table tbody td.task-batch-close-cell .close-input:focus {
       border-color: #1d4ed8 !important;
       box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.28);
+      animation: none;
     }
     .task-batch-page .task-batch-table tbody td.task-batch-close-cell .close-input.is-missing {
       border-color: #dc2626 !important;
       box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.22);
+      animation: none;
     }
     .task-batch-page .task-batch-table tbody td.task-batch-metric-cell--first > .form-control {
-      border: 1.5px solid #64748b !important;
-      box-shadow: 0 0 0 3px rgba(100, 116, 139, 0.12);
+      border: 1.5px solid #2563eb !important;
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16);
+      animation: task-batch-ring-pulse 1.8s ease-in-out infinite;
     }
     .task-batch-page .task-batch-table tbody td.task-batch-metric-cell--first > .form-control:focus {
-      border-color: #0f172a !important;
-      box-shadow: 0 0 0 4px rgba(15, 23, 42, 0.14);
+      border-color: #1d4ed8 !important;
+      box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.28);
+      animation: none;
     }
     .task-batch-page .odometer-cell .odom-photo-btn {
-      box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.08);
+      border-color: #2563eb !important;
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16);
+      animation: task-batch-ring-pulse 1.8s ease-in-out infinite;
+    }
+    .task-batch-page .odometer-cell .odom-photo-btn:focus,
+    .task-batch-page .odometer-cell .odom-photo-btn:active {
+      animation: none;
     }
 
     /* Variance & Tasks — plain rows, section label only */

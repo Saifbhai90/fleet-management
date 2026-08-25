@@ -68,6 +68,11 @@ tools/ufone_bridge/.env
 tools/ufone_bridge/.vps_password
 tools/ufone_bridge/deploy_key
 tools/ufone_bridge/sessions/
+tools/ufone_bridge/.bridge_token
+tools/ufone_bridge/.derived_token
+
+# BPOCOPS capture output — HAR/cookie dumps carry live session credentials
+tools/bpocops_capture/reports/
 
 # Local DB dump scratch (prod→demo clone)
 tmp/

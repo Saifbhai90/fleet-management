@@ -535,7 +535,8 @@ function _dbgToast(msg) {
     } catch(e) {}
 }
 (function() {
-    var _permStates = { location: 'unknown', camera: 'unknown', notifications: 'denied', update: 'checking' };
+    /* update is tracked separately (nav pill); it must NOT force the permissions popup open */
+    var _permStates = { location: 'unknown', camera: 'unknown', notifications: 'unknown', update: 'checking' };
 
     /* ── Helpers ── */
     function cap(perm) { return perm.charAt(0).toUpperCase() + perm.slice(1); }
@@ -624,21 +625,26 @@ function _dbgToast(msg) {
             if (card0) card0.style.setProperty('display', 'none', 'important');
             return;
         }
-        var locOk   = _permStates.location === 'granted';
-        var camOk   = _permStates.camera   === 'granted';
-        var notifOk = _permStates.notifications === 'granted';
-        var updateOk  = _permStates.update === 'granted';
-        var criticalOk = locOk && camOk && notifOk && updateOk;
-        var anyPending = !locOk || !camOk || !notifOk || !updateOk;
+        var loc   = _permStates.location;
+        var cam   = _permStates.camera;
+        var notif = _permStates.notifications;
+        /* Silent while any permission check is still in flight — do not flash the popup */
+        var stillChecking = (loc === 'unknown' || cam === 'unknown' || notif === 'unknown');
+        var anyMissing = (loc !== 'granted' || cam !== 'granted' || notif !== 'granted');
+        var showGate = !stillChecking && anyMissing;
 
         var card = document.getElementById('permDashCard');
         if (card) {
             card.style.position = 'fixed';
             card.style.zIndex   = '19990';
-            card.style.display  = anyPending ? 'flex' : 'none';
+            card.style.display  = showGate ? 'flex' : 'none';
         }
+        var updateRow = document.getElementById('permRowUpdate');
+        if (updateRow) updateRow.style.display = showGate ? 'flex' : 'none';
         if (window._installReadyShown) { hideNav(); return; }
-        if (criticalOk) { showNav(); } else { hideNav(); }
+        /* Only block the UI when a real permission is missing */
+        if (stillChecking) return;
+        if (showGate) { hideNav(); } else { showNav(); }
     }
 
     /* ── Live map inside permission card ── */
@@ -777,10 +783,12 @@ function _dbgToast(msg) {
             return;
         }
 
-        /* Native: immediately hide nav and show card */
-        hideNav();
+        /* Native: keep card hidden and check silently; refreshCard() shows only if something is missing */
         var card = document.getElementById('permDashCard');
-        if (card) { card.style.position = 'fixed'; card.style.zIndex = '19990'; card.style.display = 'flex'; }
+        if (card) card.style.display = 'none';
+        _permStates.location = 'unknown';
+        _permStates.camera = 'unknown';
+        _permStates.notifications = 'unknown';
 
         var Plugins = window.Capacitor.Plugins;
 
@@ -881,9 +889,7 @@ function _dbgToast(msg) {
             showNav();
             return;
         }
-        var row = document.getElementById('permRowUpdate');
-        if (row) row.style.display = 'flex';
-
+        /* Update row is shown only when the permissions gate is open (see refreshCard) */
         var Plugins = window.Capacitor && window.Capacitor.Plugins;
         var AppPlugin = Plugins && Plugins.App;
         var DevPlugin = Plugins && Plugins.Device;

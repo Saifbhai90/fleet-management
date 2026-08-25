@@ -391,6 +391,9 @@ window.FleetConfig = {
 {% set workspace_endpoints = ['workspace_dashboard', 'workspace_home', 'workspace_select_employee', 'workspace_clear_employee', 'workspace_parties_list', 'workspace_party_new', 'workspace_party_edit', 'workspace_party_import', 'workspace_party_import_template', 'workspace_party_export', 'workspace_party_print', 'workspace_products_list', 'workspace_product_new', 'workspace_product_edit', 'workspace_product_import', 'workspace_product_import_template', 'workspace_product_export', 'workspace_product_print', 'workspace_accounts_list', 'workspace_account_new', 'workspace_account_edit', 'workspace_fund_transfers_list', 'workspace_fund_transfer_new', 'workspace_fund_transfer_edit', 'workspace_ledger', 'workspace_balance_sheet', 'workspace_month_close', 'workspace_month_close_list', 'workspace_fuel_oil_month_close', 'workspace_fuel_oil_month_close_list', 'workspace_reports', 'workspace_mpg_report', 'workspace_mpg_report_export_pdf', 'workspace_mpg_report_export_excel', 'workspace_opening_expenses_list', 'workspace_opening_expense_new', 'workspace_opening_expense_edit', 'workspace_fuel_oil_openings_list', 'workspace_fuel_oil_opening_new', 'workspace_fuel_oil_opening_edit', 'vehicle_reading_setup_form', 'vehicle_reading_setup_list', 'fuel_expense_list', 'fuel_expense_add', 'fuel_expense_edit', 'oil_expense_list', 'oil_expense_form', 'oil_work_order_list', 'oil_work_order_form', 'oil_work_order_detail', 'maintenance_expense_list', 'maintenance_expense_form', 'maintenance_work_order_list', 'maintenance_work_order_form', 'maintenance_work_order_detail', 'employee_expense_list', 'employee_expense_form', 'employee_expense_form_edit'] %}
 {% set workspace_nav_hidden_endpoints = ['fuel_expense_add', 'fuel_expense_edit'] %}
 {% set workspace_open = (request.endpoint in workspace_endpoints) and (request.endpoint not in workspace_nav_hidden_endpoints) %}
+{# Report Center → MPG: do not show Employee Workspace Dashboard chrome #}
+{% set _mpg_nf = (nav_from or request.args.get('nav_from') or '')|trim %}
+{% set hide_workspace_dash_chrome = request.endpoint in ['workspace_mpg_report', 'workspace_mpg_report_export_pdf', 'workspace_mpg_report_export_excel'] and (_mpg_nf == 'reports' or (nav_back_label_auto or '') == 'Report Center') %}
 <div class="sidebar shadow {% if workspace_open or (request.endpoint != 'dashboard' and request.cookies.get('workspace_sidebar_open') != '1') %}collapsed{% endif %}" id="sidebar">
     <div class="sb-drawer-profile" role="region" aria-label="Signed in user">
         <div class="sb-drawer-profile-inner">
@@ -545,7 +548,7 @@ window.FleetConfig = {
     </div>
     {% endif %}
 
-{% if workspace_open and request.endpoint != 'workspace_dashboard' %}
+{% if workspace_open and request.endpoint != 'workspace_dashboard' and not hide_workspace_dash_chrome %}
     <aside class="ws-global-mini d-none d-lg-block">
       <div class="card">
         <div class="card-body p-2">
@@ -580,7 +583,7 @@ window.FleetConfig = {
       </div>
     </aside>
     {% endif %}
-    {% if workspace_open and request.endpoint != 'workspace_dashboard' %}
+    {% if workspace_open and request.endpoint != 'workspace_dashboard' and not hide_workspace_dash_chrome %}
     <div class="d-lg-none mb-2">
       <a href="{{ url_for('workspace_home') }}" class="btn btn-sm btn-outline-primary">
         <i class="bi bi-arrow-left-circle me-1"></i>Dashboard

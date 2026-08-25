@@ -246,6 +246,7 @@
 
     </div>
 
+    {% if not rc.hide_recommended %}
     <section class="rc-mobile-recommended" id="rcMobileRecommended" aria-label="Recommended reports">
 
       <h2 class="rc-recommended-title">Recommended &amp; recently used</h2>
@@ -253,6 +254,7 @@
       <div class="rc-recommended-row" id="rcRecommendedRow"></div>
 
     </section>
+    {% endif %}
 
     <div class="rc-mobile-sticky-header">
 
@@ -1319,13 +1321,20 @@ html.capacitor-native.page-report-centre .rc-mobile-wrapper {
 
 }
 
+/* Clear floating hamburger (left 14px + 42px btn + gap) so title/search never sit under it */
 html.capacitor-native.page-report-centre .rc-mobile-topbar {
 
   flex-shrink: 0;
 
-  padding: 0.4rem 0.65rem 0.2rem;
+  display: flex;
 
-  padding-left: 3.5rem;
+  align-items: center;
+
+  min-height: 48px;
+
+  padding: 0.45rem 0.85rem 0.25rem;
+
+  padding-left: calc(14px + 42px + 14px);
 
 }
 
@@ -1333,7 +1342,9 @@ html.capacitor-native.page-report-centre .rc-mobile-topbar .rc-page-title {
 
   margin: 0;
 
-  line-height: 1.3;
+  line-height: 1.25;
+
+  padding-left: 0.15rem;
 
 }
 
@@ -1381,11 +1392,30 @@ html.capacitor-native.page-report-centre .rc-mobile-sticky-header {
 
   flex-shrink: 0;
 
-  padding: 0 0.65rem 0.4rem;
+  /* Full-width search on original left edge; slight gap below title */
+  padding: 0.35rem 0.65rem 0.4rem;
 
   background: rgba(255, 255, 255, 0.92);
 
   z-index: 10;
+
+}
+
+html.capacitor-native.page-report-centre .rc-mobile-sticky-header .rc-search-wrap {
+
+  width: 100% !important;
+
+  max-width: 100% !important;
+
+}
+
+html.capacitor-native.page-report-centre .rc-mobile-sticky-header .rc-search-wrap .form-control {
+
+  height: 48px;
+
+  border-radius: 18px;
+
+  font-size: 0.9rem;
 
 }
 

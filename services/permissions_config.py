@@ -293,7 +293,6 @@ PERMISSION_TREE = {
         ('workspace_ledger', 'Workspace Ledger'),
         ('workspace_month_close', 'Workspace Month Close'),
         ('workspace_reports', 'Workspace Reports'),
-        ('workspace_mpg_report', 'MPG Report'),
     ],
     PERMISSION_PAYROLL: [
         ('payroll', 'Payroll (full)'),
@@ -617,7 +616,7 @@ PERMISSION_DEPENDENCIES = {
     'workspace_ledger': ['workspace'],
     'workspace_month_close': ['workspace'],
     'workspace_reports': ['workspace'],
-    'workspace_mpg_report': ['workspace'],
+    'workspace_mpg_report': [],
     # Task & Logbook – granular features independent of section "full" (like Assignments / Transfers).
     # Granting Daily Task list/add must NOT auto-add "task_report" (that implied Workbook Upload via PAGE_VISIBLE).
     'task_report_upload': [],
@@ -988,7 +987,6 @@ SECTION_PAGE_GROUPS = {
             ('workspace_ledger', 'Ledger'),
             ('workspace_month_close', 'Month Close'),
             ('workspace_reports', 'Reports'),
-            ('workspace_mpg_report', 'MPG Report'),
         ]),
     ],
     PERMISSION_PAYROLL: [
@@ -1258,7 +1256,7 @@ PAGE_VISIBLE = {
     'task_report_upload': ['task_report', 'task_report_upload'],
     'task_report_upload_list': ['task_report', 'task_report_upload_list'],
     'task_report_list': ['task_report', 'task_report_list'],
-    'task_report_vehicle_period_detail': ['task_report', 'task_report_list', 'task_report_vehicle_period_detail'],
+    'task_report_vehicle_period_detail': ['task_report', 'task_report_vehicle_period_detail'],
     'task_report_entry': ['task_report', 'task_report_entry', 'task_report_add'],
     'task_report_entry_edit': ['task_report', 'task_report_entry_edit'],
     'task_report_entry_delete': ['task_report', 'task_report_entry_delete'],
@@ -1311,7 +1309,7 @@ PAGE_VISIBLE = {
     'workspace_ledger': ['workspace', 'workspace_ledger'],
     'workspace_month_close': ['workspace', 'workspace_month_close'],
     'workspace_reports': ['workspace', 'workspace_reports'],
-    'workspace_mpg_report': ['workspace', 'workspace_mpg_report'],
+    'workspace_mpg_report': ['workspace_mpg_report', 'reports'],
     # Reports
     'reports_index': ['reports', 'reports_index'],
     'report_company_profile': ['reports', 'report_company_profile'],

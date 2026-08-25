@@ -42,7 +42,7 @@
         {% endif %}
 
         {% if can_see_section('workspace') %}
-        <a href="{{ url_for('workspace_dashboard') }}" class="{% if workspace_open %}active-link{% endif %}" id="workspaceSidebarEntry">
+        <a href="{{ url_for('workspace_dashboard') }}" class="{% if workspace_open and not hide_workspace_dash_chrome %}active-link{% endif %}" id="workspaceSidebarEntry">
             <i class="bi bi-grid-1x2"></i><span>Employee Workspace</span>
         </a>
         {% endif %}

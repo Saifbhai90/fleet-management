@@ -2099,6 +2099,17 @@
         function _removeFleetPrintPreviewOverlay() {
             var ex = document.getElementById('_fleetPrintPreviewRoot');
             if (ex) ex.remove();
+            document.documentElement.classList.remove('fleet-print-preview-open');
+            document.body.classList.remove('fleet-print-preview-open');
+        }
+
+        function _isFleetNativeOrAppShell() {
+            try {
+                if (window.FleetBridge && window.FleetBridge.isNative) return true;
+                if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) return true;
+                if (document.documentElement.classList.contains('capacitor-native')) return true;
+            } catch (e) {}
+            return false;
         }
 
         /** Same-window preview: Close removes overlay and returns to the report (native app / popup-blocked). */
@@ -2111,7 +2122,10 @@
             root.id = '_fleetPrintPreviewRoot';
             root.style.cssText = 'position:fixed;inset:0;z-index:100000;overflow:auto;-webkit-overflow-scrolling:touch;background:#f8fafc;';
             var styleEl = document.createElement('style');
-            styleEl.textContent = _fleetPreviewCss;
+            styleEl.textContent = _fleetPreviewCss +
+                'html.fleet-print-preview-open,body.fleet-print-preview-open{overflow:hidden!important;}' +
+                '#_fleetPrintPreviewRoot .toolbar-right{position:relative;z-index:2;}' +
+                '#_fleetPrintPreviewRoot .btn-c,#_fleetPrintPreviewRoot .btn-p{pointer-events:auto;min-height:40px;min-width:64px;}';
             root.appendChild(styleEl);
             /* Toolbar */
             var bar = document.createElement('div');
@@ -2119,7 +2133,7 @@
             bar.innerHTML =
                 '<div class="toolbar-left"><p class="toolbar-title">' + titleText + '</p><span class="toolbar-sub">Fleet Management System &mdash; Print Preview</span></div>' +
                 '<div class="toolbar-right">' +
-                    '<button type="button" class="btn-p" onclick="window.print()">&#128438; Print</button>' +
+                    '<button type="button" class="btn-p" id="_fleetPreviewPrint">&#128438; Print</button>' +
                     '<button type="button" class="btn-c" id="_fleetPreviewClose">&#10005; Close</button>' +
                 '</div>';
             root.appendChild(bar);
@@ -2139,7 +2153,40 @@
             pgfoot.innerHTML = '<span>Fleet Management System</span><span>' + titleText + ' &mdash; ' + dateStr + '</span>';
             root.appendChild(pgfoot);
             document.body.appendChild(root);
-            document.getElementById('_fleetPreviewClose').addEventListener('click', function() { _removeFleetPrintPreviewOverlay(); });
+            document.documentElement.classList.add('fleet-print-preview-open');
+            document.body.classList.add('fleet-print-preview-open');
+
+            function closePreview(ev) {
+                if (ev) {
+                    try { ev.preventDefault(); ev.stopPropagation(); } catch (e) {}
+                }
+                _removeFleetPrintPreviewOverlay();
+                document.removeEventListener('keydown', onPreviewKeydown, true);
+            }
+            function onPreviewKeydown(e) {
+                if (e.key === 'Escape') closePreview(e);
+            }
+            var closeBtn = root.querySelector('#_fleetPreviewClose');
+            var printBtnOv = root.querySelector('#_fleetPreviewPrint');
+            if (closeBtn) {
+                closeBtn.addEventListener('click', closePreview);
+                closeBtn.addEventListener('touchend', function(ev) {
+                    /* Some Android WebViews drop click after scroll; touchend still closes. */
+                    closePreview(ev);
+                }, { passive: false });
+            }
+            if (printBtnOv) {
+                printBtnOv.addEventListener('click', function(ev) {
+                    try { ev.preventDefault(); } catch (e) {}
+                    window.print();
+                });
+            }
+            /* Delegation fallback if button node is replaced */
+            root.addEventListener('click', function(ev) {
+                var t = ev.target && ev.target.closest ? ev.target.closest('#_fleetPreviewClose') : null;
+                if (t) closePreview(ev);
+            });
+            document.addEventListener('keydown', onPreviewKeydown, true);
         }
 
         if (printBtn) {
@@ -2148,7 +2195,7 @@
                 _fetchAllTable(function(tbl) {
                     if (!tbl) { printBtn.disabled = false; _restorePrint(); return; }
                     var clone = _cleanTable(tbl);
-                    var isNativeApp = !!(window.FleetBridge && window.FleetBridge.isNative);
+                    var isNativeApp = _isFleetNativeOrAppShell();
                     if (isNativeApp) {
                         _openFleetPrintPreviewOverlay(title, clone);
                         printBtn.disabled = false; _restorePrint();
@@ -2172,11 +2219,12 @@
                         var now2 = new Date();
                         var ds2 = now2.getDate()+'-'+(now2.getMonth()+1)+'-'+now2.getFullYear();
                         var ts2 = now2.getHours().toString().padStart(2,'0')+':'+now2.getMinutes().toString().padStart(2,'0');
-                        w.document.write('<div class="toolbar"><div class="toolbar-left"><p class="toolbar-title">' + safeTitle + '</p><span class="toolbar-sub">Fleet Management System &mdash; Print Preview</span></div><div class="toolbar-right"><button class="btn-p" onclick="window.print()">Print</button><button class="btn-c" onclick="window.close()">Close</button></div></div>');
+                        w.document.write('<div class="toolbar"><div class="toolbar-left"><p class="toolbar-title">' + safeTitle + '</p><span class="toolbar-sub">Fleet Management System &mdash; Print Preview</span></div><div class="toolbar-right"><button type="button" class="btn-p" onclick="window.print()">Print</button><button type="button" class="btn-c" id="_fleetPopupClose">Close</button></div></div>');
                         w.document.write('<div class="rpt-meta"><span><b>Report:</b>&nbsp;' + safeTitle + '</span><span><b>Date:</b>&nbsp;' + ds2 + '</span><span><b>Generated:</b>&nbsp;' + ts2 + '</span></div>');
                         w.document.write('<div class="rpt-wrap">');
                         w.document.write(clone.outerHTML);
                         w.document.write('</div><div class="rpt-page-footer"><span>Fleet Management System</span><span>' + safeTitle + ' &mdash; ' + ds2 + '</span></div>');
+                        w.document.write('<script>(function(){function c(){try{window.close();}catch(e){}try{if(!window.closed&&window.history.length>1)history.back();}catch(e2){}}var b=document.getElementById("_fleetPopupClose");if(b){b.onclick=c;b.ontouchend=function(ev){try{ev.preventDefault();}catch(e){}c();};}document.addEventListener("keydown",function(e){if(e.key==="Escape")c();});})();<\/script>');
                         w.document.write('</body></html>');
                         w.document.close();
                         w.focus();

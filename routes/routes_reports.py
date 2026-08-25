@@ -76,6 +76,9 @@ def _report_centre_badge_counts(can_page, is_master):
 
     try:
         if can_page('missing_documents_report'):
+            from auth_utils import get_user_context
+            uid = session.get('user_id')
+            ctx = get_user_context(uid) if uid else {}
             miss_q = Driver.query.filter(Driver.status != 'Left').filter(
                 db.or_(
                     Driver.photo_path.is_(None), Driver.photo_path == '',
@@ -88,6 +91,21 @@ def _report_centre_badge_counts(can_page, is_master):
                     Driver.document_path.is_(None), Driver.document_path == '',
                 )
             )
+            # Same scope as missing_documents_report — never show company-wide count.
+            if not ctx.get('is_master_or_admin', is_master):
+                allowed_vehicles = ctx.get('allowed_vehicles') or set()
+                allowed_projects = ctx.get('allowed_projects') or set()
+                allowed_districts = ctx.get('allowed_districts') or set()
+                allowed_shifts = ctx.get('allowed_shifts') or set()
+                if allowed_vehicles:
+                    miss_q = miss_q.filter(Driver.vehicle_id.in_(list(allowed_vehicles)))
+                elif allowed_projects or allowed_districts:
+                    if allowed_projects:
+                        miss_q = miss_q.filter(Driver.project_id.in_(list(allowed_projects)))
+                    if allowed_districts:
+                        miss_q = miss_q.filter(Driver.district_id.in_(list(allowed_districts)))
+                if allowed_shifts:
+                    miss_q = miss_q.filter(Driver.shift.in_(list(allowed_shifts)))
             _set('missing-docs', miss_q.count())
     except Exception:
         pass
@@ -225,10 +243,27 @@ def _report_centre_visibility(linked_driver_id=None):
 
     badges = _report_centre_badge_counts(c, is_master)
 
+    # Single district+project+vehicle users: hide Recommended strip (noise for narrow scope).
+    hide_recommended = False
+    if not is_master:
+        try:
+            from auth_utils import get_user_context
+            uid = session.get('user_id')
+            ctx = get_user_context(uid) if uid else {}
+            if not ctx.get('is_master_or_admin'):
+                hide_recommended = (
+                    len(ctx.get('allowed_districts') or ()) == 1
+                    and len(ctx.get('allowed_projects') or ()) == 1
+                    and len(ctx.get('allowed_vehicles') or ()) == 1
+                )
+        except Exception:
+            hide_recommended = False
+
     return {
         'first_tab': first_tab,
         'any_tab': any_tab,
         'badges': badges,
+        'hide_recommended': hide_recommended,
         'show_fleet': show_fleet,
         'show_task': show_task,
         'show_hr': show_hr,

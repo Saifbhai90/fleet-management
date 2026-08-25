@@ -158,6 +158,11 @@
     line-height: 0;
     position: relative;
     z-index: 2;
+    transition: transform .9s cubic-bezier(.22,.61,.36,1);
+  }
+  html.legacy-android-gpu .vmarker-car { transition: none; }
+  @media (prefers-reduced-motion: reduce) {
+    .vmarker-car { transition: none; }
   }
   .vmarker-task-pulse {
     position: absolute;
@@ -196,15 +201,205 @@
   /* ── Error banner ── */
   .tracking-error { margin: 8px 12px; padding: 8px 14px; border-radius: 8px; background: rgba(248,113,113,.15); border: 1px solid rgba(248,113,113,.3); color: #fca5a5; font-size: 13px; }
 
-  /* ── Mobile responsive ── */
+  /* ── Sheet grip (mobile only) ── */
+  .ts-grip { display: none; }
+  .ts-grip-bar { width: 46px; height: 5px; border-radius: 99px; background: #3b4d61; }
+  .ts-grip-meta { display: flex; align-items: center; gap: 7px; font-size: 11px; color: #94a3b8; font-weight: 600; }
+  .ts-live-dot { width: 7px; height: 7px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 0 0 rgba(34,197,94,.6); animation: tkLive 1.8s infinite; }
+  @keyframes tkLive {
+    0% { box-shadow: 0 0 0 0 rgba(34,197,94,.55); }
+    70% { box-shadow: 0 0 0 7px rgba(34,197,94,0); }
+    100% { box-shadow: 0 0 0 0 rgba(34,197,94,0); }
+  }
+
+  /* ── Floating map controls ── */
+  .tk-fabs { position: absolute; right: 12px; bottom: 152px; z-index: 640; display: flex; flex-direction: column; gap: 8px; }
+  .tk-fab {
+    width: 44px; height: 44px; border-radius: 14px; background: rgba(15,25,35,.92);
+    border: 1px solid #2a3a4a; color: #dbeafe; display: flex; align-items: center; justify-content: center;
+    font-size: 18px; cursor: pointer; box-shadow: 0 6px 18px rgba(0,0,0,.42); transition: background .15s, transform .1s;
+  }
+  .tk-fab:active { transform: scale(.94); }
+  .tk-fab.active { background: #1a5fb4; border-color: #1a5fb4; color: #fff; }
+  .tk-fab-info { display: none; }
+
+  /* ── Fullscreen map mode ── */
+  .tracking-wrap.tk-fullmap {
+    position: fixed !important; inset: 0 !important; z-index: 1200 !important;
+    margin: 0 !important; height: auto !important;
+  }
+  .tracking-wrap.tk-fullmap .tracking-topbar,
+  .tracking-wrap.tk-fullmap .tracking-sidebar,
+  .tracking-wrap.tk-fullmap .tracking-error { display: none !important; }
+  .tracking-wrap.tk-fullmap .tracking-body { position: absolute; inset: 0; }
+  .tracking-wrap.tk-fullmap .tracking-map-wrap { position: absolute; inset: 0; }
+  .tracking-wrap.tk-fullmap .tk-fabs { bottom: calc(18px + env(safe-area-inset-bottom, 0px)); }
+  .tracking-wrap.tk-fullmap .tk-layer-pop { bottom: calc(18px + env(safe-area-inset-bottom, 0px)); }
+  html.tk-fullmap .mobile-menu-btn,
+  html.tk-fullmap #mobileMenuBtn { display: none !important; }
+
+  .tk-full-exit, .tk-zoom { display: none; }
+  .tracking-wrap.tk-fullmap .tk-full-exit {
+    display: inline-flex; align-items: center; gap: 6px; position: absolute; z-index: 720;
+    top: calc(12px + env(safe-area-inset-top, 0px)); right: 12px;
+    padding: 9px 14px; border-radius: 999px; font-size: 12.5px; font-weight: 700;
+    background: rgba(15,25,35,.94); border: 1px solid #2a3a4a; color: #e2e8f0;
+    box-shadow: 0 6px 18px rgba(0,0,0,.42); cursor: pointer;
+  }
+  .tracking-wrap.tk-fullmap .tk-zoom {
+    display: flex; flex-direction: column; position: absolute; z-index: 720;
+    top: calc(12px + env(safe-area-inset-top, 0px)); left: 12px;
+    border-radius: 14px; overflow: hidden; border: 1px solid #2a3a4a;
+    box-shadow: 0 6px 18px rgba(0,0,0,.42);
+  }
+  .tk-zoom button {
+    width: 42px; height: 42px; border: none; background: rgba(15,25,35,.94); color: #e2e8f0;
+    font-size: 20px; font-weight: 700; line-height: 1; cursor: pointer;
+  }
+  .tk-zoom button + button { border-top: 1px solid #2a3a4a; }
+  .tk-zoom button:active { background: #1a5fb4; }
+
+  .tk-layer-pop {
+    position: absolute; right: 64px; bottom: 152px; z-index: 660; width: 196px; display: none;
+    background: #0f1923; border: 1px solid #2a3a4a; border-radius: 16px; padding: 8px;
+    box-shadow: 0 12px 32px rgba(0,0,0,.5);
+  }
+  .tk-layer-pop.open { display: block; }
+  .tk-layer-title { font-size: 10px; letter-spacing: .07em; text-transform: uppercase; color: #64748b; font-weight: 700; padding: 4px 8px 6px; }
+  .tk-layer-item {
+    display: flex; align-items: center; gap: 8px; padding: 9px 10px; border-radius: 10px;
+    font-size: 12.5px; color: #cbd5e1; cursor: pointer;
+  }
+  .tk-layer-item:active { background: #16232f; }
+  .tk-layer-item.active { background: #1a5fb4; color: #fff; font-weight: 600; }
+  .tk-layer-extras { border-top: 1px solid #22303e; margin-top: 6px; padding: 8px 10px 4px; }
+  .tk-layer-extras .tb-check { color: #cbd5e1; font-size: 12.5px; }
+
+  /* ── Vehicle detail card (mobile) ── */
+  .tk-detail { display: none; }
+  .tk-detail-head { display: flex; align-items: flex-start; gap: 10px; }
+  .tk-detail-reg { font-size: 17px; font-weight: 800; color: #fff; letter-spacing: .02em; }
+  .tk-detail-sub { font-size: 11.5px; color: #94a3b8; margin-top: 2px; line-height: 1.4; }
+  .tk-chip { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; padding: 3px 9px; border-radius: 999px; }
+  .tk-detail-close { margin-left: auto; width: 30px; height: 30px; border-radius: 50%; background: #1c2b39; border: 1px solid #2a3a4a; color: #94a3b8; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .tk-detail-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; margin-top: 11px; }
+  .tk-detail-cell { background: #16232f; border: 1px solid #24333f; border-radius: 12px; padding: 7px 9px; }
+  .tk-detail-cell .k { font-size: 9px; text-transform: uppercase; letter-spacing: .06em; color: #64748b; font-weight: 700; }
+  .tk-detail-cell .v { font-size: 13px; font-weight: 700; color: #e2e8f0; margin-top: 1px; }
+  .tk-detail-actions { display: flex; gap: 7px; margin-top: 11px; }
+  .tk-act {
+    flex: 1; display: flex; align-items: center; justify-content: center; gap: 5px;
+    padding: 11px 6px; border-radius: 13px; font-size: 12px; font-weight: 700;
+    background: #1c2b39; border: 1px solid #2a3a4a; color: #dbeafe; text-decoration: none;
+  }
+  .tk-act:active { transform: scale(.97); }
+  .tk-act.primary { background: #1a5fb4; border-color: #1a5fb4; color: #fff; }
+  .tk-act.follow.on { background: #16a34a; border-color: #16a34a; color: #fff; }
+  .tk-detail-task { display: block; margin-top: 9px; padding: 10px; border-radius: 13px; text-align: center; font-size: 12px; font-weight: 700; color: #fff !important; text-decoration: none; background: linear-gradient(135deg,#7C3AED,#5B21B6); }
+
+  /* ── Mobile: fullscreen map + draggable bottom sheet ─────────────── */
   @media (max-width: 767px) {
-    .tracking-sidebar { width: 100%; max-height: 240px; }
-    .tracking-body { flex-direction: column; }
-    .tracking-map-wrap { flex: 1; min-height: 300px; }
-    .tb-title { font-size: 14px; }
-    .tb-stat { min-width: 50px; padding: 2px 6px; }
-    .tb-stat .num { font-size: 14px; }
+    /* Let the tracking page own the whole viewport area of .main-content.
+       #appNativeShell rules in fleet_styles.css carry ID specificity, so the
+       native-shell case needs its own selector to win. */
+    html.tk-mobile .main-content,
+    html.tk-mobile body.fm-aurora-theme .main-content,
+    html.tk-mobile body.dark-mode .main-content,
+    html.tk-mobile #appNativeShell .main-content {
+      padding: 0 !important;
+      overflow: hidden !important;
+    }
+    html.tk-mobile #appNativeShell .main-content { position: relative !important; }
+    html.tk-mobile:not(.capacitor-native) .main-content {
+      position: relative !important;
+      height: calc(100dvh - var(--fm-nav-h, 60px)) !important;
+      min-height: 0 !important;
+    }
+    /* Page-level FAB would collide with map controls / sheet */
+    html.tk-mobile .mobile-fab-wrap,
+    html.tk-mobile #mobileFabWrap,
+    html.tk-mobile #mobileFabBtn { display: none !important; }
+    /* Full-bleed tracking: the app tab bar is replaced by the sheet + Hub button */
+    html.tk-mobile .mobile-bottom-nav,
+    html.tk-mobile #mobileBottomNav,
+    html.tk-mobile #appNativeShell .mobile-bottom-nav { display: none !important; }
+    /* Leaflet's own controls must never float above the sheet */
+    .leaflet-top, .leaflet-bottom { z-index: 400 !important; }
+    .leaflet-control-attribution { font-size: 9px; opacity: .75; }
+
+    .tracking-wrap { position: absolute; inset: 0; height: auto; margin: 0; --tk-peek: 122px; }
+
+    /* Header: compact two-row bar */
+    .tracking-topbar {
+      height: auto; flex-wrap: wrap; row-gap: 8px; column-gap: 8px;
+      padding: 9px 10px 10px; box-shadow: 0 4px 14px rgba(0,0,0,.35);
+    }
+    .tracking-topbar .tb-spacer,
+    .tracking-topbar .tb-check { display: none; }
+    .tb-btn { padding: 6px 9px; font-size: 13px; }
     .tb-btn span { display: none; }
+    .tb-title { font-size: 13.5px; order: 2; }
+    .tb-select { order: 3; flex: 1 1 auto; min-width: 0; max-width: 150px; font-size: 11.5px; padding: 5px 6px; }
+    /* Last-updated time is shown on the sheet handle instead */
+    .tracking-topbar .tb-updated { display: none; }
+    #forceRefreshBtn { order: 5; margin-left: auto; }
+    .tb-stats { order: 9; flex: 0 0 100%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+    .tb-stat { min-width: 0; padding: 5px 4px; border-radius: 12px; }
+    .tb-stat .num { font-size: 15px; }
+    .tb-stat .lbl { font-size: 8.5px; }
+
+    .tracking-body { position: relative; flex: 1; min-height: 0; display: block; }
+    .tracking-map-wrap { position: absolute; inset: 0; flex: none; }
+
+    /* Bottom sheet — sits above the system gesture bar */
+    .tracking-sidebar {
+      position: absolute; left: 0; right: 0; bottom: env(safe-area-inset-bottom, 0px); top: auto;
+      width: 100%; height: 90%; max-height: none; z-index: 645;
+      background: #101b26; border-right: none; border-top: 1px solid #2a3a4a;
+      border-radius: 20px 20px 0 0; box-shadow: 0 -14px 36px rgba(0,0,0,.5);
+      will-change: transform;
+      transform: translate3d(0, var(--tk-sheet-y, calc(100% - var(--tk-peek))), 0);
+      transition: transform .3s cubic-bezier(.22,.61,.36,1);
+    }
+    .tracking-sidebar.tk-dragging { transition: none; }
+    .tracking-sidebar.tk-peek { --tk-sheet-y: calc(100% - var(--tk-peek)); }
+    .tracking-sidebar.tk-full { --tk-sheet-y: 0px; }
+
+    /* Closed state shows only this handle strip */
+    .ts-grip {
+      display: flex; flex-direction: column; align-items: center; gap: 7px;
+      padding: 10px 12px 9px; touch-action: none; user-select: none; flex-shrink: 0;
+    }
+    .ts-search { padding: 4px 12px 10px; border-bottom-color: #22303e; touch-action: none; flex-shrink: 0; }
+    .ts-search input { padding: 11px 13px; font-size: 14px; border-radius: 12px; }
+    .ts-group-filter select { padding: 10px; font-size: 12.5px; border-radius: 12px; }
+    .ts-filters button { padding: 9px 4px; font-size: 11.5px; border-radius: 10px; }
+    .ts-list { -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding-bottom: calc(28px + env(safe-area-inset-bottom, 0px)); }
+    .vrow { padding: 12px 14px; gap: 12px; }
+    .vreg { font-size: 14px; }
+    .vsub { font-size: 11.5px; }
+    .vdot { width: 11px; height: 11px; }
+    .vg-header { padding: 10px 12px; }
+
+    /* Controls float above the sheet peek */
+    .tk-fabs { bottom: calc(var(--tk-peek) + 12px + env(safe-area-inset-bottom, 0px)); right: 10px; }
+    .tk-layer-pop { bottom: calc(var(--tk-peek) + 12px + env(safe-area-inset-bottom, 0px)); right: 62px; }
+    .tk-fab-info { display: flex; }
+
+    .map-legend { display: none; bottom: calc(var(--tk-peek) + 64px + env(safe-area-inset-bottom, 0px)); right: 10px; left: 10px; z-index: 641; }
+    .map-legend.tk-open { display: block; }
+
+    .tk-detail {
+      display: block; position: absolute; left: 8px; right: 8px;
+      bottom: calc(var(--tk-peek) + 10px + env(safe-area-inset-bottom, 0px));
+      z-index: 650; background: #101c28; border: 1px solid #2a3a4a; border-radius: 20px; padding: 14px;
+      box-shadow: 0 -12px 34px rgba(0,0,0,.55); will-change: transform;
+      transform: translate3d(0, 140%, 0); transition: transform .3s cubic-bezier(.22,.61,.36,1), opacity .2s ease;
+      opacity: 0; visibility: hidden; pointer-events: none;
+    }
+    .tk-detail.open { transform: translate3d(0, 0, 0); opacity: 1; visibility: visible; pointer-events: auto; }
+
+    .tracking-error { position: relative; z-index: 620; margin: 8px; font-size: 12px; }
   }
 
 </style>
@@ -246,8 +441,17 @@
 
   <!-- Body: Sidebar + Map -->
   <div class="tracking-body">
-    <!-- Sidebar -->
-    <div class="tracking-sidebar">
+    <!-- Sidebar / mobile bottom sheet -->
+    <div class="tracking-sidebar" id="trackingSidebar">
+      <div class="ts-grip" id="tsGrip">
+        <span class="ts-grip-bar"></span>
+        <div class="ts-grip-meta">
+          <span class="ts-live-dot"></span>
+          <span><b id="tsGripCount">{{ stats.total }}</b> vehicles</span>
+          <span>&middot;</span>
+          <span id="tsGripHint">swipe up for list</span>
+        </div>
+      </div>
       <div class="ts-search">
         <input type="text" id="vehicleSearch" placeholder="Search vehicle (e.g. GBC or LEG)..." />
         <div class="ts-group-filter">
@@ -296,15 +500,39 @@
       <div class="refresh-indicator" id="refreshIndicator" style="display:none;">
         <span class="spinner"></span> Updating...
       </div>
-      <div class="map-legend">
+      <div class="map-legend" id="mapLegend">
         <div class="row"><span class="dot" style="background:#22c55e"></span> Moving</div>
         <div class="row"><span class="dot" style="background:#111827;box-shadow:0 0 0 1px rgba(255,255,255,.35)"></span> Stopped (ign off)</div>
         <div class="row"><span class="dot" style="background:#ef4444;box-shadow:0 0 0 2px rgba(239,68,68,.45);animation:vmarker-pulse 2s ease-out infinite"></span> Active Ufone Task</div>
         <div class="row"><span class="dot" style="background:#f59e0b"></span> Idle / No GPS</div>
         <div style="margin-top:6px;font-size:10px;color:#94a3b8;">Nav arrow · rotates with heading</div>
-        <div style="margin-top:4px;font-size:10px;color:#94a3b8;">Switch map style &raquo; top-right</div>
+      </div>
+
+      <!-- Fullscreen-only controls -->
+      <div class="tk-full-exit" id="tkFullExit" role="button"><i class="bi bi-x-lg"></i> Close</div>
+      <div class="tk-zoom" id="tkZoom">
+        <button type="button" id="tkZoomIn" aria-label="Zoom in">+</button>
+        <button type="button" id="tkZoomOut" aria-label="Zoom out">&minus;</button>
+      </div>
+
+      <!-- Floating map controls -->
+      <div class="tk-fabs" id="tkFabs">
+        <div class="tk-fab" id="tkFabLayers" role="button" aria-label="Map style"><i class="bi bi-stack"></i></div>
+        <div class="tk-fab" id="tkFabFull" role="button" aria-label="Fullscreen map"><i class="bi bi-arrows-fullscreen"></i></div>
+        <div class="tk-fab" id="tkFabFit" role="button" aria-label="Fit all vehicles"><i class="bi bi-bounding-box"></i></div>
+        <div class="tk-fab" id="tkFabLocate" role="button" aria-label="My location"><i class="bi bi-crosshair"></i></div>
+        <div class="tk-fab tk-fab-info" id="tkFabInfo" role="button" aria-label="Legend"><i class="bi bi-info-lg"></i></div>
+      </div>
+
+      <div class="tk-layer-pop" id="tkLayerPop">
+        <div class="tk-layer-title">Map style</div>
+        <div id="tkLayerList"></div>
+        <div class="tk-layer-extras" id="tkLayerExtras"></div>
       </div>
     </div>
+
+    <!-- Vehicle detail card (mobile) -->
+    <div class="tk-detail" id="tkDetail" aria-live="polite"></div>
   </div>
 </div>
 
@@ -341,7 +569,20 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 (function() {
-  var map = L.map('trackingMap', { zoomControl: true, preferCanvas: true, zoomAnimation: true, fadeAnimation: true }).setView([30.15, 71.0], 8);
+  // ── Mobile detection — layout class must be applied before Leaflet measures ──
+  var mq = window.matchMedia('(max-width: 767px)');
+  function isMobile() { return mq.matches; }
+  document.documentElement.classList.toggle('tk-mobile', isMobile());
+
+  function haptic(style) {
+    try {
+      var H = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Haptics;
+      if (H && typeof H.impact === 'function') { H.impact({ style: style || 'Light' }); return; }
+      if (navigator.vibrate) navigator.vibrate(8);
+    } catch (e) {}
+  }
+
+  var map = L.map('trackingMap', { zoomControl: !isMobile(), preferCanvas: true, zoomAnimation: true, fadeAnimation: true, tap: true }).setView([30.15, 71.0], 8);
 
   // ── Modern Map Layers (like inDrive/Uber style) ──
   // Google Streets — default, familiar Google Maps look
@@ -374,20 +615,46 @@
     maxZoom: 19, attribution: '&copy; OpenStreetMap'
   });
 
-  L.control.layers({
-    "Google Streets": googleStreetsLayer,
-    "Voyager (Modern)": voyagerLayer,
-    "Dark Mode": darkLayer,
-    "Satellite": satelliteLayer,
-    "Esri Street": esriStreetLayer,
-    "OSM Standard": osmLayer
-  }, null, { position: 'topright', collapsed: true }).addTo(map);
+  var baseLayers = [
+    { name: 'Google Streets', layer: googleStreetsLayer },
+    { name: 'Voyager (Modern)', layer: voyagerLayer },
+    { name: 'Dark Mode', layer: darkLayer },
+    { name: 'Satellite', layer: satelliteLayer },
+    { name: 'Esri Street', layer: esriStreetLayer },
+    { name: 'OSM Standard', layer: osmLayer }
+  ];
+  var activeBaseName = 'Google Streets';
+
+  if (!isMobile()) {
+    var ctrlLayers = {};
+    baseLayers.forEach(function(b) { ctrlLayers[b.name] = b.layer; });
+    L.control.layers(ctrlLayers, null, { position: 'topright', collapsed: true }).addTo(map);
+  }
+
+  function renderLayerList() {
+    var host = document.getElementById('tkLayerList');
+    if (!host) return;
+    host.innerHTML = baseLayers.map(function(b) {
+      return '<div class="tk-layer-item' + (b.name === activeBaseName ? ' active' : '') +
+        '" data-layer="' + b.name + '"><i class="bi bi-map"></i> ' + b.name + '</div>';
+    }).join('');
+  }
+
+  function setBaseLayer(name) {
+    var target = baseLayers.filter(function(b) { return b.name === name; })[0];
+    if (!target || name === activeBaseName) return;
+    baseLayers.forEach(function(b) { if (map.hasLayer(b.layer)) map.removeLayer(b.layer); });
+    target.layer.addTo(map);
+    activeBaseName = name;
+    renderLayerList();
+  }
 
   var markers = {};
   var markerState = {};   // RegNo -> {lat, lon, icon} for change-detection
   var currentFilter = 'all';
   var currentGroupFilter = 'all';
   var positions = [];
+  var posByReg = {};
   var ufoneTasksByReg = {{ ufone_tasks_by_reg | tojson }};
 
   function fetchUfoneTaskMap() {
@@ -440,6 +707,72 @@
   }
 
   var showLabels = true;
+
+  /* ── Smooth movement between polls ──────────────────────────────────
+     Positions arrive every 30s. Instead of teleporting each marker we
+     interpolate over ~1.2s and rotate along the shortest angular path,
+     so vehicles glide along the road the way native tracking apps do. */
+  var MOVE_ANIM_MS = 1200;
+  var moveAnims = {};
+  var moveRaf = null;
+  var reduceMotion = document.documentElement.classList.contains('legacy-android-gpu') ||
+    !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+  function nowMs() { return (window.performance && performance.now) ? performance.now() : Date.now(); }
+
+  function easeInOutQuad(t) { return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t; }
+
+  /* Keeps a continuously growing angle so 350° → 10° turns 20° right, not 340° left */
+  function nextAngle(applied, targetDeg) {
+    var delta = ((targetDeg - applied) % 360 + 540) % 360 - 180;
+    return applied + delta;
+  }
+
+  function iconKeys(color, hasTask, regNo, appliedDeg) {
+    var base = color + '|' + hasTask + '|' + (showLabels ? regNo : '');
+    return { base: base, full: base + '|' + Math.round(appliedDeg) };
+  }
+
+  var moveFrame = 0;
+  function stepMoveAnims() {
+    moveRaf = null;
+    moveFrame++;
+    var t = nowMs();
+    var running = false;
+    Object.keys(moveAnims).forEach(function(reg) {
+      var a = moveAnims[reg];
+      var m = markers[reg];
+      if (!m) { delete moveAnims[reg]; return; }
+      var p = Math.min(1, (t - a.t0) / a.ms);
+      var e = easeInOutQuad(p);
+      var lat = a.from.lat + (a.to.lat - a.from.lat) * e;
+      var lng = a.from.lng + (a.to.lng - a.from.lng) * e;
+      m.setLatLng([lat, lng]);
+      /* Re-centring every frame is wasted work; every other frame looks identical */
+      if (followReg === reg && (moveFrame % 2 === 0 || p >= 1)) {
+        map.setView([lat, lng], map.getZoom(), { animate: false });
+      }
+      if (p >= 1) delete moveAnims[reg]; else running = true;
+    });
+    if (running) moveRaf = requestAnimationFrame(stepMoveAnims);
+  }
+
+  function moveMarker(reg, marker, lat, lon) {
+    var from = marker.getLatLng();
+    var to = L.latLng(lat, lon);
+    var jumpy = reduceMotion ||
+      map.distance(from, to) < 1 ||
+      map.distance(from, to) > 3000 ||
+      !map.getBounds().pad(0.4).contains(from);
+    if (jumpy) {
+      delete moveAnims[reg];
+      marker.setLatLng(to);
+      if (followReg === reg) map.setView(to, map.getZoom(), { animate: true });
+      return;
+    }
+    moveAnims[reg] = { from: from, to: to, t0: nowMs(), ms: MOVE_ANIM_MS };
+    if (!moveRaf) moveRaf = requestAnimationFrame(stepMoveAnims);
+  }
 
   function navArrowSvg(color, uid) {
     var dark = shadeHex(color, -32);
@@ -512,33 +845,175 @@
       '<a href="/tracking/vehicle/' + encodeURIComponent(v.RegNo) + '" class="pop-link">View Details</a>';
   }
 
-  function sidebarRow(v) {
-    var cls = v.VehicleStatus || 'Idle';
-    var spd = parseFloat(v.Speed || 0).toFixed(0);
-    var lm = (v.LandMark || '').replace(/^0\|\|/, '').split(',')[0];
-    var time = v.RDT ? v.RDT.substr(11, 5) : '--';
-    var taskCls = activeUfoneTask(v.RegNo) ? ' has-ufone-task' : '';
-    var taskTag = activeUfoneTask(v.RegNo) ? ' <span class="v-task-tag">TASK</span>' : '';
-    return '<div class="vrow' + taskCls + '" data-regno="' + v.RegNo + '" data-status="' + cls + '" data-group="' + (v.GroupName || 'Unassigned').replace(/"/g, '&quot;') + '" data-lat="' + v.LAT + '" data-lon="' + v.LON + '">' +
-      '<div class="vdot ' + cls + '"></div>' +
-      '<div class="vinfo"><div class="vreg">' + v.RegNo + taskTag + '</div>' +
-      '<div class="vsub">' + (lm || '-') + ' &middot; ' + time + '</div></div>' +
-      '<div class="vspd">' + spd + '<br><small>km/h</small></div></div>';
+  /* ═══════════════════════════════════════════════════════════════
+     Sidebar list: incremental (diff) rendering.
+     Rows and group sections are created once and then patched in place,
+     so a 30s poll only touches the vehicles that actually changed. This
+     also preserves scroll position, collapsed groups and row selection.
+     ═══════════════════════════════════════════════════════════════ */
+  var rowNodes = {};      // RegNo -> row element
+  var groupNodes = {};    // group name -> { header, body, count }
+  var listAdopted = false;
+
+  function cacheRowEls(row) {
+    var reg = row.querySelector('.vreg');
+    if (reg && !reg.querySelector('.vreg-txt')) {
+      reg.innerHTML = '<span class="vreg-txt"></span><span class="v-task-tag" style="display:none;">TASK</span>';
+    }
+    var spd = row.querySelector('.vspd');
+    if (spd && !spd.querySelector('.vspd-num')) {
+      spd.innerHTML = '<span class="vspd-num"></span><br><small>km/h</small>';
+    }
+    row._tkEls = {
+      dot: row.querySelector('.vdot'),
+      regTxt: reg ? reg.querySelector('.vreg-txt') : null,
+      tag: reg ? reg.querySelector('.v-task-tag') : null,
+      sub: row.querySelector('.vsub'),
+      spd: spd ? spd.querySelector('.vspd-num') : null
+    };
+    return row._tkEls;
   }
 
-  function bindGroupHeaders(scope) {
-    var root = scope || document;
-    root.querySelectorAll('.vg-header').forEach(function(hdr) {
-      hdr.addEventListener('click', function() {
-        var list = document.getElementById('vehicleList');
-        var body = list.querySelector('[data-group-body="' + hdr.dataset.group + '"]');
-        if (body) {
+  function buildRow() {
+    var row = document.createElement('div');
+    row.className = 'vrow';
+    row.innerHTML =
+      '<div class="vdot"></div>' +
+      '<div class="vinfo"><div class="vreg"></div><div class="vsub"></div></div>' +
+      '<div class="vspd"></div>';
+    cacheRowEls(row);
+    return row;
+  }
+
+  function buildGroupSection(name) {
+    var header = document.createElement('div');
+    header.className = 'vg-header';
+    header.dataset.group = name;
+    header.innerHTML = '<i class="bi bi-chevron-down vg-chevron"></i><span></span><span class="vg-count"></span>';
+    header.querySelector('span').textContent = name;
+    var body = document.createElement('div');
+    body.className = 'vg-body';
+    body.dataset.groupBody = name;
+    return { header: header, body: body, count: header.querySelector('.vg-count') };
+  }
+
+  function rowSignature(v, hasTask) {
+    return [v.VehicleStatus, v.Speed, v.LandMark, v.RDT, v.LAT, v.LON, hasTask].join('|');
+  }
+
+  function updateRow(row, v) {
+    var hasTask = !!activeUfoneTask(v.RegNo);
+    var sig = rowSignature(v, hasTask);
+    if (row._tkSig === sig) return;
+    row._tkSig = sig;
+
+    var els = row._tkEls || cacheRowEls(row);
+    var cls = v.VehicleStatus || 'Idle';
+    var lm = (v.LandMark || '').replace(/^0\|\|/, '').split(',')[0];
+    var time = v.RDT ? String(v.RDT).substr(11, 5) : '--';
+
+    row.dataset.regno = v.RegNo;
+    row.dataset.status = cls;
+    row.dataset.group = v.GroupName || 'Unassigned';
+    row.dataset.lat = v.LAT;
+    row.dataset.lon = v.LON;
+    row.classList.toggle('has-ufone-task', hasTask);
+    if (els.dot) els.dot.className = 'vdot ' + cls;
+    if (els.regTxt) els.regTxt.textContent = v.RegNo;
+    if (els.tag) els.tag.style.display = hasTask ? '' : 'none';
+    if (els.sub) els.sub.textContent = (lm || '-') + ' \u00B7 ' + time;
+    if (els.spd) els.spd.textContent = parseFloat(v.Speed || 0).toFixed(0);
+  }
+
+  /* Reuse the server-rendered rows for the first patch instead of throwing them away */
+  function adoptServerNodes(list) {
+    if (listAdopted) return;
+    listAdopted = true;
+    var pendingHeader = null;
+    Array.prototype.slice.call(list.children).forEach(function(el) {
+      if (el.classList.contains('vg-header')) {
+        pendingHeader = el;
+      } else if (el.classList.contains('vg-body') && pendingHeader) {
+        groupNodes[pendingHeader.dataset.group] = {
+          header: pendingHeader,
+          body: el,
+          count: pendingHeader.querySelector('.vg-count')
+        };
+        pendingHeader = null;
+      }
+    });
+    list.querySelectorAll('.vrow').forEach(function(row) {
+      if (!row.dataset.regno) return;
+      cacheRowEls(row);
+      rowNodes[row.dataset.regno] = row;
+    });
+  }
+
+  /* Walks the desired order and only moves nodes that are out of place */
+  function syncList(list, groupOrder, groups) {
+    adoptServerNodes(list);
+    var seenRows = {};
+    var cursor = list.firstChild;
+
+    groupOrder.forEach(function(g) {
+      var section = groupNodes[g] || (groupNodes[g] = buildGroupSection(g));
+      if (cursor === section.header) cursor = section.header.nextSibling;
+      else list.insertBefore(section.header, cursor);
+      if (cursor === section.body) cursor = section.body.nextSibling;
+      else list.insertBefore(section.body, cursor);
+
+      var gv = groups[g];
+      if (section.count && section.count.textContent !== String(gv.length)) {
+        section.count.textContent = gv.length;
+      }
+
+      var rowCursor = section.body.firstChild;
+      gv.forEach(function(v) {
+        var row = rowNodes[v.RegNo] || (rowNodes[v.RegNo] = buildRow());
+        if (rowCursor === row) rowCursor = row.nextSibling;
+        else section.body.insertBefore(row, rowCursor);
+        updateRow(row, v);
+        seenRows[v.RegNo] = true;
+      });
+      while (rowCursor) {
+        var deadRow = rowCursor;
+        rowCursor = rowCursor.nextSibling;
+        section.body.removeChild(deadRow);
+      }
+    });
+
+    while (cursor) {
+      var dead = cursor;
+      cursor = cursor.nextSibling;
+      list.removeChild(dead);
+    }
+
+    Object.keys(rowNodes).forEach(function(reg) {
+      if (!seenRows[reg]) delete rowNodes[reg];
+    });
+    Object.keys(groupNodes).forEach(function(g) {
+      if (groupOrder.indexOf(g) < 0) delete groupNodes[g];
+    });
+  }
+
+  /* One delegated handler each, so re-rendering never rebinds listeners */
+  (function bindListDelegation() {
+    var list = document.getElementById('vehicleList');
+    if (!list) return;
+    list.addEventListener('click', function(e) {
+      var hdr = e.target.closest('.vg-header');
+      if (hdr) {
+        var body = hdr.nextElementSibling;
+        if (body && body.classList.contains('vg-body')) {
           hdr.classList.toggle('collapsed');
           body.classList.toggle('collapsed');
         }
-      });
+        return;
+      }
+      var row = e.target.closest('.vrow');
+      if (row && row.dataset.regno) selectVehicle(row.dataset.regno, true);
     });
-  }
+  })();
 
   function syncGroupFilterOptions(groupOrder, groups) {
     var sel = document.getElementById('groupFilter');
@@ -559,8 +1034,9 @@
   }
 
   function syncGroupHeaderState() {
-    document.querySelectorAll('.vg-header').forEach(function(hdr) {
-      hdr.classList.toggle('active-group-filter', currentGroupFilter !== 'all' && hdr.dataset.group === currentGroupFilter);
+    Object.keys(groupNodes).forEach(function(name) {
+      var hdr = groupNodes[name].header;
+      if (hdr) hdr.classList.toggle('active-group-filter', currentGroupFilter !== 'all' && name === currentGroupFilter);
     });
   }
 
@@ -581,6 +1057,8 @@
     document.getElementById('statMoving').textContent = mv;
     document.getElementById('statStopped').textContent = st;
     document.getElementById('statIdle').textContent = id;
+    var gripCount = document.getElementById('tsGripCount');
+    if (gripCount) gripCount.textContent = total;
   }
 
   // ── Render ──
@@ -588,30 +1066,24 @@
     positions = vehicles || [];
     var list = document.getElementById('vehicleList');
 
-    // group vehicles by GroupName
+    // index by RegNo so lookups stay O(1) as the fleet grows
+    posByReg = {};
+    positions.forEach(function(v) { posByReg[v.RegNo] = v; });
+
+    // group vehicles by GroupName; stable ordering keeps the diff a no-op
     var groups = {};
-    var groupOrder = [];
     positions.forEach(function(v) {
       var g = v.GroupName || 'Unassigned';
-      if (!groups[g]) { groups[g] = []; groupOrder.push(g); }
+      if (!groups[g]) groups[g] = [];
       groups[g].push(v);
+    });
+    var groupOrder = Object.keys(groups).sort();
+    groupOrder.forEach(function(g) {
+      groups[g].sort(function(a, b) { return String(a.RegNo).localeCompare(String(b.RegNo)); });
     });
 
     syncGroupFilterOptions(groupOrder, groups);
-
-    // render grouped sidebar
-    var html = '';
-    groupOrder.forEach(function(g) {
-      var gv = groups[g];
-      html += '<div class="vg-header" data-group="' + g.replace(/"/g, '&quot;') + '">' +
-        '<i class="bi bi-chevron-down vg-chevron"></i>' +
-        '<span>' + g + '</span>' +
-        '<span class="vg-count">' + gv.length + '</span></div>';
-      html += '<div class="vg-body" data-group-body="' + g.replace(/"/g, '&quot;') + '">';
-      gv.forEach(function(v) { html += sidebarRow(v); });
-      html += '</div>';
-    });
-    list.innerHTML = html;
+    syncList(list, groupOrder, groups);
 
     // markers — car icons; change-detection avoids wasteful setIcon/setLatLng calls
     positions.forEach(function(v) {
@@ -623,56 +1095,79 @@
       var color = colorFor(cls);
       var hasTask = !!activeUfoneTask(v.RegNo);
       var deg = parseFloat(v.Direction) || 0;
-      var iconState = color + '|' + Math.round(deg) + '|' + hasTask + '|' + (showLabels ? v.RegNo : '');
 
       var m = markers[v.RegNo];
-      if (m) {
-        var prev = markerState[v.RegNo] || {};
-        if (prev.lat !== lat || prev.lon !== lon) m.setLatLng([lat, lon]);
-        if (prev.icon !== iconState) m.setIcon(carIcon(color, deg, hasTask, v.RegNo));
-        m.setPopupContent(popupHtml(v));
+      var prev = markerState[v.RegNo];
+      var applied;
+
+      if (m && prev) {
+        applied = nextAngle(prev.applied, deg);
+        var keys = iconKeys(color, hasTask, v.RegNo, applied);
+        if (prev.lat !== lat || prev.lon !== lon) moveMarker(v.RegNo, m, lat, lon);
+        if (prev.icon !== keys.full) {
+          var car = (prev.iconBase === keys.base && m._icon) ? m._icon.querySelector('.vmarker-car') : null;
+          /* Heading-only change: rotate the live node so its CSS transition runs */
+          if (car) car.style.transform = 'rotate(' + applied + 'deg)';
+          else m.setIcon(carIcon(color, applied, hasTask, v.RegNo));
+        }
+        if (m.getPopup()) m.setPopupContent(popupHtml(v));
+        markerState[v.RegNo] = { lat: lat, lon: lon, icon: keys.full, iconBase: keys.base, applied: applied };
       } else {
-        m = L.marker([lat, lon], { icon: carIcon(color, deg, hasTask, v.RegNo) }).addTo(map);
-        m.bindPopup(popupHtml(v), { maxWidth: 300 });
-        m.on('click', function() { selectVehicle(v.RegNo, false); });
+        applied = deg;
+        m = L.marker([lat, lon], { icon: carIcon(color, applied, hasTask, v.RegNo) }).addTo(map);
+        /* Mobile uses the bottom detail card instead of a cramped popup */
+        if (!isMobile()) m.bindPopup(popupHtml(v), { maxWidth: 300 });
+        var mReg = v.RegNo;
+        m.on('click', function() { selectVehicle(mReg, isMobile()); });
         markers[v.RegNo] = m;
+        var newKeys = iconKeys(color, hasTask, v.RegNo, applied);
+        markerState[v.RegNo] = { lat: lat, lon: lon, icon: newKeys.full, iconBase: newKeys.base, applied: applied };
       }
-      markerState[v.RegNo] = { lat: lat, lon: lon, icon: iconState };
     });
 
     // remove stale markers
     Object.keys(markers).forEach(function(reg) {
-      if (!positions.find(function(v) { return v.RegNo === reg; })) {
+      if (!posByReg[reg]) {
         map.removeLayer(markers[reg]);
         delete markers[reg];
         delete markerState[reg];
+        delete moveAnims[reg];
       }
-    });
-
-    bindGroupHeaders(list);
-
-    // bind sidebar clicks
-    document.querySelectorAll('.vrow').forEach(function(row) {
-      row.addEventListener('click', function() {
-        selectVehicle(row.dataset.regno, true);
-      });
     });
 
     applyFilter();
     var now = new Date();
     document.getElementById('tbUpdated').textContent = '\u21BB ' + now.toLocaleTimeString();
+    var gripHint = document.getElementById('tsGripHint');
+    if (gripHint) {
+      gripHint.textContent = '\u21BB ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    /* Keep the followed vehicle centred and the detail card live */
+    if (followReg && markers[followReg]) {
+      map.panTo(markers[followReg].getLatLng(), { animate: true });
+    }
+    if (detailReg) {
+      var dv = posByReg[detailReg];
+      if (dv) renderDetail(dv); else closeDetail();
+    }
   }
 
   function selectVehicle(reg, pan) {
-    document.querySelectorAll('.vrow').forEach(function(r) {
-      r.classList.toggle('active', r.dataset.regno === reg);
+    Object.keys(rowNodes).forEach(function(r) {
+      rowNodes[r].classList.toggle('active', r === reg);
     });
-    var v = positions.find(function(x) { return x.RegNo === reg; });
+    var v = posByReg[reg];
     var m = markers[reg];
-    if (v && m) {
-      if (pan) map.setView([parseFloat(v.LAT), parseFloat(v.LON)], 14, { animate: true });
-      m.openPopup();
+    if (!v || !m) return;
+    if (isMobile()) {
+      setSnap('peek', true);
+      map.setView([parseFloat(v.LAT), parseFloat(v.LON)], Math.max(map.getZoom(), 15), { animate: true });
+      openDetail(reg);
+      return;
     }
+    if (pan) map.setView([parseFloat(v.LAT), parseFloat(v.LON)], 14, { animate: true });
+    m.openPopup();
   }
 
   function applyFilter() {
@@ -682,25 +1177,26 @@
     // track which groups have visible rows
     var visibleGroups = {};
 
-    document.querySelectorAll('.vrow').forEach(function(r) {
+    Object.keys(rowNodes).forEach(function(reg) {
+      var r = rowNodes[reg];
       var matchFilter = currentFilter === 'all' || r.dataset.status === currentFilter;
       var matchGroup = currentGroupFilter === 'all' || r.dataset.group === currentGroupFilter;
-      var matchSearch = !search || r.dataset.regno.toLowerCase().indexOf(search) >= 0;
+      var matchSearch = !search || reg.toLowerCase().indexOf(search) >= 0;
       var show = (matchFilter && matchGroup && matchSearch);
-      r.style.display = show ? '' : 'none';
-      if (show) {
-        var body = r.closest('.vg-body');
-        if (body) visibleGroups[body.dataset.groupBody] = true;
-      }
+      var want = show ? '' : 'none';
+      if (r.style.display !== want) r.style.display = want;
+      if (show) visibleGroups[r.dataset.group] = true;
     });
 
     // show/hide whole group sections when group filter is active
-    document.querySelectorAll('.vg-header').forEach(function(hdr) {
-      var body = document.querySelector('[data-group-body="' + hdr.dataset.group + '"]');
-      if (!body) return;
-      var groupMatches = currentGroupFilter === 'all' || hdr.dataset.group === currentGroupFilter;
-      hdr.style.display = groupMatches ? '' : 'none';
-      body.style.display = groupMatches ? '' : 'none';
+    Object.keys(groupNodes).forEach(function(name) {
+      var hdr = groupNodes[name].header;
+      var body = groupNodes[name].body;
+      if (!hdr || !body) return;
+      var groupMatches = currentGroupFilter === 'all' || name === currentGroupFilter;
+      var want = groupMatches ? '' : 'none';
+      if (hdr.style.display !== want) hdr.style.display = want;
+      if (body.style.display !== want) body.style.display = want;
       if (!groupMatches) return;
       if (hasSearch) {
         if (visibleGroups[hdr.dataset.group]) {
@@ -720,7 +1216,7 @@
 
     // filter map markers too
     Object.keys(markers).forEach(function(reg) {
-      var v = positions.find(function(x) { return x.RegNo === reg; });
+      var v = posByReg[reg];
       if (!v) return;
       var grp = v.GroupName || 'Unassigned';
       var matchFilter = currentFilter === 'all' || v.VehicleStatus === currentFilter;
@@ -763,11 +1259,391 @@
     applyFilter();
   }
 
+  /* ═══════════════════════════════════════════════════════════════
+     Mobile experience: draggable bottom sheet, vehicle detail card,
+     follow mode and floating map controls.
+     ═══════════════════════════════════════════════════════════════ */
+  var trackingWrap = document.querySelector('.tracking-wrap');
+  var sheet = document.getElementById('trackingSidebar');
+  var grip = document.getElementById('tsGrip');
+  var detailEl = document.getElementById('tkDetail');
+  var layerPop = document.getElementById('tkLayerPop');
+  var fabLayers = document.getElementById('tkFabLayers');
+  var currentSnap = 'peek';
+  var detailReg = null;
+  var followReg = null;
+  var suppressGripClick = 0;
+
+  /* Closed state shows only the handle strip, so CSS offsets for the floating
+     controls stay in sync with whatever the handle measures. */
+  function peekHeight() {
+    var px = grip ? grip.offsetHeight : 36;
+    if (trackingWrap) trackingWrap.style.setProperty('--tk-peek', px + 'px');
+    return px;
+  }
+
+  /* Two states only: fully closed (handle) or fully open */
+  function snapOffsets() {
+    var h = sheet.offsetHeight || 1;
+    return { full: 0, peek: Math.max(0, h - peekHeight()) };
+  }
+
+  function setSnap(name, silent) {
+    if (!isMobile()) return;
+    currentSnap = (name === 'full') ? 'full' : 'peek';
+    sheet.classList.remove('tk-peek', 'tk-full', 'tk-dragging');
+    sheet.classList.add('tk-' + currentSnap);
+    sheet.style.removeProperty('transform');
+    /* The detail card lives in the handle gap — raising the sheet would bury it */
+    if (currentSnap !== 'peek' && detailReg) closeDetail();
+    if (!silent) haptic();
+  }
+
+  /* ── Sheet dragging (touch) ── */
+  var drag = null;
+  function dragStart(y, fromList) {
+    if (!isMobile()) return;
+    drag = { y0: y, base: snapOffsets()[currentSnap], last: y, lastT: Date.now(), v: 0, y1: null, fromList: fromList, active: false };
+  }
+  function dragMove(y, ev) {
+    if (!drag) return;
+    var dy = y - drag.y0;
+    if (!drag.active) {
+      /* From the list we only take over on a downward pull at scroll-top */
+      if (drag.fromList ? dy > 10 : Math.abs(dy) > 6) drag.active = true;
+      else return;
+    }
+    var now = Date.now();
+    if (now > drag.lastT) drag.v = (y - drag.last) / (now - drag.lastT);
+    drag.last = y; drag.lastT = now;
+    var o = snapOffsets();
+    drag.y1 = Math.min(o.peek, Math.max(0, drag.base + dy));
+    sheet.classList.add('tk-dragging');
+    sheet.style.transform = 'translate3d(0,' + drag.y1 + 'px,0)';
+    if (ev && ev.cancelable) ev.preventDefault();
+  }
+  function dragEnd() {
+    if (!drag) return;
+    var d = drag;
+    drag = null;
+    sheet.classList.remove('tk-dragging');
+    if (!d.active) { sheet.style.removeProperty('transform'); return; }
+    suppressGripClick = Date.now();
+    /* A flick decides direction outright; otherwise snap to the nearer end */
+    if (d.v > 0.35) { setSnap('peek'); return; }
+    if (d.v < -0.35) { setSnap('full'); return; }
+    var o = snapOffsets();
+    var pos = (d.y1 === null) ? o[currentSnap] : d.y1;
+    setSnap(Math.abs(pos - o.full) <= Math.abs(pos - o.peek) ? 'full' : 'peek');
+  }
+
+  function bindDragSurface(el, fromList) {
+    if (!el) return;
+    el.addEventListener('touchstart', function(e) {
+      if (!isMobile() || e.touches.length !== 1) return;
+      if (fromList && el.scrollTop > 0) return;
+      dragStart(e.touches[0].clientY, fromList);
+    }, { passive: true });
+    el.addEventListener('touchmove', function(e) {
+      if (!drag || e.touches.length !== 1) return;
+      dragMove(e.touches[0].clientY, e);
+    }, { passive: false });
+    el.addEventListener('touchend', dragEnd);
+    el.addEventListener('touchcancel', dragEnd);
+  }
+  bindDragSurface(grip, false);
+  bindDragSurface(document.querySelector('.ts-search'), false);
+  bindDragSurface(document.getElementById('vehicleList'), true);
+
+  if (grip) {
+    grip.addEventListener('click', function() {
+      if (!isMobile() || (Date.now() - suppressGripClick) < 350) return;
+      setSnap(currentSnap === 'peek' ? 'full' : 'peek');
+    });
+  }
+
+  /* ── Vehicle detail card ── */
+  function statusChip(cls) {
+    var color = colorFor(cls);
+    var bg = (cls === 'Moving') ? 'rgba(34,197,94,.16)'
+           : (cls === 'Stopped') ? 'rgba(203,213,225,.14)' : 'rgba(245,158,11,.16)';
+    return '<span class="tk-chip" style="background:' + bg + ';color:' + (cls === 'Stopped' ? '#cbd5e1' : color) + ';">' + cls.toUpperCase() + '</span>';
+  }
+
+  function detailCell(k, v) {
+    return '<div class="tk-detail-cell"><div class="k">' + k + '</div><div class="v">' + v + '</div></div>';
+  }
+
+  function renderDetail(v) {
+    if (!detailEl) return;
+    var cls = v.VehicleStatus || 'Idle';
+    var spd = parseFloat(v.Speed || 0).toFixed(0);
+    var lm = (v.LandMark || '').replace(/^0\|\|/, '');
+    var time = v.RDT ? String(v.RDT).substr(11, 5) : '--';
+    var task = activeUfoneTask(v.RegNo);
+    var following = (followReg === v.RegNo);
+    detailEl.innerHTML =
+      '<div class="tk-detail-head">' +
+        '<div style="min-width:0;">' +
+          '<div class="tk-detail-reg">' + v.RegNo + '</div>' +
+          '<div class="tk-detail-sub">' + statusChip(cls) + ' ' + (lm || 'Location not available') + '</div>' +
+        '</div>' +
+        '<div class="tk-detail-close" data-tk="close" role="button" aria-label="Close"><i class="bi bi-x-lg"></i></div>' +
+      '</div>' +
+      '<div class="tk-detail-grid">' +
+        detailCell('Speed', spd + ' km/h') +
+        detailCell('Ignition', v.IgnitionStatus || 'N/A') +
+        detailCell('Updated', time) +
+      '</div>' +
+      '<div class="tk-detail-actions">' +
+        '<button type="button" class="tk-act follow' + (following ? ' on' : '') + '" data-tk="follow">' +
+          '<i class="bi bi-broadcast-pin"></i> ' + (following ? 'Following' : 'Follow') + '</button>' +
+        '<button type="button" class="tk-act" data-tk="route" data-lat="' + v.LAT + '" data-lon="' + v.LON + '">' +
+          '<i class="bi bi-signpost-2"></i> Route</button>' +
+        '<a class="tk-act primary" href="/tracking/vehicle/' + encodeURIComponent(v.RegNo) + '">' +
+          '<i class="bi bi-graph-up"></i> Details</a>' +
+      '</div>' +
+      (task
+        ? '<a href="#" class="tk-detail-task task-detail-btn" data-id="' + task.task_id + '">' +
+          '<i class="bi bi-exclamation-circle"></i> Active Ufone Task &middot; ' + (task.task_id_display || ('PHF-' + task.task_id)) + '</a>'
+        : '');
+    if (detailReg) syncFabOffset();
+  }
+
+  /* Float the map controls above the detail card instead of behind it */
+  function syncFabOffset() {
+    var fabsEl = document.getElementById('tkFabs');
+    if (!fabsEl) return;
+    if (!isMobile()) {
+      fabsEl.style.removeProperty('bottom');
+      if (layerPop) layerPop.style.removeProperty('bottom');
+      return;
+    }
+    var extra = (detailReg && detailEl) ? (detailEl.offsetHeight + 12) : 0;
+    var offset = 'calc(var(--tk-peek) + ' + (12 + extra) + 'px)';
+    fabsEl.style.bottom = offset;
+    if (layerPop) layerPop.style.bottom = offset;
+  }
+
+  function openDetail(reg) {
+    var v = posByReg[reg];
+    if (!v || !detailEl) return;
+    detailReg = reg;
+    renderDetail(v);
+    detailEl.classList.add('open');
+    closeLegend();
+    syncFabOffset();
+  }
+
+  function closeDetail() {
+    detailReg = null;
+    if (detailEl) detailEl.classList.remove('open');
+    syncFabOffset();
+  }
+
+  function closeLegend() {
+    var legend = document.getElementById('mapLegend');
+    var fab = document.getElementById('tkFabInfo');
+    if (legend) legend.classList.remove('tk-open');
+    if (fab) fab.classList.remove('active');
+  }
+
+  /* Hand navigation off to the device's maps app when running natively */
+  function openRoute(lat, lon) {
+    if (!lat || !lon) return;
+    var url = 'https://www.google.com/maps/dir/?api=1&destination=' + lat + ',' + lon;
+    var Plugins = window.Capacitor && window.Capacitor.Plugins;
+    if (Plugins && Plugins.App && typeof Plugins.App.openUrl === 'function') {
+      Plugins.App.openUrl({ url: url }).catch(function() { window.open(url, '_blank'); });
+    } else {
+      window.open(url, '_blank');
+    }
+  }
+
+  function toggleFollow(reg) {
+    if (!reg) return;
+    followReg = (followReg === reg) ? null : reg;
+    haptic('Medium');
+    var v = posByReg[reg];
+    if (v) renderDetail(v);
+    if (followReg && markers[followReg]) {
+      map.setView(markers[followReg].getLatLng(), Math.max(map.getZoom(), 15), { animate: true });
+    }
+  }
+
+  if (detailEl) {
+    detailEl.addEventListener('click', function(e) {
+      var hit = e.target.closest('[data-tk]');
+      if (!hit) return;
+      if (hit.dataset.tk === 'close') { closeDetail(); haptic(); }
+      else if (hit.dataset.tk === 'follow') { toggleFollow(detailReg); }
+      else if (hit.dataset.tk === 'route') { openRoute(hit.dataset.lat, hit.dataset.lon); }
+    });
+  }
+
+  /* ── Floating map controls ── */
+  renderLayerList();
+  var labelToggle = document.querySelector('.tracking-topbar .tb-check');
+  var layerExtras = document.getElementById('tkLayerExtras');
+  if (isMobile() && labelToggle && layerExtras) layerExtras.appendChild(labelToggle);
+
+  function closeLayerPop() {
+    if (!layerPop) return;
+    layerPop.classList.remove('open');
+    if (fabLayers) fabLayers.classList.remove('active');
+  }
+
+  if (fabLayers) {
+    fabLayers.addEventListener('click', function(e) {
+      e.stopPropagation();
+      var open = layerPop.classList.toggle('open');
+      fabLayers.classList.toggle('active', open);
+    });
+  }
+  var layerList = document.getElementById('tkLayerList');
+  if (layerList) {
+    layerList.addEventListener('click', function(e) {
+      var item = e.target.closest('.tk-layer-item');
+      if (!item) return;
+      setBaseLayer(item.dataset.layer);
+      haptic();
+      closeLayerPop();
+    });
+  }
+
+  document.getElementById('tkFabFit').addEventListener('click', function() {
+    followReg = null;
+    if (detailReg && posByReg[detailReg]) renderDetail(posByReg[detailReg]);
+    fitMapToVisibleMarkers();
+    haptic();
+  });
+
+  /* ── Fullscreen map: nothing but the map, a close button and zoom ── */
+  var fullMap = false;
+  function setFullMap(on) {
+    fullMap = !!on;
+    trackingWrap.classList.toggle('tk-fullmap', fullMap);
+    document.documentElement.classList.toggle('tk-fullmap', fullMap);
+    closeLayerPop();
+    closeLegend();
+    var fab = document.getElementById('tkFabFull');
+    if (fab) fab.classList.toggle('active', fullMap);
+    /* Real browser fullscreen where it is available (desktop); harmless if it is not */
+    try {
+      if (fullMap && document.documentElement.requestFullscreen && !document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(function() {});
+      } else if (!fullMap && document.fullscreenElement && document.exitFullscreen) {
+        document.exitFullscreen().catch(function() {});
+      }
+    } catch (e) {}
+    haptic();
+    resyncMap();
+  }
+
+  document.getElementById('tkFabFull').addEventListener('click', function() { setFullMap(!fullMap); });
+  document.getElementById('tkFullExit').addEventListener('click', function() { setFullMap(false); });
+  document.getElementById('tkZoomIn').addEventListener('click', function() { map.zoomIn(); });
+  document.getElementById('tkZoomOut').addEventListener('click', function() { map.zoomOut(); });
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && fullMap) setFullMap(false);
+  });
+  document.addEventListener('fullscreenchange', function() {
+    if (fullMap && !document.fullscreenElement) setFullMap(false);
+  });
+
+  var legendEl = document.getElementById('mapLegend');
+  document.getElementById('tkFabInfo').addEventListener('click', function() {
+    if (!legendEl.classList.contains('tk-open') && detailReg) closeDetail();
+    var open = legendEl.classList.toggle('tk-open');
+    this.classList.toggle('active', open);
+  });
+
+  var meMarker = null;
+  document.getElementById('tkFabLocate').addEventListener('click', function() {
+    var fab = this;
+    fab.classList.add('active');
+    function done(lat, lon) {
+      fab.classList.remove('active');
+      var ll = [lat, lon];
+      if (meMarker) meMarker.setLatLng(ll);
+      else meMarker = L.circleMarker(ll, { radius: 7, weight: 3, color: '#ffffff', fillColor: '#3b82f6', fillOpacity: 1 }).addTo(map);
+      map.setView(ll, Math.max(map.getZoom(), 14), { animate: true });
+      haptic();
+    }
+    function fail() { fab.classList.remove('active'); }
+    var Geo = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Geolocation;
+    if (Geo && typeof Geo.getCurrentPosition === 'function') {
+      Geo.getCurrentPosition({ enableHighAccuracy: true, timeout: 8000 })
+        .then(function(p) { done(p.coords.latitude, p.coords.longitude); })
+        .catch(fail);
+    } else if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(function(p) { done(p.coords.latitude, p.coords.longitude); }, fail, { timeout: 8000 });
+    } else {
+      fail();
+    }
+  });
+
+  map.on('click', function() {
+    closeLayerPop();
+    if (isMobile() && detailReg) closeDetail();
+  });
+  /* Manual panning cancels follow mode, like every good tracking app */
+  map.on('dragstart', function() {
+    if (!followReg) return;
+    var reg = followReg;
+    followReg = null;
+    if (detailReg === reg && posByReg[reg]) renderDetail(posByReg[reg]);
+  });
+
+  /* ── Keep Leaflet in sync with the layout (native shell is built after load) ── */
+  var resyncTimer = null;
+  function resyncMap() {
+    clearTimeout(resyncTimer);
+    resyncTimer = setTimeout(function() {
+      try { map.invalidateSize({ animate: false }); } catch (e) {}
+    }, 60);
+  }
+  if (window.ResizeObserver) {
+    new ResizeObserver(resyncMap).observe(document.getElementById('trackingMap'));
+  }
+  window.addEventListener('load', function() { setTimeout(resyncMap, 120); });
+  window.addEventListener('orientationchange', function() { setTimeout(resyncMap, 350); });
+
+  function onViewportChange() {
+    var mobile = isMobile();
+    document.documentElement.classList.toggle('tk-mobile', mobile);
+    if (labelToggle) {
+      var host = mobile ? layerExtras : document.querySelector('.tracking-topbar');
+      if (host && labelToggle.parentNode !== host) {
+        if (mobile) host.appendChild(labelToggle);
+        else host.insertBefore(labelToggle, document.getElementById('forceRefreshBtn'));
+      }
+    }
+    if (mobile) {
+      setSnap(currentSnap, true);
+    } else {
+      sheet.classList.remove('tk-peek', 'tk-full', 'tk-dragging');
+      sheet.style.removeProperty('transform');
+      closeDetail();
+      closeLayerPop();
+      closeLegend();
+    }
+    syncFabOffset();
+    setTimeout(resyncMap, 260);
+  }
+  if (mq.addEventListener) mq.addEventListener('change', onViewportChange);
+  else if (mq.addListener) mq.addListener(onViewportChange);
+  if (isMobile()) setSnap('peek', true);
+
   // ── Events ──
   var searchDebounce = null;
-  document.getElementById('vehicleSearch').addEventListener('input', function() {
+  var searchInput = document.getElementById('vehicleSearch');
+  searchInput.addEventListener('input', function() {
     clearTimeout(searchDebounce);
     searchDebounce = setTimeout(applyFilter, 250);
+  });
+  searchInput.addEventListener('focus', function() {
+    if (isMobile() && currentSnap !== 'full') setSnap('full', true);
   });
 
   document.querySelectorAll('.ts-filters button').forEach(function(btn) {
@@ -779,16 +1655,17 @@
   document.querySelectorAll('.tb-stat').forEach(function(stat) {
     stat.addEventListener('click', function() {
       setFilter(stat.dataset.statFilter);
+      if (isMobile()) { haptic(); if (currentSnap === 'peek') setSnap('full', true); }
     });
   });
 
   document.getElementById('groupFilter').addEventListener('change', function() {
     currentGroupFilter = this.value || 'all';
     applyFilter();
+    followReg = null;
     fitMapToVisibleMarkers();
+    if (isMobile()) setSnap('peek', true);
   });
-
-  bindGroupHeaders();
 
   // Show/hide vehicle labels on map markers
   document.getElementById('showLabelsChk').addEventListener('change', function() {
@@ -796,13 +1673,15 @@
     // re-render markers with/without labels
     positions.forEach(function(v) {
       if (!markers[v.RegNo]) return;
-      var cls = v.VehicleStatus || 'Idle';
-      var color = colorFor(cls);
+      var color = colorFor(v.VehicleStatus || 'Idle');
       var hasTask = !!activeUfoneTask(v.RegNo);
-      var deg = parseFloat(v.Direction) || 0;
-      markers[v.RegNo].setIcon(carIcon(color, deg, hasTask, v.RegNo));
-      if (markerState[v.RegNo]) {
-        markerState[v.RegNo].icon = color + '|' + Math.round(deg) + '|' + hasTask + '|' + (showLabels ? v.RegNo : '');
+      var state = markerState[v.RegNo];
+      var applied = state ? state.applied : (parseFloat(v.Direction) || 0);
+      markers[v.RegNo].setIcon(carIcon(color, applied, hasTask, v.RegNo));
+      if (state) {
+        var keys = iconKeys(color, hasTask, v.RegNo, applied);
+        state.icon = keys.full;
+        state.iconBase = keys.base;
       }
     });
   });
@@ -817,6 +1696,7 @@
   }
 
   document.getElementById('forceRefreshBtn').addEventListener('click', function() {
+    haptic();
     refreshPositions(true);
   });
 
