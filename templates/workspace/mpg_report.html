@@ -107,99 +107,147 @@
       overflow: hidden;
     }
 
-    /* Hero */
+    /* Hero — mobile only */
     .mpg-report-page.is-mobile-layout .mpg-hero {
       border: 0;
-      border-radius: 16px;
-      background: linear-gradient(135deg, #1e40af 0%, #2563eb 52%, #3b82f6 100%);
-      box-shadow: 0 10px 28px rgba(37,99,235,.28);
+      border-radius: 18px;
+      background: #fff;
+      box-shadow: 0 8px 28px rgba(15,23,42,.08);
       margin-bottom: 14px;
-      color: #fff;
+      color: #0f172a;
+      overflow: visible;
     }
     .mpg-report-page.is-mobile-layout .mpg-hero::after { display: none; }
     .mpg-report-page.is-mobile-layout .mpg-hero .card-body { padding: 16px !important; }
-    .mpg-report-page.is-mobile-layout .mpg-hero .d-flex.flex-wrap.justify-content-between {
+    .mpg-report-page.is-mobile-layout .mpg-hero-top {
+      display: flex;
       flex-direction: column;
-      align-items: stretch !important;
-      gap: 10px !important;
-      margin-bottom: 14px !important;
+      align-items: stretch;
+      gap: 14px;
+      margin-bottom: 14px;
     }
-    .mpg-report-page.is-mobile-layout .mpg-hero .badge.bg-primary-subtle {
-      background: rgba(255,255,255,.16) !important;
-      color: #dbeafe !important;
-      font-size: 10px;
-      letter-spacing: .08em;
-      border: 1px solid rgba(255,255,255,.2);
-    }
-    .mpg-report-page.is-mobile-layout .mpg-hero h3 {
-      font-size: 20px;
-      color: #fff !important;
-      letter-spacing: .04em;
-    }
-    .mpg-report-page.is-mobile-layout .mpg-hero .text-muted:not(.small) { display: none; }
-    .mpg-report-page.is-mobile-layout .mpg-hero .text-muted.small {
-      color: rgba(255,255,255,.82) !important;
-      font-size: 12px;
-    }
-    .mpg-report-page.is-mobile-layout .mpg-hero .text-muted.small strong { color: #fff !important; }
-    .mpg-report-page.is-mobile-layout .mpg-hero .d-flex.gap-2.flex-wrap:not(.position-relative) {
-      order: -1;
-    }
-    .mpg-report-page.is-mobile-layout .mpg-hero .d-flex.gap-2.flex-wrap:not(.position-relative) .btn {
-      flex: 1;
-      font-size: 13px;
-      font-weight: 600;
-      padding: 10px 12px;
-      border-radius: 10px;
-      border: 1px solid rgba(255,255,255,.45);
-      background: rgba(15,23,42,.28);
-      color: #fff;
-      backdrop-filter: blur(4px);
+    .mpg-report-page.is-mobile-layout .mpg-hero-title-block .badge {
       display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: #eff6ff !important;
+      color: #1d4ed8 !important;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .06em;
+      border: 1px solid #dbeafe;
+      border-radius: 999px;
+      padding: 5px 10px;
+      margin-bottom: 8px;
+    }
+    .mpg-report-page.is-mobile-layout .mpg-hero-title-block h3 {
+      font-size: 22px;
+      font-weight: 800;
+      color: #0f172a !important;
+      letter-spacing: -.02em;
+      margin: 0 0 4px;
+    }
+    .mpg-report-page.is-mobile-layout .mpg-hero-desc { display: none; }
+    .mpg-report-page.is-mobile-layout .mpg-hero-emp {
+      color: #64748b !important;
+      font-size: 12px;
+      margin: 0;
+    }
+    .mpg-report-page.is-mobile-layout .mpg-hero-emp strong { color: #0f172a !important; }
+
+    /* Action buttons — solid, high-contrast */
+    .mpg-report-page.is-mobile-layout .mpg-hero-actions {
+      display: grid !important;
+      grid-template-columns: 1.2fr 1fr 1fr;
+      gap: 8px;
+      width: 100%;
+    }
+    .mpg-report-page.is-mobile-layout .mpg-hero-btn {
+      display: inline-flex !important;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
       gap: 4px;
+      min-height: 64px;
+      padding: 10px 8px !important;
+      border-radius: 14px !important;
+      border: 0 !important;
+      font-size: 11px !important;
+      font-weight: 700 !important;
+      line-height: 1.15;
+      text-decoration: none !important;
+      box-shadow: 0 4px 12px rgba(15,23,42,.1);
+      -webkit-tap-highlight-color: transparent;
     }
-    .mpg-report-page.is-mobile-layout .mpg-hero .d-flex.gap-2.flex-wrap:not(.position-relative) .btn-primary {
-      background: #fff;
-      color: #1d4ed8;
-      border-color: transparent;
-      box-shadow: 0 4px 12px rgba(0,0,0,.14);
+    .mpg-report-page.is-mobile-layout .mpg-hero-btn i {
+      font-size: 18px;
+      line-height: 1;
+      margin: 0 !important;
     }
-    .mpg-report-page.is-mobile-layout .mpg-hero .d-flex.gap-2.flex-wrap:not(.position-relative) .btn-outline-primary {
-      background: rgba(15,23,42,.32);
-      color: #fff;
-      border-color: rgba(255,255,255,.55);
+    .mpg-report-page.is-mobile-layout .mpg-hero-btn--print {
+      background: linear-gradient(135deg, #2563eb, #1d4ed8) !important;
+      color: #fff !important;
+      box-shadow: 0 6px 16px rgba(37,99,235,.32);
     }
-    .mpg-report-page.is-mobile-layout .mpg-hero .d-flex.gap-2.flex-wrap:not(.position-relative) .btn-outline-secondary {
-      background: rgba(255,255,255,.14);
-      color: #fff;
-      border-color: rgba(255,255,255,.4);
+    .mpg-report-page.is-mobile-layout .mpg-hero-btn--export {
+      background: linear-gradient(135deg, #0d9488, #0f766e) !important;
+      color: #fff !important;
+      box-shadow: 0 6px 16px rgba(13,148,136,.28);
     }
-    .mpg-report-page.is-mobile-layout .mpg-hero .d-flex.flex-wrap.gap-2.position-relative {
+    .mpg-report-page.is-mobile-layout .mpg-hero-btn--back {
+      background: #f1f5f9 !important;
+      color: #334155 !important;
+      border: 1.5px solid #e2e8f0 !important;
+      box-shadow: none;
+    }
+    .mpg-report-page.is-mobile-layout .mpg-hero-btn:active {
+      transform: scale(.97);
+    }
+
+    /* Stat cards — always visible on mobile */
+    .mpg-report-page.is-mobile-layout .mpg-hero-stats {
       display: grid !important;
       grid-template-columns: repeat(3, 1fr);
       gap: 8px;
+      visibility: visible !important;
+      opacity: 1 !important;
     }
     .mpg-report-page.is-mobile-layout .mpg-stat {
+      display: flex !important;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
       min-width: 0;
       text-align: center;
-      padding: 10px 6px;
-      border-radius: 12px;
-      background: rgba(255,255,255,.14);
-      border: 1px solid rgba(255,255,255,.18);
-      backdrop-filter: blur(6px);
+      padding: 12px 6px;
+      border-radius: 14px;
+      background: linear-gradient(180deg, #f8fafc, #f1f5f9);
+      border: 1px solid #e2e8f0;
+      box-shadow: none;
     }
     .mpg-report-page.is-mobile-layout .mpg-stat .stat-label {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
       font-size: 9px;
-      color: rgba(255,255,255,.78);
-      letter-spacing: .06em;
+      font-weight: 700;
+      color: #64748b;
+      letter-spacing: .05em;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+    .mpg-report-page.is-mobile-layout .mpg-stat .stat-label i {
+      display: inline-block;
+      font-size: 11px;
+      color: #3b82f6;
     }
     .mpg-report-page.is-mobile-layout .mpg-stat .stat-value {
-      font-size: 16px;
-      color: #fff;
+      font-size: 17px;
+      font-weight: 800;
+      color: #0f172a;
+      line-height: 1.1;
     }
-    .mpg-report-page.is-mobile-layout .mpg-stat .stat-label i { display: none; }
 
     /* Filters */
     .mpg-report-page.is-mobile-layout .mpg-filters-card {
@@ -370,7 +418,7 @@
       left: 0;
       right: 0;
       bottom: 0;
-      z-index: 1040;
+      z-index: 1100;
       padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px));
       background: rgba(255,255,255,.92);
       backdrop-filter: blur(10px);
@@ -555,32 +603,50 @@
       font-weight: 800 !important;
     }
 
+    /* Hide app bottom nav on MPG Report (Save bar conflict) */
+    html.capacitor-native body.mpg-hide-bottom-nav .mobile-bottom-nav,
+    html.capacitor-native body.mpg-hide-bottom-nav #appNativeShell .mobile-bottom-nav {
+      display: none !important;
+      visibility: hidden !important;
+      height: 0 !important;
+      min-height: 0 !important;
+      overflow: hidden !important;
+      pointer-events: none !important;
+      border: none !important;
+      box-shadow: none !important;
+    }
+    html.capacitor-native body.mpg-hide-bottom-nav .main-content,
+    html.capacitor-native body.mpg-hide-bottom-nav #appNativeShell .main-content {
+      bottom: 0 !important;
+      padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)) !important;
+    }
+
     /* Desktop: hide mobile-only MPG pill */
     .mpg-val-mobile { display: none; }
   </style>
 
   <div class="card mpg-hero shadow-sm mb-3">
     <div class="card-body p-4 position-relative">
-      <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
-        <div>
+      <div class="mpg-hero-top d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
+        <div class="mpg-hero-title-block">
           <span class="badge bg-primary-subtle text-primary mb-2"><i class="bi bi-speedometer2 me-1"></i>Workspace MPG Analytics</span>
           <h3 class="mb-1 fw-bold text-dark">MPG Report</h3>
-          <div class="text-muted">Fuel efficiency, deduction aur next fueling forecast (vehicle wise).</div>
+          <div class="text-muted mpg-hero-desc">Fuel efficiency, deduction aur next fueling forecast (vehicle wise).</div>
           {% if employee %}
-          <div class="text-muted small mt-1">Employee: <strong class="text-body">{{ employee.name }}</strong></div>
+          <div class="text-muted small mt-1 mpg-hero-emp">Employee: <strong class="text-body">{{ employee.name }}</strong></div>
           {% endif %}
         </div>
-        <div class="d-flex gap-2 flex-wrap">
-          <button class="btn btn-primary btn-sm" id="btnPrintReport"><i class="bi bi-eye me-1"></i>Print / Preview</button>
-          <button class="btn btn-outline-primary btn-sm" id="btnExportReport"><i class="bi bi-file-earmark-excel me-1"></i>Export</button>
+        <div class="mpg-hero-actions d-flex gap-2 flex-wrap">
+          <button type="button" class="btn btn-primary btn-sm mpg-hero-btn mpg-hero-btn--print" id="btnPrintReport"><i class="bi bi-eye me-1"></i><span>Print / Preview</span></button>
+          <button type="button" class="btn btn-outline-primary btn-sm mpg-hero-btn mpg-hero-btn--export" id="btnExportReport"><i class="bi bi-file-earmark-excel me-1"></i><span>Export</span></button>
           {% if workspace_selected_employee %}
-          <a href="{{ url_for('workspace_reports') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Reports</a>
+          <a href="{{ url_for('workspace_reports') }}" class="btn btn-outline-secondary btn-sm mpg-hero-btn mpg-hero-btn--back"><i class="bi bi-arrow-left me-1"></i><span>Reports</span></a>
           {% elif nav_back_url_auto %}
-          <a href="{{ nav_back_url_auto }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>{{ nav_back_label_auto or 'Back' }}</a>
+          <a href="{{ nav_back_url_auto }}" class="btn btn-outline-secondary btn-sm mpg-hero-btn mpg-hero-btn--back"><i class="bi bi-arrow-left me-1"></i><span>{{ nav_back_label_auto or 'Back' }}</span></a>
           {% endif %}
         </div>
       </div>
-      <div class="d-flex flex-wrap gap-2 position-relative">
+      <div class="mpg-hero-stats d-flex flex-wrap gap-2 position-relative">
         <div class="mpg-stat">
           <div class="stat-label"><i class="bi bi-truck me-1"></i>Vehicles</div>
           <div class="stat-value">{{ rows|length }}</div>
@@ -825,16 +891,22 @@ document.addEventListener('DOMContentLoaded', function(){
     if(!mpgPage) return;
     var preview = new URLSearchParams(window.location.search).has('mobile_preview');
     var mobile = window.matchMedia('(max-width: 767px)').matches;
-    var useMobile = mobile || preview;
+    var isNative = document.documentElement.classList.contains('capacitor-native');
+    var useMobile = mobile || preview || isNative;
     mpgPage.classList.toggle('is-mobile-layout', useMobile);
-    mpgPage.classList.toggle('mpg-mobile-preview', preview && !mobile);
-    document.body.classList.toggle('mpg-preview-body', preview && !mobile);
+    mpgPage.classList.toggle('mpg-mobile-preview', preview && !mobile && !isNative);
+    document.body.classList.toggle('mpg-preview-body', preview && !mobile && !isNative);
+    /* Always hide bottom nav on MPG Report in native app (conflicts with Save Inputs). */
+    document.body.classList.toggle('mpg-hide-bottom-nav', isNative);
     if(previewBanner){
-      previewBanner.hidden = !(preview && !mobile);
+      previewBanner.hidden = !(preview && !mobile && !isNative);
     }
   }
   syncMobileLayout();
   window.addEventListener('resize', syncMobileLayout);
+  /* Capacitor may add class slightly after first paint — re-sync once. */
+  setTimeout(syncMobileLayout, 50);
+  setTimeout(syncMobileLayout, 300);
 
   if(window.fleetTableEnhance){
     window.fleetTableEnhance('workspaceMpgReportTable');
