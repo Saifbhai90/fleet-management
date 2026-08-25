@@ -2045,6 +2045,11 @@ def driver_attendance_manual_checkin():
             rec.updated_at = pk_now()
             try:
                 db.session.commit()
+                try:
+                    from notification_service import dismiss_driver_attendance_reminders
+                    dismiss_driver_attendance_reminders(driver, 'checkin')
+                except Exception:
+                    pass
                 flash('Check-in update ho gaya.', 'success')
                 return redirect(back_url)
             except Exception as e:
@@ -2066,6 +2071,11 @@ def driver_attendance_manual_checkin():
         db.session.add(rec)
         try:
             db.session.commit()
+            try:
+                from notification_service import dismiss_driver_attendance_reminders
+                dismiss_driver_attendance_reminders(driver, 'checkin')
+            except Exception:
+                pass
             flash('Manual check-in save ho gaya.', 'success')
             return redirect(back_url)
         except Exception as e:
@@ -2242,6 +2252,12 @@ def driver_attendance_manual_checkout():
         rec.updated_at = pk_now()
         try:
             db.session.commit()
+            if not was_existing_checkout:
+                try:
+                    from notification_service import dismiss_driver_attendance_reminders
+                    dismiss_driver_attendance_reminders(driver, 'checkout')
+                except Exception:
+                    pass
             flash('Check-out update ho gaya.' if was_existing_checkout else 'Manual check-out save ho gaya.', 'success')
             return redirect(back_url)
         except Exception as e:
@@ -2462,6 +2478,7 @@ def driver_attendance_bulk_manual_checkout():
 
     ok_count = 0
     skip_count = 0
+    checked_out_drivers = []
     for did in to_process:
         rec = _open_driver_attendance_for_manual_checkout(did, view_date)
         if not rec or not rec.check_in or rec.check_out:
@@ -2477,6 +2494,7 @@ def driver_attendance_bulk_manual_checkout():
             rec.check_out_photo_path = photo_path
         rec.updated_at = pk_now()
         ok_count += 1
+        checked_out_drivers.append(did)
 
     try:
         db.session.commit()
@@ -2484,6 +2502,16 @@ def driver_attendance_bulk_manual_checkout():
         db.session.rollback()
         flash(f'Error: {str(e)}', 'danger')
         return redirect(back_url)
+
+    if checked_out_drivers:
+        try:
+            from notification_service import dismiss_driver_attendance_reminders
+            for did in checked_out_drivers:
+                d = db.session.get(Driver, did)
+                if d:
+                    dismiss_driver_attendance_reminders(d, 'checkout')
+        except Exception:
+            pass
 
     if ok_count:
         msg = f'{ok_count} driver(s) ka check-out save ho gaya.'

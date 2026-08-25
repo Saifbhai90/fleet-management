@@ -407,6 +407,11 @@ def mobile_checkin():
         )
         db.session.add(record)
         db.session.commit()
+        try:
+            from notification_service import dismiss_driver_attendance_reminders
+            dismiss_driver_attendance_reminders(driver, 'checkin')
+        except Exception:
+            pass
         return _ok({'message': f'Check-in recorded for {driver.name}', 'time': str(now_utc.time())[:5]})
     except Exception as e:
         db.session.rollback()
@@ -468,6 +473,11 @@ def mobile_checkout():
         if photo_url:
             record.check_out_photo_path = photo_url
         db.session.commit()
+        try:
+            from notification_service import dismiss_driver_attendance_reminders
+            dismiss_driver_attendance_reminders(driver, 'checkout')
+        except Exception:
+            pass
         return _ok({'message': f'Check-out recorded for {driver.name}', 'time': str(now_utc.time())[:5]})
     except Exception as e:
         db.session.rollback()

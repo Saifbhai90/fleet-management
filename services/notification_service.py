@@ -323,9 +323,83 @@ def _notify_dtos(district_id, project_id, driver, vehicle_no, title, message, li
         notify_user(uid, title, body, link=link, notification_type='info')
 
 
+ATTENDANCE_CHECKIN_REMINDER_TITLE = 'Check-in reminder'
+ATTENDANCE_CHECKOUT_REMINDER_TITLE = 'Check-out reminder'
+
+
+def dismiss_driver_attendance_reminders(driver, kind):
+    """
+    After a successful GPS/manual check-in or check-out, mark that driver's
+    unread matching reminder notifications as read so the inbox/tray no longer
+    shows a stale "pending" message.
+    kind: 'checkin' | 'checkout'
+    Returns number of reminders newly marked read.
+    """
+    from models import db, Notification, NotificationRead
+    from push_notifications import get_user_id_for_driver
+    from utils import pk_now
+
+    if not driver:
+        return 0
+    kind_l = (kind or '').strip().lower()
+    if kind_l in ('checkin', 'check-in', 'in'):
+        title = ATTENDANCE_CHECKIN_REMINDER_TITLE
+    elif kind_l in ('checkout', 'check-out', 'out'):
+        title = ATTENDANCE_CHECKOUT_REMINDER_TITLE
+    else:
+        return 0
+
+    uid = get_user_id_for_driver(driver)
+    if not uid:
+        return 0
+
+    read_subq = _unread_read_subq(uid)
+    unread = (
+        Notification.query.filter(
+            Notification.target_user_id == int(uid),
+            Notification.title == title,
+            ~Notification.id.in_(read_subq),
+        )
+        .all()
+    )
+    if not unread:
+        return 0
+
+    now = pk_now()
+    marked = 0
+    for n in unread:
+        existing = NotificationRead.query.filter_by(
+            notification_id=n.id, user_id=int(uid)
+        ).first()
+        if existing:
+            existing.read_at = now
+        else:
+            db.session.add(
+                NotificationRead(notification_id=n.id, user_id=int(uid), read_at=now)
+            )
+            marked += 1
+    try:
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        logger.warning(
+            'dismiss_driver_attendance_reminders failed driver=%s kind=%s: %s',
+            getattr(driver, 'id', None), kind_l, exc,
+        )
+        return 0
+    _invalidate_notif_cache([uid])
+    return marked
+
+
 def notify_gps_checkin(driver, photo_path, *, vehicle=None):
     """After GPS+Camera check-in with photo stored (prefer R2/cloud URL)."""
     from models import AttendanceSettings
+
+    # Always clear stale pending reminders, even if success push is skipped.
+    try:
+        dismiss_driver_attendance_reminders(driver, 'checkin')
+    except Exception as exc:
+        logger.warning('dismiss check-in reminders after GPS check-in: %s', exc)
 
     if not driver or not _is_cloud_media_url(photo_path):
         return
@@ -358,6 +432,12 @@ def notify_gps_checkin(driver, photo_path, *, vehicle=None):
 def notify_gps_checkout(driver, photo_path, *, vehicle=None):
     """After GPS+Camera check-out with photo stored (prefer R2/cloud URL)."""
     from models import AttendanceSettings
+
+    # Always clear stale pending reminders, even if success push is skipped.
+    try:
+        dismiss_driver_attendance_reminders(driver, 'checkout')
+    except Exception as exc:
+        logger.warning('dismiss check-out reminders after GPS check-out: %s', exc)
 
     if not driver or not _is_cloud_media_url(photo_path):
         return

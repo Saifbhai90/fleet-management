@@ -104,6 +104,7 @@ def _run_auto_gps_checkout(now_dt, helpers):
         .all()
     )
     updated = 0
+    checked_out_drivers = []
     for rec in rows:
         driver = rec.driver
         if not driver:
@@ -130,12 +131,19 @@ def _run_auto_gps_checkout(now_dt, helpers):
         if auto_tag.lower() not in remark.lower():
             rec.remarks = ((remark + ' | ') if remark else '') + auto_tag
         updated += 1
+        checked_out_drivers.append(driver)
     if updated:
         try:
             db.session.commit()
         except Exception:
             db.session.rollback()
             return 0
+        try:
+            from notification_service import dismiss_driver_attendance_reminders
+            for d in checked_out_drivers:
+                dismiss_driver_attendance_reminders(d, 'checkout')
+        except Exception:
+            pass
     return updated
 
 
