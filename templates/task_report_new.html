@@ -421,18 +421,35 @@
       border-radius: 16px;
       box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
       border: 1px solid #e5e9ef;
+      /* Status accent keeps a fixed 3px so the card never shifts width;
+         only the colour changes as the row goes Pending → Ready → Saved. */
+      border-left: 3px solid #cbd5e1;
       overflow: hidden;
       background: #fff;
     }
     .task-batch-table tbody tr.task-row > td {
       grid-column: 1 / -1;
     }
+    /* Touch keeps :hover stuck after a tap, so Bootstrap's hover tint would
+       grey the whole card while the user types. Neutralise it on phones. */
+    .task-batch-page .task-batch-table.table-hover > tbody > tr.task-row:hover > *,
+    .task-batch-page .task-batch-table.table-hover > tbody > tr.task-row:focus-within > * {
+      --bs-table-accent-bg: transparent;
+      --bs-table-bg-state: transparent;
+      box-shadow: none;
+    }
     .task-batch-table tbody tr.task-row.table-info {
       border-color: #bae6fd;
       box-shadow: 0 1px 2px rgba(14, 165, 233, 0.08);
     }
     .task-batch-table tbody tr.task-row.task-row-incomplete {
-      border-left: 3px solid #f59e0b;
+      border-left-color: #f59e0b;
+    }
+    .task-batch-table tbody tr.task-row.task-row-ready {
+      border-left-color: #10b981;
+    }
+    .task-batch-table tbody tr.task-row.table-info {
+      border-left-color: #0ea5e9;
     }
     /* Seq # lives in card header badge — hide desktop "#" column on mobile */
     .task-batch-table tbody tr.task-row > td.task-batch-num-cell {
@@ -1238,6 +1255,8 @@
   {% endif %}
   </div>
 
+  {# Everything assigned single-value: nothing but the date is actually changeable. #}
+  {% set all_locked = tef.get('lock_district') and tef.get('lock_project') and tef.get('lock_vehicle') %}
   {% set sel_district = (districts | selectattr('id', 'equalto', district_id) | map(attribute='name') | first) if district_id else none %}
   {% set sel_project = (projects | selectattr('id', 'equalto', project_id) | map(attribute='name') | first) if project_id else none %}
   {% if vehicle_id %}
@@ -1255,17 +1274,22 @@
         <i class="bi bi-funnel-fill"></i>
         <span>{{ view_date.strftime('%d-%m-%Y') }}{% if sel_district %} · {{ sel_district }}{% endif %}{% if sel_project %} · {{ sel_project }}{% endif %} · {{ sel_vehicle or 'All vehicles' }}</span>
       </span>
-      <span class="task-batch-filter-summary-action">Change</span>
+      <span class="task-batch-filter-summary-action" data-open-label="Close" data-closed-label="{{ 'Date' if all_locked else 'Change' }}">{{ 'Date' if all_locked else 'Change' }}</span>
     </button>
     {% endif %}
     <div class="card-body" id="taskEntryFilterBody">
       <form method="GET" action="{{ url_for('task_report_new') }}" id="filterForm" class="row g-3 align-items-end mx-0">
         {% from 'partials/nav_back_button.html' import nav_from_hidden %}
         {{ nav_from_hidden() }}
-        <div class="col-6 col-md-2">
+        <div class="{% if all_locked %}col-7 col-md-2{% else %}col-6 col-md-2{% endif %}">
           <label class="form-label">Date <span class="text-danger">*</span></label>
           <input type="text" name="date" class="form-control datepicker task-batch-date-input" placeholder="dd-mm-yyyy" value="{{ view_date.strftime('%d-%m-%Y') }}">
         </div>
+        {% if all_locked %}
+        <input type="hidden" name="district_id" value="{{ district_id }}">
+        <input type="hidden" name="project_id" value="{{ project_id }}">
+        <input type="hidden" name="vehicle_id" value="{{ vehicle_id }}">
+        {% else %}
         <div class="col-6 col-md-2">
           <label class="form-label">District</label>
           {% if tef.get('lock_district') %}
@@ -1308,7 +1332,8 @@
           </select>
           {% endif %}
         </div>
-        <div class="col-12 col-md-2">
+        {% endif %}
+        <div class="{% if all_locked %}col-5 col-md-2{% else %}col-12 col-md-2{% endif %}">
           <button type="submit" class="btn btn-primary w-100 py-2">
             {% if rows %}<i class="bi bi-arrow-repeat me-1"></i>Reload{% else %}<i class="bi bi-list-ul me-1"></i>Load Vehicles{% endif %}
           </button>
@@ -1699,7 +1724,12 @@ window.TASK_REPORT_NEW_LOCK_VEHICLE = {{ tef.get('lock_vehicle', false)|tojson }
     filterToggle.addEventListener('click', function() {
       var open = filterCard.classList.toggle('is-open');
       filterToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-      filterToggle.querySelector('.task-batch-filter-summary-action').textContent = open ? 'Close' : 'Change';
+      var action = filterToggle.querySelector('.task-batch-filter-summary-action');
+      if (action) {
+        action.textContent = open
+          ? (action.getAttribute('data-open-label') || 'Close')
+          : (action.getAttribute('data-closed-label') || 'Change');
+      }
     });
   }
 
@@ -1807,6 +1837,7 @@ window.TASK_REPORT_NEW_LOCK_VEHICLE = {{ tef.get('lock_vehicle', false)|tojson }
     chip.textContent = filled ? 'Ready' : 'Pending';
     chip.classList.toggle('is-ready', filled);
     row.classList.toggle('task-row-incomplete', !filled);
+    row.classList.toggle('task-row-ready', filled);
   }
 
   var batchTable = document.getElementById('batchTable');
