@@ -355,6 +355,75 @@
   var gpsSubmitStatus = { can_submit: false, state: 'checking', message: '' };
   var attendanceActionMessage = document.getElementById('attendanceActionMessage');
 
+  // The status check gates the Mark button, so a request that never settles (the
+  // WebView keeps stalled sockets after a network switch or being backgrounded)
+  // used to leave the button dead with nothing on screen and no way back except
+  // restarting the app. Time every status call out and retry it.
+  var GPS_STATUS_TIMEOUT_MS = 12000;
+  var GPS_STATUS_RETRIES = 2;
+  var GPS_STATUS_STUCK_MS = 20000;
+  var gpsStatusFetchFailed = false;
+  var gpsStatusCheckingSince = 0;
+  var gpsStatusInFlight = false;
+
+  function gpsStatusFetchJson(url, attempt) {
+    attempt = attempt || 0;
+    var ctrl = (typeof AbortController === 'function') ? new AbortController() : null;
+    var timer = setTimeout(function() { if (ctrl) ctrl.abort(); }, GPS_STATUS_TIMEOUT_MS);
+    return fetch(url, ctrl ? { signal: ctrl.signal } : undefined)
+      .then(function(r) {
+        clearTimeout(timer);
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
+      .catch(function(err) {
+        clearTimeout(timer);
+        if (attempt < GPS_STATUS_RETRIES) {
+          return new Promise(function(resolve) {
+            setTimeout(resolve, 800 * (attempt + 1));
+          }).then(function() { return gpsStatusFetchJson(url, attempt + 1); });
+        }
+        throw err;
+      });
+  }
+
+  function markGpsStatusChecking() {
+    gpsSubmitStatus = { can_submit: false, state: 'checking', message: '' };
+    gpsStatusFetchFailed = false;
+    gpsStatusInFlight = true;
+    gpsStatusCheckingSince = Date.now();
+    btnMarkAttendance.disabled = true;
+  }
+
+  function markGpsStatusSettled() {
+    gpsStatusInFlight = false;
+    gpsStatusCheckingSince = 0;
+  }
+
+  function markGpsStatusFailed() {
+    markGpsStatusSettled();
+    gpsStatusFetchFailed = true;
+    gpsSubmitStatus = {
+      can_submit: false, state: 'blocked',
+      message: 'Status check fail. Network check karein — dobara koshish ho rahi hai.',
+    };
+  }
+
+  function showGpsStatusChecking() {
+    if (!attendanceActionMessage) return;
+    attendanceActionMessage.className = 'status-box info mb-2';
+    attendanceActionMessage.innerHTML =
+      '<i class="bi bi-hourglass-split me-1"></i>Server se attendance status check ho raha hai…';
+    attendanceActionMessage.classList.remove('d-none');
+  }
+
+  /** Camera modal open or an upload in flight — never re-evaluate the gate then. */
+  function attendanceUiBusy() {
+    if (document.querySelector('.modal.show')) return true;
+    var ov = document.getElementById('savingOverlay');
+    return !!(ov && ov.classList.contains('ov-active'));
+  }
+
   function gpsApiJsonMessage(body) {
     if (!body || typeof body !== 'object') return '';
     return body.message || body.error || '';
@@ -392,15 +461,14 @@
       updateDistanceUI();
       return Promise.resolve();
     }
-    gpsSubmitStatus = { can_submit: false, state: 'checking', message: '' };
-    btnMarkAttendance.disabled = true;
+    markGpsStatusChecking();
     var params = ['kind=checkin'];
     if (driverId) params.push('driver_id=' + encodeURIComponent(driverId));
     if (vId) params.push('vehicle_id=' + encodeURIComponent(vId));
     if (pId) params.push('project_id=' + encodeURIComponent(pId));
-    return fetch('{{ url_for("api_attendance_gps_submit_status") }}?' + params.join('&'))
-      .then(function(r) { return r.json(); })
+    return gpsStatusFetchJson('{{ url_for("api_attendance_gps_submit_status") }}?' + params.join('&'))
       .then(function(data) {
+        markGpsStatusSettled();
         gpsSubmitStatus = data || { can_submit: false, state: 'blocked', message: '' };
         if (gpsSubmitStatus.state === 'complete' && driverId) clearPendingCheckin(String(driverId));
         applyGpsSubmitStatusUI();
@@ -408,7 +476,7 @@
         updateDistanceUI();
       })
       .catch(function() {
-        gpsSubmitStatus = { can_submit: false, state: 'blocked', message: 'Status check fail. Retry location ya page refresh.' };
+        markGpsStatusFailed();
         applyGpsSubmitStatusUI();
         updateDistanceUI();
       });
@@ -426,12 +494,11 @@
     var params = ['kind=checkin', 'driver_id=' + encodeURIComponent(driverId)];
     if (vId) params.push('vehicle_id=' + encodeURIComponent(vId));
     if (pId) params.push('project_id=' + encodeURIComponent(pId));
-    gpsSubmitStatus = { can_submit: false, state: 'checking', message: '' };
-    btnMarkAttendance.disabled = true;
-    return fetch('{{ url_for("api_attendance_gps_preflight") }}?' + params.join('&'))
-      .then(function(r) { return r.json(); })
+    markGpsStatusChecking();
+    return gpsStatusFetchJson('{{ url_for("api_attendance_gps_preflight") }}?' + params.join('&'))
       .then(function(data) {
         if (!data || !data.ok) throw new Error('preflight');
+        markGpsStatusSettled();
         if (data.submit_status) {
           gpsSubmitStatus = data.submit_status;
           if (gpsSubmitStatus.state === 'complete' && driverId) clearPendingCheckin(String(driverId));
@@ -446,7 +513,7 @@
         updateDistanceUI();
       })
       .catch(function() {
-        gpsSubmitStatus = { can_submit: false, state: 'blocked', message: 'Status check fail. Retry location ya page refresh.' };
+        markGpsStatusFailed();
         applyGpsSubmitStatusUI();
         updateDistanceUI();
       });
@@ -668,12 +735,17 @@
     timeWindowMessage.classList.add('d-none');
     if (gpsSubmitStatus.state === 'checking') {
       btnMarkAttendance.disabled = true;
+      showGpsStatusChecking();
       return;
     }
     if (!gpsSubmitStatus.can_submit) {
       btnMarkAttendance.disabled = true;
       applyGpsSubmitStatusUI();
       return;
+    }
+    if (attendanceActionMessage) {
+      attendanceActionMessage.classList.add('d-none');
+      attendanceActionMessage.textContent = '';
     }
     btnMarkAttendance.disabled = false;
   }
@@ -902,11 +974,39 @@
     });
   }
 
-  btnRetryLocation.addEventListener('click', fetchLocation);
+  btnRetryLocation.addEventListener('click', function() {
+    gpsStatusFetchFailed = false;
+    fetchLocation();
+    fetchGpsSubmitStatus();
+  });
   fetchTimeWindow();
   if (parkingLat.value && parkingLng.value) {
     fetchLocation();
   }
+
+  /**
+   * The gate is evaluated only on user/network events, so a stalled status call
+   * or the clock crossing into the allowed window used to leave the button dead
+   * until the app was restarted. Re-evaluate on a timer and recover on its own.
+   */
+  function attendanceGateWatchdog() {
+    if (document.hidden || attendanceUiBusy()) return;
+    updateDistanceUI();
+    var stuck = gpsSubmitStatus.state === 'checking'
+      && gpsStatusCheckingSince
+      && (Date.now() - gpsStatusCheckingSince) > GPS_STATUS_STUCK_MS;
+    if (stuck || (gpsStatusFetchFailed && !gpsStatusInFlight)) fetchGpsSubmitStatus();
+  }
+  setInterval(attendanceGateWatchdog, GPS_STATUS_STUCK_MS);
+
+  // Android freezes WebView timers and in-flight requests in the background, so
+  // anything started before the app went away may never settle. Refresh on
+  // return instead of making the driver close and reopen the app.
+  document.addEventListener('visibilitychange', function() {
+    if (document.hidden || attendanceUiBusy()) return;
+    if (!currentPosition && parkingLat.value && parkingLng.value) fetchLocation();
+    fetchGpsSubmitStatus();
+  });
 
   function selectedDriverId() {
     var raw = driverSelect.tomselect ? driverSelect.tomselect.getValue() : driverSelect.value;
