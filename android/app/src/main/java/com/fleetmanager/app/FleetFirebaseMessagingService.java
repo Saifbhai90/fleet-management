@@ -42,11 +42,13 @@ public class FleetFirebaseMessagingService extends FirebaseMessagingService {
 
         java.util.Map<String, String> data = message.getData();
 
-        if (AttendanceReminderNotifications.ACTION_DISMISS.equals(data.get("fleet_action"))) {
+        // A check-in / check-out confirmation clears the matching reminder that
+        // may still be sitting in the tray, then shows itself normally.
+        String dismissKind = AttendanceReminderNotifications.kindFor(
+                data.get("dismiss_reminder_kind"), null);
+        if (dismissKind != null) {
             AttendanceReminderNotifications.cancel(
-                    (NotificationManager) getSystemService(NOTIFICATION_SERVICE),
-                    AttendanceReminderNotifications.kindFor(data.get("reminder_kind"), null));
-            return;
+                    (NotificationManager) getSystemService(NOTIFICATION_SERVICE), dismissKind);
         }
 
         String title = "Fleet Manager";

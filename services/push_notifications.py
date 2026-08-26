@@ -32,7 +32,6 @@ _REMINDER_KIND_BY_TITLE = {
     'Check-out reminder': 'checkout',
 }
 REMINDER_TTL_SECONDS = 45 * 60
-DISMISS_REMINDER_LOG_TITLE = 'Reminder auto-clear'
 
 
 def reminder_kind_for_title(title):
@@ -183,8 +182,12 @@ def _log_delivery(
             pass
 
 
-def _build_payload_data(title, body, data=None, link=None):
+def _build_payload_data(title, body, data=None, link=None, dismiss_reminder_kind=None):
     payload_data = dict(data or {})
+    if dismiss_reminder_kind in ('checkin', 'checkout'):
+        # Consumed by the app before it builds the tray entry: clears a stale
+        # reminder still sitting in the tray, then shows this message normally.
+        payload_data['dismiss_reminder_kind'] = dismiss_reminder_kind
     popup_link = _build_popup_link(title, body, original_link=link)
     click_link = popup_link or link
     payload_data['popup_mode'] = '1'
@@ -302,7 +305,10 @@ def _send_to_tokens(
     return success_count
 
 
-def send_push(user_id, title, body, data=None, link=None, notification_id=None):
+def send_push(
+    user_id, title, body, data=None, link=None, notification_id=None,
+    dismiss_reminder_kind=None,
+):
     """
     Send push notification to all active devices of a user.
     Bank-app style: works even if the user has no active web/app session,
@@ -344,46 +350,28 @@ def send_push(user_id, title, body, data=None, link=None, notification_id=None):
         )
         return 0
 
-    payload_data = _build_payload_data(title, body, data=data, link=link)
+    payload_data = _build_payload_data(
+        title, body, data=data, link=link,
+        dismiss_reminder_kind=dismiss_reminder_kind,
+    )
     kind = reminder_kind_for_title(title)
+    if kind:
+        ttl_seconds = REMINDER_TTL_SECONDS
+        collapse_key = _reminder_collapse_key(kind)
+    else:
+        ttl_seconds = None
+        # Sharing the reminder's collapse key makes FCM drop a reminder that is
+        # still queued for an offline phone, so it can never land after the
+        # driver has already checked in / out.
+        collapse_key = (
+            _reminder_collapse_key(dismiss_reminder_kind)
+            if dismiss_reminder_kind in ('checkin', 'checkout') else None
+        )
     return _send_to_tokens(
         tokens, title, body, payload_data,
         notification_id=notification_id,
-        ttl_seconds=REMINDER_TTL_SECONDS if kind else None,
-        collapse_key=_reminder_collapse_key(kind) if kind else None,
-    )
-
-
-def send_reminder_dismiss_push(user_id, kind):
-    """
-    Silently clear an attendance reminder from the device tray after the driver
-    has actually checked in / out. Shares the reminder's collapse key, so a
-    reminder still queued at FCM (undelivered phone) is replaced by this
-    dismissal instead of arriving late.
-    """
-    if not user_id or kind not in ('checkin', 'checkout'):
-        return 0
-    if not _init_firebase():
-        return 0
-
-    from models import DeviceFCMToken
-
-    tokens = DeviceFCMToken.query.filter_by(user_id=user_id, is_active=True).all()
-    if not tokens:
-        return 0
-
-    payload_data = {
-        'fleet_action': 'dismiss_reminder',
-        'reminder_kind': kind,
-        'created_at': _notify_created_at_pkt(),
-    }
-    return _send_to_tokens(
-        tokens,
-        DISMISS_REMINDER_LOG_TITLE,
-        f'{kind} reminder cleared on device',
-        payload_data,
-        ttl_seconds=REMINDER_TTL_SECONDS,
-        collapse_key=_reminder_collapse_key(kind),
+        ttl_seconds=ttl_seconds,
+        collapse_key=collapse_key,
     )
 
 

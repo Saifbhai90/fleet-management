@@ -12,8 +12,6 @@ final class AttendanceReminderNotifications {
     static final String KIND_CHECKIN = "checkin";
     static final String KIND_CHECKOUT = "checkout";
 
-    static final String ACTION_DISMISS = "dismiss_reminder";
-
     private static final String TITLE_CHECKIN = "Check-in reminder";
     private static final String TITLE_CHECKOUT = "Check-out reminder";
 

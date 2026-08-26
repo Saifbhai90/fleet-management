@@ -259,7 +259,10 @@ def _vehicle_scope_from_driver(driver, vehicle=None):
     return district_id, project_id, v_no
 
 
-def notify_user(user_id, title, message, *, link=None, link_text=None, notification_type='info', push=True):
+def notify_user(
+    user_id, title, message, *, link=None, link_text=None,
+    notification_type='info', push=True, dismiss_reminder_kind=None,
+):
     """Create in-app notification for one user and optionally send FCM."""
     if not user_id:
         return None
@@ -289,19 +292,25 @@ def notify_user(user_id, title, message, *, link=None, link_text=None, notificat
     if push:
         try:
             from push_notifications import send_push
-            send_push(int(user_id), title, message or '', link=link, notification_id=n.id)
+            send_push(
+                int(user_id), title, message or '', link=link, notification_id=n.id,
+                dismiss_reminder_kind=dismiss_reminder_kind,
+            )
         except Exception as exc:
             logger.warning('FCM push failed user %s: %s', user_id, exc)
     _invalidate_notif_cache([user_id])
     return n
 
 
-def _notify_driver_user(driver, title, message, link=None):
+def _notify_driver_user(driver, title, message, link=None, dismiss_reminder_kind=None):
     from push_notifications import get_user_id_for_driver
 
     uid = get_user_id_for_driver(driver)
     if uid:
-        notify_user(uid, title, message, link=link, notification_type='success')
+        notify_user(
+            uid, title, message, link=link, notification_type='success',
+            dismiss_reminder_kind=dismiss_reminder_kind,
+        )
 
 
 def _notify_dtos(district_id, project_id, driver, vehicle_no, title, message, link=None):
@@ -336,7 +345,7 @@ def dismiss_driver_attendance_reminders(driver, kind):
     Returns number of reminders newly marked read.
     """
     from models import db, Notification, NotificationRead
-    from push_notifications import get_user_id_for_driver, send_reminder_dismiss_push
+    from push_notifications import get_user_id_for_driver
     from utils import pk_now
 
     if not driver:
@@ -344,10 +353,8 @@ def dismiss_driver_attendance_reminders(driver, kind):
     kind_l = (kind or '').strip().lower()
     if kind_l in ('checkin', 'check-in', 'in'):
         title = ATTENDANCE_CHECKIN_REMINDER_TITLE
-        push_kind = 'checkin'
     elif kind_l in ('checkout', 'check-out', 'out'):
         title = ATTENDANCE_CHECKOUT_REMINDER_TITLE
-        push_kind = 'checkout'
     else:
         return 0
 
@@ -364,6 +371,8 @@ def dismiss_driver_attendance_reminders(driver, kind):
         )
         .all()
     )
+    if not unread:
+        return 0
 
     now = pk_now()
     marked = 0
@@ -378,24 +387,16 @@ def dismiss_driver_attendance_reminders(driver, kind):
                 NotificationRead(notification_id=n.id, user_id=int(uid), read_at=now)
             )
             marked += 1
-    if unread:
-        try:
-            db.session.commit()
-        except Exception as exc:
-            db.session.rollback()
-            logger.warning(
-                'dismiss_driver_attendance_reminders failed driver=%s kind=%s: %s',
-                getattr(driver, 'id', None), kind_l, exc,
-            )
-            return 0
-        _invalidate_notif_cache([uid])
-
-    # Always push the dismissal, even when the inbox copy was already read: the
-    # Android tray copy is independent and may still be undelivered at FCM.
     try:
-        send_reminder_dismiss_push(uid, push_kind)
+        db.session.commit()
     except Exception as exc:
-        logger.warning('reminder dismiss push failed user=%s kind=%s: %s', uid, push_kind, exc)
+        db.session.rollback()
+        logger.warning(
+            'dismiss_driver_attendance_reminders failed driver=%s kind=%s: %s',
+            getattr(driver, 'id', None), kind_l, exc,
+        )
+        return 0
+    _invalidate_notif_cache([uid])
     return marked
 
 
@@ -433,7 +434,9 @@ def notify_gps_checkin(driver, photo_path, *, vehicle=None):
         link = url_for('driver_attendance_list', date=today.strftime('%d-%m-%Y'), _external=True)
     except Exception:
         pass
-    _notify_driver_user(driver, driver_title, driver_msg, link=link)
+    _notify_driver_user(
+        driver, driver_title, driver_msg, link=link, dismiss_reminder_kind='checkin',
+    )
     _notify_dtos(district_id, project_id, driver, v_no, dto_title, dto_msg, link=link)
 
 
@@ -471,7 +474,9 @@ def notify_gps_checkout(driver, photo_path, *, vehicle=None):
         link = url_for('driver_attendance_list', date=today.strftime('%d-%m-%Y'), _external=True)
     except Exception:
         pass
-    _notify_driver_user(driver, driver_title, driver_msg, link=link)
+    _notify_driver_user(
+        driver, driver_title, driver_msg, link=link, dismiss_reminder_kind='checkout',
+    )
     _notify_dtos(district_id, project_id, driver, v_no, dto_title, dto_msg, link=link)
     try:
         from attendance_reminder_service import notify_vehicle_peers_after_checkout
