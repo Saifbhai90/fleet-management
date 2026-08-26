@@ -54,12 +54,40 @@
   .vg-header .vg-count { margin-left: auto; font-size: 10px; color: #64748b; font-weight: 400; }
   .vg-header.active-group-filter { background: #1a3a5a; box-shadow: inset 3px 0 0 #60a5fa; }
   .vg-header.active-group-filter .vg-count { color: #93c5fd; font-weight: 600; }
-  .ts-group-filter { margin-top: 8px; }
-  .ts-group-filter select {
+  .ts-group-filter { margin-top: 8px; position: relative; }
+  .ts-group-filter-btn {
     width: 100%; padding: 7px 10px; border-radius: 6px; border: 1px solid #2a3a4a;
     background: #0f1923; color: #e0e0e0; font-size: 12px; outline: none;
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    cursor: pointer; text-align: left;
   }
-  .ts-group-filter select:focus { border-color: #1a5fb4; }
+  .ts-group-filter-btn:focus, .ts-group-filter-btn.open { border-color: #1a5fb4; }
+  .ts-group-filter-btn .ts-gf-chevron { font-size: 10px; color: #64748b; flex-shrink: 0; transition: transform .15s; }
+  .ts-group-filter-btn.open .ts-gf-chevron { transform: rotate(180deg); color: #93c5fd; }
+  .ts-group-filter-btn .ts-gf-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ts-group-filter-panel {
+    display: none; position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 50;
+    max-height: min(280px, 45vh); overflow-y: auto; overscroll-behavior: contain;
+    background: #0f1923; border: 1px solid #2a3a4a; border-radius: 8px;
+    box-shadow: 0 10px 28px rgba(0,0,0,.45);
+  }
+  .ts-group-filter-panel.open { display: block; }
+  .ts-gf-option {
+    display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+    font-size: 12px; color: #e0e0e0; cursor: pointer; user-select: none;
+    border-bottom: 1px solid #1a2633;
+  }
+  .ts-gf-option:last-child { border-bottom: 0; }
+  .ts-gf-option:hover { background: #142030; }
+  .ts-gf-option input { accent-color: #3b82f6; width: 15px; height: 15px; flex-shrink: 0; margin: 0; }
+  .ts-gf-option .ts-gf-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ts-gf-option .ts-gf-count { color: #64748b; font-size: 10px; flex-shrink: 0; }
+  .ts-gf-actions { display: flex; gap: 6px; padding: 8px 10px; border-top: 1px solid #2a3a4a; background: #0b141c; position: sticky; bottom: 0; }
+  .ts-gf-actions button {
+    flex: 1; padding: 6px 8px; border-radius: 6px; border: 1px solid #2a3a4a;
+    background: #142030; color: #cfe4ff; font-size: 11px; font-weight: 600; cursor: pointer;
+  }
+  .ts-gf-actions button:hover { border-color: #1a5fb4; }
   .vg-body { overflow: hidden; }
   .vg-body.collapsed { display: none; }
 
@@ -372,7 +400,9 @@
     }
     .ts-search { padding: 4px 12px 10px; border-bottom-color: #22303e; touch-action: none; flex-shrink: 0; }
     .ts-search input { padding: 11px 13px; font-size: 14px; border-radius: 12px; }
-    .ts-group-filter select { padding: 10px; font-size: 12.5px; border-radius: 12px; }
+    .ts-group-filter-btn { padding: 10px; font-size: 12.5px; border-radius: 12px; }
+    .ts-group-filter-panel { border-radius: 12px; max-height: min(320px, 50vh); }
+    .ts-gf-option { padding: 10px 12px; font-size: 13px; }
     .ts-filters button { padding: 9px 4px; font-size: 11.5px; border-radius: 10px; }
     .ts-list { -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding-bottom: calc(28px + env(safe-area-inset-bottom, 0px)); }
     .vrow { padding: 12px 14px; gap: 12px; }
@@ -454,14 +484,27 @@
       </div>
       <div class="ts-search">
         <input type="text" id="vehicleSearch" placeholder="Search vehicle (e.g. GBC or LEG)..." />
-        <div class="ts-group-filter">
-          <select id="groupFilter" aria-label="Filter by group">
-            <option value="all">All Groups</option>
-            {% set grouped_init = vehicles | groupby('GroupName') | sort %}
-            {% for g, gv in grouped_init %}
-            <option value="{{ g or 'Unassigned' }}">{{ g or 'Unassigned' }} ({{ gv|length }})</option>
-            {% endfor %}
-          </select>
+        <div class="ts-group-filter" id="groupFilterWrap">
+          <button type="button" class="ts-group-filter-btn" id="groupFilterBtn" aria-haspopup="listbox" aria-expanded="false" aria-label="Filter by group">
+            <span class="ts-gf-label" id="groupFilterLabel">All Groups</span>
+            <i class="bi bi-chevron-down ts-gf-chevron"></i>
+          </button>
+          <div class="ts-group-filter-panel" id="groupFilterPanel" role="listbox" aria-multiselectable="true" hidden>
+            <div id="groupFilterOptions">
+              {% set grouped_init = vehicles | groupby('GroupName') | sort %}
+              {% for g, gv in grouped_init %}
+              <label class="ts-gf-option">
+                <input type="checkbox" value="{{ g or 'Unassigned' }}" data-group-check>
+                <span class="ts-gf-name">{{ g or 'Unassigned' }}</span>
+                <span class="ts-gf-count">{{ gv|length }}</span>
+              </label>
+              {% endfor %}
+            </div>
+            <div class="ts-gf-actions">
+              <button type="button" id="groupFilterClear">All Groups</button>
+              <button type="button" id="groupFilterDone">Done</button>
+            </div>
+          </div>
         </div>
         <div class="ts-filters">
           <button class="active" data-filter="all">All</button>
@@ -652,7 +695,8 @@
   var markers = {};
   var markerState = {};   // RegNo -> {lat, lon, icon} for change-detection
   var currentFilter = 'all';
-  var currentGroupFilter = 'all';
+  /** Empty Set = All Groups; otherwise only these group names are shown. */
+  var selectedGroups = new Set();
   var positions = [];
   var posByReg = {};
   var ufoneTasksByReg = {{ ufone_tasks_by_reg | tojson }};
@@ -1015,28 +1059,53 @@
     });
   })();
 
+  function isGroupSelected(name) {
+    return selectedGroups.size === 0 || selectedGroups.has(name);
+  }
+
+  function updateGroupFilterLabel() {
+    var label = document.getElementById('groupFilterLabel');
+    if (!label) return;
+    if (selectedGroups.size === 0) {
+      label.textContent = 'All Groups (' + positions.length + ')';
+      return;
+    }
+    var names = Array.from(selectedGroups);
+    var count = 0;
+    positions.forEach(function(v) {
+      if (selectedGroups.has(v.GroupName || 'Unassigned')) count++;
+    });
+    if (names.length === 1) {
+      label.textContent = names[0] + ' (' + count + ')';
+    } else {
+      label.textContent = names.length + ' groups (' + count + ')';
+    }
+  }
+
   function syncGroupFilterOptions(groupOrder, groups) {
-    var sel = document.getElementById('groupFilter');
-    if (!sel) return;
-    var prev = currentGroupFilter;
-    var html = '<option value="all">All Groups (' + positions.length + ')</option>';
+    var box = document.getElementById('groupFilterOptions');
+    if (!box) return;
+    var prev = new Set(selectedGroups);
+    var html = '';
     groupOrder.forEach(function(g) {
       var count = (groups[g] || []).length;
-      html += '<option value="' + g.replace(/"/g, '&quot;') + '">' + g + ' (' + count + ')</option>';
+      var checked = prev.has(g) ? ' checked' : '';
+      html += '<label class="ts-gf-option">'
+        + '<input type="checkbox" value="' + g.replace(/"/g, '&quot;') + '" data-group-check' + checked + '>'
+        + '<span class="ts-gf-name">' + g.replace(/</g, '&lt;') + '</span>'
+        + '<span class="ts-gf-count">' + count + '</span>'
+        + '</label>';
     });
-    sel.innerHTML = html;
-    if (prev !== 'all' && groupOrder.indexOf(prev) >= 0) {
-      sel.value = prev;
-    } else {
-      currentGroupFilter = 'all';
-      sel.value = 'all';
-    }
+    box.innerHTML = html;
+    // Drop selections for groups that no longer exist
+    selectedGroups = new Set(Array.from(prev).filter(function(g) { return groupOrder.indexOf(g) >= 0; }));
+    updateGroupFilterLabel();
   }
 
   function syncGroupHeaderState() {
     Object.keys(groupNodes).forEach(function(name) {
       var hdr = groupNodes[name].header;
-      if (hdr) hdr.classList.toggle('active-group-filter', currentGroupFilter !== 'all' && name === currentGroupFilter);
+      if (hdr) hdr.classList.toggle('active-group-filter', selectedGroups.size > 0 && selectedGroups.has(name));
     });
   }
 
@@ -1045,7 +1114,7 @@
     var mv = 0, st = 0, id = 0, total = 0;
     positions.forEach(function(v) {
       var grp = v.GroupName || 'Unassigned';
-      var matchGroup = currentGroupFilter === 'all' || grp === currentGroupFilter;
+      var matchGroup = isGroupSelected(grp);
       var matchSearch = !search || (v.RegNo || '').toLowerCase().indexOf(search) >= 0;
       if (!matchGroup || !matchSearch) return;
       total++;
@@ -1180,7 +1249,7 @@
     Object.keys(rowNodes).forEach(function(reg) {
       var r = rowNodes[reg];
       var matchFilter = currentFilter === 'all' || r.dataset.status === currentFilter;
-      var matchGroup = currentGroupFilter === 'all' || r.dataset.group === currentGroupFilter;
+      var matchGroup = isGroupSelected(r.dataset.group);
       var matchSearch = !search || reg.toLowerCase().indexOf(search) >= 0;
       var show = (matchFilter && matchGroup && matchSearch);
       var want = show ? '' : 'none';
@@ -1193,7 +1262,7 @@
       var hdr = groupNodes[name].header;
       var body = groupNodes[name].body;
       if (!hdr || !body) return;
-      var groupMatches = currentGroupFilter === 'all' || name === currentGroupFilter;
+      var groupMatches = isGroupSelected(name);
       var want = groupMatches ? '' : 'none';
       if (hdr.style.display !== want) hdr.style.display = want;
       if (body.style.display !== want) body.style.display = want;
@@ -1206,7 +1275,7 @@
           hdr.classList.add('collapsed');
           body.classList.add('collapsed');
         }
-      } else if (currentGroupFilter !== 'all' && hdr.dataset.group === currentGroupFilter) {
+      } else if (selectedGroups.size > 0 && selectedGroups.has(hdr.dataset.group)) {
         hdr.classList.remove('collapsed');
         body.classList.remove('collapsed');
       }
@@ -1220,7 +1289,7 @@
       if (!v) return;
       var grp = v.GroupName || 'Unassigned';
       var matchFilter = currentFilter === 'all' || v.VehicleStatus === currentFilter;
-      var matchGroup = currentGroupFilter === 'all' || grp === currentGroupFilter;
+      var matchGroup = isGroupSelected(grp);
       var matchSearch = !search || (v.RegNo || '').toLowerCase().indexOf(search) >= 0;
       if (matchFilter && matchGroup && matchSearch) {
         if (!map.hasLayer(markers[reg])) markers[reg].addTo(map);
@@ -1229,6 +1298,7 @@
       }
     });
 
+    updateGroupFilterLabel();
     updateStatCounts();
   }
 
@@ -1659,12 +1729,61 @@
     });
   });
 
-  document.getElementById('groupFilter').addEventListener('change', function() {
-    currentGroupFilter = this.value || 'all';
+  function setGroupFilterPanelOpen(open) {
+    var btn = document.getElementById('groupFilterBtn');
+    var panel = document.getElementById('groupFilterPanel');
+    if (!btn || !panel) return;
+    btn.classList.toggle('open', open);
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    panel.classList.toggle('open', open);
+    if (open) panel.removeAttribute('hidden');
+    else panel.setAttribute('hidden', '');
+  }
+
+  function readGroupChecksIntoSelection() {
+    selectedGroups = new Set();
+    document.querySelectorAll('#groupFilterOptions input[data-group-check]:checked').forEach(function(cb) {
+      if (cb.value) selectedGroups.add(cb.value);
+    });
+  }
+
+  function applyGroupFilterFromUi(closePanel) {
+    readGroupChecksIntoSelection();
     applyFilter();
     followReg = null;
     fitMapToVisibleMarkers();
+    if (closePanel) setGroupFilterPanelOpen(false);
     if (isMobile()) setSnap('peek', true);
+  }
+
+  document.getElementById('groupFilterBtn').addEventListener('click', function(e) {
+    e.stopPropagation();
+    var panel = document.getElementById('groupFilterPanel');
+    setGroupFilterPanelOpen(!(panel && panel.classList.contains('open')));
+  });
+
+  document.getElementById('groupFilterOptions').addEventListener('change', function(e) {
+    if (!e.target || !e.target.matches('input[data-group-check]')) return;
+    applyGroupFilterFromUi(false);
+  });
+
+  document.getElementById('groupFilterClear').addEventListener('click', function(e) {
+    e.stopPropagation();
+    document.querySelectorAll('#groupFilterOptions input[data-group-check]').forEach(function(cb) {
+      cb.checked = false;
+    });
+    applyGroupFilterFromUi(true);
+  });
+
+  document.getElementById('groupFilterDone').addEventListener('click', function(e) {
+    e.stopPropagation();
+    applyGroupFilterFromUi(true);
+  });
+
+  document.addEventListener('click', function(e) {
+    var wrap = document.getElementById('groupFilterWrap');
+    if (!wrap || wrap.contains(e.target)) return;
+    setGroupFilterPanelOpen(false);
   });
 
   // Show/hide vehicle labels on map markers
