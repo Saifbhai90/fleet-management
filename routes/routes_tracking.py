@@ -42,7 +42,7 @@ from services.activity_record_service import (
     mark_activity_sync_status,
 )
 from services.trip_record_service import ensure_trips_for_range, load_trips_from_db
-from utils import pk_now, pk_date, parse_date
+from utils import pk_now, pk_date, parse_date, safe_float
 from datetime import datetime, timedelta, date
 import csv
 import io
@@ -443,14 +443,14 @@ def tracking_trips_export_csv():
 # ════════════════════════════════════════════════════════════════════════════
 
 def _activity_point_stats(points: list) -> dict:
-    moving = sum(1 for p in points if float(p.get('Speed') or 0) > 0)
+    moving = sum(1 for p in points if safe_float(p.get('Speed')) > 0)
     stopped = len(points) - moving
     reasons: dict[str, int] = {}
     total_distance = 0.0
     for p in points:
         r = (p.get('Reason') or 'Unknown').strip() or 'Unknown'
         reasons[r] = reasons.get(r, 0) + 1
-        total_distance += float(p.get('Distance') or 0)
+        total_distance += safe_float(p.get('Distance'))
     reason_rows = sorted(reasons.items(), key=lambda x: (-x[1], x[0]))
     return {
         'total': len(points),
@@ -517,6 +517,13 @@ def tracking_activity_report():
         except Exception as e:
             error = str(e)[:300]
             logger.warning('tracking_activity_report failed regno=%s: %s', regno, e)
+            # A failed write leaves the session needing a rollback, and without one
+            # every query below raises too — the page 500s instead of showing this
+            # error.
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
             try:
                 mark_activity_sync_status(
                     pk_date(),
@@ -540,7 +547,12 @@ def tracking_activity_report():
         ]
 
     stats = _activity_point_stats(points)
-    sync_status = get_activity_sync_status_display(acct_id or None)
+    try:
+        sync_status = get_activity_sync_status_display(acct_id or None)
+    except Exception as e:
+        # Status is a convenience panel; never let it hide the report itself.
+        logger.warning('activity sync status display failed: %s', e)
+        sync_status = None
 
     return render_template(
         'tracking/activity_report.html',

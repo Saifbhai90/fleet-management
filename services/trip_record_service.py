@@ -14,7 +14,9 @@ from typing import Optional
 
 from sqlalchemy import func, or_
 
-from utils import pk_date, pk_now, normalize_vehicle_reg_key, strip_ufone_reg_tag
+from utils import (
+    pk_date, pk_now, normalize_vehicle_reg_key, safe_float, strip_ufone_reg_tag,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -174,16 +176,32 @@ def upsert_portalxs_trips(
             'igoff_lat': t.get('IGOFF_LAT'),
             'igoff_lon': t.get('IGOFF_LON'),
             'igoff_landmark': t.get('IGOFF_LandMark') or None,
-            'mileage': float(t.get('Mileage') or 0),
+            'mileage': safe_float(t.get('Mileage')),
             'travel_time_s': (t.get('TravelTimeS') or '')[:30] or None,
-            'max_speed': float(t.get('MaxSpeed') or 0),
-            'avg_speed': float(t.get('AvgSpeed') or 0),
+            'max_speed': safe_float(t.get('MaxSpeed')),
+            'avg_speed': safe_float(t.get('AvgSpeed')),
             'trip_status': (t.get('TripStatus') or '')[:50] or None,
             'data_source': _SOURCE_PORTALXS,
         })
-    if mappings:
-        db.session.bulk_insert_mappings(VehicleTripRecord, mappings)
-    db.session.commit()
+    try:
+        if mappings:
+            db.session.bulk_insert_mappings(VehicleTripRecord, mappings)
+        db.session.commit()
+    except Exception as e:
+        # The delete above only flushed, so rolling back keeps the existing rows.
+        # Leaving a failed session open is worse than losing this refresh: every
+        # later query in the same request would raise instead of the caller being
+        # able to report the failure.
+        db.session.rollback()
+        logger.warning('trips save failed %s %s: %s', portalxs_regno, task_date, e)
+        return {
+            'ok': False,
+            'source': 'error',
+            'error': str(e)[:240],
+            'count': 0,
+            'rows': load_trips_from_db(task_date, portalxs_regno, vehicle_no),
+            'vehicle_no': store,
+        }
     rows = load_trips_from_db(task_date, portalxs_regno, vehicle_no)
     return {
         'ok': True,

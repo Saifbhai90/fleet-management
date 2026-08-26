@@ -20,7 +20,9 @@ from typing import Optional
 
 from sqlalchemy import func, or_
 
-from utils import pk_date, pk_now, normalize_vehicle_reg_key, strip_ufone_reg_tag
+from utils import (
+    pk_date, pk_now, normalize_vehicle_reg_key, safe_float, strip_ufone_reg_tag,
+)
 from services.trip_record_service import upsert_portalxs_trips, vehicle_day_has_trips
 
 logger = logging.getLogger(__name__)
@@ -149,7 +151,7 @@ def activity_rows_to_history_points(rows: list[dict]) -> list[dict]:
             'RecordDateTime': r.get('RecordDateTime') or '',
             'LAT': lat_f,
             'LON': lon_f,
-            'Speed': float(r.get('Speed') or 0),
+            'Speed': safe_float(r.get('Speed')),
             'Reason': r.get('Reason') or '',
             'LandMark': r.get('LandMark') or r.get('Location') or '',
             'Direction': r.get('DirectionDeg') if r.get('DirectionDeg') is not None else r.get('Direction'),
@@ -223,6 +225,9 @@ def upsert_portalxs_activity(
     try:
         upsert_portalxs_trips(account_id, portalxs_regno, task_date, vehicle_no=vehicle_no)
     except Exception as e:
+        # A half-written trip refresh would otherwise leave the session failed and
+        # take the activity save below down with it.
+        db.session.rollback()
         logger.warning(
             'activity co-sync trips failed %s %s: %s', portalxs_regno, task_date, e,
         )
@@ -259,9 +264,9 @@ def upsert_portalxs_activity(
             'group_name': (p.get('Group') or group_name or '')[:100] or None,
             'record_date_time': (p.get('RecordDateTime') or '')[:50] or None,
             'location': p.get('Location') or None,
-            'speed': float(p.get('Speed') or 0),
+            'speed': safe_float(p.get('Speed')),
             'direction': (p.get('Direction') or '')[:20] or None,
-            'distance': float(p.get('Distance') or 0),
+            'distance': safe_float(p.get('Distance')),
             'travel_time': (p.get('TravelTime') or '')[:30] or None,
             'stop_time': (p.get('StopTime') or '')[:30] or None,
             'reason': (p.get('Reason') or '')[:100] or None,
@@ -270,9 +275,25 @@ def upsert_portalxs_activity(
             'source_file': 'portalxs',
             'data_source': _SOURCE_PORTALXS,
         })
-    if mappings:
-        db.session.bulk_insert_mappings(VehicleActivityRecord, mappings)
-    db.session.commit()
+    try:
+        if mappings:
+            db.session.bulk_insert_mappings(VehicleActivityRecord, mappings)
+        db.session.commit()
+    except Exception as e:
+        # The delete above only flushed, so rolling back keeps the existing rows.
+        # Leaving a failed session open is worse than losing this refresh: every
+        # later query in the same request would raise instead of the caller being
+        # able to report the failure.
+        db.session.rollback()
+        logger.warning('activity save failed %s %s: %s', portalxs_regno, task_date, e)
+        return {
+            'ok': False,
+            'source': 'error',
+            'error': str(e)[:240],
+            'count': 0,
+            'rows': load_activity_from_db(task_date, portalxs_regno, vehicle_no),
+            'vehicle_no': store,
+        }
     rows = load_activity_from_db(task_date, portalxs_regno, vehicle_no)
     return {
         'ok': True,
@@ -510,7 +531,13 @@ def mark_activity_sync_status(
                 continue
             remarks.append({'regno': regno[:80], 'error': err[:240]})
         row.error_remarks = json.dumps(remarks) if remarks else None
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception as exc:
+        # This is often called while already handling a failure, so it must never
+        # be the thing that breaks the caller.
+        db.session.rollback()
+        logger.warning('activity sync status write failed %s: %s', task_date, exc)
 
 
 def clear_activity_sync_remarks(account_id: Optional[int] = None, task_date: Optional[date] = None) -> int:

@@ -424,6 +424,14 @@ def normalize_vehicle_reg_key(reg: Optional[str]) -> str:
     return re.sub(r'[^A-Za-z0-9]', '', strip_ufone_reg_tag(reg).upper())
 
 
+def safe_float(value, default: float = 0.0) -> float:
+    """Numeric fields from the tracker APIs arrive as '', '-' or 'N/A' as well."""
+    try:
+        return float(value or 0)
+    except (TypeError, ValueError):
+        return default
+
+
 def emg_amb_reg_matches_vehicle(vehicle_no: Optional[str]):
     """SQLAlchemy OR filter: EmergencyTaskRecord.amb_reg_no ↔ fleet vehicle_no.
 

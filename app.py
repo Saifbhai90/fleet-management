@@ -458,7 +458,9 @@ def inject_workspace_context():
 # Always run: local/prod entrypoints use use_reloader=False with debug=True, so the
 # old "(not debug) or WERKZEUG_RUN_MAIN" check skipped migrations entirely and left
 # emergency_task_record without account_id/synced_at (blank dashboard cards).
-_run_startup_tasks = True
+# SKIP_STARTUP_TASKS lets a diagnostic script import the app to reproduce a
+# request without the schema bootstrap and schedulers touching the database.
+_run_startup_tasks = os.environ.get('SKIP_STARTUP_TASKS', '0') != '1'
 if _run_startup_tasks:
     with app.app_context():
         print("Creating tables if needed...")
