@@ -353,11 +353,10 @@ def fetch_and_upsert_one(account_id: int, portalxs_regno: str, task_date: date, 
     return row
 
 
-def sync_day_full(account_id: int, task_date: date) -> dict:
+def sync_day_full(account_id: int, task_date: date, source: str = 'auto') -> dict:
     """Full-fleet PortalXS refresh for one day (auto schedule). Skips Excel regs."""
     pending = pending_regnos_for_day(account_id, task_date, mode='refresh_all')
     ok = 0
-    skipped = 0
     errors = []
     for item in pending:
         regno = item['portalxs_regno']
@@ -371,6 +370,13 @@ def sync_day_full(account_id: int, task_date: date) -> dict:
             logger.warning('mileage sync failed account=%s day=%s regno=%s: %s',
                            account_id, task_date, regno, exc)
     excel_n = len(excel_protected_keys(task_date))
+    mark_sync_status(
+        task_date,
+        source=source,
+        account_id=account_id,
+        fetched_count=ok,
+        error_count=len(errors),
+    )
     return {
         'task_date': task_date.isoformat(),
         'account_id': account_id,
@@ -388,7 +394,7 @@ def sync_all_active_accounts_for_day(task_date: date) -> list[dict]:
     accounts = PortalXSAccount.query.filter_by(is_active=True).all()
     for acct in accounts:
         try:
-            results.append(sync_day_full(acct.id, task_date))
+            results.append(sync_day_full(acct.id, task_date, source='auto'))
         except Exception as exc:
             logger.exception('mileage sync account=%s day=%s failed', acct.id, task_date)
             results.append({
@@ -397,6 +403,96 @@ def sync_all_active_accounts_for_day(task_date: date) -> list[dict]:
                 'error': str(exc)[:300],
             })
     return results
+
+
+def format_sync_pkt(dt) -> str:
+    if not dt:
+        return '—'
+    return dt.strftime('%d %b %Y %I:%M %p') + ' PKT'
+
+
+def mark_sync_status(
+    task_date: date,
+    source: str = 'auto',
+    account_id: Optional[int] = None,
+    fetched_count: int = 0,
+    error_count: int = 0,
+) -> None:
+    from app import db
+    from models import VehicleMileageSyncStatus
+
+    row = VehicleMileageSyncStatus.query.filter_by(
+        account_id=account_id, task_date=task_date
+    ).first()
+    if not row:
+        row = VehicleMileageSyncStatus(account_id=account_id, task_date=task_date)
+        db.session.add(row)
+    row.last_synced_at = pk_now()
+    row.source = source if source in ('auto', 'manual') else 'manual'
+    row.fetched_count = fetched_count
+    row.error_count = error_count
+    db.session.commit()
+
+
+def _status_dict(row) -> Optional[dict]:
+    if not row:
+        return None
+    return {
+        'task_date': row.task_date.isoformat() if row.task_date else '',
+        'task_date_label': row.task_date.strftime('%d %b %Y') if row.task_date else '',
+        'last_synced_at': row.last_synced_at.isoformat(sep=' ') if row.last_synced_at else '',
+        'last_synced_label': format_sync_pkt(row.last_synced_at),
+        'source': row.source or '',
+        'fetched_count': row.fetched_count or 0,
+        'error_count': row.error_count or 0,
+        'account_id': row.account_id,
+    }
+
+
+def get_mileage_sync_status_display(account_id: Optional[int] = None) -> dict:
+    """Status for UI: last auto (any day) + today's last fetch."""
+    from models import VehicleMileageSyncStatus
+
+    today = pk_date()
+
+    auto_q = VehicleMileageSyncStatus.query.filter_by(source='auto')
+    if account_id:
+        last_auto = (
+            auto_q.filter_by(account_id=account_id)
+            .order_by(VehicleMileageSyncStatus.last_synced_at.desc())
+            .first()
+        )
+        if not last_auto:
+            last_auto = (
+                VehicleMileageSyncStatus.query.filter_by(source='auto')
+                .order_by(VehicleMileageSyncStatus.last_synced_at.desc())
+                .first()
+            )
+    else:
+        last_auto = auto_q.order_by(VehicleMileageSyncStatus.last_synced_at.desc()).first()
+
+    today_q = VehicleMileageSyncStatus.query.filter_by(task_date=today)
+    if account_id:
+        today_row = (
+            today_q.filter_by(account_id=account_id)
+            .order_by(VehicleMileageSyncStatus.last_synced_at.desc())
+            .first()
+        )
+        if not today_row:
+            today_row = (
+                VehicleMileageSyncStatus.query.filter_by(task_date=today)
+                .order_by(VehicleMileageSyncStatus.last_synced_at.desc())
+                .first()
+            )
+    else:
+        today_row = today_q.order_by(VehicleMileageSyncStatus.last_synced_at.desc()).first()
+
+    return {
+        'today': today.isoformat(),
+        'today_label': today.strftime('%d %b %Y'),
+        'last_auto': _status_dict(last_auto),
+        'today_last': _status_dict(today_row),
+    }
 
 
 def plan_days_for_range(from_date: date, to_date: date) -> list[dict]:

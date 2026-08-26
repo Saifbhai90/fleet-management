@@ -31,6 +31,34 @@
     </div>
   </form>
 
+  {% set ss = sync_status or {} %}
+  <div class="alert alert-secondary py-2 mb-3" id="mileageSyncStatus">
+    <div class="small mb-1">
+      <i class="bi bi-clock-history"></i>
+      <strong>Last auto fetch:</strong>
+      <span id="mileageLastAuto">
+        {% if ss.last_auto %}
+          {{ ss.last_auto.last_synced_label }} — for date <strong>{{ ss.last_auto.task_date_label }}</strong>
+          ({{ ss.last_auto.fetched_count }} vehicles)
+        {% else %}
+          Not run yet
+        {% endif %}
+      </span>
+    </div>
+    <div class="small mb-0">
+      <i class="bi bi-calendar-check"></i>
+      <strong>Today ({{ ss.today_label or '—' }}) last fetch:</strong>
+      <span id="mileageTodayLast">
+        {% if ss.today_last %}
+          {{ ss.today_last.last_synced_label }}
+          ({{ ss.today_last.source }}{% if ss.today_last.fetched_count is not none %}, {{ ss.today_last.fetched_count }} vehicles{% endif %})
+        {% else %}
+          Not fetched yet today
+        {% endif %}
+      </span>
+    </div>
+  </div>
+
   <div id="mileageProgressWrap" class="mb-3" {% if not report_ready %}style="display:none"{% endif %}>
     <div class="d-flex justify-content-between small mb-1">
       <span id="mileageProgressLabel">
@@ -173,6 +201,23 @@ flatpickr('.datepicker', { dateFormat: 'Y-m-d', maxDate: new Date() });
     }).then(function(r) { return r.json().then(function(d) { return { status: r.status, data: d }; }); });
   }
 
+  function updateSyncStatus(ss) {
+    if (!ss) return;
+    var autoEl = document.getElementById('mileageLastAuto');
+    var todayEl = document.getElementById('mileageTodayLast');
+    if (autoEl && ss.last_auto) {
+      autoEl.innerHTML = ss.last_auto.last_synced_label
+        + ' — for date <strong>' + (ss.last_auto.task_date_label || '') + '</strong>'
+        + ' (' + (ss.last_auto.fetched_count || 0) + ' vehicles)';
+    }
+    if (todayEl && ss.today_last) {
+      todayEl.textContent = ss.today_last.last_synced_label
+        + ' (' + (ss.today_last.source || '')
+        + (ss.today_last.fetched_count != null ? ', ' + ss.today_last.fetched_count + ' vehicles' : '')
+        + ')';
+    }
+  }
+
   function runDay(dayInfo) {
     return new Promise(function(resolve) {
       var doneRegnos = [];
@@ -188,6 +233,7 @@ flatpickr('.datepicker', { dateFormat: 'Y-m-d', maxDate: new Date() });
           else showAlert('');
           if (d.complete) {
             if (d.rows) replaceAllRows(d.rows);
+            if (d.sync_status) updateSyncStatus(d.sync_status);
             resolve();
             return;
           }

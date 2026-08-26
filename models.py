@@ -774,6 +774,25 @@ class VehicleMileageRecord(db.Model):
         return f'<VehicleMileageRecord {self.reg_no} {self.task_date}>'
 
 
+class VehicleMileageSyncStatus(db.Model):
+    """Last PortalXS mileage sync per account + task_date (auto or manual)."""
+    __tablename__ = 'vehicle_mileage_sync_status'
+    id = db.Column(db.Integer, primary_key=True)
+    account_id = db.Column(db.Integer, db.ForeignKey('portalxs_account.id', ondelete='CASCADE'), nullable=True, index=True)
+    task_date = db.Column(db.Date, nullable=False, index=True)
+    last_synced_at = db.Column(db.DateTime, nullable=False, default=pk_now, index=True)
+    source = db.Column(db.String(20), nullable=False, default='auto')  # auto | manual
+    fetched_count = db.Column(db.Integer, default=0)
+    error_count = db.Column(db.Integer, default=0)
+
+    __table_args__ = (
+        db.UniqueConstraint('account_id', 'task_date', name='uq_mileage_sync_acct_day'),
+    )
+
+    def __repr__(self):
+        return f'<VehicleMileageSyncStatus {self.task_date} {self.source}>'
+
+
 class VehicleActivityRecord(db.Model):
     __tablename__ = 'vehicle_activity_record'
     id = db.Column(db.Integer, primary_key=True)

@@ -28,6 +28,8 @@ from services.portalxs_service import (
 from services.mileage_record_service import (
     aggregate_range_rows,
     fetch_and_upsert_one,
+    get_mileage_sync_status_display,
+    mark_sync_status,
     normalize_reg_key,
     pending_regnos_for_day,
     plan_days_for_range,
@@ -513,6 +515,7 @@ def tracking_mileage_report():
     error = None
     day_plan = []
     pending_total = 0
+    sync_status = get_mileage_sync_status_display(acct_id or None)
     if run_query and acct_id:
         fd = _parse_ymd(from_date)
         td = _parse_ymd(to_date)
@@ -542,6 +545,7 @@ def tracking_mileage_report():
         day_plan=day_plan,
         pending_total=pending_total,
         total_vehicles=len(vehicles_list),
+        sync_status=sync_status,
         **_nav_back_ctx(url_for('tracking_dashboard')),
     )
 
@@ -651,9 +655,17 @@ def tracking_mileage_report_fetch_one():
         'error': err_msg,
     }
     if complete:
+        mark_sync_status(
+            task_date,
+            source='manual',
+            account_id=acct_id,
+            fetched_count=done_after,
+            error_count=1 if err_msg else 0,
+        )
         rows = aggregate_range_rows(_parse_ymd(from_date), _parse_ymd(to_date))
         _apply_mileage_display_names(rows, names)
         payload['rows'] = rows
+        payload['sync_status'] = get_mileage_sync_status_display(acct_id)
     return jsonify(payload)
 
 
