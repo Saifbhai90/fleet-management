@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% from 'partials/nav_back_button.html' import nav_back_button %}
+{% from 'partials/nav_back_button.html' import nav_back_button with context %}
 {% block title %}Vehicle Mileage Report — Fleet Tracking{% endblock %}
 
 {% block extra_head %}
@@ -59,18 +59,16 @@
     </div>
   </div>
 
-  <div id="mileageProgressWrap" class="mb-3" {% if not report_ready %}style="display:none"{% endif %}>
+  <div id="mileageProgressWrap" class="mb-3" {% if not report_ready or not pending_total %}style="display:none"{% endif %}>
     <div class="d-flex justify-content-between small mb-1">
       <span id="mileageProgressLabel">
-        {% if report_ready %}
-          {% if pending_total %}Fetching / updating from PortalXS…{% else %}Loaded from database{% endif %}
-        {% endif %}
+        {% if report_ready and pending_total %}Fetching / updating from PortalXS…{% endif %}
       </span>
       <span id="mileageProgressPct"></span>
     </div>
     <div class="progress" style="height: 10px;">
       <div id="mileageProgressBar" class="progress-bar progress-bar-striped {% if pending_total %}progress-bar-animated{% endif %}"
-           role="progressbar" style="width: {% if pending_total %}0{% else %}100{% endif %}%"></div>
+           role="progressbar" style="width: 0%"></div>
     </div>
   </div>
 
@@ -130,13 +128,23 @@ flatpickr('.datepicker', { dateFormat: 'Y-m-d', maxDate: new Date() });
 
   function fmt(n) { return (Number(n) || 0).toFixed(1); }
 
+  function hideProgress() {
+    var wrap = document.getElementById('mileageProgressWrap');
+    if (wrap) wrap.style.display = 'none';
+  }
+
   function setProgress(done, total, fetchingNow, labelExtra) {
     var wrap = document.getElementById('mileageProgressWrap');
     var bar = document.getElementById('mileageProgressBar');
     var label = document.getElementById('mileageProgressLabel');
     var pctEl = document.getElementById('mileageProgressPct');
-    wrap.style.display = '';
     var pct = total ? Math.round((done / total) * 100) : 100;
+    var complete = !fetchingNow && (!total || done >= total);
+    if (complete) {
+      hideProgress();
+      return;
+    }
+    wrap.style.display = '';
     bar.style.width = pct + '%';
     bar.classList.toggle('progress-bar-animated', !!fetchingNow && done < total);
     pctEl.textContent = total ? (pct + '%') : '';
@@ -258,7 +266,7 @@ flatpickr('.datepicker', { dateFormat: 'Y-m-d', maxDate: new Date() });
     if (fetching) return;
     var todo = (dayPlan || []).filter(function(d) { return d.needs_fetch && (d.pending || 0) > 0; });
     if (!todo.length) {
-      setProgress(1, 1, false, 'Loaded from database — ');
+      hideProgress();
       return;
     }
     fetching = true;
@@ -267,7 +275,7 @@ flatpickr('.datepicker', { dateFormat: 'Y-m-d', maxDate: new Date() });
     function next() {
       if (i >= todo.length) {
         fetching = false;
-        setProgress(1, 1, false, 'Complete — ');
+        hideProgress();
         return;
       }
       runDay(todo[i]).then(function() {

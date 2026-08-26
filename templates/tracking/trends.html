@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% from 'partials/nav_back_button.html' import nav_back_button %}
+{% from 'partials/nav_back_button.html' import nav_back_button with context %}
 {% block title %}Trends — Fleet Tracking{% endblock %}
 
 {% block extra_head %}
@@ -21,7 +21,7 @@
         <select name="regno" class="form-select form-select-sm" required>
           {% for v in vehicles_list %}
           <option value="{{ v.portalxs_regno }}" {% if v.portalxs_regno == selected_regno %}selected{% endif %}>
-            {{ v.portalxs_regno }}{% if v.vehicle_no %} ({{ v.vehicle_no }}){% endif %}
+            {{ v.display_label or v.portalxs_regno }}
           </option>
           {% endfor %}
         </select>

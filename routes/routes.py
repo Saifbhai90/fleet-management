@@ -9404,6 +9404,7 @@ def _parse_activity_report_single_file(f, task_date, upload_date, seen_rows):
             'latitude': latitude,
             'longitude': longitude,
             'source_file': f.filename,
+            'data_source': 'excel',
         }
         _validate_string_lengths('vehicle_activity_record', VehicleActivityRecord, vals, excel_row_no, 'Tracker Activity Report', limits=limits)
 
@@ -9413,6 +9414,9 @@ def _parse_activity_report_single_file(f, task_date, upload_date, seen_rows):
         count_rows += 1
 
     if mappings:
+        # Replace this vehicle's rows for the day (keep other vehicles / PortalXS data).
+        from services.activity_record_service import delete_all_activity_for_vehicle
+        delete_all_activity_for_vehicle(task_date, vehicle_no)
         db.session.bulk_insert_mappings(VehicleActivityRecord, mappings)
     return count_rows, True
 
@@ -9422,8 +9426,6 @@ def _parse_activity_report_excels(files, task_date):
     valid_files = [f for f in (files or []) if f and getattr(f, 'filename', '').strip()]
     if not valid_files:
         return {'files': 0, 'rows': 0}
-
-    VehicleActivityRecord.query.filter_by(task_date=task_date).delete()
 
     count_rows = 0
     count_files = 0

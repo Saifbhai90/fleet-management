@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% from 'partials/nav_back_button.html' import nav_back_button %}
+{% from 'partials/nav_back_button.html' import nav_back_button with context %}
 {% block title %}{{ regno }} — Vehicle Tracking Detail{% endblock %}
 
 {% block extra_head %}
@@ -100,9 +100,6 @@
         </a>
         {% endif %}
         {% if can_see_page('tracking_reports') %}
-        <a href="{{ url_for('tracking_trips', regno=regno) }}" class="btn btn-outline-primary">
-          <i class="bi bi-table"></i> View Trips
-        </a>
         <a href="{{ url_for('tracking_trends', regno=regno) }}" class="btn btn-outline-primary">
           <i class="bi bi-graph-up"></i> View Trends
         </a>

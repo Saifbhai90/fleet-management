@@ -735,6 +735,7 @@ ENDPOINT_PERMISSION_MAP = [
     # Must be longer than bare 'mileage_report' key (Report Centre) so substring match
     # does not force report_vehicle_summary on Fleet Tracking mileage pages.
     ('tracking_mileage_report', 'tracking_reports'),
+    ('tracking_activity_report', 'tracking_reports'),  # GPS Point / Activity Report + CSV
     ('tracking_trends', 'tracking_reports'),
     ('tracking_alerts', 'tracking_alerts'),
     ('tracking_settings', 'tracking_settings'),        # covers all settings sub-routes

@@ -358,6 +358,8 @@ HUBS = {
             'tracking_mileage_report',
             'tracking_mileage_report_export_csv',
             'tracking_mileage_report_fetch_one',
+            'tracking_activity_report',
+            'tracking_activity_report_export_csv',
         ),
         'sections': [
             {
@@ -365,7 +367,6 @@ HUBS = {
                 'items': [
                     _item('tracking_dashboard', 'Live Map & Dashboard', 'fa-solid fa-map-location-dot', 'rc-tile--tracker', 'tracking_view'),
                     _item('tracking_history', 'Route History & Playback', 'fa-solid fa-clock-rotate-left', 'rc-tile--tracker', 'tracking_history'),
-                    _item('tracking_trips', 'Trips Report', 'fa-solid fa-table-list', 'rc-tile--tracker', 'tracking_reports'),
                 ],
             },
             {
@@ -380,6 +381,7 @@ HUBS = {
                         'tracking_reports',
                         icon_html=_MILEAGE_HUB_ICON_SVG,
                     ),
+                    _item('tracking_activity_report', 'GPS Point / Activity Report', 'fa-solid fa-location-dot', 'rc-tile--tracker', 'tracking_reports'),
                     _item('tracking_trends', 'Trends Analysis', 'fa-solid fa-chart-line', 'rc-tile--tracker', 'tracking_reports'),
                     _item('tracking_alerts', 'Alerts', 'fa-solid fa-bell', 'rc-tile--tracker', 'tracking_alerts'),
                 ],

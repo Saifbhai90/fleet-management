@@ -34,6 +34,7 @@ from services.mileage_record_service import (
     pending_regnos_for_day,
     plan_days_for_range,
 )
+from services.activity_record_service import ensure_activity_for_range
 from utils import pk_now, pk_date, parse_date
 from datetime import datetime, timedelta, date
 import csv
@@ -259,17 +260,38 @@ def tracking_history():
     vehicles_list = get_all_vehicles_for_account(acct_id) if acct_id else []
 
     regno = request.args.get('regno', '')
-    from_date = _sanitize_date(request.args.get('from_date', ''), (pk_date() - timedelta(days=1)).strftime('%Y-%m-%d'))
-    to_date = _sanitize_date(request.args.get('to_date', ''), pk_date().strftime('%Y-%m-%d'))
+    today = pk_date().strftime('%Y-%m-%d')
+    from_date = _sanitize_date(request.args.get('from_date', ''), today)
+    to_date = _sanitize_date(request.args.get('to_date', ''), today)
 
     history_points = []
+    trips = []
     error = None
     if regno and acct_id:
         fdt, tdt = _soap_dates(from_date, to_date)
+        # Trips first (same source as Trips Report), then GPS history for the map.
         try:
-            history_points = fetch_history(acct_id, regno, fdt, tdt)
+            trips = fetch_trips(acct_id, regno, fdt, tdt) or []
         except Exception as e:
-            error = str(e)[:300]
+            error = f'Trips: {str(e)[:300]}'
+            logger.warning('tracking_history trips failed regno=%s: %s', regno, e)
+        # Hide zero-distance trips on History page (ignition on/off with no movement).
+        trips = [t for t in trips if float(t.get('Mileage') or 0) > 0]
+        trips.sort(key=lambda t: str(t.get('IGON_RDT') or ''))
+        try:
+            history_points = fetch_history(acct_id, regno, fdt, tdt) or []
+        except Exception as e:
+            hist_err = str(e)[:300]
+            error = f'{error}; History: {hist_err}' if error else f'History: {hist_err}'
+            logger.warning('tracking_history history failed regno=%s: %s', regno, e)
+
+        logger.info(
+            'tracking_history regno=%s from=%s to=%s trips=%s points=%s',
+            regno, from_date, to_date, len(trips), len(history_points),
+        )
+
+    total_distance = sum(float(t.get('Mileage') or 0) for t in trips)
+    total_trips = len(trips)
 
     return render_template(
         'tracking/history.html',
@@ -278,10 +300,13 @@ def tracking_history():
         from_date=from_date,
         to_date=to_date,
         history_points=history_points,
+        trips=trips,
+        total_trips=total_trips,
+        total_distance=total_distance,
         error=error,
         accounts=accounts,
         current_account_id=acct_id,
-        **_nav_back_ctx(url_for('tracking_dashboard')),
+        **_nav_back_ctx(url_for('module_hub', hub_slug='fleet-tracking')),
     )
 
 
@@ -303,46 +328,16 @@ def api_tracking_history():
 
 
 # ════════════════════════════════════════════════════════════════════════════
-# TRIPS
+# TRIPS (page removed — merged into Route History & Playback)
 # ════════════════════════════════════════════════════════════════════════════
 
 @app.route('/tracking/trips')
 def tracking_trips():
-    acct_id = _get_account_id()
-    accounts = _get_all_accounts()
-    vehicles_list = get_all_vehicles_for_account(acct_id) if acct_id else []
-
-    regno = request.args.get('regno', '')
-    from_date = _sanitize_date(request.args.get('from_date', ''))
-    to_date = _sanitize_date(request.args.get('to_date', ''))
-
-    trips = []
-    error = None
-    if regno and acct_id:
-        fdt, tdt = _soap_dates(from_date, to_date)
-        try:
-            trips = fetch_trips(acct_id, regno, fdt, tdt)
-        except Exception as e:
-            error = str(e)[:300]
-
-    # Summary
-    total_distance = sum(t.get('Mileage', 0) for t in trips)
-    total_trips = len(trips)
-
-    return render_template(
-        'tracking/trips.html',
-        vehicles_list=vehicles_list,
-        selected_regno=regno,
-        from_date=from_date,
-        to_date=to_date,
-        trips=trips,
-        total_distance=total_distance,
-        total_trips=total_trips,
-        error=error,
-        accounts=accounts,
-        current_account_id=acct_id,
-        **_nav_back_ctx(url_for('tracking_dashboard')),
-    )
+    """Old Trips Report URL → History page (trips panel lives there now)."""
+    args = request.args.to_dict(flat=True)
+    if not args.get('nav_from'):
+        args['nav_from'] = 'hub:fleet-tracking'
+    return redirect(url_for('tracking_history', **args))
 
 
 @app.route('/tracking/trips/export/csv')
@@ -380,6 +375,164 @@ def tracking_trips_export_csv():
     resp = make_response(output.getvalue())
     resp.headers['Content-Type'] = 'text/csv'
     resp.headers['Content-Disposition'] = f'attachment; filename=trips_{regno}_{from_date}_{to_date}.csv'
+    return resp
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# GPS POINT / ACTIVITY REPORT
+# ════════════════════════════════════════════════════════════════════════════
+
+def _activity_point_stats(points: list) -> dict:
+    moving = sum(1 for p in points if float(p.get('Speed') or 0) > 0)
+    stopped = len(points) - moving
+    reasons: dict[str, int] = {}
+    total_distance = 0.0
+    for p in points:
+        r = (p.get('Reason') or 'Unknown').strip() or 'Unknown'
+        reasons[r] = reasons.get(r, 0) + 1
+        total_distance += float(p.get('Distance') or 0)
+    reason_rows = sorted(reasons.items(), key=lambda x: (-x[1], x[0]))
+    return {
+        'total': len(points),
+        'moving': moving,
+        'stopped': stopped,
+        'reasons': reason_rows,
+        'total_distance': round(total_distance, 2),
+    }
+
+
+@app.route('/tracking/activity-report')
+def tracking_activity_report():
+    """GPS Point / Activity Report — same DB table as Excel Tracker Activity uploads."""
+    acct_id = _get_account_id()
+    accounts = _get_all_accounts()
+    vehicles_list = get_all_vehicles_for_account(acct_id) if acct_id else []
+
+    today = pk_date().strftime('%Y-%m-%d')
+    regno = request.args.get('regno', '')
+    from_date = _sanitize_date(request.args.get('from_date', ''), today)
+    to_date = _sanitize_date(request.args.get('to_date', ''), today)
+    reason_filter = (request.args.get('reason') or '').strip()
+
+    points = []
+    error = None
+    data_source_label = ''
+    group_name = ''
+    vehicle_no = ''
+    if regno and acct_id:
+        for v in vehicles_list:
+            if v.get('portalxs_regno') == regno:
+                group_name = v.get('group_name') or ''
+                vehicle_no = v.get('vehicle_no') or ''
+                break
+        fd = datetime.strptime(from_date, '%Y-%m-%d').date()
+        td = datetime.strptime(to_date, '%Y-%m-%d').date()
+        try:
+            points, error, data_source_label = ensure_activity_for_range(
+                acct_id, regno, fd, td,
+                vehicle_no=vehicle_no, group_name=group_name,
+            )
+            for p in points:
+                if not p.get('RegNo'):
+                    p['RegNo'] = regno
+        except Exception as e:
+            error = str(e)[:300]
+            logger.warning('tracking_activity_report failed regno=%s: %s', regno, e)
+
+    # Reasons from unfiltered set for dropdown; apply filter after
+    all_reasons = sorted({
+        ((p.get('Reason') or 'Unknown').strip() or 'Unknown') for p in points
+    })
+    if reason_filter:
+        points = [
+            p for p in points
+            if ((p.get('Reason') or 'Unknown').strip() or 'Unknown') == reason_filter
+        ]
+
+    stats = _activity_point_stats(points)
+
+    return render_template(
+        'tracking/activity_report.html',
+        vehicles_list=vehicles_list,
+        selected_regno=regno,
+        from_date=from_date,
+        to_date=to_date,
+        reason_filter=reason_filter,
+        all_reasons=all_reasons,
+        points=points,
+        stats=stats,
+        error=error,
+        data_source_label=data_source_label,
+        accounts=accounts,
+        current_account_id=acct_id,
+        **_nav_back_ctx(url_for('module_hub', hub_slug='fleet-tracking')),
+    )
+
+
+@app.route('/tracking/activity-report/export/csv')
+def tracking_activity_report_export_csv():
+    acct_id = _get_account_id()
+    regno = request.args.get('regno', '')
+    from_date = _sanitize_date(request.args.get('from_date', ''))
+    to_date = _sanitize_date(request.args.get('to_date', ''))
+    reason_filter = (request.args.get('reason') or '').strip()
+    if not acct_id or not regno:
+        return Response('Missing parameters', status=400)
+
+    vehicles_list = get_all_vehicles_for_account(acct_id)
+    group_name = ''
+    vehicle_no = ''
+    for v in vehicles_list:
+        if v.get('portalxs_regno') == regno:
+            group_name = v.get('group_name') or ''
+            vehicle_no = v.get('vehicle_no') or ''
+            break
+
+    fd = datetime.strptime(from_date, '%Y-%m-%d').date()
+    td = datetime.strptime(to_date, '%Y-%m-%d').date()
+    try:
+        points, err, _src = ensure_activity_for_range(
+            acct_id, regno, fd, td,
+            vehicle_no=vehicle_no, group_name=group_name,
+        )
+        if err and not points:
+            return Response(f'Error: {err}', status=500)
+    except Exception as e:
+        return Response(f'Error: {e}', status=500)
+
+    if reason_filter:
+        points = [
+            p for p in points
+            if ((p.get('Reason') or 'Unknown').strip() or 'Unknown') == reason_filter
+        ]
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        'RegNo', 'Group', 'Record Date Time', 'Location', 'Speed',
+        'Direction', 'Distance', 'Travel Time', 'Stop Time', 'Reason', 'Source',
+    ])
+    for p in points:
+        writer.writerow([
+            p.get('RegNo', '') or regno,
+            p.get('Group', ''),
+            p.get('RecordDateTime', ''),
+            p.get('Location', ''),
+            p.get('Speed', 0),
+            p.get('Direction', ''),
+            p.get('Distance', 0),
+            p.get('TravelTime', ''),
+            p.get('StopTime', ''),
+            p.get('Reason', ''),
+            p.get('data_source', ''),
+        ])
+
+    resp = make_response(output.getvalue())
+    resp.headers['Content-Type'] = 'text/csv'
+    safe_reg = regno.replace(' ', '_')
+    resp.headers['Content-Disposition'] = (
+        f'attachment; filename=gps_activity_{safe_reg}_{from_date}_{to_date}.csv'
+    )
     return resp
 
 

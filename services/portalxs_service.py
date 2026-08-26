@@ -12,11 +12,14 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import threading
 import time
 from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Optional
+
+from utils import normalize_vehicle_reg_key
 
 logger = logging.getLogger(__name__)
 
@@ -112,6 +115,7 @@ def normalize_vehicle(v: dict) -> dict:
 
 def normalize_history_point(p: dict) -> dict:
     return {
+        'RegNo': p.get('RegNo', ''),
         'RecordDateTime': p.get('RecordDateTime', ''),
         'LAT': _to_float(p.get('LAT')),
         'LON': _to_float(p.get('LON')),
@@ -120,6 +124,94 @@ def normalize_history_point(p: dict) -> dict:
         'LandMark': clean_landmark(p.get('LandMark', '')),
         'Direction': _to_float(p.get('Direction')),
     }
+
+
+def _heading_to_cardinal(deg) -> str:
+    """Convert compass degrees to 8-point cardinal (PortalXS Activity Report style)."""
+    try:
+        d = float(deg)
+    except (TypeError, ValueError):
+        return ''
+    if d < 0:
+        d = d % 360
+    dirs = ('N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW')
+    return dirs[int((d + 22.5) // 45) % 8]
+
+
+def _parse_history_ts(val) -> Optional[datetime]:
+    if not val:
+        return None
+    s = str(val).strip().replace(' ', 'T')
+    for fmt in ('%Y-%m-%dT%H:%M:%S', '%Y-%m-%dT%H:%M:%S.%f', '%d/%m/%y %H:%M:%S', '%d/%m/%Y %H:%M:%S'):
+        try:
+            return datetime.strptime(s[:26], fmt)
+        except ValueError:
+            continue
+    try:
+        return datetime.fromisoformat(s)
+    except ValueError:
+        return None
+
+
+def _format_hms(seconds: float) -> str:
+    sec = max(0, int(round(seconds)))
+    h, rem = divmod(sec, 3600)
+    m, s = divmod(rem, 60)
+    return f'{h:02d}:{m:02d}:{s:02d}'
+
+
+def _haversine_km(lat1, lon1, lat2, lon2) -> float:
+    try:
+        a1, o1, a2, o2 = float(lat1), float(lon1), float(lat2), float(lon2)
+    except (TypeError, ValueError):
+        return 0.0
+    r = 6371.0
+    p1, p2 = math.radians(a1), math.radians(a2)
+    dp = math.radians(a2 - a1)
+    dl = math.radians(o2 - o1)
+    h = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return 2 * r * math.asin(min(1.0, math.sqrt(h)))
+
+
+def enrich_activity_report_rows(points: list[dict], group_name: str = '') -> list[dict]:
+    """Build PortalXS Activity Report–style rows (Distance / Travel / Stop between points).
+
+    SOAP history only returns RegNo/RDT/LAT/LON/Speed/Reason/LandMark/Direction;
+    Distance, Travel Time and Stop Time are derived like the website report.
+    """
+    rows = []
+    prev = None
+    prev_ts = None
+    for p in points or []:
+        ts = _parse_history_ts(p.get('RecordDateTime'))
+        speed = float(p.get('Speed') or 0)
+        distance = 0.0
+        delta_sec = 0.0
+        if prev is not None and ts and prev_ts:
+            delta_sec = max(0.0, (ts - prev_ts).total_seconds())
+            distance = _haversine_km(prev.get('LAT'), prev.get('LON'), p.get('LAT'), p.get('LON'))
+        if speed > 0:
+            travel_s, stop_s = delta_sec, 0.0
+        else:
+            travel_s, stop_s = 0.0, delta_sec
+        rows.append({
+            'RegNo': p.get('RegNo') or '',
+            'Group': group_name or '',
+            'RecordDateTime': p.get('RecordDateTime') or '',
+            'Location': p.get('LandMark') or '',
+            'Speed': speed,
+            'Direction': _heading_to_cardinal(p.get('Direction')),
+            'DirectionDeg': p.get('Direction'),
+            'Distance': round(distance, 2),
+            'TravelTime': _format_hms(travel_s),
+            'StopTime': _format_hms(stop_s),
+            'Reason': p.get('Reason') or '',
+            'LAT': p.get('LAT'),
+            'LON': p.get('LON'),
+        })
+        prev = p
+        prev_ts = ts
+    return rows
 
 
 def normalize_trip(t: dict) -> dict:
@@ -891,17 +983,32 @@ def test_connection(username: str, password: str) -> dict:
         return {'success': False, 'error': str(e)[:300]}
 
 
+def _vehicle_option_label(portalxs_regno: Optional[str], vehicle_no: Optional[str]) -> str:
+    """Dropdown label: PortalXS reg; append fleet no only when it is a different identity."""
+    px = (portalxs_regno or '').strip()
+    vn = (vehicle_no or '').strip()
+    if not px:
+        return vn
+    if not vn:
+        return px
+    if normalize_vehicle_reg_key(vn) == normalize_vehicle_reg_key(px):
+        return px
+    return f'{px} ({vn})'
+
+
 def get_all_vehicles_for_account(account_id: int) -> list[dict]:
     """Get all vehicles from DB mapping (no SOAP call)."""
     from models import PortalXSVehicleMapping
     mappings = PortalXSVehicleMapping.query.filter_by(account_id=account_id).all()
     result = []
     for m in mappings:
+        vehicle_no = m.vehicle.vehicle_no if m.vehicle else None
         result.append({
             'id': m.id,
             'portalxs_regno': m.portalxs_regno,
             'vehicle_id': m.vehicle_id,
-            'vehicle_no': m.vehicle.vehicle_no if m.vehicle else None,
+            'vehicle_no': vehicle_no,
+            'display_label': _vehicle_option_label(m.portalxs_regno, vehicle_no),
             'vehicle_model': m.vehicle.model if m.vehicle else None,
             'group_name': m.group_name or '',
             'make_model': m.make_model or '',

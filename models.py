@@ -813,6 +813,9 @@ class VehicleActivityRecord(db.Model):
     latitude = db.Column(db.Numeric(10, 6), nullable=True)
     longitude = db.Column(db.Numeric(10, 6), nullable=True)
     source_file = db.Column(db.String(255), nullable=True)
+    # 'excel' = Tracker Activity Excel upload (PortalXS must not overwrite);
+    # 'portalxs' = live SOAP sync from GPS Point / Activity Report
+    data_source = db.Column(db.String(20), nullable=True, index=True)
 
     def __repr__(self):
         return f'<VehicleActivityRecord {self.vehicle_no} {self.task_date}>'

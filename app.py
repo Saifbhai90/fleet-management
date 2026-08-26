@@ -531,6 +531,8 @@ if _run_startup_tasks:
                 ('vehicle_daily_task', 'odometer_photo_path', 'TEXT'),
                 ('vehicle_activity_record', 'latitude', 'NUMERIC(10,6)'),
                 ('vehicle_activity_record', 'longitude', 'NUMERIC(10,6)'),
+                ('vehicle_activity_record', 'data_source', 'VARCHAR(20)'),
+                ('vehicle_mileage_record', 'data_source', 'VARCHAR(20)'),
                 ('employee', 'wallet_account_id', 'INTEGER REFERENCES account(id)'),
                 ('employee', 'last_slip_profile_id', 'INTEGER REFERENCES workspace_slip_profile(id)'),
                 ('workspace_slip_profile_field', 'ocr_recipe_json', 'TEXT'),

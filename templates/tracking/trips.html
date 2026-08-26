@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% from 'partials/nav_back_button.html' import nav_back_button %}
+{% from 'partials/nav_back_button.html' import nav_back_button, nav_from_hidden with context %}
 {% block title %}Trips Report — Fleet Tracking{% endblock %}
 
 {% block extra_head %}
@@ -14,14 +14,15 @@
   </div>
 
   <form method="get" class="card mb-3">
+    {{ nav_from_hidden() }}
     <div class="card-body d-flex flex-wrap gap-3 align-items-end">
-      <div>
+      <div style="min-width: 220px;">
         <label class="form-label small fw-semibold">Vehicle</label>
-        <select name="regno" class="form-select form-select-sm" required>
+        <select name="regno" class="form-select form-select-sm search-select" required>
           <option value="">-- Select Vehicle --</option>
           {% for v in vehicles_list %}
           <option value="{{ v.portalxs_regno }}" {% if v.portalxs_regno == selected_regno %}selected{% endif %}>
-            {{ v.portalxs_regno }}{% if v.vehicle_no %} ({{ v.vehicle_no }}){% endif %}
+            {{ v.display_label or v.portalxs_regno }}
           </option>
           {% endfor %}
         </select>

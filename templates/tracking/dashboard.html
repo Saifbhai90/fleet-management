@@ -39,9 +39,10 @@
   .ts-search { padding: 10px; border-bottom: 1px solid #2a3a4a; }
   .ts-search input { width: 100%; padding: 8px 12px; border-radius: 6px; border: 1px solid #2a3a4a; background: #0f1923; color: #e0e0e0; font-size: 13px; outline: none; }
   .ts-search input:focus { border-color: #1a5fb4; }
-  .ts-filters { display: flex; gap: 4px; margin-top: 8px; }
-  .ts-filters button { flex: 1; padding: 4px 6px; border-radius: 5px; border: 1px solid #2a3a4a; background: #0f1923; color: #94a3b8; font-size: 11px; cursor: pointer; transition: all .15s; }
+  .ts-filters { display: flex; gap: 4px; margin-top: 8px; flex-wrap: wrap; }
+  .ts-filters button { flex: 1; min-width: 0; padding: 4px 6px; border-radius: 5px; border: 1px solid #2a3a4a; background: #0f1923; color: #94a3b8; font-size: 11px; cursor: pointer; transition: all .15s; }
   .ts-filters button.active { background: #1a5fb4; color: #fff; border-color: #1a5fb4; }
+  .ts-filters button[data-filter="Task"].active { background: #b91c1c; border-color: #b91c1c; }
   .ts-list { flex: 1; overflow-y: auto; }
   .ts-list::-webkit-scrollbar { width: 6px; }
   .ts-list::-webkit-scrollbar-thumb { background: #2a3a4a; border-radius: 3px; }
@@ -511,6 +512,7 @@
           <button data-filter="Moving">Moving</button>
           <button data-filter="Stopped">Stopped</button>
           <button data-filter="Idle">Idle</button>
+          <button data-filter="Task" title="Only vehicles with active Ufone task">Task</button>
         </div>
       </div>
       <div class="ts-list" id="vehicleList">
@@ -727,6 +729,12 @@
 
   function activeUfoneTask(regNo) {
     return ufoneTasksByReg[normalizeRegKey(regNo)] || null;
+  }
+
+  function matchesListFilter(regNo, status) {
+    if (currentFilter === 'all') return true;
+    if (currentFilter === 'Task') return !!activeUfoneTask(regNo);
+    return status === currentFilter;
   }
 
   // ── Vehicle Icons — modern navigation arrow markers ──
@@ -1248,7 +1256,7 @@
 
     Object.keys(rowNodes).forEach(function(reg) {
       var r = rowNodes[reg];
-      var matchFilter = currentFilter === 'all' || r.dataset.status === currentFilter;
+      var matchFilter = matchesListFilter(reg, r.dataset.status);
       var matchGroup = isGroupSelected(r.dataset.group);
       var matchSearch = !search || reg.toLowerCase().indexOf(search) >= 0;
       var show = (matchFilter && matchGroup && matchSearch);
@@ -1267,7 +1275,7 @@
       if (hdr.style.display !== want) hdr.style.display = want;
       if (body.style.display !== want) body.style.display = want;
       if (!groupMatches) return;
-      if (hasSearch) {
+      if (hasSearch || currentFilter === 'Task') {
         if (visibleGroups[hdr.dataset.group]) {
           hdr.classList.remove('collapsed');
           body.classList.remove('collapsed');
@@ -1288,7 +1296,7 @@
       var v = posByReg[reg];
       if (!v) return;
       var grp = v.GroupName || 'Unassigned';
-      var matchFilter = currentFilter === 'all' || v.VehicleStatus === currentFilter;
+      var matchFilter = matchesListFilter(reg, v.VehicleStatus);
       var matchGroup = isGroupSelected(grp);
       var matchSearch = !search || (v.RegNo || '').toLowerCase().indexOf(search) >= 0;
       if (matchFilter && matchGroup && matchSearch) {
@@ -1322,11 +1330,12 @@
     document.querySelectorAll('.ts-filters button').forEach(function(b) {
       b.classList.toggle('active', b.dataset.filter === filter);
     });
-    // sync stat badge highlight
+    // sync stat badge highlight (Task has no top stat chip)
     document.querySelectorAll('.tb-stat').forEach(function(s) {
       s.classList.toggle('active-filter', s.dataset.statFilter === filter);
     });
     applyFilter();
+    if (filter === 'Task') fitMapToVisibleMarkers();
   }
 
   /* ═══════════════════════════════════════════════════════════════

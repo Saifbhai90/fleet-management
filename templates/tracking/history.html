@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% from 'partials/nav_back_button.html' import nav_back_button %}
+{% from 'partials/nav_back_button.html' import nav_back_button, nav_from_hidden with context %}
 {% block title %}History Playback — Fleet Tracking{% endblock %}
 
 {% block extra_head %}
@@ -7,14 +7,141 @@
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <style>
-  #historyMap { height: 450px; border-radius: 12px; border: 1px solid var(--bs-border-color, #dee2e6); }
-  .playback-controls { background: rgba(255,255,255,0.95); padding: 10px 16px; border-radius: 0 0 12px 12px; }
-  .speed-color-0 { color: #dc3545; }
-  .speed-color-low { color: #ffc107; }
-  .speed-color-high { color: #198754; }
-  .timeline-slider { width: 100%; }
+  .hist-layout {
+    display: grid;
+    grid-template-columns: 1fr minmax(300px, 360px);
+    gap: 12px;
+    align-items: stretch;
+    min-height: 560px;
+  }
+  @media (max-width: 992px) {
+    .hist-layout { grid-template-columns: 1fr; }
+    .hist-trips-panel { max-height: 420px; }
+  }
+  .hist-map-col { display: flex; flex-direction: column; min-width: 0; }
+  #historyMap {
+    flex: 1;
+    min-height: 420px;
+    border-radius: 12px 12px 0 0;
+    border: 1px solid var(--bs-border-color, #dee2e6);
+  }
+  .playback-controls {
+    background: rgba(255,255,255,0.97);
+    padding: 10px 16px;
+    border: 1px solid var(--bs-border-color, #dee2e6);
+    border-top: 0;
+    border-radius: 0 0 12px 12px;
+  }
+  .hist-trips-panel {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid #c5d4e8;
+    border-radius: 10px;
+    overflow: hidden;
+    background: #f4f7fb;
+    max-height: 620px;
+  }
+  .hist-trips-head {
+    background: #1a5fb4;
+    color: #fff;
+    padding: 10px 14px;
+    font-weight: 700;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .hist-trips-all {
+    cursor: pointer;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.18);
+    font-weight: 600;
+    font-size: 12px;
+    user-select: none;
+  }
+  .hist-trips-all:hover { background: rgba(255,255,255,0.28); }
+  .hist-trips-all.is-active { background: #fff; color: #1a5fb4; }
+  .hist-trips-meta {
+    padding: 8px 12px;
+    background: #e8eef6;
+    border-bottom: 1px solid #d0dbe8;
+    font-size: 12px;
+    color: #334155;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 16px;
+  }
+  .hist-trips-meta strong { color: #0f172a; }
+  .hist-trips-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px;
+  }
+  .hist-trip-card {
+    background: #fff;
+    border: 1px solid #d7e0ec;
+    border-radius: 8px;
+    margin-bottom: 10px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: box-shadow .15s, border-color .15s;
+  }
+  .hist-trip-card:hover,
+  .hist-trip-card.is-active {
+    border-color: #1a5fb4;
+    box-shadow: 0 2px 10px rgba(26, 95, 180, 0.18);
+  }
+  .hist-trip-card-title {
+    text-align: center;
+    font-weight: 700;
+    font-size: 13px;
+    padding: 7px 8px;
+    background: #f0f5fb;
+    border-bottom: 1px solid #e2e8f0;
+    color: #1e3a5f;
+  }
+  .hist-trip-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    font-size: 11.5px;
+  }
+  .hist-trip-cell {
+    padding: 7px 9px;
+    border-bottom: 1px solid #eef2f7;
+    border-right: 1px solid #eef2f7;
+    min-width: 0;
+  }
+  .hist-trip-cell:nth-child(2n) { border-right: 0; }
+  .hist-trip-cell .k {
+    display: block;
+    font-weight: 700;
+    color: #1a5fb4;
+    margin-bottom: 2px;
+    font-size: 11px;
+  }
+  .hist-trip-cell .v {
+    color: #334155;
+    word-break: break-word;
+    line-height: 1.35;
+  }
+  .hist-trip-cell.full { grid-column: 1 / -1; border-right: 0; }
+  .hist-empty {
+    padding: 24px 16px;
+    text-align: center;
+    color: #64748b;
+    font-size: 13px;
+  }
   .dark-mode #historyMap { border-color: #333; }
   .dark-mode .playback-controls { background: rgba(33,37,41,0.95); }
+  .dark-mode .hist-trips-panel { background: #1a222d; border-color: #2a3a4a; }
+  .dark-mode .hist-trips-meta { background: #141b24; border-color: #2a3a4a; color: #cbd5e1; }
+  .dark-mode .hist-trip-card { background: #0f1923; border-color: #2a3a4a; }
+  .dark-mode .hist-trip-card-title { background: #142030; border-color: #2a3a4a; color: #e2e8f0; }
+  .dark-mode .hist-trip-cell { border-color: #243044; }
+  .dark-mode .hist-trip-cell .v { color: #cbd5e1; }
 </style>
 {% endblock %}
 
@@ -27,14 +154,15 @@
 
   <!-- Filter Bar -->
   <form method="get" class="card mb-3">
+    {{ nav_from_hidden() }}
     <div class="card-body d-flex flex-wrap gap-3 align-items-end">
-      <div>
+      <div style="min-width: 220px;">
         <label class="form-label small fw-semibold">Vehicle</label>
-        <select name="regno" class="form-select form-select-sm" required>
+        <select name="regno" class="form-select form-select-sm search-select" required>
           <option value="">-- Select Vehicle --</option>
           {% for v in vehicles_list %}
           <option value="{{ v.portalxs_regno }}" {% if v.portalxs_regno == selected_regno %}selected{% endif %}>
-            {{ v.portalxs_regno }}{% if v.vehicle_no %} ({{ v.vehicle_no }}){% endif %}
+            {{ v.display_label or v.portalxs_regno }}
           </option>
           {% endfor %}
         </select>
@@ -48,10 +176,9 @@
         <input type="text" name="to_date" class="form-control form-control-sm datepicker" value="{{ to_date }}" required>
       </div>
       <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-search"></i> Fetch History</button>
-      {% if history_points %}
-      <button type="button" id="exportCsvBtn" class="btn btn-sm btn-outline-success">
-        <i class="bi bi-filetype-csv"></i> Export CSV
-      </button>
+      {% if trips and selected_regno %}
+      <a href="{{ url_for('tracking_trips_export_csv', regno=selected_regno, from_date=from_date, to_date=to_date, nav_from=nav_from) }}"
+         class="btn btn-sm btn-outline-success"><i class="bi bi-filetype-csv"></i> Export Trips</a>
       {% endif %}
     </div>
   </form>
@@ -61,39 +188,109 @@
   {% endif %}
 
   {% if history_points %}
-  <div class="mb-2">
+  <div class="mb-2 d-flex flex-wrap align-items-center gap-2">
     <span class="badge bg-primary">{{ history_points|length }} GPS points</span>
-    <span class="text-muted small">Click on the route to see details. Use controls below for playback.</span>
+    {% if total_distance %}
+    <span class="badge bg-info text-dark">Total Mileage: {{ "%.1f"|format(total_distance) }} km</span>
+    {% endif %}
+    <span class="text-muted small">
+      Map par <strong>rang wali line</strong> hi route hai — click for detail.
+      Right side se trip select karke zoom karo.
+    </span>
   </div>
   {% endif %}
 
-  <div class="position-relative">
-    <div id="historyMap"></div>
-  </div>
+  <div class="hist-layout mb-3">
+    <div class="hist-map-col">
+      <div id="historyMap"></div>
+      {% if history_points %}
+      <div class="playback-controls d-flex align-items-center gap-3 flex-wrap">
+        <button type="button" id="playBtn" class="btn btn-sm btn-primary"><i class="bi bi-play-fill"></i> Play</button>
+        <button type="button" id="pauseBtn" class="btn btn-sm btn-secondary" disabled><i class="bi bi-pause-fill"></i> Pause</button>
+        <div class="d-flex align-items-center gap-2">
+          <label class="small fw-semibold mb-0">Speed:</label>
+          <select id="playbackSpeed" class="form-select form-select-sm" style="width: auto;">
+            <option value="1">1x</option>
+            <option value="2">2x</option>
+            <option value="5" selected>5x</option>
+            <option value="10">10x</option>
+            <option value="20">20x</option>
+            <option value="50">50x</option>
+          </select>
+        </div>
+        <div class="flex-grow-1 d-flex align-items-center gap-2" style="min-width: 180px;">
+          <span class="small text-muted" id="currentTime">00:00:00</span>
+          <input type="range" id="timelineSlider" class="form-range" min="0" max="{{ history_points|length - 1 }}" value="0">
+          <span class="small text-muted" id="totalTime">{{ history_points[-1].RecordDateTime[-8:] if history_points else '' }}</span>
+        </div>
+      </div>
+      {% endif %}
+    </div>
 
-  {% if history_points %}
-  <!-- Playback Controls -->
-  <div class="playback-controls d-flex align-items-center gap-3 flex-wrap">
-    <button id="playBtn" class="btn btn-sm btn-primary"><i class="bi bi-play-fill"></i> Play</button>
-    <button id="pauseBtn" class="btn btn-sm btn-secondary" disabled><i class="bi bi-pause-fill"></i> Pause</button>
-    <div class="d-flex align-items-center gap-2">
-      <label class="small fw-semibold mb-0">Speed:</label>
-      <select id="playbackSpeed" class="form-select form-select-sm" style="width: auto;">
-        <option value="1">1x</option>
-        <option value="2">2x</option>
-        <option value="5" selected>5x</option>
-        <option value="10">10x</option>
-        <option value="20">20x</option>
-        <option value="50">50x</option>
-      </select>
-    </div>
-    <div class="flex-grow-1 d-flex align-items-center gap-2" style="min-width: 200px;">
-      <span class="small text-muted" id="currentTime">00:00:00</span>
-      <input type="range" id="timelineSlider" class="form-range timeline-slider" min="0" max="{{ history_points|length - 1 }}" value="0">
-      <span class="small text-muted" id="totalTime">{{ history_points[-1].RecordDateTime[-8:] if history_points else '' }}</span>
-    </div>
+    <aside class="hist-trips-panel">
+      <div class="hist-trips-head">
+        <span><i class="bi bi-signpost-split me-1"></i>{{ selected_regno or 'Trip Details' }}</span>
+        {% if total_trips %}
+        <span id="histShowAllTrips" class="hist-trips-all is-active" title="Tamam trips ke GPS points dikhao">{{ total_trips }} trips</span>
+        {% endif %}
+      </div>
+      {% if trips %}
+      <div class="hist-trips-meta">
+        <span>Trips: <strong>{{ total_trips }}</strong></span>
+        <span>Distance: <strong>{{ "%.1f"|format(total_distance) }} km</strong></span>
+        <span>Avg / trip: <strong>{{ "%.1f"|format(total_distance / total_trips if total_trips else 0) }} km</strong></span>
+      </div>
+      <div class="hist-trips-scroll" id="histTripsScroll">
+        {% for t in trips %}
+        <div class="hist-trip-card"
+             data-trip-idx="{{ loop.index0 }}"
+             data-start="{{ t.IGON_RDT or '' }}"
+             data-end="{{ t.IGOFF_RDT or '' }}"
+             data-slat="{{ t.IGON_LAT or '' }}"
+             data-slon="{{ t.IGON_LON or '' }}"
+             data-elat="{{ t.IGOFF_LAT or '' }}"
+             data-elon="{{ t.IGOFF_LON or '' }}">
+          <div class="hist-trip-card-title">Trip # {{ '%02d'|format(loop.index) }}</div>
+          <div class="hist-trip-grid">
+            <div class="hist-trip-cell">
+              <span class="k">Start</span>
+              <span class="v">{{ t.IGON_RDT or '-' }}<br>{{ t.IGON_LandMark or '-' }}</span>
+            </div>
+            <div class="hist-trip-cell">
+              <span class="k">End</span>
+              <span class="v">{{ t.IGOFF_RDT or '-' }}<br>{{ t.IGOFF_LandMark or '-' }}</span>
+            </div>
+            <div class="hist-trip-cell">
+              <span class="k">Mileage</span>
+              <span class="v">{{ "%.2f"|format(t.Mileage or 0) }} km</span>
+            </div>
+            <div class="hist-trip-cell">
+              <span class="k">Trvl Time</span>
+              <span class="v">{{ t.TravelTimeS or '-' }}</span>
+            </div>
+            <div class="hist-trip-cell">
+              <span class="k">Avg Speed</span>
+              <span class="v">{% if t.AvgSpeed %}{{ "%.1f"|format(t.AvgSpeed) }} km/h{% else %}-{% endif %}</span>
+            </div>
+            <div class="hist-trip-cell">
+              <span class="k">Max Speed</span>
+              <span class="v">{% if t.MaxSpeed %}{{ "%.0f"|format(t.MaxSpeed) }} km/h{% else %}-{% endif %}</span>
+            </div>
+            <div class="hist-trip-cell full">
+              <span class="k">Status</span>
+              <span class="v">{{ t.TripStatus or '-' }}</span>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% elif selected_regno %}
+      <div class="hist-empty">No trips found for the selected period<br><span class="small">(0 km trips hidden)</span></div>
+      {% else %}
+      <div class="hist-empty">Vehicle select karke Fetch History karo — trips yahan side pe dikhengi.</div>
+      {% endif %}
+    </aside>
   </div>
-  {% endif %}
 </div>
 {% endblock %}
 
@@ -104,104 +301,264 @@
 (function() {
   flatpickr('.datepicker', { dateFormat: 'Y-m-d', maxDate: new Date() });
 
-  var points = {{ history_points | tojson }};
-  if (!points || !points.length) return;
+  var allPoints = {{ history_points | tojson }};
+  var map = null;
+  var routeLayers = [];
+  var tripMarkers = [];
+  var playMarker = null;
+  var hitLine = null;
+  var activePoints = [];
+  var currentIndex = 0;
+  var playing = false;
+  var playInterval = null;
 
-  var map = L.map('historyMap').setView([points[0].LAT, points[0].LON], 13);
+  var slider = document.getElementById('timelineSlider');
+  var currentTimeEl = document.getElementById('currentTime');
+  var totalTimeEl = document.getElementById('totalTime');
+  var playBtn = document.getElementById('playBtn');
+  var pauseBtn = document.getElementById('pauseBtn');
+  var pointsBadge = document.querySelector('.badge.bg-primary');
+  var showAllBtn = document.getElementById('histShowAllTrips');
+
+  function parseTs(s) {
+    if (!s) return NaN;
+    var n = Date.parse(String(s).trim().replace(' ', 'T'));
+    return n;
+  }
+
+  function clearLayers(list) {
+    list.forEach(function(layer) {
+      if (map && layer) map.removeLayer(layer);
+    });
+    list.length = 0;
+  }
+
+  function stopPlayback() {
+    playing = false;
+    if (playInterval) clearTimeout(playInterval);
+    playInterval = null;
+    if (playBtn) playBtn.disabled = false;
+    if (pauseBtn) pauseBtn.disabled = true;
+  }
+
+  function drawRoute(pts) {
+    clearLayers(routeLayers);
+    clearLayers(tripMarkers);
+    hitLine = null;
+    activePoints = pts || [];
+
+    if (!map) return;
+
+    if (pointsBadge) {
+      pointsBadge.textContent = activePoints.length + ' GPS points';
+    }
+
+    if (!activePoints.length) {
+      if (slider) { slider.min = 0; slider.max = 0; slider.value = 0; }
+      if (currentTimeEl) currentTimeEl.textContent = '00:00:00';
+      if (totalTimeEl) totalTimeEl.textContent = '';
+      if (playMarker) playMarker.setOpacity(0);
+      return;
+    }
+
+    var latlngs = activePoints.map(function(p) { return [p.LAT, p.LON]; });
+    var speeds = activePoints.map(function(p) { return p.Speed; });
+
+    for (var i = 0; i < latlngs.length - 1; i++) {
+      var s = speeds[i];
+      var color = s === 0 ? '#dc3545' : s < 30 ? '#ffc107' : '#198754';
+      routeLayers.push(L.polyline([latlngs[i], latlngs[i + 1]], {
+        color: color, weight: 4, opacity: 0.7
+      }).addTo(map));
+    }
+
+    hitLine = L.polyline(latlngs, {
+      color: '#000', weight: 14, opacity: 0, interactive: true
+    }).addTo(map);
+    routeLayers.push(hitLine);
+    hitLine.on('click', function(e) {
+      L.DomEvent.stopPropagation(e);
+      updatePoint(nearestIndex(e.latlng), true);
+    });
+
+    var startIcon = L.divIcon({
+      html: '<div style="width:14px;height:14px;border-radius:50%;background:#0d6efd;border:2px solid #fff;"></div>',
+      className: '', iconSize: [18, 18], iconAnchor: [9, 9]
+    });
+    var endIcon = L.divIcon({
+      html: '<div style="width:14px;height:14px;border-radius:50%;background:#dc3545;border:2px solid #fff;"></div>',
+      className: '', iconSize: [18, 18], iconAnchor: [9, 9]
+    });
+    routeLayers.push(L.marker(latlngs[0], { icon: startIcon })
+      .bindPopup('Start: ' + activePoints[0].RecordDateTime).addTo(map));
+    routeLayers.push(L.marker(latlngs[latlngs.length - 1], { icon: endIcon })
+      .bindPopup('End: ' + activePoints[activePoints.length - 1].RecordDateTime).addTo(map));
+
+    if (playMarker) {
+      playMarker.setOpacity(1);
+      playMarker.setLatLng(latlngs[0]);
+    } else {
+      playMarker = L.marker(latlngs[0], {
+        icon: L.divIcon({
+          html: '<div style="width:16px;height:16px;border-radius:50%;background:#0d6efd;border:3px solid #fff;box-shadow:0 0 10px rgba(13,110,253,0.6);"></div>',
+          className: '', iconSize: [22, 22], iconAnchor: [11, 11]
+        })
+      }).addTo(map);
+      playMarker.bindPopup('', { autoPan: false });
+    }
+
+    if (slider) {
+      slider.min = 0;
+      slider.max = Math.max(0, activePoints.length - 1);
+      slider.value = 0;
+    }
+    if (totalTimeEl) {
+      totalTimeEl.textContent = (activePoints[activePoints.length - 1].RecordDateTime || '').slice(-8);
+    }
+    updatePoint(0, false);
+    map.fitBounds(L.latLngBounds(latlngs), { padding: [50, 50] });
+  }
+
+  function filterPointsByTrip(startStr, endStr) {
+    var start = parseTs(startStr);
+    var end = parseTs(endStr);
+    if (isNaN(start) || isNaN(end)) return [];
+    if (end < start) {
+      var tmp = start; start = end; end = tmp;
+    }
+    // small cushion for timestamp formatting differences
+    start -= 1000;
+    end += 1000;
+    return allPoints.filter(function(p) {
+      var t = parseTs(p.RecordDateTime);
+      return !isNaN(t) && t >= start && t <= end;
+    });
+  }
+
+  function nearestIndex(latlng) {
+    var best = 0, bestD = Infinity;
+    for (var i = 0; i < activePoints.length; i++) {
+      var d = map.distance(latlng, [activePoints[i].LAT, activePoints[i].LON]);
+      if (d < bestD) { bestD = d; best = i; }
+    }
+    return best;
+  }
+
+  function updatePoint(idx, openPopup) {
+    if (!activePoints.length || idx < 0 || idx >= activePoints.length) return;
+    currentIndex = idx;
+    var p = activePoints[idx];
+    if (playMarker) playMarker.setLatLng([p.LAT, p.LON]);
+    if (slider) slider.value = idx;
+    if (currentTimeEl) currentTimeEl.textContent = (p.RecordDateTime || '').slice(-8);
+    if (playMarker) {
+      var popupContent = '<strong>Point ' + (idx + 1) + '/' + activePoints.length + '</strong><br>' +
+        'Time: ' + p.RecordDateTime + '<br>Speed: ' + Number(p.Speed || 0).toFixed(1) + ' km/h<br>' +
+        'Location: ' + (p.LandMark || 'N/A');
+      playMarker.setPopupContent(popupContent);
+      if (openPopup) playMarker.openPopup();
+    }
+  }
+
+  function showAllPoints() {
+    stopPlayback();
+    document.querySelectorAll('.hist-trip-card.is-active').forEach(function(el) {
+      el.classList.remove('is-active');
+    });
+    if (showAllBtn) showAllBtn.classList.add('is-active');
+    drawRoute(allPoints);
+  }
+
+  function focusTrip(card) {
+    if (!map || !allPoints.length) return;
+    stopPlayback();
+    document.querySelectorAll('.hist-trip-card.is-active').forEach(function(el) {
+      el.classList.remove('is-active');
+    });
+    card.classList.add('is-active');
+    if (showAllBtn) showAllBtn.classList.remove('is-active');
+
+    var filtered = filterPointsByTrip(card.dataset.start, card.dataset.end);
+    if (filtered.length) {
+      drawRoute(filtered);
+      return;
+    }
+
+    // Fallback: no matching GPS points — just mark start/end
+    drawRoute([]);
+    var slat = parseFloat(card.dataset.slat);
+    var slon = parseFloat(card.dataset.slon);
+    var elat = parseFloat(card.dataset.elat);
+    var elon = parseFloat(card.dataset.elon);
+    var pts = [];
+    if (!isNaN(slat) && !isNaN(slon)) {
+      pts.push([slat, slon]);
+      tripMarkers.push(L.circleMarker([slat, slon], {
+        radius: 7, color: '#fff', weight: 2, fillColor: '#198754', fillOpacity: 1
+      }).bindPopup('Trip start').addTo(map));
+    }
+    if (!isNaN(elat) && !isNaN(elon)) {
+      pts.push([elat, elon]);
+      tripMarkers.push(L.circleMarker([elat, elon], {
+        radius: 7, color: '#fff', weight: 2, fillColor: '#dc3545', fillOpacity: 1
+      }).bindPopup('Trip end').addTo(map));
+    }
+    if (pts.length === 1) map.setView(pts[0], 15);
+    else if (pts.length === 2) map.fitBounds(L.latLngBounds(pts), { padding: [60, 60], maxZoom: 16 });
+  }
+
+  document.querySelectorAll('.hist-trip-card').forEach(function(card) {
+    card.addEventListener('click', function() { focusTrip(card); });
+  });
+  if (showAllBtn) {
+    showAllBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      showAllPoints();
+    });
+  }
+
+  if (!allPoints || !allPoints.length) {
+    map = L.map('historyMap').setView([30.2, 71.5], 7);
+    L.tileLayer('https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+      maxZoom: 20, attribution: '&copy; Google', subdomains: ['mt0','mt1','mt2','mt3']
+    }).addTo(map);
+    return;
+  }
+
+  map = L.map('historyMap').setView([allPoints[0].LAT, allPoints[0].LON], 13);
   L.tileLayer('https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
     maxZoom: 20, attribution: '&copy; Google', subdomains: ['mt0','mt1','mt2','mt3']
   }).addTo(map);
 
-  // Color-coded polyline segments by speed
-  var latlngs = points.map(function(p) { return [p.LAT, p.LON]; });
-  var speeds = points.map(function(p) { return p.Speed; });
+  drawRoute(allPoints);
 
-  // Draw colored segments
-  for (var i = 0; i < latlngs.length - 1; i++) {
-    var s = speeds[i];
-    var color = s === 0 ? '#dc3545' : s < 30 ? '#ffc107' : '#198754';
-    L.polyline([latlngs[i], latlngs[i+1]], { color: color, weight: 4, opacity: 0.7 }).addTo(map);
-  }
+  if (slider) slider.addEventListener('input', function() {
+    updatePoint(parseInt(this.value, 10), false);
+  });
 
-  // Start/End markers
-  var startIcon = L.divIcon({ html: '<div style="width:14px;height:14px;border-radius:50%;background:#0d6efd;border:2px solid #fff;"></div>', className: '', iconSize: [18,18], iconAnchor: [9,9] });
-  var endIcon = L.divIcon({ html: '<div style="width:14px;height:14px;border-radius:50%;background:#dc3545;border:2px solid #fff;"></div>', className: '', iconSize: [18,18], iconAnchor: [9,9] });
-  L.marker(latlngs[0], { icon: startIcon }).bindPopup('Start: ' + points[0].RecordDateTime).addTo(map);
-  L.marker(latlngs[latlngs.length - 1], { icon: endIcon }).bindPopup('End: ' + points[points.length-1].RecordDateTime).addTo(map);
-
-  // Fit bounds
-  var bounds = L.latLngBounds(latlngs);
-  map.fitBounds(bounds, { padding: [50, 50] });
-
-  // Playback marker
-  var playMarker = L.marker(latlngs[0], {
-    icon: L.divIcon({ html: '<div style="width:16px;height:16px;border-radius:50%;background:#0d6efd;border:3px solid #fff;box-shadow:0 0 10px rgba(13,110,253,0.6);"></div>', className: '', iconSize: [22,22], iconAnchor: [11,11] })
-  }).addTo(map);
-
-  var currentIndex = 0;
-  var playing = false;
-  var playInterval = null;
-  var slider = document.getElementById('timelineSlider');
-  var currentTimeEl = document.getElementById('currentTime');
-  var playBtn = document.getElementById('playBtn');
-  var pauseBtn = document.getElementById('pauseBtn');
-
-  function updatePoint(idx) {
-    if (idx < 0 || idx >= points.length) return;
-    currentIndex = idx;
-    var p = points[idx];
-    playMarker.setLatLng([p.LAT, p.LON]);
-    slider.value = idx;
-    currentTimeEl.textContent = (p.RecordDateTime || '').slice(-8);
-    var popupContent = '<strong>Point ' + (idx + 1) + '/' + points.length + '</strong><br>' +
-      'Time: ' + p.RecordDateTime + '<br>Speed: ' + p.Speed.toFixed(1) + ' km/h<br>' +
-      'Location: ' + (p.LandMark || 'N/A');
-    playMarker.setPopupContent(popupContent);
-  }
-  playMarker.bindPopup('', { autoPan: false });
-
-  slider.addEventListener('input', function() { updatePoint(parseInt(this.value)); });
-
-  playBtn.addEventListener('click', function() {
+  if (playBtn) playBtn.addEventListener('click', function() {
+    if (!activePoints.length) return;
     playing = true;
     playBtn.disabled = true;
-    pauseBtn.disabled = false;
-    var speed = parseInt(document.getElementById('playbackSpeed').value);
+    if (pauseBtn) pauseBtn.disabled = false;
+    var speed = parseInt(document.getElementById('playbackSpeed').value, 10) || 5;
 
     function step() {
       if (!playing) return;
-      if (currentIndex >= points.length - 1) {
-        playing = false;
-        playBtn.disabled = false;
-        pauseBtn.disabled = true;
+      if (currentIndex >= activePoints.length - 1) {
+        stopPlayback();
         return;
       }
       updatePoint(currentIndex + 1);
-      var delay = Math.max(50, 500 / speed);
-      playInterval = setTimeout(step, delay);
+      playInterval = setTimeout(step, Math.max(50, 500 / speed));
     }
     step();
   });
 
-  pauseBtn.addEventListener('click', function() {
-    playing = false;
-    playBtn.disabled = false;
-    pauseBtn.disabled = true;
-    if (playInterval) clearTimeout(playInterval);
-  });
+  if (pauseBtn) pauseBtn.addEventListener('click', function() { stopPlayback(); });
 
-  // CSV Export
-  document.getElementById('exportCsvBtn').addEventListener('click', function() {
-    var csv = 'DateTime,LAT,LON,Speed,Reason,LandMark,Direction\n';
-    points.forEach(function(p) {
-      csv += [p.RecordDateTime, p.LAT, p.LON, p.Speed, p.Reason, '"' + (p.LandMark || '').replace(/"/g, '""') + '"', p.Direction].join(',') + '\n';
-    });
-    var blob = new Blob([csv], { type: 'text/csv' });
-    var a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'history_' + '{{ selected_regno }}' + '.csv';
-    a.click();
-  });
+  setTimeout(function() { map.invalidateSize(); }, 80);
 })();
 </script>
 {% endblock %}
