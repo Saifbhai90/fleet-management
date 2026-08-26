@@ -336,7 +336,7 @@ def dismiss_driver_attendance_reminders(driver, kind):
     Returns number of reminders newly marked read.
     """
     from models import db, Notification, NotificationRead
-    from push_notifications import get_user_id_for_driver
+    from push_notifications import get_user_id_for_driver, send_reminder_dismiss_push
     from utils import pk_now
 
     if not driver:
@@ -344,8 +344,10 @@ def dismiss_driver_attendance_reminders(driver, kind):
     kind_l = (kind or '').strip().lower()
     if kind_l in ('checkin', 'check-in', 'in'):
         title = ATTENDANCE_CHECKIN_REMINDER_TITLE
+        push_kind = 'checkin'
     elif kind_l in ('checkout', 'check-out', 'out'):
         title = ATTENDANCE_CHECKOUT_REMINDER_TITLE
+        push_kind = 'checkout'
     else:
         return 0
 
@@ -362,8 +364,6 @@ def dismiss_driver_attendance_reminders(driver, kind):
         )
         .all()
     )
-    if not unread:
-        return 0
 
     now = pk_now()
     marked = 0
@@ -378,16 +378,24 @@ def dismiss_driver_attendance_reminders(driver, kind):
                 NotificationRead(notification_id=n.id, user_id=int(uid), read_at=now)
             )
             marked += 1
+    if unread:
+        try:
+            db.session.commit()
+        except Exception as exc:
+            db.session.rollback()
+            logger.warning(
+                'dismiss_driver_attendance_reminders failed driver=%s kind=%s: %s',
+                getattr(driver, 'id', None), kind_l, exc,
+            )
+            return 0
+        _invalidate_notif_cache([uid])
+
+    # Always push the dismissal, even when the inbox copy was already read: the
+    # Android tray copy is independent and may still be undelivered at FCM.
     try:
-        db.session.commit()
+        send_reminder_dismiss_push(uid, push_kind)
     except Exception as exc:
-        db.session.rollback()
-        logger.warning(
-            'dismiss_driver_attendance_reminders failed driver=%s kind=%s: %s',
-            getattr(driver, 'id', None), kind_l, exc,
-        )
-        return 0
-    _invalidate_notif_cache([uid])
+        logger.warning('reminder dismiss push failed user=%s kind=%s: %s', uid, push_kind, exc)
     return marked
 
 

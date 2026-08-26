@@ -40,6 +40,15 @@ public class FleetFirebaseMessagingService extends FirebaseMessagingService {
     public void onMessageReceived(RemoteMessage message) {
         super.onMessageReceived(message);
 
+        java.util.Map<String, String> data = message.getData();
+
+        if (AttendanceReminderNotifications.ACTION_DISMISS.equals(data.get("fleet_action"))) {
+            AttendanceReminderNotifications.cancel(
+                    (NotificationManager) getSystemService(NOTIFICATION_SERVICE),
+                    AttendanceReminderNotifications.kindFor(data.get("reminder_kind"), null));
+            return;
+        }
+
         String title = "Fleet Manager";
         String body = "";
         String link = null;
@@ -51,17 +60,24 @@ public class FleetFirebaseMessagingService extends FirebaseMessagingService {
                     ? message.getNotification().getBody() : "";
         }
 
-        if (message.getData().containsKey("title")) {
-            title = message.getData().get("title");
+        if (data.containsKey("title")) {
+            title = data.get("title");
         }
-        if (message.getData().containsKey("body")) {
-            body = message.getData().get("body");
+        if (data.containsKey("body")) {
+            body = data.get("body");
         }
-        if (message.getData().containsKey("link")) {
-            link = message.getData().get("link");
+        if (data.containsKey("link")) {
+            link = data.get("link");
         }
 
-        showNotification(title, body, link, message.getData());
+        String reminderKind = AttendanceReminderNotifications.kindFor(data.get("reminder_kind"), title);
+        if (reminderKind != null && AttendanceReminderNotifications.isStale(data.get("valid_until"))) {
+            AttendanceReminderNotifications.cancel(
+                    (NotificationManager) getSystemService(NOTIFICATION_SERVICE), reminderKind);
+            return;
+        }
+
+        showNotification(title, body, link, data);
     }
 
     private void showNotification(String title, String body, String link, java.util.Map<String, String> data) {
@@ -83,12 +99,18 @@ public class FleetFirebaseMessagingService extends FirebaseMessagingService {
         String createdAt = data != null && data.get("created_at") != null
                 ? data.get("created_at") : "";
 
+        String reminderKind = AttendanceReminderNotifications.kindFor(
+                data != null ? data.get("reminder_kind") : null, title);
+        int notificationId = reminderKind != null
+                ? AttendanceReminderNotifications.notificationId(reminderKind)
+                : (int) System.currentTimeMillis();
+
         Intent intent = (link != null && !link.trim().isEmpty())
                 ? NotificationPopupActivity.createIntent(
                         this, link, title, body, saveEnabled, popupSource, createdAt)
                 : new Intent(this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
 
-        PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, intent,
+        PendingIntent pendingIntent = PendingIntent.getActivity(this, notificationId, intent,
                 PendingIntent.FLAG_ONE_SHOT | PendingIntent.FLAG_IMMUTABLE);
 
         NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
@@ -103,7 +125,6 @@ public class FleetFirebaseMessagingService extends FirebaseMessagingService {
             builder.setStyle(new NotificationCompat.BigTextStyle().bigText(body));
         }
 
-        int notificationId = (int) System.currentTimeMillis();
         manager.notify(notificationId, builder.build());
     }
 }

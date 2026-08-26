@@ -167,27 +167,46 @@ public class NotificationPollingService extends Service {
             JSONObject resp = new JSONObject(sb.toString());
             JSONArray arr = resp.optJSONArray("notifications");
             if (arr == null) arr = resp.optJSONArray("data");
-            if (arr == null || arr.length() == 0) return;
+            if (arr == null) return;
 
             int newCount = 0;
+            Set<String> pendingReminderKinds = new HashSet<>();
             for (int i = 0; i < arr.length(); i++) {
                 JSONObject n = arr.getJSONObject(i);
                 String id = String.valueOf(n.optInt("id", 0));
+                String title = n.optString("title", "Fleet Manager");
+                String kind = AttendanceReminderNotifications.kindFor(null, title);
+                if (kind != null) pendingReminderKinds.add(kind);
                 if (seenIds.contains(id)) continue;
                 seenIds.add(id);
                 showNotification(
-                        n.optString("title", "Fleet Manager"),
+                        title,
                         n.optString("message", n.optString("body", "")),
                         n.optString("link", null),
                         n.optString("created_at", ""),
                         Integer.parseInt(id));
                 newCount++;
             }
+            // A reminder the server no longer reports as unread has been satisfied
+            // by a check-in / check-out; clear any copy left in the tray.
+            clearSatisfiedReminders(pendingReminderKinds);
             if (newCount > 0) {
                 prefs.edit().putStringSet(KEY_SEEN_IDS, seenIds).apply();
             }
         } catch (Exception e) {
             consecutiveErrors++;
+        }
+    }
+
+    private void clearSatisfiedReminders(Set<String> pendingKinds) {
+        NotificationManager mgr = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+        if (mgr == null) return;
+        for (String kind : new String[]{
+                AttendanceReminderNotifications.KIND_CHECKIN,
+                AttendanceReminderNotifications.KIND_CHECKOUT}) {
+            if (!pendingKinds.contains(kind)) {
+                AttendanceReminderNotifications.cancel(mgr, kind);
+            }
         }
     }
 
@@ -219,11 +238,15 @@ public class NotificationPollingService extends Service {
         }
         boolean saveEnabled = title != null && TASK_POPUP_TITLES.contains(title);
         String popupSource = saveEnabled ? "ufone_task_event" : "generic";
+        String reminderKind = AttendanceReminderNotifications.kindFor(null, title);
+        int trayId = reminderKind != null
+                ? AttendanceReminderNotifications.notificationId(reminderKind)
+                : id;
         Intent intent = (link != null && !link.trim().isEmpty())
                 ? NotificationPopupActivity.createIntent(
                         this, link, title, body, saveEnabled, popupSource, createdAt != null ? createdAt : "")
                 : new Intent(this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-        PendingIntent pi = PendingIntent.getActivity(this, id, intent,
+        PendingIntent pi = PendingIntent.getActivity(this, trayId, intent,
                 PendingIntent.FLAG_ONE_SHOT | PendingIntent.FLAG_IMMUTABLE);
         NotificationCompat.Builder b = new NotificationCompat.Builder(this, NOTIF_CHANNEL_ID)
                 .setSmallIcon(R.mipmap.ic_launcher)
@@ -235,7 +258,7 @@ public class NotificationPollingService extends Service {
         if (body != null && body.length() > 50) {
             b.setStyle(new NotificationCompat.BigTextStyle().bigText(body));
         }
-        mgr.notify(id, b.build());
+        mgr.notify(trayId, b.build());
     }
 
     @Override

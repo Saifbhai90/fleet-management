@@ -5,7 +5,8 @@ Sends notifications to user devices via Firebase Admin SDK.
 
 import os
 import logging
-from datetime import datetime
+import time as _time
+from datetime import datetime, timedelta
 
 _firebase_app = None
 _initialized = False
@@ -20,6 +21,26 @@ _TASK_POPUP_TITLES = {
 
 _BODY_PREVIEW_LEN = 200
 _TOKEN_PREFIX_LEN = 16
+
+# Attendance reminders are the only pushes that go stale: once the driver has
+# checked in / out, an old "pending" message is wrong. FCM keeps undelivered
+# data messages for up to 4 weeks by default, so a dozed phone can surface a
+# morning reminder at night. TTL + collapse key keep at most one live reminder
+# per kind, and it expires within the reminder cycle.
+_REMINDER_KIND_BY_TITLE = {
+    'Check-in reminder': 'checkin',
+    'Check-out reminder': 'checkout',
+}
+REMINDER_TTL_SECONDS = 45 * 60
+DISMISS_REMINDER_LOG_TITLE = 'Reminder auto-clear'
+
+
+def reminder_kind_for_title(title):
+    return _REMINDER_KIND_BY_TITLE.get((title or '').strip())
+
+
+def _reminder_collapse_key(kind):
+    return f'attendance_{kind}_reminder'
 
 
 def _notify_created_at_pkt() -> str:
@@ -179,10 +200,19 @@ def _build_payload_data(title, body, data=None, link=None):
     if click_link:
         payload_data['click_action'] = click_link
         payload_data['link'] = click_link
+    kind = reminder_kind_for_title(title)
+    if kind:
+        payload_data['reminder_kind'] = kind
+        # Belt-and-braces for devices whose FCM ignores TTL: the app drops
+        # reminders it receives after this instant.
+        payload_data['valid_until'] = str(int(_time.time()) + REMINDER_TTL_SECONDS)
     return payload_data
 
 
-def _send_to_tokens(tokens, title, body, payload_data, *, notification_id=None):
+def _send_to_tokens(
+    tokens, title, body, payload_data, *,
+    notification_id=None, ttl_seconds=None, collapse_key=None,
+):
     """Send to a list of DeviceFCMToken rows; log each outcome. Returns success count."""
     from firebase_admin import messaging
     from models import DeviceFCMToken
@@ -202,6 +232,8 @@ def _send_to_tokens(tokens, title, body, payload_data, *, notification_id=None):
                 token=tok.fcm_token,
                 android=messaging.AndroidConfig(
                     priority='high',
+                    ttl=timedelta(seconds=ttl_seconds) if ttl_seconds else None,
+                    collapse_key=collapse_key,
                 ),
             )
             msg_id = messaging.send(message)
@@ -313,7 +345,46 @@ def send_push(user_id, title, body, data=None, link=None, notification_id=None):
         return 0
 
     payload_data = _build_payload_data(title, body, data=data, link=link)
-    return _send_to_tokens(tokens, title, body, payload_data, notification_id=notification_id)
+    kind = reminder_kind_for_title(title)
+    return _send_to_tokens(
+        tokens, title, body, payload_data,
+        notification_id=notification_id,
+        ttl_seconds=REMINDER_TTL_SECONDS if kind else None,
+        collapse_key=_reminder_collapse_key(kind) if kind else None,
+    )
+
+
+def send_reminder_dismiss_push(user_id, kind):
+    """
+    Silently clear an attendance reminder from the device tray after the driver
+    has actually checked in / out. Shares the reminder's collapse key, so a
+    reminder still queued at FCM (undelivered phone) is replaced by this
+    dismissal instead of arriving late.
+    """
+    if not user_id or kind not in ('checkin', 'checkout'):
+        return 0
+    if not _init_firebase():
+        return 0
+
+    from models import DeviceFCMToken
+
+    tokens = DeviceFCMToken.query.filter_by(user_id=user_id, is_active=True).all()
+    if not tokens:
+        return 0
+
+    payload_data = {
+        'fleet_action': 'dismiss_reminder',
+        'reminder_kind': kind,
+        'created_at': _notify_created_at_pkt(),
+    }
+    return _send_to_tokens(
+        tokens,
+        DISMISS_REMINDER_LOG_TITLE,
+        f'{kind} reminder cleared on device',
+        payload_data,
+        ttl_seconds=REMINDER_TTL_SECONDS,
+        collapse_key=_reminder_collapse_key(kind),
+    )
 
 
 def send_push_to_multiple(user_ids, title, body, data=None, link=None, notification_id=None):

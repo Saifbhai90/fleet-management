@@ -165,6 +165,31 @@ def _vehicle_has_gps_checkin_today(vehicle_id, today, helpers):
     )
 
 
+def _last_checkout_dt(driver_id, today, now):
+    """
+    Most recent completed check-out for this driver (today or the night before).
+    Future-dated check-outs (pre-filled manual rows) are ignored — they are not
+    a "driver just walked off duty" event.
+    """
+    from models import DriverAttendance
+
+    if not driver_id or not today:
+        return None
+    rows = DriverAttendance.query.filter(
+        DriverAttendance.driver_id == driver_id,
+        DriverAttendance.check_out.isnot(None),
+        DriverAttendance.attendance_date >= today - timedelta(days=1),
+    ).all()
+    best = None
+    for rec in rows:
+        dt = _combine_date_time(rec.check_out_date or rec.attendance_date, rec.check_out)
+        if not dt or (now and dt > now):
+            continue
+        if best is None or dt > best:
+            best = dt
+    return best
+
+
 def _drivers_on_vehicle(vehicle_id):
     from models import Driver
 
@@ -236,6 +261,14 @@ def _driver_needs_checkin_reminder(driver, today, helpers):
     if not starts:
         return False, None
     anchor = min(starts)
+    # On a multi-driver vehicle a check-out instantly re-opens the "check-in
+    # pending" state, and the window start is hours old — so the very next tick
+    # used to fire a reminder seconds after check-out, while the driver was
+    # still standing at the vehicle marking the next check-in. Anchoring on the
+    # check-out keeps one full reminder interval of silence.
+    last_out = _last_checkout_dt(driver.id, today, helpers['now']())
+    if last_out and last_out > anchor:
+        anchor = last_out
     return True, anchor
 
 
@@ -261,6 +294,9 @@ def _driver_needs_checkout_reminder(driver, today, helpers):
     anchor = _combine_date_time(open_rec.attendance_date, anchor_t)
     if not anchor:
         return False, None
+    checkin_dt = _combine_date_time(open_rec.attendance_date, open_rec.check_in)
+    if checkin_dt and checkin_dt > anchor:
+        anchor = checkin_dt
     return True, anchor
 
 
