@@ -732,6 +732,9 @@ ENDPOINT_PERMISSION_MAP = [
     ('tracking_history', 'tracking_history'),          # also covers api_tracking_history
     ('tracking_trips', 'tracking_reports'),            # also covers tracking_trips_export_csv
     ('tracking_fleet_report', 'tracking_reports'),
+    # Must be longer than bare 'mileage_report' key (Report Centre) so substring match
+    # does not force report_vehicle_summary on Fleet Tracking mileage pages.
+    ('tracking_mileage_report', 'tracking_reports'),
     ('tracking_trends', 'tracking_reports'),
     ('tracking_alerts', 'tracking_alerts'),
     ('tracking_settings', 'tracking_settings'),        # covers all settings sub-routes

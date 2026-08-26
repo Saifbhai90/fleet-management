@@ -58,16 +58,18 @@
             <td>{{ r.TimeFrom }}</td>
             <td>{{ r.DateTo }}</td>
             <td>{{ r.TimeTo }}</td>
-            <td>{{ "%.1f"|format(r.Mileage) }}</td>
-            <td>{{ "%.1f"|format(r.PToP) }}</td>
+            <td>{{ "%.1f"|format(r.Mileage|float) if r.Mileage is not none else '0.0' }}</td>
+            <td>{{ "%.1f"|format(r.PToP|float) if r.PToP is not none else '0.0' }}</td>
           </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
   </div>
+  {% elif report_ready and current_account_id %}
+  <div class="alert alert-info">No mileage data for this date range.</div>
   {% elif current_account_id %}
-  <div class="alert alert-info">No mileage data. Select a date range and generate.</div>
+  <div class="alert alert-info">Select a date range and click <strong>Generate</strong>.</div>
   {% endif %}
 </div>
 {% endblock %}

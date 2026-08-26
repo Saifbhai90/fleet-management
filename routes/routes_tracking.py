@@ -8,7 +8,7 @@ Integrates with PortalXS SOAP API via services/portalxs_service.py.
 """
 from flask import (
     render_template, redirect, url_for, flash, request,
-    session, jsonify, make_response, Response,
+    session, jsonify, make_response, Response, current_app,
 )
 from app import app, db, csrf
 from models import (
@@ -478,17 +478,25 @@ def tracking_mileage_report():
 
     from_date = _sanitize_date(request.args.get('from_date', ''))
     to_date = _sanitize_date(request.args.get('to_date', ''))
+    # Only hit PortalXS after user clicks Generate — opening the page alone must not
+    # fan-out mileage SOAP calls for the whole fleet (timeouts → 500 on Render).
+    run_query = ('from_date' in request.args) or ('to_date' in request.args)
 
     rows = []
     error = None
-    if acct_id and vehicles_list:
+    if run_query and acct_id and vehicles_list:
         fdt, tdt = _soap_dates(from_date, to_date)
         regno_to_name = {v['portalxs_regno']: (v.get('vehicle_no') or v['portalxs_regno'])
                          for v in vehicles_list}
-        rows, error = fetch_mileage_report_bulk(
-            acct_id, list(regno_to_name.keys()), fdt, tdt)
-        for item in rows:
-            item['vehicle_no'] = regno_to_name.get(item.get('_regno', ''), item.get('_regno', ''))
+        try:
+            rows, error = fetch_mileage_report_bulk(
+                acct_id, list(regno_to_name.keys()), fdt, tdt)
+            for item in rows:
+                item['vehicle_no'] = regno_to_name.get(item.get('_regno', ''), item.get('_regno', ''))
+        except Exception as e:
+            current_app.logger.exception('tracking_mileage_report fetch failed')
+            error = str(e)[:300]
+            rows = []
 
     return render_template(
         'tracking/mileage_report.html',
@@ -499,6 +507,7 @@ def tracking_mileage_report():
         error=error,
         accounts=accounts,
         current_account_id=acct_id,
+        report_ready=run_query,
         **_nav_back_ctx(url_for('tracking_dashboard')),
     )
 
@@ -519,7 +528,11 @@ def tracking_mileage_report_export_csv():
     fdt, tdt = _soap_dates(from_date, to_date)
     regno_to_name = {v['portalxs_regno']: (v.get('vehicle_no') or v['portalxs_regno'])
                      for v in vehicles_list}
-    rows, error = fetch_mileage_report_bulk(acct_id, list(regno_to_name.keys()), fdt, tdt)
+    try:
+        rows, error = fetch_mileage_report_bulk(acct_id, list(regno_to_name.keys()), fdt, tdt)
+    except Exception as e:
+        current_app.logger.exception('tracking_mileage_report_export_csv failed')
+        return Response(f'Error: {str(e)[:300]}', status=500)
     if error and not rows:
         return Response(f'Error: {error}', status=500)
 
