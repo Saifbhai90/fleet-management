@@ -9232,6 +9232,7 @@ def _parse_mileage_excel(f, task_date, clear=True):
     limits = _get_table_string_limits('vehicle_mileage_record', model_cls=VehicleMileageRecord)
     today = pk_date()
     mappings = []
+    excel_regs = []
     for excel_row_no, row in enumerate(all_rows[header_row_idx + 1:], start=header_row_idx + 2):
         if not row or (reg_col < len(row) and row[reg_col] is None):
             continue
@@ -9268,7 +9269,18 @@ def _parse_mileage_excel(f, task_date, clear=True):
         vals['upload_date'] = today
         vals['mileage'] = _safe_float(row[mil_col]) if mil_col < len(row) else 0
         vals['ptop'] = _safe_float(row[ptop_col]) if ptop_col < len(row) else 0
+        vals['data_source'] = 'excel'
         mappings.append(vals)
+        excel_regs.append(v_no)
+    if not clear and excel_regs:
+        # Partial upload: replace only these regs so PortalXS rows for other districts remain
+        from services.mileage_record_service import normalize_reg_key
+        excel_keys = {normalize_reg_key(r) for r in excel_regs}
+        existing = VehicleMileageRecord.query.filter_by(task_date=task_date).all()
+        for rec in existing:
+            if normalize_reg_key(rec.reg_no) in excel_keys:
+                db.session.delete(rec)
+        db.session.flush()
     if mappings:
         db.session.bulk_insert_mappings(VehicleMileageRecord, mappings)
     return len(mappings)

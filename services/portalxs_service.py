@@ -156,17 +156,69 @@ def normalize_fleet_report(r: dict) -> dict:
     }
 
 
-def normalize_mileage_report(m: dict) -> dict:
+def _pick_str(m: dict, *names) -> str:
+    if not isinstance(m, dict):
+        return ''
+    lower = {str(k).lower(): v for k, v in m.items()}
+    for n in names:
+        v = m.get(n)
+        if v in (None, ''):
+            v = lower.get(str(n).lower())
+        if v not in (None, ''):
+            return str(v).strip()
+    return ''
+
+
+def _split_date_time(val) -> tuple[str, str]:
+    s = str(val or '').strip()
+    if not s:
+        return '', ''
+    s = s.replace('T', ' ')
+    parts = s.split()
+    if len(parts) >= 2:
+        return parts[0], parts[1][:8]
+    if len(s) >= 10 and s[4] == '-' and s[7] == '-':
+        return s[:10], ''
+    return s, ''
+
+
+def normalize_mileage_report(m: dict, query_from: str = '', query_to: str = '') -> dict:
     """Normalize a mileage report row from PortalXS API.
-    Expected fields: ID, DateFrom, TimeFrom, DateTo, TimeTo, Mileage, PToP, Distance."""
+
+    PortalXS field names vary (DateFrom vs fdt vs StartDate). Empty date/time
+    columns fall back to the requested query range (00:00 / 23:59).
+    """
+    date_from = _pick_str(m, 'DateFrom', 'dateFrom', 'FromDate', 'StartDate', 'fdt', 'FDT', 'IgnOnDate', 'StartDT')
+    time_from = _pick_str(m, 'TimeFrom', 'timeFrom', 'FromTime', 'StartTime', 'IgnOnTime')
+    date_to = _pick_str(m, 'DateTo', 'dateTo', 'ToDate', 'EndDate', 'tdt', 'TDT', 'IgnOffDate', 'EndDT')
+    time_to = _pick_str(m, 'TimeTo', 'timeTo', 'ToTime', 'EndTime', 'IgnOffTime')
+
+    if date_from and not time_from:
+        d, t = _split_date_time(date_from)
+        date_from = d or date_from
+        time_from = t or time_from
+    if date_to and not time_to:
+        d, t = _split_date_time(date_to)
+        date_to = d or date_to
+        time_to = t or time_to
+
+    q_from = (query_from or '')[:10]
+    q_to = (query_to or '')[:10]
+    if not date_from and q_from:
+        date_from = q_from
+        time_from = time_from or '00:00:00'
+    if not date_to and q_to:
+        date_to = q_to
+        time_to = time_to or '23:59:59'
+
     return {
-        'ID': m.get('ID', m.get('id', '')),
-        'DateFrom': m.get('DateFrom', m.get('datefrom', '')),
-        'TimeFrom': m.get('TimeFrom', m.get('timefrom', '')),
-        'DateTo': m.get('DateTo', m.get('dateto', '')),
-        'TimeTo': m.get('TimeTo', m.get('timeto', '')),
-        'Mileage': _to_float(m.get('Mileage', m.get('Distance', 0))),
-        'PToP': _to_float(m.get('PToP', m.get('PTOP', 0))),
+        'ID': _pick_str(m, 'ID', 'id') or '',
+        'DateFrom': date_from,
+        'TimeFrom': time_from,
+        'DateTo': date_to,
+        'TimeTo': time_to,
+        'Mileage': _to_float(m.get('Mileage', m.get('Distance', m.get('mileage', 0)))),
+        'PToP': _to_float(m.get('PToP', m.get('PTOP', m.get('PtoP', m.get('ptop', 0))))),
     }
 
 
@@ -432,6 +484,147 @@ def fetch_mileage(account_id: int, regno: str, from_dt: str, to_dt: str) -> dict
     return {}
 
 
+def _query_dates_from_soap(from_dt: str, to_dt: str):
+    fd = (from_dt or '')[:10]
+    td = (to_dt or '')[:10]
+    qf = datetime.strptime(fd, '%Y-%m-%d').date() if fd else None
+    qt = datetime.strptime(td, '%Y-%m-%d').date() if td else None
+    return qf, qt
+
+
+def mileage_row_from_cache(row) -> dict:
+    return {
+        'ID': row.id,
+        '_regno': row.regno,
+        'vehicle_no': row.vehicle_no or row.regno,
+        'DateFrom': row.date_from or '',
+        'TimeFrom': row.time_from or '',
+        'DateTo': row.date_to or '',
+        'TimeTo': row.time_to or '',
+        'Mileage': float(row.mileage or 0),
+        'PToP': float(row.ptop or 0),
+        'source': 'db',
+    }
+
+
+def list_mileage_cache(account_id: int, from_dt: str, to_dt: str) -> list[dict]:
+    from models import PortalXSMileageCache
+    qf, qt = _query_dates_from_soap(from_dt, to_dt)
+    if not qf or not qt:
+        return []
+    rows = (
+        PortalXSMileageCache.query
+        .filter_by(account_id=account_id, query_from=qf, query_to=qt)
+        .order_by(PortalXSMileageCache.regno.asc())
+        .all()
+    )
+    return [mileage_row_from_cache(r) for r in rows]
+
+
+def missing_mileage_regnos(account_id: int, regnos: list[str], from_dt: str, to_dt: str) -> list[str]:
+    from models import PortalXSMileageCache
+    qf, qt = _query_dates_from_soap(from_dt, to_dt)
+    if not qf or not qt:
+        return list(regnos)
+    have = {
+        r[0] for r in PortalXSMileageCache.query.filter_by(
+            account_id=account_id, query_from=qf, query_to=qt
+        ).with_entities(PortalXSMileageCache.regno).all()
+    }
+    return [r for r in regnos if r not in have]
+
+
+def clear_mileage_cache_range(account_id: int, from_dt: str, to_dt: str) -> int:
+    from models import db, PortalXSMileageCache
+    qf, qt = _query_dates_from_soap(from_dt, to_dt)
+    if not qf or not qt:
+        return 0
+    n = PortalXSMileageCache.query.filter_by(
+        account_id=account_id, query_from=qf, query_to=qt
+    ).delete(synchronize_session=False)
+    db.session.commit()
+    return n
+
+
+def fetch_and_store_one_mileage(account_id: int, regno: str, from_dt: str, to_dt: str, vehicle_no: str = '') -> dict:
+    """Fetch one vehicle from PortalXS and upsert into DB cache."""
+    from models import db, PortalXSMileageCache
+    from utils import pk_now
+
+    qf, qt = _query_dates_from_soap(from_dt, to_dt)
+    client = _get_client(account_id)
+    raw = client.get_mileage(regno, from_dt, to_dt)
+    if isinstance(raw, dict):
+        raw = [raw]
+    if not isinstance(raw, list) or not raw:
+        item = normalize_mileage_report({}, query_from=from_dt, query_to=to_dt)
+    else:
+        # Combine numeric totals if API returns multiple slices; keep first date fields.
+        first = normalize_mileage_report(raw[0] if isinstance(raw[0], dict) else {}, query_from=from_dt, query_to=to_dt)
+        miles = 0.0
+        ptop = 0.0
+        for chunk in raw:
+            if not isinstance(chunk, dict):
+                continue
+            n = normalize_mileage_report(chunk, query_from=from_dt, query_to=to_dt)
+            miles += float(n.get('Mileage') or 0)
+            ptop += float(n.get('PToP') or 0)
+            if not first.get('DateFrom') and n.get('DateFrom'):
+                first = n
+        item = dict(first)
+        item['Mileage'] = miles or first.get('Mileage') or 0
+        item['PToP'] = ptop or first.get('PToP') or 0
+
+    row = PortalXSMileageCache.query.filter_by(
+        account_id=account_id, query_from=qf, query_to=qt, regno=regno
+    ).first()
+    if not row:
+        row = PortalXSMileageCache(
+            account_id=account_id, query_from=qf, query_to=qt, regno=regno
+        )
+        db.session.add(row)
+    row.vehicle_no = vehicle_no or regno
+    row.date_from = item.get('DateFrom') or (from_dt[:10] if from_dt else '')
+    row.time_from = item.get('TimeFrom') or '00:00:00'
+    row.date_to = item.get('DateTo') or (to_dt[:10] if to_dt else '')
+    row.time_to = item.get('TimeTo') or '23:59:59'
+    row.mileage = item.get('Mileage') or 0
+    row.ptop = item.get('PToP') or 0
+    row.fetched_at = pk_now()
+    db.session.commit()
+    out = mileage_row_from_cache(row)
+    out['source'] = 'portalxs'
+    return out
+
+
+def store_mileage_stub(account_id: int, regno: str, from_dt: str, to_dt: str, vehicle_no: str = '', error: str = '') -> dict:
+    """Save a placeholder so progressive fetch can skip a failed vehicle."""
+    from models import db, PortalXSMileageCache
+    from utils import pk_now
+    qf, qt = _query_dates_from_soap(from_dt, to_dt)
+    row = PortalXSMileageCache.query.filter_by(
+        account_id=account_id, query_from=qf, query_to=qt, regno=regno
+    ).first()
+    if not row:
+        row = PortalXSMileageCache(
+            account_id=account_id, query_from=qf, query_to=qt, regno=regno
+        )
+        db.session.add(row)
+    row.vehicle_no = vehicle_no or regno
+    row.date_from = (from_dt or '')[:10]
+    row.time_from = '00:00:00'
+    row.date_to = (to_dt or '')[:10]
+    row.time_to = '23:59:59'
+    row.mileage = 0
+    row.ptop = 0
+    row.fetched_at = pk_now()
+    db.session.commit()
+    out = mileage_row_from_cache(row)
+    out['source'] = 'error'
+    out['error'] = error
+    return out
+
+
 # ── Mileage report: parallel bulk fetch + short TTL cache ─────────────────────
 
 _mileage_report_cache: dict[tuple, tuple[float, list]] = {}
@@ -468,7 +661,7 @@ def fetch_mileage_report_bulk(account_id: int, regnos: list[str], from_dt: str, 
             raw = [raw]
         if not isinstance(raw, list):
             return []
-        return [normalize_mileage_report(m) for m in raw if isinstance(m, dict)]
+        return [normalize_mileage_report(m, query_from=from_dt, query_to=to_dt) for m in raw if isinstance(m, dict)]
 
     pool = ThreadPoolExecutor(max_workers=min(4, FLEET_REPORT_MAX_WORKERS))
     try:

@@ -13,34 +13,44 @@
     {{ nav_back_button() }}
   </div>
 
-  <form method="get" class="card mb-3">
+  <form method="get" class="card mb-3" id="mileageFilterForm">
     <div class="card-body d-flex flex-wrap gap-3 align-items-end">
       <div>
         <label class="form-label small fw-semibold">From</label>
-        <input type="text" name="from_date" class="form-control form-control-sm datepicker" value="{{ from_date }}" required>
+        <input type="text" name="from_date" id="mileageFrom" class="form-control form-control-sm datepicker" value="{{ from_date }}" required>
       </div>
       <div>
         <label class="form-label small fw-semibold">To</label>
-        <input type="text" name="to_date" class="form-control form-control-sm datepicker" value="{{ to_date }}" required>
+        <input type="text" name="to_date" id="mileageTo" class="form-control form-control-sm datepicker" value="{{ to_date }}" required>
       </div>
-      <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-search"></i> Generate</button>
-      {% if rows %}
+      <button type="submit" class="btn btn-sm btn-primary" id="mileageGenerateBtn"><i class="bi bi-search"></i> Generate</button>
       <a href="{{ url_for('tracking_mileage_report_export_csv', from_date=from_date, to_date=to_date, account_id=current_account_id) }}"
-         class="btn btn-sm btn-outline-success">
+         class="btn btn-sm btn-outline-success {% if not rows %}disabled{% endif %}" id="mileageExportBtn">
         <i class="bi bi-filetype-csv"></i> Export CSV
       </a>
-      {% endif %}
     </div>
   </form>
 
-  {% if error %}
-  <div class="alert alert-danger">{{ error }}</div>
-  {% endif %}
+  <div id="mileageProgressWrap" class="mb-3" {% if not report_ready %}style="display:none"{% endif %}>
+    <div class="d-flex justify-content-between small mb-1">
+      <span id="mileageProgressLabel">
+        {% if report_ready %}
+          {% if pending_total %}Fetching / updating from PortalXS…{% else %}Loaded from database{% endif %}
+        {% endif %}
+      </span>
+      <span id="mileageProgressPct"></span>
+    </div>
+    <div class="progress" style="height: 10px;">
+      <div id="mileageProgressBar" class="progress-bar progress-bar-striped {% if pending_total %}progress-bar-animated{% endif %}"
+           role="progressbar" style="width: {% if pending_total %}0{% else %}100{% endif %}%"></div>
+    </div>
+  </div>
 
-  {% if rows %}
-  <div class="card">
+  <div id="mileageAlert" class="alert alert-danger" {% if not error %}style="display:none"{% endif %}>{{ error or '' }}</div>
+
+  <div class="card" id="mileageCard" {% if not report_ready %}style="display:none"{% endif %}>
     <div class="card-header d-flex align-items-center justify-content-between">
-      <span><i class="bi bi-table"></i> Mileage Data ({{ rows|length }} rows)</span>
+      <span><i class="bi bi-table"></i> Mileage Data (<span id="mileageRowCount">{{ rows|length }}</span> rows)</span>
       <input type="text" id="mileageSearch" class="form-control form-control-sm" placeholder="Search..." style="max-width: 200px;">
     </div>
     <div class="table-responsive">
@@ -49,9 +59,9 @@
           <th>ID</th><th>Reg No</th><th>Date From</th><th>Time From</th>
           <th>Date To</th><th>Time To</th><th>Mileage</th><th>PtoP</th>
         </tr></thead>
-        <tbody>
+        <tbody id="mileageTbody">
           {% for r in rows %}
-          <tr>
+          <tr data-regno="{{ r._regno }}">
             <td>{{ r.ID }}</td>
             <td class="fw-semibold">{{ r.vehicle_no or r._regno }}</td>
             <td>{{ r.DateFrom }}</td>
@@ -66,10 +76,14 @@
       </table>
     </div>
   </div>
-  {% elif report_ready and current_account_id %}
-  <div class="alert alert-info">No mileage data for this date range.</div>
-  {% elif current_account_id %}
-  <div class="alert alert-info">Select a date range and click <strong>Generate</strong>.</div>
+
+  {% if not report_ready and current_account_id %}
+  <div class="alert alert-info">
+    Select a date range and click <strong>Generate</strong>.
+    <strong>Today</strong> always refreshes from PortalXS (updates km as vehicles keep moving).
+    <strong>Past dates</strong> load from DB if already saved; otherwise PortalXS once.
+    Excel-uploaded vehicles are left unchanged; other districts still auto-update.
+  </div>
   {% endif %}
 </div>
 {% endblock %}
@@ -80,22 +94,152 @@
 flatpickr('.datepicker', { dateFormat: 'Y-m-d', maxDate: new Date() });
 
 (function() {
-  var input = document.getElementById('mileageSearch');
-  if (!input) return;
-  var table = document.getElementById('mileageTable');
-  var tbody = table.querySelector('tbody');
-  var rows = tbody.querySelectorAll('tr');
-  var timer;
-  input.addEventListener('input', function() {
-    clearTimeout(timer);
-    timer = setTimeout(function() {
-      var q = input.value.toLowerCase();
-      rows.forEach(function(row) {
-        var text = row.textContent.toLowerCase();
-        row.style.display = text.includes(q) ? '' : 'none';
+  var dayPlan = {{ day_plan|default([])|tojson }};
+  var fromDate = {{ from_date|tojson }};
+  var toDate = {{ to_date|tojson }};
+  var csrf = (window.FleetConfig && window.FleetConfig.csrfToken) || (document.querySelector('meta[name="csrf-token"]') || {}).content || '';
+  var fetching = false;
+
+  function fmt(n) { return (Number(n) || 0).toFixed(1); }
+
+  function setProgress(done, total, fetchingNow, labelExtra) {
+    var wrap = document.getElementById('mileageProgressWrap');
+    var bar = document.getElementById('mileageProgressBar');
+    var label = document.getElementById('mileageProgressLabel');
+    var pctEl = document.getElementById('mileageProgressPct');
+    wrap.style.display = '';
+    var pct = total ? Math.round((done / total) * 100) : 100;
+    bar.style.width = pct + '%';
+    bar.classList.toggle('progress-bar-animated', !!fetchingNow && done < total);
+    pctEl.textContent = total ? (pct + '%') : '';
+    label.textContent = (labelExtra || '') + (total ? (done + ' / ' + total + ' vehicles') : 'Complete');
+  }
+
+  function upsertRow(r) {
+    var tb = document.getElementById('mileageTbody');
+    if (!tb || !r) return;
+    var key = r._regno || r.vehicle_no || '';
+    var existing = key ? tb.querySelector('tr[data-regno="' + key + '"]') : null;
+    var html = '<td>' + (r.ID || '') + '</td>'
+      + '<td class="fw-semibold">' + (r.vehicle_no || r._regno || '') + '</td>'
+      + '<td>' + (r.DateFrom || '') + '</td>'
+      + '<td>' + (r.TimeFrom || '') + '</td>'
+      + '<td>' + (r.DateTo || '') + '</td>'
+      + '<td>' + (r.TimeTo || '') + '</td>'
+      + '<td>' + fmt(r.Mileage) + '</td>'
+      + '<td>' + fmt(r.PToP) + '</td>';
+    if (existing) {
+      existing.innerHTML = html;
+    } else {
+      var tr = document.createElement('tr');
+      tr.setAttribute('data-regno', key);
+      tr.innerHTML = html;
+      tb.appendChild(tr);
+    }
+    document.getElementById('mileageRowCount').textContent = tb.querySelectorAll('tr').length;
+    var exp = document.getElementById('mileageExportBtn');
+    if (exp) exp.classList.remove('disabled');
+  }
+
+  function replaceAllRows(rows) {
+    var tb = document.getElementById('mileageTbody');
+    if (!tb) return;
+    tb.innerHTML = '';
+    (rows || []).forEach(upsertRow);
+  }
+
+  function showAlert(msg) {
+    var el = document.getElementById('mileageAlert');
+    if (!msg) { el.style.display = 'none'; el.textContent = ''; return; }
+    el.style.display = '';
+    el.textContent = msg;
+  }
+
+  function fetchOne(day, mode, doneRegnos) {
+    return fetch({{ url_for('tracking_mileage_report_fetch_one')|tojson }}, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': csrf
+      },
+      body: JSON.stringify({
+        from_date: fromDate,
+        to_date: toDate,
+        day: day,
+        mode: mode,
+        done_regnos: doneRegnos || []
+      })
+    }).then(function(r) { return r.json().then(function(d) { return { status: r.status, data: d }; }); });
+  }
+
+  function runDay(dayInfo) {
+    return new Promise(function(resolve) {
+      var doneRegnos = [];
+      var totalHint = dayInfo.total || 0;
+      function step() {
+        fetchOne(dayInfo.date, dayInfo.mode, doneRegnos).then(function(res) {
+          var d = res.data || {};
+          if (d.regno) doneRegnos.push(d.regno);
+          if (d.row) upsertRow(d.row);
+          setProgress(d.done || doneRegnos.length, d.total || totalHint || doneRegnos.length, !d.complete,
+            dayInfo.date + ' (' + (dayInfo.mode === 'refresh_all' ? 'refresh' : 'fill') + '): ');
+          if (d.error) showAlert(d.regno + ': ' + d.error);
+          else showAlert('');
+          if (d.complete) {
+            if (d.rows) replaceAllRows(d.rows);
+            resolve();
+            return;
+          }
+          step();
+        }).catch(function() {
+          showAlert('Network error — retrying…');
+          setTimeout(step, 1500);
+        });
+      }
+      step();
+    });
+  }
+
+  function loopFetch() {
+    if (fetching) return;
+    var todo = (dayPlan || []).filter(function(d) { return d.needs_fetch && (d.pending || 0) > 0; });
+    if (!todo.length) {
+      setProgress(1, 1, false, 'Loaded from database — ');
+      return;
+    }
+    fetching = true;
+    document.getElementById('mileageCard').style.display = '';
+    var i = 0;
+    function next() {
+      if (i >= todo.length) {
+        fetching = false;
+        setProgress(1, 1, false, 'Complete — ');
+        return;
+      }
+      runDay(todo[i]).then(function() {
+        i += 1;
+        next();
       });
-    }, 250);
-  });
+    }
+    next();
+  }
+
+  var search = document.getElementById('mileageSearch');
+  if (search) {
+    var timer;
+    search.addEventListener('input', function() {
+      clearTimeout(timer);
+      timer = setTimeout(function() {
+        var q = search.value.toLowerCase();
+        document.querySelectorAll('#mileageTbody tr').forEach(function(row) {
+          row.style.display = row.textContent.toLowerCase().indexOf(q) >= 0 ? '' : 'none';
+        });
+      }, 250);
+    });
+  }
+
+  if ({{ 'true' if report_ready else 'false' }}) loopFetch();
 })();
 </script>
 {% endblock %}

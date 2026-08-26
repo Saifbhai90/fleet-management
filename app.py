@@ -1165,6 +1165,11 @@ if _run_startup_tasks:
         except Exception as e:
             app.logger.warning('Fuel market scan scheduler failed to start: %s', e)
         try:
+            from mileage_auto_scheduler import start_mileage_auto_scheduler
+            start_mileage_auto_scheduler(app)
+        except Exception as e:
+            app.logger.warning('Mileage auto-sync scheduler failed to start: %s', e)
+        try:
             from services.ufone_service import rewrap_ufone_account_passwords
             n = rewrap_ufone_account_passwords(app)
             if n:

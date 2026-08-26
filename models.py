@@ -762,6 +762,8 @@ class VehicleMileageRecord(db.Model):
     mileage = db.Column(db.Numeric(12, 2), default=0)  # G: Mileage (Running KMs)
     ptop = db.Column(db.Numeric(12, 2), default=0)     # H: PtoP (Running KMs)
     selected_km = db.Column(db.Numeric(12, 2), nullable=True)  # user override; NULL = auto MAX(mileage,ptop)
+    # 'excel' = Excel upload (PortalXS must not overwrite); 'portalxs' = SOAP sync
+    data_source = db.Column(db.String(20), nullable=True, index=True)
 
     def effective_km(self):
         if self.selected_km is not None:
@@ -3151,6 +3153,35 @@ class PortalXSAlertCache(db.Model):
 
     def __repr__(self):
         return f'<PortalXSAlertCache {self.regno} {self.alert_type}>'
+
+
+class PortalXSMileageCache(db.Model):
+    """Cached PortalXS mileage rows per account + query date range + vehicle."""
+    __tablename__ = 'portalxs_mileage_cache'
+    id = db.Column(db.Integer, primary_key=True)
+    account_id = db.Column(db.Integer, db.ForeignKey('portalxs_account.id', ondelete='CASCADE'), nullable=False, index=True)
+    query_from = db.Column(db.Date, nullable=False)
+    query_to = db.Column(db.Date, nullable=False)
+    regno = db.Column(db.String(50), nullable=False, index=True)
+    vehicle_no = db.Column(db.String(80), nullable=True)
+    date_from = db.Column(db.String(40), nullable=True)
+    time_from = db.Column(db.String(20), nullable=True)
+    date_to = db.Column(db.String(40), nullable=True)
+    time_to = db.Column(db.String(20), nullable=True)
+    mileage = db.Column(db.Numeric(12, 2), nullable=True)
+    ptop = db.Column(db.Numeric(12, 2), nullable=True)
+    fetched_at = db.Column(db.DateTime, default=pk_now, nullable=False)
+    created_at = db.Column(db.DateTime, default=pk_now, nullable=False)
+
+    account = db.relationship('PortalXSAccount', backref='mileage_cache')
+
+    __table_args__ = (
+        db.UniqueConstraint('account_id', 'query_from', 'query_to', 'regno', name='uq_portalxs_mileage_range_regno'),
+        db.Index('ix_portalxs_mileage_range', 'account_id', 'query_from', 'query_to'),
+    )
+
+    def __repr__(self):
+        return f'<PortalXSMileageCache {self.regno} {self.query_from}>'
 
 
 # ════════════════════════════════════════════════════════════════════════════

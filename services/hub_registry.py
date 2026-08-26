@@ -357,6 +357,7 @@ HUBS = {
             'tracking_fleet_report_export_csv',
             'tracking_mileage_report',
             'tracking_mileage_report_export_csv',
+            'tracking_mileage_report_fetch_one',
         ),
         'sections': [
             {

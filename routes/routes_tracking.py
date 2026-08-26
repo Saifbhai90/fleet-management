@@ -17,8 +17,7 @@ from models import (
 )
 from services.portalxs_service import (
     fetch_live_positions, fetch_history, fetch_trips,
-    fetch_fleet_report, fetch_fleet_report_bulk, fetch_trends, fetch_mileage,
-    fetch_mileage_report_bulk,
+    fetch_fleet_report, fetch_fleet_report_bulk, fetch_trends,
     fetch_alerts, fetch_geofences,
     get_cached_positions, get_summary_stats,
     get_all_vehicles_for_account, link_vehicle, auto_link_vehicles,
@@ -26,8 +25,15 @@ from services.portalxs_service import (
     test_connection, encrypt_password, decrypt_password,
     start_polling, stop_polling, is_polling,
 )
+from services.mileage_record_service import (
+    aggregate_range_rows,
+    fetch_and_upsert_one,
+    normalize_reg_key,
+    pending_regnos_for_day,
+    plan_days_for_range,
+)
 from utils import pk_now, pk_date, parse_date
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 import csv
 import io
 import json
@@ -462,7 +468,36 @@ def tracking_fleet_report_export_csv():
 
 # ════════════════════════════════════════════════════════════════════════════
 # VEHICLE MILEAGE REPORT
+# Uses vehicle_mileage_record (same table as Excel upload).
+# Today → always PortalXS full refresh (skip Excel-protected regs) + upsert.
+# Past → DB if present, else PortalXS fill once.
+# Range → per-day then sum for display.
 # ════════════════════════════════════════════════════════════════════════════
+
+def _parse_ymd(s: str) -> date:
+    return datetime.strptime(_sanitize_date(s), '%Y-%m-%d').date()
+
+
+def _mileage_display_names(vehicles_list: list) -> dict:
+    names = {}
+    for v in vehicles_list:
+        display = v.get('vehicle_no') or v.get('portalxs_regno') or ''
+        for raw in (v.get('portalxs_regno'), v.get('vehicle_no')):
+            if not raw:
+                continue
+            names[str(raw)] = display
+            key = normalize_reg_key(raw)
+            if key:
+                names[key] = display
+    return names
+
+
+def _apply_mileage_display_names(rows: list, names: dict) -> None:
+    for item in rows:
+        raw = item.get('_regno') or item.get('vehicle_no') or ''
+        key = normalize_reg_key(raw)
+        item['vehicle_no'] = names.get(key) or names.get(raw) or item.get('vehicle_no') or raw
+
 
 @app.route('/tracking/mileage-report')
 def tracking_mileage_report():
@@ -472,25 +507,27 @@ def tracking_mileage_report():
 
     from_date = _sanitize_date(request.args.get('from_date', ''))
     to_date = _sanitize_date(request.args.get('to_date', ''))
-    # Only hit PortalXS after user clicks Generate — opening the page alone must not
-    # fan-out mileage SOAP calls for the whole fleet (timeouts → 500 on Render).
     run_query = ('from_date' in request.args) or ('to_date' in request.args)
 
     rows = []
     error = None
-    if run_query and acct_id and vehicles_list:
-        fdt, tdt = _soap_dates(from_date, to_date)
-        regno_to_name = {v['portalxs_regno']: (v.get('vehicle_no') or v['portalxs_regno'])
-                         for v in vehicles_list}
-        try:
-            rows, error = fetch_mileage_report_bulk(
-                acct_id, list(regno_to_name.keys()), fdt, tdt)
-            for item in rows:
-                item['vehicle_no'] = regno_to_name.get(item.get('_regno', ''), item.get('_regno', ''))
-        except Exception as e:
-            current_app.logger.exception('tracking_mileage_report fetch failed')
-            error = str(e)[:300]
-            rows = []
+    day_plan = []
+    pending_total = 0
+    if run_query and acct_id:
+        fd = _parse_ymd(from_date)
+        td = _parse_ymd(to_date)
+        rows = aggregate_range_rows(fd, td)
+        day_plan = plan_days_for_range(fd, td)
+        for day in day_plan:
+            if not day.get('needs_fetch'):
+                day['pending'] = 0
+                day['total'] = 0
+                continue
+            pending = pending_regnos_for_day(acct_id, _parse_ymd(day['date']), mode=day['mode'])
+            day['pending'] = len(pending)
+            day['total'] = len(pending)
+            pending_total += len(pending)
+        _apply_mileage_display_names(rows, _mileage_display_names(vehicles_list))
 
     return render_template(
         'tracking/mileage_report.html',
@@ -502,13 +539,127 @@ def tracking_mileage_report():
         accounts=accounts,
         current_account_id=acct_id,
         report_ready=run_query,
+        day_plan=day_plan,
+        pending_total=pending_total,
+        total_vehicles=len(vehicles_list),
         **_nav_back_ctx(url_for('tracking_dashboard')),
     )
 
 
+@app.route('/tracking/mileage-report/fetch-one', methods=['POST'])
+def tracking_mileage_report_fetch_one():
+    """Fetch next (or specified) vehicle from PortalXS for one day → upsert DB."""
+    acct_id = _get_account_id()
+    if not acct_id:
+        return jsonify({'ok': False, 'error': 'No account configured'}), 400
+    body = request.json or {}
+    from_date = _sanitize_date(body.get('from_date') or request.form.get('from_date') or '')
+    to_date = _sanitize_date(body.get('to_date') or request.form.get('to_date') or '')
+    day_s = _sanitize_date(body.get('day') or from_date)
+    mode = (body.get('mode') or '').strip() or None
+    explicit_regno = (body.get('regno') or '').strip()
+
+    vehicles_list = get_all_vehicles_for_account(acct_id)
+    if not vehicles_list:
+        return jsonify({'ok': False, 'error': 'No vehicles'}), 400
+
+    task_date = _parse_ymd(day_s)
+    if not mode:
+        from services.mileage_record_service import day_fetch_mode
+        mode = day_fetch_mode(task_date)
+
+    pending = pending_regnos_for_day(acct_id, task_date, mode=mode)
+    names = _mileage_display_names(vehicles_list)
+
+    done_regnos = body.get('done_regnos') or []
+    if isinstance(done_regnos, str):
+        done_regnos = [done_regnos]
+    done_set = {str(x) for x in done_regnos}
+
+    # refresh_all always returns the full non-excel list — client tracks progress via done_regnos
+    if mode == 'refresh_all':
+        remaining_list = [p for p in pending if p['portalxs_regno'] not in done_set]
+        total = len(pending)
+    else:
+        remaining_list = pending
+        total = len(vehicles_list)
+
+    if explicit_regno:
+        target = next((p for p in pending if p['portalxs_regno'] == explicit_regno), None)
+        if not target:
+            target = {
+                'portalxs_regno': explicit_regno,
+                'vehicle_no': names.get(normalize_reg_key(explicit_regno), explicit_regno),
+            }
+    else:
+        if not remaining_list:
+            rows = aggregate_range_rows(_parse_ymd(from_date), _parse_ymd(to_date))
+            _apply_mileage_display_names(rows, names)
+            return jsonify({
+                'ok': True, 'complete': True, 'source': 'db',
+                'done': len(done_set) if mode == 'refresh_all' else (total - len(remaining_list)),
+                'total': total, 'remaining': 0, 'rows': rows, 'day': day_s, 'mode': mode,
+            })
+        target = remaining_list[0]
+
+    regno = target['portalxs_regno']
+    display = names.get(normalize_reg_key(regno)) or names.get(regno) or target.get('vehicle_no') or regno
+    err_msg = None
+    try:
+        row = fetch_and_upsert_one(
+            acct_id, regno, task_date,
+            vehicle_no=target.get('vehicle_no') or display,
+        )
+        if row:
+            row['vehicle_no'] = display
+    except Exception as e:
+        current_app.logger.exception('mileage fetch-one failed regno=%s day=%s', regno, day_s)
+        err_msg = str(e)[:240]
+        row = {
+            'ID': '',
+            '_regno': regno,
+            'vehicle_no': display,
+            'DateFrom': day_s,
+            'TimeFrom': '00:00:00',
+            'DateTo': day_s,
+            'TimeTo': '23:59:59',
+            'Mileage': 0,
+            'PToP': 0,
+            'source': 'error',
+            'task_date': day_s,
+        }
+
+    if mode == 'refresh_all':
+        done_after = len(done_set) + 1
+        remaining_after = max(0, total - done_after)
+    else:
+        remaining_after = len(pending_regnos_for_day(acct_id, task_date, mode=mode))
+        done_after = total - remaining_after
+
+    complete = remaining_after <= 0
+    payload = {
+        'ok': True,
+        'complete': complete,
+        'source': (row or {}).get('source') or 'portalxs',
+        'done': done_after,
+        'total': max(total, done_after),
+        'remaining': remaining_after,
+        'row': row,
+        'regno': regno,
+        'day': day_s,
+        'mode': mode,
+        'error': err_msg,
+    }
+    if complete:
+        rows = aggregate_range_rows(_parse_ymd(from_date), _parse_ymd(to_date))
+        _apply_mileage_display_names(rows, names)
+        payload['rows'] = rows
+    return jsonify(payload)
+
+
 @app.route('/tracking/mileage-report/export/csv')
 def tracking_mileage_report_export_csv():
-    """Export vehicle mileage report as CSV."""
+    """Export vehicle mileage report as CSV from vehicle_mileage_record."""
     acct_id = _get_account_id()
     from_date = _sanitize_date(request.args.get('from_date', ''))
     to_date = _sanitize_date(request.args.get('to_date', ''))
@@ -516,19 +667,11 @@ def tracking_mileage_report_export_csv():
         return Response('No account configured', status=400)
 
     vehicles_list = get_all_vehicles_for_account(acct_id)
-    if not vehicles_list:
-        return Response('No vehicles', status=400)
-
-    fdt, tdt = _soap_dates(from_date, to_date)
-    regno_to_name = {v['portalxs_regno']: (v.get('vehicle_no') or v['portalxs_regno'])
-                     for v in vehicles_list}
-    try:
-        rows, error = fetch_mileage_report_bulk(acct_id, list(regno_to_name.keys()), fdt, tdt)
-    except Exception as e:
-        current_app.logger.exception('tracking_mileage_report_export_csv failed')
-        return Response(f'Error: {str(e)[:300]}', status=500)
-    if error and not rows:
-        return Response(f'Error: {error}', status=500)
+    names = _mileage_display_names(vehicles_list)
+    rows = aggregate_range_rows(_parse_ymd(from_date), _parse_ymd(to_date))
+    if not rows:
+        return Response('No mileage data for this date. Generate the report first.', status=400)
+    _apply_mileage_display_names(rows, names)
 
     output = io.StringIO()
     writer = csv.writer(output)
@@ -536,7 +679,7 @@ def tracking_mileage_report_export_csv():
     for r in rows:
         writer.writerow([
             r.get('ID', ''),
-            regno_to_name.get(r.get('_regno', ''), r.get('_regno', '')),
+            r.get('vehicle_no') or r.get('_regno', ''),
             r.get('DateFrom', ''),
             r.get('TimeFrom', ''),
             r.get('DateTo', ''),
