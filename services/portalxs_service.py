@@ -188,7 +188,7 @@ def enrich_activity_report_rows(points: list[dict], group_name: str = '') -> lis
     for p in points or []:
         rdt = p.get('RecordDateTime') or p.get('RDT') or ''
         ts = _parse_history_ts(rdt)
-        speed = float(p.get('Speed') or 0)
+        speed = _to_float(p.get('Speed'))
         distance = 0.0
         delta_sec = 0.0
         if prev is not None and ts and prev_ts:
@@ -394,6 +394,108 @@ def _reset_client(account_id: int):
         _clients.pop(account_id, None)
 
 
+_POSITION_FETCH_WARNINGS: dict[int, str] = {}
+_POSITION_WARNING_LOCK = threading.Lock()
+_LIVE_FETCH_ATTEMPTS = 3
+
+
+def consume_position_warning(account_id: int) -> Optional[str]:
+    """One-shot warning for the UI after a stale/DB fallback fetch."""
+    with _POSITION_WARNING_LOCK:
+        return _POSITION_FETCH_WARNINGS.pop(account_id, None)
+
+
+def friendly_portalxs_error(exc: Exception) -> str:
+    """Plain-language message — never show raw crypto errors to drivers."""
+    msg = str(exc or '').strip()
+    lower = msg.lower()
+    if 'incorrect padding' in lower or ('padding' in lower and 'decrypt' in lower):
+        return 'GPS server se connection fail — dubara koshish ho rahi hai…'
+    if '503' in msg or 'unavailable' in lower or '502' in msg or '504' in msg:
+        return 'GPS server abhi unavailable hai — thori der baad dubara try karein.'
+    if 'login failed' in lower or 'session' in lower:
+        return 'GPS login expire ho gayi — dubara connect ho raha hai…'
+    if 'timeout' in lower or 'connection' in lower:
+        return 'GPS server se connection timeout — dubara koshish ho rahi hai…'
+    if not msg:
+        return 'GPS server se data nahi mila — retry ho raha hai…'
+    return msg[:240]
+
+
+def _is_transient_portalxs_error(exc: Exception) -> bool:
+    msg = str(exc or '').lower()
+    return any(
+        needle in msg
+        for needle in (
+            'incorrect padding', 'padding', 'decrypt', 'invalid token',
+            'connection', 'timeout', 'temporarily', '503', '502', '504',
+            'session', 'no result',
+        )
+    )
+
+
+def _positions_from_db_mappings(account_id: int) -> list[dict]:
+    """Last saved map positions when live PortalXS fetch fails."""
+    from models import PortalXSVehicleMapping
+
+    out = []
+    for m in PortalXSVehicleMapping.query.filter_by(account_id=account_id).all():
+        if m.last_lat is None or m.last_lon is None:
+            continue
+        rdt = m.last_rdt.strftime('%Y-%m-%dT%H:%M:%S') if m.last_rdt else ''
+        out.append(normalize_vehicle({
+            'RegNo': m.portalxs_regno,
+            'LAT': m.last_lat,
+            'LON': m.last_lon,
+            'Speed': m.last_speed,
+            'VehicleStatus': m.last_status or 'Unknown',
+            'IgnitionStatus': m.last_ignition or '',
+            'LandMark': m.last_landmark or '',
+            'GroupName': m.group_name or '',
+            'RDT': rdt,
+            'TotalMileage': m.last_total_mileage,
+            'TotalTrips': m.last_total_trips,
+            'MaxSpeed': m.last_max_speed,
+            'MakeAndModel': m.make_model or '',
+        }))
+    return out
+
+
+def _record_fetch_failure(account_id: int, exc: Exception) -> None:
+    from models import PortalXSAccount
+    from app import db
+
+    _reset_client(account_id)
+    db.session.rollback()
+    try:
+        acct = db.session.get(PortalXSAccount, account_id)
+        if acct:
+            acct.last_error = str(exc)[:500]
+            db.session.commit()
+    except Exception:
+        db.session.rollback()
+
+
+def _finish_fetch_with_fallback(account_id: int, last_exc: Exception) -> list[dict]:
+    """Memory cache, then DB snapshots — only raise when nothing is left to show."""
+    cached = get_cached_positions(account_id)
+    if cached:
+        with _POSITION_WARNING_LOCK:
+            _POSITION_FETCH_WARNINGS[account_id] = friendly_portalxs_error(last_exc)
+        return cached
+
+    db_vehicles = _positions_from_db_mappings(account_id)
+    if db_vehicles:
+        _set_cached_positions(account_id, db_vehicles)
+        with _POSITION_WARNING_LOCK:
+            _POSITION_FETCH_WARNINGS[account_id] = (
+                friendly_portalxs_error(last_exc) + ' (last saved positions dikha rahe hain)'
+            )
+        return db_vehicles
+
+    raise RuntimeError(friendly_portalxs_error(last_exc)) from last_exc
+
+
 # ── Public API ───────────────────────────────────────────────────────────────
 
 def fetch_live_positions(account_id: int, force: bool = False) -> list[dict]:
@@ -406,71 +508,74 @@ def fetch_live_positions(account_id: int, force: bool = False) -> list[dict]:
     if not force and age is not None and age < 25:
         return get_cached_positions(account_id)
 
-    try:
-        client = _get_client(account_id)
-        raw_vehicles = client.get_vehicles()
-        if not isinstance(raw_vehicles, list):
-            raw_vehicles = []
-
-        vehicles = [normalize_vehicle(v) for v in raw_vehicles]
-        _set_cached_positions(account_id, vehicles)
-
-        # Update DB mappings — preload all mappings in ONE query (not N queries)
-        acct = db.session.get(PortalXSAccount, account_id)
-        if acct:
-            acct.vehicle_count = len(vehicles)
-            acct.last_error = None
-
-        existing = {
-            m.portalxs_regno: m
-            for m in PortalXSVehicleMapping.query.filter_by(account_id=account_id).all()
-        }
-        for v in vehicles:
-            mapping = existing.get(v['RegNo'])
-            if not mapping:
-                mapping = PortalXSVehicleMapping(
-                    account_id=account_id,
-                    portalxs_regno=v['RegNo'],
-                )
-                db.session.add(mapping)
-                existing[v['RegNo']] = mapping
-
-            mapping.group_name = v.get('GroupName', '')
-            mapping.make_model = v.get('MakeAndModel', '')
-            mapping.last_lat = v['LAT'] or None
-            mapping.last_lon = v['LON'] or None
-            mapping.last_speed = v['Speed'] or None
-            mapping.last_status = v.get('VehicleStatus', '')
-            mapping.last_rdt = _parse_rdt(v.get('RDT', ''))
-            mapping.last_ignition = v.get('IgnitionStatus', '')
-            mapping.last_landmark = v.get('LandMark', '')
-            mapping.last_total_mileage = v.get('TotalMileage') or None
-            mapping.last_total_trips = v.get('TotalTrips') or None
-            mapping.last_max_speed = v.get('MaxSpeed') or None
-
-        db.session.commit()
-        return vehicles
-
-    except Exception as e:
-        err_text = str(e)
-        if '503' in err_text or 'service is unavailable' in err_text.lower():
-            logger.warning(f"PortalXS fetch_live_positions unavailable: {err_text[:200]}")
-        else:
-            logger.error(f"PortalXS fetch_live_positions error: {e}")
-        _reset_client(account_id)
-        db.session.rollback()
+    last_exc = None
+    for attempt in range(_LIVE_FETCH_ATTEMPTS):
         try:
+            client = _get_client(account_id)
+            raw_vehicles = client.get_vehicles()
+            if not isinstance(raw_vehicles, list):
+                raw_vehicles = []
+
+            vehicles = [normalize_vehicle(v) for v in raw_vehicles]
+            _set_cached_positions(account_id, vehicles)
+
             acct = db.session.get(PortalXSAccount, account_id)
             if acct:
-                acct.last_error = str(e)[:500]
-                db.session.commit()
-        except Exception:
-            db.session.rollback()
-        # Return stale cache if available
-        cached = get_cached_positions(account_id)
-        if cached:
-            return cached
-        raise
+                acct.vehicle_count = len(vehicles)
+                acct.last_error = None
+
+            existing = {
+                m.portalxs_regno: m
+                for m in PortalXSVehicleMapping.query.filter_by(account_id=account_id).all()
+            }
+            for v in vehicles:
+                mapping = existing.get(v['RegNo'])
+                if not mapping:
+                    mapping = PortalXSVehicleMapping(
+                        account_id=account_id,
+                        portalxs_regno=v['RegNo'],
+                    )
+                    db.session.add(mapping)
+                    existing[v['RegNo']] = mapping
+
+                mapping.group_name = v.get('GroupName', '')
+                mapping.make_model = v.get('MakeAndModel', '')
+                mapping.last_lat = v['LAT'] or None
+                mapping.last_lon = v['LON'] or None
+                mapping.last_speed = v['Speed'] or None
+                mapping.last_status = v.get('VehicleStatus', '')
+                mapping.last_rdt = _parse_rdt(v.get('RDT', ''))
+                mapping.last_ignition = v.get('IgnitionStatus', '')
+                mapping.last_landmark = v.get('LandMark', '')
+                mapping.last_total_mileage = v.get('TotalMileage') or None
+                mapping.last_total_trips = v.get('TotalTrips') or None
+                mapping.last_max_speed = v.get('MaxSpeed') or None
+
+            db.session.commit()
+            with _POSITION_WARNING_LOCK:
+                _POSITION_FETCH_WARNINGS.pop(account_id, None)
+            return vehicles
+
+        except Exception as e:
+            last_exc = e
+            err_text = str(e)
+            if '503' in err_text or 'service is unavailable' in err_text.lower():
+                logger.warning(
+                    'PortalXS fetch_live_positions unavailable (attempt %s/%s): %s',
+                    attempt + 1, _LIVE_FETCH_ATTEMPTS, err_text[:200],
+                )
+            else:
+                logger.error(
+                    'PortalXS fetch_live_positions error (attempt %s/%s): %s',
+                    attempt + 1, _LIVE_FETCH_ATTEMPTS, e,
+                )
+            _record_fetch_failure(account_id, e)
+            if attempt < _LIVE_FETCH_ATTEMPTS - 1 and _is_transient_portalxs_error(e):
+                time.sleep(0.6 * (attempt + 1))
+                continue
+            break
+
+    return _finish_fetch_with_fallback(account_id, last_exc or RuntimeError('GPS fetch failed'))
 
 
 def fetch_history(account_id: int, regno: str, from_dt: str, to_dt: str) -> list[dict]:

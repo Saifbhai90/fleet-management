@@ -24,6 +24,7 @@ from services.portalxs_service import (
     create_account, update_account, delete_account,
     test_connection, encrypt_password, decrypt_password,
     start_polling, stop_polling, is_polling,
+    consume_position_warning, friendly_portalxs_error,
 )
 from services.mileage_record_service import (
     aggregate_range_rows,
@@ -137,8 +138,14 @@ def tracking_dashboard():
         try:
             vehicles = fetch_live_positions(acct_id, force=False)
             stats = get_summary_stats(acct_id)
+            error = consume_position_warning(acct_id)
         except Exception as e:
-            error = str(e)[:300]
+            error = friendly_portalxs_error(e)
+            vehicles = get_cached_positions(acct_id)
+            if vehicles:
+                stats = get_summary_stats(acct_id)
+            else:
+                logger.warning('tracking_dashboard fetch failed acct=%s: %s', acct_id, e)
     else:
         error = "No PortalXS account configured. Add one in Settings."
 
@@ -169,14 +176,21 @@ def api_tracking_positions():
     try:
         vehicles = fetch_live_positions(acct_id, force=False)
         stats = get_summary_stats(acct_id)
+        warning = consume_position_warning(acct_id)
         return jsonify({
             'vehicles': vehicles,
             'stats': stats,
             'account_id': acct_id,
             'ufone_tasks_by_reg': _ufone_tasks_for_tracking(),
+            'warning': warning,
         })
     except Exception as e:
-        return jsonify({'error': str(e)[:300], 'vehicles': [], 'stats': {}}), 200
+        return jsonify({
+            'error': friendly_portalxs_error(e),
+            'vehicles': [],
+            'stats': {},
+            'warning': None,
+        }), 200
 
 
 @app.route('/api/tracking/refresh', methods=['POST'])
@@ -188,14 +202,21 @@ def api_tracking_refresh():
     try:
         vehicles = fetch_live_positions(acct_id, force=True)
         stats = get_summary_stats(acct_id)
+        warning = consume_position_warning(acct_id)
         return jsonify({
             'vehicles': vehicles,
             'stats': stats,
             'refreshed_at': pk_now().isoformat(),
             'ufone_tasks_by_reg': _ufone_tasks_for_tracking(),
+            'warning': warning,
         })
     except Exception as e:
-        return jsonify({'error': str(e)[:300]}), 500
+        return jsonify({
+            'error': friendly_portalxs_error(e),
+            'vehicles': [],
+            'stats': {},
+            'warning': None,
+        }), 200
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -280,6 +301,8 @@ def tracking_history():
     error = None
     gps_source_label = ''
     trips_source_label = ''
+    prefer_db = request.args.get('refresh') != '1'
+    live_refresh = not prefer_db
     if regno and acct_id:
         group_name = ''
         vehicle_no = ''
@@ -295,6 +318,7 @@ def tracking_history():
             history_points, hist_err, gps_source_label = ensure_history_points_for_range(
                 acct_id, regno, fd, td,
                 vehicle_no=vehicle_no, group_name=group_name,
+                prefer_db=prefer_db,
             )
             if hist_err:
                 hist_msg = f'History: {hist_err}'
@@ -309,18 +333,29 @@ def tracking_history():
             hist_err = str(e)[:300]
             error = f'{error}; History: {hist_err}' if error else f'History: {hist_err}'
             logger.warning('tracking_history gps/trips failed regno=%s: %s', regno, e)
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
 
         # Hide zero-distance trips on History page (ignition on/off with no movement).
-        trips = [t for t in trips if float(t.get('Mileage') or 0) > 0]
-        trips.sort(key=lambda t: str(t.get('IGON_RDT') or ''))
+        try:
+            trips = [t for t in trips if safe_float(t.get('Mileage')) > 0]
+            trips.sort(key=lambda t: str(t.get('IGON_RDT') or ''))
+        except Exception as e:
+            logger.warning('tracking_history trip filter failed regno=%s: %s', regno, e)
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
 
         logger.info(
-            'tracking_history regno=%s from=%s to=%s trips=%s points=%s gps=%s trips_src=%s',
+            'tracking_history regno=%s from=%s to=%s trips=%s points=%s gps=%s trips_src=%s prefer_db=%s',
             regno, from_date, to_date, len(trips), len(history_points),
-            gps_source_label, trips_source_label,
+            gps_source_label, trips_source_label, prefer_db,
         )
 
-    total_distance = sum(float(t.get('Mileage') or 0) for t in trips)
+    total_distance = sum(safe_float(t.get('Mileage')) for t in trips)
     total_trips = len(trips)
 
     return render_template(
@@ -336,6 +371,7 @@ def tracking_history():
         error=error,
         gps_source_label=gps_source_label,
         trips_source_label=trips_source_label,
+        live_refresh=live_refresh,
         accounts=accounts,
         current_account_id=acct_id,
         **_nav_back_ctx(url_for('module_hub', hub_slug='fleet-tracking')),
@@ -363,15 +399,21 @@ def api_tracking_history():
     try:
         fd = datetime.strptime(from_date, '%Y-%m-%d').date()
         td = datetime.strptime(to_date, '%Y-%m-%d').date()
+        prefer_db = request.args.get('refresh') != '1'
         points, err, src = ensure_history_points_for_range(
             acct_id, regno, fd, td,
             vehicle_no=vehicle_no, group_name=group_name,
+            prefer_db=prefer_db,
         )
         payload = {'points': points, 'count': len(points), 'source': src}
         if err:
             payload['warning'] = err
         return jsonify(payload)
     except Exception as e:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
         return jsonify({'error': str(e)[:300]}), 500
 
 

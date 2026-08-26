@@ -176,6 +176,11 @@
         <input type="text" name="to_date" class="form-control form-control-sm datepicker" value="{{ to_date }}" required>
       </div>
       <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-search"></i> Fetch History</button>
+      <label class="small mb-0 d-flex align-items-center gap-1 user-select-none">
+        <input type="checkbox" name="refresh" value="1" class="form-check-input mt-0"
+               {% if live_refresh %}checked{% endif %}>
+        Live GPS refresh
+      </label>
       {% if trips and selected_regno %}
       <a href="{{ url_for('tracking_trips_export_csv', regno=selected_regno, from_date=from_date, to_date=to_date, nav_from=nav_from) }}"
          class="btn btn-sm btn-outline-success"><i class="bi bi-filetype-csv"></i> Export Trips</a>
@@ -201,7 +206,8 @@
     {% endif %}
     <span class="text-muted small">
       Map par <strong>rang wali line</strong> hi route hai — click for detail.
-      Right side se trip select karke zoom karo. Saved points: today = PortalXS each load; past = DB first.
+      Right side se trip select karke zoom karo. Pehle saved DB points load hote hain (fast);
+      latest GPS ke liye neeche <strong>Live GPS refresh</strong> tick karke dubara Fetch karo.
     </span>
   </div>
   {% endif %}

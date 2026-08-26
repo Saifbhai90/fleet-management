@@ -462,9 +462,9 @@
   </div>
 
   {% if error %}
-  <div class="tracking-error">
+  <div class="tracking-error" id="trackingErrorBanner">
     <i class="bi bi-exclamation-triangle"></i> {{ error }}
-    {% if can_see_page('tracking_settings') %}
+    {% if can_see_page('tracking_settings') and 'configured' in (error|lower) %}
     &mdash; <a href="{{ url_for('tracking_settings') }}" style="color:#fca5a5;text-decoration:underline;">Configure account</a>
     {% endif %}
   </div>
@@ -1861,10 +1861,17 @@
       }
       if (data.vehicles && data.vehicles.length) {
         renderVehicles(data.vehicles);
+        var errBanner = document.getElementById('trackingErrorBanner');
+        if (errBanner) errBanner.style.display = 'none';
+        if (data.warning) {
+          document.getElementById('tbUpdated').textContent = '\u26A0 ' + String(data.warning).slice(0, 80);
+        }
       } else if (Object.keys(ufoneTasksByReg).length && positions.length) {
         renderVehicles(positions);
       } else if (data.error) {
         document.getElementById('tbUpdated').textContent = '\u26A0 ' + String(data.error).slice(0, 60);
+      } else if (data.warning) {
+        document.getElementById('tbUpdated').textContent = '\u26A0 ' + String(data.warning).slice(0, 80);
       }
       indicator.style.display = 'none';
     }).catch(function() {

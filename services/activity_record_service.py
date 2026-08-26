@@ -250,7 +250,18 @@ def upsert_portalxs_activity(
         logger.warning('activity portalxs fetch failed %s %s: %s', portalxs_regno, task_date, e)
         return {'ok': False, 'source': 'error', 'error': str(e)[:240], 'count': 0, 'rows': [], 'vehicle_no': store}
 
-    enriched = enrich_activity_report_rows(raw, group_name=group_name or '')
+    try:
+        enriched = enrich_activity_report_rows(raw, group_name=group_name or '')
+    except Exception as e:
+        logger.warning('activity enrich failed %s %s: %s', portalxs_regno, task_date, e)
+        return {
+            'ok': False,
+            'source': 'error',
+            'error': str(e)[:240],
+            'count': 0,
+            'rows': load_activity_from_db(task_date, portalxs_regno, vehicle_no),
+            'vehicle_no': store,
+        }
     delete_portalxs_activity_for_vehicle(task_date, portalxs_regno, vehicle_no)
 
     today = pk_date()
@@ -311,6 +322,7 @@ def ensure_activity_for_range(
     to_date: date,
     vehicle_no: str = '',
     group_name: str = '',
+    prefer_db: bool = False,
 ) -> tuple[list[dict], Optional[str], str]:
     """Apply mileage-like day rules across a date range; return report rows.
 
@@ -329,6 +341,9 @@ def ensure_activity_for_range(
     d = from_date
     while d <= to_date:
         mode = day_fetch_mode(d, today=today)
+        if prefer_db:
+            # History page: show saved DB points immediately; skip live PortalXS on every load.
+            mode = 'fill_missing'
         need_fetch = mode == 'refresh_all' or not vehicle_day_has_activity(d, portalxs_regno, vehicle_no)
         trips_synced = False
 
@@ -362,6 +377,8 @@ def ensure_activity_for_range(
                         account_id, portalxs_regno, d, vehicle_no=vehicle_no,
                     )
                 except Exception as e:
+                    from app import db
+                    db.session.rollback()
                     logger.warning(
                         'ensure activity co-sync trips failed %s %s: %s',
                         portalxs_regno, d, e,
@@ -382,11 +399,13 @@ def ensure_history_points_for_range(
     to_date: date,
     vehicle_no: str = '',
     group_name: str = '',
+    prefer_db: bool = False,
 ) -> tuple[list[dict], Optional[str], str]:
     """Same DB rules as Activity Report; returns map-ready history points."""
     rows, err, label = ensure_activity_for_range(
         account_id, portalxs_regno, from_date, to_date,
         vehicle_no=vehicle_no, group_name=group_name,
+        prefer_db=prefer_db,
     )
     return activity_rows_to_history_points(rows), err, label
 

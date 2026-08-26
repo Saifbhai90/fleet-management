@@ -50,6 +50,12 @@ _SESSION_DIR = os.environ.get('PORTALXS_SESSION_DIR', os.path.join(os.path.dirna
 # Transport retry: attempts + backoff seconds (only for connection/timeout errors)
 _RETRY_ATTEMPTS = 3
 _RETRY_BACKOFF = (1, 2, 4)
+_CONNECT_ATTEMPTS = 3
+
+
+def _is_crypto_error(exc: Exception) -> bool:
+    msg = str(exc or '').lower()
+    return 'padding' in msg or 'decrypt' in msg or 'invalid token' in msg
 
 
 def _session_file_for(session_key) -> str:
@@ -143,6 +149,16 @@ class PortalXSClient:
         self.login_id = d.get("login_id")
         return bool(self.unique_id)
 
+    def _clear_session_file(self):
+        """Drop a stale/corrupt on-disk session so the next connect starts fresh."""
+        try:
+            if os.path.exists(self.session_file):
+                os.remove(self.session_file)
+        except OSError:
+            pass
+        self.login_id = None
+        self.unique_id = None
+
     # ---------------- transport with retry ----------------
     def _post_with_retry(self, data, headers):
         """POST with retry + exponential backoff on transport errors only
@@ -207,17 +223,27 @@ class PortalXSClient:
     def connect(self, reuse_session=True):
         """Full connect: reuse session OR register + login (1 history entry)."""
         if reuse_session and self.load_session() and self.login_id:
-            # try a light call to verify session still alive
             try:
                 self.get_vehicles()
                 return
             except Exception:
-                print("[PortalXS] session expired, re-login...")
-        # fresh
-        self.register_device()
-        self.login()
-        self.save_session()
-        print(f"[PortalXS] fresh login, loginid={self.login_id}")
+                self._clear_session_file()
+        last_exc = None
+        for attempt in range(_CONNECT_ATTEMPTS):
+            try:
+                self.register_device()
+                self.login()
+                self.save_session()
+                return
+            except Exception as e:
+                last_exc = e
+                self._clear_session_file()
+                if attempt < _CONNECT_ATTEMPTS - 1 and _is_crypto_error(e):
+                    time.sleep(0.5 * (attempt + 1))
+                    continue
+                raise
+        if last_exc:
+            raise last_exc
 
     def _ok(self):
         if not self.login_id:
