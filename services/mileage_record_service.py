@@ -11,28 +11,20 @@ Rules:
 from __future__ import annotations
 
 import logging
-import re
 from datetime import date, timedelta
 from typing import Optional
 
-from utils import pk_date, pk_now
+from utils import pk_date, pk_now, normalize_vehicle_reg_key, strip_ufone_reg_tag
 
 logger = logging.getLogger(__name__)
 
 _SOURCE_EXCEL = 'excel'
 _SOURCE_PORTALXS = 'portalxs'
-_VEHICLE_SUFFIX_RE = re.compile(
-    r'[\s\-_]*(?:COW|RAS|BLS|ALS|EMG|EMERGENCY)\s*$',
-    re.IGNORECASE,
-)
 
 
 def normalize_reg_key(raw: Optional[str]) -> str:
-    if not raw:
-        return ''
-    s = str(raw).strip()
-    s = _VEHICLE_SUFFIX_RE.sub('', s).strip()
-    return s.upper().replace(' ', '')
+    """Stable key for matching PortalXS / Excel regs to fleet vehicle_no."""
+    return normalize_vehicle_reg_key(raw)
 
 
 def _split_dt(val: Optional[str]) -> tuple[str, str]:
@@ -93,28 +85,66 @@ def is_excel_protected(task_date: date, portalxs_regno: str, vehicle_no: Optiona
     return bool(_vehicle_match_keys(portalxs_regno, vehicle_no) & protected)
 
 
+def mileage_index_for_date(task_date: date) -> dict:
+    """Map normalize_reg_key(reg_no) → VehicleMileageRecord for one day (O(1) lookups)."""
+    from models import VehicleMileageRecord
+    index = {}
+    for rec in VehicleMileageRecord.query.filter_by(task_date=task_date).all():
+        key = normalize_reg_key(rec.reg_no)
+        if not key:
+            continue
+        # Prefer excel / higher effective km if duplicates
+        prev = index.get(key)
+        if prev is None or float(rec.effective_km() or 0) >= float(prev.effective_km() or 0):
+            index[key] = rec
+    return index
+
+
+def get_mileage_record_for_vehicle(task_date: date, vehicle_no: Optional[str], index: Optional[dict] = None):
+    """Resolve mileage row for a fleet vehicle_no (handles COW/USG PortalXS tags)."""
+    key = normalize_reg_key(vehicle_no)
+    if not key:
+        return None
+    if index is not None:
+        return index.get(key)
+    from models import VehicleMileageRecord
+    # Fast path: exact / stripped
+    base = strip_ufone_reg_tag(vehicle_no) or (vehicle_no or '').strip()
+    candidates = {base, (vehicle_no or '').strip()}
+    for raw in list(candidates):
+        if raw:
+            candidates.add(f'{base} COW')
+            candidates.add(f'{base} USG')
+            candidates.add(f'{base}-COW')
+    rows = (
+        VehicleMileageRecord.query.filter_by(task_date=task_date)
+        .filter(VehicleMileageRecord.reg_no.in_([c for c in candidates if c]))
+        .all()
+    )
+    for row in rows:
+        if normalize_reg_key(row.reg_no) == key:
+            return row
+    # Fallback full-day scan (rare)
+    return mileage_index_for_date(task_date).get(key)
+
+
+def tracker_km_for_vehicle(task_date: date, vehicle_no: Optional[str], index: Optional[dict] = None) -> float:
+    rec = get_mileage_record_for_vehicle(task_date, vehicle_no, index=index)
+    return float(rec.effective_km()) if rec else 0.0
+
+
 def find_mileage_record(task_date: date, portalxs_regno: str, vehicle_no: Optional[str] = None):
     from models import VehicleMileageRecord
     keys = _vehicle_match_keys(portalxs_regno, vehicle_no)
     if not keys:
         return None
-    # Prefer direct matches first (avoids loading the whole day)
-    candidates = []
-    for raw in (vehicle_no, portalxs_regno):
-        if raw:
-            candidates.append(str(raw).strip())
-    q = VehicleMileageRecord.query.filter_by(task_date=task_date)
-    if candidates:
-        rows = q.filter(VehicleMileageRecord.reg_no.in_(candidates)).all()
-        for row in rows:
-            if normalize_reg_key(row.reg_no) in keys:
-                return row
-    # Fallback: scan day (handles suffix/normalization mismatches)
-    rows = VehicleMileageRecord.query.filter_by(task_date=task_date).all()
-    for row in rows:
-        if normalize_reg_key(row.reg_no) in keys:
+    for raw in (vehicle_no, portalxs_regno, strip_ufone_reg_tag(vehicle_no), strip_ufone_reg_tag(portalxs_regno)):
+        if not raw:
+            continue
+        row = VehicleMileageRecord.query.filter_by(task_date=task_date, reg_no=str(raw).strip()).first()
+        if row and normalize_reg_key(row.reg_no) in keys:
             return row
-    return None
+    return mileage_index_for_date(task_date).get(next(iter(keys)))
 
 
 def record_to_row(rec, seq: int = 0) -> dict:
@@ -260,7 +290,7 @@ def upsert_from_portalxs(
         existing = find_mileage_record(task_date, portalxs_regno, vehicle_no)
         return record_to_row(existing) if existing else None
 
-    store_reg = (vehicle_no or portalxs_regno or '').strip()
+    store_reg = strip_ufone_reg_tag(vehicle_no or portalxs_regno) or (vehicle_no or portalxs_regno or '').strip()
     if not store_reg:
         return None
 
@@ -283,9 +313,8 @@ def upsert_from_portalxs(
         )
         db.session.add(rec)
     else:
-        # Prefer stable fleet vehicle_no when available
-        if vehicle_no:
-            rec.reg_no = vehicle_no
+        # Keep fleet-facing reg_no without PortalXS tags so Task Entry matches
+        rec.reg_no = store_reg
 
     rec.upload_date = pk_date()
     rec.date_time_c = f'{df} {tf}'.strip()

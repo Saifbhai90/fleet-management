@@ -284,8 +284,8 @@ def task_report_list():
                 EmergencyTaskRecord.category == '',
             ),
         ).count()
-        _mil_rec = VehicleMileageRecord.query.filter_by(task_date=task_d, reg_no=v.vehicle_no).first()
-        tracker_km = _mil_rec.effective_km() if _mil_rec else 0
+        from services.mileage_record_service import tracker_km_for_vehicle
+        tracker_km = tracker_km_for_vehicle(task_d, v.vehicle_no)
         kms_diff = kms_driven - tracker_km
         pct_diff = round((kms_diff / kms_driven) * 100, 1) if kms_driven and kms_driven != 0 else None
         rows.append({
@@ -431,8 +431,8 @@ def task_report_list_export_pdf():
                 EmergencyTaskRecord.category == '',
             ),
         ).count()
-        _mil_rec = VehicleMileageRecord.query.filter_by(task_date=task_d, reg_no=v.vehicle_no).first()
-        tracker_km = _mil_rec.effective_km() if _mil_rec else 0
+        from services.mileage_record_service import tracker_km_for_vehicle
+        tracker_km = tracker_km_for_vehicle(task_d, v.vehicle_no)
         kms_diff = kms_driven - tracker_km
         pct_diff = round((kms_diff / kms_driven) * 100, 1) if kms_driven and kms_driven != 0 else None
         rows.append({
@@ -1355,11 +1355,13 @@ def api_tracker_detail():
     if from_date and to_date and not task_date:
         if from_date > to_date:
             from_date, to_date = to_date, from_date
-        recs = VehicleMileageRecord.query.filter(
-            VehicleMileageRecord.reg_no == vehicle_no,
+        from services.mileage_record_service import normalize_reg_key
+        want = normalize_reg_key(vehicle_no)
+        all_recs = VehicleMileageRecord.query.filter(
             VehicleMileageRecord.task_date >= from_date,
             VehicleMileageRecord.task_date <= to_date,
         ).order_by(VehicleMileageRecord.task_date).all()
+        recs = [r for r in all_recs if normalize_reg_key(r.reg_no) == want]
         if not recs:
             return jsonify({'range': True, 'rows': []})
 
@@ -1404,7 +1406,8 @@ def api_tracker_detail():
 
     if not task_date:
         return jsonify({})
-    rec = VehicleMileageRecord.query.filter_by(task_date=task_date, reg_no=vehicle_no).first()
+    from services.mileage_record_service import get_mileage_record_for_vehicle
+    rec = get_mileage_record_for_vehicle(task_date, vehicle_no)
     if not rec:
         return jsonify({})
     def _fmt_d(s):

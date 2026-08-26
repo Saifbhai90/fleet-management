@@ -4310,11 +4310,17 @@ def _unauthorized_movement_rows(from_date=None, to_date=None, project_id=0, dist
         tracker_rows = VehicleMileageRecord.query.filter(
             VehicleMileageRecord.task_date >= from_date,
             VehicleMileageRecord.task_date <= to_date,
-            VehicleMileageRecord.reg_no.in_(vehicle_nos),
         ).all()
+        from services.mileage_record_service import normalize_reg_key
+        by_vehicle_key = {
+            normalize_reg_key(no): agg for no, agg in by_vehicle_no.items() if normalize_reg_key(no)
+        }
         for rec in tracker_rows:
-            key_no = (rec.reg_no or '').strip().upper()
-            agg = by_vehicle_no.get(key_no)
+            key = normalize_reg_key(rec.reg_no)
+            agg = by_vehicle_key.get(key) if key else None
+            if not agg:
+                key_no = (rec.reg_no or '').strip().upper()
+                agg = by_vehicle_no.get(key_no)
             if not agg:
                 continue
             agg['tracker_km'] += float(rec.effective_km() or 0)
@@ -5745,9 +5751,11 @@ def _tracker_difference_rows(from_date=None, to_date=None, project_id=0, distric
         start_r, close_r = _resolve_task_readings(rec, vehicle.id if vehicle else None, prev_close_cache)
         total_km = round(close_r - start_r, 2)
 
-        tracker_rec = VehicleMileageRecord.query.filter_by(
-            task_date=rec.task_date, reg_no=(vehicle.vehicle_no if vehicle else None)
-        ).first()
+        tracker_rec = None
+        from services.mileage_record_service import get_mileage_record_for_vehicle
+        tracker_rec = get_mileage_record_for_vehicle(
+            rec.task_date, vehicle.vehicle_no if vehicle else None
+        )
         tracker_mileage = float(tracker_rec.effective_km()) if tracker_rec else 0.0
 
         # Match Vehicles Daily Task Report logic:
@@ -8364,8 +8372,8 @@ def _vehicle_period_detail_rows(from_date, to_date, project_id, district_id, veh
                 EmergencyTaskRecord.amb_reg_no == v.vehicle_no,
                 EmergencyTaskRecord.category.in_(['Green', 'Yellow']),
             ).count()
-            _mil_rec = VehicleMileageRecord.query.filter_by(task_date=task_d, reg_no=v.vehicle_no).first()
-            tracker_km += _mil_rec.effective_km() if _mil_rec else 0
+            from services.mileage_record_service import tracker_km_for_vehicle
+            tracker_km += tracker_km_for_vehicle(task_d, v.vehicle_no)
             ph = (getattr(t, 'odometer_photo_path', None) or '').strip()
             if ph:
                 odometer_photo_path = ph
@@ -8784,6 +8792,8 @@ def _task_entry_record_in_user_scope(rec, is_master_or_admin, allowed_projects, 
 def _build_vehicle_rows(vehicles, task_date, form=None):
     form = form or {}
     rows = []
+    from services.mileage_record_service import mileage_index_for_date, tracker_km_for_vehicle
+    mil_index = mileage_index_for_date(task_date)
     for v in vehicles:
         prev = VehicleDailyTask.query.filter(
             VehicleDailyTask.vehicle_id == v.id,
@@ -8800,8 +8810,7 @@ def _build_vehicle_rows(vehicles, task_date, form=None):
                 EmergencyTaskRecord.category == '',
             ),
         ).count()
-        _mil_rec = VehicleMileageRecord.query.filter_by(task_date=task_date, reg_no=v.vehicle_no).first()
-        tracker_km = _mil_rec.effective_km() if _mil_rec else 0
+        tracker_km = tracker_km_for_vehicle(task_date, v.vehicle_no, index=mil_index)
         existing = VehicleDailyTask.query.filter_by(vehicle_id=v.id, task_date=task_date).first()
         if existing and existing.start_reading is not None and not has_prev:
             start_reading = float(existing.start_reading)

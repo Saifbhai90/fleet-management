@@ -1112,8 +1112,8 @@ def without_task_new():
                 emg_amb_reg_matches_vehicle(v.vehicle_no),
             ).count()
             if kms_driven > 0 and emg_count == 0:
-                _mil_rec = VehicleMileageRecord.query.filter_by(task_date=view_date, reg_no=v.vehicle_no).first()
-                tracker_km = _mil_rec.effective_km() if _mil_rec else 0
+                from services.mileage_record_service import tracker_km_for_vehicle
+                tracker_km = tracker_km_for_vehicle(view_date, v.vehicle_no)
                 assigned_drivers = Driver.query.filter_by(vehicle_id=v.id, status='Active').order_by(Driver.name).all()
                 saved = saved_map.get(v.id)
                 # Keep historical integrity: include previously saved driver even if now left/unassigned.
