@@ -1,7 +1,7 @@
 """vehicle_activity_sync_status — last activity/trips sync + fail remarks
 
-Revision ID: b8c9d0e1f2a3
-Revises: a7b8c9d0e1f2
+Revision ID: act_sync_sts_01
+Revises: act_trip_rec_01
 Create Date: 2026-08-26
 """
 
@@ -10,8 +10,8 @@ import sqlalchemy as sa
 from sqlalchemy import inspect
 
 
-revision = "b8c9d0e1f2a3"
-down_revision = "a7b8c9d0e1f2"
+revision = "act_sync_sts_01"
+down_revision = "act_trip_rec_01"
 branch_labels = None
 depends_on = None
 

@@ -1,6 +1,6 @@
 """Add vehicle_trip_record for PortalXS trips synced with GPS activity
 
-Revision ID: a7b8c9d0e1f2
+Revision ID: act_trip_rec_01
 Revises: z6a7b8c9d0e1
 Create Date: 2026-08-26
 """
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 from sqlalchemy import inspect
 
 
-revision = "a7b8c9d0e1f2"
+revision = "act_trip_rec_01"
 down_revision = "z6a7b8c9d0e1"
 branch_labels = None
 depends_on = None
