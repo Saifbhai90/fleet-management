@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import date, timedelta
+from datetime import timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +90,15 @@ def _should_remind_for_days_left(days_left):
     return False
 
 
+def _expiry_titles(doc_type):
+    """Every title this service can produce for one document type."""
+    return [
+        f'\u26a0\ufe0f {doc_type} Near Expiry',
+        f'\U0001f6a8 {doc_type} Expires Today',
+        f'\U0001f6a8 {doc_type} Expired',
+    ]
+
+
 def _expiry_message(driver_name, doc_type, days_left, expiry_date=None):
     """Generate appropriate notification title and message in Urdu format."""
     date_str = expiry_date.strftime('%d-%b-%Y') if expiry_date else ''
@@ -122,9 +131,8 @@ def run_license_cnic_reminders(app):
     """Check all active drivers for license/CNIC expiry and send notifications."""
     from models import Driver
     from notification_service import notify_user, get_dto_user_ids_for_scope
-    from push_notifications import get_user_id_for_driver
 
-    results = {'license_sent': 0, 'cnic_sent': 0, 'skipped': 0}
+    results = {'license_sent': 0, 'cnic_sent': 0, 'skipped': 0, 'retired': 0}
 
     with app.app_context():
         today = _today()
@@ -136,44 +144,64 @@ def run_license_cnic_reminders(app):
         for driver in drivers:
             driver_name = (driver.name or '').strip() or f'#{driver.driver_id}'
 
-            # License expiry check
-            if driver.license_expiry_date:
-                days_left = (driver.license_expiry_date - today).days
-                if _should_remind_for_days_left(days_left):
-                    state_key = f'lic:{driver.id}:{today_str}'
-                    if _should_send_today(state, state_key, today_str):
-                        title, message = _expiry_message(driver_name, 'License', days_left, driver.license_expiry_date)
-                        _send_expiry_notification(
-                            driver, title, message,
-                            notify_user, get_user_id_for_driver, get_dto_user_ids_for_scope
-                        )
-                        _mark_sent(state, state_key, today_str)
-                        results['license_sent'] += 1
-                    else:
-                        results['skipped'] += 1
+            for doc_type, expiry_date, state_prefix, sent_key in (
+                ('License', driver.license_expiry_date, 'lic', 'license_sent'),
+                ('CNIC', driver.cnic_expiry_date, 'cnic', 'cnic_sent'),
+            ):
+                days_left = (expiry_date - today).days if expiry_date else None
+                if days_left is None or not _should_remind_for_days_left(days_left):
+                    # Document renewed (or never dated): retire the alerts already
+                    # sitting unread in the driver's inbox, otherwise they keep
+                    # resurfacing long after the renewal.
+                    results['retired'] += _retire_expiry_notifications(driver, doc_type)
+                    continue
 
-            # CNIC expiry check
-            if driver.cnic_expiry_date:
-                days_left = (driver.cnic_expiry_date - today).days
-                if _should_remind_for_days_left(days_left):
-                    state_key = f'cnic:{driver.id}:{today_str}'
-                    if _should_send_today(state, state_key, today_str):
-                        title, message = _expiry_message(driver_name, 'CNIC', days_left, driver.cnic_expiry_date)
-                        _send_expiry_notification(
-                            driver, title, message,
-                            notify_user, get_user_id_for_driver, get_dto_user_ids_for_scope
-                        )
-                        _mark_sent(state, state_key, today_str)
-                        results['cnic_sent'] += 1
-                    else:
-                        results['skipped'] += 1
+                state_key = f'{state_prefix}:{driver.id}:{today_str}'
+                if not _should_send_today(state, state_key, today_str):
+                    results['skipped'] += 1
+                    continue
+                title, message = _expiry_message(
+                    driver_name, doc_type, days_left, expiry_date
+                )
+                _send_expiry_notification(
+                    driver, title, message,
+                    notify_user, get_dto_user_ids_for_scope
+                )
+                _mark_sent(state, state_key, today_str)
+                results[sent_key] += 1
 
-        _save_state(state)
+        _save_state(_prune_state(state, today))
     return results
 
 
-def _send_expiry_notification(driver, title, message, notify_user, get_user_id_for_driver, get_dto_user_ids_for_scope):
+def _retire_expiry_notifications(driver, doc_type):
+    """Mark this driver's unread alerts for a renewed document as read."""
+    from notification_service import mark_unread_titles_read
+    from push_notifications import get_user_id_for_driver
+
+    uid = get_user_id_for_driver(driver)
+    if not uid:
+        return 0
+    try:
+        return mark_unread_titles_read(uid, _expiry_titles(doc_type))
+    except Exception as exc:
+        logger.warning(
+            'retire %s expiry alerts failed driver=%s: %s',
+            doc_type, getattr(driver, 'id', None), exc,
+        )
+        return 0
+
+
+def _prune_state(state, today, keep_days=3):
+    """Keys carry the date they were written, so drop the ones long past."""
+    cutoff = (today - timedelta(days=keep_days)).isoformat()
+    return {k: v for k, v in (state or {}).items() if str(v) >= cutoff}
+
+
+def _send_expiry_notification(driver, title, message, notify_user, get_dto_user_ids_for_scope):
     """Send notification to driver + DTOs."""
+    from push_notifications import get_user_id_for_driver
+
     # Notify driver
     uid = get_user_id_for_driver(driver)
     if uid:

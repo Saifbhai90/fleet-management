@@ -336,6 +336,125 @@ ATTENDANCE_CHECKIN_REMINDER_TITLE = 'Check-in reminder'
 ATTENDANCE_CHECKOUT_REMINDER_TITLE = 'Check-out reminder'
 
 
+def mark_unread_titles_read(user_id, titles, *, older_than=None):
+    """
+    Mark this user's unread notifications with any of `titles` as read.
+
+    A notification nobody ever reads keeps showing in the inbox forever and is
+    re-delivered to the tray by the app's polling fallback, so whatever made a
+    notification obsolete (check-in done, document renewed) must retire it here.
+
+    older_than: only retire notifications created strictly before this datetime.
+    Returns the number newly marked read.
+    """
+    from models import db, Notification, NotificationRead
+    from utils import pk_now
+
+    wanted = [t for t in (titles or []) if t]
+    if not user_id or not wanted:
+        return 0
+
+    uid = int(user_id)
+    read_subq = _unread_read_subq(uid)
+    query = Notification.query.filter(
+        Notification.target_user_id == uid,
+        Notification.title.in_(wanted),
+        ~Notification.id.in_(read_subq),
+    )
+    if older_than is not None:
+        query = query.filter(Notification.created_at < older_than)
+    unread = query.all()
+    if not unread:
+        return 0
+
+    now = pk_now()
+    marked = 0
+    for n in unread:
+        existing = NotificationRead.query.filter_by(
+            notification_id=n.id, user_id=uid
+        ).first()
+        if existing:
+            existing.read_at = now
+        else:
+            db.session.add(
+                NotificationRead(notification_id=n.id, user_id=uid, read_at=now)
+            )
+            marked += 1
+    try:
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        logger.warning(
+            'mark_unread_titles_read failed user=%s titles=%s: %s',
+            uid, wanted, exc,
+        )
+        return 0
+    _invalidate_notif_cache([uid])
+    return marked
+
+
+def retire_stale_notifications(titles, older_than, *, limit=20000):
+    """
+    Mark every user's unread notifications with these titles as read once they
+    are older than `older_than`, in one statement.
+
+    Reminders that nobody read stay "pending" forever: the inbox keeps showing
+    them and the app's polling fallback can replay them to the tray. A reminder
+    is only meaningful inside its own shift window, so retire the rest.
+    Returns the number of rows retired.
+    """
+    from sqlalchemy import exists, insert, literal, select
+
+    from models import db, Notification, NotificationRead
+    from utils import pk_now
+
+    wanted = [t for t in (titles or []) if t]
+    if not wanted or older_than is None:
+        return 0
+
+    notif_t = Notification.__table__
+    read_t = NotificationRead.__table__
+    unread_stale = (
+        notif_t.c.title.in_(wanted),
+        notif_t.c.target_user_id.isnot(None),
+        notif_t.c.created_at < older_than,
+        ~exists(
+            select(read_t.c.notification_id).where(
+                (read_t.c.notification_id == notif_t.c.id)
+                & (read_t.c.user_id == notif_t.c.target_user_id)
+            )
+        ),
+    )
+
+    try:
+        affected_users = [
+            row[0] for row in db.session.execute(
+                select(notif_t.c.target_user_id).where(*unread_stale).distinct()
+            )
+        ]
+        if not affected_users:
+            return 0
+        now = pk_now()
+        source = (
+            select(notif_t.c.id, notif_t.c.target_user_id, literal(now))
+            .where(*unread_stale)
+            .limit(limit)
+        )
+        result = db.session.execute(
+            insert(read_t).from_select(
+                ['notification_id', 'user_id', 'read_at'], source
+            )
+        )
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        logger.warning('retire_stale_notifications failed titles=%s: %s', wanted, exc)
+        return 0
+
+    _invalidate_notif_cache(affected_users)
+    return int(result.rowcount or 0)
+
+
 def dismiss_driver_attendance_reminders(driver, kind):
     """
     After a successful GPS/manual check-in or check-out, mark that driver's
@@ -344,9 +463,7 @@ def dismiss_driver_attendance_reminders(driver, kind):
     kind: 'checkin' | 'checkout'
     Returns number of reminders newly marked read.
     """
-    from models import db, Notification, NotificationRead
     from push_notifications import get_user_id_for_driver
-    from utils import pk_now
 
     if not driver:
         return 0
@@ -361,43 +478,7 @@ def dismiss_driver_attendance_reminders(driver, kind):
     uid = get_user_id_for_driver(driver)
     if not uid:
         return 0
-
-    read_subq = _unread_read_subq(uid)
-    unread = (
-        Notification.query.filter(
-            Notification.target_user_id == int(uid),
-            Notification.title == title,
-            ~Notification.id.in_(read_subq),
-        )
-        .all()
-    )
-    if not unread:
-        return 0
-
-    now = pk_now()
-    marked = 0
-    for n in unread:
-        existing = NotificationRead.query.filter_by(
-            notification_id=n.id, user_id=int(uid)
-        ).first()
-        if existing:
-            existing.read_at = now
-        else:
-            db.session.add(
-                NotificationRead(notification_id=n.id, user_id=int(uid), read_at=now)
-            )
-            marked += 1
-    try:
-        db.session.commit()
-    except Exception as exc:
-        db.session.rollback()
-        logger.warning(
-            'dismiss_driver_attendance_reminders failed driver=%s kind=%s: %s',
-            getattr(driver, 'id', None), kind_l, exc,
-        )
-        return 0
-    _invalidate_notif_cache([uid])
-    return marked
+    return mark_unread_titles_read(uid, [title])
 
 
 def notify_gps_checkin(driver, photo_path, *, vehicle=None):

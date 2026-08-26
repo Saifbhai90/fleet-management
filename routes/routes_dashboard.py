@@ -884,10 +884,19 @@ def web_register_fcm_token():
 
 
 
+POLL_NOTIFICATION_MAX_AGE_MINUTES = 90
+
+
 @app.route('/api/poll-notifications')
 def poll_notifications():
     """Session-based JSON endpoint for the native polling service.
-    Returns unread notifications filtered by user's role permissions."""
+
+    Only recent unread notifications are returned. The app turns every id it has
+    not seen before into a tray notification stamped with the arrival time, so an
+    old unread row entering this list (after a reinstall, cleared app data, or a
+    bulk mark-as-read shifting the list) would reach the driver as a brand-new
+    alert hours or months late. Older items stay in the in-app inbox instead.
+    """
     uid = session.get('user_id')
     if not uid:
         return jsonify({'error': 'Not authenticated'}), 401
@@ -895,16 +904,23 @@ def poll_notifications():
     user_perms = set(session.get('permissions') or [])
     is_master = session.get('is_master', False)
     from notification_service import unread_inbox_for_user
+    from utils import pk_now
 
+    cutoff = pk_now() - timedelta(minutes=POLL_NOTIFICATION_MAX_AGE_MINUTES)
     result = []
-    for n in unread_inbox_for_user(uid, user_perms, is_master)[:20]:
+    for n in unread_inbox_for_user(uid, user_perms, is_master):
+        if not n.created_at or n.created_at < cutoff:
+            # List is newest-first, so everything after this is older too.
+            break
         result.append({
             'id': n.id,
             'title': n.title,
             'message': n.message or '',
             'link': n.link,
-            'created_at': n.created_at.isoformat() if n.created_at else None,
+            'created_at': n.created_at.isoformat(),
         })
+        if len(result) >= 20:
+            break
 
     return jsonify({'notifications': result})
 

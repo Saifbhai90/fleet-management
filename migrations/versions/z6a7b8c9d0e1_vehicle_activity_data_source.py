@@ -41,17 +41,10 @@ def upgrade():
         return
     if not _column_exists(bind, table, "data_source"):
         op.add_column(table, sa.Column("data_source", sa.String(length=20), nullable=True))
-    idx = "ix_vehicle_activity_record_data_source"
-    if not _index_exists(bind, table, idx):
-        op.create_index(idx, table, ["data_source"], unique=False)
-    # Legacy rows were Excel uploads only — mark them so PortalXS will not overwrite.
-    try:
-        op.execute(
-            "UPDATE vehicle_activity_record SET data_source = 'excel' "
-            "WHERE data_source IS NULL"
-        )
-    except Exception:
-        pass
+    # No backfill and no index here on purpose: this table holds millions of GPS
+    # points, so an UPDATE or CREATE INDEX over it outlasts the boot window and
+    # fails the deploy. Legacy rows keep data_source NULL, which the activity
+    # service already treats as an Excel upload (never overwritten by PortalXS).
 
 
 def downgrade():

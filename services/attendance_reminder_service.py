@@ -16,6 +16,12 @@ logger = logging.getLogger(__name__)
 
 _STATE_KEY = 'attendance_reminder_last_sent'
 
+# A reminder only makes sense inside the shift it was raised for; past that it is
+# noise that would otherwise sit unread forever and can be replayed to the tray.
+REMINDER_MAX_AGE_HOURS = 12
+_RETIRE_STATE_KEY = 'stale_retired_at'
+_RETIRE_EVERY_MINUTES = 60
+
 
 def _load_last_sent():
     from models import SystemSetting
@@ -25,10 +31,13 @@ def _load_last_sent():
         return {'checkin': {}, 'checkout': {}}
     try:
         data = json.loads(row.value)
-        return {
+        state = {
             'checkin': dict(data.get('checkin') or {}),
             'checkout': dict(data.get('checkout') or {}),
         }
+        if data.get(_RETIRE_STATE_KEY):
+            state[_RETIRE_STATE_KEY] = data[_RETIRE_STATE_KEY]
+        return state
     except Exception:
         return {'checkin': {}, 'checkout': {}}
 
@@ -61,6 +70,31 @@ def _get_sent(state, kind, driver_id):
         return datetime.fromisoformat(raw)
     except Exception:
         return None
+
+
+def _retire_stale_reminders(state, now):
+    """Hourly sweep that reads out reminders whose shift window is long gone."""
+    from notification_service import (
+        ATTENDANCE_CHECKIN_REMINDER_TITLE,
+        ATTENDANCE_CHECKOUT_REMINDER_TITLE,
+        retire_stale_notifications,
+    )
+
+    last_raw = state.get(_RETIRE_STATE_KEY)
+    if last_raw:
+        try:
+            last = datetime.fromisoformat(last_raw)
+            if (now - last) < timedelta(minutes=_RETIRE_EVERY_MINUTES):
+                return 0
+        except Exception:
+            pass
+
+    retired = retire_stale_notifications(
+        [ATTENDANCE_CHECKIN_REMINDER_TITLE, ATTENDANCE_CHECKOUT_REMINDER_TITLE],
+        now - timedelta(hours=REMINDER_MAX_AGE_HOURS),
+    )
+    state[_RETIRE_STATE_KEY] = now.isoformat(timespec='seconds')
+    return retired
 
 
 def _reminder_interval_due(last_sent, window_start, now, interval_min):
@@ -400,6 +434,7 @@ def run_attendance_reminders(app=None):
         checkin_sent = 0
         checkout_sent = 0
         auto_checkout_done = _run_auto_gps_checkout(now, helpers)
+        retired = _retire_stale_reminders(state, now)
 
         try:
             from flask import url_for
@@ -464,6 +499,7 @@ def run_attendance_reminders(app=None):
             'checkin_sent': checkin_sent,
             'checkout_sent': checkout_sent,
             'auto_checkout_done': auto_checkout_done,
+            'stale_retired': retired,
         }
     except Exception as exc:
         logger.exception('run_attendance_reminders failed: %s', exc)
