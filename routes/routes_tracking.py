@@ -26,7 +26,7 @@ from services.portalxs_service import (
     test_connection, encrypt_password, decrypt_password,
     start_polling, stop_polling, is_polling,
 )
-from utils import pk_now, pk_date
+from utils import pk_now, pk_date, parse_date
 from datetime import datetime, timedelta
 import csv
 import io
@@ -51,19 +51,13 @@ def _ufone_tasks_for_tracking() -> dict:
 # ── Helper: get active account (first active, or by query param) ─────────────
 
 def _sanitize_date(s: str, default: str = None) -> str:
-    """Ensure date string is YYYY-MM-DD (strip spaces, validate format)."""
-    import re as _re
-    if not s or not s.strip():
+    """Ensure date string is YYYY-MM-DD (accepts dd-mm-yyyy or yyyy-mm-dd)."""
+    if not s or not str(s).strip():
         return default or pk_date().strftime('%Y-%m-%d')
-    s = s.strip()
-    if _re.match(r'^\d{4}-\d{2}-\d{2}$', s):
-        return s
-    # Try to parse and reformat
-    try:
-        from datetime import datetime as _dt
-        return _dt.strptime(s[:10], '%Y-%m-%d').strftime('%Y-%m-%d')
-    except Exception:
-        return default or pk_date().strftime('%Y-%m-%d')
+    parsed = parse_date(s)
+    if parsed:
+        return parsed.strftime('%Y-%m-%d')
+    return default or pk_date().strftime('%Y-%m-%d')
 
 
 def _soap_dates(from_date: str, to_date: str) -> tuple:

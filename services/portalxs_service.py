@@ -437,12 +437,15 @@ def fetch_mileage(account_id: int, regno: str, from_dt: str, to_dt: str) -> dict
 _mileage_report_cache: dict[tuple, tuple[float, list]] = {}
 _mileage_report_cache_lock = threading.Lock()
 MILEAGE_REPORT_CACHE_TTL = 300  # 5 minutes
+# Stay under Render/proxy ~30s request timeout while PortalXS SOAP is slow.
+MILEAGE_REPORT_DEADLINE_SEC = 22
 
 
 def fetch_mileage_report_bulk(account_id: int, regnos: list[str], from_dt: str, to_dt: str) -> tuple[list[dict], Optional[str]]:
     """Fetch mileage report for many vehicles in PARALLEL via ConnectApp_GetMileageReport.
-    Returns (rows, error). Each row gets _regno appended."""
-    from concurrent.futures import ThreadPoolExecutor, as_completed
+    Returns (rows, error). Each row gets _regno appended.
+    Stops after MILEAGE_REPORT_DEADLINE_SEC so the HTTP worker is not killed (502)."""
+    from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError as FuturesTimeout
 
     cache_key = (account_id, tuple(sorted(regnos)), from_dt, to_dt)
     now = time.time()
@@ -456,6 +459,7 @@ def fetch_mileage_report_bulk(account_id: int, regnos: list[str], from_dt: str, 
     rows: list[dict] = []
     errors: list[str] = []
     seq = 0
+    done = 0
 
     def _one(regno):
         client = _get_client(account_id)
@@ -466,29 +470,45 @@ def fetch_mileage_report_bulk(account_id: int, regnos: list[str], from_dt: str, 
             return []
         return [normalize_mileage_report(m) for m in raw if isinstance(m, dict)]
 
-    with ThreadPoolExecutor(max_workers=FLEET_REPORT_MAX_WORKERS) as pool:
+    pool = ThreadPoolExecutor(max_workers=min(4, FLEET_REPORT_MAX_WORKERS))
+    try:
         futures = {pool.submit(_one, r): r for r in regnos}
-        for fut in as_completed(futures):
-            regno = futures[fut]
-            try:
-                for item in fut.result():
-                    seq += 1
-                    row = dict(item)
-                    if not row.get('ID'):
-                        row['ID'] = seq
-                    row['_regno'] = regno
-                    rows.append(row)
-            except Exception as e:
-                errors.append(f"{regno}: {str(e)[:120]}")
+        try:
+            for fut in as_completed(futures, timeout=MILEAGE_REPORT_DEADLINE_SEC):
+                regno = futures[fut]
+                done += 1
+                try:
+                    for item in fut.result():
+                        seq += 1
+                        row = dict(item)
+                        if not row.get('ID'):
+                            row['ID'] = seq
+                        row['_regno'] = regno
+                        rows.append(row)
+                except Exception as e:
+                    errors.append(f"{regno}: {str(e)[:120]}")
+        except FuturesTimeout:
+            pass
+        for fut in futures:
+            if not fut.done():
+                fut.cancel()
+    finally:
+        pool.shutdown(wait=False, cancel_futures=True)
 
-    # Sort by DateFrom descending (most recent first)
     rows.sort(key=lambda x: (x.get('DateFrom', ''), x.get('TimeFrom', '')), reverse=True)
 
     error = None
+    unfinished = max(0, len(regnos) - done)
+    if unfinished:
+        error = (
+            f'PortalXS slow — {done}/{len(regnos)} vehicles loaded before timeout. '
+            'Generate dobara dabayein (cache fill hota rahega) ya chhoti date range use karein.'
+        )
     if errors:
-        error = f"{len(errors)} vehicle(s) failed — " + "; ".join(errors[:3])
+        fail_bit = f"{len(errors)} vehicle(s) failed — " + "; ".join(errors[:3])
+        error = (error + ' ' + fail_bit) if error else fail_bit
 
-    if rows:
+    if rows and unfinished == 0:
         with _mileage_report_cache_lock:
             _mileage_report_cache[cache_key] = (now, rows)
             for k in [k for k, (ts, _) in _mileage_report_cache.items() if (now - ts) > MILEAGE_REPORT_CACHE_TTL * 2]:
