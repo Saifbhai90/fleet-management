@@ -506,11 +506,14 @@ if _run_startup_tasks:
             from models import (
                 OilWorkOrder, OilWorkOrderAttachment,
                 MaintenanceWorkOrder, MaintenanceWorkOrderAttachment,
+                VehicleTripRecord, VehicleActivitySyncStatus,
             )
             OilWorkOrder.__table__.create(db.engine, checkfirst=True)
             OilWorkOrderAttachment.__table__.create(db.engine, checkfirst=True)
             MaintenanceWorkOrder.__table__.create(db.engine, checkfirst=True)
             MaintenanceWorkOrderAttachment.__table__.create(db.engine, checkfirst=True)
+            VehicleTripRecord.__table__.create(db.engine, checkfirst=True)
+            VehicleActivitySyncStatus.__table__.create(db.engine, checkfirst=True)
         except Exception as _e:
             print(f"work-order tables ensure warning (non-fatal): {_e}")
 
@@ -1171,6 +1174,11 @@ if _run_startup_tasks:
             start_mileage_auto_scheduler(app)
         except Exception as e:
             app.logger.warning('Mileage auto-sync scheduler failed to start: %s', e)
+        try:
+            from activity_auto_scheduler import start_activity_auto_scheduler
+            start_activity_auto_scheduler(app)
+        except Exception as e:
+            app.logger.warning('Activity auto-sync scheduler failed to start: %s', e)
         try:
             from services.ufone_service import rewrap_ufone_account_passwords
             n = rewrap_ufone_account_passwords(app)

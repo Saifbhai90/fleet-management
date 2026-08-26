@@ -16,7 +16,7 @@ from models import (
     Vehicle,
 )
 from services.portalxs_service import (
-    fetch_live_positions, fetch_history, fetch_trips,
+    fetch_live_positions, fetch_mileage,
     fetch_fleet_report, fetch_fleet_report_bulk, fetch_trends,
     fetch_alerts, fetch_geofences,
     get_cached_positions, get_summary_stats,
@@ -34,7 +34,14 @@ from services.mileage_record_service import (
     pending_regnos_for_day,
     plan_days_for_range,
 )
-from services.activity_record_service import ensure_activity_for_range
+from services.activity_record_service import (
+    clear_activity_sync_remarks,
+    ensure_activity_for_range,
+    ensure_history_points_for_range,
+    get_activity_sync_status_display,
+    mark_activity_sync_status,
+)
+from services.trip_record_service import ensure_trips_for_range, load_trips_from_db
 from utils import pk_now, pk_date, parse_date
 from datetime import datetime, timedelta, date
 import csv
@@ -217,17 +224,21 @@ def tracking_vehicle_detail(regno):
         flash(f"Vehicle {regno} not found.", "warning")
         return redirect(url_for('tracking_dashboard'))
 
-    # Get today's trips summary
+    # Get today's trips summary (DB-first; today always refreshes from PortalXS)
     today = pk_date()
-    fdt = today.strftime('%Y-%m-%dT00:00:00')
-    tdt = today.strftime('%Y-%m-%dT23:59:59')
     today_trips = []
     today_mileage = {}
     try:
-        today_trips = fetch_trips(acct_id, regno, fdt, tdt)
+        today_trips, _terr, _tsrc = ensure_trips_for_range(
+            acct_id, regno, today, today,
+            vehicle_no=(vehicle.get('RegNo') or regno),
+        )
+        today_trips = [t for t in today_trips if float(t.get('Mileage') or 0) > 0]
     except Exception:
         pass
     try:
+        fdt = today.strftime('%Y-%m-%dT00:00:00')
+        tdt = today.strftime('%Y-%m-%dT23:59:59')
         today_mileage = fetch_mileage(acct_id, regno, fdt, tdt)
     except Exception:
         pass
@@ -267,27 +278,46 @@ def tracking_history():
     history_points = []
     trips = []
     error = None
+    gps_source_label = ''
+    trips_source_label = ''
     if regno and acct_id:
-        fdt, tdt = _soap_dates(from_date, to_date)
-        # Trips first (same source as Trips Report), then GPS history for the map.
+        group_name = ''
+        vehicle_no = ''
+        for v in vehicles_list:
+            if v.get('portalxs_regno') == regno:
+                group_name = v.get('group_name') or ''
+                vehicle_no = v.get('vehicle_no') or ''
+                break
         try:
-            trips = fetch_trips(acct_id, regno, fdt, tdt) or []
-        except Exception as e:
-            error = f'Trips: {str(e)[:300]}'
-            logger.warning('tracking_history trips failed regno=%s: %s', regno, e)
-        # Hide zero-distance trips on History page (ignition on/off with no movement).
-        trips = [t for t in trips if float(t.get('Mileage') or 0) > 0]
-        trips.sort(key=lambda t: str(t.get('IGON_RDT') or ''))
-        try:
-            history_points = fetch_history(acct_id, regno, fdt, tdt) or []
+            fd = datetime.strptime(from_date, '%Y-%m-%d').date()
+            td = datetime.strptime(to_date, '%Y-%m-%d').date()
+            # GPS activity ensure also co-syncs trips into vehicle_trip_record.
+            history_points, hist_err, gps_source_label = ensure_history_points_for_range(
+                acct_id, regno, fd, td,
+                vehicle_no=vehicle_no, group_name=group_name,
+            )
+            if hist_err:
+                hist_msg = f'History: {hist_err}'
+                error = f'{error}; {hist_msg}' if error else hist_msg
+            # Load trips from DB (already refreshed above). Today was API→DB; past DB-first.
+            day = fd
+            while day <= td:
+                trips.extend(load_trips_from_db(day, regno, vehicle_no))
+                day += timedelta(days=1)
+            trips_source_label = gps_source_label or 'db'
         except Exception as e:
             hist_err = str(e)[:300]
             error = f'{error}; History: {hist_err}' if error else f'History: {hist_err}'
-            logger.warning('tracking_history history failed regno=%s: %s', regno, e)
+            logger.warning('tracking_history gps/trips failed regno=%s: %s', regno, e)
+
+        # Hide zero-distance trips on History page (ignition on/off with no movement).
+        trips = [t for t in trips if float(t.get('Mileage') or 0) > 0]
+        trips.sort(key=lambda t: str(t.get('IGON_RDT') or ''))
 
         logger.info(
-            'tracking_history regno=%s from=%s to=%s trips=%s points=%s',
+            'tracking_history regno=%s from=%s to=%s trips=%s points=%s gps=%s trips_src=%s',
             regno, from_date, to_date, len(trips), len(history_points),
+            gps_source_label, trips_source_label,
         )
 
     total_distance = sum(float(t.get('Mileage') or 0) for t in trips)
@@ -304,6 +334,8 @@ def tracking_history():
         total_trips=total_trips,
         total_distance=total_distance,
         error=error,
+        gps_source_label=gps_source_label,
+        trips_source_label=trips_source_label,
         accounts=accounts,
         current_account_id=acct_id,
         **_nav_back_ctx(url_for('module_hub', hub_slug='fleet-tracking')),
@@ -312,17 +344,33 @@ def tracking_history():
 
 @app.route('/api/tracking/history')
 def api_tracking_history():
-    """API endpoint for AJAX history fetch."""
+    """API endpoint for AJAX history fetch (DB-first GPS points)."""
     acct_id = request.args.get('account_id', type=int) or _get_account_id()
     regno = request.args.get('regno', '')
-    from_date = request.args.get('from_date', '')
-    to_date = request.args.get('to_date', '')
+    from_date = _sanitize_date(request.args.get('from_date', ''))
+    to_date = _sanitize_date(request.args.get('to_date', ''))
     if not acct_id or not regno:
         return jsonify({'error': 'Missing account_id or regno'}), 400
-    fdt, tdt = _soap_dates(from_date, to_date)
+
+    vehicles_list = get_all_vehicles_for_account(acct_id)
+    group_name = ''
+    vehicle_no = ''
+    for v in vehicles_list:
+        if v.get('portalxs_regno') == regno:
+            group_name = v.get('group_name') or ''
+            vehicle_no = v.get('vehicle_no') or ''
+            break
     try:
-        points = fetch_history(acct_id, regno, fdt, tdt)
-        return jsonify({'points': points, 'count': len(points)})
+        fd = datetime.strptime(from_date, '%Y-%m-%d').date()
+        td = datetime.strptime(to_date, '%Y-%m-%d').date()
+        points, err, src = ensure_history_points_for_range(
+            acct_id, regno, fd, td,
+            vehicle_no=vehicle_no, group_name=group_name,
+        )
+        payload = {'points': points, 'count': len(points), 'source': src}
+        if err:
+            payload['warning'] = err
+        return jsonify(payload)
     except Exception as e:
         return jsonify({'error': str(e)[:300]}), 500
 
@@ -349,16 +397,27 @@ def tracking_trips_export_csv():
     if not acct_id or not regno:
         return Response('Missing parameters', status=400)
 
-    fdt, tdt = _soap_dates(from_date, to_date)
+    vehicles_list = get_all_vehicles_for_account(acct_id)
+    vehicle_no = ''
+    for v in vehicles_list:
+        if v.get('portalxs_regno') == regno:
+            vehicle_no = v.get('vehicle_no') or ''
+            break
     try:
-        trips = fetch_trips(acct_id, regno, fdt, tdt)
+        fd = datetime.strptime(from_date, '%Y-%m-%d').date()
+        td = datetime.strptime(to_date, '%Y-%m-%d').date()
+        trips, err, _src = ensure_trips_for_range(
+            acct_id, regno, fd, td, vehicle_no=vehicle_no,
+        )
+        if err and not trips:
+            return Response(f'Error: {err}', status=500)
     except Exception as e:
         return Response(f'Error: {e}', status=500)
 
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(['Vehicle', 'Trip Start', 'Start Location', 'Trip End', 'End Location',
-                     'Mileage (km)', 'Max Speed', 'Avg Speed', 'Status'])
+                     'Mileage (km)', 'Max Speed', 'Avg Speed', 'Status', 'Source'])
     for t in trips:
         writer.writerow([
             regno,
@@ -370,6 +429,7 @@ def tracking_trips_export_csv():
             t.get('MaxSpeed', 0),
             t.get('AvgSpeed', 0),
             t.get('TripStatus', ''),
+            t.get('data_source', ''),
         ])
 
     resp = make_response(output.getvalue())
@@ -435,9 +495,39 @@ def tracking_activity_report():
             for p in points:
                 if not p.get('RegNo'):
                     p['RegNo'] = regno
+            # Manual Generate stamps last-fetch time; keep fleet fail remarks unless this call failed.
+            mark_day = td if td >= pk_date() else fd
+            if error:
+                mark_activity_sync_status(
+                    mark_day,
+                    source='manual',
+                    account_id=acct_id,
+                    fetched_count=0,
+                    error_count=1,
+                    errors=[f'{regno}: {error}'],
+                )
+            else:
+                mark_activity_sync_status(
+                    mark_day,
+                    source='manual',
+                    account_id=acct_id,
+                    fetched_count=1,
+                    errors=None,
+                )
         except Exception as e:
             error = str(e)[:300]
             logger.warning('tracking_activity_report failed regno=%s: %s', regno, e)
+            try:
+                mark_activity_sync_status(
+                    pk_date(),
+                    source='manual',
+                    account_id=acct_id,
+                    fetched_count=0,
+                    error_count=1,
+                    errors=[f'{regno}: {error}'],
+                )
+            except Exception:
+                pass
 
     # Reasons from unfiltered set for dropdown; apply filter after
     all_reasons = sorted({
@@ -450,6 +540,7 @@ def tracking_activity_report():
         ]
 
     stats = _activity_point_stats(points)
+    sync_status = get_activity_sync_status_display(acct_id or None)
 
     return render_template(
         'tracking/activity_report.html',
@@ -463,10 +554,23 @@ def tracking_activity_report():
         stats=stats,
         error=error,
         data_source_label=data_source_label,
+        sync_status=sync_status,
         accounts=accounts,
         current_account_id=acct_id,
         **_nav_back_ctx(url_for('module_hub', hub_slug='fleet-tracking')),
     )
+
+
+@app.route('/tracking/activity-report/clear-sync-remarks', methods=['POST'])
+def tracking_activity_report_clear_sync_remarks():
+    """Dismiss fail remarks (X button) — keeps last sync timestamps."""
+    acct_id = _get_account_id()
+    n = clear_activity_sync_remarks(account_id=acct_id or None)
+    return jsonify({
+        'ok': True,
+        'cleared': n,
+        'sync_status': get_activity_sync_status_display(acct_id or None),
+    })
 
 
 @app.route('/tracking/activity-report/export/csv')

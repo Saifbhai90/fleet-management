@@ -114,9 +114,12 @@ def normalize_vehicle(v: dict) -> dict:
 
 
 def normalize_history_point(p: dict) -> dict:
+    # PortalXS SOAP uses RDT; Activity Report / UI use RecordDateTime.
+    rdt = p.get('RecordDateTime') or p.get('RDT') or ''
     return {
         'RegNo': p.get('RegNo', ''),
-        'RecordDateTime': p.get('RecordDateTime', ''),
+        'RecordDateTime': rdt,
+        'RDT': rdt,
         'LAT': _to_float(p.get('LAT')),
         'LON': _to_float(p.get('LON')),
         'Speed': _to_float(p.get('Speed')),
@@ -183,7 +186,8 @@ def enrich_activity_report_rows(points: list[dict], group_name: str = '') -> lis
     prev = None
     prev_ts = None
     for p in points or []:
-        ts = _parse_history_ts(p.get('RecordDateTime'))
+        rdt = p.get('RecordDateTime') or p.get('RDT') or ''
+        ts = _parse_history_ts(rdt)
         speed = float(p.get('Speed') or 0)
         distance = 0.0
         delta_sec = 0.0
@@ -197,8 +201,9 @@ def enrich_activity_report_rows(points: list[dict], group_name: str = '') -> lis
         rows.append({
             'RegNo': p.get('RegNo') or '',
             'Group': group_name or '',
-            'RecordDateTime': p.get('RecordDateTime') or '',
+            'RecordDateTime': rdt,
             'Location': p.get('LandMark') or '',
+            'LandMark': p.get('LandMark') or '',
             'Speed': speed,
             'Direction': _heading_to_cardinal(p.get('Direction')),
             'DirectionDeg': p.get('Direction'),

@@ -360,6 +360,7 @@ HUBS = {
             'tracking_mileage_report_fetch_one',
             'tracking_activity_report',
             'tracking_activity_report_export_csv',
+            'tracking_activity_report_clear_sync_remarks',
         ),
         'sections': [
             {

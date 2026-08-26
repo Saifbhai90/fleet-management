@@ -821,6 +821,55 @@ class VehicleActivityRecord(db.Model):
         return f'<VehicleActivityRecord {self.vehicle_no} {self.task_date}>'
 
 
+class VehicleTripRecord(db.Model):
+    """PortalXS trip segments (ignition on→off), synced with GPS activity."""
+    __tablename__ = 'vehicle_trip_record'
+    id = db.Column(db.Integer, primary_key=True)
+    task_date = db.Column(db.Date, nullable=False, index=True)
+    upload_date = db.Column(db.Date, nullable=False)
+    created_at = db.Column(db.DateTime, default=pk_now)
+
+    vehicle_no = db.Column(db.String(50), nullable=False, index=True)
+    igon_rdt = db.Column(db.String(50), nullable=True)
+    igon_lat = db.Column(db.Numeric(10, 6), nullable=True)
+    igon_lon = db.Column(db.Numeric(10, 6), nullable=True)
+    igon_landmark = db.Column(db.Text, nullable=True)
+    igoff_rdt = db.Column(db.String(50), nullable=True)
+    igoff_lat = db.Column(db.Numeric(10, 6), nullable=True)
+    igoff_lon = db.Column(db.Numeric(10, 6), nullable=True)
+    igoff_landmark = db.Column(db.Text, nullable=True)
+    mileage = db.Column(db.Numeric(12, 2), default=0)
+    travel_time_s = db.Column(db.String(30), nullable=True)
+    max_speed = db.Column(db.Numeric(12, 2), default=0)
+    avg_speed = db.Column(db.Numeric(12, 2), default=0)
+    trip_status = db.Column(db.String(50), nullable=True)
+    data_source = db.Column(db.String(20), nullable=True, index=True)  # portalxs
+
+    def __repr__(self):
+        return f'<VehicleTripRecord {self.vehicle_no} {self.task_date}>'
+
+
+class VehicleActivitySyncStatus(db.Model):
+    """Last PortalXS activity+trips sync per account + task_date (auto or manual)."""
+    __tablename__ = 'vehicle_activity_sync_status'
+    id = db.Column(db.Integer, primary_key=True)
+    account_id = db.Column(db.Integer, db.ForeignKey('portalxs_account.id', ondelete='CASCADE'), nullable=True, index=True)
+    task_date = db.Column(db.Date, nullable=False, index=True)
+    last_synced_at = db.Column(db.DateTime, nullable=False, default=pk_now, index=True)
+    source = db.Column(db.String(20), nullable=False, default='auto')  # auto | manual
+    fetched_count = db.Column(db.Integer, default=0)
+    error_count = db.Column(db.Integer, default=0)
+    # JSON list: [{"regno": "...", "error": "..."}, ...] — dismissible in UI
+    error_remarks = db.Column(db.Text, nullable=True)
+
+    __table_args__ = (
+        db.UniqueConstraint('account_id', 'task_date', name='uq_activity_sync_acct_day'),
+    )
+
+    def __repr__(self):
+        return f'<VehicleActivitySyncStatus {self.task_date} {self.source}>'
+
+
 # ────────────────────────────────────────────────
 # Red Task Report (Red Task entries)
 # ────────────────────────────────────────────────

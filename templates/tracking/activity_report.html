@@ -66,6 +66,59 @@
     </div>
   </form>
 
+  {% set ss = sync_status or {} %}
+  <div class="alert alert-secondary py-2 mb-3" id="activitySyncStatus">
+    <div class="small mb-1">
+      <i class="bi bi-clock-history"></i>
+      <strong>Last auto fetch:</strong>
+      <span id="activityLastAuto">
+        {% if ss.last_auto %}
+          {{ ss.last_auto.last_synced_label }} — for date <strong>{{ ss.last_auto.task_date_label }}</strong>
+          ({{ ss.last_auto.fetched_count }} vehicles{% if ss.last_auto.error_count %}, {{ ss.last_auto.error_count }} failed{% endif %})
+        {% else %}
+          Not run yet
+        {% endif %}
+      </span>
+    </div>
+    <div class="small mb-0">
+      <i class="bi bi-calendar-check"></i>
+      <strong>Today ({{ ss.today_label or '—' }}) last fetch:</strong>
+      <span id="activityTodayLast">
+        {% if ss.today_last %}
+          {{ ss.today_last.last_synced_label }}
+          ({{ ss.today_last.source }}{% if ss.today_last.fetched_count is not none %}, {{ ss.today_last.fetched_count }} vehicles{% endif %})
+        {% else %}
+          Not fetched yet today
+        {% endif %}
+      </span>
+    </div>
+  </div>
+
+  {% if ss.fail_remarks %}
+  <div class="alert alert-warning position-relative mb-3" id="activityFailRemarks">
+    <button type="button" class="btn-close position-absolute top-0 end-0 m-2"
+            id="activityFailRemarksClose" aria-label="Dismiss remarks"
+            title="Clear fail remarks"></button>
+    <div class="fw-semibold mb-1 pe-4">
+      <i class="bi bi-exclamation-triangle"></i>
+      Fail remarks
+      {% if ss.fail_remarks_meta %}
+      <span class="text-muted fw-normal small">
+        — {{ ss.fail_remarks_meta.last_synced_label }}
+        ({{ ss.fail_remarks_meta.task_date_label }})
+      </span>
+      {% endif %}
+    </div>
+    <ul class="mb-0 small ps-3" id="activityFailRemarksList">
+      {% for r in ss.fail_remarks %}
+      <li>
+        {% if r.regno %}<strong>{{ r.regno }}</strong> — {% endif %}{{ r.error }}
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
   {% if error %}
   <div class="alert alert-danger">{{ error }}</div>
   {% endif %}
@@ -175,5 +228,28 @@
 
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-<script>flatpickr('.datepicker', { dateFormat: 'Y-m-d', maxDate: new Date() });</script>
+<script>
+flatpickr('.datepicker', { dateFormat: 'Y-m-d', maxDate: new Date() });
+
+(function() {
+  var btn = document.getElementById('activityFailRemarksClose');
+  if (!btn) return;
+  btn.addEventListener('click', function() {
+    var box = document.getElementById('activityFailRemarks');
+    fetch({{ url_for('tracking_activity_report_clear_sync_remarks')|tojson }}, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': (window.FleetConfig && window.FleetConfig.csrfToken) ||
+          (document.querySelector('meta[name="csrf-token"]') || {}).content || ''
+      },
+      body: '{}'
+    }).then(function(r) { return r.json(); }).then(function(d) {
+      if (d && d.ok && box) box.remove();
+    }).catch(function() {
+      if (box) box.remove();
+    });
+  });
+})();
+</script>
 {% endblock %}

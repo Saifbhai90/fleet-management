@@ -190,12 +190,18 @@
   {% if history_points %}
   <div class="mb-2 d-flex flex-wrap align-items-center gap-2">
     <span class="badge bg-primary">{{ history_points|length }} GPS points</span>
+    {% if gps_source_label %}
+    <span class="badge bg-secondary">GPS source: {{ gps_source_label }}</span>
+    {% endif %}
+    {% if trips_source_label %}
+    <span class="badge bg-secondary">Trips source: {{ trips_source_label }}</span>
+    {% endif %}
     {% if total_distance %}
     <span class="badge bg-info text-dark">Total Mileage: {{ "%.1f"|format(total_distance) }} km</span>
     {% endif %}
     <span class="text-muted small">
       Map par <strong>rang wali line</strong> hi route hai — click for detail.
-      Right side se trip select karke zoom karo.
+      Right side se trip select karke zoom karo. Saved points: today = PortalXS each load; past = DB first.
     </span>
   </div>
   {% endif %}
