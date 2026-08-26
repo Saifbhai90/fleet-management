@@ -183,7 +183,7 @@ flatpickr('.datepicker', { dateFormat: 'Y-m-d', maxDate: new Date() });
     el.textContent = msg;
   }
 
-  function fetchOne(day, mode, doneRegnos) {
+  function fetchBatch(day, mode, doneRegnos) {
     return fetch({{ url_for('tracking_mileage_report_fetch_one')|tojson }}, {
       method: 'POST',
       credentials: 'same-origin',
@@ -196,7 +196,8 @@ flatpickr('.datepicker', { dateFormat: 'Y-m-d', maxDate: new Date() });
         to_date: toDate,
         day: day,
         mode: mode,
-        done_regnos: doneRegnos || []
+        done_regnos: doneRegnos || [],
+        batch_size: 10
       })
     }).then(function(r) { return r.json().then(function(d) { return { status: r.status, data: d }; }); });
   }
@@ -223,13 +224,19 @@ flatpickr('.datepicker', { dateFormat: 'Y-m-d', maxDate: new Date() });
       var doneRegnos = [];
       var totalHint = dayInfo.total || 0;
       function step() {
-        fetchOne(dayInfo.date, dayInfo.mode, doneRegnos).then(function(res) {
+        fetchBatch(dayInfo.date, dayInfo.mode, doneRegnos).then(function(res) {
           var d = res.data || {};
-          if (d.regno) doneRegnos.push(d.regno);
-          if (d.row) upsertRow(d.row);
+          if (!d.ok && res.status >= 400) {
+            showAlert(d.error || 'Fetch failed — retrying…');
+            setTimeout(step, 1500);
+            return;
+          }
+          var batchDone = d.done_regnos || (d.regno ? [d.regno] : []);
+          batchDone.forEach(function(r) { doneRegnos.push(r); });
+          (d.batch_rows || (d.row ? [d.row] : [])).forEach(upsertRow);
           setProgress(d.done || doneRegnos.length, d.total || totalHint || doneRegnos.length, !d.complete,
-            dayInfo.date + ' (' + (dayInfo.mode === 'refresh_all' ? 'refresh' : 'fill') + '): ');
-          if (d.error) showAlert(d.regno + ': ' + d.error);
+            dayInfo.date + ' (fast batch): ');
+          if (d.error) showAlert(d.error);
           else showAlert('');
           if (d.complete) {
             if (d.rows) replaceAllRows(d.rows);

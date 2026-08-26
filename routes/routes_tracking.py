@@ -27,7 +27,7 @@ from services.portalxs_service import (
 )
 from services.mileage_record_service import (
     aggregate_range_rows,
-    fetch_and_upsert_one,
+    fetch_and_upsert_batch,
     get_mileage_sync_status_display,
     mark_sync_status,
     normalize_reg_key,
@@ -552,7 +552,10 @@ def tracking_mileage_report():
 
 @app.route('/tracking/mileage-report/fetch-one', methods=['POST'])
 def tracking_mileage_report_fetch_one():
-    """Fetch next (or specified) vehicle from PortalXS for one day → upsert DB."""
+    """Fetch next batch of vehicles from PortalXS for one day → upsert DB.
+
+    Uses parallel SOAP (batch) to stay fast without hitting Render's ~30s limit.
+    """
     acct_id = _get_account_id()
     if not acct_id:
         return jsonify({'ok': False, 'error': 'No account configured'}), 400
@@ -561,7 +564,11 @@ def tracking_mileage_report_fetch_one():
     to_date = _sanitize_date(body.get('to_date') or request.form.get('to_date') or '')
     day_s = _sanitize_date(body.get('day') or from_date)
     mode = (body.get('mode') or '').strip() or None
-    explicit_regno = (body.get('regno') or '').strip()
+    try:
+        batch_size = int(body.get('batch_size') or 10)
+    except (TypeError, ValueError):
+        batch_size = 10
+    batch_size = max(1, min(batch_size, 16))
 
     vehicles_list = get_all_vehicles_for_account(acct_id)
     if not vehicles_list:
@@ -580,7 +587,6 @@ def tracking_mileage_report_fetch_one():
         done_regnos = [done_regnos]
     done_set = {str(x) for x in done_regnos}
 
-    # refresh_all always returns the full non-excel list — client tracks progress via done_regnos
     if mode == 'refresh_all':
         remaining_list = [p for p in pending if p['portalxs_regno'] not in done_set]
         total = len(pending)
@@ -588,71 +594,56 @@ def tracking_mileage_report_fetch_one():
         remaining_list = pending
         total = len(vehicles_list)
 
-    if explicit_regno:
-        target = next((p for p in pending if p['portalxs_regno'] == explicit_regno), None)
-        if not target:
-            target = {
-                'portalxs_regno': explicit_regno,
-                'vehicle_no': names.get(normalize_reg_key(explicit_regno), explicit_regno),
-            }
-    else:
-        if not remaining_list:
-            rows = aggregate_range_rows(_parse_ymd(from_date), _parse_ymd(to_date))
-            _apply_mileage_display_names(rows, names)
-            return jsonify({
-                'ok': True, 'complete': True, 'source': 'db',
-                'done': len(done_set) if mode == 'refresh_all' else (total - len(remaining_list)),
-                'total': total, 'remaining': 0, 'rows': rows, 'day': day_s, 'mode': mode,
-            })
-        target = remaining_list[0]
+    if not remaining_list:
+        rows = aggregate_range_rows(_parse_ymd(from_date), _parse_ymd(to_date))
+        _apply_mileage_display_names(rows, names)
+        return jsonify({
+            'ok': True, 'complete': True, 'source': 'db',
+            'done': len(done_set) if mode == 'refresh_all' else (total - len(remaining_list)),
+            'total': total, 'remaining': 0, 'rows': rows, 'day': day_s, 'mode': mode,
+            'done_regnos': [], 'batch_rows': [],
+        })
 
-    regno = target['portalxs_regno']
-    display = names.get(normalize_reg_key(regno)) or names.get(regno) or target.get('vehicle_no') or regno
-    err_msg = None
+    targets = remaining_list[:batch_size]
     try:
-        row = fetch_and_upsert_one(
-            acct_id, regno, task_date,
-            vehicle_no=target.get('vehicle_no') or display,
+        result = fetch_and_upsert_batch(
+            acct_id, targets, task_date, max_workers=8, deadline_sec=18,
         )
-        if row:
-            row['vehicle_no'] = display
     except Exception as e:
-        current_app.logger.exception('mileage fetch-one failed regno=%s day=%s', regno, day_s)
-        err_msg = str(e)[:240]
-        row = {
-            'ID': '',
-            '_regno': regno,
-            'vehicle_no': display,
-            'DateFrom': day_s,
-            'TimeFrom': '00:00:00',
-            'DateTo': day_s,
-            'TimeTo': '23:59:59',
-            'Mileage': 0,
-            'PToP': 0,
-            'source': 'error',
-            'task_date': day_s,
-        }
+        current_app.logger.exception('mileage fetch-batch failed day=%s', day_s)
+        return jsonify({'ok': False, 'error': str(e)[:240]}), 500
 
+    batch_rows = result.get('rows') or []
+    for row in batch_rows:
+        key = row.get('_regno') or ''
+        display = names.get(normalize_reg_key(key)) or names.get(key) or row.get('vehicle_no') or key
+        row['vehicle_no'] = display
+
+    new_done = list(result.get('done_regnos') or [t['portalxs_regno'] for t in targets])
+    done_after = len(done_set) + len(new_done)
     if mode == 'refresh_all':
-        done_after = len(done_set) + 1
         remaining_after = max(0, total - done_after)
     else:
         remaining_after = len(pending_regnos_for_day(acct_id, task_date, mode=mode))
         done_after = total - remaining_after
 
     complete = remaining_after <= 0
+    err_list = result.get('errors') or []
     payload = {
         'ok': True,
         'complete': complete,
-        'source': (row or {}).get('source') or 'portalxs',
+        'source': 'portalxs',
         'done': done_after,
         'total': max(total, done_after),
         'remaining': remaining_after,
-        'row': row,
-        'regno': regno,
+        'batch_rows': batch_rows,
+        'row': batch_rows[0] if batch_rows else None,
+        'done_regnos': new_done,
+        'regno': new_done[0] if new_done else '',
         'day': day_s,
         'mode': mode,
-        'error': err_msg,
+        'error': '; '.join(err_list[:3]) if err_list else None,
+        'fetched': result.get('fetched') or 0,
     }
     if complete:
         mark_sync_status(
@@ -660,7 +651,7 @@ def tracking_mileage_report_fetch_one():
             source='manual',
             account_id=acct_id,
             fetched_count=done_after,
-            error_count=1 if err_msg else 0,
+            error_count=len(err_list),
         )
         rows = aggregate_range_rows(_parse_ymd(from_date), _parse_ymd(to_date))
         _apply_mileage_display_names(rows, names)

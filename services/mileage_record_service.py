@@ -98,6 +98,18 @@ def find_mileage_record(task_date: date, portalxs_regno: str, vehicle_no: Option
     keys = _vehicle_match_keys(portalxs_regno, vehicle_no)
     if not keys:
         return None
+    # Prefer direct matches first (avoids loading the whole day)
+    candidates = []
+    for raw in (vehicle_no, portalxs_regno):
+        if raw:
+            candidates.append(str(raw).strip())
+    q = VehicleMileageRecord.query.filter_by(task_date=task_date)
+    if candidates:
+        rows = q.filter(VehicleMileageRecord.reg_no.in_(candidates)).all()
+        for row in rows:
+            if normalize_reg_key(row.reg_no) in keys:
+                return row
+    # Fallback: scan day (handles suffix/normalization mismatches)
     rows = VehicleMileageRecord.query.filter_by(task_date=task_date).all()
     for row in rows:
         if normalize_reg_key(row.reg_no) in keys:
@@ -291,11 +303,35 @@ def upsert_from_portalxs(
 
 def fetch_and_upsert_one(account_id: int, portalxs_regno: str, task_date: date, vehicle_no: str = '') -> dict:
     """Fetch one vehicle from PortalXS for a single calendar day and upsert."""
-    from services.portalxs_service import fetch_mileage, normalize_mileage_report
+    batch = fetch_and_upsert_batch(
+        account_id,
+        [{'portalxs_regno': portalxs_regno, 'vehicle_no': vehicle_no or portalxs_regno}],
+        task_date,
+        max_workers=1,
+        deadline_sec=25,
+    )
+    if batch['rows']:
+        return batch['rows'][0]
+    err = (batch.get('errors') or [None])[0]
+    return {
+        'ID': '',
+        '_regno': portalxs_regno,
+        'vehicle_no': vehicle_no or portalxs_regno,
+        'DateFrom': task_date.isoformat(),
+        'TimeFrom': '00:00:00',
+        'DateTo': task_date.isoformat(),
+        'TimeTo': '23:59:59',
+        'Mileage': 0,
+        'PToP': 0,
+        'source': 'error' if err else 'excel_skip',
+        'task_date': task_date.isoformat(),
+        'error': err,
+    }
 
-    fdt = f'{task_date.isoformat()}T00:00:00'
-    tdt = f'{task_date.isoformat()}T23:59:59'
-    raw = fetch_mileage(account_id, portalxs_regno, fdt, tdt)
+
+def _combine_mileage_raw(raw, from_dt: str, to_dt: str) -> dict:
+    from services.portalxs_service import normalize_mileage_report
+
     if isinstance(raw, dict):
         raw_list = [raw]
     elif isinstance(raw, list):
@@ -304,53 +340,148 @@ def fetch_and_upsert_one(account_id: int, portalxs_regno: str, task_date: date, 
         raw_list = []
 
     if not raw_list:
-        item = normalize_mileage_report({}, query_from=fdt, query_to=tdt)
-        miles = float(item.get('Mileage') or 0)
-        ptop = float(item.get('PToP') or 0)
-    else:
-        first = normalize_mileage_report(
-            raw_list[0] if isinstance(raw_list[0], dict) else {},
-            query_from=fdt, query_to=tdt,
-        )
-        miles = 0.0
-        ptop = 0.0
-        for chunk in raw_list:
-            if not isinstance(chunk, dict):
-                continue
-            n = normalize_mileage_report(chunk, query_from=fdt, query_to=tdt)
-            miles += float(n.get('Mileage') or 0)
-            ptop += float(n.get('PToP') or 0)
-            if not first.get('DateFrom') and n.get('DateFrom'):
-                first = n
-        item = dict(first)
-
-    row = upsert_from_portalxs(
-        task_date=task_date,
-        portalxs_regno=portalxs_regno,
-        vehicle_no=vehicle_no or portalxs_regno,
-        mileage=miles,
-        ptop=ptop,
-        date_from=item.get('DateFrom') or task_date.isoformat(),
-        time_from=item.get('TimeFrom') or '00:00:00',
-        date_to=item.get('DateTo') or task_date.isoformat(),
-        time_to=item.get('TimeTo') or '23:59:59',
-    )
-    if not row:
-        # Excel skip with no prior row — return stub for UI continuity
+        item = normalize_mileage_report({}, query_from=from_dt, query_to=to_dt)
         return {
-            'ID': '',
-            '_regno': portalxs_regno,
-            'vehicle_no': vehicle_no or portalxs_regno,
-            'DateFrom': task_date.isoformat(),
-            'TimeFrom': '00:00:00',
-            'DateTo': task_date.isoformat(),
-            'TimeTo': '23:59:59',
-            'Mileage': 0,
-            'PToP': 0,
-            'source': 'excel_skip',
-            'task_date': task_date.isoformat(),
+            'Mileage': float(item.get('Mileage') or 0),
+            'PToP': float(item.get('PToP') or 0),
+            'DateFrom': item.get('DateFrom') or '',
+            'TimeFrom': item.get('TimeFrom') or '',
+            'DateTo': item.get('DateTo') or '',
+            'TimeTo': item.get('TimeTo') or '',
         }
-    return row
+
+    first = normalize_mileage_report(
+        raw_list[0] if isinstance(raw_list[0], dict) else {},
+        query_from=from_dt, query_to=to_dt,
+    )
+    miles = 0.0
+    ptop = 0.0
+    for chunk in raw_list:
+        if not isinstance(chunk, dict):
+            continue
+        n = normalize_mileage_report(chunk, query_from=from_dt, query_to=to_dt)
+        miles += float(n.get('Mileage') or 0)
+        ptop += float(n.get('PToP') or 0)
+        if not first.get('DateFrom') and n.get('DateFrom'):
+            first = n
+    return {
+        'Mileage': miles,
+        'PToP': ptop,
+        'DateFrom': first.get('DateFrom') or '',
+        'TimeFrom': first.get('TimeFrom') or '',
+        'DateTo': first.get('DateTo') or '',
+        'TimeTo': first.get('TimeTo') or '',
+    }
+
+
+def fetch_and_upsert_batch(
+    account_id: int,
+    vehicles: list[dict],
+    task_date: date,
+    max_workers: int = 8,
+    deadline_sec: float = 18,
+) -> dict:
+    """Parallel PortalXS fetch for a batch, then serial DB upsert.
+
+    SOAP runs in threads (no DB). Upserts stay on the request thread.
+    Returns {rows, errors, done_regnos, fetched}.
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError as FuturesTimeout
+    from services.portalxs_service import _get_client
+
+    fdt = f'{task_date.isoformat()}T00:00:00'
+    tdt = f'{task_date.isoformat()}T23:59:59'
+    targets = [v for v in vehicles if v.get('portalxs_regno')]
+    if not targets:
+        return {'rows': [], 'errors': [], 'done_regnos': [], 'fetched': 0}
+
+    # Warm SOAP session once before fan-out
+    _get_client(account_id)
+
+    def _soap_one(regno: str):
+        client = _get_client(account_id)
+        raw = client.get_mileage(regno, fdt, tdt)
+        return regno, _combine_mileage_raw(raw, fdt, tdt)
+
+    fetched_map: dict[str, dict] = {}
+    errors: list[str] = []
+    workers = max(1, min(max_workers, len(targets)))
+    pool = ThreadPoolExecutor(max_workers=workers)
+    try:
+        futures = {pool.submit(_soap_one, t['portalxs_regno']): t['portalxs_regno'] for t in targets}
+        try:
+            for fut in as_completed(futures, timeout=deadline_sec):
+                regno = futures[fut]
+                try:
+                    r_no, item = fut.result()
+                    fetched_map[r_no] = item
+                except Exception as exc:
+                    errors.append(f'{regno}: {str(exc)[:120]}')
+        except FuturesTimeout:
+            for fut, regno in futures.items():
+                if not fut.done():
+                    fut.cancel()
+                    if regno not in fetched_map:
+                        errors.append(f'{regno}: batch deadline')
+    finally:
+        pool.shutdown(wait=False, cancel_futures=True)
+
+    rows = []
+    done_regnos = []
+    for t in targets:
+        regno = t['portalxs_regno']
+        vno = t.get('vehicle_no') or regno
+        done_regnos.append(regno)
+        item = fetched_map.get(regno)
+        if not item:
+            rows.append({
+                'ID': '',
+                '_regno': regno,
+                'vehicle_no': vno,
+                'DateFrom': task_date.isoformat(),
+                'TimeFrom': '00:00:00',
+                'DateTo': task_date.isoformat(),
+                'TimeTo': '23:59:59',
+                'Mileage': 0,
+                'PToP': 0,
+                'source': 'error',
+                'task_date': task_date.isoformat(),
+            })
+            continue
+        row = upsert_from_portalxs(
+            task_date=task_date,
+            portalxs_regno=regno,
+            vehicle_no=vno,
+            mileage=float(item.get('Mileage') or 0),
+            ptop=float(item.get('PToP') or 0),
+            date_from=item.get('DateFrom') or task_date.isoformat(),
+            time_from=item.get('TimeFrom') or '00:00:00',
+            date_to=item.get('DateTo') or task_date.isoformat(),
+            time_to=item.get('TimeTo') or '23:59:59',
+        )
+        if row:
+            row['vehicle_no'] = vno
+            rows.append(row)
+        else:
+            rows.append({
+                'ID': '',
+                '_regno': regno,
+                'vehicle_no': vno,
+                'DateFrom': task_date.isoformat(),
+                'TimeFrom': '00:00:00',
+                'DateTo': task_date.isoformat(),
+                'TimeTo': '23:59:59',
+                'Mileage': 0,
+                'PToP': 0,
+                'source': 'excel_skip',
+                'task_date': task_date.isoformat(),
+            })
+    return {
+        'rows': rows,
+        'errors': errors,
+        'done_regnos': done_regnos,
+        'fetched': len(fetched_map),
+    }
 
 
 def sync_day_full(account_id: int, task_date: date, source: str = 'auto') -> dict:
@@ -358,17 +489,20 @@ def sync_day_full(account_id: int, task_date: date, source: str = 'auto') -> dic
     pending = pending_regnos_for_day(account_id, task_date, mode='refresh_all')
     ok = 0
     errors = []
-    for item in pending:
-        regno = item['portalxs_regno']
+    # Process in parallel batches so auto jobs finish sooner
+    batch_size = 12
+    for i in range(0, len(pending), batch_size):
+        chunk = pending[i:i + batch_size]
         try:
-            fetch_and_upsert_one(
-                account_id, regno, task_date, vehicle_no=item.get('vehicle_no') or regno
+            result = fetch_and_upsert_batch(
+                account_id, chunk, task_date, max_workers=8, deadline_sec=60,
             )
-            ok += 1
+            ok += int(result.get('fetched') or 0)
+            errors.extend(result.get('errors') or [])
         except Exception as exc:
-            errors.append(f'{regno}: {str(exc)[:120]}')
-            logger.warning('mileage sync failed account=%s day=%s regno=%s: %s',
-                           account_id, task_date, regno, exc)
+            errors.append(str(exc)[:200])
+            logger.warning('mileage sync batch failed account=%s day=%s: %s',
+                           account_id, task_date, exc)
     excel_n = len(excel_protected_keys(task_date))
     mark_sync_status(
         task_date,
