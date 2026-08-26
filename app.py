@@ -742,6 +742,17 @@ if _run_startup_tasks:
         # Create indexes (IF NOT EXISTS = safe for both SQLite and PostgreSQL)
         try:
             with db.engine.connect() as conn:
+                if conn.dialect.name == 'postgresql':
+                    # CREATE INDEX takes a ShareLock on the table before it even
+                    # checks IF NOT EXISTS, so one long transaction on a big
+                    # table (an abandoned backfill from a cancelled deploy) makes
+                    # boot wait forever — and a boot that hangs is a deploy that
+                    # never finishes and never fails. Bail out of the wait
+                    # instead; the loop below already skips what it cannot do,
+                    # and the next boot retries.
+                    conn.execute(db.text("SET lock_timeout = '5s'"))
+                    conn.execute(db.text("SET statement_timeout = '180s'"))
+                    conn.commit()
                 indexes = [
                     "CREATE INDEX IF NOT EXISTS ix_project_start_date ON project (start_date)",
                     "CREATE INDEX IF NOT EXISTS ix_project_status ON project (status)",
