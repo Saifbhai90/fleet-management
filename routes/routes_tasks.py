@@ -1702,7 +1702,6 @@ def task_report_upload_list():
     emg_dates = db.session.query(EmergencyTaskRecord.task_date).filter(
         EmergencyTaskRecord.task_date >= from_date,
         EmergencyTaskRecord.task_date <= to_date,
-        EmergencyTaskRecord.excel_uploaded_at.isnot(None),
     ).distinct().all()
 
     mil_dates = db.session.query(VehicleMileageRecord.task_date).filter(
@@ -1730,7 +1729,6 @@ def task_report_upload_list():
                 func.max(EmergencyTaskRecord.created_at),
             ).filter(
                 EmergencyTaskRecord.task_date.in_(page_date_list),
-                EmergencyTaskRecord.excel_uploaded_at.isnot(None),
             ).group_by(EmergencyTaskRecord.task_date).all()
         }
 
@@ -1864,7 +1862,6 @@ def task_report_emergency_detail_api(date_str):
 
     total_count = db.session.query(func.count(EmergencyTaskRecord.id)).filter(
         EmergencyTaskRecord.task_date == target_date,
-        EmergencyTaskRecord.excel_uploaded_at.isnot(None),
     ).scalar() or 0
 
     rows = db.session.query(
@@ -1877,7 +1874,6 @@ def task_report_emergency_detail_api(date_str):
         EmergencyTaskRecord.created_at,
     ).filter(
         EmergencyTaskRecord.task_date == target_date,
-        EmergencyTaskRecord.excel_uploaded_at.isnot(None),
     ).order_by(
         EmergencyTaskRecord.created_at.desc()
     ).limit(500).all()
@@ -1952,8 +1948,7 @@ def task_report_upload_date_summary_api(date_str):
 
     emg_count, emg_last = db.session.query(
         func.count(EmergencyTaskRecord.id), func.max(EmergencyTaskRecord.created_at),
-    ).filter(EmergencyTaskRecord.task_date == target_date,
-             EmergencyTaskRecord.excel_uploaded_at.isnot(None)).first()
+    ).filter(EmergencyTaskRecord.task_date == target_date).first()
 
     mil_count, mil_last = db.session.query(
         func.count(VehicleMileageRecord.id), func.max(VehicleMileageRecord.created_at),
@@ -1983,8 +1978,7 @@ def task_report_upload_missing_dates():
     dates_to_check = [today - timedelta(days=i) for i in range(1, days_back + 1)]
 
     emg_dates  = {r[0] for r in db.session.query(EmergencyTaskRecord.task_date).filter(
-        EmergencyTaskRecord.task_date.in_(dates_to_check),
-        EmergencyTaskRecord.excel_uploaded_at.isnot(None)).distinct().all()}
+        EmergencyTaskRecord.task_date.in_(dates_to_check)).distinct().all()}
     mil_dates  = {r[0] for r in db.session.query(VehicleMileageRecord.task_date).filter(
         VehicleMileageRecord.task_date.in_(dates_to_check)).distinct().all()}
     act_dates  = {r[0] for r in db.session.query(VehicleActivityRecord.task_date).filter(
