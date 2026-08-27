@@ -737,6 +737,9 @@ ENDPOINT_PERMISSION_MAP = [
     ('tracking_mileage_report', 'tracking_reports'),
     ('tracking_activity_report', 'tracking_reports'),  # GPS Point / Activity Report + CSV
     ('tracking_trends', 'tracking_reports'),
+    ('tracking_device_health', 'tracking_reports'),
+    ('tracking_dwell_report', 'tracking_reports'),
+    ('tracking_dispatch', 'tracking_view'),            # dispatching is a live-map task
     ('tracking_alerts', 'tracking_alerts'),
     ('tracking_settings', 'tracking_settings'),        # covers all settings sub-routes
     ('api_tracking_vehicles', 'tracking_settings'),

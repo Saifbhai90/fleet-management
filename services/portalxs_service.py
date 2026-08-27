@@ -14,6 +14,7 @@ import copy
 import json
 import logging
 import math
+import os
 import threading
 import time
 from concurrent.futures import TimeoutError as FuturesTimeout
@@ -21,7 +22,9 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Optional
 
-from utils import normalize_vehicle_reg_key
+from sqlalchemy import func
+
+from utils import clean_geo_location, normalize_vehicle_reg_key, safe_float
 
 logger = logging.getLogger(__name__)
 
@@ -57,12 +60,16 @@ def decrypt_password(enc: str, app=None) -> str:
 # ── Landmark helper ──────────────────────────────────────────────────────────
 
 def clean_landmark(raw: str) -> str:
-    if not raw:
-        return ''
-    for prefix in ('0||', '1||', '0 ', '1 '):
-        if raw.startswith(prefix):
-            return raw[len(prefix):].strip()
-    return raw.strip()
+    """Address from a live PortalXS feed, with its geofence prefix removed.
+
+    Beyond the "<geofence id>||" form that all the feeds use, the live position
+    payload also emits a bare "0 "/"1 " prefix, which only this feed needs.
+    """
+    text = clean_geo_location(raw)
+    for prefix in ('0 ', '1 '):
+        if text.startswith(prefix):
+            return text[len(prefix):].strip()
+    return text
 
 
 # ── Data normalisation ───────────────────────────────────────────────────────
@@ -1004,7 +1011,17 @@ def fetch_mileage_report_bulk(account_id: int, regnos: list[str], from_dt: str, 
     return rows, error
 
 
-ALERT_CACHE_MAX_ROWS = 500  # per account
+# Per account. This cap is the entire alert history the app keeps — PortalXS
+# only ever returns currently-open alerts — so it also sets how far back alert
+# trends can be read. 500 rows was roughly ten days for a 48-vehicle account,
+# which is too short to compare one month against another. Rows are small
+# (regno, type, message, timestamp), so 20k costs a few MB per account.
+ALERT_CACHE_MAX_ROWS = int(os.environ.get('ALERT_CACHE_MAX_ROWS') or 20000)
+
+# Pruning to the cap on every fetch would mean re-listing tens of thousands of
+# ids each time, so let the table drift above the cap and trim in one pass when
+# it has drifted far enough to be worth the write.
+ALERT_CACHE_PRUNE_SLACK = 1.25
 
 # PortalXS never sends a severity, so it is derived from the alert name.
 _ALERT_SEVERITY_HIGH = ('sos', 'panic', 'emergency', 'tow', 'accident', 'crash',
@@ -1168,19 +1185,43 @@ def fetch_alerts(account_id: int) -> list[dict]:
 
     if inserted:
         db.session.commit()
-        # Trim oldest rows beyond cap
-        ids_to_keep = [r.id for r in PortalXSAlertCache.query.filter_by(account_id=account_id)
-                       .order_by(PortalXSAlertCache.created_at.desc())
-                       .with_entities(PortalXSAlertCache.id)
-                       .limit(ALERT_CACHE_MAX_ROWS).all()]
-        if ids_to_keep:
-            deleted = PortalXSAlertCache.query.filter(
-                PortalXSAlertCache.account_id == account_id,
-                ~PortalXSAlertCache.id.in_(ids_to_keep)
-            ).delete(synchronize_session=False)
-            if deleted:
-                db.session.commit()
+        _prune_alert_cache(account_id)
     return alerts
+
+
+def _prune_alert_cache(account_id: int) -> int:
+    """Trim the account's alert history back to the cap. Returns rows deleted.
+
+    Deletes by an id cutoff rather than by listing the ids to keep: at a 20k cap
+    the keep-list would be a 20,000-element ``NOT IN`` on every fetch.
+    """
+    from app import db
+    from models import PortalXSAlertCache
+
+    total = db.session.query(func.count(PortalXSAlertCache.id)) \
+                      .filter(PortalXSAlertCache.account_id == account_id).scalar() or 0
+    if total <= ALERT_CACHE_MAX_ROWS * ALERT_CACHE_PRUNE_SLACK:
+        return 0
+
+    # Ids ascend with insertion, so the id of the Nth-newest row is the cutoff.
+    cutoff = (db.session.query(PortalXSAlertCache.id)
+              .filter(PortalXSAlertCache.account_id == account_id)
+              .order_by(PortalXSAlertCache.id.desc())
+              .offset(ALERT_CACHE_MAX_ROWS - 1)
+              .limit(1)
+              .scalar())
+    if cutoff is None:
+        return 0
+
+    deleted = PortalXSAlertCache.query.filter(
+        PortalXSAlertCache.account_id == account_id,
+        PortalXSAlertCache.id < cutoff,
+    ).delete(synchronize_session=False)
+    if deleted:
+        db.session.commit()
+        logger.info('alert cache pruned acct=%s removed=%s kept<=%s',
+                    account_id, deleted, ALERT_CACHE_MAX_ROWS)
+    return deleted
 
 
 def fetch_geofences(account_id: int) -> list[dict]:
@@ -1189,6 +1230,87 @@ def fetch_geofences(account_id: int) -> list[dict]:
     if not isinstance(raw, list):
         return []
     return raw
+
+
+# ── Nearest vehicles (dispatch assist) ───────────────────────────────────────
+
+def normalize_nearest_vehicle(raw: dict) -> dict:
+    """Flatten one entry of ConnectApp_NearestVehiclesListByRegNo.
+
+    Position fields arrive as LAT/LON and the address as LandMark, which do not
+    match the naming used by the live-positions feed. LandMark also carries the
+    same "<geofence id>||" prefix as the stored activity locations.
+    """
+    status = str(raw.get('VehicleStatus') or raw.get('Status') or '').strip()
+    return {
+        'regno': str(raw.get('RegNo') or raw.get('Regno') or '').strip(),
+        'latitude': safe_float(raw.get('LAT') or raw.get('Latitude')),
+        'longitude': safe_float(raw.get('LON') or raw.get('Longitude')),
+        'status': status or 'Unknown',
+        'moving': status.lower() in ('moving', 'running'),
+        'landmark': clean_landmark(raw.get('LandMark') or raw.get('Landmark')),
+        'speed': safe_float(raw.get('Speed')),
+        'rdt': str(raw.get('RDT') or raw.get('DateTime') or '').strip(),
+    }
+
+
+def nearest_reference_position(account_id: int, regno: str) -> dict | None:
+    """The anchor vehicle's own position, for when the nearest list omits it.
+
+    The upstream endpoint sometimes returns the anchor among its neighbours and
+    sometimes not, so the page cannot rely on it to show where the scene is.
+    The live feed already holds every vehicle's position; this is a nicety on
+    top of the nearest list, so a failure to reach it is not worth an error.
+    """
+    key = normalize_vehicle_reg_key(regno)
+    if not key:
+        return None
+
+    positions = get_cached_positions(account_id)
+    if not positions:
+        try:
+            positions = fetch_live_positions(account_id)
+        except Exception as exc:
+            logger.info('dispatch reference position unavailable: %s', exc)
+            return None
+
+    for v in positions:
+        if normalize_vehicle_reg_key(v.get('RegNo')) != key:
+            continue
+        status = str(v.get('VehicleStatus') or '').strip()
+        return {
+            'regno': v.get('RegNo') or regno,
+            'latitude': _to_float(v.get('LAT')),
+            'longitude': _to_float(v.get('LON')),
+            'status': status or 'Unknown',
+            'moving': status.lower() in ('moving', 'running'),
+            'landmark': clean_landmark(v.get('LandMark') or ''),
+            'speed': _to_float(v.get('Speed')),
+            'rdt': v.get('RDT') or '',
+        }
+    return None
+
+
+def fetch_nearest_vehicles(account_id: int, regno: str) -> list[dict]:
+    """Vehicles nearest to ``regno``, in the proximity order the server returns.
+
+    The upstream endpoint anchors on exactly one vehicle, so this cannot be
+    batched across a fleet — see PortalXSClient.get_nearest_vehicles.
+    """
+    if not regno:
+        return []
+    client = _get_client(account_id)
+    raw = client.get_nearest_vehicles(regno)
+    if not isinstance(raw, list):
+        return []
+    rows = []
+    for entry in raw:
+        if not isinstance(entry, dict):
+            continue
+        row = normalize_nearest_vehicle(entry)
+        if row['regno']:
+            rows.append(row)
+    return rows
 
 
 # ── Background polling thread ────────────────────────────────────────────────

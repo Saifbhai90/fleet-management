@@ -519,6 +519,14 @@ if _run_startup_tasks:
         except Exception as _e:
             print(f"work-order tables ensure warning (non-fatal): {_e}")
 
+        # Dwell rollup tables (Stoppage & Dwell Time report)
+        try:
+            from models import VehicleStopLocationDaily, VehicleStopRollupStatus
+            VehicleStopLocationDaily.__table__.create(db.engine, checkfirst=True)
+            VehicleStopRollupStatus.__table__.create(db.engine, checkfirst=True)
+        except Exception as _e:
+            print(f"dwell rollup tables ensure warning (non-fatal): {_e}")
+
         # Auto-add missing columns to existing tables
         try:
             from sqlalchemy import inspect as _sa_inspect, text as _sa_text
@@ -807,6 +815,13 @@ if _run_startup_tasks:
             print("Emergency task dedupe/unique index OK.")
         except Exception as e:
             print(f"Emergency task dedupe skip: {e}")
+        # Partial index for the Device Health report — owned by the service so the
+        # index predicate cannot drift from the reasons the report filters on.
+        try:
+            from services.device_health_service import ensure_device_health_index
+            print(f"Device health index OK: {ensure_device_health_index()}")
+        except Exception as e:
+            print(f"Device health index skip: {e}")
         # Seed default permissions, Admin role, and admin user (if none exist)
         try:
             from auth_utils import seed_auth_tables

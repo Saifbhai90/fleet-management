@@ -18,8 +18,8 @@ FLOW:
 USAGE:
   client = PortalXSClient("username", "password")
   client.connect()                  # register device + login (1 entry)
-  vehicles = client.get_vehicles()  # all vehicles
-  positions = client.get_positions()  # live lat/lon (0 entries!)
+  vehicles = client.get_vehicles()  # all vehicles + their live lat/lon
+  nearby = client.get_nearest_vehicles(reg)  # neighbours of ONE vehicle
   history = client.get_history(reg, fdt, tdt)
 """
 import base64
@@ -262,19 +262,31 @@ class PortalXSClient:
             return r.get("_vehicleData") or r.get("_Vehicles") or []
         return r
 
-    def get_positions(self, regnos=None):
-        """Get positions. Default = all vehicles (from get_vehicles)."""
-        if regnos is None:
-            return self.get_vehicles()
+    def get_nearest_vehicles(self, regno):
+        """Vehicles closest to one vehicle, nearest first, with live position.
+
+        The method name is plural but it anchors on a single vehicle: the server
+        feeds regno straight into geography::Point, so a comma-joined list comes
+        back as ``'geography::Point' failed because parameter 1 is not allowed
+        to be null`` instead of several vehicles' neighbours. Callers that need
+        neighbours for more than one vehicle must call this once per vehicle.
+        """
         self._ok()
-        if isinstance(regnos, list):
-            regnos = ",".join(regnos)
-        return self._soap("ConnectApp_NearestVehiclesListByRegNo", {
+        if isinstance(regno, (list, tuple)):
+            if len(regno) != 1:
+                raise ValueError(
+                    'get_nearest_vehicles accepts one regno; '
+                    'the upstream endpoint cannot batch.')
+            regno = regno[0]
+        r = self._soap("ConnectApp_NearestVehiclesListByRegNo", {
             "uniqueID": self.unique_id,
             "device_unique_identifier": self.device_id,
             "loginid": self.login_id,
-            "regno": regnos,
+            "regno": regno,
         })
+        if isinstance(r, dict):
+            return r.get("_vehicleData") or r.get("_Vehicles") or []
+        return r or []
 
     def _soap_dates(self, method, enc_params, plain_dates):
         """SOAP call with encrypted params + PLAIN date params (fdt/tdt).

@@ -1,0 +1,312 @@
+{% extends 'base.html' %}
+{% from 'partials/nav_back_button.html' import nav_back_button with context %}
+{% from 'partials/report_date_range.html' import date_range %}
+{% block title %}Device Health — Fleet Tracking{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<style>
+  .dh-badge { font-size: .72rem; padding: .18rem .45rem; border-radius: 999px; font-weight: 600; }
+  .dh-critical { background: #f8d7da; color: #842029; }
+  .dh-warning  { background: #fff3cd; color: #664d03; }
+  .dh-info     { background: #cfe2ff; color: #084298; }
+  .dh-ok       { background: #d1e7dd; color: #0f5132; }
+  .dh-score { font-variant-numeric: tabular-nums; font-weight: 700; }
+  .dh-score.is-bad  { color: #dc3545; }
+  .dh-score.is-mid  { color: #fd7e14; }
+  .dh-score.is-good { color: #198754; }
+  /* On a card header the score sits on the blue gradient, where the table's
+     text colours have almost no contrast — give it a solid pill instead. */
+  .trk-item-lead.dh-score.is-bad  { background: #fee2e2; color: #991b1b; }
+  .trk-item-lead.dh-score.is-mid  { background: #ffedd5; color: #9a3412; }
+  .trk-item-lead.dh-score.is-good { background: #dcfce7; color: #166534; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3 trk-page">
+  <div class="trk-head">
+    <h4>
+      <i class="bi bi-cpu"></i>
+      <span class="trk-head-text">Device Health &amp; Tamper</span>
+    </h4>
+    <div class="trk-head-meta">
+      {% if selected_regno %}<strong>{{ selected_regno }}</strong> · {% endif %}
+      {{ date_range(from_date, to_date) }}
+      {% if rows %}· {{ rows|length }} unit{{ 's' if rows|length != 1 }}{% endif %}
+    </div>
+    <div class="d-flex align-items-center gap-2 trk-head-actions">
+      <button type="button" class="trk-filters-toggle" data-trk-filters-toggle
+              aria-controls="trkFilters" aria-expanded="false">
+        <i class="bi bi-funnel"></i> Filters
+      </button>
+      {{ nav_back_button() }}
+    </div>
+  </div>
+
+  <form method="get" class="card mb-3 trk-filters" id="trkFilters"
+        data-trk-open="{{ '0' if (rows or gaps) else '1' }}">
+    <div class="card-body d-flex flex-wrap gap-3 align-items-end">
+      <div style="min-width: 220px;">
+        <label class="form-label small fw-semibold">Vehicle</label>
+        <select name="regno" class="form-select form-select-sm search-select">
+          <option value="">All vehicles</option>
+          {% for v in vehicles_list %}
+          <option value="{{ v.portalxs_regno }}" {% if v.portalxs_regno == selected_regno %}selected{% endif %}>
+            {{ v.display_label or v.portalxs_regno }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="form-label small fw-semibold">From</label>
+        <input type="text" name="from_date" class="form-control form-control-sm datepicker" value="{{ from_date }}" required>
+      </div>
+      <div>
+        <label class="form-label small fw-semibold">To</label>
+        <input type="text" name="to_date" class="form-control form-control-sm datepicker" value="{{ to_date }}" required>
+      </div>
+      <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-search"></i> Run</button>
+    </div>
+  </form>
+
+  <div class="trk-body">
+    {% if error %}
+    <div class="alert alert-danger">{{ error }}</div>
+    {% endif %}
+
+    <div class="trk-kpis">
+      <div class="trk-kpi">
+        <div class="trk-kpi-label">Units with events</div>
+        <div class="trk-kpi-val is-primary">{{ rows|length }}</div>
+      </div>
+      <div class="trk-kpi">
+        <div class="trk-kpi-label">Power cut</div>
+        <div class="trk-kpi-val is-danger">{{ tamper_count }}</div>
+      </div>
+      <div class="trk-kpi">
+        <div class="trk-kpi-label">Critical</div>
+        <div class="trk-kpi-val is-warning">{{ critical_count }}</div>
+      </div>
+      <div class="trk-kpi">
+        <div class="trk-kpi-label">Never reported</div>
+        <div class="trk-kpi-val is-info">{{ silent_count }}</div>
+      </div>
+    </div>
+
+    {% if tamper_count %}
+    <div class="alert alert-danger py-2 small mb-3">
+      <i class="bi bi-plug"></i>
+      <strong>{{ tamper_count }}</strong> unit{{ 's' if tamper_count != 1 }} lost main power in this
+      period. Main power off usually means the tracker was disconnected rather than that it failed.
+    </div>
+    {% endif %}
+
+    {% if rows %}
+    <div class="trk-section-title">Unit health</div>
+
+    <!-- Desktop: per-unit table -->
+    <div class="card trk-desktop-only mb-3">
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0" data-mp-skip-cards="1">
+          <thead>
+            <tr>
+              <th>Vehicle</th><th class="text-center">Score</th><th>Status</th>
+              <th class="text-end">Power cut</th><th class="text-end">Power back</th>
+              <th class="text-end">Low battery</th><th class="text-end">Errors</th>
+              <th class="text-end">Total</th><th>Last event</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in rows %}
+            <tr>
+              <td class="fw-semibold">{{ r.display_name }}</td>
+              <td class="text-center">
+                <span class="dh-score {{ 'is-bad' if r.health_score < 50 else ('is-mid' if r.health_score < 85 else 'is-good') }}">
+                  {{ r.health_score }}
+                </span>
+              </td>
+              <td><span class="dh-badge dh-{{ r.status }}">{{ r.status }}</span></td>
+              <td class="text-end {{ 'text-danger fw-semibold' if r.power_lost }}">{{ r.power_lost or '—' }}</td>
+              <td class="text-end">{{ r.power_restored or '—' }}</td>
+              <td class="text-end {{ 'text-warning fw-semibold' if r.low_battery }}">{{ r.low_battery or '—' }}</td>
+              <td class="text-end {{ 'text-danger fw-semibold' if r.error }}">{{ r.error or '—' }}</td>
+              <td class="text-end">{{ r.total_events }}</td>
+              <td class="small text-muted">{{ r.last_event or '—' }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Mobile: worst units first, score up front -->
+    <div class="trk-mobile-only mb-3">
+      <div class="trk-list">
+        {% for r in rows %}
+        <div class="trk-item">
+          <div class="trk-item-head">
+            <span class="trk-item-title">{{ r.display_name }}</span>
+            <span class="trk-item-lead dh-score {{ 'is-bad' if r.health_score < 50 else ('is-mid' if r.health_score < 85 else 'is-good') }}">
+              {{ r.health_score }}
+            </span>
+          </div>
+          <div class="mb-1">
+            <span class="dh-badge dh-{{ r.status }}">{{ r.status }}</span>
+            {% if r.tamper_suspected %}
+            <span class="dh-badge dh-critical"><i class="bi bi-plug"></i> power cut</span>
+            {% endif %}
+          </div>
+          <div class="trk-item-grid">
+            <div class="trk-cell">
+              <span class="trk-cell-label">Power cut</span>
+              <span class="trk-cell-val">{{ r.power_lost or '—' }}</span>
+            </div>
+            <div class="trk-cell">
+              <span class="trk-cell-label">Power back</span>
+              <span class="trk-cell-val">{{ r.power_restored or '—' }}</span>
+            </div>
+            <div class="trk-cell">
+              <span class="trk-cell-label">Low battery</span>
+              <span class="trk-cell-val">{{ r.low_battery or '—' }}</span>
+            </div>
+            <div class="trk-cell">
+              <span class="trk-cell-label">Errors</span>
+              <span class="trk-cell-val">{{ r.error or '—' }}</span>
+            </div>
+            <div class="trk-cell is-full">
+              <span class="trk-cell-label">Last event</span>
+              <span class="trk-cell-val">{{ r.last_event or '—' }}</span>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% elif not error %}
+    <div class="alert alert-success py-2 small">
+      <i class="bi bi-check-circle"></i> No power, battery or error events reported in this period.
+    </div>
+    {% endif %}
+
+    {% if gaps %}
+    <div class="trk-section-title">Reporting gaps</div>
+    <div class="text-muted small mb-2">
+      Units that reported on fewer days than the period covers. A tracker keeps sending
+      points even while the vehicle is parked, so silence points at the unit, not the vehicle.
+    </div>
+
+    <div class="card trk-desktop-only mb-3">
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0" data-mp-skip-cards="1">
+          <thead>
+            <tr>
+              <th>Vehicle</th><th class="text-end">Days missing</th>
+              <th class="text-end">Days seen</th><th class="text-end">Points</th>
+              <th>Last point</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for g in gaps %}
+            <tr>
+              <td class="fw-semibold">{{ g.vehicle_no }}</td>
+              <td class="text-end {{ 'text-danger fw-semibold' if g.silent }}">{{ g.missing_days }}</td>
+              <td class="text-end">{{ g.days }}</td>
+              <td class="text-end">{{ '{:,}'.format(g.points) }}</td>
+              <td class="small text-muted">
+                {% if g.silent %}<span class="badge bg-danger">never reported</span>
+                {% else %}{{ g.last_point or '—' }}{% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="trk-mobile-only mb-3">
+      <div class="trk-list">
+        {% for g in gaps %}
+        <div class="trk-item">
+          <div class="trk-item-head">
+            <span class="trk-item-title">{{ g.vehicle_no }}</span>
+            <span class="trk-item-lead {{ 'text-danger' if g.silent }}">
+              {{ g.missing_days }}d missing
+            </span>
+          </div>
+          <div class="trk-item-grid">
+            <div class="trk-cell">
+              <span class="trk-cell-label">Days seen</span>
+              <span class="trk-cell-val">{{ g.days }}</span>
+            </div>
+            <div class="trk-cell">
+              <span class="trk-cell-label">Points</span>
+              <span class="trk-cell-val">{{ '{:,}'.format(g.points) }}</span>
+            </div>
+            <div class="trk-cell is-full">
+              <span class="trk-cell-label">Last point</span>
+              <span class="trk-cell-val">
+                {% if g.silent %}never reported{% else %}{{ g.last_point or '—' }}{% endif %}
+              </span>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% if events %}
+    <div class="trk-section-title">Event log</div>
+    <input type="search" class="trk-search trk-mobile-only mb-2" placeholder="Search events…"
+           data-trk-search="#dhEventList" aria-label="Search device events">
+
+    <div class="card trk-desktop-only">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span>Device events</span>
+        <span class="trk-count">{{ events|length }} shown</span>
+      </div>
+      <div class="table-responsive" style="max-height: 460px; overflow-y: auto;">
+        <!-- The phone list is generated from these rows so the log is not sent
+             twice; see data-trk-cards in static/js/tracking_reports.js. -->
+        <table class="table table-sm table-hover mb-0" data-mp-skip-cards="1"
+               data-trk-cards="dhEventList"
+               data-trk-card-title="2" data-trk-card-lead="1"
+               data-trk-card-skip="2" data-trk-card-full="4">
+          <thead class="sticky-top bg-white">
+            <tr><th>Date</th><th>Time</th><th>Vehicle</th><th>Event</th><th>Location</th></tr>
+          </thead>
+          <tbody>
+            {% for e in events %}
+            <tr>
+              <td class="small">{{ e.task_date }}</td>
+              <td class="small">{{ e.time or '—' }}</td>
+              <td class="fw-semibold">{{ e.display_name }}</td>
+              <td>
+                <span class="dh-badge dh-{{ 'critical' if e.event_class in ('power_lost', 'error') else ('warning' if e.event_class == 'low_battery' else 'info') }}">
+                  {{ e.reason }}
+                </span>
+              </td>
+              <td class="small text-muted">{{ e.location or '—' }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="trk-mobile-only">
+      <div class="trk-list" id="dhEventList"></div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="{{ url_for('static', filename='js/tracking_reports.js') }}?v=1001"></script>
+<script>
+flatpickr('.datepicker', { dateFormat: 'Y-m-d', maxDate: new Date() });
+</script>
+{% endblock %}

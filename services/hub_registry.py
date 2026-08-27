@@ -361,6 +361,9 @@ HUBS = {
             'tracking_activity_report',
             'tracking_activity_report_export_csv',
             'tracking_activity_report_clear_sync_remarks',
+            'tracking_device_health',
+            'tracking_dwell_report',
+            'tracking_dispatch',
         ),
         'sections': [
             {
@@ -368,6 +371,7 @@ HUBS = {
                 'items': [
                     _item('tracking_dashboard', 'Live Map & Dashboard', 'fa-solid fa-map-location-dot', 'rc-tile--tracker', 'tracking_view'),
                     _item('tracking_history', 'Route History & Playback', 'fa-solid fa-clock-rotate-left', 'rc-tile--tracker', 'tracking_history'),
+                    _item('tracking_dispatch', 'Dispatch Assist (Nearest Vehicle)', 'fa-solid fa-tower-broadcast', 'rc-tile--tracker', 'tracking_view'),
                 ],
             },
             {
@@ -384,6 +388,8 @@ HUBS = {
                     ),
                     _item('tracking_activity_report', 'GPS Point / Activity Report', 'fa-solid fa-location-dot', 'rc-tile--tracker', 'tracking_reports'),
                     _item('tracking_trends', 'Trends Analysis', 'fa-solid fa-chart-line', 'rc-tile--tracker', 'tracking_reports'),
+                    _item('tracking_device_health', 'Device Health & Tamper', 'fa-solid fa-microchip', 'rc-tile--tracker', 'tracking_reports'),
+                    _item('tracking_dwell_report', 'Stoppage & Dwell Time', 'fa-solid fa-hourglass-half', 'rc-tile--tracker', 'tracking_reports'),
                     _item('tracking_alerts', 'Alerts', 'fa-solid fa-bell', 'rc-tile--tracker', 'tracking_alerts'),
                 ],
             },

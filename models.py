@@ -823,6 +823,86 @@ class VehicleActivityRecord(db.Model):
         return f'<VehicleActivityRecord {self.vehicle_no} {self.task_date}>'
 
 
+class VehicleStopLocationDaily(db.Model):
+    """One row per (day, vehicle, place) where a vehicle actually stood still.
+
+    Dwell reports have to aggregate every GPS point in the range, so they cannot
+    be fixed with an index — grouping 30 days of vehicle_activity_record by
+    location reads ~900k rows and spills the sort to disk (measured: 28 s).
+    Rolling the stops up once per day turns that into a scan of a few thousand
+    pre-aggregated rows. Rows with no stop time are dropped: a place the vehicle
+    only drove past is not a dwell.
+    """
+    __tablename__ = 'vehicle_stop_location_daily'
+    id = db.Column(db.Integer, primary_key=True)
+    task_date = db.Column(db.Date, nullable=False, index=True)
+    vehicle_no = db.Column(db.String(50), nullable=False)
+    # '0||' geofence prefix stripped; longest observed address is 137 chars.
+    location = db.Column(db.String(200), nullable=False)
+
+    visits = db.Column(db.Integer, default=0)
+    stop_seconds = db.Column(db.BigInteger, default=0)
+    points = db.Column(db.Integer, default=0)
+    longest_visit_seconds = db.Column(db.BigInteger, default=0)
+    first_seen = db.Column(db.String(50), nullable=True)
+    last_seen = db.Column(db.String(50), nullable=True)
+    latitude = db.Column(db.Numeric(10, 6), nullable=True)
+    longitude = db.Column(db.Numeric(10, 6), nullable=True)
+    built_at = db.Column(db.DateTime, default=pk_now)
+
+    __table_args__ = (
+        db.UniqueConstraint('task_date', 'vehicle_no', 'location',
+                            name='uq_stop_loc_day'),
+        db.Index('ix_stop_loc_day_date_loc', 'task_date', 'location'),
+        db.Index('ix_stop_loc_day_vehicle', 'vehicle_no', 'task_date'),
+    )
+
+    def __repr__(self):
+        return f'<VehicleStopLocationDaily {self.task_date} {self.vehicle_no}>'
+
+
+class VehicleActivityDaySummary(db.Model):
+    """One row per (day, vehicle) saying whether its tracker reported at all.
+
+    Device Health needs to name the units that went quiet, which means counting
+    each vehicle's points across the window. Done against the raw table that is
+    a group-by over ~900k rows with a 43 MB disk sort (measured: 23 s for 30
+    days); against this rollup it is 48 rows per day.
+    """
+    __tablename__ = 'vehicle_activity_day_summary'
+    id = db.Column(db.Integer, primary_key=True)
+    task_date = db.Column(db.Date, nullable=False, index=True)
+    vehicle_no = db.Column(db.String(50), nullable=False)
+    points = db.Column(db.Integer, default=0)
+    first_seen = db.Column(db.String(50), nullable=True)
+    last_seen = db.Column(db.String(50), nullable=True)
+    built_at = db.Column(db.DateTime, default=pk_now)
+
+    __table_args__ = (
+        db.UniqueConstraint('task_date', 'vehicle_no', name='uq_activity_day_vehicle'),
+    )
+
+    def __repr__(self):
+        return f'<VehicleActivityDaySummary {self.task_date} {self.vehicle_no}>'
+
+
+class VehicleStopRollupStatus(db.Model):
+    """Which days of the dwell rollup have been built.
+
+    An empty day is indistinguishable from an unbuilt day by looking at
+    vehicle_stop_location_daily alone, so record the build explicitly.
+    """
+    __tablename__ = 'vehicle_stop_rollup_status'
+    id = db.Column(db.Integer, primary_key=True)
+    task_date = db.Column(db.Date, nullable=False, unique=True, index=True)
+    built_at = db.Column(db.DateTime, nullable=False, default=pk_now)
+    source_points = db.Column(db.Integer, default=0)
+    rollup_rows = db.Column(db.Integer, default=0)
+
+    def __repr__(self):
+        return f'<VehicleStopRollupStatus {self.task_date} rows={self.rollup_rows}>'
+
+
 class VehicleTripRecord(db.Model):
     """PortalXS trip segments (ignition on→off), synced with GPS activity."""
     __tablename__ = 'vehicle_trip_record'

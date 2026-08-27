@@ -1,0 +1,214 @@
+{% extends 'base.html' %}
+{% from 'partials/nav_back_button.html' import nav_back_button with context %}
+{% from 'partials/report_date_range.html' import date_range %}
+{% block title %}Stoppage &amp; Dwell — Fleet Tracking{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<style>
+  .dw-place { font-weight: 600; }
+  .dw-rank {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 1.55rem; height: 1.55rem; border-radius: 50%;
+    background: #eef2ff; color: #3730a3; font-size: .72rem; font-weight: 700;
+  }
+  .dw-rank.is-top { background: #fee2e2; color: #991b1b; }
+  .dw-dur { font-variant-numeric: tabular-nums; font-weight: 700; color: #b45309; }
+  .dw-map-link { font-size: .75rem; white-space: nowrap; }
+  /* Addresses are long, so the card title has to wrap instead of ellipsing. */
+  @media (max-width: 767px) {
+    #dwPlaceList .trk-item-title {
+      white-space: normal;
+      line-height: 1.3;
+    }
+    #dwPlaceList .trk-item-lead { white-space: nowrap; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3 trk-page">
+  <div class="trk-head">
+    <h4>
+      <i class="bi bi-geo-alt"></i>
+      <span class="trk-head-text">Stoppage &amp; Dwell Time</span>
+    </h4>
+    <div class="trk-head-meta">
+      {% if selected_regno %}<strong>{{ selected_regno }}</strong> · {% endif %}
+      {{ date_range(from_date, to_date) }}
+      {% if locations %}· {{ locations|length }} place{{ 's' if locations|length != 1 }}{% endif %}
+    </div>
+    <div class="d-flex align-items-center gap-2 trk-head-actions">
+      <button type="button" class="trk-filters-toggle" data-trk-filters-toggle
+              aria-controls="trkFilters" aria-expanded="false">
+        <i class="bi bi-funnel"></i> Filters
+      </button>
+      {{ nav_back_button() }}
+    </div>
+  </div>
+
+  <form method="get" class="card mb-3 trk-filters" id="trkFilters"
+        data-trk-open="{{ '0' if locations else '1' }}">
+    <div class="card-body d-flex flex-wrap gap-3 align-items-end">
+      <div style="min-width: 220px;">
+        <label class="form-label small fw-semibold">Vehicle</label>
+        <select name="regno" class="form-select form-select-sm search-select">
+          <option value="">Whole fleet</option>
+          {% for v in vehicles_list %}
+          <option value="{{ v.portalxs_regno }}" {% if v.portalxs_regno == selected_regno %}selected{% endif %}>
+            {{ v.display_label or v.portalxs_regno }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="form-label small fw-semibold">From</label>
+        <input type="text" name="from_date" class="form-control form-control-sm datepicker" value="{{ from_date }}" required>
+      </div>
+      <div>
+        <label class="form-label small fw-semibold">To</label>
+        <input type="text" name="to_date" class="form-control form-control-sm datepicker" value="{{ to_date }}" required>
+      </div>
+      <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-search"></i> Run</button>
+    </div>
+  </form>
+
+  <div class="trk-body">
+    {% if error %}
+    <div class="alert alert-danger">{{ error }}</div>
+    {% endif %}
+
+    {% if coverage and not coverage.complete %}
+    <div class="alert alert-warning py-2 small mb-3">
+      <i class="bi bi-hourglass-split"></i>
+      Showing {{ coverage.days_ready }} of {{ coverage.days_requested }} days.
+      {{ coverage.days_missing }} day{{ 's' if coverage.days_missing != 1 }} still need
+      rolling up — reload in a moment to include {{ 'them' if coverage.days_missing != 1 else 'it' }}.
+    </div>
+    {% endif %}
+
+    <div class="trk-kpis">
+      <div class="trk-kpi">
+        <div class="trk-kpi-label">Places</div>
+        <div class="trk-kpi-val is-primary">{{ locations|length }}</div>
+      </div>
+      <div class="trk-kpi">
+        <div class="trk-kpi-label">Total standing</div>
+        <div class="trk-kpi-val is-warning">{{ total_stop_text }}</div>
+      </div>
+      <div class="trk-kpi">
+        <div class="trk-kpi-label">Visits</div>
+        <div class="trk-kpi-val is-info">{{ '{:,}'.format(total_visits) }}</div>
+      </div>
+      <div class="trk-kpi">
+        <div class="trk-kpi-label">Vehicles</div>
+        <div class="trk-kpi-val is-success">{{ per_vehicle|length }}</div>
+      </div>
+    </div>
+
+    {% if locations %}
+    <div class="trk-section-title">Where time is spent</div>
+    <input type="search" class="trk-search trk-mobile-only mb-2" placeholder="Search places…"
+           data-trk-search="#dwPlaceList" aria-label="Search places">
+
+    <!-- Desktop: ranked places -->
+    <div class="card trk-desktop-only mb-3">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span>Top locations by standing time</span>
+        <span class="trk-count">{{ locations|length }} places</span>
+      </div>
+      <div class="table-responsive" style="max-height: 520px; overflow-y: auto;">
+        <!-- Phone cards are generated from these rows rather than rendered a
+             second time; see data-trk-cards in static/js/tracking_reports.js. -->
+        <table class="table table-sm table-hover mb-0" data-mp-skip-cards="1"
+               data-trk-cards="dwPlaceList"
+               data-trk-card-title="1" data-trk-card-lead="2"
+               data-trk-card-skip="0,1,2" data-trk-card-full="7">
+          <thead class="sticky-top bg-white">
+            <tr>
+              <th style="width: 3rem;">#</th><th>Location</th>
+              <th class="text-end">Standing</th><th class="text-end">Visits</th>
+              <th class="text-end">Avg visit</th><th class="text-end">Longest</th>
+              <th class="text-end">Vehicles</th><th>Map</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for l in locations %}
+            <tr>
+              <td><span class="dw-rank {{ 'is-top' if loop.index <= 3 }}">{{ loop.index }}</span></td>
+              <td class="dw-place">{{ l.location }}</td>
+              <td class="text-end dw-dur">{{ l.stop_text }}</td>
+              <td class="text-end">{{ '{:,}'.format(l.visits) }}</td>
+              <td class="text-end small">{{ l.avg_visit_text }}</td>
+              <td class="text-end small">{{ l.longest_text }}</td>
+              <td class="text-end">{{ l.vehicles }}</td>
+              <td>
+                {% if l.latitude and l.longitude %}
+                <a class="dw-map-link" target="_blank" rel="noopener"
+                   href="https://www.google.com/maps?q={{ l.latitude }},{{ l.longitude }}">
+                  <i class="bi bi-map"></i> Map
+                </a>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Mobile: place cards with standing time up front (built from the table) -->
+    <div class="trk-mobile-only mb-3">
+      <div class="trk-list" id="dwPlaceList"></div>
+    </div>
+    {% elif not error %}
+    <div class="alert alert-info">No stops of a minute or more recorded in this period.</div>
+    {% endif %}
+
+    {% if per_vehicle %}
+    <div class="trk-section-title">Standing time per vehicle</div>
+
+    <div class="card trk-desktop-only">
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0" data-mp-skip-cards="1"
+               data-trk-cards="dwVehicleList"
+               data-trk-card-title="0" data-trk-card-lead="1"
+               data-trk-card-skip="0,1">
+          <thead>
+            <tr>
+              <th>Vehicle</th><th class="text-end">Standing</th>
+              <th class="text-end">Per day</th><th class="text-end">Visits</th>
+              <th class="text-end">Places</th><th class="text-end">Days</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for v in per_vehicle %}
+            <tr>
+              <td class="fw-semibold">{{ v.display_name }}</td>
+              <td class="text-end dw-dur">{{ v.stop_text }}</td>
+              <td class="text-end small">{{ v.avg_per_day_text }}</td>
+              <td class="text-end">{{ '{:,}'.format(v.visits) }}</td>
+              <td class="text-end">{{ v.places }}</td>
+              <td class="text-end">{{ v.days }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="trk-mobile-only">
+      <div class="trk-list" id="dwVehicleList"></div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="{{ url_for('static', filename='js/tracking_reports.js') }}?v=1001"></script>
+<script>
+flatpickr('.datepicker', { dateFormat: 'Y-m-d', maxDate: new Date() });
+</script>
+{% endblock %}

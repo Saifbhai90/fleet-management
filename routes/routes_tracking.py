@@ -19,7 +19,8 @@ from services.portalxs_service import (
     fetch_live_positions, fetch_mileage,
     fetch_fleet_report, fetch_fleet_report_bulk, fetch_trends_with_status,
     fetch_fleet_report_batch, fleet_report_cached,
-    fetch_alerts, fetch_geofences, list_cached_alerts,
+    fetch_alerts, fetch_geofences, list_cached_alerts, fetch_nearest_vehicles,
+    nearest_reference_position,
     get_cached_positions, get_summary_stats,
     get_all_vehicles_for_account, link_vehicle, auto_link_vehicles,
     create_account, update_account, delete_account,
@@ -45,6 +46,19 @@ from services.activity_record_service import (
     mark_activity_sync_status,
 )
 from services.trip_record_service import ensure_trips_for_range, load_trips_from_db
+from services.device_health_service import (
+    default_window as device_health_window,
+    device_event_log,
+    device_event_summary,
+    reporting_gaps,
+)
+from services.activity_rollup_service import (
+    coverage as rollup_coverage,
+    dwell_by_location,
+    dwell_by_vehicle,
+    ensure_for_request as ensure_rollup_days,
+    format_duration,
+)
 from utils import pk_now, pk_date, parse_date, safe_float
 from datetime import datetime, timedelta, date
 import csv
@@ -1147,6 +1161,206 @@ def tracking_trends():
         trends=trends,
         trend_source=trend_source,
         warning=warning,
+        error=error,
+        accounts=accounts,
+        current_account_id=acct_id,
+        **_nav_back_ctx(url_for('tracking_dashboard')),
+    )
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# DEVICE HEALTH / TAMPER
+# ════════════════════════════════════════════════════════════════════════════
+
+@app.route('/tracking/device-health')
+def tracking_device_health():
+    """Which GPS units are failing, and which have been unplugged.
+
+    Reads the activity stream the trackers already write, so there is no SOAP
+    call and nothing to wait for.
+    """
+    acct_id = _get_account_id()
+    accounts = _get_all_accounts()
+    vehicles_list = get_all_vehicles_for_account(acct_id) if acct_id else []
+
+    default_from, default_to = device_health_window(7)
+    from_date = _sanitize_date(request.args.get('from_date', ''),
+                               default_from.strftime('%Y-%m-%d'))
+    to_date = _sanitize_date(request.args.get('to_date', ''),
+                             default_to.strftime('%Y-%m-%d'))
+    regno = request.args.get('regno', '').strip()
+
+    rows = []
+    events = []
+    gaps = []
+    coverage_info = None
+    error = None
+    if acct_id:
+        fd, td = _parse_ymd(from_date), _parse_ymd(to_date)
+        try:
+            # Reporting gaps read the daily rollup, so make sure it covers the
+            # window before asking it which vehicles went quiet.
+            ensure_rollup_days(fd, td)
+            coverage_info = rollup_coverage(fd, td)
+            rows = device_event_summary(fd, td, regno)
+            events = device_event_log(fd, td, regno, limit=400)
+            gaps = reporting_gaps(fd, td, vehicles_list, regno)
+        except Exception as e:
+            db.session.rollback()
+            error = str(e)[:240]
+            logger.exception('device health report failed acct=%s', acct_id)
+
+    names = _mileage_display_names(vehicles_list)
+    for row in rows:
+        key = normalize_reg_key(row['vehicle_no'])
+        row['display_name'] = names.get(key) or row['vehicle_no']
+    for event in events:
+        key = normalize_reg_key(event['vehicle_no'])
+        event['display_name'] = names.get(key) or event['vehicle_no']
+
+    return render_template(
+        'tracking/device_health.html',
+        vehicles_list=vehicles_list,
+        selected_regno=regno,
+        from_date=from_date,
+        to_date=to_date,
+        rows=rows,
+        events=events,
+        gaps=gaps,
+        coverage=coverage_info,
+        error=error,
+        tamper_count=sum(1 for r in rows if r['tamper_suspected']),
+        critical_count=sum(1 for r in rows if r['status'] == 'critical'),
+        silent_count=sum(1 for g in gaps if g['silent']),
+        accounts=accounts,
+        current_account_id=acct_id,
+        **_nav_back_ctx(url_for('tracking_dashboard')),
+    )
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# STOPPAGE / DWELL TIME BY LOCATION
+# ════════════════════════════════════════════════════════════════════════════
+
+@app.route('/tracking/dwell-report')
+def tracking_dwell_report():
+    """Where the fleet spends its standing time.
+
+    Served from vehicle_stop_location_daily; any days of the range that have
+    not been rolled up yet are built here within a time budget, and the page
+    reports the shortfall rather than stalling on a wide range.
+    """
+    acct_id = _get_account_id()
+    accounts = _get_all_accounts()
+    vehicles_list = get_all_vehicles_for_account(acct_id) if acct_id else []
+
+    default_from, default_to = device_health_window(7)
+    from_date = _sanitize_date(request.args.get('from_date', ''),
+                               default_from.strftime('%Y-%m-%d'))
+    to_date = _sanitize_date(request.args.get('to_date', ''),
+                             default_to.strftime('%Y-%m-%d'))
+    regno = request.args.get('regno', '').strip()
+
+    locations = []
+    per_vehicle = []
+    build_info = None
+    coverage_info = None
+    error = None
+    if acct_id:
+        fd, td = _parse_ymd(from_date), _parse_ymd(to_date)
+        try:
+            build_info = ensure_rollup_days(fd, td)
+            coverage_info = rollup_coverage(fd, td)
+            locations = dwell_by_location(fd, td, regno, limit=100)
+            per_vehicle = dwell_by_vehicle(fd, td, regno, limit=60)
+        except Exception as e:
+            db.session.rollback()
+            error = str(e)[:240]
+            logger.exception('dwell report failed acct=%s', acct_id)
+
+    names = _mileage_display_names(vehicles_list)
+    for row in per_vehicle:
+        key = normalize_reg_key(row['vehicle_no'])
+        row['display_name'] = names.get(key) or row['vehicle_no']
+
+    total_seconds = sum(r['stop_seconds'] for r in locations)
+    return render_template(
+        'tracking/dwell_report.html',
+        total_stop_text=format_duration(total_seconds),
+        vehicles_list=vehicles_list,
+        selected_regno=regno,
+        from_date=from_date,
+        to_date=to_date,
+        locations=locations,
+        per_vehicle=per_vehicle,
+        coverage=coverage_info,
+        build_info=build_info,
+        error=error,
+        total_stop_seconds=total_seconds,
+        total_stop_hours=round(total_seconds / 3600.0, 1),
+        total_visits=sum(r['visits'] for r in locations),
+        accounts=accounts,
+        current_account_id=acct_id,
+        **_nav_back_ctx(url_for('tracking_dashboard')),
+    )
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# DISPATCH ASSIST - nearest vehicle to a reference vehicle
+# ════════════════════════════════════════════════════════════════════════════
+
+@app.route('/tracking/dispatch')
+def tracking_dispatch():
+    """Nearest vehicles to a chosen one, with their current task state.
+
+    The upstream endpoint anchors on a single vehicle and returns its
+    neighbours in proximity order, so the reference vehicle is the emergency's
+    location stand-in: pick the unit closest to the scene.
+    """
+    acct_id = _get_account_id()
+    accounts = _get_all_accounts()
+    vehicles_list = get_all_vehicles_for_account(acct_id) if acct_id else []
+
+    regno = request.args.get('regno', '').strip()
+    only_free = request.args.get('only_free', '') == '1'
+
+    nearby = []
+    error = None
+    if acct_id and regno:
+        try:
+            nearby = fetch_nearest_vehicles(acct_id, regno)
+        except Exception as e:
+            db.session.rollback()
+            error = friendly_portalxs_error(e)
+            logger.warning('dispatch nearest fetch failed regno=%s: %s', regno, e)
+
+    busy = _ufone_tasks_for_tracking() if nearby else {}
+    names = _mileage_display_names(vehicles_list)
+    for row in nearby:
+        key = normalize_reg_key(row['regno'])
+        row['display_name'] = names.get(key) or row['regno']
+        task = busy.get(row['regno']) or busy.get(key) or {}
+        row['task'] = task
+        row['available'] = not task
+        row['is_reference'] = key == normalize_reg_key(regno)
+
+    # When the anchor comes back among its own neighbours it is not a dispatch
+    # candidate; when it does not, its position still has to be shown.
+    candidates = [r for r in nearby if not r['is_reference']]
+    reference = next((r for r in nearby if r['is_reference']), None)
+    if reference is None and regno:
+        reference = nearest_reference_position(acct_id, regno)
+    if only_free:
+        candidates = [r for r in candidates if r['available']]
+
+    return render_template(
+        'tracking/dispatch.html',
+        vehicles_list=vehicles_list,
+        selected_regno=regno,
+        only_free=only_free,
+        reference=reference,
+        candidates=candidates,
+        free_count=sum(1 for r in candidates if r['available']),
         error=error,
         accounts=accounts,
         current_account_id=acct_id,

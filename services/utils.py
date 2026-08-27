@@ -424,6 +424,20 @@ def normalize_vehicle_reg_key(reg: Optional[str]) -> str:
     return re.sub(r'[^A-Za-z0-9]', '', strip_ufone_reg_tag(reg).upper())
 
 
+def clean_geo_location(raw: Optional[str]) -> str:
+    """Strip the geofence-id prefix PortalXS puts on location/landmark strings.
+
+    Both the activity records and the live SOAP payloads return the address as
+    "<geofence id>||<address>", e.g. "0||Govt College of Technology, Multan".
+    """
+    s = (raw or '').strip()
+    if not s:
+        return ''
+    if '||' in s:
+        s = s.split('||', 1)[1].strip()
+    return s
+
+
 def safe_float(value, default: float = 0.0) -> float:
     """Numeric fields from the tracker APIs arrive as '', '-' or 'N/A' as well."""
     try:
