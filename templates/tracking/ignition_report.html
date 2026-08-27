@@ -1,0 +1,276 @@
+{% extends 'base.html' %}
+{% from 'partials/nav_back_button.html' import nav_back_button with context %}
+{% from 'partials/report_date_range.html' import date_range %}
+{% block title %}Ignition On/Off — Fleet Tracking{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/tracking_reports.css') }}?v=1001">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  .ig-badge { font-size: .7rem; padding: .14rem .45rem; border-radius: 999px; font-weight: 600; }
+  .ig-idle { background: #fff3cd; color: #664d03; }
+  .ig-move { background: #d1e7dd; color: #0f5132; }
+  .ig-time { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .ig-loc { color: #64748b; font-size: .78rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3 trk-page">
+  <div class="trk-head">
+    <h4>
+      <i class="bi bi-key"></i>
+      <span class="trk-head-text">Ignition On/Off</span>
+    </h4>
+    <div class="trk-head-meta">
+      {{ date_range(from_date, to_date) }}
+      {% if selected_regno %} · {{ selected_regno }}{% endif %}
+      {% if total_cycles %} · {{ total_cycles }} cycles{% endif %}
+    </div>
+    <div class="d-flex align-items-center gap-2 trk-head-actions">
+      <button type="button" class="trk-filters-toggle" data-trk-filters-toggle
+              aria-controls="trkFilters" aria-expanded="false">
+        <i class="bi bi-funnel"></i> Filters
+      </button>
+      {{ nav_back_button() }}
+    </div>
+  </div>
+
+  <form method="get" class="card mb-3 trk-filters" id="trkFilters"
+        data-trk-open="{{ '0' if per_vehicle else '1' }}">
+    <div class="card-body d-flex flex-wrap gap-3 align-items-end">
+      <div style="min-width: 220px;">
+        <label class="form-label small fw-semibold">Vehicle</label>
+        <select name="regno" class="form-select form-select-sm search-select">
+          <option value="">All vehicles</option>
+          {% for v in vehicles_list %}
+          <option value="{{ v.portalxs_regno }}" {% if v.portalxs_regno == selected_regno %}selected{% endif %}>
+            {{ v.display_label or v.portalxs_regno }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="form-label small fw-semibold">From</label>
+        <input type="text" name="from_date" class="form-control form-control-sm datepicker" value="{{ from_date }}" required>
+      </div>
+      <div>
+        <label class="form-label small fw-semibold">To</label>
+        <input type="text" name="to_date" class="form-control form-control-sm datepicker" value="{{ to_date }}" required>
+      </div>
+      <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-search"></i> Run</button>
+    </div>
+  </form>
+
+  <div class="trk-body">
+    {% if error %}
+    <div class="alert alert-danger">{{ error }}</div>
+    {% endif %}
+
+    <div class="alert alert-info py-2 small mb-3">
+      <i class="bi bi-info-circle"></i>
+      Ye report <strong>PortalXS</strong> trips se banti hai (IGON → IGOFF) — Ufone se nahi.
+      History page sirf chalti gaariyan dikhati hai; yahan <strong>idle</strong> cycles
+      (engine on, 0 km) bhi dikhte hain.
+      {% if source_label %}
+      <span class="badge bg-secondary ms-1">Source: {{ source_label }}</span>
+      {% endif %}
+    </div>
+
+    {% if coverage and not coverage.complete and not selected_regno %}
+    <div class="alert alert-warning py-2 small mb-3">
+      <i class="bi bi-clock-history"></i>
+      Is range ke <strong>{{ coverage.days_ready }}</strong> din ka trip data save hai,
+      <strong>{{ coverage.days_missing }}</strong> din baqi.
+      Kisi gaari ko select karke Run karein — us gaari ke missing din PortalXS se live aa jayenge.
+      Poori fleet GPS Activity sync ke sath khud bharti rehti hai.
+    </div>
+    {% endif %}
+
+    {% if per_vehicle or cycles %}
+    <div class="trk-kpis">
+      <div class="trk-kpi">
+        <div class="trk-kpi-label">Cycles</div>
+        <div class="trk-kpi-val is-primary">{{ total_cycles }}</div>
+      </div>
+      <div class="trk-kpi">
+        <div class="trk-kpi-label">Moving</div>
+        <div class="trk-kpi-val is-success">{{ moving_cycles }}</div>
+      </div>
+      <div class="trk-kpi">
+        <div class="trk-kpi-label">Idle (0 km)</div>
+        <div class="trk-kpi-val is-warning">{{ idle_cycles }}</div>
+      </div>
+      <div class="trk-kpi">
+        <div class="trk-kpi-label">Engine on</div>
+        <div class="trk-kpi-val is-info">{{ total_on_text }}</div>
+      </div>
+    </div>
+
+    {% if daily|length > 1 %}
+    <div class="trk-chart-card mb-3">
+      <div class="trk-chart-box"><canvas id="ignitionChart"></canvas></div>
+    </div>
+    {% endif %}
+
+    <!-- Desktop: per-vehicle; phone cards from this table -->
+    <div class="card trk-desktop-only mb-3">
+      <div class="card-header py-2 small fw-semibold">Per-vehicle ignition</div>
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0" data-mp-skip-cards="1"
+               data-trk-cards="igVehicleList"
+               data-trk-card-title="0" data-trk-card-lead="1">
+          <thead>
+            <tr>
+              <th>Vehicle</th><th>Cycles</th><th>Moving</th><th>Idle</th>
+              <th>Engine on</th><th>Avg cycle</th><th>Distance (km)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in per_vehicle %}
+            <tr>
+              <td>
+                <a href="{{ url_for('tracking_ignition_report', regno=r.vehicle_no, from_date=from_date, to_date=to_date) }}">
+                  {{ r.display_name }}
+                </a>
+              </td>
+              <td>{{ r.cycles }}</td>
+              <td>{{ r.moving_cycles }}</td>
+              <td>{{ r.idle_cycles }}</td>
+              <td class="ig-time">{{ r.on_text }}</td>
+              <td class="ig-time">{{ r.avg_cycle_text }}</td>
+              <td>{{ r.distance }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="trk-mobile-only">
+      <div class="trk-section-title">Per-vehicle ignition</div>
+      <input type="search" class="trk-search" placeholder="Search vehicles..."
+             data-trk-search="igVehicleList">
+      <div class="trk-list" id="igVehicleList"></div>
+    </div>
+
+    <!-- Cycle log -->
+    <div class="card trk-desktop-only">
+      <div class="card-header py-2 small fw-semibold">Ignition cycles</div>
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0" data-mp-skip-cards="1"
+               data-trk-cards="igCycleList"
+               data-trk-card-title="1" data-trk-card-lead="4">
+          <thead>
+            <tr>
+              <th>Date</th><th>Vehicle</th><th>On</th><th>Off</th>
+              <th>Duration</th><th>Kind</th><th>km</th><th>Location</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for c in cycles %}
+            <tr>
+              <td>{{ c.task_date }}</td>
+              <td>{{ c.display_name }}</td>
+              <td class="ig-time">{{ c.igon_time or '—' }}</td>
+              <td class="ig-time">{{ c.igoff_time or '—' }}</td>
+              <td class="ig-time">{{ c.on_text }}</td>
+              <td>
+                {% if c.idle %}
+                <span class="ig-badge ig-idle">idle</span>
+                {% else %}
+                <span class="ig-badge ig-move">moving</span>
+                {% endif %}
+              </td>
+              <td>{{ c.distance }}</td>
+              <td class="ig-loc">{{ c.landmark or '—' }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="trk-mobile-only">
+      <div class="trk-section-title">Ignition cycles</div>
+      <input type="search" class="trk-search" placeholder="Search cycles..."
+             data-trk-search="igCycleList">
+      <div class="trk-list" id="igCycleList"></div>
+    </div>
+
+    {% elif not error %}
+    <div class="alert alert-info">
+      Is range ka koi ignition cycle save nahi hai.
+      {% if not selected_regno %}
+      Kisi gaari ko select karke PortalXS se live fetch karein.
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="{{ url_for('static', filename='js/tracking_reports.js') }}?v=1001"></script>
+<script>
+flatpickr('.datepicker', { dateFormat: 'Y-m-d', maxDate: new Date() });
+
+(function() {
+  var daily = {{ daily | tojson }};
+  var canvas = document.getElementById('ignitionChart');
+  if (typeof Chart === 'undefined' || !canvas || !daily || !daily.length) return;
+
+  var chart;
+  function draw() {
+    var compact = window.innerWidth <= 767;
+    if (chart) chart.destroy();
+    chart = new Chart(canvas, {
+      type: 'bar',
+      data: {
+        labels: daily.map(function(d) { return d.date_text; }),
+        datasets: [
+          {
+            label: 'Moving',
+            data: daily.map(function(d) { return Number(d.moving_cycles) || 0; }),
+            backgroundColor: 'rgba(25,135,84,0.75)'
+          },
+          {
+            label: 'Idle (0 km)',
+            data: daily.map(function(d) { return Number(d.idle_cycles) || 0; }),
+            backgroundColor: 'rgba(255,193,7,0.75)'
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: true, position: 'bottom' },
+          title: { display: true, text: 'Ignition cycles per day' }
+        },
+        scales: {
+          x: {
+            stacked: true,
+            ticks: {
+              font: { size: 10 },
+              maxRotation: compact ? 60 : 0,
+              autoSkip: true,
+              maxTicksLimit: compact ? 7 : 20
+            }
+          },
+          y: { stacked: true, beginAtZero: true, ticks: { font: { size: 10 } } }
+        }
+      }
+    });
+  }
+  draw();
+  var timer;
+  window.addEventListener('resize', function() {
+    clearTimeout(timer);
+    timer = setTimeout(draw, 250);
+  });
+})();
+</script>
+{% endblock %}

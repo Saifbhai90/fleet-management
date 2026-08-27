@@ -77,6 +77,7 @@
       </div>
       {% else %}
       <form method="post" action="{{ url_for('tracking_score_trend_snapshot') }}" class="mt-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="from_date" value="{{ from_date }}">
         <input type="hidden" name="to_date" value="{{ to_date }}">
         <button type="submit" class="btn btn-sm btn-warning">
@@ -86,6 +87,17 @@
       {% endif %}
     </div>
     {% endif %}
+
+    <div class="alert alert-info py-2 small mb-3">
+      <i class="bi bi-info-circle"></i>
+      Table ke <strong>Alerts</strong> column mein sirf <em>count</em> hai — PortalXS
+      fleet report type (Battery / Speed / Geofence) nahi bhejta.
+      Type wali detail
+      <a href="{{ url_for('tracking_alerts') }}">Fleet Alerts</a> page pe hai
+      (open + history), aur tracker disconnect / battery events
+      <a href="{{ url_for('tracking_device_health', from_date=from_date, to_date=to_date) }}">Device Health</a>
+      pe.
+    </div>
 
     {% if daily %}
     <div class="trk-kpis">

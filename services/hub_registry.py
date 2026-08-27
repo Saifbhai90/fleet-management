@@ -366,6 +366,7 @@ HUBS = {
             'tracking_dispatch',
             'tracking_score_trend',
             'tracking_score_trend_snapshot',
+            'tracking_ignition_report',
         ),
         'sections': [
             {
@@ -393,6 +394,7 @@ HUBS = {
                     _item('tracking_device_health', 'Device Health & Tamper', 'fa-solid fa-microchip', 'rc-tile--tracker', 'tracking_reports'),
                     _item('tracking_dwell_report', 'Stoppage & Dwell Time', 'fa-solid fa-hourglass-half', 'rc-tile--tracker', 'tracking_reports'),
                     _item('tracking_score_trend', 'Fleet Score Trend', 'fa-solid fa-arrow-trend-up', 'rc-tile--tracker', 'tracking_reports'),
+                    _item('tracking_ignition_report', 'Ignition On/Off', 'fa-solid fa-key', 'rc-tile--tracker', 'tracking_reports'),
                     _item('tracking_alerts', 'Alerts', 'fa-solid fa-bell', 'rc-tile--tracker', 'tracking_alerts'),
                 ],
             },

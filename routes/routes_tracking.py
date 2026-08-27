@@ -68,6 +68,14 @@ from services.fleet_score_service import (
     start_snapshot as start_fleet_score_snapshot,
     vehicle_score_summary,
 )
+from services.ignition_report_service import (
+    coverage as ignition_coverage,
+    default_window as ignition_window,
+    ignition_by_vehicle,
+    ignition_daily,
+    ignition_log,
+    refresh_vehicle as refresh_ignition_vehicle,
+)
 from utils import pk_now, pk_date, parse_date, safe_float
 from datetime import datetime, timedelta, date
 import csv
@@ -1406,6 +1414,95 @@ def tracking_score_trend_snapshot():
               f'SOAP calls leta hai, to thora waqt lagega.', 'success')
     return redirect(url_for('tracking_score_trend',
                             from_date=from_date, to_date=to_date))
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# IGNITION ON/OFF - PortalXS trip cycles (not Ufone)
+# ════════════════════════════════════════════════════════════════════════════
+
+@app.route('/tracking/ignition-report')
+def tracking_ignition_report():
+    """Every ignition on→off cycle from PortalXS, including idle (0 km) ones.
+
+    History already shows moving trips; this page keeps the cycles where the
+    engine ran without leaving the spot, which History hides. Source is always
+    PortalXS via vehicle_trip_record — never Ufone.
+    """
+    acct_id = _get_account_id()
+    accounts = _get_all_accounts()
+    vehicles_list = get_all_vehicles_for_account(acct_id) if acct_id else []
+
+    default_from, default_to = ignition_window(7)
+    from_date = _sanitize_date(request.args.get('from_date', ''),
+                               default_from.strftime('%Y-%m-%d'))
+    to_date = _sanitize_date(request.args.get('to_date', ''),
+                             default_to.strftime('%Y-%m-%d'))
+    regno = request.args.get('regno', '').strip()
+
+    per_vehicle = []
+    cycles = []
+    daily = []
+    coverage_info = None
+    source_label = ''
+    error = None
+    if acct_id:
+        fd, td = _parse_ymd(from_date), _parse_ymd(to_date)
+        try:
+            coverage_info = ignition_coverage(fd, td)
+            # Selecting a vehicle refreshes that unit from PortalXS so the
+            # detail is live; the fleet summary stays DB-backed (one SOAP call
+            # per vehicle per day would turn a page load into minutes).
+            if regno:
+                selected = next(
+                    (v for v in vehicles_list if v.get('portalxs_regno') == regno),
+                    None,
+                )
+                refreshed, err, source_label = refresh_ignition_vehicle(
+                    acct_id, regno, fd, td,
+                    vehicle_no=(selected or {}).get('vehicle_no') or '',
+                )
+                if err and not refreshed:
+                    error = err
+            per_vehicle = ignition_by_vehicle(fd, td, regno, limit=80)
+            cycles = ignition_log(fd, td, regno, limit=400)
+            daily = ignition_daily(fd, td, regno)
+        except Exception as e:
+            db.session.rollback()
+            error = str(e)[:240]
+            logger.exception('ignition report failed acct=%s', acct_id)
+
+    names = _mileage_display_names(vehicles_list)
+    for row in per_vehicle:
+        key = normalize_reg_key(row['vehicle_no'])
+        row['display_name'] = names.get(key) or row['vehicle_no']
+    for row in cycles:
+        key = normalize_reg_key(row['vehicle_no'])
+        row['display_name'] = names.get(key) or row['vehicle_no']
+
+    total_cycles = sum(r['cycles'] for r in per_vehicle)
+    idle_cycles = sum(r['idle_cycles'] for r in per_vehicle)
+    on_seconds = sum(r['on_seconds'] for r in per_vehicle)
+    return render_template(
+        'tracking/ignition_report.html',
+        vehicles_list=vehicles_list,
+        selected_regno=regno,
+        from_date=from_date,
+        to_date=to_date,
+        per_vehicle=per_vehicle,
+        cycles=cycles,
+        daily=daily,
+        coverage=coverage_info,
+        source_label=source_label,
+        error=error,
+        total_cycles=total_cycles,
+        idle_cycles=idle_cycles,
+        moving_cycles=total_cycles - idle_cycles,
+        total_on_text=format_duration(on_seconds),
+        total_distance=round(sum(r['distance'] for r in per_vehicle), 1),
+        accounts=accounts,
+        current_account_id=acct_id,
+        **_nav_back_ctx(url_for('tracking_dashboard')),
+    )
 
 
 # ════════════════════════════════════════════════════════════════════════════
