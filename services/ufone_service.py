@@ -2001,6 +2001,7 @@ def load_today_in_process_tasks(account_id: int = None, limit: int = 400) -> lis
     Small payload — never ships the full-day completed Green/Yellow/… set.
     account_id is accepted for API symmetry; EMG counts use task_date only
     (same as fetch_dashboard_counts).
+    Pass limit=None (or <=0) to return every open row (Fleet Tracking map).
     """
     from datetime import date as _date
     from sqlalchemy import or_
@@ -2024,17 +2025,22 @@ def load_today_in_process_tasks(account_id: int = None, limit: int = 400) -> lis
         ))
         .order_by(EmergencyTaskRecord.id.desc())
     )
-    if limit:
+    if limit is not None and int(limit) > 0:
         q = q.limit(int(limit))
     rows = q.all()
     return [_emg_row_to_task(r) for r in rows]
 
 
+def _task_id_digits(tid_raw) -> str:
+    return re.sub(r'\D', '', str(tid_raw or '').replace('PHF-', '').replace('phf-', ''))
+
+
 def build_active_ufone_tasks_by_reg() -> dict:
     """Map normalized vehicle reg → today's open Ufone/EMG task (Fleet Tracking).
 
-    Primary: EmergencyTaskRecord Incomplete/In-Process rows.
-    Fallback: ufone_task_cache open rows (same day) not already in map.
+    Primary: EmergencyTaskRecord Incomplete/In-Process rows (all of today).
+    Fallback: ufone_task_cache open rows (same day) not already in map —
+    but never when EMG already marks that task Completed/Cancelled (stale cache).
     """
     from services.utils import normalize_vehicle_reg_key
 
@@ -2043,7 +2049,7 @@ def build_active_ufone_tasks_by_reg() -> dict:
         key = normalize_vehicle_reg_key(amb)
         if not key or key in out:
             return
-        tid_num = re.sub(r'\D', '', str(tid_raw or '').replace('PHF-', '').replace('phf-', ''))
+        tid_num = _task_id_digits(tid_raw)
         if not tid_num:
             return
         out[key] = {
@@ -2056,17 +2062,32 @@ def build_active_ufone_tasks_by_reg() -> dict:
         }
 
     out = {}
-    for t in load_today_in_process_tasks():
+    # No 400-cap here: Fleet map must see every open amb, not only newest IDs.
+    for t in load_today_in_process_tasks(limit=None):
         _add(out, t.get('ambulance') or '', t.get('task_id') or t.get('id'),
              t.get('patient_name'), t.get('status'), t.get('district'), t.get('address'))
 
     try:
         from datetime import datetime as _dt
         from sqlalchemy import or_
-        from models import UfoneTaskCache
+        from models import EmergencyTaskRecord, UfoneTaskCache
         from utils import pk_date
 
         today = pk_date()
+        # EMG is source of truth for close: skip cache rows already Completed today.
+        closed_tids = set()
+        for (tid_ext, status) in (
+            EmergencyTaskRecord.query
+            .filter(EmergencyTaskRecord.task_date == today)
+            .with_entities(EmergencyTaskRecord.task_id_ext, EmergencyTaskRecord.status)
+            .all()
+        ):
+            if not _status_is_closed(status):
+                continue
+            digits = _task_id_digits(tid_ext)
+            if digits:
+                closed_tids.add(digits)
+
         start = _dt.combine(today, _dt.min.time())
         rows = (
             UfoneTaskCache.query
@@ -2080,6 +2101,9 @@ def build_active_ufone_tasks_by_reg() -> dict:
         )
         for row in rows:
             if _status_is_closed(row.status):
+                continue
+            tid_num = _task_id_digits(row.task_id)
+            if tid_num and tid_num in closed_tids:
                 continue
             _add(out, row.ambulance_reg or '', row.task_id, row.patient_name,
                  row.status, row.district, row.address or '')
@@ -3052,6 +3076,22 @@ def sync_emergency_report_to_db(account_id: int, items: list,
             apply_api_fields_to_row(row, fields, account_id, now_dt)
             existing[tid] = row
             upserted += 1
+            # Keep Fleet Dashboard task badges in sync: EMG close must clear
+            # stale Incomplete rows in ufone_task_cache (VPS/list poll may lag).
+            if _status_is_closed(new_status):
+                try:
+                    tid_num = _task_id_digits(tid)
+                    cache_keys = {str(tid), tid_num, f'PHF-{tid_num}'} if tid_num else {str(tid)}
+                    cache_keys.discard('')
+                    for crow in (
+                        UfoneTaskCache.query
+                        .filter(UfoneTaskCache.task_id.in_(list(cache_keys)))
+                        .all()
+                    ):
+                        if not _status_is_closed(crow.status):
+                            crow.status = new_status or 'Completed'
+                except Exception:
+                    pass
         db.session.commit()
         if events:
             try:

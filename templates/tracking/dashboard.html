@@ -604,8 +604,48 @@
   #taskModal .uf-fgrid.uf-general { grid-template-columns: repeat(4, 1fr); }
   #taskModal .uf-frow { display: flex; gap: 8px; font-size: 13px; margin-bottom: 4px; }
   #taskModal .uf-frow label { flex: 0 0 38%; color: #64748b; font-weight: 600; margin: 0; }
+  /* Same as Ufone dashboard: table on desktop, timeline only on phones. */
+  #taskModal .uf-ct-timeline { display: none; }
   @media (max-width: 768px) {
     #taskModal .uf-fgrid, #taskModal .uf-fgrid.uf-general { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 700px) {
+    #taskModal .uf-comments-table-wrap { display: none; }
+    #taskModal .uf-ct-timeline { display: block; position: relative; padding-left: 20px; }
+    #taskModal .uf-ct-timeline::before {
+      content: ''; position: absolute; left: 7px; top: 10px; bottom: 10px;
+      width: 2px; background: #cbd5e1;
+    }
+    #taskModal .uf-ct-item { position: relative; margin-bottom: 12px; }
+    #taskModal .uf-ct-item::before {
+      content: ''; position: absolute; left: -17px; top: 14px;
+      width: 10px; height: 10px; border-radius: 50%;
+      background: #2563eb; border: 2px solid #fff;
+    }
+    #taskModal .uf-ct-item.is-done::before { background: #16a34a; }
+    #taskModal .uf-ct-box {
+      background: #fff; border: 1px solid #e2e8f0; border-radius: 12px;
+      padding: 10px 14px; box-shadow: 0 1px 2px rgba(0,0,0,.04);
+    }
+    #taskModal .uf-ct-meta {
+      display: flex; justify-content: space-between; align-items: center;
+      gap: 8px; margin-bottom: 6px; font-size: 11px;
+    }
+    #taskModal .uf-ct-author {
+      display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+      min-width: 0; font-weight: 600; color: #0f172a;
+    }
+    #taskModal .uf-ct-tag {
+      background: #eff6ff; color: #2563eb; padding: 2px 6px;
+      border-radius: 4px; font-size: 10px; font-weight: 600;
+    }
+    #taskModal .uf-ct-item.is-done .uf-ct-tag { background: #f0fdf4; color: #16a34a; }
+    #taskModal .uf-ct-time {
+      color: #64748b; font-size: 11px; font-weight: 500; white-space: nowrap;
+    }
+    #taskModal .uf-ct-text {
+      font-size: 13px; color: #334155; line-height: 1.4; word-break: break-word;
+    }
   }
 </style>
 {% endblock %}
@@ -1900,7 +1940,7 @@
   });
 })();
 </script>
-<script src="{{ url_for('static', filename='js/ufone_task_detail.js') }}?v=1005"></script>
+<script src="{{ url_for('static', filename='js/ufone_task_detail.js') }}?v=1006"></script>
 <script>
 if (window.UfoneTaskDetail) {
   UfoneTaskDetail.init({
