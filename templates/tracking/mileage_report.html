@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% from 'partials/nav_back_button.html' import nav_back_button with context %}
+{% from 'partials/report_date_range.html' import date_range %}
 {% block title %}Vehicle Mileage Report — Fleet Tracking{% endblock %}
 
 {% block extra_head %}
@@ -7,13 +8,29 @@
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid py-3">
-  <div class="d-flex align-items-center justify-content-between mb-3">
-    <h4 class="mb-0 fw-bold"><i class="bi bi-speedometer2"></i> Vehicle Mileage Report</h4>
-    {{ nav_back_button() }}
+{% set total_km = rows | sum(attribute='Mileage') if rows else 0 %}
+{% set total_ptop = rows | sum(attribute='PToP') if rows else 0 %}
+<div class="container-fluid py-3 trk-page">
+  <div class="trk-head">
+    <h4>
+      <i class="bi bi-speedometer2"></i>
+      <span class="trk-head-text">Vehicle Mileage Report</span>
+    </h4>
+    <div class="trk-head-meta">
+      {{ date_range(from_date, to_date) }}
+      · <span id="mileageMetaCount">{{ rows|length }}</span> vehicles
+    </div>
+    <div class="d-flex align-items-center gap-2 trk-head-actions">
+      <button type="button" class="trk-filters-toggle" data-trk-filters-toggle
+              aria-controls="trkFilters" aria-expanded="false">
+        <i class="bi bi-funnel"></i> Filters
+      </button>
+      {{ nav_back_button() }}
+    </div>
   </div>
 
-  <form method="get" class="card mb-3" id="mileageFilterForm">
+  <form method="get" class="card mb-3 trk-filters" id="trkFilters"
+        data-trk-open="{{ '0' if report_ready else '1' }}">
     <div class="card-body d-flex flex-wrap gap-3 align-items-end">
       <div>
         <label class="form-label small fw-semibold">From</label>
@@ -31,91 +48,153 @@
     </div>
   </form>
 
-  {% set ss = sync_status or {} %}
-  <div class="alert alert-secondary py-2 mb-3" id="mileageSyncStatus">
-    <div class="small mb-1">
-      <i class="bi bi-clock-history"></i>
-      <strong>Last auto fetch:</strong>
-      <span id="mileageLastAuto">
-        {% if ss.last_auto %}
-          {{ ss.last_auto.last_synced_label }} — for date <strong>{{ ss.last_auto.task_date_label }}</strong>
-          ({{ ss.last_auto.fetched_count }} vehicles)
-        {% else %}
-          Not run yet
+  <div class="trk-body">
+    {% set ss = sync_status or {} %}
+    <div class="alert alert-secondary py-2 mb-3" id="mileageSyncStatus">
+      <div class="small mb-1">
+        <i class="bi bi-clock-history"></i>
+        <strong>Last auto fetch:</strong>
+        <span id="mileageLastAuto">
+          {% if ss.last_auto %}
+            {{ ss.last_auto.last_synced_label }} — for date <strong>{{ ss.last_auto.task_date_label }}</strong>
+            ({{ ss.last_auto.fetched_count }} vehicles)
+          {% else %}
+            Not run yet
+          {% endif %}
+        </span>
+      </div>
+      <div class="small mb-0">
+        <i class="bi bi-calendar-check"></i>
+        <strong>Today ({{ ss.today_label or '—' }}) last fetch:</strong>
+        <span id="mileageTodayLast">
+          {% if ss.today_last %}
+            {{ ss.today_last.last_synced_label }}
+            ({{ ss.today_last.source }}{% if ss.today_last.fetched_count is not none %}, {{ ss.today_last.fetched_count }} vehicles{% endif %})
+          {% else %}
+            Not fetched yet today
+          {% endif %}
+        </span>
+      </div>
+    </div>
+
+    <div id="mileageProgressWrap" class="mb-3" {% if not report_ready or not pending_total %}style="display:none"{% endif %}>
+      <div class="trk-progress-label">
+        <span id="mileageProgressLabel">
+          {% if report_ready and pending_total %}Fetching / updating from PortalXS…{% endif %}
+        </span>
+        <span id="mileageProgressPct"></span>
+      </div>
+      <div class="progress" style="height: 10px;">
+        <div id="mileageProgressBar" class="progress-bar progress-bar-striped {% if pending_total %}progress-bar-animated{% endif %}"
+             role="progressbar" style="width: 0%"></div>
+      </div>
+    </div>
+
+    <div id="mileageAlert" class="alert alert-danger" {% if not error %}style="display:none"{% endif %}>{{ error or '' }}</div>
+
+    <div id="mileageSummary" {% if not report_ready %}style="display:none"{% endif %}>
+      <div class="trk-kpis">
+        <div class="trk-kpi">
+          <div class="trk-kpi-label">Vehicles</div>
+          <div class="trk-kpi-val is-primary" id="kpiVehicles">{{ rows|length }}</div>
+        </div>
+        <div class="trk-kpi">
+          <div class="trk-kpi-label">Total km</div>
+          <div class="trk-kpi-val is-success" id="kpiTotalKm">{{ "%.1f"|format(total_km|float) }}</div>
+        </div>
+        <div class="trk-kpi">
+          <div class="trk-kpi-label">Total PtoP</div>
+          <div class="trk-kpi-val is-info" id="kpiTotalPtop">{{ "%.1f"|format(total_ptop|float) }}</div>
+        </div>
+        <div class="trk-kpi">
+          <div class="trk-kpi-label">Avg km / vehicle</div>
+          <div class="trk-kpi-val" id="kpiAvgKm">
+            {{ "%.1f"|format((total_km|float / rows|length) if rows else 0) }}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Desktop: full table -->
+    <div class="card trk-desktop-only" id="mileageCard" {% if not report_ready %}style="display:none"{% endif %}>
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <span><i class="bi bi-table"></i> Mileage Data (<span id="mileageRowCount">{{ rows|length }}</span> rows)</span>
+        <input type="text" id="mileageSearch" class="form-control form-control-sm" placeholder="Search..." style="max-width: 200px;">
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0" id="mileageTable" data-mp-skip-cards="1">
+          <thead><tr>
+            <th>ID</th><th>Reg No</th><th>Date From</th><th>Time From</th>
+            <th>Date To</th><th>Time To</th><th>Mileage</th><th>PtoP</th>
+          </tr></thead>
+          <tbody id="mileageTbody">
+            {% for r in rows %}
+            <tr data-regno="{{ r._regno }}">
+              <td>{{ r.ID }}</td>
+              <td class="fw-semibold">{{ r.vehicle_no or r._regno }}</td>
+              <td>{{ r.DateFrom }}</td>
+              <td>{{ r.TimeFrom }}</td>
+              <td>{{ r.DateTo }}</td>
+              <td>{{ r.TimeTo }}</td>
+              <td>{{ "%.1f"|format(r.Mileage|float) if r.Mileage is not none else '0.0' }}</td>
+              <td>{{ "%.1f"|format(r.PToP|float) if r.PToP is not none else '0.0' }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Mobile: one card per vehicle, km first -->
+    <div class="trk-mobile-only" id="mileageMobileWrap" {% if not report_ready %}style="display:none"{% endif %}>
+      <input type="search" class="trk-search" placeholder="Search vehicle…"
+             data-trk-search="mileageList" data-trk-count="mileageShown"
+             autocomplete="off" spellcheck="false">
+      <div class="trk-count"><span id="mileageShown">{{ rows|length }}</span> of <span id="mileageTotalCount">{{ rows|length }}</span> vehicles</div>
+      <div class="trk-list" id="mileageList">
+        {% for r in rows %}
+        <div class="trk-item" data-regno="{{ r._regno }}">
+          <div class="trk-item-head">
+            <span class="trk-item-title">{{ r.vehicle_no or r._regno }}</span>
+            <span class="trk-item-lead">{{ "%.1f"|format(r.Mileage|float) }} km</span>
+          </div>
+          <div class="trk-item-grid">
+            <div class="trk-cell">
+              <span class="trk-cell-label">From</span>
+              <span class="trk-cell-val">{{ r.DateFrom }}<br>{{ r.TimeFrom }}</span>
+            </div>
+            <div class="trk-cell">
+              <span class="trk-cell-label">To</span>
+              <span class="trk-cell-val">{{ r.DateTo }}<br>{{ r.TimeTo }}</span>
+            </div>
+            <div class="trk-cell is-full">
+              <span class="trk-cell-label">PtoP</span>
+              <span class="trk-cell-val">{{ "%.1f"|format(r.PToP|float) }} km</span>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+        {% if not rows %}
+        <div class="trk-empty" id="mileageEmpty">No mileage rows yet.</div>
         {% endif %}
-      </span>
+      </div>
     </div>
-    <div class="small mb-0">
-      <i class="bi bi-calendar-check"></i>
-      <strong>Today ({{ ss.today_label or '—' }}) last fetch:</strong>
-      <span id="mileageTodayLast">
-        {% if ss.today_last %}
-          {{ ss.today_last.last_synced_label }}
-          ({{ ss.today_last.source }}{% if ss.today_last.fetched_count is not none %}, {{ ss.today_last.fetched_count }} vehicles{% endif %})
-        {% else %}
-          Not fetched yet today
-        {% endif %}
-      </span>
-    </div>
-  </div>
 
-  <div id="mileageProgressWrap" class="mb-3" {% if not report_ready or not pending_total %}style="display:none"{% endif %}>
-    <div class="d-flex justify-content-between small mb-1">
-      <span id="mileageProgressLabel">
-        {% if report_ready and pending_total %}Fetching / updating from PortalXS…{% endif %}
-      </span>
-      <span id="mileageProgressPct"></span>
+    {% if not report_ready and current_account_id %}
+    <div class="alert alert-info">
+      Select a date range and click <strong>Generate</strong>.
+      <strong>Today</strong> always refreshes from PortalXS (updates km as vehicles keep moving).
+      <strong>Past dates</strong> load from DB if already saved; otherwise PortalXS once.
+      Excel-uploaded vehicles are left unchanged; other districts still auto-update.
     </div>
-    <div class="progress" style="height: 10px;">
-      <div id="mileageProgressBar" class="progress-bar progress-bar-striped {% if pending_total %}progress-bar-animated{% endif %}"
-           role="progressbar" style="width: 0%"></div>
-    </div>
+    {% endif %}
   </div>
-
-  <div id="mileageAlert" class="alert alert-danger" {% if not error %}style="display:none"{% endif %}>{{ error or '' }}</div>
-
-  <div class="card" id="mileageCard" {% if not report_ready %}style="display:none"{% endif %}>
-    <div class="card-header d-flex align-items-center justify-content-between">
-      <span><i class="bi bi-table"></i> Mileage Data (<span id="mileageRowCount">{{ rows|length }}</span> rows)</span>
-      <input type="text" id="mileageSearch" class="form-control form-control-sm" placeholder="Search..." style="max-width: 200px;">
-    </div>
-    <div class="table-responsive">
-      <table class="table table-sm table-hover mb-0" id="mileageTable">
-        <thead><tr>
-          <th>ID</th><th>Reg No</th><th>Date From</th><th>Time From</th>
-          <th>Date To</th><th>Time To</th><th>Mileage</th><th>PtoP</th>
-        </tr></thead>
-        <tbody id="mileageTbody">
-          {% for r in rows %}
-          <tr data-regno="{{ r._regno }}">
-            <td>{{ r.ID }}</td>
-            <td class="fw-semibold">{{ r.vehicle_no or r._regno }}</td>
-            <td>{{ r.DateFrom }}</td>
-            <td>{{ r.TimeFrom }}</td>
-            <td>{{ r.DateTo }}</td>
-            <td>{{ r.TimeTo }}</td>
-            <td>{{ "%.1f"|format(r.Mileage|float) if r.Mileage is not none else '0.0' }}</td>
-            <td>{{ "%.1f"|format(r.PToP|float) if r.PToP is not none else '0.0' }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
-
-  {% if not report_ready and current_account_id %}
-  <div class="alert alert-info">
-    Select a date range and click <strong>Generate</strong>.
-    <strong>Today</strong> always refreshes from PortalXS (updates km as vehicles keep moving).
-    <strong>Past dates</strong> load from DB if already saved; otherwise PortalXS once.
-    Excel-uploaded vehicles are left unchanged; other districts still auto-update.
-  </div>
-  {% endif %}
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="{{ url_for('static', filename='js/tracking_reports.js') }}?v=1001"></script>
 <script>
 flatpickr('.datepicker', { dateFormat: 'Y-m-d', maxDate: new Date() });
 
@@ -127,17 +206,18 @@ flatpickr('.datepicker', { dateFormat: 'Y-m-d', maxDate: new Date() });
   var fetching = false;
 
   function fmt(n) { return (Number(n) || 0).toFixed(1); }
+  function el(id) { return document.getElementById(id); }
 
   function hideProgress() {
-    var wrap = document.getElementById('mileageProgressWrap');
+    var wrap = el('mileageProgressWrap');
     if (wrap) wrap.style.display = 'none';
   }
 
   function setProgress(done, total, fetchingNow, labelExtra) {
-    var wrap = document.getElementById('mileageProgressWrap');
-    var bar = document.getElementById('mileageProgressBar');
-    var label = document.getElementById('mileageProgressLabel');
-    var pctEl = document.getElementById('mileageProgressPct');
+    var wrap = el('mileageProgressWrap');
+    var bar = el('mileageProgressBar');
+    var label = el('mileageProgressLabel');
+    var pctEl = el('mileageProgressPct');
     var pct = total ? Math.round((done / total) * 100) : 100;
     var complete = !fetchingNow && (!total || done >= total);
     if (complete) {
@@ -151,44 +231,116 @@ flatpickr('.datepicker', { dateFormat: 'Y-m-d', maxDate: new Date() });
     label.textContent = (labelExtra || '') + (total ? (done + ' / ' + total + ' vehicles') : 'Complete');
   }
 
-  function upsertRow(r) {
-    var tb = document.getElementById('mileageTbody');
-    if (!tb || !r) return;
-    var key = r._regno || r.vehicle_no || '';
-    var existing = key ? tb.querySelector('tr[data-regno="' + key + '"]') : null;
-    var html = '<td>' + (r.ID || '') + '</td>'
-      + '<td class="fw-semibold">' + (r.vehicle_no || r._regno || '') + '</td>'
-      + '<td>' + (r.DateFrom || '') + '</td>'
-      + '<td>' + (r.TimeFrom || '') + '</td>'
-      + '<td>' + (r.DateTo || '') + '</td>'
-      + '<td>' + (r.TimeTo || '') + '</td>'
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  /* Desktop table row and mobile card are rendered from the same payload so
+     the two views can never drift apart during a batched fetch. */
+  function rowHTML(r) {
+    return '<td>' + esc(r.ID) + '</td>'
+      + '<td class="fw-semibold">' + esc(r.vehicle_no || r._regno) + '</td>'
+      + '<td>' + esc(r.DateFrom) + '</td>'
+      + '<td>' + esc(r.TimeFrom) + '</td>'
+      + '<td>' + esc(r.DateTo) + '</td>'
+      + '<td>' + esc(r.TimeTo) + '</td>'
       + '<td>' + fmt(r.Mileage) + '</td>'
       + '<td>' + fmt(r.PToP) + '</td>';
-    if (existing) {
-      existing.innerHTML = html;
-    } else {
-      var tr = document.createElement('tr');
-      tr.setAttribute('data-regno', key);
-      tr.innerHTML = html;
-      tb.appendChild(tr);
+  }
+
+  function cardHTML(r) {
+    return '<div class="trk-item-head">'
+      + '<span class="trk-item-title">' + esc(r.vehicle_no || r._regno) + '</span>'
+      + '<span class="trk-item-lead">' + fmt(r.Mileage) + ' km</span>'
+      + '</div>'
+      + '<div class="trk-item-grid">'
+      + '<div class="trk-cell"><span class="trk-cell-label">From</span>'
+      + '<span class="trk-cell-val">' + esc(r.DateFrom) + '<br>' + esc(r.TimeFrom) + '</span></div>'
+      + '<div class="trk-cell"><span class="trk-cell-label">To</span>'
+      + '<span class="trk-cell-val">' + esc(r.DateTo) + '<br>' + esc(r.TimeTo) + '</span></div>'
+      + '<div class="trk-cell is-full"><span class="trk-cell-label">PtoP</span>'
+      + '<span class="trk-cell-val">' + fmt(r.PToP) + ' km</span></div>'
+      + '</div>';
+  }
+
+  function upsertRow(r) {
+    if (!r) return;
+    var key = r._regno || r.vehicle_no || '';
+    var sel = key ? '[data-regno="' + (window.CSS && CSS.escape ? CSS.escape(key) : key) + '"]' : null;
+
+    var tb = el('mileageTbody');
+    if (tb) {
+      var tr = sel ? tb.querySelector(sel) : null;
+      if (!tr) {
+        tr = document.createElement('tr');
+        tr.setAttribute('data-regno', key);
+        tb.appendChild(tr);
+      }
+      tr.innerHTML = rowHTML(r);
     }
-    document.getElementById('mileageRowCount').textContent = tb.querySelectorAll('tr').length;
-    var exp = document.getElementById('mileageExportBtn');
-    if (exp) exp.classList.remove('disabled');
+
+    var list = el('mileageList');
+    if (list) {
+      var empty = el('mileageEmpty');
+      if (empty) empty.remove();
+      var card = sel ? list.querySelector(sel) : null;
+      if (!card) {
+        card = document.createElement('div');
+        card.className = 'trk-item';
+        card.setAttribute('data-regno', key);
+        list.appendChild(card);
+      }
+      card.innerHTML = cardHTML(r);
+    }
+    refreshTotals();
+  }
+
+  function refreshTotals() {
+    var tb = el('mileageTbody');
+    if (!tb) return;
+    var trs = tb.querySelectorAll('tr');
+    var km = 0, ptop = 0;
+    trs.forEach(function(tr) {
+      var tds = tr.querySelectorAll('td');
+      if (tds.length >= 8) {
+        km += Number(tds[6].textContent) || 0;
+        ptop += Number(tds[7].textContent) || 0;
+      }
+    });
+    var count = trs.length;
+    [['mileageRowCount', count], ['mileageMetaCount', count], ['kpiVehicles', count],
+     ['mileageShown', count], ['mileageTotalCount', count],
+     ['kpiTotalKm', km.toFixed(1)], ['kpiTotalPtop', ptop.toFixed(1)],
+     ['kpiAvgKm', (count ? km / count : 0).toFixed(1)]].forEach(function(pair) {
+      var node = el(pair[0]);
+      if (node) node.textContent = pair[1];
+    });
+    var exp = el('mileageExportBtn');
+    if (exp && count) exp.classList.remove('disabled');
   }
 
   function replaceAllRows(rows) {
-    var tb = document.getElementById('mileageTbody');
-    if (!tb) return;
-    tb.innerHTML = '';
+    var tb = el('mileageTbody');
+    var list = el('mileageList');
+    if (tb) tb.innerHTML = '';
+    if (list) list.innerHTML = '';
     (rows || []).forEach(upsertRow);
+    refreshTotals();
   }
 
   function showAlert(msg) {
-    var el = document.getElementById('mileageAlert');
-    if (!msg) { el.style.display = 'none'; el.textContent = ''; return; }
-    el.style.display = '';
-    el.textContent = msg;
+    var box = el('mileageAlert');
+    if (!msg) { box.style.display = 'none'; box.textContent = ''; return; }
+    box.style.display = '';
+    box.textContent = msg;
+  }
+
+  function showResults() {
+    ['mileageCard', 'mileageMobileWrap', 'mileageSummary'].forEach(function(id) {
+      var node = el(id);
+      if (node) node.style.display = '';
+    });
   }
 
   function fetchBatch(day, mode, doneRegnos) {
@@ -212,11 +364,11 @@ flatpickr('.datepicker', { dateFormat: 'Y-m-d', maxDate: new Date() });
 
   function updateSyncStatus(ss) {
     if (!ss) return;
-    var autoEl = document.getElementById('mileageLastAuto');
-    var todayEl = document.getElementById('mileageTodayLast');
+    var autoEl = el('mileageLastAuto');
+    var todayEl = el('mileageTodayLast');
     if (autoEl && ss.last_auto) {
-      autoEl.innerHTML = ss.last_auto.last_synced_label
-        + ' — for date <strong>' + (ss.last_auto.task_date_label || '') + '</strong>'
+      autoEl.innerHTML = esc(ss.last_auto.last_synced_label)
+        + ' — for date <strong>' + esc(ss.last_auto.task_date_label || '') + '</strong>'
         + ' (' + (ss.last_auto.fetched_count || 0) + ' vehicles)';
     }
     if (todayEl && ss.today_last) {
@@ -270,7 +422,7 @@ flatpickr('.datepicker', { dateFormat: 'Y-m-d', maxDate: new Date() });
       return;
     }
     fetching = true;
-    document.getElementById('mileageCard').style.display = '';
+    showResults();
     var i = 0;
     function next() {
       if (i >= todo.length) {
@@ -286,7 +438,7 @@ flatpickr('.datepicker', { dateFormat: 'Y-m-d', maxDate: new Date() });
     next();
   }
 
-  var search = document.getElementById('mileageSearch');
+  var search = el('mileageSearch');
   if (search) {
     var timer;
     search.addEventListener('input', function() {

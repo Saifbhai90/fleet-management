@@ -2,86 +2,118 @@
 {% from 'partials/nav_back_button.html' import nav_back_button with context %}
 {% block title %}Alerts — Fleet Tracking{% endblock %}
 
+{% macro alert_rows(items, empty_text) %}
+  {% if items %}
+    {% set ns = namespace(day='') %}
+    {% for a in items %}
+      {% set day = (a.alert_time or '')[:10] %}
+      {% if day != ns.day %}
+        {% set ns.day = day %}
+        <div class="trk-feed-day">{{ day or 'Undated' }}</div>
+      {% endif %}
+      <div class="trk-alert sev-{{ (a.severity or 'low')|lower }}">
+        <div class="trk-alert-icon">
+          {% set kind = (a.alert_type or '')|lower %}
+          {% if 'battery' in kind or 'power' in kind %}<i class="bi bi-battery-half"></i>
+          {% elif 'speed' in kind %}<i class="bi bi-speedometer2"></i>
+          {% elif 'fence' in kind %}<i class="bi bi-bounding-box"></i>
+          {% elif 'sos' in kind or 'panic' in kind %}<i class="bi bi-exclamation-octagon"></i>
+          {% elif 'idle' in kind or 'stop' in kind %}<i class="bi bi-pause-circle"></i>
+          {% else %}<i class="bi bi-bell"></i>{% endif %}
+        </div>
+        <div class="trk-alert-body">
+          <div class="trk-alert-top">
+            <span class="trk-alert-veh">{{ a.regno or 'Unknown vehicle' }}</span>
+            <span class="badge {% if (a.severity or '')|lower == 'high' %}bg-danger
+              {%- elif (a.severity or '')|lower == 'medium' %}bg-warning text-dark
+              {%- else %}bg-secondary{% endif %}">{{ a.alert_type or 'Alert' }}</span>
+            {# The date is already the group heading, so show the clock only. #}
+            {% set stamp = a.alert_time or '' %}
+            <span class="trk-alert-time">{{ stamp[11:] or stamp or '—' }}</span>
+          </div>
+          {% if a.alert_msg or a.landmark %}
+          <div class="trk-alert-meta">
+            {{ a.alert_msg }}{% if a.alert_msg and a.landmark %} · {% endif %}{{ a.landmark }}
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    {% endfor %}
+  {% else %}
+    <div class="trk-empty">
+      <i class="bi bi-bell-slash d-block mb-2" style="font-size: 1.8rem;"></i>
+      {{ empty_text }}
+    </div>
+  {% endif %}
+{% endmacro %}
+
 {% block content %}
-<div class="container-fluid py-3">
-  <div class="d-flex align-items-center justify-content-between mb-3">
-    <h4 class="mb-0 fw-bold"><i class="bi bi-bell"></i> Fleet Alerts</h4>
-    <div class="d-flex gap-2">
-      <button id="refreshAlertsBtn" class="btn btn-sm btn-primary"><i class="bi bi-arrow-clockwise"></i> Refresh</button>
+<div class="container-fluid py-3 trk-page">
+  <div class="trk-head">
+    <h4>
+      <i class="bi bi-bell"></i>
+      <span class="trk-head-text">Fleet Alerts</span>
+    </h4>
+    <div class="trk-head-meta">
+      <strong>{{ alerts|length }}</strong> current · {{ history|length }} in history
+    </div>
+    <div class="d-flex align-items-center gap-2 trk-head-actions">
+      <button id="refreshAlertsBtn" class="btn btn-sm btn-primary">
+        <i class="bi bi-arrow-clockwise"></i> <span class="trk-desktop-only">Refresh</span>
+      </button>
       {{ nav_back_button() }}
     </div>
   </div>
 
-  {% if error %}
-  <div class="alert alert-warning">{{ error }}</div>
-  {% endif %}
-
-  <div class="card">
-    <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
-      <span><i class="bi bi-list-ul"></i> Recent Alerts ({{ alerts|length }})</span>
-      {% if alerts %}
-      <input type="text" id="alertFilter" class="form-control form-control-sm" style="max-width: 250px;"
-             placeholder="Filter by vehicle / type / message...">
-      {% endif %}
+  <div class="trk-body">
+    {% if error %}
+    <div class="alert alert-warning py-2 small">
+      <i class="bi bi-exclamation-triangle"></i> {{ error }}
+      Showing saved alert history below.
     </div>
-    {% if alerts %}
-    <div class="table-responsive">
-      <table class="table table-sm table-hover mb-0">
-        <thead><tr>
-          <th>Vehicle</th><th>Type</th><th>Message</th><th>Time</th><th>Severity</th>
-        </tr></thead>
-        <tbody id="alertsBody">
-          {% for a in alerts %}
-          <tr>
-            <td class="fw-semibold">{{ a.regno }}</td>
-            <td><span class="badge bg-info">{{ a.alert_type or 'Unknown' }}</span></td>
-            <td class="small">{{ a.alert_msg }}</td>
-            <td class="small text-muted">{{ a.alert_time }}</td>
-            <td>
-              {% if a.severity and a.severity|lower == 'high' %}
-              <span class="badge bg-danger">High</span>
-              {% elif a.severity and a.severity|lower == 'medium' %}
-              <span class="badge bg-warning">Medium</span>
-              {% else %}
-              <span class="badge bg-secondary">{{ a.severity or 'Low' }}</span>
-              {% endif %}
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-    {% else %}
-    <div class="card-body text-muted text-center py-4">
-      <i class="bi bi-bell-slash" style="font-size: 2rem;"></i>
-      <p class="mt-2">No alerts found.</p>
+    {% elif not alerts %}
+    <div class="alert alert-success py-2 small">
+      <i class="bi bi-check-circle"></i> PortalXS reports no open alerts right now.
+      Past alerts are listed under <strong>History</strong>.
     </div>
     {% endif %}
+
+    {# With nothing open right now, land on History so the page is not an
+       empty screen when there is saved data to read. #}
+    {% set start_tab = 'current' if alerts or not history else 'history' %}
+    <div class="trk-tabs" role="tablist">
+      <button type="button" class="trk-tab {% if start_tab == 'current' %}is-active{% endif %}"
+              data-trk-tab="current" role="tab">
+        Current ({{ alerts|length }})
+      </button>
+      <button type="button" class="trk-tab {% if start_tab == 'history' %}is-active{% endif %}"
+              data-trk-tab="history" role="tab">
+        History ({{ history|length }})
+      </button>
+    </div>
+
+    <input type="search" class="trk-search" placeholder="Filter by vehicle / type / message…"
+           id="alertFilter" data-trk-search="alertsPanes" autocomplete="off" spellcheck="false">
+
+    <div id="alertsPanes">
+      <div class="trk-pane" data-trk-pane="current" {% if start_tab != 'current' %}hidden{% endif %}>
+        {{ alert_rows(alerts, 'No open alerts right now.') }}
+      </div>
+      <div class="trk-pane" data-trk-pane="history" {% if start_tab != 'history' %}hidden{% endif %}>
+        {{ alert_rows(history, 'No alert history saved yet for this account.') }}
+      </div>
+    </div>
   </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
+<script src="{{ url_for('static', filename='js/tracking_reports.js') }}?v=1001"></script>
 <script>
 document.getElementById('refreshAlertsBtn').addEventListener('click', function() {
   this.disabled = true;
-  this.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Refreshing...';
+  this.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
   window.location.reload();
 });
-
-// Client-side alert filter (vehicle / type / message / severity)
-var alertFilter = document.getElementById('alertFilter');
-if (alertFilter) {
-  var filterDebounce = null;
-  alertFilter.addEventListener('input', function() {
-    clearTimeout(filterDebounce);
-    var q = this.value.toLowerCase();
-    filterDebounce = setTimeout(function() {
-      document.querySelectorAll('#alertsBody tr').forEach(function(tr) {
-        tr.style.display = !q || tr.textContent.toLowerCase().indexOf(q) >= 0 ? '' : 'none';
-      });
-    }, 200);
-  });
-}
 </script>
 {% endblock %}

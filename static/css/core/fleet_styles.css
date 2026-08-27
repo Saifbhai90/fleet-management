@@ -673,6 +673,10 @@ body {
                 padding-right: max(12px, env(safe-area-inset-right));
                 min-height: 56px;
                 height: auto;
+                /* The bar's height is locked to 60px elsewhere, so a wrapped
+                   second row would spill over the page instead of growing the
+                   bar. Keep one row and let the brand truncate instead. */
+                flex-wrap: nowrap;
             }
             .navbar-brand { font-size: 0.95rem; }
             .navbar .btn, .navbar .btn-link, .navbar .dropdown-toggle {

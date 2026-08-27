@@ -220,6 +220,49 @@ def aggregate_range_rows(from_date: date, to_date: date) -> list[dict]:
     return out
 
 
+def daily_mileage_trend(portalxs_regno: str, vehicle_no: Optional[str],
+                        from_date: date, to_date: date) -> list[dict]:
+    """Per-day mileage for one vehicle from vehicle_mileage_record.
+
+    Backs the Trends page when PortalXS's own trends endpoint is unavailable.
+    """
+    from models import VehicleMileageRecord
+
+    keys = _vehicle_match_keys(portalxs_regno, vehicle_no)
+    if not keys:
+        return []
+    if from_date > to_date:
+        from_date, to_date = to_date, from_date
+
+    recs = (
+        VehicleMileageRecord.query
+        .filter(
+            VehicleMileageRecord.task_date >= from_date,
+            VehicleMileageRecord.task_date <= to_date,
+        )
+        .order_by(VehicleMileageRecord.task_date.asc())
+        .all()
+    )
+    by_day: dict[date, float] = {}
+    for rec in recs:
+        if normalize_reg_key(rec.reg_no) not in keys:
+            continue
+        km = float(rec.effective_km() or 0)
+        by_day[rec.task_date] = max(by_day.get(rec.task_date, 0.0), km)
+
+    out = []
+    day = from_date
+    while day <= to_date:
+        out.append({
+            'RDT': day.isoformat(),
+            'Mileage': round(by_day.get(day, 0.0), 1),
+            'TravelTimeH': 0.0,
+            'Alerts': 0,
+        })
+        day += timedelta(days=1)
+    return out
+
+
 def day_fetch_mode(task_date: date, today: Optional[date] = None) -> str:
     """Return 'refresh_all' | 'fill_missing' | 'db_only'."""
     today = today or pk_date()

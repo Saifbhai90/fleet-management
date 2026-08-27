@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% from 'partials/nav_back_button.html' import nav_back_button with context %}
+{% from 'partials/report_date_range.html' import date_range %}
 {% block title %}Trends — Fleet Tracking{% endblock %}
 
 {% block extra_head %}
@@ -8,17 +9,37 @@
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid py-3">
-  <div class="d-flex align-items-center justify-content-between mb-3">
-    <h4 class="mb-0 fw-bold"><i class="bi bi-graph-up"></i> Trends Analysis</h4>
-    {{ nav_back_button() }}
+{% set total_km = trends | sum(attribute='Mileage') if trends else 0 %}
+{% set total_hours = trends | sum(attribute='TravelTimeH') if trends else 0 %}
+{% set total_alerts = trends | sum(attribute='Alerts') if trends else 0 %}
+<div class="container-fluid py-3 trk-page">
+  <div class="trk-head">
+    <h4>
+      <i class="bi bi-graph-up"></i>
+      <span class="trk-head-text">Trends Analysis</span>
+    </h4>
+    <div class="trk-head-meta">
+      {% if selected_regno %}
+      <strong>{{ selected_regno }}</strong> · {{ date_range(from_date, to_date) }}
+      {% else %}
+      Select a vehicle
+      {% endif %}
+    </div>
+    <div class="d-flex align-items-center gap-2 trk-head-actions">
+      <button type="button" class="trk-filters-toggle" data-trk-filters-toggle
+              aria-controls="trkFilters" aria-expanded="false">
+        <i class="bi bi-funnel"></i> Filters
+      </button>
+      {{ nav_back_button() }}
+    </div>
   </div>
 
-  <form method="get" class="card mb-3">
+  <form method="get" class="card mb-3 trk-filters" id="trkFilters"
+        data-trk-open="{{ '0' if trends else '1' }}">
     <div class="card-body d-flex flex-wrap gap-3 align-items-end">
-      <div>
+      <div style="min-width: 220px;">
         <label class="form-label small fw-semibold">Vehicle</label>
-        <select name="regno" class="form-select form-select-sm" required>
+        <select name="regno" class="form-select form-select-sm search-select" required>
           {% for v in vehicles_list %}
           <option value="{{ v.portalxs_regno }}" {% if v.portalxs_regno == selected_regno %}selected{% endif %}>
             {{ v.display_label or v.portalxs_regno }}
@@ -38,70 +59,178 @@
     </div>
   </form>
 
-  {% if error %}
-  <div class="alert alert-danger">{{ error }}</div>
-  {% endif %}
+  <div class="trk-body">
+    {% if error %}
+    <div class="alert alert-danger">{{ error }}</div>
+    {% endif %}
+    {% if warning %}
+    <div class="alert alert-warning py-2 small mb-3">
+      <i class="bi bi-exclamation-triangle"></i> {{ warning }}
+      {% if trend_source and trend_source != 'PortalXS' %}
+      Showing <strong>{{ trend_source|lower }}</strong> instead.
+      {% endif %}
+    </div>
+    {% endif %}
 
-  {% if trends %}
-  <div class="row g-3">
-    <div class="col-lg-6">
-      <div class="card p-3">
-        <canvas id="mileageChart" height="200"></canvas>
+    {% if trends %}
+    {% if trend_source %}
+    <div class="mb-2">
+      <span class="badge bg-secondary">Source: {{ trend_source }}</span>
+    </div>
+    {% endif %}
+
+    <div class="trk-kpis">
+      <div class="trk-kpi">
+        <div class="trk-kpi-label">Days</div>
+        <div class="trk-kpi-val is-primary">{{ trends|length }}</div>
+      </div>
+      <div class="trk-kpi">
+        <div class="trk-kpi-label">Total km</div>
+        <div class="trk-kpi-val is-success">{{ "%.1f"|format(total_km|float) }}</div>
+      </div>
+      <div class="trk-kpi">
+        <div class="trk-kpi-label">Avg km / day</div>
+        <div class="trk-kpi-val is-info">{{ "%.1f"|format((total_km|float / trends|length) if trends else 0) }}</div>
+      </div>
+      <div class="trk-kpi">
+        <div class="trk-kpi-label">Alerts</div>
+        <div class="trk-kpi-val is-danger">{{ total_alerts }}</div>
       </div>
     </div>
-    <div class="col-lg-6">
-      <div class="card p-3">
-        <canvas id="alertsChart" height="200"></canvas>
+
+    <div class="row g-3 mb-3">
+      <div class="col-lg-6">
+        <div class="trk-chart-card">
+          <div class="trk-chart-box"><canvas id="mileageChart"></canvas></div>
+        </div>
+      </div>
+      <div class="col-lg-6">
+        <div class="trk-chart-card">
+          <div class="trk-chart-box"><canvas id="alertsChart"></canvas></div>
+        </div>
       </div>
     </div>
-  </div>
 
-  <div class="card mt-3">
-    <div class="card-header">Daily Breakdown</div>
-    <div class="table-responsive">
-      <table class="table table-sm table-hover mb-0">
-        <thead><tr><th>Date</th><th>Mileage (km)</th><th>Travel Time (h)</th><th>Alerts</th></tr></thead>
-        <tbody>
-          {% for t in trends %}
-          <tr>
-            <td>{{ t.RDT[:10] }}</td>
-            <td>{{ "%.1f"|format(t.Mileage) }}</td>
-            <td>{{ "%.1f"|format(t.TravelTimeH) }}</td>
-            <td>{{ t.Alerts }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+    <!-- Desktop: daily table -->
+    <div class="card trk-desktop-only">
+      <div class="card-header">Daily Breakdown</div>
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0" data-mp-skip-cards="1">
+          <thead><tr><th>Date</th><th>Mileage (km)</th><th>Travel Time (h)</th><th>Alerts</th></tr></thead>
+          <tbody>
+            {% for t in trends %}
+            <tr>
+              <td>{{ t.RDT[:10] }}</td>
+              <td>{{ "%.1f"|format(t.Mileage) }}</td>
+              <td>{{ "%.1f"|format(t.TravelTimeH) }}</td>
+              <td>{{ t.Alerts }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     </div>
+
+    <!-- Mobile: day rows with km up front -->
+    <div class="trk-mobile-only">
+      <div class="trk-section-title">Daily breakdown</div>
+      <div class="trk-list">
+        {% for t in trends %}
+        <div class="trk-item">
+          <div class="trk-item-head">
+            <span class="trk-item-title">{{ t.RDT[:10] }}</span>
+            <span class="trk-item-lead">{{ "%.1f"|format(t.Mileage) }} km</span>
+          </div>
+          <div class="trk-item-grid">
+            <div class="trk-cell">
+              <span class="trk-cell-label">Travel time</span>
+              <span class="trk-cell-val">{{ "%.1f"|format(t.TravelTimeH) }} h</span>
+            </div>
+            <div class="trk-cell">
+              <span class="trk-cell-label">Alerts</span>
+              <span class="trk-cell-val">{{ t.Alerts }}</span>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% elif selected_regno and not warning and not error %}
+    <div class="alert alert-info">No trend data for the selected period.</div>
+    {% endif %}
   </div>
-  {% elif selected_regno %}
-  <div class="alert alert-info">No trend data for the selected period.</div>
-  {% endif %}
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="{{ url_for('static', filename='js/tracking_reports.js') }}?v=1001"></script>
 <script>
 flatpickr('.datepicker', { dateFormat: 'Y-m-d', maxDate: new Date() });
 
-var trends = {{ trends | tojson }};
-if (trends && trends.length) {
+(function() {
+  var trends = {{ trends | tojson }};
+  if (typeof Chart === 'undefined' || !trends || !trends.length) return;
+
   var labels = trends.map(function(t) { return (t.RDT || '').slice(0, 10); });
-  var mileages = trends.map(function(t) { return t.Mileage; });
-  var alerts = trends.map(function(t) { return t.Alerts; });
+  var charts = {};
 
-  new Chart(document.getElementById('mileageChart'), {
-    type: 'line',
-    data: { labels: labels, datasets: [{ label: 'Mileage (km)', data: mileages, borderColor: '#0d6efd', backgroundColor: 'rgba(13,110,253,0.1)', fill: true, tension: 0.3 }] },
-    options: { responsive: true, plugins: { title: { display: true, text: 'Daily Mileage' } } }
-  });
+  function draw() {
+    var compact = window.innerWidth <= 767;
+    var specs = [
+      ['mileageChart', 'line', 'Daily Mileage (km)',
+        trends.map(function(t) { return Number(t.Mileage) || 0; }), '#0d6efd', 'rgba(13,110,253,0.12)'],
+      ['alertsChart', 'bar', 'Daily Alerts',
+        trends.map(function(t) { return Number(t.Alerts) || 0; }), '#dc3545', 'rgba(220,53,69,0.7)']
+    ];
 
-  new Chart(document.getElementById('alertsChart'), {
-    type: 'bar',
-    data: { labels: labels, datasets: [{ label: 'Alerts', data: alerts, backgroundColor: 'rgba(220,53,69,0.7)' }] },
-    options: { responsive: true, plugins: { title: { display: true, text: 'Daily Alerts' } } }
+    specs.forEach(function(spec) {
+      var canvas = document.getElementById(spec[0]);
+      if (!canvas) return;
+      if (charts[spec[0]]) charts[spec[0]].destroy();
+      charts[spec[0]] = new Chart(canvas, {
+        type: spec[1],
+        data: {
+          labels: labels,
+          datasets: [{
+            label: spec[2],
+            data: spec[3],
+            borderColor: spec[4],
+            backgroundColor: spec[5],
+            fill: spec[1] === 'line',
+            tension: 0.3,
+            pointRadius: compact ? 2 : 3
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            title: { display: true, text: spec[2] }
+          },
+          scales: {
+            x: {
+              ticks: {
+                font: { size: 10 },
+                maxRotation: compact ? 60 : 0,
+                autoSkip: true,
+                maxTicksLimit: compact ? 7 : 20
+              }
+            },
+            y: { beginAtZero: true, ticks: { font: { size: 10 } } }
+          }
+        }
+      });
+    });
+  }
+
+  draw();
+  var timer;
+  window.addEventListener('resize', function() {
+    clearTimeout(timer);
+    timer = setTimeout(draw, 250);
   });
-}
+})();
 </script>
 {% endblock %}

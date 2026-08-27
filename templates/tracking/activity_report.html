@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% from 'partials/nav_back_button.html' import nav_back_button, nav_from_hidden with context %}
+{% from 'partials/report_date_range.html' import date_range %}
 {% block title %}GPS Point / Activity Report — Fleet Tracking{% endblock %}
 
 {% block extra_head %}
@@ -11,17 +12,55 @@
   }
   .act-speed-stop { color: #dc3545; font-weight: 600; }
   .act-speed-move { color: #198754; font-weight: 600; }
+
+  /* Reason chips scroll on one line instead of stacking into a wall */
+  @media (max-width: 767px) {
+    .act-reason-scroll {
+      display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 6px;
+      -webkit-overflow-scrolling: touch; scrollbar-width: none;
+    }
+    .act-reason-scroll::-webkit-scrollbar { display: none; }
+    .act-reason-scroll > * { flex-shrink: 0; }
+    /* Moving vs stopped reads at a glance from the card header colour.
+       The class is copied off the Speed cell by tracking_reports.js. */
+    .trk-item.act-speed-move .trk-item-head {
+      background: linear-gradient(135deg, #14532d 0%, #16a34a 100%);
+    }
+    .trk-item.act-speed-stop .trk-item-head {
+      background: linear-gradient(135deg, #7f1d1d 0%, #dc2626 100%);
+    }
+    /* act-speed-* also sets a text colour meant for the table cell */
+    .trk-item.act-speed-move,
+    .trk-item.act-speed-stop { color: inherit; font-weight: 400; }
+  }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid py-3">
-  <div class="d-flex align-items-center justify-content-between mb-3">
-    <h4 class="mb-0 fw-bold"><i class="bi bi-geo-alt"></i> GPS Point / Activity Report</h4>
-    {{ nav_back_button() }}
+<div class="container-fluid py-3 trk-page">
+  <div class="trk-head">
+    <h4>
+      <i class="bi bi-geo-alt"></i>
+      <span class="trk-head-text">GPS Point / Activity Report</span>
+    </h4>
+    <div class="trk-head-meta">
+      {% if selected_regno %}
+      <strong>{{ selected_regno }}</strong> · {{ date_range(from_date, to_date) }}
+      {% else %}
+      Select a vehicle
+      {% endif %}
+    </div>
+    <div class="d-flex align-items-center gap-2 trk-head-actions">
+      <button type="button" class="trk-filters-toggle" data-trk-filters-toggle
+              aria-controls="trkFilters" aria-expanded="false">
+        <i class="bi bi-funnel"></i> Filters
+      </button>
+      {{ nav_back_button() }}
+    </div>
   </div>
 
-  <form method="get" class="card mb-3">
+  <form method="get" class="card mb-3 trk-filters" id="trkFilters"
+        data-trk-open="{{ '0' if (selected_regno and points) else '1' }}">
     {{ nav_from_hidden() }}
     <div class="card-body d-flex flex-wrap gap-3 align-items-end">
       <div style="min-width: 220px;">
@@ -66,168 +105,184 @@
     </div>
   </form>
 
-  {% set ss = sync_status or {} %}
-  <div class="alert alert-secondary py-2 mb-3" id="activitySyncStatus">
-    <div class="small mb-1">
-      <i class="bi bi-clock-history"></i>
-      <strong>Last auto fetch:</strong>
-      <span id="activityLastAuto">
-        {% if ss.last_auto %}
-          {{ ss.last_auto.last_synced_label }} — for date <strong>{{ ss.last_auto.task_date_label }}</strong>
-          ({{ ss.last_auto.fetched_count }} vehicles{% if ss.last_auto.error_count %}, {{ ss.last_auto.error_count }} failed{% endif %})
-        {% else %}
-          Not run yet
-        {% endif %}
-      </span>
+  <div class="trk-body">
+    {% set ss = sync_status or {} %}
+    <div class="alert alert-secondary py-2 mb-3" id="activitySyncStatus">
+      <div class="small mb-1">
+        <i class="bi bi-clock-history"></i>
+        <strong>Last auto fetch:</strong>
+        <span id="activityLastAuto">
+          {% if ss.last_auto %}
+            {{ ss.last_auto.last_synced_label }} — for date <strong>{{ ss.last_auto.task_date_label }}</strong>
+            ({{ ss.last_auto.fetched_count }} vehicles{% if ss.last_auto.error_count %}, {{ ss.last_auto.error_count }} failed{% endif %})
+          {% else %}
+            Not run yet
+          {% endif %}
+        </span>
+      </div>
+      <div class="small mb-0">
+        <i class="bi bi-calendar-check"></i>
+        <strong>Today ({{ ss.today_label or '—' }}) last fetch:</strong>
+        <span id="activityTodayLast">
+          {% if ss.today_last %}
+            {{ ss.today_last.last_synced_label }}
+            ({{ ss.today_last.source }}{% if ss.today_last.fetched_count is not none %}, {{ ss.today_last.fetched_count }} vehicles{% endif %})
+          {% else %}
+            Not fetched yet today
+          {% endif %}
+        </span>
+      </div>
     </div>
-    <div class="small mb-0">
-      <i class="bi bi-calendar-check"></i>
-      <strong>Today ({{ ss.today_label or '—' }}) last fetch:</strong>
-      <span id="activityTodayLast">
-        {% if ss.today_last %}
-          {{ ss.today_last.last_synced_label }}
-          ({{ ss.today_last.source }}{% if ss.today_last.fetched_count is not none %}, {{ ss.today_last.fetched_count }} vehicles{% endif %})
-        {% else %}
-          Not fetched yet today
-        {% endif %}
-      </span>
-    </div>
-  </div>
 
-  {% if ss.fail_remarks %}
-  <div class="alert alert-warning position-relative mb-3" id="activityFailRemarks">
-    <button type="button" class="btn-close position-absolute top-0 end-0 m-2"
-            id="activityFailRemarksClose" aria-label="Dismiss remarks"
-            title="Clear fail remarks"></button>
-    <div class="fw-semibold mb-1 pe-4">
-      <i class="bi bi-exclamation-triangle"></i>
-      Fail remarks
-      {% if ss.fail_remarks_meta %}
-      <span class="text-muted fw-normal small">
-        — {{ ss.fail_remarks_meta.last_synced_label }}
-        ({{ ss.fail_remarks_meta.task_date_label }})
-      </span>
-      {% endif %}
+    {% if ss.fail_remarks %}
+    <div class="alert alert-warning position-relative mb-3" id="activityFailRemarks">
+      <button type="button" class="btn-close position-absolute top-0 end-0 m-2"
+              id="activityFailRemarksClose" aria-label="Dismiss remarks"
+              title="Clear fail remarks"></button>
+      <div class="fw-semibold mb-1 pe-4">
+        <i class="bi bi-exclamation-triangle"></i>
+        Fail remarks
+        {% if ss.fail_remarks_meta %}
+        <span class="text-muted fw-normal small">
+          — {{ ss.fail_remarks_meta.last_synced_label }}
+          ({{ ss.fail_remarks_meta.task_date_label }})
+        </span>
+        {% endif %}
+      </div>
+      <ul class="mb-0 small ps-3" id="activityFailRemarksList">
+        {% for r in ss.fail_remarks %}
+        <li>
+          {% if r.regno %}<strong>{{ r.regno }}</strong> — {% endif %}{{ r.error }}
+        </li>
+        {% endfor %}
+      </ul>
     </div>
-    <ul class="mb-0 small ps-3" id="activityFailRemarksList">
-      {% for r in ss.fail_remarks %}
-      <li>
-        {% if r.regno %}<strong>{{ r.regno }}</strong> — {% endif %}{{ r.error }}
-      </li>
-      {% endfor %}
-    </ul>
-  </div>
-  {% endif %}
+    {% endif %}
 
-  {% if error %}
-  <div class="alert alert-danger">{{ error }}</div>
-  {% endif %}
+    {% if error %}
+    <div class="alert alert-danger">{{ error }}</div>
+    {% endif %}
 
     {% if selected_regno and not error %}
-  <div class="mb-2 d-flex flex-wrap align-items-center gap-2">
-    {% if data_source_label %}
-    <span class="badge bg-secondary">Source: {{ data_source_label }}</span>
-    {% endif %}
-    <span class="text-muted small">Saved in <code>vehicle_activity_record</code> (same table as Excel Tracker Activity). Excel-protected vehicles are not overwritten by PortalXS.</span>
-  </div>
-  <div class="row g-2 mb-3">
-    <div class="col-6 col-md-3">
-      <div class="card p-3 text-center">
-        <div class="text-muted small">GPS Points</div>
-        <div class="fs-4 fw-bold text-primary">{{ stats.total }}</div>
-      </div>
-    </div>
-    <div class="col-6 col-md-3">
-      <div class="card p-3 text-center">
-        <div class="text-muted small">Moving</div>
-        <div class="fs-4 fw-bold text-success">{{ stats.moving }}</div>
-      </div>
-    </div>
-    <div class="col-6 col-md-3">
-      <div class="card p-3 text-center">
-        <div class="text-muted small">Stopped</div>
-        <div class="fs-4 fw-bold text-danger">{{ stats.stopped }}</div>
-      </div>
-    </div>
-    <div class="col-6 col-md-3">
-      <div class="card p-3 text-center">
-        <div class="text-muted small">Distance (sum)</div>
-        <div class="fs-4 fw-bold text-info">{{ "%.2f"|format(stats.total_distance or 0) }} km</div>
-      </div>
-    </div>
-  </div>
-
-  {% if stats.reasons %}
-  <div class="card mb-3">
-    <div class="card-body py-2 d-flex flex-wrap gap-2 align-items-center">
-      <span class="small text-muted fw-semibold me-1">By activity:</span>
-      {% for name, cnt in stats.reasons[:12] %}
-      <a class="act-reason-chip text-decoration-none"
-         href="{{ url_for('tracking_activity_report', regno=selected_regno, from_date=from_date, to_date=to_date, reason=name, nav_from=nav_from) }}">
-        {{ name }} · {{ cnt }}
-      </a>
-      {% endfor %}
-      {% if reason_filter %}
-      <a class="btn btn-sm btn-link" href="{{ url_for('tracking_activity_report', regno=selected_regno, from_date=from_date, to_date=to_date, nav_from=nav_from) }}">Clear filter</a>
+    <div class="mb-2 d-flex flex-wrap align-items-center gap-2">
+      {% if data_source_label %}
+      <span class="badge bg-secondary">Source: {{ data_source_label }}</span>
       {% endif %}
+      <span class="text-muted small trk-desktop-only">Saved in <code>vehicle_activity_record</code> (same table as Excel Tracker Activity). Excel-protected vehicles are not overwritten by PortalXS.</span>
     </div>
-  </div>
-  {% endif %}
 
-  {% if points %}
-  <div class="card">
-    <div class="card-header d-flex justify-content-between align-items-center">
-      <span><i class="bi bi-list-ul"></i> Activity details
-        {% if reason_filter %}<span class="badge bg-secondary ms-1">{{ reason_filter }}</span>{% endif %}
-      </span>
-      <span class="small text-muted">{{ selected_regno }} · {{ from_date }} → {{ to_date }}</span>
+    <div class="trk-kpis">
+      <div class="trk-kpi">
+        <div class="trk-kpi-label">GPS Points</div>
+        <div class="trk-kpi-val is-primary">{{ stats.total }}</div>
+      </div>
+      <div class="trk-kpi">
+        <div class="trk-kpi-label">Moving</div>
+        <div class="trk-kpi-val is-success">{{ stats.moving }}</div>
+      </div>
+      <div class="trk-kpi">
+        <div class="trk-kpi-label">Stopped</div>
+        <div class="trk-kpi-val is-danger">{{ stats.stopped }}</div>
+      </div>
+      <div class="trk-kpi">
+        <div class="trk-kpi-label">Distance (sum)</div>
+        <div class="trk-kpi-val is-info">{{ "%.2f"|format(stats.total_distance or 0) }} km</div>
+      </div>
     </div>
-    <div class="table-responsive" style="max-height: 620px;">
-      <table class="table table-sm table-hover mb-0">
-        <thead class="table-light sticky-top">
-          <tr>
-            <th>RegNo</th>
-            <th>Group</th>
-            <th>Record Date Time</th>
-            <th>Location</th>
-            <th>Speed</th>
-            <th>Direction</th>
-            <th>Distance</th>
-            <th>Travel Time</th>
-            <th>Stop Time</th>
-            <th>Reason</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for p in points %}
-          <tr>
-            <td class="text-nowrap fw-semibold">{{ p.RegNo or selected_regno }}</td>
-            <td class="small">{{ p.Group or '-' }}</td>
-            <td class="text-nowrap">{{ p.RecordDateTime }}</td>
-            <td class="small text-muted">{{ p.Location or '-' }}</td>
-            <td class="{% if (p.Speed or 0) > 0 %}act-speed-move{% else %}act-speed-stop{% endif %}">
-              {{ "%.0f"|format(p.Speed or 0) }}
-            </td>
-            <td>{{ p.Direction or '-' }}</td>
-            <td>{{ "%.2f"|format(p.Distance or 0) }}</td>
-            <td class="text-nowrap">{{ p.TravelTime or '00:00:00' }}</td>
-            <td class="text-nowrap">{{ p.StopTime or '00:00:00' }}</td>
-            <td><span class="act-reason-chip">{{ p.Reason or 'Unknown' }}</span></td>
-          </tr>
+
+    {% if stats.reasons %}
+    <div class="card mb-3">
+      <div class="card-body py-2">
+        <div class="d-flex flex-wrap gap-2 align-items-center act-reason-scroll">
+          <span class="small text-muted fw-semibold me-1">By activity:</span>
+          {% for name, cnt in stats.reasons[:12] %}
+          <a class="act-reason-chip text-decoration-none"
+             href="{{ url_for('tracking_activity_report', regno=selected_regno, from_date=from_date, to_date=to_date, reason=name, nav_from=nav_from) }}">
+            {{ name }} · {{ cnt }}
+          </a>
           {% endfor %}
-        </tbody>
-      </table>
+          {% if reason_filter %}
+          <a class="btn btn-sm btn-link" href="{{ url_for('tracking_activity_report', regno=selected_regno, from_date=from_date, to_date=to_date, nav_from=nav_from) }}">Clear filter</a>
+          {% endif %}
+        </div>
+      </div>
     </div>
+    {% endif %}
+
+    {% if points %}
+    <!-- Desktop: full point table -->
+    <div class="card trk-desktop-only">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-list-ul"></i> Activity details
+          {% if reason_filter %}<span class="badge bg-secondary ms-1">{{ reason_filter }}</span>{% endif %}
+        </span>
+        <span class="small text-muted">{{ selected_regno }} · {{ from_date }} → {{ to_date }}</span>
+      </div>
+      <div class="table-responsive" style="max-height: 620px;">
+        <table class="table table-sm table-hover mb-0" data-mp-skip-cards="1"
+               data-trk-cards="activityList"
+               data-trk-card-title="2" data-trk-card-lead="4" data-trk-card-lead-suffix=" km/h"
+               data-trk-card-class-from="4" data-trk-card-skip="0,2,4" data-trk-card-full="3">
+          <thead class="table-light sticky-top">
+            <tr>
+              <th>RegNo</th>
+              <th>Group</th>
+              <th>Record Date Time</th>
+              <th>Location</th>
+              <th>Speed</th>
+              <th>Direction</th>
+              <th>Distance</th>
+              <th>Travel Time</th>
+              <th>Stop Time</th>
+              <th>Reason</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in points %}
+            <tr>
+              <td class="text-nowrap fw-semibold">{{ p.RegNo or selected_regno }}</td>
+              <td class="small">{{ p.Group or '-' }}</td>
+              <td class="text-nowrap">{{ p.RecordDateTime }}</td>
+              <td class="small text-muted">{{ p.Location or '-' }}</td>
+              <td class="{% if (p.Speed or 0) > 0 %}act-speed-move{% else %}act-speed-stop{% endif %}">
+                {{ "%.0f"|format(p.Speed or 0) }}
+              </td>
+              <td>{{ p.Direction or '-' }}</td>
+              <td>{{ "%.2f"|format(p.Distance or 0) }}</td>
+              <td class="text-nowrap">{{ p.TravelTime or '00:00:00' }}</td>
+              <td class="text-nowrap">{{ p.StopTime or '00:00:00' }}</td>
+              <td><span class="act-reason-chip">{{ p.Reason or 'Unknown' }}</span></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Mobile: timestamped activity cards, newest field order first -->
+    <div class="trk-mobile-only">
+      <div class="trk-section-title">
+        Activity details{% if reason_filter %} · {{ reason_filter }}{% endif %}
+      </div>
+      <input type="search" class="trk-search" placeholder="Search time, location, activity…"
+             data-trk-search="activityList" data-trk-count="activityShown"
+             autocomplete="off" spellcheck="false">
+      <div class="trk-count"><span id="activityShown">{{ points|length }}</span> of {{ points|length }} points</div>
+      <!-- Filled from the desktop table above so a multi-day report does not
+           ship every GPS point twice. -->
+      <div class="trk-list" id="activityList"></div>
+    </div>
+    {% else %}
+    <div class="alert alert-info">No GPS points found for the selected filters.</div>
+    {% endif %}
+    {% endif %}
   </div>
-  {% else %}
-  <div class="alert alert-info">No GPS points found for the selected filters.</div>
-  {% endif %}
-  {% endif %}
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="{{ url_for('static', filename='js/tracking_reports.js') }}?v=1001"></script>
 <script>
 flatpickr('.datepicker', { dateFormat: 'Y-m-d', maxDate: new Date() });
 

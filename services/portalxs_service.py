@@ -10,11 +10,13 @@ Wraps the SOAP client with:
 """
 from __future__ import annotations
 
+import copy
 import json
 import logging
 import math
 import threading
 import time
+from concurrent.futures import TimeoutError as FuturesTimeout
 from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Optional
@@ -605,33 +607,70 @@ def fetch_fleet_report(account_id: int, regno: str, from_dt: str, to_dt: str) ->
     return [normalize_fleet_report(r) for r in raw]
 
 
-# ── Fleet report: parallel bulk fetch + short TTL cache ──────────────────────
+# ── Fleet report: per-vehicle cache + incremental batch fetch ────────────────
+# One SOAP call per vehicle means a whole fleet takes far longer than a single
+# HTTP request may last on Render. The page therefore renders from cache and
+# the browser walks the remaining vehicles in small batches.
 
-_fleet_report_cache: dict[tuple, tuple[float, list]] = {}
+# {(account_id, from_dt, to_dt): {regno: (fetched_at, rows)}}
+_fleet_report_cache: dict[tuple, dict[str, tuple[float, list]]] = {}
 _fleet_report_cache_lock = threading.Lock()
 FLEET_REPORT_CACHE_TTL = 300  # 5 minutes
 FLEET_REPORT_MAX_WORKERS = 8
+FLEET_REPORT_BATCH_DEADLINE = 18  # seconds — stay well inside Render's limit
 
 
-def fetch_fleet_report_bulk(account_id: int, regnos: list[str], from_dt: str, to_dt: str) -> tuple[list[dict], Optional[str]]:
-    """Fetch fleet reports for many vehicles in PARALLEL with a 5-min cache.
-    Returns (reports, error). Partial results are returned even if some vehicles fail.
+def _fleet_cache_key(account_id: int, from_dt: str, to_dt: str) -> tuple:
+    return (account_id, from_dt, to_dt)
+
+
+def _fleet_cache_prune(now: float) -> None:
+    """Drop whole date-range buckets whose newest entry is long expired."""
+    for key, bucket in list(_fleet_report_cache.items()):
+        newest = max((ts for ts, _ in bucket.values()), default=0.0)
+        if (now - newest) > FLEET_REPORT_CACHE_TTL * 4:
+            _fleet_report_cache.pop(key, None)
+
+
+def fleet_report_cached(account_id: int, regnos: list[str], from_dt: str,
+                        to_dt: str) -> tuple[list[dict], list[str]]:
+    """Read whatever is already cached. Returns (rows, regnos_still_missing)."""
+    now = time.time()
+    key = _fleet_cache_key(account_id, from_dt, to_dt)
+    rows: list[dict] = []
+    missing: list[str] = []
+    with _fleet_report_cache_lock:
+        bucket = _fleet_report_cache.get(key) or {}
+        for regno in regnos:
+            hit = bucket.get(regno)
+            if hit and (now - hit[0]) < FLEET_REPORT_CACHE_TTL:
+                rows.extend(copy.deepcopy(hit[1]))
+            else:
+                missing.append(regno)
+    return rows, missing
+
+
+def fetch_fleet_report_batch(account_id: int, regnos: list[str], from_dt: str, to_dt: str,
+                             max_workers: int = FLEET_REPORT_MAX_WORKERS,
+                             deadline_sec: int = FLEET_REPORT_BATCH_DEADLINE) -> dict:
+    """Fetch one slice of vehicles in parallel and merge it into the cache.
+
+    Returns {'rows', 'done_regnos', 'errors'}. Never raises for per-vehicle
+    failures — a vehicle that errors is reported and counted as done so the
+    caller's progress loop cannot stall on it.
     """
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
-    cache_key = (account_id, tuple(sorted(regnos)), from_dt, to_dt)
-    now = time.time()
-    with _fleet_report_cache_lock:
-        hit = _fleet_report_cache.get(cache_key)
-        if hit and (now - hit[0]) < FLEET_REPORT_CACHE_TTL:
-            return hit[1], None
+    result: dict = {'rows': [], 'done_regnos': [], 'errors': []}
+    if not regnos:
+        return result
 
-    # Ensure the client is connected ONCE before parallel calls
-    # (avoids N threads racing to login simultaneously)
-    _get_client(account_id)
-
-    reports: list[dict] = []
-    errors: list[str] = []
+    # Log in once up front so N threads don't race to authenticate.
+    try:
+        _get_client(account_id)
+    except Exception as e:
+        result['errors'].append(friendly_portalxs_error(e))
+        return result
 
     def _one(regno):
         client = _get_client(account_id)
@@ -640,39 +679,92 @@ def fetch_fleet_report_bulk(account_id: int, regnos: list[str], from_dt: str, to
             return []
         return [normalize_fleet_report(r) for r in raw]
 
-    with ThreadPoolExecutor(max_workers=FLEET_REPORT_MAX_WORKERS) as pool:
+    key = _fleet_cache_key(account_id, from_dt, to_dt)
+    pool = ThreadPoolExecutor(max_workers=max(1, max_workers))
+    try:
         futures = {pool.submit(_one, r): r for r in regnos}
-        for fut in as_completed(futures):
-            regno = futures[fut]
-            try:
-                for item in fut.result():
+        try:
+            # Bounded by wall clock, not by the slowest vehicle: whatever is not
+            # finished stays out of done_regnos and is retried on the next call.
+            for fut in as_completed(futures, timeout=deadline_sec):
+                regno = futures[fut]
+                try:
+                    rows = fut.result()
+                except Exception as e:
+                    result['errors'].append(f"{regno}: {friendly_portalxs_error(e)[:120]}")
+                    result['done_regnos'].append(regno)
+                    continue
+                for item in rows:
                     item['_regno'] = regno
-                    reports.append(item)
-            except Exception as e:
-                errors.append(f"{regno}: {str(e)[:120]}")
+                result['rows'].extend(rows)
+                result['done_regnos'].append(regno)
+                with _fleet_report_cache_lock:
+                    _fleet_report_cache.setdefault(key, {})[regno] = (time.time(), copy.deepcopy(rows))
+        except FuturesTimeout:
+            stalled = [r for r in regnos if r not in set(result['done_regnos'])]
+            result['errors'].append(
+                f"{len(stalled)} vehicle(s) still loading after {deadline_sec}s")
+            logger.warning('fleet report batch hit the %ss deadline, %s vehicle(s) unfinished',
+                           deadline_sec, len(stalled))
+    finally:
+        pool.shutdown(wait=False, cancel_futures=True)
+
+    with _fleet_report_cache_lock:
+        _fleet_cache_prune(time.time())
+    return result
+
+
+def fetch_fleet_report_bulk(account_id: int, regnos: list[str], from_dt: str,
+                            to_dt: str) -> tuple[list[dict], Optional[str]]:
+    """Whole-fleet fetch, walking the batch helper until every vehicle is done.
+
+    Only for callers that can afford the full runtime (CSV export). Page loads
+    use fleet_report_cached() + fetch_fleet_report_batch() instead.
+    """
+    rows, missing = fleet_report_cached(account_id, regnos, from_dt, to_dt)
+    errors: list[str] = []
+    while missing:
+        batch = missing[:FLEET_REPORT_MAX_WORKERS]
+        res = fetch_fleet_report_batch(account_id, batch, from_dt, to_dt)
+        rows.extend(res['rows'])
+        errors.extend(res['errors'])
+        if not res['done_regnos']:
+            errors.append(f"{len(missing)} vehicle(s) could not be fetched")
+            break
+        missing = [r for r in missing if r not in set(res['done_regnos'])]
 
     error = None
     if errors:
         error = f"{len(errors)} vehicle(s) failed — " + "; ".join(errors[:3])
-
-    # Cache only fully/partially successful results (something to show)
-    if reports:
-        with _fleet_report_cache_lock:
-            _fleet_report_cache[cache_key] = (now, reports)
-            # Evict stale entries to keep memory bounded
-            for k in [k for k, (ts, _) in _fleet_report_cache.items() if (now - ts) > FLEET_REPORT_CACHE_TTL * 2]:
-                _fleet_report_cache.pop(k, None)
-
-    return reports, error
+    return rows, error
 
 
 def fetch_trends(account_id: int, regno: str, from_dt: str, to_dt: str) -> list[dict]:
     """Fetch daily trends for a vehicle."""
+    return fetch_trends_with_status(account_id, regno, from_dt, to_dt)[0]
+
+
+def fetch_trends_with_status(account_id: int, regno: str, from_dt: str,
+                             to_dt: str) -> tuple[list[dict], Optional[str]]:
+    """Daily trends plus PortalXS's own message when it returns no series.
+
+    The endpoint answers {responseCode, responseMsg, _trends} and often fails
+    upstream ("Object reference not set…"); without the message the page cannot
+    tell an empty range apart from a broken endpoint.
+    """
     client = _get_client(account_id)
     raw = client.get_trends(regno, from_dt, to_dt)
-    if not isinstance(raw, list):
-        return []
-    return [normalize_trend(t) for t in raw]
+    if isinstance(raw, list):
+        return [normalize_trend(t) for t in raw], None
+    if isinstance(raw, dict):
+        for value in raw.values():
+            if isinstance(value, list):
+                return [normalize_trend(t) for t in value if isinstance(t, dict)], None
+        msg = str(raw.get('responseMsg') or '').strip()
+        code = raw.get('responseCode')
+        if msg:
+            return [], f"PortalXS trends unavailable ({code}): {msg}"
+    return [], None
 
 
 def fetch_mileage(account_id: int, regno: str, from_dt: str, to_dt: str) -> dict:
@@ -914,6 +1006,124 @@ def fetch_mileage_report_bulk(account_id: int, regnos: list[str], from_dt: str, 
 
 ALERT_CACHE_MAX_ROWS = 500  # per account
 
+# PortalXS never sends a severity, so it is derived from the alert name.
+_ALERT_SEVERITY_HIGH = ('sos', 'panic', 'emergency', 'tow', 'accident', 'crash',
+                        'power cut', 'powercut', 'unplug', 'tamper', 'theft', 'jam')
+_ALERT_SEVERITY_MEDIUM = ('overspeed', 'over speed', 'speed', 'battery', 'harsh',
+                          'idle', 'geofence', 'fence', 'offline', 'no data')
+
+
+def _alert_severity(alert_type: str) -> str:
+    name = (alert_type or '').lower()
+    if any(k in name for k in _ALERT_SEVERITY_HIGH):
+        return 'High'
+    if any(k in name for k in _ALERT_SEVERITY_MEDIUM):
+        return 'Medium'
+    return 'Low'
+
+
+def _alert_rows_from_response(raw) -> list[dict]:
+    """PortalXS answers either a bare list or {responseCode, responseMsg, _vAlerts}.
+    A 'no alerts' answer has _vAlerts = null and must read as empty, not as junk."""
+    if isinstance(raw, list):
+        return [a for a in raw if isinstance(a, dict)]
+    if isinstance(raw, dict):
+        for value in raw.values():
+            if isinstance(value, list):
+                return [a for a in value if isinstance(a, dict)]
+    return []
+
+
+def _alert_time_text(value: str) -> str:
+    """PortalXS mixes 'YYYY-MM-DDTHH:MM:SS' and 'YYYY-MM-DD HH:MM:SS'; show one."""
+    return value.replace('T', ' ', 1) if value else ''
+
+
+def _is_serialized_blob(value: str) -> bool:
+    """True for legacy cache rows that stored the whole record in a text column."""
+    text = (value or '').strip()
+    return text.startswith(('{', '[')) and text.endswith(('}', ']'))
+
+
+def normalize_alert(a: dict) -> dict:
+    """Map a PortalXS alert record onto the fields the UI and cache use.
+
+    Field names differ per endpoint version: AlertName/AlertType for the kind,
+    AlertDateTime/RDT for the timestamp.
+    """
+    def pick(*keys):
+        for k in keys:
+            v = a.get(k)
+            if v not in (None, ''):
+                return str(v).strip()
+        return ''
+
+    alert_type = pick('AlertName', 'AlertType', 'Type', 'EventName')
+    landmark = pick('LandMark', 'Landmark', 'Location', 'Address')
+    if landmark.lower().startswith('invalid gis'):
+        landmark = ''
+    alert_msg = pick('AlertMsg', 'Message', 'Description', 'AlertValue')
+    if alert_msg and alert_msg == alert_type:
+        alert_msg = ''
+    severity = pick('Severity') or _alert_severity(alert_type)
+
+    return {
+        'regno': pick('RegNo', 'regNo', 'Reg_No'),
+        'alert_type': alert_type,
+        'alert_msg': alert_msg,
+        'alert_time': _alert_time_text(
+            pick('AlertDateTime', 'RDT', 'AlertTime', 'DateTime', 'EventTime')),
+        'severity': severity,
+        'landmark': landmark,
+        'lat': pick('LAT', 'Lat', 'Latitude'),
+        'lon': pick('LON', 'Lon', 'Longitude'),
+    }
+
+
+def alert_row_from_cache(row) -> dict:
+    """Rebuild a UI alert dict from a cached row, re-reading raw_json when the
+    row predates the field-name fix (older rows have type/time stored as NULL)."""
+    payload = {}
+    if row.raw_json:
+        try:
+            parsed = json.loads(row.raw_json)
+            if isinstance(parsed, dict):
+                payload = normalize_alert(parsed)
+        except (ValueError, TypeError):
+            payload = {}
+
+    alert_time = row.alert_time.strftime('%Y-%m-%d %H:%M:%S') if row.alert_time else ''
+    alert_type = row.alert_type or payload.get('alert_type', '')
+    # Rows written before the field-name fix stored the whole record in
+    # alert_msg, which would otherwise render as a dict dump in the UI.
+    alert_msg = '' if _is_serialized_blob(row.alert_msg) else (row.alert_msg or '')
+    return {
+        'regno': row.regno or payload.get('regno', ''),
+        'alert_type': alert_type,
+        'alert_msg': alert_msg or payload.get('alert_msg', ''),
+        'alert_time': alert_time or payload.get('alert_time', ''),
+        'severity': row.severity or payload.get('severity') or _alert_severity(alert_type),
+        'landmark': payload.get('landmark', ''),
+        'lat': payload.get('lat', ''),
+        'lon': payload.get('lon', ''),
+        'source': 'db',
+    }
+
+
+def list_cached_alerts(account_id: int, limit: int = 200) -> list[dict]:
+    """Alert history from the DB cache, newest first."""
+    from models import PortalXSAlertCache
+    rows = (
+        PortalXSAlertCache.query.filter_by(account_id=account_id)
+        .order_by(PortalXSAlertCache.created_at.desc())
+        .limit(limit).all()
+    )
+    items = [alert_row_from_cache(r) for r in rows]
+    # alert_time can be NULL on older rows, so sort here instead of in SQL
+    # where the dialect decides where NULLs land.
+    items.sort(key=lambda a: a.get('alert_time') or '', reverse=True)
+    return items
+
 
 def fetch_alerts(account_id: int) -> list[dict]:
     """Fetch alerts; insert only NEW ones into cache (no delete-all churn).
@@ -922,9 +1132,7 @@ def fetch_alerts(account_id: int) -> list[dict]:
     from app import db
 
     client = _get_client(account_id)
-    raw = client.get_alerts()
-    if not isinstance(raw, list):
-        raw = []
+    raw = _alert_rows_from_response(client.get_alerts())
 
     # Existing alert keys (regno + type + time) to dedupe against
     existing_keys = {
@@ -937,35 +1145,26 @@ def fetch_alerts(account_id: int) -> list[dict]:
     alerts = []
     inserted = 0
     for a in raw:
-        if not isinstance(a, dict):
-            continue
-        regno = a.get('RegNo', a.get('regNo', ''))
-        alert_type = a.get('AlertType', a.get('Type', ''))
-        alert_msg = a.get('AlertMsg', a.get('Message', str(a)))
-        alert_time_str = a.get('RDT', a.get('AlertTime', a.get('DateTime', '')))
-        alert_time = _parse_rdt(alert_time_str) if alert_time_str else None
+        item = normalize_alert(a)
+        alert_time = _parse_rdt(item['alert_time']) if item['alert_time'] else None
 
-        key = (regno or '', alert_type or '', alert_time.isoformat() if alert_time else '')
+        key = (item['regno'], item['alert_type'],
+               alert_time.isoformat() if alert_time else '')
         if key not in existing_keys:
             db.session.add(PortalXSAlertCache(
                 account_id=account_id,
-                regno=regno,
-                alert_type=alert_type,
-                alert_msg=alert_msg,
+                regno=item['regno'],
+                alert_type=item['alert_type'],
+                alert_msg=item['alert_msg'],
                 alert_time=alert_time,
-                severity=a.get('Severity', ''),
+                severity=item['severity'],
                 raw_json=json.dumps(a, ensure_ascii=False),
             ))
             existing_keys.add(key)
             inserted += 1
 
-        alerts.append({
-            'regno': regno,
-            'alert_type': alert_type,
-            'alert_msg': alert_msg,
-            'alert_time': alert_time_str,
-            'severity': a.get('Severity', ''),
-        })
+        item['source'] = 'live'
+        alerts.append(item)
 
     if inserted:
         db.session.commit()

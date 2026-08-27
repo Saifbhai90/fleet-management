@@ -1,0 +1,12 @@
+{# Report header date range. A single-day report reads better as one date than
+   as "26-08-2026 → 26-08-2026", and the shorter string leaves room for the row
+   count next to it on a phone. #}
+{% macro date_range(from_date, to_date) -%}
+{%- if from_date and to_date and from_date == to_date -%}
+<strong>{{ from_date }}</strong>
+{%- elif from_date and to_date -%}
+<strong>{{ from_date }}</strong> → <strong>{{ to_date }}</strong>
+{%- else -%}
+<strong>{{ from_date or to_date or '—' }}</strong>
+{%- endif -%}
+{%- endmacro %}

@@ -12,13 +12,14 @@ from flask import (
 )
 from app import app, db, csrf
 from models import (
-    PortalXSAccount, PortalXSVehicleMapping, PortalXSAlertCache,
+    PortalXSAccount, PortalXSVehicleMapping,
     Vehicle,
 )
 from services.portalxs_service import (
     fetch_live_positions, fetch_mileage,
-    fetch_fleet_report, fetch_fleet_report_bulk, fetch_trends,
-    fetch_alerts, fetch_geofences,
+    fetch_fleet_report, fetch_fleet_report_bulk, fetch_trends_with_status,
+    fetch_fleet_report_batch, fleet_report_cached,
+    fetch_alerts, fetch_geofences, list_cached_alerts,
     get_cached_positions, get_summary_stats,
     get_all_vehicles_for_account, link_vehicle, auto_link_vehicles,
     create_account, update_account, delete_account,
@@ -28,6 +29,7 @@ from services.portalxs_service import (
 )
 from services.mileage_record_service import (
     aggregate_range_rows,
+    daily_mileage_trend,
     fetch_and_upsert_batch,
     get_mileage_sync_status_display,
     mark_sync_status,
@@ -698,8 +700,30 @@ def tracking_activity_report_export_csv():
 # FLEET REPORT
 # ════════════════════════════════════════════════════════════════════════════
 
+def _fleet_report_names(vehicles_list: list) -> dict:
+    return {v['portalxs_regno']: (v.get('vehicle_no') or v['portalxs_regno'])
+            for v in vehicles_list}
+
+
+def _apply_fleet_report_names(reports: list, names: dict) -> None:
+    for item in reports:
+        key = item.get('_regno') or item.get('RegNo', '')
+        item['vehicle_no'] = names.get(key, item.get('RegNo', '') or key)
+
+
+def _rank_fleet_reports(reports: list) -> list:
+    reports.sort(key=lambda x: safe_float(x.get('VehicleScore')), reverse=True)
+    return reports
+
+
 @app.route('/tracking/fleet-report')
 def tracking_fleet_report():
+    """Render from cache only.
+
+    One SOAP call per vehicle means a full fleet takes far longer than a single
+    request may last, so the remaining vehicles are fetched by the browser in
+    small batches via /tracking/fleet-report/fetch-batch.
+    """
     acct_id = _get_account_id()
     accounts = _get_all_accounts()
     vehicles_list = get_all_vehicles_for_account(acct_id) if acct_id else []
@@ -709,31 +733,90 @@ def tracking_fleet_report():
 
     reports = []
     error = None
+    pending_total = 0
     if acct_id and vehicles_list:
         fdt, tdt = _soap_dates(from_date, to_date)
-        regno_to_name = {v['portalxs_regno']: (v.get('vehicle_no') or v['portalxs_regno'])
-                         for v in vehicles_list}
-        # Parallel fetch (8 workers) + 5-min cache — was sequential O(N) before
-        reports, error = fetch_fleet_report_bulk(
-            acct_id, list(regno_to_name.keys()), fdt, tdt)
-        for item in reports:
-            item['vehicle_no'] = regno_to_name.get(item.get('_regno', item.get('RegNo', '')),
-                                                   item.get('RegNo', ''))
-
-    # Sort by score descending (vehicle ranking)
-    reports.sort(key=lambda x: x.get('VehicleScore', 0), reverse=True)
+        names = _fleet_report_names(vehicles_list)
+        try:
+            reports, missing = fleet_report_cached(acct_id, list(names.keys()), fdt, tdt)
+        except Exception as e:
+            logger.warning('fleet report cache read failed acct=%s: %s', acct_id, e)
+            reports, missing = [], list(names.keys())
+        pending_total = len(missing)
+        _apply_fleet_report_names(reports, names)
 
     return render_template(
         'tracking/fleet_report.html',
         vehicles_list=vehicles_list,
         from_date=from_date,
         to_date=to_date,
-        reports=reports,
+        reports=_rank_fleet_reports(reports),
         error=error,
+        pending_total=pending_total,
+        total_vehicles=len(vehicles_list),
         accounts=accounts,
         current_account_id=acct_id,
         **_nav_back_ctx(url_for('tracking_dashboard')),
     )
+
+
+@app.route('/tracking/fleet-report/fetch-batch', methods=['POST'])
+def tracking_fleet_report_fetch_batch():
+    """Fetch the next slice of vehicles for the fleet report."""
+    acct_id = _get_account_id()
+    if not acct_id:
+        return jsonify({'ok': False, 'error': 'No account configured'}), 400
+
+    body = request.json or {}
+    from_date = _sanitize_date(body.get('from_date') or '')
+    to_date = _sanitize_date(body.get('to_date') or '')
+    try:
+        batch_size = int(body.get('batch_size') or 8)
+    except (TypeError, ValueError):
+        batch_size = 8
+    batch_size = max(1, min(batch_size, 12))
+
+    vehicles_list = get_all_vehicles_for_account(acct_id)
+    if not vehicles_list:
+        return jsonify({'ok': False, 'error': 'No vehicles'}), 400
+
+    names = _fleet_report_names(vehicles_list)
+    fdt, tdt = _soap_dates(from_date, to_date)
+
+    cached_rows, missing = fleet_report_cached(acct_id, list(names.keys()), fdt, tdt)
+    total = len(names)
+    if not missing:
+        _apply_fleet_report_names(cached_rows, names)
+        return jsonify({
+            'ok': True, 'complete': True, 'done': total, 'total': total,
+            'batch_rows': [], 'rows': _rank_fleet_reports(cached_rows), 'error': None,
+        })
+
+    targets = missing[:batch_size]
+    try:
+        result = fetch_fleet_report_batch(acct_id, targets, fdt, tdt)
+    except Exception as e:
+        logger.exception('fleet report batch failed acct=%s', acct_id)
+        return jsonify({'ok': False, 'error': friendly_portalxs_error(e)[:240]}), 500
+
+    batch_rows = result['rows']
+    _apply_fleet_report_names(batch_rows, names)
+    done_after = total - len(missing) + len(result['done_regnos'])
+    complete = done_after >= total
+
+    payload = {
+        'ok': True,
+        'complete': complete,
+        'done': done_after,
+        'total': total,
+        'batch_rows': _rank_fleet_reports(batch_rows),
+        'error': '; '.join(result['errors'][:3]) if result['errors'] else None,
+    }
+    if complete:
+        rows, _ = fleet_report_cached(acct_id, list(names.keys()), fdt, tdt)
+        _apply_fleet_report_names(rows, names)
+        payload['rows'] = _rank_fleet_reports(rows)
+    return jsonify(payload)
 
 
 @app.route('/tracking/fleet-report/export/csv')
@@ -1024,12 +1107,36 @@ def tracking_trends():
 
     trends = []
     error = None
+    warning = None
+    trend_source = ''
     if regno and acct_id:
         fdt, tdt = _soap_dates(from_date, to_date)
         try:
-            trends = fetch_trends(acct_id, regno, fdt, tdt)
+            trends, warning = fetch_trends_with_status(acct_id, regno, fdt, tdt)
+            trend_source = 'PortalXS' if trends else ''
         except Exception as e:
-            error = str(e)[:300]
+            db.session.rollback()
+            error = friendly_portalxs_error(e)
+            logger.warning('tracking_trends fetch failed regno=%s: %s', regno, e)
+
+        # PortalXS's trends endpoint is frequently down for a vehicle. Our own
+        # per-day mileage records cover the same range, so chart those instead
+        # of showing an empty page.
+        if not trends:
+            selected = next((v for v in vehicles_list if v['portalxs_regno'] == regno), None)
+            try:
+                trends = daily_mileage_trend(
+                    regno, (selected or {}).get('vehicle_no'),
+                    _parse_ymd(from_date), _parse_ymd(to_date),
+                )
+            except Exception as e:
+                db.session.rollback()
+                logger.warning('tracking_trends db fallback failed regno=%s: %s', regno, e)
+                trends = []
+            if any(safe_float(t.get('Mileage')) > 0 for t in trends):
+                trend_source = 'Saved mileage records'
+            else:
+                trends = []
 
     return render_template(
         'tracking/trends.html',
@@ -1038,6 +1145,8 @@ def tracking_trends():
         from_date=from_date,
         to_date=to_date,
         trends=trends,
+        trend_source=trend_source,
+        warning=warning,
         error=error,
         accounts=accounts,
         current_account_id=acct_id,
@@ -1055,27 +1164,31 @@ def tracking_alerts():
     accounts = _get_all_accounts()
 
     alerts = []
+    history = []
     error = None
     if acct_id:
         try:
             alerts = fetch_alerts(acct_id)
         except Exception as e:
-            error = str(e)[:300]
-            # Fall back to DB cached alerts
-            cached = PortalXSAlertCache.query.filter_by(account_id=acct_id).order_by(
-                PortalXSAlertCache.created_at.desc()
-            ).limit(200).all()
-            alerts = [{
-                'regno': a.regno,
-                'alert_type': a.alert_type,
-                'alert_msg': a.alert_msg,
-                'alert_time': a.alert_time.isoformat() if a.alert_time else '',
-                'severity': a.severity,
-            } for a in cached]
+            db.session.rollback()
+            error = friendly_portalxs_error(e)
+            logger.warning('tracking_alerts live fetch failed acct=%s: %s', acct_id, e)
+        # History always comes from the cache so the page has content even when
+        # PortalXS currently reports no open alerts.
+        try:
+            history = list_cached_alerts(acct_id, limit=300)
+        except Exception as e:
+            db.session.rollback()
+            logger.warning('tracking_alerts history load failed acct=%s: %s', acct_id, e)
+
+    live_keys = {(a.get('regno'), a.get('alert_type'), a.get('alert_time')) for a in alerts}
+    history = [h for h in history
+               if (h.get('regno'), h.get('alert_type'), h.get('alert_time')) not in live_keys]
 
     return render_template(
         'tracking/alerts.html',
         alerts=alerts,
+        history=history,
         error=error,
         accounts=accounts,
         current_account_id=acct_id,

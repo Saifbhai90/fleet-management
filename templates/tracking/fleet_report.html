@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% from 'partials/nav_back_button.html' import nav_back_button with context %}
+{% from 'partials/report_date_range.html' import date_range %}
 {% block title %}Fleet Report — Fleet Tracking{% endblock %}
 
 {% block extra_head %}
@@ -8,13 +9,27 @@
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid py-3">
-  <div class="d-flex align-items-center justify-content-between mb-3">
-    <h4 class="mb-0 fw-bold"><i class="bi bi-bar-chart"></i> Fleet Report & Vehicle Ranking</h4>
-    {{ nav_back_button() }}
+<div class="container-fluid py-3 trk-page">
+  <div class="trk-head">
+    <h4>
+      <i class="bi bi-bar-chart"></i>
+      <span class="trk-head-text">Fleet Report &amp; Vehicle Ranking</span>
+    </h4>
+    <div class="trk-head-meta">
+      {{ date_range(from_date, to_date) }}
+      · <span id="fleetMetaCount">{{ reports|length }}</span> vehicles
+    </div>
+    <div class="d-flex align-items-center gap-2 trk-head-actions">
+      <button type="button" class="trk-filters-toggle" data-trk-filters-toggle
+              aria-controls="trkFilters" aria-expanded="false">
+        <i class="bi bi-funnel"></i> Filters
+      </button>
+      {{ nav_back_button() }}
+    </div>
   </div>
 
-  <form method="get" class="card mb-3">
+  <form method="get" class="card mb-3 trk-filters" id="trkFilters"
+        data-trk-open="{{ '0' if reports else '1' }}">
     <div class="card-body d-flex flex-wrap gap-3 align-items-end">
       <div>
         <label class="form-label small fw-semibold">From</label>
@@ -25,93 +40,350 @@
         <input type="text" name="to_date" class="form-control form-control-sm datepicker" value="{{ to_date }}" required>
       </div>
       <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-search"></i> Generate</button>
-      {% if reports %}
       <a href="{{ url_for('tracking_fleet_report_export_csv', from_date=from_date, to_date=to_date, account_id=current_account_id) }}"
-         class="btn btn-sm btn-outline-success">
+         class="btn btn-sm btn-outline-success {% if not reports %}disabled{% endif %}" id="fleetExportBtn">
         <i class="bi bi-filetype-csv"></i> Export CSV
       </a>
-      {% endif %}
     </div>
   </form>
 
-  {% if error %}
-  <div class="alert alert-danger">{{ error }}</div>
-  {% endif %}
-
-  {% if reports %}
-  <div class="row g-3 mb-3">
-    <div class="col-lg-6">
-      <div class="card p-3">
-        <canvas id="distanceChart" height="200"></canvas>
+  <div class="trk-body">
+    <div id="fleetProgressWrap" class="mb-3" {% if not pending_total %}style="display:none"{% endif %}>
+      <div class="trk-progress-label">
+        <span id="fleetProgressLabel">Loading vehicles from PortalXS…</span>
+        <span id="fleetProgressPct"></span>
+      </div>
+      <div class="progress" style="height: 10px;">
+        <div id="fleetProgressBar" class="progress-bar progress-bar-striped progress-bar-animated"
+             role="progressbar" style="width: 0%"></div>
+      </div>
+      <!-- Placeholders so a cold cache does not open on a blank screen. -->
+      <div class="trk-skeletons" id="fleetSkeletons" aria-hidden="true">
+        {% for _ in range(6) %}
+        <div class="trk-skeleton">
+          <div class="trk-skeleton-bar" style="width: 45%"></div>
+          <div class="trk-skeleton-bar" style="width: 70%"></div>
+        </div>
+        {% endfor %}
       </div>
     </div>
-    <div class="col-lg-6">
-      <div class="card p-3">
-        <canvas id="scoreChart" height="200"></canvas>
+
+    <div id="fleetAlert" class="alert alert-warning" {% if not error %}style="display:none"{% endif %}>{{ error or '' }}</div>
+
+    <div id="fleetResults" {% if not reports %}style="display:none"{% endif %}>
+      <div class="trk-kpis">
+        <div class="trk-kpi">
+          <div class="trk-kpi-label">Vehicles</div>
+          <div class="trk-kpi-val is-primary" id="kpiFleetVehicles">0</div>
+        </div>
+        <div class="trk-kpi">
+          <div class="trk-kpi-label">Total distance</div>
+          <div class="trk-kpi-val is-success" id="kpiFleetDistance">0</div>
+        </div>
+        <div class="trk-kpi">
+          <div class="trk-kpi-label">Avg score</div>
+          <div class="trk-kpi-val is-info" id="kpiFleetScore">0</div>
+        </div>
+        <div class="trk-kpi">
+          <div class="trk-kpi-label">Total alerts</div>
+          <div class="trk-kpi-val is-danger" id="kpiFleetAlerts">0</div>
+        </div>
+      </div>
+
+      <div class="row g-3 mb-3">
+        <div class="col-lg-6">
+          <div class="trk-chart-card">
+            <div class="trk-chart-box"><canvas id="distanceChart"></canvas></div>
+          </div>
+        </div>
+        <div class="col-lg-6">
+          <div class="trk-chart-card">
+            <div class="trk-chart-box"><canvas id="scoreChart"></canvas></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Desktop: ranking table -->
+      <div class="card trk-desktop-only">
+        <div class="card-header"><i class="bi bi-trophy"></i> Vehicle Ranking by Score</div>
+        <div class="table-responsive">
+          <table class="table table-sm table-hover mb-0" id="fleetTable" data-mp-skip-cards="1">
+            <thead><tr>
+              <th>Rank</th><th>Vehicle</th><th>Score</th><th>Fuel (ltr)</th><th>Trips</th>
+              <th>Duration</th><th>Distance (km)</th><th>Alerts</th>
+            </tr></thead>
+            <tbody id="fleetTbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Mobile: leaderboard cards -->
+      <div class="trk-mobile-only">
+        <div class="trk-section-title"><i class="bi bi-trophy"></i> Ranking by score</div>
+        <input type="search" class="trk-search" placeholder="Search vehicle…"
+               data-trk-search="fleetList" data-trk-count="fleetShown"
+               autocomplete="off" spellcheck="false">
+        <div class="trk-count"><span id="fleetShown">0</span> vehicles</div>
+        <div class="trk-list" id="fleetList"></div>
       </div>
     </div>
-  </div>
 
-  <div class="card">
-    <div class="card-header"><i class="bi bi-trophy"></i> Vehicle Ranking by Score</div>
-    <div class="table-responsive">
-      <table class="table table-sm table-hover mb-0">
-        <thead><tr>
-          <th>Rank</th><th>Vehicle</th><th>Score</th><th>Fuel (ltr)</th><th>Trips</th>
-          <th>Duration</th><th>Distance (km)</th><th>Alerts</th>
-        </tr></thead>
-        <tbody>
-          {% for r in reports %}
-          <tr>
-            <td><span class="badge {% if loop.index <= 3 %}bg-warning{% else %}bg-light text-dark{% endif %}">#{{ loop.index }}</span></td>
-            <td class="fw-semibold">{{ r.vehicle_no or r.RegNo }}</td>
-            <td>
-              <div class="d-flex align-items-center gap-2">
-                <span class="fw-bold">{{ "%.1f"|format(r.VehicleScore) }}</span>
-                <div class="progress flex-grow-1" style="height: 6px; max-width: 80px;">
-                  <div class="progress-bar bg-success" style="width: {{ r.VehicleScore }}%"></div>
-                </div>
-              </div>
-            </td>
-            <td>{{ "%.1f"|format(r.FuelConsumption) }}</td>
-            <td>{{ r.Trips }}</td>
-            <td>{{ (r.Duration / 3600)|round(1) }}h</td>
-            <td>{{ "%.1f"|format(r.Distance) }}</td>
-            <td>{{ r.Alerts }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+    <div class="alert alert-info" id="fleetEmpty"
+         {% if reports or pending_total %}style="display:none"{% endif %}>
+      {% if current_account_id %}
+      No report data for this range. Pick dates and press <strong>Generate</strong>.
+      {% else %}
+      No PortalXS account configured.
+      {% endif %}
     </div>
   </div>
-  {% elif current_account_id %}
-  <div class="alert alert-info">No report data. Select a date range and generate.</div>
-  {% endif %}
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="{{ url_for('static', filename='js/tracking_reports.js') }}?v=1001"></script>
 <script>
 flatpickr('.datepicker', { dateFormat: 'Y-m-d', maxDate: new Date() });
 
-var reports = {{ reports | tojson }};
-if (reports && reports.length) {
-  var labels = reports.map(function(r) { return r.vehicle_no || r.RegNo; });
-  var distances = reports.map(function(r) { return r.Distance; });
-  var scores = reports.map(function(r) { return r.VehicleScore; });
+(function() {
+  /* One SOAP call per vehicle: the page opens on whatever is cached and the
+     rest streams in through /tracking/fleet-report/fetch-batch, so a large
+     fleet can never blow the request timeout. */
+  var reports = {{ reports | tojson }};
+  var pendingTotal = {{ pending_total | default(0) | tojson }};
+  var totalVehicles = {{ total_vehicles | default(0) | tojson }};
+  var fromDate = {{ from_date|tojson }};
+  var toDate = {{ to_date|tojson }};
+  var csrf = (window.FleetConfig && window.FleetConfig.csrfToken) ||
+    (document.querySelector('meta[name="csrf-token"]') || {}).content || '';
+  var charts = {};
 
-  new Chart(document.getElementById('distanceChart'), {
-    type: 'bar',
-    data: { labels: labels, datasets: [{ label: 'Distance (km)', data: distances, backgroundColor: 'rgba(13,110,253,0.7)' }] },
-    options: { responsive: true, plugins: { title: { display: true, text: 'Distance Comparison' } }, scales: { x: { ticks: { maxRotation: 45, minRotation: 45, font: { size: 10 } } } } }
-  });
+  function el(id) { return document.getElementById(id); }
+  function num(v) { return Number(v) || 0; }
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
 
-  new Chart(document.getElementById('scoreChart'), {
-    type: 'bar',
-    data: { labels: labels, datasets: [{ label: 'Vehicle Score', data: scores, backgroundColor: 'rgba(25,135,84,0.7)' }] },
-    options: { responsive: true, plugins: { title: { display: true, text: 'Vehicle Score Ranking' } }, scales: { x: { ticks: { maxRotation: 45, minRotation: 45, font: { size: 10 } } } } }
+  function sortReports() {
+    reports.sort(function(a, b) { return num(b.VehicleScore) - num(a.VehicleScore); });
+  }
+
+  function renderTable() {
+    var tb = el('fleetTbody');
+    if (!tb) return;
+    tb.innerHTML = reports.map(function(r, i) {
+      var score = num(r.VehicleScore);
+      return '<tr>'
+        + '<td><span class="badge ' + (i < 3 ? 'bg-warning' : 'bg-light text-dark') + '">#' + (i + 1) + '</span></td>'
+        + '<td class="fw-semibold">' + esc(r.vehicle_no || r.RegNo) + '</td>'
+        + '<td><div class="d-flex align-items-center gap-2"><span class="fw-bold">' + score.toFixed(1) + '</span>'
+        + '<div class="progress flex-grow-1" style="height: 6px; max-width: 80px;">'
+        + '<div class="progress-bar bg-success" style="width: ' + Math.min(100, score) + '%"></div></div></div></td>'
+        + '<td>' + num(r.FuelConsumption).toFixed(1) + '</td>'
+        + '<td>' + num(r.Trips) + '</td>'
+        + '<td>' + (num(r.Duration) / 3600).toFixed(1) + 'h</td>'
+        + '<td>' + num(r.Distance).toFixed(1) + '</td>'
+        + '<td>' + num(r.Alerts) + '</td>'
+        + '</tr>';
+    }).join('');
+  }
+
+  function renderCards() {
+    var list = el('fleetList');
+    if (!list) return;
+    list.innerHTML = reports.map(function(r, i) {
+      var score = num(r.VehicleScore);
+      return '<div class="trk-item">'
+        + '<div class="trk-item-head">'
+        + '<span class="trk-item-rank' + (i < 3 ? ' is-podium' : '') + '">' + (i + 1) + '</span>'
+        + '<span class="trk-item-title">' + esc(r.vehicle_no || r.RegNo) + '</span>'
+        + '<span class="trk-item-lead">' + score.toFixed(1) + '</span>'
+        + '</div>'
+        + '<div class="trk-item-grid">'
+        + '<div class="trk-cell is-full"><span class="trk-cell-label">Score</span>'
+        + '<div class="trk-score-bar"><div class="trk-score-fill" style="width:'
+        + Math.min(100, score) + '%"></div></div></div>'
+        + '<div class="trk-cell"><span class="trk-cell-label">Distance</span>'
+        + '<span class="trk-cell-val">' + num(r.Distance).toFixed(1) + ' km</span></div>'
+        + '<div class="trk-cell"><span class="trk-cell-label">Trips</span>'
+        + '<span class="trk-cell-val">' + num(r.Trips) + '</span></div>'
+        + '<div class="trk-cell"><span class="trk-cell-label">Duration</span>'
+        + '<span class="trk-cell-val">' + (num(r.Duration) / 3600).toFixed(1) + ' h</span></div>'
+        + '<div class="trk-cell"><span class="trk-cell-label">Fuel</span>'
+        + '<span class="trk-cell-val">' + num(r.FuelConsumption).toFixed(1) + ' ltr</span></div>'
+        + '<div class="trk-cell"><span class="trk-cell-label">Alerts</span>'
+        + '<span class="trk-cell-val">' + num(r.Alerts) + '</span></div>'
+        + '</div></div>';
+    }).join('');
+  }
+
+  function renderKpis() {
+    var distance = 0, alerts = 0, score = 0;
+    reports.forEach(function(r) {
+      distance += num(r.Distance);
+      alerts += num(r.Alerts);
+      score += num(r.VehicleScore);
+    });
+    var count = reports.length;
+    var vals = {
+      kpiFleetVehicles: count,
+      kpiFleetDistance: distance.toFixed(0),
+      kpiFleetScore: count ? (score / count).toFixed(1) : '0',
+      kpiFleetAlerts: alerts,
+      fleetMetaCount: count,
+      fleetShown: count
+    };
+    Object.keys(vals).forEach(function(id) {
+      var node = el(id);
+      if (node) node.textContent = vals[id];
+    });
+  }
+
+  /* Charts get the top slice only: 48 rotated labels are unreadable on a
+     phone and barely better on a laptop. */
+  function renderCharts() {
+    if (typeof Chart === 'undefined' || !reports.length) return;
+    var limit = window.innerWidth <= 767 ? 10 : 25;
+    var top = reports.slice(0, limit);
+    var labels = top.map(function(r) { return r.vehicle_no || r.RegNo; });
+    var horizontal = window.innerWidth <= 767;
+
+    var specs = [
+      ['distanceChart', 'Distance (km)', top.map(function(r) { return num(r.Distance); }), 'rgba(13,110,253,0.75)'],
+      ['scoreChart', 'Vehicle Score', top.map(function(r) { return num(r.VehicleScore); }), 'rgba(25,135,84,0.75)']
+    ];
+
+    specs.forEach(function(spec) {
+      var canvas = el(spec[0]);
+      if (!canvas) return;
+      if (charts[spec[0]]) charts[spec[0]].destroy();
+      charts[spec[0]] = new Chart(canvas, {
+        type: 'bar',
+        data: { labels: labels, datasets: [{ label: spec[1], data: spec[2], backgroundColor: spec[3] }] },
+        options: {
+          indexAxis: horizontal ? 'y' : 'x',
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            title: { display: true, text: spec[1] + (reports.length > limit ? ' — top ' + limit : '') }
+          },
+          scales: {
+            x: { ticks: { font: { size: 10 }, maxRotation: horizontal ? 0 : 45, minRotation: horizontal ? 0 : 45 } },
+            y: { ticks: { font: { size: 10 } } }
+          }
+        }
+      });
+    });
+  }
+
+  function renderAll() {
+    sortReports();
+    renderTable();
+    renderCards();
+    renderKpis();
+    renderCharts();
+    var results = el('fleetResults');
+    var empty = el('fleetEmpty');
+    if (reports.length) {
+      if (results) results.style.display = '';
+      if (empty) empty.style.display = 'none';
+      var skel = el('fleetSkeletons');
+      if (skel) skel.remove();
+      var exp = el('fleetExportBtn');
+      if (exp) exp.classList.remove('disabled');
+    } else if (empty && !pendingTotal) {
+      empty.style.display = '';
+    }
+  }
+
+  function showAlert(msg) {
+    var box = el('fleetAlert');
+    if (!box) return;
+    if (!msg) { box.style.display = 'none'; box.textContent = ''; return; }
+    box.style.display = '';
+    box.textContent = msg;
+  }
+
+  function setProgress(done, total) {
+    var wrap = el('fleetProgressWrap');
+    if (!wrap) return;
+    if (done >= total) {
+      wrap.style.display = 'none';
+      return;
+    }
+    var pct = total ? Math.round((done / total) * 100) : 0;
+    wrap.style.display = '';
+    el('fleetProgressBar').style.width = pct + '%';
+    el('fleetProgressPct').textContent = pct + '%';
+    el('fleetProgressLabel').textContent = 'Loading from PortalXS — ' + done + ' / ' + total + ' vehicles';
+  }
+
+  var lastDone = -1;
+  var stalledRounds = 0;
+
+  function loadNext(retries) {
+    fetch({{ url_for('tracking_fleet_report_fetch_batch')|tojson }}, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf },
+      body: JSON.stringify({ from_date: fromDate, to_date: toDate, batch_size: 8 })
+    }).then(function(r) {
+      return r.json().then(function(d) { return { status: r.status, data: d }; });
+    }).then(function(res) {
+      var d = res.data || {};
+      if (!d.ok) {
+        if ((retries || 0) < 3) {
+          setTimeout(function() { loadNext((retries || 0) + 1); }, 2000);
+          return;
+        }
+        showAlert(d.error || 'Could not load the fleet report.');
+        var wrap = el('fleetProgressWrap');
+        if (wrap) wrap.style.display = 'none';
+        return;
+      }
+      if (d.rows) reports = d.rows;
+      else if (d.batch_rows && d.batch_rows.length) reports = reports.concat(d.batch_rows);
+      showAlert(d.error || '');
+      setProgress(d.done || 0, d.total || totalVehicles);
+      renderAll();
+      if (d.complete) return;
+
+      /* PortalXS can leave a vehicle hanging every round. Give up rather than
+         looping on the same batch forever. */
+      var done = d.done || 0;
+      stalledRounds = done > lastDone ? 0 : stalledRounds + 1;
+      lastDone = Math.max(lastDone, done);
+      if (stalledRounds >= 3) {
+        var wrap = el('fleetProgressWrap');
+        if (wrap) wrap.style.display = 'none';
+        showAlert('Some vehicles did not respond — showing ' + reports.length
+          + ' of ' + (d.total || totalVehicles) + '. Press Generate to retry.');
+        return;
+      }
+      loadNext(0);
+    }).catch(function() {
+      if ((retries || 0) < 3) {
+        setTimeout(function() { loadNext((retries || 0) + 1); }, 2000);
+        return;
+      }
+      showAlert('Network error while loading the fleet report.');
+    });
+  }
+
+  renderAll();
+  if (pendingTotal > 0) {
+    setProgress(totalVehicles - pendingTotal, totalVehicles);
+    loadNext(0);
+  }
+
+  var resizeTimer;
+  window.addEventListener('resize', function() {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(renderCharts, 250);
   });
-}
+})();
 </script>
 {% endblock %}

@@ -1,0 +1,515 @@
+/* ================================================================
+   tracking_reports.css
+   Shared shell for the PortalXS report screens:
+     Vehicle Mileage · Activity / GPS Points · Fleet Report & Ranking
+     Trends · Alerts · Tracking Settings
+
+   Desktop keeps the existing Bootstrap layout. Mobile gets the layout
+   fleet platforms use on phones: a compact sticky header, filters
+   folded behind a pill, a KPI strip, and purpose-built list rows
+   instead of a horizontally scrolling table.
+
+   Every mobile rule lives inside (max-width: 767px), so desktop is
+   untouched and the change stays reversible.
+   ================================================================ */
+
+/* ── Visibility helpers ──────────────────────────────────────────
+   Mobile-only blocks are hidden by default so a desktop browser
+   never renders both the table and the phone list. */
+.trk-mobile-only { display: none; }
+.trk-head-meta,
+.trk-filters-toggle { display: none; }
+
+/* Label text that is dropped on phones to keep a control on one line. */
+.trk-desktop-only-inline { display: inline; }
+
+/* ── Page header ─────────────────────────────────────────────── */
+.trk-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 1rem;
+}
+.trk-head h4 {
+  margin: 0;
+  font-weight: 700;
+  min-width: 0;
+}
+
+/* ── KPI strip ───────────────────────────────────────────────── */
+.trk-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin-bottom: 1rem;
+}
+.trk-kpi {
+  background: #fff;
+  border: 1px solid #e6eaf0;
+  border-radius: 12px;
+  padding: 12px 14px;
+  text-align: center;
+}
+.trk-kpi-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+.trk-kpi-val {
+  font-size: 1.4rem;
+  font-weight: 700;
+  line-height: 1.2;
+  color: #1e293b;
+}
+.trk-kpi-val.is-primary { color: #2563eb; }
+.trk-kpi-val.is-success { color: #16a34a; }
+.trk-kpi-val.is-danger  { color: #dc2626; }
+.trk-kpi-val.is-info    { color: #0891b2; }
+
+/* ── Chart cards ─────────────────────────────────────────────── */
+.trk-chart-card {
+  background: #fff;
+  border: 1px solid #e6eaf0;
+  border-radius: 12px;
+  padding: 14px;
+}
+.trk-chart-box {
+  position: relative;
+  height: 260px;
+}
+
+/* ── Mobile list rows (replace the table on phones) ──────────── */
+.trk-list { display: none; }
+.trk-item {
+  background: #fff;
+  border: 1px solid #e6eaf0;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+}
+.trk-item + .trk-item { margin-top: 8px; }
+.trk-item-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%);
+  color: #fff;
+}
+.trk-item-title {
+  font-weight: 700;
+  font-size: 0.86rem;
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.trk-item-lead {
+  font-size: 0.8rem;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  padding: 2px 9px;
+  white-space: nowrap;
+}
+.trk-item-rank {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.2);
+  font-size: 0.74rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.trk-item-rank.is-podium { background: #f59e0b; color: #1e293b; }
+.trk-item-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.trk-cell {
+  padding: 8px 12px;
+  border-top: 1px solid #f1f5f9;
+  min-width: 0;
+}
+.trk-cell:nth-child(odd) { border-right: 1px solid #f1f5f9; }
+.trk-cell.is-full { grid-column: 1 / -1; border-right: 0; }
+.trk-cell-label {
+  display: block;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: #94a3b8;
+  margin-bottom: 1px;
+}
+.trk-cell-val {
+  font-size: 0.83rem;
+  color: #1e293b;
+  font-weight: 500;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.trk-empty {
+  padding: 28px 16px;
+  text-align: center;
+  color: #94a3b8;
+  font-size: 0.86rem;
+}
+
+/* ── Loading placeholders ────────────────────────────────────── */
+.trk-skeletons { margin-top: 12px; }
+.trk-skeleton {
+  background: #fff;
+  border: 1px solid #e6eaf0;
+  border-radius: 12px;
+  padding: 14px 14px 16px;
+  margin-bottom: 8px;
+}
+.trk-skeleton-bar {
+  height: 10px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #eef2f7 25%, #e2e8f0 37%, #eef2f7 63%);
+  background-size: 400% 100%;
+  animation: trk-shimmer 1.4s ease-in-out infinite;
+}
+.trk-skeleton-bar + .trk-skeleton-bar { margin-top: 9px; }
+@keyframes trk-shimmer {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .trk-skeleton-bar { animation: none; }
+}
+.dark-mode .trk-skeleton { background: #131c2b; border-color: #243044; }
+.dark-mode .trk-skeleton-bar {
+  background: linear-gradient(90deg, #1b2536 25%, #243044 37%, #1b2536 63%);
+  background-size: 400% 100%;
+}
+
+/* ── Score bar (fleet ranking) ───────────────────────────────── */
+.trk-score-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: #e6eaf0;
+  overflow: hidden;
+  margin-top: 4px;
+}
+.trk-score-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #16a34a, #4ade80);
+}
+
+/* ── Alerts feed ─────────────────────────────────────────────── */
+.trk-feed-day {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #64748b;
+  margin: 14px 0 6px;
+}
+.trk-alert {
+  display: flex;
+  gap: 10px;
+  background: #fff;
+  border: 1px solid #e6eaf0;
+  border-left: 4px solid #94a3b8;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.trk-alert + .trk-alert { margin-top: 8px; }
+.trk-alert.sev-high   { border-left-color: #dc2626; }
+.trk-alert.sev-medium { border-left-color: #f59e0b; }
+.trk-alert.sev-low    { border-left-color: #64748b; }
+.trk-alert-icon {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 1rem;
+}
+.trk-alert.sev-high .trk-alert-icon   { background: #fee2e2; color: #b91c1c; }
+.trk-alert.sev-medium .trk-alert-icon { background: #fef3c7; color: #b45309; }
+.trk-alert-body { min-width: 0; flex: 1; }
+.trk-alert-top {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.trk-alert-veh {
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: #1e293b;
+  overflow-wrap: anywhere;
+}
+.trk-alert-time {
+  font-size: 0.72rem;
+  color: #94a3b8;
+  margin-left: auto;
+  white-space: nowrap;
+}
+.trk-alert-meta {
+  font-size: 0.78rem;
+  color: #475569;
+  margin-top: 2px;
+  overflow-wrap: anywhere;
+}
+
+/* ── Tabs / search / section titles (used on both breakpoints) ── */
+.trk-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.trk-tab {
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #475569;
+  border-radius: 999px;
+  padding: 7px 18px;
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+.trk-tab.is-active {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+}
+
+.trk-search {
+  width: 100%;
+  max-width: 340px;
+  min-height: 40px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 8px 14px;
+  font-size: 0.88rem;
+  margin-bottom: 12px;
+}
+.trk-search:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.trk-count {
+  font-size: 0.76rem;
+  color: #64748b;
+  margin-bottom: 8px;
+}
+
+.trk-section-title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: #64748b;
+  margin: 16px 0 8px;
+}
+
+/* ── Progress strip (batched fetches) ────────────────────────── */
+.trk-progress-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.78rem;
+  color: #475569;
+  margin-bottom: 4px;
+}
+
+.dark-mode .trk-kpi,
+.dark-mode .trk-chart-card,
+.dark-mode .trk-item,
+.dark-mode .trk-alert { background: #1a222d; border-color: #2a3a4a; }
+.dark-mode .trk-kpi-val,
+.dark-mode .trk-cell-val,
+.dark-mode .trk-alert-veh { color: #e2e8f0; }
+.dark-mode .trk-cell { border-color: #243044; }
+.dark-mode .trk-cell:nth-child(odd) { border-right-color: #243044; }
+
+/* ════════════════════════════════════════════════════════════════
+   MOBILE
+   ════════════════════════════════════════════════════════════════ */
+@media (max-width: 767px) {
+
+  .trk-mobile-only { display: block; }
+  .trk-desktop-only { display: none !important; }
+  .trk-desktop-only-inline { display: none; }
+  .trk-list { display: block; }
+
+  .trk-page {
+    padding: 0 0 14px !important;
+  }
+
+  /* Compact header — same blue chrome as the map screens so moving between
+     tracking pages does not change the furniture. Deliberately NOT sticky:
+     mobile_responsive_audit.css sets overflow-x on .main-content and
+     .container-fluid, which turns them into scroll containers and kills
+     position:sticky, and the app's own fixed navbar (z-index 1050) would
+     sit on top of it anyway. */
+  .trk-head {
+    margin: 0 0 10px !important;
+    padding: 8px 10px;
+    gap: 8px;
+    background: linear-gradient(90deg, #0b3d91, #1a5fb4);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
+  }
+  .trk-head h4 {
+    font-size: 14px;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .trk-head h4 .trk-head-text { display: none; }
+  .trk-head .btn-nav-back-rounded {
+    padding: 5px 9px;
+    font-size: 12px;
+    background: rgba(255, 255, 255, 0.15);
+    border-color: rgba(255, 255, 255, 0.25);
+    color: #fff;
+  }
+  .trk-head .btn-nav-back-rounded span { display: none; }
+  /* Two lines before clipping: a vehicle name plus a date range rarely fits
+     on one, and the row count that follows it is worth keeping. */
+  .trk-head-meta {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    flex: 1;
+    min-width: 0;
+    color: #cfe4ff;
+    font-size: 11.5px;
+    line-height: 1.3;
+    overflow: hidden;
+  }
+  .trk-head-meta strong { color: #fff; font-size: 12.5px; }
+  .trk-head .trk-head-actions .btn {
+    padding: 5px 9px;
+    font-size: 12px;
+    min-height: 34px;
+  }
+
+  /* Filters fold behind a pill; a report screen should open on data. */
+  .trk-filters-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    flex-shrink: 0;
+    background: rgba(255, 255, 255, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    color: #fff;
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 12px;
+    font-weight: 600;
+    min-height: 34px;
+  }
+  .trk-filters-toggle.is-open { background: #fff; color: #1a5fb4; }
+
+  .trk-filters {
+    display: none;
+    margin: 0 10px 10px !important;
+  }
+  .trk-filters.is-open { display: block; }
+  .trk-filters .card-body {
+    padding: 12px;
+    gap: 10px !important;
+  }
+  .trk-filters .card-body > div { flex: 1 1 100%; min-width: 0; }
+  .trk-filters .form-select,
+  .trk-filters .form-control {
+    font-size: 14px;
+    padding: 9px 11px;
+  }
+  .trk-filters .btn {
+    flex: 1 1 auto;
+    padding: 10px 12px;
+    font-size: 13px;
+  }
+
+  /* Body content gets its own gutter since .trk-page dropped padding */
+  .trk-body { padding: 0 10px; }
+
+  .trk-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  .trk-kpi { padding: 10px; border-radius: 10px; }
+  .trk-kpi-val { font-size: 1.15rem; }
+  .trk-kpi-label { font-size: 0.64rem; }
+
+  /* Charts: one per row, tall enough to read, never wider than screen */
+  .trk-chart-card { padding: 10px; border-radius: 10px; }
+  .trk-chart-box { height: 220px; }
+  .trk-chart-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .trk-section-title {
+    font-size: 0.78rem;
+    margin: 12px 0 6px;
+  }
+
+  .trk-search {
+    max-width: none;
+    min-height: 42px;
+    font-size: 0.9rem;
+    margin-bottom: 10px;
+  }
+  .trk-count { font-size: 0.74rem; margin-bottom: 6px; }
+
+  /* Alerts: tabs stretch to thumb width */
+  .trk-tabs { gap: 6px; }
+  .trk-tab {
+    flex: 1;
+    padding: 8px 10px;
+    font-size: 0.8rem;
+    min-height: 40px;
+  }
+
+  /* Settings: tab strip scrolls instead of wrapping into three lines */
+  .trk-nav-scroll {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    margin: 0 10px 12px;
+  }
+  .trk-nav-scroll::-webkit-scrollbar { display: none; }
+  .trk-nav-scroll .nav-item { flex-shrink: 0; }
+  .trk-nav-scroll .nav-link {
+    white-space: nowrap;
+    font-size: 0.82rem;
+    padding: 8px 12px;
+  }
+
+  .trk-page .alert {
+    margin: 0 10px 10px;
+    font-size: 0.82rem;
+  }
+  .trk-page .progress { height: 8px; }
+
+  .dark-mode .trk-tab { background: #1a222d; border-color: #2a3a4a; color: #cbd5e1; }
+  .dark-mode .trk-search { background: #1a222d; border-color: #2a3a4a; color: #e2e8f0; }
+}
+
+/* Small phones: keep the two-up cells readable */
+@media (max-width: 360px) {
+  .trk-item-grid { grid-template-columns: 1fr; }
+  .trk-cell:nth-child(odd) { border-right: 0; }
+}

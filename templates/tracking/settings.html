@@ -7,21 +7,59 @@
   .modal { z-index: 1070 !important; }
   .modal-backdrop { z-index: 1060 !important; }
   .modal-dialog { z-index: 1075 !important; }
+
+  .set-acct-actions .btn { flex: 1 1 auto; }
+
+  @media (max-width: 767px) {
+    /* Account rows become cards: six columns plus a four-button group cannot
+       be read or tapped inside a 360px-wide scroller. */
+    .set-acct-card { padding: 12px; }
+    .set-acct-card + .set-acct-card { border-top: 1px solid #eef2f7; }
+    .set-acct-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 10px;
+    }
+    .set-acct-actions .btn,
+    .set-acct-actions form {
+      flex: 1 1 calc(50% - 3px);
+      min-width: 0;
+    }
+    .set-acct-actions form .btn { width: 100%; }
+    .set-link-row {
+      border: 1px solid #e6eaf0;
+      border-radius: 10px;
+      padding: 10px 12px;
+      background: #fff;
+    }
+    .set-link-row + .set-link-row { margin-top: 8px; }
+    .set-link-row .form-select { margin: 8px 0; }
+  }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid py-3" style="max-width: 1000px;">
-  <div class="d-flex align-items-center justify-content-between mb-3">
-    <h4 class="mb-0 fw-bold"><i class="bi bi-gear"></i> PortalXS Tracking Settings</h4>
-    {{ nav_back_button() }}
+<div class="container-fluid py-3 trk-page" style="max-width: 1000px;">
+  <div class="trk-head">
+    <h4>
+      <i class="bi bi-gear"></i>
+      <span class="trk-head-text">PortalXS Tracking Settings</span>
+    </h4>
+    <div class="trk-head-meta">
+      <strong>{{ accounts|length }}</strong> account{{ '' if accounts|length == 1 else 's' }}
+      · polling {{ 'on' if polling_active else 'off' }}
+    </div>
+    <div class="d-flex align-items-center gap-2 trk-head-actions">
+      {{ nav_back_button() }}
+    </div>
   </div>
 
   <!-- Nav Tabs -->
-  <ul class="nav nav-tabs mb-3" role="tablist">
+  <ul class="nav nav-tabs mb-3 trk-nav-scroll" role="tablist">
     <li class="nav-item" role="presentation">
       <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-accounts" type="button" role="tab">
-        <i class="bi bi-person-badge"></i> PortalXS Accounts
+        <i class="bi bi-person-badge"></i> Accounts
       </button>
     </li>
     <li class="nav-item" role="presentation">
@@ -31,24 +69,25 @@
     </li>
     <li class="nav-item" role="presentation">
       <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-polling" type="button" role="tab">
-        <i class="bi bi-arrow-repeat"></i> Background Polling
+        <i class="bi bi-arrow-repeat"></i> Polling
       </button>
     </li>
   </ul>
 
-  <div class="tab-content">
+  <div class="tab-content trk-body">
     <!-- Tab: Accounts -->
     <div class="tab-pane fade show active" id="tab-accounts" role="tabpanel">
       <div class="card">
-        <div class="card-header d-flex justify-content-between align-items-center">
+        <div class="card-header d-flex justify-content-between align-items-center gap-2">
           <span><i class="bi bi-person-badge"></i> PortalXS Accounts</span>
-          <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#addAccountModal">
-            <i class="bi bi-plus-lg"></i> Add Account
+          <button class="btn btn-sm btn-primary text-nowrap" data-bs-toggle="modal"
+                  data-bs-target="#addAccountModal">
+            <i class="bi bi-plus-lg"></i> Add<span class="trk-desktop-only-inline"> Account</span>
           </button>
         </div>
         {% if accounts %}
-        <div class="table-responsive">
-          <table class="table table-sm table-hover mb-0">
+        <div class="table-responsive trk-desktop-only">
+          <table class="table table-sm table-hover mb-0" data-mp-skip-cards="1">
             <thead><tr>
               <th>Label</th><th>Username</th><th>Vehicles</th><th>Last Connected</th>
               <th>Status</th><th>Actions</th>
@@ -83,6 +122,37 @@
             </tbody>
           </table>
         </div>
+
+        <div class="trk-mobile-only">
+          {% for a in accounts %}
+          <div class="set-acct-card">
+            <div class="d-flex align-items-center justify-content-between gap-2">
+              <span class="fw-bold">{{ a.label }}</span>
+              {% if a.is_active %}<span class="badge bg-success">Active</span>
+              {% else %}<span class="badge bg-secondary">Inactive</span>{% endif %}
+            </div>
+            <div class="small text-muted mt-1">
+              <div><i class="bi bi-person"></i> {{ a.username }}</div>
+              <div><i class="bi bi-truck"></i> {{ a.vehicle_count }} vehicles</div>
+              <div><i class="bi bi-clock"></i>
+                {{ a.last_connected.strftime('%Y-%m-%d %H:%M') if a.last_connected else 'Never connected' }}
+              </div>
+            </div>
+            <div class="set-acct-actions">
+              <button class="btn btn-sm btn-outline-info btn-test-account" data-acct-id="{{ a.id }}">Test</button>
+              <button class="btn btn-sm btn-outline-primary btn-sync-account" data-acct-id="{{ a.id }}">Sync</button>
+              <button class="btn btn-sm btn-outline-warning" data-bs-toggle="modal" data-bs-target="#editAccountModal"
+                      data-acct-id="{{ a.id }}" data-label="{{ a.label }}" data-username="{{ a.username }}"
+                      data-active="{{ a.is_active }}">Edit</button>
+              <form method="post" action="{{ url_for('tracking_settings_account_delete', acct_id=a.id) }}"
+                    onsubmit="return confirm('Delete this account and all vehicle mappings?')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-sm btn-outline-danger">Delete</button>
+              </form>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
         {% else %}
         <div class="card-body text-muted text-center py-4">
           <i class="bi bi-exclamation-circle" style="font-size: 2rem;"></i>
@@ -99,16 +169,16 @@
         <div class="card-header"><i class="bi bi-link-45deg"></i> Vehicle Linking (PortalXS RegNo → Internal Vehicle)</div>
         <div class="card-body">
           <p class="text-muted small">Link PortalXS registration numbers to your internal vehicle records for cross-referencing.</p>
-          <div class="mb-3 d-flex align-items-end gap-2">
-            <div>
+          <div class="mb-3 d-flex flex-wrap align-items-end gap-2">
+            <div class="flex-grow-1" style="min-width: 200px;">
               <label class="form-label small fw-semibold">Select Account</label>
-              <select id="linkAccountSelect" class="form-select form-select-sm" style="width: auto;">
+              <select id="linkAccountSelect" class="form-select form-select-sm">
                 {% for a in accounts %}
                 <option value="{{ a.id }}">{{ a.label }} ({{ a.username }})</option>
                 {% endfor %}
               </select>
             </div>
-            <form method="post" action="{{ url_for('tracking_settings_auto_link') }}" class="d-inline" id="autoLinkForm">
+            <form method="post" action="{{ url_for('tracking_settings_auto_link') }}" id="autoLinkForm">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <input type="hidden" name="account_id" id="autoLinkAccountId" value="{{ accounts[0].id if accounts else '' }}">
               <button type="submit" class="btn btn-sm btn-success" id="autoLinkBtn">
@@ -145,14 +215,14 @@
         </div>
         <div class="card-body">
           <p class="text-muted small">Positions auto-refresh every 30 seconds. Polling starts automatically when any tracking page is opened — use these buttons only for manual control.</p>
-          <div class="d-flex gap-2">
-            <form method="post" action="{{ url_for('tracking_settings_start_polling') }}" class="d-inline">
+          <div class="d-flex flex-wrap gap-2 set-acct-actions">
+            <form method="post" action="{{ url_for('tracking_settings_start_polling') }}">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <button type="submit" class="btn btn-sm btn-primary" {% if polling_active %}disabled{% endif %}><i class="bi bi-play"></i> Start Polling</button>
+              <button type="submit" class="btn btn-sm btn-primary w-100" {% if polling_active %}disabled{% endif %}><i class="bi bi-play"></i> Start Polling</button>
             </form>
-            <form method="post" action="{{ url_for('tracking_settings_stop_polling') }}" class="d-inline">
+            <form method="post" action="{{ url_for('tracking_settings_stop_polling') }}">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <button type="submit" class="btn btn-sm btn-outline-danger" {% if not polling_active %}disabled{% endif %}><i class="bi bi-stop"></i> Stop Polling</button>
+              <button type="submit" class="btn btn-sm btn-outline-danger w-100" {% if not polling_active %}disabled{% endif %}><i class="bi bi-stop"></i> Stop Polling</button>
             </form>
           </div>
         </div>
@@ -242,6 +312,12 @@
 
 {% block extra_js %}
 <script>
+function esc(value) {
+  return String(value == null ? '' : value)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
 // Move modals to <body> to escape .main-content stacking context
 document.addEventListener('DOMContentLoaded', function() {
   ['addAccountModal', 'editAccountModal'].forEach(function(id) {
@@ -314,16 +390,36 @@ document.getElementById('linkAccountSelect').addEventListener('change', function
       container.innerHTML = '<p class="text-muted small">No vehicles found. Click "Sync" on the account first.</p>';
       return;
     }
-    var html = '<div class="table-responsive"><table class="table table-sm"><thead><tr><th>PortalXS RegNo</th><th>Group</th><th>Internal Vehicle</th><th></th></tr></thead><tbody>';
-    vehicles.forEach(function(v) {
-      var linkedLabel = v.vehicle_no ? (v.vehicle_no + (v.vehicle_model ? ' (' + v.vehicle_model + ')' : '')) : '';
-      html += '<tr><td class="fw-semibold">' + v.portalxs_regno + '</td><td>' + (v.group_name || '') + '</td>' +
-        '<td><select class="form-select form-select-sm vehicle-link-select" data-mapping-id="' + v.id + '">' +
-        '<option value="">-- Not Linked --</option>' +
-        (v.vehicle_no ? '<option value="' + (v.vehicle_id || '') + '" selected>' + linkedLabel + '</option>' : '') +
-        '</select></td><td><button class="btn btn-sm btn-outline-primary btn-link-vehicle" data-mapping-id="' + v.id + '">Link</button></td></tr>';
-    });
-    html += '</tbody></table></div>';
+    /* A four-column table with a dropdown per row is unusable on a phone,
+       so the same rows render as stacked blocks there. */
+    var mobile = window.innerWidth <= 767;
+    var html;
+    if (mobile) {
+      html = vehicles.map(function(v) {
+        var linkedLabel = v.vehicle_no ? (v.vehicle_no + (v.vehicle_model ? ' (' + v.vehicle_model + ')' : '')) : '';
+        return '<div class="set-link-row">'
+          + '<div class="d-flex justify-content-between align-items-center gap-2">'
+          + '<span class="fw-semibold">' + esc(v.portalxs_regno) + '</span>'
+          + '<span class="small text-muted">' + esc(v.group_name || '') + '</span></div>'
+          + '<select class="form-select form-select-sm vehicle-link-select" data-mapping-id="' + v.id + '">'
+          + '<option value="">-- Not Linked --</option>'
+          + (v.vehicle_no ? '<option value="' + esc(v.vehicle_id || '') + '" selected>' + esc(linkedLabel) + '</option>' : '')
+          + '</select>'
+          + '<button class="btn btn-sm btn-outline-primary btn-link-vehicle w-100" data-mapping-id="' + v.id + '">Link</button>'
+          + '</div>';
+      }).join('');
+    } else {
+      html = '<div class="table-responsive"><table class="table table-sm" data-mp-skip-cards="1"><thead><tr><th>PortalXS RegNo</th><th>Group</th><th>Internal Vehicle</th><th></th></tr></thead><tbody>';
+      vehicles.forEach(function(v) {
+        var linkedLabel = v.vehicle_no ? (v.vehicle_no + (v.vehicle_model ? ' (' + v.vehicle_model + ')' : '')) : '';
+        html += '<tr><td class="fw-semibold">' + esc(v.portalxs_regno) + '</td><td>' + esc(v.group_name || '') + '</td>' +
+          '<td><select class="form-select form-select-sm vehicle-link-select" data-mapping-id="' + v.id + '">' +
+          '<option value="">-- Not Linked --</option>' +
+          (v.vehicle_no ? '<option value="' + esc(v.vehicle_id || '') + '" selected>' + esc(linkedLabel) + '</option>' : '') +
+          '</select></td><td><button class="btn btn-sm btn-outline-primary btn-link-vehicle" data-mapping-id="' + v.id + '">Link</button></td></tr>';
+      });
+      html += '</tbody></table></div>';
+    }
     container.innerHTML = html;
 
     // Internal vehicles loaded ONCE and shared across all selects (was N fetches)
