@@ -134,6 +134,14 @@
     color: #64748b;
     font-size: 13px;
   }
+
+  /* Mobile-only chrome: hidden on desktop so nothing changes there. */
+  .hist-grip,
+  .hist-head-meta,
+  .hist-filters-toggle,
+  .hist-pb-hide,
+  .hist-pb-show { display: none; }
+
   .dark-mode #historyMap { border-color: #333; }
   .dark-mode .playback-controls { background: rgba(33,37,41,0.95); }
   .dark-mode .hist-trips-panel { background: #1a222d; border-color: #2a3a4a; }
@@ -142,18 +150,204 @@
   .dark-mode .hist-trip-card-title { background: #142030; border-color: #2a3a4a; color: #e2e8f0; }
   .dark-mode .hist-trip-cell { border-color: #243044; }
   .dark-mode .hist-trip-cell .v { color: #cbd5e1; }
+
+  /* ── Mobile: fullscreen map, draggable trips sheet, floating replay bar ──
+     Same shell as the Fleet Dashboard: the page owns .main-content, the map
+     fills it, and the trip list rides in a bottom sheet the thumb can drag.
+     The replay bar floats above the sheet peek with a show/hide toggle so it
+     never eats map space while panning. */
+  @media (max-width: 767px) {
+    html.hist-mobile .main-content,
+    html.hist-mobile body.fm-aurora-theme .main-content,
+    html.hist-mobile body.dark-mode .main-content,
+    html.hist-mobile #appNativeShell .main-content {
+      padding: 0 !important;
+      overflow: hidden !important;
+    }
+    html.hist-mobile #appNativeShell .main-content { position: relative !important; }
+    html.hist-mobile:not(.capacitor-native) .main-content {
+      position: relative !important;
+      height: calc(100dvh - var(--fm-nav-h, 60px)) !important;
+      min-height: 0 !important;
+    }
+    /* Page FAB and tab bar would collide with the sheet + map controls */
+    html.hist-mobile .mobile-fab-wrap,
+    html.hist-mobile #mobileFabWrap,
+    html.hist-mobile #mobileFabBtn { display: none !important; }
+    html.hist-mobile .mobile-bottom-nav,
+    html.hist-mobile #mobileBottomNav,
+    html.hist-mobile #appNativeShell .mobile-bottom-nav { display: none !important; }
+    .leaflet-top, .leaflet-bottom { z-index: 400 !important; }
+    .leaflet-control-attribution { font-size: 9px; opacity: .75; }
+
+    .hist-page {
+      position: absolute; inset: 0; padding: 0 !important;
+      display: flex; flex-direction: column; overflow: hidden;
+      --hist-peek: 118px;
+    }
+
+    /* Compact blue header carries back, title, context and the filter toggle */
+    .hist-head {
+      margin: 0 !important; flex-shrink: 0; z-index: 6;
+      background: linear-gradient(90deg,#0b3d91,#1a5fb4);
+      padding: 8px 10px; display: flex; align-items: center; gap: 8px;
+      box-shadow: 0 4px 14px rgba(0,0,0,.35);
+    }
+    .hist-head h4 { font-size: 14px; color: #fff; min-width: 0; }
+    .hist-head h4 .hist-head-text { display: none; }
+    .hist-head .btn-nav-back-rounded {
+      padding: 5px 9px; font-size: 12px; background: rgba(255,255,255,.15);
+      border-color: rgba(255,255,255,.25); color: #fff;
+    }
+    .hist-head .btn-nav-back-rounded span { display: none; }
+    .hist-head-meta {
+      display: block; flex: 1; min-width: 0; color: #cfe4ff; font-size: 11.5px;
+      line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .hist-head-meta strong { color: #fff; font-size: 12.5px; }
+    .hist-filters-toggle {
+      display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0;
+      background: rgba(255,255,255,.15); border: 1px solid rgba(255,255,255,.25);
+      color: #fff; border-radius: 8px; padding: 6px 10px; font-size: 12px; font-weight: 600;
+    }
+    .hist-filters-toggle.is-open { background: #fff; color: #1a5fb4; }
+
+    /* Filters collapse away by default — the map is the point of this screen */
+    .hist-filters { display: none; margin: 0 !important; border-radius: 0; }
+    .hist-filters.is-open { display: block; flex-shrink: 0; max-height: 62vh; overflow-y: auto; }
+    .hist-filters .card-body { padding: 12px; gap: 10px !important; }
+    .hist-filters .card-body > div { flex: 1 1 100%; min-width: 0; }
+    .hist-filters .form-select, .hist-filters .form-control { font-size: 14px; padding: 9px 11px; }
+    .hist-filters .btn { flex: 1 1 auto; padding: 9px 12px; font-size: 13px; }
+
+    /* Badge strip stays one swipeable line; the long hint is desktop-only */
+    .hist-badges {
+      flex-shrink: 0; margin: 0 !important; padding: 6px 10px;
+      display: flex !important; flex-wrap: nowrap !important; overflow-x: auto;
+      gap: 6px !important; background: #0f1923;
+      -webkit-overflow-scrolling: touch; scrollbar-width: none;
+    }
+    .hist-badges::-webkit-scrollbar { display: none; }
+    .hist-badges .badge { flex-shrink: 0; font-size: 10.5px; }
+    .hist-badges .hist-hint { display: none; }
+    .hist-page .alert { margin: 8px 10px; font-size: 12px; }
+
+    .hist-layout {
+      position: relative; flex: 1; min-height: 0; display: block;
+      margin: 0 !important; gap: 0;
+    }
+    .hist-map-col { position: absolute; inset: 0; display: block; }
+    #historyMap {
+      height: 100%; min-height: 0; border: none; border-radius: 0;
+    }
+
+    /* Replay bar — floats over the map, above the sheet peek */
+    .playback-controls {
+      position: absolute; left: 8px; right: 8px;
+      bottom: calc(var(--hist-peek) + 10px + env(safe-area-inset-bottom, 0px));
+      z-index: 650; border: 1px solid #2a3a4a; border-radius: 16px;
+      background: rgba(16,28,40,.96); color: #e2e8f0;
+      padding: 10px 12px; gap: 8px 10px !important;
+      box-shadow: 0 -10px 30px rgba(0,0,0,.5);
+      transition: transform .25s cubic-bezier(.22,.61,.36,1), opacity .2s ease;
+    }
+    .playback-controls.is-hidden {
+      transform: translate3d(0, 160%, 0); opacity: 0; pointer-events: none;
+    }
+    .playback-controls .form-label,
+    .playback-controls .small { color: #94a3b8 !important; }
+    .playback-controls .btn { padding: 8px 12px; font-size: 13px; }
+    .playback-controls .form-select {
+      background: #16232f; border-color: #2a3a4a; color: #e2e8f0; font-size: 12px;
+    }
+    .playback-controls #timelineSlider { min-width: 0; }
+    .hist-pb-hide {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
+      background: #1c2b39; border: 1px solid #2a3a4a; color: #94a3b8;
+    }
+    .hist-pb-show {
+      display: none; position: absolute; right: 10px;
+      bottom: calc(var(--hist-peek) + 12px + env(safe-area-inset-bottom, 0px));
+      z-index: 649; width: 44px; height: 44px; border-radius: 50%;
+      background: #1a5fb4; border: 1px solid #2a3a4a; color: #fff;
+      align-items: center; justify-content: center; font-size: 17px;
+      box-shadow: 0 6px 18px rgba(0,0,0,.45);
+    }
+    .hist-pb-show.is-visible { display: flex; }
+
+    /* Trips bottom sheet */
+    .hist-trips-panel {
+      position: absolute; left: 0; right: 0; top: auto;
+      bottom: env(safe-area-inset-bottom, 0px);
+      width: 100%; height: 88%; max-height: none; z-index: 645;
+      background: #101b26; border: none; border-top: 1px solid #2a3a4a;
+      border-radius: 20px 20px 0 0; box-shadow: 0 -14px 36px rgba(0,0,0,.5);
+      will-change: transform;
+      transform: translate3d(0, var(--hist-sheet-y, calc(100% - var(--hist-peek))), 0);
+      transition: transform .3s cubic-bezier(.22,.61,.36,1);
+    }
+    .hist-trips-panel.hist-dragging { transition: none; }
+    .hist-trips-panel.hist-peek { --hist-sheet-y: calc(100% - var(--hist-peek)); }
+    .hist-trips-panel.hist-full { --hist-sheet-y: 0px; }
+
+    .hist-grip {
+      display: flex; align-items: center; justify-content: center;
+      padding: 9px 12px 7px; touch-action: none; user-select: none; flex-shrink: 0;
+    }
+    .hist-grip::before {
+      content: ''; width: 42px; height: 4px; border-radius: 999px; background: #3a4a5a;
+    }
+    .hist-trips-head {
+      background: transparent; color: #e2e8f0; padding: 2px 14px 9px;
+      border-bottom: 1px solid #22303e; touch-action: none;
+    }
+    .hist-trips-all { background: #1c2b39; color: #cfe4ff; padding: 4px 10px; font-size: 11.5px; }
+    .hist-trips-all.is-active { background: #1a5fb4; color: #fff; }
+    .hist-trips-meta {
+      background: #0f1923; border-color: #22303e; color: #94a3b8;
+      padding: 8px 14px; font-size: 11.5px; touch-action: none;
+    }
+    .hist-trips-meta strong { color: #e2e8f0; }
+    .hist-trips-scroll {
+      -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
+      padding: 10px 12px calc(28px + env(safe-area-inset-bottom, 0px));
+    }
+    .hist-trip-card { background: #16232f; border-color: #24333f; border-radius: 14px; }
+    .hist-trip-card.is-active { border-color: #1a5fb4; box-shadow: 0 0 0 1px #1a5fb4; }
+    .hist-trip-card-title {
+      background: #0f1923; border-color: #22303e; color: #cfe4ff;
+      padding: 9px 8px; font-size: 12.5px;
+    }
+    .hist-trip-grid { font-size: 12px; }
+    .hist-trip-cell { padding: 9px 10px; border-color: #22303e; }
+    .hist-trip-cell .k { color: #60a5fa; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; }
+    .hist-trip-cell .v { color: #cbd5e1; }
+    .hist-empty { color: #94a3b8; }
+  }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid py-3">
-  <div class="d-flex align-items-center justify-content-between mb-3">
-    <h4 class="mb-0 fw-bold"><i class="bi bi-clock-history"></i> Route History & Playback</h4>
+<div class="container-fluid py-3 hist-page">
+  <div class="d-flex align-items-center justify-content-between mb-3 hist-head">
+    <h4 class="mb-0 fw-bold">
+      <i class="bi bi-clock-history"></i>
+      <span class="hist-head-text">Route History &amp; Playback</span>
+    </h4>
+    <div class="hist-head-meta">
+      <strong>{{ selected_regno or 'Select vehicle' }}</strong><br>
+      {{ from_date }} &rarr; {{ to_date }}
+    </div>
+    <button type="button" class="hist-filters-toggle" id="histFiltersToggle"
+            aria-controls="histFilters" aria-expanded="false">
+      <i class="bi bi-sliders"></i> Filters
+    </button>
     {{ nav_back_button() }}
   </div>
 
   <!-- Filter Bar -->
-  <form method="get" class="card mb-3">
+  <form method="get" class="card mb-3 hist-filters" id="histFilters">
     {{ nav_from_hidden() }}
     <div class="card-body d-flex flex-wrap gap-3 align-items-end">
       <div style="min-width: 220px;">
@@ -193,7 +387,7 @@
   {% endif %}
 
   {% if history_points %}
-  <div class="mb-2 d-flex flex-wrap align-items-center gap-2">
+  <div class="mb-2 d-flex flex-wrap align-items-center gap-2 hist-badges">
     <span class="badge bg-primary">{{ history_points|length }} GPS points</span>
     {% if gps_source_label %}
     <span class="badge bg-secondary">GPS source: {{ gps_source_label }}</span>
@@ -204,7 +398,7 @@
     {% if total_distance %}
     <span class="badge bg-info text-dark">Total Mileage: {{ "%.1f"|format(total_distance) }} km</span>
     {% endif %}
-    <span class="text-muted small">
+    <span class="text-muted small hist-hint">
       Map par <strong>rang wali line</strong> hi route hai — click for detail.
       Right side se trip select karke zoom karo. Pehle saved DB points load hote hain (fast);
       latest GPS ke liye neeche <strong>Live GPS refresh</strong> tick karke dubara Fetch karo.
@@ -216,7 +410,7 @@
     <div class="hist-map-col">
       <div id="historyMap"></div>
       {% if history_points %}
-      <div class="playback-controls d-flex align-items-center gap-3 flex-wrap">
+      <div class="playback-controls d-flex align-items-center gap-3 flex-wrap" id="histPlayback">
         <button type="button" id="playBtn" class="btn btn-sm btn-primary"><i class="bi bi-play-fill"></i> Play</button>
         <button type="button" id="pauseBtn" class="btn btn-sm btn-secondary" disabled><i class="bi bi-pause-fill"></i> Pause</button>
         <div class="d-flex align-items-center gap-2">
@@ -235,11 +429,18 @@
           <input type="range" id="timelineSlider" class="form-range" min="0" max="{{ history_points|length - 1 }}" value="0">
           <span class="small text-muted" id="totalTime">{{ history_points[-1].RecordDateTime[-8:] if history_points else '' }}</span>
         </div>
+        <button type="button" class="hist-pb-hide" id="histPbHide" aria-label="Hide replay bar">
+          <i class="bi bi-x-lg"></i>
+        </button>
       </div>
+      <button type="button" class="hist-pb-show" id="histPbShow" aria-label="Show replay bar">
+        <i class="bi bi-play-circle"></i>
+      </button>
       {% endif %}
     </div>
 
-    <aside class="hist-trips-panel">
+    <aside class="hist-trips-panel" id="histTripsPanel">
+      <div class="hist-grip" id="histGrip" role="button" aria-label="Trips list kholein ya band karein"></div>
       <div class="hist-trips-head">
         <span><i class="bi bi-signpost-split me-1"></i>{{ selected_regno or 'Trip Details' }}</span>
         {% if total_trips %}
@@ -256,6 +457,7 @@
         {% for t in trips %}
         <div class="hist-trip-card"
              data-trip-idx="{{ loop.index0 }}"
+             data-trip-no="{{ '%02d'|format(loop.index) }}"
              data-start="{{ t.IGON_RDT or '' }}"
              data-end="{{ t.IGOFF_RDT or '' }}"
              data-slat="{{ t.IGON_LAT or '' }}"
@@ -310,6 +512,181 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <script>
+/* Mobile shell: fullscreen map, draggable trips sheet, floating replay bar.
+   Kept separate from the map code so it also runs on a no-points page. */
+(function() {
+  var mq = window.matchMedia('(max-width: 767px)');
+  function isMobile() { return mq.matches; }
+
+  var page = document.querySelector('.hist-page');
+  var sheet = document.getElementById('histTripsPanel');
+  var grip = document.getElementById('histGrip');
+  var head = sheet ? sheet.querySelector('.hist-trips-head') : null;
+  var meta = sheet ? sheet.querySelector('.hist-trips-meta') : null;
+  var scroll = document.getElementById('histTripsScroll');
+  var filters = document.getElementById('histFilters');
+  var filtersToggle = document.getElementById('histFiltersToggle');
+  var playback = document.getElementById('histPlayback');
+  var pbHide = document.getElementById('histPbHide');
+  var pbShow = document.getElementById('histPbShow');
+  var currentSnap = 'peek';
+  var suppressGripClick = 0;
+
+  document.documentElement.classList.toggle('hist-mobile', isMobile());
+
+  function haptic() {
+    try {
+      var H = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Haptics;
+      if (H && H.impact) H.impact({ style: 'Light' });
+      else if (navigator.vibrate) navigator.vibrate(8);
+    } catch (e) { /* haptics are best-effort */ }
+  }
+
+  function relayoutMap() {
+    document.dispatchEvent(new CustomEvent('hist:relayout'));
+  }
+
+  /* Peek shows handle + vehicle row + totals, so the floating controls need
+     whatever those actually measure. */
+  function peekHeight() {
+    var px = (grip ? grip.offsetHeight : 30) +
+             (head ? head.offsetHeight : 0) +
+             (meta ? meta.offsetHeight : 0);
+    px = Math.max(70, px);
+    if (page) page.style.setProperty('--hist-peek', px + 'px');
+    return px;
+  }
+
+  function snapOffsets() {
+    var h = sheet.offsetHeight || 1;
+    return { full: 0, peek: Math.max(0, h - peekHeight()) };
+  }
+
+  function setSnap(name, silent) {
+    if (!isMobile() || !sheet) return;
+    currentSnap = (name === 'full') ? 'full' : 'peek';
+    sheet.classList.remove('hist-peek', 'hist-full', 'hist-dragging');
+    sheet.classList.add('hist-' + currentSnap);
+    sheet.style.removeProperty('transform');
+    if (!silent) haptic();
+  }
+
+  var drag = null;
+  function dragStart(y, fromList) {
+    if (!isMobile()) return;
+    drag = { y0: y, base: snapOffsets()[currentSnap], last: y, lastT: Date.now(), v: 0, y1: null, fromList: fromList, active: false };
+  }
+  function dragMove(y, ev) {
+    if (!drag) return;
+    var dy = y - drag.y0;
+    if (!drag.active) {
+      if (drag.fromList ? dy > 10 : Math.abs(dy) > 6) drag.active = true;
+      else return;
+    }
+    var now = Date.now();
+    if (now > drag.lastT) drag.v = (y - drag.last) / (now - drag.lastT);
+    drag.last = y; drag.lastT = now;
+    var o = snapOffsets();
+    drag.y1 = Math.min(o.peek, Math.max(0, drag.base + dy));
+    sheet.classList.add('hist-dragging');
+    sheet.style.transform = 'translate3d(0,' + drag.y1 + 'px,0)';
+    if (ev && ev.cancelable) ev.preventDefault();
+  }
+  function dragEnd() {
+    if (!drag) return;
+    var d = drag;
+    drag = null;
+    sheet.classList.remove('hist-dragging');
+    if (!d.active) { sheet.style.removeProperty('transform'); return; }
+    suppressGripClick = Date.now();
+    if (d.v > 0.35) { setSnap('peek'); return; }
+    if (d.v < -0.35) { setSnap('full'); return; }
+    var o = snapOffsets();
+    var pos = (d.y1 === null) ? o[currentSnap] : d.y1;
+    setSnap(Math.abs(pos - o.full) <= Math.abs(pos - o.peek) ? 'full' : 'peek');
+  }
+
+  function bindDragSurface(el, fromList) {
+    if (!el) return;
+    el.addEventListener('touchstart', function(e) {
+      if (!isMobile() || e.touches.length !== 1) return;
+      if (fromList && el.scrollTop > 0) return;
+      dragStart(e.touches[0].clientY, fromList);
+    }, { passive: true });
+    el.addEventListener('touchmove', function(e) {
+      if (!drag || e.touches.length !== 1) return;
+      dragMove(e.touches[0].clientY, e);
+    }, { passive: false });
+    el.addEventListener('touchend', dragEnd);
+    el.addEventListener('touchcancel', dragEnd);
+  }
+  bindDragSurface(grip, false);
+  bindDragSurface(head, false);
+  bindDragSurface(meta, false);
+  bindDragSurface(scroll, true);
+
+  if (grip) {
+    grip.addEventListener('click', function() {
+      if (!isMobile() || (Date.now() - suppressGripClick) < 350) return;
+      setSnap(currentSnap === 'peek' ? 'full' : 'peek');
+    });
+  }
+
+  /* Picking a trip should reveal the map it just zoomed to. */
+  document.querySelectorAll('.hist-trip-card').forEach(function(card) {
+    card.addEventListener('click', function() {
+      if (isMobile() && currentSnap !== 'peek') setSnap('peek', true);
+    });
+  });
+
+  if (filtersToggle && filters) {
+    filtersToggle.addEventListener('click', function() {
+      var open = filters.classList.toggle('is-open');
+      filtersToggle.classList.toggle('is-open', open);
+      filtersToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+      relayoutMap();
+    });
+  }
+
+  /* Replay bar show/hide — same escape hatch big trackers ship, so the bar
+     never blocks the route while panning. */
+  function setPlayback(visible) {
+    if (!playback) return;
+    playback.classList.toggle('is-hidden', !visible);
+    if (pbShow) pbShow.classList.toggle('is-visible', !visible && isMobile());
+  }
+  if (pbHide) pbHide.addEventListener('click', function() { setPlayback(false); haptic(); });
+  if (pbShow) pbShow.addEventListener('click', function() { setPlayback(true); haptic(); });
+
+  function applyMode() {
+    var mobile = isMobile();
+    document.documentElement.classList.toggle('hist-mobile', mobile);
+    if (mobile) {
+      peekHeight();
+      setSnap(currentSnap, true);
+    } else if (sheet) {
+      sheet.classList.remove('hist-peek', 'hist-full', 'hist-dragging');
+      sheet.style.removeProperty('transform');
+      setPlayback(true);
+      if (pbShow) pbShow.classList.remove('is-visible');
+    }
+    relayoutMap();
+  }
+
+  if (mq.addEventListener) mq.addEventListener('change', applyMode);
+  else if (mq.addListener) mq.addListener(applyMode);
+  window.addEventListener('resize', function() {
+    if (isMobile()) peekHeight();
+  });
+
+  if (isMobile()) {
+    peekHeight();
+    setSnap('peek', true);
+  }
+  setTimeout(relayoutMap, 120);
+})();
+</script>
+<script>
 (function() {
   flatpickr('.datepicker', { dateFormat: 'Y-m-d', maxDate: new Date() });
 
@@ -323,6 +700,7 @@
   var currentIndex = 0;
   var playing = false;
   var playInterval = null;
+  var activeTripNo = '';
 
   var slider = document.getElementById('timelineSlider');
   var currentTimeEl = document.getElementById('currentTime');
@@ -331,6 +709,14 @@
   var pauseBtn = document.getElementById('pauseBtn');
   var pointsBadge = document.querySelector('.badge.bg-primary');
   var showAllBtn = document.getElementById('histShowAllTrips');
+
+  /* The mobile shell resizes the map container (sheet snaps, filter panel),
+     so Leaflet needs a nudge whenever that happens. */
+  function bindRelayout(m) {
+    document.addEventListener('hist:relayout', function() {
+      setTimeout(function() { m.invalidateSize(); }, 60);
+    });
+  }
 
   function parseTs(s) {
     if (!s) return NaN;
@@ -351,6 +737,13 @@
     playInterval = null;
     if (playBtn) playBtn.disabled = false;
     if (pauseBtn) pauseBtn.disabled = true;
+  }
+
+  /* Trip numbers match the cards, so a marker on the map and a card in the
+     sheet always refer to the same trip. */
+  function tripLabel(kind) {
+    if (!activeTripNo) return kind;
+    return 'Trip #' + activeTripNo + ' ' + kind;
   }
 
   function drawRoute(pts) {
@@ -402,9 +795,9 @@
       className: '', iconSize: [18, 18], iconAnchor: [9, 9]
     });
     routeLayers.push(L.marker(latlngs[0], { icon: startIcon })
-      .bindPopup('Start: ' + activePoints[0].RecordDateTime).addTo(map));
+      .bindPopup(tripLabel('Start') + ': ' + activePoints[0].RecordDateTime).addTo(map));
     routeLayers.push(L.marker(latlngs[latlngs.length - 1], { icon: endIcon })
-      .bindPopup('End: ' + activePoints[activePoints.length - 1].RecordDateTime).addTo(map));
+      .bindPopup(tripLabel('End') + ': ' + activePoints[activePoints.length - 1].RecordDateTime).addTo(map));
 
     if (playMarker) {
       playMarker.setOpacity(1);
@@ -478,6 +871,7 @@
       el.classList.remove('is-active');
     });
     if (showAllBtn) showAllBtn.classList.add('is-active');
+    activeTripNo = '';
     drawRoute(allPoints);
   }
 
@@ -489,6 +883,7 @@
     });
     card.classList.add('is-active');
     if (showAllBtn) showAllBtn.classList.remove('is-active');
+    activeTripNo = card.dataset.tripNo || '';
 
     var filtered = filterPointsByTrip(card.dataset.start, card.dataset.end);
     if (filtered.length) {
@@ -507,13 +902,13 @@
       pts.push([slat, slon]);
       tripMarkers.push(L.circleMarker([slat, slon], {
         radius: 7, color: '#fff', weight: 2, fillColor: '#198754', fillOpacity: 1
-      }).bindPopup('Trip start').addTo(map));
+      }).bindPopup(tripLabel('start')).addTo(map));
     }
     if (!isNaN(elat) && !isNaN(elon)) {
       pts.push([elat, elon]);
       tripMarkers.push(L.circleMarker([elat, elon], {
         radius: 7, color: '#fff', weight: 2, fillColor: '#dc3545', fillOpacity: 1
-      }).bindPopup('Trip end').addTo(map));
+      }).bindPopup(tripLabel('end')).addTo(map));
     }
     if (pts.length === 1) map.setView(pts[0], 15);
     else if (pts.length === 2) map.fitBounds(L.latLngBounds(pts), { padding: [60, 60], maxZoom: 16 });
@@ -530,18 +925,23 @@
     });
   }
 
+  var isPhone = window.matchMedia('(max-width: 767px)').matches;
+
   if (!allPoints || !allPoints.length) {
-    map = L.map('historyMap').setView([30.2, 71.5], 7);
+    map = L.map('historyMap', { zoomControl: !isPhone }).setView([30.2, 71.5], 7);
     L.tileLayer('https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
       maxZoom: 20, attribution: '&copy; Google', subdomains: ['mt0','mt1','mt2','mt3']
     }).addTo(map);
+    bindRelayout(map);
     return;
   }
 
-  map = L.map('historyMap').setView([allPoints[0].LAT, allPoints[0].LON], 13);
+  map = L.map('historyMap', { zoomControl: !isPhone, tap: true })
+    .setView([allPoints[0].LAT, allPoints[0].LON], 13);
   L.tileLayer('https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
     maxZoom: 20, attribution: '&copy; Google', subdomains: ['mt0','mt1','mt2','mt3']
   }).addTo(map);
+  bindRelayout(map);
 
   drawRoute(allPoints);
 
