@@ -903,6 +903,71 @@ class VehicleStopRollupStatus(db.Model):
         return f'<VehicleStopRollupStatus {self.task_date} rows={self.rollup_rows}>'
 
 
+class FleetScoreDaily(db.Model):
+    """One day's PortalXS fleet-report row per vehicle, kept for trends.
+
+    VehicleScore is computed on the PortalXS side and only ever reached the app
+    through a 5-minute in-memory cache, so there was no way to ask how a
+    vehicle's score moved over a month. Storing the score together with the
+    figures behind it keeps the trend answerable without re-querying an API
+    that costs one SOAP call per vehicle per day.
+    """
+    __tablename__ = 'fleet_score_daily'
+    id = db.Column(db.Integer, primary_key=True)
+    account_id = db.Column(db.Integer,
+                           db.ForeignKey('portalxs_account.id', ondelete='CASCADE'),
+                           nullable=False, index=True)
+    task_date = db.Column(db.Date, nullable=False, index=True)
+    # Ufone COW/USG tags stripped, as in vehicle_mileage_record.
+    reg_no = db.Column(db.String(50), nullable=False)
+
+    vehicle_score = db.Column(db.Numeric(6, 2), default=0)
+    distance = db.Column(db.Numeric(12, 2), default=0)
+    fuel_consumption = db.Column(db.Numeric(12, 2), default=0)
+    trips = db.Column(db.Integer, default=0)
+    duration = db.Column(db.Integer, default=0)
+    alerts = db.Column(db.Integer, default=0)
+    built_at = db.Column(db.DateTime, default=pk_now)
+
+    __table_args__ = (
+        db.UniqueConstraint('account_id', 'task_date', 'reg_no',
+                            name='uq_fleet_score_acct_day_reg'),
+        db.Index('ix_fleet_score_day', 'account_id', 'task_date'),
+        db.Index('ix_fleet_score_reg', 'reg_no', 'task_date'),
+    )
+
+    def __repr__(self):
+        return f'<FleetScoreDaily {self.task_date} {self.reg_no} {self.vehicle_score}>'
+
+
+class FleetScoreSyncStatus(db.Model):
+    """Which days of the fleet-score snapshot have been taken, and how fully.
+
+    A day where every vehicle errored looks the same as an unsnapshotted day in
+    fleet_score_daily, so the attempt is recorded separately — the same reason
+    vehicle_mileage_sync_status exists alongside vehicle_mileage_record.
+    """
+    __tablename__ = 'fleet_score_sync_status'
+    id = db.Column(db.Integer, primary_key=True)
+    account_id = db.Column(db.Integer,
+                           db.ForeignKey('portalxs_account.id', ondelete='CASCADE'),
+                           nullable=False, index=True)
+    task_date = db.Column(db.Date, nullable=False, index=True)
+    last_synced_at = db.Column(db.DateTime, nullable=False, default=pk_now)
+    source = db.Column(db.String(20), nullable=False, default='auto')  # auto | manual
+    vehicles_total = db.Column(db.Integer, default=0)
+    fetched_count = db.Column(db.Integer, default=0)
+    error_count = db.Column(db.Integer, default=0)
+
+    __table_args__ = (
+        db.UniqueConstraint('account_id', 'task_date',
+                            name='uq_fleet_score_sync_acct_day'),
+    )
+
+    def __repr__(self):
+        return f'<FleetScoreSyncStatus {self.task_date} {self.fetched_count}>'
+
+
 class VehicleTripRecord(db.Model):
     """PortalXS trip segments (ignition on→off), synced with GPS activity."""
     __tablename__ = 'vehicle_trip_record'

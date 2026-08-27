@@ -1,0 +1,304 @@
+{% extends 'base.html' %}
+{% from 'partials/nav_back_button.html' import nav_back_button with context %}
+{% from 'partials/report_date_range.html' import date_range %}
+{% block title %}Fleet Score Trend — Fleet Tracking{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/tracking_reports.css') }}?v=1001">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  .st-move { display: flex; align-items: center; gap: 8px; padding: 6px 0; }
+  .st-move + .st-move { border-top: 1px solid #f1f5f9; }
+  .st-move-reg { font-weight: 600; font-size: 0.84rem; flex: 1; min-width: 0;
+                 overflow-wrap: anywhere; }
+  .st-move-delta { font-weight: 700; font-size: 0.84rem; white-space: nowrap;
+                   font-variant-numeric: tabular-nums; }
+  .st-move-delta.is-up   { color: #198754; }
+  .st-move-delta.is-down { color: #dc3545; }
+  .st-move-from { color: #64748b; font-size: 0.76rem; white-space: nowrap;
+                  font-variant-numeric: tabular-nums; }
+  .st-score { font-variant-numeric: tabular-nums; font-weight: 600; }
+  .trk-item-lead.st-lead { background: #eef2ff; color: #3730a3; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3 trk-page">
+  <div class="trk-head">
+    <h4>
+      <i class="bi bi-graph-up-arrow"></i>
+      <span class="trk-head-text">Fleet Score Trend</span>
+    </h4>
+    <div class="trk-head-meta">
+      {{ date_range(from_date, to_date) }}
+      {% if daily %} · {{ daily|length }} days · avg {{ avg_score }}{% endif %}
+    </div>
+    <div class="d-flex align-items-center gap-2 trk-head-actions">
+      <button type="button" class="trk-filters-toggle" data-trk-filters-toggle
+              aria-controls="trkFilters" aria-expanded="false">
+        <i class="bi bi-funnel"></i> Filters
+      </button>
+      {{ nav_back_button() }}
+    </div>
+  </div>
+
+  <form method="get" class="card mb-3 trk-filters" id="trkFilters"
+        data-trk-open="{{ '0' if daily else '1' }}">
+    <div class="card-body d-flex flex-wrap gap-3 align-items-end">
+      <div>
+        <label class="form-label small fw-semibold">From</label>
+        <input type="text" name="from_date" class="form-control form-control-sm datepicker" value="{{ from_date }}" required>
+      </div>
+      <div>
+        <label class="form-label small fw-semibold">To</label>
+        <input type="text" name="to_date" class="form-control form-control-sm datepicker" value="{{ to_date }}" required>
+      </div>
+      <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-search"></i> Run</button>
+    </div>
+  </form>
+
+  <div class="trk-body">
+    {% if error %}
+    <div class="alert alert-danger">{{ error }}</div>
+    {% endif %}
+
+    {% if coverage and not coverage.complete %}
+    <div class="alert alert-warning py-2 small mb-3">
+      <i class="bi bi-clock-history"></i>
+      Is range ke <strong>{{ coverage.days_ready }}</strong> din ka score save hai,
+      <strong>{{ coverage.days_missing }}</strong> din baqi hain.
+      Fleet report har gaari ka alag SOAP call hai, is liye purane din page kholne par
+      khud nahi aate — neeche se snapshot chalayein.
+      {% if snapshot_running %}
+      <div class="mt-2">
+        <span class="spinner-border spinner-border-sm"></span>
+        Snapshot chal raha hai — page refresh karke progress dekhein.
+      </div>
+      {% else %}
+      <form method="post" action="{{ url_for('tracking_score_trend_snapshot') }}" class="mt-2">
+        <input type="hidden" name="from_date" value="{{ from_date }}">
+        <input type="hidden" name="to_date" value="{{ to_date }}">
+        <button type="submit" class="btn btn-sm btn-warning">
+          <i class="bi bi-cloud-download"></i> Missing din snapshot karein
+        </button>
+      </form>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    {% if daily %}
+    <div class="trk-kpis">
+      <div class="trk-kpi">
+        <div class="trk-kpi-label">Avg score</div>
+        <div class="trk-kpi-val is-primary">{{ avg_score }}</div>
+      </div>
+      <div class="trk-kpi">
+        <div class="trk-kpi-label">Days saved</div>
+        <div class="trk-kpi-val is-info">{{ daily|length }}</div>
+      </div>
+      <div class="trk-kpi">
+        <div class="trk-kpi-label">Best day</div>
+        <div class="trk-kpi-val is-success">{{ best_day.avg_score if best_day else '—' }}</div>
+      </div>
+      <div class="trk-kpi">
+        <div class="trk-kpi-label">Worst day</div>
+        <div class="trk-kpi-val is-danger">{{ worst_day.avg_score if worst_day else '—' }}</div>
+      </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+      <div class="col-lg-8">
+        <div class="trk-chart-card">
+          <div class="trk-chart-box"><canvas id="scoreChart"></canvas></div>
+        </div>
+      </div>
+      <div class="col-lg-4">
+        <div class="card h-100">
+          <div class="card-header py-2 small fw-semibold">
+            Score movement
+            {% if movers.split_date %}
+            <span class="text-muted fw-normal">
+              (pehla vs doosra half)
+            </span>
+            {% endif %}
+          </div>
+          <div class="card-body py-2">
+            {% if movers.improved or movers.declined %}
+              {% if movers.declined %}
+              <div class="small text-danger fw-semibold mb-1">Girawat</div>
+              {% for m in movers.declined %}
+              <div class="st-move">
+                <span class="st-move-reg">{{ m.reg_no }}</span>
+                <span class="st-move-from">{{ m.before }} → {{ m.after }}</span>
+                <span class="st-move-delta is-down">{{ m.change }}</span>
+              </div>
+              {% endfor %}
+              {% endif %}
+              {% if movers.improved %}
+              <div class="small text-success fw-semibold mb-1 mt-2">Behtari</div>
+              {% for m in movers.improved %}
+              <div class="st-move">
+                <span class="st-move-reg">{{ m.reg_no }}</span>
+                <span class="st-move-from">{{ m.before }} → {{ m.after }}</span>
+                <span class="st-move-delta is-up">+{{ m.change }}</span>
+              </div>
+              {% endfor %}
+              {% endif %}
+            {% elif not movers.split_date %}
+            <div class="text-muted small">
+              Movement dekhne ke liye kam az kam 4 din ka data chahiye.
+            </div>
+            {% else %}
+            <div class="text-muted small">
+              Is period mein kisi gaari ka score numaya tabdeel nahi hua.
+            </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Desktop: per-vehicle ranking; phone cards are built from this table -->
+    <div class="card trk-desktop-only mb-3">
+      <div class="card-header py-2 small fw-semibold">Per-vehicle score</div>
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0" data-mp-skip-cards="1"
+               data-trk-cards="stVehicleList"
+               data-trk-card-title="0" data-trk-card-lead="1">
+          <thead>
+            <tr>
+              <th>Vehicle</th><th>Avg score</th><th>Min</th><th>Max</th>
+              <th>Days</th><th>Distance (km)</th><th>Alerts</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in per_vehicle %}
+            <tr>
+              <td>{{ r.display_name }}</td>
+              <td class="st-score">{{ r.avg_score }}</td>
+              <td>{{ r.min_score }}</td>
+              <td>{{ r.max_score }}</td>
+              <td>{{ r.days }}</td>
+              <td>{{ r.distance }}</td>
+              <td>{{ r.alerts }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="trk-mobile-only">
+      <div class="trk-section-title">Per-vehicle score</div>
+      <input type="search" class="trk-search" placeholder="Search vehicles..."
+             data-trk-search="stVehicleList">
+      <div class="trk-list" id="stVehicleList"></div>
+    </div>
+
+    <!-- Desktop: the daily series behind the chart -->
+    <div class="card trk-desktop-only">
+      <div class="card-header py-2 small fw-semibold">Daily fleet average</div>
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0" data-mp-skip-cards="1"
+               data-trk-cards="stDayList"
+               data-trk-card-title="0" data-trk-card-lead="1">
+          <thead>
+            <tr>
+              <th>Date</th><th>Avg score</th><th>Vehicles</th>
+              <th>Distance (km)</th><th>Trips</th><th>Alerts</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for d in daily %}
+            <tr>
+              <td>{{ d.task_date }}</td>
+              <td class="st-score">{{ d.avg_score }}</td>
+              <td>{{ d.vehicles }}</td>
+              <td>{{ d.distance }}</td>
+              <td>{{ d.trips }}</td>
+              <td>{{ d.alerts }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="trk-mobile-only">
+      <div class="trk-section-title">Daily fleet average</div>
+      <div class="trk-list" id="stDayList"></div>
+    </div>
+
+    {% elif not error %}
+    <div class="alert alert-info">
+      Is range ka koi score save nahi hai.
+      {% if coverage and coverage.days_missing %}
+      Ooper se snapshot chalayein — uske baad har raat 11:50 par khud save hota rahega.
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="{{ url_for('static', filename='js/tracking_reports.js') }}?v=1001"></script>
+<script>
+flatpickr('.datepicker', { dateFormat: 'Y-m-d', maxDate: new Date() });
+
+(function() {
+  var daily = {{ daily | tojson }};
+  var canvas = document.getElementById('scoreChart');
+  if (typeof Chart === 'undefined' || !canvas || !daily || !daily.length) return;
+
+  var chart;
+  function draw() {
+    var compact = window.innerWidth <= 767;
+    if (chart) chart.destroy();
+    chart = new Chart(canvas, {
+      type: 'line',
+      data: {
+        labels: daily.map(function(d) { return d.date_text; }),
+        datasets: [{
+          label: 'Fleet average score',
+          data: daily.map(function(d) { return Number(d.avg_score) || 0; }),
+          borderColor: '#4f46e5',
+          backgroundColor: 'rgba(79,70,229,0.12)',
+          fill: true,
+          tension: 0.3,
+          pointRadius: compact ? 2 : 3
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          title: { display: true, text: 'Fleet average score' }
+        },
+        scales: {
+          x: {
+            ticks: {
+              font: { size: 10 },
+              maxRotation: compact ? 60 : 0,
+              autoSkip: true,
+              maxTicksLimit: compact ? 7 : 20
+            }
+          },
+          y: { beginAtZero: true, ticks: { font: { size: 10 } } }
+        }
+      }
+    });
+  }
+
+  draw();
+  var timer;
+  window.addEventListener('resize', function() {
+    clearTimeout(timer);
+    timer = setTimeout(draw, 250);
+  });
+})();
+</script>
+{% endblock %}

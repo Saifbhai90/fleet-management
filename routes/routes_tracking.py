@@ -59,6 +59,15 @@ from services.activity_rollup_service import (
     ensure_for_request as ensure_rollup_days,
     format_duration,
 )
+from services.fleet_score_service import (
+    coverage as fleet_score_coverage,
+    daily_fleet_score,
+    default_window as fleet_score_window,
+    score_movers,
+    snapshot_running as fleet_score_snapshot_running,
+    start_snapshot as start_fleet_score_snapshot,
+    vehicle_score_summary,
+)
 from utils import pk_now, pk_date, parse_date, safe_float
 from datetime import datetime, timedelta, date
 import csv
@@ -1303,6 +1312,100 @@ def tracking_dwell_report():
         current_account_id=acct_id,
         **_nav_back_ctx(url_for('tracking_dashboard')),
     )
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# FLEET SCORE TREND - history of the fleet report's VehicleScore
+# ════════════════════════════════════════════════════════════════════════════
+
+@app.route('/tracking/score-trend')
+def tracking_score_trend():
+    """How fleet and per-vehicle scores moved over time.
+
+    Reads only what has already been snapshotted into fleet_score_daily. The
+    live fleet report costs one SOAP call per vehicle per day, so a range is
+    never fetched on page load — the page states how much of the window is
+    ready and offers to snapshot the rest.
+    """
+    acct_id = _get_account_id()
+    accounts = _get_all_accounts()
+    vehicles_list = get_all_vehicles_for_account(acct_id) if acct_id else []
+
+    default_from, default_to = fleet_score_window(30)
+    from_date = _sanitize_date(request.args.get('from_date', ''),
+                               default_from.strftime('%Y-%m-%d'))
+    to_date = _sanitize_date(request.args.get('to_date', ''),
+                             default_to.strftime('%Y-%m-%d'))
+
+    daily = []
+    per_vehicle = []
+    movers = {'improved': [], 'declined': [], 'split_date': None}
+    coverage_info = None
+    error = None
+    if acct_id:
+        fd, td = _parse_ymd(from_date), _parse_ymd(to_date)
+        try:
+            coverage_info = fleet_score_coverage(acct_id, fd, td)
+            daily = daily_fleet_score(acct_id, fd, td)
+            per_vehicle = vehicle_score_summary(acct_id, fd, td, limit=100)
+            movers = score_movers(acct_id, fd, td, limit=5)
+        except Exception as e:
+            db.session.rollback()
+            error = str(e)[:240]
+            logger.exception('score trend failed acct=%s', acct_id)
+
+    names = _mileage_display_names(vehicles_list)
+    for row in per_vehicle:
+        key = normalize_reg_key(row['reg_no'])
+        row['display_name'] = names.get(key) or row['reg_no']
+
+    scores = [d['avg_score'] for d in daily]
+    return render_template(
+        'tracking/score_trend.html',
+        vehicles_list=vehicles_list,
+        from_date=from_date,
+        to_date=to_date,
+        daily=daily,
+        per_vehicle=per_vehicle,
+        movers=movers,
+        coverage=coverage_info,
+        error=error,
+        avg_score=round(sum(scores) / len(scores), 1) if scores else 0,
+        best_day=max(daily, key=lambda d: d['avg_score']) if daily else None,
+        worst_day=min(daily, key=lambda d: d['avg_score']) if daily else None,
+        snapshot_running=fleet_score_snapshot_running(),
+        accounts=accounts,
+        current_account_id=acct_id,
+        **_nav_back_ctx(url_for('tracking_dashboard')),
+    )
+
+
+@app.route('/tracking/score-trend/snapshot', methods=['POST'])
+def tracking_score_trend_snapshot():
+    """Kick off a snapshot of the days this window is still missing.
+
+    One day is ~48 SOAP calls, so this cannot run inside the request; it starts
+    a worker and the page reports progress on reload.
+    """
+    acct_id = _get_account_id()
+    from_date = _sanitize_date(request.form.get('from_date', ''))
+    to_date = _sanitize_date(request.form.get('to_date', ''))
+    if not acct_id:
+        flash('Koi PortalXS account active nahi hai.', 'warning')
+        return redirect(url_for('tracking_score_trend'))
+
+    fd, td = _parse_ymd(from_date), _parse_ymd(to_date)
+    started = start_fleet_score_snapshot(acct_id, fd, td)
+    if started is None:
+        flash('Snapshot pehle se chal raha hai — thori dair mein page refresh karein.', 'info')
+    elif started == 0:
+        flash('Is range ke sab din pehle se snapshot ho chuke hain.', 'info')
+    else:
+        flash(f'{started} din ka snapshot background mein shuru ho gaya. '
+              f'Har din takreeban {len(get_all_vehicles_for_account(acct_id) or [])} '
+              f'SOAP calls leta hai, to thora waqt lagega.', 'success')
+    return redirect(url_for('tracking_score_trend',
+                            from_date=from_date, to_date=to_date))
 
 
 # ════════════════════════════════════════════════════════════════════════════

@@ -739,6 +739,7 @@ ENDPOINT_PERMISSION_MAP = [
     ('tracking_trends', 'tracking_reports'),
     ('tracking_device_health', 'tracking_reports'),
     ('tracking_dwell_report', 'tracking_reports'),
+    ('tracking_score_trend', 'tracking_reports'),      # covers the snapshot sub-route
     ('tracking_dispatch', 'tracking_view'),            # dispatching is a live-map task
     ('tracking_alerts', 'tracking_alerts'),
     ('tracking_settings', 'tracking_settings'),        # covers all settings sub-routes

@@ -519,13 +519,25 @@ if _run_startup_tasks:
         except Exception as _e:
             print(f"work-order tables ensure warning (non-fatal): {_e}")
 
-        # Dwell rollup tables (Stoppage & Dwell Time report)
+        # Activity rollup tables (Stoppage & Dwell Time, Device Health reports)
         try:
-            from models import VehicleStopLocationDaily, VehicleStopRollupStatus
+            from models import (
+                VehicleActivityDaySummary, VehicleStopLocationDaily,
+                VehicleStopRollupStatus,
+            )
             VehicleStopLocationDaily.__table__.create(db.engine, checkfirst=True)
             VehicleStopRollupStatus.__table__.create(db.engine, checkfirst=True)
+            VehicleActivityDaySummary.__table__.create(db.engine, checkfirst=True)
         except Exception as _e:
-            print(f"dwell rollup tables ensure warning (non-fatal): {_e}")
+            print(f"activity rollup tables ensure warning (non-fatal): {_e}")
+
+        # Fleet score history (Fleet Score Trend report)
+        try:
+            from models import FleetScoreDaily, FleetScoreSyncStatus
+            FleetScoreDaily.__table__.create(db.engine, checkfirst=True)
+            FleetScoreSyncStatus.__table__.create(db.engine, checkfirst=True)
+        except Exception as _e:
+            print(f"fleet score tables ensure warning (non-fatal): {_e}")
 
         # Auto-add missing columns to existing tables
         try:
@@ -1207,6 +1219,11 @@ if _run_startup_tasks:
             start_activity_auto_scheduler(app)
         except Exception as e:
             app.logger.warning('Activity auto-sync scheduler failed to start: %s', e)
+        try:
+            from fleet_score_scheduler import start_fleet_score_scheduler
+            start_fleet_score_scheduler(app)
+        except Exception as e:
+            app.logger.warning('Fleet score snapshot scheduler failed to start: %s', e)
         try:
             from services.ufone_service import rewrap_ufone_account_passwords
             n = rewrap_ufone_account_passwords(app)
