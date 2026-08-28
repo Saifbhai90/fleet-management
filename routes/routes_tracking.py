@@ -200,6 +200,67 @@ def api_tracking_ufone_active_tasks():
     return jsonify({'tasks_by_reg': _ufone_tasks_for_tracking()})
 
 
+def _nearest_dispatch_data(acct_id: int, regno: str,
+                           only_free: bool = False) -> dict:
+    """Build one consistent nearest-vehicle payload for page and map clients."""
+    nearby = fetch_nearest_vehicles(acct_id, regno)
+    busy = _ufone_tasks_for_tracking() if nearby else {}
+    names = _mileage_display_names(get_all_vehicles_for_account(acct_id))
+
+    for row in nearby:
+        key = normalize_reg_key(row['regno'])
+        row['display_name'] = names.get(key) or row['regno']
+        task = busy.get(row['regno']) or busy.get(key) or {}
+        row['task'] = task
+        row['available'] = not task
+        row['is_reference'] = key == normalize_reg_key(regno)
+
+    candidates = [row for row in nearby if not row['is_reference']]
+    reference = next((row for row in nearby if row['is_reference']), None)
+    if reference is None and regno:
+        reference = nearest_reference_position(acct_id, regno)
+        if reference:
+            key = normalize_reg_key(reference['regno'])
+            reference['display_name'] = names.get(key) or reference['regno']
+            reference['task'] = busy.get(key) or {}
+            reference['available'] = not reference['task']
+            reference['is_reference'] = True
+    if only_free:
+        candidates = [row for row in candidates if row['available']]
+
+    return {
+        'reference': reference,
+        'candidates': candidates,
+        'nearby_count': len(nearby),
+        'free_count': sum(1 for row in candidates if row['available']),
+        'on_task_count': sum(1 for row in candidates if not row['available']),
+        'moving_count': sum(1 for row in candidates if row['moving']),
+    }
+
+
+@app.route('/api/tracking/nearest')
+def api_tracking_nearest():
+    """Return nearest PortalXS vehicles for the Fleet Dashboard overlay."""
+    acct_id = _get_account_id()
+    regno = request.args.get('regno', '').strip()
+    only_free = request.args.get('only_free', '') == '1'
+    if not acct_id:
+        return jsonify({'ok': False, 'error': 'No PortalXS account configured.',
+                        'reference': None, 'candidates': []}), 200
+    if not regno:
+        return jsonify({'ok': False, 'error': 'Select a reference vehicle first.',
+                        'reference': None, 'candidates': []}), 200
+    try:
+        payload = _nearest_dispatch_data(acct_id, regno, only_free=only_free)
+        return jsonify({'ok': True, 'account_id': acct_id, 'regno': regno,
+                        **payload})
+    except Exception as exc:
+        db.session.rollback()
+        logger.warning('dashboard nearest fetch failed regno=%s: %s', regno, exc)
+        return jsonify({'ok': False, 'error': friendly_portalxs_error(exc),
+                        'reference': None, 'candidates': []}), 200
+
+
 @app.route('/api/tracking/positions')
 def api_tracking_positions():
     """API endpoint for auto-refresh: return cached/fresh positions as JSON."""

@@ -304,6 +304,70 @@
   .tk-layer-extras { border-top: 1px solid #22303e; margin-top: 6px; padding: 8px 10px 4px; }
   .tk-layer-extras .tb-check { color: #cbd5e1; font-size: 12.5px; }
 
+  /* ── Nearest vehicle assist overlay ── */
+  .tk-nearest-panel {
+    position: absolute; top: 14px; right: 14px; z-index: 670; width: 348px;
+    max-height: calc(100% - 28px); display: none; overflow: hidden;
+    background: rgba(15, 25, 35, .97); border: 1px solid #33495d;
+    border-radius: 16px; color: #e2e8f0; box-shadow: 0 14px 38px rgba(0,0,0,.48);
+  }
+  .tk-nearest-panel.open { display: flex; flex-direction: column; }
+  .tk-nearest-head {
+    display: flex; align-items: flex-start; gap: 10px; padding: 12px 13px;
+    background: linear-gradient(135deg, #123f77, #1769aa); border-bottom: 1px solid #2a4d70;
+  }
+  .tk-nearest-title { flex: 1; min-width: 0; font-size: 13px; font-weight: 800; }
+  .tk-nearest-sub { margin-top: 2px; color: #bfdbfe; font-size: 10.5px; }
+  .tk-nearest-close {
+    width: 30px; height: 30px; border: 1px solid rgba(255,255,255,.22);
+    border-radius: 50%; background: rgba(0,0,0,.16); color: #fff; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .tk-nearest-kpis {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 9px 10px;
+    border-bottom: 1px solid #243746;
+  }
+  .tk-nearest-kpi { background: #162635; border: 1px solid #243746; border-radius: 9px; padding: 6px; text-align: center; }
+  .tk-nearest-kpi .n { display: block; color: #fff; font-size: 15px; font-weight: 800; line-height: 1.1; }
+  .tk-nearest-kpi .l { display: block; color: #94a3b8; font-size: 8px; text-transform: uppercase; margin-top: 2px; }
+  .tk-nearest-kpi.free .n { color: #4ade80; }
+  .tk-nearest-kpi.busy .n { color: #fb7185; }
+  .tk-nearest-filter {
+    display: flex; align-items: center; gap: 7px; padding: 8px 12px; color: #cbd5e1;
+    font-size: 11px; border-bottom: 1px solid #243746; cursor: pointer;
+  }
+  .tk-nearest-filter input { width: 15px; height: 15px; accent-color: #3b82f6; }
+  .tk-nearest-list { overflow-y: auto; padding: 5px 8px 9px; }
+  .tk-nearest-row {
+    display: flex; gap: 8px; align-items: flex-start; padding: 9px 5px;
+    border-bottom: 1px solid #243746; cursor: pointer;
+  }
+  .tk-nearest-row:last-child { border-bottom: 0; }
+  .tk-nearest-row:hover { background: #1b3244; border-radius: 8px; }
+  .tk-nearest-rank {
+    width: 24px; height: 24px; border-radius: 50%; background: #2563eb; color: #fff;
+    display: inline-flex; align-items: center; justify-content: center; font-size: 11px;
+    font-weight: 800; flex-shrink: 0;
+  }
+  .tk-nearest-row-body { min-width: 0; flex: 1; }
+  .tk-nearest-reg { color: #fff; font-size: 12px; font-weight: 750; overflow-wrap: anywhere; }
+  .tk-nearest-meta { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
+  .tk-nearest-badge { border-radius: 999px; padding: 2px 6px; font-size: 9px; font-weight: 700; }
+  .tk-nearest-badge.free { background: #14532d; color: #bbf7d0; }
+  .tk-nearest-badge.busy { background: #7f1d1d; color: #fecaca; }
+  .tk-nearest-badge.status { background: #334155; color: #cbd5e1; }
+  .tk-nearest-loc { color: #94a3b8; font-size: 10px; line-height: 1.35; margin-top: 3px; overflow-wrap: anywhere; }
+  .tk-nearest-empty { color: #94a3b8; font-size: 11px; padding: 14px 6px; text-align: center; }
+  .tk-nearest-marker {
+    width: 29px; height: 29px; border: 3px solid #fff; border-radius: 50%;
+    background: #2563eb; color: #fff; box-shadow: 0 2px 9px rgba(15,23,42,.55);
+    display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800;
+  }
+  .tk-nearest-marker.free { background: #16a34a; }
+  .tk-nearest-marker.busy { background: #dc2626; }
+  .tk-nearest-marker.reference { width: 35px; height: 35px; background: #7c3aed; border-width: 4px; }
+  .pop-nearest-btn { width: 100%; border: 0; cursor: pointer; }
+
   /* ── Vehicle detail card (mobile) ── */
   .tk-detail { display: none; }
   .tk-detail-head { display: flex; align-items: flex-start; gap: 10px; }
@@ -419,6 +483,16 @@
 
     .map-legend { display: none; bottom: calc(var(--tk-peek) + 64px + env(safe-area-inset-bottom, 0px)); right: 10px; left: 10px; z-index: 641; }
     .map-legend.tk-open { display: block; }
+
+    .tk-nearest-panel {
+      /* The compact dashboard topbar wraps to ~112px. The map layer starts
+         underneath it, so keep the assist card below the bar rather than
+         allowing the bar to cover its heading and KPIs. */
+      top: 122px; right: 8px; left: 8px; width: auto; max-height: 62%;
+      border-radius: 18px; z-index: 655;
+    }
+    .tracking-wrap.tk-fullmap .tk-nearest-panel { top: 10px; }
+    .tk-nearest-list { max-height: 38vh; }
 
     .tk-detail {
       display: block; position: absolute; left: 8px; right: 8px;
@@ -574,6 +648,24 @@
         <div id="tkLayerList"></div>
         <div class="tk-layer-extras" id="tkLayerExtras"></div>
       </div>
+
+      <section class="tk-nearest-panel" id="tkNearestPanel" aria-live="polite">
+        <div class="tk-nearest-head">
+          <div>
+            <div class="tk-nearest-title" id="tkNearestTitle">Nearest vehicles</div>
+            <div class="tk-nearest-sub" id="tkNearestSub">Select a vehicle to begin</div>
+          </div>
+          <button type="button" class="tk-nearest-close" id="tkNearestClose" aria-label="Close nearest vehicles">
+            <i class="bi bi-x-lg"></i>
+          </button>
+        </div>
+        <div class="tk-nearest-kpis" id="tkNearestKpis"></div>
+        <label class="tk-nearest-filter">
+          <input type="checkbox" id="tkNearestFreeOnly">
+          <span>Only vehicles without an active task</span>
+        </label>
+        <div class="tk-nearest-list" id="tkNearestList"></div>
+      </section>
     </div>
 
     <!-- Vehicle detail card (mobile) -->
@@ -742,6 +834,9 @@
   var positions = [];
   var posByReg = {};
   var ufoneTasksByReg = {{ ufone_tasks_by_reg | tojson }};
+  var nearestLayer = L.layerGroup();
+  var nearestMarkers = {};
+  var nearestState = null;
 
   function fetchUfoneTaskMap() {
     return fetch('/api/tracking/ufone-active-tasks?_=' + Date.now(), { credentials: 'same-origin' })
@@ -769,6 +864,181 @@
 
   function activeUfoneTask(regNo) {
     return ufoneTasksByReg[normalizeRegKey(regNo)] || null;
+  }
+
+  function escapeNearest(value) {
+    return String(value == null ? '' : value).replace(/[&<>"']/g, function(ch) {
+      return {'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[ch];
+    });
+  }
+
+  function nearestHasCoords(row) {
+    return row && isFinite(parseFloat(row.latitude)) && isFinite(parseFloat(row.longitude)) &&
+      parseFloat(row.latitude) !== 0 && parseFloat(row.longitude) !== 0;
+  }
+
+  function nearestIcon(label, kind, available) {
+    var cls = kind === 'reference' ? 'reference' : (available ? 'free' : 'busy');
+    return L.divIcon({
+      className: 'tk-nearest-divicon',
+      html: '<div class="tk-nearest-marker ' + cls + '">' + escapeNearest(label) + '</div>',
+      iconSize: kind === 'reference' ? [35, 35] : [29, 29],
+      iconAnchor: kind === 'reference' ? [17, 17] : [14, 14]
+    });
+  }
+
+  function clearNearestOverlay() {
+    nearestLayer.clearLayers();
+    nearestMarkers = {};
+    nearestState = null;
+    if (map.hasLayer(nearestLayer)) map.removeLayer(nearestLayer);
+    var panel = document.getElementById('tkNearestPanel');
+    if (panel) panel.classList.remove('open');
+  }
+
+  function nearestMarkerKey(reg) {
+    return normalizeRegKey(reg);
+  }
+
+  function syncNearestMarkerPositions() {
+    if (!nearestState) return;
+    var ref = nearestState.reference;
+    var liveRef = ref && positions.find(function(v) {
+      return normalizeRegKey(v.RegNo) === normalizeRegKey(ref.regno);
+    });
+    if (ref && liveRef && nearestHasCoords(ref)) {
+      if (isFinite(parseFloat(liveRef.LAT)) && isFinite(parseFloat(liveRef.LON))) {
+        ref.latitude = parseFloat(liveRef.LAT);
+        ref.longitude = parseFloat(liveRef.LON);
+      }
+    }
+    var all = (nearestState.candidates || []);
+    all.forEach(function(row) {
+      var live = positions.find(function(v) {
+        return normalizeRegKey(v.RegNo) === normalizeRegKey(row.regno);
+      });
+      if (live && isFinite(parseFloat(live.LAT)) && isFinite(parseFloat(live.LON))) {
+        row.latitude = parseFloat(live.LAT);
+        row.longitude = parseFloat(live.LON);
+      }
+      var marker = nearestMarkers[nearestMarkerKey(row.regno)];
+      if (marker && nearestHasCoords(row)) marker.setLatLng([row.latitude, row.longitude]);
+    });
+    var refMarker = nearestMarkers[nearestMarkerKey(ref && ref.regno)];
+    if (refMarker && ref && nearestHasCoords(ref)) {
+      refMarker.setLatLng([ref.latitude, ref.longitude]);
+    }
+  }
+
+  function renderNearestPanel() {
+    if (!nearestState) return;
+    var panel = document.getElementById('tkNearestPanel');
+    var list = document.getElementById('tkNearestList');
+    var kpis = document.getElementById('tkNearestKpis');
+    var onlyFree = !!nearestState.onlyFree;
+    var all = nearestState.candidates || [];
+    var shown = all.filter(function(row) { return !onlyFree || row.available; });
+    var ref = nearestState.reference;
+
+    document.getElementById('tkNearestTitle').textContent =
+      'Nearest to ' + ((ref && (ref.display_name || ref.regno)) || nearestState.regno);
+    document.getElementById('tkNearestSub').textContent =
+      shown.length + ' shown · PortalXS proximity order';
+    kpis.innerHTML =
+      '<div class="tk-nearest-kpi"><span class="n">' + all.length + '</span><span class="l">Nearby</span></div>' +
+      '<div class="tk-nearest-kpi free"><span class="n">' + all.filter(function(r) { return r.available; }).length + '</span><span class="l">Free now</span></div>' +
+      '<div class="tk-nearest-kpi busy"><span class="n">' + all.filter(function(r) { return !r.available; }).length + '</span><span class="l">On task</span></div>';
+
+    if (!shown.length) {
+      list.innerHTML = '<div class="tk-nearest-empty">No vehicles match this filter.</div>';
+    } else {
+      list.innerHTML = shown.map(function(row) {
+        var index = all.indexOf(row) + 1;
+        var taskText = row.task && (row.task.task_id_display || row.task.task_id)
+          ? ' · ' + (row.task.task_id_display || ('PHF-' + row.task.task_id)) : '';
+        return '<div class="tk-nearest-row" data-nearest-reg="' + escapeNearest(row.regno) + '">' +
+          '<span class="tk-nearest-rank">' + index + '</span>' +
+          '<div class="tk-nearest-row-body">' +
+          '<div class="tk-nearest-reg">' + escapeNearest(row.display_name || row.regno) + '</div>' +
+          '<div class="tk-nearest-meta">' +
+          '<span class="tk-nearest-badge ' + (row.available ? 'free' : 'busy') + '">' +
+            (row.available ? 'FREE' : 'ON TASK') + '</span>' +
+          '<span class="tk-nearest-badge status">' + escapeNearest(row.status || 'Unknown') + '</span>' +
+          '</div>' +
+          '<div class="tk-nearest-loc">' + escapeNearest(row.landmark || 'Location not available') +
+            escapeNearest(taskText) + '</div>' +
+          '</div></div>';
+      }).join('');
+    }
+
+    nearestLayer.clearLayers();
+    nearestMarkers = {};
+    if (ref && nearestHasCoords(ref)) {
+      var refMarker = L.marker([ref.latitude, ref.longitude], {
+        icon: nearestIcon('R', 'reference', true), zIndexOffset: 1000
+      }).bindTooltip('Reference · ' + (ref.display_name || ref.regno), { direction: 'top' });
+      refMarker.addTo(nearestLayer);
+      nearestMarkers[nearestMarkerKey(ref.regno)] = refMarker;
+    }
+    shown.forEach(function(row) {
+      if (!nearestHasCoords(row)) return;
+      var marker = L.marker([row.latitude, row.longitude], {
+        icon: nearestIcon(String(all.indexOf(row) + 1), 'candidate', row.available),
+        zIndexOffset: 900 - all.indexOf(row)
+      }).bindTooltip(
+        (all.indexOf(row) + 1) + '. ' + (row.display_name || row.regno) +
+        (row.available ? ' · FREE' : ' · ON TASK'),
+        { direction: 'top' }
+      );
+      marker.addTo(nearestLayer);
+      nearestMarkers[nearestMarkerKey(row.regno)] = marker;
+    });
+    if (!map.hasLayer(nearestLayer)) nearestLayer.addTo(map);
+    panel.classList.add('open');
+  }
+
+  function openNearest(regno) {
+    if (!regno) return;
+    closeDetail();
+    closeLegend();
+    var panel = document.getElementById('tkNearestPanel');
+    panel.classList.add('open');
+    document.getElementById('tkNearestTitle').textContent = 'Finding nearest vehicles…';
+    document.getElementById('tkNearestSub').textContent = 'PortalXS live search';
+    document.getElementById('tkNearestKpis').innerHTML = '';
+    document.getElementById('tkNearestList').innerHTML =
+      '<div class="tk-nearest-empty"><span class="spinner-border spinner-border-sm"></span> Loading live positions…</div>';
+    var account = document.getElementById('accountSelect');
+    var query = '?regno=' + encodeURIComponent(regno);
+    if (account && account.value) query += '&account_id=' + encodeURIComponent(account.value);
+    fetch('/api/tracking/nearest' + query, { credentials: 'same-origin' })
+      .then(function(response) { return response.json(); })
+      .then(function(data) {
+        if (!data.ok) throw new Error(data.error || 'Nearest vehicle search failed.');
+        nearestState = {
+          regno: regno,
+          reference: data.reference,
+          candidates: data.candidates || [],
+          onlyFree: false
+        };
+        document.getElementById('tkNearestFreeOnly').checked = false;
+        renderNearestPanel();
+        var points = [];
+        if (nearestHasCoords(data.reference)) points.push([data.reference.latitude, data.reference.longitude]);
+        (data.candidates || []).forEach(function(row) {
+          if (nearestHasCoords(row)) points.push([row.latitude, row.longitude]);
+        });
+        if (points.length > 1) map.fitBounds(L.latLngBounds(points), { padding: [60, 60], maxZoom: 14, animate: true });
+        else if (points.length === 1) map.setView(points[0], Math.max(map.getZoom(), 14), { animate: true });
+      })
+      .catch(function(error) {
+        clearNearestOverlay();
+        panel.classList.add('open');
+        document.getElementById('tkNearestTitle').textContent = 'Nearest vehicles unavailable';
+        document.getElementById('tkNearestSub').textContent = 'PortalXS could not complete the live search';
+        document.getElementById('tkNearestList').innerHTML =
+          '<div class="tk-nearest-empty">' + escapeNearest(error.message) + '</div>';
+      });
   }
 
   function matchesListFilter(regNo, status) {
@@ -934,6 +1204,8 @@
       '<div class="pop-row"><b>Trips:</b> ' + (v.TotalTrips || 0) + '</div>' +
       '<div class="pop-row"><b>Coords:</b> ' + v.LAT + ', ' + v.LON + '</div>' +
       popupTaskBlock(v.RegNo) +
+      '<button type="button" class="pop-link pop-nearest-btn" data-nearest-reg="' + encodeURIComponent(v.RegNo) + '">' +
+      '<i class="bi bi-broadcast-pin"></i> Find nearest vehicles</button>' +
       '<a href="/tracking/vehicle/' + encodeURIComponent(v.RegNo) + '" class="pop-link">View Details</a>';
   }
 
@@ -1268,6 +1540,7 @@
       var dv = posByReg[detailReg];
       if (dv) renderDetail(dv); else closeDetail();
     }
+    syncNearestMarkerPositions();
   }
 
   function selectVehicle(reg, pan) {
@@ -1517,8 +1790,12 @@
       '<div class="tk-detail-actions">' +
         '<button type="button" class="tk-act follow' + (following ? ' on' : '') + '" data-tk="follow">' +
           '<i class="bi bi-broadcast-pin"></i> ' + (following ? 'Following' : 'Follow') + '</button>' +
+        '<button type="button" class="tk-act" data-tk="nearest">' +
+          '<i class="bi bi-broadcast-pin"></i> Nearest</button>' +
         '<button type="button" class="tk-act" data-tk="route" data-lat="' + v.LAT + '" data-lon="' + v.LON + '">' +
           '<i class="bi bi-signpost-2"></i> Route</button>' +
+      '</div>' +
+      '<div class="tk-detail-actions">' +
         '<a class="tk-act primary" href="/tracking/vehicle/' + encodeURIComponent(v.RegNo) + '">' +
           '<i class="bi bi-graph-up"></i> Details</a>' +
       '</div>' +
@@ -1596,9 +1873,38 @@
       if (!hit) return;
       if (hit.dataset.tk === 'close') { closeDetail(); haptic(); }
       else if (hit.dataset.tk === 'follow') { toggleFollow(detailReg); }
+      else if (hit.dataset.tk === 'nearest') { openNearest(detailReg); haptic(); }
       else if (hit.dataset.tk === 'route') { openRoute(hit.dataset.lat, hit.dataset.lon); }
     });
   }
+
+  document.addEventListener('click', function(e) {
+    var nearestButton = e.target.closest('.pop-nearest-btn');
+    if (nearestButton) {
+      e.preventDefault();
+      openNearest(decodeURIComponent(nearestButton.dataset.nearestReg || ''));
+      haptic();
+    }
+    var nearestRow = e.target.closest('.tk-nearest-row');
+    if (nearestRow && nearestState) {
+      var marker = nearestMarkers[nearestMarkerKey(nearestRow.dataset.nearestReg)];
+      if (marker) {
+        map.setView(marker.getLatLng(), Math.max(map.getZoom(), 14), { animate: true });
+        marker.openTooltip();
+      }
+    }
+  });
+
+  document.getElementById('tkNearestClose').addEventListener('click', function() {
+    clearNearestOverlay();
+    haptic();
+  });
+  document.getElementById('tkNearestFreeOnly').addEventListener('change', function() {
+    if (nearestState) {
+      nearestState.onlyFree = this.checked;
+      renderNearestPanel();
+    }
+  });
 
   /* ── Floating map controls ── */
   renderLayerList();

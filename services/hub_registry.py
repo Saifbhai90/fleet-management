@@ -351,6 +351,7 @@ HUBS = {
             'tracking_settings_auto_link', 'tracking_settings_start_polling',
             'tracking_settings_stop_polling',
             'api_tracking_positions', 'api_tracking_refresh',
+            'api_tracking_nearest',
             'api_tracking_history', 'api_tracking_vehicles',
             'api_tracking_internal_vehicles',
             'tracking_trips_export_csv',
