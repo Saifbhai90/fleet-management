@@ -4393,6 +4393,18 @@ def workspace_mpg_report():
                 continue
 
             if not existing:
+                # saved_inputs is scoped to the viewer (employee or created_by user),
+                # but the unique key is (employee_id, vehicle_id, from_date, to_date).
+                # A row stored by another user for the same employee is invisible here,
+                # so look it up on the real key before inserting.
+                existing = WorkspaceMpgReportInput.query.filter_by(
+                    employee_id=save_emp_id,
+                    vehicle_id=loop_vehicle_id,
+                    from_date=from_date,
+                    to_date=to_date,
+                ).first()
+
+            if not existing:
                 existing = WorkspaceMpgReportInput(
                     employee_id=save_emp_id,
                     vehicle_id=loop_vehicle_id,
@@ -4401,7 +4413,7 @@ def workspace_mpg_report():
                     created_by_user_id=user_id,
                 )
                 db.session.add(existing)
-                saved_inputs[loop_vehicle_id] = existing
+            saved_inputs[loop_vehicle_id] = existing
 
             existing.current_odoo_meter_reading = current_meter
             existing.today_fuel = today_fuel
@@ -4410,19 +4422,35 @@ def workspace_mpg_report():
             db.session.rollback()
             flash("Some numeric inputs are invalid. Please enter valid numbers only.", "danger")
         else:
-            db.session.commit()
-            if save_skipped:
-                flash("Some inputs could not be saved (no employee scope for fuel data).", "warning")
+            try:
+                db.session.commit()
+            except IntegrityError:
+                db.session.rollback()
+                flash(
+                    "Inputs could not be saved because the same rows were updated elsewhere. "
+                    "Please reload the report and try again.",
+                    "warning",
+                )
             else:
-                flash("MPG report inputs saved successfully.", "success")
-        return redirect(url_for(
-            "workspace_mpg_report",
-            from_date=from_date.isoformat(),
-            to_date=to_date.isoformat(),
-            district_id=district_id or "",
-            project_id=project_id or "",
-            vehicle_id=selected_vehicle_id or "",
-        ))
+                if save_skipped:
+                    flash("Some inputs could not be saved (no employee scope for fuel data).", "warning")
+                else:
+                    flash("MPG report inputs saved successfully.", "success")
+        # Keep nav_from / mobile_preview on the redirect, otherwise the reload renders
+        # the Employee-Workspace variant of the page instead of the Report Center one.
+        redirect_args = {
+            "from_date": from_date.isoformat(),
+            "to_date": to_date.isoformat(),
+            "district_id": district_id or "",
+            "project_id": project_id or "",
+            "vehicle_id": selected_vehicle_id or "",
+        }
+        _nav_from = (request.values.get("nav_from") or "").strip()
+        if _nav_from:
+            redirect_args["nav_from"] = _nav_from
+        if request.values.get("mobile_preview"):
+            redirect_args["mobile_preview"] = request.values.get("mobile_preview")
+        return redirect(url_for("workspace_mpg_report", **redirect_args))
 
     report_rows = []
     for idx, row_vehicle_id in enumerate(vehicle_ids, start=1):

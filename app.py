@@ -104,9 +104,12 @@ if _is_sqlite:
         'pool_pre_ping': True,
     }
 else:
+    # 15 connections is enough for 4 request threads plus the background sync
+    # threads, and it keeps both this 512 MB instance and the 256 MB Postgres
+    # well inside their limits (the old 10+20 allowed 30 live connections).
     app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
-        'pool_size': 10,
-        'max_overflow': 20,
+        'pool_size': 5,
+        'max_overflow': 10,
         'pool_pre_ping': True,
         'pool_recycle': 120,
         'connect_args': {
@@ -200,6 +203,8 @@ from urllib.parse import quote as _url_quote
 app.jinja_env.filters['url_quote'] = lambda s: _url_quote(str(s), safe='')
 
 _notif_cache = {}
+_NOTIF_CACHE_TTL = 60
+_NOTIF_CACHE_MAX_ENTRIES = 200
 
 @app.context_processor
 def inject_notification_badge():
@@ -214,13 +219,18 @@ def inject_notification_badge():
             return dict(unread_notification_count=0)
         cache_key = f'notif_{user_id}'
         cached = _notif_cache.get(cache_key)
-        if cached and (_time.time() - cached[1]) < 60:
+        if cached and (_time.time() - cached[1]) < _NOTIF_CACHE_TTL:
             return dict(unread_notification_count=cached[0])
         from notification_service import count_unread_inbox_for_user
         user_perms = set(session.get('permissions') or [])
         is_master = session.get('is_master', False)
         count = count_unread_inbox_for_user(user_id, user_perms, is_master)
-        _notif_cache[cache_key] = (count, _time.time())
+        _now = _time.time()
+        _notif_cache[cache_key] = (count, _now)
+        if len(_notif_cache) > _NOTIF_CACHE_MAX_ENTRIES:
+            for _k in [_k for _k, _v in _notif_cache.items()
+                       if (_now - _v[1]) > _NOTIF_CACHE_TTL]:
+                _notif_cache.pop(_k, None)
     except Exception as e:
         app.logger.warning('Notification badge error: %s', e)
         count = 0
@@ -1224,6 +1234,11 @@ if _run_startup_tasks:
             start_fleet_score_scheduler(app)
         except Exception as e:
             app.logger.warning('Fleet score snapshot scheduler failed to start: %s', e)
+        try:
+            from services.memory_guard import start_memory_guard
+            start_memory_guard(app)
+        except Exception as e:
+            app.logger.warning('Memory guard failed to start: %s', e)
         try:
             from services.ufone_service import rewrap_ufone_account_passwords
             n = rewrap_ufone_account_passwords(app)

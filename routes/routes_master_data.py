@@ -1936,12 +1936,20 @@ def handle_csrf_error(e):
 @app.errorhandler(Exception)
 def handle_unhandled_exception(e):
     """Ensure API endpoints never leak HTML pages on failures."""
-    if request.path.startswith('/api/'):
+    # Roll back for every route, not just /api/. A failed write leaves the scoped
+    # session on a dead transaction, and anything that still runs in the request
+    # lifecycle (diagnostics logging, teardown) then silently loses its own work.
+    if not isinstance(e, HTTPException):
         try:
             db.session.rollback()
         except Exception:
             pass
+    if request.path.startswith('/api/'):
         if isinstance(e, HTTPException):
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
             return jsonify({'ok': False, 'error': e.description or 'HTTP error'}), int(e.code or 500)
         return jsonify({'ok': False, 'error': f'API internal error: {e}'}), 500
     if isinstance(e, HTTPException):

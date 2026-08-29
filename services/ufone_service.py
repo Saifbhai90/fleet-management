@@ -3472,6 +3472,13 @@ def _poll_loop(app):
                 logger.warning(
                     f"ufone poll: {consecutive_failures} failed cycle(s), "
                     f"next retry in {wait}s")
+            # One app context spans the whole thread life, so release the scoped
+            # session each cycle instead of letting it hold every loaded row.
+            try:
+                from app import db
+                db.session.remove()
+            except Exception:
+                pass
             _poll_thread_stop.wait(wait)
 
 

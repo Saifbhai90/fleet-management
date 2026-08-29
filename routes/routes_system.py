@@ -22,6 +22,7 @@ from flask import (
 from sqlalchemy import func, text
 
 from app import app, db
+from services.memory_guard import stats as memory_guard_stats
 from models import (
     Driver, Project, District, Notification, NotificationRead,
     ActivityLog, LoginLog, LoginAttempt, DeviceFCMToken,
@@ -824,11 +825,16 @@ def health_check():
         db_ok = False
     uptime = int(_sh_time.time() - _app_start_time)
     status_code = 200 if db_ok else 503
-    return jsonify({
+    payload = {
         'status': 'ok' if db_ok else 'degraded',
         'db': db_ok,
         'uptime_seconds': uptime,
-    }), status_code
+    }
+    try:
+        payload['memory'] = memory_guard_stats()
+    except Exception:
+        pass
+    return jsonify(payload), status_code
 
 
 @app.route('/admin/system-health/cleanup', methods=['POST'])

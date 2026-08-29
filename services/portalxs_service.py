@@ -648,6 +648,10 @@ _fleet_report_cache_lock = threading.Lock()
 FLEET_REPORT_CACHE_TTL = 300  # 5 minutes
 FLEET_REPORT_MAX_WORKERS = 8
 FLEET_REPORT_BATCH_DEADLINE = 18  # seconds — stay well inside Render's limit
+# Every distinct date range opens a new bucket holding one row set per vehicle.
+# On a 512 MB instance an unbounded number of ranges is what makes the process
+# drift into the memory limit, so keep only the few most recently used ones.
+FLEET_REPORT_CACHE_MAX_BUCKETS = 6
 
 
 def _fleet_cache_key(account_id: int, from_dt: str, to_dt: str) -> tuple:
@@ -655,10 +659,24 @@ def _fleet_cache_key(account_id: int, from_dt: str, to_dt: str) -> tuple:
 
 
 def _fleet_cache_prune(now: float) -> None:
-    """Drop whole date-range buckets whose newest entry is long expired."""
+    """Drop expired entries, then the least recently used surplus buckets.
+
+    Caller must hold ``_fleet_report_cache_lock``.
+    """
     for key, bucket in list(_fleet_report_cache.items()):
-        newest = max((ts for ts, _ in bucket.values()), default=0.0)
-        if (now - newest) > FLEET_REPORT_CACHE_TTL * 4:
+        for regno in [r for r, (ts, _) in bucket.items()
+                      if (now - ts) > FLEET_REPORT_CACHE_TTL]:
+            bucket.pop(regno, None)
+        if not bucket:
+            _fleet_report_cache.pop(key, None)
+
+    surplus = len(_fleet_report_cache) - FLEET_REPORT_CACHE_MAX_BUCKETS
+    if surplus > 0:
+        by_age = sorted(
+            _fleet_report_cache.items(),
+            key=lambda kv: max((ts for ts, _ in kv[1].values()), default=0.0),
+        )
+        for key, _bucket in by_age[:surplus]:
             _fleet_report_cache.pop(key, None)
 
 
@@ -677,6 +695,7 @@ def fleet_report_cached(account_id: int, regnos: list[str], from_dt: str,
                 rows.extend(copy.deepcopy(hit[1]))
             else:
                 missing.append(regno)
+        _fleet_cache_prune(now)
     return rows, missing
 
 
@@ -957,6 +976,9 @@ _mileage_report_cache_lock = threading.Lock()
 MILEAGE_REPORT_CACHE_TTL = 300  # 5 minutes
 # Stay under Render/proxy ~30s request timeout while PortalXS SOAP is slow.
 MILEAGE_REPORT_DEADLINE_SEC = 22
+# The key includes the vehicle list, so filter changes multiply entries. Cap them
+# so the cache cannot grow into the instance memory limit.
+MILEAGE_REPORT_CACHE_MAX_ENTRIES = 8
 
 
 def fetch_mileage_report_bulk(account_id: int, regnos: list[str], from_dt: str, to_dt: str) -> tuple[list[dict], Optional[str]]:
@@ -1029,8 +1051,14 @@ def fetch_mileage_report_bulk(account_id: int, regnos: list[str], from_dt: str, 
     if rows and unfinished == 0:
         with _mileage_report_cache_lock:
             _mileage_report_cache[cache_key] = (now, rows)
-            for k in [k for k, (ts, _) in _mileage_report_cache.items() if (now - ts) > MILEAGE_REPORT_CACHE_TTL * 2]:
+            for k in [k for k, (ts, _) in _mileage_report_cache.items()
+                      if (now - ts) > MILEAGE_REPORT_CACHE_TTL]:
                 _mileage_report_cache.pop(k, None)
+            surplus = len(_mileage_report_cache) - MILEAGE_REPORT_CACHE_MAX_ENTRIES
+            if surplus > 0:
+                by_age = sorted(_mileage_report_cache.items(), key=lambda kv: kv[1][0])
+                for k, _v in by_age[:surplus]:
+                    _mileage_report_cache.pop(k, None)
 
     return rows, error
 
@@ -1357,6 +1385,12 @@ def _poll_loop(app):
             except Exception as e:
                 db.session.rollback()
                 logger.error(f"[PortalXS] Poll loop error: {e}")
+            # This thread keeps one app context for its whole life, so the scoped
+            # session would otherwise hold every ORM object it ever loaded.
+            try:
+                db.session.remove()
+            except Exception:
+                pass
             _poll_thread_stop.wait(30)
 
 

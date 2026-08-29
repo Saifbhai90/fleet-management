@@ -98,8 +98,14 @@ def _unread_notifications_for_user(user_id, limit=20):
 # user_id + is_master + permission-set hash + from_login flag. Avoids re-running
 # ~15-20 dashboard DB queries on rapid refreshes / mobile re-opens.
 # Bypassed for first-after-login loads (from_login=1) so login scripts/sounds fire.
+#
+# Each entry holds a whole rendered dashboard (hundreds of KB). The instance runs
+# on a 512 MB plan, so the cache is kept small and expired entries are dropped on
+# every write — holding hundreds of 60-second-stale pages was the single largest
+# source of the slow memory climb that ended in Render restarting the instance.
 _dashboard_cache = {}  # {cache_key: {'ts': float, 'html': str}}
 _DASHBOARD_CACHE_TTL = 60  # seconds
+_DASHBOARD_CACHE_MAX_ENTRIES = 12
 
 
 
@@ -1270,11 +1276,15 @@ def dashboard():
     if user_id and not _from_login:
         import time as _time
         try:
-            _dashboard_cache[_ckey] = {'ts': _time.time(), 'html': _dash_html}
-            # Bound the cache size: drop oldest entries beyond 200.
-            if len(_dashboard_cache) > 200:
+            _now = _time.time()
+            _dashboard_cache[_ckey] = {'ts': _now, 'html': _dash_html}
+            # Stale entries can never be served again, so free them immediately.
+            for k in [k for k, v in _dashboard_cache.items()
+                      if (_now - v['ts']) > _DASHBOARD_CACHE_TTL]:
+                _dashboard_cache.pop(k, None)
+            if len(_dashboard_cache) > _DASHBOARD_CACHE_MAX_ENTRIES:
                 _oldest = sorted(_dashboard_cache.items(), key=lambda kv: kv[1]['ts'])
-                for k, _v in _oldest[:50]:
+                for k, _v in _oldest[:len(_dashboard_cache) - _DASHBOARD_CACHE_MAX_ENTRIES]:
                     _dashboard_cache.pop(k, None)
         except Exception:
             pass

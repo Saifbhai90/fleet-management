@@ -32,8 +32,11 @@ services:
     plan: starter
     buildCommand: pip install -r requirements.txt && python -m playwright install --with-deps chromium
     # Matches Procfile; bind 0.0.0.0:$PORT per https://render.com/docs/web-services#port-binding
-    # Starter ~512MB: use 1 worker so backup + Flask stays under RAM (was OOM with workers=2)
-    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --timeout 600 --workers 1 --worker-class gthread --threads 4
+    # Starter ~512MB: use 1 worker so backup + Flask stays under RAM (was OOM with workers=2).
+    # gthread + 4 threads is required: with the default sync worker the single
+    # process serves one request at a time, so one slow PortalXS report blocks
+    # every other user and the default 30s timeout kills the worker outright.
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --worker-class gthread --threads 4 --timeout 300 --graceful-timeout 30 --keep-alive 5
     preDeployCommand: sh scripts/render_migrate.sh
     healthCheckPath: /health
     envVars:
@@ -47,6 +50,15 @@ services:
         value: app:app
       - key: SESSION_COOKIE_SECURE
         value: "true"
+      # glibc opens up to 8 malloc arenas per core; with ~15 threads (gthread +
+      # the sync/poll threads) that inflates RSS well past what Python holds and
+      # keeps freed report memory out of the kernel's hands. Two arenas keeps the
+      # baseline low enough to survive a report spike on a 512 MB instance.
+      - key: MALLOC_ARENA_MAX
+        value: "2"
+      # Read by services/memory_guard.py to size its trim thresholds.
+      - key: MEMORY_LIMIT_MB
+        value: "512"
       - key: DEMO_MODE
         value: "0"
       - key: BACKUP_INCLUDE_UPLOADS
@@ -66,7 +78,7 @@ services:
     runtime: python
     plan: starter
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --timeout 600 --workers 1 --worker-class gthread --threads 4
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --worker-class gthread --threads 4 --timeout 300 --graceful-timeout 30 --keep-alive 5
     preDeployCommand: sh scripts/render_migrate.sh
     # First successful deploy only — also re-runs idempotently on boot when DEMO_MODE=1
     initialDeployHook: sh scripts/seed_demo.sh
@@ -82,6 +94,10 @@ services:
         value: app:app
       - key: SESSION_COOKIE_SECURE
         value: "true"
+      - key: MALLOC_ARENA_MAX
+        value: "2"
+      - key: MEMORY_LIMIT_MB
+        value: "512"
       - key: DEMO_MODE
         value: "1"
       - key: BACKUP_INCLUDE_UPLOADS

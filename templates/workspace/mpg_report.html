@@ -3,7 +3,27 @@
 {# Report Center MPG must not jump into Employee Workspace dashboard. #}
 {% set _nf = (nav_from or request.args.get('nav_from') or '')|trim %}
 {% set from_report_center = _nf == 'reports' or (nav_back_label_auto or '') == 'Report Center' %}
-<div class="container-fluid py-3 mpg-report-page{% if from_report_center %} from-report-center{% endif %}">
+<div class="container-fluid py-3 mpg-report-page{% if from_report_center %} from-report-center{% endif %}{% if is_native_app %} is-mobile-layout{% endif %}">
+  <script>
+  /* Pick the layout here, while the page is still being parsed, so the phone
+     never paints the desktop table first. `is_native_app` already covers the
+     Capacitor app server-side; this also catches mobile browsers and the
+     ?mobile_preview=1 desktop preview. Waiting for DOMContentLoaded is not an
+     option: on a slow connection the external scripts in base.html hold it back
+     for seconds while the table below is already on screen. */
+  (function () {
+    try {
+      var page = document.currentScript.parentElement;
+      var preview = /(^|[?&])mobile_preview(=|&|$)/.test(window.location.search);
+      var narrow = window.matchMedia('(max-width: 767px)').matches;
+      var native = document.documentElement.classList.contains('capacitor-native');
+      if (narrow || preview || native) page.classList.add('is-mobile-layout');
+      if (preview && !narrow && !native) page.classList.add('mpg-mobile-preview');
+      window.__mpgLayout = { preview: preview, native: native };
+    } catch (e) { /* leave the desktop layout in place */ }
+  })();
+  </script>
+
   {% if from_report_center %}
   <div class="mpg-top-bar mb-3" id="mpgTopBar">
     <a href="{{ nav_back_url_auto or url_for('reports_index') }}"
@@ -164,6 +184,111 @@
     .mpg-balance-neg { color: #dc2626; font-weight: 700; }
     .mpg-vehicle-cell .vno { font-weight: 700; font-size: .85rem; color: #1e293b; }
     .mpg-vehicle-cell .vno-sub { font-size: .68rem; color: #64748b; margin-top: 1px; }
+
+    /* ── Desktop web table ─────────────────────────────────────────────────
+       22 columns means the grid always scrolls sideways, so the header row and
+       the two identity columns stay pinned and the two editable columns are
+       tinted — otherwise a reading gets typed into the wrong vehicle's row. */
+    .mpg-report-page:not(.is-mobile-layout) .mpg-toolbar-more-btn { display: none; }
+    @media (min-width: 768px) {
+      .mpg-report-page:not(.is-mobile-layout) .mpg-top-bar {
+        flex-wrap: nowrap;
+        align-items: center;
+      }
+      .mpg-report-page:not(.is-mobile-layout) .mpg-top-bar > .mpg-hero-btn--back {
+        flex: 0 0 auto;
+        min-width: 172px;
+        margin-right: auto;
+      }
+      .mpg-report-page:not(.is-mobile-layout) .mpg-top-bar > .mpg-more-menu {
+        flex: 0 0 auto;
+        justify-content: flex-end;
+      }
+      .mpg-report-page:not(.is-mobile-layout) .mpg-top-bar .mpg-hero-btn {
+        min-width: 172px;
+        min-height: 40px;
+        border-radius: 10px;
+        font-weight: 600;
+      }
+    }
+    /* Height is set from the space actually left on screen (see
+       sizeMpgTableViewport) so the pinned header never ends up below the fold. */
+    .mpg-report-page:not(.is-mobile-layout) .mpg-table-wrap {
+      max-height: calc(100vh - 330px);
+      min-height: 260px;
+      overflow: auto;
+    }
+    .mpg-report-page:not(.is-mobile-layout) .mpg-m-apply { white-space: nowrap; }
+    .mpg-report-page:not(.is-mobile-layout) .mpg-table {
+      border-collapse: separate;
+      border-spacing: 0;
+    }
+    .mpg-report-page:not(.is-mobile-layout) .mpg-table thead th {
+      position: sticky;
+      top: 0;
+      z-index: 3;
+      box-shadow: inset 0 -2px 0 #cbd5e1;
+    }
+    .mpg-report-page:not(.is-mobile-layout) .mpg-table tbody tr:nth-child(even) > td {
+      background: #fbfcfe;
+    }
+    .mpg-report-page:not(.is-mobile-layout) .mpg-table th.mpg-sticky-sr,
+    .mpg-report-page:not(.is-mobile-layout) .mpg-table td.mpg-sticky-sr {
+      position: sticky;
+      left: 0;
+      z-index: 2;
+      width: 52px;
+      min-width: 52px;
+      background: #fff;
+    }
+    .mpg-report-page:not(.is-mobile-layout) .mpg-table th.mpg-sticky-veh,
+    .mpg-report-page:not(.is-mobile-layout) .mpg-table td.mpg-sticky-veh {
+      position: sticky;
+      left: 52px;
+      z-index: 2;
+      min-width: 168px;
+      background: #fff;
+      box-shadow: 6px 0 8px -6px rgba(15, 23, 42, .18);
+    }
+    .mpg-report-page:not(.is-mobile-layout) .mpg-table thead th.mpg-sticky-sr,
+    .mpg-report-page:not(.is-mobile-layout) .mpg-table thead th.mpg-sticky-veh {
+      z-index: 4;
+      background: #f1f5f9;
+    }
+    .mpg-report-page:not(.is-mobile-layout) .mpg-table tbody tr:hover > td.mpg-sticky-sr,
+    .mpg-report-page:not(.is-mobile-layout) .mpg-table tbody tr:hover > td.mpg-sticky-veh {
+      background: #f0f7ff;
+    }
+    .mpg-report-page:not(.is-mobile-layout) .mpg-table th.mpg-col-input,
+    .mpg-report-page:not(.is-mobile-layout) .mpg-table td.mpg-input-cell {
+      background: #eff6ff;
+      box-shadow: inset 1px 0 0 #bfdbfe, inset -1px 0 0 #bfdbfe;
+    }
+    .mpg-report-page:not(.is-mobile-layout) .mpg-table thead th.mpg-col-input {
+      color: #1d4ed8;
+      box-shadow: inset 1px 0 0 #bfdbfe, inset -1px 0 0 #bfdbfe, inset 0 -2px 0 #60a5fa;
+    }
+    .mpg-report-page:not(.is-mobile-layout) .mpg-table td.mpg-input-cell .form-control {
+      border-color: #93c5fd;
+      font-weight: 600;
+    }
+    .mpg-report-page:not(.is-mobile-layout) .mpg-table tfoot td {
+      position: sticky;
+      bottom: 0;
+      z-index: 3;
+      background: #eef2f7;
+      font-weight: 700;
+      font-size: .78rem;
+      color: #1e293b;
+      border-top: 2px solid #94a3b8;
+      white-space: nowrap;
+    }
+    .mpg-report-page:not(.is-mobile-layout) .mpg-table tfoot td.mpg-sticky-sr,
+    .mpg-report-page:not(.is-mobile-layout) .mpg-table tfoot td.mpg-sticky-veh {
+      z-index: 4;
+      background: #e2e8f0;
+    }
+    .mpg-report-page.is-mobile-layout .mpg-table tfoot { display: none !important; }
 
     /* Mobile-only helpers — hidden on desktop web table */
     .mpg-m-filter-head,
@@ -1380,8 +1505,8 @@
         <table class="table table-sm table-bordered table-hover align-middle mb-0 mpg-table mpg-mobile-table" id="workspaceMpgReportTable" data-mp-skip-cards="1" data-mp-skip-search="1">
           <thead class="table-light">
             <tr>
-              <th>Sr.No.</th>
-              <th>Vehicle No.</th>
+              <th class="mpg-sticky-sr">Sr.No.</th>
+              <th class="mpg-sticky-veh">Vehicle No.</th>
               <th>Entry Date</th>
               <th>SLIP NO.</th>
               <th class="text-end">Previous Reading</th>
@@ -1395,12 +1520,12 @@
               <th class="text-end">Short Km's</th>
               <th class="text-end">With Full Tank Next Fueling Reading</th>
               <th class="text-end" id="thCurrentDateReading">Current Date Reading</th>
-              <th class="text-end" id="thCurrentOdooMeter">Current Odoo Meter Reading</th>
+              <th class="text-end mpg-col-input" id="thCurrentOdooMeter">Current Odoo Meter Reading</th>
               <th class="text-end">R. KM's from Fueling</th>
               <th class="text-end">In Tank Current Ltr</th>
               <th class="text-end">Fueling LTR With Target MPG</th>
               <th class="text-end">Fueling Amount</th>
-              <th class="text-end">Today Fuel</th>
+              <th class="text-end mpg-col-input">Today Fuel</th>
               <th class="text-end">Balance Amount</th>
             </tr>
           </thead>
@@ -1426,8 +1551,8 @@
               data-tank-capacity="{{ r.tank_capacity if r.tank_capacity is not none else '' }}"
               data-avg-fuel-price="{{ r.avg_fuel_price if r.avg_fuel_price is not none else '' }}"
             >
-              <td class="text-center text-muted mpg-mobile-hide">{{ r.sr_no }}</td>
-              <td class="mpg-vehicle-cell mpg-mobile-hide">
+              <td class="text-center text-muted mpg-mobile-hide mpg-sticky-sr">{{ r.sr_no }}</td>
+              <td class="mpg-vehicle-cell mpg-mobile-hide mpg-sticky-veh">
                 <div class="vno">{{ r.vehicle.vehicle_no }}</div>
                 <div class="vno-sub">T:{{ "{:,.1f}".format(r.target_mpg or 0) }} MPG | Tk:{{ "{:,.0f}".format(r.tank_capacity or 0) }}L</div>
               </td>
@@ -1487,6 +1612,40 @@
             </tr>
             {% endfor %}
           </tbody>
+          {% if has_mpg_data %}
+          {% set total_km = rows|map(attribute='km')|reject('none')|sum %}
+          {% set total_deduction = rows|map(attribute='fuel_deduction')|reject('none')|sum %}
+          {% set total_short = rows|map(attribute='short_kms')|reject('none')|sum %}
+          {% set total_today_fuel = rows|map(attribute='today_fuel')|reject('none')|sum %}
+          {% set total_balance = rows|map(attribute='balance_amount')|reject('none')|sum %}
+          {% set fleet_mpg = (total_km / total_ltr) if total_ltr else none %}
+          <tfoot>
+            <tr>
+              <td class="mpg-sticky-sr"></td>
+              <td class="mpg-sticky-veh">Total ({{ vehicle_count }} vehicle{{ 's' if vehicle_count != 1 }})</td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td class="text-end">{{ "{:,.2f}".format(total_km) }}</td>
+              <td></td>
+              <td class="text-end">{{ "{:,.2f}".format(total_ltr) }}</td>
+              <td class="text-end">{{ "{:,.2f}".format(fleet_mpg) if fleet_mpg is not none else '-' }}</td>
+              <td class="text-end">{{ "{:,.2f}".format(total_amount) }}</td>
+              <td class="text-end{% if total_deduction > 0 %} mpg-val-neg{% endif %}">{{ "{:,.2f}".format(total_deduction) }}</td>
+              <td class="text-end{% if total_short > 0 %} mpg-val-warn{% endif %}">{{ "{:,.2f}".format(total_short) }}</td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td class="text-end">{{ "{:,.2f}".format(total_today_fuel) }}</td>
+              <td class="text-end{% if total_balance < 0 %} mpg-balance-neg{% else %} mpg-balance-pos{% endif %}">{{ "{:,.2f}".format(total_balance) }}</td>
+            </tr>
+          </tfoot>
+          {% endif %}
         </table>
       </div>
     </div>
@@ -1509,13 +1668,20 @@ document.addEventListener('DOMContentLoaded', function(){
   var mpgPage = document.querySelector('.mpg-report-page');
   var previewBanner = document.getElementById('mpgPreviewBanner');
 
+  var serverNative = {{ (is_native_app|default(false))|tojson }};
+
   function syncMobileLayout(){
     if(!mpgPage) return;
     var preview = new URLSearchParams(window.location.search).has('mobile_preview');
     var mobile = window.matchMedia('(max-width: 767px)').matches;
-    var isNative = document.documentElement.classList.contains('capacitor-native');
+    var isNative = serverNative || document.documentElement.classList.contains('capacitor-native');
     var useMobile = mobile || preview || isNative;
-    mpgPage.classList.toggle('is-mobile-layout', useMobile);
+    /* Only ever add on the app: a wide webview must not drop the card layout. */
+    if(useMobile){
+      mpgPage.classList.add('is-mobile-layout');
+    } else {
+      mpgPage.classList.remove('is-mobile-layout');
+    }
     mpgPage.classList.toggle('mpg-mobile-preview', preview && !mobile && !isNative);
     document.body.classList.toggle('mpg-preview-body', preview && !mobile && !isNative);
     /* Always hide bottom nav on MPG Report in native app (conflicts with Save Inputs). */
@@ -1524,11 +1690,30 @@ document.addEventListener('DOMContentLoaded', function(){
       previewBanner.hidden = !(preview && !mobile && !isNative);
     }
   }
-  syncMobileLayout();
-  window.addEventListener('resize', syncMobileLayout);
+  /* The desktop grid scrolls inside its own box so the header and the Sr.No. /
+     Vehicle columns can stay pinned. Size that box to the room left below it,
+     otherwise the pinned header sits under the fold and pins nothing useful. */
+  var mpgTableWrap = document.querySelector('.mpg-table-wrap');
+  function sizeMpgTableViewport(){
+    if(!mpgTableWrap) return;
+    if(!mpgPage || mpgPage.classList.contains('is-mobile-layout')){
+      mpgTableWrap.style.maxHeight = '';
+      return;
+    }
+    var top = mpgTableWrap.getBoundingClientRect().top;
+    mpgTableWrap.style.maxHeight = Math.max(280, window.innerHeight - top - 28) + 'px';
+  }
+
+  function syncMpgLayoutAndSize(){
+    syncMobileLayout();
+    sizeMpgTableViewport();
+  }
+
+  syncMpgLayoutAndSize();
+  window.addEventListener('resize', syncMpgLayoutAndSize);
   /* Capacitor may add class slightly after first paint — re-sync once. */
-  setTimeout(syncMobileLayout, 50);
-  setTimeout(syncMobileLayout, 300);
+  setTimeout(syncMpgLayoutAndSize, 50);
+  setTimeout(syncMpgLayoutAndSize, 300);
 
   /* First open: make sure vehicle card can clear the fixed Save bar (no keyboard needed). */
   (function(){
