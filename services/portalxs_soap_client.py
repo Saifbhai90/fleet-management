@@ -60,6 +60,23 @@ def _is_crypto_error(exc: Exception) -> bool:
     return 'padding' in msg or 'decrypt' in msg or 'invalid token' in msg
 
 
+def _is_transport_error(exc: Exception) -> bool:
+    """True when the call never got an answer, so the session is still good.
+
+    Re-registering the device is not free: PortalXS hands out a uniqueID per
+    device and starts refusing once a caller asks too often, and it refuses in
+    plain text where an encrypted uniqueID belongs. So a read timeout must not
+    be allowed to invalidate a session that upstream still considers valid.
+    """
+    if isinstance(exc, (requests.ConnectionError, requests.Timeout)):
+        return True
+    msg = str(exc or '').lower()
+    return ('timed out' in msg or 'timeout' in msg
+            or 'connection aborted' in msg or 'connection reset' in msg
+            or 'remotedisconnected' in msg or 'connection broken' in msg
+            or 'max retries exceeded' in msg)
+
+
 def _session_file_for(session_key) -> str:
     """Account-specific session file so multiple accounts never collide."""
     key = str(session_key) if session_key else 'default'
@@ -226,7 +243,15 @@ class PortalXSClient:
             "device_unique_identifier": self.device_id})
         msg = r.get("responseMsg", "") if isinstance(r, dict) else str(r)
         uid_enc = msg.replace("Unique ID for this device is:", "").strip()
-        self.unique_id = dec_app(uid_enc)   # decrypt with APP key
+        try:
+            self.unique_id = dec_app(uid_enc)   # decrypt with APP key
+        except Exception as exc:
+            # When registration is refused the server puts its reason in
+            # responseMsg in plain text, and blindly decoding it reports a
+            # base64 length error that says nothing about what went wrong.
+            raise RuntimeError(
+                f"Device registration refused by PortalXS: {msg[:200] or exc}"
+            ) from exc
         return self.unique_id
 
     def login(self):
@@ -254,7 +279,13 @@ class PortalXSClient:
             try:
                 self.get_vehicles()
                 return
-            except Exception:
+            except Exception as probe_exc:
+                # A timeout says nothing about whether the session is still
+                # valid, and discarding it here is what drives the device
+                # re-registration loop. Let the caller retry on the same
+                # session instead.
+                if _is_transport_error(probe_exc):
+                    raise
                 self._clear_session_file()
         last_exc = None
         for attempt in range(_CONNECT_ATTEMPTS):
