@@ -14,6 +14,7 @@ import logging
 from datetime import date, timedelta
 from typing import Optional
 
+from services.portalxs_coordination import portalxs_work
 from utils import pk_date, pk_now, normalize_vehicle_reg_key, strip_ufone_reg_tag
 
 logger = logging.getLogger(__name__)
@@ -452,6 +453,7 @@ def fetch_and_upsert_batch(
     task_date: date,
     max_workers: int = 8,
     deadline_sec: float = 18,
+    wait_for_workers: bool = False,
 ) -> dict:
     """Parallel PortalXS fetch for a batch, then serial DB upsert.
 
@@ -496,7 +498,7 @@ def fetch_and_upsert_batch(
                     if regno not in fetched_map:
                         errors.append(f'{regno}: batch deadline')
     finally:
-        pool.shutdown(wait=False, cancel_futures=True)
+        pool.shutdown(wait=wait_for_workers, cancel_futures=True)
 
     rows = []
     done_regnos = []
@@ -561,13 +563,14 @@ def sync_day_full(account_id: int, task_date: date, source: str = 'auto') -> dic
     pending = pending_regnos_for_day(account_id, task_date, mode='refresh_all')
     ok = 0
     errors = []
-    # Process in parallel batches so auto jobs finish sooner
-    batch_size = 12
+    # Keep auto-sync pressure below the Render Starter process limit.
+    batch_size = 8
     for i in range(0, len(pending), batch_size):
         chunk = pending[i:i + batch_size]
         try:
             result = fetch_and_upsert_batch(
-                account_id, chunk, task_date, max_workers=8, deadline_sec=60,
+                account_id, chunk, task_date, max_workers=4, deadline_sec=60,
+                wait_for_workers=True,
             )
             ok += int(result.get('fetched') or 0)
             errors.extend(result.get('errors') or [])
@@ -599,15 +602,16 @@ def sync_all_active_accounts_for_day(task_date: date) -> list[dict]:
     results = []
     accounts = PortalXSAccount.query.filter_by(is_active=True).all()
     for acct in accounts:
-        try:
-            results.append(sync_day_full(acct.id, task_date, source='auto'))
-        except Exception as exc:
-            logger.exception('mileage sync account=%s day=%s failed', acct.id, task_date)
-            results.append({
-                'task_date': task_date.isoformat(),
-                'account_id': acct.id,
-                'error': str(exc)[:300],
-            })
+        with portalxs_work(acct.id, 'mileage-auto-sync', wait=True):
+            try:
+                results.append(sync_day_full(acct.id, task_date, source='auto'))
+            except Exception as exc:
+                logger.exception('mileage sync account=%s day=%s failed', acct.id, task_date)
+                results.append({
+                    'task_date': task_date.isoformat(),
+                    'account_id': acct.id,
+                    'error': str(exc)[:300],
+                })
     return results
 
 

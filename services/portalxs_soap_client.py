@@ -27,6 +27,7 @@ import hashlib
 import json
 import os
 import re
+import threading
 import time
 import uuid
 from datetime import datetime
@@ -34,6 +35,7 @@ from datetime import datetime
 import requests
 from Crypto.Cipher import DES3
 from Crypto.Util.Padding import pad, unpad
+from requests.adapters import HTTPAdapter
 
 # ============================================================
 #  CONFIG (from APK .env)
@@ -118,13 +120,36 @@ class PortalXSClient:
         self.username = username
         self.password = password
         self.device_id = device_id or str(uuid.uuid4().int)[:15]
-        self.session = requests.Session()
-        self.session.headers.update({"User-Agent": "TW-PX/5.0.4 Android"})
+        self._session_local = threading.local()
+        self._request_slots = threading.BoundedSemaphore(4)
+        self.session = self._new_session()
+        self._session_local.session = self.session
         self.unique_id = None
         self.login_id = None
         self.profile = None
         # Session persisted per account (session_key) — prevents multi-account collision
         self.session_file = _session_file_for(session_key or username)
+
+    @staticmethod
+    def _new_session():
+        session = requests.Session()
+        adapter = HTTPAdapter(
+            pool_connections=1,
+            pool_maxsize=1,
+            pool_block=True,
+            max_retries=0,
+        )
+        session.mount("http://", adapter)
+        session.mount("https://", adapter)
+        session.headers.update({"User-Agent": "TW-PX/5.0.4 Android"})
+        return session
+
+    def _session_for_thread(self):
+        session = getattr(self._session_local, 'session', None)
+        if session is None:
+            session = self._new_session()
+            self._session_local.session = session
+        return session
 
     # ---------------- persistence ----------------
     def save_session(self):
@@ -166,7 +191,10 @@ class PortalXSClient:
         last_exc = None
         for attempt in range(_RETRY_ATTEMPTS):
             try:
-                return self.session.post(SOAP_URL, data=data, headers=headers, timeout=30)
+                with self._request_slots:
+                    return self._session_for_thread().post(
+                        SOAP_URL, data=data, headers=headers, timeout=30,
+                    )
             except (requests.ConnectionError, requests.Timeout) as e:
                 last_exc = e
                 if attempt < _RETRY_ATTEMPTS - 1:

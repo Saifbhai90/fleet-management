@@ -20,6 +20,7 @@ from sqlalchemy import func
 
 from app import db
 from models import FleetScoreDaily, FleetScoreSyncStatus, PortalXSAccount
+from services.portalxs_coordination import portalxs_work
 from services.portalxs_service import (
     fetch_fleet_report_batch,
     get_all_vehicles_for_account,
@@ -30,8 +31,8 @@ logger = logging.getLogger(__name__)
 
 # Vehicles per SOAP fan-out. The report page uses 8 with an 18 s deadline to
 # stay inside a request; a scheduled snapshot has no such limit.
-SNAPSHOT_BATCH_SIZE = 12
-SNAPSHOT_WORKERS = 8
+SNAPSHOT_BATCH_SIZE = 6
+SNAPSHOT_WORKERS = 3
 SNAPSHOT_DEADLINE = 60
 
 
@@ -60,7 +61,9 @@ def snapshot_day(account_id: int, day: date, source: str = 'auto') -> dict:
         try:
             result = fetch_fleet_report_batch(
                 account_id, chunk, fdt, tdt,
-                max_workers=SNAPSHOT_WORKERS, deadline_sec=SNAPSHOT_DEADLINE,
+                max_workers=SNAPSHOT_WORKERS,
+                deadline_sec=SNAPSHOT_DEADLINE,
+                wait_for_workers=True,
             )
         except Exception as exc:
             db.session.rollback()
@@ -129,14 +132,15 @@ def _mark_status(account_id: int, day: date, source: str, total: int,
 def snapshot_all_active_accounts(day: date, source: str = 'auto') -> list[dict]:
     results = []
     for acct in PortalXSAccount.query.filter_by(is_active=True).all():
-        try:
-            results.append(snapshot_day(acct.id, day, source=source))
-        except Exception as exc:
-            db.session.rollback()
-            logger.exception('fleet score snapshot account=%s day=%s failed',
-                             acct.id, day)
-            results.append({'account_id': acct.id, 'task_date': day.isoformat(),
-                            'error': str(exc)[:300]})
+        with portalxs_work(acct.id, 'fleet-score-snapshot', wait=True):
+            try:
+                results.append(snapshot_day(acct.id, day, source=source))
+            except Exception as exc:
+                db.session.rollback()
+                logger.exception('fleet score snapshot account=%s day=%s failed',
+                                 acct.id, day)
+                results.append({'account_id': acct.id, 'task_date': day.isoformat(),
+                                'error': str(exc)[:300]})
     return results
 
 

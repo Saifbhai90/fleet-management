@@ -1093,7 +1093,7 @@ def tracking_mileage_report_fetch_one():
     targets = remaining_list[:batch_size]
     try:
         result = fetch_and_upsert_batch(
-            acct_id, targets, task_date, max_workers=8, deadline_sec=18,
+            acct_id, targets, task_date, max_workers=4, deadline_sec=18,
         )
     except Exception as e:
         current_app.logger.exception('mileage fetch-batch failed day=%s', day_s)

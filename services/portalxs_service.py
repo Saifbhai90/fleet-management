@@ -24,6 +24,7 @@ from typing import Optional
 
 from sqlalchemy import func
 
+from services.portalxs_coordination import portalxs_work
 from utils import clean_geo_location, normalize_vehicle_reg_key, safe_float
 
 logger = logging.getLogger(__name__)
@@ -370,6 +371,7 @@ def _set_cached_positions(account_id: int, vehicles: list[dict]):
 
 _clients: dict[int, 'PortalXSClient'] = {}
 _clients_lock = threading.Lock()
+_client_creation_locks: dict[int, threading.Lock] = {}
 
 
 def _get_client(account_id: int) -> 'PortalXSClient':
@@ -379,23 +381,33 @@ def _get_client(account_id: int) -> 'PortalXSClient':
     from app import db
 
     with _clients_lock:
-        if account_id in _clients:
-            return _clients[account_id]
+        client = _clients.get(account_id)
+        if client is not None:
+            return client
+        creation_lock = _client_creation_locks.setdefault(
+            account_id, threading.Lock(),
+        )
 
-    acct = db.session.get(PortalXSAccount, account_id)
-    if not acct:
-        raise ValueError(f"PortalXSAccount {account_id} not found")
+    with creation_lock:
+        with _clients_lock:
+            client = _clients.get(account_id)
+            if client is not None:
+                return client
 
-    password = decrypt_password(acct.password_enc)
-    client = PortalXSClient(acct.username, password, session_key=f"acct{account_id}")
-    client.connect()
-    acct.last_connected = datetime.now()
-    acct.last_error = None
-    db.session.commit()
+        acct = db.session.get(PortalXSAccount, account_id)
+        if not acct:
+            raise ValueError(f"PortalXSAccount {account_id} not found")
 
-    with _clients_lock:
-        _clients[account_id] = client
-    return client
+        password = decrypt_password(acct.password_enc)
+        client = PortalXSClient(acct.username, password, session_key=f"acct{account_id}")
+        client.connect()
+        acct.last_connected = datetime.now()
+        acct.last_error = None
+        db.session.commit()
+
+        with _clients_lock:
+            _clients[account_id] = client
+        return client
 
 
 def _reset_client(account_id: int):
@@ -508,6 +520,17 @@ def _finish_fetch_with_fallback(account_id: int, last_exc: Exception) -> list[di
 # ── Public API ───────────────────────────────────────────────────────────────
 
 def fetch_live_positions(account_id: int, force: bool = False) -> list[dict]:
+    """Fetch live positions without competing with a bulk PortalXS sync."""
+    with portalxs_work(account_id, 'live-position', wait=False) as acquired:
+        if not acquired:
+            return _finish_fetch_with_fallback(
+                account_id,
+                RuntimeError('PortalXS bulk sync is currently in progress'),
+            )
+        return _fetch_live_positions(account_id, force=force)
+
+
+def _fetch_live_positions(account_id: int, force: bool = False) -> list[dict]:
     """Fetch live positions from PortalXS, update DB cache, return vehicles."""
     from models import PortalXSAccount, PortalXSVehicleMapping
     from app import db
@@ -659,7 +682,8 @@ def fleet_report_cached(account_id: int, regnos: list[str], from_dt: str,
 
 def fetch_fleet_report_batch(account_id: int, regnos: list[str], from_dt: str, to_dt: str,
                              max_workers: int = FLEET_REPORT_MAX_WORKERS,
-                             deadline_sec: int = FLEET_REPORT_BATCH_DEADLINE) -> dict:
+                             deadline_sec: int = FLEET_REPORT_BATCH_DEADLINE,
+                             wait_for_workers: bool = False) -> dict:
     """Fetch one slice of vehicles in parallel and merge it into the cache.
 
     Returns {'rows', 'done_regnos', 'errors'}. Never raises for per-vehicle
@@ -714,7 +738,7 @@ def fetch_fleet_report_batch(account_id: int, regnos: list[str], from_dt: str, t
             logger.warning('fleet report batch hit the %ss deadline, %s vehicle(s) unfinished',
                            deadline_sec, len(stalled))
     finally:
-        pool.shutdown(wait=False, cancel_futures=True)
+        pool.shutdown(wait=wait_for_workers, cancel_futures=True)
 
     with _fleet_report_cache_lock:
         _fleet_cache_prune(time.time())

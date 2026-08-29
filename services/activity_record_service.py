@@ -20,6 +20,7 @@ from typing import Optional
 
 from sqlalchemy import func, or_
 
+from services.portalxs_coordination import portalxs_work
 from utils import (
     pk_date, pk_now, normalize_vehicle_reg_key, safe_float, strip_ufone_reg_tag,
 )
@@ -434,7 +435,7 @@ def pending_vehicles_for_day(account_id: int, task_date: date, mode: Optional[st
     return pending
 
 
-def sync_day_full(account_id: int, task_date: date, max_workers: int = 4) -> dict:
+def sync_day_full(account_id: int, task_date: date, max_workers: int = 3) -> dict:
     """Full-fleet PortalXS → vehicle_activity_record for one day (auto schedule)."""
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -467,7 +468,7 @@ def sync_day_full(account_id: int, task_date: date, max_workers: int = 4) -> dic
                 group_name=item.get('group_name') or '',
             )
 
-    workers = max(1, min(int(max_workers or 4), 8))
+    workers = max(1, min(int(max_workers or 3), 6))
     with ThreadPoolExecutor(max_workers=workers) as pool:
         futures = {pool.submit(_worker, item): item for item in pending}
         for fut in as_completed(futures):
@@ -692,30 +693,31 @@ def sync_all_active_accounts_for_day(task_date: date) -> list[dict]:
     results = []
     accounts = PortalXSAccount.query.filter_by(is_active=True).all()
     for acct in accounts:
-        try:
-            result = sync_day_full(acct.id, task_date)
-            mark_activity_sync_status(
-                task_date,
-                source='auto',
-                account_id=acct.id,
-                fetched_count=int(result.get('fetched') or 0),
-                error_count=int(result.get('error_count') or 0),
-                errors=result.get('errors') or [],
-            )
-            results.append(result)
-        except Exception as exc:
-            logger.exception('activity sync account=%s day=%s failed', acct.id, task_date)
-            mark_activity_sync_status(
-                task_date,
-                source='auto',
-                account_id=acct.id,
-                fetched_count=0,
-                error_count=1,
-                errors=[f'account:{str(exc)[:240]}'],
-            )
-            results.append({
-                'task_date': task_date.isoformat(),
-                'account_id': acct.id,
-                'error': str(exc)[:300],
-            })
+        with portalxs_work(acct.id, 'activity-auto-sync', wait=True):
+            try:
+                result = sync_day_full(acct.id, task_date)
+                mark_activity_sync_status(
+                    task_date,
+                    source='auto',
+                    account_id=acct.id,
+                    fetched_count=int(result.get('fetched') or 0),
+                    error_count=int(result.get('error_count') or 0),
+                    errors=result.get('errors') or [],
+                )
+                results.append(result)
+            except Exception as exc:
+                logger.exception('activity sync account=%s day=%s failed', acct.id, task_date)
+                mark_activity_sync_status(
+                    task_date,
+                    source='auto',
+                    account_id=acct.id,
+                    fetched_count=0,
+                    error_count=1,
+                    errors=[f'account:{str(exc)[:240]}'],
+                )
+                results.append({
+                    'task_date': task_date.isoformat(),
+                    'account_id': acct.id,
+                    'error': str(exc)[:300],
+                })
     return results
