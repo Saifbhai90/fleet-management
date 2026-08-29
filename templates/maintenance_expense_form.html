@@ -205,7 +205,7 @@
   }
 </style>
 <script>var MAINTENANCE_DIRECT_R2 = {{ maintenance_direct_r2 | tojson }};</script>
-<div class="container-fluid maint-form-wrap py-2">
+<div class="container-fluid maint-form-wrap expense-mobile-form-page py-2">
   <div class="page-header d-flex justify-content-between align-items-center">
     <h4><i class="bi bi-wrench me-2"></i>{{ title }}</h4>
     <div class="d-flex gap-2">
@@ -513,7 +513,7 @@
           <div id="expenseByBalanceHint" class="small mt-1 text-muted"></div>
         </div>
       </div>
-      <div class="action-bar">
+      <div class="action-bar expense-mobile-actions">
         <a href="{{ url_for('maintenance_expense_list') }}" class="btn btn-outline-secondary">Cancel</a>
         {{ form.submit(class="btn btn-primary", id="maintSaveBtn") }}
       </div>

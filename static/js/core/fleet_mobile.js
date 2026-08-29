@@ -28,7 +28,8 @@
     /* ── Detect action column ── */
     function isActionCol(header, td, colIndex, totalCols) {
         var h = (header || '').toLowerCase().trim();
-        if (h === 'action' || h === 'actions' || h === '#' || h === '') return false; // '#' is usually row number
+        if (h === '#' || h === '') return false; // '#' is usually row number
+        if (h === 'action' || h === 'actions') return true;
         // Last column containing only buttons/links
         if (colIndex === totalCols - 1) {
             var clone = td.cloneNode(true);
@@ -186,6 +187,14 @@
 
         tables.forEach(function(tbl) {
             if (tbl.dataset.mpBuilt) return;
+            /* Keep the original rows for dense business lists so direct
+               handlers on status, media, and action controls remain intact.
+               The shared CSS turns these rows into mobile cards. */
+            if (tbl.getAttribute('data-mp-preserve-rows') === '1') {
+                preparePreservedRows(tbl);
+                tbl.dataset.mpBuilt = 'preserved-rows';
+                return;
+            }
             /* Batch forms (e.g. New Task Entry): must keep one DOM tree — footer Save + input listeners.
                Mobile “cards” duplicate cells and hide the whole .card, breaking save + live totals. */
             if (tbl.getAttribute('data-mp-skip-cards') === '1') {
@@ -261,6 +270,22 @@
                 mf.innerHTML = sib.innerHTML;
                 cardList.after(mf);
             }
+        });
+    }
+
+    function preparePreservedRows(tbl) {
+        var headers = [];
+        tbl.querySelectorAll('thead th, thead td').forEach(function(th) {
+            headers.push(th.textContent.trim());
+        });
+        tbl.querySelectorAll('tbody tr').forEach(function(row) {
+            if (row.classList.contains('d-none') || row.hidden ||
+                row.getAttribute('data-mp-skip-row') === '1') return;
+            Array.from(row.children).forEach(function(cell, index) {
+                if (headers[index]) {
+                    cell.setAttribute('data-mp-label', headers[index]);
+                }
+            });
         });
     }
 

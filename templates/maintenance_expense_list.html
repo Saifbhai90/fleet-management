@@ -27,10 +27,10 @@
   }
   .mwo-open-wo-panel__body { overflow: auto; -webkit-overflow-scrolling: touch; }
 </style>
-<div class="container-fluid py-3">
+<div class="container-fluid py-3 expense-mobile-page maint-list-page">
   <script type="application/json" id="locationCascadeData">{{ location_cascade|tojson }}</script>
   <div class="maint-list-wrap">
-  <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 maint-list-head">
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 maint-list-head expense-mobile-header">
     <h5 class="mb-0"><i class="bi bi-wrench me-2"></i>Maintenance Expense</h5>
     <div class="d-flex gap-2 flex-wrap">
       <button type="button" class="btn btn-outline-light btn-sm" id="btnMwoOpenPanelToggle" aria-expanded="false" aria-controls="mwoOpenListPanel" title="Open WOs: add bill or close (list stays usable)">
@@ -115,7 +115,7 @@
     <div class="card-body p-0">
       {% set umc = show_upload_media_columns|default(true) %}
       <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0 small" id="maintenanceTable">
+        <table class="table table-hover align-middle mb-0 small expense-mobile-table" id="maintenanceTable" data-mp-preserve-rows="1">
           <thead class="table-light">
             <tr>
               <th class="ps-3">#</th>
@@ -142,7 +142,7 @@
           <tbody>
             {% for item in rows %}
             {% set r = item.rec %}
-            <tr class="maintenance-expense-row">
+            <tr class="maintenance-expense-row expense-mobile-row">
               <td class="ps-3">{{ loop.index }}</td>
               <td>{{ r.district.name if r.district else '-' }}</td>
               <td>{{ r.project.name if r.project else '-' }}</td>

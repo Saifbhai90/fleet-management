@@ -11,10 +11,10 @@
   .fuel-expense-by-cell { max-width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: .74rem; color: #334155; }
   .fuel-fueling-date-cell { cursor: help; white-space: nowrap; }
 </style>
-<div class="container-fluid py-3 fuel-grid-page">
+<div class="container-fluid py-3 fuel-grid-page expense-mobile-page">
   <script type="application/json" id="locationCascadeData">{{ location_cascade|tojson }}</script>
   <div class="fuel-list-wrap">
-  <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 fuel-list-head">
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 fuel-list-head expense-mobile-header">
     <h5 class="mb-0"><i class="bi bi-fuel-pump me-2"></i>Fuel Expense</h5>
     <div class="d-flex gap-2">
       <button class="btn btn-outline-light btn-sm" id="btnPrintReport"><i class="bi bi-eye me-1"></i>Print / Preview</button>
@@ -108,8 +108,8 @@
     </div>
     <div class="card-body p-0">
       {% set umc = show_upload_media_columns|default(true) %}
-      <div class="daily-attn-scroll">
-        <table class="daily-attn-table mb-0" id="fuelExpenseTable">
+      <div class="daily-attn-scroll table-responsive">
+        <table class="daily-attn-table expense-mobile-table mb-0" id="fuelExpenseTable" data-mp-preserve-rows="1">
           <thead>
             <tr class="hdr-row-1">
               <th class="ps-3 text-center" style="min-width:42px;width:42px;">#</th>
@@ -142,7 +142,7 @@
           <tbody>
             {% for r in rows %}
             {% set expense_by_label = (expense_by_labels.get(r.id) if expense_by_labels else '') or '' %}
-            <tr class="fuel-expense-row" data-liters="{{ r.liters if r.liters is not none else '' }}" data-amount="{{ r.amount if r.amount is not none else '' }}">
+            <tr class="fuel-expense-row expense-mobile-row" data-liters="{{ r.liters if r.liters is not none else '' }}" data-amount="{{ r.amount if r.amount is not none else '' }}">
               <td class="ps-3">{{ loop.index }}</td>
               <td>{{ r.district.name if r.district else '-' }}</td>
               <td class="fw-medium">{{ r.vehicle.vehicle_no if r.vehicle else '-' }}</td>

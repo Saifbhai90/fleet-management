@@ -24,10 +24,10 @@
   }
   .owo-open-wo-panel__body { overflow: auto; -webkit-overflow-scrolling: touch; }
 </style>
-<div class="container-fluid py-3">
+<div class="container-fluid py-3 expense-mobile-page oil-list-page">
   <script type="application/json" id="locationCascadeData">{{ location_cascade|tojson }}</script>
   <div class="oil-list-wrap">
-  <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 oil-list-head">
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 oil-list-head expense-mobile-header">
     <h5 class="mb-0"><i class="bi bi-droplet me-2"></i>Oil Expense</h5>
     <div class="d-flex gap-2 flex-wrap">
       <button type="button" class="btn btn-outline-light btn-sm" id="btnOwoOpenPanelToggle" aria-expanded="false" aria-controls="owoOpenListPanel" title="Open WOs: add bill or close">
@@ -110,7 +110,7 @@
     <div class="card-body p-0">
       {% set umc = show_upload_media_columns|default(true) %}
       <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0 small" id="oilExpenseTable">
+        <table class="table table-hover align-middle mb-0 small expense-mobile-table" id="oilExpenseTable" data-mp-preserve-rows="1">
           <thead class="table-light">
             <tr>
               <th class="ps-3">#</th>
@@ -135,7 +135,7 @@
           <tbody>
             {% for item in rows %}
             {% set r = item.rec %}
-            <tr class="oil-expense-row">
+            <tr class="oil-expense-row expense-mobile-row">
               <td class="ps-3">{{ loop.index }}</td>
               <td>{{ r.district.name if r.district else '-' }}</td>
               <td>{{ r.project.name if r.project else '-' }}</td>
