@@ -911,6 +911,11 @@
       box-shadow: inset 0 1px 2px rgba(15,23,42,.04);
     }
     .mpg-report-page.is-mobile-layout .mpg-table-search-wrap #mpgTableSearch {
+      display: block !important;
+      visibility: visible !important;
+      flex: 1 1 auto !important;
+      width: 1% !important;
+      min-width: 0 !important;
       border-radius: 0 12px 12px 0 !important;
     }
     .mpg-report-page.is-mobile-layout .mpg-table-search-wrap .input-group-text {
@@ -1492,9 +1497,9 @@
           <span class="badge bg-light text-secondary border">{{ rows|length }} vehicle(s)</span>
         </div>
         <div class="d-flex align-items-center gap-2 flex-wrap">
-          <div class="input-group input-group-sm mpg-table-search-wrap" id="mpgTableSearchWrap"{% if rows|length <= 1 %} hidden{% endif %} style="width: 260px;">
+          <div class="input-group input-group-sm mpg-table-search-wrap" id="mpgTableSearchWrap" style="width: 260px;">
             <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
-            <input type="text" class="form-control border-start-0" id="mpgTableSearch" placeholder="Search vehicle / slip / values..." autocomplete="off" inputmode="search">
+            <input type="search" class="form-control border-start-0" id="mpgTableSearch" placeholder="Search vehicle / slip / values..." autocomplete="off" inputmode="search" aria-label="Search MPG report">
             <button type="button" class="mpg-search-clear" id="mpgSearchClear" title="Clear search" aria-label="Clear search"><i class="bi bi-x-lg"></i></button>
           </div>
           <button type="submit" class="btn btn-success btn-sm" id="mpgDesktopSaveBtn"><i class="bi bi-save me-1"></i>Save Inputs</button>
@@ -1774,10 +1779,6 @@ document.addEventListener('DOMContentLoaded', function(){
     });
   })();
 
-  if(window.fleetTableEnhance){
-    window.fleetTableEnhance('workspaceMpgReportTable');
-  }
-
   const table = document.getElementById('workspaceMpgReportTable');
   const isMobileLayout = function(){
     return mpgPage && mpgPage.classList.contains('is-mobile-layout');
@@ -1829,7 +1830,10 @@ document.addEventListener('DOMContentLoaded', function(){
     let noMatchRow = null;
 
     if(searchWrap){
-      searchWrap.hidden = dataRows.length <= 1;
+      /* Keep search available even when the current filter returns one row.
+         Hiding it made the control look disabled and prevented searching the
+         same report after a filter narrowed the result set. */
+      searchWrap.hidden = false;
     }
 
     function rowSearchHaystack(row){
@@ -1847,18 +1851,6 @@ document.addEventListener('DOMContentLoaded', function(){
       if(searchWrap){
         searchWrap.classList.toggle('has-value', !!(searchInput.value || '').trim());
       }
-      if(dataRows.length <= 1){
-        dataRows.forEach(function(row){
-          row.classList.remove('mpg-row-hidden');
-          row.style.display = '';
-        });
-        if(noMatchRow){
-          noMatchRow.classList.add('mpg-row-hidden');
-          noMatchRow.style.display = 'none';
-        }
-        return;
-      }
-
       const terms = (searchInput.value || '')
         .toLowerCase()
         .split(/\s+/)
@@ -1905,8 +1897,17 @@ document.addEventListener('DOMContentLoaded', function(){
       }
     };
 
-    searchInput.addEventListener('input', applySearch);
-    searchInput.addEventListener('search', applySearch);
+    /* Android WebView can deliver key events without a native `input` event
+       while IME/composition is active. Keep filtering immediate for every
+       input path, and never let Enter submit the surrounding Save form. */
+    ['input', 'keyup', 'change', 'search', 'compositionend'].forEach(function(eventName){
+      searchInput.addEventListener(eventName, applySearch);
+    });
+    searchInput.addEventListener('keydown', function(event){
+      if(event.key === 'Enter'){
+        event.preventDefault();
+      }
+    });
     var searchClearBtn = document.getElementById('mpgSearchClear');
     if(searchClearBtn){
       searchClearBtn.addEventListener('click', function(){
@@ -1916,6 +1917,16 @@ document.addEventListener('DOMContentLoaded', function(){
       });
     }
     applySearch();
+  }
+
+  /* Search is page-owned and must still initialize if the generic table
+     enhancer encounters a mobile/WebView-specific table shape. */
+  if(window.fleetTableEnhance){
+    try {
+      window.fleetTableEnhance('workspaceMpgReportTable');
+    } catch (e) {
+      console.warn('MPG table enhancement skipped:', e);
+    }
   }
 
   function parseNumber(value){
