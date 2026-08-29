@@ -69,6 +69,7 @@ import csv
 from io import StringIO, BytesIO
 import io
 import xlsxwriter
+from PIL import Image
 from sqlalchemy import func, text, inspect, or_, cast, and_, false, delete, insert, select
 from sqlalchemy import String as SAString
 from sqlalchemy.exc import OperationalError, IntegrityError, DataError
@@ -2139,6 +2140,15 @@ def _add_expense_attachments_from_request(files, *, r2_folder, attachment_model,
             ft = 'video'
         else:
             continue
+        if ft == 'image':
+            try:
+                f.stream.seek(0)
+                with Image.open(f.stream) as image:
+                    image.verify()
+                f.stream.seek(0)
+            except Exception:
+                failed.append(f'{fn} (invalid image)')
+                continue
         fk_id = next(iter(fk_kwargs.values()))
         rel_prefix = f"{r2_folder}/{fk_id}"
         try:
