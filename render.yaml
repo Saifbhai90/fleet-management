@@ -59,6 +59,11 @@ services:
       # Read by services/memory_guard.py to size its trim thresholds.
       - key: MEMORY_LIMIT_MB
         value: "512"
+      # Python block-buffers stdout when it is a pipe, so print() output sat in
+      # an 8 KB buffer that was thrown away whenever the platform SIGKILLed the
+      # process — which is why the memory restarts left no trace in the logs.
+      - key: PYTHONUNBUFFERED
+        value: "1"
       - key: DEMO_MODE
         value: "0"
       - key: BACKUP_INCLUDE_UPLOADS
@@ -98,6 +103,8 @@ services:
         value: "2"
       - key: MEMORY_LIMIT_MB
         value: "512"
+      - key: PYTHONUNBUFFERED
+        value: "1"
       - key: DEMO_MODE
         value: "1"
       - key: BACKUP_INCLUDE_UPLOADS
