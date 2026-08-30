@@ -39,6 +39,10 @@
     .ws-context-chip > i {
       display: none;
     }
+    .ws-module-search-wrap,
+    .ws-module-search-status {
+      display: none;
+    }
     @media (max-width: 767px) {
       .workspace-dashboard-page {
         padding: 8px 10px calc(24px + env(safe-area-inset-bottom, 0px)) !important;
@@ -52,14 +56,21 @@
         color: #fff;
         overflow: hidden;
       }
+      body.fm-aurora-theme:not(.dark-mode) .main-content #workspaceDashboardHero {
+        background: linear-gradient(135deg, #0f766e 0%, #0e7490 52%, #2563eb 100%) !important;
+      }
       .workspace-dashboard-page .ws-hero-card .card-body {
         padding: 17px 15px !important;
+        color: #fff !important;
       }
       .workspace-dashboard-page .ws-hero-title {
-        color: #fff;
+        color: #fff !important;
         font-size: 1.18rem;
         font-weight: 800;
         letter-spacing: -.02em;
+      }
+      .workspace-dashboard-page .ws-hero-context {
+        color: rgba(255,255,255,.9) !important;
       }
       .workspace-dashboard-page .ws-hero-context {
         display: flex;
@@ -156,14 +167,29 @@
         line-height: 1.2;
       }
       .workspace-dashboard-page .ws-financial-grid > [class*="col-"] {
-        width: 100%;
-        padding-left: 0;
-        padding-right: 0;
+        flex: 0 0 50% !important;
+        max-width: 50% !important;
+        width: 50% !important;
+        padding-left: 4px;
+        padding-right: 4px;
+      }
+      .workspace-dashboard-page .ws-financial-grid {
+        row-gap: 10px !important;
+        margin-left: -4px;
+        margin-right: -4px;
       }
       .workspace-dashboard-page .ws-financial-card {
         min-height: 92px;
         border-radius: 16px;
         padding: 14px !important;
+        font-size: .74rem;
+      }
+      .workspace-dashboard-page .ws-financial-card h4 {
+        font-size: 1rem;
+      }
+      .workspace-dashboard-page .ws-financial-card .ws-module-icon {
+        width: 32px;
+        height: 32px;
       }
       .workspace-dashboard-page .ws-modules-card {
         border-radius: 20px;
@@ -181,6 +207,64 @@
       }
       .workspace-dashboard-page .ws-modules-head > span {
         display: none;
+      }
+      .workspace-dashboard-page .ws-module-search-wrap {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        min-height: 46px;
+        margin: 13px 0 5px;
+        padding: 0 10px;
+        border: 1px solid #dbe4f0;
+        border-radius: 14px;
+        background: #f8fafc;
+      }
+      .workspace-dashboard-page .ws-module-search-wrap > i {
+        flex: 0 0 auto;
+        color: #64748b;
+        font-size: .95rem;
+      }
+      .workspace-dashboard-page .ws-module-search-input {
+        flex: 1 1 auto;
+        min-width: 0;
+        min-height: 42px;
+        padding: 7px 0 !important;
+        border: 0 !important;
+        outline: 0 !important;
+        background: transparent !important;
+        box-shadow: none !important;
+        color: #0f172a;
+        font-size: .82rem !important;
+      }
+      .workspace-dashboard-page .ws-module-search-input::placeholder {
+        color: #94a3b8;
+      }
+      .workspace-dashboard-page .ws-module-search-clear {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 34px;
+        width: 34px;
+        height: 34px;
+        padding: 0;
+        border: 0;
+        border-radius: 10px;
+        background: transparent;
+        color: #64748b;
+        opacity: 0;
+        pointer-events: none;
+      }
+      .workspace-dashboard-page .ws-module-search-clear.is-visible {
+        opacity: 1;
+        pointer-events: auto;
+      }
+      .workspace-dashboard-page .ws-module-search-status {
+        display: block;
+        min-height: 16px;
+        margin: 0 2px 7px;
+        color: #64748b;
+        font-size: .66rem;
       }
       .workspace-dashboard-page .ws-modules-card .row.g-3 {
         row-gap: 10px !important;
@@ -248,7 +332,7 @@
 
   <div class="row g-3">
     <div class="col-12">
-      <div class="card border-0 shadow-sm mb-3 ws-hero-card">
+      <div class="card border-0 shadow-sm mb-3 ws-hero-card" id="workspaceDashboardHero">
         <div class="card-body p-4">
           <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
             <div>
@@ -351,6 +435,17 @@
             <h5 class="mb-0">Workspace Modules</h5>
             <span class="text-muted small">Clear sections to avoid confusion</span>
           </div>
+          <div class="ws-module-search-wrap" role="search">
+            <i class="bi bi-search" aria-hidden="true"></i>
+            <input type="search" id="workspaceModuleSearch" class="ws-module-search-input"
+                   placeholder="Search modules (e.g. fuel expense)"
+                   aria-label="Search Workspace Modules" autocomplete="off" spellcheck="false">
+            <button type="button" id="workspaceModuleSearchClear" class="ws-module-search-clear"
+                    aria-label="Clear module search" title="Clear search">
+              <i class="bi bi-x-lg" aria-hidden="true"></i>
+            </button>
+          </div>
+          <div id="workspaceModuleSearchStatus" class="ws-module-search-status" aria-live="polite"></div>
           <hr class="my-3">
 
           <div class="ws-section-title">Master Modules</div>
@@ -518,4 +613,82 @@
     </div>
   </div>
 </div>
+<script>
+(function() {
+  function initWorkspaceModuleSearch() {
+    var root = document.querySelector('.workspace-dashboard-page');
+    var input = document.getElementById('workspaceModuleSearch');
+    var clearBtn = document.getElementById('workspaceModuleSearchClear');
+    var status = document.getElementById('workspaceModuleSearchStatus');
+    if (!root || !input || !status) return;
+
+    var moduleCards = Array.prototype.slice.call(
+      root.querySelectorAll('.ws-modules-card .ws-module-card')
+    ).map(function(card) {
+      return {
+        card: card,
+        column: card.closest('[class*="col-"]')
+      };
+    }).filter(function(item) {
+      return !!item.column;
+    });
+    var sectionTitles = Array.prototype.slice.call(
+      root.querySelectorAll('.ws-modules-card .ws-section-title')
+    );
+
+    function applyModuleSearch() {
+      var query = String(input.value || '').trim().toLowerCase();
+      var tokens = query ? query.split(/\s+/).filter(Boolean) : [];
+      var visibleCount = 0;
+
+      moduleCards.forEach(function(item) {
+        var text = String(item.card.textContent || '').toLowerCase();
+        var matches = !tokens.length || tokens.every(function(token) {
+          return text.indexOf(token) !== -1;
+        });
+        item.column.classList.toggle('d-none', !matches);
+        if (matches) visibleCount += 1;
+      });
+
+      sectionTitles.forEach(function(title) {
+        var moduleRow = title.nextElementSibling;
+        var hasVisibleModule = moduleRow && moduleRow.querySelector(
+          '[class*="col-"]:not(.d-none) .ws-module-card'
+        );
+        title.classList.toggle('d-none', !!tokens.length && !hasVisibleModule);
+      });
+
+      clearBtn.classList.toggle('is-visible', !!query);
+      if (!tokens.length) {
+        status.textContent = visibleCount + ' modules available';
+      } else if (visibleCount) {
+        status.textContent = visibleCount + ' matching module' + (visibleCount === 1 ? '' : 's');
+      } else {
+        status.textContent = 'No matching modules';
+      }
+    }
+
+    input.addEventListener('input', applyModuleSearch);
+    input.addEventListener('keyup', applyModuleSearch);
+    input.addEventListener('change', applyModuleSearch);
+    input.addEventListener('search', applyModuleSearch);
+    input.addEventListener('compositionend', applyModuleSearch);
+    input.addEventListener('keydown', function(event) {
+      if (event.key === 'Enter') event.preventDefault();
+    });
+    clearBtn.addEventListener('click', function() {
+      input.value = '';
+      input.focus();
+      applyModuleSearch();
+    });
+    applyModuleSearch();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initWorkspaceModuleSearch);
+  } else {
+    initWorkspaceModuleSearch();
+  }
+})();
+</script>
 {% endblock %}
