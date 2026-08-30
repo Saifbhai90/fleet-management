@@ -6,6 +6,14 @@
   .mwo-list-head { background: linear-gradient(135deg, #b45309 0%, #92400e 100%); color:#fff; border-radius: 12px; padding: .65rem 1rem; }
   .mwo-list-card { border: 1px solid #e9ecef; border-radius: 12px; box-shadow: 0 2px 10px rgba(16,24,40,.06); }
   .mwo-list-card .card-header { background: linear-gradient(to right, #fffbeb 0%, #fff 100%); font-weight: 600; font-size: .87rem; }
+  @media (max-width: 767px) {
+    .mwo-list-page .mwo-list-wrap {
+      width: 100%;
+      max-width: none;
+      margin-left: 0;
+      margin-right: 0;
+    }
+  }
   /* Icon toolbar: outlined “document” look on a light surface (ref: PDF/Excel style chips) */
   .mwo-head-tools {
     background: #fff; border-radius: 10px; padding: 6px 8px; box-shadow: 0 1px 3px rgba(0,0,0,.08);

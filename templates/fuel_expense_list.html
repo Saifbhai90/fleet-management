@@ -10,6 +10,14 @@
   .fuel-grid-page .fuel-list-card .card-body.p-0 { padding: 0 !important; }
   .fuel-expense-by-cell { max-width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: .74rem; color: #334155; }
   .fuel-fueling-date-cell { cursor: help; white-space: nowrap; }
+  @media (max-width: 767px) {
+    .fuel-grid-page .fuel-list-wrap {
+      width: 100%;
+      max-width: none;
+      margin-left: 0;
+      margin-right: 0;
+    }
+  }
 </style>
 <div class="container-fluid py-3 fuel-grid-page expense-mobile-page">
   <script type="application/json" id="locationCascadeData">{{ location_cascade|tojson }}</script>
