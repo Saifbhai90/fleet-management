@@ -540,6 +540,15 @@
               </a>
             </div>
             {% endif %}
+            {% if can_see_page('vehicles_list') %}
+            <div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6">
+              <a href="{{ url_for('vehicle_reading_setup_list') }}" class="ws-module-card p-3">
+                <div class="ws-module-icon bg-success-subtle text-success mb-2"><i class="bi bi-speedometer2"></i></div>
+                <div class="fw-semibold">Vehicle Fuel/Oil Reading Setup</div>
+                <small class="text-muted">Vehicle ke previous fuel/oil readings set karein.</small>
+              </a>
+            </div>
+            {% endif %}
           </div>
 
           <div class="ws-section-title">Transactions</div>
@@ -598,6 +607,13 @@
               </a>
             </div>
             {% endif %}
+            <div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6">
+              <a href="{{ url_for('workspace_balance_sheet') }}" class="ws-module-card p-3">
+                <div class="ws-module-icon bg-primary-subtle text-primary mb-2"><i class="bi bi-file-earmark-bar-graph"></i></div>
+                <div class="fw-semibold">Balance Sheet</div>
+                <small class="text-muted">Workspace accounts ka financial position view.</small>
+              </a>
+            </div>
             {% if can_see_page('workspace_reports') %}
             <div class="col-xxl-2 col-xl-3 col-lg-4 col-md-6">
               <a href="{{ url_for('workspace_reports') }}" class="ws-module-card p-3">

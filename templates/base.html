@@ -58,7 +58,7 @@ window.FleetConfig = {
     <link rel="stylesheet" href="{{ url_for('static', filename='vendor/tom-select/tom-select.bootstrap5.min.css') }}?v=1001">
 
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/core/fleet_styles.css') }}?v=8005">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/core/fleet_styles.css') }}?v=8006">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/fm_hub_pages.css') }}?v=8006">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/rc_tile_gradients.css') }}?v=8005">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/tracking_reports.css') }}?v=1001">
@@ -571,6 +571,7 @@ window.FleetConfig = {
           <a href="{{ url_for('employee_expense_list') }}" class="{% if request.endpoint in ['employee_expense_list', 'employee_expense_form', 'employee_expense_form_edit'] %}active{% endif %}"><i class="bi bi-person-badge"></i>Employee Expense</a>
           <a href="{{ url_for('workspace_opening_expenses_list') }}" class="{% if request.endpoint in ['workspace_opening_expenses_list', 'workspace_opening_expense_new', 'workspace_opening_expense_edit'] %}active{% endif %}"><i class="bi bi-cash-coin"></i>Opening Expense</a>
           <a href="{{ url_for('workspace_fuel_oil_openings_list') }}" class="{% if request.endpoint in ['workspace_fuel_oil_openings_list', 'workspace_fuel_oil_opening_new', 'workspace_fuel_oil_opening_edit'] %}active{% endif %}"><i class="bi bi-fuel-pump-diesel"></i>Fuel/Oil Opening</a>
+          <a href="{{ url_for('vehicle_reading_setup_list') }}" class="{% if request.endpoint in ['vehicle_reading_setup_list', 'vehicle_reading_setup_form', 'vehicle_reading_setup_import', 'vehicle_reading_setup_import_template', 'vehicle_reading_setup_export', 'vehicle_reading_setup_print'] %}active{% endif %}"><i class="bi bi-speedometer2"></i>Vehicle Fuel/Oil Reading Setup</a>
           <div class="ws-mini-section-title">Transactions</div>
           <a href="{{ url_for('workspace_fund_transfers_list') }}" class="{% if request.endpoint in ['workspace_fund_transfers_list', 'workspace_fund_transfer_new', 'workspace_fund_transfer_edit'] %}active{% endif %}"><i class="bi bi-arrow-left-right"></i>Fund Transfer</a>
           <a href="{{ url_for('workspace_journal_vouchers_list') }}" class="{% if request.endpoint in ['workspace_journal_vouchers_list', 'workspace_journal_voucher_add'] %}active{% endif %}"><i class="bi bi-journal-text"></i>Journal Vouchers</a>

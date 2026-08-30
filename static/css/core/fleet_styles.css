@@ -627,8 +627,21 @@ body {
             top: 78px;
             right: 16px;
             width: 205px;
+            max-height: calc(100vh - 94px);
+            overflow-x: hidden;
+            overflow-y: auto;
+            overscroll-behavior: contain;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(100,116,139,.45) transparent;
             z-index: 1030;
         }
+        .ws-global-mini::-webkit-scrollbar { width: 6px; }
+        .ws-global-mini::-webkit-scrollbar-track { background: transparent; }
+        .ws-global-mini::-webkit-scrollbar-thumb {
+            background: rgba(100,116,139,.45);
+            border-radius: 999px;
+        }
+        .ws-global-mini::-webkit-scrollbar-thumb:hover { background: rgba(71,85,105,.65); }
         .ws-global-mini .card { border: 0; box-shadow: 0 0.25rem 0.9rem rgba(16,24,40,.12); }
         .ws-global-mini a {
             display: flex; align-items: center; gap: .45rem;
