@@ -10,12 +10,176 @@
   .fuel-grid-page .fuel-list-card .card-body.p-0 { padding: 0 !important; }
   .fuel-expense-by-cell { max-width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: .74rem; color: #334155; }
   .fuel-fueling-date-cell { cursor: help; white-space: nowrap; }
+  .fuel-mobile-card-list { display: none; }
   @media (max-width: 767px) {
     .fuel-grid-page .fuel-list-wrap {
       width: 100%;
       max-width: none;
       margin-left: 0;
       margin-right: 0;
+    }
+    .fuel-grid-page .fuel-data-list-card > .card-body > .daily-attn-scroll {
+      display: none !important;
+    }
+    .fuel-grid-page .fuel-mobile-card-list {
+      display: grid;
+      gap: 12px;
+      padding: 0 10px 12px;
+    }
+    .fuel-grid-page .fuel-mobile-expense-card {
+      overflow: hidden;
+      border: 1px solid #dbe4f0;
+      border-radius: 18px;
+      background: #fff;
+      box-shadow: 0 7px 20px rgba(15, 23, 42, .08);
+    }
+    .fuel-grid-page .fuel-mobile-card-hero {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 14px 15px;
+      color: #fff;
+      background: linear-gradient(135deg, #2563eb 0%, #4338ca 100%);
+    }
+    .fuel-grid-page .fuel-mobile-card-kicker {
+      display: block;
+      color: #bfdbfe;
+      font-size: .62rem;
+      font-weight: 800;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    .fuel-grid-page .fuel-mobile-card-title {
+      margin: 2px 0 1px;
+      font-size: 1rem;
+      font-weight: 800;
+      line-height: 1.25;
+    }
+    .fuel-grid-page .fuel-mobile-card-date {
+      color: #dbeafe;
+      font-size: .72rem;
+    }
+    .fuel-grid-page .fuel-mobile-match {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      flex: 0 0 auto;
+      padding: 5px 8px;
+      border: 1px solid rgba(167, 243, 208, .8);
+      border-radius: 999px;
+      color: #d1fae5;
+      background: rgba(16, 185, 129, .2);
+      font-size: .66rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .fuel-grid-page .fuel-mobile-match.is-unmatched {
+      border-color: rgba(254, 215, 170, .9);
+      color: #ffedd5;
+      background: rgba(234, 88, 12, .24);
+    }
+    .fuel-grid-page .fuel-mobile-card-content {
+      padding: 14px;
+    }
+    .fuel-grid-page .fuel-mobile-kpis {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .fuel-grid-page .fuel-mobile-kpi {
+      min-width: 0;
+      padding: 10px;
+      border: 1px solid #e5eaf2;
+      border-radius: 12px;
+      background: #f8fafc;
+    }
+    .fuel-grid-page .fuel-mobile-kpi-label,
+    .fuel-grid-page .fuel-mobile-field-label,
+    .fuel-grid-page .fuel-mobile-section-title {
+      display: block;
+      color: #64748b;
+      font-size: .62rem;
+      font-weight: 800;
+      letter-spacing: .05em;
+      line-height: 1.2;
+      text-transform: uppercase;
+    }
+    .fuel-grid-page .fuel-mobile-kpi-value {
+      display: block;
+      margin-top: 4px;
+      overflow-wrap: anywhere;
+      color: #0f172a;
+      font-size: .95rem;
+      font-weight: 800;
+      line-height: 1.25;
+    }
+    .fuel-grid-page .fuel-mobile-kpi-value.is-accent { color: #4338ca; }
+    .fuel-grid-page .fuel-mobile-section {
+      margin-top: 12px;
+      padding: 12px;
+      border: 1px solid #edf1f7;
+      border-radius: 14px;
+      background: #f8fafc;
+    }
+    .fuel-grid-page .fuel-mobile-section-title {
+      margin-bottom: 10px;
+      color: #94a3b8;
+    }
+    .fuel-grid-page .fuel-mobile-fields {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px 14px;
+    }
+    .fuel-grid-page .fuel-mobile-field {
+      min-width: 0;
+    }
+    .fuel-grid-page .fuel-mobile-field-value {
+      display: block;
+      margin-top: 3px;
+      overflow-wrap: anywhere;
+      color: #334155;
+      font-size: .76rem;
+      font-weight: 700;
+      line-height: 1.35;
+    }
+    .fuel-grid-page .fuel-mobile-field-value.is-ellipsis {
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+      overflow: hidden;
+    }
+    .fuel-grid-page .fuel-mobile-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 1px solid #edf1f7;
+    }
+    .fuel-grid-page .fuel-mobile-action {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex: 1 1 0;
+      min-height: 42px;
+      padding: 8px 10px;
+      border: 1px solid;
+      border-radius: 11px;
+      background: #fff;
+      font-size: .72rem;
+      font-weight: 700;
+      text-decoration: none;
+    }
+    .fuel-grid-page .fuel-mobile-action--view { border-color: #34d399; color: #047857; }
+    .fuel-grid-page .fuel-mobile-action--media { border-color: #60a5fa; color: #2563eb; }
+    .fuel-grid-page .fuel-mobile-action--edit { border-color: #93c5fd; color: #1d4ed8; }
+    .fuel-grid-page .fuel-mobile-action--delete { border-color: #fda4af; color: #be123c; }
+    .fuel-grid-page .fuel-mobile-action--delete:hover { background: #fff1f2; }
+    .fuel-grid-page .fuel-mobile-empty {
+      padding: 28px 14px;
+      color: #64748b;
+      text-align: center;
     }
   }
 </style>
@@ -109,13 +273,138 @@
     </div>
   </div>
 
-  <div class="card fuel-list-card overflow-hidden">
+  <div class="card fuel-list-card fuel-data-list-card overflow-hidden">
     <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
       <span class="fw-semibold">Fuel Expense from {{ from_date|ddmmyyyy }} to {{ to_date|ddmmyyyy }}</span>
       <input type="text" id="fuelExpenseSearch" class="form-control form-control-sm bg-white text-dark" placeholder="Search — press Enter" style="max-width: 240px;" autocomplete="off" value="{{ q or '' }}">
     </div>
     <div class="card-body p-0">
       {% set umc = show_upload_media_columns|default(true) %}
+      <div class="fuel-mobile-card-list" aria-label="Fuel expense records">
+        {% for r in rows %}
+        {% set expense_by_label = (expense_by_labels.get(r.id) if expense_by_labels else '') or '' %}
+        {% set matched = r.meter_reading_matched == 'Yes' %}
+        <article class="fuel-mobile-expense-card">
+          <div class="fuel-mobile-card-hero">
+            <div>
+              <span class="fuel-mobile-card-kicker">Slip No. #{{ r.slip_no or '-' }}</span>
+              <h3 class="fuel-mobile-card-title">Fuel Expense Report</h3>
+              <span class="fuel-mobile-card-date"><i class="bi bi-calendar3 me-1"></i>{{ r.fueling_date|ddmmyyyy }}</span>
+            </div>
+            <span class="fuel-mobile-match{% if not matched %} is-unmatched{% endif %}">
+              <i class="bi bi-{{ 'check-circle' if matched else 'exclamation-circle' }}"></i>
+              {{ 'Matched' if matched else 'Not Matched' }}
+            </span>
+          </div>
+          <div class="fuel-mobile-card-content">
+            <div class="fuel-mobile-kpis">
+              <div class="fuel-mobile-kpi">
+                <span class="fuel-mobile-kpi-label">Total Amount</span>
+                <span class="fuel-mobile-kpi-value">PKR {{ '%.2f'|format(r.amount|float) if r.amount is not none else '-' }}</span>
+              </div>
+              <div class="fuel-mobile-kpi">
+                <span class="fuel-mobile-kpi-label">Liters</span>
+                <span class="fuel-mobile-kpi-value">{{ '%.2f'|format(r.liters|float) if r.liters is not none else '-' }} L</span>
+              </div>
+              <div class="fuel-mobile-kpi">
+                <span class="fuel-mobile-kpi-label">Distance Driven</span>
+                <span class="fuel-mobile-kpi-value">{{ '%.2f'|format(r.km|float) if r.km is not none else '-' }} KM</span>
+              </div>
+              <div class="fuel-mobile-kpi">
+                <span class="fuel-mobile-kpi-label">MPG</span>
+                <span class="fuel-mobile-kpi-value is-accent">{{ '%.2f'|format(r.mpg|float) if r.mpg is not none else '-' }}</span>
+              </div>
+            </div>
+
+            <section class="fuel-mobile-section">
+              <span class="fuel-mobile-section-title">Vehicle &amp; Personnel</span>
+              <div class="fuel-mobile-fields">
+                <div class="fuel-mobile-field">
+                  <span class="fuel-mobile-field-label">Vehicle Number</span>
+                  <span class="fuel-mobile-field-value">{{ r.vehicle.vehicle_no if r.vehicle else '-' }}</span>
+                </div>
+                <div class="fuel-mobile-field">
+                  <span class="fuel-mobile-field-label">Expense By</span>
+                  <span class="fuel-mobile-field-value is-ellipsis">{{ expense_by_label or '-' }}</span>
+                </div>
+                <div class="fuel-mobile-field">
+                  <span class="fuel-mobile-field-label">District</span>
+                  <span class="fuel-mobile-field-value">{{ r.district.name if r.district else '-' }}</span>
+                </div>
+                <div class="fuel-mobile-field">
+                  <span class="fuel-mobile-field-label">Pump Station</span>
+                  <span class="fuel-mobile-field-value is-ellipsis">{{ r.workspace_pump.name if r.workspace_pump else (r.fuel_pump.name if r.fuel_pump else '-') }}</span>
+                </div>
+              </div>
+            </section>
+
+            <div class="fuel-mobile-fields">
+              <section class="fuel-mobile-section">
+                <span class="fuel-mobile-section-title">Fuel Details</span>
+                <div class="fuel-mobile-field">
+                  <span class="fuel-mobile-field-label">Fuel Type</span>
+                  <span class="fuel-mobile-field-value">{{ r.fuel_type or '-' }}</span>
+                </div>
+                <div class="fuel-mobile-field mt-2">
+                  <span class="fuel-mobile-field-label">Fuel Price</span>
+                  <span class="fuel-mobile-field-value">{{ '%.2f'|format(r.fuel_price|float) if r.fuel_price is not none else '-' }} / L</span>
+                </div>
+                <div class="fuel-mobile-field mt-2">
+                  <span class="fuel-mobile-field-label">Payment Type</span>
+                  <span class="fuel-mobile-field-value">{{ r.payment_type or '-' }}</span>
+                </div>
+                <div class="fuel-mobile-field mt-2">
+                  <span class="fuel-mobile-field-label">Card Swipe Date</span>
+                  <span class="fuel-mobile-field-value">{{ r.card_swipe_date|ddmmyyyy if r.card_swipe_date else '-' }}</span>
+                </div>
+              </section>
+              <section class="fuel-mobile-section">
+                <span class="fuel-mobile-section-title">Odometer Log</span>
+                <div class="fuel-mobile-field">
+                  <span class="fuel-mobile-field-label">Previous Reading</span>
+                  <span class="fuel-mobile-field-value">{{ '%.2f'|format(r.previous_reading|float) if r.previous_reading is not none else '-' }}</span>
+                </div>
+                <div class="fuel-mobile-field mt-2">
+                  <span class="fuel-mobile-field-label">Current Reading</span>
+                  <span class="fuel-mobile-field-value">{{ '%.2f'|format(r.current_reading|float) if r.current_reading is not none else '-' }}</span>
+                </div>
+                <div class="fuel-mobile-field mt-2">
+                  <span class="fuel-mobile-field-label">KM Out / In (Task)</span>
+                  <span class="fuel-mobile-field-value">{{ '%.2f'|format(r.km_out_task|float) if r.km_out_task is not none else '-' }} / {{ '%.2f'|format(r.km_in_task|float) if r.km_in_task is not none else '-' }}</span>
+                </div>
+              </section>
+            </div>
+
+            <div class="fuel-mobile-actions">
+              <a class="fuel-mobile-action fuel-mobile-action--view" href="{{ url_for('fuel_expense_view', pk=r.id, return_to=request.full_path) }}" title="View invoice">
+                <i class="bi bi-eye me-1"></i>View
+              </a>
+              <a class="fuel-mobile-action fuel-mobile-action--media" href="{{ url_for('fuel_expense_media', pk=r.id, return_to=request.full_path) }}" title="View media">
+                <i class="bi bi-images me-1"></i>Media
+              </a>
+              <a class="fuel-mobile-action fuel-mobile-action--edit" href="{{ url_for('fuel_expense_edit', pk=r.id, return_to=request.full_path) }}" title="Edit expense">
+                <i class="bi bi-pencil me-1"></i>Edit
+              </a>
+              <form action="{{ url_for('fuel_expense_delete', pk=r.id, return_to=request.full_path) }}" method="POST" class="d-inline flex-fill" onsubmit="return confirm('Delete this fuel expense entry?');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="fuel-mobile-action fuel-mobile-action--delete w-100" title="Delete expense">
+                  <i class="bi bi-trash me-1"></i>Delete
+                </button>
+              </form>
+            </div>
+          </div>
+        </article>
+        {% else %}
+        <div class="fuel-mobile-empty">
+          <i class="bi bi-fuel-pump display-6 d-block mb-2"></i>
+          No fuel expense entries.
+        </div>
+        {% endfor %}
+        <div class="fuel-mobile-empty fuel-mobile-search-empty d-none" id="fuelMobileSearchEmpty">
+          <i class="bi bi-search display-6 d-block mb-2"></i>
+          No matching fuel expense records.
+        </div>
+      </div>
       <div class="daily-attn-scroll table-responsive">
         <table class="daily-attn-table expense-mobile-table mb-0" id="fuelExpenseTable" data-mp-preserve-rows="1">
           <thead>
@@ -711,6 +1000,39 @@ document.addEventListener('DOMContentLoaded', function(){
   });
   if (window.initFuelSearchTooltips) window.initFuelSearchTooltips();
 });
+</script>
+
+<script>
+(function() {
+  var searchInput = document.getElementById('fuelExpenseSearch');
+  var mobileCards = Array.prototype.slice.call(
+    document.querySelectorAll('.fuel-mobile-card-list .fuel-mobile-expense-card')
+  );
+  var emptyState = document.getElementById('fuelMobileSearchEmpty');
+  if (!searchInput || !mobileCards.length || !emptyState) return;
+
+  function matchesAllWords(text, query) {
+    var words = String(query || '').toLowerCase().trim().split(/\s+/).filter(Boolean);
+    var haystack = String(text || '').toLowerCase();
+    return !words.length || words.every(function(word) {
+      return haystack.indexOf(word) !== -1;
+    });
+  }
+
+  function filterMobileCards() {
+    var query = searchInput.value || '';
+    var shown = 0;
+    mobileCards.forEach(function(card) {
+      var visible = matchesAllWords(card.textContent, query);
+      card.classList.toggle('d-none', !visible);
+      if (visible) shown += 1;
+    });
+    emptyState.classList.toggle('d-none', shown !== 0);
+  }
+
+  searchInput.addEventListener('input', filterMobileCards);
+  filterMobileCards();
+})();
 </script>
 
 {% if pagination and pagination.pages > 1 %}
