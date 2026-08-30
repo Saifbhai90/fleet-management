@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="container-fluid py-3">
+<div class="container-fluid py-3 workspace-dashboard-page">
   <style>
     .ws-module-card {
       border: 1px solid #e8ecf3;
@@ -36,26 +36,232 @@
       padding-bottom: .35rem;
       border-bottom: 1px dashed #d0d5dd;
     }
+    .ws-context-chip > i {
+      display: none;
+    }
+    @media (max-width: 767px) {
+      .workspace-dashboard-page {
+        padding: 8px 10px calc(24px + env(safe-area-inset-bottom, 0px)) !important;
+      }
+      html.capacitor-native .workspace-dashboard-page {
+        padding-bottom: calc(92px + env(safe-area-inset-bottom, 0px)) !important;
+      }
+      .workspace-dashboard-page .ws-hero-card {
+        border-radius: 20px;
+        background: linear-gradient(135deg, #0f766e 0%, #0e7490 52%, #2563eb 100%);
+        color: #fff;
+        overflow: hidden;
+      }
+      .workspace-dashboard-page .ws-hero-card .card-body {
+        padding: 17px 15px !important;
+      }
+      .workspace-dashboard-page .ws-hero-title {
+        color: #fff;
+        font-size: 1.18rem;
+        font-weight: 800;
+        letter-spacing: -.02em;
+      }
+      .workspace-dashboard-page .ws-hero-context {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 9px;
+      }
+      .workspace-dashboard-page .ws-context-label,
+      .workspace-dashboard-page .ws-context-separator {
+        display: none;
+      }
+      .workspace-dashboard-page .ws-context-chip > i {
+        display: inline-block;
+      }
+      .workspace-dashboard-page .ws-context-chip {
+        display: inline-flex;
+        align-items: center;
+        min-height: 28px;
+        max-width: 100%;
+        padding: 4px 9px;
+        border: 1px solid rgba(255,255,255,.28);
+        border-radius: 999px;
+        background: rgba(255,255,255,.14);
+        color: rgba(255,255,255,.96);
+        font-size: .72rem;
+        line-height: 1.25;
+        overflow-wrap: anywhere;
+      }
+      .workspace-dashboard-page .ws-hero-actions {
+        display: grid !important;
+        grid-template-columns: minmax(0, 1fr) auto;
+        width: 100%;
+        gap: 8px !important;
+        margin-top: 15px;
+      }
+      .workspace-dashboard-page .ws-hero-actions .btn {
+        min-height: 46px;
+        border-radius: 12px;
+        font-size: .82rem;
+        font-weight: 700;
+      }
+      .workspace-dashboard-page .ws-hero-actions .btn-outline-primary {
+        border-color: rgba(255,255,255,.75);
+        background: #fff;
+        color: #0f766e;
+      }
+      .workspace-dashboard-page .ws-hero-actions .btn-outline-secondary {
+        border-color: rgba(255,255,255,.38);
+        color: #fff;
+        background: rgba(255,255,255,.12);
+      }
+      .workspace-dashboard-page .ws-kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+      .workspace-dashboard-page .ws-kpi-col {
+        width: auto;
+        padding: 0;
+      }
+      .workspace-dashboard-page .ws-kpi-card {
+        min-height: 108px;
+        border: 1px solid rgba(148,163,184,.2) !important;
+        border-radius: 16px;
+        background: rgba(255,255,255,.82);
+        box-shadow: 0 8px 20px rgba(15,23,42,.06) !important;
+      }
+      .workspace-dashboard-page .ws-kpi-card .card-body {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        justify-content: center;
+        gap: 4px;
+        padding: 13px 12px !important;
+      }
+      .workspace-dashboard-page .ws-kpi-label {
+        color: #64748b;
+        font-size: .68rem;
+        font-weight: 700;
+        line-height: 1.2;
+      }
+      .workspace-dashboard-page .ws-kpi-value {
+        font-size: 1.05rem;
+        line-height: 1.15;
+        letter-spacing: -.02em;
+      }
+      .workspace-dashboard-page .ws-kpi-note {
+        display: -webkit-box;
+        overflow: hidden;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+        color: #94a3b8 !important;
+        font-size: .64rem;
+        line-height: 1.2;
+      }
+      .workspace-dashboard-page .ws-financial-grid > [class*="col-"] {
+        width: 100%;
+        padding-left: 0;
+        padding-right: 0;
+      }
+      .workspace-dashboard-page .ws-financial-card {
+        min-height: 92px;
+        border-radius: 16px;
+        padding: 14px !important;
+      }
+      .workspace-dashboard-page .ws-modules-card {
+        border-radius: 20px;
+      }
+      .workspace-dashboard-page .ws-modules-card > .card-body {
+        padding: 16px 12px !important;
+      }
+      .workspace-dashboard-page .ws-modules-head {
+        align-items: flex-start !important;
+        gap: 4px;
+      }
+      .workspace-dashboard-page .ws-modules-head h5 {
+        font-size: 1rem;
+        font-weight: 800;
+      }
+      .workspace-dashboard-page .ws-modules-head > span {
+        display: none;
+      }
+      .workspace-dashboard-page .ws-modules-card .row.g-3 {
+        row-gap: 10px !important;
+        margin-left: -4px;
+        margin-right: -4px;
+      }
+      .workspace-dashboard-page .ws-modules-card .row.g-3 > [class*="col-"] {
+        width: 50%;
+        padding-left: 4px;
+        padding-right: 4px;
+      }
+      .workspace-dashboard-page .ws-module-card {
+        min-height: 116px;
+        padding: 13px !important;
+        border-radius: 16px;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        justify-content: flex-start;
+        box-shadow: 0 5px 14px rgba(15,23,42,.04);
+      }
+      .workspace-dashboard-page .ws-module-card:active {
+        transform: scale(.98);
+      }
+      .workspace-dashboard-page .ws-module-icon {
+        flex: 0 0 auto;
+        width: 38px;
+        height: 38px;
+        margin-bottom: 10px !important;
+        border-radius: 12px;
+      }
+      .workspace-dashboard-page .ws-module-card .fw-semibold {
+        font-size: .78rem;
+        line-height: 1.25;
+      }
+      .workspace-dashboard-page .ws-module-card small {
+        display: -webkit-box;
+        overflow: hidden;
+        margin-top: 4px;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+        font-size: .64rem;
+        line-height: 1.25;
+      }
+      .workspace-dashboard-page .ws-section-title {
+        margin-top: 16px;
+        padding-bottom: 7px;
+        font-size: .68rem;
+        letter-spacing: .08em;
+        border-bottom-style: solid;
+        border-bottom-color: #e2e8f0;
+      }
+    }
+    @media (max-width: 359.98px) {
+      .workspace-dashboard-page .ws-kpi-grid {
+        grid-template-columns: 1fr;
+      }
+      .workspace-dashboard-page .ws-module-card {
+        min-height: 108px;
+      }
+    }
   </style>
 
   <div class="row g-3">
     <div class="col-12">
-      <div class="card border-0 shadow-sm mb-3">
+      <div class="card border-0 shadow-sm mb-3 ws-hero-card">
         <div class="card-body p-4">
           <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
             <div>
-              <h4 class="mb-1">Employee Workspace Dashboard</h4>
-              <div class="text-muted small">
-                Selected Employee: <strong>{{ employee.name }}</strong>
+              <h4 class="mb-1 ws-hero-title">Employee Workspace Dashboard</h4>
+              <div class="text-muted small ws-hero-context">
+                <span class="ws-context-chip"><i class="bi bi-person-fill me-1"></i><span class="ws-context-label">Selected Employee: </span><strong>{{ employee.name }}</strong></span>
                 {% if scope and scope.districts %}
-                  | Assigned District: <strong>{{ scope.districts|join(', ') }}</strong>
+                  <span class="ws-context-separator"> | </span><span class="ws-context-chip"><i class="bi bi-geo-alt-fill me-1"></i><span class="ws-context-label">Assigned District: </span><strong>{{ scope.districts|join(', ') }}</strong></span>
                 {% endif %}
                 {% if scope and scope.projects %}
-                  | Assigned Project: <strong>{{ scope.projects|join(', ') }}</strong>
+                  <span class="ws-context-separator"> | </span><span class="ws-context-chip"><i class="bi bi-kanban-fill me-1"></i><span class="ws-context-label">Assigned Project: </span><strong>{{ scope.projects|join(', ') }}</strong></span>
                 {% endif %}
               </div>
             </div>
-            <div class="d-flex gap-2">
+            <div class="d-flex gap-2 ws-hero-actions">
               <a href="{{ url_for('workspace_clear_employee') }}" class="btn btn-outline-primary">
                 <i class="bi bi-person-check me-1"></i>Change Employee
               </a>
@@ -65,49 +271,49 @@
         </div>
       </div>
 
-      <div class="row g-3 mb-3">
-        <div class="col-lg-2 col-md-4"><div class="card border-0 shadow-sm h-100"><div class="card-body"><small class="text-muted">Parties</small><h4 class="mb-0">{{ stats.parties }}</h4></div></div></div>
-        <div class="col-lg-2 col-md-4"><div class="card border-0 shadow-sm h-100"><div class="card-body"><small class="text-muted">Products</small><h4 class="mb-0">{{ stats.products }}</h4></div></div></div>
-        <div class="col-lg-2 col-md-4">
-          <div class="card border-0 shadow-sm h-100">
+      <div class="row g-3 mb-3 ws-kpi-grid">
+        <div class="col-lg-2 col-md-4 ws-kpi-col"><div class="card border-0 shadow-sm h-100 ws-kpi-card"><div class="card-body"><small class="text-muted ws-kpi-label">Parties</small><h4 class="mb-0 ws-kpi-value">{{ stats.parties }}</h4></div></div></div>
+        <div class="col-lg-2 col-md-4 ws-kpi-col"><div class="card border-0 shadow-sm h-100 ws-kpi-card"><div class="card-body"><small class="text-muted ws-kpi-label">Products</small><h4 class="mb-0 ws-kpi-value">{{ stats.products }}</h4></div></div></div>
+        <div class="col-lg-2 col-md-4 ws-kpi-col">
+          <div class="card border-0 shadow-sm h-100 ws-kpi-card">
             <div class="card-body">
-              <small class="text-muted">Account Ledger End Balance</small>
-              <h4 class="mb-0 {{ 'text-danger' if (stats.ledger_end_balance or 0)|float < 0 else 'text-success' }}">{{ '%.2f'|format((stats.ledger_end_balance or 0)|float) }}</h4>
-              <small class="text-muted">Selected employee ledger (month-close safe)</small>
+              <small class="text-muted ws-kpi-label">Account Ledger End Balance</small>
+              <h4 class="mb-0 ws-kpi-value {{ 'text-danger' if (stats.ledger_end_balance or 0)|float < 0 else 'text-success' }}">{{ '%.2f'|format((stats.ledger_end_balance or 0)|float) }}</h4>
+              <small class="text-muted ws-kpi-note">Selected employee ledger (month-close safe)</small>
             </div>
           </div>
         </div>
-        <div class="col-lg-2 col-md-4">
-          <a href="{{ url_for('workspace_reports', tab='w-expense', expense_summary=1) }}" class="ws-module-card h-100 p-3">
-            <small class="text-muted">Total Expenses</small>
-            <h4 class="mb-0">{{ '%.2f'|format(stats.expenses|float) }}</h4>
-            <small class="text-muted">Expense Summary report</small>
+        <div class="col-lg-2 col-md-4 ws-kpi-col">
+          <a href="{{ url_for('workspace_reports', tab='w-expense', expense_summary=1) }}" class="ws-module-card h-100 p-3 ws-kpi-card">
+            <small class="text-muted ws-kpi-label">Total Expenses</small>
+            <h4 class="mb-0 ws-kpi-value">{{ '%.2f'|format(stats.expenses|float) }}</h4>
+            <small class="text-muted ws-kpi-note">Expense Summary report</small>
           </a>
         </div>
-        <div class="col-lg-2 col-md-4">
-          <div class="card border-0 shadow-sm h-100">
+        <div class="col-lg-2 col-md-4 ws-kpi-col">
+          <div class="card border-0 shadow-sm h-100 ws-kpi-card">
             <div class="card-body">
-              <small class="text-muted">Net Balance</small>
-              <h4 class="mb-0 {{ 'text-danger' if (stats.net_balance or 0)|float < 0 else 'text-success' }}">{{ '%.2f'|format((stats.net_balance or 0)|float) }}</h4>
-              <small class="text-muted">Account Ledger End Balance - Total Expenses</small>
+              <small class="text-muted ws-kpi-label">Net Balance</small>
+              <h4 class="mb-0 ws-kpi-value {{ 'text-danger' if (stats.net_balance or 0)|float < 0 else 'text-success' }}">{{ '%.2f'|format((stats.net_balance or 0)|float) }}</h4>
+              <small class="text-muted ws-kpi-note">Account Ledger End Balance - Total Expenses</small>
               <div class="mt-1 small fw-semibold {% if (stats.net_balance or 0)|float > 0 %}text-success{% elif (stats.net_balance or 0)|float < 0 %}text-danger{% else %}text-secondary{% endif %}">
                 {{ stats.net_balance_status or 'Settled' }}
               </div>
             </div>
           </div>
         </div>
-        <div class="col-lg-2 col-md-4">
-          <a href="{{ url_for('workspace_dashboard_financial_report', kind='bank') }}" class="ws-module-card h-100 p-3">
-            <small class="text-muted">Balance in Bank</small>
-            <h4 class="mb-1 {{ 'text-danger' if (stats.bank_balance_total or 0)|float < 0 else 'text-success' }}">{{ '%.2f'|format((stats.bank_balance_total or 0)|float) }}</h4>
-            <small class="text-muted">HBL / Easypaisa / JazzCash + others</small>
+        <div class="col-lg-2 col-md-4 ws-kpi-col">
+          <a href="{{ url_for('workspace_dashboard_financial_report', kind='bank') }}" class="ws-module-card h-100 p-3 ws-kpi-card">
+            <small class="text-muted ws-kpi-label">Balance in Bank</small>
+            <h4 class="mb-1 ws-kpi-value {{ 'text-danger' if (stats.bank_balance_total or 0)|float < 0 else 'text-success' }}">{{ '%.2f'|format((stats.bank_balance_total or 0)|float) }}</h4>
+            <small class="text-muted ws-kpi-note">HBL / Easypaisa / JazzCash + others</small>
           </a>
         </div>
       </div>
 
-      <div class="row g-3 mb-3">
+      <div class="row g-3 mb-3 ws-financial-grid">
         <div class="col-lg-6 col-md-6">
-          <a href="{{ url_for('workspace_dashboard_financial_report', kind='receivable') }}" class="ws-module-card h-100 p-3">
+          <a href="{{ url_for('workspace_dashboard_financial_report', kind='receivable') }}" class="ws-module-card h-100 p-3 ws-financial-card">
             <div class="d-flex justify-content-between align-items-start">
               <div>
                 <small class="text-muted">Receivable from Parties/Drivers</small>
@@ -119,7 +325,7 @@
           </a>
         </div>
         <div class="col-lg-6 col-md-6">
-          <a href="{{ url_for('workspace_dashboard_financial_report', kind='payable') }}" class="ws-module-card h-100 p-3">
+          <a href="{{ url_for('workspace_dashboard_financial_report', kind='payable') }}" class="ws-module-card h-100 p-3 ws-financial-card">
             <div class="d-flex justify-content-between align-items-start">
               <div>
                 <small class="text-muted">Payable to Parties/Drivers</small>
@@ -137,9 +343,9 @@
       </div>
       {% endif %}
 
-      <div class="card border-0 shadow-sm">
+      <div class="card border-0 shadow-sm ws-modules-card">
         <div class="card-body p-4">
-          <div class="d-flex justify-content-between align-items-center mb-2">
+          <div class="d-flex justify-content-between align-items-center mb-2 ws-modules-head">
             <h5 class="mb-0">Workspace Modules</h5>
             <span class="text-muted small">Clear sections to avoid confusion</span>
           </div>
