@@ -3137,10 +3137,31 @@ document.addEventListener('DOMContentLoaded', function() {
 
   if (fuelAttachZone && fuelAttachmentFiles) {
     var _fuelAttachStash = [];
-    fuelAttachZone.addEventListener('click', function() {
-      _fuelAttachStash = Array.prototype.slice.call(fuelAttachmentFiles.files || []);
-      fuelAttachmentFiles.click();
-    });
+    function openFuelAttachmentPicker() {
+      var nativeMedia = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())
+        || document.documentElement.classList.contains('capacitor-native');
+      _fuelAttachStash = nativeMedia ? [] : Array.prototype.slice.call(fuelAttachmentFiles.files || []);
+      if (typeof window.fleetOpenNativeMediaPicker === 'function') {
+        window.fleetOpenNativeMediaPicker({
+          title: 'Fuel Photos / Videos',
+          accept: 'image/*,video/*',
+          cameraDirection: 'REAR',
+          multiple: true,
+          fileInput: fuelAttachmentFiles,
+          onFiles: function(files) {
+            _fuelAttachStash = [];
+            mergeAttachmentFiles(files);
+          },
+          onFile: function(file) {
+            _fuelAttachStash = [];
+            mergeAttachmentFiles([file]);
+          }
+        });
+      } else {
+        fuelAttachmentFiles.click();
+      }
+    }
+    fuelAttachZone.addEventListener('click', openFuelAttachmentPicker);
     fuelAttachmentFiles.addEventListener('change', function() {
       var picked = Array.prototype.slice.call(this.files || []);
       if (_fuelAttachStash.length) {
@@ -3175,7 +3196,7 @@ document.addEventListener('DOMContentLoaded', function() {
     fuelAttachZone.addEventListener('keydown', function(e) {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
-        fuelAttachmentFiles.click();
+        openFuelAttachmentPicker();
       }
     });
   }

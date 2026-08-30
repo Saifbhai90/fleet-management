@@ -3565,7 +3565,8 @@
     /** Mobile app: ask Live Camera vs Gallery before attaching receipt/media. Web falls back to file input. */
     window.fleetOpenNativeMediaPicker = function(opts) {
         opts = opts || {};
-        var isNative = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+        var isNative = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())
+            || document.documentElement.classList.contains('capacitor-native');
         if (!isNative) {
             if (opts.fileInput) opts.fileInput.click();
             else if (typeof opts.onFallback === 'function') opts.onFallback();
@@ -3579,9 +3580,22 @@
             if (ov) ov.remove();
         }
 
-        function deliverFile(file) {
+        function deliverFiles(files) {
             closeOverlay();
-            if (file && typeof opts.onFile === 'function') opts.onFile(file);
+            files = Array.prototype.slice.call(files || []).filter(Boolean);
+            if (!files.length) {
+                if (typeof opts.onCancel === 'function') opts.onCancel();
+                return;
+            }
+            if (typeof opts.onFiles === 'function') {
+                opts.onFiles(files);
+            } else if (typeof opts.onFile === 'function') {
+                opts.onFile(files[0]);
+            }
+        }
+
+        function deliverFile(file) {
+            deliverFiles(file ? [file] : []);
         }
 
         function base64ToFile(b64, mime, name) {
@@ -3641,13 +3655,13 @@
             var input = document.createElement('input');
             input.type = 'file';
             input.accept = accept;
+            input.multiple = !!opts.multiple;
             input.style.display = 'none';
             document.body.appendChild(input);
             input.addEventListener('change', function() {
-                var file = input.files && input.files[0];
+                var files = input.files ? Array.prototype.slice.call(input.files) : [];
                 if (input.parentNode) input.parentNode.removeChild(input);
-                if (file) deliverFile(file);
-                else if (typeof opts.onCancel === 'function') opts.onCancel();
+                deliverFiles(files);
             });
             input.click();
         }

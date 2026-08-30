@@ -12,6 +12,13 @@
         var emailPatterns = /email/i;
 
         document.querySelectorAll('input[type="text"], input[type="number"]').forEach(function(inp) {
+            /* Tom Select creates a text input for every searchable select. Its
+               id/name can contain words such as "fuel" or "km", but it must
+               always use the full text keyboard, never the numeric keypad. */
+            if (inp.closest('.ts-wrapper') || inp.classList.contains('ts-input')) {
+                inp.setAttribute('inputmode', 'text');
+                return;
+            }
             if (inp.getAttribute('inputmode')) return; // already set
             var name = (inp.name || inp.id || '').toLowerCase();
             if (emailPatterns.test(name)) {
