@@ -1561,6 +1561,42 @@ def _driver_has_open_segment(driver_id, attendance_date):
     ).first() is not None
 
 
+def _lock_attendance_driver_vehicle(driver_id, vehicle_id=None):
+    """Serialize attendance mutations for one driver and its selected vehicle.
+
+    PostgreSQL uses row locks here; SQLite does not implement FOR UPDATE, so the
+    partial unique open-session index remains the final race-condition guard.
+    Driver is always locked first, then vehicle ids in sorted order, preventing
+    lock-order inversions between concurrent requests.
+    """
+    locked_driver = (
+        db.session.query(Driver)
+        .filter(Driver.id == driver_id)
+        .with_for_update()
+        .first()
+    )
+    if not locked_driver:
+        return None
+
+    vehicle_ids = set()
+    for value in (getattr(locked_driver, 'vehicle_id', None), vehicle_id):
+        if not value:
+            continue
+        try:
+            vehicle_ids.add(int(value))
+        except (TypeError, ValueError):
+            continue
+    for locked_vehicle_id in sorted(vehicle_ids):
+        db.session.query(Vehicle.id).filter(
+            Vehicle.id == locked_vehicle_id,
+        ).with_for_update().first()
+
+    # The relationship may have been loaded before the row lock. Expire it so
+    # the subsequent vehicle-capacity checks use the locked/current assignment.
+    db.session.expire(locked_driver, ['vehicle'])
+    return locked_driver
+
+
 def _count_driver_segments_with_checkin(driver_id, attendance_date):
     return (
         db.session.query(func.count(DriverAttendance.id))

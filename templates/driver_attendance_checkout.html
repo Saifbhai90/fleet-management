@@ -347,6 +347,7 @@
   var effectiveCheckoutEnd = null;
   var checkoutCrossShift = false;
   var PENDING_PREFIX = 'gps-attendance:checkout:';
+  var checkoutUploadInFlight = false;
   var gpsSubmitStatus = { can_submit: false, state: 'checking', message: '' };
   var attendanceActionMessage = document.getElementById('attendanceActionMessage');
 
@@ -1046,6 +1047,16 @@
     return dd + '-' + mm + '-' + yyyy;
   }
 
+  function newAttendanceRequestId(kind) {
+    var prefix = kind + '-';
+    if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+      return prefix + window.crypto.randomUUID();
+    }
+    var now = Date.now().toString(36);
+    var random = Math.random().toString(36).slice(2);
+    return prefix + now + '-' + random;
+  }
+
   function pendingStorageKey(driverId) {
     return PENDING_PREFIX + currentDateDmy() + ':' + String(driverId || '');
   }
@@ -1223,8 +1234,10 @@
     }
     if (btnCapture) btnCapture.className = 'btn btn-danger btn-lg rounded-pill px-5 d-none';
     if (btnConfirmUpload) {
-      btnConfirmUpload.disabled = false;
-      btnConfirmUpload.innerHTML = '<i class="bi bi-check2-circle me-2"></i>Check-out save karein';
+      btnConfirmUpload.disabled = checkoutUploadInFlight;
+      btnConfirmUpload.innerHTML = checkoutUploadInFlight
+        ? '<i class="bi bi-cloud-arrow-up me-2"></i>Check-out upload ho rahi hai…'
+        : '<i class="bi bi-check2-circle me-2"></i>Check-out save karein';
     }
   }
 
@@ -1419,6 +1432,7 @@
       photo_base64: shot.dataUrl,
       vehicle_id: Number(formVehicleId.value || 0),
       project_id: Number(formProjectId.value || 0),
+      request_id: newAttendanceRequestId('checkout'),
       captured_at: shot.timeStr,
       capture_date: currentDateDmy(),
     };
@@ -1427,6 +1441,7 @@
   }
 
   function openNativeCheckoutCamera() {
+    checkoutUploadInFlight = false;
     if (window.FLEET_ATTENDANCE_USE_INAPP_PREVIEW) {
       startCheckoutCameraLive();
       return;
@@ -1522,6 +1537,10 @@
         alert('Pehle photo capture karein.');
         return;
       }
+      if (checkoutUploadInFlight) return;
+      checkoutUploadInFlight = true;
+      this.disabled = true;
+      this.innerHTML = '<i class="bi bi-cloud-arrow-up me-2"></i>Check-out upload ho rahi hai…';
       closeCheckoutPreviewModal();
       var _ovEl = document.getElementById('savingOverlay');
       var _ovFill = document.getElementById('savingOverlayFill');

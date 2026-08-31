@@ -600,6 +600,9 @@ if _run_startup_tasks:
                 ('driver', 'verify_license_photo_path', 'VARCHAR(500)'),
                 ('driver', 'branch_code', 'VARCHAR(50)'),
                 ('driver', 'cheque_book_path', 'VARCHAR(500)'),
+                # GPS attendance idempotency fields (migration fallback)
+                ('driver_attendance', 'check_in_request_id', 'VARCHAR(100)'),
+                ('driver_attendance', 'check_out_request_id', 'VARCHAR(100)'),
                 ('driver_document_history', 'batch_id', 'VARCHAR(36)'),
                 ('driver_document_history', 'update_source', 'VARCHAR(20)'),
                 ('app_release', 'apk_r2_url', 'VARCHAR(512)'),

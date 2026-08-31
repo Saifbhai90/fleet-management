@@ -516,6 +516,27 @@ class DriverAttendance(db.Model):
             'driver_id', 'attendance_date', 'attendance_segment',
             name='uq_attendance_driver_date_seg',
         ),
+        db.Index(
+            'uq_attendance_open_driver_date',
+            'driver_id', 'attendance_date',
+            unique=True,
+            postgresql_where=db.text('check_in IS NOT NULL AND check_out IS NULL'),
+            sqlite_where=db.text('check_in IS NOT NULL AND check_out IS NULL'),
+        ),
+        db.Index(
+            'uq_attendance_checkin_request_id',
+            'check_in_request_id',
+            unique=True,
+            postgresql_where=db.text('check_in_request_id IS NOT NULL'),
+            sqlite_where=db.text('check_in_request_id IS NOT NULL'),
+        ),
+        db.Index(
+            'uq_attendance_checkout_request_id',
+            'check_out_request_id',
+            unique=True,
+            postgresql_where=db.text('check_out_request_id IS NOT NULL'),
+            sqlite_where=db.text('check_out_request_id IS NOT NULL'),
+        ),
     )
     id = db.Column(db.Integer, primary_key=True)
     driver_id = db.Column(db.Integer, db.ForeignKey('driver.id'), nullable=False, index=True)
@@ -527,6 +548,9 @@ class DriverAttendance(db.Model):
     check_in = db.Column(db.Time, nullable=True)
     check_out = db.Column(db.Time, nullable=True)
     check_out_date = db.Column(db.Date, nullable=True)
+    # Client-generated keys make retries safe after a timeout or app backgrounding.
+    check_in_request_id = db.Column(db.String(100), nullable=True)
+    check_out_request_id = db.Column(db.String(100), nullable=True)
     remarks = db.Column(db.Text, nullable=True)
     project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=True)
     # Geofenced check-in: parking station, driver's coords at check-in, selfie

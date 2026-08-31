@@ -22,6 +22,7 @@ from flask import (
 )
 from sqlalchemy import func, text, or_, and_, cast
 from sqlalchemy import String as SAString
+from sqlalchemy.exc import IntegrityError
 from werkzeug.utils import secure_filename
 
 from app import app, db
@@ -84,6 +85,7 @@ from routes import (
     _gps_marked_attendance_row,
     _manual_checkin_blocked_by_vehicle_rules,
     _next_attendance_segment,
+    _lock_attendance_driver_vehicle,
     _open_driver_attendance_for_manual_checkout,
     _open_gps_driver_attendance_for_checkout,
     _open_gps_driver_attendance_session,
@@ -3421,6 +3423,10 @@ def api_attendance_gps_checkin_submit():
         body = request.get_json(silent=True) or {}
         driver_id = int(body.get('driver_id') or 0)
         parking_station_id = int(body.get('parking_station_id') or 0)
+        request_id = str(
+            body.get('request_id') or body.get('idempotency_key')
+            or request.headers.get('Idempotency-Key') or ''
+        ).strip() or None
         lat_val = float(body.get('latitude')) if body.get('latitude') not in (None, '') else None
         lng_val = float(body.get('longitude')) if body.get('longitude') not in (None, '') else None
         photo_b64 = (body.get('photo_base64') or '').strip()
@@ -3429,6 +3435,32 @@ def api_attendance_gps_checkin_submit():
         if not parking_station_id:
             return jsonify({'ok': False, 'message': 'Please select a parking station.'}), 400
         driver = Driver.query.options(joinedload(Driver.vehicle)).get(driver_id)
+        if not driver:
+            return jsonify({'ok': False, 'message': 'Invalid driver.'}), 404
+        if request_id:
+            existing_request = DriverAttendance.query.filter_by(
+                check_in_request_id=request_id,
+            ).first()
+            if existing_request:
+                if existing_request.driver_id != driver_id:
+                    return jsonify({
+                        'ok': False,
+                        'message': 'This check-in request key is already in use.',
+                    }), 409
+                return jsonify({
+                    'ok': True,
+                    'message': 'Check-in already recorded (duplicate request ignored).',
+                    'idempotent_replay': True,
+                    'record': {
+                        'check_in_time': (
+                            existing_request.check_in.strftime('%H:%M')
+                            if existing_request.check_in else None
+                        ),
+                        'media': _attendance_media_payload(existing_request, 'checkin'),
+                    },
+                })
+        requested_vehicle_id = int(body.get('vehicle_id') or 0) or None
+        driver = _lock_attendance_driver_vehicle(driver_id, requested_vehicle_id)
         if not driver:
             return jsonify({'ok': False, 'message': 'Invalid driver.'}), 404
         today = _attendance_local_date()
@@ -3491,13 +3523,38 @@ def api_attendance_gps_checkin_submit():
                     app.logger.warning('GPS check-in delayed photo upload failed: %s', photo_exc)
                     return jsonify({'ok': False, 'message': 'Image upload failed. Network check karein.'}), 502
                 existing_rec.check_in_photo_path = photo_path
+                if request_id and not existing_rec.check_in_request_id:
+                    existing_rec.check_in_request_id = request_id
                 existing_rec.check_in_latitude = existing_rec.check_in_latitude or lat_val
                 existing_rec.check_in_longitude = existing_rec.check_in_longitude or lng_val
                 existing_rec.updated_at = pk_now()
                 _sync_note = f' | Photo delayed-sync {today.strftime("%d-%m-%Y")}'
                 if _sync_note not in (existing_rec.remarks or ''):
                     existing_rec.remarks = (existing_rec.remarks or '').rstrip() + _sync_note
-                db.session.commit()
+                try:
+                    db.session.commit()
+                except IntegrityError:
+                    db.session.rollback()
+                    replay = DriverAttendance.query.filter_by(
+                        check_in_request_id=request_id,
+                    ).first() if request_id else None
+                    if replay and replay.driver_id == driver_id:
+                        return jsonify({
+                            'ok': True,
+                            'message': 'Check-in already recorded (duplicate request ignored).',
+                            'idempotent_replay': True,
+                            'record': {
+                                'check_in_time': (
+                                    replay.check_in.strftime('%H:%M')
+                                    if replay.check_in else None
+                                ),
+                                'media': _attendance_media_payload(replay, 'checkin'),
+                            },
+                        })
+                    return jsonify({
+                        'ok': False,
+                        'message': 'Check-in photo already synced by another request.',
+                    }), 409
                 app.logger.info(
                     'GPS checkin delayed-sync: photo filled for driver=%s date=%s', driver_id, attendance_date
                 )
@@ -3554,10 +3611,34 @@ def api_attendance_gps_checkin_submit():
             check_in_latitude=lat_val,
             check_in_longitude=lng_val,
             check_in_photo_path=photo_path,
+            check_in_request_id=request_id,
             remarks='Ye GPS + Camera se attendance lagi hai.',
         )
         db.session.add(rec)
-        db.session.commit()
+        try:
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            replay = DriverAttendance.query.filter_by(
+                check_in_request_id=request_id,
+            ).first() if request_id else None
+            if replay and replay.driver_id == driver_id:
+                return jsonify({
+                    'ok': True,
+                    'message': 'Check-in already recorded (duplicate request ignored).',
+                    'idempotent_replay': True,
+                    'record': {
+                        'check_in_time': (
+                            replay.check_in.strftime('%H:%M')
+                            if replay.check_in else None
+                        ),
+                        'media': _attendance_media_payload(replay, 'checkin'),
+                    },
+                })
+            return jsonify({
+                'ok': False,
+                'message': 'Check-out pending hai. Duplicate check-in blocked.',
+            }), 409
         try:
             from notification_service import notify_gps_checkin
             _v = db.session.get(Vehicle, _ci_vehicle_id) if _ci_vehicle_id else None
@@ -3584,6 +3665,10 @@ def api_attendance_gps_checkout_submit():
         body = request.get_json(silent=True) or {}
         driver_id = int(body.get('driver_id') or 0)
         parking_station_id = int(body.get('parking_station_id') or 0)
+        request_id = str(
+            body.get('request_id') or body.get('idempotency_key')
+            or request.headers.get('Idempotency-Key') or ''
+        ).strip() or None
         lat_val = float(body.get('latitude')) if body.get('latitude') not in (None, '') else None
         lng_val = float(body.get('longitude')) if body.get('longitude') not in (None, '') else None
         photo_b64 = (body.get('photo_base64') or '').strip()
@@ -3592,6 +3677,32 @@ def api_attendance_gps_checkout_submit():
         if not parking_station_id:
             return jsonify({'ok': False, 'message': 'Please select a parking station.'}), 400
         driver = db.session.get(Driver, driver_id)
+        if not driver:
+            return jsonify({'ok': False, 'message': 'Invalid driver.'}), 404
+        if request_id:
+            existing_request = DriverAttendance.query.filter_by(
+                check_out_request_id=request_id,
+            ).first()
+            if existing_request:
+                if existing_request.driver_id != driver_id:
+                    return jsonify({
+                        'ok': False,
+                        'message': 'This check-out request key is already in use.',
+                    }), 409
+                return jsonify({
+                    'ok': True,
+                    'message': 'Check-out already recorded (duplicate request ignored).',
+                    'idempotent_replay': True,
+                    'record': {
+                        'check_out_time': (
+                            existing_request.check_out.strftime('%H:%M')
+                            if existing_request.check_out else None
+                        ),
+                        'media': _attendance_media_payload(existing_request, 'checkout'),
+                    },
+                })
+        requested_vehicle_id = int(body.get('vehicle_id') or 0) or None
+        driver = _lock_attendance_driver_vehicle(driver_id, requested_vehicle_id)
         if not driver:
             return jsonify({'ok': False, 'message': 'Invalid driver.'}), 404
         today = _attendance_local_date()
@@ -3678,11 +3789,36 @@ def api_attendance_gps_checkout_submit():
                         co_t = _bump
                 existing.check_out = co_t
                 existing.check_out_date = lookup_date
+            if request_id and not existing.check_out_request_id:
+                existing.check_out_request_id = request_id
             existing.updated_at = pk_now()
             _sync_note = f' | Checkout photo delayed-sync {today.strftime("%d-%m-%Y")}'
             if _sync_note not in (existing.remarks or ''):
                 existing.remarks = (existing.remarks or '').rstrip() + _sync_note
-            db.session.commit()
+            try:
+                db.session.commit()
+            except IntegrityError:
+                db.session.rollback()
+                replay = DriverAttendance.query.filter_by(
+                    check_out_request_id=request_id,
+                ).first() if request_id else None
+                if replay and replay.driver_id == driver_id:
+                    return jsonify({
+                        'ok': True,
+                        'message': 'Check-out already recorded (duplicate request ignored).',
+                        'idempotent_replay': True,
+                        'record': {
+                            'check_out_time': (
+                                replay.check_out.strftime('%H:%M')
+                                if replay.check_out else None
+                            ),
+                            'media': _attendance_media_payload(replay, 'checkout'),
+                        },
+                    })
+                return jsonify({
+                    'ok': False,
+                    'message': 'Check-out photo already synced by another request.',
+                }), 409
             app.logger.info(
                 'GPS checkout delayed-sync: photo filled for driver=%s date=%s', driver_id, lookup_date
             )
@@ -3731,10 +3867,34 @@ def api_attendance_gps_checkout_submit():
         existing.check_out_latitude = lat_val
         existing.check_out_longitude = lng_val
         existing.check_out_photo_path = photo_path
+        existing.check_out_request_id = request_id
         existing.updated_at = now
         if not existing.remarks or 'GPS' not in (existing.remarks or ''):
             existing.remarks = (existing.remarks or '').rstrip() + ' | Check-out GPS+Cam'
-        db.session.commit()
+        try:
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            replay = DriverAttendance.query.filter_by(
+                check_out_request_id=request_id,
+            ).first() if request_id else None
+            if replay and replay.driver_id == driver_id:
+                return jsonify({
+                    'ok': True,
+                    'message': 'Check-out already recorded (duplicate request ignored).',
+                    'idempotent_replay': True,
+                    'record': {
+                        'check_out_time': (
+                            replay.check_out.strftime('%H:%M')
+                            if replay.check_out else None
+                        ),
+                        'media': _attendance_media_payload(replay, 'checkout'),
+                    },
+                })
+            return jsonify({
+                'ok': False,
+                'message': 'Check-out already completed or another request won the update.',
+            }), 409
         try:
             from notification_service import notify_gps_checkout
             _v = db.session.get(Vehicle, _co_vehicle_id) if _co_vehicle_id else None

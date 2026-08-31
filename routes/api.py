@@ -21,8 +21,10 @@ from collections import defaultdict
 from functools import wraps
 
 from flask import Blueprint, request, jsonify, current_app
+from sqlalchemy.exc import IntegrityError
 from werkzeug.security import check_password_hash
 from app import db
+from routes import _lock_attendance_driver_vehicle
 
 api_bp = Blueprint('api', __name__, url_prefix='/api/v1')
 
@@ -307,10 +309,32 @@ def mobile_checkin():
     lat = body.get('latitude')
     lng = body.get('longitude')
     photo_b64 = body.get('photo_base64', '')
+    request_id = str(
+        body.get('request_id') or body.get('idempotency_key')
+        or request.headers.get('Idempotency-Key') or ''
+    ).strip() or None
 
     driver, err = _resolve_driver_for_jwt(body, request.jwt_payload)
     if err:
         return err
+
+    if request_id:
+        existing_request = DriverAttendance.query.filter_by(
+            check_in_request_id=request_id,
+        ).first()
+        if existing_request:
+            if existing_request.driver_id != driver.id:
+                return _err('This check-in request key is already in use.', 409)
+            return _ok({
+                'message': 'Check-in already recorded (duplicate request ignored).',
+                'time': str(existing_request.check_in)[:5] if existing_request.check_in else None,
+                'idempotent_replay': True,
+            })
+
+    requested_vehicle_id = body.get('vehicle_id')
+    driver = _lock_attendance_driver_vehicle(driver.id, requested_vehicle_id)
+    if not driver:
+        return _err('Driver profile not found for this user.', 404)
 
     today = pk_date()
     now_utc = pk_now()
@@ -403,10 +427,24 @@ def mobile_checkin():
             check_in_latitude=lat,
             check_in_longitude=lng,
             check_in_photo_path=photo_url,
+            check_in_request_id=request_id,
             status='Present',
         )
         db.session.add(record)
-        db.session.commit()
+        try:
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            replay = DriverAttendance.query.filter_by(
+                check_in_request_id=request_id,
+            ).first() if request_id else None
+            if replay and replay.driver_id == driver.id:
+                return _ok({
+                    'message': 'Check-in already recorded (duplicate request ignored).',
+                    'time': str(replay.check_in)[:5] if replay.check_in else None,
+                    'idempotent_replay': True,
+                })
+            return _err('Check-out pending for current session. Duplicate check-in blocked.', 409)
         try:
             from notification_service import dismiss_driver_attendance_reminders
             dismiss_driver_attendance_reminders(driver, 'checkin')
@@ -436,10 +474,31 @@ def mobile_checkout():
     lat = body.get('latitude')
     lng = body.get('longitude')
     photo_b64 = body.get('photo_base64', '')
+    request_id = str(
+        body.get('request_id') or body.get('idempotency_key')
+        or request.headers.get('Idempotency-Key') or ''
+    ).strip() or None
 
     driver, err = _resolve_driver_for_jwt(body, request.jwt_payload)
     if err:
         return err
+
+    if request_id:
+        existing_request = DriverAttendance.query.filter_by(
+            check_out_request_id=request_id,
+        ).first()
+        if existing_request:
+            if existing_request.driver_id != driver.id:
+                return _err('This check-out request key is already in use.', 409)
+            return _ok({
+                'message': 'Check-out already recorded (duplicate request ignored).',
+                'time': str(existing_request.check_out)[:5] if existing_request.check_out else None,
+                'idempotent_replay': True,
+            })
+
+    driver = _lock_attendance_driver_vehicle(driver.id)
+    if not driver:
+        return _err('Driver profile not found for this user.', 404)
 
     today = pk_date()
     now_utc = pk_now()
@@ -472,7 +531,21 @@ def mobile_checkout():
         record.check_out_longitude = lng
         if photo_url:
             record.check_out_photo_path = photo_url
-        db.session.commit()
+        record.check_out_request_id = request_id
+        try:
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            replay = DriverAttendance.query.filter_by(
+                check_out_request_id=request_id,
+            ).first() if request_id else None
+            if replay and replay.driver_id == driver.id:
+                return _ok({
+                    'message': 'Check-out already recorded (duplicate request ignored).',
+                    'time': str(replay.check_out)[:5] if replay.check_out else None,
+                    'idempotent_replay': True,
+                })
+            return _err('Check-out already completed or another request won the update.', 409)
         try:
             from notification_service import dismiss_driver_attendance_reminders
             dismiss_driver_attendance_reminders(driver, 'checkout')
