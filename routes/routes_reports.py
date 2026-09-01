@@ -195,7 +195,7 @@ def _report_centre_visibility(linked_driver_id=None):
     show_fleet = bool(fleet_vehicle or fleet_project or fleet_expense)
 
     task_daily = (
-        c('task_report_list') or c('task_report_new') or c('task_report_entry') or c('red_task_list') or c('red_task_summary') or c('red_task_summary_detail') or c('without_task_list')
+        c('task_report_list') or c('task_report_new') or c('task_report_entry') or c('red_task_list') or c('red_task_summary') or c('red_task_summary_detail') or c('red_task_summary_vehicles') or c('without_task_list')
         or c('speed_monitoring_report') or c('mileage_report') or c('tracker_difference_report')
         or c('unauthorized_movement_report') or c('task_start_delay_report') or c('task_turnaround_report')
         or c('unexecuted_task_report')

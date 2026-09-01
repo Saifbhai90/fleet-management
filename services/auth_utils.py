@@ -228,10 +228,12 @@ ENDPOINT_PERMISSION_MAP = [
     ('api_task_report_odometer_photo_upload', 'task_report_entry'),
     # Red Task
     ('red_task_list', 'red_task'),
-    ('red_task_summary', 'red_task'),
-    ('red_task_summary_detail', 'red_task'),
     ('red_task_new', 'red_task_add'),
     ('red_task_edit', 'red_task_edit'),
+    # Category Wise Task Summary (separate from Red Task Report)
+    ('red_task_summary', 'red_task_summary'),
+    ('red_task_summary_detail', 'red_task_summary'),
+    ('red_task_summary_vehicles', 'red_task_summary'),
     # Movement without Task
     ('without_task_list', 'without_task'),
     ('without_task_new', 'without_task_add'),

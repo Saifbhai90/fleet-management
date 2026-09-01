@@ -1,31 +1,160 @@
 {% extends "base.html" %}
-{% block title %}Red Task Summary{% endblock %}
+{% block title %}Category Wise Task Summary{% endblock %}
 {% block content %}
-<div class="container-fluid">
-  <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
-    <h2 class="mb-0"><i class="bi bi-pie-chart-fill me-2 text-danger"></i>Red Task Summary</h2>
-    <div class="d-flex gap-2">
-      <a href="{{ url_for('red_task_list') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-list-ul me-1"></i>Red Task Report</a>
+<style>
+  .cwts-header { background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 55%, #7c3aed 100%); }
+  .cwts-th-green { color: #15803d; }
+  .cwts-th-yellow { color: #a16207; }
+  .cwts-th-red { color: #b91c1c; }
+  .cwts-th-orange { color: #c2410c; }
+  .cwts-count-green { color: #15803d; font-weight: 700; }
+  .cwts-count-yellow { color: #a16207; font-weight: 700; }
+  .cwts-count-red { color: #b91c1c; font-weight: 700; }
+  .cwts-count-orange { color: #c2410c; font-weight: 700; }
+  .cwts-summary-table {
+    table-layout: fixed;
+    width: 100%;
+    font-size: 0.88rem;
+  }
+  .cwts-summary-table thead th {
+    white-space: normal;
+    vertical-align: middle;
+    line-height: 1.2;
+    padding: 0.55rem 0.45rem;
+    font-size: 0.78rem;
+  }
+  .cwts-summary-table tbody td,
+  .cwts-summary-table tfoot td {
+    padding: 0.5rem 0.45rem;
+    vertical-align: middle;
+  }
+  .cwts-summary-table .cwts-district {
+    width: 32%;
+    text-align: left;
+    font-weight: 500;
+  }
+  .cwts-summary-table .cwts-num {
+    width: 17%;
+    text-align: center !important;
+  }
+  .cwts-summary-table thead th.cwts-th-green { background: #dcfce7; color: #166534; }
+  .cwts-summary-table thead th.cwts-th-yellow { background: #fef3c7; color: #92400e; }
+  .cwts-summary-table thead th.cwts-th-red { background: #fee2e2; color: #991b1b; }
+  .cwts-summary-table thead th.cwts-th-orange { background: #ffedd5; color: #9a3412; }
+  .cwts-summary-table tfoot td {
+    background: #f1f5f9 !important;
+    font-size: 0.92rem;
+    border-top: 2px solid #cbd5e1;
+  }
+  @media (max-width: 767.98px) {
+    .cwts-page-title { font-size: 1.15rem; }
+    .cwts-actions .btn { font-size: 0.78rem; }
+    .cwts-filter-card .card-body { padding: 0.85rem; }
+    .cwts-filter-card .form-label { font-size: 0.8rem; margin-bottom: 0.25rem; }
+    .cwts-result-header { padding: 0.75rem !important; }
+    .cwts-result-header .no-print { min-width: 0 !important; width: 100%; }
+    .cwts-summary-table { table-layout: auto; font-size: 0.92rem; }
+    .cwts-summary-table thead { display: none; }
+    .cwts-summary-table,
+    .cwts-summary-table tbody,
+    .cwts-summary-table tfoot,
+    .cwts-summary-table tr,
+    .cwts-summary-table td {
+      display: block;
+      width: 100% !important;
+    }
+    .cwts-summary-table tbody tr,
+    .cwts-summary-table tfoot tr {
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      margin-bottom: 0.75rem;
+      padding: 0.65rem 0.75rem 0.5rem;
+      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+    }
+    .cwts-summary-table tbody tr[data-search],
+    .cwts-summary-table tfoot tr {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.35rem 0.5rem;
+    }
+    .cwts-summary-table tbody td.cwts-district,
+    .cwts-summary-table tfoot td.cwts-district {
+      grid-column: 1 / -1;
+      font-weight: 700;
+      font-size: 0.98rem;
+      color: #0f172a;
+      padding: 0 0 0.35rem !important;
+      border-bottom: 1px solid #e2e8f0;
+      margin-bottom: 0.15rem;
+    }
+    .cwts-summary-table tbody td.cwts-num,
+    .cwts-summary-table tfoot td.cwts-num {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.15rem;
+      padding: 0.4rem 0.5rem !important;
+      border-radius: 8px;
+      background: #f8fafc;
+      text-align: left !important;
+    }
+    .cwts-summary-table tbody td.cwts-num[data-label]::before,
+    .cwts-summary-table tfoot td.cwts-num[data-label]::before {
+      content: attr(data-label);
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+    }
+    .cwts-summary-table tbody td.cwts-count-green,
+    .cwts-summary-table tfoot td.cwts-count-green { background: #f0fdf4; }
+    .cwts-summary-table tbody td.cwts-count-yellow,
+    .cwts-summary-table tfoot td.cwts-count-yellow { background: #fffbeb; }
+    .cwts-summary-table tbody td.cwts-count-red,
+    .cwts-summary-table tfoot td.cwts-count-red { background: #fef2f2; }
+    .cwts-summary-table tbody td.cwts-count-orange,
+    .cwts-summary-table tfoot td.cwts-count-orange { background: #fff7ed; }
+    .cwts-summary-table tfoot td { background: transparent !important; border-top: none; }
+    .cwts-summary-table .table-responsive { overflow: visible; }
+    #cwtsChoicePanel { width: min(420px, calc(100vw - 16px)); }
+  }
+  @media print {
+    .sidebar, .navbar, .btn, .collapse-item, footer, .no-print { display: none !important; }
+    .card { border: none !important; box-shadow: none !important; }
+  }
+</style>
+<div class="container-fluid px-2 px-sm-3">
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3 mb-md-4">
+    <h2 class="mb-0 cwts-page-title"><i class="bi bi-bar-chart-steps me-2 text-primary"></i>Category Wise Task Summary</h2>
+    <div class="d-flex gap-2 no-print cwts-actions flex-wrap">
       {% if show and summary_rows %}
-      <button type="button" class="btn btn-outline-primary btn-sm" onclick="window.print()"><i class="bi bi-printer me-1"></i>Print</button>
+      <button type="button" class="btn btn-outline-secondary btn-sm" id="btnPrintReport" title="Print / Preview">
+        <i class="bi bi-eye me-1"></i><span class="d-none d-sm-inline">Print / Preview</span><span class="d-sm-none">Print</span>
+      </button>
+      <button type="button" class="btn btn-outline-success btn-sm" id="btnExportReport" title="Export">
+        <i class="bi bi-file-earmark-excel me-1"></i>Export
+      </button>
       {% endif %}
     </div>
   </div>
 
-  <div class="card shadow-sm border-0 rounded-3 mb-4">
+  <div class="card shadow-sm border-0 rounded-3 mb-3 mb-md-4 no-print cwts-filter-card">
     <div class="card-body">
-      <p class="text-muted small mb-3"><strong>Direct Emergency Task Report</strong> (Excel upload) ki <strong>Red</strong> category — <strong>har row count hoti hai</strong>. Master district naam match ho to us naam se group; warna Excel ka district text alag line par (detail link usi Excel grouping par). Fine saved <strong>Red Task</strong> se (same date + Task ID).</p>
-      <form method="get" action="{{ url_for('red_task_summary') }}" class="row g-3 align-items-end">
+      <p class="text-muted small mb-3 d-none d-md-block"><strong>Direct Emergency Task Report</strong> (Excel upload) — <strong>Green, Yellow, Red, Orange</strong> categories ki har row count hoti hai. Master district naam match ho to us naam se group; warna Excel ka district text alag line par (detail link usi Excel grouping par).</p>
+      <p class="text-muted small mb-3 d-md-none"><strong>Green / Yellow / Red / Orange</strong> counts by district (Excel Emergency Task Report).</p>
+      <form method="get" action="{{ url_for('red_task_summary') }}" class="row g-2 g-md-3 align-items-end">
         <input type="hidden" name="show" value="1">
-        <div class="col-md-2">
+        <div class="col-6 col-md-2">
           <label class="form-label">From Date</label>
           <input type="text" name="from_date" class="form-control datepicker" placeholder="dd-mm-yyyy" value="{{ from_date.strftime('%d-%m-%Y') if from_date else '' }}" autocomplete="off">
         </div>
-        <div class="col-md-2">
+        <div class="col-6 col-md-2">
           <label class="form-label">To Date</label>
           <input type="text" name="to_date" class="form-control datepicker" placeholder="dd-mm-yyyy" value="{{ to_date.strftime('%d-%m-%Y') if to_date else '' }}" autocomplete="off">
         </div>
-        <div class="col-md-5">
+        <div class="col-12 col-md-3">
           <label class="form-label">District</label>
           <select name="district_id" id="summaryDistrictSelect" class="form-select search-select">
             {% for val, label in form.district_id.choices %}
@@ -33,8 +162,17 @@
             {% endfor %}
           </select>
         </div>
-        <div class="col-md-3">
-          <button type="submit" class="btn btn-danger w-100">
+        <div class="col-6 col-md-2">
+          <label class="form-label">Category</label>
+          <select name="category" class="form-select">
+            <option value="" {% if not category_filter %}selected{% endif %}>-- Tamam categories --</option>
+            {% for cat in summary_categories %}
+            <option value="{{ cat }}" {% if category_filter == cat %}selected{% endif %}>{{ cat }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-6 col-md-3">
+          <button type="submit" class="btn btn-primary w-100">
             <i class="bi bi-bar-chart-fill me-1"></i>Show Summary
           </button>
         </div>
@@ -44,80 +182,372 @@
 
   {% if show %}
   <div class="card shadow border-0 rounded-3 overflow-hidden">
-    <div class="card-header bg-danger text-white py-3">
-      <span class="fw-semibold"><i class="bi bi-calendar-range me-2"></i>{{ from_date|ddmmyyyy }} — {{ to_date|ddmmyyyy }}</span>
-      {% if district_id %}
-      <span class="ms-2 badge bg-light text-danger">District filtered</span>
+    <div class="card-header cwts-header text-white py-3 d-flex flex-wrap justify-content-between align-items-center gap-2 cwts-result-header">
+      <div>
+        <span class="fw-semibold"><i class="bi bi-calendar-range me-2"></i>{{ from_date|ddmmyyyy }} — {{ to_date|ddmmyyyy }}</span>
+        {% if district_id %}
+        <span class="ms-2 badge bg-light text-primary">District filtered</span>
+        {% endif %}
+        {% if category_filter %}
+        <span class="ms-2 badge bg-warning text-dark">{{ category_filter }} only</span>
+        {% endif %}
+      </div>
+      {% if summary_rows %}
+      <div class="no-print" style="min-width: 220px;">
+        <input type="search" id="cwtsTableSearch" class="form-control form-control-sm" placeholder="Search district..." autocomplete="off" inputmode="search" aria-label="Search summary table">
+      </div>
       {% endif %}
     </div>
-    <div class="card-body">
+    <div class="card-body px-2 px-md-3">
       {% if not summary_rows %}
-      <p class="text-muted mb-0"><i class="bi bi-info-circle me-1"></i>Is date range mein Emergency Report mein koi <strong>Red</strong> category task nahi — Task Report upload / dates check karein.</p>
+      <p class="text-muted mb-0"><i class="bi bi-info-circle me-1"></i>Is date range / filter mein Emergency Report mein koi <strong>Green / Yellow / Red / Orange</strong> task nahi — Task Report upload / dates check karein.</p>
       {% else %}
-      <p class="small text-muted mb-3"><strong>{{ summary_title }}</strong></p>
+      <p class="small text-muted mb-3 d-none d-md-block"><strong>{{ summary_title }}</strong></p>
       <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0">
-          <thead class="table-light">
+        <table class="table table-hover align-middle mb-0 cwts-summary-table" id="cwtsSummaryTable">
+          <thead>
             <tr>
               {% if summary_kind == 'single' %}
-              <th class="ps-3">Scope</th>
+              <th class="ps-3 cwts-district">Scope</th>
               {% elif summary_kind == 'by_project' %}
-              <th class="ps-3">Project</th>
+              <th class="ps-3 cwts-district">Project</th>
               {% else %}
-              <th class="ps-3">District</th>
+              <th class="ps-3 cwts-district">District</th>
               {% endif %}
-              <th class="text-end">Red Tasks</th>
-              <th class="text-end pe-3">Total Fine (PKR)</th>
+              <th class="cwts-num cwts-th-green">Green Task</th>
+              <th class="cwts-num cwts-th-yellow">Yellow Task</th>
+              <th class="cwts-num cwts-th-red">Red Task</th>
+              <th class="cwts-num cwts-th-orange pe-3">Orange Task</th>
             </tr>
           </thead>
           <tbody>
             {% for row in summary_rows %}
-            <tr>
-              <td class="ps-3">{{ row.label }}</td>
-              <td class="text-end fw-semibold">
-                {% if row.detail_kind == 'master' %}
-                <a href="{{ url_for('red_task_summary_detail', district_id=row.district_id, from_date=from_date.strftime('%d-%m-%Y'), to_date=to_date.strftime('%d-%m-%Y')) }}" class="text-danger text-decoration-underline">{{ row.count }}</a>
-                {% else %}
-                <a href="{{ url_for('red_task_summary_detail', from_date=from_date.strftime('%d-%m-%Y'), to_date=to_date.strftime('%d-%m-%Y'), excel_norm=row.excel_norm) }}" class="text-danger text-decoration-underline">{{ row.count }}</a>
-                {% endif %}
+            <tr data-search="{{ row.label|lower }}">
+              <td class="ps-3 cwts-district" data-label="District">{{ row.label }}</td>
+              <td class="cwts-num cwts-count-green" data-label="Green">
+                {% if row.green > 0 %}
+                <a href="#" class="cwts-count-link cwts-count-green text-decoration-underline"
+                   data-category="Green"
+                   data-count="{{ row.green }}"
+                   data-label="{{ row.label }}"
+                   data-detail-kind="{{ row.detail_kind }}"
+                   data-district-id="{{ row.district_id or '' }}"
+                   data-excel-norm="{{ row.excel_norm or '' }}">{{ row.green }}</a>
+                {% else %}<span class="text-muted">0</span>{% endif %}
               </td>
-              <td class="text-end pe-3">{{ '%.2f' % row.fine }}</td>
+              <td class="cwts-num cwts-count-yellow" data-label="Yellow">
+                {% if row.yellow > 0 %}
+                <a href="#" class="cwts-count-link cwts-count-yellow text-decoration-underline"
+                   data-category="Yellow"
+                   data-count="{{ row.yellow }}"
+                   data-label="{{ row.label }}"
+                   data-detail-kind="{{ row.detail_kind }}"
+                   data-district-id="{{ row.district_id or '' }}"
+                   data-excel-norm="{{ row.excel_norm or '' }}">{{ row.yellow }}</a>
+                {% else %}<span class="text-muted">0</span>{% endif %}
+              </td>
+              <td class="cwts-num cwts-count-red" data-label="Red">
+                {% if row.red > 0 %}
+                <a href="#" class="cwts-count-link cwts-count-red text-decoration-underline"
+                   data-category="Red"
+                   data-count="{{ row.red }}"
+                   data-label="{{ row.label }}"
+                   data-detail-kind="{{ row.detail_kind }}"
+                   data-district-id="{{ row.district_id or '' }}"
+                   data-excel-norm="{{ row.excel_norm or '' }}">{{ row.red }}</a>
+                {% else %}<span class="text-muted">0</span>{% endif %}
+              </td>
+              <td class="cwts-num cwts-count-orange pe-3" data-label="Orange">
+                {% if row.orange > 0 %}
+                <a href="#" class="cwts-count-link cwts-count-orange text-decoration-underline"
+                   data-category="Orange"
+                   data-count="{{ row.orange }}"
+                   data-label="{{ row.label }}"
+                   data-detail-kind="{{ row.detail_kind }}"
+                   data-district-id="{{ row.district_id or '' }}"
+                   data-excel-norm="{{ row.excel_norm or '' }}">{{ row.orange }}</a>
+                {% else %}<span class="text-muted">0</span>{% endif %}
+              </td>
             </tr>
             {% endfor %}
           </tbody>
           {% if summary_kind != 'single' %}
-          <tfoot class="table-secondary fw-bold">
+          <tfoot>
             <tr>
-              <td class="ps-3">Grand total</td>
-              <td class="text-end">{{ grand_count }}</td>
-              <td class="text-end pe-3">{{ '%.2f' % grand_fine }}</td>
+              <td class="ps-3 cwts-district" data-label="Total">Grand total</td>
+              <td class="cwts-num cwts-count-green" data-label="Green">{{ grand_totals.green }}</td>
+              <td class="cwts-num cwts-count-yellow" data-label="Yellow">{{ grand_totals.yellow }}</td>
+              <td class="cwts-num cwts-count-red" data-label="Red">{{ grand_totals.red }}</td>
+              <td class="cwts-num cwts-count-orange pe-3" data-label="Orange">{{ grand_totals.orange }}</td>
             </tr>
           </tfoot>
           {% endif %}
         </table>
       </div>
+      <p id="cwtsSearchEmpty" class="text-muted small mb-0 mt-2 d-none"><i class="bi bi-search me-1"></i>Search ke mutabiq koi district nahi mila.</p>
       {% endif %}
     </div>
   </div>
   {% else %}
-  <div class="alert alert-light border"><i class="bi bi-hand-index-thumb me-2"></i>Filters set karke <strong>Show Summary</strong> dabayein.</div>
+  <div class="alert alert-light border"><i class="bi bi-hand-index-thumb me-2"></i>Filters set karke <strong>Show Summary</strong> dabayein ya date range select karein.</div>
   {% endif %}
+</div>
+
+<style>
+  #cwtsChoicePanel {
+    position: fixed;
+    z-index: 1080;
+    width: min(420px, calc(100vw - 24px));
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 18px 48px rgba(15, 23, 42, 0.28);
+    background: #fff;
+    display: none;
+  }
+  #cwtsChoicePanel.is-open { display: block; }
+  #cwtsChoicePanel .cwts-choice-head {
+    background: linear-gradient(135deg, #1e3a5f, #2563eb);
+    color: #fff;
+    padding: 0.75rem 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+  #cwtsChoicePanel .cwts-choice-body { padding: 1rem; }
+</style>
+<div id="cwtsChoicePanel" role="dialog" aria-labelledby="cwtsChoiceModalLabel" aria-modal="false" hidden>
+  <div class="cwts-choice-head">
+    <h5 class="modal-title mb-0 fs-6" id="cwtsChoiceModalLabel"><i class="bi bi-ui-checks-grid me-2"></i>Open report</h5>
+    <button type="button" class="btn-close btn-close-white" id="cwtsChoiceClose" aria-label="Close"></button>
+  </div>
+  <div class="cwts-choice-body">
+    <p class="small text-muted mb-3" id="cwtsChoiceSubtitle">Select how you want to open this count.</p>
+    <div class="d-grid gap-2">
+      <a href="#" id="cwtsOptVehicle" class="btn btn-outline-primary text-start py-3 px-3" style="border-radius:12px;">
+        <div class="d-flex align-items-start gap-2">
+          <i class="bi bi-truck-front fs-4 mt-1"></i>
+          <div>
+            <div class="fw-semibold">Vehicle Wise Task Summary</div>
+            <div class="small text-muted">Is district ki tamam vehicles ki Green / Yellow / Red / Orange summary</div>
+          </div>
+        </div>
+      </a>
+      <a href="#" id="cwtsOptDetail" class="btn btn-outline-secondary text-start py-3 px-3" style="border-radius:12px;">
+        <div class="d-flex align-items-start gap-2">
+          <i class="bi bi-list-columns-reverse fs-4 mt-1"></i>
+          <div>
+            <div class="fw-semibold">Category Task Detail</div>
+            <div class="small text-muted">Is category ke task rows (date, task id, vehicle, facility…)</div>
+          </div>
+        </div>
+      </a>
+    </div>
+  </div>
 </div>
 
 <script>
 (function() {
-  var ds = document.getElementById('summaryDistrictSelect');
-  if (!ds) return;
-  setTimeout(function() {
-    if (ds.classList.contains('search-select') && ds.parentNode) {
-      if (ds.tomselect) ds.tomselect.destroy();
-      initSearchableDropdowns(ds.parentNode);
+  var fromDate = {{ from_date.strftime('%d-%m-%Y')|tojson }};
+  var toDate = {{ to_date.strftime('%d-%m-%Y')|tojson }};
+  var vehicleBase = {{ url_for('red_task_summary_vehicles')|tojson }};
+  var detailBase = {{ url_for('red_task_summary_detail')|tojson }};
+  var choicePanel = document.getElementById('cwtsChoicePanel');
+  var optVehicle = document.getElementById('cwtsOptVehicle');
+  var optDetail = document.getElementById('cwtsOptDetail');
+  var choiceSubtitle = document.getElementById('cwtsChoiceSubtitle');
+  var choiceClose = document.getElementById('cwtsChoiceClose');
+
+  function buildUrl(base, params) {
+    var u = new URL(base, window.location.origin);
+    Object.keys(params).forEach(function(k) {
+      if (params[k] !== null && params[k] !== undefined && params[k] !== '') {
+        u.searchParams.set(k, params[k]);
+      }
+    });
+    return u.pathname + '?' + u.searchParams.toString();
+  }
+
+  function hideChoicePanel() {
+    if (!choicePanel) return;
+    choicePanel.classList.remove('is-open');
+    choicePanel.hidden = true;
+  }
+
+  function showChoicePanel(anchorEl) {
+    if (!choicePanel) return;
+    choicePanel.hidden = false;
+    choicePanel.classList.add('is-open');
+    var rect = anchorEl && anchorEl.getBoundingClientRect ? anchorEl.getBoundingClientRect() : null;
+    var panelW = choicePanel.offsetWidth || 420;
+    var panelH = choicePanel.offsetHeight || 280;
+    var left = rect ? (rect.left + rect.width / 2 - panelW / 2) : (window.innerWidth - panelW) / 2;
+    var top = rect ? (rect.bottom + 10) : Math.max(24, (window.innerHeight - panelH) / 3);
+    left = Math.max(12, Math.min(left, window.innerWidth - panelW - 12));
+    if (rect && top + panelH > window.innerHeight - 12) {
+      top = Math.max(12, rect.top - panelH - 10);
     }
-  }, 80);
+    top = Math.max(12, Math.min(top, window.innerHeight - panelH - 12));
+    choicePanel.style.left = left + 'px';
+    choicePanel.style.top = top + 'px';
+  }
+
+  document.addEventListener('click', function(e) {
+    var link = e.target.closest('.cwts-count-link');
+    if (!link) {
+      if (choicePanel && choicePanel.classList.contains('is-open') && !e.target.closest('#cwtsChoicePanel')) {
+        hideChoicePanel();
+      }
+      return;
+    }
+    e.preventDefault();
+    e.stopPropagation();
+    var category = link.getAttribute('data-category') || '';
+    var label = link.getAttribute('data-label') || '';
+    var count = link.getAttribute('data-count') || '';
+    var kind = link.getAttribute('data-detail-kind') || '';
+    var districtId = link.getAttribute('data-district-id') || '';
+    var excelNorm = link.getAttribute('data-excel-norm') || '';
+    var common = { from_date: fromDate, to_date: toDate, category: category };
+    var vehicleParams = Object.assign({}, common);
+    var detailParams = Object.assign({}, common);
+    if (kind === 'master' && districtId) {
+      vehicleParams.district_id = districtId;
+      detailParams.district_id = districtId;
+    } else {
+      vehicleParams.excel_norm = excelNorm;
+      detailParams.excel_norm = excelNorm;
+    }
+    if (optVehicle) optVehicle.href = buildUrl(vehicleBase, vehicleParams);
+    if (optDetail) optDetail.href = buildUrl(detailBase, detailParams);
+    if (choiceSubtitle) {
+      choiceSubtitle.textContent = label + ' — ' + category + ' (' + count + ')';
+    }
+    if (choicePanel) showChoicePanel(link);
+    else if (optDetail) window.location.href = optDetail.href;
+  });
+
+  if (choiceClose) choiceClose.addEventListener('click', hideChoicePanel);
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') hideChoicePanel();
+  });
+
+  var ds = document.getElementById('summaryDistrictSelect');
+  if (ds) {
+    setTimeout(function() {
+      if (ds.classList.contains('search-select') && ds.parentNode) {
+        if (ds.tomselect) ds.tomselect.destroy();
+        initSearchableDropdowns(ds.parentNode);
+      }
+    }, 80);
+  }
+
+  var searchInput = document.getElementById('cwtsTableSearch');
+  var table = document.getElementById('cwtsSummaryTable');
+  var emptyMsg = document.getElementById('cwtsSearchEmpty');
+  if (searchInput && table) {
+    var rows = Array.from(table.querySelectorAll('tbody tr[data-search]'));
+    searchInput.addEventListener('input', function() {
+      var q = (searchInput.value || '').trim().toLowerCase();
+      var visible = 0;
+      rows.forEach(function(tr) {
+        var hay = tr.getAttribute('data-search') || '';
+        var show = !q || hay.indexOf(q) !== -1;
+        tr.style.display = show ? '' : 'none';
+        tr.dataset.searchHidden = show ? '0' : '1';
+        if (show) visible++;
+      });
+      if (emptyMsg) {
+        emptyMsg.classList.toggle('d-none', visible > 0 || !q);
+      }
+    });
+  }
+
+  if (!table || !document.getElementById('btnPrintReport')) return;
+
+  function exposeFilteredRows() {
+    if (!table) return;
+    table.querySelectorAll('tbody tr[data-search]').forEach(function(tr) {
+      tr.style.display = (tr.dataset.searchHidden === '1') ? 'none' : '';
+    });
+  }
+
+  function restoreSearchFilterSoon() {
+    if (!searchInput) return;
+    setTimeout(function() { searchInput.dispatchEvent(new Event('input')); }, 800);
+  }
+
+  var printBtn = document.getElementById('btnPrintReport');
+  if (printBtn) {
+    printBtn.addEventListener('click', function() {
+      exposeFilteredRows();
+      restoreSearchFilterSoon();
+    }, true);
+  }
+
+  document.addEventListener('click', function(e) {
+    var t = e.target && e.target.closest ? e.target.closest('[data-fleet-export-format]') : null;
+    if (!t || !document.getElementById('cwtsSummaryTable')) return;
+    exposeFilteredRows();
+    restoreSearchFilterSoon();
+  }, true);
+
+  var reportTitle = {{ (
+    'Category Wise Task Summary — ' ~ (from_date|ddmmyyyy) ~ ' to ' ~ (to_date|ddmmyyyy) ~
+    (' — District filtered' if district_id else '') ~
+    (' — ' ~ category_filter ~ ' only' if category_filter else '')
+  )|tojson }};
+  var exportBase = {{ (
+    'Category_Wise_Task_Summary_' ~
+    from_date.strftime('%d-%m-%Y') ~ '_to_' ~ to_date.strftime('%d-%m-%Y') ~
+    ('_District' if district_id else '') ~
+    ('_' ~ category_filter if category_filter else '')
+  )|tojson }};
+
+  function bindCwtsPrintExport() {
+    if (window._cwtsFleetPrintBound) return true;
+    if (!window.fleetPrintExport) return false;
+    window._cwtsFleetPrintBound = true;
+    window.fleetPrintExport('cwtsSummaryTable', reportTitle, exportBase + '.csv', {
+      reportTitle: reportTitle,
+      generatedLabel: 'Generated: ' + new Date().toLocaleString(),
+      numberColumns: ['Green Task', 'Yellow Task', 'Red Task', 'Orange Task'],
+      previewCssExtra:
+        'table.cwts-summary-table{table-layout:fixed!important;width:100%!important;}' +
+        'table.cwts-summary-table th,table.cwts-summary-table td{font-size:11px!important;line-height:1.35!important;padding:7px 10px!important;white-space:normal!important;word-break:break-word;vertical-align:middle!important;}' +
+        'table.cwts-summary-table thead th{font-size:10.5px!important;text-align:center!important;}' +
+        'table.cwts-summary-table .cwts-district,table.cwts-summary-table thead th:first-child{width:34%!important;text-align:left!important;}' +
+        'table.cwts-summary-table .cwts-num,table.cwts-summary-table thead th.cwts-th-green,table.cwts-summary-table thead th.cwts-th-yellow,table.cwts-summary-table thead th.cwts-th-red,table.cwts-summary-table thead th.cwts-th-orange{width:16.5%!important;text-align:center!important;font-weight:700!important;}' +
+        'table.cwts-summary-table .cwts-count-green{color:#15803d!important;}' +
+        'table.cwts-summary-table .cwts-count-yellow{color:#a16207!important;}' +
+        'table.cwts-summary-table .cwts-count-red{color:#b91c1c!important;}' +
+        'table.cwts-summary-table .cwts-count-orange{color:#c2410c!important;}' +
+        'table.cwts-summary-table thead th.cwts-th-green{background:#166534!important;color:#fff!important;}' +
+        'table.cwts-summary-table thead th.cwts-th-yellow{background:#a16207!important;color:#fff!important;}' +
+        'table.cwts-summary-table thead th.cwts-th-red{background:#b91c1c!important;color:#fff!important;}' +
+        'table.cwts-summary-table thead th.cwts-th-orange{background:#c2410c!important;color:#fff!important;}' +
+        'table.cwts-summary-table thead th:first-child{background:#1e3a5f!important;color:#fff!important;}' +
+        'table.cwts-summary-table tfoot td{font-size:12px!important;font-weight:700!important;background:#e2e8f0!important;color:#1e293b!important;border-top:2px solid #1e3a5f!important;}' +
+        'table.cwts-summary-table tbody tr:nth-child(even) td{background:#f8fafc!important;}' +
+        'table.cwts-summary-table tbody tr:nth-child(odd) td{background:#fff!important;}'
+    });
+    return true;
+  }
+
+  if (!bindCwtsPrintExport()) {
+    function tryBindLater() {
+      if (bindCwtsPrintExport()) return;
+      var n = 0;
+      var t = setInterval(function() {
+        if (bindCwtsPrintExport() || ++n > 40) clearInterval(t);
+      }, 50);
+    }
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', tryBindLater);
+    } else {
+      tryBindLater();
+    }
+  }
 })();
 </script>
-<style media="print">
-  .sidebar, .navbar, .btn, .collapse-item, footer { display: none !important; }
-  .card { border: none !important; box-shadow: none !important; }
-</style>
 {% endblock %}

@@ -26,6 +26,7 @@ FREEZE_EXEMPT_ENDPOINTS = {
     'red_task_list',
     'red_task_summary',
     'red_task_summary_detail',
+    'red_task_summary_vehicles',
     'without_task_list',
     'penalty_record_list',
     'driver_attendance_report',

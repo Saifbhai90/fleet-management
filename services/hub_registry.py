@@ -29,6 +29,36 @@ _MILEAGE_HUB_ICON_SVG = (
     '</svg>'
 )
 
+# Category Wise Task Summary — multi-color bars (Green/Yellow/Red/Orange), distinct from Task Counts chart-column
+_CATEGORY_SUMMARY_HUB_ICON_SVG = (
+    '<svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">'
+    '<defs>'
+    '<linearGradient id="cwtsCardGrad" x1="0%" y1="0%" x2="100%" y2="100%">'
+    '<stop offset="0%" stop-color="#e0e7ff"/><stop offset="100%" stop-color="#c7d2fe"/>'
+    '</linearGradient>'
+    '<linearGradient id="cwtsGreen" x1="0%" y1="100%" x2="0%" y2="0%">'
+    '<stop offset="0%" stop-color="#16a34a"/><stop offset="100%" stop-color="#4ade80"/>'
+    '</linearGradient>'
+    '<linearGradient id="cwtsYellow" x1="0%" y1="100%" x2="0%" y2="0%">'
+    '<stop offset="0%" stop-color="#ca8a04"/><stop offset="100%" stop-color="#facc15"/>'
+    '</linearGradient>'
+    '<linearGradient id="cwtsRed" x1="0%" y1="100%" x2="0%" y2="0%">'
+    '<stop offset="0%" stop-color="#dc2626"/><stop offset="100%" stop-color="#f87171"/>'
+    '</linearGradient>'
+    '<linearGradient id="cwtsOrange" x1="0%" y1="100%" x2="0%" y2="0%">'
+    '<stop offset="0%" stop-color="#ea580c"/><stop offset="100%" stop-color="#fb923c"/>'
+    '</linearGradient>'
+    '</defs>'
+    '<rect x="4" y="4" width="40" height="40" rx="10" fill="url(#cwtsCardGrad)"/>'
+    '<rect x="10" y="30" width="5.5" height="8" rx="2" fill="url(#cwtsGreen)"/>'
+    '<rect x="17.5" y="22" width="5.5" height="16" rx="2" fill="url(#cwtsYellow)"/>'
+    '<rect x="25" y="14" width="5.5" height="24" rx="2" fill="url(#cwtsRed)"/>'
+    '<rect x="32.5" y="18" width="5.5" height="20" rx="2" fill="url(#cwtsOrange)"/>'
+    '<path d="M11 12h10" stroke="#6366f1" stroke-width="2.2" stroke-linecap="round"/>'
+    '<path d="M11 16h6" stroke="#a5b4fc" stroke-width="2.2" stroke-linecap="round"/>'
+    '</svg>'
+)
+
 
 HUBS = {
     'master-data': {
@@ -423,6 +453,7 @@ HUBS = {
             'ufone_settings_account_test', 'ufone_settings_start_polling',
             'ufone_settings_stop_polling',
             'ufone_export',
+            'red_task_summary', 'red_task_summary_detail', 'red_task_summary_vehicles',
             'api_ufone_positions', 'api_ufone_refresh', 'api_ufone_vehicles',
             'api_ufone_districts', 'api_ufone_tehsils', 'api_ufone_ucs',
             'api_ufone_task_detail', 'api_ufone_task_comments',
@@ -451,6 +482,14 @@ HUBS = {
                 'title': 'Task Management',
                 'items': [
                     _item('ufone_emergency_tasks', 'Emergency Tasks', 'fa-solid fa-triangle-exclamation', 'rc-tile--red-task', 'ufone_reports'),
+                    _item(
+                        'red_task_summary',
+                        'Category Wise Task Summary',
+                        'fa-solid fa-table-list',
+                        'rc-tile--period-detail',
+                        'red_task_summary',
+                        icon_html=_CATEGORY_SUMMARY_HUB_ICON_SVG,
+                    ),
                     _item('ufone_task_counts', 'Task Counts (Daily/Monthly)', 'fa-solid fa-chart-column', 'rc-tile--chart-accounts', 'ufone_reports'),
                 ],
             },

@@ -225,6 +225,8 @@ PERMISSION_TREE = {
         ('red_task', 'Red Task – List / View'),
         ('red_task_add', 'Red Task – Add New'),
         ('red_task_edit', 'Red Task – Edit'),
+        # Category Wise Task Summary (independent of Red Task Report)
+        ('red_task_summary', 'Category Wise Task Summary'),
         # Movement without Task
         ('without_task', 'Movement without Task – List / View'),
         ('without_task_add', 'Movement without Task – Add New'),
@@ -632,6 +634,7 @@ PERMISSION_DEPENDENCIES = {
     'red_task': [],
     'red_task_add': ['red_task'],
     'red_task_edit': ['red_task'],
+    'red_task_summary': [],
     'without_task': [],
     'without_task_add': ['without_task'],
     'without_task_edit': ['without_task'],
@@ -901,6 +904,9 @@ SECTION_PAGE_GROUPS = {
             ('red_task', 'List / View'),
             ('red_task_add', 'Add New'),
             ('red_task_edit', 'Edit'),
+        ]),
+        ('Category Wise Task Summary', [
+            ('red_task_summary', 'List / View'),
         ]),
         ('Movement without Task', [
             ('without_task', 'List / View'),
@@ -1265,6 +1271,7 @@ PAGE_VISIBLE = {
     'task_report_entry_delete': ['task_report', 'task_report_entry_delete'],
     'task_report_pending': ['task_report', 'task_report_pending'],
     'red_task': ['task_report', 'red_task'],
+    'red_task_summary': ['task_report', 'red_task_summary'],
     'without_task': ['task_report', 'without_task'],
     'task_report_logbook': ['task_report', 'task_report_logbook'],
     # Expense Management
@@ -1356,8 +1363,9 @@ PAGE_VISIBLE = {
     'journal_vouchers_list': ['accounts', 'accounts_jv'],
     'fund_transfers_list': ['accounts', 'fund_transfer'],
     'red_task_list': ['task_report', 'red_task'],
-    'red_task_summary': ['task_report', 'red_task'],
-    'red_task_summary_detail': ['task_report', 'red_task'],
+    'red_task_summary': ['task_report', 'red_task_summary'],
+    'red_task_summary_detail': ['task_report', 'red_task_summary'],
+    'red_task_summary_vehicles': ['task_report', 'red_task_summary'],
     'without_task_list': ['task_report', 'without_task'],
     'task_report_new': ['task_report', 'task_report_list', 'task_report_entry', 'task_report_add'],
     'task_report_pending': ['task_report', 'task_report_pending'],

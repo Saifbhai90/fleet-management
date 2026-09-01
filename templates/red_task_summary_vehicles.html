@@ -1,0 +1,323 @@
+{% extends "base.html" %}
+{% block title %}Vehicle Wise Task Summary — {{ scope_label }}{% endblock %}
+{% block content %}
+<style>
+  .cwts-header { background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 55%, #7c3aed 100%); }
+  .cwts-th-green { color: #15803d; }
+  .cwts-th-yellow { color: #a16207; }
+  .cwts-th-red { color: #b91c1c; }
+  .cwts-th-orange { color: #c2410c; }
+  .cwts-count-green { color: #15803d; font-weight: 700; }
+  .cwts-count-yellow { color: #a16207; font-weight: 700; }
+  .cwts-count-red { color: #b91c1c; font-weight: 700; }
+  .cwts-count-orange { color: #c2410c; font-weight: 700; }
+  .cwts-summary-table {
+    table-layout: fixed;
+    width: 100%;
+    font-size: 0.88rem;
+  }
+  .cwts-summary-table thead th {
+    white-space: normal;
+    vertical-align: middle;
+    line-height: 1.2;
+    padding: 0.55rem 0.45rem;
+    font-size: 0.78rem;
+  }
+  .cwts-summary-table tbody td,
+  .cwts-summary-table tfoot td {
+    padding: 0.5rem 0.45rem;
+    vertical-align: middle;
+  }
+  .cwts-summary-table .cwts-district {
+    width: 32%;
+    text-align: left;
+    font-weight: 500;
+  }
+  .cwts-summary-table .cwts-num {
+    width: 17%;
+    text-align: center !important;
+  }
+  .cwts-summary-table thead th.cwts-th-green { background: #dcfce7; color: #166534; }
+  .cwts-summary-table thead th.cwts-th-yellow { background: #fef3c7; color: #92400e; }
+  .cwts-summary-table thead th.cwts-th-red { background: #fee2e2; color: #991b1b; }
+  .cwts-summary-table thead th.cwts-th-orange { background: #ffedd5; color: #9a3412; }
+  .cwts-summary-table tfoot td {
+    background: #f1f5f9 !important;
+    font-size: 0.92rem;
+    border-top: 2px solid #cbd5e1;
+  }
+  @media (max-width: 767.98px) {
+    .cwts-page-title { font-size: 1.15rem; }
+    .cwts-result-header { padding: 0.75rem !important; }
+    .cwts-result-header .no-print { min-width: 0 !important; width: 100%; }
+    .cwts-summary-table { table-layout: auto; font-size: 0.92rem; }
+    .cwts-summary-table thead { display: none; }
+    .cwts-summary-table,
+    .cwts-summary-table tbody,
+    .cwts-summary-table tfoot,
+    .cwts-summary-table tr,
+    .cwts-summary-table td {
+      display: block;
+      width: 100% !important;
+    }
+    .cwts-summary-table tbody tr,
+    .cwts-summary-table tfoot tr {
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      margin-bottom: 0.75rem;
+      padding: 0.65rem 0.75rem 0.5rem;
+      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+    }
+    .cwts-summary-table tbody tr[data-search],
+    .cwts-summary-table tfoot tr {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.35rem 0.5rem;
+    }
+    .cwts-summary-table tbody td.cwts-district,
+    .cwts-summary-table tfoot td.cwts-district {
+      grid-column: 1 / -1;
+      font-weight: 700;
+      font-size: 0.98rem;
+      color: #0f172a;
+      padding: 0 0 0.35rem !important;
+      border-bottom: 1px solid #e2e8f0;
+      margin-bottom: 0.15rem;
+    }
+    .cwts-summary-table tbody td.cwts-num,
+    .cwts-summary-table tfoot td.cwts-num {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.15rem;
+      padding: 0.4rem 0.5rem !important;
+      border-radius: 8px;
+      background: #f8fafc;
+      text-align: left !important;
+    }
+    .cwts-summary-table tbody td.cwts-num[data-label]::before,
+    .cwts-summary-table tfoot td.cwts-num[data-label]::before {
+      content: attr(data-label);
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+    }
+    .cwts-summary-table tbody td.cwts-count-green,
+    .cwts-summary-table tfoot td.cwts-count-green { background: #f0fdf4; }
+    .cwts-summary-table tbody td.cwts-count-yellow,
+    .cwts-summary-table tfoot td.cwts-count-yellow { background: #fffbeb; }
+    .cwts-summary-table tbody td.cwts-count-red,
+    .cwts-summary-table tfoot td.cwts-count-red { background: #fef2f2; }
+    .cwts-summary-table tbody td.cwts-count-orange,
+    .cwts-summary-table tfoot td.cwts-count-orange { background: #fff7ed; }
+    .cwts-summary-table tfoot td { background: transparent !important; border-top: none; }
+  }
+  @media print {
+    .sidebar, .navbar, .btn, .collapse-item, footer, .no-print { display: none !important; }
+    .card { border: none !important; box-shadow: none !important; }
+  }
+</style>
+<div class="container-fluid px-2 px-sm-3">
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3 mb-md-4">
+    <h2 class="mb-0 cwts-page-title"><i class="bi bi-truck-front me-2 text-primary"></i>Vehicle Wise Task Summary</h2>
+    <div class="d-flex gap-2 no-print flex-wrap">
+      <a href="{{ back_summary_url }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i><span class="d-none d-sm-inline">Category Summary</span><span class="d-sm-none">Back</span></a>
+      {% if summary_rows %}
+      <button type="button" class="btn btn-outline-secondary btn-sm" id="btnPrintReport" title="Print / Preview">
+        <i class="bi bi-eye me-1"></i><span class="d-none d-sm-inline">Print / Preview</span><span class="d-sm-none">Print</span>
+      </button>
+      <button type="button" class="btn btn-outline-success btn-sm" id="btnExportReport" title="Export">
+        <i class="bi bi-file-earmark-excel me-1"></i>Export
+      </button>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card shadow border-0 rounded-3 overflow-hidden">
+    <div class="card-header cwts-header text-white py-3 d-flex flex-wrap justify-content-between align-items-center gap-2 cwts-result-header">
+      <div>
+        <span class="fw-semibold"><i class="bi bi-geo-alt me-2"></i>{{ scope_label }}</span>
+        <span class="ms-2 opacity-75">{{ from_date|ddmmyyyy }} — {{ to_date|ddmmyyyy }}</span>
+        {% if not district %}<span class="ms-2 badge bg-light text-primary">Excel district</span>{% endif %}
+        {% if category_hint %}<span class="ms-2 badge bg-warning text-dark">Opened from {{ category_hint }}</span>{% endif %}
+      </div>
+      {% if summary_rows %}
+      <div class="no-print" style="min-width: 220px;">
+        <input type="search" id="cwtsTableSearch" class="form-control form-control-sm" placeholder="Search vehicle..." autocomplete="off" inputmode="search" aria-label="Search vehicle table">
+      </div>
+      {% endif %}
+    </div>
+    <div class="card-body px-2 px-md-3">
+      {% if not summary_rows %}
+      <p class="text-muted mb-0"><i class="bi bi-info-circle me-1"></i>Is district / date range mein koi Green / Yellow / Red / Orange task nahi mila.</p>
+      {% else %}
+      <p class="small text-muted mb-3 d-none d-md-block"><strong>{{ scope_label }}</strong> — har vehicle ke Green / Yellow / Red / Orange counts</p>
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0 cwts-summary-table" id="cwtsVehicleTable">
+          <thead>
+            <tr>
+              <th class="ps-3 cwts-district">Vehicle</th>
+              <th class="cwts-num cwts-th-green">Green Task</th>
+              <th class="cwts-num cwts-th-yellow">Yellow Task</th>
+              <th class="cwts-num cwts-th-red">Red Task</th>
+              <th class="cwts-num cwts-th-orange pe-3">Orange Task</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in summary_rows %}
+            <tr data-search="{{ row.label|lower }}">
+              <td class="ps-3 cwts-district" data-label="Vehicle">{{ row.label }}</td>
+              <td class="cwts-num cwts-count-green" data-label="Green">
+                {% if row.green > 0 %}
+                  {% if district_id %}
+                  <a href="{{ url_for('red_task_summary_detail', district_id=district_id, vehicle_no=row.vehicle_no, from_date=from_date.strftime('%d-%m-%Y'), to_date=to_date.strftime('%d-%m-%Y'), category='Green') }}" class="cwts-count-green text-decoration-underline">{{ row.green }}</a>
+                  {% else %}
+                  <a href="{{ url_for('red_task_summary_detail', excel_norm=excel_norm, vehicle_no=row.vehicle_no, from_date=from_date.strftime('%d-%m-%Y'), to_date=to_date.strftime('%d-%m-%Y'), category='Green') }}" class="cwts-count-green text-decoration-underline">{{ row.green }}</a>
+                  {% endif %}
+                {% else %}<span class="text-muted">0</span>{% endif %}
+              </td>
+              <td class="cwts-num cwts-count-yellow" data-label="Yellow">
+                {% if row.yellow > 0 %}
+                  {% if district_id %}
+                  <a href="{{ url_for('red_task_summary_detail', district_id=district_id, vehicle_no=row.vehicle_no, from_date=from_date.strftime('%d-%m-%Y'), to_date=to_date.strftime('%d-%m-%Y'), category='Yellow') }}" class="cwts-count-yellow text-decoration-underline">{{ row.yellow }}</a>
+                  {% else %}
+                  <a href="{{ url_for('red_task_summary_detail', excel_norm=excel_norm, vehicle_no=row.vehicle_no, from_date=from_date.strftime('%d-%m-%Y'), to_date=to_date.strftime('%d-%m-%Y'), category='Yellow') }}" class="cwts-count-yellow text-decoration-underline">{{ row.yellow }}</a>
+                  {% endif %}
+                {% else %}<span class="text-muted">0</span>{% endif %}
+              </td>
+              <td class="cwts-num cwts-count-red" data-label="Red">
+                {% if row.red > 0 %}
+                  {% if district_id %}
+                  <a href="{{ url_for('red_task_summary_detail', district_id=district_id, vehicle_no=row.vehicle_no, from_date=from_date.strftime('%d-%m-%Y'), to_date=to_date.strftime('%d-%m-%Y'), category='Red') }}" class="cwts-count-red text-decoration-underline">{{ row.red }}</a>
+                  {% else %}
+                  <a href="{{ url_for('red_task_summary_detail', excel_norm=excel_norm, vehicle_no=row.vehicle_no, from_date=from_date.strftime('%d-%m-%Y'), to_date=to_date.strftime('%d-%m-%Y'), category='Red') }}" class="cwts-count-red text-decoration-underline">{{ row.red }}</a>
+                  {% endif %}
+                {% else %}<span class="text-muted">0</span>{% endif %}
+              </td>
+              <td class="cwts-num cwts-count-orange pe-3" data-label="Orange">
+                {% if row.orange > 0 %}
+                  {% if district_id %}
+                  <a href="{{ url_for('red_task_summary_detail', district_id=district_id, vehicle_no=row.vehicle_no, from_date=from_date.strftime('%d-%m-%Y'), to_date=to_date.strftime('%d-%m-%Y'), category='Orange') }}" class="cwts-count-orange text-decoration-underline">{{ row.orange }}</a>
+                  {% else %}
+                  <a href="{{ url_for('red_task_summary_detail', excel_norm=excel_norm, vehicle_no=row.vehicle_no, from_date=from_date.strftime('%d-%m-%Y'), to_date=to_date.strftime('%d-%m-%Y'), category='Orange') }}" class="cwts-count-orange text-decoration-underline">{{ row.orange }}</a>
+                  {% endif %}
+                {% else %}<span class="text-muted">0</span>{% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td class="ps-3 cwts-district" data-label="Total">Grand total</td>
+              <td class="cwts-num cwts-count-green" data-label="Green">{{ grand_totals.green }}</td>
+              <td class="cwts-num cwts-count-yellow" data-label="Yellow">{{ grand_totals.yellow }}</td>
+              <td class="cwts-num cwts-count-red" data-label="Red">{{ grand_totals.red }}</td>
+              <td class="cwts-num cwts-count-orange pe-3" data-label="Orange">{{ grand_totals.orange }}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <p id="cwtsSearchEmpty" class="text-muted small mb-0 mt-2 d-none"><i class="bi bi-search me-1"></i>Search ke mutabiq koi vehicle nahi mila.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  var searchInput = document.getElementById('cwtsTableSearch');
+  var table = document.getElementById('cwtsVehicleTable');
+  var emptyMsg = document.getElementById('cwtsSearchEmpty');
+  if (searchInput && table) {
+    var rows = Array.from(table.querySelectorAll('tbody tr[data-search]'));
+    searchInput.addEventListener('input', function() {
+      var q = (searchInput.value || '').trim().toLowerCase();
+      var visible = 0;
+      rows.forEach(function(tr) {
+        var hay = tr.getAttribute('data-search') || '';
+        var show = !q || hay.indexOf(q) !== -1;
+        tr.style.display = show ? '' : 'none';
+        tr.dataset.searchHidden = show ? '0' : '1';
+        if (show) visible++;
+      });
+      if (emptyMsg) emptyMsg.classList.toggle('d-none', visible > 0 || !q);
+    });
+  }
+
+  if (!table || !document.getElementById('btnPrintReport')) return;
+
+  function exposeFilteredRows() {
+    table.querySelectorAll('tbody tr[data-search]').forEach(function(tr) {
+      tr.style.display = (tr.dataset.searchHidden === '1') ? 'none' : '';
+    });
+  }
+  function restoreSearchFilterSoon() {
+    if (!searchInput) return;
+    setTimeout(function() { searchInput.dispatchEvent(new Event('input')); }, 800);
+  }
+  var printBtn = document.getElementById('btnPrintReport');
+  if (printBtn) {
+    printBtn.addEventListener('click', function() {
+      exposeFilteredRows();
+      restoreSearchFilterSoon();
+    }, true);
+  }
+  document.addEventListener('click', function(e) {
+    var t = e.target && e.target.closest ? e.target.closest('[data-fleet-export-format]') : null;
+    if (!t || !document.getElementById('cwtsVehicleTable')) return;
+    exposeFilteredRows();
+    restoreSearchFilterSoon();
+  }, true);
+
+  var reportTitle = {{ (
+    'Vehicle Wise Task Summary — ' ~ scope_label ~
+    ' — ' ~ (from_date|ddmmyyyy) ~ ' to ' ~ (to_date|ddmmyyyy)
+  )|tojson }};
+  var exportBase = {{ (
+    'Vehicle_Wise_Task_Summary_' ~ scope_label|replace(' ', '_') ~
+    '_' ~ from_date.strftime('%d-%m-%Y') ~ '_to_' ~ to_date.strftime('%d-%m-%Y')
+  )|tojson }};
+
+  function bindPrintExport() {
+    if (window._cwtsVehicleFleetPrintBound) return true;
+    if (!window.fleetPrintExport) return false;
+    window._cwtsVehicleFleetPrintBound = true;
+    window.fleetPrintExport('cwtsVehicleTable', reportTitle, exportBase + '.csv', {
+      reportTitle: reportTitle,
+      generatedLabel: 'Generated: ' + new Date().toLocaleString(),
+      numberColumns: ['Green Task', 'Yellow Task', 'Red Task', 'Orange Task'],
+      previewCssExtra:
+        'table.cwts-summary-table{table-layout:fixed!important;width:100%!important;}' +
+        'table.cwts-summary-table th,table.cwts-summary-table td{font-size:11px!important;line-height:1.35!important;padding:7px 10px!important;white-space:normal!important;}' +
+        'table.cwts-summary-table .cwts-district,table.cwts-summary-table thead th:first-child{width:34%!important;text-align:left!important;}' +
+        'table.cwts-summary-table .cwts-num{width:16.5%!important;text-align:center!important;font-weight:700!important;}' +
+        'table.cwts-summary-table .cwts-count-green{color:#15803d!important;}' +
+        'table.cwts-summary-table .cwts-count-yellow{color:#a16207!important;}' +
+        'table.cwts-summary-table .cwts-count-red{color:#b91c1c!important;}' +
+        'table.cwts-summary-table .cwts-count-orange{color:#c2410c!important;}' +
+        'table.cwts-summary-table thead th.cwts-th-green{background:#166534!important;color:#fff!important;}' +
+        'table.cwts-summary-table thead th.cwts-th-yellow{background:#a16207!important;color:#fff!important;}' +
+        'table.cwts-summary-table thead th.cwts-th-red{background:#b91c1c!important;color:#fff!important;}' +
+        'table.cwts-summary-table thead th.cwts-th-orange{background:#c2410c!important;color:#fff!important;}' +
+        'table.cwts-summary-table thead th:first-child{background:#1e3a5f!important;color:#fff!important;}' +
+        'table.cwts-summary-table tfoot td{font-size:12px!important;font-weight:700!important;background:#e2e8f0!important;}'
+    });
+    return true;
+  }
+  if (!bindPrintExport()) {
+    function tryBindLater() {
+      if (bindPrintExport()) return;
+      var n = 0;
+      var t = setInterval(function() {
+        if (bindPrintExport() || ++n > 40) clearInterval(t);
+      }, 50);
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', tryBindLater);
+    else tryBindLater();
+  }
+})();
+</script>
+{% endblock %}

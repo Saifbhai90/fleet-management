@@ -2096,6 +2096,10 @@
                 'tbody tr:hover td{background:inherit;}' +
             '}';
 
+        function _fleetPreviewCssResolved() {
+            return _fleetPreviewCss + ((excelConfig && excelConfig.previewCssExtra) ? excelConfig.previewCssExtra : '');
+        }
+
         function _removeFleetPrintPreviewOverlay() {
             var ex = document.getElementById('_fleetPrintPreviewRoot');
             if (ex) ex.remove();
@@ -2122,7 +2126,7 @@
             root.id = '_fleetPrintPreviewRoot';
             root.style.cssText = 'position:fixed;inset:0;z-index:100000;overflow:auto;-webkit-overflow-scrolling:touch;background:#f8fafc;';
             var styleEl = document.createElement('style');
-            styleEl.textContent = _fleetPreviewCss +
+            styleEl.textContent = _fleetPreviewCssResolved() +
                 'html.fleet-print-preview-open,body.fleet-print-preview-open{overflow:hidden!important;}' +
                 '#_fleetPrintPreviewRoot .toolbar-right{position:relative;z-index:2;}' +
                 '#_fleetPrintPreviewRoot .btn-c,#_fleetPrintPreviewRoot .btn-p{pointer-events:auto;min-height:40px;min-width:64px;}';
@@ -2215,7 +2219,7 @@
                             .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
                         w.document.open();
                         w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + safeTitle + '</title>');
-                        w.document.write('<style>' + _fleetPreviewCss + '</style></head><body>');
+                        w.document.write('<style>' + _fleetPreviewCssResolved() + '</style></head><body>');
                         var now2 = new Date();
                         var ds2 = now2.getDate()+'-'+(now2.getMonth()+1)+'-'+now2.getFullYear();
                         var ts2 = now2.getHours().toString().padStart(2,'0')+':'+now2.getMinutes().toString().padStart(2,'0');

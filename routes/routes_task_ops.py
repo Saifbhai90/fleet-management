@@ -54,6 +54,63 @@ from forms import PenaltyRecordFilterForm, RedTaskFilterForm, VehicleMoveWithout
 from decimal import Decimal
 from utils import generate_excel_template
 from models import project_district
+
+_SUMMARY_CATEGORIES = ('Green', 'Yellow', 'Red', 'Orange')
+_SUMMARY_CATEGORY_BY_KEY = {c.lower(): c for c in _SUMMARY_CATEGORIES}
+
+
+def _norm_emg_category(value):
+    if value is None:
+        return None
+    return _SUMMARY_CATEGORY_BY_KEY.get(str(value).strip().lower())
+
+
+def _empty_category_counts():
+    return {c.lower(): 0 for c in _SUMMARY_CATEGORIES}
+
+
+def _summary_parse_dates():
+    today = pk_date()
+    from_date = today
+    to_date = today
+    from_str = (request.args.get('from_date') or '').strip()
+    to_str = (request.args.get('to_date') or '').strip()
+    if from_str:
+        from_date = parse_date(from_str) or from_date
+    if to_str:
+        to_date = parse_date(to_str) or to_date
+    if from_date and to_date and from_date > to_date:
+        from_date, to_date = to_date, from_date
+    return from_date, to_date
+
+
+def _summary_district_name_map(districts):
+    name_map = {}
+    for d in districts:
+        k = _norm_district_name_key(d.name)
+        if k not in name_map:
+            name_map[k] = d
+    return name_map
+
+
+def _summary_emg_rows(from_date, to_date, category=None):
+    q = EmergencyTaskRecord.query.filter(
+        EmergencyTaskRecord.task_date >= from_date,
+        EmergencyTaskRecord.task_date <= to_date,
+    )
+    if category and category in _SUMMARY_CATEGORIES:
+        q = q.filter(func.lower(EmergencyTaskRecord.category) == category.lower())
+    else:
+        q = q.filter(
+            func.lower(EmergencyTaskRecord.category).in_(tuple(_SUMMARY_CATEGORY_BY_KEY.keys()))
+        )
+    return q.all()
+
+
+def _vehicle_label(amb_reg_no):
+    return (amb_reg_no or '').strip() or '(Vehicle khali)'
+
+
 @app.route('/red-task', methods=['GET', 'POST'])
 def red_task_list():
     form = RedTaskFilterForm()
@@ -119,7 +176,7 @@ def red_task_list():
 
 @app.route('/red-task/summary', methods=['GET'])
 def red_task_summary():
-    """Direct Emergency Task Report (category Red): every Red row counted; group by master district if Excel name matches else by Excel district text."""
+    """Direct Emergency Task Report: Green/Yellow/Red/Orange counts grouped by district."""
     form = RedTaskFilterForm()
     all_districts = District.query.order_by(District.name).all()
     valid_district_ids = {d.id for d in all_districts}
@@ -129,7 +186,13 @@ def red_task_summary():
     from_date = today
     to_date = today
     district_id = request.args.get('district_id', type=int) or 0
-    show = request.args.get('show', type=int) or 0
+    if 'show' not in request.args:
+        show = 1
+    else:
+        show = request.args.get('show', type=int) or 0
+    category_filter = (request.args.get('category') or '').strip()
+    if category_filter not in _SUMMARY_CATEGORIES:
+        category_filter = ''
 
     from_str = request.args.get('from_date', '').strip()
     to_str = request.args.get('to_date', '').strip()
@@ -152,8 +215,7 @@ def red_task_summary():
     summary_rows = []
     summary_kind = ''
     summary_title = ''
-    grand_count = 0
-    grand_fine = Decimal('0')
+    grand_totals = _empty_category_counts()
 
     if show:
         name_map_all = {}
@@ -166,30 +228,26 @@ def red_task_summary():
             sel = db.session.get(District, district_id)
             name_map = {_norm_district_name_key(sel.name): sel} if sel else {}
             summary_kind = 'single'
-            summary_title = 'Direct Emergency (Red) — selected district (sirf jahan Excel naam is district se match ho)'
+            summary_title = 'Direct Emergency — selected district (sirf jahan Excel naam is district se match ho)'
         else:
             name_map = name_map_all
             summary_kind = 'by_district'
-            summary_title = 'Direct Emergency Task Report — Red category (har Red row; Excel district master se match ho ya na ho)'
+            summary_title = 'Direct Emergency Task Report — Green / Yellow / Red / Orange (har row count; Excel district master se match ho ya na ho)'
 
         dist_by_id = {d.id: d for d in all_districts}
-
-        fine_lookup = {}
-        for rt in RedTask.query.filter(RedTask.task_date >= from_date, RedTask.task_date <= to_date).all():
-            k = (rt.task_date, (rt.task_id or '').strip())
-            fa = rt.fine_amount if rt.fine_amount is not None else Decimal('0')
-            if not isinstance(fa, Decimal):
-                fa = Decimal(str(fa))
-            fine_lookup[k] = fine_lookup.get(k, Decimal('0')) + fa
 
         emg_rows = EmergencyTaskRecord.query.filter(
             EmergencyTaskRecord.task_date >= from_date,
             EmergencyTaskRecord.task_date <= to_date,
-            EmergencyTaskRecord.category == 'Red',
+            func.lower(EmergencyTaskRecord.category).in_(tuple(_SUMMARY_CATEGORY_BY_KEY.keys())),
         ).all()
 
         groups = {}
         for r in emg_rows:
+            cat = _norm_emg_category(r.category)
+            if not cat:
+                continue
+
             nk_excel = _norm_district_name_key(r.district_name)
             d = name_map.get(nk_excel)
 
@@ -199,13 +257,13 @@ def red_task_summary():
                 gkey = ('id', d.id)
                 if gkey not in groups:
                     groups[gkey] = {
-                        'district_id': d.id, 'label': d.name, 'count': 0, 'fine': Decimal('0'),
+                        'district_id': d.id, 'label': d.name, **_empty_category_counts(),
                     }
             elif d:
                 gkey = ('id', d.id)
                 if gkey not in groups:
                     groups[gkey] = {
-                        'district_id': d.id, 'label': d.name, 'count': 0, 'fine': Decimal('0'),
+                        'district_id': d.id, 'label': d.name, **_empty_category_counts(),
                     }
             else:
                 gkey = ('excel', nk_excel)
@@ -214,13 +272,11 @@ def red_task_summary():
                         'district_id': None,
                         'label': (r.district_name or '').strip() or '(Excel district khali)',
                         'excel_norm': nk_excel,
-                        'count': 0, 'fine': Decimal('0'),
+                        **_empty_category_counts(),
                     }
 
             ent = groups[gkey]
-            ent['count'] += 1
-            fk = (r.task_date, (r.task_id_ext or '').strip())
-            ent['fine'] += fine_lookup.get(fk, Decimal('0'))
+            ent[cat.lower()] += 1
 
         def _sort_summary_key(gk):
             kind, val = gk
@@ -231,16 +287,21 @@ def red_task_summary():
         for gk in sorted(groups.keys(), key=_sort_summary_key):
             ent = groups[gk]
             is_master = gk[0] == 'id'
-            summary_rows.append({
+            row = {
                 'label': ent['label'],
-                'count': ent['count'],
-                'fine': ent['fine'],
+                'green': ent['green'],
+                'yellow': ent['yellow'],
+                'red': ent['red'],
+                'orange': ent['orange'],
                 'detail_kind': 'master' if is_master else 'excel',
                 'district_id': ent['district_id'],
                 'excel_norm': ent.get('excel_norm'),
-            })
-            grand_count += ent['count']
-            grand_fine += ent['fine']
+            }
+            if category_filter and row[category_filter.lower()] <= 0:
+                continue
+            summary_rows.append(row)
+            for ck in grand_totals:
+                grand_totals[ck] += row[ck]
 
     return render_template(
         'red_task_summary.html',
@@ -249,34 +310,120 @@ def red_task_summary():
         to_date=to_date,
         district_id=district_id,
         project_id=0,
+        category_filter=category_filter,
+        summary_categories=_SUMMARY_CATEGORIES,
         summary_rows=summary_rows,
         summary_kind=summary_kind,
         summary_title=summary_title,
-        grand_count=grand_count,
-        grand_fine=grand_fine,
+        grand_totals=grand_totals,
         show=bool(show),
     )
 
 
 
-@app.route('/red-task/summary/detail', methods=['GET'])
-def red_task_summary_detail():
-    """Emergency Report Red rows: either master district match or Excel-only bucket (excel_norm query param)."""
-    today = pk_date()
-    from_date = today
-    to_date = today
+@app.route('/red-task/summary/vehicles', methods=['GET'])
+def red_task_summary_vehicles():
+    """Vehicle-wise Green/Yellow/Red/Orange counts for one district (or Excel district bucket)."""
+    from_date, to_date = _summary_parse_dates()
     district_id = request.args.get('district_id', type=int) or 0
     excel_mode = ('excel_norm' in request.args) and not district_id
     excel_norm = request.args.get('excel_norm', '') if excel_mode else None
+    category_hint = (request.args.get('category') or '').strip()
+    if category_hint not in _SUMMARY_CATEGORIES:
+        category_hint = ''
 
-    from_str = request.args.get('from_date', '').strip()
-    to_str = request.args.get('to_date', '').strip()
-    if from_str:
-        from_date = parse_date(from_str) or from_date
-    if to_str:
-        to_date = parse_date(to_str) or to_date
-    if from_date and to_date and from_date > to_date:
-        from_date, to_date = to_date, from_date
+    if not district_id and not excel_mode:
+        flash('Vehicle summary ke liye district ya Excel district bucket zaroori hai.', 'warning')
+        return redirect(url_for(
+            'red_task_summary',
+            show=1,
+            from_date=from_date.strftime('%d-%m-%Y'),
+            to_date=to_date.strftime('%d-%m-%Y'),
+        ))
+
+    dist = None
+    target_norm = None
+    scope_label = ''
+    if district_id:
+        dist = District.query.get_or_404(district_id)
+        target_norm = _norm_district_name_key(dist.name)
+        scope_label = dist.name
+    else:
+        target_norm = excel_norm or ''
+        scope_label = '(Excel district)'
+
+    groups = {}
+    excel_label = None
+    for r in _summary_emg_rows(from_date, to_date):
+        cat = _norm_emg_category(r.category)
+        if not cat:
+            continue
+        if _norm_district_name_key(r.district_name) != target_norm:
+            continue
+        if excel_label is None:
+            excel_label = (r.district_name or '').strip() or None
+        vkey = (r.amb_reg_no or '').strip().upper()
+        if vkey not in groups:
+            groups[vkey] = {
+                'label': _vehicle_label(r.amb_reg_no),
+                'vehicle_no': (r.amb_reg_no or '').strip(),
+                **_empty_category_counts(),
+            }
+        groups[vkey][cat.lower()] += 1
+
+    if not dist and excel_label:
+        scope_label = excel_label
+
+    summary_rows = []
+    grand_totals = _empty_category_counts()
+    for vkey in sorted(groups.keys(), key=lambda k: (groups[k]['label'] or '').lower()):
+        ent = groups[vkey]
+        row = {
+            'label': ent['label'],
+            'vehicle_no': ent['vehicle_no'],
+            'green': ent['green'],
+            'yellow': ent['yellow'],
+            'red': ent['red'],
+            'orange': ent['orange'],
+        }
+        summary_rows.append(row)
+        for ck in grand_totals:
+            grand_totals[ck] += row[ck]
+
+    back_url = url_for(
+        'red_task_summary',
+        show=1,
+        from_date=from_date.strftime('%d-%m-%Y'),
+        to_date=to_date.strftime('%d-%m-%Y'),
+    )
+
+    return render_template(
+        'red_task_summary_vehicles.html',
+        district=dist,
+        scope_label=scope_label,
+        excel_norm=excel_norm if excel_mode else None,
+        district_id=district_id,
+        from_date=from_date,
+        to_date=to_date,
+        category_hint=category_hint,
+        summary_rows=summary_rows,
+        grand_totals=grand_totals,
+        back_summary_url=back_url,
+    )
+
+
+@app.route('/red-task/summary/detail', methods=['GET'])
+def red_task_summary_detail():
+    """Emergency Report rows by category: master district match or Excel-only bucket (excel_norm query param)."""
+    from_date, to_date = _summary_parse_dates()
+    district_id = request.args.get('district_id', type=int) or 0
+    excel_mode = ('excel_norm' in request.args) and not district_id
+    excel_norm = request.args.get('excel_norm', '') if excel_mode else None
+    category = (request.args.get('category') or '').strip()
+    if category not in _SUMMARY_CATEGORIES:
+        category = ''
+    vehicle_no = (request.args.get('vehicle_no') or '').strip()
+    vehicle_key = vehicle_no.upper()
 
     if not district_id and not excel_mode:
         flash('Detail ke liye district ya Excel district bucket zaroori hai.', 'warning')
@@ -287,19 +434,23 @@ def red_task_summary_detail():
             to_date=to_date.strftime('%d-%m-%Y'),
         ))
 
-    saved_map = {}
-    for rt in RedTask.query.filter(
-        RedTask.task_date >= from_date,
-        RedTask.task_date <= to_date,
-    ).order_by(RedTask.id.asc()).all():
-        k = (rt.task_date, (rt.task_id or '').strip())
-        saved_map[k] = rt
-
     emg_q = EmergencyTaskRecord.query.filter(
         EmergencyTaskRecord.task_date >= from_date,
         EmergencyTaskRecord.task_date <= to_date,
-        EmergencyTaskRecord.category == 'Red',
-    ).order_by(EmergencyTaskRecord.task_date.desc(), EmergencyTaskRecord.id.desc())
+    )
+    if category:
+        emg_q = emg_q.filter(func.lower(EmergencyTaskRecord.category) == category.lower())
+    else:
+        emg_q = emg_q.filter(
+            func.lower(EmergencyTaskRecord.category).in_(tuple(_SUMMARY_CATEGORY_BY_KEY.keys()))
+        )
+    emg_q = emg_q.order_by(EmergencyTaskRecord.task_date.desc(), EmergencyTaskRecord.id.desc())
+
+    summary_back_kwargs = dict(
+        show=1,
+        from_date=from_date.strftime('%d-%m-%Y'),
+        to_date=to_date.strftime('%d-%m-%Y'),
+    )
 
     rows = []
     dist = None
@@ -307,34 +458,44 @@ def red_task_summary_detail():
     if district_id:
         dist = District.query.get_or_404(district_id)
         target_norm = _norm_district_name_key(dist.name)
-        back_q = url_for(
-            'red_task_summary',
-            show=1,
-            from_date=from_date.strftime('%d-%m-%Y'),
-            to_date=to_date.strftime('%d-%m-%Y'),
-            district_id=district_id,
-        )
+        if vehicle_no:
+            back_q = url_for(
+                'red_task_summary_vehicles',
+                district_id=district_id,
+                from_date=from_date.strftime('%d-%m-%Y'),
+                to_date=to_date.strftime('%d-%m-%Y'),
+                category=category or None,
+            )
+        else:
+            back_q = url_for('red_task_summary', **summary_back_kwargs)
     else:
         target_norm = excel_norm
-        back_q = url_for(
-            'red_task_summary',
-            show=1,
-            from_date=from_date.strftime('%d-%m-%Y'),
-            to_date=to_date.strftime('%d-%m-%Y'),
-        )
+        if vehicle_no:
+            back_q = url_for(
+                'red_task_summary_vehicles',
+                excel_norm=excel_norm,
+                from_date=from_date.strftime('%d-%m-%Y'),
+                to_date=to_date.strftime('%d-%m-%Y'),
+                category=category or None,
+            )
+        else:
+            back_q = url_for('red_task_summary', **summary_back_kwargs)
 
     for r in emg_q.all():
         if _norm_district_name_key(r.district_name) != target_norm:
             continue
-        fk = (r.task_date, (r.task_id_ext or '').strip())
-        rows.append({'emg': r, 'saved': saved_map.get(fk)})
+        if vehicle_key and (r.amb_reg_no or '').strip().upper() != vehicle_key:
+            continue
+        rows.append(r)
 
     if dist:
         scope_label = dist.name
     elif rows:
-        scope_label = (rows[0]['emg'].district_name or '').strip() or '(Excel district khali)'
+        scope_label = (rows[0].district_name or '').strip() or '(Excel district khali)'
     else:
         scope_label = '(Excel district)'
+    if vehicle_no:
+        scope_label = f'{scope_label} — {vehicle_no}'
 
     return render_template(
         'red_task_summary_detail.html',
@@ -343,9 +504,10 @@ def red_task_summary_detail():
         rows=rows,
         from_date=from_date,
         to_date=to_date,
+        category=category,
+        vehicle_no=vehicle_no,
         back_summary_url=back_q,
     )
-
 
 
 @app.route('/red-task/new', methods=['GET', 'POST'])
