@@ -4273,6 +4273,144 @@ def _workspace_mpg_fuel_query(emp_id, from_date, to_date, district_id, project_i
     return fuel_q
 
 
+def _workspace_mpg_resolve_dates(values):
+    """Default MPG range: current month start through today."""
+    today = pk_date()
+    month_start = today.replace(day=1)
+    from_date = parse_date(values.get("from_date")) or month_start
+    to_date = parse_date(values.get("to_date")) or today
+    if from_date > to_date:
+        from_date, to_date = to_date, from_date
+    return from_date, to_date, today, month_start
+
+
+def _workspace_mpg_is_default_period(from_date, to_date, month_start, today):
+    return from_date == month_start and to_date == today
+
+
+def _workspace_mpg_single_assigned_vehicle_id(scope, filters):
+    """True single-vehicle users (typical drivers) get the auto from-date fallback."""
+    if scope.get("is_master_or_admin"):
+        return None
+    allowed_vehicles = scope.get("allowed_vehicles") or set()
+    if len(allowed_vehicles) != 1:
+        return None
+    only_v = int(next(iter(allowed_vehicles)))
+    selected_v = int(filters.get("vehicle_id") or 0)
+    if selected_v and selected_v != only_v:
+        return None
+    return only_v
+
+
+def _workspace_mpg_last_fuel_bill_date(emp_id, to_date, district_id, project_id, vehicle_id, scope):
+    """Most recent fuel bill on or before to_date, using the same scope as the report."""
+    fuel_q = FuelExpense.query.filter(FuelExpense.fueling_date <= to_date)
+    if emp_id:
+        fuel_q = fuel_q.filter(FuelExpense.employee_id == emp_id)
+    if not scope["is_master_or_admin"]:
+        allowed_projects = scope["allowed_projects"]
+        allowed_districts = scope["allowed_districts"]
+        allowed_vehicles = scope["allowed_vehicles"]
+        if allowed_projects:
+            fuel_q = fuel_q.filter(FuelExpense.project_id.in_(list(allowed_projects)))
+        if allowed_districts:
+            fuel_q = fuel_q.filter(FuelExpense.district_id.in_(list(allowed_districts)))
+        if allowed_vehicles:
+            fuel_q = fuel_q.filter(FuelExpense.vehicle_id.in_(list(allowed_vehicles)))
+    if district_id:
+        fuel_q = fuel_q.filter(FuelExpense.district_id == district_id)
+    if project_id:
+        fuel_q = fuel_q.filter(FuelExpense.project_id == project_id)
+    if vehicle_id:
+        fuel_q = fuel_q.filter(FuelExpense.vehicle_id == vehicle_id)
+    row = (
+        fuel_q.order_by(
+            FuelExpense.fueling_date.desc(),
+            FuelExpense.id.desc(),
+        )
+        .first()
+    )
+    return row.fueling_date if row else None
+
+
+def _workspace_mpg_maybe_fallback_from_date(
+    from_date,
+    to_date,
+    month_start,
+    today,
+    fuel_rows,
+    session_emp_id,
+    district_id,
+    project_id,
+    scope,
+    filters,
+):
+    """When the default month-to-date range is empty, widen from_date to the last fuel bill."""
+    if fuel_rows:
+        return from_date
+    if not _workspace_mpg_is_default_period(from_date, to_date, month_start, today):
+        return from_date
+    vehicle_id = _workspace_mpg_single_assigned_vehicle_id(scope, filters)
+    if not vehicle_id:
+        return from_date
+    last_bill_date = _workspace_mpg_last_fuel_bill_date(
+        session_emp_id,
+        to_date,
+        district_id,
+        project_id,
+        vehicle_id,
+        scope,
+    )
+    if not last_bill_date or last_bill_date > to_date:
+        return from_date
+    return last_bill_date
+
+
+def _workspace_mpg_fetch_fuel_rows(
+    session_emp_id, from_date, to_date, district_id, project_id, vehicle_id, scope
+):
+    fuel_q = _workspace_mpg_fuel_query(
+        session_emp_id, from_date, to_date, district_id, project_id, vehicle_id, scope
+    )
+    return (
+        fuel_q
+        .order_by(
+            FuelExpense.vehicle_id.asc(),
+            FuelExpense.fueling_date.asc(),
+            db.case((FuelExpense.current_reading.is_(None), 1), else_=0).asc(),
+            FuelExpense.current_reading.asc(),
+            FuelExpense.id.asc(),
+        )
+        .all()
+    )
+
+
+def _workspace_mpg_load_report_data(values, session_emp_id, district_id, project_id, vehicle_id, scope, filters):
+    """Resolve MPG dates, apply single-vehicle fallback, and load fuel rows."""
+    from_date, to_date, today, month_start = _workspace_mpg_resolve_dates(values)
+    fuel_rows = _workspace_mpg_fetch_fuel_rows(
+        session_emp_id, from_date, to_date, district_id, project_id, vehicle_id, scope
+    )
+    fallback_from_date = _workspace_mpg_maybe_fallback_from_date(
+        from_date,
+        to_date,
+        month_start,
+        today,
+        fuel_rows,
+        session_emp_id,
+        district_id,
+        project_id,
+        scope,
+        filters,
+    )
+    if fallback_from_date != from_date:
+        from_date = fallback_from_date
+        fuel_rows = _workspace_mpg_fetch_fuel_rows(
+            session_emp_id, from_date, to_date, district_id, project_id, vehicle_id, scope
+        )
+    return from_date, to_date, today, month_start, fuel_rows
+
+
 def workspace_mpg_report():
     guard = _workspace_mpg_auth_guard()
     if guard:
@@ -4289,12 +4427,15 @@ def workspace_mpg_report():
     project_id = filters["project_id"]
     selected_vehicle_id = filters["vehicle_id"]
 
-    today = pk_date()
-    month_start = today.replace(day=1)
-    from_date = parse_date(request.values.get("from_date")) or month_start
-    to_date = parse_date(request.values.get("to_date")) or today
-    if from_date > to_date:
-        from_date, to_date = to_date, from_date
+    from_date, to_date, today, month_start, fuel_rows = _workspace_mpg_load_report_data(
+        request.values,
+        session_emp_id,
+        district_id,
+        project_id,
+        selected_vehicle_id,
+        scope,
+        filters,
+    )
 
     def _to_dec(value, fallback=Decimal("0")):
         if value is None or value == "":
@@ -4312,24 +4453,6 @@ def workspace_mpg_report():
             return Decimal(raw.replace(",", "")), False
         except (InvalidOperation, ValueError):
             return None, True
-
-    fuel_q = _workspace_mpg_fuel_query(
-        session_emp_id, from_date, to_date, district_id, project_id, selected_vehicle_id, scope
-    )
-
-    # Keep MPG row sequencing aligned with Fuel Expense resequence logic:
-    # date asc, then non-null current_reading first, then current_reading asc.
-    fuel_rows = (
-        fuel_q
-        .order_by(
-            FuelExpense.vehicle_id.asc(),
-            FuelExpense.fueling_date.asc(),
-            db.case((FuelExpense.current_reading.is_(None), 1), else_=0).asc(),
-            FuelExpense.current_reading.asc(),
-            FuelExpense.id.asc(),
-        )
-        .all()
-    )
 
     entries_by_vehicle = {}
     for row in fuel_rows:
@@ -4613,12 +4736,15 @@ def workspace_mpg_report_export_pdf():
     project_id = filters["project_id"]
     selected_vehicle_id = filters["vehicle_id"]
 
-    today = pk_date()
-    month_start = today.replace(day=1)
-    from_date = parse_date(request.values.get("from_date")) or month_start
-    to_date = parse_date(request.values.get("to_date")) or today
-    if from_date > to_date:
-        from_date, to_date = to_date, from_date
+    from_date, to_date, today, month_start, fuel_rows = _workspace_mpg_load_report_data(
+        request.values,
+        session_emp_id,
+        district_id,
+        project_id,
+        selected_vehicle_id,
+        scope,
+        filters,
+    )
 
     def _to_dec(value, fallback=Decimal("0")):
         if value is None or value == "":
@@ -4627,22 +4753,6 @@ def workspace_mpg_report_export_pdf():
             return Decimal(str(value))
         except Exception:
             return fallback
-
-    fuel_q = _workspace_mpg_fuel_query(
-        session_emp_id, from_date, to_date, district_id, project_id, selected_vehicle_id, scope
-    )
-
-    fuel_rows = (
-        fuel_q
-        .order_by(
-            FuelExpense.vehicle_id.asc(),
-            FuelExpense.fueling_date.asc(),
-            db.case((FuelExpense.current_reading.is_(None), 1), else_=0).asc(),
-            FuelExpense.current_reading.asc(),
-            FuelExpense.id.asc(),
-        )
-        .all()
-    )
 
     entries_by_vehicle = {}
     for row in fuel_rows:
@@ -4838,12 +4948,15 @@ def workspace_mpg_report_export_excel():
     project_id = filters["project_id"]
     selected_vehicle_id = filters["vehicle_id"]
 
-    today = pk_date()
-    month_start = today.replace(day=1)
-    from_date = parse_date(request.values.get("from_date")) or month_start
-    to_date = parse_date(request.values.get("to_date")) or today
-    if from_date > to_date:
-        from_date, to_date = to_date, from_date
+    from_date, to_date, today, month_start, fuel_rows = _workspace_mpg_load_report_data(
+        request.values,
+        session_emp_id,
+        district_id,
+        project_id,
+        selected_vehicle_id,
+        scope,
+        filters,
+    )
 
     def _to_dec(value, fallback=Decimal("0")):
         if value is None or value == "":
@@ -4852,22 +4965,6 @@ def workspace_mpg_report_export_excel():
             return Decimal(str(value))
         except Exception:
             return fallback
-
-    fuel_q = _workspace_mpg_fuel_query(
-        session_emp_id, from_date, to_date, district_id, project_id, selected_vehicle_id, scope
-    )
-
-    fuel_rows = (
-        fuel_q
-        .order_by(
-            FuelExpense.vehicle_id.asc(),
-            FuelExpense.fueling_date.asc(),
-            db.case((FuelExpense.current_reading.is_(None), 1), else_=0).asc(),
-            FuelExpense.current_reading.asc(),
-            FuelExpense.id.asc(),
-        )
-        .all()
-    )
 
     entries_by_vehicle = {}
     for row in fuel_rows:
