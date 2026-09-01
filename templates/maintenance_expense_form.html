@@ -139,7 +139,8 @@
   .existing-attachment-card img, .existing-attachment-card video { width: 100%; height: 120px; object-fit: cover; border-radius: 8px; background: #f1f5f9; }
   .existing-attachment-name { margin-top: 6px; font-size: 0.82rem; line-height: 1.2; word-break: break-word; }
   #maintDirectUploadModal .progress { height: 1.35rem; }
-  #maintSubmitOverlay {
+  #maintSubmitOverlay,
+  .expense-batch-overlay {
     position: fixed;
     inset: 0;
     z-index: 1070;
@@ -206,6 +207,7 @@
 </style>
 <script>var MAINTENANCE_DIRECT_R2 = {{ maintenance_direct_r2 | tojson }};</script>
 <div class="container-fluid maint-form-wrap expense-mobile-form-page py-2">
+  <script src="{{ url_for('static', filename='js/expense_batch_upload.js') }}?v=1001"></script>
   <div class="page-header d-flex justify-content-between align-items-center">
     <h4><i class="bi bi-wrench me-2"></i>{{ title }}</h4>
     <div class="d-flex gap-2">
@@ -468,7 +470,7 @@
       <div class="form-section-header">Photos / Videos</div>
       <div class="form-section-body">
         <input type="file" name="attachments" id="maintAttachmentFiles" multiple accept="image/*,video/*" class="form-control">
-        <small class="text-muted">Multiple images or videos allowed. Paste with Ctrl+V. Har file ~{{ maintenance_attachment_max_mb|default(300) }} MB tak. Zyada files hon to system khud batches me upload karega — aapko alag save nahi karna.{% if maintenance_direct_r2 %} <strong>Cloudflare par seedha upload</strong> (server par bojh kam) — R2 bucket par CORS allow karein is site ke domain ke liye.{% endif %}</small>
+        <small class="text-muted">Multiple images or videos allowed. Paste with Ctrl+V. Har file ~{{ maintenance_attachment_max_mb|default(300) }} MB tak. Zyada files hon to system khud batches me upload karega — fail hone par <strong>file names + Retry</strong> dikhega.{% if maintenance_direct_r2 %} <strong>Cloudflare par seedha upload</strong> (server par bojh kam) — R2 bucket par CORS allow karein is site ke domain ke liye.{% endif %}</small>
         <div class="small text-success mt-1" id="maintAttachmentPasteHint"></div>
         {% if maintenance_direct_r2 %}
         <div class="form-check mt-2">
@@ -2217,25 +2219,6 @@ document.addEventListener('DOMContentLoaded', function() {
     return fileCount > MAINT_AUTO_BATCH_FILE_COUNT || totalBytes > MAINT_AUTO_BATCH_TOTAL_BYTES;
   }
 
-  function maintBuildFileBatches(fileList) {
-    var batches = [];
-    var cur = [];
-    var curBytes = 0;
-    for (var i = 0; i < fileList.length; i++) {
-      var f = fileList[i];
-      var sz = f.size || 0;
-      if (cur.length > 0 && (cur.length >= MAINT_BATCH_FILE_LIMIT || (curBytes + sz > MAINT_BATCH_BYTE_LIMIT))) {
-        batches.push(cur);
-        cur = [];
-        curBytes = 0;
-      }
-      cur.push(f);
-      curBytes += sz;
-    }
-    if (cur.length) batches.push(cur);
-    return batches;
-  }
-
   function maintSaveFormWithoutFiles() {
     var fd = new FormData(maintenanceExpenseForm);
     fd.delete('attachments');
@@ -2274,70 +2257,24 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  function maintUploadFileBatch(expenseId, batchFiles, batchIdx, totalBatches, isFinal, onProgress) {
-    return new Promise(function(resolve, reject) {
-      var fd = new FormData();
-      batchFiles.forEach(function(f) { fd.append('attachments', f, f.name || 'file'); });
-      var xhr = new XMLHttpRequest();
-      xhr.open('POST', '/api/maintenance-expense/' + expenseId + '/queue-files');
-      xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
-      xhr.setRequestHeader('X-CSRFToken', maintCsrfTok());
-      if (isFinal) xhr.setRequestHeader('X-Maint-Batch-Final', '1');
-      xhr.upload.addEventListener('progress', function(ev) {
-        if (onProgress) onProgress(ev, batchIdx, totalBatches);
-      });
-      xhr.onload = function() {
-        try {
-          var j = JSON.parse(xhr.responseText || '{}');
-          if (xhr.status >= 200 && xhr.status < 400 && j.ok) {
-            resolve(j);
-            return;
-          }
-          reject(new Error((j && j.error) ? j.error : ('Batch HTTP ' + xhr.status)));
-        } catch (err) {
-          reject(err);
-        }
-      };
-      xhr.onerror = function() { reject(new Error('Network error on batch ' + (batchIdx + 1))); };
-      xhr.send(fd);
-    });
-  }
-
   function maintUploadInBatches(fileList, totalBytes) {
-    var batches = maintBuildFileBatches(fileList);
-    var totalBatches = batches.length;
-    maintShowSubmitOverlay(
-      'Form save ho raha hai',
-      fileList.length + ' file(s), ' + totalBatches + ' batch(es) — please wait',
-      0
-    );
-    return maintSaveFormWithoutFiles().then(function(saved) {
-      var expenseId = saved.id;
-      var listUrl = saved.list_url || '{{ url_for("maintenance_expense_list") }}';
-      var chain = Promise.resolve();
-      batches.forEach(function(batch, idx) {
-        chain = chain.then(function() {
-          maintShowSubmitOverlay(
-            'Batch ' + (idx + 1) + ' / ' + totalBatches + ' upload ho rahi hai',
-            batch.length + ' file(s) — ' + maintFormatBytes(totalBytes) + ' total',
-            Math.round((idx / totalBatches) * 100)
-          );
-          return maintUploadFileBatch(expenseId, batch, idx, totalBatches, idx === totalBatches - 1, function(ev, batchIdx, batchTotal) {
-            if (!ev.lengthComputable || !ev.total) return;
-            var within = (ev.loaded / ev.total) * (100 / batchTotal);
-            var pct = Math.round(((batchIdx / batchTotal) * 100) + within);
-            maintShowSubmitOverlay(
-              'Batch ' + (batchIdx + 1) + ' / ' + batchTotal + ' upload ho rahi hai',
-              maintFormatBytes(ev.loaded) + ' / ' + maintFormatBytes(ev.total),
-              Math.min(99, pct)
-            );
-          });
-        });
-      });
-      return chain.then(function() {
-        maintShowSubmitOverlay('Upload queue me lag gayi', 'Background me Cloudflare par jaa rahi hain — list par status dekhein.', 100);
-        window.setTimeout(function() { window.location.href = listUrl; }, 600);
-      });
+    if (!window.ExpenseBatchUpload) {
+      return Promise.reject(new Error('Batch upload module missing — page refresh karein.'));
+    }
+    return ExpenseBatchUpload.runSplitUpload({
+      overlayId: 'maintSubmitOverlay',
+      panelClass: 'maint-submit-panel',
+      fileList: fileList,
+      totalBytes: totalBytes,
+      fileLimit: MAINT_BATCH_FILE_LIMIT,
+      byteLimit: MAINT_BATCH_BYTE_LIMIT,
+      getCsrf: maintCsrfTok,
+      saveFormWithoutFiles: maintSaveFormWithoutFiles,
+      queueUrl: function(id) { return '/api/maintenance-expense/' + id + '/queue-files'; },
+      finalHeader: 'X-Maint-Batch-Final',
+      fallbackListUrl: {{ url_for('maintenance_expense_list')|tojson }},
+      autoRetryOnce: true,
+      onUnlock: maintUnlockSubmitButtons
     });
   }
 
@@ -2379,7 +2316,16 @@ document.addEventListener('DOMContentLoaded', function() {
         maintUploadInBatches(fileList, totalBytes).catch(function(err) {
           maintHideSubmitOverlay();
           maintUnlockSubmitButtons();
-          alert((err && err.message) ? err.message : 'Upload fail — dubara try karein.');
+          if (window.ExpenseBatchUpload) {
+            ExpenseBatchUpload.showProgress(
+              { overlayId: 'maintSubmitOverlay', panelClass: 'maint-submit-panel' },
+              'Upload fail',
+              (err && err.message) ? err.message : 'Upload fail — dubara try karein.',
+              0
+            );
+          } else {
+            alert((err && err.message) ? err.message : 'Upload fail — dubara try karein.');
+          }
         });
         return;
       }

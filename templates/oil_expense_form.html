@@ -48,7 +48,8 @@
   .oil-form-wrap .oil-last-price-badge { color: #dc2626; font-weight: 700; }
   .oil-form-wrap .balance-qty--bad { color: #dc2626 !important; font-weight: 700; }
   .oil-form-wrap .balance-qty-input--bad { color: #dc2626; font-weight: 700; border-color: #f87171 !important; }
-  #oilSubmitOverlay {
+  #oilSubmitOverlay,
+  .expense-batch-overlay {
     position: fixed;
     inset: 0;
     z-index: 1070;
@@ -68,6 +69,7 @@
   #oilSubmitOverlay .progress { height: 1.25rem; }
 </style>
 <div class="container-fluid oil-form-wrap expense-mobile-form-page py-2">
+  <script src="{{ url_for('static', filename='js/expense_batch_upload.js') }}?v=1001"></script>
   <div class="page-header d-flex justify-content-between align-items-center">
     <h4><i class="bi bi-droplet-fill me-2"></i>{{ title }}</h4>
     <div class="d-flex gap-2">
@@ -292,7 +294,7 @@
           <div class="col-md-8">
             <label class="form-label">Photos / Videos</label>
             <input type="file" name="attachments" id="oilAttachmentFiles" multiple accept="image/*,video/*" class="form-control">
-            <small class="text-muted">Multiple images or videos allowed. Paste with Ctrl+V. Har file ~{{ oil_attachment_max_mb|default(300) }} MB tak. Zyada files hon to system khud batches me upload karega — aapko alag save nahi karna.</small>
+            <small class="text-muted">Multiple images or videos allowed. Paste with Ctrl+V. Har file ~{{ oil_attachment_max_mb|default(300) }} MB tak. Zyada files hon to system khud batches me upload karega — fail hone par <strong>file names + Retry</strong> dikhega, aapko alag se missing files dhundhne ki zaroorat nahi.</small>
             <div class="small text-success mt-1" id="oilAttachmentPasteHint"></div>
           </div>
         </div>
@@ -1429,25 +1431,6 @@ document.addEventListener('DOMContentLoaded', function() {
     return fileCount > OIL_AUTO_BATCH_FILE_COUNT || totalBytes > OIL_AUTO_BATCH_TOTAL_BYTES;
   }
 
-  function oilBuildFileBatches(fileList) {
-    var batches = [];
-    var cur = [];
-    var curBytes = 0;
-    for (var i = 0; i < fileList.length; i++) {
-      var f = fileList[i];
-      var sz = f.size || 0;
-      if (cur.length > 0 && (cur.length >= OIL_BATCH_FILE_LIMIT || (curBytes + sz > OIL_BATCH_BYTE_LIMIT))) {
-        batches.push(cur);
-        cur = [];
-        curBytes = 0;
-      }
-      cur.push(f);
-      curBytes += sz;
-    }
-    if (cur.length) batches.push(cur);
-    return batches;
-  }
-
   function oilSaveFormWithoutFiles() {
     var fd = new FormData(formEl);
     fd.delete('attachments');
@@ -1486,70 +1469,24 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  function oilUploadFileBatch(expenseId, batchFiles, batchIdx, totalBatches, isFinal, onProgress) {
-    return new Promise(function(resolve, reject) {
-      var fd = new FormData();
-      batchFiles.forEach(function(f) { fd.append('attachments', f, f.name || 'file'); });
-      var xhr = new XMLHttpRequest();
-      xhr.open('POST', '/api/oil-expense/' + expenseId + '/queue-files');
-      xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
-      xhr.setRequestHeader('X-CSRFToken', oilCsrfTok());
-      if (isFinal) xhr.setRequestHeader('X-Oil-Batch-Final', '1');
-      xhr.upload.addEventListener('progress', function(ev) {
-        if (onProgress) onProgress(ev, batchIdx, totalBatches);
-      });
-      xhr.onload = function() {
-        try {
-          var j = JSON.parse(xhr.responseText || '{}');
-          if (xhr.status >= 200 && xhr.status < 400 && j.ok) {
-            resolve(j);
-            return;
-          }
-          reject(new Error((j && j.error) ? j.error : ('Batch HTTP ' + xhr.status)));
-        } catch (err) {
-          reject(err);
-        }
-      };
-      xhr.onerror = function() { reject(new Error('Network error on batch ' + (batchIdx + 1))); };
-      xhr.send(fd);
-    });
-  }
-
   function oilUploadInBatches(fileList, totalBytes) {
-    var batches = oilBuildFileBatches(fileList);
-    var totalBatches = batches.length;
-    oilShowSubmitOverlay(
-      'Form save ho raha hai',
-      fileList.length + ' file(s), ' + totalBatches + ' batch(es) — please wait',
-      0
-    );
-    return oilSaveFormWithoutFiles().then(function(saved) {
-      var expenseId = saved.id;
-      var listUrl = saved.list_url || '{{ url_for("oil_expense_list") }}';
-      var chain = Promise.resolve();
-      batches.forEach(function(batch, idx) {
-        chain = chain.then(function() {
-          oilShowSubmitOverlay(
-            'Batch ' + (idx + 1) + ' / ' + totalBatches + ' upload ho rahi hai',
-            batch.length + ' file(s) — ' + oilFormatBytes(totalBytes) + ' total',
-            Math.round((idx / totalBatches) * 100)
-          );
-          return oilUploadFileBatch(expenseId, batch, idx, totalBatches, idx === totalBatches - 1, function(ev, batchIdx, batchTotal) {
-            if (!ev.lengthComputable || !ev.total) return;
-            var within = (ev.loaded / ev.total) * (100 / batchTotal);
-            var pct = Math.round(((batchIdx / batchTotal) * 100) + within);
-            oilShowSubmitOverlay(
-              'Batch ' + (batchIdx + 1) + ' / ' + batchTotal + ' upload ho rahi hai',
-              oilFormatBytes(ev.loaded) + ' / ' + oilFormatBytes(ev.total),
-              Math.min(99, pct)
-            );
-          });
-        });
-      });
-      return chain.then(function() {
-        oilShowSubmitOverlay('Upload queue me lag gayi', 'Background me Cloudflare par jaa rahi hain — list par status dekhein.', 100);
-        window.setTimeout(function() { window.location.href = listUrl; }, 600);
-      });
+    if (!window.ExpenseBatchUpload) {
+      return Promise.reject(new Error('Batch upload module missing — page refresh karein.'));
+    }
+    return ExpenseBatchUpload.runSplitUpload({
+      overlayId: 'oilSubmitOverlay',
+      panelClass: 'oil-submit-panel',
+      fileList: fileList,
+      totalBytes: totalBytes,
+      fileLimit: OIL_BATCH_FILE_LIMIT,
+      byteLimit: OIL_BATCH_BYTE_LIMIT,
+      getCsrf: oilCsrfTok,
+      saveFormWithoutFiles: oilSaveFormWithoutFiles,
+      queueUrl: function(id) { return '/api/oil-expense/' + id + '/queue-files'; },
+      finalHeader: 'X-Oil-Batch-Final',
+      fallbackListUrl: {{ url_for('oil_expense_list')|tojson }},
+      autoRetryOnce: true,
+      onUnlock: oilUnlockSubmitButtons
     });
   }
 
@@ -1587,7 +1524,16 @@ document.addEventListener('DOMContentLoaded', function() {
         oilUploadInBatches(fileList, totalBytes).catch(function(err) {
           oilHideSubmitOverlay();
           oilUnlockSubmitButtons();
-          alert((err && err.message) ? err.message : 'Upload fail — dubara try karein.');
+          if (window.ExpenseBatchUpload) {
+            ExpenseBatchUpload.showProgress(
+              { overlayId: 'oilSubmitOverlay', panelClass: 'oil-submit-panel' },
+              'Upload fail',
+              (err && err.message) ? err.message : 'Upload fail — dubara try karein.',
+              0
+            );
+          } else {
+            alert((err && err.message) ? err.message : 'Upload fail — dubara try karein.');
+          }
         });
         return;
       }
