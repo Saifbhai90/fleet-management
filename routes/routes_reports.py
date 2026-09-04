@@ -29,6 +29,7 @@ from utils import (
     parse_date, pk_now, pk_date,
     make_driver_profile_share_token, load_driver_profile_share_token,
 )
+from services.driver_job_history import build_driver_job_history, job_history_counts
 
 # Import shared helpers from routes.py
 from routes import (
@@ -1003,34 +1004,7 @@ def report_vehicle_summary():
 def _driver_profile_view_core(driver_id):
     """Shared template context for driver profile (authenticated + public share link)."""
     driver = Driver.query.get_or_404(driver_id)
-    transfers = DriverTransfer.query.filter_by(driver_id=driver_id).order_by(DriverTransfer.transfer_date.asc()).all()
-    status_changes = DriverStatusChange.query.filter_by(driver_id=driver_id).order_by(DriverStatusChange.change_date.asc()).all()
-
-    job_history = []
-    if driver.assign_date:
-        if transfers:
-            first_t = transfers[0]
-            _assign_snap = type('Snap', (), {
-                'vehicle': first_t.old_vehicle,
-                'project': first_t.old_project,
-                'district': first_t.old_district,
-                'shift': first_t.old_shift,
-                'assign_remarks': driver.assign_remarks,
-            })()
-        else:
-            _assign_snap = driver
-        job_history.append({'date': driver.assign_date, 'type': 'assignment', 'data': _assign_snap})
-    for t in transfers:
-        job_history.append({'date': t.transfer_date, 'type': 'transfer', 'data': t})
-    for s in status_changes:
-        job_history.append({'date': s.change_date, 'type': 'status', 'data': s})
-    job_history.sort(key=lambda x: x['date'])
-
-    from datetime import date as _date
-    _today_d = _date.today()
-    for i, h in enumerate(job_history):
-        next_date = job_history[i + 1]['date'] if i + 1 < len(job_history) else _today_d
-        h['duration_days'] = (next_date - h['date']).days
+    job_history = build_driver_job_history(driver)
 
     total_actions = len(job_history)
     last_action = job_history[-1]['date'] if job_history else None
@@ -1054,20 +1028,7 @@ def _driver_profile_view_core(driver_id):
                   driver.verify_license_photo_path, driver.cheque_book_path, driver.document_path]
     doc_uploaded = sum(1 for d in doc_fields if d)
     doc_total = len(doc_fields)
-    jh_counts = {'assignment': 0, 'transfer': 0, 'shift_change': 0, 'left': 0, 'rejoin': 0}
-    for h in job_history:
-        if h['type'] == 'assignment':
-            jh_counts['assignment'] += 1
-        elif h['type'] == 'transfer':
-            if h['data'].is_shift_only:
-                jh_counts['shift_change'] += 1
-            else:
-                jh_counts['transfer'] += 1
-        elif h['type'] == 'status':
-            if h['data'].action_type == 'left':
-                jh_counts['left'] += 1
-            else:
-                jh_counts['rejoin'] += 1
+    jh_counts = job_history_counts(job_history)
 
     return {
         'driver': driver,

@@ -213,7 +213,7 @@ body .ts-wrapper.focus .ts-control {
     <div class="adv-page-header">
         <div>
             <h5><i class="bi bi-person-video2 me-2"></i>Assign Driver to Vehicle</h5>
-            <div class="sub"><i class="bi bi-info-circle me-1"></i>Shift &amp; Capacity Control — Fill all steps to finalize</div>
+            <div class="sub"><i class="bi bi-info-circle me-1"></i>Sirf pehli baar assign — Job History / Left drivers ke liye Driver Re-employment use karein</div>
         </div>
         {% from 'partials/nav_back_button.html' import nav_back_button with context %}
         {{ nav_back_button() }}
@@ -290,7 +290,10 @@ body .ts-wrapper.focus .ts-control {
                         <div class="step-label"><span class="step-badge" style="background:#e8f5e9;color:#2e7d32;">5</span> Available Driver</div>
                         {{ form.driver_id(class="form-select search-select" + (" is-invalid" if form.driver_id.errors else ""), id="driver_select") }}
                         {% if form.driver_id.errors %}<div class="invalid-feedback d-block">{% for e in form.driver_id.errors %}{{ e }}{% endfor %}</div>{% endif %}
-                    </div>
+                        <div class="form-text mt-1" style="font-size:0.78rem;color:#64748b;">
+                            List mein sirf wo drivers hain jin ki pehle koi Job History nahi.
+                            Left / Rejoin wale drivers <strong>Driver Re-employment</strong> se assign karein.
+                        </div>                    </div>
                 </div>
 
                 <hr class="section-divider">

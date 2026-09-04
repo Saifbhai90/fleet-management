@@ -221,7 +221,9 @@ def driver_rejoin_new():
             driver.district_id = form.district_id.data
             driver.vehicle_id = form.vehicle_id.data
             driver.shift = form.shift.data
-            driver.assign_date = form.rejoin_date.data
+            # Keep original first-assignment date; rejoin is recorded in status_changes.
+            if not driver.assign_date:
+                driver.assign_date = form.rejoin_date.data
 
             rejoin_log = DriverStatusChange(
                 driver_id=driver.id,

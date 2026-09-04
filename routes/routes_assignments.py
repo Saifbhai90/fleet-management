@@ -16,7 +16,7 @@ from sqlalchemy import String as SAString
 from app import app, db
 from models import (
     Company, Project, Vehicle, Driver, ParkingStation, District,
-    project_district,
+    project_district, DriverStatusChange,
 )
 from forms import (
     AssignProjectToCompanyForm, EditProjectAssignmentForm,
@@ -26,6 +26,12 @@ from forms import (
 from vehicle_sort_utils import vehicle_order_by
 from utils import (
     generate_csv_response, pk_now, pk_date, parse_date,
+)
+from services.driver_job_history import (
+    build_driver_job_history_api,
+    driver_has_prior_job_history,
+    is_first_assignment_eligible,
+    query_first_assignment_eligible_drivers,
 )
 
 # parse_date_dmy is used in the parking assignment code;
@@ -1291,101 +1297,6 @@ def get_driver_details(driver_id):
     d = Driver.query.get_or_404(driver_id)
     district_name = d.district.name if d.district else (d.driver_district or '-')
     photo_url = d.photo_path if d.photo_path else None
-    proj_obj = db.session.get(Project, d.project_id) if d.project_id else None
-    project_name = proj_obj.name if proj_obj else '-'
-
-    # ── Build Job History ──
-    history = []
-
-    # 1. Initial Assignment event
-    if d.assign_date:
-        transfers_sorted = sorted(d.transfer_history, key=lambda t: t.transfer_date)
-        if transfers_sorted:
-            ft = transfers_sorted[0]
-            init_veh = ft.old_vehicle.vehicle_no if ft.old_vehicle else '-'
-            if ft.old_vehicle and ft.old_vehicle.model:
-                init_veh += f" ({ft.old_vehicle.model})"
-            init_dist = ft.old_district.name if ft.old_district else '-'
-            init_proj = ft.old_project.name if ft.old_project else '-'
-            init_shift = ft.old_shift or '-'
-        else:
-            init_veh = (d.vehicle.vehicle_no + (f" ({d.vehicle.model})" if d.vehicle.model else '')) if d.vehicle else '-'
-            init_dist  = district_name
-            init_proj  = project_name
-            init_shift = d.shift or '-'
-        history.append({
-            'date_sort': d.assign_date.isoformat(),
-            'date':  d.assign_date.strftime('%d-%m-%Y'),
-            'type':  'assignment',
-            'title': 'ASSIGNMENT',
-            'line1': f"To Vehicle: {init_veh}",
-            'line2': f"Project: {init_proj}",
-            'line3': f"District: {init_dist} | Shift: {init_shift}",
-            'remarks': d.assign_remarks or '',
-        })
-
-    # 2. Transfers
-    for t in sorted(d.transfer_history, key=lambda x: x.transfer_date):
-        new_veh = t.new_vehicle.vehicle_no if t.new_vehicle else '-'
-        if t.new_vehicle and t.new_vehicle.model:
-            new_veh += f" ({t.new_vehicle.model})"
-        if t.is_shift_only:
-            history.append({
-                'date_sort': t.transfer_date.isoformat(),
-                'date':  t.transfer_date.strftime('%d-%m-%Y'),
-                'type':  'shift_change',
-                'title': 'SHIFT CHANGE',
-                'line1': f"Vehicle: {new_veh}",
-                'line2': f"Shift: {t.old_shift or '-'} → {t.new_shift or '-'}",
-                'line3': f"Project: {t.new_project.name if t.new_project else '-'} | District: {t.new_district.name if t.new_district else '-'}",
-                'remarks': t.remarks or '',
-            })
-        else:
-            history.append({
-                'date_sort': t.transfer_date.isoformat(),
-                'date':  t.transfer_date.strftime('%d-%m-%Y'),
-                'type':  'transfer',
-                'title': 'TRANSFER',
-                'line1': f"To Vehicle: {new_veh}",
-                'line2': f"Project: {t.new_project.name if t.new_project else '-'}",
-                'line3': f"District: {t.new_district.name if t.new_district else '-'} | Shift: {t.new_shift or '-'}",
-                'remarks': t.remarks or '',
-            })
-
-    # 3. Status Changes (left / rejoin)
-    for sc in sorted(d.status_changes, key=lambda x: x.change_date):
-        if sc.action_type == 'left':
-            lv = sc.left_vehicle.vehicle_no if sc.left_vehicle else '-'
-            if sc.left_vehicle and sc.left_vehicle.model:
-                lv += f" ({sc.left_vehicle.model})"
-            history.append({
-                'date_sort': sc.change_date.isoformat(),
-                'date':  sc.change_date.strftime('%d-%m-%Y'),
-                'type':  'left',
-                'title': 'JOB LEFT',
-                'line1': f"Reason: {sc.reason or '-'}",
-                'line2': f"From Vehicle: {lv}",
-                'line3': f"District: {sc.left_district.name if sc.left_district else '-'} | Project: {sc.left_project.name if sc.left_project else '-'}",
-                'remarks': sc.remarks or '',
-            })
-        elif sc.action_type == 'rejoin':
-            rv = sc.new_vehicle.vehicle_no if sc.new_vehicle else '-'
-            if sc.new_vehicle and sc.new_vehicle.model:
-                rv += f" ({sc.new_vehicle.model})"
-            history.append({
-                'date_sort': sc.change_date.isoformat(),
-                'date':  sc.change_date.strftime('%d-%m-%Y'),
-                'type':  'rejoin',
-                'title': 'REJOINED',
-                'line1': f"To Vehicle: {rv}",
-                'line2': f"Project: {sc.new_project.name if sc.new_project else '-'}",
-                'line3': f"District: {sc.new_district.name if sc.new_district else '-'} | Shift: {sc.new_shift or '-'}",
-                'remarks': sc.remarks or '',
-            })
-
-    history.sort(key=lambda x: x['date_sort'])
-    for h in history:
-        del h['date_sort']
 
     return jsonify({
         'name':        d.name,
@@ -1400,7 +1311,7 @@ def get_driver_details(driver_id):
         'phone1':      d.phone1 or '-',
         'phone2':      d.phone2 or '-',
         'address':     d.address or '-',
-        'history':     history,
+        'history':     build_driver_job_history_api(d),
     })
 
 @app.route('/assign_driver_to_vehicle/new', methods=['GET', 'POST'])
@@ -1447,7 +1358,7 @@ def assign_driver_to_vehicle_new():
                         (v.id, f"{v.vehicle_no} – {v.model or 'N/A'}") for v in vehicles
                     ]
 
-    unassigned_drivers = Driver.query.filter(Driver.vehicle_id.is_(None)).order_by(Driver.name).all()
+    unassigned_drivers = query_first_assignment_eligible_drivers().all()
     form.driver_id.choices = [(0, '-- Select Driver --')] + [
         (d.id, f"{d.name} ({d.driver_id})") for d in unassigned_drivers
     ]
@@ -1459,6 +1370,16 @@ def assign_driver_to_vehicle_new():
         if not vehicle or not driver:
             flash("Selected vehicle or driver not found.", "danger")
             return render_template('assign_driver_to_vehicle_new.html', form=form,
+                                   **_nav_back_ctx(url_for('assign_driver_to_vehicle_list')))
+
+        if not is_first_assignment_eligible(driver):
+            flash(
+                "Sirf pehli baar assign hone wale drivers yahan assign ho sakte hain. "
+                "Jis driver ki pehle Job History (assign / left / rejoin) ho, "
+                "usay sirf Driver Re-employment se wapas assign karein.",
+                "danger",
+            )
+            return render_template('assign_driver_to_vehicle_new.html', form=form, disable_project=disable_project,
                                    **_nav_back_ctx(url_for('assign_driver_to_vehicle_list')))
 
         if not vehicle.parking_station_id:
@@ -1759,16 +1680,44 @@ def assign_driver_to_vehicle_print():
         search=search
     )
 
+@app.route('/get_unassigned_drivers')
+def get_unassigned_drivers():
+    """Drivers eligible for first-time Driver→Vehicle assign (no prior job history)."""
+    rows = query_first_assignment_eligible_drivers().all()
+    return jsonify([
+        {
+            'id': d.id,
+            'name': f"{d.name} ({d.driver_id})" if d.driver_id else (d.name or ''),
+        }
+        for d in rows
+    ])
+
+
 @app.route('/assign_driver_to_vehicle/desassign/<int:driver_id>', methods=['POST'])
 def desassign_driver_from_vehicle(driver_id):
     driver = Driver.query.get_or_404(driver_id)
     vehicle = db.session.get(Vehicle, driver.vehicle_id) if driver.vehicle_id else None
     vehicle_no = vehicle.vehicle_no if vehicle else "Vehicle"
-    
+    had_history = driver_has_prior_job_history(driver.id)
+
     driver.vehicle_id = None
     driver.shift = None
+    if not had_history:
+        # Undo first-time assign completely so they can be assigned again.
+        driver.assign_date = None
+        driver.assign_remarks = None
+    else:
+        # Should be rare (Assign form blocks history drivers). Restore Left if last event was left.
+        last = (
+            DriverStatusChange.query.filter_by(driver_id=driver.id)
+            .order_by(DriverStatusChange.change_date.desc(), DriverStatusChange.id.desc())
+            .first()
+        )
+        if last and last.action_type == 'left':
+            driver.status = 'Left'
+
     db.session.commit()
-    
+
     flash(f"Driver '{driver.name}' successfully removed from Vehicle '{vehicle_no}'.", "info")
     return redirect(url_for('assign_driver_to_vehicle_list', **_preserve_nav_from()))
 
@@ -1797,7 +1746,10 @@ def assign_driver_to_vehicle_edit(driver_id):
                 form.vehicle_id.choices += [(v.id, f"{v.vehicle_no} – {v.model or 'N/A'}") for v in vehicles]
 
     current_driver_choice = (driver.id, f"{driver.name} ({driver.driver_id}) – Current")
-    unassigned = Driver.query.filter(Driver.vehicle_id.is_(None), Driver.id != driver.id).order_by(Driver.name).all()
+    unassigned = [
+        d for d in query_first_assignment_eligible_drivers().all()
+        if d.id != driver.id
+    ]
     unassigned_choices = [(d.id, f"{d.name} ({d.driver_id}) – Unassigned") for d in unassigned]
     form.driver_id.choices = [current_driver_choice] + unassigned_choices
 
@@ -1841,25 +1793,37 @@ def assign_driver_to_vehicle_edit(driver_id):
         try:
             new_driver_id = form.driver_id.data
             if new_driver_id != driver.id:
+                new_driver = db.session.get(Driver, new_driver_id)
+                if not new_driver or not is_first_assignment_eligible(new_driver):
+                    flash(
+                        "Replacement driver pehle Job History wala hai — "
+                        "sirf pehli-baar assign drivers select karein, ya Re-employment use karein.",
+                        "danger",
+                    )
+                    return render_template('assign_driver_to_vehicle_edit.html', form=form, driver=driver,
+                                           **_nav_back_ctx(url_for('assign_driver_to_vehicle_list')))
+
                 driver.vehicle_id = None
                 driver.shift = None
-                driver.assign_date = None
-                driver.assign_remarks = None
+                if not driver_has_prior_job_history(driver.id):
+                    driver.assign_date = None
+                    driver.assign_remarks = None
 
-                new_driver = db.session.get(Driver, new_driver_id)
-                if new_driver:
-                    new_driver.vehicle_id = vehicle.id
-                    new_driver.shift = form.shift.data
-                    new_driver.project_id = form.project_id.data
-                    new_driver.assign_date = form.assign_date.data
-                    new_driver.assign_remarks = form.remarks.data
-                    if (new_driver.status or '').strip().lower() == 'left':
-                        new_driver.status = 'Active'
+                new_driver.vehicle_id = vehicle.id
+                new_driver.shift = form.shift.data
+                new_driver.project_id = form.project_id.data
+                new_driver.assign_date = form.assign_date.data
+                new_driver.assign_remarks = form.remarks.data
+                if (new_driver.status or '').strip().lower() == 'left':
+                    new_driver.status = 'Active'
             else:
                 driver.vehicle_id = vehicle.id
                 driver.shift = form.shift.data
                 driver.project_id = form.project_id.data
-                driver.assign_date = form.assign_date.data
+                # Preserve original first-assignment date when driver already has job history
+                # (e.g. assigned via Re-employment). Only first-time drivers update assign_date.
+                if not driver_has_prior_job_history(driver.id):
+                    driver.assign_date = form.assign_date.data
                 driver.assign_remarks = form.remarks.data
                 if (driver.status or '').strip().lower() == 'left':
                     driver.status = 'Active'
