@@ -1564,8 +1564,12 @@ def assign_driver_to_vehicle_list():
         search = request.args.get('search', '').strip()
         project_id = request.args.get('project_id', type=int)
         district_id = request.args.get('district_id', type=int)
-        sort_by = request.args.get('sort_by', 'driver')
-        sort_order = request.args.get('sort_order', 'asc')
+        from_date_raw = (request.args.get('from_date') or '').strip()
+        to_date_raw = (request.args.get('to_date') or '').strip()
+        from_date = parse_date(from_date_raw) if from_date_raw else None
+        to_date = parse_date(to_date_raw) if to_date_raw else None
+        sort_by = request.args.get('sort_by', 'assign_date')
+        sort_order = request.args.get('sort_order', 'desc')
         
         # Auto-select if only 1 option available
         disable_project = False
@@ -1580,7 +1584,15 @@ def assign_driver_to_vehicle_list():
                     district_id = next(iter(allowed_districts))
                 disable_district = True
         
-        assigned_drivers = _assign_driver_to_vehicle_data(search=search, project_id=project_id, district_id=district_id, sort_by=sort_by, sort_order=sort_order)
+        assigned_drivers = _assign_driver_to_vehicle_data(
+            search=search,
+            project_id=project_id,
+            district_id=district_id,
+            from_date=from_date,
+            to_date=to_date,
+            sort_by=sort_by,
+            sort_order=sort_order,
+        )
     except Exception as e:
         app.logger.exception('assign_driver_to_vehicle_list error: %s', e)
         flash(f"Error loading page: {str(e)}", "danger")
@@ -1618,6 +1630,8 @@ def assign_driver_to_vehicle_list():
         search=search,
         project_id=project_id or 0,
         district_id=district_id or 0,
+        from_date=from_date_raw if from_date else '',
+        to_date=to_date_raw if to_date else '',
         sort_by=sort_by,
         sort_order=sort_order,
         project_choices=projects,
@@ -1630,13 +1644,25 @@ def assign_driver_to_vehicle_list():
     )
 
 
-def _assign_driver_to_vehicle_data(search=None, project_id=None, district_id=None, sort_by='driver', sort_order='asc'):
-    """Query (Driver, Vehicle) pairs for assigned drivers. Optional filter by project_id, district_id."""
+def _assign_driver_to_vehicle_data(
+    search=None,
+    project_id=None,
+    district_id=None,
+    from_date=None,
+    to_date=None,
+    sort_by='assign_date',
+    sort_order='desc',
+):
+    """Query (Driver, Vehicle) pairs for assigned drivers. Optional filters."""
     query = db.session.query(Driver, Vehicle).join(Vehicle, Driver.vehicle_id == Vehicle.id)
     if project_id:
         query = query.filter(Driver.project_id == project_id)
     if district_id:
         query = query.filter(Vehicle.district_id == district_id)
+    if from_date:
+        query = query.filter(Driver.assign_date.isnot(None), Driver.assign_date >= from_date)
+    if to_date:
+        query = query.filter(Driver.assign_date.isnot(None), Driver.assign_date <= to_date)
 
     _joined_project  = False
     _joined_district = False
@@ -1666,10 +1692,20 @@ def _assign_driver_to_vehicle_data(search=None, project_id=None, district_id=Non
         if not _joined_district:
             query = query.outerjoin(District, Vehicle.district_id == District.id)
         order_col = District.name
+    elif sort_by == 'assign_date':
+        order_col = Driver.assign_date
     else:
-        order_col = Driver.name
+        order_col = Driver.assign_date
+        sort_order = 'desc'
 
-    query = query.order_by(order_col.asc() if sort_order == 'asc' else order_col.desc())
+    if sort_by == 'assign_date':
+        # Newest assignments first; null dates sink to the end.
+        if sort_order == 'asc':
+            query = query.order_by(order_col.asc().nullslast(), Driver.name.asc())
+        else:
+            query = query.order_by(order_col.desc().nullslast(), Driver.name.asc())
+    else:
+        query = query.order_by(order_col.asc() if sort_order == 'asc' else order_col.desc())
     return query.all()
 
 
@@ -1678,8 +1714,15 @@ def assign_driver_to_vehicle_export():
     search = request.args.get('search', '').strip()
     project_id = request.args.get('project_id', type=int)
     district_id = request.args.get('district_id', type=int)
-    assigned_drivers = _assign_driver_to_vehicle_data(search=search, project_id=project_id, district_id=district_id)
-    headers = ['S.No', 'Driver Name', 'Driver ID', 'Project', 'District', 'Vehicle No', 'Model', 'Shift']
+    from_date_raw = (request.args.get('from_date') or '').strip()
+    to_date_raw = (request.args.get('to_date') or '').strip()
+    from_date = parse_date(from_date_raw) if from_date_raw else None
+    to_date = parse_date(to_date_raw) if to_date_raw else None
+    assigned_drivers = _assign_driver_to_vehicle_data(
+        search=search, project_id=project_id, district_id=district_id,
+        from_date=from_date, to_date=to_date,
+    )
+    headers = ['S.No', 'Driver Name', 'Driver ID', 'Project', 'District', 'Vehicle No', 'Model', 'Shift', 'Assign Date']
     rows = []
     for i, (driver, vehicle) in enumerate(assigned_drivers, 1):
         rows.append([
@@ -1690,7 +1733,8 @@ def assign_driver_to_vehicle_export():
             vehicle.district.name if vehicle.district else '',
             vehicle.vehicle_no or '',
             vehicle.model or '',
-            driver.shift or ''
+            driver.shift or '',
+            driver.assign_date.strftime('%d-%m-%Y') if driver.assign_date else '',
         ])
     filename = 'driver_vehicle_assignments.xlsx' if not search else f'driver_vehicle_assignments_{search[:30].replace("/", "-")}.xlsx'
     return generate_excel_template(headers, rows, required_columns=[], filename=filename)
@@ -1701,7 +1745,14 @@ def assign_driver_to_vehicle_print():
     search = request.args.get('search', '').strip()
     project_id = request.args.get('project_id', type=int)
     district_id = request.args.get('district_id', type=int)
-    assigned_drivers = _assign_driver_to_vehicle_data(search=search, project_id=project_id, district_id=district_id)
+    from_date_raw = (request.args.get('from_date') or '').strip()
+    to_date_raw = (request.args.get('to_date') or '').strip()
+    from_date = parse_date(from_date_raw) if from_date_raw else None
+    to_date = parse_date(to_date_raw) if to_date_raw else None
+    assigned_drivers = _assign_driver_to_vehicle_data(
+        search=search, project_id=project_id, district_id=district_id,
+        from_date=from_date, to_date=to_date,
+    )
     return render_template(
         'assign_driver_to_vehicle_print.html',
         assigned_drivers=assigned_drivers,

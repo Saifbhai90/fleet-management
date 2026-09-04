@@ -117,13 +117,14 @@ from finance_utils import (
 
 
 def _multi_word_filter(search_str, *columns):
-    """Multi-word AND search: each space-separated token must appear in at least one column.
-    
+    """Multi-word AND search: each token must appear in at least one column.
+
+    Tokens split on whitespace AND punctuation (hyphen, slash, etc.) so
+    ``GBD-942`` matches vehicle_no ``GBD-24-942`` via tokens GBD + 942.
     Example: "COW 395" → (any_col ILIKE '%COW%') AND (any_col ILIKE '%395%')
-    This lets users narrow results by typing multiple keywords from different columns.
     Returns a SQLAlchemy clause or None if no tokens found.
     """
-    tokens = [t for t in search_str.split() if t]
+    tokens = [t for t in re.split(r'[^A-Za-z0-9]+', search_str or '') if t]
     if not tokens:
         return None
     return and_(*(or_(*(col.ilike(f'%{tok}%') for col in columns)) for tok in tokens))
