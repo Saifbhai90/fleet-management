@@ -1381,6 +1381,115 @@ def ufone_admin_assignments():
     )
 
 
+@app.route('/ufone/add-emergency-task')
+def ufone_add_emergency_task():
+    """BPOCOPS Add Emergency Task — AmbulanceAssignment.aspx/saveAmbulanceAssignment."""
+    acct_id = _get_account_id()
+    accounts = _get_all_accounts()
+    districts = []
+    if acct_id:
+        try:
+            districts = get_districts_cached(acct_id)
+        except Exception:
+            pass
+    return render_template(
+        'ufone/add_emergency_task.html',
+        districts=districts,
+        accounts=accounts,
+        current_account_id=acct_id,
+    )
+
+
+@app.route('/api/ufone/patient-by-phone')
+def api_ufone_patient_by_phone():
+    acct_id = _get_account_id()
+    if not acct_id:
+        return jsonify({'error': 'No account'}), 400
+    phone = (request.args.get('phone') or '').strip()
+    if not phone:
+        return jsonify({'error': 'phone required', 'patients': []}), 400
+    note_ui_activity()
+    try:
+        client = _client_for(acct_id)
+        rows = client.get_patient_by_phone(phone) or []
+        return jsonify({'patients': rows, 'count': len(rows)})
+    except Exception as e:
+        return jsonify({'error': str(e)[:300], 'patients': []}), 502
+
+
+@app.route('/api/ufone/ambulances-for-assign')
+def api_ufone_ambulances_for_assign():
+    """District ambulances for Add Emergency Task picker."""
+    acct_id = _get_account_id()
+    if not acct_id:
+        return jsonify({'error': 'No account'}), 400
+    district = (request.args.get('district') or '').strip()
+    if not district:
+        return jsonify({'error': 'district required', 'ambulances': []}), 400
+    note_ui_activity()
+    try:
+        client = _client_for(acct_id)
+        rows = client.get_ambulance_near(district=district) or []
+        out = []
+        for r in rows:
+            out.append({
+                'id': r.get('Id') or r.get('id'),
+                'reg_no': r.get('Reg_No') or r.get('reg_no') or '',
+                'driver_name': r.get('Driver_Name') or '',
+                'driver_cell': r.get('Driver_Cell') or r.get('MobNo') or '',
+                'status': r.get('Status'),
+                'latitude': r.get('Latitude') or r.get('LocLat') or '',
+                'longitude': r.get('Logitude') or r.get('LocLong') or '',
+                'facility_name': r.get('facility_name') or '',
+                'location': r.get('Location') or '',
+            })
+        return jsonify({'ambulances': out, 'count': len(out)})
+    except Exception as e:
+        return jsonify({'error': str(e)[:300], 'ambulances': []}), 502
+
+
+@app.route('/api/ufone/add-emergency-task', methods=['POST'])
+@csrf.exempt
+def api_ufone_add_emergency_task():
+    acct_id = _get_account_id()
+    if not acct_id:
+        return jsonify({'ok': False, 'error': 'No account'}), 400
+    data = request.get_json(silent=True) or {}
+    phone = (data.get('phone') or '').strip()
+    name = (data.get('name') or '').strip()
+    address = (data.get('address') or '').strip()
+    city = str(data.get('city') or '').strip()
+    ambulance = (data.get('ambulance') or data.get('Ambulance') or '').strip()
+    location = (data.get('location') or '').strip()
+    txt_geo = (data.get('txt_geo_location') or data.get('txtGeoLocation') or '').strip()
+    missing = [k for k, v in (
+        ('phone', phone), ('name', name), ('address', address), ('city', city),
+        ('ambulance', ambulance), ('location', location), ('txt_geo_location', txt_geo),
+    ) if not v]
+    if missing:
+        return jsonify({'ok': False, 'error': f'Missing required: {", ".join(missing)}'}), 400
+    note_ui_activity()
+    try:
+        client = _client_for(acct_id)
+        result = client.save_ambulance_assignment(
+            phone=phone,
+            name=name,
+            address=address,
+            city=city,
+            ambulance=ambulance,
+            driver_contact=(data.get('driver_contact') or data.get('driverContact') or ''),
+            location=location,
+            txt_geo_location=txt_geo,
+            loc_lat=(data.get('loc_lat') or data.get('LocLat') or ''),
+            loc_long=(data.get('loc_long') or data.get('LocLong') or ''),
+            ambulance_id=str(data.get('ambulance_id') or data.get('AmbulanceId') or ''),
+            patient_id=str(data.get('patient_id') or data.get('patientId') or ''),
+        )
+        return jsonify({'ok': True, 'result': result})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)[:400]}), 502
+
+
 # ════════════════════════════════════════════════════════════════════════════
 # CSV EXPORTS
 # ════════════════════════════════════════════════════════════════════════════

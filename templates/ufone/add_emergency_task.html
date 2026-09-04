@@ -1,0 +1,336 @@
+{% extends 'base.html' %}
+{% from 'partials/nav_back_button.html' import nav_back_button with context %}
+
+{% block title %}Add Emergency Task — Fleet Manager{% endblock %}
+
+{% block extra_head %}
+<style>
+  .uf-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
+  .uf-header h4 { font-weight: 800; color: #1e293b; margin: 0; display: flex; align-items: center; gap: 10px; }
+  .uf-header h4 i { color: #EF4444; }
+  .uf-card {
+    background: #fff; border-radius: 12px; padding: 22px 24px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.04); border: 1px solid #e9ecef;
+  }
+  .uf-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 18px; }
+  .uf-grid .span2 { grid-column: span 2; }
+  .uf-form-group label { font-size: 12px; color: #64748b; font-weight: 700; margin-bottom: 4px; display: block; text-transform: uppercase; letter-spacing: .3px; }
+  .uf-form-group input, .uf-form-group select {
+    border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; font-size: 14px; width: 100%;
+  }
+  .uf-form-group input:focus, .uf-form-group select:focus {
+    outline: none; border-color: #7C3AED; box-shadow: 0 0 0 3px rgba(124,58,237,0.15);
+  }
+  .uf-form-group.has-error input, .uf-form-group.has-error select {
+    border-color: #ef4444;
+  }
+  .uf-btn {
+    background: linear-gradient(135deg,#7C3AED,#5B21B6); color: #fff; border: none;
+    padding: 10px 20px; border-radius: 8px; font-weight: 600; font-size: 14px;
+    display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
+  }
+  .uf-btn:disabled { opacity: .55; cursor: not-allowed; }
+  .uf-btn-outline { background: #fff; color: #7C3AED; border: 1px solid #7C3AED; }
+  .uf-alert { display: none; border-radius: 8px; padding: 12px 14px; margin-bottom: 14px; font-size: 13px; }
+  .uf-alert.ok { background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; }
+  .uf-alert.err { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
+  .uf-amb-table { width: 100%; font-size: 13px; }
+  .uf-amb-table th { background: #f8fafc; color: #64748b; font-size: 11px; text-transform: uppercase; padding: 10px 8px; }
+  .uf-amb-table td { padding: 8px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+  .uf-amb-table tr:hover { background: #f8fafc; }
+  .uf-amb-table .pick { padding: 4px 10px; font-size: 12px; border-radius: 6px; border: 1px solid #7C3AED; color: #7C3AED; background: #fff; cursor: pointer; }
+  .uf-amb-table .pick:hover { background: #7C3AED; color: #fff; }
+  .uf-hint { font-size: 12px; color: #64748b; margin-top: 8px; }
+  @media (max-width: 720px) {
+    .uf-grid { grid-template-columns: 1fr; }
+    .uf-grid .span2 { grid-column: span 1; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+  <div class="uf-header">
+    <div>
+      <h4><i class="bi bi-plus-circle-fill"></i> Add Emergency Task</h4>
+      <small class="text-muted">BPOCOPS Ambulance Assignment → create / assign task</small>
+    </div>
+    {{ nav_back_button() }}
+  </div>
+
+  <div id="alertOk" class="uf-alert ok"></div>
+  <div id="alertErr" class="uf-alert err"></div>
+
+  <div class="uf-card mb-3">
+    <div class="uf-grid">
+      <div class="uf-form-group">
+        <label>District (load ambulances)</label>
+        <select id="fDistrict">
+          <option value="">Select district</option>
+          {% for d in districts %}
+          <option value="{{ d.code }}">{{ d.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="uf-form-group" style="display:flex; align-items:flex-end; gap:8px;">
+        <button type="button" class="uf-btn uf-btn-outline" id="btnLoadAmb">
+          <i class="bi bi-truck-front"></i> Load ambulances
+        </button>
+      </div>
+
+      <div class="uf-form-group" data-req="phone">
+        <label>Phone *</label>
+        <div style="display:flex; gap:8px;">
+          <input type="text" id="phone" placeholder="03XXXXXXXXX" autocomplete="off">
+          <button type="button" class="uf-btn uf-btn-outline" id="btnLookupPhone"><i class="bi bi-search"></i></button>
+        </div>
+      </div>
+      <div class="uf-form-group" data-req="name">
+        <label>Patient name *</label>
+        <input type="text" id="name" autocomplete="off">
+      </div>
+      <div class="uf-form-group span2" data-req="address">
+        <label>Address *</label>
+        <input type="text" id="address" autocomplete="off">
+      </div>
+      <div class="uf-form-group" data-req="city">
+        <label>City *</label>
+        <input type="text" id="city" placeholder="City / city code" autocomplete="off">
+      </div>
+      <div class="uf-form-group">
+        <label>Driver contact</label>
+        <input type="text" id="driverContact" autocomplete="off">
+      </div>
+      <div class="uf-form-group" data-req="Ambulance">
+        <label>Ambulance reg *</label>
+        <input type="text" id="Ambulance" placeholder="Pick from list or type" autocomplete="off">
+      </div>
+      <div class="uf-form-group">
+        <label>Ambulance Id</label>
+        <input type="text" id="AmbulanceId" readonly>
+      </div>
+      <div class="uf-form-group span2" data-req="location">
+        <label>Location *</label>
+        <input type="text" id="location" autocomplete="off">
+      </div>
+      <div class="uf-form-group span2" data-req="txtGeoLocation">
+        <label>Geo location text *</label>
+        <input type="text" id="txtGeoLocation" placeholder="Landmark / geo description" autocomplete="off">
+      </div>
+      <div class="uf-form-group">
+        <label>Lat</label>
+        <input type="text" id="LocLat" autocomplete="off">
+      </div>
+      <div class="uf-form-group">
+        <label>Long</label>
+        <input type="text" id="LocLong" autocomplete="off">
+      </div>
+      <input type="hidden" id="patientId" value="">
+    </div>
+
+    <div class="mt-3 d-flex flex-wrap gap-2">
+      <button type="button" class="uf-btn" id="btnSave">
+        <i class="bi bi-check-lg"></i> Create / Assign Task
+      </button>
+      <button type="button" class="uf-btn uf-btn-outline" id="btnClear">Clear</button>
+    </div>
+    <p class="uf-hint">Live BPOCOPS: phone lookup → pick ambulance → <code>saveAmbulanceAssignment</code>. Required fields match portal.</p>
+  </div>
+
+  <div class="uf-card">
+    <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+      <strong style="color:#1e293b;">Ambulances</strong>
+      <span class="text-muted" id="ambCount" style="font-size:13px;">Select district &amp; load</span>
+    </div>
+    <div style="overflow-x:auto; max-height:420px;">
+      <table class="uf-amb-table">
+        <thead>
+          <tr>
+            <th></th>
+            <th>Reg No</th>
+            <th>Driver</th>
+            <th>Cell</th>
+            <th>Status</th>
+            <th>Facility</th>
+          </tr>
+        </thead>
+        <tbody id="ambBody">
+          <tr><td colspan="6" class="text-muted">No rows yet</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const STATUS_LABEL = { '1': 'Free', '2': 'Busy', '0': 'Off' };
+
+  function showOk(msg) {
+    const el = document.getElementById('alertOk');
+    document.getElementById('alertErr').style.display = 'none';
+    el.textContent = msg;
+    el.style.display = 'block';
+  }
+  function showErr(msg) {
+    const el = document.getElementById('alertErr');
+    document.getElementById('alertOk').style.display = 'none';
+    el.textContent = msg;
+    el.style.display = 'block';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  function clearForm() {
+    ['phone','name','address','city','Ambulance','driverContact','location','txtGeoLocation','LocLat','LocLong','AmbulanceId','patientId']
+      .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    document.querySelectorAll('.uf-form-group.has-error').forEach(el => el.classList.remove('has-error'));
+  }
+  function validateRequired() {
+    const req = ['phone','name','address','city','Ambulance','location','txtGeoLocation'];
+    let ok = true;
+    document.querySelectorAll('.uf-form-group.has-error').forEach(el => el.classList.remove('has-error'));
+    req.forEach(id => {
+      const input = document.getElementById(id);
+      const wrap = document.querySelector('[data-req="' + id + '"]');
+      if (!input || !String(input.value || '').trim()) {
+        ok = false;
+        if (wrap) wrap.classList.add('has-error');
+      }
+    });
+    return ok;
+  }
+
+  async function lookupPhone() {
+    const phone = document.getElementById('phone').value.trim();
+    if (!phone) { showErr('Enter phone first'); return; }
+    try {
+      const res = await fetch('/api/ufone/patient-by-phone?phone=' + encodeURIComponent(phone));
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Lookup failed');
+      const rows = data.patients || [];
+      if (!rows.length) {
+        document.getElementById('patientId').value = '';
+        showErr('No patient found for this phone — fill fields manually');
+        return;
+      }
+      const p = rows[0];
+      document.getElementById('patientId').value = p.id || '';
+      document.getElementById('name').value = p.name || '';
+      document.getElementById('address').value = p.address || '';
+      document.getElementById('city').value = (p.city != null && p.city !== '') ? String(p.city) : '';
+      if (p.location) document.getElementById('location').value = p.location;
+      if (p.txtGeoLocation) document.getElementById('txtGeoLocation').value = p.txtGeoLocation;
+      if (p.LocLat) document.getElementById('LocLat').value = p.LocLat;
+      if (p.LocLong) document.getElementById('LocLong').value = p.LocLong;
+      let msg = 'Patient loaded' + (rows.length > 1 ? ' (' + rows.length + ' matches — using first)' : '');
+      if (!document.getElementById('city').value) msg += ' — fill City manually';
+      showOk(msg);
+    } catch (e) {
+      showErr(e.message || String(e));
+    }
+  }
+
+  /* Portal selectAmbulance only sets id / reg / contact — do not overwrite patient coords. */
+  function pickAmbulance(r) {
+    document.getElementById('AmbulanceId').value = r.id || '';
+    document.getElementById('Ambulance').value = r.reg_no || '';
+    document.getElementById('driverContact').value = r.driver_cell || '';
+    showOk('Selected ambulance ' + (r.reg_no || r.id || ''));
+  }
+
+  async function loadAmbulances() {
+    const district = document.getElementById('fDistrict').value;
+    if (!district) { showErr('Select district'); return; }
+    const body = document.getElementById('ambBody');
+    const btn = document.getElementById('btnLoadAmb');
+    body.innerHTML = '<tr><td colspan="6">Loading…</td></tr>';
+    btn.disabled = true;
+    try {
+      const res = await fetch('/api/ufone/ambulances-for-assign?district=' + encodeURIComponent(district));
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed');
+      const rows = data.ambulances || [];
+      document.getElementById('ambCount').textContent = rows.length + ' ambulances';
+      if (!rows.length) {
+        body.innerHTML = '<tr><td colspan="6" class="text-muted">No ambulances</td></tr>';
+        return;
+      }
+      body.innerHTML = '';
+      rows.forEach(r => {
+        const tr = document.createElement('tr');
+        const st = STATUS_LABEL[String(r.status)] || String(r.status ?? '—');
+        tr.innerHTML =
+          '<td></td>' +
+          '<td>' + esc(r.reg_no || '—') + '</td>' +
+          '<td>' + esc(r.driver_name || '—') + '</td>' +
+          '<td>' + esc(r.driver_cell || '—') + '</td>' +
+          '<td>' + esc(st) + '</td>' +
+          '<td>' + esc(r.facility_name || '—') + '</td>';
+        const btnPick = document.createElement('button');
+        btnPick.type = 'button';
+        btnPick.className = 'pick';
+        btnPick.textContent = 'Select';
+        btnPick.addEventListener('click', () => pickAmbulance(r));
+        tr.children[0].appendChild(btnPick);
+        body.appendChild(tr);
+      });
+    } catch (e) {
+      body.innerHTML = '<tr><td colspan="6" class="text-danger">Error</td></tr>';
+      showErr(e.message || String(e));
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  async function saveTask() {
+    if (!validateRequired()) {
+      showErr('Please enter required fields.');
+      return;
+    }
+    const payload = {
+      phone: document.getElementById('phone').value.trim(),
+      name: document.getElementById('name').value.trim(),
+      address: document.getElementById('address').value.trim(),
+      city: document.getElementById('city').value.trim(),
+      ambulance: document.getElementById('Ambulance').value.trim(),
+      driver_contact: document.getElementById('driverContact').value.trim(),
+      location: document.getElementById('location').value.trim(),
+      txt_geo_location: document.getElementById('txtGeoLocation').value.trim(),
+      loc_lat: document.getElementById('LocLat').value.trim(),
+      loc_long: document.getElementById('LocLong').value.trim(),
+      ambulance_id: document.getElementById('AmbulanceId').value.trim(),
+      patient_id: document.getElementById('patientId').value.trim(),
+    };
+    const btn = document.getElementById('btnSave');
+    btn.disabled = true;
+    try {
+      const res = await fetch('/api/ufone/add-emergency-task', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || 'Save failed');
+      showOk('Ambulance assigned successfully (task created on BPOCOPS).');
+      clearForm();
+    } catch (e) {
+      showErr(e.message || String(e));
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  document.getElementById('btnLoadAmb').addEventListener('click', loadAmbulances);
+  document.getElementById('btnLookupPhone').addEventListener('click', lookupPhone);
+  document.getElementById('btnSave').addEventListener('click', saveTask);
+  document.getElementById('btnClear').addEventListener('click', clearForm);
+  document.getElementById('phone').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); lookupPhone(); }
+  });
+})();
+</script>
+{% endblock %}

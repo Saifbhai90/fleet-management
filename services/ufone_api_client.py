@@ -359,6 +359,58 @@ class UfoneClient:
             "ReceivedBy": received_by, "isReceived": is_received,
         }, raw=True)
 
+    def get_patient_by_phone(self, phone: str) -> list:
+        """Lookup patient(s) by phone (AmbulanceAssignment form helper)."""
+        return self._call(
+            "AmbulanceAssignment.aspx", "getPatientByPhone",
+            {"phone": str(phone or "").strip()},
+            visit_page=False,
+        ) or []
+
+    def save_ambulance_assignment(
+        self,
+        phone: str,
+        name: str,
+        address: str,
+        city: str,
+        ambulance: str,
+        driver_contact: str = "",
+        location: str = "",
+        txt_geo_location: str = "",
+        loc_lat: str = "",
+        loc_long: str = "",
+        ambulance_id: str = "",
+        patient_id: str = "",
+    ):
+        """Create / assign emergency task (BPOCOPS Add Emergency Task).
+
+        Mirrors ReportEmergencyTask.aspx → AmbulanceAssignment.aspx/saveAmbulanceAssignment.
+        """
+        def _s(v):
+            # Escape for ASP.NET {'k':'v'} body (portal uses single-quoted JSON).
+            return str(v or "").replace("\\", "\\\\").replace("'", "\\'")
+
+        return self._call(
+            "AmbulanceAssignment.aspx",
+            "saveAmbulanceAssignment",
+            {
+                "phone": _s(phone),
+                "name": _s(name),
+                "address": _s(address),
+                "city": _s(city),
+                "Ambulance": _s(ambulance),
+                "driverContact": _s(driver_contact),
+                "location": _s(location),
+                "txtGeoLocation": _s(txt_geo_location),
+                "LocLat": _s(loc_lat),
+                "LocLong": _s(loc_long),
+                "AmbulanceId": _s(ambulance_id),
+                "patientId": _s(patient_id),
+            },
+            visit_page=False,
+            raw=True,
+        )
+
     # ══════════════════════════════════════════════════════
     #  REPORTS
     # ══════════════════════════════════════════════════════

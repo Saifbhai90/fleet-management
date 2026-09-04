@@ -396,7 +396,7 @@ PERMISSION_TREE = {
         ('ufone_view', 'Dashboard, Live Map & Vehicles – View'),
         ('ufone_history', 'Vehicle History'),
         ('ufone_reports', 'Reports (Tasks, Patients, Distance, Ignition, Maintenance)'),
-        ('ufone_actions', 'Task Actions (Comment, Feedback, Complete)'),
+        ('ufone_actions', 'Task Actions (Comment, Feedback, Complete, Add Emergency Task)'),
         ('ufone_admin', 'Admin (Patient Registration, Ambulance Management)'),
         ('ufone_settings', 'Settings (Accounts, Polling)'),
     ],
@@ -1129,7 +1129,7 @@ SECTION_PAGE_GROUPS = {
             ('ufone_reports', 'Reports (Tasks, Patients, Distance, Ignition, Maintenance)'),
         ]),
         ('Task Actions', [
-            ('ufone_actions', 'Task Actions (Comment, Feedback, Complete)'),
+            ('ufone_actions', 'Task Actions (Comment, Feedback, Complete, Add Emergency Task)'),
         ]),
         ('Admin (Restricted)', [
             ('ufone_admin', 'Admin (Patient Registration, Ambulance Management)'),

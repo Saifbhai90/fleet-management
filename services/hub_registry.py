@@ -447,6 +447,7 @@ HUBS = {
             'ufone_track', 'ufone_history', 'ufone_ignition', 'ufone_distance',
             'ufone_maintenance', 'ufone_maintenance_history', 'ufone_emergency_tasks', 'ufone_patient_reports',
             'ufone_patient_reports_ussd', 'ufone_task_counts', 'ufone_task_detail',
+            'ufone_add_emergency_task',
             'ufone_admin_patients', 'ufone_admin_ambulances', 'ufone_admin_assignments',
             'ufone_settings', 'ufone_settings_account_new',
             'ufone_settings_account_edit', 'ufone_settings_account_delete',
@@ -460,6 +461,8 @@ HUBS = {
             'api_ufone_task_vps_refresh',
             'api_ufone_task_comment_save', 'api_ufone_task_feedback_save',
             'api_ufone_task_complete', 'api_ufone_tasks_dashboard',
+            'api_ufone_patient_by_phone', 'api_ufone_ambulances_for_assign',
+            'api_ufone_add_emergency_task',
             'api_ufone_reports_emergency', 'api_ufone_reports_distance',
             'api_ufone_reports_ignition', 'api_ufone_reports_maintenance',
             'api_ufone_reports_patients', 'api_ufone_reports_patients_ussd',
@@ -482,6 +485,7 @@ HUBS = {
                 'title': 'Task Management',
                 'items': [
                     _item('ufone_emergency_tasks', 'Emergency Tasks', 'fa-solid fa-triangle-exclamation', 'rc-tile--red-task', 'ufone_reports'),
+                    _item('ufone_add_emergency_task', 'Add Emergency Task', 'fa-solid fa-plus', 'rc-tile--red-task', 'ufone_actions'),
                     _item(
                         'red_task_summary',
                         'Category Wise Task Summary',
@@ -502,6 +506,7 @@ HUBS = {
                     _item('ufone_maintenance', 'Maintenance', 'fa-solid fa-screwdriver-wrench', 'rc-tile--hub-admin', 'ufone_reports'),
                     _item('ufone_maintenance_history', 'Maintenance History', 'fa-solid fa-clock-rotate-left', 'rc-tile--hub-admin', 'ufone_reports'),
                     _item('ufone_patient_reports', 'Patients Report', 'fa-solid fa-user-injured', 'rc-tile--chart-accounts', 'ufone_reports'),
+                    _item('ufone_patient_reports_ussd', 'Patient Report USSD', 'fa-solid fa-mobile-screen-button', 'rc-tile--chart-accounts', 'ufone_reports'),
                 ],
             },
             {

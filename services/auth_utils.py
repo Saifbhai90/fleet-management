@@ -772,6 +772,10 @@ ENDPOINT_PERMISSION_MAP = [
     ('api_ufone_task_comment',    'ufone_actions'),
     ('api_ufone_task_feedback',   'ufone_actions'),
     ('api_ufone_task_complete',   'ufone_actions'),
+    ('ufone_add_emergency_task',  'ufone_actions'),
+    ('api_ufone_patient_by_phone','ufone_actions'),
+    ('api_ufone_ambulances_for_assign', 'ufone_actions'),
+    ('api_ufone_add_emergency_task', 'ufone_actions'),
     ('ufone_admin',               'ufone_admin'),       # patient reg / amb mgmt
     ('ufone_admin_patients',      'ufone_admin'),
     ('ufone_admin_ambulances',    'ufone_admin'),

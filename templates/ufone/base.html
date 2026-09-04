@@ -111,6 +111,7 @@
 
     <div class="sidebar-section">Task Management</div>
     <a href="{{ url_for('ufone_emergency_tasks') }}" class="{% if request.endpoint == 'ufone_emergency_tasks' %}active{% endif %}"><i class="bi bi-exclamation-triangle"></i> Emergency Tasks</a>
+    <a href="{{ url_for('ufone_add_emergency_task') }}" class="{% if request.endpoint == 'ufone_add_emergency_task' %}active{% endif %}"><i class="bi bi-plus-circle"></i> Add Emergency Task</a>
     <a href="{{ url_for('ufone_task_counts') }}" class="{% if request.endpoint == 'ufone_task_counts' %}active{% endif %}"><i class="bi bi-bar-chart"></i> Task Counts</a>
 
     <div class="sidebar-section">Reports</div>
