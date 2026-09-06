@@ -157,10 +157,11 @@
      style="background:linear-gradient(135deg,#fef2f2,#fee2e2);border:2px solid #fca5a5;border-radius:14px;">
     <i class="bi bi-exclamation-triangle-fill text-danger fs-5 flex-shrink-0 mt-1"></i>
     <div class="flex-grow-1">
-        <strong class="text-danger">Critical Storage Alert</strong>
+        <strong class="text-danger">Critical Alert</strong>
         <span class="ms-2 text-danger" style="font-size:0.85rem;">
             {% if data.db_critical %}Database at <strong>{{ data.db_pct }}%</strong> ({{ data.db_size_mb }} MB / {{ data.db_size_limit_mb }} MB).{% endif %}
             {% if data.r2_critical %}R2 Bucket at <strong>{{ data.r2_pct }}%</strong>.{% endif %}
+            {% if data.mobile_critical %}Mobile Ufone bridge is <strong>DOWN</strong>.{% endif %}
         </span>
     </div>
 </div>
@@ -374,6 +375,88 @@
 </div>
 
 {# ═════════════════════════════════════════
+   ROW 1b — Mobile Phone Bridge status
+═════════════════════════════════════════ #}
+{% set mb = data.mobile_bridge or {} %}
+{% set mb_st = (mb.overall or 'unknown') | lower %}
+<div class="row g-2 mb-2">
+    <div class="col-12">
+        <div class="sh-card {% if mb_st == 'ok' %}sh-card-success{% elif mb_st == 'slow' %}sh-card-warning{% elif mb_st in ['degraded','down'] %}sh-card-danger{% else %}sh-card-cyan{% endif %}" id="mb-card">
+            <div class="d-flex flex-column flex-md-row justify-content-between gap-2 mb-2">
+                <div>
+                    <div class="lbl mb-1"><i class="bi bi-phone me-1"></i>Mobile Ufone Bridge (Phone)</div>
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <span class="sbadge {% if mb_st == 'ok' %}sb-ok{% elif mb_st == 'slow' %}sb-bld{% elif mb_st in ['degraded','down'] %}sb-down{% else %}sb-unk{% endif %}" id="mb-badge">
+                            <span style="width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block;"></span>
+                            <span id="mb-overall">{{ (mb.overall or 'unknown') | upper }}</span>
+                        </span>
+                        <span class="sub mb-0" id="mb-network-label">{{ mb.network_label or 'Not checked' }}</span>
+                        <span class="sub mb-0" id="mb-checked-at">{% if mb.checked_at %}· checked {{ mb.checked_at }}{% endif %}</span>
+                    </div>
+                </div>
+                <div class="d-flex gap-2 align-items-start">
+                    <button type="button" class="btn btn-sm btn-outline-primary" id="mb-refresh-btn" onclick="_refreshMobileBridge()" style="font-size:0.75rem;">
+                        <i class="bi bi-arrow-clockwise"></i> Probe Now
+                    </button>
+                    <a href="{{ mb.url or 'https://ufone-detail.myfleetmanager.co.uk' }}/health" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary" style="font-size:0.75rem;">
+                        Open Health
+                    </a>
+                </div>
+            </div>
+            <div class="row g-2" style="font-size:0.78rem;">
+                <div class="col-6 col-md-3">
+                    <div class="lbl">Tunnel RTT</div>
+                    <div class="fw-bold text-dark" id="mb-health-ms">{% if mb.health_ms is not none %}{{ mb.health_ms }} ms{% else %}—{% endif %}</div>
+                    <div class="sub" id="mb-tunnel-quality">quality: {{ mb.tunnel_quality or '—' }}</div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="lbl">Ufone from phone</div>
+                    <div class="fw-bold text-dark" id="mb-ufone-ms">{% if mb.ufone_rtt_ms is not none %}{{ mb.ufone_rtt_ms }} ms{% else %}—{% endif %}</div>
+                    <div class="sub" id="mb-ufone-ok">{% if mb.ufone_ok is sameas true %}reachable{% elif mb.ufone_ok is sameas false %}unreachable{% else %}—{% endif %}</div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="lbl">Ingest freshness</div>
+                    <div class="fw-bold text-dark" id="mb-ingest">
+                        {% if mb.ingest_vehicle_age_sec is not none %}
+                            vehicles {{ (mb.ingest_vehicle_age_sec / 60) | round(0) | int }}m
+                        {% else %}—{% endif %}
+                        {% if mb.ingest_task_age_sec is not none %}
+                            · tasks {{ (mb.ingest_task_age_sec / 60) | round(0) | int }}m
+                        {% endif %}
+                    </div>
+                    <div class="sub" id="mb-ingest-ok">{% if mb.ingest_ok is sameas true %}sync OK{% elif mb.ingest_ok is sameas false %}stale / missing{% else %}—{% endif %}</div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="lbl">Public IP</div>
+                    <div class="fw-bold text-dark" style="font-family:monospace;font-size:0.85rem;" id="mb-ip">{{ mb.public_ip or '—' }}</div>
+                    <div class="sub" id="mb-url" style="word-break:break-all;">{{ mb.url or '' }}</div>
+                </div>
+            </div>
+            <hr class="my-2">
+            <div class="d-flex flex-wrap gap-2" id="mb-procs">
+                {% macro mb_chip(ok, label) -%}
+                <span class="chip {% if ok is sameas true %}chip-ok{% elif ok is sameas false %}chip-err{% else %}chip-na{% endif %}">{{ label }}{% if ok is sameas true %} ✓{% elif ok is sameas false %} ✗{% else %} ·{% endif %}</span>
+                {%- endmacro %}
+                {{ mb_chip(mb.worker_pg, 'worker_pg') }}
+                {{ mb_chip(mb.cloudflared, 'cloudflared') }}
+                {{ mb_chip(mb.watch_tunnel, 'watchdog') }}
+                {{ mb_chip(mb.sshd, 'sshd') }}
+                {{ mb_chip(mb.detail_local_ok, 'detail :8787') }}
+                {% if mb.vps_tunnel_disabled is sameas true %}
+                <span class="chip chip-ok">VPS soak OFF ✓</span>
+                {% elif mb.autossh_vps is sameas true %}
+                <span class="chip chip-skip">autossh VPS on</span>
+                {% endif %}
+                {% if mb.bridge_only %}
+                <span class="chip chip-ok">BRIDGE_ONLY</span>
+                {% endif %}
+            </div>
+            <div class="sub mt-2" id="mb-error" style="{% if not mb.error %}display:none;{% endif %}color:#b91c1c;">{{ mb.error or '' }}</div>
+        </div>
+    </div>
+</div>
+
+{# ═════════════════════════════════════════
    ROW 2 — Deploy History | DB Table Stats | System Info
 ═════════════════════════════════════════ #}
 <div class="row g-2 mb-2">
@@ -517,6 +600,9 @@
                 ('R2_BUCKET_NAME',       'R2 Bucket Name'),
                 ('DATABASE_URL',         'Database URL'),
                 ('SECRET_KEY',           'Flask Secret Key'),
+                ('UFONE_BRIDGE_ONLY',    'Ufone Bridge Only'),
+                ('UFONE_VPS_DETAIL_URL', 'Mobile Detail URL'),
+                ('UFONE_BRIDGE_TOKEN',   'Ufone Bridge Token'),
             ] %}
             {% for env_key, label in env_checks %}
             {% set is_set = env_vars_set.get(env_key, False) %}
@@ -543,11 +629,12 @@
         <div class="sh-card">
             <div class="lbl mb-2"><i class="bi bi-terminal me-1"></i>Sync Log — Last Fetch</div>
             {% set check_meta = [
-                ('render_api',   'bi-cloud-check',    'Render API'),
-                ('db_size',      'bi-database',       'Database Size'),
-                ('r2_storage',   'bi-cloud-haze2',    'R2 Storage'),
-                ('sessions',     'bi-people',         'Active Sessions'),
-                ('api_latency',  'bi-speedometer2',   'API Latency'),
+                ('render_api',     'bi-cloud-check',    'Render API'),
+                ('db_size',        'bi-database',       'Database Size'),
+                ('r2_storage',     'bi-cloud-haze2',    'R2 Storage'),
+                ('sessions',       'bi-people',         'Active Sessions'),
+                ('api_latency',    'bi-speedometer2',   'API Latency'),
+                ('mobile_bridge',  'bi-phone',          'Mobile Bridge'),
             ] %}
             {% for key, icon, label in check_meta %}
             {% set chk = data.checks.get(key, {}) %}
@@ -949,6 +1036,7 @@
 
         if (d.latency_history) _drawSparkline('spark-latency', d.latency_history, '#10b981');
         if (d.session_history) _drawSparkline('spark-sessions', d.session_history, '#8b5cf6');
+        if (d.mobile_bridge) _renderMobileBridge(d.mobile_bridge);
 
         _lastFetch = Date.now();
     }
@@ -959,6 +1047,8 @@
             .then(function(r) { return r.json(); })
             .then(function(d) { _updateKPI(d); })
             .catch(function() {});
+        // Live mobile probe (bypasses 15-min health cache)
+        _refreshMobileBridgeQuiet();
     }
 
     function _startTimer() {
@@ -1018,6 +1108,8 @@
 
     _startTimer();
     setInterval(_updateAgoLabel, 5000);
+    // Immediate live mobile probe (full /status may be 404 until phone deploy)
+    setTimeout(_refreshMobileBridgeQuiet, 800);
 })();
 </script>
 <script>
@@ -1101,6 +1193,120 @@
             .then(function(d) { _renderDiagRows(d); })
             .catch(function() {});
     }
+
+    function _chipHtml(ok, label) {
+        var cls = 'chip-na';
+        var mark = ' ·';
+        if (ok === true) { cls = 'chip-ok'; mark = ' ✓'; }
+        else if (ok === false) { cls = 'chip-err'; mark = ' ✗'; }
+        return '<span class="chip ' + cls + '">' + label + mark + '</span>';
+    }
+
+    function _fmtAgeMin(sec) {
+        if (sec == null || !isFinite(sec)) return null;
+        return Math.round(sec / 60) + 'm';
+    }
+
+    function _renderMobileBridge(mb) {
+        if (!mb) return;
+        var card = document.getElementById('mb-card');
+        var overall = (mb.overall || 'unknown').toLowerCase();
+        if (card) {
+            card.className = 'sh-card ' + (
+                overall === 'ok' ? 'sh-card-success' :
+                overall === 'slow' ? 'sh-card-warning' :
+                (overall === 'degraded' || overall === 'down') ? 'sh-card-danger' : 'sh-card-cyan'
+            );
+        }
+        var badge = document.getElementById('mb-badge');
+        if (badge) {
+            badge.className = 'sbadge ' + (
+                overall === 'ok' ? 'sb-ok' :
+                overall === 'slow' ? 'sb-bld' :
+                (overall === 'degraded' || overall === 'down') ? 'sb-down' : 'sb-unk'
+            );
+        }
+        var el;
+        el = document.getElementById('mb-overall');
+        if (el) el.textContent = (mb.overall || 'unknown').toUpperCase();
+        el = document.getElementById('mb-network-label');
+        if (el) el.textContent = mb.network_label || 'Not checked';
+        el = document.getElementById('mb-checked-at');
+        if (el) el.textContent = mb.checked_at ? ('· checked ' + mb.checked_at) : '';
+        el = document.getElementById('mb-health-ms');
+        if (el) el.textContent = mb.health_ms != null ? (mb.health_ms + ' ms') : '—';
+        el = document.getElementById('mb-tunnel-quality');
+        if (el) el.textContent = 'quality: ' + (mb.tunnel_quality || '—');
+        el = document.getElementById('mb-ufone-ms');
+        if (el) el.textContent = mb.ufone_rtt_ms != null ? (mb.ufone_rtt_ms + ' ms') : '—';
+        el = document.getElementById('mb-ufone-ok');
+        if (el) el.textContent = mb.ufone_ok === true ? 'reachable' : (mb.ufone_ok === false ? 'unreachable' : '—');
+        el = document.getElementById('mb-ingest');
+        if (el) {
+            var parts = [];
+            var va = _fmtAgeMin(mb.ingest_vehicle_age_sec);
+            var ta = _fmtAgeMin(mb.ingest_task_age_sec);
+            if (va) parts.push('vehicles ' + va);
+            if (ta) parts.push('tasks ' + ta);
+            el.textContent = parts.length ? parts.join(' · ') : '—';
+        }
+        el = document.getElementById('mb-ingest-ok');
+        if (el) el.textContent = mb.ingest_ok === true ? 'sync OK' : (mb.ingest_ok === false ? 'stale / missing' : '—');
+        el = document.getElementById('mb-ip');
+        if (el) el.textContent = mb.public_ip || '—';
+        el = document.getElementById('mb-url');
+        if (el) el.textContent = mb.url || '';
+        el = document.getElementById('mb-procs');
+        if (el) {
+            var html = '';
+            html += _chipHtml(mb.worker_pg, 'worker_pg');
+            html += _chipHtml(mb.cloudflared, 'cloudflared');
+            html += _chipHtml(mb.watch_tunnel, 'watchdog');
+            html += _chipHtml(mb.sshd, 'sshd');
+            html += _chipHtml(mb.detail_local_ok, 'detail :8787');
+            if (mb.vps_tunnel_disabled === true) html += '<span class="chip chip-ok">VPS soak OFF ✓</span>';
+            else if (mb.autossh_vps === true) html += '<span class="chip chip-skip">autossh VPS on</span>';
+            if (mb.bridge_only) html += '<span class="chip chip-ok">BRIDGE_ONLY</span>';
+            el.innerHTML = html;
+        }
+        el = document.getElementById('mb-error');
+        if (el) {
+            if (mb.error) {
+                el.style.display = '';
+                el.textContent = mb.error;
+            } else {
+                el.style.display = 'none';
+                el.textContent = '';
+            }
+        }
+    }
+
+    function _refreshMobileBridgeQuiet() {
+        fetch('{{ url_for("system_health_mobile_bridge_api") }}', { cache: 'no-store' })
+            .then(function(r) { return r.json(); })
+            .then(function(d) { _renderMobileBridge(d); })
+            .catch(function() {});
+    }
+
+    function _refreshMobileBridge() {
+        var btn = document.getElementById('mb-refresh-btn');
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+        }
+        fetch('{{ url_for("system_health_mobile_bridge_api") }}', { cache: 'no-store' })
+            .then(function(r) { return r.json(); })
+            .then(function(d) { _renderMobileBridge(d); })
+            .catch(function() {})
+            .finally(function() {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Probe Now';
+                }
+            });
+    }
+
+    window._refreshMobileBridge = _refreshMobileBridge;
 
     function _netSignalLevel(speedMbps, rtt) {
         if (speedMbps >= 6 && rtt <= 120) return 4;

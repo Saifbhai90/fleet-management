@@ -13,7 +13,13 @@ The before_request/after_request hooks that populate that state also remain in r
 import time as _sh_time
 import os
 import uuid
+import hmac
+import hashlib
+import json
+import urllib.error
+import urllib.request
 from datetime import datetime, timedelta
+from typing import Optional
 
 from flask import (
     render_template, request, redirect, url_for, flash, jsonify,
@@ -26,7 +32,7 @@ from services.memory_guard import stats as memory_guard_stats
 from models import (
     Driver, Project, District, Notification, NotificationRead,
     ActivityLog, LoginLog, LoginAttempt, DeviceFCMToken,
-    SystemSetting, User,
+    SystemSetting, User, UfoneVehicleCache, UfoneTaskCache,
 )
 from utils import pk_now, pk_date
 
@@ -342,6 +348,202 @@ def _resolve_db_size_limit_mb():
     return 512, None, None
 
 
+# ════════════════════════════════════════════════════════════════════════════════
+# MOBILE PHONE BRIDGE HEALTH (Cloudflare → Termux)
+# ════════════════════════════════════════════════════════════════════════════════
+
+def _bridge_expected_token_local() -> str:
+    explicit = (os.environ.get('UFONE_BRIDGE_TOKEN') or '').strip()
+    if explicit:
+        return explicit
+    secret = (os.environ.get('SECRET_KEY') or '').strip()
+    if not secret:
+        return ''
+    return hmac.new(secret.encode('utf-8'), b'ufone-bridge-v1', hashlib.sha256).hexdigest()
+
+
+def _mobile_bridge_detail_url() -> str:
+    return (
+        os.environ.get('UFONE_VPS_DETAIL_URL')
+        or os.environ.get('UFONE_BRIDGE_DETAIL_URL')
+        or 'https://ufone-detail.myfleetmanager.co.uk'
+    ).strip().rstrip('/')
+
+
+def _age_seconds(dt) -> Optional[int]:
+    if not dt:
+        return None
+    try:
+        now = pk_now()
+        if getattr(dt, 'tzinfo', None) and dt.tzinfo is not None:
+            if getattr(now, 'tzinfo', None) is None:
+                dt = dt.replace(tzinfo=None)
+        return max(0, int((now - dt).total_seconds()))
+    except Exception:
+        return None
+
+
+def _probe_mobile_bridge() -> dict:
+    """Live probe of phone bridge via Cloudflare + DB ingest freshness."""
+    url = _mobile_bridge_detail_url()
+    token = _bridge_expected_token_local()
+    bridge_only = (os.environ.get('UFONE_BRIDGE_ONLY') or '').strip().lower() in (
+        '1', 'true', 'yes', 'on',
+    )
+    out = {
+        'url': url,
+        'bridge_only': bridge_only,
+        'reachable': False,
+        'health_ok': False,
+        'health_ms': None,
+        'status_ok': False,
+        'status_ms': None,
+        'overall': 'unknown',
+        'network_label': 'Unknown',
+        'worker_pg': None,
+        'cloudflared': None,
+        'sshd': None,
+        'autossh_vps': None,
+        'watch_tunnel': None,
+        'vps_tunnel_disabled': None,
+        'ufone_ok': None,
+        'ufone_rtt_ms': None,
+        'public_ip': None,
+        'detail_local_ok': None,
+        'detail_local_ms': None,
+        'ingest_vehicle_age_sec': None,
+        'ingest_task_age_sec': None,
+        'ingest_ok': None,
+        'error': None,
+        'checked_at': pk_now().strftime('%d-%m-%Y %H:%M:%S'),
+    }
+
+    # DB ingest freshness (worker → Render)
+    try:
+        latest_v = (
+            db.session.query(func.max(UfoneVehicleCache.updated_at)).scalar()
+        )
+        latest_t = (
+            db.session.query(func.max(UfoneTaskCache.updated_at)).scalar()
+        )
+        out['ingest_vehicle_age_sec'] = _age_seconds(latest_v)
+        out['ingest_task_age_sec'] = _age_seconds(latest_t)
+        ages = [a for a in (out['ingest_vehicle_age_sec'], out['ingest_task_age_sec']) if a is not None]
+        if ages:
+            # Worker tick is typically 1–3 min; warn after 10 min, fail after 30.
+            best = min(ages)
+            out['ingest_ok'] = best <= 600
+            if best > 1800:
+                out['ingest_ok'] = False
+        else:
+            out['ingest_ok'] = False
+    except Exception as e:
+        out['error'] = f'ingest lookup: {str(e)[:80]}'
+
+    # Public health (no token)
+    try:
+        t0 = _sh_time.perf_counter()
+        req = urllib.request.Request(
+            f'{url}/health',
+            headers={'User-Agent': 'fleet-system-health/1.0'},
+        )
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            raw = resp.read().decode('utf-8', errors='replace')
+            code = resp.status
+        out['health_ms'] = round((_sh_time.perf_counter() - t0) * 1000)
+        out['reachable'] = True
+        try:
+            payload = json.loads(raw) if raw else {}
+        except Exception:
+            payload = {}
+        out['health_ok'] = bool(code == 200 and payload.get('ok'))
+    except Exception as e:
+        out['health_ok'] = False
+        out['reachable'] = False
+        out['error'] = f'health: {str(e)[:120]}'
+
+    # Rich /status (token)
+    if token and out['reachable']:
+        try:
+            t0 = _sh_time.perf_counter()
+            req = urllib.request.Request(
+                f'{url}/status',
+                headers={
+                    'User-Agent': 'fleet-system-health/1.0',
+                    'X-Ufone-Bridge-Token': token,
+                },
+            )
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                raw = resp.read().decode('utf-8', errors='replace')
+                code = resp.status
+            out['status_ms'] = round((_sh_time.perf_counter() - t0) * 1000)
+            try:
+                st = json.loads(raw) if raw else {}
+            except Exception:
+                st = {}
+            if code == 200 and isinstance(st, dict):
+                out['status_ok'] = True
+                for k in (
+                    'worker_pg', 'cloudflared', 'sshd', 'autossh_vps', 'watch_tunnel',
+                    'vps_tunnel_disabled', 'ufone_ok', 'ufone_rtt_ms', 'public_ip',
+                    'detail_local_ok', 'detail_local_ms', 'overall',
+                ):
+                    if k in st:
+                        out[k] = st.get(k)
+            elif code == 404:
+                # Older phone build without /status — health-only mode
+                out['status_ok'] = False
+            else:
+                out['status_ok'] = False
+                out['error'] = out.get('error') or f'status HTTP {code}'
+        except Exception as e:
+            out['status_ok'] = False
+            out['error'] = out.get('error') or f'status: {str(e)[:120]}'
+
+    # Classify overall + network label
+    health_ms = out.get('health_ms')
+    ufone_ms = out.get('ufone_rtt_ms')
+    if not out['reachable'] or not out['health_ok']:
+        out['overall'] = 'down'
+        out['network_label'] = 'Unreachable'
+    elif out.get('worker_pg') is False or out.get('cloudflared') is False:
+        out['overall'] = 'down'
+        out['network_label'] = 'Bridge process down'
+    elif out.get('ufone_ok') is False:
+        out['overall'] = 'degraded'
+        out['network_label'] = 'Ufone unreachable from phone'
+    elif out.get('ingest_ok') is False and bridge_only:
+        out['overall'] = 'degraded'
+        out['network_label'] = 'Tunnel OK — ingest stale'
+    elif (health_ms is not None and health_ms > 2000) or (
+        ufone_ms is not None and ufone_ms > 2500
+    ):
+        out['overall'] = 'slow'
+        out['network_label'] = 'Reachable but slow'
+    elif out.get('overall') in (None, 'unknown', 'ok'):
+        out['overall'] = 'ok'
+        out['network_label'] = 'Stable'
+    elif out.get('overall') == 'slow':
+        out['network_label'] = 'Reachable but slow'
+    elif out.get('overall') == 'degraded':
+        out['network_label'] = out.get('network_label') or 'Degraded'
+
+    if health_ms is not None:
+        if health_ms <= 400:
+            hop = 'excellent'
+        elif health_ms <= 900:
+            hop = 'good'
+        elif health_ms <= 2000:
+            hop = 'fair'
+        else:
+            hop = 'poor'
+        out['tunnel_quality'] = hop
+    else:
+        out['tunnel_quality'] = 'unknown'
+
+    return out
+
+
 def _system_health_fallback_data(error_msg=None):
     """Safe defaults when health metrics cannot be loaded."""
     import platform
@@ -407,7 +609,14 @@ def _system_health_fallback_data(error_msg=None):
         'db_critical': False,
         'r2_critical': False,
         'any_critical': False,
+        'mobile_critical': False,
         'diagnostics': {},
+        'mobile_bridge': {
+            'overall': 'unknown',
+            'network_label': 'Not checked',
+            'reachable': False,
+            'url': '',
+        },
     }
 
 
@@ -481,6 +690,12 @@ def _build_health_data():
         'backup_schedule_time':    app.config.get('BACKUP_SCHEDULE_TIME', '02:00'),
         'backup_email_to':         app.config.get('BACKUP_EMAIL_TO', ''),
         'diagnostics':             {},
+        'mobile_bridge': {
+            'overall': 'unknown',
+            'network_label': 'Not checked',
+            'reachable': False,
+            'url': _mobile_bridge_detail_url(),
+        },
     }
 
     render_key = os.environ.get('RENDER_API_KEY', '').strip()
@@ -705,6 +920,42 @@ def _build_health_data():
         result['last_backup_result'] = 'unknown'
         result['last_backup_size'] = None
 
+    # 12b. Mobile phone bridge (Cloudflare → Termux)
+    try:
+        mb = _probe_mobile_bridge()
+        result['mobile_bridge'] = mb
+        overall = mb.get('overall') or 'unknown'
+        if overall == 'ok':
+            st, msg = 'ok', (
+                f"{mb.get('network_label')} · tunnel {mb.get('health_ms')}ms"
+                f" · quality {mb.get('tunnel_quality')}"
+            )
+        elif overall == 'slow':
+            st, msg = 'ok', (
+                f"Slow · tunnel {mb.get('health_ms')}ms"
+                f" · Ufone {mb.get('ufone_rtt_ms')}ms"
+            )
+        elif overall == 'degraded':
+            st, msg = 'error', mb.get('network_label') or 'Degraded'
+        elif overall == 'down':
+            st, msg = 'error', mb.get('error') or mb.get('network_label') or 'Down'
+        else:
+            st, msg = 'na', mb.get('network_label') or 'Unknown'
+        result['checks']['mobile_bridge'] = {'status': st, 'msg': msg}
+        if overall == 'down' and mb.get('bridge_only'):
+            result['errors'].append(
+                f"Mobile Ufone bridge down: {mb.get('error') or mb.get('network_label')}"
+            )
+    except Exception as e:
+        result['mobile_bridge'] = {
+            'overall': 'unknown',
+            'network_label': 'Probe failed',
+            'reachable': False,
+            'url': _mobile_bridge_detail_url(),
+            'error': str(e)[:120],
+        }
+        result['checks']['mobile_bridge'] = {'status': 'error', 'msg': str(e)[:120]}
+
     # Percentages & Critical Flags
     if result['db_size_mb'] is not None and result['db_size_limit_mb']:
         result['db_pct'] = round(result['db_size_mb'] / result['db_size_limit_mb'] * 100, 1)
@@ -716,7 +967,13 @@ def _build_health_data():
         result['r2_pct'] = None
     result['db_critical']  = bool(result['db_pct'] is not None and result['db_pct'] >= 80)
     result['r2_critical']  = bool(result['r2_pct'] is not None and result['r2_pct'] >= 80)
-    result['any_critical'] = result['db_critical'] or result['r2_critical']
+    mb_overall = (result.get('mobile_bridge') or {}).get('overall')
+    result['mobile_critical'] = bool(
+        (result.get('mobile_bridge') or {}).get('bridge_only') and mb_overall == 'down'
+    )
+    result['any_critical'] = (
+        result['db_critical'] or result['r2_critical'] or result['mobile_critical']
+    )
 
     # 13. Software diagnostics from route-level timings
     try:
@@ -762,6 +1019,7 @@ def system_health():
         'RENDER_API_KEY', 'RENDER_SERVICE_ID',
         'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'R2_ENDPOINT_URL', 'R2_BUCKET_NAME',
         'DATABASE_URL', 'SECRET_KEY',
+        'UFONE_BRIDGE_ONLY', 'UFONE_VPS_DETAIL_URL', 'UFONE_BRIDGE_TOKEN',
     ]}
     try:
         data = _fetch_system_health(force=force)
@@ -801,6 +1059,24 @@ def system_health_diagnostics_api():
     if not session.get('is_master'):
         return jsonify({'error': 'Forbidden'}), 403
     return jsonify(_build_route_diagnostics(window_minutes=15))
+
+
+@app.route('/admin/system-health/mobile-bridge/api')
+def system_health_mobile_bridge_api():
+    """Live mobile phone bridge probe (bypasses 15-min health cache)."""
+    if not session.get('is_master'):
+        return jsonify({'error': 'Forbidden'}), 403
+    try:
+        return jsonify(_probe_mobile_bridge())
+    except Exception as e:
+        app.logger.exception('mobile bridge probe failed')
+        return jsonify({
+            'overall': 'unknown',
+            'network_label': 'Probe failed',
+            'reachable': False,
+            'error': str(e)[:200],
+            'url': _mobile_bridge_detail_url(),
+        }), 500
 
 
 @app.route('/network-probe')

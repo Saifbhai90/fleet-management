@@ -22,11 +22,14 @@ sshd 2>/dev/null || true
 settings put global adb_enabled 1 2>/dev/null || true
 
 # --- Primary: VPS reverse tunnels (stable Render URL) ---
+# Soak / mobile-only test: touch ~/remote/DISABLE_VPS_TUNNEL to skip VPS.
 pkill -f "autossh.*${VPS}" 2>/dev/null || true
 pkill -f "ssh.*${VPS}.*18022" 2>/dev/null || true
 sleep 1
 
-if [ ! -f "$KEY" ]; then
+if [ -f "$HOME/remote/DISABLE_VPS_TUNNEL" ]; then
+  echo "[$(date)] VPS tunnel DISABLED (DISABLE_VPS_TUNNEL present)" | tee -a "$LOG"
+elif [ ! -f "$KEY" ]; then
   echo "[$(date)] MISSING $KEY — cannot start VPS tunnel" | tee -a "$LOG"
 else
   export AUTOSSH_GATETIME=0
@@ -82,4 +85,9 @@ if command -v cloudflared >/dev/null 2>&1; then
   fi
 fi
 
-echo "http://185.228.92.23:8787" > "$HOME/remote/primary_public_url.txt"
+# Prefer Cloudflare named URL; VPS IP is legacy/soak-disabled.
+if [ -f "$HOME/remote/cloudflared_public_url.txt" ]; then
+  cp "$HOME/remote/cloudflared_public_url.txt" "$HOME/remote/primary_public_url.txt"
+else
+  echo "https://ufone-detail.myfleetmanager.co.uk" > "$HOME/remote/primary_public_url.txt"
+fi

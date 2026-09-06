@@ -8,10 +8,12 @@ mkdir -p "$HOME/remote"
 termux-wake-lock 2>/dev/null || true
 
 while true; do
-  # VPS tunnel (primary public endpoint)
-  if ! pgrep -f 'autossh.*185.228.92.23' >/dev/null 2>&1; then
-    echo "[$(date)] autossh down — restarting tunnels" | tee -a "$LOG"
-    bash "$HOME/remote/start_tunnel.sh" >>"$LOG" 2>&1 || true
+  # VPS tunnel (optional; skipped during mobile-only soak)
+  if [ ! -f "$HOME/remote/DISABLE_VPS_TUNNEL" ]; then
+    if ! pgrep -f 'autossh.*185.228.92.23' >/dev/null 2>&1; then
+      echo "[$(date)] autossh down — restarting tunnels" | tee -a "$LOG"
+      bash "$HOME/remote/start_tunnel.sh" >>"$LOG" 2>&1 || true
+    fi
   fi
 
   # cloudflared backup
