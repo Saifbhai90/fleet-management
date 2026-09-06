@@ -1,25 +1,12 @@
-# Ufone Pakistan Bridge
+﻿# Ufone Pakistan Bridge
 #
-# ## Permanent production (phone worker + stable VPS public IP)
+# ## Permanent production
 #
-# - Worker + detail API run on TECNO SPARK 4 (Termux)
-# - Websouls VPS is ONLY a stable public IP / SSH jump (autossh reverse)
-# - Render: UFONE_VPS_DETAIL_URL=http://185.228.92.23:8787
+# - Worker + detail on TECNO SPARK 4 (Termux)
+# - Public HTTPS: https://ufone-detail.myfleetmanager.co.uk (Cloudflare named tunnel)
+# - Optional VPS jump still available for SSH admin
 #
-# See [PHONE_BRIDGE.md](PHONE_BRIDGE.md) and helpers in `phone/`.
+# See PHONE_BRIDGE.md
 #
-# ## Render env
-#
-# - `UFONE_BRIDGE_TOKEN`
-# - `UFONE_BRIDGE_ONLY=1`
-# - `UFONE_VPS_DETAIL_URL=http://185.228.92.23:8787`
-#
-# ## Ops
-#
-# | Action | Command |
-# |--------|---------|
-# | Public health | `curl -s http://185.228.92.23:8787/health` |
-# | Phone shell (no USB) | `python tools/ufone_bridge/phone/phone_ssh.py` |
-# | Phone bring-up | `bash ~/remote/bringup_phone_bridge.sh` |
-#
-# Ingest: `POST /api/ufone/bridge/ingest` header `X-Ufone-Bridge-Token`
+# Render: UFONE_BRIDGE_ONLY=1
+#         UFONE_VPS_DETAIL_URL=https://ufone-detail.myfleetmanager.co.uk
