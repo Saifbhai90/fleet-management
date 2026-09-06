@@ -460,7 +460,17 @@ def _probe_mobile_bridge() -> dict:
     except Exception as e:
         out['health_ok'] = False
         out['reachable'] = False
-        out['error'] = f'health: {str(e)[:120]}'
+        err_s = str(e)
+        # Cloudflare: 530 / Error 1033 = tunnel connector offline (phone cloudflared down / no net)
+        low = err_s.lower()
+        if '530' in err_s or '1033' in err_s or 'cloudflare tunnel' in low:
+            out['error'] = (
+                'Cloudflare tunnel offline (Error 1033/530) — '
+                'phone cloudflared disconnected or no internet'
+            )
+            out['network_label'] = 'Tunnel offline on phone'
+        else:
+            out['error'] = f'health: {err_s[:120]}'
 
     # Rich /status (token)
     if token and out['reachable']:
