@@ -109,6 +109,20 @@ def fetch_maintenance_log_anon(maint_id, start_date: str = '') -> list:
     return rows if isinstance(rows, list) else []
 
 
+def _coerce_account_id(account_id) -> int:
+    """Resolve a usable ufone_account.id when caller/env passes 0/empty."""
+    try:
+        aid = int(account_id or 0)
+    except (TypeError, ValueError):
+        aid = 0
+    if aid > 0:
+        return aid
+    from ufone_creds import resolve_ufone_login
+
+    resolved, _, _ = resolve_ufone_login()
+    return int(resolved)
+
+
 def fetch_and_store_one_task_detail(account_id: int, task_id) -> dict:
     """Fetch detail+comments from Ufone, upsert Postgres, return payload.
 
@@ -119,6 +133,8 @@ def fetch_and_store_one_task_detail(account_id: int, task_id) -> dict:
         bare = bare[4:].strip()
     if not bare.isdigit():
         return {'ok': False, 'error': 'invalid task_id', 'task_id': str(task_id)}
+
+    account_id = _coerce_account_id(account_id)
 
     with UFONE_IO_LOCK:
         client = _get_client(account_id)
@@ -191,6 +207,8 @@ def fetch_and_store_emg_day(account_id: int, day: str) -> dict:
     does not flood drivers with generate/close events.
     """
     from datetime import date as _date
+
+    account_id = _coerce_account_id(account_id)
 
     day = (day or '').strip()
     if not _is_ymd(day):

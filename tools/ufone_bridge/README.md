@@ -1,9 +1,19 @@
-# Ufone Pakistan VPS Bridge
+# Ufone Pakistan Bridge
+#
+# ## Current production (2026-09 cutover)
+#
+# Bridge **worker + detail API** run on **TECNO SPARK 4 (Termux)**.
+# Websouls VPS `185.228.92.23` is only the public IP / SSH jump host.
+# VPS systemd unit `ufone-bridge` is **stopped/disabled**.
+#
+# See [PHONE_BRIDGE.md](PHONE_BRIDGE.md) and helpers in `phone/`.
+#
+# ## Legacy VPS deploy (pre-cutover)
 #
 # VPS: 185.228.92.23 (WebSouls PK VPS-1, Ubuntu 22.04)
-# Role: fetch bpocops.ufone.com from PK IP → POST cache to Render ingest API
+# Role was: fetch bpocops.ufone.com from PK IP → write Render Postgres
 #
-# ## One-time: SSH access
+# ## One-time: SSH access (jump host)
 #
 # 1. WebSouls panel → Product 42557 → **SSH Keys** → paste `deploy_key.pub`
 #    OR put root password in `.vps_password` (gitignored, one line).
@@ -15,23 +25,23 @@
 #
 # Bridge loads username/password from `ufone_account` (Ufone → Accounts).
 # Never uses UFONE_USERNAME / UFONE_PASSWORD from .env.
-# VPS needs `DATABASE_URL` + `UFONE_BRIDGE_TOKEN` (same as Render).
-# Render boot rewraps stored passwords under the bridge token so VPS can decrypt.
+# Needs `DATABASE_URL` + `UFONE_BRIDGE_TOKEN` (same as Render).
+# Render boot rewraps stored passwords under the bridge token so the bridge can decrypt.
 #
 # ## Render env (required)
 #
-# - `UFONE_BRIDGE_TOKEN` — shared secret (same as VPS `.env`)
+# - `UFONE_BRIDGE_TOKEN` — shared secret (same as phone/VPS `.env`)
 # - `UFONE_BRIDGE_ONLY=1` — disable Render→Ufone direct polling (TLS fails)
+# - `UFONE_VPS_DETAIL_URL=http://185.228.92.23:8787` — optional; this is the code default
 #
-# ## Ops
+# ## Ops (phone cutover)
 #
 # | Action | Command |
 # |--------|---------|
-# | Status | `ssh root@185.228.92.23 'systemctl status ufone-bridge'` |
-# | Logs | `ssh root@185.228.92.23 'journalctl -u ufone-bridge -f'` |
-# | One-shot sync | `ssh root@185.228.92.23 '/opt/ufone-bridge/venv/bin/python /opt/ufone-bridge/worker.py --once'` |
-# | Restart | `ssh root@185.228.92.23 'systemctl restart ufone-bridge'` |
-# | Rotate token | change both Render env + `/opt/ufone-bridge/.env`, restart worker |
+# | Public detail health | `curl -s http://185.228.92.23:8787/health` |
+# | Phone shell (via VPS tunnel) | `python tools/ufone_bridge/phone/phone_ssh.py` |
+# | Restart phone bridge | on phone: `bash ~/remote/bringup_phone_bridge.sh` |
+# | VPS prep (stop old worker) | `python tools/ufone_bridge/phone/vps_cutover_prep.py` |
 #
 # Ingest: `POST /api/ufone/bridge/ingest` header `X-Ufone-Bridge-Token`
 # Health: `GET /api/ufone/bridge/health`
