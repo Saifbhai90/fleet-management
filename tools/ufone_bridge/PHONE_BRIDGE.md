@@ -1,17 +1,13 @@
-﻿# Phone Ufone Bridge — Websouls worker cutover
+﻿# Phone Ufone Bridge — full cutover (no Websouls jump required)
 
-## Status (cut over)
+## Status
 
-Bridge **worker + detail API** now run on **TECNO SPARK 4 (Termux)**.
+Bridge **worker + detail API + public HTTPS** run on **TECNO SPARK 4 (Termux)**.
 
-Websouls VPS `185.228.92.23` is only:
-- public IP / SSH jump
-- TCP reverse-forward target for phone ports
+Public reachability uses **Cloudflare Tunnel** (`cloudflared`) from the phone.
+Websouls VPS reverse tunnels are **no longer required**.
 
-`ufone-bridge` **systemd unit is stopped/disabled** on VPS.
-
-Full Websouls cancel still needs Cloudflare Tunnel (or another public endpoint).
-Until then the VPS bill is for the jump IP only — not for running the Python bridge.
+Remote phone admin: **RustDesk** (or USB ADB). VPS SSH jump is optional/legacy.
 
 ## Architecture
 
@@ -21,52 +17,47 @@ Ufone BPOCOPS
      | PK IP (phone)
 Termux worker_pg.py + detail :8787
      |
-     | autossh reverse
-VPS 185.228.92.23
-  :8787  -> phone detail (Render UFONE_VPS_DETAIL_URL)
-  :18022 -> phone sshd (agent shell; localhost on VPS)
-  :15555 -> phone adb (scrcpy)
+     | cloudflared tunnel
+Cloudflare edge (HTTPS)
      |
-Render Hub + Postgres
+Render Hub + Postgres  (UFONE_VPS_DETAIL_URL)
 ```
 
-Render should keep:
+Render:
 - `UFONE_BRIDGE_ONLY=1`
-- `UFONE_VPS_DETAIL_URL=http://185.228.92.23:8787` (code default)
+- `UFONE_VPS_DETAIL_URL=<https tunnel URL>`
 
-Phone `.env` must have a real `UFONE_ACCOUNT_ID` (Muzaffergarh = `2`). Never `0`.
+Phone `.env`: `UFONE_ACCOUNT_ID=2` (never `0`).
+
+## Tunnel modes
+
+### A) Named tunnel (recommended, stable URL)
+
+1. Cloudflare Zero Trust → Tunnels → Create → copy install token.
+2. On phone: save token to `~/remote/cloudflared_tunnel_token.txt`
+3. Save public hostname to `~/remote/cloudflared_public_url.txt` (e.g. `https://ufone-detail.yourdomain.com`)
+4. Set Render `UFONE_VPS_DETAIL_URL` to that hostname once.
+5. `bash ~/remote/bringup_phone_bridge.sh`
+
+### B) Quick tunnel (works now, URL changes on restart)
+
+`cloudflared tunnel --url http://127.0.0.1:8787` writes
+`~/remote/cloudflared_url.txt`. After each reboot, update Render
+`UFONE_VPS_DETAIL_URL` to the new `*.trycloudflare.com` URL.
+
+## Bring-up
+
+```bash
+bash ~/remote/bringup_phone_bridge.sh
+curl -s http://127.0.0.1:8787/health
+cat ~/remote/cloudflared_url.txt
+```
 
 ## Verify
 
 ```bash
-curl -s http://185.228.92.23:8787/health
-# {"ok": true, "service": "ufone-detail"}
-
-python tools/ufone_bridge/phone/phone_ssh.py "pgrep -af worker_pg"
+curl -s "$(cat tools path or phone url)/health"
+python tools/ufone_bridge/phone/phone_ssh.py "pgrep -af 'worker_pg|cloudflared'"
 ```
 
-On phone (Termux / USB adb):
-
-```bash
-bash ~/remote/bringup_phone_bridge.sh
-```
-
-## Local secrets (gitignored)
-
-Keep under `tools/ufone_bridge/_phone_remote/`:
-- `phone_id_ed25519` (phone SSH key)
-- `rustdesk_creds.txt` (if used)
-- copies of deploy key / staging APKs
-
-Tracked helpers live in `tools/ufone_bridge/phone/` and expect:
-- `tools/ufone_bridge/deploy_key` (gitignored)
-- `tools/ufone_bridge/_phone_remote/phone_id_ed25519` (or set path)
-
-## Boot
-
-`~/.termux/boot/ufone-bridge` starts wake-lock, sshd, tunnel, worker.
-
-## Notes
-
-- Phone must stay on charger + WiFi/SIM 24/7.
-- `detail_ops` coerces `account_id<=0` via `resolve_ufone_login()` so detail cache FK cannot write `account_id=0`.
+Legacy VPS helpers remain under `phone/` for emergency rollback only.

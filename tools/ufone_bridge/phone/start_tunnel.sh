@@ -1,38 +1,48 @@
 #!/data/data/com.termux/files/usr/bin/bash
-# Reverse tunnels: phone -> Websouls VPS (public IP for Render + agent access)
-export PREFIX=/data/data/com.termux/files/usr
+# Public reachability without Websouls VPS: Cloudflare Tunnel -> local :8787
 export HOME=/data/data/com.termux/files/home
+export PREFIX=/data/data/com.termux/files/usr
 export PATH=$PREFIX/bin:$PATH
 termux-wake-lock 2>/dev/null || true
+mkdir -p "$HOME/remote"
 
-pkill -x sshd 2>/dev/null || true
-sshd
+# Prefer named tunnel token (stable hostname). Fallback: quick tunnel.
+TOKEN_FILE=$HOME/remote/cloudflared_tunnel_token.txt
+LOG=$HOME/remote/cloudflared.log
+PIDF=$HOME/remote/cloudflared.pid
+URLF=$HOME/remote/cloudflared_url.txt
 
-VPS=185.228.92.23
-KEY=$HOME/.ssh/vps_deploy_key
-LOG=$HOME/remote/tunnel.log
-
+pkill -f 'cloudflared tunnel' 2>/dev/null || true
+# Stop legacy VPS reverse tunnels (no longer required for detail)
 pkill -f "autossh.*185.228.92.23" 2>/dev/null || true
 pkill -f "ssh.*185.228.92.23.*18022" 2>/dev/null || true
 sleep 1
+rm -f "$LOG"
+: > "$LOG"
 
-export AUTOSSH_GATETIME=0
-export AUTOSSH_POLL=30
+if [ -f "$TOKEN_FILE" ] && [ -s "$TOKEN_FILE" ]; then
+  TOKEN=$(tr -d '\r\n' < "$TOKEN_FILE")
+  nohup cloudflared tunnel --no-autoupdate run --token "$TOKEN" >"$LOG" 2>&1 &
+  echo $! > "$PIDF"
+  # Named tunnel hostname is configured in Cloudflare dashboard; optional override file:
+  if [ -f "$HOME/remote/cloudflared_public_url.txt" ]; then
+    cp "$HOME/remote/cloudflared_public_url.txt" "$URLF"
+  fi
+  echo "[$(date)] named cloudflared started pid=$(cat "$PIDF")"
+else
+  nohup cloudflared tunnel --url http://127.0.0.1:8787 --no-autoupdate >"$LOG" 2>&1 &
+  echo $! > "$PIDF"
+  url=""
+  for i in $(seq 1 45); do
+    url=$(grep -oE 'https://[a-zA-Z0-9-]+\.trycloudflare\.com' "$LOG" | tail -1 || true)
+    if [ -n "$url" ]; then
+      echo "$url" > "$URLF"
+      break
+    fi
+    sleep 1
+  done
+  echo "[$(date)] quick cloudflared started pid=$(cat "$PIDF") url=${url:-TIMEOUT}"
+fi
 
-# 18022 -> Termux sshd (agent shell)
-# 15555 -> ADB TCP 5555 (scrcpy)
-# 8787  -> bridge detail HTTP (Render UFONE_VPS_DETAIL_URL)
-nohup autossh -M 0 -N \
-  -o BatchMode=yes \
-  -o ServerAliveInterval=20 \
-  -o ServerAliveCountMax=3 \
-  -o ExitOnForwardFailure=yes \
-  -o StrictHostKeyChecking=accept-new \
-  -i "$KEY" \
-  -R 127.0.0.1:18022:127.0.0.1:8022 \
-  -R 127.0.0.1:15555:127.0.0.1:5555 \
-  -R 0.0.0.0:8787:127.0.0.1:8787 \
-  root@$VPS >> "$LOG" 2>&1 &
-
-echo $! > $HOME/remote/tunnel.pid
-echo "[$(date)] tunnel started pid=$(cat $HOME/remote/tunnel.pid) (ssh+adb+detail8787)" | tee -a "$LOG"
+# Keep local sshd for USB debugging only (not exposed via VPS anymore)
+sshd 2>/dev/null || true

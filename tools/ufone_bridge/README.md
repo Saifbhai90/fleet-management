@@ -1,47 +1,30 @@
 # Ufone Pakistan Bridge
 #
-# ## Current production (2026-09 cutover)
+# ## Current production (2026-09 full phone cutover)
 #
-# Bridge **worker + detail API** run on **TECNO SPARK 4 (Termux)**.
-# Websouls VPS `185.228.92.23` is only the public IP / SSH jump host.
-# VPS systemd unit `ufone-bridge` is **stopped/disabled**.
+# Bridge **worker + detail API + public HTTPS** run on **TECNO SPARK 4 (Termux)**
+# via **Cloudflare Tunnel**. Websouls VPS is **not required**.
 #
 # See [PHONE_BRIDGE.md](PHONE_BRIDGE.md) and helpers in `phone/`.
 #
-# ## Legacy VPS deploy (pre-cutover)
-#
-# VPS: 185.228.92.23 (WebSouls PK VPS-1, Ubuntu 22.04)
-# Role was: fetch bpocops.ufone.com from PK IP → write Render Postgres
-#
-# ## One-time: SSH access (jump host)
-#
-# 1. WebSouls panel → Product 42557 → **SSH Keys** → paste `deploy_key.pub`
-#    OR put root password in `.vps_password` (gitignored, one line).
-# 2. From repo root (PowerShell):
-#
-#    .\tools\ufone_bridge\deploy.ps1
-#
-# ## Login (Fleet UI only)
-#
-# Bridge loads username/password from `ufone_account` (Ufone → Accounts).
-# Never uses UFONE_USERNAME / UFONE_PASSWORD from .env.
-# Needs `DATABASE_URL` + `UFONE_BRIDGE_TOKEN` (same as Render).
-# Render boot rewraps stored passwords under the bridge token so the bridge can decrypt.
-#
 # ## Render env (required)
 #
-# - `UFONE_BRIDGE_TOKEN` — shared secret (same as phone/VPS `.env`)
-# - `UFONE_BRIDGE_ONLY=1` — disable Render→Ufone direct polling (TLS fails)
-# - `UFONE_VPS_DETAIL_URL=http://185.228.92.23:8787` — optional; this is the code default
+# - `UFONE_BRIDGE_TOKEN` — shared secret (same as phone `.env`)
+# - `UFONE_BRIDGE_ONLY=1` — disable Render→Ufone direct polling
+# - `UFONE_VPS_DETAIL_URL` — public Cloudflare Tunnel HTTPS URL to phone `:8787`
 #
-# ## Ops (phone cutover)
+# ## Ops (phone)
 #
 # | Action | Command |
 # |--------|---------|
-# | Public detail health | `curl -s http://185.228.92.23:8787/health` |
-# | Phone shell (via VPS tunnel) | `python tools/ufone_bridge/phone/phone_ssh.py` |
-# | Restart phone bridge | on phone: `bash ~/remote/bringup_phone_bridge.sh` |
-# | VPS prep (stop old worker) | `python tools/ufone_bridge/phone/vps_cutover_prep.py` |
+# | Bring-up | on phone: `bash ~/remote/bringup_phone_bridge.sh` |
+# | Local health | `curl -s http://127.0.0.1:8787/health` |
+# | Public URL file | `cat ~/remote/cloudflared_url.txt` |
 #
 # Ingest: `POST /api/ufone/bridge/ingest` header `X-Ufone-Bridge-Token`
 # Health: `GET /api/ufone/bridge/health`
+#
+# ## Legacy note
+#
+# Older docs referring to Websouls `185.228.92.23` systemd worker are obsolete.
+# Keep the VPS only if you still want an emergency SSH jump; it is unused for bridge traffic.

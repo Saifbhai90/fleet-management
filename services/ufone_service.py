@@ -1439,10 +1439,12 @@ def fetch_maintenance_log(maint_id=None, reg_no: str = "",
 
 
 def _vps_bridge_base_url() -> str:
+    # Phone Cloudflare Tunnel URL (or other public bridge endpoint).
+    # Do not hardcode Websouls VPS — set UFONE_VPS_DETAIL_URL on Render.
     return (
         os.environ.get('UFONE_VPS_DETAIL_URL')
         or os.environ.get('UFONE_BRIDGE_DETAIL_URL')
-        or 'http://185.228.92.23:8787'
+        or ''
     ).strip().rstrip('/')
 
 
