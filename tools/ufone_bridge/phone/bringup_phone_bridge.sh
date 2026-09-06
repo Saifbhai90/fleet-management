@@ -1,5 +1,5 @@
 #!/data/data/com.termux/files/usr/bin/bash
-# One-shot bring-up: phone owns Ufone bridge + public Cloudflare tunnel (no Websouls VPS).
+# Permanent bring-up: worker on phone + VPS stable public IP + watchdogs.
 export PREFIX=/data/data/com.termux/files/usr
 export HOME=/data/data/com.termux/files/home
 export PATH=$PREFIX/bin:$PATH
@@ -27,19 +27,16 @@ pkill -f run_forever.sh 2>/dev/null || true
 sleep 1
 nohup bash "$HOME/ufone-bridge/run_forever.sh" >/dev/null 2>&1 &
 
-# Optional: if watch script exists, keep publishing URL / health
 pkill -f watch_tunnel.sh 2>/dev/null || true
-if [ -x "$HOME/remote/watch_tunnel.sh" ]; then
-  nohup bash "$HOME/remote/watch_tunnel.sh" >/dev/null 2>&1 &
-fi
+nohup bash "$HOME/remote/watch_tunnel.sh" >/dev/null 2>&1 &
 
-sleep 4
+sleep 5
 echo "=== STATUS ==="
-pgrep -af 'cloudflared|worker_pg|sshd|run_forever' | head -20 || true
+pgrep -af 'autossh|cloudflared|worker_pg|sshd|run_forever|watch_tunnel' | head -30 || true
 echo "=== DETAIL LOCAL ==="
-curl -m 5 -s http://127.0.0.1:8787/health || echo "detail_not_up_yet"
+curl -m 5 -s http://127.0.0.1:8787/health || echo detail_not_up_yet
 echo
-echo "=== PUBLIC URL ==="
-cat "$HOME/remote/cloudflared_url.txt" 2>/dev/null || echo "(set named tunnel URL in remote/cloudflared_public_url.txt)"
+echo "=== PRIMARY PUBLIC ==="
+cat "$HOME/remote/primary_public_url.txt" 2>/dev/null || echo "http://185.228.92.23:8787"
 echo
 echo BRINGUP_DONE

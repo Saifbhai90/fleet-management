@@ -1,63 +1,63 @@
-﻿# Phone Ufone Bridge — full cutover (no Websouls jump required)
+﻿# Phone Ufone Bridge — permanent setup
 
-## Status
+## Goal
 
-Bridge **worker + detail API + public HTTPS** run on **TECNO SPARK 4 (Termux)**.
+Bridge **always runs on phone**. Public URL stays **stable** so Render / agent
+access does not break after USB unplug.
 
-Public reachability uses **Cloudflare Tunnel** (`cloudflared`) from the phone.
-Websouls VPS reverse tunnels are **no longer required**.
-
-Remote phone admin: **RustDesk** (or USB ADB). VPS SSH jump is optional/legacy.
-
-## Architecture
+## Architecture (permanent)
 
 ```
-Ufone BPOCOPS
-     ^
-     | PK IP (phone)
-Termux worker_pg.py + detail :8787
-     |
-     | cloudflared tunnel
-Cloudflare edge (HTTPS)
-     |
-Render Hub + Postgres  (UFONE_VPS_DETAIL_URL)
+Ufone BPOCOPS  <--- phone WiFi/SIM (PK IP)
+        ^
+Termux: worker_pg.py + detail :8787
+        |
+        | autossh reverse (always-on, watchdog)
+VPS 185.228.92.23   (stable public IP ONLY)
+  :8787  -> phone detail   << Render UFONE_VPS_DETAIL_URL
+  :18022 -> phone sshd     << remote admin (no USB)
+  :15555 -> phone adb      << optional scrcpy
+        |
+Render Hub
 ```
 
-Render:
+Optional backup: `cloudflared` quick/named tunnel (not used by Render by default).
+
+## Why this is permanent
+
+| Problem before | Fix now |
+|----------------|---------|
+| USB unplug killed internet (gnirehtet) | Phone uses own WiFi/SIM |
+| trycloudflare URL changed every restart | Render uses stable `http://185.228.92.23:8787` |
+| Connection refused / dead after reboot | Termux:Boot + `watch_tunnel.sh` + `run_forever.sh` |
+| No remote admin without USB | VPS `:18022` SSH jump restored |
+
+## Render env
+
 - `UFONE_BRIDGE_ONLY=1`
-- `UFONE_VPS_DETAIL_URL=<https tunnel URL>`
+- `UFONE_VPS_DETAIL_URL=http://185.228.92.23:8787`
 
-Phone `.env`: `UFONE_ACCOUNT_ID=2` (never `0`).
-
-## Tunnel modes
-
-### A) Named tunnel (recommended, stable URL)
-
-1. Cloudflare Zero Trust → Tunnels → Create → copy install token.
-2. On phone: save token to `~/remote/cloudflared_tunnel_token.txt`
-3. Save public hostname to `~/remote/cloudflared_public_url.txt` (e.g. `https://ufone-detail.yourdomain.com`)
-4. Set Render `UFONE_VPS_DETAIL_URL` to that hostname once.
-5. `bash ~/remote/bringup_phone_bridge.sh`
-
-### B) Quick tunnel (works now, URL changes on restart)
-
-`cloudflared tunnel --url http://127.0.0.1:8787` writes
-`~/remote/cloudflared_url.txt`. After each reboot, update Render
-`UFONE_VPS_DETAIL_URL` to the new `*.trycloudflare.com` URL.
-
-## Bring-up
+## Phone ops
 
 ```bash
 bash ~/remote/bringup_phone_bridge.sh
 curl -s http://127.0.0.1:8787/health
-cat ~/remote/cloudflared_url.txt
+curl -s http://185.228.92.23:8787/health
 ```
 
-## Verify
+From PC (no USB):
 
 ```bash
-curl -s "$(cat tools path or phone url)/health"
-python tools/ufone_bridge/phone/phone_ssh.py "pgrep -af 'worker_pg|cloudflared'"
+python tools/ufone_bridge/phone/phone_ssh.py "pgrep -af worker_pg"
 ```
 
-Legacy VPS helpers remain under `phone/` for emergency rollback only.
+## Boot
+
+`~/.termux/boot/ufone-bridge` → `bringup_phone_bridge.sh`  
+Keep phone on charger. Disable battery optimization for Termux (already whitelisted via ADB).
+
+## Later: cancel Websouls
+
+Add Cloudflare **named tunnel token** to `~/remote/cloudflared_tunnel_token.txt`
+and hostname to `~/remote/cloudflared_public_url.txt`, point Render to that HTTPS
+URL, then you can stop paying for the VPS jump IP.

@@ -1,30 +1,25 @@
 # Ufone Pakistan Bridge
 #
-# ## Current production (2026-09 full phone cutover)
+# ## Permanent production (phone worker + stable VPS public IP)
 #
-# Bridge **worker + detail API + public HTTPS** run on **TECNO SPARK 4 (Termux)**
-# via **Cloudflare Tunnel**. Websouls VPS is **not required**.
+# - Worker + detail API run on TECNO SPARK 4 (Termux)
+# - Websouls VPS is ONLY a stable public IP / SSH jump (autossh reverse)
+# - Render: UFONE_VPS_DETAIL_URL=http://185.228.92.23:8787
 #
 # See [PHONE_BRIDGE.md](PHONE_BRIDGE.md) and helpers in `phone/`.
 #
-# ## Render env (required)
+# ## Render env
 #
-# - `UFONE_BRIDGE_TOKEN` — shared secret (same as phone `.env`)
-# - `UFONE_BRIDGE_ONLY=1` — disable Render→Ufone direct polling
-# - `UFONE_VPS_DETAIL_URL` — public Cloudflare Tunnel HTTPS URL to phone `:8787`
+# - `UFONE_BRIDGE_TOKEN`
+# - `UFONE_BRIDGE_ONLY=1`
+# - `UFONE_VPS_DETAIL_URL=http://185.228.92.23:8787`
 #
-# ## Ops (phone)
+# ## Ops
 #
 # | Action | Command |
 # |--------|---------|
-# | Bring-up | on phone: `bash ~/remote/bringup_phone_bridge.sh` |
-# | Local health | `curl -s http://127.0.0.1:8787/health` |
-# | Public URL file | `cat ~/remote/cloudflared_url.txt` |
+# | Public health | `curl -s http://185.228.92.23:8787/health` |
+# | Phone shell (no USB) | `python tools/ufone_bridge/phone/phone_ssh.py` |
+# | Phone bring-up | `bash ~/remote/bringup_phone_bridge.sh` |
 #
 # Ingest: `POST /api/ufone/bridge/ingest` header `X-Ufone-Bridge-Token`
-# Health: `GET /api/ufone/bridge/health`
-#
-# ## Legacy note
-#
-# Older docs referring to Websouls `185.228.92.23` systemd worker are obsolete.
-# Keep the VPS only if you still want an emergency SSH jump; it is unused for bridge traffic.

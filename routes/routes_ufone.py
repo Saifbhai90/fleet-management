@@ -617,12 +617,11 @@ def ufone_task_detail(task_id):
 
 
 def _vps_detail_base_url() -> str:
-    # Phone Cloudflare Tunnel URL (or other public bridge endpoint).
-    # Do not hardcode Websouls VPS — set UFONE_VPS_DETAIL_URL on Render.
+    # Phone bridge detail via stable VPS reverse-forward (or Cloudflare URL).
     return (
         os.environ.get('UFONE_VPS_DETAIL_URL')
         or os.environ.get('UFONE_BRIDGE_DETAIL_URL')
-        or ''
+        or 'http://185.228.92.23:8787'
     ).strip().rstrip('/')
 
 
