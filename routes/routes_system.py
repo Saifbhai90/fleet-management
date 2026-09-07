@@ -411,6 +411,13 @@ def _probe_mobile_bridge() -> dict:
         'public_ip': None,
         'detail_local_ok': None,
         'detail_local_ms': None,
+        'battery_pct': None,
+        'battery_status': None,
+        'battery_plugged': None,
+        'battery_health': None,
+        'battery_temp_c': None,
+        'battery_charging': None,
+        'battery_low': None,
         'ingest_vehicle_age_sec': None,
         'ingest_task_age_sec': None,
         'ingest_ok': None,
@@ -497,6 +504,8 @@ def _probe_mobile_bridge() -> dict:
                     'worker_pg', 'cloudflared', 'sshd', 'autossh_vps', 'watch_tunnel',
                     'vps_tunnel_disabled', 'ufone_ok', 'ufone_rtt_ms', 'public_ip',
                     'detail_local_ok', 'detail_local_ms', 'overall',
+                    'battery_pct', 'battery_status', 'battery_plugged', 'battery_health',
+                    'battery_temp_c', 'battery_charging', 'battery_low',
                 ):
                     if k in st:
                         out[k] = st.get(k)
@@ -522,6 +531,9 @@ def _probe_mobile_bridge() -> dict:
     elif out.get('ufone_ok') is False:
         out['overall'] = 'degraded'
         out['network_label'] = 'Ufone unreachable from phone'
+    elif out.get('battery_low'):
+        out['overall'] = 'degraded'
+        out['network_label'] = f"Phone battery low ({out.get('battery_pct')}%) — plug in charger"
     elif out.get('ingest_ok') is False and bridge_only:
         out['overall'] = 'degraded'
         out['network_label'] = 'Tunnel OK — ingest stale'

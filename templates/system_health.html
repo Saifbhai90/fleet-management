@@ -404,7 +404,23 @@
                 </div>
             </div>
             <div class="row g-2" style="font-size:0.78rem;">
-                <div class="col-6 col-md-3">
+                <div class="col-6 col-md-2">
+                    <div class="lbl"><i class="bi bi-battery-half me-1"></i>Phone battery</div>
+                    {% set bp = mb.battery_pct %}
+                    <div class="fw-bold {% if mb.battery_low %}text-danger{% elif bp is not none and bp <= 30 %}text-warning{% else %}text-dark{% endif %}" id="mb-battery-pct">
+                        {% if bp is not none %}{{ bp }}%{% else %}—{% endif %}
+                    </div>
+                    <div class="sub" id="mb-battery-meta">
+                        {% if mb.battery_charging %}charging{% elif mb.battery_status %}{{ mb.battery_status | lower }}{% else %}—{% endif %}
+                        {% if mb.battery_temp_c is not none %} · {{ mb.battery_temp_c }}°C{% endif %}
+                    </div>
+                    <div class="pt" style="margin-top:6px;">
+                        <div class="pf {% if mb.battery_low %}pf-bad{% elif bp is not none and bp <= 30 %}pf-warn{% else %}pf-ok{% endif %}"
+                             id="mb-battery-bar"
+                             style="width:{% if bp is not none %}{{ [bp, 100] | min }}{% else %}0{% endif %}%;"></div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-2">
                     <div class="lbl">Tunnel RTT</div>
                     <div class="fw-bold text-dark" id="mb-health-ms">{% if mb.health_ms is not none %}{{ mb.health_ms }} ms{% else %}—{% endif %}</div>
                     <div class="sub" id="mb-tunnel-quality">quality: {{ mb.tunnel_quality or '—' }}</div>
@@ -426,9 +442,9 @@
                     </div>
                     <div class="sub" id="mb-ingest-ok">{% if mb.ingest_ok is sameas true %}sync OK{% elif mb.ingest_ok is sameas false %}stale / missing{% else %}—{% endif %}</div>
                 </div>
-                <div class="col-6 col-md-3">
+                <div class="col-6 col-md-2">
                     <div class="lbl">Public IP</div>
-                    <div class="fw-bold text-dark" style="font-family:monospace;font-size:0.85rem;" id="mb-ip">{{ mb.public_ip or '—' }}</div>
+                    <div class="fw-bold text-dark" style="font-family:monospace;font-size:0.8rem;" id="mb-ip">{{ mb.public_ip or '—' }}</div>
                     <div class="sub" id="mb-url" style="word-break:break-all;">{{ mb.url or '' }}</div>
                 </div>
             </div>
@@ -1233,6 +1249,27 @@
         if (el) el.textContent = mb.network_label || 'Not checked';
         el = document.getElementById('mb-checked-at');
         if (el) el.textContent = mb.checked_at ? ('· checked ' + mb.checked_at) : '';
+        el = document.getElementById('mb-battery-pct');
+        if (el) {
+            var bp = mb.battery_pct;
+            el.textContent = (bp != null) ? (bp + '%') : '—';
+            el.className = 'fw-bold ' + (mb.battery_low ? 'text-danger' : (bp != null && bp <= 30 ? 'text-warning' : 'text-dark'));
+        }
+        el = document.getElementById('mb-battery-meta');
+        if (el) {
+            var meta = [];
+            if (mb.battery_charging) meta.push('charging');
+            else if (mb.battery_status) meta.push(String(mb.battery_status).toLowerCase());
+            if (mb.battery_temp_c != null) meta.push(mb.battery_temp_c + '°C');
+            if (mb.battery_plugged) meta.push(String(mb.battery_plugged).replace('PLUGGED_', '').toLowerCase());
+            el.textContent = meta.length ? meta.join(' · ') : '—';
+        }
+        el = document.getElementById('mb-battery-bar');
+        if (el) {
+            var pct = (mb.battery_pct != null) ? Math.min(mb.battery_pct, 100) : 0;
+            el.style.width = pct + '%';
+            el.className = 'pf ' + (mb.battery_low ? 'pf-bad' : (mb.battery_pct != null && mb.battery_pct <= 30 ? 'pf-warn' : 'pf-ok'));
+        }
         el = document.getElementById('mb-health-ms');
         if (el) el.textContent = mb.health_ms != null ? (mb.health_ms + ' ms') : '—';
         el = document.getElementById('mb-tunnel-quality');
@@ -1264,6 +1301,8 @@
             html += _chipHtml(mb.watch_tunnel, 'watchdog');
             html += _chipHtml(mb.sshd, 'sshd');
             html += _chipHtml(mb.detail_local_ok, 'detail :8787');
+            if (mb.battery_charging === true) html += '<span class="chip chip-ok">charging ✓</span>';
+            else if (mb.battery_low === true) html += '<span class="chip chip-err">battery low ✗</span>';
             if (mb.vps_tunnel_disabled === true) html += '<span class="chip chip-ok">VPS soak OFF ✓</span>';
             else if (mb.autossh_vps === true) html += '<span class="chip chip-skip">autossh VPS on</span>';
             if (mb.bridge_only) html += '<span class="chip chip-ok">BRIDGE_ONLY</span>';

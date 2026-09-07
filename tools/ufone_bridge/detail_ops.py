@@ -285,6 +285,53 @@ def _pgrep_running(pattern: str) -> bool:
         return False
 
 
+def _read_phone_battery() -> dict:
+    """Best-effort Termux battery snapshot (termux-api)."""
+    out = {
+        'battery_pct': None,
+        'battery_status': None,
+        'battery_plugged': None,
+        'battery_health': None,
+        'battery_temp_c': None,
+        'battery_charging': None,
+        'battery_low': None,
+    }
+    try:
+        r = subprocess.run(
+            ['termux-battery-status'],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if r.returncode != 0 or not (r.stdout or '').strip():
+            return out
+        data = json.loads(r.stdout)
+        pct = data.get('percentage')
+        try:
+            pct_i = int(pct) if pct is not None else None
+        except (TypeError, ValueError):
+            pct_i = None
+        plugged = (data.get('plugged') or '').strip() or None
+        status = (data.get('status') or '').strip() or None
+        charging = False
+        if status and status.upper() == 'CHARGING':
+            charging = True
+        if plugged and plugged.upper() not in ('', 'UNPLUGGED'):
+            charging = True
+        out.update({
+            'battery_pct': pct_i,
+            'battery_status': status,
+            'battery_plugged': plugged,
+            'battery_health': (data.get('health') or None),
+            'battery_temp_c': data.get('temperature'),
+            'battery_charging': charging,
+            'battery_low': bool(pct_i is not None and pct_i <= 15 and not charging),
+        })
+    except Exception:
+        pass
+    return out
+
+
 def _build_phone_status() -> dict:
     """Snapshot for System Health: processes + Ufone/network reachability."""
     import time as _t
@@ -326,6 +373,8 @@ def _build_phone_status() -> dict:
         except Exception:
             public_ip = None
 
+    battery = _read_phone_battery()
+
     worker = _pgrep_running('worker_pg.py')
     cloudflared = _pgrep_running('cloudflared tunnel')
     sshd = _pgrep_running('sshd')
@@ -336,6 +385,8 @@ def _build_phone_status() -> dict:
     if not detail_ok or not worker or not cloudflared:
         overall = 'down'
     elif not ufone_ok:
+        overall = 'degraded'
+    elif battery.get('battery_low'):
         overall = 'degraded'
     elif ufone_ms is not None and ufone_ms > 2500:
         overall = 'slow'
@@ -358,6 +409,7 @@ def _build_phone_status() -> dict:
         'ufone_rtt_ms': ufone_ms,
         'public_ip': public_ip,
         'host': 'phone',
+        **battery,
     }
 
 
