@@ -404,7 +404,7 @@
 
           <div class="list-group list-group-flush report-link-group">
 
-            {% if can_see_page('fuel_expense_list') %}
+            {% if can_see_page('fuel_expense_list') or can_see_page('fuel_expense_report') %}
 
             {{ report_link(url_for('fuel_expense_list', nav_from='reports'), 'fa-solid fa-gas-pump', 'Fuel Expense Report', 'rc-tile--fuel') }}
 

@@ -344,6 +344,7 @@ PERMISSION_TREE = {
         ('driver_salary_slip', 'Driver Salary Slip (Bank)'),
         ('driver_seat_available_report', 'Driver Seat Available'),
         ('oil_change_alert_report', 'Oil Change Alert Report'),
+        ('fuel_expense_report', 'Fuel Expense Report'),
         ('speed_monitoring_report', 'Speed Monitoring Report'),
         ('mileage_report', 'Mileage Report'),
         ('tracker_difference_report', 'Tracker Difference Report'),
@@ -620,6 +621,7 @@ PERMISSION_DEPENDENCIES = {
     'workspace_month_close': ['workspace'],
     'workspace_reports': ['workspace'],
     'workspace_mpg_report': [],
+    'fuel_expense_report': [],
     # Task & Logbook – granular features independent of section "full" (like Assignments / Transfers).
     # Granting Daily Task list/add must NOT auto-add "task_report" (that implied Workbook Upload via PAGE_VISIBLE).
     'task_report_upload': [],
@@ -1057,6 +1059,7 @@ SECTION_PAGE_GROUPS = {
         ('Driver Salary Slip (Bank)', [('driver_salary_slip', 'Driver Salary Slip (Bank)')]),
         ('Driver Seat Available', [('driver_seat_available_report', 'Driver Seat Available')]),
         ('Oil Change Alert Report', [('oil_change_alert_report', 'Oil Change Alert Report')]),
+        ('Fuel Expense Report', [('fuel_expense_report', 'Fuel Expense Report')]),
         ('MPG Report', [('workspace_mpg_report', 'MPG Report')]),
         ('Speed Monitoring Report', [('speed_monitoring_report', 'Speed Monitoring Report')]),
         ('Mileage Report', [('mileage_report', 'Mileage Report')]),
@@ -1354,8 +1357,9 @@ PAGE_VISIBLE = {
     'report_uniform_sizes': ['reports', 'report_uniform_sizes'],
     'uniform_size_edit': ['reports', 'report_uniform_sizes', 'uniform_size_edit'],
     # Report Centre uses endpoint-style keys for list routes — align with real permission codes
-    # Include `reports` so Drivers (Report Centre) can open Fuel Expense like MPG Report.
-    'fuel_expense_list': ['expenses', 'fuel_expense', 'reports'],
+    # fuel_expense_report = view-only Report Centre access (Drivers); fuel_expense = Expense Management.
+    'fuel_expense_list': ['expenses', 'fuel_expense', 'fuel_expense_report', 'reports'],
+    'fuel_expense_report': ['fuel_expense_report', 'reports', 'fuel_expense', 'expenses'],
     'oil_expense_list': ['expenses', 'oil_expense'],
     'maintenance_expense_list': ['expenses', 'maintenance_expense'],
     'payment_vouchers_list': ['accounts', 'accounts_quick_payment'],

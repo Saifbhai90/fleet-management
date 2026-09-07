@@ -1073,6 +1073,25 @@ def seed_auth_tables(app):
         except Exception:
             db.session.rollback()
 
+        # Fuel Expense Report: grant to roles that already have MPG Report or Report Centre.
+        try:
+            fuel_rep = Permission.query.filter_by(code='fuel_expense_report').first()
+            if fuel_rep:
+                changed = False
+                for role in Role.query.all():
+                    if role.name == 'Master':
+                        continue
+                    codes = {p.code for p in role.permissions}
+                    if 'fuel_expense_report' in codes:
+                        continue
+                    if 'workspace_mpg_report' in codes or 'reports_index' in codes:
+                        role.permissions.append(fuel_rep)
+                        changed = True
+                if changed:
+                    db.session.commit()
+        except Exception:
+            db.session.rollback()
+
         # MPG is a Report Centre report — do not keep Employee Workspace (full) on roles
         # that only received `workspace` because older dependency expansion forced it with MPG.
         try:
