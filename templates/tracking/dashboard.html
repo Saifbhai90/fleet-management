@@ -632,7 +632,7 @@
       <div class="tk-zoom" id="tkZoom">
         <button type="button" id="tkZoomIn" aria-label="Zoom in">+</button>
         <button type="button" id="tkZoomOut" aria-label="Zoom out">&minus;</button>
-      </div>
+    </div>
 
       <!-- Floating map controls -->
       <div class="tk-fabs" id="tkFabs">
@@ -641,13 +641,13 @@
         <div class="tk-fab" id="tkFabFit" role="button" aria-label="Fit all vehicles"><i class="bi bi-bounding-box"></i></div>
         <div class="tk-fab" id="tkFabLocate" role="button" aria-label="My location"><i class="bi bi-crosshair"></i></div>
         <div class="tk-fab tk-fab-info" id="tkFabInfo" role="button" aria-label="Legend"><i class="bi bi-info-lg"></i></div>
-      </div>
+  </div>
 
       <div class="tk-layer-pop" id="tkLayerPop">
         <div class="tk-layer-title">Map style</div>
         <div id="tkLayerList"></div>
         <div class="tk-layer-extras" id="tkLayerExtras"></div>
-      </div>
+</div>
 
       <section class="tk-nearest-panel" id="tkNearestPanel" aria-live="polite">
         <div class="tk-nearest-head">
@@ -1556,8 +1556,8 @@
       openDetail(reg);
       return;
     }
-    if (pan) map.setView([parseFloat(v.LAT), parseFloat(v.LON)], 14, { animate: true });
-    m.openPopup();
+      if (pan) map.setView([parseFloat(v.LAT), parseFloat(v.LON)], 14, { animate: true });
+      m.openPopup();
   }
 
   function applyFilter() {
@@ -2229,16 +2229,16 @@
   // ── Initial load ──
   var initialVehicles = {{ vehicles | tojson }};
   fetchUfoneTaskMap().finally(function() {
-    if (initialVehicles && initialVehicles.length) {
-      renderVehicles(initialVehicles);
+  if (initialVehicles && initialVehicles.length) {
+    renderVehicles(initialVehicles);
       var boundsVehicles = initialVehicles.filter(function(v) {
         if (!v.LAT || !v.LON) return false;
         return true;
       });
       if (boundsVehicles.length) {
         var bounds = L.latLngBounds(boundsVehicles.map(function(v) { return [parseFloat(v.LAT), parseFloat(v.LON)]; }));
-        if (bounds.isValid()) map.fitBounds(bounds, { padding: [40, 40] });
-      }
+    if (bounds.isValid()) map.fitBounds(bounds, { padding: [40, 40] });
+  }
     } else {
       updateStatCounts();
       syncGroupHeaderState();

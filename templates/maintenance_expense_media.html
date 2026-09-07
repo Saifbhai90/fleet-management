@@ -96,9 +96,152 @@
     font-size: 0.78rem; color: #64748b; margin-top: 0.5rem; text-align: center;
   }
 </style>
+{% if media_mobile_chrome|default(false) %}
+<style>
+  /* Hard hide hamburger for fuel media — endpoint based, always on */
+  body[data-fleet-endpoint="fuel_expense_media"] .mobile-menu-btn,
+  body[data-fleet-endpoint="fuel_expense_media"] #mobileMenuBtn,
+  html.capacitor-native body[data-fleet-endpoint="fuel_expense_media"] .mobile-menu-btn,
+  html.capacitor-native body[data-fleet-endpoint="fuel_expense_media"] #mobileMenuBtn,
+  html.capacitor-native body.fuel-hide-mobile-menu .mobile-menu-btn,
+  body.fuel-hide-mobile-menu .mobile-menu-btn,
+  body.fuel-hide-mobile-menu #mobileMenuBtn {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
 
-<div class="container-fluid py-3">
+  body[data-fleet-endpoint="fuel_expense_media"],
+  body.fuel-hide-mobile-menu {
+    --media-chrome-bar-h: 48px;
+  }
+
+  html.capacitor-native body[data-fleet-endpoint="fuel_expense_media"] #appNativeShell,
+  html.capacitor-native body.fuel-hide-mobile-menu #appNativeShell {
+    top: env(safe-area-inset-top, 0px) !important;
+  }
+
+  body[data-fleet-endpoint="fuel_expense_media"] .main-content,
+  html.capacitor-native body[data-fleet-endpoint="fuel_expense_media"] .main-content,
+  html.capacitor-native body[data-fleet-endpoint="fuel_expense_media"] #appNativeShell .main-content,
+  body.fuel-hide-mobile-menu .main-content,
+  html.capacitor-native body.fuel-hide-mobile-menu .main-content,
+  html.capacitor-native body.fuel-hide-mobile-menu #appNativeShell .main-content {
+    top: env(safe-area-inset-top, 0px) !important;
+    margin: 0 !important;
+    padding-top: 0 !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    padding-bottom: max(12px, env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  .media-chrome-page.container-fluid {
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+  }
+  .media-chrome-page .media-wrap {
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: var(--media-chrome-bar-h, 48px) 12px 12px !important;
+  }
+  .media-chrome-top-bar {
+    display: flex !important;
+    position: fixed !important;
+    top: env(safe-area-inset-top, 0px) !important;
+    left: 0 !important;
+    right: 0 !important;
+    height: var(--media-chrome-bar-h, 48px) !important;
+    z-index: 1100 !important;
+    margin: 0 !important;
+    padding: 0 8px !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 8px !important;
+    border: none !important;
+    border-bottom: 1px solid #e5e7eb !important;
+    border-radius: 0 !important;
+    background: #fff !important;
+    box-shadow: none !important;
+  }
+  .media-chrome-back-btn {
+    width: 40px !important;
+    height: 40px !important;
+    padding: 0 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border-radius: 999px !important;
+    border-color: transparent !important;
+    background: transparent !important;
+    color: #334155 !important;
+  }
+  .media-chrome-back-btn:hover { background: #f1f5f9 !important; }
+  .media-chrome-back-btn .bi {
+    margin: 0 !important;
+    font-size: 1.1rem !important;
+  }
+  .media-chrome-title {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    padding: 0 4px !important;
+    color: #0f172a !important;
+    font-size: .92rem !important;
+    font-weight: 700 !important;
+    line-height: 1.25 !important;
+    text-align: center !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+  .media-chrome-spacer {
+    width: 40px !important;
+    height: 40px !important;
+    flex: 0 0 auto !important;
+  }
+  .media-chrome-page .media-toolbar {
+    margin-top: 0 !important;
+  }
+  .media-chrome-page .media-grid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)) !important;
+    gap: 10px !important;
+  }
+  .media-chrome-page .media-thumb {
+    object-fit: contain !important;
+    background: #0f172a !important;
+  }
+</style>
+<script>
+  document.body.classList.add('fuel-hide-mobile-menu');
+</script>
+{% endif %}
+
+<div class="container-fluid py-3{% if media_mobile_chrome|default(false) %} media-chrome-page{% endif %}">
+  {% if media_mobile_chrome|default(false) %}
+  <div class="media-chrome-top-bar d-print-none">
+    <a href="{{ back_url or url_for('fuel_expense_list') }}"
+       class="btn btn-outline-secondary btn-sm media-chrome-back-btn"
+       title="Back"
+       aria-label="Back"
+       data-fleet-nav-back="1"
+       onclick="return window.fleetNavigateBack ? window.fleetNavigateBack(event, this) : true;">
+      <i class="bi bi-arrow-left"></i>
+    </a>
+    <span class="media-chrome-title" title="{{ media_title or 'Fuel Media Gallery' }}">{{ media_title or 'Fuel Media Gallery' }}</span>
+    <span class="media-chrome-spacer" aria-hidden="true"></span>
+  </div>
+  {% endif %}
   <div class="media-wrap">
+    {% if media_mobile_chrome|default(false) %}
+    <div class="small text-muted mb-2 px-1">
+      Vehicle: {{ rec.vehicle.vehicle_no if rec.vehicle else '-' }}
+      · Date: {{ media_date_label or (rec.expense_date|ddmmyyyy if rec.expense_date else '—') }}
+    </div>
+    {% else %}
     <div class="d-flex justify-content-between align-items-center mb-3 media-head">
       <div>
         <h5 class="mb-0"><i class="bi bi-images me-2"></i>{{ media_title or 'Maintenance Media Gallery' }}</h5>
@@ -106,6 +249,7 @@
       </div>
       <a href="{{ back_url or url_for('maintenance_expense_list') }}" class="btn btn-outline-light btn-sm"><i class="bi bi-arrow-left me-1"></i>{{ back_link_label|default('Back') }}</a>
     </div>
+    {% endif %}
 
     {% if media_items %}
       {% set image_count = media_items|selectattr('type','equalto','image')|list|length %}

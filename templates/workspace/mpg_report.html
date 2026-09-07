@@ -27,11 +27,14 @@
   {% if from_report_center %}
   <div class="mpg-top-bar mb-3" id="mpgTopBar">
     <a href="{{ nav_back_url_auto or url_for('reports_index') }}"
-       class="btn btn-outline-secondary btn-sm mpg-hero-btn mpg-hero-btn--back"
+       class="btn btn-outline-secondary btn-sm mpg-hero-btn mpg-hero-btn--back mpg-report-back-btn"
+       title="Back to Report Center"
+       aria-label="Back to Report Center"
        data-fleet-nav-back="1"
        onclick="return window.fleetNavigateBack(event, this);">
-      <i class="bi bi-arrow-left me-1"></i><span>Report Center</span>
+      <i class="bi bi-arrow-left"></i><span class="mpg-back-label">Report Center</span>
     </a>
+    <span class="mpg-report-title-inline" title="MPG Report">MPG Report</span>
     <button type="button" class="mpg-toolbar-more-btn" id="mpgMoreBtn" aria-label="More actions" aria-expanded="false" aria-controls="mpgMoreMenu" aria-haspopup="true">
       <i class="bi bi-three-dots"></i>
     </button>
@@ -40,6 +43,9 @@
       <button type="button" class="btn btn-outline-primary btn-sm mpg-hero-btn mpg-hero-btn--export" id="btnExportReport" role="menuitem"><i class="bi bi-file-earmark-excel me-1"></i><span>Export</span></button>
     </div>
   </div>
+  <script>
+    document.body.classList.add('mpg-hide-mobile-menu');
+  </script>
   {% elif workspace_selected_employee %}
   {% include "workspace/_nav.html" %}
   {% else %}
@@ -329,8 +335,7 @@
     .mpg-report-page.is-mobile-layout {
       max-width: 100vw;
       overflow-x: hidden;
-      /* Extra bottom room so vehicle card clears fixed Save bar (same idea as Task Entry) */
-      padding: 14px max(14px, env(safe-area-inset-left, 0px)) max(150px, calc(110px + env(safe-area-inset-bottom, 0px))) max(14px, env(safe-area-inset-right, 0px));
+      padding: 14px max(14px, env(safe-area-inset-left, 0px)) max(20px, env(safe-area-inset-bottom, 0px)) max(14px, env(safe-area-inset-right, 0px));
       background: #ffffff;
       -webkit-font-smoothing: antialiased;
     }
@@ -681,39 +686,82 @@
       justify-content: space-between;
       gap: 10px;
       width: 100%;
-      padding: 11px 14px;
-      background: #fff;
+      padding: 10px 12px;
+      background: #f8fafc;
       border: none;
       border-radius: 16px;
       text-align: left;
       color: #0f172a;
     }
-    .mpg-filter-summary-text {
+    .mpg-filter-summary-main {
       display: flex;
-      align-items: flex-start;
-      gap: 8px;
+      flex-direction: column;
+      gap: 6px;
       min-width: 0;
-      flex: 1 1 auto;
-      font-size: 0.82rem;
+      flex: 1;
+      width: 100%;
+    }
+    .mpg-filter-summary-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      width: 100%;
+    }
+    .mpg-filter-summary-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: #64748b;
+      font-size: .68rem;
+      font-weight: 800;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+    .mpg-filter-summary-label .bi { color: #2563eb; }
+    .mpg-filter-chips {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 5px;
+    }
+    .mpg-filter-chip {
+      display: inline-flex;
+      align-items: center;
+      flex: 0 1 auto;
+      width: max-content;
+      max-width: 100%;
+      padding: 4px 8px;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      background: #fff;
+      color: #334155;
+      font-size: .7rem;
       font-weight: 600;
-      line-height: 1.35;
+      line-height: 1.2;
+      white-space: nowrap;
+      box-shadow: 0 1px 2px rgba(15,23,42,.04);
     }
-    .mpg-filter-summary-text > span {
-      min-width: 0;
-      flex: 1 1 auto;
-      white-space: normal;
-      overflow: visible;
-      text-overflow: clip;
-      word-break: break-word;
+    .mpg-filter-chip.is-date {
+      font-size: .68rem;
+      letter-spacing: -.01em;
+      padding-left: 7px;
+      padding-right: 7px;
     }
-    .mpg-filter-summary-text .bi { flex: 0 0 auto; color: #64748b; margin-top: 2px; }
+    .mpg-filter-chip.is-vehicle {
+      border-color: #bfdbfe;
+      background: #eff6ff;
+      color: #1d4ed8;
+    }
+    .mpg-filter-summary-text {
+      display: none;
+    }
     .mpg-filter-summary-action {
       flex: 0 0 auto;
-      align-self: flex-start;
-      font-size: 0.75rem;
+      font-size: .75rem;
       font-weight: 700;
       color: #2563eb;
-      padding-top: 1px;
+      line-height: 1.2;
     }
     .mpg-report-page.is-mobile-layout .mpg-filters-card.is-collapsible > .mpg-filters-body {
       height: 0;
@@ -732,6 +780,7 @@
     .mpg-report-page.is-mobile-layout .mpg-filters-card.is-collapsible.is-open .mpg-filter-summary {
       border-bottom: 1px solid #eef2f7;
       border-radius: 16px 16px 0 0;
+      background: #fff;
     }
     .mpg-report-page.is-mobile-layout .mpg-filters-form {
       display: flex;
@@ -935,44 +984,44 @@
     }
     .mpg-report-page.is-mobile-layout .mpg-m-save-bar {
       display: block;
-      position: fixed;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      z-index: 1100;
-      padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px));
-      background: rgba(255,255,255,.92);
-      backdrop-filter: blur(10px);
-      border-top: 1px solid #e2e8f0;
-      box-shadow: 0 -8px 24px rgba(15,23,42,.08);
+      position: relative;
+      left: auto;
+      right: auto;
+      bottom: auto;
+      z-index: 1;
+      margin: 0;
+      padding: 4px 14px 16px;
+      background: #eef2f7;
+      backdrop-filter: none;
+      border-top: none;
+      box-shadow: none;
     }
     .mpg-report-page.is-mobile-layout .mpg-m-scroll-spacer {
-      display: block;
-      height: max(120px, calc(96px + env(safe-area-inset-bottom, 0px)));
-      width: 100%;
-      pointer-events: none;
+      display: none !important;
+      height: 0 !important;
     }
     .mpg-report-page.is-mobile-layout.mpg-mobile-preview .mpg-m-save-bar {
-      left: 50%;
-      transform: translateX(-50%);
-      max-width: 390px;
-      border-radius: 0 0 22px 22px;
+      left: auto;
+      transform: none;
+      max-width: none;
+      border-radius: 0;
     }
     .mpg-report-page.is-mobile-layout .mpg-m-save-btn {
       min-height: 48px;
       border-radius: 12px;
-      font-weight: 700;
+      font-weight: 800;
       font-size: 15px;
       border: 0;
+      letter-spacing: -.01em;
       background: linear-gradient(135deg, #16a34a, #15803d);
-      box-shadow: 0 6px 16px rgba(22,163,74,.28);
+      box-shadow: 0 6px 14px rgba(22,163,74,.24);
     }
     .mpg-report-page.is-mobile-layout .mpg-table-wrap {
       overflow: visible !important;
       max-height: none !important;
     }
 
-    /* Vehicle cards */
+    /* Vehicle cards — light polish on existing layout */
     .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table {
       min-width: 0 !important;
       width: 100% !important;
@@ -985,12 +1034,12 @@
     .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody tr.mpg-data-row {
       display: grid !important;
       grid-template-columns: 1fr 1fr;
-      margin: 0 0 14px;
+      margin: 0 0 12px;
       border-radius: 16px;
       overflow: hidden;
       background: #fff;
-      border: 1px solid rgba(226,232,240,.9);
-      box-shadow: 0 8px 22px rgba(15,23,42,.07);
+      border: 1px solid #e8edf3;
+      box-shadow: 0 4px 14px rgba(15,23,42,.05);
       -webkit-tap-highlight-color: transparent;
       scroll-margin-bottom: max(120px, calc(90px + env(safe-area-inset-bottom, 0px)));
     }
@@ -1014,7 +1063,7 @@
     }
     .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody tr.mpg-data-row:hover > td.mpg-m-finance,
     .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody tr.mpg-data-row:focus-within > td.mpg-m-finance {
-      background: linear-gradient(180deg, #f8fafc, #fff) !important;
+      background: #f8fafc !important;
     }
     .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody tr.mpg-data-row:hover > td.current-date-reading-cell,
     .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody tr.mpg-data-row:focus-within > td.current-date-reading-cell {
@@ -1022,13 +1071,13 @@
     }
     .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody tr.mpg-data-row:hover > td.balance-amount-cell,
     .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody tr.mpg-data-row:focus-within > td.balance-amount-cell {
-      background: linear-gradient(180deg, #f8fafc, #fff) !important;
+      background: #f8fafc !important;
     }
     .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody tr.mpg-balance-neg-row:hover > td.balance-amount-cell,
     .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody tr.mpg-balance-neg-row:focus-within > td.balance-amount-cell,
     .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody tr.mpg-data-row:hover > td.balance-amount-cell.mpg-balance-neg,
     .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody tr.mpg-data-row:focus-within > td.balance-amount-cell.mpg-balance-neg {
-      background: linear-gradient(180deg, #fef2f2, #fee2e2) !important;
+      background: #fef2f2 !important;
     }
     .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody tr.mpg-data-row.mpg-row-hidden {
       display: none !important;
@@ -1046,27 +1095,30 @@
       display: flex;
       align-items: center;
       gap: 8px;
-      min-height: 46px;
-      padding: 12px 16px;
-      background: linear-gradient(135deg, #1e40af, #2563eb);
+      min-height: 48px;
+      padding: 12px 14px;
+      background: linear-gradient(135deg, #1e3a8a, #2563eb);
       color: #fff;
-      font-weight: 700;
+      font-weight: 800;
       font-size: 14px;
+      letter-spacing: -.01em;
+      border-bottom: 1px solid rgba(255,255,255,.08);
     }
     .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody tr.mpg-data-row > td {
       display: flex !important;
       flex-direction: column !important;
-      gap: 3px;
-      padding: 11px 14px !important;
+      gap: 4px;
+      padding: 12px 14px !important;
       border: 0 !important;
       border-bottom: 1px solid #f1f5f9 !important;
       background: #fff;
       text-align: left !important;
+      min-width: 0;
     }
     .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody tr.mpg-data-row > td.mpg-mobile-hide { display: none !important; }
     .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody tr.mpg-data-row > td.mpg-m-full { grid-column: 1 / -1; }
     .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody tr.mpg-data-row > td.mpg-m-finance {
-      background: linear-gradient(180deg, #f8fafc, #fff);
+      background: #f8fafc;
     }
     .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody td[data-label]:not(.mpg-m-editable)::before {
       content: attr(data-label);
@@ -1075,6 +1127,7 @@
       text-transform: uppercase;
       letter-spacing: .05em;
       color: #94a3b8;
+      line-height: 1.2;
     }
     .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody td .mpg-val-desktop { display: none !important; }
     .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody td .mpg-val-mobile { display: inline-block; }
@@ -1082,26 +1135,30 @@
       flex-direction: row !important;
       align-items: center !important;
       justify-content: space-between !important;
+      background: #f8fbff !important;
+      border-bottom-color: #e2e8f0 !important;
     }
     .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table .mpg-val-mobile {
       font-size: 11px;
       font-weight: 800;
-      padding: 4px 9px;
+      padding: 5px 10px;
       border-radius: 999px;
       color: #fff;
+      letter-spacing: .01em;
     }
     .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table .mpg-val-mobile.mpg-tier-low { background: #dc2626; }
     .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table .mpg-val-mobile.mpg-tier-mid { background: #d97706; }
     .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table .mpg-val-mobile.mpg-tier-high { background: #16a34a; }
     .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table .mpg-val-mobile.mpg-tier-neutral { background: #64748b; }
 
-    /* Modern editable inputs — enable color + running ring (same cue as Task Entry) */
+    /* Editable inputs — calmer focus, less aggressive pulse */
     .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody td.mpg-m-editable {
       grid-column: 1 / -1;
       margin: 0;
       padding: 0 !important;
       border: 0 !important;
-      background: transparent !important;
+      background: #f8fafc !important;
+      border-bottom: 1px solid #eef2f7 !important;
     }
     .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody td.mpg-m-editable::before { display: none !important; }
     .mpg-report-page.is-mobile-layout .mpg-m-edit-label {
@@ -1114,8 +1171,8 @@
       padding: 12px 14px 0;
     }
     @keyframes mpg-edit-ring-pulse {
-      0%, 100% { box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18); }
-      50% { box-shadow: 0 0 0 6px rgba(37, 99, 235, 0.08); }
+      0%, 100% { box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12); }
+      50% { box-shadow: 0 0 0 5px rgba(37, 99, 235, 0.06); }
     }
     .mpg-report-page.is-mobile-layout .mpg-m-edit-input {
       display: block;
@@ -1124,14 +1181,14 @@
       min-height: 48px !important;
       padding: 12px 14px !important;
       border-radius: 12px !important;
-      border: 1.5px solid #2563eb !important;
+      border: 1.5px solid #93c5fd !important;
       background: #ffffff !important;
       font-size: 16px !important;
       font-weight: 700 !important;
       text-align: right !important;
       color: #0f172a !important;
-      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16);
-      animation: mpg-edit-ring-pulse 1.8s ease-in-out infinite;
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+      animation: mpg-edit-ring-pulse 2.2s ease-in-out infinite;
       -webkit-appearance: none;
       appearance: none;
       scroll-margin-bottom: max(130px, calc(100px + env(safe-area-inset-bottom, 0px)));
@@ -1142,25 +1199,28 @@
       opacity: 1;
     }
     .mpg-report-page.is-mobile-layout .mpg-m-edit-input:focus {
-      border-color: #1d4ed8 !important;
+      border-color: #2563eb !important;
       background: #fff !important;
-      box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.28) !important;
+      box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.2) !important;
       animation: none;
       outline: none;
     }
     .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody td.mpg-m-today .mpg-m-edit-input {
-      border-color: #2563eb !important;
+      border-color: #93c5fd !important;
       background: #ffffff !important;
     }
-    .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody td > *:not(.mpg-val-desktop):not(.mpg-val-mobile):not(.mpg-m-edit-label):not(.mpg-m-edit-input) {
+    .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody td > *:not(.mpg-val-desktop):not(.mpg-val-mobile):not(.mpg-m-edit-label):not(.mpg-m-edit-input):not(.mpg-odoo-warn) {
       font-size: 14px;
       font-weight: 700;
       color: #0f172a;
+      letter-spacing: -.01em;
+      line-height: 1.3;
+      word-break: break-word;
     }
     .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody td.balance-amount-cell .mpg-balance-pos { color: #15803d !important; }
     .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody td.balance-amount-cell .mpg-balance-neg { color: #dc2626 !important; }
 
-    /* Full-width summary rows (Current Date Reading + Balance Amount) */
+    /* Task Report MR + Current Fueling Amount rows */
     .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody td.current-date-reading-cell {
       background: #f8fafc !important;
       border-bottom: 1px solid #e2e8f0 !important;
@@ -1169,15 +1229,15 @@
       color: #2563eb !important;
     }
     .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody td.balance-amount-cell {
-      background: linear-gradient(180deg, #f8fafc, #fff) !important;
+      background: #f8fafc !important;
       border-top: 1px solid #e2e8f0 !important;
       padding-top: 14px !important;
       padding-bottom: 16px !important;
     }
     .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody td.balance-amount-cell.mpg-balance-neg,
     .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody tr.mpg-balance-neg-row > td.balance-amount-cell {
-      background: linear-gradient(180deg, #fef2f2, #fee2e2) !important;
-      border-top: 2px solid #ef4444 !important;
+      background: #fef2f2 !important;
+      border-top: 2px solid #f87171 !important;
       box-shadow: inset 0 -3px 0 #ef4444;
     }
     .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody td.balance-amount-cell.mpg-balance-neg::before,
@@ -1185,8 +1245,9 @@
       color: #dc2626 !important;
     }
     .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody td.balance-amount-cell.mpg-balance-pos {
-      background: linear-gradient(180deg, #f0fdf4, #fff) !important;
+      background: #f0fdf4 !important;
       border-top: 1px solid #bbf7d0 !important;
+      box-shadow: inset 0 -3px 0 #22c55e;
     }
     .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody td.balance-amount-cell::before {
       color: #475569 !important;
@@ -1195,6 +1256,7 @@
     .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody td.balance-amount-cell > * {
       font-size: 18px !important;
       font-weight: 800 !important;
+      letter-spacing: -.02em !important;
     }
 
     /* Search clear button */
@@ -1291,12 +1353,322 @@
     html.capacitor-native body.mpg-hide-bottom-nav .main-content,
     html.capacitor-native body.mpg-hide-bottom-nav #appNativeShell .main-content {
       bottom: 0 !important;
-      /* Leave room under scroll content for fixed Save Inputs bar */
-      padding-bottom: max(150px, calc(110px + env(safe-area-inset-bottom, 0px))) !important;
+      padding-bottom: max(16px, env(safe-area-inset-bottom, 0px)) !important;
     }
 
     /* Desktop: hide mobile-only MPG pill */
     .mpg-val-mobile { display: none; }
+
+    /* Report Centre title — mobile chrome only (desktop keeps text back) */
+    .mpg-report-title-inline { display: none; }
+    .mpg-report-page:not(.is-mobile-layout) .mpg-report-title-inline { display: none !important; }
+    .mpg-report-page:not(.is-mobile-layout) .mpg-back-label { display: inline; }
+    .mpg-report-page:not(.is-mobile-layout) .mpg-report-back-btn .bi { margin-right: .25rem; }
+
+    /* Report Centre → MPG: hide hamburger + full-width chrome (Fuel Expense parity) */
+    html.capacitor-native body.mpg-hide-mobile-menu .mobile-menu-btn,
+    body.mpg-hide-mobile-menu .mobile-menu-btn,
+    body.mpg-hide-mobile-menu #mobileMenuBtn {
+      display: none !important;
+    }
+    @media (max-width: 767px) {
+      body.mpg-hide-mobile-menu {
+        --mpg-report-bar-h: 48px;
+      }
+      html.capacitor-native body.mpg-hide-mobile-menu #appNativeShell {
+        top: env(safe-area-inset-top, 0px) !important;
+      }
+      body.mpg-hide-mobile-menu .main-content,
+      html.capacitor-native body.mpg-hide-mobile-menu .main-content,
+      html.capacitor-native body.mpg-hide-mobile-menu #appNativeShell .main-content {
+        top: env(safe-area-inset-top, 0px) !important;
+        margin: 0 !important;
+        padding-top: 0 !important;
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+        padding-bottom: max(16px, env(safe-area-inset-bottom, 0px)) !important;
+      }
+      body.mpg-hide-mobile-menu .mpg-report-page.from-report-center.container-fluid,
+      body.mpg-hide-mobile-menu .mpg-report-page.is-mobile-layout.from-report-center {
+        padding: var(--mpg-report-bar-h) 0 max(16px, env(safe-area-inset-bottom, 0px)) !important;
+        margin: 0 !important;
+        width: 100% !important;
+        max-width: none !important;
+        background: #eef2f7 !important;
+      }
+
+      /* Fixed top bar — ← | MPG Report | ⋯ */
+      body.mpg-hide-mobile-menu .mpg-report-page.from-report-center .mpg-top-bar {
+        display: flex !important;
+        flex-wrap: nowrap !important;
+        position: fixed !important;
+        top: env(safe-area-inset-top, 0px) !important;
+        left: 0 !important;
+        right: 0 !important;
+        width: 100% !important;
+        height: var(--mpg-report-bar-h) !important;
+        z-index: 45 !important;
+        margin: 0 !important;
+        padding: 0 8px !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        gap: 8px !important;
+        border: none !important;
+        border-bottom: 1px solid #e5e7eb !important;
+        border-radius: 0 !important;
+        background: #fff !important;
+        box-shadow: none !important;
+      }
+      body.mpg-hide-mobile-menu .mpg-report-page.from-report-center .mpg-top-bar .mpg-report-back-btn,
+      body.mpg-hide-mobile-menu .mpg-report-page.from-report-center .mpg-top-bar .mpg-hero-btn--back {
+        flex: 0 0 auto !important;
+        width: 40px !important;
+        height: 40px !important;
+        min-height: 40px !important;
+        max-width: none !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        border-radius: 999px !important;
+        border-color: transparent !important;
+        background: transparent !important;
+        color: #334155 !important;
+        box-shadow: none !important;
+      }
+      body.mpg-hide-mobile-menu .mpg-report-page.from-report-center .mpg-top-bar .mpg-back-label {
+        display: none !important;
+      }
+      body.mpg-hide-mobile-menu .mpg-report-page.from-report-center .mpg-top-bar .mpg-report-back-btn .bi,
+      body.mpg-hide-mobile-menu .mpg-report-page.from-report-center .mpg-top-bar .mpg-hero-btn--back .bi {
+        margin: 0 !important;
+        font-size: 1.1rem !important;
+      }
+      body.mpg-hide-mobile-menu .mpg-report-page.from-report-center .mpg-report-title-inline {
+        display: block !important;
+        min-width: 0;
+        flex: 1 1 auto;
+        margin: 0;
+        padding: 0 4px;
+        background: none;
+        color: #0f172a;
+        font-size: .95rem;
+        font-weight: 700;
+        line-height: 1.25;
+        text-align: center;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      body.mpg-hide-mobile-menu .mpg-report-page.from-report-center .mpg-toolbar-more-btn {
+        display: inline-flex !important;
+        width: 40px !important;
+        height: 40px !important;
+        margin: 0 !important;
+        border: none !important;
+        border-radius: 999px !important;
+        background: transparent !important;
+        color: #334155 !important;
+        box-shadow: none !important;
+      }
+      body.mpg-hide-mobile-menu .mpg-report-page.from-report-center .mpg-more-menu {
+        top: calc(100% + 4px) !important;
+        right: 8px !important;
+      }
+
+      /* Stats hero — full width, no card shell */
+      body.mpg-hide-mobile-menu .mpg-report-page.from-report-center .mpg-hero,
+      body.mpg-hide-mobile-menu .mpg-report-page.from-report-center .mpg-hero--compact {
+        margin: 0 0 10px !important;
+        border: none !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+        background: #fff !important;
+      }
+      body.mpg-hide-mobile-menu .mpg-report-page.from-report-center .mpg-hero--compact .card-body {
+        padding: 12px 14px !important;
+      }
+      body.mpg-hide-mobile-menu .mpg-report-page.from-report-center .mpg-hero--compact .mpg-hero-title-block h3 {
+        display: none !important;
+      }
+
+      /* Active Filter — full width */
+      body.mpg-hide-mobile-menu .mpg-report-page.from-report-center .mpg-filters-card,
+      body.mpg-hide-mobile-menu .mpg-report-page.from-report-center .mpg-filters-card.card {
+        position: relative !important;
+        top: auto !important;
+        z-index: 1 !important;
+        margin: 0 0 10px !important;
+        width: 100% !important;
+        max-width: none !important;
+        border: none !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+        background: #f8fafc !important;
+        overflow: visible !important;
+      }
+      body.mpg-hide-mobile-menu .mpg-report-page.from-report-center .mpg-filters-card.is-collapsible .mpg-filter-summary {
+        display: flex !important;
+        width: 100% !important;
+        max-width: none !important;
+        padding: 12px 14px 14px !important;
+        margin: 0 !important;
+        border: none !important;
+        border-bottom: 1px solid #e2e8f0 !important;
+        border-radius: 0 !important;
+        background: #f8fafc !important;
+        box-shadow: none !important;
+        text-align: left;
+      }
+      body.mpg-hide-mobile-menu .mpg-report-page.from-report-center .mpg-filter-summary-main {
+        gap: 8px !important;
+        width: 100% !important;
+      }
+      body.mpg-hide-mobile-menu .mpg-report-page.from-report-center .mpg-filter-summary-head {
+        margin-bottom: 0;
+      }
+      body.mpg-hide-mobile-menu .mpg-report-page.from-report-center .mpg-filter-chips {
+        gap: 6px !important;
+      }
+      body.mpg-hide-mobile-menu .mpg-report-page.from-report-center .mpg-filter-chip {
+        padding: 5px 9px !important;
+        border-radius: 999px !important;
+        font-size: .72rem !important;
+        box-shadow: none !important;
+        background: #fff !important;
+        border: 1px solid #e2e8f0 !important;
+      }
+      body.mpg-hide-mobile-menu .mpg-report-page.from-report-center .mpg-filter-chip.is-vehicle {
+        background: #eff6ff !important;
+        border-color: #bfdbfe !important;
+        color: #1d4ed8 !important;
+      }
+      body.mpg-hide-mobile-menu .mpg-report-page.from-report-center .mpg-filters-card.is-collapsible.is-open .mpg-filter-summary {
+        border-bottom-color: #eef2f7 !important;
+      }
+      body.mpg-hide-mobile-menu .mpg-report-page.from-report-center .mpg-filters-card.is-collapsible.is-open > .mpg-filters-body {
+        border: none !important;
+        border-bottom: 1px solid #e2e8f0 !important;
+        border-radius: 0 !important;
+        background: #f8fafc !important;
+        padding: 12px 14px !important;
+        width: 100% !important;
+      }
+
+      /* Data list — full width grey band + edge cards */
+      body.mpg-hide-mobile-menu .mpg-report-page.from-report-center .mpg-data-card,
+      body.mpg-hide-mobile-menu .mpg-report-page.from-report-center .mpg-data-card.card {
+        margin: 0 !important;
+        width: 100% !important;
+        max-width: none !important;
+        border: none !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+        background: #eef2f7 !important;
+      }
+      body.mpg-hide-mobile-menu .mpg-report-page.from-report-center .mpg-data-card > .card-header {
+        padding: 10px 14px 8px !important;
+        background: #eef2f7 !important;
+      }
+      body.mpg-hide-mobile-menu .mpg-report-page.from-report-center .mpg-data-card > .card-body,
+      body.mpg-hide-mobile-menu .mpg-report-page.from-report-center .mpg-table-wrap {
+        padding: 0 !important;
+        margin: 0 !important;
+        width: 100% !important;
+        max-width: none !important;
+        overflow-x: hidden !important;
+      }
+      body.mpg-hide-mobile-menu .mpg-report-page.from-report-center #workspaceMpgReportTable.mpg-mobile-table tbody tr.mpg-data-row {
+        width: calc(100% - 16px) !important;
+        margin: 0 8px 12px !important;
+        border-radius: 14px !important;
+        border: 1px solid #e8edf3 !important;
+        border-left: 4px solid #2563eb !important;
+        box-shadow: 0 4px 12px rgba(15,23,42,.05) !important;
+        overflow: hidden !important;
+      }
+      body.mpg-hide-mobile-menu .mpg-report-page.from-report-center #workspaceMpgReportTable.mpg-mobile-table tbody {
+        padding: 4px 0 0 !important;
+      }
+      body.mpg-hide-mobile-menu .mpg-report-page.from-report-center .mpg-m-save-bar {
+        padding-left: 14px !important;
+        padding-right: 14px !important;
+      }
+    }
+    /* Capacitor / narrow native: same chrome without relying only on media query */
+    html.capacitor-native body.mpg-hide-mobile-menu .mpg-report-page.is-mobile-layout.from-report-center {
+      padding: var(--mpg-report-bar-h, 48px) 0 max(16px, env(safe-area-inset-bottom, 0px)) !important;
+      margin: 0 !important;
+      width: 100% !important;
+      max-width: none !important;
+      background: #eef2f7 !important;
+    }
+    html.capacitor-native body.mpg-hide-mobile-menu .mpg-report-page.is-mobile-layout.from-report-center .mpg-top-bar {
+      display: flex !important;
+      flex-wrap: nowrap !important;
+      position: fixed !important;
+      top: env(safe-area-inset-top, 0px) !important;
+      left: 0 !important;
+      right: 0 !important;
+      width: 100% !important;
+      height: var(--mpg-report-bar-h, 48px) !important;
+      z-index: 45 !important;
+      margin: 0 !important;
+      padding: 0 8px !important;
+      align-items: center !important;
+      justify-content: space-between !important;
+      gap: 8px !important;
+      border: none !important;
+      border-bottom: 1px solid #e5e7eb !important;
+      background: #fff !important;
+      box-shadow: none !important;
+    }
+    html.capacitor-native body.mpg-hide-mobile-menu .mpg-report-page.is-mobile-layout.from-report-center .mpg-top-bar .mpg-back-label {
+      display: none !important;
+    }
+    html.capacitor-native body.mpg-hide-mobile-menu .mpg-report-page.is-mobile-layout.from-report-center .mpg-report-title-inline {
+      display: block !important;
+      flex: 1 1 auto;
+      min-width: 0;
+      text-align: center;
+      font-size: .95rem;
+      font-weight: 700;
+      color: #0f172a;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    html.capacitor-native body.mpg-hide-mobile-menu .mpg-report-page.is-mobile-layout.from-report-center .mpg-top-bar .mpg-report-back-btn,
+    html.capacitor-native body.mpg-hide-mobile-menu .mpg-report-page.is-mobile-layout.from-report-center .mpg-top-bar .mpg-hero-btn--back {
+      width: 40px !important;
+      height: 40px !important;
+      min-height: 40px !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      border-radius: 999px !important;
+      border-color: transparent !important;
+      background: transparent !important;
+      justify-content: center !important;
+    }
+    html.capacitor-native body.mpg-hide-mobile-menu .mpg-report-page.is-mobile-layout.from-report-center .mpg-toolbar-more-btn {
+      width: 40px !important;
+      height: 40px !important;
+      border: none !important;
+      border-radius: 999px !important;
+      background: transparent !important;
+      box-shadow: none !important;
+    }
+    html.capacitor-native body.mpg-hide-mobile-menu .mpg-report-page.is-mobile-layout.from-report-center .mpg-filters-card,
+    html.capacitor-native body.mpg-hide-mobile-menu .mpg-report-page.is-mobile-layout.from-report-center .mpg-data-card,
+    html.capacitor-native body.mpg-hide-mobile-menu .mpg-report-page.is-mobile-layout.from-report-center .mpg-hero {
+      width: 100% !important;
+      max-width: none !important;
+      margin-left: 0 !important;
+      margin-right: 0 !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
+    }
   </style>
 
   {% set vehicle_count = rows|length %}
@@ -1315,56 +1687,6 @@
     {% set bar_amt = 0 %}
   {% endif %}
 
-  <div class="card mpg-hero shadow-sm mb-3{% if from_report_center %} mpg-hero--compact{% endif %}">
-    <div class="card-body p-4 position-relative">
-      <div class="mpg-hero-top d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
-        <div class="mpg-hero-title-block">
-          <h3 class="mb-1 fw-bold text-dark">MPG Report</h3>
-          <div class="text-muted mpg-hero-desc">Fuel efficiency, deduction aur next fueling forecast (vehicle wise).</div>
-          {% if employee %}
-          <div class="text-muted small mt-1 mpg-hero-emp">Employee: <strong class="text-body">{{ employee.name }}</strong></div>
-          {% endif %}
-        </div>
-        <div class="mpg-hero-actions d-flex gap-2 flex-wrap">
-          {% if not from_report_center %}
-          <button type="button" class="btn btn-primary btn-sm mpg-hero-btn mpg-hero-btn--print" id="btnPrintReport"><i class="bi bi-eye me-1"></i><span>Print / Preview</span></button>
-          <button type="button" class="btn btn-outline-primary btn-sm mpg-hero-btn mpg-hero-btn--export" id="btnExportReport"><i class="bi bi-file-earmark-excel me-1"></i><span>Export</span></button>
-          {% if workspace_selected_employee %}
-          <a href="{{ url_for('workspace_reports') }}" class="btn btn-outline-secondary btn-sm mpg-hero-btn mpg-hero-btn--back"><i class="bi bi-arrow-left me-1"></i><span>Reports</span></a>
-          {% elif nav_back_url_auto %}
-          <a href="{{ nav_back_url_auto }}" class="btn btn-outline-secondary btn-sm mpg-hero-btn mpg-hero-btn--back"><i class="bi bi-arrow-left me-1"></i><span>{{ nav_back_label_auto or 'Back' }}</span></a>
-          {% endif %}
-          {% endif %}
-        </div>
-      </div>
-      {% if has_mpg_data %}
-      <div class="mpg-hero-stats d-flex flex-wrap gap-2 position-relative">
-        <div class="mpg-stat mpg-stat--veh">
-          <div class="stat-label"><i class="bi bi-truck me-1"></i>Vehicles</div>
-          <div class="stat-value">{{ vehicle_count }}</div>
-          <span class="stat-bar" aria-hidden="true"><span style="width: {{ bar_veh }}%;"></span></span>
-        </div>
-        <div class="mpg-stat mpg-stat--ltr">
-          <div class="stat-label"><i class="bi bi-fuel-pump me-1"></i>Total LTR</div>
-          <div class="stat-value">{{ "{:,.0f}".format(total_ltr) }}</div>
-          <span class="stat-bar" aria-hidden="true"><span style="width: {{ bar_ltr }}%;"></span></span>
-        </div>
-        <div class="mpg-stat mpg-stat--amt">
-          <div class="stat-label"><i class="bi bi-cash-coin me-1"></i>Total Amount</div>
-          <div class="stat-value">{{ "{:,.0f}".format(total_amount) }}</div>
-          <span class="stat-bar" aria-hidden="true"><span style="width: {{ bar_amt }}%;"></span></span>
-        </div>
-      </div>
-      {% else %}
-      <div class="mpg-empty-state" role="status">
-        <i class="bi bi-fuel-pump" aria-hidden="true"></i>
-        <strong>No MPG data for this filter</strong>
-        <span>Date range ya district / project / vehicle adjust karke <em>Apply Filters</em> dabayein.</span>
-      </div>
-      {% endif %}
-    </div>
-  </div>
-
   {% set all_locked = disable_district and disable_project and disable_vehicle %}
   {% set sel_district = (districts | selectattr('id', 'equalto', district_id) | map(attribute='name') | first) if district_id else none %}
   {% set sel_project = (projects | selectattr('id', 'equalto', project_id) | map(attribute='name') | first) if project_id else none %}
@@ -1375,20 +1697,21 @@
        id="mpgFiltersCard"
        data-pk-today="{{ mpg_today.strftime('%d-%m-%Y') if mpg_today else '' }}">
     <button type="button" class="mpg-filter-summary" id="mpgFilterToggle" aria-expanded="false" aria-controls="mpgFilterBody">
-      <span class="mpg-filter-summary-text">
-        <i class="bi bi-funnel-fill"></i>
-        <span>
-          {{ from_date.strftime('%d-%m-%Y') if from_date else '—' }}
-          – {{ to_date.strftime('%d-%m-%Y') if to_date else '—' }}
-          {% if sel_district %} · {{ sel_district }}{% endif %}
-          {% if sel_project %} · {{ sel_project }}{% endif %}
-          · {{ sel_vehicle or (vehicle_count ~ ' vehicle(s)' if vehicle_count else 'All vehicles') }}
+      <span class="mpg-filter-summary-main">
+        <span class="mpg-filter-summary-head">
+          <span class="mpg-filter-summary-label"><i class="bi bi-funnel"></i> Active Filter</span>
+          <span class="mpg-filter-summary-action" id="mpgFilterSummaryAction">Change</span>
+        </span>
+        <span class="mpg-filter-chips">
+          <span class="mpg-filter-chip is-date">{{ from_date.strftime('%d-%m-%Y') if from_date else '—' }} → {{ to_date.strftime('%d-%m-%Y') if to_date else '—' }}</span>
+          {% if sel_district %}<span class="mpg-filter-chip">{{ sel_district }}</span>{% endif %}
+          {% if sel_project %}<span class="mpg-filter-chip">{{ sel_project }}</span>{% endif %}
+          <span class="mpg-filter-chip{% if sel_vehicle %} is-vehicle{% endif %}">{{ sel_vehicle or (vehicle_count ~ ' vehicle(s)' if vehicle_count else 'All vehicles') }}</span>
         </span>
       </span>
-      <span class="mpg-filter-summary-action" data-open-label="Close" data-closed-label="{{ 'Date' if all_locked else 'Change' }}">{{ 'Date' if all_locked else 'Change' }}</span>
     </button>
     <div class="card-body py-3 mpg-filters-body" id="mpgFilterBody">
-      <div class="mpg-m-filter-head">
+      <div class="mpg-m-filter-head d-none">
         <i class="bi bi-sliders"></i>
         <span>Report Filters</span>
       </div>
@@ -1475,9 +1798,59 @@
         {% endif %}
         <div class="col-md-2 d-flex gap-2 mpg-m-actions">
           <button type="submit" class="btn btn-primary flex-fill mpg-m-apply"><i class="bi bi-funnel me-1"></i>{% if all_locked %}Apply Dates{% else %}Apply Filters{% endif %}</button>
-          <a href="{{ url_for('workspace_mpg_report', nav_from=nav_from) if nav_from else url_for('workspace_mpg_report') }}" class="btn btn-outline-secondary mpg-m-clear" title="Reset"><i class="bi bi-x-lg"></i></a>
+          <button type="button" class="btn btn-outline-secondary mpg-m-clear" id="mpgFilterCloseBtn" title="Close filters" aria-label="Close filters"><i class="bi bi-x-lg"></i></button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <div class="card mpg-hero shadow-sm mb-3{% if from_report_center %} mpg-hero--compact{% endif %}">
+    <div class="card-body p-4 position-relative">
+      <div class="mpg-hero-top d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
+        <div class="mpg-hero-title-block">
+          <h3 class="mb-1 fw-bold text-dark">MPG Report</h3>
+          <div class="text-muted mpg-hero-desc">Fuel efficiency, deduction aur next fueling forecast (vehicle wise).</div>
+          {% if employee %}
+          <div class="text-muted small mt-1 mpg-hero-emp">Employee: <strong class="text-body">{{ employee.name }}</strong></div>
+          {% endif %}
+        </div>
+        <div class="mpg-hero-actions d-flex gap-2 flex-wrap">
+          {% if not from_report_center %}
+          <button type="button" class="btn btn-primary btn-sm mpg-hero-btn mpg-hero-btn--print" id="btnPrintReport"><i class="bi bi-eye me-1"></i><span>Print / Preview</span></button>
+          <button type="button" class="btn btn-outline-primary btn-sm mpg-hero-btn mpg-hero-btn--export" id="btnExportReport"><i class="bi bi-file-earmark-excel me-1"></i><span>Export</span></button>
+          {% if workspace_selected_employee %}
+          <a href="{{ url_for('workspace_reports') }}" class="btn btn-outline-secondary btn-sm mpg-hero-btn mpg-hero-btn--back"><i class="bi bi-arrow-left me-1"></i><span>Reports</span></a>
+          {% elif nav_back_url_auto %}
+          <a href="{{ nav_back_url_auto }}" class="btn btn-outline-secondary btn-sm mpg-hero-btn mpg-hero-btn--back"><i class="bi bi-arrow-left me-1"></i><span>{{ nav_back_label_auto or 'Back' }}</span></a>
+          {% endif %}
+          {% endif %}
+        </div>
+      </div>
+      {% if has_mpg_data %}
+      <div class="mpg-hero-stats d-flex flex-wrap gap-2 position-relative">
+        <div class="mpg-stat mpg-stat--veh">
+          <div class="stat-label"><i class="bi bi-truck me-1"></i>Vehicles</div>
+          <div class="stat-value">{{ vehicle_count }}</div>
+          <span class="stat-bar" aria-hidden="true"><span style="width: {{ bar_veh }}%;"></span></span>
+        </div>
+        <div class="mpg-stat mpg-stat--ltr">
+          <div class="stat-label"><i class="bi bi-fuel-pump me-1"></i>Total LTR</div>
+          <div class="stat-value">{{ "{:,.0f}".format(total_ltr) }}</div>
+          <span class="stat-bar" aria-hidden="true"><span style="width: {{ bar_ltr }}%;"></span></span>
+        </div>
+        <div class="mpg-stat mpg-stat--amt">
+          <div class="stat-label"><i class="bi bi-cash-coin me-1"></i>Total Amount</div>
+          <div class="stat-value">{{ "{:,.0f}".format(total_amount) }}</div>
+          <span class="stat-bar" aria-hidden="true"><span style="width: {{ bar_amt }}%;"></span></span>
+        </div>
+      </div>
+      {% else %}
+      <div class="mpg-empty-state" role="status">
+        <i class="bi bi-fuel-pump" aria-hidden="true"></i>
+        <strong>No MPG data for this filter</strong>
+        <span>Date range ya district / project / vehicle adjust karke <em>Apply Filters</em> dabayein.</span>
+      </div>
+      {% endif %}
     </div>
   </div>
 
@@ -1494,14 +1867,18 @@
       <div class="card-header bg-white border-bottom py-3 d-flex flex-wrap justify-content-between align-items-center gap-2 mpg-data-card-header">
         <div class="d-flex align-items-center gap-3">
           <strong class="text-primary"><i class="bi bi-table me-1"></i>Vehicle MPG Detail</strong>
+          {% if not all_locked %}
           <span class="badge bg-light text-secondary border">{{ rows|length }} vehicle(s)</span>
+          {% endif %}
         </div>
         <div class="d-flex align-items-center gap-2 flex-wrap">
+          {% if not all_locked %}
           <div class="input-group input-group-sm mpg-table-search-wrap" id="mpgTableSearchWrap" style="width: 260px;">
             <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
             <input type="search" class="form-control border-start-0" id="mpgTableSearch" placeholder="Search vehicle / slip / values..." autocomplete="off" inputmode="search" aria-label="Search MPG report">
             <button type="button" class="mpg-search-clear" id="mpgSearchClear" title="Clear search" aria-label="Clear search"><i class="bi bi-x-lg"></i></button>
           </div>
+          {% endif %}
           <button type="submit" class="btn btn-success btn-sm" id="mpgDesktopSaveBtn"><i class="bi bi-save me-1"></i>Save Inputs</button>
           <span class="mpg-last-saved" id="mpgLastSaved" aria-live="polite"></span>
         </div>
@@ -1512,10 +1889,10 @@
             <tr>
               <th class="mpg-sticky-sr">Sr.No.</th>
               <th class="mpg-sticky-veh">Vehicle No.</th>
-              <th>Entry Date</th>
-              <th>SLIP NO.</th>
-              <th class="text-end">Previous Reading</th>
-              <th class="text-end">Current Reading</th>
+              <th>Last Bill Date</th>
+              <th>Last Bill Slip No</th>
+              <th class="text-end">Start Reading</th>
+              <th class="text-end">Last Bill MR</th>
               <th class="text-end">KM</th>
               <th class="text-end" title="Total Amount/Total Ltr = Weighted Average price">Avg. Fuel Price</th>
               <th class="text-end">Total LTR</th>
@@ -1524,14 +1901,14 @@
               <th class="text-end">FUEL DEDUCTION</th>
               <th class="text-end">Short Km's</th>
               <th class="text-end">With Full Tank Next Fueling Reading</th>
-              <th class="text-end" id="thCurrentDateReading">Current Date Reading</th>
+              <th class="text-end" id="thCurrentDateReading">Task Report MR</th>
               <th class="text-end mpg-col-input" id="thCurrentOdooMeter">Current Odoo Meter Reading</th>
               <th class="text-end">R. KM's from Fueling</th>
               <th class="text-end">In Tank Current Ltr</th>
               <th class="text-end">Fueling LTR With Target MPG</th>
               <th class="text-end">Fueling Amount</th>
               <th class="text-end mpg-col-input">Today Fuel</th>
-              <th class="text-end">Balance Amount</th>
+              <th class="text-end">Current Fueling Amount</th>
             </tr>
           </thead>
           <tbody>
@@ -1830,9 +2207,8 @@ document.addEventListener('DOMContentLoaded', function(){
     let noMatchRow = null;
 
     if(searchWrap){
-      /* Keep search available even when the current filter returns one row.
-         Hiding it made the control look disabled and prevented searching the
-         same report after a filter narrowed the result set. */
+      /* Locked single-vehicle users (drivers) omit search in the template.
+         Multi-scope users keep search even when the current filter returns one row. */
       searchWrap.hidden = false;
     }
 
@@ -1952,9 +2328,9 @@ document.addEventListener('DOMContentLoaded', function(){
       mpgExportBtn.setAttribute('data-export-url', {{ url_for('workspace_mpg_report_export_excel') | tojson }} + window.location.search);
     }
     window.fleetPrintExport('workspaceMpgReportTable', {{ print_report_title|tojson }}, 'Workspace_MPG_Report.csv', {
-      columnOrder: ['Sr.No.', 'Vehicle No.', 'Entry Date', 'SLIP NO.', 'Previous Reading', 'Current Reading', 'KM', 'Avg. Fuel Price', 'Total LTR', 'MPG', 'Amount', 'FUEL DEDUCTION', 'Short Km\'s', 'With Full Tank Next Fueling Reading', 'Current Date Reading', 'Current Odoo Meter Reading', 'R. KM\'s from Fueling', 'In Tank Current Ltr', 'Fueling LTR With Target MPG', 'Fueling Amount', 'Today Fuel', 'Balance Amount'],
-      numberColumns: ['Previous Reading', 'Current Reading', 'KM', 'Avg. Fuel Price', 'Total LTR', 'MPG', 'Amount', 'FUEL DEDUCTION', 'Short Km\'s', 'With Full Tank Next Fueling Reading', 'Current Date Reading', 'Current Odoo Meter Reading', 'R. KM\'s from Fueling', 'In Tank Current Ltr', 'Fueling LTR With Target MPG', 'Fueling Amount', 'Today Fuel', 'Balance Amount'],
-      dateColumns: ['Entry Date']
+      columnOrder: ['Sr.No.', 'Vehicle No.', 'Last Bill Date', 'Last Bill Slip No', 'Start Reading', 'Last Bill MR', 'KM', 'Avg. Fuel Price', 'Total LTR', 'MPG', 'Amount', 'FUEL DEDUCTION', 'Short Km\'s', 'With Full Tank Next Fueling Reading', 'Task Report MR', 'Current Odoo Meter Reading', 'R. KM\'s from Fueling', 'In Tank Current Ltr', 'Fueling LTR With Target MPG', 'Fueling Amount', 'Today Fuel', 'Current Fueling Amount'],
+      numberColumns: ['Start Reading', 'Last Bill MR', 'KM', 'Avg. Fuel Price', 'Total LTR', 'MPG', 'Amount', 'FUEL DEDUCTION', 'Short Km\'s', 'With Full Tank Next Fueling Reading', 'Task Report MR', 'Current Odoo Meter Reading', 'R. KM\'s from Fueling', 'In Tank Current Ltr', 'Fueling LTR With Target MPG', 'Fueling Amount', 'Today Fuel', 'Current Fueling Amount'],
+      dateColumns: ['Last Bill Date']
     });
   }
 
@@ -1971,11 +2347,11 @@ document.addEventListener('DOMContentLoaded', function(){
     let msg = '';
     if(value != null){
       if(previousReading != null && value < previousReading){
-        msg = 'Reading is below Previous Reading (' + formatOrDash(previousReading) + '). Please verify.';
+        msg = 'Reading is below Start Reading (' + formatOrDash(previousReading) + '). Please verify.';
       } else if(currentReading != null && value < currentReading){
         msg = 'Reading is below Current Slip Reading (' + formatOrDash(currentReading) + '). Please verify.';
       } else if(currentDateReading != null && value < currentDateReading){
-        msg = 'Reading is below Current Date Reading (' + formatOrDash(currentDateReading) + '). Please verify.';
+        msg = 'Reading is below Task Report MR (' + formatOrDash(currentDateReading) + '). Please verify.';
       }
     }
     currentOdooInput.classList.toggle('is-warn', !!msg);
@@ -2129,21 +2505,28 @@ document.addEventListener('DOMContentLoaded', function(){
     }
   })();
 
-  /* Filter collapse (mobile summary) */
+  /* Filter collapse (mobile summary) — Fuel Expense parity */
   (function(){
     var filterCard = document.getElementById('mpgFiltersCard');
     var filterToggle = document.getElementById('mpgFilterToggle');
+    var action = document.getElementById('mpgFilterSummaryAction');
+    var closeBtn = document.getElementById('mpgFilterCloseBtn');
 
-    if(filterCard && filterToggle){
-      filterToggle.addEventListener('click', function(){
-        var open = filterCard.classList.toggle('is-open');
-        filterToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-        var action = filterToggle.querySelector('.mpg-filter-summary-action');
-        if(action){
-          action.textContent = open
-            ? (action.getAttribute('data-open-label') || 'Close')
-            : (action.getAttribute('data-closed-label') || 'Change');
-        }
+    if(!filterCard || !filterToggle) return;
+
+    function setOpen(open){
+      filterCard.classList.toggle('is-open', open);
+      filterToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+      if(action) action.textContent = open ? 'Hide' : 'Change';
+    }
+
+    setOpen(false);
+    filterToggle.addEventListener('click', function(){
+      setOpen(!filterCard.classList.contains('is-open'));
+    });
+    if(closeBtn){
+      closeBtn.addEventListener('click', function(){
+        setOpen(false);
       });
     }
   })();

@@ -8558,14 +8558,18 @@ def fuel_expense_media(pk):
             'is_local_file': bool(local_full),
         })
     date_label = rec.fueling_date.strftime('%d-%m-%Y') if rec.fueling_date else '-'
+    default_back = url_for('fuel_expense_list')
+    back_url = _safe_internal_path(request.args.get('return_to'), default_back)
     return render_template(
         'maintenance_expense_media.html',
         rec=rec,
         media_items=media_items,
         media_title='Fuel Media Gallery',
         media_date_label=date_label,
-        back_url=url_for('fuel_expense_list'),
+        back_url=back_url,
         download_all_url=url_for('fuel_expense_media_download_all', pk=rec.id),
+        media_mobile_chrome=True,
+        media_empty_hint='No media found for this fuel expense.',
     )
 
 

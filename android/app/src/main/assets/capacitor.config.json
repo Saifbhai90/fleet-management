@@ -6,16 +6,10 @@
 		"url": "https://fleet-management-xdvj.onrender.com",
 		"startPath": "/mobile-init",
 		"cleartext": false,
-		"androidScheme": "https",
-		"allowNavigation": [
-			"fleet-management-xdvj.onrender.com",
-			"127.0.0.1",
-			"localhost"
-		]
+		"androidScheme": "https"
 	},
 	"android": {
 		"allowMixedContent": false,
-		"appendUserAgent": "FleetCapacitor",
 		"captureInput": true,
 		"webContentsDebuggingEnabled": false,
 		"overScrollMode": "never",
@@ -36,9 +30,7 @@
 			"launchShowDuration": 0,
 			"backgroundColor": "#0f172a",
 			"androidSplashResourceName": "splash",
-			"showSpinner": true,
-			"androidSpinnerStyle": "large",
-			"spinnerColor": "#94a3b8"
+			"showSpinner": false
 		},
 		"StatusBar": {
 			"style": "DARK",

@@ -27,11 +27,19 @@
       padding: 0 10px 12px;
     }
     .fuel-grid-page .fuel-mobile-expense-card {
+      position: relative;
       overflow: hidden;
       border: 1px solid #dbe4f0;
-      border-radius: 18px;
+      border-left: 4px solid #2563eb;
+      border-radius: 16px;
       background: #fff;
-      box-shadow: 0 7px 20px rgba(15, 23, 42, .08);
+      box-shadow: 0 4px 14px rgba(15, 23, 42, .06);
+    }
+    .fuel-grid-page .fuel-mobile-expense-card.is-matched {
+      border-left-color: #10b981;
+    }
+    .fuel-grid-page .fuel-mobile-expense-card.is-unmatched {
+      border-left-color: #f59e0b;
     }
     .fuel-grid-page .fuel-mobile-card-hero {
       display: flex;
@@ -49,33 +57,44 @@
       line-height: 1.15;
       letter-spacing: .01em;
     }
-    .fuel-grid-page .fuel-mobile-card-district {
-      display: none;
-    }
     .fuel-grid-page .fuel-mobile-card-meta {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 6px 10px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px 12px;
       padding-top: 10px;
       border-top: 1px solid rgba(255,255,255,.14);
       color: #dbeafe;
       font-size: .74rem;
       font-weight: 600;
     }
+    .fuel-grid-page .fuel-mobile-card-meta.is-solo {
+      padding-top: 0;
+      border-top: none;
+    }
     .fuel-grid-page .fuel-mobile-card-meta span {
       display: inline-flex;
       align-items: center;
       gap: 5px;
+      flex: 0 1 auto;
       min-width: 0;
+      max-width: 100%;
+      white-space: nowrap;
     }
     .fuel-grid-page .fuel-mobile-card-meta .fuel-mobile-card-slip {
-      grid-column: 1 / -1;
       color: #eff6ff;
       font-weight: 800;
     }
     .fuel-grid-page .fuel-mobile-card-meta .fuel-mobile-card-slip strong {
       color: #fff;
       font-weight: 800;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+      white-space: normal;
+    }
+    .fuel-grid-page .fuel-mobile-card-scope {
+      color: #e0e7ff;
+      font-weight: 700;
     }
     .fuel-grid-page .fuel-mobile-match {
       display: inline-flex;
@@ -108,20 +127,91 @@
       background: rgba(234, 88, 12, .24);
     }
     .fuel-grid-page .fuel-mobile-card-content {
-      padding: 14px;
+      padding: 12px 12px 14px;
+      background: #fff;
     }
     .fuel-grid-page .fuel-mobile-kpis {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 8px;
-      margin-bottom: 14px;
+      margin-bottom: 12px;
     }
     .fuel-grid-page .fuel-mobile-kpi {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
       min-width: 0;
-      padding: 10px;
-      border: 1px solid #e5eaf2;
-      border-radius: 12px;
-      background: #f8fafc;
+      padding: 11px 12px;
+      border: 1px solid #e8eef6;
+      border-radius: 14px;
+      background: #fff;
+    }
+    .fuel-grid-page .fuel-mobile-kpi-head {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: #64748b;
+      font-size: .64rem;
+      font-weight: 700;
+      letter-spacing: .02em;
+      text-transform: none;
+    }
+    .fuel-grid-page .fuel-mobile-kpi-head .bi {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 18px;
+      height: 18px;
+      border-radius: 6px;
+      font-size: .72rem;
+      background: #f1f5f9;
+      color: #64748b;
+    }
+    .fuel-grid-page .fuel-mobile-kpi.is-amount .fuel-mobile-kpi-head .bi {
+      background: #ecfdf5;
+      color: #059669;
+    }
+    .fuel-grid-page .fuel-mobile-kpi.is-liters .fuel-mobile-kpi-head .bi {
+      background: #eff6ff;
+      color: #2563eb;
+    }
+    .fuel-grid-page .fuel-mobile-kpi.is-liters .fuel-mobile-kpi-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      min-width: 0;
+    }
+    .fuel-grid-page .fuel-mobile-kpi.is-liters .fuel-mobile-kpi-head {
+      min-width: 0;
+      flex: 1 1 auto;
+    }
+    .fuel-grid-page .fuel-mobile-kpi-rate {
+      flex: 0 0 auto;
+      color: #2563eb;
+      font-size: .72rem;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      line-height: 1.1;
+      white-space: nowrap;
+    }
+    .fuel-grid-page .fuel-mobile-kpi-rate small {
+      margin-left: 2px;
+      color: #64748b;
+      font-size: .58rem;
+      font-weight: 700;
+    }
+    .fuel-grid-page .fuel-mobile-kpi-rate.is-empty {
+      color: #94a3b8;
+      font-weight: 600;
+    }
+    .fuel-grid-page .fuel-mobile-kpi.is-distance .fuel-mobile-kpi-head .bi {
+      background: #f5f3ff;
+      color: #7c3aed;
+    }
+    .fuel-grid-page .fuel-mobile-kpi.is-average .fuel-mobile-kpi-head .bi {
+      background: #fff7ed;
+      color: #ea580c;
     }
     .fuel-grid-page .fuel-mobile-kpi-label,
     .fuel-grid-page .fuel-mobile-field-label,
@@ -136,41 +226,70 @@
     }
     .fuel-grid-page .fuel-mobile-kpi-value {
       display: block;
-      margin-top: 4px;
       overflow-wrap: anywhere;
       color: #0f172a;
-      font-size: .95rem;
+      font-size: 1.05rem;
       font-weight: 800;
-      line-height: 1.25;
+      line-height: 1.2;
+      font-variant-numeric: tabular-nums;
     }
-    .fuel-grid-page .fuel-mobile-kpi-value.is-accent { color: #4338ca; }
+    .fuel-grid-page .fuel-mobile-kpi-value .fuel-kpi-unit {
+      margin-left: 3px;
+      color: #94a3b8;
+      font-size: .72rem;
+      font-weight: 700;
+    }
+    .fuel-grid-page .fuel-mobile-kpi-value .fuel-kpi-unit.is-prefix {
+      margin-left: 0;
+      margin-right: 4px;
+    }
+    .fuel-grid-page .fuel-mobile-kpi-value.is-accent,
+    .fuel-grid-page .fuel-mobile-kpi-value.is-accent .fuel-kpi-unit {
+      color: #2563eb;
+    }
+    .fuel-grid-page .fuel-mobile-kpi-value.is-muted,
+    .fuel-grid-page .fuel-mobile-field-value.is-muted {
+      color: #94a3b8;
+      font-weight: 600;
+    }
     .fuel-grid-page .fuel-mobile-section {
-      margin-top: 12px;
+      margin-top: 10px;
       padding: 12px;
-      border: 1px solid #edf1f7;
-      border-radius: 14px;
+      border: none;
+      border-radius: 12px;
       background: #f8fafc;
     }
     .fuel-grid-page .fuel-mobile-section-title {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
       margin-bottom: 10px;
+      color: #64748b;
+    }
+    .fuel-grid-page .fuel-mobile-section-title .bi {
       color: #94a3b8;
+      font-size: .78rem;
     }
     .fuel-grid-page .fuel-mobile-fields {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 10px 14px;
+      gap: 10px 12px;
     }
     .fuel-grid-page .fuel-mobile-field {
       min-width: 0;
+    }
+    .fuel-grid-page .fuel-mobile-field.is-wide {
+      grid-column: 1 / -1;
     }
     .fuel-grid-page .fuel-mobile-field-value {
       display: block;
       margin-top: 3px;
       overflow-wrap: anywhere;
-      color: #334155;
-      font-size: .76rem;
+      color: #0f172a;
+      font-size: .8rem;
       font-weight: 700;
       line-height: 1.35;
+      font-variant-numeric: tabular-nums;
     }
     .fuel-grid-page .fuel-mobile-field-value.is-ellipsis {
       display: -webkit-box;
@@ -178,32 +297,130 @@
       -webkit-line-clamp: 2;
       overflow: hidden;
     }
+    .fuel-grid-page .fuel-mobile-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 10px;
+    }
+    .fuel-grid-page .fuel-mobile-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 9px;
+      border-radius: 999px;
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      color: #334155;
+      font-size: .72rem;
+      font-weight: 700;
+    }
+    .fuel-grid-page .fuel-mobile-odo {
+      margin-top: 10px;
+      padding: 12px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #eff6ff 0%, #f5f3ff 100%);
+      border: 1px solid #dbeafe;
+    }
+    .fuel-grid-page .fuel-mobile-odo-title {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 10px;
+      color: #64748b;
+      font-size: .62rem;
+      font-weight: 800;
+      letter-spacing: .05em;
+      text-transform: uppercase;
+    }
+    .fuel-grid-page .fuel-mobile-odo-flow {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .fuel-grid-page .fuel-mobile-odo-point {
+      min-width: 0;
+      flex: 1 1 0;
+    }
+    .fuel-grid-page .fuel-mobile-odo-point.is-end {
+      text-align: right;
+    }
+    .fuel-grid-page .fuel-mobile-odo-point span {
+      display: block;
+    }
+    .fuel-grid-page .fuel-mobile-odo-point .fuel-mobile-field-label {
+      margin-bottom: 2px;
+      text-transform: none;
+      letter-spacing: .02em;
+      font-size: .66rem;
+      font-weight: 700;
+    }
+    .fuel-grid-page .fuel-mobile-odo-point strong {
+      display: block;
+      color: #0f172a;
+      font-size: .92rem;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      line-height: 1.2;
+      overflow-wrap: anywhere;
+    }
+    .fuel-grid-page .fuel-mobile-odo-arrow {
+      flex: 0 0 auto;
+      color: #6366f1;
+      font-size: 1rem;
+    }
+    .fuel-grid-page .fuel-mobile-odo-task {
+      margin-top: 10px;
+      padding-top: 9px;
+      border-top: 1px solid rgba(148, 163, 184, .35);
+      color: #475569;
+      font-size: .72rem;
+      font-weight: 600;
+    }
+    .fuel-grid-page .fuel-mobile-odo-task strong {
+      color: #0f172a;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+    }
     .fuel-grid-page .fuel-mobile-actions {
       display: flex;
       gap: 8px;
-      margin-top: 14px;
+      margin-top: 12px;
       padding-top: 12px;
-      border-top: 1px solid #edf1f7;
+      border-top: 1px solid #eef2f7;
     }
     .fuel-grid-page .fuel-mobile-action {
       display: inline-flex;
       align-items: center;
       justify-content: center;
       flex: 1 1 0;
-      min-height: 42px;
+      min-height: 44px;
       padding: 8px 10px;
-      border: 1px solid;
-      border-radius: 11px;
-      background: #fff;
-      font-size: .72rem;
-      font-weight: 700;
+      border: none;
+      border-radius: 12px;
+      font-size: .78rem;
+      font-weight: 800;
       text-decoration: none;
+      box-shadow: none;
     }
-    .fuel-grid-page .fuel-mobile-action--view { border-color: #34d399; color: #047857; }
-    .fuel-grid-page .fuel-mobile-action--media { border-color: #60a5fa; color: #2563eb; }
-    .fuel-grid-page .fuel-mobile-action--edit { border-color: #93c5fd; color: #1d4ed8; }
-    .fuel-grid-page .fuel-mobile-action--delete { border-color: #fda4af; color: #be123c; }
-    .fuel-grid-page .fuel-mobile-action--delete:hover { background: #fff1f2; }
+    .fuel-grid-page .fuel-mobile-action--view {
+      background: #059669;
+      color: #fff;
+    }
+    .fuel-grid-page .fuel-mobile-action--media {
+      background: #2563eb;
+      color: #fff;
+    }
+    .fuel-grid-page .fuel-mobile-action--edit {
+      background: #e0e7ff;
+      color: #1d4ed8;
+    }
+    .fuel-grid-page .fuel-mobile-action--delete {
+      background: #fff1f2;
+      color: #be123c;
+    }
+    .fuel-grid-page .fuel-mobile-action--delete:hover { background: #ffe4e6; }
     .fuel-grid-page .fuel-mobile-empty {
       padding: 28px 14px;
       color: #64748b;
@@ -384,7 +601,7 @@
       justify-content: space-between;
       gap: 10px;
       width: 100%;
-      padding: 11px 14px;
+      padding: 10px 12px;
       background: #f8fafc;
       border: none;
       text-align: left;
@@ -400,9 +617,17 @@
     .fuel-grid-page .fuel-filter-summary-main {
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 6px;
       min-width: 0;
       flex: 1;
+      width: 100%;
+    }
+    .fuel-grid-page .fuel-filter-summary-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      width: 100%;
     }
     .fuel-grid-page .fuel-filter-summary-label {
       display: inline-flex;
@@ -418,21 +643,31 @@
     .fuel-grid-page .fuel-filter-chips {
       display: flex;
       flex-wrap: wrap;
-      gap: 6px;
+      align-items: center;
+      gap: 5px;
     }
     .fuel-grid-page .fuel-filter-chip {
       display: inline-flex;
       align-items: center;
+      flex: 0 1 auto;
+      width: max-content;
       max-width: 100%;
-      padding: 5px 9px;
+      padding: 4px 8px;
       border: 1px solid #e2e8f0;
-      border-radius: 10px;
+      border-radius: 8px;
       background: #fff;
       color: #334155;
-      font-size: .72rem;
+      font-size: .7rem;
       font-weight: 600;
       line-height: 1.2;
+      white-space: nowrap;
       box-shadow: 0 1px 2px rgba(15,23,42,.04);
+    }
+    .fuel-grid-page .fuel-filter-chip.is-date {
+      font-size: .68rem;
+      letter-spacing: -.01em;
+      padding-left: 7px;
+      padding-right: 7px;
     }
     .fuel-grid-page .fuel-filter-chip.is-vehicle {
       border-color: #bfdbfe;
@@ -444,10 +679,41 @@
     }
     .fuel-grid-page .fuel-filter-summary-action {
       flex: 0 0 auto;
-      padding-top: 2px;
       font-size: .75rem;
       font-weight: 700;
       color: #2563eb;
+      line-height: 1.2;
+    }
+    .fuel-grid-page .fuel-filter-actions {
+      align-items: stretch;
+    }
+    .fuel-grid-page .fuel-filter-close {
+      flex: 0 0 42px;
+      width: 42px;
+      min-height: 38px;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 10px;
+    }
+    .fuel-grid-page .fuel-filter-close .bi {
+      font-size: .95rem;
+      margin: 0;
+    }
+  }
+  @media (max-width: 767px) {
+    .fuel-grid-page .fuel-filter-apply {
+      min-height: 44px;
+      font-weight: 700;
+      border-radius: 12px;
+    }
+    .fuel-grid-page .fuel-filter-close {
+      flex: 0 0 46px;
+      width: 46px;
+      min-height: 44px;
+      border-radius: 12px;
+      border-width: 1.5px;
     }
   }
 </style>
@@ -462,11 +728,192 @@
 {% set can_edit_fuel = can_see_page('fuel_expense_edit') and not driver_report_mode %}
 {% set can_delete_fuel = can_see_page('fuel_expense_delete') and not driver_report_mode %}
 {% set hide_list_search = hide_list_search|default(false) %}
+{% if from_report_center %}
+<style>
+  /* Report Centre → Fuel: hide hamburger + tight chrome */
+  html.capacitor-native body.fuel-hide-mobile-menu .mobile-menu-btn,
+  body.fuel-hide-mobile-menu .mobile-menu-btn,
+  body.fuel-hide-mobile-menu #mobileMenuBtn {
+    display: none !important;
+  }
+  @media (max-width: 767px) {
+    body.fuel-hide-mobile-menu {
+      --fuel-report-bar-h: 48px;
+    }
+    html.capacitor-native body.fuel-hide-mobile-menu #appNativeShell {
+      top: env(safe-area-inset-top, 0px) !important;
+    }
+    /* Kill shell/page side gutters so content matches full-width header */
+    body.fuel-hide-mobile-menu .main-content,
+    html.capacitor-native body.fuel-hide-mobile-menu .main-content,
+    html.capacitor-native body.fuel-hide-mobile-menu #appNativeShell .main-content {
+      top: env(safe-area-inset-top, 0px) !important;
+      margin: 0 !important;
+      padding-top: 0 !important;
+      padding-left: 0 !important;
+      padding-right: 0 !important;
+      padding-bottom: max(12px, env(safe-area-inset-bottom, 0px)) !important;
+    }
+    body.fuel-hide-mobile-menu .fuel-grid-page.from-report-center.container-fluid,
+    body.fuel-hide-mobile-menu .fuel-grid-page.from-report-center.expense-mobile-page {
+      padding: 0 !important;
+      padding-left: 0 !important;
+      padding-right: 0 !important;
+      margin: 0 !important;
+      width: 100% !important;
+      max-width: none !important;
+    }
+    body.fuel-hide-mobile-menu .fuel-grid-page.from-report-center .fuel-list-wrap {
+      width: 100% !important;
+      max-width: none !important;
+      margin: 0 !important;
+      /* Same as header: edge-to-edge; only top offset for fixed bar */
+      padding: var(--fuel-report-bar-h) 0 12px !important;
+    }
+
+    /* Fixed top bar — flush, no card */
+    body.fuel-hide-mobile-menu .fuel-grid-page.from-report-center .fuel-report-top-bar {
+      display: flex !important;
+      position: fixed !important;
+      top: env(safe-area-inset-top, 0px) !important;
+      left: 0 !important;
+      right: 0 !important;
+      width: 100% !important;
+      height: var(--fuel-report-bar-h) !important;
+      z-index: 45 !important;
+      margin: 0 !important;
+      padding: 0 8px !important;
+      align-items: center !important;
+      border: none !important;
+      border-bottom: 1px solid #e5e7eb !important;
+      border-radius: 0 !important;
+      background: #fff !important;
+      box-shadow: none !important;
+    }
+
+    /* Active Filter — full width, clearly separated from detail list */
+    body.fuel-hide-mobile-menu .fuel-grid-page.from-report-center .fuel-filters-card,
+    body.fuel-hide-mobile-menu .fuel-grid-page.from-report-center .fuel-filters-card.card {
+      position: relative !important;
+      top: auto !important;
+      z-index: 1 !important;
+      margin: 0 0 10px !important;
+      width: 100% !important;
+      max-width: none !important;
+      border: none !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
+      background: #f8fafc !important;
+      overflow: visible !important;
+    }
+    body.fuel-hide-mobile-menu .fuel-grid-page.from-report-center .fuel-filters-card.is-collapsible .fuel-filter-summary {
+      display: block !important;
+      width: 100% !important;
+      max-width: none !important;
+      padding: 12px 14px 14px !important;
+      margin: 0 !important;
+      border: none !important;
+      border-bottom: 1px solid #e2e8f0 !important;
+      border-radius: 0 !important;
+      background: #f8fafc !important;
+      box-shadow: none !important;
+      text-align: left;
+    }
+    body.fuel-hide-mobile-menu .fuel-grid-page.from-report-center .fuel-filter-summary-main {
+      gap: 8px !important;
+      width: 100% !important;
+    }
+    body.fuel-hide-mobile-menu .fuel-grid-page.from-report-center .fuel-filter-summary-head {
+      margin-bottom: 0;
+    }
+    body.fuel-hide-mobile-menu .fuel-grid-page.from-report-center .fuel-filter-chips {
+      gap: 6px !important;
+    }
+    body.fuel-hide-mobile-menu .fuel-grid-page.from-report-center .fuel-filter-chip {
+      padding: 5px 9px !important;
+      border-radius: 999px !important;
+      font-size: .72rem !important;
+      box-shadow: none !important;
+      background: #fff !important;
+      border: 1px solid #e2e8f0 !important;
+    }
+    body.fuel-hide-mobile-menu .fuel-grid-page.from-report-center .fuel-filter-chip.is-vehicle {
+      background: #eff6ff !important;
+      border-color: #bfdbfe !important;
+      color: #1d4ed8 !important;
+    }
+    body.fuel-hide-mobile-menu .fuel-grid-page.from-report-center .fuel-filters-card.is-collapsible.is-open .fuel-filter-summary {
+      border-bottom-color: #eef2f7 !important;
+    }
+    body.fuel-hide-mobile-menu .fuel-grid-page.from-report-center .fuel-filters-card.is-collapsible.is-open .fuel-filters-body {
+      border: none !important;
+      border-bottom: 1px solid #e2e8f0 !important;
+      border-radius: 0 !important;
+      background: #f8fafc !important;
+      padding: 12px 14px !important;
+      width: 100% !important;
+    }
+
+    /* List chrome — full width; gap band separates filter from details */
+    body.fuel-hide-mobile-menu .fuel-grid-page.from-report-center .fuel-data-list-card,
+    body.fuel-hide-mobile-menu .fuel-grid-page.from-report-center .fuel-data-list-card.card {
+      margin: 0 !important;
+      width: 100% !important;
+      max-width: none !important;
+      border: none !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
+      background: #eef2f7 !important;
+      overflow: visible !important;
+    }
+    body.fuel-hide-mobile-menu .fuel-grid-page.from-report-center .fuel-data-list-card > .card-header {
+      display: none !important;
+    }
+    body.fuel-hide-mobile-menu .fuel-grid-page.from-report-center .fuel-data-list-card > .card-body {
+      padding: 0 !important;
+    }
+    body.fuel-hide-mobile-menu .fuel-grid-page.from-report-center .fuel-mobile-card-list {
+      padding: 8px 0 12px !important;
+      gap: 12px;
+      width: 100% !important;
+      background: #eef2f7;
+    }
+    body.fuel-hide-mobile-menu .fuel-grid-page.from-report-center .fuel-mobile-expense-card {
+      width: 100% !important;
+      margin: 0 !important;
+      border: 1px solid #e2e8f0 !important;
+      border-left: 4px solid #2563eb !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
+      background: #fff !important;
+    }
+    body.fuel-hide-mobile-menu .fuel-grid-page.from-report-center .fuel-mobile-expense-card.is-matched {
+      border-left-color: #10b981 !important;
+    }
+    body.fuel-hide-mobile-menu .fuel-grid-page.from-report-center .fuel-mobile-expense-card.is-unmatched {
+      border-left-color: #f59e0b !important;
+    }
+    body.fuel-hide-mobile-menu .fuel-grid-page.from-report-center .fuel-mobile-expense-card + .fuel-mobile-expense-card {
+      margin-top: 0 !important;
+    }
+    body.fuel-hide-mobile-menu .fuel-grid-page.from-report-center .fuel-list-head {
+      display: none !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      height: 0 !important;
+      overflow: hidden !important;
+    }
+  }
+</style>
+<script>
+  document.body.classList.add('fuel-hide-mobile-menu');
+</script>
+{% endif %}
 <div class="container-fluid py-3 fuel-grid-page expense-mobile-page{% if from_report_center %} from-report-center{% endif %}">
   <script type="application/json" id="locationCascadeData">{{ location_cascade|tojson }}</script>
   <div class="fuel-list-wrap">
   {% if from_report_center %}
-  <div class="fuel-report-top-bar mb-2 d-md-none">
+  <div class="fuel-report-top-bar d-md-none">
     <a href="{{ nav_back_url_auto or url_for('reports_index') }}"
        class="btn btn-outline-secondary btn-sm fuel-report-back-btn"
        title="Back to Report Center"
@@ -548,15 +995,17 @@
   <div class="card fuel-list-card mb-3 fuel-filters-card is-collapsible" id="fuelFiltersCard">
     <button type="button" class="fuel-filter-summary" id="fuelFilterSummaryBtn" aria-expanded="false" aria-controls="fuelFilterBody">
       <span class="fuel-filter-summary-main">
-        <span class="fuel-filter-summary-label"><i class="bi bi-funnel"></i> Active Filter</span>
+        <span class="fuel-filter-summary-head">
+          <span class="fuel-filter-summary-label"><i class="bi bi-funnel"></i> Active Filter</span>
+          <span class="fuel-filter-summary-action" id="fuelFilterSummaryAction">Change</span>
+        </span>
         <span class="fuel-filter-chips">
-          <span class="fuel-filter-chip">{{ from_date|ddmmyyyy }} → {{ to_date|ddmmyyyy }}</span>
+          <span class="fuel-filter-chip is-date">{{ from_date|ddmmyyyy }} → {{ to_date|ddmmyyyy }}</span>
           {% if sel_district %}<span class="fuel-filter-chip">{{ sel_district }}</span>{% endif %}
-          {% if sel_project and not all_locked %}<span class="fuel-filter-chip">{{ sel_project }}</span>{% endif %}
+          {% if sel_project %}<span class="fuel-filter-chip">{{ sel_project }}</span>{% endif %}
           <span class="fuel-filter-chip{% if sel_vehicle %} is-vehicle{% endif %}">{{ sel_vehicle or 'All vehicles' }}</span>
         </span>
       </span>
-      <span class="fuel-filter-summary-action" id="fuelFilterSummaryAction">Change</span>
     </button>
     <div class="card-header d-none d-md-block"><i class="bi bi-funnel me-1 text-primary"></i>Filters</div>
     <div class="card-body fuel-filters-body" id="fuelFilterBody">
@@ -627,9 +1076,14 @@
         {% endif %}
         <div class="col-md-2">
           <div class="d-grid gap-2">
-            <button type="submit" class="btn btn-primary btn-sm w-100">
-              <i class="bi bi-funnel me-1"></i>{% if all_locked %}Apply Dates{% else %}Apply Filter{% endif %}
-            </button>
+            <div class="d-flex gap-2 fuel-filter-actions">
+              <button type="submit" class="btn btn-primary btn-sm flex-fill fuel-filter-apply">
+                <i class="bi bi-funnel me-1"></i>{% if all_locked %}Apply Dates{% else %}Apply Filter{% endif %}
+              </button>
+              <button type="button" class="btn btn-outline-secondary btn-sm fuel-filter-close" id="fuelFilterCloseBtn" title="Close filters" aria-label="Close filters">
+                <i class="bi bi-x-lg"></i>
+              </button>
+            </div>
             {% if can_add_fuel %}
             <button type="button" class="btn btn-outline-warning btn-sm w-100 d-none d-md-inline-block" id="fuelBackfillBtn">
               <i class="bi bi-arrow-repeat me-1"></i>Backfill Task KM
@@ -662,12 +1116,18 @@
         {% for r in rows %}
         {% set expense_by_label = (expense_by_labels.get(r.id) if expense_by_labels else '') or '' %}
         {% set matched = r.meter_reading_matched == 'Yes' %}
-        <article class="fuel-mobile-expense-card">
+        {% set show_scope_on_card = not all_locked %}
+        <article class="fuel-mobile-expense-card{% if matched %} is-matched{% else %} is-unmatched{% endif %}">
           <div class="fuel-mobile-card-hero">
             <div>
+              {% if show_scope_on_card %}
               <h3 class="fuel-mobile-card-vehicle">{{ r.vehicle.vehicle_no if r.vehicle else '—' }}</h3>
-              <div class="fuel-mobile-card-meta">
-                <span><i class="bi bi-geo-alt"></i>{{ r.district.name if r.district else '—' }}</span>
+              {% endif %}
+              <div class="fuel-mobile-card-meta{% if not show_scope_on_card %} is-solo{% endif %}">
+                {% if show_scope_on_card %}
+                <span class="fuel-mobile-card-scope"><i class="bi bi-geo-alt"></i>{{ r.district.name if r.district else '—' }}</span>
+                <span class="fuel-mobile-card-scope"><i class="bi bi-folder2"></i>{{ r.project.name if r.project else '—' }}</span>
+                {% endif %}
                 <span><i class="bi bi-calendar3"></i>{{ r.fueling_date|ddmmyyyy }}</span>
                 <span class="fuel-mobile-card-slip"><i class="bi bi-receipt"></i>Slip <strong>#{{ r.slip_no or '—' }}</strong></span>
               </div>
@@ -678,82 +1138,99 @@
             </span>
           </div>
           <div class="fuel-mobile-card-content">
+            {% set amt = r.amount|float if r.amount is not none else none %}
+            {% set ltrs = r.liters|float if r.liters is not none else none %}
+            {% set dist = r.km|float if r.km is not none else none %}
+            {% set mpgv = r.mpg|float if r.mpg is not none else none %}
+            {% set pump_name = (r.workspace_pump.name if r.workspace_pump else (r.fuel_pump.name if r.fuel_pump else '')) or '' %}
+            {% set prev_rd = r.previous_reading|float if r.previous_reading is not none else none %}
+            {% set curr_rd = r.current_reading|float if r.current_reading is not none else none %}
+            {% set km_out = r.km_out_task|float if r.km_out_task is not none else none %}
+            {% set km_in = r.km_in_task|float if r.km_in_task is not none else none %}
+            {% set price = r.fuel_price|float if r.fuel_price is not none else none %}
+
             <div class="fuel-mobile-kpis">
-              <div class="fuel-mobile-kpi">
-                <span class="fuel-mobile-kpi-label">Total Amount</span>
-                <span class="fuel-mobile-kpi-value">PKR {{ '%.2f'|format(r.amount|float) if r.amount is not none else '-' }}</span>
+              <div class="fuel-mobile-kpi is-amount">
+                <span class="fuel-mobile-kpi-head"><i class="bi bi-cash-stack"></i>Total Amount</span>
+                <span class="fuel-mobile-kpi-value{% if amt is none %} is-muted{% endif %}">
+                  {% if amt is not none %}<span class="fuel-kpi-unit is-prefix">PKR</span>{{ '{:,.0f}'.format(amt) }}{% else %}—{% endif %}
+                </span>
               </div>
-              <div class="fuel-mobile-kpi">
-                <span class="fuel-mobile-kpi-label">Liters</span>
-                <span class="fuel-mobile-kpi-value">{{ '%.2f'|format(r.liters|float) if r.liters is not none else '-' }} L</span>
+              <div class="fuel-mobile-kpi is-liters">
+                <div class="fuel-mobile-kpi-top">
+                  <span class="fuel-mobile-kpi-head"><i class="bi bi-fuel-pump"></i>Liters Filled</span>
+                  <span class="fuel-mobile-kpi-rate{% if price is none %} is-empty{% endif %}">
+                    {% if price is not none %}{{ '{:,.2f}'.format(price) }}<small>/L</small>{% else %}—{% endif %}
+                  </span>
+                </div>
+                <span class="fuel-mobile-kpi-value{% if ltrs is none %} is-muted{% endif %}">
+                  {% if ltrs is not none %}{{ '{:,.2f}'.format(ltrs) }}<span class="fuel-kpi-unit">L</span>{% else %}—{% endif %}
+                </span>
               </div>
-              <div class="fuel-mobile-kpi">
-                <span class="fuel-mobile-kpi-label">Distance Driven</span>
-                <span class="fuel-mobile-kpi-value">{{ '%.2f'|format(r.km|float) if r.km is not none else '-' }} KM</span>
+              <div class="fuel-mobile-kpi is-distance">
+                <span class="fuel-mobile-kpi-head"><i class="bi bi-signpost-split"></i>Distance Driven</span>
+                <span class="fuel-mobile-kpi-value{% if dist is none %} is-muted{% endif %}">
+                  {% if dist is not none %}{{ '{:,.0f}'.format(dist) }}<span class="fuel-kpi-unit">KM</span>{% else %}—{% endif %}
+                </span>
               </div>
-              <div class="fuel-mobile-kpi">
-                <span class="fuel-mobile-kpi-label">MPG</span>
-                <span class="fuel-mobile-kpi-value is-accent">{{ '%.2f'|format(r.mpg|float) if r.mpg is not none else '-' }}</span>
+              <div class="fuel-mobile-kpi is-average">
+                <span class="fuel-mobile-kpi-head"><i class="bi bi-speedometer2"></i>Average</span>
+                <span class="fuel-mobile-kpi-value is-accent{% if mpgv is none %} is-muted{% endif %}">
+                  {% if mpgv is not none %}{{ '{:,.2f}'.format(mpgv) }}<span class="fuel-kpi-unit">KM/L</span>{% else %}—{% endif %}
+                </span>
               </div>
             </div>
 
             <section class="fuel-mobile-section">
-              <span class="fuel-mobile-section-title">Pump &amp; Payment</span>
+              <span class="fuel-mobile-section-title"><i class="bi bi-fuel-pump"></i>Pump &amp; Payment</span>
               <div class="fuel-mobile-fields">
-                <div class="fuel-mobile-field">
+                <div class="fuel-mobile-field is-wide">
                   <span class="fuel-mobile-field-label">Pump Station</span>
-                  <span class="fuel-mobile-field-value is-ellipsis">{{ r.workspace_pump.name if r.workspace_pump else (r.fuel_pump.name if r.fuel_pump else '-') }}</span>
+                  <span class="fuel-mobile-field-value is-ellipsis{% if not pump_name %} is-muted{% endif %}">{{ pump_name or 'Not assigned' }}</span>
                 </div>
-                <div class="fuel-mobile-field">
+                <div class="fuel-mobile-field is-wide">
                   <span class="fuel-mobile-field-label">Expense By</span>
-                  <span class="fuel-mobile-field-value is-ellipsis">{{ expense_by_label or '-' }}</span>
+                  <span class="fuel-mobile-field-value is-ellipsis{% if not expense_by_label %} is-muted{% endif %}">{{ expense_by_label or 'Not assigned' }}</span>
                 </div>
-                <div class="fuel-mobile-field">
-                  <span class="fuel-mobile-field-label">Fuel Type</span>
-                  <span class="fuel-mobile-field-value">{{ r.fuel_type or '-' }}</span>
-                </div>
-                <div class="fuel-mobile-field">
-                  <span class="fuel-mobile-field-label">Payment Type</span>
-                  <span class="fuel-mobile-field-value">{{ r.payment_type or '-' }}</span>
-                </div>
+              </div>
+              <div class="fuel-mobile-chips">
+                <span class="fuel-mobile-chip"><i class="bi bi-droplet"></i>{{ r.fuel_type or '—' }}</span>
+                <span class="fuel-mobile-chip"><i class="bi bi-credit-card"></i>{{ r.payment_type or '—' }}</span>
+                {% if r.card_swipe_date %}
+                <span class="fuel-mobile-chip"><i class="bi bi-calendar-check"></i>{{ r.card_swipe_date|ddmmyyyy }}</span>
+                {% endif %}
               </div>
             </section>
 
-            <div class="fuel-mobile-fields">
-              <section class="fuel-mobile-section">
-                <span class="fuel-mobile-section-title">Fuel Details</span>
-                <div class="fuel-mobile-field">
-                  <span class="fuel-mobile-field-label">Fuel Price</span>
-                  <span class="fuel-mobile-field-value">{{ '%.2f'|format(r.fuel_price|float) if r.fuel_price is not none else '-' }} / L</span>
+            <section class="fuel-mobile-odo">
+              <span class="fuel-mobile-odo-title"><i class="bi bi-speedometer"></i>Odometer Log</span>
+              <div class="fuel-mobile-odo-flow">
+                <div class="fuel-mobile-odo-point">
+                  <span class="fuel-mobile-field-label">Previous Bill MR</span>
+                  <strong>{% if prev_rd is not none %}{{ '{:,.0f}'.format(prev_rd) }}{% else %}—{% endif %}</strong>
                 </div>
-                <div class="fuel-mobile-field mt-2">
-                  <span class="fuel-mobile-field-label">Card Swipe Date</span>
-                  <span class="fuel-mobile-field-value">{{ r.card_swipe_date|ddmmyyyy if r.card_swipe_date else '-' }}</span>
+                <i class="bi bi-arrow-right fuel-mobile-odo-arrow" aria-hidden="true"></i>
+                <div class="fuel-mobile-odo-point is-end">
+                  <span class="fuel-mobile-field-label">Current Bill MR</span>
+                  <strong>{% if curr_rd is not none %}{{ '{:,.0f}'.format(curr_rd) }}{% else %}—{% endif %}</strong>
                 </div>
-              </section>
-              <section class="fuel-mobile-section">
-                <span class="fuel-mobile-section-title">Odometer Log</span>
-                <div class="fuel-mobile-field">
-                  <span class="fuel-mobile-field-label">Previous Reading</span>
-                  <span class="fuel-mobile-field-value">{{ '%.2f'|format(r.previous_reading|float) if r.previous_reading is not none else '-' }}</span>
-                </div>
-                <div class="fuel-mobile-field mt-2">
-                  <span class="fuel-mobile-field-label">Current Reading</span>
-                  <span class="fuel-mobile-field-value">{{ '%.2f'|format(r.current_reading|float) if r.current_reading is not none else '-' }}</span>
-                </div>
-                <div class="fuel-mobile-field mt-2">
-                  <span class="fuel-mobile-field-label">KM Out / In (Task)</span>
-                  <span class="fuel-mobile-field-value">{{ '%.2f'|format(r.km_out_task|float) if r.km_out_task is not none else '-' }} / {{ '%.2f'|format(r.km_in_task|float) if r.km_in_task is not none else '-' }}</span>
-                </div>
-              </section>
-            </div>
+              </div>
+              <div class="fuel-mobile-odo-task">
+                Task KM Out / In:
+                <strong>
+                  {% if km_out is not none %}{{ '{:,.0f}'.format(km_out) }}{% else %}—{% endif %}
+                  /
+                  {% if km_in is not none %}{{ '{:,.0f}'.format(km_in) }}{% else %}—{% endif %}
+                </strong>
+              </div>
+            </section>
 
             <div class="fuel-mobile-actions">
-              <a class="fuel-mobile-action fuel-mobile-action--view" href="{{ url_for('fuel_expense_view', pk=r.id, return_to=request.full_path) }}" title="View invoice">
-                <i class="bi bi-eye me-1"></i>View
+              <a class="fuel-mobile-action fuel-mobile-action--view" href="{{ url_for('fuel_expense_view', pk=r.id, return_to=request.full_path) }}" title="View slip">
+                <i class="bi bi-eye me-1"></i>View Slip
               </a>
               <a class="fuel-mobile-action fuel-mobile-action--media" href="{{ url_for('fuel_expense_media', pk=r.id, return_to=request.full_path) }}" title="View media">
-                <i class="bi bi-images me-1"></i>Media
+                <i class="bi bi-images me-1"></i>View Media
               </a>
               {% if can_edit_fuel %}
               <a class="fuel-mobile-action fuel-mobile-action--edit" href="{{ url_for('fuel_expense_edit', pk=r.id, return_to=request.full_path) }}" title="Edit expense">
@@ -1220,15 +1697,30 @@
     });
     var printMobile = document.getElementById('btnPrintReportMobile');
     var exportMobile = document.getElementById('btnExportReportMobile');
-    // Close ⋯ after Print/Export; fleetPrintExport binds these buttons directly.
-    // Defer close so Export format menu can anchor to the visible button first.
-    [printMobile, exportMobile].forEach(function(btn) {
-      if (!btn) return;
-      btn.addEventListener('click', function(e) {
-        e.stopPropagation();
-        setTimeout(closeMore, 0);
+    // Mobile ⋯ actions: call fleet APIs with the visible More button as anchor.
+    // (Hidden desktop buttons / menu-close races were making Export look silent.)
+    if (printMobile) {
+      printMobile.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        closeMore();
+        setTimeout(function() {
+          if (typeof window.fleetRunPrintReport === 'function') window.fleetRunPrintReport();
+        }, 30);
       });
-    });
+    }
+    if (exportMobile) {
+      exportMobile.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        closeMore();
+        setTimeout(function() {
+          if (typeof window.fleetOpenExportMenu === 'function') {
+            window.fleetOpenExportMenu(moreBtn || exportMobile);
+          }
+        }, 30);
+      });
+    }
   })();
 
   /* Sticky collapsible filter drawer (mobile) */
@@ -1236,6 +1728,7 @@
     var card = document.getElementById('fuelFiltersCard');
     var btn = document.getElementById('fuelFilterSummaryBtn');
     var action = document.getElementById('fuelFilterSummaryAction');
+    var closeBtn = document.getElementById('fuelFilterCloseBtn');
     if (!card || !btn) return;
     function setOpen(open) {
       card.classList.toggle('is-open', open);
@@ -1246,6 +1739,11 @@
     btn.addEventListener('click', function() {
       setOpen(!card.classList.contains('is-open'));
     });
+    if (closeBtn) {
+      closeBtn.addEventListener('click', function() {
+        setOpen(false);
+      });
+    }
   })();
 })();
 </script>

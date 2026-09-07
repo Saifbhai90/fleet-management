@@ -2220,57 +2220,72 @@
         }
 
         if (printBtns.length) {
+            function _runFleetPrint() {
+                var btn = _activePrintBtn || printBtns[0];
+                if (!btn) return;
+                btn.disabled = true;
+                btn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Loading...';
+                _fetchAllTable(function(tbl) {
+                    if (!tbl) { _restorePrint(); return; }
+                    var clone = _cleanTable(tbl);
+                    var isNativeApp = _isFleetNativeOrAppShell();
+                    if (isNativeApp) {
+                        _openFleetPrintPreviewOverlay(title, clone);
+                        _restorePrint();
+                        return;
+                    }
+                    var w = window.open('', '_blank');
+                    if (!w || typeof w.document === 'undefined' || !w.document) {
+                        _openFleetPrintPreviewOverlay(title, clone);
+                        _restorePrint();
+                        return;
+                    }
+                    try {
+                        // Escape title for HTML injection into document.write — bare titles with
+                        // quotes/angles have caused Chromium about:blank RESULT_CODE_KILLED_BAD_MESSAGE.
+                        var safeTitle = String(title || 'Report')
+                            .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                            .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                        w.document.open();
+                        w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + safeTitle + '</title>');
+                        w.document.write('<style>' + _fleetPreviewCssResolved() + '</style></head><body>');
+                        var now2 = new Date();
+                        var ds2 = now2.getDate()+'-'+(now2.getMonth()+1)+'-'+now2.getFullYear();
+                        var ts2 = now2.getHours().toString().padStart(2,'0')+':'+now2.getMinutes().toString().padStart(2,'0');
+                        w.document.write('<div class="toolbar"><div class="toolbar-left"><p class="toolbar-title">' + safeTitle + '</p><span class="toolbar-sub">Fleet Management System &mdash; Print Preview</span></div><div class="toolbar-right"><button type="button" class="btn-p" onclick="window.print()">Print</button><button type="button" class="btn-c" id="_fleetPopupClose">Close</button></div></div>');
+                        w.document.write('<div class="rpt-meta"><span><b>Report:</b>&nbsp;' + safeTitle + '</span><span><b>Date:</b>&nbsp;' + ds2 + '</span><span><b>Generated:</b>&nbsp;' + ts2 + '</span></div>');
+                        w.document.write('<div class="rpt-wrap">');
+                        w.document.write(clone.outerHTML);
+                        w.document.write('</div><div class="rpt-page-footer"><span>Fleet Management System</span><span>' + safeTitle + ' &mdash; ' + ds2 + '</span></div>');
+                        w.document.write('<script>(function(){function c(){try{window.close();}catch(e){}try{if(!window.closed&&window.history.length>1)history.back();}catch(e2){}}var b=document.getElementById("_fleetPopupClose");if(b){b.onclick=c;b.ontouchend=function(ev){try{ev.preventDefault();}catch(e){}c();};}document.addEventListener("keydown",function(e){if(e.key==="Escape")c();});})();<\/script>');
+                        w.document.write('</body></html>');
+                        w.document.close();
+                        w.focus();
+                    } catch (e) {
+                        try { if (w && !w.closed) w.close(); } catch (e2) {}
+                        _openFleetPrintPreviewOverlay(title, clone);
+                    }
+                    _restorePrint();
+                });
+            }
             printBtns.forEach(function(btn) {
                 if (btn.dataset.fleetPrintBound === '1') return;
                 btn.dataset.fleetPrintBound = '1';
                 btn.addEventListener('click', function() {
                     _activePrintBtn = btn;
-                    btn.disabled = true;
-                    btn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Loading...';
-                    _fetchAllTable(function(tbl) {
-                        if (!tbl) { _restorePrint(); return; }
-                        var clone = _cleanTable(tbl);
-                        var isNativeApp = _isFleetNativeOrAppShell();
-                        if (isNativeApp) {
-                            _openFleetPrintPreviewOverlay(title, clone);
-                            _restorePrint();
-                            return;
-                        }
-                        var w = window.open('', '_blank');
-                        if (!w || typeof w.document === 'undefined' || !w.document) {
-                            _openFleetPrintPreviewOverlay(title, clone);
-                            _restorePrint();
-                            return;
-                        }
-                        try {
-                            // Escape title for HTML injection into document.write — bare titles with
-                            // quotes/angles have caused Chromium about:blank RESULT_CODE_KILLED_BAD_MESSAGE.
-                            var safeTitle = String(title || 'Report')
-                                .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-                                .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-                            w.document.open();
-                            w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + safeTitle + '</title>');
-                            w.document.write('<style>' + _fleetPreviewCssResolved() + '</style></head><body>');
-                            var now2 = new Date();
-                            var ds2 = now2.getDate()+'-'+(now2.getMonth()+1)+'-'+now2.getFullYear();
-                            var ts2 = now2.getHours().toString().padStart(2,'0')+':'+now2.getMinutes().toString().padStart(2,'0');
-                            w.document.write('<div class="toolbar"><div class="toolbar-left"><p class="toolbar-title">' + safeTitle + '</p><span class="toolbar-sub">Fleet Management System &mdash; Print Preview</span></div><div class="toolbar-right"><button type="button" class="btn-p" onclick="window.print()">Print</button><button type="button" class="btn-c" id="_fleetPopupClose">Close</button></div></div>');
-                            w.document.write('<div class="rpt-meta"><span><b>Report:</b>&nbsp;' + safeTitle + '</span><span><b>Date:</b>&nbsp;' + ds2 + '</span><span><b>Generated:</b>&nbsp;' + ts2 + '</span></div>');
-                            w.document.write('<div class="rpt-wrap">');
-                            w.document.write(clone.outerHTML);
-                            w.document.write('</div><div class="rpt-page-footer"><span>Fleet Management System</span><span>' + safeTitle + ' &mdash; ' + ds2 + '</span></div>');
-                            w.document.write('<script>(function(){function c(){try{window.close();}catch(e){}try{if(!window.closed&&window.history.length>1)history.back();}catch(e2){}}var b=document.getElementById("_fleetPopupClose");if(b){b.onclick=c;b.ontouchend=function(ev){try{ev.preventDefault();}catch(e){}c();};}document.addEventListener("keydown",function(e){if(e.key==="Escape")c();});})();<\/script>');
-                            w.document.write('</body></html>');
-                            w.document.close();
-                            w.focus();
-                        } catch (e) {
-                            try { if (w && !w.closed) w.close(); } catch (e2) {}
-                            _openFleetPrintPreviewOverlay(title, clone);
-                        }
-                        _restorePrint();
-                    });
+                    _runFleetPrint();
                 });
             });
+            window.fleetRunPrintReport = function() {
+                _activePrintBtn = printBtns[0] || null;
+                for (var i = 0; i < printBtns.length; i++) {
+                    if (printBtns[i].offsetParent !== null) {
+                        _activePrintBtn = printBtns[i];
+                        break;
+                    }
+                }
+                _runFleetPrint();
+            };
         }
         if (exportBtns.length) {
             exportBtns.forEach(function(btn) {
@@ -2287,6 +2302,20 @@
                     _showFleetExportMenu(btn);
                 });
             });
+            window.fleetOpenExportMenu = function(anchorEl) {
+                _activeExportBtn = exportBtns[0] || null;
+                for (var i = 0; i < exportBtns.length; i++) {
+                    if (exportBtns[i].getAttribute('data-export-url')) {
+                        _activeExportBtn = exportBtns[i];
+                        break;
+                    }
+                }
+                if (!_activeExportBtn) _activeExportBtn = exportBtns[0];
+                var anchor = anchorEl || _activeExportBtn;
+                if (!anchor) return;
+                if (_fleetExportMenuEl) _closeFleetExportMenu();
+                _showFleetExportMenu(anchor);
+            };
         }
     };
 

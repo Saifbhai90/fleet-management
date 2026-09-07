@@ -2171,7 +2171,8 @@ document.addEventListener('DOMContentLoaded', function() {
   function handlePaymentTypeBehavior(forceReset) {
     if (!paymentTypeSelect) return;
     var paymentType = paymentTypeSelect.value || '';
-    var cardDisabled = paymentType === 'Cash' || paymentType === 'Credit';
+    var cardEnabled = paymentType === 'Tp/Card' || paymentType === 'Shl/Card';
+    var cardDisabled = !cardEnabled;
     if (cardSwipeDateInput) {
       cardSwipeDateInput.disabled = cardDisabled;
       if (cardDisabled) {

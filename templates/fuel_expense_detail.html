@@ -1,164 +1,565 @@
 {% extends "base.html" %}
-{% block title %}Fuel bill — #{{ rec.id }}{% endblock %}
+{% block title %}Fuel Invoice — #{{ rec.id }}{% endblock %}
 {% block content %}
 {% set pump_name = rec.workspace_pump.name if rec.workspace_pump else (rec.fuel_pump.name if rec.fuel_pump else '—') %}
+{% set matched = rec.meter_reading_matched == 'Yes' %}
+{% set amt = rec.amount|float if rec.amount is not none else none %}
+{% set ltrs = rec.liters|float if rec.liters is not none else none %}
+{% set price = rec.fuel_price|float if rec.fuel_price is not none else none %}
+{% set dist = rec.km|float if rec.km is not none else none %}
+{% set mpgv = rec.mpg|float if rec.mpg is not none else none %}
+{% set prev_rd = rec.previous_reading|float if rec.previous_reading is not none else none %}
+{% set curr_rd = rec.current_reading|float if rec.current_reading is not none else none %}
+{% set km_out = rec.km_out_task|float if rec.km_out_task is not none else none %}
+{% set km_in = rec.km_in_task|float if rec.km_in_task is not none else none %}
 <style>
-  .feinv-page { max-width: 100%; width: 100%; margin: 0; }
-  .feinv-bill { border: 1px solid #e2e8f0; border-top: 3px solid #0d6efd; border-radius: 10px; box-shadow: 0 1px 2px rgba(15, 23, 42, .04); }
-  .feinv-hero { background: linear-gradient(135deg, #eff6ff 0%, #fff 60%); border-bottom: 1px solid #bfdbfe; border-radius: 9px 9px 0 0; }
-  .feinv-hlabel { font-size: .65rem; letter-spacing: .08em; color: #1d4ed8; font-weight: 700; }
-  .feinv-htitle { font-size: 1.1rem; font-weight: 700; color: #0f172a; }
-  .feinv-pill { display: inline-flex; align-items: center; gap: .35rem; padding: .2rem .55rem; border-radius: 999px; background: #eff6ff; border: 1px solid #bfdbfe; }
-  .feinv-pill__k { font-size: .62rem; text-transform: uppercase; letter-spacing: .04em; color: #64748b; }
-  .feinv-pill__v { font-size: .8rem; font-weight: 700; color: #0f172a; }
-  .feinv-k { font-size: .68rem; text-transform: uppercase; letter-spacing: .04em; color: #64748b; line-height: 1.15; margin-bottom: .2rem; }
-  .feinv-v { font-size: .86rem; font-weight: 600; color: #0f172a; line-height: 1.3; word-break: break-word; }
-  .feinv-field { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: .5rem .65rem; min-height: 100%; }
-  .feinv-mono { font-variant-numeric: tabular-nums; }
-  .feinv-nums__sep { color: #94a3b8; font-weight: 500; }
-  .feinv-meta--tiles { background: linear-gradient(180deg, #f8fafc 0%, #eff6ff 100%); padding: .5rem; border-radius: 0 0 8px 8px; }
-  .feinv-total-band {
-    background: linear-gradient(135deg, #1d4ed8 0%, #1e3a8a 100%);
-    color: #fff; padding: 1rem 1.1rem; border-radius: 0 0 8px 8px;
+  /* Hide hamburger + reclaim top chrome */
+  html.capacitor-native body.fuel-hide-mobile-menu .mobile-menu-btn,
+  body.fuel-hide-mobile-menu .mobile-menu-btn,
+  body.fuel-hide-mobile-menu #mobileMenuBtn {
+    display: none !important;
   }
-  .feinv-total-band .feinv-total__label { font-size: .75rem; text-transform: uppercase; letter-spacing: .05em; opacity: .9; }
-  .feinv-total-band .feinv-total__amt { font-size: 1.65rem; font-weight: 800; line-height: 1.1; }
-  .feinv-subgrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: .5rem; }
-  @media (min-width: 768px) { .feinv-subgrid { grid-template-columns: repeat(4, 1fr); } }
+
+  .feinv-page {
+    --ink: #15182b;
+    --muted: #8b90a5;
+    --line: #e8eaef;
+    --soft: #f4f5f8;
+    --ok: #15803d;
+    --ok-bg: #e8f8ee;
+    --ok-border: #b7ebc8;
+    max-width: 720px;
+    width: 100%;
+    margin: 0 auto;
+  }
+
+  .feinv-top-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin: 0 0 12px;
+    padding: 0 4px;
+    background: #fff;
+  }
+  .feinv-back-btn {
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    border-color: transparent;
+    background: transparent;
+    color: #334155;
+  }
+  .feinv-back-btn:hover { background: #f1f5f9; }
+  .feinv-back-btn .bi { margin: 0; font-size: 1.1rem; }
+  .feinv-top-title {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+    padding: 0 4px;
+    color: var(--ink);
+    font-size: .95rem;
+    font-weight: 700;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .feinv-top-spacer { width: 40px; height: 40px; flex: 0 0 auto; }
+
+  .feinv-card {
+    background: #fff;
+    border: 1px solid #eceef3;
+    border-radius: 18px;
+    box-shadow: 0 8px 28px rgba(21, 24, 43, .06);
+    padding: 22px 22px 20px;
+    overflow: hidden;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .feinv-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 10px;
+    min-width: 0;
+  }
+  .feinv-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    max-width: 60%;
+    padding: 5px 10px;
+    border-radius: 8px;
+    background: var(--ok-bg);
+    border: 1px solid var(--ok-border);
+    color: var(--ok);
+    font-size: .68rem;
+    font-weight: 800;
+    letter-spacing: .02em;
+    text-transform: uppercase;
+  }
+  .feinv-badge.is-warn {
+    background: #fff7ed;
+    border-color: #fed7aa;
+    color: #c2410c;
+  }
+  .feinv-date {
+    text-align: right;
+    min-width: 0;
+    flex: 0 1 auto;
+  }
+  .feinv-date__k {
+    display: block;
+    color: var(--muted);
+    font-size: .62rem;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+  }
+  .feinv-date__v {
+    display: block;
+    margin-top: 3px;
+    color: var(--ink);
+    font-size: .9rem;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .feinv-title {
+    margin: 8px 0 0;
+    color: var(--ink);
+    font-size: 1.55rem;
+    font-weight: 800;
+    letter-spacing: .02em;
+    line-height: 1.15;
+    text-transform: uppercase;
+  }
+  .feinv-sub {
+    margin: 6px 0 0;
+    color: var(--muted);
+    font-size: .84rem;
+    font-weight: 600;
+  }
+
+  .feinv-rule {
+    height: 1px;
+    background: var(--line);
+    margin: 16px 0;
+    border: 0;
+  }
+
+  .feinv-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px 18px;
+  }
+  .feinv-field.is-wide { grid-column: 1 / -1; }
+  .feinv-k {
+    display: block;
+    margin-bottom: 4px;
+    color: var(--muted);
+    font-size: .68rem;
+    font-weight: 700;
+  }
+  .feinv-v {
+    display: block;
+    color: var(--ink);
+    font-size: .95rem;
+    font-weight: 800;
+    line-height: 1.3;
+    word-break: break-word;
+  }
+
+  .feinv-strip {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    margin-top: 16px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    background: var(--soft);
+  }
+  .feinv-strip.is-stack {
+    flex-direction: column;
+    gap: 12px;
+  }
+  .feinv-strip__row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    width: 100%;
+    min-width: 0;
+  }
+  .feinv-strip__k {
+    display: block;
+    margin-bottom: 4px;
+    color: var(--muted);
+    font-size: .62rem;
+    font-weight: 700;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+  }
+  .feinv-strip__v {
+    display: block;
+    color: var(--ink);
+    font-size: .88rem;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.25;
+    word-break: break-word;
+  }
+  .feinv-strip__end { text-align: right; }
+  .feinv-strip__v.is-ok { color: var(--ok); }
+  .feinv-strip__divider {
+    width: 100%;
+    height: 1px;
+    background: #e2e5ec;
+  }
+
+  .feinv-table-wrap {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin-top: 18px;
+  }
+  .feinv-table {
+    width: 100%;
+    margin: 0;
+    border-collapse: collapse;
+    table-layout: fixed;
+  }
+  .feinv-table th {
+    padding: 0 4px 10px 0;
+    color: var(--muted);
+    font-size: .58rem;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    border: none;
+    background: transparent;
+  }
+  .feinv-table th:first-child { width: 38%; }
+  .feinv-table th:nth-child(2) { width: 18%; }
+  .feinv-table th:nth-child(3) { width: 18%; }
+  .feinv-table th:last-child { width: 26%; padding-right: 0; }
+  .feinv-table th:not(:first-child),
+  .feinv-table td:not(:first-child) { text-align: right; }
+  .feinv-table td {
+    padding: 8px 4px 14px 0;
+    color: var(--ink);
+    font-size: .8rem;
+    font-weight: 700;
+    border: none;
+    border-bottom: 1.5px solid var(--ink);
+    vertical-align: top;
+    font-variant-numeric: tabular-nums;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+  }
+  .feinv-table td:last-child {
+    font-weight: 800;
+    padding-right: 0;
+  }
+
+  .feinv-line-mobile { display: none; }
+
+  .feinv-foot {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 12px;
+    margin-top: 18px;
+    min-width: 0;
+  }
+  .feinv-total__k {
+    display: block;
+    color: var(--muted);
+    font-size: .62rem;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+  }
+  .feinv-total__v {
+    display: block;
+    margin-top: 4px;
+    color: var(--ink);
+    font-size: 1.35rem;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.1;
+    word-break: break-word;
+  }
+  .feinv-print {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    min-height: 42px;
+    padding: 0 14px;
+    border: none;
+    border-radius: 10px;
+    background: var(--ink);
+    color: #fff;
+    font-size: .8rem;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .feinv-print:hover { background: #0f1222; color: #fff; }
+
+  @media (max-width: 767px) {
+    body.fuel-hide-mobile-menu { --feinv-bar-h: 48px; }
+    html.capacitor-native body.fuel-hide-mobile-menu #appNativeShell {
+      top: env(safe-area-inset-top, 0px) !important;
+    }
+    body.fuel-hide-mobile-menu .main-content,
+    html.capacitor-native body.fuel-hide-mobile-menu .main-content,
+    html.capacitor-native body.fuel-hide-mobile-menu #appNativeShell .main-content {
+      top: env(safe-area-inset-top, 0px) !important;
+      margin: 0 !important;
+      padding-top: 0 !important;
+      padding-left: 0 !important;
+      padding-right: 0 !important;
+      padding-bottom: max(12px, env(safe-area-inset-bottom, 0px)) !important;
+      background: #f3f4f7 !important;
+    }
+    body.fuel-hide-mobile-menu .feinv-page.container-fluid {
+      padding: 0 !important;
+      margin: 0 !important;
+      width: 100% !important;
+      max-width: none !important;
+    }
+    body.fuel-hide-mobile-menu .feinv-page {
+      padding: var(--feinv-bar-h) 12px 16px !important;
+      max-width: none !important;
+    }
+    .feinv-top-bar {
+      position: fixed !important;
+      top: env(safe-area-inset-top, 0px) !important;
+      left: 0 !important;
+      right: 0 !important;
+      height: var(--feinv-bar-h) !important;
+      z-index: 45 !important;
+      margin: 0 !important;
+      padding: 0 8px !important;
+      border-bottom: 1px solid #e5e7eb !important;
+      background: #fff !important;
+    }
+    .feinv-card {
+      padding: 16px 14px 14px;
+      border-radius: 16px;
+    }
+    .feinv-title { font-size: 1.28rem; }
+    .feinv-strip__end { text-align: left; }
+    .feinv-table-wrap { display: none; }
+    .feinv-line-mobile {
+      display: block;
+      margin-top: 16px;
+      padding-bottom: 14px;
+      border-bottom: 1.5px solid var(--ink);
+    }
+    .feinv-line-mobile__desc {
+      color: var(--ink);
+      font-size: .9rem;
+      font-weight: 800;
+      margin-bottom: 10px;
+    }
+    .feinv-line-mobile__grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+    }
+    .feinv-line-mobile__grid .feinv-k { margin-bottom: 2px; }
+    .feinv-line-mobile__grid .feinv-v {
+      font-size: .82rem;
+      font-variant-numeric: tabular-nums;
+    }
+    .feinv-foot {
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .feinv-total__v { font-size: 1.2rem; }
+  }
+
   @media print {
-    .navbar, .sidebar, .flash-message, .d-print-none { display: none !important; }
-    .main-content { margin: 0 !important; margin-top: 0 !important; padding: 6px !important; }
-    .feinv-bill { box-shadow: none !important; border: 1px solid #000 !important; }
+    .navbar, .sidebar, .flash-message, .d-print-none, .mobile-bottom-nav, .mobile-menu-btn { display: none !important; }
+    .main-content { margin: 0 !important; padding: 8px !important; background: #fff !important; }
+    .feinv-card { box-shadow: none !important; border-color: #ccc !important; }
+    .feinv-print { display: none !important; }
   }
 </style>
+<script>
+  document.body.classList.add('fuel-hide-mobile-menu');
+</script>
+
 <div class="container-fluid py-2 feinv-page">
-  <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2 d-print-none">
-    <div class="small text-muted fw-semibold text-uppercase" style="letter-spacing:.04em">Bill view</div>
-    <div class="d-flex flex-wrap gap-1">
-      <a href="{{ back_url if back_url is defined else url_for('fuel_expense_list') }}" class="btn btn-outline-secondary btn-sm py-1"><i class="bi bi-arrow-left me-1"></i>Back</a>
-      <button type="button" class="btn btn-primary btn-sm py-1" onclick="window.print()"><i class="bi bi-printer me-1"></i>Print</button>
-      <a href="{{ url_for('fuel_expense_media', pk=rec.id) }}{% if return_to_path is defined and return_to_path %}?return_to={{ return_to_path|url_quote }}{% endif %}" class="btn btn-light btn-sm py-1 text-primary border border-primary"><i class="bi bi-images me-1"></i>Media</a>
-    </div>
+  <div class="feinv-top-bar d-print-none">
+    <a href="{{ back_url if back_url is defined else url_for('fuel_expense_list') }}"
+       class="btn btn-outline-secondary btn-sm feinv-back-btn"
+       title="Back"
+       aria-label="Back"
+       data-fleet-nav-back="1"
+       onclick="return window.fleetNavigateBack ? window.fleetNavigateBack(event, this) : true;">
+      <i class="bi bi-arrow-left"></i>
+    </a>
+    <span class="feinv-top-title">Bill View</span>
+    <span class="feinv-top-spacer" aria-hidden="true"></span>
   </div>
 
-  <div id="expense-invoice-print-root" class="feinv-bill shadow-sm mb-3">
-    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 py-2 px-2 px-md-3 feinv-hero">
-      <div class="min-w-0">
-        <div class="text-uppercase feinv-hlabel">Fuel bill / invoice</div>
-        <div class="feinv-htitle mb-0">Entry #{{ rec.id }}</div>
-      </div>
-      <div class="text-end d-flex flex-column align-items-end gap-1 small">
-        <div class="feinv-pill text-nowrap">
-          <span class="feinv-pill__k">Fueling</span>
-          <span class="feinv-pill__v">{{ rec.fueling_date|ddmmyyyy if rec.fueling_date else '—' }}</span>
-        </div>
-        {% if rec.card_swipe_date %}
-        <div class="feinv-pill text-nowrap">
-          <span class="feinv-pill__k">Card</span>
-          <span class="feinv-pill__v">{{ rec.card_swipe_date|ddmmyyyy }}</span>
-        </div>
-        {% endif %}
+  <article id="expense-invoice-print-root" class="feinv-card mb-3">
+    <div class="feinv-head">
+      {% if matched %}
+      <span class="feinv-badge"><i class="bi bi-check-lg"></i> Matched &amp; Verified</span>
+      {% else %}
+      <span class="feinv-badge is-warn"><i class="bi bi-exclamation-circle"></i> Not Matched</span>
+      {% endif %}
+      <div class="feinv-date">
+        <span class="feinv-date__k">Fueling Date</span>
+        <span class="feinv-date__v">{{ rec.fueling_date|ddmmyyyy if rec.fueling_date else '—' }}</span>
       </div>
     </div>
-    <div class="px-2 pb-2 feinv-meta--tiles">
-      <div class="feinv-subgrid mb-2">
-        <div class="feinv-field">
-          <div class="feinv-k">District</div>
-          <div class="feinv-v">{{ rec.district.name if rec.district else '—' }}</div>
-        </div>
-        <div class="feinv-field">
-          <div class="feinv-k">Project</div>
-          <div class="feinv-v">{{ rec.project.name if rec.project else '—' }}</div>
-        </div>
-        <div class="feinv-field">
-          <div class="feinv-k">Vehicle</div>
-          <div class="feinv-v">{{ rec.vehicle.vehicle_no if rec.vehicle else '—' }}</div>
-        </div>
-        <div class="feinv-field">
-          <div class="feinv-k">Payment</div>
-          <div class="feinv-v">{{ rec.payment_type or '—' }}</div>
-        </div>
+
+    <h1 class="feinv-title">Fuel Invoice</h1>
+    <p class="feinv-sub">
+      Entry #{{ rec.id }}
+      {% if rec.slip_no %} | Slip #{{ rec.slip_no }}{% endif %}
+    </p>
+
+    <hr class="feinv-rule">
+
+    <div class="feinv-grid">
+      <div class="feinv-field">
+        <span class="feinv-k">Vehicle Reg. No.</span>
+        <span class="feinv-v">{{ rec.vehicle.vehicle_no if rec.vehicle else '—' }}</span>
       </div>
-      <div class="feinv-subgrid">
-        <div class="feinv-field">
-          <div class="feinv-k">Fuel</div>
-          <div class="feinv-v">{{ rec.fuel_type or '—' }}</div>
-        </div>
-        <div class="feinv-field">
-          <div class="feinv-k">Pump / party</div>
-          <div class="feinv-v">{{ pump_name }}</div>
-        </div>
-        <div class="feinv-field">
-          <div class="feinv-k">Expense By (COA)</div>
-          <div class="feinv-v">{{ expense_by_label or '—' }}</div>
-        </div>
-        <div class="feinv-field">
-          <div class="feinv-k">Slip no.</div>
-          <div class="feinv-v feinv-mono">{{ rec.slip_no or '—' }}</div>
-        </div>
-        <div class="feinv-field">
-          <div class="feinv-k">Meter</div>
-          <div class="feinv-v feinv-mono" style="font-size:.8rem;">{{ rec.meter_reading_matched or '—' }}</div>
-        </div>
+      <div class="feinv-field">
+        <span class="feinv-k">Project Name</span>
+        <span class="feinv-v">{{ rec.project.name if rec.project else '—' }}</span>
       </div>
+      <div class="feinv-field">
+        <span class="feinv-k">District</span>
+        <span class="feinv-v">{{ rec.district.name if rec.district else '—' }}</span>
+      </div>
+      <div class="feinv-field">
+        <span class="feinv-k">Payment Method</span>
+        <span class="feinv-v">{{ rec.payment_type or '—' }}</span>
+      </div>
+      <div class="feinv-field">
+        <span class="feinv-k">Fuel Type</span>
+        <span class="feinv-v">{{ rec.fuel_type or '—' }}</span>
+      </div>
+      <div class="feinv-field">
+        <span class="feinv-k">Expense By</span>
+        <span class="feinv-v">{{ expense_by_label or 'Not assigned' }}</span>
+      </div>
+      {% if rec.card_swipe_date %}
+      <div class="feinv-field">
+        <span class="feinv-k">Card Swipe Date</span>
+        <span class="feinv-v">{{ rec.card_swipe_date|ddmmyyyy }}</span>
+      </div>
+      <div class="feinv-field">
+        <span class="feinv-k">Pump / Supplier Name</span>
+        <span class="feinv-v">{{ pump_name }}</span>
+      </div>
+      {% else %}
+      <div class="feinv-field is-wide">
+        <span class="feinv-k">Pump / Supplier Name</span>
+        <span class="feinv-v">{{ pump_name }}</span>
+      </div>
+      {% endif %}
     </div>
-    <div class="px-2 pb-2">
-      <div class="row g-2">
-        <div class="col-6 col-md-3">
-          <div class="feinv-field h-100">
-            <div class="feinv-k">KM out (task)</div>
-            <div class="feinv-v feinv-mono">{% if rec.km_out_task is not none %}{{ "%.2f"|format(rec.km_out_task|float) }}{% else %}—{% endif %}</div>
-          </div>
+
+    <div class="feinv-strip is-stack">
+      <div class="feinv-strip__row">
+        <div>
+          <span class="feinv-strip__k">Previous Bill MR</span>
+          <span class="feinv-strip__v">{% if prev_rd is not none %}{{ '{:,.0f}'.format(prev_rd) }}{% else %}—{% endif %}</span>
         </div>
-        <div class="col-6 col-md-3">
-          <div class="feinv-field h-100">
-            <div class="feinv-k">KM in (task)</div>
-            <div class="feinv-v feinv-mono">{% if rec.km_in_task is not none %}{{ "%.2f"|format(rec.km_in_task|float) }}{% else %}—{% endif %}</div>
-          </div>
-        </div>
-        <div class="col-6 col-md-3">
-          <div class="feinv-field h-100">
-            <div class="feinv-k">Previous / current</div>
-            <div class="feinv-v feinv-mono" style="font-size:.8rem;">{{ "%.2f"|format((rec.previous_reading or 0)|float) }}<span class="feinv-nums__sep"> · </span>{{ "%.2f"|format((rec.current_reading or 0)|float) }}</div>
-          </div>
-        </div>
-        <div class="col-6 col-md-3">
-          <div class="feinv-field h-100">
-            <div class="feinv-k">Trip KM / MPG</div>
-            <div class="feinv-v feinv-mono" style="font-size:.8rem;">
-              {% if rec.km is not none %}{{ "%.2f"|format(rec.km|float) }}{% else %}—{% endif %}
-              <span class="feinv-nums__sep"> · </span>
-              {% if rec.mpg is not none %}{{ "%.2f"|format(rec.mpg|float) }}{% else %}—{% endif %}
-            </div>
-          </div>
+        <div class="feinv-strip__end">
+          <span class="feinv-strip__k">Current Bill MR</span>
+          <span class="feinv-strip__v">{% if curr_rd is not none %}{{ '{:,.0f}'.format(curr_rd) }}{% else %}—{% endif %}</span>
         </div>
       </div>
-    </div>
-    <div class="px-2 pb-2">
-      <div class="row g-2">
-        <div class="col-6 col-md-4">
-          <div class="feinv-field border-dashed" style="border-style: dashed; background: #f8fafc;">
-            <div class="feinv-k">Price / liter</div>
-            <div class="feinv-v feinv-mono">{% if rec.fuel_price is not none %}{{ "%.2f"|format(rec.fuel_price|float) }}{% else %}—{% endif %}</div>
-          </div>
+      <div class="feinv-strip__divider"></div>
+      <div class="feinv-strip__row">
+        <div>
+          <span class="feinv-strip__k">Task KM Out</span>
+          <span class="feinv-strip__v">{% if km_out is not none %}{{ '{:,.0f}'.format(km_out) }}{% else %}—{% endif %}</span>
         </div>
-        <div class="col-6 col-md-4">
-          <div class="feinv-field border-dashed" style="border-style: dashed; background: #f8fafc;">
-            <div class="feinv-k">Liters</div>
-            <div class="feinv-v feinv-mono">{% if rec.liters is not none %}{{ "%.2f"|format(rec.liters|float) }}{% else %}—{% endif %}</div>
-          </div>
+        <div class="feinv-strip__end">
+          <span class="feinv-strip__k">Task KM In</span>
+          <span class="feinv-strip__v">{% if km_in is not none %}{{ '{:,.0f}'.format(km_in) }}{% else %}—{% endif %}</span>
         </div>
-        <div class="col-12 col-md-4 d-flex align-items-stretch">
-          <div class="feinv-total-band w-100 d-flex flex-wrap justify-content-between align-items-center gap-2">
-            <div>
-              <div class="feinv-total__label">Total</div>
-              <div class="feinv-total__amt feinv-mono">{{ "%.2f"|format((rec.amount or 0)|float) }}</div>
-            </div>
-            <i class="bi bi-droplet-half d-none d-sm-block" style="font-size:2rem;opacity:.35;"></i>
-          </div>
+      </div>
+      <div class="feinv-strip__divider"></div>
+      <div class="feinv-strip__row">
+        <div>
+          <span class="feinv-strip__k">Distance Driven</span>
+          <span class="feinv-strip__v">{% if dist is not none %}{{ '{:,.0f}'.format(dist) }} KM{% else %}—{% endif %}</span>
+        </div>
+        <div class="feinv-strip__end">
+          <span class="feinv-strip__k">Average</span>
+          <span class="feinv-strip__v is-ok">{% if mpgv is not none %}{{ '{:,.2f}'.format(mpgv) }} KM/L{% else %}—{% endif %}</span>
         </div>
       </div>
     </div>
-  </div>
+
+    <div class="feinv-table-wrap">
+      <table class="feinv-table">
+        <thead>
+          <tr>
+            <th>Description</th>
+            <th>Rate</th>
+            <th>Qty</th>
+            <th>Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>{{ (rec.fuel_type or 'Fuel') }} (Fueling Expense)</td>
+            <td>{% if price is not none %}{{ '{:,.2f}'.format(price) }}{% else %}—{% endif %}</td>
+            <td>{% if ltrs is not none %}{{ '{:,.2f}'.format(ltrs) }} L{% else %}—{% endif %}</td>
+            <td>{% if amt is not none %}PKR {{ '{:,.2f}'.format(amt) }}{% else %}—{% endif %}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="feinv-line-mobile">
+      <div class="feinv-line-mobile__desc">{{ (rec.fuel_type or 'Fuel') }} (Fueling Expense)</div>
+      <div class="feinv-line-mobile__grid">
+        <div>
+          <span class="feinv-k">Rate</span>
+          <span class="feinv-v">{% if price is not none %}{{ '{:,.2f}'.format(price) }}{% else %}—{% endif %}</span>
+        </div>
+        <div>
+          <span class="feinv-k">Qty</span>
+          <span class="feinv-v">{% if ltrs is not none %}{{ '{:,.2f}'.format(ltrs) }} L{% else %}—{% endif %}</span>
+        </div>
+        <div>
+          <span class="feinv-k">Amount</span>
+          <span class="feinv-v">{% if amt is not none %}PKR {{ '{:,.2f}'.format(amt) }}{% else %}—{% endif %}</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="feinv-foot">
+      <div>
+        <span class="feinv-total__k">Total Billed</span>
+        <span class="feinv-total__v">{% if amt is not none %}PKR {{ '{:,.2f}'.format(amt) }}{% else %}—{% endif %}</span>
+      </div>
+      <button type="button" class="feinv-print d-print-none" onclick="window.print()">Print Invoice</button>
+    </div>
+  </article>
 </div>
 {% endblock %}

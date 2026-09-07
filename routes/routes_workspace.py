@@ -5122,12 +5122,12 @@ def workspace_mpg_report_export_excel():
 
     headers = [
         "Sr.No.", "Vehicle No.", "Target MPG", "Tank Capacity (L)",
-        "Entry Date", "SLIP NO.", "Previous Reading", "Current Reading",
+        "Last Bill Date", "Last Bill Slip No", "Start Reading", "Last Bill MR",
         "KM", "Avg. Fuel Price", "Total LTR", "MPG", "Amount",
         "FUEL DEDUCTION", "Short Km's", "With Full Tank Next Fueling Reading",
-        "Current Date Reading", "Current Odoo Meter Reading",
+        "Task Report MR", "Current Odoo Meter Reading",
         "R. KM's from Fueling", "In Tank Current Ltr",
-        "Fueling LTR With Target MPG", "Fueling Amount", "Today Fuel", "Balance Amount",
+        "Fueling LTR With Target MPG", "Fueling Amount", "Today Fuel", "Current Fueling Amount",
     ]
 
     thin_border = Border(
@@ -5154,18 +5154,18 @@ def workspace_mpg_report_export_excel():
         cell.border = thin_border
 
     num_cols = {
-        "Previous Reading", "Current Reading", "KM", "Avg. Fuel Price",
+        "Start Reading", "Last Bill MR", "KM", "Avg. Fuel Price",
         "Total LTR", "MPG", "Amount", "FUEL DEDUCTION", "Short Km's",
-        "With Full Tank Next Fueling Reading", "Current Date Reading",
+        "With Full Tank Next Fueling Reading", "Task Report MR",
         "Current Odoo Meter Reading", "R. KM's from Fueling",
         "In Tank Current Ltr", "Fueling LTR With Target MPG",
-        "Fueling Amount", "Today Fuel", "Balance Amount",
+        "Fueling Amount", "Today Fuel", "Current Fueling Amount",
         "Target MPG", "Tank Capacity (L)",
     }
     # Columns that should show integer when decimal part is 0, else 2 decimals
     real_num_cols = {
-        "Previous Reading", "Current Reading", "KM",
-        "With Full Tank Next Fueling Reading", "Current Date Reading",
+        "Start Reading", "Last Bill MR", "KM",
+        "With Full Tank Next Fueling Reading", "Task Report MR",
         "Current Odoo Meter Reading",
     }
     num_fmt = '#,##0.00'
@@ -5229,7 +5229,7 @@ def workspace_mpg_report_export_excel():
                         cell.number_format = num_fmt
             elif h == "Sr.No.":
                 cell.alignment = center_align
-            elif h == "Entry Date":
+            elif h == "Last Bill Date":
                 cell.alignment = center_align
                 if val != '' and hasattr(val, 'strftime'):
                     cell.number_format = 'dd-mm-yy'
@@ -5245,7 +5245,7 @@ def workspace_mpg_report_export_excel():
                 cell.font = neg_font
             elif h == "Short Km's" and val != '' and val > 0:
                 cell.font = warn_font
-            elif h == "Balance Amount" and val != '':
+            elif h == "Current Fueling Amount" and val != '':
                 if val > 0:
                     cell.font = pos_font
                 elif val < 0:
@@ -5260,7 +5260,7 @@ def workspace_mpg_report_export_excel():
 
     sum_cols = {
         "KM", "Total LTR", "Amount", "FUEL DEDUCTION",
-        "Fueling Amount", "Today Fuel", "Balance Amount",
+        "Fueling Amount", "Today Fuel", "Current Fueling Amount",
     }
 
     totals = {}
