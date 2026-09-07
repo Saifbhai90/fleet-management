@@ -1409,7 +1409,9 @@ def fuel_expense_list():
     disable_project = scope_filters['disable_project']
     disable_vehicle = scope_filters['disable_vehicle']
 
-    from_d = parse_date(from_date) if from_date else today
+    # MPG-style default range: month start → today (user can still change)
+    month_start = today.replace(day=1)
+    from_d = parse_date(from_date) if from_date else month_start
     to_d = parse_date(to_date) if to_date else today
     if from_d and to_d and from_d > to_d:
         from_d, to_d = to_d, from_d
@@ -1534,6 +1536,7 @@ def fuel_expense_list():
         )
     cleanup_status = _latest_expense_cleanup_status('fuel', workspace_employee_id)
     driver_report_mode = bool(is_driver and not workspace_employee_id) or (nav_from == 'reports' and is_driver)
+    hide_list_search = bool(all_locked)
     return render_template(
         'fuel_expense_list.html',
         form=form,
@@ -1561,6 +1564,7 @@ def fuel_expense_list():
         sel_vehicle=sel_vehicle,
         is_driver=is_driver,
         driver_report_mode=driver_report_mode,
+        hide_list_search=hide_list_search,
         nav_from=nav_from,
     )
 

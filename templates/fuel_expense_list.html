@@ -38,23 +38,46 @@
       align-items: flex-start;
       justify-content: space-between;
       gap: 10px;
-      padding: 14px 15px;
+      padding: 12px 14px;
       color: #fff;
       background: linear-gradient(135deg, #2563eb 0%, #4338ca 100%);
     }
-    .fuel-grid-page .fuel-mobile-card-kicker {
-      display: block;
-      color: #bfdbfe;
-      font-size: .62rem;
+    .fuel-grid-page .fuel-mobile-card-vehicle {
+      margin: 0 0 4px;
+      font-size: 1.08rem;
       font-weight: 800;
-      letter-spacing: .08em;
-      text-transform: uppercase;
+      line-height: 1.2;
+      letter-spacing: .01em;
+    }
+    .fuel-grid-page .fuel-mobile-card-district {
+      display: block;
+      color: #c7d2fe;
+      font-size: .78rem;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .fuel-grid-page .fuel-mobile-card-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      color: #dbeafe;
+      font-size: .74rem;
+      font-weight: 600;
+    }
+    .fuel-grid-page .fuel-mobile-card-meta span {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .fuel-grid-page .fuel-mobile-card-meta .fuel-mobile-card-slip {
+      color: #eff6ff;
+      font-weight: 700;
+    }
+    .fuel-grid-page .fuel-mobile-card-kicker {
+      display: none;
     }
     .fuel-grid-page .fuel-mobile-card-title {
-      margin: 2px 0 1px;
-      font-size: 1rem;
-      font-weight: 800;
-      line-height: 1.25;
+      display: none;
     }
     .fuel-grid-page .fuel-mobile-card-date {
       color: #dbeafe;
@@ -247,8 +270,64 @@
     z-index: 25;
     background: #fff;
   }
+  .fuel-grid-page .fuel-report-top-bar { display: none; }
   .fuel-grid-page .fuel-filter-summary { display: none; }
   @media (max-width: 767px) {
+    .fuel-grid-page.from-report-center .fuel-report-top-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      position: sticky;
+      top: 0;
+      z-index: 32;
+      margin: 0 -12px 8px;
+      padding: 8px 12px;
+      background: #f8fafc;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    .fuel-grid-page.from-report-center .fuel-report-top-bar .btn {
+      flex: 0 0 auto;
+    }
+    .fuel-grid-page.from-report-center .fuel-report-top-bar .fuel-report-title-inline {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+      flex: 1 1 auto;
+      margin: 0;
+      padding: 6px 10px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);
+      color: #fff;
+      font-size: .78rem;
+      font-weight: 700;
+      line-height: 1.2;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .fuel-grid-page.from-report-center .fuel-report-top-bar .fuel-report-title-inline .bi {
+      flex: 0 0 auto;
+      font-size: .85rem;
+      opacity: .92;
+    }
+    .fuel-grid-page.from-report-center .fuel-report-top-bar .fuel-toolbar-more-btn {
+      display: inline-flex;
+      width: 38px;
+      height: 38px;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      background: #fff;
+      color: #334155;
+      box-shadow: 0 1px 3px rgba(15,23,42,.06);
+    }
+    .fuel-grid-page.from-report-center .fuel-report-top-bar .fuel-more-menu {
+      top: calc(100% + 4px);
+    }
+    .fuel-grid-page.from-report-center .fuel-list-head {
+      display: none !important;
+    }
     .fuel-grid-page .fuel-list-head {
       position: sticky;
       top: 0;
@@ -256,13 +335,23 @@
       border-radius: 0 0 14px 14px;
       margin-left: -12px;
       margin-right: -12px;
+      padding: .45rem .75rem;
       padding-left: 12px;
       padding-right: 12px;
     }
+    .fuel-grid-page .fuel-list-head h5 {
+      font-size: .95rem;
+      margin: 0;
+    }
     .fuel-grid-page .fuel-head-actions-desktop { display: none !important; }
-    .fuel-grid-page .fuel-toolbar-more-btn { display: inline-flex; }
-    .fuel-grid-page .fuel-filters-card {
-      top: 56px;
+    .fuel-grid-page:not(.from-report-center) .fuel-toolbar-more-btn { display: inline-flex; }
+    .fuel-grid-page.from-report-center .fuel-filters-card {
+      top: 52px;
+      border-radius: 16px;
+      overflow: hidden;
+    }
+    .fuel-grid-page:not(.from-report-center) .fuel-filters-card {
+      top: 48px;
       border-radius: 16px;
       overflow: hidden;
     }
@@ -311,11 +400,38 @@
 {% set can_add_fuel = can_see_page('fuel_expense_add') and not driver_report_mode %}
 {% set can_edit_fuel = can_see_page('fuel_expense_edit') and not driver_report_mode %}
 {% set can_delete_fuel = can_see_page('fuel_expense_delete') and not driver_report_mode %}
+{% set hide_list_search = hide_list_search|default(false) %}
 <div class="container-fluid py-3 fuel-grid-page expense-mobile-page{% if from_report_center %} from-report-center{% endif %}">
   <script type="application/json" id="locationCascadeData">{{ location_cascade|tojson }}</script>
   <div class="fuel-list-wrap">
   {% if from_report_center %}
-  <div class="mb-2">
+  <div class="fuel-report-top-bar mb-2 d-md-none">
+    <a href="{{ nav_back_url_auto or url_for('reports_index') }}"
+       class="btn btn-outline-secondary btn-sm"
+       data-fleet-nav-back="1"
+       onclick="return window.fleetNavigateBack(event, this);">
+      <i class="bi bi-arrow-left me-1"></i>Report Center
+    </a>
+    <span class="fuel-report-title-inline" title="Fuel Expense Report">
+      <i class="bi bi-fuel-pump"></i>
+      <span>Fuel Expense Report</span>
+    </span>
+    <button type="button" class="fuel-toolbar-more-btn" id="fuelMoreBtn" aria-label="More actions" aria-expanded="false" aria-controls="fuelMoreMenu" aria-haspopup="true">
+      <i class="bi bi-three-dots"></i>
+    </button>
+    <div class="fuel-more-menu" id="fuelMoreMenu" role="menu" hidden>
+      <button type="button" class="btn btn-outline-primary btn-sm" id="btnPrintReportMobile" role="menuitem"><i class="bi bi-eye me-1"></i>Print / Preview</button>
+      <button type="button" class="btn btn-outline-primary btn-sm" id="btnExportReportMobile" role="menuitem"><i class="bi bi-file-earmark-excel me-1"></i>Export</button>
+      {% if can_see_page('workspace_mpg_report') %}
+      <a href="{{ url_for('workspace_mpg_report', nav_from=nav_from if nav_from else None) }}" class="btn btn-outline-warning btn-sm" role="menuitem"><i class="bi bi-speedometer2 me-1"></i>MPG Report</a>
+      {% endif %}
+      {% if can_add_fuel %}
+      <button type="button" class="btn btn-outline-warning btn-sm" id="fuelBackfillBtnMenu" role="menuitem"><i class="bi bi-arrow-repeat me-1"></i>Backfill Task KM</button>
+      <a href="{{ url_for('fuel_expense_add', district_id=form.district_id.data or 0, project_id=form.project_id.data or 0) }}" class="btn btn-primary btn-sm" role="menuitem"><i class="bi bi-plus-circle me-1"></i>Add Fuel Expense</a>
+      {% endif %}
+    </div>
+  </div>
+  <div class="mb-2 d-none d-md-block">
     <a href="{{ nav_back_url_auto or url_for('reports_index') }}"
        class="btn btn-outline-secondary btn-sm"
        data-fleet-nav-back="1"
@@ -340,6 +456,7 @@
       </a>
       {% endif %}
     </div>
+    {% if not from_report_center %}
     <button type="button" class="fuel-toolbar-more-btn" id="fuelMoreBtn" aria-label="More actions" aria-expanded="false" aria-controls="fuelMoreMenu" aria-haspopup="true">
       <i class="bi bi-three-dots"></i>
     </button>
@@ -354,6 +471,7 @@
       <a href="{{ url_for('fuel_expense_add', district_id=form.district_id.data or 0, project_id=form.project_id.data or 0) }}" class="btn btn-primary btn-sm" role="menuitem"><i class="bi bi-plus-circle me-1"></i>Add Fuel Expense</a>
       {% endif %}
     </div>
+    {% endif %}
   </div>
   {% if cleanup_status %}
   <div class="mb-2 d-flex flex-wrap align-items-center gap-2">
@@ -474,7 +592,9 @@
   <div class="card fuel-list-card fuel-data-list-card overflow-hidden">
     <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
       <span class="fw-semibold">Fuel Expense from {{ from_date|ddmmyyyy }} to {{ to_date|ddmmyyyy }}</span>
+      {% if not hide_list_search %}
       <input type="text" id="fuelExpenseSearch" class="form-control form-control-sm bg-white text-dark" placeholder="Search — press Enter" style="max-width: 240px;" autocomplete="off" value="{{ q or '' }}">
+      {% endif %}
     </div>
     <div class="card-body p-0">
       {% set umc = show_upload_media_columns|default(true) %}
@@ -485,9 +605,12 @@
         <article class="fuel-mobile-expense-card">
           <div class="fuel-mobile-card-hero">
             <div>
-              <span class="fuel-mobile-card-kicker">Slip No. #{{ r.slip_no or '-' }}</span>
-              <h3 class="fuel-mobile-card-title">Fuel Expense Report</h3>
-              <span class="fuel-mobile-card-date"><i class="bi bi-calendar3 me-1"></i>{{ r.fueling_date|ddmmyyyy }}</span>
+              <h3 class="fuel-mobile-card-vehicle">{{ r.vehicle.vehicle_no if r.vehicle else '—' }}</h3>
+              <span class="fuel-mobile-card-district"><i class="bi bi-geo-alt me-1"></i>{{ r.district.name if r.district else '—' }}</span>
+              <div class="fuel-mobile-card-meta">
+                <span><i class="bi bi-calendar3"></i>{{ r.fueling_date|ddmmyyyy }}</span>
+                <span class="fuel-mobile-card-slip"><i class="bi bi-receipt"></i>Slip #{{ r.slip_no or '—' }}</span>
+              </div>
             </div>
             <span class="fuel-mobile-match{% if not matched %} is-unmatched{% endif %}">
               <i class="bi bi-{{ 'check-circle' if matched else 'exclamation-circle' }}"></i>
@@ -515,23 +638,23 @@
             </div>
 
             <section class="fuel-mobile-section">
-              <span class="fuel-mobile-section-title">Vehicle &amp; Personnel</span>
+              <span class="fuel-mobile-section-title">Pump &amp; Payment</span>
               <div class="fuel-mobile-fields">
                 <div class="fuel-mobile-field">
-                  <span class="fuel-mobile-field-label">Vehicle Number</span>
-                  <span class="fuel-mobile-field-value">{{ r.vehicle.vehicle_no if r.vehicle else '-' }}</span>
+                  <span class="fuel-mobile-field-label">Pump Station</span>
+                  <span class="fuel-mobile-field-value is-ellipsis">{{ r.workspace_pump.name if r.workspace_pump else (r.fuel_pump.name if r.fuel_pump else '-') }}</span>
                 </div>
                 <div class="fuel-mobile-field">
                   <span class="fuel-mobile-field-label">Expense By</span>
                   <span class="fuel-mobile-field-value is-ellipsis">{{ expense_by_label or '-' }}</span>
                 </div>
                 <div class="fuel-mobile-field">
-                  <span class="fuel-mobile-field-label">District</span>
-                  <span class="fuel-mobile-field-value">{{ r.district.name if r.district else '-' }}</span>
+                  <span class="fuel-mobile-field-label">Fuel Type</span>
+                  <span class="fuel-mobile-field-value">{{ r.fuel_type or '-' }}</span>
                 </div>
                 <div class="fuel-mobile-field">
-                  <span class="fuel-mobile-field-label">Pump Station</span>
-                  <span class="fuel-mobile-field-value is-ellipsis">{{ r.workspace_pump.name if r.workspace_pump else (r.fuel_pump.name if r.fuel_pump else '-') }}</span>
+                  <span class="fuel-mobile-field-label">Payment Type</span>
+                  <span class="fuel-mobile-field-value">{{ r.payment_type or '-' }}</span>
                 </div>
               </div>
             </section>
@@ -540,16 +663,8 @@
               <section class="fuel-mobile-section">
                 <span class="fuel-mobile-section-title">Fuel Details</span>
                 <div class="fuel-mobile-field">
-                  <span class="fuel-mobile-field-label">Fuel Type</span>
-                  <span class="fuel-mobile-field-value">{{ r.fuel_type or '-' }}</span>
-                </div>
-                <div class="fuel-mobile-field mt-2">
                   <span class="fuel-mobile-field-label">Fuel Price</span>
                   <span class="fuel-mobile-field-value">{{ '%.2f'|format(r.fuel_price|float) if r.fuel_price is not none else '-' }} / L</span>
-                </div>
-                <div class="fuel-mobile-field mt-2">
-                  <span class="fuel-mobile-field-label">Payment Type</span>
-                  <span class="fuel-mobile-field-value">{{ r.payment_type or '-' }}</span>
                 </div>
                 <div class="fuel-mobile-field mt-2">
                   <span class="fuel-mobile-field-label">Card Swipe Date</span>
