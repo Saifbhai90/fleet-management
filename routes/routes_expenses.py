@@ -2802,7 +2802,6 @@ def fuel_expense_edit(pk):
     )
 
 
-@app.route('/expenses/fuel/<int:pk>/view')
 def _fuel_expense_viewer_allowed(rec):
     """Deny out-of-scope fuel rows for drivers/report viewers without workspace employee."""
     workspace_employee_id = _workspace_employee_id_for_expenses()
@@ -2827,6 +2826,7 @@ def _fuel_expense_viewer_allowed(rec):
     return True
 
 
+@app.route('/expenses/fuel/<int:pk>/view')
 def fuel_expense_view(pk):
     _guard = _require_workspace_employee_for_expense_management(allow_report_or_driver=True)
     if _guard:
