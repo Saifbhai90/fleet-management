@@ -1012,16 +1012,38 @@
 
     // ── Print & Export (all pages) ──
     window.fleetPrintExport = function(tableId, title, csvFilename, excelConfig) {
-        var printBtn = document.getElementById('btnPrintReport');
-        var exportBtn = document.getElementById('btnExportReport');
-        if (!printBtn && !exportBtn) return;
-        if (printBtn && !printBtn._fleetOrigHtml) printBtn._fleetOrigHtml = printBtn.innerHTML;
-        if (exportBtn && !exportBtn._fleetOrigHtml) exportBtn._fleetOrigHtml = exportBtn.innerHTML;
+        var printBtns = [];
+        var exportBtns = [];
+        ['btnPrintReport', 'btnPrintReportMobile'].forEach(function(id) {
+            var el = document.getElementById(id);
+            if (el && printBtns.indexOf(el) < 0) printBtns.push(el);
+        });
+        ['btnExportReport', 'btnExportReportMobile'].forEach(function(id) {
+            var el = document.getElementById(id);
+            if (el && exportBtns.indexOf(el) < 0) exportBtns.push(el);
+        });
+        var printBtn = printBtns[0] || null;
+        var exportBtn = exportBtns[0] || null;
+        if (!printBtns.length && !exportBtns.length) return;
+        printBtns.forEach(function(btn) {
+            if (!btn._fleetOrigHtml) btn._fleetOrigHtml = btn.innerHTML;
+        });
+        exportBtns.forEach(function(btn) {
+            if (!btn._fleetOrigHtml) btn._fleetOrigHtml = btn.innerHTML;
+        });
+        var _activePrintBtn = printBtn;
+        var _activeExportBtn = exportBtn;
         function _restorePrint() {
-            if (printBtn) printBtn.innerHTML = printBtn._fleetOrigHtml || '<i class="bi bi-eye me-1"></i>Print / Preview';
+            printBtns.forEach(function(btn) {
+                btn.innerHTML = btn._fleetOrigHtml || '<i class="bi bi-eye me-1"></i>Print / Preview';
+                btn.disabled = false;
+            });
         }
         function _restoreExport() {
-            if (exportBtn) exportBtn.innerHTML = exportBtn._fleetOrigHtml || '<i class="bi bi-file-earmark-excel me-1"></i>Export';
+            exportBtns.forEach(function(btn) {
+                btn.innerHTML = btn._fleetOrigHtml || '<i class="bi bi-file-earmark-excel me-1"></i>Export';
+                btn.disabled = false;
+            });
         }
 
         function _allPagesUrl() {
@@ -1613,7 +1635,7 @@
         }
 
         function _fleetExportExcel(clone) {
-            var serverUrl = exportBtn && exportBtn.getAttribute('data-export-url');
+            var serverUrl = (_activeExportBtn || exportBtn) && (_activeExportBtn || exportBtn).getAttribute('data-export-url');
             if (serverUrl) {
                 var qs = new URLSearchParams(window.location.search || '');
                 qs.delete('page');
@@ -1730,7 +1752,8 @@
         }
 
         function _fleetExportPdf(clone) {
-            var serverPdfUrl = exportBtn && exportBtn.getAttribute('data-pdf-url');
+            var _expBtn = _activeExportBtn || exportBtn;
+            var serverPdfUrl = _expBtn && _expBtn.getAttribute('data-pdf-url');
             if (serverPdfUrl) {
                 var qs = new URLSearchParams(window.location.search || '');
                 qs.delete('page');
@@ -2010,20 +2033,20 @@
 
         function _runFleetExport(format) {
             _closeFleetExportMenu();
-            if (!exportBtn) return;
-            var serverUrl = exportBtn.getAttribute('data-export-url');
+            var btn = _activeExportBtn || exportBtn;
+            if (!btn) return;
+            var serverUrl = btn.getAttribute('data-export-url');
             if (format === 'excel' && serverUrl) {
-                exportBtn.disabled = true;
-                exportBtn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Loading...';
+                btn.disabled = true;
+                btn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Loading...';
                 _fleetExportExcel(null);
-                setTimeout(function() { exportBtn.disabled = false; _restoreExport(); }, 1500);
+                setTimeout(function() { _restoreExport(); }, 1500);
                 return;
             }
-            exportBtn.disabled = true;
-            exportBtn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Loading...';
+            btn.disabled = true;
+            btn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Loading...';
             _fetchAllTable(function(tbl) {
                 if (!tbl) {
-                    exportBtn.disabled = false;
                     _restoreExport();
                     return;
                 }
@@ -2035,7 +2058,6 @@
                 Promise.resolve(job).catch(function(err) {
                     alert((err && err.message) ? err.message : 'Export failed. Please try again.');
                 }).finally(function() {
-                    exportBtn.disabled = false;
                     _restoreExport();
                 });
             });
@@ -2044,7 +2066,11 @@
         if (!window._fleetExportMenuDocBound) {
             window._fleetExportMenuDocBound = true;
             document.addEventListener('click', function(e) {
-                if (!e.target.closest('.fleet-export-menu') && !e.target.closest('#btnExportReport')) {
+                if (
+                    !e.target.closest('.fleet-export-menu') &&
+                    !e.target.closest('#btnExportReport') &&
+                    !e.target.closest('#btnExportReportMobile')
+                ) {
                     _closeFleetExportMenu();
                 }
             });
@@ -2193,66 +2219,74 @@
             document.addEventListener('keydown', onPreviewKeydown, true);
         }
 
-        if (printBtn) {
-            printBtn.addEventListener('click', function() {
-                printBtn.disabled = true; printBtn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Loading...';
-                _fetchAllTable(function(tbl) {
-                    if (!tbl) { printBtn.disabled = false; _restorePrint(); return; }
-                    var clone = _cleanTable(tbl);
-                    var isNativeApp = _isFleetNativeOrAppShell();
-                    if (isNativeApp) {
-                        _openFleetPrintPreviewOverlay(title, clone);
-                        printBtn.disabled = false; _restorePrint();
-                        return;
-                    }
-                    var w = window.open('', '_blank');
-                    if (!w || typeof w.document === 'undefined' || !w.document) {
-                        _openFleetPrintPreviewOverlay(title, clone);
-                        printBtn.disabled = false; _restorePrint();
-                        return;
-                    }
-                    try {
-                        // Escape title for HTML injection into document.write — bare titles with
-                        // quotes/angles have caused Chromium about:blank RESULT_CODE_KILLED_BAD_MESSAGE.
-                        var safeTitle = String(title || 'Report')
-                            .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-                            .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-                        w.document.open();
-                        w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + safeTitle + '</title>');
-                        w.document.write('<style>' + _fleetPreviewCssResolved() + '</style></head><body>');
-                        var now2 = new Date();
-                        var ds2 = now2.getDate()+'-'+(now2.getMonth()+1)+'-'+now2.getFullYear();
-                        var ts2 = now2.getHours().toString().padStart(2,'0')+':'+now2.getMinutes().toString().padStart(2,'0');
-                        w.document.write('<div class="toolbar"><div class="toolbar-left"><p class="toolbar-title">' + safeTitle + '</p><span class="toolbar-sub">Fleet Management System &mdash; Print Preview</span></div><div class="toolbar-right"><button type="button" class="btn-p" onclick="window.print()">Print</button><button type="button" class="btn-c" id="_fleetPopupClose">Close</button></div></div>');
-                        w.document.write('<div class="rpt-meta"><span><b>Report:</b>&nbsp;' + safeTitle + '</span><span><b>Date:</b>&nbsp;' + ds2 + '</span><span><b>Generated:</b>&nbsp;' + ts2 + '</span></div>');
-                        w.document.write('<div class="rpt-wrap">');
-                        w.document.write(clone.outerHTML);
-                        w.document.write('</div><div class="rpt-page-footer"><span>Fleet Management System</span><span>' + safeTitle + ' &mdash; ' + ds2 + '</span></div>');
-                        w.document.write('<script>(function(){function c(){try{window.close();}catch(e){}try{if(!window.closed&&window.history.length>1)history.back();}catch(e2){}}var b=document.getElementById("_fleetPopupClose");if(b){b.onclick=c;b.ontouchend=function(ev){try{ev.preventDefault();}catch(e){}c();};}document.addEventListener("keydown",function(e){if(e.key==="Escape")c();});})();<\/script>');
-                        w.document.write('</body></html>');
-                        w.document.close();
-                        w.focus();
-                    } catch (e) {
-                        try { if (w && !w.closed) w.close(); } catch (e2) {}
-                        _openFleetPrintPreviewOverlay(title, clone);
-                    }
-                    printBtn.disabled = false; _restorePrint();
+        if (printBtns.length) {
+            printBtns.forEach(function(btn) {
+                if (btn.dataset.fleetPrintBound === '1') return;
+                btn.dataset.fleetPrintBound = '1';
+                btn.addEventListener('click', function() {
+                    _activePrintBtn = btn;
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Loading...';
+                    _fetchAllTable(function(tbl) {
+                        if (!tbl) { _restorePrint(); return; }
+                        var clone = _cleanTable(tbl);
+                        var isNativeApp = _isFleetNativeOrAppShell();
+                        if (isNativeApp) {
+                            _openFleetPrintPreviewOverlay(title, clone);
+                            _restorePrint();
+                            return;
+                        }
+                        var w = window.open('', '_blank');
+                        if (!w || typeof w.document === 'undefined' || !w.document) {
+                            _openFleetPrintPreviewOverlay(title, clone);
+                            _restorePrint();
+                            return;
+                        }
+                        try {
+                            // Escape title for HTML injection into document.write — bare titles with
+                            // quotes/angles have caused Chromium about:blank RESULT_CODE_KILLED_BAD_MESSAGE.
+                            var safeTitle = String(title || 'Report')
+                                .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                                .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                            w.document.open();
+                            w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + safeTitle + '</title>');
+                            w.document.write('<style>' + _fleetPreviewCssResolved() + '</style></head><body>');
+                            var now2 = new Date();
+                            var ds2 = now2.getDate()+'-'+(now2.getMonth()+1)+'-'+now2.getFullYear();
+                            var ts2 = now2.getHours().toString().padStart(2,'0')+':'+now2.getMinutes().toString().padStart(2,'0');
+                            w.document.write('<div class="toolbar"><div class="toolbar-left"><p class="toolbar-title">' + safeTitle + '</p><span class="toolbar-sub">Fleet Management System &mdash; Print Preview</span></div><div class="toolbar-right"><button type="button" class="btn-p" onclick="window.print()">Print</button><button type="button" class="btn-c" id="_fleetPopupClose">Close</button></div></div>');
+                            w.document.write('<div class="rpt-meta"><span><b>Report:</b>&nbsp;' + safeTitle + '</span><span><b>Date:</b>&nbsp;' + ds2 + '</span><span><b>Generated:</b>&nbsp;' + ts2 + '</span></div>');
+                            w.document.write('<div class="rpt-wrap">');
+                            w.document.write(clone.outerHTML);
+                            w.document.write('</div><div class="rpt-page-footer"><span>Fleet Management System</span><span>' + safeTitle + ' &mdash; ' + ds2 + '</span></div>');
+                            w.document.write('<script>(function(){function c(){try{window.close();}catch(e){}try{if(!window.closed&&window.history.length>1)history.back();}catch(e2){}}var b=document.getElementById("_fleetPopupClose");if(b){b.onclick=c;b.ontouchend=function(ev){try{ev.preventDefault();}catch(e){}c();};}document.addEventListener("keydown",function(e){if(e.key==="Escape")c();});})();<\/script>');
+                            w.document.write('</body></html>');
+                            w.document.close();
+                            w.focus();
+                        } catch (e) {
+                            try { if (w && !w.closed) w.close(); } catch (e2) {}
+                            _openFleetPrintPreviewOverlay(title, clone);
+                        }
+                        _restorePrint();
+                    });
                 });
             });
         }
-        if (exportBtn) {
-            if (exportBtn.dataset.fleetExportMenuBound !== '1') {
-                exportBtn.dataset.fleetExportMenuBound = '1';
-                exportBtn.addEventListener('click', function(e) {
+        if (exportBtns.length) {
+            exportBtns.forEach(function(btn) {
+                if (btn.dataset.fleetExportMenuBound === '1') return;
+                btn.dataset.fleetExportMenuBound = '1';
+                btn.addEventListener('click', function(e) {
                     e.preventDefault();
                     e.stopPropagation();
+                    _activeExportBtn = btn;
                     if (_fleetExportMenuEl) {
                         _closeFleetExportMenu();
                         return;
                     }
-                    _showFleetExportMenu(exportBtn);
+                    _showFleetExportMenu(btn);
                 });
-            }
+            });
         }
     };
 

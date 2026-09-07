@@ -43,23 +43,21 @@
       background: linear-gradient(135deg, #2563eb 0%, #4338ca 100%);
     }
     .fuel-grid-page .fuel-mobile-card-vehicle {
-      margin: 0 0 4px;
-      font-size: 1.08rem;
+      margin: 0 0 10px;
+      font-size: 1.2rem;
       font-weight: 800;
-      line-height: 1.2;
+      line-height: 1.15;
       letter-spacing: .01em;
     }
     .fuel-grid-page .fuel-mobile-card-district {
-      display: block;
-      color: #c7d2fe;
-      font-size: .78rem;
-      font-weight: 600;
-      margin-bottom: 8px;
+      display: none;
     }
     .fuel-grid-page .fuel-mobile-card-meta {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px 10px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(255,255,255,.14);
       color: #dbeafe;
       font-size: .74rem;
       font-weight: 600;
@@ -68,10 +66,31 @@
       display: inline-flex;
       align-items: center;
       gap: 5px;
+      min-width: 0;
     }
     .fuel-grid-page .fuel-mobile-card-meta .fuel-mobile-card-slip {
+      grid-column: 1 / -1;
       color: #eff6ff;
+      font-weight: 800;
+    }
+    .fuel-grid-page .fuel-mobile-card-meta .fuel-mobile-card-slip strong {
+      color: #fff;
+      font-weight: 800;
+    }
+    .fuel-grid-page .fuel-mobile-match {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      flex: 0 0 auto;
+      padding: 5px 9px;
+      border: 1px solid rgba(167, 243, 208, .45);
+      border-radius: 999px;
+      color: #d1fae5;
+      background: rgba(16, 185, 129, .22);
+      backdrop-filter: blur(6px);
+      font-size: .66rem;
       font-weight: 700;
+      white-space: nowrap;
     }
     .fuel-grid-page .fuel-mobile-card-kicker {
       display: none;
@@ -82,20 +101,6 @@
     .fuel-grid-page .fuel-mobile-card-date {
       color: #dbeafe;
       font-size: .72rem;
-    }
-    .fuel-grid-page .fuel-mobile-match {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      flex: 0 0 auto;
-      padding: 5px 8px;
-      border: 1px solid rgba(167, 243, 208, .8);
-      border-radius: 999px;
-      color: #d1fae5;
-      background: rgba(16, 185, 129, .2);
-      font-size: .66rem;
-      font-weight: 700;
-      white-space: nowrap;
     }
     .fuel-grid-page .fuel-mobile-match.is-unmatched {
       border-color: rgba(254, 215, 170, .9);
@@ -282,45 +287,63 @@
       top: 0;
       z-index: 32;
       margin: 0 -12px 8px;
-      padding: 8px 12px;
-      background: #f8fafc;
+      padding: 10px 12px;
+      background: #fff;
       border-bottom: 1px solid #e2e8f0;
     }
     .fuel-grid-page.from-report-center .fuel-report-top-bar .btn {
       flex: 0 0 auto;
     }
-    .fuel-grid-page.from-report-center .fuel-report-top-bar .fuel-report-title-inline {
+    .fuel-grid-page.from-report-center .fuel-report-top-bar .fuel-report-back-btn {
+      width: 40px;
+      height: 40px;
+      padding: 0;
       display: inline-flex;
       align-items: center;
-      gap: 6px;
+      justify-content: center;
+      border-radius: 999px;
+      border-color: transparent;
+      background: transparent;
+      color: #334155;
+    }
+    .fuel-grid-page.from-report-center .fuel-report-top-bar .fuel-report-back-btn:hover {
+      background: #f1f5f9;
+    }
+    .fuel-grid-page.from-report-center .fuel-report-top-bar .fuel-report-back-btn .bi {
+      margin: 0;
+      font-size: 1.1rem;
+    }
+    .fuel-grid-page.from-report-center .fuel-report-top-bar .fuel-report-title-inline {
+      display: block;
       min-width: 0;
       flex: 1 1 auto;
       margin: 0;
-      padding: 6px 10px;
-      border-radius: 10px;
-      background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);
-      color: #fff;
-      font-size: .78rem;
+      padding: 0 4px;
+      background: none;
+      color: #0f172a;
+      font-size: .95rem;
       font-weight: 700;
-      line-height: 1.2;
+      line-height: 1.25;
+      text-align: center;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
     .fuel-grid-page.from-report-center .fuel-report-top-bar .fuel-report-title-inline .bi {
-      flex: 0 0 auto;
-      font-size: .85rem;
-      opacity: .92;
+      display: none;
     }
     .fuel-grid-page.from-report-center .fuel-report-top-bar .fuel-toolbar-more-btn {
       display: inline-flex;
-      width: 38px;
-      height: 38px;
-      border: 1px solid #e2e8f0;
-      border-radius: 12px;
-      background: #fff;
+      width: 40px;
+      height: 40px;
+      border: none;
+      border-radius: 999px;
+      background: transparent;
       color: #334155;
-      box-shadow: 0 1px 3px rgba(15,23,42,.06);
+      box-shadow: none;
+    }
+    .fuel-grid-page.from-report-center .fuel-report-top-bar .fuel-toolbar-more-btn:hover {
+      background: #f1f5f9;
     }
     .fuel-grid-page.from-report-center .fuel-report-top-bar .fuel-more-menu {
       top: calc(100% + 4px);
@@ -362,7 +385,7 @@
       gap: 10px;
       width: 100%;
       padding: 11px 14px;
-      background: #fff;
+      background: #f8fafc;
       border: none;
       text-align: left;
       color: #0f172a;
@@ -372,18 +395,56 @@
     }
     .fuel-grid-page .fuel-filters-card.is-collapsible.is-open .fuel-filter-summary {
       border-bottom: 1px solid #eef2f7;
+      background: #fff;
     }
-    .fuel-grid-page .fuel-filter-summary-text {
+    .fuel-grid-page .fuel-filter-summary-main {
       display: flex;
+      flex-direction: column;
       gap: 8px;
       min-width: 0;
       flex: 1;
-      font-size: .82rem;
+    }
+    .fuel-grid-page .fuel-filter-summary-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: #64748b;
+      font-size: .68rem;
+      font-weight: 800;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+    .fuel-grid-page .fuel-filter-summary-label .bi { color: #2563eb; }
+    .fuel-grid-page .fuel-filter-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .fuel-grid-page .fuel-filter-chip {
+      display: inline-flex;
+      align-items: center;
+      max-width: 100%;
+      padding: 5px 9px;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      background: #fff;
+      color: #334155;
+      font-size: .72rem;
       font-weight: 600;
-      line-height: 1.35;
+      line-height: 1.2;
+      box-shadow: 0 1px 2px rgba(15,23,42,.04);
+    }
+    .fuel-grid-page .fuel-filter-chip.is-vehicle {
+      border-color: #bfdbfe;
+      background: #eff6ff;
+      color: #1d4ed8;
+    }
+    .fuel-grid-page .fuel-filter-summary-text {
+      display: none;
     }
     .fuel-grid-page .fuel-filter-summary-action {
       flex: 0 0 auto;
+      padding-top: 2px;
       font-size: .75rem;
       font-weight: 700;
       color: #2563eb;
@@ -407,15 +468,14 @@
   {% if from_report_center %}
   <div class="fuel-report-top-bar mb-2 d-md-none">
     <a href="{{ nav_back_url_auto or url_for('reports_index') }}"
-       class="btn btn-outline-secondary btn-sm"
+       class="btn btn-outline-secondary btn-sm fuel-report-back-btn"
+       title="Back to Report Center"
+       aria-label="Back to Report Center"
        data-fleet-nav-back="1"
        onclick="return window.fleetNavigateBack(event, this);">
-      <i class="bi bi-arrow-left me-1"></i>Report Center
+      <i class="bi bi-arrow-left"></i>
     </a>
-    <span class="fuel-report-title-inline" title="Fuel Expense Report">
-      <i class="bi bi-fuel-pump"></i>
-      <span>Fuel Expense Report</span>
-    </span>
+    <span class="fuel-report-title-inline" title="Fuel Expense Report">Fuel Expense Report</span>
     <button type="button" class="fuel-toolbar-more-btn" id="fuelMoreBtn" aria-label="More actions" aria-expanded="false" aria-controls="fuelMoreMenu" aria-haspopup="true">
       <i class="bi bi-three-dots"></i>
     </button>
@@ -487,16 +547,16 @@
 
   <div class="card fuel-list-card mb-3 fuel-filters-card is-collapsible" id="fuelFiltersCard">
     <button type="button" class="fuel-filter-summary" id="fuelFilterSummaryBtn" aria-expanded="false" aria-controls="fuelFilterBody">
-      <span class="fuel-filter-summary-text">
-        <i class="bi bi-funnel"></i>
-        <span>
-          {{ from_date|ddmmyyyy }} → {{ to_date|ddmmyyyy }}
-          {% if sel_district %} · {{ sel_district }}{% endif %}
-          {% if sel_project %} · {{ sel_project }}{% endif %}
-          {% if sel_vehicle %} · {{ sel_vehicle }}{% else %} · All vehicles{% endif %}
+      <span class="fuel-filter-summary-main">
+        <span class="fuel-filter-summary-label"><i class="bi bi-funnel"></i> Active Filter</span>
+        <span class="fuel-filter-chips">
+          <span class="fuel-filter-chip">{{ from_date|ddmmyyyy }} → {{ to_date|ddmmyyyy }}</span>
+          {% if sel_district %}<span class="fuel-filter-chip">{{ sel_district }}</span>{% endif %}
+          {% if sel_project and not all_locked %}<span class="fuel-filter-chip">{{ sel_project }}</span>{% endif %}
+          <span class="fuel-filter-chip{% if sel_vehicle %} is-vehicle{% endif %}">{{ sel_vehicle or 'All vehicles' }}</span>
         </span>
       </span>
-      <span class="fuel-filter-summary-action" id="fuelFilterSummaryAction">Filters</span>
+      <span class="fuel-filter-summary-action" id="fuelFilterSummaryAction">Change</span>
     </button>
     <div class="card-header d-none d-md-block"><i class="bi bi-funnel me-1 text-primary"></i>Filters</div>
     <div class="card-body fuel-filters-body" id="fuelFilterBody">
@@ -606,10 +666,10 @@
           <div class="fuel-mobile-card-hero">
             <div>
               <h3 class="fuel-mobile-card-vehicle">{{ r.vehicle.vehicle_no if r.vehicle else '—' }}</h3>
-              <span class="fuel-mobile-card-district"><i class="bi bi-geo-alt me-1"></i>{{ r.district.name if r.district else '—' }}</span>
               <div class="fuel-mobile-card-meta">
+                <span><i class="bi bi-geo-alt"></i>{{ r.district.name if r.district else '—' }}</span>
                 <span><i class="bi bi-calendar3"></i>{{ r.fueling_date|ddmmyyyy }}</span>
-                <span class="fuel-mobile-card-slip"><i class="bi bi-receipt"></i>Slip #{{ r.slip_no or '—' }}</span>
+                <span class="fuel-mobile-card-slip"><i class="bi bi-receipt"></i>Slip <strong>#{{ r.slip_no or '—' }}</strong></span>
               </div>
             </div>
             <span class="fuel-mobile-match{% if not matched %} is-unmatched{% endif %}">
@@ -1160,14 +1220,15 @@
     });
     var printMobile = document.getElementById('btnPrintReportMobile');
     var exportMobile = document.getElementById('btnExportReportMobile');
-    var printDesk = document.getElementById('btnPrintReport');
-    var exportDesk = document.getElementById('btnExportReport');
-    if (printMobile && printDesk) {
-      printMobile.addEventListener('click', function() { printDesk.click(); closeMore(); });
-    }
-    if (exportMobile && exportDesk) {
-      exportMobile.addEventListener('click', function() { exportDesk.click(); closeMore(); });
-    }
+    // Close ⋯ after Print/Export; fleetPrintExport binds these buttons directly.
+    // Defer close so Export format menu can anchor to the visible button first.
+    [printMobile, exportMobile].forEach(function(btn) {
+      if (!btn) return;
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        setTimeout(closeMore, 0);
+      });
+    });
   })();
 
   /* Sticky collapsible filter drawer (mobile) */
@@ -1179,7 +1240,7 @@
     function setOpen(open) {
       card.classList.toggle('is-open', open);
       btn.setAttribute('aria-expanded', open ? 'true' : 'false');
-      if (action) action.textContent = open ? 'Hide' : 'Filters';
+      if (action) action.textContent = open ? 'Hide' : 'Change';
     }
     setOpen(false);
     btn.addEventListener('click', function() {
