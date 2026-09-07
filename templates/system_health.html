@@ -216,6 +216,11 @@
         </button>
     </li>
     <li class="nav-item" role="presentation">
+        <button class="nav-link" id="sh-mobile-tab" data-bs-toggle="tab" data-bs-target="#sh-mobile-panel" type="button" role="tab" aria-controls="sh-mobile-panel" aria-selected="false">
+            <i class="bi bi-phone me-1"></i>Mobile Ufone Bridge
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
         <button class="nav-link" id="sh-diagnostics-tab" data-bs-toggle="tab" data-bs-target="#sh-diagnostics-panel" type="button" role="tab" aria-controls="sh-diagnostics-panel" aria-selected="false">
             <i class="bi bi-activity me-1"></i>Diagnostics & Analysis
         </button>
@@ -375,14 +380,14 @@
 </div>
 
 {# ═════════════════════════════════════════
-   ROW 1b — Mobile Phone Bridge status
+   ROW 1b — Mobile Bridge compact summary (full details in Mobile tab)
 ═════════════════════════════════════════ #}
 {% set mb = data.mobile_bridge or {} %}
 {% set mb_st = (mb.overall or 'unknown') | lower %}
 <div class="row g-2 mb-2">
     <div class="col-12">
         <div class="sh-card {% if mb_st == 'ok' %}sh-card-success{% elif mb_st == 'slow' %}sh-card-warning{% elif mb_st in ['degraded','down'] %}sh-card-danger{% else %}sh-card-cyan{% endif %}" id="mb-card">
-            <div class="d-flex flex-column flex-md-row justify-content-between gap-2 mb-2">
+            <div class="d-flex flex-column flex-md-row justify-content-between gap-2">
                 <div>
                     <div class="lbl mb-1"><i class="bi bi-phone me-1"></i>Mobile Ufone Bridge (Phone)</div>
                     <div class="d-flex align-items-center gap-2 flex-wrap">
@@ -391,81 +396,20 @@
                             <span id="mb-overall">{{ (mb.overall or 'unknown') | upper }}</span>
                         </span>
                         <span class="sub mb-0" id="mb-network-label">{{ mb.network_label or 'Not checked' }}</span>
+                        <span class="sub mb-0" id="mb-ov-battery">
+                            {% if mb.battery_pct is not none %}· battery {{ mb.battery_pct }}%{% if mb.battery_charging %} charging{% endif %}{% endif %}
+                        </span>
                         <span class="sub mb-0" id="mb-checked-at">{% if mb.checked_at %}· checked {{ mb.checked_at }}{% endif %}</span>
                     </div>
                 </div>
                 <div class="d-flex gap-2 align-items-start">
-                    <button type="button" class="btn btn-sm btn-outline-primary" id="mb-refresh-btn" onclick="_refreshMobileBridge()" style="font-size:0.75rem;">
-                        <i class="bi bi-arrow-clockwise"></i> Probe Now
+                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="document.getElementById('sh-mobile-tab').click(); _refreshMobileBridge();" style="font-size:0.75rem;">
+                        <i class="bi bi-phone"></i> Open Mobile Tab
                     </button>
-                    <a href="{{ mb.url or 'https://ufone-detail.myfleetmanager.co.uk' }}/health" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary" style="font-size:0.75rem;">
-                        Open Health
-                    </a>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="mb-refresh-btn" onclick="_refreshMobileBridge()" style="font-size:0.75rem;">
+                        <i class="bi bi-arrow-clockwise"></i> Probe
+                    </button>
                 </div>
-            </div>
-            <div class="row g-2" style="font-size:0.78rem;">
-                <div class="col-6 col-md-2">
-                    <div class="lbl"><i class="bi bi-battery-half me-1"></i>Phone battery</div>
-                    {% set bp = mb.battery_pct %}
-                    <div class="fw-bold {% if mb.battery_low %}text-danger{% elif bp is not none and bp <= 30 %}text-warning{% else %}text-dark{% endif %}" id="mb-battery-pct">
-                        {% if bp is not none %}{{ bp }}%{% else %}—{% endif %}
-                    </div>
-                    <div class="sub" id="mb-battery-meta">
-                        {% if mb.battery_charging %}charging{% elif mb.battery_status %}{{ mb.battery_status | lower }}{% else %}—{% endif %}
-                        {% if mb.battery_temp_c is not none %} · {{ mb.battery_temp_c }}°C{% endif %}
-                    </div>
-                    <div class="pt" style="margin-top:6px;">
-                        <div class="pf {% if mb.battery_low %}pf-bad{% elif bp is not none and bp <= 30 %}pf-warn{% else %}pf-ok{% endif %}"
-                             id="mb-battery-bar"
-                             style="width:{% if bp is not none %}{{ [bp, 100] | min }}{% else %}0{% endif %}%;"></div>
-                    </div>
-                </div>
-                <div class="col-6 col-md-2">
-                    <div class="lbl">Tunnel RTT</div>
-                    <div class="fw-bold text-dark" id="mb-health-ms">{% if mb.health_ms is not none %}{{ mb.health_ms }} ms{% else %}—{% endif %}</div>
-                    <div class="sub" id="mb-tunnel-quality">quality: {{ mb.tunnel_quality or '—' }}</div>
-                </div>
-                <div class="col-6 col-md-3">
-                    <div class="lbl">Ufone from phone</div>
-                    <div class="fw-bold text-dark" id="mb-ufone-ms">{% if mb.ufone_rtt_ms is not none %}{{ mb.ufone_rtt_ms }} ms{% else %}—{% endif %}</div>
-                    <div class="sub" id="mb-ufone-ok">{% if mb.ufone_ok is sameas true %}reachable{% elif mb.ufone_ok is sameas false %}unreachable{% else %}—{% endif %}</div>
-                </div>
-                <div class="col-6 col-md-3">
-                    <div class="lbl">Ingest freshness</div>
-                    <div class="fw-bold text-dark" id="mb-ingest">
-                        {% if mb.ingest_vehicle_age_sec is not none %}
-                            vehicles {{ (mb.ingest_vehicle_age_sec / 60) | round(0) | int }}m
-                        {% else %}—{% endif %}
-                        {% if mb.ingest_task_age_sec is not none %}
-                            · tasks {{ (mb.ingest_task_age_sec / 60) | round(0) | int }}m
-                        {% endif %}
-                    </div>
-                    <div class="sub" id="mb-ingest-ok">{% if mb.ingest_ok is sameas true %}sync OK{% elif mb.ingest_ok is sameas false %}stale / missing{% else %}—{% endif %}</div>
-                </div>
-                <div class="col-6 col-md-2">
-                    <div class="lbl">Public IP</div>
-                    <div class="fw-bold text-dark" style="font-family:monospace;font-size:0.8rem;" id="mb-ip">{{ mb.public_ip or '—' }}</div>
-                    <div class="sub" id="mb-url" style="word-break:break-all;">{{ mb.url or '' }}</div>
-                </div>
-            </div>
-            <hr class="my-2">
-            <div class="d-flex flex-wrap gap-2" id="mb-procs">
-                {% macro mb_chip(ok, label) -%}
-                <span class="chip {% if ok is sameas true %}chip-ok{% elif ok is sameas false %}chip-err{% else %}chip-na{% endif %}">{{ label }}{% if ok is sameas true %} ✓{% elif ok is sameas false %} ✗{% else %} ·{% endif %}</span>
-                {%- endmacro %}
-                {{ mb_chip(mb.worker_pg, 'worker_pg') }}
-                {{ mb_chip(mb.cloudflared, 'cloudflared') }}
-                {{ mb_chip(mb.watch_tunnel, 'watchdog') }}
-                {{ mb_chip(mb.sshd, 'sshd') }}
-                {{ mb_chip(mb.detail_local_ok, 'detail :8787') }}
-                {% if mb.vps_tunnel_disabled is sameas true %}
-                <span class="chip chip-ok">VPS soak OFF ✓</span>
-                {% elif mb.autossh_vps is sameas true %}
-                <span class="chip chip-skip">autossh VPS on</span>
-                {% endif %}
-                {% if mb.bridge_only %}
-                <span class="chip chip-ok">BRIDGE_ONLY</span>
-                {% endif %}
             </div>
             <div class="sub mt-2" id="mb-error" style="{% if not mb.error %}display:none;{% endif %}color:#b91c1c;">{{ mb.error or '' }}</div>
         </div>
@@ -842,6 +786,116 @@
 </div>
 {% endif %}
 
+</div>
+
+<div class="tab-pane fade" id="sh-mobile-panel" role="tabpanel" aria-labelledby="sh-mobile-tab">
+{% set mb = data.mobile_bridge or {} %}
+{% set mb_st = (mb.overall or 'unknown') | lower %}
+{% set bp = mb.battery_pct %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+    <div>
+        <h5 class="mb-0 fw-bold" style="color:#0f172a;"><i class="bi bi-phone text-primary me-1"></i>Mobile Ufone Bridge — Phone Details</h5>
+        <div class="sub">All phone / tunnel / ingest metrics in one place</div>
+    </div>
+    <div class="d-flex gap-2">
+        <button type="button" class="btn btn-sm btn-primary" id="mb-refresh-btn-tab" onclick="_refreshMobileBridge()" style="font-size:0.78rem;">
+            <i class="bi bi-arrow-clockwise"></i> Probe Now
+        </button>
+        <a href="{{ mb.url or 'https://ufone-detail.myfleetmanager.co.uk' }}/health" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary" style="font-size:0.78rem;">Open Health</a>
+    </div>
+</div>
+
+<div class="row g-2 mb-2">
+    <div class="col-md-4">
+        <div class="sh-card {% if mb_st == 'ok' %}sh-card-success{% elif mb_st == 'slow' %}sh-card-warning{% elif mb_st in ['degraded','down'] %}sh-card-danger{% else %}sh-card-cyan{% endif %}">
+            <div class="lbl">Overall</div>
+            <div class="val-md mt-1" id="mb-tab-overall">{{ (mb.overall or 'unknown') | upper }}</div>
+            <div class="sub" id="mb-tab-network-label">{{ mb.network_label or 'Not checked' }}</div>
+            <div class="sub" id="mb-tab-checked-at">{% if mb.checked_at %}checked {{ mb.checked_at }}{% endif %}</div>
+            <div class="sub mt-1" id="mb-tab-error" style="{% if not mb.error %}display:none;{% endif %}color:#b91c1c;">{{ mb.error or '' }}</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="sh-card {% if mb.battery_low %}sh-card-danger{% elif bp is not none and bp <= 30 %}sh-card-warning{% else %}sh-card-success{% endif %}">
+            <div class="lbl"><i class="bi bi-battery-charging me-1"></i>Battery</div>
+            <div class="val-md mt-1" id="mb-battery-pct">{% if bp is not none %}{{ bp }}%{% else %}—{% endif %}</div>
+            <div class="sub" id="mb-battery-meta">
+                {% if mb.battery_charging %}charging{% elif mb.battery_status %}{{ mb.battery_status | lower }}{% else %}—{% endif %}
+                {% if mb.battery_plugged %} · {{ mb.battery_plugged | replace('PLUGGED_','') | lower }}{% endif %}
+                {% if mb.battery_temp_c is not none %} · {{ mb.battery_temp_c }}°C{% endif %}
+                {% if mb.battery_health %} · {{ mb.battery_health }}{% endif %}
+            </div>
+            <div class="pt"><div class="pf {% if mb.battery_low %}pf-bad{% elif bp is not none and bp <= 30 %}pf-warn{% else %}pf-ok{% endif %}" id="mb-battery-bar" style="width:{% if bp is not none %}{{ bp }}{% else %}0{% endif %}%;"></div></div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="sh-card sh-card-info">
+            <div class="lbl"><i class="bi bi-display me-1"></i>Live Screen</div>
+            <div class="fw-bold mt-1" id="mb-screen-avail">{% if mb.screen_view_available %}Available{% else %}Not in Fleet Manager{% endif %}</div>
+            <div class="sub" id="mb-screen-note">{{ mb.screen_view_note or 'Use RustDesk or USB scrcpy to view phone screen.' }}</div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-2 mb-2">
+    <div class="col-md-6">
+        <div class="sh-card">
+            <div class="lbl mb-2"><i class="bi bi-wifi me-1"></i>Network</div>
+            <div class="tbl-stat-row"><span>WiFi</span><strong id="mb-wifi-ssid">{% if mb.wifi_connected %}{{ mb.wifi_ssid or 'connected' }}{% else %}—{% endif %}</strong></div>
+            <div class="tbl-stat-row"><span>Signal (RSSI)</span><strong id="mb-wifi-rssi">{% if mb.wifi_rssi is not none %}{{ mb.wifi_rssi }} dBm{% if mb.wifi_weak %} (weak){% endif %}{% else %}—{% endif %}</strong></div>
+            <div class="tbl-stat-row"><span>Link speed</span><strong id="mb-wifi-link">{% if mb.wifi_link_mbps is not none %}{{ mb.wifi_link_mbps }} Mbps{% else %}—{% endif %}</strong></div>
+            <div class="tbl-stat-row"><span>LAN IP</span><strong id="mb-wifi-ip" style="font-family:monospace;">{{ mb.wifi_ip or '—' }}</strong></div>
+            <div class="tbl-stat-row"><span>Public IP</span><strong id="mb-ip" style="font-family:monospace;">{{ mb.public_ip or '—' }}</strong></div>
+            <div class="tbl-stat-row"><span>Tunnel RTT</span><strong id="mb-health-ms">{% if mb.health_ms is not none %}{{ mb.health_ms }} ms{% else %}—{% endif %}</strong></div>
+            <div class="tbl-stat-row"><span>Tunnel quality</span><strong id="mb-tunnel-quality">{{ mb.tunnel_quality or '—' }}</strong></div>
+            <div class="tbl-stat-row"><span>Ufone RTT</span><strong id="mb-ufone-ms">{% if mb.ufone_rtt_ms is not none %}{{ mb.ufone_rtt_ms }} ms{% else %}—{% endif %}</strong></div>
+            <div class="tbl-stat-row"><span>Ufone</span><strong id="mb-ufone-ok">{% if mb.ufone_ok is sameas true %}reachable{% elif mb.ufone_ok is sameas false %}unreachable{% else %}—{% endif %}</strong></div>
+            <div class="sub mt-2" id="mb-url" style="word-break:break-all;">{{ mb.url or '' }}</div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="sh-card">
+            <div class="lbl mb-2"><i class="bi bi-cpu me-1"></i>Device resources</div>
+            <div class="tbl-stat-row"><span>Storage used</span><strong id="mb-storage">{% if mb.storage_pct is not none %}{{ mb.storage_used_gb }} / {{ mb.storage_total_gb }} GB ({{ mb.storage_pct }}%){% else %}—{% endif %}</strong></div>
+            <div class="tbl-stat-row"><span>Storage free</span><strong id="mb-storage-free">{% if mb.storage_free_gb is not none %}{{ mb.storage_free_gb }} GB{% else %}—{% endif %}</strong></div>
+            <div class="tbl-stat-row"><span>RAM</span><strong id="mb-mem">{% if mb.mem_total_mb is not none %}{{ mb.mem_used_mb }} / {{ mb.mem_total_mb }} MB ({{ mb.mem_used_pct }}%){% else %}—{% endif %}</strong></div>
+            <div class="tbl-stat-row"><span>RAM available</span><strong id="mb-mem-avail">{% if mb.mem_available_mb is not none %}{{ mb.mem_available_mb }} MB{% else %}—{% endif %}</strong></div>
+            <div class="tbl-stat-row"><span>Load avg</span><strong id="mb-load">{% if mb.load_1 is not none %}{{ mb.load_1 }} / {{ mb.load_5 }} / {{ mb.load_15 }}{% else %}—{% endif %}</strong></div>
+            <div class="tbl-stat-row"><span>Uptime</span><strong id="mb-uptime" style="font-size:0.72rem;">{{ mb.uptime_text or '—' }}</strong></div>
+            <div class="tbl-stat-row"><span>Ingest</span><strong id="mb-ingest">
+                {% if mb.ingest_vehicle_age_sec is not none %}vehicles {{ (mb.ingest_vehicle_age_sec/60)|round(0)|int }}m{% else %}—{% endif %}
+                {% if mb.ingest_task_age_sec is not none %} · tasks {{ (mb.ingest_task_age_sec/60)|round(0)|int }}m{% endif %}
+            </strong></div>
+            <div class="tbl-stat-row"><span>Ingest status</span><strong id="mb-ingest-ok">{% if mb.ingest_ok is sameas true %}sync OK{% elif mb.ingest_ok is sameas false %}stale / missing{% else %}—{% endif %}</strong></div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-2 mb-2">
+    <div class="col-12">
+        <div class="sh-card">
+            <div class="lbl mb-2"><i class="bi bi-gear me-1"></i>Bridge processes</div>
+            <div class="d-flex flex-wrap gap-2 mb-2" id="mb-procs">
+                {% macro mb_chip(ok, label) -%}
+                <span class="chip {% if ok is sameas true %}chip-ok{% elif ok is sameas false %}chip-err{% else %}chip-na{% endif %}">{{ label }}{% if ok is sameas true %} ✓{% elif ok is sameas false %} ✗{% else %} ·{% endif %}</span>
+                {%- endmacro %}
+                {{ mb_chip(mb.worker_pg, 'worker_pg') }}
+                {{ mb_chip(mb.cloudflared, 'cloudflared') }}
+                {{ mb_chip(mb.watch_tunnel, 'watchdog') }}
+                {{ mb_chip(mb.sshd, 'sshd') }}
+                {{ mb_chip(mb.detail_local_ok, 'detail :8787') }}
+                {% if mb.battery_charging %}<span class="chip chip-ok">charging ✓</span>{% elif mb.battery_low %}<span class="chip chip-err">battery low ✗</span>{% endif %}
+                {% if mb.wifi_weak %}<span class="chip chip-err">wifi weak</span>{% endif %}
+                {% if mb.storage_low %}<span class="chip chip-err">storage high</span>{% endif %}
+                {% if mb.vps_tunnel_disabled is sameas true %}<span class="chip chip-ok">VPS soak OFF ✓</span>{% elif mb.autossh_vps is sameas true %}<span class="chip chip-skip">autossh VPS on</span>{% endif %}
+                {% if mb.bridge_only %}<span class="chip chip-ok">BRIDGE_ONLY</span>{% endif %}
+            </div>
+            <div class="tbl-stat-row"><span>worker uptime</span><strong id="mb-worker-etime">{{ mb.worker_etime or '—' }}</strong></div>
+            <div class="tbl-stat-row"><span>cloudflared uptime</span><strong id="mb-cf-etime">{{ mb.cloudflared_etime or '—' }}</strong></div>
+            <div class="tbl-stat-row"><span>detail local RTT</span><strong id="mb-detail-local">{% if mb.detail_local_ms is not none %}{{ mb.detail_local_ms }} ms{% else %}—{% endif %}</strong></div>
+        </div>
+    </div>
+</div>
 </div>
 
 <div class="tab-pane fade" id="sh-diagnostics-panel" role="tabpanel" aria-labelledby="sh-diagnostics-tab">
@@ -1223,10 +1277,28 @@
         return Math.round(sec / 60) + 'm';
     }
 
+    function _setText(id, text) {
+        var el = document.getElementById(id);
+        if (el) el.textContent = text;
+    }
+
+    function _setError(id, err) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        if (err) {
+            el.style.display = '';
+            el.textContent = err;
+        } else {
+            el.style.display = 'none';
+            el.textContent = '';
+        }
+    }
+
     function _renderMobileBridge(mb) {
         if (!mb) return;
-        var card = document.getElementById('mb-card');
         var overall = (mb.overall || 'unknown').toLowerCase();
+        var overallUpper = (mb.overall || 'unknown').toUpperCase();
+        var card = document.getElementById('mb-card');
         if (card) {
             card.className = 'sh-card ' + (
                 overall === 'ok' ? 'sh-card-success' :
@@ -1242,42 +1314,83 @@
                 (overall === 'degraded' || overall === 'down') ? 'sb-down' : 'sb-unk'
             );
         }
-        var el;
-        el = document.getElementById('mb-overall');
-        if (el) el.textContent = (mb.overall || 'unknown').toUpperCase();
-        el = document.getElementById('mb-network-label');
-        if (el) el.textContent = mb.network_label || 'Not checked';
-        el = document.getElementById('mb-checked-at');
-        if (el) el.textContent = mb.checked_at ? ('· checked ' + mb.checked_at) : '';
-        el = document.getElementById('mb-battery-pct');
+
+        _setText('mb-overall', overallUpper);
+        _setText('mb-network-label', mb.network_label || 'Not checked');
+        _setText('mb-checked-at', mb.checked_at ? ('· checked ' + mb.checked_at) : '');
+        _setText('mb-tab-overall', overallUpper);
+        _setText('mb-tab-network-label', mb.network_label || 'Not checked');
+        _setText('mb-tab-checked-at', mb.checked_at ? ('checked ' + mb.checked_at) : '');
+        _setError('mb-error', mb.error || '');
+        _setError('mb-tab-error', mb.error || '');
+
+        var bp = mb.battery_pct;
+        var el = document.getElementById('mb-battery-pct');
+        if (el) el.textContent = (bp != null) ? (bp + '%') : '—';
+        el = document.getElementById('mb-ov-battery');
         if (el) {
-            var bp = mb.battery_pct;
-            el.textContent = (bp != null) ? (bp + '%') : '—';
-            el.className = 'fw-bold ' + (mb.battery_low ? 'text-danger' : (bp != null && bp <= 30 ? 'text-warning' : 'text-dark'));
+            if (bp != null) {
+                el.textContent = '· battery ' + bp + '%' + (mb.battery_charging ? ' charging' : '');
+            } else {
+                el.textContent = '';
+            }
         }
         el = document.getElementById('mb-battery-meta');
         if (el) {
             var meta = [];
             if (mb.battery_charging) meta.push('charging');
             else if (mb.battery_status) meta.push(String(mb.battery_status).toLowerCase());
-            if (mb.battery_temp_c != null) meta.push(mb.battery_temp_c + '°C');
             if (mb.battery_plugged) meta.push(String(mb.battery_plugged).replace('PLUGGED_', '').toLowerCase());
+            if (mb.battery_temp_c != null) meta.push(mb.battery_temp_c + '°C');
+            if (mb.battery_health) meta.push(String(mb.battery_health));
             el.textContent = meta.length ? meta.join(' · ') : '—';
         }
         el = document.getElementById('mb-battery-bar');
         if (el) {
-            var pct = (mb.battery_pct != null) ? Math.min(mb.battery_pct, 100) : 0;
-            el.style.width = pct + '%';
-            el.className = 'pf ' + (mb.battery_low ? 'pf-bad' : (mb.battery_pct != null && mb.battery_pct <= 30 ? 'pf-warn' : 'pf-ok'));
+            el.style.width = ((bp != null) ? Math.min(bp, 100) : 0) + '%';
+            el.className = 'pf ' + (mb.battery_low ? 'pf-bad' : (bp != null && bp <= 30 ? 'pf-warn' : 'pf-ok'));
         }
-        el = document.getElementById('mb-health-ms');
-        if (el) el.textContent = mb.health_ms != null ? (mb.health_ms + ' ms') : '—';
-        el = document.getElementById('mb-tunnel-quality');
-        if (el) el.textContent = 'quality: ' + (mb.tunnel_quality || '—');
-        el = document.getElementById('mb-ufone-ms');
-        if (el) el.textContent = mb.ufone_rtt_ms != null ? (mb.ufone_rtt_ms + ' ms') : '—';
-        el = document.getElementById('mb-ufone-ok');
-        if (el) el.textContent = mb.ufone_ok === true ? 'reachable' : (mb.ufone_ok === false ? 'unreachable' : '—');
+
+        _setText('mb-screen-avail', mb.screen_view_available ? 'Available' : 'Not in Fleet Manager');
+        _setText('mb-screen-note', mb.screen_view_note || 'Use RustDesk or USB scrcpy to view phone screen.');
+
+        _setText('mb-wifi-ssid', mb.wifi_connected ? (mb.wifi_ssid || 'connected') : '—');
+        el = document.getElementById('mb-wifi-rssi');
+        if (el) {
+            if (mb.wifi_rssi != null) {
+                el.textContent = mb.wifi_rssi + ' dBm' + (mb.wifi_weak ? ' (weak)' : '');
+            } else {
+                el.textContent = '—';
+            }
+        }
+        _setText('mb-wifi-link', mb.wifi_link_mbps != null ? (mb.wifi_link_mbps + ' Mbps') : '—');
+        _setText('mb-wifi-ip', mb.wifi_ip || '—');
+        _setText('mb-ip', mb.public_ip || '—');
+        _setText('mb-health-ms', mb.health_ms != null ? (mb.health_ms + ' ms') : '—');
+        _setText('mb-tunnel-quality', mb.tunnel_quality || '—');
+        _setText('mb-ufone-ms', mb.ufone_rtt_ms != null ? (mb.ufone_rtt_ms + ' ms') : '—');
+        _setText('mb-ufone-ok', mb.ufone_ok === true ? 'reachable' : (mb.ufone_ok === false ? 'unreachable' : '—'));
+        _setText('mb-url', mb.url || '');
+
+        if (mb.storage_pct != null) {
+            _setText('mb-storage', mb.storage_used_gb + ' / ' + mb.storage_total_gb + ' GB (' + mb.storage_pct + '%)');
+        } else {
+            _setText('mb-storage', '—');
+        }
+        _setText('mb-storage-free', mb.storage_free_gb != null ? (mb.storage_free_gb + ' GB') : '—');
+        if (mb.mem_total_mb != null) {
+            _setText('mb-mem', mb.mem_used_mb + ' / ' + mb.mem_total_mb + ' MB (' + mb.mem_used_pct + '%)');
+        } else {
+            _setText('mb-mem', '—');
+        }
+        _setText('mb-mem-avail', mb.mem_available_mb != null ? (mb.mem_available_mb + ' MB') : '—');
+        if (mb.load_1 != null) {
+            _setText('mb-load', mb.load_1 + ' / ' + mb.load_5 + ' / ' + mb.load_15);
+        } else {
+            _setText('mb-load', '—');
+        }
+        _setText('mb-uptime', mb.uptime_text || '—');
+
         el = document.getElementById('mb-ingest');
         if (el) {
             var parts = [];
@@ -1287,12 +1400,8 @@
             if (ta) parts.push('tasks ' + ta);
             el.textContent = parts.length ? parts.join(' · ') : '—';
         }
-        el = document.getElementById('mb-ingest-ok');
-        if (el) el.textContent = mb.ingest_ok === true ? 'sync OK' : (mb.ingest_ok === false ? 'stale / missing' : '—');
-        el = document.getElementById('mb-ip');
-        if (el) el.textContent = mb.public_ip || '—';
-        el = document.getElementById('mb-url');
-        if (el) el.textContent = mb.url || '';
+        _setText('mb-ingest-ok', mb.ingest_ok === true ? 'sync OK' : (mb.ingest_ok === false ? 'stale / missing' : '—'));
+
         el = document.getElementById('mb-procs');
         if (el) {
             var html = '';
@@ -1303,21 +1412,16 @@
             html += _chipHtml(mb.detail_local_ok, 'detail :8787');
             if (mb.battery_charging === true) html += '<span class="chip chip-ok">charging ✓</span>';
             else if (mb.battery_low === true) html += '<span class="chip chip-err">battery low ✗</span>';
+            if (mb.wifi_weak === true) html += '<span class="chip chip-err">wifi weak</span>';
+            if (mb.storage_low === true) html += '<span class="chip chip-err">storage high</span>';
             if (mb.vps_tunnel_disabled === true) html += '<span class="chip chip-ok">VPS soak OFF ✓</span>';
             else if (mb.autossh_vps === true) html += '<span class="chip chip-skip">autossh VPS on</span>';
             if (mb.bridge_only) html += '<span class="chip chip-ok">BRIDGE_ONLY</span>';
             el.innerHTML = html;
         }
-        el = document.getElementById('mb-error');
-        if (el) {
-            if (mb.error) {
-                el.style.display = '';
-                el.textContent = mb.error;
-            } else {
-                el.style.display = 'none';
-                el.textContent = '';
-            }
-        }
+        _setText('mb-worker-etime', mb.worker_etime || '—');
+        _setText('mb-cf-etime', mb.cloudflared_etime || '—');
+        _setText('mb-detail-local', mb.detail_local_ms != null ? (mb.detail_local_ms + ' ms') : '—');
     }
 
     function _refreshMobileBridgeQuiet() {
@@ -1328,19 +1432,28 @@
     }
 
     function _refreshMobileBridge() {
-        var btn = document.getElementById('mb-refresh-btn');
-        if (btn) {
+        var btns = [
+            document.getElementById('mb-refresh-btn'),
+            document.getElementById('mb-refresh-btn-tab')
+        ].filter(Boolean);
+        btns.forEach(function(btn) {
             btn.disabled = true;
             btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
-        }
+        });
         fetch('{{ url_for("system_health_mobile_bridge_api") }}', { cache: 'no-store' })
             .then(function(r) { return r.json(); })
             .then(function(d) { _renderMobileBridge(d); })
             .catch(function() {})
             .finally(function() {
-                if (btn) {
-                    btn.disabled = false;
-                    btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Probe Now';
+                var ov = document.getElementById('mb-refresh-btn');
+                if (ov) {
+                    ov.disabled = false;
+                    ov.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Probe';
+                }
+                var tab = document.getElementById('mb-refresh-btn-tab');
+                if (tab) {
+                    tab.disabled = false;
+                    tab.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Probe Now';
                 }
             });
     }

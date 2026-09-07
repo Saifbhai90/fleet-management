@@ -418,6 +418,33 @@ def _probe_mobile_bridge() -> dict:
         'battery_temp_c': None,
         'battery_charging': None,
         'battery_low': None,
+        'wifi_ssid': None,
+        'wifi_rssi': None,
+        'wifi_link_mbps': None,
+        'wifi_ip': None,
+        'wifi_freq_mhz': None,
+        'wifi_connected': None,
+        'wifi_weak': None,
+        'storage_total_gb': None,
+        'storage_used_gb': None,
+        'storage_free_gb': None,
+        'storage_pct': None,
+        'storage_low': None,
+        'mem_total_mb': None,
+        'mem_used_mb': None,
+        'mem_available_mb': None,
+        'mem_used_pct': None,
+        'load_1': None,
+        'load_5': None,
+        'load_15': None,
+        'uptime_text': None,
+        'worker_etime': None,
+        'cloudflared_etime': None,
+        'screen_view_available': False,
+        'screen_view_note': (
+            'Live phone screen cannot be shown inside Fleet Manager from Termux. '
+            'Use RustDesk (or USB scrcpy) for remote screen view.'
+        ),
         'ingest_vehicle_age_sec': None,
         'ingest_task_age_sec': None,
         'ingest_ok': None,
@@ -506,6 +533,14 @@ def _probe_mobile_bridge() -> dict:
                     'detail_local_ok', 'detail_local_ms', 'overall',
                     'battery_pct', 'battery_status', 'battery_plugged', 'battery_health',
                     'battery_temp_c', 'battery_charging', 'battery_low',
+                    'wifi_ssid', 'wifi_rssi', 'wifi_link_mbps', 'wifi_ip', 'wifi_freq_mhz',
+                    'wifi_connected', 'wifi_weak',
+                    'storage_total_gb', 'storage_used_gb', 'storage_free_gb', 'storage_pct',
+                    'storage_low',
+                    'mem_total_mb', 'mem_used_mb', 'mem_available_mb', 'mem_used_pct',
+                    'load_1', 'load_5', 'load_15', 'uptime_text',
+                    'worker_etime', 'cloudflared_etime',
+                    'screen_view_available', 'screen_view_note',
                 ):
                     if k in st:
                         out[k] = st.get(k)
@@ -534,6 +569,16 @@ def _probe_mobile_bridge() -> dict:
     elif out.get('battery_low'):
         out['overall'] = 'degraded'
         out['network_label'] = f"Phone battery low ({out.get('battery_pct')}%) — plug in charger"
+    elif out.get('storage_low'):
+        out['overall'] = 'degraded'
+        out['network_label'] = f"Phone storage high ({out.get('storage_pct')}%)"
+    elif out.get('wifi_weak'):
+        out['overall'] = 'slow'
+        out['network_label'] = (
+            f"WiFi weak ({out.get('wifi_rssi')} dBm)"
+            if out.get('wifi_rssi') is not None
+            else 'WiFi signal weak'
+        )
     elif out.get('ingest_ok') is False and bridge_only:
         out['overall'] = 'degraded'
         out['network_label'] = 'Tunnel OK — ingest stale'

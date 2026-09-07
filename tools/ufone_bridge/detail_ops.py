@@ -285,6 +285,34 @@ def _pgrep_running(pattern: str) -> bool:
         return False
 
 
+def _run_text(argv: list, timeout: float = 5.0) -> str:
+    try:
+        r = subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
+        if r.returncode != 0:
+            return ''
+        return (r.stdout or '').strip()
+    except Exception:
+        return ''
+
+
+def _process_etime(pattern: str) -> Optional[str]:
+    """Return ps etime for first matching process, e.g. '07:53' or '1-02:10:03'."""
+    try:
+        r = subprocess.run(
+            ['pgrep', '-f', pattern],
+            capture_output=True,
+            text=True,
+            timeout=3,
+        )
+        pids = [p for p in (r.stdout or '').split() if p.isdigit()]
+        if not pids:
+            return None
+        et = _run_text(['ps', '-o', 'etime=', '-p', pids[0]], timeout=3)
+        return et or None
+    except Exception:
+        return None
+
+
 def _read_phone_battery() -> dict:
     """Best-effort Termux battery snapshot (termux-api)."""
     out = {
@@ -297,15 +325,10 @@ def _read_phone_battery() -> dict:
         'battery_low': None,
     }
     try:
-        r = subprocess.run(
-            ['termux-battery-status'],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        if r.returncode != 0 or not (r.stdout or '').strip():
+        raw = _run_text(['termux-battery-status'], timeout=5)
+        if not raw:
             return out
-        data = json.loads(r.stdout)
+        data = json.loads(raw)
         pct = data.get('percentage')
         try:
             pct_i = int(pct) if pct is not None else None
@@ -332,8 +355,116 @@ def _read_phone_battery() -> dict:
     return out
 
 
+def _read_phone_wifi() -> dict:
+    out = {
+        'wifi_ssid': None,
+        'wifi_rssi': None,
+        'wifi_link_mbps': None,
+        'wifi_ip': None,
+        'wifi_freq_mhz': None,
+        'wifi_connected': None,
+    }
+    try:
+        raw = _run_text(['termux-wifi-connectioninfo'], timeout=5)
+        if not raw:
+            return out
+        data = json.loads(raw)
+        ssid = (data.get('ssid') or '').strip()
+        if ssid in ('<unknown ssid>', 'unknown ssid', '0x'):
+            ssid = None
+        rssi = data.get('rssi')
+        try:
+            rssi_i = int(rssi) if rssi is not None else None
+        except (TypeError, ValueError):
+            rssi_i = None
+        link = data.get('link_speed_mbps')
+        try:
+            link_i = int(link) if link is not None else None
+        except (TypeError, ValueError):
+            link_i = None
+        state = (data.get('supplicant_state') or '').upper()
+        out.update({
+            'wifi_ssid': ssid,
+            'wifi_rssi': rssi_i,
+            'wifi_link_mbps': link_i,
+            'wifi_ip': (data.get('ip') or None),
+            'wifi_freq_mhz': data.get('frequency_mhz'),
+            'wifi_connected': bool(state == 'COMPLETED' or data.get('ip')),
+        })
+    except Exception:
+        pass
+    return out
+
+
+def _read_phone_storage_mem() -> dict:
+    out = {
+        'storage_total_gb': None,
+        'storage_used_gb': None,
+        'storage_free_gb': None,
+        'storage_pct': None,
+        'mem_total_mb': None,
+        'mem_used_mb': None,
+        'mem_available_mb': None,
+        'mem_used_pct': None,
+        'load_1': None,
+        'load_5': None,
+        'load_15': None,
+        'uptime_text': None,
+    }
+    try:
+        # df -kP /data  → 1K blocks
+        df = _run_text(['df', '-k', '/data'], timeout=4)
+        lines = [ln for ln in df.splitlines() if ln.strip()]
+        if len(lines) >= 2:
+            parts = lines[-1].split()
+            if len(parts) >= 4 and parts[1].isdigit():
+                total_k = int(parts[1])
+                used_k = int(parts[2])
+                free_k = int(parts[3])
+                out['storage_total_gb'] = round(total_k / (1024 * 1024), 1)
+                out['storage_used_gb'] = round(used_k / (1024 * 1024), 1)
+                out['storage_free_gb'] = round(free_k / (1024 * 1024), 1)
+                out['storage_pct'] = round(100.0 * used_k / total_k, 1) if total_k else None
+    except Exception:
+        pass
+    try:
+        free = _run_text(['free', '-m'], timeout=4)
+        for ln in free.splitlines():
+            if ln.lower().startswith('mem:'):
+                parts = ln.split()
+                # Mem: total used free shared buff/cache available
+                if len(parts) >= 7 and parts[1].isdigit():
+                    total = int(parts[1])
+                    used = int(parts[2])
+                    avail = int(parts[6])
+                    out['mem_total_mb'] = total
+                    out['mem_used_mb'] = used
+                    out['mem_available_mb'] = avail
+                    out['mem_used_pct'] = round(100.0 * used / total, 1) if total else None
+                break
+    except Exception:
+        pass
+    try:
+        up = _run_text(['uptime'], timeout=3)
+        out['uptime_text'] = up or None
+        # load average: a, b, c
+        if 'load average:' in up:
+            tail = up.split('load average:', 1)[1].strip()
+            bits = [b.strip().rstrip(',') for b in tail.split(',')]
+            if len(bits) >= 3:
+                try:
+                    out['load_1'] = float(bits[0])
+                    out['load_5'] = float(bits[1])
+                    out['load_15'] = float(bits[2])
+                except ValueError:
+                    pass
+    except Exception:
+        pass
+    return out
+
+
 def _build_phone_status() -> dict:
-    """Snapshot for System Health: processes + Ufone/network reachability."""
+    """Snapshot for System Health: processes + Ufone/network/device."""
     import time as _t
     from urllib.request import urlopen, Request
 
@@ -374,6 +505,8 @@ def _build_phone_status() -> dict:
             public_ip = None
 
     battery = _read_phone_battery()
+    wifi = _read_phone_wifi()
+    host_stats = _read_phone_storage_mem()
 
     worker = _pgrep_running('worker_pg.py')
     cloudflared = _pgrep_running('cloudflared tunnel')
@@ -381,14 +514,27 @@ def _build_phone_status() -> dict:
     autossh = _pgrep_running('autossh')
     watch = _pgrep_running('watch_tunnel.sh')
     vps_disabled = (home / 'remote' / 'DISABLE_VPS_TUNNEL').is_file()
+    worker_etime = _process_etime('python worker_pg.py') if worker else None
+    cloudflared_etime = _process_etime('cloudflared tunnel') if cloudflared else None
+
+    storage_low = bool(
+        host_stats.get('storage_pct') is not None and host_stats['storage_pct'] >= 90
+    )
+    wifi_weak = bool(
+        wifi.get('wifi_connected')
+        and wifi.get('wifi_rssi') is not None
+        and wifi['wifi_rssi'] <= -80
+    )
 
     if not detail_ok or not worker or not cloudflared:
         overall = 'down'
     elif not ufone_ok:
         overall = 'degraded'
-    elif battery.get('battery_low'):
+    elif battery.get('battery_low') or storage_low:
         overall = 'degraded'
     elif ufone_ms is not None and ufone_ms > 2500:
+        overall = 'slow'
+    elif wifi_weak:
         overall = 'slow'
     else:
         overall = 'ok'
@@ -409,7 +555,19 @@ def _build_phone_status() -> dict:
         'ufone_rtt_ms': ufone_ms,
         'public_ip': public_ip,
         'host': 'phone',
+        'worker_etime': worker_etime,
+        'cloudflared_etime': cloudflared_etime,
+        'storage_low': storage_low,
+        'wifi_weak': wifi_weak,
+        # Live screen cannot be mirrored into Fleet Manager from Termux (no capture permission).
+        'screen_view_available': False,
+        'screen_view_note': (
+            'Live phone screen cannot be shown inside Fleet Manager from Termux. '
+            'Use RustDesk (or USB scrcpy) for remote screen view.'
+        ),
         **battery,
+        **wifi,
+        **host_stats,
     }
 
 
