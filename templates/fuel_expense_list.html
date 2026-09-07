@@ -182,23 +182,177 @@
       text-align: center;
     }
   }
+
+  /* Sticky filter drawer + More menu */
+  .fuel-grid-page .fuel-top-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    position: relative;
+  }
+  .fuel-grid-page .fuel-toolbar-more-btn {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border: 1px solid rgba(255,255,255,.45);
+    border-radius: 12px;
+    background: rgba(255,255,255,.12);
+    color: #fff;
+    flex-shrink: 0;
+    padding: 0;
+  }
+  .fuel-grid-page .fuel-more-menu {
+    display: none;
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    z-index: 40;
+    min-width: 200px;
+    padding: 8px;
+    border-radius: 14px;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 12px 28px rgba(15,23,42,.16);
+    flex-direction: column;
+    gap: 6px;
+  }
+  .fuel-grid-page .fuel-more-menu.is-open { display: flex; }
+  .fuel-grid-page .fuel-more-menu .btn { justify-content: flex-start; width: 100%; }
+  .fuel-grid-page .fuel-locked-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    color: #334155;
+    font-size: .78rem;
+    font-weight: 600;
+    width: 100%;
+  }
+  .fuel-grid-page .fuel-locked-chip .bi { color: #64748b; font-size: .75rem; }
+  .fuel-grid-page .fuel-locked-chips-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .fuel-grid-page .fuel-locked-chips-row .fuel-locked-chip { width: auto; flex: 1 1 140px; }
+  .fuel-grid-page .fuel-filters-card {
+    position: sticky;
+    top: 0;
+    z-index: 25;
+    background: #fff;
+  }
+  .fuel-grid-page .fuel-filter-summary { display: none; }
+  @media (max-width: 767px) {
+    .fuel-grid-page .fuel-list-head {
+      position: sticky;
+      top: 0;
+      z-index: 30;
+      border-radius: 0 0 14px 14px;
+      margin-left: -12px;
+      margin-right: -12px;
+      padding-left: 12px;
+      padding-right: 12px;
+    }
+    .fuel-grid-page .fuel-head-actions-desktop { display: none !important; }
+    .fuel-grid-page .fuel-toolbar-more-btn { display: inline-flex; }
+    .fuel-grid-page .fuel-filters-card {
+      top: 56px;
+      border-radius: 16px;
+      overflow: hidden;
+    }
+    .fuel-grid-page .fuel-filters-card.is-collapsible .fuel-filter-summary {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      width: 100%;
+      padding: 11px 14px;
+      background: #fff;
+      border: none;
+      text-align: left;
+      color: #0f172a;
+    }
+    .fuel-grid-page .fuel-filters-card.is-collapsible:not(.is-open) > .fuel-filters-body {
+      display: none;
+    }
+    .fuel-grid-page .fuel-filters-card.is-collapsible.is-open .fuel-filter-summary {
+      border-bottom: 1px solid #eef2f7;
+    }
+    .fuel-grid-page .fuel-filter-summary-text {
+      display: flex;
+      gap: 8px;
+      min-width: 0;
+      flex: 1;
+      font-size: .82rem;
+      font-weight: 600;
+      line-height: 1.35;
+    }
+    .fuel-grid-page .fuel-filter-summary-action {
+      flex: 0 0 auto;
+      font-size: .75rem;
+      font-weight: 700;
+      color: #2563eb;
+    }
+  }
 </style>
-<div class="container-fluid py-3 fuel-grid-page expense-mobile-page">
+{% set _nf = (nav_from or request.args.get('nav_from') or '')|trim %}
+{% set from_report_center = _nf == 'reports' or (nav_back_label_auto or '') == 'Report Center' %}
+{% set disable_district = disable_district|default(false) %}
+{% set disable_project = disable_project|default(false) %}
+{% set disable_vehicle = disable_vehicle|default(false) %}
+{% set all_locked = all_locked|default(false) %}
+{% set driver_report_mode = driver_report_mode|default(false) %}
+{% set can_add_fuel = can_see_page('fuel_expense_add') and not driver_report_mode %}
+{% set can_edit_fuel = can_see_page('fuel_expense_edit') and not driver_report_mode %}
+{% set can_delete_fuel = can_see_page('fuel_expense_delete') and not driver_report_mode %}
+<div class="container-fluid py-3 fuel-grid-page expense-mobile-page{% if from_report_center %} from-report-center{% endif %}">
   <script type="application/json" id="locationCascadeData">{{ location_cascade|tojson }}</script>
   <div class="fuel-list-wrap">
-  <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 fuel-list-head expense-mobile-header">
-    <h5 class="mb-0"><i class="bi bi-fuel-pump me-2"></i>Fuel Expense</h5>
-    <div class="d-flex gap-2">
+  {% if from_report_center %}
+  <div class="mb-2">
+    <a href="{{ nav_back_url_auto or url_for('reports_index') }}"
+       class="btn btn-outline-secondary btn-sm"
+       data-fleet-nav-back="1"
+       onclick="return window.fleetNavigateBack(event, this);">
+      <i class="bi bi-arrow-left me-1"></i>Report Center
+    </a>
+  </div>
+  {% endif %}
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 fuel-list-head expense-mobile-header fuel-top-bar">
+    <h5 class="mb-0"><i class="bi bi-fuel-pump me-2"></i>{% if from_report_center %}Fuel Expense Report{% else %}Fuel Expense{% endif %}</h5>
+    <div class="d-flex gap-2 fuel-head-actions-desktop">
       <button class="btn btn-outline-light btn-sm" id="btnPrintReport"><i class="bi bi-eye me-1"></i>Print / Preview</button>
       <button class="btn btn-outline-light btn-sm" id="btnExportReport"><i class="bi bi-file-earmark-excel me-1"></i>Export</button>
       {% if can_see_page('workspace_mpg_report') %}
-      <a href="{{ url_for('workspace_mpg_report') }}" class="btn btn-outline-warning btn-sm" title="Open MPG Report">
+      <a href="{{ url_for('workspace_mpg_report', nav_from=nav_from if nav_from else None) }}" class="btn btn-outline-warning btn-sm" title="Open MPG Report">
         <i class="bi bi-speedometer2 me-1"></i>MPG Report
       </a>
       {% endif %}
+      {% if can_add_fuel %}
       <a href="{{ url_for('fuel_expense_add', district_id=form.district_id.data or 0, project_id=form.project_id.data or 0) }}" class="btn btn-light btn-sm text-primary">
         <i class="bi bi-plus-circle me-1"></i>Add Fuel Expense
       </a>
+      {% endif %}
+    </div>
+    <button type="button" class="fuel-toolbar-more-btn" id="fuelMoreBtn" aria-label="More actions" aria-expanded="false" aria-controls="fuelMoreMenu" aria-haspopup="true">
+      <i class="bi bi-three-dots"></i>
+    </button>
+    <div class="fuel-more-menu" id="fuelMoreMenu" role="menu" hidden>
+      <button type="button" class="btn btn-outline-primary btn-sm" id="btnPrintReportMobile" role="menuitem"><i class="bi bi-eye me-1"></i>Print / Preview</button>
+      <button type="button" class="btn btn-outline-primary btn-sm" id="btnExportReportMobile" role="menuitem"><i class="bi bi-file-earmark-excel me-1"></i>Export</button>
+      {% if can_see_page('workspace_mpg_report') %}
+      <a href="{{ url_for('workspace_mpg_report', nav_from=nav_from if nav_from else None) }}" class="btn btn-outline-warning btn-sm" role="menuitem"><i class="bi bi-speedometer2 me-1"></i>MPG Report</a>
+      {% endif %}
+      {% if can_add_fuel %}
+      <button type="button" class="btn btn-outline-warning btn-sm" id="fuelBackfillBtnMenu" role="menuitem"><i class="bi bi-arrow-repeat me-1"></i>Backfill Task KM</button>
+      <a href="{{ url_for('fuel_expense_add', district_id=form.district_id.data or 0, project_id=form.project_id.data or 0) }}" class="btn btn-primary btn-sm" role="menuitem"><i class="bi bi-plus-circle me-1"></i>Add Fuel Expense</a>
+      {% endif %}
     </div>
   </div>
   {% if cleanup_status %}
@@ -213,52 +367,96 @@
   </div>
   {% endif %}
 
-  <div class="card fuel-list-card mb-3">
-    <div class="card-header"><i class="bi bi-funnel me-1 text-primary"></i>Filters</div>
-    <div class="card-body">
+  <div class="card fuel-list-card mb-3 fuel-filters-card is-collapsible" id="fuelFiltersCard">
+    <button type="button" class="fuel-filter-summary" id="fuelFilterSummaryBtn" aria-expanded="false" aria-controls="fuelFilterBody">
+      <span class="fuel-filter-summary-text">
+        <i class="bi bi-funnel"></i>
+        <span>
+          {{ from_date|ddmmyyyy }} → {{ to_date|ddmmyyyy }}
+          {% if sel_district %} · {{ sel_district }}{% endif %}
+          {% if sel_project %} · {{ sel_project }}{% endif %}
+          {% if sel_vehicle %} · {{ sel_vehicle }}{% else %} · All vehicles{% endif %}
+        </span>
+      </span>
+      <span class="fuel-filter-summary-action" id="fuelFilterSummaryAction">Filters</span>
+    </button>
+    <div class="card-header d-none d-md-block"><i class="bi bi-funnel me-1 text-primary"></i>Filters</div>
+    <div class="card-body fuel-filters-body" id="fuelFilterBody">
       <form method="POST" action="{{ url_for('fuel_expense_list') }}" class="row g-3 align-items-end" id="fuelListFilterForm">
         {{ form.hidden_tag() }}
         <input type="hidden" name="q" id="fuelListFilterQuery" value="{{ q or '' }}">
-        <div class="col-md-2">
+        {% if nav_from %}<input type="hidden" name="nav_from" value="{{ nav_from }}">{% endif %}
+        <div class="col-6 col-md-2">
           <label class="form-label small">From Date</label>
           {{ form.from_date(class="form-control form-control-sm datepicker") }}
         </div>
-        <div class="col-md-2">
+        <div class="col-6 col-md-2">
           <label class="form-label small">To Date</label>
           {{ form.to_date(class="form-control form-control-sm datepicker") }}
         </div>
+        {% if all_locked %}
+        <input type="hidden" name="district_id" value="{{ district_id }}">
+        <input type="hidden" name="project_id" value="{{ project_id }}">
+        <input type="hidden" name="vehicle_id" value="{{ vehicle_id }}">
+        <div class="col-md-6">
+          <label class="form-label small">Assigned scope</label>
+          <div class="fuel-locked-chips-row">
+            <div class="fuel-locked-chip" title="Assigned district"><i class="bi bi-lock-fill"></i><span>{{ sel_district or 'District' }}</span></div>
+            <div class="fuel-locked-chip" title="Assigned project"><i class="bi bi-lock-fill"></i><span>{{ sel_project or 'Project' }}</span></div>
+            <div class="fuel-locked-chip" title="Assigned vehicle"><i class="bi bi-lock-fill"></i><span>{{ sel_vehicle or 'Vehicle' }}</span></div>
+          </div>
+        </div>
+        {% else %}
         <div class="col-md-2">
           <label class="form-label small">District</label>
+          {% if disable_district %}
+          <input type="hidden" name="district_id" value="{{ district_id }}">
+          <div class="fuel-locked-chip" title="Aap ko sirf yeh district assign hai"><i class="bi bi-lock-fill"></i><span>{{ sel_district or '—' }}</span></div>
+          {% else %}
           <select name="district_id" id="districtSelect" class="form-select form-select-sm search-select">
             {% for val, label in form.district_id.choices %}
               <option value="{{ val }}" {% if form.district_id.data == val %}selected{% endif %}>{{ label }}</option>
             {% endfor %}
           </select>
+          {% endif %}
         </div>
         <div class="col-md-2">
           <label class="form-label small">Project</label>
+          {% if disable_project %}
+          <input type="hidden" name="project_id" value="{{ project_id }}">
+          <div class="fuel-locked-chip" title="Aap ko sirf yeh project assign hai"><i class="bi bi-lock-fill"></i><span>{{ sel_project or '—' }}</span></div>
+          {% else %}
           <select name="project_id" id="projectSelect" class="form-select form-select-sm search-select">
             {% for val, label in form.project_id.choices %}
               <option value="{{ val }}" {% if form.project_id.data == val %}selected{% endif %}>{{ label }}</option>
             {% endfor %}
           </select>
+          {% endif %}
         </div>
         <div class="col-md-2">
           <label class="form-label small">Vehicle</label>
+          {% if disable_vehicle %}
+          <input type="hidden" name="vehicle_id" value="{{ vehicle_id }}">
+          <div class="fuel-locked-chip" title="Aap ko sirf yeh vehicle assign hai"><i class="bi bi-lock-fill"></i><span>{{ sel_vehicle or '—' }}</span></div>
+          {% else %}
           <select name="vehicle_id" id="vehicleSelect" class="form-select form-select-sm search-select">
             {% for val, label in form.vehicle_id.choices %}
               <option value="{{ val }}" {% if form.vehicle_id.data == val %}selected{% endif %}>{{ label }}</option>
             {% endfor %}
           </select>
+          {% endif %}
         </div>
+        {% endif %}
         <div class="col-md-2">
           <div class="d-grid gap-2">
             <button type="submit" class="btn btn-primary btn-sm w-100">
-              <i class="bi bi-funnel me-1"></i>Apply Filter
+              <i class="bi bi-funnel me-1"></i>{% if all_locked %}Apply Dates{% else %}Apply Filter{% endif %}
             </button>
-            <button type="button" class="btn btn-outline-warning btn-sm w-100" id="fuelBackfillBtn">
+            {% if can_add_fuel %}
+            <button type="button" class="btn btn-outline-warning btn-sm w-100 d-none d-md-inline-block" id="fuelBackfillBtn">
               <i class="bi bi-arrow-repeat me-1"></i>Backfill Task KM
             </button>
+            {% endif %}
           </div>
         </div>
       </form>
@@ -382,15 +580,19 @@
               <a class="fuel-mobile-action fuel-mobile-action--media" href="{{ url_for('fuel_expense_media', pk=r.id, return_to=request.full_path) }}" title="View media">
                 <i class="bi bi-images me-1"></i>Media
               </a>
+              {% if can_edit_fuel %}
               <a class="fuel-mobile-action fuel-mobile-action--edit" href="{{ url_for('fuel_expense_edit', pk=r.id, return_to=request.full_path) }}" title="Edit expense">
                 <i class="bi bi-pencil me-1"></i>Edit
               </a>
+              {% endif %}
+              {% if can_delete_fuel %}
               <form action="{{ url_for('fuel_expense_delete', pk=r.id, return_to=request.full_path) }}" method="POST" class="d-inline flex-fill" onsubmit="return confirm('Delete this fuel expense entry?');">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit" class="fuel-mobile-action fuel-mobile-action--delete w-100" title="Delete expense">
                   <i class="bi bi-trash me-1"></i>Delete
                 </button>
               </form>
+              {% endif %}
             </div>
           </div>
         </article>
@@ -533,11 +735,15 @@
                     <a class="btn btn-outline-success btn-sm w-100 py-1" href="{{ url_for('fuel_expense_media', pk=r.id, return_to=request.full_path) }}">Media</a>
                   </div>
                 </div>
+                {% if can_edit_fuel %}
                 <a href="{{ url_for('fuel_expense_edit', pk=r.id, return_to=request.full_path) }}" class="btn btn-outline-primary btn-sm" title="Edit"><i class="bi bi-pencil"></i></a>
+                {% endif %}
+                {% if can_delete_fuel %}
                 <form action="{{ url_for('fuel_expense_delete', pk=r.id, return_to=request.full_path) }}" method="POST" class="d-inline" onsubmit="return confirm('Delete this fuel expense entry?');">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                   <button type="submit" class="btn btn-outline-danger btn-sm" title="Delete"><i class="bi bi-trash"></i></button>
                 </form>
+                {% endif %}
               </td>
             </tr>
             <tr class="fuel-upload-expand-row d-none" data-record-id="{{ r.id }}">
@@ -563,7 +769,7 @@
             <tr id="fuelExpenseNoDataRow">
               <td colspan="{% if umc %}23{% else %}21{% endif %}" class="text-center py-5 text-muted">
                 <i class="bi bi-fuel-pump display-6 d-block mb-2"></i>
-                No fuel expense entries. <a href="{{ url_for('fuel_expense_add') }}">Add Fuel Expense</a>
+                No fuel expense entries.{% if can_add_fuel %} <a href="{{ url_for('fuel_expense_add') }}">Add Fuel Expense</a>{% endif %}
               </td>
             </tr>
             {% endfor %}
@@ -704,9 +910,35 @@
   var projectSelect = document.getElementById('projectSelect');
   var vehicleSelect = document.getElementById('vehicleSelect');
   var backfillBtn = document.getElementById('fuelBackfillBtn');
+  var backfillBtnMenu = document.getElementById('fuelBackfillBtnMenu');
   var backfillForm = document.getElementById('fuelBackfillForm');
   var fromDateInput = document.querySelector('#fuelListFilterForm [name="from_date"]');
   var toDateInput = document.querySelector('#fuelListFilterForm [name="to_date"]');
+
+  function _filterFieldValue(name, selectEl) {
+    if (selectEl && selectEl.value != null && selectEl.value !== '') return selectEl.value;
+    var hidden = document.querySelector('#fuelListFilterForm [name="' + name + '"]');
+    return hidden ? (hidden.value || '0') : '0';
+  }
+
+  function runBackfill() {
+    if (!backfillForm) return;
+    var msg = 'Backfill sirf un records par chalega jahan KM Out aur KM In missing hain.\n' +
+      'Existing filled records ko touch nahi kiya jayega.\n\nContinue?';
+    if (!window.confirm(msg)) return;
+    var bfFrom = document.getElementById('bfFromDate');
+    var bfTo = document.getElementById('bfToDate');
+    var bfDistrict = document.getElementById('bfDistrictId');
+    var bfProject = document.getElementById('bfProjectId');
+    var bfVehicle = document.getElementById('bfVehicleId');
+    if (bfFrom) bfFrom.value = fromDateInput ? (fromDateInput.value || '') : '';
+    if (bfTo) bfTo.value = toDateInput ? (toDateInput.value || '') : '';
+    if (bfDistrict) bfDistrict.value = _filterFieldValue('district_id', districtSelect);
+    if (bfProject) bfProject.value = _filterFieldValue('project_id', projectSelect);
+    if (bfVehicle) bfVehicle.value = _filterFieldValue('vehicle_id', vehicleSelect);
+    backfillForm.submit();
+  }
+
   if (districtSelect && projectSelect) {
     districtSelect.addEventListener('change', function() {
       var did = this.value;
@@ -779,23 +1011,66 @@
   }
 
   if (backfillBtn && backfillForm) {
-    backfillBtn.addEventListener('click', function() {
-      var msg = 'Backfill sirf un records par chalega jahan KM Out aur KM In missing hain.\n' +
-        'Existing filled records ko touch nahi kiya jayega.\n\nContinue?';
-      if (!window.confirm(msg)) return;
-      var bfFrom = document.getElementById('bfFromDate');
-      var bfTo = document.getElementById('bfToDate');
-      var bfDistrict = document.getElementById('bfDistrictId');
-      var bfProject = document.getElementById('bfProjectId');
-      var bfVehicle = document.getElementById('bfVehicleId');
-      if (bfFrom) bfFrom.value = fromDateInput ? (fromDateInput.value || '') : '';
-      if (bfTo) bfTo.value = toDateInput ? (toDateInput.value || '') : '';
-      if (bfDistrict) bfDistrict.value = districtSelect ? (districtSelect.value || '0') : '0';
-      if (bfProject) bfProject.value = projectSelect ? (projectSelect.value || '0') : '0';
-      if (bfVehicle) bfVehicle.value = vehicleSelect ? (vehicleSelect.value || '0') : '0';
-      backfillForm.submit();
-    });
+    backfillBtn.addEventListener('click', runBackfill);
   }
+  if (backfillBtnMenu && backfillForm) {
+    backfillBtnMenu.addEventListener('click', runBackfill);
+  }
+
+  /* Mobile More menu */
+  (function() {
+    var moreBtn = document.getElementById('fuelMoreBtn');
+    var moreMenu = document.getElementById('fuelMoreMenu');
+    if (!moreBtn || !moreMenu) return;
+    function closeMore() {
+      moreMenu.classList.remove('is-open');
+      moreMenu.hidden = true;
+      moreBtn.setAttribute('aria-expanded', 'false');
+    }
+    function openMore() {
+      moreMenu.hidden = false;
+      moreMenu.classList.add('is-open');
+      moreBtn.setAttribute('aria-expanded', 'true');
+    }
+    moreBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (moreMenu.classList.contains('is-open')) closeMore();
+      else openMore();
+    });
+    document.addEventListener('click', function(e) {
+      if (!moreMenu.classList.contains('is-open')) return;
+      if (e.target.closest && (e.target.closest('#fuelMoreMenu') || e.target.closest('#fuelMoreBtn'))) return;
+      closeMore();
+    });
+    var printMobile = document.getElementById('btnPrintReportMobile');
+    var exportMobile = document.getElementById('btnExportReportMobile');
+    var printDesk = document.getElementById('btnPrintReport');
+    var exportDesk = document.getElementById('btnExportReport');
+    if (printMobile && printDesk) {
+      printMobile.addEventListener('click', function() { printDesk.click(); closeMore(); });
+    }
+    if (exportMobile && exportDesk) {
+      exportMobile.addEventListener('click', function() { exportDesk.click(); closeMore(); });
+    }
+  })();
+
+  /* Sticky collapsible filter drawer (mobile) */
+  (function() {
+    var card = document.getElementById('fuelFiltersCard');
+    var btn = document.getElementById('fuelFilterSummaryBtn');
+    var action = document.getElementById('fuelFilterSummaryAction');
+    if (!card || !btn) return;
+    function setOpen(open) {
+      card.classList.toggle('is-open', open);
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      if (action) action.textContent = open ? 'Hide' : 'Filters';
+    }
+    setOpen(false);
+    btn.addEventListener('click', function() {
+      setOpen(!card.classList.contains('is-open'));
+    });
+  })();
 })();
 </script>
 <script>

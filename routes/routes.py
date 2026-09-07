@@ -1937,6 +1937,15 @@ def require_login():
                 return api_resp
             return redirect(url_for('login'))
 
+        # Report Centre → Fuel Expense list: allow expenses / fuel_expense / reports
+        # (Drivers with Report Centre can view their scoped fuel history like MPG.)
+        if endpoint == 'fuel_expense_list' and (
+            user_can_access(perms, 'fuel_expense')
+            or user_can_access(perms, 'expenses')
+            or user_can_access(perms, 'reports')
+        ):
+            return
+
         # Explicit: assignment (full) grants all assignment sub-pages (Vehicle to Parking, etc.)
         if not user_can_access(perms, required):
             if required and required.startswith('assign_') and ('assignment' in perms):

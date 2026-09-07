@@ -1354,7 +1354,8 @@ PAGE_VISIBLE = {
     'report_uniform_sizes': ['reports', 'report_uniform_sizes'],
     'uniform_size_edit': ['reports', 'report_uniform_sizes', 'uniform_size_edit'],
     # Report Centre uses endpoint-style keys for list routes — align with real permission codes
-    'fuel_expense_list': ['expenses', 'fuel_expense'],
+    # Include `reports` so Drivers (Report Centre) can open Fuel Expense like MPG Report.
+    'fuel_expense_list': ['expenses', 'fuel_expense', 'reports'],
     'oil_expense_list': ['expenses', 'oil_expense'],
     'maintenance_expense_list': ['expenses', 'maintenance_expense'],
     'payment_vouchers_list': ['accounts', 'accounts_quick_payment'],

@@ -1345,27 +1345,31 @@ def api_fuel_expense_km_gap_limit():
 
 @app.route('/expenses/fuel', methods=['GET', 'POST'])
 def fuel_expense_list():
-    _guard = _require_workspace_employee_for_expense_management()
+    _guard = _require_workspace_employee_for_expense_management(allow_report_or_driver=True)
     if _guard:
         return _guard
     workspace_employee_id = _workspace_employee_id_for_expenses()
     from auth_utils import get_user_context
-    
+
     user_id = session.get('user_id')
     user_context = get_user_context(user_id) if user_id else {}
     allowed_projects = user_context.get('allowed_projects', set())
     allowed_districts = user_context.get('allowed_districts', set())
     allowed_vehicles = user_context.get('allowed_vehicles', set())
     is_master_or_admin = user_context.get('is_master_or_admin', False)
-    
+    is_driver = bool(user_context.get('is_driver'))
+    nav_from = (request.args.get('nav_from') or request.form.get('nav_from') or '').strip()
+
     form = FuelExpenseFilterForm()
-    
+
     # Filter district choices by user scope
     district_q = District.query
     if not is_master_or_admin and allowed_districts:
         district_q = district_q.filter(District.id.in_(list(allowed_districts)))
-    form.district_id.choices = [(0, '-- Select District --')] + [(d.id, d.name) for d in district_q.order_by(District.name).all()]
-    
+    form.district_id.choices = [(0, '-- Select District --')] + [
+        (d.id, d.name) for d in district_q.order_by(District.name).all()
+    ]
+
     form.project_id.choices = [(0, '-- Select Project --')]
     form.vehicle_id.choices = [(0, '-- All Vehicles --')]
     today = pk_date()
@@ -1382,7 +1386,29 @@ def fuel_expense_list():
         project_id = request.form.get('project_id', type=int) or 0
         vehicle_id = request.form.get('vehicle_id', type=int) or 0
         search_q = (request.form.get('q') or '').strip()
-        return redirect(url_for('fuel_expense_list', from_date=from_date or '', to_date=to_date or '', district_id=district_id, project_id=project_id, vehicle_id=vehicle_id, q=search_q))
+        nav_from = (request.form.get('nav_from') or nav_from or '').strip()
+        redirect_kwargs = {
+            'from_date': from_date or '',
+            'to_date': to_date or '',
+            'district_id': district_id,
+            'project_id': project_id,
+            'vehicle_id': vehicle_id,
+            'q': search_q,
+        }
+        if nav_from:
+            redirect_kwargs['nav_from'] = nav_from
+        return redirect(url_for('fuel_expense_list', **redirect_kwargs))
+
+    scope_filters = _fuel_expense_resolve_scope_filters(
+        district_id, project_id, vehicle_id, user_context
+    )
+    district_id = scope_filters['district_id']
+    project_id = scope_filters['project_id']
+    vehicle_id = scope_filters['vehicle_id']
+    disable_district = scope_filters['disable_district']
+    disable_project = scope_filters['disable_project']
+    disable_vehicle = scope_filters['disable_vehicle']
+
     from_d = parse_date(from_date) if from_date else today
     to_d = parse_date(to_date) if to_date else today
     if from_d and to_d and from_d > to_d:
@@ -1393,14 +1419,39 @@ def fuel_expense_list():
     form.project_id.data = project_id
     form.vehicle_id.data = vehicle_id
     if district_id:
-        projects = Project.query.join(project_district).filter(project_district.c.district_id == district_id).order_by(Project.name).all()
+        projects = (
+            Project.query.join(project_district)
+            .filter(project_district.c.district_id == district_id)
+            .order_by(Project.name)
+            .all()
+        )
+        if not is_master_or_admin and allowed_projects:
+            projects = [p for p in projects if p.id in allowed_projects]
         form.project_id.choices = [(0, '-- Select Project --')] + [(p.id, p.name) for p in projects]
     if project_id:
         veh_q = Vehicle.query.filter(Vehicle.project_id == project_id)
         if district_id:
             veh_q = veh_q.filter(Vehicle.district_id == district_id)
+        if not is_master_or_admin and allowed_vehicles:
+            veh_q = veh_q.filter(Vehicle.id.in_(list(allowed_vehicles)))
         vehicles = veh_q.order_by(*vehicle_order_by()).all()
         form.vehicle_id.choices = [(0, '-- All Vehicles --')] + [(v.id, v.vehicle_no) for v in vehicles]
+
+    # Locked chip labels
+    sel_district = None
+    sel_project = None
+    sel_vehicle = None
+    if district_id:
+        d_obj = db.session.get(District, district_id)
+        sel_district = d_obj.name if d_obj else None
+    if project_id:
+        p_obj = db.session.get(Project, project_id)
+        sel_project = p_obj.name if p_obj else None
+    if vehicle_id:
+        v_obj = db.session.get(Vehicle, vehicle_id)
+        sel_vehicle = v_obj.vehicle_no if v_obj else None
+    all_locked = bool(disable_district and disable_project and disable_vehicle)
+
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 50, type=int) or 50
     if per_page in (25, 50, 100, 200):
@@ -1421,7 +1472,7 @@ def fuel_expense_list():
                 FuelExpense.employee_id.is_(None),
             )
         )
-    
+
     # Apply user data scope
     if not is_master_or_admin:
         if allowed_projects:
@@ -1430,7 +1481,7 @@ def fuel_expense_list():
             query = query.filter(FuelExpense.district_id.in_(list(allowed_districts)))
         if allowed_vehicles:
             query = query.filter(FuelExpense.vehicle_id.in_(list(allowed_vehicles)))
-    
+
     if district_id:
         query = query.filter(FuelExpense.district_id == district_id)
     if project_id:
@@ -1459,11 +1510,15 @@ def fuel_expense_list():
         last_curr = all_rows[0].current_reading
         avg_mpg = round(total_km / total_liters, 2) if total_liters else None
         avg_fuel_price = round(total_amount / total_liters, 2) if total_liters else None
-        totals = {'total_km': total_km, 'total_liters': total_liters, 'total_amount': total_amount,
-                  'first_previous_reading': float(first_prev) if first_prev else None,
-                  'last_current_reading': float(last_curr) if last_curr else None,
-                  'avg_mpg': avg_mpg,
-                  'avg_fuel_price': avg_fuel_price}
+        totals = {
+            'total_km': total_km,
+            'total_liters': total_liters,
+            'total_amount': total_amount,
+            'first_previous_reading': float(first_prev) if first_prev else None,
+            'last_current_reading': float(last_curr) if last_curr else None,
+            'avg_mpg': avg_mpg,
+            'avg_fuel_price': avg_fuel_price,
+        }
 
     from list_visibility import expense_or_work_order_needs_upload_media_columns
     show_upload_media_columns = (
@@ -1478,16 +1533,36 @@ def fuel_expense_list():
             workspace_employee_id, 'FuelExpense', [r.id for r in rows]
         )
     cleanup_status = _latest_expense_cleanup_status('fuel', workspace_employee_id)
-    return render_template('fuel_expense_list.html', form=form, rows=rows,
-                           from_date=from_d, to_date=to_d, totals=totals,
-                           pagination=pagination, page=page, per_page=per_page,
-                           district_id=district_id, project_id=project_id, vehicle_id=vehicle_id,
-                           q=search_q,
-                           expense_by_labels=expense_by_labels,
-                           cleanup_status=cleanup_status,
-                           show_upload_media_columns=show_upload_media_columns,
-                           location_cascade=_fuel_expense_location_cascade_dict())
-
+    driver_report_mode = bool(is_driver and not workspace_employee_id) or (nav_from == 'reports' and is_driver)
+    return render_template(
+        'fuel_expense_list.html',
+        form=form,
+        rows=rows,
+        from_date=from_d,
+        to_date=to_d,
+        totals=totals,
+        pagination=pagination,
+        page=page,
+        per_page=per_page,
+        district_id=district_id,
+        project_id=project_id,
+        vehicle_id=vehicle_id,
+        q=search_q,
+        expense_by_labels=expense_by_labels,
+        cleanup_status=cleanup_status,
+        show_upload_media_columns=show_upload_media_columns,
+        location_cascade=_fuel_expense_location_cascade_dict(),
+        disable_district=disable_district,
+        disable_project=disable_project,
+        disable_vehicle=disable_vehicle,
+        all_locked=all_locked,
+        sel_district=sel_district,
+        sel_project=sel_project,
+        sel_vehicle=sel_vehicle,
+        is_driver=is_driver,
+        driver_report_mode=driver_report_mode,
+        nav_from=nav_from,
+    )
 
 @app.route('/expenses/fuel/backfill-task-readings', methods=['POST'])
 def fuel_expense_backfill_task_readings():
@@ -1880,12 +1955,96 @@ def _fuel_expense_list_search_filter(search_q, workspace_employee_id):
     return and_(*token_clauses)
 
 
-def _require_workspace_employee_for_expense_management():
-    """Expense Management is now part of Employee Workspace."""
-    if not session.get('workspace_employee_id'):
-        flash('Employee Workspace select karna zaroori hai.', 'warning')
-        return redirect(url_for('workspace_dashboard'))
-    return None
+def _require_workspace_employee_for_expense_management(allow_report_or_driver=False):
+    """Expense Management is now part of Employee Workspace.
+
+    Drivers / Report Centre viewers may open Fuel Expense list without selecting
+    an Employee Workspace (scoped by get_user_context allowed_*).
+    """
+    if session.get('workspace_employee_id'):
+        return None
+    if allow_report_or_driver:
+        from auth_utils import get_user_context
+        user_id = session.get('user_id')
+        ctx = get_user_context(user_id) if user_id else {}
+        nav = (
+            request.args.get('nav_from')
+            or request.values.get('nav_from')
+            or ''
+        ).strip()
+        if ctx.get('is_driver') or nav == 'reports':
+            return None
+    flash('Employee Workspace select karna zaroori hai.', 'warning')
+    return redirect(url_for('workspace_dashboard'))
+
+
+def _fuel_expense_resolve_scope_filters(district_id, project_id, vehicle_id, user_context):
+    """Auto-select + lock district/project/vehicle when user has exactly one (MPG pattern)."""
+    allowed_projects = user_context.get('allowed_projects', set()) or set()
+    allowed_districts = user_context.get('allowed_districts', set()) or set()
+    allowed_vehicles = user_context.get('allowed_vehicles', set()) or set()
+    is_master_or_admin = bool(user_context.get('is_master_or_admin'))
+
+    disable_district = False
+    disable_project = False
+    disable_vehicle = False
+
+    district_id = int(district_id or 0)
+    project_id = int(project_id or 0)
+    vehicle_id = int(vehicle_id or 0)
+
+    if not is_master_or_admin:
+        if len(allowed_districts) == 1:
+            if not district_id:
+                district_id = next(iter(allowed_districts))
+            disable_district = True
+        if len(allowed_projects) == 1:
+            only_p = next(iter(allowed_projects))
+            linked = True
+            if district_id:
+                linked = bool(
+                    db.session.query(project_district.c.project_id)
+                    .filter(
+                        project_district.c.district_id == district_id,
+                        project_district.c.project_id == only_p,
+                    )
+                    .first()
+                )
+            if linked:
+                if not project_id:
+                    project_id = only_p
+                disable_project = True
+        if len(allowed_vehicles) == 1:
+            only_v = next(iter(allowed_vehicles))
+            if not vehicle_id:
+                if district_id and project_id:
+                    vrow = db.session.get(Vehicle, only_v)
+                    if (
+                        vrow
+                        and vrow.district_id == district_id
+                        and (vrow.project_id or 0) == (project_id or 0)
+                    ):
+                        vehicle_id = only_v
+                else:
+                    vehicle_id = only_v
+            if vehicle_id == only_v:
+                disable_vehicle = True
+
+        if allowed_districts and district_id and district_id not in allowed_districts:
+            district_id = 0
+        if allowed_projects and project_id and project_id not in allowed_projects:
+            project_id = 0
+        if allowed_vehicles and vehicle_id and vehicle_id not in allowed_vehicles:
+            vehicle_id = 0
+
+    return {
+        'district_id': district_id,
+        'project_id': project_id,
+        'vehicle_id': vehicle_id,
+        'disable_district': disable_district,
+        'disable_project': disable_project,
+        'disable_vehicle': disable_vehicle,
+    }
 
 
 def _workspace_employee_id_for_expenses():
@@ -2644,14 +2803,38 @@ def fuel_expense_edit(pk):
 
 
 @app.route('/expenses/fuel/<int:pk>/view')
+def _fuel_expense_viewer_allowed(rec):
+    """Deny out-of-scope fuel rows for drivers/report viewers without workspace employee."""
+    workspace_employee_id = _workspace_employee_id_for_expenses()
+    if workspace_employee_id:
+        if rec.employee_id and rec.employee_id != workspace_employee_id:
+            return False
+        return True
+    from auth_utils import get_user_context
+    user_id = session.get('user_id')
+    ctx = get_user_context(user_id) if user_id else {}
+    if ctx.get('is_master_or_admin'):
+        return True
+    allowed_vehicles = ctx.get('allowed_vehicles') or set()
+    allowed_districts = ctx.get('allowed_districts') or set()
+    allowed_projects = ctx.get('allowed_projects') or set()
+    if allowed_vehicles and rec.vehicle_id not in allowed_vehicles:
+        return False
+    if allowed_districts and rec.district_id not in allowed_districts:
+        return False
+    if allowed_projects and rec.project_id not in allowed_projects:
+        return False
+    return True
+
+
 def fuel_expense_view(pk):
-    _guard = _require_workspace_employee_for_expense_management()
+    _guard = _require_workspace_employee_for_expense_management(allow_report_or_driver=True)
     if _guard:
         return _guard
     workspace_employee_id = _workspace_employee_id_for_expenses()
     rec = FuelExpense.query.get_or_404(pk)
-    if workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
-        flash('This expense does not belong to selected workspace employee.', 'danger')
+    if not _fuel_expense_viewer_allowed(rec):
+        flash('This expense is outside your assigned scope.', 'danger')
         return redirect(url_for('fuel_expense_list'))
     default_back = url_for('fuel_expense_list')
     back_url = _safe_internal_path(request.args.get('return_to'), default_back)
@@ -8319,7 +8502,7 @@ def maintenance_expense_media_download_all(pk):
 @app.route('/fuel-expense/<int:pk>/media')
 @app.route('/fuel-expenses/<int:pk>/media')
 def fuel_expense_media(pk):
-    _guard = _require_workspace_employee_for_expense_management()
+    _guard = _require_workspace_employee_for_expense_management(allow_report_or_driver=True)
     if _guard:
         return _guard
     workspace_employee_id = _workspace_employee_id_for_expenses()
@@ -8327,8 +8510,8 @@ def fuel_expense_media(pk):
     if not rec:
         flash('Media record not found (maybe deleted).', 'warning')
         return redirect(url_for('fuel_expense_list'))
-    if workspace_employee_id and rec.employee_id and rec.employee_id != workspace_employee_id:
-        flash('This expense does not belong to selected workspace employee.', 'danger')
+    if not _fuel_expense_viewer_allowed(rec):
+        flash('This expense is outside your assigned scope.', 'danger')
         return redirect(url_for('fuel_expense_list'))
 
     def _human_size(n):
@@ -8385,7 +8568,7 @@ def fuel_expense_media(pk):
 @app.route('/fuel-expense/<int:pk>/media/download/<int:att_id>')
 @app.route('/fuel-expenses/<int:pk>/media/download/<int:att_id>')
 def fuel_expense_media_download(pk, att_id):
-    _guard = _require_workspace_employee_for_expense_management()
+    _guard = _require_workspace_employee_for_expense_management(allow_report_or_driver=True)
     if _guard:
         return _guard
     workspace_employee_id = _workspace_employee_id_for_expenses()
@@ -8420,7 +8603,7 @@ def fuel_expense_media_download(pk, att_id):
 @app.route('/fuel-expense/<int:pk>/media/download-all')
 @app.route('/fuel-expenses/<int:pk>/media/download-all')
 def fuel_expense_media_download_all(pk):
-    _guard = _require_workspace_employee_for_expense_management()
+    _guard = _require_workspace_employee_for_expense_management(allow_report_or_driver=True)
     if _guard:
         return _guard
     workspace_employee_id = _workspace_employee_id_for_expenses()
