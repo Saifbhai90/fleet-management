@@ -698,6 +698,7 @@ ENDPOINT_PERMISSION_MAP = [
     # Feature API helpers — fuel market
     ('api_fuel_market_rate_for_date', 'fuel_expense'),
     ('api_fuel_market_rates', 'fuel_expense'),
+    ('api_fuel_market_scan_now', 'fuel_expense'),
     ('api_fuel_market_scan_trend', 'fuel_expense'),
     # Feature API helpers — maintenance
     ('api_maintenance_expense_invoice_detail', 'maintenance_expense'),

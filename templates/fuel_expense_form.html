@@ -36,6 +36,16 @@
   .fuel-form-wrap .fuel-info-bar .fuel-info-sep { color: #64748b; font-weight: 700; }
   .fuel-form-wrap .fuel-info-scan .scan-ok { color: #15803d; font-weight: 700; }
   .fuel-form-wrap .fuel-info-scan .scan-bad { color: #b91c1c; font-weight: 700; }
+  .fuel-form-wrap .fuel-pso-scan-btn {
+    font-size: 0.72rem;
+    padding: 0.15rem 0.55rem;
+    white-space: nowrap;
+  }
+  .fuel-form-wrap .fuel-pso-scan-btn .spinner-border {
+    width: 0.75rem;
+    height: 0.75rem;
+    border-width: 0.12em;
+  }
   .fuel-form-wrap .fuel-info-saved .badge { font-size: 0.72rem; vertical-align: middle; }
   .fuel-form-wrap .fuel-info-saved .btn { font-size: 0.72rem; padding: 0.1rem 0.45rem; }
   .fuel-form-wrap .vehicle-last-entry-strip {
@@ -749,7 +759,10 @@
       {% else %}
       <strong>Last Scan:</strong> <span class="text-muted">Loading...</span>
       {% endif %}
-  </div>
+    </div>
+    <button type="button" class="btn btn-sm btn-outline-success fuel-pso-scan-btn" id="fuelPsoScanNowBtn" title="Scan today's PSO rates now">
+      <i class="bi bi-arrow-repeat me-1"></i>Scan Now
+    </button>
     {% if not rec %}
     <span class="fuel-info-sep">•</span>
     <div id="fuelLastSavedBar" class="fuel-info-saved d-flex flex-wrap align-items-center gap-1 fuel-info-click" role="button" tabindex="0" title="Click for last entry preview">
@@ -2168,6 +2181,43 @@ document.addEventListener('DOMContentLoaded', function() {
       .catch(function() { renderFuelMarketStatus(null); });
   }
 
+  function runFuelPsoScanNow() {
+    var btn = document.getElementById('fuelPsoScanNowBtn');
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Scanning...';
+    }
+    var headers = { 'Content-Type': 'application/json', 'Accept': 'application/json' };
+    var csrfMeta = document.querySelector('meta[name="csrf-token"]');
+    if (csrfMeta && csrfMeta.getAttribute('content')) {
+      headers['X-CSRFToken'] = csrfMeta.getAttribute('content');
+    }
+    fetch('/api/fuel-market-scan-now', { method: 'POST', headers: headers, credentials: 'same-origin', body: '{}' })
+      .then(function(r) { return r.json().then(function(d) { return { okHttp: r.ok, data: d }; }); })
+      .then(function(res) {
+        var data = res.data || {};
+        if (!res.okHttp || data.ok === false) {
+          throw new Error(data.error || 'Scan failed');
+        }
+        renderFuelMarketStatus(data);
+        try { fetchPsoRateForDate(); } catch (e) {}
+      })
+      .catch(function(err) {
+        if (fuelMarketScanStatusBar) {
+          fuelMarketScanStatusBar.innerHTML =
+            '<strong>Last Scan:</strong> <span class="scan-bad">' +
+            (err && err.message ? err.message : 'Scan failed') +
+            '</span>';
+        }
+      })
+      .finally(function() {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = '<i class="bi bi-arrow-repeat me-1"></i>Scan Now';
+        }
+      });
+  }
+
   function handlePaymentTypeBehavior(forceReset) {
     if (!paymentTypeSelect) return;
     var paymentType = paymentTypeSelect.value || '';
@@ -3558,6 +3608,15 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     fuelMarketScanStatusBar.addEventListener('keydown', function(e) {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fuelMarketScanStatusBar.click(); }
+    });
+  }
+
+  var fuelPsoScanNowBtn = document.getElementById('fuelPsoScanNowBtn');
+  if (fuelPsoScanNowBtn) {
+    fuelPsoScanNowBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      runFuelPsoScanNow();
     });
   }
 

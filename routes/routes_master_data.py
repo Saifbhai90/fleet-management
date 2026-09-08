@@ -104,6 +104,34 @@ def api_fuel_market_rates():
 
 
 
+@app.route('/api/fuel-market-scan-now', methods=['POST'])
+def api_fuel_market_scan_now():
+    """Manual PSO scan for current date (force refresh)."""
+    if not session.get('user_id'):
+        return jsonify({'ok': False, 'error': 'Login required'}), 401
+    try:
+        data = _scan_fuel_market_rates(force=True) or {}
+        today = data.get('scan_date') or ''
+        rates = data.get('rates') or {}
+        today_entry = rates.get(today) or {}
+        pso = (data.get('sources') or {}).get('pso') or {}
+        ok = bool(today_entry.get('ok') or pso.get('ok'))
+        return jsonify({
+            'ok': ok,
+            'scan_date': today,
+            'scanned_at': data.get('scanned_at') or today_entry.get('scanned_at') or '',
+            'petrol': today_entry.get('petrol', pso.get('petrol')),
+            'diesel': today_entry.get('diesel', pso.get('diesel')),
+            'error': '' if ok else (today_entry.get('error') or pso.get('error') or 'Scan failed'),
+            'sources': data.get('sources') or {},
+            'rates': rates,
+            'status': data.get('status') or ('ok' if ok else 'error'),
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)[:220]}), 500
+
+
+
 @app.route('/api/fuel-market-rate-for-date')
 def api_fuel_market_rate_for_date():
     """Return PSO rate for a specific date.
