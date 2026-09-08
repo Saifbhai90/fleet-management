@@ -3369,22 +3369,48 @@ def _workspace_products_for_expense_form(employee_id, form_token):
         if key not in ws_default_price_by_name or ws.default_price is not None:
             ws_default_price_by_name[key] = ws.default_price
 
+    name_keys = []
+    seen_keys = set()
+    for ws in ws_rows:
+        key = (ws.name or '').strip().lower()
+        if not key or key in seen_keys:
+            continue
+        seen_keys.add(key)
+        name_keys.append(key)
+
+    prod_by_name = {}
+    if name_keys:
+        # One bulk lookup instead of N per-name queries (was the slow-route spike cause).
+        for prod in Product.query.filter(func.lower(Product.name).in_(name_keys)).all():
+            key = (prod.name or '').strip().lower()
+            if key and key not in prod_by_name:
+                prod_by_name[key] = prod
+
     mapped = []
     changed = False
     for ws in ws_rows:
         name = (ws.name or '').strip()
         if not name:
             continue
-        prod = Product.query.filter(func.lower(Product.name) == name.lower()).first()
+        key = name.lower()
+        prod = prod_by_name.get(key)
         if not prod:
             prod = Product(name=name, used_in_forms=token or None, remarks=ws.remarks)
             db.session.add(prod)
             try:
                 db.session.flush()
                 changed = True
+                prod_by_name[key] = prod
             except IntegrityError:
                 db.session.rollback()
-                prod = Product.query.filter(func.lower(Product.name) == name.lower()).first()
+                # Session rolled back — rebuild map once, then continue.
+                prod_by_name = {}
+                if name_keys:
+                    for row in Product.query.filter(func.lower(Product.name).in_(name_keys)).all():
+                        rk = (row.name or '').strip().lower()
+                        if rk and rk not in prod_by_name:
+                            prod_by_name[rk] = row
+                prod = prod_by_name.get(key)
                 if not prod:
                     continue
         elif token:
@@ -3393,7 +3419,7 @@ def _workspace_products_for_expense_form(employee_id, form_token):
                 existing_tokens.append(token)
                 prod.used_in_forms = ','.join(existing_tokens)
                 changed = True
-        default_price = ws_default_price_by_name.get(name.lower())
+        default_price = ws_default_price_by_name.get(key)
         if not hasattr(prod, 'default_price'):
             setattr(prod, 'default_price', default_price)
         else:
