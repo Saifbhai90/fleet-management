@@ -4274,6 +4274,11 @@
 
                 ts.on('item_remove', function() {
                     _setOverwriteReady(false);
+                    // Programmatic clear/setValue (e.g. Payment Type → Cash default
+                    // COA) must not open another field's dropdown. Only reopen when
+                    // the user is actively editing this control.
+                    if (ts._wsSilentFill || window._wsOcrIsUpdating) return;
+                    if (!ts.isFocused && !ts.wrapper.classList.contains('focus')) return;
                     if (!ts.isOpen) ts.open();
                 });
 

@@ -2218,6 +2218,22 @@ document.addEventListener('DOMContentLoaded', function() {
       });
   }
 
+  function setExpenseByValueQuiet(value) {
+    if (!expenseBySelect) return;
+    var next = value == null ? '' : String(value);
+    expenseBySelect.value = next;
+    var ts = expenseBySelect.tomselect;
+    if (!ts) return;
+    ts._wsSilentFill = true;
+    try {
+      if (next) ts.setValue(next, true);
+      else ts.clear(true);
+      if (ts.isOpen) ts.close();
+    } finally {
+      window.setTimeout(function() { ts._wsSilentFill = false; }, 0);
+    }
+  }
+
   function handlePaymentTypeBehavior(forceReset) {
     if (!paymentTypeSelect) return;
     var paymentType = paymentTypeSelect.value || '';
@@ -2232,19 +2248,14 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!expenseBySelect) return;
     var shouldForce = !!forceReset;
     var scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+    // Quiet value sync only — never focus/open Expense By from Payment Type.
     if (paymentType === 'Cash') {
       if (cashExpenseByValue && (shouldForce || !expenseBySelect.value)) {
-        expenseBySelect.value = cashExpenseByValue;
-        if (expenseBySelect.tomselect) {
-          expenseBySelect.tomselect.setValue(cashExpenseByValue, true);
-        }
+        setExpenseByValueQuiet(cashExpenseByValue);
       }
     } else if (paymentType === 'Credit') {
       if (shouldForce) {
-        expenseBySelect.value = '';
-        if (expenseBySelect.tomselect) {
-          expenseBySelect.tomselect.setValue('', true);
-        }
+        setExpenseByValueQuiet('');
       }
     }
     window.scrollTo(0, scrollY);
