@@ -179,6 +179,15 @@ body.sh-diag-wide .container-fluid.sh-page-shell {
     padding-left: 12px;
     padding-right: 12px;
 }
+.sh-diag-capture-root {
+    background: #f1f5f9;
+    border-radius: 12px;
+    padding: 10px;
+}
+#diagScreenshotBtn.capturing {
+    pointer-events: none;
+    opacity: 0.7;
+}
 </style>
 {% endblock %}
 
@@ -940,6 +949,13 @@ body.sh-diag-wide .container-fluid.sh-page-shell {
 
 <div class="tab-pane fade" id="sh-diagnostics-panel" role="tabpanel" aria-labelledby="sh-diagnostics-tab">
     {% set diag = data.diagnostics or {} %}
+    <div id="shDiagCaptureRoot" class="sh-diag-capture-root">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+        <div class="lbl mb-0" style="font-size:0.95rem;"><i class="bi bi-activity me-1"></i>Diagnostics &amp; Analysis</div>
+        <button type="button" class="btn btn-sm btn-outline-primary" id="diagScreenshotBtn" title="Capture full Diagnostics view as one image">
+            <i class="bi bi-camera me-1"></i>Screenshot Full View
+        </button>
+    </div>
     <div class="row g-2 mb-2">
         <div class="col-lg-4">
             <div class="sh-card sh-card-info">
@@ -1196,6 +1212,7 @@ body.sh-diag-wide .container-fluid.sh-page-shell {
             </div>
         </div>
     </div>
+    </div>{# /#shDiagCaptureRoot #}
 </div>
 </div>
 </div>
@@ -1825,6 +1842,76 @@ body.sh-diag-wide .container-fluid.sh-page-shell {
             _stopDiagPolling();
         }
     }
+
+    function _loadHtml2Canvas() {
+        return new Promise(function(resolve, reject) {
+            if (window.html2canvas) {
+                resolve(window.html2canvas);
+                return;
+            }
+            var s = document.createElement('script');
+            s.src = 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
+            s.async = true;
+            s.onload = function() {
+                if (window.html2canvas) resolve(window.html2canvas);
+                else reject(new Error('html2canvas failed to load'));
+            };
+            s.onerror = function() { reject(new Error('html2canvas CDN blocked')); };
+            document.head.appendChild(s);
+        });
+    }
+
+    function _captureDiagnosticsScreenshot() {
+        var btn = document.getElementById('diagScreenshotBtn');
+        var root = document.getElementById('shDiagCaptureRoot');
+        if (!root) return;
+        if (!_isDiagnosticsActive()) {
+            var tab = document.getElementById('sh-diagnostics-tab');
+            if (tab) tab.click();
+        }
+        if (btn) {
+            btn.classList.add('capturing');
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Capturing...';
+        }
+        // Let layout settle (wide mode + tables fully painted)
+        setTimeout(function() {
+            _loadHtml2Canvas().then(function(html2canvas) {
+                return html2canvas(root, {
+                    backgroundColor: '#f1f5f9',
+                    scale: Math.min(2, window.devicePixelRatio || 1.5),
+                    useCORS: true,
+                    allowTaint: true,
+                    logging: false,
+                    scrollX: 0,
+                    scrollY: 0,
+                    windowWidth: Math.max(root.scrollWidth, root.offsetWidth),
+                    windowHeight: Math.max(root.scrollHeight, root.offsetHeight),
+                });
+            }).then(function(canvas) {
+                var stamp = new Date();
+                var pad = function(n) { return String(n).padStart(2, '0'); };
+                var name = 'diagnostics-' +
+                    stamp.getFullYear() + pad(stamp.getMonth() + 1) + pad(stamp.getDate()) + '-' +
+                    pad(stamp.getHours()) + pad(stamp.getMinutes()) + pad(stamp.getSeconds()) + '.png';
+                var link = document.createElement('a');
+                link.download = name;
+                link.href = canvas.toDataURL('image/png');
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+            }).catch(function(err) {
+                alert('Screenshot failed: ' + (err && err.message ? err.message : err));
+            }).finally(function() {
+                if (btn) {
+                    btn.classList.remove('capturing');
+                    btn.innerHTML = '<i class="bi bi-camera me-1"></i>Screenshot Full View';
+                }
+            });
+        }, 250);
+    }
+
+    var _shotBtn = document.getElementById('diagScreenshotBtn');
+    if (_shotBtn) _shotBtn.addEventListener('click', _captureDiagnosticsScreenshot);
 
     if (_diagTabBtn) _diagTabBtn.addEventListener('shown.bs.tab', _syncDiagPolling);
     document.querySelectorAll('[data-bs-toggle="tab"]').forEach(function(btn) {

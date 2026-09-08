@@ -2619,7 +2619,7 @@ def fuel_expense_edit(pk):
                 form=form,
                 title='Edit Fuel Expense',
                 rec=rec,
-                location_cascade=_fuel_expense_location_cascade_dict(),
+                location_cascade=None,
             )
         district_id = form.district_id.data or None
         if district_id == 0:
@@ -2638,7 +2638,7 @@ def fuel_expense_edit(pk):
                 form=form,
                 title='Edit Fuel Expense',
                 rec=rec,
-                location_cascade=_fuel_expense_location_cascade_dict(),
+                location_cascade=None,
             )
         if payment_type in ('Cash', 'Credit'):
             card_swipe_date = None
@@ -2655,7 +2655,7 @@ def fuel_expense_edit(pk):
                 form=form,
                 title='Edit Fuel Expense',
                 rec=rec,
-                location_cascade=_fuel_expense_location_cascade_dict(),
+                location_cascade=None,
             )
         previous_reading = form.previous_reading.data
         current_reading = form.current_reading.data
@@ -2801,7 +2801,7 @@ def fuel_expense_edit(pk):
         back_url=back_url,
         return_to_path=request.full_path,
         fuel_market_scan=_read_fuel_market_scan() or None,
-        location_cascade=_fuel_expense_location_cascade_dict(),
+        location_cascade=None,
         fuel_expense_settings=fuel_expense_settings_payload(),
     )
 

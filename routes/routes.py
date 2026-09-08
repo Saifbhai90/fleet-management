@@ -554,7 +554,9 @@ def _fuel_expense_last_entry_payload(rec):
 def _fuel_expense_add_form_ctx(workspace_employee_id, last_id=None):
     from fuel_expense_settings import fuel_expense_settings_payload
     return {
-        'location_cascade': _fuel_expense_location_cascade_dict(),
+        # Lazy /get_projects_by_district + /get_vehicles_by_project_district (template supports null).
+        # Full cascade embed was ~250KB+ and slowed GET/POST fuel_expense_add.
+        'location_cascade': None,
         'last_rec': _fuel_expense_last_saved_rec(workspace_employee_id, last_id),
         'from_save': last_id is not None,
         'fuel_market_scan': _read_fuel_market_scan() or None,
