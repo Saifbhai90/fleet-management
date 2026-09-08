@@ -148,11 +148,42 @@
 .diag-status-error { background:#fee2e2; color:#b91c1c; }
 .diag-status-idle { background:#f1f5f9; color:#64748b; }
 .diag-mini-wrap-tall { max-height:280px; }
+/* Diagnostics: use full page width, no cramped side gutters / table scroll */
+#sh-diagnostics-panel .diag-full-wrap {
+    max-height: none !important;
+    overflow: visible !important;
+}
+#sh-diagnostics-panel .diag-full-table th,
+#sh-diagnostics-panel .diag-full-table td {
+    white-space: normal;
+    vertical-align: top;
+    word-break: break-word;
+}
+#sh-diagnostics-panel .diag-cause {
+    font-size: 0.72rem;
+    color: #334155;
+    line-height: 1.35;
+}
+#sh-diagnostics-panel .diag-fix {
+    font-size: 0.72rem;
+    color: #0f766e;
+    line-height: 1.35;
+}
+#sh-diagnostics-panel .diag-route-cell {
+    font-weight: 600;
+    color: #0f172a;
+    min-width: 12rem;
+}
+body.sh-diag-wide .container-fluid.sh-page-shell {
+    max-width: 100% !important;
+    padding-left: 12px;
+    padding-right: 12px;
+}
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid py-4" style="max-width:1300px;">
+<div class="container-fluid py-4 sh-page-shell" style="max-width:1300px;">
 <div class="mb-3">{% from 'partials/nav_back_button.html' import nav_back_button with context %}{{ nav_back_button() }}</div>
 
 {% set svc     = data.service %}
@@ -955,32 +986,36 @@
     </div>
 
     <div class="row g-2">
-        <div class="col-lg-8">
+        <div class="col-12">
             <div class="sh-card">
                 <div class="lbl mb-2"><i class="bi bi-signpost-split me-1"></i>Top Slow Routes (Software side)</div>
-                <div class="diag-mini-wrap">
-                    <table class="diag-mini-table">
+                <div class="diag-mini-wrap diag-full-wrap">
+                    <table class="diag-mini-table diag-full-table">
                         <thead>
                             <tr>
                                 <th>Route</th>
                                 <th>Hits</th>
-                                <th>Avg ms</th>
-                                <th>P95 ms</th>
-                                <th>Max ms</th>
-                                <th>Avg Payload Size</th>
-                                <th>Errors</th>
+                                <th>Avg</th>
+                                <th>P95</th>
+                                <th>Max</th>
+                                <th>Payload</th>
+                                <th>Err</th>
+                                <th>Likely Cause</th>
+                                <th>Fix Hint</th>
                             </tr>
                         </thead>
                         <tbody id="diagSlowRoutesBody">
                             {% for r in diag.top_slow_routes or [] %}
                             <tr>
-                                <td title="{{ r.path or r.route }}">{{ r.route }}</td>
+                                <td class="diag-route-cell" title="{{ r.path or r.route }}">{{ r.route }}</td>
                                 <td>{{ r.hits }}</td>
                                 <td class="{% if r.avg_ms >= 1200 %}diag-text-danger{% elif r.avg_ms >= 700 %}diag-text-warning{% endif %}">{{ r.avg_ms }}</td>
                                 <td class="{% if r.p95_ms >= 1800 %}diag-text-danger{% elif r.p95_ms >= 900 %}diag-text-warning{% endif %}">{{ r.p95_ms }}</td>
                                 <td>{{ r.max_ms }}</td>
                                 <td class="{% if (r.avg_payload_bytes or 0) >= (1024 * 1024) %}diag-text-warning{% endif %}">{{ r.avg_payload_size or '-' }}</td>
                                 <td class="{% if r.error_count > 0 %}diag-text-danger{% endif %}">{{ r.error_count }}</td>
+                                <td class="diag-cause">{{ r.cause or '—' }}</td>
+                                <td class="diag-fix">{{ r.fix_hint or '—' }}</td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -988,11 +1023,11 @@
                 </div>
             </div>
         </div>
-        <div class="col-lg-4">
+        <div class="col-12">
             <div class="sh-card sh-card-danger">
                 <div class="lbl mb-2"><i class="bi bi-bug-fill me-1"></i>Recent Server Errors</div>
-                <div class="diag-mini-wrap">
-                    <table class="diag-mini-table">
+                <div class="diag-mini-wrap diag-full-wrap">
+                    <table class="diag-mini-table diag-full-table">
                         <thead>
                             <tr>
                                 <th>Time</th>
@@ -1059,8 +1094,8 @@
                     </div>
                     <div class="col-lg-7">
                         <div class="sub mb-1">Recent client events (app)</div>
-                        <div class="diag-mini-wrap diag-mini-wrap-tall">
-                            <table class="diag-mini-table">
+                        <div class="diag-mini-wrap diag-full-wrap">
+                            <table class="diag-mini-table diag-full-table">
                                 <thead>
                                     <tr>
                                         <th>Time</th>
@@ -1090,11 +1125,11 @@
     </div>
 
     <div class="row g-2 mt-1">
-        <div class="col-lg-6">
+        <div class="col-12">
             <div class="sh-card">
                 <div class="lbl mb-2"><i class="bi bi-ui-checks-grid me-1"></i>Form Health (load / save)</div>
-                <div class="diag-mini-wrap diag-mini-wrap-tall">
-                    <table class="diag-mini-table">
+                <div class="diag-mini-wrap diag-full-wrap">
+                    <table class="diag-mini-table diag-full-table">
                         <thead>
                             <tr>
                                 <th>Form / Route</th>
@@ -1102,30 +1137,34 @@
                                 <th>P95</th>
                                 <th>Max</th>
                                 <th>Status</th>
+                                <th>Likely Cause</th>
+                                <th>Fix Hint</th>
                             </tr>
                         </thead>
                         <tbody id="diagFormHealthBody">
                             {% for r in diag.form_health or [] %}
                             <tr>
-                                <td title="{{ r.path or r.route }}">{{ r.route }}</td>
+                                <td class="diag-route-cell" title="{{ r.path or r.route }}">{{ r.route }}</td>
                                 <td>{{ r.hits }}</td>
                                 <td class="{% if (r.p95_ms or 0) >= 1800 %}diag-text-danger{% elif (r.p95_ms or 0) >= 900 %}diag-text-warning{% endif %}">{{ r.p95_ms if r.p95_ms is not none else '-' }}</td>
                                 <td>{{ r.max_ms if r.max_ms is not none else '-' }}</td>
                                 <td><span class="diag-status diag-status-{{ r.status }}">{{ r.status_label }}</span></td>
+                                <td class="diag-cause">{{ r.cause or '—' }}</td>
+                                <td class="diag-fix">{{ r.fix_hint or '—' }}</td>
                             </tr>
                             {% else %}
-                            <tr><td colspan="5" class="text-muted">No form traffic sampled yet.</td></tr>
+                            <tr><td colspan="7" class="text-muted">No form traffic sampled yet.</td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
                 </div>
             </div>
         </div>
-        <div class="col-lg-6">
+        <div class="col-12">
             <div class="sh-card">
                 <div class="lbl mb-2"><i class="bi bi-funnel me-1"></i>Filter Field Health (list / report)</div>
-                <div class="diag-mini-wrap diag-mini-wrap-tall">
-                    <table class="diag-mini-table">
+                <div class="diag-mini-wrap diag-full-wrap">
+                    <table class="diag-mini-table diag-full-table">
                         <thead>
                             <tr>
                                 <th>Page</th>
@@ -1133,19 +1172,23 @@
                                 <th>Hits</th>
                                 <th>P95</th>
                                 <th>Status</th>
+                                <th>Likely Cause</th>
+                                <th>Fix Hint</th>
                             </tr>
                         </thead>
                         <tbody id="diagFilterHealthBody">
                             {% for r in diag.filter_health or [] %}
                             <tr>
-                                <td title="{{ r.path or r.route }}">{{ r.route }}</td>
-                                <td title="{{ r.filters }}">{{ r.filters }}</td>
+                                <td class="diag-route-cell" title="{{ r.path or r.route }}">{{ r.route }}</td>
+                                <td>{{ r.filters }}</td>
                                 <td>{{ r.hits }}</td>
                                 <td class="{% if (r.p95_ms or 0) >= 1800 %}diag-text-danger{% elif (r.p95_ms or 0) >= 900 %}diag-text-warning{% endif %}">{{ r.p95_ms if r.p95_ms is not none else '-' }}</td>
                                 <td><span class="diag-status diag-status-{{ r.status }}">{{ r.status_label }}</span></td>
+                                <td class="diag-cause">{{ r.cause or '—' }}</td>
+                                <td class="diag-fix">{{ r.fix_hint or '—' }}</td>
                             </tr>
                             {% else %}
-                            <tr><td colspan="5" class="text-muted">No filtered list/report requests yet.</td></tr>
+                            <tr><td colspan="7" class="text-muted">No filtered list/report requests yet.</td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
@@ -1380,15 +1423,17 @@
                 var payloadCls = (r.avg_payload_bytes || 0) >= (1024 * 1024) ? 'diag-text-warning' : '';
                 var errCls = r.error_count > 0 ? 'diag-text-danger' : '';
                 return '<tr>' +
-                    '<td title="' + _escHtml(r.path || r.route) + '">' + _escHtml(r.route) + '</td>' +
+                    '<td class="diag-route-cell" title="' + _escHtml(r.path || r.route) + '">' + _escHtml(r.route) + '</td>' +
                     '<td>' + _escHtml(r.hits) + '</td>' +
                     '<td class="' + avgCls + '">' + _escHtml(r.avg_ms) + '</td>' +
                     '<td class="' + p95Cls + '">' + _escHtml(r.p95_ms) + '</td>' +
                     '<td>' + _escHtml(r.max_ms) + '</td>' +
                     '<td class="' + payloadCls + '">' + _escHtml(r.avg_payload_size || '-') + '</td>' +
                     '<td class="' + errCls + '">' + _escHtml(r.error_count) + '</td>' +
+                    '<td class="diag-cause">' + _escHtml(r.cause || '—') + '</td>' +
+                    '<td class="diag-fix">' + _escHtml(r.fix_hint || '—') + '</td>' +
                 '</tr>';
-            }).join('') || '<tr><td colspan="7" class="text-muted">No route timing sample yet.</td></tr>';
+            }).join('') || '<tr><td colspan="9" class="text-muted">No route timing sample yet.</td></tr>';
         }
 
         if (errBody) {
@@ -1409,13 +1454,15 @@
             formBody.innerHTML = forms.map(function(r) {
                 var p95Cls = (r.p95_ms || 0) >= 1800 ? 'diag-text-danger' : ((r.p95_ms || 0) >= 900 ? 'diag-text-warning' : '');
                 return '<tr>' +
-                    '<td title="' + _escHtml(r.path || r.route) + '">' + _escHtml(r.route) + '</td>' +
+                    '<td class="diag-route-cell" title="' + _escHtml(r.path || r.route) + '">' + _escHtml(r.route) + '</td>' +
                     '<td>' + _escHtml(r.hits) + '</td>' +
                     '<td class="' + p95Cls + '">' + _escHtml(r.p95_ms != null ? r.p95_ms : '-') + '</td>' +
                     '<td>' + _escHtml(r.max_ms != null ? r.max_ms : '-') + '</td>' +
                     '<td>' + _statusBadge(r.status, r.status_label) + '</td>' +
+                    '<td class="diag-cause">' + _escHtml(r.cause || '—') + '</td>' +
+                    '<td class="diag-fix">' + _escHtml(r.fix_hint || '—') + '</td>' +
                 '</tr>';
-            }).join('') || '<tr><td colspan="5" class="text-muted">No form traffic sampled yet.</td></tr>';
+            }).join('') || '<tr><td colspan="7" class="text-muted">No form traffic sampled yet.</td></tr>';
         }
 
         if (filterBody) {
@@ -1423,13 +1470,15 @@
             filterBody.innerHTML = filters.map(function(r) {
                 var p95Cls = (r.p95_ms || 0) >= 1800 ? 'diag-text-danger' : ((r.p95_ms || 0) >= 900 ? 'diag-text-warning' : '');
                 return '<tr>' +
-                    '<td title="' + _escHtml(r.path || r.route) + '">' + _escHtml(r.route) + '</td>' +
-                    '<td title="' + _escHtml(r.filters) + '">' + _escHtml(r.filters || '—') + '</td>' +
+                    '<td class="diag-route-cell" title="' + _escHtml(r.path || r.route) + '">' + _escHtml(r.route) + '</td>' +
+                    '<td>' + _escHtml(r.filters || '—') + '</td>' +
                     '<td>' + _escHtml(r.hits) + '</td>' +
                     '<td class="' + p95Cls + '">' + _escHtml(r.p95_ms != null ? r.p95_ms : '-') + '</td>' +
                     '<td>' + _statusBadge(r.status, r.status_label) + '</td>' +
+                    '<td class="diag-cause">' + _escHtml(r.cause || '—') + '</td>' +
+                    '<td class="diag-fix">' + _escHtml(r.fix_hint || '—') + '</td>' +
                 '</tr>';
-            }).join('') || '<tr><td colspan="5" class="text-muted">No filtered list/report requests yet.</td></tr>';
+            }).join('') || '<tr><td colspan="7" class="text-muted">No filtered list/report requests yet.</td></tr>';
         }
 
         var mapp = diag.mobile_app || {};
@@ -1768,12 +1817,19 @@
     }
 
     function _syncDiagPolling() {
-        if (_isDiagnosticsActive()) _startDiagPolling();
-        else _stopDiagPolling();
+        if (_isDiagnosticsActive()) {
+            document.body.classList.add('sh-diag-wide');
+            _startDiagPolling();
+        } else {
+            document.body.classList.remove('sh-diag-wide');
+            _stopDiagPolling();
+        }
     }
 
     if (_diagTabBtn) _diagTabBtn.addEventListener('shown.bs.tab', _syncDiagPolling);
-    if (_overviewTabBtn) _overviewTabBtn.addEventListener('shown.bs.tab', _syncDiagPolling);
+    document.querySelectorAll('[data-bs-toggle="tab"]').forEach(function(btn) {
+        btn.addEventListener('shown.bs.tab', _syncDiagPolling);
+    });
     _syncDiagPolling();
 })();
 </script>

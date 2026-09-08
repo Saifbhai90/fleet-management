@@ -232,6 +232,75 @@ def _build_route_diagnostics(window_minutes=15):
             for qk in (row.get('query_keys') or []):
                 fl['query_keys'].add(str(qk))
 
+    def _issue_detail(route_key, path='', avg_ms=None, p95_ms=None, max_ms=None,
+                      avg_payload_bytes=0, error_count=0, filters=None, status=None):
+        """Heuristic why a route is slow/broken + what to check for a fix."""
+        blob = f'{route_key or ""} {path or ""}'.lower()
+        causes = []
+        fixes = []
+
+        if int(error_count or 0) > 0:
+            causes.append('Server 5xx responses on this route')
+            fixes.append('Open Recent Server Errors / Render logs for this endpoint')
+
+        payload = int(avg_payload_bytes or 0)
+        if payload >= 200 * 1024:
+            causes.append(f'Very large response payload ({_fmt_size(payload)})')
+            fixes.append('Remove embedded cascade/lists; load via lazy API')
+        elif payload >= 80 * 1024:
+            causes.append(f'Heavy response payload ({_fmt_size(payload)})')
+            fixes.append('Trim embedded JSON/HTML; paginate where possible')
+
+        try:
+            avg_f = float(avg_ms) if avg_ms is not None else None
+            max_f = float(max_ms) if max_ms is not None else None
+            p95_f = float(p95_ms) if p95_ms is not None else None
+        except (TypeError, ValueError):
+            avg_f = max_f = p95_f = None
+        if avg_f and max_f and max_f >= max(avg_f * 2.5, 2000):
+            causes.append(f'Outlier spike (max {max_f} ms vs avg {avg_f} ms)')
+            fixes.append('Check occasional R2/FCM/external call or cold DB path')
+
+        if 'ufone_bridge_notify' in blob or ('ufone' in blob and 'notify' in blob):
+            causes.append('Task notify path: FCM push + per-event DB duplicate guard')
+            fixes.append('Mostly expected push latency; batch/async only if consistently >2s')
+        elif 'fund_transfer' in blob:
+            causes.append('Workspace transfer prep (COA sync) and/or receipt upload')
+            fixes.append('Skip driver/party sync on successful POST; upload only when file attached')
+        elif 'maintenance_expense_form' in blob or 'oil_expense_form' in blob:
+            causes.append('Expense form GET/POST prep (products, parties, choices, cascade)')
+            fixes.append('Lazy location cascade; bulk product load; slim expense-by labels')
+        elif 'fuel_expense' in blob and ('form' in blob or 'add' in blob):
+            causes.append('Fuel form data prep / large HTML')
+            fixes.append('Lazy cascade + avoid re-querying unused dropdown data on POST')
+        elif 'task_report' in blob:
+            causes.append('Task entry builds rows with per-vehicle DB work')
+            fixes.append('Batch previous/existing/EMG lookups for vehicle set')
+        elif 'slip_ocr' in blob:
+            causes.append('Slip sample image upload to object storage (R2)')
+            fixes.append('Reuse existing image_hash path; compress before upload')
+        elif 'system-health' in blob or 'system_health' in blob:
+            causes.append('System Health page runs many live probes (DB/R2/bridge)')
+            fixes.append('Cache probe results; load heavy tabs on demand')
+        elif 'location_cascade' in blob or 'products' in blob:
+            causes.append('Bulk master-data API for form dropdowns')
+            fixes.append('Cache short TTL; return only needed fields')
+
+        if filters and str(filters).strip() not in ('', '—'):
+            causes.append(f'Active filters: {filters}')
+            if p95_f and p95_f >= 900:
+                fixes.append('Review filter indexes / date range size / result volume')
+
+        if not causes and status in ('warn', 'slow', 'error'):
+            causes.append('Backend time above threshold (DB/CPU/template)')
+            fixes.append('Profile SQL + template size for this endpoint')
+        if not causes:
+            return {'cause': '—', 'fix_hint': '—'}
+        return {
+            'cause': ' · '.join(dict.fromkeys(causes)),
+            'fix_hint': ' · '.join(dict.fromkeys(fixes)) if fixes else 'Review route handler timing',
+        }
+
     def _bucket_rows(buckets, limit=8, include_filters=False):
         rows = []
         for route_key, b in buckets.items():
@@ -262,10 +331,16 @@ def _build_route_diagnostics(window_minutes=15):
             }
             if include_filters:
                 qkeys = sorted(b.get('query_keys') or [])
-                item['filters'] = ', '.join(qkeys[:6]) if qkeys else '—'
+                item['filters'] = ', '.join(qkeys[:8]) if qkeys else '—'
                 item['filter_count'] = len(qkeys)
             if b.get('methods'):
                 item['methods'] = ','.join(sorted(b['methods']))
+            detail = _issue_detail(
+                route_key, item.get('path'), avg, p95, mx, 0, errors,
+                filters=item.get('filters'), status=status,
+            )
+            item['cause'] = detail['cause']
+            item['fix_hint'] = detail['fix_hint']
             rows.append(item)
         rows.sort(key=lambda x: (
             0 if x['status'] == 'error' else 1 if x['status'] == 'slow' else 2 if x['status'] == 'warn' else 3,
@@ -285,6 +360,10 @@ def _build_route_diagnostics(window_minutes=15):
         mx = round(times[-1], 1)
         payloads = b.get('payloads') or []
         avg_payload_bytes = int(round(sum(payloads) / len(payloads))) if payloads else 0
+        detail = _issue_detail(
+            route_key, b.get('path') or '', avg, p95, mx, avg_payload_bytes,
+            int(b['errors']), status=_health_status(p95, int(b['errors']), hits),
+        )
         top_slow.append({
             'route': route_key,
             'path': b['path'],
@@ -295,12 +374,14 @@ def _build_route_diagnostics(window_minutes=15):
             'error_count': int(b['errors']),
             'avg_payload_bytes': avg_payload_bytes,
             'avg_payload_size': _fmt_size(avg_payload_bytes),
+            'cause': detail['cause'],
+            'fix_hint': detail['fix_hint'],
         })
     top_slow.sort(key=lambda x: (x['p95_ms'], x['avg_ms']), reverse=True)
-    top_slow = top_slow[:8]
+    top_slow = top_slow[:10]
 
-    form_health = _bucket_rows(form_buckets, limit=10)
-    filter_health = _bucket_rows(filter_buckets, limit=10, include_filters=True)
+    form_health = _bucket_rows(form_buckets, limit=12)
+    filter_health = _bucket_rows(filter_buckets, limit=12, include_filters=True)
 
     recent_errors = []
     for row in sorted(recent, key=lambda x: x.get('ts', 0), reverse=True):
@@ -460,9 +541,15 @@ def _build_route_diagnostics(window_minutes=15):
         top_max = max(top_slow, key=lambda x: float(x.get('max_ms') or 0))
         top_max_ms = float(top_max.get('max_ms') or 0)
         if top_max_ms >= 2500:
+            cause_bit = f" Cause: {top_max.get('cause')}." if top_max.get('cause') and top_max.get('cause') != '—' else ''
+            fix_bit = f" Fix: {top_max.get('fix_hint')}." if top_max.get('fix_hint') and top_max.get('fix_hint') != '—' else ''
             analysis.append({
                 'level': 'warning',
-                'text': f'Outlier spike detected on {top_max.get("route")} (max {round(top_max_ms, 1)} ms, hits {top_max.get("hits")}).',
+                'text': (
+                    f'Outlier spike detected on {top_max.get("route")} '
+                    f'(max {round(top_max_ms, 1)} ms, hits {top_max.get("hits")}).'
+                    f'{cause_bit}{fix_bit}'
+                ),
             })
     if slow_rate_pct >= 15:
         analysis.append({
@@ -471,18 +558,27 @@ def _build_route_diagnostics(window_minutes=15):
         })
     bad_forms = [f for f in form_health if f.get('status') in ('error', 'slow')]
     if bad_forms:
+        bf = bad_forms[0]
+        cause_bit = f" Cause: {bf.get('cause')}." if bf.get('cause') and bf.get('cause') != '—' else ''
+        fix_bit = f" Fix: {bf.get('fix_hint')}." if bf.get('fix_hint') and bf.get('fix_hint') != '—' else ''
         analysis.append({
-            'level': 'danger' if bad_forms[0]['status'] == 'error' else 'warning',
-            'text': f"Form hotspot: {bad_forms[0]['route']} is {bad_forms[0]['status_label']} (p95 {bad_forms[0].get('p95_ms') or '-'} ms).",
+            'level': 'danger' if bf['status'] == 'error' else 'warning',
+            'text': (
+                f"Form hotspot: {bf['route']} is {bf['status_label']} "
+                f"(p95 {bf.get('p95_ms') or '-'} ms).{cause_bit}{fix_bit}"
+            ),
         })
     bad_filters = [f for f in filter_health if f.get('status') in ('error', 'slow')]
     if bad_filters:
+        bfl = bad_filters[0]
+        cause_bit = f" Cause: {bfl.get('cause')}." if bfl.get('cause') and bfl.get('cause') != '—' else ''
+        fix_bit = f" Fix: {bfl.get('fix_hint')}." if bfl.get('fix_hint') and bfl.get('fix_hint') != '—' else ''
         analysis.append({
-            'level': 'danger' if bad_filters[0]['status'] == 'error' else 'warning',
+            'level': 'danger' if bfl['status'] == 'error' else 'warning',
             'text': (
-                f"Filter issue on {bad_filters[0]['route']} "
-                f"(filters: {bad_filters[0].get('filters') or '—'}; "
-                f"status {bad_filters[0]['status_label']})."
+                f"Filter issue on {bfl['route']} "
+                f"(filters: {bfl.get('filters') or '—'}; "
+                f"status {bfl['status_label']}).{cause_bit}{fix_bit}"
             ),
         })
     if mobile_app.get('status') == 'error':
