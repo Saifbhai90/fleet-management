@@ -2224,13 +2224,20 @@ document.addEventListener('DOMContentLoaded', function() {
     expenseBySelect.value = next;
     var ts = expenseBySelect.tomselect;
     if (!ts) return;
+    // Credit clear() can transiently focus this control; keep silent long
+    // enough to block the global TomSelect focus/open handlers, then blur.
     ts._wsSilentFill = true;
     try {
       if (next) ts.setValue(next, true);
       else ts.clear(true);
       if (ts.isOpen) ts.close();
+      try { ts.blur(); } catch (err) {}
     } finally {
-      window.setTimeout(function() { ts._wsSilentFill = false; }, 0);
+      window.setTimeout(function() {
+        if (ts.isOpen) ts.close();
+        try { ts.blur(); } catch (err2) {}
+        ts._wsSilentFill = false;
+      }, 50);
     }
   }
 

@@ -4274,12 +4274,15 @@
 
                 ts.on('item_remove', function() {
                     _setOverwriteReady(false);
-                    // Programmatic clear/setValue (e.g. Payment Type → Cash default
-                    // COA) must not open another field's dropdown. Only reopen when
-                    // the user is actively editing this control.
+                    // Programmatic clear/setValue (Payment Type Cash/Credit COA sync)
+                    // can transiently focus this control. Only reopen when the user
+                    // is still actively typing in this input after the remove.
                     if (ts._wsSilentFill || window._wsOcrIsUpdating) return;
-                    if (!ts.isFocused && !ts.wrapper.classList.contains('focus')) return;
-                    if (!ts.isOpen) ts.open();
+                    window.setTimeout(function() {
+                        if (ts._wsSilentFill || window._wsOcrIsUpdating) return;
+                        if (document.activeElement !== ts.control_input) return;
+                        if (!ts.isOpen) ts.open();
+                    }, 0);
                 });
 
                 // Store references for Enter-to-tab capture listener
