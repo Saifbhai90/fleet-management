@@ -3279,16 +3279,10 @@ def workspace_fund_transfers_list():
     )
 
 
-def workspace_fund_transfer_form(pk=None):
-    guard, emp = _workspace_guard("workspace_transfer_edit" if pk else "workspace_transfer_add")
-    if guard:
-        return guard
+def _workspace_fund_transfer_form_ctx(emp, row, extra=None):
+    """Heavy form prep (driver/party COA sync + dropdowns). GET / validation re-render only."""
     ensure_workspace_base_accounts(emp.id)
     _ensure_workspace_driver_accounts(emp)
-    row = WorkspaceFundTransfer.query.filter_by(employee_id=emp.id, id=pk).first() if pk else None
-    if pk and not row:
-        flash("Workspace transfer not found.", "danger")
-        return redirect(url_for("workspace_fund_transfers_list"))
 
     # Ensure counterparty accounts exist so To Account shows drivers + parties directly.
     parties = WorkspaceParty.query.filter_by(employee_id=emp.id, is_active=True).order_by(WorkspaceParty.name).all()
@@ -3329,7 +3323,7 @@ def workspace_fund_transfer_form(pk=None):
         }
 
     last_saved_transfer = None
-    if not pk:
+    if not (row and row.id):
         last_saved_transfer = (
             WorkspaceFundTransfer.query.filter_by(employee_id=emp.id)
             .options(joinedload(WorkspaceFundTransfer.from_account), joinedload(WorkspaceFundTransfer.to_account))
@@ -3337,23 +3331,34 @@ def workspace_fund_transfer_form(pk=None):
             .first()
         )
 
-    def _transfer_form_ctx(extra=None):
-        ctx = dict(
-            row=row,
-            employee=emp,
-            accounts=accounts,
-            account_display_map=account_display_map,
-            categories=categories,
-            existing_attachment=(row.attachment if row else None),
-            account_balance_json=account_balance_json,
-            last_saved_transfer=last_saved_transfer,
-            can_manage_slip_profiles=_can_manage_slip_profiles(),
-        )
-        if extra:
-            ctx.update(extra)
-        return ctx
+    ctx = dict(
+        row=row,
+        employee=emp,
+        accounts=accounts,
+        account_display_map=account_display_map,
+        categories=categories,
+        existing_attachment=(row.attachment if row else None),
+        account_balance_json=account_balance_json,
+        last_saved_transfer=last_saved_transfer,
+        can_manage_slip_profiles=_can_manage_slip_profiles(),
+    )
+    if extra:
+        ctx.update(extra)
+    return ctx
+
+
+def workspace_fund_transfer_form(pk=None):
+    guard, emp = _workspace_guard("workspace_transfer_edit" if pk else "workspace_transfer_add")
+    if guard:
+        return guard
+    row = WorkspaceFundTransfer.query.filter_by(employee_id=emp.id, id=pk).first() if pk else None
+    if pk and not row:
+        flash("Workspace transfer not found.", "danger")
+        return redirect(url_for("workspace_fund_transfers_list"))
 
     if request.method == "POST":
+        # Skip driver/party COA sync + dropdown rebuild on successful save (was the 3–7s spike).
+        # Accounts are already seeded when the form was opened (GET).
         transfer_date_raw = (request.form.get("transfer_date") or "").strip()
         amount_raw = (request.form.get("amount") or "").strip()
         from_account_id = request.form.get("from_account_id", type=int)
@@ -3389,10 +3394,26 @@ def workspace_fund_transfer_form(pk=None):
         elif from_account_id and from_account_id == to_account_id:
             validation_errors.append("From aur To Account alag hone chahiye.")
 
+        if from_account_id and to_account_id and from_account_id != to_account_id:
+            owned = {
+                int(r[0]) for r in db.session.query(WorkspaceAccount.id).filter(
+                    WorkspaceAccount.employee_id == emp.id,
+                    WorkspaceAccount.is_active.is_(True),
+                    WorkspaceAccount.id.in_([from_account_id, to_account_id]),
+                ).all() if r and r[0]
+            }
+            if from_account_id not in owned:
+                validation_errors.append("From Account is invalid for this workspace.")
+            if to_account_id not in owned:
+                validation_errors.append("To Account is invalid for this workspace.")
+
         if validation_errors:
             for msg in validation_errors:
                 flash(msg, "danger")
-            return render_template("workspace/transfer_form.html", **_transfer_form_ctx())
+            return render_template(
+                "workspace/transfer_form.html",
+                **_workspace_fund_transfer_form_ctx(emp, row),
+            )
 
         # D-02: Server-side duplicate reference_no guard
         ref_no = (request.form.get("reference_no") or "").strip()
@@ -3405,7 +3426,10 @@ def workspace_fund_transfer_form(pk=None):
                 dup_q = dup_q.filter(WorkspaceFundTransfer.id != row.id)
             if dup_q.first():
                 flash(f"Reference No '{ref_no}' already exists for this employee. Duplicate not allowed.", "danger")
-                return render_template("workspace/transfer_form.html", **_transfer_form_ctx())
+                return render_template(
+                    "workspace/transfer_form.html",
+                    **_workspace_fund_transfer_form_ctx(emp, row),
+                )
 
         attachment_url = _upload_workspace_transfer_attachment(request.files.get("attachment"))
 
@@ -3444,7 +3468,11 @@ def workspace_fund_transfer_form(pk=None):
         if request.form.get("_save_action") == "save_add":
             return redirect(url_for("workspace_fund_transfer_new"))
         return redirect(url_for("workspace_fund_transfers_list"))
-    return render_template("workspace/transfer_form.html", **_transfer_form_ctx())
+
+    return render_template(
+        "workspace/transfer_form.html",
+        **_workspace_fund_transfer_form_ctx(emp, row),
+    )
 
 
 def workspace_fund_transfer_delete(pk):
@@ -5850,7 +5878,10 @@ def _hash_image_bytes(raw):
 
 
 def _store_slip_sample_image(file_storage):
-    """Persist a slip image to R2 (or fall back to None). Returns (path, hash)."""
+    """Persist a slip image to R2 (or fall back to None). Returns (path, hash).
+
+    If the same image hash was already stored, reuse that path and skip a second R2 upload.
+    """
     if not file_storage or not getattr(file_storage, "filename", None):
         return None, None
     try:
@@ -5858,8 +5889,20 @@ def _store_slip_sample_image(file_storage):
         file_storage.seek(0)
     except Exception:
         raw = None
+    image_hash = _hash_image_bytes(raw)
+    if image_hash:
+        existing = (
+            SlipOcrSample.query.filter(
+                SlipOcrSample.image_hash == image_hash,
+                SlipOcrSample.image_path.isnot(None),
+            )
+            .order_by(SlipOcrSample.id.desc())
+            .first()
+        )
+        if existing and existing.image_path:
+            return existing.image_path, image_hash
     path = _upload_workspace_transfer_attachment(file_storage)
-    return path, _hash_image_bytes(raw)
+    return path, image_hash
 
 
 def workspace_slip_ocr_sample_api():
