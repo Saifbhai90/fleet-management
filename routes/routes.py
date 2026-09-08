@@ -11947,6 +11947,19 @@ def _sh_after_request(response):
                         payload_bytes = int(response.headers.get('Content-Length') or 0)
                     except Exception:
                         payload_bytes = 0
+                ua_l = (request.headers.get('User-Agent') or '').lower()
+                is_mobile = (
+                    'capacitor' in ua_l
+                    or ('wv' in ua_l and 'android' in ua_l)
+                    or (request.cookies.get('fleet_native_app') or '') == '1'
+                )
+                # Track filter-ish GETs (query present beyond noise keys).
+                q_keys = []
+                try:
+                    noise = {'csrf_token', 'native', 'app', '_'}
+                    q_keys = [k for k in request.args.keys() if k not in noise][:8]
+                except Exception:
+                    q_keys = []
                 _route_perf_log.append({
                     'ts': int(_sh_time.time()),
                     'method': request.method,
@@ -11955,6 +11968,9 @@ def _sh_after_request(response):
                     'ms': ms,
                     'status': int(getattr(response, 'status_code', 0) or 0),
                     'payload_bytes': payload_bytes,
+                    'is_mobile': bool(is_mobile),
+                    'has_query': bool(q_keys),
+                    'query_keys': q_keys,
                 })
                 uid = session.get('user_id')
                 if uid and request.endpoint != 'api_client_diagnostics':

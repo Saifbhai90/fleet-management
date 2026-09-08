@@ -33,6 +33,7 @@ from models import (
     Driver, Project, District, Notification, NotificationRead,
     ActivityLog, LoginLog, LoginAttempt, DeviceFCMToken,
     SystemSetting, User, UfoneVehicleCache, UfoneTaskCache,
+    ClientDiagnosticLog, DeviceAppVersion, AppRelease,
 )
 from utils import pk_now, pk_date
 
@@ -139,12 +140,56 @@ def _build_route_diagnostics(window_minutes=15):
             return f'{round(n / 1024, 1)} KB'
         return f'{int(n)} B'
 
+    def _pctile(sorted_times, ratio):
+        if not sorted_times:
+            return None
+        idx = max(0, int(len(sorted_times) * ratio) - 1)
+        return round(sorted_times[idx], 1)
+
+    def _health_status(p95, errors, hits):
+        if errors > 0:
+            return 'error'
+        if p95 is not None and p95 >= 1800:
+            return 'slow'
+        if p95 is not None and p95 >= 900:
+            return 'warn'
+        if hits <= 0:
+            return 'idle'
+        return 'ok'
+
+    def _looks_like_form(method, path, endpoint):
+        blob = f'{endpoint or ""} {path or ""}'.lower()
+        if method == 'POST' and any(x in blob for x in (
+            'form', 'expense', 'attendance', 'task', 'fuel', 'oil', 'maintenance',
+            'save', 'create', 'edit', 'update', 'submit',
+        )):
+            return True
+        return any(x in blob for x in ('_form', '/form', 'expense_form', 'task_report'))
+
+    def _looks_like_filter_page(path, endpoint):
+        blob = f'{endpoint or ""} {path or ""}'.lower()
+        return any(x in blob for x in (
+            'list', 'report', 'expense', 'mpg', 'attendance', 'history',
+            'tracking', 'dwell', 'mileage', 'ignition', 'dispatch', 'alerts',
+            'device-health', 'score', 'trend', 'workspace',
+        ))
+
     route_buckets = {}
+    form_buckets = {}
+    filter_buckets = {}
+    mobile_times = []
+    mobile_errors = 0
+    mobile_hits = 0
+
     for row in recent:
         method = str(row.get('method') or 'GET').upper()
         endpoint_or_path = row.get('endpoint') or row.get('path') or 'unknown'
+        path = row.get('path') or ''
         key = f'{method} {endpoint_or_path}'
-        b = route_buckets.setdefault(key, {'times': [], 'errors': 0, 'path': row.get('path') or '', 'payloads': []})
+        b = route_buckets.setdefault(key, {
+            'times': [], 'errors': 0, 'path': path, 'payloads': [],
+            'client_errors': 0,
+        })
         t = float(row.get('ms') or 0)
         if t > 0:
             b['times'].append(t)
@@ -154,6 +199,80 @@ def _build_route_diagnostics(window_minutes=15):
         st = int(row.get('status') or 0)
         if st >= 500:
             b['errors'] += 1
+        elif st >= 400:
+            b['client_errors'] += 1
+
+        if row.get('is_mobile'):
+            mobile_hits += 1
+            if t > 0:
+                mobile_times.append(t)
+            if st >= 500:
+                mobile_errors += 1
+
+        if _looks_like_form(method, path, endpoint_or_path):
+            fb = form_buckets.setdefault(key, {
+                'times': [], 'errors': 0, 'path': path, 'methods': set(),
+            })
+            if t > 0:
+                fb['times'].append(t)
+            if st >= 500:
+                fb['errors'] += 1
+            fb['methods'].add(method)
+
+        if method == 'GET' and row.get('has_query') and _looks_like_filter_page(path, endpoint_or_path):
+            filt_key = endpoint_or_path
+            fl = filter_buckets.setdefault(filt_key, {
+                'times': [], 'errors': 0, 'path': path, 'query_keys': set(), 'hits': 0,
+            })
+            fl['hits'] += 1
+            if t > 0:
+                fl['times'].append(t)
+            if st >= 500:
+                fl['errors'] += 1
+            for qk in (row.get('query_keys') or []):
+                fl['query_keys'].add(str(qk))
+
+    def _bucket_rows(buckets, limit=8, include_filters=False):
+        rows = []
+        for route_key, b in buckets.items():
+            times = sorted(b.get('times') or [])
+            if not times and not include_filters:
+                continue
+            hits = int(b.get('hits') or len(times) or 0)
+            if hits <= 0:
+                continue
+            avg = round(sum(times) / len(times), 1) if times else None
+            p95 = _pctile(times, 0.95)
+            mx = round(times[-1], 1) if times else None
+            errors = int(b.get('errors') or 0)
+            status = _health_status(p95, errors, hits)
+            item = {
+                'route': route_key,
+                'path': b.get('path') or '',
+                'hits': hits,
+                'avg_ms': avg,
+                'p95_ms': p95,
+                'max_ms': mx,
+                'error_count': errors,
+                'status': status,
+                'status_label': {
+                    'ok': 'OK', 'warn': 'Slow', 'slow': 'Very Slow',
+                    'error': 'Errors', 'idle': 'Idle',
+                }.get(status, status),
+            }
+            if include_filters:
+                qkeys = sorted(b.get('query_keys') or [])
+                item['filters'] = ', '.join(qkeys[:6]) if qkeys else '—'
+                item['filter_count'] = len(qkeys)
+            if b.get('methods'):
+                item['methods'] = ','.join(sorted(b['methods']))
+            rows.append(item)
+        rows.sort(key=lambda x: (
+            0 if x['status'] == 'error' else 1 if x['status'] == 'slow' else 2 if x['status'] == 'warn' else 3,
+            -(x.get('p95_ms') or 0),
+            -(x.get('hits') or 0),
+        ))
+        return rows[:limit]
 
     top_slow = []
     for route_key, b in route_buckets.items():
@@ -180,6 +299,9 @@ def _build_route_diagnostics(window_minutes=15):
     top_slow.sort(key=lambda x: (x['p95_ms'], x['avg_ms']), reverse=True)
     top_slow = top_slow[:8]
 
+    form_health = _bucket_rows(form_buckets, limit=10)
+    filter_health = _bucket_rows(filter_buckets, limit=10, include_filters=True)
+
     recent_errors = []
     for row in sorted(recent, key=lambda x: x.get('ts', 0), reverse=True):
         st = int(row.get('status') or 0)
@@ -190,6 +312,7 @@ def _build_route_diagnostics(window_minutes=15):
             'route': row.get('endpoint') or row.get('path') or 'unknown',
             'status': st,
             'ms': round(float(row.get('ms') or 0), 1),
+            'mobile': bool(row.get('is_mobile')),
         })
         if len(recent_errors) >= 8:
             break
@@ -201,6 +324,97 @@ def _build_route_diagnostics(window_minutes=15):
     err_count = sum(1 for r in recent if int(r.get('status') or 0) >= 500)
     slow_count = sum(1 for t in overall_times if t >= 1000)
     slow_rate_pct = round((slow_count * 100.0) / req_count, 1) if req_count else 0.0
+
+    # ── Mobile App diagnostics (versions + client events + mobile route timings)
+    mobile_app = {
+        'request_count': mobile_hits,
+        'avg_ms': round(sum(mobile_times) / len(mobile_times), 1) if mobile_times else None,
+        'p95_ms': _pctile(sorted(mobile_times), 0.95) if mobile_times else None,
+        'error_count': mobile_errors,
+        'slow_count': sum(1 for t in mobile_times if t >= 1000),
+        'latest_release': None,
+        'force_update': False,
+        'version_counts': [],
+        'active_devices_24h': 0,
+        'stale_devices_7d': 0,
+        'client_events': [],
+        'client_event_counts': {},
+        'status': 'idle',
+        'status_label': 'No mobile traffic',
+    }
+    try:
+        latest = AppRelease.query.filter_by(is_latest=True).order_by(AppRelease.id.desc()).first()
+        if latest:
+            mobile_app['latest_release'] = latest.version
+            mobile_app['force_update'] = bool(latest.force_update)
+        now_dt = pk_now()
+        day_ago = now_dt - timedelta(hours=24)
+        week_ago = now_dt - timedelta(days=7)
+        mobile_app['active_devices_24h'] = DeviceAppVersion.query.filter(
+            DeviceAppVersion.last_seen >= day_ago
+        ).count()
+        mobile_app['stale_devices_7d'] = DeviceAppVersion.query.filter(
+            DeviceAppVersion.last_seen < week_ago
+        ).count()
+        ver_rows = (
+            db.session.query(DeviceAppVersion.app_version, func.count(DeviceAppVersion.id))
+            .group_by(DeviceAppVersion.app_version)
+            .order_by(func.count(DeviceAppVersion.id).desc())
+            .limit(6)
+            .all()
+        )
+        mobile_app['version_counts'] = [
+            {'version': v or '?', 'count': int(c or 0)} for v, c in ver_rows
+        ]
+        since = now_dt - timedelta(minutes=int(window_minutes))
+        # Prefer Capacitor / Android WebView client rows; fall back to all recent events.
+        q = ClientDiagnosticLog.query.filter(ClientDiagnosticLog.created_at >= since)
+        rows = q.order_by(ClientDiagnosticLog.created_at.desc()).limit(200).all()
+        mobile_rows = []
+        for r in rows:
+            ua = (r.user_agent or '').lower()
+            if 'capacitor' in ua or ('wv' in ua and 'android' in ua) or (r.device_id or ''):
+                mobile_rows.append(r)
+        use_rows = mobile_rows if mobile_rows else rows[:40]
+        counts = {}
+        client_events = []
+        for r in use_rows:
+            et = r.event_type or 'unknown'
+            counts[et] = counts.get(et, 0) + 1
+            if len(client_events) < 8:
+                client_events.append({
+                    'time': r.created_at.strftime('%H:%M:%S') if r.created_at else '',
+                    'event_type': et,
+                    'page_path': r.page_path or '',
+                    'message': (r.message or '')[:120],
+                    'duration_ms': r.duration_ms,
+                    'status_code': r.status_code,
+                })
+        mobile_app['client_event_counts'] = counts
+        mobile_app['client_events'] = client_events
+        js_err = int(counts.get('js_error', 0))
+        offline = int(counts.get('offline', 0))
+        slow_page = int(counts.get('slow_page', 0)) + int(counts.get('slow_server', 0))
+        http_err = int(counts.get('http_error', 0))
+        if mobile_errors > 0 or js_err >= 3 or http_err >= 3:
+            mobile_app['status'] = 'error'
+            mobile_app['status_label'] = 'Issues detected'
+        elif (mobile_app.get('p95_ms') or 0) >= 1800 or slow_page >= 3 or offline >= 3:
+            mobile_app['status'] = 'warn'
+            mobile_app['status_label'] = 'Degraded'
+        elif mobile_hits > 0 or mobile_app['active_devices_24h'] > 0:
+            mobile_app['status'] = 'ok'
+            mobile_app['status_label'] = 'Healthy'
+        if latest and ver_rows:
+            on_latest = sum(int(c or 0) for v, c in ver_rows if (v or '') == latest.version)
+            total_ver = sum(int(c or 0) for _, c in ver_rows)
+            mobile_app['on_latest_count'] = on_latest
+            mobile_app['versioned_devices'] = total_ver
+            if latest.force_update and total_ver and on_latest < total_ver:
+                mobile_app['status'] = 'warn'
+                mobile_app['status_label'] = 'Force update pending'
+    except Exception as e:
+        mobile_app['error'] = str(e)[:160]
 
     analysis = []
     if err_count > 0:
@@ -255,6 +469,32 @@ def _build_route_diagnostics(window_minutes=15):
             'level': 'warning',
             'text': f'High slow-request ratio detected: {slow_rate_pct}% requests are >= 1000 ms.',
         })
+    bad_forms = [f for f in form_health if f.get('status') in ('error', 'slow')]
+    if bad_forms:
+        analysis.append({
+            'level': 'danger' if bad_forms[0]['status'] == 'error' else 'warning',
+            'text': f"Form hotspot: {bad_forms[0]['route']} is {bad_forms[0]['status_label']} (p95 {bad_forms[0].get('p95_ms') or '-'} ms).",
+        })
+    bad_filters = [f for f in filter_health if f.get('status') in ('error', 'slow')]
+    if bad_filters:
+        analysis.append({
+            'level': 'danger' if bad_filters[0]['status'] == 'error' else 'warning',
+            'text': (
+                f"Filter issue on {bad_filters[0]['route']} "
+                f"(filters: {bad_filters[0].get('filters') or '—'}; "
+                f"status {bad_filters[0]['status_label']})."
+            ),
+        })
+    if mobile_app.get('status') == 'error':
+        analysis.append({
+            'level': 'danger',
+            'text': 'Mobile app diagnostics report errors (server 5xx / JS / HTTP). Check Mobile App panel.',
+        })
+    elif mobile_app.get('status') == 'warn':
+        analysis.append({
+            'level': 'warning',
+            'text': f"Mobile app degraded: {mobile_app.get('status_label')}.",
+        })
     if not analysis:
         analysis.append({
             'level': 'success',
@@ -271,6 +511,9 @@ def _build_route_diagnostics(window_minutes=15):
         'slow_rate_pct': slow_rate_pct,
         'top_slow_routes': top_slow,
         'recent_errors': recent_errors,
+        'form_health': form_health,
+        'filter_health': filter_health,
+        'mobile_app': mobile_app,
         'analysis': analysis,
     }
 
@@ -1052,8 +1295,20 @@ def _build_health_data():
             'avg_ms': None,
             'p95_ms': None,
             'error_count': 0,
+            'slow_count': 0,
+            'slow_rate_pct': 0,
             'top_slow_routes': [],
             'recent_errors': [],
+            'form_health': [],
+            'filter_health': [],
+            'mobile_app': {
+                'status': 'idle',
+                'status_label': 'Diagnostics engine error',
+                'request_count': 0,
+                'version_counts': [],
+                'client_events': [],
+                'client_event_counts': {},
+            },
             'analysis': [{'level': 'danger', 'text': f'Diagnostics engine error: {str(e)[:120]}'}],
         }
 

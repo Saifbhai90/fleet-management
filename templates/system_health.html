@@ -139,6 +139,15 @@
 .diag-mini-wrap { max-height:240px; overflow:auto; border:1px solid #e5e7eb; border-radius:10px; background:#fff; }
 .diag-text-danger { color:#b91c1c !important; font-weight:700; }
 .diag-text-warning { color:#92400e !important; font-weight:700; }
+.diag-status {
+    display:inline-block; padding:2px 8px; border-radius:999px; font-size:0.68rem; font-weight:700;
+}
+.diag-status-ok { background:#dcfce7; color:#166534; }
+.diag-status-warn { background:#fef3c7; color:#92400e; }
+.diag-status-slow { background:#ffedd5; color:#c2410c; }
+.diag-status-error { background:#fee2e2; color:#b91c1c; }
+.diag-status-idle { background:#f1f5f9; color:#64748b; }
+.diag-mini-wrap-tall { max-height:280px; }
 </style>
 {% endblock %}
 
@@ -997,9 +1006,146 @@
                             <tr>
                                 <td>{{ e.time }}</td>
                                 <td class="diag-text-danger">{{ e.status }}</td>
-                                <td title="{{ e.route }}">{{ e.route }}</td>
+                                <td title="{{ e.route }}">{{ e.route }}{% if e.mobile %} <span class="diag-pill diag-pill-info">app</span>{% endif %}</td>
                                 <td>{{ e.ms }}</td>
                             </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% set mapp = diag.mobile_app or {} %}
+    <div class="row g-2 mt-1">
+        <div class="col-12">
+            <div class="sh-card {% if mapp.status == 'error' %}sh-card-danger{% elif mapp.status == 'warn' %}sh-card-warning{% elif mapp.status == 'ok' %}sh-card-success{% else %}sh-card-info{% endif %}">
+                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+                    <div class="lbl mb-0"><i class="bi bi-phone me-1"></i>Mobile App Diagnostics</div>
+                    <span id="diagMobileStatus" class="diag-status diag-status-{{ mapp.status or 'idle' }}">{{ mapp.status_label or 'No mobile traffic' }}</span>
+                </div>
+                <div class="d-flex gap-2 flex-wrap mb-2">
+                    <span class="diag-pill diag-pill-info">Latest APK: <strong id="diagMobileLatest">{{ mapp.latest_release or '—' }}</strong></span>
+                    <span class="diag-pill {% if mapp.force_update %}diag-pill-warning{% else %}diag-pill-success{% endif %}">
+                        Force update: <strong id="diagMobileForce">{{ 'ON' if mapp.force_update else 'OFF' }}</strong>
+                    </span>
+                    <span class="diag-pill diag-pill-info">Active 24h: <strong id="diagMobileActive">{{ mapp.active_devices_24h or 0 }}</strong></span>
+                    <span class="diag-pill diag-pill-info">App hits: <strong id="diagMobileHits">{{ mapp.request_count or 0 }}</strong></span>
+                    <span class="diag-pill {% if (mapp.p95_ms or 0) >= 1800 %}diag-pill-danger{% elif (mapp.p95_ms or 0) >= 900 %}diag-pill-warning{% else %}diag-pill-success{% endif %}">
+                        App P95: <strong id="diagMobileP95">{{ mapp.p95_ms if mapp.p95_ms is not none else '-' }}</strong> ms
+                    </span>
+                    <span class="diag-pill {% if (mapp.error_count or 0) > 0 %}diag-pill-danger{% else %}diag-pill-success{% endif %}">
+                        App 5xx: <strong id="diagMobileErr">{{ mapp.error_count or 0 }}</strong>
+                    </span>
+                </div>
+                <div class="row g-2">
+                    <div class="col-lg-5">
+                        <div class="sub mb-1">Installed versions</div>
+                        <div id="diagMobileVersions" class="d-flex flex-wrap gap-1">
+                            {% for v in mapp.version_counts or [] %}
+                            <span class="diag-pill diag-pill-info">v{{ v.version }} · {{ v.count }}</span>
+                            {% else %}
+                            <span class="sub">No version reports yet.</span>
+                            {% endfor %}
+                        </div>
+                        <div class="sub mt-2" id="diagMobileEventCounts">
+                            {% set cec = mapp.client_event_counts or {} %}
+                            JS errors: <strong>{{ cec.get('js_error', 0) }}</strong> ·
+                            Slow pages: <strong>{{ (cec.get('slow_page', 0) or 0) + (cec.get('slow_server', 0) or 0) }}</strong> ·
+                            Offline: <strong>{{ cec.get('offline', 0) }}</strong> ·
+                            HTTP errors: <strong>{{ cec.get('http_error', 0) }}</strong>
+                        </div>
+                    </div>
+                    <div class="col-lg-7">
+                        <div class="sub mb-1">Recent client events (app)</div>
+                        <div class="diag-mini-wrap diag-mini-wrap-tall">
+                            <table class="diag-mini-table">
+                                <thead>
+                                    <tr>
+                                        <th>Time</th>
+                                        <th>Type</th>
+                                        <th>Page</th>
+                                        <th>Detail</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="diagMobileEventsBody">
+                                    {% for e in mapp.client_events or [] %}
+                                    <tr>
+                                        <td>{{ e.time }}</td>
+                                        <td>{{ e.event_type }}</td>
+                                        <td title="{{ e.page_path }}">{{ e.page_path }}</td>
+                                        <td title="{{ e.message }}">{{ e.message }}{% if e.duration_ms %} ({{ e.duration_ms }}ms){% endif %}</td>
+                                    </tr>
+                                    {% else %}
+                                    <tr><td colspan="4" class="text-muted">No client diagnostic events in window.</td></tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-2 mt-1">
+        <div class="col-lg-6">
+            <div class="sh-card">
+                <div class="lbl mb-2"><i class="bi bi-ui-checks-grid me-1"></i>Form Health (load / save)</div>
+                <div class="diag-mini-wrap diag-mini-wrap-tall">
+                    <table class="diag-mini-table">
+                        <thead>
+                            <tr>
+                                <th>Form / Route</th>
+                                <th>Hits</th>
+                                <th>P95</th>
+                                <th>Max</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="diagFormHealthBody">
+                            {% for r in diag.form_health or [] %}
+                            <tr>
+                                <td title="{{ r.path or r.route }}">{{ r.route }}</td>
+                                <td>{{ r.hits }}</td>
+                                <td class="{% if (r.p95_ms or 0) >= 1800 %}diag-text-danger{% elif (r.p95_ms or 0) >= 900 %}diag-text-warning{% endif %}">{{ r.p95_ms if r.p95_ms is not none else '-' }}</td>
+                                <td>{{ r.max_ms if r.max_ms is not none else '-' }}</td>
+                                <td><span class="diag-status diag-status-{{ r.status }}">{{ r.status_label }}</span></td>
+                            </tr>
+                            {% else %}
+                            <tr><td colspan="5" class="text-muted">No form traffic sampled yet.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="sh-card">
+                <div class="lbl mb-2"><i class="bi bi-funnel me-1"></i>Filter Field Health (list / report)</div>
+                <div class="diag-mini-wrap diag-mini-wrap-tall">
+                    <table class="diag-mini-table">
+                        <thead>
+                            <tr>
+                                <th>Page</th>
+                                <th>Filters used</th>
+                                <th>Hits</th>
+                                <th>P95</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="diagFilterHealthBody">
+                            {% for r in diag.filter_health or [] %}
+                            <tr>
+                                <td title="{{ r.path or r.route }}">{{ r.route }}</td>
+                                <td title="{{ r.filters }}">{{ r.filters }}</td>
+                                <td>{{ r.hits }}</td>
+                                <td class="{% if (r.p95_ms or 0) >= 1800 %}diag-text-danger{% elif (r.p95_ms or 0) >= 900 %}diag-text-warning{% endif %}">{{ r.p95_ms if r.p95_ms is not none else '-' }}</td>
+                                <td><span class="diag-status diag-status-{{ r.status }}">{{ r.status_label }}</span></td>
+                            </tr>
+                            {% else %}
+                            <tr><td colspan="5" class="text-muted">No filtered list/report requests yet.</td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
@@ -1193,10 +1339,17 @@
             .replace(/'/g, '&#039;');
     }
 
+    function _statusBadge(status, label) {
+        var st = status || 'idle';
+        return '<span class="diag-status diag-status-' + _escHtml(st) + '">' + _escHtml(label || st) + '</span>';
+    }
+
     function _renderDiagRows(diag) {
         var slowBody = document.getElementById('diagSlowRoutesBody');
         var errBody = document.getElementById('diagRecentErrorsBody');
         var anaWrap = document.getElementById('diagAnalysisWrap');
+        var formBody = document.getElementById('diagFormHealthBody');
+        var filterBody = document.getElementById('diagFilterHealthBody');
         var reqCount = document.getElementById('diagReqCount');
         var avgMs = document.getElementById('diagAvgMs');
         var p95 = document.getElementById('diagP95');
@@ -1236,10 +1389,89 @@
                 return '<tr>' +
                     '<td>' + _escHtml(e.time) + '</td>' +
                     '<td class="diag-text-danger">' + _escHtml(e.status) + '</td>' +
-                    '<td title="' + _escHtml(e.route) + '">' + _escHtml(e.route) + '</td>' +
+                    '<td title="' + _escHtml(e.route) + '">' + _escHtml(e.route) +
+                        (e.mobile ? ' <span class="diag-pill diag-pill-info">app</span>' : '') + '</td>' +
                     '<td>' + _escHtml(e.ms) + '</td>' +
                 '</tr>';
             }).join('') || '<tr><td colspan="4" class="text-muted">No recent 5xx errors.</td></tr>';
+        }
+
+        if (formBody) {
+            var forms = diag.form_health || [];
+            formBody.innerHTML = forms.map(function(r) {
+                var p95Cls = (r.p95_ms || 0) >= 1800 ? 'diag-text-danger' : ((r.p95_ms || 0) >= 900 ? 'diag-text-warning' : '');
+                return '<tr>' +
+                    '<td title="' + _escHtml(r.path || r.route) + '">' + _escHtml(r.route) + '</td>' +
+                    '<td>' + _escHtml(r.hits) + '</td>' +
+                    '<td class="' + p95Cls + '">' + _escHtml(r.p95_ms != null ? r.p95_ms : '-') + '</td>' +
+                    '<td>' + _escHtml(r.max_ms != null ? r.max_ms : '-') + '</td>' +
+                    '<td>' + _statusBadge(r.status, r.status_label) + '</td>' +
+                '</tr>';
+            }).join('') || '<tr><td colspan="5" class="text-muted">No form traffic sampled yet.</td></tr>';
+        }
+
+        if (filterBody) {
+            var filters = diag.filter_health || [];
+            filterBody.innerHTML = filters.map(function(r) {
+                var p95Cls = (r.p95_ms || 0) >= 1800 ? 'diag-text-danger' : ((r.p95_ms || 0) >= 900 ? 'diag-text-warning' : '');
+                return '<tr>' +
+                    '<td title="' + _escHtml(r.path || r.route) + '">' + _escHtml(r.route) + '</td>' +
+                    '<td title="' + _escHtml(r.filters) + '">' + _escHtml(r.filters || '—') + '</td>' +
+                    '<td>' + _escHtml(r.hits) + '</td>' +
+                    '<td class="' + p95Cls + '">' + _escHtml(r.p95_ms != null ? r.p95_ms : '-') + '</td>' +
+                    '<td>' + _statusBadge(r.status, r.status_label) + '</td>' +
+                '</tr>';
+            }).join('') || '<tr><td colspan="5" class="text-muted">No filtered list/report requests yet.</td></tr>';
+        }
+
+        var mapp = diag.mobile_app || {};
+        var mobStatus = document.getElementById('diagMobileStatus');
+        if (mobStatus) {
+            mobStatus.className = 'diag-status diag-status-' + (mapp.status || 'idle');
+            mobStatus.textContent = mapp.status_label || 'No mobile traffic';
+        }
+        var setTxt = function(id, val) {
+            var el = document.getElementById(id);
+            if (el) el.textContent = val;
+        };
+        setTxt('diagMobileLatest', mapp.latest_release || '—');
+        setTxt('diagMobileForce', mapp.force_update ? 'ON' : 'OFF');
+        setTxt('diagMobileActive', mapp.active_devices_24h != null ? mapp.active_devices_24h : 0);
+        setTxt('diagMobileHits', mapp.request_count != null ? mapp.request_count : 0);
+        setTxt('diagMobileP95', mapp.p95_ms != null ? mapp.p95_ms : '-');
+        setTxt('diagMobileErr', mapp.error_count != null ? mapp.error_count : 0);
+        var verWrap = document.getElementById('diagMobileVersions');
+        if (verWrap) {
+            var vers = mapp.version_counts || [];
+            verWrap.innerHTML = vers.length
+                ? vers.map(function(v) {
+                    return '<span class="diag-pill diag-pill-info">v' + _escHtml(v.version) + ' · ' + _escHtml(v.count) + '</span>';
+                }).join('')
+                : '<span class="sub">No version reports yet.</span>';
+        }
+        var cec = mapp.client_event_counts || {};
+        var eventCounts = document.getElementById('diagMobileEventCounts');
+        if (eventCounts) {
+            var slowPages = (cec.slow_page || 0) + (cec.slow_server || 0);
+            eventCounts.innerHTML =
+                'JS errors: <strong>' + _escHtml(cec.js_error || 0) + '</strong> · ' +
+                'Slow pages: <strong>' + _escHtml(slowPages) + '</strong> · ' +
+                'Offline: <strong>' + _escHtml(cec.offline || 0) + '</strong> · ' +
+                'HTTP errors: <strong>' + _escHtml(cec.http_error || 0) + '</strong>';
+        }
+        var mobEvents = document.getElementById('diagMobileEventsBody');
+        if (mobEvents) {
+            var evs = mapp.client_events || [];
+            mobEvents.innerHTML = evs.map(function(e) {
+                var detail = e.message || '';
+                if (e.duration_ms) detail += ' (' + e.duration_ms + 'ms)';
+                return '<tr>' +
+                    '<td>' + _escHtml(e.time) + '</td>' +
+                    '<td>' + _escHtml(e.event_type) + '</td>' +
+                    '<td title="' + _escHtml(e.page_path) + '">' + _escHtml(e.page_path) + '</td>' +
+                    '<td title="' + _escHtml(e.message) + '">' + _escHtml(detail) + '</td>' +
+                '</tr>';
+            }).join('') || '<tr><td colspan="4" class="text-muted">No client diagnostic events in window.</td></tr>';
         }
 
         if (anaWrap) {
