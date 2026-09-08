@@ -8856,25 +8856,85 @@ def _build_vehicle_rows(vehicles, task_date, form=None):
     form = form or {}
     rows = []
     from services.mileage_record_service import mileage_index_for_date, tracker_km_for_vehicle
+    from services.utils import strip_ufone_reg_tag
     mil_index = mileage_index_for_date(task_date)
+    vehicles = list(vehicles or [])
+    if not vehicles:
+        return rows
+
+    vehicle_ids = [int(v.id) for v in vehicles if v and v.id]
+
+    # Batch: existing same-day tasks (was 1 query per vehicle).
+    existing_by_vid = {}
+    if vehicle_ids:
+        for t in VehicleDailyTask.query.filter(
+            VehicleDailyTask.vehicle_id.in_(vehicle_ids),
+            VehicleDailyTask.task_date == task_date,
+        ).all():
+            existing_by_vid[int(t.vehicle_id)] = t
+
+    # Batch: latest previous close reading per vehicle.
+    prev_by_vid = {}
+    if vehicle_ids:
+        prev_max = (
+            db.session.query(
+                VehicleDailyTask.vehicle_id.label('vehicle_id'),
+                func.max(VehicleDailyTask.task_date).label('max_date'),
+            )
+            .filter(
+                VehicleDailyTask.vehicle_id.in_(vehicle_ids),
+                VehicleDailyTask.task_date < task_date,
+            )
+            .group_by(VehicleDailyTask.vehicle_id)
+            .subquery()
+        )
+        for t in (
+            db.session.query(VehicleDailyTask)
+            .join(
+                prev_max,
+                and_(
+                    VehicleDailyTask.vehicle_id == prev_max.c.vehicle_id,
+                    VehicleDailyTask.task_date == prev_max.c.max_date,
+                ),
+            )
+            .all()
+        ):
+            prev_by_vid[int(t.vehicle_id)] = t
+
+    # Batch: EMG counts for the day, match in Python (same rules as emg_amb_reg_matches_vehicle).
+    emg_rows = EmergencyTaskRecord.query.filter(
+        EmergencyTaskRecord.task_date == task_date,
+        or_(
+            EmergencyTaskRecord.category.in_(['Green', 'Yellow']),
+            EmergencyTaskRecord.category.is_(None),
+            EmergencyTaskRecord.category == '',
+        ),
+    ).with_entities(EmergencyTaskRecord.amb_reg_no).all()
+    emg_regs = [(r[0] or '').strip() for r in emg_rows if r and (r[0] or '').strip()]
+
+    def _emg_count_for_vehicle(vehicle_no):
+        raw = (vehicle_no or '').strip()
+        if not raw:
+            return 0
+        base = strip_ufone_reg_tag(raw) or raw
+        base_l = base.lower()
+        n = 0
+        for reg in emg_regs:
+            if reg == raw or reg == base:
+                n += 1
+                continue
+            rl = reg.lower()
+            if rl.startswith(base_l + ' ') or rl.startswith(base_l + '-'):
+                n += 1
+        return n
+
     for v in vehicles:
-        prev = VehicleDailyTask.query.filter(
-            VehicleDailyTask.vehicle_id == v.id,
-            VehicleDailyTask.task_date < task_date
-        ).order_by(VehicleDailyTask.task_date.desc()).first()
+        prev = prev_by_vid.get(int(v.id))
         has_prev = prev is not None and prev.close_reading is not None
         start_reading = float(prev.close_reading) if has_prev else 0
-        emg_tasks = EmergencyTaskRecord.query.filter(
-            EmergencyTaskRecord.task_date == task_date,
-            emg_amb_reg_matches_vehicle(v.vehicle_no),
-            or_(
-                EmergencyTaskRecord.category.in_(['Green', 'Yellow']),
-                EmergencyTaskRecord.category.is_(None),
-                EmergencyTaskRecord.category == '',
-            ),
-        ).count()
+        emg_tasks = _emg_count_for_vehicle(v.vehicle_no)
         tracker_km = tracker_km_for_vehicle(task_date, v.vehicle_no, index=mil_index)
-        existing = VehicleDailyTask.query.filter_by(vehicle_id=v.id, task_date=task_date).first()
+        existing = existing_by_vid.get(int(v.id))
         if existing and existing.start_reading is not None and not has_prev:
             start_reading = float(existing.start_reading)
         existing_close = float(existing.close_reading) if existing and existing.close_reading is not None else None

@@ -7772,7 +7772,9 @@ def maintenance_expense_form(pk=None):
             maintenance_attachment_max_mb=maintenance_attachment_max_mb,
             requested_work_order=requested_work_order,
             maintenance_form_focus=maintenance_form_focus,
-            location_cascade=_fuel_expense_location_cascade_dict(),
+            # Lazy /get_projects_by_district + /get_vehicles_by_project_district (template already supports null).
+            # Embedding full cascade here was ~200KB+ and ~2s GET spikes.
+            location_cascade=None,
         )
     form.expense_by.choices = _workspace_expense_by_choices(workspace_employee_id)
     products_for_maintenance = _workspace_products_for_expense_form(workspace_employee_id, 'Maintenance')
