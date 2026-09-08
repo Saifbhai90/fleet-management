@@ -1252,7 +1252,9 @@
 
         if (d.latency_history) _drawSparkline('spark-latency', d.latency_history, '#10b981');
         if (d.session_history) _drawSparkline('spark-sessions', d.session_history, '#8b5cf6');
-        if (d.mobile_bridge) _renderMobileBridge(d.mobile_bridge);
+        if (d.mobile_bridge && typeof window._renderMobileBridge === 'function') {
+            window._renderMobileBridge(d.mobile_bridge);
+        }
 
         _lastFetch = Date.now();
     }
@@ -1264,7 +1266,9 @@
             .then(function(d) { _updateKPI(d); })
             .catch(function() {});
         // Live mobile probe (bypasses 15-min health cache)
-        _refreshMobileBridgeQuiet();
+        if (typeof window._refreshMobileBridgeQuiet === 'function') {
+            window._refreshMobileBridgeQuiet();
+        }
     }
 
     function _startTimer() {
@@ -1325,7 +1329,11 @@
     _startTimer();
     setInterval(_updateAgoLabel, 5000);
     // Immediate live mobile probe (full /status may be 404 until phone deploy)
-    setTimeout(_refreshMobileBridgeQuiet, 800);
+    setTimeout(function() {
+        if (typeof window._refreshMobileBridgeQuiet === 'function') {
+            window._refreshMobileBridgeQuiet();
+        }
+    }, 800);
 })();
 </script>
 <script>
@@ -1691,6 +1699,8 @@
     }
 
     window._refreshMobileBridge = _refreshMobileBridge;
+    window._refreshMobileBridgeQuiet = _refreshMobileBridgeQuiet;
+    window._renderMobileBridge = _renderMobileBridge;
 
     function _netSignalLevel(speedMbps, rtt) {
         if (speedMbps >= 6 && rtt <= 120) return 4;
