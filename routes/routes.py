@@ -1658,26 +1658,25 @@ def _open_gps_driver_attendance_for_checkout(driver_id, today):
     Today's open session (GPS or manual), or open session from up to 7 days back.
     Used by Mark Check-out (GPS+Camera) and Auto GPS Check-out window logic.
     """
-    rec = _open_gps_driver_attendance_session(driver_id, today)
-    if rec:
-        return rec
     if not driver_id or not today:
         return None
-    for days_back in range(1, 8):
-        past_date = today - timedelta(days=days_back)
-        rec = (
-            DriverAttendance.query.filter(
-                DriverAttendance.driver_id == driver_id,
-                DriverAttendance.attendance_date == past_date,
-                DriverAttendance.check_in.isnot(None),
-                DriverAttendance.check_out.is_(None),
-            )
-            .order_by(DriverAttendance.attendance_segment.desc(), DriverAttendance.id.desc())
-            .first()
+    # One query instead of up to 8 round-trips (today + 7 day walk).
+    oldest = today - timedelta(days=7)
+    return (
+        DriverAttendance.query.filter(
+            DriverAttendance.driver_id == driver_id,
+            DriverAttendance.attendance_date >= oldest,
+            DriverAttendance.attendance_date <= today,
+            DriverAttendance.check_in.isnot(None),
+            DriverAttendance.check_out.is_(None),
         )
-        if rec:
-            return rec
-    return None
+        .order_by(
+            DriverAttendance.attendance_date.desc(),
+            DriverAttendance.attendance_segment.desc(),
+            DriverAttendance.id.desc(),
+        )
+        .first()
+    )
 
 
 def _open_driver_attendance_for_manual_checkout(driver_id, attendance_date):

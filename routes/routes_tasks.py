@@ -24,7 +24,10 @@ from datetime import datetime, date, timedelta
 from sqlalchemy import func, text, or_, and_, false
 from werkzeug.utils import secure_filename
 from auth_utils import user_can_access, get_user_context
-from utils import pk_now, pk_date, parse_date, format_date_ddmmyyyy, emg_amb_reg_matches_vehicle
+from utils import (
+    pk_now, pk_date, parse_date, format_date_ddmmyyyy,
+    emg_amb_reg_matches_vehicle, strip_ufone_reg_tag,
+)
 from vehicle_sort_utils import vehicle_order_by, sort_vehicles_in_memory
 import re
 import os
@@ -76,6 +79,191 @@ from routes import (
 from models import AttendanceSettings
 from forms import VehicleMileageUploadForm
 from models import project_district
+from collections import defaultdict
+
+
+def _task_report_list_rows(tasks):
+    """Build Task Report list/PDF rows with batched prev / EMG / tracker lookups.
+
+    Avoids the old N+1 pattern (1 prev + 1 EMG + 1 mileage query per row) that
+    pushed task_report_list P95 into multi-second territory.
+    """
+    from services.mileage_record_service import normalize_reg_key, tracker_km_for_vehicle
+
+    tasks = list(tasks or [])
+    if not tasks:
+        return []
+
+    vehicle_ids = sorted({int(t.vehicle_id) for t in tasks if t.vehicle_id})
+    task_dates = sorted({t.task_date for t in tasks if t.task_date})
+
+    # In-range tasks per vehicle (already loaded) + one prior row before earliest.
+    in_range_by_vid = defaultdict(list)
+    earliest_by_vid = {}
+    for t in tasks:
+        vid = int(t.vehicle_id)
+        in_range_by_vid[vid].append(t)
+        prev_earliest = earliest_by_vid.get(vid)
+        if prev_earliest is None or t.task_date < prev_earliest:
+            earliest_by_vid[vid] = t.task_date
+    for vid in in_range_by_vid:
+        in_range_by_vid[vid].sort(key=lambda row: (row.task_date, row.id or 0))
+
+    prior_by_vid = {}
+    if earliest_by_vid:
+        dialect = db.engine.dialect.name
+        if dialect == 'postgresql':
+            values_sql = ', '.join(
+                f'({int(vid)}::int, DATE \'{cutoff.isoformat()}\')'
+                for vid, cutoff in earliest_by_vid.items()
+            )
+            prior_sql = text(f'''
+                WITH cutoffs(vehicle_id, cutoff) AS (
+                    VALUES {values_sql}
+                )
+                SELECT DISTINCT ON (p.vehicle_id)
+                    p.vehicle_id, p.task_date, p.close_reading, p.start_reading
+                FROM vehicle_daily_task p
+                JOIN cutoffs c
+                  ON c.vehicle_id = p.vehicle_id
+                 AND p.task_date < c.cutoff
+                ORDER BY p.vehicle_id, p.task_date DESC
+            ''')
+            for row in db.session.execute(prior_sql):
+                prior_by_vid[int(row.vehicle_id)] = row
+        else:
+            # Portable fallback: scan history once, keep latest before each cutoff.
+            max_cutoff = max(earliest_by_vid.values())
+            for h in (
+                VehicleDailyTask.query.filter(
+                    VehicleDailyTask.vehicle_id.in_(vehicle_ids),
+                    VehicleDailyTask.task_date < max_cutoff,
+                )
+                .order_by(
+                    VehicleDailyTask.vehicle_id.asc(),
+                    VehicleDailyTask.task_date.asc(),
+                )
+                .all()
+            ):
+                cutoff = earliest_by_vid.get(int(h.vehicle_id))
+                if cutoff is None or h.task_date >= cutoff:
+                    continue
+                prior_by_vid[int(h.vehicle_id)] = h
+
+    def _prev_close(vid, task_d):
+        vid = int(vid)
+        prev = None
+        seed = prior_by_vid.get(vid)
+        if seed is not None and getattr(seed, 'task_date', None) is not None and seed.task_date < task_d:
+            prev = seed
+        for h in in_range_by_vid.get(vid, []):
+            if h.task_date < task_d:
+                prev = h
+            else:
+                break
+        return prev
+
+    emg_by_date = defaultdict(list)
+    if task_dates:
+        for reg, d in (
+            EmergencyTaskRecord.query.filter(
+                EmergencyTaskRecord.task_date.in_(task_dates),
+                or_(
+                    EmergencyTaskRecord.category.in_(['Green', 'Yellow']),
+                    EmergencyTaskRecord.category.is_(None),
+                    EmergencyTaskRecord.category == '',
+                ),
+            )
+            .with_entities(EmergencyTaskRecord.amb_reg_no, EmergencyTaskRecord.task_date)
+            .all()
+        ):
+            if reg and str(reg).strip():
+                emg_by_date[d].append(str(reg).strip())
+
+    def _emg_count(vehicle_no, task_d):
+        raw = (vehicle_no or '').strip()
+        if not raw:
+            return 0
+        base = strip_ufone_reg_tag(raw) or raw
+        base_l = base.lower()
+        n = 0
+        for reg in emg_by_date.get(task_d, []):
+            if reg == raw or reg == base:
+                n += 1
+                continue
+            rl = reg.lower()
+            if rl.startswith(base_l + ' ') or rl.startswith(base_l + '-'):
+                n += 1
+        return n
+
+    mil_by_date = defaultdict(dict)
+    if task_dates:
+        for rec in VehicleMileageRecord.query.filter(
+            VehicleMileageRecord.task_date.in_(task_dates)
+        ).all():
+            key = normalize_reg_key(rec.reg_no)
+            if not key:
+                continue
+            bucket = mil_by_date[rec.task_date]
+            prev = bucket.get(key)
+            if prev is None or float(rec.effective_km() or 0) >= float(prev.effective_km() or 0):
+                bucket[key] = rec
+
+    rows = []
+    for t in tasks:
+        v = t.vehicle
+        task_d = t.task_date
+        prev = _prev_close(t.vehicle_id, task_d)
+        if prev is not None and getattr(prev, 'close_reading', None) is not None:
+            start_reading = float(prev.close_reading)
+        elif t.start_reading is not None:
+            start_reading = float(t.start_reading)
+        else:
+            start_reading = 0
+        close_reading = float(t.close_reading)
+        kms_driven = close_reading - start_reading
+        if kms_driven < 0:
+            kms_driven = 0
+        emg_tasks = _emg_count(v.vehicle_no if v else '', task_d)
+        tracker_km = tracker_km_for_vehicle(
+            task_d,
+            v.vehicle_no if v else '',
+            index=mil_by_date.get(task_d),
+        )
+        kms_diff = kms_driven - tracker_km
+        pct_diff = round((kms_diff / kms_driven) * 100, 1) if kms_driven else None
+        rows.append({
+            'task': t,
+            'vehicle': v,
+            'task_date': task_d,
+            'start_reading': start_reading,
+            'close_reading': close_reading,
+            'kms_driven': round(kms_driven, 2),
+            'tasks_count': t.tasks_count,
+            'emg_tasks': emg_tasks,
+            'tracker_km': round(tracker_km, 2),
+            'kms_diff': round(kms_diff, 2),
+            'pct_diff': pct_diff,
+            'odometer_photo_path': (getattr(t, 'odometer_photo_path', None) or '').strip(),
+        })
+    return rows
+
+
+def _task_report_list_query_options(query, vehicle_joined=False):
+    """Eager-load vehicle + related labels used by search / template.
+
+    Uses selectinload so it stays safe when the list query already JOINs vehicle
+    for scope/district filters (joinedload + explicit join can double-join).
+    """
+    from sqlalchemy.orm import selectinload
+    # vehicle_joined kept for call-site clarity; selectinload ignores it safely.
+    _ = vehicle_joined
+    return query.options(
+        selectinload(VehicleDailyTask.vehicle).selectinload(Vehicle.district),
+        selectinload(VehicleDailyTask.vehicle).selectinload(Vehicle.parking_station),
+    )
+
+
 @app.route('/task-report', methods=['GET', 'POST'])
 def task_report_list():
     from auth_utils import get_user_context
@@ -256,46 +444,12 @@ def task_report_list():
         query = query.filter(VehicleDailyTask.project_id == project_id)
     if vehicle_id:
         query = query.filter(VehicleDailyTask.vehicle_id == vehicle_id)
-    tasks = query.order_by(VehicleDailyTask.task_date.desc(), VehicleDailyTask.id).all()
-    rows = []
-    for t in tasks:
-        v = t.vehicle
-        task_d = t.task_date
-        prev = VehicleDailyTask.query.filter(
-            VehicleDailyTask.vehicle_id == t.vehicle_id,
-            VehicleDailyTask.task_date < task_d
-        ).order_by(VehicleDailyTask.task_date.desc()).first()
-        if prev and prev.close_reading is not None:
-            start_reading = float(prev.close_reading)
-        elif t.start_reading is not None:
-            start_reading = float(t.start_reading)
-        else:
-            start_reading = 0
-        close_reading = float(t.close_reading)
-        kms_driven = close_reading - start_reading
-        if kms_driven < 0:
-            kms_driven = 0
-        emg_tasks = EmergencyTaskRecord.query.filter(
-            EmergencyTaskRecord.task_date == task_d,
-            emg_amb_reg_matches_vehicle(v.vehicle_no),
-            or_(
-                EmergencyTaskRecord.category.in_(['Green', 'Yellow']),
-                EmergencyTaskRecord.category.is_(None),
-                EmergencyTaskRecord.category == '',
-            ),
-        ).count()
-        from services.mileage_record_service import tracker_km_for_vehicle
-        tracker_km = tracker_km_for_vehicle(task_d, v.vehicle_no)
-        kms_diff = kms_driven - tracker_km
-        pct_diff = round((kms_diff / kms_driven) * 100, 1) if kms_driven and kms_driven != 0 else None
-        rows.append({
-            'task': t, 'vehicle': v, 'task_date': task_d,
-            'start_reading': start_reading, 'close_reading': close_reading,
-            'kms_driven': round(kms_driven, 2), 'tasks_count': t.tasks_count,
-            'emg_tasks': emg_tasks, 'tracker_km': round(tracker_km, 2),
-            'kms_diff': round(kms_diff, 2), 'pct_diff': pct_diff,
-            'odometer_photo_path': (getattr(t, 'odometer_photo_path', None) or '').strip(),
-        })
+    tasks = (
+        _task_report_list_query_options(query, vehicle_joined=vehicle_joined)
+        .order_by(VehicleDailyTask.task_date.desc(), VehicleDailyTask.id)
+        .all()
+    )
+    rows = _task_report_list_rows(tasks)
     search = (request.args.get('search') or '').strip()
     if search:
         tokens = [t.lower() for t in search.split() if t]
@@ -403,51 +557,12 @@ def task_report_list_export_pdf():
     if vehicle_id:
         query = query.filter(VehicleDailyTask.vehicle_id == vehicle_id)
 
-    tasks = query.order_by(VehicleDailyTask.task_date.desc(), VehicleDailyTask.id).all()
-    rows = []
-    for t in tasks:
-        v = t.vehicle
-        task_d = t.task_date
-        prev = VehicleDailyTask.query.filter(
-            VehicleDailyTask.vehicle_id == t.vehicle_id,
-            VehicleDailyTask.task_date < task_d,
-        ).order_by(VehicleDailyTask.task_date.desc()).first()
-        if prev and prev.close_reading is not None:
-            start_reading = float(prev.close_reading)
-        elif t.start_reading is not None:
-            start_reading = float(t.start_reading)
-        else:
-            start_reading = 0
-        close_reading = float(t.close_reading)
-        kms_driven = close_reading - start_reading
-        if kms_driven < 0:
-            kms_driven = 0
-        emg_tasks = EmergencyTaskRecord.query.filter(
-            EmergencyTaskRecord.task_date == task_d,
-            emg_amb_reg_matches_vehicle(v.vehicle_no),
-            or_(
-                EmergencyTaskRecord.category.in_(['Green', 'Yellow']),
-                EmergencyTaskRecord.category.is_(None),
-                EmergencyTaskRecord.category == '',
-            ),
-        ).count()
-        from services.mileage_record_service import tracker_km_for_vehicle
-        tracker_km = tracker_km_for_vehicle(task_d, v.vehicle_no)
-        kms_diff = kms_driven - tracker_km
-        pct_diff = round((kms_diff / kms_driven) * 100, 1) if kms_driven and kms_driven != 0 else None
-        rows.append({
-            'task': t,
-            'vehicle': v,
-            'task_date': task_d,
-            'start_reading': start_reading,
-            'close_reading': close_reading,
-            'kms_driven': round(kms_driven, 2),
-            'tasks_count': t.tasks_count,
-            'emg_tasks': emg_tasks,
-            'tracker_km': round(tracker_km, 2),
-            'kms_diff': round(kms_diff, 2),
-            'pct_diff': pct_diff,
-        })
+    tasks = (
+        _task_report_list_query_options(query, vehicle_joined=vehicle_joined)
+        .order_by(VehicleDailyTask.task_date.desc(), VehicleDailyTask.id)
+        .all()
+    )
+    rows = _task_report_list_rows(tasks)
 
     if search:
         tokens = [tok.lower() for tok in search.split() if tok]

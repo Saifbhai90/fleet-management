@@ -246,7 +246,10 @@ def _build_route_diagnostics(window_minutes=15):
         payload = int(avg_payload_bytes or 0)
         if payload >= 200 * 1024:
             causes.append(f'Very large response payload ({_fmt_size(payload)})')
-            fixes.append('Remove embedded cascade/lists; load via lazy API')
+            if 'task_report' in blob:
+                fixes.append('Slim HTML vehicle rows; keep filter dropdowns lazy where possible')
+            else:
+                fixes.append('Remove embedded cascade/lists; load via lazy API')
         elif payload >= 80 * 1024:
             causes.append(f'Heavy response payload ({_fmt_size(payload)})')
             fixes.append('Trim embedded JSON/HTML; paginate where possible')
@@ -273,9 +276,14 @@ def _build_route_diagnostics(window_minutes=15):
         elif 'fuel_expense' in blob and ('form' in blob or 'add' in blob):
             causes.append('Fuel form data prep / large HTML')
             fixes.append('Lazy cascade + avoid re-querying unused dropdown data on POST')
+        elif 'attendance_gps_check' in blob or (
+            'attendance' in blob and 'gps' in blob and 'submit' in blob
+        ):
+            causes.append('GPS attendance: selfie → R2 WebP upload (+ FCM notify)')
+            fixes.append('Fast WebP encode; defer FCM after response; keep photo upload required')
         elif 'task_report' in blob:
-            causes.append('Task entry builds rows with per-vehicle DB work')
-            fixes.append('Batch previous/existing/EMG lookups for vehicle set')
+            causes.append('Task report row enrichment (prev reading / EMG / tracker km)')
+            fixes.append('Use batched list-row builder; narrow date range; paginate')
         elif 'slip_ocr' in blob:
             causes.append('Slip sample image upload to object storage (R2)')
             fixes.append('Reuse existing image_hash path; compress before upload')

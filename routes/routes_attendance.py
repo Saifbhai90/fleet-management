@@ -3416,6 +3416,36 @@ def _upload_attendance_photo_from_form_or_b64(photo_file, photo_b64, *, required
     return photo_path
 
 
+def _defer_gps_attendance_notify(kind, driver_id, photo_path, vehicle_id=None):
+    """FCM / reminder cleanup after response — do not block GPS submit on push latency."""
+    import threading
+
+    app_obj = app._get_current_object()
+    kind_l = (kind or '').strip().lower()
+    did = int(driver_id or 0)
+    vid = int(vehicle_id or 0) or None
+    path = photo_path
+
+    def _runner():
+        with app_obj.app_context():
+            try:
+                from notification_service import notify_gps_checkin, notify_gps_checkout
+                driver = db.session.get(Driver, did)
+                vehicle = db.session.get(Vehicle, vid) if vid else None
+                if kind_l in ('checkout', 'check-out', 'out'):
+                    notify_gps_checkout(driver, path, vehicle=vehicle)
+                else:
+                    notify_gps_checkin(driver, path, vehicle=vehicle)
+            except Exception:
+                app_obj.logger.exception(
+                    'Deferred GPS %s notify failed driver=%s', kind_l, did
+                )
+
+    threading.Thread(
+        target=_runner, daemon=True, name=f'gps-{kind_l or "checkin"}-notify-{did}'
+    ).start()
+
+
 @app.route('/api/attendance/gps-checkin-submit', methods=['POST'])
 def api_attendance_gps_checkin_submit():
     """Async GPS+Camera check-in upload endpoint used by web UI retry flow."""
@@ -3434,9 +3464,6 @@ def api_attendance_gps_checkin_submit():
             return jsonify({'ok': False, 'message': 'Please select a driver.'}), 400
         if not parking_station_id:
             return jsonify({'ok': False, 'message': 'Please select a parking station.'}), 400
-        driver = Driver.query.options(joinedload(Driver.vehicle)).get(driver_id)
-        if not driver:
-            return jsonify({'ok': False, 'message': 'Invalid driver.'}), 404
         if request_id:
             existing_request = DriverAttendance.query.filter_by(
                 check_in_request_id=request_id,
@@ -3640,9 +3667,9 @@ def api_attendance_gps_checkin_submit():
                 'message': 'Check-out pending hai. Duplicate check-in blocked.',
             }), 409
         try:
-            from notification_service import notify_gps_checkin
-            _v = db.session.get(Vehicle, _ci_vehicle_id) if _ci_vehicle_id else None
-            notify_gps_checkin(driver, photo_path, vehicle=_v)
+            _defer_gps_attendance_notify(
+                'checkin', driver_id, photo_path, vehicle_id=_ci_vehicle_id
+            )
         except Exception:
             pass
         return jsonify({
@@ -3676,9 +3703,6 @@ def api_attendance_gps_checkout_submit():
             return jsonify({'ok': False, 'message': 'Please select a driver.'}), 400
         if not parking_station_id:
             return jsonify({'ok': False, 'message': 'Please select a parking station.'}), 400
-        driver = db.session.get(Driver, driver_id)
-        if not driver:
-            return jsonify({'ok': False, 'message': 'Invalid driver.'}), 404
         if request_id:
             existing_request = DriverAttendance.query.filter_by(
                 check_out_request_id=request_id,
@@ -3896,9 +3920,12 @@ def api_attendance_gps_checkout_submit():
                 'message': 'Check-out already completed or another request won the update.',
             }), 409
         try:
-            from notification_service import notify_gps_checkout
-            _v = db.session.get(Vehicle, _co_vehicle_id) if _co_vehicle_id else None
-            notify_gps_checkout(driver, existing.check_out_photo_path, vehicle=_v)
+            _defer_gps_attendance_notify(
+                'checkout',
+                driver_id,
+                existing.check_out_photo_path,
+                vehicle_id=_co_vehicle_id,
+            )
         except Exception:
             pass
         return jsonify({
@@ -4091,9 +4118,9 @@ def driver_attendance_checkin():
         try:
             db.session.commit()
             try:
-                from notification_service import notify_gps_checkin
-                _v = db.session.get(Vehicle, _ci_vehicle_id) if _ci_vehicle_id else None
-                notify_gps_checkin(driver, photo_path, vehicle=_v)
+                _defer_gps_attendance_notify(
+                    'checkin', driver_id, photo_path, vehicle_id=_ci_vehicle_id
+                )
             except Exception:
                 pass
             flash('Attendance marked successfully. Check-in recorded with photo.', 'success')

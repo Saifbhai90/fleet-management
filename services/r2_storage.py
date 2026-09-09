@@ -1,5 +1,6 @@
 import io
 import os
+import threading
 import uuid
 from typing import Optional, Tuple
 
@@ -17,35 +18,52 @@ R2_ENDPOINT_URL = os.environ.get("R2_ENDPOINT_URL", "").strip()
 R2_BUCKET_NAME = os.environ.get("R2_BUCKET_NAME", "").strip()
 R2_PUBLIC_URL = os.environ.get("R2_PUBLIC_URL", "").strip().rstrip("/")
 
+_s3_client = None
+_s3_client_lock = threading.Lock()
+
 
 def _get_s3_client():
     """
     Create a boto3 S3 client for Cloudflare R2.
 
     We keep this lazy so local dev without R2 creds can still run most of the app.
+    Reuse one client — recreating per upload adds noticeable latency on GPS attendance.
     """
+    global _s3_client
+    if _s3_client is not None:
+        return _s3_client
     if not (R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY and R2_ENDPOINT_URL and R2_BUCKET_NAME and R2_PUBLIC_URL):
         raise RuntimeError("Cloudflare R2 environment variables are not fully configured.")
 
-    # Cloudflare R2 S3 API expects region "auto" and sigv4
-    session = boto3.session.Session()
-    client = session.client(
-        "s3",
-        region_name="auto",
-        endpoint_url=R2_ENDPOINT_URL,
-        aws_access_key_id=R2_ACCESS_KEY_ID,
-        aws_secret_access_key=R2_SECRET_ACCESS_KEY,
-        config=Config(signature_version="s3v4"),
-    )
-    return client
+    with _s3_client_lock:
+        if _s3_client is not None:
+            return _s3_client
+        # Cloudflare R2 S3 API expects region "auto" and sigv4
+        session = boto3.session.Session()
+        _s3_client = session.client(
+            "s3",
+            region_name="auto",
+            endpoint_url=R2_ENDPOINT_URL,
+            aws_access_key_id=R2_ACCESS_KEY_ID,
+            aws_secret_access_key=R2_SECRET_ACCESS_KEY,
+            config=Config(signature_version="s3v4"),
+        )
+        return _s3_client
 
 
-def _process_image_to_webp(data: bytes, max_width: int = 1000, quality: int = 75) -> bytes:
+def _process_image_to_webp(
+    data: bytes,
+    max_width: int = 1000,
+    quality: int = 75,
+    method: int = 4,
+) -> bytes:
     """
     Compress + resize image and convert to WebP.
 
     - Maintains aspect ratio.
     - If image is already smaller than max_width, width is preserved.
+    - method: Pillow WebP encoder effort (0=fast … 6=slow/best). Default 4
+      is much faster than 6 with little size difference for attendance selfies.
     """
     with Image.open(io.BytesIO(data)) as img:
         # Ensure we have RGB / RGBA for WebP
@@ -58,7 +76,7 @@ def _process_image_to_webp(data: bytes, max_width: int = 1000, quality: int = 75
             img = img.resize((max_width, new_h), Image.LANCZOS)
 
         out = io.BytesIO()
-        img.save(out, format="WEBP", quality=quality, method=6)
+        img.save(out, format="WEBP", quality=quality, method=int(method))
         out.seek(0)
         return out.read()
 
@@ -71,7 +89,10 @@ def upload_image_bytes(data: bytes, folder: str = "attendance", max_retries: int
     """
     client = _get_s3_client()
 
-    processed = _process_image_to_webp(data)
+    # Attendance selfies are latency-sensitive (GPS check-in/out APIs).
+    folder_l = (folder or "").strip().lower()
+    webp_method = 2 if folder_l.startswith("attendance") else 4
+    processed = _process_image_to_webp(data, method=webp_method)
     uid = uuid.uuid4().hex
     key = f"{folder.rstrip('/')}/{uid}.webp"
 
