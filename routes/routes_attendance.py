@@ -4321,9 +4321,12 @@ def driver_attendance_checkout():
         try:
             db.session.commit()
             try:
-                from notification_service import notify_gps_checkout
-                _v = db.session.get(Vehicle, _co_vehicle_id) if _co_vehicle_id else None
-                notify_gps_checkout(driver, photo_path or existing.check_out_photo_path, vehicle=_v)
+                _defer_gps_attendance_notify(
+                    'checkout',
+                    driver_id,
+                    photo_path or existing.check_out_photo_path,
+                    vehicle_id=_co_vehicle_id,
+                )
             except Exception:
                 pass
             flash('Check-out recorded successfully with photo.', 'success')
