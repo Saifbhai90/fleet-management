@@ -82,11 +82,36 @@ from models import project_district
 from collections import defaultdict
 
 
+def _task_report_reg_candidates(vehicle_nos):
+    """Exact reg strings likely stored on EMG / mileage rows for these fleet vehicles."""
+    cands = set()
+    for raw in vehicle_nos or []:
+        raw = (raw or '').strip()
+        if not raw:
+            continue
+        base = strip_ufone_reg_tag(raw) or raw
+        for x in (
+            raw,
+            base,
+            f'{base} COW',
+            f'{base} USG',
+            f'{base} RAS',
+            f'{base}-COW',
+            f'{base}-USG',
+            f'{base}-RAS',
+        ):
+            x = (x or '').strip()
+            if x:
+                cands.add(x)
+    return list(cands)
+
+
 def _task_report_list_rows(tasks):
     """Build Task Report list/PDF rows with batched prev / EMG / tracker lookups.
 
-    Avoids the old N+1 pattern (1 prev + 1 EMG + 1 mileage query per row) that
-    pushed task_report_list P95 into multi-second territory.
+    Batching alone was not enough: statewide day-loads of EMG/mileage plus
+    per-row linear EMG scans still pushed P95 into multi-second territory.
+    Scope enrichment to vehicles in the result set and count EMG in O(1).
     """
     from services.mileage_record_service import normalize_reg_key, tracker_km_for_vehicle
 
@@ -96,6 +121,14 @@ def _task_report_list_rows(tasks):
 
     vehicle_ids = sorted({int(t.vehicle_id) for t in tasks if t.vehicle_id})
     task_dates = sorted({t.task_date for t in tasks if t.task_date})
+    vehicle_nos = []
+    for t in tasks:
+        v = getattr(t, 'vehicle', None)
+        no = (getattr(v, 'vehicle_no', None) or '').strip() if v is not None else ''
+        if no:
+            vehicle_nos.append(no)
+    reg_cands = _task_report_reg_candidates(vehicle_nos)
+    wanted_mil_keys = {normalize_reg_key(no) for no in vehicle_nos if normalize_reg_key(no)}
 
     # In-range tasks per vehicle (already loaded) + one prior row before earliest.
     in_range_by_vid = defaultdict(list)
@@ -163,51 +196,61 @@ def _task_report_list_rows(tasks):
                 break
         return prev
 
-    emg_by_date = defaultdict(list)
-    if task_dates:
-        for reg, d in (
-            EmergencyTaskRecord.query.filter(
-                EmergencyTaskRecord.task_date.in_(task_dates),
-                or_(
-                    EmergencyTaskRecord.category.in_(['Green', 'Yellow']),
-                    EmergencyTaskRecord.category.is_(None),
-                    EmergencyTaskRecord.category == '',
-                ),
-            )
-            .with_entities(EmergencyTaskRecord.amb_reg_no, EmergencyTaskRecord.task_date)
-            .all()
-        ):
-            if reg and str(reg).strip():
-                emg_by_date[d].append(str(reg).strip())
+    # Count by stripped base so tagged Portal/Ufone regs match without O(tasks×regs).
+    emg_count_by_date_base = defaultdict(int)
+    if task_dates and reg_cands:
+        emg_cat = or_(
+            EmergencyTaskRecord.category.in_(['Green', 'Yellow']),
+            EmergencyTaskRecord.category.is_(None),
+            EmergencyTaskRecord.category == '',
+        )
+        seen_emg = set()
+        for i in range(0, len(reg_cands), 400):
+            chunk = reg_cands[i:i + 400]
+            for reg, d in (
+                EmergencyTaskRecord.query.filter(
+                    EmergencyTaskRecord.task_date.in_(task_dates),
+                    EmergencyTaskRecord.amb_reg_no.in_(chunk),
+                    emg_cat,
+                )
+                .with_entities(EmergencyTaskRecord.amb_reg_no, EmergencyTaskRecord.task_date)
+                .all()
+            ):
+                raw = (str(reg).strip() if reg else '')
+                if not raw:
+                    continue
+                key = (d, raw)
+                if key in seen_emg:
+                    continue
+                seen_emg.add(key)
+                base = (strip_ufone_reg_tag(raw) or raw).strip().lower()
+                if base:
+                    emg_count_by_date_base[(d, base)] += 1
 
     def _emg_count(vehicle_no, task_d):
         raw = (vehicle_no or '').strip()
         if not raw:
             return 0
-        base = strip_ufone_reg_tag(raw) or raw
-        base_l = base.lower()
-        n = 0
-        for reg in emg_by_date.get(task_d, []):
-            if reg == raw or reg == base:
-                n += 1
-                continue
-            rl = reg.lower()
-            if rl.startswith(base_l + ' ') or rl.startswith(base_l + '-'):
-                n += 1
-        return n
+        base = (strip_ufone_reg_tag(raw) or raw).strip().lower()
+        if not base:
+            return 0
+        return int(emg_count_by_date_base.get((task_d, base), 0))
 
     mil_by_date = defaultdict(dict)
-    if task_dates:
-        for rec in VehicleMileageRecord.query.filter(
-            VehicleMileageRecord.task_date.in_(task_dates)
-        ).all():
-            key = normalize_reg_key(rec.reg_no)
-            if not key:
-                continue
-            bucket = mil_by_date[rec.task_date]
-            prev = bucket.get(key)
-            if prev is None or float(rec.effective_km() or 0) >= float(prev.effective_km() or 0):
-                bucket[key] = rec
+    if task_dates and reg_cands and wanted_mil_keys:
+        for i in range(0, len(reg_cands), 400):
+            chunk = reg_cands[i:i + 400]
+            for rec in VehicleMileageRecord.query.filter(
+                VehicleMileageRecord.task_date.in_(task_dates),
+                VehicleMileageRecord.reg_no.in_(chunk),
+            ).all():
+                key = normalize_reg_key(rec.reg_no)
+                if not key or key not in wanted_mil_keys:
+                    continue
+                bucket = mil_by_date[rec.task_date]
+                prev = bucket.get(key)
+                if prev is None or float(rec.effective_km() or 0) >= float(prev.effective_km() or 0):
+                    bucket[key] = rec
 
     rows = []
     for t in tasks:
@@ -225,10 +268,12 @@ def _task_report_list_rows(tasks):
         if kms_driven < 0:
             kms_driven = 0
         emg_tasks = _emg_count(v.vehicle_no if v else '', task_d)
+        # Always pass a dict (even empty) so missing days do not fall back to
+        # per-row full-day mileage queries inside tracker_km_for_vehicle.
         tracker_km = tracker_km_for_vehicle(
             task_d,
             v.vehicle_no if v else '',
-            index=mil_by_date.get(task_d),
+            index=mil_by_date[task_d],
         )
         kms_diff = kms_driven - tracker_km
         pct_diff = round((kms_diff / kms_driven) * 100, 1) if kms_driven else None
@@ -249,19 +294,22 @@ def _task_report_list_rows(tasks):
     return rows
 
 
-def _task_report_list_query_options(query, vehicle_joined=False):
+def _task_report_list_query_options(query, vehicle_joined=False, include_parking=False):
     """Eager-load vehicle + related labels used by search / template.
 
     Uses selectinload so it stays safe when the list query already JOINs vehicle
     for scope/district filters (joinedload + explicit join can double-join).
+    Parking is only needed for free-text search matching.
     """
     from sqlalchemy.orm import selectinload
     # vehicle_joined kept for call-site clarity; selectinload ignores it safely.
     _ = vehicle_joined
-    return query.options(
-        selectinload(VehicleDailyTask.vehicle).selectinload(Vehicle.district),
-        selectinload(VehicleDailyTask.vehicle).selectinload(Vehicle.parking_station),
-    )
+    opts = [selectinload(VehicleDailyTask.vehicle).selectinload(Vehicle.district)]
+    if include_parking:
+        opts.append(
+            selectinload(VehicleDailyTask.vehicle).selectinload(Vehicle.parking_station)
+        )
+    return query.options(*opts)
 
 
 @app.route('/task-report', methods=['GET', 'POST'])
@@ -444,21 +492,30 @@ def task_report_list():
         query = query.filter(VehicleDailyTask.project_id == project_id)
     if vehicle_id:
         query = query.filter(VehicleDailyTask.vehicle_id == vehicle_id)
-    tasks = (
-        _task_report_list_query_options(query, vehicle_joined=vehicle_joined)
-        .order_by(VehicleDailyTask.task_date.desc(), VehicleDailyTask.id)
-        .all()
-    )
-    rows = _task_report_list_rows(tasks)
     search = (request.args.get('search') or '').strip()
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+    # Parking labels are only needed for free-text search blobs.
+    include_parking = bool(search)
+    ordered = (
+        _task_report_list_query_options(
+            query, vehicle_joined=vehicle_joined, include_parking=include_parking
+        )
+        .order_by(VehicleDailyTask.task_date.desc(), VehicleDailyTask.id)
+    )
+    # Footer totals need the full filtered set enriched; search also requires all
+    # rows in memory. Scoped EMG/mileage lookups keep this path cheap.
+    tasks = ordered.all()
+    rows = _task_report_list_rows(tasks)
     if search:
         tokens = [t.lower() for t in search.split() if t]
         def _match(r):
+            ps = getattr(r['vehicle'], 'parking_station', None) if r.get('vehicle') else None
             blob = ' '.join([
                 str(r['task_date']), r['vehicle'].vehicle_no,
                 r['vehicle'].district.name if r['vehicle'].district else '',
-                r['vehicle'].parking_station.tehsil if r['vehicle'].parking_station else '',
-                r['vehicle'].parking_station.name if r['vehicle'].parking_station else '',
+                ps.tehsil if ps else '',
+                ps.name if ps else '',
                 r['vehicle'].vehicle_type or '',
                 str(r['kms_driven']), str(r['tasks_count']), str(r['emg_tasks']),
                 str(r.get('odometer_photo_path') or ''),
@@ -473,8 +530,6 @@ def task_report_list():
     total_tasks = sum(r['tasks_count'] for r in rows)
     total_emg = sum(r['emg_tasks'] for r in rows)
     total_task_diff = total_tasks - total_emg
-    page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 20, type=int)
     pagination = SimplePagination(rows, page, per_page)
     rows = pagination.items
     return render_template('task_report_list.html', form=form, rows=rows, from_date=from_date, to_date=to_date,
@@ -558,7 +613,9 @@ def task_report_list_export_pdf():
         query = query.filter(VehicleDailyTask.vehicle_id == vehicle_id)
 
     tasks = (
-        _task_report_list_query_options(query, vehicle_joined=vehicle_joined)
+        _task_report_list_query_options(
+            query, vehicle_joined=vehicle_joined, include_parking=bool(search)
+        )
         .order_by(VehicleDailyTask.task_date.desc(), VehicleDailyTask.id)
         .all()
     )
@@ -568,12 +625,13 @@ def task_report_list_export_pdf():
         tokens = [tok.lower() for tok in search.split() if tok]
 
         def _match(r):
+            ps = getattr(r['vehicle'], 'parking_station', None) if r.get('vehicle') else None
             blob = ' '.join([
                 str(r['task_date']),
                 r['vehicle'].vehicle_no,
                 r['vehicle'].district.name if r['vehicle'].district else '',
-                r['vehicle'].parking_station.tehsil if r['vehicle'].parking_station else '',
-                r['vehicle'].parking_station.name if r['vehicle'].parking_station else '',
+                ps.tehsil if ps else '',
+                ps.name if ps else '',
                 r['vehicle'].vehicle_type or '',
                 str(r['kms_driven']),
                 str(r['tasks_count']),

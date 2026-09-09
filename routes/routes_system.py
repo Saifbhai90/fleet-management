@@ -294,7 +294,7 @@ def _build_route_diagnostics(window_minutes=15):
             fixes.append('Closing-balance SQL only; sync driver COA once per session')
         elif 'task_report' in blob:
             causes.append('Task report row enrichment (prev reading / EMG / tracker km)')
-            fixes.append('Use batched list-row builder; narrow date range; paginate')
+            fixes.append('Scope EMG/mileage to result vehicles; O(1) EMG counts; avoid parking load unless search')
         elif 'slip_ocr' in blob:
             causes.append('Slip sample image upload to object storage (R2)')
             fixes.append('Reuse existing image_hash path; compress before upload')
