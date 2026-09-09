@@ -216,34 +216,31 @@ document.addEventListener('DOMContentLoaded', function() {
     out.sort(function(a, b) { return (a.vehicle_no || '').localeCompare(b.vehicle_no || '', undefined, { numeric: true }); });
     return out;
   }
-  function resetSelectWithDefault(sel, placeholder) {
-    if (!sel) return;
-    if (sel.tomselect) { try { sel.tomselect.destroy(); } catch(e) {} }
-    sel.innerHTML = '<option value="0">' + placeholder + '</option>';
-  }
-  function initSelectSearch(sel) {
-    if (!sel) return;
-    if (typeof initSearchableDropdowns === 'function') initSearchableDropdowns(sel.parentNode);
-  }
   function fillProjectOptions(arr) {
-    resetSelectWithDefault(projectSelect, '-- Select Project --');
-    (arr || []).forEach(function(p) {
+    var opts = (arr || []).map(function(p) { return { value: p.id, text: p.name }; });
+    if (typeof fleetFillSelect === 'function') {
+      fleetFillSelect(projectSelect, opts, { placeholder: '-- Select Project --', placeholderValue: '0' });
+      return;
+    }
+    projectSelect.innerHTML = '<option value="0">-- Select Project --</option>';
+    opts.forEach(function(p) {
       var o = document.createElement('option');
-      o.value = p.id;
-      o.textContent = p.name;
-      projectSelect.appendChild(o);
+      o.value = p.value; o.textContent = p.text; projectSelect.appendChild(o);
     });
-    initSelectSearch(projectSelect);
+    if (typeof initSearchableDropdowns === 'function') initSearchableDropdowns(projectSelect.parentNode);
   }
   function fillVehicleOptions(arr) {
-    resetSelectWithDefault(vehicleSelect, '-- Select Vehicle --');
-    (arr || []).forEach(function(v) {
+    var opts = (arr || []).map(function(v) { return { value: v.id, text: v.vehicle_no }; });
+    if (typeof fleetFillSelect === 'function') {
+      fleetFillSelect(vehicleSelect, opts, { placeholder: '-- Select Vehicle --', placeholderValue: '0' });
+      return;
+    }
+    vehicleSelect.innerHTML = '<option value="0">-- Select Vehicle --</option>';
+    opts.forEach(function(v) {
       var o = document.createElement('option');
-      o.value = v.id;
-      o.textContent = v.vehicle_no;
-      vehicleSelect.appendChild(o);
+      o.value = v.value; o.textContent = v.text; vehicleSelect.appendChild(o);
     });
-    initSelectSearch(vehicleSelect);
+    if (typeof initSearchableDropdowns === 'function') initSearchableDropdowns(vehicleSelect.parentNode);
   }
   if (districtSelect && projectSelect) {
     districtSelect.addEventListener('change', function() {

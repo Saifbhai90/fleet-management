@@ -174,6 +174,10 @@ textarea.form-control { height: auto !important; }
 (function() {
   function rebuildSel(el, html) {
     if (!el) return;
+    if (typeof fleetFillSelectFromHtml === 'function') {
+      fleetFillSelectFromHtml(el, html);
+      return;
+    }
     if (el.tomselect) { el.tomselect.destroy(); delete el.tomselect; }
     el.innerHTML = html;
     el.disabled = false;

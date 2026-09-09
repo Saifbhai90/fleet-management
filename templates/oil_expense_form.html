@@ -349,21 +349,28 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   function _smoothFillSelect(sel, arr, buildOptionFn) {
     if (!sel) return;
+    var opts = [];
+    if (arr && buildOptionFn) arr.forEach(function(item) { opts.push(buildOptionFn(item)); });
+    if (typeof fleetFillSelect === 'function') {
+      fleetFillSelect(sel, opts, { placeholder: '-- Select --', placeholderValue: '0' });
+      return;
+    }
     if (sel.tomselect) {
       var ts = sel.tomselect;
       ts.clear(true); ts.clearOptions();
-      if (arr) arr.forEach(function(item) { ts.addOption(buildOptionFn(item)); });
+      opts.forEach(function(opt) { ts.addOption(opt); });
       ts.enable(); return;
     }
     sel.innerHTML = '<option value="0">-- Select --</option>';
-    if (arr) arr.forEach(function(item) {
-      var opt = buildOptionFn(item); var o = document.createElement('option');
+    opts.forEach(function(opt) {
+      var o = document.createElement('option');
       o.value = opt.value; o.textContent = opt.text; sel.appendChild(o);
     });
     initSearchableDropdowns(sel.parentNode);
   }
   function _smoothLoadingSelect(sel) {
     if (!sel) return;
+    if (typeof fleetSetSelectLoading === 'function') { fleetSetSelectLoading(sel); return; }
     if (sel.tomselect) { sel.tomselect.clear(true); sel.tomselect.clearOptions(); sel.tomselect.disable(); return; }
     sel.innerHTML = '<option value="0">-- Loading... --</option>';
   }
@@ -463,17 +470,20 @@ document.addEventListener('DOMContentLoaded', function() {
   function _populateOilProducts(arr) {
     productsForOil = arr;
     var sel = entryProductSelect;
-    if (sel.tomselect) sel.tomselect.destroy();
-    sel.innerHTML = '<option value="">-- Search / Select --</option>';
-    arr.forEach(function(p) {
-      var o = document.createElement('option');
-      o.value = p.id;
-      o.textContent = p.name;
-      o.setAttribute('data-name', p.name || '');
-      sel.appendChild(o);
-    });
-    initSearchableDropdowns(sel.parentNode);
-    if (sel.tomselect) {
+    var opts = (arr || []).map(function(p) { return { value: p.id, text: p.name }; });
+    if (typeof fleetFillSelect === 'function') {
+      fleetFillSelect(sel, opts, { placeholder: '-- Search / Select --', placeholderValue: '' });
+    } else {
+      if (sel.tomselect) sel.tomselect.destroy();
+      sel.innerHTML = '<option value="">-- Search / Select --</option>';
+      opts.forEach(function(p) {
+        var o = document.createElement('option');
+        o.value = p.value; o.textContent = p.text; sel.appendChild(o);
+      });
+      initSearchableDropdowns(sel.parentNode);
+    }
+    if (sel.tomselect && !sel._oilProductChangeBound) {
+      sel._oilProductChangeBound = true;
       sel.tomselect.on('change', function() {
         if (entryDefaultPriceHint) {
           entryDefaultPriceHint.dataset.lastPriceLabel = '<span class="oil-last-price-badge">Last: 0.00</span>';
@@ -481,7 +491,8 @@ document.addEventListener('DOMContentLoaded', function() {
         updateDefaultPriceHint();
         fetchOilPriceHistory(false);
       });
-    } else {
+    } else if (!sel.tomselect && !sel._oilProductChangeBound) {
+      sel._oilProductChangeBound = true;
       sel.addEventListener('change', function() {
         if (entryDefaultPriceHint) {
           entryDefaultPriceHint.dataset.lastPriceLabel = '<span class="oil-last-price-badge">Last: 0.00</span>';
@@ -1322,8 +1333,7 @@ document.addEventListener('DOMContentLoaded', function() {
       _tsSet(districtSelect, did);
     }
 
-    // Always run full fetch chain — never rely on server-rendered project/vehicle options
-    // because _smoothFillSelect destroys TomSelect on each call and options may be stale.
+    // Always run full fetch chain — never rely on server-rendered project/vehicle options.
     if (did && did !== 0 && projectSelect) {
       _loadProjectsForDistrict(did, pid || null, function() {
         var activePid = pid || _tsVal(projectSelect);

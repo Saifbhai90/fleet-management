@@ -7856,15 +7856,20 @@ def maintenance_expense_form(pk=None):
             form.district_id.data = requested_work_order.district_id or 0
             form.project_id.data = requested_work_order.project_id or 0
             form.vehicle_id.data = requested_work_order.vehicle_id
-            form.work_order_id.data = requested_work_order.id
+            # Prefill location from WO; leave Work Order unselected so Add bill
+            # opens the dropdown for manual pick (no auto-select).
+            form.work_order_id.data = 0
             form.expense_date.data = requested_work_order.opened_on or pk_date()
         else:
             if default_district_id:
                 form.district_id.data = default_district_id
             form.expense_date.data = pk_date()
         selected_payment_type = ''
-    if request.method == 'GET' and not rec:
-        maintenance_form_focus = 'job_category' if requested_work_order else 'expense_date'
+    if request.method == 'GET':
+        if rec and getattr(rec, 'work_order_id', None):
+            maintenance_form_focus = 'work_order'
+        elif not rec:
+            maintenance_form_focus = 'work_order' if requested_work_order else 'expense_date'
 
     if form.validate_on_submit():
         vehicle_id = form.vehicle_id.data

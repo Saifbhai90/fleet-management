@@ -131,6 +131,10 @@
 (function() {
   function rebuildSel(el, html) {
     if (!el) return;
+    if (typeof fleetFillSelectFromHtml === 'function') {
+      fleetFillSelectFromHtml(el, html);
+      return;
+    }
     if (el.tomselect) el.tomselect.destroy();
     el.innerHTML = html;
     initSearchableDropdowns(el.parentNode);

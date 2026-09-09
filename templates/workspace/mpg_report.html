@@ -2544,22 +2544,18 @@ document.addEventListener('DOMContentLoaded', function(){
 
   function reinitSearchSelect(selectEl){
     if(!selectEl) return;
-    if(selectEl.tomselect){
-      selectEl.tomselect.destroy();
-    }
+    if(selectEl.tomselect) return;
     if(window.initSearchableDropdowns){
       window.initSearchableDropdowns(selectEl.parentNode || document);
     }
   }
 
-  function setOptions(selectEl, defaultLabel, rows, valueKey, textKey){
+  function setOptions(selectEl, defaultLabel, rows, valueKey, textKey, selected){
     if(!selectEl) return;
-    selectEl.innerHTML = '<option value="0">' + defaultLabel + '</option>';
-    (rows || []).forEach(function(item){
-      const option = document.createElement('option');
-      option.value = item[valueKey];
-      option.textContent = item[textKey];
-      selectEl.appendChild(option);
+    fleetFillSelectRows(selectEl, rows, valueKey, textKey, {
+      placeholder: defaultLabel,
+      placeholderValue: '0',
+      selected: selected
     });
   }
 
@@ -2568,12 +2564,8 @@ document.addEventListener('DOMContentLoaded', function(){
       const did = districtSelect.value || '0';
 
       if(did === '0'){
-        projectSelect.innerHTML = initialProjectOptions;
-        reinitSearchSelect(projectSelect);
-        if(vehicleSelect){
-          vehicleSelect.innerHTML = initialVehicleOptions;
-          reinitSearchSelect(vehicleSelect);
-        }
+        fleetFillSelectFromHtml(projectSelect, initialProjectOptions);
+        if(vehicleSelect) fleetFillSelectFromHtml(vehicleSelect, initialVehicleOptions);
         return;
       }
 
@@ -2581,15 +2573,12 @@ document.addEventListener('DOMContentLoaded', function(){
         .then(function(resp){ return resp.json(); })
         .then(function(projects){
           const previousProjectValue = projectSelect.value || '0';
-          setOptions(projectSelect, '-- All Projects --', projects, 'id', 'name');
           const hasPreviousProject = projects.some(function(p){ return String(p.id) === String(previousProjectValue); });
-          projectSelect.value = hasPreviousProject ? previousProjectValue : '0';
-          reinitSearchSelect(projectSelect);
+          setOptions(projectSelect, '-- All Projects --', projects, 'id', 'name', hasPreviousProject ? previousProjectValue : '0');
           projectSelect.dispatchEvent(new Event('change'));
         })
         .catch(function(){
-          projectSelect.innerHTML = initialProjectOptions;
-          reinitSearchSelect(projectSelect);
+          fleetFillSelectFromHtml(projectSelect, initialProjectOptions);
         });
     });
   }
@@ -2600,8 +2589,7 @@ document.addEventListener('DOMContentLoaded', function(){
       const did = districtSelect ? (districtSelect.value || '0') : '0';
 
       if(pid === '0'){
-        vehicleSelect.innerHTML = initialVehicleOptions;
-        reinitSearchSelect(vehicleSelect);
+        fleetFillSelectFromHtml(vehicleSelect, initialVehicleOptions);
         return;
       }
 
@@ -2613,14 +2601,11 @@ document.addEventListener('DOMContentLoaded', function(){
         .then(function(resp){ return resp.json(); })
         .then(function(vehicles){
           const previousVehicleValue = vehicleSelect.value || '0';
-          setOptions(vehicleSelect, '-- All Vehicles --', vehicles, 'id', 'vehicle_no');
           const hasPreviousVehicle = vehicles.some(function(v){ return String(v.id) === String(previousVehicleValue); });
-          vehicleSelect.value = hasPreviousVehicle ? previousVehicleValue : '0';
-          reinitSearchSelect(vehicleSelect);
+          setOptions(vehicleSelect, '-- All Vehicles --', vehicles, 'id', 'vehicle_no', hasPreviousVehicle ? previousVehicleValue : '0');
         })
         .catch(function(){
-          vehicleSelect.innerHTML = initialVehicleOptions;
-          reinitSearchSelect(vehicleSelect);
+          fleetFillSelectFromHtml(vehicleSelect, initialVehicleOptions);
         });
     });
   }

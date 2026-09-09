@@ -815,7 +815,14 @@ function setSelectOptions(el, options, placeholderText, keepValue) {
       return;
     }
   }
-  if (el.tomselect) { try { el.tomselect.destroy(); } catch(e) {} }
+  if (el.tomselect) {
+    fleetFillSelect(el, options || [], {
+      placeholder: placeholderText,
+      placeholderValue: '',
+      selected: (prev && (options || []).some(function(o) { return String(o.value) === String(prev); })) ? prev : null
+    });
+    return;
+  }
   el.innerHTML = '';
   const ph = document.createElement('option');
   ph.value = '';

@@ -190,15 +190,13 @@ document.addEventListener('DOMContentLoaded', function() {
   if (districtSelect && projectSelect) {
     districtSelect.addEventListener('change', function() {
       var did = this.value;
-      if (projectSelect.tomselect) projectSelect.tomselect.destroy();
-      if (vehicleSelect.tomselect) vehicleSelect.tomselect.destroy();
-      projectSelect.innerHTML = '<option value="0">-- All Projects --</option>';
-      vehicleSelect.innerHTML = '<option value="0">-- All Vehicles --</option>';
-      if (typeof initSearchableDropdowns === 'function') initSearchableDropdowns(vehicleSelect.parentNode);
-      if (!did || did === '0') { if (typeof initSearchableDropdowns === 'function') initSearchableDropdowns(projectSelect.parentNode); return; }
+      fleetFillSelectRows(vehicleSelect, [], 'id', 'vehicle_no', { placeholder: '-- All Vehicles --', placeholderValue: '0' });
+      if (!did || did === '0') {
+        fleetFillSelectRows(projectSelect, [], 'id', 'name', { placeholder: '-- All Projects --', placeholderValue: '0' });
+        return;
+      }
       fetch('/get_projects_by_district/' + did).then(function(r){ return r.json(); }).then(function(arr){
-        arr.forEach(function(p){ var o = document.createElement('option'); o.value = p.id; o.textContent = p.name; projectSelect.appendChild(o); });
-        if (typeof initSearchableDropdowns === 'function') initSearchableDropdowns(projectSelect.parentNode);
+        fleetFillSelectRows(projectSelect, arr, 'id', 'name', { placeholder: '-- All Projects --', placeholderValue: '0' });
       });
     });
   }
@@ -206,14 +204,14 @@ document.addEventListener('DOMContentLoaded', function() {
     projectSelect.addEventListener('change', function() {
       var pid = this.value;
       var did = districtSelect ? districtSelect.value : '';
-      if (vehicleSelect.tomselect) vehicleSelect.tomselect.destroy();
-      vehicleSelect.innerHTML = '<option value="0">-- All Vehicles --</option>';
-      if (!pid || pid === '0') { if (typeof initSearchableDropdowns === 'function') initSearchableDropdowns(vehicleSelect.parentNode); return; }
+      if (!pid || pid === '0') {
+        fleetFillSelectRows(vehicleSelect, [], 'id', 'vehicle_no', { placeholder: '-- All Vehicles --', placeholderValue: '0' });
+        return;
+      }
       var url = '/get_vehicles_by_project_district?project_id=' + encodeURIComponent(pid);
       if (did && did !== '0') url += '&district_id=' + encodeURIComponent(did);
       fetch(url).then(function(r){ return r.json(); }).then(function(arr){
-        arr.forEach(function(v){ var o = document.createElement('option'); o.value = v.id; o.textContent = v.vehicle_no; vehicleSelect.appendChild(o); });
-        if (typeof initSearchableDropdowns === 'function') initSearchableDropdowns(vehicleSelect.parentNode);
+        fleetFillSelectRows(vehicleSelect, arr, 'id', 'vehicle_no', { placeholder: '-- All Vehicles --', placeholderValue: '0' });
       });
     });
   }

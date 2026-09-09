@@ -732,31 +732,57 @@ document.addEventListener('DOMContentLoaded', function() {
     return out;
   }
   var _suppressCascadeEvents = false;
-  function _smoothFillSelect(sel, arr, buildOptionFn, thenSelectVal) {
-    if (!sel) return;
+  function _smoothFillSelect(sel, arr, buildOptionFn, thenSelectVal, onReady) {
+    if (!sel) {
+      if (onReady) onReady();
+      return;
+    }
     _suppressCascadeEvents = true;
-    if (sel.tomselect) { try { sel.tomselect.destroy(); } catch(e) {} }
+
+    function _applyValueAndReady() {
+      if (thenSelectVal && thenSelectVal !== 0 && thenSelectVal !== '0') {
+        setTimeout(function() {
+          _suppressCascadeEvents = true;
+          _selSet(sel, thenSelectVal);
+          setTimeout(function() {
+            _suppressCascadeEvents = false;
+            if (onReady) onReady();
+          }, 50);
+        }, 30);
+      } else {
+        _suppressCascadeEvents = false;
+        if (onReady) onReady();
+      }
+    }
+
+    var opts = [];
+    if (arr && arr.length && buildOptionFn) {
+      arr.forEach(function(item) {
+        var opt = buildOptionFn(item);
+        if (opt) opts.push({ value: String(opt.value), text: opt.text });
+      });
+    }
+    if (typeof fleetFillSelect === 'function') {
+      fleetFillSelect(sel, opts, { placeholder: '-- Select --', placeholderValue: '0' });
+      _applyValueAndReady();
+      return;
+    }
     sel.innerHTML = '<option value="0">-- Select --</option>';
-    if (arr && arr.length && buildOptionFn) arr.forEach(function(item) {
-      var opt = buildOptionFn(item); var o = document.createElement('option');
+    opts.forEach(function(opt) {
+      var o = document.createElement('option');
       o.value = opt.value; o.textContent = opt.text; sel.appendChild(o);
     });
     _reinitSearchableDropdown(sel.parentNode);
-    // Keep suppress ON until after deferred _selSet so setValue doesn't re-trigger cascade
-    if (thenSelectVal && thenSelectVal !== 0 && thenSelectVal !== '0') {
-      setTimeout(function() {
-        _suppressCascadeEvents = true;
-        _selSet(sel, thenSelectVal);
-        setTimeout(function() { _suppressCascadeEvents = false; }, 50);
-      }, 30);
-    } else {
-      _suppressCascadeEvents = false;
-    }
+    _applyValueAndReady();
   }
   function _smoothLoadingSelect(sel) {
     if (!sel) return;
     _suppressCascadeEvents = true;
-    if (sel.tomselect) { try { sel.tomselect.destroy(); } catch(e) {} }
+    if (typeof fleetSetSelectLoading === 'function') {
+      fleetSetSelectLoading(sel);
+      _suppressCascadeEvents = false;
+      return;
+    }
     sel.innerHTML = '<option value="0">-- Loading... --</option>';
     _reinitSearchableDropdown(sel.parentNode);
     _suppressCascadeEvents = false;
@@ -836,6 +862,14 @@ document.addEventListener('DOMContentLoaded', function() {
   var serverDistrictId = {{ (form.district_id.data or 0) | tojson }};
   var serverProjectId = {{ (form.project_id.data or 0) | tojson }};
   var serverVehicleId = {{ (form.vehicle_id.data or 0) | tojson }};
+  var serverWorkOrderId = {{ (form.work_order_id.data or 0) | tojson }};
+  var shouldFocusWorkOrder = {{ 'true' if maintenance_form_focus == 'work_order' else 'false' }};
+  /* Add bill lands with work_order_id in the URL for location prefill only. */
+  var addBillWorkOrderId = {{ (requested_work_order.id if requested_work_order else 0) | tojson }};
+  var addBillWorkOrderLabel = {{ (
+    ((requested_work_order.work_order_no or '') ~ ' | ' ~ (requested_work_order.title or ''))
+    if requested_work_order else ''
+  ) | tojson }};
   function focusEntryProduct() {
     if (!entryProductSelect) return;
     if (entryProductSelect.tomselect) {
@@ -1155,13 +1189,11 @@ document.addEventListener('DOMContentLoaded', function() {
     if (LOCATION_CASCADE) {
       var coldP = (LOCATION_CASCADE.projects_by_district && LOCATION_CASCADE.projects_by_district[String(did)]) || [];
       window._cascadeCache[_cKey] = coldP;
-      _smoothFillSelect(projectSelect, coldP, function(p) { return {value: String(p.id), text: p.name}; }, thenSelectProjectId || null);
-      if (thenCallback) setTimeout(thenCallback, 20);
+      _smoothFillSelect(projectSelect, coldP, function(p) { return {value: String(p.id), text: p.name}; }, thenSelectProjectId || null, thenCallback || null);
       return;
     }
     if (window._cascadeCache[_cKey]) {
-      _smoothFillSelect(projectSelect, window._cascadeCache[_cKey], function(p) { return {value: String(p.id), text: p.name}; }, thenSelectProjectId || null);
-      if (thenCallback) setTimeout(thenCallback, 20);
+      _smoothFillSelect(projectSelect, window._cascadeCache[_cKey], function(p) { return {value: String(p.id), text: p.name}; }, thenSelectProjectId || null, thenCallback || null);
       return;
     }
     _smoothLoadingSelect(projectSelect);
@@ -1169,12 +1201,10 @@ document.addEventListener('DOMContentLoaded', function() {
       .then(function(r) { return r.json(); })
       .then(function(arr) {
         window._cascadeCache[_cKey] = arr;
-        _smoothFillSelect(projectSelect, arr, function(p) { return {value: String(p.id), text: p.name}; }, thenSelectProjectId || null);
-        if (thenCallback) setTimeout(thenCallback, 20);
+        _smoothFillSelect(projectSelect, arr, function(p) { return {value: String(p.id), text: p.name}; }, thenSelectProjectId || null, thenCallback || null);
       })
       .catch(function() {
-        _smoothFillSelect(projectSelect, []);
-        if (thenCallback) thenCallback();
+        _smoothFillSelect(projectSelect, [], null, null, thenCallback || null);
       });
   }
 
@@ -1193,13 +1223,11 @@ document.addEventListener('DOMContentLoaded', function() {
       var coldV = vehiclesFromColdCacheMaint(pid, did);
       if (coldV == null) coldV = [];
       window._cascadeCache[_vKey] = coldV;
-      _smoothFillSelect(vehicleSelect, coldV, function(v) { return {value: String(v.id), text: v.vehicle_no}; }, thenSelectVehicleId || null);
-      if (thenCallback) setTimeout(thenCallback, 20);
+      _smoothFillSelect(vehicleSelect, coldV, function(v) { return {value: String(v.id), text: v.vehicle_no}; }, thenSelectVehicleId || null, thenCallback || null);
       return;
     }
     if (window._cascadeCache[_vKey]) {
-      _smoothFillSelect(vehicleSelect, window._cascadeCache[_vKey], function(v) { return {value: String(v.id), text: v.vehicle_no}; }, thenSelectVehicleId || null);
-      if (thenCallback) setTimeout(thenCallback, 20);
+      _smoothFillSelect(vehicleSelect, window._cascadeCache[_vKey], function(v) { return {value: String(v.id), text: v.vehicle_no}; }, thenSelectVehicleId || null, thenCallback || null);
       return;
     }
     _smoothLoadingSelect(vehicleSelect);
@@ -1209,27 +1237,29 @@ document.addEventListener('DOMContentLoaded', function() {
       .then(function(r) { return r.json(); })
       .then(function(arr) {
         window._cascadeCache[_vKey] = arr;
-        _smoothFillSelect(vehicleSelect, arr, function(v) { return {value: String(v.id), text: v.vehicle_no}; }, thenSelectVehicleId || null);
-        if (thenCallback) setTimeout(thenCallback, 20);
+        _smoothFillSelect(vehicleSelect, arr, function(v) { return {value: String(v.id), text: v.vehicle_no}; }, thenSelectVehicleId || null, thenCallback || null);
       })
       .catch(function() {
-        _smoothFillSelect(vehicleSelect, []);
-        if (thenCallback) thenCallback();
+        _smoothFillSelect(vehicleSelect, [], null, null, thenCallback || null);
       });
   }
 
   function _populateMaintenanceProducts(arr) {
     productsForMaintenance = arr;
-    if (entryProductSelect.tomselect) entryProductSelect.tomselect.destroy();
-    entryProductSelect.innerHTML = '<option value="">-- Search / Select --</option>';
-    arr.forEach(function(p) {
-      var o = document.createElement('option');
-      o.value = p.id;
-      o.textContent = p.name;
-      entryProductSelect.appendChild(o);
-    });
-    _reinitSearchableDropdown(entryProductSelect.parentNode);
-    if (entryProductSelect.tomselect) {
+    var opts = (arr || []).map(function(p) { return { value: p.id, text: p.name }; });
+    if (typeof fleetFillSelect === 'function') {
+      fleetFillSelect(entryProductSelect, opts, { placeholder: '-- Search / Select --', placeholderValue: '' });
+    } else {
+      if (entryProductSelect.tomselect) entryProductSelect.tomselect.destroy();
+      entryProductSelect.innerHTML = '<option value="">-- Search / Select --</option>';
+      opts.forEach(function(p) {
+        var o = document.createElement('option');
+        o.value = p.value; o.textContent = p.text; entryProductSelect.appendChild(o);
+      });
+      _reinitSearchableDropdown(entryProductSelect.parentNode);
+    }
+    if (entryProductSelect.tomselect && !entryProductSelect._maintProductChangeBound) {
+      entryProductSelect._maintProductChangeBound = true;
       entryProductSelect.tomselect.on('change', function() {
         updateDefaultPriceHint();
       });
@@ -1731,46 +1761,48 @@ document.addEventListener('DOMContentLoaded', function() {
   function applyJobCategoryOptions(clean, preferVal) {
     if (!jobCategorySelect) return;
     var keepVal = (preferVal != null && preferVal !== '') ? preferVal : (jobCategorySelect.value || '');
-    if (jobCategorySelect.tomselect) { try { jobCategorySelect.tomselect.destroy(); } catch (e) {} }
-    while (jobCategorySelect.options.length > 2) {
-      jobCategorySelect.remove(2);
-    }
+    var opts = [{
+      value: 'General Maintenance',
+      text: 'General Maintenance',
+      attrs: { 'data-interval-mode': '', 'data-interval-value': '' }
+    }];
     (clean || []).forEach(function(jc) {
-      var o = document.createElement('option');
-      o.value = jc.name;
-      o.setAttribute('data-interval-mode', jc.interval_mode || '');
-      o.setAttribute('data-interval-value', jc.interval_value != null ? String(jc.interval_value) : '');
-      o.textContent = jc.name + ' (' + (jc.interval_mode === 'interval_km' ? (jc.interval_value + ' KM') : (jc.interval_value + ' Days')) + ')';
-      jobCategorySelect.appendChild(o);
+      if (!jc || !jc.name) return;
+      if (jc.name === 'General Maintenance') return;
+      opts.push({
+        value: jc.name,
+        text: jc.name + ' (' + (jc.interval_mode === 'interval_km' ? (jc.interval_value + ' KM') : (jc.interval_value + ' Days')) + ')',
+        attrs: {
+          'data-interval-mode': jc.interval_mode || '',
+          'data-interval-value': jc.interval_value != null ? String(jc.interval_value) : ''
+        }
+      });
     });
-    _reinitSearchableDropdown(jobCategorySelect.parentNode);
     var want = keepVal;
     var found = false;
-    for (var i = 0; i < jobCategorySelect.options.length; i++) {
-      if ((jobCategorySelect.options[i].value || '') === want) { found = true; break; }
+    for (var i = 0; i < opts.length; i++) {
+      if ((opts[i].value || '') === want) { found = true; break; }
     }
     if (!found && want) {
       var wl = want.toLowerCase();
-      for (var j = 0; j < jobCategorySelect.options.length; j++) {
-        if ((jobCategorySelect.options[j].value || '').toLowerCase() === wl) {
-          want = jobCategorySelect.options[j].value;
+      for (var j = 0; j < opts.length; j++) {
+        if ((opts[j].value || '').toLowerCase() === wl) {
+          want = opts[j].value;
           found = true;
           break;
         }
       }
     }
-    if (!found) {
-      var hasGM = false;
-      for (var k = 0; k < jobCategorySelect.options.length; k++) {
-        if (jobCategorySelect.options[k].value === 'General Maintenance') { hasGM = true; break; }
-      }
-      want = hasGM ? 'General Maintenance' : ((jobCategorySelect.options[0] && jobCategorySelect.options[0].value) || '');
+    if (!found && want === '') {
+      want = '';
+    } else if (!found) {
+      want = 'General Maintenance';
     }
-    jobCategorySelect.value = want;
-    if (jobCategorySelect.tomselect) {
-      jobCategorySelect.tomselect.sync();
-      jobCategorySelect.tomselect.setValue(want, true);
-    }
+    fleetFillSelect(jobCategorySelect, opts, {
+      placeholder: 'Non-Trackable',
+      placeholderValue: '',
+      selected: want
+    });
     syncJobIntervalMode();
   }
 
@@ -2056,51 +2088,252 @@ document.addEventListener('DOMContentLoaded', function() {
       });
   }
 
-  function fetchWorkOrdersForVehicle() {
+  var _maintHoldWoFocusUntil = 0;
+  var _maintWoOpenScheduled = false;
+  var _maintAddBillWoBusy = false;
+  var _maintWoCloseLockUntil = 0;
+  var _maintWoClosePatched = false;
+
+  function _maintSetJobCategorySilent(on) {
+    if (jobCategorySelect && jobCategorySelect.tomselect) {
+      jobCategorySelect.tomselect._wsSilentFill = !!on;
+    }
+  }
+
+  function _maintBeginWoFocusGuard(ms) {
+    _maintHoldWoFocusUntil = Date.now() + (ms || 3000);
+    _maintSetJobCategorySilent(true);
+  }
+
+  function _maintEndWoFocusGuard() {
+    _maintHoldWoFocusUntil = 0;
+    _maintSetJobCategorySilent(false);
+  }
+
+  function _maintPatchWoCloseLock(ts) {
+    if (!ts || _maintWoClosePatched) return;
+    _maintWoClosePatched = true;
+    var _origClose = ts.close.bind(ts);
+    ts.close = function() {
+      if (Date.now() < _maintWoCloseLockUntil) return;
+      return _origClose();
+    };
+    ts.on('item_add', function() {
+      if (ts._wsSilentFill) return;
+      _maintWoCloseLockUntil = 0;
+      _maintAddBillWoBusy = false;
+      _maintEndWoFocusGuard();
+    });
+  }
+
+  function focusAndOpenWorkOrder() {
     if (!workOrderSelect) return;
-    var vid = _selVal(vehicleSelect);
-    var currentVal = _selVal(workOrderSelect);
-    if (!vid || vid === '0') {
-      /* No vehicle — reset to single placeholder option */
-      if (workOrderSelect.tomselect) {
-        workOrderSelect.tomselect.clear(true);
-        workOrderSelect.tomselect.clearOptions();
-        workOrderSelect.tomselect.addOption({ value: '0', text: '-- No Work Order --' });
-        workOrderSelect.tomselect.setValue('0', true);
-      } else {
-        workOrderSelect.innerHTML = '<option value="0">-- No Work Order --</option>';
-        workOrderSelect.value = '0';
-      }
+    var ts = workOrderSelect.tomselect;
+    if (!ts) {
+      try { workOrderSelect.focus(); } catch (e0) {}
       return;
     }
+    /* Already open and focused — leave it alone (no re-open flicker). */
+    if (ts.isOpen && document.activeElement === ts.control_input) return;
+
+    _maintBeginWoFocusGuard(5000);
+    _maintPatchWoCloseLock(ts);
+    _maintWoCloseLockUntil = Date.now() + 2500;
+
+    /* Must be truly empty — value "0" / "No Work Order" selected closes the menu
+       on focus. Typing works because it clears into search mode. */
+    ts._wsSilentFill = true;
+    ts._justSelected = true;
+    try { ts.clear(true); } catch (eClr) {}
+    try { ts.wrapper.classList.remove('has-items'); } catch (eHas) {}
+    if (ts.control_input) ts.control_input.value = '';
+    ts._wsSilentFill = false;
+    ts._justSelected = false;
+    ts._overwriteReady = false;
+    try { ts.control.classList.remove('ts-overwrite-ready'); } catch (eOw) {}
+
+    try {
+      if (ts.control_input) ts.control_input.focus({ preventScroll: true });
+      else ts.focus();
+    } catch (e1) {
+      try { ts.focus(); } catch (e1b) {}
+    }
+
+    /* Same path as typing: refreshOptions(true) opens + filters the list. */
+    try {
+      ts.refreshOptions(true);
+    } catch (e2) {
+      try { ts.open(); } catch (e3) {}
+    }
+    if (typeof window.fleetPositionTomSelectDropdown === 'function') {
+      try { window.fleetPositionTomSelectDropdown(ts); } catch (e4) {}
+    }
+
+    window.setTimeout(function() {
+      if (!workOrderSelect || !workOrderSelect.tomselect) return;
+      if (Date.now() > _maintWoCloseLockUntil) return;
+      var t2 = workOrderSelect.tomselect;
+      if (t2.isOpen) return;
+      try { t2.refreshOptions(true); } catch (e5) {
+        try { t2.open(); } catch (e6) {}
+      }
+    }, 100);
+
+    window.setTimeout(function() { _maintWoCloseLockUntil = 0; }, 2600);
+    window.setTimeout(function() {
+      _maintAddBillWoBusy = false;
+      _maintEndWoFocusGuard();
+    }, 5000);
+  }
+
+  /* While Add-bill is parking on WO, don't let Job Category steal focus. */
+  if (shouldFocusWorkOrder) {
+    _maintBeginWoFocusGuard(8000);
+  }
+  document.addEventListener('focusin', function(e) {
+    if (Date.now() > _maintHoldWoFocusUntil) return;
+    if (!jobCategorySelect || !jobCategorySelect.tomselect) return;
+    var jc = jobCategorySelect.tomselect;
+    var onJc = e.target === jc.control_input ||
+      (jc.wrapper && jc.wrapper.contains(e.target)) ||
+      (jc.dropdown && jc.dropdown.contains(e.target));
+    if (!onJc) return;
+    var wts = workOrderSelect && workOrderSelect.tomselect;
+    if (wts && wts.isOpen) {
+      try { if (wts.control_input) wts.control_input.focus({ preventScroll: true }); } catch (e0) {}
+      return;
+    }
+    window.setTimeout(function() {
+      if (Date.now() > _maintHoldWoFocusUntil) return;
+      focusAndOpenWorkOrder();
+    }, 0);
+  }, true);
+
+  function _fillWorkOrderSelect(opts, selectedId, forAddBillOpen) {
+    if (!workOrderSelect) return;
+    var pick = (selectedId && String(selectedId) !== '0') ? String(selectedId) : '';
+    if (workOrderSelect.tomselect) {
+      var ts = workOrderSelect.tomselect;
+      ts._wsSilentFill = true;
+      ts._justSelected = true;
+      /* Unlock close only for this rebuild. */
+      var prevLock = _maintWoCloseLockUntil;
+      _maintWoCloseLockUntil = 0;
+      try { if (ts.isOpen) ts.close(); } catch (e0) {}
+      _maintWoCloseLockUntil = prevLock;
+      ts.clear(true);
+      ts.clearOptions();
+      (opts || []).forEach(function(o) {
+        var v = String(o.value);
+        /* Never put "No Work Order" (value 0) in the dropdown — it gets auto-selected
+           and then focus/open immediately closes the menu. */
+        if (v === '0') return;
+        ts.addOption({ value: v, text: o.text });
+      });
+      if (pick) {
+        ts.setValue(pick, true);
+      } else {
+        ts.clear(true);
+        try { ts.wrapper.classList.remove('has-items'); } catch (e1) {}
+        if (ts.control_input) ts.control_input.value = '';
+        /* Leave native select empty; submit handler coerces to 0. */
+        try { workOrderSelect.value = ''; } catch (e2) {}
+      }
+      ts._wsSilentFill = false;
+      if (!forAddBillOpen) ts._justSelected = false;
+    } else {
+      workOrderSelect.innerHTML = '<option value="0">-- No Work Order --</option>';
+      (opts || []).forEach(function(o) {
+        if (String(o.value) === '0') return;
+        var el = document.createElement('option');
+        el.value = o.value;
+        el.textContent = o.text;
+        workOrderSelect.appendChild(el);
+      });
+      workOrderSelect.value = pick || '0';
+    }
+  }
+
+  function fetchWorkOrdersForVehicle(preferredVid, thenOpen) {
+    if (!workOrderSelect) return;
+    /* Avoid a second rebuild (vehicle change) killing an in-progress Add-bill open. */
+    if (_maintAddBillWoBusy && !thenOpen) return;
+
+    var vid = _selVal(vehicleSelect);
+    if ((!vid || vid === '0') && preferredVid && preferredVid !== '0' && preferredVid !== 0) {
+      vid = String(preferredVid);
+    }
+    var currentVal = _selVal(workOrderSelect);
+    if ((!currentVal || currentVal === '0') && serverWorkOrderId && serverWorkOrderId !== 0) {
+      currentVal = String(serverWorkOrderId);
+    }
+    var forAddBillOpen = !!(thenOpen && !IS_MAINTENANCE_EDIT);
+    if (forAddBillOpen) currentVal = '';
+
+    if (!vid || vid === '0') {
+      _fillWorkOrderSelect([], '', false);
+      return;
+    }
+
+    if (forAddBillOpen) {
+      _maintAddBillWoBusy = true;
+      _maintBeginWoFocusGuard(8000);
+    }
+
     fetch('/api/maintenance-work-orders/for-vehicle?vehicle_id=' + vid)
       .then(function(r) { return r.json(); })
       .then(function(d) {
-        if (!d || !d.ok) return;
-        var opts = [{ value: '0', text: '-- No Work Order --' }];
+        if (!d || !d.ok) {
+          if (forAddBillOpen) _maintAddBillWoBusy = false;
+          return;
+        }
+        var opts = [];
         (d.work_orders || []).forEach(function(w) {
           opts.push({ value: String(w.id), text: w.label });
         });
-        if (workOrderSelect.tomselect) {
-          workOrderSelect.tomselect.clear(true);
-          workOrderSelect.tomselect.clearOptions();
-          opts.forEach(function(o) { workOrderSelect.tomselect.addOption({ value: o.value, text: o.text }); });
-          /* Keep current selection if it still exists in new list */
-          var stillValid = opts.some(function(o) { return o.value === String(currentVal); });
-          workOrderSelect.tomselect.setValue(stillValid ? String(currentVal) : '0', true);
-        } else {
-          workOrderSelect.innerHTML = '';
-          opts.forEach(function(o) {
-            var el = document.createElement('option');
-            el.value = o.value;
-            el.textContent = o.text;
-            workOrderSelect.appendChild(el);
+        if (currentVal && currentVal !== '0' &&
+            !opts.some(function(o) { return o.value === String(currentVal); })) {
+          var keepLabel = null;
+          if (workOrderSelect.tomselect) {
+            var prevOpt = workOrderSelect.tomselect.options[String(currentVal)];
+            if (prevOpt) keepLabel = prevOpt.text;
+          }
+          opts.push({
+            value: String(currentVal),
+            text: keepLabel || ('Work Order #' + currentVal)
           });
-          var stillValid = opts.some(function(o) { return o.value === String(currentVal); });
-          workOrderSelect.value = stillValid ? String(currentVal) : '0';
+        }
+        if (forAddBillOpen && addBillWorkOrderId && addBillWorkOrderId !== 0 &&
+            !opts.some(function(o) { return o.value === String(addBillWorkOrderId); })) {
+          opts.push({
+            value: String(addBillWorkOrderId),
+            text: (addBillWorkOrderLabel && String(addBillWorkOrderLabel).trim())
+              ? String(addBillWorkOrderLabel).trim()
+              : ('Work Order #' + addBillWorkOrderId)
+          });
+        }
+
+        var nextVal = '';
+        if (!forAddBillOpen && currentVal && currentVal !== '0' &&
+            opts.some(function(o) { return o.value === String(currentVal); })) {
+          nextVal = String(currentVal);
+        }
+
+        _fillWorkOrderSelect(opts, nextVal, forAddBillOpen);
+
+        if (thenOpen && !_maintWoOpenScheduled) {
+          _maintWoOpenScheduled = true;
+          /* Wait for cascade/layout to settle, then open once — no reopen loop. */
+          window.setTimeout(function() {
+            focusAndOpenWorkOrder();
+          }, 280);
+        } else if (forAddBillOpen) {
+          _maintAddBillWoBusy = false;
         }
       })
-      .catch(function() {});
+      .catch(function() {
+        _maintAddBillWoBusy = false;
+      });
   }
 
   if (vehicleSelect) vehicleSelect.addEventListener('change', function() {
@@ -2280,6 +2513,21 @@ document.addEventListener('DOMContentLoaded', function() {
 
   if (maintenanceExpenseForm) {
     maintenanceExpenseForm.addEventListener('submit', function(e) {
+      /* Empty WO TomSelect → POST 0 (optional field). */
+      if (workOrderSelect) {
+        var wv = workOrderSelect.tomselect
+          ? String(workOrderSelect.tomselect.getValue() || '')
+          : String(workOrderSelect.value || '');
+        if (!wv || wv === '0') {
+          if (!workOrderSelect.querySelector('option[value="0"]')) {
+            var woOpt = document.createElement('option');
+            woOpt.value = '0';
+            woOpt.textContent = '-- No Work Order --';
+            workOrderSelect.insertBefore(woOpt, workOrderSelect.firstChild);
+          }
+          workOrderSelect.value = '0';
+        }
+      }
       if (maintenanceSubmitLocked) {
         e.preventDefault();
         return;
@@ -2355,8 +2603,9 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  // Put cursor in Date field when form opens.
+  // Put cursor in Date field when form opens (skip when Add bill / Edit targets Work Order).
   window.setTimeout(function() {
+    if (shouldFocusWorkOrder || (serverWorkOrderId && serverWorkOrderId !== 0)) return;
     if (expenseDate) {
       expenseDate.focus({ preventScroll: true });
     }
@@ -2369,11 +2618,11 @@ document.addEventListener('DOMContentLoaded', function() {
     var pid = serverProjectId;
     var vid = serverVehicleId;
     if (did && did !== 0) _selSet(districtSelect, did);
-    // Always run full fetch chain — never rely on server-rendered project/vehicle options
-    // because _smoothFillSelect destroys TomSelect on each call and options may be stale.
+    // Always run full fetch chain — never rely on server-rendered project/vehicle options.
     function _afterVehicleLoad() {
       fetchTaskReadingsForMaintenance();
-      fetchWorkOrdersForVehicle();
+      var openWo = !!(shouldFocusWorkOrder || (serverWorkOrderId && serverWorkOrderId !== 0));
+      fetchWorkOrdersForVehicle(vid || serverVehicleId || null, openWo);
     }
     if (did && did !== 0) {
       _loadProjectsForDistrict(did, pid || null, function() {
@@ -2398,7 +2647,10 @@ document.addEventListener('DOMContentLoaded', function() {
   var restoredDraft = restoreMaintFormDraft(function() {
     applyMaintQuickCreateFromUrl();
     fetchTaskReadingsForMaintenance();
-    fetchWorkOrdersForVehicle();
+    fetchWorkOrdersForVehicle(
+      serverVehicleId || null,
+      !!(shouldFocusWorkOrder || (serverWorkOrderId && serverWorkOrderId !== 0))
+    );
     fetchMaintenanceLiveSummary();
     handlePaymentTypeBehavior(false);
     updateLabourSplitHint();
@@ -2512,12 +2764,16 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  // Auto-scroll with focus movement (down/up) so active field stays visible.
+  // Auto-scroll with focus movement — disabled entirely during Add-bill WO open
+  // (smooth scroll closes body-attached TomSelect and caused open/close flicker).
   var focusScrollSelectors = 'input, select, textarea, .ts-control input';
   maintenanceExpenseForm && maintenanceExpenseForm.addEventListener('focusin', function(e) {
     var t = e.target;
     if (!t || !t.matches) return;
     if (!t.matches(focusScrollSelectors)) return;
+    if (_maintAddBillWoBusy || Date.now() < _maintHoldWoFocusUntil || Date.now() < _maintWoCloseLockUntil) {
+      return;
+    }
     window.setTimeout(function() {
       try {
         t.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
@@ -2690,31 +2946,14 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 <script>
 (function() {
+  /* WO focus/open is owned by the main form script. Only handle date here. */
   var focus = {{ maintenance_form_focus|default(none) | tojson }};
-  if (!focus) return;
+  if (focus !== 'expense_date') return;
   function tryFocus() {
-    if (focus === 'expense_date') {
-      var el = document.getElementById('expenseDate');
-      if (el) { el.focus(); try { el.select && el.select(); } catch (e) {} }
-      return;
-    }
-    if (focus === 'job_category') {
-      var jc = document.getElementById('jobCategorySelect');
-      if (!jc) return;
-      if (jc.tomselect) {
-        try {
-          if (jc.tomselect.control_input) jc.tomselect.control_input.focus();
-          else jc.tomselect.focus();
-        } catch (e) {
-          try { jc.tomselect.open(); } catch (e2) {}
-        }
-      } else {
-        jc.focus();
-      }
-    }
+    var el = document.getElementById('expenseDate');
+    if (el) { el.focus(); try { el.select && el.select(); } catch (e) {} }
   }
   setTimeout(tryFocus, 200);
-  setTimeout(tryFocus, 500);
 })();
 </script>
 {% endblock %}

@@ -1702,58 +1702,37 @@ window.TASK_REPORT_NEW_LOCK_VEHICLE = {{ tef.get('lock_vehicle', false)|tojson }
     var pid = projectSelect ? (projectSelect.tomselect ? projectSelect.tomselect.getValue() : projectSelect.value) : '0';
     var did = districtSelect ? (districtSelect.tomselect ? districtSelect.tomselect.getValue() : districtSelect.value) : '0';
     var keep = vehicleSelect.tomselect ? vehicleSelect.tomselect.getValue() : vehicleSelect.value;
-    if (vehicleSelect.tomselect) { vehicleSelect.tomselect.destroy(); }
-    vehicleSelect.innerHTML = '<option value="0">-- All Vehicles --</option>';
     var url = '/get_vehicles_by_project_district?project_id=' + encodeURIComponent(pid || 0) + '&district_id=' + encodeURIComponent(did || 0);
     fetch(url)
       .then(function(r) { return r.json(); })
       .then(function(arr) {
-        arr.forEach(function(v) {
-          var o = document.createElement('option');
-          o.value = v.id;
-          o.textContent = v.vehicle_no;
-          vehicleSelect.appendChild(o);
+        var selected = null;
+        if (keep && keep !== '0' && (arr || []).some(function(v) { return String(v.id) === String(keep); })) {
+          selected = keep;
+        }
+        fleetFillSelectRows(vehicleSelect, arr, 'id', 'vehicle_no', {
+          placeholder: '-- All Vehicles --',
+          placeholderValue: '0',
+          selected: selected
         });
-        if (keep && keep !== '0' && vehicleSelect.querySelector('option[value="' + keep + '"]')) {
-          vehicleSelect.value = keep;
-        }
-        if (typeof initSearchableDropdowns === 'function') {
-          initSearchableDropdowns(vehicleSelect.parentNode);
-        }
       })
       .catch(function() {
-        if (typeof initSearchableDropdowns === 'function') {
-          initSearchableDropdowns(vehicleSelect.parentNode);
-        }
+        fleetFillSelectRows(vehicleSelect, [], 'id', 'vehicle_no', { placeholder: '-- All Vehicles --', placeholderValue: '0' });
       });
   }
 
   if (projectSelect && districtSelect && !lockDistrict) {
     districtSelect.addEventListener('change', function() {
       var did = this.value;
-      if (projectSelect.tomselect) { projectSelect.tomselect.destroy(); }
-      projectSelect.innerHTML = '<option value="0">-- Select Project --</option>';
+      fleetFillSelectRows(projectSelect, [], 'id', 'name', { placeholder: '-- Select Project --', placeholderValue: '0' });
       if (did && did !== '0') {
         fetch('/get_projects_by_district/' + did)
           .then(function(r) { return r.json(); })
           .then(function(arr) {
-            arr.forEach(function(p) {
-              var o = document.createElement('option');
-              o.value = p.id;
-              o.textContent = p.name;
-              projectSelect.appendChild(o);
-            });
-            if (typeof initSearchableDropdowns === 'function') {
-            initSearchableDropdowns(projectSelect.parentNode);
-            }
-            reloadTaskEntryVehicles();
+            fleetFillSelectRows(projectSelect, arr, 'id', 'name', { placeholder: '-- Select Project --', placeholderValue: '0' });
           });
-      } else {
-        if (typeof initSearchableDropdowns === 'function') {
-        initSearchableDropdowns(projectSelect.parentNode);
-        }
-        reloadTaskEntryVehicles();
       }
+      reloadTaskEntryVehicles();
     });
   }
 

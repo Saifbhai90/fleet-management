@@ -360,7 +360,7 @@
 
   function reinitDropdown(el, placeholder) {
     if (!el) return;
-    if (el.tomselect) el.tomselect.destroy();
+    if (el.tomselect) return;
     initSearchableDropdowns(el.parentNode);
   }
 
@@ -395,31 +395,21 @@
     fetch(url)
       .then(function(r) { return r.json(); })
       .then(function(arr) {
-        if (driverSelect.tomselect) driverSelect.tomselect.destroy();
-        driverSelect.innerHTML = '<option value="0">All Drivers</option>';
-        var ids = ['0'];
-        (arr || []).forEach(function(d) {
-          var opt = document.createElement('option');
-          opt.value = d.id;
-          opt.textContent = (d.name || '') + (d.driver_id ? ' (' + d.driver_id + ')' : '') + (d.shift ? ' - ' + d.shift : '');
-          driverSelect.appendChild(opt);
-          ids.push(String(d.id));
+        var opts = (arr || []).map(function(d) {
+          return { value: d.id, text: (d.name || '') + (d.driver_id ? ' (' + d.driver_id + ')' : '') + (d.shift ? ' - ' + d.shift : '') };
         });
+        var ids = ['0'].concat(opts.map(function(o) { return String(o.value); }));
         var keep = keepSelectionIfInList && currentDriverId && ids.indexOf(String(currentDriverId)) !== -1;
-        if (!keep) {
-          driverSelect.value = '0';
-          if (hiddenDriverId) hiddenDriverId.value = '0';
-        } else {
-          driverSelect.value = currentDriverId;
-          if (hiddenDriverId) hiddenDriverId.value = currentDriverId;
-        }
-        reinitDropdown(driverSelect, 'Search driver...');
+        fleetFillSelect(driverSelect, opts, {
+          placeholder: 'All Drivers',
+          placeholderValue: '0',
+          selected: keep ? currentDriverId : null
+        });
+        if (hiddenDriverId) hiddenDriverId.value = keep ? currentDriverId : '0';
       })
       .catch(function() {
-        driverSelect.innerHTML = '<option value="0">All Drivers</option>';
-        driverSelect.value = '0';
+        fleetFillSelect(driverSelect, [], { placeholder: 'All Drivers', placeholderValue: '0' });
         if (hiddenDriverId) hiddenDriverId.value = '0';
-        reinitDropdown(driverSelect, 'Search driver...');
       });
   }
 
@@ -435,55 +425,30 @@
     if (hiddenDriverId) hiddenDriverId.value = '0';
     if (hiddenVehicleId) hiddenVehicleId.value = '0';
     if (hiddenDistrictId) hiddenDistrictId.value = '0';
-    if (districtSelect.tomselect) districtSelect.tomselect.destroy();
-    districtSelect.innerHTML = '<option value="0">All Districts</option>';
-    vehicleSelect.innerHTML = '<option value="0">All Vehicles</option>';
-    driverSelect.innerHTML = '<option value="0">All Drivers</option>';
-    vehicleSelect.value = '0';
-    driverSelect.value = '0';
-    reinitDropdown(vehicleSelect, 'Search vehicle...');
-    reinitDropdown(driverSelect, 'Search driver...');
+    fleetFillSelectRows(districtSelect, [], 'id', 'name', { placeholder: 'All Districts', placeholderValue: '0' });
+    fleetFillSelectRows(vehicleSelect, [], 'id', 'vehicle_no', { placeholder: 'All Vehicles', placeholderValue: '0' });
+    if (driverSelect) fleetFillSelect(driverSelect, [], { placeholder: 'All Drivers', placeholderValue: '0' });
     if (pid && pid !== '0') {
       fetch('/api/filter/districts-by-project?project_id=' + pid)
         .then(function(r) { return r.json(); })
         .then(function(districts) {
-          districts.forEach(function(d) {
-            var opt = document.createElement('option');
-            opt.value = d.id;
-            opt.textContent = d.name;
-            districtSelect.appendChild(opt);
-          });
-          reinitDropdown(districtSelect, 'Search district...');
+          fleetFillSelectRows(districtSelect, districts, 'id', 'name', { placeholder: 'All Districts', placeholderValue: '0' });
         });
       fetch('/api/filter/all-vehicles-by-project-district?project_id=' + pid + '&district_id=0')
         .then(function(r) { return r.json(); })
         .then(function(vehicles) {
-          if (vehicleSelect.tomselect) vehicleSelect.tomselect.destroy();
-          vehicleSelect.innerHTML = '<option value="0">All Vehicles</option>';
-          vehicles.forEach(function(v) {
-            var opt = document.createElement('option');
-            opt.value = v.id;
-            opt.textContent = v.vehicle_no + (v.vehicle_type ? ' (' + v.vehicle_type + ')' : '');
-            vehicleSelect.appendChild(opt);
-          });
-          vehicleSelect.value = '0';
-          reinitDropdown(vehicleSelect, 'Search vehicle...');
+          fleetFillSelect(vehicleSelect, (vehicles || []).map(function(v) {
+            return { value: v.id, text: v.vehicle_no + (v.vehicle_type ? ' (' + v.vehicle_type + ')' : '') };
+          }), { placeholder: 'All Vehicles', placeholderValue: '0' });
           if (typeof refreshDriverDropdown === 'function') refreshDriverDropdown(false);
         });
     } else {
       fetch('/api/filter/all-vehicles-by-project-district')
         .then(function(r) { return r.json(); })
         .then(function(vehicles) {
-          if (vehicleSelect.tomselect) vehicleSelect.tomselect.destroy();
-          vehicleSelect.innerHTML = '<option value="0">All Vehicles</option>';
-          vehicles.forEach(function(v) {
-            var opt = document.createElement('option');
-            opt.value = v.id;
-            opt.textContent = v.vehicle_no + (v.vehicle_type ? ' (' + v.vehicle_type + ')' : '');
-            vehicleSelect.appendChild(opt);
-          });
-          vehicleSelect.value = '0';
-          reinitDropdown(vehicleSelect, 'Search vehicle...');
+          fleetFillSelect(vehicleSelect, (vehicles || []).map(function(v) {
+            return { value: v.id, text: v.vehicle_no + (v.vehicle_type ? ' (' + v.vehicle_type + ')' : '') };
+          }), { placeholder: 'All Vehicles', placeholderValue: '0' });
           if (typeof refreshDriverDropdown === 'function') refreshDriverDropdown(false);
         });
       reinitDropdown(districtSelect, 'Search district...');
@@ -494,27 +459,14 @@
     if (hiddenDistrictId) hiddenDistrictId.value = did || '0';
     if (hiddenDriverId) hiddenDriverId.value = '0';
     if (hiddenVehicleId) hiddenVehicleId.value = '0';
-    if (vehicleSelect.tomselect) vehicleSelect.tomselect.destroy();
-    if (driverSelect && driverSelect.tomselect) driverSelect.tomselect.destroy();
-    vehicleSelect.innerHTML = '<option value="0">All Vehicles</option>';
-    driverSelect.innerHTML = '<option value="0">All Drivers</option>';
-    vehicleSelect.value = '0';
-    driverSelect.value = '0';
-    reinitDropdown(vehicleSelect, 'Search vehicle...');
-    reinitDropdown(driverSelect, 'Search driver...');
+    fleetFillSelectRows(vehicleSelect, [], 'id', 'vehicle_no', { placeholder: 'All Vehicles', placeholderValue: '0' });
+    if (driverSelect) fleetFillSelect(driverSelect, [], { placeholder: 'All Drivers', placeholderValue: '0' });
     fetch('/api/filter/all-vehicles-by-project-district?project_id=' + (pid || '0') + '&district_id=' + (did || '0'))
       .then(function(r) { return r.json(); })
       .then(function(vehicles) {
-        if (vehicleSelect.tomselect) vehicleSelect.tomselect.destroy();
-        vehicleSelect.innerHTML = '<option value="0">All Vehicles</option>';
-        vehicles.forEach(function(v) {
-          var opt = document.createElement('option');
-          opt.value = v.id;
-          opt.textContent = v.vehicle_no + (v.vehicle_type ? ' (' + v.vehicle_type + ')' : '');
-          vehicleSelect.appendChild(opt);
-        });
-        vehicleSelect.value = '0';
-        reinitDropdown(vehicleSelect, 'Search vehicle...');
+        fleetFillSelect(vehicleSelect, (vehicles || []).map(function(v) {
+          return { value: v.id, text: v.vehicle_no + (v.vehicle_type ? ' (' + v.vehicle_type + ')' : '') };
+        }), { placeholder: 'All Vehicles', placeholderValue: '0' });
         if (typeof refreshDriverDropdown === 'function') refreshDriverDropdown(true);
       });
   }

@@ -436,8 +436,7 @@
   if (ds) {
     setTimeout(function() {
       if (ds.classList.contains('search-select') && ds.parentNode) {
-        if (ds.tomselect) ds.tomselect.destroy();
-        initSearchableDropdowns(ds.parentNode);
+        if (!ds.tomselect) initSearchableDropdowns(ds.parentNode);
       }
     }, 80);
   }

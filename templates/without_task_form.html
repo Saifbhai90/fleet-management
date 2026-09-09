@@ -169,22 +169,13 @@
   if (projectSelect && document.getElementById('districtSelect')) {
     document.getElementById('districtSelect').addEventListener('change', function() {
       var did = this.value;
-      if (projectSelect.tomselect) { projectSelect.tomselect.destroy(); }
-      projectSelect.innerHTML = '<option value="0">-- All Projects --</option>';
+      fleetFillSelectRows(projectSelect, [], 'id', 'name', { placeholder: '-- All Projects --', placeholderValue: '0' });
       if (did && did !== '0') {
         fetch('/get_projects_by_district/' + did)
           .then(function(r) { return r.json(); })
           .then(function(arr) {
-            arr.forEach(function(p) {
-              var o = document.createElement('option');
-              o.value = p.id;
-              o.textContent = p.name;
-              projectSelect.appendChild(o);
-            });
-            initSearchableDropdowns(projectSelect.parentNode);
+      fleetFillSelectRows(projectSelect, arr, 'id', 'name', { placeholder: '-- All Projects --', placeholderValue: '0' });
           });
-      } else {
-        initSearchableDropdowns(projectSelect.parentNode);
       }
     });
   }

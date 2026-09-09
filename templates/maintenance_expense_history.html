@@ -255,15 +255,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function refreshSelect(select, placeholder, rows, textField) {
     if (!select) return;
-    if (select.tomselect) select.tomselect.destroy();
-    select.innerHTML = '<option value="0">' + placeholder + '</option>';
-    (rows || []).forEach(function(row) {
-      var o = document.createElement('option');
-      o.value = row.id;
-      o.textContent = row[textField];
-      select.appendChild(o);
-    });
-    if (typeof initSearchableDropdowns === 'function') initSearchableDropdowns(select.parentNode);
+    fleetFillSelectRows(select, rows, 'id', textField, { placeholder: placeholder, placeholderValue: '0' });
   }
 
   if (districtSelect && projectSelect) {

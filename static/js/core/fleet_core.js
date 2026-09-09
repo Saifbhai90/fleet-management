@@ -4322,6 +4322,183 @@
         });
     };
 
+    function _fleetIsPlaceholderOption(value, text) {
+        var fv = value == null ? '' : String(value);
+        var ft = (text || '').trim();
+        return (fv === '' || fv === '0') && /^(--|select|all[\s(]|choose|pick|no\s)/i.test(ft);
+    }
+
+    function _fleetOptionAttrs(el) {
+        var attrs = {};
+        if (!el || !el.attributes) return attrs;
+        Array.prototype.forEach.call(el.attributes, function(a) {
+            if (!a || !a.name) return;
+            if (a.name.indexOf('data-') === 0) attrs[a.name] = a.value;
+        });
+        return attrs;
+    }
+
+    function _fleetSyncOptionAttrs(sel, items) {
+        if (!sel || !items) return;
+        var byVal = {};
+        items.forEach(function(item) {
+            if (!item || !item.attrs) return;
+            byVal[String(item.value)] = item.attrs;
+        });
+        Array.prototype.forEach.call(sel.options || [], function(o) {
+            var attrs = byVal[String(o.value)];
+            if (!attrs) return;
+            Object.keys(attrs).forEach(function(k) {
+                if (attrs[k] == null) return;
+                o.setAttribute(k, String(attrs[k]));
+            });
+        });
+    }
+
+    function _fleetParseSelectHtml(html) {
+        var wrap = document.createElement('select');
+        wrap.innerHTML = html || '';
+        var opts = [];
+        var placeholder = null;
+        var selected = null;
+        Array.prototype.forEach.call(wrap.options || [], function(o, i) {
+            var item = { value: String(o.value), text: (o.textContent || '').trim() };
+            var attrs = _fleetOptionAttrs(o);
+            if (Object.keys(attrs).length) item.attrs = attrs;
+            if (o.selected && item.value && item.value !== '0') selected = item.value;
+            if (i === 0 && _fleetIsPlaceholderOption(item.value, item.text)) {
+                placeholder = item;
+                return;
+            }
+            opts.push(item);
+        });
+        return { options: opts, placeholder: placeholder, selected: selected };
+    }
+
+    window.fleetSetSelectValue = function(sel, val, silent) {
+        if (!sel) return;
+        var v = (val == null || val === '') ? '' : String(val);
+        if (sel.tomselect) {
+            if (silent !== false) {
+                sel.tomselect._wsSilentFill = true;
+                sel.tomselect._justSelected = true;
+            }
+            if (!v || v === '0') {
+                try { sel.tomselect.clear(true); } catch (e) {}
+                try { sel.tomselect.wrapper.classList.remove('has-items'); } catch (e2) {}
+            } else {
+                try { sel.tomselect.setValue(v, true); } catch (e3) {}
+            }
+            if (silent !== false) sel.tomselect._wsSilentFill = false;
+            try { sel.tomselect.close(); } catch (e4) {}
+            return;
+        }
+        sel.value = v || '0';
+    };
+
+    window.fleetFillSelect = function(sel, options, cfg) {
+        if (!sel) return;
+        cfg = cfg || {};
+        var items = options || [];
+        var selected = cfg.selected;
+        if (sel.tomselect) {
+            var ts = sel.tomselect;
+            ts._wsSilentFill = true;
+            ts._justSelected = true;
+            try { ts.close(); } catch (e0) {}
+            ts.clear(true);
+            ts.clearOptions();
+            items.forEach(function(item) {
+                if (!item) return;
+                var v = String(item.value);
+                if (_fleetIsPlaceholderOption(v, item.text)) return;
+                var payload = { value: v, text: item.text || '' };
+                if (item.attrs) {
+                    Object.keys(item.attrs).forEach(function(k) { payload[k] = item.attrs[k]; });
+                }
+                ts.addOption(payload);
+            });
+            _fleetSyncOptionAttrs(sel, items);
+            try { ts.enable(); } catch (e1) {}
+            ts._wsSilentFill = false;
+            if (selected != null && selected !== '' && String(selected) !== '0') {
+                window.fleetSetSelectValue(sel, selected, cfg.silent !== false);
+            } else {
+                try { ts.wrapper.classList.remove('has-items'); } catch (e2) {}
+            }
+            return;
+        }
+        var phVal = cfg.placeholderValue != null ? String(cfg.placeholderValue) : '0';
+        var phText = cfg.placeholder || '-- Select --';
+        sel.innerHTML = '';
+        var ph = document.createElement('option');
+        ph.value = phVal;
+        ph.textContent = phText;
+        sel.appendChild(ph);
+        items.forEach(function(item) {
+            if (!item) return;
+            var v = String(item.value);
+            if (_fleetIsPlaceholderOption(v, item.text)) return;
+            var o = document.createElement('option');
+            o.value = item.value;
+            o.textContent = item.text;
+            if (item.attrs) {
+                Object.keys(item.attrs).forEach(function(k) {
+                    if (item.attrs[k] == null) return;
+                    o.setAttribute(k, String(item.attrs[k]));
+                });
+            }
+            sel.appendChild(o);
+        });
+        if (typeof window.initSearchableDropdowns === 'function') {
+            window.initSearchableDropdowns(sel.parentNode || sel);
+        }
+        if (selected != null && selected !== '' && String(selected) !== '0') {
+            window.fleetSetSelectValue(sel, selected, cfg.silent !== false);
+        }
+    };
+
+    window.fleetFillSelectRows = function(sel, rows, valueKey, textKey, cfg) {
+        var opts = (rows || []).map(function(row) {
+            if (!row) return null;
+            return {
+                value: row[valueKey],
+                text: (typeof textKey === 'function') ? textKey(row) : row[textKey]
+            };
+        }).filter(Boolean);
+        window.fleetFillSelect(sel, opts, cfg || {});
+    };
+
+    window.fleetFillSelectFromHtml = function(sel, html, cfg) {
+        if (!sel) return;
+        var parsed = _fleetParseSelectHtml(html);
+        var nextCfg = {};
+        if (cfg) {
+            Object.keys(cfg).forEach(function(k) { nextCfg[k] = cfg[k]; });
+        }
+        if (parsed.placeholder) {
+            if (nextCfg.placeholder == null) nextCfg.placeholder = parsed.placeholder.text;
+            if (nextCfg.placeholderValue == null) nextCfg.placeholderValue = parsed.placeholder.value;
+        }
+        if (nextCfg.selected == null && parsed.selected) nextCfg.selected = parsed.selected;
+        window.fleetFillSelect(sel, parsed.options, nextCfg);
+    };
+
+    window.fleetSetSelectLoading = function(sel) {
+        if (!sel) return;
+        if (sel.tomselect) {
+            var ts = sel.tomselect;
+            ts._wsSilentFill = true;
+            ts.clear(true);
+            ts.clearOptions();
+            try { ts.disable(); } catch (e) {}
+            try { ts.wrapper.classList.remove('has-items'); } catch (e2) {}
+            ts._wsSilentFill = false;
+            return;
+        }
+        sel.innerHTML = '<option value="0">-- Loading... --</option>';
+    };
+
     // Safe global helper: page-specific scripts can call this any time.
     window.FleetInitSelectors = function(scope) {
         if (typeof TomSelect === 'undefined') {

@@ -317,23 +317,13 @@
     district.addEventListener('change', function() {
       if (vrsBlockCascade) return;
       var did = district.tomselect ? district.tomselect.getValue() : district.value;
-      if (project.tomselect) { project.tomselect.destroy(); }
-      if (vehicle.tomselect) { vehicle.tomselect.destroy(); }
-      project.innerHTML = '<option value="">-- Select --</option>';
-      vehicle.innerHTML = '<option value="">-- Select --</option>';
-      initSearchableDropdowns(vehicle.parentNode);
+      fleetFillSelectRows(vehicle, [], 'id', 'vehicle_no', { placeholder: '-- Select --', placeholderValue: '' });
       if (did) {
         fetch('/get_projects_by_district/' + did).then(function(r) { return r.json(); }).then(function(arr) {
-          arr.forEach(function(p) {
-            var o = document.createElement('option');
-            o.value = p.id;
-            o.textContent = p.name;
-            project.appendChild(o);
-          });
-          initSearchableDropdowns(project.parentNode);
+          fleetFillSelectRows(project, arr, 'id', 'name', { placeholder: '-- Select --', placeholderValue: '' });
         });
       } else {
-        initSearchableDropdowns(project.parentNode);
+        fleetFillSelectRows(project, [], 'id', 'name', { placeholder: '-- Select --', placeholderValue: '' });
       }
     });
   }
@@ -343,22 +333,14 @@
       if (vrsBlockCascade) return;
       var pid = project.tomselect ? project.tomselect.getValue() : project.value;
       var did = district ? (district.tomselect ? district.tomselect.getValue() : district.value) : '';
-      if (vehicle.tomselect) { vehicle.tomselect.destroy(); }
-      vehicle.innerHTML = '<option value="">-- Select --</option>';
       if (pid) {
         var url = '/get_vehicles_by_project_district?project_id=' + pid;
         if (did) url += '&district_id=' + did;
         fetch(url).then(function(r) { return r.json(); }).then(function(arr) {
-          arr.forEach(function(v) {
-            var o = document.createElement('option');
-            o.value = v.id;
-            o.textContent = v.vehicle_no;
-            vehicle.appendChild(o);
-          });
-          initSearchableDropdowns(vehicle.parentNode);
+          fleetFillSelectRows(vehicle, arr, 'id', 'vehicle_no', { placeholder: '-- Select --', placeholderValue: '' });
         });
       } else {
-        initSearchableDropdowns(vehicle.parentNode);
+        fleetFillSelectRows(vehicle, [], 'id', 'vehicle_no', { placeholder: '-- Select --', placeholderValue: '' });
       }
     });
   }

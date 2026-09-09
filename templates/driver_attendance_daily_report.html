@@ -2235,10 +2235,7 @@
 
   function reinitDropdown(el) {
     if (!el) return;
-    if (el.tomselect) {
-      try { el.tomselect.destroy(); } catch (e) {}
-      delete el.tomselect;
-    }
+    if (el.tomselect) return;
     if (typeof window.initSearchableDropdowns === 'function') {
       window.initSearchableDropdowns(el.parentElement || el.closest('.filter-card') || document);
     }
@@ -2247,34 +2244,24 @@
   function loadDistricts(projectId) {
     if (hasSingle || !districtSelect) return;
     var cur = selectValue(districtSelect);
-    if (districtSelect.tomselect) {
-      try { districtSelect.tomselect.destroy(); } catch (e) {}
-      delete districtSelect.tomselect;
-    }
-    districtSelect.innerHTML = '<option value="0">-- Select District --</option>';
     if (!projectId || projectId === '0') {
-      reinitDropdown(districtSelect);
+      fleetFillSelectRows(districtSelect, [], 'id', 'name', { placeholder: '-- Select District --', placeholderValue: '0' });
       loadVehicles();
       return;
     }
     fetch('/api/filter/districts-by-project?project_id=' + encodeURIComponent(projectId))
       .then(function(r) { return r.json(); })
       .then(function(districts) {
-        (districts || []).forEach(function(d) {
-          var opt = document.createElement('option');
-          opt.value = d.id;
-          opt.textContent = d.name;
-          districtSelect.appendChild(opt);
+        var selected = (cur && cur !== '0' && (districts || []).some(function(d) { return String(d.id) === String(cur); })) ? cur : null;
+        fleetFillSelectRows(districtSelect, districts, 'id', 'name', {
+          placeholder: '-- Select District --',
+          placeholderValue: '0',
+          selected: selected
         });
-        if (cur && cur !== '0') {
-          var hasCur = Array.prototype.some.call(districtSelect.options, function(o) { return o.value === String(cur); });
-          districtSelect.value = hasCur ? cur : '0';
-        }
-        reinitDropdown(districtSelect);
         loadVehicles();
       })
       .catch(function() {
-        reinitDropdown(districtSelect);
+        fleetFillSelectRows(districtSelect, [], 'id', 'name', { placeholder: '-- Select District --', placeholderValue: '0' });
         loadVehicles();
       });
   }
@@ -2284,33 +2271,21 @@
     var pid = selectValue(projectSelect);
     var did = selectValue(districtSelect);
     var cur = selectValue(vehicleSelect);
-    if (vehicleSelect.tomselect) {
-      try { vehicleSelect.tomselect.destroy(); } catch (e) {}
-      delete vehicleSelect.tomselect;
-    }
-    vehicleSelect.innerHTML = '<option value="0">-- All Vehicles --</option>';
     fetch('/api/filter/all-vehicles-by-project-district?project_id=' + encodeURIComponent(pid) + '&district_id=' + encodeURIComponent(did))
       .then(function(r) { return r.json(); })
       .then(function(vehicles) {
-        (vehicles || []).forEach(function(v) {
-          var opt = document.createElement('option');
-          opt.value = v.id;
-          opt.textContent = v.vehicle_no + (v.vehicle_type ? ' (' + v.vehicle_type + ')' : '');
-          vehicleSelect.appendChild(opt);
-        });
-        if (cur && cur !== '0') {
-          var hasCur = Array.prototype.some.call(vehicleSelect.options, function(o) { return o.value === String(cur); });
-          vehicleSelect.value = hasCur ? cur : '0';
+        var selected = (cur && cur !== '0' && (vehicles || []).some(function(v) { return String(v.id) === String(cur); })) ? cur : null;
+        if (hasSingle && scope.vehicles.length === 1) selected = String(scope.vehicles[0]);
+        fleetFillSelect(vehicleSelect, (vehicles || []).map(function(v) {
+          return { value: v.id, text: v.vehicle_no + (v.vehicle_type ? ' (' + v.vehicle_type + ')' : '') };
+        }), { placeholder: '-- All Vehicles --', placeholderValue: '0', selected: selected });
+        if (hasSingle && scope.vehicles.length === 1 && vehicleSelect.tomselect) {
+          try { vehicleSelect.tomselect.disable(); } catch (e) {}
         }
-        if (hasSingle && scope.vehicles.length === 1) {
-          vehicleSelect.value = String(scope.vehicles[0]);
-          vehicleSelect.disabled = true;
-        }
-        reinitDropdown(vehicleSelect);
         refreshDriverDropdown();
       })
       .catch(function() {
-        reinitDropdown(vehicleSelect);
+        fleetFillSelectRows(vehicleSelect, [], 'id', 'vehicle_no', { placeholder: '-- All Vehicles --', placeholderValue: '0' });
       });
   }
 
@@ -2323,29 +2298,17 @@
     var did = selectValue(districtSelect);
     var vid = selectValue(vehicleSelect);
     var cur = selectValue(driverSelect);
-    if (driverSelect.tomselect) {
-      try { driverSelect.tomselect.destroy(); } catch (e) {}
-      delete driverSelect.tomselect;
-    }
     fetch('/api/attendance/filtered-drivers?project_id=' + encodeURIComponent(pid) + '&district_id=' + encodeURIComponent(did) + '&vehicle_id=' + encodeURIComponent(vid))
       .then(function(r) { return r.json(); })
       .then(function(arr) {
-        driverSelect.innerHTML = '<option value="0">-- All Drivers --</option>';
-        (arr || []).forEach(function(d) {
-          var opt = document.createElement('option');
-          opt.value = d.id;
-          opt.textContent = d.name + ' (' + (d.driver_id || '-') + ') - ' + (d.shift || '-');
-          driverSelect.appendChild(opt);
-        });
-        if (cur && cur !== '0') {
-          var hasCur = Array.prototype.some.call(driverSelect.options, function(o) { return o.value === String(cur); });
-          driverSelect.value = hasCur ? cur : '0';
-        }
-        reinitDropdown(driverSelect);
+        var selected = (cur && cur !== '0' && (arr || []).some(function(d) { return String(d.id) === String(cur); })) ? cur : null;
+        fleetFillSelect(driverSelect, (arr || []).map(function(d) {
+          return { value: d.id, text: d.name + ' (' + (d.driver_id || '-') + ') - ' + (d.shift || '-') };
+        }), { placeholder: '-- All Drivers --', placeholderValue: '0', selected: selected });
         if (typeof onDone === 'function') onDone();
       })
       .catch(function() {
-        reinitDropdown(driverSelect);
+        fleetFillSelectRows(driverSelect, [], 'id', 'name', { placeholder: '-- All Drivers --', placeholderValue: '0' });
         if (typeof onDone === 'function') onDone();
       });
   }

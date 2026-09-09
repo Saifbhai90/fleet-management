@@ -171,7 +171,11 @@ textarea.form-control { height: auto !important; }
 (function() {
   function rebuildSel(el, html) {
     if (!el) return;
-    if (el.tomselect) { el.tomselect.destroy(); }
+   if (typeof fleetFillSelectFromHtml === 'function') {
+      fleetFillSelectFromHtml(el, html);
+      return;
+    }
+    if (el.tomselect) { try { el.tomselect.destroy(); } catch (e) {} }
     el.innerHTML = html;
     initSearchableDropdowns(el.parentNode);
     if (el === driverId && el.tomselect) {

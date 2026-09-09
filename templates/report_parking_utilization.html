@@ -450,6 +450,13 @@
 
   function rebuildSelect(sel, items, valueKey, labelKey, allLabel) {
     if (!sel) return;
+    var opts = (items || []).map(function(item) {
+      return { value: item[valueKey], text: item[labelKey] };
+    });
+    if (typeof fleetFillSelect === 'function') {
+      fleetFillSelect(sel, opts, { placeholder: allLabel, placeholderValue: '0' });
+      return;
+    }
     if (sel.tomselect) { sel.tomselect.destroy(); }
     sel.innerHTML = '<option value="0">' + allLabel + '</option>';
     (items || []).forEach(function(item) {

@@ -413,12 +413,19 @@
   if (!projSel || !distSel) return;
 
   function rebuildSelect(sel, items, valueKey, labelKey, allLabel) {
-    if (sel.tomselect) { sel.tomselect.destroy(); }
+    if (!sel) return;
+   var opts = (items || []).map(function(item) {
+      return { value: item[valueKey], text: item[labelKey] };
+    });
+    if (typeof fleetFillSelect === 'function') {
+      fleetFillSelect(sel, opts, { placeholder: allLabel, placeholderValue: '0' });
+      return;
+    }
     sel.innerHTML = '<option value="0">' + allLabel + '</option>';
-    (items || []).forEach(function(item) {
+    opts.forEach(function(item) {
       var opt = document.createElement('option');
-      opt.value = item[valueKey];
-      opt.textContent = item[labelKey];
+      opt.value = item.value;
+      opt.textContent = item.text;
       sel.appendChild(opt);
     });
     initSearchableDropdowns(sel.parentNode);

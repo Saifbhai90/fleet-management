@@ -405,6 +405,10 @@
   // ─── TomSelect-aware helpers (same pattern as Driver Transfer Portal) ───
   function rebuildSel(el, html) {
     if (!el) return;
+    if (typeof fleetFillSelectFromHtml === 'function') {
+      fleetFillSelectFromHtml(el, html);
+      return;
+    }
     if (el.tomselect) { el.tomselect.destroy(); }
     el.innerHTML = html;
     el.disabled = false;

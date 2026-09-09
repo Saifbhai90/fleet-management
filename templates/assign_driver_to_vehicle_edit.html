@@ -135,7 +135,11 @@ body .ts-wrapper .ts-control { border-radius: 9px !important; border: 1.5px soli
 (function() {
   function rebuildSel(el, html) {
     if (!el) return;
-    if (el.tomselect) { el.tomselect.destroy(); }
+   if (typeof fleetFillSelectFromHtml === 'function') {
+      fleetFillSelectFromHtml(el, html);
+      return;
+    }
+    if (el.tomselect) { try { el.tomselect.destroy(); } catch (e) {} }
     el.innerHTML = html;
     initSearchableDropdowns(el.parentNode);
   }

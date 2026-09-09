@@ -1287,21 +1287,28 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   function _smoothFillSelect(sel, arr, buildOptionFn) {
     if (!sel) return;
+    var opts = [];
+    if (arr && buildOptionFn) arr.forEach(function(item) { opts.push(buildOptionFn(item)); });
+    if (typeof fleetFillSelect === 'function') {
+      fleetFillSelect(sel, opts, { placeholder: '-- Select --', placeholderValue: '0' });
+      return;
+    }
     if (sel.tomselect) {
       var ts = sel.tomselect;
       ts.clear(true); ts.clearOptions();
-      if (arr) arr.forEach(function(item) { ts.addOption(buildOptionFn(item)); });
+      opts.forEach(function(opt) { ts.addOption(opt); });
       ts.enable(); return;
     }
     sel.innerHTML = '<option value="0">-- Select --</option>';
-    if (arr) arr.forEach(function(item) {
-      var opt = buildOptionFn(item); var o = document.createElement('option');
+    opts.forEach(function(opt) {
+      var o = document.createElement('option');
       o.value = opt.value; o.textContent = opt.text; sel.appendChild(o);
     });
     initSearchableDropdowns(sel.parentNode);
   }
   function _smoothLoadingSelect(sel) {
     if (!sel) return;
+    if (typeof fleetSetSelectLoading === 'function') { fleetSetSelectLoading(sel); return; }
     if (sel.tomselect) { sel.tomselect.clear(true); sel.tomselect.clearOptions(); sel.tomselect.disable(); return; }
     sel.innerHTML = '<option value="0">-- Loading... --</option>';
   }
@@ -3133,8 +3140,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   var fuelPumpSel = document.getElementById('fuelPumpSelect');
   if (fuelPumpSel) {
-    if (fuelPumpSel.tomselect) fuelPumpSel.tomselect.destroy();
-    initSearchableDropdowns(fuelPumpSel.parentNode);
+    if (!fuelPumpSel.tomselect) initSearchableDropdowns(fuelPumpSel.parentNode);
     fuelPumpSel.addEventListener('change', function() {
       fetchPriceHistory();
       fetchSuggestedPrice();

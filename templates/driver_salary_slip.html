@@ -272,7 +272,7 @@
 
   function reinitDropdown(el) {
     if (!el) return;
-    if (el.tomselect) el.tomselect.destroy();
+    if (el.tomselect) return;
     if (typeof window.initSearchableDropdowns === 'function') {
       window.initSearchableDropdowns(el.parentNode || document);
     }
@@ -318,19 +318,10 @@
 
   function loadProjects(did) {
     if (locked.district) return;
-    if (pEl.tomselect) pEl.tomselect.destroy();
-    if (vEl.tomselect) vEl.tomselect.destroy();
-    if (rEl.tomselect) rEl.tomselect.destroy();
     if (!did || did === '0') {
-      pEl.innerHTML = '<option value="0">— Select district first —</option>';
-      vEl.innerHTML = '<option value="0">— Select district &amp; project first —</option>';
-      rEl.innerHTML = '<option value="0">— Select driver —</option>';
-      pEl.value = '0';
-      vEl.value = '0';
-      rEl.value = '0';
-      reinitDropdown(pEl);
-      reinitDropdown(vEl);
-      reinitDropdown(rEl);
+      fleetFillSelect(pEl, [], { placeholder: '— Select district first —', placeholderValue: '0' });
+      fleetFillSelect(vEl, [], { placeholder: '— Select district & project first —', placeholderValue: '0' });
+      fleetFillSelect(rEl, [], { placeholder: '— Select driver —', placeholderValue: '0' });
       setDashAuto();
       syncManualToSlip();
       return;
@@ -338,25 +329,12 @@
     fetch('/api/filter/projects-by-district?district_id=' + encodeURIComponent(did))
       .then(function(x) { return x.json(); })
       .then(function(arr) {
-        pEl.innerHTML = '';
-        var o0p = document.createElement('option');
-        o0p.value = '0';
-        o0p.textContent = arr.length ? '— Select project —' : '— No project in this district —';
-        pEl.appendChild(o0p);
-        arr.forEach(function(p) {
-          var o = document.createElement('option');
-          o.value = p.id;
-          o.textContent = p.name;
-          pEl.appendChild(o);
+        fleetFillSelectRows(pEl, arr, 'id', 'name', {
+          placeholder: arr.length ? '— Select project —' : '— No project in this district —',
+          placeholderValue: '0'
         });
-        pEl.value = '0';
-        vEl.innerHTML = '<option value="0">— Select district &amp; project first —</option>';
-        rEl.innerHTML = '<option value="0">— Select driver —</option>';
-        vEl.value = '0';
-        rEl.value = '0';
-        reinitDropdown(pEl);
-        reinitDropdown(vEl);
-        reinitDropdown(rEl);
+        fleetFillSelect(vEl, [], { placeholder: '— Select district & project first —', placeholderValue: '0' });
+        fleetFillSelect(rEl, [], { placeholder: '— Select driver —', placeholderValue: '0' });
         setDashAuto();
         syncManualToSlip();
       });
@@ -367,42 +345,26 @@
     var pid = getSelVal(pEl);
     var did = getSelVal(dEl);
     var keepVid = getSelVal(vEl);
-    if (vEl.tomselect) vEl.tomselect.destroy();
-    if (rEl.tomselect) rEl.tomselect.destroy();
     if (!pid || pid === '0' || !did || did === '0') {
-      vEl.innerHTML = '<option value="0">— Select district &amp; project first —</option>';
-      rEl.innerHTML = '<option value="0">— Select driver —</option>';
-      vEl.value = '0';
-      rEl.value = '0';
-      reinitDropdown(vEl);
-      reinitDropdown(rEl);
+      fleetFillSelect(vEl, [], { placeholder: '— Select district & project first —', placeholderValue: '0' });
+      fleetFillSelect(rEl, [], { placeholder: '— Select driver —', placeholderValue: '0' });
       return;
     }
     fetch('/api/filter/all-vehicles-by-project-district?project_id=' + encodeURIComponent(pid) + '&district_id=' + encodeURIComponent(did))
       .then(function(x) { return x.json(); })
       .then(function(arr) {
-        vEl.innerHTML = '';
-        var o0 = document.createElement('option');
-        o0.value = '0';
-        o0.textContent = arr.length ? '— Select vehicle —' : '— No vehicle —';
-        vEl.appendChild(o0);
-        arr.forEach(function(v) {
-          var o = document.createElement('option');
-          o.value = v.id;
-          o.textContent = v.vehicle_no + (v.vehicle_type ? ' (' + v.vehicle_type + ')' : '');
-          vEl.appendChild(o);
+        var selected = (keepVid && keepVid !== '0' && (arr || []).some(function(v) { return String(v.id) === String(keepVid); })) ? keepVid : null;
+        fleetFillSelect(vEl, (arr || []).map(function(v) {
+          return { value: v.id, text: v.vehicle_no + (v.vehicle_type ? ' (' + v.vehicle_type + ')' : '') };
+        }), {
+          placeholder: arr.length ? '— Select vehicle —' : '— No vehicle —',
+          placeholderValue: '0',
+          selected: selected
         });
-        if (keepVid && keepVid !== '0' && vEl.querySelector('option[value="' + keepVid + '"]')) {
-          vEl.value = keepVid;
-          reinitDropdown(vEl);
-          reinitDropdown(rEl);
+        if (selected) {
           loadDrivers();
         } else {
-          vEl.value = '0';
-          rEl.innerHTML = '<option value="0">— Select driver —</option>';
-          rEl.value = '0';
-          reinitDropdown(vEl);
-          reinitDropdown(rEl);
+          fleetFillSelect(rEl, [], { placeholder: '— Select driver —', placeholderValue: '0' });
           setDashAuto();
           syncManualToSlip();
         }
@@ -412,35 +374,19 @@
   function loadDrivers() {
     var vid = getSelVal(vEl);
     var keepRid = getSelVal(rEl);
-    if (rEl.tomselect) rEl.tomselect.destroy();
     if (!vid || vid === '0') {
-      rEl.innerHTML = '<option value="0">— Select driver —</option>';
-      rEl.value = '0';
-      reinitDropdown(rEl);
+      fleetFillSelect(rEl, [], { placeholder: '— Select driver —', placeholderValue: '0' });
       return;
     }
     fetch('/api/salary-slip/drivers-for-vehicle?vehicle_id=' + encodeURIComponent(vid))
       .then(function(x) { return x.json(); })
       .then(function(arr) {
-        rEl.innerHTML = '';
-        var o0 = document.createElement('option');
-        o0.value = '0';
-        o0.textContent = '— Select driver —';
-        rEl.appendChild(o0);
-        arr.forEach(function(d) {
-          var o = document.createElement('option');
-          o.value = d.id;
-          o.textContent = d.label || (d.name + ' (' + (d.driver_id || '-') + ')');
-          rEl.appendChild(o);
-        });
-        if (keepRid && keepRid !== '0' && rEl.querySelector('option[value="' + keepRid + '"]')) {
-          rEl.value = keepRid;
-        } else {
-          rEl.value = '0';
-        }
-        reinitDropdown(rEl);
-        if (rEl.value && rEl.value !== '0') {
-          loadDriverData(rEl.value);
+        var selected = (keepRid && keepRid !== '0' && (arr || []).some(function(d) { return String(d.id) === String(keepRid); })) ? keepRid : null;
+        fleetFillSelect(rEl, (arr || []).map(function(d) {
+          return { value: d.id, text: d.label || (d.name + ' (' + (d.driver_id || '-') + ')') };
+        }), { placeholder: '— Select driver —', placeholderValue: '0', selected: selected });
+        if (selected) {
+          loadDriverData(selected);
         } else {
           setDashAuto();
           syncManualToSlip();
