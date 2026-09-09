@@ -216,6 +216,31 @@ def get_account_balance(account_id, as_of_date=None):
     return balance
 
 
+def get_account_closing_balance(account_id):
+    """Closing balance without building the full ledger transaction list.
+
+    Same math as get_account_ledger(...).closing_balance: opening + posted lines.
+    """
+    from sqlalchemy import func
+
+    account = db.session.get(Account, account_id)
+    if not account:
+        return Decimal('0')
+    opening = Decimal(str(account.opening_balance or 0))
+    debit_sum, credit_sum = db.session.query(
+        func.coalesce(func.sum(JournalEntryLine.debit), 0),
+        func.coalesce(func.sum(JournalEntryLine.credit), 0),
+    ).join(JournalEntry).filter(
+        JournalEntryLine.account_id == account_id,
+        JournalEntry.is_posted == True,
+    ).one()
+    debit = Decimal(str(debit_sum or 0))
+    credit = Decimal(str(credit_sum or 0))
+    if account.account_type in ['Asset', 'Expense']:
+        return opening + debit - credit
+    return opening + credit - debit
+
+
 def get_account_ledger(account_id, from_date=None, to_date=None, category=None):
     """
     Get account ledger with all transactions and running balance.

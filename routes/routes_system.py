@@ -276,11 +276,22 @@ def _build_route_diagnostics(window_minutes=15):
         elif 'fuel_expense' in blob and ('form' in blob or 'add' in blob):
             causes.append('Fuel form data prep / large HTML')
             fixes.append('Lazy cascade + avoid re-querying unused dropdown data on POST')
+        elif 'attendance' in blob and 'daily_report' in blob:
+            causes.append('Day-wise attendance grid (full month × drivers HTML)')
+            fixes.append('SSR only web OR native view; skip TRA prewarm on daily payload')
         elif 'attendance_gps_check' in blob or (
             'attendance' in blob and 'gps' in blob and 'submit' in blob
         ):
             causes.append('GPS attendance: selfie → R2 WebP upload (+ FCM notify)')
             fixes.append('Fast WebP encode; defer FCM after response; keep photo upload required')
+        elif 'driver_attendance_list' in blob or (
+            'attendance' in blob and 'list' in blob
+        ):
+            causes.append('Attendance list filter prep / full-row enrichment')
+            fixes.append('Lazy driver dropdown via API; paginate; trim unused select options')
+        elif 'workspace_home' in blob or ('workspace' in blob and 'home' in blob):
+            causes.append('Workspace dashboard: wallet ledger + expense sums + driver COA sync')
+            fixes.append('Closing-balance SQL only; sync driver COA once per session')
         elif 'task_report' in blob:
             causes.append('Task report row enrichment (prev reading / EMG / tracker km)')
             fixes.append('Use batched list-row builder; narrow date range; paginate')

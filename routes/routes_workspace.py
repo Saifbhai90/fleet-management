@@ -32,6 +32,7 @@ from routes_finance import check_auth, _ft_media_items_from_path
 from auth_utils import get_user_context
 from finance_utils import (
     get_account_ledger,
+    get_account_closing_balance,
     ensure_workspace_base_accounts,
     ensure_workspace_opening_expense_accounts,
     ensure_workspace_fuel_oil_opening_accounts,
@@ -690,8 +691,12 @@ def workspace_home():
     guard, emp = _workspace_guard("workspace_dashboard")
     if guard:
         return guard
-    _ensure_workspace_driver_accounts(emp)
-    db.session.commit()
+    # Sync driver COA at most once per browser session (was every page hit).
+    sync_key = 'ws_drv_coa_synced_%s' % int(emp.id)
+    if not session.get(sync_key):
+        _ensure_workspace_driver_accounts(emp)
+        db.session.commit()
+        session[sync_key] = 1
     scope = _get_employee_scope_summary(emp)
     fuel_expenses = Decimal(str(
         db.session.query(db.func.coalesce(db.func.sum(FuelExpense.amount), 0))
@@ -731,7 +736,11 @@ def workspace_home():
         + opening_expenses
         + fuel_oil_openings
     )
-    total_transfers = sum((x.amount or 0) for x in WorkspaceFundTransfer.query.filter_by(employee_id=emp.id).all())
+    total_transfers = Decimal(str(
+        db.session.query(db.func.coalesce(db.func.sum(WorkspaceFundTransfer.amount), 0))
+        .filter(WorkspaceFundTransfer.employee_id == emp.id)
+        .scalar() or 0
+    ))
 
     # Live ledger position:
     # User convention for dashboard card:
@@ -740,21 +749,18 @@ def workspace_home():
     close_credit_total = Decimal("0")
     wallet_acct = db.session.get(Account, emp.wallet_account_id) if emp.wallet_account_id else None
     if wallet_acct:
-        # Use ledger closing balance (last running balance) as source of truth.
-        ledger_data = get_account_ledger(wallet_acct.id)
-        if ledger_data and isinstance(ledger_data, dict):
-            wallet_balance = Decimal(str(ledger_data.get("closing_balance") or 0))
-        else:
-            wallet_balance = Decimal(str(wallet_acct.current_balance or 0))
-        rows = db.session.query(JournalEntryLine).join(JournalEntry).filter(
-            JournalEntryLine.account_id == wallet_acct.id,
-            JournalEntry.is_posted == True,
-            JournalEntry.category.in_(["Workspace Close", "Workspace Fuel/Oil Close"]),
-        ).all()
-        for ln in rows:
-            credit = Decimal(str(ln.credit or 0))
-            if credit > 0:
-                close_credit_total += credit
+        # Same closing math as full ledger, without building every transaction row.
+        wallet_balance = get_account_closing_balance(wallet_acct.id)
+        close_credit_total = Decimal(str(
+            db.session.query(db.func.coalesce(db.func.sum(JournalEntryLine.credit), 0))
+            .join(JournalEntry)
+            .filter(
+                JournalEntryLine.account_id == wallet_acct.id,
+                JournalEntry.is_posted == True,
+                JournalEntry.category.in_(["Workspace Close", "Workspace Fuel/Oil Close"]),
+            )
+            .scalar() or 0
+        ))
 
     adjusted_ledger_end = wallet_balance + close_credit_total
     # User convention: Net = Account Ledger End Balance - Total Expenses

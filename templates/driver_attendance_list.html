@@ -779,6 +779,9 @@ document.addEventListener('click', function (e) {
   } else {
     document.addEventListener('DOMContentLoaded', setupTableSearch);
   }
+  document.addEventListener('DOMContentLoaded', function() {
+    try { refreshDriverDropdown(true); } catch (e) {}
+  });
 
   /** Same filters as clicking View — full dataset for gallery (list pagination is ignored server-side). */
   window.buildAttendanceGalleryParams = function() {

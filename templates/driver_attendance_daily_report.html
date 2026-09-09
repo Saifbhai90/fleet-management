@@ -1750,11 +1750,19 @@
     var native = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())
       || !!(window.FleetBridge && window.FleetBridge.isNative)
       || document.documentElement.classList.contains('capacitor-native');
-    if (native) {
+    var hasNativeView = !!document.getElementById('dailyNativeView');
+    var hasWebGrid = !!document.getElementById('dailyReportWebGrid');
+    // Only switch to native layout when native markup was actually SSR'd.
+    // Otherwise keep the web grid (avoids blank page if cookie/UA lag).
+    if (native && hasNativeView) {
       document.documentElement.classList.add('daily-report-native', 'daily-attn-native-active', 'capacitor-native');
       document.body.classList.add('capacitor-native');
       var page = document.querySelector('.daily-attn-page');
       if (page) page.classList.add('daily-mode-native');
+    } else if (native && hasWebGrid && !hasNativeView) {
+      document.documentElement.classList.remove('daily-report-native', 'daily-attn-native-active');
+      var page2 = document.querySelector('.daily-attn-page');
+      if (page2) page2.classList.remove('daily-mode-native');
     }
   })();
   </script>
@@ -1834,6 +1842,7 @@
         <input type="text" id="dailyTableSearch" class="form-control form-control-sm daily-attn-toolbar__search" placeholder="Search drivers...">
       </div>
     </div>
+    {% if not is_native_app %}
     <div class="daily-attn-web-only" id="dailyReportWebGrid">
     <div class="card fuel-list-card overflow-hidden">
       <div class="card-body p-0">
@@ -1922,9 +1931,11 @@
       </div>
     </div>
     </div>{# /.daily-attn-web-only #}
+    {% endif %}
 
-    {# Capacitor app only — card + calendar (hidden on web via CSS) #}
-    <div class="daily-native-view" id="dailyNativeView" aria-hidden="true">
+    {% if is_native_app %}
+    {# Capacitor app only — avoid dual SSR of the full month grid (was ~2× payload). #}
+    <div class="daily-native-view" id="dailyNativeView" aria-hidden="false">
       <div class="daily-native-list" id="dailyNativeList">
         {% for row in report %}
         <article class="daily-driver-card{% if row.date_of_leaving %} daily-driver-card--ex{% endif %}" data-native-row="{{ loop.index0 }}" data-driver-name="{{ row.driver_name|e }}" data-search-text="{{ (row.driver_name ~ ' ' ~ row.district_name ~ ' ' ~ row.project_name ~ ' ' ~ row.vehicle_no ~ ' ' ~ row.shift)|lower }}">
@@ -2041,6 +2052,7 @@
         <div class="daily-cal-sheet__body" id="dailyCalSheetBody"></div>
       </div>
     </div>
+    {% endif %}
 
     <div class="daily-attn-footnote" id="dailyAttendanceLegend">
       <button type="button" class="daily-legend-toggle" id="dailyLegendToggle" aria-expanded="false" aria-controls="dailyLegendPanel" title="Slots &amp; status legend">
@@ -2372,6 +2384,7 @@
     reinitDropdown(districtSelect);
     reinitDropdown(vehicleSelect);
     reinitDropdown(driverSelect);
+    refreshDriverDropdown();
     if (!hasServerVehicles) {
       var pid = selectValue(projectSelect);
       var did = selectValue(districtSelect);
@@ -3727,7 +3740,13 @@
   function exportDailyPdfNative(done) {
     var src = document.getElementById('dailyReportTable');
     if (!src) {
-      alert('Report data nahi mila.');
+      // Native SSR no longer embeds the web table — Excel keeps full export.
+      var excelUrl = getDailyExcelExportUrl();
+      if (excelUrl) {
+        window.location.href = excelUrl;
+      } else {
+        alert('Report data nahi mila.');
+      }
       if (done) done();
       return;
     }

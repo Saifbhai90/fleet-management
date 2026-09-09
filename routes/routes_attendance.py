@@ -271,27 +271,13 @@ def driver_attendance_list():
     form.shift.data = shift
     form.district_id.data = district_id if district_id else 0
 
-    # Sirf wo records jo Mark Attendance form se mark hue (DriverAttendance table mein hain)
-    # Agar from/to diya ho to date range, warna single view_date
-    # Build vehicle_drivers list for driver dropdown
-    vd_q = Driver.query.filter(Driver.status == 'Active', Driver.vehicle_id.isnot(None))
-    if project_id:
-        vd_q = vd_q.filter(Driver.project_id == project_id)
-    elif not is_master_or_admin and allowed_projects:
-        vd_q = vd_q.filter(Driver.project_id.in_(list(allowed_projects)))
-    if district_id or (not is_master_or_admin and allowed_districts):
-        vd_q = vd_q.outerjoin(Vehicle, Driver.vehicle_id == Vehicle.id)
-        if district_id:
-            vd_q = vd_q.filter(db.or_(Driver.district_id == district_id, Vehicle.district_id == district_id))
-        elif not is_master_or_admin and allowed_districts:
-            vd_q = vd_q.filter(db.or_(Driver.district_id.in_(list(allowed_districts)), Vehicle.district_id.in_(list(allowed_districts))))
-    if vehicle_id:
-        vd_q = vd_q.filter(Driver.vehicle_id == vehicle_id)
-    if shift:
-        vd_q = vd_q.filter(Driver.shift == shift)
-    if not is_master_or_admin and allowed_vehicles:
-        vd_q = vd_q.filter(Driver.vehicle_id.in_(list(allowed_vehicles)))
-    vehicle_drivers = vd_q.order_by(Driver.name).all()
+    # Driver dropdown options load via /api/attendance/filtered-drivers after paint.
+    # Keep only the currently selected driver so SSR stays light.
+    vehicle_drivers = []
+    if driver_id:
+        _sel_drv = db.session.get(Driver, driver_id)
+        if _sel_drv:
+            vehicle_drivers = [_sel_drv]
 
     uc = get_user_context(user_id) if user_id else {}
     attendance_rows_full = _driver_attendance_flat_rows(
@@ -4628,7 +4614,8 @@ def _build_driver_daily_attendance_report_payload(
     )
     tra_cache = _TraMonthCache(start_d, end_d, eligible_ids)
     tra_cache.load()
-    tra_cache.prewarm(drivers)
+    # Do not prewarm TRA vehicle-day caches here — daily grid never uses them
+    # and prewarm is O(vehicles × days) wasted work on the 9s/3MB report path.
 
     att_by_driver = {did: [] for did in eligible_ids}
     att_rows = (
@@ -5151,18 +5138,15 @@ def driver_attendance_daily_report():
                 ndays = payload['ndays']
                 grand_totals = payload['grand_totals']
 
-    district_options = [{'id': d.id, 'name': d.name} for d in (
-        District.query.filter(District.id.in_(scope_districts)).order_by(District.name).all()
-        if scope_districts else District.query.order_by(District.name).all()
-    )]
+    district_options = []
 
-    vd_q = Driver.query.filter(Driver.status == 'Active', Driver.vehicle_id.isnot(None))
-    if scope_projects:
-        vd_q = vd_q.filter(Driver.project_id.in_(scope_projects))
-    if scope_vehicles:
-        vd_q = vd_q.filter(Driver.vehicle_id.in_(scope_vehicles))
-    vehicle_drivers = vd_q.order_by(Driver.name).all()
+    # Driver filter options load via /api/attendance/filtered-drivers (keep selected only).
+    vehicle_drivers = []
     selected_driver_id = (request.form.get('driver_id', type=int) or 0) if request.method == 'POST' else 0
+    if selected_driver_id:
+        _sel_drv = db.session.get(Driver, selected_driver_id)
+        if _sel_drv:
+            vehicle_drivers = [_sel_drv]
 
     cal_today_day = None
     if report is not None:
