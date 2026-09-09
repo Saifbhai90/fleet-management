@@ -595,7 +595,7 @@ function _dtPrintOrPdf(btn) {
   btn.disabled = true;
   btn.innerHTML = '<span style="width:14px;height:14px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;display:inline-block;animation:_bp_spin .7s linear infinite;vertical-align:middle;"></span> Generating...';
   var scr = doc.createElement('script');
-  scr.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.2/html2pdf.bundle.min.js';
+  scr.src = '/static/vendor/html2pdf/0.10.2/html2pdf.bundle.min.js?v=8006';
   scr.onload = function() {
     var toolbar = body.querySelector('.dt-print-toolbar');
     if (toolbar) toolbar.style.display = 'none';
@@ -636,10 +636,10 @@ window._dtPrintCustomize = function(title, color, icon) {
     $b.prepend(toolbar);
     $b.prepend(hdr);
     var lnk = doc.createElement('link');
-    lnk.rel='stylesheet'; lnk.href='https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css';
+    lnk.rel='stylesheet'; lnk.href='/static/vendor/bootstrap-icons/1.11.3/bootstrap-icons.min.css?v=8006';
     doc.head.appendChild(lnk);
     var lnk2 = doc.createElement('link');
-    lnk2.rel='stylesheet'; lnk2.href='https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap';
+    lnk2.rel='stylesheet'; lnk2.href='/static/css/fonts.css?v=8006';
     doc.head.appendChild(lnk2);
     var sty = doc.createElement('style');
     sty.textContent = '@page{size:landscape;margin:6mm;}@media print{.dt-print-toolbar{display:none!important;}div[style*="border-radius"]{-webkit-print-color-adjust:exact;print-color-adjust:exact;}table{font-size:9px!important;margin:0!important;max-width:100%!important;width:100%!important;}table thead th{font-size:8px!important;padding:3px 5px!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}table tbody td{padding:3px 5px!important;font-size:9px!important;}table tbody tr:nth-child(even){-webkit-print-color-adjust:exact;print-color-adjust:exact;}}';

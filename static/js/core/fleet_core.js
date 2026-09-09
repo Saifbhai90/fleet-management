@@ -1643,7 +1643,7 @@
                 window.location.href = serverUrl + (qs.toString() ? ('?' + qs.toString()) : '');
                 return Promise.resolve();
             }
-            return _fleetLoadScript('https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js').then(function() {
+            return _fleetLoadScript('/static/vendor/xlsx-js-style/1.2.0/xlsx.bundle.js?v=8006').then(function() {
                 if (!window.XLSX) throw new Error('Excel library not available');
                 var aoa = excelConfig ? _fleetTableToAoaExcel(clone, excelConfig) : _fleetTableToAoa(clone);
                 var metaRows = [];
@@ -1808,8 +1808,8 @@
                     });
             }
             // jsPDF + autoTable: direct PDF download, no popup
-            var JSPDF_URL    = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
-            var AUTOTBL_URL  = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js';
+            var JSPDF_URL    = '/static/vendor/jspdf/2.5.1/jspdf.umd.min.js?v=8006';
+            var AUTOTBL_URL  = '/static/vendor/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js?v=8006';
             return _fleetLoadScript(JSPDF_URL).then(function() {
                 return _fleetLoadScript(AUTOTBL_URL);
             }).then(function() {
@@ -6306,7 +6306,7 @@
             var title = document.title.replace(/[^a-zA-Z0-9_ -]/g,'') || 'Report';
             var fname = title.replace(/\s+/g,'_') + '.pdf';
             var scr = document.createElement('script');
-            scr.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.2/html2pdf.bundle.min.js';
+            scr.src = '/static/vendor/html2pdf/0.10.2/html2pdf.bundle.min.js?v=8006';
             scr.onload = function() {
                 html2pdf().set({
                     margin:[6,4,6,4], filename:fname,
@@ -6502,7 +6502,7 @@
             return;
         }
         window.addEventListener('load', function() {
-            navigator.serviceWorker.register('/sw.js?v=8', { scope: '/', updateViaCache: 'none' }).catch(function() {});
+            navigator.serviceWorker.register('/sw.js?v=9', { scope: '/', updateViaCache: 'none' }).catch(function() {});
         });
     })();
 

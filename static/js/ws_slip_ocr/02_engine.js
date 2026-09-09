@@ -44,10 +44,7 @@
 
   function tesseractScriptSources() {
     var base = tesseractBaseUrl();
-    return [base + 'tesseract.min.js'].concat([
-      'https://cdn.jsdelivr.net/npm/tesseract.js@' + Ws.TESSERACT_VERSION + '/dist/tesseract.min.js',
-      'https://unpkg.com/tesseract.js@' + Ws.TESSERACT_VERSION + '/dist/tesseract.min.js',
-    ]);
+    return [base + 'tesseract.min.js'];
   }
 
   function loadScriptOnce(url) {

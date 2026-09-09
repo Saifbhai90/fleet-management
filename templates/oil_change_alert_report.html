@@ -2,7 +2,7 @@
 {% block title %}Oil Change Alert Report{% endblock %}
 
 {% block content %}
-<link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css">
+<link rel="stylesheet" href="/static/vendor/datatables/1.13.7/dataTables.bootstrap5.min.css?v=8006">
 <style>
   .oca-header { background: linear-gradient(135deg, #8e24aa 0%, #5e35b1 100%); color: #fff; border-radius: 10px; padding: 1rem 1.2rem; margin-bottom: 1rem; }
   .oca-header h2 { margin: 0; font-size: 1.3rem; font-weight: 700; }
@@ -214,9 +214,9 @@
   </div>
 </div>
 
-<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-<script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
-<script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
+<script src="/static/vendor/jquery/jquery-3.7.1.min.js?v=8006"></script>
+<script src="/static/vendor/datatables/1.13.7/jquery.dataTables.min.js?v=8006"></script>
+<script src="/static/vendor/datatables/1.13.7/dataTables.bootstrap5.min.js?v=8006"></script>
 <script>
 $(function () {
   function buildActionUrl(baseUrl) {

@@ -788,7 +788,7 @@ document.addEventListener('DOMContentLoaded', function () {
       }
       var script = document.createElement('script');
       script.id = 'umrHtml2CanvasScript';
-      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+      script.src = '/static/vendor/html2canvas/1.4.1/html2canvas.min.js?v=8006';
       script.onload = function () { resolve(); };
       script.onerror = function () { reject(new Error('Screenshot library load nahi ho saki.')); };
       document.head.appendChild(script);

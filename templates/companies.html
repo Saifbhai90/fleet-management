@@ -39,7 +39,7 @@
   .sort-icon { position: absolute; right: 0.5rem; top: 50%; transform: translateY(-50%); width: 14px; height: 14px; opacity: 0.5; }
   .sortable-header.active .sort-icon { opacity: 1; }
 </style>
-<script src="https://unpkg.com/lucide@latest"></script>
+<script src="/static/vendor/lucide/1.43.0/lucide.min.js?v=8006"></script>
 {% set report_mode = request.args.get('mode') == 'report' %}
 {% set companies_master = can_see_page('companies') %}
 {% set show_export_print = (not report_mode) or companies_master %}

@@ -4,7 +4,7 @@
 {% block title %}Live Ambulance Map — Fleet Manager{% endblock %}
 
 {% block extra_head %}
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="/static/vendor/leaflet/1.9.4/leaflet.css?v=8006" />
 <style>
   .uf-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px; }
   .uf-header h4 { font-weight: 700; color: #1e293b; margin: 0; display: flex; align-items: center; gap: 10px; }
@@ -72,7 +72,7 @@
 
 {% if error %}<div class="alert alert-warning mt-2" style="border-radius:10px;">{{ error }}</div>{% endif %}
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="/static/vendor/leaflet/1.9.4/leaflet.js?v=8006"></script>
 <script>
 const rawData = {{ vehicles | tojson }};
 let map, markerLayer, allMarkers = [];

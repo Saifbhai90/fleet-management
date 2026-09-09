@@ -1,15 +1,22 @@
-// Fleet Manager Service Worker v8
-const CACHE_NAME = 'fleetmgr-v8';
+// Fleet Manager Service Worker v9
+const CACHE_NAME = 'fleetmgr-v9';
 
-// Static assets to pre-cache on install.
-// NOTE: select2 removed (app uses tom-select, served from /static/vendor — cached on first fetch).
+// Static assets to pre-cache on install (self-hosted vendor libs + fonts —
+// same files every page needs, so the PWA is usable right after install).
+// Keep ?v= in sync with the versions used in base.html.
 const PRECACHE_URLS = [
-    'https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css',
-    'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css',
-    'https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css',
-    'https://code.jquery.com/jquery-3.7.1.min.js',
-    'https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js',
-    'https://cdn.jsdelivr.net/npm/flatpickr',
+    '/static/vendor/bootstrap/5.3.3/css/bootstrap.min.css?v=8006',
+    '/static/vendor/bootstrap-icons/1.11.3/bootstrap-icons.min.css?v=8006',
+    '/static/vendor/flatpickr/4.6.13/flatpickr.min.css?v=8006',
+    '/static/vendor/jquery/jquery-3.7.1.min.js?v=8006',
+    '/static/vendor/bootstrap/5.3.3/js/bootstrap.bundle.min.js?v=8006',
+    '/static/vendor/flatpickr/4.6.13/flatpickr.min.js?v=8006',
+    '/static/vendor/lucide/1.43.0/lucide.min.js?v=8006',
+    '/static/css/fonts.css?v=8006',
+    '/static/fonts/inter-latin-400.woff2?v=8006',
+    '/static/fonts/inter-latin-600.woff2?v=8006',
+    '/static/fonts/inter-latin-700.woff2?v=8006',
+    '/static/fonts/plus-jakarta-sans-latin-700.woff2?v=8006'
 ];
 
 // Install: pre-cache key static assets

@@ -4,7 +4,7 @@
 {% block title %}{{ regno }} — Vehicle Info{% endblock %}
 
 {% block extra_head %}
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="/static/vendor/leaflet/1.9.4/leaflet.css?v=8006" />
 <style>
   .uf-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 10px; }
   .uf-header h4 { font-weight: 800; color: #1e293b; margin: 0; display: flex; align-items: center; gap: 10px; }
@@ -110,7 +110,7 @@
 </div>
 
 {% if vehicle.has_gps %}
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="/static/vendor/leaflet/1.9.4/leaflet.js?v=8006"></script>
 <script>
   const vMap = L.map('vMap').setView([{{ vehicle.latitude }}, {{ vehicle.longitude }}], 14);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(vMap);

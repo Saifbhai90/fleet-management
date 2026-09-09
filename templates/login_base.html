@@ -17,10 +17,12 @@
   })();
   </script>
   <title>{% block title %}Fleet Manager{% endblock %}</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link rel="preload" href="/static/fonts/inter-latin-400.woff2?v=8006" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/static/fonts/inter-latin-600.woff2?v=8006" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/static/fonts/inter-latin-700.woff2?v=8006" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/static/fonts/plus-jakarta-sans-latin-700.woff2?v=8006" as="font" type="font/woff2" crossorigin>
+  <link href="/static/css/fonts.css?v=8006" rel="stylesheet">
+  <link rel="stylesheet" href="/static/vendor/bootstrap-icons/1.11.3/bootstrap-icons.min.css?v=8006">
   <style>
     *, *::before, *::after { box-sizing: border-box; }
 
@@ -910,7 +912,7 @@
   </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="/static/vendor/bootstrap/5.3.3/js/bootstrap.bundle.min.js?v=8006"></script>
   <script src="{{ url_for('static', filename='js/session_sounds.js') }}"></script>
   <script src="{{ url_for('static', filename='js/fleet_biometric_toggle.js') }}"></script>
   <script>

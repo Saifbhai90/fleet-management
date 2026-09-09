@@ -1,0 +1,88 @@
+/* ═══════════════════════════════════════════════════════════════
+   SELF-HOSTED FONTS — Inter + Plus Jakarta Sans (latin subset)
+   Served same-origin from /static/fonts with immutable caching.
+   Replaces Google Fonts CSS: no external round-trip, no FOUT wait
+   on third-party DNS/TLS. font-display: optional + <link rel=preload>
+   in base.html means warm loads paint with the real font instantly
+   and a late font file cannot swap text (layout jolt).
+   Bump ?v= here AND in the preload tags when replacing font files.
+   ═══════════════════════════════════════════════════════════════ */
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: optional;
+  src: url('/static/fonts/inter-latin-400.woff2?v=8006') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 500;
+  font-display: optional;
+  src: url('/static/fonts/inter-latin-500.woff2?v=8006') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: optional;
+  src: url('/static/fonts/inter-latin-600.woff2?v=8006') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 700;
+  font-display: optional;
+  src: url('/static/fonts/inter-latin-700.woff2?v=8006') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 800;
+  font-display: optional;
+  src: url('/static/fonts/inter-latin-800.woff2?v=8006') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 900;
+  font-display: optional;
+  src: url('/static/fonts/inter-latin-900.woff2?v=8006') format('woff2');
+}
+
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-display: optional;
+  src: url('/static/fonts/plus-jakarta-sans-latin-400.woff2?v=8006') format('woff2');
+}
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-weight: 500;
+  font-display: optional;
+  src: url('/static/fonts/plus-jakarta-sans-latin-500.woff2?v=8006') format('woff2');
+}
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-weight: 600;
+  font-display: optional;
+  src: url('/static/fonts/plus-jakarta-sans-latin-600.woff2?v=8006') format('woff2');
+}
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-weight: 700;
+  font-display: optional;
+  src: url('/static/fonts/plus-jakarta-sans-latin-700.woff2?v=8006') format('woff2');
+}
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-weight: 800;
+  font-display: optional;
+  src: url('/static/fonts/plus-jakarta-sans-latin-800.woff2?v=8006') format('woff2');
+}

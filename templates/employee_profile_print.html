@@ -1,8 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Employee Profile – {{ employee.name }}{% endblock %}
 {% block content %}
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="/static/css/fonts.css?v=8006" rel="stylesheet">
 <style>
   :root {
     --brand:      #0f766e;
@@ -562,8 +561,8 @@
 </div>
 
 <!-- ── PDF / Print / Image Engine (same as Driver Profile) ── -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="/static/vendor/html2pdf/0.10.1/html2pdf.bundle.min.js?v=8006"></script>
+<script src="/static/vendor/html2canvas/1.4.1/html2canvas.min.js?v=8006"></script>
 <script>
 (function(){
   var empName = '{{ employee.name | e }}'.replace(/[^a-zA-Z0-9_\- ]/g,'').trim() || 'Employee';

@@ -4,9 +4,9 @@
 {% block title %}Fleet Score Trend — Fleet Tracking{% endblock %}
 
 {% block extra_head %}
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<link rel="stylesheet" href="/static/vendor/flatpickr/4.6.13/flatpickr.min.css?v=8006">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/tracking_reports.css') }}?v=1001">
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="/static/vendor/chartjs/4.4.2/chart.umd.min.js?v=8006"></script>
 <style>
   .st-move { display: flex; align-items: center; gap: 8px; padding: 6px 0; }
   .st-move + .st-move { border-top: 1px solid #f1f5f9; }
@@ -255,7 +255,7 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="/static/vendor/flatpickr/4.6.13/flatpickr.min.js?v=8006"></script>
 <script src="{{ url_for('static', filename='js/tracking_reports.js') }}?v=1001"></script>
 <script>
 flatpickr('.datepicker', { dateFormat: 'Y-m-d', maxDate: new Date() });

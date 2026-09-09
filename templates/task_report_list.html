@@ -752,14 +752,14 @@ document.addEventListener('click', function (e) {
 
     function _loadTaskReportPdfLibs() {
         return _loadTaskReportScriptWithFallbacks(
-            [_taskReportJspdfSrc, 'https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js'],
+            [_taskReportJspdfSrc, '/static/vendor/jspdf/2.5.2/jspdf.umd.min.js?v=8006'],
             _getTaskReportJsPDFClass
         ).then(function() {
             if (!_taskReportPdfLibsReady()) {
                 document.querySelectorAll('script[data-task-report-pdf-src="' + _taskReportAutotableSrc + '"]').forEach(function(s) { s.remove(); });
             }
             return _loadTaskReportScriptWithFallbacks(
-                [_taskReportAutotableSrc, 'https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js'],
+                [_taskReportAutotableSrc, '/static/vendor/jspdf-autotable/3.8.4/jspdf.plugin.autotable.min.js?v=8006'],
                 _taskReportPdfLibsReady
             );
         });

@@ -4,7 +4,7 @@
 {% block title %}Device Health — Fleet Tracking{% endblock %}
 
 {% block extra_head %}
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<link rel="stylesheet" href="/static/vendor/flatpickr/4.6.13/flatpickr.min.css?v=8006">
 <style>
   .dh-badge { font-size: .72rem; padding: .18rem .45rem; border-radius: 999px; font-weight: 600; }
   .dh-critical { background: #f8d7da; color: #842029; }
@@ -304,7 +304,7 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="/static/vendor/flatpickr/4.6.13/flatpickr.min.js?v=8006"></script>
 <script src="{{ url_for('static', filename='js/tracking_reports.js') }}?v=1001"></script>
 <script>
 flatpickr('.datepicker', { dateFormat: 'Y-m-d', maxDate: new Date() });

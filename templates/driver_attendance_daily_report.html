@@ -3130,7 +3130,7 @@
     ].join('');
     win.document.open();
     win.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Day Wise Attendance Report</title>');
-    win.document.write('<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">');
+    win.document.write('<link rel="stylesheet" href="/static/vendor/bootstrap-icons/1.11.3/bootstrap-icons.min.css?v=8006">');
     win.document.write('<style>' + styles + '</style></head><body>');
     win.document.write('<div class="pv-toolbar pv-print-toolbar">');
     win.document.write('<button type="button" class="pv-close" onclick="window.close()"><i class="bi bi-arrow-left"></i> Close</button>');
@@ -3144,7 +3144,7 @@
     win.document.write('</div>');
     var legendSrc = document.getElementById('dailyAttendanceLegend');
     win.document.write('<div class="pv-legend">' + (legendSrc ? legendSrc.innerHTML : '') + '</div>');
-    win.document.write('<script>var PV_PDF_OPTS={margin:[5,5,5,5],filename:"Day_Wise_Attendance_Report.pdf",image:{type:"jpeg",quality:0.96},html2canvas:{scale:2,useCORS:true,logging:false,backgroundColor:"#ffffff"},jsPDF:{unit:"mm",format:"a3",orientation:"landscape"},pagebreak:{mode:["css","legacy"],avoid:".pv-total-row"}};function prepareForPrint(){var inner=document.getElementById("pvScaleInner");if(!inner)return;var tbl=inner.querySelector("table");var wrap=inner.parentElement;inner.style.transform="none";inner.style.transformOrigin="";inner.style.width="100%";inner.style.zoom="1";if(wrap){wrap.style.overflow="visible";wrap.style.minHeight="";wrap.style.width="100%";wrap.style.zoom="1";}if(tbl){tbl.style.tableLayout="fixed";tbl.style.width="100%";tbl.style.maxWidth="100%";}document.body.style.zoom="1";}function getPrintRoot(){return document.getElementById("pvPrintArea")||document.body;}function runPdfExport(done){var tb=document.querySelector(".pv-print-toolbar");var leg=document.querySelector(".pv-legend");prepareForPrint();if(tb)tb.style.display="none";if(leg)leg.style.display="none";var el=getPrintRoot();html2pdf().set(PV_PDF_OPTS).from(el).save().then(function(){if(tb)tb.style.display="";if(leg)leg.style.display="";if(done)done();}).catch(function(){if(tb)tb.style.display="";if(leg)leg.style.display="";alert("PDF error — dubara try karein.");if(done)done();});}function fitAndPrint(){prepareForPrint();setTimeout(function(){try{window.print();}catch(e){alert("Print nahi ho saka. Save as PDF use karein.");}},300);}function saveDailyPdf(){if(typeof html2pdf!=="undefined"){runPdfExport();return;}var s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.2/html2pdf.bundle.min.js";s.onload=function(){runPdfExport();};s.onerror=function(){alert("PDF library load nahi hui.");};document.head.appendChild(s);}window.addEventListener("load",function(){setTimeout(prepareForPrint,80);});window.addEventListener("beforeprint",prepareForPrint);window.addEventListener("afterprint",prepareForPrint);<\/script>');
+    win.document.write('<script>var PV_PDF_OPTS={margin:[5,5,5,5],filename:"Day_Wise_Attendance_Report.pdf",image:{type:"jpeg",quality:0.96},html2canvas:{scale:2,useCORS:true,logging:false,backgroundColor:"#ffffff"},jsPDF:{unit:"mm",format:"a3",orientation:"landscape"},pagebreak:{mode:["css","legacy"],avoid:".pv-total-row"}};function prepareForPrint(){var inner=document.getElementById("pvScaleInner");if(!inner)return;var tbl=inner.querySelector("table");var wrap=inner.parentElement;inner.style.transform="none";inner.style.transformOrigin="";inner.style.width="100%";inner.style.zoom="1";if(wrap){wrap.style.overflow="visible";wrap.style.minHeight="";wrap.style.width="100%";wrap.style.zoom="1";}if(tbl){tbl.style.tableLayout="fixed";tbl.style.width="100%";tbl.style.maxWidth="100%";}document.body.style.zoom="1";}function getPrintRoot(){return document.getElementById("pvPrintArea")||document.body;}function runPdfExport(done){var tb=document.querySelector(".pv-print-toolbar");var leg=document.querySelector(".pv-legend");prepareForPrint();if(tb)tb.style.display="none";if(leg)leg.style.display="none";var el=getPrintRoot();html2pdf().set(PV_PDF_OPTS).from(el).save().then(function(){if(tb)tb.style.display="";if(leg)leg.style.display="";if(done)done();}).catch(function(){if(tb)tb.style.display="";if(leg)leg.style.display="";alert("PDF error — dubara try karein.");if(done)done();});}function fitAndPrint(){prepareForPrint();setTimeout(function(){try{window.print();}catch(e){alert("Print nahi ho saka. Save as PDF use karein.");}},300);}function saveDailyPdf(){if(typeof html2pdf!=="undefined"){runPdfExport();return;}var s=document.createElement("script");s.src="/static/vendor/html2pdf/0.10.2/html2pdf.bundle.min.js?v=8006";s.onload=function(){runPdfExport();};s.onerror=function(){alert("PDF library load nahi hui.");};document.head.appendChild(s);}window.addEventListener("load",function(){setTimeout(prepareForPrint,80);});window.addEventListener("beforeprint",prepareForPrint);window.addEventListener("afterprint",prepareForPrint);<\/script>');
     win.document.write('</body></html>');
     win.document.close();
   }
@@ -3222,11 +3222,11 @@
 
   function loadDailyPdfLibs() {
     return loadDailyScriptWithFallbacks(
-      [dailyJspdfSrc, 'https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js'],
+      [dailyJspdfSrc, '/static/vendor/jspdf/2.5.2/jspdf.umd.min.js?v=8006'],
       function() { return !!getDailyJsPDFClass(); }
     ).then(function() {
       return loadDailyScriptWithFallbacks(
-        [dailyAutotableSrc, 'https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js'],
+        [dailyAutotableSrc, '/static/vendor/jspdf-autotable/3.8.4/jspdf.plugin.autotable.min.js?v=8006'],
         dailyPdfLibsReady
       );
     }).then(function() {

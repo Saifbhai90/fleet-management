@@ -3,7 +3,7 @@
 {% block title %}Drivers List{% endblock %}
 
 {% block content %}
-<link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css">
+<link rel="stylesheet" href="/static/vendor/datatables/1.13.7/dataTables.bootstrap5.min.css?v=8006">
 <style>
   body { background: #f8f9fa; }
   .page-header-gradient { background: #fff; padding: 0; margin-bottom: 0.75rem; }
@@ -331,9 +331,9 @@
   </div>
 </div>
 
-<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-<script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
-<script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
+<script src="/static/vendor/jquery/jquery-3.7.1.min.js?v=8006"></script>
+<script src="/static/vendor/datatables/1.13.7/jquery.dataTables.min.js?v=8006"></script>
+<script src="/static/vendor/datatables/1.13.7/dataTables.bootstrap5.min.js?v=8006"></script>
 <script>
 $(document).ready(function () {
     var table = $('#driversTable').DataTable({

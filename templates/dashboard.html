@@ -2,9 +2,11 @@
 {% block title %}Dashboard — Fleet Manager{% endblock %}
 
 {% block extra_head %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<!-- Self-hosted, version-pinned. defer is safe: all Chart/L usage below is
+     inside DOMContentLoaded, which fires after deferred scripts execute. -->
+<script src="/static/vendor/chartjs/4.4.2/chart.umd.min.js?v=8006" defer></script>
+<link rel="stylesheet" href="/static/vendor/leaflet/1.9.4/leaflet.css?v=8006">
+<script src="/static/vendor/leaflet/1.9.4/leaflet.js?v=8006" defer></script>
 <style>
 /* ═══════════════════════════════════════════════
    BENTO GRID — Premium Dashboard Layout
@@ -661,10 +663,10 @@ function _dbgToast(msg) {
             if (!window.L) {
                 var lCss = document.createElement('link');
                 lCss.rel = 'stylesheet';
-                lCss.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+                lCss.href = '/static/vendor/leaflet/1.9.4/leaflet.css?v=8006';
                 document.head.appendChild(lCss);
                 var lJs = document.createElement('script');
-                lJs.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+                lJs.src = '/static/vendor/leaflet/1.9.4/leaflet.js?v=8006';
                 lJs.onload = function() { _renderMap(lat, lng); };
                 document.head.appendChild(lJs);
             } else {
