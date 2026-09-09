@@ -786,7 +786,13 @@ body {
             -webkit-tap-highlight-color: transparent;
         }
         .mobile-nav-item i { font-size: 1.25rem; line-height: 1; }
-        .mobile-nav-item svg { width: 22px; height: 22px; }
+        .mobile-nav-item svg,
+        .mobile-nav-item .chrome-ico {
+            width: 22px;
+            height: 22px;
+            display: block;
+            flex-shrink: 0;
+        }
         .mobile-nav-item.active { color: #60a5fa; position: relative; }
         .mobile-nav-item.active::before {
             content: ''; position: absolute; top: 5px; left: 50%;
@@ -794,17 +800,14 @@ body {
             width: 48px; height: 30px;
             background: rgba(96,165,250,0.18);
             border-radius: 24px; z-index: 0;
-            transition: transform 0.25s cubic-bezier(.34,1.56,.64,1);
         }
         .mobile-nav-item > i, .mobile-nav-item > svg, .mobile-nav-item > span { position: relative; z-index: 1; }
         .mobile-nav-item.active i, .mobile-nav-item.active svg {
             filter: drop-shadow(0 0 6px rgba(96,165,250,0.9));
             transform: translateY(-2px);
-            transition: transform 0.2s cubic-bezier(.34,1.56,.64,1);
         }
         .mobile-nav-item.active span { font-weight: 700; color: #93c5fd; }
-        .mobile-nav-item:not(.active) i, .mobile-nav-item:not(.active) svg { transition: transform 0.2s; }
-        .mobile-nav-item:active { opacity: 0.6; transition: opacity 0.1s; }
+        .mobile-nav-item:active { opacity: 0.6; }
 
         /* ─── More Bottom Drawer ─── */
         .more-drawer-overlay {
@@ -1272,6 +1275,13 @@ body {
             border: none; border-radius: 12px; color: #e2e8f0;
             align-items: center; justify-content: center;
             z-index: 1055; box-shadow: 0 2px 12px rgba(0,0,0,0.3); cursor: pointer;
+        }
+        .mobile-menu-btn svg,
+        .mobile-menu-btn .chrome-ico {
+            width: 22px;
+            height: 22px;
+            display: block;
+            flex-shrink: 0;
         }
         .capacitor-native .mobile-menu-btn { display: flex; }
 

@@ -59,7 +59,7 @@ window.FleetConfig = {
     <link rel="stylesheet" href="{{ url_for('static', filename='vendor/tom-select/tom-select.bootstrap5.min.css') }}?v=1001">
 
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/core/fleet_styles.css') }}?v=8006">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/core/fleet_styles.css') }}?v=8007">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/fm_hub_pages.css') }}?v=8006">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/rc_tile_gradients.css') }}?v=8005">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/tracking_reports.css') }}?v=1001">
@@ -75,14 +75,12 @@ window.FleetConfig = {
     (function(){var u=navigator.userAgent||'';if(!/Android/i.test(u))return;var legacy=/CPH1909|OPPO\s*A5/i.test(u);if(!legacy){var m=u.match(/Android\s+([\d.]+)/i);if(m){var v=parseInt(m[1],10);if(!isNaN(v)&&v<=9)legacy=true;}}if(legacy)document.documentElement.classList.add('legacy-android-gpu');})();
     </script>
 
-    <!-- Reserve space for lucide icons BEFORE lucide.min.js replaces <i> with
-         <svg>. Without this, icon-only buttons/nav items are zero-size on first
-         paint and jump when icons render — the "design changes then settles"
-         flash on the mobile app dashboard. Default 24px matches lucide's
-         default svg size; inline width/height styles override per icon. -->
+    <!-- Reserve space for remaining lucide icons BEFORE lucide.min.js replaces
+         <i> with <svg>. Mobile chrome (hamburger + bottom nav) uses inline SVGs
+         so those buttons never wait on deferred lucide. -->
     <style>
     i[data-lucide]{display:inline-block;width:24px;height:24px;flex-shrink:0;vertical-align:middle;}
-    svg.lucide{flex-shrink:0;}
+    svg.lucide,svg.chrome-ico{flex-shrink:0;}
     </style>
 
     <!-- Capacitor native detection (inline — runs ASAP, BEFORE first paint, so the
@@ -619,9 +617,31 @@ window.FleetConfig = {
     <span id="ptrText">Pull down to refresh</span>
 </div>
 
+{# Chrome icons are inline SVG so hamburger + bottom-nav paint with HTML.
+   Lucide is deferred; waiting on it made these buttons empty then snap. #}
+{% macro chrome_ico(name) -%}
+<svg class="chrome-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+{%- if name == 'menu' -%}
+<line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/>
+{%- elif name == 'home' -%}
+<path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
+{%- elif name == 'truck' -%}
+<path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/>
+{%- elif name == 'search' -%}
+<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+{%- elif name == 'calendar-check' -%}
+<path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="m9 16 2 2 4-4"/>
+{%- elif name == 'grid' -%}
+<rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/>
+{%- elif name == 'plus' -%}
+<path d="M5 12h14"/><path d="M12 5v14"/>
+{%- endif -%}
+</svg>
+{%- endmacro %}
+
 <!-- Mobile Hamburger (fixed, sidebar access without navbar) -->
 <button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Open menu">
-    <i data-lucide="menu"></i>
+    {{ chrome_ico('menu') }}
 </button>
 
 <!-- Fixed Bottom Navigation Bar (Mobile only, < 768px) -->
@@ -629,21 +649,21 @@ window.FleetConfig = {
     <!-- Home: always visible -->
     <a href="{{ url_for('dashboard') }}"
        class="mobile-nav-item {% if request.endpoint == 'dashboard' %}active{% endif %}">
-        <i data-lucide="home"></i>
+        {{ chrome_ico('home') }}
         <span>Home</span>
     </a>
     <!-- Fleet: only if user can see drivers or vehicles -->
     {% if can_see_page('drivers') or can_see_page('vehicles') %}
     <a href="{{ url_for('drivers_list') }}"
        class="mobile-nav-item {% if request.endpoint in ['drivers_list','vehicles_list','driver_form','vehicle_form','parking_list'] %}active{% endif %}">
-        <i data-lucide="truck"></i>
+        {{ chrome_ico('truck') }}
         <span>Fleet</span>
     </a>
     {% endif %}
     <!-- Search: only if global_search permission -->
     {% if can_see_page('global_search') %}
     <button type="button" class="mobile-nav-item" onclick="openCmdPalette()" aria-label="Search">
-        <i data-lucide="search"></i>
+        {{ chrome_ico('search') }}
         <span>Search</span>
     </button>
     {% endif %}
@@ -652,13 +672,13 @@ window.FleetConfig = {
     <button type="button"
             class="mobile-nav-item {% if request.endpoint and 'attendance' in request.endpoint %}active{% endif %}"
             id="attendNavBtn" onclick="openAttendSheet()" aria-label="Attendance">
-        <i data-lucide="calendar-check"></i>
+        {{ chrome_ico('calendar-check') }}
         <span>Attend</span>
     </button>
     {% endif %}
     <!-- More – opens bottom drawer -->
     <button type="button" class="mobile-nav-item" id="moreNavBtn" onclick="openMoreDrawer()" aria-label="More options">
-        <i data-lucide="grid-2x2"></i>
+        {{ chrome_ico('grid') }}
         <span>More</span>
     </button>
 </nav>
@@ -884,7 +904,7 @@ window.FleetConfig = {
         {% endif %}
     </div>
     <button class="mobile-fab" id="mobileFabBtn" aria-label="Quick actions">
-        <i data-lucide="plus"></i>
+        {{ chrome_ico('plus') }}
     </button>
 </div>
 {% endif %}
