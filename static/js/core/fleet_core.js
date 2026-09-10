@@ -3915,7 +3915,14 @@
     function _fleetFocusField(el) {
         if (!el) return;
         if (el.tagName === 'SELECT' && el.tomselect) {
+            el.tomselect._justSelected = false;
             el.tomselect.focus();
+            setTimeout(function() {
+                if (!el.tomselect || el.tomselect.isDisabled) return;
+                if (!el.tomselect.isOpen) {
+                    try { el.tomselect.open(); } catch (x) {}
+                }
+            }, 0);
             return;
         }
         el.focus();
@@ -3950,29 +3957,76 @@
     // Defined at global script scope (NOT inside jQuery ready) so the function
     // is available immediately — the content block fields are already in
     // the DOM here because the content block renders above the scripts.
+    function _tsIsCascadeLoading(sel) {
+        if (!sel || !sel.tomselect) return false;
+        var ts = sel.tomselect;
+        if (!ts.isDisabled) return false;
+        try {
+            return Object.keys(ts.options || {}).length === 0;
+        } catch (e) {
+            return true;
+        }
+    }
+
+    function _tsFocusAndOpen(sel) {
+        if (!sel || !sel.tomselect) return;
+        var ts = sel.tomselect;
+        if (ts.isDisabled) return;
+        ts._justSelected = false;
+        ts.focus();
+        setTimeout(function() {
+            if (ts.isDisabled || ts._wsSilentFill) return;
+            if (!ts.isOpen) {
+                try { ts.open(); } catch (e) {}
+            }
+        }, 0);
+    }
+
+    function _tsWaitEnableThenFocus(sel) {
+        var tries = 0;
+        (function tick() {
+            tries += 1;
+            if (sel && sel.tomselect && !sel.tomselect.isDisabled) {
+                _tsFocusAndOpen(sel);
+                return;
+            }
+            if (tries < 40) {
+                setTimeout(tick, 50);
+                return;
+            }
+            if (sel) _tsMoveFocus(sel);
+        })();
+    }
+
     function _tsMoveFocus(origSelect) {
         var form = origSelect.closest('form');
         if (!form) return;
         var all = Array.from(form.querySelectorAll(
             'input:not([type="hidden"]):not([disabled]):not([readonly]), ' +
-            'select:not([disabled]), ' +
+            'select, ' +
             'textarea:not([disabled]):not([readonly]), ' +
             'button[type="submit"]'
         ));
-        // Build focusable list: TS-managed selects included by .tomselect check,
-        // everything else must be visible in layout (offsetParent !== null)
+        // TS-managed selects stay in the walk even while cascade-loading
+        // (disabled + empty) so Enter from Project can wait for Vehicle.
         var focusable = all.filter(function(f) {
-            if (f.tagName === 'SELECT' && f.tomselect) return true;
+            if (f.tagName === 'SELECT' && f.tomselect) {
+                if (f.tomselect.isDisabled && !_tsIsCascadeLoading(f)) return false;
+                return true;
+            }
+            if (f.disabled) return false;
             return f.offsetParent !== null;
         });
         var idx = focusable.indexOf(origSelect);
         if (idx < 0) return;
-        // Walk forward to find the next truly visible/focusable candidate
         for (var i = idx + 1; i < focusable.length; i++) {
             var candidate = focusable[i];
             if (candidate.tagName === 'SELECT' && candidate.tomselect) {
-                // Let TS handle opening via its own focus listener
-                setTimeout(function(n) { n.tomselect.focus(); }, 30, candidate);
+                if (_tsIsCascadeLoading(candidate)) {
+                    _tsWaitEnableThenFocus(candidate);
+                    return;
+                }
+                setTimeout(_tsFocusAndOpen, 30, candidate);
                 return;
             }
             if (candidate.offsetParent !== null) {
@@ -4225,6 +4279,8 @@
 
                 ts.on('focus', function() {
                     if (ts._wsSilentFill || window._wsOcrIsUpdating) return;
+                    if (window._isReturningFromCamera || window._isShieldActive) return;
+                    if (ts.isDisabled) return;
                     // _justSelected guards against re-opening immediately after
                     // the user confirms a selection (TS internally refocuses then).
                     if (ts._justSelected) {
@@ -4232,7 +4288,6 @@
                         _setOverwriteReady(false);
                         return;
                     }
-                    // Open the dropdown immediately (no visual delay).
                     if (!ts.isOpen) ts.open();
                     // Apply the blue highlight slightly deferred so TS's own
                     // focus routine has settled — fixes Shift+Tab first-attempt miss.
@@ -4404,7 +4459,6 @@
         if (sel.tomselect) {
             var ts = sel.tomselect;
             ts._wsSilentFill = true;
-            ts._justSelected = true;
             try { ts.close(); } catch (e0) {}
             ts.clear(true);
             ts.clearOptions();
@@ -4421,10 +4475,19 @@
             _fleetSyncOptionAttrs(sel, items);
             try { ts.enable(); } catch (e1) {}
             ts._wsSilentFill = false;
+            // Do not latch _justSelected here — that blocked auto-open on the
+            // next real focus (Project after District, Vehicle after Project).
+            ts._justSelected = false;
             if (selected != null && selected !== '' && String(selected) !== '0') {
                 window.fleetSetSelectValue(sel, selected, cfg.silent !== false);
             } else {
                 try { ts.wrapper.classList.remove('has-items'); } catch (e2) {}
+            }
+            var focused = ts.isFocused
+                || (ts.wrapper && ts.wrapper.classList.contains('focus'))
+                || document.activeElement === ts.control_input;
+            if (focused && !ts.isDisabled && items.length) {
+                try { ts.open(); } catch (e3) {}
             }
             return;
         }
